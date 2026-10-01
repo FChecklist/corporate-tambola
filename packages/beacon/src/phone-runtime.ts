@@ -2,8 +2,8 @@
 // It talks to exactly two things: the public beacon (through BeaconOpts) and our one small store (through deps.api).
 import { generateTicket, type PatternId, type Ticket } from "../../shared/src/ticket";
 import { ControlTracker, SAFETY_FAST, SAFETY_STANDARD, pausedAt, type ControlConfig } from "./control";
-import { ALL_PATTERNS, RoundStore, completionIndex, logFrom, ticketFor } from "./game";
-import { NUMBERS, QUICKNET, fetchRound, roundAt, roundTimeMs, type BeaconOpts } from "./index";
+import { ALL_PATTERNS, RoundStore, completionIndex, ticketFor } from "./game";
+import { NUMBERS, QUICKNET, fetchRound, pickNumber, roundAt, roundTimeMs, type BeaconOpts } from "./index";
 
 export interface PhoneDeps {
   /** Calls our store. Must throw an Error with `.status` on HTTP errors, and a plain Error when offline. */
@@ -31,6 +31,7 @@ export class PhoneRuntime {
   ticket: Ticket | null = null;
   startRound = 0;
   callSeconds = 0;
+  trackClaims = true;
   store: RoundStore;
   tracker: ControlTracker | null = null;
   results: RuntimeView["results"] = [];
@@ -41,6 +42,9 @@ export class PhoneRuntime {
   private lastResultPoll = -Infinity;
   private logCache: number[] = [];
   private controlFast = false;
+  /** unknown: have not yet heard whether this engagement can be paused. none: the store says no pause key exists. known: we hold a verified control file. */
+  private controlState: "unknown" | "none" | "known" = "unknown";
+  private unknownSince: number | null = null;
 
   constructor(readonly eid: string, readonly deps: PhoneDeps) {
     this.store = new RoundStore(deps.beacon, deps.verify);
@@ -64,7 +68,7 @@ export class PhoneRuntime {
   async boot(): Promise<void> {
     try {
       const info = await this.deps.api("GET", `/api/z/${this.eid}/info`);
-      this.startRound = info.startRound; this.callSeconds = info.callSeconds;
+      this.startRound = info.startRound; this.callSeconds = info.callSeconds; this.trackClaims = info.trackClaims !== false;
     } catch (e: any) {
       this.phase = e?.status === 404 ? "missing" : "boot";
       this.error = e?.status === 404 ? "This engagement link is not valid." : "Could not reach the engagement. Check your connection.";
@@ -84,7 +88,7 @@ export class PhoneRuntime {
   async join(phone: string, name?: string): Promise<boolean> {
     try {
       const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name });
-      this.startRound = r.startRound; this.callSeconds = r.callSeconds;
+      this.startRound = r.startRound; this.callSeconds = r.callSeconds; this.trackClaims = r.trackClaims !== false;
       this.deps.store.set(this.key("pid"), r.pid);
       this.adopt(r.pid); this.error = null;
       return true;
@@ -101,7 +105,7 @@ export class PhoneRuntime {
     this.lastControlPoll = m;
     let body: any = null;
     try { body = await this.deps.api("GET", `/api/z/${this.eid}/control`); } catch (e: any) {
-      if (e?.status === 404) { this.tracker = null; return; } // no key registered: this engagement cannot be paused
+      if (e?.status === 404) { this.tracker = null; this.controlState = "none"; return; } // no key registered: this engagement cannot be paused
       this.tracker?.failed(now); return;
     }
     if (!body?.pubKey) { this.tracker?.failed(now); return; }
@@ -111,22 +115,29 @@ export class PhoneRuntime {
       const safety = body.leadRounds === SAFETY_FAST.leadRounds ? SAFETY_FAST : SAFETY_STANDARD;
       this.tracker = new ControlTracker(cfg, this.eid, safety, now);
     }
-    await this.tracker.ingest(now, body);
+    if (await this.tracker.ingest(now, body)) this.controlState = "known";
   }
 
+  private modeAt(now: number): RuntimeView["mode"] {
+    if (this.controlState === "none") return "none";
+    if (this.controlState === "unknown") return this.unknownSince !== null && now - this.unknownSince >= SAFETY_STANDARD.giveUpRounds ? "blind" : "hold";
+    return this.tracker!.mode(now);
+  }
   private roundFor(k: number): number | null {
     return this.tracker ? this.tracker.callRound(this.startRound, this.stride, k) : this.startRound + k * this.stride;
   }
 
   /** One pass of the loop. Call about once a second. Safe to call while offline (it simply makes no progress). */
   async tick(): Promise<RuntimeView> {
-    if (this.phase === "ended") { await this.pollResults(); return this.view(); } // the engagement is over, but the outcome is still worth fetching
+    if (this.phase === "ended") { await this.autoClaim(); await this.pollResults(); return this.view(); } // a claim that failed to send keeps being retried after the last call // the engagement is over, but the outcome is still worth fetching
     if (this.phase !== "play") return this.view();
     if (!(await this.syncClock())) { this.error = "Waiting for the clock. Check your connection."; return this.view(); }
     this.error = null;
     const now = this.nowRound!;
     await this.pollControl(now);
-    const live = !this.tracker || this.tracker.mode(now) === "live" || this.tracker.mode(now) === "blind";
+    if (this.controlState === "unknown" && this.unknownSince === null) this.unknownSince = now;
+    const m = this.modeAt(now);
+    const live = m === "live" || m === "none" || m === "blind"; // blind = we have been unable to ask for a long time: play on, visibly flagged
     // rounds we are entitled to reveal: scheduled round has been published
     const want: number[] = [];
     for (let k = 0; k < NUMBERS; k++) {
@@ -138,32 +149,47 @@ export class PhoneRuntime {
     await Promise.all(batch.map((r, i) => (now - r <= 2 ? this.store.fetchLive(r, i) : this.store.fetchBackfill(r, i))));
     this.store.verifySome(2);
     if (live) this.logCache = this.buildLog(now); // on hold we keep showing what we had, and reveal nothing new
-    await this.autoClaim();
+    if (m !== "blind") await this.autoClaim(); // never claim from a log that might be missing a pause we could not hear about
     await this.pollResults();
     if (this.logCache.length >= NUMBERS || (this.tracker?.state.stopRound != null && now >= this.tracker.state.stopRound)) this.phase = "ended";
     return this.view();
   }
 
+  private builtDiscards = 0;
+  private builtMsgs = 0;
+  /** Extends the call log with newly available rounds instead of recomputing all 90 calls every second. Rebuilds from scratch only if a provisional round was thrown away. */
   private buildLog(now: number): number[] {
-    const sched: number[] = [];
-    for (let k = 0; k < NUMBERS; k++) { const r = this.roundFor(k); if (r === null || r > now) break; sched.push(r); }
-    return logFrom(this.eid, sched, this.store, sched.length);
+    const msgs = this.tracker?.log.length ?? 0;
+    if (this.store.discarded !== this.builtDiscards || msgs !== this.builtMsgs) { this.logCache = []; this.builtDiscards = this.store.discarded; this.builtMsgs = msgs; } // a new organizer message can move later calls: re-derive
+    const out = this.logCache;
+    for (let k = out.length; k < NUMBERS; k++) {
+      const r = this.roundFor(k);
+      if (r === null || r > now) break;
+      const x = this.store.rounds.get(r);
+      if (!x) break;
+      out.push(pickNumber(this.eid, k, x.randomness, out));
+    }
+    return out;
   }
 
+  private unsent = 0;
+  private claimLen = -1;
   private async autoClaim() {
     if (!this.ticket || !this.pid) return;
+    if (this.logCache.length === this.claimLen && this.unsent === 0) return; // nothing new has been called and nothing is waiting to be sent
+    this.claimLen = this.logCache.length;
+    this.unsent = 0;
     for (const p of ALL_PATTERNS) {
       if (this.claimed.has(p)) continue;
       const idx = completionIndex(this.ticket, p, this.logCache);
       if (idx < 0) continue;
       try {
-        await this.deps.api("POST", `/api/z/${this.eid}/claims`, { pid: this.pid, claims: [{ pattern: p, idx }] });
+        if (this.trackClaims) await this.deps.api("POST", `/api/z/${this.eid}/claims`, { pid: this.pid, claims: [{ pattern: p, idx }] });
         this.claimed.add(p);
         this.deps.store.set(this.key("claimed"), JSON.stringify([...this.claimed]));
-      } catch { /* kept: the next tick sends it again; a claim is never lost because nothing is marked sent until it was */ }
+      } catch { this.unsent++; /* kept: the next tick sends it again; a claim is never lost because nothing is marked sent until it was */ }
     }
   }
-  private wantClaims(): PatternId[] { return this.ticket ? ALL_PATTERNS.filter((p) => !this.claimed.has(p) && completionIndex(this.ticket!, p, this.logCache) >= 0) : []; }
 
   private async pollResults() {
     const m = this.deps.mono();
@@ -178,8 +204,8 @@ export class PhoneRuntime {
     const nextRound = this.logCache.length < NUMBERS ? this.roundFor(this.logCache.length) : null;
     return {
       phase: this.phase, error: this.error, pid: this.pid, ticket: this.ticket, log: this.logCache, nowRound: now, startRound: this.startRound, callSeconds: this.callSeconds,
-      mode: this.tracker && now !== null ? this.tracker.mode(now) : "none", paused: !!st && now !== null && pausedAt(st, now), stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
-      claimed: [...this.claimed], unsent: this.wantClaims().length, results: this.results, pendingChecks: this.store.pending(), discarded: this.store.discarded,
+      mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: !!st && now !== null && pausedAt(st, now), stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
+      claimed: [...this.claimed], unsent: this.unsent, results: this.results, pendingChecks: this.store.pending(), discarded: this.store.discarded,
       nextCallInSec: nextRound !== null && now !== null && this.offsetMs !== null ? Math.max(0, Math.round((roundTimeMs(nextRound) - (this.deps.mono() + this.offsetMs)) / 1000)) : null,
     };
   }

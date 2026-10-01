@@ -291,7 +291,11 @@
       case "result": showResult(m.items || []); refreshSoon(); break;
       case "break": showBreak(m); break;
       case "resume": G.pause = null; hideBreak(); paintStrip(); paintBanner(); paintRewards(); reload(); break;
-      case "ended": stopLive(); G.status = "ended"; reloadForEnd(); break;
+      case "ended":
+        G.status = "ended"; // a closing lucky draw / scratch card is allowed to finish before the thank-you screen replaces it
+        if (MO.cur && !MO.after) { MO.after = () => { stopLive(); reloadForEnd(); }; setTimeout(() => { if (MO.after) closeMoment(true); }, 12000); }
+        else if (!MO.after) { stopLive(); reloadForEnd(); }
+        break;
       case "purged": stopLive(); endedScreen(true); break;
       case "refresh": if (m.scope === "settings") setTimeout(reload, Math.random() * 4000); else reload(); break; // random delay: thousands of phones never ask at once
       case "starting": G.status = "starting"; G.liveLocal = Date.now() + (m.inMs || 0); paintAll(); break;
@@ -758,6 +762,7 @@
     clearMomentTimers(); MO.cur = null;
     const o = $("mov"); if (o) o.remove();
     document.body.style.overflow = "";
+    if (MO.after) { const f = MO.after; MO.after = null; f(); }
   }
   function ensureMoment(id, kind, extra) {
     if (MO.cur && MO.cur.id === id) { Object.assign(MO.cur, extra || {}); return MO.cur; }
@@ -785,7 +790,7 @@
     clearTimeout(c.safeT); c.safeT = setTimeout(() => closeMoment(true), ((m.confirmSeconds || 30) + 40) * 1000);
     paintMoment(); say("You won the lucky draw! Tap I'm here.");
     const b = $("movhere"); if (b) try { b.focus(); } catch {}
-    try { if (navigator.vibrate) navigator.vibrate([60, 40, 60]); } catch {}
+    try { if (navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) navigator.vibrate([60, 40, 60]); } catch {}
   }
   function onMomentResult(m) {
     refreshSoon();

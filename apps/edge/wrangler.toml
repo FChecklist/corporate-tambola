@@ -1,0 +1,25 @@
+# Cloudflare Worker + D1 for Corporate Tambola's zero-server mode. NOT deployed yet; every value below is a placeholder to fill when going live.
+# Free plan limits this is designed around: Workers 100,000 requests/day, D1 100,000 rows written/day (the Worker refuses politely at 80,000).
+name = "corporate-tambola-edge"
+main = "src/worker.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]   # billing uses node:crypto HMAC
+
+[[d1_databases]]
+binding = "DB"
+database_name = "corporate-tambola"
+database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+migrations_dir = "migrations"
+
+[triggers]
+crons = ["17 3 * * *"]   # daily 03:17 UTC: deletes engagements older than 365 days
+
+[vars]
+DAILY_WRITE_BUDGET = "80000"
+
+# Route the API on the same domain as the Pages site so phones never make a cross-origin call (set when the domain is bought):
+# routes = [{ pattern = "YOUR-DOMAIN/api/*", zone_name = "YOUR-DOMAIN" }]
+
+# Secrets are never written in files. Set them once, by hand:
+#   wrangler secret put ORGANIZER_SECRET   (our platform key)
+#   wrangler secret put PHONE_SALT         (random 32+ characters; keeps phone hashes unguessable)

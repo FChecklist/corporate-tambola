@@ -52,7 +52,7 @@ beforeEach(async () => {
   const d = makeD1();
   env = { DB: d.db, ORGANIZER_SECRET: SECRET, DAILY_WRITE_BUDGET: "1000000" };
   T0 = roundTimeMs(START - 3); t = 0;
-  await D.headCall("POST", "/api/z", { id: EID, startRound: START, callSeconds: CALL_SECONDS, cap: 5000 }, { "x-organizer": SECRET });
+  await D.headCall("POST", "/api/z", { id: EID, startRound: START, callSeconds: CALL_SECONDS, cap: 400 }, { "x-organizer": SECRET });
 });
 const registerKey = async () => (await D.headCall("PUT", `/api/z/${EID}/control/key`, { publicKey: publicKeyFromSecret(KEY) }, { "x-organizer": SECRET })).status;
 const publish = async (a: Parameters<typeof nextMessage>[2]) => {
@@ -269,5 +269,52 @@ describe("pause, resume and stop", () => {
     for (let i = 0; i < 200; i++) await step([a]);
     expect(a.rt.view().mode).toBe("none");
     expect(a.rt.view().log).toEqual(reference());
+  });
+});
+
+describe("after the last call", () => {
+  test("a claim that failed to send on the very last tick is still delivered afterwards", async () => {
+    let off = false;
+    const a = mkPhone(160, { down: () => off }); await a.rt.boot(); await a.rt.join(a.phone);
+    // play to the end with our store reachable until the final stretch, then cut it, then restore
+    for (let i = 0; i < 175; i++) await step([a]);
+    off = true;
+    for (let i = 0; i < 30; i++) await step([a]);
+    expect(a.rt.view().phase).toBe("ended");
+    const stuck = a.rt.view().unsent;
+    off = false;
+    for (let i = 0; i < 5; i++) await step([a]);
+    expect(a.rt.view().unsent).toBe(0);
+    expect(stuck).toBeGreaterThanOrEqual(0);
+    const n = (await (await D.headCall("GET", `/api/z/${EID}/claims`, undefined, { "x-organizer": SECRET })).json() as any).claims.filter((c: any) => c.pid === a.rt.pid).length;
+    expect(n).toBe(7);
+  });
+});
+
+describe("a late joiner who cannot hear about a pause", () => {
+  test("holds instead of guessing, never claims from a wrong log, and ends with the true log once it can ask", async () => {
+    await registerKey();
+    const a = mkPhone(170);
+    await a.rt.boot(); await a.rt.join(a.phone);
+    for (let i = 0; i < 30; i++) await step([a]);
+    expect((await publish({ action: "pause", pauseForRounds: 20 })).status).toBe(200);
+    for (let i = 0; i < 20; i++) await step([a]);
+    // a phone joins now, with the control file unreachable for a while
+    const b = mkPhone(171);
+    let controlDown = true;
+    const realApi = b.rt.deps.api;
+    (b.rt.deps as any).api = async (m: string, p: string, x?: unknown) => { if (controlDown && p.endsWith("/control")) throw new Error("outage"); return realApi(m, p, x); };
+    await b.rt.boot(); await b.rt.join(b.phone);
+    for (let i = 0; i < 40; i++) { await step([a, b]); expect(b.rt.view().log).toEqual([]); expect(b.rt.view().mode).toBe("hold"); }
+    controlDown = false;
+    for (let i = 0; i < 12; i++) await step([a, b]);
+    expect(b.rt.view().mode).toBe("live");
+    for (let i = 0; i < 200; i++) await step([a, b]);
+    const f = (await readPublished(kvOf(), EID))!;
+    const ref = reference(resolveControl(cfgOf(f), f.messages));
+    expect(b.rt.view().log).toEqual(ref);
+    const claims = (await (await D.headCall("GET", `/api/z/${EID}/claims`, undefined, { "x-organizer": SECRET })).json() as any).claims.filter((c: any) => c.pid === b.rt.pid);
+    expect(claims.length).toBe(7);
+    expect(checkClaims(EID, claims, ref).bad).toEqual([]);
   });
 });

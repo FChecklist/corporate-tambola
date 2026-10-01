@@ -40,6 +40,7 @@
       <div class="zcard"><h2>Your free AI assistant</h2>
         <p class="zsmall" style="margin-top:0">Included with every engagement. Give this message to ChatGPT, Claude or Gemini and it does the work for you: sets up the engagement, loads your list, schedules it and watches it. It cannot publish results, erase data or pause by itself, and it cannot change the rules.</p>
         ${S.aiMsg ? `<textarea class="zlink" id="aimsg" rows="7" readonly style="width:100%">${esc(S.aiMsg)}</textarea><button class="zbtn s alt" id="aicopy">Copy message</button><button class="zbtn s alt" id="airevoke">Stop this link</button>` : `<button class="zbtn s" id="aimake">Create my AI work link</button>`}</div>
+      ${(S.sugs || []).length ? `<div class="zcard"><h2>Ideas to improve Corporate Tambola</h2><p class="zsmall" style="margin-top:0">Suggested by organizers' AI assistants. We review them all.</p>${S.sugs.map((x) => `<div class="zrow"><span>${esc(x.title)}${x.yours ? " · yours" : ""}</span><i>${x.votes} · ${esc(x.status.replace("_", " "))}</i></div>`).join("")}</div>` : ""}
       ${S.note ? `<div class="zbanner info">${esc(S.note)}</div>` : ""}`;
   }
   function engView() {
@@ -69,7 +70,7 @@
   }
   function draw(v) { $app.innerHTML = v; bind(); }
 
-  async function refreshHome() { try { S.history = await call("GET", "/api/history"); } catch (e) { if (e.status === 403) { secret = ""; return draw(loginView("That organizer key was not accepted.")); } } draw(homeView()); }
+  async function refreshHome() { try { S.sugs = (await call("GET", "/api/z/suggestions")).suggestions.slice(0, 6); } catch { S.sugs = []; } try { S.history = await call("GET", "/api/history"); } catch (e) { if (e.status === 403) { secret = ""; return draw(loginView("That organizer key was not accepted.")); } } draw(homeView()); }
 
   async function refreshEng() {
     try {

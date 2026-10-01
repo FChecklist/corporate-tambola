@@ -11,6 +11,7 @@
 //                   So an AI can never decide who wins, and never change what the public beacon decides.
 //   nobody        - phones: join, send claims, read results counts, read the engagement info and the signed control file.
 
+import { PAY_SCHEMA, payRoute, type PayEnv } from "./pay";
 import { SAFETY_FAST, SAFETY_STANDARD, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 
 export interface D1Result<T = any> { results?: T[]; meta?: { changes?: number } }
@@ -18,9 +19,12 @@ export interface D1Stmt { bind(...v: unknown[]): D1Stmt; run(): Promise<D1Result
 export interface D1 { prepare(sql: string): D1Stmt; batch(s: D1Stmt[]): Promise<D1Result[]> }
 export interface Env { DB: D1; ORGANIZER_SECRET?: string; DAILY_WRITE_BUDGET?: string; PHONE_SALT?: string }
 export const RETENTION_DAYS = 365;
+/** Claims are only a live cross-check (settlement never uses them), and 7 rows per phone would eat the free write allowance, so they are stored only for engagements this size or smaller. */
+export const CLAIM_TRACKING_MAX_CAP = 500;
+const tracks = (e: { cap: number }) => e.cap <= CLAIM_TRACKING_MAX_CAP;
 
-export const SCHEMA = [
-  `CREATE TABLE IF NOT EXISTS engagement (id TEXT PRIMARY KEY, start_round INTEGER NOT NULL, call_seconds INTEGER NOT NULL, cap INTEGER NOT NULL, created_ms INTEGER NOT NULL, org TEXT, closed INTEGER NOT NULL DEFAULT 0)`,
+export const SCHEMA: string[] = [
+  `CREATE TABLE IF NOT EXISTS engagement (id TEXT PRIMARY KEY, start_round INTEGER NOT NULL, call_seconds INTEGER NOT NULL, cap INTEGER NOT NULL, created_ms INTEGER NOT NULL, org TEXT, closed INTEGER NOT NULL DEFAULT 0, pack INTEGER)`,
   `CREATE TABLE IF NOT EXISTS participant (eid TEXT NOT NULL, pid TEXT NOT NULL, phone_hash TEXT NOT NULL, name TEXT, joined_ms INTEGER NOT NULL, PRIMARY KEY (eid, pid))`,
   `CREATE UNIQUE INDEX IF NOT EXISTS participant_phone ON participant (eid, phone_hash)`,
   `CREATE TABLE IF NOT EXISTS claim (eid TEXT NOT NULL, pid TEXT NOT NULL, pattern TEXT NOT NULL, idx INTEGER NOT NULL, at_ms INTEGER NOT NULL, PRIMARY KEY (eid, pid, pattern))`,
@@ -29,6 +33,9 @@ export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS organizer_key (hash TEXT PRIMARY KEY, org TEXT NOT NULL, kind TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_ms INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS ctl_request (id INTEGER PRIMARY KEY AUTOINCREMENT, eid TEXT NOT NULL, action TEXT NOT NULL, note TEXT, at_ms INTEGER NOT NULL, open INTEGER NOT NULL DEFAULT 1)`,
+  `CREATE TABLE IF NOT EXISTS suggestion (id INTEGER PRIMARY KEY AUTOINCREMENT, org TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'new', note TEXT, votes INTEGER NOT NULL DEFAULT 1, created_ms INTEGER NOT NULL, title_hash TEXT NOT NULL, UNIQUE (org, title_hash))`,
+  `CREATE TABLE IF NOT EXISTS suggestion_vote (sid INTEGER NOT NULL, org TEXT NOT NULL, PRIMARY KEY (sid, org))`,
+  ...PAY_SCHEMA,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full"]);
@@ -90,7 +97,7 @@ export const AI_MANIFEST = {
   how: "Send your organizer AI key in the x-organizer header (or Authorization: Bearer). Every call is JSON. The numbers are drawn from public randomness on participants' phones; you cannot change them.",
   you_can: [
     { do: "List engagements and head-counts", call: "GET /api/history" },
-    { do: "Create an engagement", call: "POST /api/z {id, startRound, callSeconds (6|9|12|15), cap, closed?}" },
+    { do: "Create an engagement (uses one purchased engagement)", call: "POST /api/z {id, startRound, callSeconds (6|9|12|15), cap, closed?}" },
     { do: "Change start time, speed, cap or invite-only before the first number", call: "PATCH /api/z/{id}/settings {startRound?, callSeconds?, cap?, closed?}" },
     { do: "Load participants (invite list)", call: "POST /api/z/{id}/roster {people:[{phone,name}]} up to 100 per call" },
     { do: "Reuse an earlier engagement's people", call: "POST /api/z/{id}/reuse {from}" },
@@ -99,7 +106,10 @@ export const AI_MANIFEST = {
     { do: "See published results", call: "GET /api/z/{id}/results" },
     { do: "Ask the organizer to pause, resume or stop (they approve in their console)", call: "POST /api/z/{id}/control/request {action: pause|resume|stop, note}" },
     { do: "Read the current pause status", call: "GET /api/z/{id}/control" },
+    { do: "Suggest a feature, improvement or report we should build (shared with every organizer's AI, reviewed by us)", call: "POST /api/z/suggestions {kind: feature|improvement|report|bug|other, title, body}" },
+    { do: "See everyone's suggestions and what we decided, and add your support to one", call: "GET /api/z/suggestions ; POST /api/z/suggestions/{id}/vote" },
   ],
+  suggestions_rules: "Describe the need and the benefit, not code. Never include names, phone numbers, e-mail addresses or anything about specific people. Suggestions are visible to all organizers' AI assistants without saying who wrote them. We review them and mark each one new, under_review, planned, shipped or declined.",
   you_cannot: [
     "Publish results or decide winners (the organizer's console recomputes them from the public numbers)",
     "Erase participant data (the organizer does that)",
@@ -115,6 +125,8 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   const a = await authOf(req, env);
 
   if (req.method === "GET" && p === "/api/z/ai-manifest") return json(AI_MANIFEST);
+  const paid = await payRoute(req, env as PayEnv, now, (n) => spend(env, now, n));
+  if (paid) return paid;
 
   /* ---- organizers and their keys ---- */
   if (req.method === "POST" && p === "/api/org") { // platform: a new organizer (called after payment / sign-up); the key is shown once
@@ -186,6 +198,56 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     return json({ error: "Not found" }, 404);
   }
 
+  /* ---- suggestions: one shared board for every organizer's AI; we (platform) decide what to build ---- */
+  if (p === "/api/z/suggestions" || /^\/api\/z\/suggestions\/\d{1,9}\/(vote|status)$/.test(p)) {
+    const KINDS = ["feature", "improvement", "report", "bug", "other"], STATUSES = ["new", "under_review", "planned", "shipped", "declined"];
+    if (!a.plat && !a.org) return deny(a);
+    if (req.method === "GET" && p === "/api/z/suggestions") {
+      const st = url.searchParams.get("status");
+      const q = st && STATUSES.includes(st) ? env.DB.prepare("SELECT id, kind, title, body, status, note, votes, created_ms, org FROM suggestion WHERE status=? ORDER BY votes DESC, id DESC LIMIT 200").bind(st) : env.DB.prepare("SELECT id, kind, title, body, status, note, votes, created_ms, org FROM suggestion ORDER BY votes DESC, id DESC LIMIT 200");
+      const rows = (await q.all<any>()).results ?? [];
+      const mine = a.org ? new Set(((await env.DB.prepare("SELECT sid FROM suggestion_vote WHERE org=?").bind(a.org).all<any>()).results ?? []).map((r: any) => r.sid)) : new Set();
+      return json({ suggestions: rows.map((r: any) => ({ id: r.id, kind: r.kind, title: r.title, body: r.body, status: r.status, note: r.note, votes: r.votes, created_ms: r.created_ms, yours: !!a.org && r.org === a.org, youSupported: mine.has(r.id), ...(a.plat ? { org: r.org } : {}) })) }); // authors are never shown to other organizers
+    }
+    if (req.method === "POST" && p === "/api/z/suggestions") {
+      if (!a.org) return deny(a); // platform has its own tools; this is for organizers and their AI
+      const b = await body(req, 8192);
+      const title = typeof b?.title === "string" ? b.title.replace(/[<>`]/g, "").trim() : "";
+      const text = typeof b?.body === "string" ? b.body.replace(/[<>`]/g, "").trim() : "";
+      if (!b || !KINDS.includes(b.kind) || title.length < 4 || title.length > 120 || text.length < 10 || text.length > 2000) return json({ error: "Give a kind (feature, improvement, report, bug or other), a short title (4 to 120 characters) and a description (10 to 2000 characters)." }, 400);
+      if (/[\w.+-]+@[\w-]+\.[\w.]+/.test(title + " " + text) || /(?:\d[\s-]?){10,}/.test(title + " " + text)) return json({ error: "Please do not include e-mail addresses or phone numbers, or anything about specific people. Describe the need in general terms." }, 400);
+      const today = (await env.DB.prepare("SELECT COUNT(*) AS c FROM suggestion WHERE org=? AND created_ms>?").bind(a.org, now - 86_400_000).first<{ c: number }>())?.c ?? 0;
+      if (today >= 20) return json({ error: "That is plenty for today. Please try again tomorrow." }, 429);
+      const th = await sha("title|" + title.toLowerCase().replace(/\s+/g, " "));
+      const dup = await env.DB.prepare("SELECT id FROM suggestion WHERE org=? AND title_hash=?").bind(a.org, th).first<{ id: number }>();
+      if (dup) return json({ ok: true, id: dup.id, duplicate: true });
+      if (!(await spend(env, now, 2))) return BUSY();
+      const r = await env.DB.prepare("INSERT INTO suggestion(org,kind,title,body,status,votes,created_ms,title_hash) VALUES(?,?,?,?, 'new', 1, ?, ?)").bind(a.org, b.kind, title, text, now, th).run();
+      const id = (await env.DB.prepare("SELECT id FROM suggestion WHERE org=? AND title_hash=?").bind(a.org, th).first<{ id: number }>())!.id;
+      await env.DB.prepare("INSERT OR IGNORE INTO suggestion_vote(sid,org) VALUES(?,?)").bind(id, a.org).run();
+      return json({ ok: true, id, stored: r.meta?.changes ?? 0 });
+    }
+    const sm = p.match(/^\/api\/z\/suggestions\/(\d+)\/(vote|status)$/);
+    if (sm && req.method === "POST") {
+      const sid = Number(sm[1]);
+      const row = await env.DB.prepare("SELECT id FROM suggestion WHERE id=?").bind(sid).first();
+      if (!row) return json({ error: "No such suggestion." }, 404);
+      if (sm[2] === "vote") {
+        if (!a.org) return deny(a);
+        if (!(await spend(env, now, 2))) return BUSY();
+        const r = await env.DB.prepare("INSERT OR IGNORE INTO suggestion_vote(sid,org) VALUES(?,?)").bind(sid, a.org).run();
+        if (r.meta?.changes) await env.DB.prepare("UPDATE suggestion SET votes=votes+1 WHERE id=?").bind(sid).run();
+        return json({ ok: true, counted: !!r.meta?.changes });
+      }
+      if (!a.plat) return deny(a); // only we decide status
+      const b = await body(req);
+      if (!b || !STATUSES.includes(b.status)) return json({ error: "Pick a status." }, 400);
+      await env.DB.prepare("UPDATE suggestion SET status=?, note=? WHERE id=?").bind(b.status, typeof b.note === "string" ? b.note.replace(/[<>`]/g, "").slice(0, 300) : null, sid).run();
+      return json({ ok: true });
+    }
+    return json({ error: "Not found" }, 404);
+  }
+
   /* ---- engagements ---- */
   if (req.method === "POST" && p === "/api/z") {
     if (!a.plat && !a.org) return deny(a);
@@ -194,8 +256,12 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
       return json({ error: "Check the engagement details." }, 400);
     const have = await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(b.id).first<{ org: string | null }>();
     if (have) return json({ ok: true, existed: true }); // creating twice never overwrites (and never reveals whose it is)
-    if (!(await spend(env, now))) return BUSY();
-    await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed) VALUES(?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.closed ? 1 : 0).run();
+    // an organizer needs a purchased engagement (entitlement) big enough for the limit they ask for; we (platform) do not
+    const ent = a.plat ? null : await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(a.org, b.cap).first<{ id: string; pack: number }>();
+    if (!a.plat && !ent) return json({ error: "Please buy an engagement first (or a pack big enough for this many participants)." }, 402);
+    if (!(await spend(env, now, 2))) return BUSY();
+    await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack) VALUES(?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.closed ? 1 : 0, ent?.pack ?? b.cap).run();
+    if (ent) await env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(b.id, ent.id).run();
     return json({ ok: true });
   }
   if (req.method === "GET" && p === "/api/history") {
@@ -228,14 +294,14 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const ph = await phoneHash(b?.phone);
     if (!ph) return json({ error: "Enter a valid mobile number." }, 400);
     const have = await env.DB.prepare("SELECT pid FROM participant WHERE eid=? AND phone_hash=?").bind(eid, ph).first<{ pid: string }>();
-    if (have) return json({ pid: have.pid, startRound: e.start_round, callSeconds: e.call_seconds, again: true }); // same number twice = same participant, no extra write
+    if (have) return json({ pid: have.pid, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), again: true }); // same number twice = same participant, no extra write
     if (e.closed) return json({ error: "This engagement is by invitation. Ask your organizer to add your number." }, 403);
     const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
     if ((n?.c ?? 0) >= e.cap) return json({ error: "This engagement is full." }, 409);
     if (!(await spend(env, now))) return BUSY();
     const pid = await pidOf(ph);
     await env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,joined_ms) VALUES(?,?,?,?,?)").bind(eid, pid, ph, cleanName(b?.name), now).run();
-    return json({ pid, startRound: e.start_round, callSeconds: e.call_seconds });
+    return json({ pid, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e) });
   }
   if (action === "claims" && req.method === "POST") {
     const b = await body(req);
@@ -243,6 +309,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (!b || typeof b.pid !== "string" || !list) return json({ error: "Bad claim." }, 400);
     const who = await env.DB.prepare("SELECT pid FROM participant WHERE eid=? AND pid=?").bind(eid, b.pid).first();
     if (!who) return json({ error: "Not a participant of this engagement." }, 403);
+    if (!tracks(e)) return json({ ok: true, stored: 0, tracked: false }); // large engagement: winners are worked out from the public numbers, nothing is stored per claim
     let stored = 0;
     for (const c of list) {
       if (!PATTERNS.has(c?.pattern) || !Number.isInteger(c?.idx) || c.idx < 0 || c.idx > 89) continue;
@@ -256,7 +323,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const r = await env.DB.prepare("SELECT pattern,idx,pids FROM settled WHERE eid=?").bind(eid).all<any>();
     return json({ results: (r.results ?? []).map((x: any) => ({ pattern: x.pattern, idx: x.idx, count: JSON.parse(x.pids).length })) }); // public: counts only, no ids
   }
-  if (action === "info" && req.method === "GET") return json({ startRound: e.start_round, callSeconds: e.call_seconds });
+  if (action === "info" && req.method === "GET") return json({ startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e) });
 
   // everything below is for the organizer (or their AI, where allowed)
   if (action === "claims" && req.method === "GET") {
@@ -331,6 +398,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (!Number.isInteger(next.start_round) || !Number.isInteger(next.call_seconds) || next.call_seconds % 3 || next.call_seconds < 6 || !Number.isInteger(next.cap) || next.cap < 1 || next.cap > 100000) return json({ error: "Check the details." }, 400);
     if (roundMs(next.start_round) <= now) return json({ error: "Pick a start time in the future." }, 400);
     const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
+    if (!a.plat && next.cap > (e.pack ?? e.cap)) return json({ error: `Your pack allows up to ${e.pack ?? e.cap} participants. Buy a bigger pack to raise the limit.` }, 402);
     if (next.cap < (have?.c ?? 0)) return json({ error: "The limit cannot be lower than the people already on the list." }, 409);
     if (!(await spend(env, now))) return BUSY();
     await env.DB.prepare("UPDATE engagement SET start_round=?, call_seconds=?, cap=?, closed=? WHERE id=?").bind(next.start_round, next.call_seconds, next.cap, next.closed, eid).run();

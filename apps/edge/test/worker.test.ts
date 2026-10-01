@@ -9,7 +9,7 @@ const T = Date.UTC(2026, 9, 1, 10, 0, 0);
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}, now = T) =>
   handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body) }), env, now);
 const org = { "x-organizer": SECRET };
-const create = (over: Record<string, unknown> = {}) => call("POST", "/api/z", { id: "ENG1", startRound: 1000, callSeconds: 6, cap: 20000, ...over }, org);
+const create = (over: Record<string, unknown> = {}) => call("POST", "/api/z", { id: "ENG1", startRound: 1000, callSeconds: 6, cap: 400, ...over }, org);
 const phone = (i: number) => "9" + String(100000000 + i);
 const join = (i: number, eid = "ENG1", now = T) => call("POST", `/api/z/${eid}/join`, { phone: phone(i), name: "P" + i }, {}, now);
 
@@ -38,7 +38,7 @@ describe("engagement set-up", () => {
   test("creating twice does not overwrite the first", async () => {
     await create();
     await create({ cap: 5 });
-    expect(raw.query("SELECT cap FROM engagement WHERE id='ENG1'").get()).toEqual({ cap: 20000 });
+    expect(raw.query("SELECT cap FROM engagement WHERE id='ENG1'").get()).toEqual({ cap: 400 });
   });
 });
 
@@ -49,7 +49,7 @@ describe("joining", () => {
     expect(r.startRound).toBe(1000);
     expect(r.callSeconds).toBe(6);
     expect(r.pid).toHaveLength(16);
-    expect(Object.keys(r).sort()).toEqual(["callSeconds", "pid", "startRound"]);
+    expect(Object.keys(r).sort()).toEqual(["callSeconds", "pid", "startRound", "trackClaims"]);
   });
   test("the same number joining twice, even typed differently, is one participant and one write", async () => {
     const a = await (await call("POST", "/api/z/ENG1/join", { phone: "+91 98765-43210" })).json() as any;
@@ -165,18 +165,33 @@ describe("free-plan guard and scale", () => {
     const rs = await Promise.all(Array.from({ length: 10000 }, (_, i) => join(i)));
     expect(rs.every((r) => r.status === 200)).toBe(true);
     expect((raw.query("SELECT COUNT(*) c FROM participant").get() as any).c).toBe(10000);
-    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(10001);
+    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(10002);
     expect(10001).toBeLessThan(100000 * 0.2); // one 10,000-person engagement uses ~10% of D1's free daily writes
   }, 120_000);
-  test("10,000 joins plus every pattern claimed by 10,000 phones, twice (retries) - stored once each", async () => {
+  test("a large engagement stores no per-claim rows (winners come from the public numbers), so 10,000 phones claiming adds no writes", async () => {
     await create({ cap: 20000 });
     const pids: string[] = [];
     for (let i = 0; i < 10000; i++) pids.push(((await (await join(i)).json()) as any).pid);
     const pats = ["early5", "top", "mid", "bot", "corners", "star", "full"];
     for (let round = 0; round < 2; round++)
       await Promise.all(pids.slice(0, 2000).map((pid, i) => call("POST", "/api/z/ENG1/claims", { pid, claims: [{ pattern: pats[i % 7], idx: i % 90 }] })));
-    expect((raw.query("SELECT COUNT(*) c FROM claim").get() as any).c).toBe(2000);
+    expect((raw.query("SELECT COUNT(*) c FROM claim").get() as any).c).toBe(0);
+    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(10002); // 1 create + 1 entitlement-free + 10,000 joins
   }, 120_000);
+  test("a small engagement (up to 500) stores claims once each, even when sent twice", async () => {
+    await create({ cap: 500 });
+    const pids: string[] = [];
+    for (let i = 0; i < 300; i++) pids.push(((await (await join(i)).json()) as any).pid);
+    const pats = ["early5", "top", "mid", "bot", "corners", "star", "full"];
+    for (let round = 0; round < 2; round++)
+      await Promise.all(pids.map((pid, i) => call("POST", "/api/z/ENG1/claims", { pid, claims: [{ pattern: pats[i % 7], idx: i % 90 }] })));
+    expect((raw.query("SELECT COUNT(*) c FROM claim").get() as any).c).toBe(300);
+  }, 120_000);
+  test("the engagement tells phones whether claims are tracked", async () => {
+    await create({ cap: 500 }); await create({ id: "BIG01", cap: 501 });
+    expect(((await (await call("GET", "/api/z/ENG1/info")).json()) as any).trackClaims).toBe(true);
+    expect(((await (await call("GET", "/api/z/BIG01/info")).json()) as any).trackClaims).toBe(false);
+  });
 });
 
 describe("roster, history, erase and 365-day retention", () => {
@@ -187,7 +202,7 @@ describe("roster, history, erase and 365-day retention", () => {
       expect((await call(m, p, m === "POST" ? {} : undefined)).status).toBe(403);
   });
   test("info is public and holds only what a phone needs", async () => {
-    expect(await (await call("GET", "/api/z/ENG1/info")).json()).toEqual({ startRound: 1000, callSeconds: 6 });
+    expect(await (await call("GET", "/api/z/ENG1/info")).json()).toEqual({ startRound: 1000, callSeconds: 6, trackClaims: true });
   });
   test("the organizer sees ids and names, never phone numbers or hashes", async () => {
     await join(1);
@@ -262,6 +277,7 @@ describe("organizers, their AI assistant, and what the AI may not do", () => {
     master = ((await (await call("POST", "/api/org", {}, plat)).json()) as any).organizerKey;
     other = ((await (await call("POST", "/api/org", {}, plat)).json()) as any).organizerKey;
     aiKey = ((await (await call("POST", "/api/org/ai", {}, asM())).json()) as any).aiKey;
+    for (let i = 0; i < 6; i++) raw.run("INSERT INTO entitlement(id,org,pack,payment_id,eid,created_ms) SELECT 'g" + i + "'||hash, org, 1000, 'x', NULL, 0 FROM organizer_key WHERE kind='master'"); // purchased engagements
     await call("POST", "/api/z", { id: "MINE1", startRound: FUTURE, callSeconds: 6, cap: 50 }, asM());
   });
   test("only the platform makes organizers; keys are shown once and never stored in the clear", async () => {
@@ -377,5 +393,99 @@ describe("organizers, their AI assistant, and what the AI may not do", () => {
     await call("POST", "/api/purge", {}, plat);
     expect(raw.query("SELECT COUNT(*) c FROM ctl_request WHERE eid='ANCIENT'").get()).toEqual({ c: 0 });
     expect(raw.query("SELECT COUNT(*) c FROM kv WHERE k LIKE 'control/ANCIENT%'").get()).toEqual({ c: 0 });
+  });
+});
+
+describe("the shared suggestion board for every organizer's AI", () => {
+  const plat = { "x-organizer": SECRET };
+  let ma = "", mb = "", aiA = "";
+  const asA = () => ({ "x-organizer": aiA });
+  const asB = () => ({ "x-organizer": mb });
+  const sug = (h: Record<string, string>, o: Record<string, unknown> = {}) => call("POST", "/api/z/suggestions", { kind: "feature", title: "Team leaderboard across rounds", body: "Show each team's total after every round so teams can compare.", ...o }, h);
+  beforeEach(async () => {
+    ma = ((await (await call("POST", "/api/org", {}, plat)).json()) as any).organizerKey;
+    mb = ((await (await call("POST", "/api/org", {}, plat)).json()) as any).organizerKey;
+    aiA = ((await (await call("POST", "/api/org/ai", {}, { "x-organizer": ma })).json()) as any).aiKey;
+  });
+  test("an organizer's AI can suggest; strangers cannot", async () => {
+    expect((await sug(asA())).status).toBe(200);
+    expect((await sug({ "x-organizer": "cta_nobody" })).status).toBe(403);
+    expect((await sug({})).status).toBe(403);
+  });
+  test("every other organizer's AI can read the whole board, but never who wrote what", async () => {
+    await sug(asA());
+    const list = await (await call("GET", "/api/z/suggestions", undefined, asB())).json() as any;
+    expect(list.suggestions).toHaveLength(1);
+    expect(list.suggestions[0]).toMatchObject({ kind: "feature", status: "new", votes: 1, yours: false });
+    expect(JSON.stringify(list)).not.toMatch(/"org"/);
+    const mine = await (await call("GET", "/api/z/suggestions", undefined, asA())).json() as any;
+    expect(mine.suggestions[0].yours).toBe(true);
+    const asPlatform = await (await call("GET", "/api/z/suggestions", undefined, plat)).json() as any;
+    expect(asPlatform.suggestions[0].org).toBeTruthy(); // we can see who, to follow up
+  });
+  test("the board is closed to the public", async () => {
+    expect((await call("GET", "/api/z/suggestions")).status).toBe(403);
+  });
+  test("a vote counts once per organizer, however often it is sent", async () => {
+    const id = ((await (await sug(asA())).json()) as any).id;
+    for (let i = 0; i < 3; i++) await call("POST", `/api/z/suggestions/${id}/vote`, {}, asB());
+    await call("POST", `/api/z/suggestions/${id}/vote`, {}, asA()); // the author already counted
+    const list = await (await call("GET", "/api/z/suggestions", undefined, asB())).json() as any;
+    expect(list.suggestions[0].votes).toBe(2);
+    expect(list.suggestions[0].youSupported).toBe(true);
+    expect((await call("POST", "/api/z/suggestions/9999/vote", {}, asB())).status).toBe(404);
+  });
+  test("the same idea sent twice is stored once", async () => {
+    const a = await (await sug(asA())).json() as any;
+    const b = await (await sug(asA(), { title: "  team LEADERBOARD   across rounds " })).json() as any;
+    expect(b.duplicate).toBe(true);
+    expect(b.id).toBe(a.id);
+    expect(raw.query("SELECT COUNT(*) c FROM suggestion").get()).toEqual({ c: 1 });
+  });
+  test("only we decide the outcome: neither an AI nor an organizer can change a status or a note", async () => {
+    const id = ((await (await sug(asA())).json()) as any).id;
+    expect((await call("POST", `/api/z/suggestions/${id}/status`, { status: "shipped" }, asA())).status).toBe(403);
+    expect((await call("POST", `/api/z/suggestions/${id}/status`, { status: "shipped" }, asB())).status).toBe(403);
+    expect((await call("POST", `/api/z/suggestions/${id}/status`, { status: "declined" }, { "x-organizer": ma })).status).toBe(403);
+    expect((await call("POST", `/api/z/suggestions/${id}/status`, { status: "mystery" }, plat)).status).toBe(400);
+    expect((await call("POST", `/api/z/suggestions/${id}/status`, { status: "planned", note: "Good one <b>thanks</b>" }, plat)).status).toBe(200);
+    const list = await (await call("GET", "/api/z/suggestions?status=planned", undefined, asB())).json() as any;
+    expect(list.suggestions[0]).toMatchObject({ status: "planned", note: "Good one bthanks/b" });
+    expect(((await (await call("GET", "/api/z/suggestions?status=new", undefined, asB())).json()) as any).suggestions).toEqual([]);
+  });
+  test("nobody can edit or delete a suggestion, their own or another's", async () => {
+    const id = ((await (await sug(asA())).json()) as any).id;
+    for (const m of ["PATCH", "PUT", "DELETE"]) expect([404, 403]).toContain((await call(m, `/api/z/suggestions/${id}`, { title: "hacked" }, asB())).status);
+    expect(raw.query("SELECT title FROM suggestion WHERE id=?").get(id)).toEqual({ title: "Team leaderboard across rounds" });
+  });
+  test("bad kinds, too short or too long text and markup are refused or cleaned", async () => {
+    for (const o of [{ kind: "hack" }, { title: "ab" }, { title: "x".repeat(121) }, { body: "short" }, { body: "y".repeat(2001) }]) expect((await sug(asA(), o)).status).toBe(400);
+    const r = await (await sug(asA(), { title: "Use <script>alert(1)</script> colours", body: "Make the board <b>brighter</b> for older phones please." })).json() as any;
+    expect(r.ok).toBe(true);
+    const row = raw.query("SELECT title, body FROM suggestion WHERE id=?").get(r.id) as any;
+    expect(/[<>`]/.test(row.title + row.body)).toBe(false);
+  });
+  test("personal details are refused so the shared board never leaks anyone", async () => {
+    expect((await sug(asA(), { body: "Ask Priya at priya@acme.com to approve the list before it starts." })).status).toBe(400);
+    expect((await sug(asA(), { body: "Call 98765 43210 when the engagement is about to begin please." })).status).toBe(400);
+    expect((await sug(asA(), { body: "Call 9 8 7 6 5 4 3 2 1 0 when the engagement is about to begin." })).status).toBe(400);
+    expect(raw.query("SELECT COUNT(*) c FROM suggestion").get()).toEqual({ c: 0 });
+  });
+  test("at most 20 a day per organizer, then fine again the next day", async () => {
+    for (let i = 0; i < 20; i++) expect((await sug(asA(), { title: "Idea number " + i + " for later" })).status).toBe(200);
+    expect((await sug(asA(), { title: "One idea too many today" })).status).toBe(429);
+    expect((await sug(asB(), { title: "One idea too many today" })).status).toBe(200); // another organizer is unaffected
+    expect((await call("POST", "/api/z/suggestions", { kind: "feature", title: "Fresh idea next day", body: "A perfectly reasonable description of the need." }, asA(), T + 86_400_001 + 1)).status).toBe(200);
+  });
+  test("a suggestion gives no one a way to run code or touch another organizer's engagements", async () => {
+    await call("POST", "/api/z", { id: "OTHERS1", startRound: 99999999, callSeconds: 9, cap: 5 }, plat);
+    for (const path of ["/api/z/OTHERS1/participants", "/api/z/OTHERS1/claims", "/api/z/OTHERS1/roster", "/api/z/OTHERS1/erase", "/api/z/OTHERS1/settle", "/api/z/OTHERS1/settings"])
+      expect([403, 404, 405]).toContain((await call(path.endsWith("participants") || path.endsWith("claims") ? "GET" : "POST", path, {}, asA())).status);
+  });
+  test("the manifest tells the AI about the board and what not to put on it", async () => {
+    const mf = await (await call("GET", "/api/z/ai-manifest")).json() as any;
+    expect(JSON.stringify(mf)).toMatch(/suggest/i);
+    expect(mf.suggestions_rules).toMatch(/Never include names, phone numbers/);
+    expect(JSON.stringify(mf.you_cannot)).toMatch(/code/i);
   });
 });
