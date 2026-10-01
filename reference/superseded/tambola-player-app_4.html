@@ -1,0 +1,821 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F6F3EC"><title>Tambola – Player</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400&family=IBM+Plex+Mono:wght@500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F6F3EC; --surface:#FFFFFF; --ink:#0E1726; --ink2:#2B3444; --muted:#6B7280; --faint:#9AA0A9;
+  --line:#E6E0D4; --line2:#EFEAE0; --gold:#B8955A; --gold2:#D9C29A; --goldbg:#F7F0E2;
+  --ok:#1F6F54; --okbg:#E6F2EC; --bad:#A4262C; --badbg:#FBEAEA;
+  --c:#0F1E3D; --a:#C5A46D;
+  --serif:"Fraunces",Georgia,"Times New Roman",serif; --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:16px; --shadow:0 1px 2px rgba(14,23,38,.04),0 12px 32px -18px rgba(14,23,38,.28);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.55 var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:var(--ink);text-decoration-color:var(--gold2);text-underline-offset:3px}
+.hidden{display:none!important}
+.ic{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;vertical-align:-3.5px}
+.app{max-width:560px;margin:0 auto;padding:0 18px calc(110px + env(safe-area-inset-bottom))}
+h1,h2,h3{font-family:var(--serif);font-weight:600;letter-spacing:-.01em;margin:0}
+.eyebrow{font:600 10.5px/1.2 var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--gold)}
+.muted{color:var(--muted)}
+/* ---------- app bar ---------- */
+.appbar{position:sticky;top:0;z-index:15;display:flex;align-items:center;gap:12px;padding:14px 0 12px;background:linear-gradient(var(--bg) 75%,rgba(246,243,236,0))}
+.brand{display:flex;align-items:center;gap:10px}
+.mark{width:32px;height:32px;border-radius:9px;background:var(--ink);color:var(--gold2);display:grid;place-items:center}
+.mark .ic{width:17px;height:17px}
+.word{font-family:var(--serif);font-weight:600;font-size:19px;letter-spacing:-.01em}
+.word i{font-style:normal;color:var(--gold)}
+.iconbtn{width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
+.avatar{margin-left:auto;width:38px;height:38px;border-radius:50%;border:1px solid var(--gold2);background:var(--surface);font:600 13px var(--sans);letter-spacing:.04em;color:var(--ink)}
+.menu{position:absolute;right:0;top:58px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:8px;min-width:240px;z-index:30}
+.menu-h{padding:8px 10px 12px;border-bottom:1px solid var(--line2);margin-bottom:6px}.menu-h b{display:block;font-weight:600}.menu-h span{font-size:13px;color:var(--muted)}
+.menu button,.menu a{display:flex;align-items:center;gap:12px;width:100%;border:0;background:none;padding:10px;border-radius:10px;text-align:left;text-decoration:none;color:var(--ink);font-weight:500}
+.menu button:hover,.menu a:hover{background:var(--bg)}
+/* ---------- buttons ---------- */
+.btn{border:0;border-radius:14px;padding:14px 18px;font:600 15px var(--sans);letter-spacing:.01em;color:#fff;background:var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:10px;transition:transform .12s,opacity .12s}
+.btn:active{transform:scale(.985)}
+.btn.block{width:100%}
+.btn.gold{background:linear-gradient(180deg,#CBAE78,#B08D57);color:#1B1408;box-shadow:0 10px 24px -12px rgba(176,141,87,.9);letter-spacing:.08em;text-transform:uppercase;font-size:14px}
+.btn.line{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.linkbtn{border:0;background:none;color:var(--ink2);font-weight:500;padding:10px 2px;display:inline-flex;gap:8px;align-items:center;text-decoration:underline;text-decoration-color:var(--gold2);text-underline-offset:4px}
+.linkbtn:disabled{color:var(--faint);text-decoration:none;cursor:default}
+/* ---------- welcome ---------- */
+.welcome{display:grid;gap:22px;padding-top:6px}
+.w-text h1{font-size:36px;line-height:1.08;margin:10px 0 12px}
+.w-text h1 em{font-style:italic;color:var(--gold)}
+.w-text p{margin:0;color:var(--ink2);font-size:16px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.step{padding:14px 10px 14px 0}
+.step+.step{padding-left:12px;border-left:1px solid var(--line)}
+.step b{display:block;font-family:var(--serif);font-size:22px;color:var(--gold);font-weight:500}
+.step span{font-size:13px;color:var(--ink2)}
+.fine{font-size:12.5px;color:var(--muted);margin:12px 0 0;text-align:center}
+/* ---------- forms ---------- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:24px 20px;box-shadow:var(--shadow)}
+.card h2{font-size:26px;margin:8px 0 6px}
+.card .lead{color:var(--muted);margin:0 0 20px}
+label.lb{display:block;font:600 10.5px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
+.inp,.phone{width:100%;border:1px solid var(--line);border-radius:14px;padding:14px 15px;font:500 16px var(--sans);background:#FDFCF9;color:var(--ink);outline:none;transition:border-color .15s,box-shadow .15s}
+.inp:focus,.phone:focus-within{border-color:var(--ink);box-shadow:0 0 0 4px rgba(14,23,38,.06);background:#fff}
+.phone{display:flex;align-items:center;gap:12px;padding:0 0 0 15px}
+.phone span{font-weight:600;color:var(--muted);padding-right:12px;border-right:1px solid var(--line)}
+.phone input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:500 16px var(--sans);padding:14px 15px 14px 0;color:var(--ink)}
+.hint{font-size:13px;color:var(--muted);margin:8px 0 18px}
+.err{background:var(--badbg);color:var(--bad);border-radius:12px;padding:11px 13px;font-size:13.5px;margin:0 0 14px;display:flex;gap:10px;align-items:flex-start}
+.demo{font-size:12px;color:var(--muted);border-top:1px dashed var(--line);padding-top:12px;margin:18px 0 0}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:4px;gap:4px}
+.seg button{border:0;background:transparent;padding:11px 8px;border-radius:10px;font-weight:600;font-size:14px;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:8px}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(14,23,38,.12)}
+.otp{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:6px 0 16px}
+.otp input{width:100%;text-align:center;font:600 22px var(--mono);padding:14px 0;border:1px solid var(--line);border-radius:12px;background:#FDFCF9;outline:none;color:var(--ink)}
+.otp input:focus{border-color:var(--ink);box-shadow:0 0 0 4px rgba(14,23,38,.06)}
+.otp-foot{display:flex;justify-content:space-between;flex-wrap:wrap;margin-top:6px}
+.consent{border:1px solid var(--line);border-radius:14px;padding:14px;margin:18px 0}
+.cb{display:flex;gap:12px;align-items:flex-start;font-size:14px;color:var(--ink2);margin:0}
+.cb input{width:19px;height:19px;margin-top:2px;accent-color:var(--ink);flex:0 0 auto}
+/* ---------- games list ---------- */
+.hello h2{font-size:28px;margin:4px 0 4px}
+.sec{font:600 10.5px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:26px 0 10px;display:flex;align-items:center;gap:10px}
+.sec::after{content:"";flex:1;height:1px;background:var(--line)}
+.glist{display:grid;gap:12px}
+.gcard{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden;cursor:pointer;box-shadow:var(--shadow);transition:transform .12s}
+.gcard:active{transform:scale(.99)}
+.gdate{width:76px;flex:0 0 auto;background:var(--c);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;padding:10px 0}
+.gdate b{font:500 30px/1 var(--serif);color:var(--a)}
+.gdate span{font:600 10px var(--sans);letter-spacing:.16em;text-transform:uppercase;margin-top:4px;opacity:.85}
+.gdate::after{content:"";position:absolute;right:-1px;top:10px;bottom:10px;border-right:2px dashed var(--bg)}
+.gbody{flex:1;min-width:0;padding:14px 14px 14px 16px}
+.gbody .eyebrow{font-size:10px}
+.gname{font:600 18px/1.25 var(--serif);margin:3px 0 8px}
+.gmeta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted)}
+.gmeta span{display:inline-flex;align-items:center;gap:6px}
+.gmeta .ic{width:15px;height:15px}
+.gchev{display:flex;align-items:center;padding-right:14px;color:var(--faint)}
+.st{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.st i{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+.st.live i{background:#C0392B;box-shadow:0 0 0 0 rgba(192,57,43,.5);animation:pulse 1.6s infinite}
+.st.daily i{background:var(--gold)}.st.up i{background:#3D5A99}.st.over i{background:var(--faint)}
+@keyframes pulse{to{box-shadow:0 0 0 8px rgba(192,57,43,0)}}
+/* ---------- game layout ---------- */
+.g-layout{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}.g-layout>*{min-width:0}
+.ghead .eyebrow{color:var(--a)}
+.ghead h2{font-size:26px;line-height:1.15;margin:4px 0 8px}
+.ghead .meta{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted)}
+.ghead .meta span{display:inline-flex;align-items:center;gap:6px}
+.ghead .meta .ic{width:15px;height:15px}
+/* caller */
+.caller{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:var(--shadow)}
+.cl-top{display:flex;gap:18px;align-items:center}
+.ringw{position:relative;width:116px;height:116px;flex:0 0 auto}
+.ringw>svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.ringw .trk{stroke:var(--line2)}.ringw .prg{stroke:var(--a);transition:stroke-dashoffset .2s linear}
+.ball{position:absolute;inset:10px;border-radius:50%;background:var(--c);color:#fff;display:grid;place-items:center;font:500 46px/1 var(--serif);letter-spacing:-.02em;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.ball small{font:600 10px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--a);text-align:center;line-height:1.4}
+.ball .ic{width:30px;height:30px;color:var(--a)}
+.ball.pop{animation:pop .45s cubic-bezier(.2,1.4,.4,1)}
+@keyframes pop{from{transform:scale(.7);opacity:.3}to{transform:none;opacity:1}}
+.cl-text{min-width:0;flex:1}
+.cl-line{font:italic 400 17px/1.35 var(--serif);color:var(--ink);margin:6px 0 8px}
+.cl-sub{font-size:13px;color:var(--muted)}
+.cl-next{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line2);font-size:13.5px}
+.cl-next b{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cl-next .ic{color:var(--gold)}
+.bar{height:3px;background:var(--line2);border-radius:3px;margin-top:10px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--a)}
+.cl-note{display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-size:12.5px;color:var(--muted)}
+.cl-note .ic{width:16px;height:16px;margin-top:1px}
+.cl-tools{display:flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap}
+.langs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0}
+.langs::-webkit-scrollbar{display:none}
+.lang{border:1px solid var(--line);background:transparent;border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:600;color:var(--muted);white-space:nowrap}
+.lang.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.vbtn{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:transparent;display:grid;place-items:center;flex:0 0 auto}
+.vbtn.on{border-color:var(--gold);color:var(--gold)}
+.count{display:flex;gap:8px;margin-top:10px}
+.count div{border:1px solid var(--line);border-radius:12px;padding:6px 10px;text-align:center;min-width:58px}
+.count b{display:block;font:500 24px/1.1 var(--serif)}.count span{font:600 9.5px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+/* tabs */
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--line);position:sticky;top:62px;z-index:8;background:var(--bg)}
+.tabs button{border:0;background:none;padding:12px 4px 11px;font-size:13.5px;font-weight:600;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:7px;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--a)}
+.tabs button .ic{width:16px;height:16px}
+.panel{padding-top:16px}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px}
+.box h3{font-size:18px;margin:0 0 4px}
+.box .sub{font-size:13px;color:var(--muted);margin:0 0 10px}
+.prz{display:flex;gap:14px;align-items:center;padding:13px 0;border-top:1px solid var(--line2);cursor:pointer}
+.prz:first-of-type{border-top:0}
+.prz .pt{flex:1;min-width:0}.prz .pt b{display:block;font-weight:600}.prz .pt span{display:block;font-size:13px;color:var(--muted)}
+.prz .tag{font-size:12px;font-weight:600;white-space:nowrap}
+.prz .tag.open{color:var(--ok)}.prz .tag.won{color:var(--muted)}
+.prz.sel{background:var(--goldbg);margin:0 -10px;padding-left:10px;padding-right:10px;border-radius:12px}
+.mini{display:grid;grid-template-columns:repeat(9,5px);gap:2px;flex:0 0 auto;padding:5px;border:1px solid var(--line);border-radius:6px}
+.mini i{width:5px;height:5px;border-radius:1px;background:var(--line2)}.mini i.p{background:var(--c)}
+.rules{list-style:none;margin:6px 0 0;padding:0;counter-reset:r}
+.rules li{counter-increment:r;display:grid;grid-template-columns:34px 1fr;gap:6px;padding:11px 0;border-top:1px solid var(--line2);font-size:15px;line-height:1.55;color:var(--ink2)}
+.rules li:first-child{border-top:0}
+.rules li::before{content:counter(r,decimal-leading-zero);font:500 15px/1.55 var(--serif);color:var(--gold)}
+.rules b{color:var(--ink);font-weight:600}
+.kv{display:flex;justify-content:space-between;gap:14px;padding:11px 0;border-top:1px solid var(--line2);font-size:14px}
+.kv:first-of-type{border-top:0}.kv span{color:var(--muted)}.kv b{font-weight:600;text-align:right}
+.note{font-size:13px;color:var(--muted);margin:10px 2px}
+.lock{display:flex;gap:10px;align-items:center;border:1px dashed var(--line);border-radius:14px;padding:12px 14px;font-size:14px;color:var(--ink2);margin-top:14px}
+.claim-fixed{position:fixed;left:0;right:0;bottom:0;z-index:12;padding:14px 18px calc(16px + env(safe-area-inset-bottom));background:linear-gradient(rgba(246,243,236,0),var(--bg) 40%)}
+.claim-fixed .btn{max-width:524px;margin:0 auto;display:flex}
+.claim-side{display:none}
+/* ---------- BOARDING PASS TICKET ---------- */
+.bpw{container-type:inline-size}
+.bp{position:relative;display:flex;flex-direction:column;background:#FFFDF8;border:1px solid #E9E2D3;border-radius:20px;overflow:hidden;box-shadow:0 1px 2px rgba(14,23,38,.05),0 22px 44px -26px rgba(14,23,38,.5);color:var(--ink)}
+.bp-head{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--c);color:#fff;border-bottom:2px solid var(--a);position:relative}
+.bp-head::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.035) 0 2px,transparent 2px 9px);pointer-events:none}
+.bp-logo{width:36px;height:36px;border-radius:10px;border:1px solid rgba(255,255,255,.28);display:grid;place-items:center;font:600 14px var(--serif);color:var(--a);flex:0 0 auto}
+.bp-org{font:600 10px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--a)}
+.bp-title{font:600 17px/1.2 var(--serif);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bp-kind{margin-left:auto;text-align:right;font:600 9.5px/1.5 var(--sans);letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.7);flex:0 0 auto}
+.bp-kind b{display:block;color:#fff;font-size:11px}
+.bp-fields{display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:10px 14px;padding:14px 16px 6px}
+.fl label{display:block;font:600 9px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:2px}
+.fl b{display:block;font:600 14px/1.25 var(--sans);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fl b.big{font:500 20px/1.1 var(--serif)}
+.bp-grid{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));grid-auto-rows:clamp(34px,9vw,46px);gap:4px;padding:10px 16px 14px}
+.cell{height:100%;border-radius:8px;display:grid;place-items:center;font:600 clamp(14px,4vw,18px)/1 var(--sans);font-variant-numeric:tabular-nums;position:relative;user-select:none}
+.cell.blank{background:#F3EEE4}
+.cell.num{background:#fff;border:1px solid #E4DCCB;color:var(--ink)}
+.bp.play .cell.num{cursor:pointer}
+.bp.play .cell.num:active{transform:scale(.94)}
+.cell.cut{background:var(--c);border-color:var(--c);color:#fff}
+.cell.cut::after{content:"";position:absolute;left:18%;right:18%;top:50%;height:1.5px;background:var(--a);transform:rotate(-38deg)}
+.cell.hl{box-shadow:0 0 0 2px var(--a);border-color:var(--a)}
+.cell.hl:not(.cut){background:#FBF4E6}
+.bp-legal{margin:0 16px 14px;padding:10px 12px;border-radius:10px;background:#F7F2E8;font-size:11px;line-height:1.5;color:#5B6170}
+.bp-legal b{color:var(--ink);font-weight:600}
+.bp-perf{position:relative;height:0;margin:0 18px;border-top:1.5px dashed #DCD3C0}
+.bp-perf::before,.bp-perf::after{content:"";position:absolute;top:-12px;width:24px;height:24px;border-radius:50%;background:var(--bg);border:1px solid #E9E2D3}
+.bp-perf::before{left:-31px}.bp-perf::after{right:-31px}
+.bp-stub{display:flex;align-items:center;gap:16px;padding:14px 16px 16px}
+.bp-stub .fl b.big{color:var(--c)}
+.bc{flex:1;height:46px;display:flex;align-items:stretch;gap:1.6px;min-width:0;overflow:hidden}
+.bc i{background:var(--ink);border-radius:.5px}
+.bp-id{font:500 10.5px/1.4 var(--mono);color:var(--muted);letter-spacing:.02em}
+.bp-free{display:inline-block;border:1px solid var(--a);color:var(--c);border-radius:999px;padding:3px 9px;font:700 9.5px var(--sans);letter-spacing:.14em;margin-top:4px}
+.bp.locked .cell.num{color:var(--faint)}
+.bp.sm .bp-fields,.bp.sm .bp-legal,.bp.sm .bp-perf,.bp.sm .bp-stub{display:none}
+.bp.sm .bp-head{padding:10px 14px}.bp.sm .bp-logo{width:30px;height:30px}.bp.sm .bp-kind{display:none}
+.bp.sm .bp-grid{padding:10px 12px 12px;gap:3px;grid-auto-rows:30px}.bp.sm .cell{font-size:13px;border-radius:6px}
+/* wide boarding pass: stub on the right */
+@container (min-width:600px){
+  .bp:not(.sm){flex-direction:row}
+  .bp:not(.sm) .bp-main{flex:1;min-width:0}
+  .bp:not(.sm) .bp-perf{height:auto;width:0;margin:18px 0;border-top:0;border-left:1.5px dashed #DCD3C0}
+  .bp:not(.sm) .bp-perf::before,.bp:not(.sm) .bp-perf::after{left:-12px;right:auto}
+  .bp:not(.sm) .bp-perf::before{top:-31px}.bp:not(.sm) .bp-perf::after{top:auto;bottom:-31px}
+  .bp:not(.sm) .bp-stub{width:330px;flex:0 0 auto}
+  
+  .bp:not(.sm) .bc{flex:0 0 46px}
+  .bp:not(.sm) .bp-fields{grid-template-columns:1.6fr 1fr 1fr 1fr}
+}
+.stub-top{display:none}.stub-extra{display:none}
+@container (min-width:600px){.bp:not(.sm) .stub-top{display:flex}.bp:not(.sm) .stub-extra{display:block}}
+@container (max-width:380px){.bp-fields{grid-template-columns:1.4fr 1fr 1fr}.bp-extra{display:none}.bp-kind{display:none}}
+@container (max-width:600px){.bp-extra{display:none}}
+/* ---------- sheet / toast ---------- */
+.modal{position:fixed;inset:0;z-index:40;background:rgba(14,23,38,.45);backdrop-filter:blur(3px);display:grid;place-items:end center}
+.sheet{background:var(--surface);width:100%;max-width:560px;border-radius:24px 24px 0 0;padding:10px 20px calc(24px + env(safe-area-inset-bottom));max-height:92vh;overflow:auto;animation:up .25s ease-out}
+.sheet::before{content:"";display:block;width:40px;height:4px;border-radius:4px;background:var(--line);margin:0 auto 16px}
+@keyframes up{from{transform:translateY(30px);opacity:.5}to{transform:none;opacity:1}}
+.sheet h2{font-size:24px;margin-bottom:4px}
+.opt{display:flex;align-items:center;gap:14px;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:8px;cursor:pointer}
+.opt.sel{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.opt b{display:block;font-weight:600}.opt span{font-size:13px;color:var(--muted)}
+.res{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;margin:8px auto 14px;border:1px solid var(--line)}
+.res .ic{width:32px;height:32px;stroke-width:1.4}
+.res.ok{background:var(--okbg);border-color:#CFE5DA;color:var(--ok)}
+.res.no{background:var(--badbg);border-color:#F2D2D4;color:var(--bad)}
+.res.end{background:var(--goldbg);border-color:var(--gold2);color:var(--gold)}
+.center{text-align:center}
+.toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:60;background:var(--ink);color:#fff;padding:12px 16px;border-radius:14px;font-size:14px;font-weight:500;max-width:92vw;display:flex;gap:10px;align-items:center;box-shadow:0 14px 30px -12px rgba(0,0,0,.5);animation:up .25s}
+.toast .ic{color:var(--gold2)}
+/* prototype controls */
+.proto{position:fixed;left:14px;bottom:calc(92px + env(safe-area-inset-bottom));z-index:20;font-size:13px}
+.proto-t{border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);padding:7px 11px;font-weight:600;font-size:12px;display:flex;gap:6px;align-items:center;box-shadow:var(--shadow)}
+.proto-t .ic{width:14px;height:14px}
+.proto-b{display:none;position:absolute;left:0;bottom:42px;background:var(--ink);color:#fff;border-radius:14px;padding:10px;width:240px}
+.proto.open .proto-b{display:block}
+.proto-b b{display:block;margin:2px 4px 6px;font-weight:600}
+.proto-b button{display:block;width:100%;text-align:left;border:0;background:rgba(255,255,255,.08);color:#fff;border-radius:9px;padding:9px 10px;margin-top:5px}
+/* ---------- LANDSCAPE PHONES + TABLETS/DESKTOP ---------- */
+@media (min-width:900px),(orientation:landscape) and (max-height:560px){
+  .app{max-width:1120px}
+  .g-layout{grid-template-columns:minmax(290px,.8fr) minmax(0,1.2fr);gap:24px;align-items:start}
+  .g-side{position:sticky;top:70px}
+  .claim-fixed{display:none!important}
+  .claim-side{display:flex;margin-top:14px}
+  .welcome{grid-template-columns:1fr 1.1fr;align-items:center;gap:32px}
+  .glist{grid-template-columns:1fr 1fr}
+  .tabs{top:62px}
+}
+@media (orientation:landscape) and (max-height:560px){
+  .appbar{padding:8px 0}
+  .app{padding-bottom:30px}
+  .g-side{top:56px}
+  .ghead h2{font-size:21px}
+  .caller{padding:14px}
+  .ringw{width:92px;height:92px}.ball{inset:8px;font-size:36px}
+  .cl-line{font-size:15px}
+  .cl-note{display:none}
+  .w-text h1{font-size:30px}
+  .proto{bottom:14px}
+  .bp-grid{grid-auto-rows:34px}
+  .bp-legal{font-size:10.5px}
+  .tabs{top:54px}
+}
+
+
+/* v4: call modes, pause, audio, prize table */
+.modechip{display:inline-flex;gap:5px;align-items:center;font-size:11.5px;font-weight:600;color:var(--ink2);border:1px solid var(--line);border-radius:999px;padding:2px 9px;margin-left:8px;vertical-align:1px}
+.modechip .ic{width:13px;height:13px;color:var(--gold)}
+.bar.indet i{width:30%;animation:ind 1.5s ease-in-out infinite}
+@keyframes ind{0%{transform:translateX(-110%)}100%{transform:translateX(360%)}}
+.caller.paused{border-color:var(--a);box-shadow:0 0 0 4px var(--goldbg),var(--shadow)}
+.ball.paused{background:#fff;color:var(--c);box-shadow:inset 0 0 0 2px var(--c)}
+.ball.paused .ic,.ball.ok .ic,.ball.bad .ic{color:inherit}
+.ball.ok{background:var(--ok);color:#fff}.ball.bad{background:var(--bad);color:#fff}
+.audio{display:flex;align-items:center;gap:12px;margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:14px}
+.audio.on{border-color:var(--a);background:var(--goldbg)}
+.eq{display:flex;gap:3px;align-items:flex-end;height:22px;width:24px;flex:0 0 auto}
+.eq i{width:4px;height:30%;background:var(--faint);border-radius:2px}
+.audio.on .eq i{background:var(--c);animation:eq .9s ease-in-out infinite}
+.audio.on .eq i:nth-child(2){animation-delay:.15s}.audio.on .eq i:nth-child(3){animation-delay:.3s}.audio.on .eq i:nth-child(4){animation-delay:.45s}
+@keyframes eq{0%,100%{height:25%}50%{height:100%}}
+.au-t{flex:1;min-width:0}.au-t b{display:block;font-size:14px;font-weight:600}.au-t span{font-size:12.5px;color:var(--muted)}
+.chip-btn{border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:999px;padding:8px 12px;font-size:12.5px;font-weight:600;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.chip-btn .ic{width:15px;height:15px}
+.audio.on .chip-btn{background:transparent;color:var(--ink)}
+.bp-prizes{margin:0 16px 14px;border:1px solid #E9E2D3;border-radius:12px;overflow:hidden;background:#fff}
+.pz-h,.pz-r{display:grid;grid-template-columns:minmax(0,1fr) auto 70px;gap:10px;align-items:center;padding:9px 12px}
+.pz-h{background:#F7F2E8;font:600 9px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.pz-h span:last-child,.pz-c{text-align:center}
+.pz-r{border-top:1px solid #EFE8DA}
+.pz-n{min-width:0;cursor:pointer}.pz-n b{display:block;font-weight:600;font-size:13.5px}
+.pz-n small{display:block;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pz-s{font-size:11.5px;font-weight:600;color:var(--c);background:#F6EEDC;border:1px solid var(--a);padding:3px 9px;border-radius:999px;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis}
+.pz-r.won{background:#FAF8F4}
+.pz-r.won .pz-n b,.pz-r.won .pz-n small{text-decoration:line-through;text-decoration-thickness:1.5px;color:var(--faint)}
+.pz-r.won .pz-s{background:transparent;border-color:var(--line);color:var(--muted);font-weight:500}
+.pz-r.sel{background:#FBF4E6}
+.pz-btn{border:0;background:var(--c);color:#fff;border-radius:999px;padding:6px 13px;font-size:12px;font-weight:600;letter-spacing:.03em}
+.pz-btn:disabled{opacity:.35;cursor:not-allowed}
+.pz-c .ic{color:var(--ok);width:18px;height:18px}
+@container (max-width:380px){.pz-h,.pz-r{grid-template-columns:minmax(0,1fr) auto 62px;gap:8px;padding:9px 10px}.pz-s{max-width:96px}}
+.pz-n em{display:block;font-style:normal;font-size:11.5px;font-weight:600;color:var(--ink2);text-decoration:none!important}
+.lockchip{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;font-weight:600;color:var(--ink2);border:1px solid var(--line);border-radius:999px;padding:7px 12px;background:var(--bg)}
+.lockchip .ic{width:14px;height:14px;color:var(--gold)}
+.audio.on:not(.talk) .eq i{animation:none;height:30%;background:var(--gold2)}
+.audio.talk{border-color:var(--c);box-shadow:0 0 0 3px var(--goldbg)}
+
+/* v5: everything inside the pass */
+#passWrap{max-width:1000px;margin:14px auto 0}
+.ghead h2{font-size:24px}
+.bp-strip{position:relative;display:flex;align-items:center;gap:14px;padding:14px 16px 17px;background:var(--c);color:#fff;border-bottom:2px solid var(--a);min-height:96px}
+.bp-strip::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.035) 0 2px,transparent 2px 9px);pointer-events:none}
+.bp-strip>*{position:relative;z-index:1}
+.sball{width:64px;height:64px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;background:radial-gradient(circle at 32% 28%,#fff 0,#F6E9CF 38%,var(--a) 100%);color:var(--c);font:500 31px/1 var(--serif);box-shadow:0 0 0 3px rgba(255,255,255,.14)}
+.sball small{font:600 9.5px var(--sans);letter-spacing:.12em;text-transform:uppercase}
+.sball .ic{width:26px;height:26px;color:var(--c)}
+.sball.ok{background:#2E8B67}.sball.bad{background:#C0392B}.sball.ok .ic,.sball.bad .ic{color:#fff}
+.sball.pop{animation:pop .45s cubic-bezier(.2,1.4,.4,1)}
+.stext{flex:1;min-width:0}
+.seb{font:600 10px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--a)}
+.sline{font:italic 400 17px/1.3 var(--serif);margin:3px 0 5px}
+.sline b{font-style:normal;font-weight:600}
+.ssub{font-size:12.5px;color:rgba(255,255,255,.78);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ssub b{color:#fff;font-weight:600;font-variant-numeric:tabular-nums}
+.ssub .ic{width:14px;height:14px;color:var(--a)}
+.stools{display:flex;flex-direction:column;gap:8px;align-items:flex-end;flex:0 0 auto;align-self:flex-start}
+.spill{border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;border-radius:999px;padding:6px 11px;font-size:12px;font-weight:600;display:inline-flex;gap:7px;align-items:center;white-space:nowrap}
+.spill.on{background:rgba(255,255,255,.12);border-color:var(--a)}
+.spill .eq{height:12px;width:13px;display:flex;gap:2px;align-items:flex-end}.spill .eq i{width:3px;height:40%;background:var(--a);border-radius:1px}
+.spill.talk .eq i{animation:eq .9s ease-in-out infinite}.spill.talk .eq i:nth-child(2){animation-delay:.15s}.spill.talk .eq i:nth-child(3){animation-delay:.3s}
+.sicon{width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;display:grid;place-items:center}
+.sicon .ic{width:16px;height:16px}.sicon.off{opacity:.55}
+.sbar{position:absolute!important;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.12);overflow:hidden}.sbar i{display:block;height:100%;width:0;background:var(--a)}
+.sbar.indet i{width:30%;animation:ind 1.5s ease-in-out infinite}
+.bp-strip.paused{background:linear-gradient(90deg,var(--c),color-mix(in srgb,var(--c) 80%,#000))}
+.bp .stub-top{display:flex!important;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--c);color:var(--a);font:600 10px var(--sans);letter-spacing:.18em;text-transform:uppercase;border-bottom:2px solid var(--a);margin:0}
+.bp .bp-stub{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:0 0 14px}
+.bp-stub .bp-prizes{margin:12px 14px 0}
+.stub-foot{display:flex;align-items:center;gap:14px;padding:12px 16px 0}
+.stub-foot .bc{height:36px}
+.bp-stub .bp-id{padding:4px 16px 0}
+.pz-h,.pz-r{grid-template-columns:minmax(0,1fr) auto 64px;gap:8px;padding:8px 10px}
+.pz-n em{font-style:normal;font-size:11px;font-weight:600;color:var(--ink2);display:block}
+.dash{color:var(--faint)}
+.hintline{font-size:12px;color:var(--muted);text-align:center;margin:10px 0 0}
+.winnote{display:flex;gap:10px;align-items:flex-start;margin-top:12px;padding:12px 14px;border:1px solid var(--gold2);background:var(--goldbg);border-radius:14px;font-size:14px}
+.winnote .ic{color:var(--gold);margin-top:2px}
+.fine{text-align:left;display:grid;gap:4px 28px;margin:26px auto 0;padding-top:16px;border-top:1px solid var(--line);font-size:11.5px;line-height:1.55;color:var(--muted);max-width:1000px}
+.fine h4{font:600 9.5px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--ink2);margin:0 0 6px}
+.fine ol{margin:0 0 14px;padding-left:16px}.fine li{margin:2px 0}.fine b{color:var(--ink2);font-weight:600}.fine p{margin:0 0 10px}
+@media (min-width:760px){.fine{grid-template-columns:1.3fr 1fr}}
+@container (max-width:460px){.bp-strip{flex-wrap:wrap}.stools{flex-direction:row;width:100%;justify-content:flex-start;padding-left:78px;align-self:auto}.sline{font-size:16px}}
+.proto{bottom:calc(14px + env(safe-area-inset-bottom))!important}
+@media (orientation:landscape) and (max-height:560px){#scrGame .ghead .eyebrow,#scrGame .ghead .meta{display:none}#scrGame .ghead h2{font-size:18px}#passWrap{margin-top:8px}.bp-strip{min-height:0;padding:10px 14px 13px}.sball{width:54px;height:54px;font-size:26px}.bp-fields{padding-top:8px}}
+.bp-hint{margin:-4px 16px 10px;font-size:11.5px;color:var(--muted);text-align:center}
+.fine{display:flex!important;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px 4px;text-align:center}
+.flink{border:0;background:none;padding:6px 8px;font:600 10.5px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--ink2);text-decoration:underline;text-decoration-color:var(--gold2);text-underline-offset:4px}
+.fsep{color:var(--line)}
+.finepop{margin-top:10px;font-size:14px;line-height:1.6;color:var(--ink2)}
+.finepop ol{margin:0;padding-left:20px}.finepop li{margin:6px 0}.finepop b{color:var(--ink)}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m11 18-6-6 6-6"/></symbol><symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></symbol><symbol id="i-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 11v2"/><path d="M13 17v2"/></symbol><symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol><symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol><symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol><symbol id="i-login" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></symbol><symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol><symbol id="i-trophy" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></symbol><symbol id="i-gift" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></symbol><symbol id="i-rules" viewBox="0 0 24 24"><path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><circle cx="4.5" cy="6" r=".8"/><circle cx="4.5" cy="12" r=".8"/><circle cx="4.5" cy="18" r=".8"/></symbol><symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 16v-4.5"/><path d="M12 8h.01"/></symbol><symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M2 14h4"/><path d="M10 8h4"/><path d="M18 16h4"/></symbol><symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5"/><path d="M12 16h.01"/></symbol><symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3 2"/></symbol><symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol><symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M16 2.5v4"/><path d="M8 2.5v4"/><path d="M3 10h18"/></symbol><symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 22V4"/><path d="M5 4h11l-2 4 2 4H5"/></symbol><symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></symbol><symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol><symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><path d="m2 2 20 20"/></symbol><symbol id="i-vol" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol><symbol id="i-mute" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></symbol><symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol><symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7.5"/><path d="m21 21-4.3-4.3"/></symbol><symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol><symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></symbol><symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol><symbol id="i-sparkles" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></symbol><symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol><symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></symbol><symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></symbol></defs></svg>
+<div class="app">
+  <header class="appbar">
+    <button class="iconbtn hidden" id="backBtn" onclick="goGames()" aria-label="Back"><svg class="ic"><use href="#i-back"/></svg></button>
+    <div class="brand"><span class="mark"><svg class="ic"><use href="#i-ticket"/></svg></span><span class="word">Tambola<i>.</i></span></div>
+    <button class="avatar hidden" id="avatarBtn" onclick="toggleMenu()" aria-label="Account"></button>
+    <div class="menu hidden" id="menu">
+      <div class="menu-h"><b id="mName"></b><span id="mId"></span></div>
+      <button onclick="toggleMenu();openPrivacy()"><svg class="ic"><use href="#i-shield"/></svg> Privacy &amp; your data</button>
+      <a href="#" id="mComplain"><svg class="ic"><use href="#i-mail"/></svg> Write to us</a>
+      <button onclick="logout()"><svg class="ic"><use href="#i-logout"/></svg> Log out</button>
+    </div>
+  </header>
+
+  <!-- 1. WELCOME -->
+  <section class="scr" id="scrWelcome">
+    <div class="welcome">
+      <div class="w-text">
+        <div class="eyebrow">Private game · by invitation</div>
+        <h1>Tambola, <em>beautifully</em> simple.</h1>
+        <p>Your company, society or group has invited you to play. Log in, collect your pass, cut your numbers and claim your prize.</p>
+        <div class="steps" style="margin-top:22px">
+          <div class="step"><b>01</b><span>Log in with mobile or email</span></div>
+          <div class="step"><b>02</b><span>Collect your ticket pass</span></div>
+          <div class="step"><b>03</b><span>Cut, claim &amp; win</span></div>
+        </div>
+        <button class="btn block" style="margin-top:22px" onclick="show('scrLogin')"><svg class="ic"><use href="#i-login"/></svg> Log in to play</button>
+        <p class="fine">Free to play. We never ask for payment.</p>
+      </div>
+      <div id="heroTicket"></div>
+    </div>
+  </section>
+
+  <!-- 2. LOGIN -->
+  <section class="scr hidden" id="scrLogin">
+    <div class="card">
+      <div class="eyebrow">Step 1 of 3</div>
+      <h2>Log in</h2>
+      <p class="lead">Use the mobile number or email your organiser registered.</p>
+      <div class="seg" id="loginSeg">
+        <button class="on" onclick="loginMode('mobile')"><svg class="ic"><use href="#i-phone"/></svg> Mobile</button>
+        <button onclick="loginMode('email')"><svg class="ic"><use href="#i-mail"/></svg> Email</button>
+      </div>
+      <div id="modeMobile">
+        <label class="lb" for="inMob">Mobile number</label>
+        <div class="phone"><span>+91</span><input id="inMob" inputmode="numeric" maxlength="10" placeholder="98765 43210" autocomplete="tel"></div>
+        <p class="hint">We'll send a 6-digit code by SMS.</p>
+      </div>
+      <div id="modeEmail" class="hidden">
+        <label class="lb" for="inMail">Email ID</label>
+        <input class="inp" id="inMail" type="email" placeholder="name@company.com" autocomplete="email">
+        <p class="hint">We'll send a 6-digit code to your inbox.</p>
+      </div>
+      <p class="err hidden" id="loginErr"></p>
+      <button class="btn block" id="sendBtn" onclick="sendCode()">Send code <svg class="ic"><use href="#i-arrow"/></svg></button>
+      <p class="demo">Prototype: any valid number or email works. Try 9000000000 or not@invited.com to see "not registered".</p>
+    </div>
+    <button class="linkbtn" onclick="show('scrWelcome')"><svg class="ic"><use href="#i-back"/></svg> Back</button>
+  </section>
+
+  <!-- 3. OTP -->
+  <section class="scr hidden" id="scrOtp">
+    <div class="card">
+      <div class="eyebrow">Step 2 of 3</div>
+      <h2>Enter the code</h2>
+      <p class="lead" id="otpTo"></p>
+      <div class="otp" id="otpBoxes"></div>
+      <p class="err hidden" id="otpErr"></p>
+      <button class="btn block" id="verifyBtn" onclick="verifyCode()" disabled>Verify <svg class="ic"><use href="#i-arrow"/></svg></button>
+      <div class="otp-foot"><button class="linkbtn" id="resendBtn" onclick="resend()" disabled></button><button class="linkbtn" onclick="show('scrLogin')">Change</button></div>
+      <p class="demo">Prototype: any 6 digits work. 000000 shows the wrong-code message.</p>
+    </div>
+  </section>
+
+  <!-- 4. NAME + CONSENT -->
+  <section class="scr hidden" id="scrName">
+    <div class="card">
+      <div class="eyebrow">Step 3 of 3 · first time only</div>
+      <h2>Your name</h2>
+      <p class="lead">It appears on your ticket and on the winners list.</p>
+      <label class="lb" for="inName">Full name</label>
+      <input class="inp" id="inName" maxlength="30" placeholder="e.g. Priya Sharma">
+      <div class="consent"><label class="cb"><input type="checkbox" id="inConsent"><span>I agree that my name and <span id="consentId">mobile number</span> are used only to run this game, and that my personal data is deleted within 24 hours after each game ends. <a href="#" onclick="openPrivacy();return false">Privacy notice</a></span></label></div>
+      <p class="err hidden" id="nameErr"></p>
+      <button class="btn block" onclick="saveName()">Show my games <svg class="ic"><use href="#i-arrow"/></svg></button>
+    </div>
+  </section>
+
+  <!-- 5. MY GAMES -->
+  <section class="scr hidden" id="scrGames">
+    <div class="hello"><div class="eyebrow">Your invitations</div><h2 id="helloName"></h2><p class="muted" style="margin:0">Games your organisers have invited you to.</p></div>
+    <div id="gameList"></div>
+    <p class="fine" style="margin-top:24px">Missing a game? Ask your organiser to add your <span id="fineId">mobile number</span>.</p>
+  </section>
+
+  <!-- 6. GAME -->
+  <section class="scr hidden" id="scrGame">
+    <div class="ghead" id="gHead"></div>
+    <div id="passWrap"></div>
+        <div class="fine" id="fineRules"></div>
+  </section>
+</div>
+
+<div class="modal hidden" id="modal" onclick="if(event.target===this)closeSheet()"><div class="sheet" id="sheet"></div></div>
+
+<div class="proto hidden" id="proto">
+  <button class="proto-t" onclick="document.getElementById('proto').classList.toggle('open')"><svg class="ic"><use href="#i-sliders"/></svg> Demo</button>
+  <div class="proto-b">
+    <b>Prototype controls</b>
+    <button onclick="demoSpeed(5000)">AI voice: fast · 5 sec</button>
+    <button onclick="demoSpeed(10000)">AI voice: normal · 10 sec</button>
+    <button onclick="demoOtherWin()">Another player claims a prize</button>
+    <button onclick="demoCheat()">Tester: show called numbers</button>
+  </div>
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const COMPLAINT_EMAIL='care@yourbrand.in';            // replace with your real support address
+const THEME={burgundy:{c:'#5A1426',a:'#CDA873'},midnight:{c:'#0F1E3D',a:'#C5A46D'},emerald:{c:'#0F3D34',a:'#C9A96E'},plum:{c:'#3A1F4B',a:'#D2B48C'},graphite:{c:'#22262B',a:'#B8894D'}};
+const PAT={
+  early5:{name:'Early Five',desc:'Any 5 numbers on your ticket'},
+  top:{name:'Top Line',desc:'All 5 numbers of the first row'},
+  mid:{name:'Middle Line',desc:'All 5 numbers of the second row'},
+  bot:{name:'Bottom Line',desc:'All 5 numbers of the third row'},
+  corners:{name:'Four Corners',desc:'First and last numbers of the top and bottom rows'},
+  star:{name:'Star',desc:'Four corners and the centre of the middle row'},
+  full:{name:'Full House',desc:'All 15 numbers on your ticket'},
+  full2:{name:'Second Full House',desc:'The next Full House after the first'}
+};
+const SHAPES={early5:[1,5,12,20,25],top:[0,2,4,6,8],mid:[9,11,13,15,17],bot:[18,20,22,24,26],corners:[0,8,18,26],star:[0,8,18,26,13],full:[...Array(27).keys()],full2:[...Array(27).keys()]};
+
+/* ---- Commentary: one simple line per number (cricket + India facts) ---- */
+const HOOK={1:"Captain walks out first",2:"Quick double, run hard",3:"Three stumps standing tall",4:"Cracking boundary, four runs",5:"A proper five-day Test",6:"Sixer, out of the stadium",7:"Dhoni's jersey, Captain Cool",8:"Eight planets in our solar system",9:"Nine nights of Navratri",10:"Sachin's jersey, the Master Blaster",
+11:"Eleven players take the field",12:"Twelfth man brings the drinks",13:"Googly, didn't see that coming",14:"Children's Day, 14 November",15:"Independence Day, 15 August",16:"Sachin's Test debut at sixteen",17:"Sharp single, well run",18:"Virat's jersey, the chase master",19:"India's Under-19 stars",20:"T20, twenty overs of masti",
+21:"Yoga Day, 21 June",22:"Twenty-two yards of pitch",23:"Chandrayaan-3 landed on 23 August",24:"Twenty-four spokes in the Ashoka Chakra",25:"Silver jubilee celebration",26:"Republic Day, 26 January",27:"Cover drive, pure class",28:"India has 28 states",29:"Leap day, once in four years",30:"Thirty-yard circle, fielders inside",
+31:"New Year's Eve party",32:"Big smile, all 32 teeth",33:"All the threes, triple treat",34:"Maiden over, no runs given",35:"Reverse sweep, very cheeky",36:"Yuvraj's six sixes in one over",37:"Normal body temperature, 37 degrees",38:"Yorker, right at the toes",39:"Free hit coming up",40:"Strategic timeout, sip some water",
+41:"Straight drive past the bowler",42:"A marathon is 42 kilometres",43:"DRS review, third umpire checking",44:"All the fours, double boundary",45:"Rohit's jersey, the Hitman",46:"Bouncer, duck quickly",47:"1947, India becomes free",48:"Helicopter shot, Dhoni style",49:"So close to fifty, stay calm",50:"Half century, raise the bat",
+51:"Lucky 51, the shagun number",52:"Our national anthem, 52 seconds",53:"Hat-trick ball, all eyes on the bowler",54:"Howzat! Big LBW appeal",55:"Powerplay on, attack time",56:"Doosra from the spinner",57:"Direct hit, run out",58:"Caught behind, keeper is happy",59:"No-ball, free runs",60:"Sixty minutes in an hour",
+61:"Wide ball, extra run",62:"Super over drama",63:"Slower ball, clever bowling",64:"Sixty-four squares, Anand's chessboard",65:"Mangalyaan reached Mars on the first try",66:"Clickety click, double six",67:"Twenty-two official languages, one Tambola",68:"Taj Mahal, a wonder of the world",69:"One short of seventy",70:"ISRO launched 104 satellites at once",
+71:"T20 World Cup champions, 2024",72:"2011 World Cup at Wankhede",73:"The tiger, our national animal",74:"The peacock, our national bird",75:"Seventy-five years of freedom",76:"Kumble's all ten wickets",77:"Double seven, Dhoni twice",78:"Mango, king of fruits",79:"The lotus, our national flower",80:"Around the world in 80 days",
+81:"Milkha Singh, the Flying Sikh",82:"Indian Railways, a giant network",83:"Kapil's Devils win in 1983",84:"Mary Kom, six-time world champion",85:"Sindhu, world badminton champion",86:"Anand, five-time chess world champion",87:"Neeraj's golden throw, 87.58 metres",88:"Two round laddoos",89:"One short of top of the house",90:"Top of the house, no nervous nineties"};
+const LANGS={
+  hinglish:{label:'Hinglish',t:["Number {n}! {h}, kya baat hai!","Aa gaya number {n}. {h}!","Number {n}. {h}, jaldi kaato!","Number {n}. {h}, ekdum mast!"]},
+  tamlish:{label:'Tamlish',t:["Number {n}! {h}, semma!","Number {n} vandhachu. {h}!","Number {n}. {h}, seekiram cut pannunga!","Number {n}. {h}, super-a irukku!"]},
+  kanglish:{label:'Kanglish',t:["Number {n}! {h}, sakkath!","Number {n} bantu. {h}!","Number {n}. {h}, bega cut maadi!","Number {n}. {h}, chennagide!"]},
+  tenglish:{label:'Tenglish',t:["Number {n}! {h}, adhirindi!","Number {n} vachindi. {h}!","Number {n}. {h}, twaraga cut cheyyandi!","Number {n}. {h}, keka!"]},
+  english:{label:'English',t:["Number {n}. {h}."]}
+};
+function line(n,lang){const L=LANGS[lang]||LANGS.english;return L.t[n%L.t.length].replace('{n}',n).replace('{h}',HOOK[n])}
+const OTHERS=['Rahul M.','Anita K.','Vikram J.','Sneha R.','Arjun P.','Meera D.','Karan T.','Fatima S.','Flat B-402','Mrs. Kapoor'];
+
+/* ================= HELPERS ================= */
+const $=id=>document.getElementById(id);
+function ic(n){return `<svg class="ic"><use href="#i-${n}"/></svg>`}
+function esc(s){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+function rnd(n){return Math.floor(Math.random()*n)}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]]}return a}
+function colRange(c){return[c===0?1:c*10,c===8?90:c*10+9]}
+function genTicket(){while(true){const g=[0,1,2].map(()=>{const r=Array(9).fill(false);shuffle([...Array(9).keys()]).slice(0,5).forEach(c=>r[c]=true);return r});
+  let ok=true;for(let c=0;c<9;c++)if(!(g[0][c]||g[1][c]||g[2][c]))ok=false;if(!ok)continue;const t=[[],[],[]];
+  for(let c=0;c<9;c++){const[lo,hi]=colRange(c);const pool=[];for(let v=lo;v<=hi;v++)pool.push(v);const k=[0,1,2].filter(r=>g[r][c]).length;const p=shuffle(pool).slice(0,k).sort((a,b)=>a-b);let i=0;for(let r=0;r<3;r++)t[r][c]=g[r][c]?p[i++]:null}
+  return t}}
+function patternNums(t,k){const row=r=>t[r].filter(v=>v!==null);
+  if(k==='top')return row(0);if(k==='mid')return row(1);if(k==='bot')return row(2);
+  if(k==='corners'){const a=row(0),c=row(2);return[a[0],a[4],c[0],c[4]]}
+  if(k==='star'){const a=row(0),b=row(1),c=row(2);return[a[0],a[4],c[0],c[4],b[2]]}
+  if(k==='full'||k==='full2')return[...row(0),...row(1),...row(2)];return null}
+function initials(s){return(s||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase()}
+function code4(s){return((s||'ORG').replace(/[^A-Za-z]/g,'').toUpperCase()+'XXXX').slice(0,4)}
+function tid(g,serial){const base=`TMB-${code4(g.org)}-${g.id}-${String(serial).padStart(6,'0')}`;let h=0;for(const ch of base)h=(h*31+ch.charCodeAt(0))%23;return base+'-'+'ABCDEFGHJKLMNPQRSTUVWXY'[h]}
+function barcode(seed){let h=0;for(const ch of seed)h=(h*131+ch.charCodeAt(0))>>>0;let o='';for(let i=0;i<46;i++){h=(h*1103515245+12345)>>>0;const w=1+((h>>16)%3);o+=`<i style="width:${w}px"></i>`}return o}
+const fmtD=t=>new Date(t).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+const fmtDs=t=>new Date(t).toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
+const fmtT=t=>new Date(t).toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit'}).toUpperCase();
+const fmtTs=t=>new Date(t).toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit',second:'2-digit'}).toUpperCase();
+function when(t){const d=new Date(t),n=new Date();const same=d.toDateString()===n.toDateString();return(same?'Today':fmtDs(t))+', '+fmtT(t)}
+function toast(msg,icon='bell'){document.querySelectorAll('.toast').forEach(x=>x.remove());const t=document.createElement('div');t.className='toast';t.innerHTML=ic(icon)+'<span>'+msg+'</span>';document.body.appendChild(t);setTimeout(()=>t.remove(),3000)}
+function mini(k){const s=new Set(SHAPES[k]);let h='<span class="mini">';for(let i=0;i<27;i++)h+=`<i class="${s.has(i)?'p':''}"></i>`;return h+'</span>'}
+
+/* ================= DATA (would come from the server) ================= */
+const NOW=Date.now();
+const today=h=>{const d=new Date();d.setHours(h,0,0,0);return d.getTime()};
+const GAMES=[
+  {id:'DW26',org:'Acme Industries',name:'Diwali Tambola 2026',theme:'burgundy',status:'live',start:NOW-60e3,callMode:'both',lang:'hinglish',host:'Neha (HR)',
+   pace:'Live · AI voice every 10 seconds · host can speak',sound:'Voice and screen',contact:'Neha, HR team',
+   prizes:[['early5','₹1,000 Amazon voucher'],['top','₹1,500 Amazon voucher'],['mid','₹1,500 Amazon voucher'],['bot','₹1,500 Amazon voucher'],['corners','₹2,000 Amazon voucher'],['full','₹5,000 Amazon voucher and trophy']],serial:147},
+  {id:'SK27',org:'Acme Industries',name:'Sales Kick-off Tambola',theme:'graphite',status:'live',start:NOW-3e5,callMode:'manual',lang:'tamlish',host:'Neha (HR)',
+   pace:'Live · host calls on live audio',sound:'Host voice on live audio',contact:'Neha, HR team',
+   prizes:[['early5','₹1,000 voucher'],['top','₹1,500 voucher'],['mid','₹1,500 voucher'],['bot','₹1,500 voucher'],['full','₹5,000 voucher and trophy']],serial:88},
+  {id:'GPNV',org:'Green Park RWA',name:'Navratri Month-long Tambola',theme:'plum',status:'daily',start:today(10)-4*864e5,
+   callMode:'ai',lang:'kanglish',pace:'Daily · 3 numbers at 10:00 AM',sound:'Screen only',contact:'Society office',release:3,
+   prizes:[['early5','Dinner voucher for two'],['top','Movie tickets for two'],['mid','Movie tickets for two'],['bot','Movie tickets for two'],['full','Smart watch']],serial:38},
+  {id:'NY27',org:'Acme Industries',name:'New Year Bash Tambola',theme:'midnight',status:'upcoming',callMode:'ai',lang:'tenglish',start:new Date('2026-12-31T21:00').getTime(),
+   pace:'Live · one number every 10 seconds',sound:'Voice and screen',contact:'Neha, HR team',
+   prizes:[['early5','₹1,000 voucher'],['top','₹1,500 voucher'],['mid','₹1,500 voucher'],['bot','₹1,500 voucher'],['star','₹2,000 voucher'],['full','Weekend getaway for two'],['full2','₹3,000 voucher']],serial:211},
+  {id:'LB01',org:'Acme Industries',name:'Lunch-break Quick Tambola',theme:'emerald',status:'over',callMode:'ai',lang:'english',start:NOW-4.5*36e5,ended:NOW-3*36e5,
+   pace:'Live · one number every 10 seconds',sound:'Voice and screen',contact:'Neha, HR team',
+   prizes:[['early5','Coffee voucher'],['top','₹500 voucher'],['mid','₹500 voucher'],['bot','₹500 voucher'],['full','₹2,000 voucher']],serial:56}
+];
+GAMES.forEach(g=>{g.t=genTicket();g.cut=new Set();g.called=[];g.won={};g.bogeys=0;g.draw=shuffle([...Array(90)].map((_,i)=>i+1));g.current=null;g.nextAt=null;
+  if(g.status==='daily'){g.called=g.draw.slice(0,12);g.won={early5:{who:'Mrs. Kapoor',at:NOW-2*864e5}}}
+  if(g.status==='over'){const ws=['Sneha R.','Karan T.','You','Anita K.','Rahul M.'];g.prizes.forEach(([k],i)=>g.won[k]={who:ws[i],at:g.ended-(5-i)*6e4});g.t.forEach(r=>r.forEach(v=>{if(v!==null&&Math.random()>.35)g.cut.add(v)}))}});
+
+/* ================= STATE ================= */
+let U={mode:'mobile',id:'',masked:'',name:'',lang:'hinglish'},G=null,timer=null,uiTimer=null,gap=10000,audioOn=false,hl=null,voice=true,cur='ticket',claimK=null,resendT=null,actx=null;
+
+/* ================= NAVIGATION ================= */
+function show(id){document.querySelectorAll('.scr').forEach(s=>s.classList.toggle('hidden',s.id!==id));
+  const inApp=['scrGames','scrGame'].includes(id);$('avatarBtn').classList.toggle('hidden',!inApp);$('backBtn').classList.toggle('hidden',id!=='scrGame');
+  const playable=id==='scrGame'&&G&&['live','daily'].includes(G.status);
+  $('proto').classList.toggle('hidden',!playable);
+  window.scrollTo(0,0);if(id==='scrOtp')setTimeout(()=>document.querySelector('#otpBoxes input').focus(),60)}
+function toggleMenu(){$('menu').classList.toggle('hidden')}
+function logout(){stopCalls();$('menu').classList.add('hidden');U={...U,id:'',masked:'',name:''};$('inMob').value='';$('inMail').value='';resetTheme();show('scrWelcome');toast('You have been logged out','logout')}
+
+/* ================= LOGIN ================= */
+function loginMode(m){U.mode=m;document.querySelectorAll('#loginSeg button').forEach((b,i)=>b.classList.toggle('on',(i===0)===(m==='mobile')));
+  $('modeMobile').classList.toggle('hidden',m!=='mobile');$('modeEmail').classList.toggle('hidden',m!=='email');$('loginErr').classList.add('hidden');
+  setTimeout(()=>(m==='mobile'?$('inMob'):$('inMail')).focus(),30)}
+function lerr(msg){const e=$('loginErr');e.innerHTML=ic('alert')+'<span>'+msg+'</span>';e.classList.remove('hidden')}
+function sendCode(){
+  if(U.mode==='mobile'){const m=$('inMob').value.replace(/\D/g,'');
+    if(!/^[6-9]\d{9}$/.test(m))return lerr('Please enter a valid 10-digit mobile number.');
+    if(m==='9000000000')return lerr('This number is not registered for any game. Please ask your organiser to add it.');
+    U.id=m;U.masked='+91 '+m.slice(0,2)+'•••••'+m.slice(-3);$('otpTo').textContent='Sent by SMS to '+U.masked+'.'}
+  else{const e=$('inMail').value.trim().toLowerCase();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e))return lerr('Please enter a valid email ID.');
+    if(e==='not@invited.com')return lerr('This email is not registered for any game. Please ask your organiser to add it.');
+    U.id=e;const[a,d]=e.split('@');U.masked=a.slice(0,2)+'•••@'+d;$('otpTo').textContent='Sent to '+U.masked+'. Check your inbox.'}
+  $('loginErr').classList.add('hidden');buildOtp();show('scrOtp');startResend();toast('Code sent','mail')}
+function buildOtp(){const b=$('otpBoxes');b.innerHTML='';for(let i=0;i<6;i++){const inp=document.createElement('input');inp.inputMode='numeric';inp.maxLength=1;inp.autocomplete=i?'off':'one-time-code';inp.setAttribute('aria-label','Digit '+(i+1));
+  inp.oninput=()=>{inp.value=inp.value.replace(/\D/g,'').slice(-1);if(inp.value&&inp.nextElementSibling)inp.nextElementSibling.focus();checkOtp()};
+  inp.onkeydown=e=>{if(e.key==='Backspace'&&!inp.value&&inp.previousElementSibling)inp.previousElementSibling.focus();if(e.key==='Enter'&&otpVal().length===6)verifyCode()};
+  inp.onpaste=e=>{const d=(e.clipboardData.getData('text')||'').replace(/\D/g,'').slice(0,6);if(d.length){e.preventDefault();[...b.children].forEach((x,j)=>x.value=d[j]||'');checkOtp()}};b.appendChild(inp)}
+  $('otpErr').classList.add('hidden');checkOtp()}
+function otpVal(){return[...$('otpBoxes').children].map(x=>x.value).join('')}
+function checkOtp(){$('verifyBtn').disabled=otpVal().length!==6}
+function startResend(){let s=30;const b=$('resendBtn');b.disabled=true;clearInterval(resendT);b.textContent=`Resend in ${s}s`;
+  resendT=setInterval(()=>{s--;if(s<=0){clearInterval(resendT);b.disabled=false;b.textContent='Resend code'}else b.textContent=`Resend in ${s}s`},1000)}
+function resend(){buildOtp();startResend();toast('A new code is on its way','mail')}
+function verifyCode(){if(otpVal()==='000000'){const e=$('otpErr');e.innerHTML=ic('alert')+'<span>That code is not correct. You have 2 attempts left.</span>';e.classList.remove('hidden');return}
+  clearInterval(resendT);$('consentId').textContent=U.mode==='mobile'?'mobile number':'email ID';show('scrName');setTimeout(()=>$('inName').focus(),60)}
+function saveName(){const n=$('inName').value.trim(),e=$('nameErr');
+  if(n.length<2){e.innerHTML=ic('alert')+'<span>Please enter your name.</span>';e.classList.remove('hidden');return}
+  if(!$('inConsent').checked){e.innerHTML=ic('alert')+'<span>Please tick the box to continue.</span>';e.classList.remove('hidden');return}
+  e.classList.add('hidden');U.name=n;$('avatarBtn').textContent=initials(n);$('mName').textContent=n;$('mId').textContent=U.masked;
+  $('mComplain').href='mailto:'+COMPLAINT_EMAIL+'?subject=Tambola%20-%20complaint';goGames()}
+
+/* ================= MY GAMES ================= */
+function stInfo(g){return{live:['live','Live now'],daily:['daily','Daily game running'],upcoming:['up','Upcoming'],over:['over','Finished']}[g.status]}
+function stHTML(g){const[c,t]=stInfo(g);return`<span class="st ${c}"><i></i>${t}</span>`}
+function timeLine(g){if(g.status==='live')return'Started '+when(g.start);if(g.status==='daily')return'Next numbers tomorrow, 10:00 AM';if(g.status==='upcoming')return'Starts '+when(g.start);return'Ended '+when(g.ended)}
+function resetTheme(){document.documentElement.style.removeProperty('--c');document.documentElement.style.removeProperty('--a')}
+function goGames(){stopCalls();G=null;resetTheme();$('helloName').textContent='Welcome, '+U.name.split(' ')[0];$('fineId').textContent=U.mode==='mobile'?'mobile number':'email ID';
+  const grp=[['Playing now',GAMES.filter(g=>['live','daily'].includes(g.status))],['Coming up',GAMES.filter(g=>g.status==='upcoming')],['Finished today',GAMES.filter(g=>g.status==='over')]];
+  $('gameList').innerHTML=grp.filter(x=>x[1].length).map(([t,list])=>`<div class="sec">${t}</div><div class="glist">`+list.map(g=>{const th=THEME[g.theme],d=new Date(g.status==='over'?g.ended:g.start);
+    const open=g.prizes.filter(([k])=>!g.won[k]).length;
+    return `<div class="gcard" onclick="openGame('${g.id}')" style="--c:${th.c};--a:${th.a}"><div class="gdate"><b>${d.getDate()}</b><span>${d.toLocaleDateString('en-IN',{month:'short'})}</span></div>
+      <div class="gbody"><div class="eyebrow" style="color:${th.a}">${esc(g.org)}</div><div class="gname">${esc(g.name)}</div>
+      <div class="gmeta">${stHTML(g)}<span>${ic('clock')}${timeLine(g)}</span><span>${ic('gift')}${g.prizes.length} prizes${g.status!=='upcoming'?' · '+open+' open':''}</span></div></div>
+      <div class="gchev">${ic('chevron')}</div></div>`}).join('')+'</div>').join('');
+  show('scrGames')}
+
+/* ================= GAME ================= */
+function openGame(id){G=GAMES.find(g=>g.id===id);cur='ticket';hl=null;G.current=G.status==='live'?G.current:G.current;const th=THEME[G.theme];document.documentElement.style.setProperty('--c',th.c);document.documentElement.style.setProperty('--a',th.a);
+  renderGame();show('scrGame');if(G.status==='live')startLive();if(G.status==='daily')startDaily()}
+function renderGame(){
+  $('gHead').innerHTML=`<div class="eyebrow">${esc(G.org)}</div><h2>${esc(G.name)}</h2><div class="meta">${stHTML(G)}<span>${ic('calendar')}${G.status==='upcoming'?'Starts':'Started'} ${when(G.start)}</span></div>`;
+  renderTab()}
+const RING=0;
+/* ---------- the call strip (top band of the boarding pass) ---------- */
+function stripHTML(){const live=G.status==='live',n=G.current,manual=G.callMode==='manual',hasHost=G.callMode!=='ai';
+  let ball,eb,ln,sub='',bar='';
+  if(G.status==='upcoming'){const d=G.start-Date.now();const dd=Math.max(0,Math.floor(d/864e5)),hh=Math.floor(d%864e5/36e5),mm=Math.floor(d%36e5/6e4);
+    ball=ic('clock');eb='Game starts';ln=`${fmtDs(G.start)} · ${fmtT(G.start)}`;sub=`In ${dd} days ${hh} hrs ${mm} min · opens 15 min before`}
+  else if(G.status==='over'){ball=ic('flag');eb='Game finished';ln=when(G.ended);sub=`Your data is deleted by ${when(G.ended+864e5)}`}
+  else if(G.paused){const P=G.paused;ball=ic(P.ok?'check':P.bad?'x':'pause');eb=P.ok?'Prize awarded':P.bad?'Bogey':'Game paused · claim received';ln=P.msg;sub=P.sub;if(!P.ok&&!P.bad)bar='<div class="sbar indet"><i></i></div>'}
+  else{ball=n?String(n):`<small>${live?'Ready':'10 AM'}</small>`;eb=`${live?'Now calling':'Today\'s release'} · call ${G.called.length} of 90`;
+    ln=n?esc(line(n,G.lang)):(live?(manual?'The host is about to start…':'The first number is on its way…'):'Today\'s numbers are done. Next release tomorrow, 10:00 AM.');
+    sub=manual?`${ic('mic')} ${esc(G.host)} will draw the next number`:(G.status==='daily'?`${ic('clock')} <span id="nxtTxt">Next release tomorrow, 10:00 AM</span>`:`${ic('clock')} <span id="nxtTxt">Next number in —</span> <b id="nxtAt"></b>`);
+    bar=manual?'':'<div class="sbar"><i id="barI"></i></div>'}
+  const tools=['live','daily'].includes(G.status)?`<div class="stools">${hasHost?`<button class="spill ${audioOn?'on':''} ${G.talking&&audioOn?'talk':''}" id="audioBox" onclick="toggleAudio()"><span class="eq"><i></i><i></i><i></i></span><span id="auT">${audioOn?(G.talking?'Host speaking':'Audio on'):'Join audio'}</span></button>`:''}${!manual?`<button class="sicon ${voice?'':'off'}" onclick="toggleVoice()" aria-label="AI voice">${ic(voice?'vol':'mute')}</button>`:''}</div>`:'';
+  return`<div class="sball ${G.paused?(G.paused.ok?'ok':G.paused.bad?'bad':'pz'):''}" id="numBall">${ball}</div><div class="stext"><div class="seb">${eb}</div><div class="sline">${ln}</div><div class="ssub">${sub}</div></div>${tools}${bar}`}
+function renderCaller(){const s=$('callStrip');if(s){s.innerHTML=stripHTML();s.classList.toggle('paused',!!G.paused)}tickUI()}
+function setTalking(on){if(!G)return;G.talking=on;const a=$('audioBox');if(!a)return;a.classList.toggle('talk',on&&audioOn);const t=$('auT');if(t&&audioOn)t.textContent=on?'Host speaking':'Audio on'}
+function toggleAudio(){audioOn=!audioOn;if(audioOn){try{actx=actx||new(window.AudioContext||window.webkitAudioContext)();actx.resume()}catch(e){}toast('Connected to live audio (demo)','vol')}renderCaller()}
+function toggleVoice(){voice=!voice;if(!voice&&window.speechSynthesis)speechSynthesis.cancel();renderCaller()}
+function gTab(){renderTab()}
+/* ---------- whole game view: the pass + fine print ---------- */
+function renderTab(){if(!G)return;const play=['live','daily'].includes(G.status);
+  $('passWrap').innerHTML=passHTML(G,{game:true,play,hl:hl?new Set(patternNums(G.t,hl)||[]):null,hlKey:hl})+yourWins();
+  $('passWrap').querySelectorAll('.bp.play .cell.num').forEach(d=>d.onclick=()=>{const v=+d.dataset.v;G.cut.has(v)?G.cut.delete(v):G.cut.add(v);d.classList.toggle('cut');if(navigator.vibrate)navigator.vibrate(10)});
+  renderCaller();$('fineRules').innerHTML=fineHTML()}
+function fineSections(){const who=U.mode==='mobile'?'mobile number':'email ID',t=tid(G,G.serial);
+  const mode={ai:'AI voice – a new number every 10 seconds.',manual:`Host voice – ${esc(G.host||'the host')} draws and announces each number, at least 5 seconds apart.`,both:`AI voice every 10 seconds, and ${esc(G.host||'the host')} can speak to everyone.`}[G.callMode];
+  const L=a=>'<ol>'+a.map(x=>`<li>${x}</li>`).join('')+'</ol>';
+  return{play:['How to play',L([
+    `One ticket per player, locked to your ${who} and this game. One device at a time.`,
+    `Numbers 1–90 are drawn at random by the software. Nobody can choose a number. This game: ${mode}`,
+    `Each number is shown and announced only once. Nobody sees a list of past numbers during the game.`,
+    `Tap a number on your ticket to cut it. Nothing is cut for you.`,
+    `Tap <b>Claim</b> next to a prize when every number of that pattern is called and cut by you. No prize is given without a claim.`,
+    `Claim before the next number is called. Example: if 23 completes your Top Line, claim before 24.`,
+    `Any claim pauses the game for everyone. The software checks it and shows all: prize awarded or bogey. Its result is final.`,
+    `After 2 bogeys your ticket is blocked for this game.`,
+    `Valid claims for the same prize before the next number share the prize equally, unless the organiser stated otherwise before the start.`,
+    `Other disputes are decided by ${esc(G.org)}. Their decision is final.`])],
+   money:['Money &amp; your data',L([`Free to play. You never pay on this platform.`,`Prizes are given directly by ${esc(G.org)}. We do not handle money.`,`Your personal data is deleted within 24 hours after the game ends.`,`Questions or complaints: <a href="mailto:${COMPLAINT_EMAIL}">${COMPLAINT_EMAIL}</a>`])],
+   disc:['Disclaimer',L([`Private game for a closed group invited by ${esc(G.org)}. We only provide the software; we do not organise the game or give prizes.`,`Opens 15 minutes before the start and closes 15 minutes after the end. Runs in one stretch; only the host can pause, in an emergency.`,`Claims are checked only by the software.`])],
+   ticket:['This ticket',`<div class="kv"><span>Ticket ID</span><b style="font:500 12px var(--mono)">${t}</b></div><div class="kv"><span>Player</span><b>${esc(U.name)}</b></div><div class="kv"><span>Logged in with</span><b>${esc(U.masked)}</b></div><div class="kv"><span>Game</span><b>${esc(G.name)}</b></div><div class="kv"><span>Starts</span><b>${when(G.start)}</b></div><div class="kv"><span>Wrong claims</span><b>${G.bogeys} of 2</b></div><div class="kv"><span>Organiser contact</span><b>${esc(G.contact)}</b></div><a class="btn line block" style="margin-top:14px;text-decoration:none" href="mailto:${COMPLAINT_EMAIL}?subject=${encodeURIComponent('Complaint - '+G.name+' - '+t)}">${ic('mail')} Write to us</a>`]}}
+function fineHTML(){return[['play','How to play'],['money','Money & your data'],['disc','Disclaimer'],['ticket','This ticket']].map(([k,t])=>`<button class="flink" onclick="openFine('${k}')">${t}</button>`).join('<span class="fsep">|</span>')}
+function openFine(k){const [t,body]=fineSections()[k];sheet(`<div class="eyebrow">${esc(G.org)} · ${esc(G.name)}</div><h2>${t}</h2><div class="finepop">${body}</div><button class="btn block" style="margin-top:16px" onclick="closeSheet()">Close</button>`)}
+function yourWins(){const mine=G.prizes.filter(([k])=>G.won[k]&&G.won[k].who==='You');if(!mine.length)return'';
+  return`<div class="winnote">${ic('trophy')}<span>You won ${mine.map(([k,p])=>`<b>${PAT[k].name}</b> (${esc(p)})`).join(', ')}. ${esc(G.org)} will contact you and hand over the prize directly.</span></div>`}
+function hlPrize(k){hl=hl===k?null:k;renderTab()}
+function claimPrize(k){if(!G)return;if(G.paused)return toast('A claim is being checked. Please wait.','clock');
+  if(G.bogeys>=2)return sheet(`<div class="res no">${ic('lock')}</div><h2 class="center">Ticket blocked</h2><p class="center muted">You have made 2 wrong claims, so this ticket cannot claim any more prizes in this game.</p><button class="btn block" onclick="closeSheet()">OK</button>`);
+  claimK=k;
+  sheet(`<div class="eyebrow">Confirm your claim</div><h2>${PAT[k].name}</h2><p class="muted" style="margin:0 0 12px">${PAT[k].desc}. Prize: ${esc(G.prizes.find(p=>p[0]===k)[1])}.</p>
+   ${passHTML(G,{small:true,hl:new Set(patternNums(G.t,k)||[])})}<p class="note">${k==='early5'?'You need at least 5 cut numbers that have been called.':'Outlined numbers are the ones this prize needs. Make sure all are cut.'} The game pauses for everyone while we check.</p>
+   <button class="btn gold block" onclick="submitClaim()">${ic('trophy')} Confirm claim</button><button class="btn line block" style="margin-top:8px" onclick="closeSheet()">Cancel</button>`)}
+
+/* ================= BOARDING-PASS TICKET ================= */
+function passHTML(g,o={}){const th=THEME[g.theme],t=g.t;let cells='';
+  for(let r=0;r<3;r++)for(let c=0;c<9;c++){const v=t[r][c];if(v===null){cells+='<div class="cell blank"></div>';continue}
+    const cl=['cell','num'];if(g.cut.has(v))cl.push('cut');if(o.hl&&o.hl.has(v))cl.push('hl');cells+=`<div class="${cl.join(' ')}" data-v="${v}">${v}</div>`}
+  const id=tid(g,g.serial),player=o.player||U.name||'Player';
+  const playable=o.play&&['live','daily'].includes(g.status);
+  const open=g.prizes?g.prizes.filter(([k])=>!g.won[k]).length:0;
+  const rows=g.prizes?g.prizes.map(([k,p])=>{const w=g.won[k];
+      return`<div class="pz-r ${w?'won':''} ${o.hlKey===k?'sel':''}"><span class="pz-n" onclick="${o.game?`hlPrize('${k}')`:''}"><b>${PAT[k].name}</b><small>${esc(p)}</small>${w?`<em>${esc(w.who)} · ${fmtT(w.at)}</em>`:''}</span>
+      <span class="pz-s">${w?'Won':'Open'}</span>
+      <span class="pz-c">${w?ic('check'):playable?`<button class="pz-btn" ${g.paused?'disabled':''} onclick="claimPrize('${k}')">Claim</button>`:'<span class="dash">—</span>'}</span></div>`}).join(''):'';
+  const head=o.game?`<div class="bp-strip" id="callStrip"></div>`:`<div class="bp-head"><div class="bp-logo">${esc(initials(g.org))}</div><div style="min-width:0"><div class="bp-org">${esc(g.org)}</div><div class="bp-title">${esc(g.name)}</div></div><div class="bp-kind">Tambola<b>Pass</b></div></div>`;
+  return`<div class="bpw"><div class="bp ${o.play?'play':''} ${o.small?'sm':''} ${o.game?'game':''} ${g.status==='upcoming'?'locked':''}" style="--c:${th.c};--a:${th.a}">
+   <div class="bp-main">
+    ${head}
+    <div class="bp-fields">
+      <div class="fl"><label>Player</label><b>${esc(player)}</b></div>
+      <div class="fl"><label>Date</label><b>${fmtD(g.start)}</b></div>
+      <div class="fl"><label>Starts</label><b>${fmtT(g.start)}</b></div>
+      <div class="fl bp-extra"><label>Entry</label><b>Free</b></div>
+    </div>
+    <div class="bp-grid">${cells}</div>
+    ${o.game?'<div class="bp-hint">Tap a number to cut it · tap a prize name to see its pattern · claimed prizes are struck through</div>':''}
+    <div class="bp-legal"><b>Private group, team building and entertainment game</b> for invited members of ${esc(g.org)} only. <b>Free to play</b> – this platform never asks for or handles any payment. Prizes are given directly by ${esc(g.org)}. Personal data is deleted within 24 hours after the game ends. Complaints: ${COMPLAINT_EMAIL}</div>
+   </div>
+   <div class="bp-perf"></div>
+   <div class="bp-stub">
+     <div class="stub-top"><span>${g.prizes?'Prizes':'Boarding pass'}</span><span>${g.prizes?open+' of '+g.prizes.length+' open':'Tambola'}</span></div>
+     ${g.prizes?`<div class="bp-prizes"><div class="pz-h"><span>Prize</span><span>Status</span><span>Claim</span></div>${rows}</div>`:''}
+     <div class="stub-foot"><div class="fl"><label>Ticket no.</label><b class="big">${String(g.serial).padStart(6,'0')}</b></div><div class="bc">${barcode(id)}</div></div>
+     <div class="bp-id">${id}</div>
+   </div>
+  </div></div>`}
+
+/* ================= CALLING ================= */
+function chime(){try{actx=actx||new(window.AudioContext||window.webkitAudioContext)();const t=actx.currentTime;[[880,0],[1318.5,.12]].forEach(([f,d])=>{const o=actx.createOscillator(),g=actx.createGain();o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0,t+d);g.gain.linearRampToValueAtTime(.08,t+d+.02);g.gain.exponentialRampToValueAtTime(.0001,t+d+.5);o.connect(g).connect(actx.destination);o.start(t+d);o.stop(t+d+.55)})}catch(e){}}
+/* Pick the most natural Indian voice the device has: Indian-English "Natural/Neural/Online" voices first,
+   then the regional voice for the chosen commentary, then any en-IN voice. Never an American default if avoidable. */
+const VPREF={hinglish:['hi-IN','en-IN'],tamlish:['en-IN','ta-IN'],kanglish:['en-IN','kn-IN'],tenglish:['en-IN','te-IN'],english:['en-IN']};
+let VOICES=[];function loadVoices(){if(window.speechSynthesis)VOICES=speechSynthesis.getVoices()}
+if(window.speechSynthesis){loadVoices();speechSynthesis.onvoiceschanged=loadVoices}
+function pickVoice(lang){const pref=VPREF[lang]||['en-IN'];let best=null,score=-1;
+  for(const v of VOICES){const L=(v.lang||'').replace('_','-');let s=-1;const i=pref.indexOf(L);if(i>=0)s=100-i*20;else if(/-IN$/.test(L))s=40;if(s<0)continue;
+    if(/natural|neural|online|wavenet|premium|enhanced/i.test(v.name))s+=30;if(/google/i.test(v.name))s+=10;if(s>score){score=s;best=v}}
+  return best}
+function speakLine(txt,lang){if(!window.speechSynthesis)return;speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(txt);const v=pickVoice(lang);
+  if(v){u.voice=v;u.lang=v.lang}else u.lang='en-IN';u.rate=1.0;u.pitch=1.0;speechSynthesis.speak(u)}
+function speak(txt){if(!voice||!G||G.callMode==='manual'||!G.sound.includes('Voice'))return;speakLine(txt,G.lang)}
+function hostGap(){return 9000+rnd(6000)}
+function stopCalls(){clearTimeout(timer);clearInterval(uiTimer);timer=null;if(G)G.nextAt=null;if(window.speechSynthesis)speechSynthesis.cancel()}
+function schedule(ms){clearTimeout(timer);G.nextAt=Date.now()+ms;G.span=ms;const g=G;timer=setTimeout(()=>{if(G===g&&!g.paused)callNext()},ms)}
+function startLive(){stopCalls();G.paused=null;schedule(G.called.length?(G.callMode==='manual'?hostGap():gap):3000);uiTimer=setInterval(tickUI,200)}
+function startDaily(){stopCalls();G.paused=null;G.left=G.release;schedule(2000);uiTimer=setInterval(tickUI,200)}
+function tickUI(){if(!G||!G.nextAt||G.paused||G.callMode==='manual')return;const left=Math.max(0,G.nextAt-Date.now()),p=1-left/G.span;
+  const pr=$('prg');if(pr)pr.style.strokeDashoffset=RING*(1-p);const bi=$('barI');if(bi)bi.style.width=(p*100)+'%';
+  const nt=$('nxtTxt');if(nt)nt.textContent=`Next number in ${Math.ceil(left/1000)} seconds`;const na=$('nxtAt');if(na)na.textContent='· '+fmtTs(G.nextAt)}
+function callNext(){if(!G||G.paused)return;if(G.called.length>=90)return endGame();
+  const n=G.draw[G.called.length];G.called.push(n);G.current=n;   // number always comes from the random draw
+  if(G.status==='daily'){G.left--;if(G.left>0)schedule(6000);else{G.nextAt=null;setTimeout(()=>{if(G&&G.status==='daily'&&!G.paused){G.current=null;renderCaller();toast("Today's 3 numbers are done. Next release tomorrow at 10:00 AM",'calendar')}},6000)}}
+  else schedule(G.callMode==='manual'?hostGap():gap);
+  renderCaller();const b=$('numBall');if(b){b.classList.remove('pop');void b.offsetWidth;b.classList.add('pop')}
+  if(voice){chime();setTimeout(()=>speak(line(n,G.lang)),450)}
+  if(G.callMode==='manual'){setTalking(true);const g=G;setTimeout(()=>{if(G===g)setTalking(false)},3500)}
+  if(G.callMode==='both'&&G.called.length%4===0){const g=G;setTimeout(()=>{if(G===g){setTalking(true);setTimeout(()=>{if(G===g)setTalking(false)},3000)}},5000)}
+  if(cur==='info')renderTab();
+  if(G.status==='live'&&[9,17,25,33,42,52].includes(G.called.length)){const g=G;setTimeout(()=>{if(G===g&&g.status==='live'&&!g.paused)demoOtherWin()},4000)}}
+function demoSpeed(ms){gap=ms;if(G&&G.status==='live'&&!G.paused&&G.callMode!=='manual')schedule(gap);toast('AI voice: one number every '+ms/1000+' seconds','clock')}
+function demoOtherWin(){if(!G||!['live','daily'].includes(G.status)||G.paused)return;const open=G.prizes.filter(([k])=>!G.won[k]);if(!open.length)return;
+  const pick=open.find(([k])=>k!=='full')||open[0];const k=pick[0];if(k==='full'&&G.called.length<45&&open.length>1)return;
+  processClaim(OTHERS[rnd(OTHERS.length)],k,Math.random()>.25,false)}
+function demoCheat(){if(G)toast('Tester only – called: '+(G.called.slice().sort((a,b)=>a-b).join(', ')||'none'),'search')}
+function endGame(){if(!G||G.status==='over')return;stopCalls();G.status='over';G.ended=Date.now();G.current=null;G.paused=null;
+  $('proto').classList.add('hidden');renderGame();
+  sheet(`<div class="res end">${ic('flag')}</div><h2 class="center">Game over</h2><p class="center muted">Thank you for playing ${esc(G.name)}.</p>
+   <div class="box" style="margin-top:14px">${G.prizes.map(([k])=>`<div class="kv"><span>${PAT[k].name}</span><b>${G.won[k]?esc(G.won[k].who):'Not won'}</b></div>`).join('')}</div>
+   <p class="note center">Your personal data for this game will be deleted by ${when(G.ended+864e5)}.</p><button class="btn block" onclick="closeSheet()">Close</button>`)}
+
+/* ================= CLAIM → PAUSE → CHECK → ANNOUNCE ================= */
+function openClaim(){if(!G)return;if(G.paused)return toast('A claim is being checked. Please wait.','clock');
+  if(G.bogeys>=2)return sheet(`<div class="res no">${ic('lock')}</div><h2 class="center">Ticket blocked</h2><p class="center muted">You have made 2 wrong claims, so this ticket cannot claim any more prizes in this game.</p><button class="btn block" onclick="closeSheet()">OK</button>`);
+  const open=G.prizes.filter(([k])=>!G.won[k]&&!(k==='full2'&&!G.won.full));claimK=null;
+  sheet(`<h2>What are you claiming?</h2><p class="muted" style="margin:0 0 16px">Choose one prize. The game pauses for everyone while we check.</p>
+   ${open.map(([k,p])=>`<div class="opt" onclick="pickClaim('${k}',this)">${mini(k)}<div><b>${PAT[k].name}</b><span>${esc(p)}</span></div></div>`).join('')}
+   <div id="cPrev" style="margin:12px 0"></div><button class="btn gold block" id="cOk" disabled onclick="submitClaim()">${ic('trophy')} Confirm claim</button><button class="btn line block" style="margin-top:8px" onclick="closeSheet()">Cancel</button>`)}
+function pickClaim(k,el){claimK=k;document.querySelectorAll('.opt').forEach(o=>o.classList.remove('sel'));el.classList.add('sel');$('cOk').disabled=false;
+  $('cPrev').innerHTML=passHTML(G,{small:true,hl:new Set(patternNums(G.t,k)||[])})+`<p class="note">${k==='early5'?'You need at least 5 cut numbers that have been called.':'Outlined numbers are the ones this prize needs. Make sure all are cut.'}</p>`}
+function submitClaim(){const k=claimK;if(!k)return;const c=new Set(G.called);closeSheet();
+  if(G.won[k])return result(false,'This prize has already been won.');
+  const ok=k==='early5'?G.t.flat().filter(v=>v!==null&&c.has(v)&&G.cut.has(v)).length>=5:patternNums(G.t,k).every(v=>c.has(v)&&G.cut.has(v));
+  processClaim('You',k,ok,true)}
+function processClaim(who,k,valid,isMe){if(!G||G.paused)return;const g=G;clearTimeout(timer);G.nextAt=null;
+  const name=who==='You'?'You':who;
+  G.paused={msg:`${who==='You'?'You have':esc(who)+' has'} claimed <b>${PAT[k].name}</b>.`,sub:'The game is paused for everyone. The system is checking the ticket…'};
+  renderCaller();renderTab();if(isMe)sheet(`<div class="res end">${ic('search')}</div><h2 class="center">Checking your claim</h2><p class="center muted">${PAT[k].name} · the game is paused for all players.</p><div class="bar indet" style="margin-top:14px"><i></i></div>`);
+  toast(`${name} claimed ${PAT[k].name} · game paused`,'flag');chime();if(G.callMode!=='manual')setTimeout(()=>speak(`Claim! ${who==='You'?U.name:who} has claimed ${PAT[k].name}. Please wait.`),400);
+  setTimeout(()=>{if(G!==g)return;
+    if(valid){G.won[k]={who,at:Date.now()};G.paused={ok:true,msg:`<b>${PAT[k].name}</b> awarded to ${who==='You'?'you':esc(who)}.`,sub:'Claim verified by the system. The game continues in a moment.'}}
+    else{if(isMe)G.bogeys++;G.paused={bad:true,msg:`${who==='You'?'Your':esc(who)+'\'s'} claim for <b>${PAT[k].name}</b> was not valid.`,sub:'The prize is still open. The game continues in a moment.'}}
+    renderCaller();renderTab();toast(valid?`${PAT[k].name} awarded to ${name}`:`Bogey – ${name}'s claim for ${PAT[k].name} was not valid`,valid?'trophy':'x');
+    speak(valid?`${PAT[k].name} confirmed for ${who==='You'?U.name:who}!`:`Bogey! The claim for ${PAT[k].name} is not valid.`);
+    if(isMe)result(valid,valid?`<b>${PAT[k].name}</b> is yours.<br>Prize: ${esc(G.prizes.find(p=>p[0]===k)[1])}.<br>${esc(G.org)} will contact you and hand it over directly.`:`This pattern is not complete on your ticket – some numbers have either not been called or not been cut.<br><b>Wrong claims: ${G.bogeys} of 2.</b>${G.bogeys>=2?' Your ticket is now blocked for this game.':''}`);
+    const allWon=G.prizes.every(([p])=>G.won[p]);
+    setTimeout(()=>{if(G!==g)return;if(allWon)return endGame();G.paused=null;renderCaller();renderTab();
+      if(G.status==='live')schedule(G.callMode==='manual'?hostGap():gap);else if(G.status==='daily'&&G.left>0)schedule(6000)},3500)},2400)}
+function result(ok,msg){sheet(`<div class="res ${ok?'ok':'no'}">${ic(ok?'trophy':'x')}</div><h2 class="center">${ok?'Congratulations':'Not a valid claim'}</h2><p class="center muted" style="line-height:1.6">${msg}</p><button class="btn block" style="margin-top:8px" onclick="closeSheet()">Back to game</button>`)}
+
+/* ================= SHEETS ================= */
+function sheet(h){$('sheet').innerHTML=h;$('modal').classList.remove('hidden')}
+function closeSheet(){$('modal').classList.add('hidden')}
+function openPrivacy(){sheet(`<div class="res end">${ic('shield')}</div><h2 class="center">Privacy &amp; your data</h2>
+  <ol class="rules" style="margin-top:14px"><li><span>We collect only your <b>name</b> and the ${U.mode==='mobile'?'mobile number':'email ID'} you log in with.</span></li><li><span>It is used only to let you play the games your organiser invited you to.</span></li><li><span>We <b>never ask for payment</b> and never handle money. Prizes come directly from your organiser.</span></li><li><span>Your personal data is <b>deleted within 24 hours</b> after each game ends.</span></li><li><span>Questions or complaints: <a href="mailto:${COMPLAINT_EMAIL}">${COMPLAINT_EMAIL}</a></span></li></ol>
+  <button class="btn block" style="margin-top:10px" onclick="closeSheet()">Understood</button>`)}
+
+/* ================= INIT ================= */
+(function(){const demo={org:'Acme Industries',name:'Diwali Tambola 2026',id:'DW26',theme:'burgundy',start:new Date('2026-11-01T16:00').getTime(),status:'live',serial:147,t:genTicket(),cut:new Set()};
+  demo.t.flat().filter(v=>v!==null).filter((_,i)=>i%4===1).forEach(v=>demo.cut.add(v));
+  $('heroTicket').innerHTML=passHTML(demo,{player:'Priya Sharma'});
+  document.addEventListener('click',e=>{if(!e.target.closest('#menu')&&!e.target.closest('#avatarBtn'))$('menu').classList.add('hidden')});
+  ['inMob','inMail'].forEach(i=>$(i).addEventListener('keydown',e=>{if(e.key==='Enter')sendCode()}));
+  $('inName').addEventListener('keydown',e=>{if(e.key==='Enter')saveName()});
+  if(window.speechSynthesis)speechSynthesis.getVoices();
+  show('scrWelcome')})();
+
+</script></body></html>

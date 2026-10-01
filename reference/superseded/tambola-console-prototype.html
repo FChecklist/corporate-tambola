@@ -1,0 +1,869 @@
+<title>Tambola Game Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one calm column of numbered steps under a sticky "viewing as" bar; tables scroll inside their own box. */
+:root{
+  --bg:#F4F6F3; --surface:#FFFFFF; --sunk:#EDF1EE; --ink:#14211E; --muted:#56665F; --line:#D5DDD8;
+  --accent:#0E6857; --accent-soft:#DCEFE9; --on-accent:#FFFFFF; --marigold:#D9920B; --marigold-soft:#FBEFD3;
+  --good:#1B7A4A; --good-soft:#DDF2E6; --warn:#9A6400; --warn-soft:#FBEFD3; --bad:#B42318; --bad-soft:#FBE3E0;
+  --qr-bg:#FFFFFF;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Consolas, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0E1412; --surface:#161F1C; --sunk:#111916; --ink:#E6EEEA; --muted:#9AADA5; --line:#2A3833;
+  --accent:#43B89F; --accent-soft:#17332C; --on-accent:#06120F; --marigold:#F0B53D; --marigold-soft:#3A2D10;
+  --good:#52C68D; --good-soft:#12301F; --warn:#E6AE4E; --warn-soft:#352812; --bad:#F2766C; --bad-soft:#3A1715;
+  color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0E1412; --surface:#161F1C; --sunk:#111916; --ink:#E6EEEA; --muted:#9AADA5; --line:#2A3833;
+  --accent:#43B89F; --accent-soft:#17332C; --on-accent:#06120F; --marigold:#F0B53D; --marigold-soft:#3A2D10;
+  --good:#52C68D; --good-soft:#12301F; --warn:#E6AE4E; --warn-soft:#352812; --bad:#F2766C; --bad-soft:#3A1715;
+  color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg); color:var(--ink); font-family:var(--f-body); font-size:15px; line-height:1.5; padding-inline:16px; padding-block:0 64px}
+.wrap{max-width:1040px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+h1,h2,h3{font-family:var(--f-display); text-wrap:balance; margin:0; line-height:1.15}
+h1{font-size:1.45rem} h2{font-size:1.2rem} h3{font-size:1rem}
+p{margin:0}
+.muted{color:var(--muted)}
+.small{font-size:.86rem}
+.num{font-family:var(--f-mono); font-size:.86rem; font-variant-numeric:tabular-nums; white-space:nowrap}
+button,select,input,textarea{font:inherit; color:inherit}
+:focus-visible{outline:3px solid var(--marigold); outline-offset:2px}
+
+/* Top bar */
+.top{position:sticky; top:env(safe-area-inset-top,0px); z-index:5; background:var(--bg); padding-block:14px 12px; border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:12px 20px; align-items:center; justify-content:space-between}
+.brand{display:flex; gap:12px; align-items:center; min-width:0}
+.ticket{display:grid; grid-template-columns:repeat(9,11px); grid-auto-rows:11px; gap:2px; padding:4px; border:1.5px solid var(--marigold); border-radius:4px; background:var(--marigold-soft); flex:none}
+.ticket i{display:block; border-radius:2px; background:transparent}
+.ticket i.n{background:var(--marigold)}
+.brand small{display:block; color:var(--muted); font-size:.82rem}
+.seg{display:flex; flex-wrap:wrap; gap:4px; padding:4px; background:var(--sunk); border:1px solid var(--line); border-radius:999px; margin:0}
+.seg legend{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+.seg label{position:relative; cursor:pointer}
+.seg input{position:absolute; opacity:0; inset:0; cursor:pointer}
+.seg span{display:block; padding:6px 14px; border-radius:999px; font-weight:600; font-size:.9rem; color:var(--muted)}
+.seg input:checked + span{background:var(--accent); color:var(--on-accent)}
+.seg input:focus-visible + span{outline:3px solid var(--marigold)}
+.viewing{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.viewing b{font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:600}
+
+.demo{font-size:.86rem; color:var(--warn); background:var(--warn-soft); border-radius:var(--r); padding:8px 12px}
+
+/* Status strip */
+.status{display:flex; flex-wrap:wrap; gap:12px 28px; align-items:center; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:14px 18px}
+.status .game{min-width:0; flex:1 1 220px}
+.status .game h2{font-size:1.15rem; overflow-wrap:anywhere}
+.stat{display:flex; flex-direction:column}
+.stat b{font-family:var(--f-mono); font-size:1.15rem; font-variant-numeric:tabular-nums}
+.stat span{font-size:.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em}
+
+.pill{display:inline-flex; align-items:center; gap:6px; padding:2px 10px; border-radius:999px; font-size:.8rem; font-weight:600; white-space:nowrap}
+.pill::before{content:""; width:7px; height:7px; border-radius:50%; background:currentColor}
+.st-open,.st-joined{color:var(--good); background:var(--good-soft)}
+.st-sent{color:var(--accent); background:var(--accent-soft)}
+.st-not{color:var(--muted); background:var(--sunk)}
+.st-started{color:var(--warn); background:var(--warn-soft)}
+.st-done,.st-cancel{color:var(--bad); background:var(--bad-soft)}
+
+/* Panels */
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:20px; display:flex; flex-direction:column; gap:16px}
+.panel-head{display:flex; gap:14px; align-items:flex-start}
+.step{flex:none; width:30px; height:30px; border-radius:50%; background:var(--accent-soft); color:var(--accent); display:grid; place-items:center; font-family:var(--f-mono); font-size:.9rem}
+.panel-head p{color:var(--muted); font-size:.9rem; margin-top:2px}
+.locked{opacity:.55}
+
+.grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:18px 24px}
+.field{display:flex; flex-direction:column; gap:6px; min-width:0}
+.field > label, .field > .lab, fieldset > legend{font-weight:600; font-size:.9rem; padding:0}
+.help{font-size:.8rem; color:var(--muted)}
+fieldset{border:0; margin:0; padding:0; min-width:0}
+input[type=text],input[type=tel],input[type=date],select,textarea{background:var(--surface); border:1.5px solid var(--line); border-radius:8px; padding:9px 11px; width:100%; min-width:0}
+textarea{min-height:150px; font-family:var(--f-mono); font-size:.85rem; resize:vertical}
+input:disabled,select:disabled,textarea:disabled{background:var(--sunk); color:var(--muted)}
+.choices{display:flex; flex-wrap:wrap; gap:6px}
+.choice{position:relative}
+.choice input{position:absolute; opacity:0; inset:0; cursor:pointer; margin:0}
+.choice span{display:block; padding:7px 13px; border:1.5px solid var(--line); border-radius:8px; font-weight:600; font-size:.9rem; cursor:pointer; background:var(--surface)}
+.choice input:checked + span{border-color:var(--accent); background:var(--accent-soft); color:var(--accent)}
+.choice input:focus-visible + span{outline:3px solid var(--marigold)}
+.choice input:disabled + span{opacity:.5; cursor:not-allowed}
+.check{display:flex; gap:10px; align-items:flex-start; cursor:pointer}
+.check input{width:18px; height:18px; margin-top:2px; accent-color:var(--accent); flex:none}
+
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:6px; border-radius:8px; padding:9px 16px; font-weight:600; cursor:pointer; border:1.5px solid var(--line); background:var(--surface); text-decoration:none; color:var(--ink); white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:var(--on-accent)}
+.btn.danger{color:var(--bad); border-color:var(--bad)}
+.btn.sm{padding:5px 10px; font-size:.84rem}
+.btn:disabled{opacity:.45; cursor:not-allowed}
+.wa{color:var(--good)}
+.row{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+.spacer{flex:1}
+
+/* Check results */
+.chips{display:flex; flex-wrap:wrap; gap:8px}
+.chip{border-radius:8px; padding:8px 12px; font-size:.88rem; display:flex; gap:8px; align-items:baseline}
+.chip b{font-family:var(--f-mono); font-size:1.05rem}
+.c-ok{background:var(--good-soft); color:var(--good)}
+.c-fix{background:var(--accent-soft); color:var(--accent)}
+.c-dup{background:var(--warn-soft); color:var(--warn)}
+.c-bad{background:var(--bad-soft); color:var(--bad)}
+details{border:1px solid var(--line); border-radius:8px; padding:8px 12px}
+details summary{cursor:pointer; font-weight:600; font-size:.9rem}
+details ul{margin:8px 0 2px; padding-left:18px; display:flex; flex-direction:column; gap:3px; font-size:.86rem}
+.warnbox{background:var(--bad-soft); color:var(--bad); border-radius:8px; padding:10px 12px; font-size:.9rem}
+.infobox{background:var(--sunk); border-radius:8px; padding:10px 12px; font-size:.88rem; color:var(--muted)}
+
+/* Tables */
+.tbl-wrap{overflow-x:auto; border:1px solid var(--line); border-radius:8px}
+table{border-collapse:collapse; width:100%; min-width:760px}
+th,td{text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; font-size:.9rem}
+th{font-size:.76rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); background:var(--sunk); font-weight:600}
+tr:last-child td{border-bottom:0}
+td .sub{font-size:.78rem; color:var(--muted)}
+td select{padding:5px 8px; width:auto}
+td.acts{white-space:nowrap}
+td.acts .row{flex-wrap:nowrap; gap:6px}
+.bulk{display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--accent-soft); border-radius:8px; padding:10px 12px}
+.bulk select{width:auto}
+
+/* Share */
+.share{display:grid; grid-template-columns:1fr auto; gap:20px; align-items:start}
+.linkbox{font-family:var(--f-mono); font-size:.9rem; background:var(--sunk); border:1.5px dashed var(--accent); border-radius:8px; padding:10px 12px; overflow-wrap:anywhere; user-select:all}
+.qr{background:var(--qr-bg); padding:10px; border-radius:8px; border:1px solid var(--line); width:max-content}
+.qr img,.qr canvas{display:block}
+
+/* Queue */
+.list{display:flex; flex-direction:column; border:1px solid var(--line); border-radius:8px}
+.item{display:flex; gap:12px; align-items:center; padding:10px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap}
+.item:last-child{border-bottom:0}
+.item .who{flex:1 1 200px; min-width:0}
+.alert{border-left:4px solid var(--warn); background:var(--warn-soft); border-radius:8px; padding:10px 12px; display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+.alert p{flex:1 1 260px}
+
+/* Team lead */
+.meters{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px}
+.meter{border:1px solid var(--line); border-radius:8px; padding:12px 14px; display:flex; flex-direction:column; gap:8px}
+.meter .bar{height:8px; border-radius:99px; background:var(--sunk); overflow:hidden}
+.meter .bar i{display:block; height:100%; background:var(--accent)}
+.meter .big{font-family:var(--f-mono); font-size:1.3rem}
+.result{border:1.5px solid var(--accent); background:var(--accent-soft); border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:10px}
+
+#toast{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(20px + env(safe-area-inset-bottom,0px)); background:var(--ink); color:var(--bg); padding:10px 16px; border-radius:8px; font-weight:600; font-size:.9rem; display:flex; gap:12px; align-items:center; max-width:calc(100% - 32px); z-index:10}
+#toast button{background:none; border:0; color:var(--marigold); font-weight:700; cursor:pointer; padding:0}
+
+@media (max-width:640px){
+  .share{grid-template-columns:1fr}
+  .panel{padding:16px}
+  .status{gap:10px 20px}
+}
+@media (prefers-reduced-motion:no-preference){ .btn,.choice span,.seg span{transition:background .15s, border-color .15s, color .15s} }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="ticket" aria-hidden="true" id="ticket"></div>
+      <div><h1>Tambola Game Console</h1><small>Set up the game, add people, admit players. No SMS needed.</small></div>
+    </div>
+    <div class="viewing">
+      <b>Viewing as</b>
+      <fieldset class="seg" id="role-seg">
+        <legend>Viewing as</legend>
+        <label><input type="radio" name="role" value="org" id="role-org" checked><span>Organizer</span></label>
+        <label><input type="radio" name="role" value="host" id="role-host"><span>Host</span></label>
+        <label><input type="radio" name="role" value="tl" id="role-tl"><span>Team Lead</span></label>
+      </fieldset>
+    </div>
+  </header>
+
+  <p class="demo">Demo with example data. Nothing is sent and nothing is saved. In the real product, each person sees only their own view, opened from their own link.</p>
+
+  <section class="status" aria-label="Game status">
+    <div class="game"><h2 id="st-name">Diwali Housie 2026</h2><p class="small muted" id="st-when"></p></div>
+    <span class="pill st-open" id="st-pill">Open for entry</span>
+    <div class="stat"><b id="st-joined">0</b><span>Joined</span></div>
+    <div class="stat"><b id="st-list">0</b><span>Places used</span></div>
+    <div class="stat"><b id="st-limit">500</b><span>Player limit</span></div>
+    <div class="stat"><b id="st-wait">0</b><span>Waiting</span></div>
+  </section>
+
+  <!-- 1 SETUP -->
+  <section class="panel" data-roles="org host" id="s-setup">
+    <div class="panel-head"><div class="step">1</div><div><h2>Set up the game</h2><p>Pick an option in each box. You can change these until the game starts.</p><p class="small" data-roles="host">As a Host you can only change the family limit. The Organizer controls the rest.</p></div></div>
+    <div class="grid">
+      <div class="field"><label for="g-name">Game name</label><input type="text" id="g-name" data-lock="org" value="Diwali Housie 2026" maxlength="60"></div>
+      <div class="field"><label for="g-date">Game date</label><input type="date" id="g-date" data-lock="org" value="2026-10-24"></div>
+      <div class="field"><label for="g-time">Start time</label><select id="g-time" data-lock="org"></select><span class="help" id="tz-help"></span></div>
+      <div class="field"><label for="g-country">Most players' country</label><select id="g-country" data-lock="org"></select><span class="help">Numbers without a country code are read as this country.</span></div>
+      <div class="field"><label for="g-max">Player limit (everyone, including family)</label>
+        <select id="g-max" data-lock="org"><option>50</option><option>100</option><option>250</option><option selected>500</option><option>1000</option><option>2000</option><option>5000</option></select>
+        <span class="help">Entry stops at this number, whatever the invite limits allow.</span></div>
+    </div>
+    <div class="grid">
+      <fieldset class="field"><legend>Family members each player can bring</legend>
+        <div class="choices" id="fam-choices">
+          <label class="choice"><input type="radio" name="family" value="0"><span>None</span></label>
+          <label class="choice"><input type="radio" name="family" value="1"><span>1</span></label>
+          <label class="choice"><input type="radio" name="family" value="2" checked><span>2</span></label>
+          <label class="choice"><input type="radio" name="family" value="3"><span>3</span></label>
+          <label class="choice"><input type="radio" name="family" value="4"><span>4</span></label>
+        </div><span class="help">Family members get their own pass. They cannot invite anyone.</span></fieldset>
+      <fieldset class="field"><legend>Can family members win prizes?</legend>
+        <div class="choices">
+          <label class="choice"><input type="radio" name="famprize" value="yes" data-lock="org" checked><span>Yes</span></label>
+          <label class="choice"><input type="radio" name="famprize" value="no" data-lock="org"><span>No, they play for fun</span></label>
+        </div></fieldset>
+      <fieldset class="field"><legend>Can regular players invite colleagues?</legend>
+        <div class="choices">
+          <label class="choice"><input type="radio" name="pinv" value="0" data-lock="org" checked><span>No</span></label>
+          <label class="choice"><input type="radio" name="pinv" value="1" data-lock="org"><span>1 each</span></label>
+          <label class="choice"><input type="radio" name="pinv" value="2" data-lock="org"><span>2 each</span></label>
+          <label class="choice"><input type="radio" name="pinv" value="3" data-lock="org"><span>3 each</span></label>
+        </div><span class="help">Their invites go to the waiting room for you to approve.</span></fieldset>
+    </div>
+  </section>
+
+  <!-- 2 ADD PEOPLE -->
+  <section class="panel" data-roles="org" id="s-add">
+    <div class="panel-head"><div class="step">2</div><div><h2>Add mobile numbers</h2><p>Paste or upload in any format: 98765 43210, +91 98765 43210, 09876543210, 0091 98765 43210, +44 7700 900123. We fix the format and remove repeats.</p></div></div>
+    <fieldset class="field"><legend>How do you want to add them?</legend>
+      <div class="choices">
+        <label class="choice"><input type="radio" name="addhow" value="paste" checked><span>Paste a list</span></label>
+        <label class="choice"><input type="radio" name="addhow" value="file"><span>Upload Excel or CSV</span></label>
+      </div></fieldset>
+    <div class="field" id="add-paste">
+      <label for="paste">One person per line. Name is optional: "Rahul Mehta, 98765 43210" or just the number.</label>
+      <textarea id="paste" placeholder="Rahul Mehta, 98765 43210&#10;+91 99887 76655&#10;Sana, 09123456780"></textarea>
+      <div class="row"><button type="button" class="btn sm" id="btn-sample">Fill with an example list</button></div>
+    </div>
+    <div class="field" id="add-file" hidden>
+      <label for="file">Choose a file (.xlsx, .xls, .csv or .txt). Any column layout works; we find the numbers.</label>
+      <input type="file" id="file" accept=".xlsx,.xls,.csv,.txt">
+      <span class="help" id="file-note"></span>
+    </div>
+    <div class="row"><button type="button" class="btn primary" id="btn-check">Check numbers</button><span class="small muted">Nothing is added until you confirm.</span></div>
+    <div id="check-out" class="field" hidden></div>
+  </section>
+
+  <!-- 3 PEOPLE -->
+  <section class="panel" data-roles="org host" id="s-people">
+    <div class="panel-head"><div class="step" id="n-people">3</div><div><h2>People and roles</h2><p>Tick people, then choose what to do with them. Team Leads get their own link to bring in their team. Hosts help you run the game.</p></div></div>
+    <div class="row">
+      <input type="text" id="p-search" placeholder="Search name or number" style="max-width:260px" aria-label="Search people">
+      <select id="p-filter" style="width:auto" aria-label="Show">
+        <option value="all">Show everyone</option><option value="Player">Players</option><option value="Team Lead">Team Leads</option><option value="Host">Hosts</option>
+        <option value="Joined">Joined</option><option value="Not joined">Not joined yet</option><option value="Pass sent">Pass sent</option><option value="Family">Family members</option>
+      </select>
+    </div>
+    <div class="bulk" id="bulk">
+      <span id="bulk-count">0 selected</span>
+      <select id="bulk-action" aria-label="Action for selected people">
+        <option value="">Choose what to do…</option>
+        <option value="tl10">Make Team Lead: 10 invites</option>
+        <option value="tl25">Make Team Lead: 25 invites</option>
+        <option value="tl50">Make Team Lead: 50 invites</option>
+        <option value="tl100">Make Team Lead: 100 invites</option>
+        <option value="host" data-orgonly>Make Host</option>
+        <option value="player">Make regular player</option>
+        <option value="remove">Remove from game</option>
+      </select>
+      <button type="button" class="btn sm primary" id="bulk-apply">Apply</button>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th><input type="checkbox" id="sel-all" aria-label="Select all shown"></th><th>Name</th><th>Mobile</th><th>Role</th><th>Can bring in</th><th>Status</th><th>Their link</th></tr></thead>
+      <tbody id="p-body"></tbody>
+    </table></div>
+  </section>
+
+  <!-- 4 SHARE -->
+  <section class="panel" data-roles="org host" id="s-share">
+    <div class="panel-head"><div class="step" id="n-share">4</div><div><h2>Share the game link</h2><p>One link for everyone on your list. If a number is not on your list, that person goes to the waiting room.</p></div></div>
+    <div class="share">
+      <div class="field">
+        <div class="linkbox" id="game-link"></div>
+        <div class="row">
+          <button type="button" class="btn primary" id="copy-link">Copy link</button>
+          <a class="btn wa" id="wa-group" target="_blank" rel="noopener">Share on WhatsApp</a>
+          <button type="button" class="btn" id="copy-msg">Copy message for email</button>
+        </div>
+        <label for="msg" class="lab small muted">Message that goes with the link</label>
+        <textarea id="msg" style="min-height:90px; font-family:var(--f-body); font-size:.9rem"></textarea>
+      </div>
+      <div class="field"><span class="lab small muted">Show on a screen or print for the office</span><div class="qr" id="qr"></div></div>
+    </div>
+  </section>
+
+  <!-- 5 WAITING -->
+  <section class="panel" data-roles="org host" id="s-wait">
+    <div class="panel-head"><div class="step" id="n-wait">5</div><div><h2>Waiting room</h2><p>People who used the game link but are not on your list, and players' invites. Admit them or decline them.</p></div></div>
+    <div id="alerts" class="field"></div>
+    <div class="row" id="q-actions">
+      <label class="check"><input type="checkbox" id="q-all"><span>Select all</span></label>
+      <span class="spacer"></span>
+      <button type="button" class="btn sm primary" id="q-admit">Admit selected</button>
+      <button type="button" class="btn sm" id="q-admit-all">Admit everyone</button>
+      <button type="button" class="btn sm danger" id="q-decline">Decline selected</button>
+    </div>
+    <div class="list" id="q-list"></div>
+  </section>
+
+  <!-- 6 START -->
+  <section class="panel" data-roles="org host" id="s-start">
+    <div class="panel-head"><div class="step" id="n-start">6</div><div><h2>Start the game</h2><p>Once the game starts, nobody new can join. All links stop letting people in.</p></div></div>
+    <div id="start-host" class="infobox" data-roles="host">Only the Organizer can start or end the game.</div>
+    <div id="start-org" class="field" data-roles="org">
+      <label class="check"><input type="checkbox" id="ck1"><span>I have admitted everyone I want from the waiting room.</span></label>
+      <label class="check"><input type="checkbox" id="ck2"><span>I understand nobody can join after the game starts.</span></label>
+      <div class="row"><button type="button" class="btn primary" id="btn-start" disabled>Start game now</button><button type="button" class="btn danger" id="btn-end" hidden>End game</button></div>
+      <p class="small" id="start-msg"></p>
+    </div>
+  </section>
+
+  <!-- 7 AFTER -->
+  <section class="panel" data-roles="org" id="s-report">
+    <div class="panel-head"><div class="step">7</div><div><h2>After the game</h2><p>Copy the game report before it is deleted. We delete every mobile number 24 hours after the game ends.</p></div></div>
+    <div id="report"></div>
+  </section>
+
+  <!-- TEAM LEAD -->
+  <section class="panel" data-roles="tl" id="s-tl">
+    <div class="panel-head"><div class="step">1</div><div><h2 id="tl-title">Bring in your team</h2><p>Create a pass for each person. Each pass works on one phone only, so nobody else can use it.</p></div></div>
+    <div class="field" style="max-width:360px"><label for="tl-who">Preview as this Team Lead (demo only)</label><select id="tl-who"></select></div>
+    <div class="meters" id="tl-meters"></div>
+    <form id="tl-form" class="field" novalidate>
+      <fieldset class="field"><legend>Who is this pass for?</legend>
+        <div class="choices">
+          <label class="choice"><input type="radio" name="tltype" value="Colleague" checked><span>A colleague</span></label>
+          <label class="choice"><input type="radio" name="tltype" value="Family" id="tl-fam-radio"><span>My family member</span></label>
+        </div></fieldset>
+      <div class="grid">
+        <div class="field"><label for="tl-name">Their name</label><input type="text" id="tl-name" placeholder="e.g. Karan Shah" maxlength="60"></div>
+        <div class="field"><label for="tl-cc">Their country</label><select id="tl-cc"></select></div>
+        <div class="field"><label for="tl-num">Their mobile number</label><input type="tel" id="tl-num" placeholder="e.g. 98765 43210" inputmode="tel"><span class="help" id="tl-hint">Type the number in any format.</span></div>
+      </div>
+      <div class="row"><button type="submit" class="btn primary" id="tl-create">Create pass</button></div>
+    </form>
+    <div id="tl-result" hidden></div>
+  </section>
+  <section class="panel" data-roles="tl" id="s-tl-list">
+    <div class="panel-head"><div class="step">2</div><div><h2>Passes you created</h2><p>Cancel a pass that hasn't been used. If someone changes phones, issue them a new pass. The old one stops working.</p></div></div>
+    <div class="list" id="tl-list"></div>
+  </section>
+</div>
+
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/libphonenumber-js@1.11.4/bundle/libphonenumber-max.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function(){
+const LP = window.libphonenumber || null;
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const BASE = 'https://play.yourgame.example/';
+const CH = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function code(n=8){ const a=new Uint32Array(n); (window.crypto||{getRandomValues:x=>x.map(()=>Math.random()*1e9)}).getRandomValues(a); return Array.from(a,v=>CH[v%CH.length]).join(''); }
+let uid = 1; const id = () => 'p'+(uid++);
+
+/* ---------- countries ---------- */
+const FALLBACK = [['IN','91'],['AE','971'],['US','1'],['GB','44'],['SG','65'],['AU','61'],['CA','1'],['SA','966'],['QA','974'],['KW','965'],['OM','968'],['BH','973'],['NP','977'],['BD','880'],['LK','94'],['MY','60'],['ZA','27'],['KE','254'],['NG','234'],['DE','49'],['FR','33'],['NL','31'],['NZ','64'],['IE','353'],['PH','63'],['ID','62']];
+const DN = (()=>{ try{ return new Intl.DisplayNames(['en'],{type:'region'}); }catch(e){ return null; } })();
+const cname = c => { try{ return (DN && DN.of(c)) || c; }catch(e){ return c; } };
+const COUNTRIES = (LP && LP.getCountries ? LP.getCountries().map(c=>({c, d:LP.getCountryCallingCode(c)})) : FALLBACK.map(([c,d])=>({c,d})))
+  .map(o=>({...o, n:cname(o.c)})).sort((a,b)=>a.n.localeCompare(b.n));
+const COMMON = ['IN','AE','US','GB','SG','AU','CA','SA'];
+function dialOf(c){ const f = COUNTRIES.find(x=>x.c===c); return f ? f.d : '91'; }
+function guessCountry(){
+  try{ const r = new Intl.Locale(navigator.language).maximize().region; if(r && COUNTRIES.some(x=>x.c===r) && navigator.language.includes('-')) return r; }catch(e){}
+  try{ const tz = Intl.DateTimeFormat().resolvedOptions().timeZone||''; if(/Calcutta|Kolkata/.test(tz)) return 'IN'; if(/Dubai/.test(tz)) return 'AE'; if(/London/.test(tz)) return 'GB'; if(/Singapore/.test(tz)) return 'SG'; }catch(e){}
+  return 'IN';
+}
+function fillCountrySelect(sel, value){
+  const opt = o => `<option value="${o.c}">${esc(o.n)} (+${o.d})</option>`;
+  const common = COMMON.map(c=>COUNTRIES.find(x=>x.c===c)).filter(Boolean);
+  sel.innerHTML = `<optgroup label="Common">${common.map(opt).join('')}</optgroup><optgroup label="All countries">${COUNTRIES.map(opt).join('')}</optgroup>`;
+  sel.value = value;
+}
+
+/* ---------- phone numbers ---------- */
+const strip = s => String(s).replace(/[\s\-().\/]/g,'');
+function normalize(raw, cc){
+  const orig = String(raw ?? '').trim();
+  if(!orig) return {ok:false, reason:'No number found'};
+  let s = strip(orig);
+  if(/[a-z]/i.test(s)) return {ok:false, reason:'Contains letters'};
+  if(s.startsWith('00')) s = '+' + s.slice(2);
+  const plus = s.startsWith('+');
+  const digits = s.replace(/\D/g,'');
+  if(digits.length < 6) return {ok:false, reason:'Too short'};
+  if(digits.length > 15) return {ok:false, reason:'Too long'};
+  if(LP){
+    const tries = plus ? ['+'+digits] : [digits, '+'+digits];
+    for(const t of tries){
+      let p=null; try{ p = LP.parsePhoneNumberFromString(t, cc); }catch(e){}
+      if(p && p.isValid()) return {ok:true, e164:p.number, changed: strip(orig)!==p.number};
+    }
+    return {ok:false, reason: plus ? 'Not a valid number' : 'Not a valid '+cname(cc)+' number'};
+  }
+  let e; const dial = dialOf(cc);
+  if(plus) e = '+'+digits;
+  else{
+    const d = digits.replace(/^0+/,'');
+    if(cc==='IN'){
+      if(d.length===10) e='+91'+d; else if(d.length===12 && d.startsWith('91')) e='+'+d;
+      else return {ok:false, reason:'Indian mobile numbers have 10 digits'};
+    } else e = (d.startsWith(dial) && d.length >= dial.length+7) ? '+'+d : '+'+dial+d;
+  }
+  if(e.startsWith('+91') && !/^\+91[6-9]\d{9}$/.test(e)) return {ok:false, reason:'Not a valid Indian mobile number'};
+  if(e.length < 8 || e.length > 16) return {ok:false, reason:'Wrong length'};
+  return {ok:true, e164:e, changed: strip(orig)!==e};
+}
+function fmt(e164){
+  if(LP){ try{ const p = LP.parsePhoneNumberFromString(e164); if(p) return p.formatInternational(); }catch(e){} }
+  return e164;
+}
+function splitLine(line){
+  const cells = line.split(/[,\t;|]/).map(x=>x.trim()).filter(Boolean);
+  let best=-1, bd=0;
+  cells.forEach((c,i)=>{ const n=(c.match(/\d/g)||[]).length; if(n>bd){ bd=n; best=i; } });
+  if(bd===0) return {name:cells.join(' '), phone:''};
+  const cell = cells[best];
+  const m = cell.match(/\+?\d[\d\s\-().\/]*\d/);
+  const phone = m ? m[0] : cell;
+  const rest = cell.replace(phone,'').trim();
+  const name = [...cells.filter((_,i)=>i!==best), rest].filter(x=>x && (x.match(/\d/g)||[]).length<4).join(' ').replace(/\s+/g,' ').trim();
+  return {name, phone};
+}
+
+/* ---------- state ---------- */
+const S = {
+  role:'org', status:'open', startedAt:null, endedAt:null, gameCode:code(7),
+  set:{ name:'Diwali Housie 2026', date:'2026-10-24', time:'17:00', country:guessCountry(), max:500, family:2, famPrize:'yes', pinv:0 },
+  people:[], queue:[], alerts:[], sel:new Set(), qsel:new Set(), checked:null, tlId:null, undo:null
+};
+function person(name, e164, role, o={}){ return {id:id(), name, e164, role, cap:o.cap||0, status:o.status||'Not joined', via:o.via||'Your list', invitedBy:o.invitedBy||null, kind:o.kind||null, code:code()}; }
+(function seed(){
+  const anita = person('Anita Rao','+919820011223','Host',{status:'Joined'});
+  const priya = person('Priya Nair','+919812345670','Team Lead',{cap:25,status:'Joined'});
+  const vikram = person('Vikram Singh','+918888777666','Team Lead',{cap:10});
+  S.people.push(anita, priya,
+    person('Rahul Mehta','+919876543210','Player',{status:'Joined'}),
+    person('Sana Sheikh','+919900112233','Player'),
+    vikram,
+    person('Deepa Iyer','+919845098450','Player',{status:'Joined'}),
+    person('Karan Shah','+919811122233','Player',{status:'Joined',via:'Pass from Priya Nair',invitedBy:priya.id,kind:'Colleague'}),
+    person('Tom Baker','+447700900123','Player',{status:'Pass sent',via:'Pass from Priya Nair',invitedBy:priya.id,kind:'Colleague'}),
+    person('Meera Nair','+919812345671','Player',{status:'Pass sent',via:'Pass from Priya Nair (family)',invitedBy:priya.id,kind:'Family'})
+  );
+  const now = Date.now();
+  S.queue.push(
+    {id:id(), name:'Imran Qureshi', e164:'+919833344455', src:'Used the game link. Not on your list.', t:now-6*60e3},
+    {id:id(), name:'Neha Gupta', e164:'+919822200011', src:'Invited by Rahul Mehta (player invite)', t:now-3*60e3},
+    {id:id(), name:'Rohit Das', e164:'+971501234567', src:'Used the game link. Not on your list.', t:now-60e3}
+  );
+  S.alerts.push({id:id(), pid:S.people[2].id});
+  S.tlId = priya.id;
+})();
+
+const byId = pid => S.people.find(p=>p.id===pid);
+const used = () => S.people.length;
+const joined = () => S.people.filter(p=>p.status==='Joined').length;
+const locked = () => S.status!=='open';
+const allNumbers = () => new Set([...S.people.map(p=>p.e164), ...S.queue.map(q=>q.e164)]);
+
+/* ---------- toast & copy ---------- */
+let tt;
+function toast(msg, undoFn){
+  const t = $('#toast'); t.innerHTML = `<span>${esc(msg)}</span>` + (undoFn ? '<button type="button" id="undo">Undo</button>' : '');
+  t.hidden = false; clearTimeout(tt); tt = setTimeout(()=>{ t.hidden = true; }, undoFn ? 7000 : 2600);
+  if(undoFn) $('#undo').onclick = () => { undoFn(); t.hidden = true; renderAll(); toast('Undone'); };
+}
+function copy(text, label){
+  const done = () => toast(label || 'Copied');
+  try{
+    navigator.clipboard.writeText(text).then(done, fallback);
+  }catch(e){ fallback(); }
+  function fallback(){
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select();
+    let ok=false; try{ ok = document.execCommand('copy'); }catch(e){}
+    ta.remove(); ok ? done() : toast('Could not copy. Select the text and copy it yourself.');
+  }
+}
+const waTo = (e164, text) => 'https://wa.me/' + e164.replace('+','') + '?text=' + encodeURIComponent(text);
+const waAny = text => 'https://wa.me/?text=' + encodeURIComponent(text);
+const gameLink = () => BASE + 'g/' + S.gameCode;
+const passLink = p => BASE + 'p/' + p.code;
+function passMsg(p){
+  const g = S.set.name;
+  if(p.role==='Team Lead') return `Hi ${p.name}, you are a Team Lead for ${g}. Open your link to bring in up to ${p.cap} colleagues: ${passLink(p)}\nPlease don't forward this link. It works on one phone only.`;
+  if(p.role==='Host') return `Hi ${p.name}, you are a Host for ${g}. Open your link to help admit players: ${passLink(p)}\nPlease don't forward this link.`;
+  return `Hi ${p.name}, here is your personal pass for ${g}: ${passLink(p)}\nIt works on one phone only, so please don't forward it.`;
+}
+
+/* ---------- setup ---------- */
+function whenText(){
+  const [h,m] = S.set.time.split(':').map(Number);
+  let d; try{ d = new Date(S.set.date+'T00:00:00'); d.setHours(h,m); }catch(e){}
+  if(!d || isNaN(d)) return '';
+  return d.toLocaleDateString(undefined,{weekday:'short', day:'numeric', month:'short', year:'numeric'}) + ', ' + d.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
+}
+function initSetup(){
+  const ts = $('#g-time'); let h='';
+  for(let i=12;i<48;i++){ const hh=String(Math.floor(i/2)).padStart(2,'0'), mm=i%2?'30':'00'; const d=new Date(2026,0,1,+hh,+mm); h+=`<option value="${hh}:${mm}">${d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}</option>`; }
+  ts.innerHTML = h; ts.value = S.set.time;
+  try{ $('#tz-help').textContent = 'Your local time ('+Intl.DateTimeFormat().resolvedOptions().timeZone+'). Players see it in their own time.'; }catch(e){}
+  fillCountrySelect($('#g-country'), S.set.country);
+  fillCountrySelect($('#tl-cc'), S.set.country);
+  $('#g-name').addEventListener('input', e=>{ S.set.name = e.target.value.trim() || 'Untitled game'; renderStatus(); renderShare(); });
+  $('#g-date').addEventListener('change', e=>{ S.set.date = e.target.value; renderStatus(); saved(); });
+  ts.addEventListener('change', e=>{ S.set.time = e.target.value; renderStatus(); saved(); });
+  $('#g-country').addEventListener('change', e=>{ S.set.country = e.target.value; $('#tl-cc').value = e.target.value; saved(); });
+  $('#g-max').addEventListener('change', e=>{ const v=+e.target.value; if(v < used()){ e.target.value = S.set.max; toast(`You already have ${used()} people. Remove some before lowering the limit.`); return; } S.set.max=v; renderAll(); saved(); });
+  $$('input[name=family]').forEach(r=>r.addEventListener('change', e=>{ S.set.family=+e.target.value; renderAll(); saved(); }));
+  $$('input[name=famprize]').forEach(r=>r.addEventListener('change', e=>{ S.set.famPrize=e.target.value; saved(); }));
+  $$('input[name=pinv]').forEach(r=>r.addEventListener('change', e=>{ S.set.pinv=+e.target.value; saved(); }));
+}
+const saved = () => toast('Saved');
+
+/* ---------- add people ---------- */
+const SAMPLE = `Name,Mobile
+Arjun Kapoor,98200 44556
+Fatima Khan,+91 99876 11223
+Suresh Kumar,09123456780
+Lakshmi Menon,0091 9988776655
+Arjun Kapoor,98200-44556
+Joseph D'Souza,919812312312
+Emily Chen,+65 9123 4567
+Ahmed Ali,+971 50 765 4321
+Ravi,12345
+Sana Sheikh,99001 12233`;
+function initAdd(){
+  $$('input[name=addhow]').forEach(r=>r.addEventListener('change', e=>{ $('#add-paste').hidden = e.target.value!=='paste'; $('#add-file').hidden = e.target.value!=='file'; }));
+  $('#btn-sample').onclick = () => { $('#paste').value = SAMPLE; toast('Example list added. Now press Check numbers.'); };
+  $('#btn-check').onclick = () => runCheck($('#paste').value);
+  $('#file').addEventListener('change', async e=>{
+    const f = e.target.files[0]; if(!f) return;
+    const note = $('#file-note');
+    try{
+      let text;
+      if(/\.xlsx?$/i.test(f.name)){
+        if(!window.XLSX){ note.textContent = 'Excel reading is unavailable right now. Save the sheet as CSV and upload that.'; return; }
+        const wb = XLSX.read(await f.arrayBuffer(), {type:'array'});
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+        text = rows.map(r=>r.map(v=>String(v)).join('\t')).join('\n');
+      } else text = await f.text();
+      note.textContent = `Read ${text.split(/\r?\n/).filter(l=>l.trim()).length} rows from ${f.name}.`;
+      $('#paste').value = text;
+      runCheck(text);
+    }catch(err){ note.textContent = 'Could not read that file. Try saving it as CSV.'; }
+  });
+}
+function runCheck(text){
+  const out = $('#check-out');
+  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(!lines.length){ out.hidden=false; out.innerHTML = '<div class="warnbox">The list is empty. Paste numbers or upload a file first.</div>'; return; }
+  const existing = allNumbers(); const seen = new Set();
+  const ok=[], fixed=[], dup=[], bad=[];
+  lines.forEach((line,i)=>{
+    const {name, phone} = splitLine(line);
+    if(!phone){ if(i===0) return; bad.push({line, reason:'No number found'}); return; }
+    const r = normalize(phone, S.set.country);
+    if(!r.ok){ bad.push({line, reason:r.reason}); return; }
+    if(existing.has(r.e164)){ dup.push({line, e164:r.e164, why:'Already in this game'}); return; }
+    if(seen.has(r.e164)){ dup.push({line, e164:r.e164, why:'Repeated in your list'}); return; }
+    seen.add(r.e164);
+    (r.changed ? fixed : ok).push({name, e164:r.e164, orig:phone});
+  });
+  S.checked = [...ok, ...fixed];
+  const n = S.checked.length, room = S.set.max - used();
+  const li = a => a.map(x=>`<li>${x}</li>`).join('');
+  out.hidden = false;
+  out.innerHTML = `
+    <div class="chips">
+      <div class="chip c-ok"><b>${ok.length}</b> ready</div>
+      <div class="chip c-fix"><b>${fixed.length}</b> format fixed</div>
+      <div class="chip c-dup"><b>${dup.length}</b> repeats removed</div>
+      <div class="chip c-bad"><b>${bad.length}</b> need your attention</div>
+    </div>
+    ${bad.length ? `<details open><summary>Numbers we could not read (${bad.length}). Fix them in the list and check again.</summary><ul>${li(bad.map(b=>`<span class="num">${esc(b.line)}</span>: ${esc(b.reason)}`))}</ul></details>` : ''}
+    ${fixed.length ? `<details><summary>Formats we fixed (${fixed.length})</summary><ul>${li(fixed.map(f=>`<span class="num">${esc(f.orig)}</span> → <span class="num">${esc(fmt(f.e164))}</span>`))}</ul></details>` : ''}
+    ${dup.length ? `<details><summary>Repeats removed (${dup.length})</summary><ul>${li(dup.map(d=>`<span class="num">${esc(fmt(d.e164))}</span>: ${esc(d.why)}`))}</ul></details>` : ''}
+    ${n > room ? `<div class="warnbox">This adds ${n} people, but only ${room} places are left under your limit of ${S.set.max}. Raise the player limit in step 1, or remove some names.</div>` : ''}
+    <div class="row"><button type="button" class="btn primary" id="btn-add" ${(!n || n>room || locked()) ? 'disabled':''}>Add ${n} ${n===1?'person':'people'} to the game</button>${locked()?'<span class="small muted">The game has started. No one can be added.</span>':''}</div>`;
+  const b = $('#btn-add'); if(b) b.onclick = () => {
+    S.checked.forEach(c=>S.people.push(person(c.name || 'No name given', c.e164, 'Player')));
+    toast(`Added ${n} ${n===1?'person':'people'}`); S.checked=null; out.hidden = true; $('#paste').value=''; renderAll();
+  };
+}
+
+/* ---------- people table ---------- */
+function renderPeople(){
+  const q = $('#p-search').value.trim().toLowerCase(), f = $('#p-filter').value;
+  const qd = q.replace(/\D/g,'');
+  const rows = S.people.filter(p=>{
+    if(f==='Family' ? p.kind!=='Family' : (f!=='all' && p.role!==f && p.status!==f)) return false;
+    if(!q) return true;
+    return p.name.toLowerCase().includes(q) || (qd.length>2 && p.e164.includes(qd));
+  });
+  const isOrg = S.role==='org', dis = locked() ? 'disabled' : '';
+  $('#p-body').innerHTML = rows.length ? rows.map(p=>{
+    const hostRow = p.role==='Host';
+    const canEdit = !locked() && (isOrg || !hostRow);
+    const roleOpts = ['Player','Team Lead', ...(isOrg||hostRow?['Host']:[])].map(r=>`<option ${r===p.role?'selected':''} ${(!isOrg && r==='Host')?'disabled':''}>${r}</option>`).join('');
+    let bring;
+    if(p.role==='Team Lead'){
+      const u = S.people.filter(x=>x.invitedBy===p.id && x.kind==='Colleague').length;
+      bring = `<select data-cap="${p.id}" ${canEdit?'':'disabled'} aria-label="Invite limit for ${esc(p.name)}">${[10,25,50,100].map(c=>`<option value="${c}" ${c===p.cap?'selected':''}>${c} colleagues</option>`).join('')}</select><div class="sub">${u} used</div>`;
+    } else if(hostRow) bring = '<span class="sub">Helps run the game</span>';
+    else if(p.kind==='Family') bring = '<span class="sub">Cannot invite</span>';
+    else bring = `<span class="sub">${S.set.family ? 'Family: up to '+S.set.family : 'No family'}</span>`;
+    const st = {'Joined':'st-joined','Pass sent':'st-sent','Not joined':'st-not'}[p.status];
+    let link = '<span class="sub">Uses game link</span>';
+    if(p.role!=='Player' || p.invitedBy){
+      link = `<div class="row"><button type="button" class="btn sm" data-copylink="${p.id}">Copy</button><a class="btn sm wa" href="${waTo(p.e164, passMsg(p))}" target="_blank" rel="noopener">WhatsApp</a></div>`;
+    }
+    return `<tr>
+      <td><input type="checkbox" data-sel="${p.id}" ${S.sel.has(p.id)?'checked':''} ${canEdit?'':'disabled'} aria-label="Select ${esc(p.name)}"></td>
+      <td><div>${esc(p.name)}</div><div class="sub">${esc(p.kind==='Family' ? p.via : p.via)}</div></td>
+      <td class="num">${esc(fmt(p.e164))}</td>
+      <td>${p.kind==='Family' ? '<span class="sub">Family member</span>' : `<select data-role="${p.id}" ${canEdit?'':'disabled'} aria-label="Role for ${esc(p.name)}">${roleOpts}</select>`}</td>
+      <td>${bring}</td>
+      <td><span class="pill ${st}">${p.status}</span></td>
+      <td class="acts">${link}</td></tr>`;
+  }).join('') : `<tr><td colspan="7" class="muted" style="padding:18px">Nobody matches. Change the search or the "Show" filter.</td></tr>`;
+  $('#bulk-count').textContent = S.sel.size + ' selected';
+  $('#bulk-apply').disabled = !S.sel.size || locked();
+  $('#bulk-action').disabled = locked();
+  $$('#bulk-action option[data-orgonly]').forEach(o=>{ o.hidden = !isOrg; o.disabled = !isOrg; });
+}
+function initPeople(){
+  $('#p-search').addEventListener('input', renderPeople);
+  $('#p-filter').addEventListener('change', renderPeople);
+  $('#sel-all').addEventListener('change', e=>{ $$('#p-body input[data-sel]:not(:disabled)').forEach(c=>{ e.target.checked ? S.sel.add(c.dataset.sel) : S.sel.delete(c.dataset.sel); }); renderPeople(); });
+  $('#p-body').addEventListener('change', e=>{
+    const t = e.target;
+    if(t.dataset.sel){ t.checked ? S.sel.add(t.dataset.sel) : S.sel.delete(t.dataset.sel); renderPeople(); }
+    if(t.dataset.role){ const p = byId(t.dataset.role); p.role = t.value; if(p.role==='Team Lead' && !p.cap) p.cap = 25; toast(`${p.name} is now ${p.role==='Player'?'a regular player':'a '+p.role}`); renderAll(); }
+    if(t.dataset.cap){ const p = byId(t.dataset.cap); p.cap = +t.value; toast(`${p.name} can bring in ${p.cap} colleagues`); renderAll(); }
+  });
+  $('#p-body').addEventListener('click', e=>{ const b = e.target.closest('[data-copylink]'); if(b){ const p = byId(b.dataset.copylink); copy(passMsg(p), 'Link and message copied'); } });
+  $('#bulk-apply').onclick = () => {
+    const a = $('#bulk-action').value; if(!a){ toast('Choose what to do from the list first'); return; }
+    const ids = [...S.sel]; const ps = ids.map(byId).filter(Boolean);
+    if(a==='remove'){
+      const before = S.people.slice();
+      S.people = S.people.filter(p=>!S.sel.has(p.id) && !S.sel.has(p.invitedBy));
+      const gone = before.length - S.people.length;
+      S.sel.clear(); renderAll(); toast(`Removed ${gone} ${gone===1?'person':'people'} (and anyone they invited)`, ()=>{ S.people = before; });
+      return;
+    }
+    ps.filter(p=>p.kind!=='Family').forEach(p=>{
+      if(a.startsWith('tl')){ p.role='Team Lead'; p.cap=+a.slice(2); }
+      else if(a==='host' && S.role==='org') p.role='Host';
+      else if(a==='player') p.role='Player';
+    });
+    const skipped = ps.filter(p=>p.kind==='Family').length;
+    S.sel.clear(); $('#bulk-action').value=''; renderAll();
+    toast(`Updated ${ps.length - skipped}` + (skipped ? `. Family members can't be Team Leads or Hosts.` : ''));
+  };
+}
+
+/* ---------- share ---------- */
+let qrMade = false;
+function defaultMsg(){ return `You're invited to ${S.set.name} on ${whenText()}!\nJoin here from your phone: ${gameLink()}\nEntry closes when the game starts.`; }
+let msgTouched = false;
+function renderShare(){
+  $('#game-link').textContent = gameLink();
+  if(!msgTouched) $('#msg').value = defaultMsg();
+  $('#wa-group').href = waAny($('#msg').value);
+  if(!qrMade){
+    qrMade = true;
+    if(window.QRCode){ try{ new QRCode($('#qr'), {text:gameLink(), width:148, height:148, colorDark:'#14211E', colorLight:'#FFFFFF'}); }catch(e){ $('#qr').parentElement.hidden = true; } }
+    else $('#qr').parentElement.hidden = true;
+  }
+}
+function initShare(){
+  $('#copy-link').onclick = () => copy(gameLink(), 'Game link copied');
+  $('#copy-msg').onclick = () => copy($('#msg').value, 'Message copied');
+  $('#msg').addEventListener('input', ()=>{ msgTouched = true; $('#wa-group').href = waAny($('#msg').value); });
+}
+
+/* ---------- waiting room ---------- */
+function ago(t){ const m = Math.max(1, Math.round((Date.now()-t)/60e3)); return m<60 ? m+' min ago' : Math.round(m/60)+' h ago'; }
+function renderQueue(){
+  const al = S.alerts.map(a=>{ const p = byId(a.pid); if(!p) return ''; return `<div class="alert"><p><b>Second phone tried to join as ${esc(p.name)}</b> (<span class="num">${esc(fmt(p.e164))}</span>). The first phone is still playing. If ${esc(p.name.split(' ')[0])} changed phones, let the new one in.</p><div class="row"><button type="button" class="btn sm" data-keep="${a.id}">Keep first phone</button><button type="button" class="btn sm primary" data-swap="${a.id}">Let new phone in</button></div></div>`; }).join('');
+  $('#alerts').innerHTML = al; $('#alerts').hidden = !al;
+  const L = $('#q-list');
+  if(!S.queue.length){ L.innerHTML = `<div class="item muted">Nobody is waiting. New requests appear here.</div>`; }
+  else L.innerHTML = S.queue.map(q=>`<label class="item check"><input type="checkbox" data-q="${q.id}" ${S.qsel.has(q.id)?'checked':''} ${locked()?'disabled':''}><div class="who"><div><b>${esc(q.name)}</b> <span class="num muted">${esc(fmt(q.e164))}</span></div><div class="small muted">${esc(q.src)}</div></div><span class="small muted">${ago(q.t)}</span></label>`).join('');
+  const none = !S.queue.length || locked();
+  $('#q-admit').disabled = none || !S.qsel.size; $('#q-decline').disabled = none || !S.qsel.size; $('#q-admit-all').disabled = none; $('#q-all').disabled = none;
+  $('#q-all').checked = S.queue.length && S.qsel.size===S.queue.length;
+}
+function admit(ids){
+  const room = S.set.max - used();
+  if(ids.length > room){ toast(`Only ${room} places left under your limit. Raise the limit in step 1 first.`); return; }
+  ids.forEach(i=>{ const q = S.queue.find(x=>x.id===i); if(q){ S.people.push(person(q.name, q.e164, 'Player', {status:'Joined', via:'Waiting room'})); } });
+  S.queue = S.queue.filter(q=>!ids.includes(q.id)); S.qsel.clear();
+  toast(`Admitted ${ids.length}`); renderAll();
+}
+function initQueue(){
+  $('#q-list').addEventListener('change', e=>{ const i = e.target.dataset.q; if(i){ e.target.checked ? S.qsel.add(i) : S.qsel.delete(i); renderQueue(); } });
+  $('#q-all').addEventListener('change', e=>{ S.qsel = e.target.checked ? new Set(S.queue.map(q=>q.id)) : new Set(); renderQueue(); });
+  $('#q-admit').onclick = () => admit([...S.qsel]);
+  $('#q-admit-all').onclick = () => admit(S.queue.map(q=>q.id));
+  $('#q-decline').onclick = () => { const before = S.queue.slice(); const n = S.qsel.size; S.queue = S.queue.filter(q=>!S.qsel.has(q.id)); S.qsel.clear(); renderAll(); toast(`Declined ${n}`, ()=>{ S.queue = before; }); };
+  $('#alerts').addEventListener('click', e=>{
+    const k = e.target.dataset.keep, s = e.target.dataset.swap;
+    if(k){ S.alerts = S.alerts.filter(a=>a.id!==k); toast('The second phone stays blocked'); renderAll(); }
+    if(s){ const a = S.alerts.find(x=>x.id===s); const p = byId(a.pid); p.code = code(); S.alerts = S.alerts.filter(x=>x.id!==s); toast(`${p.name} now plays on the new phone. The old phone is logged out.`); renderAll(); }
+  });
+}
+
+/* ---------- start / end ---------- */
+function renderStart(){
+  const s = S.status;
+  $('#ck1').disabled = $('#ck2').disabled = s!=='open';
+  $('#btn-start').disabled = !( $('#ck1').checked && $('#ck2').checked ) || s!=='open';
+  $('#btn-start').hidden = s!=='open';
+  $('#btn-end').hidden = s!=='started';
+  const tm = t => new Date(t).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+  $('#start-msg').textContent = s==='started' ? `Game started at ${tm(S.startedAt)}. Entry is closed. Press End game when the last prize is won.` : s==='done' ? `Game ended at ${tm(S.endedAt)}.` : '';
+}
+function initStart(){
+  ['#ck1','#ck2'].forEach(c=>$(c).addEventListener('change', renderStart));
+  $('#btn-start').onclick = () => { S.status='started'; S.startedAt=Date.now(); toast('Game started. Entry is closed.'); renderAll(); };
+  $('#btn-end').onclick = () => { S.status='done'; S.endedAt=Date.now(); toast('Game ended. Copy your report below.'); renderAll(); };
+}
+
+/* ---------- report ---------- */
+function reportRows(){
+  return S.people.filter(p=>p.status==='Joined').map(p=>{ const inv = p.invitedBy ? byId(p.invitedBy) : null; return {name:p.name, num:p.e164, role:p.kind==='Family'?'Family member':p.role, via:p.via, by:inv?inv.name:''}; });
+}
+function renderReport(){
+  const R = $('#report');
+  if(S.status!=='done'){ R.innerHTML = `<div class="infobox">The report appears here when you end the game. It lists every player, who invited them and the winners. You copy it before we delete it.</div>`; return; }
+  const rows = reportRows(); const del = new Date(S.endedAt + 24*3600e3);
+  R.innerHTML = `
+    <div class="alert"><p><b>All mobile numbers will be deleted on ${del.toLocaleString(undefined,{weekday:'short',day:'numeric',month:'short',hour:'numeric',minute:'2-digit'})}.</b> Copy the report now and keep it with your records.</p><button type="button" class="btn sm primary" id="copy-report">Copy report (for Excel)</button></div>
+    <div class="infobox">Winners, their tickets and the order numbers were called are added here by the live game.</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Joined through</th><th>Invited by</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${esc(fmt(r.num))}</td><td>${esc(r.role)}</td><td>${esc(r.via)}</td><td>${esc(r.by)||'<span class="sub">—</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+  $('#copy-report').onclick = () => {
+    const tsv = ['Name\tMobile\tRole\tJoined through\tInvited by', ...rows.map(r=>[r.name,r.num,r.role,r.via,r.by].join('\t'))].join('\n');
+    copy(tsv, 'Report copied. Paste it into Excel.');
+  };
+}
+
+/* ---------- team lead ---------- */
+function leads(){ return S.people.filter(p=>p.role==='Team Lead'); }
+function renderTL(){
+  const sel = $('#tl-who'); const L = leads();
+  if(!L.length){ $('#tl-title').textContent = 'No Team Leads yet'; sel.innerHTML=''; $('#tl-meters').innerHTML = '<div class="infobox">Switch to Organizer and make someone a Team Lead in step 3.</div>'; $('#tl-form').hidden = true; $('#tl-list').innerHTML=''; return; }
+  $('#tl-form').hidden = false;
+  if(!L.some(l=>l.id===S.tlId)) S.tlId = L[0].id;
+  sel.innerHTML = L.map(l=>`<option value="${l.id}" ${l.id===S.tlId?'selected':''}>${esc(l.name)} (${l.cap} invites)</option>`).join('');
+  const me = byId(S.tlId);
+  $('#tl-title').textContent = `${me.name.split(' ')[0]}, bring in your team`;
+  const mine = S.people.filter(p=>p.invitedBy===me.id);
+  const col = mine.filter(p=>p.kind==='Colleague').length, fam = mine.filter(p=>p.kind==='Family').length;
+  const room = S.set.max - used();
+  const bar = (u,c) => `<div class="bar"><i style="width:${c?Math.min(100,u/c*100):0}%"></i></div>`;
+  $('#tl-meters').innerHTML = `
+    <div class="meter"><span class="small muted">Colleague passes</span><span class="big">${col} / ${me.cap}</span>${bar(col,me.cap)}</div>
+    <div class="meter"><span class="small muted">Family passes</span><span class="big">${fam} / ${S.set.family}</span>${bar(fam,S.set.family)}</div>
+    <div class="meter"><span class="small muted">Places left in the whole game</span><span class="big">${room}</span>${bar(used(),S.set.max)}</div>`;
+  const famFull = fam >= S.set.family, colFull = col >= me.cap;
+  $('#tl-fam-radio').disabled = famFull;
+  if(famFull && $('input[name=tltype]:checked').value==='Family') $('input[name=tltype][value=Colleague]').checked = true;
+  const type = $('input[name=tltype]:checked').value;
+  const blocked = locked() || room<=0 || (type==='Colleague' && colFull);
+  $('#tl-create').disabled = blocked;
+  $$('#tl-form input, #tl-form select').forEach(x=>{ if(x.name!=='tltype') x.disabled = locked(); });
+  let why = '';
+  if(locked()) why = 'The game has started. No new passes can be created.';
+  else if(room<=0) why = 'The game is full. Ask the organizer to raise the player limit.';
+  else if(type==='Colleague' && colFull) why = `You have used all ${me.cap} colleague passes. Ask the organizer for more.`;
+  $('#tl-hint').textContent = why || $('#tl-hint').dataset.last || 'Type the number in any format.';
+  $('#tl-list').innerHTML = mine.length ? mine.map(p=>{
+    const st = {'Joined':'st-joined','Pass sent':'st-sent'}[p.status] || 'st-not';
+    const acts = locked() ? '' : p.status==='Joined'
+      ? `<button type="button" class="btn sm" data-reissue="${p.id}">Changed phone? New pass</button>`
+      : `<a class="btn sm wa" href="${waTo(p.e164, passMsg(p))}" target="_blank" rel="noopener">Resend on WhatsApp</a><button type="button" class="btn sm" data-copylink2="${p.id}">Copy</button><button type="button" class="btn sm danger" data-cancel="${p.id}">Cancel pass</button>`;
+    return `<div class="item"><div class="who"><div><b>${esc(p.name)}</b> <span class="num muted">${esc(fmt(p.e164))}</span></div><div class="small muted">${p.kind==='Family'?'Family member':'Colleague'}</div></div><span class="pill ${st}">${p.status}</span><div class="row">${acts}</div></div>`;
+  }).join('') : `<div class="item muted">No passes yet. Create one above.</div>`;
+}
+function tlHint(){
+  const v = $('#tl-num').value.trim(); const h = $('#tl-hint');
+  if(!v){ h.dataset.last=''; renderTL(); return; }
+  const r = normalize(v, $('#tl-cc').value);
+  h.dataset.last = r.ok ? `Pass will be for ${fmt(r.e164)}` : r.reason;
+  h.style.color = r.ok ? 'var(--good)' : 'var(--bad)';
+  renderTL();
+}
+function initTL(){
+  $('#tl-who').addEventListener('change', e=>{ S.tlId = e.target.value; $('#tl-result').hidden = true; renderTL(); });
+  $$('input[name=tltype]').forEach(r=>r.addEventListener('change', renderTL));
+  $('#tl-num').addEventListener('input', tlHint);
+  $('#tl-cc').addEventListener('change', tlHint);
+  $('#tl-form').addEventListener('submit', e=>{
+    e.preventDefault();
+    const me = byId(S.tlId); const type = $('input[name=tltype]:checked').value;
+    const name = $('#tl-name').value.trim();
+    if(!name){ toast('Type their name first'); $('#tl-name').focus(); return; }
+    const r = normalize($('#tl-num').value, $('#tl-cc').value);
+    if(!r.ok){ toast('Check the number: ' + r.reason); $('#tl-num').focus(); return; }
+    if(allNumbers().has(r.e164)){ toast('This number is already in the game. Each number gets one pass.'); return; }
+    const p = person(name, r.e164, 'Player', {status:'Pass sent', via:'Pass from '+me.name+(type==='Family'?' (family)':''), invitedBy:me.id, kind:type});
+    S.people.push(p);
+    const res = $('#tl-result'); res.hidden = false;
+    res.innerHTML = `<div class="result"><b>Pass ready for ${esc(name)}</b><div class="linkbox">${esc(passLink(p))}</div><div class="row"><a class="btn primary wa" style="color:var(--on-accent)" href="${waTo(p.e164, passMsg(p))}" target="_blank" rel="noopener">Send to ${esc(name.split(' ')[0])} on WhatsApp</a><button type="button" class="btn" id="tl-copy">Copy link and message</button></div><p class="small muted">WhatsApp opens with the message ready. You press send.</p></div>`;
+    $('#tl-copy').onclick = () => copy(passMsg(p), 'Copied');
+    $('#tl-name').value=''; $('#tl-num').value=''; $('#tl-hint').dataset.last=''; $('#tl-hint').style.color='';
+    renderAll();
+  });
+  $('#tl-list').addEventListener('click', e=>{
+    const c = e.target.dataset.cancel, rI = e.target.dataset.reissue, cp = e.target.dataset.copylink2;
+    if(c){ const before = S.people.slice(); const p = byId(c); S.people = S.people.filter(x=>x.id!==c); renderAll(); toast(`Pass for ${p.name} cancelled`, ()=>{ S.people = before; }); }
+    if(rI){ const p = byId(rI); p.code = code(); p.status='Pass sent'; renderAll(); toast(`New pass made for ${p.name}. The old one no longer works.`); }
+    if(cp){ copy(passMsg(byId(cp)), 'Copied'); }
+  });
+}
+
+/* ---------- status & role ---------- */
+function renderStatus(){
+  $('#st-name').textContent = S.set.name;
+  $('#st-when').textContent = whenText();
+  const P = $('#st-pill');
+  const m = {open:['Open for entry','st-open'], started:['Game in progress: entry closed','st-started'], done:['Game ended','st-done']}[S.status];
+  P.textContent = m[0]; P.className = 'pill ' + m[1];
+  $('#st-joined').textContent = joined(); $('#st-list').textContent = used(); $('#st-limit').textContent = S.set.max; $('#st-wait').textContent = S.queue.length;
+}
+function applyRole(){
+  $$('[data-roles]').forEach(el=>{ el.hidden = !el.dataset.roles.split(' ').includes(S.role); });
+  $$('[data-lock]').forEach(el=>{ el.disabled = S.role!=='org' || locked(); });
+  $$('input[name=family]').forEach(el=>{ el.disabled = S.role==='tl' || locked(); });
+  // step numbers shift for Host (no "Add numbers" step)
+  const h = S.role==='host';
+  $('#n-people').textContent = h?2:3; $('#n-share').textContent = h?3:4; $('#n-wait').textContent = h?4:5; $('#n-start').textContent = h?5:6;
+}
+function renderAll(){ applyRole(); renderStatus(); renderPeople(); renderShare(); renderQueue(); renderStart(); renderReport(); renderTL(); }
+
+/* ---------- ticket motif ---------- */
+(function(){ const n=[0,3,5,7,8, 10,11,14,16,17, 19,21,22,24,26]; $('#ticket').innerHTML = Array.from({length:27},(_,i)=>`<i class="${n.includes(i)?'n':''}"></i>`).join(''); })();
+
+$$('input[name=role]').forEach(r=>r.addEventListener('change', e=>{ S.role = e.target.value; S.sel.clear(); renderAll(); window.scrollTo({top:0}); }));
+initSetup(); initAdd(); initPeople(); initShare(); initQueue(); initStart(); initTL();
+renderAll();
+})();
+</script>

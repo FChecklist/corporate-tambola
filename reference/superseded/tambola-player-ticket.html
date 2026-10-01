@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tambola Player Ticket</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;color:#1c1530;font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+ background:radial-gradient(circle at 8% 0%,#ffe0f0 0,transparent 38%),radial-gradient(circle at 95% 8%,#dcebff 0,transparent 40%),radial-gradient(circle at 50% 100%,#fff3c4 0,transparent 45%),#f7f5ff;background-attachment:fixed}
+.wrap{max-width:920px;margin:0 auto;padding:16px}
+button{font:inherit;cursor:pointer}
+.top{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.lg{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,#ff3d00,#d4006f)}
+.lg .ic{width:22px;height:22px}
+h1{font-size:20px;margin:0;background:linear-gradient(90deg,#ff3d00,#d4006f);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:#6a6385;font-size:13px;margin:0 0 14px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#fff;border-radius:16px;padding:12px;box-shadow:0 10px 28px -14px rgba(60,20,120,.35);margin-bottom:16px}
+.bar input{padding:9px 11px;border:1.5px solid #e6e1f5;border-radius:10px;font:inherit;min-width:0;flex:1 1 160px}
+.chip{border:1.5px solid #e6e1f5;background:#fff;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:700;color:#3b3355;display:inline-flex;align-items:center;gap:6px}
+.chip.on{border-color:#e6007a;background:#fff3a8;color:#e6007a}
+.btn{border:0;border-radius:12px;padding:10px 14px;font-weight:800;color:#fff;background:linear-gradient(135deg,#ff3d00,#d4006f);display:inline-flex;align-items:center;gap:8px}
+.sec{display:flex;align-items:center;gap:8px;font-weight:900;font-size:15px;margin:22px 0 10px;color:#2a1033}
+.sec .ic{color:#e6007a}
+.strip{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:820px){.strip{grid-template-columns:1fr 1fr}}
+.check{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.ok{background:#d9fbe8;color:#00894a;border-radius:999px;padding:5px 11px;font-size:12.5px;font-weight:800;display:inline-flex;gap:6px;align-items:center}
+.ok .ic{width:14px;height:14px}
+.note{font-size:12px;color:#6a6385}
+@media print{.bar,.noprint{display:none!important}body{background:#fff}.tk{box-shadow:none;break-inside:avoid}}
+/*TICKET-CSS-START*/
+.ic{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;vertical-align:-3px}
+.ic.f{fill:currentColor}
+.tk{--f1:#ff3d00;--f2:#d4006f;--acc:#ffd23f;--paper:#fffdf6;--cut:#e6007a;--tink:#2a1033;--tline:#ffcf9e;--blank:#fff0da;--dot:rgba(255,232,120,.5);--hlbg:#fff3a8;--sub:#8a4a5c;
+  display:flex;border-radius:18px;padding:9px;position:relative;color:var(--tink);
+  background:radial-gradient(var(--dot) 1.6px,transparent 2.2px) 0 0/14px 14px,linear-gradient(135deg,var(--f1),var(--f2));
+  box-shadow:0 12px 30px -8px var(--f2)}
+.tk[data-theme=classic]{--f1:#2962ff;--f2:#7c1dff;--acc:#ffd23f;--paper:#fbfcff;--cut:#3d4dff;--tline:#c9d3ff;--blank:#edf0ff;--dot:rgba(255,255,255,.32);--hlbg:#fff3a8;--sub:#55608a}
+.tk[data-theme=newyear]{--f1:#00b7ff;--f2:#8f00ff;--acc:#ffe45c;--paper:#fbfbff;--cut:#7b2cff;--tline:#d6c9ff;--blank:#f0eaff;--dot:rgba(255,255,255,.35);--hlbg:#fff6b0;--sub:#5d5a86}
+.tk[data-theme=holi]{--f1:#ff2e88;--f2:#7b2cff;--acc:#ffe04d;--paper:#fffdf9;--cut:#ff2e88;--tline:#ffc6df;--blank:#ffeef6;--dot:rgba(255,255,255,.45);--hlbg:#fff4b0;--sub:#80607a;
+  background:radial-gradient(rgba(255,255,255,.45) 1.6px,transparent 2.2px) 0 0/14px 14px,linear-gradient(120deg,#ff8a00,#ff2e88 30%,#b100ff 62%,#00c2ff)}
+.tk[data-theme=corporate]{--f1:#00c9a7;--f2:#0061ff;--acc:#ffd23f;--paper:#ffffff;--cut:#0070ff;--tline:#c7e2ff;--blank:#ebf5ff;--dot:rgba(255,255,255,.25);--hlbg:#fff3a8;--sub:#4b6784}
+.tk-main{flex:1;min-width:0;background:var(--paper);border:2px solid var(--acc);border-radius:12px 4px 4px 12px;padding:10px 11px}
+.tk-head{display:flex;gap:9px;align-items:center;padding-bottom:7px;margin-bottom:8px;border-bottom:1.5px dashed var(--acc)}
+.tk-logo{width:40px;height:40px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;font-weight:900;font-size:14px;color:var(--f2);background:radial-gradient(circle at 30% 30%,#fff,var(--acc) 70%);border:2.5px solid var(--f1);box-shadow:0 0 0 3px var(--paper),0 0 0 5px var(--acc)}
+.tk-org{font-weight:900;letter-spacing:.6px;text-transform:uppercase;color:var(--cut);font-size:14px;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tk-game{font-size:11.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tk-motif{margin-left:auto;flex:0 0 auto;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--f1),var(--f2))}.tk-motif .ic{width:20px;height:20px}
+.tk-grid{display:grid;grid-template-columns:repeat(9,1fr);gap:3px}
+.tk-cell{aspect-ratio:1/1;min-height:30px;border-radius:6px;display:grid;place-items:center;font-weight:800;font-size:clamp(13px,3.4vw,18px);position:relative;user-select:none}
+.tk-cell.blank{background:repeating-linear-gradient(45deg,var(--blank),var(--blank) 4px,transparent 4px,transparent 8px),var(--paper);border:1px solid var(--tline)}
+.tk-cell.num{background:#fff;border:1.5px solid var(--tline);color:var(--tink)}
+.tk.play .tk-cell.num{cursor:pointer}
+.tk.play .tk-cell.num:active{transform:scale(.94)}
+.tk-cell.cut{background:linear-gradient(135deg,var(--f1),var(--f2));color:#fff;border-color:transparent;box-shadow:0 3px 8px -3px var(--f2)}
+.tk-cell.cut::after{content:"";position:absolute;left:14%;right:14%;top:50%;border-top:3px solid var(--acc);transform:rotate(-35deg)}
+.tk-cell.hl{box-shadow:0 0 0 3px #ffb800 inset;background:var(--hlbg)}
+.tk-cell.hl.cut{background:var(--cut)}
+.tk-cell.miss{box-shadow:0 0 0 3px #d93025 inset;background:#fde7e5}
+.tk-cell.called:not(.cut){background:#fffbe8}
+.tk-foot{display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-top:8px;padding-top:6px;border-top:1.5px dashed var(--acc);font-size:11.5px;color:var(--sub)}
+.tk-foot b{color:var(--tink)}
+.tk-note{font-size:10.5px;color:var(--sub);margin-top:4px}
+.tk-stub{position:relative;width:96px;flex:0 0 auto;background:var(--paper);border:2px solid var(--acc);border-left:2px dashed var(--acc);border-radius:4px 12px 12px 4px;padding:9px 6px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:6px;text-align:center}
+.tk-stub::before,.tk-stub::after{content:"";position:absolute;left:-10px;width:16px;height:16px;border-radius:50%;background:var(--f2)}
+.tk-stub::before{top:-11px} .tk-stub::after{bottom:-11px}
+.tk-sl{font-size:9px;letter-spacing:1.2px;color:var(--sub);font-weight:800}
+.tk-serial{font-size:17px;font-weight:900;color:var(--cut);font-family:ui-monospace,Menlo,Consolas,monospace}
+.tk-tid{font-size:8.5px;font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--tink);word-break:break-all;line-height:1.2}
+.tk-qr{display:grid;grid-template-columns:repeat(9,5px);gap:0;padding:3px;background:#fff;border:1px solid var(--tline)}
+.tk-qr i{width:5px;height:5px;background:#fff}.tk-qr i.b{background:#111}
+.tk-badge{font-size:10px;font-weight:900;padding:3px 7px;border-radius:999px;background:var(--acc);color:var(--f2);letter-spacing:.5px}
+.tk-badge.pend{background:#fde7e5;color:#b3261e}
+.tk.sm{padding:6px;border-radius:14px}
+.tk.sm .tk-main{padding:7px}
+.tk.sm .tk-cell{min-height:22px;font-size:12px}
+@media(max-width:560px){
+  .tk:not(.sm){flex-direction:column}
+  .tk:not(.sm) .tk-main{border-radius:12px 12px 4px 4px}
+  .tk:not(.sm) .tk-stub{width:auto;flex-direction:row;border-left:2px solid var(--acc);border-top:2px dashed var(--acc);border-radius:4px 4px 12px 12px;padding:7px 10px}
+  .tk:not(.sm) .tk-stub::before{left:-11px;top:-10px} .tk:not(.sm) .tk-stub::after{left:auto;right:-11px;top:-10px;bottom:auto}
+}
+/*TICKET-CSS-END*/
+</style></head><body>
+<!--ICONS-START--><svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol><symbol id="i-trophy" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></symbol><symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol><symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol><symbol id="i-rupee" viewBox="0 0 24 24"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></symbol><symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol><symbol id="i-sparkles" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/></symbol><symbol id="i-palette" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.65-.75 1.65-1.69 0-.44-.18-.84-.44-1.13-.29-.29-.44-.65-.44-1.13a1.64 1.64 0 0 1 1.67-1.67h2c3.05 0 5.55-2.5 5.55-5.55C21.97 6.01 17.46 2 12 2z"/></symbol><symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></symbol><symbol id="i-gift" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></symbol><symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol><symbol id="i-vol" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol><symbol id="i-mute" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></symbol><symbol id="i-play" viewBox="0 0 24 24"><path d="M6 3l14 9-14 9V3z"/></symbol><symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></symbol><symbol id="i-next" viewBox="0 0 24 24"><path d="M5 4l10 8-10 8V4z"/><path d="M19 5v14"/></symbol><symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></symbol><symbol id="i-phone" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></symbol><symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></symbol><symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol><symbol id="i-chat" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/></symbol><symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol><symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol><symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol><symbol id="i-rules" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></symbol><symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></symbol><symbol id="i-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></symbol><symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></symbol><symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol><symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></symbol><symbol id="i-xc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol><symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol><symbol id="i-login" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></symbol><symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol><symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></symbol><symbol id="i-brief" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></symbol><symbol id="i-wand" viewBox="0 0 24 24"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></symbol><symbol id="i-party" viewBox="0 0 24 24"><path d="M5.8 11.3 2 22l10.7-3.79"/><path d="M4 3h.01"/><path d="M22 8h.01"/><path d="M15 2h.01"/><path d="M22 20h.01"/><path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10"/><path d="m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11-.11.7-.72 1.22-1.43 1.22H17"/><path d="m11 2 .33.82c.34.86-.2 1.82-1.11 1.98-.7.1-1.22.72-1.22 1.43V7"/><path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z"/></symbol><symbol id="i-hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></symbol></defs></svg><!--ICONS-END-->
+<div class="wrap">
+  <div class="top"><span class="lg"><svg class="ic"><use href="#i-ticket"/></svg></span><h1>Player Ticket</h1></div>
+  <p class="sub">What each player gets. Every ticket is unique, locked to one mobile number, and carries a permanent ticket ID.</p>
+  <div class="bar noprint">
+    <input id="org" value="Acme Industries" oninput="S.org=this.value;draw()">
+    <input id="game" value="Diwali Tambola 2026" oninput="S.game=this.value;draw()">
+    <div id="themes" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    <span class="chip" onclick="S.entry=S.entry==='paid'?'free':'paid';draw()" id="entryBtn"></span>
+    <button class="btn" onclick="newStrip()"><svg class="ic"><use href="#i-shuffle"/></svg> New strip</button>
+    <button class="btn" onclick="window.print()"><svg class="ic"><use href="#i-download"/></svg> Print / PDF</button>
+  </div>
+
+  <div class="sec"><svg class="ic"><use href="#i-phone"/></svg> Player's ticket (tap numbers to cut)</div>
+  <div id="one"></div>
+
+  <div class="sec"><svg class="ic"><use href="#i-grid"/></svg> Full strip of 6 tickets (covers 1 to 90 exactly once)</div>
+  <div class="strip" id="strip"></div>
+  <div class="check" id="checks"></div>
+  <p class="note">In the live product, tickets are generated on the server with a secure random generator, and a permanent fingerprint check stops any ticket from ever repeating. This page generates them in the browser only to show the design.</p>
+</div>
+<script>
+const S={org:'Acme Industries',game:'Diwali Tambola 2026',when:'2026-11-01T16:00',theme:'diwali',custom:'#2563eb',entry:'paid',fee:100};
+const THEMES={diwali:['Diwali','flame'],classic:['Classic','star'],newyear:['New Year','sparkles'],holi:['Holi','drop'],corporate:['Corporate','brief'],custom:['Custom colour','palette']};
+/*TICKET-JS-START*/
+function ic(n,f){return `<svg class="ic${f?' f':''}"><use href="#i-${n}"/></svg>`}
+function rnd(n){return Math.floor(Math.random()*n)}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]]}return a}
+function colRange(c){return [c===0?1:c*10, c===8?90:c*10+9]}
+/* one valid ticket: 3x9, 5 per row, 1-3 per column, sorted columns */
+function genTicket(){
+  while(true){
+    const g=[0,1,2].map(()=>{const r=Array(9).fill(false);shuffle([...Array(9).keys()]).slice(0,5).forEach(c=>r[c]=true);return r});
+    let ok=true;for(let c=0;c<9;c++)if(!(g[0][c]||g[1][c]||g[2][c]))ok=false;
+    if(!ok)continue;
+    const t=[[],[],[]];
+    for(let c=0;c<9;c++){const[lo,hi]=colRange(c);const pool=[];for(let v=lo;v<=hi;v++)pool.push(v);
+      const k=[0,1,2].filter(r=>g[r][c]).length;const p=shuffle(pool).slice(0,k).sort((a,b)=>a-b);let i=0;
+      for(let r=0;r<3;r++)t[r][c]=g[r][c]?p[i++]:null}
+    return t;
+  }
+}
+function esc(s){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+function initials(s){return (s||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase()}
+function orgCode(){return ((S.org||'ORG').replace(/[^A-Za-z]/g,'').toUpperCase()+'XXXX').slice(0,4)}
+function tidFor(serial){const s=String(serial).padStart(6,'0');const base=`TMB-${orgCode()}-DW26-${s}`;let h=0;for(const ch of base)h=(h*31+ch.charCodeAt(0))%23;return base+'-'+'ABCDEFGHJKLMNPQRSTUVWXY'[h]}
+function fmtWhen(){const d=new Date(S.when);if(isNaN(d))return '';return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})+' · '+d.toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit'})}
+function shade(hex,f){const n=parseInt(hex.slice(1),16);let r=n>>16,g=n>>8&255,b=n&255;r=Math.round(r*f);g=Math.round(g*f);b=Math.round(b*f);return '#'+[r,g,b].map(x=>Math.min(255,x).toString(16).padStart(2,'0')).join('')}
+function themeStyle(th){return th==='custom'?`--f1:${S.custom};--f2:${shade(S.custom,.45)};--cut:${S.custom};--acc:#f4d58d;--dot:rgba(255,255,255,.25)`:''}
+function qrCells(seed,n){let h=0;for(const ch of seed)h=(h*131+ch.charCodeAt(0))>>>0;let out='';
+  for(let i=0;i<n*n;i++){const r=Math.floor(i/n),c=i%n;const corner=(r<3&&c<3)||(r<3&&c>=n-3)||(r>=n-3&&c<3);
+    let b;if(corner){const rr=r<3?r:r-(n-3),cc=c<3?c:c-(n-3);b=!(rr===1&&cc===1)?true:true;b=(rr===1&&cc===1)||rr!==1||cc!==1}else{h=(h*1103515245+12345)>>>0;b=(h>>16)&1}
+    out+=`<i class="${b?'b':''}"></i>`}return out}
+function entryLine(paid){return S.entry==='paid'?`Entry ₹${esc(S.fee)} · ${paid?'<b>Paid ✓</b> (recorded by organiser)':'<b>Pending</b>'}`:'<b>Free entry</b>'}
+function entryNote(){return S.entry==='paid'?`Entry money and prizes are handled directly by ${esc(S.org)}. This platform does not collect or pay money.`:`Free to play · Prizes sponsored by ${esc(S.org)}`}
+/* o: {play, small, stub, cut:Set, hl:Set, miss:Set, called:Set, serial, player, paid, theme} */
+function ticketHTML(t,o={}){
+  const th=o.theme||S.theme, motif=THEMES[th][1];let cells='';
+  for(let r=0;r<3;r++)for(let c=0;c<9;c++){const v=t[r][c];
+    if(v===null){cells+='<div class="tk-cell blank"></div>';continue}
+    const cls=['tk-cell','num'];if(o.cut&&o.cut.has(v))cls.push('cut');if(o.hl&&o.hl.has(v))cls.push('hl');if(o.miss&&o.miss.has(v))cls.push('miss');if(o.called&&o.called.has(v))cls.push('called');
+    cells+=`<div class="${cls.join(' ')}" data-v="${v}">${v}</div>`}
+  const serial=o.serial||'000147', tid=tidFor(serial);
+  const stub=o.stub===false?'':`<div class="tk-stub"><div class="tk-sl">TICKET NO.</div><div class="tk-serial">${String(serial).padStart(6,'0')}</div><div class="tk-qr">${qrCells(tid,9)}</div><div class="tk-tid">${tid}</div><div class="tk-badge ${S.entry==='paid'&&!o.paid?'pend':''}">${S.entry==='paid'?(o.paid?'PAID ✓':'PENDING'):'FREE'}</div></div>`;
+  return `<div class="tk ${o.play?'play':''} ${o.small?'sm':''}" data-theme="${th}" style="${themeStyle(th)}"><div class="tk-main">
+    <div class="tk-head"><div class="tk-logo">${esc(initials(S.org))}</div><div style="min-width:0"><div class="tk-org">${esc(S.org)}</div><div class="tk-game">${esc(S.game)} · ${fmtWhen()}</div></div><div class="tk-motif">${ic(motif)}</div></div>
+    <div class="tk-grid">${cells}</div>
+    ${o.small?'':`<div class="tk-foot"><span>${esc(o.player||'Player name · 98xxxxxx10')}</span><span>${entryLine(o.paid)}</span></div><div class="tk-note">${entryNote()}</div>`}
+  </div>${o.small?'':stub}</div>`;
+}
+/* numbers that make a pattern on ticket t (null for Early Five) */
+function patternNums(t,k){const row=r=>t[r].filter(v=>v!==null);
+  if(k==='top')return row(0);if(k==='mid')return row(1);if(k==='bot')return row(2);
+  if(k==='corners'){const a=row(0),c=row(2);return[a[0],a[4],c[0],c[4]]}
+  if(k==='star'){const a=row(0),b=row(1),c=row(2);return[a[0],a[4],c[0],c[4],b[2]]}
+  if(k==='pyramid'){const a=row(0),b=row(1),c=row(2);return[a[2],b[1],b[3],c[0],c[2],c[4]]}
+  if(k==='full'||k==='full2')return[...row(0),...row(1),...row(2)];
+  return null}
+/*TICKET-JS-END*/
+/* strip of 6: every number 1..90 once, each ticket 15 numbers, 5 per row, 1..3 per column */
+function genStrip(){
+  const sizes=[...Array(9)].map((_,c)=>{const[lo,hi]=colRange(c);return hi-lo+1});
+  outer: for(let attempt=0;attempt<5000;attempt++){
+    const cnt=[...Array(6)].map(()=>Array(9).fill(1)); const left=Array(6).fill(6);
+    for(let c=0;c<9;c++){let extra=sizes[c]-6;
+      while(extra>0){const opts=[...Array(6).keys()].filter(t=>cnt[t][c]<3&&left[t]>0);if(!opts.length)continue outer;
+        opts.sort((a,b)=>left[b]-left[a]+Math.random()-.5);const t=opts[0];cnt[t][c]++;left[t]--;extra--}}
+    if(left.some(x=>x))continue;
+    const layouts=[];
+    for(let t=0;t<6;t++){let ok=false;
+      for(let k=0;k<400&&!ok;k++){const g=[[],[],[]];const rs=[0,0,0];let bad=false;
+        const order=shuffle([...Array(9).keys()]).sort((a,b)=>cnt[t][b]-cnt[t][a]);
+        for(const c of order){const rows=[0,1,2].sort((a,b)=>rs[a]-rs[b]+Math.random()*.5-.25).slice(0,cnt[t][c]);
+          for(let r=0;r<3;r++)g[r][c]=rows.includes(r);rows.forEach(r=>rs[r]++);if(rs.some(x=>x>5)){bad=true;break}}
+        if(!bad&&rs.every(x=>x===5)){layouts.push(g);ok=true}}
+      if(!ok)continue outer}
+    const tickets=layouts.map(()=>[[],[],[]]);
+    for(let c=0;c<9;c++){const[lo,hi]=colRange(c);const pool=shuffle([...Array(hi-lo+1)].map((_,i)=>lo+i));let i=0;
+      for(let t=0;t<6;t++){const nums=pool.slice(i,i+cnt[t][c]).sort((a,b)=>a-b);i+=cnt[t][c];let j=0;
+        for(let r=0;r<3;r++)tickets[t][r][c]=layouts[t][r][c]?nums[j++]:null}}
+    return tickets;
+  }
+  return [...Array(6)].map(genTicket);
+}
+let strip=genStrip(), cut=new Set();
+function newStrip(){strip=genStrip();cut=new Set();draw()}
+function draw(){
+  document.getElementById('themes').innerHTML=Object.keys(THEMES).filter(k=>k!=='custom').map(k=>`<span class="chip ${S.theme===k?'on':''}" onclick="S.theme='${k}';draw()">${ic(THEMES[k][1])} ${THEMES[k][0]}</span>`).join('');
+  document.getElementById('entryBtn').innerHTML=ic('rupee')+(S.entry==='paid'?' Paid entry':' Free entry');
+  const one=document.getElementById('one');
+  one.innerHTML=ticketHTML(strip[0],{play:true,cut,serial:147,player:'Priya S. · 98xxxxxx10',paid:true});
+  one.querySelectorAll('.tk-cell.num').forEach(d=>d.onclick=()=>{const v=+d.dataset.v;cut.has(v)?cut.delete(v):cut.add(v);d.classList.toggle('cut')});
+  document.getElementById('strip').innerHTML=strip.map((t,i)=>ticketHTML(t,{serial:147+i,player:'Player '+(i+1),paid:i%3!==2})).join('');
+  // verify
+  const all=strip.flatMap(t=>t.flat().filter(v=>v!==null)).sort((a,b)=>a-b);
+  const once=all.length===90&&all.every((v,i)=>v===i+1);
+  const rows=strip.every(t=>t.every(r=>r.filter(v=>v!==null).length===5));
+  const cols=strip.every(t=>[...Array(9).keys()].every(c=>{const n=[0,1,2].filter(r=>t[r][c]!==null).length;return n>=1&&n<=3}));
+  const fp=new Set(strip.map(t=>JSON.stringify(t))).size===6;
+  const b=(ok,txt)=>`<span class="ok" style="${ok?'':'background:#ffe0e5;color:#e5213c'}">${ic(ok?'check':'xc')} ${txt}</span>`;
+  document.getElementById('checks').innerHTML=b(once,'All 90 numbers used exactly once')+b(rows,'5 numbers in every row')+b(cols,'1 to 3 numbers in every column')+b(fp,'6 unique ticket fingerprints');
+}
+draw();
+</script></body></html>

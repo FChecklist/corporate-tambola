@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Corporate Tambola – Prototype</title>
+<style>
+:root{
+  --bg:#f6f3ee; --card:#ffffff; --ink:#1d1b19; --muted:#6b645c; --line:#e6dfd4;
+  --brand:#7a1f2b; --brand2:#a8323f; --gold:#c89b3c; --gold2:#f1d48a;
+  --ok:#1f7a4d; --bad:#b3261e; --cut:#7a1f2b; --called:#fff4d6;
+  --r:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button{font:inherit;cursor:pointer}
+.wrap{max-width:980px;margin:0 auto;padding:16px}
+.topbar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:14px}
+.logo{font-weight:800;letter-spacing:.3px;color:var(--brand)}
+.logo small{display:block;font-weight:500;color:var(--muted);font-size:12px;letter-spacing:0}
+.seg{display:inline-flex;background:#ebe4d8;border-radius:999px;padding:3px}
+.seg button{border:0;background:transparent;padding:8px 14px;border-radius:999px;color:var(--muted);font-weight:600}
+.seg button.on{background:var(--card);color:var(--brand);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px}
+h2{font-size:18px;margin:0 0 10px}
+h3{font-size:15px;margin:14px 0 8px}
+.muted{color:var(--muted)}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>*{flex:1 1 200px}
+label{display:block;font-size:13px;font-weight:600;margin:8px 0 4px;color:#3c3731}
+input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fff;color:var(--ink)}
+textarea{min-height:78px;resize:vertical}
+.btn{border:0;border-radius:10px;padding:11px 16px;font-weight:700;background:var(--brand);color:#fff}
+.btn.ghost{background:#fff;color:var(--brand);border:1px solid var(--brand)}
+.btn.gold{background:linear-gradient(180deg,#e0b555,#c3902c);color:#3a2605}
+.btn.block{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#efe8dc;color:#5a5249}
+.pill.ok{background:#e1f2e8;color:var(--ok)} .pill.bad{background:#fbe3e1;color:var(--bad)}
+.hidden{display:none!important}
+
+/* chips / presets */
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600;color:#3c3731}
+.chip.on{border-color:var(--brand);background:#fbeef0;color:var(--brand)}
+
+/* prize table */
+.prize{display:grid;grid-template-columns:24px 1fr 1fr 70px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--line)}
+.prize:last-child{border-bottom:0}
+.prize input[type=text]{padding:7px 9px}
+.prize select{padding:7px}
+
+/* ticket */
+.ticket-frame{
+  position:relative;border-radius:18px;padding:12px;
+  background:
+    radial-gradient(circle at 12px 12px,var(--gold2) 3px,transparent 4px) 0 0/24px 24px,
+    linear-gradient(135deg,var(--brand),#4e0f18);
+  box-shadow:0 8px 24px rgba(122,31,43,.25);
+}
+.ticket-inner{background:#fffaf0;border-radius:12px;border:2px solid var(--gold);padding:10px}
+.t-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.t-org{font-weight:800;color:var(--brand);font-size:15px;line-height:1.1}
+.t-org small{display:block;font-weight:600;color:var(--muted);font-size:11px}
+.t-badge{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--gold2),var(--gold));display:grid;place-items:center;font-weight:900;color:var(--brand);flex:0 0 auto}
+.grid{display:grid;grid-template-columns:repeat(9,1fr);gap:3px}
+.cell{aspect-ratio:1/1;min-height:32px;border-radius:6px;display:grid;place-items:center;font-weight:800;font-size:clamp(13px,3.6vw,18px);position:relative;user-select:none}
+.cell.blank{background:repeating-linear-gradient(45deg,#f3e6c8,#f3e6c8 4px,#efdfbb 4px,#efdfbb 8px)}
+.cell.num{background:#fff;border:1.5px solid #e2cf9f;color:#2b2521}
+.cell.num:active{transform:scale(.96)}
+.cell.cut{background:var(--cut);color:#fff;border-color:var(--cut)}
+.cell.cut::after{content:"";position:absolute;inset:18% 12%;border-top:3px solid var(--gold2);transform:rotate(-35deg);top:50%}
+.t-foot{display:flex;justify-content:space-between;gap:8px;margin-top:8px;font-size:11px;color:var(--muted);flex-wrap:wrap}
+.t-foot b{color:#3c3731;font-family:ui-monospace,Menlo,Consolas,monospace}
+
+/* live number */
+.live{display:flex;align-items:center;gap:14px}
+.ball{width:84px;height:84px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;font-size:36px;font-weight:900;color:var(--brand);
+  background:radial-gradient(circle at 30% 30%,#fff,#f5dfa6 55%,#c89b3c);box-shadow:inset 0 -4px 10px rgba(0,0,0,.15),0 6px 16px rgba(0,0,0,.12)}
+.ball.pop{animation:pop .5s}
+@keyframes pop{0%{transform:scale(.6)}70%{transform:scale(1.1)}100%{transform:scale(1)}}
+.last5{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.last5 span{min-width:30px;padding:3px 6px;border-radius:8px;background:#efe8dc;text-align:center;font-weight:700;font-size:13px}
+.board{display:grid;grid-template-columns:repeat(10,1fr);gap:3px}
+.board div{aspect-ratio:1/1;display:grid;place-items:center;font-size:12px;font-weight:700;border-radius:5px;background:#f1ece3;color:#a39a8e}
+.board div.on{background:var(--brand);color:#fff}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px}
+.tabs button{border:1px solid var(--line);background:#fff;padding:8px 12px;border-radius:10px;font-weight:700;color:var(--muted);white-space:nowrap}
+.tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.claimbar{position:sticky;bottom:0;padding:10px 0;margin-top:14px;background:linear-gradient(0deg,var(--bg) 70%,transparent)}
+.stat{display:flex;gap:8px;flex-wrap:wrap}
+.stat div{flex:1 1 90px;background:#faf7f2;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-size:20px}
+.list{margin:0;padding:0;list-style:none}
+.list li{display:flex;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px dashed var(--line);align-items:center}
+.list li:last-child{border-bottom:0}
+.mini{display:inline-grid;grid-template-columns:repeat(9,7px);gap:1px;vertical-align:middle;margin-right:8px}
+.mini i{width:7px;height:7px;background:#eadfca;border-radius:1px}
+.mini i.p{background:var(--brand)}
+
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(20,16,12,.55);display:grid;place-items:end center;padding:0;z-index:20}
+.sheet{background:#fff;width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:18px 16px 22px;max-height:88vh;overflow:auto}
+@media(min-width:700px){.modal{place-items:center}.sheet{border-radius:18px}}
+.opt{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.opt.sel{border-color:var(--brand);background:#fbeef0}
+.opt input{width:auto}
+.toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-weight:600;z-index:30;max-width:92vw;text-align:center}
+.celebrate{font-size:44px;text-align:center}
+.qr{width:120px;height:120px;background:
+  conic-gradient(from 90deg at 25% 25%,#000 25%,#fff 0) 0 0/20px 20px;border:8px solid #fff;outline:1px solid var(--line);border-radius:6px}
+.two{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:860px){.two{grid-template-columns:1.1fr .9fr}}
+.aibox{background:linear-gradient(135deg,#fff7e3,#fbeef0);border:1px solid #ecd9ae}
+.step{display:flex;gap:6px;margin-bottom:12px}
+.step span{flex:1;height:5px;border-radius:5px;background:#e6dfd4}
+.step span.on{background:var(--brand)}
+.note{font-size:12px;color:var(--muted);margin-top:6px}
+.legal{font-size:12px;background:#fff8e1;border:1px solid #f0dca0;border-radius:10px;padding:8px 10px;color:#5b4a1c}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="logo">🎟 Corporate Tambola<small>Clickable prototype · web only · mobile responsive</small></div>
+    <div class="seg" role="tablist">
+      <button id="vPlayer" class="on" onclick="setView('player')">Player view</button>
+      <button id="vHost" onclick="setView('host')">HR / Admin view</button>
+    </div>
+  </div>
+
+  <!-- ================= PLAYER ================= -->
+  <section id="player">
+    <!-- login -->
+    <div id="login" class="card" style="max-width:420px;margin:0 auto">
+      <div class="t-badge" style="margin-bottom:8px">AC</div>
+      <h2>Acme Diwali Tambola 2026</h2>
+      <p class="muted" style="margin-top:0">Log in with your registered mobile number.</p>
+      <label>Mobile number</label>
+      <input id="mob" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" value="9876543210">
+      <div id="otpWrap" class="hidden">
+        <label>OTP sent by SMS / WhatsApp</label>
+        <input id="otp" inputmode="numeric" maxlength="6" placeholder="Enter any 6 digits (demo)">
+        <label>Your display name</label>
+        <input id="pname" placeholder="Name" value="Priya S.">
+        <p class="note">One number = one seat in this game. Logging in on another device signs out this one.</p>
+      </div>
+      <div style="height:10px"></div>
+      <button id="loginBtn" class="btn block" onclick="loginStep()">Send OTP</button>
+      <p class="legal" style="margin-top:12px">Free to play. Prizes sponsored by Acme Industries.</p>
+    </div>
+
+    <!-- game -->
+    <div id="game" class="hidden">
+      <div class="card">
+        <div class="live">
+          <div id="ball" class="ball">–</div>
+          <div style="flex:1;min-width:0">
+            <div class="muted" style="font-size:13px">Last number called</div>
+            <div style="font-weight:800;font-size:17px" id="callText">Waiting for host to start…</div>
+            <div class="last5" id="last5"></div>
+          </div>
+        </div>
+        <div class="stat" style="margin-top:12px">
+          <div><span class="muted">Called</span><b id="sCalled">0/90</b></div>
+          <div><span class="muted">Pace</span><b style="font-size:15px" id="sPace">Live · 8 sec</b></div>
+          <div><span class="muted">Sound</span><b style="font-size:15px"><button class="chip" id="soundBtn" onclick="toggleSound()">🔊 Voice</button></b></div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn ghost" onclick="demoCall()">Demo: call next number</button>
+          <button class="btn ghost" id="autoBtn" onclick="toggleAuto()">Demo: auto-call ▶</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="on" data-t="tTicket" onclick="tab(this)">My ticket</button>
+        <button data-t="tBoard" onclick="tab(this)">Board</button>
+        <button data-t="tRules" onclick="tab(this)">Rules & prizes</button>
+        <button data-t="tWin" onclick="tab(this)">Winners</button>
+      </div>
+
+      <div id="tTicket">
+        <div class="ticket-frame">
+          <div class="ticket-inner">
+            <div class="t-head">
+              <div class="t-org">ACME INDUSTRIES<small>Diwali Tambola · 01 Nov 2026 · 4:00 PM</small></div>
+              <div class="t-badge">AC</div>
+            </div>
+            <div class="grid" id="ticket"></div>
+            <div class="t-foot">
+              <span>Ticket ID <b id="tid">TMB-ACME-DW26-000147-K</b></span>
+              <span id="tplayer">Priya S. · 98xxxxxx10</span>
+            </div>
+            <div class="t-foot"><span>Free to play · Prizes sponsored by Acme Industries</span><span>Tap a number to cut it</span></div>
+          </div>
+        </div>
+      </div>
+      <div id="tBoard" class="card hidden"><h2>All numbers</h2><div class="board" id="board"></div></div>
+      <div id="tRules" class="card hidden">
+        <h2>Rules & prizes</h2>
+        <ul class="list" id="rulesList"></ul>
+        <h3>Game rules set by host</h3>
+        <ul class="list" style="font-size:14px">
+          <li><span>Claim window</span><span class="pill">Before next number</span></li>
+          <li><span>Strict cut mode</span><span class="pill">On – you must cut numbers</span></li>
+          <li><span>Wrong claim (bogey)</span><span class="pill">2 bogeys = blocked</span></li>
+          <li><span>Tie</span><span class="pill">Prize split equally</span></li>
+        </ul>
+      </div>
+      <div id="tWin" class="card hidden"><h2>Winners</h2><ul class="list" id="winList"><li class="muted">No winners yet.</li></ul></div>
+
+      <div class="claimbar"><button class="btn gold block" style="font-size:17px;padding:14px" onclick="openClaim()">🏆 CLAIM A PRIZE</button></div>
+    </div>
+  </section>
+
+  <!-- ================= HOST ================= -->
+  <section id="host" class="hidden">
+    <div class="tabs">
+      <button class="on" data-h="hSetup" onclick="htab(this)">1. Create game</button>
+      <button data-h="hPlayers" onclick="htab(this)">2. Players</button>
+      <button data-h="hLive" onclick="htab(this)">3. Live console</button>
+    </div>
+
+    <div id="hSetup">
+      <div class="card aibox">
+        <h2>✨ Describe your game</h2>
+        <p class="muted" style="margin-top:0">Type in plain words. AI fills the form below. You review and confirm.</p>
+        <textarea id="aiText">Diwali game for 300 employees on 1 Nov at 4 pm, voice mode, live game, 6 prizes, Amazon vouchers</textarea>
+        <div style="height:8px"></div>
+        <button class="btn" onclick="aiFill()">Fill the form for me</button>
+      </div>
+
+      <div class="two">
+        <div>
+          <div class="card">
+            <h2>Start from a preset</h2>
+            <div class="chips" id="presets">
+              <button class="chip on" onclick="preset(this,'quick')">Quick office game</button>
+              <button class="chip" onclick="preset(this,'fest')">Festival evening</button>
+              <button class="chip" onclick="preset(this,'daily')">Month-long daily</button>
+              <button class="chip" onclick="preset(this,'weekly')">Dealer weekly</button>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Basics</h2>
+            <div class="row">
+              <div><label>Game name</label><input id="gName" value="Diwali Tambola 2026"></div>
+              <div><label>Organisation</label><input value="Acme Industries"></div>
+            </div>
+            <div class="row">
+              <div><label>Start</label><input id="gDate" type="datetime-local" value="2026-11-01T16:00"></div>
+              <div><label>Ticket theme</label><select><option>Diwali</option><option>Classic</option><option>New Year</option><option>Holi</option><option>Corporate minimal</option><option>Custom colours</option></select></div>
+            </div>
+            <h3>Sound</h3>
+            <div class="chips" id="soundChips">
+              <button class="chip" onclick="pick(this,'soundChips')">🔇 Silent</button>
+              <button class="chip on" onclick="pick(this,'soundChips')">🔊 Voice</button>
+            </div>
+            <h3>Pace</h3>
+            <div class="chips" id="paceChips">
+              <button class="chip on" onclick="pace(this,'live')">Live</button>
+              <button class="chip" onclick="pace(this,'timed')">Timed</button>
+              <button class="chip" onclick="pace(this,'daily')">Daily</button>
+              <button class="chip" onclick="pace(this,'weekly')">Weekly</button>
+            </div>
+            <div id="paceOpt" class="row" style="margin-top:6px">
+              <div><label>Gap between numbers</label><select id="gap"><option>5 sec</option><option selected>8 sec</option><option>10 sec</option><option>15 sec</option><option>Manual (Next button)</option></select></div>
+            </div>
+            <div class="row">
+              <div><label>Tickets per player</label><select><option>1</option><option>2</option><option>3</option><option>6 (full strip)</option></select></div>
+              <div><label>Max players</label><input id="gMax" type="number" value="300"></div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <h2>Prizes</h2>
+            <div class="prize muted" style="font-size:12px;font-weight:700"><span></span><span>Pattern</span><span>Prize</span><span>Winners</span></div>
+            <div id="prizeRows"></div>
+          </div>
+          <div class="card">
+            <h2>Claim rules</h2>
+            <label>Claim window</label>
+            <select><option>Before next number is called</option><option>Before next 2 numbers</option><option>Until next release (daily/weekly)</option><option>Anytime while prize is open</option></select>
+            <label>Wrong claim (bogey)</label>
+            <select><option>Blocked after 2 bogeys</option><option>Warning only</option><option>Blocked for that prize</option></select>
+            <label>If two people win together</label>
+            <select><option>Split prize equally</option><option>Each gets full prize</option><option>First claim wins</option></select>
+            <label>Strict cut mode</label>
+            <select><option>On – player must cut the numbers</option><option>Off – only called numbers checked</option></select>
+          </div>
+          <div class="legal">Players never pay on this platform. Prizes are sponsored by your organisation. (Online Gaming Act, 2025.)</div>
+          <div style="height:10px"></div>
+          <button class="btn block" onclick="publish()">Review & publish game</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="hPlayers" class="hidden">
+      <div class="card">
+        <h2>Who can play?</h2>
+        <div class="opt sel" onclick="selOpt(this)"><input type="radio" name="acc" checked><div><b>Approved list</b> <span class="pill ok">Recommended</span><div class="muted" style="font-size:13px">Upload Excel/CSV of mobile numbers. Only these numbers can log in.</div></div></div>
+        <div class="opt" onclick="selOpt(this)"><input type="radio" name="acc"><div><b>Open link + host approval</b><div class="muted" style="font-size:13px">Anyone with the link can request. You approve each one.</div></div></div>
+        <div class="opt" onclick="selOpt(this)"><input type="radio" name="acc"><div><b>Open link + game code</b><div class="muted" style="font-size:13px">Anyone with link and 6-digit code. Simplest, least secure.</div></div></div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn ghost" onclick="toast('Demo: 287 numbers uploaded, 4 duplicates removed, 2 invalid')">⬆ Upload player list</button>
+          <div><label style="margin-top:0">Family invites per employee</label><select><option>0</option><option>1</option><option>2</option><option>3</option></select></div>
+        </div>
+        <p class="note">Rule: 1 mobile number = 1 seat per game. Tickets are locked to the number.</p>
+      </div>
+      <div class="card">
+        <h2>Share with players</h2>
+        <div class="row" style="align-items:center">
+          <div class="qr" style="flex:0 0 120px"></div>
+          <div>
+            <label style="margin-top:0">Player link</label>
+            <input readonly value="https://play.tambola.example/acme/DW26">
+            <div style="height:8px"></div>
+            <button class="btn" onclick="toast('Demo: link copied')">Copy link</button>
+            <button class="btn ghost" onclick="toast('Demo: WhatsApp message prepared')">Share on WhatsApp</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="hLive" class="hidden">
+      <div class="card">
+        <div class="live">
+          <div id="hBall" class="ball">–</div>
+          <div style="flex:1">
+            <div class="muted" style="font-size:13px">Now calling</div>
+            <div style="font-weight:800" id="hCalled">0 of 90 called</div>
+            <div class="row" style="margin-top:8px">
+              <button class="btn" onclick="demoCall()">Next number</button>
+              <button class="btn ghost" id="hAuto" onclick="toggleAuto()">Auto ▶</button>
+              <button class="btn ghost" onclick="toast('Demo: game paused, claim windows extended')">Pause</button>
+            </div>
+          </div>
+        </div>
+        <p class="note">Sealed draw hash: <b style="font-family:monospace">9f3a…c21e</b> (full order revealed after the game)</p>
+      </div>
+      <div class="stat">
+        <div><span class="muted">Players online</span><b>241 / 287</b></div>
+        <div><span class="muted">Valid claims</span><b id="hValid">0</b></div>
+        <div><span class="muted">Bogeys</span><b id="hBogey">0</b></div>
+        <div><span class="muted">Prizes left</span><b id="hLeft">6</b></div>
+      </div>
+      <div style="height:14px"></div>
+      <div class="card"><h2>Claims feed</h2><ul class="list" id="feed"><li class="muted">Claims appear here in real time.</li></ul></div>
+      <button class="btn ghost block" onclick="toast('Demo: winners report downloaded (Excel)')">⬇ Download winners report</button>
+    </div>
+  </section>
+</div>
+
+<!-- claim modal -->
+<div id="claimModal" class="modal hidden" onclick="if(event.target===this)closeClaim()">
+  <div class="sheet">
+    <div id="claimPick">
+      <h2>What are you claiming?</h2>
+      <p class="muted" style="margin-top:0">Choose the prize you have completed on ticket <b id="cTid"></b>.</p>
+      <div id="claimOpts"></div>
+      <button class="btn gold block" id="confirmClaim" onclick="submitClaim()" disabled>Confirm claim</button>
+      <div style="height:8px"></div>
+      <button class="btn ghost block" onclick="closeClaim()">Cancel</button>
+    </div>
+    <div id="claimResult" class="hidden"></div>
+  </div>
+</div>
+
+<script>
+/* ---------- data ---------- */
+const PATTERNS = {
+  early5:{name:'Early Five',desc:'Any 5 numbers cut',prize:'₹1,000 voucher',n:1},
+  top:{name:'Top Line',desc:'All 5 numbers of row 1',prize:'₹1,500 voucher',n:1},
+  mid:{name:'Middle Line',desc:'All 5 numbers of row 2',prize:'₹1,500 voucher',n:1},
+  bot:{name:'Bottom Line',desc:'All 5 numbers of row 3',prize:'₹1,500 voucher',n:1},
+  corners:{name:'Four Corners',desc:'First & last of top and bottom rows',prize:'₹2,000 voucher',n:1},
+  star:{name:'Star',desc:'Four corners + centre of middle row',prize:'₹2,000 voucher',n:1},
+  full:{name:'Full House',desc:'All 15 numbers',prize:'₹5,000 voucher + trophy',n:1},
+  full2:{name:'Second Full House',desc:'Next full house after first',prize:'₹2,500 voucher',n:1},
+};
+const PRESETS = {
+  quick:['early5','top','mid','bot','full'],
+  fest:['early5','top','mid','bot','corners','star','full','full2'],
+  daily:['early5','top','mid','bot','full'],
+  weekly:['top','mid','bot','full'],
+};
+let active = ['early5','top','mid','bot','corners','full']; // 6 prizes for demo
+const CALLS = {1:'Kelly\'s eye',11:'Legs eleven',22:'Two little ducks',33:'All the threes',44:'Droopy drawers',
+  50:'Half a century',66:'Clickety click',77:'Sunset strip',88:'Two fat ladies',90:'Top of the house'};
+
+/* ---------- ticket generator (valid Indian tambola) ---------- */
+function rnd(n){return Math.floor(Math.random()*n)}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]]}return a}
+function genTicket(){
+  while(true){
+    // pick layout: 3x9, each row 5, each column 1..3
+    const g=[[],[],[]];
+    for(let r=0;r<3;r++){const cols=shuffle([...Array(9).keys()]).slice(0,5);g[r]=Array(9).fill(false);cols.forEach(c=>g[r][c]=true)}
+    let ok=true;for(let c=0;c<9;c++){if(!(g[0][c]||g[1][c]||g[2][c])){ok=false;break}}
+    if(!ok)continue;
+    const t=[[],[],[]];
+    for(let c=0;c<9;c++){
+      const lo=c===0?1:c*10, hi=c===8?90:c*10+9;
+      const pool=[];for(let v=lo;v<=hi;v++)pool.push(v);
+      const k=[0,1,2].filter(r=>g[r][c]).length;
+      const pick=shuffle(pool).slice(0,k).sort((a,b)=>a-b);let i=0;
+      for(let r=0;r<3;r++)t[r][c]=g[r][c]?pick[i++]:null;
+    }
+    return t;
+  }
+}
+
+/* ---------- state ---------- */
+let ticket=genTicket(), cut=new Set(), called=[], draw=shuffle([...Array(90)].map((_,i)=>i+1));
+let voice=true, auto=null, won={}, bogeys=0, winners=[], hValid=0, hBogey=0, sel=null;
+
+/* ---------- view switching ---------- */
+function setView(v){
+  document.getElementById('player').classList.toggle('hidden',v!=='player');
+  document.getElementById('host').classList.toggle('hidden',v!=='host');
+  document.getElementById('vPlayer').classList.toggle('on',v==='player');
+  document.getElementById('vHost').classList.toggle('on',v==='host');
+}
+function tab(b){document.querySelectorAll('[data-t]').forEach(x=>{x.classList.toggle('on',x===b);document.getElementById(x.dataset.t).classList.toggle('hidden',x!==b)})}
+function htab(b){document.querySelectorAll('[data-h]').forEach(x=>{x.classList.toggle('on',x===b);document.getElementById(x.dataset.h).classList.toggle('hidden',x!==b)})}
+function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2400)}
+
+/* ---------- login ---------- */
+function loginStep(){
+  const m=document.getElementById('mob').value.trim();
+  if(!/^[6-9]\d{9}$/.test(m)){toast('Enter a valid 10-digit Indian mobile number');return}
+  const w=document.getElementById('otpWrap');
+  if(w.classList.contains('hidden')){w.classList.remove('hidden');document.getElementById('loginBtn').textContent='Verify & join game';toast('Demo: OTP sent to '+m.slice(0,2)+'xxxxxx'+m.slice(-2));return}
+  if(!/^\d{6}$/.test(document.getElementById('otp').value)){toast('Enter the 6-digit OTP');return}
+  const n=document.getElementById('pname').value||'Player';
+  document.getElementById('tplayer').textContent=n+' · '+m.slice(0,2)+'xxxxxx'+m.slice(-2);
+  document.getElementById('login').classList.add('hidden');
+  document.getElementById('game').classList.remove('hidden');
+  renderAll();
+}
+
+/* ---------- render ---------- */
+function renderTicket(){
+  const el=document.getElementById('ticket');el.innerHTML='';
+  for(let r=0;r<3;r++)for(let c=0;c<9;c++){
+    const v=ticket[r][c],d=document.createElement('div');
+    if(v===null){d.className='cell blank'}
+    else{d.className='cell num'+(cut.has(v)?' cut':'');d.textContent=v;d.onclick=()=>{cut.has(v)?cut.delete(v):cut.add(v);renderTicket()}}
+    el.appendChild(d);
+  }
+}
+function renderBoard(){
+  const b=document.getElementById('board');b.innerHTML='';
+  for(let i=1;i<=90;i++){const d=document.createElement('div');d.textContent=i;if(called.includes(i))d.className='on';b.appendChild(d)}
+}
+function miniShape(k){
+  const on=new Set();const add=(r,c)=>on.add(r*9+c);
+  if(k==='top')for(let c=0;c<9;c+=2)add(0,c);
+  if(k==='mid')for(let c=0;c<9;c+=2)add(1,c);
+  if(k==='bot')for(let c=0;c<9;c+=2)add(2,c);
+  if(k==='corners'){add(0,0);add(0,8);add(2,0);add(2,8)}
+  if(k==='star'){add(0,0);add(0,8);add(2,0);add(2,8);add(1,4)}
+  if(k==='full'||k==='full2')for(let i=0;i<27;i++)on.add(i);
+  if(k==='early5'){[1,5,12,20,25].forEach(i=>on.add(i))}
+  let h='<span class="mini">';for(let i=0;i<27;i++)h+='<i class="'+(on.has(i)?'p':'')+'"></i>';return h+'</span>';
+}
+function renderRules(){
+  document.getElementById('rulesList').innerHTML=active.map(k=>{
+    const p=PATTERNS[k];const st=won[k]?'<span class="pill bad">Won</span>':'<span class="pill ok">Open</span>';
+    return `<li><span>${miniShape(k)}<b>${p.name}</b><br><span class="muted" style="font-size:13px">${p.desc} · ${p.prize}</span></span>${st}</li>`}).join('');
+}
+function renderWinners(){
+  const l=document.getElementById('winList');
+  l.innerHTML=winners.length?winners.map(w=>`<li><span><b>${w.p}</b><br><span class="muted" style="font-size:13px">${w.who} · ${w.tid}</span></span><span class="pill ok">on #${w.num}</span></li>`).join(''):'<li class="muted">No winners yet.</li>';
+}
+function renderLive(){
+  const last=called[called.length-1];
+  ['ball','hBall'].forEach(id=>{const b=document.getElementById(id);b.textContent=last||'–';b.classList.remove('pop');void b.offsetWidth;if(last)b.classList.add('pop')});
+  document.getElementById('callText').textContent=last?(CALLS[last]?CALLS[last]+', '+last:'Number '+last):'Waiting for host to start…';
+  document.getElementById('last5').innerHTML=called.slice(-6,-1).reverse().map(n=>`<span>${n}</span>`).join('');
+  document.getElementById('sCalled').textContent=called.length+'/90';
+  document.getElementById('hCalled').textContent=called.length+' of 90 called';
+  document.getElementById('hLeft').textContent=active.filter(k=>!won[k]).length;
+}
+function renderPrizeRows(){
+  document.getElementById('prizeRows').innerHTML=Object.keys(PATTERNS).map(k=>{
+    const p=PATTERNS[k],on=active.includes(k);
+    return `<div class="prize"><input type="checkbox" ${on?'checked':''} onchange="togglePattern('${k}',this.checked)"><span style="font-size:14px;font-weight:600">${p.name}</span><input type="text" value="${p.prize}" onchange="PATTERNS['${k}'].prize=this.value;renderRules()"><select><option>1</option><option>2</option><option>3</option></select></div>`}).join('');
+}
+function renderAll(){renderTicket();renderBoard();renderRules();renderWinners();renderLive();renderPrizeRows()}
+
+/* ---------- calling ---------- */
+function speak(n){
+  if(!voice||!('speechSynthesis' in window))return;
+  const u=new SpeechSynthesisUtterance(CALLS[n]?CALLS[n]+', '+n:'Number '+n);u.lang='en-IN';u.rate=.95;
+  speechSynthesis.cancel();speechSynthesis.speak(u);
+}
+function demoCall(){
+  if(called.length>=90){toast('All 90 numbers called');stopAuto();return}
+  const n=draw[called.length];called.push(n);renderLive();renderBoard();speak(n);
+}
+function toggleAuto(){auto?stopAuto():(auto=setInterval(demoCall,4000),demoCall(),setAutoLabel())}
+function stopAuto(){clearInterval(auto);auto=null;setAutoLabel()}
+function setAutoLabel(){document.getElementById('autoBtn').textContent=auto?'Demo: pause ⏸':'Demo: auto-call ▶';document.getElementById('hAuto').textContent=auto?'Pause ⏸':'Auto ▶'}
+function toggleSound(){voice=!voice;document.getElementById('soundBtn').textContent=voice?'🔊 Voice':'🔇 Silent';if(!voice&&'speechSynthesis' in window)speechSynthesis.cancel()}
+
+/* ---------- claims ---------- */
+function patternNums(k){
+  const row=r=>ticket[r].filter(v=>v!==null);
+  if(k==='top')return row(0); if(k==='mid')return row(1); if(k==='bot')return row(2);
+  if(k==='corners'){const a=row(0),c=row(2);return [a[0],a[4],c[0],c[4]]}
+  if(k==='star'){const a=row(0),b=row(1),c=row(2);return [a[0],a[4],c[0],c[4],b[2]]}
+  if(k==='full'||k==='full2')return [...row(0),...row(1),...row(2)];
+  return null;
+}
+function openClaim(){
+  sel=null;document.getElementById('cTid').textContent=document.getElementById('tid').textContent;
+  const open=active.filter(k=>!won[k]&&!(k==='full2'&&!won.full));
+  document.getElementById('claimOpts').innerHTML=open.length?open.map(k=>`<div class="opt" onclick="pickClaim(this,'${k}')"><input type="radio" name="cl"><div>${miniShape(k)}<b>${PATTERNS[k].name}</b><div class="muted" style="font-size:13px">${PATTERNS[k].desc} · ${PATTERNS[k].prize}</div></div></div>`).join(''):'<p class="muted">All prizes have been won.</p>';
+  document.getElementById('confirmClaim').disabled=true;
+  document.getElementById('claimPick').classList.remove('hidden');document.getElementById('claimResult').classList.add('hidden');
+  document.getElementById('claimModal').classList.remove('hidden');
+}
+function pickClaim(el,k){document.querySelectorAll('#claimOpts .opt').forEach(o=>o.classList.remove('sel'));el.classList.add('sel');el.querySelector('input').checked=true;sel=k;document.getElementById('confirmClaim').disabled=false}
+function closeClaim(){document.getElementById('claimModal').classList.add('hidden')}
+function submitClaim(){
+  if(bogeys>=2){showResult(false,'This ticket is blocked after 2 wrong claims.');return}
+  let ok,reason='';
+  if(sel==='early5'){
+    const good=[...cut].filter(v=>called.includes(v));
+    ok=good.length>=5; if(!ok)reason=`You have ${good.length} called-and-cut numbers. Early Five needs 5.`;
+  }else{
+    const need=patternNums(sel);
+    const notCalled=need.filter(v=>!called.includes(v));
+    const notCut=need.filter(v=>called.includes(v)&&!cut.has(v));
+    ok=notCalled.length===0&&notCut.length===0;
+    if(notCalled.length)reason=`Not called yet: ${notCalled.join(', ')}`;
+    else if(notCut.length)reason=`Called but not cut by you (strict cut mode): ${notCut.join(', ')}`;
+  }
+  const who=document.getElementById('tplayer').textContent.split(' · ')[0];
+  const tid=document.getElementById('tid').textContent;
+  const last=called[called.length-1]||'-';
+  const feed=document.getElementById('feed');if(feed.querySelector('.muted'))feed.innerHTML='';
+  if(ok){
+    won[sel]=true;hValid++;winners.push({p:PATTERNS[sel].name,who,tid,num:last});
+    feed.insertAdjacentHTML('afterbegin',`<li><span><b>${who}</b> claimed ${PATTERNS[sel].name}<br><span class="muted" style="font-size:12px">${tid} · after #${last}</span></span><span class="pill ok">Valid</span></li>`);
+    showResult(true,`${PATTERNS[sel].name} confirmed! Prize: ${PATTERNS[sel].prize}. The host will contact you.`);
+    if(voice&&'speechSynthesis' in window){speechSynthesis.speak(new SpeechSynthesisUtterance(PATTERNS[sel].name+' won by '+who))}
+  }else{
+    bogeys++;hBogey++;
+    feed.insertAdjacentHTML('afterbegin',`<li><span><b>${who}</b> claimed ${PATTERNS[sel].name}<br><span class="muted" style="font-size:12px">${tid} · after #${last}</span></span><span class="pill bad">Bogey</span></li>`);
+    showResult(false,reason+` (Wrong claims: ${bogeys}/2)`);
+  }
+  document.getElementById('hValid').textContent=hValid;document.getElementById('hBogey').textContent=hBogey;
+  renderRules();renderWinners();renderLive();
+}
+function showResult(ok,msg){
+  document.getElementById('claimPick').classList.add('hidden');
+  const r=document.getElementById('claimResult');r.classList.remove('hidden');
+  r.innerHTML=`<div class="celebrate">${ok?'🎉':'✋'}</div><h2 style="text-align:center">${ok?'Claim valid':'Not a valid claim'}</h2><p style="text-align:center" class="muted">${msg}</p><button class="btn block" onclick="closeClaim()">Back to game</button>`;
+}
+
+/* ---------- host setup ---------- */
+function pick(b,grp){document.querySelectorAll('#'+grp+' .chip').forEach(x=>x.classList.toggle('on',x===b))}
+function pace(b,p){
+  pick(b,'paceChips');
+  const o=document.getElementById('paceOpt');
+  const html={
+    live:'<div><label>Gap between numbers</label><select><option>5 sec</option><option selected>8 sec</option><option>10 sec</option><option>15 sec</option><option>Manual (Next button)</option></select></div>',
+    timed:'<div><label>Release one number every</label><select><option>5 min</option><option>15 min</option><option>30 min</option></select></div><div><label>Between</label><input value="10:00 – 18:00"></div>',
+    daily:'<div><label>Numbers per day</label><select><option>1</option><option>2</option><option selected>3</option><option>5</option><option>10</option></select></div><div><label>Release time</label><input type="time" value="10:00"></div><div><label>Skip weekends</label><select><option>Yes</option><option>No</option></select></div>',
+    weekly:'<div><label>Numbers per week</label><select><option>5</option><option selected>10</option><option>15</option></select></div><div><label>Release day</label><select><option>Monday</option><option>Friday</option></select></div>'
+  }[p];
+  o.innerHTML=html;
+  document.getElementById('sPace').textContent={live:'Live · 8 sec',timed:'Every 15 min',daily:'3 / day',weekly:'10 / week'}[p];
+}
+function preset(b,k){pick(b,'presets');active=PRESETS[k].slice();renderPrizeRows();renderRules();
+  const map={quick:0,fest:0,daily:2,weekly:3};pace(document.querySelectorAll('#paceChips .chip')[map[k]],['live','live','daily','weekly'][map[k]]);toast('Preset applied – change anything you like')}
+function togglePattern(k,on){active=on?[...new Set([...active,k])]:active.filter(x=>x!==k);renderRules()}
+function selOpt(el){el.parentElement.querySelectorAll('.opt').forEach(o=>o.classList.remove('sel'));el.classList.add('sel');el.querySelector('input').checked=true}
+function aiFill(){
+  const t=document.getElementById('aiText').value.toLowerCase();
+  const m=t.match(/(\d{2,5})\s*(employees|people|players|residents|members|dealers)/);if(m)document.getElementById('gMax').value=m[1];
+  if(t.includes('diwali'))document.getElementById('gName').value='Diwali Tambola 2026';
+  if(t.includes('new year'))document.getElementById('gName').value='New Year Tambola';
+  pick(document.querySelectorAll('#soundChips .chip')[t.includes('silent')?0:1],'soundChips');
+  const pc=document.querySelectorAll('#paceChips .chip');
+  if(t.includes('daily'))pace(pc[2],'daily');else if(t.includes('week'))pace(pc[3],'weekly');else pace(pc[0],'live');
+  const pm=t.match(/(\d+)\s*prizes?/);const n=pm?Math.min(+pm[1],8):5;
+  active=PRESETS.fest.filter(k=>k!=='full').slice(0,Math.max(n-1,0)).concat('full');
+  if(t.includes('amazon'))Object.values(PATTERNS).forEach(p=>p.prize=p.prize.replace('voucher','Amazon voucher'));
+  renderPrizeRows();renderRules();toast('AI filled the form. Please review before publishing.');
+}
+function publish(){
+  if(!active.length){toast('Pick at least one prize');return}
+  toast('Game published. Rules locked. '+document.getElementById('gMax').value+' unique tickets generated.');
+  htab(document.querySelector('[data-h="hPlayers"]'));
+}
+
+renderAll();
+</script>
+</body>
+</html>
