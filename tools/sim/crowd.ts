@@ -95,8 +95,8 @@ const elapsed = ((Date.now() - t0) / 1000).toFixed(0);
 console.log(`\n  simulated ${N} phones x ${TICKS} ticks in ${elapsed} s`);
 
 /* ---- checks ---- */
-const f = (await readPublished({ get: async (k) => (await d.db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<any>())?.v ?? null, put: async () => {} }, EID))!;
-const st = resolveControl(cfgOf(f), f.messages);
+const f = (await readPublished({ get: async (k) => (await d.db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<any>())?.v ?? null, put: async () => {} }, EID));
+const st = f ? resolveControl(cfgOf(f), f.messages) : null; // no file: nothing can be paused here (above 2,000 participants)
 const refs: Record<number, number[]> = {};
 for (let r = 1; r <= ROUNDS; r++) refs[r] = deriveCalls(roundEid(EID, r), Array.from({ length: 90 }, (_, k) => rnd(callRoundR(st, START, STRIDE, CFG.breaks, r, k)!)));
 const ref = refs[ROUNDS]!; // phones that finished show the last round
