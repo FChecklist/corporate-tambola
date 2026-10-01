@@ -13,7 +13,7 @@
   const call = async (method, path, body) => {
     const r = await fetch(BASE + path, { method, headers: { "content-type": "application/json", "x-organizer": secret }, body: body === undefined ? undefined : JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw Object.assign(new Error(j.error || "http " + r.status), { status: r.status });
+    if (!r.ok) throw Object.assign(new Error(j.error || "http " + r.status), { status: r.status, needPack: j.needPack });
     return j;
   };
   const S = { info: null, people: [], claims: [], control: null, results: [], store: null, log: [], note: "", history: null, busy: false };
@@ -30,14 +30,14 @@
     const h = S.history;
     const last = h && h.engagements[0];
     const bar = last ? `<div class="lastbar"><span>LAST ENGAGEMENT WAS ON <b>${fmtDay(last.created_ms)}</b> · ${last.participants} participants</span><span><button data-reuse="${esc(last.id)}">REUSE THE DATA</button><button data-hist="1">HISTORY</button></span></div>` : "";
-    const hist = S.showHist && h ? `<div class="zcard"><h2>History · kept ${h.retentionDays} days</h2><table>${h.engagements.map((e) => `<tr><td>${esc(e.id)}</td><td>${fmtDay(e.created_ms)}</td><td>${e.participants} people</td><td><button class="zbtn s alt" data-open="${esc(e.id)}">Open</button><button class="zbtn s alt" data-reuse="${esc(e.id)}">Reuse</button></td></tr>`).join("")}</table></div>` : "";
+    const hist = S.showHist && h ? `<div class="zcard"><h2>History · kept ${h.retentionDays} days</h2><table>${h.engagements.map((e) => `<tr><td>${esc(e.id)}</td><td>${fmtDay(e.created_ms)}</td><td>${e.participants} people${e.draft ? " · draft" : ""}</td><td><button class="zbtn s alt" data-open="${esc(e.id)}">Open</button><button class="zbtn s alt" data-reuse="${esc(e.id)}">Reuse</button></td></tr>`).join("")}</table></div>` : "";
     return `<div class="zhead"><b>Corporate Tambola · Organizer</b></div>${bar}${hist}
-      <div class="zcard zform"><h2>New engagement</h2>
+      <div class="zcard zform"><h2>Option 2 · Work in this page: new engagement</h2>
       <label for="mins">Starts in (minutes)</label><input id="mins" type="number" min="1" max="1440" value="10">
       <label for="spd">Calling speed</label><select id="spd"><option value="6">Fast · 6 seconds</option><option value="9" selected>Normal · 9 seconds</option><option value="12">Relaxed · 12 seconds</option><option value="15">Slow · 15 seconds</option></select>
       <label for="cap">Most participants</label><input id="cap" type="number" min="1" max="100000" value="500">
-      <button class="zbtn" id="mk">Create engagement</button><p class="zsmall">The first number is called one minute after the start time. Numbers come from public randomness that nobody, including us, can know in advance.</p></div>
-      <div class="zcard"><h2>Your free AI assistant</h2>
+      <button class="zbtn" id="mk">Create engagement</button><p class="zsmall">You build it first, at no cost. Payment is asked only when you publish. The first number is called one minute after the start time. Numbers come from public randomness that nobody, including us, can know in advance.</p></div>
+      <div class="zcard"><h2>Option 1 · AI work link (paste it in any AI chat)</h2>
         <p class="zsmall" style="margin-top:0">Included with every engagement. Give this message to ChatGPT, Claude or Gemini and it does the work for you: sets up the engagement, loads your list, schedules it and watches it. It cannot publish results, erase data or pause by itself, and it cannot change the rules.</p>
         ${S.aiMsg ? `<textarea class="zlink" id="aimsg" rows="7" readonly style="width:100%">${esc(S.aiMsg)}</textarea><button class="zbtn s alt" id="aicopy">Copy message</button><button class="zbtn s alt" id="airevoke">Stop this link</button>` : `<button class="zbtn s" id="aimake">Create my AI work link</button>`}</div>
       ${(S.keys || []).length ? `<div class="zcard"><h2>Your sign-in keys</h2>${S.keys.map((k) => `<div class="zrow"><span>${k.kind === "ai" ? "AI assistant link" : "Organizer key"} · made ${new Date(k.created_ms).toLocaleDateString()}${k.thisOne ? " · in use now" : ""}</span>${k.revoked ? `<i>retired</i>` : k.thisOne ? `<i>active</i>` : `<button class="zbtn s alt" data-retire="${k.id}">Retire</button>`}</div>`).join("")}<p class="zsmall">If you ever lose a key or think someone has it, sign in with another one and retire it here.</p></div>` : ""}
@@ -123,7 +123,7 @@
     const paused = c && c.pausedNow;
     return `<div class="zhead"><b>Engagement ${esc(eid)}</b><button class="zsnd" id="back">All engagements</button></div>
       ${S.note ? `<div class="zbanner info">${esc(S.note)}</div>` : ""}
-      <div class="zcard"><h2>Share with participants</h2><div class="zlink">${esc(link)}</div><button class="zbtn s alt" id="copy">Copy link</button></div>
+      ${S.draft ? `<div class="zcard" style="border-color:var(--gold,#c9a24a)"><h2>Draft · not published yet</h2><p class="zsmall" style="margin-top:0">Set it up first: rewards, brand breaks, your invite list. Participants cannot see or join a draft. When you are ready, publish it. Payment is asked at that step.</p><button class="zbtn" id="publish">Publish and pay</button>${S.pubNote ? `<p class="zsmall"><b>${esc(S.pubNote)}</b></p>` : ""}</div>` : `<div class="zcard"><h2>Share with participants</h2><div class="zlink">${esc(link)}</div><button class="zbtn s alt" id="copy">Copy link</button></div>`}
       <div class="zgrid"><div class="zcard"><h2>Participants</h2><div class="zstat">${S.people.length}</div></div><div class="zcard"><h2>Numbers called${S.cfg.rounds > 1 ? " · round " + S.round + " of " + S.cfg.rounds : ""}</h2><div class="zstat">${S.log.length} / 90</div></div></div>
       ${(S.reqs || []).length ? `<div class="zcard"><h2>Your AI assistant is asking</h2>${S.reqs.map((r) => `<div class="zrow"><span>${esc(r.action)}${r.note ? " · " + esc(r.note) : ""}</span></div>`).join("")}<button class="zbtn s" id="reqok">Approve (${esc(S.reqs[0].action)})</button><button class="zbtn s alt" id="reqno">Dismiss</button></div>` : ""}
       <div class="zcard zform"><h2>Invite list</h2>
@@ -131,7 +131,7 @@
         <button class="zbtn s" id="addroster">Add to list</button>
         <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="closed" style="width:auto;min-height:0" ${S.closed ? "checked" : ""}> Invite only (people not on the list cannot join)</label></div>
       ${luckyAdminCard()}
-      ${S.started ? "" : settingsCard()}
+      ${S.started && !S.draft ? "" : settingsCard()}
       <div class="zcard"><h2>Controls</h2>
         <button class="zbtn s" data-ctl="pause" ${paused ? "disabled" : ""}>Pause</button><button class="zbtn s alt" data-ctl="resume" ${paused ? "" : "disabled"}>Resume</button><button class="zbtn s bad" data-ctl="stop">End engagement</button>
         <p class="zsmall">A pause reaches every phone about 30 to 40 seconds after you press it, because phones check in every few seconds. ${paused ? "<b>Paused now.</b>" : ""} ${S.ctlNote ? esc(S.ctlNote) : ""}</p></div>
@@ -149,9 +149,10 @@
 
   async function refreshEng() {
     try {
-      S.info = await fetch(BASE + `/api/z/${eid}/info`).then((r) => r.json());
+      S.info = await call("GET", `/api/z/${eid}/info`); S.draft = !!S.info.draft;
       let pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed;
-      while (S.people.length < pr.total) { const more = await call("GET", `/api/z/${eid}/participants?offset=${S.people.length}`); if (!more.participants.length) break; S.people.push(...more.participants); } // a long list arrives in pages S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, rounds: pr.rounds || 1 };
+      while (S.people.length < pr.total) { const more = await call("GET", `/api/z/${eid}/participants?offset=${S.people.length}`); if (!more.participants.length) break; S.people.push(...more.participants); } // a long list arrives in pages
+      S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, rounds: pr.rounds || 1 };
       S.claims = (await call("GET", `/api/z/${eid}/claims`)).claims;
       try { S.reqs = (await call("GET", `/api/z/${eid}/control/request`)).requests; } catch { S.reqs = []; }
       const cf = await fetch(BASE + `/api/z/${eid}/control`).then((r) => (r.ok ? r.json() : null));
@@ -199,6 +200,12 @@
         S.note = k.ok ? "" : "Created, but pause control is unavailable: " + (k.reason || "");
         eid = id; history.replaceState(null, "", "?e=" + id + (BASE ? "&api=" + encodeURIComponent(BASE) : "")); S.store = null; refreshEng();
       } catch (e) { S.note = e.message; draw(homeView()); }
+    };
+    if ($("publish")) $("publish").onclick = async () => {
+      $("publish").disabled = true;
+      try { await call("POST", `/api/z/${eid}/publish`, {}); S.pubNote = ""; S.note = "Published. Share the link with your participants."; }
+      catch (e) { S.pubNote = e.message + (e.needPack ? " (pack for up to " + e.needPack + " participants)" : ""); }
+      refreshEng();
     };
     document.querySelectorAll("[data-hist]").forEach((b) => (b.onclick = () => { S.showHist = !S.showHist; draw(homeView()); }));
     document.querySelectorAll("[data-open]").forEach((b) => (b.onclick = () => { eid = b.dataset.open; S.store = null; refreshEng(); }));

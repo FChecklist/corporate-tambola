@@ -165,9 +165,13 @@ describe("what a purchase lets you do", () => {
     const K = { "x-organizer": first.organizerKey };
     const mk = (id: string, cap: number) => call("POST", "/api/z", { id, startRound: FUT, callSeconds: 9, cap }, K);
     expect((await call("POST", "/api/z", { id: "NOPE1", startRound: FUT, callSeconds: 9, cap: 10 }, { "x-organizer": "ctk_none" })).status).toBe(403);
-    expect((await mk("TOOBIG", 501)).status).toBe(402); // pack is 500
+    expect((await mk("TOOBIG", 501)).status).toBe(200); // pack is 500: it can be built, as a draft, but not published with this pack
+    expect((await call("POST", "/api/z/TOOBIG/publish", {}, K)).status).toBe(402);
     expect((await mk("FIRST1", 400)).status).toBe(200);
-    expect((await mk("SECOND", 10)).status).toBe(402);
+    expect(raw.query("SELECT pack FROM engagement WHERE id='FIRST1'").get()).toEqual({ pack: 500 }); // published at once: a purchased pack was waiting
+    expect((await mk("SECOND", 10)).status).toBe(200); // a second one can be built, but it is a draft until another purchase
+    expect(raw.query("SELECT pack FROM engagement WHERE id='SECOND'").get()).toEqual({ pack: 0 });
+    expect((await call("POST", "/api/z/SECOND/publish", {}, K)).status).toBe(402);
     expect(raw.query("SELECT eid FROM entitlement").get()).toEqual({ eid: "FIRST1" });
     expect(raw.query("SELECT pack FROM engagement WHERE id='FIRST1'").get()).toEqual({ pack: 500 });
   });

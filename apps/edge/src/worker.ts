@@ -12,7 +12,8 @@
 //   nobody        - phones: join, send claims, read results counts, read the engagement info and the signed control file.
 
 import { defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
-import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, type PayEnv } from "./pay";
+import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
+import { PACKS } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { SAFETY_FAST, SAFETY_STANDARD, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 
@@ -184,7 +185,15 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
       if (!(await spend(env, now, 2))) return BUSY();
       const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000));
       await env.DB.prepare("INSERT INTO login_code(email_hash,code_hash,expires_ms,attempts,win_start,sent) VALUES(?,?,?,0,?,1) ON CONFLICT(email_hash) DO UPDATE SET code_hash=excluded.code_hash, expires_ms=excluded.expires_ms, attempts=0, win_start=?, sent=?").bind(eh, await sha("code|" + eh + "|" + code), now + 600_000, fresh ? now : row!.win_start, fresh ? now : row!.win_start, fresh ? 1 : row!.sent + 1).run();
-      await sendMail(env as PayEnv, env.DB, email, "Your Corporate Tambola sign-in code", `Your sign-in code is ${code}. It works for 10 minutes. If you did not ask for it, ignore this message.`, now);
+      await sendMail(env as PayEnv, env.DB, email, "Your Corporate Tambola sign-in code", `Your sign-in code is ${code}. It works for 10 minutes. If you did not ask for it, ignore this message.
+
+After you sign in, you can work in two ways:
+
+OPTION 1: AI WORK LINK. Create it in your console and paste it into any AI chat (ChatGPT, Claude, Gemini). Your AI assistant sets up the engagement for you, free.
+
+OPTION 2: WORK IN THE WEBPAGE. Open ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html and set it up yourself.
+
+You create the engagement first. Payment is asked only when you publish it.`, now);
       if (test) devCode = code;
     }
     return json({ ok: true, ...(devCode ? { devCode } : {}) });
@@ -360,17 +369,23 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (have) return json({ ok: true, existed: true }); // creating twice never overwrites (and never reveals whose it is)
     // an organizer needs a purchased engagement (entitlement) big enough for the limit they ask for; we (platform) do not
     const ent = a.plat ? null : await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(a.org, b.cap).first<{ id: string; pack: number }>();
-    if (!a.plat && !ent) return json({ error: "Please buy an engagement first (or a pack big enough for this many participants)." }, 402);
+    // no payment is needed to BUILD an engagement: without a purchased pack it is saved as a draft (pack 0) that participants cannot see or join;
+    // payment is asked only when the organizer publishes it (POST /api/z/:id/publish)
+    const draft = !a.plat && !ent;
+    if (draft) {
+      const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM engagement WHERE org=? AND pack=0").bind(a.org).first<{ c: number }>())?.c ?? 0;
+      if (n >= MAX_DRAFTS) return json({ error: `You have ${MAX_DRAFTS} unpublished drafts. Publish or delete one first.` }, 409);
+    }
     if (!(await spend(env, now, 2))) return BUSY();
-    await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.closed ? 1 : 0, ent?.pack ?? b.cap, vc.cfg.tickets, cfgJson(vc.cfg)).run();
+    await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.closed ? 1 : 0, draft ? 0 : ent?.pack ?? b.cap, vc.cfg.tickets, cfgJson(vc.cfg)).run();
     if (ent) await env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(b.id, ent.id).run();
-    return json({ ok: true });
+    return json({ ok: true, draft });
   }
   if (req.method === "GET" && p === "/api/history") {
     if (!a.plat && !a.org) return deny(a);
     const q = a.plat
-      ? env.DB.prepare("SELECT e.id, e.created_ms, e.call_seconds, e.closed, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e ORDER BY e.created_ms DESC LIMIT 50")
-      : env.DB.prepare("SELECT e.id, e.created_ms, e.call_seconds, e.closed, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e WHERE e.org=? ORDER BY e.created_ms DESC LIMIT 50").bind(a.org);
+      ? env.DB.prepare("SELECT e.id, e.created_ms, e.call_seconds, e.closed, (e.pack=0) AS draft, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e ORDER BY e.created_ms DESC LIMIT 50")
+      : env.DB.prepare("SELECT e.id, e.created_ms, e.call_seconds, e.closed, (e.pack=0) AS draft, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e WHERE e.org=? ORDER BY e.created_ms DESC LIMIT 50").bind(a.org);
     const r = await q.all<any>();
     return json({ engagements: r.results ?? [], retentionDays: RETENTION_DAYS });
   }
@@ -378,7 +393,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (!a.plat) return deny(a);
     return json({ ok: true, purged: await purgeOld(env, now) });
   }
-  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings)$/);
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish)$/);
   if (!m) return json({ error: "Not found" }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
@@ -391,6 +406,8 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   const pidOf = async (ph: string) => (await sha(`${eid}|${ph}`)).slice(0, 16);
   const cleanName = (n: unknown) => (typeof n === "string" ? n.replace(/[<>`]/g, "").slice(0, 60) : null);
 
+  const isDraft = e.pack === 0;
+  if (isDraft && ((action === "join" && req.method === "POST") || (action === "info" && !can(a, e)))) return json({ error: "This engagement is not open yet." }, 403);
   if (action === "join" && req.method === "POST") {
     const b = await body(req);
     const ph = await phoneHash(b?.phone);
@@ -428,9 +445,23 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     // public: counts only, no ids. The one exception is a lucky draw, whose winners are shown by their opaque ticket ids so each phone can tell whether it won
     return json({ results: (r.results ?? []).map((x: any) => ({ pattern: x.pattern, ordinal: x.ordinal, round: x.round, idx: x.idx, count: JSON.parse(x.pids).length, ...(x.pattern === "lucky" ? { winners: JSON.parse(x.pids) } : {}) })) });
   }
-  if (action === "info" && req.method === "GET") return json({ startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), ...pub(e) });
+  if (action === "info" && req.method === "GET") return json({ ...(isDraft ? { draft: true } : {}), startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), ...pub(e) });
 
   // everything below is for the organizer (or their AI, where allowed)
+  if (action === "publish" && req.method === "POST") { // payment is asked here, never to build; only the organizer themself (not their AI) publishes
+    if (!can(a, e, true)) return deny(a);
+    if (e.pack !== 0) return json({ ok: true, published: true, already: true });
+    const need = PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null;
+    const ent = await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(e.org, e.cap).first<{ id: string; pack: number }>();
+    const free = !ent && freeLaunch(env as PayEnv) && e.cap <= FREE_CAP; // optional switch: small engagements free while the gateway is off
+    if (!ent && !free) return json({ error: payMode(env as PayEnv) === "off" ? "Payment opens soon. Your draft is saved; publish it as soon as payments switch on." : "Please pay for this engagement to publish it.", needPack: need, payments: payMode(env as PayEnv), draft: true }, 402);
+    if (!(await spend(env, now, 3))) return BUSY();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE engagement SET pack=? WHERE id=? AND pack=0").bind(ent?.pack ?? e.cap, eid),
+      ...(ent ? [env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(eid, ent.id)] : []),
+    ]);
+    return json({ ok: true, published: true });
+  }
   if (action === "claims" && req.method === "GET") {
     if (!can(a, e)) return deny(a);
     const r = await env.DB.prepare("SELECT pid,pattern,round,idx FROM claim WHERE eid=? ORDER BY round,idx,pid").bind(eid).all();
@@ -509,7 +540,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (!Number.isInteger(next.start_round) || !Number.isInteger(next.call_seconds) || next.call_seconds % 3 || next.call_seconds < 6 || !Number.isInteger(next.cap) || next.cap < 1 || next.cap > 100000) return json({ error: "Check the details." }, 400);
     if (roundMs(next.start_round) <= now) return json({ error: "Pick a start time in the future." }, 400);
     const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
-    if (!a.plat && next.cap > (e.pack ?? e.cap)) return json({ error: `Your pack allows up to ${e.pack ?? e.cap} participants. Buy a bigger pack to raise the limit.` }, 402);
+    if (!a.plat && e.pack !== 0 && next.cap > (e.pack ?? e.cap)) return json({ error: `Your pack allows up to ${e.pack ?? e.cap} participants. Buy a bigger pack to raise the limit.` }, 402);
     if (next.cap < (have?.c ?? 0)) return json({ error: "The limit cannot be lower than the people already on the list." }, 409);
     if (!(await spend(env, now))) return BUSY();
     await env.DB.prepare("UPDATE engagement SET start_round=?, call_seconds=?, cap=?, closed=?, tickets=?, config=? WHERE id=?").bind(next.start_round, next.call_seconds, next.cap, next.closed, vc.cfg.tickets, cfgJson(vc.cfg), eid).run();

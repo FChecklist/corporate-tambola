@@ -15,7 +15,7 @@ import { partnerCode, phoneHashFor, recordCommission } from "./partners";
 
 export interface PayEnv extends Env {
   RAZORPAY_KEY_ID?: string; RAZORPAY_KEY_SECRET?: string; RAZORPAY_WEBHOOK_SECRET?: string; RAZORPAY_BASE_URL?: string; RAZORPAY_INTERNATIONAL?: string;
-  PARTNER_COMMISSION_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string;
+  PARTNER_COMMISSION_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; FREE_LAUNCH?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string;
 }
 
 export const PAY_SCHEMA = [
@@ -34,6 +34,9 @@ const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
 
 const company = (env: PayEnv): Company => { try { return { ...DEFAULT_COMPANY, ...(env.COMPANY_JSON ? JSON.parse(env.COMPANY_JSON) : {}) }; } catch { return DEFAULT_COMPANY; } };
 const rzpOf = (env: PayEnv): (RazorpayConfig) | null => (env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET ? { keyId: env.RAZORPAY_KEY_ID, keySecret: env.RAZORPAY_KEY_SECRET, webhookSecret: env.RAZORPAY_WEBHOOK_SECRET, baseUrl: env.RAZORPAY_BASE_URL } : null);
+/** Optional switch (env FREE_LAUNCH="1"): small engagements (up to FREE_CAP participants) may be published without a purchase. Building a draft is always free. */
+export const FREE_CAP = 100, MAX_DRAFTS = 10;
+export const freeLaunch = (env: PayEnv) => env.FREE_LAUNCH === "1";
 export const payMode = (env: PayEnv) => (rzpOf(env) ? "razorpay" : env.TEST_MODE === "1" ? "test" : "off");
 
 async function body(req: Request, max = 4096): Promise<any | null> { const t = await req.text(); if (t.length > max) return null; try { const v = JSON.parse(t); return v && typeof v === "object" ? v : null; } catch { return null; } }
@@ -117,7 +120,18 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
   const rzp = rzpOf(env); const mode = payMode(env);
   const busy = () => json({ error: "Busy day. Please try again after midnight UTC." }, 503);
 
-  if (req.method === "GET" && p === "/api/payments/status") { const co = company(env); return json({ mode, brand: brand.name, legalEntity: co.legalName, missingCompanyDetails: companyGaps(co), international: env.RAZORPAY_INTERNATIONAL === "1" }); }
+  if (req.method === "GET" && p === "/api/payments/status") { const co = company(env); return json({ mode, freeLaunch: freeLaunch(env), freeCap: FREE_CAP, brand: brand.name, legalEntity: co.legalName, missingCompanyDetails: companyGaps(co), international: env.RAZORPAY_INTERNATIONAL === "1" }); }
+
+  if (req.method === "POST" && p === "/api/signup") { // anyone can make an organizer account with a work email (building is free; payment is asked only to publish); the key only ever arrives by the e-mailed code
+    const b = await body(req);
+    if (!b || typeof b.email !== "string" || !EMAIL.test(b.email.trim())) return json({ error: "Enter a valid e-mail address." }, 400);
+    const eh = await sha("email|" + b.email.trim().toLowerCase());
+    if (!(await db.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first())) {
+      if (!(await spend(2))) return busy();
+      await db.prepare("INSERT OR IGNORE INTO organizer_email(email_hash,org) VALUES(?,?)").bind(eh, randHex(8)).run();
+    }
+    return json({ ok: true });
+  }
 
   if (req.method === "POST" && p === "/api/checkout") {
     if (mode === "off") return json({ error: "Payments are not switched on yet. Please try again later." }, 503);

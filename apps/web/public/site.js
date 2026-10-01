@@ -3,6 +3,7 @@
   const $ = TB.$, esc = TB.esc, ic = TB.ic;
   const nf = (n) => Number(n).toLocaleString("en-IN");
   const S = { cur: TB.guessCurrency(), pack: 1000 };
+  const FREE = { on: true, cap: 1e9 }; // the process: sign in, build the engagement, pay only when publishing
   let ORDER = null;
 
   // ---------- price display ----------
@@ -20,8 +21,9 @@
     $("heroBrk").innerHTML = breakdown(S.pack, S.cur);
     $("packs").innerHTML = TB.PACKS.map(([n]) => {
       const x = TB.price(n, S.cur);
-      return `<div class="pack"><span class="up">Up to</span><span class="n">${nf(n)} participants</span><span class="tot">${TB.money(x.total, S.cur)}</span><div class="brk">${breakdown(n, S.cur)}</div><button type="button" class="btn ${n === S.pack ? "" : "line"}" data-buy="${n}" aria-label="Choose the pack for up to ${nf(n)} participants">Choose this pack ${ic("arrow")}</button></div>`;
+      return `<div class="pack"><span class="up">Up to</span><span class="n">${nf(n)} participants</span><span class="tot">${TB.money(x.total, S.cur)}</span><div class="brk">${breakdown(n, S.cur)}</div>${`<button type="button" class="btn ${n === S.pack ? "" : "line"}" data-buy="${n}" aria-label="Create an engagement for up to ${nf(n)} participants">Create Engagement ${ic("arrow")}</button>`}</div>`;
     }).join("");
+    if (FREE.on) { $("priceNote").textContent = "You build your engagement first, at no cost. Payment is asked only when you publish it. " + (S.cur === "INR" ? "Prices in Indian rupees include 18% GST." : "Prices in US dollars. No tax added."); return; }
     $("priceNote").textContent = S.cur === "INR" ? "Prices in Indian rupees include 18% GST. Billed in India." : "Prices in US dollars. No tax added. Billed outside India.";
   }
   document.addEventListener("click", (e) => {
@@ -57,6 +59,7 @@
     S.cur = india ? "INR" : "USD"; renderPrices(); sumRefresh();
   }
   function openCheckout(pack) {
+    if (FREE.on) return openFree();
     ORDER = { pack };
     const def = TB.guessCountry();
     TB.sheet(`${xbtn}<div class="eyebrow">Your order</div><h2>Up to ${nf(pack)} participants</h2>
@@ -89,6 +92,21 @@
   if (REF) TB.api("GET", "/api/partner/check?code=" + REF).then((r) => { if (!r.valid) { try { localStorage.removeItem("ctz-ref"); } catch {} } }).catch(() => {});
   let PAYMODE = "test"; // razorpay | test | off, from the server
   TB.api("GET", "/api/payments/status").then((s) => { PAYMODE = s.mode; }).catch(() => {});
+  // ---------- free launch: create an organizer account with a work email; the key arrives only through the e-mailed code ----------
+  function openFree() {
+    TB.sheet(`${xbtn}<div class="eyebrow">Build it first. Pay when you publish.</div><h2>Create your engagement</h2>
+      <ul class="facts"><li>${ic("ticket")}Every participant gets their own ticket on their phone</li><li>${ic("phone")}Mobile number only. No SMS, no app, no password for participants</li><li>${ic("gift")}Participants never pay. You give the rewards</li><li>${ic("users")}Free AI assistant for you, the organizer</li></ul>
+      <form id="frForm" novalidate><label class="lb" for="fMail">Your work email</label><input class="inp" id="fMail" type="email" autocomplete="email" placeholder="you@company.com"><div id="fErr"></div>
+      <button class="btn block" style="margin-top:14px" type="submit" id="frGo">Email me a sign-in code ${ic("arrow")}</button></form>
+      <p class="proto">We email you a 6-digit code: no password. Your email is used only to sign you in. In that email you also get two ways to work: an AI work link for any AI chat, or a link to work in the webpage.</p>`);
+    $("frForm").addEventListener("submit", async (e) => {
+      e.preventDefault(); const m = $("fMail").value.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) return setErr("Please enter a valid work email.");
+      const b = $("frGo"); b.disabled = true; setErr("");
+      try { await TB.api("POST", "/api/signup", { email: m }); askCode(m, b); } catch (x) { b.disabled = false; setErr(x.message); }
+    });
+    focusFirst("fMail");
+  }
   async function pay() {
     const org = $("oName").value.trim(), email = $("oMail").value.trim().toLowerCase(), country = $("oCty").value, taxId = $("oGst").value.trim().toUpperCase();
     if (org.length < 2) return setErr("Please enter your organization name.");
