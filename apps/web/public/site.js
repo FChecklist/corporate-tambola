@@ -97,13 +97,18 @@
     TB.sheet(`${xbtn}<div class="eyebrow">Build it first. Pay when you publish.</div><h2>Create your engagement</h2>
       <ul class="facts"><li>${ic("ticket")}Every participant gets their own ticket on their phone</li><li>${ic("phone")}Mobile number only. No SMS, no app, no password for participants</li><li>${ic("gift")}Participants never pay. You give the rewards</li><li>${ic("users")}Free AI assistant for you, the organizer</li></ul>
       <form id="frForm" novalidate><label class="lb" for="fMail">Your work email</label><input class="inp" id="fMail" type="email" autocomplete="email" placeholder="you@company.com"><div id="fErr"></div>
-      <button class="btn block" style="margin-top:14px" type="submit" id="frGo">Email me a sign-in code ${ic("arrow")}</button></form>
-      <p class="proto">We email you a 6-digit code: no password. Your email is used only to sign you in. In that email you also get two ways to work: an AI work link for any AI chat, or a link to work in the webpage.</p>`);
+      <button class="btn block" style="margin-top:14px" type="submit" id="frGo">Create my engagement ${ic("arrow")}</button></form>
+      <p class="proto">Your console opens straight away: no password and no waiting for an email. Your email is used for your invoice and to sign you back in later.</p>`);
     $("frForm").addEventListener("submit", async (e) => {
       e.preventDefault(); const m = $("fMail").value.trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) return setErr("Please enter a valid work email.");
       const b = $("frGo"); b.disabled = true; setErr("");
-      try { await TB.api("POST", "/api/signup", { email: m }); askCode(m, b); } catch (x) { b.disabled = false; setErr(x.message); }
+      try {
+        const r = await TB.api("POST", "/api/start", { email: m });
+        if (r.exists) { TB.toast("You already have an account, so we are emailing you a code to confirm it is you"); return askCode(m, b); }
+        try { sessionStorage.setItem("ctz-org", r.token); sessionStorage.setItem("ctz-aimsg", r.aiMessage); sessionStorage.setItem("ctz-email", m); } catch {}
+        location.href = "/zc.html";
+      } catch (x) { b.disabled = false; setErr(x.message); }
     });
     focusFirst("fMail");
   }

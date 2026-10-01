@@ -16,7 +16,7 @@
     if (!r.ok) throw Object.assign(new Error(j.error || "http " + r.status), { status: r.status, needPack: j.needPack });
     return j;
   };
-  const S = { info: null, people: [], claims: [], control: null, results: [], store: null, log: [], note: "", history: null, busy: false };
+  const S = { aiMsg: ss.get("ctz-aimsg") || "", contact: { email: ss.get("ctz-email") || "", phone: ss.get("ctz-phone") || "" }, info: null, people: [], claims: [], control: null, results: [], store: null, log: [], note: "", history: null, busy: false };
   const fmtDay = (ms) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
   async function latestRound() { const x = await ZG.fetchRound("latest"); return x ? x.round : null; }
@@ -24,22 +24,34 @@
   function loginView(msg) {
     return `<div class="zhead"><b>Corporate Tambola · Organizer</b></div><div class="zcard zform"><h2>Organizer key</h2>
       <label for="sec">Your organizer key</label><input id="sec" type="password" autocomplete="off" value="${esc(secret)}">
-      ${msg ? `<div class="zbanner bad">${esc(msg)}</div>` : ""}<button class="zbtn" id="in">Continue</button></div>`;
+      ${msg ? `<div class="zbanner bad">${esc(msg)}</div>` : ""}<button class="zbtn" id="in">Continue</button></div><div class="zcard"><h2>Coming back?</h2><p class="zsmall" style="margin-top:0">Sign in with your work email: we send you a 6-digit code, no password.</p><a class="zbtn s alt" href="/#login" style="text-decoration:none;display:inline-block">Sign in with email</a></div>`;
+  }
+  /** The two ways to work, shown first and prominently. Most organizers pick the AI. */
+  function optionsCard() {
+    const ai = S.aiMsg
+      ? `<textarea class="zlink" id="aimsg" rows="5" readonly style="width:100%;box-sizing:border-box">${esc(S.aiMsg)}</textarea><button class="zbtn" id="aicopy" style="margin-top:8px">Copy my AI work link</button><button class="zbtn s alt" id="airevoke">Stop this link</button>`
+      : `<button class="zbtn" id="aimake">Get my AI work link</button>`;
+    return `<div class="zcard" style="border:2px solid #c9a24a;background:#fffaf0"><div class="zsmall" style="font-weight:700;letter-spacing:.06em;color:#8a6a1a">OPTION 1 · THE EASY WAY · MOST ORGANIZERS CHOOSE THIS</div>
+      <h2 style="margin:6px 0 8px;font-size:22px">Let your free AI assistant do all the work for you.</h2>
+      <p style="margin:0 0 10px">Do not want to fill in forms? Copy your AI work link below and paste it into any AI chat: <b>ChatGPT, Gemini, Grok, Claude, DeepSeek, Z.ai</b> or any other. Then just tell it what you want, in your own words: <i>"Create an engagement for 300 employees this Friday at 4 pm, with a lucky draw."</i></p>
+      <p style="margin:0 0 10px">It sets up everything: the engagement, the rewards, your brand breaks, your participant list and the schedule. <b>You watch it happen right here on this page.</b> It is free with every engagement. When it is ready to publish, the AI hands you the link; you confirm your details and pay yourself. The AI never pays.</p>
+      ${ai}
+      <hr style="border:0;border-top:1px solid #e6d9b8;margin:16px 0">
+      <div class="zsmall" style="font-weight:700;letter-spacing:.06em;color:#555">OPTION 2 · DO IT YOURSELF</div>
+      <p style="margin:6px 0 8px">Prefer to click through it yourself? Create your engagement by hand in the console.</p>
+      <a class="zbtn s alt" href="#newform" style="text-decoration:none;display:inline-block">Create engagement manually ↓</a></div>`;
   }
   function homeView() {
     const h = S.history;
     const last = h && h.engagements[0];
     const bar = last ? `<div class="lastbar"><span>LAST ENGAGEMENT WAS ON <b>${fmtDay(last.created_ms)}</b> · ${last.participants} participants</span><span><button data-reuse="${esc(last.id)}">REUSE THE DATA</button><button data-hist="1">HISTORY</button></span></div>` : "";
     const hist = S.showHist && h ? `<div class="zcard"><h2>History · kept ${h.retentionDays} days</h2><table>${h.engagements.map((e) => `<tr><td>${esc(e.id)}</td><td>${fmtDay(e.created_ms)}</td><td>${e.participants} people${e.draft ? " · draft" : ""}</td><td><button class="zbtn s alt" data-open="${esc(e.id)}">Open</button><button class="zbtn s alt" data-reuse="${esc(e.id)}">Reuse</button></td></tr>`).join("")}</table></div>` : "";
-    return `<div class="zhead"><b>Corporate Tambola · Organizer</b></div>${bar}${hist}
-      <div class="zcard zform"><h2>Option 2 · Work in this page: new engagement</h2>
+    return `<div class="zhead"><b>Corporate Tambola · Organizer</b></div>${optionsCard()}${bar}${hist}
+      <div class="zcard zform" id="newform"><h2>Create your engagement</h2>
       <label for="mins">Starts in (minutes)</label><input id="mins" type="number" min="1" max="1440" value="10">
       <label for="spd">Calling speed</label><select id="spd"><option value="6">Fast · 6 seconds</option><option value="9" selected>Normal · 9 seconds</option><option value="12">Relaxed · 12 seconds</option><option value="15">Slow · 15 seconds</option></select>
       <label for="cap">Most participants</label><input id="cap" type="number" min="1" max="100000" value="500">
       <button class="zbtn" id="mk">Create engagement</button><p class="zsmall">You build it first, at no cost. Payment is asked only when you publish. The first number is called one minute after the start time. Numbers come from public randomness that nobody, including us, can know in advance.</p></div>
-      <div class="zcard"><h2>Option 1 · AI work link (paste it in any AI chat)</h2>
-        <p class="zsmall" style="margin-top:0">Included with every engagement. Give this message to ChatGPT, Claude or Gemini and it does the work for you: sets up the engagement, loads your list, schedules it and watches it. It cannot publish results, erase data or pause by itself, and it cannot change the rules.</p>
-        ${S.aiMsg ? `<textarea class="zlink" id="aimsg" rows="7" readonly style="width:100%">${esc(S.aiMsg)}</textarea><button class="zbtn s alt" id="aicopy">Copy message</button><button class="zbtn s alt" id="airevoke">Stop this link</button>` : `<button class="zbtn s" id="aimake">Create my AI work link</button>`}</div>
       ${(S.keys || []).length ? `<div class="zcard"><h2>Your sign-in keys</h2>${S.keys.map((k) => `<div class="zrow"><span>${k.kind === "ai" ? "AI assistant link" : "Organizer key"} · made ${new Date(k.created_ms).toLocaleDateString()}${k.thisOne ? " · in use now" : ""}</span>${k.revoked ? `<i>retired</i>` : k.thisOne ? `<i>active</i>` : `<button class="zbtn s alt" data-retire="${k.id}">Retire</button>`}</div>`).join("")}<p class="zsmall">If you ever lose a key or think someone has it, sign in with another one and retire it here.</p></div>` : ""}
       ${(S.sugs || []).length ? `<div class="zcard"><h2>Ideas to improve Corporate Tambola</h2><p class="zsmall" style="margin-top:0">Suggested by organizers' AI assistants. We review them all.</p>${S.sugs.map((x) => `<div class="zrow"><span>${esc(x.title)}${x.yours ? " · yours" : ""}</span><i>${x.votes} · ${esc(x.status.replace("_", " "))}</i></div>`).join("")}</div>` : ""}
       ${S.note ? `<div class="zbanner info">${esc(S.note)}</div>` : ""}`;
@@ -123,7 +135,7 @@
     const paused = c && c.pausedNow;
     return `<div class="zhead"><b>Engagement ${esc(eid)}</b><button class="zsnd" id="back">All engagements</button></div>
       ${S.note ? `<div class="zbanner info">${esc(S.note)}</div>` : ""}
-      ${S.draft ? `<div class="zcard" style="border-color:var(--gold,#c9a24a)"><h2>Draft · not published yet</h2><p class="zsmall" style="margin-top:0">Set it up first: rewards, brand breaks, your invite list. Participants cannot see or join a draft. When you are ready, publish it. Payment is asked at that step.</p><button class="zbtn" id="publish">Publish and pay</button>${S.pubNote ? `<p class="zsmall"><b>${esc(S.pubNote)}</b></p>` : ""}</div>` : `<div class="zcard"><h2>Share with participants</h2><div class="zlink">${esc(link)}</div><button class="zbtn s alt" id="copy">Copy link</button></div>`}
+      ${S.draft ? `<div class="zcard" style="border:2px solid #c9a24a"><h2>Your engagement is a draft</h2><p class="zsmall" style="margin-top:0">Set it up first (by hand or with your AI), and check it here as it takes shape. Participants cannot see or join a draft. When you are happy with it, publish it: you confirm your details, then pay.</p>${S.pubOpen ? `<label for="pubEmail">Your email (for the invoice)</label><input id="pubEmail" type="email" value="${esc(S.contact.email)}" autocomplete="email"><label for="pubPhone">Your mobile number</label><input id="pubPhone" type="tel" value="${esc(S.contact.phone)}" autocomplete="tel" placeholder="98765 43210"><button class="zbtn" id="pubgo">Confirm and continue to payment</button><button class="zbtn s alt" id="pubcancel">Back</button>` : `<button class="zbtn" id="publishopen">Publish engagement</button>`}${S.pubNote ? `<p class="zsmall"><b>${esc(S.pubNote)}</b></p>` : ""}</div>` : `<div class="zcard"><h2>Share with participants</h2><div class="zlink">${esc(link)}</div><button class="zbtn s alt" id="copy">Copy link</button></div>`}
       <div class="zgrid"><div class="zcard"><h2>Participants</h2><div class="zstat">${S.people.length}</div></div><div class="zcard"><h2>Numbers called${S.cfg.rounds > 1 ? " · round " + S.round + " of " + S.cfg.rounds : ""}</h2><div class="zstat">${S.log.length} / 90</div></div></div>
       ${(S.reqs || []).length ? `<div class="zcard"><h2>Your AI assistant is asking</h2>${S.reqs.map((r) => `<div class="zrow"><span>${esc(r.action)}${r.note ? " · " + esc(r.note) : ""}</span></div>`).join("")}<button class="zbtn s" id="reqok">Approve (${esc(S.reqs[0].action)})</button><button class="zbtn s alt" id="reqno">Dismiss</button></div>` : ""}
       <div class="zcard zform"><h2>Invite list</h2>
@@ -201,10 +213,14 @@
         eid = id; history.replaceState(null, "", "?e=" + id + (BASE ? "&api=" + encodeURIComponent(BASE) : "")); S.store = null; refreshEng();
       } catch (e) { S.note = e.message; draw(homeView()); }
     };
-    if ($("publish")) $("publish").onclick = async () => {
-      $("publish").disabled = true;
-      try { await call("POST", `/api/z/${eid}/publish`, {}); S.pubNote = ""; S.note = "Published. Share the link with your participants."; }
-      catch (e) { S.pubNote = e.message + (e.needPack ? " (pack for up to " + e.needPack + " participants)" : ""); }
+    if ($("publishopen")) $("publishopen").onclick = () => { S.pubOpen = true; S.pubNote = ""; draw(engView()); };
+    if ($("pubcancel")) $("pubcancel").onclick = () => { S.pubOpen = false; draw(engView()); };
+    if ($("pubEmail")) $("pubEmail").oninput = (e) => { S.contact.email = e.target.value; };
+    if ($("pubPhone")) $("pubPhone").oninput = (e) => { S.contact.phone = e.target.value; };
+    if ($("pubgo")) $("pubgo").onclick = async () => {
+      $("pubgo").disabled = true;
+      try { await call("POST", `/api/z/${eid}/publish`, { email: S.contact.email.trim(), phone: S.contact.phone }); ss.set("ctz-email", S.contact.email.trim()); ss.set("ctz-phone", S.contact.phone); S.pubOpen = false; S.note = "Published. Share the link with your participants."; }
+      catch (e) { ss.set("ctz-email", S.contact.email.trim()); ss.set("ctz-phone", S.contact.phone); S.pubNote = e.message + (e.needPack ? " (a pack for up to " + e.needPack + " participants)" : ""); }
       refreshEng();
     };
     document.querySelectorAll("[data-hist]").forEach((b) => (b.onclick = () => { S.showHist = !S.showHist; draw(homeView()); }));
@@ -237,11 +253,11 @@
     };
     document.querySelectorAll("[data-retire]").forEach((b) => (b.onclick = async () => { if (!confirm("Retire this key? It will stop working at once.")) return; try { await call("POST", "/api/org/keys/revoke", { id: b.dataset.retire }); S.note = "Key retired."; } catch (e) { S.note = e.message; } refreshHome(); }));
     if ($("aimake")) $("aimake").onclick = async () => {
-      try { const r = await call("POST", "/api/org/ai", {}); const origin = BASE || location.origin; S.aiMsg = "You are my Corporate Tambola assistant. Read the instructions at " + origin + "/api/z/ai-manifest, then do what I ask using that API. Send this key in the x-organizer header on every call: " + r.aiKey + ". Keep the key private. Set up everything for me: create the engagement, set the rewards and brand breaks, load my participant list, schedule it. Ask me for anything you need, such as how many participants, the date and time, and which rewards I want. Tell me before you do anything that cannot be undone. When it is ready to publish, give me the link the API returns: I will open it and pay myself. Never try to pay. Help me with every step before that."; } catch (e) { S.note = e.message; }
+      try { const r = await call("POST", "/api/org/ai", {}); S.aiMsg = r.aiMessage; ss.set("ctz-aimsg", r.aiMessage); } catch (e) { S.note = e.message; }
       draw(homeView());
     };
-    if ($("aicopy")) $("aicopy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(S.aiMsg);
-    if ($("airevoke")) $("airevoke").onclick = async () => { try { await call("POST", "/api/org/ai/revoke", {}); S.aiMsg = ""; S.note = "Your AI work link has been stopped."; } catch (e) { S.note = e.message; } draw(homeView()); };
+    if ($("aicopy")) $("aicopy").onclick = () => { try { navigator.clipboard.writeText(S.aiMsg); $("aicopy").textContent = "Copied. Now paste it into your AI chat"; } catch {} };
+    if ($("airevoke")) $("airevoke").onclick = async () => { try { await call("POST", "/api/org/ai/revoke", {}); S.aiMsg = ""; ss.set("ctz-aimsg", ""); S.note = "Your AI work link has been stopped."; } catch (e) { S.note = e.message; } draw(homeView()); };
     if ($("reqok")) $("reqok").onclick = async () => {
       const r = S.reqs[0];
       try { const x = await TBControl.publish(eid, { token: secret, base: BASE, prefix: "/api/z" }, r.action, r.action === "pause" ? { pauseForRounds: 600 } : {}); S.ctlNote = x.status === 200 ? r.action + " sent." : (x.data && x.data.error) || "Not accepted."; await call("POST", `/api/z/${eid}/control/request/clear`, {}); } catch (e) { S.ctlNote = e.message; }
@@ -268,6 +284,6 @@
   }
 
   if (!secret) draw(loginView("")); else if (eid) refreshEng(); else refreshHome();
-  setInterval(() => { const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; /* never wipe what the organizer is typing */ if (eid && secret && !document.hidden) refreshEng(); }, 5000);
+  setInterval(() => { const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; /* never wipe what the organizer is typing */ if (!secret || document.hidden) return; if (eid) refreshEng(); else refreshHome(); }, 5000);
   window.__zc = S;
 })();

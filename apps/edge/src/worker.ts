@@ -34,6 +34,10 @@ async function mirrorControl(env: Env, id: string) {
   try { const f = await readPublished(d1kv(env), id); if (f) await env.CONTROL_R2.put(controlKey(id), JSON.stringify(f), { httpMetadata: { contentType: "application/json", cacheControl: "public, max-age=3" } }); } catch { /* the Worker route still serves it */ }
 }
 export const RETENTION_DAYS = 365;
+/** An engagement that was never published is forgotten after this many days. */
+export const DRAFT_DAYS = 30;
+/** New organizer accounts one network address may open in a day (a free-plan guard, not a security wall). */
+const STARTS_PER_DAY = 5;
 /** Largest page of participants one request returns, so a 10,000-person list never costs a free Worker its ~10 ms of CPU in one go. */
 export const PAGE = 2000;
 /** Claims are only a live cross-check (settlement never uses them), and 7 rows per phone would eat the free write allowance, so they are stored only for engagements this size or smaller. */
@@ -97,35 +101,6 @@ const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers
 /** The message an organizer pastes into any AI chat. The key in it is the scoped AI key: it cannot publish, pay, erase or settle. */
 export const aiMessage = (origin: string, key: string) =>
   `You are my Corporate Tambola assistant. Read the instructions at ${origin}/api/z/ai-manifest, then do what I ask using that API. Send this key in the x-organizer header on every call: ${key}. Keep the key private. Set up everything for me: create the engagement, set the rewards and brand breaks, load my participant list, schedule it. Ask me for anything you need, such as how many participants, the date and time, and which rewards I want. Tell me before you do anything that cannot be undone. When it is ready to publish, give me the link the API returns: I will open it and pay myself. Never try to pay. Help me with every step before that.`;
-export const welcomeMail = (origin: string, key: string) => `Welcome to Corporate Tambola.
-
-You can set up your engagement in two ways. Most organizers choose Option 1, and so should you.
-
-OPTION 1 (RECOMMENDED): LET YOUR FREE AI ASSISTANT DO ALL THE WORK
-You get a personal AI assistant, free with every engagement. It does the work for you: it creates the engagement, sets the rewards and brand breaks, loads your participant list, schedules it and keeps watch while it runs.
-
-How to start, in 10 seconds:
- 1. Copy the AI work link below (everything between the two lines).
- 2. Paste it into any AI chat: ChatGPT, Gemini, Grok, Claude, DeepSeek, Z.ai or any other.
- 3. Tell it what you want, for example: "Create an engagement for 300 employees this Friday at 4 pm, with a lucky draw."
-
-When it is time to publish, the AI gives you a link. You open it, make the payment yourself and your engagement goes live. The AI never pays and never touches your money. It helps you with every step up to that last one, and it can explain the payment step too.
-
------ COPY FROM THIS LINE -----
-${aiMessage(origin, key)}
------ TO THIS LINE -----
-
-OPTION 2: DO IT YOURSELF
-Prefer to click through it yourself? Sign in and open your console, then create the engagement by hand:
-${origin}/#login
-
-Both options work together, and you can switch at any time. Building an engagement is free. Payment is asked only when you publish it.
-
-Keep your AI work link private. Whoever holds it can work on your engagements, but it can never publish, pay, erase data or change who wins.
-
-Corporate Tambola
-`;
-
 /** Runs the daily clean-up (365-day purge, one more try for unsent mail) the first time an organizer-side request arrives each UTC day. Never slows or fails the request. */
 export async function housekeeping(env: Env, now: number): Promise<void> {
   try {
@@ -203,6 +178,27 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   if (partnered) return partnered;
 
   /* ---- sign in with an e-mailed code (no passwords): also how an organizer who lost their key gets a fresh one ---- */
+  /* ---- start: a new organizer enters a work email and the console opens at once (no mail is sent). An email that already has an account is
+     asked for the e-mailed code instead, so nobody can open someone else's console by typing their address. ---- */
+  if (req.method === "POST" && p === "/api/start") {
+    const b = await body(req);
+    const email = typeof b?.email === "string" ? b.email.trim().toLowerCase() : "";
+    if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(email)) return json({ error: "Please enter a valid work email." }, 400);
+    const eh = await sha("email|" + email);
+    if (await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first()) return json({ ok: true, exists: true });
+    const ipk = `start/${day(now)}/${(await sha("ip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16)}`;
+    const used = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(ipk).first<{ v: string }>())?.v ?? 0);
+    if (used >= STARTS_PER_DAY) return json({ error: "Too many new engagements from this network today. Please try again tomorrow." }, 429);
+    if (!(await spend(env, now, 6))) return BUSY();
+    const org = randHex(8), token = "ctk_" + randHex(24), aiKey = "cta_" + randHex(24);
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + token), org, "master", now),
+      env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + aiKey), org, "ai", now),
+      env.DB.prepare("INSERT INTO organizer_email(email_hash,org) VALUES(?,?)").bind(eh, org),
+      env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(ipk, String(used + 1), String(used + 1)),
+    ]);
+    return json({ ok: true, token, aiKey, aiMessage: aiMessage((env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, aiKey) });
+  }
   if (req.method === "POST" && p === "/api/auth/email") {
     const b = await body(req);
     const email = typeof b?.email === "string" ? b.email.trim().toLowerCase() : "";
@@ -218,9 +214,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
       if (!(await spend(env, now, 2))) return BUSY();
       const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000));
       await env.DB.prepare("INSERT INTO login_code(email_hash,code_hash,expires_ms,attempts,win_start,sent) VALUES(?,?,?,0,?,1) ON CONFLICT(email_hash) DO UPDATE SET code_hash=excluded.code_hash, expires_ms=excluded.expires_ms, attempts=0, win_start=?, sent=?").bind(eh, await sha("code|" + eh + "|" + code), now + 600_000, fresh ? now : row!.win_start, fresh ? now : row!.win_start, fresh ? 1 : row!.sent + 1).run();
-      await sendMail(env as PayEnv, env.DB, email, "Your Corporate Tambola sign-in code", `Your sign-in code is ${code}. It works for 10 minutes. If you did not ask for it, ignore this message.
-
-Once you are signed in we send you one more email with your free AI assistant, ready to copy and paste.`, now);
+      await sendMail(env as PayEnv, env.DB, email, "Your Corporate Tambola sign-in code", `Your sign-in code is ${code}. It works for 10 minutes. If you did not ask for it, ignore this message.`, now);
       if (test) devCode = code;
     }
     return json({ ok: true, ...(devCode ? { devCode } : {}) });
@@ -242,14 +236,6 @@ Once you are signed in we send you one more email with your free AI assistant, r
       env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + token), acct.org, "master", now),
       env.DB.prepare("DELETE FROM login_code WHERE email_hash=?").bind(eh),
     ]);
-    // the first time (or after the AI link was stopped) the verified address gets the welcome email with the free AI work link
-    const hasAi = await env.DB.prepare("SELECT 1 AS x FROM organizer_key WHERE org=? AND kind='ai' AND revoked=0").bind(acct.org).first();
-    if (!hasAi && (await spend(env, now, 3))) {
-      const aiKey = "cta_" + randHex(24);
-      await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + aiKey), acct.org, "ai", now).run();
-      const origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
-      await sendMail(env as PayEnv, env.DB, email, "Your free AI assistant is ready: copy, paste, done", welcomeMail(origin, aiKey), now);
-    }
     return json({ ok: true, token });
   }
 
@@ -267,7 +253,7 @@ Once you are signed in we send you one more email with your free AI assistant, r
     await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE org=? AND kind='ai'").bind(a.org).run();
     const key = "cta_" + randHex(24);
     await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), a.org, "ai", now).run();
-    return json({ ok: true, aiKey: key });
+    return json({ ok: true, aiKey: key, aiMessage: aiMessage((env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, key) });
   }
   if (req.method === "GET" && p === "/api/org/keys") { // the organizer sees their own sign-in keys (never the keys themselves) and can retire old ones
     if (a.kind !== "master" || !a.org) return deny(a);
@@ -488,10 +474,16 @@ Once you are signed in we send you one more email with your free AI assistant, r
     if (a.kind === "ai" && can(a, e)) return json({ ok: true, published: e.pack !== 0, needsOrganizer: e.pack === 0, payUrl, message: e.pack === 0 ? "Everything is ready. Please give this link to the organizer: they open it, press Publish and pay, and make the payment themselves. The AI never pays." : "Already published." });
     if (!can(a, e, true)) return deny(a);
     if (e.pack !== 0) return json({ ok: true, published: true, already: true });
+    // the organizer confirms (and may correct) their email and mobile number before payment
+    const pb = await body(req);
+    const cEmail = typeof pb?.email === "string" ? pb.email.trim() : "", cPhone = String(pb?.phone ?? "").replace(/\D/g, "");
+    if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(cEmail)) return json({ error: "Please confirm a valid email address." }, 400);
+    if (cPhone.length < 10 || cPhone.length > 15) return json({ error: "Please confirm a valid mobile number." }, 400);
+    await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`contact/${eid}`, JSON.stringify({ email: cEmail, phone: cPhone.slice(-10) })).run();
     const need = PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null;
     const ent = await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(e.org, e.cap).first<{ id: string; pack: number }>();
     const free = !ent && freeLaunch(env as PayEnv) && e.cap <= FREE_CAP; // optional switch: small engagements free while the gateway is off
-    if (!ent && !free) return json({ error: payMode(env as PayEnv) === "off" ? "Payment opens soon. Your draft is saved; publish it as soon as payments switch on." : "Please pay for this engagement to publish it.", needPack: need, payments: payMode(env as PayEnv), draft: true }, 402);
+    if (!ent && !free) return json({ error: payMode(env as PayEnv) === "off" ? "Payment opens soon. Your draft is saved; publish it as soon as payments switch on." : "Please pay for this engagement to publish it.", needPack: need, payments: payMode(env as PayEnv), draft: true, confirmed: { email: cEmail, phone: cPhone.slice(-10) } }, 402);
     if (!(await spend(env, now, 3))) return BUSY();
     await env.DB.batch([
       env.DB.prepare("UPDATE engagement SET pack=? WHERE id=? AND pack=0").bind(ent?.pack ?? e.cap, eid),
@@ -589,13 +581,13 @@ Once you are signed in we send you one more email with your free AI assistant, r
 /** Deletes engagements (and their people, claims and results) older than the 365-day retention period. */
 export async function purgeOld(env: Env, now: number): Promise<number> {
   const cutoff = now - RETENTION_DAYS * 86_400_000;
-  const old = await env.DB.prepare("SELECT id FROM engagement WHERE created_ms < ?").bind(cutoff).all<{ id: string }>();
+  const old = await env.DB.prepare("SELECT id FROM engagement WHERE created_ms < ? OR (pack=0 AND created_ms < ?)").bind(cutoff, now - DRAFT_DAYS * 86_400_000).all<{ id: string }>();
   let n = 0;
   for (const { id } of old.results ?? []) {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(id),
       env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
-      env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
+      env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
     ]);
     try { await env.CONTROL_R2?.delete(controlKey(id)); } catch { /* the object expires with its engagement anyway */ }
     n++;

@@ -122,17 +122,6 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
 
   if (req.method === "GET" && p === "/api/payments/status") { const co = company(env); return json({ mode, freeLaunch: freeLaunch(env), freeCap: FREE_CAP, brand: brand.name, legalEntity: co.legalName, missingCompanyDetails: companyGaps(co), international: env.RAZORPAY_INTERNATIONAL === "1" }); }
 
-  if (req.method === "POST" && p === "/api/signup") { // anyone can make an organizer account with a work email (building is free; payment is asked only to publish); the key only ever arrives by the e-mailed code
-    const b = await body(req);
-    if (!b || typeof b.email !== "string" || !EMAIL.test(b.email.trim())) return json({ error: "Enter a valid e-mail address." }, 400);
-    const eh = await sha("email|" + b.email.trim().toLowerCase());
-    if (!(await db.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first())) {
-      if (!(await spend(2))) return busy();
-      await db.prepare("INSERT OR IGNORE INTO organizer_email(email_hash,org) VALUES(?,?)").bind(eh, randHex(8)).run();
-    }
-    return json({ ok: true });
-  }
-
   if (req.method === "POST" && p === "/api/checkout") {
     if (mode === "off") return json({ error: "Payments are not switched on yet. Please try again later." }, 503);
     const b = await body(req);
