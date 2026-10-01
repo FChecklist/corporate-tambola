@@ -240,3 +240,126 @@ describe("test mode (local only)", () => {
     expect(raw.query("SELECT COUNT(*) c FROM entitlement").get()).toEqual({ c: 0 });
   });
 });
+
+describe("sign in by e-mailed code", () => {
+  beforeEach(() => { env.RAZORPAY_KEY_ID = undefined; env.RAZORPAY_KEY_SECRET = undefined; env.TEST_MODE = "1"; });
+  const ask = (email: string) => call("POST", "/api/auth/email", { email });
+  const verify = (email: string, code: string) => call("POST", "/api/auth/verify", { email, code });
+  const account = async () => { await buy({ email: "Owner@Corp.com" }); };
+  test("an organizer who lost their key asks for a code, enters it, and gets a working fresh key; the old key still works", async () => {
+    const first = (await (await buy({ email: "Owner@Corp.com" })).json() as any).result.organizerKey as string;
+    const r = await (await ask("owner@corp.com")).json() as any;
+    expect(r.devCode).toMatch(/^\d{6}$/);
+    const t = await (await verify("OWNER@corp.com", r.devCode)).json() as any;
+    expect(t.token).toMatch(/^ctk_/);
+    expect(t.token).not.toBe(first);
+    expect((await call("GET", "/api/history", undefined, { "x-organizer": t.token })).status).toBe(200);
+    expect((await call("GET", "/api/history", undefined, { "x-organizer": first })).status).toBe(200);
+    expect((raw.query("SELECT COUNT(*) c FROM outbox WHERE subject LIKE '%sign-in code%'").get() as any).c).toBe(1);
+  });
+  test("an unknown address gets exactly the same answer and no mail, so nobody can learn who has an account", async () => {
+    const r = await (await ask("nobody@nowhere.com")).json() as any;
+    expect(r).toEqual({ ok: true, devCode: undefined } as any);
+    expect(raw.query("SELECT COUNT(*) c FROM outbox").get()).toEqual({ c: 0 });
+    expect((await verify("nobody@nowhere.com", "123456")).status).toBe(400);
+  });
+  test("production never reveals the code in the response", async () => {
+    await account(); env.TEST_MODE = undefined; env.RAZORPAY_KEY_ID = "k"; env.RAZORPAY_KEY_SECRET = "s";
+    const r = await (await ask("owner@corp.com")).json() as any;
+    expect(r.devCode).toBeUndefined();
+    expect((raw.query("SELECT COUNT(*) c FROM outbox WHERE subject LIKE '%sign-in code%'").get() as any).c).toBe(1);
+  });
+  test("a wrong code is refused, five wrong guesses lock that code, and the right one then no longer works", async () => {
+    await account();
+    const code = ((await (await ask("owner@corp.com")).json()) as any).devCode as string;
+    const wrong = code === "000000" ? "111111" : "000000";
+    for (let i = 0; i < 5; i++) expect((await verify("owner@corp.com", wrong)).status).toBe(400);
+    expect((await verify("owner@corp.com", code)).status).toBe(400);
+    const again = ((await (await ask("owner@corp.com")).json()) as any).devCode as string; // a new code resets the guesses
+    expect((await verify("owner@corp.com", again)).status).toBe(200);
+  });
+  test("a code works once and expires after 10 minutes", async () => {
+    await account();
+    const c1 = ((await (await ask("owner@corp.com")).json()) as any).devCode as string;
+    expect((await call("POST", "/api/auth/verify", { email: "owner@corp.com", code: c1 }, {}, T + 11 * 60_000)).status).toBe(400);
+    const c2 = ((await (await ask("owner@corp.com")).json()) as any).devCode as string;
+    expect((await verify("owner@corp.com", c2)).status).toBe(200);
+    expect((await verify("owner@corp.com", c2)).status).toBe(400);
+  });
+  test("at most five codes an hour per address", async () => {
+    await account();
+    for (let i = 0; i < 5; i++) expect((await ask("owner@corp.com")).status).toBe(200);
+    expect((await ask("owner@corp.com")).status).toBe(429);
+    expect((await call("POST", "/api/auth/email", { email: "owner@corp.com" }, {}, T + 3_600_001)).status).toBe(200);
+  });
+  test("bad e-mails and malformed codes are refused", async () => {
+    expect((await ask("not-an-email")).status).toBe(400);
+    expect((await verify("owner@corp.com", "12")).status).toBe(400);
+    expect((await call("POST", "/api/auth/verify", "junk")).status).toBe(400);
+  });
+});
+
+describe("e-mail through Resend (organizers only)", () => {
+  let sent: any[]; let resendUp: boolean;
+  beforeEach(() => {
+    sent = []; resendUp = true;
+    env.RAZORPAY_KEY_ID = undefined; env.RAZORPAY_KEY_SECRET = undefined; env.TEST_MODE = "1";
+    env.RESEND_API_KEY = "re_test_dummy"; env.MAIL_REPLY_TO = "help@veridian-aios.com";
+    const inner = (globalThis as any).fetch;
+    (globalThis as any).fetch = async (url: string, init?: any) => {
+      if (String(url) === "https://api.resend.com/emails") { if (!resendUp) return new Response("{}", { status: 500 }); sent.push({ auth: init.headers.authorization, ...JSON.parse(init.body) }); return new Response("{}", { status: 200 }); }
+      return inner(url, init);
+    };
+  });
+  test("the purchase mail goes from the Corporate Tambola sender on the shared verified domain, to the buyer only", async () => {
+    const r = await (await buy({ email: "Boss@Acme.com" })).json() as any;
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ from: "Corporate Tambola <tambola@veridian-aios.com>", to: ["boss@acme.com"], reply_to: "help@veridian-aios.com", headers: { "Auto-Submitted": "auto-generated" } });
+    expect(sent[0].auth).toBe("Bearer re_test_dummy");
+    expect(sent[0].text).toContain(r.result.organizerKey);
+    expect(sent[0].text).toContain("INVOICE");
+  });
+  test("after a successful send no mail body (and so no organizer key) is kept anywhere", async () => {
+    const r = await (await buy()).json() as any;
+    expect(raw.query("SELECT sent, body FROM outbox").get()).toEqual({ sent: 1, body: "" });
+    expect(JSON.stringify(raw.query("SELECT * FROM outbox").all()).includes(r.result.organizerKey)).toBe(false);
+  });
+  test("if Resend is down the purchase still completes; the unsent mail is kept without the key and retried by the daily job", async () => {
+    resendUp = false;
+    const r = await (await buy()).json() as any;
+    expect(r.result.organizerKey).toMatch(/^ctk_/); // the buyer still sees the key on screen
+    const row = raw.query("SELECT sent, body FROM outbox").get() as any;
+    expect(row.sent).toBe(0);
+    expect(row.body.includes(r.result.organizerKey)).toBe(false);
+    expect(row.body).toContain("INVOICE");
+    resendUp = true;
+    const { retryOutbox } = await import("../src/pay");
+    expect(await retryOutbox(env, T + 3600_000)).toMatchObject({ retried: 1 });
+    expect(raw.query("SELECT sent, body FROM outbox").get()).toEqual({ sent: 1, body: "" });
+    expect(sent).toHaveLength(1);
+  });
+  test("mail older than 3 days is dropped whether sent or not", async () => {
+    resendUp = false; await buy();
+    const { retryOutbox } = await import("../src/pay");
+    resendUp = false;
+    const r = await retryOutbox(env, T + 4 * 86_400_000);
+    expect(r.dropped).toBe(1);
+    expect(raw.query("SELECT COUNT(*) c FROM outbox").get()).toEqual({ c: 0 });
+  });
+  test("sign-in codes are mailed to the organizer's address only, and the code is not kept afterwards", async () => {
+    await buy({ email: "owner@corp.com" });
+    sent.length = 0;
+    const r = await (await call("POST", "/api/auth/email", { email: "owner@corp.com" })).json() as any;
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toEqual(["owner@corp.com"]);
+    expect(sent[0].text).toContain(r.devCode);
+    expect(JSON.stringify(raw.query("SELECT * FROM outbox").all()).includes(r.devCode)).toBe(false);
+    await call("POST", "/api/auth/email", { email: "stranger@nowhere.com" });
+    expect(sent).toHaveLength(1); // nobody without an account is ever e-mailed
+  });
+  test("only organizers have an e-mail address on file: the store keeps none for participants", async () => {
+    // participants join with a mobile number; the schema has no e-mail column on them
+    const cols = raw.query("PRAGMA table_info(participant)").all().map((c: any) => c.name);
+    expect(cols.some((c: string) => /mail/i.test(c))).toBe(false);
+  });
+});

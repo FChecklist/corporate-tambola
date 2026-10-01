@@ -2,7 +2,8 @@
 // database in a local SQLite file. Run: bun run apps/edge/src/local.ts   (env: PORT, ORGANIZER_SECRET, DB_FILE)
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
-import { SCHEMA, handle, purgeOld, type D1, type D1Stmt, type Env } from "./worker";
+import { SCHEMA, handle, purgeOld, type D1, type D1Stmt } from "./worker";
+import type { PayEnv } from "./pay";
 
 export function sqliteD1(file: string): { db: D1; raw: Database } {
   const raw = new Database(file, { create: true });
@@ -20,7 +21,8 @@ export function sqliteD1(file: string): { db: D1; raw: Database } {
 export function startLocal(o: { port?: number; secret?: string; dbFile?: string; webDir?: string; budget?: string } = {}) {
   const webDir = o.webDir ?? join(import.meta.dir, "../../web/public");
   const { db, raw } = sqliteD1(o.dbFile ?? ":memory:");
-  const env: Env = { DB: db, ORGANIZER_SECRET: o.secret ?? process.env.ORGANIZER_SECRET ?? "local-organizer-secret", DAILY_WRITE_BUDGET: o.budget ?? process.env.DAILY_WRITE_BUDGET ?? "80000" };
+  const pe = process.env;
+  const env: PayEnv = { DB: db, TEST_MODE: pe.TEST_MODE, COMPANY_JSON: pe.COMPANY_JSON, PUBLIC_ORIGIN: pe.PUBLIC_ORIGIN, RAZORPAY_KEY_ID: pe.RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET: pe.RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET: pe.RAZORPAY_WEBHOOK_SECRET, RAZORPAY_BASE_URL: pe.RAZORPAY_BASE_URL, RESEND_API_KEY: pe.RESEND_API_KEY, MAIL_FROM: pe.MAIL_FROM, MAIL_REPLY_TO: pe.MAIL_REPLY_TO, ORGANIZER_SECRET: o.secret ?? process.env.ORGANIZER_SECRET ?? "local-organizer-secret", DAILY_WRITE_BUDGET: o.budget ?? process.env.DAILY_WRITE_BUDGET ?? "80000" };
   const server = Bun.serve({
     port: o.port ?? Number(process.env.PORT ?? 8788),
     async fetch(req) {

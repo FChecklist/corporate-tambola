@@ -14,7 +14,7 @@ import type { D1, Env } from "./worker";
 
 export interface PayEnv extends Env {
   RAZORPAY_KEY_ID?: string; RAZORPAY_KEY_SECRET?: string; RAZORPAY_WEBHOOK_SECRET?: string; RAZORPAY_BASE_URL?: string; RAZORPAY_INTERNATIONAL?: string;
-  TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; MAIL_FROM?: string; PUBLIC_ORIGIN?: string;
+  TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string;
 }
 
 export const PAY_SCHEMA = [
@@ -37,13 +37,36 @@ export const payMode = (env: PayEnv) => (rzpOf(env) ? "razorpay" : env.TEST_MODE
 
 async function body(req: Request, max = 4096): Promise<any | null> { const t = await req.text(); if (t.length > max) return null; try { const v = JSON.parse(t); return v && typeof v === "object" ? v : null; } catch { return null; } }
 
+const KEYRE = /ctk_[0-9a-f]{48}/g;
+/**
+ * Mail goes out through Resend (the same account and verified sending domain DPDP already uses, so no extra cost). Only organizers, the people who bought,
+ * are ever e-mailed; participants are reached by mobile number only. In production the mail body is never kept: a sent mail leaves no body behind, and a
+ * mail that could not be sent is kept (with any organizer key blanked out) only so the daily job can try again, then it is dropped after 3 days.
+ * Without RESEND_API_KEY (local/test) the mail simply stays in the outbox so it can be read.
+ */
 export async function sendMail(env: PayEnv, db: D1, to: string, subject: string, text: string, now: number) {
-  await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,0)").bind(to, subject, text, now).run();
-  if (!env.RESEND_API_KEY) return; // kept in the outbox (local and test use)
+  if (!env.RESEND_API_KEY) { await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,0)").bind(to, subject, text, now).run(); return; }
+  const ok = await resendSend(env, to, subject, text);
+  await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,?)").bind(to, subject, ok ? "" : text.replace(KEYRE, "ctk_(blanked; use the key shown when you paid, or sign in with an e-mailed code)"), now, ok ? 1 : 0).run();
+}
+async function resendSend(env: PayEnv, to: string, subject: string, text: string): Promise<boolean> {
   try {
-    const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify({ from: env.MAIL_FROM ?? "Corporate Tambola <no-reply@example.invalid>", to: [to], subject, text }) });
-    if (r.ok) await db.prepare("UPDATE outbox SET sent=1 WHERE id=(SELECT MAX(id) FROM outbox WHERE to_addr=?)").bind(to).run();
-  } catch { /* stays in the outbox, unsent */ }
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
+      body: JSON.stringify({ from: env.MAIL_FROM ?? "Corporate Tambola <tambola@veridian-aios.com>", to: [to], subject, text, ...(env.MAIL_REPLY_TO ? { reply_to: env.MAIL_REPLY_TO } : {}), headers: { "Auto-Submitted": "auto-generated" } }),
+    });
+    return r.ok;
+  } catch { return false; }
+}
+/** Daily job: tries unsent mail once more (only mail with a body worth retrying), and forgets anything older than 3 days. */
+export async function retryOutbox(env: PayEnv, now: number): Promise<{ retried: number; dropped: number }> {
+  const db = env.DB; let retried = 0;
+  if (env.RESEND_API_KEY) {
+    const rows = (await db.prepare("SELECT id, to_addr, subject, body FROM outbox WHERE sent=0 AND body<>'' AND at_ms>?").bind(now - 3 * 86_400_000).all<any>()).results ?? [];
+    for (const r of rows) if (await resendSend(env, r.to_addr, r.subject, r.body)) { await db.prepare("UPDATE outbox SET sent=1, body='' WHERE id=?").bind(r.id).run(); retried++; }
+  }
+  const old = await db.prepare("DELETE FROM outbox WHERE at_ms<?").bind(now - 3 * 86_400_000).run();
+  return { retried, dropped: old.meta?.changes ?? 0 };
 }
 
 async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: number) => Promise<boolean>) {

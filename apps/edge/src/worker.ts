@@ -11,7 +11,7 @@
 //                   So an AI can never decide who wins, and never change what the public beacon decides.
 //   nobody        - phones: join, send claims, read results counts, read the engagement info and the signed control file.
 
-import { PAY_SCHEMA, payRoute, type PayEnv } from "./pay";
+import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, type PayEnv } from "./pay";
 import { SAFETY_FAST, SAFETY_STANDARD, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 
 export interface D1Result<T = any> { results?: T[]; meta?: { changes?: number } }
@@ -35,6 +35,7 @@ export const SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS ctl_request (id INTEGER PRIMARY KEY AUTOINCREMENT, eid TEXT NOT NULL, action TEXT NOT NULL, note TEXT, at_ms INTEGER NOT NULL, open INTEGER NOT NULL DEFAULT 1)`,
   `CREATE TABLE IF NOT EXISTS suggestion (id INTEGER PRIMARY KEY AUTOINCREMENT, org TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'new', note TEXT, votes INTEGER NOT NULL DEFAULT 1, created_ms INTEGER NOT NULL, title_hash TEXT NOT NULL, UNIQUE (org, title_hash))`,
   `CREATE TABLE IF NOT EXISTS suggestion_vote (sid INTEGER NOT NULL, org TEXT NOT NULL, PRIMARY KEY (sid, org))`,
+  `CREATE TABLE IF NOT EXISTS login_code (email_hash TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires_ms INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, win_start INTEGER NOT NULL, sent INTEGER NOT NULL DEFAULT 0)`,
   ...PAY_SCHEMA,
 ];
 
@@ -127,6 +128,47 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   if (req.method === "GET" && p === "/api/z/ai-manifest") return json(AI_MANIFEST);
   const paid = await payRoute(req, env as PayEnv, now, (n) => spend(env, now, n));
   if (paid) return paid;
+
+  /* ---- sign in with an e-mailed code (no passwords): also how an organizer who lost their key gets a fresh one ---- */
+  if (req.method === "POST" && p === "/api/auth/email") {
+    const b = await body(req);
+    const email = typeof b?.email === "string" ? b.email.trim().toLowerCase() : "";
+    if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(email)) return json({ error: "Please enter a valid work email." }, 400);
+    const eh = await sha("email|" + email);
+    const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
+    const test = (env as PayEnv).TEST_MODE === "1";
+    let devCode: string | undefined;
+    if (acct) { // an unknown address gets the same answer, so nobody can find out who has an account
+      const row = await env.DB.prepare("SELECT win_start, sent FROM login_code WHERE email_hash=?").bind(eh).first<{ win_start: number; sent: number }>();
+      const fresh = !row || now - row.win_start > 3_600_000;
+      if (!fresh && row!.sent >= 5) return json({ error: "Too many codes requested. Please try again in an hour." }, 429);
+      if (!(await spend(env, now, 2))) return BUSY();
+      const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000));
+      await env.DB.prepare("INSERT INTO login_code(email_hash,code_hash,expires_ms,attempts,win_start,sent) VALUES(?,?,?,0,?,1) ON CONFLICT(email_hash) DO UPDATE SET code_hash=excluded.code_hash, expires_ms=excluded.expires_ms, attempts=0, win_start=?, sent=?").bind(eh, await sha("code|" + eh + "|" + code), now + 600_000, fresh ? now : row!.win_start, fresh ? now : row!.win_start, fresh ? 1 : row!.sent + 1).run();
+      await sendMail(env as PayEnv, env.DB, email, "Your Corporate Tambola sign-in code", `Your sign-in code is ${code}. It works for 10 minutes. If you did not ask for it, ignore this message.`, now);
+      if (test) devCode = code;
+    }
+    return json({ ok: true, ...(devCode ? { devCode } : {}) });
+  }
+  if (req.method === "POST" && p === "/api/auth/verify") {
+    const b = await body(req);
+    const email = typeof b?.email === "string" ? b.email.trim().toLowerCase() : "";
+    const code = typeof b?.code === "string" ? b.code.replace(/\D/g, "") : "";
+    if (!email || code.length !== 6) return json({ error: "Enter the 6-digit code." }, 400);
+    const eh = await sha("email|" + email);
+    const row = await env.DB.prepare("SELECT code_hash, expires_ms, attempts FROM login_code WHERE email_hash=?").bind(eh).first<{ code_hash: string; expires_ms: number; attempts: number }>();
+    const bad = () => json({ error: "That code is not right or has expired. Please ask for a new one." }, 400);
+    if (!row || row.expires_ms < now || row.attempts >= 5) return bad();
+    if (row.code_hash !== (await sha("code|" + eh + "|" + code))) { await env.DB.prepare("UPDATE login_code SET attempts=attempts+1 WHERE email_hash=?").bind(eh).run(); return bad(); }
+    const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
+    if (!acct || !(await spend(env, now, 2))) return acct ? BUSY() : bad();
+    const token = "ctk_" + randHex(24); // a fresh organizer key; the old ones keep working until the organizer retires them
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + token), acct.org, "master", now),
+      env.DB.prepare("DELETE FROM login_code WHERE email_hash=?").bind(eh),
+    ]);
+    return json({ ok: true, token });
+  }
 
   /* ---- organizers and their keys ---- */
   if (req.method === "POST" && p === "/api/org") { // platform: a new organizer (called after payment / sign-up); the key is shown once
@@ -423,4 +465,4 @@ export async function purgeOld(env: Env, now: number): Promise<number> {
   return n;
 }
 
-export default { fetch: (req: Request, env: Env) => handle(req, env), scheduled: async (_e: unknown, env: Env) => { await purgeOld(env, Date.now()); } };
+export default { fetch: (req: Request, env: Env) => handle(req, env), scheduled: async (_e: unknown, env: Env) => { await purgeOld(env, Date.now()); await retryOutbox(env as PayEnv, Date.now()); } };

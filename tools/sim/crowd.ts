@@ -109,7 +109,8 @@ const claims = (await (await raw("GET", `/api/z/${EID}/claims`, undefined, org))
 const claims2 = (await (await raw("GET", `/api/z/${EID}/claims`, undefined, org)).json() as any).claims;
 const chk = checkClaims(EID, claims2.map((c: any) => ({ pid: c.pid, pattern: c.pattern, idx: c.idx })), ref);
 // a cheater who also genuinely completes star at a different call has the INSERT OR IGNORE'd honest claim; count only the invented ones that are wrong
-ok(chk.bad.length === cheated && chk.good.length === claims2.length - cheated, `every invented claim was caught by recomputation and no true claim was rejected (${chk.bad.length} rejected of ${claims2.length}; ${cheated} invented)`);
+if (N > 500) ok(claims2.length === 0, `large engagement: no per-claim rows are stored (${claims2.length}); invented claims cannot influence winners because winners are recomputed from the public log`);
+else ok(chk.bad.length === cheated && chk.good.length === claims2.length - cheated, `every invented claim was caught by recomputation and no true claim was rejected (${chk.bad.length} rejected of ${claims2.length}; ${cheated} invented)`);
 for (const c of chk.bad.filter((c) => !((c.pattern === 'full' && c.idx === 3) || (c.pattern === 'star' && c.idx === 2))).slice(0, 5)) { const ph = phones.find((p) => p.rt.pid === c.pid)!; console.log(`  (unexpected bad claim ${c.pattern}@${c.idx} true=${completionIndex(ticketFor(EID, c.pid), c.pattern, ref)} joinAt=${ph.joinAt} liar=${ph.liar} flaky=${ph.flaky} off=${ph.offFrom} logLen=${ph.rt.view().log.length})`); }
 const settled = settleAll(EID, pids, ref);
 ok(settled.length === 7, "every pattern settled from the public log and the participant list alone");
@@ -124,10 +125,11 @@ const pub = await (await raw("GET", `/api/z/${EID}/results`)).json() as any;
 ok(JSON.stringify(pub).includes("pids") === false && pub.results.length === 7, "public results carry counts only, no participant ids");
 // an honest phone's own record: claimed everything it completed
 const sample = live.filter((p) => same.includes(p)).slice(0, 200);
+
 const missed = sample.filter((p) => { const v = p.rt.view(); return !ALL_PATTERNS.every((pat) => v.claimed.includes(pat) || completionIndex(v.ticket!, pat, v.log) < 0); });
 for (const p of missed.slice(0, 3)) console.log(`  (phone ${p.phone}: joinAt=${p.joinAt} flaky=${p.flaky} off=${p.offFrom} unsent=${p.rt.view().unsent} claimed=${p.rt.view().claimed.length})`);
 ok(missed.length === 0, `sampled honest phones sent a claim for every pattern they completed (${sample.length - missed.length}/${sample.length})`);
 const writes = (d.raw.query("SELECT SUM(writes) w FROM usage").get() as any).w as number;
-ok(writes < 100000 * 0.5, `store writes for the whole engagement: ${writes} (${((writes / 100000) * 100).toFixed(1)}% of the free daily D1 allowance)`);
+ok(writes < 100000 * (N > 500 ? 0.2 : 0.5), `store writes for the whole engagement: ${writes} (${((writes / 100000) * 100).toFixed(1)}% of the free daily D1 allowance)`);
 console.log(`\n${checks - failed}/${checks} checks passed${failed ? ` — ${failed} FAILED` : ""}`);
 process.exit(failed ? 1 : 0);
