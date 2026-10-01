@@ -7,11 +7,12 @@
     "tools/*"
   ],
   "scripts": {
-    "test": "bun test packages",
+    "test": "bun test packages apps",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "dev": "bun run apps/server/src/index.ts",
     "seed": "bun run tools/seed/seed.ts",
-    "sim": "bun run tools/sim/run.ts"
+    "sim": "bun run tools/sim/run.ts",
+    "ai-persona": "bun run tools/sim/ai-persona.ts"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

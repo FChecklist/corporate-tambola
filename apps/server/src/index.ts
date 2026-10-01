@@ -7,8 +7,9 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, normalize as pnorm } from "node:path";
 import type { ServerWebSocket } from "bun";
 import { CFG, EngagementEngine, makeRewardLines, type PublicEvent, type RewardLine } from "@tambola/engine";
-import { PACKS, checkUpload, formatInternational, maskNumber, normalize, price, rewardName, type Currency, type PatternId } from "@tambola/shared";
+import { PACKS, checkUpload, formatInternational, maskNumber, normalize, price, proposeBreakPositions, rewardName, type Currency, type PatternId } from "@tambola/shared";
 import { openDb, sha256 } from "./db";
+import { createAiLink } from "./ai-link";
 
 // ---------- config ----------
 const PORT = Number(process.env.PORT ?? 8787);
@@ -99,9 +100,20 @@ setInterval(() => {
     const e = room.engine;
     if (e.status === "starting" || e.status === "started") { const before = e.status + e.called.length + (e.paused?.type ?? ""); e.tick(); if (before !== e.status + e.called.length + (e.paused?.type ?? "")) room.touch(); }
     if (e.status === "ended" && e.endedAt && now() - e.endedAt > Number(process.env.TAMBOLA_PURGE_MS ?? 24 * 3600_000)) purgeRoom(room);
+    if (e.status === "ended" && !(db.query("SELECT 1 FROM mail_sent WHERE code=? AND kind='report'").get(room.code))) mailReport(room);
   }
 }, 50);
 setInterval(() => { for (const r of rooms.values()) if (r.dirty) save(r); }, 1000);
+
+/** Once, when an engagement ends: the organizer gets the report by email, in plain words. */
+function mailReport(room: Room) {
+  db.query("INSERT OR IGNORE INTO mail_sent(code,kind,at) VALUES(?,?,?)").run(room.code, "report", now());
+  const o = db.query("SELECT email, org_name FROM organizers WHERE id=?").get(room.organizerId) as any;
+  if (!o) return;
+  const r = room.engine.report();
+  ai.sendEmail(o.email, `Report: ${room.engine.settings.name}`,
+    `Hello ${o.org_name},\n\nYour engagement has ended. Here is the report.\n\n${ai.summariseReport(r)}\n\nWHAT HAPPENS NEXT\n  - Tickets, phones, claims and the activity log are deleted 24 hours after the end. Copy anything you need from the console now, or ask your AI: "Give me the full report of ${room.engine.settings.name}".\n  - The names and numbers of everyone on the list are kept ${Math.round(RETAIN_MS / DAY)} days, so your next engagement takes one step: ask your AI "Set up a new engagement and reuse everyone from the last one", or open your Dashboard and tap Reuse the data.\n  - You give the rewards yourself; we never handle reward money.\n\nCorporate Tambola\n`, false);
+}
 
 function purgeRoom(room: Room) {
   if (room.engine.status !== "ended") return;
@@ -172,20 +184,32 @@ function sendMail(to: string, subject: string, body: string) {
   console.log(`[mail] to=${to} subject=${subject}`);
 }
 
+// ---------- AI work link (the organizer's AI does the work; see ai-link.ts) ----------
+// forward declaration: callRoute needs the routes table, which is declared further down
+const ai = createAiLink({
+  db, sha256, now, dev: DEV, rooms, sendMail,
+  callRoute: (method, path, orgId, origin, body) => callRoute(method, path, orgId, origin, body),
+  mask: maskNumber, normalize: (raw, c) => normalize(raw, c) as any, packs: PACKS, price, breakPositions: proposeBreakPositions,
+  checkUpload, retentionDays: Math.round(RETAIN_MS / DAY),
+});
+
 // ---------- http helpers ----------
 class HttpError extends Error { constructor(public status: number, msg: string) { super(msg); } }
 function fail(status: number, msg: string): never { throw new HttpError(status, msg); }
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
 const body = async (req: Request): Promise<any> => { try { return await req.json(); } catch { return {}; } };
 const deviceOf = (req: Request): string | null => { const d = req.headers.get("x-device"); return d && d.length >= 16 ? sha256(d) : null; };
-const ipOf = (req: Request, server: any) => server.requestIP(req)?.address ?? "?";
+const ipOf = (req: Request, server: any) => server?.requestIP?.(req)?.address ?? "?";
 const hits = new Map<string, number[]>();
 function ipLimit(ip: string) {
   const t = now(), arr = (hits.get(ip) ?? []).filter((x) => t - x < 600_000);
   arr.push(t); hits.set(ip, arr);
   if (arr.length > IP_LIMIT) fail(429, "Too many attempts from this network. Try again in a few minutes.");
 }
+const internalOrg = new WeakMap<Request, string>(); // requests made by the AI work link on behalf of an organizer (same rules as the console)
 function orgOf(req: Request): string | null {
+  const io = internalOrg.get(req);
+  if (io) return io;
   const a = req.headers.get("authorization");
   if (!a?.startsWith("Bearer ")) return null;
   const r = db.query("SELECT organizer_id, expires_at FROM tokens WHERE hash=?").get(sha256(a.slice(7))) as any;
@@ -301,8 +325,14 @@ route_("POST", "/api/checkout", async ({ req }) => {
   const orderId = "ord_" + rid(8);
   // fake payment gateway: always succeeds locally
   db.query("INSERT INTO orders(id,organizer_id,engagement_code,pack,currency,total,tax,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)").run(orderId, o.id, room.code, pack, currency, pr.total, pr.tax, "paid", now());
-  sendMail(email, "Your Corporate Tambola order", `Order ${orderId} paid: ${currency} ${pr.total}. Open the console and log in with your work email.`);
-  return json({ ok: true, orderId, engagementCode: room.code, total: pr.total, tax: pr.tax, currency });
+  // AI work link: minted on the first purchase and emailed (never returned in the response: the buyer may not own the address).
+  // A repeat purchase keeps the existing link, which already covers the new engagement.
+  const existingLink = ai.linkInfo(o.id);
+  const minted = existingLink && existingLink.active ? null : ai.mint(o.id, 30, "standard");
+  const origin_ = new URL(req.url).origin;
+  const mail = ai.emailAbout({ email, org }, minted ? `${origin_}/ai/${minted.token}` : "", { origin: origin_, engagement: { code: room.code, link: `${origin_}/e/${room.code}` }, order: { id: orderId, pack, currency, total: pr.total, tax: pr.tax } });
+  ai.sendEmail(email, mail.subject, mail.body, !!minted);
+  return json({ ok: true, orderId, engagementCode: room.code, total: pr.total, tax: pr.tax, currency, ...(DEV && minted ? { devAiLink: `${origin_}/ai/${minted.token}` } : {}) });
 });
 
 route_("POST", "/api/auth/email", async ({ req }) => {
@@ -758,6 +788,42 @@ if (DEV) {
   route_("GET", "/api/dev/outbox", () => json({ note: "see data/outbox" }));
 }
 
+// ----- AI work link: mint / status / revoke / confirmation -----
+async function callRoute(method: string, path: string, orgId: string, origin: string, body?: unknown): Promise<{ status: number; data: any }> {
+  const url = new URL(origin + path);
+  const req = new Request(url, { method, headers: { "content-type": "application/json" }, body: body === undefined || method === "GET" ? undefined : JSON.stringify(body) });
+  internalOrg.set(req, orgId);
+  for (const r of routes) {
+    if (r.method !== method) continue;
+    const m = url.pathname.match(r.re);
+    if (!m) continue;
+    try {
+      const res = await r.h({ req, url, m, server: null });
+      let data: any = null; try { data = await res.json(); } catch { /* empty */ }
+      return { status: res.status, data };
+    } catch (e) {
+      if (e instanceof HttpError) return { status: e.status, data: { error: e.message } };
+      throw e;
+    }
+  }
+  return { status: 404, data: { error: "Not found" } };
+}
+route_("GET", "/api/orgs/me/ai-link", ({ req }) => { const org = orgOf(req) ?? fail(401, "Please log in."); return json({ link: ai.linkInfo(org) }); });
+route_("POST", "/api/orgs/me/ai-link", async ({ req }) => {
+  const org = orgOf(req) ?? fail(401, "Please log in.");
+  const b = await body(req);
+  const days = ([1, 7, 30].includes(Number(b.days)) ? Number(b.days) : 30) as 1 | 7 | 30;
+  const minted = ai.mint(org, days, b.level === "read" ? "read" : "standard");
+  const link = `${new URL(req.url).origin}/ai/${minted.token}`;
+  const o = db.query("SELECT email, org_name FROM organizers WHERE id=?").get(org) as any;
+  const mail = ai.emailAbout({ email: o.email, org: o.org_name }, link, { origin: new URL(req.url).origin });
+  ai.sendEmail(o.email, mail.subject, mail.body, true);
+  return json({ ok: true, link, prompt: ai.promptFor(link), expiresAt: minted.expiresAt, level: minted.level, emailedTo: o.email, shownOnce: true });
+});
+route_("DELETE", "/api/orgs/me/ai-link", ({ req }) => { const org = orgOf(req) ?? fail(401, "Please log in."); ai.revoke(org); return json({ ok: true }); });
+route_("POST", "/api/ai/drafts/:id/preview", async ({ req, m }) => { const org = orgOf(req) ?? fail(401, "Please sign in."); const b = await body(req); const r = ai.previewDraft(m[1]!, org, String(b.code ?? "")); return json(r.body, r.status); });
+route_("POST", "/api/ai/drafts/:id/confirm", async ({ req, m }) => { const org = orgOf(req) ?? fail(401, "Please sign in."); const b = await body(req); const r = await ai.confirmDraft(m[1]!, org, String(b.code ?? ""), req); return json(r.body, r.status); });
+
 // ---------- static + app manifest (the cached "thin client") ----------
 const MIME: Record<string, string> = { html: "text/html; charset=utf-8", css: "text/css", js: "text/javascript", json: "application/json", svg: "image/svg+xml", png: "image/png", webp: "image/webp", ico: "image/x-icon", m4a: "audio/mp4", mp3: "audio/mpeg", woff2: "font/woff2" };
 // Which files each kind of screen needs. The service worker downloads a group once and re-downloads only files whose hash changed.
@@ -795,6 +861,7 @@ function serveStatic(path: string): Response {
   let file = path === "/" ? "/index.html" : path;
   if (/^\/(e|p)\/[^/]+$/.test(file)) file = "/play.html";
   else if (/^\/r\/[^/]+$/.test(file) || file === "/console") file = "/console.html";
+  else if (/^\/confirm\/[^/]+$/.test(file)) file = "/confirm.html";
   const full = pnorm(join(WEB_DIR, file));
   if (!full.startsWith(WEB_DIR) || !existsSync(full) || file.includes("/_")) return new Response("Not found", { status: 404 });
   const ext = full.split(".").pop() ?? "";
@@ -827,6 +894,7 @@ const server = Bun.serve<WSData>({
       return server.upgrade(req, { data }) ? undefined : new Response("upgrade failed", { status: 400 });
     }
     stats.http++;
+    if (url.pathname.startsWith("/ai/")) { stats.api++; return ai.handle(req, url, server); }
     if (url.pathname.startsWith("/api/")) {
       stats.api++;
       for (const r of routes) {

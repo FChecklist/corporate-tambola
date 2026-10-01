@@ -202,6 +202,10 @@
       if (!el) { el = document.createElement("div"); el.dataset.sec = id; stage.appendChild(el); }
       patch(el, html);
     }
+    // keep sections in order, and drop ones that no longer apply (e.g. the reuse banner)
+    const ids = secs.map((x) => x[0]);
+    [...stage.children].forEach((c) => { if (!ids.includes(c.dataset.sec)) c.remove(); });
+    ids.forEach((id, i) => { const c = stage.querySelector(`[data-sec="${id}"]`); if (c && stage.children[i] !== c) stage.insertBefore(c, stage.children[i] || null); });
     if (S.step === "share") drawQR();
     if (S.step === "report" && !S.report && eng().status !== "open") loadReport();
     if (S.step === "people" && isOrg() && !D.dash && !D.loading) loadDash().then(() => { if (S.step === "people") paintStage(); });
@@ -500,7 +504,8 @@
     const roles = S.data.participants.filter((p) => p.roleLink && (p.role === "host" || p.role === "team_lead"));
     const rl = roles.length ? `<div class="tscroll"><table class="t"><thead><tr><th>Name</th><th>Role</th><th>Personal link</th><th></th></tr></thead><tbody>${roles.map((p) => `<tr><td>${esc(p.name || "(no name)")}</td><td>${pill(p.role === "host" ? "wine" : "info", roleName(p.role))}</td><td class="mono" style="font-size:12px;word-break:break-all">${esc(p.roleLink)}</td><td><div class="lnk"><button class="btn sm line" data-a="copyLink" data-v="${esc(p.roleLink)}">${ic("copy")}</button><a class="btn sm line" target="_blank" rel="noopener" href="${wa(p.e164, waMsg(p))}">WhatsApp</a></div></td></tr>`).join("")}</tbody></table></div>` : `<p class="muted small">No Hosts or Team Leads yet. Make them in the People step; their personal links appear here.</p>`;
     return [["share", `<div class="panel"><div class="phead"><div class="step">5</div><div><h2>Share the engagement link</h2><p>One link for everyone on your list. If a number is not on your list, that person goes to the waiting room.</p>
-      ${closed ? `<p class="lockmsg">Entry is closed. The link now shows “Entry is closed”.</p>` : ""}</div></div>
+      ${closed ? `<p class="lockmsg">Entry is closed. The link now shows “Entry is closed”.</p>` : ""}
+      ${isOrg() ? `<p class="hint">${ic("link")} <a href="/console#AI" data-a="aiHint">Use your AI for this</a>: let ChatGPT, Gemini or Claude do the setup for you.</p>` : ""}</div></div>
       <div class="row" style="align-items:flex-start;gap:18px"><div style="flex:1;min-width:260px"><div class="linkbox">${esc(e.link)}</div>
       <div class="row" style="margin-top:10px"><button class="btn sm" data-a="copyLink" data-v="${esc(e.link)}">${ic("copy")} Copy link</button><a class="btn sm line" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(curMsg())}">Share on WhatsApp</a><button class="btn sm line" data-a="copyMsg">${ic("mail")} Copy email message</button></div>
       <label class="lb" for="gmsg">Message that goes with the link</label><textarea class="inp" id="gmsg" style="min-height:100px;font-family:var(--sans)" ${isOrg() ? "" : "readonly"} data-i="msg">${esc(curMsg())}</textarea></div>
@@ -905,7 +910,268 @@
     bootConsole();
   }
 
-@@NEW@@
+  // ================================================================ DASHBOARD + REUSE (organizer landing screen)
+  const D = { dash: null, lib: null, libQ: "", libT: null, loading: false, ai: undefined, aiDays: 30, aiLevel: "standard", aiBusy: false };
+  async function loadAi() { try { D.ai = (await api("GET", "/api/orgs/me/ai-link")).link || null; } catch (e) { D.ai = D.ai === undefined ? null : D.ai; D.aiErr = true; } }
+  function aiStatus() {
+    const l = D.ai;
+    if (!l) return { pill: pill("", "No link yet"), line: "You have not made a link yet." };
+    if (l.revoked) return { pill: pill("bad", "Stopped"), line: "This link was stopped. Your AI can no longer use it." };
+    if (!l.active) return { pill: pill("warn", "Expired"), line: `This link expired on ${esc(dDate(l.expiresAt))}.` };
+    return { pill: pill("ok", l.level === "read" ? "Active · read only" : "Active"), line: `Expires on <b>${esc(dDate(l.expiresAt))}</b> · ${l.lastUsedAt ? "last used " + esc(TB.ago(l.lastUsedAt)) : "not used yet"} · <b>${l.calls || 0}</b> ${(l.calls || 0) === 1 ? "call" : "calls"}` };
+  }
+  function aiChoices() {
+    return `<label class="lb">Valid for</label>${chips("aiPick", "aiDays", "n", [[1, "1 day"], [7, "7 days"], [30, "30 days"]], D.aiDays)}
+      <label class="lb">What your AI may do</label>${chips("aiPick", "aiLevel", "s", [["standard", "Standard"], ["read", "Read only"]], D.aiLevel)}
+      <p class="hint">${D.aiLevel === "read" ? "Read only: your AI can look at engagements and reports but cannot change anything." : "Standard: your AI can set up engagements, add people and run the day. Big steps still need your tap."}</p>`;
+  }
+  function aiCard() {
+    const has = !!D.ai, st = aiStatus();
+    return `<div class="panel dai" id="aiCard"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><div class="eyebrow">Your AI</div><h2 class="dlh">Let your AI do the work</h2></div>${st.pill}</div>
+      <p class="muted small" style="margin:4px 0 8px">Copy one message into ChatGPT, Gemini, Claude or any AI chat. Your AI then sets up engagements, adds or reuses people, runs the day and tells you the report. No password and no learning our screens. Starting, ending, removing people, erasing details and payments still need your tap.</p>
+      ${D.ai !== undefined ? `<div class="dline" style="font-size:14px">${st.line}</div>` : ""}
+      ${has ? `<p class="hint">A new link replaces and cancels the old one.</p>` : ""}
+      ${aiChoices()}
+      <div class="row dbtns" style="margin-top:12px"><button class="btn gold dbtn" ${D.aiBusy ? "disabled" : ""} data-a="aiCreate">${ic("link")} ${has ? "Create a new link" : "Create my AI work link"}</button>${has && D.ai.active ? `<button class="btn line dbtn" data-a="aiStop">Stop this link</button>` : ""}</div>
+      <p class="hint">${ic("shield")} Your AI provider (for example OpenAI or Google) sees what your AI reads, such as names. Mobile numbers are masked.</p></div>`;
+  }
+  A.aiPick = (el) => { D[el.dataset.k] = parseV(el); const c = $("aiCard"); if (c) c.outerHTML = aiCard(); };
+  A.aiCreate = async () => {
+    if (D.aiBusy) return; D.aiBusy = true; const c = $("aiCard"); if (c) c.outerHTML = aiCard();
+    const r = await run(api("POST", "/api/orgs/me/ai-link", { days: D.aiDays, level: D.aiLevel }));
+    D.aiBusy = false;
+    if (r) await loadAi();
+    const c2 = $("aiCard"); if (c2) c2.outerHTML = aiCard();
+    if (!r) return;
+    AI_PROMPT = r.prompt || r.link;
+    sheet(`<h2>Your AI work link is ready</h2><p class="muted small">Paste this whole message into your AI chat (ChatGPT, Gemini, Claude or any other). It will start working right away.</p>
+      <label class="lb" for="aiMsg">Message for your AI</label><textarea class="inp" id="aiMsg" readonly style="min-height:150px" aria-label="Message for your AI">${esc(AI_PROMPT)}</textarea>
+      <button class="btn gold block dbtn" style="margin-top:10px" data-a="aiCopy">${ic("copy")} Copy message</button>
+      <p class="hint"><b>Shown only once.</b> We also emailed it to ${esc(r.emailedTo || S.me.email)}.</p>
+      <ul class="facts" style="margin:8px 0 0"><li>Anyone with this message can act for you, so keep it private.</li><li>Mobile numbers are masked for your AI.</li><li>When your AI wants to start or end an engagement, it sends you a confirmation link. Open it and tap Confirm.</li></ul>
+      <button class="btn line block dbtn" style="margin-top:10px" data-a="closeSheet">Done</button>`);
+    const t = $("aiMsg"); if (t) { t.focus(); t.select(); }
+  };
+  A.aiCopy = () => { copy(AI_PROMPT, "Message copied"); const t = $("aiMsg"); if (t) t.select(); };
+  A.aiStop = () => confirmSheet({ title: "Stop this AI work link?", body: "Your AI will no longer be able to act for you. Anything it already drafted that is waiting for your tap will not be confirmed. You can make a new link any time.", yes: "Stop this link", danger: true,
+    onYes: async () => { closeSheet(); const r = await run(api("DELETE", "/api/orgs/me/ai-link"), "Link stopped"); if (r) { await loadAi(); const c = $("aiCard"); if (c) c.outerHTML = aiCard(); } } });
+  A.aiHint = () => { location.href = "/console#AI"; };
+  let AI_PROMPT = "";
+  let R = null; // reuse sheet state
+  let rvT = null;
+  const dDate = (t) => (t ? TB.fmtD(t) : "date not set");
+  const people = (n) => TB.plural(n, "person", "people");
+  async function loadDash() {
+    D.loading = true;
+    try { D.dash = await api("GET", "/api/orgs/me/dashboard"); } catch (e) { if (!D.dash) D.dash = null; }
+    D.loading = false;
+    return D.dash;
+  }
+  async function loadLib() {
+    try { D.lib = await api("GET", "/api/orgs/me/library?q=" + encodeURIComponent(D.libQ)); } catch (e) { D.lib = { total: 0, rows: [], error: e.message }; }
+  }
+  const pastList = () => (D.dash ? D.dash.history.filter((x) => x.status === "ended" || x.status === "purged") : []);
+  const openList = () => (D.dash ? D.dash.history.filter((x) => x.status === "open") : []);
+  const activeList = () => (D.dash ? D.dash.history.filter((x) => x.status === "open" || x.status === "starting" || x.status === "started") : []);
+  const libCount = () => (D.dash ? D.dash.library.count : 0);
+  // sources that can be reused: past engagements with kept people, plus the saved list
+  const rvSources = (exclude) => pastList().filter((x) => x.code !== exclude && x.peopleCount > 0);
+  const canReuseAny = () => rvSources("").length > 0 || libCount() > 0;
+  const lastLine = (x) => `Held on <b>${esc(dDate(x.heldAt))}</b> · Total <b>${x.total}</b> · Participated <b>${x.participated}</b>`;
+
+  function pastCard(x) {
+    const kept = x.peopleCount > 0;
+    return `<div class="panel dcard"><div class="row" style="justify-content:space-between;align-items:flex-start"><div style="min-width:0"><b style="font:600 17px var(--serif)">${esc(x.name)}</b><div class="tiny muted">${esc(dDate(x.heldAt))} · ${esc(x.code)}</div></div>${pill("", "Ended")}</div>
+      <div class="stats" style="margin:8px 0">Total <b>${x.total}</b> · Participated <b>${x.participated}</b></div>
+      <div style="margin-bottom:10px">${kept ? pill("info", "Details kept until " + dDate(x.peopleExpiresAt) + " · " + people(x.peopleCount)) : pill("", "Details deleted")}</div>
+      <div class="row dbtns"><button class="btn sm dbtn" ${kept ? "" : "disabled"} data-a="dReuse" data-v="${esc(x.code)}">Reuse the data</button><button class="btn sm line dbtn" ${kept ? "" : "disabled"} data-a="dEraseEng" data-v="${esc(x.code)}">${ic("trash")} Erase kept details</button></div>
+      ${kept ? "" : `<p class="hint">Nothing is kept from this engagement, so there is nothing to reuse.</p>`}</div>`;
+  }
+  function activeCard(x) {
+    const when = x.heldAt ? new Date(x.heldAt) : null;
+    return `<a class="gcard" style="text-decoration:none;color:inherit" href="/console#${esc(x.code)}" data-a="openEng" data-v="${esc(x.code)}"><div class="gdate"><b>${when ? when.getDate() : "–"}</b><span>${when ? when.toLocaleDateString(undefined, { month: "short" }) : ""}</span></div><div style="flex:1;min-width:0"><b>${esc(x.name)}</b><div class="tiny muted">${esc(x.code)} · ${x.total} on the list</div></div>${pill(x.status === "open" ? "ok" : "warn", x.status === "open" ? "Open" : x.status === "starting" ? "Starting" : "In progress")}<span class="btn sm gold dbtn" style="pointer-events:none">Open</span></a>`;
+  }
+  function libRows() {
+    const l = D.lib;
+    if (!l) return `<p class="muted small">Loading…</p>`;
+    if (l.error) return `<div class="err">${ic("alert")}<span>${esc(l.error)}</span></div>`;
+    if (!l.rows.length) return `<p class="muted small">${D.libQ ? "Nobody matches this search." : "Nobody is saved yet."}</p>`;
+    return `<div class="liblist">${l.rows.map((r) => `<div class="librow"><div style="min-width:0;flex:1"><b>${esc(r.name || "(no name)")}</b>${r.info ? ` <span class="tiny muted">· ${esc(r.info)}</span>` : ""}<div class="mono tiny">${esc(r.number)}</div><div class="tiny muted">Kept until ${esc(dDate(r.expiresAt))}</div></div><button class="btn sm danger dbtn" data-a="libErase" data-v="${esc(r.e164)}" data-n="${esc(r.name || r.number)}" aria-label="Erase ${esc(r.name || r.number)}">${ic("trash")} Erase</button></div>`).join("")}</div>${l.total > l.rows.length && !D.libQ ? `<p class="hint">Showing the first ${l.rows.length} of ${l.total}. Use search to find anyone else.</p>` : ""}`;
+  }
+  function renderDash() {
+    const me = S.me, d = D.dash;
+    if (!d) { root.innerHTML = `${topbar(consoleLinks(true))}<div class="wrap" style="max-width:760px"><div class="panel center"><p class="muted">We could not load your Dashboard.</p><button class="btn" data-a="dReload">Try again</button></div></div>`; return; }
+    const last = d.last, active = activeList(), past = pastList();
+    const lastCard = last
+      ? `<div class="panel dlast"><div class="eyebrow">Last engagement</div><h2 class="dlh">${esc(last.name)}</h2><div class="dline">${lastLine(last)}</div>
+         <div class="row dbtns" style="margin-top:12px"><button class="btn gold dbtn" ${canReuseAny() ? "" : "disabled"} data-a="dReuse" data-v="">Reuse the data</button><button class="btn line dbtn" data-a="dHist">History of all past engagements</button></div>
+         ${canReuseAny() ? "" : `<p class="hint">The details of this engagement have been deleted, so there is nothing to reuse yet.</p>`}</div>`
+      : `<div class="panel dlast"><div class="eyebrow">Last engagement</div><h2 class="dlh">Nothing here yet</h2><p class="muted small" style="margin:6px 0 0">Your past engagements will appear here. After your first engagement you can reuse everyone with one tap.</p></div>`;
+    root.innerHTML = `${topbar(consoleLinks(true))}<div class="wrap" style="max-width:760px">
+      <div class="chead"><div><div class="eyebrow">Dashboard · ${esc(me.org)}</div><h1>Your engagements</h1><div class="stats">${esc(me.email)}</div></div><a class="btn gold" href="/#pricing">Buy another pack</a></div>
+      ${lastCard}
+      ${aiCard()}
+      <h2 class="dh2">Current engagements</h2>
+      ${active.length ? active.map(activeCard).join("") : `<div class="panel center"><p class="muted small" style="margin:0 0 10px">You have no open engagement. Buy a pack to create a new one, then reuse your past people in it.</p><a class="btn dbtn" href="/#pricing">Buy a pack</a></div>`}
+      <h2 class="dh2" id="dHistory">History of all past engagements</h2>
+      ${past.length ? past.map(pastCard).join("") : `<div class="panel center"><p class="muted small" style="margin:0">No past engagements yet.</p></div>`}
+      <h2 class="dh2">My saved list</h2>
+      <div class="panel" id="dLib"><div class="row" style="justify-content:space-between;align-items:center"><div><b style="font:600 20px var(--serif)">${d.library.count}</b> <span class="muted">${d.library.count === 1 ? "person saved" : "people saved"}</span></div><button class="btn sm danger dbtn" ${d.library.count ? "" : "disabled"} data-a="libEraseAll">${ic("trash")} Erase everyone</button></div>
+        <p class="hint">Kept for up to ${d.retentionDays} days after you last use them, then deleted automatically.${d.library.soonestExpiry ? " The earliest deletion is on " + esc(dDate(d.library.soonestExpiry)) + "." : ""}</p>
+        <label class="lb" for="libQ">Search by name or number</label><input class="inp" id="libQ" type="search" value="${esc(D.libQ)}" placeholder="Search your saved list" data-i="libQ">
+        <div id="libList" style="margin-top:10px">${libRows()}</div></div></div>`;
+  }
+  async function dashboard(scrollHist) {
+    root.innerHTML = `${topbar(consoleLinks(true))}<div class="wrap center muted" style="padding-top:60px">Loading…</div>`;
+    await Promise.all([loadDash(), loadLib(), loadAi()]);
+    renderDash();
+    if (scrollHist === "ai") { const h = $("aiCard"); if (h) h.scrollIntoView(); }
+    else if (scrollHist) { const h = $("dHistory"); if (h) h.scrollIntoView(); }
+  }
+  async function refreshDash() { await Promise.all([loadDash(), loadLib(), loadAi()]); renderDash(); }
+  function paintLib() { const el = $("libList"); if (el) el.innerHTML = libRows(); }
+
+  // ---- reuse sheet
+  async function openReuse(o) {
+    o = o || {};
+    await loadDash();
+    if (!D.dash) return toast("We could not load your past engagements. Try again.");
+    const opens = openList();
+    R = { target: o.target || "", from: "", list: true, colleagues: true, family: false, roles: false, prev: null, prevErr: "", seq: 0, busy: false };
+    if (!R.target) {
+      if (!opens.length) {
+        return sheet(`<h2>Buy a pack to create a new engagement first</h2><p class="muted small">The data is added to an engagement that is open for entry. You do not have one yet.</p>
+          <a class="btn gold block dbtn" style="margin-top:12px" href="/#pricing">Buy a pack</a><button class="btn line block dbtn" style="margin-top:8px" data-a="closeSheet">Close</button>`);
+      }
+      if (opens.length === 1) R.target = opens[0].code;
+    }
+    R.want = o.from || "";
+    if (R.target) rvPickDefault();
+    rvRender();
+    if (R.target) rvQueue(0);
+  }
+  function rvPickDefault() {
+    const srcs = rvSources(R.target);
+    const want = R.want;
+    if (want && (srcs.some((x) => x.code === want) || want === "library")) R.from = want;
+    else if (D.dash.last && srcs.some((x) => x.code === D.dash.last.code)) R.from = D.dash.last.code;
+    else if (srcs.length) R.from = srcs[0].code;
+    else if (libCount() > 0) R.from = "library";
+    else R.from = "";
+  }
+  function rvRender() {
+    const r = R; if (!r) return;
+    if (!r.target) {
+      return sheet(`<h2>Which engagement do you want to fill?</h2><p class="muted small">Choose the engagement that should receive these people.</p>
+        <div class="rvlist">${openList().map((x) => `<button type="button" class="chip" data-a="rvTarget" data-v="${esc(x.code)}"><b>${esc(x.name)}</b><span class="tiny muted">${esc(x.code)} · ${esc(dDate(x.heldAt))} · ${people(x.total)} on the list</span></button>`).join("")}</div>
+        <button class="btn line block dbtn" style="margin-top:12px" data-a="closeSheet">Cancel</button>`);
+    }
+    const srcs = rvSources(r.target), tgt = D.dash.history.find((x) => x.code === r.target), p = r.prev;
+    if (!srcs.length && !libCount()) {
+      return sheet(`<h2>Nothing to reuse yet</h2><p class="muted small">No saved people were found. Details are kept after an engagement ends.</p><button class="btn line block dbtn" style="margin-top:12px" data-a="closeSheet">Close</button>`);
+    }
+    const chipHtml = srcs.map((x) => `<button type="button" class="chip ${r.from === x.code ? "on" : ""}" role="radio" aria-checked="${r.from === x.code}" data-a="rvFrom" data-v="${esc(x.code)}"><b>${esc(x.name)}</b><span class="tiny muted">${esc(dDate(x.heldAt))} · ${people(x.peopleCount)}</span></button>`).join("")
+      + (libCount() ? `<button type="button" class="chip ${r.from === "library" ? "on" : ""}" role="radio" aria-checked="${r.from === "library"}" data-a="rvFrom" data-v="library"><b>Everyone in my saved list</b><span class="tiny muted">${people(libCount())}</span></button>` : "");
+    const cnt = (k) => (p ? ` <b>(${p.counts[k]})</b>` : "");
+    const tick = (k, label, extra) => `<label class="cb"><input type="checkbox" ${r[k] ? "checked" : ""} data-c="rvTick" data-k="${k}"><span>${label}${extra || ""}</span></label>`;
+    let prev;
+    if (r.prevErr) prev = `<div class="err">${ic("alert")}<span>${esc(r.prevErr)}</span></div>`;
+    else if (!p) prev = `<div class="note">${ic("clock")}<span>Checking who will be added…</span></div>`;
+    else {
+      const total = tgt ? tgt.total + p.placesLeft : null;
+      prev = `<div class="note info" style="display:block"><div>Will add <b>${people(p.willAdd)}</b>. ${p.skipped.alreadyIn} ${p.skipped.alreadyIn === 1 ? "is" : "are"} already in this engagement. ${p.skipped.optedOut} asked us not to keep their details.</div><div style="margin-top:4px">Places left: <b>${p.placesLeft}</b>${total ? " of <b>" + total + "</b>" : ""}</div></div>`
+        + (p.exceedsBy > 0 ? `<div class="err" style="margin-top:8px">${ic("alert")}<span>This adds ${people(p.willAdd)} but only ${p.placesLeft} ${p.placesLeft === 1 ? "place is" : "places are"} left. Raise your limit or untick a group.</span></div>` : "");
+    }
+    const ok = p && !r.prevErr && p.willAdd > 0 && p.exceedsBy <= 0 && !r.busy;
+    sheet(`<div class="rvs"><h2>Reuse the data</h2>
+      <p class="muted small" style="margin:0 0 8px">Add people to <b>${esc(tgt ? tgt.name : r.target)}</b> <span class="tiny">(${esc(r.target)})</span>${openList().length > 1 ? ` <button type="button" class="btn ghost" data-a="rvChange">Change</button>` : ""}</p>
+      <label class="lb" style="margin-top:4px">Take people from</label><div class="rvlist" role="radiogroup">${chipHtml}</div>
+      <label class="lb">Who to add</label>
+      ${tick("list", "People on the list", cnt("list"))}${tick("colleagues", "Colleagues who joined", cnt("colleagues"))}${tick("family", "Family members", cnt("family"))}
+      ${tick("roles", "Also make the same Hosts and Team Leads", p ? ` <b>(${p.roles.hosts} Hosts, ${p.roles.teamLeads} Team Leads)</b>` : "")}
+      <div id="rvPrev" style="margin-top:8px">${prev}</div>
+      <button class="btn gold block dbtn" style="margin-top:14px" ${ok ? "" : "disabled"} data-a="rvGo">${r.busy ? "Adding…" : p && p.willAdd > 0 ? "Add " + people(p.willAdd) : "Add people"}</button>
+      <button class="btn line block dbtn" style="margin-top:8px" data-a="closeSheet">Cancel</button></div>`);
+  }
+  function rvQueue(delay) {
+    const r = R; if (!r || !r.target || !r.from) return;
+    r.prev = null; r.prevErr = "";
+    const seq = ++r.seq;
+    clearTimeout(rvT);
+    rvT = setTimeout(async () => {
+      const q = `from=${encodeURIComponent(r.from)}&list=${r.list ? 1 : 0}&colleagues=${r.colleagues ? 1 : 0}&family=${r.family ? 1 : 0}`;
+      let res, err = "";
+      try { res = await api("GET", `/api/e/${encodeURIComponent(r.target)}/reuse/preview?${q}`); } catch (e) { err = e.message; }
+      if (R !== r || r.seq !== seq) return;
+      r.prev = res || null; r.prevErr = err; rvRender();
+    }, delay === undefined ? 250 : delay);
+  }
+  async function rvGo() {
+    const r = R; if (!r || r.busy) return;
+    r.busy = true; rvRender();
+    let res;
+    try { res = await api("POST", `/api/e/${encodeURIComponent(r.target)}/reuse`, { from: r.from, include: { list: r.list, colleagues: r.colleagues, family: r.family }, restoreRoles: r.roles }); }
+    catch (e) { r.busy = false; r.prevErr = e.message; rvRender(); return; }
+    closeSheet();
+    toast(`Added ${people(res.added)}${res.rolesRestored ? " · " + res.rolesRestored + " Host/Team Lead roles restored" : ""}`);
+    const target = r.target; R = null; D.dash = null;
+    S.nextStep = "people";
+    if (S.role === "org" && S.code === target && S.data) { await loadConsole(); gotoStep("people"); }
+    else { history.replaceState(null, "", "/console#" + target); startOrg(); }
+  }
+  function reuseBanner() {
+    const l = D.dash.last, can = rvSources(S.code).length > 0 || libCount() > 0;
+    return `<div class="alert"><span class="dbanner" style="flex:1;min-width:220px">${ic("clock")} <span><b>Last engagement was on ${esc(dDate(l.heldAt))}</b> · Total <b>${l.total}</b> · Participated <b>${l.participated}</b></span></span>${can ? `<button class="btn sm dbtn" data-a="reuseHere">Reuse the data</button>` : ""}<a class="btn sm line dbtn" href="/console#history">History</a></div>`;
+  }
+
+  // ---- erase (always behind a confirm sheet)
+  function eraseEngagement(code) {
+    const x = D.dash.history.find((h) => h.code === code); if (!x) return;
+    confirmSheet({ title: `Erase the kept details of ${x.name}?`, body: `The names, numbers and departments kept from this engagement are deleted now. The totals stay. People who are also in your saved list stay there until you erase them in My saved list or they expire.`, yes: "Erase kept details", danger: true,
+      onYes: async () => { closeSheet(); const r = await run(api("POST", "/api/orgs/me/erase", { type: "engagement", code }), "Kept details erased"); if (r) await refreshDash(); } });
+  }
+  function erasePerson(e164, name) {
+    confirmSheet({ title: `Erase ${name}?`, body: `Their name, number and department are deleted from your saved list and from every past engagement. <b>This also stops us keeping this number again</b>, even if you upload it in a future engagement.`, yes: "Erase this person", danger: true,
+      onYes: async () => { closeSheet(); const r = await run(api("POST", "/api/orgs/me/erase", { type: "person", e164 }), "Erased"); if (r) await refreshDash(); } });
+  }
+  function eraseAll() {
+    const go = async () => {
+      if (!$("eaOk").checked) { sheetYes = go; return toast("Tick the box to confirm."); }
+      closeSheet(); const r = await run(api("POST", "/api/orgs/me/erase", { type: "all" }), "Everyone erased"); if (r) await refreshDash();
+    };
+    confirmSheet({ title: "Erase everyone you have saved?", body: "Every name, number and department kept from all your engagements is deleted. You will have to upload people again for your next engagement.", danger: true, yes: "Erase everyone", extra: `<label class="cb"><input type="checkbox" id="eaOk"> I understand this cannot be undone.</label>`, onYes: go });
+  }
+
+  A.openEng = (el, e) => { e.preventDefault(); history.replaceState(null, "", "/console#" + el.dataset.v); startOrg(); };
+  A.dReload = () => dashboard();
+  A.dHist = () => { const h = $("dHistory"); if (h) h.scrollIntoView({ behavior: "smooth" }); };
+  A.dReuse = (el) => openReuse({ from: el.dataset.v });
+  A.reuseHere = () => openReuse({ target: S.code });
+  A.dEraseEng = (el) => eraseEngagement(el.dataset.v);
+  A.libErase = (el) => erasePerson(el.dataset.v, el.dataset.n);
+  A.libEraseAll = eraseAll;
+  A.rvFrom = (el) => { if (!R) return; R.from = el.dataset.v; rvRender(); rvQueue(); };
+  A.rvTarget = (el) => { if (!R) return; R.target = el.dataset.v; rvPickDefault(); rvRender(); rvQueue(0); };
+  A.rvChange = () => { if (!R) return; R.want = R.from; R.target = ""; R.prev = null; rvRender(); };
+  A.rvGo = rvGo;
+  C.rvTick = (el) => { if (!R) return; R[el.dataset.k] = el.checked; rvRender(); if (el.dataset.k !== "roles") rvQueue(); };
+  I.libQ = (el) => { D.libQ = el.value; clearTimeout(D.libT); D.libT = setTimeout(async () => { await loadLib(); paintLib(); }, 250); };
+  window.addEventListener("hashchange", () => { if (S.role === "org") location.reload(); });
+
+  async function startOrg() {
+    if (!TB.orgToken()) return location.replace("/#login");
+    S.role = "org";
+    let me;
+    try { me = await TB.api("GET", "/api/orgs/me", undefined, { org: true }); }
+    catch (e) { if (e.status === 401) { TB.setOrgToken(null); return location.replace("/#login"); } return fatal(e.message); }
+    S.me = me;
+    const hash = decodeURIComponent(location.hash.slice(1)).toUpperCase();
+    const code = (me.engagements.find((x) => x.code === hash) || {}).code;
+    if (!code) return dashboard(hash === "AI" ? "ai" : hash === "HISTORY");
+    S.code = code; S.data = null; S.step = S.nextStep || ""; S.nextStep = ""; S.stageStep = null;
+    bootConsole();
+  }
+
   // ---------------------------------------------------------------- boot
   const path = location.pathname;
   if (/^\/r\/[^/]+$/.test(path)) bootRole(path.split("/")[2]);

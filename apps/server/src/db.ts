@@ -46,6 +46,9 @@ export function openDb(path: string): Database {
     CREATE TABLE IF NOT EXISTS optouts (
       organizer_id TEXT NOT NULL, hash TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (organizer_id, hash)
     );
+    CREATE TABLE IF NOT EXISTS mail_sent (
+      code TEXT NOT NULL, kind TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (code, kind)
+    );
     CREATE TABLE IF NOT EXISTS summaries (
       code TEXT PRIMARY KEY, organizer_id TEXT NOT NULL, json TEXT NOT NULL
     );

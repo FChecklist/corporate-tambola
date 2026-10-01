@@ -82,3 +82,27 @@
   table.stack td[data-l]::before{content:attr(data-l) ": ";font:600 10.5px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
   .tscroll.stk{overflow:visible}
 }
+
+/* dashboard + reuse */
+.dlast{border-color:var(--gold)}
+.dlh{font:600 24px var(--serif);margin:4px 0 4px}
+.dline{font-size:15px;color:var(--ink2)}
+.dh2{font:600 19px var(--serif);margin:22px 2px 10px}
+.btn.dbtn,.btn.sm.dbtn,.btn.ghost{min-height:42px}
+.ctin a,.ctin button.tl{min-height:40px;display:inline-flex;align-items:center}
+.dbtns{gap:8px}
+.dcard .stats b{font-family:var(--mono)}
+.dbanner{display:flex;gap:8px;align-items:center}
+.liblist{border:1px solid var(--line);border-radius:12px;padding:0 10px;max-height:420px;overflow:auto}
+.librow{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.librow:first-child{border-top:0}
+.rvlist{display:flex;flex-direction:column;gap:6px}
+.rvlist .chip{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:1px;min-height:44px;width:100%}
+.rvs .cb{min-height:40px;align-items:center}
+.sheet{max-height:92vh;overflow:auto}
+@media(max-width:640px){.dbtns .btn{flex:1 1 auto}.dlh{font-size:21px}}
+
+/* AI work link card */
+.dai{border-color:var(--wine)}
+.dai .chip{min-height:42px}
+.dai .hint .ic{width:14px;height:14px;vertical-align:-2px}
