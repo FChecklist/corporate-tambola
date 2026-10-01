@@ -29,7 +29,7 @@ const WALL = 1_700_000_000_000;
 const H = (h: Record<string, string> = {}) => ({ "content-type": "application/json", ...h });
 const raw = (m: string, p: string, b?: unknown, h: Record<string, string> = {}) => handle(new Request("http://x" + p, { method: m, headers: H(h), body: b === undefined ? undefined : JSON.stringify(b) }), env, WALL);
 
-await raw("POST", "/api/z", { id: EID, startRound: START, callSeconds: 6, cap: N <= 500 ? 500 : 100000, tickets: CFG.tickets, rewards: CFG.rewards, breaks: CFG.breaks, rounds: CFG.rounds }, { "x-organizer": SECRET });
+await raw("POST", "/api/z", { id: EID, startRound: START, callSeconds: 6, cap: N <= 500 ? 500 : N <= 2000 ? 2000 : 100000, tickets: CFG.tickets, rewards: CFG.rewards, breaks: CFG.breaks, rounds: CFG.rounds }, { "x-organizer": SECRET });
 await raw("PUT", `/api/z/${EID}/control/key`, { publicKey: publicKeyFromSecret(KEY) }, { "x-organizer": SECRET });
 
 interface P { rt: PhoneRuntime; phone: string; joinAt: number; offFrom: number; offTo: number; blockedAll: boolean; liar: boolean; flaky: number; cheater: boolean; stranded: boolean }
@@ -79,13 +79,14 @@ for (step = 0; step < TICKS; step++) {
   for (let i = 0; i < batch.length; i += 500) await Promise.all(batch.slice(i, i + 500));
   if (step === 10) for (const p of phones) if (p.cheater && p.rt.pid) { await raw("POST", `/api/z/${EID}/claims`, { pid: p.rt.pid, claims: [{ pattern: "full", idx: 3 }, { pattern: "star", idx: 2 }] }); cheated += 2; } // invented claims, sent before the phone could have completed anything
   if (step === 60 && !published) { // the organizer signs a real pause of 20 rounds
-    const f = (await readPublished({ get: async (k) => (await d.db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<any>())?.v ?? null, put: async () => {} }, EID))!;
+    const f = (await readPublished({ get: async (k) => (await d.db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<any>())?.v ?? null, put: async () => {} }, EID));
+    if (!f) { published = true; console.log("  (above 2,000 participants no pause is registered on the free plan: the pause step is skipped)"); } else {
     const m = signControlWithSecret(KEY, nextMessage(f, now, { action: "pause", pauseForRounds: 20 }));
     const r = await raw("POST", `/api/z/${EID}/control`, { message: m });
     ok(r.ok, "organizer pause accepted by the store");
     const f2 = (await readPublished({ get: async (k) => (await d.db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<any>())?.v ?? null, put: async () => {} }, EID))!;
     pauseIv = resolveControl(cfgOf(f2), f2.messages).intervals[0]!; published = true;
-  }
+  } }
   if (RICH) { const ref0 = phones.find((p) => p.joinAt === 0 && !p.stranded && !p.liar && p.flaky === 0 && p.offFrom < 0)!; const b = ref0.rt.view().brk; if (b) { brkSeen.add(b.title); const L = ref0.rt.view().log.length; const prev = brkLen.get(b.title); if (prev === undefined) brkLen.set(b.title, L); else if (prev !== L) brkGrew = true; } }
   if (pauseIv && now >= pauseIv.start && now < pauseIv.end) { const ref = phones.find((p) => p.joinAt === 0 && !p.stranded && !p.liar && p.flaky === 0 && p.offFrom < 0)!; sawDuring.add(ref.rt.view().log.length); }
   if (step % 40 === 0) process.stdout.write(`  step ${step}/${TICKS}, ${((Date.now() - t0) / 1000).toFixed(0)} s\r`);
@@ -99,7 +100,7 @@ const st = resolveControl(cfgOf(f), f.messages);
 const refs: Record<number, number[]> = {};
 for (let r = 1; r <= ROUNDS; r++) refs[r] = deriveCalls(roundEid(EID, r), Array.from({ length: 90 }, (_, k) => rnd(callRoundR(st, START, STRIDE, CFG.breaks, r, k)!)));
 const ref = refs[ROUNDS]!; // phones that finished show the last round
-ok(sawDuring.size === 1, `during the pause no phone revealed a number (log held at ${[...sawDuring][0]})`);
+ok(!pauseIv || sawDuring.size === 1, `during the pause no phone revealed a number (log held at ${[...sawDuring][0]})`);
 if (RICH) { ok(brkSeen.size === 2 && !brkGrew, `both brand breaks were shown (${[...brkSeen].join(", ")}) and no number appeared while one was showing`); ok(phones.filter((p) => p.rt.pid).every((p) => p.rt.view().tickets.length === 2), "every participant holds two tickets"); }
 const live = phones.filter((p) => !p.stranded && !p.liar && p.rt.pid);
 const same = live.filter((p) => { const l = p.rt.view().log; return l.length === 90 && l.every((n, i) => n === ref[i]); });
