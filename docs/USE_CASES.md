@@ -1,4 +1,4 @@
-# Corporate Tambola: use cases, exceptions and what can go wrong
+﻿# Corporate Tambola: use cases, exceptions and what can go wrong
 
 Every row has an ID. The tests carry the same ID in their names (`UC-12 ...`), so `grep "UC-12"` finds the test.
 Automated tests live in `apps/edge/test/usecases.test.ts` (server and money), `apps/edge/test/free-launch.test.ts` (the organizer journey),
@@ -97,3 +97,42 @@ Building and publishing are free. The organizer pays before the start time. If i
 | UC-56 | Big screen: countdown, big number, board, paused | Live check |
 | UC-57 | Phone page shows "waiting for the organizer" when locked | Live check |
 | UC-58 | Mobile width and tablet | Live check |
+
+---
+
+# Test results (2026-10-02)
+
+Run: `bun test packages apps tools/control-worker` gives **449 passing, 0 failing** (type check clean). Real-time runs are listed below.
+
+## Where each use case is tested
+| IDs | Where | How |
+|---|---|---|
+| UC-1, UC-2, UC-4, UC-7, UC-9, UC-10, UC-12, UC-13, UC-27, UC-28 | `apps/edge/test/free-launch.test.ts` | The organizer journey, step by step |
+| UC-3, UC-5, UC-6, UC-8b, UC-14 to UC-26, UC-28 to UC-35, UC-39, UC-41, UC-45 to UC-52, UC-60 to UC-63 | `apps/edge/test/usecases.test.ts` | One named test per case, with a stand-in payment gateway and a stand-in mail service |
+| UC-36, UC-37, UC-38, UC-40, UC-42, UC-43 | `packages/beacon/test/phone-runtime.test.ts` | Simulated phones, a fake clock, a fake beacon; includes the held-for-payment test |
+| Money: price, GST, packs, invoice, partners | `apps/edge/test/pay.test.ts`, `partners.test.ts` | Payment flow including paying for a draft |
+| UC-44, 10,000 phones, free-plan write budget | `tools/sim/crowd.ts`, `live-local.ts` | Real public beacon, real clock, a signed pause |
+| UC-10 (live) | `tools/sim/live-unpaid.ts` against the live site | New organizer, build, publish, 3 phones, nobody pays: held, no number shown, 12/12 checks |
+| UC-9 and UC-12 (real time) | `tools/sim/live-paid.ts` against a local server in test-payment mode | Pays in time: starts on time and matches the public reference. Pays late: begins about 3 minutes later with the same numbers on every phone; 9/9 checks |
+| The organizer's external AI | A separate Claude acted as ChatGPT-style assistant with only the pasted AI work link, and a persona organizer answered | Two full conversations against the live site (create, settings, roster, summary, publish hand-over) |
+| UC-53 to UC-58 | In-app browser on the live site | Landing (mobile width too), console in draft, payment-due, and held states, payment page, big screen (countdown, running, held), phone page held |
+
+## What testing found and what was done
+| Found | Where | Fix |
+|---|---|---|
+| A crowd joining at the same instant could pass the limit | UC-32 | The last places are now claimed by one atomic insert |
+| A phone could show the first number at the very start before it learned the engagement was held | Live run | The hold now starts 45 seconds before the start time |
+| Guests could learn the engagement was unpaid from the public info | UC-35 | Only the organizer sees "unpaid"; phones only see "held" |
+| GSTIN was checked only on the page | UC-22 | The server checks it too (an empty one is still allowed) |
+| The simulated external AI did not know about the lucky draw, one reward line per winner, the two-ticket house, how to read back what was saved, or the payment rules | AI run 1 | Manifest now has the full schema and a worked example, a `summary` read-back, a payment FAQ, and a helpful 404 |
+| Console froze on "Loading..." when an engagement was held for non-payment (a held answer was mistaken for a pause file) | Live browser | Fixed in the console and the big screen; the console now shows an error message instead of freezing |
+| The console showed numbers called while guests saw nothing (held) | Live browser | The console shows 0 called while held |
+| Link buttons were misaligned | Live browser | Styled as buttons |
+| Browsers kept an old script for an hour after a release | Live browser | Scripts and styles are re-checked on every load |
+| 5 new organizer accounts per network per day was tight for an office | Live | Now 10 |
+
+## Known limits and decisions
+- There is no automatic test of the page scripts themselves (no browser test runner): they were checked by hand in the browser on the live site, and by Playwright-style steps run through the in-app browser. A permanent browser test is a good next step.
+- Online payment itself is not testable end to end until Razorpay keys exist. Everything around it (order, signature check, webhook, late payment, tampering, duplicates) is tested with a stand-in gateway.
+- Phones check for the held state about every 6 to 9 seconds, so a late hold or a late release can take up to about 12 seconds to reach a phone.
+- Mail is a nudge only: nothing depends on a mail arriving.

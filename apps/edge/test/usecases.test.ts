@@ -524,3 +524,34 @@ describe("G. the organizer's AI", () => {
     const n = await j(await call("GET", "/api/z/EXAMPLE-1/nothing-here")); expect(n.hint).toMatch(/ai-manifest/);
   });
 });
+
+describe("G2. the organizer's AI: round 2 findings", () => {
+  test("UC-64 a partial rewards patch is refused with a message that explains rewards REPLACE the list, and nothing changes", async () => {
+    const o = await organizer(); await call("POST", "/api/z", eng("REPL-1"), o.ai);
+    await call("PATCH", "/api/z/REPL-1/settings", { rewards: [{ pattern: "full", ordinal: 1, text: "A" }, { pattern: "full", ordinal: 2, text: "B" }] }, o.ai);
+    const r = await call("PATCH", "/api/z/REPL-1/settings", { rewards: [{ pattern: "full", ordinal: 5, text: "E" }] }, o.ai);
+    expect(r.status).toBe(400); expect((await j(r)).error).toMatch(/REPLACES the whole list/);
+    expect((await j(await call("GET", "/api/z/REPL-1/summary", undefined, o.ai))).rewards.length).toBe(2);
+    expect((await call("PATCH", "/api/z/REPL-1/settings", { rewards: [{ pattern: "full", ordinal: 1, text: "A" }, { pattern: "full", ordinal: 2, text: "B" }, { pattern: "full", ordinal: 3, text: "C" }] }, o.ai)).status).toBe(200);
+  });
+  test("UC-65 the links are consistent: a draft gives consoleUrl; once published the same call gives payUrl and shareUrl", async () => {
+    const o = await organizer(); await call("POST", "/api/z", eng("LINK-1"), o.ai);
+    const d = await j(await call("POST", "/api/z/LINK-1/publish", {}, o.ai)); expect(d.consoleUrl).toContain("/zc.html?e=LINK-1"); expect(d.payUrl).toBeUndefined();
+    await call("POST", "/api/z/LINK-1/publish", contact, o.h);
+    const p = await j(await call("POST", "/api/z/LINK-1/publish", {}, o.ai)); expect(p.payUrl).toContain("/pay.html?e=LINK-1"); expect(p.shareUrl).toContain("/z.html?e=LINK-1");
+    expect((await j(await call("GET", "/api/z/LINK-1/summary", undefined, o.ai))).payUrl).toBe(p.payUrl); // the summary agrees
+  });
+  test("UC-66 the summary says what is due: pack, price with GST, pay-before time, paid flag and the game length", async () => {
+    const o = await organizer();
+    await call("POST", "/api/z", eng("DUE-1", { cap: 480, callSeconds: 12 }), o.ai);
+    await call("PATCH", "/api/z/DUE-1/settings", { rounds: 2, breaks: [{ after: 20, seconds: 120, kind: "speech", title: "MD address" }] }, o.ai);
+    await call("POST", "/api/z/DUE-1/publish", contact, o.h);
+    const s = await j(await call("GET", "/api/z/DUE-1/summary", undefined, o.ai));
+    expect(s.paid).toBe(false); expect(s.pack).toBe(500); expect(s.priceInrIncludingGst).toBeGreaterThan(1000); expect(s.payBefore).toMatch(/IST/);
+    expect(s.gameMinutes).toBe(Math.round((90 * 12 * 2 + 120 + 90) / 60)); // two rounds of 90 calls, one break, one intermission
+  });
+  test("UC-67 the manifest says: no writes before the yes, rewards replace the list, what skipped/invalid mean, and does not ask for the speed in the schedule call", async () => {
+    const t = JSON.stringify(await j(await call("GET", "/api/z/ai-manifest")));
+    expect(t).toMatch(/DO NOT call POST \/api\/z or any other write/); expect(t).toMatch(/REPLACE what was saved/); expect(t).toMatch(/skipped \(already on the list/); expect(t).not.toMatch(/schedule\?at=[^"]*callSeconds/);
+  });
+});

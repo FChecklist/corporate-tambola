@@ -15,7 +15,7 @@
   async function tick() {
     try {
       if (!S.info) S.info = await j(`/api/z/${EID}/info`);
-      S.cf = await fetch(`/api/z/${EID}/control`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => S.cf);
+      const cf0 = await fetch(`/api/z/${EID}/control`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => S.cf); S.cf = cf0 && cf0.pubKey ? cf0 : null; S.locked = !!(cf0 && cf0.locked); // held for non-payment: nothing is shown
       const l = await ZG.fetchRound("latest"); if (l) { S.now = l.round; S.nowAt = Date.now(); }
       if (S.now === null) { S.err = "Waiting for the clock…"; return; }
       S.st = S.cf ? ZG.resolveControl(ZG.cfgOf(S.cf), S.cf.messages) : null;
@@ -25,7 +25,7 @@
       let budget = 60;
       for (let r = 1; r <= cfg.rounds; r++) {
         const sched = Array.from({ length: 90 }, (_, k) => ZG.callRoundR(S.st, S.info.startRound, stride, cfg.breaks, r, k));
-        const upto = sched.filter((x) => x !== null && x <= S.now);
+        const upto = sched.filter((x) => x !== null && !S.locked && x <= S.now);
         const need = upto.filter((x) => !S.store.rounds.has(x)).slice(0, budget); budget -= need.length;
         await Promise.all(need.map((x, i) => (S.now - x <= 2 ? S.store.fetchLive(x, i) : S.store.fetchBackfill(x, i))));
         S.logs[r] = ZG.logFrom(ZG.roundEid(EID, r), sched.filter((x) => x !== null), S.store, upto.length);
@@ -41,7 +41,8 @@
     if (!S.info) return ($app.innerHTML = `<p class="msg">${esc(S.err || "Loading…")}</p>`);
     const info = S.info, cfg = S.cfg || { rounds: 1 };
     const secsToStart = S.now === null ? null : (info.startRound - S.now) * 3 - (Date.now() - (S.nowAt || Date.now())) / 1000;
-    const log = S.logs[S.round] || [];
+    const log = S.locked ? [] : S.logs[S.round] || [];
+    if (S.locked) return ($app.innerHTML = `<div class="top"><div class="brand">Corporate Tambola</div></div><div class="big"><h1>Waiting for the organizer</h1><p>This engagement will begin as soon as the organizer finishes setting it up.</p></div><div class="foot">${esc(location.host)}/z?e=${esc(EID)}</div>`);
     const paused = S.st && S.now !== null && S.st.intervals.some((i) => S.now >= i.start && S.now < i.end);
     const head = `<div class="top"><div class="brand">Corporate Tambola</div><div class="meta">${cfg.rounds > 1 ? "Round " + S.round + " of " + cfg.rounds + " · " : ""}${log.length} of 90 numbers called</div></div>`;
     const wins = (S.results || []).filter((r) => r.round === S.round || r.round === undefined).map((r) => `<span><b>${esc(ORD(r.ordinal || 1))} ${esc(NAMES[r.pattern] || r.pattern)}</b> · ${r.count} winner${r.count === 1 ? "" : "s"}</span>`).join("");

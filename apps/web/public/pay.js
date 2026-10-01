@@ -37,7 +37,7 @@
       : `<div class="zrow"><span><b>Total</b></span><em><b>${TB.money(x.total, "USD")}</b></em></div><p class="zsmall">No tax added. Billed in US dollars.</p>`;
     const off = S.mode === "off";
     return `${head}
-      ${off ? `<div class="zbanner info"><b>Payment opens soon.</b> Your draft is saved and nothing is lost. Come back to this page when online payment is switched on.</div>` : ""}
+      ${off ? `<div class="zbanner info"><b>Online payment opens soon.</b> Your engagement is saved and nothing is lost. Come back to this page when payment is switched on. Until then it stays held at its start time.</div>` : ""}
       <div class="zcard"><h2>Your order</h2>
         <div class="zrow"><span>Engagement</span><em>${esc(eid)}</em></div>
         <div class="zrow"><span>Participants</span><em>Up to ${nf(pack)}</em></div>${sum}

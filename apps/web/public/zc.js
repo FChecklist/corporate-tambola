@@ -179,7 +179,7 @@
       S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, rounds: pr.rounds || 1 };
       S.claims = (await call("GET", `/api/z/${eid}/claims`)).claims;
       try { S.reqs = (await call("GET", `/api/z/${eid}/control/request`)).requests; } catch { S.reqs = []; }
-      const cf = await fetch(BASE + `/api/z/${eid}/control`).then((r) => (r.ok ? r.json() : null));
+      const cf0 = await fetch(BASE + `/api/z/${eid}/control`).then((r) => (r.ok ? r.json() : null)); const cf = cf0 && cf0.pubKey ? cf0 : null; // a held (unpaid) engagement answers {locked:true} with no signing key: that is not a pause file
       S.control = null; S.cf = cf;
       const now = await latestRound();
       let st = null;
@@ -192,7 +192,7 @@
       S.logs = {}; let budget = 60; // catch up quickly when the console is opened late
       for (let r = 1; r <= S.cfg.rounds; r++) {
         const sched = schedOf(r);
-        const upto = sched.filter((x) => x !== null && now !== null && x <= now);
+        const upto = sched.filter((x) => x !== null && now !== null && !S.locked && x <= now); // held for non-payment: nothing is shown to anyone, the organizer included
         const need = upto.filter((x) => !S.store.rounds.has(x)).slice(0, budget); budget -= need.length;
         await Promise.all(need.map((x, i) => (now - x <= 2 ? S.store.fetchLive(x, i) : S.store.fetchBackfill(x, i))));
         S.logs[r] = ZG.logFrom(ZG.roundEid(eid, r), sched.filter((x) => x !== null), S.store, upto.length);

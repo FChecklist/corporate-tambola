@@ -29,3 +29,7 @@
 .zbtn{width:100%;min-height:48px;margin-top:14px;border:0;border-radius:12px;background:var(--wine);color:#fff;font:700 16px var(--sans,inherit)}
 .zsmall{font-size:12px;color:var(--muted);margin-top:8px}
 .zref{display:inline-block;margin-top:10px;padding:8px 2px;min-height:24px;font-size:12px;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+
+/* link buttons look and align like real buttons */
+a.zbtn{display:flex!important;align-items:center;justify-content:center;text-align:center;text-decoration:none;box-sizing:border-box}
+.zc a.zbtn.s{display:inline-flex!important}

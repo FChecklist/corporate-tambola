@@ -119,7 +119,7 @@ describe("build first, pay to publish", () => {
     const { h, ai: key } = await organizer();
     await call("POST", "/api/z", eng("DRAFT-5"), h);
     const r = await (await call("POST", "/api/z/DRAFT-5/publish", {}, { "x-organizer": key })).json() as any;
-    expect(r.published).toBe(false); expect(r.needsOrganizer).toBe(true); expect(r.payUrl).toBe("https://tambola.test/zc.html?e=DRAFT-5");
+    expect(r.published).toBe(false); expect(r.needsOrganizer).toBe(true); expect(r.consoleUrl).toBe("https://tambola.test/zc.html?e=DRAFT-5"); expect(r.payUrl).toBeUndefined(); // a draft is opened in the console first; the pay page link only exists once it is published
     expect(raw.prepare("SELECT pack FROM engagement WHERE id='DRAFT-5'").get()).toEqual({ pack: 0 });
     expect((await call("POST", "/api/z/DRAFT-5/join", { phone: "9876543210" })).status).toBe(403); // still a draft
   });

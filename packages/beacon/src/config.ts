@@ -65,7 +65,7 @@ export function validateCfg(input: { tickets?: unknown; rewards?: unknown; break
       seen.add(id);
       out.push({ pattern, scope, ordinal, text: cleanText(r?.text, 80) });
     }
-    for (const l of out) if (l.ordinal > 1 && !out.some((x) => x.pattern === l.pattern && x.scope === l.scope && x.ordinal === l.ordinal - 1)) return { ok: false, error: "A 2nd, 3rd... reward needs the one before it." };
+    for (const l of out) if (l.ordinal > 1 && !out.some((x) => x.pattern === l.pattern && x.scope === l.scope && x.ordinal === l.ordinal - 1)) return { ok: false, error: "A 2nd, 3rd... reward needs the one before it. Note that sending rewards REPLACES the whole list, so send every reward line each time, with ordinals starting at 1 for each house." };
     if (out.some((l) => l.scope === "two_ticket") && (input.tickets ?? cfg.tickets) !== 2) return { ok: false, error: "A Full Two-Ticket House needs two tickets per participant." };
     cfg.rewards = out;
   }
