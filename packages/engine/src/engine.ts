@@ -453,7 +453,7 @@ export class EngagementEngine {
     this.current = n;
     this.lastDrawAt = this.now();
     this.nextAt = this.settings.callMode === "manual" ? null : this.now() + CFG.AI_GAP;
-    this.logMsg(`Call ${this.called.length}: ${n}${by ? ` (drawn by ${by})` : ""}`);
+    this.logMsg(`Call ${this.called.length}${by ? ` (drawn by ${by})` : ""}`); // number deliberately not logged: nobody sees past numbers during the engagement
     this.emit({ to: "all", type: "call", callNo: this.called.length, number: n });
     return null;
   }

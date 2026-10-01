@@ -1,0 +1,83 @@
+/* Participant page: only what app.css does not already cover. */
+body{background:var(--bg)}
+.sr{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.pw{max-width:440px;margin:0 auto;padding:10px 8px 40px;min-height:100vh;min-height:100dvh}
+.ptop .word{font-size:17px}
+.ptop .av{width:40px;height:40px;display:grid;place-items:center}
+.pcard .tiny{margin:10px 0 0}
+.pcard .center{text-align:center}
+.mname{font:600 28px/1.15 var(--serif);letter-spacing:.04em;margin:8px 0 2px;color:var(--wine)}
+
+/* the pass: keep the strip sticky (no clipping ancestor) */
+.bp{overflow:visible}
+.bphd{border-radius:18px 18px 0 0}
+.stub{border-radius:0 0 18px 18px}
+.bphd .meta .pill{font-size:11.5px}
+.strip2{min-height:86px}
+.strip2>div:nth-child(2){flex:1;min-width:0}
+.strip2 .sln{overflow-wrap:anywhere}
+.strip2 .tools{flex-direction:column;justify-content:center}
+.spill{min-height:40px;min-width:40px;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.spill.icon{padding:0;width:40px;border-radius:50%}
+.spill.talk{border-color:#7CF0B5;color:#7CF0B5}
+.strip2 .talkchip{display:inline-flex;gap:5px;align-items:center;margin-bottom:3px;border:1px solid #7CF0B5;color:#7CF0B5;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700}
+.ball{font-variant-numeric:tabular-nums}
+
+/* ticket grid: 9 columns on a phone, so cells are taller than wide to keep a 44px tap target */
+.tgrid{gap:3px;padding:8px 6px}
+.cell{aspect-ratio:auto;height:44px;padding:0;min-width:0}
+button.cell{font:700 15px var(--sans);color:var(--ink);cursor:pointer}
+button.cell.cut{color:var(--gold2)}
+.cell.cut{box-shadow:0 0 0 1px var(--deep) inset}
+.cell.hl{box-shadow:0 0 0 2px var(--gold) inset}
+.cell.cut.hl{box-shadow:0 0 0 2px var(--gold) inset}
+.sg .cell{height:34px;font-size:13px}
+.tabs2{display:flex;gap:6px;padding:10px 12px 0}
+.tabs2 .chip{min-height:40px;flex:1}
+.tcap{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);padding:6px 14px 0}
+
+/* rewards */
+.pzr{grid-template-columns:minmax(0,1fr) auto;align-items:start}
+.pzr .nm{background:none;border:0;padding:0;text-align:left;cursor:pointer;display:block;width:100%}
+.pzr .nm b{display:block;font-size:13.5px}
+.pzr .nm small{display:block}
+.pzr em{overflow-wrap:anywhere;font-family:var(--mono);font-size:10.5px}
+.pzr .rt{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.cl{min-height:40px;min-width:72px;font-size:13px}
+.pzr.later{opacity:.6}
+.pzr.won .nm b,.pzr.won .nm small{text-decoration:line-through;color:var(--muted)}
+.mine{color:var(--ok);font-weight:700}
+.plinks a{font:700 10px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);text-decoration:underline;text-underline-offset:3px;min-height:40px;display:inline-flex;align-items:center}
+.mrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:0 14px 10px}
+.tid{font:500 11.5px var(--mono);color:var(--muted);overflow-wrap:anywhere}
+
+/* floating banners (claim check, result, emergency, reconnecting) */
+.bnr{position:fixed;left:0;right:0;bottom:78px;z-index:60;display:grid;gap:6px;padding:0 10px;pointer-events:none;justify-items:center}
+.bnr>div{pointer-events:auto;max-width:424px;width:100%;border-radius:12px;padding:11px 13px;font-size:13.5px;line-height:1.4;box-shadow:0 14px 30px -14px rgba(0,0,0,.55);background:var(--ink);color:#fff}
+.bnr .ok{background:#1f5c44}.bnr .bad{background:#7a1f1a}.bnr .warn{background:#7a5a10}.bnr .info{background:#1F2F52}
+.bnr b{display:block;font-size:14.5px}
+.bnr ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:5px}
+.bnr li{display:flex;gap:8px;align-items:flex-start}
+.bnr li .ic{margin-top:2px}
+.bnr .you{display:inline-block;margin-left:6px;background:var(--gold);color:var(--deep);border-radius:999px;padding:0 8px;font-size:11px;font-weight:700}
+
+/* menu inside a sheet */
+.sheet .pmenu{position:static;width:auto;border:0;box-shadow:none;padding:0}
+.sheet .pmenu button,.sheet .pmenu a{display:flex;gap:10px;align-items:center;width:100%;border:0;background:transparent;padding:12px 10px;border-radius:9px;text-align:left;font-weight:500;min-height:44px;color:var(--ink);text-decoration:none;font-size:15px}
+.sheet .pmenu button:hover,.sheet .pmenu a:hover{background:var(--sunk)}
+.inv{border-top:1px solid var(--line2);padding:10px 0}
+.inv:first-of-type{border-top:0}
+.inv .row{margin-top:6px}
+.sheet .btn+.btn{margin-top:8px}
+
+/* brand break overlay */
+.brkov{position:fixed;inset:0;z-index:70;background:#14091c;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px;text-align:center}
+.brkov .eyebrow{color:var(--gold)}
+.brkov h2{font:600 26px/1.2 var(--serif);margin:0;max-width:560px}
+.brkov .cnt{font:600 44px var(--mono)}
+.brkov .cntl{font-size:12.5px;color:#EBD9DE}
+.brkov video,.brkov iframe{width:100%;max-width:640px;aspect-ratio:16/9;max-height:46vh;background:#000;border:0;border-radius:12px}
+.brkov .card{width:100%;max-width:560px;aspect-ratio:16/9;max-height:40vh;border-radius:12px;background:#1F2F52;display:grid;place-items:center;padding:16px;font:600 22px var(--serif)}
+
+#toast{z-index:95}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}

@@ -1,0 +1,146 @@
+/* Corporate Tambola public website: pricing, checkout, organizer login. Vanilla JS; needs common.js (window.TB). */
+(function () {
+  const $ = TB.$, esc = TB.esc, ic = TB.ic;
+  const nf = (n) => Number(n).toLocaleString("en-IN");
+  const S = { cur: TB.guessCurrency(), pack: 1000 };
+  let ORDER = null;
+
+  // ---------- price display ----------
+  function breakdown(pack, cur) {
+    const x = TB.price(pack, cur);
+    return cur === "INR"
+      ? `<span>Software <b>${TB.money(x.base, "INR")}</b></span><span>GST 18% <b>${TB.money(x.tax, "INR")}</b></span><span>Total <b>${TB.money(x.total, "INR")}</b></span>`
+      : `<span>Total <b>${TB.money(x.total, "USD")}</b></span><span>No tax added · billed in US dollars</span>`;
+  }
+  function renderPrices() {
+    document.querySelectorAll("[data-cur]").forEach((el) => {
+      el.innerHTML = ["INR", "USD"].map((k) => `<button type="button" class="${S.cur === k ? "on" : ""}" aria-pressed="${S.cur === k}" data-c="${k}">${k === "INR" ? "₹ INR" : "US$"}</button>`).join("");
+    });
+    $("pack").innerHTML = TB.PACKS.map(([n]) => `<option value="${n}" ${n === S.pack ? "selected" : ""}>Up to ${nf(n)} participants</option>`).join("");
+    $("heroBrk").innerHTML = breakdown(S.pack, S.cur);
+    $("packs").innerHTML = TB.PACKS.map(([n]) => {
+      const x = TB.price(n, S.cur);
+      return `<div class="pack"><span class="up">Up to</span><span class="n">${nf(n)} participants</span><span class="tot">${TB.money(x.total, S.cur)}</span><div class="brk">${breakdown(n, S.cur)}</div><button type="button" class="btn ${n === S.pack ? "" : "line"}" data-buy="${n}" aria-label="Choose the pack for up to ${nf(n)} participants">Choose this pack ${ic("arrow")}</button></div>`;
+    }).join("");
+    $("priceNote").textContent = S.cur === "INR" ? "Prices in Indian rupees include 18% GST. Billed in India." : "Prices in US dollars. No tax added. Billed outside India.";
+  }
+  document.addEventListener("click", (e) => {
+    const c = e.target.closest("[data-c]"); if (c) { S.cur = c.dataset.c; renderPrices(); if ($("ordSum")) sumRefresh(); return; }
+    const b = e.target.closest("[data-buy]"); if (b) { S.pack = +b.dataset.buy; renderPrices(); openCheckout(S.pack); return; }
+    if (e.target.closest("[data-close]")) TB.closeSheet();
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") TB.closeSheet(); });
+  $("pack").addEventListener("change", (e) => { S.pack = +e.target.value; renderPrices(); });
+  $("payBtn").addEventListener("click", () => openCheckout(S.pack));
+  $("loginLink").addEventListener("click", (e) => { e.preventDefault(); openLogin(""); });
+
+  // ---------- helpers ----------
+  const xbtn = `<button type="button" class="xbtn" data-close aria-label="Close">${ic("x")}</button>`;
+  const err = (t) => `<div class="err" role="alert">${ic("alert")}<span>${esc(t)}</span></div>`;
+  const setErr = (t) => { $("fErr").innerHTML = t ? err(t) : ""; };
+  const focusFirst = (id) => setTimeout(() => { const el = $(id); if (el) el.focus(); }, 60);
+  function busy(btn, on, label) { btn.disabled = on; if (label) btn.dataset.l = btn.dataset.l || btn.innerHTML; btn.innerHTML = on ? label : btn.dataset.l || btn.innerHTML; }
+
+  // ---------- checkout ----------
+  function sumHTML(pack, cur) {
+    const x = TB.price(pack, cur);
+    return cur === "INR"
+      ? `<div class="kv"><span>Software</span><b>${TB.money(x.base, cur)}</b></div><div class="kv"><span>GST 18%</span><b>${TB.money(x.tax, cur)}</b></div><div class="kv t"><span>Total</span><b>${TB.money(x.total, cur)}</b></div>`
+      : `<div class="kv"><span>Software</span><b>${TB.money(x.base, cur)}</b></div><div class="kv"><span>Tax</span><b>None added</b></div><div class="kv t"><span>Total</span><b>${TB.money(x.total, cur)}</b></div><p class="tiny muted" style="margin:0 0 10px">No tax added · billed in US dollars</p>`;
+  }
+  function sumRefresh() { $("ordSum").innerHTML = sumHTML(ORDER.pack, S.cur); }
+  function taxField() {
+    const c = $("oCty").value, india = c === "IN";
+    $("taxBox").innerHTML = india
+      ? `<label class="lb" for="oGst">GSTIN (for your GST invoice)</label><input class="inp" id="oGst" maxlength="15" autocomplete="off" placeholder="e.g. 27ABCDE1234F1Z5" style="text-transform:uppercase">`
+      : `<label class="lb" for="oGst">Company tax / VAT number (optional)</label><input class="inp" id="oGst" maxlength="30" autocomplete="off" placeholder="Shown on your invoice">`;
+    S.cur = india ? "INR" : "USD"; renderPrices(); sumRefresh();
+  }
+  function openCheckout(pack) {
+    ORDER = { pack };
+    const def = TB.guessCountry();
+    TB.sheet(`${xbtn}<div class="eyebrow">Your order</div><h2>Up to ${nf(pack)} participants</h2>
+      <ul class="facts"><li>${ic("ticket")}Every participant gets their own ticket on their phone</li><li>${ic("phone")}Mobile number only. No SMS, no app, no password for participants</li><li>${ic("users")}A private engagement for your closed group, in any country</li><li>${ic("gift")}Participants never pay. You give the rewards</li></ul>
+      <div class="sum" id="ordSum"></div>
+      <form id="coForm" novalidate>
+        <label class="lb" for="oName">Organization name</label><input class="inp" id="oName" autocomplete="organization" placeholder="e.g. Acme Industries">
+        <label class="lb" for="oMail">Your work email (invoice and login)</label><input class="inp" id="oMail" type="email" autocomplete="email" placeholder="you@company.com">
+        <label class="lb" for="oCty">Country of your organization</label><select class="inp" id="oCty">${TB.countryOpts(def)}</select>
+        <div id="taxBox"></div><div id="fErr"></div>
+        <button class="btn block" style="margin-top:16px" type="submit" id="payGo">${ic("lock")} Pay (local test payment)</button>
+      </form>
+      <p class="proto">Local test payment: no real money is taken. Unused places are not refunded.</p>`);
+    $("oCty").addEventListener("change", taxField);
+    $("coForm").addEventListener("submit", (e) => { e.preventDefault(); pay(); });
+    taxField(); focusFirst("oName");
+  }
+  async function pay() {
+    const org = $("oName").value.trim(), email = $("oMail").value.trim().toLowerCase(), country = $("oCty").value, taxId = $("oGst").value.trim().toUpperCase();
+    if (org.length < 2) return setErr("Please enter your organization name.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return setErr("Please enter a valid work email.");
+    if (country === "IN" && !taxId) return setErr("Please enter your GSTIN.");
+    if (country === "IN" && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(taxId)) return setErr("This GSTIN does not look right. It has 15 characters, like 27ABCDE1234F1Z5.");
+    setErr("");
+    const btn = $("payGo"); btn.disabled = true; const keep = btn.innerHTML; btn.textContent = "Processing…";
+    try {
+      const r = await TB.api("POST", "/api/checkout", { org, email, country, taxId, pack: ORDER.pack, currency: S.cur });
+      ORDER = Object.assign(ORDER, { org, email }, r);
+      done();
+    } catch (e) { setErr(e.message); btn.disabled = false; btn.innerHTML = keep; }
+  }
+  function done() {
+    const o = ORDER;
+    TB.sheet(`${xbtn}<div class="res ok">${ic("check")}</div><h2 class="center">Your engagement is ready</h2>
+      <div class="sum"><div class="kv"><span>Order</span><b class="mono">${esc(o.orderId)}</b></div><div class="kv"><span>Organization</span><b>${esc(o.org)}</b></div><div class="kv"><span>Participants</span><b>Up to ${nf(o.pack)}</b></div><div class="kv t"><span>Paid (test)</span><b>${TB.money(o.total, o.currency)}</b></div></div>
+      <p class="small muted center">Next step: log in to your console to add participants and share the link. We will send the login code to <b>${esc(o.email)}</b>.</p>
+      <div id="fErr"></div>
+      <button class="btn block" id="toLogin" type="button">Log in to your console ${ic("arrow")}</button>`);
+    $("toLogin").addEventListener("click", () => askCode(o.email, $("toLogin")));
+  }
+
+  // ---------- login ----------
+  function openLogin(email) {
+    TB.sheet(`${xbtn}<div class="eyebrow">Organizer login</div><h2>Sign in with your work email</h2><p class="muted small">Participants never log in here. They join with your link. We email you a 6-digit code: no password.</p>
+      <form id="lgForm" novalidate><label class="lb" for="lMail">Work email</label><input class="inp" id="lMail" type="email" autocomplete="email" placeholder="you@company.com" value="${esc(email || "")}"><div id="fErr"></div>
+      <button class="btn block" style="margin-top:14px" type="submit" id="lgGo">Email me a code ${ic("arrow")}</button></form>`);
+    $("lgForm").addEventListener("submit", (e) => { e.preventDefault(); const m = $("lMail").value.trim().toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) return setErr("Please enter a valid work email."); askCode(m, $("lgGo")); });
+    focusFirst("lMail");
+  }
+  async function askCode(email, btn) {
+    if (btn) { btn.disabled = true; }
+    try {
+      const r = await TB.api("POST", "/api/auth/email", { email });
+      codeView(email, r.devCode);
+    } catch (e) { if (btn) btn.disabled = false; const f = $("fErr"); if (f) f.innerHTML = err(e.message); else TB.toast(esc(e.message)); }
+  }
+  function codeView(email, devCode) {
+    TB.sheet(`${xbtn}<div class="eyebrow">Check your inbox</div><h2>Enter the 6-digit code</h2><p class="muted small">In production the code arrives by email at <b>${esc(email)}</b> and works for 10 minutes.</p>
+      ${devCode ? `<div class="note info devcode" role="note"><span>Local test mode: your code is <b>${esc(devCode)}</b></span><button type="button" class="btn sm" id="useCode">Use this code</button></div>` : ""}
+      <form id="cdForm" novalidate><label class="lb" for="lCode">6-digit code</label><input class="inp mono codein" id="lCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" aria-describedby="fErr"><div id="fErr"></div>
+      <button class="btn block" style="margin-top:14px" type="submit" id="cdGo">Sign in</button></form>
+      <button class="btn line block" style="margin-top:8px" type="button" id="resend">Send a new code</button>`);
+    const verify = async () => {
+      const code = $("lCode").value.replace(/\D/g, "");
+      if (code.length !== 6) return setErr("Enter the 6-digit code.");
+      const b = $("cdGo"); b.disabled = true; setErr("");
+      try {
+        const r = await TB.api("POST", "/api/auth/verify", { email, code });
+        TB.setOrgToken(r.token); location.href = "/console";
+      } catch (e) { b.disabled = false; setErr(e.message); }
+    };
+    $("cdForm").addEventListener("submit", (e) => { e.preventDefault(); verify(); });
+    $("resend").addEventListener("click", () => askCode(email, $("resend")));
+    const u = $("useCode"); if (u) u.addEventListener("click", () => { $("lCode").value = devCode; verify(); });
+    focusFirst("lCode");
+  }
+
+  // ---------- init ----------
+  renderPrices();
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    let wi = 0; const tick = () => { const L = document.querySelectorAll("#whoL li"); L.forEach((l, i) => l.classList.toggle("on", i === wi % L.length)); wi++; };
+    tick(); setInterval(tick, 1300);
+    let bb = 0; setInterval(() => { bb = (bb + 2) % 102; const e = $("bbp"); if (e) e.style.setProperty("--p", bb + "%"); }, 200);
+  }
+  const hashLogin = () => { if (location.hash === "#login") openLogin(""); };
+  window.addEventListener("hashchange", hashLogin); hashLogin();
+})();

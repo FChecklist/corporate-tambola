@@ -465,9 +465,12 @@ route_("POST", "/api/e/:code/people/bulk", async ({ req, m }) => {
   const room = getRoom(m[1]!), who = needConsole(actorOf(req, room)), b = await body(req);
   const ids: string[] = b.ids ?? [];
   if (b.action === "role") {
-    for (const id of ids) orErr(room.engine.setRole(who, id, b.role, b.cap), 0);
+    const errors: string[] = [];
+    let done = 0;
+    for (const id of ids) { const err = room.engine.setRole(who, id, b.role, b.cap); if (err) errors.push(err); else done++; }
+    if (done === 0 && errors.length) fail(400, errors[0]!);
     room.touch(true);
-    return json({ ok: true });
+    return json({ ok: true, changed: done, skipped: errors.length, firstError: errors[0] });
   }
   if (b.action === "remove") {
     const r = room.engine.removeParticipants(who, ids);

@@ -1,0 +1,76 @@
+/* Public website extras (landing, pricing, checkout, legal). Reuses app.css tokens/classes. */
+html{scroll-behavior:smooth;scroll-padding-top:12px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.call{animation:none}}
+body{overflow-x:hidden}
+.site{min-height:0}
+@media (min-width:961px){.site{min-height:100vh;min-height:100dvh}}
+.snav .links a{min-height:40px;display:inline-flex;align-items:center}
+.snav .links a.login{display:inline-flex}
+.snav .links a:hover{border-color:var(--gold)}
+.snav .brand{display:flex;align-items:center;gap:12px;color:inherit;text-decoration:none}
+.snav .links a.how{background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}
+.snav .links a.pricing{background:var(--gold);color:var(--deep);border-color:var(--gold)}
+@media (max-width:560px){
+  .snav{gap:8px}.snav .mark{flex-basis:30px;width:30px;height:30px}.word{font-size:16px}
+  .snav .links{gap:5px}.snav .links a{padding:8px 9px;font-size:12px}
+  .snav .links a.how{display:none}
+}
+@media (max-width:380px){.word{font-size:14.5px}.snav .links a{padding:8px 7px;font-size:11.5px}}
+.buy .btn{min-height:46px}
+.cur button{min-height:40px;min-width:52px}
+.snav .brand{min-height:40px}
+.def{margin:8px 2px 0;font-size:12px;color:var(--muted)}
+.strip a{color:inherit}
+
+.sec{padding:clamp(40px,6vw,72px) 0}
+.sec .in{max-width:1120px;margin:0 auto;padding:0 16px}
+.sec h2.h{font:600 clamp(26px,3.6vw,38px)/1.12 var(--serif);margin:6px 0 10px;letter-spacing:-.01em}
+.sec .lead{max-width:680px;color:var(--ink2);margin:0 0 26px;font-size:16px}
+.sec.alt{background:var(--ivory);border-block:1px solid var(--line)}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;counter-reset:s}
+.steps li{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+.steps .hnum{margin-bottom:10px}
+.steps h3,.benef h3{font:600 18px/1.25 var(--serif);margin:0 0 6px}
+.steps p,.benef p{margin:0;color:var(--ink2);font-size:14px}
+.benef{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.benef article{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px}
+.benef .bi{width:38px;height:38px;border-radius:10px;background:var(--wine);color:var(--gold);display:grid;place-items:center;margin-bottom:10px}
+.pricehead{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}
+.pricehead .cur button{padding:8px 16px;font-size:13px;min-height:40px}
+.packs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.pack{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--shadow)}
+.pack .up{font:600 11px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--goldd)}
+.pack .n{font:600 26px var(--serif)}
+.pack .tot{font:700 22px var(--mono);margin-top:4px}
+.pack .brk{margin:0;font-size:12px}
+.pack .btn{margin-top:auto}
+.pack .btn.line{margin-top:10px}
+.pricenote{margin-top:16px;color:var(--muted);font-size:13px}
+.faq{max-width:780px}
+.faq details{border:1px solid var(--line);background:var(--surface);border-radius:12px;margin:8px 0}
+.faq summary{cursor:pointer;padding:13px 16px;font-weight:600;min-height:44px;display:flex;align-items:center}
+.faq details[open] summary{color:var(--wine)}
+.faq details p{margin:0;padding:0 16px 14px;color:var(--ink2);font-size:14.5px}
+.foot{background:var(--deep);color:#EBD9DE;padding:30px 0 40px;font-size:13.5px}
+.foot .in{max-width:1120px;margin:0 auto;padding:0 16px;display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between}
+.foot a{color:var(--gold2);display:inline-block;padding:8px 2px;min-height:40px}
+.foot .fl{display:flex;flex-wrap:wrap;gap:4px 18px}
+.foot p{margin:0 0 6px}
+.xbtn{position:absolute;right:12px;top:12px;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#fff;display:grid;place-items:center}
+.sheet{position:relative}
+.sheet .row2{display:grid;gap:0 12px}
+.devcode{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between}
+.devcode b{font:600 22px var(--mono);letter-spacing:.2em}
+.codein{font-size:24px;letter-spacing:.35em;text-align:center}
+.legal{max-width:760px;margin:0 auto;padding:24px 16px 70px}
+.legal h1{font:600 clamp(28px,4vw,40px)/1.1 var(--serif);margin:8px 0 6px}
+.legal h2{font:600 26px var(--serif);margin:0 0 10px}
+.legal section{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin:22px 0;box-shadow:var(--shadow)}
+.legal li{margin:7px 0;color:var(--ink2)}
+.legal ul{padding-left:20px}
+.legaltop{background:linear-gradient(135deg,#3A0B18,#5A1426);color:var(--ivory)}
+.legaltop .sin{display:flex;align-items:center;gap:12px;padding-top:14px;padding-bottom:14px}
+.legaltop a.back{margin-left:auto;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:999px;padding:8px 14px;text-decoration:none;font-weight:600;font-size:13px;min-height:40px;display:inline-flex;align-items:center}
+.legaltop .brand{display:flex;align-items:center;gap:12px;color:inherit;text-decoration:none}
+.legal .toc a{color:var(--wine);border-color:var(--line);min-height:40px;display:inline-flex;align-items:center}
+.legal :target{scroll-margin-top:12px;outline:2px solid var(--gold);outline-offset:4px}
