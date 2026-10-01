@@ -1,0 +1,96 @@
+{
+  "baseUrl": "http://localhost:8803",
+  "organizerEmail": "demo.b2ea@acme-industries.com",
+  "organizerLoginNote": "Log in at /#login with this email; the 6-digit code is shown on screen in local dev and saved in data/outbox",
+  "organizerToken": "4f800ac6b98c47958381977c4b32b55dce5859f87e6c419788d79d597e751d56",
+  "engagementCode": "MPQSEFS",
+  "gameLink": "http://localhost:8803/e/MPQSEFS",
+  "hostLink": "http://localhost:8803/r/244AMYFT",
+  "teamLeadLinks": [
+    "http://localhost:8803/r/TPNDPSCR",
+    "http://localhost:8803/r/NQKQW9SV"
+  ],
+  "participants": [
+    {
+      "name": "Anita Rao",
+      "number": "+919876500000"
+    },
+    {
+      "name": "Priya Nair",
+      "number": "+919876500137"
+    },
+    {
+      "name": "Rahul Mehta",
+      "number": "+919876500274"
+    },
+    {
+      "name": "Sana Sheikh",
+      "number": "+919876500411"
+    },
+    {
+      "name": "Vikram Singh",
+      "number": "+919876500548"
+    },
+    {
+      "name": "Deepa Iyer",
+      "number": "+919876500685"
+    },
+    {
+      "name": "Fatima Khan",
+      "number": "+919876500822"
+    },
+    {
+      "name": "Emily Chen",
+      "number": "+919876500959"
+    },
+    {
+      "name": "Ahmed Ali",
+      "number": "+919876501096"
+    },
+    {
+      "name": "Arjun Kapoor",
+      "number": "+919876501233"
+    },
+    {
+      "name": "Suresh Kumar",
+      "number": "+919876501370"
+    },
+    {
+      "name": "Lakshmi Menon",
+      "number": "+919876501507"
+    },
+    {
+      "name": "Joseph DSouza",
+      "number": "+919876501644"
+    },
+    {
+      "name": "Kavya Reddy",
+      "number": "+919876501781"
+    },
+    {
+      "name": "Nikhil Joshi",
+      "number": "+919876501918"
+    },
+    {
+      "name": "Pooja Bhatt",
+      "number": "+919876502055"
+    },
+    {
+      "name": "Sam Wilson",
+      "number": "+919876502192"
+    },
+    {
+      "name": "Omar Farooq",
+      "number": "+919876502329"
+    },
+    {
+      "name": "Meera Nair",
+      "number": "+919876502466"
+    },
+    {
+      "name": "Karan Shah",
+      "number": "+919876502603"
+    }
+  ],
+  "howToLoginInBrowserForTests": "In the browser console: localStorage.setItem('tb_org_token', organizerToken)"
+}

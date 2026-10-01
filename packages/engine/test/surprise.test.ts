@@ -109,6 +109,32 @@ describe("schedule", () => {
   });
 });
 
+describe("counters before the start", () => {
+  test("show exactly what was configured, and the same numbers once live (never jump)", () => {
+    const h = make({ rounds: 3, luckyDraws: 4, scratchCards: 2, momentsMode: "auto" }, { rewards: makeRewardLines([{ pattern: "top", texts: ["T"] }, { pattern: "full", texts: ["F"] }]) });
+    join(h, 3);
+    expect(h.eng.publicState().still).toMatchObject({ prizes: 6, lucky: 4, scratch: 2 });
+    h.eng.start();
+    expect(h.eng.publicState().still).toMatchObject({ prizes: 6, lucky: 4, scratch: 2 });
+  });
+  test("rewards left never goes up between rounds", () => {
+    const h = make({ rounds: 3, momentsMode: "manual" }, { rewards: makeRewardLines([{ pattern: "top", texts: ["T"] }]) });
+    const [a] = join(h, 2); h.eng.start();
+    const seen: number[] = [h.eng.publicState().still!.prizes];
+    for (let r = 0; r < 3; r++) {
+      const top = a!.tickets[0]![0]!.filter((v): v is number => v !== null);
+      top.forEach((n) => callNum(h.eng, n)); h.eng.claim(a!.id, { ticket: "A", pattern: "top", cut: top });
+      h.advance(CFG.CLAIM_CHECK + 1); h.eng.tick(); seen.push(h.eng.publicState().still!.prizes);
+      h.advance(CFG.RESULT_SHOW + 1); h.eng.tick(); seen.push(h.eng.publicState().still!.prizes);
+      if (h.eng.status !== "started") break;
+      h.advance(SCFG.INTERMISSION_MS + 1); h.eng.tick(); seen.push(h.eng.publicState().still!.prizes);
+    }
+    for (let i = 1; i < seen.length; i++) expect(seen[i]!).toBeLessThanOrEqual(seen[i - 1]!);
+    expect(seen[0]).toBe(3);
+    expect(seen[seen.length - 1]).toBe(0);
+  });
+});
+
 describe("rounds", () => {
   test("round 1 finishes -> intermission -> round 2 with brand new tickets and numbers; report has both rounds", () => {
     const h = make({ rounds: 2, momentsMode: "manual" }, { rewards: makeRewardLines([{ pattern: "top", texts: ["T"] }]) });

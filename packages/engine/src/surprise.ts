@@ -30,6 +30,7 @@ export class Surprise {
   cont: Cont = "none";
   intermissionUntil = 0;
   resultWindows = 0;
+  between = false; // true from the end of a round until the next one starts (the finished round has nothing left to win)
   lastMomentCall = -99;
   lucky: null | { id: string; winners: string[]; confirmed: string[]; deadline: number; redrawn: boolean; drawn: string[] } = null;
   scratch: null | { id: string; outcomes: Record<string, string>; revealed: string[]; until: number; concurrent: boolean; winningCards: number } = null;
@@ -325,6 +326,7 @@ export class Surprise {
       return this.finishAllPending();
     }
     e.winners = new Map();
+    this.between = true;
     this.intermissionUntil = e.now() + SCFG.INTERMISSION_MS;
     e.paused = { type: "intermission", round: this.round, until: this.intermissionUntil };
     e.nextAt = null;
@@ -342,7 +344,7 @@ export class Surprise {
 
   private startNextRound(): void {
     const e = this.e;
-    this.round++; this.resultWindows = 0; this.lastMomentCall = -99;
+    this.round++; this.resultWindows = 0; this.lastMomentCall = -99; this.between = false;
     e.called = []; e.remaining = Array.from({ length: 90 }, (_, i) => i + 1); e.current = null; e.lastDrawAt = 0;
     e.ticketKeys.clear();
     for (const p of e.participants) {
@@ -403,10 +405,12 @@ export class Surprise {
   // ---------------------------------------------------------------- what everyone may be told
   still() {
     const e = this.e;
-    const open = e.settings.rewards.filter((l) => !e.winners.get(l.id)?.length).length;
-    const prizes = e.status === "started" || e.status === "starting" ? open + Math.max(0, this.rounds - this.round) * e.settings.rewards.length : open;
-    const lucky = this.moments.filter((m) => m.kind === "lucky" && (m.status === "pending" || m.status === "running")).length;
-    const scratch = this.moments.filter((m) => m.kind === "scratch" && (m.status === "pending" || m.status === "running")).length;
+    const open = this.between ? 0 : e.settings.rewards.filter((l) => !e.winners.get(l.id)?.length).length;
+    const prizes = open + Math.max(0, this.rounds - this.round) * e.settings.rewards.length; // this round's open rewards plus every later round's full list
+    // before the engagement goes live the schedule does not exist yet: the counters show exactly what was configured
+    const planned = e.status === "open" || e.status === "starting";
+    const lucky = planned ? this.cfg.luckyDraws : this.moments.filter((m) => m.kind === "lucky" && (m.status === "pending" || m.status === "running")).length;
+    const scratch = planned ? this.cfg.scratchCards : this.moments.filter((m) => m.kind === "scratch" && (m.status === "pending" || m.status === "running")).length;
     const nxt = this.moments.find((m) => m.status === "pending");
     const next = this.cfg.momentsMode === "manual" ? (nxt ? "any moment now" : "") : nxt ? (nxt.bumper ? "bumper lucky draw" : nxt.kind === "lucky" ? "lucky draw" : "scratch card") : "";
     return { prizes, lucky, scratch, round: this.round, rounds: this.rounds, next, enabled: this.enabled };
@@ -423,7 +427,7 @@ export class Surprise {
   // ---------------------------------------------------------------- persistence
   toJSON() {
     return { round: this.round, roundWinners: this.roundWinners, moments: this.moments, slots: this.slots, results: this.results, queue: this.queue, cont: this.cont, intermissionUntil: this.intermissionUntil,
-      resultWindows: this.resultWindows, lastMomentCall: this.lastMomentCall, lucky: this.lucky, scratch: this.scratch, boosterUses: this.boosterUses };
+      resultWindows: this.resultWindows, between: this.between, lastMomentCall: this.lastMomentCall, lucky: this.lucky, scratch: this.scratch, boosterUses: this.boosterUses };
   }
   load(s: any): void { if (s) Object.assign(this, s); }
 }

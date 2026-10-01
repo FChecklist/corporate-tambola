@@ -6,7 +6,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, normalize as pnorm } from "node:path";
 import type { ServerWebSocket } from "bun";
-import { CFG, EngagementEngine, Surprise, makeRewardLines, type PublicEvent, type RewardLine } from "@tambola/engine";
+import { CFG, EngagementEngine, SCFG, Surprise, makeRewardLines, type PublicEvent, type RewardLine } from "@tambola/engine";
 import { PACKS, checkUpload, formatInternational, maskNumber, normalize, price, proposeBreakPositions, rewardName, type Currency, type PatternId } from "@tambola/shared";
 import { openDb, sha256 } from "./db";
 import { createAiLink } from "./ai-link";
@@ -21,6 +21,9 @@ const WEB_DIR = join(import.meta.dir, "../../web/public");
 const IP_LIMIT = Number(process.env.TAMBOLA_IP_LIMIT ?? 1000); // joins per IP per 10 min
 if (process.env.TAMBOLA_GAP) CFG.AI_GAP = Number(process.env.TAMBOLA_GAP);
 if (process.env.TAMBOLA_PRESTART_MS) CFG.PRE_START_MS = Number(process.env.TAMBOLA_PRESTART_MS);
+// lucky draw / scratch card / intermission durations can be shortened for testing (e.g. TAMBOLA_MOMENT_SCALE=0.1)
+const momentScale = FAST ? 0.03 : Number(process.env.TAMBOLA_MOMENT_SCALE ?? 1);
+if (momentScale !== 1) for (const k of ["INTERMISSION_MS", "LUCKY_CONFIRM_MS", "LUCKY_REDRAW_MS", "SCRATCH_MS"] as const) SCFG[k] = Math.max(300, Math.round(SCFG[k] * momentScale));
 if (FAST) Object.assign(CFG, { AI_GAP: 120, MIN_HOST_GAP: 100, CLAIM_CHECK: 100, RESULT_SHOW: 120, RESUME_DELAY: 40, PRE_START_MS: 400 });
 
 mkdirSync(join(DATA_DIR, "outbox"), { recursive: true });

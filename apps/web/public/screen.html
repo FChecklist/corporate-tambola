@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex"><meta name="referrer" content="no-referrer">
+<title>Corporate Tambola - Big screen</title>
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/screen.css">
+</head><body class="scr">
+<main id="stage" aria-label="Engagement big screen">
+  <header id="hd">
+    <div class="swho"><div id="org" class="org"></div><div id="eng" class="eng">Corporate Tambola</div></div>
+    <div class="schips">
+      <span id="roundChip" class="chip-s hidden"></span>
+      <span id="statusChip" class="chip-s st-wait"><i></i><b id="statusTxt">Connecting</b></span>
+      <button id="fsBtn" class="fs" type="button" title="Full screen (F)" aria-label="Full screen">&#x26F6;</button>
+      <button id="spkBtn" class="fs" type="button" title="Speak numbers (S)" aria-pressed="false" aria-label="Speak numbers: off">&#x1F507;</button>
+    </div>
+  </header>
+
+  <section id="centre">
+    <div id="ballWrap" class="ballWrap">
+      <div id="ball" class="sball"><span id="ballNo" class="mono">--</span></div>
+      <div id="ballLbl" class="ballLbl"></div>
+      <div id="callCnt" class="callCnt"></div>
+    </div>
+    <div id="msg" class="bigmsg hidden"></div>
+  </section>
+
+  <section id="lower">
+    <div id="feed" class="feed hidden" aria-hidden="true"></div>
+    <div id="board" class="board"></div>
+    <div id="still" class="still hidden">
+      <div id="next" class="next hidden"></div>
+      <div class="stillRow">
+        <div class="stillLbl">STILL<br>TO WIN</div>
+        <div class="st"><b id="stP" class="mono">0</b><span>Rewards</span></div>
+        <div class="st"><b id="stL" class="mono">0</b><span>lucky draws</span></div>
+        <div class="st"><b id="stS" class="mono">0</b><span>scratch cards</span></div>
+      </div>
+      <div id="allWon" class="allWon hidden">All rewards won. Thank you for taking part!</div>
+    </div>
+  </section>
+
+  <!-- overlays -->
+  <div id="ovClaim" class="ov calm hidden"><div class="ovBox"><div class="spinner"></div><h2>Checking a claim...</h2><p>Please hold on while the organizer checks</p></div></div>
+  <div id="ovResult" class="ov hidden"><div class="ovBox"><div class="eyebrowL">Claim result</div><div id="resList" class="resList"></div></div></div>
+  <div id="ovSplash" class="ov splash hidden"><div class="ovBox"><div id="splashTxt" class="splashTxt"></div></div></div>
+  <div id="ovInter" class="ov calm hidden"><div class="ovBox"><div class="eyebrowL" id="interRound"></div><h2 id="interTitle">Next round starts soon</h2></div></div>
+  <div id="ovLucky" class="ov stageov hidden">
+    <div class="ovBox wide">
+      <div class="momentHead"><span class="mtag">LUCKY DRAW</span><span id="lkBump" class="bump hidden">BUMPER</span></div>
+      <div id="lkPrize" class="prizeLine"></div>
+      <div id="lkReel" class="reel mono" aria-hidden="true">TMB-XXXX-000000</div>
+      <div id="lkCount" class="count mono"></div>
+      <div id="lkWin" class="winners hidden"></div>
+    </div>
+  </div>
+  <div id="ovScratch" class="ov stageov hidden">
+    <div class="miniBall" id="miniBall"><span class="mono" id="miniNo">--</span><small>last number</small></div>
+    <div class="ovBox wide">
+      <div class="momentHead"><span class="mtag">EVERYONE HAS A SCRATCH CARD</span></div>
+      <div id="scBody" class="scBody"></div>
+      <div id="scCount" class="count mono"></div>
+    </div>
+  </div>
+  <div id="ovBreak" class="ov sbrk hidden"><div class="brkTitle" id="brkTitle"></div><div class="brkMedia" id="brkMedia"></div><div class="brkCount mono" id="brkCount"></div></div>
+  <div id="ovEnd" class="ov calm hidden"><div class="ovBox"><h2>Thank you for taking part</h2><p id="endSub"></p></div></div>
+
+  <div id="conn" class="conn"><i></i><span id="connTxt">Connecting...</span></div>
+  <div id="live" class="sr" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="bad" class="sbad hidden"><div><h2>This screen link is not complete</h2><p>Open the big-screen link from the organizer console, including the part after the # sign.</p></div></div>
+</main>
+<script src="/common.js"></script>
+<script src="/audio.js"></script>
+<script src="/screen.js"></script>
+</body></html>

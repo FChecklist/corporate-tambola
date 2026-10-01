@@ -43,7 +43,7 @@
     code: "", me: null, data: null, step: "", stageStep: null, hostName: "",
     sel: new Set(), wsel: new Set(), q: "", filter: "all",
     paste: "", check: null, country: "", ck1: false, ck2: false, pauseWhy: PAUSE_WHY[0], talk: false,
-    report: null, reportFor: "", msgDraft: null, ws: null,
+    report: null, reportFor: "", msgDraft: null, ws: null, sxOpen: null,
   };
   const RW = { counts: {}, texts: {}, dirty: false, warn: "", v: 0 };
   const BK = { list: [], dirty: false, warn: "", v: 0 };
@@ -123,11 +123,11 @@
   }
 
   // ================================================================ ORGANIZER / HOST CONSOLE
-  const STEP_LABEL = { setup: "Set up", rewards: "Rewards", breaks: "Brand breaks", people: "People", share: "Share", wait: "Waiting room", start: "Start", live: "Live", report: "Report" };
+  const STEP_LABEL = { setup: "Set up", rewards: "Rewards", surprise: "Rounds and surprises", breaks: "Brand breaks", people: "People", share: "Share", wait: "Waiting room", start: "Start", live: "Live", report: "Report" };
   function stepList() {
     const st = eng().status;
     if (!isOrg()) return st === "open" ? ["wait", "people"] : ["wait", "people", "live"];
-    const a = ["setup", "rewards", "breaks", "people", "share", "wait"];
+    const a = ["setup", "rewards", "surprise", "breaks", "people", "share", "wait"];
     if (st === "open") a.push("start"); else if (st === "started") a.push("live"); else if (st === "ended") a.push("live", "report"); else a.push("report");
     return a;
   }
@@ -195,7 +195,7 @@
   function paintStage() {
     const stage = $("stage");
     if (S.stageStep !== S.step) { stage.innerHTML = ""; S.stageStep = S.step; }
-    const fn = { setup: setupSecs, rewards: rewardsSecs, breaks: breaksSecs, people: peopleSecs, share: shareSecs, wait: waitSecs, start: startSecs, live: liveSecs, report: reportSecs }[S.step];
+    const fn = { setup: setupSecs, rewards: rewardsSecs, surprise: surpriseSecs, breaks: breaksSecs, people: peopleSecs, share: shareSecs, wait: waitSecs, start: startSecs, live: liveSecs, report: reportSecs }[S.step];
     const secs = fn ? fn() : [];
     for (const [id, html] of secs) {
       let el = stage.querySelector(`[data-sec="${id}"]`);
@@ -206,7 +206,8 @@
     const ids = secs.map((x) => x[0]);
     [...stage.children].forEach((c) => { if (!ids.includes(c.dataset.sec)) c.remove(); });
     ids.forEach((id, i) => { const c = stage.querySelector(`[data-sec="${id}"]`); if (c && stage.children[i] !== c) stage.insertBefore(c, stage.children[i] || null); });
-    if (S.step === "share") drawQR();
+    if (S.step === "share") drawQR("qr", eng().link);
+    if (S.step === "surprise" && S.data.screenUrl) drawQR("qrScreen", S.data.screenUrl);
     if (S.step === "report" && !S.report && eng().status !== "open") loadReport();
     if (S.step === "people" && isOrg() && !D.dash && !D.loading) loadDash().then(() => { if (S.step === "people") paintStage(); });
   }
@@ -248,7 +249,7 @@
     const e = eng(), ro = e.status !== "open" || !isOrg();
     const ms = e.startsAt || Date.now() + 864e5, d = new Date(ms);
     const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const modeHint = { ai: "The system calls a random number every 10 seconds.", manual: "A Host presses “Draw” (the system picks the number at random) and announces it. At least 5 seconds apart.", both: "The system calls a number every 10 seconds. Hosts can also speak to everyone at any time." }[e.callMode];
+    const modeHint = { ai: `The system calls a random number every ${sx().callSeconds} seconds.`, manual: "A Host presses “Draw” (the system picks the number at random) and announces it. At least 5 seconds apart.", both: `The system calls a number every ${sx().callSeconds} seconds. Hosts can also speak to everyone at any time.` }[e.callMode];
     const raise = isOrg() && e.status === "open" ? `<button class="btn sm line" data-a="raise">${ic("users")} Raise limit</button>` : "";
     return [["setup", `<div class="panel"><div class="phead"><div class="step">1</div><div><h2>Set up the engagement</h2><p>Pick an option in each box. Changes save by themselves until the engagement starts.</p>
       ${e.status !== "open" ? `<p class="lockmsg">Everything is locked because the engagement has started.</p>` : ""}</div></div>
@@ -356,6 +357,83 @@
       <p class="hint">Two or more valid claims on the same number share that reward. Count 0 means the reward is not offered. At most 30 reward lines.</p></div>`]];
   }
 
+  // ---------------------------------------------------------------- 2b. rounds and surprise moments (optional)
+  const SXD = { rounds: 1, callSeconds: 10, autoMark: true, luckyDraws: 0, luckyWinners: 3, luckyPrize: "gift", bumper: true, scratchCards: 0, scratchWinning: 10, scratchPrize: "mix", momentsMode: "auto", boostersAllowed: true, revealNames: false };
+  const sx = () => Object.assign({}, SXD, (S.data && S.data.surprise) || {});
+  const sxOn = (c) => c.rounds > 1 || c.luckyDraws > 0 || c.scratchCards > 0;
+  // same formulas as the server's Surprise.plan (used for instant feedback; the server's own numbers replace these after each save)
+  function sxPlan(c, P) {
+    const R = c.rounds, tambola = R * P, lw = c.luckyDraws * c.luckyWinners, sw = c.scratchCards * c.scratchWinning, half = Math.ceil(sw / 2);
+    const gifts = tambola + (c.luckyPrize === "gift" ? lw : 0) + (c.scratchPrize === "gift" ? sw : c.scratchPrize === "mix" ? half : 0);
+    const boosters = (c.luckyPrize === "booster" ? lw : 0) + (c.scratchPrize === "booster" ? sw : c.scratchPrize === "mix" ? sw - half : 0);
+    const capacity = R * P + 2 * (R - 1) + 2 + (c.autoMark ? 2 * R : 0), moments = c.luckyDraws + c.scratchCards;
+    const minutes = Math.round(R * (70 * 10 / 60) + R * P * 20 / 60 + c.luckyDraws * 1.2 + (c.autoMark ? 0 : c.scratchCards * 0.7) + 2 * (R - 1));
+    return { tambolaPrizes: tambola, luckyWinners: lw, scratchWinningCards: sw, giftPrizes: gifts, boosters, capacity, moments, fits: moments <= capacity, estimatedMinutes: minutes };
+  }
+  const planOf = () => S.data.plan || sxPlan(sx(), S.data.rewards.length);
+  const nOf = (n, a, b) => `${n} ${n === 1 ? a : b}`;
+  async function saveSurprise(part) {
+    setInd("Saving…");
+    S.sxOpen = true; // keep the options open while the organizer is working on them
+    const c = Object.assign({}, sx(), part);
+    if (c.boostersAllowed === false) { c.luckyPrize = "gift"; c.scratchPrize = "gift"; part = Object.assign({}, part, { luckyPrize: "gift", scratchPrize: "gift" }); }
+    S.data.surprise = c; S.data.plan = sxPlan(c, S.data.rewards.length);
+    paintAll();
+    try { await api("PATCH", `${E()}/settings`, { surprise: part }); savedInd(); }
+    catch (e) { errT(e); setInd("Not saved", "err"); }
+    await loadConsole();
+  }
+  function stillText(c, p) {
+    const a = [`${p.tambolaPrizes} Rewards`];
+    if (c.luckyDraws > 0) a.push(nOf(c.luckyDraws, "lucky draw", "lucky draws"));
+    if (c.scratchCards > 0) a.push(nOf(c.scratchCards, "scratch card", "scratch cards"));
+    return a.join(" · ");
+  }
+  function surpriseSecs() {
+    const e = eng(), ro = e.status !== "open" || !isOrg(), c = sx(), on = sxOn(c), open = S.sxOpen === null || S.sxOpen === undefined ? on : S.sxOpen;
+    const head = `<div class="panel"><div class="phead"><div class="step">3</div><div><h2>Rounds and surprise moments <span class="pill info" style="vertical-align:middle;margin-left:6px">Optional</span></h2><p>Make the event bigger: several short rounds, lucky draws and scratch cards, with a Still to win counter that keeps everyone watching. All of this is optional.</p>
+      ${e.status !== "open" ? `<p class="lockmsg">Locked because the engagement has started.</p>` : ""}</div></div>`;
+    if (!open) return [["surprise", `${head}<button class="btn sm line" data-a="sxToggle">${ic("sliders")} Show the options</button></div>`]];
+    const cp = (act, k, t, opts, v, dis) => chips(act, k, t, opts, v, dis === undefined ? ro : dis);
+    const sel = (k, label, from, to, none) => `<select class="inp" id="sx_${k}" ${ro ? "disabled" : ""} data-c="sxSel" data-k="${k}" data-t="n" aria-label="${esc(label)}">${none ? `<option value="0" ${c[k] === 0 ? "selected" : ""}>None</option>` : ""}${Array.from({ length: to - from + 1 }, (_, i) => from + i).map((n) => `<option value="${n}" ${c[k] === n ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const hasMoments = c.luckyDraws > 0 || c.scratchCards > 0, noBoost = !c.boostersAllowed;
+    const yn = (k, yes, no) => cp("sx", k, "b", [[true, yes], [false, no]], c[k]);
+    const g1 = `<div class="grid">
+      <div><label class="lb">Tambola rounds in this event</label>${cp("sx", "rounds", "n", [[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"]], c.rounds)}<p class="hint">Each round uses all the rewards you set up in step 2.</p></div>
+      <div><label class="lb">Calling speed</label>${cp("sx", "callSeconds", "n", [[6, "Fast · 6 s"], [10, "Normal · 10 s"], [15, "Relaxed · 15 s"]], c.callSeconds)}</div>
+      <div><label class="lb">Mark tickets automatically</label>${yn("autoMark", "Yes", "No, participants tap")}<p class="hint">${c.autoMark ? "Each called number is marked on the participant’s ticket for them. Claims are still checked." : "Participants tap each called number themselves. Rounds take a little longer."}</p></div></div>`;
+    const g2 = `<div class="grid">
+      <div><label class="lb" for="sx_luckyDraws">Lucky draws in the event</label>${sel("luckyDraws", "Lucky draws in the event", 1, 10, true)}</div>
+      ${c.luckyDraws > 0 ? `<div><label class="lb">Winners in each draw</label>${cp("sx", "luckyWinners", "n", [[1, "1"], [3, "3"], [5, "5"], [10, "10"]], c.luckyWinners)}</div>
+      <div><label class="lb">Lucky draw reward</label>${cp("sx", "luckyPrize", "s", [["gift", "Gift you provide"], ["booster", "Booster"]], c.luckyPrize, ro || noBoost)}</div>
+      <div><label class="lb">Last draw is a bumper</label>${yn("bumper", "Yes", "No")}<p class="hint">A bumper is the grand finale of the event.</p></div>` : ""}
+      <div><label class="lb" for="sx_scratchCards">Scratch cards in the event</label>${sel("scratchCards", "Scratch cards in the event", 1, 10, true)}</div>
+      ${c.scratchCards > 0 ? `<div><label class="lb">Winning cards in each scratch round</label>${cp("sx", "scratchWinning", "n", [[5, "5"], [10, "10"], [20, "20"], [50, "50"]], c.scratchWinning)}<p class="hint">A fixed number, never a percentage.</p></div>
+      <div><label class="lb">Scratch card reward</label>${cp("sx", "scratchPrize", "s", [["gift", "Gift"], ["booster", "Booster"], ["mix", "Half and half"]], c.scratchPrize, ro || noBoost)}</div>` : ""}</div>`;
+    const g3 = `<div class="grid">
+      ${hasMoments ? `<div><label class="lb">When surprise moments happen</label>${cp("sx", "momentsMode", "s", [["auto", "Automatically at natural pauses"], ["manual", "When I press the button"]], c.momentsMode)}<p class="hint">${c.momentsMode === "manual" ? "You or a Host start each lucky draw or scratch card from the Live step." : "The system starts them at natural pauses, spread across the event."}</p></div>
+      <div><label class="lb">Allow boosters</label>${yn("boostersAllowed", "Yes", "No, keep it pure")}<p class="hint">${noBoost ? "Boosters are off. Every lucky draw and scratch card reward is set to Gift." : "A Joker marks a missed number, an Extra ticket gives a second ticket next round, a Lucky draw pass gives one more entry in the next draw."}</p></div>` : ""}
+      <div><label class="lb">Show winners’ first name, department and last 4 digits</label>${yn("revealNames", "Yes", "No, ticket id only")}<p class="hint">Only people who joined after you switch this on will be shown by name; everyone else stays a ticket id.</p></div></div>`;
+    const p = planOf(), R = c.rounds, P = S.data.rewards.length;
+    const line = [R > 1 ? `${R} × ${P} = ${nOf(p.tambolaPrizes, "reward", "rewards")}` : nOf(p.tambolaPrizes, "reward", "rewards")];
+    if (c.luckyDraws > 0) line.push(`${nOf(c.luckyDraws, "lucky draw", "lucky draws")} (${nOf(p.luckyWinners, "winner", "winners")})`);
+    if (c.scratchCards > 0) line.push(`${nOf(c.scratchCards, "scratch card", "scratch cards")} (${p.scratchWinningCards} winning cards)`);
+    const plan = `<div class="sum"><div class="kv" style="display:block"><b>${esc(line.join(" · "))}</b></div>
+      <div class="kv"><span>Gifts you arrange</span><b>${p.giftPrizes}</b></div>
+      <div class="kv"><span>Free boosters</span><b>${p.boosters}</b></div>
+      <div class="kv"><span>Surprise moments that fit</span><b>about ${p.capacity}</b></div>
+      <div class="kv"><span>Estimated length</span><b>about ${p.estimatedMinutes} minutes</b></div></div>
+      ${p.fits ? "" : `<div class="err">${ic("alert")}<span>Too many surprise moments: ${p.moments} chosen, but ${R === 1 ? "1 round fits" : R + " rounds fit"} about ${p.capacity}. Add a round, turn on automatic marking, or lower the numbers.</span></div>`}
+      ${R > 1 ? `<p class="hint">Brand breaks happen in round 1. Between rounds there is a break.</p>` : ""}`;
+    const main = `${head}${g1}${g2}${g3}<label class="lb">Your plan</label>${plan}
+      <div class="row" style="margin-top:12px"><button class="btn sm ghost" data-a="sxToggle">Hide the options</button>${on ? "" : `<span class="tiny muted">Nothing here is switched on. The event runs exactly as before.</span>`}</div></div>`;
+    const screen = S.data.screenUrl ? `<div class="row" style="align-items:flex-start;gap:18px"><div style="flex:1;min-width:240px"><div class="row"><a class="btn sm" target="_blank" rel="noopener" href="${esc(S.data.screenUrl)}">Open the big screen</a><button class="btn sm line" data-a="copyLink" data-v="${esc(S.data.screenUrl)}">${ic("copy")} Copy link</button></div>
+      <p class="hint">Show it on a projector. It shows only the last number, the counters and results by ticket id, never names or numbers${c.revealNames ? " (names are on, so winners appear by first name, department and last 4 digits)" : " (unless you switched names on)"}.</p></div><div class="qrbox" id="qrScreen"></div></div>` : "";
+    const see = `<div class="panel"><div class="phead"><div class="step">${ic("users")}</div><div><h2>What participants see</h2><p>A Still to win counter on every phone and on the big screen.</p></div></div>
+      <div class="note info" style="font-weight:600;font-size:14px">Still to win: ${esc(stillText(c, p))}</div>${screen ? `<div style="margin-top:14px">${screen}</div>` : ""}</div>`;
+    return [["surprise", main], ["sxsee", see]];
+  }
+
   // ---------------------------------------------------------------- 3. brand breaks
   let bkT = null;
   function queueBreaks(delay) { BK.dirty = true; BK.v++; setInd("Saving…"); clearTimeout(bkT); bkT = setTimeout(saveBreaks, delay === undefined ? 600 : delay); }
@@ -389,7 +467,7 @@
         ${needsLink ? `<div style="margin-top:6px"><label class="lb">${b.kind === "youtube" ? "YouTube link" : "Company video link"} (starts with https://)</label><input class="inp" inputmode="url" value="${esc(b.mediaUrl)}" ${ro ? "disabled" : ""} placeholder="https://" data-i="bkUrl" data-c="bkUrl" data-n="${i}">
         ${!b.mediaUrl ? `<p class="hint bad">Add the link before the engagement starts.</p>` : ""}</div>` : `<p class="hint">${b.kind === "speech" ? "A Host speaks live during the break." : "Your slides are shown by the Host during the break."}</p>`}</div>`;
     }).join("");
-    return [["breaks", `<div class="panel"><div class="phead"><div class="step">3</div><div><h2>Brand breaks</h2><p>Up to 3 moments where the engagement pauses for everyone and your company is on screen. Breaks never start while a claim is being checked.</p>
+    return [["breaks", `<div class="panel"><div class="phead"><div class="step">4</div><div><h2>Brand breaks</h2><p>Up to 3 moments where the engagement pauses for everyone and your company is on screen. Breaks never start while a claim is being checked.</p>
       ${e.status !== "open" ? `<p class="lockmsg">Locked because the engagement has started.</p>` : ""}</div></div>
       ${rows || `<p class="muted small">No brand breaks. Add one if you want to show a company video, YouTube video, slides or a speech.</p>`}
       ${BK.warn ? `<div class="err">${ic("alert")}<span>${esc(BK.warn)}</span></div>` : ""}
@@ -410,7 +488,7 @@
     const e = eng(), lock = e.status !== "open", c = S.check;
     const cty = S.country || e.defaultCountry;
     const items = c ? [...c.ready, ...c.fixed] : [];
-    return `<div class="panel"><div class="phead"><div class="step">4</div><div><h2>People</h2><p>Add mobile numbers by pasting a list or choosing a file. Any format works: 98765 43210, +91 98765 43210, 09876543210, +44 7700 900123. We fix the format and remove repeats.</p>
+    return `<div class="panel"><div class="phead"><div class="step">5</div><div><h2>People</h2><p>Add mobile numbers by pasting a list or choosing a file. Any format works: 98765 43210, +91 98765 43210, 09876543210, +44 7700 900123. We fix the format and remove repeats.</p>
       ${lock ? `<p class="lockmsg">Entry is closed. Nobody can be added after the start.</p>` : ""}</div></div>
       <div class="grid"><div style="grid-column:1/-1"><label class="lb" for="paste">One person per line. The name is optional: “Rahul Mehta, 98765 43210” or just the number.</label>
       <textarea class="inp" id="paste" ${lock ? "disabled" : ""} data-i="paste" placeholder="Name, mobile number">${esc(S.paste)}</textarea></div>
@@ -503,7 +581,7 @@
     const e = eng(), closed = e.status !== "open" && e.status !== "starting";
     const roles = S.data.participants.filter((p) => p.roleLink && (p.role === "host" || p.role === "team_lead"));
     const rl = roles.length ? `<div class="tscroll"><table class="t"><thead><tr><th>Name</th><th>Role</th><th>Personal link</th><th></th></tr></thead><tbody>${roles.map((p) => `<tr><td>${esc(p.name || "(no name)")}</td><td>${pill(p.role === "host" ? "wine" : "info", roleName(p.role))}</td><td class="mono" style="font-size:12px;word-break:break-all">${esc(p.roleLink)}</td><td><div class="lnk"><button class="btn sm line" data-a="copyLink" data-v="${esc(p.roleLink)}">${ic("copy")}</button><a class="btn sm line" target="_blank" rel="noopener" href="${wa(p.e164, waMsg(p))}">WhatsApp</a></div></td></tr>`).join("")}</tbody></table></div>` : `<p class="muted small">No Hosts or Team Leads yet. Make them in the People step; their personal links appear here.</p>`;
-    return [["share", `<div class="panel"><div class="phead"><div class="step">5</div><div><h2>Share the engagement link</h2><p>One link for everyone on your list. If a number is not on your list, that person goes to the waiting room.</p>
+    return [["share", `<div class="panel"><div class="phead"><div class="step">6</div><div><h2>Share the engagement link</h2><p>One link for everyone on your list. If a number is not on your list, that person goes to the waiting room.</p>
       ${closed ? `<p class="lockmsg">Entry is closed. The link now shows “Entry is closed”.</p>` : ""}
       ${isOrg() ? `<p class="hint">${ic("link")} <a href="/console#AI" data-a="aiHint">Use your AI for this</a>: let ChatGPT, Gemini or Claude do the setup for you.</p>` : ""}</div></div>
       <div class="row" style="align-items:flex-start;gap:18px"><div style="flex:1;min-width:260px"><div class="linkbox">${esc(e.link)}</div>
@@ -512,9 +590,9 @@
       <div><label class="lb" style="margin-top:0">Show on a screen or print for the office</label><div class="qrbox" id="qr"></div></div></div></div>
       <div class="panel"><div class="phead"><div class="step">${ic("link")}</div><div><h2>Host and Team Lead links</h2><p>Each link belongs to one person and works on one phone only. Send each link privately.</p></div></div>${rl}</div>`]];
   }
-  async function drawQR() {
-    const el = $("qr"); if (!el) return;
-    const link = eng().link; if (el._t === link) return;
+  async function drawQR(id, link) {
+    const el = $(id); if (!el || !link) return;
+    if (el._t === link) return;
     el._t = link;
     if (!window.QRCode) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js");
     if (window.QRCode) TB.QR(el, link); else el.innerHTML = `<span class="tiny muted center">QR code needs an internet connection</span>`;
@@ -529,7 +607,7 @@
       <button class="btn sm" ${!open || !S.wsel.size ? "disabled" : ""} data-a="admit" data-v="sel">Admit selected</button><button class="btn sm line" ${!open ? "disabled" : ""} data-a="admit" data-v="all">Admit everyone</button><button class="btn sm danger" ${!open || !S.wsel.size ? "disabled" : ""} data-a="decline">Decline selected</button></div>
       <div style="border:1px solid var(--line);border-radius:12px;padding:0 10px">${w.map((x) => `<div class="qitem"><input type="checkbox" ${!open ? "disabled" : ""} ${S.wsel.has(x.id) ? "checked" : ""} aria-label="Select ${esc(x.name)}" data-c="wsel" data-id="${x.id}"><div style="flex:1"><b>${esc(x.name)}</b> <span class="mono small muted">${esc(x.number)}</span>${x.info ? ` <span class="tiny muted">· ${esc(x.info)}</span>` : ""}<div class="tiny muted">${x.invitedBy ? "Invited by " + esc(x.invitedBy) : "Used the engagement link. Not on your list."} · ${TB.ago(x.at)}</div></div></div>`).join("")}</div>`
       : `<p class="muted small">Nobody is waiting.</p>`;
-    return [["wait", `<div class="panel"><div class="phead"><div class="step">${isOrg() ? 6 : 1}</div><div><h2>Waiting room</h2><p>People who used the engagement link but are not on your list, and invites from participants. Admit them or decline them.</p>
+    return [["wait", `<div class="panel"><div class="phead"><div class="step">${isOrg() ? 7 : 1}</div><div><h2>Waiting room</h2><p>People who used the engagement link but are not on your list, and invites from participants. Admit them or decline them.</p>
       ${!open ? `<p class="lockmsg">Entry is closed. Anyone still waiting was told “Entry is closed”.</p>` : ""}</div></div>${alerts}${list}</div>`]];
   }
 
@@ -539,17 +617,18 @@
     if (!isOrg()) return [["start", `<div class="panel"><div class="phead"><div class="step">${ic("lock")}</div><div><h2>Starting</h2><p>Only the Organizer can start or end the engagement.</p></div></div></div>`]];
     const missing = BK.list.filter((b) => (b.kind === "file" || b.kind === "youtube") && !b.mediaUrl).length;
     const ready = S.ck1 && S.ck2;
-    return [["start", `<div class="panel" style="border-color:var(--gold)"><div class="phead"><div class="step">7</div><div><h2>Start the engagement</h2><p>Every setting locks at once. People can still join for 60 seconds while their phones get ready, then entry closes and the first number is called.</p></div></div>
+    return [["start", `<div class="panel" style="border-color:var(--gold)"><div class="phead"><div class="step">8</div><div><h2>Start the engagement</h2><p>Every setting locks at once. People can still join for 60 seconds while their phones get ready, then entry closes and the first number is called.</p></div></div>
       <div class="sum"><div class="kv"><span>Engagement</span><b>${esc(e.name)}</b></div>
       <div class="kv"><span>Planned start</span><b>${e.startsAt ? esc(TB.fmtDT(e.startsAt)) : "Not set"}</b></div>
       <div class="kv"><span>Joined</span><b>${c.joined} of ${c.used} places</b></div>
       <div class="kv"><span>Waiting room</span><b>${c.waiting ? pill("warn", c.waiting + " still waiting") : "Nobody waiting"}</b></div>
       <div class="kv"><span>Rewards</span><b>${S.data.rewards.length}</b></div>
       <div class="kv"><span>Brand breaks</span><b>${S.data.breaks.length}${missing ? " · " + missing + " without a link" : ""}</b></div>
+      ${sxOn(sx()) ? `<div class="kv"><span>Rounds and surprises</span><b>${esc(nOf(sx().rounds, "round", "rounds") + (sx().luckyDraws ? " · " + nOf(sx().luckyDraws, "lucky draw", "lucky draws") : "") + (sx().scratchCards ? " · " + nOf(sx().scratchCards, "scratch card", "scratch cards") : ""))}</b></div>` : ""}
       <div class="kv"><span>Tickets</span><b>${e.ticketMode === "double" ? "2 per participant" : "1 per participant"}</b></div>
       <div class="kv"><span>Numbers called by</span><b>${{ ai: "AI voice", manual: "Host voice", both: "AI voice + host speaks" }[e.callMode]}</b></div></div>
       ${c.joined === 0 ? `<div class="note warn">${ic("alert")}<span>Nobody has joined yet.</span></div>` : ""}
-      ${missing ? `<div class="note warn">${ic("alert")}<span>A brand break has no video link. Add it in step 3 or remove the break.</span></div>` : ""}
+      ${missing ? `<div class="note warn">${ic("alert")}<span>A brand break has no video link. Add it in step 4 or remove the break.</span></div>` : ""}
       <label class="cb"><input type="checkbox" ${S.ck1 ? "checked" : ""} data-c="ck1"> <span>Everyone I want has been admitted.${c.waiting ? ` <span class="pill warn">${c.waiting} still waiting</span>` : ""}</span></label>
       <label class="cb"><input type="checkbox" ${S.ck2 ? "checked" : ""} data-c="ck2"> I understand that after the first 60 seconds nobody can join, and nothing can be changed.</label>
       <button class="btn gold" ${ready ? "" : "disabled"} data-a="start">${ic("play")} Start engagement now</button> <span class="tiny muted">${c.joined} of ${c.used} have joined so far.</span></div>`]];
@@ -574,9 +653,31 @@
     }
     return `<div class="caller ${cls}"><div class="bigball">${ball}</div><div><div class="eyebrow">${eb}</div><div class="ln">${ln}</div><div class="sub">${sub}</div></div></div>`;
   }
+  function stillStrip() {
+    const d = S.data, st = d.still, e = eng();
+    if (!st || !st.enabled || (e.status !== "started" && e.status !== "starting")) return "";
+    const c = sx(), running = e.status === "started", pz = d.live.paused, ms = d.moments || [];
+    const busy = ms.some((m) => m.status === "running");
+    const parts = [];
+    if (st.rounds > 1) parts.push(`Round <b>${st.round}</b> of <b>${st.rounds}</b>`);
+    parts.push(`Rewards left <b>${st.prizes}</b>`);
+    if (c.luckyDraws > 0) parts.push(`Lucky draws left <b>${st.lucky}</b>`);
+    if (c.scratchCards > 0) parts.push(`Scratch cards left <b>${st.scratch}</b>`);
+    const manual = c.momentsMode === "manual", hasM = c.luckyDraws > 0 || c.scratchCards > 0;
+    let extra = "";
+    if (hasM && manual) {
+      const off = (n) => (!running || pz || busy || n <= 0 ? "disabled" : "");
+      extra = `<div class="row" style="margin-top:8px">${c.luckyDraws > 0 ? `<button class="btn sm" ${off(st.lucky)} data-a="sxTrigger" data-v="lucky">${ic("gift")} Start lucky draw</button>` : ""}${c.scratchCards > 0 ? `<button class="btn sm" ${off(st.scratch)} data-a="sxTrigger" data-v="scratch">${ic("star")} Start scratch card</button>` : ""}${st.next ? `<span class="tiny muted">Next surprise: ${esc(st.next)}</span>` : ""}</div>`;
+    } else if (hasM && ms.length) {
+      const cnt = { lucky: 0, scratch: 0 };
+      const pl = { pending: pill("", "Waiting"), running: pill("warn", "On screen"), done: pill("ok", "Done"), skipped: pill("", "Done") };
+      extra = `${st.next ? `<div class="tiny muted" style="margin-top:6px">Next surprise: ${esc(st.next)}</div>` : ""}<div class="small" style="margin-top:6px">${ms.map((m) => { const n = ++cnt[m.kind]; return `<div>${m.bumper ? "Bumper lucky draw" : (m.kind === "lucky" ? "Lucky draw " : "Scratch card ") + n} ${pl[m.status] || ""}</div>`; }).join("")}</div>`;
+    }
+    return `<div class="note info" style="display:block;margin:0 0 12px"><div style="font-size:13.5px">${parts.join(" · ")}</div>${extra}</div>`;
+  }
   function liveSecs() {
     const e = eng(), l = S.data.live, d = S.data, running = e.status === "started", pz = l.paused;
-    const draw = running && e.callMode === "manual" ? `<button class="btn" data-a="draw" ${pz ? "disabled" : ""}>${ic("draw")} Draw next number</button>` : running ? `<span class="tiny muted" style="flex:1 1 200px">The system calls a number every 10 seconds. It can only be paused in an emergency.</span>` : "";
+    const draw = running && e.callMode === "manual" ? `<button class="btn" data-a="draw" ${pz ? "disabled" : ""}>${ic("draw")} Draw next number</button>` : running ? `<span class="tiny muted" style="flex:1 1 200px">The system calls a number every ${sx().callSeconds} seconds. It can only be paused in an emergency.</span>` : "";
     const talk = running && e.callMode !== "ai" ? `<button class="talk ${S.talk ? "on" : ""}" style="flex:1 1 100%" data-a="talk">${ic("mic")}<span><b>${S.talk ? "Speaking · tap to stop" : "Speak to everyone"}</b><br><span class="tiny muted">Everyone with sound on hears you</span></span>${S.talk ? `<span class="sp-chip" style="margin-left:auto">Host speaking</span>` : ""}</button>` : "";
     let pauseBtn = "";
     if (running) {
@@ -594,7 +695,7 @@
     const log = d.log.filter((x) => !/^Call \d+:/.test(x.msg)).slice(0, 40).map((x) => `<li><time>${fmtTs(x.t)}</time><span>${esc(x.msg)}</span></li>`).join("");
     const brk = d.breaks.length ? d.breaks.map((b) => `<div>${b.done ? "✓" : "•"} After call ${b.after}: ${esc(b.title)} (${b.seconds} sec) ${b.done ? pill("ok", "Done") : ""}</div>`).join("") : `<span class="muted">None set up.</span>`;
     return [["live", `<div class="panel" style="border-color:var(--gold)"><div class="phead"><div class="step">${ic("play")}</div><div><h2>Live</h2><p>${isOrg() ? "You are running the engagement. Hosts see the same screen." : "You are helping run the engagement."} Numbers are always drawn at random by the system. Nobody sees a list of past numbers.</p></div></div>
-      <div class="livebox"><div><div>${callerHtml()}</div>
+      ${stillStrip()}<div class="livebox"><div><div>${callerHtml()}</div>
         <div class="row" style="margin-top:10px">${draw}${talk}</div>
         ${running ? `<div style="margin-top:12px"><label class="lb" style="margin-top:0">Emergency pause: reason</label><div class="row">${why}${pauseBtn}${isOrg() ? `<span class="sp"></span><button class="btn danger" data-a="askEnd">${ic("flag")} End engagement</button>` : ""}</div></div>` : ""}
         <label class="lb">Calls so far</label><div><b class="mono" style="font-size:18px">${l.called}</b> <span class="muted small">of 90</span></div>
@@ -614,9 +715,15 @@
   function reportTSV(r) {
     const e = eng(), L = [], t = (a) => a.map((x) => String(x ?? "").replace(/[\t\r\n]+/g, " ")).join("\t");
     L.push(t(["Engagement", r.engagement, "Organizer", e.orgName, "Started", r.startedAt ? TB.fmtDT(r.startedAt) : "", "Ended", r.endedAt ? TB.fmtDT(r.endedAt) : ""]), "", "WINNERS");
-    L.push(t(["Reward", "Reward text", "Winner", "Ticket ID", "Mobile", "Winners sharing", "Won on number", "Call no.", "Time"]));
-    r.winners.forEach((w) => L.push(t([w.reward, w.rewardText, w.name, w.ticketId, w.e164, w.winners, w.wonOnNumber, w.callNo, fmtTs(w.at)])));
-    L.push("", "NOT AWARDED", ...nameNotAwarded(r).map((x) => t([x.name, x.text])));
+    L.push(t(["Reward", "Reward text", "Winner", "Ticket ID", "Mobile", "Winners sharing", "Won on number", "Call no.", "Time", "Round"]));
+    r.winners.forEach((w) => L.push(t([w.reward, w.rewardText, w.name, w.ticketId, w.e164, w.winners, w.wonOnNumber, w.callNo, fmtTs(w.at), w.round || 1])));
+    L.push("", "NOT AWARDED", t(["Reward", "Reward text", "Round"]), ...nameNotAwarded(r).map((x) => t([x.name, x.text, x.round])));
+    const mo = r.moments || [];
+    if (mo.length || r.boosterUses) {
+      L.push("", "LUCKY DRAWS AND SCRATCH CARDS", t(["Moment", "Round", "Winning cards", "Replacement draws", "Ticket ID", "Name", "Reward"]));
+      mo.forEach((m) => { const ws = m.winners.length ? m.winners : [{}]; ws.forEach((w) => L.push(t([momentName(m, mo), m.round, m.winningCards ?? "", m.redraws || 0, w.ticketId || "", w.name || "", w.ticketId ? prizeName(w.prize) : ""]))); });
+      L.push(t(["Boosters used", r.boosterUses || 0]));
+    }
     L.push("", "NOT VALID CLAIMS", t(["Ticket ID", "Reward claimed", "Reason", "Time"]));
     r.notValid.forEach((n) => L.push(t([n.ticketId, PN[n.pattern] || n.pattern, n.why, fmtTs(n.at)])));
     L.push("", "PARTICIPANTS", t(["Ticket ID", "Name", "Mobile", "Role", "Kind", "Status", "Not valid claims"]));
@@ -624,9 +731,38 @@
     L.push("", "NUMBERS IN THE ORDER CALLED", r.callOrder.join(", "));
     return L.join("\n");
   }
+  const PRIZE = { gift: "Gift", joker: "Booster: Joker", extra: "Booster: Extra ticket", pass: "Booster: Lucky draw pass" };
+  const prizeName = (p) => PRIZE[p] || String(p || "");
+  function momentName(m, all) {
+    const same = all.filter((x) => x.kind === m.kind), i = same.indexOf(m) + 1;
+    return (m.kind === "lucky" ? "Lucky draw " : "Scratch card ") + i;
+  }
+  function momentsHtml(r) {
+    const mo = r.moments || [];
+    if (!mo.length && !r.boosterUses) return "";
+    const rows = mo.map((m) => {
+      const types = [...new Set(m.winners.map((w) => (w.prize === "gift" ? "Gift" : "Booster")))];
+      const notes = [m.kind === "scratch" && m.winningCards !== undefined ? nOf(m.winningCards, "winning card", "winning cards") : "", m.redraws ? `${nOf(m.redraws, "replacement draw", "replacement draws")} because a winner was not there` : "", m.note || ""].filter(Boolean).join(" · ");
+      return `<tr><td><b>${esc(momentName(m, mo))}</b></td><td>${m.round}</td><td style="font-size:13px">${m.winners.length ? m.winners.map((w) => `<span class="mono" style="font-size:12px">${esc(w.ticketId)}</span>${w.name ? " " + esc(w.name) : ""} <span class="muted">(${esc(prizeName(w.prize))})</span>`).join(", ") : `<span class="muted">No winners</span>`}</td><td>${esc(types.join(" and ") || "None")}</td><td class="small">${esc(notes) || "—"}</td></tr>`;
+    }).join("");
+    return `<label class="lb">Lucky draws and scratch cards</label><div class="tscroll"><table class="t"><thead><tr><th>Moment</th><th>Round</th><th>Winners</th><th>Reward type</th><th>Notes</th></tr></thead><tbody>${rows || `<tr><td colspan="5" class="muted">None took place.</td></tr>`}</tbody></table></div>
+      <div class="small" style="margin-top:6px">Boosters used: <b>${r.boosterUses || 0}</b></div>`;
+  }
   function nameNotAwarded(r) {
     const byId = new Map(S.data.rewards.map((x) => [x.id, x]));
-    return r.notAwarded.map((x) => ({ name: (byId.get(x.id) || {}).name || x.id, text: x.text }));
+    return r.notAwarded.map((x) => ({ round: x.round || 1, name: (byId.get(x.id) || {}).name || x.id, text: x.text }));
+  }
+  function winnersHtml(r, na) {
+    const wrow = (w) => `<tr><td><b>${esc(w.reward)}</b><div class="sub">${esc(w.rewardText)}${w.winners > 1 ? " · shared equally" : ""}</div></td><td>${esc(w.name)}<div class="sub mono">${esc(w.e164)}</div></td><td class="mono" style="font-size:12px">${esc(w.ticketId)}</td><td>${w.winners}</td><td>Number ${w.wonOnNumber} (call ${w.callNo})</td></tr>`;
+    const table = (ws) => `<div class="tscroll"><table class="t"><thead><tr><th>Reward</th><th>Winner</th><th>Ticket ID</th><th>Winners</th><th>Won on</th></tr></thead><tbody>${ws.length ? ws.map(wrow).join("") : `<tr><td colspan="5" class="muted">No rewards were won.</td></tr>`}</tbody></table></div>`;
+    const naTxt = (l) => (l.length ? l.map((x) => `${esc(x.name)} <span class="muted">(${esc(x.text)})</span>`).join(", ") : "All rewards were won.");
+    const R = r.rounds || 1;
+    if (R <= 1) return `<label class="lb">Winners</label>${table(r.winners)}
+      <label class="lb">Not awarded</label><div class="small">${naTxt(na)}</div>`;
+    const played = Math.max(1, r.roundsPlayed || 1);
+    let h = "";
+    for (let n = 1; n <= played; n++) h += `<label class="lb">Round ${n} of ${R}: winners</label>${table(r.winners.filter((w) => (w.round || 1) === n))}<div class="small" style="margin-top:6px"><span class="muted">Not awarded:</span> ${naTxt(na.filter((x) => x.round === n))}</div>`;
+    return h;
   }
   function reportSecs() {
     const r = S.report;
@@ -641,8 +777,8 @@
     const na = nameNotAwarded(r);
     return [["report", `<div class="panel" style="border-color:var(--gold)"><div class="phead"><div class="step">${ic("flag")}</div><div><h2>Report</h2><p>Copy the report before the tickets and claims are deleted. ${esc(NOTICE)}</p></div></div>
       <div class="alert">${ic("clock")}<span style="flex:1"><b>Tickets, phones, claims and the activity log will be deleted on ${esc(TB.fmtDT(del))}.</b> Names, numbers and departments are kept for up to 365 days for reuse. Copy the report now and keep it with your records.</span><button class="btn sm" data-a="copyReport">${ic("copy")} Copy report for Excel</button></div>
-      <label class="lb">Winners</label><div class="tscroll"><table class="t"><thead><tr><th>Reward</th><th>Winner</th><th>Ticket ID</th><th>Winners</th><th>Won on</th></tr></thead><tbody>${r.winners.length ? r.winners.map((w) => `<tr><td><b>${esc(w.reward)}</b><div class="sub">${esc(w.rewardText)}${w.winners > 1 ? " · shared equally" : ""}</div></td><td>${esc(w.name)}<div class="sub mono">${esc(w.e164)}</div></td><td class="mono" style="font-size:12px">${esc(w.ticketId)}</td><td>${w.winners}</td><td>Number ${w.wonOnNumber} (call ${w.callNo})</td></tr>`).join("") : `<tr><td colspan="5" class="muted">No rewards were won.</td></tr>`}</tbody></table></div>
-      <label class="lb">Not awarded</label><div class="small">${na.length ? na.map((x) => `${esc(x.name)} <span class="muted">(${esc(x.text)})</span>`).join(", ") : "All rewards were won."}</div>
+      ${winnersHtml(r, na)}
+      ${momentsHtml(r)}
       <label class="lb">Not valid claims (${r.notValid.length})</label><div class="small">${r.notValid.length ? r.notValid.map((n) => `<div>${esc(n.ticketId)} – ${esc(PN[n.pattern] || n.pattern)} <span class="tiny muted">${esc(n.why)}</span></div>`).join("") : `<span class="muted">None.</span>`}</div>
       <label class="lb">Participants (${r.participants.length})</label><div class="tscroll" style="max-height:340px;overflow:auto"><table class="t"><thead><tr><th>Ticket ID</th><th>Name</th><th>Mobile</th><th>Role</th><th>Status</th></tr></thead><tbody>${r.participants.map((p) => `<tr><td class="mono" style="font-size:12px">${esc(p.ticketId)}</td><td>${esc(p.name)}</td><td class="mono">${esc(p.e164)}</td><td>${esc(p.kind === "family" ? "Family" : roleName(p.role))}</td><td>${p.joined ? "Joined" : "Did not join"}${p.blocked ? " · blocked" : ""}</td></tr>`).join("")}</tbody></table></div>
       <label class="lb">Numbers in the order they were called (${r.callOrder.length})</label><div class="linkbox" style="border-style:solid">${r.callOrder.join(", ") || "—"}</div></div>`]];
@@ -704,6 +840,9 @@
     pause: async () => { await run(api("POST", `${E()}/pause`, { reason: S.pauseWhy })); await loadConsole(); },
     resume: async () => { await run(api("POST", `${E()}/resume`, {})); await loadConsole(); },
     endbreak: async () => { await run(api("POST", `${E()}/endbreak`, {})); await loadConsole(); },
+    sx: (el) => saveSurprise({ [el.dataset.k]: parseV(el) }),
+    sxToggle: () => { const c = sx(); const open = S.sxOpen === null || S.sxOpen === undefined ? sxOn(c) : S.sxOpen; S.sxOpen = !open; paintStage(); },
+    sxTrigger: async (el) => { await run(api("POST", `${E()}/moments/trigger`, { kind: el.dataset.v })); await loadConsole(); },
     copyReport: () => { if (S.report && !S.report.error) copy(reportTSV(S.report), "Report copied. Paste it into Excel."); },
   };
   // End-engagement confirm needs to stay open until the tick-box is ticked; re-implemented without arguments.callee.
@@ -724,6 +863,7 @@
     date: (el) => el.value && saveStart(el.value),
     time: (el) => saveStart(null, Number(el.value)),
     country: (el) => saveSettings({ defaultCountry: el.value }),
+    sxSel: (el) => saveSurprise({ [el.dataset.k]: Number(el.value) }),
     rwText: (el) => { RW.texts[el.dataset.k][Number(el.dataset.n)] = el.value; queueRewards(100); },
     bkTitle: (el) => { BK.list[Number(el.dataset.n)].title = el.value; queueBreaks(100); },
     bkUrl: (el) => { BK.list[Number(el.dataset.n)].mediaUrl = el.value.trim(); queueBreaks(100); paintStage(); },

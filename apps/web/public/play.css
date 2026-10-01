@@ -81,3 +81,53 @@ button.cell.cut{color:var(--gold2)}
 
 #toast{z-index:95}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+/* ---------- optional features (only drawn when the organizer switched them on) ---------- */
+div.cell.num.auto{font:700 15px var(--sans);color:var(--ink);cursor:default}
+div.cell.num.auto.cut{color:var(--gold2)}
+.still{padding:7px 14px 8px;background:#FFF8EC;border-bottom:1px solid var(--line)}
+.still .stt{font:700 9px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--goldd);margin-bottom:2px}
+.still .stg{display:flex;gap:6px;justify-content:space-between}
+.still .sti{flex:1;min-width:0;text-align:center;border-left:1px solid var(--line);line-height:1.15}
+.still .sti:first-child{border-left:0;text-align:left}
+.still .sti b{display:inline-block;font:600 20px var(--serif);color:var(--wine);font-variant-numeric:tabular-nums}
+.still .sti span{display:block;font-size:11px;color:var(--muted)}
+.still .stnext{font-size:11.5px;color:var(--muted);margin-top:3px}
+.still .stdone{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:600;color:var(--ok)}
+.pop{animation:stpop .7s ease-out}
+@keyframes stpop{0%{transform:scale(1)}35%{transform:scale(1.6);color:var(--ok)}100%{transform:scale(1)}}
+.boost{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px 0}
+.bchip{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border-radius:999px;border:1px dashed var(--goldd);background:#FFF8EC;color:var(--ink2);font:600 12.5px var(--sans)}
+button.bchip.joker{border:0;background:linear-gradient(180deg,#E6C58A,#C9A45F);color:var(--deep);font-size:13.5px}
+
+/* lucky draw (focused card) and scratch card (sheet) overlays */
+.mov{position:fixed;inset:0;z-index:72;display:grid;overflow:auto;padding:16px}
+.mov.lucky{place-items:center;background:radial-gradient(900px 500px at 50% 30%,#7A1C33,#2E0812 70%)}
+.mov.scratch{place-items:end center;padding:0;background:rgba(20,5,10,.55);backdrop-filter:blur(2px)}
+.movc{width:100%;max-width:380px;text-align:center;color:#fff}
+.mov.scratch .movc{max-width:440px;background:#FFFDF8;color:var(--ink);border-radius:22px 22px 0 0;padding:14px 18px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -20px 40px -20px rgba(0,0,0,.6)}
+.movc h2{font:600 28px/1.15 var(--serif);margin:10px 0 6px}
+.mov.scratch .movc h2{font-size:21px;margin:6px 0}
+.movtop{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left}
+.mov.lucky .eyebrow{color:var(--gold)}
+.bump{display:inline-block;margin-left:8px;background:var(--gold);color:var(--deep);border-radius:999px;padding:1px 9px;font-size:10px;letter-spacing:.12em}
+.movballw{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--gold2)}
+.mov.scratch .movballw{color:var(--muted)}
+.movballw b{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#fff,#F3E6CB 55%,#D9C29A);color:var(--wine);font:600 17px var(--serif)}
+.movp{font-size:15px;line-height:1.45;margin:6px 0}
+.movs{font-size:12.5px;color:var(--gold2);margin:8px 0}
+.mov.scratch .movs{color:var(--muted)}
+.movhide{color:var(--gold2);min-height:40px;padding:6px 14px}
+.spin{font:600 36px var(--mono);letter-spacing:.08em;color:var(--gold2);margin:16px 0 8px;min-height:50px;display:grid;place-items:center}
+.movl{list-style:none;margin:10px 0;padding:0;display:grid;gap:6px;text-align:left}
+.movl li{background:rgba(255,255,255,.12);border-radius:10px;padding:9px 12px;font:500 13px var(--mono);overflow-wrap:anywhere}
+.res.mv{margin:14px auto 4px}
+.btn.big{min-height:52px;padding:0 28px;font-size:17px;margin-top:10px}
+.mov.lucky .btn.line{background:transparent;color:#fff;border-color:rgba(255,255,255,.5)}
+.mov .err{text-align:left}
+.scrbox{position:relative;width:100%;height:140px;margin:10px 0 4px;border-radius:14px;overflow:hidden;background:#FBF1D8;border:1px solid var(--goldd)}
+.scrres{position:absolute;inset:0;display:grid;place-items:center;padding:10px;font:600 20px/1.25 var(--serif);color:var(--muted);text-align:center}
+.scrres.win{color:var(--wine)}
+.scrbox canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab;transition:opacity .45s}
+.scrbox canvas.gone{opacity:0;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.scrbox canvas{transition:none}.sheet{animation:none}}

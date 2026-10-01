@@ -44,13 +44,17 @@
   }
   function fatal(msg) { show(`${ptop()}<div class="pcard center"><div class="res no">${ic("alert")}</div><h2>Something went wrong</h2><p class="lead">${esc(msg)}</p><button class="btn line block" data-act="reload">Try again</button></div>`); }
   const consentBox = (id, html) => `<label class="cb" style="border:1px solid var(--line);border-radius:12px;padding:12px"><input type="checkbox" id="${id}"><span>${html}</span></label>`;
-  const CONSENT = `I agree to join. My name, mobile number and department are used to run this engagement. My ticket and phone details are <b>deleted within 24 hours</b> after it ends. My name and number are <b>kept for up to 365 days</b> so my organizer can invite me to future engagements, and I can ask them not to be kept at any time. <a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy notice</a>`;
+  const REVEAL_CLAUSE = ` If I win a lucky draw, my first name, department and last 4 digits of my number may be shown to everyone in this engagement.`;
+  const revealOn = () => !!(J.info && J.info.revealNames === true);
+  const CONSENT_BASE = `I agree to join. My name, mobile number and department are used to run this engagement. My ticket and phone details are <b>deleted within 24 hours</b> after it ends. My name and number are <b>kept for up to 365 days</b> so my organizer can invite me to future engagements, and I can ask them not to be kept at any time. <a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy notice</a>`;
+  const consentText = () => CONSENT_BASE.replace(' <a href="/legal.html#privacy"', (revealOn() ? REVEAL_CLAUSE : "") + ' <a href="/legal.html#privacy"');
 
   // ---------- state ----------
   const J = { info: null, cc: "IN", raw: "", name: "", info2: "" };
   const G = { eng: null, me: null, quotas: null, invitees: [], consoleLink: null, tickets: [], ids: {}, gap: 10000, status: "open", current: 0, callNo: 0, rewards: [],
-    pause: null, result: null, talk: false, nextLocal: 0, heard: new Set(), cut: { A: new Set(), B: new Set() }, tab: "A", hl: null, wsOpen: false, wsEver: false,
-    prefetching: false, brk: null, lastMe: 0, claimR: null, claimSel: "A" };
+    pause: null, result: null, talk: false, nextLocal: 0, heard: new Set(), cut: { A: new Set(), B: new Set(), C: new Set() }, tab: "A", hl: null, wsOpen: false, wsEver: false,
+    prefetching: false, brk: null, lastMe: 0, claimR: null, claimSel: "A",
+    round: 1, rounds: 1, still: null, stillPrev: null, stillMax: { lucky: 0, scratch: 0 }, surprise: null, moment: null, boosters: { joker: 0, extra: 0, pass: 0 }, note: null, jokerT: "A" };
   let ws = null, tickT = null, resultT = null;
   const BLOBS = new Map();
 
@@ -107,7 +111,7 @@
     show(`${ptop()}<div class="pcard"><div class="eyebrow">You're on the list</div><h2>Is this you?</h2>
       <div class="mname" aria-label="Masked name">${esc(r.name)}</div><p class="small muted" style="margin:0 0 8px">${r.e164Display ? "Number " + esc(r.e164Display) : ""}</p>
       <p class="lead">Your full name appears on your ticket only. Other participants never see it.</p>
-      ${consentBox("cOk", CONSENT)}<div id="cErr" role="alert"></div>
+      ${consentBox("cOk", consentText())}<div id="cErr" role="alert"></div>
       <button class="btn block" id="cGo">Yes, this is me. Join ${ic("arrow")}</button>
       <p class="center"><button class="linkbtn" id="cBack">No, use a different number</button></p>
       <p class="tiny muted">This phone becomes your ticket. If you open the engagement on another phone, it will be blocked.</p></div>`);
@@ -125,7 +129,7 @@
       <p class="lead"><span class="mono">${esc(display || "")}</span> is not on the organizer's list. Send a request and the organizer can let you in.</p>
       <label class="lb" for="aName">Your name</label><input class="inp" id="aName" maxlength="30" autocomplete="name" placeholder="So the organizer knows you" value="${esc(J.name)}">
       <label class="lb" for="aInfo">Department or flat (optional)</label><input class="inp" id="aInfo" maxlength="30" placeholder="e.g. Finance, or B-402" value="${esc(J.info2)}">
-      ${consentBox("aOk", "I agree that my name and number are shared with the organizer for this engagement. My ticket and phone details are <b>deleted within 24 hours</b> after it ends. My name and number are <b>kept for up to 365 days</b> so the organizer can invite me again, unless I ask them not to be kept.")}<div id="aErr" role="alert"></div>
+      ${consentBox("aOk", "I agree that my name and number are shared with the organizer for this engagement. My ticket and phone details are <b>deleted within 24 hours</b> after it ends. My name and number are <b>kept for up to 365 days</b> so the organizer can invite me again, unless I ask them not to be kept." + (revealOn() ? REVEAL_CLAUSE : ""))}<div id="aErr" role="alert"></div>
       <button class="btn block" id="aGo">Ask to join ${ic("arrow")}</button>
       <p class="center"><button class="linkbtn" id="aBack">Use a different number</button></p></div>`);
     $("aBack").onclick = joinScreen;
@@ -172,7 +176,7 @@
     show(`${ptop()}<div class="pcard"><div class="eyebrow">Your personal pass</div><h2>Hi ${esc(firstName(r.name))}, this is your pass for <em>${esc(r.engagement.name)}</em></h2>
       <p class="lead">From ${esc(r.engagement.orgName)}. It works on one phone only, so please do not forward it. Nothing to type.</p>
       ${r.engagement.startsAt ? `<div class="passbox"><span>Starts</span><b>${esc(TB.fmtDT(r.engagement.startsAt))}</b></div>` : ""}
-      ${consentBox("pOk", CONSENT)}<div id="pErr" role="alert"></div>
+      ${consentBox("pOk", consentText())}<div id="pErr" role="alert"></div>
       <button class="btn block" id="pGo">Join engagement ${ic("arrow")}</button></div>`);
     $("pGo").onclick = async () => {
       if (!$("pOk").checked) return inlineErr("pErr", "Please tick the box to join.");
@@ -183,20 +187,44 @@
   }
 
   // ================= LIVE TICKET =================
-  const storeKey = () => `tb_play_${code}_${TB.device().slice(0, 8)}`;
-  function saveLocal() { TB.store.set(storeKey(), JSON.stringify({ heard: [...G.heard], A: [...G.cut.A], B: [...G.cut.B] })); }
+  // Round 1 keeps the original key; later rounds get their own (every round has new tickets and a new call list).
+  const storeKey = () => `tb_play_${code}_${TB.device().slice(0, 8)}${G.round > 1 ? "_r" + G.round : ""}`;
+  function saveLocal() { TB.store.set(storeKey(), JSON.stringify({ heard: [...G.heard], A: [...G.cut.A], B: [...G.cut.B], C: [...G.cut.C] })); }
   function loadLocal() {
-    try { const o = JSON.parse(TB.store.get(storeKey()) || "null"); if (o) { G.heard = new Set(o.heard || []); G.cut.A = new Set(o.A || []); G.cut.B = new Set(o.B || []); } } catch {}
+    try { const o = JSON.parse(TB.store.get(storeKey()) || "null"); if (o) { G.heard = new Set(o.heard || []); G.cut.A = new Set(o.A || []); G.cut.B = new Set(o.B || []); G.cut.C = new Set(o.C || []); } } catch {}
   }
-  function hear(n) { if (n && !G.heard.has(n)) { G.heard.add(n); saveLocal(); } }
+  // Returns true when the round changed (this round's heard/cut sets are replaced by the saved ones for the new round).
+  function switchRound(r) {
+    r = Number(r) || 1;
+    if (G.localLoaded && r === G.round) return false;
+    G.round = r; G.localLoaded = true; G.heard = new Set(); G.cut = { A: new Set(), B: new Set(), C: new Set() }; loadLocal();
+    return true;
+  }
+  const autoOn = () => !!(G.surprise && G.surprise.autoMark);
+  const LET = ["A", "B", "C"];
+  const curTab = () => (LET.indexOf(G.tab) < G.tickets.length ? G.tab : "A");
+  function automark(n) {
+    let ch = false;
+    G.tickets.forEach((t, i) => { const L = LET[i]; if (L && t.flat().includes(n) && !G.cut[L].has(n)) { G.cut[L].add(n); ch = true; } });
+    return ch;
+  }
+  function hear(n) {
+    if (!n) return; let ch = false;
+    if (!G.heard.has(n)) { G.heard.add(n); ch = true; }
+    if (autoOn() && automark(n)) ch = true;
+    if (ch) saveLocal();
+  }
 
   async function loadMe() {
-    if (!G.localLoaded) { G.localLoaded = true; loadLocal(); } // must run before hear() can overwrite saved cuts
     const d = await api("GET", `/api/e/${enc(code)}/me`);
+    switchRound(d.state && d.state.round); // must run before hear() can overwrite saved cuts
     G.lastMe = Date.now(); G.eng = d.engagement; G.me = d.me; G.quotas = d.quotas; G.invitees = d.invitees || []; G.consoleLink = d.consoleLink;
-    G.tickets = d.me.tickets || []; G.ids = d.me.ticketIds || {}; G.gap = d.engagement.gapMs || 10000;
-    const s = d.state; G.status = s.status; G.liveLocal = s.liveIn != null ? Date.now() + s.liveIn : 0; G.callNo = s.callNo; G.current = s.current; G.rewards = s.rewards || [];
+    G.tickets = d.me.tickets || []; G.ids = d.me.ticketIds || {}; if (G.tickets.length > 2 && !G.ids.C && G.ids.A) G.ids.C = G.ids.A.replace(/-A$/, "-C"); G.gap = d.engagement.gapMs || 10000;
+    const s = d.state; applyOptional(s); G.boosters = d.boosters || G.boosters;
+    if (LET.indexOf(G.tab) >= G.tickets.length) G.tab = "A";
+    G.status = s.status; G.liveLocal = s.liveIn != null ? Date.now() + s.liveIn : 0; G.callNo = s.callNo; G.current = s.current; G.rewards = s.rewards || [];
     if (G.status === "started" && G.current) hear(G.current);
+    if (autoOn()) { let ch = false; G.heard.forEach((n) => { if (automark(n)) ch = true; }); if (ch) saveLocal(); }
     if (d.nextAt) { let rem = d.nextAt - Date.now(); if (rem < -1500 || rem > G.gap + 1500) rem = G.gap; G.nextLocal = Date.now() + Math.max(0, rem); } else G.nextLocal = 0;
     const p = d.paused;
     if (!p) { G.pause = null; if (G.brk) hideBreak(); }
@@ -209,17 +237,26 @@
         showBreak({ title: p.brk.title, kind: p.brk.kind, seconds: secs, mediaUrl: b.mediaUrl });
       }
     }
+    if (G.moment) syncMoment(G.moment, false);
+  }
+  // The optional-feature fields of the server's public state (null/absent when no optional feature is on).
+  function applyOptional(s) {
+    G.rounds = s.rounds || 1; G.surprise = s.surprise || null;
+    const st = s.still && s.still.enabled !== false ? s.still : null;
+    G.still = st;
+    if (st) { G.stillMax.lucky = Math.max(G.stillMax.lucky, st.lucky || 0); G.stillMax.scratch = Math.max(G.stillMax.scratch, st.scratch || 0); }
+    G.moment = s.moment || null;
   }
   async function reload(repaint = true) {
     try { await loadMe(); if (repaint) paintAll(); }
     catch (e) { if (e.status === 401) { stopLive(); errCard("moved"); } }
   }
 
-  function stopLive() { if (ws) ws.close(); ws = null; G.wsOpen = false; G.wsEver = false; clearInterval(tickT); hideBreak(); $("bnr").innerHTML = ""; }
+  function stopLive() { if (ws) ws.close(); ws = null; G.wsOpen = false; G.wsEver = false; clearInterval(tickT); hideBreak(); closeMoment(); $("bnr").innerHTML = ""; }
 
   function startPlay() {
     if (G.status === "ended" || G.status === "purged") return endedScreen(G.status === "purged");
-    show(`${ptop(true)}<div class="bp"><div class="bphd" id="hd"></div><div id="strip"></div><div class="fields" id="fields"></div><div id="tabs"></div>
+    show(`${ptop(true)}<div class="bp"><div class="bphd" id="hd"></div><div id="strip"></div><div id="still"></div><div id="boost"></div><div class="fields" id="fields"></div><div id="tabs"></div>
       <div class="tgrid" id="grid"></div><p class="pnote" id="pnote"></p><div id="notes"></div>
       <div class="plegal">Private engagement for a closed group. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
       <div class="plinks"><a href="/legal.html#rules" target="_blank" rel="noopener">Rules &amp; how to play</a><a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy</a><a href="/legal.html#disclaimer" target="_blank" rel="noopener">Disclaimer</a></div>
@@ -234,21 +271,24 @@
   function onMsg(m) {
     switch (m.type) {
       case "state":
+        switchRound(m.round); applyOptional(m);
         G.status = m.status; G.liveLocal = m.liveIn != null ? Date.now() + m.liveIn : 0; G.callNo = m.callNo; G.current = m.current; G.rewards = m.rewards || G.rewards;
         if (m.paused) { if (!G.pause || G.pause.kind !== m.paused) G.pause = { kind: m.paused, reason: "" }; } else { G.pause = null; hideBreak(); }
         if (G.status === "ended" || G.status === "purged") return endedScreen(G.status === "purged");
         if (G.status === "started" && m.current) hear(m.current);
         paintAll();
+        syncMoment(G.moment, true);
         if (Date.now() - G.lastMe > 1500) reload();
         break;
       case "call":
         G.status = "started"; G.pause = null; G.current = m.number; G.callNo = m.callNo; hear(m.number); G.nextLocal = Date.now() + G.gap;
         say("Number " + m.number + " called.");
         try { if (TBAudio.unlocked) TBAudio.play(m.number); } catch {}
-        paintStrip(); paintBanner(); paintRewards();
+        paintStrip(); paintBanner(); paintRewards(); updMovBall();
+        if (autoOn()) { paintTabs(); paintGrid(); }
         break;
       case "pause": G.pause = { kind: m.kind, reason: m.reason || "" }; paintStrip(); paintBanner(); paintRewards(); if (m.kind === "emergency") say("Paused. " + (m.reason || "")); break;
-      case "result": showResult(m.items || []); break;
+      case "result": showResult(m.items || []); refreshSoon(); break;
       case "break": showBreak(m); break;
       case "resume": G.pause = null; hideBreak(); paintStrip(); paintBanner(); paintRewards(); reload(); break;
       case "ended": stopLive(); G.status = "ended"; reloadForEnd(); break;
@@ -258,6 +298,18 @@
       case "live": G.status = "started"; G.liveLocal = 0; paintAll(); break;
       case "loggedout": stopLive(); errCard("moved"); break;
       case "talk": G.talk = !!m.on; paintStrip(); break;
+      case "round_start": onRoundStart(m); break;
+      case "round_end": onRoundEnd(m); break;
+      case "moment_start": onMomentStart(m); break;
+      case "moment_result": onMomentResult(m); break;
+      case "lucky_won": onLuckyWon(m); break;
+      case "scratch_result": if (MO.cur && MO.cur.kind === "scratch" && (!m.momentId || m.momentId === MO.cur.id)) setScratchOutcome(m.outcome); break;
+      case "booster": G.boosters = m.boosters || G.boosters; paintBoost(); break;
+      case "presentAck":
+        if (m.error) { if (MO.cur) { MO.cur.err = m.error; paintMoment(); } TB.toast(esc(m.error)); } else if (MO.cur) { MO.cur.confirmed = true; if (MO.cur.phase === "won") { MO.cur.phase = "confirmed"; paintMoment(); } say("Confirmed. Your organizer will contact you."); }
+        break;
+      case "scratchAck": if (m.error) { if (MO.cur) MO.cur.sent = false; TB.toast(esc(m.error)); } else if (m.outcome) setScratchOutcome(m.outcome); break;
+      case "jokerAck": onJokerAck(m); break;
       case "claimAck":
         if (m.error) TB.toast(esc(m.error)); else TB.toast("Claim sent. The engagement pauses for everyone while it is checked.");
         break;
@@ -276,13 +328,13 @@
   }
 
   // ---------- painting ----------
-  function paintAll() { if (!$("strip")) return; paintHd(); paintStrip(); paintFields(); paintTabs(); paintGrid(); paintNotes(); paintRewards(); paintBanner(); }
+  function paintAll() { if (!$("strip")) return; paintHd(); paintStrip(); paintStill(); paintBoost(); paintFields(); paintTabs(); paintGrid(); paintNotes(); paintRewards(); paintBanner(); }
 
   function paintHd() {
     const st = { open: ["pill", "Not started yet"], starting: ["pill warn", "Starting"], started: ["pill ok", "Live"], ended: ["pill", "Ended"] }[G.status] || ["pill", G.status];
     const sw = TB.sw, swChip = sw.state === "downloading" || sw.state === "checking" ? `<span class="pill info">Getting ready ${sw.pct}%</span>` : sw.state === "ready" ? `<span class="pill ok"><i></i>Software ready</span>` : "";
     $("hd").innerHTML = `<div class="eyebrow">${esc(G.eng.orgName)}</div><h3>${esc(G.eng.name)}</h3><div class="meta"><span class="${st[0]}"><i></i>${st[1]}</span>
-      ${G.eng.startsAt ? `<span>${ic("clock")} ${G.status === "open" ? "Starts" : "Started"} ${esc(TB.fmtDT(G.eng.startsAt))}</span>` : ""}${swChip}${G.prefetching ? `<span class="pill info">Getting videos ready</span>` : ""}</div>`;
+      ${G.eng.startsAt ? `<span>${ic("clock")} ${G.status === "open" ? "Starts" : "Started"} ${esc(TB.fmtDT(G.eng.startsAt))}</span>` : ""}${G.rounds > 1 ? `<span class="pill wine" id="rdchip">Round ${G.round} of ${G.rounds}</span>` : ""}${swChip}${G.prefetching ? `<span class="pill info">Getting videos ready</span>` : ""}</div>`;
   }
 
   function stripModel() {
@@ -296,6 +348,8 @@
       return { cls: any ? "okc" : "badc", ball: ic(any ? "check" : "x"), eb: any ? "Reward awarded" : "Not valid", ln: it.map((x) => x.ok ? x.reward : "Not valid").slice(0, 2).join(" · "), sub: "Checked by the software. The engagement continues in a few seconds." };
     }
     if (p === "break") return { cls: "brk", ball: ic("play"), eb: "Brand break", ln: G.brk ? G.brk.title : "A short break", sub: "The engagement continues right after." };
+    if (p === "intermission") return { cls: "brk", ball: ic("clock"), eb: "Break between rounds", ln: "Next round starts soon", sub: "Your new ticket appears here by itself." };
+    if (p === "moment") return { cls: "pz", ball: ic("star"), eb: "A surprise is on", ln: "Numbers continue right after", sub: "Your ticket is safe." };
     if (p === "emergency") return { cls: "pz", ball: ic("pause"), eb: "Paused by the host", ln: G.pause.reason || "Please wait", sub: "Please wait. Your ticket is safe." };
     const manual = G.eng.callMode === "manual";
     return { cls: "", ball: G.current ? String(G.current) : "<small>Ready</small>", eb: `Now calling · call ${G.callNo} of 90`, ln: G.current ? "Number " + G.current : (manual ? "The host is about to start…" : "The first number is on its way…"),
@@ -321,12 +375,12 @@
     if (G.brk) { const r = Math.max(0, Math.ceil((G.brk.until - Date.now()) / 1000)); const c = $("brkc"); if (c) c.textContent = r > 0 ? r : "…"; const l = $("brkl"); if (l) l.textContent = r > 0 ? "seconds left" : "Resuming"; }
   }
 
-  const cardNo = (id) => { const m = /-(\d{4,})-[AB]$/.exec(id || ""); return m ? m[1] : ""; };
+  const cardNo = (id) => { const m = /-(\d{4,})-[ABC]$/.exec(id || ""); return m ? m[1] : ""; };
   function paintFields() {
     $("fields").innerHTML = `<div><label>Participant</label><b>${esc(G.me.name)}</b></div><div><label>Date</label><b>${G.eng.startsAt ? esc(TB.fmtD(G.eng.startsAt)) : "-"}</b></div><div><label>Tickets</label><b>${G.tickets.length}</b></div>`;
   }
   function paintTabs() {
-    $("tabs").innerHTML = G.tickets.length < 2 ? "" : `<div class="tabs2" role="tablist" aria-label="Your tickets">${["A", "B"].map((t) => `<button class="chip ${G.tab === t ? "on" : ""}" role="tab" aria-selected="${G.tab === t}" data-act="tab" data-arg="${t}">Ticket ${t} <span class="tiny">· ${G.cut[t].size} cut</span></button>`).join("")}</div>`;
+    $("tabs").innerHTML = G.tickets.length < 2 ? "" : `<div class="tabs2" role="tablist" aria-label="Your tickets">${LET.slice(0, G.tickets.length).map((t) => `<button class="chip ${curTab() === t ? "on" : ""}" role="tab" aria-selected="${curTab() === t}" data-act="tab" data-arg="${t}">Ticket ${t} <span class="tiny">· ${G.cut[t].size} cut</span></button>`).join("")}</div>`;
   }
 
   // pattern numbers (same rules as the server)
@@ -341,16 +395,18 @@
     }
   }
   function cellsHTML(t, cutSet, hl, live) {
+    const auto = autoOn();
     return t.flat().map((v) => v === null ? `<div class="cell blank"></div>`
+      : live && auto ? `<div class="cell num auto ${cutSet.has(v) ? "cut" : ""} ${hl && hl.has(v) ? "hl" : ""}" role="img" aria-label="${v}${cutSet.has(v) ? ", cut" : ""}">${v}</div>`
       : live ? `<button class="cell num ${cutSet.has(v) ? "cut" : ""} ${hl && hl.has(v) ? "hl" : ""}" data-act="cell" data-arg="${v}" aria-pressed="${cutSet.has(v)}" aria-label="${v}${cutSet.has(v) ? ", cut" : ""}">${v}</button>`
         : `<div class="cell ${cutSet.has(v) ? "cut" : ""} ${hl && hl.has(v) ? "hl" : ""}">${v}</div>`).join("");
   }
   function paintGrid() {
-    const t = G.tickets[G.tab === "B" && G.tickets[1] ? 1 : 0]; if (!t) return;
-    const tab = G.tickets[1] ? G.tab : "A";
+    const tab = curTab(), t = G.tickets[LET.indexOf(tab)]; if (!t) return;
     const hl = G.hl ? new Set(patternNums(t, G.hl.pattern)) : null;
     $("grid").innerHTML = cellsHTML(t, G.cut[tab], hl, true);
-    $("pnote").textContent = G.status === "started" ? "Tap a number to cut it (tap again to undo). You can cut a number only after it is called. Tap a reward name to see its pattern." : "Your ticket is ready. You can cut numbers once the first number is called.";
+    $("pnote").textContent = G.status === "started" && autoOn() ? "Called numbers are cut for you. Tap a reward name to see its pattern."
+      : G.status === "started" ? "Tap a number to cut it (tap again to undo). You can cut a number only after it is called. Tap a reward name to see its pattern." : "Your ticket is ready. You can cut numbers once the first number is called.";
   }
   function paintNotes() {
     let h = "";
@@ -387,7 +443,7 @@
         <button class="nm" data-act="hl" data-arg="${esc(r.id)}" aria-label="Show pattern for ${esc(r.name)}">${mini(r.pattern)}<b>${esc(r.name)}</b><small>${esc(r.text)}</small>${won ? `<em>${ids}</em>` : ""}</button>
         <span class="rt"><span class="pill ${won ? "ok" : ""}">${won ? "Awarded" : "Open"}</span>${won ? "" : isNext ? `<button class="cl" data-act="claim" data-arg="${esc(r.id)}" ${canNow ? "" : "disabled"}>Claim</button>` : `<span class="tiny muted">After the previous one</span>`}</span></div>`;
     }).join("");
-    const ids = [G.ids.A, G.tickets.length > 1 ? G.ids.B : null].filter(Boolean);
+    const ids = [G.ids.A, G.tickets.length > 1 ? G.ids.B : null, G.tickets.length > 2 ? G.ids.C : null].filter(Boolean);
     $("stub").innerHTML = `<div class="stubh"><span>Rewards</span><span>${open} open</span></div>${rows || `<p class="muted small">No rewards have been set up yet.</p>`}
       <div class="row" style="justify-content:space-between;margin-top:12px;align-items:flex-start"><span><span class="tiny muted">TICKET NO.</span><br><b style="font:600 18px var(--serif);color:var(--wine)">${esc(cardNo(G.ids.A))}</b></span><span class="tid" style="text-align:right">${ids.map(esc).join("<br>")}</span></div>`;
   }
@@ -403,6 +459,11 @@
       out.push(`<div class="${any ? "ok" : "bad"}" role="status"><b>${any ? "Checked: reward awarded" : "Checked: not valid"}</b><ul>${it.map((x) =>
         `<li>${ic(x.ok ? "check" : "x")}<span>${x.ok ? (x.fun ? `Valid, family takes part for fun: ${esc(x.reward)}` : `Reward awarded: ${esc(x.reward)}`) : "Not valid"} - <span class="mono">${esc(x.ticketId)}</span>${x.me ? `<span class="you">That is you!</span>` : ""}</span></li>`).join("")}</ul>${me ? "" : ""}</div>`);
     }
+    if (G.note) {
+      const n = G.note;
+      if (n.round) out.push(`<div class="info" role="status"><b>${ic("flag")} Round ${n.round} finished</b>${G.pause && G.pause.kind === "intermission" ? "Next round starts soon." : ""}</div>`);
+      else out.push(`<div class="info" role="status">${n.html}</div>`);
+    }
     $("bnr").innerHTML = out.join("");
   }
 
@@ -413,10 +474,11 @@
     doforget: async () => { try { await api("POST", `/api/e/${enc(code)}/me/forget`); TB.closeSheet(); TB.toast("Done. We will not keep your name and number."); } catch (e) { TB.toast(esc(e.message)); } },
     audio: async () => { await TBAudio.unlock(); TBAudio.preload(); paintStrip(); TB.toast("Audio is on. You will hear each number."); },
     voice: () => { TBAudio.enabled = !TBAudio.enabled; if (!TBAudio.enabled) TBAudio.stop(); paintStrip(); },
-    tab: (t) => { G.tab = t; paintTabs(); paintGrid(); },
+    tab: (t) => { G.tab = LET.indexOf(t) < G.tickets.length ? t : "A"; paintTabs(); paintGrid(); },
     hl: (id) => { const r = G.rewards.map(parseR).find((x) => x.id === id); G.hl = G.hl && G.hl.id === id ? null : r; paintGrid(); paintRewards(); },
     cell: (arg) => {
-      const n = Number(arg), tab = G.tickets[1] ? G.tab : "A";
+      if (autoOn()) return;
+      const n = Number(arg), tab = curTab();
       if (!G.heard.has(n)) return TB.toast("That number has not been called yet.");
       const s = G.cut[tab]; s.has(n) ? s.delete(n) : s.add(n);
       saveLocal(); try { if (navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) navigator.vibrate(8); } catch {}
@@ -447,16 +509,16 @@
   // ---------- claim ----------
   function claimSheet(id) {
     const R = G.rewards.map(parseR).find((x) => x.id === id); if (!R) return;
-    G.claimR = R; G.claimSel = R.scope === "two_ticket" ? "AB" : (G.tickets.length > 1 ? G.tab : "A");
+    G.claimR = R; G.claimSel = R.scope === "two_ticket" ? "AB" : (G.tickets.length > 1 ? curTab() : "A");
     renderClaim();
   }
   function renderClaim() {
     const R = G.claimR, two = R.scope === "two_ticket", multi = G.tickets.length > 1;
-    const grid = (i) => { const t = G.tickets[i], k = i ? "B" : "A"; return `${two ? `<div class="tcap"><b>Ticket ${k}</b></div>` : ""}<div class="tgrid sg">${cellsHTML(t, G.cut[k], new Set(patternNums(t, R.pattern)), false)}</div>`; };
+    const grid = (i) => { const t = G.tickets[i], k = LET[i]; return `${two ? `<div class="tcap"><b>Ticket ${k}</b></div>` : ""}<div class="tgrid sg">${cellsHTML(t, G.cut[k], new Set(patternNums(t, R.pattern)), false)}</div>`; };
     const sel = G.claimSel;
     TB.sheet(`<div class="eyebrow">Confirm your claim</div><h2>${esc(R.name)}</h2><p class="muted small">${esc(PDESC[R.pattern] || "")}. Reward: ${esc(R.text)}.</p>
-      ${multi && !two ? `<div class="chips" role="group" aria-label="Which ticket">${["A", "B"].map((t) => `<button class="chip ${sel === t ? "on" : ""}" data-act="csel" data-arg="${t}" aria-pressed="${sel === t}">Ticket ${t}</button>`).join("")}</div>` : ""}
-      <div class="bp" style="margin-top:10px">${two ? grid(0) + grid(1) : grid(sel === "B" ? 1 : 0)}</div>
+      ${multi && !two ? `<div class="chips" role="group" aria-label="Which ticket">${LET.slice(0, G.tickets.length).map((t) => `<button class="chip ${sel === t ? "on" : ""}" data-act="csel" data-arg="${t}" aria-pressed="${sel === t}">Ticket ${t}</button>`).join("")}</div>` : ""}
+      <div class="bp" style="margin-top:10px">${two ? grid(0) + grid(1) : grid(Math.max(0, LET.indexOf(sel)))}</div>
       <p class="tiny muted center">${R.pattern === "early5" ? "You need at least 5 cut numbers that have been called." : "Outlined numbers are the ones this reward needs. Make sure all are cut."} The engagement pauses for everyone while the software checks.</p>
       <button class="btn gold block" data-act="doclaim">${ic("trophy")} Confirm claim${multi && !two ? " for Ticket " + sel : ""}</button><button class="btn line block" data-act="close">Cancel</button>`);
   }
@@ -606,12 +668,242 @@
     const mine = new Set(Object.values(G.ids || {}).filter(Boolean));
     const won = (G.rewards || []).map(parseR).filter((r) => (r.winners || []).some((w) => mine.has(w)));
     show(`${ptop()}<div class="pcard center"><div class="res ok">${ic("flag")}</div><h2>Thank you for taking part</h2>
-      <p class="lead">${deleted ? "This engagement has ended and its data has been deleted." : "The engagement has ended."} The organizer gives the rewards directly. The software only called numbers and checked claims.</p>
+      <p class="lead">${deleted ? "This engagement has ended and its data has been deleted." : G.rounds > 1 ? "All rounds are finished." : "The engagement has ended."} The organizer gives the rewards directly. The software only called numbers and checked claims.</p>
       ${won.length ? `<div class="note ok" style="text-align:left">${ic("trophy")}<span>Your ticket won: <b>${won.map((r) => esc(r.name)).join(", ")}</b>. Your organizer will give the reward.</span></div>` : ""}
       ${deleted ? "" : `<p class="tiny muted">Your ticket and phone details are deleted within 24 hours. Your name and number are kept for up to 365 days so your organizer can invite you again.</p><button class="btn line block" data-act="forget">${ic("trash")} Do not keep my details</button>`}</div>
       <div class="plegal">Private engagement for a closed group. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
       <div class="plinks"><a href="/legal.html#rules" target="_blank" rel="noopener">Rules</a><a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy</a><a href="/legal.html#disclaimer" target="_blank" rel="noopener">Disclaimer</a></div>`);
   }
+
+
+  // ================= OPTIONAL FEATURES: rounds, still to win, boosters, lucky draw, scratch card =================
+  const REDUCED = () => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
+  const BNAME = { joker: "Joker", extra: "Extra ticket", pass: "Lucky draw pass" };
+  const SCR = { gift: "You won a gift! Your organizer will give it", joker: "You won a Joker", extra: "Extra ticket won (used in the next round)", pass: "Lucky draw pass won (used in the next draw)", none: "Better luck next time" };
+  const prizeText = (p) => p === "gift" ? "a gift" : p === "booster" ? "a booster (Joker, Extra ticket or Lucky draw pass)" : p === "mix" ? "a gift or a booster" : BNAME[p] ? "a " + BNAME[p] : "a reward";
+  let refreshT = null;
+  function refreshSoon() { clearTimeout(refreshT); refreshT = setTimeout(() => reload(), 700); }
+
+  // ---- still to win strip ----
+  function paintStill() {
+    const el = $("still"); if (!el) return;
+    const st = G.still;
+    if (!st) { el.innerHTML = ""; G.stillPrev = null; return; }
+    const prev = G.stillPrev || {};
+    const pop = (k) => (prev[k] != null && st[k] < prev[k] ? "pop" : "");
+    const item = (k, n, one, many) => `<div class="sti"><b class="${pop(k)}">${n}</b><span>${n === 1 ? one : many}</span></div>`;
+    const all = !st.prizes && !st.lucky && !st.scratch;
+    const items = [item("prizes", st.prizes, "Reward", "Rewards")];
+    if (st.lucky > 0 || G.stillMax.lucky > 0) items.push(item("lucky", st.lucky, "lucky draw", "lucky draws"));
+    if (st.scratch > 0 || G.stillMax.scratch > 0) items.push(item("scratch", st.scratch, "scratch card", "scratch cards"));
+    el.innerHTML = `<div class="still" role="group" aria-label="Still to win">${all
+      ? `<div class="stdone">${ic("check")} All rewards won. Thank you for taking part!</div>`
+      : `<div class="stt">Still to win</div><div class="stg">${items.join("")}</div>${st.next ? `<div class="stnext">Next surprise: ${esc(st.next)}</div>` : ""}`}</div>`;
+    G.stillPrev = { prizes: st.prizes, lucky: st.lucky, scratch: st.scratch };
+  }
+
+  // ---- boosters tray ----
+  function paintBoost() {
+    const el = $("boost"); if (!el) return;
+    const b = G.boosters || {}, on = G.surprise && G.surprise.boostersAllowed;
+    if (!on || !(b.joker > 0 || b.extra > 0 || b.pass > 0)) { el.innerHTML = ""; return; }
+    el.innerHTML = `<div class="boost" role="group" aria-label="Your boosters">
+      ${b.joker > 0 ? `<button class="bchip joker" data-act="joker" aria-label="Use a Joker. You have ${b.joker}">${ic("star")} Joker ×${b.joker}</button>` : ""}
+      ${b.extra > 0 ? `<span class="bchip">${ic("ticket")} Extra ticket ×${b.extra} (next round)</span>` : ""}
+      ${b.pass > 0 ? `<span class="bchip">${ic("gift")} Lucky draw pass ×${b.pass} (next draw)</span>` : ""}</div>`;
+  }
+  function pickTicketSheet() {
+    TB.sheet(`<div class="eyebrow">Joker</div><h2>Use it on which ticket?</h2><p class="muted small">The Joker cuts one called number you missed on that ticket.</p>
+      <div class="chips" role="group" aria-label="Which ticket">${LET.slice(0, G.tickets.length).map((t) => `<button class="chip" style="min-height:44px;min-width:92px" data-act="jokerpick" data-arg="${t}">Ticket ${t}</button>`).join("")}</div>
+      <button class="btn line block" data-act="close" style="margin-top:12px">Cancel</button>`);
+  }
+  function useJoker(t) {
+    TB.closeSheet();
+    if (!ws || !G.wsOpen) return TB.toast("Not connected right now. Try again in a moment.");
+    G.jokerT = t; ws.send({ type: "joker", ticket: t, cut: [...G.cut[t]] });
+  }
+  function onJokerAck(m) {
+    if (m.error) return TB.toast(esc(m.error));
+    const n = m.number, t = G.jokerT || "A";
+    if (n) { G.heard.add(n); G.cut[t].add(n); saveLocal(); }
+    if (m.boosters) G.boosters = m.boosters;
+    paintBoost(); paintTabs(); paintGrid();
+    TB.toast(`Joker used: number ${esc(n)} marked`); say(`Joker used: number ${n} marked.`);
+  }
+
+  // ---- rounds ----
+  function setNote(n, ms) { G.note = n; clearTimeout(setNote.t); setNote.t = setTimeout(() => { G.note = null; paintBanner(); }, ms || 7000); paintBanner(); }
+  async function onRoundStart(m) {
+    switchRound(m.round); G.rounds = m.of || G.rounds; G.tab = "A"; G.pause = null; G.current = 0; G.callNo = 0; G.nextLocal = 0; G.hl = null;
+    await reload(false);
+    paintAll();
+    const txt = `Round ${m.round} of ${m.of}: your new ticket is ready`;
+    setNote({ html: `<b>${ic("ticket")} ${esc(txt)}</b>` }); say(txt + ".");
+  }
+  function onRoundEnd(m) {
+    setNote({ round: m.round }, 9000); say(`Round ${m.round} finished.`);
+    setTimeout(() => reload(), 500);
+  }
+
+  // ---- moments (lucky draw / scratch card) ----
+  const MO = { cur: null, dismissed: new Set() };
+  function momentEl() {
+    let o = $("mov");
+    if (!o) { o = document.createElement("div"); o.id = "mov"; o.className = "mov"; o.setAttribute("role", "dialog"); o.setAttribute("aria-modal", "true"); document.body.appendChild(o); }
+    return o;
+  }
+  function clearMomentTimers() { const c = MO.cur; if (!c) return; clearInterval(c.spinT); clearInterval(c.cdT); clearTimeout(c.closeT); clearTimeout(c.safeT); }
+  function closeMoment(markDone) {
+    if (MO.cur && markDone) MO.dismissed.add(MO.cur.id);
+    clearMomentTimers(); MO.cur = null;
+    const o = $("mov"); if (o) o.remove();
+    document.body.style.overflow = "";
+  }
+  function ensureMoment(id, kind, extra) {
+    if (MO.cur && MO.cur.id === id) { Object.assign(MO.cur, extra || {}); return MO.cur; }
+    if (MO.dismissed.has(id)) return null;
+    closeMoment(false);
+    MO.cur = Object.assign({ id, kind, bumper: false, prize: "gift", winners: 0, phase: kind === "lucky" ? "draw" : "scratch", seconds: 30, err: "" }, extra || {});
+    MO.cur.safeT = setTimeout(() => closeMoment(true), ((MO.cur.seconds || 30) + 40) * 1000);
+    document.body.style.overflow = "hidden";
+    paintMoment();
+    return MO.cur;
+  }
+  function syncMoment(mm, closeIfNone) {
+    if (mm && mm.id) {
+      if (!MO.cur || MO.cur.id !== mm.id) { const c = ensureMoment(mm.id, mm.kind, { bumper: !!mm.bumper, prize: mm.prize, winners: mm.winners, seconds: Math.max(5, Math.round((mm.leftMs || 20000) / 1000)) }); if (c) say(mm.kind === "lucky" ? "Lucky draw." : "Scratch card."); }
+    } else if (closeIfNone && MO.cur && ["draw", "scratch"].includes(MO.cur.phase)) closeMoment(false);
+  }
+  function onMomentStart(m) {
+    const c = ensureMoment(m.id, m.kind, { bumper: !!m.bumper, prize: m.prize, winners: m.winners, seconds: m.seconds || 30 }); if (!c) return;
+    say(m.kind === "lucky" ? (m.bumper ? "Bumper lucky draw." : "Lucky draw.") : "Scratch card for everyone. Scratch your card.");
+    refreshSoon();
+  }
+  function onLuckyWon(m) {
+    const c = ensureMoment(m.momentId, "lucky", {}); if (!c) return;
+    c.phase = "won"; c.prize = m.prize; c.until = Date.now() + (m.confirmSeconds || 30) * 1000; c.err = "";
+    clearTimeout(c.safeT); c.safeT = setTimeout(() => closeMoment(true), ((m.confirmSeconds || 30) + 40) * 1000);
+    paintMoment(); say("You won the lucky draw! Tap I'm here.");
+    const b = $("movhere"); if (b) try { b.focus(); } catch {}
+    try { if (navigator.vibrate) navigator.vibrate([60, 40, 60]); } catch {}
+  }
+  function onMomentResult(m) {
+    refreshSoon();
+    const c = (MO.cur && MO.cur.id === m.id) ? MO.cur : ensureMoment(m.id, m.kind, { bumper: !!m.bumper }); if (!c) return;
+    clearMomentTimers();
+    c.wasConfirmed = !!c.confirmed || c.phase === "confirmed";
+    c.phase = "result"; c.list = Array.isArray(m.winners) ? m.winners : []; c.cards = m.winningCards;
+    if (c.kind === "scratch" && !c.outcome) revealCanvas();
+    paintMoment();
+    say(c.kind === "lucky" ? "Lucky draw result is on your screen." : (c.cards != null ? `${c.cards} winning cards this round.` : "Scratch card round finished."));
+    c.closeT = setTimeout(() => closeMoment(true), 6000);
+  }
+  function updMovBall() { const b = $("movball"); if (b) { b.textContent = G.current || "-"; b.setAttribute("aria-label", G.current ? "Number " + G.current : "No number yet"); } }
+  const movTop = (label, badge) => `<div class="movtop"><div class="eyebrow">${label}${badge ? `<span class="bump">BUMPER</span>` : ""}</div>
+      <div class="movballw"><small>Number</small><b id="movball" role="img" aria-label="${G.current ? "Number " + G.current : "No number yet"}">${G.current || "-"}</b></div></div>`;
+  const CODECH = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const fakeCode = () => { let a = ""; for (let i = 0; i < 6; i++) { a += CODECH[Math.floor(Math.random() * CODECH.length)]; if (i === 2) a += "-"; } return a; };
+
+  function paintMoment() {
+    const c = MO.cur; if (!c) return;
+    const o = momentEl(); o.className = "mov " + c.kind;
+    if (c.kind === "lucky") {
+      clearInterval(c.spinT); clearInterval(c.cdT);
+      let h = "";
+      if (c.phase === "draw") {
+        h = `${movTop("Lucky draw", c.bumper)}<h2>Lucky draw</h2>
+          <p class="movp">${c.winners ? TB.plural(c.winners, "winner") + " will be drawn. " : ""}Reward: ${esc(prizeText(c.prize))}.</p>
+          <div class="spin" id="spin" aria-hidden="true">${REDUCED() ? "Drawing..." : fakeCode()}</div>
+          <p class="movs">Winners are drawn by the system</p><button class="linkbtn movhide" data-act="mclose">Hide</button>`;
+      } else if (c.phase === "won") {
+        h = `${movTop("Lucky draw", c.bumper)}<div class="res ok mv">${ic("trophy")}</div><h2>You won!</h2>
+          <p class="movp">Reward: ${esc(prizeText(c.prize))}.<br>Tap <b>I'm here</b> to confirm you are present.</p>
+          <button class="btn gold big" id="movhere" data-act="here">${ic("check")} I'm here</button>
+          <p class="movs" aria-hidden="true">Time left: <b id="movcd">${Math.max(0, Math.ceil((c.until - Date.now()) / 1000))}</b>s</p>
+          ${c.err ? `<div class="err">${ic("alert")}<span>${esc(c.err)}</span></div>` : ""}`;
+      } else if (c.phase === "confirmed") {
+        const booster = c.prize && c.prize !== "gift";
+        h = `${movTop("Lucky draw", c.bumper)}<div class="res ok mv">${ic("check")}</div><h2>You're in</h2>
+          <p class="movp">${booster ? `Your ${esc(BNAME[c.prize] || "booster")} is added to your boosters.` : "Confirmed. Your organizer will contact you."}</p><button class="btn line big" data-act="mclose">Close</button>`;
+      } else {
+        const list = (c.list || []).map((w) => `<li>${esc(w)}</li>`).join("");
+        h = `${movTop("Lucky draw result", c.bumper)}<h2>Lucky draw winners</h2>${list ? `<ul class="movl">${list}</ul>` : `<p class="movp">No winner was confirmed this time.</p>`}
+          ${c.wasConfirmed ? `<p class="movs">Your place is confirmed.</p>` : ""}<button class="btn line big" data-act="mclose">Close</button>`;
+      }
+      o.innerHTML = `<div class="movc">${h}</div>`;
+      if (c.phase === "draw" && !REDUCED()) c.spinT = setInterval(() => { const s = $("spin"); if (s) s.textContent = fakeCode(); }, 90);
+      if (c.phase === "won") c.cdT = setInterval(() => { const s = $("movcd"); if (s) s.textContent = Math.max(0, Math.ceil((c.until - Date.now()) / 1000)); }, 250);
+      return;
+    }
+    // scratch card: build the canvas once, then only update parts
+    if (!$("scrcv")) {
+      o.innerHTML = `<div class="movc">${movTop("Scratch card")}<h2>Scratch your card</h2>
+        <div class="scrbox" id="scrbox"><div class="scrres" id="scrres" aria-live="polite">Scratch to reveal</div><canvas id="scrcv" aria-label="Scratch card. Use the Reveal button instead if scratching is hard."></canvas></div>
+        <p class="movs" id="scrfoot">Scratch with your finger, or use Reveal.</p>
+        <div class="row" style="justify-content:center"><button class="btn gold big" id="scrbtn" data-act="reveal">Reveal</button></div></div>`;
+      initCanvas();
+    }
+    const foot = $("scrfoot"), btn = $("scrbtn");
+    if (c.phase === "result") {
+      if (foot) foot.textContent = c.cards != null ? (c.cards === 1 ? "1 winning card this round" : `${c.cards} winning cards this round`) : "This round of scratch cards is over.";
+      if (btn) { btn.disabled = false; btn.textContent = "Close"; btn.dataset.act = "mclose"; btn.classList.add("line"); btn.classList.remove("gold"); }
+    }
+  }
+
+  // ---- scratch canvas ----
+  function initCanvas() {
+    const cv = $("scrcv"), box = $("scrbox"); if (!cv || !box) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1), W = box.clientWidth || 300, H = box.clientHeight || 140;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const x = cv.getContext("2d"); x.scale(dpr, dpr);
+    const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, "#F3D9A4"); g.addColorStop(.5, "#D9AE63"); g.addColorStop(1, "#B8894D");
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.strokeStyle = "rgba(255,255,255,.22)"; x.lineWidth = 2;
+    for (let i = -H; i < W; i += 14) { x.beginPath(); x.moveTo(i, H); x.lineTo(i + H, 0); x.stroke(); }
+    x.fillStyle = "rgba(90,20,38,.75)"; x.font = "600 22px Georgia, serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText("SCRATCH HERE", W / 2, H / 2);
+    x.globalCompositeOperation = "destination-out";
+    let down = false, last = null, moves = 0;
+    const pt = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * (W / r.width), (e.clientY - r.top) * (H / r.height)]; };
+    function stroke(a, b) { x.lineCap = "round"; x.lineJoin = "round"; x.lineWidth = 34; x.beginPath(); x.moveTo(a[0], a[1]); x.lineTo(b[0], b[1]); x.stroke(); }
+    const check = () => {
+      try {
+        const d = x.getImageData(0, 0, cv.width, cv.height).data; let clear = 0, tot = 0; const step = Math.max(6, Math.round(12 * dpr));
+        for (let yy = 0; yy < cv.height; yy += step) for (let xx = 0; xx < cv.width; xx += step) { tot++; if (d[(yy * cv.width + xx) * 4 + 3] < 40) clear++; }
+        if (tot && clear / tot >= 0.4) revealByUser();
+      } catch {}
+    };
+    cv.addEventListener("pointerdown", (e) => { down = true; last = pt(e); try { cv.setPointerCapture(e.pointerId); } catch {} stroke(last, last); e.preventDefault(); });
+    cv.addEventListener("pointermove", (e) => { if (!down) return; const p = pt(e); stroke(last, p); last = p; if (++moves % 6 === 0) check(); e.preventDefault(); });
+    const up = () => { if (down) { down = false; check(); } };
+    cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+  }
+  function revealCanvas() { const cv = $("scrcv"); if (cv) cv.classList.add("gone"); }
+  function revealByUser() {
+    const c = MO.cur; if (!c || c.kind !== "scratch") return;
+    revealCanvas();
+    if (c.sent) return;
+    if (!ws || !G.wsOpen) { TB.toast("Not connected right now. Try again in a moment."); return; }
+    c.sent = true; ws.send({ type: "scratch", momentId: c.id });
+    const b = $("scrbtn"); if (b && c.phase !== "result") { b.disabled = true; b.textContent = "Revealing..."; }
+  }
+  function setScratchOutcome(outcome) {
+    const c = MO.cur; if (!c || c.kind !== "scratch") return;
+    c.outcome = outcome; c.sent = true; revealCanvas();
+    const t = SCR[outcome] || SCR.none, r = $("scrres"); if (r) { r.textContent = t; r.classList.toggle("win", outcome !== "none"); }
+    const b = $("scrbtn"); if (b && c.phase !== "result") { b.disabled = false; b.textContent = "Done"; b.dataset.act = "mclose"; b.classList.remove("gold"); b.classList.add("line"); }
+    say(t + ".");
+  }
+  Object.assign(ACT, {
+    joker: () => { if (G.tickets.length > 1) pickTicketSheet(); else useJoker("A"); },
+    jokerpick: (t) => useJoker(t),
+    here: () => {
+      const c = MO.cur; if (!c) return;
+      if (!ws || !G.wsOpen) return TB.toast("Not connected right now. Try again in a moment.");
+      ws.send({ type: "present", momentId: c.id });
+    },
+    reveal: () => revealByUser(),
+    mclose: () => closeMoment(true),
+  });
 
   // ---------- go ----------
   if (MODE === "p") bootPass(); else if (MODE === "e" && code) bootEngagement(); else errCard("badlink");
