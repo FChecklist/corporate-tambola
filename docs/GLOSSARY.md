@@ -12,7 +12,7 @@
 | "Engagement" as the *price-pack unit* (1 engagement = 1 ticket per number) | **Participant place** ("Up to 1,000 participants") | **Collision:** the old handout used "engagement" for the pack unit. That word now means the event. Packs are sold as "Up to N participants" |
 | Game started / Game ended | Engagement started / ended | |
 
-**Proposed, NOT yet approved (same logic, owner to decide):** Prize -> "Reward"; Bogey -> "Not valid" (or "Check failed"); Win/Winner -> "Reward recipient" or keep "Winner". "Claim" can stay. The product name "Corporate Tambola" is unchanged unless the owner says otherwise.
+**Approved 2026-10-01:** Prize -> **Reward**; Bogey -> **Not valid**. Still open: Win/Winner (keep "Winner" or use "Reward recipient"); "Claim" stays unless the owner says otherwise. The product name "Corporate Tambola" is unchanged unless the owner says otherwise.
 
 Rule for code: identifiers use `engagement` / `participant` from the start (tables `engagements`, `participants`, class `EngagementEngine`, room `EngagementRoom`). All UI text lives in `strings.en.ts`, so a later wording change is one file.
 

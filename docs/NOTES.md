@@ -144,3 +144,26 @@ Data model (tickets become rows, not one JSON), ticket UI (A/B switch or stacked
 5. **Privacy change to results.** The prototype shows winners' names to everyone. To satisfy "no personal information of others", participants see only **ticket ID and house number** in results; names and numbers appear only in Organizer/Host consoles and the report. Team Leads see only their own invitees.
 6. **Pack unit renamed** ("Up to N participants") because "engagement" now means the event.
 7. Rulebook v1.4 sections 5 (commentary), 10 (breaks) and 11 (report names), plus every "game/player", need a v1.5; the handout needs a v2.1. Not done; nothing in Drive was edited.
+
+
+## 12. CR-03 (2026-10-01): voice, claim rule, wording — decisions
+
+| Item | Decision |
+|---|---|
+| Claim in flight | **YES, approved.** A claim that reaches the server before the next call is processed counts for the previous number; after that it is late. The server's order of events decides, never the phone's clock. |
+| Voice language | **One voice for v1: Indian English, slow and clear, neutral accent that is understood globally. Female, sweet but firm, around 30 years old.** No Hinglish/Tamlish/other one-liners. The "voice language" setting is dropped for v1. |
+| Spoken format | "Next number is **two four, twenty-four**." then "Number **twenty-four**." (digits first, then the number as words, then the short repeat). |
+| Wording | **Reward** (was Prize), **Not valid** (was Bogey). Applied in the glossary and from now on in all docs, code and screens. |
+| Honour-system cut | **Awaiting your yes/no** (explained again in chat; recommendation: accept). |
+
+Spoken-format details I need you to check:
+- Two-digit numbers: "Next number is two four, twenty-four. Number twenty-four."
+- Round numbers: 10 = "one zero, ten"; 20 = "two zero, twenty"; 90 = "nine zero, ninety".
+- Single digits: I propose just "Next number is seven. Number seven." because saying the digit twice is awkward. Confirm.
+- Teens/others follow the same pattern (e.g. 13 = "one three, thirteen").
+
+Voice production notes (see IMPLEMENTATION.md §11.3 for the audio design, unchanged otherwise):
+- 90 full-phrase clips, one voice, about 4-5 s each, spoken slowly with a clear pause between the digits and the word and between the two sentences.
+- The quality bar "sweet, firm, age ~30, no accent" is a taste judgement. I cannot hear a voice, so you must approve sample clips (try numbers 7, 24, 40, 90) before we generate all 90.
+- Two ways to produce it: (a) a free offline text-to-speech voice (local, no cost, quality varies; I do not know that a suitable free Indian-English female voice exists, so this needs a listening test); (b) a professional voice artist recording 90 clips (best match to "sweet, firm, 30", clear licence, usually a small one-off fee). **(b) is a cost; I will not commit to it without your yes.**
+- Whatever we use, its licence must allow commercial use and redistribution inside a product. Check before choosing.
