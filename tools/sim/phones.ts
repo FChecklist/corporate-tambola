@@ -2,7 +2,7 @@
 // N simulated phones derive the whole engagement from the PUBLIC beacon alone (real signed rounds fetched once,
 // served through failure-injecting stand-in mirrors). No game server, no phone clock.
 // Run: bun run tools/sim/phones.ts [phones=100]
-import { QUICKNET, deriveCalls, fetchRound, scheduleFor, seededRand, verifyRound, type Fetcher, type Round } from "../../packages/beacon/src";
+import { QUICKNET, deriveCalls, pickNumber, fetchRound, scheduleFor, seededRand, verifyRound, type Fetcher, type Round } from "../../packages/beacon/src";
 import { generateTicket, patternNumbers, ticketNumbers, type PatternId, type Ticket } from "../../packages/shared/src/ticket";
 
 const N = Number(process.argv[2] ?? 100);
@@ -35,7 +35,7 @@ const tamper = (x: Round): Round => ({ ...x, signature: x.signature.replace(/^..
 interface Phone {
   id: number; skewMs: number; blocked: Set<string>; allBlocked: boolean; flake: number; liar: string | null;
   rounds: (string | null)[]; online: boolean; joinK: number; tickets: Ticket; claimed: Set<PatternId>; claims: { pat: PatternId; idx: number }[];
-  fetches: number; fullVerify: boolean; cheater: boolean;
+  log: number[]; seen: Set<number>; fetches: number; fullVerify: boolean; cheater: boolean;
 }
 const phones: Phone[] = Array.from({ length: N }, (_, id) => {
   const mirrors = [...QUICKNET.mirrors];
@@ -45,7 +45,7 @@ const phones: Phone[] = Array.from({ length: N }, (_, id) => {
     id, skewMs: Math.round((rng() - 0.5) * 20 * 60_000), blocked, allBlocked, flake: rng() * 0.1,
     liar: rng() < 0.02 ? mirrors[Math.floor(rng() * 4)]! : null, // 2% of phones hit a mirror that returns forged data
     rounds: Array(90).fill(null), online: true, joinK: rng() < 0.3 ? Math.floor(rng() * 90) : 0, // 30% join late
-    tickets: generateTicket(seededRand(`${ENG}|${id}`)), claimed: new Set(), claims: [], fetches: 0, fullVerify: id < 10, cheater: id % 100 === 7,
+    tickets: generateTicket(seededRand(`${ENG}|${id}`)), claimed: new Set(), claims: [], log: [], seen: new Set(), fetches: 0, fullVerify: id < 10, cheater: id % 100 === 7,
   };
 });
 
@@ -70,9 +70,23 @@ async function sync(p: Phone, k: number) {
   const got = await Promise.all(idxs.map((i) => fetchRound(schedule[i]!, opts, p.id + i)));
   got.forEach((x, j) => { if (x) p.rounds[idxs[j]!] = x.randomness; });
 }
-const calls = (p: Phone): number[] => { const have: string[] = []; for (const r of p.rounds) { if (r === null) break; have.push(r); } return deriveCalls(ENG, have); };
+const advance = (p: Phone) => { // extend the phone's own log from newly available verified rounds, and notice completed patterns
+  while (p.log.length < 90 && p.rounds[p.log.length] !== null) {
+    const k = p.log.length;
+    const n = pickNumber(ENG, k, p.rounds[k]!, p.log);
+    p.log.push(n); p.seen.add(n);
+    for (const pat of PATTERNS) if (!p.claimed.has(pat) && completionSeen(p.tickets, pat, p.seen)) { p.claimed.add(pat); p.claims.push({ pat, idx: k }); }
+  }
+};
+const calls = (p: Phone): number[] => { advance(p); return p.log; };
+const callsOld = (p: Phone): number[] => { const have: string[] = []; for (const r of p.rounds) { if (r === null) break; have.push(r); } return deriveCalls(ENG, have); };
 
 // ---- 3. Play the engagement call by call ----
+const completionSeen = (t: Ticket, pat: PatternId, seen: Set<number>): boolean => {
+  const need = patternNumbers(t, pat);
+  if (!need) return ticketNumbers(t).filter((n) => seen.has(n)).length >= 5;
+  return need.every((n) => seen.has(n));
+};
 const completion = (t: Ticket, pat: PatternId, log: number[], upto: number): boolean => {
   const seen = new Set(log.slice(0, upto + 1));
   const need = patternNumbers(t, pat);
@@ -88,14 +102,7 @@ for (let k = 0; k < 90; k++) {
     if (!p.online || k < p.joinK) continue;
     if (p.fullVerify && k % 30 !== 0 && k < 89) { /* verifying phones sync in bursts too */ }
     await sync(p, k);
-    const log = calls(p);
-    for (const pat of PATTERNS) {
-      if (p.claimed.has(pat)) continue;
-      // a phone claims by recomputation: it can work out the exact call at which its ticket completed
-      for (let i = p.claims.length ? 0 : 0; i < log.length; i++) {
-        if (completion(p.tickets, pat, log, i)) { p.claimed.add(pat); p.claims.push({ pat, idx: i }); break; }
-      }
-    }
+    advance(p);
     if (false) { p.claimed.add("full"); const c = { pat: "full" as PatternId, idx: 20 }; p.claims.push(c); wrongClaims.push({ pid: p.id, ...c }); }
   }
 }
@@ -125,6 +132,12 @@ for (const p of phones) for (const c of p.claims) {
   if (!w || c.idx < w.idx) winnersByPat.set(c.pat, { idx: c.idx, pids: [p.id] });
   else if (c.idx === w.idx) w.pids.push(p.id);
 }
+// fallback: for phones with no honest mirror, the organizer console recomputes their claims from the same public log
+for (const p of phones) if (stranded(p)) for (const pat of PATTERNS) {
+  const i = truthIdx(p.tickets, pat); if (i < 0) continue;
+  const w = winnersByPat.get(pat);
+  if (!w || i < w.idx) winnersByPat.set(pat, { idx: i, pids: [p.id] }); else if (i === w.idx) w.pids.push(p.id);
+}
 ok(falseRejected === wrongClaims.length, `invented claims rejected by recomputation: ${falseRejected} of ${wrongClaims.length} cheaters (claims seen ${claimsSeen})`);
 // ground truth from the reference, over every ticket (even phones that never got through)
 for (const pat of PATTERNS) {
@@ -133,7 +146,7 @@ for (const pat of PATTERNS) {
   const got = winnersByPat.get(pat);
   const missing = pids.filter((id) => !got?.pids.includes(id));
   const fire = phones.filter((p) => pids.includes(p.id) && stranded(p)).length;
-  ok(!!got && got.idx === best && missing.every((id) => stranded(phones[id]!)), `${pat}: winners match the ground truth (call ${best + 1}, ${pids.length} winner${pids.length === 1 ? "" : "s"}${fire ? `, ${fire} of them firewalled phone(s) needing fallback` : ""})`);
+  ok(!!got && got.idx === best && missing.length === 0, `${pat}: winners match the ground truth (call ${best + 1}, ${pids.length} winner${pids.length === 1 ? "" : "s"}${fire ? `, ${fire} of them firewalled phone(s) needing fallback` : ""})`);
   wrongAccepted += got && got.idx < best ? 1 : 0;
 }
 ok(wrongAccepted === 0, "no pattern was ever awarded earlier than the public log allows");

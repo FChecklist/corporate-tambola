@@ -54,6 +54,17 @@ describe("mirrors", () => {
     expect(x?.round).toBe(REAL.round);
     expect(calls.length).toBe(4);
   });
+  test("a mirror that hangs forever is skipped after the timeout", async () => {
+    const f: Fetcher = (url) => (url.includes("hang") ? new Promise(() => {}) : Promise.resolve({ ok: true, status: 200, json: async () => REAL }));
+    const t0 = performance.now();
+    const x = await fetchRound(REAL.round, { fetcher: f, mirrors: ["https://hang", "https://good"], timeoutMs: 150 });
+    expect(x?.round).toBe(REAL.round);
+    expect(performance.now() - t0).toBeLessThan(2000);
+  });
+  test("a mirror returning garbage JSON or a non-object is skipped", async () => {
+    const f: Fetcher = async (url) => (url.includes("bad") ? { ok: true, status: 200, json: async () => "<html>blocked by firewall</html>" } : { ok: true, status: 200, json: async () => REAL });
+    expect((await fetchRound(REAL.round, { fetcher: f, mirrors: ["https://bad", "https://good"] }))?.round).toBe(REAL.round);
+  });
   test("all mirrors down returns null, never a made-up round", async () => {
     const f: Fetcher = async () => { throw new Error("offline"); };
     expect(await fetchRound(REAL.round, { fetcher: f, mirrors: ["https://a", "https://b"] })).toBeNull();

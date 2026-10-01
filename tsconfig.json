@@ -4,5 +4,5 @@
     "strict": true, "noUncheckedIndexedAccess": true, "skipLibCheck": true,
     "noEmit": true, "types": ["bun"], "lib": ["ES2022", "DOM"]
   },
-  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "apps/server/src/**/*.ts", "tools/**/*.ts", "apps/server/test/**/*.ts", "packages/billing/**/*.ts"]
+  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "apps/server/src/**/*.ts", "apps/edge/**/*.ts", "tools/**/*.ts", "apps/server/test/**/*.ts", "packages/billing/**/*.ts"]
 }

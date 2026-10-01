@@ -72,9 +72,13 @@ export async function fetchRound(r: number | "latest", opts: BeaconOpts = {}, sa
     const m = mirrors[(i + salt) % mirrors.length]!;
     try {
       const ctl = new AbortController();
-      const t = setTimeout(() => ctl.abort(), opts.timeoutMs ?? 6000);
-      const res = await f(`${m}/${net.chainHash}/public/${r}`, { signal: ctl.signal });
-      clearTimeout(t);
+      const ms = opts.timeoutMs ?? 6000;
+      let t: ReturnType<typeof setTimeout> | undefined;
+      // A mirror that hangs (or a fetcher that ignores the abort signal) must never stall the phone.
+      const res = await Promise.race([
+        f(`${m}/${net.chainHash}/public/${r}`, { signal: ctl.signal }),
+        new Promise<never>((_, rej) => { t = setTimeout(() => { ctl.abort(); rej(new Error("timeout")); }, ms); }),
+      ]).finally(() => clearTimeout(t));
       if (!res.ok) continue; // 404 = not published yet (or a bad mirror): try the next
       const x = (await res.json()) as Round;
       if ((opts.verify ?? verifyRound)(x, net) && (r === "latest" || x.round === r)) return x;
