@@ -163,7 +163,7 @@
     S.data = d;
     if (!S.step || !stepList().includes(S.step)) S.step = defaultStep();
     if (prev && prev !== d.engagement.status) {
-      if (prev === "open" && d.engagement.status === "started" && S.step === "start") S.step = "live";
+      if (prev === "open" && (d.engagement.status === "started" || d.engagement.status === "starting") && S.step === "start") S.step = "live";
       if (d.engagement.status === "ended" && isOrg()) { S.step = "report"; S.report = null; }
       if (d.engagement.status === "purged") S.report = null;
       if (!stepList().includes(S.step)) S.step = defaultStep();
@@ -210,8 +210,8 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
   function tick() {
-    document.querySelectorAll("[data-nextat]").forEach((el) => {
-      const t = Number(el.dataset.nextat); el.textContent = Math.max(0, Math.ceil((t - Date.now()) / 1000));
+    document.querySelectorAll("[data-nextat],[data-liveat]").forEach((el) => {
+      const t = Number(el.dataset.nextat || el.dataset.liveat); el.textContent = Math.max(0, Math.ceil((t - Date.now()) / 1000));
     });
   }
 
@@ -488,11 +488,11 @@
   // ---------------------------------------------------------------- 5. share
   function defaultMsg() {
     const e = eng();
-    return `You're invited to ${e.name}${e.startsAt ? " on " + TB.fmtDT(e.startsAt) : ""}!\nJoin here from your phone: ${e.link}\nEntry closes when the engagement starts.`;
+    return `You're invited to ${e.name}${e.startsAt ? " on " + TB.fmtDT(e.startsAt) : ""}!\nJoin here from your phone: ${e.link}\nEntry closes when the first number is called.`;
   }
   const curMsg = () => (S.msgDraft !== null ? S.msgDraft : defaultMsg());
   function shareSecs() {
-    const e = eng(), closed = e.status !== "open";
+    const e = eng(), closed = e.status !== "open" && e.status !== "starting";
     const roles = S.data.participants.filter((p) => p.roleLink && (p.role === "host" || p.role === "team_lead"));
     const rl = roles.length ? `<div class="tscroll"><table class="t"><thead><tr><th>Name</th><th>Role</th><th>Personal link</th><th></th></tr></thead><tbody>${roles.map((p) => `<tr><td>${esc(p.name || "(no name)")}</td><td>${pill(p.role === "host" ? "wine" : "info", roleName(p.role))}</td><td class="mono" style="font-size:12px;word-break:break-all">${esc(p.roleLink)}</td><td><div class="lnk"><button class="btn sm line" data-a="copyLink" data-v="${esc(p.roleLink)}">${ic("copy")}</button><a class="btn sm line" target="_blank" rel="noopener" href="${wa(p.e164, waMsg(p))}">WhatsApp</a></div></td></tr>`).join("")}</tbody></table></div>` : `<p class="muted small">No Hosts or Team Leads yet. Make them in the People step; their personal links appear here.</p>`;
     return [["share", `<div class="panel"><div class="phead"><div class="step">5</div><div><h2>Share the engagement link</h2><p>One link for everyone on your list. If a number is not on your list, that person goes to the waiting room.</p>
@@ -530,7 +530,7 @@
     if (!isOrg()) return [["start", `<div class="panel"><div class="phead"><div class="step">${ic("lock")}</div><div><h2>Starting</h2><p>Only the Organizer can start or end the engagement.</p></div></div></div>`]];
     const missing = BK.list.filter((b) => (b.kind === "file" || b.kind === "youtube") && !b.mediaUrl).length;
     const ready = S.ck1 && S.ck2;
-    return [["start", `<div class="panel" style="border-color:var(--gold)"><div class="phead"><div class="step">7</div><div><h2>Start the engagement</h2><p>Once it starts, nobody new can join. All links stop letting people in and every setting locks.</p></div></div>
+    return [["start", `<div class="panel" style="border-color:var(--gold)"><div class="phead"><div class="step">7</div><div><h2>Start the engagement</h2><p>Every setting locks at once. People can still join for 60 seconds while their phones get ready, then entry closes and the first number is called.</p></div></div>
       <div class="sum"><div class="kv"><span>Engagement</span><b>${esc(e.name)}</b></div>
       <div class="kv"><span>Planned start</span><b>${e.startsAt ? esc(TB.fmtDT(e.startsAt)) : "Not set"}</b></div>
       <div class="kv"><span>Joined</span><b>${c.joined} of ${c.used} places</b></div>
@@ -542,7 +542,7 @@
       ${c.joined === 0 ? `<div class="note warn">${ic("alert")}<span>Nobody has joined yet.</span></div>` : ""}
       ${missing ? `<div class="note warn">${ic("alert")}<span>A brand break has no video link. Add it in step 3 or remove the break.</span></div>` : ""}
       <label class="cb"><input type="checkbox" ${S.ck1 ? "checked" : ""} data-c="ck1"> <span>Everyone I want has been admitted.${c.waiting ? ` <span class="pill warn">${c.waiting} still waiting</span>` : ""}</span></label>
-      <label class="cb"><input type="checkbox" ${S.ck2 ? "checked" : ""} data-c="ck2"> I understand nobody can join or change anything after the start.</label>
+      <label class="cb"><input type="checkbox" ${S.ck2 ? "checked" : ""} data-c="ck2"> I understand that after the first 60 seconds nobody can join, and nothing can be changed.</label>
       <button class="btn gold" ${ready ? "" : "disabled"} data-a="start">${ic("play")} Start engagement now</button> <span class="tiny muted">${c.joined} of ${c.used} have joined so far.</span></div>`]];
   }
 
@@ -551,7 +551,8 @@
     const e = eng(), l = S.data.live;
     let cls = "", ball, eb, ln, sub = "";
     const pz = l.paused;
-    if (e.status === "ended") { cls = "pz"; ball = ic("flag"); eb = "Engagement ended"; ln = "Thank you for running it."; sub = isOrg() ? "Open the Report step for winners and the full list." : "The Organizer can see the report."; }
+    if (e.status === "starting") { cls = "pz"; ball = ic("clock"); eb = "Starting · phones are getting ready"; ln = "The first number is called when the countdown ends."; sub = `People can still join. First number in <b data-liveat="${l.liveAt}">${Math.max(0, Math.ceil((l.liveAt - Date.now()) / 1000))}</b> seconds`; }
+    else if (e.status === "ended") { cls = "pz"; ball = ic("flag"); eb = "Engagement ended"; ln = "Thank you for running it."; sub = isOrg() ? "Open the Report step for winners and the full list." : "The Organizer can see the report."; }
     else if (pz && pz.type === "claim") { cls = "pz"; ball = ic("pause"); eb = "Paused · checking a claim"; ln = "The system is checking. Everyone waits."; }
     else if (pz && pz.type === "result") { cls = "okc"; ball = ic("trophy"); eb = "Result shown to everyone"; ln = "The engagement continues in a few seconds."; }
     else if (pz && pz.type === "break") { cls = "brk"; ball = ic("play"); eb = "Brand break"; ln = esc(pz.title || ""); sub = "Playing on every phone."; }
@@ -807,7 +808,7 @@
   }
   function tlPaint() {
     const m = T.me; if (!m) return;
-    const e = m.engagement, q = m.quotas, closed = e.status !== "open";
+    const e = m.engagement, q = m.quotas, closed = e.status !== "open" && e.status !== "starting";
     const cu = q.colleagues ? q.colleagues.used : 0, cap = q.colleagues ? q.colleagues.cap : 0;
     const fu = q.family ? q.family.used : 0, fl = q.family ? q.family.limit : 0;
     const cFull = !q.colleagues || cu >= cap, fFull = !q.family || fu >= fl;

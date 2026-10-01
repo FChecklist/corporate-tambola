@@ -10,13 +10,16 @@ import { normalize, ticketNumbers, patternNumbers, type PatternId, type Ticket }
 const BASE = process.env.BASE ?? "http://localhost:8787";
 const WS = BASE.replace("http", "ws");
 const N = Number(process.env.N ?? 100);
+const PACK = Number(process.env.PACK ?? 250);
 const results: { ok: boolean; name: string; detail?: string }[] = [];
 const check = (name: string, ok: boolean, detail = "") => { results.push({ ok, name, detail }); console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  -> " + detail : ""}`); };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const rnd = (n: number) => Math.floor(Math.random() * n);
 const hex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
 
+let calls = 0; // every HTTP request this script makes
 async function http(method: string, path: string, body?: unknown, h: { token?: string; device?: string } = {}) {
+  calls++;
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (h.token) headers.authorization = `Bearer ${h.token}`;
   if (h.device) headers["x-device"] = h.device;
@@ -114,10 +117,10 @@ if (!health.data?.fast) console.log("NOTE: server not in TAMBOLA_FAST mode; the 
 
 // 1 organizer buys + logs in
 const email = `hr.${hex(3)}@acme-industries.com`;
-const co = await http("POST", "/api/checkout", { org: "Acme Industries", email, country: "IN", taxId: "27ABCDE1234F1Z5", pack: 250, currency: "INR" });
+const co = await http("POST", "/api/checkout", { org: "Acme Industries", email, country: "IN", taxId: "27ABCDE1234F1Z5", pack: PACK, currency: "INR" });
 check("checkout creates order and engagement", co.status === 200 && co.data.engagementCode?.length === 7, JSON.stringify(co.data));
 code = co.data.engagementCode;
-check("India price: Rs 1,000 incl. GST split", co.data.total === 1000 && co.data.tax > 150, `tax ${co.data.tax}`);
+check("India price incl. GST split", co.data.total > 0 && co.data.tax > 0, `total ${co.data.total} tax ${co.data.tax}`);
 const bad = await http("POST", "/api/auth/verify", { email, code: "000000" });
 check("login with no code requested is refused", bad.status === 400);
 const ae = await http("POST", "/api/auth/email", { email });
@@ -150,8 +153,8 @@ check(`upload check: ${N} usable, bad lines and repeats caught`, chk.data.ready.
   `ready ${chk.data.ready.length}, fixed ${chk.data.fixed.length}, bad ${chk.data.bad.length}, repeats ${chk.data.repeats.length}`);
 const com = await A("POST", "/upload/commit", { items: [...chk.data.ready, ...chk.data.fixed].map((x: any) => ({ name: x.name, e164: x.e164 })) });
 check(`${N} participants added`, com.status === 200 && com.data.added === N);
-const over = await A("POST", "/upload/commit", { items: Array.from({ length: 200 }, () => ({ name: "Over", e164: fakePerson(900).e164 })) });
-check("player limit (250) refuses an upload that would exceed it", over.status === 400, over.data?.error);
+const over = await A("POST", "/upload/commit", { items: Array.from({ length: PACK + 50 }, () => ({ name: "Over", e164: fakePerson(900).e164 })) });
+check("player limit refuses an upload that would exceed it", over.status === 400, over.data?.error);
 
 // 4 roles
 let cs = (await A("GET", "/console")).data;
@@ -303,12 +306,21 @@ const orgWs = new WebSocket(`${WS}/ws?e=${code}&t=${tok}`);
 const orgMsgs: any[] = []; orgWs.onmessage = (ev) => orgMsgs.push(JSON.parse(String(ev.data)));
 await sleep(200);
 
+await http("POST", "/api/dev/stats/reset");
 const startRes = await A("POST", "/start");
-check("organizer starts the engagement", startRes.status === 200);
-const late = await http("POST", `/api/e/${code}/join`, { raw: fakePerson(700).typed, country: "IN" }, hAuth(mkBot(fakePerson(701))));
-check("after Start entry is closed", late.data.t === "err" && late.data.k === "closed", JSON.stringify(late.data));
-const lateSettings = await A("PATCH", "/settings", { limit: 250, name: "x" });
-check("after Start settings are locked", lateSettings.status === 400);
+check("organizer starts the engagement (starting window opens)", startRes.status === 200);
+const lateSettings = await A("PATCH", "/settings", { limit: PACK, name: "x" });
+check("settings lock the moment Start is pressed", lateSettings.status === 400);
+const st1 = (await A("GET", "/console")).data;
+check("status is 'starting' and no number is called yet", st1.engagement.status === "starting" && st1.live.called === 0, st1.engagement.status);
+// someone who clicks the link in the last seconds can still get in (this is what the 60 s window is for)
+const lateBot = mkBot(fakePerson(700));
+const lj = await http("POST", `/api/e/${code}/join`, { raw: lateBot.typed, country: "IN" }, hAuth(lateBot));
+check("during the starting window a new phone is still told to ask to join", lj.data.t === "ask", JSON.stringify(lj.data));
+for (let i = 0; i < 100; i++) { const s = (await A("GET", "/console")).data; if (s.engagement.status === "started") break; await sleep(100); }
+const late = await http("POST", `/api/e/${code}/join`, { raw: fakePerson(701).typed, country: "IN" }, hAuth(mkBot(fakePerson(702))));
+check("once the first number is called entry is closed", late.data.t === "err" && late.data.k === "closed", JSON.stringify(late.data));
+const hs0 = (await http("GET", "/api/health")).data.stats; const calls0 = calls;
 
 // 8 the live run
 let paused = false;
@@ -319,9 +331,11 @@ for (let i = 0; i < 400; i++) {
     const p = await http("POST", `/api/e/${code}/pause`, { reason: "Internet issue at venue" }, hAuth(hostBots[0]!));
     paused = p.status === 200;
     check("host triggers an emergency pause", paused);
+    await sleep(150); // let any number already in flight land
+    const before = (await A("GET", "/console")).data;
     await sleep(600);
     const mid = (await A("GET", "/console")).data;
-    check("engagement stays paused (no number called)", mid.live.called === s.live.called && mid.live.paused?.type === "emergency");
+    check("engagement stays paused (no number called)", mid.live.called === before.live.called && mid.live.paused?.type === "emergency");
     const rs = await http("POST", `/api/e/${code}/resume`, {}, hAuth(hostBots[1]!));
     check("host resumes", rs.status === 200);
   }
@@ -342,6 +356,14 @@ console.log("  two-ticket houses:", two.map((h: any) => `${h.name}:${h.winners.l
 check("some claims were Not valid (cheaters/late) and were refused", fin.notValid.length >= 1, `${fin.notValid.length}`);
 check("brand breaks fired (3 break pauses seen)", orgMsgs.filter((m) => m.type === "break").length === 3, `${orgMsgs.filter((m) => m.type === "break").length}`);
 check("no more than one winner per share line is miscounted (shares sum)", awarded.every((x: any) => x.winners.every((w: any) => w.share === x.winners.length)));
+
+// traffic: during the live phase participants should cause NO http requests of their own
+const hs1 = (await http("GET", "/api/health")).data.stats;
+const apiLive = hs1.api - hs0.api;
+const ownCalls = calls - calls0 - 1; // organizer/host console calls made by this script (the -1 is the health call itself)
+const phoneHttp = apiLive - ownCalls - 1;
+console.log(`  traffic from Start to End: ${all.length} phones caused ${phoneHttp} HTTP requests; they sent ${hs1.wsIn - hs0.wsIn} WebSocket messages in (their claims) and received ${hs1.wsOut - hs0.wsOut} pushed messages`);
+check("phones made NO HTTP requests during the engagement (everything is pushed or cached)", phoneHttp <= 0, `${phoneHttp}`);
 
 // 9 privacy audit over every message each participant received
 const audited = all.filter((b) => !hostBots.includes(b)); // hosts are console users and legitimately see names

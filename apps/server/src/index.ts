@@ -18,7 +18,8 @@ const DATA_DIR = process.env.TAMBOLA_DATA ?? join(import.meta.dir, "../../../dat
 const WEB_DIR = join(import.meta.dir, "../../web/public");
 const IP_LIMIT = Number(process.env.TAMBOLA_IP_LIMIT ?? 1000); // joins per IP per 10 min
 if (process.env.TAMBOLA_GAP) CFG.AI_GAP = Number(process.env.TAMBOLA_GAP);
-if (FAST) Object.assign(CFG, { AI_GAP: 120, MIN_HOST_GAP: 100, CLAIM_CHECK: 100, RESULT_SHOW: 120, RESUME_DELAY: 40 });
+if (process.env.TAMBOLA_PRESTART_MS) CFG.PRE_START_MS = Number(process.env.TAMBOLA_PRESTART_MS);
+if (FAST) Object.assign(CFG, { AI_GAP: 120, MIN_HOST_GAP: 100, CLAIM_CHECK: 100, RESULT_SHOW: 120, RESUME_DELAY: 40, PRE_START_MS: 400 });
 
 mkdirSync(join(DATA_DIR, "outbox"), { recursive: true });
 const db = openDb(process.env.TAMBOLA_DB ?? join(DATA_DIR, "tambola.db"));
@@ -27,20 +28,35 @@ const rid = (n = 8) => crypto.randomUUID().replace(/-/g, "").slice(0, n);
 const FREE_MAIL = /@(gmail|yahoo|outlook|hotmail|rediffmail|icloud|proton(mail)?|aol)\./i;
 
 // ---------- rooms ----------
-type WSData = { code: string; kind: "org" | "p"; pid?: string; console: boolean };
+type WSData = { code: string; kind: "org" | "p" | "w"; pid?: string; console: boolean; device?: string };
+const stats = { http: 0, api: 0, wsIn: 0, wsOut: 0, wsOpen: 0 };
 class Room {
   sockets = new Set<ServerWebSocket<WSData>>();
   dirty = false;
   declined = new Set<string>();
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   constructor(public code: string, public organizerId: string, public engine: EngagementEngine, public pack: number, public currency: Currency) {}
   send(filter: (d: WSData) => boolean, msg: unknown) {
     const s = JSON.stringify(msg);
-    for (const ws of this.sockets) if (filter(ws.data)) ws.send(s);
+    for (const ws of this.sockets) if (filter(ws.data)) { ws.send(s); stats.wsOut++; }
   }
-  touch(roster = false) {
-    this.dirty = true;
-    this.send((d) => d.console, { type: "refresh" });
-    if (roster) this.send((d) => d.kind === "p", { type: "refresh", scope: "roster" });
+  /** Tell the console (organizer + hosts) something changed. Participants are NOT pinged here. */
+  touch(_roster = false) { this.dirty = true; this.send((d) => d.console, { type: "refresh" }); }
+  /** Ping only the participants who are affected. */
+  notify(pids: string[]) { const set = new Set(pids); this.send((d) => d.kind === "p" && !!d.pid && set.has(d.pid), { type: "refresh" }); }
+  /** Rare, coalesced ping to every participant (settings changed). Clients add random delay before refetching. */
+  refreshAll() {
+    if (this.refreshTimer) return;
+    this.refreshTimer = setTimeout(() => { this.refreshTimer = null; this.send((d) => d.kind === "p", { type: "refresh", scope: "settings" }); }, 3000);
+  }
+  sendDevice(dev: string | null | undefined, msg: unknown) { if (dev) this.send((d) => d.device === dev, msg); }
+  kickDevice(dev: string | null | undefined) {
+    if (!dev) return;
+    for (const ws of [...this.sockets]) if (ws.data.device === dev) { ws.send(JSON.stringify({ type: "loggedout" })); ws.close(); }
+  }
+  kickPids(pids: string[]) {
+    const set = new Set(pids);
+    for (const ws of [...this.sockets]) if (ws.data.pid && set.has(ws.data.pid)) { ws.send(JSON.stringify({ type: "loggedout" })); ws.close(); }
   }
 }
 const rooms = new Map<string, Room>();
@@ -51,7 +67,7 @@ function mkEngine(room: { code: string; get: () => Room | undefined }, init: Con
 function route(room: Room | undefined, e: PublicEvent) {
   if (!room) return;
   room.dirty = true;
-  if (e.to === "all") room.send(() => true, e);
+  if (e.to === "all") room.send((d) => d.kind !== "w" || e.type === "starting" || e.type === "live" || e.type === "ended", e);
   else room.send((d) => d.console, e);
 }
 function loadRooms() {
@@ -81,7 +97,7 @@ loadRooms();
 setInterval(() => {
   for (const room of rooms.values()) {
     const e = room.engine;
-    if (e.status === "started") { const before = e.called.length + (e.paused?.type ?? ""); e.tick(); if (before !== e.called.length + (e.paused?.type ?? "")) room.touch(); }
+    if (e.status === "starting" || e.status === "started") { const before = e.status + e.called.length + (e.paused?.type ?? ""); e.tick(); if (before !== e.status + e.called.length + (e.paused?.type ?? "")) room.touch(); }
     if (e.status === "ended" && e.endedAt && now() - e.endedAt > Number(process.env.TAMBOLA_PURGE_MS ?? 24 * 3600_000)) purgeRoom(room);
   }
 }, 50);
@@ -168,7 +184,7 @@ function consoleState(room: Room, a: Actor, req: Request) {
         winners: (e.winners.get(l.id) ?? []).map((w) => ({ ticketId: w.ticketId, name: byId.get(w.pid)?.name ?? "", share: w.share, number: w.number, callNo: w.callNo })) };
     }),
     breaks: s.breaks,
-    live: { called: e.called.length, current: e.current, paused: e.paused ? { type: e.paused.type, reason: (e.paused as any).reason, title: (e.paused as any).brk?.title } : null, nextAt: e.nextAt },
+    live: { liveAt: e.liveAt, called: e.called.length, current: e.current, paused: e.paused ? { type: e.paused.type, reason: (e.paused as any).reason, title: (e.paused as any).brk?.title } : null, nextAt: e.nextAt },
     log: e.log.slice(0, 80),
     notValid: e.notValidLog.map((n) => ({ ticketId: n.ticketId, pattern: n.pattern, why: n.why, at: n.at })),
     packs: PACKS,
@@ -209,7 +225,7 @@ type Handler = (c: Ctx) => Promise<Response> | Response;
 const routes: { method: string; re: RegExp; h: Handler }[] = [];
 const route_ = (method: string, path: string, h: Handler) => routes.push({ method, re: new RegExp("^" + path.replace(/:(\w+)/g, "([^/]+)") + "$"), h });
 
-route_("GET", "/api/health", () => json({ ok: true, dev: DEV, fast: FAST, rooms: rooms.size }));
+route_("GET", "/api/health", () => json({ ok: true, dev: DEV, fast: FAST, rooms: rooms.size, stats }));
 
 // ----- checkout + organizer login -----
 route_("POST", "/api/checkout", async ({ req }) => {
@@ -296,7 +312,7 @@ route_("POST", "/api/e/:code/confirm", async ({ req, m }) => {
   if (!n.ok) fail(400, n.reason);
   const p = room.engine.participants.find((x) => x.e164 === n.e164) ?? fail(404, "This number is not on the list.");
   orErr(room.engine.confirmJoin(dev, p.id), 0);
-  room.touch(true);
+  room.touch();
   return json({ ok: true });
 });
 
@@ -349,7 +365,7 @@ route_("POST", "/api/p/:pass/confirm", async ({ req, m }) => {
   if (!b.consent) fail(400, "Please tick the consent box.");
   const f = findByPass(m[1]!) ?? fail(404, "This pass is not valid.");
   orErr(f.room.engine.confirmJoin(dev, f.p.id), 0);
-  f.room.touch(true);
+  f.room.touch();
   return json({ ok: true, code: f.room.code });
 });
 route_("POST", "/api/r/:code/open", ({ req, m }) => {
@@ -367,7 +383,7 @@ route_("POST", "/api/r/:code/confirm", async ({ req, m }) => {
   if (!b.consent) fail(400, "Please tick the consent box.");
   const f = findByRole(m[1]!) ?? fail(404, "This link is not valid.");
   orErr(f.room.engine.confirmJoin(dev, f.p.id), 0);
-  f.room.touch(true);
+  f.room.touch();
   return json({ ok: true, code: f.room.code, role: f.p.role });
 });
 
@@ -380,7 +396,7 @@ route_("POST", "/api/e/:code/me/passes", async ({ req, m }) => {
   if (!n.ok) fail(400, n.reason);
   const r = room.engine.createPass((a as any).pid, { name: String(b.name ?? ""), e164: n.e164, kind: b.kind === "family" ? "family" : "colleague" });
   if (!r.ok) fail(400, r.reason);
-  room.touch(true);
+  room.touch();
   return json({ ok: true, link: `${origin(req)}/p/${r.p.passCode}`, name: r.p.name });
 });
 route_("DELETE", "/api/e/:code/me/passes/:pid", ({ req, m }) => {
@@ -388,7 +404,7 @@ route_("DELETE", "/api/e/:code/me/passes/:pid", ({ req, m }) => {
   if (!a || a.kind === "organizer") fail(403, "Not allowed.");
   const t = room.engine.participants.find((x) => x.id === m[2]);
   if (!t || t.invitedBy !== (a as any).pid) fail(403, "Not your pass.");
-  orErr(room.engine.cancelPass(t.id), 0); room.touch(true);
+  orErr(room.engine.cancelPass(t.id), 0); room.touch();
   return json({ ok: true });
 });
 route_("POST", "/api/e/:code/me/passes/:pid/reissue", ({ req, m }) => {
@@ -396,7 +412,7 @@ route_("POST", "/api/e/:code/me/passes/:pid/reissue", ({ req, m }) => {
   if (!a || a.kind === "organizer") fail(403, "Not allowed.");
   const t = room.engine.participants.find((x) => x.id === m[2]);
   if (!t || t.invitedBy !== (a as any).pid) fail(403, "Not your pass.");
-  orErr(room.engine.reissuePass(t.id), 0); room.touch(true);
+  orErr(room.engine.reissuePass(t.id), 0); room.touch();
   return json({ ok: true, link: `${origin(req)}/p/${t.passCode}` });
 });
 route_("POST", "/api/e/:code/me/invite", async ({ req, m }) => {
@@ -424,7 +440,7 @@ route_("PATCH", "/api/e/:code/settings", async ({ req, m }) => {
   for (const k of allowed) if (k in b) patch[k] = b[k];
   orErr(room.engine.updateSettings(who, patch), 0);
   if (patch.limit && patch.limit > room.pack) fail(400, "To raise the limit, upgrade your pack.");
-  room.touch(true);
+  room.touch(); room.refreshAll();
   return json({ ok: true });
 });
 
@@ -435,14 +451,14 @@ route_("PUT", "/api/e/:code/rewards", async ({ req, m }) => {
   if (Array.isArray(b.spec)) lines = makeRewardLines(b.spec.map((s: any) => ({ pattern: s.pattern as PatternId, scope: s.scope === "two_ticket" ? "two_ticket" : "ticket", texts: (s.texts as string[]).map((t) => String(t)) })));
   else lines = b.lines;
   orErr(room.engine.setRewards("organizer", lines), 0);
-  room.touch(true);
+  room.touch(); room.refreshAll();
   return json({ ok: true });
 });
 route_("PUT", "/api/e/:code/breaks", async ({ req, m }) => {
   const room = getRoom(m[1]!), a = actorOf(req, room); needOrganizer(a);
   const b = await body(req);
   orErr(room.engine.setBreaks("organizer", b.breaks ?? []), 0);
-  room.touch(true);
+  room.touch(); room.refreshAll();
   return json({ ok: true });
 });
 
@@ -457,7 +473,7 @@ route_("POST", "/api/e/:code/upload/commit", async ({ req, m }) => {
   const items = (b.items ?? []) as { name?: string; e164: string }[];
   const r = room.engine.addParticipants(items);
   if (!r.ok) fail(400, r.reason);
-  room.touch(true);
+  room.touch();
   return json({ ok: true, added: items.length });
 });
 
@@ -469,13 +485,14 @@ route_("POST", "/api/e/:code/people/bulk", async ({ req, m }) => {
     let done = 0;
     for (const id of ids) { const err = room.engine.setRole(who, id, b.role, b.cap); if (err) errors.push(err); else done++; }
     if (done === 0 && errors.length) fail(400, errors[0]!);
-    room.touch(true);
+    room.touch(); room.notify(ids);
     return json({ ok: true, changed: done, skipped: errors.length, firstError: errors[0] });
   }
   if (b.action === "remove") {
     const r = room.engine.removeParticipants(who, ids);
     if (typeof r === "string") fail(400, r);
-    room.touch(true);
+    room.kickPids(r.removed.map((p) => p.id));
+    room.touch();
     return json({ ok: true, removed: r.removed.length });
   }
   fail(400, "Unknown action.");
@@ -488,7 +505,7 @@ route_("POST", "/api/e/:code/people/pass", async ({ req, m }) => {
   if (!n.ok) fail(400, n.reason);
   const r = room.engine.createPass(String(b.senderId), { name: String(b.name ?? ""), e164: n.e164, kind: b.kind === "family" ? "family" : "colleague" });
   if (!r.ok) fail(400, r.reason);
-  room.touch(true);
+  room.touch();
   return json({ ok: true, link: `${origin(req)}/p/${r.p.passCode}` });
 });
 
@@ -496,33 +513,39 @@ route_("POST", "/api/e/:code/waiting/admit", async ({ req, m }) => {
   const room = getRoom(m[1]!); needConsole(actorOf(req, room));
   const b = await body(req);
   const ids: string[] = b.all ? room.engine.waiting.map((w) => w.id) : b.ids ?? [];
-  orErr(room.engine.admit(ids), 0); room.touch(true);
+  const devs = room.engine.waiting.filter((w) => ids.includes(w.id)).map((w) => w.device);
+  orErr(room.engine.admit(ids), 0); room.touch();
+  devs.forEach((d) => room.sendDevice(d, { type: "admitted" }));
   return json({ ok: true });
 });
 route_("POST", "/api/e/:code/waiting/decline", async ({ req, m }) => {
   const room = getRoom(m[1]!); needConsole(actorOf(req, room));
   const b = await body(req);
   const list = room.engine.decline(b.ids ?? []);
-  list.forEach((w) => w.device && room.declined.add(w.device));
+  list.forEach((w) => { if (w.device) { room.declined.add(w.device); room.sendDevice(w.device, { type: "declined" }); } });
   room.touch();
   return json({ ok: true });
 });
 route_("POST", "/api/e/:code/conflicts/:cid/resolve", async ({ req, m }) => {
   const room = getRoom(m[1]!); needConsole(actorOf(req, room));
   const b = await body(req);
+  const cf = room.engine.conflicts.find((x) => x.id === m[2]);
+  const target = cf ? room.engine.participants.find((x) => x.id === cf.pid) : undefined;
+  const oldDev = target?.device;
   orErr(room.engine.resolveConflict(m[2]!, b.res === "moved" ? "moved" : "kept"), 0);
-  room.touch(true);
+  if (b.res === "moved" && oldDev) room.kickDevice(oldDev);
+  room.touch();
   return json({ ok: true });
 });
 
 route_("POST", "/api/e/:code/start", ({ req, m }) => {
   const room = getRoom(m[1]!); needOrganizer(actorOf(req, room));
-  orErr(room.engine.start(), 0); room.touch(true);
+  orErr(room.engine.start(), 0); room.touch();
   return json({ ok: true });
 });
 route_("POST", "/api/e/:code/end", ({ req, m }) => {
   const room = getRoom(m[1]!); needOrganizer(actorOf(req, room));
-  room.engine.end(); room.touch(true);
+  room.engine.end(); room.touch();
   return json({ ok: true });
 });
 route_("POST", "/api/e/:code/draw", ({ req, m }) => {
@@ -550,7 +573,7 @@ route_("POST", "/api/e/:code/raise-limit", async ({ req, m }) => {
     .run("ord_" + rid(8), room.organizerId, room.code, pack, room.currency, diff, 0, "paid", now(), room.code);
   room.pack = pack;
   orErr(room.engine.updateSettings("organizer", { limit: pack }), 0);
-  room.touch(true);
+  room.touch();
   return json({ ok: true, paid: diff, currency: room.currency });
 });
 
@@ -562,11 +585,43 @@ route_("GET", "/api/e/:code/report", ({ req, m }) => {
 
 if (DEV) {
   route_("POST", "/api/dev/purge/:code", ({ m }) => { const room = getRoom(m[1]!); purgeRoom(room); return json({ ok: true, status: room.engine.status, summary: room.engine.summary }); });
+  route_("POST", "/api/dev/stats/reset", () => { Object.assign(stats, { http: 0, api: 0, wsIn: 0, wsOut: 0 }); return json({ ok: true }); });
   route_("GET", "/api/dev/outbox", () => json({ note: "see data/outbox" }));
 }
 
-// ---------- static ----------
-const MIME: Record<string, string> = { html: "text/html; charset=utf-8", css: "text/css", js: "text/javascript", json: "application/json", svg: "image/svg+xml", png: "image/png", webp: "image/webp", ico: "image/x-icon", m4a: "audio/mp4", mp3: "audio/mpeg" };
+// ---------- static + app manifest (the cached "thin client") ----------
+const MIME: Record<string, string> = { html: "text/html; charset=utf-8", css: "text/css", js: "text/javascript", json: "application/json", svg: "image/svg+xml", png: "image/png", webp: "image/webp", ico: "image/x-icon", m4a: "audio/mp4", mp3: "audio/mpeg", woff2: "font/woff2" };
+// Which files each kind of screen needs. The service worker downloads a group once and re-downloads only files whose hash changed.
+const GROUPS: Record<string, string[]> = {
+  core: ["/common.js", "/app.css", "/fonts.css", "/fonts/Fraunces-italic-500.woff2", "/fonts/Fraunces-normal-500-700.woff2", "/fonts/IBMPlexMono-normal-500.woff2", "/fonts/Inter-normal-400.woff2"],
+  participant: ["/play.html", "/play.js", "/play.css", "/audio.js"],
+  console: ["/console.html", "/console.js", "/console.css"],
+  site: ["/index.html", "/site.js", "/site.css", "/legal.html"],
+};
+const hashCache = new Map<string, { mtime: number; hash: string; size: number }>();
+async function assetInfo(url: string) {
+  const full = pnorm(join(WEB_DIR, url));
+  const f = Bun.file(full);
+  if (!(await f.exists())) return null;
+  const mtime = f.lastModified;
+  const c = hashCache.get(url);
+  if (c && c.mtime === mtime) return c;
+  const buf = new Uint8Array(await f.arrayBuffer());
+  const info = { mtime, hash: new Bun.CryptoHasher("sha256").update(buf).digest("hex").slice(0, 16), size: buf.length };
+  hashCache.set(url, info);
+  return info;
+}
+route_("GET", "/api/app-manifest", async () => {
+  const groups: Record<string, { url: string; hash: string; size: number }[]> = {};
+  let all = "";
+  for (const [g, urls] of Object.entries(GROUPS)) {
+    groups[g] = [];
+    for (const url of urls) { const i = await assetInfo(url); if (i) { groups[g]!.push({ url, hash: i.hash, size: i.size }); all += i.hash; } }
+  }
+  const sizes = Object.fromEntries(Object.entries(groups).map(([g, a]) => [g, a.reduce((n, x) => n + x.size, 0)]));
+  return new Response(JSON.stringify({ version: sha256(all).slice(0, 12), groups, sizes }), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+});
+
 function serveStatic(path: string): Response {
   let file = path === "/" ? "/index.html" : path;
   if (/^\/(e|p)\/[^/]+$/.test(file)) file = "/play.html";
@@ -574,7 +629,10 @@ function serveStatic(path: string): Response {
   const full = pnorm(join(WEB_DIR, file));
   if (!full.startsWith(WEB_DIR) || !existsSync(full) || file.includes("/_")) return new Response("Not found", { status: 404 });
   const ext = full.split(".").pop() ?? "";
-  return new Response(Bun.file(full), { headers: { "content-type": MIME[ext] ?? "application/octet-stream", "cache-control": "no-cache" } });
+  const headers: Record<string, string> = { "content-type": MIME[ext] ?? "application/octet-stream", "cache-control": "no-cache" };
+  if (file.startsWith("/fonts/") || file.startsWith("/img/") || file.startsWith("/audio/")) headers["cache-control"] = "public, max-age=31536000, immutable";
+  if (file === "/sw.js") headers["service-worker-allowed"] = "/";
+  return new Response(Bun.file(full), { headers });
 }
 
 // ---------- server ----------
@@ -591,13 +649,17 @@ const server = Bun.serve<WSData>({
         const r = db.query("SELECT organizer_id, expires_at FROM tokens WHERE hash=?").get(sha256(t)) as any;
         if (r && r.expires_at > now() && r.organizer_id === room.organizerId) data = { code, kind: "org", console: true };
       } else if (d && d.length >= 16) {
-        const p = room.engine.participants.find((x) => x.device === sha256(d) && x.status === "joined");
-        if (p) data = { code, kind: "p", pid: p.id, console: p.role === "host" };
+        const dh = sha256(d);
+        const p = room.engine.participants.find((x) => x.device === dh && x.status === "joined");
+        if (p) data = { code, kind: "p", pid: p.id, console: p.role === "host", device: dh };
+        else if (room.engine.waiting.some((w) => w.device === dh)) data = { code, kind: "w", console: false, device: dh }; // waiting-room phone: gets pushed 'admitted' instead of polling
       }
       if (!data) return new Response("unauthorized", { status: 401 });
       return server.upgrade(req, { data }) ? undefined : new Response("upgrade failed", { status: 400 });
     }
+    stats.http++;
     if (url.pathname.startsWith("/api/")) {
+      stats.api++;
       for (const r of routes) {
         if (r.method !== req.method) continue;
         const m = url.pathname.match(r.re);
@@ -617,9 +679,12 @@ const server = Bun.serve<WSData>({
     open(ws) {
       const room = rooms.get(ws.data.code)!;
       room.sockets.add(ws);
+      stats.wsOpen++;
+      if (ws.data.kind === "w") { ws.send(JSON.stringify({ type: "waiting" })); return; }
       ws.send(JSON.stringify({ type: "state", ...room.engine.publicState() }));
     },
     message(ws, raw) {
+      stats.wsIn++;
       const room = rooms.get(ws.data.code);
       if (!room) return;
       let msg: any;
@@ -630,7 +695,7 @@ const server = Bun.serve<WSData>({
         ws.send(JSON.stringify({ type: "claimAck", error: err, pattern: msg.pattern, ticket: msg.ticket }));
         room.touch();
       } else if (msg.type === "talk" && ws.data.console) {
-        room.send(() => true, { type: "talk", on: !!msg.on });
+        room.send((d) => d.kind !== "w", { type: "talk", on: !!msg.on });
       } else if (msg.type === "ping") ws.send(JSON.stringify({ type: "pong" }));
     },
     close(ws) { rooms.get(ws.data.code)?.sockets.delete(ws); },

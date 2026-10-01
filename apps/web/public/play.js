@@ -7,6 +7,9 @@
   const MODE = seg[0], LINK = seg[1] || "";
   let code = MODE === "e" ? LINK : "";
   document.title = "Corporate Tambola";
+  // Thin client: download the whole participant app once and keep it on the phone (see sw.js).
+  TB.sw.on(() => { if ($("hd")) paintHd(); });
+  TB.sw.start("participant");
 
   const PNAME = { early5: "Early Five", top: "Top Line", mid: "Middle Line", bot: "Bottom Line", corners: "Four Corners", star: "Star", full: "Full House" };
   const PDESC = { early5: "Any 5 numbers on your ticket", top: "All 5 numbers of the first row", mid: "All 5 numbers of the second row", bot: "All 5 numbers of the third row",
@@ -32,8 +35,8 @@
   const api = (m, p, b) => TB.api(m, p, b);
   const firstName = (n) => String(n || "").trim().split(/\s+/)[0] || "";
   const say = (t) => { const l = $("live"); if (l) l.textContent = t; };
-  let pollT = null;
-  function show(html) { clearInterval(pollT); app.innerHTML = `<div class="pw">${html}</div>`; window.scrollTo(0, 0); }
+  let pollT = null, waitWs = null;
+  function show(html) { clearInterval(pollT); if (waitWs) { waitWs.close(); waitWs = null; } app.innerHTML = `<div class="pw">${html}</div>`; window.scrollTo(0, 0); }
   const ptop = (menu) => `<div class="ptop"><span class="mark">${ic("ticket")}</span><span class="word">Corporate Tambola<i>.</i></span>${menu ? `<button class="av" data-act="menu" aria-label="Menu" aria-haspopup="dialog">${ic("menu")}</button>` : ""}</div>`;
   function errCard(k) {
     const [i, t, x] = ERRS[k] || ERRS.badlink;
@@ -73,7 +76,7 @@
   function joinScreen() {
     const i = J.info;
     show(`${ptop()}<div class="pcard"><div class="eyebrow">${esc(i.orgName)}</div><h2>${esc(i.name)}</h2>
-      <p class="lead">${i.startsAt ? `Starts ${esc(TB.fmtDT(i.startsAt))} (your local time). ` : ""}Entry closes when the engagement starts.</p>
+      <p class="lead">${i.startsAt ? `Starts ${esc(TB.fmtDT(i.startsAt))} (your local time). ` : ""}Entry closes when the first number is called.</p>
       <label class="lb" for="jCc">Country</label><select class="inp" id="jCc">${TB.countryOpts(J.cc)}</select>
       <label class="lb" for="jNum">Your mobile number</label><div class="phonein"><span id="jDial">+${dial(J.cc)}</span><input id="jNum" inputmode="tel" autocomplete="tel" placeholder="98765 43210" value="${esc(J.raw)}"></div>
       <p class="hint">Enter the number your organizer has for you. Any format works.</p><div id="jErr" role="alert"></div>
@@ -138,17 +141,24 @@
 
   function waitScreen() {
     show(`${ptop()}<div class="pcard center"><div class="res">${ic("clock")}</div><h2>Your request is with the organizer</h2>
-      <p class="lead">Keep this page open. You will get in as soon as the organizer admits you. Entry closes when the engagement starts.</p><div class="waitdots"><i></i><i></i><i></i></div></div>`);
+      <p class="lead">Keep this page open. You will get in as soon as the organizer admits you. Entry closes when the first number is called.</p><div class="waitdots"><i></i><i></i><i></i></div></div>`);
+    const goIn = async () => { try { await loadMe(); TB.toast("The organizer let you in"); startPlay(); } catch { /* keep waiting */ } };
+    // The organizer's decision is PUSHED to this phone; the slow poll below is only a safety net.
+    waitWs = TB.ws(code, {}, (m) => {
+      if (m.type === "admitted") goIn();
+      else if (m.type === "declined") errCard("declined");
+      else if (m.type === "live" || m.type === "ended") errCard("closed");
+    });
     const poll = async () => {
       try {
         const s = await api("GET", `/api/e/${enc(code)}/status`);
-        if (s.state === "in") { clearInterval(pollT); await loadMe(); TB.toast("The organizer let you in"); return startPlay(); }
+        if (s.state === "in") return goIn();
         if (s.state === "declined") return errCard("declined");
         if (s.state === "closed") return errCard("closed");
         if (s.state === "none") return joinScreen();
       } catch {}
     };
-    pollT = setInterval(poll, 3000);
+    pollT = setInterval(poll, 20000);
   }
 
   async function bootPass() {
@@ -185,7 +195,7 @@
     const d = await api("GET", `/api/e/${enc(code)}/me`);
     G.lastMe = Date.now(); G.eng = d.engagement; G.me = d.me; G.quotas = d.quotas; G.invitees = d.invitees || []; G.consoleLink = d.consoleLink;
     G.tickets = d.me.tickets || []; G.ids = d.me.ticketIds || {}; G.gap = d.engagement.gapMs || 10000;
-    const s = d.state; G.status = s.status; G.callNo = s.callNo; G.current = s.current; G.rewards = s.rewards || [];
+    const s = d.state; G.status = s.status; G.liveLocal = s.liveIn != null ? Date.now() + s.liveIn : 0; G.callNo = s.callNo; G.current = s.current; G.rewards = s.rewards || [];
     if (G.status === "started" && G.current) hear(G.current);
     if (d.nextAt) { let rem = d.nextAt - Date.now(); if (rem < -1500 || rem > G.gap + 1500) rem = G.gap; G.nextLocal = Date.now() + Math.max(0, rem); } else G.nextLocal = 0;
     const p = d.paused;
@@ -224,7 +234,7 @@
   function onMsg(m) {
     switch (m.type) {
       case "state":
-        G.status = m.status; G.callNo = m.callNo; G.current = m.current; G.rewards = m.rewards || G.rewards;
+        G.status = m.status; G.liveLocal = m.liveIn != null ? Date.now() + m.liveIn : 0; G.callNo = m.callNo; G.current = m.current; G.rewards = m.rewards || G.rewards;
         if (m.paused) { if (!G.pause || G.pause.kind !== m.paused) G.pause = { kind: m.paused, reason: "" }; } else { G.pause = null; hideBreak(); }
         if (G.status === "ended" || G.status === "purged") return endedScreen(G.status === "purged");
         if (G.status === "started" && m.current) hear(m.current);
@@ -243,7 +253,10 @@
       case "resume": G.pause = null; hideBreak(); paintStrip(); paintBanner(); paintRewards(); reload(); break;
       case "ended": stopLive(); G.status = "ended"; reloadForEnd(); break;
       case "purged": stopLive(); endedScreen(true); break;
-      case "refresh": reload(); break;
+      case "refresh": if (m.scope === "settings") setTimeout(reload, Math.random() * 4000); else reload(); break; // random delay: thousands of phones never ask at once
+      case "starting": G.status = "starting"; G.liveLocal = Date.now() + (m.inMs || 0); paintAll(); break;
+      case "live": G.status = "started"; G.liveLocal = 0; paintAll(); break;
+      case "loggedout": stopLive(); errCard("moved"); break;
       case "talk": G.talk = !!m.on; paintStrip(); break;
       case "claimAck":
         if (m.error) TB.toast(esc(m.error)); else TB.toast("Claim sent. The engagement pauses for everyone while it is checked.");
@@ -266,13 +279,15 @@
   function paintAll() { if (!$("strip")) return; paintHd(); paintStrip(); paintFields(); paintTabs(); paintGrid(); paintNotes(); paintRewards(); paintBanner(); }
 
   function paintHd() {
-    const st = { open: ["pill", "Not started yet"], started: ["pill ok", "Live"], ended: ["pill", "Ended"] }[G.status] || ["pill", G.status];
+    const st = { open: ["pill", "Not started yet"], starting: ["pill warn", "Starting"], started: ["pill ok", "Live"], ended: ["pill", "Ended"] }[G.status] || ["pill", G.status];
+    const sw = TB.sw, swChip = sw.state === "downloading" || sw.state === "checking" ? `<span class="pill info">Getting ready ${sw.pct}%</span>` : sw.state === "ready" ? `<span class="pill ok"><i></i>Software ready</span>` : "";
     $("hd").innerHTML = `<div class="eyebrow">${esc(G.eng.orgName)}</div><h3>${esc(G.eng.name)}</h3><div class="meta"><span class="${st[0]}"><i></i>${st[1]}</span>
-      ${G.eng.startsAt ? `<span>${ic("clock")} ${G.status === "open" ? "Starts" : "Started"} ${esc(TB.fmtDT(G.eng.startsAt))}</span>` : ""}${G.prefetching ? `<span class="pill info">Getting ready</span>` : ""}</div>`;
+      ${G.eng.startsAt ? `<span>${ic("clock")} ${G.status === "open" ? "Starts" : "Started"} ${esc(TB.fmtDT(G.eng.startsAt))}</span>` : ""}${swChip}${G.prefetching ? `<span class="pill info">Getting videos ready</span>` : ""}</div>`;
   }
 
   function stripModel() {
     const p = G.pause && G.pause.kind;
+    if (G.status === "starting") return { cls: "", ball: ic("clock"), eb: "Engagement starting", ln: "The first number is coming", sub: `${ic("clock")} <span id="cds"></span> Your software is ready.` };
     if (G.status === "open") return { cls: "", ball: ic("clock"), eb: "Engagement starts", ln: G.eng.startsAt ? TB.fmtDT(G.eng.startsAt) : "Soon", sub: "The organizer presses Start. The first number will appear here." };
     if (p === "claim") return { cls: "pz", ball: ic("pause"), eb: "Paused · claim received", ln: "Checking a claim...", sub: "The software is checking it. Everyone waits." };
     if (p === "result") {
@@ -295,6 +310,8 @@
     tick();
   }
   function tick() {
+    const cds = $("cds");
+    if (cds) { const r = Math.max(0, Math.ceil((G.liveLocal - Date.now()) / 1000)); cds.textContent = r > 0 ? `First number in ${r}s.` : "Any moment now."; }
     const cd = $("cd");
     if (cd) {
       const rem = G.nextLocal - Date.now();
@@ -333,7 +350,7 @@
     const tab = G.tickets[1] ? G.tab : "A";
     const hl = G.hl ? new Set(patternNums(t, G.hl.pattern)) : null;
     $("grid").innerHTML = cellsHTML(t, G.cut[tab], hl, true);
-    $("pnote").textContent = G.status === "started" ? "Tap a number to cut it (tap again to undo). You can cut a number only after it is called. Tap a reward name to see its pattern." : "Your ticket. You can cut numbers once the engagement starts.";
+    $("pnote").textContent = G.status === "started" ? "Tap a number to cut it (tap again to undo). You can cut a number only after it is called. Tap a reward name to see its pattern." : "Your ticket is ready. You can cut numbers once the first number is called.";
   }
   function paintNotes() {
     let h = "";

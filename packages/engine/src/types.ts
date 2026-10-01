@@ -2,7 +2,7 @@ import type { PatternId, Scope, Ticket } from "@tambola/shared";
 
 export type Role = "participant" | "team_lead" | "host";
 export type Kind = null | "colleague" | "family";
-export type EngagementStatus = "open" | "started" | "ended" | "purged";
+export type EngagementStatus = "open" | "starting" | "started" | "ended" | "purged";
 export type CallMode = "ai" | "manual" | "both";
 export type TicketMode = "single" | "double";
 export type Actor = "organizer" | "host";
@@ -103,5 +103,7 @@ export type PublicEvent =
   | { to: "all"; type: "result"; items: { ticketId: string; reward: string; ok: boolean; fun: boolean }[] }
   | { to: "all"; type: "break"; title: string; kind: BrandBreak["kind"]; seconds: number; mediaUrl?: string }
   | { to: "all"; type: "resume" }
+  | { to: "all"; type: "starting"; liveAt: number; inMs: number }
+  | { to: "all"; type: "live" }
   | { to: "all"; type: "ended"; why: string }
   | { to: "console"; type: "log"; msg: string };

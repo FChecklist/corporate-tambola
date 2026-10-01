@@ -99,5 +99,31 @@
   TB.countryOpts = (sel) => TB.COUNTRIES.map(([c, n, d]) => `<option value="${c}" ${c === sel ? "selected" : ""}>${TB.esc(n)} (+${d})</option>`).join("");
   TB.guessCountry = () => { try { const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; if (/Calcutta|Kolkata/.test(tz)) return "IN"; if (/Dubai/.test(tz)) return "AE"; if (/London/.test(tz)) return "GB"; if (/Singapore/.test(tz)) return "SG"; if (/^Australia\//.test(tz)) return "AU"; if (/^America\//.test(tz)) return "US"; } catch {} return "IN"; };
 
+  // ---- thin client: service worker that downloads the app once and keeps it (see sw.js) ----
+  // TB.sw.start(group, cb): cb({state:'unsupported'|'checking'|'downloading'|'ready'|'error', pct, bytesTotal}) on every change.
+  TB.sw = {
+    state: "idle", pct: 0, bytesTotal: 0, listeners: [],
+    on(cb) { TB.sw.listeners.push(cb); cb({ state: TB.sw.state, pct: TB.sw.pct, bytesTotal: TB.sw.bytesTotal }); },
+    emit(o) { Object.assign(TB.sw, o); TB.sw.listeners.forEach((f) => { try { f({ state: TB.sw.state, pct: TB.sw.pct, bytesTotal: TB.sw.bytesTotal }); } catch {} }); },
+    async start(group) {
+      if (!("serviceWorker" in navigator) || !window.caches) { TB.sw.emit({ state: "unsupported", pct: 100 }); return; }
+      TB.sw.emit({ state: "checking", pct: 0 });
+      navigator.serviceWorker.addEventListener("message", (ev) => {
+        const m = ev.data || {};
+        if (m.type !== "tb-sw") return;
+        if (m.state === "error") return TB.sw.emit({ state: "error" });
+        const pct = m.bytesTotal ? Math.min(100, Math.round((m.bytesDone / m.bytesTotal) * 100)) : 100;
+        TB.sw.emit({ state: m.state, pct: m.state === "ready" ? 100 : pct, bytesTotal: m.bytesTotal || 0 });
+      });
+      try {
+        await navigator.serviceWorker.register("/sw.js");
+        const reg = await navigator.serviceWorker.ready;
+        try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch {} // ask the browser to keep the app (not clear it when storage is low)
+        const target = reg.active || navigator.serviceWorker.controller;
+        if (target) target.postMessage({ type: "ensure", groups: ["core", group] });
+      } catch { TB.sw.emit({ state: "error" }); }
+    },
+  };
+
   TB.QR = (el, text) => { /* optional: uses qrcodejs if the page loaded it */ if (window.QRCode && el) { el.innerHTML = ""; new window.QRCode(el, { text, width: 140, height: 140 }); } };
 })();

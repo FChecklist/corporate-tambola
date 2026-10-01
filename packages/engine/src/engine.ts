@@ -9,7 +9,9 @@ import type {
 
 void _n;
 
-export const CFG = { AI_GAP: 10_000, MIN_HOST_GAP: 5_000, CLAIM_CHECK: 2_400, RESULT_SHOW: 5_000, RESUME_DELAY: 3_000, MAX_REWARD_LINES: 30, MAX_BREAKS: 3 };
+export const CFG = { AI_GAP: 10_000, MIN_HOST_GAP: 5_000, CLAIM_CHECK: 2_400, RESULT_SHOW: 5_000, RESUME_DELAY: 3_000, MAX_REWARD_LINES: 30, MAX_BREAKS: 3,
+  /** After the organizer presses Start, the first number is called this long after, so every phone can finish getting ready. Entry stays open meanwhile. */
+  PRE_START_MS: 60_000 };
 
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
@@ -63,6 +65,8 @@ export class EngagementEngine {
   nextAt: number | null = null;
   lastDrawAt = 0;
   startedAt: number | null = null;
+  liveAt: number | null = null;
+  pendingEmergency: string | null = null; // a pause asked for during a claim check or brand break; applied right after it
   endedAt: number | null = null;
   winners = new Map<string, Winner[]>(); // reward line id -> winners
   notValidLog: { pid: string; ticketId: string; pattern: PatternId; at: number; why: string }[] = [];
@@ -101,7 +105,7 @@ export class EngagementEngine {
   private logMsg(msg: string) { this.log.unshift({ t: this.now(), msg }); if (this.log.length > 200) this.log.pop(); this.emit({ to: "console", type: "log", msg }); }
   get placesUsed() { return this.participants.length; }
   get placesLeft() { return this.settings.limit - this.placesUsed; }
-  get entryOpen() { return this.status === "open"; }
+  get entryOpen() { return this.status === "open" || this.status === "starting"; }
   private byId(pid: string) { return this.participants.find((p) => p.id === pid); }
   private byNumber(e164: string) { return this.participants.find((p) => p.e164 === e164); }
   numberInEngagement(e164: string) { return this.byNumber(e164) ?? this.waiting.find((w) => w.e164 === e164); }
@@ -136,7 +140,7 @@ export class EngagementEngine {
 
   // ---------- settings (organizer; host may change only the family limit) ----------
   updateSettings(actor: Actor, patch: Partial<Pick<Settings, "name" | "limit" | "familyLimit" | "familyCanWin" | "participantInvites" | "ticketMode" | "callMode" | "defaultCountry" | "startsAt" | "tz" | "orgName">>): Err | null {
-    if (!this.entryOpen) return "Settings are locked after the start.";
+    if (this.status !== "open") return "Settings are locked after the start.";
     const keys = Object.keys(patch);
     if (actor === "host" && keys.some((k) => k !== "familyLimit")) return "Only the organizer can change this setting.";
     if (patch.limit !== undefined && patch.limit < this.placesUsed) return `The limit cannot be below the ${this.placesUsed} places already used.`;
@@ -158,7 +162,7 @@ export class EngagementEngine {
 
   setRewards(actor: Actor, lines: RewardLine[]): Err | null {
     if (actor !== "organizer") return "Only the organizer can change rewards.";
-    if (!this.entryOpen) return "Settings are locked after the start.";
+    if (this.status !== "open") return "Settings are locked after the start.";
     if (lines.length === 0) return "Add at least one reward.";
     if (lines.length > CFG.MAX_REWARD_LINES) return `At most ${CFG.MAX_REWARD_LINES} rewards.`;
     const kinds = new Map<string, number[]>();
@@ -177,7 +181,7 @@ export class EngagementEngine {
 
   setBreaks(actor: Actor, breaks: Omit<BrandBreak, "done">[]): Err | null {
     if (actor !== "organizer") return "Only the organizer can change brand breaks.";
-    if (!this.entryOpen) return "Brand breaks cannot be changed after the start.";
+    if (this.status !== "open") return "Brand breaks cannot be changed after the start.";
     if (breaks.length > CFG.MAX_BREAKS) return `At most ${CFG.MAX_BREAKS} brand breaks.`;
     const pos = breaks.map((b) => b.after);
     if (pos.some((a, i) => a < 1 || a > 89 || (i > 0 && a <= pos[i - 1]!))) return "Brand breaks must come at increasing positions between call 1 and 89.";
@@ -392,13 +396,27 @@ export class EngagementEngine {
   }
 
   // ---------- lifecycle ----------
+  /**
+   * Organizer presses Start: settings lock now, but entry stays open for PRE_START_MS so phones that open the link
+   * at the last moment can still download the software. The first number is called when that window ends.
+   */
   start(): Err | null {
     if (this.status !== "open") return "Already started.";
+    this.logMsg("Start pressed. Settings locked; entry stays open until the first number.");
+    if (CFG.PRE_START_MS <= 0) { this.goLive(); return null; }
+    this.status = "starting";
+    this.liveAt = this.now() + CFG.PRE_START_MS;
+    this.emit({ to: "all", type: "starting", liveAt: this.liveAt, inMs: CFG.PRE_START_MS });
+    return null;
+  }
+
+  private goLive(): void {
     this.status = "started";
     this.startedAt = this.now();
-    this.nextAt = this.settings.callMode === "manual" ? null : this.now() + 4_000;
-    this.logMsg("Engagement started. Entry closed.");
-    return null;
+    this.liveAt = null;
+    this.nextAt = this.settings.callMode === "manual" ? null : this.now();
+    this.logMsg("Engagement live. Entry closed.");
+    this.emit({ to: "all", type: "live" });
   }
 
   end(why = "Organizer ended the engagement"): void {
@@ -467,11 +485,17 @@ export class EngagementEngine {
   }
 
   emergency(reason: string): Err | null {
-    if (this.status !== "started" || this.paused) return "Cannot pause now.";
+    if (this.status !== "started") return "Cannot pause now.";
+    if (this.paused?.type === "emergency") return "Already paused.";
+    if (this.paused) { this.pendingEmergency = reason; this.logMsg(`Emergency pause requested: ${reason}. It starts right after the current check.`); return null; }
+    this.applyEmergency(reason);
+    return null;
+  }
+  private applyEmergency(reason: string) {
     this.paused = { type: "emergency", reason };
+    this.pendingEmergency = null;
     this.emit({ to: "all", type: "pause", kind: "emergency", reason });
     this.logMsg(`Emergency pause: ${reason}`);
-    return null;
   }
   resume(): void {
     if (this.paused?.type === "emergency") {
@@ -587,6 +611,7 @@ export class EngagementEngine {
 
   /** Drive the state machine; call from the room alarm. */
   tick(): void {
+    if (this.status === "starting" && this.liveAt !== null && this.now() >= this.liveAt) this.goLive();
     if (this.status !== "started") return;
     const t = this.now();
     const pz = this.paused;
@@ -597,6 +622,7 @@ export class EngagementEngine {
         this.nextAt = this.settings.callMode === "manual" ? null : t + CFG.RESUME_DELAY;
         this.emit({ to: "all", type: "resume" });
         if (this.openRewardLines().length === 0) this.end("All rewards awarded");
+        else if (this.pendingEmergency) this.applyEmergency(this.pendingEmergency);
       }
     } else if (this.settings.callMode !== "manual" && this.nextAt !== null && t >= this.nextAt) this.draw();
   }
@@ -606,7 +632,7 @@ export class EngagementEngine {
     return JSON.stringify({
       settings: this.settings, status: this.status, participants: this.participants, waiting: this.waiting,
       conflicts: this.conflicts, called: this.called, current: this.current, paused: this.paused, nextAt: this.nextAt,
-      lastDrawAt: this.lastDrawAt, startedAt: this.startedAt, endedAt: this.endedAt, winners: [...this.winners.entries()],
+      lastDrawAt: this.lastDrawAt, startedAt: this.startedAt, liveAt: this.liveAt, pendingEmergency: this.pendingEmergency, endedAt: this.endedAt, winners: [...this.winners.entries()],
       notValidLog: this.notValidLog, claims: this.claims, log: this.log, summary: this.summary, remaining: this.remaining,
       cancelledPasses: [...this.cancelledPasses], serial: this.serial, seq: this.seq,
     });
@@ -617,7 +643,7 @@ export class EngagementEngine {
     const e = new EngagementEngine({}, deps);
     e.settings = s.settings; e.status = s.status; e.participants = s.participants; e.waiting = s.waiting;
     e.conflicts = s.conflicts; e.called = s.called; e.current = s.current; e.paused = s.paused; e.nextAt = s.nextAt;
-    e.lastDrawAt = s.lastDrawAt; e.startedAt = s.startedAt; e.endedAt = s.endedAt; e.winners = new Map(s.winners);
+    e.lastDrawAt = s.lastDrawAt; e.startedAt = s.startedAt; e.liveAt = s.liveAt ?? null; e.pendingEmergency = s.pendingEmergency ?? null; e.endedAt = s.endedAt; e.winners = new Map(s.winners);
     e.notValidLog = s.notValidLog; e.claims = s.claims; e.log = s.log; e.summary = s.summary; e.remaining = s.remaining;
     e.cancelledPasses = new Set(s.cancelledPasses); e.serial = s.serial; e.seq = s.seq;
     e.ticketKeys = new Set(e.participants.flatMap((p) => p.tickets.map(ticketKey)));
@@ -648,6 +674,8 @@ export class EngagementEngine {
   publicState() {
     return {
       status: this.status,
+      liveAt: this.liveAt,
+      liveIn: this.liveAt === null ? null : Math.max(0, this.liveAt - this.now()), // relative, so phone clocks do not matter
       callNo: this.called.length,
       current: this.current,
       paused: this.paused ? this.paused.type : null,

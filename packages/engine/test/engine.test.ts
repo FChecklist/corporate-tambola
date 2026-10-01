@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { isValidTicket, ticketNumbers } from "@tambola/shared";
 import { CFG, EngagementEngine, makeRewardLines, type PublicEvent } from "../src";
 
+// Most tests want the engagement live immediately; the 60-second window has its own tests below.
+CFG.PRE_START_MS = 0;
+
 // ---------- helpers ----------
 function seeded(seed: number) {
   let s = seed >>> 0;
@@ -445,5 +448,62 @@ describe("purge", () => {
     expect(h.eng.log.length).toBe(0);
     expect(h.eng.summary?.players).toBe(1);
     expect(h.eng.status).toBe("purged");
+  });
+});
+
+describe("emergency pause during a claim check", () => {
+  test("is accepted and starts right after the check, so a Host is never refused when many phones are claiming", () => {
+    const h = make({ callMode: "manual", rewards: makeRewardLines([{ pattern: "top", texts: ["T"] }, { pattern: "full", texts: ["F"] }]) }); // 2nd reward stays open so the engagement keeps running
+    const p = addP(h.eng, "A");
+    h.eng.start();
+    const top = p.tickets[0]![0]!.filter((v): v is number => v !== null);
+    top.forEach((n) => callNum(h.eng, n));
+    h.eng.claim(p.id, { ticket: "A", pattern: "top", cut: top }); // claim window open
+    expect(h.eng.emergency("Internet issue")).toBeNull(); // accepted, not refused
+    expect(h.eng.paused?.type).toBe("claim");
+    h.advance(CFG.CLAIM_CHECK + 1); h.eng.tick(); // result shows
+    h.advance(CFG.RESULT_SHOW + 1); h.eng.tick(); // window over -> emergency pause begins
+    expect(h.eng.paused?.type).toBe("emergency");
+    h.eng.resume();
+    expect(h.eng.paused).toBeNull();
+  });
+});
+
+describe("60-second window before the first number", () => {
+  test("Start locks settings but entry stays open; the first number comes 60 s later; then entry closes", () => {
+    CFG.PRE_START_MS = 60_000;
+    try {
+      const h = make({ callMode: "ai", limit: 10 });
+      addP(h.eng, "A");
+      expect(h.eng.start()).toBeNull();
+      expect(h.eng.status).toBe("starting");
+      expect(h.eng.updateSettings("organizer", { name: "x" })).toContain("locked"); // settings locked at once
+      expect(h.eng.draw()).toContain("not running"); // no number yet
+      // a late arrival can still get in during the window
+      const e = num();
+      expect(h.eng.askToJoin("devLate", { name: "Late", e164: e })).toBeNull();
+      expect(h.eng.admit(h.eng.waiting.map((w) => w.id))).toBeNull();
+      h.advance(59_000); h.eng.tick();
+      expect(h.eng.status).toBe("starting");
+      expect(h.eng.called.length).toBe(0);
+      h.advance(1_001); h.eng.tick();
+      expect(h.eng.status).toBe("started");
+      h.eng.tick(); // first call fires on the next tick
+      expect(h.eng.called.length).toBe(1);
+      expect(h.eng.askToJoin(null, { name: "TooLate", e164: num() })).toContain("closed");
+      expect(h.events.some((ev) => ev.type === "starting")).toBe(true);
+      expect(h.events.some((ev) => ev.type === "live")).toBe(true);
+    } finally { CFG.PRE_START_MS = 0; }
+  });
+  test("state survives a save/restore during the window", () => {
+    CFG.PRE_START_MS = 60_000;
+    try {
+      const h = make({ callMode: "ai" });
+      addP(h.eng, "A");
+      h.eng.start();
+      const back = EngagementEngine.restore(h.eng.snapshot(), { now: h.clock });
+      expect(back.status).toBe("starting");
+      expect(back.liveAt).toBe(h.eng.liveAt);
+    } finally { CFG.PRE_START_MS = 0; }
   });
 });
