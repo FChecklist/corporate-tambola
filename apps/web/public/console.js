@@ -1153,7 +1153,7 @@
       ${lastCard}
       ${aiCard()}
       <h2 class="dh2">Current engagements</h2>
-      ${active.length ? active.map(activeCard).join("") : `<div class="panel center"><p class="muted small" style="margin:0 0 10px">You have no open engagement. Buy a pack to create a new one, then reuse your past people in it.</p><a class="btn dbtn" href="/#pricing">Buy a pack</a></div>`}
+      ${active.length ? active.map(activeCard).join("") : `<div class="panel center"><p class="muted small" style="margin:0 0 10px">You have no open engagement. Buy a pack to create a new one, then reuse your past people in it.</p><a class="btn dbtn" href="/#pricing">Create Engagement</a></div>`}
       <h2 class="dh2" id="dHistory">History of all past engagements</h2>
       ${past.length ? past.map(pastCard).join("") : `<div class="panel center"><p class="muted small" style="margin:0">No past engagements yet.</p></div>`}
       <h2 class="dh2">My saved list</h2>
@@ -1182,7 +1182,7 @@
     if (!R.target) {
       if (!opens.length) {
         return sheet(`<h2>Buy a pack to create a new engagement first</h2><p class="muted small">The data is added to an engagement that is open for entry. You do not have one yet.</p>
-          <a class="btn gold block dbtn" style="margin-top:12px" href="/#pricing">Buy a pack</a><button class="btn line block dbtn" style="margin-top:8px" data-a="closeSheet">Close</button>`);
+          <a class="btn gold block dbtn" style="margin-top:12px" href="/#pricing">Create Engagement</a><button class="btn line block dbtn" style="margin-top:8px" data-a="closeSheet">Close</button>`);
       }
       if (opens.length === 1) R.target = opens[0].code;
     }
