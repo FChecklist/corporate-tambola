@@ -26,9 +26,25 @@ async function organizer(email = "boss@acme.com") {
 }
 
 describe("build first, pay to publish", () => {
-  test("the sign-in email carries the code and both ways to work", async () => {
-    const { mail } = await organizer();
-    expect(mail).toMatch(/OPTION 1: AI WORK LINK/); expect(mail).toMatch(/OPTION 2: WORK IN THE WEBPAGE/); expect(mail).toMatch(/Payment is asked only when you publish/);
+  test("after the first sign-in the organizer gets the welcome email: Option 1 AI work link (recommended) and Option 2 manual", async () => {
+    await organizer();
+    const mails = raw.prepare("SELECT subject, body FROM outbox WHERE to_addr=? ORDER BY id").all("boss@acme.com") as { subject: string; body: string }[];
+    const w = mails.find((m) => /free AI assistant is ready/.test(m.subject))!;
+    expect(w).toBeTruthy();
+    expect(w.body).toMatch(/OPTION 1 \(RECOMMENDED\)/); expect(w.body).toMatch(/OPTION 2: DO IT YOURSELF/);
+    expect(w.body).toMatch(/ChatGPT, Gemini, Grok, Claude, DeepSeek, Z\.ai/); expect(w.body).toMatch(/The AI never pays/);
+    const key = w.body.match(/cta_[0-9a-f]{48}/)![0];
+    expect((await call("GET", "/api/history", undefined, { "x-organizer": key })).status).toBe(200); // the emailed link really works
+    expect(w.body).toMatch(/\/api\/z\/ai-manifest/);
+  });
+  test("a second sign-in does not email another AI link", async () => {
+    await organizer();
+    await call("POST", "/api/auth/email", { email: "boss@acme.com" });
+    const mail = raw.prepare("SELECT body FROM outbox WHERE to_addr=? ORDER BY id DESC LIMIT 1").get("boss@acme.com") as { body: string };
+    const code = mail.body.match(/\b\d{6}\b/)![0];
+    await call("POST", "/api/auth/verify", { email: "boss@acme.com", code });
+    const n = (raw.prepare("SELECT COUNT(*) AS c FROM outbox WHERE to_addr=? AND subject LIKE '%AI assistant is ready%'").get("boss@acme.com") as any).c;
+    expect(n).toBe(1);
   });
   test("signup alone gives no key", async () => {
     const r = await (await call("POST", "/api/signup", { email: "x@acme.com" })).json() as any;
@@ -66,13 +82,15 @@ describe("build first, pay to publish", () => {
     expect((await call("POST", "/api/z/DRAFT-4/join", { phone: "9876543210" })).status).toBe(200);
     expect((raw.prepare("SELECT eid FROM entitlement WHERE id='ent_t'").get() as any).eid).toBe("DRAFT-4");
   });
-  test("the AI key cannot publish", async () => {
+  test("the AI key cannot publish or pay, but hands the organizer the link", async () => {
     const { h } = await organizer();
     await call("POST", "/api/z", eng("DRAFT-5"), h);
     const k = await (await call("POST", "/api/org/ai", {}, h)).json() as any;
     const key = k.aiKey;
     expect(key).toMatch(/^cta_/);
-    expect([401, 403]).toContain((await call("POST", "/api/z/DRAFT-5/publish", {}, { "x-organizer": key })).status);
+    const r = await (await call("POST", "/api/z/DRAFT-5/publish", {}, { "x-organizer": key })).json() as any;
+    expect(r.published).toBe(false); expect(r.needsOrganizer).toBe(true); expect(r.payUrl).toBe("https://tambola.test/zc.html?e=DRAFT-5");
+    expect(raw.prepare("SELECT pack FROM engagement WHERE id='DRAFT-5'").get()).toEqual({ pack: 0 }); // still a draft
   });
   test("optional free-publish switch lets small engagements go out without payment", async () => {
     env.FREE_LAUNCH = "1";

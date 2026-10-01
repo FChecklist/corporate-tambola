@@ -94,6 +94,38 @@ const BUSY = () => json({ error: "Busy day. Please try again after midnight UTC.
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-organizer, x-partner, authorization", "access-control-allow-methods": "GET, POST, PUT, PATCH, OPTIONS", "access-control-max-age": "86400" };
 /** Phones load the app from Pages and call this Worker from another origin, so every answer carries open CORS (no cookies are used anywhere). */
+/** The message an organizer pastes into any AI chat. The key in it is the scoped AI key: it cannot publish, pay, erase or settle. */
+export const aiMessage = (origin: string, key: string) =>
+  `You are my Corporate Tambola assistant. Read the instructions at ${origin}/api/z/ai-manifest, then do what I ask using that API. Send this key in the x-organizer header on every call: ${key}. Keep the key private. Set up everything for me: create the engagement, set the rewards and brand breaks, load my participant list, schedule it. Ask me for anything you need, such as how many participants, the date and time, and which rewards I want. Tell me before you do anything that cannot be undone. When it is ready to publish, give me the link the API returns: I will open it and pay myself. Never try to pay. Help me with every step before that.`;
+export const welcomeMail = (origin: string, key: string) => `Welcome to Corporate Tambola.
+
+You can set up your engagement in two ways. Most organizers choose Option 1, and so should you.
+
+OPTION 1 (RECOMMENDED): LET YOUR FREE AI ASSISTANT DO ALL THE WORK
+You get a personal AI assistant, free with every engagement. It does the work for you: it creates the engagement, sets the rewards and brand breaks, loads your participant list, schedules it and keeps watch while it runs.
+
+How to start, in 10 seconds:
+ 1. Copy the AI work link below (everything between the two lines).
+ 2. Paste it into any AI chat: ChatGPT, Gemini, Grok, Claude, DeepSeek, Z.ai or any other.
+ 3. Tell it what you want, for example: "Create an engagement for 300 employees this Friday at 4 pm, with a lucky draw."
+
+When it is time to publish, the AI gives you a link. You open it, make the payment yourself and your engagement goes live. The AI never pays and never touches your money. It helps you with every step up to that last one, and it can explain the payment step too.
+
+----- COPY FROM THIS LINE -----
+${aiMessage(origin, key)}
+----- TO THIS LINE -----
+
+OPTION 2: DO IT YOURSELF
+Prefer to click through it yourself? Sign in and open your console, then create the engagement by hand:
+${origin}/#login
+
+Both options work together, and you can switch at any time. Building an engagement is free. Payment is asked only when you publish it.
+
+Keep your AI work link private. Whoever holds it can work on your engagements, but it can never publish, pay, erase data or change who wins.
+
+Corporate Tambola
+`;
+
 /** Runs the daily clean-up (365-day purge, one more try for unsent mail) the first time an organizer-side request arrives each UTC day. Never slows or fails the request. */
 export async function housekeeping(env: Env, now: number): Promise<void> {
   try {
@@ -136,7 +168,8 @@ export const AI_MANIFEST = {
   how: "Send your organizer AI key in the x-organizer header (or Authorization: Bearer). Every call is JSON. The numbers are drawn from public randomness on participants' phones; you cannot change them.",
   you_can: [
     { do: "List engagements and head-counts", call: "GET /api/history" },
-    { do: "Create an engagement (uses one purchased engagement)", call: "POST /api/z {id, startRound, callSeconds (6|9|12|15), cap, closed?}" },
+    { do: "Create an engagement. It is saved as a free draft that participants cannot see yet; nothing is paid at this step", call: "POST /api/z {id, startRound, callSeconds (6|9|12|15), cap, closed?}  -> {ok, draft, openUrl}" },
+    { do: "When everything is set up, ask to publish. Publishing needs payment, which only the organizer can make, so this returns a payUrl: give that link to the organizer and tell them to open it, pay and publish. You can help them with every step before that, and answer questions about the payment step, but never try to pay yourself", call: "POST /api/z/{id}/publish -> {published:false, needsOrganizer:true, payUrl}" },
     { do: "Change start time, speed, cap, invite-only, tickets per participant (1 or 2), reward lines and brand breaks (up to 3) and rounds (1 to 5 games, each with new numbers and new tickets) before the first number", call: "PATCH /api/z/{id}/settings {startRound?, callSeconds?, cap?, closed?, tickets?, rounds?, rewards?: [{pattern: early5|top|mid|bot|corners|star|full, scope?: ticket|two_ticket, ordinal?: 1-5, text}], breaks?: [{after: 1-89 numbers called, seconds: 15-600 in steps of 3, kind: file|youtube|slides|speech, title, mediaUrl?: https link}]}" },
     { do: "Load participants (invite list)", call: "POST /api/z/{id}/roster {people:[{phone,name}]} up to 100 per call" },
     { do: "Reuse an earlier engagement's people", call: "POST /api/z/{id}/reuse {from}" },
@@ -187,13 +220,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
       await env.DB.prepare("INSERT INTO login_code(email_hash,code_hash,expires_ms,attempts,win_start,sent) VALUES(?,?,?,0,?,1) ON CONFLICT(email_hash) DO UPDATE SET code_hash=excluded.code_hash, expires_ms=excluded.expires_ms, attempts=0, win_start=?, sent=?").bind(eh, await sha("code|" + eh + "|" + code), now + 600_000, fresh ? now : row!.win_start, fresh ? now : row!.win_start, fresh ? 1 : row!.sent + 1).run();
       await sendMail(env as PayEnv, env.DB, email, "Your Corporate Tambola sign-in code", `Your sign-in code is ${code}. It works for 10 minutes. If you did not ask for it, ignore this message.
 
-After you sign in, you can work in two ways:
-
-OPTION 1: AI WORK LINK. Create it in your console and paste it into any AI chat (ChatGPT, Claude, Gemini). Your AI assistant sets up the engagement for you, free.
-
-OPTION 2: WORK IN THE WEBPAGE. Open ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html and set it up yourself.
-
-You create the engagement first. Payment is asked only when you publish it.`, now);
+Once you are signed in we send you one more email with your free AI assistant, ready to copy and paste.`, now);
       if (test) devCode = code;
     }
     return json({ ok: true, ...(devCode ? { devCode } : {}) });
@@ -215,6 +242,14 @@ You create the engagement first. Payment is asked only when you publish it.`, no
       env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + token), acct.org, "master", now),
       env.DB.prepare("DELETE FROM login_code WHERE email_hash=?").bind(eh),
     ]);
+    // the first time (or after the AI link was stopped) the verified address gets the welcome email with the free AI work link
+    const hasAi = await env.DB.prepare("SELECT 1 AS x FROM organizer_key WHERE org=? AND kind='ai' AND revoked=0").bind(acct.org).first();
+    if (!hasAi && (await spend(env, now, 3))) {
+      const aiKey = "cta_" + randHex(24);
+      await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + aiKey), acct.org, "ai", now).run();
+      const origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
+      await sendMail(env as PayEnv, env.DB, email, "Your free AI assistant is ready: copy, paste, done", welcomeMail(origin, aiKey), now);
+    }
     return json({ ok: true, token });
   }
 
@@ -379,7 +414,7 @@ You create the engagement first. Payment is asked only when you publish it.`, no
     if (!(await spend(env, now, 2))) return BUSY();
     await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.closed ? 1 : 0, draft ? 0 : ent?.pack ?? b.cap, vc.cfg.tickets, cfgJson(vc.cfg)).run();
     if (ent) await env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(b.id, ent.id).run();
-    return json({ ok: true, draft });
+    return json({ ok: true, draft, openUrl: `${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html?e=${b.id}` });
   }
   if (req.method === "GET" && p === "/api/history") {
     if (!a.plat && !a.org) return deny(a);
@@ -449,6 +484,8 @@ You create the engagement first. Payment is asked only when you publish it.`, no
 
   // everything below is for the organizer (or their AI, where allowed)
   if (action === "publish" && req.method === "POST") { // payment is asked here, never to build; only the organizer themself (not their AI) publishes
+    const payUrl = `${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html?e=${eid}`;
+    if (a.kind === "ai" && can(a, e)) return json({ ok: true, published: e.pack !== 0, needsOrganizer: e.pack === 0, payUrl, message: e.pack === 0 ? "Everything is ready. Please give this link to the organizer: they open it, press Publish and pay, and make the payment themselves. The AI never pays." : "Already published." });
     if (!can(a, e, true)) return deny(a);
     if (e.pack !== 0) return json({ ok: true, published: true, already: true });
     const need = PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null;

@@ -237,7 +237,7 @@
     };
     document.querySelectorAll("[data-retire]").forEach((b) => (b.onclick = async () => { if (!confirm("Retire this key? It will stop working at once.")) return; try { await call("POST", "/api/org/keys/revoke", { id: b.dataset.retire }); S.note = "Key retired."; } catch (e) { S.note = e.message; } refreshHome(); }));
     if ($("aimake")) $("aimake").onclick = async () => {
-      try { const r = await call("POST", "/api/org/ai", {}); const origin = BASE || location.origin; S.aiMsg = "You are my Corporate Tambola assistant. Read the instructions at " + origin + "/api/z/ai-manifest, then do what I ask using that API. Send this key in the x-organizer header on every call: " + r.aiKey + ". Keep the key private. Tell me before you do anything that cannot be undone."; } catch (e) { S.note = e.message; }
+      try { const r = await call("POST", "/api/org/ai", {}); const origin = BASE || location.origin; S.aiMsg = "You are my Corporate Tambola assistant. Read the instructions at " + origin + "/api/z/ai-manifest, then do what I ask using that API. Send this key in the x-organizer header on every call: " + r.aiKey + ". Keep the key private. Set up everything for me: create the engagement, set the rewards and brand breaks, load my participant list, schedule it. Ask me for anything you need, such as how many participants, the date and time, and which rewards I want. Tell me before you do anything that cannot be undone. When it is ready to publish, give me the link the API returns: I will open it and pay myself. Never try to pay. Help me with every step before that."; } catch (e) { S.note = e.message; }
       draw(homeView());
     };
     if ($("aicopy")) $("aicopy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(S.aiMsg);
