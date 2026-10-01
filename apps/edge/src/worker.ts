@@ -17,7 +17,19 @@ import { SAFETY_FAST, SAFETY_STANDARD, publishControl, readPublished, registerKe
 export interface D1Result<T = any> { results?: T[]; meta?: { changes?: number } }
 export interface D1Stmt { bind(...v: unknown[]): D1Stmt; run(): Promise<D1Result>; all<T = any>(): Promise<D1Result<T>>; first<T = any>(): Promise<T | null> }
 export interface D1 { prepare(sql: string): D1Stmt; batch(s: D1Stmt[]): Promise<D1Result[]> }
-export interface Env { DB: D1; ORGANIZER_SECRET?: string; DAILY_WRITE_BUDGET?: string; PHONE_SALT?: string }
+export interface R2Like { put(key: string, value: string, opts?: unknown): Promise<unknown>; delete(key: string): Promise<unknown> }
+export interface Env {
+  DB: D1; ORGANIZER_SECRET?: string; DAILY_WRITE_BUDGET?: string; PHONE_SALT?: string;
+  /** Optional: a public R2 bucket behind a cached custom domain. Phones then read the pause file from the CDN and never invoke the Worker for it. */
+  CONTROL_R2?: R2Like; CONTROL_BASE?: string;
+}
+const controlKey = (id: string) => `c/${id}.json`;
+const controlUrl = (env: Env, id: string) => (env.CONTROL_BASE && env.CONTROL_R2 ? `${env.CONTROL_BASE.replace(/\/$/, "")}/${controlKey(id)}` : null);
+/** Keeps the static copy in step with the stored file. Best effort: the Worker's own /control answer stays correct if this fails. */
+async function mirrorControl(env: Env, id: string) {
+  if (!env.CONTROL_R2) return;
+  try { const f = await readPublished(d1kv(env), id); if (f) await env.CONTROL_R2.put(controlKey(id), JSON.stringify(f), { httpMetadata: { contentType: "application/json", cacheControl: "public, max-age=3" } }); } catch { /* the Worker route still serves it */ }
+}
 export const RETENTION_DAYS = 365;
 /** Claims are only a live cross-check (settlement never uses them), and 7 rows per phone would eat the free write allowance, so they are stored only for engagements this size or smaller. */
 export const CLAIM_TRACKING_MAX_CAP = 500;
@@ -76,10 +88,10 @@ export async function handle(req: Request, env: Env, now = Date.now()): Promise<
   return new Response(r.body, { status: r.status, headers: h });
 }
 
-const d1kv = (env: Env): KV => ({
+function d1kv(env: Env): KV { return {
   get: async (k) => (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? null,
   put: async (k, v) => { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, v).run(); },
-});
+}; }
 
 interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | null }
 async function authOf(req: Request, env: Env): Promise<Auth> {
@@ -207,6 +219,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
       if (!b) return json({ error: "Bad message." }, 400);
       if (!(await spend(env, now))) return BUSY();
       const r = await publishControl(kv, cid!, b.message);
+      if (r.ok && !(r as any).duplicate) await mirrorControl(env, cid!);
       return r.ok ? json(r) : json({ error: r.error }, r.status);
     }
     const ce = await env.DB.prepare("SELECT id, org FROM engagement WHERE id=?").bind(cid).first<{ id: string; org: string | null }>();
@@ -217,6 +230,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
       if (!b || typeof b.publicKey !== "string") return json({ error: "Bad key." }, 400);
       if (!(await spend(env, now))) return BUSY();
       const r = await registerKey(kv, cid!, b.publicKey, b.profile === "fast" ? SAFETY_FAST : SAFETY_STANDARD);
+      if (r.ok) await mirrorControl(env, cid!);
       return r.ok ? json({ ok: true }) : json({ error: r.error }, 409);
     }
     if (sub === "/request" && req.method === "POST") { // the AI (or organizer) asks; the organizer's browser approves by signing
@@ -365,7 +379,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const r = await env.DB.prepare("SELECT pattern,idx,pids FROM settled WHERE eid=?").bind(eid).all<any>();
     return json({ results: (r.results ?? []).map((x: any) => ({ pattern: x.pattern, idx: x.idx, count: JSON.parse(x.pids).length })) }); // public: counts only, no ids
   }
-  if (action === "info" && req.method === "GET") return json({ startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e) });
+  if (action === "info" && req.method === "GET") return json({ startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id) });
 
   // everything below is for the organizer (or their AI, where allowed)
   if (action === "claims" && req.method === "GET") {
@@ -460,6 +474,7 @@ export async function purgeOld(env: Env, now: number): Promise<number> {
       env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
       env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
     ]);
+    try { await env.CONTROL_R2?.delete(controlKey(id)); } catch { /* the object expires with its engagement anyway */ }
     n++;
   }
   return n;

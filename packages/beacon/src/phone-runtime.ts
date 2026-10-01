@@ -12,6 +12,8 @@ export interface PhoneDeps {
   /** A monotonic millisecond clock (performance.now in a browser). Never the wall clock. */
   mono(): number;
   store: { get(k: string): string | null; set(k: string, v: string): void };
+  /** Optional: reads a public (CDN-cached) JSON file by absolute URL; used for the pause file when the engagement publishes one, so the Worker is not hit every few seconds. */
+  getPublic?(url: string): Promise<any>;
   /** Test hook only. */
   verify?: (x: { round: number; signature: string; randomness: string }) => boolean;
 }
@@ -32,6 +34,7 @@ export class PhoneRuntime {
   startRound = 0;
   callSeconds = 0;
   trackClaims = true;
+  controlUrl: string | null = null;
   store: RoundStore;
   tracker: ControlTracker | null = null;
   results: RuntimeView["results"] = [];
@@ -68,7 +71,7 @@ export class PhoneRuntime {
   async boot(): Promise<void> {
     try {
       const info = await this.deps.api("GET", `/api/z/${this.eid}/info`);
-      this.startRound = info.startRound; this.callSeconds = info.callSeconds; this.trackClaims = info.trackClaims !== false;
+      this.startRound = info.startRound; this.callSeconds = info.callSeconds; this.trackClaims = info.trackClaims !== false; this.controlUrl = typeof info.controlUrl === "string" ? info.controlUrl : null;
     } catch (e: any) {
       this.phase = e?.status === 404 ? "missing" : "boot";
       this.error = e?.status === 404 ? "This engagement link is not valid." : "Could not reach the engagement. Check your connection.";
@@ -104,7 +107,7 @@ export class PhoneRuntime {
     if (m - this.lastControlPoll < every + (Math.floor(m) % 3000)) return; // 9 s plus a little jitter so phones do not all poll together
     this.lastControlPoll = m;
     let body: any = null;
-    try { body = await this.deps.api("GET", `/api/z/${this.eid}/control`); } catch (e: any) {
+    try { body = this.controlUrl && this.deps.getPublic ? await this.deps.getPublic(this.controlUrl) : await this.deps.api("GET", `/api/z/${this.eid}/control`); } catch (e: any) {
       if (e?.status === 404) { this.tracker = null; this.controlState = "none"; return; } // no key registered: this engagement cannot be paused
       this.tracker?.failed(now); return;
     }

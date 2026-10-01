@@ -202,7 +202,7 @@ describe("roster, history, erase and 365-day retention", () => {
       expect((await call(m, p, m === "POST" ? {} : undefined)).status).toBe(403);
   });
   test("info is public and holds only what a phone needs", async () => {
-    expect(await (await call("GET", "/api/z/ENG1/info")).json()).toEqual({ startRound: 1000, callSeconds: 6, trackClaims: true });
+    expect(await (await call("GET", "/api/z/ENG1/info")).json()).toEqual({ startRound: 1000, callSeconds: 6, trackClaims: true, controlUrl: null });
   });
   test("the organizer sees ids and names, never phone numbers or hashes", async () => {
     await join(1);
@@ -487,5 +487,60 @@ describe("the shared suggestion board for every organizer's AI", () => {
     expect(JSON.stringify(mf)).toMatch(/suggest/i);
     expect(mf.suggestions_rules).toMatch(/Never include names, phone numbers/);
     expect(JSON.stringify(mf.you_cannot)).toMatch(/code/i);
+  });
+});
+
+describe("pause file served from a cached static copy", () => {
+  const plat = { "x-organizer": SECRET };
+  let store: Map<string, any>;
+  beforeEach(async () => {
+    store = new Map();
+    env.CONTROL_R2 = { put: async (k: string, v: string, o: unknown) => void store.set(k, { v, o }), delete: async (k: string) => void store.delete(k) };
+    env.CONTROL_BASE = "https://c.example.test/";
+    await create();
+  });
+  test("info tells phones where the static file is only when a static store is configured", async () => {
+    expect(((await (await call("GET", "/api/z/ENG1/info")).json()) as any).controlUrl).toBe("https://c.example.test/c/ENG1.json");
+    env.CONTROL_R2 = undefined;
+    expect(((await (await call("GET", "/api/z/ENG1/info")).json()) as any).controlUrl).toBeNull();
+  });
+  test("registering the key and every signed message refreshes the static copy, which equals what the Worker serves", async () => {
+    const { publicKeyFromSecret, signControlWithSecret, nextMessage, readPublished } = await import("../../../packages/beacon/src/control");
+    const KEY = "55".repeat(32);
+    expect((await call("PUT", "/api/z/ENG1/control/key", { publicKey: publicKeyFromSecret(KEY) }, plat)).status).toBe(200);
+    expect(store.get("c/ENG1.json")).toBeTruthy();
+    const kv = { get: async (k: string) => (raw.query("SELECT v FROM kv WHERE k=?").get(k) as any)?.v ?? null, put: async () => {} };
+    const f = (await readPublished(kv, "ENG1"))!;
+    const nowRound = Math.floor((T / 1000 - 1692803367) / 3) + 1;
+    const m = signControlWithSecret(KEY, nextMessage(f, nowRound, { action: "pause", pauseForRounds: 20 }));
+    expect((await call("POST", "/api/z/ENG1/control", { message: m })).status).toBe(200);
+    const served = await (await call("GET", "/api/z/ENG1/control")).text();
+    expect(JSON.parse(store.get("c/ENG1.json").v)).toEqual(JSON.parse(served));
+    expect(JSON.parse(served).messages).toHaveLength(1);
+    expect(store.get("c/ENG1.json").o.httpMetadata.cacheControl).toBe("public, max-age=3");
+  });
+  test("a refused message leaves the static copy untouched", async () => {
+    const { publicKeyFromSecret, signControlWithSecret, nextMessage, readPublished } = await import("../../../packages/beacon/src/control");
+    await call("PUT", "/api/z/ENG1/control/key", { publicKey: publicKeyFromSecret("55".repeat(32)) }, plat);
+    const before = store.get("c/ENG1.json").v;
+    const kv = { get: async (k: string) => (raw.query("SELECT v FROM kv WHERE k=?").get(k) as any)?.v ?? null, put: async () => {} };
+    const f = (await readPublished(kv, "ENG1"))!;
+    const bad = signControlWithSecret("66".repeat(32), nextMessage(f, 100, { action: "pause", pauseForRounds: 10 }));
+    expect((await call("POST", "/api/z/ENG1/control", { message: bad })).status).toBe(403);
+    expect(store.get("c/ENG1.json").v).toBe(before);
+  });
+  test("if the static store fails, signing and serving still work from the Worker", async () => {
+    const { publicKeyFromSecret } = await import("../../../packages/beacon/src/control");
+    env.CONTROL_R2 = { put: async () => { throw new Error("r2 down"); }, delete: async () => {} };
+    expect((await call("PUT", "/api/z/ENG1/control/key", { publicKey: publicKeyFromSecret("55".repeat(32)) }, plat)).status).toBe(200);
+    expect((await call("GET", "/api/z/ENG1/control")).status).toBe(200);
+  });
+  test("purging an old engagement removes its static copy too", async () => {
+    const { publicKeyFromSecret } = await import("../../../packages/beacon/src/control");
+    await call("POST", "/api/z", { id: "OLD99", startRound: 5, callSeconds: 6, cap: 5 }, plat, T - 400 * 86_400_000);
+    await call("PUT", "/api/z/OLD99/control/key", { publicKey: publicKeyFromSecret("77".repeat(32)) }, plat);
+    expect(store.has("c/OLD99.json")).toBe(true);
+    await call("POST", "/api/purge", {}, plat);
+    expect(store.has("c/OLD99.json")).toBe(false);
   });
 });

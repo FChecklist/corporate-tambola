@@ -318,3 +318,19 @@ describe("a late joiner who cannot hear about a pause", () => {
     expect(checkClaims(EID, claims, ref).bad).toEqual([]);
   });
 });
+
+describe("pause file read from a cached public copy", () => {
+  test("when the engagement publishes a static file, the phone reads the pause file from it and does not ask the Worker", async () => {
+    await registerKey();
+    const a = mkPhone(180);
+    let viaApi = 0, viaPublic = 0;
+    const realApi = a.rt.deps.api;
+    (a.rt.deps as any).api = async (m: string, p: string, x?: unknown) => { if (p.endsWith("/control")) viaApi++; if (p.endsWith("/info")) { const j = await realApi(m, p, x); return { ...j, controlUrl: "https://static.test/c/x.json" }; } return realApi(m, p, x); };
+    (a.rt.deps as any).getPublic = async (url: string) => { viaPublic++; expect(url).toBe("https://static.test/c/x.json"); return realApi("GET", `/api/z/${EID}/control`); };
+    await a.rt.boot(); await a.rt.join(a.phone);
+    for (let i = 0; i < 30; i++) await step([a]);
+    expect(viaPublic).toBeGreaterThan(0);
+    expect(viaApi).toBe(0);
+    expect(a.rt.view().mode).toBe("live");
+  });
+});

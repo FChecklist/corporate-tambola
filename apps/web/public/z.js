@@ -16,7 +16,8 @@
     return j;
   };
   const NAMES = { early5: "Early Five", top: "Top line", mid: "Middle line", bot: "Bottom line", corners: "Four corners", star: "Star", full: "Full house" };
-  const rt = new ZG.PhoneRuntime(EID, { api, beacon: {}, mono: () => performance.now(), store });
+  const getPublic = async (url) => { let r; try { r = await fetch(url, { cache: "no-store" }); } catch { throw new Error("offline"); } if (!r.ok) throw Object.assign(new Error("http " + r.status), { status: r.status }); return r.json(); };
+  const rt = new ZG.PhoneRuntime(EID, { api, getPublic, beacon: {}, mono: () => performance.now(), store });
   let lastLen = 0, firstPaint = true, sound = store.get("ctz-sound") !== "off", timer = null;
   if (window.TBAudio) TBAudio.enabled = sound;
   const fmt = (s) => (s >= 90 ? Math.round(s / 60) + " min" : s + "s");
