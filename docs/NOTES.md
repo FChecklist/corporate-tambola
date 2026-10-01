@@ -83,3 +83,35 @@ Plus the new ones above: #1 (cut enforcement), #2 (late-claim tie-break), paymen
 ## 8. What "done" means (handout §16, summary)
 
 All number-format tests pass client+server; 2,000-row Excel check < 3 s in browser; no mobile number in any URL; same number never added twice (incl. parallel requests); player limit/Team-Lead cap/family limit/invite depth enforced server-side; host restrictions server-side; second-phone flow; after Start everything says "Entry is closed"; claim/share/bogey/block/for-fun/brand-break/emergency behave per §5; 10,000 phones receive each number < 1 s; 24 h after end no personal data remains; works at 360 px and keyboard-only; no browser dialogs; first-3-months Cloudflare bill US$0–5.
+
+## 9. Change request CR-01 (2026-10-01, from owner): ticket mode and multiple houses
+
+Owner's words, condensed: when creating a game, ADMIN / HR / HOST can create a **1-ticket and/or 2-ticket game**. In a 2-ticket game a player holds two separate tickets, and there are **Full Two-Ticket Houses** as well. There can be more than one house: **2nd, 3rd, 4th, 5th Full House "as per them"**, and the same for the Full Two-Ticket House. "There can be more options."
+
+This **supersedes** handout §3/§5/§9 where they differ (handout: 1 ticket per number; prizes up to 8 with a single "Second Full House"; prize keys `full`, `full2`).
+
+### 9.1 What I understood (please confirm)
+1. **Ticket mode** is a game setting chosen at creation, locked at Start: **1 ticket**, **2 tickets**, or **both** (my reading of "and/or": the organizer can offer both kinds in one game, either as a per-player choice or per-group assignment, see question Q1).
+2. In a 2-ticket game each player gets **two independent 3×9 tickets** (A and B), each cut separately. All single-ticket patterns can be claimed **per ticket**.
+3. **Full Two-Ticket House** = all 30 numbers across both tickets (A and B) cut and called.
+4. **Houses are numbered.** The organizer chooses how many Full Houses (1st … 5th, maybe more) and how many Full Two-Ticket Houses (1st … 5th), each with its own prize text. The Nth house can only be won after the (N−1)th has been awarded (generalises the existing "Second Full House" rule).
+5. **"More options"** is open-ended; I propose a generic prize model so new options need no engine change (see 9.3).
+
+### 9.2 Questions I need answered (they change the design)
+- **Q1. "1 ticket and/or 2 ticket":** (a) one game is either 1-ticket or 2-ticket; or (b) one game mixes both: every player gets 1 or 2 tickets (who decides: organizer per person on the list, or player at join?). Default I will build unless told otherwise: **(a) per game, plus (b) as a later option**.
+- **Q2. Pricing:** is 1 engagement = 1 *number* or 1 *ticket*? Today it is one ticket per number. In a 2-ticket game, does a player use 1 engagement (two tickets) or 2? This directly changes the price list (₹500 per 100 is per ticket-holder). **Owner/commercial decision.**
+- **Q3. Who may set this:** you wrote ADMIN / HR / HOST. Rules v1.4 say only the **Organizer** (HR/event lead) can change settings; a Host can't, and "admin" must never appear on screen (rule 13). Default: **Organizer only** sets ticket mode and houses; Host can't (as today). Say if Host should also be allowed (before Start only).
+- **Q4. Does a Full House on ticket A and a Full House on ticket B both count, and can the same player win both?** Default: each ticket can win a house independently; a player may win several different prizes, but not the same numbered house twice.
+- **Q5. Limits:** how many houses at most (my default: 1st–5th for each house type, configurable up to 10), and raise the "up to 8 prizes" cap accordingly (default cap 30 prize lines).
+- **Q6. Tie in the same window between a Full House and a Full Two-Ticket House:** default: both are separate prizes and both are awarded if valid.
+
+### 9.3 Proposed generic prize model
+Replace fixed keys with prize lines: `{ id, pattern, scope, ordinal, text, share_rule }`
+- `pattern`: early5, top, mid, bot, corners, star, full (extensible: e.g. "first 7", "two lines", "jaldi", "pyramid" if the owner wants them).
+- `scope`: `ticket` (per ticket) or `two_ticket` (A+B combined, only when mode allows 2 tickets).
+- `ordinal`: 1 = first, 2 = second … N. Rule: ordinal k is claimable only after ordinal k−1 of the same pattern+scope has been awarded.
+- Claim carries `{ticket: A|B|AB, pattern, ordinal}`; server resolves the open ordinal itself so a player can't skip ahead.
+- Validity stays as in §4: complete **and** completed by the **last called number**.
+
+### 9.4 Knock-on effects (all captured in IMPLEMENTATION.md §10)
+Data model (tickets become rows, not one JSON), ticket UI (A/B switch or stacked, 360 px), claim button per ticket plus a "Two-ticket" claim, report columns (ticket A/B, house number), bogey rules (a wrong claim on either ticket counts as one bogey), commentary/results text ("2nd Full House"), prize setup UI (house counters/steppers, not typing), pricing, and tests.

@@ -129,3 +129,33 @@ Needed by phase 9: payment gateway (Razorpay vs Stripe, and who is the merchant 
 1. You review `NOTES.md` §6 and tell me which judgement calls to accept.
 2. I scaffold the monorepo (phase 0) and port `phone`, `ticket`, `patterns`, `pricing`, `commentary` into `shared` with the mandated tests.
 3. Then `engine` with property tests, before touching Cloudflare tooling.
+
+## 10. CR-01 — ticket mode and multiple houses (added 2026-10-01)
+
+Read `NOTES.md` §9 for the owner request and open questions Q1–Q6. Defaults used below until answered: ticket mode per game (1 or 2), Organizer-only setting, houses 1st–5th (configurable), prize cap 30 lines.
+
+**Settings:** `ticket_mode` ∈ {`single`,`double`} (later `mixed`), locked at Start. Setup UI: chips for ticket mode; for each house type a stepper "How many Full Houses (1–5+)" and "How many Full Two-Ticket Houses (0–5+)"; one prize-text box per line. No typing except prize text.
+
+**Data model changes (room SQLite):**
+- `tickets(id, participant_id, idx 0|1, grid_json, serial)` replaces `participants.ticket_json`; `UNIQUE(participant_id, idx)`; ticket uniqueness check across the game.
+- `prizes(id, pattern, scope 'ticket'|'two_ticket', ordinal, prize_text, share_rule)`; replaces keyed prizes `k`.
+- `claims(…, ticket 'A'|'B'|'AB', pattern, ordinal)`; `winners(…, ticket, pattern, ordinal)`.
+- `settings.ticket_mode`.
+- Cuts are per ticket on the phone; a claim sends only the relevant ticket's cut list (or both for `AB`).
+
+**Engine changes:**
+- `genTicket` called once or twice per participant at join (also guarantee A ≠ B and no duplicate grid in the game).
+- `completionIdx(ticket, pattern)` unchanged per ticket; new `completionIdxTwo(A,B)` = max index over all 30 numbers, valid only if all called and cut.
+- Ordinal gating: ordinal k opens only after k−1 is awarded (generalises `full2`). Server picks the open ordinal for a claim.
+- Same-window sharing applies per prize line. A player may win different prize lines but never the same line twice.
+- Bogeys: wrong claim on any ticket = 1 bogey on the player; 2 = blocked (unchanged).
+- Game ends when all prize lines are awarded, 90 called, or Organizer ends.
+- Brand-break/claim-window logic unchanged.
+
+**UI changes:** ticket screen shows A and B (tab or stacked card) with per-ticket cut state and a combined "Two-ticket" claim row; prize list shows "1st Full House … 5th Full House" and "1st Full Two-Ticket House …" with winners; result banner names ticket and house number; report adds columns Ticket (A/B/AB) and House no.
+
+**Pricing:** blocked on Q2. Engine stores tickets-per-participant; billing counts engagements via a single function `engagementsFor(participant)` so either answer is a one-line change.
+
+**Tests to add:** 2-ticket generation validity (both valid, A≠B); Full Two-Ticket House valid only with all 30 numbers; ordinal gating (3rd cannot be awarded before 2nd); same-window sharing per line; one player winning ticket A full house and ticket B full house; Full House and Two-Ticket House in the same window; bogey counting across tickets; prize-cap enforcement; mode locked after Start; single-ticket games unaffected (regression); report columns.
+
+**Phase impact:** adds work in phases 1 (shared/engine), 3 (setup UI), 4 (ticket UI), 5 (claims). Estimate +1 week. The prototype does not implement any of this, so its screens must be extended first (a clickable update to `corporate-tambola-complete.html` or direct build, your call).
