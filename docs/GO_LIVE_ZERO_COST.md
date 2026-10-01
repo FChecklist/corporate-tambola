@@ -69,3 +69,13 @@ Two modes exist side by side. **Phone-run mode** (new, no server per engagement)
 | Cost per engagement | about zero (free plans) | a server process |
 
 The phone-run mode is the one to sell at scale. Anything in the "no" rows is either optional or needs a design decision before building it for phone-run mode (scratch cards and boosters need their own fairness rules; roles and passes need a roster model the phone-run store does not have yet).
+
+## 8. Launch on pages.dev, free, no domain (prepared 2026-10-01)
+Everything is built and tested locally in Cloudflare's own runtime (`wrangler pages dev` with a local D1: the real-beacon run with a signed pause passed 6/6). One step is needed from the owner: a Cloudflare API token with **Account > D1 > Edit** (the existing token can edit Pages but not D1). Then:
+```
+setx CLOUDFLARE_D1_TOKEN "<the new token>"      # PowerShell, once; open a new terminal afterwards
+python pages/launch.py                          # creates the D1 database and loads the schema, creates the Pages project,
+                                                # sets secrets (platform key generated and kept in config/platform-key.txt, git-ignored),
+                                                # deploys, and smoke-tests https://corporate-tambola.pages.dev
+```
+After launch: payments stay OFF (no Razorpay keys, TEST_MODE off). The organizer page `/zc.html` works with the platform key to create engagements. No cron exists on Pages, so the 365-day purge and the unsent-mail retry run by themselves the first time an organizer-side request arrives each UTC day (`housekeeping` in the Worker). Large participant lists are fetched in pages of 2,000 so no request exceeds the free ~10 ms CPU. R2 is not used (it needs a card on file); the pause file is served by the Function, which is fine up to a few thousand phones; beyond that, add R2 later.
