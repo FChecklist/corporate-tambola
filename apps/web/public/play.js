@@ -44,7 +44,7 @@
   }
   function fatal(msg) { show(`${ptop()}<div class="pcard center"><div class="res no">${ic("alert")}</div><h2>Something went wrong</h2><p class="lead">${esc(msg)}</p><button class="btn line block" data-act="reload">Try again</button></div>`); }
   const consentBox = (id, html) => `<label class="cb" style="border:1px solid var(--line);border-radius:12px;padding:12px"><input type="checkbox" id="${id}"><span>${html}</span></label>`;
-  const CONSENT = `I agree to join. My name and mobile number are used only to run this engagement and are <b>deleted within 24 hours</b> after it ends. <a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy notice</a>`;
+  const CONSENT = `I agree to join. My name, mobile number and department are used to run this engagement. My ticket and phone details are <b>deleted within 24 hours</b> after it ends. My name and number are <b>kept for up to 365 days</b> so my organizer can invite me to future engagements, and I can ask them not to be kept at any time. <a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy notice</a>`;
 
   // ---------- state ----------
   const J = { info: null, cc: "IN", raw: "", name: "", info2: "" };
@@ -81,7 +81,7 @@
       <label class="lb" for="jNum">Your mobile number</label><div class="phonein"><span id="jDial">+${dial(J.cc)}</span><input id="jNum" inputmode="tel" autocomplete="tel" placeholder="98765 43210" value="${esc(J.raw)}"></div>
       <p class="hint">Enter the number your organizer has for you. Any format works.</p><div id="jErr" role="alert"></div>
       <button class="btn block" id="jGo" style="margin-top:12px">Join engagement ${ic("arrow")}</button>
-      <p class="tiny muted">No SMS or code is sent. Your number is only checked against the organizer's list and deleted within 24 hours after the engagement.</p></div>`);
+      <p class="tiny muted">No SMS or code is sent. Your number is only checked against the organizer's list. Your name and number are kept for up to 365 days so your organizer can invite you again, and you can ask us not to keep them.</p></div>`);
     $("jCc").onchange = () => { J.cc = $("jCc").value; $("jDial").textContent = "+" + dial(J.cc); };
     $("jNum").onkeydown = (e) => { if (e.key === "Enter") doJoin(); };
     $("jGo").onclick = doJoin;
@@ -125,7 +125,7 @@
       <p class="lead"><span class="mono">${esc(display || "")}</span> is not on the organizer's list. Send a request and the organizer can let you in.</p>
       <label class="lb" for="aName">Your name</label><input class="inp" id="aName" maxlength="30" autocomplete="name" placeholder="So the organizer knows you" value="${esc(J.name)}">
       <label class="lb" for="aInfo">Department or flat (optional)</label><input class="inp" id="aInfo" maxlength="30" placeholder="e.g. Finance, or B-402" value="${esc(J.info2)}">
-      ${consentBox("aOk", "I agree that my name and number are shared with the organizer for this engagement and <b>deleted within 24 hours</b> after it ends.")}<div id="aErr" role="alert"></div>
+      ${consentBox("aOk", "I agree that my name and number are shared with the organizer for this engagement. My ticket and phone details are <b>deleted within 24 hours</b> after it ends. My name and number are <b>kept for up to 365 days</b> so the organizer can invite me again, unless I ask them not to be kept.")}<div id="aErr" role="alert"></div>
       <button class="btn block" id="aGo">Ask to join ${ic("arrow")}</button>
       <p class="center"><button class="linkbtn" id="aBack">Use a different number</button></p></div>`);
     $("aBack").onclick = joinScreen;
@@ -409,6 +409,8 @@
   // ---------- actions ----------
   const ACT = {
     reload: () => location.reload(),
+    forget: () => TB.sheet(`<div class="eyebrow">Your details</div><h2>Do not keep my details?</h2><p class="muted small">Your organizer will not be able to invite you again from a saved list. Your ticket and phone details are deleted within 24 hours either way. This cannot be undone, but you can still be invited again with a new link.</p><button class="btn block" data-act="doforget">Yes, do not keep my name and number</button><button class="btn line block" data-act="close">Cancel</button>`),
+    doforget: async () => { try { await api("POST", `/api/e/${enc(code)}/me/forget`); TB.closeSheet(); TB.toast("Done. We will not keep your name and number."); } catch (e) { TB.toast(esc(e.message)); } },
     audio: async () => { await TBAudio.unlock(); TBAudio.preload(); paintStrip(); TB.toast("Audio is on. You will hear each number."); },
     voice: () => { TBAudio.enabled = !TBAudio.enabled; if (!TBAudio.enabled) TBAudio.stop(); paintStrip(); },
     tab: (t) => { G.tab = t; paintTabs(); paintGrid(); },
@@ -465,6 +467,7 @@
     if (q.family && q.family.limit > 0) out.push(`<button data-act="fam">${ic("users")} Bring your family (${q.family.used}/${q.family.limit})</button>`);
     if (q.invites && q.invites.max > 0) out.push(`<button data-act="inv">${ic("mail")} Invite a colleague (${q.invites.used}/${q.invites.max})</button>`);
     if (G.consoleLink) out.push(`<a href="${esc(G.consoleLink)}">${ic("sliders")} ${G.me.role === "host" ? "Host console" : "My Team Lead page"}</a>`);
+    out.push(`<button data-act="forget">${ic("trash")} Do not keep my details</button>`);
     out.push(`<a href="/legal.html#rules" target="_blank" rel="noopener">${ic("rules")} Rules &amp; how to play</a>`,
       `<a href="/legal.html#privacy" target="_blank" rel="noopener">${ic("shield")} Privacy &amp; your data</a>`,
       `<a href="/legal.html#disclaimer" target="_blank" rel="noopener">${ic("info")} Disclaimer</a>`,
@@ -605,7 +608,7 @@
     show(`${ptop()}<div class="pcard center"><div class="res ok">${ic("flag")}</div><h2>Thank you for taking part</h2>
       <p class="lead">${deleted ? "This engagement has ended and its data has been deleted." : "The engagement has ended."} The organizer gives the rewards directly. The software only called numbers and checked claims.</p>
       ${won.length ? `<div class="note ok" style="text-align:left">${ic("trophy")}<span>Your ticket won: <b>${won.map((r) => esc(r.name)).join(", ")}</b>. Your organizer will give the reward.</span></div>` : ""}
-      ${deleted ? "" : `<p class="tiny muted">Your name and mobile number are deleted within 24 hours.</p>`}</div>
+      ${deleted ? "" : `<p class="tiny muted">Your ticket and phone details are deleted within 24 hours. Your name and number are kept for up to 365 days so your organizer can invite you again.</p><button class="btn line block" data-act="forget">${ic("trash")} Do not keep my details</button>`}</div>
       <div class="plegal">Private engagement for a closed group. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
       <div class="plinks"><a href="/legal.html#rules" target="_blank" rel="noopener">Rules</a><a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy</a><a href="/legal.html#disclaimer" target="_blank" rel="noopener">Disclaimer</a></div>`);
   }

@@ -25,6 +25,27 @@ export function openDb(path: string): Database {
       code TEXT PRIMARY KEY, organizer_id TEXT NOT NULL, pack INTEGER, currency TEXT,
       state_json TEXT NOT NULL, updated_at INTEGER NOT NULL
     );
+    -- Kept for reuse (owner decision: every number uploaded or joined, 365 days). Never holds tickets, phones, claims or logs.
+    CREATE TABLE IF NOT EXISTS contacts (
+      organizer_id TEXT NOT NULL, e164 TEXT NOT NULL, name TEXT, info TEXT,
+      first_seen INTEGER NOT NULL, last_used INTEGER NOT NULL, expires_at INTEGER NOT NULL,
+      PRIMARY KEY (organizer_id, e164)
+    );
+    CREATE TABLE IF NOT EXISTS engagement_people (
+      engagement_code TEXT NOT NULL, organizer_id TEXT NOT NULL, e164 TEXT NOT NULL, name TEXT, info TEXT,
+      role TEXT, kind TEXT, cap INTEGER, joined INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL,
+      PRIMARY KEY (engagement_code, e164)
+    );
+    -- No personal data: counts only. Survives the people expiring.
+    CREATE TABLE IF NOT EXISTS engagement_history (
+      code TEXT PRIMARY KEY, organizer_id TEXT NOT NULL, name TEXT, org_name TEXT, held_at INTEGER,
+      started_at INTEGER, ended_at INTEGER, total INTEGER, participated INTEGER, family INTEGER,
+      team_leads INTEGER, hosts INTEGER, people_expires_at INTEGER
+    );
+    -- A person who asked us not to keep their details. Stores a hash only, never the number.
+    CREATE TABLE IF NOT EXISTS optouts (
+      organizer_id TEXT NOT NULL, hash TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (organizer_id, hash)
+    );
     CREATE TABLE IF NOT EXISTS summaries (
       code TEXT PRIMARY KEY, organizer_id TEXT NOT NULL, json TEXT NOT NULL
     );

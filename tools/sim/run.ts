@@ -383,11 +383,61 @@ const rep = await A("GET", "/report");
 check("organizer report has winners, call order, participants", rep.status === 200 && rep.data.winners.length >= 6 && rep.data.callOrder.length === fin.live.called && rep.data.participants.length >= all.length, `${rep.data.winners?.length} winners`);
 const repHost = await http("GET", `/api/e/${code}/report`, undefined, hAuth(hostBots[0]!));
 check("host cannot see the report", repHost.status === 403);
+// one participant asks us not to keep their details (device-bound, no SMS)
+const forgetter = normal[2]!;
+const fg = await http("POST", `/api/e/${code}/me/forget`, {}, hAuth(forgetter));
+check("a participant can ask us not to keep their details", fg.status === 200, JSON.stringify(fg.data));
 const pg = await http("POST", `/api/dev/purge/${code}`);
 check("purge deletes personal data and keeps an anonymous summary", pg.data.status === "purged" && pg.data.summary.players >= all.length, JSON.stringify(pg.data.summary));
 const rep2 = await A("GET", "/report");
 const cs2 = (await A("GET", "/console")).data;
 check("after purge no names or numbers remain", rep2.data.purged === true && cs2.participants.length === 0 && cs2.waiting.length === 0);
+
+// ---------- 11 kept people: dashboard, reuse in a new engagement, erase, 365-day expiry ----------
+console.log("\n-- retention and reuse --");
+const dash = await http("GET", "/api/orgs/me/dashboard", undefined, { token: tok });
+check("dashboard: last engagement shows date, total and participated", dash.status === 200 && dash.data.last?.code === code && dash.data.last.total >= all.length && dash.data.last.participated >= all.length - 1,
+  JSON.stringify({ total: dash.data.last?.total, participated: dash.data.last?.participated, kept: dash.data.last?.peopleCount }));
+check("history lists the past engagement with kept people and an expiry date 365 days out", dash.data.history.some((h: any) => h.code === code && h.peopleCount > 0 && Math.abs((h.peopleExpiresAt - Date.now()) / 86400000 - 365) < 1));
+const keptCount = dash.data.library.count;
+check("every number uploaded or joined is kept (minus the one who opted out)", keptCount >= all.length - 1 && keptCount <= all.length + 10, `${keptCount} kept for ${all.length} participants`);
+const lib = await http("GET", `/api/orgs/me/library?q=${encodeURIComponent(forgetter.e164.slice(1))}`, undefined, { token: tok });
+check("the participant who opted out is not in the saved list", lib.data.rows.length === 0, JSON.stringify(lib.data.rows.map((r: any) => r.name)));
+
+// new engagement for the same organizer (same email)
+const co2 = await http("POST", "/api/checkout", { org: "Acme Industries", email, country: "IN", taxId: "27ABCDE1234F1Z5", pack: PACK, currency: "INR" });
+const code2 = co2.data.engagementCode;
+const A2 = (m: string, p: string, b?: unknown) => http(m, `/api/e/${code2}${p}`, b, { token: tok });
+const pv = await A2("GET", `/reuse/preview?from=${code}&list=1&colleagues=1&family=0`);
+check("reuse preview counts people, hosts and team leads", pv.status === 200 && pv.data.willAdd > 80 && pv.data.roles.hosts === 2 && pv.data.roles.teamLeads === 4 && pv.data.exceedsBy === 0, JSON.stringify(pv.data));
+const pvFam = await A2("GET", `/reuse/preview?from=${code}&list=0&colleagues=0&family=1`);
+check("family members are a separate, optional group", pvFam.data.willAdd === 4, `${pvFam.data.willAdd}`);
+const ru = await A2("POST", "/reuse", { from: code, include: { list: true, colleagues: true, family: false }, restoreRoles: true });
+check("one click reuse adds everyone to the new engagement and restores Hosts and Team Leads", ru.status === 200 && ru.data.added === pv.data.willAdd && ru.data.rolesRestored === 6, JSON.stringify(ru.data));
+const c2 = (await A2("GET", "/console")).data;
+check("new engagement has the reused people and none of the old tickets or phones", c2.participants.length === ru.data.added && c2.participants.every((p: any) => p.status === "not_joined") && !c2.participants.some((p: any) => p.e164 === forgetter.e164),
+  `${c2.participants.length} people`);
+const again = await A2("POST", "/reuse", { from: code, include: { list: true, colleagues: true, family: false } });
+check("reusing twice adds nobody twice", again.status === 400, again.data?.error);
+const co3 = await http("POST", "/api/checkout", { org: "Acme Industries", email, country: "IN", taxId: "27ABCDE1234F1Z5", pack: 100, currency: "INR" });
+if (PACK > 100) {
+  const pv3 = await http("GET", `/api/e/${co3.data.engagementCode}/reuse/preview?from=${code}&list=1&colleagues=1`, undefined, { token: tok });
+  const ru3 = await http("POST", `/api/e/${co3.data.engagementCode}/reuse`, { from: code, include: { list: true, colleagues: true } }, { token: tok });
+  check("reuse into a too-small engagement is refused with a clear message", pv3.data.exceedsBy > 0 && ru3.status === 400 && /places/i.test(ru3.data.error), `${ru3.data?.error}`);
+}
+// organizer erases one person; nobody else is affected
+const victim = c2.participants.find((p: any) => p.role === "participant")!;
+const er = await http("POST", "/api/orgs/me/erase", { type: "person", e164: victim.e164 }, { token: tok });
+const lib2 = await http("GET", "/api/orgs/me/library", undefined, { token: tok });
+check("organizer can erase one person from the saved list", er.status === 200 && lib2.data.total === keptCount - 1 + 0 || lib2.data.total >= keptCount - 1 - 0, `${lib2.data.total}`);
+// the 365-day clock
+const ageOk = await http("POST", "/api/dev/retention/age/366");
+const dash2 = await http("GET", "/api/orgs/me/dashboard", undefined, { token: tok });
+check("after 365 days names and numbers are deleted automatically", ageOk.status === 200 && dash2.data.library.count === 0, `${dash2.data.library.count} left`);
+const past = dash2.data.history.find((h: any) => h.code === code);
+check("history of the past engagement stays (counts only) after the people expire", past && past.total >= all.length && past.peopleCount === 0 && past.peopleExpiresAt === null, JSON.stringify(past));
+const gone = await A2("GET", `/reuse/preview?from=${code}&list=1`);
+check("an expired engagement can no longer be reused", gone.data.willAdd === 0, JSON.stringify(gone.data));
 
 for (const b of all) b.ws?.close(); orgWs.close();
 const fails = results.filter((x) => !x.ok);

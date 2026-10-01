@@ -104,10 +104,65 @@ setInterval(() => {
 setInterval(() => { for (const r of rooms.values()) if (r.dirty) save(r); }, 1000);
 
 function purgeRoom(room: Room) {
+  if (room.engine.status !== "ended") return;
+  retainPeople(room); // owner decision: keep name + number + department for reuse (365 days); everything else is deleted below
   if (room.engine.purge()) return;
   db.query("INSERT OR REPLACE INTO summaries(code,organizer_id,json) VALUES(?,?,?)").run(room.code, room.organizerId, JSON.stringify(room.engine.summary));
   save(room);
   room.send(() => true, { type: "purged" });
+}
+
+// ---------- kept people: reuse library (owner decision: every number uploaded or joined, 365 days) ----------
+const DAY = 86_400_000;
+const RETAIN_MS = Number(process.env.TAMBOLA_RETAIN_DAYS ?? 365) * DAY;
+const ohash = (org: string, e164: string) => sha256(org + ":" + e164);
+const isOptedOut = (org: string, e164: string) => !!db.query("SELECT 1 FROM optouts WHERE organizer_id=? AND hash=?").get(org, ohash(org, e164));
+interface PersonRow { e164: string; name: string; info: string; role: string; kind: string | null; cap: number; joined: boolean }
+const groupOf = (r: PersonRow): "list" | "colleagues" | "family" => (r.kind === "family" ? "family" : r.kind === "colleague" ? "colleagues" : "list");
+
+/** Everyone the organizer uploaded or who joined. Colleague/family passes that nobody opened are excluded (never uploaded, never joined). */
+function peopleOf(room: Room): PersonRow[] {
+  return room.engine.participants
+    .filter((p) => !(p.kind && p.status !== "joined"))
+    .map((p) => ({ e164: p.e164, name: p.name ?? "", info: p.info ?? "", role: p.role, kind: p.kind, cap: p.cap, joined: p.status === "joined" }));
+}
+function retainPeople(room: Room) {
+  const e = room.engine, org = room.organizerId, t = now(), exp = t + RETAIN_MS;
+  const kept = peopleOf(room).filter((r) => !isOptedOut(org, r.e164));
+  const insEp = db.query("INSERT OR REPLACE INTO engagement_people(engagement_code,organizer_id,e164,name,info,role,kind,cap,joined,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?)");
+  const upC = db.query(`INSERT INTO contacts(organizer_id,e164,name,info,first_seen,last_used,expires_at) VALUES(?,?,?,?,?,?,?)
+    ON CONFLICT(organizer_id,e164) DO UPDATE SET name=CASE WHEN excluded.name<>'' THEN excluded.name ELSE contacts.name END,
+      info=CASE WHEN excluded.info<>'' THEN excluded.info ELSE contacts.info END, last_used=excluded.last_used, expires_at=excluded.expires_at`);
+  db.transaction(() => {
+    for (const r of kept) { insEp.run(room.code, org, r.e164, r.name, r.info, r.role, r.kind, r.cap, r.joined ? 1 : 0, exp); upC.run(org, r.e164, r.name, r.info, t, t, exp); }
+    db.query("INSERT OR REPLACE INTO engagement_history(code,organizer_id,name,org_name,held_at,started_at,ended_at,total,participated,family,team_leads,hosts,people_expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .run(room.code, org, e.settings.name, e.settings.orgName, e.settings.startsAt ?? e.startedAt ?? t, e.startedAt, e.endedAt, e.participants.length,
+        e.participants.filter((p) => p.status === "joined").length, e.participants.filter((p) => p.kind === "family").length,
+        e.participants.filter((p) => p.role === "team_lead").length, e.participants.filter((p) => p.role === "host").length, exp);
+  })();
+}
+function runExpiry() {
+  const t = now();
+  db.query("DELETE FROM contacts WHERE expires_at < ?").run(t);
+  db.query("DELETE FROM engagement_people WHERE expires_at < ?").run(t);
+  // engagements that were set up, never run, and are 30+ days past their date: close them so the normal purge (and retention) applies
+  for (const r of rooms.values()) if (r.engine.status === "open" && r.engine.settings.startsAt && t - r.engine.settings.startsAt > 30 * DAY) r.engine.discard();
+}
+setInterval(runExpiry, 10 * 60_000);
+
+function sourceRows(org: string, from: string): { rows: PersonRow[]; name: string; heldAt: number | null; live: boolean } {
+  if (from === "library") {
+    const rows = (db.query("SELECT e164,name,info FROM contacts WHERE organizer_id=? AND expires_at>? ORDER BY name").all(org, now()) as any[])
+      .map((c) => ({ e164: c.e164, name: c.name ?? "", info: c.info ?? "", role: "participant", kind: null, cap: 25, joined: false }));
+    return { rows, name: "Everyone in your saved list", heldAt: null, live: false };
+  }
+  const room = rooms.get(from);
+  if (room && room.organizerId === org && room.engine.status !== "purged") return { rows: peopleOf(room), name: room.engine.settings.name, heldAt: room.engine.settings.startsAt, live: true };
+  const h = db.query("SELECT * FROM engagement_history WHERE code=? AND organizer_id=?").get(from, org) as any;
+  if (!h) fail(404, "That past engagement was not found.");
+  const rows = (db.query("SELECT * FROM engagement_people WHERE engagement_code=? AND organizer_id=? AND expires_at>?").all(from, org, now()) as any[])
+    .map((c) => ({ e164: c.e164, name: c.name ?? "", info: c.info ?? "", role: c.role ?? "participant", kind: c.kind, cap: c.cap ?? 25, joined: !!c.joined }));
+  return { rows, name: h.name, heldAt: h.held_at, live: false };
 }
 
 // ---------- mail (dev outbox) ----------
@@ -283,6 +338,113 @@ route_("GET", "/api/orgs/me", ({ req }) => {
   const o = db.query("SELECT email, org_name FROM organizers WHERE id=?").get(id) as any;
   const list = [...rooms.values()].filter((r) => r.organizerId === id).map((r) => ({ code: r.code, name: r.engine.settings.name, status: r.engine.status, pack: r.pack, startsAt: r.engine.settings.startsAt, participants: r.engine.placesUsed }));
   return json({ email: o.email, org: o.org_name, engagements: list });
+});
+
+// ----- dashboard: last engagement, history, reuse of kept people -----
+route_("GET", "/api/orgs/me/dashboard", ({ req }) => {
+  const org = orgOf(req) ?? fail(401, "Please log in.");
+  const t = now();
+  const items: any[] = [];
+  for (const r of rooms.values()) {
+    if (r.organizerId !== org || r.engine.status === "purged") continue;
+    const e = r.engine;
+    items.push({ code: r.code, name: e.settings.name, heldAt: e.settings.startsAt ?? e.startedAt, status: e.status, total: e.placesUsed, participated: e.participants.filter((p) => p.status === "joined").length,
+      peopleCount: peopleOf(r).length, peopleExpiresAt: null, live: true });
+  }
+  for (const h of db.query("SELECT * FROM engagement_history WHERE organizer_id=?").all(org) as any[]) {
+    const n = (db.query("SELECT COUNT(*) c FROM engagement_people WHERE engagement_code=? AND expires_at>?").get(h.code, t) as any).c;
+    if (rooms.get(h.code) && rooms.get(h.code)!.engine.status !== "purged") continue;
+    items.push({ code: h.code, name: h.name, heldAt: h.held_at, status: "purged", total: h.total, participated: h.participated, family: h.family, teamLeads: h.team_leads, hosts: h.hosts,
+      peopleCount: n, peopleExpiresAt: n ? h.people_expires_at : null, live: false });
+  }
+  items.sort((a, b) => (b.heldAt ?? 0) - (a.heldAt ?? 0));
+  const past = items.filter((i) => i.status === "ended" || i.status === "purged");
+  const lib = db.query("SELECT COUNT(*) c, MIN(expires_at) soonest FROM contacts WHERE organizer_id=? AND expires_at>?").get(org, t) as any;
+  return json({ last: past[0] ?? null, history: items, library: { count: lib.c, soonestExpiry: lib.soonest }, retentionDays: Math.round(RETAIN_MS / DAY) });
+});
+
+route_("GET", "/api/orgs/me/library", ({ req, url }) => {
+  const org = orgOf(req) ?? fail(401, "Please log in.");
+  const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
+  const all = db.query("SELECT e164,name,info,last_used,expires_at FROM contacts WHERE organizer_id=? AND expires_at>? ORDER BY name").all(org, now()) as any[];
+  const digits = q.replace(/\D/g, "");
+  const rows = q ? all.filter((c) => (c.name ?? "").toLowerCase().includes(q) || (digits && c.e164.includes(digits))) : all;
+  return json({ total: all.length, rows: rows.slice(0, 300).map((c) => ({ e164: c.e164, number: formatInternational(c.e164), name: c.name, info: c.info, lastUsed: c.last_used, expiresAt: c.expires_at })) });
+});
+
+route_("POST", "/api/orgs/me/erase", async ({ req }) => {
+  const org = orgOf(req) ?? fail(401, "Please log in.");
+  const b = await body(req);
+  if (b.type === "all") {
+    db.query("DELETE FROM contacts WHERE organizer_id=?").run(org); db.query("DELETE FROM engagement_people WHERE organizer_id=?").run(org);
+    return json({ ok: true });
+  }
+  if (b.type === "engagement") {
+    db.query("DELETE FROM engagement_people WHERE organizer_id=? AND engagement_code=?").run(org, String(b.code));
+    return json({ ok: true });
+  }
+  if (b.type === "person") {
+    const n = normalize(b.e164, "IN");
+    const e164 = n.ok ? n.e164 : String(b.e164);
+    db.query("DELETE FROM contacts WHERE organizer_id=? AND e164=?").run(org, e164); db.query("DELETE FROM engagement_people WHERE organizer_id=? AND e164=?").run(org, e164);
+    if (b.block !== false) db.query("INSERT OR IGNORE INTO optouts(organizer_id,hash,created_at) VALUES(?,?,?)").run(org, ohash(org, e164), now());
+    return json({ ok: true });
+  }
+  return fail(400, "Unknown erase request.");
+});
+
+function reuseGroups(q: any) { return { list: q.list !== false && q.list !== "0", colleagues: q.colleagues !== false && q.colleagues !== "0", family: q.family === true || q.family === "1" }; }
+function reusePlan(room: Room, from: string, g: { list: boolean; colleagues: boolean; family: boolean }) {
+  const src = sourceRows(room.organizerId, from);
+  const counts = { list: 0, colleagues: 0, family: 0 };
+  src.rows.forEach((r) => counts[groupOf(r)]++);
+  const pick: PersonRow[] = [], skipped = { alreadyIn: 0, optedOut: 0 };
+  for (const r of src.rows) {
+    if (!g[groupOf(r)]) continue;
+    if (isOptedOut(room.organizerId, r.e164)) { skipped.optedOut++; continue; }
+    if (room.engine.numberInEngagement(r.e164)) { skipped.alreadyIn++; continue; }
+    pick.push(r);
+  }
+  return { src, counts, pick, skipped };
+}
+route_("GET", "/api/e/:code/reuse/preview", ({ req, m, url }) => {
+  const room = getRoom(m[1]!); needOrganizer(actorOf(req, room));
+  const sp = url.searchParams;
+  const g = reuseGroups({ list: sp.get("list") ?? undefined, colleagues: sp.get("colleagues") ?? undefined, family: sp.get("family") ?? undefined });
+  const pl = reusePlan(room, sp.get("from") ?? "library", g);
+  const left = room.engine.placesLeft;
+  return json({ source: { name: pl.src.name, heldAt: pl.src.heldAt }, counts: pl.counts, willAdd: pl.pick.length, placesLeft: left, exceedsBy: Math.max(0, pl.pick.length - left), skipped: pl.skipped,
+    roles: { hosts: pl.pick.filter((r) => r.role === "host").length, teamLeads: pl.pick.filter((r) => r.role === "team_lead").length } });
+});
+route_("POST", "/api/e/:code/reuse", async ({ req, m }) => {
+  const room = getRoom(m[1]!); needOrganizer(actorOf(req, room));
+  const b = await body(req);
+  const pl = reusePlan(room, String(b.from ?? "library"), reuseGroups(b.include ?? {}));
+  if (!pl.pick.length) fail(400, "There is nobody new to add from this list.");
+  const r = room.engine.addParticipants(pl.pick.map((x) => ({ name: x.name, info: x.info, e164: x.e164 })));
+  if (!r.ok) fail(400, r.reason);
+  let rolesRestored = 0;
+  if (b.restoreRoles) for (const x of pl.pick) {
+    if (x.role !== "host" && x.role !== "team_lead") continue;
+    const p = room.engine.participants.find((y) => y.e164 === x.e164);
+    if (p && !room.engine.setRole("organizer", p.id, x.role as any, x.cap)) rolesRestored++;
+  }
+  const t = now();
+  const touchC = db.query("UPDATE contacts SET last_used=?, expires_at=? WHERE organizer_id=? AND e164=?");
+  pl.pick.forEach((x) => touchC.run(t, t + RETAIN_MS, room.organizerId, x.e164));
+  room.touch();
+  return json({ ok: true, added: pl.pick.length, skipped: pl.skipped, rolesRestored });
+});
+
+// a participant asks us not to keep their details (device-bound, no SMS needed)
+route_("POST", "/api/e/:code/me/forget", ({ req, m }) => {
+  const room = getRoom(m[1]!), a = actorOf(req, room);
+  if (!a || a.kind === "organizer") fail(403, "Not allowed.");
+  const p = room.engine.participants.find((x) => x.id === (a as any).pid)!;
+  db.query("INSERT OR IGNORE INTO optouts(organizer_id,hash,created_at) VALUES(?,?,?)").run(room.organizerId, ohash(room.organizerId, p.e164), now());
+  db.query("DELETE FROM contacts WHERE organizer_id=? AND e164=?").run(room.organizerId, p.e164);
+  db.query("DELETE FROM engagement_people WHERE organizer_id=? AND e164=?").run(room.organizerId, p.e164);
+  return json({ ok: true });
 });
 
 // ----- public engagement info + join -----
@@ -585,6 +747,13 @@ route_("GET", "/api/e/:code/report", ({ req, m }) => {
 
 if (DEV) {
   route_("POST", "/api/dev/purge/:code", ({ m }) => { const room = getRoom(m[1]!); purgeRoom(room); return json({ ok: true, status: room.engine.status, summary: room.engine.summary }); });
+  route_("POST", "/api/dev/retention/age/:days", ({ m }) => {
+    const ms = Number(m[1]) * DAY;
+    db.query("UPDATE contacts SET expires_at=expires_at-?").run(ms); db.query("UPDATE engagement_people SET expires_at=expires_at-?").run(ms);
+    db.query("UPDATE engagement_history SET people_expires_at=people_expires_at-?").run(ms);
+    runExpiry();
+    return json({ ok: true });
+  });
   route_("POST", "/api/dev/stats/reset", () => { Object.assign(stats, { http: 0, api: 0, wsIn: 0, wsOut: 0 }); return json({ ok: true }); });
   route_("GET", "/api/dev/outbox", () => json({ note: "see data/outbox" }));
 }

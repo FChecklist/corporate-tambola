@@ -12,6 +12,7 @@
     toast(esc(msg || "Copied"));
   }
   const root = $("app");
+  const NOTICE = "Tickets, phones, claims and the activity log are deleted 24 hours after the engagement ends. Names, numbers and departments are kept for up to 365 days so you can reuse them, then deleted. You can erase them any time from the Dashboard.";
 
   // ---------------------------------------------------------------- constants
   const PN = { early5: "Early Five", top: "Top Line", mid: "Middle Line", bot: "Bottom Line", corners: "Four Corners", star: "Star", full: "Full House" };
@@ -74,7 +75,7 @@
   const fmtTs = (t) => new Date(t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" });
   function statusPill() {
     const s = eng().status;
-    return { open: pill("ok", "Open for entry"), started: pill("warn", "Engagement in progress · entry closed"), ended: pill("bad", "Engagement ended"), purged: pill("", "Personal data deleted") }[s] || "";
+    return { open: pill("ok", "Open for entry"), started: pill("warn", "Engagement in progress · entry closed"), ended: pill("bad", "Engagement ended"), purged: pill("", "Tickets and claims deleted") }[s] || "";
   }
   function pStatus(p) {
     return p.status === "joined" ? pill("ok", "Joined") : p.status === "pass_sent" ? pill("info", "Pass sent") : pill("", "Not joined");
@@ -144,8 +145,8 @@
     S.poll = setInterval(() => loadConsole(), 8000);
     setInterval(tick, 1000);
   }
-  function consoleLinks() {
-    if (isOrg()) return `<a href="/#pricing">Buy another pack</a><button class="tl" data-a="logout">${ic("logout")} Log out</button>`;
+  function consoleLinks(onDash) {
+    if (isOrg()) return `${onDash ? "" : '<a href="/console">Dashboard</a>'}<a href="/#pricing">Buy another pack</a><button class="tl" data-a="logout">${ic("logout")} Log out</button>`;
     return `<a href="/e/${esc(S.code)}">Open my ticket</a>`;
   }
   let rT = null;
@@ -155,7 +156,7 @@
     let d;
     try { d = await api("GET", `${E()}/console`); }
     catch (e) {
-      if (first) { fatal(e.message || "Cannot open this engagement.", isOrg() ? `<a class="btn" href="/console">Back to my engagements</a>` : ""); return; }
+      if (first) { fatal(e.message || "Cannot open this engagement.", isOrg() ? `<a class="btn" href="/console">Back to the Dashboard</a>` : ""); return; }
       if (!isOrg() && (e.status === 403 || e.status === 401)) { clearInterval(S.poll); if (S.ws) S.ws.close(); fatal("This link is no longer active on this phone.", `<p class="lead">The engagement may have ended and its personal data deleted, or your access was changed by the Organizer.</p>`); }
       return;
     }
@@ -203,9 +204,11 @@
     }
     if (S.step === "share") drawQR();
     if (S.step === "report" && !S.report && eng().status !== "open") loadReport();
+    if (S.step === "people" && isOrg() && !D.dash && !D.loading) loadDash().then(() => { if (S.step === "people") paintStage(); });
   }
   function gotoStep(s) {
     S.step = s; S.stageStep = null; paintSteps(); paintStage();
+    if (s === "people" && isOrg() && !D.loading) loadDash().then(() => { if (S.step === "people") paintStage(); });
     if (s === "rewards" || s === "breaks") { initDrafts(); paintStage(); }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -443,6 +446,7 @@
     const n = S.sel.size;
     const bulk = open ? `<div class="bulk"><b>${n} selected</b><span class="lbx">Make Team Lead:</span>${CAPS.map((c) => `<button class="btn sm chipb" ${n ? "" : "disabled"} data-a="bulkTL" data-v="${c}">${c}</button>`).join("")}${isOrg() ? `<button class="btn sm line" ${n ? "" : "disabled"} data-a="bulkRole" data-v="host">Make Host</button>` : ""}<button class="btn sm line" ${n ? "" : "disabled"} data-a="bulkRole" data-v="participant">Make regular participant</button><button class="btn sm danger" ${n ? "" : "disabled"} data-a="bulkRemove">Remove</button><span class="sp"></span><button class="btn sm ghost" data-a="selAll">${n && n === list.length ? "Clear" : "Select all shown"}</button></div>` : "";
     const secs = [];
+    if (isOrg() && open && all.length <= 5 && D.dash && D.dash.last) secs.push(["pbanner", reuseBanner()]);
     if (isOrg()) secs.push(["padd", addSec()]); else secs.push(["pfam", famSec()]);
     secs.push(["pbar", `<div class="panel" style="margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:0;box-shadow:none"><div class="phead" style="margin-bottom:2px"><div><h2>Everyone on the list</h2><p>Tick people, then choose what to do with them. Team Leads get their own link to bring in their team. Hosts help you run the engagement.</p></div></div>
       <div class="row"><input class="inp" style="max-width:260px" placeholder="Search name or number" value="${esc(S.q)}" data-i="q" aria-label="Search"></div>
@@ -625,13 +629,13 @@
     if (r.error) return [["report", `<div class="panel"><div class="err">${ic("alert")}<span>${esc(r.error)}</span></div></div>`]];
     if (r.purged) {
       const s = r.summary || {};
-      return [["report", `<div class="panel"><div class="phead"><div class="step">${ic("trash")}</div><div><h2>Personal data deleted</h2><p>24 hours after the end, every name, mobile number and personal link was deleted. Only this anonymous summary stays.</p></div></div>
+      return [["report", `<div class="panel"><div class="phead"><div class="step">${ic("trash")}</div><div><h2>Personal data deleted</h2><p>${esc(NOTICE)}</p></div></div>
         <div class="grid" style="margin-top:10px"><div class="meter"><span>Participants</span><b>${s.players ?? 0}</b></div><div class="meter"><span>Family members</span><b>${s.family ?? 0}</b></div><div class="meter"><span>Team Leads</span><b>${s.teamLeads ?? 0}</b></div></div></div>`]];
     }
     const del = (r.endedAt || Date.now()) + 864e5;
     const na = nameNotAwarded(r);
-    return [["report", `<div class="panel" style="border-color:var(--gold)"><div class="phead"><div class="step">${ic("flag")}</div><div><h2>Report</h2><p>Copy the report before it is deleted. Personal data is deleted 24 hours after the end; only an anonymous summary stays.</p></div></div>
-      <div class="alert">${ic("clock")}<span style="flex:1"><b>All names and mobile numbers will be deleted on ${esc(TB.fmtDT(del))}.</b> Copy the report now and keep it with your records.</span><button class="btn sm" data-a="copyReport">${ic("copy")} Copy report for Excel</button></div>
+    return [["report", `<div class="panel" style="border-color:var(--gold)"><div class="phead"><div class="step">${ic("flag")}</div><div><h2>Report</h2><p>Copy the report before the tickets and claims are deleted. ${esc(NOTICE)}</p></div></div>
+      <div class="alert">${ic("clock")}<span style="flex:1"><b>Tickets, phones, claims and the activity log will be deleted on ${esc(TB.fmtDT(del))}.</b> Names, numbers and departments are kept for up to 365 days for reuse. Copy the report now and keep it with your records.</span><button class="btn sm" data-a="copyReport">${ic("copy")} Copy report for Excel</button></div>
       <label class="lb">Winners</label><div class="tscroll"><table class="t"><thead><tr><th>Reward</th><th>Winner</th><th>Ticket ID</th><th>Winners</th><th>Won on</th></tr></thead><tbody>${r.winners.length ? r.winners.map((w) => `<tr><td><b>${esc(w.reward)}</b><div class="sub">${esc(w.rewardText)}${w.winners > 1 ? " · shared equally" : ""}</div></td><td>${esc(w.name)}<div class="sub mono">${esc(w.e164)}</div></td><td class="mono" style="font-size:12px">${esc(w.ticketId)}</td><td>${w.winners}</td><td>Number ${w.wonOnNumber} (call ${w.callNo})</td></tr>`).join("") : `<tr><td colspan="5" class="muted">No rewards were won.</td></tr>`}</tbody></table></div>
       <label class="lb">Not awarded</label><div class="small">${na.length ? na.map((x) => `${esc(x.name)} <span class="muted">(${esc(x.text)})</span>`).join(", ") : "All rewards were won."}</div>
       <label class="lb">Not valid claims (${r.notValid.length})</label><div class="small">${r.notValid.length ? r.notValid.map((n) => `<div>${esc(n.ticketId)} – ${esc(PN[n.pattern] || n.pattern)} <span class="tiny muted">${esc(n.why)}</span></div>`).join("") : `<span class="muted">None.</span>`}</div>
@@ -702,7 +706,7 @@
       if (!$("endOk").checked) { sheetYes = go; return toast("Tick the box to confirm."); }
       closeSheet(); await run(api("POST", `${E()}/end`, {})); await loadConsole();
     };
-    confirmSheet({ title: "End the engagement now?", body: "Rewards that are still open will not be awarded. The report becomes available, and personal data is deleted 24 hours from now.", danger: true, yes: "End engagement", no: "Keep going",
+    confirmSheet({ title: "End the engagement now?", body: "Rewards that are still open will not be awarded. The report becomes available. Tickets, phones, claims and the activity log are deleted 24 hours from now; names, numbers and departments are kept for up to 365 days so you can reuse them.", danger: true, yes: "End engagement", no: "Keep going",
       extra: `<label class="cb"><input type="checkbox" id="endOk"> I want to end the engagement for everyone.</label>`, onYes: go });
   };
   // the sheet button calls sheetYes then clears it; keep it set for the tick-box retry
@@ -873,7 +877,7 @@
     roleScreen(`<div class="pcard"><div class="eyebrow">${esc(rn)} link</div><h2>Hi ${esc(firstName(r.name))}, you are a <em>${esc(rn)}</em> for ${esc(en)}</h2>
       <p class="lead">${r.role === "host" ? "As a Host you help admit participants and run the engagement." : "As a Team Lead you bring in your own team with personal passes."} This link works on this phone only.</p>
       ${r.engagement.startsAt ? `<div class="sum"><div class="kv"><span>When</span><b>${esc(TB.fmtDT(r.engagement.startsAt))}</b></div></div>` : ""}
-      <label class="cb"><input type="checkbox" id="roleOk"> <span>I agree that my name and mobile number are used for this engagement and are deleted 24 hours after it ends.</span></label>
+      <label class="cb"><input type="checkbox" id="roleOk"> <span>I agree that my name and mobile number are used for this engagement. The Organizer may keep them for up to 365 days to reuse them, then they are deleted.</span></label>
       <button class="btn gold block" id="roleGo" disabled>Continue</button></div>`);
     const ok = $("roleOk"), go = $("roleGo");
     ok.onchange = () => (go.disabled = !ok.checked);
@@ -901,29 +905,7 @@
     bootConsole();
   }
 
-  // ================================================================ ORGANIZER BOOT
-  function picker(me) {
-    const list = me.engagements;
-    root.innerHTML = `${topbar(consoleLinks())}<div class="wrap" style="max-width:720px"><div class="chead"><div><div class="eyebrow">Organizer console · ${esc(me.org)}</div><h1>Your engagements</h1><div class="stats">${esc(me.email)}</div></div><a class="btn gold" href="/#pricing">Buy another pack</a></div>
-      ${list.length ? list.map((x) => `<a class="gcard" style="text-decoration:none;color:inherit" href="/console#${esc(x.code)}" data-a="openEng" data-v="${esc(x.code)}"><div class="gdate"><b>${x.startsAt ? new Date(x.startsAt).getDate() : "–"}</b><span>${x.startsAt ? new Date(x.startsAt).toLocaleDateString(undefined, { month: "short" }) : ""}</span></div><div style="flex:1"><b>${esc(x.name)}</b><div class="tiny muted">${esc(x.code)} · pack of ${x.pack} · ${x.participants} on the list</div></div>${pill(x.status === "open" ? "ok" : x.status === "started" ? "warn" : "", x.status === "open" ? "Open" : x.status === "started" ? "In progress" : x.status === "ended" ? "Ended" : "Deleted")}</a>`).join("") : `<div class="panel center"><p class="muted">You have no engagements yet.</p><a class="btn" href="/#pricing">Buy a pack</a></div>`}</div>`;
-  }
-  A.openEng = (el, e) => { e.preventDefault(); history.replaceState(null, "", "/console#" + el.dataset.v); startOrg(); };
-
-  async function startOrg() {
-    if (!TB.orgToken()) return location.replace("/#login");
-    S.role = "org";
-    let me;
-    try { me = await TB.api("GET", "/api/orgs/me", undefined, { org: true }); }
-    catch (e) { if (e.status === 401) { TB.setOrgToken(null); return location.replace("/#login"); } return fatal(e.message); }
-    S.me = me;
-    const hash = decodeURIComponent(location.hash.slice(1)).toUpperCase();
-    let code = (me.engagements.find((x) => x.code === hash) || {}).code;
-    if (!code && me.engagements.length === 1) code = me.engagements[0].code;
-    if (!code) return picker(me);
-    S.code = code; S.data = null; S.step = ""; S.stageStep = null;
-    bootConsole();
-  }
-
+@@NEW@@
   // ---------------------------------------------------------------- boot
   const path = location.pathname;
   if (/^\/r\/[^/]+$/.test(path)) bootRole(path.split("/")[2]);

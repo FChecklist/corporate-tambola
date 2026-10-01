@@ -188,3 +188,18 @@ Voice production notes (see IMPLEMENTATION.md §11.3 for the audio design, uncha
 **Open: keeping participant data for reuse (owner message, 180 days)**
 - DPDP has no "180 days" figure. It is purpose-based: retention period must be stated in the notice, data erased when the purpose is served or consent withdrawn. 180 days is defensible only if (a) stated in the notice, (b) tied to the purpose "invite you to future engagements", (c) erasable on request. Sources are secondary summaries; **lawyer sign-off needed** (also for Rule 8's one-year log-retention minimum, which may conflict with our 24-hour log purge).
 - Proposed design: keep only a **contact library** per organizer (name, number, department): erased 180 days after last use; everything else (tickets, claims, devices, activity log) still purged 24 h after the end. Optional consent tick for people who joined through waiting room/passes/family; organizer's own uploaded list is the organizer's data. Participant and organizer can erase at any time. Consent wording, privacy page, landing page and rules must change from "24 hours". **Not built yet; waiting for the owner's decision on the consent model.**
+
+## 15. CR-06 (2026-10-01): keep every uploaded/joined number for 365 days; dashboard reuse
+**Owner decision:** option B, **every number ever uploaded or joined**, notice states **365 days** (replaces the earlier 180-day idea). At the top of the organizer dashboard: "Last engagement was on <date> - Total <n> - Participated <m> - Reuse the data | History of all past engagements"; the organizer sees every past engagement, clicks one and can reuse its people.
+
+**What is kept / deleted**
+- Kept 365 days after last use: name, mobile number, department/flat (+ role, caps, joined flag per engagement). Anyone who opened a pass or joined, and everyone on the organizer's uploaded list. Unopened colleague/family passes and declined or pending waiting-room requests are NOT kept.
+- Still deleted 24 hours after the end: tickets, phone/device bindings, claims, activity log, call order. Only counts remain in the history.
+- Clock: 365 days from purge; reusing someone restarts their clock.
+- Erase: a participant can tap "Do not keep my details" (menu or thank-you screen; stores only a hash so it is remembered); the organizer can erase one person, one past engagement's people, or everyone. Never-run engagements 30+ days past their date are closed and handled by the same path.
+- Database: `contacts`, `engagement_people`, `engagement_history`, `optouts` (server `db.ts`). Verified by the simulation: 79/79 checks, including 365-day expiry (dev route ages the data).
+
+**Needs a lawyer before go-live (not decided here)**
+- The notice wording (play.js consent, legal.html privacy, landing page) now says 365 days. DPDP is purpose-based and has no fixed number; whether keeping every uploaded number, including people who never joined and so never saw a notice, is acceptable is a legal question for the organizer-as-controller. The previous "24 hours" promise is gone from the product and the Drive documents (Rules v1.4, Handout v2.0) are now out of date.
+- Rule 8 of the DPDP Rules mentions one-year minimum retention of some logs; counsel to confirm how it applies to our 24-hour log deletion.
+- No self-serve public "erase my number" page: without SMS/OTP we cannot prove who owns a number, so erase requests go through the in-app button, the organizer, or the support email.

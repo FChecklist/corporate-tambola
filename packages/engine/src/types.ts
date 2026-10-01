@@ -28,6 +28,7 @@ export interface BrandBreak {
 export interface Participant {
   id: string;
   name: string;
+  info: string; // department / flat
   e164: string;
   role: Role;
   kind: Kind;

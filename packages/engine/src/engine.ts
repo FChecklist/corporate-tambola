@@ -120,7 +120,7 @@ export class EngagementEngine {
   private makeParticipant(o: Partial<Participant>): Participant {
     this.serial += 1 + this.rand(9);
     return {
-      id: this.uid("p"), name: "", e164: "", role: "participant", kind: null, source: "list", invitedBy: null,
+      id: this.uid("p"), name: "", info: "", e164: "", role: "participant", kind: null, source: "list", invitedBy: null,
       status: "not_joined", cap: 25, passCode: null, roleLink: null, device: null,
       tickets: Array.from({ length: this.ticketCount() }, () => this.newTicket()),
       serial: this.serial, notValid: 0, blocked: false, consentAt: null, joinedAt: null, ...o,
@@ -191,7 +191,7 @@ export class EngagementEngine {
   }
 
   // ---------- list upload ----------
-  addParticipants(items: { name?: string; e164: string }[]): { ok: true } | { ok: false; reason: string } {
+  addParticipants(items: { name?: string; info?: string; e164: string }[]): { ok: true } | { ok: false; reason: string } {
     const e = this.guardEntry(items.length);
     if (e) return { ok: false, reason: e };
     const seen = new Set<string>();
@@ -199,7 +199,7 @@ export class EngagementEngine {
       if (seen.has(it.e164) || this.numberInEngagement(it.e164)) return { ok: false, reason: `${it.e164} is already in this engagement.` };
       seen.add(it.e164);
     }
-    for (const it of items) this.participants.push(this.makeParticipant({ name: it.name ?? "", e164: it.e164, source: "list" }));
+    for (const it of items) this.participants.push(this.makeParticipant({ name: it.name ?? "", info: it.info ?? "", e164: it.e164, source: "list" }));
     this.logMsg(`Organizer added ${items.length} participants`);
     return { ok: true };
   }
@@ -371,7 +371,7 @@ export class EngagementEngine {
     const list = this.waiting.filter((w) => ids.includes(w.id));
     if (this.placesLeft < list.length) return `Only ${this.placesLeft} places are left under your limit of ${this.settings.limit}.`;
     for (const w of list) {
-      const p = this.makeParticipant({ name: w.name, e164: w.e164, source: "waiting_room", invitedBy: w.invitedBy, kind: w.invitedBy ? "colleague" : null });
+      const p = this.makeParticipant({ name: w.name, info: w.info, e164: w.e164, source: "waiting_room", invitedBy: w.invitedBy, kind: w.invitedBy ? "colleague" : null });
       this.participants.push(p);
       if (w.device) this.bind(p, w.device);
     }
@@ -427,6 +427,14 @@ export class EngagementEngine {
     this.nextAt = null;
     this.logMsg(why);
     this.emit({ to: "all", type: "ended", why });
+  }
+
+  /** An engagement that was set up but never run and has passed its date: close it so the normal purge path applies. */
+  discard(): void {
+    if (this.status !== "open") return;
+    this.status = "ended";
+    this.endedAt = this.now();
+    this.logMsg("Closed without being run");
   }
 
   /** Writes the anonymous summary, then deletes everything personal. */
