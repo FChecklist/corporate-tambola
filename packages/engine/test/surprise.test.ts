@@ -263,6 +263,28 @@ describe("lucky draw", () => {
   });
 });
 
+describe("manual triggers are safe", () => {
+  test("nothing starts while a moment is on screen, and the bumper only opens when everything else is done", () => {
+    const h = make({ luckyDraws: 2, luckyWinners: 1, bumper: true, scratchCards: 1, scratchWinning: 5, autoMark: true, momentsMode: "manual" });
+    const ps = join(h, 8); h.eng.start();
+    expect(h.eng.triggerMoment("scratch")).toBeNull();
+    expect(h.eng.triggerMoment("lucky")).toContain("already on screen");
+    h.advance(SCFG.SCRATCH_MS + 1); h.eng.tick();
+    // one ordinary draw is pending, so the bumper (the other lucky draw) must wait for it
+    expect(h.eng.triggerMoment("lucky")).toBeNull();
+    const first = h.eng.sx.moments.find((m) => m.status === "running")!;
+    expect(first.bumper).toBe(false);
+    for (const w of toPid(h, "lucky_won")) h.eng.confirmPresent(w.pid, first.id);
+    expect(h.eng.triggerMoment("lucky")).toBeNull(); // now the bumper opens
+    expect(h.eng.sx.moments.find((m) => m.status === "running")!.bumper).toBe(true);
+    void ps;
+  });
+  test("the planning estimate follows the calling speed", () => {
+    const base = { rounds: 1, callSeconds: 10, autoMark: true, luckyDraws: 0, luckyWinners: 3, luckyPrize: "gift", bumper: false, scratchCards: 0, scratchWinning: 5, scratchPrize: "gift", momentsMode: "auto", boostersAllowed: true, revealNames: false } as SurpriseSettings;
+    expect(Surprise.plan({ ...base, callSeconds: 6 }, 3).estimatedMinutes).toBeLessThan(Surprise.plan({ ...base, callSeconds: 15 }, 3).estimatedMinutes);
+  });
+});
+
 describe("scratch card", () => {
   test("exactly the set number of winning cards, decided before anyone scratches, even if few scratch", () => {
     const h = make({ scratchCards: 1, scratchWinning: 5, scratchPrize: "gift", autoMark: true, momentsMode: "manual" });

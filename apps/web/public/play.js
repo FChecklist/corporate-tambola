@@ -826,7 +826,7 @@
         h = `${movTop("Lucky draw", c.bumper)}<div class="res ok mv">${ic("check")}</div><h2>You're in</h2>
           <p class="movp">${booster ? `Your ${esc(BNAME[c.prize] || "booster")} is added to your boosters.` : "Confirmed. Your organizer will contact you."}</p><button class="btn line big" data-act="mclose">Close</button>`;
       } else {
-        const list = (c.list || []).map((w) => `<li>${esc(w)}</li>`).join("");
+        const mineIds = new Set(Object.values(G.ids || {}).filter(Boolean)), list = (c.list || []).map((w) => `<li>${esc(w)}${mineIds.has(w) ? ` <span class="mine">(you)</span>` : ""}</li>`).join("");
         h = `${movTop("Lucky draw result", c.bumper)}<h2>Lucky draw winners</h2>${list ? `<ul class="movl">${list}</ul>` : `<p class="movp">No winner was confirmed this time.</p>`}
           ${c.wasConfirmed ? `<p class="movs">Your place is confirmed.</p>` : ""}<button class="btn line big" data-act="mclose">Close</button>`;
       }

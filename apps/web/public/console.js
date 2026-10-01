@@ -671,7 +671,7 @@
     } else if (hasM && ms.length) {
       const cnt = { lucky: 0, scratch: 0 };
       const pl = { pending: pill("", "Waiting"), running: pill("warn", "On screen"), done: pill("ok", "Done"), skipped: pill("", "Done") };
-      extra = `${st.next ? `<div class="tiny muted" style="margin-top:6px">Next surprise: ${esc(st.next)}</div>` : ""}<div class="small" style="margin-top:6px">${ms.map((m) => { const n = ++cnt[m.kind]; return `<div>${m.bumper ? "Bumper lucky draw" : (m.kind === "lucky" ? "Lucky draw " : "Scratch card ") + n} ${pl[m.status] || ""}</div>`; }).join("")}</div>`;
+      extra = `${st.next ? `<div class="tiny muted" style="margin-top:6px">Next surprise: ${esc(st.next)}</div>` : ""}<div class="row small" style="margin-top:6px;gap:6px 16px">${ms.map((m) => { const n = ++cnt[m.kind]; return `<span>${m.bumper ? "Bumper lucky draw" : (m.kind === "lucky" ? "Lucky draw " : "Scratch card ") + n} ${pl[m.status] || ""}</span>`; }).join("")}</div>`;
     }
     return `<div class="note info" style="display:block;margin:0 0 12px"><div style="font-size:13.5px">${parts.join(" · ")}</div>${extra}</div>`;
   }

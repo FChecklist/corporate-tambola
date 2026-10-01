@@ -72,7 +72,7 @@ export class Surprise {
     const boosters = (c.luckyPrize === "booster" ? luckyWinners : 0) + (c.scratchPrize === "booster" ? scratchWinners : c.scratchPrize === "mix" ? scratchWinners - half : 0);
     const capacity = R * P + 2 * (R - 1) + 2 + (c.autoMark ? 2 * R : 0);
     const moments = c.luckyDraws + c.scratchCards;
-    const speed = 10; // minutes estimate uses the normal 10 s unless the caller changes calling speed
+    const speed = c.callSeconds; // the estimate follows the calling speed setting
     const minutes = Math.round(R * (70 * speed / 60) + R * P * 20 / 60 + c.luckyDraws * 1.2 + (c.autoMark ? 0 : c.scratchCards * 0.7) + 2 * (R - 1));
     return { tambolaPrizes: tambola, luckyWinners, scratchWinningCards: scratchWinners, giftPrizes: gifts, boosters, capacity, moments, fits: moments <= capacity, estimatedMinutes: minutes };
   }
@@ -374,7 +374,9 @@ export class Surprise {
     if (e.status !== "started") return "The engagement is not running.";
     if (this.cfg.momentsMode !== "manual") return "Surprise moments run automatically in this engagement.";
     if (e.paused) return "Wait until the engagement is not paused.";
-    const m = this.moments.find((x) => x.status === "pending" && x.kind === kind && !(x.kind === "lucky" && x.bumper && this.moments.some((y) => y.status === "pending" && y.kind === "lucky" && !y.bumper)));
+    if (this.lucky || this.scratch) return "A lucky draw or scratch card is already on screen. Wait until it finishes.";
+    // the bumper draw is always the very last moment: it only opens once everything else has happened
+    const m = this.moments.find((x) => x.status === "pending" && x.kind === kind && !(x.bumper && this.moments.some((y) => y.status === "pending" && y.id !== x.id)));
     if (!m) return kind === "lucky" ? "There are no lucky draws left." : "There are no scratch cards left.";
     this.queue = [m.id]; this.cont = "resume";
     this.startNext();
