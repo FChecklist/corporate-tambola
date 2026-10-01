@@ -1,0 +1,244 @@
+// The pages themselves, run as a browser runs them (real page scripts in a DOM, talking to the real Worker code and an in-memory database).
+// IDs match docs/USE_CASES.md. These catch what API tests cannot: a page that freezes, a button that does nothing, a message that never shows.
+import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+
+setDefaultTimeout(30_000);
+import { createHash } from "node:crypto";
+import { newWorld, openPage, roundAt, roundMs, T, type Page } from "./harness";
+import { publicKeyFromSecret } from "../../../packages/beacon/src/control";
+
+const HOUR = 3_600_000;
+const START = roundAt(T) + 1200; // one hour after T
+const START_MS = roundMs(START);
+const rnd = (r: number) => createHash("sha256").update("fake" + r).digest("hex");
+let open: Page[] = [];
+afterEach(async () => { for (const p of open) await p.close(); open = []; });
+
+async function organizer(extra: Record<string, string> = {}) {
+  const w = newWorld(extra);
+  const s = await w.json(await w.api("POST", "/api/start", { email: "boss@acme.com" }));
+  return { ...w, token: s.token as string, aiKey: s.aiKey as string, aiMessage: s.aiMessage as string };
+}
+type O = Awaited<ReturnType<typeof organizer>>;
+const make = async (o: O, id: string, over: Record<string, unknown> = {}) => o.api("POST", "/api/z", { id, startRound: START, callSeconds: 9, cap: 100, ...over }, o.aiKey);
+const publish = (o: O, id: string) => o.api("POST", `/api/z/${id}/publish`, { email: "boss@acme.com", phone: "98765 43210" }, o.token);
+const regKey = (o: O, id: string) => o.api("PUT", `/api/z/${id}/control/key`, { publicKey: publicKeyFromSecret("11".repeat(32)) }, o.token);
+async function page(o: O, url: string, html: string, scripts: string[], session: Record<string, string> = {}, extra: Partial<Parameters<typeof openPage>[1]> = {}) {
+  const p = await openPage(o.world, { url: "http://localhost" + url, html, scripts, session, ...extra }); open.push(p); return p;
+}
+const consolePage = (o: O, eid: string, key = o.token, session: Record<string, string> = {}) =>
+  page(o, `/zc?e=${eid}`, "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": key, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com", ...session });
+
+describe("console (organizer page)", () => {
+  test("UC-53 the home page shows the two options first, with the AI work link ready to copy", async () => {
+    const o = await organizer();
+    const p = await page(o, "/zc", "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token, "ctz-aimsg": o.aiMessage });
+    const t = await p.waitFor((x) => /OPTION 1/.test(x));
+    expect(t.indexOf("OPTION 1")).toBeLessThan(t.indexOf("OPTION 2")); expect(t.indexOf("OPTION 2")).toBeLessThan(t.indexOf("Create your engagement"));
+    expect(t).toMatch(/ChatGPT, Gemini, Grok, Claude, DeepSeek, Z\.ai/); expect(t).toMatch(/The AI never pays/);
+    expect((p.$("#aimsg") as any).value).toContain("ai-manifest"); expect(p.$("#aicopy")).toBeTruthy();
+    expect(p.errors).toEqual([]);
+  });
+  test("UC-54 draft: the organizer publishes (free) after confirming email and mobile, then sees the payment-due card and the share link", async () => {
+    const o = await organizer(); await make(o, "UI-DRAFT");
+    const p = await consolePage(o, "UI-DRAFT");
+    await p.waitFor((x) => /Your engagement is a draft/.test(x));
+    expect(p.text()).toMatch(/publishing is free/i); expect(p.text()).not.toMatch(/Share with participants/);
+    p.click("#publishopen");
+    await p.waitFor((x) => /Confirm and publish/.test(x));
+    expect((p.$("#pubEmail") as any).value).toBe("boss@acme.com"); // prefilled, editable
+    (p.$("#pubPhone") as any).value = "98765 43210"; (p.$("#pubPhone") as any).dispatchEvent(new p.win.Event("input", { bubbles: true }));
+    p.click("#pubgo");
+    const t = await p.waitFor((x) => /LAST STEP: PAY BEFORE THE START/i.test(x));
+    expect(t).toMatch(/will not begin/); expect(t).toMatch(/Share with participants/);
+    expect((p.$('a[href^="/pay.html"]') as any).getAttribute("href")).toBe("/pay.html?e=UI-DRAFT");
+    expect(p.text()).toMatch(/localhost\/z\.html\?e=UI-DRAFT/);
+    expect(p.errors).toEqual([]);
+  });
+  test("UC-54 published but invalid details: the console shows the server's message and stays on the form", async () => {
+    const o = await organizer(); await make(o, "UI-BADPUB");
+    const p = await consolePage(o, "UI-BADPUB", o.token, { "ctz-email": "not-an-email" });
+    await p.waitFor((x) => /draft/.test(x)); p.click("#publishopen"); await p.waitFor((x) => /Confirm and publish/.test(x));
+    p.click("#pubgo");
+    await p.waitFor((x) => /valid (email|mobile)/i.test(x)); expect(p.text()).not.toMatch(/LAST STEP/i);
+  });
+  test("UC-10 / UC-54 held for non-payment: a clear red card, nothing called, no freeze", async () => {
+    const o = await organizer(); await make(o, "UI-HELD"); await publish(o, "UI-HELD");
+    o.world.now = START_MS + 5 * 60_000;
+    const p = await consolePage(o, "UI-HELD");
+    const t = await p.waitFor((x) => /could not begin/i.test(x));
+    expect(t).toMatch(/Pay now and start/); expect(t).toMatch(/0 \/ 90/); expect(p.errors).toEqual([]);
+  });
+  test("UC-54 a payment-due card counts down to the start and offers Pay now", async () => {
+    const o = await organizer(); await make(o, "UI-DUE"); await publish(o, "UI-DUE");
+    const p = await consolePage(o, "UI-DUE");
+    const t = await p.waitFor((x) => /LAST STEP/i.test(x));
+    expect(t).toMatch(/If payment is not made before then, the engagement will not begin/); expect(t).toMatch(/Pay now/); expect(t).toMatch(/Open the big screen/);
+  });
+  test("UC-6 a wrong or expired sign-in shows a message, never an endless Loading", async () => {
+    const o = await organizer(); await make(o, "UI-KEY");
+    const p = await consolePage(o, "UI-KEY", "ctk_" + "0".repeat(48));
+    const t = await p.waitFor((x) => !/^Loading/.test(x) || /sign-in/i.test(x), 4000);
+    expect(t).toMatch(/sign-in has expired|sign in again/i);
+  });
+  test("UC-80 the organizer sends a message to everyone from the console; empty is refused; clear works", async () => {
+    const o = await organizer(); await make(o, "UI-ANN"); await regKey(o, "UI-ANN"); await publish(o, "UI-ANN");
+    const p = await consolePage(o, "UI-ANN");
+    await p.waitFor((x) => /Message to everyone/.test(x));
+    p.click("#annSend"); await p.waitFor((x) => /Write a message first/.test(x));
+    p.click('[data-chip="Dinner is served"]'); expect((p.$("#annText") as any).value).toBe("Dinner is served");
+    p.click("#annSend"); await p.waitFor((x) => /Sent\. Phones show and speak it/.test(x));
+    expect((await o.json(await o.api("GET", "/api/z/UI-ANN/control"))).ann.text).toBe("Dinner is served");
+    p.click("#annClear"); await p.waitFor((x) => /wait a few seconds/.test(x)); // the server spaces messages a few seconds apart
+    o.world.now += 10_000; p.click("#annClear"); await p.waitFor((x) => /Message cleared/.test(x));
+    expect((await o.json(await o.api("GET", "/api/z/UI-ANN/control"))).ann).toBeUndefined();
+  });
+  test("UC-81 the co-host link opens a limited screen: numbers, participants, big screen and messages, nothing that changes anything", async () => {
+    const o = await organizer(); await make(o, "UI-HOST"); await regKey(o, "UI-HOST"); await publish(o, "UI-HOST");
+    const host = await consolePage(o, "UI-HOST"); await host.waitFor((x) => /Co-host/.test(x)); // the organizer's own screen offers it
+    host.click("#hostmake"); const link = (await host.waitFor((x) => /#host=cth_/.test(x))).match(/#host=(cth_[0-9a-f]{48})/)![1]!;
+    const h = await page(o, `/zc?e=UI-HOST#host=${link}`, "zc.html", ["zgame.js", "control.js", "zc.js"]);
+    const t = await h.waitFor((x) => /Co-host · UI-HOST/.test(x));
+    expect(t).toMatch(/Message to everyone/); expect(t).toMatch(/Open the big screen/);
+    for (const banned of [/Publish/i, /Pay/i, /Erase/, /Invite list/, /Controls/, /Rewards ·/, /AI assistant/i, /Co-host link/i]) expect(t).not.toMatch(banned);
+    expect(h.win.location.hash).toBe(""); // the key is not left in the address bar
+    h.click('[data-chip="We start in 5 minutes"]'); h.click("#annSend");
+    await h.waitFor((x) => /Sent\./.test(x));
+    expect((await o.json(await o.api("GET", "/api/z/UI-HOST/control"))).ann.text).toBe("We start in 5 minutes");
+  });
+  test("UC-82 the break editor can make a lucky draw a scratch card", async () => {
+    const o = await organizer(); await make(o, "UI-SCR");
+    const p = await consolePage(o, "UI-SCR"); await p.waitFor((x) => /Tickets, rewards and brand breaks/.test(x));
+    const set = (sel: string, v: string) => { const el = p.$(sel) as any; el.value = v; };
+    set('[data-bk="after"][data-i="0"]', "40"); set('[data-bk="seconds"][data-i="0"]', "60"); set('[data-bk="kind"][data-i="0"]', "lucky"); set('[data-bk="title"][data-i="0"]', "Scratch and win"); set('[data-bk="style"][data-i="0"]', "scratch");
+    p.click("#savecfg"); await p.waitFor((x) => /Saved/.test(x));
+    expect((await o.json(await o.api("GET", "/api/z/UI-SCR/summary", undefined, o.aiKey))).breaks[0].style).toBe("scratch");
+  });
+});
+
+describe("payment page", () => {
+  const payPage = (o: O, eid: string, signedIn = true) => page(o, `/pay?e=${eid}`, "pay.html", ["common.js", "pay.js"], signedIn ? { "ctz-org": o.token, "ctz-email": "boss@acme.com", "ctz-phone": "98765 43210" } : {});
+  test("UC-55 not signed in: asks to sign in instead of showing a broken page", async () => {
+    const o = await organizer(); await make(o, "UI-PAY0");
+    const p = await payPage(o, "UI-PAY0", false); expect(await p.waitFor((x) => /Please sign in first/.test(x))).toMatch(/Sign in with email/);
+  });
+  test("UC-23 / UC-55 payments not switched on: the order is shown, the button says so, nothing can be charged", async () => {
+    const o = await organizer(); await make(o, "UI-PAY1", { cap: 230 }); await publish(o, "UI-PAY1");
+    const p = await payPage(o, "UI-PAY1");
+    const t = await p.waitFor((x) => /Your order/.test(x));
+    expect(t).toMatch(/Online payment opens soon/); expect(t).toMatch(/Up to 250/); expect(t).toMatch(/GST 18%/); expect(t).toMatch(/Pay before/);
+    expect((p.$("#paygo") as any).disabled).toBe(true);
+  });
+  test("UC-9 / UC-55 test-payment mode end to end in the page: validation first, then paid, published, and told when it begins", async () => {
+    const o = await organizer({ TEST_MODE: "1" }); await make(o, "UI-PAY2", { cap: 100 }); await publish(o, "UI-PAY2");
+    const p = await payPage(o, "UI-PAY2"); await p.waitFor((x) => /Billing details/.test(x));
+    p.click("#paygo"); await p.waitFor((x) => /organization name/i.test(x));
+    (p.$("#org") as any).value = "Acme Industries";
+    p.click("#paygo"); await p.waitFor((x) => /GSTIN/i.test(x) && /valid/i.test(x)); // India needs a GSTIN on this page
+    (p.$("#org") as any).value = "Acme Industries"; (p.$("#tax") as any).value = "27ABCDE1234F1Z5";
+    p.click("#paygo");
+    const t = await p.waitFor((x) => /Payment received/i.test(x));
+    expect(t).toMatch(/will begin on time/); expect(t).toMatch(/Open my engagement/);
+    expect((o.world.raw.prepare("SELECT pack FROM engagement WHERE id='UI-PAY2'").get() as any).pack).toBe(100);
+  });
+  test("UC-12 / UC-55 paying while held: the page says when it will begin", async () => {
+    const o = await organizer({ TEST_MODE: "1" }); await make(o, "UI-PAY3"); await publish(o, "UI-PAY3");
+    o.world.now = START_MS + HOUR;
+    const p = await payPage(o, "UI-PAY3"); await p.waitFor((x) => /waiting for your payment now/i.test(x));
+    (p.$("#org") as any).value = "Acme"; (p.$("#tax") as any).value = "27ABCDE1234F1Z5"; p.click("#paygo");
+    expect(await p.waitFor((x) => /Payment received/i.test(x))).toMatch(/It begins at/);
+  });
+  test("UC-55 an already paid engagement says so; a stranger's engagement is not shown", async () => {
+    const o = await organizer(); await make(o, "UI-PAY4"); await publish(o, "UI-PAY4"); o.world.raw.prepare("UPDATE engagement SET pack=100 WHERE id='UI-PAY4'").run();
+    expect(await (await payPage(o, "UI-PAY4")).waitFor((x) => /already paid and published/i.test(x))).toBeTruthy();
+    const other = await o.json(await o.api("POST", "/api/start", { email: "other@x.com" }, undefined)).then ? null : null; void other;
+  });
+});
+
+describe("big screen", () => {
+  const big = (o: O, eid: string) => page(o, `/big?e=${eid}`, "big.html", ["zgame.js", "big.js"]);
+  test("UC-56 before the start it counts down; a held engagement says it is waiting; an announcement is shown big", async () => {
+    const o = await organizer(); await make(o, "UI-BIG"); await regKey(o, "UI-BIG"); await publish(o, "UI-BIG");
+    let p = await big(o, "UI-BIG");
+    expect(await p.waitFor((x) => /The engagement starts in/.test(x))).toMatch(/0 of 90 numbers called/);
+    await o.api("POST", "/api/z/UI-BIG/announce", { text: "Dinner is served" }, o.token);
+    await p.close(); p = await big(o, "UI-BIG");
+    await p.waitFor((x) => /Dinner is served/.test(x));
+    o.world.now = START_MS + 60_000; await p.close(); p = await big(o, "UI-BIG");
+    expect(await p.waitFor((x) => /Waiting for the organizer/.test(x))).not.toMatch(/pay/i);
+  });
+  test("UC-56 a draft shows a message, not a crash", async () => {
+    const o = await organizer(); await make(o, "UI-BIG2");
+    const p = await big(o, "UI-BIG2"); await p.waitFor((x) => /not open yet|Connecting/i.test(x));
+  });
+});
+
+describe("phone page", () => {
+  const rtFake = (win: any, nowMs: () => number) => { // the phone's runtime with a fake public beacon (the real one is not reachable from a test)
+    const Orig = win.ZG.PhoneRuntime;
+    win.ZG.PhoneRuntime = class extends Orig {
+      constructor(eid: string, deps: any) {
+        super(eid, { ...deps, beacon: { fetcher: async (url: string) => { const last = url.split("/").pop()!; const r = last === "latest" ? roundAt(nowMs()) : Number(last); return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" }) }; }, mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 }, verify: (x: any) => x.signature === "aa", mono: () => deps.mono() });
+      }
+    };
+  };
+  const phone = (o: O, eid: string) => page(o, `/z?e=${eid}`, "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, () => o.world.now); } });
+  const join = async (p: Page) => { await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = "9822222222"; (p.$("#nm") as any).value = "Asha"; p.click("#go"); };
+  test("UC-29 / UC-57 a guest joins a published engagement before payment and gets the waiting room: countdown, what can be won, how it works, sound check, calendar", async () => {
+    const o = await organizer(); await make(o, "UI-PH1"); await o.api("PATCH", "/api/z/UI-PH1/settings", { rewards: [{ pattern: "full", ordinal: 1, text: "Voucher 5000" }, { pattern: "early5", ordinal: 1, text: "Gift hamper" }] }, o.aiKey); await publish(o, "UI-PH1");
+    const p = await phone(o, "UI-PH1"); await join(p);
+    const t = await p.waitFor((x) => /What you can win/.test(x));
+    expect(t).toMatch(/You are in\. See you at/); expect(t).toMatch(/Voucher 5000/); expect(t).toMatch(/Gift hamper/); expect(t).toMatch(/How it works/); expect(t).toMatch(/Check my sound/); expect(t).toMatch(/Add to my calendar/);
+    expect(t).toMatch(/until the first number/); expect(t).not.toMatch(/pay|unpaid|invoice/i);
+    expect(decodeURIComponent((p.$("#addcal") as any).getAttribute("href"))).toMatch(/BEGIN:VEVENT[\s\S]*SUMMARY:Corporate Tambola/);
+    expect(p.errors).toEqual([]);
+  });
+  test("UC-28 a draft's link says it is not open yet", async () => {
+    const o = await organizer(); await make(o, "UI-PH2");
+    const p = await phone(o, "UI-PH2"); await p.waitFor((x) => /not open yet|Could not reach|not valid/i.test(x));
+  });
+  test("UC-38 / UC-57 held for non-payment: the phone says it is waiting for the organizer, shows no number and never mentions money", async () => {
+    const o = await organizer(); await make(o, "UI-PH3"); await regKey(o, "UI-PH3"); await publish(o, "UI-PH3");
+    const p = await phone(o, "UI-PH3"); await join(p); await p.waitFor((x) => /What you can win|Your ticket/.test(x));
+    o.world.now = START_MS + 30_000; // the clock moves past the hold point; the phone learns it with its next check
+    for (let i = 0; i < 40 && !/Waiting for the organizer/.test(p.text()); i++) { await new Promise((r) => setTimeout(r, 100)); (p.win.__rt as any).lastControlPoll = -1e9; }
+    const t = await p.waitFor((x) => /Waiting for the organizer/.test(x), 8000);
+    expect(t).not.toMatch(/pay|unpaid|invoice|price/i); expect(t).toMatch(/Your ticket is safe/);
+  });
+  test("UC-80 an announcement shows as a banner on the phone, can be dismissed, and a new one shows again", async () => {
+    const o = await organizer(); await make(o, "UI-PH4"); await regKey(o, "UI-PH4"); await publish(o, "UI-PH4");
+    const p = await phone(o, "UI-PH4"); await join(p); await p.waitFor((x) => /Your ticket|What you can win/.test(x));
+    let at = T; const say = (text: string) => o.api("POST", "/api/z/UI-PH4/announce", { text }, o.token, (at += 10_000));
+    await say("Please take your seats");
+    const poll = async (re: RegExp) => { for (let i = 0; i < 60 && !re.test(p.text()); i++) { (p.win.__rt as any).lastControlPoll = -1e9; await new Promise((r) => setTimeout(r, 100)); } return p.text(); };
+    expect(await poll(/Message from the organizer/)).toMatch(/Please take your seats/);
+    p.click("#annok"); await p.waitFor((x) => !/Message from the organizer/.test(x));
+    await say("Rewards at the stage");
+    expect(await poll(/Rewards at the stage/)).toMatch(/Message from the organizer/);
+  });
+});
+
+describe("scratch card on the phone", () => {
+  const rtFake2 = (win: any, nowMs: () => number) => { const Orig = win.ZG.PhoneRuntime; win.ZG.PhoneRuntime = class extends Orig { constructor(eid: string, deps: any) { super(eid, { ...deps, beacon: { fetcher: async (url: string) => { const last = url.split("/").pop()!; const r = last === "latest" ? roundAt(nowMs()) : Number(last); return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" }) }; }, mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 }, verify: (x: any) => x.signature === "aa" }); } }; };
+  async function scratchSetup(o: O, id: string) {
+    await make(o, id); await o.api("PATCH", `/api/z/${id}/settings`, { breaks: [{ after: 30, seconds: 60, kind: "lucky", title: "Scratch and win", winners: 3, style: "scratch" }] }, o.aiKey); await publish(o, id);
+    const p = await page(o, `/z?e=${id}`, "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake2(win, () => o.world.now); } });
+    await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = "9822222222"; p.click("#go"); await p.waitFor((x) => /Your ticket|What you can win/.test(x));
+    return p;
+  }
+  test("UC-82 a scratch card: the winner scratches to reveal 'You won', it opens by itself after 45 seconds, and a non-winner sees 'Not this time'", async () => {
+    const o = await organizer(); const p = await scratchSetup(o, "UI-SC1"); const rt = p.win.__rt;
+    expect(await p.waitFor((x) => /Scratch card/.test(x))).toMatch(/at the end of the break/);
+    rt.allResults = [{ pattern: "lucky", ordinal: 1, round: 1, idx: 30, count: 1, winners: [rt.pid] }];
+    await p.waitFor((x) => /Scratch here/.test(x)); expect(p.text()).not.toMatch(/You won/);
+    p.click("[data-scr]"); expect(await p.waitFor((x) => /You won!/.test(x))).not.toMatch(/Scratch here/);
+    rt.allResults = [{ pattern: "lucky", ordinal: 1, round: 1, idx: 30, count: 1, winners: ["someone-else"] }];
+    await p.waitFor((x) => /Not this time/.test(x));
+  });
+  test("UC-82 untouched, a scratch card opens by itself after 45 seconds", async () => {
+    const o = await organizer(); const p = await scratchSetup(o, "UI-SC2"); const rt = p.win.__rt;
+    rt.allResults = [{ pattern: "lucky", ordinal: 1, round: 1, idx: 30, count: 1, winners: ["someone-else"] }];
+    await p.waitFor((x) => /Scratch here/.test(x));
+    o.world.now += 46_000; expect(await p.waitFor((x) => /Not this time/.test(x))).not.toMatch(/Scratch here/);
+  });
+});

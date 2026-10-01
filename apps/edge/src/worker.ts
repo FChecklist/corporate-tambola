@@ -15,7 +15,7 @@ import { defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/b
 import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
-import { SAFETY_FAST, SAFETY_STANDARD, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
+import { PAUSE_MAX_PARTICIPANTS, safetyForCap, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 
 export interface D1Result<T = any> { results?: T[]; meta?: { changes?: number } }
 export interface D1Stmt { bind(...v: unknown[]): D1Stmt; run(): Promise<D1Result>; all<T = any>(): Promise<D1Result<T>>; first<T = any>(): Promise<T | null> }
@@ -151,17 +151,20 @@ function d1kv(env: Env): KV { return {
   put: async (k, v) => { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, v).run(); },
 }; }
 
-interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | null }
+interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | null }
 async function authOf(req: Request, env: Env): Promise<Auth> {
   const presented = req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   if (!presented) return { plat: false, org: null, kind: null };
   if (env.ORGANIZER_SECRET && presented === env.ORGANIZER_SECRET) return { plat: true, org: null, kind: "platform" };
-  const row = await env.DB.prepare("SELECT org, kind FROM organizer_key WHERE hash=? AND revoked=0").bind(await sha("key|" + presented)).first<{ org: string; kind: "master" | "ai" }>();
+  const row = await env.DB.prepare("SELECT org, kind FROM organizer_key WHERE hash=? AND revoked=0").bind(await sha("key|" + presented)).first<{ org: string; kind: "master" | "ai" | "host" }>();
   return row ? { plat: false, org: row.org, kind: row.kind } : { plat: false, org: null, kind: null };
 }
 /** May this caller act on this engagement? `master` = needs the organizer's own key (or ours), not the AI's. */
 const can = (a: Auth, e: { org: string | null }, master = false) => a.plat || (!!a.org && e.org === a.org && (!master || a.kind === "master"));
-const deny = (a: Auth) => json({ error: a.kind === "ai" ? "Your AI assistant may not do this. Please do it yourself in the console." : "Not allowed." }, 403);
+const deny = (a: Auth) => json({ error: a.kind === "ai" ? "Your AI assistant may not do this. Please do it yourself in the console." : a.kind === "host" ? "Only the organizer can do this. A co-host can watch the engagement and send messages to everyone." : "Not allowed." }, 403);
+/** What a co-host may touch: watching, and messages to everyone. Nothing that changes the engagement, the money or anyone's data. */
+const HOST_ACTIONS = new Set(["participants", "summary", "results", "info", "announce"]);
+const MAX_HOSTS = 5;
 
 export const AI_MANIFEST = {
   name: "Corporate Tambola organizer API",
@@ -188,7 +191,7 @@ export const AI_MANIFEST = {
     { do: "List engagements and head-counts", call: "GET /api/history" },
     { do: "Create an engagement. It is saved as a free draft that participants cannot see yet; nothing is paid at this step", call: "POST /api/z {id, startRound, callSeconds (6|9|12|15), cap, closed?}  -> {ok, draft, openUrl}" },
     { do: "When everything is set up, tell the organizer it is ready. Publishing is free but only the organizer can do it (they confirm their email and mobile number), and payment is due before the start time or the engagement will not begin. This returns a link: give it to the organizer and help them through every step, but never try to publish or pay yourself", call: "POST /api/z/{id}/publish -> {published:false, needsOrganizer:true, consoleUrl} (the organizer opens consoleUrl, confirms their details and presses Publish; afterwards the same call returns payUrl, the payment page, and shareUrl, the link for guests)" },
-    { do: "Change start time, speed, cap, invite-only, tickets per participant (1 or 2), reward lines and brand breaks (up to 3) and rounds (1 to 5 games, each with new numbers and new tickets) before the first number", call: "PATCH /api/z/{id}/settings {startRound?, callSeconds?, cap?, closed?, tickets?, rounds?, rewards?: [{pattern: early5|top|mid|bot|corners|star|full, scope?: ticket|two_ticket, ordinal?: 1-5, text}], breaks?: [{after: 1-89 numbers called, seconds: 15-600 in steps of 3, kind: file|youtube|slides|speech|lucky, title, mediaUrl?: https link (not for lucky), winners?: 1|3|5|10 (lucky only, default 3)}]}. IMPORTANT: rewards, breaks and every list you send REPLACE what was saved, they are not merged, so always send the complete list (to change one reward, read the summary, change it, send them all). A media link must be https; for kind youtube it must be a YouTube link; for file it must be a direct link the phones can open (a video, audio, image or PDF file), which we cannot check for you. A reward line is ONE winner of ONE house: for three winners of the full house send three lines with ordinal 1, 2 and 3. For the two-ticket full house use pattern full with scope two_ticket (ordinal 1-5). Names for the organizer: early5 = Early Five, top = Top line, mid = Middle line, bot = Bottom line, corners = Four corners, star = Star, full = Full house. A lucky draw is a break: {after: 60, seconds: 60, kind: lucky, title: Lucky draw, winners: 3}. Worked example: PATCH /api/z/{id}/settings {startRound: 33146812, callSeconds: 9, cap: 250, tickets: 2, rounds: 1, rewards: [{pattern: early5, ordinal: 1, text: Gift hamper}, {pattern: full, ordinal: 1, text: Voucher 5000}, {pattern: full, ordinal: 2, text: Voucher 3000}, {pattern: full, scope: two_ticket, ordinal: 1, text: iPad}], breaks: [{after: 30, seconds: 90, kind: youtube, title: Anniversary film, mediaUrl: https://www.youtube.com/watch?v=...}, {after: 60, seconds: 60, kind: lucky, title: Lucky draw, winners: 3}]}" },
+    { do: "Change start time, speed, cap, invite-only, tickets per participant (1 or 2), reward lines and brand breaks (up to 3) and rounds (1 to 5 games, each with new numbers and new tickets) before the first number", call: "PATCH /api/z/{id}/settings {startRound?, callSeconds?, cap?, closed?, tickets?, rounds?, rewards?: [{pattern: early5|top|mid|bot|corners|star|full, scope?: ticket|two_ticket, ordinal?: 1-5, text}], breaks?: [{after: 1-89 numbers called, seconds: 15-600 in steps of 3, kind: file|youtube|slides|speech|lucky, title, mediaUrl?: https link (not for lucky), winners?: 1|3|5|10 (lucky only, default 3), style?: draw|scratch (lucky only; scratch shows a scratch card on phones, the winners are drawn the same fair way)}]}. IMPORTANT: rewards, breaks and every list you send REPLACE what was saved, they are not merged, so always send the complete list (to change one reward, read the summary, change it, send them all). A media link must be https; for kind youtube it must be a YouTube link; for file it must be a direct link the phones can open (a video, audio, image or PDF file), which we cannot check for you. A reward line is ONE winner of ONE house: for three winners of the full house send three lines with ordinal 1, 2 and 3. For the two-ticket full house use pattern full with scope two_ticket (ordinal 1-5). Names for the organizer: early5 = Early Five, top = Top line, mid = Middle line, bot = Bottom line, corners = Four corners, star = Star, full = Full house. A lucky draw is a break: {after: 60, seconds: 60, kind: lucky, title: Lucky draw, winners: 3}. Worked example: PATCH /api/z/{id}/settings {startRound: 33146812, callSeconds: 9, cap: 250, tickets: 2, rounds: 1, rewards: [{pattern: early5, ordinal: 1, text: Gift hamper}, {pattern: full, ordinal: 1, text: Voucher 5000}, {pattern: full, ordinal: 2, text: Voucher 3000}, {pattern: full, scope: two_ticket, ordinal: 1, text: iPad}], breaks: [{after: 30, seconds: 90, kind: youtube, title: Anniversary film, mediaUrl: https://www.youtube.com/watch?v=...}, {after: 60, seconds: 60, kind: lucky, title: Lucky draw, winners: 3}]}" },
     { do: "Load participants (invite list)", call: "POST /api/z/{id}/roster {people:[{phone,name}]} up to 100 per call" },
     { do: "Reuse an earlier engagement's people", call: "POST /api/z/{id}/reuse {from}" },
     { do: "See who joined (names and ids only, never phone numbers)", call: "GET /api/z/{id}/participants" },
@@ -215,6 +218,7 @@ export const AI_MANIFEST = {
     "Sign or send a pause yourself (only the organizer's own browser holds that key)",
     "Change the rules, the reward patterns, the numbers or anyone's ticket",
     "Write or run code on the platform",
+    "Send messages to the guests' phones (the organizer or their co-host does that)",
   ],
 };
 
@@ -330,6 +334,16 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const r = await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE org=? AND substr(hash,1,10)=? AND revoked=0").bind(a.org, id).run();
     return json({ ok: true, revoked: r.meta?.changes ?? 0 });
   }
+  if (req.method === "GET" && p === "/api/whoami") return a.kind ? json({ kind: a.kind }) : deny(a); // the console uses this to show the right screen
+  if (req.method === "POST" && p === "/api/org/host") { // the organizer invites a co-host: a key that can watch and send messages to everyone, and nothing else
+    if (a.kind !== "master" || !a.org) return deny(a);
+    const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM organizer_key WHERE org=? AND kind='host' AND revoked=0").bind(a.org).first<{ c: number }>())?.c ?? 0;
+    if (n >= MAX_HOSTS) return json({ error: `You can have up to ${MAX_HOSTS} co-hosts at a time. Retire one first.` }, 409);
+    if (!(await spend(env, now, 2))) return BUSY();
+    const key = "cth_" + randHex(24);
+    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), a.org, "host", now).run();
+    return json({ ok: true, hostKey: key });
+  }
   if (req.method === "POST" && p === "/api/org/ai/revoke") {
     if (a.kind !== "master" || !a.org) return deny(a);
     if (!(await spend(env, now))) return BUSY();
@@ -347,6 +361,10 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
       const ge = await env.DB.prepare("SELECT id, pack, start_round FROM engagement WHERE id=?").bind(cid).first<{ id: string; pack: number | null; start_round: number }>();
       if (ge && ge.pack === 0 && roundMs(ge.start_round) - LOCK_LEAD_MS <= now && (await isPublished(env, ge))) // published, unpaid, start time reached: phones hold, nothing is shown
         return new Response(JSON.stringify({ ...(f ?? {}), locked: true }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } });
+      if (f) { // the organizer's latest message rides along with the pause file phones already ask for, so it costs no extra requests
+        const an = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`ann/${cid}`).first<{ v: string }>();
+        if (an) { const x = JSON.parse(an.v); return new Response(JSON.stringify({ ...f, ann: { id: x.id, text: x.text } }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } }); }
+      }
       return f ? new Response(JSON.stringify(f), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } }) : json({ registered: false }, 404);
     }
     if (!sub && req.method === "POST") {
@@ -357,14 +375,16 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
       if (r.ok && !(r as any).duplicate) await mirrorControl(env, cid!);
       return r.ok ? json(r) : json({ error: r.error }, r.status);
     }
-    const ce = await env.DB.prepare("SELECT id, org FROM engagement WHERE id=?").bind(cid).first<{ id: string; org: string | null }>();
+    const ce = await env.DB.prepare("SELECT id, org, cap FROM engagement WHERE id=?").bind(cid).first<{ id: string; org: string | null; cap: number }>();
     if (!ce) return json({ error: "No such engagement." }, 404);
     if (sub === "/key" && req.method === "PUT") { // only the organizer's own console registers the key that signs pauses
       if (!can(a, ce, true)) return deny(a);
       const b = await body(req);
       if (!b || typeof b.publicKey !== "string") return json({ error: "Bad key." }, 400);
       if (!(await spend(env, now))) return BUSY();
-      const r = await registerKey(kv, cid!, b.publicKey, b.profile === "fast" ? SAFETY_FAST : SAFETY_STANDARD);
+      const safety = safetyForCap(ce.cap, b.profile === "fast");
+      if (!safety) return json({ error: `Pause is available for engagements of up to ${PAUSE_MAX_PARTICIPANTS.toLocaleString("en-IN")} participants. Larger ones run without it, which keeps every phone's traffic off the free plan's daily allowance.` }, 409);
+      const r = await registerKey(kv, cid!, b.publicKey, safety);
       if (r.ok) await mirrorControl(env, cid!);
       return r.ok ? json({ ok: true }) : json({ error: r.error }, 409);
     }
@@ -442,6 +462,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   /* ---- engagements ---- */
   if (req.method === "POST" && p === "/api/z") {
     if (!a.plat && !a.org) return deny(a);
+    if (a.kind === "host") return deny(a);
     const b = await body(req);
     if (!b || !ID.test(b.id ?? "") || !Number.isInteger(b.startRound) || !Number.isInteger(b.callSeconds) || b.callSeconds % 3 || b.callSeconds < 6 || !Number.isInteger(b.cap) || b.cap < 1 || b.cap > 100000)
       return json({ error: "Check the engagement details." }, 400);
@@ -475,7 +496,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (!a.plat) return deny(a);
     return json({ ok: true, purged: await purgeOld(env, now) });
   }
-  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary)$/);
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce)$/);
   if (!m) return json({ error: "Not found", hint: "Read the list of what you can do at /api/z/ai-manifest. Engagement routes look like /api/z/{id}/summary, /settings, /roster, /participants, /results, /publish." }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
@@ -488,6 +509,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   const pidOf = async (ph: string) => (await sha(`${eid}|${ph}`)).slice(0, 16);
   const cleanName = (n: unknown) => (typeof n === "string" ? n.replace(/[<>`]/g, "").slice(0, 60) : null);
 
+  if (a.kind === "host" && !HOST_ACTIONS.has(action!)) return deny(a);
   const unpaid = e.pack === 0;
   const isDraft = unpaid && !(await isPublished(env, e));
   const locked = unpaid && !isDraft && roundMs(e.start_round) - LOCK_LEAD_MS <= now; // published but not paid by its start time: it does not begin
@@ -537,6 +559,20 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   if (action === "info" && req.method === "GET") return json({ ...(isDraft ? { draft: true } : {}), ...(unpaid && !isDraft ? { ...(can(a, e) ? { unpaid: true } : {}), locked } : {}), startMs: roundMs(e.start_round), cap: e.cap, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), ...pub(e) });
 
   // everything below is for the organizer (or their AI, where allowed)
+  if (action === "announce" && req.method === "POST") { // a message to every phone and the big screen. Organizer or co-host only: never the AI, never a stranger
+    if (!can(a, e) || a.kind === "ai") return deny(a);
+    if (isDraft) return json({ error: "Publish the engagement first. Nobody can see a draft." }, 400);
+    const b = await body(req, 2_048);
+    const text = typeof b?.text === "string" ? b.text.replace(/[<>`]/g, "").replace(/\s+/g, " ").trim().slice(0, 160) : null;
+    if (text === null) return json({ error: "Write the message to send." }, 400);
+    const last = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`ann/${eid}`).first<{ v: string }>();
+    if (last && now - (JSON.parse(last.v).at ?? 0) < 5_000) return json({ error: "Please wait a few seconds before sending another message." }, 429);
+    if (!(await spend(env, now))) return BUSY();
+    if (!text) { await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`ann/${eid}`).run(); return json({ ok: true, cleared: true }); }
+    const ann = { id: randHex(4), text, at: now };
+    await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`ann/${eid}`, JSON.stringify(ann)).run();
+    return json({ ok: true, sent: ann, reachesPhonesWithin: "about a minute, on engagements with pause available" });
+  }
   if (action === "summary" && req.method === "GET") { // one read-back of everything saved, so the organizer's AI can confirm it with them
     if (!can(a, e)) return deny(a);
     const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
@@ -658,6 +694,14 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (next.cap < (have?.c ?? 0)) return json({ error: "The limit cannot be lower than the people already on the list." }, 409);
     if (!(await spend(env, now))) return BUSY();
     await env.DB.prepare("UPDATE engagement SET start_round=?, call_seconds=?, cap=?, closed=?, tickets=?, config=? WHERE id=?").bind(next.start_round, next.call_seconds, next.cap, next.closed, vc.cfg.tickets, cfgJson(vc.cfg), eid).run();
+    { // the pause profile depends on the size: if no pause has been sent yet and the size moved to another profile, forget the unused key so the console registers the right one
+      const f = await readPublished(d1kv(env), eid!);
+      const sf = safetyForCap(next.cap);
+      if (f && f.messages.length === 0 && (!sf || sf.leadRounds !== f.leadRounds)) {
+        await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${eid}.json`).run();
+        try { await env.CONTROL_R2?.delete(controlKey(eid!)); } catch { /* the object expires with its engagement anyway */ }
+      }
+    }
     return json({ ok: true, startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed, tickets: vc.cfg.tickets, rewards: vc.cfg.rewards, breaks: vc.cfg.breaks, rounds: vc.cfg.rounds });
   }
   return json({ error: "Not found" }, 404);
@@ -672,7 +716,7 @@ export async function purgeOld(env: Env, now: number): Promise<number> {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(id),
       env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
-      env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`), env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
+      env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`), env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
     ]);
     try { await env.CONTROL_R2?.delete(controlKey(id)); } catch { /* the object expires with its engagement anyway */ }
     n++;

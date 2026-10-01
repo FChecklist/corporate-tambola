@@ -23,7 +23,8 @@
     "pages:deploy": "bun run pages/build.mjs && cd pages && bunx wrangler@3 pages deploy public --project-name corporate-tambola --branch main --commit-dirty=true"
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "happy-dom": "^20.14.5",
+    "typescript": "^5.6.0"
   }
 }

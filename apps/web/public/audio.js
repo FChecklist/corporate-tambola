@@ -61,5 +61,16 @@
       speechSynthesis.speak(u);
     } catch {}
   };
+  // A spoken message (the organizer's announcement, or the sound check). Uses the phone's own voice, so it costs nothing.
+  A.say = (text, lead = "Message from the organizer. ") => {
+    if (!A.enabled || !window.speechSynthesis) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(lead + text); u.rate = 0.9; u.lang = "en-IN";
+      const vs = speechSynthesis.getVoices(); const pick = vs.find((v) => v.lang === "en-IN") || vs.find((v) => /^en/.test(v.lang)); if (pick) u.voice = pick;
+      speechSynthesis.speak(u);
+    } catch {}
+  };
+  A.test = () => { A.unlock(); A.play(24); };
   A.stop = () => { try { window.speechSynthesis && speechSynthesis.cancel(); } catch {} };
 })();

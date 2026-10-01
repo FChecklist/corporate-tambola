@@ -35,7 +35,16 @@ Mail handling in the Worker: a sent mail leaves no body behind; a mail that coul
 
 ## 4. What the free plan can and cannot carry
 - Phones fetch the public randomness directly from drand's mirrors (about 160 requests per phone for a whole engagement); that never touches our free request allowance.
-- The control file (pause) is polled by every phone every ~9 s. 10,000 phones is about 4,000 requests a minute: **serve it from a cached static file (R2 or Pages) rather than through the Worker**, or it will use the 100,000 daily Worker requests in about 25 minutes. Not yet wired; design in `AI_LINK_AND_PAUSE_DESIGN.md`.
+- **The pause check is the one thing that costs Worker requests, so it scales with size (done 2026-10-02).** Free Workers allow about 100,000 requests a day. Phones ask "any pause?" on a timer, so the timer slows as the engagement grows (planning figure: about 40,000 requests per engagement):
+
+  | Participants | Phones ask about every | A pause reaches phones in about | Requests for a 20-minute engagement |
+  |---|---|---|---|
+  | up to 250 | 9 to 12 s | 30 s | up to about 33,000 |
+  | 251 to 1,000 | 27 to 36 s | 75 s | about 40,000 |
+  | 1,001 to 2,000 | 54 to 72 s | 150 s | about 40,000 |
+  | over 2,000 | never: no pause is registered, so phones ask once or twice before the start and never again | pause not available | about 0 |
+
+  An engagement nobody can pause costs almost nothing: after the start phones stop asking altogether. Organizer messages (announcements) ride along with this same check, so they cost no extra requests and reach phones within one interval. If the owner later accepts a paid plan, or R2 with a card on file, a static file would remove this limit; until then this is the free-plan design. The write budget (D1) is separate and unchanged.
 - Claims are stored only for engagements of up to 500 participants (they never decide winners); larger ones store none.
 
 ## 5. Still open
@@ -63,9 +72,20 @@ Two modes exist side by side. **Phone-run mode** (new, no server per engagement)
 | External AI work link (scoped), suggestion board | yes | yes (link only) |
 | Refer & earn, payments, invoices, e-mailed sign-in | yes | payments and sign-in yes |
 | Rounds (1 to 5 games in one engagement; new numbers and new tickets each round, a 90 s wait between) | yes | yes |
-| **Scratch cards, boosters (joker, extra ticket, pass)** | **no** | yes |
-| Family passes, team leads/hosts roles, waiting room, second-phone alerts | **no** | yes |
-| Host live voice, big-screen view | **no** | yes (big screen) |
+| Scratch card (a lucky draw shown as a scratch card; same fair draw, only the reveal differs) | yes | yes |
+| Waiting room before the start (countdown, what can be won, how it works, sound check, add to calendar) | yes | yes |
+| Messages from the organizer to every phone and the big screen, shown and spoken by the phone's own voice | yes (replaces "host live voice") | yes |
+| Co-host (a limited key: watch, big screen, send messages; cannot change, publish, pay or see numbers) | yes (replaces "host" role) | yes |
+| Big-screen view for a room (`/big.html`) | yes | yes |
+| Boosters (joker, extra ticket, pass) | **not built, on purpose** | yes |
+| Family passes, team leads, second-phone alerts | **not built, on purpose** | yes |
+
+Decisions on what is NOT in phone-run mode, and why (owner rule: reject what is not needed):
+- **Boosters** change who can win by adding items nobody can verify from the public numbers. Phone-run winners are recomputed by anyone from the public log; boosters would break that.
+- **Family passes** need people without a mobile number; the rule is that a mobile number is the only identifier. Family members take part with their own numbers (the roster takes any number).
+- **Team leads** need a team model and per-team reports nobody asked for; the co-host covers the stage need.
+- **Second-phone alerts** are not needed: the same number on two phones gets the same ticket, harmlessly.
+- **Live host voice** (a person speaking live to every phone) needs a streaming server, which is not free. Messages spoken by each phone's own voice give the same effect at no cost.
 | Cost per engagement | about zero (free plans) | a server process |
 
 The phone-run mode is the one to sell at scale. Anything in the "no" rows is either optional or needs a design decision before building it for phone-run mode (scratch cards and boosters need their own fairness rules; roles and passes need a roster model the phone-run store does not have yet).

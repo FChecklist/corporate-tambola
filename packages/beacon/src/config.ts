@@ -5,7 +5,7 @@ import type { PatternId, Scope } from "../../shared/src/ticket";
 
 export type PatternKey = PatternId | "full2"; // "full2" = Full Two-Ticket House (all 30 numbers across both tickets)
 export interface RewardLine { pattern: PatternId; scope: Scope; ordinal: number; text: string }
-export interface BreakCfg { after: number; seconds: number; kind: "file" | "youtube" | "slides" | "speech" | "lucky"; title: string; mediaUrl?: string; winners?: 1 | 3 | 5 | 10 }
+export interface BreakCfg { after: number; seconds: number; kind: "file" | "youtube" | "slides" | "speech" | "lucky"; title: string; mediaUrl?: string; winners?: 1 | 3 | 5 | 10; /** How a lucky draw is shown on phones. The winners are drawn the same way either way; a scratch card only changes the reveal. */ style?: "draw" | "scratch" }
 export interface EngagementCfg { tickets: 1 | 2; rewards: RewardLine[]; breaks: BreakCfg[]; rounds: number }
 export const MAX_ROUNDS = 5;
 /** Between two rounds everyone waits this many 3 s beacon rounds (90 s) before the next round's first number. */
@@ -81,6 +81,9 @@ export function validateCfg(input: { tickets?: unknown; rewards?: unknown; break
       if (!KINDS.has(kind)) return { ok: false, error: "A break is a file, a YouTube link, slides, a speech or a lucky draw." };
       const winners = kind === "lucky" ? (b?.winners === undefined ? 3 : b.winners) : undefined;
       if (kind === "lucky" && !(LUCKY_WINNERS as readonly number[]).includes(winners)) return { ok: false, error: "A lucky draw picks 1, 3, 5 or 10 people." };
+      const style = kind === "lucky" ? (b?.style === undefined || b.style === "" ? "draw" : b.style) : undefined;
+      if (kind === "lucky" && style !== "draw" && style !== "scratch") return { ok: false, error: "A lucky draw is shown as a draw or as a scratch card." };
+      if (kind !== "lucky" && b?.style !== undefined && b.style !== "") return { ok: false, error: "Only a lucky draw has a style." };
       const title = cleanText(b?.title, 80);
       if (title.length < 2) return { ok: false, error: "Give each break a short title." };
       let mediaUrl: string | undefined;
@@ -91,7 +94,7 @@ export function validateCfg(input: { tickets?: unknown; rewards?: unknown; break
       }
       if ((kind === "file" || kind === "youtube") && !mediaUrl) return { ok: false, error: "This kind of break needs a link." };
       if (kind === "lucky" && mediaUrl) return { ok: false, error: "A lucky draw has no link." };
-      out.push({ after, seconds, kind, title, ...(mediaUrl ? { mediaUrl } : {}), ...(winners ? { winners } : {}) });
+      out.push({ after, seconds, kind, title, ...(mediaUrl ? { mediaUrl } : {}), ...(winners ? { winners } : {}), ...(style === "scratch" ? { style } : {}) });
     }
     out.sort((a, b) => a.after - b.after);
     for (let i = 1; i < out.length; i++) if (out[i]!.after === out[i - 1]!.after) return { ok: false, error: "Two breaks cannot start at the same number." };

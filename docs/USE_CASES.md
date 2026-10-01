@@ -98,11 +98,27 @@ Building and publishing are free. The organizer pays before the start time. If i
 | UC-57 | Phone page shows "waiting for the organizer" when locked | Live check |
 | UC-58 | Mobile width and tablet | Live check |
 
+## H. Free plan, announcements, co-hosts, scratch cards, pages (added 2026-10-02)
+| ID | Scenario | Expected | Test |
+|---|---|---|---|
+| UC-70 | Pause key registered for engagements of different sizes | Up to 250 standard, up to 1,000 slower, up to 2,000 slower still, above that refused with a clear message and no file (phones will not keep asking) | usecases.test.ts |
+| UC-71 | A slower profile | Longer lead before a pause takes effect, so nobody sees a number a pause should have prevented | usecases.test.ts |
+| UC-72 | Size raised to another profile before any pause was sent | The unused key is forgotten and the console registers the right one; after a pause was sent it stays | usecases.test.ts |
+| UC-73 | Request budget | A phone of an unpausable engagement asks at most about 3 times in 20 minutes; a 800-person profile about every 30 s | phone-runtime.test.ts |
+| UC-80 | Announcement | Reaches phones inside the pause check they already make; new message has a new id; clear removes it; cleaned and cut; rate limited; not for drafts, the AI or strangers; shown, spoken and dismissible on the phone; big banner on the big screen | usecases, phone-runtime, pages tests |
+| UC-81 | Co-host | Can watch and message only; cannot change, publish, pay, erase, make keys or create engagements; at most five; retiring stops it at once; its link keeps the key out of the address bar | usecases, pages tests |
+| UC-82 | Scratch card | A lucky draw can be a scratch card; only lucky draws have the style; winner scratches to reveal; opens by itself after 45 s; non-winner sees "Not this time" | usecases, pages tests |
+| UC-83 | Waiting room | Before the first number: countdown, what can be won, how it works, sound check, add to calendar; never mentions money | pages tests |
+| UC-90 | Console pages in a DOM | Home options first; draft to publish with confirmation; invalid details; held state; wrong sign-in never freezes; announcements; co-host screen; break editor | pages.test.ts |
+| UC-91 | Payment page in a DOM | Not signed in; payments off; paid end to end in test mode (validation first); paying while held says when it begins; already paid | pages.test.ts |
+| UC-92 | Big screen in a DOM | Countdown, announcement, held, draft | pages.test.ts |
+| UC-93 | Phone page in a DOM | Draft refused; join before payment and waiting room; held; announcement; scratch card | pages.test.ts |
+
 ---
 
 # Test results (2026-10-02)
 
-Run: `bun test packages apps tools/control-worker` gives **449 passing, 0 failing** (type check clean). Real-time runs are listed below.
+Run: `bun test packages apps tools/control-worker` gives **479 passing, 0 failing** (type check clean). Real-time runs are listed below.
 
 ## Where each use case is tested
 | IDs | Where | How |
@@ -132,7 +148,7 @@ Run: `bun test packages apps tools/control-worker` gives **449 passing, 0 failin
 | 5 new organizer accounts per network per day was tight for an office | Live | Now 10 |
 
 ## Known limits and decisions
-- There is no automatic test of the page scripts themselves (no browser test runner): they were checked by hand in the browser on the live site, and by Playwright-style steps run through the in-app browser. A permanent browser test is a good next step.
+- The page scripts are tested in a DOM (`apps/web/test`, happy-dom, free), not in a real browser engine: layout and real touch behaviour were checked by hand on the live site.
 - Online payment itself is not testable end to end until Razorpay keys exist. Everything around it (order, signature check, webhook, late payment, tampering, duplicates) is tested with a stand-in gateway.
 - Phones check for the held state about every 6 to 9 seconds, so a late hold or a late release can take up to about 12 seconds to reach a phone.
 - Mail is a nudge only: nothing depends on a mail arriving.

@@ -207,7 +207,7 @@ export function scheduleWithControl(s: ControlState, startRound: number, strideR
 /* ---------------- how fresh must a phone's view be? ---------------- */
 
 export interface SafetyInput { pollMaxSec: number; cacheTtlSec: number; latencySec: number; missedPollsTolerated: number }
-export interface Safety { holdAfterRounds: number; leadRounds: number; giveUpRounds: number; worstNormalAgeSec: number }
+export interface Safety { holdAfterRounds: number; leadRounds: number; giveUpRounds: number; worstNormalAgeSec: number; pollMaxSec: number }
 
 /**
  * The rule that makes a late discovery impossible. A phone reveals new calls only while its last good fetch is at most
@@ -220,11 +220,28 @@ export function deriveSafety(i: SafetyInput): Safety {
   const worst = i.pollMaxSec + i.cacheTtlSec + i.latencySec;
   const holdAfter = ceil3(worst + i.missedPollsTolerated * i.pollMaxSec);
   const lead = holdAfter + ceil3(i.cacheTtlSec) + 2; // snapshot staleness + publish latency margin
-  return { holdAfterRounds: holdAfter, leadRounds: lead, giveUpRounds: Math.max(holdAfter * 6, 60), worstNormalAgeSec: worst };
+  return { holdAfterRounds: holdAfter, leadRounds: lead, giveUpRounds: Math.max(holdAfter * 6, 60), worstNormalAgeSec: worst, pollMaxSec: i.pollMaxSec };
 }
 /** The two profiles we recommend. */
 export const SAFETY_STANDARD = deriveSafety({ pollMaxSec: 12, cacheTtlSec: 3, latencySec: 3, missedPollsTolerated: 1 }); // poll 9 s +/- 3
 export const SAFETY_FAST = deriveSafety({ pollMaxSec: 7, cacheTtlSec: 3, latencySec: 3, missedPollsTolerated: 1 }); // poll 6 s +/- 1
+
+/**
+ * The free plan allows about 100,000 Worker requests a day, and every phone asks "any pause?" on a timer. So the bigger the engagement, the slower
+ * the timer, and the longer a pause takes to reach phones (it always takes effect `leadRounds` after signing, so nobody ever sees a number a pause
+ * should have prevented). Planning figure: one engagement may use about 40,000 requests for this, over about 20 minutes.
+ */
+export const SAFETY_LEAN30 = deriveSafety({ pollMaxSec: 36, cacheTtlSec: 3, latencySec: 3, missedPollsTolerated: 1 }); // phones ask about every 27 to 36 s
+export const SAFETY_LEAN60 = deriveSafety({ pollMaxSec: 72, cacheTtlSec: 3, latencySec: 3, missedPollsTolerated: 1 }); // about every 54 to 72 s
+export const ALL_SAFETIES: Safety[] = [SAFETY_FAST, SAFETY_STANDARD, SAFETY_LEAN30, SAFETY_LEAN60];
+export const PAUSE_MAX_PARTICIPANTS = 2000;
+/** The pause profile for an engagement of this size, or null when it is too large for a pause to be affordable on the free plan. */
+export function safetyForCap(cap: number, fast = false): Safety | null {
+  if (cap <= 250) return fast ? SAFETY_FAST : SAFETY_STANDARD;
+  if (cap <= 1000) return SAFETY_LEAN30;
+  if (cap <= PAUSE_MAX_PARTICIPANTS) return SAFETY_LEAN60;
+  return null;
+}
 
 export type Mode = "live" | "hold" | "blind";
 

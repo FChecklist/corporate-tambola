@@ -555,3 +555,97 @@ describe("G2. the organizer's AI: round 2 findings", () => {
     expect(t).toMatch(/DO NOT call POST \/api\/z or any other write/); expect(t).toMatch(/REPLACE what was saved/); expect(t).toMatch(/skipped \(already on the list/); expect(t).not.toMatch(/schedule\?at=[^"]*callSeconds/);
   });
 });
+
+describe("H. the free plan: pause profiles by size", () => {
+  const key = async () => (await import("../../../packages/beacon/src/control")).publicKeyFromSecret("11".repeat(32));
+  const ctl = async (id: string) => j(await call("GET", `/api/z/${id}/control`, undefined, {}, T));
+  test("UC-70 a standard engagement gets the fast profile, a mid-size one a slower one, a large one a slower still, and a huge one none", async () => {
+    const { SAFETY_STANDARD, SAFETY_LEAN30, SAFETY_LEAN60 } = await import("../../../packages/beacon/src/control");
+    const o = await organizer(); const pk = await key();
+    for (const [id, cap, want] of [["PF-STD", 200, SAFETY_STANDARD.leadRounds], ["PF-MID", 800, SAFETY_LEAN30.leadRounds], ["PF-BIG", 2000, SAFETY_LEAN60.leadRounds]] as const) {
+      await call("POST", "/api/z", eng(id, { cap }), o.h);
+      expect((await call("PUT", `/api/z/${id}/control/key`, { publicKey: pk }, o.h)).status).toBe(200);
+      expect((await ctl(id)).leadRounds).toBe(want);
+    }
+    await call("POST", "/api/z", eng("PF-HUGE", { cap: 5000 }), o.h);
+    const r = await call("PUT", "/api/z/PF-HUGE/control/key", { publicKey: pk }, o.h);
+    expect(r.status).toBe(409); expect((await j(r)).error).toMatch(/up to 2,000 participants/);
+    expect((await call("GET", "/api/z/PF-HUGE/control", undefined, {}, T)).status).toBe(404); // no file: phones will not keep asking
+  });
+  test("UC-71 a bigger pause profile means a longer lead, so nobody can see a number a pause should have prevented", async () => {
+    const { SAFETY_STANDARD, SAFETY_LEAN30, SAFETY_LEAN60 } = await import("../../../packages/beacon/src/control");
+    expect(SAFETY_LEAN30.leadRounds).toBeGreaterThan(SAFETY_STANDARD.leadRounds); expect(SAFETY_LEAN60.leadRounds).toBeGreaterThan(SAFETY_LEAN30.leadRounds);
+    for (const s of [SAFETY_STANDARD, SAFETY_LEAN30, SAFETY_LEAN60]) expect(s.leadRounds * 3).toBeGreaterThan(s.holdAfterRounds * 3 + 3); // the rule from control.ts
+  });
+  test("UC-72 raising the size to another profile before any pause was sent forgets the unused key; after a pause was sent it stays", async () => {
+    const { SAFETY_LEAN30 } = await import("../../../packages/beacon/src/control");
+    const o = await organizer(); const pk = await key();
+    await call("POST", "/api/z", eng("PF-GROW", { cap: 200 }), o.h);
+    await call("PUT", "/api/z/PF-GROW/control/key", { publicKey: pk }, o.h);
+    expect((await call("PATCH", "/api/z/PF-GROW/settings", { cap: 900 }, o.h)).status).toBe(200);
+    expect((await call("GET", "/api/z/PF-GROW/control", undefined, {}, T)).status).toBe(404); // forgotten: the console registers the right one next time it opens
+    expect((await call("PUT", "/api/z/PF-GROW/control/key", { publicKey: pk }, o.h)).status).toBe(200);
+    expect((await ctl("PF-GROW")).leadRounds).toBe(SAFETY_LEAN30.leadRounds);
+  });
+});
+
+describe("I. announcements, co-hosts and scratch cards", () => {
+  const pk = async () => (await import("../../../packages/beacon/src/control")).publicKeyFromSecret("11".repeat(32));
+  async function live(id: string, o: Org, cap = 100) { await call("POST", "/api/z", eng(id, { cap }), o.h); await call("PUT", `/api/z/${id}/control/key`, { publicKey: await pk() }, o.h); await call("POST", `/api/z/${id}/publish`, contact, o.h); }
+  const ann = async (id: string, who: Record<string, string>, text: string, now = T) => call("POST", `/api/z/${id}/announce`, { text }, who, now);
+  const ctl = async (id: string, now = T) => j(await call("GET", `/api/z/${id}/control`, undefined, {}, now));
+  test("UC-80 the organizer's message reaches phones inside the control answer they already ask for; clearing removes it", async () => {
+    const o = await organizer(); await live("ANN-1", o);
+    expect((await ctl("ANN-1")).ann).toBeUndefined();
+    expect((await ann("ANN-1", o.h, "Dinner is served in the hall")).status).toBe(200);
+    expect((await ctl("ANN-1")).ann.text).toBe("Dinner is served in the hall");
+    expect((await ctl("ANN-1")).pubKey).toBeTruthy(); // the pause file is still there
+    const id1 = (await ctl("ANN-1")).ann.id;
+    await ann("ANN-1", o.h, "Rewards at the stage in 10 minutes", T + 10_000);
+    expect((await ctl("ANN-1", T + 10_000)).ann.id).not.toBe(id1); // a new message has a new id, so phones show it again
+    expect((await ann("ANN-1", o.h, "", T + 20_000)).status).toBe(200);
+    expect((await ctl("ANN-1", T + 20_000)).ann).toBeUndefined();
+  });
+  test("UC-80 messages are cleaned and cut, rate limited, not for drafts, and not for the AI or a stranger", async () => {
+    const o = await organizer(); await live("ANN-2", o);
+    await ann("ANN-2", o.h, "<b>Hello</b>   `team` " + "x".repeat(400));
+    const t = (await ctl("ANN-2")).ann.text as string; expect(t).not.toMatch(/[<>`]/); expect(t.length).toBeLessThanOrEqual(160);
+    expect((await ann("ANN-2", o.h, "again", T + 1000)).status).toBe(429);
+    expect((await ann("ANN-2", o.ai, "ai says hi", T + 60_000)).status).toBe(403);
+    expect((await call("POST", "/api/z/ANN-2/announce", { text: "hi" }, {}, T + 60_000)).status).toBe(403);
+    expect((await call("POST", "/api/z/ANN-2/announce", { notext: 1 }, o.h, T + 60_000)).status).toBe(400);
+    await call("POST", "/api/z", eng("ANN-DRAFT"), o.h);
+    expect((await ann("ANN-DRAFT", o.h, "hi", T + 60_000)).status).toBe(400);
+    const other = await organizer(); expect((await ann("ANN-2", other.h, "hijack", T + 60_000)).status).toBe(403);
+  });
+  test("UC-81 a co-host can watch and send messages, and nothing else; at most five; retiring stops it at once", async () => {
+    const o = await organizer(); await live("HOST-1", o);
+    const hk = (await j(await call("POST", "/api/org/host", {}, o.h))).hostKey as string; expect(hk).toMatch(/^cth_/);
+    const h = { "x-organizer": hk };
+    expect((await j(await call("GET", "/api/whoami", undefined, h))).kind).toBe("host"); expect((await j(await call("GET", "/api/whoami", undefined, o.h))).kind).toBe("master");
+    expect((await ann("HOST-1", h, "Welcome everyone")).status).toBe(200);
+    expect((await call("GET", "/api/z/HOST-1/participants", undefined, h)).status).toBe(200);
+    expect((await call("GET", "/api/z/HOST-1/summary", undefined, h)).status).toBe(200);
+    for (const [m, p, body] of [["PATCH", "/api/z/HOST-1/settings", { cap: 5 }], ["POST", "/api/z/HOST-1/roster", { people: [{ phone: phone(5) }] }], ["POST", "/api/z/HOST-1/erase", {}], ["POST", "/api/z/HOST-1/settle", { results: [] }], ["POST", "/api/z/HOST-1/publish", contact], ["GET", "/api/z/HOST-1/claims"], ["PUT", "/api/z/HOST-1/control/key", { publicKey: "aa" }], ["POST", "/api/z", eng("HOSTMADE")], ["POST", "/api/org/host", {}], ["POST", "/api/org/ai", {}], ["GET", "/api/org/keys"], ["POST", "/api/org/keys/revoke", { id: "x" }], ["POST", "/api/checkout", { eid: "HOST-1", org: "X", email: "x@x.com" }]] as const)
+      expect([401, 403, 503]).toContain((await call(m, p, body, h)).status);
+    expect(engRow("HOSTMADE")).toBeFalsy();
+    const keys = await j(await call("GET", "/api/org/keys", undefined, o.h)); const hostRow = keys.keys.find((k: any) => k.kind === "host");
+    for (let i = 0; i < 4; i++) expect((await call("POST", "/api/org/host", {}, o.h)).status).toBe(200);
+    expect((await call("POST", "/api/org/host", {}, o.h)).status).toBe(409);
+    // retire it with a second master key, as in real life
+    await call("POST", "/api/auth/email", { email: o.email }); const code = outbox("%sign-in code%").at(-1)!.body.match(/\d{6}/)![0];
+    const m2 = (await j(await call("POST", "/api/auth/verify", { email: o.email, code }))).token as string;
+    expect((await call("POST", "/api/org/keys/revoke", { id: hostRow.id }, { "x-organizer": m2 })).status).toBe(200);
+    expect((await ann("HOST-1", h, "still there?", T + 60_000)).status).toBe(403);
+  });
+  test("UC-82 a lucky draw can be a scratch card: only the lucky draw has the style, anything else is refused, and it is read back", async () => {
+    const o = await organizer(); await call("POST", "/api/z", eng("SCR-1"), o.ai);
+    const ok = (b: unknown) => call("PATCH", "/api/z/SCR-1/settings", { breaks: b }, o.ai);
+    expect((await ok([{ after: 40, seconds: 60, kind: "lucky", title: "Scratch and win", winners: 5, style: "scratch" }])).status).toBe(200);
+    expect((await j(await call("GET", "/api/z/SCR-1/summary", undefined, o.ai))).breaks[0].style).toBe("scratch");
+    expect((await ok([{ after: 40, seconds: 60, kind: "lucky", title: "Plain draw", winners: 3 }])).status).toBe(200);
+    expect((await j(await call("GET", "/api/z/SCR-1/summary", undefined, o.ai))).breaks[0].style).toBeUndefined(); // the default draw stores nothing extra
+    expect((await ok([{ after: 40, seconds: 60, kind: "lucky", title: "x1", style: "confetti" }])).status).toBe(400);
+    expect((await ok([{ after: 40, seconds: 60, kind: "speech", title: "Address", style: "scratch" }])).status).toBe(400);
+  });
+});

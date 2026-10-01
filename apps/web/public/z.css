@@ -33,3 +33,12 @@
 /* link buttons look and align like real buttons */
 a.zbtn{display:flex!important;align-items:center;justify-content:center;text-align:center;text-decoration:none;box-sizing:border-box}
 .zc a.zbtn.s{display:inline-flex!important}
+
+/* waiting room, announcements, scratch cards */
+.zwait h3{margin:14px 0 4px;font-size:15px}
+.zwait .zcount{font:700 44px/1.1 var(--sans,inherit);margin:6px 0}
+.zlist{margin:4px 0 8px;padding-left:20px;font-size:15px}
+.zlist li{margin:2px 0}
+.zann{border:2px solid #c9a24a}
+.zscratch{border:0;border-radius:10px;padding:10px 16px;font:700 14px var(--sans,inherit);color:#555;cursor:pointer;background:repeating-linear-gradient(135deg,#c9c9c9,#ececec 6px,#bdbdbd 12px)}
+a.zbtn#addcal{margin-left:6px}

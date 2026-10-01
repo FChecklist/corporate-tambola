@@ -37,10 +37,10 @@ const beaconFetcher = (opt: { blocked?: () => boolean } = {}): Fetcher => async 
   if (r > nowR) return { ok: false, status: 404, json: async () => ({}) };
   return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" } as Round) };
 };
-const mkPhone = (n: number, o: { down?: () => boolean; blocked?: () => boolean; locked?: () => boolean } = {}) => {
+const mkPhone = (n: number, o: { down?: () => boolean; blocked?: () => boolean; locked?: () => boolean; eid?: string; onApi?: (path: string) => void } = {}) => {
   const mem = new Map<string, string>();
-  const rt = new PhoneRuntime(EID, {
-    api: ((base) => (async (method: string, path: string, body?: unknown) => (o.locked?.() && /\/control$/.test(path) ? { locked: true } : base(method, path, body))) as PhoneDeps["api"])(api(o.down)), mono: () => t, store: { get: (k) => mem.get(k) ?? null, set: (k, v) => void mem.set(k, v) },
+  const rt = new PhoneRuntime(o.eid ?? EID, {
+    api: ((base) => (async (method: string, path: string, body?: unknown) => (o.onApi?.(path), o.locked?.() && /\/control$/.test(path) ? { locked: true } : base(method, path, body))) as PhoneDeps["api"])(api(o.down)), mono: () => t, store: { get: (k) => mem.get(k) ?? null, set: (k, v) => void mem.set(k, v) },
     beacon: { fetcher: beaconFetcher({ blocked: o.blocked }), mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 },
     verify: (x) => x.signature === "aa" && x.randomness === rnd(x.round),
   });
@@ -53,7 +53,7 @@ beforeEach(async () => {
   const d = makeD1();
   env = { DB: d.db, ORGANIZER_SECRET: SECRET, DAILY_WRITE_BUDGET: "1000000" };
   T0 = roundTimeMs(START - 3); t = 0;
-  await D.headCall("POST", "/api/z", { id: EID, startRound: START, callSeconds: CALL_SECONDS, cap: 400 }, { "x-organizer": SECRET });
+  await D.headCall("POST", "/api/z", { id: EID, startRound: START, callSeconds: CALL_SECONDS, cap: 200 }, { "x-organizer": SECRET });
 });
 const registerKey = async () => (await D.headCall("PUT", `/api/z/${EID}/control/key`, { publicKey: publicKeyFromSecret(KEY) }, { "x-organizer": SECRET })).status;
 const publish = async (a: Parameters<typeof nextMessage>[2]) => {
@@ -288,6 +288,47 @@ describe("an engagement that was not paid for by its start", () => {
   });
 });
 
+describe("the free plan: how often phones ask about a pause", () => {
+  const controlCalls = (log: string[]) => log.filter((p) => /\/control$/.test(p)).length;
+  test("an engagement nobody can pause is hardly asked about, and not at all once it has started", async () => {
+    const log: string[] = []; const a = mkPhone(11, { onApi: (p) => log.push(p) });
+    await a.rt.boot(); await a.rt.join(a.phone, "A");
+    for (let i = 0; i < 400; i++) await step([a]); // twenty minutes
+    expect(controlCalls(log)).toBeLessThanOrEqual(3);
+    expect(a.rt.view().log.length).toBeGreaterThan(20); // and it played normally
+  });
+  test("a mid-size engagement asks about every 30 seconds, a standard one every 9 to 12", async () => {
+    await D.headCall("POST", "/api/z", { id: "ENG-LEAN", startRound: START, callSeconds: CALL_SECONDS, cap: 800 }, { "x-organizer": SECRET });
+    await D.headCall("PUT", "/api/z/ENG-LEAN/control/key", { publicKey: publicKeyFromSecret(KEY) }, { "x-organizer": SECRET });
+    const lean: string[] = [], std: string[] = [];
+    const l = mkPhone(12, { eid: "ENG-LEAN", onApi: (p) => lean.push(p) });
+    await registerKey(); const s = mkPhone(13, { onApi: (p) => std.push(p) });
+    for (const p of [l, s]) { await p.rt.boot(); await p.rt.join(p.phone, "A"); }
+    for (let i = 0; i < 200; i++) await step([l, s]); // ten minutes
+    expect(controlCalls(lean)).toBeGreaterThan(8); expect(controlCalls(lean)).toBeLessThanOrEqual(26);
+    expect(controlCalls(std)).toBeGreaterThan(40);
+    expect(l.rt.view().log.length).toBeGreaterThan(10); // a longer interval does not stop the numbers
+  });
+});
+
+describe("announcements and scratch cards on real phones", () => {
+  test("a message from the organizer reaches the phone inside the pause check, a new one replaces it, and clearing removes it", async () => {
+    expect(await registerKey()).toBe(200);
+    const a = mkPhone(21); await a.rt.boot(); await a.rt.join(a.phone, "A");
+    for (let i = 0; i < 6; i++) await step([a]);
+    expect(a.rt.view().announcement).toBeNull();
+    let at = 1_700_000_000_000; // the server enforces a few seconds between messages: move its clock on for each one
+    const say = (text: string) => handle(new Request(`http://x/api/z/${EID}/announce`, { method: "POST", headers: { "content-type": "application/json", "x-organizer": SECRET }, body: JSON.stringify({ text }) }), env, (at += 10_000));
+    expect((await say("Please take your seats")).status).toBe(200);
+    for (let i = 0; i < 8; i++) await step([a]);
+    const first = a.rt.view().announcement; expect(first?.text).toBe("Please take your seats");
+    t += 6000; expect((await say("Rewards at the stage")).status).toBe(200);
+    for (let i = 0; i < 8; i++) await step([a]);
+    const second = a.rt.view().announcement; expect(second?.text).toBe("Rewards at the stage"); expect(second?.id).not.toBe(first?.id);
+    expect(a.rt.view().log.length).toBeGreaterThan(0); // numbers carried on throughout
+  });
+});
+
 describe("after the last call", () => {
   test("a claim that failed to send on the very last tick is still delivered afterwards", async () => {
     let off = false;
@@ -442,7 +483,7 @@ describe("lucky draw on phones", () => {
     let sawCard = false;
     for (let i = 0; i < 60; i++) { await step(ps); const b = ps[0]!.rt.view().brk; if (b) { sawCard = true; expect(b.kind).toBe("lucky"); expect(b.winners).toBe(3); } }
     expect(sawCard).toBe(true);
-    for (const p of ps) expect(p.rt.view().lucky).toEqual([{ ordinal: 1, title: "Lucky draw", winners: 3, published: false, won: false }]);
+    for (const p of ps) expect(p.rt.view().lucky).toEqual([{ ordinal: 1, title: "Lucky draw", winners: 3, style: "draw", published: false, won: false }]);
     // the organizer's console draws from the participant list with the public randomness of the round that ends the break
     const brk = { after: 10, seconds: 30, kind: "lucky" as const, title: "Lucky draw", winners: 3 as const };
     const round = luckyRound(null, START, 2, [brk], brk)!;

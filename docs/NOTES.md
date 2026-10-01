@@ -228,3 +228,10 @@ Voice production notes (see IMPLEMENTATION.md §11.3 for the audio design, uncha
 
 ## 18. Razorpay and brand-wise invoices (2026-10-01)
 See `docs/RAZORPAY_OWNER_STEPS.md`. Built `packages/billing` (brands, GST maths, brand-wise invoice numbers, Razorpay Orders/verify/webhook/capture) and the Corporate Tambola checkout, upgrades and invoice page; 23/23 checks against a stand-in for Razorpay's public API. NOT done: nothing in the Razorpay dashboard was read or changed (Claude in Chrome refuses that site for this session); company GSTIN/CIN/PAN/address/SAC are not in public search results and are left blank in `config/company.json` (invoices say DRAFT until filled); live keys, webhook registration, international payments and dashboard cleanup are owner steps.
+
+## 19. Remaining features, free-plan limits and page tests (2026-10-02)
+**Built (phone-run mode, all free):** waiting room, announcements (organizer or co-host, spoken by the phone's own voice), co-host key (`cth_`, max 5, can watch and message only), scratch-card style for lucky draws, big screen (`/big.html`), payment page (`/pay.html`), publish-free / pay-before-start with a hold 45 s before the start, scaled pause profiles (see GO_LIVE_ZERO_COST section 4), manifest conversation for the organizer's AI with summary read-back.
+**Rejected on purpose:** boosters, family passes, team leads, second-phone alerts, live host voice (reasons in GO_LIVE_ZERO_COST section 7).
+**Free-plan finding:** phones polled for a pause every 9 s, which would have used the whole 100,000 daily Worker requests with about 1,000 phones. Fixed by size-scaled profiles and by phones that stop asking once the start has passed when nothing can be paused.
+**Tests:** 479 passing. `apps/web/test/` runs the real page scripts in a DOM (happy-dom) against the real Worker code: console, payment page, big screen, phone page, co-host screen, scratch card. Use cases are numbered in `docs/USE_CASES.md`.
+**Open (owner):** Razorpay keys (payment integration is the only thing not done); Resend key choice (a sending-only key instead of the shared full-access one); lawyer review of policies.

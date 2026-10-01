@@ -1,7 +1,7 @@
 // The whole phone-side engagement loop, with no UI, so it can be tested without a browser and then wrapped by a thin page.
 // It talks to exactly two things: the public beacon (through BeaconOpts) and our one small store (through deps.api).
 import { generateTicket, type Ticket } from "../../shared/src/ticket";
-import { ControlTracker, SAFETY_FAST, SAFETY_STANDARD, pausedAt, type ControlConfig } from "./control";
+import { ALL_SAFETIES, ControlTracker, SAFETY_FAST, SAFETY_STANDARD, pausedAt, type ControlConfig } from "./control";
 import { defaultCfg, keysInPlay, roundEid, validateCfg, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
 import { RoundStore, activeBreak, activeIntermission, callRoundR, completionIndexKey, ticketsFor } from "./game";
 import { NUMBERS, QUICKNET, fetchRound, pickNumber, roundAt, roundTimeMs, type BeaconOpts } from "./index";
@@ -32,7 +32,9 @@ export interface RuntimeView {
   /** My earliest completion (0-based call index) of each house in play so far, or -1. */
   myIdx: Partial<Record<PatternKey, number>>;
   /** Each lucky draw of this engagement: whether its winners are published yet and whether this phone is one of them. */
-  lucky: { ordinal: number; title: string; winners: number; published: boolean; won: boolean }[];
+  lucky: { ordinal: number; title: string; winners: number; published: boolean; won: boolean; style: "draw" | "scratch" }[];
+  /** The organizer's latest message to everyone (shown and spoken on phones), or null. */
+  announcement: { id: string; text: string } | null;
   /** The round being played (or just finished) and how many there are. */
   round: number; rounds: number;
   /** Between two rounds: which round comes next and how long until its first number. */
@@ -54,6 +56,7 @@ export class PhoneRuntime {
   controlUrl: string | null = null;
   /** The engagement was not paid for by its start time: nothing is shown until it is. */
   locked = false;
+  announcement: { id: string; text: string } | null = null;
   store: RoundStore;
   tracker: ControlTracker | null = null;
   results: RuntimeView["results"] = [];
@@ -68,6 +71,9 @@ export class PhoneRuntime {
   private lastResultPoll = -Infinity;
   private get logCache(): number[] { return this.logs[this.cur - 1] ?? (this.logs[this.cur - 1] = []); }
   private controlFast = false;
+  private pollBaseMs = 9_000; private pollJitterMs = 3_000;
+  /** The engagement can be held for non-payment (the server says so), so a phone near its start keeps asking. */
+  private gated = false;
   /** unknown: have not yet heard whether this engagement can be paused. none: the store says no pause key exists. known: we hold a verified control file. */
   private controlState: "unknown" | "none" | "known" = "unknown";
   private unknownSince: number | null = null;
@@ -94,7 +100,7 @@ export class PhoneRuntime {
   async boot(): Promise<void> {
     try {
       const info = await this.deps.api("GET", `/api/z/${this.eid}/info`);
-      this.startRound = info.startRound; this.callSeconds = info.callSeconds; this.trackClaims = info.trackClaims !== false; this.controlUrl = typeof info.controlUrl === "string" ? info.controlUrl : null; this.locked = !!info.locked; this.readCfg(info);
+      this.startRound = info.startRound; this.callSeconds = info.callSeconds; this.trackClaims = info.trackClaims !== false; this.controlUrl = typeof info.controlUrl === "string" ? info.controlUrl : null; this.locked = !!info.locked; this.gated = info.locked !== undefined; this.readCfg(info);
     } catch (e: any) {
       this.phase = e?.status === 404 ? "missing" : "boot";
       this.error = e?.status === 404 ? "This engagement link is not valid." : "Could not reach the engagement. Check your connection.";
@@ -142,28 +148,36 @@ export class PhoneRuntime {
 
   private async pollControl(now: number) {
     const m = this.deps.mono();
-    const every = this.controlFast ? 6_000 : 9_000;
-    if (m - this.lastControlPoll < every + (Math.floor(m) % 3000)) return; // 9 s plus a little jitter so phones do not all poll together
+    if (this.controlState === "none" && !this.locked) {
+      // nothing can be paused here (no key was registered, and none can be after the start), so there is almost nothing to ask:
+      // once the start has passed a hold can no longer begin, and before it we ask rarely, or every few seconds close to the start if it can be held
+      const toStart = this.startRound - now;
+      if (toStart < -20) return;
+      if (m - this.lastControlPoll < (this.gated && toStart < 40 ? 9_000 : 60_000) + (Math.floor(m) % 3000)) return;
+    } else if (m - this.lastControlPoll < this.pollBaseMs + (Math.floor(m) % this.pollJitterMs)) return; // the profile's interval plus a little jitter so phones do not all poll together
     this.lastControlPoll = m;
     let body: any = null;
     try { body = this.controlUrl && this.deps.getPublic ? await this.deps.getPublic(this.controlUrl) : await this.deps.api("GET", `/api/z/${this.eid}/control`); } catch (e: any) {
       if (e?.status === 404) { if (this.locked) { this.locked = false; await this.reloadSchedule(); } this.tracker = null; this.controlState = "none"; return; } // no key registered: this engagement cannot be paused
       this.tracker?.failed(now); return;
     }
+    this.announcement = body && body.ann && typeof body.ann.id === "string" && typeof body.ann.text === "string" ? { id: body.ann.id, text: body.ann.text.slice(0, 200) } : null;
     const wasLocked = this.locked; this.locked = !!body?.locked;
     if (wasLocked && !this.locked) await this.reloadSchedule(); // paid at last: the start time has moved, read it again
     if (!body?.pubKey) { this.tracker?.failed(now); return; }
     if (!this.tracker) {
       const cfg: ControlConfig = { pubKey: body.pubKey, maxPauseRounds: body.maxPauseRounds, leadRounds: body.leadRounds };
       this.controlFast = body.leadRounds === SAFETY_FAST.leadRounds;
-      const safety = body.leadRounds === SAFETY_FAST.leadRounds ? SAFETY_FAST : SAFETY_STANDARD;
+      const safety = ALL_SAFETIES.find((s) => s.leadRounds === body.leadRounds) ?? SAFETY_STANDARD;
+      if (safety !== SAFETY_FAST && safety !== SAFETY_STANDARD) { this.pollBaseMs = Math.round(safety.pollMaxSec * 750); this.pollJitterMs = Math.round(safety.pollMaxSec * 250); }
+      else { this.pollBaseMs = this.controlFast ? 6_000 : 9_000; this.pollJitterMs = 3_000; }
       this.tracker = new ControlTracker(cfg, this.eid, safety, now);
     }
     if (await this.tracker.ingest(now, body)) this.controlState = "known";
   }
 
   private async reloadSchedule() {
-    try { const info = await this.deps.api("GET", `/api/z/${this.eid}/info`); this.startRound = info.startRound; this.callSeconds = info.callSeconds; this.readCfg(info); } catch { /* the next poll tries again */ }
+    try { const info = await this.deps.api("GET", `/api/z/${this.eid}/info`); this.startRound = info.startRound; this.callSeconds = info.callSeconds; this.gated = info.locked !== undefined; this.readCfg(info); } catch { /* the next poll tries again */ }
   }
   private modeAt(now: number): RuntimeView["mode"] {
     if (this.locked) return "hold";
@@ -278,7 +292,7 @@ export class PhoneRuntime {
       if (b.kind !== "lucky") continue;
       n++;
       const r = this.allResults.find((x) => x.pattern === "lucky" && x.ordinal === n);
-      out.push({ ordinal: n, title: b.title, winners: b.winners ?? 3, published: !!r, won: !!r && !!this.pid && (r.winners ?? []).includes(this.pid) });
+      out.push({ ordinal: n, title: b.title, winners: b.winners ?? 3, style: b.style === "scratch" ? "scratch" : "draw", published: !!r, won: !!r && !!this.pid && (r.winners ?? []).includes(this.pid) });
     }
     return out;
   }
@@ -313,7 +327,7 @@ export class PhoneRuntime {
     const claimedNow = keysInPlay(this.cfg.rewards).filter((k) => this.claimedAll.has(`${this.cur}:${k}`));
     return {
       phase: this.phase, error: this.error, pid: this.pid, ticket: this.ticket, log: this.logCache, nowRound: now, startRound: this.startRound, callSeconds: this.callSeconds,
-      locked: this.locked,
+      locked: this.locked, announcement: this.announcement,
       mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: !!st && now !== null && pausedAt(st, now), stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
       claimed: claimedNow, unsent: this.unsent, results: this.allResults.filter((x) => (x.round ?? 1) === this.cur), pendingChecks: this.store.pending(), discarded: this.store.discarded,
       nextCallInSec: nextRound !== null && now !== null ? secsTo(nextRound) : null,

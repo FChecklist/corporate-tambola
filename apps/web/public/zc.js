@@ -8,6 +8,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const ss = { get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch {} } };
   let secret = ss.get("ctz-org") || "";
+  { const m = location.hash.match(/^#host=(cth_[0-9a-f]{48})$/); if (m) { secret = m[1]; ss.set("ctz-org", secret); history.replaceState(null, "", location.pathname + location.search); } }
   let eid = q.get("e") || "";
   const NAMES = { full2: "Full Two-Ticket House", early5: "Early Five", top: "Top line", mid: "Middle line", bot: "Bottom line", corners: "Four corners", star: "Star", full: "Full house" };
   const call = async (method, path, body) => {
@@ -16,7 +17,7 @@
     if (!r.ok) throw Object.assign(new Error(j.error || "http " + r.status), { status: r.status, needPack: j.needPack, payments: j.payments });
     return j;
   };
-  const S = { aiMsg: ss.get("ctz-aimsg") || "", contact: { email: ss.get("ctz-email") || "", phone: ss.get("ctz-phone") || "" }, info: null, people: [], claims: [], control: null, results: [], store: null, log: [], note: "", history: null, busy: false };
+  const S = { role: "", annNote: "", hostLink: "", aiMsg: ss.get("ctz-aimsg") || "", contact: { email: ss.get("ctz-email") || "", phone: ss.get("ctz-phone") || "" }, info: null, people: [], claims: [], control: null, results: [], store: null, log: [], note: "", history: null, busy: false };
   const fmtDay = (ms) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
   async function latestRound() { const x = await ZG.fetchRound("latest"); return x ? x.round : null; }
@@ -103,6 +104,7 @@
     const rows = [0, 1, 2].map((i) => { const b = c.breaks[i] || {}; return `<div class="zgrid" style="margin-bottom:8px"><div><label>After how many numbers</label><input type="number" min="1" max="89" data-bk="after" data-i="${i}" value="${b.after ?? ""}"></div><div><label>Seconds (15 to 600)</label><input type="number" min="15" max="600" step="3" data-bk="seconds" data-i="${i}" value="${b.seconds ?? ""}"></div>
       <div><label>Kind</label><select data-bk="kind" data-i="${i}">${["speech", "slides", "youtube", "file", "lucky"].map((k) => `<option value="${k}" ${b.kind === k ? "selected" : ""}>${{ speech: "Speech", slides: "Slides", youtube: "YouTube link", file: "Video file link", lucky: "Lucky draw" }[k]}</option>`).join("")}</select></div>
       <div><label>Title</label><input data-bk="title" data-i="${i}" maxlength="80" value="${esc(b.title || "")}"></div>
+      <div><label>Lucky draw: how it is shown</label><select data-bk="style" data-i="${i}"><option value="draw" ${b.style !== "scratch" ? "selected" : ""}>A draw</option><option value="scratch" ${b.style === "scratch" ? "selected" : ""}>A scratch card</option></select></div>
       <div><label>Lucky draw: how many people</label><select data-bk="winners" data-i="${i}">${[1, 3, 5, 10].map((n) => `<option value="${n}" ${(b.winners || 3) === n ? "selected" : ""}>${n}</option>`).join("")}</select></div>
       <div style="grid-column:1/-1"><label>Link (https://, for YouTube or a video file)</label><input data-bk="mediaUrl" data-i="${i}" value="${esc(b.mediaUrl || "")}"></div></div>`; }).join("");
     return `<div class="zcard zform"><h2>Tickets, rewards and brand breaks</h2>
@@ -123,7 +125,7 @@
       if (!g("after") && !g("seconds") && !g("title") && !g("mediaUrl")) continue;
       const b = { after: Number(g("after")), seconds: Number(g("seconds")), kind: g("kind") || "speech", title: g("title").trim() };
       if (g("mediaUrl").trim()) b.mediaUrl = g("mediaUrl").trim();
-      if (b.kind === "lucky") b.winners = Number(g("winners") || 3);
+      if (b.kind === "lucky") { b.winners = Number(g("winners") || 3); if (g("style") === "scratch") b.style = "scratch"; }
       breaks.push(b);
     }
     return { tickets, rewards, breaks, rounds: Number(document.getElementById("rnd").value) };
@@ -139,7 +141,33 @@
     if (S.locked || left <= 0) return `<div class="zcard" style="border:3px solid #b3261e;background:#fff4f2"><h2 style="color:#b3261e;margin:0 0 6px">Your engagement could not begin: payment is due</h2><p style="margin:0 0 10px">${people}They are waiting, and nothing will start until you pay. <b>Pay now and it begins in about 3 minutes, for everyone already waiting.</b></p><a class="zbtn" href="/pay.html?e=${encodeURIComponent(eid)}" style="text-decoration:none;display:inline-block;background:#b3261e">Pay now and start</a></div>`;
     return `<div class="zcard" style="border:3px solid #c9a24a;background:#fffaf0"><h2 style="margin:0 0 6px">Last step: pay before the start</h2><p style="margin:0 0 6px">${people}Your engagement starts <b>${esc(when)}</b> (in ${fmtLeft(left)}).</p><p style="margin:0 0 10px"><b>If payment is not made before then, the engagement will not begin</b> and everyone you invited will be left waiting. It takes about 2 minutes.</p><a class="zbtn" href="/pay.html?e=${encodeURIComponent(eid)}" style="text-decoration:none;display:inline-block">Pay now</a></div>`;
   }
+  /** A message to every phone and the big screen (organizer or co-host). */
+  function announceCard() {
+    if (S.draft) return "";
+    const avail = !!S.cf;
+    const chips = ["Please take your seats", "Dinner is served", "Rewards at the stage in 10 minutes", "We start in 5 minutes"];
+    return `<div class="zcard zform"><h2>Message to everyone</h2><p class="zsmall" style="margin-top:0">${avail ? "Shown and spoken on every phone and on the big screen. It reaches phones within about a minute." : (S.info && S.info.cap > 2000 ? "Messages are available for engagements of up to 2,000 participants." : "Messages become available once this engagement is set up.")}</p>
+      <textarea id="annText" rows="2" maxlength="160" placeholder="Write a short message" style="width:100%;box-sizing:border-box;font-size:15px;border:1px solid var(--line);border-radius:10px;padding:8px"></textarea>
+      <div>${chips.map((c) => `<button class="zbtn s alt" data-chip="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+      <button class="zbtn s" id="annSend" ${avail ? "" : "disabled"}>Send to everyone</button><button class="zbtn s alt" id="annClear" ${avail ? "" : "disabled"}>Clear message</button>${S.annNote ? `<p class="zsmall"><b>${esc(S.annNote)}</b></p>` : ""}</div>`;
+  }
+  function hostsCard() {
+    if (S.draft || S.role === "host") return "";
+    return `<div class="zcard"><h2>Co-host</h2><p class="zsmall" style="margin-top:0">Invite someone to stand on stage with you. They can watch this engagement and send messages to everyone. They cannot change anything, see phone numbers, publish or pay.</p>
+      ${S.hostLink ? `<div class="zlink">${esc(S.hostLink)}</div><button class="zbtn s alt" id="hostcopy">Copy co-host link</button><p class="zsmall">It is shown only now. You can retire it any time from your keys on the home page.</p>` : `<button class="zbtn s" id="hostmake">Create a co-host link</button>`}</div>`;
+  }
+  /** What a co-host sees: the numbers, who is here, the big screen, and the message box. Nothing that changes anything. */
+  function hostView() {
+    const link = location.origin + "/z.html?e=" + encodeURIComponent(eid);
+    return `<div class="zhead"><b>Co-host · ${esc(eid)}</b></div>
+      ${S.note ? `<div class="zbanner info">${esc(S.note)}</div>` : ""}
+      <div class="zcard"><h2>Share with participants</h2><div class="zlink">${esc(link)}</div><a class="zbtn s alt" href="/big.html?e=${encodeURIComponent(eid)}" target="_blank" rel="noopener">Open the big screen</a></div>
+      <div class="zgrid"><div class="zcard"><h2>Participants</h2><div class="zstat">${S.people.length}</div></div><div class="zcard"><h2>Numbers called</h2><div class="zstat">${S.log.length} / 90</div></div></div>
+      ${announceCard()}
+      <div class="zcard"><p class="zsmall" style="margin:0">You are signed in as a co-host. The organizer controls the rest.</p></div>`;
+  }
   function engView() {
+    if (S.role === "host") return hostView();
     const link = location.origin + (BASE ? "" : "") + "/z.html?e=" + encodeURIComponent(eid) + (BASE ? "&api=" + encodeURIComponent(BASE) : "");
     const bad = S.checked ? S.checked.bad.length : 0;
     const c = S.control;
@@ -147,6 +175,7 @@
     return `<div class="zhead"><b>Engagement ${esc(eid)}</b><button class="zsnd" id="back">All engagements</button></div>
       ${S.note ? `<div class="zbanner info">${esc(S.note)}</div>` : ""}
       ${payDueCard()}
+      ${announceCard()}${hostsCard()}
       ${S.draft ? `<div class="zcard" style="border:2px solid #c9a24a"><h2>Your engagement is a draft</h2><p class="zsmall" style="margin-top:0">Set it up first (by hand or with your AI) and watch it take shape here. Participants cannot see or join a draft. When you are happy with it, publish it: <b>publishing is free</b>. You confirm your details, get your link, and send it to everyone. You pay before the start time, and it begins the moment you have.</p>${S.pubOpen ? `<label for="pubEmail">Your email (for the invoice)</label><input id="pubEmail" type="email" value="${esc(S.contact.email)}" autocomplete="email"><label for="pubPhone">Your mobile number</label><input id="pubPhone" type="tel" value="${esc(S.contact.phone)}" autocomplete="tel" placeholder="98765 43210"><button class="zbtn" id="pubgo">Confirm and publish</button><button class="zbtn s alt" id="pubcancel">Back</button>` : `<button class="zbtn" id="publishopen">Publish my engagement, free</button>`}${S.pubNote ? `<p class="zsmall"><b>${esc(S.pubNote)}</b></p>` : ""}</div>` : `<div class="zcard"><h2>Share with participants</h2><div class="zlink">${esc(link)}</div><button class="zbtn s alt" id="copy">Copy link</button><a class="zbtn s alt" href="/big.html?e=${encodeURIComponent(eid)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block">Open the big screen</a><p class="zsmall">The big screen shows the numbers to a whole room on a projector or TV. Open it on the laptop that is connected to the screen.</p></div>`}
       <div class="zgrid"><div class="zcard"><h2>Participants</h2><div class="zstat">${S.people.length}</div></div><div class="zcard"><h2>Numbers called${S.cfg.rounds > 1 ? " · round " + S.round + " of " + S.cfg.rounds : ""}</h2><div class="zstat">${S.log.length} / 90</div></div></div>
       ${(S.reqs || []).length ? `<div class="zcard"><h2>Your AI assistant is asking</h2>${S.reqs.map((r) => `<div class="zrow"><span>${esc(r.action)}${r.note ? " · " + esc(r.note) : ""}</span></div>`).join("")}<button class="zbtn s" id="reqok">Approve (${esc(S.reqs[0].action)})</button><button class="zbtn s alt" id="reqno">Dismiss</button></div>` : ""}
@@ -158,7 +187,7 @@
       ${S.started && !S.draft ? "" : settingsCard()}
       <div class="zcard"><h2>Controls</h2>
         <button class="zbtn s" data-ctl="pause" ${paused ? "disabled" : ""}>Pause</button><button class="zbtn s alt" data-ctl="resume" ${paused ? "" : "disabled"}>Resume</button><button class="zbtn s bad" data-ctl="stop">End engagement</button>
-        <p class="zsmall">A pause reaches every phone about 30 to 40 seconds after you press it, because phones check in every few seconds. ${paused ? "<b>Paused now.</b>" : ""} ${S.ctlNote ? esc(S.ctlNote) : ""}</p></div>
+        <p class="zsmall">${S.cf ? `A pause reaches every phone about ${Math.max(10, Math.round(S.cf.leadRounds * 3 / 5) * 5)} seconds after you press it: phones check in on a timer, and larger engagements check less often so they stay within the free plan.` : (S.info && S.info.cap > 2000 ? "Pause is available for engagements of up to 2,000 participants. This one is larger, so it runs without it." : "Pause becomes available once this engagement is set up.")} ${paused ? "<b>Paused now.</b>" : ""} ${S.ctlNote ? esc(S.ctlNote) : ""}</p></div>
       <div class="zcard"><h2>Rewards · from the public number log</h2>
         ${S.settledPreview.length ? S.settledPreview.map((s) => `<div class="zrow"><span>${esc(lineLabel(s))} · call ${s.idx + 1}</span><em>${s.pids.length} participant${s.pids.length === 1 ? "" : "s"}${s.names ? " · " + esc(s.names) : ""}</em></div>`).join("") : "<p class=zsmall>No pattern is complete yet.</p>"}
         <p class="zsmall">Claims received: ${S.claims.length}. ${bad ? `<b>${bad} not valid</b> (they do not match the public log and are ignored).` : "All claims so far match the public log."}</p>
@@ -177,8 +206,9 @@
       let pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed;
       while (S.people.length < pr.total) { const more = await call("GET", `/api/z/${eid}/participants?offset=${S.people.length}`); if (!more.participants.length) break; S.people.push(...more.participants); } // a long list arrives in pages
       S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, rounds: pr.rounds || 1 };
-      S.claims = (await call("GET", `/api/z/${eid}/claims`)).claims;
-      try { S.reqs = (await call("GET", `/api/z/${eid}/control/request`)).requests; } catch { S.reqs = []; }
+      S.claims = S.role === "host" ? [] : (await call("GET", `/api/z/${eid}/claims`)).claims;
+      try { S.reqs = S.role === "host" ? [] : (await call("GET", `/api/z/${eid}/control/request`)).requests; } catch { S.reqs = []; }
+      if (!S.started && !S.draft && S.role !== "host") { try { const k = await TBControl.ensureKey(eid, { token: secret, base: BASE, prefix: "/api/z" }); if (!k.ok && !S.ctlNote) S.ctlNote = k.reason || ""; } catch { /* the pause is optional; the engagement does not depend on it */ } } // an engagement made by the AI has no pause key until the organizer opens it here
       const cf0 = await fetch(BASE + `/api/z/${eid}/control`).then((r) => (r.ok ? r.json() : null)); const cf = cf0 && cf0.pubKey ? cf0 : null; // a held (unpaid) engagement answers {locked:true} with no signing key: that is not a pause file
       S.control = null; S.cf = cf;
       const now = await latestRound();
@@ -239,6 +269,15 @@
       }
       refreshEng();
     };
+    document.querySelectorAll("[data-chip]").forEach((b) => (b.onclick = () => { const t = $("annText"); if (t) { t.value = b.dataset.chip; t.focus(); } }));
+    if ($("annSend")) $("annSend").onclick = async () => {
+      const t = ($("annText").value || "").trim(); if (!t) { S.annNote = "Write a message first."; return draw(engView()); }
+      try { await call("POST", `/api/z/${eid}/announce`, { text: t }); S.annNote = "Sent. Phones show and speak it within about a minute."; } catch (e) { S.annNote = e.message; }
+      refreshEng();
+    };
+    if ($("annClear")) $("annClear").onclick = async () => { try { await call("POST", `/api/z/${eid}/announce`, { text: "" }); S.annNote = "Message cleared."; } catch (e) { S.annNote = e.message; } refreshEng(); };
+    if ($("hostmake")) $("hostmake").onclick = async () => { try { const r = await call("POST", "/api/org/host", {}); S.hostLink = `${location.origin}/zc.html?e=${encodeURIComponent(eid)}#host=${r.hostKey}`; } catch (e) { S.note = e.message; } draw(engView()); };
+    if ($("hostcopy")) $("hostcopy").onclick = () => { try { navigator.clipboard.writeText(S.hostLink); $("hostcopy").textContent = "Copied"; } catch {} };
     document.querySelectorAll("[data-hist]").forEach((b) => (b.onclick = () => { S.showHist = !S.showHist; draw(homeView()); }));
     document.querySelectorAll("[data-open]").forEach((b) => (b.onclick = () => { eid = b.dataset.open; S.store = null; refreshEng(); }));
     document.querySelectorAll("[data-reuse]").forEach((b) => (b.onclick = async () => {
@@ -299,7 +338,12 @@
     if ($("erase")) $("erase").onclick = async () => { if (!confirm("Erase all participant data for this engagement? This cannot be undone.")) return; try { const r = await call("POST", `/api/z/${eid}/erase`, {}); S.note = r.erased + " participants erased."; } catch (e) { S.note = e.message; } refreshEng(); };
   }
 
-  if (!secret) draw(loginView("")); else if (eid) refreshEng(); else refreshHome();
-  setInterval(() => { const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; /* never wipe what the organizer is typing */ if (!secret || document.hidden) return; if (eid) refreshEng(); else refreshHome(); }, 5000);
+  (async () => {
+    if (secret) { try { S.role = (await call("GET", "/api/whoami")).kind === "host" ? "host" : ""; } catch { /* an old or wrong key is handled by the screens below */ } }
+    if (!secret) draw(loginView(""));
+    else if (S.role === "host" && !eid) draw(`<div class="zhead"><b>Co-host</b></div><div class="zcard"><p style="margin:0">Open the co-host link your organizer sent you. It opens the engagement directly.</p></div>`);
+    else if (eid) refreshEng(); else refreshHome();
+  })();
+  setInterval(() => { const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; /* never wipe what the organizer is typing */ if (!secret || document.hidden) return; if (eid) refreshEng(); else if (S.role !== "host") refreshHome(); }, 5000);
   window.__zc = S;
 })();
