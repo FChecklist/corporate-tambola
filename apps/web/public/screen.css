@@ -39,7 +39,7 @@ body.scr :focus-visible{outline:3px solid var(--g2);outline-offset:3px}
 /* lower */
 #lower{flex:0 0 auto;display:flex;flex-direction:column;gap:1.2vmin}
 .feed{font:600 max(2.3vmin,15px)/1.3 var(--sans);color:var(--g2);text-align:center;min-height:3vmin;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.board{display:flex;flex-wrap:wrap;gap:.9vmin;justify-content:center;max-height:15vmin;overflow:hidden}
+.board{display:flex;flex-wrap:wrap;gap:.9vmin;justify-content:center;max-height:21vmin;overflow:hidden}
 .rw{border:.2vmin solid rgba(224,184,114,.35);border-radius:1.2vmin;padding:.7vmin 1.4vmin;background:rgba(0,0,0,.28);max-width:30vw;min-width:0}
 .rw b{display:block;font:700 max(1.8vmin,13px)/1.2 var(--sans);color:var(--iv);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rw span{display:block;font:500 max(1.5vmin,12px)/1.25 var(--sans);color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -131,3 +131,8 @@ body.scr :focus-visible{outline:3px solid var(--g2);outline-offset:3px}
   .sball.pop,.st b.pop,.splashTxt,.win,.spinner{animation:none!important}
   .spinner{border-top-color:rgba(224,184,114,.25);border-style:dotted}
 }
+
+/* ended / intermission: keep the header and the 'Still to win' strip visible, hide ball, board and feed behind the message */
+#ovEnd,#ovInter{inset:9vmin 0 24vmin 0;background:transparent;z-index:20}
+body[data-ov="end"] #centre,body[data-ov="inter"] #centre,body[data-ov="end"] .feed,body[data-ov="inter"] .feed,body[data-ov="end"] .board,body[data-ov="inter"] .board{visibility:hidden}
+@media (orientation:portrait){#ovEnd,#ovInter{inset:10vh 0 26vh 0}}

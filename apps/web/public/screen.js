@@ -72,7 +72,7 @@
     const set = (id, v) => { const el = $(id); if (el.textContent !== String(v)) { el.textContent = v; if (el.dataset.seen != null && !reduce()) { el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); } } el.dataset.seen = "1"; };
     set("stP", st.prizes); set("stL", st.lucky); set("stS", st.scratch);
     const next = $("next");
-    const nt = st.next ? "Next surprise: " + st.next : "";
+    const nt = st.next && !over() ? "Next surprise: " + st.next : "";
     show(next, !!nt); setTxt(next, nt);
     const zero = !st.prizes && !st.lucky && !st.scratch;
     show($("allWon"), zero);
