@@ -107,7 +107,7 @@ export interface Settings {
   breaks: BrandBreak[];
 }
 
-export interface Claim { id: string; pid: string; ticket: "A" | "B" | "AB"; pattern: PatternId; cut: number[]; idx: number; at: number }
+export interface Claim { id: string; pid: string; ticket: "A" | "B" | "C" | "AB"; pattern: PatternId; cut: number[]; idx: number; at: number }
 
 export interface Winner { pid: string; ticketId: string; idx: number; callNo: number; number: number; at: number; share: number }
 

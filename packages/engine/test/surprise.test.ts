@@ -318,6 +318,22 @@ describe("boosters", () => {
   });
 });
 
+describe("extra ticket claims", () => {
+  test("the third ticket (Extra ticket booster in a 2-ticket engagement) can claim", () => {
+    const h = make({ rounds: 2, momentsMode: "manual" }, { ticketMode: "double", rewards: makeRewardLines([{ pattern: "top", texts: ["T"] }]) });
+    const [a, b] = join(h, 2); a!.boosters.extra = 1; h.eng.start();
+    const t = b!.tickets[0]![0]!.filter((v): v is number => v !== null);
+    t.forEach((n) => callNum(h.eng, n)); h.eng.claim(b!.id, { ticket: "A", pattern: "top", cut: t }); settle(h);
+    h.advance(SCFG.INTERMISSION_MS + 1); h.eng.tick();
+    expect(a!.tickets.length).toBe(3);
+    const c = a!.tickets[2]![0]!.filter((v): v is number => v !== null);
+    c.forEach((n) => callNum(h.eng, n));
+    expect(h.eng.claim(a!.id, { ticket: "C", pattern: "top", cut: c })).toBeNull();
+    settle(h);
+    expect(h.eng.winners.get("top:ticket:1")![0]!.ticketId.endsWith("-C")).toBe(true);
+  });
+});
+
 describe("privacy of moments", () => {
   test("by default winners are ticket ids; with the opt-in they show first name, department and last 4 digits, never the full number", () => {
     const off = make({ luckyDraws: 1, luckyWinners: 1, bumper: false, momentsMode: "manual" });

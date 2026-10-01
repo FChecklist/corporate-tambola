@@ -144,7 +144,7 @@ export class EngagementEngine {
   }
 
   /** Public ticket id: shown to everyone instead of a name. */
-  ticketId(p: Participant, which: "A" | "B" | "AB" = "A"): string {
+  ticketId(p: Participant, which: "A" | "B" | "C" | "AB" = "A"): string {
     const org = (this.settings.orgName.replace(/[^A-Za-z]/g, "").toUpperCase() || "ORG").slice(0, 4);
     return `TMB-${org}-${this.settings.id}-${String(p.serial).padStart(6, "0")}-${which}`;
   }
@@ -545,12 +545,13 @@ export class EngagementEngine {
   }
 
   // ---------- claims ----------
-  private ticketsOf(p: Participant, which: "A" | "B" | "AB"): Ticket[] | null {
+  private ticketsOf(p: Participant, which: "A" | "B" | "C" | "AB"): Ticket[] | null {
     if (which === "A") return p.tickets[0] ? [p.tickets[0]] : null;
     if (which === "B") return p.tickets[1] ? [p.tickets[1]] : null;
-    return p.tickets.length === 2 ? p.tickets : null;
+    if (which === "C") return p.tickets[2] ? [p.tickets[2]] : null; // the Extra ticket booster
+    return p.tickets.length >= 2 ? [p.tickets[0]!, p.tickets[1]!] : null; // two-ticket houses use the first two
   }
-  private scopeOf(which: "A" | "B" | "AB"): Scope { return which === "AB" ? "two_ticket" : "ticket"; }
+  private scopeOf(which: "A" | "B" | "C" | "AB"): Scope { return which === "AB" ? "two_ticket" : "ticket"; }
   private linesFor(pattern: PatternId, scope: Scope): RewardLine[] {
     return this.settings.rewards.filter((l) => l.pattern === pattern && l.scope === scope).sort((a, b) => a.ordinal - b.ordinal);
   }
@@ -559,7 +560,7 @@ export class EngagementEngine {
    * A claim carries the client's list of cut numbers (honour system, owner decision).
    * idx is the call that was current when the claim reached the server (owner decision: claim in flight).
    */
-  claim(pid: string, o: { ticket: "A" | "B" | "AB"; pattern: PatternId; cut: number[] }): Err | null {
+  claim(pid: string, o: { ticket: "A" | "B" | "C" | "AB"; pattern: PatternId; cut: number[] }): Err | null {
     const p = this.byId(pid);
     if (!p) return "Not found.";
     if (this.status !== "started") return "The engagement is not running.";
