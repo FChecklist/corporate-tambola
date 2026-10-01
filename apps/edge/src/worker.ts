@@ -466,7 +466,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     // public: counts only, no ids. The one exception is a lucky draw, whose winners are shown by their opaque ticket ids so each phone can tell whether it won
     return json({ results: (r.results ?? []).map((x: any) => ({ pattern: x.pattern, ordinal: x.ordinal, round: x.round, idx: x.idx, count: JSON.parse(x.pids).length, ...(x.pattern === "lucky" ? { winners: JSON.parse(x.pids) } : {}) })) });
   }
-  if (action === "info" && req.method === "GET") return json({ ...(isDraft ? { draft: true } : {}), startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), ...pub(e) });
+  if (action === "info" && req.method === "GET") return json({ ...(isDraft ? { draft: true } : {}), cap: e.cap, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), ...pub(e) });
 
   // everything below is for the organizer (or their AI, where allowed)
   if (action === "publish" && req.method === "POST") { // payment is asked here, never to build; only the organizer themself (not their AI) publishes

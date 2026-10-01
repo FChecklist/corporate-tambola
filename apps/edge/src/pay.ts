@@ -81,8 +81,9 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
   if (!(await spend(6))) return { error: "Busy day. Your payment is safe; this will complete shortly.", status: 503 };
   const meta = JSON.parse(p.meta);
   const eh = await sha("email|" + p.email.toLowerCase());
-  let org = (await db.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>())?.org ?? null;
+  let org: string | null = meta.orgId ?? (await db.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>())?.org ?? null;
   let organizerKey: string | null = null;
+  if (meta.orgId) await db.prepare("INSERT OR IGNORE INTO organizer_email(email_hash,org) VALUES(?,?)").bind(eh, meta.orgId).run(); // the confirmed email can sign this organizer in too
   if (!org) { // a first purchase makes the organizer; the key is shown once (and mailed)
     org = randHex(8); organizerKey = "ctk_" + randHex(24);
     await db.batch([
@@ -91,6 +92,11 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
     ]);
   }
   await db.prepare("INSERT OR IGNORE INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,?,NULL,?)").bind("ent_" + p.id, org, p.pack, p.id, now).run();
+  let published: string | null = null;
+  if (meta.eid) { // publish the draft this payment was made for (only if it is still an unpublished draft of the same organizer)
+    const up = await db.prepare("UPDATE engagement SET pack=? WHERE id=? AND org=? AND pack=0").bind(p.pack, meta.eid, org).run();
+    if ((up.meta?.changes ?? 0) > 0) { await db.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(meta.eid, "ent_" + p.id).run(); published = meta.eid; }
+  }
   // invoice: brand-wise numbering per financial year; the legal entity is always the supplier; missing supplier details => DRAFT, never a fake valid invoice
   const co = company(env);
   const fy = financialYear(new Date(now));
@@ -104,12 +110,12 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
   const origin = env.PUBLIC_ORIGIN ?? meta.origin ?? "";
   const lines = [
     `Thank you. Your ${brand.name} engagement for up to ${p.pack} participants is ready to set up.`,
-    organizerKey ? `Your organizer key (keep it private, it is shown only once): ${organizerKey}\nOpen ${origin}/zc.html and paste it to begin.` : `Use your existing organizer key at ${origin}/zc.html to create this engagement.`,
+    published ? `Your engagement is published. Share the link with your participants from your console: ${origin}/zc.html?e=${published}` : organizerKey ? `Your organizer key (keep it private, it is shown only once): ${organizerKey}\nOpen ${origin}/zc.html and paste it to begin.` : `Use your existing organizer key at ${origin}/zc.html to create this engagement.`,
     `\nINVOICE\n${renderInvoiceText(data)}\nView or print it: ${origin}/api/invoice/${token}`,
   ];
   await sendMail(env, db, p.email, `${brand.name}: payment received, invoice ${number}`, lines.join("\n\n"), now);
   await recordCommission(env, p, tax.taxable, now); // refer & earn: a commission row for a referred, PAID purchase only
-  const result = { ok: true, orderId: p.id, pack: p.pack, total: p.amount, tax: p.tax, currency: p.currency, invoiceUrl: `/api/invoice/${token}`, invoiceNumber: number, organizerKey, newOrganizer: !!organizerKey };
+  const result = { ok: true, orderId: p.id, pack: p.pack, total: p.amount, tax: p.tax, currency: p.currency, invoiceUrl: `/api/invoice/${token}`, invoiceNumber: number, organizerKey, newOrganizer: !!organizerKey, published: !!published, eid: published };
   await db.prepare("UPDATE payment SET status='paid', paid_ms=?, org=?, result=? WHERE id=?").bind(now, org, JSON.stringify(result), p.id).run();
   return { result };
 }
@@ -125,7 +131,20 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
   if (req.method === "POST" && p === "/api/checkout") {
     if (mode === "off") return json({ error: "Payments are not switched on yet. Please try again later." }, 503);
     const b = await body(req);
-    const pack = Number(b?.pack); const cur = b?.currency === "USD" ? "USD" : "INR";
+    // a signed-in organizer paying to publish their own draft: the pack is the smallest one that fits the draft, and the payment is bound to them and to it
+    let boundOrg: string | null = null, boundEid: string | null = null, boundPack: number | null = null;
+    const presented = (req.headers.get("x-organizer") ?? "").trim();
+    if (presented && typeof b?.eid === "string") {
+      const k = await db.prepare("SELECT org, kind FROM organizer_key WHERE hash=? AND revoked=0").bind(await sha("key|" + presented)).first<{ org: string; kind: string }>();
+      if (!k || k.kind !== "master") return json({ error: "Please sign in again." }, 403);
+      const eg = await db.prepare("SELECT org, cap, pack FROM engagement WHERE id=?").bind(b.eid).first<{ org: string | null; cap: number; pack: number | null }>();
+      if (!eg || eg.org !== k.org) return json({ error: "No such engagement." }, 404);
+      if (eg.pack !== 0) return json({ error: "This engagement is already published." }, 409);
+      boundPack = PACKS.find((x) => x[0] >= eg.cap)?.[0] ?? null;
+      if (!boundPack) return json({ error: "That many participants needs a custom arrangement. Please write to us." }, 400);
+      boundOrg = k.org; boundEid = b.eid;
+    }
+    const pack = boundPack ?? Number(b?.pack); const cur = b?.currency === "USD" ? "USD" : "INR";
     if (!b || !PACKS.some((x) => x[0] === pack)) return json({ error: "Choose a pack." }, 400);
     if (typeof b.email !== "string" || !EMAIL.test(b.email.trim())) return json({ error: "Enter a valid e-mail address." }, 400);
     if (typeof b.org !== "string" || b.org.trim().length < 2) return json({ error: "Enter your organisation's name." }, 400);
@@ -133,7 +152,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     if (!(await spend(2))) return busy();
     const pr = price(pack, cur);
     const id = "pay_" + randHex(8);
-    const meta = { org: String(b.org).trim().slice(0, 120), country: typeof b.country === "string" ? b.country.slice(0, 2) : "IN", taxId: typeof b.taxId === "string" ? b.taxId.trim().slice(0, 20) : "", origin: env.PUBLIC_ORIGIN ?? url.origin };
+    const meta = { org: String(b.org).trim().slice(0, 120), country: typeof b.country === "string" ? b.country.slice(0, 2) : "IN", taxId: typeof b.taxId === "string" ? b.taxId.trim().slice(0, 20) : "", origin: env.PUBLIC_ORIGIN ?? url.origin, ...(boundOrg ? { orgId: boundOrg, eid: boundEid } : {}) };
     let order: any = null;
     if (rzp) {
       try { order = await createOrder(rzp, { amountMinor: toMinor(pr.total), currency: cur, receipt: id, notes: { brand: brand.name, product: "engagement", pack: String(pack), organization: meta.org.slice(0, 80), payment_ref: id } }); }

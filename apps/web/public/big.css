@@ -1,0 +1,30 @@
+/* Corporate Tambola big screen: for a projector or TV. Dark, large, readable from the back of a hall. */
+:root{--bg:#14090f;--ink:#fff7ea;--mute:#bda9a0;--gold:#e8b84a;--maroon:#5b1426;--line:#3a2630}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;min-height:100%}
+#app{min-height:100vh;display:grid;grid-template-rows:auto 1fr auto;gap:2vh;padding:2.4vh 3vw}
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:2vw;flex-wrap:wrap}
+.brand{font:400 clamp(20px,2.6vw,40px) "DM Serif Display",Georgia,serif;color:var(--gold)}
+.meta{font-size:clamp(14px,1.6vw,26px);color:var(--mute)}
+.main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:3vw;align-items:center}
+.now{text-align:center}
+.now .lbl{font-size:clamp(14px,1.6vw,26px);color:var(--mute);text-transform:uppercase;letter-spacing:.14em}
+.now .num{font:700 clamp(120px,22vw,380px)/1 Inter,system-ui,sans-serif;color:var(--gold);margin:.02em 0;text-shadow:0 0 .2em rgba(232,184,74,.25)}
+.now .num.fresh{animation:pop .5s ease}
+@keyframes pop{from{transform:scale(.7);opacity:.2}to{transform:scale(1);opacity:1}}
+.recent{display:flex;gap:1.2vw;justify-content:center;flex-wrap:wrap}
+.recent span{font:600 clamp(24px,3.4vw,56px) Inter,sans-serif;min-width:2.2em;text-align:center;padding:.1em .3em;border:2px solid var(--line);border-radius:.4em;color:var(--ink)}
+.board{display:grid;grid-template-columns:repeat(10,1fr);gap:.6vw}
+.board div{aspect-ratio:1;display:grid;place-items:center;font:600 clamp(14px,2.1vw,34px) Inter,sans-serif;border-radius:.3em;border:1px solid var(--line);color:#5c474f}
+.board div.c{background:var(--maroon);border-color:var(--gold);color:var(--ink)}
+.board div.l{background:var(--gold);color:#2a1308;border-color:var(--gold)}
+.big{text-align:center;padding:4vh 2vw;border:2px solid var(--gold);border-radius:1em;background:#1d0f17}
+.big h1{font:400 clamp(32px,6vw,110px)/1.05 "DM Serif Display",Georgia,serif;margin:.1em 0;color:var(--gold)}
+.big p{font-size:clamp(18px,2.4vw,40px);margin:.3em 0;color:var(--ink)}
+.cd{font:700 clamp(60px,14vw,240px)/1 Inter,sans-serif;color:var(--gold);letter-spacing:.02em}
+.wins{display:flex;gap:1.4vw;flex-wrap:wrap;justify-content:center}
+.wins span{font-size:clamp(14px,1.8vw,30px);padding:.3em .8em;border:1px solid var(--line);border-radius:2em;color:var(--ink)}
+.wins b{color:var(--gold)}
+.foot{font-size:clamp(12px,1.3vw,22px);color:var(--mute);text-align:center}
+.msg{font-size:clamp(18px,2.4vw,40px);text-align:center;margin-top:30vh;color:var(--mute)}
+@media (max-width:800px){.main{grid-template-columns:1fr}}

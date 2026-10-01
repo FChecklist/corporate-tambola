@@ -167,7 +167,7 @@
       const b = $("cdGo"); b.disabled = true; setErr("");
       try {
         const r = await TB.api("POST", "/api/auth/verify", { email, code });
-        try { sessionStorage.setItem("ctz-org", r.token); } catch {} location.href = "/zc.html";
+        try { sessionStorage.setItem("ctz-org", r.token); } catch {} let nx = "/zc.html"; try { const n = sessionStorage.getItem("ctz-next"); if (n && /^\/(zc|pay)(\.html)?(\?e=[A-Za-z0-9_-]{4,40})?$/.test(n)) nx = n; sessionStorage.removeItem("ctz-next"); } catch {} location.href = nx;
       } catch (e) { b.disabled = false; setErr(e.message); }
     };
     $("cdForm").addEventListener("submit", (e) => { e.preventDefault(); verify(); });
