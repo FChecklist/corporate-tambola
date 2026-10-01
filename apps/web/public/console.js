@@ -267,7 +267,7 @@
       </div>
       <div class="grid">
         <div><label class="lb">Tickets per participant</label>${chips("set", "ticketMode", "s", [["single", "1 ticket"], ["double", "2 tickets"]], e.ticketMode, ro)}<p class="hint">${e.ticketMode === "double" ? "Each participant gets two tickets. A “Full Two-Ticket House” reward becomes possible." : "Each participant gets one ticket."}</p></div>
-        <div><label class="lb">How numbers are called</label>${chips("set", "callMode", "s", [["ai", "AI voice"], ["manual", "Host voice"], ["both", "AI voice + host speaks"]], e.callMode, ro)}<p class="hint">${esc(modeHint)}</p></div>
+        <div><label class="lb">How numbers are called</label>${chips("set", "callMode", "s", [["ai", "Automatic"], ["manual", "Host voice"], ["both", "Automatic + host speaks"]], e.callMode, ro)}<p class="hint">${esc(modeHint)}</p></div>
         <div><label class="lb">Voice</label><div class="pill wine" style="margin-top:4px">${ic("mic")} Indian English, female, slow and clear</div></div>
       </div></div>`]];
   }
@@ -358,7 +358,7 @@
   }
 
   // ---------------------------------------------------------------- 2b. rounds and surprise moments (optional)
-  const SXD = { rounds: 1, callSeconds: 10, autoMark: true, luckyDraws: 0, luckyWinners: 3, luckyPrize: "gift", bumper: true, scratchCards: 0, scratchWinning: 10, scratchPrize: "mix", momentsMode: "auto", boostersAllowed: true, revealNames: false };
+  const SXD = { rounds: 1, callSeconds: 9, autoMark: true, luckyDraws: 0, luckyWinners: 3, luckyPrize: "gift", bumper: true, scratchCards: 0, scratchWinning: 10, scratchPrize: "mix", momentsMode: "auto", boostersAllowed: true, revealNames: false };
   const sx = () => Object.assign({}, SXD, (S.data && S.data.surprise) || {});
   const sxOn = (c) => c.rounds > 1 || c.luckyDraws > 0 || c.scratchCards > 0;
   // same formulas as the server's Surprise.plan (used for instant feedback; the server's own numbers replace these after each save)
@@ -400,7 +400,7 @@
     const yn = (k, yes, no) => cp("sx", k, "b", [[true, yes], [false, no]], c[k]);
     const g1 = `<div class="grid">
       <div><label class="lb">Tambola rounds in this event</label>${cp("sx", "rounds", "n", [[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"]], c.rounds)}<p class="hint">Each round uses all the rewards you set up in step 2.</p></div>
-      <div><label class="lb">Calling speed</label>${cp("sx", "callSeconds", "n", [[6, "Fast · 6 s"], [10, "Normal · 10 s"], [15, "Relaxed · 15 s"]], c.callSeconds)}</div>
+      <div><label class="lb">Calling speed</label>${cp("sx", "callSeconds", "n", [[6, "Fast · 6 s"], [9, "Normal · 9 s"], [12, "Relaxed · 12 s"], [15, "Slow · 15 s"]], c.callSeconds)}</div>
       <div><label class="lb">Mark tickets automatically</label>${yn("autoMark", "Yes", "No, participants tap")}<p class="hint">${c.autoMark ? "Each called number is marked on the participant’s ticket for them. Claims are still checked." : "Participants tap each called number themselves. Rounds take a little longer."}</p></div></div>`;
     const g2 = `<div class="grid">
       <div><label class="lb" for="sx_luckyDraws">Lucky draws in the event</label>${sel("luckyDraws", "Lucky draws in the event", 1, 10, true)}</div>
@@ -626,7 +626,7 @@
       <div class="kv"><span>Brand breaks</span><b>${S.data.breaks.length}${missing ? " · " + missing + " without a link" : ""}</b></div>
       ${sxOn(sx()) ? `<div class="kv"><span>Rounds and surprises</span><b>${esc(nOf(sx().rounds, "round", "rounds") + (sx().luckyDraws ? " · " + nOf(sx().luckyDraws, "lucky draw", "lucky draws") : "") + (sx().scratchCards ? " · " + nOf(sx().scratchCards, "scratch card", "scratch cards") : ""))}</b></div>` : ""}
       <div class="kv"><span>Tickets</span><b>${e.ticketMode === "double" ? "2 per participant" : "1 per participant"}</b></div>
-      <div class="kv"><span>Numbers called by</span><b>${{ ai: "AI voice", manual: "Host voice", both: "AI voice + host speaks" }[e.callMode]}</b></div></div>
+      <div class="kv"><span>Numbers called by</span><b>${{ ai: "Automatic", manual: "Host voice", both: "AI voice + host speaks" }[e.callMode]}</b></div></div>
       ${c.joined === 0 ? `<div class="note warn">${ic("alert")}<span>Nobody has joined yet.</span></div>` : ""}
       ${missing ? `<div class="note warn">${ic("alert")}<span>A brand break has no video link. Add it in step 4 or remove the break.</span></div>` : ""}
       <label class="cb"><input type="checkbox" ${S.ck1 ? "checked" : ""} data-c="ck1"> <span>Everyone I want has been admitted.${c.waiting ? ` <span class="pill warn">${c.waiting} still waiting</span>` : ""}</span></label>

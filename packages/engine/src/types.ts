@@ -13,7 +13,7 @@ export type PrizeKind = "gift" | "booster" | "mix";
 /** Optional: rounds, lucky draws, scratch cards, boosters. Defaults leave the engagement exactly as before (one round, nothing extra). */
 export interface SurpriseSettings {
   rounds: number; // 1-5
-  callSeconds: 6 | 10 | 15; // calling speed: fast / normal / relaxed
+  callSeconds: 6 | 9 | 12 | 15; // calling speed: multiples of the 3 s public-beacon round (fast / normal / relaxed / slow)
   autoMark: boolean; // phones mark called numbers for the participant (claims still carry the cut list)
   luckyDraws: number; // 0-10, counted per engagement
   luckyWinners: 1 | 3 | 5 | 10;
@@ -26,7 +26,7 @@ export interface SurpriseSettings {
   boostersAllowed: boolean;
   revealNames: boolean; // OFF by default: winners are shown by ticket id. ON: first name + department + last 4 digits (needs participants' consent wording)
 }
-export const DEFAULT_SURPRISE: SurpriseSettings = { rounds: 1, callSeconds: 10, autoMark: true, luckyDraws: 0, luckyWinners: 3, luckyPrize: "gift", bumper: true, scratchCards: 0, scratchWinning: 10, scratchPrize: "mix", momentsMode: "auto", boostersAllowed: true, revealNames: false };
+export const DEFAULT_SURPRISE: SurpriseSettings = { rounds: 1, callSeconds: 9, autoMark: true, luckyDraws: 0, luckyWinners: 3, luckyPrize: "gift", bumper: true, scratchCards: 0, scratchWinning: 10, scratchPrize: "mix", momentsMode: "auto", boostersAllowed: true, revealNames: false };
 
 export interface Moment {
   id: string; kind: "lucky" | "scratch"; slot: string; winners: number; prize: PrizeKind; bumper: boolean;

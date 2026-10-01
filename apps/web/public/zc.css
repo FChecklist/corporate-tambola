@@ -1,0 +1,13 @@
+.zc{max-width:760px}
+.zc .zbtn.s{width:auto;min-height:40px;padding:0 16px;margin:6px 6px 0 0;font-size:14px}
+.zc .zbtn.alt{background:var(--surface);color:var(--wine);border:1px solid var(--wine)}
+.zc .zbtn.bad{background:var(--bad)}
+.zc .zbtn[disabled]{opacity:.5}
+.zc select{min-height:46px;font-size:16px;padding:0 10px;border:1px solid var(--line);border-radius:10px;background:#fff;width:100%}
+.zc .zgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.zc .zstat{font:700 26px var(--sans,inherit);color:var(--wine)}
+.zc .zlink{word-break:break-all;font-family:var(--mono,monospace);font-size:13px;background:var(--sunk);padding:8px 10px;border-radius:8px}
+.zc .lastbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:var(--deep);color:#fff;border-radius:14px;padding:12px 14px;margin:10px 0}
+.zc .lastbar b{color:var(--gold2)}
+.zc .lastbar button{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:8px;min-height:36px;padding:0 12px;margin-left:6px}
+.zc table{width:100%;border-collapse:collapse;font-size:14px}.zc td,.zc th{padding:6px 4px;border-top:1px solid var(--line2);text-align:left}

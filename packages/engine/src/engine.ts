@@ -11,7 +11,7 @@ import type {
 
 void _n;
 
-export const CFG = { AI_GAP: 10_000, MIN_HOST_GAP: 5_000, CLAIM_CHECK: 2_400, RESULT_SHOW: 5_000, RESUME_DELAY: 3_000, MAX_REWARD_LINES: 30, MAX_BREAKS: 3,
+export const CFG = { AI_GAP: 9_000, MIN_HOST_GAP: 5_000, CLAIM_CHECK: 2_400, RESULT_SHOW: 5_000, RESUME_DELAY: 3_000, MAX_REWARD_LINES: 30, MAX_BREAKS: 3,
   /** After the organizer presses Start, the first number is called this long after, so every phone can finish getting ready. Entry stays open meanwhile. */
   PRE_START_MS: 60_000 };
 
@@ -442,8 +442,8 @@ export class EngagementEngine {
 
   finishEngagement(why: string): void { this.end(why); }
   applyPendingEmergency(): void { if (this.pendingEmergency) this.applyEmergency(this.pendingEmergency); }
-  /** Calling gap: 6 / 10 / 15 s from the settings (the test speed switch still overrides the normal 10 s). */
-  gapMs(): number { const c = this.settings.surprise.callSeconds; return c === 10 ? CFG.AI_GAP : c * 1000; }
+  /** Calling gap: 6 / 9 / 12 / 15 s from the settings (the test speed switch still overrides the normal 10 s). */
+  gapMs(): number { const c = this.settings.surprise.callSeconds; return c === 9 ? CFG.AI_GAP : c * 1000; }
 
   end(why = "Organizer ended the engagement"): void {
     if (this.status !== "started") return;

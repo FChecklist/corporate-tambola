@@ -2,30 +2,48 @@
 // and the settled results. It never draws numbers and never verifies BLS (a free Worker has ~10 ms CPU; one verify costs ~60 ms),
 // so the organizer's own console verifies claims against the public log and posts the settled result.
 // D1-compatible: env.DB only uses prepare/bind/run/all/first/batch.
+//
+// Who may do what:
+//   platform key  (env.ORGANIZER_SECRET)  - us: issues organizer keys, runs the daily purge, and can act on any engagement (also single-tenant/local mode).
+//   master key    - the organizer's own console: everything for that organizer's engagements, including publishing results, erasing, registering the pause key.
+//   AI key        - the organizer's external AI assistant: everything a person could do in the console EXCEPT publishing results, erasing data and
+//                   registering/using the pause signing key (pausing needs the organizer's own browser; the AI can only ask, see /control/request).
+//                   So an AI can never decide who wins, and never change what the public beacon decides.
+//   nobody        - phones: join, send claims, read results counts, read the engagement info and the signed control file.
+
+import { SAFETY_FAST, SAFETY_STANDARD, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 
 export interface D1Result<T = any> { results?: T[]; meta?: { changes?: number } }
 export interface D1Stmt { bind(...v: unknown[]): D1Stmt; run(): Promise<D1Result>; all<T = any>(): Promise<D1Result<T>>; first<T = any>(): Promise<T | null> }
 export interface D1 { prepare(sql: string): D1Stmt; batch(s: D1Stmt[]): Promise<D1Result[]> }
-export interface Env { DB: D1; ORGANIZER_SECRET?: string; DAILY_WRITE_BUDGET?: string }
+export interface Env { DB: D1; ORGANIZER_SECRET?: string; DAILY_WRITE_BUDGET?: string; PHONE_SALT?: string }
+export const RETENTION_DAYS = 365;
 
 export const SCHEMA = [
-  `CREATE TABLE IF NOT EXISTS engagement (id TEXT PRIMARY KEY, start_round INTEGER NOT NULL, call_seconds INTEGER NOT NULL, cap INTEGER NOT NULL, created_ms INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS engagement (id TEXT PRIMARY KEY, start_round INTEGER NOT NULL, call_seconds INTEGER NOT NULL, cap INTEGER NOT NULL, created_ms INTEGER NOT NULL, org TEXT, closed INTEGER NOT NULL DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS participant (eid TEXT NOT NULL, pid TEXT NOT NULL, phone_hash TEXT NOT NULL, name TEXT, joined_ms INTEGER NOT NULL, PRIMARY KEY (eid, pid))`,
   `CREATE UNIQUE INDEX IF NOT EXISTS participant_phone ON participant (eid, phone_hash)`,
   `CREATE TABLE IF NOT EXISTS claim (eid TEXT NOT NULL, pid TEXT NOT NULL, pattern TEXT NOT NULL, idx INTEGER NOT NULL, at_ms INTEGER NOT NULL, PRIMARY KEY (eid, pid, pattern))`,
   `CREATE TABLE IF NOT EXISTS settled (eid TEXT NOT NULL, pattern TEXT NOT NULL, idx INTEGER NOT NULL, pids TEXT NOT NULL, PRIMARY KEY (eid, pattern))`,
   `CREATE TABLE IF NOT EXISTS usage (day TEXT PRIMARY KEY, writes INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS organizer_key (hash TEXT PRIMARY KEY, org TEXT NOT NULL, kind TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_ms INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS ctl_request (id INTEGER PRIMARY KEY AUTOINCREMENT, eid TEXT NOT NULL, action TEXT NOT NULL, note TEXT, at_ms INTEGER NOT NULL, open INTEGER NOT NULL DEFAULT 1)`,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full"]);
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))), (b) => b.toString(16).padStart(2, "0")).join("");
+const randHex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
 const MAX_BODY = 4096;
+const ID = /^[A-Za-z0-9_-]{4,40}$/;
+const GENESIS = 1692803367; // drand quicknet; round r is published at GENESIS + (r-1)*3 s (UTC)
+const roundMs = (r: number) => (GENESIS + (r - 1) * 3) * 1000;
 
-async function body(req: Request): Promise<any | null> {
+async function body(req: Request, max = MAX_BODY): Promise<any | null> {
   const t = await req.text();
-  if (t.length > MAX_BODY) return null;
+  if (t.length > max) return null;
   try { const v = JSON.parse(t); return v && typeof v === "object" ? v : null; } catch { return null; }
 }
 
@@ -38,38 +56,185 @@ async function spend(env: Env, now: number, n = 1): Promise<boolean> {
   await env.DB.prepare("INSERT INTO usage(day,writes) VALUES(?,?) ON CONFLICT(day) DO UPDATE SET writes=writes+?").bind(d, n, n).run();
   return true;
 }
+const BUSY = () => json({ error: "Busy day. Please try again after midnight UTC." }, 503);
 
+const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-organizer, authorization", "access-control-allow-methods": "GET, POST, PUT, PATCH, OPTIONS", "access-control-max-age": "86400" };
+/** Phones load the app from Pages and call this Worker from another origin, so every answer carries open CORS (no cookies are used anywhere). */
 export async function handle(req: Request, env: Env, now = Date.now()): Promise<Response> {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+  const r = await route(req, env, now);
+  const h = new Headers(r.headers);
+  for (const [k, v] of Object.entries(CORS)) h.set(k, v);
+  return new Response(r.body, { status: r.status, headers: h });
+}
+
+const d1kv = (env: Env): KV => ({
+  get: async (k) => (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? null,
+  put: async (k, v) => { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, v).run(); },
+});
+
+interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | null }
+async function authOf(req: Request, env: Env): Promise<Auth> {
+  const presented = req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!presented) return { plat: false, org: null, kind: null };
+  if (env.ORGANIZER_SECRET && presented === env.ORGANIZER_SECRET) return { plat: true, org: null, kind: "platform" };
+  const row = await env.DB.prepare("SELECT org, kind FROM organizer_key WHERE hash=? AND revoked=0").bind(await sha("key|" + presented)).first<{ org: string; kind: "master" | "ai" }>();
+  return row ? { plat: false, org: row.org, kind: row.kind } : { plat: false, org: null, kind: null };
+}
+/** May this caller act on this engagement? `master` = needs the organizer's own key (or ours), not the AI's. */
+const can = (a: Auth, e: { org: string | null }, master = false) => a.plat || (!!a.org && e.org === a.org && (!master || a.kind === "master"));
+const deny = (a: Auth) => json({ error: a.kind === "ai" ? "Your AI assistant may not do this. Please do it yourself in the console." : "Not allowed." }, 403);
+
+export const AI_MANIFEST = {
+  name: "Corporate Tambola organizer API",
+  how: "Send your organizer AI key in the x-organizer header (or Authorization: Bearer). Every call is JSON. The numbers are drawn from public randomness on participants' phones; you cannot change them.",
+  you_can: [
+    { do: "List engagements and head-counts", call: "GET /api/history" },
+    { do: "Create an engagement", call: "POST /api/z {id, startRound, callSeconds (6|9|12|15), cap, closed?}" },
+    { do: "Change start time, speed, cap or invite-only before the first number", call: "PATCH /api/z/{id}/settings {startRound?, callSeconds?, cap?, closed?}" },
+    { do: "Load participants (invite list)", call: "POST /api/z/{id}/roster {people:[{phone,name}]} up to 100 per call" },
+    { do: "Reuse an earlier engagement's people", call: "POST /api/z/{id}/reuse {from}" },
+    { do: "See who joined (names and ids only, never phone numbers)", call: "GET /api/z/{id}/participants" },
+    { do: "See claims received", call: "GET /api/z/{id}/claims" },
+    { do: "See published results", call: "GET /api/z/{id}/results" },
+    { do: "Ask the organizer to pause, resume or stop (they approve in their console)", call: "POST /api/z/{id}/control/request {action: pause|resume|stop, note}" },
+    { do: "Read the current pause status", call: "GET /api/z/{id}/control" },
+  ],
+  you_cannot: [
+    "Publish results or decide winners (the organizer's console recomputes them from the public numbers)",
+    "Erase participant data (the organizer does that)",
+    "Sign or send a pause yourself (only the organizer's own browser holds that key)",
+    "Change the rules, the reward patterns, the numbers or anyone's ticket",
+    "Write or run code on the platform",
+  ],
+};
+
+async function route(req: Request, env: Env, now: number): Promise<Response> {
   const url = new URL(req.url);
-  const isOrg = !!env.ORGANIZER_SECRET && req.headers.get("x-organizer") === env.ORGANIZER_SECRET;
-  if (req.method === "POST" && url.pathname === "/api/e") {
-    if (!isOrg) return json({ error: "Not allowed." }, 403);
+  const p = url.pathname;
+  const a = await authOf(req, env);
+
+  if (req.method === "GET" && p === "/api/z/ai-manifest") return json(AI_MANIFEST);
+
+  /* ---- organizers and their keys ---- */
+  if (req.method === "POST" && p === "/api/org") { // platform: a new organizer (called after payment / sign-up); the key is shown once
+    if (!a.plat) return deny(a);
+    if (!(await spend(env, now))) return BUSY();
+    const org = randHex(8), key = "ctk_" + randHex(24);
+    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), org, "master", now).run();
+    return json({ ok: true, organizerKey: key });
+  }
+  if (req.method === "POST" && p === "/api/org/ai") { // the organizer's own key mints the AI key; a new one replaces the old one
+    if (a.kind !== "master" || !a.org) return deny(a);
+    if (!(await spend(env, now, 2))) return BUSY();
+    await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE org=? AND kind='ai'").bind(a.org).run();
+    const key = "cta_" + randHex(24);
+    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), a.org, "ai", now).run();
+    return json({ ok: true, aiKey: key });
+  }
+  if (req.method === "POST" && p === "/api/org/ai/revoke") {
+    if (a.kind !== "master" || !a.org) return deny(a);
+    if (!(await spend(env, now))) return BUSY();
+    const r = await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE org=? AND kind='ai' AND revoked=0").bind(a.org).run();
+    return json({ ok: true, revoked: r.meta?.changes ?? 0 });
+  }
+
+  /* ---- signed pause / resume / extend / stop: the signature is the authorisation, the Worker just stores and serves one small file ---- */
+  const cm = p.match(/^\/api\/z\/([A-Za-z0-9_-]{3,40})\/control(\/key|\/request|\/request\/clear)?$/);
+  if (cm) {
+    const [, cid, sub] = cm;
+    const kv = d1kv(env);
+    if (!sub && req.method === "GET") {
+      const f = await readPublished(kv, cid!);
+      return f ? new Response(JSON.stringify(f), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } }) : json({ registered: false }, 404);
+    }
+    if (!sub && req.method === "POST") {
+      const b = await body(req);
+      if (!b) return json({ error: "Bad message." }, 400);
+      if (!(await spend(env, now))) return BUSY();
+      const r = await publishControl(kv, cid!, b.message);
+      return r.ok ? json(r) : json({ error: r.error }, r.status);
+    }
+    const ce = await env.DB.prepare("SELECT id, org FROM engagement WHERE id=?").bind(cid).first<{ id: string; org: string | null }>();
+    if (!ce) return json({ error: "No such engagement." }, 404);
+    if (sub === "/key" && req.method === "PUT") { // only the organizer's own console registers the key that signs pauses
+      if (!can(a, ce, true)) return deny(a);
+      const b = await body(req);
+      if (!b || typeof b.publicKey !== "string") return json({ error: "Bad key." }, 400);
+      if (!(await spend(env, now))) return BUSY();
+      const r = await registerKey(kv, cid!, b.publicKey, b.profile === "fast" ? SAFETY_FAST : SAFETY_STANDARD);
+      return r.ok ? json({ ok: true }) : json({ error: r.error }, 409);
+    }
+    if (sub === "/request" && req.method === "POST") { // the AI (or organizer) asks; the organizer's browser approves by signing
+      if (!can(a, ce)) return deny(a);
+      const b = await body(req);
+      if (!b || !["pause", "resume", "stop"].includes(b.action)) return json({ error: "Ask for pause, resume or stop." }, 400);
+      if (!(await spend(env, now))) return BUSY();
+      await env.DB.prepare("INSERT INTO ctl_request(eid,action,note,at_ms,open) VALUES(?,?,?,?,1)").bind(cid, b.action, typeof b.note === "string" ? b.note.replace(/[<>`]/g, "").slice(0, 200) : null, now).run();
+      return json({ ok: true, message: "The organizer has been asked and must approve it in their console." });
+    }
+    if (sub === "/request" && req.method === "GET") {
+      if (!can(a, ce)) return deny(a);
+      const r = await env.DB.prepare("SELECT id, action, note, at_ms FROM ctl_request WHERE eid=? AND open=1 ORDER BY id").bind(cid).all<any>();
+      return json({ requests: r.results ?? [] });
+    }
+    if (sub === "/request/clear" && req.method === "POST") {
+      if (!can(a, ce, true)) return deny(a);
+      await env.DB.prepare("UPDATE ctl_request SET open=0 WHERE eid=?").bind(cid).run();
+      return json({ ok: true });
+    }
+    return json({ error: "Not found" }, 404);
+  }
+
+  /* ---- engagements ---- */
+  if (req.method === "POST" && p === "/api/z") {
+    if (!a.plat && !a.org) return deny(a);
     const b = await body(req);
-    if (!b || !/^[A-Za-z0-9_-]{4,40}$/.test(b.id ?? "") || !Number.isInteger(b.startRound) || !Number.isInteger(b.callSeconds) || b.callSeconds % 3 || b.callSeconds < 6 || !Number.isInteger(b.cap) || b.cap < 1 || b.cap > 100000)
+    if (!b || !ID.test(b.id ?? "") || !Number.isInteger(b.startRound) || !Number.isInteger(b.callSeconds) || b.callSeconds % 3 || b.callSeconds < 6 || !Number.isInteger(b.cap) || b.cap < 1 || b.cap > 100000)
       return json({ error: "Check the engagement details." }, 400);
-    if (!(await spend(env, now))) return json({ error: "Busy day. Please try again after midnight UTC." }, 503);
-    await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms) VALUES(?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now).run();
+    const have = await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(b.id).first<{ org: string | null }>();
+    if (have) return json({ ok: true, existed: true }); // creating twice never overwrites (and never reveals whose it is)
+    if (!(await spend(env, now))) return BUSY();
+    await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed) VALUES(?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.closed ? 1 : 0).run();
     return json({ ok: true });
   }
-  const m = url.pathname.match(/^\/api\/e\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results)$/);
+  if (req.method === "GET" && p === "/api/history") {
+    if (!a.plat && !a.org) return deny(a);
+    const q = a.plat
+      ? env.DB.prepare("SELECT e.id, e.created_ms, e.call_seconds, e.closed, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e ORDER BY e.created_ms DESC LIMIT 50")
+      : env.DB.prepare("SELECT e.id, e.created_ms, e.call_seconds, e.closed, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e WHERE e.org=? ORDER BY e.created_ms DESC LIMIT 50").bind(a.org);
+    const r = await q.all<any>();
+    return json({ engagements: r.results ?? [], retentionDays: RETENTION_DAYS });
+  }
+  if (req.method === "POST" && p === "/api/purge") { // run daily (Cron trigger) or by hand: removes everything older than the retention period
+    if (!a.plat) return deny(a);
+    return json({ ok: true, purged: await purgeOld(env, now) });
+  }
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings)$/);
   if (!m) return json({ error: "Not found" }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
   if (!e) return json({ error: "No such engagement." }, 404);
+  const phoneHash = async (raw: unknown): Promise<string | null> => {
+    const d = String(raw ?? "").replace(/\D/g, "");
+    if (d.length < 10 || d.length > 15) return null;
+    return sha(`${env.PHONE_SALT ?? env.ORGANIZER_SECRET ?? "ct"}|${d.slice(-10)}`); // +91 98765 43210, 098765 43210 and 9876543210 are the same person; one hash in every engagement so a roster can be reused without storing the number
+  };
+  const pidOf = async (ph: string) => (await sha(`${eid}|${ph}`)).slice(0, 16);
+  const cleanName = (n: unknown) => (typeof n === "string" ? n.replace(/[<>`]/g, "").slice(0, 60) : null);
 
   if (action === "join" && req.method === "POST") {
     const b = await body(req);
-    const phone = String(b?.phone ?? "").replace(/\D/g, "");
-    if (phone.length < 10 || phone.length > 15) return json({ error: "Enter a valid mobile number." }, 400);
-    const ph = await sha(`${eid}|${phone}`);
-    const name = typeof b?.name === "string" ? b.name.replace(/[<>`]/g, "").slice(0, 60) : null;
+    const ph = await phoneHash(b?.phone);
+    if (!ph) return json({ error: "Enter a valid mobile number." }, 400);
     const have = await env.DB.prepare("SELECT pid FROM participant WHERE eid=? AND phone_hash=?").bind(eid, ph).first<{ pid: string }>();
     if (have) return json({ pid: have.pid, startRound: e.start_round, callSeconds: e.call_seconds, again: true }); // same number twice = same participant, no extra write
+    if (e.closed) return json({ error: "This engagement is by invitation. Ask your organizer to add your number." }, 403);
     const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
     if ((n?.c ?? 0) >= e.cap) return json({ error: "This engagement is full." }, 409);
-    if (!(await spend(env, now))) return json({ error: "Busy day. Please try again after midnight UTC." }, 503);
-    const pid = ph.slice(0, 16);
-    await env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,joined_ms) VALUES(?,?,?,?,?)").bind(eid, pid, ph, name, now).run();
+    if (!(await spend(env, now))) return BUSY();
+    const pid = await pidOf(ph);
+    await env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,joined_ms) VALUES(?,?,?,?,?)").bind(eid, pid, ph, cleanName(b?.name), now).run();
     return json({ pid, startRound: e.start_round, callSeconds: e.call_seconds });
   }
   if (action === "claims" && req.method === "POST") {
@@ -87,27 +252,107 @@ export async function handle(req: Request, env: Env, now = Date.now()): Promise<
     }
     return json({ ok: true, stored });
   }
-  if (action === "claims" && req.method === "GET") {
-    if (!isOrg) return json({ error: "Not allowed." }, 403);
-    const r = await env.DB.prepare("SELECT pid,pattern,idx FROM claim WHERE eid=? ORDER BY idx,pid").bind(eid).all();
-    return json({ claims: r.results ?? [] });
-  }
-  if (action === "settle" && req.method === "POST") {
-    if (!isOrg) return json({ error: "Not allowed." }, 403);
-    const b = await body(req);
-    if (!b || !Array.isArray(b.results)) return json({ error: "Bad result." }, 400);
-    for (const x of b.results) {
-      if (!PATTERNS.has(x?.pattern) || !Number.isInteger(x?.idx) || !Array.isArray(x?.pids)) return json({ error: "Bad result." }, 400);
-      if (!(await spend(env, now))) return json({ error: "Busy day." }, 503);
-      await env.DB.prepare("INSERT INTO settled(eid,pattern,idx,pids) VALUES(?,?,?,?) ON CONFLICT(eid,pattern) DO UPDATE SET idx=excluded.idx, pids=excluded.pids").bind(eid, x.pattern, x.idx, JSON.stringify(x.pids.slice(0, 500))).run();
-    }
-    return json({ ok: true });
-  }
   if (action === "results" && req.method === "GET") {
     const r = await env.DB.prepare("SELECT pattern,idx,pids FROM settled WHERE eid=?").bind(eid).all<any>();
     return json({ results: (r.results ?? []).map((x: any) => ({ pattern: x.pattern, idx: x.idx, count: JSON.parse(x.pids).length })) }); // public: counts only, no ids
   }
+  if (action === "info" && req.method === "GET") return json({ startRound: e.start_round, callSeconds: e.call_seconds });
+
+  // everything below is for the organizer (or their AI, where allowed)
+  if (action === "claims" && req.method === "GET") {
+    if (!can(a, e)) return deny(a);
+    const r = await env.DB.prepare("SELECT pid,pattern,idx FROM claim WHERE eid=? ORDER BY idx,pid").bind(eid).all();
+    return json({ claims: r.results ?? [] });
+  }
+  if (action === "participants" && req.method === "GET") {
+    if (!can(a, e)) return deny(a);
+    const r = await env.DB.prepare("SELECT pid, name FROM participant WHERE eid=? ORDER BY joined_ms, pid").bind(eid).all<any>();
+    return json({ participants: r.results ?? [], closed: !!e.closed, cap: e.cap });
+  }
+  if (action === "settle" && req.method === "POST") { // only the organizer's own console (which recomputed it from the public log), never the AI
+    if (!can(a, e, true)) return deny(a);
+    const b = await body(req, 65_536);
+    if (!b || !Array.isArray(b.results) || b.results.length > 7) return json({ error: "Bad result." }, 400);
+    for (const x of b.results) if (!PATTERNS.has(x?.pattern) || !Number.isInteger(x?.idx) || !Array.isArray(x?.pids)) return json({ error: "Bad result." }, 400);
+    if (!(await spend(env, now, b.results.length))) return BUSY();
+    for (const x of b.results) await env.DB.prepare("INSERT INTO settled(eid,pattern,idx,pids) VALUES(?,?,?,?) ON CONFLICT(eid,pattern) DO UPDATE SET idx=excluded.idx, pids=excluded.pids").bind(eid, x.pattern, x.idx, JSON.stringify(x.pids.slice(0, 500))).run();
+    return json({ ok: true });
+  }
+  if (action === "erase" && req.method === "POST") { // right to erasure: everything about the people of this engagement, nothing else
+    if (!can(a, e, true)) return deny(a);
+    const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
+    if (!(await spend(env, now, (n?.c ?? 0) + 1))) return BUSY();
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(eid),
+      env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(eid),
+    ]);
+    return json({ ok: true, erased: n?.c ?? 0 });
+  }
+  if (action === "reuse" && req.method === "POST") { // copy the people of an earlier engagement into this one (their phones get a new participant id)
+    if (!can(a, e)) return deny(a);
+    const b = await body(req);
+    if (!b || !ID.test(b.from ?? "") || b.from === eid) return json({ error: "Pick an earlier engagement." }, 400);
+    const src = await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(b.from).first<{ org: string | null }>();
+    if (!src || !can(a, src)) return json({ error: "Pick an earlier engagement." }, 400); // someone else's roster is never reachable
+    const old = await env.DB.prepare("SELECT phone_hash, name FROM participant WHERE eid=?").bind(b.from).all<any>();
+    const rows = old.results ?? [];
+    if (rows.length > e.cap) return json({ error: "This engagement is smaller than the earlier roster." }, 409);
+    if (!(await spend(env, now, rows.length))) return BUSY();
+    let copied = 0;
+    for (const r of rows) {
+      const x = await env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,joined_ms) VALUES(?,?,?,?,?)").bind(eid, await pidOf(r.phone_hash), r.phone_hash, r.name, now).run();
+      copied += x.meta?.changes ?? 0;
+    }
+    return json({ ok: true, copied });
+  }
+  if (action === "roster" && req.method === "POST") { // an invite list: these people are on the engagement before they open the link
+    if (!can(a, e)) return deny(a);
+    const b = await body(req, 32_768);
+    if (!b || !Array.isArray(b.people) || b.people.length < 1 || b.people.length > 100) return json({ error: "Send between 1 and 100 people at a time." }, 400);
+    const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
+    let room = e.cap - (have?.c ?? 0);
+    const todo: { ph: string; name: string | null }[] = []; let invalid = 0;
+    for (const x of b.people) { const ph = await phoneHash(x?.phone); if (!ph) { invalid++; continue; } todo.push({ ph, name: cleanName(x?.name) }); }
+    if (!(await spend(env, now, todo.length))) return BUSY();
+    let added = 0, skipped = 0;
+    for (const t of todo) {
+      if (room <= 0) { skipped++; continue; }
+      const r = await env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,joined_ms) VALUES(?,?,?,?,?)").bind(eid, await pidOf(t.ph), t.ph, t.name, now).run();
+      if (r.meta?.changes) { added++; room--; } else skipped++;
+    }
+    return json({ ok: true, added, skipped, invalid });
+  }
+  if (action === "settings" && (req.method === "PATCH" || req.method === "POST")) { // only before the first number can possibly have been called
+    if (!can(a, e)) return deny(a);
+    if (roundMs(e.start_round) <= now) return json({ error: "The engagement has already started, so it can no longer be changed." }, 409);
+    const b = await body(req);
+    if (!b) return json({ error: "Check the details." }, 400);
+    const next = { start_round: b.startRound ?? e.start_round, call_seconds: b.callSeconds ?? e.call_seconds, cap: b.cap ?? e.cap, closed: b.closed === undefined ? e.closed : b.closed ? 1 : 0 };
+    if (!Number.isInteger(next.start_round) || !Number.isInteger(next.call_seconds) || next.call_seconds % 3 || next.call_seconds < 6 || !Number.isInteger(next.cap) || next.cap < 1 || next.cap > 100000) return json({ error: "Check the details." }, 400);
+    if (roundMs(next.start_round) <= now) return json({ error: "Pick a start time in the future." }, 400);
+    const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
+    if (next.cap < (have?.c ?? 0)) return json({ error: "The limit cannot be lower than the people already on the list." }, 409);
+    if (!(await spend(env, now))) return BUSY();
+    await env.DB.prepare("UPDATE engagement SET start_round=?, call_seconds=?, cap=?, closed=? WHERE id=?").bind(next.start_round, next.call_seconds, next.cap, next.closed, eid).run();
+    return json({ ok: true, startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed });
+  }
   return json({ error: "Not found" }, 404);
 }
 
-export default { fetch: (req: Request, env: Env) => handle(req, env) };
+/** Deletes engagements (and their people, claims and results) older than the 365-day retention period. */
+export async function purgeOld(env: Env, now: number): Promise<number> {
+  const cutoff = now - RETENTION_DAYS * 86_400_000;
+  const old = await env.DB.prepare("SELECT id FROM engagement WHERE created_ms < ?").bind(cutoff).all<{ id: string }>();
+  let n = 0;
+  for (const { id } of old.results ?? []) {
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(id),
+      env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
+      env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
+    ]);
+    n++;
+  }
+  return n;
+}
+
+export default { fetch: (req: Request, env: Env) => handle(req, env), scheduled: async (_e: unknown, env: Env) => { await purgeOld(env, Date.now()); } };

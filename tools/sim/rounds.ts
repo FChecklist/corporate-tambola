@@ -89,10 +89,10 @@ const av = await http("POST", "/api/auth/verify", { email, code: ae.data.devCode
 const T = av.data.token as string, org = A(T);
 
 let r = await org("PATCH", "/settings", { name: "Rounds engagement", ticketMode: "single", familyLimit: 1, callMode: "ai",
-  surprise: { rounds: 3, callSeconds: 10, autoMark: true, luckyDraws: 3, luckyWinners: 3, luckyPrize: "mix" as any, bumper: true, scratchCards: 2, scratchWinning: 5, scratchPrize: "mix", momentsMode: "auto", boostersAllowed: true, revealNames: false } });
+  surprise: { rounds: 3, callSeconds: 9, autoMark: true, luckyDraws: 3, luckyWinners: 3, luckyPrize: "mix" as any, bumper: true, scratchCards: 2, scratchWinning: 5, scratchPrize: "mix", momentsMode: "auto", boostersAllowed: true, revealNames: false } });
 check("a lucky-draw reward of 'mix' is refused (draws are a gift or a booster)", r.status === 400, r.data?.error);
 r = await org("PATCH", "/settings", { name: "Rounds engagement", ticketMode: "single", familyLimit: 1, callMode: "ai",
-  surprise: { rounds: 3, callSeconds: 10, autoMark: true, luckyDraws: 3, luckyWinners: 3, luckyPrize: "booster", bumper: true, scratchCards: 2, scratchWinning: 5, scratchPrize: "mix", momentsMode: "auto", boostersAllowed: true, revealNames: false } });
+  surprise: { rounds: 3, callSeconds: 9, autoMark: true, luckyDraws: 3, luckyWinners: 3, luckyPrize: "booster", bumper: true, scratchCards: 2, scratchWinning: 5, scratchPrize: "mix", momentsMode: "auto", boostersAllowed: true, revealNames: false } });
 check("organizer switches on 3 rounds, 3 lucky draws, 2 scratch cards", r.status === 200, r.data?.error);
 r = await org("PUT", "/rewards", { spec: [{ pattern: "early5", texts: ["Rs 500 voucher"] }, { pattern: "top", texts: ["Rs 800 voucher"] }, { pattern: "full", texts: ["Smart watch"] }] });
 check("3 rewards per round", r.status === 200);

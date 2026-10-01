@@ -44,7 +44,7 @@ const settle = (h: H) => { h.advance(CFG.CLAIM_CHECK + 1); h.eng.tick(); h.advan
 const toPid = (h: H, type: string) => h.events.filter((e) => e.to === "pid" && (e as any).type === type) as any[];
 
 describe("planning summary (handoff formulas)", () => {
-  const base: SurpriseSettings = { rounds: 3, callSeconds: 10, autoMark: true, luckyDraws: 6, luckyWinners: 3, luckyPrize: "gift", bumper: true, scratchCards: 5, scratchWinning: 10, scratchPrize: "mix", momentsMode: "auto", boostersAllowed: true, revealNames: false };
+  const base: SurpriseSettings = { rounds: 3, callSeconds: 9, autoMark: true, luckyDraws: 6, luckyWinners: 3, luckyPrize: "gift", bumper: true, scratchCards: 5, scratchWinning: 10, scratchPrize: "mix", momentsMode: "auto", boostersAllowed: true, revealNames: false };
   test("sample setup: totals, gifts vs boosters, capacity and fit", () => {
     const p = Surprise.plan(base, 6);
     expect(p.tambolaPrizes).toBe(18);
@@ -280,7 +280,7 @@ describe("manual triggers are safe", () => {
     void ps;
   });
   test("the planning estimate follows the calling speed", () => {
-    const base = { rounds: 1, callSeconds: 10, autoMark: true, luckyDraws: 0, luckyWinners: 3, luckyPrize: "gift", bumper: false, scratchCards: 0, scratchWinning: 5, scratchPrize: "gift", momentsMode: "auto", boostersAllowed: true, revealNames: false } as SurpriseSettings;
+    const base = { rounds: 1, callSeconds: 9, autoMark: true, luckyDraws: 0, luckyWinners: 3, luckyPrize: "gift", bumper: false, scratchCards: 0, scratchWinning: 5, scratchPrize: "gift", momentsMode: "auto", boostersAllowed: true, revealNames: false } as SurpriseSettings;
     expect(Surprise.plan({ ...base, callSeconds: 6 }, 3).estimatedMinutes).toBeLessThan(Surprise.plan({ ...base, callSeconds: 15 }, 3).estimatedMinutes);
   });
 });

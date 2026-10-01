@@ -9,9 +9,9 @@ const T = Date.UTC(2026, 9, 1, 10, 0, 0);
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}, now = T) =>
   handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body) }), env, now);
 const org = { "x-organizer": SECRET };
-const create = (over: Record<string, unknown> = {}) => call("POST", "/api/e", { id: "ENG1", startRound: 1000, callSeconds: 6, cap: 20000, ...over }, org);
+const create = (over: Record<string, unknown> = {}) => call("POST", "/api/z", { id: "ENG1", startRound: 1000, callSeconds: 6, cap: 20000, ...over }, org);
 const phone = (i: number) => "9" + String(100000000 + i);
-const join = (i: number, eid = "ENG1", now = T) => call("POST", `/api/e/${eid}/join`, { phone: phone(i), name: "P" + i }, {}, now);
+const join = (i: number, eid = "ENG1", now = T) => call("POST", `/api/z/${eid}/join`, { phone: phone(i), name: "P" + i }, {}, now);
 
 beforeEach(() => {
   const d = makeD1();
@@ -21,12 +21,12 @@ beforeEach(() => {
 
 describe("engagement set-up", () => {
   test("only the organizer can create one", async () => {
-    expect((await call("POST", "/api/e", { id: "ENG1", startRound: 1, callSeconds: 6, cap: 10 })).status).toBe(403);
-    expect((await call("POST", "/api/e", { id: "ENG1", startRound: 1, callSeconds: 6, cap: 10 }, { "x-organizer": "wrong" })).status).toBe(403);
+    expect((await call("POST", "/api/z", { id: "ENG1", startRound: 1, callSeconds: 6, cap: 10 })).status).toBe(403);
+    expect((await call("POST", "/api/z", { id: "ENG1", startRound: 1, callSeconds: 6, cap: 10 }, { "x-organizer": "wrong" })).status).toBe(403);
   });
   test("with no secret configured, nobody is the organizer (no empty-secret bypass)", async () => {
     env.ORGANIZER_SECRET = undefined;
-    expect((await call("POST", "/api/e", { id: "ENG1", startRound: 1, callSeconds: 6, cap: 10 }, { "x-organizer": "" })).status).toBe(403);
+    expect((await call("POST", "/api/z", { id: "ENG1", startRound: 1, callSeconds: 6, cap: 10 }, { "x-organizer": "" })).status).toBe(403);
   });
   test("call speed must be a multiple of 3 s and at least 6 s", async () => {
     for (const s of [10, 3, 7, 0, -6, 6.5]) expect((await create({ callSeconds: s })).status).toBe(400);
@@ -52,8 +52,8 @@ describe("joining", () => {
     expect(Object.keys(r).sort()).toEqual(["callSeconds", "pid", "startRound"]);
   });
   test("the same number joining twice, even typed differently, is one participant and one write", async () => {
-    const a = await (await call("POST", "/api/e/ENG1/join", { phone: "+91 98765-43210" })).json() as any;
-    const b = await (await call("POST", "/api/e/ENG1/join", { phone: "919876543210" })).json() as any;
+    const a = await (await call("POST", "/api/z/ENG1/join", { phone: "+91 98765-43210" })).json() as any;
+    const b = await (await call("POST", "/api/z/ENG1/join", { phone: "919876543210" })).json() as any;
     expect(a.pid).toBe(b.pid);
     expect(b.again).toBe(true);
     expect(raw.query("SELECT COUNT(*) c FROM participant").get()).toEqual({ c: 1 });
@@ -65,20 +65,20 @@ describe("joining", () => {
   });
   test("invalid or hostile input is refused cleanly", async () => {
     for (const b of [{}, { phone: "" }, { phone: "123" }, { phone: "9".repeat(30) }, { phone: "abc" }, null, "not json", "[]"])
-      expect((await call("POST", "/api/e/ENG1/join", b as any)).status).toBe(400);
-    expect((await call("POST", "/api/e/ENG1/join", "x".repeat(10000))).status).toBe(400);
+      expect((await call("POST", "/api/z/ENG1/join", b as any)).status).toBe(400);
+    expect((await call("POST", "/api/z/ENG1/join", "x".repeat(10000))).status).toBe(400);
   });
   test("names are cleaned and cut", async () => {
-    await call("POST", "/api/e/ENG1/join", { phone: phone(2), name: "<script>alert(1)</script>`x`" + "y".repeat(200) });
+    await call("POST", "/api/z/ENG1/join", { phone: phone(2), name: "<script>alert(1)</script>`x`" + "y".repeat(200) });
     const n = (raw.query("SELECT name FROM participant").get() as any).name as string;
     expect(/[<>`]/.test(n)).toBe(false);
     expect(n.length).toBeLessThanOrEqual(60);
   });
   test("unknown engagement, wrong method and odd paths", async () => {
     expect((await join(1, "NOPE1")).status).toBe(404);
-    expect((await call("GET", "/api/e/ENG1/join")).status).toBe(404);
-    expect((await call("POST", "/api/e/ENG1/../x")).status).toBe(404);
-    expect((await call("DELETE", "/api/e/ENG1/claims")).status).toBe(404);
+    expect((await call("GET", "/api/z/ENG1/join")).status).toBe(404);
+    expect((await call("POST", "/api/z/ENG1/../x")).status).toBe(404);
+    expect((await call("DELETE", "/api/z/ENG1/claims")).status).toBe(404);
   });
   test("the participant cap is enforced and a full engagement still lets existing people back in", async () => {
     await create({ id: "SMALL", cap: 3 });
@@ -92,7 +92,7 @@ describe("joining", () => {
 describe("claims", () => {
   let pid: string;
   beforeEach(async () => { await create(); pid = ((await (await join(1)).json()) as any).pid; });
-  const claim = (b: unknown) => call("POST", "/api/e/ENG1/claims", b);
+  const claim = (b: unknown) => call("POST", "/api/z/ENG1/claims", b);
   test("a claim is stored once even if the phone sends it five times", async () => {
     for (let i = 0; i < 5; i++) await claim({ pid, claims: [{ pattern: "top", idx: 33 }] });
     expect(raw.query("SELECT COUNT(*) c FROM claim").get()).toEqual({ c: 1 });
@@ -116,9 +116,9 @@ describe("claims", () => {
     expect(r.stored).toBeLessThanOrEqual(7);
   });
   test("claims cannot be read without the organizer secret", async () => {
-    expect((await call("GET", "/api/e/ENG1/claims")).status).toBe(403);
-    expect((await call("GET", "/api/e/ENG1/claims", undefined, { "x-organizer": "no" })).status).toBe(403);
-    expect((await call("GET", "/api/e/ENG1/claims", undefined, org)).status).toBe(200);
+    expect((await call("GET", "/api/z/ENG1/claims")).status).toBe(403);
+    expect((await call("GET", "/api/z/ENG1/claims", undefined, { "x-organizer": "no" })).status).toBe(403);
+    expect((await call("GET", "/api/z/ENG1/claims", undefined, org)).status).toBe(200);
   });
 });
 
@@ -126,19 +126,19 @@ describe("settling and results", () => {
   beforeEach(async () => { await create(); });
   test("only the organizer settles; a re-settle replaces, never duplicates", async () => {
     const body = { results: [{ pattern: "top", idx: 20, pids: ["a", "b"] }] };
-    expect((await call("POST", "/api/e/ENG1/settle", body)).status).toBe(403);
-    expect((await call("POST", "/api/e/ENG1/settle", body, org)).status).toBe(200);
-    await call("POST", "/api/e/ENG1/settle", { results: [{ pattern: "top", idx: 18, pids: ["c"] }] }, org);
+    expect((await call("POST", "/api/z/ENG1/settle", body)).status).toBe(403);
+    expect((await call("POST", "/api/z/ENG1/settle", body, org)).status).toBe(200);
+    await call("POST", "/api/z/ENG1/settle", { results: [{ pattern: "top", idx: 18, pids: ["c"] }] }, org);
     expect(raw.query("SELECT COUNT(*) c FROM settled").get()).toEqual({ c: 1 });
   });
   test("public results show counts only, never who", async () => {
-    await call("POST", "/api/e/ENG1/settle", { results: [{ pattern: "full", idx: 70, pids: ["secretpid1", "secretpid2"] }] }, org);
-    const txt = await (await call("GET", "/api/e/ENG1/results")).text();
+    await call("POST", "/api/z/ENG1/settle", { results: [{ pattern: "full", idx: 70, pids: ["secretpid1", "secretpid2"] }] }, org);
+    const txt = await (await call("GET", "/api/z/ENG1/results")).text();
     expect(txt.includes("secretpid")).toBe(false);
     expect(JSON.parse(txt).results[0]).toEqual({ pattern: "full", idx: 70, count: 2 });
   });
   test("a malformed result changes nothing", async () => {
-    expect((await call("POST", "/api/e/ENG1/settle", { results: [{ pattern: "top", idx: 1, pids: "no" }] }, org)).status).toBe(400);
+    expect((await call("POST", "/api/z/ENG1/settle", { results: [{ pattern: "top", idx: 1, pids: "no" }] }, org)).status).toBe(400);
     expect(raw.query("SELECT COUNT(*) c FROM settled").get()).toEqual({ c: 0 });
   });
 });
@@ -167,14 +167,215 @@ describe("free-plan guard and scale", () => {
     expect((raw.query("SELECT COUNT(*) c FROM participant").get() as any).c).toBe(10000);
     expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(10001);
     expect(10001).toBeLessThan(100000 * 0.2); // one 10,000-person engagement uses ~10% of D1's free daily writes
-  });
+  }, 120_000);
   test("10,000 joins plus every pattern claimed by 10,000 phones, twice (retries) - stored once each", async () => {
     await create({ cap: 20000 });
     const pids: string[] = [];
     for (let i = 0; i < 10000; i++) pids.push(((await (await join(i)).json()) as any).pid);
     const pats = ["early5", "top", "mid", "bot", "corners", "star", "full"];
     for (let round = 0; round < 2; round++)
-      await Promise.all(pids.slice(0, 2000).map((pid, i) => call("POST", "/api/e/ENG1/claims", { pid, claims: [{ pattern: pats[i % 7], idx: i % 90 }] })));
+      await Promise.all(pids.slice(0, 2000).map((pid, i) => call("POST", "/api/z/ENG1/claims", { pid, claims: [{ pattern: pats[i % 7], idx: i % 90 }] })));
     expect((raw.query("SELECT COUNT(*) c FROM claim").get() as any).c).toBe(2000);
+  }, 120_000);
+});
+
+describe("roster, history, erase and 365-day retention", () => {
+  const D = 86_400_000;
+  beforeEach(async () => { await create(); });
+  test("only the organizer can list people, history, erase, purge or reuse", async () => {
+    for (const [m, p] of [["GET", "/api/z/ENG1/participants"], ["GET", "/api/history"], ["POST", "/api/z/ENG1/erase"], ["POST", "/api/purge"], ["POST", "/api/z/ENG1/reuse"]] as const)
+      expect((await call(m, p, m === "POST" ? {} : undefined)).status).toBe(403);
+  });
+  test("info is public and holds only what a phone needs", async () => {
+    expect(await (await call("GET", "/api/z/ENG1/info")).json()).toEqual({ startRound: 1000, callSeconds: 6 });
+  });
+  test("the organizer sees ids and names, never phone numbers or hashes", async () => {
+    await join(1);
+    const txt = await (await call("GET", "/api/z/ENG1/participants", undefined, org)).text();
+    expect(txt.includes(phone(1))).toBe(false);
+    expect(txt.includes("phone_hash")).toBe(false);
+    expect(JSON.parse(txt).participants).toHaveLength(1);
+  });
+  test("reuse copies the roster into a new engagement and the same phone lands on the new participant", async () => {
+    for (let i = 0; i < 5; i++) await join(i);
+    await create({ id: "ENG2" });
+    const r = await (await call("POST", "/api/z/ENG2/reuse", { from: "ENG1" }, org)).json() as any;
+    expect(r.copied).toBe(5);
+    const again = await (await join(2, "ENG2")).json() as any;
+    expect(again.again).toBe(true); // already on the roster, no new write
+    expect((raw.query("SELECT COUNT(*) c FROM participant WHERE eid='ENG2'").get() as any).c).toBe(5);
+    const first = (raw.query("SELECT pid FROM participant WHERE eid='ENG1' ORDER BY pid LIMIT 1").get() as any).pid;
+    expect((raw.query("SELECT COUNT(*) c FROM participant WHERE eid='ENG2' AND pid=?").get(first) as any).c).toBe(0); // new ids per engagement
+  });
+  test("reuse twice does not duplicate, and refuses itself or a roster bigger than the cap", async () => {
+    for (let i = 0; i < 4; i++) await join(i);
+    await create({ id: "ENG2", cap: 3 });
+    expect((await call("POST", "/api/z/ENG2/reuse", { from: "ENG1" }, org)).status).toBe(409);
+    await create({ id: "ENG3" });
+    await call("POST", "/api/z/ENG3/reuse", { from: "ENG1" }, org);
+    const r2 = await (await call("POST", "/api/z/ENG3/reuse", { from: "ENG1" }, org)).json() as any;
+    expect(r2.copied).toBe(0);
+    expect((await call("POST", "/api/z/ENG3/reuse", { from: "ENG3" }, org)).status).toBe(400);
+  });
+  test("erase removes the people, claims and results of one engagement and leaves the others alone", async () => {
+    const pid = ((await (await join(1)).json()) as any).pid;
+    await call("POST", "/api/z/ENG1/claims", { pid, claims: [{ pattern: "top", idx: 4 }] });
+    await call("POST", "/api/z/ENG1/settle", { results: [{ pattern: "top", idx: 4, pids: [pid] }] }, org);
+    await create({ id: "ENG2" }); await join(9, "ENG2");
+    const r = await (await call("POST", "/api/z/ENG1/erase", {}, org)).json() as any;
+    expect(r.erased).toBe(1);
+    for (const t of ["participant", "claim", "settled"]) expect((raw.query(`SELECT COUNT(*) c FROM ${t} WHERE eid='ENG1'`).get() as any).c).toBe(0);
+    expect((raw.query("SELECT COUNT(*) c FROM participant WHERE eid='ENG2'").get() as any).c).toBe(1);
+  });
+  test("history lists engagements newest first with head-counts", async () => {
+    await join(1); await join(2);
+    await create({ id: "ENG2" });
+    const h = await (await call("GET", "/api/history", undefined, org)).json() as any;
+    expect(h.retentionDays).toBe(365);
+    expect(h.engagements.find((x: any) => x.id === "ENG1").participants).toBe(2);
+  });
+  test("purge deletes only engagements older than 365 days, with everything under them", async () => {
+    await join(1);
+    await call("POST", "/api/z", { id: "OLD1", startRound: 5, callSeconds: 6, cap: 10 }, org, T - 366 * D);
+    await join(5, "OLD1", T - 366 * D);
+    await call("POST", "/api/z", { id: "EDGE", startRound: 5, callSeconds: 6, cap: 10 }, org, T - 364 * D);
+    const r = await (await call("POST", "/api/purge", {}, org)).json() as any;
+    expect(r.purged).toBe(1);
+    expect(raw.query("SELECT id FROM engagement ORDER BY id").all()).toEqual([{ id: "EDGE" }, { id: "ENG1" }]);
+    expect((raw.query("SELECT COUNT(*) c FROM participant WHERE eid='OLD1'").get() as any).c).toBe(0);
+  });
+  test("a day over the write budget does not erase half-way: erase says busy and changes nothing", async () => {
+    for (let i = 0; i < 5; i++) await join(i);
+    env.DAILY_WRITE_BUDGET = "6";
+    expect((await call("POST", "/api/z/ENG1/erase", {}, org)).status).toBe(503);
+    expect((raw.query("SELECT COUNT(*) c FROM participant").get() as any).c).toBe(5);
+  });
+});
+
+describe("organizers, their AI assistant, and what the AI may not do", () => {
+  const plat = { "x-organizer": SECRET };
+  let master = "", aiKey = "", other = "";
+  const asM = () => ({ "x-organizer": master });
+  const asA = () => ({ "x-organizer": aiKey });
+  const FUTURE = Math.floor((T / 1000 - 1692803367) / 3) + 1 + 2000; // a start round well after T
+  beforeEach(async () => {
+    master = ((await (await call("POST", "/api/org", {}, plat)).json()) as any).organizerKey;
+    other = ((await (await call("POST", "/api/org", {}, plat)).json()) as any).organizerKey;
+    aiKey = ((await (await call("POST", "/api/org/ai", {}, asM())).json()) as any).aiKey;
+    await call("POST", "/api/z", { id: "MINE1", startRound: FUTURE, callSeconds: 6, cap: 50 }, asM());
+  });
+  test("only the platform makes organizers; keys are shown once and never stored in the clear", async () => {
+    expect((await call("POST", "/api/org", {}, asM())).status).toBe(403);
+    expect((await call("POST", "/api/org", {})).status).toBe(403);
+    expect(master).toMatch(/^ctk_[0-9a-f]{48}$/);
+    expect(aiKey).toMatch(/^cta_[0-9a-f]{48}$/);
+    const dump = JSON.stringify(raw.query("SELECT * FROM organizer_key").all());
+    expect(dump.includes(master) || dump.includes(aiKey)).toBe(false);
+  });
+  test("an organizer reaches only their own engagements; another organizer gets nothing", async () => {
+    expect((await call("GET", "/api/z/MINE1/participants", undefined, asM())).status).toBe(200);
+    expect((await call("GET", "/api/z/MINE1/participants", undefined, { "x-organizer": other })).status).toBe(403);
+    expect((await call("GET", "/api/z/MINE1/claims", undefined, { "x-organizer": "ctk_nope" })).status).toBe(403);
+    const h = await (await call("GET", "/api/history", undefined, { "x-organizer": other })).json() as any;
+    expect(h.engagements).toEqual([]);
+    expect((await (await call("GET", "/api/history", undefined, asM())).json() as any).engagements.map((x: any) => x.id)).toEqual(["MINE1"]);
+  });
+  test("another organizer can neither reuse my roster nor create over my id", async () => {
+    await call("POST", "/api/z", { id: "THEIRS", startRound: FUTURE, callSeconds: 6, cap: 50 }, { "x-organizer": other });
+    expect((await call("POST", "/api/z/THEIRS/reuse", { from: "MINE1" }, { "x-organizer": other })).status).toBe(400);
+    const r = await (await call("POST", "/api/z", { id: "MINE1", startRound: 1, callSeconds: 6, cap: 1 }, { "x-organizer": other })).json() as any;
+    expect(r.existed).toBe(true);
+    expect(raw.query("SELECT cap FROM engagement WHERE id='MINE1'").get()).toEqual({ cap: 50 });
+  });
+  test("the AI can do the organizer's work: create, load an invite list, change settings, read people and claims, reuse", async () => {
+    expect((await call("POST", "/api/z", { id: "BYAI1", startRound: FUTURE, callSeconds: 9, cap: 10 }, asA())).status).toBe(200);
+    const r = await (await call("POST", "/api/z/BYAI1/roster", { people: [{ phone: phone(1), name: "A" }, { phone: phone(2), name: "B" }, { phone: "12" }] }, asA())).json() as any;
+    expect(r).toMatchObject({ added: 2, invalid: 1 });
+    expect((await call("PATCH", "/api/z/BYAI1/settings", { callSeconds: 12 }, asA())).status).toBe(200);
+    expect(((await (await call("GET", "/api/z/BYAI1/participants", undefined, asA())).json()) as any).participants).toHaveLength(2);
+    expect((await call("GET", "/api/z/BYAI1/claims", undefined, asA())).status).toBe(200);
+    expect((await call("POST", "/api/z/MINE1/reuse", { from: "BYAI1" }, asA())).status).toBe(200);
+  });
+  test("the AI can NOT publish results, erase data, register the pause key, or mint keys", async () => {
+    expect((await call("POST", "/api/z/MINE1/settle", { results: [{ pattern: "full", idx: 5, pids: ["x"] }] }, asA())).status).toBe(403);
+    expect((await call("POST", "/api/z/MINE1/erase", {}, asA())).status).toBe(403);
+    expect((await call("PUT", "/api/z/MINE1/control/key", { publicKey: "aa".repeat(32) }, asA())).status).toBe(403);
+    expect((await call("POST", "/api/org/ai", {}, asA())).status).toBe(403);
+    expect((await call("POST", "/api/org/ai/revoke", {}, asA())).status).toBe(403);
+    expect((await call("POST", "/api/purge", {}, asA())).status).toBe(403);
+    expect(raw.query("SELECT COUNT(*) c FROM settled").get()).toEqual({ c: 0 });
+  });
+  test("the refusal explains itself plainly, and the manifest says what the AI cannot do", async () => {
+    const r = await (await call("POST", "/api/z/MINE1/erase", {}, asA())).json() as any;
+    expect(r.error).toMatch(/AI assistant may not/);
+    const mf = await (await call("GET", "/api/z/ai-manifest")).json() as any;
+    expect(JSON.stringify(mf.you_cannot)).toMatch(/Publish results/);
+    expect(JSON.stringify(mf)).not.toMatch(/lottery|bogey|player\b|prize\b|admin/i);
+  });
+  test("a new AI key replaces the old one; revoking stops it at once; the master key is unaffected", async () => {
+    const second = ((await (await call("POST", "/api/org/ai", {}, asM())).json()) as any).aiKey;
+    expect((await call("GET", "/api/z/MINE1/participants", undefined, asA())).status).toBe(403);
+    expect((await call("GET", "/api/z/MINE1/participants", undefined, { "x-organizer": second })).status).toBe(200);
+    const r = await (await call("POST", "/api/org/ai/revoke", {}, asM())).json() as any;
+    expect(r.revoked).toBe(1);
+    expect((await call("GET", "/api/z/MINE1/participants", undefined, { "x-organizer": second })).status).toBe(403);
+    expect((await call("GET", "/api/z/MINE1/participants", undefined, asM())).status).toBe(200);
+  });
+  test("pausing: the AI asks, the organizer sees the request and clears it; nobody else can see it", async () => {
+    expect((await call("POST", "/api/z/MINE1/control/request", { action: "explode" }, asA())).status).toBe(400);
+    expect((await call("POST", "/api/z/MINE1/control/request", { action: "pause", note: "Fire drill <b>now</b>" }, asA())).status).toBe(200);
+    const q = await (await call("GET", "/api/z/MINE1/control/request", undefined, asM())).json() as any;
+    expect(q.requests).toHaveLength(1);
+    expect(q.requests[0].note).not.toMatch(/[<>]/);
+    expect((await call("GET", "/api/z/MINE1/control/request", undefined, { "x-organizer": other })).status).toBe(403);
+    expect((await call("POST", "/api/z/MINE1/control/request/clear", {}, asA())).status).toBe(403);
+    expect((await call("POST", "/api/z/MINE1/control/request/clear", {}, asM())).status).toBe(200);
+    expect(((await (await call("GET", "/api/z/MINE1/control/request", undefined, asM())).json()) as any).requests).toEqual([]);
+  });
+  test("invite-only: a number on the list gets in, any other is told so; the list respects the limit", async () => {
+    await call("PATCH", "/api/z/MINE1/settings", { closed: true, cap: 3 }, asM());
+    await call("POST", "/api/z/MINE1/roster", { people: [{ phone: phone(1), name: "A" }, { phone: phone(2) }] }, asM());
+    expect((await join(1, "MINE1")).status).toBe(200);
+    const no = await join(9, "MINE1");
+    expect(no.status).toBe(403);
+    expect(((await no.json()) as any).error).toMatch(/by invitation/);
+    const r = await (await call("POST", "/api/z/MINE1/roster", { people: [{ phone: phone(3) }, { phone: phone(4) }] }, asM())).json() as any;
+    expect(r).toMatchObject({ added: 1, skipped: 1 });
+  });
+  test("a roster entry joins with the same ticket id they would get joining by themselves", async () => {
+    await call("POST", "/api/z/MINE1/roster", { people: [{ phone: phone(5), name: "Rosa" }] }, asM());
+    const pid = (raw.query("SELECT pid FROM participant WHERE eid='MINE1'").get() as any).pid;
+    const j = await (await join(5, "MINE1")).json() as any;
+    expect(j.pid).toBe(pid);
+    expect(j.again).toBe(true);
+  });
+  test("roster limits: up to 100 per call, none empty, hostile bodies refused", async () => {
+    expect((await call("POST", "/api/z/MINE1/roster", { people: [] }, asM())).status).toBe(400);
+    expect((await call("POST", "/api/z/MINE1/roster", { people: Array.from({ length: 101 }, (_, i) => ({ phone: phone(i) })) }, asM())).status).toBe(400);
+    expect((await call("POST", "/api/z/MINE1/roster", "not json", asM())).status).toBe(400);
+  });
+  test("settings can change before the first number and never after; bad values change nothing", async () => {
+    expect((await call("PATCH", "/api/z/MINE1/settings", { callSeconds: 10 }, asM())).status).toBe(400);
+    expect((await call("PATCH", "/api/z/MINE1/settings", { startRound: 5 }, asM())).status).toBe(400); // in the past
+    expect((await call("PATCH", "/api/z/MINE1/settings", { callSeconds: 15, startRound: FUTURE + 100 }, asM())).status).toBe(200);
+    expect(raw.query("SELECT call_seconds, start_round FROM engagement WHERE id='MINE1'").get()).toEqual({ call_seconds: 15, start_round: FUTURE + 100 });
+    await call("POST", "/api/z", { id: "OLDSTART", startRound: 5, callSeconds: 6, cap: 5 }, asM()); // already started long ago
+    expect((await call("PATCH", "/api/z/OLDSTART/settings", { cap: 9 }, asM())).status).toBe(409);
+  });
+  test("the limit cannot be set below the people already listed", async () => {
+    await call("POST", "/api/z/MINE1/roster", { people: [{ phone: phone(1) }, { phone: phone(2) }, { phone: phone(3) }] }, asM());
+    expect((await call("PATCH", "/api/z/MINE1/settings", { cap: 2 }, asM())).status).toBe(409);
+  });
+  test("the platform key still works everywhere (single-tenant and local use)", async () => {
+    expect((await call("GET", "/api/z/MINE1/participants", undefined, plat)).status).toBe(200);
+    expect((await call("POST", "/api/z/MINE1/erase", {}, plat)).status).toBe(200);
+  });
+  test("purge also removes the pause file and requests of an old engagement", async () => {
+    await call("POST", "/api/z", { id: "ANCIENT", startRound: 5, callSeconds: 6, cap: 5 }, plat, T - 400 * 86_400_000);
+    await call("POST", "/api/z/ANCIENT/control/request", { action: "pause" }, plat);
+    await call("PUT", "/api/z/ANCIENT/control/key", { publicKey: "aa".repeat(32) }, plat);
+    await call("POST", "/api/purge", {}, plat);
+    expect(raw.query("SELECT COUNT(*) c FROM ctl_request WHERE eid='ANCIENT'").get()).toEqual({ c: 0 });
+    expect(raw.query("SELECT COUNT(*) c FROM kv WHERE k LIKE 'control/ANCIENT%'").get()).toEqual({ c: 0 });
   });
 });

@@ -46,7 +46,7 @@ export class Surprise {
   // ---------------------------------------------------------------- settings
   validate(s: Partial<SurpriseSettings>): string | null {
     if (s.rounds !== undefined && !(Number.isInteger(s.rounds) && s.rounds >= 1 && s.rounds <= 5)) return "Rounds must be 1 to 5.";
-    if (s.callSeconds !== undefined && ![6, 10, 15].includes(s.callSeconds)) return "Calling speed must be 6, 10 or 15 seconds.";
+    if (s.callSeconds !== undefined && ![6, 9, 12, 15].includes(s.callSeconds)) return "Calling speed must be 6, 9, 12 or 15 seconds.";
     if (s.luckyDraws !== undefined && !(Number.isInteger(s.luckyDraws) && s.luckyDraws >= 0 && s.luckyDraws <= 10)) return "Lucky draws must be 0 to 10.";
     if (s.scratchCards !== undefined && !(Number.isInteger(s.scratchCards) && s.scratchCards >= 0 && s.scratchCards <= 10)) return "Scratch cards must be 0 to 10.";
     if (s.luckyWinners !== undefined && ![1, 3, 5, 10].includes(s.luckyWinners)) return "Winners in each draw must be 1, 3, 5 or 10.";

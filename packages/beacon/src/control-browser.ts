@@ -26,18 +26,19 @@ async function beaconRound(): Promise<number> {
   return Math.floor((Date.now() / 1000 - GENESIS) / 3) + 1;
 }
 
-type Auth = { token: string; base?: string };
+type Auth = { token: string; base?: string; prefix?: string };
+const P = (a: Auth) => `${a.base ?? ""}${a.prefix ?? "/api/e"}`;
 const hdr = (a: Auth) => ({ "content-type": "application/json", authorization: `Bearer ${a.token}` });
 
 const TBControl = {
   /** Make sure this engagement has a key registered. Call once while the engagement is still open. Returns false if this browser lacks the key. */
   async ensureKey(code: string, a: Auth, profile: "standard" | "fast" = "standard"): Promise<{ ok: boolean; created?: boolean; reason?: string }> {
     const base = a.base ?? "";
-    const pub = await (await fetch(`${base}/api/e/${code}/control`)).json().catch(() => null);
+    const pub = await (await fetch(`${P(a)}/${code}/control`)).json().catch(() => null);
     const mine = await get(code);
     if (pub?.pubKey) return mine && mine.publicKeyHex === pub.pubKey ? { ok: true } : { ok: false, reason: "This engagement's signing key lives in another browser." };
     const k = await generateOrganizerKey(false);
-    const r = await fetch(`${base}/api/e/${code}/control/key`, { method: "PUT", headers: hdr(a), body: JSON.stringify({ publicKey: k.publicKeyHex, profile }) });
+    const r = await fetch(`${P(a)}/${code}/control/key`, { method: "PUT", headers: hdr(a), body: JSON.stringify({ publicKey: k.publicKeyHex, profile }) });
     if (!r.ok) return { ok: false, reason: (await r.json().catch(() => ({}))).error ?? "Could not register the key." };
     await put(code, k);
     return { ok: true, created: true };
@@ -45,7 +46,7 @@ const TBControl = {
   /** Build, sign and return the next control message (does not publish it). */
   async sign(code: string, a: Auth, action: ControlAction, o: { pauseForRounds?: number; untilRound?: number; addRounds?: number } = {}) {
     const base = a.base ?? "";
-    const f = (await (await fetch(`${base}/api/e/${code}/control`, { cache: "no-store" })).json()) as PublishedFile;
+    const f = (await (await fetch(`${P(a)}/${code}/control`, { cache: "no-store" })).json()) as PublishedFile;
     const k = await get(code);
     if (!k || k.publicKeyHex !== f.pubKey) throw new Error("This browser does not hold the signing key for this engagement.");
     return signControl(k.privateKey, nextMessage(f, await beaconRound(), { action, ...o }));
@@ -53,7 +54,7 @@ const TBControl = {
   /** Sign and publish in one step (what the console's Pause / Resume buttons call). */
   async publish(code: string, a: Auth, action: ControlAction, o: { pauseForRounds?: number; untilRound?: number; addRounds?: number } = {}) {
     const message = await TBControl.sign(code, a, action, o);
-    const r = await fetch(`${a.base ?? ""}/api/e/${code}/control`, { method: "POST", headers: hdr(a), body: JSON.stringify({ message }) });
+    const r = await fetch(`${P(a)}/${code}/control`, { method: "POST", headers: hdr(a), body: JSON.stringify({ message }) });
     return { status: r.status, data: await r.json().catch(() => ({})), message };
   },
 };
