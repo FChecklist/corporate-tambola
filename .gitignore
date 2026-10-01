@@ -5,3 +5,5 @@ dist/
 data*/
 config/company.json
 *.sqlite*
+pages/public/
+.wrangler-state/

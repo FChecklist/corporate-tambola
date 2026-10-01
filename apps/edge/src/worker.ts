@@ -33,6 +33,8 @@ async function mirrorControl(env: Env, id: string) {
   try { const f = await readPublished(d1kv(env), id); if (f) await env.CONTROL_R2.put(controlKey(id), JSON.stringify(f), { httpMetadata: { contentType: "application/json", cacheControl: "public, max-age=3" } }); } catch { /* the Worker route still serves it */ }
 }
 export const RETENTION_DAYS = 365;
+/** Largest page of participants one request returns, so a 10,000-person list never costs a free Worker its ~10 ms of CPU in one go. */
+export const PAGE = 2000;
 /** Claims are only a live cross-check (settlement never uses them), and 7 rows per phone would eat the free write allowance, so they are stored only for engagements this size or smaller. */
 export const CLAIM_TRACKING_MAX_CAP = 500;
 const tracks = (e: { cap: number }) => e.cap <= CLAIM_TRACKING_MAX_CAP;
@@ -91,8 +93,20 @@ const BUSY = () => json({ error: "Busy day. Please try again after midnight UTC.
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-organizer, x-partner, authorization", "access-control-allow-methods": "GET, POST, PUT, PATCH, OPTIONS", "access-control-max-age": "86400" };
 /** Phones load the app from Pages and call this Worker from another origin, so every answer carries open CORS (no cookies are used anywhere). */
-export async function handle(req: Request, env: Env, now = Date.now()): Promise<Response> {
+/** Runs the daily clean-up (365-day purge, one more try for unsent mail) the first time an organizer-side request arrives each UTC day. Never slows or fails the request. */
+export async function housekeeping(env: Env, now: number): Promise<void> {
+  try {
+    const d = day(now);
+    const last = await env.DB.prepare("SELECT v FROM kv WHERE k='housekeeping_day'").first<{ v: string }>();
+    if (last?.v === d) return;
+    await env.DB.prepare("INSERT INTO kv(k,v) VALUES('housekeeping_day',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(d).run(); // claim the day first so two requests do not both run it
+    await purgeOld(env, now);
+    await retryOutbox(env as PayEnv, now);
+  } catch { /* try again on the next request */ }
+}
+export async function handle(req: Request, env: Env, now = Date.now(), waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+  if ((req.method === "POST" && new URL(req.url).pathname === "/api/z") || new URL(req.url).pathname === "/api/history") { const h = housekeeping(env, now); if (waitUntil) waitUntil(h); else await h; }
   const r = await route(req, env, now);
   const h = new Headers(r.headers);
   for (const [k, v] of Object.entries(CORS)) h.set(k, v);
@@ -424,8 +438,10 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   }
   if (action === "participants" && req.method === "GET") {
     if (!can(a, e)) return deny(a);
-    const r = await env.DB.prepare("SELECT pid, name FROM participant WHERE eid=? ORDER BY joined_ms, pid").bind(eid).all<any>();
-    return json({ participants: r.results ?? [], closed: !!e.closed, cap: e.cap, ...pub(e) });
+    const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || PAGE, 1), PAGE), offset = Math.max(Number(url.searchParams.get("offset")) || 0, 0);
+    const r = await env.DB.prepare("SELECT pid, name FROM participant WHERE eid=? ORDER BY joined_ms, pid LIMIT ? OFFSET ?").bind(eid, limit, offset).all<any>();
+    const total = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
+    return json({ participants: r.results ?? [], total, offset, limit, closed: !!e.closed, cap: e.cap, ...pub(e) });
   }
   if (action === "settle" && req.method === "POST") { // only the organizer's own console (which recomputed it from the public log), never the AI
     if (!can(a, e, true)) return deny(a);

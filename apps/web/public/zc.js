@@ -150,7 +150,8 @@
   async function refreshEng() {
     try {
       S.info = await fetch(BASE + `/api/z/${eid}/info`).then((r) => r.json());
-      const pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed; S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, rounds: pr.rounds || 1 };
+      let pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed;
+      while (S.people.length < pr.total) { const more = await call("GET", `/api/z/${eid}/participants?offset=${S.people.length}`); if (!more.participants.length) break; S.people.push(...more.participants); } // a long list arrives in pages S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, rounds: pr.rounds || 1 };
       S.claims = (await call("GET", `/api/z/${eid}/claims`)).claims;
       try { S.reqs = (await call("GET", `/api/z/${eid}/control/request`)).requests; } catch { S.reqs = []; }
       const cf = await fetch(BASE + `/api/z/${eid}/control`).then((r) => (r.ok ? r.json() : null));

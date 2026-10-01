@@ -113,7 +113,8 @@ ok(strand.every((p) => p.rt.view().log.length === 0), `firewalled phones (${stra
 
 // organizer side
 const org = { "x-organizer": SECRET };
-const people = (await (await raw("GET", `/api/z/${EID}/participants`, undefined, org)).json() as any).participants;
+const people: any[] = [];
+for (;;) { const pg = await (await raw("GET", `/api/z/${EID}/participants?offset=${people.length}`, undefined, org)).json() as any; people.push(...pg.participants); if (!pg.participants.length || people.length >= pg.total) break; } // a long list arrives in pages
 const pids: string[] = people.map((x: any) => x.pid);
 ok(pids.length === phones.filter((p) => p.rt.pid).length, `store holds exactly the ${pids.length} people who joined, no duplicates`);
 const claims = (await (await raw("GET", `/api/z/${EID}/claims`, undefined, org)).json() as any).claims;

@@ -708,3 +708,40 @@ describe("rounds in the store", () => {
     for (const t of ["claim", "settled", "participant"]) expect((raw.query(`SELECT COUNT(*) c FROM ${t} WHERE eid='RND05'`).get() as any).c).toBe(0);
   });
 });
+
+describe("big lists come in pages, and the daily clean-up runs by itself", () => {
+  const plat = { "x-organizer": SECRET };
+  const D = 86_400_000;
+  const old = (id: string) => raw.run("INSERT INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config) VALUES(?,?,?,?,?,NULL,0,5,1,NULL)".replace(/\?/g, () => "?"), [id, 5, 6, 5, T - 400 * D] as any);
+  test("participants are returned in pages with a total, so one request never has to carry a whole 10,000-person list", async () => {
+    await create({ cap: 20000 });
+    for (let i = 0; i < 7; i++) await join(i);
+    const p1 = await (await call("GET", "/api/z/ENG1/participants?limit=3", undefined, org)).json() as any;
+    const p2 = await (await call("GET", "/api/z/ENG1/participants?limit=3&offset=3", undefined, org)).json() as any;
+    const p3 = await (await call("GET", "/api/z/ENG1/participants?limit=3&offset=6", undefined, org)).json() as any;
+    expect([p1.participants.length, p2.participants.length, p3.participants.length]).toEqual([3, 3, 1]);
+    expect(p1.total).toBe(7);
+    expect(new Set([...p1.participants, ...p2.participants, ...p3.participants].map((x: any) => x.pid)).size).toBe(7);
+    const all = await (await call("GET", "/api/z/ENG1/participants", undefined, org)).json() as any;
+    expect(all.participants).toHaveLength(7);
+    for (const q of ["limit=0", "limit=-5", "limit=abc", "offset=-4", "limit=999999"]) expect((await call("GET", "/api/z/ENG1/participants?" + q, undefined, org)).status).toBe(200);
+    expect(((await (await call("GET", "/api/z/ENG1/participants?limit=999999", undefined, org)).json()) as any).limit).toBeLessThanOrEqual(2000);
+  });
+  test("the 365-day purge runs on its own the first time an organizer acts each day, and at most once a day", async () => {
+    old("OLDONE");
+    expect((raw.query("SELECT COUNT(*) c FROM engagement WHERE id='OLDONE'").get() as any).c).toBe(1);
+    await call("GET", "/api/history", undefined, plat, T); // first organizer request of the day: housekeeping runs
+    expect((raw.query("SELECT COUNT(*) c FROM engagement WHERE id='OLDONE'").get() as any).c).toBe(0);
+    old("OLDTWO");
+    await call("GET", "/api/history", undefined, plat, T + 1000); // same day: does not run again
+    expect((raw.query("SELECT COUNT(*) c FROM engagement WHERE id='OLDTWO'").get() as any).c).toBe(1);
+    await call("GET", "/api/history", undefined, plat, T + D + 1000); // next day: runs
+    expect((raw.query("SELECT COUNT(*) c FROM engagement WHERE id='OLDTWO'").get() as any).c).toBe(0);
+  });
+  test("phones and public reads never trigger it (only organizer-side requests do)", async () => {
+    await create();
+    old("OLDTHREE");
+    await call("GET", "/api/z/ENG1/info"); await join(1);
+    expect((raw.query("SELECT COUNT(*) c FROM engagement WHERE id='OLDTHREE'").get() as any).c).toBe(1);
+  });
+});

@@ -1,0 +1,17 @@
+# Corporate Tambola on Cloudflare Pages + Functions + D1: free plan only, no custom domain (https://corporate-tambola.pages.dev).
+# Deploy with:  bun run pages:deploy   (see README.md in this folder). Secrets are NOT in this file.
+name = "corporate-tambola"
+pages_build_output_dir = "public"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]   # billing uses node:crypto HMAC
+
+[[d1_databases]]
+binding = "DB"
+database_name = "corporate-tambola"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+[vars]
+DAILY_WRITE_BUDGET = "80000"
+PUBLIC_ORIGIN = "https://corporate-tambola.pages.dev"
+MAIL_FROM = "Corporate Tambola <tambola@veridian-aios.com>"
+COMPANY_JSON = '{"cin":"U74999UP2017PTC098453","gstin":"09AAZCS4477M1Z3","pan":"AAZCS4477M","stateCode":"09","stateName":"Uttar Pradesh","addressLines":["B-1105, Plot No. 14, Shipra Krishna Vista, Ahinsa Khand-1","Indirapuram, Ghaziabad, Uttar Pradesh 201014, India"],"email":"raajat.agarwal@gmail.com","phone":"+91 96503 97480","sacCode":"998314","sacDescription":"IT design and development services"}'
