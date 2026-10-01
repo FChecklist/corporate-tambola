@@ -47,3 +47,25 @@ Engineering: cached static control file; real-office/real-phone test; the legacy
 - A commission row is written only when a referred purchase is **paid**, on the taxable value (not the GST). The **rate is not set**: rows wait as "counted" and show "to be announced" until we set it (`POST /api/partners/commission/rate {rate}`, or `PARTNER_COMMISSION_RATE`). Self-referral is blocked with a reason. We record payouts (`/api/partners/payout`) and can void a refunded sale; the actual payout (KYC, TDS, RazorpayX) happens outside this system.
 - Partners see only their own sales (date, pack, status, amount), never who bought.
 - **Limit to decide on:** enrolment needs no OTP, like participants joining, so someone could enrol a number that is not theirs. They would earn nothing without payout KYC, but the real owner of that number would find it taken. Fix before the first payout: verify the number (SMS/WhatsApp OTP costs money) or only pay after KYC proves who the person is.
+
+## 7. Which features each mode has (2026-10-01, later)
+Two modes exist side by side. **Phone-run mode** (new, no server per engagement) and the **server-driven mode** (older, one server process per engagement).
+
+| Feature | Phone-run | Server-driven |
+|---|---|---|
+| Numbers called, tickets, marking, "still to win" | yes | yes |
+| 1 or 2 tickets per participant | yes | yes |
+| Reward lines with text, 1st/2nd/3rd order, Full Two-Ticket House | yes | yes |
+| Brand breaks (up to 3: speech, slides, YouTube, video link) | yes | yes |
+| Lucky draw (1, 3, 5 or 10 people, verifiable from public randomness) | yes | yes |
+| Pause / resume / stop, AI asks and organizer approves | yes (signed, about 30-40 s to reach phones) | yes (instant) |
+| Invite list, invite-only, reuse, erase, 365-day retention | yes | yes |
+| External AI work link (scoped), suggestion board | yes | yes (link only) |
+| Refer & earn, payments, invoices, e-mailed sign-in | yes | payments and sign-in yes |
+| **Rounds (several games in one engagement)** | **no** | yes |
+| **Scratch cards, boosters (joker, extra ticket, pass)** | **no** | yes |
+| Family passes, team leads/hosts roles, waiting room, second-phone alerts | **no** | yes |
+| Host live voice, big-screen view | **no** | yes (big screen) |
+| Cost per engagement | about zero (free plans) | a server process |
+
+The phone-run mode is the one to sell at scale. Anything in the "no" rows is either optional or needs a design decision before building it for phone-run mode (rounds and scratch cards each need their own fairness rules; roles and passes need a roster model the phone-run store does not have yet).

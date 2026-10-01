@@ -39,8 +39,8 @@ const pay = (orderId: string, status = "captured", amountOverride?: number) => {
 };
 
 // ---------- a real Tambola server pointed at it ----------
-const DATA = "C:/ct/tambola/data-pay"; rmSync(DATA, { recursive: true, force: true }); mkdirSync(DATA, { recursive: true });
-const PORT = 8791, BASE = `http://localhost:${PORT}`;
+const DATA = process.env.DATA_DIR ?? "C:/ct/tambola/data-pay"; rmSync(DATA, { recursive: true, force: true }); mkdirSync(DATA, { recursive: true });
+const PORT = Number(process.env.PAY_PORT ?? 8791), BASE = `http://localhost:${PORT}`;
 const server = Bun.spawn(["bun", "run", "apps/server/src/index.ts"], { cwd: "C:/ct/tambola", stdout: "ignore", stderr: "inherit",
   env: { ...process.env, PORT: String(PORT), TAMBOLA_DATA: DATA, RAZORPAY_KEY_ID: KEY_ID, RAZORPAY_KEY_SECRET: KEY_SECRET, RAZORPAY_WEBHOOK_SECRET: WH_SECRET, RAZORPAY_BASE_URL: `http://localhost:${rzp.port}/v1`, TAMBOLA_COMPANY: "C:/ct/tambola/data-pay/none.json" } });
 for (let i = 0; i < 50; i++) { try { if ((await fetch(BASE + "/api/health")).ok) break; } catch { /* starting */ } await sleep(100); }
