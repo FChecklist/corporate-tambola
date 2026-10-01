@@ -27,3 +27,10 @@ MAIL_FROM = "Corporate Tambola <tambola@veridian-aios.com>"   # shared, already-
 # Secrets are never written in files. Set them once, by hand:
 #   wrangler secret put ORGANIZER_SECRET   (our platform key)
 #   wrangler secret put PHONE_SALT         (random 32+ characters; keeps phone hashes unguessable)
+
+# Optional but recommended at scale: serve the pause file from the CDN instead of the Worker (phones poll it every ~9 s).
+# Create a public bucket, attach a custom domain with caching, then:
+# [[r2_buckets]]
+# binding = "CONTROL_R2"
+# bucket_name = "corporate-tambola-control"
+# and set CONTROL_BASE = "https://c.YOUR-DOMAIN"
