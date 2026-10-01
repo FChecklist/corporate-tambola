@@ -156,6 +156,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     if (!b || !PACKS.some((x) => x[0] === pack)) return json({ error: "Choose a pack." }, 400);
     if (typeof b.email !== "string" || !EMAIL.test(b.email.trim())) return json({ error: "Enter a valid e-mail address." }, 400);
     if (typeof b.org !== "string" || b.org.trim().length < 2) return json({ error: "Enter your organisation's name." }, 400);
+    if ((typeof b.country !== "string" || b.country.slice(0, 2) === "IN") && typeof b.taxId === "string" && b.taxId.trim() && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(b.taxId.trim().toUpperCase())) return json({ error: "That GSTIN does not look right. It has 15 characters, like 27ABCDE1234F1Z5." }, 400);
     if (cur === "USD" && rzp && env.RAZORPAY_INTERNATIONAL !== "1") return json({ error: "Payments in US dollars are not switched on yet. Please pay in Indian rupees or write to us." }, 400);
     if (!(await spend(2))) return busy();
     const pr = price(pack, cur);

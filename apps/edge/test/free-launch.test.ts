@@ -69,7 +69,8 @@ describe("build first, pay to publish", () => {
     expect(j.published).toBe(true); expect(j.paid).toBe(false); expect(j.shareUrl).toBe("https://tambola.test/z.html?e=PUB-1"); expect(j.payUrl).toBe("https://tambola.test/pay.html?e=PUB-1");
     expect((await call("POST", "/api/z/PUB-1/join", { phone: "9876543210" })).status).toBe(200); // everyone can join before the organizer has paid
     const info = await (await call("GET", "/api/z/PUB-1/info")).json() as any;
-    expect(info.unpaid).toBe(true); expect(info.locked).toBe(false);
+    expect(info.unpaid).toBeUndefined(); expect(info.locked).toBe(false); // participants are never told it is unpaid
+    expect(((await (await call("GET", "/api/z/PUB-1/info", undefined, h)).json()) as any).unpaid).toBe(true); // the organizer is
     const mail = raw.prepare("SELECT subject, body FROM outbox WHERE to_addr=? ORDER BY id DESC LIMIT 1").get("boss@acme.com") as { subject: string; body: string };
     expect(mail.subject).toMatch(/pay before/i); expect(mail.body).toMatch(/will not begin/); expect(mail.body).toContain("/pay.html?e=PUB-1"); expect(mail.body).toContain("/z.html?e=PUB-1");
   });

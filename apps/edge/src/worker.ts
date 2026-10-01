@@ -13,7 +13,7 @@
 
 import { defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
 import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
-import { PACKS } from "../../../packages/shared/src/pricing";
+import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { SAFETY_FAST, SAFETY_STANDARD, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 
@@ -117,7 +117,7 @@ const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers
 /** Phones load the app from Pages and call this Worker from another origin, so every answer carries open CORS (no cookies are used anywhere). */
 /** The message an organizer pastes into any AI chat. The key in it is the scoped AI key: it cannot publish, pay, erase or settle. */
 export const aiMessage = (origin: string, key: string) =>
-  `You are my Corporate Tambola assistant. Read the instructions at ${origin}/api/z/ai-manifest, then do what I ask using that API. Send this key in the x-organizer header on every call: ${key}. Keep the key private. Set up everything for me: create the engagement, set the rewards and brand breaks, load my participant list, schedule it. Ask me for anything you need, such as how many participants, the date and time, and which rewards I want. Tell me before you do anything that cannot be undone. When it is ready, give me the link the API returns: I will open it, confirm my email and mobile number, publish it (publishing is free) and pay before the start time, because without payment the engagement will not begin. Never try to publish or pay yourself. Help me with every step, and remind me about the payment before the start.`;
+  `You are my Corporate Tambola assistant. Read the instructions at ${origin}/api/z/ai-manifest, then do what I ask using that API. Send this key in the x-organizer header on every call: ${key}. Keep the key private. Talk to me like a friendly event planner: follow the "conversation" steps in that manifest in order, ask me ONE question at a time, give me 2 to 4 options with your recommendation, and wait for my answer. Never assume. Then set everything up for me: create the engagement, rewards, brand breaks, my participant list and the schedule. Tell me before you do anything that cannot be undone. When it is ready, give me the link the API returns: I will open it, confirm my email and mobile number, publish it (publishing is free) and pay before the start time, because without payment the engagement will not begin. Never try to publish or pay yourself. Help me with every step, and remind me about the payment before the start.`;
 /** Runs the daily clean-up (365-day purge, one more try for unsent mail) the first time an organizer-side request arrives each UTC day. Never slows or fails the request. */
 export async function housekeeping(env: Env, now: number): Promise<void> {
   try {
@@ -164,11 +164,29 @@ const deny = (a: Auth) => json({ error: a.kind === "ai" ? "Your AI assistant may
 export const AI_MANIFEST = {
   name: "Corporate Tambola organizer API",
   how: "Send your organizer AI key in the x-organizer header (or Authorization: Bearer). Every call is JSON. The numbers are drawn from public randomness on participants' phones; you cannot change them.",
+  your_role: "You are the organizer's event planner. Talk with them in plain, friendly words, never in API terms. Work through the steps in `conversation` IN ORDER, ONE question at a time, offering 2 to 4 clear options with a recommended default, and wait for their answer before moving on. Never invent details for them. They can watch everything you create appear live in their console (the openUrl returned when you create the engagement).",
+  conversation: [
+    "1. The event and the guests: what is the occasion (for example a Diwali party, a dealer meet, a town hall) and who takes part (employees, their families, dealers, customers, vendors).",
+    "2. How many people at most. Recommend a limit a little above the headcount. See `packs` for the sizes. Building and publishing are free; payment is due before the start time.",
+    "3. Date and time, and their time zone (default Asia/Kolkata). Turn it into startRound with GET /api/z/schedule?at=<ISO time with offset>&callSeconds=<speed>. It must be in the future. Suggest at least 2 hours ahead so everyone can join.",
+    "4. Calling speed: 6 seconds fast, 9 normal (recommended), 12 relaxed, 15 slow. A full game is about 9, 14, 18 or 22 minutes of calling.",
+    "5. Tickets per person: 1 (simple) or 2 (more chances; adds the Full Two-Ticket House reward).",
+    "6. Rewards: which houses to reward (early5, top, mid, bot, corners, star, full, and full2 with two tickets) and how many winners for each (1st to 5th). Ask what each reward is, for example a gift voucher. Remind them that the organizer gives the rewards; we only provide the software.",
+    "7. Brand breaks (optional, at most 3): a company video, a YouTube link, slides, a speech or a lucky draw (1, 3, 5 or 10 winners), each after a number of calls.",
+    "8. Rounds (1 to 5 games, each with new numbers and tickets) and whether it is invite-only (only people on the list can join) or open to anyone with the link.",
+    "9. Participants (optional): ask them to paste lines like 'name, mobile number' and load them 100 at a time with the roster call. Phone numbers are never shown back to anyone. If they prefer, they simply share the link.",
+    "10. Read back a short summary and ask for a clear yes. Then create the engagement (POST /api/z) and apply the details with PATCH settings. Tell them it is a draft that nobody else can see yet, and that they can watch it take shape in their console.",
+    "11. When they say it is ready, call POST /api/z/{id}/publish and give them the link it returns. Be honest and clear: publishing is free but they must do it themselves in their console (they confirm their email and mobile number); they then share the participants link with everyone; and they must PAY BEFORE THE START TIME (say the exact local time) or the engagement will not begin and their guests will be left waiting. You cannot publish or pay for them. Offer to help with every step, answer their questions about payment, and offer to remind them before the start.",
+  ],
+  packs: PACKS.map(([n]) => ({ upTo: n, inr_including_gst: price(n, "INR").total, usd: price(n, "USD").total })),
+  choices: { call_seconds: [6, 9, 12, 15], tickets: [1, 2], rewards: ["early5", "top", "mid", "bot", "corners", "star", "full", "full2 (two tickets)"], winners_per_reward: "1 to 5", break_kinds: ["file", "youtube", "slides", "speech", "lucky (1, 3, 5 or 10 winners)"], rounds: "1 to 5" },
   you_can: [
+    { do: "Turn the organizer's chosen date and time into the startRound the engagement needs, and check it is in the future", call: "GET /api/z/schedule?at=2026-10-03T16:00:00+05:30&callSeconds=9 -> {startRound, startMs, startsInMinutes, startsAtIST}" },
+    { do: "Read back everything saved for one engagement (start time in the organizer's time, speed, limit, tickets, every reward, every break, rounds, head-count, and whether it is a draft, published or paid). Use it to confirm the details with the organizer after every change", call: "GET /api/z/{id}/summary" },
     { do: "List engagements and head-counts", call: "GET /api/history" },
     { do: "Create an engagement. It is saved as a free draft that participants cannot see yet; nothing is paid at this step", call: "POST /api/z {id, startRound, callSeconds (6|9|12|15), cap, closed?}  -> {ok, draft, openUrl}" },
     { do: "When everything is set up, tell the organizer it is ready. Publishing is free but only the organizer can do it (they confirm their email and mobile number), and payment is due before the start time or the engagement will not begin. This returns a link: give it to the organizer and help them through every step, but never try to publish or pay yourself", call: "POST /api/z/{id}/publish -> {published:false, needsOrganizer:true, payUrl}" },
-    { do: "Change start time, speed, cap, invite-only, tickets per participant (1 or 2), reward lines and brand breaks (up to 3) and rounds (1 to 5 games, each with new numbers and new tickets) before the first number", call: "PATCH /api/z/{id}/settings {startRound?, callSeconds?, cap?, closed?, tickets?, rounds?, rewards?: [{pattern: early5|top|mid|bot|corners|star|full, scope?: ticket|two_ticket, ordinal?: 1-5, text}], breaks?: [{after: 1-89 numbers called, seconds: 15-600 in steps of 3, kind: file|youtube|slides|speech, title, mediaUrl?: https link}]}" },
+    { do: "Change start time, speed, cap, invite-only, tickets per participant (1 or 2), reward lines and brand breaks (up to 3) and rounds (1 to 5 games, each with new numbers and new tickets) before the first number", call: "PATCH /api/z/{id}/settings {startRound?, callSeconds?, cap?, closed?, tickets?, rounds?, rewards?: [{pattern: early5|top|mid|bot|corners|star|full, scope?: ticket|two_ticket, ordinal?: 1-5, text}], breaks?: [{after: 1-89 numbers called, seconds: 15-600 in steps of 3, kind: file|youtube|slides|speech|lucky, title, mediaUrl?: https link (not for lucky), winners?: 1|3|5|10 (lucky only, default 3)}]}. A reward line is ONE winner of ONE house: for three winners of the full house send three lines with ordinal 1, 2 and 3. For the two-ticket full house use pattern full with scope two_ticket (ordinal 1-5). Names for the organizer: early5 = Early Five, top = Top line, mid = Middle line, bot = Bottom line, corners = Four corners, star = Star, full = Full house. A lucky draw is a break: {after: 60, seconds: 60, kind: lucky, title: Lucky draw, winners: 3}. Worked example: PATCH /api/z/{id}/settings {startRound: 33146812, callSeconds: 9, cap: 250, tickets: 2, rounds: 1, rewards: [{pattern: early5, ordinal: 1, text: Gift hamper}, {pattern: full, ordinal: 1, text: Voucher 5000}, {pattern: full, ordinal: 2, text: Voucher 3000}, {pattern: full, scope: two_ticket, ordinal: 1, text: iPad}], breaks: [{after: 30, seconds: 90, kind: youtube, title: Anniversary film, mediaUrl: https://www.youtube.com/watch?v=...}, {after: 60, seconds: 60, kind: lucky, title: Lucky draw, winners: 3}]}" },
     { do: "Load participants (invite list)", call: "POST /api/z/{id}/roster {people:[{phone,name}]} up to 100 per call" },
     { do: "Reuse an earlier engagement's people", call: "POST /api/z/{id}/reuse {from}" },
     { do: "See who joined (names and ids only, never phone numbers)", call: "GET /api/z/{id}/participants" },
@@ -178,6 +196,15 @@ export const AI_MANIFEST = {
     { do: "Read the current pause status", call: "GET /api/z/{id}/control" },
     { do: "Suggest a feature, improvement or report we should build (shared with every organizer's AI, reviewed by us)", call: "POST /api/z/suggestions {kind: feature|improvement|report|bug|other, title, body}" },
     { do: "See everyone's suggestions and what we decided, and add your support to one", call: "GET /api/z/suggestions ; POST /api/z/suggestions/{id}/vote" },
+  ],
+  payment_faq: [
+    "Building and publishing are free. Only the organizer publishes (they confirm their email and mobile number), and only the organizer pays; you never do either.",
+    "Price is per engagement, by size: the smallest pack that covers the limit (see `packs`, prices include GST in India). The limit does not have to match a pack size; people beyond the limit cannot join.",
+    "The organizer pays on the payment page, any time before the start time, online through Razorpay (the page shows the methods available). It takes about 2 minutes, and a GST invoice is emailed.",
+    "If it is not paid by the start time the engagement does not begin: the guests who already joined see a waiting screen and nothing is shown to them. Nothing is charged and there is no penalty.",
+    "If the organizer pays late, even hours later, the engagement starts about 3 minutes after the payment, for everyone already waiting, and they can also choose a new start time first.",
+    "If they never pay, nothing is owed. They can create a new engagement whenever they like. Unpaid engagements are forgotten after 30 days.",
+    "Unused places are not refunded once an engagement is paid. The full terms are at /legal.html.",
   ],
   suggestions_rules: "Describe the need and the benefit, not code. Never include names, phone numbers, e-mail addresses or anything about specific people. Suggestions are visible to all organizers' AI assistants without saying who wrote them. We review them and mark each one new, under_review, planned, shipped or declined.",
   you_cannot: [
@@ -203,6 +230,12 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   /* ---- sign in with an e-mailed code (no passwords): also how an organizer who lost their key gets a fresh one ---- */
   /* ---- start: a new organizer enters a work email and the console opens at once (no mail is sent). An email that already has an account is
      asked for the e-mailed code instead, so nobody can open someone else's console by typing their address. ---- */
+  if (req.method === "GET" && p === "/api/z/schedule") { // a helper for the organizer's AI: a date and time becomes a start round
+    const at = Date.parse(url.searchParams.get("at") ?? "");
+    if (!Number.isFinite(at)) return json({ error: "Give a date and time with a time zone, like at=2026-10-03T16:00:00+05:30." }, 400);
+    const startRound = roundOfMs(at);
+    return json({ ok: at > now, startRound, startMs: roundMs(startRound), startsInMinutes: Math.round((roundMs(startRound) - now) / 60_000), startsAtIST: istTime(roundMs(startRound)), ...(at > now ? {} : { error: "That time has already passed. Pick a time in the future." }) });
+  }
   if (req.method === "POST" && p === "/api/start") {
     const b = await body(req);
     const email = typeof b?.email === "string" ? b.email.trim().toLowerCase() : "";
@@ -431,17 +464,17 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   if (req.method === "GET" && p === "/api/history") {
     if (!a.plat && !a.org) return deny(a);
     const q = a.plat
-      ? env.DB.prepare("SELECT e.id, e.created_ms, e.call_seconds, e.closed, (e.pack=0) AS draft, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e ORDER BY e.created_ms DESC LIMIT 50")
-      : env.DB.prepare("SELECT e.id, e.created_ms, e.call_seconds, e.closed, (e.pack=0) AS draft, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e WHERE e.org=? ORDER BY e.created_ms DESC LIMIT 50").bind(a.org);
+      ? env.DB.prepare("SELECT e.id, e.created_ms, e.start_round, e.call_seconds, e.closed, (e.pack=0) AS draft, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e ORDER BY e.created_ms DESC LIMIT 50")
+      : env.DB.prepare("SELECT e.id, e.created_ms, e.start_round, e.call_seconds, e.closed, (e.pack=0) AS draft, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e WHERE e.org=? ORDER BY e.created_ms DESC LIMIT 50").bind(a.org);
     const r = await q.all<any>();
-    return json({ engagements: r.results ?? [], retentionDays: RETENTION_DAYS });
+    return json({ engagements: (r.results ?? []).map((x: any) => ({ ...x, startsAtIST: istTime(roundMs(x.start_round)) })), retentionDays: RETENTION_DAYS });
   }
   if (req.method === "POST" && p === "/api/purge") { // run daily (Cron trigger) or by hand: removes everything older than the retention period
     if (!a.plat) return deny(a);
     return json({ ok: true, purged: await purgeOld(env, now) });
   }
-  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish)$/);
-  if (!m) return json({ error: "Not found" }, 404);
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary)$/);
+  if (!m) return json({ error: "Not found", hint: "Read the list of what you can do at /api/z/ai-manifest. Engagement routes look like /api/z/{id}/summary, /settings, /roster, /participants, /results, /publish." }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
   if (!e) return json({ error: "No such engagement." }, 404);
@@ -469,7 +502,11 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if ((n?.c ?? 0) >= e.cap) return json({ error: "This engagement is full." }, 409);
     if (!(await spend(env, now))) return BUSY();
     const pid = await pidOf(ph);
-    await env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,joined_ms) VALUES(?,?,?,?,?)").bind(eid, pid, ph, cleanName(b?.name), now).run();
+    // far from the limit a plain insert is enough; near it the insert itself re-checks the head-count, so a crowd arriving at the same instant can never pass the limit
+    const ins = (n?.c ?? 0) + 200 < e.cap
+      ? await env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,joined_ms) VALUES(?,?,?,?,?)").bind(eid, pid, ph, cleanName(b?.name), now).run()
+      : await env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,joined_ms) SELECT ?,?,?,?,? WHERE (SELECT COUNT(*) FROM participant WHERE eid=?) < ?").bind(eid, pid, ph, cleanName(b?.name), now, eid, e.cap).run();
+    if ((ins.meta?.changes ?? 0) === 0 && !(await env.DB.prepare("SELECT 1 AS x FROM participant WHERE eid=? AND pid=?").bind(eid, pid).first())) return json({ error: "This engagement is full." }, 409); // lost the race for the last place
     return json({ pid, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), ...pub(e) });
   }
   if (action === "claims" && req.method === "POST") {
@@ -495,9 +532,18 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     // public: counts only, no ids. The one exception is a lucky draw, whose winners are shown by their opaque ticket ids so each phone can tell whether it won
     return json({ results: (r.results ?? []).map((x: any) => ({ pattern: x.pattern, ordinal: x.ordinal, round: x.round, idx: x.idx, count: JSON.parse(x.pids).length, ...(x.pattern === "lucky" ? { winners: JSON.parse(x.pids) } : {}) })) });
   }
-  if (action === "info" && req.method === "GET") return json({ ...(isDraft ? { draft: true } : {}), ...(unpaid && !isDraft ? { unpaid: true, locked } : {}), startMs: roundMs(e.start_round), cap: e.cap, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), ...pub(e) });
+  if (action === "info" && req.method === "GET") return json({ ...(isDraft ? { draft: true } : {}), ...(unpaid && !isDraft ? { ...(can(a, e) ? { unpaid: true } : {}), locked } : {}), startMs: roundMs(e.start_round), cap: e.cap, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), ...pub(e) });
 
   // everything below is for the organizer (or their AI, where allowed)
+  if (action === "summary" && req.method === "GET") { // one read-back of everything saved, so the organizer's AI can confirm it with them
+    if (!can(a, e)) return deny(a);
+    const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
+    const c = cfgOf(e), origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
+    return json({ id: e.id, status: isDraft ? "draft" : unpaid ? (locked ? "published, NOT PAID, held because the start time passed" : "published, payment due before the start") : "published and paid",
+      startsAtIST: istTime(roundMs(e.start_round)), startMs: roundMs(e.start_round), startRound: e.start_round, callSeconds: e.call_seconds, limit: e.cap, closed: !!e.closed,
+      tickets: c.tickets, rounds: c.rounds, rewards: c.rewards, breaks: c.breaks, participants: n,
+      consoleUrl: `${origin}/zc.html?e=${e.id}`, ...(isDraft ? {} : { shareUrl: `${origin}/z.html?e=${e.id}` }), ...(unpaid ? { payUrl: `${origin}/pay.html?e=${e.id}` } : {}) });
+  }
   if (action === "publish" && req.method === "POST") { // free: the organizer confirms their details, shares the link, and pays before the start (or it will not begin)
     const origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
     const payUrl = `${origin}/pay.html?e=${eid}`, shareUrl = `${origin}/z.html?e=${eid}`;
