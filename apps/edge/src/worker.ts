@@ -78,6 +78,23 @@ const MAX_BODY = 4096;
 const ID = /^[A-Za-z0-9_-]{4,40}$/;
 const GENESIS = 1692803367; // drand quicknet; round r is published at GENESIS + (r-1)*3 s (UTC)
 const roundMs = (r: number) => (GENESIS + (r - 1) * 3) * 1000;
+const roundOfMs = (ms: number) => Math.floor((ms / 1000 - GENESIS) / 3) + 1;
+/** A published engagement is open to participants even before it is paid for; a draft is not. Paid engagements are always published. */
+async function isPublished(env: Env, e: { id: string; pack: number | null }): Promise<boolean> {
+  if (e.pack !== 0) return true;
+  return !!(await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`pub/${e.id}`).first());
+}
+const istTime = (ms: number) => new Date(ms).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }) + " IST";
+/** The organizer is e-mailed once, and only about their own engagement. A mail is a nudge, never a requirement. */
+async function nudge(env: Env, id: string, flag: string, now: number, subject: string, text: string): Promise<void> {
+  try {
+    if (await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`${flag}/${id}`).first()) return;
+    const c = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`contact/${id}`).first<{ v: string }>();
+    if (!c) return;
+    await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`${flag}/${id}`, String(now)).run();
+    await sendMail(env as PayEnv, env.DB, JSON.parse(c.v).email, subject, text, now);
+  } catch { /* never block a request on a nudge */ }
+}
 
 async function body(req: Request, max = MAX_BODY): Promise<any | null> {
   const t = await req.text();
@@ -100,7 +117,7 @@ const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers
 /** Phones load the app from Pages and call this Worker from another origin, so every answer carries open CORS (no cookies are used anywhere). */
 /** The message an organizer pastes into any AI chat. The key in it is the scoped AI key: it cannot publish, pay, erase or settle. */
 export const aiMessage = (origin: string, key: string) =>
-  `You are my Corporate Tambola assistant. Read the instructions at ${origin}/api/z/ai-manifest, then do what I ask using that API. Send this key in the x-organizer header on every call: ${key}. Keep the key private. Set up everything for me: create the engagement, set the rewards and brand breaks, load my participant list, schedule it. Ask me for anything you need, such as how many participants, the date and time, and which rewards I want. Tell me before you do anything that cannot be undone. When it is ready to publish, give me the link the API returns: I will open it and pay myself. Never try to pay. Help me with every step before that.`;
+  `You are my Corporate Tambola assistant. Read the instructions at ${origin}/api/z/ai-manifest, then do what I ask using that API. Send this key in the x-organizer header on every call: ${key}. Keep the key private. Set up everything for me: create the engagement, set the rewards and brand breaks, load my participant list, schedule it. Ask me for anything you need, such as how many participants, the date and time, and which rewards I want. Tell me before you do anything that cannot be undone. When it is ready, give me the link the API returns: I will open it, confirm my email and mobile number, publish it (publishing is free) and pay before the start time, because without payment the engagement will not begin. Never try to publish or pay yourself. Help me with every step, and remind me about the payment before the start.`;
 /** Runs the daily clean-up (365-day purge, one more try for unsent mail) the first time an organizer-side request arrives each UTC day. Never slows or fails the request. */
 export async function housekeeping(env: Env, now: number): Promise<void> {
   try {
@@ -110,6 +127,12 @@ export async function housekeeping(env: Env, now: number): Promise<void> {
     await env.DB.prepare("INSERT INTO kv(k,v) VALUES('housekeeping_day',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(d).run(); // claim the day first so two requests do not both run it
     await purgeOld(env, now);
     await retryOutbox(env as PayEnv, now);
+    // published but unpaid, starting within 36 hours: one reminder to the organizer
+    const due = await env.DB.prepare("SELECT e.id, e.start_round FROM engagement e WHERE e.pack=0 AND EXISTS (SELECT 1 FROM kv WHERE k='pub/'||e.id)").all<{ id: string; start_round: number }>();
+    for (const x of due.results ?? []) {
+      const at = roundMs(x.start_round);
+      if (at > now && at - now < 36 * 3_600_000) await nudge(env, x.id, "remind", now, `Payment due before ${istTime(at)}: your engagement ${x.id}`, `Your engagement ${x.id} starts ${istTime(at)}. Payment has not been received yet. If it is not paid before the start, the engagement will not begin and everyone you invited will be left waiting.\n\nPay now (about 2 minutes): ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${x.id}`);
+    }
   } catch { /* try again on the next request */ }
 }
 export async function handle(req: Request, env: Env, now = Date.now(), waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
@@ -144,7 +167,7 @@ export const AI_MANIFEST = {
   you_can: [
     { do: "List engagements and head-counts", call: "GET /api/history" },
     { do: "Create an engagement. It is saved as a free draft that participants cannot see yet; nothing is paid at this step", call: "POST /api/z {id, startRound, callSeconds (6|9|12|15), cap, closed?}  -> {ok, draft, openUrl}" },
-    { do: "When everything is set up, ask to publish. Publishing needs payment, which only the organizer can make, so this returns a payUrl: give that link to the organizer and tell them to open it, pay and publish. You can help them with every step before that, and answer questions about the payment step, but never try to pay yourself", call: "POST /api/z/{id}/publish -> {published:false, needsOrganizer:true, payUrl}" },
+    { do: "When everything is set up, tell the organizer it is ready. Publishing is free but only the organizer can do it (they confirm their email and mobile number), and payment is due before the start time or the engagement will not begin. This returns a link: give it to the organizer and help them through every step, but never try to publish or pay yourself", call: "POST /api/z/{id}/publish -> {published:false, needsOrganizer:true, payUrl}" },
     { do: "Change start time, speed, cap, invite-only, tickets per participant (1 or 2), reward lines and brand breaks (up to 3) and rounds (1 to 5 games, each with new numbers and new tickets) before the first number", call: "PATCH /api/z/{id}/settings {startRound?, callSeconds?, cap?, closed?, tickets?, rounds?, rewards?: [{pattern: early5|top|mid|bot|corners|star|full, scope?: ticket|two_ticket, ordinal?: 1-5, text}], breaks?: [{after: 1-89 numbers called, seconds: 15-600 in steps of 3, kind: file|youtube|slides|speech, title, mediaUrl?: https link}]}" },
     { do: "Load participants (invite list)", call: "POST /api/z/{id}/roster {people:[{phone,name}]} up to 100 per call" },
     { do: "Reuse an earlier engagement's people", call: "POST /api/z/{id}/reuse {from}" },
@@ -286,6 +309,9 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const kv = d1kv(env);
     if (!sub && req.method === "GET") {
       const f = await readPublished(kv, cid!);
+      const ge = await env.DB.prepare("SELECT id, pack, start_round FROM engagement WHERE id=?").bind(cid).first<{ id: string; pack: number | null; start_round: number }>();
+      if (ge && ge.pack === 0 && roundMs(ge.start_round) <= now && (await isPublished(env, ge))) // published, unpaid, start time reached: phones hold, nothing is shown
+        return new Response(JSON.stringify({ ...(f ?? {}), locked: true }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } });
       return f ? new Response(JSON.stringify(f), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } }) : json({ registered: false }, 404);
     }
     if (!sub && req.method === "POST") {
@@ -427,8 +453,11 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   const pidOf = async (ph: string) => (await sha(`${eid}|${ph}`)).slice(0, 16);
   const cleanName = (n: unknown) => (typeof n === "string" ? n.replace(/[<>`]/g, "").slice(0, 60) : null);
 
-  const isDraft = e.pack === 0;
+  const unpaid = e.pack === 0;
+  const isDraft = unpaid && !(await isPublished(env, e));
+  const locked = unpaid && !isDraft && roundMs(e.start_round) <= now; // published but not paid by its start time: it does not begin
   if (isDraft && ((action === "join" && req.method === "POST") || (action === "info" && !can(a, e)))) return json({ error: "This engagement is not open yet." }, 403);
+  if (locked && !can(a, e) && (action === "info" || action === "join")) await nudge(env, e.id, "lockmail", now, `Your engagement ${e.id} could not begin: payment is due`, `Your participants opened your link, but your engagement ${e.id} could not begin because payment has not been received.\n\nPay now and it starts in about 3 minutes, for everyone already waiting: ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${e.id}`);
   if (action === "join" && req.method === "POST") {
     const b = await body(req);
     const ph = await phoneHash(b?.phone);
@@ -466,30 +495,36 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     // public: counts only, no ids. The one exception is a lucky draw, whose winners are shown by their opaque ticket ids so each phone can tell whether it won
     return json({ results: (r.results ?? []).map((x: any) => ({ pattern: x.pattern, ordinal: x.ordinal, round: x.round, idx: x.idx, count: JSON.parse(x.pids).length, ...(x.pattern === "lucky" ? { winners: JSON.parse(x.pids) } : {}) })) });
   }
-  if (action === "info" && req.method === "GET") return json({ ...(isDraft ? { draft: true } : {}), cap: e.cap, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), ...pub(e) });
+  if (action === "info" && req.method === "GET") return json({ ...(isDraft ? { draft: true } : {}), ...(unpaid && !isDraft ? { unpaid: true, locked } : {}), startMs: roundMs(e.start_round), cap: e.cap, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), ...pub(e) });
 
   // everything below is for the organizer (or their AI, where allowed)
-  if (action === "publish" && req.method === "POST") { // payment is asked here, never to build; only the organizer themself (not their AI) publishes
-    const payUrl = `${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html?e=${eid}`;
-    if (a.kind === "ai" && can(a, e)) return json({ ok: true, published: e.pack !== 0, needsOrganizer: e.pack === 0, payUrl, message: e.pack === 0 ? "Everything is ready. Please give this link to the organizer: they open it, press Publish and pay, and make the payment themselves. The AI never pays." : "Already published." });
+  if (action === "publish" && req.method === "POST") { // free: the organizer confirms their details, shares the link, and pays before the start (or it will not begin)
+    const origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
+    const payUrl = `${origin}/pay.html?e=${eid}`, shareUrl = `${origin}/z.html?e=${eid}`;
+    if (a.kind === "ai" && can(a, e)) return json({ ok: true, published: !isDraft, needsOrganizer: isDraft, payUrl: isDraft ? `${origin}/zc.html?e=${eid}` : payUrl, shareUrl: isDraft ? undefined : shareUrl, message: isDraft
+      ? "Everything is ready. Please give this link to the organizer: they open it, confirm their email and mobile number and press Publish. Publishing is free. After that they must pay before the start time or the engagement will not begin. The organizer does both themself: the AI never publishes or pays."
+      : unpaid ? "It is published. Payment is still due before the start time, otherwise the engagement will not begin. Give the organizer this link to pay: they do it themself." : "Already published and paid." });
     if (!can(a, e, true)) return deny(a);
-    if (e.pack !== 0) return json({ ok: true, published: true, already: true });
-    // the organizer confirms (and may correct) their email and mobile number before payment
+    if (!isDraft) return json({ ok: true, published: true, already: true, paid: !unpaid, startMs: roundMs(e.start_round), payUrl, shareUrl });
+    // the organizer confirms (and may correct) their email and mobile number
     const pb = await body(req);
     const cEmail = typeof pb?.email === "string" ? pb.email.trim() : "", cPhone = String(pb?.phone ?? "").replace(/\D/g, "");
     if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(cEmail)) return json({ error: "Please confirm a valid email address." }, 400);
     if (cPhone.length < 10 || cPhone.length > 15) return json({ error: "Please confirm a valid mobile number." }, 400);
-    await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`contact/${eid}`, JSON.stringify({ email: cEmail, phone: cPhone.slice(-10) })).run();
-    const need = PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null;
+    if (roundMs(e.start_round) <= now) return json({ error: "The start time has passed. Please choose a new start time first." }, 400);
     const ent = await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(e.org, e.cap).first<{ id: string; pack: number }>();
     const free = !ent && freeLaunch(env as PayEnv) && e.cap <= FREE_CAP; // optional switch: small engagements free while the gateway is off
-    if (!ent && !free) return json({ error: payMode(env as PayEnv) === "off" ? "Payment opens soon. Your draft is saved; publish it as soon as payments switch on." : "Please pay for this engagement to publish it.", needPack: need, payments: payMode(env as PayEnv), draft: true, confirmed: { email: cEmail, phone: cPhone.slice(-10) } }, 402);
-    if (!(await spend(env, now, 3))) return BUSY();
+    if (!(await spend(env, now, 4))) return BUSY();
     await env.DB.batch([
-      env.DB.prepare("UPDATE engagement SET pack=? WHERE id=? AND pack=0").bind(ent?.pack ?? e.cap, eid),
+      env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`contact/${eid}`, JSON.stringify({ email: cEmail, phone: cPhone.slice(-10) })),
+      env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`pub/${eid}`, String(now)),
+      ...(ent || free ? [env.DB.prepare("UPDATE engagement SET pack=? WHERE id=? AND pack=0").bind(ent?.pack ?? e.cap, eid)] : []),
       ...(ent ? [env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(eid, ent.id)] : []),
     ]);
-    return json({ ok: true, published: true });
+    const paid = !!(ent || free), startMs = roundMs(e.start_round);
+    if (!paid) await sendMail(env as PayEnv, env.DB, cEmail, `Your engagement ${eid} is published: pay before ${istTime(startMs)}`,
+      `Your engagement ${eid} is published and open to your participants.\n\nShare this link with them:\n${shareUrl}\n\nIMPORTANT: payment is due before the start (${istTime(startMs)}). If it is not paid by then, the engagement will not begin and everyone you invited will be left waiting. You can pay any time before the start, and it takes about 2 minutes:\n${payUrl}\n\nYou can also open the big screen for the room: ${origin}/big.html?e=${eid}`, now);
+    return json({ ok: true, published: true, paid, startMs, payUrl, shareUrl, confirmed: { email: cEmail, phone: cPhone.slice(-10) } });
   }
   if (action === "claims" && req.method === "GET") {
     if (!can(a, e)) return deny(a);
@@ -560,7 +595,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   }
   if (action === "settings" && (req.method === "PATCH" || req.method === "POST")) { // only before the first number can possibly have been called
     if (!can(a, e)) return deny(a);
-    if (roundMs(e.start_round) <= now) return json({ error: "The engagement has already started, so it can no longer be changed." }, 409);
+    if (!unpaid && roundMs(e.start_round) <= now) return json({ error: "The engagement has already started, so it can no longer be changed." }, 409);
     const b = await body(req);
     if (!b) return json({ error: "Check the details." }, 400);
     const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds }, cfgOf(e));
@@ -587,7 +622,7 @@ export async function purgeOld(env: Env, now: number): Promise<number> {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(id),
       env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
-      env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
+      env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`), env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
     ]);
     try { await env.CONTROL_R2?.delete(controlKey(id)); } catch { /* the object expires with its engagement anyway */ }
     n++;

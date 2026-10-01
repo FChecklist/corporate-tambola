@@ -22,6 +22,7 @@ export interface PhoneDeps {
 export type Phase = "boot" | "missing" | "join" | "play" | "ended";
 export interface RuntimeView {
   phase: Phase; error: string | null; pid: string | null; ticket: Ticket | null; log: number[]; nowRound: number | null;
+  locked: boolean;
   startRound: number; callSeconds: number; mode: "live" | "hold" | "blind" | "none"; paused: boolean; stopped: boolean;
   claimed: PatternKey[]; unsent: number; results: { pattern: PatternKey | "lucky"; ordinal: number; idx: number; count: number; winners?: string[]; round?: number }[]; pendingChecks: number; discarded: number;
   nextCallInSec: number | null;
@@ -51,6 +52,8 @@ export class PhoneRuntime {
   callSeconds = 0;
   trackClaims = true;
   controlUrl: string | null = null;
+  /** The engagement was not paid for by its start time: nothing is shown until it is. */
+  locked = false;
   store: RoundStore;
   tracker: ControlTracker | null = null;
   results: RuntimeView["results"] = [];
@@ -91,7 +94,7 @@ export class PhoneRuntime {
   async boot(): Promise<void> {
     try {
       const info = await this.deps.api("GET", `/api/z/${this.eid}/info`);
-      this.startRound = info.startRound; this.callSeconds = info.callSeconds; this.trackClaims = info.trackClaims !== false; this.controlUrl = typeof info.controlUrl === "string" ? info.controlUrl : null; this.readCfg(info);
+      this.startRound = info.startRound; this.callSeconds = info.callSeconds; this.trackClaims = info.trackClaims !== false; this.controlUrl = typeof info.controlUrl === "string" ? info.controlUrl : null; this.locked = !!info.locked; this.readCfg(info);
     } catch (e: any) {
       this.phase = e?.status === 404 ? "missing" : "boot";
       this.error = e?.status === 404 ? "This engagement link is not valid." : "Could not reach the engagement. Check your connection.";
@@ -144,9 +147,11 @@ export class PhoneRuntime {
     this.lastControlPoll = m;
     let body: any = null;
     try { body = this.controlUrl && this.deps.getPublic ? await this.deps.getPublic(this.controlUrl) : await this.deps.api("GET", `/api/z/${this.eid}/control`); } catch (e: any) {
-      if (e?.status === 404) { this.tracker = null; this.controlState = "none"; return; } // no key registered: this engagement cannot be paused
+      if (e?.status === 404) { if (this.locked) { this.locked = false; await this.reloadSchedule(); } this.tracker = null; this.controlState = "none"; return; } // no key registered: this engagement cannot be paused
       this.tracker?.failed(now); return;
     }
+    const wasLocked = this.locked; this.locked = !!body?.locked;
+    if (wasLocked && !this.locked) await this.reloadSchedule(); // paid at last: the start time has moved, read it again
     if (!body?.pubKey) { this.tracker?.failed(now); return; }
     if (!this.tracker) {
       const cfg: ControlConfig = { pubKey: body.pubKey, maxPauseRounds: body.maxPauseRounds, leadRounds: body.leadRounds };
@@ -157,7 +162,11 @@ export class PhoneRuntime {
     if (await this.tracker.ingest(now, body)) this.controlState = "known";
   }
 
+  private async reloadSchedule() {
+    try { const info = await this.deps.api("GET", `/api/z/${this.eid}/info`); this.startRound = info.startRound; this.callSeconds = info.callSeconds; this.readCfg(info); } catch { /* the next poll tries again */ }
+  }
   private modeAt(now: number): RuntimeView["mode"] {
+    if (this.locked) return "hold";
     if (this.controlState === "none") return "none";
     if (this.controlState === "unknown") return this.unknownSince !== null && now - this.unknownSince >= SAFETY_STANDARD.giveUpRounds ? "blind" : "hold";
     return this.tracker!.mode(now);
@@ -304,6 +313,7 @@ export class PhoneRuntime {
     const claimedNow = keysInPlay(this.cfg.rewards).filter((k) => this.claimedAll.has(`${this.cur}:${k}`));
     return {
       phase: this.phase, error: this.error, pid: this.pid, ticket: this.ticket, log: this.logCache, nowRound: now, startRound: this.startRound, callSeconds: this.callSeconds,
+      locked: this.locked,
       mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: !!st && now !== null && pausedAt(st, now), stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
       claimed: claimedNow, unsent: this.unsent, results: this.allResults.filter((x) => (x.round ?? 1) === this.cur), pendingChecks: this.store.pending(), discarded: this.store.discarded,
       nextCallInSec: nextRound !== null && now !== null ? secsTo(nextRound) : null,

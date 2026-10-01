@@ -23,7 +23,7 @@
       const x = TB.price(n, S.cur);
       return `<div class="pack"><span class="up">Up to</span><span class="n">${nf(n)} participants</span><span class="tot">${TB.money(x.total, S.cur)}</span><div class="brk">${breakdown(n, S.cur)}</div>${`<button type="button" class="btn ${n === S.pack ? "" : "line"}" data-buy="${n}" aria-label="Create an engagement for up to ${nf(n)} participants">Create Engagement ${ic("arrow")}</button>`}</div>`;
     }).join("");
-    if (FREE.on) { $("priceNote").textContent = "You build your engagement first, at no cost. Payment is asked only when you publish it. " + (S.cur === "INR" ? "Prices in Indian rupees include 18% GST." : "Prices in US dollars. No tax added."); return; }
+    if (FREE.on) { $("priceNote").textContent = "You build and publish your engagement for free. You pay before it starts: if it is not paid by the start time, it will not begin. " + (S.cur === "INR" ? "Prices in Indian rupees include 18% GST." : "Prices in US dollars. No tax added."); return; }
     $("priceNote").textContent = S.cur === "INR" ? "Prices in Indian rupees include 18% GST. Billed in India." : "Prices in US dollars. No tax added. Billed outside India.";
   }
   document.addEventListener("click", (e) => {
@@ -94,7 +94,7 @@
   TB.api("GET", "/api/payments/status").then((s) => { PAYMODE = s.mode; }).catch(() => {});
   // ---------- free launch: create an organizer account with a work email; the key arrives only through the e-mailed code ----------
   function openFree() {
-    TB.sheet(`${xbtn}<div class="eyebrow">Build it first. Pay when you publish.</div><h2>Create your engagement</h2>
+    TB.sheet(`${xbtn}<div class="eyebrow">Build it and publish it free. Pay before it starts.</div><h2>Create your engagement</h2>
       <ul class="facts"><li>${ic("ticket")}Every participant gets their own ticket on their phone</li><li>${ic("phone")}Mobile number only. No SMS, no app, no password for participants</li><li>${ic("gift")}Participants never pay. You give the rewards</li><li>${ic("users")}Free AI assistant for you, the organizer</li></ul>
       <form id="frForm" novalidate><label class="lb" for="fMail">Your work email</label><input class="inp" id="fMail" type="email" autocomplete="email" placeholder="you@company.com"><div id="fErr"></div>
       <button class="btn block" style="margin-top:14px" type="submit" id="frGo">Create my engagement ${ic("arrow")}</button></form>

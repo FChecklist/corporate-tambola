@@ -128,6 +128,17 @@
     }
     return { tickets, rewards, breaks, rounds: Number(document.getElementById("rnd").value) };
   }
+  /** Published but not paid: the one thing that matters now. The organizer sent the link to everyone, so the engagement must start. */
+  function payDueCard() {
+    if (!S.unpaid || S.draft || !S.info) return "";
+    const at = S.info.startMs, left = Math.round((at - Date.now()) / 1000);
+    const when = new Date(at).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+    const waiting = S.people.length;
+    const fmtLeft = (s) => (s >= 86400 ? Math.floor(s / 86400) + " d " + Math.floor((s % 86400) / 3600) + " h" : s >= 3600 ? Math.floor(s / 3600) + " h " + Math.floor((s % 3600) / 60) + " min" : Math.max(0, Math.floor(s / 60)) + " min");
+    const people = waiting ? `<b>${waiting} ${waiting === 1 ? "person has" : "people have"} already joined your link.</b> ` : "Your link is live. ";
+    if (S.locked || left <= 0) return `<div class="zcard" style="border:3px solid #b3261e;background:#fff4f2"><h2 style="color:#b3261e;margin:0 0 6px">Your engagement could not begin: payment is due</h2><p style="margin:0 0 10px">${people}They are waiting, and nothing will start until you pay. <b>Pay now and it begins in about 3 minutes, for everyone already waiting.</b></p><a class="zbtn" href="/pay.html?e=${encodeURIComponent(eid)}" style="text-decoration:none;display:inline-block;background:#b3261e">Pay now and start</a></div>`;
+    return `<div class="zcard" style="border:3px solid #c9a24a;background:#fffaf0"><h2 style="margin:0 0 6px">Last step: pay before the start</h2><p style="margin:0 0 6px">${people}Your engagement starts <b>${esc(when)}</b> (in ${fmtLeft(left)}).</p><p style="margin:0 0 10px"><b>If payment is not made before then, the engagement will not begin</b> and everyone you invited will be left waiting. It takes about 2 minutes.</p><a class="zbtn" href="/pay.html?e=${encodeURIComponent(eid)}" style="text-decoration:none;display:inline-block">Pay now</a></div>`;
+  }
   function engView() {
     const link = location.origin + (BASE ? "" : "") + "/z.html?e=" + encodeURIComponent(eid) + (BASE ? "&api=" + encodeURIComponent(BASE) : "");
     const bad = S.checked ? S.checked.bad.length : 0;
@@ -135,7 +146,8 @@
     const paused = c && c.pausedNow;
     return `<div class="zhead"><b>Engagement ${esc(eid)}</b><button class="zsnd" id="back">All engagements</button></div>
       ${S.note ? `<div class="zbanner info">${esc(S.note)}</div>` : ""}
-      ${S.draft ? `<div class="zcard" style="border:2px solid #c9a24a"><h2>Your engagement is a draft</h2><p class="zsmall" style="margin-top:0">Set it up first (by hand or with your AI), and check it here as it takes shape. Participants cannot see or join a draft. When you are happy with it, publish it: you confirm your details, then pay.</p>${S.pubOpen ? `<label for="pubEmail">Your email (for the invoice)</label><input id="pubEmail" type="email" value="${esc(S.contact.email)}" autocomplete="email"><label for="pubPhone">Your mobile number</label><input id="pubPhone" type="tel" value="${esc(S.contact.phone)}" autocomplete="tel" placeholder="98765 43210"><button class="zbtn" id="pubgo">Confirm and continue to payment</button><button class="zbtn s alt" id="pubcancel">Back</button>` : `<button class="zbtn" id="publishopen">Publish engagement</button>`}${S.pubNote ? `<p class="zsmall"><b>${esc(S.pubNote)}</b></p>` : ""}</div>` : `<div class="zcard"><h2>Share with participants</h2><div class="zlink">${esc(link)}</div><button class="zbtn s alt" id="copy">Copy link</button><a class="zbtn s alt" href="/big.html?e=${encodeURIComponent(eid)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block">Open the big screen</a><p class="zsmall">The big screen shows the numbers to a whole room on a projector or TV. Open it on the laptop that is connected to the screen.</p></div>`}
+      ${payDueCard()}
+      ${S.draft ? `<div class="zcard" style="border:2px solid #c9a24a"><h2>Your engagement is a draft</h2><p class="zsmall" style="margin-top:0">Set it up first (by hand or with your AI) and watch it take shape here. Participants cannot see or join a draft. When you are happy with it, publish it: <b>publishing is free</b>. You confirm your details, get your link, and send it to everyone. You pay before the start time, and it begins the moment you have.</p>${S.pubOpen ? `<label for="pubEmail">Your email (for the invoice)</label><input id="pubEmail" type="email" value="${esc(S.contact.email)}" autocomplete="email"><label for="pubPhone">Your mobile number</label><input id="pubPhone" type="tel" value="${esc(S.contact.phone)}" autocomplete="tel" placeholder="98765 43210"><button class="zbtn" id="pubgo">Confirm and publish</button><button class="zbtn s alt" id="pubcancel">Back</button>` : `<button class="zbtn" id="publishopen">Publish my engagement, free</button>`}${S.pubNote ? `<p class="zsmall"><b>${esc(S.pubNote)}</b></p>` : ""}</div>` : `<div class="zcard"><h2>Share with participants</h2><div class="zlink">${esc(link)}</div><button class="zbtn s alt" id="copy">Copy link</button><a class="zbtn s alt" href="/big.html?e=${encodeURIComponent(eid)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block">Open the big screen</a><p class="zsmall">The big screen shows the numbers to a whole room on a projector or TV. Open it on the laptop that is connected to the screen.</p></div>`}
       <div class="zgrid"><div class="zcard"><h2>Participants</h2><div class="zstat">${S.people.length}</div></div><div class="zcard"><h2>Numbers called${S.cfg.rounds > 1 ? " · round " + S.round + " of " + S.cfg.rounds : ""}</h2><div class="zstat">${S.log.length} / 90</div></div></div>
       ${(S.reqs || []).length ? `<div class="zcard"><h2>Your AI assistant is asking</h2>${S.reqs.map((r) => `<div class="zrow"><span>${esc(r.action)}${r.note ? " · " + esc(r.note) : ""}</span></div>`).join("")}<button class="zbtn s" id="reqok">Approve (${esc(S.reqs[0].action)})</button><button class="zbtn s alt" id="reqno">Dismiss</button></div>` : ""}
       <div class="zcard zform"><h2>Invite list</h2>
@@ -161,7 +173,7 @@
 
   async function refreshEng() {
     try {
-      S.info = await call("GET", `/api/z/${eid}/info`); S.draft = !!S.info.draft;
+      S.info = await call("GET", `/api/z/${eid}/info`); S.draft = !!S.info.draft; S.unpaid = !!S.info.unpaid; S.locked = !!S.info.locked;
       let pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed;
       while (S.people.length < pr.total) { const more = await call("GET", `/api/z/${eid}/participants?offset=${S.people.length}`); if (!more.participants.length) break; S.people.push(...more.participants); } // a long list arrives in pages
       S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, rounds: pr.rounds || 1 };
@@ -220,10 +232,9 @@
     if ($("pubPhone")) $("pubPhone").oninput = (e) => { S.contact.phone = e.target.value; };
     if ($("pubgo")) $("pubgo").onclick = async () => {
       $("pubgo").disabled = true;
-      try { await call("POST", `/api/z/${eid}/publish`, { email: S.contact.email.trim(), phone: S.contact.phone }); ss.set("ctz-email", S.contact.email.trim()); ss.set("ctz-phone", S.contact.phone); S.pubOpen = false; S.note = "Published. Share the link with your participants."; }
+      try { await call("POST", `/api/z/${eid}/publish`, { email: S.contact.email.trim(), phone: S.contact.phone }); ss.set("ctz-email", S.contact.email.trim()); ss.set("ctz-phone", S.contact.phone); S.pubOpen = false; S.note = "Published. Send the link below to your participants. Please pay before the start time, or the engagement will not begin."; }
       catch (e) {
         ss.set("ctz-email", S.contact.email.trim()); ss.set("ctz-phone", S.contact.phone);
-        if (e.status === 402 && e.payments && e.payments !== "off") { location.href = "/pay.html?e=" + encodeURIComponent(eid); return; } // details confirmed: the payment page opens
         S.pubNote = e.message + (e.needPack ? " (a pack for up to " + e.needPack + " participants)" : "");
       }
       refreshEng();

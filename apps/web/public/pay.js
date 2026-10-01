@@ -22,14 +22,14 @@
     if (!secret) return `${head}<div class="zcard"><h2>Please sign in first</h2><p class="zsmall" style="margin-top:0">Open your console from the home page, or sign in with your work email: we send you a 6-digit code.</p><a class="zbtn" href="/#login" id="goLogin" style="text-decoration:none;display:inline-block">Sign in with email</a></div>`;
     if (S.done) {
       const d = S.done;
-      return `${head}<div class="zcard" style="border:2px solid #2e7d4f"><h2>Payment received. Your engagement is published.</h2>
-        <p style="margin:0 0 10px">Thank you. Your engagement for up to <b>${nf(d.pack)}</b> participants is now open. Share the link with your participants from your console.</p>
+      return `${head}<div class="zcard" style="border:2px solid #2e7d4f"><h2>Payment received. Your engagement will begin on time.</h2>
+        <p style="margin:0 0 10px">Thank you. Your engagement for up to <b>${nf(d.pack)}</b> participants is confirmed.${d.restartedAtMs ? ` It begins at <b>${esc(new Date(d.restartedAtMs).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }))}</b>, for everyone already waiting.` : " Share the link with your participants from your console if you have not already."}</p>
         ${d.invoiceUrl ? `<p class="zsmall"><a href="${esc(d.invoiceUrl)}" target="_blank" rel="noopener">View your invoice ${esc(d.invoiceNumber || "")}</a>. We also emailed it to you.</p>` : ""}
         <a class="zbtn" href="/zc.html?e=${encodeURIComponent(d.eid || eid)}" style="text-decoration:none;display:inline-block">Open my engagement</a></div>`;
     }
     if (!S.info) return `${head}<p class="zmsg">${S.err ? esc(S.err) : "Loading…"}</p>`;
     const pack = packFor(S.info.cap);
-    if (!S.info.draft) return `${head}<div class="zcard"><h2>This engagement is already published</h2><a class="zbtn" href="/zc.html?e=${encodeURIComponent(eid)}" style="text-decoration:none;display:inline-block">Open my engagement</a></div>`;
+    if (!S.info.draft && !S.info.unpaid) return `${head}<div class="zcard"><h2>This engagement is already paid and published</h2><a class="zbtn" href="/zc.html?e=${encodeURIComponent(eid)}" style="text-decoration:none;display:inline-block">Open my engagement</a></div>`;
     if (!pack) return `${head}<div class="zcard"><h2>A custom arrangement is needed</h2><p class="zsmall" style="margin-top:0">An engagement for more than 10,000 participants is arranged with us directly. Please write to us from the contact page.</p></div>`;
     const x = TB.price(pack, S.cur);
     const sum = S.cur === "INR"
@@ -41,7 +41,7 @@
       <div class="zcard"><h2>Your order</h2>
         <div class="zrow"><span>Engagement</span><em>${esc(eid)}</em></div>
         <div class="zrow"><span>Participants</span><em>Up to ${nf(pack)}</em></div>${sum}
-        <p class="zsmall">Every participant gets their own ticket on their phone. Participants never pay: you give the rewards. Unused places are not refunded.</p></div>
+        <p class="zsmall">Every participant gets their own ticket on their phone. Participants never pay: you give the rewards. Unused places are not refunded.</p>${S.info.startMs ? `<p class="zsmall"><b>Pay before ${esc(new Date(S.info.startMs).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))}.</b> If it is not paid by then, the engagement will not begin.${S.info.locked ? " It is waiting for your payment now: pay and it starts in about 3 minutes." : ""}</p>` : ""}</div>
       <div class="zcard zform"><h2>Billing details</h2>
         <label for="org">Organization name</label><input id="org" autocomplete="organization" value="${esc(S.org || "")}" placeholder="e.g. Acme Industries">
         <label for="cty">Country of your organization</label><select id="cty">${TB.countryOpts(S.country)}</select>

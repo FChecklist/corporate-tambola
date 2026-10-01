@@ -92,10 +92,18 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
     ]);
   }
   await db.prepare("INSERT OR IGNORE INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,?,NULL,?)").bind("ent_" + p.id, org, p.pack, p.id, now).run();
-  let published: string | null = null;
+  let published: string | null = null, restart: number | null = null;
   if (meta.eid) { // publish the draft this payment was made for (only if it is still an unpublished draft of the same organizer)
     const up = await db.prepare("UPDATE engagement SET pack=? WHERE id=? AND org=? AND pack=0").bind(p.pack, meta.eid, org).run();
-    if ((up.meta?.changes ?? 0) > 0) { await db.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(meta.eid, "ent_" + p.id).run(); published = meta.eid; }
+    if ((up.meta?.changes ?? 0) > 0) {
+      await db.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(meta.eid, "ent_" + p.id).run(); published = meta.eid;
+      await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`pub/${meta.eid}`, String(now)).run(); // paying also publishes
+      const st = await db.prepare("SELECT start_round FROM engagement WHERE id=?").bind(meta.eid).first<{ start_round: number }>();
+      if (st && (1692803367 + (st.start_round - 1) * 3) * 1000 <= now) { // it was held because it was not paid at its start time: it now starts in about 3 minutes, for everyone already waiting
+        restart = Math.floor((now / 1000 - 1692803367) / 3) + 1 + 60;
+        await db.prepare("UPDATE engagement SET start_round=? WHERE id=?").bind(restart, meta.eid).run();
+      }
+    }
   }
   // invoice: brand-wise numbering per financial year; the legal entity is always the supplier; missing supplier details => DRAFT, never a fake valid invoice
   const co = company(env);
@@ -115,7 +123,7 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
   ];
   await sendMail(env, db, p.email, `${brand.name}: payment received, invoice ${number}`, lines.join("\n\n"), now);
   await recordCommission(env, p, tax.taxable, now); // refer & earn: a commission row for a referred, PAID purchase only
-  const result = { ok: true, orderId: p.id, pack: p.pack, total: p.amount, tax: p.tax, currency: p.currency, invoiceUrl: `/api/invoice/${token}`, invoiceNumber: number, organizerKey, newOrganizer: !!organizerKey, published: !!published, eid: published };
+  const result = { ok: true, orderId: p.id, pack: p.pack, total: p.amount, tax: p.tax, currency: p.currency, invoiceUrl: `/api/invoice/${token}`, invoiceNumber: number, organizerKey, newOrganizer: !!organizerKey, published: !!published, eid: published, restartedAtMs: restart ? (1692803367 + (restart - 1) * 3) * 1000 : null };
   await db.prepare("UPDATE payment SET status='paid', paid_ms=?, org=?, result=? WHERE id=?").bind(now, org, JSON.stringify(result), p.id).run();
   return { result };
 }

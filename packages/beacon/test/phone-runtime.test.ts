@@ -37,10 +37,10 @@ const beaconFetcher = (opt: { blocked?: () => boolean } = {}): Fetcher => async 
   if (r > nowR) return { ok: false, status: 404, json: async () => ({}) };
   return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" } as Round) };
 };
-const mkPhone = (n: number, o: { down?: () => boolean; blocked?: () => boolean } = {}) => {
+const mkPhone = (n: number, o: { down?: () => boolean; blocked?: () => boolean; locked?: () => boolean } = {}) => {
   const mem = new Map<string, string>();
   const rt = new PhoneRuntime(EID, {
-    api: api(o.down), mono: () => t, store: { get: (k) => mem.get(k) ?? null, set: (k, v) => void mem.set(k, v) },
+    api: ((base) => (async (method: string, path: string, body?: unknown) => (o.locked?.() && /\/control$/.test(path) ? { locked: true } : base(method, path, body))) as PhoneDeps["api"])(api(o.down)), mono: () => t, store: { get: (k) => mem.get(k) ?? null, set: (k, v) => void mem.set(k, v) },
     beacon: { fetcher: beaconFetcher({ blocked: o.blocked }), mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 },
     verify: (x) => x.signature === "aa" && x.randomness === rnd(x.round),
   });
@@ -270,6 +270,21 @@ describe("pause, resume and stop", () => {
     for (let i = 0; i < 200; i++) await step([a]);
     expect(a.rt.view().mode).toBe("none");
     expect(a.rt.view().log).toEqual(reference());
+  });
+});
+
+describe("an engagement that was not paid for by its start", () => {
+  test("the phone holds and shows nothing while it is locked, says so, and carries on once it is unlocked", async () => {
+    let locked = true;
+    const a = mkPhone(7, { locked: () => locked });
+    await a.rt.boot(); await a.rt.join(a.phone, "Asha");
+    for (let i = 0; i < 30; i++) await step([a]); // well past the first call
+    let v = a.rt.view();
+    expect(v.locked).toBe(true); expect(v.mode).toBe("hold"); expect(v.log).toEqual([]); // not one number is revealed
+    locked = false;
+    for (let i = 0; i < 12; i++) await step([a]);
+    v = a.rt.view();
+    expect(v.locked).toBe(false); expect(v.log.length).toBeGreaterThan(0);
   });
 });
 
