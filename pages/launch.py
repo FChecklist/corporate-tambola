@@ -10,6 +10,7 @@ import json, os, re, secrets, subprocess, sys, time, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
 ACC = os.environ["CLOUDFLARE_ACCOUNT_ID"]; TOK = os.environ["CLOUDFLARE_API_TOKEN"]; D1TOK = os.environ.get("CLOUDFLARE_D1_TOKEN", TOK)
+os.environ["PATH"] = os.path.join(os.path.expanduser("~"), "AppData", "Roaming", "npm", "node_modules", "bun", "node_modules", "@oven", "bun-windows-x64-baseline", "bin") + os.pathsep + os.environ["PATH"]  # bun/bunx live here on this laptop
 PROJECT = "corporate-tambola"; DBNAME = "corporate-tambola"
 def api(method, path, body=None, token=TOK):
     req = urllib.request.Request("https://api.cloudflare.com/client/v4" + path, method=method, headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"}, data=json.dumps(body).encode() if body is not None else None)
@@ -65,8 +66,8 @@ print("project settings and secrets set (payments stay OFF until Razorpay keys a
 # 5. deploy
 new_toml = re.sub(r'database_id = "[^"]*"', f'database_id = "{dbid}"', toml)
 open(os.path.join(HERE, "wrangler.toml"), "w", encoding="utf-8", newline="").write(new_toml)
-subprocess.run(["bun", "run", "pages/build.mjs"], cwd=ROOT, check=True)
-r = subprocess.run("bunx wrangler@3 pages deploy public --project-name %s --branch main --commit-dirty=true" % PROJECT, cwd=HERE, shell=True)
+subprocess.run("bun run pages/build.mjs", cwd=ROOT, shell=True, check=True)
+r = subprocess.run("bun x wrangler@3 pages deploy public --project-name %s --branch main --commit-dirty=true" % PROJECT, cwd=HERE, shell=True)
 need(r.returncode == 0, "deploy failed")
 
 # 6. smoke test of the live site
