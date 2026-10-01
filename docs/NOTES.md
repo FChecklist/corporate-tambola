@@ -115,3 +115,32 @@ Replace fixed keys with prize lines: `{ id, pattern, scope, ordinal, text, share
 
 ### 9.4 Knock-on effects (all captured in IMPLEMENTATION.md §10)
 Data model (tickets become rows, not one JSON), ticket UI (A/B switch or stacked, 360 px), claim button per ticket plus a "Two-ticket" claim, report columns (ticket A/B, house number), bogey rules (a wrong claim on either ticket counts as one bogey), commentary/results text ("2nd Full House"), prize setup UI (house counters/steppers, not typing), pricing, and tests.
+
+
+## 10. Change request CR-02 (2026-10-01, owner decisions)
+
+### 10.1 Decisions recorded
+| Item | Decision |
+|---|---|
+| Brand-break media | A **link**: a video stored with the company (company-hosted URL or file we store) **and/or a YouTube video** shown in the web page. **The company decides** length/content. |
+| Number of breaks | **Maximum 3 per ticket** (read as: max 3 in the whole engagement), at **nearly equal intervals**. The software proposes positions (roughly thirds of the expected calls); organizer may adjust. |
+| Video delivery | When the participant's page opens, the video is **downloaded in low quality to the participant's own browser** ahead of time. |
+| AI voice | Speaks **only the number, no one-liner**, twice: "Next number is XX" then "Number XX". Commentary one-liners are removed from the AI voice. |
+| Pre-downloaded audio | Owner asks whether all number audio can be downloaded once to the phone/laptop and kept, with only a small ping per number. **Yes. See IMPLEMENTATION.md section 11.** |
+| Principle | **Minimum server, maximum participant device RAM/storage.** |
+| Privacy | **No personal information of other participants is ever sent to a participant.** |
+| Wording | Game -> **Engagement**; Player -> **Participant** (see `GLOSSARY.md`). |
+| Handout open items (US$ prices, auto-end, support email, domain) | Wait until go-live. |
+
+### 10.2 Items not answered (I am assuming the following; correct me)
+- **Gap 1 (cut is honour-system):** assumed **accepted**. Cuts stay on the phone; the server verifies the pattern numbers were actually called and the timing. No money is involved.
+- **Gap 2 (claim in flight):** assumed rule: the server decides by **which call was current when the claim reached the server**. A claim arriving before the next call is processed counts for the previous number; one arriving after is late.
+
+### 10.3 Consequences and things to watch
+1. **Commentary language setting changes meaning.** With numbers-only audio, the Hinglish/Tamlish/etc. one-liners disappear. The setting becomes **voice language/accent** (e.g. English-India, Hindi, International English), or is removed. Question: which voice languages for v1?
+2. **YouTube cannot be pre-downloaded.** Its terms and player only allow streaming an embed; a page cannot cache it. So company-hosted files are pre-downloaded (low quality); YouTube links are loaded at break time (we can only preload the player, not the video). The organizer is told this at setup. Fallback if a video is not ready: show the title card for the break length and continue.
+3. **"Low quality" needs a transcoding step.** Cloudflare's free tier has no video transcoding (Stream is paid). Free options: organizer uploads an already-small file (we show a recommended spec, e.g. 360p H.264/AAC MP4), or the organizer's browser transcodes before upload (heavy on weak laptops). Default: recommended-spec upload plus a warning when the file is larger than the guide.
+4. **Per-participant data use.** A 3-minute 360p clip is roughly 10-15 MB (my estimate). Three breaks could be ~40 MB per participant, ~40 GB for 1,000 participants. R2 egress is free per the handout, but participants' mobile data matters. Mitigations: honour Data Saver, show progress, ask before big downloads on mobile data, allow skipping prefetch.
+5. **Privacy change to results.** The prototype shows winners' names to everyone. To satisfy "no personal information of others", participants see only **ticket ID and house number** in results; names and numbers appear only in Organizer/Host consoles and the report. Team Leads see only their own invitees.
+6. **Pack unit renamed** ("Up to N participants") because "engagement" now means the event.
+7. Rulebook v1.4 sections 5 (commentary), 10 (breaks) and 11 (report names), plus every "game/player", need a v1.5; the handout needs a v2.1. Not done; nothing in Drive was edited.

@@ -159,3 +159,64 @@ Read `NOTES.md` §9 for the owner request and open questions Q1–Q6. Defaults u
 **Tests to add:** 2-ticket generation validity (both valid, A≠B); Full Two-Ticket House valid only with all 30 numbers; ordinal gating (3rd cannot be awarded before 2nd); same-window sharing per line; one player winning ticket A full house and ticket B full house; Full House and Two-Ticket House in the same window; bogey counting across tickets; prize-cap enforcement; mode locked after Start; single-ticket games unaffected (regression); report columns.
 
 **Phase impact:** adds work in phases 1 (shared/engine), 3 (setup UI), 4 (ticket UI), 5 (claims). Estimate +1 week. The prototype does not implement any of this, so its screens must be extended first (a clickable update to `corporate-tambola-complete.html` or direct build, your call).
+
+
+## 11. CR-02 — pre-downloaded audio, brand-break links, privacy, wording (added 2026-10-01)
+
+Terminology: from here, **engagement** = the event and **participant** = the person (see `GLOSSARY.md`). Earlier sections still say game/player.
+
+### 11.1 Yes: all number audio can live on the participant's device
+**Verdict: possible with standard web technology, no native app needed.** The caveat is a one-time tap on phones (below).
+
+**How it works**
+1. Audio is pre-generated **once**, offline (never at run time): 90 clips per voice language, each the full phrase "Next number is 47. Number 47." (about 4 s, ~16-25 KB at a low Opus/AAC bitrate, so about 1.5-2.5 MB per language). A smaller alternative: 90 number clips plus 2 shared phrase clips ("Next number is", "Number") spliced together, slightly less natural. Recommendation: full phrases.
+2. They are **static files** on the same host as the site (static assets: unlimited free requests per the handout), with versioned filenames and `Cache-Control: immutable`.
+3. A **Service Worker** installs the app shell (HTML/JS/CSS, ticket UI, rules text) and **precaches the audio pack** for the engagement's voice language when the participant first opens the link ("Getting ready 80%"). Cache Storage/IndexedDB keeps it and it is reused for later engagements (same version = no re-download).
+4. Before the engagement the page **decodes the clips into memory** (Web Audio `decodeAudioData`) so playback is instant and uses the participant's RAM, not our server.
+5. At each call the server sends one tiny WebSocket message, e.g. `{"c":23,"n":47}` (~25 bytes). The phone plays clip 47, shows the number and runs the countdown. No audio, text or commentary crosses the network during the engagement.
+6. Fallbacks: missing clip -> browser `speechSynthesis` ("Next number is 47. Number 47."); audio blocked -> the number is still shown visually.
+
+**Limits (honest)**
+- **Autoplay rules (iOS/Safari and Chrome):** audio starts only after a tap. The existing "Join audio" button is that tap; afterwards scheduled playback works. A page reload needs one tap again.
+- **Browsers may evict stored files** (Safari clears script-written storage after about 7 days without a visit; any browser may under storage pressure). So the app **re-checks on every open** and re-downloads if missing. We can promise "stays unless the browser removes it", not "stays forever".
+- **Private/incognito mode** may not persist; the engagement still works and the pack downloads again each time.
+- **Format support:** Opus is fine on current Chrome/Firefox/Edge; Safari depends on version/container. Ship AAC (m4a) as the safe default and test Opus. **Measure on real devices in a short spike before choosing.**
+- All sizes above are my estimates, not measurements.
+
+**Server-cost effect:** per participant one cached download (~2 MB) plus one 25-byte push per number. This strengthens the near-zero-cost design.
+
+### 11.2 Design rule: work lives on the participant's device
+Everything except the draw, the claim check and the roster runs on the device: UI, ticket(s) (stored locally after join), cutting, audio playback, countdown, brand-break playback, strings, rule pages. The server (engagement room) only keeps the secret draw, broadcasts `{callNo, number}` plus pause/result/break/ended signals, checks claims and enforces entry rules.
+
+### 11.3 Voice calling spec (replaces handout section 5 commentary)
+- Each call plays "Next number is XX", a short gap, then "Number XX" (same voice; the number as words, e.g. "forty-seven"). An optional later setting could also say digits ("four, seven"); not in v1 unless requested.
+- Spoken time is ~4-5 s, inside the 10 s AI gap and the 5 s minimum host gap. In host-draw mode the next draw is accepted only after max(5 s, clip length).
+- Remove `HOOK`, `HOOK_INTL`, `LANGS` and `line()` from `shared/commentary.ts`; add `audio.ts` (clip manifest per voice language plus a version hash).
+- "Voice language" replaces "commentary language" (open question: which languages in v1?).
+- Host live speaking (Realtime) is unchanged.
+- Producing the clips locally: a free offline neural text-to-speech tool (e.g. Piper) or Windows built-in voices are possible; check the licence of whichever voice we ship, and consider a paid voice artist for quality later.
+
+### 11.4 Brand breaks (replaces handout brand-break wording and rulebook section 10 limits)
+- **Source:** (a) a company-hosted video URL or a file stored for the company, and/or (b) a YouTube link (embed). Slides and speech types stay.
+- **Count:** max **3** per engagement. Setup proposes near-equal positions: 3 breaks -> after calls ~22, 45, 67; 2 -> 30 and 60; 1 -> 45. The organizer can nudge them, spacing stays near-equal, and never during a claim.
+- **Length:** the company decides. Technical guard only: show the duration, warn above a recommended size, and a sanity ceiling in config (proposal: 50 MB per hosted file; to confirm).
+- **Prefetch:** when the engagement page opens, the device downloads the low-quality hosted videos into Cache Storage with progress shown. Respect `navigator.connection.saveData`, check `navigator.storage.estimate()`, ask before large downloads on mobile data.
+- **Playback:** from the local cache (instant, no server load). If not cached: stream; if that fails: show a title card for the break length.
+- **YouTube:** embed only, cannot be cached; load the iframe (not the video) a few calls early. The organizer sees a note about this.
+- **Low quality:** recommended-spec upload (e.g. 360p H.264 + AAC MP4, ~600 kbps video) with an automatic size/bitrate check. Optional browser-side transcode later. Server-side transcoding is a paid service and out of scope for the free-tier plan.
+- Data: `brand_breaks(id, after_call, kind 'file'|'youtube'|'slides'|'speech', title, seconds, media_url, size_bytes, low_q_url NULL, done)`.
+
+### 11.5 Privacy design rule ("we don't transmit any personal information of others to any user")
+- Broadcasts to participants contain only call numbers, pause/result/break signals and **ticket IDs plus house numbers** for results. **No names, mobile numbers, departments, inviter names or photos.**
+- A participant's own screen shows only their own name and ticket. A pass screen shows nothing about the sender beyond "your organizer" unless the owner approves otherwise.
+- A Team Lead sees only their own invitees. Host/Organizer consoles (role-based) see the roster. The report goes only to the Organizer.
+- Test: record every message sent to a participant socket across a full engagement and assert none contains any other participant's name or number.
+
+### 11.6 Rename work (apply with CR-01)
+Code identifiers use `engagement`/`participant` from the start; URLs `/e/CODE` and `/p/CODE` (pass). A `check-wording` script fails the build if the strings file or docs contain "game" or "player" outside an allow-list.
+
+### 11.7 Phase impact
+- Phase 2: service-worker app shell and audio-pack precache scaffold.
+- Phase 4: participant app uses local audio and the locally stored ticket.
+- Phase 6: brand breaks become link/YouTube plus prefetch plus local playback (was R2 upload only).
+- Add a **half-day spike**: measure audio size, format support and latency on a real iPhone, an Android phone and a desktop, plus cache persistence; and a second small spike for video prefetch size and Data Saver handling.
