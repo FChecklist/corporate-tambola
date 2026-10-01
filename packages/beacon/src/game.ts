@@ -1,7 +1,7 @@
 // The phone-side game: everything a phone (or the organizer's console) needs to play and to check an engagement
 // from the public beacon alone. Pure and deterministic: no server, no phone clock.
 import { generateTicket, patternNumbers, ticketNumbers, type PatternId, type Ticket } from "../../shared/src/ticket";
-import { PATTERN_ORDER, breakShift, defaultCfg, keysInPlay, linesFor, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import { INTERMISSION_ROUNDS, PATTERN_ORDER, breakShift, defaultCfg, keysInPlay, linesFor, roundEid, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
 import type { ControlState } from "./control";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
@@ -46,7 +46,7 @@ export function completionIndexKey(tickets: readonly Ticket[], key: PatternKey, 
   return best;
 }
 
-export interface Settled { pattern: PatternKey; ordinal: number; idx: number; pids: string[] }
+export interface Settled { pattern: PatternKey; ordinal: number; idx: number; pids: string[]; round: number }
 
 /**
  * The organizer console's settlement: from the public log, the participant list and the engagement's own settings alone, who completed each house first.
@@ -54,11 +54,12 @@ export interface Settled { pattern: PatternKey; ordinal: number; idx: number; pi
  * Ties share the reward. The 1st reward of a house goes to whoever completes it at the earliest call; the 2nd to whoever completes it at the next
  * distinct call; and so on.
  */
-export function settleAll(engagementId: string, pids: readonly string[], log: readonly number[], cfg: EngagementCfg = defaultCfg()): Settled[] {
+export function settleAll(engagementId: string, pids: readonly string[], log: readonly number[], cfg: EngagementCfg = defaultCfg(), round = 1): Settled[] {
+  const eid = roundEid(engagementId, round);
   const keys = keysInPlay(cfg.rewards);
   const best = new Map<PatternKey, Map<number, string[]>>(keys.map((k) => [k, new Map()]));
   for (const pid of pids) {
-    const tk = ticketsFor(engagementId, pid, cfg.tickets);
+    const tk = ticketsFor(eid, pid, cfg.tickets);
     for (const k of keys) {
       const i = completionIndexKey(tk, k, log);
       if (i < 0) continue;
@@ -68,18 +69,22 @@ export function settleAll(engagementId: string, pids: readonly string[], log: re
   const out: Settled[] = [];
   for (const k of keys) {
     const groups = [...best.get(k)!.entries()].sort((a, b) => a[0] - b[0]);
-    for (const line of linesFor(cfg.rewards, k)) { const g = groups[line.ordinal - 1]; if (g) out.push({ pattern: k, ordinal: line.ordinal, idx: g[0], pids: g[1] }); }
+    for (const line of linesFor(cfg.rewards, k)) { const g = groups[line.ordinal - 1]; if (g) out.push({ pattern: k, ordinal: line.ordinal, idx: g[0], pids: g[1], round }); }
   }
   return out;
 }
 
-export interface Claim { pid: string; pattern: PatternKey; idx: number }
+export interface Claim { pid: string; pattern: PatternKey; idx: number; round?: number }
 /** A claim is accepted only if recomputing it from the public log gives exactly the same call index. */
-export const checkClaims = (engagementId: string, claims: readonly Claim[], log: readonly number[], cfg: EngagementCfg = defaultCfg()) => {
+export const checkClaims = (engagementId: string, claims: readonly Claim[], log: readonly number[] | Readonly<Record<number, readonly number[]>>, cfg: EngagementCfg = defaultCfg()) => {
   const good: Claim[] = []; const bad: Claim[] = []; const cache = new Map<string, Ticket[]>();
   for (const c of claims) {
-    let tk = cache.get(c.pid); if (!tk) { tk = ticketsFor(engagementId, c.pid, cfg.tickets); cache.set(c.pid, tk); }
-    (completionIndexKey(tk, c.pattern, log) === c.idx ? good : bad).push(c);
+    const round = c.round ?? 1;
+    const l = Array.isArray(log) ? (round === 1 ? (log as readonly number[]) : undefined) : (log as Readonly<Record<number, readonly number[]>>)[round];
+    if (!l || round < 1 || round > cfg.rounds) { bad.push(c); continue; }
+    const key = `${round}|${c.pid}`;
+    let tk = cache.get(key); if (!tk) { tk = ticketsFor(roundEid(engagementId, round), c.pid, cfg.tickets); cache.set(key, tk); }
+    (completionIndexKey(tk, c.pattern, l) === c.idx ? good : bad).push(c);
   }
   return { good, bad };
 };
@@ -115,16 +120,36 @@ export function luckyRound(st: ControlState | null, start: number, stride: numbe
 /* ---------------- the schedule, with brand breaks and the organizer's pauses ---------------- */
 
 /**
+ * Round `round` (1..rounds) call k, on the schedule where nothing has been paused yet: round 1 follows the plain schedule plus brand breaks; every later
+ * round starts a fixed intermission after the previous round's last call and has no breaks. Pauses are applied on top (see callRoundR).
+ */
+export function unshiftedRound(start: number, stride: number, breaks: readonly BreakCfg[], round: number, k: number): number {
+  if (round <= 1) return start + k * stride + breakShift(breaks, k);
+  return unshiftedRound(start, stride, breaks, round - 1, NUMBERS - 1) + stride + INTERMISSION_ROUNDS + k * stride;
+}
+/** The beacon round call k of round `round` uses, with the organizer's signed pauses applied. Null when the engagement was stopped before it. */
+export function callRoundR(st: ControlState | null, start: number, stride: number, breaks: readonly BreakCfg[], round: number, k: number): number | null {
+  let a = unshiftedRound(start, stride, breaks, round, k);
+  if (st) { for (const i of st.intervals) if (a >= i.start) a += i.end - i.start; if (st.stopRound !== null && a >= st.stopRound) return null; }
+  return a;
+}
+/**
  * The beacon round call k uses: the plain schedule, pushed later by every brand break that starts at or before it, and then by every pause the
  * organizer signed. Breaks are part of the engagement's public settings, so every phone computes the same schedule.
  */
 export function callRoundFull(st: ControlState | null, start: number, stride: number, breaks: readonly BreakCfg[], k: number): number | null {
-  let a = start + k * stride + breakShift(breaks, k);
-  if (st) { for (const i of st.intervals) if (a >= i.start) a += i.end - i.start; if (st.stopRound !== null && a >= st.stopRound) return null; }
-  return a;
+  return callRoundR(st, start, stride, breaks, 1, k);
 }
 export const scheduleFull = (st: ControlState | null, start: number, stride: number, breaks: readonly BreakCfg[], count = NUMBERS): (number | null)[] =>
   Array.from({ length: count }, (_, k) => callRoundFull(st, start, stride, breaks, k));
+
+/** The intermission before `round` (2..), if it is showing at `nowRound`: it starts right after the previous round's last call and ends when this round's first call is due. */
+export function activeIntermission(st: ControlState | null, start: number, stride: number, breaks: readonly BreakCfg[], round: number, nowRound: number): { endsAtRound: number } | null {
+  if (round < 2) return null;
+  const prevLast = callRoundR(st, start, stride, breaks, round - 1, NUMBERS - 1), first = callRoundR(st, start, stride, breaks, round, 0);
+  if (prevLast === null || first === null) return null;
+  return nowRound > prevLast && nowRound < first ? { endsAtRound: first } : null;
+}
 
 /** The brand break showing at `nowRound`, if any: it starts right after the call it follows and lasts its stated length. */
 export function activeBreak(st: ControlState | null, start: number, stride: number, breaks: readonly BreakCfg[], nowRound: number): { brk: BreakCfg; endsAtRound: number } | null {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { activeBreak, callRoundFull, checkClaims, completionIndexKey, scheduleFull, settleAll, stillToWin, ticketFor, ticketsFor } from "../src/game";
-import { breakShift, defaultCfg, keysInPlay, validateCfg, type BreakCfg, type EngagementCfg } from "../src/config";
+import { breakShift, defaultCfg, keysInPlay, roundEid, validateCfg, type BreakCfg, type EngagementCfg } from "../src/config";
 import { deriveCalls } from "../src";
 import { createHash } from "node:crypto";
 import { ticketNumbers } from "../../shared/src/ticket";
@@ -165,5 +165,19 @@ describe("lucky draw", () => {
   });
   test("winners are not accepted on other kinds of break", () => {
     expect(ok({ breaks: [{ after: 30, seconds: 30, kind: "speech", title: "Hi", winners: 5 }] }).breaks[0]!.winners).toBeUndefined();
+  });
+});
+
+describe("rounds", () => {
+  test("1 to 5, whole numbers only, one by default, kept when other settings change", () => {
+    expect(ok({}).rounds).toBe(1);
+    for (const r of [1, 2, 5]) expect(ok({ rounds: r }).rounds).toBe(r);
+    for (const r of [0, 6, 1.5, "2", null, -1]) bad({ rounds: r });
+    expect(ok({ tickets: 2 }, ok({ rounds: 3 })).rounds).toBe(3);
+  });
+  test("each round has its own id, so its own numbers and tickets; round 1 keeps the engagement's id", () => {
+    expect(roundEid("E1", 1)).toBe("E1");
+    expect(roundEid("E1", 2)).toBe("E1~r2");
+    expect(new Set([1, 2, 3, 4, 5].map((r) => roundEid("E1", r))).size).toBe(5);
   });
 });

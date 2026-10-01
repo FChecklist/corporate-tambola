@@ -62,10 +62,10 @@ Two modes exist side by side. **Phone-run mode** (new, no server per engagement)
 | Invite list, invite-only, reuse, erase, 365-day retention | yes | yes |
 | External AI work link (scoped), suggestion board | yes | yes (link only) |
 | Refer & earn, payments, invoices, e-mailed sign-in | yes | payments and sign-in yes |
-| **Rounds (several games in one engagement)** | **no** | yes |
+| Rounds (1 to 5 games in one engagement; new numbers and new tickets each round, a 90 s wait between) | yes | yes |
 | **Scratch cards, boosters (joker, extra ticket, pass)** | **no** | yes |
 | Family passes, team leads/hosts roles, waiting room, second-phone alerts | **no** | yes |
 | Host live voice, big-screen view | **no** | yes (big screen) |
 | Cost per engagement | about zero (free plans) | a server process |
 
-The phone-run mode is the one to sell at scale. Anything in the "no" rows is either optional or needs a design decision before building it for phone-run mode (rounds and scratch cards each need their own fairness rules; roles and passes need a roster model the phone-run store does not have yet).
+The phone-run mode is the one to sell at scale. Anything in the "no" rows is either optional or needs a design decision before building it for phone-run mode (scratch cards and boosters need their own fairness rules; roles and passes need a roster model the phone-run store does not have yet).

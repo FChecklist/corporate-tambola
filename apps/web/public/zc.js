@@ -49,7 +49,7 @@
   function lineLabel(s) {
     const lines = (S.cfg && S.cfg.rewards || []).filter((l) => (l.scope === "two_ticket" ? "full2" : l.pattern) === s.pattern);
     const line = lines.find((l) => l.ordinal === s.ordinal);
-    return (lines.length > 1 ? ORD(s.ordinal) + " " : "") + NAMES[s.pattern] + (line && line.text ? " (" + line.text + ")" : "");
+    return ((S.cfg && S.cfg.rounds > 1) ? "Round " + (s.round || 1) + " · " : "") + (lines.length > 1 ? ORD(s.ordinal) + " " : "") + NAMES[s.pattern] + (line && line.text ? " (" + line.text + ")" : "");
   }
   function rewardsToText(c) {
     return c.rewards.map((l) => (l.scope === "two_ticket" ? "full2" : l.pattern) + ": " + l.text).join("\n");
@@ -95,6 +95,7 @@
       <div style="grid-column:1/-1"><label>Link (https://, for YouTube or a video file)</label><input data-bk="mediaUrl" data-i="${i}" value="${esc(b.mediaUrl || "")}"></div></div>`; }).join("");
     return `<div class="zcard zform"><h2>Tickets, rewards and brand breaks</h2>
       <p class="zsmall" style="margin-top:0">You can change these until the first number is called.</p>
+      <label for="rnd">Rounds (each round is a full game of 90 numbers with new tickets; a short wait separates them)</label><select id="rnd">${[1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${(c.rounds || 1) === n ? "selected" : ""}>${n} round${n === 1 ? "" : "s"}</option>`).join("")}</select>
       <label for="tix">Tickets for each participant</label><select id="tix"><option value="1" ${c.tickets === 1 ? "selected" : ""}>1 ticket</option><option value="2" ${c.tickets === 2 ? "selected" : ""}>2 tickets</option></select>
       <label for="rw">What each house wins: one per line, like <code>full: Gift hamper</code>. Write a house twice for a 2nd reward. Houses: early5, top, mid, bot, corners, star, full, and full2 (Full Two-Ticket House, needs 2 tickets). Only houses you list are in play.</label>
       <textarea id="rw" rows="6" style="width:100%;box-sizing:border-box;font-size:15px;border:1px solid var(--line);border-radius:10px;padding:8px">${esc(rewardsToText(c))}</textarea>
@@ -113,7 +114,7 @@
       if (b.kind === "lucky") b.winners = Number(g("winners") || 3);
       breaks.push(b);
     }
-    return { tickets, rewards, breaks };
+    return { tickets, rewards, breaks, rounds: Number(document.getElementById("rnd").value) };
   }
   function engView() {
     const link = location.origin + (BASE ? "" : "") + "/z.html?e=" + encodeURIComponent(eid) + (BASE ? "&api=" + encodeURIComponent(BASE) : "");
@@ -123,7 +124,7 @@
     return `<div class="zhead"><b>Engagement ${esc(eid)}</b><button class="zsnd" id="back">All engagements</button></div>
       ${S.note ? `<div class="zbanner info">${esc(S.note)}</div>` : ""}
       <div class="zcard"><h2>Share with participants</h2><div class="zlink">${esc(link)}</div><button class="zbtn s alt" id="copy">Copy link</button></div>
-      <div class="zgrid"><div class="zcard"><h2>Participants</h2><div class="zstat">${S.people.length}</div></div><div class="zcard"><h2>Numbers called</h2><div class="zstat">${S.log.length} / 90</div></div></div>
+      <div class="zgrid"><div class="zcard"><h2>Participants</h2><div class="zstat">${S.people.length}</div></div><div class="zcard"><h2>Numbers called${S.cfg.rounds > 1 ? " · round " + S.round + " of " + S.cfg.rounds : ""}</h2><div class="zstat">${S.log.length} / 90</div></div></div>
       ${(S.reqs || []).length ? `<div class="zcard"><h2>Your AI assistant is asking</h2>${S.reqs.map((r) => `<div class="zrow"><span>${esc(r.action)}${r.note ? " · " + esc(r.note) : ""}</span></div>`).join("")}<button class="zbtn s" id="reqok">Approve (${esc(S.reqs[0].action)})</button><button class="zbtn s alt" id="reqno">Dismiss</button></div>` : ""}
       <div class="zcard zform"><h2>Invite list</h2>
         <label for="roster">Paste one person per line: name, mobile number</label><textarea id="roster" rows="4" style="width:100%;box-sizing:border-box;font-size:15px;border:1px solid var(--line);border-radius:10px;padding:8px"></textarea>
@@ -149,26 +150,35 @@
   async function refreshEng() {
     try {
       S.info = await fetch(BASE + `/api/z/${eid}/info`).then((r) => r.json());
-      const pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed; S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks };
+      const pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed; S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, rounds: pr.rounds || 1 };
       S.claims = (await call("GET", `/api/z/${eid}/claims`)).claims;
       try { S.reqs = (await call("GET", `/api/z/${eid}/control/request`)).requests; } catch { S.reqs = []; }
       const cf = await fetch(BASE + `/api/z/${eid}/control`).then((r) => (r.ok ? r.json() : null));
       S.control = null; S.cf = cf;
       const now = await latestRound();
-      let sched;
-      if (cf) { const st = ZG.resolveControl(ZG.cfgOf(cf), cf.messages); S.st = st; S.control = { pausedNow: now !== null && st.intervals.some((i) => now >= i.start && now < i.end) }; sched = ZG.scheduleFull(st, S.info.startRound, S.info.callSeconds / 3, S.cfg.breaks, 90); }
-      else sched = ZG.scheduleFull(null, S.info.startRound, S.info.callSeconds / 3, S.cfg.breaks, 90);
+      let st = null;
+      if (cf) { st = ZG.resolveControl(ZG.cfgOf(cf), cf.messages); S.st = st; S.control = { pausedNow: now !== null && st.intervals.some((i) => now >= i.start && now < i.end) }; } else S.st = null;
+      const stride = S.info.callSeconds / 3;
+      const schedOf = (r) => Array.from({ length: 90 }, (_, k) => ZG.callRoundR(st, S.info.startRound, stride, S.cfg.breaks, r, k));
       S.started = now !== null && now >= S.info.startRound;
       try { S.published = (await fetch(BASE + `/api/z/${eid}/results`).then((r) => r.json())).results || []; } catch { S.published = S.published || []; }
       if (!S.store) S.store = new ZG.RoundStore({});
-      const upto = sched.filter((r) => r !== null && now !== null && r <= now);
-      await Promise.all(upto.filter((r) => !S.store.rounds.has(r)).slice(0, 12).map((r, i) => (now - r <= 2 ? S.store.fetchLive(r, i) : S.store.fetchBackfill(r, i))));
+      S.logs = {}; let budget = 60; // catch up quickly when the console is opened late
+      for (let r = 1; r <= S.cfg.rounds; r++) {
+        const sched = schedOf(r);
+        const upto = sched.filter((x) => x !== null && now !== null && x <= now);
+        const need = upto.filter((x) => !S.store.rounds.has(x)).slice(0, budget); budget -= need.length;
+        await Promise.all(need.map((x, i) => (now - x <= 2 ? S.store.fetchLive(x, i) : S.store.fetchBackfill(x, i))));
+        S.logs[r] = ZG.logFrom(ZG.roundEid(eid, r), sched.filter((x) => x !== null), S.store, upto.length);
+      }
       S.store.verifySome(3);
-      S.log = ZG.logFrom(eid, sched.filter((r) => r !== null), S.store, upto.length);
+      S.round = Math.max(1, ...Object.keys(S.logs).filter((r) => S.logs[r].length > 0).map(Number));
+      S.log = S.logs[S.round] || [];
       const pids = S.people.map((p) => p.pid);
-      S.checked = ZG.checkClaims(eid, S.claims.map((c) => ({ pid: c.pid, pattern: c.pattern, idx: c.idx })), S.log, S.cfg);
+      S.checked = ZG.checkClaims(eid, S.claims.map((c) => ({ pid: c.pid, pattern: c.pattern, idx: c.idx, round: c.round })), S.logs, S.cfg);
       const nm = new Map(S.people.map((p) => [p.pid, p.name]));
-      S.settledPreview = ZG.settleAll(eid, pids, S.log, S.cfg).map((s) => ({ ...s, names: s.pids.length <= 3 ? s.pids.map((p) => nm.get(p) || "Participant").join(", ") : "" }));
+      S.settledPreview = [];
+      for (let r = 1; r <= S.cfg.rounds; r++) if (S.logs[r].length) S.settledPreview.push(...ZG.settleAll(eid, pids, S.logs[r], S.cfg, r).map((s) => ({ ...s, names: s.pids.length <= 3 ? s.pids.map((p) => nm.get(p) || "Participant").join(", ") : "" })));
       S.lucky = await computeLucky(now);
     } catch (e) { S.note = e.status === 404 ? "That engagement was not found." : "Could not refresh. Retrying…"; }
     if (eid) draw(engView());
@@ -210,7 +220,7 @@
       try { const r = await TBControl.publish(eid, { token: secret, base: BASE, prefix: "/api/z" }, action, action === "pause" ? { pauseForRounds: 600 } : {}); S.ctlNote = r.status === 200 ? action[0].toUpperCase() + action.slice(1) + " sent. Phones follow within about 40 seconds." : (r.data && r.data.error) || "Not accepted."; } catch (e) { S.ctlNote = e.message; }
       refreshEng();
     }));
-    if ($("settle")) $("settle").onclick = async () => { try { await call("POST", `/api/z/${eid}/settle`, { results: S.settledPreview.map(({ pattern, ordinal, idx, pids }) => ({ pattern, ordinal, idx, pids })) }); S.note = "Results published to participants."; } catch (e) { S.note = e.message; } refreshEng(); };
+    if ($("settle")) $("settle").onclick = async () => { try { const all = S.settledPreview.map(({ pattern, ordinal, round, idx, pids }) => ({ pattern, ordinal, round, idx, pids })); for (let i = 0; i < all.length; i += 40) await call("POST", `/api/z/${eid}/settle`, { results: all.slice(i, i + 40) }); S.note = "Results published to participants."; } catch (e) { S.note = e.message; } refreshEng(); };
     if ($("csv")) $("csv").onclick = () => {
       const nm = new Map(S.people.map((p) => [p.pid, p.name || ""]));
       const rows = [["Reward", "Call number", "Participant"]];
@@ -243,7 +253,7 @@
       refreshEng();
     }));
     if ($("savecfg")) $("savecfg").onclick = async () => {
-      try { const v = readSettings(); const r = await call("PATCH", `/api/z/${eid}/settings`, v); S.cfg = { tickets: r.tickets, rewards: r.rewards, breaks: r.breaks }; S.note = "Saved."; } catch (e) { S.note = e.message; }
+      try { const v = readSettings(); const r = await call("PATCH", `/api/z/${eid}/settings`, v); S.cfg = { tickets: r.tickets, rewards: r.rewards, breaks: r.breaks, rounds: r.rounds || 1 }; S.note = "Saved."; } catch (e) { S.note = e.message; }
       refreshEng();
     };
     if ($("erase")) $("erase").onclick = async () => { if (!confirm("Erase all participant data for this engagement? This cannot be undone.")) return; try { const r = await call("POST", `/api/z/${eid}/erase`, {}); S.note = r.erased + " participants erased."; } catch (e) { S.note = e.message; } refreshEng(); };

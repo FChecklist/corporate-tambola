@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { bytesToHex } from "@noble/hashes/utils";
 import { sha256 } from "@noble/hashes/sha256";
-import { ALL_PATTERNS, RoundStore, callRoundFull, checkClaims, completionIndex, completionIndexKey, logFrom, luckyRound, luckyWinners, settleAll, stillToWin, ticketFor } from "../src/game";
+import { ALL_PATTERNS, RoundStore, activeIntermission, callRoundFull, callRoundR, checkClaims, completionIndex, completionIndexKey, logFrom, luckyRound, luckyWinners, settleAll, stillToWin, ticketFor, ticketsFor, unshiftedRound } from "../src/game";
+import { INTERMISSION_ROUNDS, defaultCfg, roundEid, type BreakCfg } from "../src/config";
 import { createHash } from "node:crypto";
 import { deriveCalls, scheduleFor, verifyRound, type Fetcher, type Round } from "../src";
 import { ticketNumbers } from "../../shared/src/ticket";
@@ -202,5 +203,67 @@ describe("lucky draw winners", () => {
     const b = { after: 5, seconds: 30, kind: "lucky" as const, title: "D", winners: 3 as const };
     const prev = callRoundFull(null, 1000, 2, [b], 4)!;
     expect(luckyRound(null, 1000, 2, [b], b)).toBe(prev + 1 + 10);
+  });
+});
+
+describe("rounds", () => {
+  const C2 = { ...defaultCfg(), rounds: 2 };
+  const E2 = "ENG-ROUNDS";
+  const pids2 = Array.from({ length: 200 }, (_, i) => "rp" + i);
+  const R1 = deriveCalls(E2, Array.from({ length: 90 }, (_, k) => createHash("sha256").update("a" + k).digest("hex")));
+  const R2 = deriveCalls(roundEid(E2, 2), Array.from({ length: 90 }, (_, k) => createHash("sha256").update("b" + k).digest("hex")));
+  test("a later round starts a fixed intermission after the last call of the one before, with the same gap between calls", () => {
+    const last1 = unshiftedRound(1000, 2, [], 1, 89);
+    expect(unshiftedRound(1000, 2, [], 2, 0)).toBe(last1 + 2 + INTERMISSION_ROUNDS);
+    expect(unshiftedRound(1000, 2, [], 2, 1) - unshiftedRound(1000, 2, [], 2, 0)).toBe(2);
+    expect(unshiftedRound(1000, 2, [], 3, 0)).toBe(unshiftedRound(1000, 2, [], 2, 89) + 2 + INTERMISSION_ROUNDS);
+  });
+  test("brand breaks belong to round 1 only; they push round 2 later by their length and nothing else", () => {
+    const b: BreakCfg[] = [{ after: 10, seconds: 60, kind: "speech", title: "Hello" }];
+    expect(unshiftedRound(1000, 2, b, 2, 0)).toBe(unshiftedRound(1000, 2, [], 2, 0) + 20);
+    expect(unshiftedRound(1000, 2, b, 2, 5) - unshiftedRound(1000, 2, b, 2, 4)).toBe(2);
+  });
+  test("a pause in round 1 moves everything after it, including round 2, without moving round 2 twice", () => {
+    const st = { intervals: [{ start: 1050, end: 1070 }], stopRound: null } as any;
+    const before = unshiftedRound(1000, 2, [], 2, 0);
+    expect(callRoundR(st, 1000, 2, [], 2, 0)).toBe(before + 20);
+    expect(callRoundR(st, 1000, 2, [], 1, 5)).toBe(1010); // before the pause
+    expect(callRoundR(st, 1000, 2, [], 1, 30)).toBe(1060 + 20); // after it
+    const a = callRoundR(st, 1000, 2, [], 2, 3)!, b = callRoundR(st, 1000, 2, [], 2, 4)!;
+    expect(b - a).toBe(2);
+  });
+  test("a stop before a round's first call means that round never happens", () => {
+    const st = { intervals: [], stopRound: 1100 } as any;
+    expect(callRoundR(st, 1000, 2, [], 1, 40)).toBe(1080);
+    expect(callRoundR(st, 1000, 2, [], 1, 60)).toBeNull();
+    expect(callRoundR(st, 1000, 2, [], 2, 0)).toBeNull();
+  });
+  test("the intermission shows exactly between the last call of a round and the first of the next", () => {
+    const last = callRoundR(null, 1000, 2, [], 1, 89)!, first = callRoundR(null, 1000, 2, [], 2, 0)!;
+    expect(activeIntermission(null, 1000, 2, [], 2, last)).toBeNull();
+    expect(activeIntermission(null, 1000, 2, [], 2, last + 1)?.endsAtRound).toBe(first);
+    expect(activeIntermission(null, 1000, 2, [], 2, first - 1)).not.toBeNull();
+    expect(activeIntermission(null, 1000, 2, [], 2, first)).toBeNull();
+    expect(activeIntermission(null, 1000, 2, [], 1, last + 1)).toBeNull();
+  });
+  test("every round gives every participant different tickets, and the numbers differ", () => {
+    for (const p of pids2.slice(0, 20)) expect(JSON.stringify(ticketsFor(E2, p, 1))).not.toBe(JSON.stringify(ticketsFor(roundEid(E2, 2), p, 1)));
+    expect(R1).not.toEqual(R2);
+    expect(new Set(R2).size).toBe(90);
+  });
+  test("each round is settled on its own numbers and tickets; round 1 results never leak into round 2", () => {
+    const s1 = settleAll(E2, pids2, R1, C2, 1), s2 = settleAll(E2, pids2, R2, C2, 2);
+    expect(s1.every((x) => x.round === 1)).toBe(true);
+    expect(s2.every((x) => x.round === 2)).toBe(true);
+    for (const x of s2) for (const p of x.pids) expect(completionIndexKey(ticketsFor(roundEid(E2, 2), p, 1), x.pattern, R2)).toBe(x.idx);
+    expect(s1.map((x) => x.idx).join()).not.toBe(s2.map((x) => x.idx).join());
+  });
+  test("claims are checked against their own round's log; a round 1 claim does not pass as round 2", () => {
+    const p = "rp3"; const i1 = completionIndexKey(ticketsFor(E2, p, 1), "top", R1), i2 = completionIndexKey(ticketsFor(roundEid(E2, 2), p, 1), "top", R2);
+    const logs = { 1: R1, 2: R2 };
+    expect(checkClaims(E2, [{ pid: p, pattern: "top", idx: i1, round: 1 }, { pid: p, pattern: "top", idx: i2, round: 2 }], logs, C2).good).toHaveLength(2);
+    expect(checkClaims(E2, [{ pid: p, pattern: "top", idx: i1, round: 2 }], logs, C2).bad.length + checkClaims(E2, [{ pid: p, pattern: "top", idx: i2, round: 1 }], logs, C2).bad.length).toBeGreaterThanOrEqual(1);
+    expect(checkClaims(E2, [{ pid: p, pattern: "top", idx: i1, round: 3 }], logs, C2).bad).toHaveLength(1); // no such round
+    expect(checkClaims(E2, [{ pid: p, pattern: "top", idx: i1 }], R1, C2).good).toHaveLength(1); // old style: round 1
   });
 });

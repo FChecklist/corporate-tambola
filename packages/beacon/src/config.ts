@@ -6,7 +6,12 @@ import type { PatternId, Scope } from "../../shared/src/ticket";
 export type PatternKey = PatternId | "full2"; // "full2" = Full Two-Ticket House (all 30 numbers across both tickets)
 export interface RewardLine { pattern: PatternId; scope: Scope; ordinal: number; text: string }
 export interface BreakCfg { after: number; seconds: number; kind: "file" | "youtube" | "slides" | "speech" | "lucky"; title: string; mediaUrl?: string; winners?: 1 | 3 | 5 | 10 }
-export interface EngagementCfg { tickets: 1 | 2; rewards: RewardLine[]; breaks: BreakCfg[] }
+export interface EngagementCfg { tickets: 1 | 2; rewards: RewardLine[]; breaks: BreakCfg[]; rounds: number }
+export const MAX_ROUNDS = 5;
+/** Between two rounds everyone waits this many 3 s beacon rounds (90 s) before the next round's first number. */
+export const INTERMISSION_ROUNDS = 30;
+/** Round 1 keeps the engagement's own id; later rounds use a derived id, so each round has its own numbers and its own tickets. */
+export const roundEid = (eid: string, round: number): string => (round <= 1 ? eid : `${eid}~r${round}`);
 
 export const PATTERN_ORDER: readonly PatternId[] = ["early5", "top", "mid", "bot", "corners", "star", "full"];
 export const MAX_BREAKS = 3;
@@ -17,7 +22,7 @@ export const LUCKY_WINNERS = [1, 3, 5, 10] as const;
 
 /** One reward line for each house, no text: what an engagement has until the organizer says otherwise. */
 export const defaultRewards = (): RewardLine[] => PATTERN_ORDER.map((pattern) => ({ pattern, scope: "ticket", ordinal: 1, text: "" }));
-export const defaultCfg = (): EngagementCfg => ({ tickets: 1, rewards: defaultRewards(), breaks: [] });
+export const defaultCfg = (): EngagementCfg => ({ tickets: 1, rewards: defaultRewards(), breaks: [], rounds: 1 });
 
 export const keyOfLine = (l: Pick<RewardLine, "pattern" | "scope">): PatternKey => (l.scope === "two_ticket" ? "full2" : l.pattern);
 export const lineKey = (l: RewardLine) => `${keyOfLine(l)}#${l.ordinal}`;
@@ -37,8 +42,12 @@ const cleanText = (s: unknown, max: number) => (typeof s === "string" ? s.replac
 const YT = /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i;
 
 /** Validates what the organizer sent. Returns the cleaned config, or a plain-English reason. Missing parts keep their defaults. */
-export function validateCfg(input: { tickets?: unknown; rewards?: unknown; breaks?: unknown }, base: EngagementCfg = defaultCfg()): { ok: true; cfg: EngagementCfg } | { ok: false; error: string } {
-  const cfg: EngagementCfg = { tickets: base.tickets, rewards: base.rewards, breaks: base.breaks };
+export function validateCfg(input: { tickets?: unknown; rewards?: unknown; breaks?: unknown; rounds?: unknown }, base: EngagementCfg = defaultCfg()): { ok: true; cfg: EngagementCfg } | { ok: false; error: string } {
+  const cfg: EngagementCfg = { tickets: base.tickets, rewards: base.rewards, breaks: base.breaks, rounds: base.rounds ?? 1 };
+  if (input.rounds !== undefined) {
+    if (!Number.isInteger(input.rounds) || (input.rounds as number) < 1 || (input.rounds as number) > MAX_ROUNDS) return { ok: false, error: `An engagement has 1 to ${MAX_ROUNDS} rounds.` };
+    cfg.rounds = input.rounds as number;
+  }
   if (input.tickets !== undefined) {
     if (input.tickets !== 1 && input.tickets !== 2) return { ok: false, error: "Each participant gets 1 or 2 tickets." };
     cfg.tickets = input.tickets;

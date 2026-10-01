@@ -49,7 +49,7 @@ describe("joining", () => {
     expect(r.startRound).toBe(1000);
     expect(r.callSeconds).toBe(6);
     expect(r.pid).toHaveLength(16);
-    expect(Object.keys(r).sort()).toEqual(["breaks", "callSeconds", "pid", "rewards", "startRound", "tickets", "trackClaims"]);
+    expect(Object.keys(r).sort()).toEqual(["breaks", "callSeconds", "pid", "rewards", "rounds", "startRound", "tickets", "trackClaims"]);
   });
   test("the same number joining twice, even typed differently, is one participant and one write", async () => {
     const a = await (await call("POST", "/api/z/ENG1/join", { phone: "+91 98765-43210" })).json() as any;
@@ -135,7 +135,7 @@ describe("settling and results", () => {
     await call("POST", "/api/z/ENG1/settle", { results: [{ pattern: "full", idx: 70, pids: ["secretpid1", "secretpid2"] }] }, org);
     const txt = await (await call("GET", "/api/z/ENG1/results")).text();
     expect(txt.includes("secretpid")).toBe(false);
-    expect(JSON.parse(txt).results[0]).toEqual({ pattern: "full", ordinal: 1, idx: 70, count: 2 });
+    expect(JSON.parse(txt).results[0]).toEqual({ pattern: "full", ordinal: 1, round: 1, idx: 70, count: 2 });
   });
   test("a malformed result changes nothing", async () => {
     expect((await call("POST", "/api/z/ENG1/settle", { results: [{ pattern: "top", idx: 1, pids: "no" }] }, org)).status).toBe(400);
@@ -587,7 +587,7 @@ describe("tickets, reward lines and brand breaks", () => {
     expect((await call("POST", "/api/z/CFG01/settle", body(50), org)).status).toBe(200);
     expect((await call("POST", "/api/z/CFG01/settle", body(51), org)).status).toBe(200);
     const r = await (await call("GET", "/api/z/CFG01/results")).json() as any;
-    expect(r.results).toEqual([{ pattern: "full", ordinal: 1, idx: 51, count: 1 }, { pattern: "full", ordinal: 2, idx: 54, count: 2 }]);
+    expect(r.results).toEqual([{ pattern: "full", ordinal: 1, round: 1, idx: 51, count: 1 }, { pattern: "full", ordinal: 2, round: 1, idx: 54, count: 2 }]);
     expect((await call("POST", "/api/z/CFG01/settle", { results: [{ pattern: "full", ordinal: 6, idx: 1, pids: [] }] }, org)).status).toBe(400);
     expect((await call("POST", "/api/z/CFG01/settle", { results: [{ pattern: "full2", ordinal: 1, idx: 1, pids: [] }] }, org)).status).toBe(200);
   });
@@ -603,7 +603,7 @@ describe("lucky draw results", () => {
     expect((await call("POST", "/api/z/LUCK1/settle", { results: [{ pattern: "lucky", ordinal: 1, idx: 20, pids: ["aa11", "bb22", "cc33"] }] })).status).toBe(403);
     expect((await call("POST", "/api/z/LUCK1/settle", { results: [{ pattern: "lucky", ordinal: 1, idx: 20, pids: ["aa11", "bb22", "cc33"] }] }, org)).status).toBe(200);
     const r = await pub();
-    expect(r.results[0]).toEqual({ pattern: "lucky", ordinal: 1, idx: 20, count: 3, winners: ["aa11", "bb22", "cc33"] });
+    expect(r.results[0]).toEqual({ pattern: "lucky", ordinal: 1, round: 1, idx: 20, count: 3, winners: ["aa11", "bb22", "cc33"] });
   });
   test("house results still carry counts only", async () => {
     await call("POST", "/api/z/LUCK1/settle", { results: [{ pattern: "full", ordinal: 1, idx: 70, pids: ["secretpid"] }] }, org);
@@ -662,5 +662,49 @@ describe("an organizer's own sign-in keys", () => {
     expect(r.revoked).toBe(0);
     expect((await call("GET", "/api/history", undefined, { "x-organizer": other })).status).toBe(200);
     for (const id of ["zz", "", 5, "../../../etc"]) expect((await call("POST", "/api/org/keys/revoke", { id }, { "x-organizer": a1 })).status).toBe(400);
+  });
+});
+
+describe("rounds in the store", () => {
+  const FUT = Math.floor((T / 1000 - 1692803367) / 3) + 1 + 4000;
+  test("rounds are set at creation or before the start, shown to phones, and 1 to 5 only", async () => {
+    expect((await call("POST", "/api/z", { id: "RND01", startRound: FUT, callSeconds: 9, cap: 50, rounds: 3 }, org)).status).toBe(200);
+    expect(((await (await call("GET", "/api/z/RND01/info")).json()) as any).rounds).toBe(3);
+    expect((await call("PATCH", "/api/z/RND01/settings", { rounds: 2 }, org)).status).toBe(200);
+    expect(((await (await call("GET", "/api/z/RND01/info")).json()) as any).rounds).toBe(2);
+    for (const r of [0, 6, 1.5, "2"]) { expect((await call("PATCH", "/api/z/RND01/settings", { rounds: r }, org)).status).toBe(400); expect((await call("POST", "/api/z", { id: "BADR" + String(r).length, startRound: FUT, callSeconds: 9, cap: 5, rounds: r }, org)).status).toBe(400); }
+    expect(((await (await call("GET", "/api/z/RND01/info")).json()) as any).rounds).toBe(2);
+  });
+  test("an engagement with nothing set is one round", async () => {
+    await call("POST", "/api/z", { id: "RND02", startRound: FUT, callSeconds: 9, cap: 50 }, org);
+    expect(((await (await call("GET", "/api/z/RND02/info")).json()) as any).rounds).toBe(1);
+  });
+  test("claims are kept per round, a round that does not exist is ignored, and the same claim in two rounds is two claims", async () => {
+    await call("POST", "/api/z", { id: "RND03", startRound: FUT, callSeconds: 9, cap: 50, rounds: 2 }, org);
+    const pid = ((await (await join(1, "RND03")).json()) as any).pid;
+    const claim = (c: unknown) => call("POST", "/api/z/RND03/claims", { pid, claims: [c] });
+    await claim({ pattern: "top", idx: 20 }); await claim({ pattern: "top", idx: 25, round: 2 }); await claim({ pattern: "top", idx: 25, round: 2 }); await claim({ pattern: "top", idx: 30, round: 3 }); await claim({ pattern: "top", idx: 30, round: 0 });
+    const c = (await (await call("GET", "/api/z/RND03/claims", undefined, org)).json() as any).claims;
+    expect(c).toEqual([{ pid, pattern: "top", round: 1, idx: 20 }, { pid, pattern: "top", round: 2, idx: 25 }]);
+  });
+  test("results are published per round and lines can be re-published; a round that does not exist, or a lucky draw in round 2, is refused", async () => {
+    await call("POST", "/api/z", { id: "RND04", startRound: FUT, callSeconds: 9, cap: 50, rounds: 2, breaks: [{ after: 20, seconds: 30, kind: "lucky", title: "Draw", winners: 3 }] }, org);
+    const post = (results: unknown[]) => call("POST", "/api/z/RND04/settle", { results }, org);
+    expect((await post([{ pattern: "full", ordinal: 1, round: 1, idx: 60, pids: ["a"] }, { pattern: "full", ordinal: 1, round: 2, idx: 70, pids: ["b", "c"] }])).status).toBe(200);
+    await post([{ pattern: "full", ordinal: 1, round: 2, idx: 71, pids: ["d"] }]);
+    const r = (await (await call("GET", "/api/z/RND04/results")).json() as any).results;
+    expect(r.map((x: any) => [x.round, x.idx, x.count])).toEqual([[1, 60, 1], [2, 71, 1]]);
+    expect((await post([{ pattern: "full", round: 3, idx: 1, pids: [] }])).status).toBe(400);
+    expect((await post([{ pattern: "full", round: 0, idx: 1, pids: [] }])).status).toBe(400);
+    expect((await post([{ pattern: "lucky", ordinal: 1, round: 2, idx: 20, pids: ["a"] }])).status).toBe(400);
+    expect((await post([{ pattern: "lucky", ordinal: 1, round: 1, idx: 20, pids: ["a"] }])).status).toBe(200);
+  });
+  test("erase removes every round's claims and results", async () => {
+    await call("POST", "/api/z", { id: "RND05", startRound: FUT, callSeconds: 9, cap: 50, rounds: 2 }, org);
+    const pid = ((await (await join(1, "RND05")).json()) as any).pid;
+    await call("POST", "/api/z/RND05/claims", { pid, claims: [{ pattern: "top", idx: 20, round: 2 }] });
+    await call("POST", "/api/z/RND05/settle", { results: [{ pattern: "top", round: 2, idx: 20, pids: [pid] }] }, org);
+    await call("POST", "/api/z/RND05/erase", {}, org);
+    for (const t of ["claim", "settled", "participant"]) expect((raw.query(`SELECT COUNT(*) c FROM ${t} WHERE eid='RND05'`).get() as any).c).toBe(0);
   });
 });

@@ -4,7 +4,8 @@ import { sha256 } from "@noble/hashes/sha256";
 import { handle, type Env } from "../../../apps/edge/src/worker";
 import { makeD1 } from "../../../apps/edge/test/d1-sqlite";
 import { PhoneRuntime, type PhoneDeps } from "../src/phone-runtime";
-import { ALL_PATTERNS, checkClaims, completionIndex, luckyRound, luckyWinners, scheduleFull, settleAll, ticketFor } from "../src/game";
+import { ALL_PATTERNS, callRoundR, checkClaims, completionIndex, luckyRound, luckyWinners, scheduleFull, settleAll, ticketFor } from "../src/game";
+import { defaultRewards, roundEid } from "../src/config";
 import { deriveCalls, roundAt, roundTimeMs, type Fetcher, type Round } from "../src";
 import { nextMessage, publicKeyFromSecret, readPublished, resolveControl, scheduleWithControl, signControlWithSecret, cfgOf, type KV } from "../src/control";
 
@@ -403,7 +404,7 @@ describe("brand breaks, reward lines and two tickets on real phones", () => {
     expect(JSON.stringify(v.tickets[0])).not.toBe(JSON.stringify(v.tickets[1]));
     expect(new Set(v.claimed)).toEqual(new Set(["full", "full2"]));
     const ref = refWith([]);
-    const cfg = { tickets: 2 as const, rewards: [{ pattern: "full" as const, scope: "ticket" as const, ordinal: 1, text: "" }, { pattern: "full" as const, scope: "ticket" as const, ordinal: 2, text: "" }, { pattern: "full" as const, scope: "two_ticket" as const, ordinal: 1, text: "" }], breaks: [] };
+    const cfg = { tickets: 2 as const, rewards: [{ pattern: "full" as const, scope: "ticket" as const, ordinal: 1, text: "" }, { pattern: "full" as const, scope: "ticket" as const, ordinal: 2, text: "" }, { pattern: "full" as const, scope: "two_ticket" as const, ordinal: 1, text: "" }], breaks: [], rounds: 1 };
     const pids = (await (await D.headCall("GET", `/api/z/${EID}/participants`, undefined, { "x-organizer": SECRET })).json() as any).participants.map((x: any) => x.pid);
     const claims = (await (await D.headCall("GET", `/api/z/${EID}/claims`, undefined, { "x-organizer": SECRET })).json() as any).claims;
     expect(checkClaims(EID, claims, ref, cfg).bad).toEqual([]);
@@ -437,5 +438,83 @@ describe("lucky draw on phones", () => {
     await step(ps, 16000);
     for (const p of ps) { const v = p.rt.view(); expect(v.lucky[0]!.published).toBe(true); expect(v.lucky[0]!.won).toBe(winners.includes(p.rt.pid!)); }
     expect(ps.filter((p) => p.rt.view().lucky[0]!.won)).toHaveLength(3);
+  });
+});
+
+describe("two rounds on real phones", () => {
+  const refRound = (r: number, st: any = null) => deriveCalls(roundEid(EID, r), Array.from({ length: 90 }, (_, k) => rnd(callRoundR(st, START, 2, [], r, k)!)));
+  const two = { rewards: undefined as unknown, rounds: 2 };
+  const setRounds = () => env.DB.prepare("UPDATE engagement SET config=? WHERE id=?").bind(JSON.stringify({ rounds: 2 }), EID).run();
+
+  test("round 1 plays out, an intermission follows, round 2 has new numbers and new tickets, and the engagement ends only after round 2", async () => {
+    await setRounds();
+    const ps = Array.from({ length: 6 }, (_, i) => mkPhone(400 + i));
+    for (const p of ps) { await p.rt.boot(); await p.rt.join(p.phone); }
+    expect(ps[0]!.rt.view().rounds).toBe(2);
+    let sawInter = false, endOfRound1: any = null, secs: number[] = [];
+    for (let i = 0; i < 420; i++) {
+      await step(ps);
+      const v = ps[0]!.rt.view();
+      if (v.intermission) { sawInter = true; expect(v.intermission.round).toBe(2); expect(v.round).toBe(1); expect(v.phase).toBe("play"); secs.push(v.intermission.secondsLeft); if (!endOfRound1) endOfRound1 = { log: v.log.slice(), tickets: v.tickets }; }
+    }
+    expect(sawInter).toBe(true);
+    expect(secs[0]! >= secs[secs.length - 1]!).toBe(true);
+    expect(endOfRound1.log).toEqual(refRound(1));
+    for (const p of ps) { const v = p.rt.view(); expect(v.round).toBe(2); expect(v.phase).toBe("ended"); expect(v.log).toEqual(refRound(2)); expect(v.intermission).toBeNull(); expect(JSON.stringify(v.tickets)).not.toBe(JSON.stringify(endOfRound1.tickets)); }
+  });
+  test("the engagement is not over after round 1: phones keep playing and wait for round 2", async () => {
+    await setRounds();
+    const a = mkPhone(410); await a.rt.boot(); await a.rt.join(a.phone);
+    for (let i = 0; i < 200; i++) await step([a]);
+    const v = a.rt.view();
+    expect(v.log.length).toBe(90); expect(v.round).toBe(1); expect(v.phase).toBe("play");
+    expect(v.nextCallInSec).not.toBeNull(); // counting down to round 2's first number
+  });
+  test("claims go to the store per round (7 each), the organizer's check passes for both, and results show per round with what each phone received", async () => {
+    await setRounds();
+    const ps = Array.from({ length: 10 }, (_, i) => mkPhone(420 + i));
+    for (const p of ps) { await p.rt.boot(); await p.rt.join(p.phone); }
+    for (let i = 0; i < 420; i++) await step(ps);
+    const claims = (await (await D.headCall("GET", `/api/z/${EID}/claims`, undefined, { "x-organizer": SECRET })).json() as any).claims;
+    expect(claims.filter((c: any) => c.round === 1)).toHaveLength(70);
+    expect(claims.filter((c: any) => c.round === 2)).toHaveLength(70);
+    const cfg = { tickets: 1 as const, rewards: defaultRewards(), breaks: [], rounds: 2 };
+    const logs = { 1: refRound(1), 2: refRound(2) };
+    const chk = checkClaims(EID, claims.map((c: any) => ({ pid: c.pid, pattern: c.pattern, idx: c.idx, round: c.round })), logs, cfg);
+    expect(chk.bad).toEqual([]);
+    const pids = (await (await D.headCall("GET", `/api/z/${EID}/participants`, undefined, { "x-organizer": SECRET })).json() as any).participants.map((x: any) => x.pid);
+    const settled = [...settleAll(EID, pids, logs[1], cfg, 1), ...settleAll(EID, pids, logs[2], cfg, 2)];
+    expect(settled.filter((s) => s.round === 1)).toHaveLength(7); expect(settled.filter((s) => s.round === 2)).toHaveLength(7);
+    expect((await D.headCall("POST", `/api/z/${EID}/settle`, { results: settled.map((s) => ({ pattern: s.pattern, ordinal: s.ordinal, round: s.round, idx: s.idx, pids: s.pids })) }, { "x-organizer": SECRET })).status).toBe(200);
+    await step(ps, 16000);
+    for (const p of ps) {
+      const v = p.rt.view();
+      expect(v.results.every((r) => (r.round ?? 1) === 2)).toBe(true); // the card shows the round being played
+      expect(v.results).toHaveLength(7);
+      const got1 = v.past.find((x) => x.round === 1)!.got.length;
+      const expected1 = settled.filter((s) => s.round === 1 && s.pids.includes(p.rt.pid!)).length;
+      expect(got1).toBe(expected1);
+    }
+  });
+  test("a signed pause during round 1 also moves round 2, and every phone still matches the organizer's reference for both rounds", async () => {
+    await registerKey(); await setRounds();
+    const ps = [mkPhone(440), mkPhone(441)];
+    for (const p of ps) { await p.rt.boot(); await p.rt.join(p.phone); }
+    for (let i = 0; i < 40; i++) await step(ps);
+    expect((await publish({ action: "pause", pauseForRounds: 20 })).status).toBe(200);
+    for (let i = 0; i < 460; i++) await step(ps);
+    const f = (await readPublished(kvOf(), EID))!; const st = resolveControl(cfgOf(f), f.messages);
+    expect(ps[0]!.rt.view().log).toEqual(refRound(2, st));
+    expect(ps[1]!.rt.view().log).toEqual(refRound(2, st));
+    expect(ps[0]!.rt.view().phase).toBe("ended");
+  });
+  test("a stop between the rounds ends it for everyone and round 2 never starts", async () => {
+    await registerKey(); await setRounds();
+    const ps = [mkPhone(450), mkPhone(451)];
+    for (const p of ps) { await p.rt.boot(); await p.rt.join(p.phone); }
+    for (let i = 0; i < 195; i++) await step(ps);
+    expect((await publish({ action: "stop" })).status).toBe(200);
+    for (let i = 0; i < 260; i++) await step(ps);
+    for (const p of ps) { const v = p.rt.view(); expect(v.phase).toBe("ended"); expect(v.round).toBe(1); }
   });
 });

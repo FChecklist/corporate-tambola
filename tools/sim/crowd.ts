@@ -4,17 +4,18 @@
 import { handle, type Env } from "../../apps/edge/src/worker";
 import { makeD1 } from "../../apps/edge/test/d1-sqlite";
 import { PhoneRuntime } from "../../packages/beacon/src/phone-runtime";
-import { checkClaims, completionIndexKey, scheduleFull, settleAll, ticketsFor } from "../../packages/beacon/src/game";
+import { callRoundR, checkClaims, completionIndexKey, settleAll, ticketsFor } from "../../packages/beacon/src/game";
 import { deriveCalls, roundAt, roundTimeMs, type Fetcher } from "../../packages/beacon/src";
 import { cfgOf, nextMessage, publicKeyFromSecret, readPublished, resolveControl, signControlWithSecret } from "../../packages/beacon/src/control";
 import { createHash } from "node:crypto";
-import { defaultCfg, keysInPlay, type EngagementCfg } from "../../packages/beacon/src/config";
+import { defaultCfg, keysInPlay, roundEid, type EngagementCfg } from "../../packages/beacon/src/config";
 
 const N = Number(process.argv[2] ?? 2000);
+const ROUNDS = Number(process.env.ROUNDS ?? 1); // ROUNDS=2 plays two full rounds (new numbers and new tickets each)
 const RICH = process.argv[3] === "rich"; // two tickets, reward lines with 1st/2nd houses, a two-ticket house, two brand breaks
 const CFG: EngagementCfg = RICH
-  ? { tickets: 2, rewards: [{ pattern: "early5", scope: "ticket", ordinal: 1, text: "Coffee" }, { pattern: "top", scope: "ticket", ordinal: 1, text: "Voucher" }, { pattern: "full", scope: "ticket", ordinal: 1, text: "Hamper" }, { pattern: "full", scope: "ticket", ordinal: 2, text: "Mug" }, { pattern: "full", scope: "ticket", ordinal: 3, text: "Pen" }, { pattern: "full", scope: "two_ticket", ordinal: 1, text: "Grand" }], breaks: [{ after: 20, seconds: 30, kind: "speech", title: "CEO message" }, { after: 60, seconds: 45, kind: "youtube", title: "Our story", mediaUrl: "https://youtu.be/abc" }] }
-  : defaultCfg();
+  ? { tickets: 2, rounds: ROUNDS, rewards: [{ pattern: "early5", scope: "ticket", ordinal: 1, text: "Coffee" }, { pattern: "top", scope: "ticket", ordinal: 1, text: "Voucher" }, { pattern: "full", scope: "ticket", ordinal: 1, text: "Hamper" }, { pattern: "full", scope: "ticket", ordinal: 2, text: "Mug" }, { pattern: "full", scope: "ticket", ordinal: 3, text: "Pen" }, { pattern: "full", scope: "two_ticket", ordinal: 1, text: "Grand" }], breaks: [{ after: 20, seconds: 30, kind: "speech", title: "CEO message" }, { after: 60, seconds: 45, kind: "youtube", title: "Our story", mediaUrl: "https://youtu.be/abc" }] }
+  : { ...defaultCfg(), rounds: ROUNDS };
 const SECRET = "plat", KEY = "44".repeat(32), EID = "CROWD-" + N, START = 70_000, STRIDE = 2;
 const rnd = (r: number) => createHash("sha256").update("crowd" + r).digest("hex");
 let checks = 0, failed = 0;
@@ -28,7 +29,7 @@ const WALL = 1_700_000_000_000;
 const H = (h: Record<string, string> = {}) => ({ "content-type": "application/json", ...h });
 const raw = (m: string, p: string, b?: unknown, h: Record<string, string> = {}) => handle(new Request("http://x" + p, { method: m, headers: H(h), body: b === undefined ? undefined : JSON.stringify(b) }), env, WALL);
 
-await raw("POST", "/api/z", { id: EID, startRound: START, callSeconds: 6, cap: 100000, tickets: CFG.tickets, rewards: CFG.rewards, breaks: CFG.breaks }, { "x-organizer": SECRET });
+await raw("POST", "/api/z", { id: EID, startRound: START, callSeconds: 6, cap: N <= 500 ? 500 : 100000, tickets: CFG.tickets, rewards: CFG.rewards, breaks: CFG.breaks, rounds: CFG.rounds }, { "x-organizer": SECRET });
 await raw("PUT", `/api/z/${EID}/control/key`, { publicKey: publicKeyFromSecret(KEY) }, { "x-organizer": SECRET });
 
 interface P { rt: PhoneRuntime; phone: string; joinAt: number; offFrom: number; offTo: number; blockedAll: boolean; liar: boolean; flaky: number; cheater: boolean; stranded: boolean }
@@ -61,7 +62,7 @@ const phones: P[] = Array.from({ length: N }, (_, i) => {
   return p;
 });
 let step = 0;
-const TICKS = RICH ? 215 + 25 + 20 : 215; // the rich settings add 25 rounds of breaks
+const TICKS = (RICH ? 215 + 25 + 20 : 215) + (ROUNDS - 1) * 212; // the rich settings add 25 rounds of breaks; each extra round adds 180 + the 30-round wait + slack
 const t0 = Date.now();
 const brkSeen = new Set<string>(); const brkLen = new Map<string, number>(); let brkGrew = false; let cheated = 0; let published = false, pauseIv: { start: number; end: number } | null = null; const sawDuring = new Set<number>();
 for (step = 0; step < TICKS; step++) {
@@ -95,7 +96,9 @@ console.log(`\n  simulated ${N} phones x ${TICKS} ticks in ${elapsed} s`);
 /* ---- checks ---- */
 const f = (await readPublished({ get: async (k) => (await d.db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<any>())?.v ?? null, put: async () => {} }, EID))!;
 const st = resolveControl(cfgOf(f), f.messages);
-const ref = deriveCalls(EID, (scheduleFull(st, START, STRIDE, CFG.breaks, 90) as number[]).map((r) => rnd(r)));
+const refs: Record<number, number[]> = {};
+for (let r = 1; r <= ROUNDS; r++) refs[r] = deriveCalls(roundEid(EID, r), Array.from({ length: 90 }, (_, k) => rnd(callRoundR(st, START, STRIDE, CFG.breaks, r, k)!)));
+const ref = refs[ROUNDS]!; // phones that finished show the last round
 ok(sawDuring.size === 1, `during the pause no phone revealed a number (log held at ${[...sawDuring][0]})`);
 if (RICH) { ok(brkSeen.size === 2 && !brkGrew, `both brand breaks were shown (${[...brkSeen].join(", ")}) and no number appeared while one was showing`); ok(phones.filter((p) => p.rt.pid).every((p) => p.rt.view().tickets.length === 2), "every participant holds two tickets"); }
 const live = phones.filter((p) => !p.stranded && !p.liar && p.rt.pid);
@@ -115,18 +118,18 @@ const pids: string[] = people.map((x: any) => x.pid);
 ok(pids.length === phones.filter((p) => p.rt.pid).length, `store holds exactly the ${pids.length} people who joined, no duplicates`);
 const claims = (await (await raw("GET", `/api/z/${EID}/claims`, undefined, org)).json() as any).claims;
 const claims2 = (await (await raw("GET", `/api/z/${EID}/claims`, undefined, org)).json() as any).claims;
-const chk = checkClaims(EID, claims2.map((c: any) => ({ pid: c.pid, pattern: c.pattern, idx: c.idx })), ref, CFG);
+const chk = checkClaims(EID, claims2.map((c: any) => ({ pid: c.pid, pattern: c.pattern, idx: c.idx, round: c.round })), refs, CFG);
 // a cheater who also genuinely completes star at a different call has the INSERT OR IGNORE'd honest claim; count only the invented ones that are wrong
 if (N > 500) ok(claims2.length === 0, `large engagement: no per-claim rows are stored (${claims2.length}); invented claims cannot influence winners because winners are recomputed from the public log`);
 else ok(chk.bad.length === cheated && chk.good.length === claims2.length - cheated, `every invented claim was caught by recomputation and no true claim was rejected (${chk.bad.length} rejected of ${claims2.length}; ${cheated} invented)`);
 for (const c of chk.bad.filter((c) => !((c.pattern === 'full' && c.idx === 3) || (c.pattern === 'star' && c.idx === 2))).slice(0, 5)) { const ph = phones.find((p) => p.rt.pid === c.pid)!; console.log(`  (unexpected bad claim ${c.pattern}@${c.idx} true=${completionIndexKey(ticketsFor(EID, c.pid, CFG.tickets), c.pattern, ref)} joinAt=${ph.joinAt} liar=${ph.liar} flaky=${ph.flaky} off=${ph.offFrom} logLen=${ph.rt.view().log.length})`); }
-const settled = settleAll(EID, pids, ref, CFG);
-ok(settled.length === CFG.rewards.length, `every reward line (${CFG.rewards.length}) settled from the public log, the participant list and the engagement settings alone`);
+const settled = Array.from({ length: ROUNDS }, (_, i) => settleAll(EID, pids, refs[i + 1]!, CFG, i + 1)).flat();
+ok(settled.length === CFG.rewards.length * ROUNDS, `every reward line (${CFG.rewards.length}) settled from the public log, the participant list and the engagement settings alone`);
 for (const s of settled) {
-  if (s.ordinal === 1) { const truth = Math.min(...pids.map((pid) => completionIndexKey(ticketsFor(EID, pid, CFG.tickets), s.pattern, ref)).filter((i) => i >= 0)); if (s.idx !== truth) ok(false, `${s.pattern} earliest call matches ground truth`); }
+  if (s.ordinal === 1) { const truth = Math.min(...pids.map((pid) => completionIndexKey(ticketsFor(roundEid(EID, s.round), pid, CFG.tickets), s.pattern, refs[s.round]!)).filter((i) => i >= 0)); if (s.idx !== truth) ok(false, `${s.pattern} earliest call matches ground truth`); }
 }
-ok(true, "earliest completion for every pattern equals ground truth over all tickets: " + settled.map((s) => `${s.pattern}#${s.ordinal}@${s.idx + 1}x${s.pids.length}`).join(" "));
-const post = await raw("POST", `/api/z/${EID}/settle`, { results: settled.map((s) => ({ pattern: s.pattern, ordinal: s.ordinal, idx: s.idx, pids: s.pids })) }, org);
+ok(true, "earliest completion for every pattern equals ground truth over all tickets: " + settled.map((s) => `r${s.round}:${s.pattern}#${s.ordinal}@${s.idx + 1}x${s.pids.length}`).join(" "));
+const post = await raw("POST", `/api/z/${EID}/settle`, { results: settled.map((s) => ({ pattern: s.pattern, ordinal: s.ordinal, round: s.round, idx: s.idx, pids: s.pids })) }, org);
 ok(post.ok, "organizer published the results");
 const pub = await (await raw("GET", `/api/z/${EID}/results`)).json() as any;
 if (pub.results.length !== settled.length) console.log("  (published", pub.results.length, "settled", settled.length, JSON.stringify(pub).slice(0, 200), ")");
