@@ -12,6 +12,7 @@
 //   nobody        - phones: join, send claims, read results counts, read the engagement info and the signed control file.
 
 import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, type PayEnv } from "./pay";
+import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { SAFETY_FAST, SAFETY_STANDARD, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 
 export interface D1Result<T = any> { results?: T[]; meta?: { changes?: number } }
@@ -49,6 +50,7 @@ export const SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS suggestion_vote (sid INTEGER NOT NULL, org TEXT NOT NULL, PRIMARY KEY (sid, org))`,
   `CREATE TABLE IF NOT EXISTS login_code (email_hash TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires_ms INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, win_start INTEGER NOT NULL, sent INTEGER NOT NULL DEFAULT 0)`,
   ...PAY_SCHEMA,
+  ...PARTNER_SCHEMA,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full"]);
@@ -78,7 +80,7 @@ async function spend(env: Env, now: number, n = 1): Promise<boolean> {
 }
 const BUSY = () => json({ error: "Busy day. Please try again after midnight UTC." }, 503);
 
-const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-organizer, authorization", "access-control-allow-methods": "GET, POST, PUT, PATCH, OPTIONS", "access-control-max-age": "86400" };
+const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-organizer, x-partner, authorization", "access-control-allow-methods": "GET, POST, PUT, PATCH, OPTIONS", "access-control-max-age": "86400" };
 /** Phones load the app from Pages and call this Worker from another origin, so every answer carries open CORS (no cookies are used anywhere). */
 export async function handle(req: Request, env: Env, now = Date.now()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
@@ -140,6 +142,8 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   if (req.method === "GET" && p === "/api/z/ai-manifest") return json(AI_MANIFEST);
   const paid = await payRoute(req, env as PayEnv, now, (n) => spend(env, now, n));
   if (paid) return paid;
+  const partnered = await partnerRoute(req, env as PayEnv, now, (n) => spend(env, now, n), a.plat);
+  if (partnered) return partnered;
 
   /* ---- sign in with an e-mailed code (no passwords): also how an organizer who lost their key gets a fresh one ---- */
   if (req.method === "POST" && p === "/api/auth/email") {

@@ -65,6 +65,7 @@
       <form id="coForm" novalidate>
         <label class="lb" for="oName">Organization name</label><input class="inp" id="oName" autocomplete="organization" placeholder="e.g. Acme Industries">
         <label class="lb" for="oMail">Your work email (invoice and login)</label><input class="inp" id="oMail" type="email" autocomplete="email" placeholder="you@company.com">
+        <label class="lb" for="oPh">Your mobile number (optional)</label><input class="inp" id="oPh" type="tel" autocomplete="tel" placeholder="98765 43210">
         <label class="lb" for="oCty">Country of your organization</label><select class="inp" id="oCty">${TB.countryOpts(def)}</select>
         <div id="taxBox"></div><div id="fErr"></div>
         <button class="btn block" style="margin-top:16px" type="submit" id="payGo">${ic("lock")} ${PAYMODE === "razorpay" ? "Pay securely with Razorpay" : PAYMODE === "off" ? "Payments are not switched on yet" : "Pay (local test payment)"}</button>
@@ -74,6 +75,18 @@
     $("coForm").addEventListener("submit", (e) => { e.preventDefault(); pay(); });
     taxField(); focusFirst("oName");
   }
+  // ---------- refer & earn: remember who sent this visitor for 30 days (kept in this browser only) ----------
+  const REF = (() => {
+    try {
+      const p = new URLSearchParams(location.search).get("ref"); const d = p ? p.replace(/\D/g, "").slice(-10) : "";
+      if (d.length === 10) localStorage.setItem("ctz-ref", JSON.stringify({ code: d, at: Date.now() }));
+      const v = JSON.parse(localStorage.getItem("ctz-ref") || "null");
+      if (v && Date.now() - v.at < 30 * 86400000) return v.code;
+      localStorage.removeItem("ctz-ref");
+    } catch {}
+    return "";
+  })();
+  if (REF) TB.api("GET", "/api/partner/check?code=" + REF).then((r) => { if (!r.valid) { try { localStorage.removeItem("ctz-ref"); } catch {} } }).catch(() => {});
   let PAYMODE = "test"; // razorpay | test | off, from the server
   TB.api("GET", "/api/payments/status").then((s) => { PAYMODE = s.mode; }).catch(() => {});
   async function pay() {
@@ -85,7 +98,7 @@
     setErr("");
     const btn = $("payGo"); btn.disabled = true; const keep = btn.innerHTML; btn.textContent = "Processing…";
     try {
-      let r = await TB.api("POST", "/api/checkout", { org, email, country, taxId, pack: ORDER.pack, currency: S.cur });
+      let r = await TB.api("POST", "/api/checkout", { org, email, country, taxId, pack: ORDER.pack, currency: S.cur, ref: (() => { try { const v = JSON.parse(localStorage.getItem("ctz-ref") || "null"); return v && Date.now() - v.at < 30 * 86400000 ? v.code : ""; } catch { return ""; } })(), phone: ($("oPh") ? $("oPh").value.trim() : "") });
       if (r.mode === "razorpay") r = await TB.pay(r.razorpay, r.paymentId); // opens Razorpay Checkout; the server verifies the payment
       else if (r.result) r = Object.assign({ mode: r.mode }, r.result); // local test mode answers with the finished order
       ORDER = Object.assign(ORDER, { org, email, mode: r.mode }, r);

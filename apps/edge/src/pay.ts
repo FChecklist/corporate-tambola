@@ -11,14 +11,15 @@ import {
 } from "../../../packages/billing/src";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import type { D1, Env } from "./worker";
+import { partnerCode, phoneHashFor, recordCommission } from "./partners";
 
 export interface PayEnv extends Env {
   RAZORPAY_KEY_ID?: string; RAZORPAY_KEY_SECRET?: string; RAZORPAY_WEBHOOK_SECRET?: string; RAZORPAY_BASE_URL?: string; RAZORPAY_INTERNATIONAL?: string;
-  TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string;
+  PARTNER_COMMISSION_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string;
 }
 
 export const PAY_SCHEMA = [
-  `CREATE TABLE IF NOT EXISTS payment (id TEXT PRIMARY KEY, org TEXT, email TEXT NOT NULL, pack INTEGER NOT NULL, currency TEXT NOT NULL, amount REAL NOT NULL, tax REAL NOT NULL, rzp_order_id TEXT UNIQUE, rzp_payment_id TEXT, status TEXT NOT NULL, created_ms INTEGER NOT NULL, paid_ms INTEGER, meta TEXT NOT NULL, result TEXT)`,
+  `CREATE TABLE IF NOT EXISTS payment (id TEXT PRIMARY KEY, org TEXT, email TEXT NOT NULL, pack INTEGER NOT NULL, currency TEXT NOT NULL, amount REAL NOT NULL, tax REAL NOT NULL, rzp_order_id TEXT UNIQUE, rzp_payment_id TEXT, status TEXT NOT NULL, created_ms INTEGER NOT NULL, paid_ms INTEGER, meta TEXT NOT NULL, result TEXT, ref TEXT, buyer_phone_hash TEXT)`,
   `CREATE TABLE IF NOT EXISTS invoice (token TEXT PRIMARY KEY, payment_id TEXT UNIQUE NOT NULL, brand TEXT NOT NULL, fy TEXT NOT NULL, seq INTEGER NOT NULL, number TEXT NOT NULL, issued_ms INTEGER NOT NULL, data TEXT NOT NULL, UNIQUE (brand, fy, seq))`,
   `CREATE TABLE IF NOT EXISTS entitlement (id TEXT PRIMARY KEY, org TEXT NOT NULL, pack INTEGER NOT NULL, payment_id TEXT NOT NULL, eid TEXT, created_ms INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS organizer_email (email_hash TEXT PRIMARY KEY, org TEXT NOT NULL)`,
@@ -104,6 +105,7 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
     `\nINVOICE\n${renderInvoiceText(data)}\nView or print it: ${origin}/api/invoice/${token}`,
   ];
   await sendMail(env, db, p.email, `${brand.name}: payment received, invoice ${number}`, lines.join("\n\n"), now);
+  await recordCommission(env, p, tax.taxable, now); // refer & earn: a commission row for a referred, PAID purchase only
   const result = { ok: true, orderId: p.id, pack: p.pack, total: p.amount, tax: p.tax, currency: p.currency, invoiceUrl: `/api/invoice/${token}`, invoiceNumber: number, organizerKey, newOrganizer: !!organizerKey };
   await db.prepare("UPDATE payment SET status='paid', paid_ms=?, org=?, result=? WHERE id=?").bind(now, org, JSON.stringify(result), p.id).run();
   return { result };
@@ -134,7 +136,9 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
       try { order = await createOrder(rzp, { amountMinor: toMinor(pr.total), currency: cur, receipt: id, notes: { brand: brand.name, product: "engagement", pack: String(pack), organization: meta.org.slice(0, 80), payment_ref: id } }); }
       catch (e: any) { return json({ error: `The payment service said: ${e.message}` }, 502); }
     }
-    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), pack, cur, pr.total, pr.tax, order?.id ?? null, "created", now, JSON.stringify(meta)).run();
+    const ref = partnerCode(b.ref); // from the buyer's own browser (valid for 30 days after the link was opened); checked against real partners when the payment is fulfilled
+    const bph = partnerCode(b.phone); // optional, only used to spot a partner buying through their own link
+    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,ref,buyer_phone_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), pack, cur, pr.total, pr.tax, order?.id ?? null, "created", now, JSON.stringify(meta), ref, bph ? await phoneHashFor(env, bph) : null).run();
     if (!rzp) { const f = await fulfil(env, id, now, spend); return "result" in f ? json({ mode: "test", paymentId: id, result: f.result }) : json({ error: f.error }, f.status); }
     return json({ mode: "razorpay", paymentId: id, razorpay: { keyId: rzp.keyId, orderId: order.id, amount: toMinor(pr.total), currency: cur, name: brand.name, description: `Up to ${pack} participants`, prefill: { email: b.email.trim() }, notes: { brand: brand.name }, theme: { color: brand.theme } } });
   }

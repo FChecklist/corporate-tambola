@@ -55,7 +55,7 @@
       <div class="zcard"><div class="zball"><div class="zbig ${last ? "" : "none"}" id="big" aria-live="assertive" aria-label="${last ? "Number " + last : "No number yet"}">${last ?? "–"}</div></div>
         <div class="zsub">${sub}</div>
         <div class="zlast" aria-label="Recent numbers">${v.log.slice(-7, -1).reverse().map((n) => `<span>${n}</span>`).join("")}</div></div>
-      <div class="zcard"><h2>Your ticket</h2>${v.ticket ? ticketHtml(v.ticket, called) : ""}</div>
+      <div class="zcard"><h2>Your ticket</h2>${v.ticket ? ticketHtml(v.ticket, called) : ""}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
       <div class="zcard"><h2>Still to win</h2>${still}${chk}</div>
       <div class="zcard"><h2>All numbers · ${v.log.length} of 90 called</h2><div class="zboard">${Array.from({ length: 90 }, (_, i) => `<div class="${called.has(i + 1) ? "c" : ""}">${i + 1}</div>`).join("")}</div></div>`;
   }
@@ -75,7 +75,9 @@
     go.onclick = async () => {
       go.disabled = true;
       if (window.TBAudio) TBAudio.unlock();
-      const ok = await rt.join(document.getElementById("ph").value, document.getElementById("nm").value.trim());
+      const typed = document.getElementById("ph").value;
+      store.set("ctz-phone", typed.replace(/\D/g, "").slice(-10)); // kept on this phone only, so Refer & earn can fill it in for you
+      const ok = await rt.join(typed, document.getElementById("nm").value.trim());
       if (ok) start(); else { go.disabled = false; paint(); }
     };
   }
