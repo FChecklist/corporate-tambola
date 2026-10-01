@@ -12,7 +12,7 @@ describe("AI work link guardrails", () => {
     }
   });
   test("exactly these actions need the organizer's confirmation", () => {
-    expect(TOOLS.filter((t) => t.kind === "confirm").map((t) => t.name).sort()).toEqual(["end_engagement", "erase_saved_people", "raise_limit", "remove_people", "start_engagement"]);
+    expect(TOOLS.filter((t) => t.kind === "confirm").map((t) => t.name).sort()).toEqual(["end_engagement", "erase_saved_people", "raise_limit", "remove_people", "request_control", "start_engagement"]);
   });
   test("every tool has a summary, valid schema and a code parameter where it targets an engagement", () => {
     for (const t of TOOLS) {

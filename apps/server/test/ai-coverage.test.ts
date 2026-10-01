@@ -13,6 +13,9 @@ const EXEMPT: Record<string, string> = {
   "GET /api/orgs/me/ai-link": "creating/rotating the AI link is the organizer's own act",
   "POST /api/orgs/me/ai-link": "same",
   "DELETE /api/orgs/me/ai-link": "same",
+  "GET /api/e/:code/control": "public static file that phones read, not an organizer action",
+  "PUT /api/e/:code/control/key": "registering the signing key is done by the organizer own browser; the AI never holds or sets a key",
+  "POST /api/e/:code/control": "must carry the organizer signature; the AI can only DRAFT it (request_control) and the confirm page signs",
   "GET /api/orgs/me/invoices": "TODO: add a read-only get_invoices tool",
 };
 
@@ -22,7 +25,7 @@ test("every organizer console route has an AI tool or a stated reason", async ()
   const idx = await Bun.file(new URL("../src/index.ts", import.meta.url)).text();
   const ai = await Bun.file(new URL("../src/ai-link.ts", import.meta.url)).text();
   const routes = [...idx.matchAll(/^route_\("([A-Z]+)", "([^"]+)"/gm)].map((m) => `${m[1]} ${m[2]}`);
-  const console_ = routes.filter((r) => /\/api\/(e\/:code\/(console|settings|rewards|breaks|upload|people|waiting|conflicts|start|end|draw|pause|resume|moments|endbreak|raise-limit|report|reuse)|orgs\/me|checkout|payments|webhooks|auth|health)/.test(r));
+  const console_ = routes.filter((r) => /\/api\/(e\/:code\/(console|settings|rewards|breaks|upload|people|waiting|conflicts|start|end|draw|pause|resume|moments|endbreak|raise-limit|report|reuse|control)|orgs\/me|checkout|payments|webhooks|auth|health)/.test(r));
   const tools = new Set([...ai.matchAll(/(?:must|call|callRoute)\([a-z]+,\s*"([A-Z]+)",\s*[`"]([^`"]*)[`"]/g)].map((m) => `${m[1]} ${norm(m[2]!)}`));
   const missing = console_.filter((r) => !EXEMPT[r] && ![...tools].some((t) => t === norm(r)));
   expect(missing).toEqual([]);

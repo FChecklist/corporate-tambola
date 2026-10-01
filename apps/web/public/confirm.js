@@ -117,7 +117,16 @@
   }
   async function confirm() {
     const b = $("yes"); b.disabled = true; setErr("");
-    const { status, data } = await call(`/api/ai/drafts/${encodeURIComponent(id)}/confirm`, { code });
+    // a pause/resume/stop for phone-only engagements must be signed by the key that lives in THIS browser (the AI cannot do it)
+    let signed;
+    const ctl = (draft.actions || []).find((a) => a.tool === "request_control");
+    if (ctl && window.TBControl) {
+      try {
+        const p = ctl.params || {}, mins = Number(p.minutes || 0);
+        signed = await window.TBControl.sign(p.code, { token: "" }, p.action, { pauseForRounds: p.action === "pause" && mins ? mins * 20 : undefined, addRounds: p.action === "extend" ? mins * 20 : undefined });
+      } catch (e) { b.disabled = false; return setErr("Open this link in the browser where you set up this engagement: that is where your signing key is kept."); }
+    }
+    const { status, data } = await call(`/api/ai/drafts/${encodeURIComponent(id)}/confirm`, { code, signed });
     if (status === 401) { TB.setOrgToken(null); return signIn("Please sign in again to finish."); }
     if (data && Array.isArray(data.results)) {
       const needPay = data.results.find((r) => r.ok && r.result && r.result.mode === "razorpay");
