@@ -1,0 +1,16 @@
+{
+  "_note": "Copy to config/company.json and fill in from your GST registration certificate / MCA record. Nothing here is guessed; invoices say DRAFT until gstin, address and stateCode are filled.",
+  "legalName": "SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED",
+  "cin": "",
+  "pan": "",
+  "gstin": "",
+  "stateCode": "",
+  "stateName": "",
+  "addressLines": [],
+  "email": "",
+  "phone": "",
+  "sacCode": "",
+  "sacDescription": "Software solutions and products",
+  "bank": { "name": "", "accountNumber": "", "ifsc": "" },
+  "invoiceFooter": "This is a computer generated invoice."
+}

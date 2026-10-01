@@ -12,7 +12,8 @@
     "dev": "bun run apps/server/src/index.ts",
     "seed": "bun run tools/seed/seed.ts",
     "sim": "bun run tools/sim/run.ts",
-    "ai-persona": "bun run tools/sim/ai-persona.ts"
+    "ai-persona": "bun run tools/sim/ai-persona.ts",
+    "payments-test": "bun run tools/sim/payments.ts"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

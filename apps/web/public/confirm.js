@@ -119,9 +119,25 @@
     const b = $("yes"); b.disabled = true; setErr("");
     const { status, data } = await call(`/api/ai/drafts/${encodeURIComponent(id)}/confirm`, { code });
     if (status === 401) { TB.setOrgToken(null); return signIn("Please sign in again to finish."); }
-    if (data && Array.isArray(data.results)) return done(data, status);
+    if (data && Array.isArray(data.results)) {
+      const needPay = data.results.find((r) => r.ok && r.result && r.result.mode === "razorpay");
+      if (needPay) return payStep(data, status, needPay.result);
+      return done(data, status);
+    }
     if (status === 410 || status === 409 || status === 404) return problem(title(status, data), reason(status, data));
     b.disabled = false; setErr(reason(status, data));
+  }
+  // an upgrade is confirmed first, then paid on this page (the AI can never pay)
+  function payStep(data, status, r) {
+    clearInterval(timer);
+    view(card(`<div class="res">${ic("lock")}</div><h1 class="center" style="font-size:24px">One more step: pay</h1>
+      <p class="center">Your upgrade is confirmed. Pay ${esc(TB.money(r.razorpay.amount / 100, r.razorpay.currency))} securely with Razorpay to finish.</p><div id="fErr"></div>
+      <button class="btn gold block" id="payNow">${ic("lock")} Pay now</button>`));
+    $("payNow").addEventListener("click", async () => {
+      $("payNow").disabled = true; setErr("");
+      try { const paid = await TB.pay(r.razorpay, r.paymentId); data.results.forEach((x) => { if (x.result && x.result.mode === "razorpay") x.result = paid; }); done(data, status); }
+      catch (e) { $("payNow").disabled = false; setErr(e.message); }
+    });
   }
   function done(data, status) {
     clearInterval(timer);

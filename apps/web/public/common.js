@@ -125,5 +125,26 @@
     },
   };
 
+  // ---- payments: Razorpay Checkout (the brand is the checkout name). The SERVER verifies the payment; the browser only reports it. ----
+  TB.pay = (rz, paymentId) => new Promise((resolve, reject) => {
+    const open = () => {
+      try {
+        const box = new window.Razorpay({
+          key: rz.keyId, order_id: rz.orderId, amount: rz.amount, currency: rz.currency, name: rz.name, description: rz.description, prefill: rz.prefill, notes: rz.notes, theme: rz.theme,
+          handler: async (resp) => {
+            try { resolve(await TB.api("POST", "/api/payments/verify", { paymentId, razorpay_order_id: resp.razorpay_order_id, razorpay_payment_id: resp.razorpay_payment_id, razorpay_signature: resp.razorpay_signature })); }
+            catch (e) { reject(e); }
+          },
+          modal: { ondismiss: () => reject(Object.assign(new Error("Payment was cancelled. Nothing was charged."), { cancelled: true })) },
+        });
+        box.on && box.on("payment.failed", (r) => reject(new Error((r && r.error && r.error.description) || "The payment failed. Nothing was charged.")));
+        box.open();
+      } catch (e) { reject(new Error("Could not open the payment window. Please try again.")); }
+    };
+    if (window.Razorpay) return open();
+    const s = document.createElement("script"); s.src = "https://checkout.razorpay.com/v1/checkout.js"; s.onload = open; s.onerror = () => reject(new Error("Could not reach the payment service. Check your internet and try again."));
+    document.head.appendChild(s);
+  });
+
   TB.QR = (el, text) => { /* optional: uses qrcodejs if the page loaded it */ if (window.QRCode && el) { el.innerHTML = ""; new window.QRCode(el, { text, width: 140, height: 140 }); } };
 })();

@@ -1,2 +1,13 @@
-{ "name": "@tambola/server", "version": "0.1.0", "type": "module", "scripts": { "dev": "bun run src/index.ts" },
-  "dependencies": { "@tambola/engine": "workspace:*", "@tambola/shared": "workspace:*" } }
+{
+  "name": "@tambola/server",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@tambola/engine": "workspace:*",
+    "@tambola/shared": "workspace:*",
+    "@tambola/billing": "workspace:*"
+  }
+}

@@ -10,6 +10,7 @@ import { CFG, EngagementEngine, makeRewardLines, type PublicEvent, type RewardLi
 import { PACKS, checkUpload, formatInternational, maskNumber, normalize, price, proposeBreakPositions, rewardName, type Currency, type PatternId } from "@tambola/shared";
 import { openDb, sha256 } from "./db";
 import { createAiLink } from "./ai-link";
+import { PayError, createPayments } from "./payments";
 
 // ---------- config ----------
 const PORT = Number(process.env.PORT ?? 8787);
@@ -193,6 +194,10 @@ const ai = createAiLink({
   checkUpload, retentionDays: Math.round(RETAIN_MS / DAY),
 });
 
+// ---------- payments (Razorpay) + brand-wise invoices ----------
+const pay = createPayments({ db, now, rid, dev: DEV, createRoom, rooms, ai, sendMail, price, packs: PACKS, repoRoot: join(import.meta.dir, "../../..") });
+const payGuard = async <T>(f: () => Promise<T>): Promise<T> => { try { return await f(); } catch (e) { if (e instanceof PayError) fail(e.status, e.message); throw e; } };
+
 // ---------- http helpers ----------
 class HttpError extends Error { constructor(public status: number, msg: string) { super(msg); } }
 function fail(status: number, msg: string): never { throw new HttpError(status, msg); }
@@ -320,20 +325,24 @@ route_("POST", "/api/checkout", async ({ req }) => {
   if (currency === "INR" && !String(b.taxId ?? "").trim() && b.country === "IN") fail(400, "Enter your GSTIN.");
   let o = db.query("SELECT * FROM organizers WHERE email=?").get(email) as any;
   if (!o) { const id = rid(10); db.query("INSERT INTO organizers(id,email,org_name,country,tax_id,created_at) VALUES(?,?,?,?,?,?)").run(id, email, org, b.country ?? "IN", b.taxId ?? "", now()); o = { id }; }
-  const pr = price(pack, currency);
-  const room = createRoom(o.id, pack, currency, { orgName: org, limit: pack, defaultCountry: b.country ?? "IN", name: "My first engagement", startsAt: now() + 2 * 86400_000 });
-  const orderId = "ord_" + rid(8);
-  // fake payment gateway: always succeeds locally
-  db.query("INSERT INTO orders(id,organizer_id,engagement_code,pack,currency,total,tax,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)").run(orderId, o.id, room.code, pack, currency, pr.total, pr.tax, "paid", now());
-  // AI work link: minted on the first purchase and emailed (never returned in the response: the buyer may not own the address).
-  // A repeat purchase keeps the existing link, which already covers the new engagement.
-  const existingLink = ai.linkInfo(o.id);
-  const minted = existingLink && existingLink.active ? null : ai.mint(o.id, 30, "standard");
-  const origin_ = new URL(req.url).origin;
-  const mail = ai.emailAbout({ email, org }, minted ? `${origin_}/ai/${minted.token}` : "", { origin: origin_, engagement: { code: room.code, link: `${origin_}/e/${room.code}` }, order: { id: orderId, pack, currency, total: pr.total, tax: pr.tax } });
-  ai.sendEmail(email, mail.subject, mail.body, !!minted);
-  return json({ ok: true, orderId, engagementCode: room.code, total: pr.total, tax: pr.tax, currency, ...(DEV && minted ? { devAiLink: `${origin_}/ai/${minted.token}` } : {}) });
+  const r = await payGuard(() => pay.begin({ organizerId: o.id, email, org, country: b.country ?? "IN", taxId: String(b.taxId ?? ""), pack, currency, origin: new URL(req.url).origin, purpose: "new_engagement" }));
+  // local test mode (no Razorpay keys, dev only) is fulfilled at once; with keys the browser opens Razorpay Checkout and then calls /api/payments/verify
+  if (r.mode === "test") return json({ ...r.result, mode: "test" });
+  return json({ ok: true, mode: "razorpay", paymentId: r.paymentId, razorpay: r.razorpay });
 });
+
+route_("POST", "/api/payments/verify", async ({ req }) => {
+  const b = await body(req);
+  const r = await payGuard(() => pay.verify(String(b.paymentId ?? ""), { razorpay_order_id: String(b.razorpay_order_id ?? ""), razorpay_payment_id: String(b.razorpay_payment_id ?? ""), razorpay_signature: String(b.razorpay_signature ?? "") }));
+  return json(r);
+});
+route_("POST", "/api/webhooks/razorpay", async ({ req }) => {
+  const raw = await req.text();
+  const r = await payGuard(() => pay.webhook(raw, req.headers.get("x-razorpay-signature") ?? ""));
+  return json(r);
+});
+route_("GET", "/api/payments/status", () => json(pay.status()));
+route_("GET", "/api/orgs/me/invoices", ({ req }) => { const org = orgOf(req) ?? fail(401, "Please log in."); return json({ invoices: pay.invoicesOf(org) }); });
 
 route_("POST", "/api/auth/email", async ({ req }) => {
   const b = await body(req);
@@ -760,13 +769,12 @@ route_("POST", "/api/e/:code/raise-limit", async ({ req, m }) => {
   const room = getRoom(m[1]!); needOrganizer(actorOf(req, room));
   const b = await body(req), pack = Number(b.pack);
   if (!PACKS.some((p) => p[0] === pack) || pack <= room.pack) fail(400, "Choose a bigger pack.");
-  const diff = price(pack, room.currency).total - price(room.pack, room.currency).total;
-  db.query("INSERT INTO orders(id,organizer_id,engagement_code,pack,currency,total,tax,status,created_at,upgrade_of) VALUES(?,?,?,?,?,?,?,?,?,?)")
-    .run("ord_" + rid(8), room.organizerId, room.code, pack, room.currency, diff, 0, "paid", now(), room.code);
-  room.pack = pack;
-  orErr(room.engine.updateSettings("organizer", { limit: pack }), 0);
-  room.touch();
-  return json({ ok: true, paid: diff, currency: room.currency });
+  const now_ = price(pack, room.currency), before = price(room.pack, room.currency);
+  const diff = now_.total - before.total;
+  const org = db.query("SELECT email, org_name, country, tax_id FROM organizers WHERE id=?").get(room.organizerId) as any;
+  const r = await payGuard(() => pay.begin({ organizerId: room.organizerId, email: org.email, org: org.org_name, country: org.country ?? "IN", taxId: org.tax_id ?? "", pack, currency: room.currency, origin: new URL(req.url).origin, purpose: "upgrade", engagementCode: room.code, amountOverride: { total: diff, tax: Math.round((now_.tax - before.tax) * 100) / 100 } }));
+  if (r.mode === "test") return json({ ok: true, mode: "test", paid: diff, currency: room.currency, invoiceUrl: r.result.invoiceUrl });
+  return json({ ok: true, mode: "razorpay", paymentId: r.paymentId, razorpay: r.razorpay, note: "Open Razorpay Checkout with these details, then confirm the payment." });
 });
 
 route_("GET", "/api/e/:code/report", ({ req, m }) => {
@@ -894,6 +902,10 @@ const server = Bun.serve<WSData>({
       return server.upgrade(req, { data }) ? undefined : new Response("upgrade failed", { status: 400 });
     }
     stats.http++;
+    if (url.pathname.startsWith("/invoice/")) {
+      const html = pay.invoiceHtml(url.pathname.slice(9));
+      return html ? new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex" } }) : new Response("Invoice not found", { status: 404 });
+    }
     if (url.pathname.startsWith("/ai/")) { stats.api++; return ai.handle(req, url, server); }
     if (url.pathname.startsWith("/api/")) {
       stats.api++;

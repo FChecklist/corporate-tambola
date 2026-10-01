@@ -1,1 +1,9 @@
-{ "name": "@tambola/sim", "version": "0.1.0", "type": "module", "dependencies": { "@tambola/shared": "workspace:*" } }
+{
+  "name": "@tambola/sim",
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "@tambola/shared": "workspace:*",
+    "@tambola/billing": "workspace:*"
+  }
+}

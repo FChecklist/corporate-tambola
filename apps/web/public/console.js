@@ -658,8 +658,9 @@
     raise: () => raiseSheet(),
     raisePick: (el) => { S.raisePick = Number(el.dataset.v); sheet(raiseHtml()); },
     raiseGo: async () => {
-      const r = await run(api("POST", `${E()}/raise-limit`, { pack: S.raisePick }));
-      if (r) { closeSheet(); toast(`Limit raised. You paid ${esc(TB.money(r.paid, r.currency))}.`); await loadConsole(); }
+      let r = await run(api("POST", `${E()}/raise-limit`, { pack: S.raisePick }));
+      if (r && r.mode === "razorpay") { try { r = await TB.pay(r.razorpay, r.paymentId); } catch (e) { toast(esc(e.message)); return; } }
+      if (r) { closeSheet(); toast(`Limit raised. You paid ${esc(TB.money(r.paid, r.currency))}.${r.invoiceUrl ? ` <a href="${esc(r.invoiceUrl)}" target="_blank" rel="noopener">Invoice</a>` : ""}`); await loadConsole(); }
     },
     rwStep: (el) => {
       const k = el.dataset.k, d = Number(el.dataset.v), x = KINDS.find((y) => kkey(y) === k);

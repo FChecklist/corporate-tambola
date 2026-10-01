@@ -67,13 +67,15 @@
         <label class="lb" for="oMail">Your work email (invoice and login)</label><input class="inp" id="oMail" type="email" autocomplete="email" placeholder="you@company.com">
         <label class="lb" for="oCty">Country of your organization</label><select class="inp" id="oCty">${TB.countryOpts(def)}</select>
         <div id="taxBox"></div><div id="fErr"></div>
-        <button class="btn block" style="margin-top:16px" type="submit" id="payGo">${ic("lock")} Pay (local test payment)</button>
+        <button class="btn block" style="margin-top:16px" type="submit" id="payGo">${ic("lock")} ${PAYMODE === "razorpay" ? "Pay securely with Razorpay" : PAYMODE === "off" ? "Payments are not switched on yet" : "Pay (local test payment)"}</button>
       </form>
-      <p class="proto">Local test payment: no real money is taken. Unused places are not refunded.</p>`);
+      <p class="proto">${PAYMODE === "razorpay" ? "Secure payment by Razorpay. Unused places are not refunded. A GST invoice is emailed to you." : "Local test payment: no real money is taken. Unused places are not refunded."}</p>`);
     $("oCty").addEventListener("change", taxField);
     $("coForm").addEventListener("submit", (e) => { e.preventDefault(); pay(); });
     taxField(); focusFirst("oName");
   }
+  let PAYMODE = "test"; // razorpay | test | off, from the server
+  TB.api("GET", "/api/payments/status").then((s) => { PAYMODE = s.mode; }).catch(() => {});
   async function pay() {
     const org = $("oName").value.trim(), email = $("oMail").value.trim().toLowerCase(), country = $("oCty").value, taxId = $("oGst").value.trim().toUpperCase();
     if (org.length < 2) return setErr("Please enter your organization name.");
@@ -83,15 +85,16 @@
     setErr("");
     const btn = $("payGo"); btn.disabled = true; const keep = btn.innerHTML; btn.textContent = "Processing…";
     try {
-      const r = await TB.api("POST", "/api/checkout", { org, email, country, taxId, pack: ORDER.pack, currency: S.cur });
-      ORDER = Object.assign(ORDER, { org, email }, r);
+      let r = await TB.api("POST", "/api/checkout", { org, email, country, taxId, pack: ORDER.pack, currency: S.cur });
+      if (r.mode === "razorpay") r = await TB.pay(r.razorpay, r.paymentId); // opens Razorpay Checkout; the server verifies the payment
+      ORDER = Object.assign(ORDER, { org, email, mode: r.mode }, r);
       done();
     } catch (e) { setErr(e.message); btn.disabled = false; btn.innerHTML = keep; }
   }
   function done() {
     const o = ORDER;
     TB.sheet(`${xbtn}<div class="res ok">${ic("check")}</div><h2 class="center">Your engagement is ready</h2>
-      <div class="sum"><div class="kv"><span>Order</span><b class="mono">${esc(o.orderId)}</b></div><div class="kv"><span>Organization</span><b>${esc(o.org)}</b></div><div class="kv"><span>Participants</span><b>Up to ${nf(o.pack)}</b></div><div class="kv t"><span>Paid (test)</span><b>${TB.money(o.total, o.currency)}</b></div></div>
+      <div class="sum"><div class="kv"><span>Order</span><b class="mono">${esc(o.orderId)}</b></div><div class="kv"><span>Organization</span><b>${esc(o.org)}</b></div><div class="kv"><span>Participants</span><b>Up to ${nf(o.pack)}</b></div><div class="kv t"><span>${o.mode === "test" ? "Paid (test)" : "Paid"}</span><b>${TB.money(o.total, o.currency)}</b></div>${o.invoiceNumber ? `<div class="kv"><span>Invoice</span><b class="mono"><a href="${esc(o.invoiceUrl)}" target="_blank" rel="noopener">${esc(o.invoiceNumber)}</a></b></div>` : ""}</div>
       <p class="small muted center">Next step: log in to your console to add participants and share the link. We will send the login code to <b>${esc(o.email)}</b>.</p>
       <div id="fErr"></div>
       <button class="btn block" id="toLogin" type="button">Log in to your console ${ic("arrow")}</button>`);

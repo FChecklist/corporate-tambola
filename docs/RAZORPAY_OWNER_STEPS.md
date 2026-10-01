@@ -1,0 +1,23 @@
+# Razorpay: what is built, and the steps only you can do
+
+Legal entity on every invoice: **SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED**. Brands (what the customer sees): **CORPORATE TAMBOLA**, **dpdp.VERIDIAN-AIOS.COM**, **projexa-ai.com**, **dewberry.in**. All are software solutions and products.
+
+## What is already built (and tested, 23/23 checks against a stand-in for Razorpay's public API)
+- `packages/billing`: the four brands, GST invoice maths (CGST+SGST same state, IGST other state, none for dollar sales), **brand-wise invoice numbers per financial year** (`CT/2026-27/000001`, `DPDP/...`, `PXA/...`, `DEW/...`), invoice HTML and text, and the Razorpay client (Orders API, payment lookup, capture, signature checks from the public docs).
+- Corporate Tambola checkout: our server creates the Razorpay **Order** (amount in paise, **brand name as the checkout name**, brand and product in the order notes) -> the browser opens Razorpay Checkout -> the server **verifies the signature and asks Razorpay what really happened** before delivering anything -> engagement created, **brand-wise tax invoice issued**, email sent with the invoice. A webhook delivers the purchase if the buyer closes the tab. Replays and tampering (wrong amount, wrong order, bad signature) deliver nothing. Upgrades ("raise limit") pay only the difference and are invoiced. Without keys, production cannot sell anything.
+- The invoice title is the BRAND; the supplier is always the legal entity ("A product of SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED"). Until the company details below are filled, invoices say **DRAFT** instead of pretending to be valid tax invoices.
+
+## What I could NOT do, and why
+Claude in Chrome silently refuses to open dashboard.razorpay.com for my session (the tab stays blank; example.com opens fine), so I could not read or change your dashboard. The Claude panel you have open inside your Razorpay tab is a different session that I cannot reach. So nothing in your Razorpay account has been cleaned or changed by me. Public search also did not show the company's GSTIN, CIN or address, so I have not guessed any.
+
+## Steps for you (about 15 minutes)
+1. **Test keys.** Razorpay Dashboard -> switch to **Test Mode** -> Account & Settings -> API Keys -> Generate Test Key. Put them in `C:\ct\ct\.env.local` (never in chat or the repo) as `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`; I will use the same file. Live keys come last, at go-live.
+2. **Company details.** Copy `config/company.example.json` to `config/company.json` and fill in: GSTIN, state code (first two digits of the GSTIN), registered address, CIN, PAN, SAC code (ask your CA which SAC applies; I have not assumed one), bank details if you want them on invoices.
+3. **Webhook.** Settings -> Webhooks -> Add: URL `https://<your domain>/api/webhooks/razorpay`, events `payment.captured` and `order.paid`, choose a secret and put it in `.env.local` as `RAZORPAY_WEBHOOK_SECRET`. (Locally use a tunnel; not needed for testing.)
+4. **Capture.** Payments -> Settings -> set **automatic capture**. (If it stays manual, our server captures the exact amount itself.)
+5. **Dollar payments.** International payments need to be enabled on your Razorpay account by Razorpay support. Until then dollar purchases are refused with a clear message. When enabled, set `RAZORPAY_INTERNATIONAL=1`. Tax treatment of dollar sales (export of services, LUT) needs your CA.
+6. **Branding in the dashboard.** Settings -> Business/Branding: set the account display name and logo. The **checkout name is sent per order**, so each product shows its own brand regardless. Razorpay's own receipts and emails use the account-level name, which is ONE name per account. If you want Razorpay's receipts to be brand-wise too, the only way is a separate Razorpay account per brand (each needs its own onboarding). Our own GST invoices are already brand-wise.
+7. **Cleaning up your dashboard.** Review: unused Payment Pages / Payment Links, old items and plans, old test webhooks, stale team members. Deleting is destructive, so I will not do it for you; tell me what you decide to remove and I will update the code that referred to it.
+
+## Using it for all four products
+`@tambola/billing` is written to be shared. The other three products live in other repositories (compliance-tracker for dpdp.veridian-aios.com, projexa, dewberry). When you want them on the same billing, I move the package to a shared location and give each product its brand id; each already has its own invoice number series and checkout name. That needs your go-ahead because it touches those repositories and the live sites.

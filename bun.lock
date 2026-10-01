@@ -13,9 +13,14 @@
       "name": "@tambola/server",
       "version": "0.1.0",
       "dependencies": {
+        "@tambola/billing": "workspace:*",
         "@tambola/engine": "workspace:*",
         "@tambola/shared": "workspace:*",
       },
+    },
+    "packages/billing": {
+      "name": "@tambola/billing",
+      "version": "0.1.0",
     },
     "packages/engine": {
       "name": "@tambola/engine",
@@ -42,11 +47,14 @@
       "name": "@tambola/sim",
       "version": "0.1.0",
       "dependencies": {
+        "@tambola/billing": "workspace:*",
         "@tambola/shared": "workspace:*",
       },
     },
   },
   "packages": {
+    "@tambola/billing": ["@tambola/billing@workspace:packages/billing"],
+
     "@tambola/engine": ["@tambola/engine@workspace:packages/engine"],
 
     "@tambola/seed": ["@tambola/seed@workspace:tools/seed"],
