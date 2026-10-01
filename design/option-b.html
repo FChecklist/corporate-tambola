@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Corporate Tambola - Option B: Clean Corporate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--wine:#5A1426;--wine2:#7A1C33;--wtint:#F7EBEE;--gold:#B8894D;--bg:#F7F6F4;--surf:#fff;--sunk:#F1EFEC;--ink:#1F1B1D;--ink2:#443E41;--mut:#6E676B;--line:#E4E0DB;--line2:#EEEBE7;
+--ok:#1E7B54;--okbg:#E6F4EC;--warn:#8A5A00;--warnbg:#FCF1D8;--bad:#B3261E;--badbg:#FBE8E6;
+--sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--serif:"Fraunces",Georgia,serif}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.55 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer}
+:focus-visible{outline:2px solid var(--wine);outline-offset:2px}
+.hidden{display:none!important}
+h1,h2,h3,p{margin:0}
+.num{font-variant-numeric:tabular-nums}
+.mut{color:var(--mut)}.sm{font-size:13px}.xs{font-size:12px}
+.eyebrow{font:600 11px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--gold)}
+.btn{border:1px solid var(--wine);background:var(--wine);color:#fff;border-radius:8px;padding:10px 16px;min-height:40px;font-weight:600;font-size:14px;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;line-height:1.2}
+.btn:hover{background:var(--wine2)}
+.btn.o{background:#fff;color:var(--ink);border-color:var(--line)}.btn.o:hover{border-color:var(--ink2);background:#fff}
+.btn.d{background:#fff;color:var(--bad);border-color:#EBB9B4}
+.btn.sm{padding:7px 12px;font-size:13px}.btn.blk{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.chip{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 13px;min-height:40px;font-weight:500;font-size:14px;color:var(--ink2)}
+.chip[aria-pressed=true]{border-color:var(--wine);background:var(--wtint);color:var(--wine);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;background:var(--sunk);color:var(--mut);white-space:nowrap}
+.pill.ok{background:var(--okbg);color:var(--ok)}.pill.warn{background:var(--warnbg);color:var(--warn)}.pill.bad{background:var(--badbg);color:var(--bad)}.pill.w{background:var(--wtint);color:var(--wine)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:20px}
+label.l{display:block;font:600 12px var(--sans);color:var(--ink2);margin:18px 0 6px}
+.inp{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-height:42px;background:#fff;font-size:15px}
+.inp:focus{border-color:var(--wine);outline:2px solid var(--wtint)}
+.note{border-radius:8px;padding:10px 12px;font-size:13px;background:var(--sunk);color:var(--ink2);margin-top:12px}
+.note.w{background:var(--warnbg);color:var(--warn)}.note.ok{background:var(--okbg);color:var(--ok)}.note.bad{background:var(--badbg);color:var(--bad)}
+.tgl{position:relative;width:46px;height:26px;border-radius:26px;border:0;background:#CFC9C4;flex:0 0 46px;padding:0}
+.tgl::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.15s}
+.tgl[aria-checked=true]{background:var(--wine)}.tgl[aria-checked=true]::after{left:23px}
+.stp{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:8px;background:#fff}
+.stp button{width:40px;height:40px;border:0;background:transparent;font-size:18px;color:var(--wine)}
+.stp output{min-width:30px;text-align:center;font-weight:600}
+.logo{font:700 20px var(--serif);color:var(--wine);letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+.logo i{width:26px;height:26px;border-radius:7px;background:var(--wine);color:#fff;display:grid;place-items:center;font:700 14px var(--serif);font-style:normal}
+
+/* switcher */
+#sw{position:sticky;top:0;z-index:60;background:#fff;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;justify-content:center;padding:8px 12px;flex-wrap:wrap}
+#sw .lbl{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+#sw .seg{display:inline-flex;background:var(--sunk);border-radius:9px;padding:3px;gap:2px}
+#sw .seg button{border:0;background:transparent;border-radius:7px;padding:8px 12px;min-height:40px;font-weight:600;font-size:13px;color:var(--ink2)}
+#sw .seg button[aria-selected=true]{background:#fff;color:var(--wine);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+
+/* website */
+.wrapw{max-width:1080px;margin:0 auto;padding:0 20px}
+.wnav{display:flex;align-items:center;gap:16px;padding:16px 0;flex-wrap:wrap}
+.wnav .lk{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.wnav .lk a.t{color:var(--ink2);text-decoration:none;font-weight:500;font-size:14px;padding:10px 10px}
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;padding:48px 0 56px}
+.hero h1{font:700 clamp(32px,6vw,52px)/1.08 var(--serif);letter-spacing:-.02em;color:var(--ink);margin:10px 0 16px}
+.hero h1 em{font-style:normal;color:var(--wine)}
+.hero p.lead{font-size:17px;color:var(--ink2);max-width:520px}
+.hero .cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}
+.trust{display:flex;gap:18px;flex-wrap:wrap;margin-top:22px;font-size:13px;color:var(--mut)}
+.trust span::before{content:"\2713\00a0";color:var(--ok);font-weight:700}
+.mini{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 18px 40px -26px rgba(31,27,29,.35)}
+.mini .g{display:grid;grid-template-columns:repeat(9,1fr);gap:4px;margin-top:12px}
+.mini .g b{height:30px;border-radius:6px;border:1px solid var(--line2);display:grid;place-items:center;font:500 12px var(--sans);color:var(--ink2);background:#fff}
+.mini .g b.e{background:var(--sunk);border-color:var(--sunk)}
+.mini .g b.c{background:var(--wine);border-color:var(--wine);color:#fff;border-radius:50%}
+.sec{padding:52px 0;border-top:1px solid var(--line)}
+.sec h2{font:700 clamp(26px,4vw,34px)/1.15 var(--serif);letter-spacing:-.01em;margin:6px 0 10px}
+.feats{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin-top:26px}
+.feats .card h3{font-size:16px;margin:8px 0 6px}.feats .card p{font-size:14px;color:var(--mut)}
+.feats .ico{width:36px;height:36px;border-radius:9px;background:var(--wtint);color:var(--wine);display:grid;place-items:center;font-weight:700}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-top:24px;counter-reset:s}
+.steps div{counter-increment:s;border-left:2px solid var(--line);padding-left:14px;font-size:14px;color:var(--ink2)}
+.steps div::before{content:"Step " counter(s);display:block;font:600 11px var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:2px}
+.pr-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.cur{display:inline-flex;background:var(--sunk);border-radius:9px;padding:3px}
+.cur button{border:0;background:transparent;border-radius:7px;padding:8px 16px;min-height:40px;font-weight:600;color:var(--ink2)}
+.cur button[aria-pressed=true]{background:#fff;color:var(--wine);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.packs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:24px}
+.pack{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:2px;position:relative}
+.pack.pop{border-color:var(--wine);box-shadow:0 0 0 1px var(--wine)}
+.pack .tg{position:absolute;top:-10px;right:14px;background:var(--wine);color:#fff;font-size:11px;font-weight:600;padding:2px 9px;border-radius:999px}
+.pack .up{font-size:12px;color:var(--mut)}
+.pack .n{font:700 28px var(--sans);letter-spacing:-.02em}
+.pack .p{font:600 20px var(--sans);color:var(--wine);margin:8px 0 2px}
+.pack .gst{font-size:12px;color:var(--mut);margin-bottom:12px;flex:1}
+.fine{font-size:12.5px;color:var(--mut);margin-top:16px}
+.foot{padding:28px 0 60px;border-top:1px solid var(--line);font-size:13px;color:var(--mut);display:flex;gap:16px;justify-content:space-between;flex-wrap:wrap}
+
+/* participant */
+#v-p{padding:20px 0 40px}
+.phone{width:390px;max-width:100%;margin:0 auto;background:var(--bg);border:1px solid var(--line);border-radius:22px;overflow:hidden;position:relative;box-shadow:0 24px 50px -30px rgba(31,27,29,.5)}
+@media(max-width:430px){.phone{border-radius:0;border-left:0;border-right:0}}
+.ph-h{background:#fff;padding:14px 16px 12px;border-bottom:1px solid var(--line)}
+.ph-h .orgn{font-size:12px;color:var(--mut);font-weight:500}
+.ph-h h1{font:600 17px/1.25 var(--sans);margin:2px 0 8px}
+.callstrip{position:sticky;top:57px;z-index:20;background:#fff;border-bottom:1px solid var(--line);padding:10px 16px;display:grid;grid-template-columns:auto 1fr;gap:4px 14px;align-items:center}
+.cur-n{grid-row:span 2;width:76px;height:76px;border-radius:16px;background:var(--wine);color:#fff;display:grid;place-items:center;font:700 40px var(--sans);letter-spacing:-.02em}
+.cs-t{font-size:13px;color:var(--ink2)}.cs-t b{color:var(--wine)}
+.cs-a{display:flex;gap:6px;flex-wrap:wrap}
+.bar{height:3px;background:var(--line2);position:absolute;left:0;right:0;bottom:0}.bar i{display:block;height:100%;background:var(--gold);width:70%;transition:width 1s linear}
+.pbody{padding:14px 14px 20px}
+.tt{display:grid;grid-template-columns:1fr 1fr;background:var(--sunk);border-radius:10px;padding:3px;gap:3px}
+.tt button{border:0;background:transparent;border-radius:8px;min-height:42px;font-weight:600;font-size:14px;color:var(--ink2)}
+.tt button[aria-selected=true]{background:#fff;color:var(--wine);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.tk{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px}
+.tk .th{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:12px;color:var(--mut)}
+.tk .th b{color:var(--ink);font-size:13px}
+.gr{display:grid;grid-template-columns:repeat(9,1fr);gap:4px}
+.cell{aspect-ratio:1/1.2;min-height:42px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:0;display:grid;place-items:center;font:600 16px var(--sans);color:var(--ink);font-variant-numeric:tabular-nums;position:relative}
+.cell.e{background:var(--sunk);border-color:var(--sunk);pointer-events:none}
+.cell.called{border-color:var(--gold);background:#FBF6EC}
+.cell[aria-pressed=true]{color:#fff;border-color:var(--wine);background:transparent}
+.cell[aria-pressed=true]::before{content:"";position:absolute;width:78%;aspect-ratio:1;border-radius:50%;background:var(--wine);z-index:0;max-height:90%}
+.cell span{position:relative;z-index:1}
+.cl-row{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.cl-row b{font-size:14px;display:block}.cl-row small{color:var(--mut);font-size:12px}
+.rw{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:12px;overflow:hidden}
+.rw h3{font:600 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--mut);padding:12px 14px;border-bottom:1px solid var(--line2)}
+.ri{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--line2);min-height:56px}
+.ri:first-of-type{border-top:0}
+.ri .nm{flex:1;min-width:0}.ri .nm b{display:block;font-size:14px;font-weight:600}
+.ri .nm small{display:block;font:500 11.5px var(--sans);color:var(--ok);font-variant-numeric:tabular-nums;word-break:break-all}
+.ri .nm small.n{color:var(--mut)}
+.res{margin:12px 14px 0;border-radius:10px;padding:12px 14px;font-size:14px;font-weight:600;display:flex;gap:10px;align-items:center}
+.res.ok{background:var(--okbg);color:var(--ok)}.res.bad{background:var(--badbg);color:var(--bad)}
+.res small{display:block;font-weight:400;opacity:.9}
+.pf{padding:14px;text-align:center;font-size:12px;color:var(--mut);border-top:1px solid var(--line);background:#fff}
+.pf b{color:var(--ink);font-variant-numeric:tabular-nums}
+.bb{position:absolute;inset:0;z-index:40;background:rgba(31,27,29,.94);color:#fff;padding:80px 18px 20px;text-align:center}
+.bb .vid{aspect-ratio:16/9;border-radius:12px;background:#2c2528;border:1px solid #4a4044;display:grid;place-items:center;margin:14px 0}
+.bb .vid span{width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.14);display:grid;place-items:center;font-size:22px}
+.demo{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:0 auto 14px;max-width:390px;padding:0 12px}
+
+/* organizer */
+#v-o{padding:20px 0 40px}
+.org{display:grid;grid-template-columns:230px minmax(0,1fr);gap:20px;max-width:1200px;margin:0 auto;padding:0 16px}
+.sn{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;align-self:start;position:sticky;top:66px}
+.sn .ev{padding:8px 10px 12px;border-bottom:1px solid var(--line2);margin-bottom:6px}
+.sn .ev b{display:block;font-size:14px}
+.sn button.s{width:100%;display:flex;align-items:center;gap:10px;text-align:left;border:0;background:transparent;padding:10px;min-height:42px;border-radius:8px;font-weight:500;font-size:14px;color:var(--ink2)}
+.sn button.s i{width:22px;height:22px;border-radius:50%;border:1px solid var(--line);font:600 11px var(--sans);font-style:normal;display:grid;place-items:center;color:var(--mut);flex:0 0 22px}
+.sn button.s:hover{background:var(--sunk)}
+.sn button.s[aria-current=step]{background:var(--wtint);color:var(--wine);font-weight:600}
+.sn button.s[aria-current=step] i{background:var(--wine);border-color:var(--wine);color:#fff}
+.pn h2{font:700 24px/1.2 var(--serif);margin-bottom:4px}
+.pn .sub{color:var(--mut);margin-bottom:18px;font-size:14px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+.line{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:14px 0;border-top:1px solid var(--line2)}
+.line:first-child{border-top:0}.line b{font-size:14px;display:block}.line small{color:var(--mut);font-size:12.5px}
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th{font:600 11px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--mut);text-align:left;padding:10px;background:var(--sunk)}
+.tbl td{padding:10px;border-top:1px solid var(--line2);vertical-align:middle}
+.tbl select{border:1px solid var(--line);border-radius:7px;padding:6px;min-height:36px;background:#fff}
+.ts{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+.rwrow{display:grid;grid-template-columns:200px auto minmax(0,1fr);gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line2)}
+.rwrow:first-child{border-top:0}
+.bbk{display:grid;grid-template-columns:90px 130px 1fr auto;gap:10px;align-items:center;padding:12px 0;border-top:1px solid var(--line2)}
+.bbk:first-child{border-top:0}
+.live{display:grid;grid-template-columns:260px 1fr;gap:18px}
+.bign{background:var(--wine);color:#fff;border-radius:14px;padding:22px;text-align:center}
+.bign .v{font:700 84px/1 var(--sans);letter-spacing:-.03em;margin:6px 0}
+.kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.kpi div{background:var(--sunk);border-radius:10px;padding:10px;text-align:center}.kpi b{display:block;font-size:20px}.kpi span{font-size:11px;color:var(--mut)}
+.lkb{word-break:break-all;font:500 13px ui-monospace,Consolas,monospace;background:var(--sunk);border:1px dashed var(--line);border-radius:8px;padding:10px 12px}
+
+@media(max-width:860px){
+ .hero{grid-template-columns:1fr;gap:24px;padding:28px 0 36px}
+ .org{grid-template-columns:1fr}
+ .sn{position:static}.sn .ev{display:none}
+ .sn nav{display:flex;overflow-x:auto;gap:4px}.sn button.s{width:auto;white-space:nowrap}
+ .row2,.live{grid-template-columns:1fr}
+ .rwrow{grid-template-columns:1fr auto}.rwrow .inp{grid-column:1/-1}
+ .bbk{grid-template-columns:1fr 1fr}.bbk .inp,.bbk .x{grid-column:1/-1}
+}
+@media(max-width:420px){.wrapw{padding:0 14px}.wnav .lk a.t{display:none}.cell{font-size:15px}.gr{gap:3px}}
+</style></head>
+<body>
+
+<div id="sw" role="tablist" aria-label="Design view">
+ <span class="lbl">Option B - Clean Corporate</span>
+ <div class="seg">
+  <button role="tab" aria-selected="true" data-v="w">Website</button>
+  <button role="tab" aria-selected="false" data-v="p">Participant ticket</button>
+  <button role="tab" aria-selected="false" data-v="o">Organizer panel</button>
+ </div>
+</div>
+
+<!-- ============ 1. WEBSITE ============ -->
+<section id="v-w">
+<div class="wrapw">
+ <header class="wnav">
+  <div class="logo"><i>T</i>Corporate Tambola</div>
+  <nav class="lk"><a class="t" href="#feat">Why us</a><a class="t" href="#pricing">Pricing</a><a class="btn o sm" href="#pricing">Sign in</a><a class="btn sm" href="#pricing">Create an engagement</a></nav>
+ </header>
+ <div class="hero">
+  <div>
+   <div class="eyebrow">Live tambola for teams</div>
+   <h1>The all-hands activity your people <em>actually join.</em></h1>
+   <p class="lead">Run a live housie engagement for your company, society or club. Participants join from any phone, with no app and no payments. You offer the rewards and show your brand to everyone at once.</p>
+   <div class="cta"><a class="btn" href="#pricing">See pricing</a><button class="btn o" type="button" data-go="p">View a participant ticket</button></div>
+   <div class="trust"><span>No app to install</span><span>Closed group, verified entry</span><span>No ads</span></div>
+  </div>
+  <div class="mini" aria-hidden="true">
+   <div style="display:flex;justify-content:space-between;align-items:center"><b class="sm">Ticket A</b><span class="pill ok"><i class="dot"></i>Live</span></div>
+   <div class="g" id="miniG"></div>
+   <div class="sm mut" style="margin-top:12px">Next number in 7s</div>
+  </div>
+ </div>
+ <section class="sec" id="feat">
+  <div class="eyebrow">Built for organizations</div><h2>Everything an engagement needs, nothing it does not.</h2>
+  <div class="feats">
+   <div class="card"><div class="ico">1</div><h3>Closed and verified</h3><p>Only people on your list or with a pass can enter. Waiting room for everyone else.</p></div>
+   <div class="card"><div class="ico">2</div><h3>Brand breaks</h3><p>Up to three short video breaks shown to every participant at the same moment.</p></div>
+   <div class="card"><div class="ico">3</div><h3>Scales to 10,000</h3><p>From a team of 100 to a whole company, on the same page and the same call.</p></div>
+   <div class="card"><div class="ico">4</div><h3>Privacy first</h3><p>Participants never see other names or numbers. Personal data is deleted 24 hours after the engagement.</p></div>
+  </div>
+  <div class="steps">
+   <div>Set up your engagement and rewards</div><div>Share the link or send passes</div><div>Admit people from the waiting room</div><div>Go live and download the report</div>
+  </div>
+ </section>
+ <section class="sec" id="pricing">
+  <div class="pr-head"><div><div class="eyebrow">Pricing</div><h2>One price per engagement.</h2><p class="mut">Pick the size of your group. Participants never pay.</p></div>
+   <div class="cur" role="group" aria-label="Currency"><button type="button" aria-pressed="true" data-c="inr">INR</button><button type="button" aria-pressed="false" data-c="usd">USD</button></div></div>
+  <div class="packs" id="packs"></div>
+  <p class="fine" id="fine">Prices in INR include 18% GST. Designed for DPDP, GDPR and US privacy laws.</p>
+ </section>
+ <footer class="foot"><span>&copy; Corporate Tambola (placeholder brand)</span><span>care@yourbrand.example</span></footer>
+</div>
+</section>
+
+<!-- ============ 2. PARTICIPANT ============ -->
+<section id="v-p" class="hidden">
+ <div class="demo">
+  <button class="btn o sm" type="button" id="dBreak">Toggle brand break</button>
+  <button class="btn o sm" type="button" id="dOk">Show: Reward awarded</button>
+  <button class="btn o sm" type="button" id="dNo">Show: Not valid</button>
+ </div>
+ <div class="phone" id="phone">
+  <div class="ph-h">
+   <div class="orgn">Acme Industries Pvt Ltd</div>
+   <h1>Diwali Townhall Tambola</h1>
+   <span class="pill ok"><i class="dot"></i>Live now</span> <span class="pill">Two-ticket engagement</span>
+  </div>
+  <div class="callstrip">
+   <div class="cur-n num" id="curN" aria-live="polite">47</div>
+   <div class="cs-t">Current number<br><b id="cd">Next number in 7s</b></div>
+   <div class="cs-a"><button class="btn sm" type="button" id="aud">Join audio</button><button class="chip" type="button" id="voice" aria-pressed="true" style="min-height:36px;padding:5px 10px;font-size:13px">Voice on</button></div>
+   <div class="bar"><i id="barI"></i></div>
+  </div>
+  <div id="resSlot"></div>
+  <div class="pbody">
+   <div class="tt" role="tablist"><button role="tab" aria-selected="true" data-t="0">Ticket A</button><button role="tab" aria-selected="false" data-t="1">Ticket B</button></div>
+   <div class="tk"><div class="th"><b id="tkTitle">Ticket A</b><span id="tkCnt" class="num"></span></div><div class="gr" id="gr"></div>
+    <p class="xs mut" style="margin-top:10px">Tap a number to cut it. Tap again to undo. Nothing is cut for you.</p></div>
+   <div class="cl-row"><div><b>Two-ticket claim</b><small>Cut every number on both tickets</small></div><button class="btn sm" type="button" data-claim="Two-ticket">Claim</button></div>
+   <div class="rw"><h3>Rewards</h3><div id="rwList"></div></div>
+  </div>
+  <div class="pf">Your ticket<br><b>TMB-ACME-000147 / 000148</b><br>Participants never see other names or numbers.</div>
+  <div class="bb hidden" id="bb" role="dialog" aria-label="Brand break">
+   <span class="pill w" style="background:#fff2">Brand break: 30s</span>
+   <div class="vid"><span>&#9654;</span></div>
+   <p class="sm" style="opacity:.8">A word from Acme Industries. The engagement resumes right after.</p>
+   <button class="btn o sm" type="button" style="margin-top:18px" id="bbClose">Close preview</button>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 3. ORGANIZER ============ -->
+<section id="v-o" class="hidden">
+<div class="org">
+ <aside class="sn"><div class="ev"><b>Diwali Townhall Tambola</b><span class="xs mut">Acme Industries</span></div>
+  <nav aria-label="Steps" id="steps"></nav></aside>
+ <main class="pn card" id="pn">
+
+ <div data-p="0">
+  <h2>Setup</h2><p class="sub">Basic details. Settings lock when you start.</p>
+  <label class="l" for="en">Engagement name</label><input class="inp" id="en" value="Diwali Townhall Tambola">
+  <div class="row2"><div><label class="l" for="ed">Date</label><input class="inp" id="ed" type="date" value="2026-10-23"></div>
+  <div><label class="l">Start time</label><div class="chips" data-chips><button class="chip" aria-pressed="false" type="button">17:00</button><button class="chip" aria-pressed="true" type="button">17:30</button><button class="chip" aria-pressed="false" type="button">18:00</button><button class="chip" aria-pressed="false" type="button">18:30</button></div></div></div>
+  <div class="row2"><div><label class="l" for="pl">Participant limit</label><select class="inp" id="pl"><option>Up to 100</option><option>Up to 250</option><option selected>Up to 500</option><option>Up to 1,000</option></select></div>
+  <div><label class="l">Ticket mode</label><div class="chips" data-chips><button class="chip" aria-pressed="false" type="button">1 ticket</button><button class="chip" aria-pressed="true" type="button">2 tickets</button></div></div></div>
+  <div class="line" style="margin-top:14px"><div><b>Family limit per participant</b><small>Family members who may join on the same invitation</small></div><div class="stp"><button type="button" data-st="-1" aria-label="Fewer">-</button><output>3</output><button type="button" data-st="1" aria-label="More">+</button></div></div>
+  <div class="line"><div><b>Family can win</b><small>If off, family members take part for fun and no reward is recorded</small></div><button class="tgl" role="switch" aria-checked="false" type="button" aria-label="Family can win"></button></div>
+  <label class="l">Voice</label><div class="note" style="margin-top:0">One fixed voice for every engagement: <b>Indian English, female</b></div>
+  <label class="l">Calling mode</label><div class="chips" data-chips><button class="chip" aria-pressed="true" type="button">AI voice</button><button class="chip" aria-pressed="false" type="button">Host voice</button><button class="chip" aria-pressed="false" type="button">AI + host</button></div>
+  <div style="margin-top:22px"><button class="btn" type="button" data-next>Save and continue</button></div>
+ </div>
+
+ <div data-p="1" class="hidden">
+  <h2>Rewards</h2><p class="sub">You offer the rewards. We never handle reward money.</p>
+  <div id="rwSetup"></div>
+  <div style="margin-top:20px"><button class="btn" type="button" data-next>Save and continue</button></div>
+ </div>
+
+ <div data-p="2" class="hidden">
+  <h2>Brand breaks</h2><p class="sub">Up to 3 breaks, shown to every participant at the same time.</p>
+  <div class="note ok" style="margin-top:0">Proposed positions are spread evenly across about 90 numbers: after call <b>22</b>, <b>45</b>, <b>67</b>. You can adjust them.</div>
+  <div id="bbList" style="margin-top:8px"></div>
+  <div class="note w">YouTube links cannot be downloaded in advance, so they depend on a live connection. A company video file is safer for large groups.</div>
+  <div style="margin-top:16px"><button class="btn o" type="button" id="addBB">Add a break</button></div>
+ </div>
+
+ <div data-p="3" class="hidden">
+  <h2>Participants</h2><p class="sub">142 of 500 places used.</p>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px"><input class="inp" id="srch" placeholder="Search by name or team" style="max-width:280px" aria-label="Search participants">
+   <div class="chips" data-chips id="roleF"><button class="chip" aria-pressed="true" type="button">All</button><button class="chip" aria-pressed="false" type="button">Participant</button><button class="chip" aria-pressed="false" type="button">Team Lead</button><button class="chip" aria-pressed="false" type="button">Host</button></div></div>
+  <div class="ts"><table class="tbl"><thead><tr><th>Name</th><th>Team</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody id="ptb"></tbody></table></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn o sm" type="button">Import list</button><button class="btn o sm" type="button">Send passes to all</button><button class="btn o sm" type="button">Export</button><button class="btn d sm" type="button">Remove selected</button></div>
+ </div>
+
+ <div data-p="4" class="hidden">
+  <h2>Share</h2><p class="sub">Send this engagement link to your group.</p>
+  <label class="l">Engagement link</label><div class="lkb">https://play.example/e/ACME-7K2Q</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" type="button" id="cpy">Copy link</button><button class="btn o" type="button">Send passes</button><button class="btn o" type="button">Show QR code</button></div>
+  <div class="note ok" id="cpyN" hidden>Link copied.</div>
+  <div class="note">Invitations flow Organizer, then Team Lead, then colleague, then family. Each pass uses one place until it is cancelled.</div>
+ </div>
+
+ <div data-p="5" class="hidden">
+  <h2>Waiting room</h2><p class="sub">People who are not on your list yet.</p>
+  <div class="note w" style="margin-top:0"><b>Second phone alert.</b> Priya S. is already in on another phone and is trying to join on a new one.
+   <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn o sm" type="button" data-resolve>Keep first phone</button><button class="btn sm" type="button" data-resolve>Let new phone in</button></div></div>
+  <div id="wr" style="margin-top:12px"></div>
+ </div>
+
+ <div data-p="6" class="hidden">
+  <h2>Start</h2><p class="sub">Final check before going live.</p>
+  <div class="line"><div><b>Participants admitted</b></div><span class="pill ok">142 / 500</span></div>
+  <div class="line"><div><b>Rewards configured</b></div><span class="pill ok">10 rewards</span></div>
+  <div class="line"><div><b>Brand breaks</b></div><span class="pill ok">3 ready</span></div>
+  <div class="line"><div><b>Calling mode</b></div><span class="pill">AI voice</span></div>
+  <div class="note w">Starting closes entry and locks all settings.</div>
+  <div style="margin-top:16px"><button class="btn" type="button" data-go-step="7">Start engagement</button></div>
+ </div>
+
+ <div data-p="7" class="hidden">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h2>Live</h2><span class="pill ok" id="lvSt"><i class="dot"></i>Running</span></div>
+  <div class="live" style="margin-top:14px">
+   <div><div class="bign"><div class="xs" style="opacity:.8">CALLED NUMBER</div><div class="v num" id="lvN">47</div><div class="sm" style="opacity:.85">Call <span id="lvC">31</span> of 90 &middot; next in 7s</div></div>
+    <div class="kpi"><div><b>118</b><span>Joined</span></div><div><b>3</b><span>Claims</span></div><div><b>0</b><span>Not valid</span></div></div></div>
+   <div><div class="rw" style="margin-top:0"><h3>Rewards</h3><div id="lvRw"></div></div>
+    <div style="margin-top:14px"><label class="l" style="margin-top:0">Pause reason</label><div class="chips" data-chips id="pr"><button class="chip" aria-pressed="false" type="button">Announcement</button><button class="chip" aria-pressed="false" type="button">Technical issue</button><button class="chip" aria-pressed="false" type="button">Short break</button></div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn o" type="button" id="pz">Pause</button><button class="btn d" type="button" id="endB">End engagement</button></div>
+    <div class="note bad" id="endC" hidden>End the engagement now? Remaining rewards will not be awarded. <button class="btn d sm" type="button" id="endY" style="margin-left:6px">Yes, end</button> <button class="btn o sm" type="button" id="endN">Cancel</button></div></div>
+   </div>
+  </div>
+ </div>
+
+ <div data-p="8" class="hidden">
+  <h2>Report</h2><p class="sub">Available after the engagement ends. Personal data is deleted 24 hours later; this anonymous summary stays.</p>
+  <div class="kpi" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))"><div><b>142</b><span>Participants</span></div><div><b>38</b><span>Family</span></div><div><b>9</b><span>Team Leads</span></div><div><b>10 / 10</b><span>Rewards awarded</span></div></div>
+  <div style="margin-top:16px"><button class="btn o" type="button">Download report</button></div>
+ </div>
+
+ </main>
+</div>
+</section>
+
+<script>
+(function(){
+var $=function(s,r){return (r||document).querySelector(s)},$$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
+
+/* ---- switcher ---- */
+function view(v){["w","p","o"].forEach(function(k){$("#v-"+k).classList.toggle("hidden",k!==v)});
+ $$("#sw [data-v]").forEach(function(b){b.setAttribute("aria-selected",b.dataset.v===v)});window.scrollTo(0,0)}
+$$("#sw [data-v]").forEach(function(b){b.onclick=function(){view(b.dataset.v)}});
+$$("[data-go]").forEach(function(b){b.onclick=function(){view(b.dataset.go)}});
+
+/* ---- generic chips / toggles / steppers ---- */
+document.addEventListener("click",function(e){
+ var c=e.target.closest(".chip");
+ if(c&&c.parentNode.hasAttribute("data-chips")){$$(".chip",c.parentNode).forEach(function(x){x.setAttribute("aria-pressed",x===c)})}
+ var t=e.target.closest(".tgl");if(t)t.setAttribute("aria-checked",t.getAttribute("aria-checked")!=="true");
+ var s=e.target.closest("[data-st]");if(s){var o=s.parentNode.querySelector("output");o.textContent=Math.max(0,Math.min(9,+o.textContent+ +s.dataset.st))}
+});
+
+/* ---- website ---- */
+var PACKS=[[100,500,79],[250,1000,149],[500,1500,249],[750,1800,329],[1000,2000,399],[2500,4000,799],[5000,6250,1299],[10000,10000,1999]],cur="inr";
+function fmt(n){return n.toLocaleString("en-IN")}
+function packs(){var h="";PACKS.forEach(function(p,i){
+ var price=cur==="inr"?"₹"+fmt(p[1]):"$"+p[2].toLocaleString("en-US");
+ h+='<div class="pack'+(i===2?" pop":"")+'">'+(i===2?'<span class="tg">Most chosen</span>':"")+'<span class="up">Up to</span><span class="n num">'+fmt(p[0])+'</span><span class="up">participants</span><span class="p num">'+price+'</span><span class="gst">'+(cur==="inr"?"incl. 18% GST, per engagement":"no tax added, per engagement")+'</span><button class="btn '+(i===2?"":"o ")+'blk" type="button">Choose</button></div>'});
+ $("#packs").innerHTML=h;
+ $("#fine").textContent=(cur==="inr"?"Prices in INR include 18% GST. ":"Prices in USD, no tax added. ")+"Designed for DPDP, GDPR and US privacy laws."}
+$$("[data-c]").forEach(function(b){b.onclick=function(){cur=b.dataset.c;$$("[data-c]").forEach(function(x){x.setAttribute("aria-pressed",x===b)});packs()}});
+packs();
+var mg="";[[4,0,0,0,31,0,56,0,81],[0,12,0,0,0,44,0,63,0],[7,0,23,0,38,0,0,71,88]].forEach(function(r,ri){r.forEach(function(n,ci){mg+=n?'<b class="'+((n===31||n===56||n===12||n===44||n===71)?"c":"")+'">'+n+"</b>":'<b class="e"></b>'})});$("#miniG").innerHTML=mg;
+
+/* ---- ticket generation (seeded) ---- */
+function rng(s){return function(){s=(s*1664525+1013904223)%4294967296;return s/4294967296}}
+function gen(seed){var r=rng(seed);
+ for(;;){var g=[[],[],[]],ok=true;
+  for(var i=0;i<3;i++){var cols=[0,1,2,3,4,5,6,7,8].sort(function(){return r()-.5}).slice(0,5);for(var c=0;c<9;c++)g[i][c]=cols.indexOf(c)>-1?1:0}
+  for(var c2=0;c2<9;c2++){if(!(g[0][c2]+g[1][c2]+g[2][c2])){ok=false;break}}
+  if(!ok)continue;
+  for(var c3=0;c3<9;c3++){var lo=c3===0?1:c3*10,hi=c3===8?90:c3*10+9,used=[],k=g[0][c3]+g[1][c3]+g[2][c3];
+   while(used.length<k){var n=lo+Math.floor(r()*(hi-lo+1));if(used.indexOf(n)<0)used.push(n)}
+   used.sort(function(a,b){return a-b});var j=0;for(var i2=0;i2<3;i2++)if(g[i2][c3])g[i2][c3]=used[j++]}
+  return g}}
+var tickets=[gen(147),gen(2210)],ti=0,called=[4,12,17,23,31,38,44,47,52,56,63,71,80],cut=[{},{}];
+called.forEach(function(n,i){if(i%2===0)tickets.forEach(function(t,k){t.forEach(function(r){if(r.indexOf(n)>-1)cut[k][n]=1})})});
+function renderT(){var h="";tickets[ti].forEach(function(r){r.forEach(function(n){
+ if(!n)h+='<div class="cell e"></div>';else h+='<button type="button" class="cell'+(called.indexOf(n)>-1?" called":"")+'" aria-pressed="'+(!!cut[ti][n])+'" aria-label="Number '+n+(cut[ti][n]?", cut":"")+'" data-n="'+n+'"><span>'+n+'</span></button>'})});
+ $("#gr").innerHTML=h;$("#tkTitle").textContent="Ticket "+(ti?"B":"A");
+ var tot=15;$("#tkCnt").textContent=Object.keys(cut[ti]).length+" of "+tot+" cut"}
+$("#gr").onclick=function(e){var b=e.target.closest("[data-n]");if(!b)return;var n=b.dataset.n;if(cut[ti][n])delete cut[ti][n];else cut[ti][n]=1;renderT();var x=$('[data-n="'+n+'"]');if(x)x.focus()};
+$$(".tt button").forEach(function(b){b.onclick=function(){ti=+b.dataset.t;$$(".tt button").forEach(function(x){x.setAttribute("aria-selected",x===b)});renderT()}});
+renderT();
+
+/* ---- rewards list (participant) ---- */
+var RW=[["Early Five","TMB-ACME-000212"],["Top Line","TMB-ACME-000063"],["Middle Line","TMB-ACME-000391"],["Bottom Line",null],["Four Corners","TMB-ACME-000098"],["1st Full House",null],["2nd Full House",null],["3rd Full House",null],["1st Full Two-Ticket House",null],["2nd Full Two-Ticket House",null]];
+var rl="";RW.forEach(function(r,i){rl+='<div class="ri"><div class="nm"><b>'+r[0]+'</b>'+(r[1]?'<small>Awarded to '+r[1]+'</small>':'<small class="n">Not yet awarded</small>')+'</div>'+(r[1]?'<span class="pill ok">Awarded</span>':'<button class="btn o sm" type="button" data-claim="'+r[0]+'">Claim</button>')+'</div>'});
+$("#rwList").innerHTML=rl;
+function banner(ok,txt){$("#resSlot").innerHTML='<div class="res '+(ok?"ok":"bad")+'" role="status"><div>'+(ok?"Reward awarded":"Not valid")+'<small>'+txt+'</small></div></div>'}
+$("#phone").addEventListener("click",function(e){var c=e.target.closest("[data-claim]");if(!c)return;
+ var b=c.dataset.claim;c.textContent="Checking...";c.disabled=true;
+ setTimeout(function(){c.disabled=false;c.textContent="Claim";banner(false,"Your "+b+" claim does not match the numbers called so far.")},900)});
+$("#dOk").onclick=function(){banner(true,"Top Line goes to TMB-ACME-000147.")};
+$("#dNo").onclick=function(){banner(false,"Your Bottom Line claim does not match the numbers called so far.")};
+$("#dBreak").onclick=$("#bbClose").onclick=function(){$("#bb").classList.toggle("hidden")};
+$("#voice").onclick=function(){var p=this.getAttribute("aria-pressed")!=="true";this.setAttribute("aria-pressed",p);this.textContent=p?"Voice on":"Voice off"};
+$("#aud").onclick=function(){var on=this.dataset.on!=="1";this.dataset.on=on?"1":"";this.textContent=on?"Audio joined":"Join audio";this.className=on?"btn o sm":"btn sm"};
+
+/* ---- countdown ---- */
+var left=7,rem=[];for(var n=1;n<=90;n++)if(called.indexOf(n)<0)rem.push(n);
+setInterval(function(){
+ if($("#v-p").classList.contains("hidden"))return;
+ left--;if(left<=0){var n2=rem.splice(Math.floor(Math.random()*rem.length),1)[0];called.push(n2);$("#curN").textContent=n2;left=10;renderT()}
+ $("#cd").textContent="Next number in "+left+"s";$("#barI").style.width=(left/10*100)+"%"},1000);
+
+/* ---- organizer ---- */
+var STEPS=["Setup","Rewards","Brand breaks","Participants","Share","Waiting room","Start","Live","Report"],cs=0;
+$("#steps").innerHTML=STEPS.map(function(s,i){return '<button type="button" class="s" data-s="'+i+'"><i>'+(i+1)+"</i>"+s+"</button>"}).join("");
+function step(i){cs=i;$$("#pn > [data-p]").forEach(function(p){p.classList.toggle("hidden",+p.dataset.p!==i)});
+ $$(".sn .s").forEach(function(b){if(+b.dataset.s===i)b.setAttribute("aria-current","step");else b.removeAttribute("aria-current")})}
+$("#steps").onclick=function(e){var b=e.target.closest("[data-s]");if(b)step(+b.dataset.s)};
+$$("[data-next]").forEach(function(b){b.onclick=function(){step(cs+1)}});
+$$("[data-go-step]").forEach(function(b){b.onclick=function(){step(+b.dataset.goStep)}});
+step(0);
+
+var SETUP=[["Early Five",0],["Top Line",0],["Middle Line",0],["Bottom Line",0],["Four Corners",0],["Full House",3,"1st / 2nd / 3rd Full House"],["Full Two-Ticket House",2,"1st / 2nd Full Two-Ticket House"]],TXT=["Amazon voucher Rs 500","Wireless earbuds","Movie tickets for two","Team lunch","Smart watch","Gold coin","Weekend stay"];
+$("#rwSetup").innerHTML=SETUP.map(function(r,i){return '<div class="rwrow"><b class="sm">'+(r[2]||r[0])+'</b>'+(r[1]?'<div class="stp"><button type="button" data-st="-1" aria-label="Fewer">-</button><output>'+r[1]+'</output><button type="button" data-st="1" aria-label="More">+</button></div>':'<span class="pill">1 reward</span>')+'<input class="inp" value="'+TXT[i]+'" aria-label="Reward text for '+r[0]+'"></div>'}).join("");
+
+var BB=[["22","Company video link","https://cdn.acme.example/brand-30s.mp4"],["45","YouTube link","https://youtu.be/abc123"],["67","Company video link","https://cdn.acme.example/ceo-note.mp4"]];
+function bbr(){$("#bbList").innerHTML=BB.map(function(b,i){return '<div class="bbk"><div><span class="xs mut">Break '+(i+1)+'</span><br><b class="sm">After call '+b[0]+'</b></div><select class="inp" aria-label="Source"><option'+(b[1][0]==="C"?" selected":"")+'>Company video link</option><option'+(b[1][0]==="Y"?" selected":"")+'>YouTube link</option></select><input class="inp" value="'+b[2]+'" aria-label="Link"><button class="btn d sm x" type="button" data-rm="'+i+'">Remove</button></div>'}).join("");$("#addBB").disabled=BB.length>=3}
+$("#bbList").onclick=function(e){var r=e.target.closest("[data-rm]");if(r){BB.splice(+r.dataset.rm,1);bbr()}};
+$("#addBB").onclick=function(){if(BB.length<3){BB.push(["80","Company video link",""]);bbr()}};bbr();
+
+var PP=[["Anita Rao","Finance","Team Lead","Joined"],["Vikram Shah","Sales","Participant","Joined"],["Meera Iyer","HR","Host","Joined"],["Rohit Das","Engineering","Participant","Pass sent"],["Priya Sethi","Operations","Participant","Joined"],["Imran Khan","Engineering","Team Lead","Joined"],["Neha Kulkarni","Marketing","Participant","Pass sent"]],rf="All";
+function ptb(){var q=$("#srch").value.toLowerCase();$("#ptb").innerHTML=PP.filter(function(p){return(rf==="All"||p[2]===rf)&&(p[0]+p[1]).toLowerCase().indexOf(q)>-1}).map(function(p){
+ return '<tr><td><b>'+p[0]+'</b></td><td>'+p[1]+'</td><td><select aria-label="Role"><option'+(p[2]==="Participant"?" selected":"")+'>Participant</option><option'+(p[2]==="Team Lead"?" selected":"")+'>Team Lead</option><option'+(p[2]==="Host"?" selected":"")+'>Host</option></select></td><td><span class="pill '+(p[3]==="Joined"?"ok":"warn")+'">'+p[3]+'</span></td><td><button class="btn o sm" type="button">Remove</button></td></tr>'}).join("")}
+$("#srch").oninput=ptb;$("#roleF").onclick=function(e){var c=e.target.closest(".chip");if(c){rf=c.textContent;ptb()}};ptb();
+
+$("#cpy").onclick=function(){$("#cpyN").hidden=false};
+var WQ=["Karan Mehta - Sales","Divya Nair - Finance","Arjun Pillai - Engineering"];
+function wr(){$("#wr").innerHTML=WQ.length?WQ.map(function(w,i){return '<div class="line"><div><b>'+w+'</b><small>Not on your list</small></div><div style="display:flex;gap:6px"><button class="btn o sm" type="button" data-w="'+i+'">Decline</button><button class="btn sm" type="button" data-w="'+i+'">Admit</button></div></div>'}).join(""):'<div class="note ok">Waiting room is empty.</div>'}
+$("#wr").onclick=function(e){var b=e.target.closest("[data-w]");if(b){WQ.splice(+b.dataset.w,1);wr()}};wr();
+$$("[data-resolve]").forEach(function(b){b.onclick=function(){b.closest(".note").className="note ok";b.closest(".note").innerHTML="Resolved."}});
+
+var LR=[["Early Five","TMB-ACME-000212"],["Top Line","TMB-ACME-000063"],["Middle Line","TMB-ACME-000391"],["Bottom Line",null],["Four Corners","TMB-ACME-000098"],["1st Full House",null],["2nd Full House",null],["3rd Full House",null],["1st Full Two-Ticket House",null],["2nd Full Two-Ticket House",null]];
+$("#lvRw").innerHTML=LR.map(function(r){return '<div class="ri"><div class="nm"><b>'+r[0]+'</b></div>'+(r[1]?'<span class="pill ok num">'+r[1]+'</span>':'<span class="pill">Open</span>')+'</div>'}).join("");
+var paused=false;
+$("#pz").onclick=function(){var r=$$("#pr .chip").filter(function(c){return c.getAttribute("aria-pressed")==="true"})[0];
+ if(!paused&&!r){$("#pr").nextElementSibling.scrollIntoView&&0;this.textContent="Choose a reason first";var t=this;setTimeout(function(){t.textContent="Pause"},1600);return}
+ paused=!paused;this.textContent=paused?"Resume":"Pause";$("#lvSt").className="pill "+(paused?"warn":"ok");$("#lvSt").innerHTML='<i class="dot"></i>'+(paused?"Paused: "+r.textContent:"Running")};
+$("#endB").onclick=function(){$("#endC").hidden=false};$("#endN").onclick=function(){$("#endC").hidden=true};$("#endY").onclick=function(){$("#endC").hidden=true;step(8)};
+})();
+</script>
+</body></html>

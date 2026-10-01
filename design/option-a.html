@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Corporate Tambola - Option A, Refined Classic</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500..700;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--wine:#5A1426;--wine2:#7A1C33;--deep:#2E0812;--gold:#E0B872;--gold2:#F3D9A4;--goldd:#B8894D;--goldtx:#855D25;--ivory:#FBF6EC;--bg:#F6F1E7;--surf:#fff;--sunk:#F3ECE0;--ink:#1C1014;--ink2:#3B2E33;--muted:#645760;--line:#E8DDCC;--line2:#F1EADF;--rose:#F8E9EC;
+--ok:#1F7A55;--okbg:#E4F3EC;--warn:#7A5000;--warnbg:#FBF0D9;--bad:#B3261E;--badbg:#FBE7E4;
+--serif:"Fraunces",Georgia,serif;--sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+--sw:56px;--shadow:0 1px 2px rgba(28,16,20,.05),0 18px 40px -26px rgba(28,16,20,.5)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+body{overflow-x:hidden}
+button,select,input{font:inherit;color:inherit}button{cursor:pointer}
+a{color:var(--wine)}
+[hidden]{display:none!important}
+:focus-visible{outline:3px solid var(--goldd);outline-offset:2px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}.sm{font-size:13px}
+.eyebrow{font:600 11px var(--sans);letter-spacing:.18em;text-transform:uppercase;color:var(--goldtx)}
+h1,h2,h3{font-family:var(--serif);font-weight:600;margin:0}
+.btn{border:0;border-radius:10px;padding:10px 18px;min-height:44px;font-weight:600;font-size:14px;display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--wine);color:#fff;text-decoration:none;line-height:1.2}
+.btn:hover{background:var(--wine2)}
+.btn.gold{background:linear-gradient(180deg,#E9CB93,#CDA862);color:var(--deep)}
+.btn.line{background:var(--surf);color:var(--ink);border:1px solid var(--line)}.btn.line:hover{border-color:var(--ink)}
+.btn.danger{background:var(--surf);color:var(--bad);border:1px solid #E8B4AE}
+.btn.sm{min-height:40px;padding:8px 14px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--surf);border-radius:10px;padding:8px 14px;min-height:40px;font-weight:600;font-size:14px;color:var(--ink2)}
+.chip[aria-pressed=true]{border-color:var(--wine);background:var(--rose);color:var(--wine);box-shadow:0 0 0 1px var(--wine) inset}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 11px;font-size:12px;font-weight:600;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.pill i{width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.ok{background:var(--okbg);color:var(--ok)}.pill.warn{background:var(--warnbg);color:var(--warn)}.pill.bad{background:var(--badbg);color:var(--bad)}.pill.wine{background:var(--rose);color:var(--wine)}
+.inp{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px;font-size:15px;background:#FDFBF7}
+.inp:focus{border-color:var(--wine);background:#fff}
+label.lb{display:block;font:600 11px var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
+label.lb:first-child{margin-top:0}
+.hint{font-size:13px;color:var(--muted);margin:8px 0 0}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px;background:#fff;overflow:hidden}
+.stepper button{width:44px;height:44px;border:0;background:var(--sunk);font-size:20px;font-weight:600;color:var(--wine)}
+.stepper output{min-width:48px;text-align:center;font:600 16px var(--mono)}
+.switch{position:relative;width:52px;height:30px;border-radius:30px;border:0;background:#CFC3B0;flex:0 0 52px;padding:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.switch[aria-checked=true]{background:var(--ok)}.switch[aria-checked=true]::after{transform:translateX(22px)}
+.swrap{display:flex;align-items:center;gap:12px;min-height:44px}
+
+/* top switcher */
+#sw{position:sticky;top:0;z-index:60;height:var(--sw);background:var(--deep);color:#EBD9DE;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid #4a1d29}
+#sw .b{font:600 17px var(--serif);color:var(--gold);white-space:nowrap}
+#sw .tabs{margin-left:auto;display:flex;gap:4px;background:#3a1420;border-radius:11px;padding:3px}
+#sw .tabs button{border:0;background:transparent;color:#EBD9DE;border-radius:8px;padding:0 14px;min-height:40px;font-weight:600;font-size:13px}
+#sw .tabs button[aria-selected=true]{background:var(--gold);color:var(--deep)}
+@media(max-width:560px){#sw{padding:0 8px;gap:6px}#sw .b{display:none}#sw .tabs{margin:0 auto;width:100%}#sw .tabs button{flex:1;padding:0 4px;font-size:12px}}
+
+/* ===== WEBSITE ===== */
+.in{max-width:1120px;margin:0 auto;padding:0 20px}
+.hero{background:radial-gradient(900px 500px at 85% 40%,rgba(224,184,114,.2),transparent 60%),linear-gradient(135deg,#3A0B18,#5A1426 60%,#3A0B18);color:var(--ivory);padding:0 0 72px}
+.hnav{display:flex;align-items:center;gap:12px;padding:22px 0}
+.mark{width:36px;height:36px;border-radius:10px;background:var(--gold);color:var(--wine);display:grid;place-items:center;font:600 18px var(--serif)}
+.hnav .w{font:600 21px var(--serif)}.hnav .w i{font-style:normal;color:var(--gold)}
+.hnav a.btn{margin-left:auto;min-height:40px}
+.hgrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:48px;align-items:center;padding-top:28px}
+.hero .eyebrow{color:var(--gold)}
+.hero h1{font-size:clamp(34px,5.6vw,60px);line-height:1.05;letter-spacing:-.02em;margin:14px 0 20px}
+.hero h1 em{display:block;color:var(--gold);font-style:italic;font-weight:500}
+.hero p.lead{font-size:18px;line-height:1.6;color:#EBD9DE;max-width:520px;margin:0 0 30px}
+.hero .cta{display:flex;flex-wrap:wrap;gap:12px}
+.hero .btn.line{background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}
+.trust{margin-top:30px;font-size:13px;color:var(--gold2)}
+.ptk{background:#FFFDF8;border-radius:18px;padding:18px;color:var(--ink);transform:rotate(-2deg);box-shadow:0 50px 80px -40px rgba(0,0,0,.8);max-width:430px;margin:0 auto;position:relative}
+.ptk::before,.ptk::after{content:"";position:absolute;top:62px;width:22px;height:22px;border-radius:50%;background:#4A1020}
+.ptk::before{left:-11px}.ptk::after{right:-11px}
+.ptk .top{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:22px;border-bottom:2px dashed var(--line)}
+.ptk .top h3{font-size:19px}
+.mini{display:grid;grid-template-columns:repeat(9,1fr);gap:4px;margin-top:16px}
+.mini span{aspect-ratio:1;border-radius:6px;display:grid;place-items:center;font:600 13px var(--mono);background:#fff;border:1px solid var(--line)}
+.mini .e{background:var(--sunk);border-color:transparent}.mini .c{background:var(--wine);color:var(--gold2);border-color:var(--wine)}
+.ptk .foot{display:flex;justify-content:space-between;margin-top:14px;font:500 12px var(--mono);color:var(--muted)}
+.sec{padding:76px 0}.sec.alt{background:var(--ivory);border-block:1px solid var(--line)}
+.sec h2{font-size:clamp(28px,4vw,40px);line-height:1.12;margin:10px 0 14px;letter-spacing:-.01em}
+.sec .sub{font-size:17px;color:var(--muted);max-width:620px;margin:0}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:44px}
+.steps div{border-top:2px solid var(--wine);padding-top:16px}
+.steps b{font:600 13px var(--mono);color:var(--goldtx)}.steps h3{font-size:21px;margin:6px 0}.steps p{margin:0;color:var(--muted)}
+.feat{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:40px}
+.feat div{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px}
+.feat h3{font-size:19px;margin-bottom:6px}.feat p{margin:0;color:var(--muted);font-size:14.5px}
+.phead{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end;justify-content:space-between}
+.cur{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:#fff}
+.cur button{border:0;background:transparent;border-radius:999px;min-height:40px;padding:0 20px;font-weight:600;color:var(--muted)}
+.cur button[aria-pressed=true]{background:var(--wine);color:#fff}
+.packs{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:34px}
+.pk{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px 18px;display:flex;flex-direction:column;gap:2px}
+.pk .up{font:600 11px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.pk .n{font:600 34px var(--serif);line-height:1.1}.pk .n small{display:block;font:500 13px var(--sans);color:var(--ink2);margin-top:2px}
+.pk .pr{font:600 24px var(--mono);margin-top:14px;color:var(--wine)}
+.pk .pp{font-size:12.5px;color:var(--muted);margin-bottom:14px}
+.pk .btn{margin-top:auto}
+.pk.big{background:var(--deep);color:var(--ivory);border-color:var(--deep)}.pk.big .up,.pk.big .pp,.pk.big .n small{color:var(--gold2)}.pk.big .pr{color:var(--gold)}
+.fine{font-size:13px;color:var(--muted);margin-top:22px;max-width:760px}
+footer.site{background:var(--deep);color:#EBD9DE;padding:34px 0;font-size:13px}
+@media(max-width:900px){.hgrid{grid-template-columns:1fr;gap:42px}.packs{grid-template-columns:repeat(2,1fr)}.steps,.feat{grid-template-columns:1fr}}
+@media(max-width:420px){.in{padding:0 16px}.sec{padding:52px 0}.pk{padding:18px 14px}.pk .n{font-size:28px}.pk .pr{font-size:20px}.hero p.lead{font-size:16px}}
+
+/* ===== PARTICIPANT ===== */
+.stage{padding:26px 12px 40px}
+.phone{width:390px;max-width:100%;margin:0 auto;background:var(--ivory);border:8px solid #1c1014;border-radius:36px;overflow:clip;box-shadow:0 40px 80px -40px rgba(0,0,0,.6);position:relative}
+.phone .hd{background:#fff;padding:14px 16px 12px;border-bottom:1px solid var(--line)}
+.phone .hd .org{font:600 11px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--goldtx)}
+.phone .hd h2{font-size:21px;margin:3px 0 8px;line-height:1.2}
+.phone .hd .row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.call{position:sticky;top:var(--sw);z-index:20;background:var(--wine);color:#fff;padding:12px 16px 14px}
+.call .main{display:flex;align-items:center;gap:14px}
+.ball{width:84px;height:84px;flex:0 0 84px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#fff,#F3E6CB 55%,#D9C29A);color:var(--wine);font:600 42px var(--serif);box-shadow:0 0 0 4px rgba(224,184,114,.35)}
+.call .eb{font:700 10px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--gold2)}
+.call .wd{font:500 italic 18px/1.25 var(--serif);margin:2px 0 4px}
+.call .nx{font:500 13px var(--mono);color:#EBD9DE}
+.call .bar{height:3px;background:rgba(255,255,255,.2);border-radius:3px;margin:12px 0 10px;overflow:hidden}.call .bar i{display:block;height:100%;background:var(--gold);width:100%;transition:width 1s linear}
+.call .tools{display:flex;gap:8px}
+.call .tools button{flex:1;min-height:40px;border-radius:999px;border:1px solid rgba(255,255,255,.45);background:transparent;color:#fff;font-weight:600;font-size:13px}
+.call .tools button[aria-pressed=true]{background:rgba(255,255,255,.18);border-color:var(--gold);color:var(--gold2)}
+.tsw{display:flex;padding:14px 16px 0;gap:8px}
+.tsw button{flex:1;min-height:44px;border-radius:10px;border:1px solid var(--line);background:#fff;font-weight:600;color:var(--ink2)}
+.tsw button[aria-pressed=true]{background:var(--wine);border-color:var(--wine);color:var(--gold2)}
+.pass{margin:12px 14px 0;background:#FFFDF8;border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);position:relative}
+.pass .ph{padding:14px 16px 16px;display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px dashed var(--line);position:relative}
+.pass .ph h3{font-size:18px}
+.pass .ph::before,.pass .ph::after{content:"";position:absolute;bottom:-11px;width:20px;height:20px;border-radius:50%;background:var(--ivory);border:1px solid var(--line)}
+.pass .ph::before{left:-11px;clip-path:inset(0 0 0 50%)}.pass .ph::after{right:-11px;clip-path:inset(0 50% 0 0)}
+.tg{display:grid;grid-template-columns:repeat(9,1fr);gap:4px;padding:18px 10px 14px}
+.cell{height:42px;border-radius:7px;border:1px solid var(--line);background:#fff;font:600 15px var(--mono);padding:0;display:grid;place-items:center;position:relative;color:var(--ink)}
+.cell.blank{background:var(--sunk);border-color:transparent;pointer-events:none}
+.cell[aria-pressed=true]{background:var(--wine);color:var(--gold2);border-color:var(--wine)}
+.cell[aria-pressed=true]::after{content:"";position:absolute;left:16%;right:16%;top:50%;height:2px;background:var(--gold);transform:rotate(-35deg)}
+.hintp{text-align:center;font-size:12px;color:var(--muted);padding:0 12px 14px}
+.claimrow{margin:12px 14px 0;display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.claimrow div{flex:1;font-size:13px;line-height:1.35}.claimrow b{display:block;font-size:14px}
+.rw{margin:18px 14px 0}
+.rw h3{font-size:19px;margin-bottom:4px}
+.rwr{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.rwr:first-of-type{border-top:0}
+.rwr b{display:block;font-size:14.5px}.rwr small{font-size:12px;color:var(--muted)}
+.rwr.won b{color:var(--muted)}
+.cl{border:0;border-radius:999px;background:var(--wine);color:#fff;font-weight:700;font-size:13px;min-height:40px;padding:0 20px}
+.cl:disabled{background:var(--sunk);color:var(--muted);cursor:not-allowed}
+.tid{font:600 12px var(--mono);background:var(--okbg);color:var(--ok);border-radius:8px;padding:6px 9px;white-space:nowrap}
+.tid.me{background:var(--gold2);color:var(--deep)}
+.banner{position:sticky;bottom:10px;z-index:15;margin:16px 14px 0;border-radius:14px;padding:14px 16px;display:flex;gap:12px;align-items:center;box-shadow:0 14px 30px -14px rgba(0,0,0,.5)}
+.banner.ok{background:var(--ok);color:#fff}.banner.no{background:var(--bad);color:#fff}
+.banner b{font:600 18px var(--serif);display:block}.banner span{font-size:13px}
+.banner button{margin-left:auto;border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;border-radius:8px;min-height:40px;padding:0 12px;font-weight:600}
+.pfoot{margin-top:18px;background:var(--deep);color:#EBD9DE;padding:16px;text-align:center;font-size:12px}
+.pfoot b{display:block;font:600 15px var(--mono);color:var(--gold);margin:2px 0 4px}
+.brk{position:fixed;inset:0;z-index:100;background:rgba(20,5,10,.88);display:grid;place-items:center;padding:16px}
+.brk .card{width:min(390px,100%);background:#1b0a10;color:#fff;border-radius:22px;overflow:hidden;border:1px solid #4a1d29}
+.vid{aspect-ratio:16/9;background:linear-gradient(135deg,#3A0B18,#12060a);display:grid;place-items:center;position:relative}
+.vid .play{width:64px;height:64px;border-radius:50%;background:rgba(224,184,114,.18);border:2px solid var(--gold);display:grid;place-items:center}
+.vid .play::after{content:"";border-left:18px solid var(--gold);border-block:11px solid transparent;margin-left:5px}
+.vid .lbl{position:absolute;left:12px;top:10px;font:600 11px var(--sans);color:var(--gold2);letter-spacing:.1em;text-transform:uppercase}
+.brk .bd{padding:18px 20px 20px;text-align:center}.brk h3{font-size:24px;color:var(--gold)}
+.brk p{margin:6px 0 14px;color:#EBD9DE;font-size:14px}
+.brk .pb{height:5px;background:rgba(255,255,255,.15);border-radius:5px;overflow:hidden;margin-bottom:14px}.brk .pb i{display:block;height:100%;background:var(--gold);transition:width 1s linear}
+.demo{max-width:390px;margin:18px auto 0;border:1px dashed var(--goldd);border-radius:14px;padding:12px;background:rgba(255,255,255,.6)}
+.demo .eyebrow{display:block;margin-bottom:8px}.demo .chips .chip{font-size:13px}
+@media(max-width:430px){.stage{padding:0 0 30px}.phone{border:0;border-radius:0}.demo{margin:18px 12px 0}}
+
+/* ===== ORGANIZER ===== */
+.org{max-width:1200px;margin:0 auto;padding:24px 20px 60px}
+.ohead{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between;margin-bottom:22px}
+.ohead h1{font-size:28px}.ohead .meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:13.5px}
+.ogrid{display:grid;grid-template-columns:230px minmax(0,1fr);gap:28px;align-items:start}
+.snav{position:sticky;top:calc(var(--sw) + 16px);display:grid;gap:2px}
+.snav button{display:flex;align-items:center;gap:12px;min-height:44px;border:0;background:transparent;border-radius:10px;padding:0 12px;text-align:left;font-weight:500;color:var(--ink2)}
+.snav button .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:600 12px var(--mono);background:var(--sunk);color:var(--muted);flex:0 0 26px}
+.snav button[aria-current=step]{background:#fff;box-shadow:var(--shadow);font-weight:700;color:var(--wine)}
+.snav button[aria-current=step] .n{background:var(--wine);color:var(--gold2)}
+.snav button.done .n{background:var(--okbg);color:var(--ok)}
+.panel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:30px 32px 34px;box-shadow:var(--shadow)}
+.panel>h2{font-size:26px}.panel>p.lede{color:var(--muted);margin:6px 0 28px;max-width:600px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:0 28px}
+.fl{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-top:1px solid var(--line2)}
+.fl b{display:block;font-size:14.5px}.fl span.d{font-size:13px;color:var(--muted)}
+.voice{display:flex;gap:12px;align-items:center;background:var(--sunk);border-radius:12px;padding:12px 14px}
+.voice .dot{width:36px;height:36px;border-radius:50%;background:var(--wine);color:var(--gold);display:grid;place-items:center;font-size:13px;font-weight:700}
+.rg{display:grid;gap:10px}
+.rgr{display:grid;grid-template-columns:28px minmax(120px,.7fr) minmax(0,1.3fr);gap:12px;align-items:center}
+.rgr input[type=checkbox]{width:22px;height:22px;accent-color:var(--wine)}
+.hs{background:var(--ivory);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:20px}
+.hs .t{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.hs .t b{font:600 17px var(--serif)}
+.bb{border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px;background:#FDFBF7}
+.bb .h{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.bb .f{display:grid;grid-template-columns:110px 190px minmax(0,1fr) 110px;gap:12px}
+.note{border-radius:12px;padding:12px 14px;font-size:13.5px;margin-top:16px;background:var(--warnbg);color:var(--warn)}
+.note.ok{background:var(--okbg);color:var(--ok)}.note.info{background:var(--sunk);color:var(--ink2)}
+.toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px}
+.toolbar .inp{max-width:280px}
+.bulk{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--rose);border-radius:12px;padding:8px 12px;margin-bottom:12px}
+.tw{border:1px solid var(--line);border-radius:12px;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 11px var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;padding:11px 14px;background:var(--sunk);white-space:nowrap}
+td{padding:10px 14px;border-top:1px solid var(--line2);vertical-align:middle}
+td input[type=checkbox],th input[type=checkbox]{width:20px;height:20px;accent-color:var(--wine)}
+td select{min-height:40px;border:1px solid var(--line);border-radius:8px;padding:0 8px;background:#fff}
+.alert{display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:var(--warnbg);border:1px solid #EBD3A0;border-radius:14px;padding:14px 16px;margin-bottom:18px}
+.alert div{flex:1;min-width:220px;color:var(--warn);font-size:14px}.alert b{display:block;color:var(--ink)}
+.q{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line2);flex-wrap:wrap}.q:first-child{border-top:0}.q .sp{flex:1;min-width:140px}
+.linkbox{font:500 14px var(--mono);background:var(--sunk);border:1px dashed var(--goldd);border-radius:12px;padding:14px;word-break:break-all}
+.qr{display:grid;grid-template-columns:repeat(21,1fr);width:168px;height:168px;padding:8px;background:#fff;border:1px solid var(--line);border-radius:12px;gap:0}
+.qr i{background:#fff}.qr i.k{background:var(--deep)}
+.cl2{list-style:none;margin:0;padding:0}.cl2 li{display:flex;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line2)}.cl2 li:first-child{border-top:0}
+.live{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+.big{background:var(--wine);color:#fff;border-radius:18px;padding:22px;display:flex;gap:18px;align-items:center}
+.big .ball{width:104px;height:104px;flex-basis:104px;font-size:52px}
+.big .wd{font:500 italic 20px var(--serif);margin:2px 0}.big .sub{font-size:13px;color:#EBD9DE}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.stats div{border:1px solid var(--line);border-radius:12px;padding:10px 12px}.stats span{font-size:12px;color:var(--muted)}.stats b{display:block;font:600 22px var(--mono)}
+.wl{display:grid;gap:0}.wl .r{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--line2);font-size:14px}.wl .r:first-child{border-top:0}
+.ctrl{margin-top:20px;border-top:1px solid var(--line);padding-top:18px}
+.sumc{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.sumc div{border:1px solid var(--line);border-radius:14px;padding:14px}.sumc span{font-size:12px;color:var(--muted)}.sumc b{display:block;font:600 28px var(--serif);color:var(--wine)}
+@media(max-width:1000px){.ogrid{grid-template-columns:1fr}.snav{position:static;grid-template-columns:repeat(3,1fr)}.snav button{padding:0 8px}.two,.live{grid-template-columns:1fr}.bb .f{grid-template-columns:1fr 1fr}.sumc{grid-template-columns:1fr 1fr}.panel{padding:22px 18px}}
+@media(max-width:560px){.snav{grid-template-columns:1fr 1fr}.rgr{grid-template-columns:28px 1fr}.rgr input[type=text]{grid-column:1/-1}}
+</style></head><body>
+
+<div id="sw" role="banner"><span class="b">Corporate Tambola</span>
+<div class="tabs" role="tablist" aria-label="Design views">
+<button role="tab" aria-selected="true" data-v="site">Website</button>
+<button role="tab" aria-selected="false" data-v="tkt">Participant ticket</button>
+<button role="tab" aria-selected="false" data-v="org">Organizer panel</button></div></div>
+
+<!-- ===================== WEBSITE ===================== -->
+<main id="v-site">
+<header class="hero"><div class="in">
+ <div class="hnav"><span class="mark" aria-hidden="true">T</span><span class="w">Corporate <i>Tambola</i></span><a class="btn gold" href="#pricing">See pricing</a></div>
+ <div class="hgrid">
+  <div><span class="eyebrow">Live tambola for your whole organisation</span>
+   <h1>One ticket for every colleague.<em>One calm, fair evening.</em></h1>
+   <p class="lead">Run a live housie for your company, society or club. Participants open a link on their phone, cut their numbers, and claim rewards you set. No app to install.</p>
+   <div class="cta"><a class="btn gold" href="#pricing">Choose a pack</a><a class="btn line" href="#how">How it works</a></div>
+   <p class="trust">Designed for DPDP, GDPR and US privacy laws. Participants never see each other's names.</p></div>
+  <div class="ptk" aria-hidden="true"><div class="top"><h3>Diwali Tambola Night</h3><span class="mono sm muted">TICKET A</span></div><div class="mini" id="miniT"></div><div class="foot"><span>Acme Industries</span><span>TMB-ACME-000203</span></div></div>
+ </div></div></header>
+
+<section class="sec" id="how"><div class="in"><span class="eyebrow">How it works</span><h2>Three steps, one evening</h2>
+<p class="sub">You set it up once. We call every number, check every claim and keep the report.</p>
+<div class="steps"><div><b>01</b><h3>Set up</h3><p>Name the engagement, pick the date, choose one or two tickets, and list your rewards.</p></div>
+<div><b>02</b><h3>Invite</h3><p>Share one link. Participants join from a list you control, with a waiting room for anyone new.</p></div>
+<div><b>03</b><h3>Go live</h3><p>A clear voice calls each number. Brand breaks let you show a company video to everyone at once.</p></div></div></div></section>
+
+<section class="sec alt"><div class="in"><span class="eyebrow">Made for companies</span><h2>Calm for the organizer, fair for everyone</h2>
+<div class="feat"><div><h3>One or two tickets</h3><p>Offer a single ticket or two per participant, with Full Two-Ticket House rewards on top.</p></div>
+<div><h3>Brand breaks</h3><p>Up to three company videos at even intervals, shown to every participant together.</p></div>
+<div><h3>Verified entry</h3><p>Closed group, waiting room, and one phone per entry. Entry closes when you start.</p></div>
+<div><h3>Private by design</h3><p>Winners appear as ticket IDs only. Personal data is deleted 24 hours after the engagement ends.</p></div></div></div></section>
+
+<section class="sec" id="pricing"><div class="in"><div class="phead"><div><span class="eyebrow">Pricing</span><h2>Pay per engagement. Participants never pay.</h2><p class="sub">Choose how many people can take part.</p></div>
+<div class="cur" role="group" aria-label="Currency"><button aria-pressed="true" data-c="inr">INR</button><button aria-pressed="false" data-c="usd">USD</button></div></div>
+<div class="packs" id="packs"></div>
+<p class="fine" id="fine"></p></div></section>
+<footer class="site"><div class="in">Corporate Tambola (placeholder brand). Rewards are provided by the organizer; we never handle reward money.</div></footer>
+</main>
+
+<!-- ===================== PARTICIPANT ===================== -->
+<main id="v-tkt" hidden><div class="stage">
+<div class="phone" id="phone">
+ <div class="hd"><div class="org">Acme Industries Ltd</div><h2>Diwali Tambola Night</h2><div class="row"><span class="pill ok"><i></i>Live</span><span>Two-ticket engagement</span></div></div>
+ <div class="call" aria-label="Current number">
+  <div class="main"><div class="ball" id="ball" aria-live="polite">64</div><div><div class="eb">Current number</div><div class="wd" id="word">Sixty-four</div><div class="nx" id="nx">Next number in 7s</div></div></div>
+  <div class="bar" aria-hidden="true"><i id="cbar"></i></div>
+  <div class="tools"><button id="audio" aria-pressed="false">Join audio</button><button id="voice" aria-pressed="true">Voice on</button></div>
+ </div>
+ <div class="tsw" role="group" aria-label="Choose ticket"><button aria-pressed="true" data-t="A">Ticket A</button><button aria-pressed="false" data-t="B">Ticket B</button></div>
+ <div class="pass"><div class="ph"><h3 id="tname">Ticket A</h3><span class="mono sm muted" id="tid">TMB-ACME-000203</span></div>
+  <div class="tg" id="tg" role="group" aria-label="Ticket numbers"></div>
+  <p class="hintp">Tap a number to cut it. Tap again to undo.</p></div>
+ <div class="claimrow"><div><b>Two-ticket claim</b>Both tickets complete? Claim a Full Two-Ticket House below.</div></div>
+ <div class="rw"><h3>Rewards</h3><p class="sm muted" style="margin:0 0 6px">Winners are shown by ticket ID only.</p><div id="rw"></div></div>
+ <div class="banner ok" id="banner" role="status" hidden><div><b id="bt">Reward awarded</b><span id="bs"></span></div><button id="bx">Close</button></div>
+ <div class="pfoot">Your ticket ID<b>TMB-ACME-000203</b>Tickets A and B. Keep this screen open during the engagement.</div>
+</div>
+<div class="demo"><span class="eyebrow">Design preview controls (not part of the product)</span>
+<div class="chips"><button class="chip" aria-pressed="false" id="dBrk">Show brand break</button><button class="chip" aria-pressed="false" id="dOk">Reward awarded</button><button class="chip" aria-pressed="false" id="dNo">Not valid</button></div></div>
+</div>
+<div class="brk" id="brk" hidden role="dialog" aria-modal="true" aria-label="Brand break"><div class="card"><div class="vid"><span class="lbl">Acme Industries</span><span class="play"></span></div>
+<div class="bd"><h3>Brand break: 30s</h3><p>A short message from Acme Industries. The engagement resumes right after.</p><div class="pb"><i id="bpb" style="width:100%"></i></div><button class="btn line" id="bcl" style="background:transparent;color:#fff;border-color:#6b3a47">Close preview</button></div></div></div>
+</main>
+
+<!-- ===================== ORGANIZER ===================== -->
+<main id="v-org" hidden><div class="org">
+<div class="ohead"><div><span class="eyebrow">Organizer panel</span><h1 id="oname">Diwali Tambola Night</h1></div><div class="meta"><span class="pill wine" id="ostat"><i></i>Draft</span><span>Up to 500 participants</span></div></div>
+<div class="ogrid">
+<nav class="snav" id="snav" aria-label="Engagement steps"></nav>
+<div id="oc">
+
+<section class="panel" data-s="setup"><h2>Setup</h2><p class="lede">The basics. You can change these until you start the engagement.</p>
+<label class="lb" for="ename">Engagement name</label><input class="inp" id="ename" value="Diwali Tambola Night">
+<div class="two"><div><label class="lb" for="edate">Date</label><input class="inp" id="edate" type="date" value="2026-10-24"></div>
+<div><label class="lb" for="elim">Participant limit</label><select class="inp" id="elim"><option>Up to 100 participants</option><option>Up to 250 participants</option><option selected>Up to 500 participants</option><option>Up to 750 participants</option><option>Up to 1,000 participants</option></select></div></div>
+<label class="lb">Start time</label><div class="chips" data-single><button class="chip" aria-pressed="false">17:30</button><button class="chip" aria-pressed="true">18:00</button><button class="chip" aria-pressed="false">18:30</button><button class="chip" aria-pressed="false">19:00</button><button class="chip" aria-pressed="false">19:30</button><button class="chip" aria-pressed="false">20:00</button></div>
+<p class="hint">Shown to each participant in their own time zone.</p>
+<label class="lb">Ticket mode</label><div class="chips" data-single id="tmode"><button class="chip" aria-pressed="false">1 ticket</button><button class="chip" aria-pressed="true">2 tickets</button></div>
+<div class="fl" style="margin-top:22px"><div><b>Family limit per participant</b><span class="d">How many family members each participant may invite.</span></div><div class="stepper" data-st="fam" data-min="0" data-max="6"><button aria-label="Fewer">-</button><output>3</output><button aria-label="More">+</button></div></div>
+<div class="fl"><div><b>Family can win</b><span class="d">Off means family members take part for fun and are not given rewards.</span></div><button class="switch" role="switch" aria-checked="false" aria-label="Family can win"></button></div>
+<label class="lb">Voice</label><div class="voice"><span class="dot">EN</span><div><b>Indian English, female</b><div class="sm muted">One fixed voice, slow and clear.</div></div></div>
+<label class="lb">Calling mode</label><div class="chips" data-single><button class="chip" aria-pressed="true">AI voice</button><button class="chip" aria-pressed="false">Host voice</button><button class="chip" aria-pressed="false">AI + host</button></div>
+<p class="hint">AI voice speaks only the number, for example "Next number is two four, twenty-four."</p></section>
+
+<section class="panel" data-s="rewards" hidden><h2>Rewards</h2><p class="lede">Choose which patterns carry a reward and what each one is.</p>
+<div class="rg" id="pat"></div>
+<div class="hs"><div class="t"><b>Full House</b><div class="stepper" data-st="fh" data-min="1" data-max="5"><button aria-label="Fewer">-</button><output>3</output><button aria-label="More">+</button></div></div><div class="rg" id="fhl"></div></div>
+<div class="hs"><div class="t"><b>Full Two-Ticket House</b><div class="stepper" data-st="f2" data-min="0" data-max="5"><button aria-label="Fewer">-</button><output>2</output><button aria-label="More">+</button></div></div><div class="rg" id="f2l"></div></div>
+<p class="note info">The 2nd house opens only after the 1st has been awarded, and so on.</p></section>
+
+<section class="panel" data-s="breaks" hidden><h2>Brand breaks</h2><p class="lede">Show your company's message to every participant at once. Up to 3 breaks, spaced evenly.</p>
+<div id="bbl"></div><button class="btn line" id="addbb">Add a brand break</button>
+<p class="note">YouTube videos cannot be downloaded ahead of time. They load when the break starts, so a company-hosted video link is smoother on slow networks. Company videos are saved to each participant's phone in low quality before the engagement.</p></section>
+
+<section class="panel" data-s="people" hidden><h2>Participants</h2><p class="lede">Only you and hosts see names. Other participants never do.</p>
+<div class="toolbar"><input class="inp" id="srch" placeholder="Search by name or team" aria-label="Search participants"><div class="chips" id="rolef" data-single><button class="chip" aria-pressed="true">All</button><button class="chip" aria-pressed="false">Participant</button><button class="chip" aria-pressed="false">Team Lead</button><button class="chip" aria-pressed="false">Host</button></div></div>
+<div class="bulk" id="bulk"><b class="sm" id="bcount">0 selected</b><button class="btn sm line" data-b="pass">Send pass</button><button class="btn sm line" data-b="lead">Make Team Lead</button><button class="btn sm danger" data-b="rm">Remove</button><span class="sm" id="bmsg" role="status"></span></div>
+<div class="tw"><table><thead><tr><th><input type="checkbox" id="all" aria-label="Select all"></th><th>Name</th><th>Team</th><th>Role</th><th>Status</th></tr></thead><tbody id="ptb"></tbody></table></div></section>
+
+<section class="panel" data-s="share" hidden><h2>Share</h2><p class="lede">One link for everyone. No mobile numbers ever appear in it.</p>
+<label class="lb">Engagement link</label><div class="linkbox" id="lnk">https://play.example/e/DIWALI-8F2K</div>
+<div style="display:flex;gap:20px;align-items:center;margin-top:18px;flex-wrap:wrap"><div class="qr" id="qr" aria-label="QR code placeholder"></div><div><button class="btn" id="cp">Copy link</button> <span class="sm" id="cpm" role="status"></span><p class="hint">Send it by email or your intranet. Participants must be on your list or wait for approval.</p></div></div></section>
+
+<section class="panel" data-s="wait" hidden><h2>Waiting room</h2><p class="lede">People who opened the link but are not on your list yet.</p>
+<div class="alert" id="ph2"><div><b>Second phone detected</b>Someone is opening the ticket of Rohan Das (+91 98••• ••412) on a new phone.</div><button class="btn sm line" data-p="keep">Keep first phone</button><button class="btn sm" data-p="move">Let new phone in</button></div>
+<div id="wq"></div></section>
+
+<section class="panel" data-s="start" hidden><h2>Start</h2><p class="lede">Check everything, then begin. Entry closes and settings lock at Start.</p>
+<ul class="cl2"><li><span class="pill ok">Ready</span>Setup complete: 2 tickets, up to 500 participants</li><li><span class="pill ok">Ready</span>Rewards: 5 patterns, 3 Full Houses, 2 Full Two-Ticket Houses</li><li><span class="pill ok">Ready</span>Brand breaks: 3 planned, after calls 22, 45 and 67</li><li><span class="pill warn">Check</span>3 people are still in the waiting room</li></ul>
+<div style="margin-top:22px"><button class="btn gold" id="go">Start engagement</button></div></section>
+
+<section class="panel" data-s="live" hidden><h2>Live</h2><p class="lede" id="livel">The engagement is running. Participants cannot join now.</p>
+<div class="live"><div><div class="big"><div class="ball" id="obl">64</div><div><div class="eyebrow" style="color:var(--gold2)">Current number</div><div class="wd" id="owd">Sixty-four</div><div class="sub" id="ocnt">Call 14 of 90. Next in 7s</div></div></div>
+<div class="stats"><div><span>Joined</span><b>412</b></div><div><span>Called</span><b id="ocalled">14</b></div><div><span>Claims</span><b>9</b></div></div></div>
+<div><h3 style="font-size:19px;margin-bottom:6px">Rewards</h3><div class="wl" id="wl"></div></div></div>
+<div class="ctrl"><label class="lb" style="margin-top:0">Pause reason</label><div class="chips" data-single style="margin-bottom:14px"><button class="chip" aria-pressed="true">Announcement</button><button class="chip" aria-pressed="false">Technical issue</button><button class="chip" aria-pressed="false">Short break</button></div>
+<div class="chips"><button class="btn line" id="pz">Pause</button><button class="btn danger" id="end">End engagement</button><span id="endc" hidden style="display:inline-flex;gap:8px;align-items:center"><span class="sm">End for everyone?</span><button class="btn sm danger" id="endy">Yes, end</button><button class="btn sm line" id="endn">Keep going</button></span></div><p class="sm muted" id="pzm" role="status"></p></div></section>
+
+<section class="panel" data-s="report" hidden><h2>Report</h2><p class="lede">An anonymous summary stays after personal data is deleted 24 hours after the end.</p>
+<div class="sumc"><div><span>Participants</span><b>412</b></div><div><span>Calls made</span><b>71</b></div><div><span>Rewards awarded</span><b>8</b></div><div><span>Not valid</span><b>3</b></div></div>
+<div class="chips"><button class="btn line">Download winners (ticket IDs)</button><button class="btn line">Download full report</button></div>
+<p class="note ok">Names and phone numbers appear only in this organizer report, and are removed after 24 hours.</p></section>
+</div></div></div></main>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+/* top switcher */
+$$('#sw .tabs button').forEach(b=>b.onclick=()=>{$$('#sw .tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));['site','tkt','org'].forEach(v=>$('#v-'+v).hidden=v!==b.dataset.v);scrollTo(0,0)});
+/* generic single-select chips, steppers, switches */
+document.addEventListener('click',e=>{
+ const c=e.target.closest('[data-single] .chip');if(c){$$('.chip',c.parentElement).forEach(x=>x.setAttribute('aria-pressed',x===c));if(c.parentElement.id==='rolef')renderP();if(c.parentElement.id==='tmode')$('#f2l').parentElement.style.opacity=c.textContent.startsWith('1')?.5:1}
+ const sw=e.target.closest('.switch');if(sw)sw.setAttribute('aria-checked',sw.getAttribute('aria-checked')!=='true');
+ const st=e.target.closest('.stepper button');if(st){const s=st.parentElement,o=$('output',s);let v=+o.textContent+(st.textContent==='+'?1:-1);v=Math.max(+s.dataset.min,Math.min(+s.dataset.max,v));o.textContent=v;if(s.dataset.st==='fh')houses('fhl','Full House',v);if(s.dataset.st==='f2')houses('f2l','Full Two-Ticket House',v)}
+});
+const ord=n=>['1st','2nd','3rd','4th','5th'][n-1];
+
+/* ---------- WEBSITE ---------- */
+const A=[[4,0,23,0,41,0,62,73,0],[0,12,0,31,0,55,0,76,88],[0,18,27,0,47,0,68,0,90]];
+const B=[[0,11,0,34,0,52,0,70,85],[6,0,21,0,43,0,64,0,89],[8,16,0,38,0,58,0,79,0]];
+$('#miniT').innerHTML=A.flat().map(n=>`<span class="${n?(n%3==1?'c':''):'e'}">${n||''}</span>`).join('');
+const PK=[[100,500,79],[250,1000,149],[500,1500,249],[750,1800,329],[1000,2000,399],[2500,4000,799],[5000,6250,1299],[10000,10000,1999]];
+let cur='inr';
+function packs(){$('#packs').innerHTML=PK.map(([n,i,u],k)=>{const p=cur=='inr'?i:u,s=cur=='inr'?'₹':'US$',pp=(p/n).toFixed(2);return `<div class="pk${k==7?' big':''}"><span class="up">Up to</span><div class="n">${n.toLocaleString('en-IN')}<small>participants</small></div><div class="pr">${s}${p.toLocaleString(cur=='inr'?'en-IN':'en-US')}</div><div class="pp">about ${s}${pp} per participant</div><a class="btn ${k==7?'gold':'line'} sm" href="#pricing">Choose</a></div>`}).join('');
+ $('#fine').textContent=cur=='inr'?'Prices in rupees include 18% GST. Sold per engagement; participants never pay.':'Prices in US dollars. No tax added. Sold per engagement; participants never pay.'}
+$$('.cur button').forEach(b=>b.onclick=()=>{cur=b.dataset.c;$$('.cur button').forEach(x=>x.setAttribute('aria-pressed',x===b));packs()});packs();
+
+/* ---------- PARTICIPANT ---------- */
+const called=[4,23,41,62,73,12,55,18,47,90,34,70,8,64];
+let curNo=64,tab='A',cut={A:new Set([4,23,41,62]),B:new Set([34,8])},secs=7;
+const ones='zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen'.split(' '),tens='_ _ twenty thirty forty fifty sixty seventy eighty ninety'.split(' ');
+const words=n=>{const w=n<20?ones[n]:tens[n/10|0]+(n%10?'-'+ones[n%10]:'');return w[0].toUpperCase()+w.slice(1)};
+const TK=()=>tab=='A'?A:B;
+function grid(){$('#tg').innerHTML=TK().flat().map(n=>n?`<button class="cell" data-n="${n}" aria-pressed="${cut[tab].has(n)}" aria-label="Number ${n}">${n}</button>`:'<span class="cell blank"></span>').join('')}
+$('#tg').onclick=e=>{const c=e.target.closest('.cell[data-n]');if(!c)return;const n=+c.dataset.n,s=cut[tab];s.has(n)?s.delete(n):s.add(n);c.setAttribute('aria-pressed',s.has(n))};
+$$('.tsw button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;$$('.tsw button').forEach(x=>x.setAttribute('aria-pressed',x===b));$('#tname').textContent='Ticket '+tab;grid()});
+const ME='TMB-ACME-000203';
+const RW=[{n:'Early Five',t:'t',p:'e5',w:'TMB-ACME-000147'},{n:'Top Line',t:'t',p:'r0'},{n:'Middle Line',t:'t',p:'r1',w:'TMB-ACME-000088'},{n:'Bottom Line',t:'t',p:'r2'},{n:'Four Corners',t:'t',p:'co',w:'TMB-ACME-000412'},
+{n:'1st Full House',t:'t',p:'fh'},{n:'2nd Full House',t:'t',p:'fh',after:5},{n:'3rd Full House',t:'t',p:'fh',after:6},{n:'1st Full Two-Ticket House',t:'2',p:'f2'},{n:'2nd Full Two-Ticket House',t:'2',p:'f2',after:8}];
+function rw(){$('#rw').innerHTML=RW.map((r,i)=>{const lock=r.after!=null&&!RW[r.after].w;return `<div class="rwr${r.w?' won':''}"><div><b>${r.n}</b><small>${r.w?'Awarded to':lock?'Opens after the '+RW[r.after].n:r.t=='2'?'Both tickets':'Your ticket A or B'}</small></div>${r.w?`<span class="tid${r.w==ME?' me':''}">${r.w}</span>`:`<button class="cl" data-i="${i}" ${lock?'disabled':''}>Claim</button>`}</div>`}).join('')}
+function nums(t,p){const rows=t,all=rows.flat().filter(Boolean);if(p=='e5')return all.filter(n=>cut[t===A?'A':'B'].has(n)).slice(0,5);if(p[0]=='r')return rows[+p[1]].filter(Boolean);if(p=='co'){const a=rows[0].filter(Boolean),c=rows[2].filter(Boolean);return[a[0],a.at(-1),c[0],c.at(-1)]}return all}
+function ok(t,p,k){const s=cut[k],ns=nums(t,p);return ns.length>=(p=='e5'?5:1)&&ns.every(n=>s.has(n)&&called.includes(n))}
+function banner(good,title,sub){const b=$('#banner');b.hidden=false;b.className='banner '+(good?'ok':'no');$('#bt').textContent=title;$('#bs').textContent=sub}
+$('#rw').onclick=e=>{const b=e.target.closest('.cl');if(!b)return;const r=RW[+b.dataset.i];let v;
+ if(r.t=='2')v=ok(A,'fh','A')&&ok(B,'fh','B');else v=ok(TK(),r.p,tab);
+ if(v){r.w=ME;banner(true,'Reward awarded',r.n+' to ticket '+ME);rw()}else banner(false,'Not valid',r.n+' is not complete yet. Check your cut numbers.')};
+$('#bx').onclick=()=>$('#banner').hidden=true;
+$('#audio').onclick=function(){const on=this.getAttribute('aria-pressed')!=='true';this.setAttribute('aria-pressed',on);this.textContent=on?'Audio live':'Join audio'};
+$('#voice').onclick=function(){const on=this.getAttribute('aria-pressed')!=='true';this.setAttribute('aria-pressed',on);this.textContent=on?'Voice on':'Voice off'};
+function tick(){secs--;if(secs<=0){const pool=[...Array(90)].map((_,i)=>i+1).filter(n=>!called.includes(n));curNo=pool[Math.random()*pool.length|0];called.push(curNo);secs=7;$('#ball').textContent=curNo;$('#word').textContent=words(curNo);$('#obl').textContent=curNo;$('#owd').textContent=words(curNo);$('#ocalled').textContent=called.length}
+ $('#nx').textContent='Next number in '+secs+'s';$('#cbar').style.width=(secs/7*100)+'%';$('#ocnt').textContent='Call '+called.length+' of 90. Next in '+secs+'s'}
+let paused=false;setInterval(()=>{if(!paused)tick()},1000);
+/* brand break */
+let bsec=30,bt;
+function brk(on){$('#brk').hidden=!on;$('#dBrk').setAttribute('aria-pressed',on);clearInterval(bt);if(on){bsec=30;bt=setInterval(()=>{bsec--;$('#bpb').style.width=(bsec/30*100)+'%';$('#brk h3').textContent='Brand break: '+bsec+'s';if(bsec<=0)brk(false)},1000);$('#bcl').focus()}else $('#brk h3').textContent='Brand break: 30s'}
+$('#dBrk').onclick=()=>brk($('#brk').hidden);$('#bcl').onclick=()=>brk(false);
+$('#dOk').onclick=()=>banner(true,'Reward awarded','Top Line to ticket '+ME);$('#dNo').onclick=()=>banner(false,'Not valid','Top Line is not complete yet.');
+grid();rw();
+
+/* ---------- ORGANIZER ---------- */
+const STEPS=[['setup','Setup'],['rewards','Rewards'],['breaks','Brand breaks'],['people','Participants'],['share','Share'],['wait','Waiting room'],['start','Start'],['live','Live'],['report','Report']];
+function step(id){$$('#oc>section').forEach(s=>s.hidden=s.dataset.s!==id);$$('#snav button').forEach(b=>{if(b.dataset.s===id)b.setAttribute('aria-current','step');else b.removeAttribute('aria-current')})}
+$('#snav').innerHTML=STEPS.map(([k,l],i)=>`<button data-s="${k}" class="${i<3?'done':''}"><span class="n">${i+1}</span>${l}</button>`).join('');
+$('#snav').onclick=e=>{const b=e.target.closest('button');if(b)step(b.dataset.s)};step('setup');
+$('#ename').oninput=e=>$('#oname').textContent=e.target.value||'Untitled engagement';
+/* rewards */
+const PAT=[['Early Five','Wireless earbuds'],['Top Line','Coffee hamper'],['Middle Line','Gift voucher'],['Bottom Line','Desk plant'],['Four Corners','Movie tickets']];
+$('#pat').innerHTML=PAT.map(([n,t])=>`<div class="rgr"><input type="checkbox" checked aria-label="Include ${n}"><b>${n}</b><input class="inp" type="text" value="${t}" aria-label="${n} reward"></div>`).join('');
+function houses(id,name,n){const pre=['Smart speaker','Weekend stay','Gift card','Headphones','Smart watch'];$('#'+id).innerHTML=[...Array(n)].map((_,i)=>`<div class="rgr"><span class="pill wine" style="justify-self:start">${i+1}</span><b>${ord(i+1)} ${name}</b><input class="inp" type="text" value="${id=='f2l'?['Tablet','Holiday voucher','Cookware set','Backpack','Speaker'][i]:pre[i]}" aria-label="${ord(i+1)} ${name} reward"></div>`).join('')}
+houses('fhl','Full House',3);houses('f2l','Full Two-Ticket House',2);
+/* brand breaks */
+let bbs=[{src:'Company video link',url:'https://videos.acme.example/welcome.mp4',len:30},{src:'YouTube link',url:'https://youtu.be/example',len:45},{src:'Company video link',url:'https://videos.acme.example/awards.mp4',len:30}];
+function bbr(){const n=bbs.length,pos=bbs.map((_,i)=>Math.floor(90*(i+1)/(n+1)));
+ $('#bbl').innerHTML=bbs.map((b,i)=>`<div class="bb"><div class="h"><b>Break ${i+1}</b><button class="btn sm line" data-r="${i}">Remove</button></div><div class="f"><div><label class="lb" style="margin-top:0">After call</label><input class="inp mono" type="number" value="${pos[i]}" min="1" max="89" aria-label="After call"></div><div><label class="lb" style="margin-top:0">Source</label><select class="inp" aria-label="Source"><option ${b.src[0]=='C'?'selected':''}>Company video link</option><option ${b.src[0]=='Y'?'selected':''}>YouTube link</option></select></div><div><label class="lb" style="margin-top:0">Link</label><input class="inp" value="${b.url}" aria-label="Video link"></div><div><label class="lb" style="margin-top:0">Seconds</label><input class="inp mono" type="number" value="${b.len}" aria-label="Seconds"></div></div></div>`).join('');
+ $('#addbb').disabled=n>=3;$('#addbb').textContent=n>=3?'Maximum 3 breaks reached':'Add a brand break'}
+$('#bbl').onclick=e=>{const r=e.target.closest('[data-r]');if(r){bbs.splice(+r.dataset.r,1);bbr()}};
+$('#addbb').onclick=()=>{if(bbs.length<3){bbs.push({src:'Company video link',url:'https://',len:30});bbr()}};bbr();
+/* participants */
+let P=[['Aarav Mehta','Finance','Participant','Joined'],['Priya Nair','HR','Team Lead','Joined'],['Rohan Das','Sales','Participant','Joined'],['Sneha Kulkarni','Operations','Participant','Pass sent'],['Imran Sheikh','IT','Host','Joined'],['Kavya Reddy','Marketing','Team Lead','Joined'],['Vikram Singh','Sales','Participant','Pass sent'],['Ananya Iyer','Legal','Participant','Joined'],['Manoj Patil','Operations','Participant','Joined'],['Divya Menon','Finance','Participant','Joined']].map((r,i)=>({id:i,n:r[0],t:r[1],r:r[2],s:r[3]}));
+let sel=new Set(),removed=[];
+function renderP(){const q=$('#srch').value.toLowerCase(),f=$('#rolef .chip[aria-pressed=true]').textContent;
+ $('#ptb').innerHTML=P.filter(p=>(f=='All'||p.r==f)&&(p.n+p.t).toLowerCase().includes(q)).map(p=>`<tr><td><input type="checkbox" data-i="${p.id}" ${sel.has(p.id)?'checked':''} aria-label="Select ${p.n}"></td><td><b>${p.n}</b></td><td>${p.t}</td><td><select data-ro="${p.id}" aria-label="Role for ${p.n}">${['Participant','Team Lead','Host'].map(r=>`<option ${r==p.r?'selected':''}>${r}</option>`).join('')}</select></td><td><span class="pill ${p.s=='Joined'?'ok':'warn'}"><i></i>${p.s}</span></td></tr>`).join('');
+ $('#bcount').textContent=sel.size+' selected'}
+$('#srch').oninput=renderP;
+$('#ptb').onchange=e=>{const t=e.target;if(t.dataset.i!=null){t.checked?sel.add(+t.dataset.i):sel.delete(+t.dataset.i);$('#bcount').textContent=sel.size+' selected'}if(t.dataset.ro!=null)P.find(p=>p.id==+t.dataset.ro).r=t.value};
+$('#all').onchange=e=>{$$('#ptb input[type=checkbox]').forEach(c=>{c.checked=e.target.checked;e.target.checked?sel.add(+c.dataset.i):sel.delete(+c.dataset.i)});$('#bcount').textContent=sel.size+' selected'};
+$('#bulk').onclick=e=>{const b=e.target.closest('[data-b]');const u=e.target.closest('[data-undo]');const m=$('#bmsg');
+ if(u){P.push(...removed);P.sort((a,c)=>a.id-c.id);m.textContent='Restored '+removed.length+'.';removed=[];renderP();return}
+ if(!b)return;if(!sel.size){m.textContent='Select at least one participant first.';return}
+ const n=sel.size;if(b.dataset.b=='pass'){P.filter(p=>sel.has(p.id)&&p.s!='Joined').forEach(p=>p.s='Pass sent');m.textContent='Pass sent to '+n+'.'}
+ if(b.dataset.b=='lead'){P.filter(p=>sel.has(p.id)).forEach(p=>p.r='Team Lead');m.textContent=n+' made Team Lead.'}
+ if(b.dataset.b=='rm'){removed=P.filter(p=>sel.has(p.id));P=P.filter(p=>!sel.has(p.id));m.innerHTML=n+' removed. <button class="linkbtn" data-undo style="border:0;background:none;color:var(--wine);font-weight:700;text-decoration:underline;min-height:40px">Undo</button>'}
+ sel.clear();$('#all').checked=false;renderP()};renderP();
+/* share */
+$('#qr').innerHTML=[...Array(441)].map((_,i)=>{const x=i%21,y=i/21|0,f=(a,b)=>{const dx=x-a,dy=y-b;return dx>=0&&dx<7&&dy>=0&&dy<7?(dx%6==0||dy%6==0||(dx>1&&dx<5&&dy>1&&dy<5)):null};
+ let k=f(0,0);if(k===null)k=f(14,0);if(k===null)k=f(0,14);if(k===null)k=((x*7+y*13+x*y)%5<2);return `<i class="${k?'k':''}"></i>`}).join('');
+$('#cp').onclick=()=>{$('#cpm').textContent='Link copied.';try{navigator.clipboard&&navigator.clipboard.writeText($('#lnk').textContent)}catch(e){}};
+/* waiting room */
+const W=[['Nisha Verma','Sales team, new joiner'],['Arjun Kapoor','Finance, not on list'],['Meera Joshi','HR, not on list']];
+function wq(){$('#wq').innerHTML=W.length?W.map((w,i)=>`<div class="q"><div class="sp"><b>${w[0]}</b><div class="sm muted">${w[1]}</div></div><button class="btn sm" data-a="${i}">Admit</button><button class="btn sm line" data-d="${i}">Decline</button></div>`).join(''):'<p class="note ok">The waiting room is empty.</p>'}
+$('#wq').onclick=e=>{const a=e.target.closest('[data-a],[data-d]');if(!a)return;W.splice(+(a.dataset.a??a.dataset.d),1);wq()};wq();
+$('#ph2').onclick=e=>{const b=e.target.closest('[data-p]');if(!b)return;$('#ph2').className='note ok';$('#ph2').innerHTML=b.dataset.p=='keep'?'Kept the first phone. The new phone was not let in.':'The new phone is in. The first phone has been signed out.'};
+/* start / live */
+const WL=[['Early Five','TMB-ACME-000147'],['Top Line',''],['Middle Line','TMB-ACME-000088'],['Bottom Line',''],['Four Corners','TMB-ACME-000412'],['1st Full House',''],['2nd Full House',''],['3rd Full House',''],['1st Full Two-Ticket House',''],['2nd Full Two-Ticket House','']];
+$('#wl').innerHTML=WL.map(([n,w])=>`<div class="r"><span>${n}</span>${w?`<span class="tid">${w}</span>`:'<span class="pill"><i></i>Open</span>'}</div>`).join('');
+$('#go').onclick=()=>{$('#ostat').className='pill ok';$('#ostat').innerHTML='<i></i>Live';step('live')};
+$('#pz').onclick=function(){paused=!paused;this.textContent=paused?'Resume':'Pause';const why=$('.ctrl .chip[aria-pressed=true]').textContent;$('#pzm').textContent=paused?'Paused for everyone. Reason shown to participants: '+why+'.':'';$('#ostat').className='pill '+(paused?'warn':'ok');$('#ostat').innerHTML='<i></i>'+(paused?'Paused':'Live')};
+$('#end').onclick=()=>{$('#end').hidden=true;$('#endc').hidden=false};$('#endn').onclick=()=>{$('#end').hidden=false;$('#endc').hidden=true};
+$('#endy').onclick=()=>{$('#endc').hidden=true;$('#ostat').className='pill';$('#ostat').innerHTML='<i></i>Ended';paused=true;step('report')};
+</script>
+</body></html>

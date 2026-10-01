@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Corporate Tambola - Option C: Bold Event Night</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* ===== Tokens: "Event night" (default, dark) and "Daylight" (organizer choice) ===== */
+:root,[data-theme=night]{
+  --bg0:#14040A;--bg1:#2E0812;--card:#220A12;--card2:#2E1019;--raise:#3A1421;
+  --text:#FFF4DE;--muted:#D2B8BF;--faint:#B79DA5;
+  --gold:#F2C14E;--gold2:#FFE08A;--goldtext:#F2C14E;--onGold:#2E0812;
+  --line:#4A2430;--cell:#4A1626;--cellInk:#FFF4DE;--cellEmpty:#1B070D;
+  --cutBg:#F2C14E;--cutInk:#2E0812;
+  --ok:#5BD99B;--okbg:#0F3326;--bad:#FF8C84;--badbg:#3F1210;--warn:#FFD27A;--warnbg:#3A2A08;--info:#9CC4FF;--infobg:#12294A;
+  --glow:0 0 28px rgba(242,193,78,.55),0 0 80px rgba(242,193,78,.25);
+  --hero:radial-gradient(900px 520px at 75% 20%,rgba(242,193,78,.22),transparent 60%),radial-gradient(700px 500px at 0% 0%,#7A1C33 0%,transparent 60%),linear-gradient(160deg,#2E0812,#14040A 70%);
+  --page:linear-gradient(180deg,#14040A,#2E0812 140%);
+}
+[data-theme=day]{
+  --bg0:#FBF6EC;--bg1:#F3ECE0;--card:#FFFFFF;--card2:#FBF6EC;--raise:#F3ECE0;
+  --text:#2A1017;--muted:#5E4E54;--faint:#6F6166;
+  --gold:#E0B872;--gold2:#B8894D;--goldtext:#7A4F00;--onGold:#2E0812;
+  --line:#E3D6C2;--cell:#F8E9EC;--cellInk:#2A1017;--cellEmpty:#EFE6D8;
+  --cutBg:#5A1426;--cutInk:#FFF4DE;
+  --ok:#17653F;--okbg:#E4F3EC;--bad:#9E1F18;--badbg:#FBE7E4;--warn:#7A4F00;--warnbg:#FBF0D9;--info:#1F4E8C;--infobg:#E6EEF9;
+  --glow:0 6px 24px rgba(90,20,38,.25);
+  --hero:radial-gradient(900px 520px at 75% 20%,rgba(224,184,114,.4),transparent 60%),linear-gradient(160deg,#FBF6EC,#F3ECE0);
+  --page:#FBF6EC;
+}
+:root{--serif:"Fraunces",Georgia,serif;--sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;--swh:56px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg0);color:var(--text);font:400 15px/1.5 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body{background:var(--page);min-height:100vh}
+button,select,input{font:inherit;color:inherit}button{cursor:pointer}
+a{color:var(--goldtext)}
+:focus-visible{outline:3px solid var(--gold2);outline-offset:2px}
+[data-theme=day] :focus-visible{outline-color:#5A1426}
+.hidden{display:none!important}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}.small{font-size:13px}.tiny{font-size:12px}
+.eyebrow{font:700 11px var(--sans);letter-spacing:.18em;text-transform:uppercase;color:var(--goldtext)}
+h1,h2,h3{font-family:var(--serif);margin:0;letter-spacing:-.01em}
+.btn{border:0;border-radius:12px;padding:10px 18px;min-height:44px;font-weight:700;font-size:14.5px;display:inline-flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(180deg,var(--gold2),var(--gold));color:var(--onGold);text-decoration:none;line-height:1.2}
+.btn:hover{filter:brightness(1.07)}
+.btn.line{background:transparent;color:var(--text);border:1px solid var(--line);box-shadow:none}
+.btn.line:hover{border-color:var(--gold)}
+.btn.danger{background:transparent;color:var(--bad);border:1px solid var(--bad)}
+.btn.sm{min-height:40px;padding:8px 14px;font-size:13.5px;border-radius:10px}
+.btn.block{width:100%}.btn:disabled{opacity:.5;cursor:not-allowed;filter:none}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--card2);color:var(--text);border-radius:999px;padding:8px 16px;min-height:40px;font-weight:600;font-size:13.5px}
+.chip.on{background:var(--gold);border-color:var(--gold);color:var(--onGold)}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 11px;font-size:12px;font-weight:700;white-space:nowrap;background:var(--raise);color:var(--muted)}
+.pill i{width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.ok{background:var(--okbg);color:var(--ok)}.pill.warn{background:var(--warnbg);color:var(--warn)}.pill.bad{background:var(--badbg);color:var(--bad)}.pill.info{background:var(--infobg);color:var(--info)}.pill.live i{animation:blink 1.2s infinite}
+@keyframes blink{50%{opacity:.25}}
+.note{border-radius:12px;padding:11px 14px;font-size:13.5px;background:var(--infobg);color:var(--info);margin-top:12px}
+.note.warn{background:var(--warnbg);color:var(--warn)}.note.ok{background:var(--okbg);color:var(--ok)}
+.inp{width:100%;min-height:44px;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--cellEmpty);color:var(--text)}
+.inp:focus{border-color:var(--gold)}
+label.lb{display:block;font:700 11px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:16px 0 7px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:12px;background:var(--cellEmpty)}
+.stepper button{width:44px;height:44px;border:0;background:transparent;font-size:20px;font-weight:700;color:var(--goldtext)}
+.stepper b{min-width:40px;text-align:center;font:600 17px var(--mono)}
+.switch{display:inline-flex;align-items:center;gap:10px;min-height:44px;font-weight:600;cursor:pointer}
+.switch input{position:absolute;opacity:0;width:44px;height:28px;margin:0;cursor:pointer}
+.switch .tr{position:relative;width:48px;height:28px;border-radius:28px;background:var(--raise);border:1px solid var(--line);flex:0 0 48px;transition:.15s}
+.switch .tr::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--muted);transition:.15s}
+.switch input:checked+.tr{background:var(--gold);border-color:var(--gold)}.switch input:checked+.tr::after{left:23px;background:var(--onGold)}
+.switch input:focus-visible+.tr{outline:3px solid var(--gold2);outline-offset:2px}
+.switch{position:relative}.switch input{left:0;top:8px}
+
+/* ===== Top switcher ===== */
+#sw{position:sticky;top:0;z-index:60;height:var(--swh);background:#0C0206;color:#FFF4DE;border-bottom:1px solid #4A2430;display:flex;align-items:center;gap:10px;padding:0 12px;overflow-x:auto}
+#sw b{font:700 11px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:#F2C14E;white-space:nowrap}
+#sw .seg{display:flex;gap:4px;background:#1B070D;border:1px solid #4A2430;border-radius:12px;padding:3px}
+#sw .seg button{border:0;background:transparent;color:#FFF4DE;border-radius:9px;padding:0 14px;min-height:40px;font-weight:700;font-size:13px;white-space:nowrap}
+#sw .seg button[aria-selected=true]{background:#F2C14E;color:#2E0812}
+#sw .sp{flex:1}
+#sw .theme{border:1px solid #4A2430;background:#1B070D;color:#FFF4DE;border-radius:10px;min-height:40px;padding:0 12px;font-weight:600;font-size:12.5px;white-space:nowrap}
+.darknote{background:#1B070D;color:#E4CFD5;font-size:12.5px;padding:8px 14px;text-align:center;border-bottom:1px solid #4A2430}
+.darknote b{color:#F2C14E}
+
+/* ===== 1. Website ===== */
+.site{background:var(--hero)}
+.in{max-width:1180px;margin:0 auto;padding:0 clamp(16px,3vw,32px)}
+.snav{display:flex;align-items:center;gap:12px;padding:16px 0;flex-wrap:wrap}
+.mark{width:38px;height:38px;border-radius:11px;background:var(--gold);color:var(--onGold);display:grid;place-items:center;font:800 19px var(--serif);box-shadow:var(--glow)}
+.word{font:800 21px var(--serif)}.word i{font-style:normal;color:var(--goldtext)}
+.snav .links{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.snav .links a.l{color:var(--text);text-decoration:none;font-weight:600;font-size:14px;padding:10px 8px;min-height:40px;display:inline-flex;align-items:center}
+.hero{display:grid;grid-template-columns:1.15fr .85fr;gap:clamp(20px,4vw,56px);align-items:center;padding:clamp(24px,5vw,64px) 0 clamp(40px,6vw,80px)}
+.hero h1{font-size:clamp(38px,6.2vw,76px);line-height:1;font-weight:800;margin:14px 0 18px}
+.hero h1 em{font-style:normal;color:var(--goldtext);text-shadow:0 0 30px rgba(242,193,78,.45)}
+[data-theme=day] .hero h1 em{text-shadow:none}
+.hero p.lead{font-size:clamp(16px,2vw,19px);color:var(--muted);max-width:52ch;margin:0 0 24px}
+.cta{display:flex;gap:10px;flex-wrap:wrap}
+.trust{display:flex;gap:18px;flex-wrap:wrap;margin-top:22px;color:var(--muted);font-size:13px}.trust span::before{content:"\2713\00a0";color:var(--ok);font-weight:800}
+.stage{position:relative;border:1px solid var(--line);border-radius:28px;padding:22px;background:linear-gradient(180deg,var(--card2),var(--card));text-align:center;box-shadow:0 30px 80px -40px #000}
+.ball{width:min(210px,52vw);aspect-ratio:1;border-radius:50%;margin:6px auto 12px;display:grid;place-items:center;background:radial-gradient(circle at 32% 28%,#FFF3C4,#F2C14E 45%,#B8761A 100%);color:#2E0812;font:800 clamp(70px,16vw,104px)/1 var(--serif);box-shadow:var(--glow);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 44px rgba(242,193,78,.8),0 0 110px rgba(242,193,78,.35)}}
+.stage .mini{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.sec{padding:clamp(40px,6vw,76px) 0}.sec.alt{background:rgba(0,0,0,.18)}
+[data-theme=day] .sec.alt{background:var(--bg1)}
+.sec h2{font-size:clamp(28px,4vw,44px);font-weight:800;margin:8px 0 12px}
+.sec .sub{color:var(--muted);max-width:60ch;margin:0 0 28px}
+.feats{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.feat h3{font-size:20px;margin:10px 0 6px}.feat p{margin:0;color:var(--muted);font-size:14.5px}
+.feat .no{font:800 30px var(--serif);color:var(--goldtext)}
+.curr{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.price-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.pack{position:relative;display:flex;flex-direction:column;gap:6px}
+.pack.pop{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),var(--glow)}
+.pack .tagp{position:absolute;top:-12px;right:14px;background:var(--gold);color:var(--onGold);font:800 11px var(--sans);letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:999px}
+.pack .upto{color:var(--muted);font-size:13px}
+.pack .n{font:800 34px var(--serif)}
+.pack .p{font:600 28px var(--mono);color:var(--goldtext)}
+.pack .tx{font-size:12.5px;color:var(--faint)}
+.foot{padding:30px 0 50px;color:var(--muted);font-size:13px;border-top:1px solid var(--line)}
+@media(max-width:820px){.hero{grid-template-columns:1fr}}
+
+/* ===== 2. Participant ticket ===== */
+.pwrap{display:grid;grid-template-columns:minmax(0,390px) 280px;gap:28px;justify-content:center;align-items:start;padding:22px 16px 60px}
+.phone{width:100%;max-width:390px;background:linear-gradient(180deg,var(--bg1),var(--bg0));border:1px solid var(--line);border-radius:30px;box-shadow:0 40px 80px -40px #000,0 0 0 8px var(--card);position:relative;margin:0 auto}
+.phead{padding:16px 16px 12px;border-bottom:1px solid var(--line);border-radius:30px 30px 0 0}
+.phead .org{font:700 11px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--goldtext)}
+.phead h2{font-size:22px;font-weight:800;margin:3px 0 8px}
+.callstrip{position:sticky;top:var(--swh);z-index:20;background:linear-gradient(180deg,#3A0F1C,#240912);border-bottom:1px solid var(--line);padding:10px 14px 12px;display:grid;grid-template-columns:auto 1fr;gap:4px 14px;align-items:center;box-shadow:0 14px 24px -16px #000}
+[data-theme=day] .callstrip{background:linear-gradient(180deg,#5A1426,#3A0B18);color:#FFF4DE}
+.bigball{grid-row:span 2;width:92px;height:92px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 32% 28%,#FFF3C4,#F2C14E 48%,#B8761A 100%);color:#2E0812;font:800 46px/1 var(--serif);box-shadow:var(--glow)}
+.bigball.pop{animation:pop .5s}
+@keyframes pop{0%{transform:scale(.7)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+.cs-l{font:700 10.5px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:#F2C14E}
+.cs-t{font:600 15px var(--mono);color:#FFF4DE}
+.cs-t b{color:#FFE08A}
+.cs-btns{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.cs-btns .btn{flex:1;min-width:120px;color:#FFF4DE}
+.cs-btns .btn:not(.line){color:#2E0812}
+.cs-btns .btn.line{border-color:#7A4A58}
+.cbar{grid-column:1/-1;height:5px;border-radius:5px;background:#4A2430;overflow:hidden}.cbar i{display:block;height:100%;background:#F2C14E;width:100%;transition:width 1s linear}
+.pbody{padding:14px 14px 22px}
+.tabs{display:flex;gap:8px;margin:2px 0 12px}
+.tabs button{flex:1;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card2);font-weight:700}
+.tabs button[aria-selected=true]{background:var(--gold);color:var(--onGold);border-color:var(--gold)}
+.ticket{background:linear-gradient(180deg,var(--card2),var(--card));border:2px solid var(--gold);border-radius:18px;padding:10px;position:relative;box-shadow:var(--glow)}
+.ticket::before,.ticket::after{content:"";position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:var(--bg1);border:2px solid var(--gold);margin-top:-8px}
+.ticket::before{left:-10px;clip-path:inset(0 0 0 50%)}.ticket::after{right:-10px;clip-path:inset(0 50% 0 0)}
+.thead{display:flex;justify-content:space-between;align-items:center;font:700 11px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--goldtext);padding:2px 4px 8px}
+.grid{display:grid;grid-template-columns:repeat(9,1fr);gap:4px}
+.cell{aspect-ratio:auto;min-height:46px;border-radius:9px;display:grid;place-items:center;font:700 19px var(--mono);border:0;padding:0;background:var(--cell);color:var(--cellInk)}
+.cell.blank{background:var(--cellEmpty);border:1px dashed var(--line);cursor:default}
+.cell.cut{background:var(--cutBg);color:var(--cutInk);position:relative;box-shadow:0 0 14px rgba(242,193,78,.5)}
+.cell.cut::after{content:"";position:absolute;left:18%;right:18%;top:50%;height:3px;background:var(--cutInk);transform:rotate(-14deg);border-radius:3px;opacity:.75}
+.tfoot{display:flex;justify-content:space-between;padding:8px 4px 0;font-size:12px;color:var(--muted)}
+.hint{font-size:12.5px;color:var(--muted);margin:8px 2px 0}
+.two{display:flex;align-items:center;gap:10px;margin:14px 0;padding:12px;border:1px dashed var(--gold);border-radius:14px;background:var(--card)}
+.two .t{flex:1;font-size:13px}.two .t b{display:block;font-size:14.5px}
+.rw h3{font-size:20px;margin:18px 0 8px}
+.rwrow{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:11px 12px;margin-bottom:8px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.rwrow .nm{font-weight:700}.rwrow .tx{font-size:12.5px;color:var(--muted)}
+.rwrow .win{grid-column:1/-1;font:600 12.5px var(--mono);color:var(--ok)}
+.rwrow.done{border-color:#2E6B52}
+.banner{margin:10px 14px 0;border-radius:14px;padding:12px 14px;display:flex;gap:12px;align-items:center;font-weight:700}
+.banner.ok{background:var(--okbg);color:var(--ok);border:1px solid var(--ok)}.banner.no{background:var(--badbg);color:var(--bad);border:1px solid var(--bad)}
+.banner small{display:block;font-weight:500;opacity:.95}.banner button{margin-left:auto;border:1px solid currentColor;background:transparent;border-radius:9px;min-height:40px;padding:0 12px;font-weight:700}
+.pfoot{border-top:1px solid var(--line);padding:12px 16px 16px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);border-radius:0 0 30px 30px}
+.pfoot b{font-family:var(--mono);color:var(--text)}
+.brk{position:fixed;z-index:55;top:var(--swh);bottom:0;left:50%;transform:translateX(-50%);width:min(390px,100%);background:radial-gradient(500px 400px at 50% 30%,#4A1226,#0C0206);display:flex;flex-direction:column;justify-content:center;padding:20px;text-align:center;color:#FFF4DE}
+.vid{aspect-ratio:16/9;border-radius:16px;background:repeating-linear-gradient(45deg,#2E0812 0 14px,#3A0F1C 14px 28px);border:2px solid #F2C14E;display:grid;place-items:center;box-shadow:var(--glow)}
+.vid span{background:#0C0206;border:1px solid #7A4A58;border-radius:999px;padding:8px 16px;font-weight:600;font-size:13px}
+.brk h2{font-size:30px;margin:18px 0 4px;color:#FFE08A}
+.brk .cnt{font:800 52px var(--mono);color:#F2C14E}
+.demo{position:sticky;top:calc(var(--swh) + 16px)}
+.demo h3{font-size:18px;margin-bottom:10px}.demo .chips{margin:8px 0 14px}
+@media(max-width:760px){.pwrap{grid-template-columns:1fr;padding:0 0 40px}.phone{border-radius:0;border-width:0;box-shadow:none;max-width:none}.phead,.pfoot{border-radius:0}.demo{position:static;padding:16px}}
+@media(max-width:380px){.grid{gap:3px}.cell{font-size:17px;border-radius:7px}.bigball{width:80px;height:80px;font-size:38px}}
+
+/* ===== 3. Organizer ===== */
+.org{display:grid;grid-template-columns:230px minmax(0,1fr);min-height:calc(100vh - var(--swh));max-width:1360px;margin:0 auto}
+.side{background:var(--card);border-right:1px solid var(--line);padding:18px 12px;position:sticky;top:var(--swh);align-self:start;height:calc(100vh - var(--swh));overflow:auto}
+.side .brand{display:flex;gap:10px;align-items:center;padding:0 8px 14px}
+.side .eng{padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--card2);margin:0 4px 14px;font-size:12.5px;color:var(--muted)}.side .eng b{display:block;color:var(--text);font-size:14px}
+.stepbtn{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;border:0;background:transparent;color:var(--muted);border-radius:10px;padding:0 10px;font-weight:600;text-align:left}
+.stepbtn span.n{width:24px;height:24px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font:600 11px var(--mono);flex:0 0 24px}
+.stepbtn:hover{background:var(--raise);color:var(--text)}
+.stepbtn[aria-current=true]{background:var(--raise);color:var(--text);box-shadow:inset 3px 0 0 var(--gold)}
+.stepbtn[aria-current=true] span.n{background:var(--gold);color:var(--onGold);border-color:var(--gold)}
+.main{padding:24px clamp(16px,3vw,36px) 60px;min-width:0}
+.ph{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:18px}.ph h2{font-size:30px;font-weight:800}.ph .sp{flex:1}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}.kpi span{font-size:12px;color:var(--muted)}.kpi b{display:block;font:600 26px var(--mono);color:var(--goldtext)}
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{font:700 10.5px var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;padding:10px;background:var(--card2);border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:9px 10px;border-top:1px solid var(--line);vertical-align:middle}
+.tbl input[type=checkbox]{width:20px;height:20px;accent-color:#F2C14E}
+.tscroll{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.rrow{display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}.rrow:first-child{border-top:0}
+.live-ball{width:150px;height:150px;border-radius:50%;margin:6px auto;display:grid;place-items:center;background:radial-gradient(circle at 32% 28%,#FFF3C4,#F2C14E 48%,#B8761A 100%);color:#2E0812;font:800 76px/1 var(--serif);box-shadow:var(--glow)}
+.linkbox{font:500 13.5px var(--mono);background:var(--cellEmpty);border:1px dashed var(--gold);border-radius:10px;padding:11px 12px;word-break:break-all}
+.alert2{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--warnbg);color:var(--warn);border:1px solid var(--warn);border-radius:14px;padding:12px 14px;margin-bottom:14px}
+.alert2 .sp{flex:1}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:90;background:#FFF4DE;color:#2E0812;border-radius:12px;padding:10px 14px;font-weight:600;display:flex;gap:12px;align-items:center;max-width:calc(100vw - 24px);box-shadow:0 20px 40px -18px #000}
+#toast button{border:1px solid #2E0812;background:transparent;color:#2E0812;border-radius:9px;min-height:40px;padding:0 12px;font-weight:700}
+@media(max-width:900px){.org{grid-template-columns:1fr}.side{position:static;height:auto;display:block;border-right:0;border-bottom:1px solid var(--line)}.side nav{display:flex;flex-wrap:wrap;gap:4px}.stepbtn{width:auto}.rrow{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head>
+<body data-theme="night">
+
+<div id="sw" role="tablist" aria-label="Switch view">
+  <b>Option C &middot; Bold Event Night</b>
+  <div class="seg">
+    <button role="tab" aria-selected="true" data-view="site">Website</button>
+    <button role="tab" aria-selected="false" data-view="ticket">Participant ticket</button>
+    <button role="tab" aria-selected="false" data-view="org">Organizer panel</button>
+  </div>
+  <span class="sp"></span>
+  <button class="theme" id="themeBtn" aria-pressed="false">Theme: Event night</button>
+</div>
+<div class="darknote"><b>Event night</b> is the default for the live moment (dim rooms, projectors, phones in the dark). The organizer can switch any engagement to <b>Daylight</b> in Setup or with the theme button above.</div>
+
+<!-- ============ 1. WEBSITE ============ -->
+<section id="v-site" class="site">
+  <div class="in">
+    <div class="snav">
+      <div class="mark" aria-hidden="true">T</div><div class="word">Corporate <i>Tambola</i></div>
+      <div class="links"><a class="l" href="#how">How it works</a><a class="l" href="#pricing">Pricing</a><a class="btn sm line" href="#pricing">Organizer sign in</a><a class="btn sm" href="#pricing">Create an engagement</a></div>
+    </div>
+    <div class="hero">
+      <div>
+        <span class="eyebrow">Live &middot; Web only &middot; No app to install</span>
+        <h1>Make your next company night <em>unforgettable.</em></h1>
+        <p class="lead">Live housie for companies, societies and clubs. One link, one number at a time, every participant on the same call. Brand breaks, verified entry and a clean report afterwards.</p>
+        <div class="cta"><a class="btn" href="#pricing">See packs and pricing</a><a class="btn line" href="#how">Watch how it works</a></div>
+        <div class="trust"><span>Participants never pay</span><span>Closed group, verified entry</span><span>Works on any phone</span></div>
+      </div>
+      <div class="stage" aria-label="Live call preview">
+        <span class="eyebrow">Now calling</span>
+        <div class="ball" id="heroBall" aria-live="polite">47</div>
+        <div class="mini"><span class="pill live ok"><i></i>Live</span><span class="pill info">1,284 participants</span><span class="pill warn">Brand break after call 45</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+<section id="v-site2">
+  <div class="sec alt" id="how"><div class="in">
+    <span class="eyebrow">How it works</span><h2>Three steps. One unforgettable evening.</h2><p class="sub">The organizer sets it up in minutes. Participants only need a phone and the engagement link.</p>
+    <div class="feats">
+      <div class="card feat"><div class="no">01</div><h3>Set up</h3><p>Choose date, time, tickets per participant and your rewards. Add up to three brand breaks.</p></div>
+      <div class="card feat"><div class="no">02</div><h3>Share the link</h3><p>Participants join with their mobile number and wait in a lobby. You admit who belongs.</p></div>
+      <div class="card feat"><div class="no">03</div><h3>Go live</h3><p>Numbers are called with voice, participants cut their own tickets and claim rewards.</p></div>
+      <div class="card feat"><div class="no">04</div><h3>Report</h3><p>A tidy engagement report for the organizer. Personal data is deleted after 24 hours.</p></div>
+    </div>
+  </div></div>
+  <div class="sec"><div class="in">
+    <span class="eyebrow">Built for trust</span><h2>Private by design</h2>
+    <div class="feats">
+      <div class="card feat"><h3>Participants see no one else</h3><p>Results show ticket IDs only. Names and numbers stay with the organizer.</p></div>
+      <div class="card feat"><h3>Brand breaks</h3><p>Your video or a YouTube link, shown to everyone at once, up to three times.</p></div>
+      <div class="card feat"><h3>Scale</h3><p>From a team of 100 to 10,000 participants in one live engagement.</p></div>
+    </div>
+  </div></div>
+  <div class="sec alt" id="pricing"><div class="in">
+    <span class="eyebrow">Pricing</span><h2>One price per engagement</h2>
+    <p class="sub">Pick the pack that fits your group. Participants never pay. Packs are sold as places: "Up to N participants".</p>
+    <div class="curr"><div class="chips" role="group" aria-label="Currency"><button class="chip on" data-cur="inr" aria-pressed="true">India (INR)</button><button class="chip" data-cur="usd" aria-pressed="false">Abroad (USD)</button></div><span class="small muted" id="taxnote"></span></div>
+    <div class="price-grid" id="packs"></div>
+    <p class="small muted" style="margin-top:18px">Designed for DPDP, GDPR and US privacy laws. Reward rules vary by country; the organizer is responsible for their rewards.</p>
+  </div></div>
+  <div class="in foot">Corporate Tambola (placeholder brand) &middot; care@yourbrand.example &middot; Terms &middot; Privacy</div>
+</section>
+
+<!-- ============ 2. PARTICIPANT TICKET ============ -->
+<section id="v-ticket" class="hidden">
+  <div class="pwrap">
+    <div class="phone" id="phone">
+      <div class="phead">
+        <div class="org">Acme Industries</div>
+        <h2>Diwali Housie Night</h2>
+        <div class="chips"><span class="pill live ok"><i></i>Live</span><span class="pill info">Two tickets</span><span class="pill">Call <span id="callNo">23</span> of 90</span></div>
+      </div>
+      <div class="callstrip" aria-label="Call strip">
+        <div class="bigball" id="pBall" aria-live="polite" aria-atomic="true">52</div>
+        <div><div class="cs-l">Current number</div><div class="cs-t" id="nextT">Next number in <b id="cd">7</b>s</div></div>
+        <div class="cbar" aria-hidden="true"><i id="cbar" style="width:100%"></i></div>
+        <div class="cs-btns"><button class="btn sm" id="joinAudio">Join audio</button><button class="btn sm line" id="voiceBtn" aria-pressed="true">Voice: On</button></div>
+      </div>
+      <div id="banner"></div>
+      <div class="pbody">
+        <div class="tabs" role="tablist" aria-label="Your tickets"><button role="tab" aria-selected="true" data-t="A">Ticket A</button><button role="tab" aria-selected="false" data-t="B">Ticket B</button></div>
+        <div class="ticket">
+          <div class="thead"><span id="tName">Ticket A</span><span class="mono" id="tCount">4 of 15 cut</span></div>
+          <div class="grid" id="tGrid" role="grid" aria-label="Ticket numbers"></div>
+          <div class="tfoot"><span>Tap a number to cut it. Tap again to undo.</span></div>
+        </div>
+        <p class="hint">Nothing is cut for you. Cut a number only after it is called.</p>
+        <div class="two"><div class="t"><b>Two-ticket</b><span id="twoProg">A 4/15 &middot; B 4/15</span></div><button class="btn sm" data-claim="two1">Claim</button></div>
+        <div class="rw"><h3>Rewards</h3><div id="rewards"></div>
+        <p class="hint">Winners are shown as ticket IDs only.</p></div>
+      </div>
+      <div class="pfoot"><span>Your ticket ID <b>TMB-ACME-000147</b></span><span>Engagement <b>ACME-7K2Q</b></span></div>
+    </div>
+    <aside class="demo card">
+      <h3>Demo states</h3>
+      <p class="small muted">These controls only exist in this design preview.</p>
+      <label class="lb">Brand break</label>
+      <div class="chips"><button class="chip" id="brkBtn">Show brand break</button></div>
+      <label class="lb">Result banner</label>
+      <div class="chips" id="resBtns"><button class="chip" data-r="ok">Reward awarded</button><button class="chip" data-r="no">Not valid</button><button class="chip on" data-r="none">Hidden</button></div>
+      <div class="note warn">Dark is for the live moment. Contrast checked: cell text #FFF4DE on #4A1626 is about 12:1, cut cell #2E0812 on #F2C14E about 9:1, muted text #D2B8BF on #220A12 about 9:1 (all above WCAG AA 4.5:1).</div>
+    </aside>
+  </div>
+  <div class="brk hidden" id="brk" role="dialog" aria-label="Brand break">
+    <span class="eyebrow" style="color:#F2C14E">Brand break from Acme Industries</span>
+    <div class="vid" style="margin-top:14px"><span>Video placeholder</span></div>
+    <h2>Brand break: <span id="brkSec">30</span>s</h2>
+    <div class="cnt mono" id="brkCnt">30</div>
+    <p class="small" style="color:#E4CFD5">Calling resumes automatically for everyone at the same moment.</p>
+    <button class="btn line" id="brkClose" style="color:#FFF4DE;border-color:#7A4A58">Close preview</button>
+  </div>
+</section>
+
+<!-- ============ 3. ORGANIZER ============ -->
+<section id="v-org" class="hidden">
+  <div class="org">
+    <aside class="side">
+      <div class="brand"><div class="mark" aria-hidden="true">T</div><div class="word" style="font-size:17px">Corporate <i>Tambola</i></div></div>
+      <div class="eng"><b>Diwali Housie Night</b>Acme Industries &middot; Fri 7:00 pm<br><span class="pill warn" style="margin-top:6px">Draft</span></div>
+      <nav id="steps" aria-label="Engagement steps"></nav>
+    </aside>
+    <main class="main" id="panel" tabindex="-1"></main>
+  </div>
+</section>
+<div id="toast" class="hidden" role="status"></div>
+
+<script>
+/* ---------- helpers ---------- */
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let toastT;function toast(msg,undo){const t=$('#toast');t.innerHTML='<span>'+esc(msg)+'</span>'+(undo?'<button>Undo</button>':'');t.classList.remove('hidden');if(undo)$('button',t).onclick=()=>{undo();t.classList.add('hidden')};clearTimeout(toastT);toastT=setTimeout(()=>t.classList.add('hidden'),4500)}
+
+/* ---------- view switcher + theme ---------- */
+const views={site:['v-site','v-site2'],ticket:['v-ticket'],org:['v-org']};
+function show(v){Object.entries(views).forEach(([k,ids])=>ids.forEach(id=>$('#'+id).classList.toggle('hidden',k!==v)));$$('#sw .seg button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view===v));if(v!=='ticket')$('#brk').classList.add('hidden');window.scrollTo(0,0)}
+$$('#sw .seg button').forEach(b=>b.onclick=()=>show(b.dataset.view));
+function setTheme(t){document.body.dataset.theme=t;$('#themeBtn').textContent='Theme: '+(t==='night'?'Event night':'Daylight');$('#themeBtn').setAttribute('aria-pressed',t==='day');$$('[data-theme-chip]').forEach(c=>c.classList.toggle('on',c.dataset.themeChip===t))}
+$('#themeBtn').onclick=()=>setTheme(document.body.dataset.theme==='night'?'day':'night');
+
+/* ---------- 1. website ---------- */
+const PACKS=[[100,500,79],[250,1000,149],[500,1500,249],[750,1800,329],[1000,2000,399],[2500,4000,799],[5000,6250,1299],[10000,10000,1999]];
+let cur='inr';
+function renderPacks(){
+  $('#packs').innerHTML=PACKS.map(([n,r,u],i)=>`<div class="card pack ${n===1000?'pop':''}">${n===1000?'<span class="tagp">Most chosen</span>':''}<span class="upto">Up to</span><span class="n">${n.toLocaleString('en-IN')} <span style="font-size:17px;font-family:var(--sans);font-weight:600">participants</span></span><span class="p">${cur==='inr'?'&#8377;'+r.toLocaleString('en-IN'):'$'+u.toLocaleString('en-US')}</span><span class="tx">${cur==='inr'?'per engagement, incl. 18% GST':'per engagement, no tax added'}</span><a class="btn ${n===1000?'':'line'} block" href="#pricing" style="margin-top:8px">Choose this pack</a></div>`).join('');
+  $('#taxnote').textContent=cur==='inr'?'Prices include 18% GST.':'US dollar prices, no tax added.';
+}
+$$('[data-cur]').forEach(b=>b.onclick=()=>{cur=b.dataset.cur;$$('[data-cur]').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',x===b)});renderPacks()});
+renderPacks();
+
+/* ---------- 2. participant ticket ---------- */
+const TK={A:[[4,0,23,0,41,0,62,0,82],[0,15,0,34,0,56,0,73,88],[9,0,27,38,48,0,67,0,0]],B:[[0,11,0,31,0,52,0,71,85],[2,0,21,0,44,0,63,0,89],[7,18,0,0,0,58,69,0,90]]};
+const cut={A:new Set([4,23,41,56]),B:new Set([11,31,52,2])};
+let tab='A';
+const flat=t=>TK[t].flat().filter(Boolean);
+function renderTicket(){
+  $('#tName').textContent='Ticket '+tab;
+  $('#tGrid').innerHTML=TK[tab].map(r=>r.map(n=>n?`<button class="cell ${cut[tab].has(n)?'cut':''}" data-n="${n}" aria-pressed="${cut[tab].has(n)}" aria-label="Number ${n}${cut[tab].has(n)?', cut':''}">${n}</button>`:'<span class="cell blank" aria-hidden="true"></span>').join('')).join('');
+  $('#tCount').textContent=cut[tab].size+' of 15 cut';
+  $('#twoProg').textContent=`A ${cut.A.size}/15 · B ${cut.B.size}/15`;
+}
+$('#tGrid').onclick=e=>{const b=e.target.closest('.cell[data-n]');if(!b)return;const n=+b.dataset.n;cut[tab].has(n)?cut[tab].delete(n):cut[tab].add(n);renderTicket()};
+$$('.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;$$('.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));renderTicket()});
+const REW=[
+ {id:'e5',n:'Early Five',t:'Smart speaker',w:'TMB-ACME-000212'},
+ {id:'top',n:'Top Line',t:'Coffee hamper',w:'TMB-ACME-000031'},
+ {id:'mid',n:'Middle Line',t:'Headphones'},
+ {id:'bot',n:'Bottom Line',t:'Gift voucher'},
+ {id:'cor',n:'Four Corners',t:'Power bank'},
+ {id:'f1',n:'1st Full House',t:'Smartwatch'},
+ {id:'f2',n:'2nd Full House',t:'Tablet',after:'f1'},
+ {id:'f3',n:'3rd Full House',t:'Gift hamper',after:'f2'},
+ {id:'two1',n:'1st Full Two-Ticket House',t:'Weekend getaway'},
+ {id:'two2',n:'2nd Full Two-Ticket House',t:'Gift voucher',after:'two1'}];
+const by=id=>REW.find(r=>r.id===id);
+function renderRewards(){
+  $('#rewards').innerHTML=REW.map(r=>{const locked=r.after&&!by(r.after).w;return `<div class="rwrow ${r.w?'done':''}"><div><div class="nm">${r.n}</div><div class="tx">${r.t}</div></div>${r.w?'<span class="pill ok">Awarded</span>':`<button class="btn sm" data-claim="${r.id}" ${locked?'disabled':''}>${locked?'Locked':'Claim'}</button>`}${r.w?`<div class="win">Winner ${r.w}</div>`:locked?`<div class="tx" style="grid-column:1/-1">Opens after the ${esc(by(r.after).n)} is awarded.</div>`:''}</div>`}).join('');
+}
+const rowAll=(t,i)=>TK[t][i].every(n=>!n||cut[t].has(n));
+function corners(t){const a=TK[t][0].filter(Boolean),c=TK[t][2].filter(Boolean);return [a[0],a[a.length-1],c[0],c[c.length-1]].every(n=>cut[t].has(n))}
+function valid(id){
+  if(id==='two1'||id==='two2')return cut.A.size===15&&cut.B.size===15;
+  return ['A','B'].some(t=>({e5:cut[t].size>=5,top:rowAll(t,0),mid:rowAll(t,1),bot:rowAll(t,2),cor:corners(t),f1:cut[t].size===15,f2:cut[t].size===15,f3:cut[t].size===15})[id]);
+}
+function banner(kind){
+  $$('#resBtns .chip').forEach(c=>c.classList.toggle('on',c.dataset.r===kind));
+  $('#banner').innerHTML=kind==='ok'?'<div class="banner ok" role="status"><span aria-hidden="true" style="font-size:26px">&#9733;</span><div>Reward awarded<small>Your ticket TMB-ACME-000147 is the winner.</small></div><button data-x>Dismiss</button></div>':kind==='no'?'<div class="banner no" role="status"><span aria-hidden="true" style="font-size:26px">&#10005;</span><div>Not valid<small>The pattern is not complete on your ticket. Keep going.</small></div><button data-x>Dismiss</button></div>':'';
+  const x=$('#banner [data-x]');if(x)x.onclick=()=>banner('none');
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-claim]');if(!b)return;const id=b.dataset.claim,r=by(id);if(valid(id)){r.w='TMB-ACME-000147';banner('ok');renderRewards()}else banner('no')});
+$$('#resBtns .chip').forEach(c=>c.onclick=()=>banner(c.dataset.r));
+renderTicket();renderRewards();
+
+/* call loop */
+const seq=[52,7,81,19,66,34,90,3,45,28];let si=0,left=7,callNo=23,voice=true;
+setInterval(()=>{
+  if(!$('#v-ticket').classList.contains('hidden')&&!$('#brk').classList.contains('hidden'))return;
+  left--;if(left<=0){si=(si+1)%seq.length;callNo=Math.min(90,callNo+1);left=7;const b=$('#pBall');b.textContent=seq[si];b.classList.remove('pop');void b.offsetWidth;b.classList.add('pop');$('#callNo').textContent=callNo;$('#heroBall').textContent=seq[(si+3)%seq.length]}
+  $('#cd').textContent=left;$('#cbar').style.width=(left/7*100)+'%';
+},1000);
+$('#joinAudio').onclick=function(){this.textContent='Audio joined';this.disabled=true;toast('Audio joined. You will hear each number twice.')};
+$('#voiceBtn').onclick=function(){voice=!voice;this.textContent='Voice: '+(voice?'On':'Off');this.setAttribute('aria-pressed',voice)};
+let brkT;function brk(open){const o=$('#brk');o.classList.toggle('hidden',!open);clearInterval(brkT);$('#brkBtn').textContent=open?'Hide brand break':'Show brand break';if(open){let s=30;$('#brkCnt').textContent=s;$('#brkSec').textContent=s;brkT=setInterval(()=>{s=s<=1?30:s-1;$('#brkCnt').textContent=s;$('#brkSec').textContent=s},1000)}}
+$('#brkBtn').onclick=()=>brk($('#brk').classList.contains('hidden'));$('#brkClose').onclick=()=>brk(false);
+
+/* ---------- 3. organizer ---------- */
+const STEPS=['Setup','Rewards','Brand breaks','Participants','Share','Waiting room','Start','Live','Report'];
+let step=0;
+const O={tickets:'2 tickets',family:2,fcan:false,calling:'AI voice',time:'7:00 pm',limit:'1000',fh:3,f2:2,breaks:3,src:['Company video link','YouTube link','Company video link'],paused:false,endAsk:false,theme:'night',role:'All'};
+const PEOPLE=[['Anita Rao','+91 98••• ••214','Participant','Joined'],['Vikram Shah','+91 99••• ••871','Team Lead','Joined'],['Meera Iyer','+91 98••• ••360','Host','Joined'],['Rohan Das','+44 78•• •••905','Participant','Pass sent'],['Sara Khan','+971 50• ••••42','Participant','Joined'],['Dev Malhotra','+91 97••• ••118','Team Lead','Joined'],['Priya Nair','+91 90••• ••757','Participant','Pass sent'],['Tom Becker','+1 415•••••••09','Participant','Joined']];
+let WAIT=[['Neha Kapoor','+91 98••• ••493'],['Arjun Menon','+91 99••• ••027'],['Li Wei','+65 91•• •••58']];
+let SECOND=true;
+const ord=n=>['1st','2nd','3rd','4th','5th'][n-1];
+const chips=(key,opts)=>`<div class="chips" data-key="${key}" role="group">${opts.map(o=>`<button class="chip ${O[key]===o?'on':''}" data-v="${o}" aria-pressed="${O[key]===o}">${o}</button>`).join('')}</div>`;
+const stepper=(key,min,max)=>`<div class="stepper"><button data-st="${key}" data-d="-1" data-min="${min}" data-max="${max}" aria-label="Decrease">&minus;</button><b class="mono" id="st-${key}">${O[key]}</b><button data-st="${key}" data-d="1" data-min="${min}" data-max="${max}" aria-label="Increase">+</button></div>`;
+const head=(t,sub,right='')=>`<div class="ph"><div><span class="eyebrow">Step ${step+1} of 9</span><h2>${t}</h2><p class="muted" style="margin:4px 0 0">${sub}</p></div><span class="sp"></span>${right}</div>`;
+const winners={e5:'TMB-ACME-000212',top:'TMB-ACME-000031'};
+const P={
+0:()=>head('Setup','Settings lock when you press Start.','<button class="btn" data-go="1">Save and continue</button>')+`<div class="cols">
+ <div class="card"><label class="lb" style="margin-top:0" for="en">Engagement name</label><input id="en" class="inp" value="Diwali Housie Night">
+  <label class="lb" for="ed">Date</label><input id="ed" class="inp" value="Friday, 14 November 2026">
+  <label class="lb">Start time</label>${chips('time',['6:00 pm','6:30 pm','7:00 pm','7:30 pm','8:00 pm'])}
+  <label class="lb" for="pl">Participant limit</label><select id="pl" class="inp" data-sel="limit">${PACKS.map(p=>`<option value="${p[0]}" ${O.limit==p[0]?'selected':''}>Up to ${p[0].toLocaleString('en-IN')} participants</option>`).join('')}</select></div>
+ <div class="card"><label class="lb" style="margin-top:0">Ticket mode</label>${chips('tickets',['1 ticket','2 tickets'])}
+  <label class="lb">Family limit per participant</label>${stepper('family',0,6)}
+  <div style="margin-top:12px"><label class="switch"><input type="checkbox" data-tg="fcan" ${O.fcan?'checked':''}><span class="tr"></span>Family can win rewards</label></div>
+  <label class="lb">Voice</label><div class="inp" style="display:flex;justify-content:space-between;align-items:center"><span>Indian English, female</span><span class="pill">One fixed voice</span></div>
+  <label class="lb">Calling mode</label>${chips('calling',['AI voice','Host voice','AI + host'])}
+  <label class="lb">Look of the live screens</label><div class="chips"><button class="chip ${O.theme==='night'?'on':''}" data-theme-chip="night">Event night (dark)</button><button class="chip ${O.theme==='day'?'on':''}" data-theme-chip="day">Daylight</button></div>
+  <div class="note">Dark is recommended for the live moment. You can choose Daylight for bright rooms or printed material.</div></div></div>`,
+1:()=>head('Rewards','Pick how many houses to offer. The Nth house opens after the (N-1)th is awarded.','<button class="btn" data-go="2">Save and continue</button>')+`<div class="cols">
+ <div class="card"><h3 style="font-size:19px;margin-bottom:6px">Full Houses</h3><p class="small muted" style="margin:0 0 10px">How many (1st to 5th)</p>${stepper('fh',1,5)}
+  <h3 style="font-size:19px;margin:20px 0 6px">Full Two-Ticket Houses</h3><p class="small muted" style="margin:0 0 10px">A and B both complete</p>${stepper('f2',0,5)}
+  <div class="note ok">Early Five, three Lines and Four Corners are always included.</div></div>
+ <div class="card"><h3 style="font-size:19px;margin-bottom:6px">Reward text</h3>
+  ${[['Early Five','Smart speaker'],['Top Line','Coffee hamper'],['Middle Line','Headphones'],['Bottom Line','Gift voucher'],['Four Corners','Power bank']].map(r=>`<div class="rrow"><span>${r[0]}</span><input class="inp" aria-label="${r[0]} reward" value="${r[1]}"></div>`).join('')}
+  ${Array.from({length:O.fh},(_,i)=>`<div class="rrow"><span>${ord(i+1)} Full House</span><input class="inp" aria-label="${ord(i+1)} Full House reward" placeholder="Reward text"></div>`).join('')}
+  ${Array.from({length:O.f2},(_,i)=>`<div class="rrow"><span>${ord(i+1)} Full Two-Ticket House</span><input class="inp" aria-label="${ord(i+1)} Full Two-Ticket House reward" placeholder="Reward text"></div>`).join('')}</div></div>`,
+2:()=>{const pos=Array.from({length:O.breaks},(_,i)=>Math.round(90*(i+1)/(O.breaks+1)));return head('Brand breaks','Up to 3 breaks, spaced nearly equally. Everyone sees the same break at the same time.','<button class="btn" data-go="3">Save and continue</button>')+`<div class="card" style="margin-bottom:16px"><div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div><label class="lb" style="margin:0 0 6px">Number of breaks (max 3)</label>${stepper('breaks',0,3)}</div><div class="small muted" style="flex:1;min-width:220px">Proposed positions: ${pos.length?pos.map(p=>'after call <b class="mono" style="color:var(--goldtext)">'+p+'</b>').join(', '):'none'}. You can adjust each one.</div></div></div>
+ <div class="cols">${pos.map((p,i)=>`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:19px">Break ${i+1}</h3><span class="pill warn">After call ${p}</span></div>
+  <label class="lb">Source</label><div class="chips">${['Company video link','YouTube link'].map(s=>`<button class="chip ${O.src[i]===s?'on':''}" data-src="${i}" data-v="${s}">${s}</button>`).join('')}</div>
+  <label class="lb" for="u${i}">Link</label><input id="u${i}" class="inp" value="${O.src[i]==='YouTube link'?'https://www.youtube.com/watch?v=demo':'https://videos.acme.example/diwali-greeting.mp4'}">
+  <label class="lb">Length</label>${chips_s(i)}</div>`).join('')}</div>
+ <div class="note warn">YouTube videos cannot be downloaded ahead of time, so they load when the break starts. Company video links are saved to each participant's phone in low quality before the engagement.</div>`},
+3:()=>head('Participants','Names and numbers are visible only to you, never to other participants.','<button class="btn line">Import Excel</button><button class="btn">Add participant</button>')+`<div class="card" style="margin-bottom:14px"><div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center"><input id="q" class="inp" style="max-width:300px" placeholder="Search name or number" aria-label="Search"><div class="chips" data-key="role">${['All','Participant','Team Lead','Host'].map(r=>`<button class="chip ${O.role===r?'on':''}" data-v="${r}" aria-pressed="${O.role===r}">${r}</button>`).join('')}</div></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn sm line" data-bulk="Passes sent to selected participants.">Send pass</button><button class="btn sm line" data-bulk="Role changed for selected participants.">Change role</button><button class="btn sm danger" data-bulk="Selected participants removed.">Remove</button></div></div>
+ <div class="tscroll"><table class="tbl"><thead><tr><th><span class="sr" aria-hidden="true"></span>Select</th><th>Name</th><th>Mobile</th><th>Role</th><th>Status</th></tr></thead><tbody id="ptb"></tbody></table></div>`,
+4:()=>head('Share','Participants join with this link. No mobile number ever appears in it.')+`<div class="cols"><div class="card"><label class="lb" style="margin-top:0">Engagement link</label><div class="linkbox">https://play.corporatetambola.example/e/ACME-7K2Q</div><div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn" data-bulk="Link copied.">Copy link</button><button class="btn line" data-bulk="Share sheet opened.">Share</button></div></div>
+ <div class="card"><label class="lb" style="margin-top:0">Message to participants</label><div class="inp" style="min-height:96px;display:block">You are invited to Diwali Housie Night on Friday at 7:00 pm. Join with your mobile number: link above.</div><div class="note">Ticket screens open 15 minutes before the start time.</div></div></div>`,
+5:()=>head('Waiting room','Admit the people who belong. Everyone else stays out.')+(SECOND?`<div class="alert2"><b>Second phone alert</b><span>Meera Iyer is trying to join from a new phone.</span><span class="sp"></span><button class="btn sm" data-second="keep">Keep first phone</button><button class="btn sm line" data-second="move">Move to new phone</button></div>`:'')+`<div class="tscroll"><table class="tbl"><thead><tr><th>Name</th><th>Mobile</th><th>Action</th></tr></thead><tbody>${WAIT.map((w,i)=>`<tr><td>${w[0]}</td><td class="mono">${w[1]}</td><td><button class="btn sm" data-admit="${i}">Admit</button> <button class="btn sm danger" data-decline="${i}">Decline</button></td></tr>`).join('')||'<tr><td colspan="3" class="muted">Nobody is waiting.</td></tr>'}</tbody></table></div>`,
+6:()=>head('Start','Check everything. Settings and entry lock when you press Start.')+`<div class="cols"><div class="card">${['Name, date and time set','2 tickets per participant','Rewards: 5 patterns, '+O.fh+' Full Houses, '+O.f2+' Two-Ticket Houses','Brand breaks: '+O.breaks,'Voice: Indian English, female ('+O.calling+')'].map(x=>`<div class="rrow" style="grid-template-columns:1fr"><span><span style="color:var(--ok)">&#10003;</span>&nbsp; ${x}</span></div>`).join('')}</div><div class="card"><div class="note warn">Once started, entry is closed and settings are locked.</div><button class="btn block" style="margin-top:14px;min-height:54px;font-size:17px" data-go="7">Start engagement</button></div></div>`,
+7:()=>head('Live','Control room','<span class="pill live '+(O.paused?'warn':'ok')+'"><i></i>'+(O.paused?'Paused':'Live')+'</span>')+`<div class="kpis"><div class="kpi"><span>Participants in</span><b>1,284</b></div><div class="kpi"><span>Calls made</span><b>23 / 90</b></div><div class="kpi"><span>Rewards awarded</span><b>2 / ${5+O.fh+O.f2}</b></div><div class="kpi"><span>Next break</span><b>call 45</b></div></div>
+ <div class="cols"><div class="card" style="text-align:center"><span class="eyebrow">Current number</span><div class="live-ball">52</div><div class="small muted">Next number in 7s &middot; ${O.calling}</div>
+  <label class="lb">Pause reason</label><div style="display:flex;justify-content:center">${chips('reason',['Technical issue','Claim check','Announcement'])}</div>
+  <div style="display:flex;gap:8px;justify-content:center;margin-top:14px;flex-wrap:wrap"><button class="btn" data-pause>${O.paused?'Resume':'Pause'}</button>${O.endAsk?'<span class="small">End for everyone?</span><button class="btn danger sm" data-end="yes">Yes, end</button><button class="btn line sm" data-end="no">Keep going</button>':'<button class="btn danger" data-end="ask">End engagement</button>'}</div></div>
+ <div class="card"><h3 style="font-size:19px;margin-bottom:8px">Rewards</h3>${['Early Five','Top Line','Middle Line','Bottom Line','Four Corners','1st Full House','1st Full Two-Ticket House'].map((n,i)=>`<div class="rrow" style="grid-template-columns:1fr auto"><span>${n}</span>${i<2?`<span class="mono pill ok">${[winners.e5,winners.top][i]}</span>`:'<span class="pill">Open</span>'}</div>`).join('')}</div></div>`,
+8:()=>head('Report','Summary appears after the engagement ends. Personal data is deleted 24 hours later.')+`<div class="kpis"><div class="kpi"><span>Participants</span><b>1,284</b></div><div class="kpi"><span>Family members</span><b>312</b></div><div class="kpi"><span>Team Leads</span><b>41</b></div><div class="kpi"><span>Duration</span><b>1h 12m</b></div></div><div class="tscroll"><table class="tbl"><thead><tr><th>Reward</th><th>Ticket ID</th><th>Called at</th></tr></thead><tbody><tr><td>Early Five</td><td class="mono">TMB-ACME-000212</td><td>Call 14</td></tr><tr><td>Top Line</td><td class="mono">TMB-ACME-000031</td><td>Call 21</td></tr></tbody></table></div><div class="note">The organizer report can include names. The anonymous summary stays after deletion.</div>`};
+function chips_s(i){O['len'+i]=O['len'+i]||'60 s';const k='len'+i;return `<div class="chips" data-key="${k}">${['30 s','60 s','90 s'].map(o=>`<button class="chip ${O[k]===o?'on':''}" data-v="${o}">${o}</button>`).join('')}</div>`}
+function renderNav(){$('#steps').innerHTML=STEPS.map((s,i)=>`<button class="stepbtn" data-step="${i}" ${i===step?'aria-current="true"':''}><span class="n">${i+1}</span>${s}</button>`).join('')}
+function renderPeople(){const q=($('#q')||{value:''}).value.toLowerCase();const rows=PEOPLE.filter(p=>(O.role==='All'||p[2]===O.role)&&(p[0]+p[1]).toLowerCase().includes(q));$('#ptb').innerHTML=rows.map((p,i)=>`<tr><td><input type="checkbox" aria-label="Select ${esc(p[0])}"></td><td>${p[0]}</td><td class="mono">${p[1]}</td><td>${p[2]}</td><td><span class="pill ${p[3]==='Joined'?'ok':'info'}">${p[3]}</span></td></tr>`).join('')||'<tr><td colspan="5" class="muted">No matches.</td></tr>'}
+function draw(keepFocus){renderNav();$('#panel').innerHTML=P[step]();if(step===3){renderPeople();$('#q').oninput=renderPeople}}
+function go(i){step=i;draw();window.scrollTo(0,0)}
+document.addEventListener('click',e=>{
+  if($('#v-org').classList.contains('hidden'))return;
+  const t=e.target;let b;
+  if(b=t.closest('[data-step]'))return go(+b.dataset.step);
+  if(b=t.closest('[data-go]'))return go(+b.dataset.go);
+  if(b=t.closest('[data-theme-chip]')){setTheme(b.dataset.themeChip);O.theme=b.dataset.themeChip;return}
+  if(b=t.closest('[data-st]')){const k=b.dataset.st;O[k]=Math.max(+b.dataset.min,Math.min(+b.dataset.max,O[k]+ +b.dataset.d));return (k==='fh'||k==='f2'||k==='breaks')?draw():($('#st-'+k).textContent=O[k])}
+  if(b=t.closest('[data-src]')){O.src[+b.dataset.src]=b.dataset.v;return draw()}
+  if(b=t.closest('.chip[data-v]')){const k=b.parentElement.dataset.key;if(k){O[k]=b.dataset.v;$$('.chip',b.parentElement).forEach(c=>{c.classList.toggle('on',c===b);c.setAttribute('aria-pressed',c===b)});if(k==='role')renderPeople();return}}
+  if(b=t.closest('[data-bulk]'))return toast(b.dataset.bulk,()=>toast('Undone.'));
+  if(b=t.closest('[data-admit]')){const w=WAIT.splice(+b.dataset.admit,1)[0];draw();return toast(w[0]+' admitted.',()=>{WAIT.push(w);draw()})}
+  if(b=t.closest('[data-decline]')){const w=WAIT.splice(+b.dataset.decline,1)[0];draw();return toast(w[0]+' declined.',()=>{WAIT.push(w);draw()})}
+  if(b=t.closest('[data-second]')){SECOND=false;draw();return toast(b.dataset.second==='keep'?'First phone kept.':'Moved to the new phone.')}
+  if(b=t.closest('[data-pause]')){O.paused=!O.paused;return draw()}
+  if(b=t.closest('[data-end]')){const v=b.dataset.end;if(v==='ask')O.endAsk=true;else if(v==='no')O.endAsk=false;else{O.endAsk=false;go(8);return toast('Engagement ended. Report ready.')}return draw()}
+});
+document.addEventListener('change',e=>{const s=e.target;if(s.dataset&&s.dataset.sel)O[s.dataset.sel]=s.value;if(s.dataset&&s.dataset.tg)O[s.dataset.tg]=s.checked});
+draw();
+</script>
+</body></html>

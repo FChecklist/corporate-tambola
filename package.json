@@ -1,0 +1,10 @@
+{
+  "name": "corporate-tambola",
+  "private": true,
+  "workspaces": ["packages/*", "apps/*", "tools/*"],
+  "scripts": {
+    "test": "bun test packages",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": { "typescript": "^5.6.0", "@types/bun": "latest" }
+}
