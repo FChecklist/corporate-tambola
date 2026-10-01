@@ -19,7 +19,7 @@ DAILY_WRITE_BUDGET = "80000"
 MAIL_FROM = "Corporate Tambola <tambola@veridian-aios.com>"   # shared, already-verified Resend domain
 # MAIL_REPLY_TO = "the address organizers should reply to"
 # PUBLIC_ORIGIN = "https://YOUR-DOMAIN"
-# COMPANY_JSON = '{"gstin":"...","pan":"...","stateCode":"..","stateName":"..","sacCode":"..","addressLines":["..",".."]}'
+COMPANY_JSON = '{"cin":"U74999UP2017PTC098453","gstin":"09AAZCS4477M1Z3","pan":"AAZCS4477M","stateCode":"09","stateName":"Uttar Pradesh","addressLines":["B-1105, Plot No. 14, Shipra Krishna Vista, Ahinsa Khand-1","Indirapuram, Ghaziabad, Uttar Pradesh 201014, India"],"email":"raajat.agarwal@gmail.com","phone":"+91 96503 97480"}'   # the SAC code is still needed for invoices to stop saying DRAFT
 
 # Route the API on the same domain as the Pages site so phones never make a cross-origin call (set when the domain is bought):
 # routes = [{ pattern = "YOUR-DOMAIN/api/*", zone_name = "YOUR-DOMAIN" }]
