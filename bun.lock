@@ -9,6 +9,14 @@
         "typescript": "^5.6.0",
       },
     },
+    "apps/server": {
+      "name": "@tambola/server",
+      "version": "0.1.0",
+      "dependencies": {
+        "@tambola/engine": "workspace:*",
+        "@tambola/shared": "workspace:*",
+      },
+    },
     "packages/engine": {
       "name": "@tambola/engine",
       "version": "0.1.0",
@@ -23,11 +31,22 @@
         "libphonenumber-js": "^1.11.4",
       },
     },
+    "tools/sim": {
+      "name": "@tambola/sim",
+      "version": "0.1.0",
+      "dependencies": {
+        "@tambola/shared": "workspace:*",
+      },
+    },
   },
   "packages": {
     "@tambola/engine": ["@tambola/engine@workspace:packages/engine"],
 
+    "@tambola/server": ["@tambola/server@workspace:apps/server"],
+
     "@tambola/shared": ["@tambola/shared@workspace:packages/shared"],
+
+    "@tambola/sim": ["@tambola/sim@workspace:tools/sim"],
 
     "@types/bun": ["@types/bun@1.4.2", "", { "dependencies": { "bun-types": "1.4.2" } }, "sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ=="],
 

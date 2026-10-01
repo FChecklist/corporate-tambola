@@ -69,6 +69,8 @@ export interface Settings {
   ticketMode: TicketMode;
   callMode: CallMode;
   defaultCountry: string;
+  startsAt: number | null;
+  tz: string;
   rewards: RewardLine[];
   breaks: BrandBreak[];
 }

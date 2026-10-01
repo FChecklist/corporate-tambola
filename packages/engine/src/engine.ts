@@ -87,7 +87,7 @@ export class EngagementEngine {
     this.settings = {
       id: this.code(4), code: this.code(7), name: "My engagement", orgName: "My organization", limit: 100,
       familyLimit: 2, familyCanWin: true, participantInvites: 0, ticketMode: "single", callMode: "ai",
-      defaultCountry: "IN", rewards: DEFAULT_REWARDS(), breaks: [], ...init,
+      defaultCountry: "IN", startsAt: null, tz: "Asia/Kolkata", rewards: DEFAULT_REWARDS(), breaks: [], ...init,
     } as Settings;
   }
 
@@ -135,7 +135,7 @@ export class EngagementEngine {
   }
 
   // ---------- settings (organizer; host may change only the family limit) ----------
-  updateSettings(actor: Actor, patch: Partial<Pick<Settings, "name" | "limit" | "familyLimit" | "familyCanWin" | "participantInvites" | "ticketMode" | "callMode" | "defaultCountry">>): Err | null {
+  updateSettings(actor: Actor, patch: Partial<Pick<Settings, "name" | "limit" | "familyLimit" | "familyCanWin" | "participantInvites" | "ticketMode" | "callMode" | "defaultCountry" | "startsAt" | "tz" | "orgName">>): Err | null {
     if (!this.entryOpen) return "Settings are locked after the start.";
     const keys = Object.keys(patch);
     if (actor === "host" && keys.some((k) => k !== "familyLimit")) return "Only the organizer can change this setting.";
@@ -292,7 +292,7 @@ export class EngagementEngine {
   private bind(p: Participant, device: string) {
     p.device = device; p.status = "joined"; p.joinedAt = this.now(); p.consentAt = this.now();
   }
-  private raiseConflict(p: Participant, device: string) {
+  raiseConflict(p: Participant, device: string) {
     if (!this.conflicts.find((c) => c.pid === p.id && c.device === device && !c.done)) {
       this.conflicts.push({ id: this.uid("c"), pid: p.id, device, at: this.now(), done: false });
       this.logMsg(`Second phone tried to join as ${p.name || p.e164}`);
@@ -598,6 +598,49 @@ export class EngagementEngine {
         if (this.openRewardLines().length === 0) this.end("All rewards awarded");
       }
     } else if (this.settings.callMode !== "manual" && this.nextAt !== null && t >= this.nextAt) this.draw();
+  }
+
+  // ---------- persistence and report ----------
+  snapshot(): string {
+    return JSON.stringify({
+      settings: this.settings, status: this.status, participants: this.participants, waiting: this.waiting,
+      conflicts: this.conflicts, called: this.called, current: this.current, paused: this.paused, nextAt: this.nextAt,
+      lastDrawAt: this.lastDrawAt, startedAt: this.startedAt, endedAt: this.endedAt, winners: [...this.winners.entries()],
+      notValidLog: this.notValidLog, claims: this.claims, log: this.log, summary: this.summary, remaining: this.remaining,
+      cancelledPasses: [...this.cancelledPasses], serial: this.serial, seq: this.seq,
+    });
+  }
+
+  static restore(json: string, deps: Deps): EngagementEngine {
+    const s = JSON.parse(json);
+    const e = new EngagementEngine({}, deps);
+    e.settings = s.settings; e.status = s.status; e.participants = s.participants; e.waiting = s.waiting;
+    e.conflicts = s.conflicts; e.called = s.called; e.current = s.current; e.paused = s.paused; e.nextAt = s.nextAt;
+    e.lastDrawAt = s.lastDrawAt; e.startedAt = s.startedAt; e.endedAt = s.endedAt; e.winners = new Map(s.winners);
+    e.notValidLog = s.notValidLog; e.claims = s.claims; e.log = s.log; e.summary = s.summary; e.remaining = s.remaining;
+    e.cancelledPasses = new Set(s.cancelledPasses); e.serial = s.serial; e.seq = s.seq;
+    e.ticketKeys = new Set(e.participants.flatMap((p) => p.tickets.map(ticketKey)));
+    return e;
+  }
+
+  /** Organizer-only report (contains personal data; deleted with the purge). */
+  report() {
+    const byPid = new Map(this.participants.map((p) => [p.id, p]));
+    const wins = [...this.winners.entries()].flatMap(([lineId, ws]) => {
+      const line = this.settings.rewards.find((l) => l.id === lineId)!;
+      const total = this.linesFor(line.pattern, line.scope).length;
+      return ws.map((w) => {
+        const p = byPid.get(w.pid);
+        return { ticketId: w.ticketId, name: p?.name ?? "", e164: p?.e164 ?? "", role: p?.role ?? "", kind: p?.kind ?? null,
+          reward: rewardName(line.pattern, line.scope, line.ordinal, total), rewardText: line.text, winners: ws.length, wonOnNumber: w.number, callNo: w.callNo, at: w.at };
+      });
+    });
+    const notAwarded = this.settings.rewards.filter((l) => !this.winners.get(l.id)?.length).map((l) => ({ id: l.id, text: l.text }));
+    return {
+      engagement: this.settings.name, status: this.status, startedAt: this.startedAt, endedAt: this.endedAt,
+      participants: this.participants.map((p) => ({ ticketId: this.ticketId(p), name: p.name, e164: p.e164, role: p.role, kind: p.kind, joined: p.status === "joined", notValid: p.notValid, blocked: p.blocked })),
+      winners: wins, notAwarded, notValid: this.notValidLog, callOrder: this.called,
+    };
   }
 
   /** What a (re)connecting participant may be told: no past numbers, no personal data. */
