@@ -42,8 +42,8 @@ describe("build first, pay to publish", () => {
     expect(((await (await call("POST", "/api/auth/verify", { email: "boss@acme.com", code })).json()) as any).token).toMatch(/^ctk_/);
   });
   test("a network address can open only a few new organizer accounts a day", async () => {
-    for (let i = 1; i <= 5; i++) await organizer(`u${i}@acme.com`, "9.9.9.9");
-    expect((await call("POST", "/api/start", { email: "u6@acme.com" }, { "cf-connecting-ip": "9.9.9.9" })).status).toBe(429);
+    for (let i = 1; i <= 10; i++) await organizer(`u${i}@acme.com`, "9.9.9.9");
+    expect((await call("POST", "/api/start", { email: "u11@acme.com" }, { "cf-connecting-ip": "9.9.9.9" })).status).toBe(429);
     expect((await call("POST", "/api/start", { email: "u7@acme.com" }, { "cf-connecting-ip": "8.8.8.8" })).status).toBe(200);
   });
   test("an organizer builds an engagement with no payment: it is a draft", async () => {

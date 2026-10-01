@@ -37,7 +37,7 @@ export const RETENTION_DAYS = 365;
 /** An engagement that was never published is forgotten after this many days. */
 export const DRAFT_DAYS = 30;
 /** New organizer accounts one network address may open in a day (a free-plan guard, not a security wall). */
-const STARTS_PER_DAY = 5;
+const STARTS_PER_DAY = 10;
 /** Largest page of participants one request returns, so a 10,000-person list never costs a free Worker its ~10 ms of CPU in one go. */
 export const PAGE = 2000;
 /** Claims are only a live cross-check (settlement never uses them), and 7 rows per phone would eat the free write allowance, so they are stored only for engagements this size or smaller. */
@@ -78,6 +78,8 @@ const MAX_BODY = 4096;
 const ID = /^[A-Za-z0-9_-]{4,40}$/;
 const GENESIS = 1692803367; // drand quicknet; round r is published at GENESIS + (r-1)*3 s (UTC)
 const roundMs = (r: number) => (GENESIS + (r - 1) * 3) * 1000;
+/** An unpaid engagement is held from this long BEFORE its start, so every phone (they check every few seconds) knows before the first number would be shown. */
+const LOCK_LEAD_MS = 45_000;
 const roundOfMs = (ms: number) => Math.floor((ms / 1000 - GENESIS) / 3) + 1;
 /** A published engagement is open to participants even before it is paid for; a draft is not. Paid engagements are always published. */
 async function isPublished(env: Env, e: { id: string; pack: number | null }): Promise<boolean> {
@@ -343,7 +345,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (!sub && req.method === "GET") {
       const f = await readPublished(kv, cid!);
       const ge = await env.DB.prepare("SELECT id, pack, start_round FROM engagement WHERE id=?").bind(cid).first<{ id: string; pack: number | null; start_round: number }>();
-      if (ge && ge.pack === 0 && roundMs(ge.start_round) <= now && (await isPublished(env, ge))) // published, unpaid, start time reached: phones hold, nothing is shown
+      if (ge && ge.pack === 0 && roundMs(ge.start_round) - LOCK_LEAD_MS <= now && (await isPublished(env, ge))) // published, unpaid, start time reached: phones hold, nothing is shown
         return new Response(JSON.stringify({ ...(f ?? {}), locked: true }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } });
       return f ? new Response(JSON.stringify(f), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } }) : json({ registered: false }, 404);
     }
@@ -488,7 +490,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
 
   const unpaid = e.pack === 0;
   const isDraft = unpaid && !(await isPublished(env, e));
-  const locked = unpaid && !isDraft && roundMs(e.start_round) <= now; // published but not paid by its start time: it does not begin
+  const locked = unpaid && !isDraft && roundMs(e.start_round) - LOCK_LEAD_MS <= now; // published but not paid by its start time: it does not begin
   if (isDraft && ((action === "join" && req.method === "POST") || (action === "info" && !can(a, e)))) return json({ error: "This engagement is not open yet." }, 403);
   if (locked && !can(a, e) && (action === "info" || action === "join")) await nudge(env, e.id, "lockmail", now, `Your engagement ${e.id} could not begin: payment is due`, `Your participants opened your link, but your engagement ${e.id} could not begin because payment has not been received.\n\nPay now and it starts in about 3 minutes, for everyone already waiting: ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${e.id}`);
   if (action === "join" && req.method === "POST") {

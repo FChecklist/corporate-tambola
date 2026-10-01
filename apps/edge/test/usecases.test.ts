@@ -387,10 +387,12 @@ describe("E. timing", () => {
   test("UC-39 start boundary: not held one second before, held from the start, in both info and control", async () => {
     const o = await organizer(); await call("POST", "/api/z", eng("EDGE-1"), o.h); await call("POST", "/api/z/EDGE-1/publish", contact, o.h);
     const at = (ms: number) => call("GET", "/api/z/EDGE-1/control", undefined, {}, ms);
-    expect((await j(await at(START_MS - 1000))).locked).toBeUndefined();
+    // held from 45 s before the start, so every phone knows before the first number could be shown
+    expect((await j(await at(START_MS - 46_000))).locked).toBeUndefined();
+    expect((await j(await at(START_MS - 45_000))).locked).toBe(true);
     expect((await j(await at(START_MS))).locked).toBe(true);
-    expect((await j(await call("GET", "/api/z/EDGE-1/info", undefined, {}, START_MS - 1000))).locked).toBe(false);
-    expect((await j(await call("GET", "/api/z/EDGE-1/info", undefined, {}, START_MS))).locked).toBe(true);
+    expect((await j(await call("GET", "/api/z/EDGE-1/info", undefined, {}, START_MS - 46_000))).locked).toBe(false);
+    expect((await j(await call("GET", "/api/z/EDGE-1/info", undefined, {}, START_MS - 45_000))).locked).toBe(true);
   });
   test("UC-39 publishing exactly at the start is too late; one second before is fine", async () => {
     const o = await organizer(); await call("POST", "/api/z", eng("EDGE-2"), o.h); await call("POST", "/api/z", eng("EDGE-3"), o.h);

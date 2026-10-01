@@ -206,8 +206,8 @@
       S.settledPreview = [];
       for (let r = 1; r <= S.cfg.rounds; r++) if (S.logs[r].length) S.settledPreview.push(...ZG.settleAll(eid, pids, S.logs[r], S.cfg, r).map((s) => ({ ...s, names: s.pids.length <= 3 ? s.pids.map((p) => nm.get(p) || "Participant").join(", ") : "" })));
       S.lucky = await computeLucky(now);
-    } catch (e) { S.note = e.status === 404 ? "That engagement was not found." : "Could not refresh. Retrying…"; }
-    if (eid) draw(engView());
+    } catch (e) { S.note = e.status === 404 ? "That engagement was not found." : e.status === 403 ? "Your sign-in has expired or does not belong to this engagement. Open the home page and sign in again." : "Could not refresh. Retrying…"; }
+    if (eid) draw(S.cfg && S.info ? engView() : `<div class="zhead"><b>Engagement ${esc(eid)}</b><button class="zsnd" id="back">All engagements</button></div><div class="zbanner info">${esc(S.note || "Loading…")}</div>`);
   }
 
   function bind() {
