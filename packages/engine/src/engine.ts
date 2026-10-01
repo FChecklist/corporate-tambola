@@ -181,6 +181,7 @@ export class EngagementEngine {
     if (breaks.length > CFG.MAX_BREAKS) return `At most ${CFG.MAX_BREAKS} brand breaks.`;
     const pos = breaks.map((b) => b.after);
     if (pos.some((a, i) => a < 1 || a > 89 || (i > 0 && a <= pos[i - 1]!))) return "Brand breaks must come at increasing positions between call 1 and 89.";
+    if (breaks.some((b) => b.mediaUrl && !/^https?:\/\//i.test(b.mediaUrl))) return "Video links must start with http:// or https://.";
     this.settings.breaks = breaks.map((b) => ({ ...b, done: false }));
     return null;
   }
@@ -443,7 +444,7 @@ export class EngagementEngine {
       this.paused = { type: "break", brk, until: this.now() + brk.seconds * 1000 };
       this.logMsg(`Brand break: ${brk.title} (${brk.seconds} sec)`);
       this.emit({ to: "all", type: "pause", kind: "break" });
-      this.emit({ to: "all", type: "break", title: brk.title, kind: brk.kind, seconds: brk.seconds });
+      this.emit({ to: "all", type: "break", title: brk.title, kind: brk.kind, seconds: brk.seconds, mediaUrl: brk.mediaUrl });
       return null;
     }
     const i = this.rand(this.remaining.length);

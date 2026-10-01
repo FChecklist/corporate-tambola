@@ -31,6 +31,13 @@
         "libphonenumber-js": "^1.11.4",
       },
     },
+    "tools/seed": {
+      "name": "@tambola/seed",
+      "version": "0.1.0",
+      "dependencies": {
+        "@tambola/shared": "workspace:*",
+      },
+    },
     "tools/sim": {
       "name": "@tambola/sim",
       "version": "0.1.0",
@@ -41,6 +48,8 @@
   },
   "packages": {
     "@tambola/engine": ["@tambola/engine@workspace:packages/engine"],
+
+    "@tambola/seed": ["@tambola/seed@workspace:tools/seed"],
 
     "@tambola/server": ["@tambola/server@workspace:apps/server"],
 

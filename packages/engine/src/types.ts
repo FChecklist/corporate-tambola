@@ -21,6 +21,7 @@ export interface BrandBreak {
   kind: "file" | "youtube" | "slides" | "speech";
   title: string;
   seconds: number;
+  mediaUrl?: string; // company-hosted video file URL or YouTube link
   done: boolean;
 }
 
@@ -100,7 +101,7 @@ export type PublicEvent =
   | { to: "all"; type: "call"; callNo: number; number: number }
   | { to: "all"; type: "pause"; kind: "claim" | "result" | "break" | "emergency"; reason?: string }
   | { to: "all"; type: "result"; items: { ticketId: string; reward: string; ok: boolean; fun: boolean }[] }
-  | { to: "all"; type: "break"; title: string; kind: BrandBreak["kind"]; seconds: number }
+  | { to: "all"; type: "break"; title: string; kind: BrandBreak["kind"]; seconds: number; mediaUrl?: string }
   | { to: "all"; type: "resume" }
   | { to: "all"; type: "ended"; why: string }
   | { to: "console"; type: "log"; msg: string };

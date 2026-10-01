@@ -180,7 +180,7 @@ function meState(room: Room, pid: string, req: Request) {
   const mine = e.participants.filter((x) => x.invitedBy === p.id);
   return {
     engagement: { code: s.code, name: s.name, orgName: s.orgName, status: e.status, startsAt: s.startsAt, tz: s.tz, ticketMode: s.ticketMode, callMode: s.callMode,
-      familyLimit: s.familyLimit, participantInvites: s.participantInvites, familyCanWin: s.familyCanWin, breaks: s.breaks.map((b) => ({ after: b.after, title: b.title, kind: b.kind, seconds: b.seconds })) },
+      familyLimit: s.familyLimit, participantInvites: s.participantInvites, familyCanWin: s.familyCanWin, breaks: s.breaks.map((b) => ({ after: b.after, title: b.title, kind: b.kind, seconds: b.seconds, mediaUrl: b.mediaUrl })), gapMs: CFG.AI_GAP },
     me: { name: p.name, role: p.role, kind: p.kind, tickets: p.tickets, ticketIds: { A: e.ticketId(p, "A"), B: e.ticketId(p, "B"), AB: e.ticketId(p, "AB") },
       notValid: p.notValid, blocked: p.blocked, status: p.status },
     quotas: {
