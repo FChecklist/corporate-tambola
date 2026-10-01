@@ -167,3 +167,10 @@ Voice production notes (see IMPLEMENTATION.md §11.3 for the audio design, uncha
 - The quality bar "sweet, firm, age ~30, no accent" is a taste judgement. I cannot hear a voice, so you must approve sample clips (try numbers 7, 24, 40, 90) before we generate all 90.
 - Two ways to produce it: (a) a free offline text-to-speech voice (local, no cost, quality varies; I do not know that a suitable free Indian-English female voice exists, so this needs a listening test); (b) a professional voice artist recording 90 clips (best match to "sweet, firm, 30", clear licence, usually a small one-off fee). **(b) is a cost; I will not commit to it without your yes.**
 - Whatever we use, its licence must allow commercial use and redistribution inside a product. Check before choosing.
+
+## 13. Decisions CR-04 (2026-10-01)
+- Honour-system cut: **accepted** (owner: "accept the cut"). State this plainly in the rules: you must mark your own numbers.
+- Single-digit numbers are spoken once ("Next number is seven. Number seven."): **accepted**.
+- Design: all three new options rejected; **the original prototype design is kept** and the real system is being built on it (`apps/web/public/app.css` is the original CSS).
+- Local system built: `apps/server` (HTTP + WebSocket + SQLite), website, participant app, organizer/host/team-lead console, and `tools/sim` (100-participant full-cycle simulation, 61/61 checks passing on the server alone). See `docs/RUNNING.md`.
+- Known stand-ins/gaps: fake payment; dev mail outbox; number audio uses browser speech synthesis until the recorded voice clips exist (voice choice and cost still open); Excel (.xlsx) upload not built (CSV/TXT/paste only); Not valid reasons are shown only in the organizer console, not to participants; brand-break video prefetch is built in the participant app but the low-quality transcoding is the organizer's responsibility; real Cloudflare deployment not started (owner-gated).
