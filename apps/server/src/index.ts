@@ -6,7 +6,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, normalize as pnorm } from "node:path";
 import type { ServerWebSocket } from "bun";
-import { CFG, EngagementEngine, makeRewardLines, type PublicEvent, type RewardLine } from "@tambola/engine";
+import { CFG, EngagementEngine, Surprise, makeRewardLines, type PublicEvent, type RewardLine } from "@tambola/engine";
 import { PACKS, checkUpload, formatInternational, maskNumber, normalize, price, proposeBreakPositions, rewardName, type Currency, type PatternId } from "@tambola/shared";
 import { openDb, sha256 } from "./db";
 import { createAiLink } from "./ai-link";
@@ -30,7 +30,7 @@ const rid = (n = 8) => crypto.randomUUID().replace(/-/g, "").slice(0, n);
 const FREE_MAIL = /@(gmail|yahoo|outlook|hotmail|rediffmail|icloud|proton(mail)?|aol)\./i;
 
 // ---------- rooms ----------
-type WSData = { code: string; kind: "org" | "p" | "w"; pid?: string; console: boolean; device?: string };
+type WSData = { code: string; kind: "org" | "p" | "w" | "s"; pid?: string; console: boolean; device?: string };
 const stats = { http: 0, api: 0, wsIn: 0, wsOut: 0, wsOpen: 0 };
 class Room {
   sockets = new Set<ServerWebSocket<WSData>>();
@@ -42,6 +42,8 @@ class Room {
     const s = JSON.stringify(msg);
     for (const ws of this.sockets) if (filter(ws.data)) { ws.send(s); stats.wsOut++; }
   }
+  /** Participants with a live connection right now (lucky draws pick only people who are present). */
+  presentPids(): Set<string> { const s = new Set<string>(); for (const ws of this.sockets) if (ws.data.kind === "p" && ws.data.pid) s.add(ws.data.pid); return s; }
   /** Tell the console (organizer + hosts) something changed. Participants are NOT pinged here. */
   touch(_roster = false) { this.dirty = true; this.send((d) => d.console, { type: "refresh" }); }
   /** Ping only the participants who are affected. */
@@ -64,19 +66,20 @@ class Room {
 const rooms = new Map<string, Room>();
 
 function mkEngine(room: { code: string; get: () => Room | undefined }, init: ConstructorParameters<typeof EngagementEngine>[0]) {
-  return new EngagementEngine(init, { now, emit: (e) => route(room.get(), e) });
+  return new EngagementEngine(init, { now, emit: (e) => route(room.get(), e), present: () => room.get()?.presentPids() ?? null });
 }
 function route(room: Room | undefined, e: PublicEvent) {
   if (!room) return;
   room.dirty = true;
   if (e.to === "all") room.send((d) => d.kind !== "w" || e.type === "starting" || e.type === "live" || e.type === "ended", e);
+  else if (e.to === "pid") room.send((d) => d.pid === e.pid, e);
   else room.send((d) => d.console, e);
 }
 function loadRooms() {
   const rows = db.query("SELECT * FROM engagements").all() as any[];
   for (const r of rows) {
     let room: Room;
-    const engine = EngagementEngine.restore(r.state_json, { now, emit: (e) => route(room, e) });
+    const engine = EngagementEngine.restore(r.state_json, { now, emit: (e) => route(room, e), present: () => room?.presentPids() ?? null });
     room = new Room(r.code, r.organizer_id, engine, r.pack, r.currency);
     rooms.set(r.code, room);
   }
@@ -268,6 +271,9 @@ function consoleState(room: Room, a: Actor, req: Request) {
         winners: (e.winners.get(l.id) ?? []).map((w) => ({ ticketId: w.ticketId, name: byId.get(w.pid)?.name ?? "", share: w.share, number: w.number, callNo: w.callNo })) };
     }),
     breaks: s.breaks,
+    surprise: s.surprise, plan: Surprise.plan(s.surprise, s.rewards.length), still: e.sx.still(), round: e.sx.round,
+    moments: e.sx.moments.map((m) => ({ id: m.id, kind: m.kind, slot: m.slot, winners: m.winners, prize: m.prize, bumper: m.bumper, status: m.status })),
+    screenUrl: `${origin(req)}/screen/${s.code}#${s.screenKey}`,
     live: { liveAt: e.liveAt, called: e.called.length, current: e.current, paused: e.paused ? { type: e.paused.type, reason: (e.paused as any).reason, title: (e.paused as any).brk?.title } : null, nextAt: e.nextAt },
     log: e.log.slice(0, 80),
     notValid: e.notValidLog.map((n) => ({ ticketId: n.ticketId, pattern: n.pattern, why: n.why, at: n.at })),
@@ -289,6 +295,7 @@ function meState(room: Room, pid: string, req: Request) {
       invites: p.kind || p.role !== "participant" ? null : { used: e.participantInvitesUsed(p), max: s.participantInvites },
     },
     invitees: mine.map((x) => ({ id: x.id, name: x.name, kind: x.kind, status: x.status, link: x.passCode && x.status !== "joined" ? `${origin(req)}/p/${x.passCode}` : null })),
+    boosters: e.boostersOf(pid),
     consoleLink: p.roleLink ? `${origin(req)}/r/${p.roleLink}` : null,
     state: e.publicState(),
     paused: e.paused ? { type: e.paused.type, reason: (e.paused as any).reason ?? null, brk: (e.paused as any).brk ? { title: (e.paused as any).brk.title, kind: (e.paused as any).brk.kind, seconds: (e.paused as any).brk.seconds, until: (e.paused as any).until } : null } : null,
@@ -300,7 +307,7 @@ const maskName = (n: string) => (n ? n.split(/\s+/).map((w) => w[0] + "•".repe
 function publicInfo(room: Room) {
   const s = room.engine.settings;
   return { code: s.code, name: s.name, orgName: s.orgName, status: room.engine.status, startsAt: s.startsAt, tz: s.tz, defaultCountry: s.defaultCountry, ticketMode: s.ticketMode,
-    open: room.engine.entryOpen };
+    open: room.engine.entryOpen, revealNames: room.engine.settings.surprise.revealNames };
 }
 
 // ---------- routes ----------
@@ -636,7 +643,7 @@ route_("GET", "/api/e/:code/console", ({ req, m }) => {
 
 route_("PATCH", "/api/e/:code/settings", async ({ req, m }) => {
   const room = getRoom(m[1]!), who = needConsole(actorOf(req, room)), b = await body(req);
-  const allowed = ["name", "limit", "familyLimit", "familyCanWin", "participantInvites", "ticketMode", "callMode", "defaultCountry", "startsAt", "tz", "orgName"];
+  const allowed = ["name", "limit", "familyLimit", "familyCanWin", "participantInvites", "ticketMode", "callMode", "defaultCountry", "startsAt", "tz", "orgName", "surprise"];
   const patch: any = {};
   for (const k of allowed) if (k in b) patch[k] = b[k];
   orErr(room.engine.updateSettings(who, patch), 0);
@@ -763,6 +770,12 @@ route_("POST", "/api/e/:code/pause", async ({ req, m }) => {
   return json({ ok: true });
 });
 route_("POST", "/api/e/:code/resume", ({ req, m }) => { const room = getRoom(m[1]!); needConsole(actorOf(req, room)); room.engine.resume(); room.touch(); return json({ ok: true }); });
+route_("POST", "/api/e/:code/moments/trigger", async ({ req, m }) => {
+  const room = getRoom(m[1]!); needConsole(actorOf(req, room));
+  const b = await body(req);
+  orErr(room.engine.triggerMoment(b.kind === "scratch" ? "scratch" : "lucky"), 0); room.touch();
+  return json({ ok: true });
+});
 route_("POST", "/api/e/:code/endbreak", ({ req, m }) => { const room = getRoom(m[1]!); needConsole(actorOf(req, room)); room.engine.endBreak(); room.touch(); return json({ ok: true }); });
 
 route_("POST", "/api/e/:code/raise-limit", async ({ req, m }) => {
@@ -870,6 +883,7 @@ function serveStatic(path: string): Response {
   if (/^\/(e|p)\/[^/]+$/.test(file)) file = "/play.html";
   else if (/^\/r\/[^/]+$/.test(file) || file === "/console") file = "/console.html";
   else if (/^\/confirm\/[^/]+$/.test(file)) file = "/confirm.html";
+  else if (/^\/screen\/[^/]+$/.test(file)) file = "/screen.html";
   const full = pnorm(join(WEB_DIR, file));
   if (!full.startsWith(WEB_DIR) || !existsSync(full) || file.includes("/_")) return new Response("Not found", { status: 404 });
   const ext = full.split(".").pop() ?? "";
@@ -887,9 +901,10 @@ const server = Bun.serve<WSData>({
     if (url.pathname === "/ws") {
       const code = url.searchParams.get("e") ?? "", room = rooms.get(code);
       if (!room) return new Response("no engagement", { status: 404 });
-      const t = url.searchParams.get("t"), d = url.searchParams.get("d");
+      const t = url.searchParams.get("t"), d = url.searchParams.get("d"), sk = url.searchParams.get("s");
       let data: WSData | null = null;
-      if (t) {
+      if (sk && sk === room.engine.settings.screenKey) data = { code, kind: "s", console: false };
+      else if (t) {
         const r = db.query("SELECT organizer_id, expires_at FROM tokens WHERE hash=?").get(sha256(t)) as any;
         if (r && r.expires_at > now() && r.organizer_id === room.organizerId) data = { code, kind: "org", console: true };
       } else if (d && d.length >= 16) {
@@ -930,6 +945,7 @@ const server = Bun.serve<WSData>({
       room.sockets.add(ws);
       stats.wsOpen++;
       if (ws.data.kind === "w") { ws.send(JSON.stringify({ type: "waiting" })); return; }
+      if (ws.data.kind === "s") { ws.send(JSON.stringify({ type: "state", ...room.engine.publicState(), name: room.engine.settings.name, orgName: room.engine.settings.orgName })); return; }
       ws.send(JSON.stringify({ type: "state", ...room.engine.publicState() }));
     },
     message(ws, raw) {
@@ -943,6 +959,14 @@ const server = Bun.serve<WSData>({
         const err = e.claim(ws.data.pid, { ticket: msg.ticket, pattern: msg.pattern, cut: Array.isArray(msg.cut) ? msg.cut.filter((n: unknown) => Number.isInteger(n)) : [] });
         ws.send(JSON.stringify({ type: "claimAck", error: err, pattern: msg.pattern, ticket: msg.ticket }));
         room.touch();
+      } else if (msg.type === "present" && ws.data.kind === "p" && ws.data.pid) {
+        ws.send(JSON.stringify({ type: "presentAck", error: e.confirmPresent(ws.data.pid, String(msg.momentId)) })); room.touch();
+      } else if (msg.type === "scratch" && ws.data.kind === "p" && ws.data.pid) {
+        const r = e.revealScratch(ws.data.pid, String(msg.momentId));
+        ws.send(JSON.stringify(typeof r === "string" ? { type: "scratchAck", error: r } : { type: "scratchAck", outcome: r.outcome }));
+      } else if (msg.type === "joker" && ws.data.kind === "p" && ws.data.pid) {
+        const r = e.useJoker(ws.data.pid, msg.ticket === "B" ? "B" : msg.ticket === "C" ? "C" : "A", Array.isArray(msg.cut) ? msg.cut.filter((n: unknown) => Number.isInteger(n)) : []);
+        ws.send(JSON.stringify(typeof r === "string" ? { type: "jokerAck", error: r } : { type: "jokerAck", number: r.number, boosters: e.boostersOf(ws.data.pid) }));
       } else if (msg.type === "talk" && ws.data.console) {
         room.send((d) => d.kind !== "w", { type: "talk", on: !!msg.on });
       } else if (msg.type === "ping") ws.send(JSON.stringify({ type: "pong" }));

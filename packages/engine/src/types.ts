@@ -7,6 +7,32 @@ export type CallMode = "ai" | "manual" | "both";
 export type TicketMode = "single" | "double";
 export type Actor = "organizer" | "host";
 
+export interface Boosters { joker: number; extra: number; pass: number }
+export type BoosterKind = "joker" | "extra" | "pass";
+export type PrizeKind = "gift" | "booster" | "mix";
+/** Optional: rounds, lucky draws, scratch cards, boosters. Defaults leave the engagement exactly as before (one round, nothing extra). */
+export interface SurpriseSettings {
+  rounds: number; // 1-5
+  callSeconds: 6 | 10 | 15; // calling speed: fast / normal / relaxed
+  autoMark: boolean; // phones mark called numbers for the participant (claims still carry the cut list)
+  luckyDraws: number; // 0-10, counted per engagement
+  luckyWinners: 1 | 3 | 5 | 10;
+  luckyPrize: "gift" | "booster";
+  bumper: boolean; // the last lucky draw is a bumper and always the last moment
+  scratchCards: number; // 0-10, counted per engagement
+  scratchWinning: 5 | 10 | 20 | 50; // exact number of winning cards per scratch round, never a percentage
+  scratchPrize: PrizeKind;
+  momentsMode: "auto" | "manual";
+  boostersAllowed: boolean;
+  revealNames: boolean; // OFF by default: winners are shown by ticket id. ON: first name + department + last 4 digits (needs participants' consent wording)
+}
+export const DEFAULT_SURPRISE: SurpriseSettings = { rounds: 1, callSeconds: 10, autoMark: true, luckyDraws: 0, luckyWinners: 3, luckyPrize: "gift", bumper: true, scratchCards: 0, scratchWinning: 10, scratchPrize: "mix", momentsMode: "auto", boostersAllowed: true, revealNames: false };
+
+export interface Moment {
+  id: string; kind: "lucky" | "scratch"; slot: string; winners: number; prize: PrizeKind; bumper: boolean;
+  status: "pending" | "running" | "done" | "skipped"; startedAt?: number; endedAt?: number; round?: number;
+}
+
 export interface RewardLine {
   id: string;
   pattern: PatternId;
@@ -39,7 +65,9 @@ export interface Participant {
   passCode: string | null;
   roleLink: string | null;
   device: string | null;
-  tickets: Ticket[]; // 1 or 2
+  tickets: Ticket[]; // 1 or 2 (3 when an Extra ticket booster is used)
+  boosters: Boosters;
+  namesConsent?: boolean; // joined while the "show winners' names" option was on, so they saw its consent wording
   serial: number;
   notValid: number;
   blocked: boolean;
@@ -62,6 +90,7 @@ export interface Conflict { id: string; pid: string; device: string; at: number;
 export interface Settings {
   id: string;
   code: string;
+  screenKey: string; // secret for the big-screen link
   name: string;
   orgName: string;
   limit: number;
@@ -71,6 +100,7 @@ export interface Settings {
   ticketMode: TicketMode;
   callMode: CallMode;
   defaultCountry: string;
+  surprise: SurpriseSettings;
   startsAt: number | null;
   tz: string;
   rewards: RewardLine[];
@@ -85,7 +115,9 @@ export type Pause =
   | { type: "claim"; items: Claim[]; checkAt: number }
   | { type: "result"; results: ResultItem[]; until: number }
   | { type: "break"; brk: BrandBreak; until: number }
-  | { type: "emergency"; reason: string };
+  | { type: "emergency"; reason: string }
+  | { type: "moment"; momentId: string; until: number }
+  | { type: "intermission"; round: number; until: number };
 
 export interface ResultItem {
   ok: boolean;
@@ -107,4 +139,11 @@ export type PublicEvent =
   | { to: "all"; type: "starting"; liveAt: number; inMs: number }
   | { to: "all"; type: "live" }
   | { to: "all"; type: "ended"; why: string }
+  | { to: "all"; type: "round_start"; round: number; of: number }
+  | { to: "all"; type: "round_end"; round: number; of: number }
+  | { to: "all"; type: "moment_start"; id: string; kind: "lucky" | "scratch"; winners: number; bumper: boolean; prize: string; seconds: number }
+  | { to: "all"; type: "moment_result"; id: string; kind: "lucky" | "scratch"; winners: string[]; winningCards?: number; bumper: boolean }
+  | { to: "pid"; pid: string; type: "lucky_won"; momentId: string; confirmSeconds: number; prize: string }
+  | { to: "pid"; pid: string; type: "scratch_result"; momentId: string; outcome: "gift" | "joker" | "extra" | "pass" | "none" }
+  | { to: "pid"; pid: string; type: "booster"; boosters: Boosters }
   | { to: "console"; type: "log"; msg: string };

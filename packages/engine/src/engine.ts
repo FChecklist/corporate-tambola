@@ -2,6 +2,8 @@ import {
   cryptoRand, generateTicket, normalize as _n, patternNumbers, PATTERNS, rewardName, ticketKey, ticketNumbers,
   type PatternId, type Rand, type Scope, type Ticket,
 } from "@tambola/shared";
+import { DEFAULT_SURPRISE } from "./types";
+import { Surprise } from "./surprise";
 import type {
   Actor, BrandBreak, CallMode, Claim, Conflict, EngagementStatus, Kind, Participant, Pause, PublicEvent,
   ResultItem, Role, RewardLine, Settings, TicketMode, WaitingEntry, Winner,
@@ -19,6 +21,8 @@ export interface Deps {
   now: () => number;
   rand?: Rand;
   emit?: (e: PublicEvent) => void;
+  /** Ids of participants with a live connection right now (lucky draws pick only people who are present). */
+  present?: () => Set<string> | null;
 }
 
 export type Err = string;
@@ -29,9 +33,10 @@ export type JoinResult =
   | { t: "ask" }
   | { t: "err"; k: "rate" | "inuse" | "closed" | "usepass" | "full" | "blocked" };
 
-export interface SettingsInit extends Partial<Omit<Settings, "rewards" | "breaks">> {
+export interface SettingsInit extends Partial<Omit<Settings, "rewards" | "breaks" | "surprise">> {
   rewards?: RewardLine[];
   breaks?: BrandBreak[];
+  surprise?: Partial<import("./types").SurpriseSettings>;
 }
 
 /** Build reward lines: texts.length houses of one kind -> ordinals 1..n. */
@@ -74,25 +79,29 @@ export class EngagementEngine {
   log: { t: number; msg: string }[] = [];
   summary: { players: number; family: number; teamLeads: number; startedAt: number | null; endedAt: number | null } | null = null;
 
-  private remaining: number[] = Array.from({ length: 90 }, (_, i) => i + 1); // secret, never exposed
+  remaining: number[] = Array.from({ length: 90 }, (_, i) => i + 1); // secret, never exposed
+  sx: Surprise = new Surprise(this); // optional features: rounds, lucky draws, scratch cards, boosters
+  present: (() => Set<string> | null) | undefined;
   private deviceTries = new Map<string, number[]>();
   private cancelledPasses = new Set<string>();
-  private ticketKeys = new Set<string>();
+  ticketKeys = new Set<string>();
   private serial = 100;
   private seq = 1;
-  private now: () => number;
+  now: () => number;
   rand: Rand; // public so tests can steer draws
-  private emit: (e: PublicEvent) => void;
+  emit: (e: PublicEvent) => void;
 
   constructor(init: SettingsInit = {}, deps: Deps) {
     this.now = deps.now;
     this.rand = deps.rand ?? cryptoRand;
     this.emit = deps.emit ?? (() => {});
+    this.present = deps.present;
     this.settings = {
-      id: this.code(4), code: this.code(7), name: "My engagement", orgName: "My organization", limit: 100,
+      id: this.code(4), code: this.code(7), screenKey: this.code(14), name: "My engagement", orgName: "My organization", limit: 100,
       familyLimit: 2, familyCanWin: true, participantInvites: 0, ticketMode: "single", callMode: "ai",
       defaultCountry: "IN", startsAt: null, tz: "Asia/Kolkata", rewards: DEFAULT_REWARDS(), breaks: [], ...init,
     } as Settings;
+    this.settings.surprise = { ...DEFAULT_SURPRISE, ...(init.surprise ?? {}) };
   }
 
   // ---------- helpers ----------
@@ -101,8 +110,8 @@ export class EngagementEngine {
     for (let i = 0; i < n; i++) s += CODE_CHARS[this.rand(CODE_CHARS.length)];
     return s;
   }
-  private uid(p: string) { return `${p}${this.seq++}`; }
-  private logMsg(msg: string) { this.log.unshift({ t: this.now(), msg }); if (this.log.length > 200) this.log.pop(); this.emit({ to: "console", type: "log", msg }); }
+  uid(p: string) { return `${p}${this.seq++}`; }
+  logMsg(msg: string) { this.log.unshift({ t: this.now(), msg }); if (this.log.length > 200) this.log.pop(); this.emit({ to: "console", type: "log", msg }); }
   get placesUsed() { return this.participants.length; }
   get placesLeft() { return this.settings.limit - this.placesUsed; }
   get entryOpen() { return this.status === "open" || this.status === "starting"; }
@@ -110,7 +119,8 @@ export class EngagementEngine {
   private byNumber(e164: string) { return this.participants.find((p) => p.e164 === e164); }
   numberInEngagement(e164: string) { return this.byNumber(e164) ?? this.waiting.find((w) => w.e164 === e164); }
   private ticketCount() { return this.settings.ticketMode === "double" ? 2 : 1; }
-  private newTicket(): Ticket {
+  ticketCountFor() { return this.ticketCount(); }
+  newTicket(): Ticket {
     for (;;) {
       const t = generateTicket(this.rand);
       const k = ticketKey(t);
@@ -123,6 +133,7 @@ export class EngagementEngine {
       id: this.uid("p"), name: "", info: "", e164: "", role: "participant", kind: null, source: "list", invitedBy: null,
       status: "not_joined", cap: 25, passCode: null, roleLink: null, device: null,
       tickets: Array.from({ length: this.ticketCount() }, () => this.newTicket()),
+      boosters: { joker: 0, extra: 0, pass: 0 },
       serial: this.serial, notValid: 0, blocked: false, consentAt: null, joinedAt: null, ...o,
     };
   }
@@ -139,10 +150,18 @@ export class EngagementEngine {
   }
 
   // ---------- settings (organizer; host may change only the family limit) ----------
-  updateSettings(actor: Actor, patch: Partial<Pick<Settings, "name" | "limit" | "familyLimit" | "familyCanWin" | "participantInvites" | "ticketMode" | "callMode" | "defaultCountry" | "startsAt" | "tz" | "orgName">>): Err | null {
+  updateSettings(actor: Actor, patch: Partial<Pick<Settings, "name" | "limit" | "familyLimit" | "familyCanWin" | "participantInvites" | "ticketMode" | "callMode" | "defaultCountry" | "startsAt" | "tz" | "orgName">> & { surprise?: Partial<import("./types").SurpriseSettings> }): Err | null {
     if (this.status !== "open") return "Settings are locked after the start.";
     const keys = Object.keys(patch);
     if (actor === "host" && keys.some((k) => k !== "familyLimit")) return "Only the organizer can change this setting.";
+    if (patch.surprise !== undefined) {
+      if (actor === "host") return "Only the organizer can change this setting.";
+      const bad = this.sx.validate(patch.surprise);
+      if (bad) return bad;
+      Object.assign(this.settings.surprise, patch.surprise);
+      this.sx.normalise();
+      delete patch.surprise;
+    }
     if (patch.limit !== undefined && patch.limit < this.placesUsed) return `The limit cannot be below the ${this.placesUsed} places already used.`;
     if (patch.familyLimit !== undefined && (patch.familyLimit < 0 || patch.familyLimit > 4)) return "Family limit is 0 to 4.";
     if (patch.participantInvites !== undefined && (patch.participantInvites < 0 || patch.participantInvites > 3)) return "Invites are 0 to 3.";
@@ -296,6 +315,7 @@ export class EngagementEngine {
   // ---------- joining ----------
   private bind(p: Participant, device: string) {
     p.device = device; p.status = "joined"; p.joinedAt = this.now(); p.consentAt = this.now();
+    p.namesConsent = this.settings.surprise.revealNames;
   }
   raiseConflict(p: Participant, device: string) {
     if (!this.conflicts.find((c) => c.pid === p.id && c.device === device && !c.done)) {
@@ -414,10 +434,16 @@ export class EngagementEngine {
     this.status = "started";
     this.startedAt = this.now();
     this.liveAt = null;
-    this.nextAt = this.settings.callMode === "manual" ? null : this.now();
+    this.nextAt = null;
     this.logMsg("Engagement live. Entry closed.");
     this.emit({ to: "all", type: "live" });
+    if (!this.sx.onGoLive()) this.nextAt = this.settings.callMode === "manual" ? null : this.now(); // an opening moment, if any, holds the first number
   }
+
+  finishEngagement(why: string): void { this.end(why); }
+  applyPendingEmergency(): void { if (this.pendingEmergency) this.applyEmergency(this.pendingEmergency); }
+  /** Calling gap: 6 / 10 / 15 s from the settings (the test speed switch still overrides the normal 10 s). */
+  gapMs(): number { const c = this.settings.surprise.callSeconds; return c === 10 ? CFG.AI_GAP : c * 1000; }
 
   end(why = "Organizer ended the engagement"): void {
     if (this.status !== "started") return;
@@ -448,12 +474,14 @@ export class EngagementEngine {
     };
     this.participants = []; this.waiting = []; this.conflicts = []; this.log = []; this.claims = [];
     this.notValidLog = []; this.winners = new Map(); this.deviceTries.clear(); this.ticketKeys.clear();
+    this.sx = new Surprise(this);
     this.status = "purged";
     return null;
   }
 
   // ---------- live ----------
   private nextBreak(): BrandBreak | undefined {
+    if (this.sx.round > 1) return undefined; // brand breaks belong to round 1; later rounds use the break between rounds
     return this.settings.breaks.find((b) => !b.done && b.after === this.called.length);
   }
   private openRewardLines(): RewardLine[] {
@@ -463,7 +491,7 @@ export class EngagementEngine {
   draw(by?: string): Err | null {
     if (this.status !== "started") return "The engagement is not running.";
     if (this.paused) return "The engagement is paused.";
-    if (this.called.length >= 90) { this.end("All 90 numbers called"); return null; }
+    if (this.called.length >= 90) { this.sx.finishRound("All 90 numbers called"); return null; }
     const brk = this.nextBreak();
     if (brk) {
       brk.done = true;
@@ -478,7 +506,7 @@ export class EngagementEngine {
     this.called.push(n);
     this.current = n;
     this.lastDrawAt = this.now();
-    this.nextAt = this.settings.callMode === "manual" ? null : this.now() + CFG.AI_GAP;
+    this.nextAt = this.settings.callMode === "manual" ? null : this.now() + this.gapMs();
     this.logMsg(`Call ${this.called.length}${by ? ` (drawn by ${by})` : ""}`); // number deliberately not logged: nobody sees past numbers during the engagement
     this.emit({ to: "all", type: "call", callNo: this.called.length, number: n });
     return null;
@@ -621,16 +649,20 @@ export class EngagementEngine {
   tick(): void {
     if (this.status === "starting" && this.liveAt !== null && this.now() >= this.liveAt) this.goLive();
     if (this.status !== "started") return;
+    this.sx.tick();
+    if (this.status !== "started") return;
     const t = this.now();
     const pz = this.paused;
     if (pz) {
       if (pz.type === "claim" && t >= pz.checkAt) this.checkClaims();
       else if ((pz.type === "result" || pz.type === "break") && t >= pz.until) {
+        const wasResult = pz.type === "result";
         this.paused = null;
         this.nextAt = this.settings.callMode === "manual" ? null : t + CFG.RESUME_DELAY;
         this.emit({ to: "all", type: "resume" });
-        if (this.openRewardLines().length === 0) this.end("All rewards awarded");
-        else if (this.pendingEmergency) this.applyEmergency(this.pendingEmergency);
+        if (wasResult && this.openRewardLines().length === 0) { this.sx.finishRound("All rewards awarded"); return; }
+        if (wasResult && this.sx.onResultWindowEnd()) return; // a lucky draw or scratch card starts here
+        if (this.pendingEmergency) this.applyEmergency(this.pendingEmergency);
       }
     } else if (this.settings.callMode !== "manual" && this.nextAt !== null && t >= this.nextAt) this.draw();
   }
@@ -642,7 +674,7 @@ export class EngagementEngine {
       conflicts: this.conflicts, called: this.called, current: this.current, paused: this.paused, nextAt: this.nextAt,
       lastDrawAt: this.lastDrawAt, startedAt: this.startedAt, liveAt: this.liveAt, pendingEmergency: this.pendingEmergency, endedAt: this.endedAt, winners: [...this.winners.entries()],
       notValidLog: this.notValidLog, claims: this.claims, log: this.log, summary: this.summary, remaining: this.remaining,
-      cancelledPasses: [...this.cancelledPasses], serial: this.serial, seq: this.seq,
+      cancelledPasses: [...this.cancelledPasses], serial: this.serial, seq: this.seq, sx: this.sx.toJSON(),
     });
   }
 
@@ -654,6 +686,11 @@ export class EngagementEngine {
     e.lastDrawAt = s.lastDrawAt; e.startedAt = s.startedAt; e.liveAt = s.liveAt ?? null; e.pendingEmergency = s.pendingEmergency ?? null; e.endedAt = s.endedAt; e.winners = new Map(s.winners);
     e.notValidLog = s.notValidLog; e.claims = s.claims; e.log = s.log; e.summary = s.summary; e.remaining = s.remaining;
     e.cancelledPasses = new Set(s.cancelledPasses); e.serial = s.serial; e.seq = s.seq;
+    e.sx.load(s.sx);
+    e.settings.surprise = { ...DEFAULT_SURPRISE, ...(e.settings.surprise ?? {}) };
+    e.settings.screenKey ??= e.code(14);
+    for (const p of e.participants) p.boosters ??= { joker: 0, extra: 0, pass: 0 };
+    e.present = deps.present;
     e.ticketKeys = new Set(e.participants.flatMap((p) => p.tickets.map(ticketKey)));
     return e;
   }
@@ -661,20 +698,28 @@ export class EngagementEngine {
   /** Organizer-only report (contains personal data; deleted with the purge). */
   report() {
     const byPid = new Map(this.participants.map((p) => [p.id, p]));
-    const wins = [...this.winners.entries()].flatMap(([lineId, ws]) => {
-      const line = this.settings.rewards.find((l) => l.id === lineId)!;
+    const all: { round: number; lineId: string; winners: Winner[] }[] = [...this.sx.roundWinners, ...[...this.winners.entries()].map(([lineId, winners]) => ({ round: this.sx.round, lineId, winners }))];
+    const wins = all.flatMap(({ round, lineId, winners: ws }) => {
+      const line = this.settings.rewards.find((l) => l.id === lineId);
+      if (!line) return [];
       const total = this.linesFor(line.pattern, line.scope).length;
       return ws.map((w) => {
         const p = byPid.get(w.pid);
-        return { ticketId: w.ticketId, name: p?.name ?? "", e164: p?.e164 ?? "", role: p?.role ?? "", kind: p?.kind ?? null,
+        return { round, ticketId: w.ticketId, name: p?.name ?? "", e164: p?.e164 ?? "", role: p?.role ?? "", kind: p?.kind ?? null,
           reward: rewardName(line.pattern, line.scope, line.ordinal, total), rewardText: line.text, winners: ws.length, wonOnNumber: w.number, callNo: w.callNo, at: w.at };
       });
     });
-    const notAwarded = this.settings.rewards.filter((l) => !this.winners.get(l.id)?.length).map((l) => ({ id: l.id, text: l.text }));
+    const playedRounds = this.status === "started" || this.status === "ended" ? this.sx.round : 0;
+    const notAwarded: { round: number; id: string; text: string }[] = [];
+    for (let r = 1; r <= playedRounds; r++) for (const l of this.settings.rewards) {
+      const won = r === this.sx.round ? !!this.winners.get(l.id)?.length : this.sx.roundWinners.some((x) => x.round === r && x.lineId === l.id);
+      if (!won) notAwarded.push({ round: r, id: l.id, text: l.text });
+    }
+    const moments = this.sx.results.map((r) => ({ ...r, winners: r.winners.map((w) => ({ ...w, name: byPid.get(w.pid)?.name ?? "" })) }));
     return {
-      engagement: this.settings.name, status: this.status, startedAt: this.startedAt, endedAt: this.endedAt,
+      engagement: this.settings.name, status: this.status, startedAt: this.startedAt, endedAt: this.endedAt, rounds: this.sx.rounds, roundsPlayed: playedRounds,
       participants: this.participants.map((p) => ({ ticketId: this.ticketId(p), name: p.name, e164: p.e164, role: p.role, kind: p.kind, joined: p.status === "joined", notValid: p.notValid, blocked: p.blocked })),
-      winners: wins, notAwarded, notValid: this.notValidLog, callOrder: this.called,
+      winners: wins, notAwarded, notValid: this.notValidLog, callOrder: this.called, moments, boosterUses: this.sx.boosterUses.length,
     };
   }
 
@@ -687,12 +732,23 @@ export class EngagementEngine {
       callNo: this.called.length,
       current: this.current,
       paused: this.paused ? this.paused.type : null,
+      round: this.sx.round, rounds: this.sx.rounds,
+      still: this.sx.enabled ? this.sx.still() : null,
+      moment: this.sx.activeMoment(),
+      surprise: this.sx.enabled ? { autoMark: this.settings.surprise.autoMark, boostersAllowed: this.settings.surprise.boostersAllowed, revealNames: this.settings.surprise.revealNames } : null,
       rewards: this.settings.rewards.map((l) => {
         const total = this.linesFor(l.pattern, l.scope).length;
         return { id: l.id, name: rewardName(l.pattern, l.scope, l.ordinal, total), text: l.text, winners: (this.winners.get(l.id) ?? []).map((w) => w.ticketId) };
       }),
     };
   }
+
+  // ---------------------------------------------------------------- optional features: entry points used by the room
+  confirmPresent(pid: string, momentId: string) { return this.sx.confirmPresent(pid, momentId); }
+  revealScratch(pid: string, momentId: string) { return this.sx.revealScratch(pid, momentId); }
+  useJoker(pid: string, ticket: "A" | "B" | "C", cut: number[]) { return this.sx.useJoker(pid, ticket, cut); }
+  triggerMoment(kind: "lucky" | "scratch") { return this.sx.trigger(kind); }
+  boostersOf(pid: string) { return this.sx.boostersOf(pid); }
 }
 
 export type { Kind, CallMode, TicketMode };
