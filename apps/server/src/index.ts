@@ -10,6 +10,7 @@ import { CFG, EngagementEngine, SCFG, Surprise, makeRewardLines, type PublicEven
 import { PACKS, checkUpload, formatInternational, maskNumber, normalize, price, proposeBreakPositions, rewardName, type Currency, type PatternId } from "@tambola/shared";
 import { openDb, sha256 } from "./db";
 import { createAiLink } from "./ai-link";
+import { SAFETY_FAST, SAFETY_STANDARD, describeControl, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 import { PayError, createPayments } from "./payments";
 
 // ---------- config ----------
@@ -766,6 +767,7 @@ route_("POST", "/api/e/:code/draw", ({ req, m }) => {
 });
 route_("POST", "/api/e/:code/pause", async ({ req, m }) => {
   const room = getRoom(m[1]!); needConsole(actorOf(req, room));
+  if (await readPublished(controlKv, room.engine.settings.code)) fail(409, "This engagement runs from the phones: pause it with the signed pause (the console does this for you).");
   const b = await body(req);
   const reason = String(b.reason ?? "").trim();
   if (!reason) fail(400, "Choose a reason.");
@@ -773,6 +775,38 @@ route_("POST", "/api/e/:code/pause", async ({ req, m }) => {
   return json({ ok: true });
 });
 route_("POST", "/api/e/:code/resume", ({ req, m }) => { const room = getRoom(m[1]!); needConsole(actorOf(req, room)); room.engine.resume(); room.touch(); return json({ ok: true }); });
+// ---------- signed organizer control (pause / resume / extend / stop) for the phone-only mode ----------
+// Phones fetch GET /api/e/:code/control (one small cacheable file: in production a static file on a free CDN) and apply it themselves.
+// Every change is signed by a key that lives only in the organizer's browser; the server (or a CDN Worker) cannot create or alter one.
+const controlKv: KV = {
+  get: async (k) => (db.query("SELECT v FROM control_kv WHERE k=?").get(k) as { v: string } | null)?.v ?? null,
+  put: async (k, v) => { db.query("INSERT INTO control_kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").run(k, v); },
+};
+const beaconRoundNow = () => Math.floor((now() / 1000 - 1692803367) / 3) + 1;
+route_("GET", "/api/e/:code/control", async ({ m }) => {
+  const f = await readPublished(controlKv, m[1]!);
+  if (!f) return json({ error: "No signed control for this engagement." }, 404);
+  return new Response(JSON.stringify(f), { headers: { "content-type": "application/json", "cache-control": "public, max-age=0, s-maxage=3", "access-control-allow-origin": "*" } });
+});
+route_("GET", "/api/e/:code/control/status", async ({ req, m }) => {
+  const room = getRoom(m[1]!); needConsole(actorOf(req, room));
+  const f = await readPublished(controlKv, room.engine.settings.code);
+  return json({ mode: f ? "phones" : "server", nowRound: beaconRoundNow(), ...describeControl(f, beaconRoundNow()) });
+});
+route_("PUT", "/api/e/:code/control/key", async ({ req, m }) => {
+  const room = getRoom(m[1]!); needOrganizer(actorOf(req, room));
+  if (room.engine.status !== "open") fail(409, "The signing key can only be set before the engagement starts.");
+  const b = await body(req);
+  const r = await registerKey(controlKv, room.engine.settings.code, String(b.publicKey ?? ""), b.profile === "fast" ? SAFETY_FAST : SAFETY_STANDARD);
+  if (!r.ok) fail(409, r.error);
+  return json({ ok: true });
+});
+route_("POST", "/api/e/:code/control", async ({ req, m }) => {
+  const room = getRoom(m[1]!); needOrganizer(actorOf(req, room));
+  const b = await body(req);
+  const r = await publishControl(controlKv, room.engine.settings.code, b.message);
+  return r.ok ? json(r) : json({ error: r.error }, r.status);
+});
 route_("POST", "/api/e/:code/moments/trigger", async ({ req, m }) => {
   const room = getRoom(m[1]!); needConsole(actorOf(req, room));
   const b = await body(req);
@@ -846,7 +880,7 @@ route_("POST", "/api/orgs/me/ai-link", async ({ req }) => {
 });
 route_("DELETE", "/api/orgs/me/ai-link", ({ req }) => { const org = orgOf(req) ?? fail(401, "Please log in."); ai.revoke(org); return json({ ok: true }); });
 route_("POST", "/api/ai/drafts/:id/preview", async ({ req, m }) => { const org = orgOf(req) ?? fail(401, "Please sign in."); const b = await body(req); const r = ai.previewDraft(m[1]!, org, String(b.code ?? "")); return json(r.body, r.status); });
-route_("POST", "/api/ai/drafts/:id/confirm", async ({ req, m }) => { const org = orgOf(req) ?? fail(401, "Please sign in."); const b = await body(req); const r = await ai.confirmDraft(m[1]!, org, String(b.code ?? ""), req); return json(r.body, r.status); });
+route_("POST", "/api/ai/drafts/:id/confirm", async ({ req, m }) => { const org = orgOf(req) ?? fail(401, "Please sign in."); const b = await body(req); const r = await ai.confirmDraft(m[1]!, org, String(b.code ?? ""), req, b.signed); return json(r.body, r.status); });
 
 // ---------- static + app manifest (the cached "thin client") ----------
 const MIME: Record<string, string> = { html: "text/html; charset=utf-8", css: "text/css", js: "text/javascript", json: "application/json", svg: "image/svg+xml", png: "image/png", webp: "image/webp", ico: "image/x-icon", m4a: "audio/mp4", mp3: "audio/mpeg", woff2: "font/woff2" };

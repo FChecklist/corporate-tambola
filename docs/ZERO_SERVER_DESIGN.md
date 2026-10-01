@@ -56,3 +56,5 @@ Owner decisions needed: accept public-beacon dependence (and its firewall risk),
 - **Call speeds must be multiples of 3 s** (6, 9, 12, 15). The current default of 10 s must change in this mode.
 - **Not solved yet:** an unscheduled organizer pause (needs a tiny signed control message), and phones that cannot reach any honest mirror (fallback: the organizer console computes the same log and winners from the public rounds).
 - **Tests:** `bun test packages/beacon` (20), `bun run tools/sim/phones.ts 100` (14 checks, real signed rounds, blocked/lying/flaky mirrors, late joiners, drops, +/-10 min wrong clocks, an invented claim).
+
+- **Update 2026-10-01 (later):** the unscheduled organizer pause is now designed, built and simulated (signed control messages, free-CDN file, freshness rule), and the external AI work link is aligned with the zero-server mode: see `docs/AI_LINK_AND_PAUSE_DESIGN.md`. Players are mobile-only, so the office-firewall beacon risk is deprioritised.

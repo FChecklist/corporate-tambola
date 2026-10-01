@@ -49,6 +49,8 @@ export function openDb(path: string): Database {
     CREATE TABLE IF NOT EXISTS mail_sent (
       code TEXT NOT NULL, kind TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (code, kind)
     );
+    -- Signed organizer control log (pause/resume/extend/stop) for the phone-only mode. Public by design: signed messages, no personal data.
+    CREATE TABLE IF NOT EXISTS control_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS summaries (
       code TEXT PRIMARY KEY, organizer_id TEXT NOT NULL, json TEXT NOT NULL
     );

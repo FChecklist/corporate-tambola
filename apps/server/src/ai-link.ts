@@ -115,6 +115,11 @@ export const TOOLS: Tool[] = [
       const off = Number(p.offset ?? 0), lim = Math.min(300, Number(p.limit ?? 100));
       return { total: rows.length, offset: off, user_data: rows.slice(off, off + lim).map((x) => brief(x, c)) };
     } },
+  { name: "get_control_status", kind: "read", summary: "Phone-only engagements: whether the signed pause/resume/stop control is set up, the current pause schedule, and how many seconds ahead a pause must be announced. If mode is server, the older server pause tools apply.", params: { code: P.code }, required: ["code"],
+    run: async (c, p) => {
+      const r = await must(c, "GET", `/api/e/${p.code}/control/status`);
+      return { mode: r.mode, registered: r.registered, pause_notice_seconds: r.leadSeconds, longest_open_ended_pause_rounds: r.maxPauseRounds, paused_now: r.pausedNow, stopped: r.stopped, pauses_so_far: r.messages?.length ?? 0, how_to: r.mode === "phones" ? "Use request_control. It is only a draft: the organizer signs it on their own device." : "Use pause_engagement / resume_engagement." };
+    } },
   { name: "get_waiting_room", kind: "read", summary: "People waiting to be admitted and phone alerts (someone opened a second phone).", params: { code: P.code }, required: ["code"],
     run: async (c, p) => { const d = await must(c, "GET", `/api/e/${p.code}/console`); return { user_data: { waiting: d.waiting.map((w: any) => ({ name: w.name, department: w.info, number: c.d.mask(w.e164 ?? w.number), invited_by: w.invitedBy })), phone_alerts: d.conflicts.map((x: any) => ({ id: x.id, name: x.name })) } }; } },
   { name: "get_report", kind: "read", summary: "The full report of an engagement: who won what, claims that were Not valid, rewards not awarded, how many took part. Available after it ends and until its details are deleted 24 hours later. Summarize it in plain words for the organizer.", params: { code: P.code }, required: ["code"],
@@ -211,6 +216,14 @@ export const TOOLS: Tool[] = [
   { name: "remove_people", kind: "confirm", summary: "Remove people from an engagement before it starts (also removes the people they invited). DRAFT: the organizer confirms.", params: { code: P.code, numbers: { type: "array", items: { type: "string" } }, country: P.country }, required: ["code", "numbers"],
     confirmText: (p) => `Remove ${p.numbers.length} people from engagement ${p.code}, and anyone they invited.`,
     run: async (c, p) => { const { found } = await participantsByNumber(c, p.code, p.numbers, p.country); if (!found.length) throw new ToolError(404, "None of those numbers are in this engagement."); return must(c, "POST", `/api/e/${p.code}/people/bulk`, { ids: found.map((x: any) => x.id), action: "remove" }); } },
+  { name: "request_control", kind: "confirm", summary: "Phone-only engagements: pause, resume, extend or stop the engagement for every phone at once. DRAFT only: the message must be signed with the organizer's own key, which lives in their browser, so you cannot do it and cannot fake it. A pause takes effect after the notice time from get_control_status (about 40 seconds), never instantly.", params: { code: P.code, action: { type: "string", enum: ["pause", "resume", "extend", "stop"] }, minutes: { type: "integer", minimum: 1, maximum: 120, description: "pause: optional length of a timed break (leave out for an open-ended pause). extend: how many minutes to add." } }, required: ["code", "action"],
+    confirmText: (p) => p.action === "pause" ? `Pause engagement ${p.code} for everyone${p.minutes ? ` for ${p.minutes} minutes` : " until you resume"}. It takes effect after a short notice (about 40 seconds).` : p.action === "resume" ? `Resume engagement ${p.code} for everyone.` : p.action === "extend" ? `Extend the pause of engagement ${p.code} by ${p.minutes ?? "?"} minutes.` : `Stop engagement ${p.code} for everyone. No more numbers will be called. This cannot be undone.`,
+    run: async (c, p) => {
+      const sm = p.__signed;
+      if (!sm || typeof sm !== "object") throw new ToolError(409, "This needs the organizer's signature. Open the confirmation link on the device and browser where the engagement was set up, then tap Confirm there.");
+      if (sm.action !== p.action) throw new ToolError(409, "The signed message does not match what was asked for.");
+      return must(c, "POST", `/api/e/${p.code}/control`, { message: sm });
+    } },
   { name: "erase_saved_people", kind: "confirm", summary: "Delete saved names and numbers: everyone, one past engagement's people, or one person. DRAFT: the organizer confirms. This cannot be undone.", params: { scope: { type: "string", enum: ["all", "engagement", "person"] }, code: { type: "string" }, number: { type: "string" } }, required: ["scope"],
     confirmText: (p) => p.scope === "all" ? "Erase every saved name and number." : p.scope === "engagement" ? `Erase the saved people of past engagement ${p.code}.` : "Erase one person from the saved list and stop keeping their number.",
     run: async (c, p) => must(c, "POST", "/api/orgs/me/erase", p.scope === "person" ? { type: "person", e164: p.number } : p.scope === "engagement" ? { type: "engagement", code: p.code } : { type: "all" }) },
@@ -244,6 +257,7 @@ You are only an assistant to the organizer. You work inside the same rules and g
 - You cannot choose, see ahead or change any number. The system draws numbers at random; even in manual mode a Host only presses "draw" and the system picks.
 - You cannot claim for anyone, change a claim result, a winner or a loser, or add or remove a reward after Start. There is no tool for it and you must not look for a way.
 - You cannot act as a participant, see tickets, or see anyone's full mobile number.
+- You cannot sign a pause, resume or stop: the organizer's own device holds the key. You can only draft it for them.
 - You cannot pay, bypass a confirmation, or use the organizer's password: you need none. This link already gives you the organizer's access, and only that.
 - If the organizer asks for something you cannot do, say so plainly and explain what they can do instead.
 
@@ -258,6 +272,15 @@ Base address: \`${o.base}\` (the secret is already in it).
 ## What an engagement is (the facts you need)
 Participants join from their phones with a link. Each gets a ticket (1 or 2 tickets). The system draws numbers 1 to 90 at random and a clear female Indian-English voice says each number twice. Participants cut their own numbers and claim rewards (Early Five, lines, Four Corners, Star, Full House; Full House can be offered 1st, 2nd, 3rd... and with two tickets also Full Two-Ticket Houses). Brand breaks (up to 3: company video link, YouTube, slides, speech) pause everyone for a message. Settings lock at Start; people can still join for 60 seconds while phones get ready; then the first number is called. Participants never pay; the organizer gives the rewards. Call **get_rules** for all limits.
 Saved people: names, numbers and departments of everyone uploaded or joined are kept ${o.retentionDays} days so a new engagement can reuse them in one step. Tickets, phones, claims and logs are deleted 24 hours after an engagement ends.
+
+## Jobs you may be asked to do
+Read-only: summarize an engagement, who has joined or is waiting, a plain-words report after the end, and what is left to do before the day.
+Drafting words (you write, the organizer reviews, then you apply with the tools above): reward texts, brand break titles and speech lines, the invitation message, a thank-you note after the engagement, a short summary for leadership. These never touch money, numbers or winners.
+Applying: the changes in "Workflows" below. Anything marked "needs organizer confirmation" is only a draft until the organizer confirms it themselves.
+Phone-only engagements (get_control_status says mode phones): a pause, resume, extension or stop is a signed message. Use request_control, give the organizer the confirm_url, and tell them it takes effect after the notice time (about 40 seconds), on every phone at once. Do not use pause_engagement for these.
+
+## If you can only open web addresses (no POST, no tools)
+You can still read this manual and every read tool with GET. You cannot send changes yourself: build a plan with the /plan address described above, or give the organizer the exact text to type into their console. You cannot confirm or sign anything, you cannot see anything that is not in the read tools, and you must say so instead of pretending a change was made.
 
 ## Tools
 ${toolTable(o.level)}
@@ -407,12 +430,14 @@ ${na}`;
       tell_the_organizer: "Open the confirm link, sign in with your work email, check the summary and tap Confirm. Nothing happens until then." };
   }
 
-  async function runActions(actions: { tool: string; params: any }[], orgId: string, linkId: string, req: Request) {
+  async function runActions(actions: { tool: string; params: any }[], orgId: string, linkId: string, req: Request, signed?: unknown) {
     const out: any[] = [];
     for (const a of actions) {
       const tool = TOOL.get(a.tool);
       if (!tool) { out.push({ tool: a.tool, ok: false, error: "Unknown tool." }); break; }
-      try { out.push({ tool: a.tool, ok: true, result: await execTool(tool, a.params ?? {}, orgId, linkId, req) }); }
+      const params = { ...(a.params ?? {}) }; delete params.__signed; // only the organizer's own signature (from the confirm page) can ever fill this
+      if (tool.name === "request_control" && signed) params.__signed = signed;
+      try { out.push({ tool: a.tool, ok: true, result: await execTool(tool, params, orgId, linkId, req) }); }
       catch (e: any) { out.push({ tool: a.tool, ok: false, error: e instanceof ToolError ? e.message : "Something went wrong." }); break; }
     }
     return out;
@@ -536,14 +561,16 @@ ${na}`;
     const dr = r.dr!;
     return { status: 200, body: { summary: dr.summary, actions: JSON.parse(dr.actions_json).map((a: any) => ({ tool: a.tool, params: cleanDeep(a.params) })), expires_at: dr.expires_at } };
   }
-  async function confirmDraft(id: string, orgId: string, code: string, req: Request) {
+  async function confirmDraft(id: string, orgId: string, code: string, req: Request, signed?: unknown) {
     const r = draftFor(id, orgId, code);
     if (r.err) return { status: r.err[0], body: { error: r.err[1] } };
     const dr = r.dr!;
     db.query("UPDATE ai_drafts SET state='running' WHERE id=? AND state='pending'").run(id);
-    const results = await runActions(JSON.parse(dr.actions_json), orgId, dr.link_id, req);
+    const results = await runActions(JSON.parse(dr.actions_json), orgId, dr.link_id, req, signed);
     const ok = results.every((x) => x.ok);
-    db.query("UPDATE ai_drafts SET state=?, result_json=? WHERE id=?").run(ok ? "confirmed" : "failed", JSON.stringify(results), id);
+    // a missing/wrong signature must not burn the draft: the organizer can retry from the right browser until it expires
+    const retry = !ok && results.some((x) => x.tool === "request_control" && !x.ok);
+    db.query("UPDATE ai_drafts SET state=?, result_json=? WHERE id=?").run(ok ? "confirmed" : retry ? "pending" : "failed", JSON.stringify(results), id);
     return { status: ok ? 200 : 422, body: { ok, results } };
   }
 
