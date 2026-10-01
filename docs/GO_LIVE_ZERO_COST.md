@@ -41,3 +41,9 @@ Mail handling in the Worker: a sent mail leaves no body behind; a mail that coul
 ## 5. Still open
 Owner: buy the domain; Razorpay Test keys and webhook URL; company tax details; lawyer review of the 365-day retention and consent wording; voice decision; the Resend key above.
 Engineering: cached static control file; real-office/real-phone test; the legacy server-driven mode still exists beside the new one (kept until the new one is accepted).
+
+## 6. Refer & earn (sales partners)
+- A partner's code is their **mobile number**; their link is `/?ref=<number>` (30-day attribution, kept in the buyer's own browser). Anyone can join from `/partner.html`, and a participant can join from the small "Refer & earn" link under their ticket. A footer link is on every page.
+- A commission row is written only when a referred purchase is **paid**, on the taxable value (not the GST). The **rate is not set**: rows wait as "counted" and show "to be announced" until we set it (`POST /api/partners/commission/rate {rate}`, or `PARTNER_COMMISSION_RATE`). Self-referral is blocked with a reason. We record payouts (`/api/partners/payout`) and can void a refunded sale; the actual payout (KYC, TDS, RazorpayX) happens outside this system.
+- Partners see only their own sales (date, pack, status, amount), never who bought.
+- **Limit to decide on:** enrolment needs no OTP, like participants joining, so someone could enrol a number that is not theirs. They would earn nothing without payout KYC, but the real owner of that number would find it taken. Fix before the first payout: verify the number (SMS/WhatsApp OTP costs money) or only pay after KYC proves who the person is.
