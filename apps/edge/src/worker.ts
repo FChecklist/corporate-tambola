@@ -11,6 +11,7 @@
 //                   So an AI can never decide who wins, and never change what the public beacon decides.
 //   nobody        - phones: join, send claims, read results counts, read the engagement info and the signed control file.
 
+import { defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
 import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, type PayEnv } from "./pay";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { SAFETY_FAST, SAFETY_STANDARD, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
@@ -35,13 +36,15 @@ export const RETENTION_DAYS = 365;
 /** Claims are only a live cross-check (settlement never uses them), and 7 rows per phone would eat the free write allowance, so they are stored only for engagements this size or smaller. */
 export const CLAIM_TRACKING_MAX_CAP = 500;
 const tracks = (e: { cap: number }) => e.cap <= CLAIM_TRACKING_MAX_CAP;
+/** The part of the settings every phone needs, public by design: how many tickets, what each house wins, and when the brand breaks are. */
+const pub = (e: any) => { const c = cfgOf(e); return { tickets: c.tickets, rewards: c.rewards, breaks: c.breaks }; };
 
 export const SCHEMA: string[] = [
-  `CREATE TABLE IF NOT EXISTS engagement (id TEXT PRIMARY KEY, start_round INTEGER NOT NULL, call_seconds INTEGER NOT NULL, cap INTEGER NOT NULL, created_ms INTEGER NOT NULL, org TEXT, closed INTEGER NOT NULL DEFAULT 0, pack INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS engagement (id TEXT PRIMARY KEY, start_round INTEGER NOT NULL, call_seconds INTEGER NOT NULL, cap INTEGER NOT NULL, created_ms INTEGER NOT NULL, org TEXT, closed INTEGER NOT NULL DEFAULT 0, pack INTEGER, tickets INTEGER NOT NULL DEFAULT 1, config TEXT)`,
   `CREATE TABLE IF NOT EXISTS participant (eid TEXT NOT NULL, pid TEXT NOT NULL, phone_hash TEXT NOT NULL, name TEXT, joined_ms INTEGER NOT NULL, PRIMARY KEY (eid, pid))`,
   `CREATE UNIQUE INDEX IF NOT EXISTS participant_phone ON participant (eid, phone_hash)`,
   `CREATE TABLE IF NOT EXISTS claim (eid TEXT NOT NULL, pid TEXT NOT NULL, pattern TEXT NOT NULL, idx INTEGER NOT NULL, at_ms INTEGER NOT NULL, PRIMARY KEY (eid, pid, pattern))`,
-  `CREATE TABLE IF NOT EXISTS settled (eid TEXT NOT NULL, pattern TEXT NOT NULL, idx INTEGER NOT NULL, pids TEXT NOT NULL, PRIMARY KEY (eid, pattern))`,
+  `CREATE TABLE IF NOT EXISTS settled (eid TEXT NOT NULL, pattern TEXT NOT NULL, ordinal INTEGER NOT NULL DEFAULT 1, idx INTEGER NOT NULL, pids TEXT NOT NULL, PRIMARY KEY (eid, pattern, ordinal))`,
   `CREATE TABLE IF NOT EXISTS usage (day TEXT PRIMARY KEY, writes INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS organizer_key (hash TEXT PRIMARY KEY, org TEXT NOT NULL, kind TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_ms INTEGER NOT NULL)`,
@@ -53,7 +56,12 @@ export const SCHEMA: string[] = [
   ...PARTNER_SCHEMA,
 ];
 
-const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full"]);
+const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
+/** What the organizer set for this engagement (tickets per participant, reward lines, brand breaks); plain defaults when nothing was set. */
+const cfgOf = (e: { tickets?: number; config?: string | null }): EngagementCfg => {
+  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks }); if (v.ok) return v.cfg; } catch { /* fall through */ }
+  return defaultCfg();
+};
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -113,7 +121,7 @@ export const AI_MANIFEST = {
   you_can: [
     { do: "List engagements and head-counts", call: "GET /api/history" },
     { do: "Create an engagement (uses one purchased engagement)", call: "POST /api/z {id, startRound, callSeconds (6|9|12|15), cap, closed?}" },
-    { do: "Change start time, speed, cap or invite-only before the first number", call: "PATCH /api/z/{id}/settings {startRound?, callSeconds?, cap?, closed?}" },
+    { do: "Change start time, speed, cap, invite-only, tickets per participant (1 or 2), reward lines and brand breaks (up to 3) before the first number", call: "PATCH /api/z/{id}/settings {startRound?, callSeconds?, cap?, closed?, tickets?, rewards?: [{pattern: early5|top|mid|bot|corners|star|full, scope?: ticket|two_ticket, ordinal?: 1-5, text}], breaks?: [{after: 1-89 numbers called, seconds: 15-600 in steps of 3, kind: file|youtube|slides|speech, title, mediaUrl?: https link}]}" },
     { do: "Load participants (invite list)", call: "POST /api/z/{id}/roster {people:[{phone,name}]} up to 100 per call" },
     { do: "Reuse an earlier engagement's people", call: "POST /api/z/{id}/reuse {from}" },
     { do: "See who joined (names and ids only, never phone numbers)", call: "GET /api/z/{id}/participants" },
@@ -201,6 +209,23 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const key = "cta_" + randHex(24);
     await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), a.org, "ai", now).run();
     return json({ ok: true, aiKey: key });
+  }
+  if (req.method === "GET" && p === "/api/org/keys") { // the organizer sees their own sign-in keys (never the keys themselves) and can retire old ones
+    if (a.kind !== "master" || !a.org) return deny(a);
+    const me = await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")));
+    const r = await env.DB.prepare("SELECT hash, kind, revoked, created_ms FROM organizer_key WHERE org=? ORDER BY created_ms DESC").bind(a.org).all<any>();
+    return json({ keys: (r.results ?? []).map((k: any) => ({ id: k.hash.slice(0, 10), kind: k.kind, revoked: !!k.revoked, created_ms: k.created_ms, thisOne: k.hash === me })) });
+  }
+  if (req.method === "POST" && p === "/api/org/keys/revoke") {
+    if (a.kind !== "master" || !a.org) return deny(a);
+    const b = await body(req);
+    const id = typeof b?.id === "string" && /^[0-9a-f]{10}$/.test(b.id) ? b.id : "";
+    if (!id) return json({ error: "Pick a key from the list." }, 400);
+    const me = await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")));
+    if (me.startsWith(id)) return json({ error: "That is the key you are using right now. Sign in with another key first." }, 409);
+    if (!(await spend(env, now))) return BUSY();
+    const r = await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE org=? AND substr(hash,1,10)=? AND revoked=0").bind(a.org, id).run();
+    return json({ ok: true, revoked: r.meta?.changes ?? 0 });
   }
   if (req.method === "POST" && p === "/api/org/ai/revoke") {
     if (a.kind !== "master" || !a.org) return deny(a);
@@ -314,13 +339,15 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const b = await body(req);
     if (!b || !ID.test(b.id ?? "") || !Number.isInteger(b.startRound) || !Number.isInteger(b.callSeconds) || b.callSeconds % 3 || b.callSeconds < 6 || !Number.isInteger(b.cap) || b.cap < 1 || b.cap > 100000)
       return json({ error: "Check the engagement details." }, 400);
+    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks });
+    if (!vc.ok) return json({ error: vc.error }, 400);
     const have = await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(b.id).first<{ org: string | null }>();
     if (have) return json({ ok: true, existed: true }); // creating twice never overwrites (and never reveals whose it is)
     // an organizer needs a purchased engagement (entitlement) big enough for the limit they ask for; we (platform) do not
     const ent = a.plat ? null : await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(a.org, b.cap).first<{ id: string; pack: number }>();
     if (!a.plat && !ent) return json({ error: "Please buy an engagement first (or a pack big enough for this many participants)." }, 402);
     if (!(await spend(env, now, 2))) return BUSY();
-    await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack) VALUES(?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.closed ? 1 : 0, ent?.pack ?? b.cap).run();
+    await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.closed ? 1 : 0, ent?.pack ?? b.cap, vc.cfg.tickets, JSON.stringify({ rewards: vc.cfg.rewards, breaks: vc.cfg.breaks })).run();
     if (ent) await env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(b.id, ent.id).run();
     return json({ ok: true });
   }
@@ -354,14 +381,14 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const ph = await phoneHash(b?.phone);
     if (!ph) return json({ error: "Enter a valid mobile number." }, 400);
     const have = await env.DB.prepare("SELECT pid FROM participant WHERE eid=? AND phone_hash=?").bind(eid, ph).first<{ pid: string }>();
-    if (have) return json({ pid: have.pid, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), again: true }); // same number twice = same participant, no extra write
+    if (have) return json({ pid: have.pid, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), ...pub(e), again: true }); // same number twice = same participant, no extra write
     if (e.closed) return json({ error: "This engagement is by invitation. Ask your organizer to add your number." }, 403);
     const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
     if ((n?.c ?? 0) >= e.cap) return json({ error: "This engagement is full." }, 409);
     if (!(await spend(env, now))) return BUSY();
     const pid = await pidOf(ph);
     await env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,joined_ms) VALUES(?,?,?,?,?)").bind(eid, pid, ph, cleanName(b?.name), now).run();
-    return json({ pid, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e) });
+    return json({ pid, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), ...pub(e) });
   }
   if (action === "claims" && req.method === "POST") {
     const b = await body(req);
@@ -380,10 +407,11 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     return json({ ok: true, stored });
   }
   if (action === "results" && req.method === "GET") {
-    const r = await env.DB.prepare("SELECT pattern,idx,pids FROM settled WHERE eid=?").bind(eid).all<any>();
-    return json({ results: (r.results ?? []).map((x: any) => ({ pattern: x.pattern, idx: x.idx, count: JSON.parse(x.pids).length })) }); // public: counts only, no ids
+    const r = await env.DB.prepare("SELECT pattern,ordinal,idx,pids FROM settled WHERE eid=? ORDER BY pattern, ordinal").bind(eid).all<any>();
+    // public: counts only, no ids. The one exception is a lucky draw, whose winners are shown by their opaque ticket ids so each phone can tell whether it won
+    return json({ results: (r.results ?? []).map((x: any) => ({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, count: JSON.parse(x.pids).length, ...(x.pattern === "lucky" ? { winners: JSON.parse(x.pids) } : {}) })) });
   }
-  if (action === "info" && req.method === "GET") return json({ startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id) });
+  if (action === "info" && req.method === "GET") return json({ startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), ...pub(e) });
 
   // everything below is for the organizer (or their AI, where allowed)
   if (action === "claims" && req.method === "GET") {
@@ -394,15 +422,17 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   if (action === "participants" && req.method === "GET") {
     if (!can(a, e)) return deny(a);
     const r = await env.DB.prepare("SELECT pid, name FROM participant WHERE eid=? ORDER BY joined_ms, pid").bind(eid).all<any>();
-    return json({ participants: r.results ?? [], closed: !!e.closed, cap: e.cap });
+    return json({ participants: r.results ?? [], closed: !!e.closed, cap: e.cap, ...pub(e) });
   }
   if (action === "settle" && req.method === "POST") { // only the organizer's own console (which recomputed it from the public log), never the AI
     if (!can(a, e, true)) return deny(a);
     const b = await body(req, 65_536);
-    if (!b || !Array.isArray(b.results) || b.results.length > 7) return json({ error: "Bad result." }, 400);
-    for (const x of b.results) if (!PATTERNS.has(x?.pattern) || !Number.isInteger(x?.idx) || !Array.isArray(x?.pids)) return json({ error: "Bad result." }, 400);
+    if (!b || !Array.isArray(b.results) || b.results.length > 40) return json({ error: "Bad result." }, 400);
+    for (const x of b.results) if (!PATTERNS.has(x?.pattern) || !Number.isInteger(x?.idx) || !Array.isArray(x?.pids) || (x.ordinal !== undefined && (!Number.isInteger(x.ordinal) || x.ordinal < 1 || x.ordinal > 5))) return json({ error: "Bad result." }, 400);
+    const luckyCount = cfgOf(e).breaks.filter((x) => x.kind === "lucky").length;
+    for (const x of b.results) if (x.pattern === "lucky" && ((x.ordinal ?? 1) > luckyCount || x.pids.length > 10 || x.pids.some((p: unknown) => typeof p !== "string"))) return json({ error: "That lucky draw does not exist in this engagement." }, 400);
     if (!(await spend(env, now, b.results.length))) return BUSY();
-    for (const x of b.results) await env.DB.prepare("INSERT INTO settled(eid,pattern,idx,pids) VALUES(?,?,?,?) ON CONFLICT(eid,pattern) DO UPDATE SET idx=excluded.idx, pids=excluded.pids").bind(eid, x.pattern, x.idx, JSON.stringify(x.pids.slice(0, 500))).run();
+    for (const x of b.results) await env.DB.prepare("INSERT INTO settled(eid,pattern,ordinal,idx,pids) VALUES(?,?,?,?,?) ON CONFLICT(eid,pattern,ordinal) DO UPDATE SET idx=excluded.idx, pids=excluded.pids").bind(eid, x.pattern, x.ordinal ?? 1, x.idx, JSON.stringify(x.pids.slice(0, 500))).run();
     return json({ ok: true });
   }
   if (action === "erase" && req.method === "POST") { // right to erasure: everything about the people of this engagement, nothing else
@@ -454,6 +484,8 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (roundMs(e.start_round) <= now) return json({ error: "The engagement has already started, so it can no longer be changed." }, 409);
     const b = await body(req);
     if (!b) return json({ error: "Check the details." }, 400);
+    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks }, cfgOf(e));
+    if (!vc.ok) return json({ error: vc.error }, 400);
     const next = { start_round: b.startRound ?? e.start_round, call_seconds: b.callSeconds ?? e.call_seconds, cap: b.cap ?? e.cap, closed: b.closed === undefined ? e.closed : b.closed ? 1 : 0 };
     if (!Number.isInteger(next.start_round) || !Number.isInteger(next.call_seconds) || next.call_seconds % 3 || next.call_seconds < 6 || !Number.isInteger(next.cap) || next.cap < 1 || next.cap > 100000) return json({ error: "Check the details." }, 400);
     if (roundMs(next.start_round) <= now) return json({ error: "Pick a start time in the future." }, 400);
@@ -461,8 +493,8 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (!a.plat && next.cap > (e.pack ?? e.cap)) return json({ error: `Your pack allows up to ${e.pack ?? e.cap} participants. Buy a bigger pack to raise the limit.` }, 402);
     if (next.cap < (have?.c ?? 0)) return json({ error: "The limit cannot be lower than the people already on the list." }, 409);
     if (!(await spend(env, now))) return BUSY();
-    await env.DB.prepare("UPDATE engagement SET start_round=?, call_seconds=?, cap=?, closed=? WHERE id=?").bind(next.start_round, next.call_seconds, next.cap, next.closed, eid).run();
-    return json({ ok: true, startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed });
+    await env.DB.prepare("UPDATE engagement SET start_round=?, call_seconds=?, cap=?, closed=?, tickets=?, config=? WHERE id=?").bind(next.start_round, next.call_seconds, next.cap, next.closed, vc.cfg.tickets, JSON.stringify({ rewards: vc.cfg.rewards, breaks: vc.cfg.breaks }), eid).run();
+    return json({ ok: true, startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed, tickets: vc.cfg.tickets, rewards: vc.cfg.rewards, breaks: vc.cfg.breaks });
   }
   return json({ error: "Not found" }, 404);
 }

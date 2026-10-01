@@ -4,7 +4,7 @@ import { sha256 } from "@noble/hashes/sha256";
 import { handle, type Env } from "../../../apps/edge/src/worker";
 import { makeD1 } from "../../../apps/edge/test/d1-sqlite";
 import { PhoneRuntime, type PhoneDeps } from "../src/phone-runtime";
-import { ALL_PATTERNS, checkClaims, completionIndex, settleAll, ticketFor } from "../src/game";
+import { ALL_PATTERNS, checkClaims, completionIndex, luckyRound, luckyWinners, scheduleFull, settleAll, ticketFor } from "../src/game";
 import { deriveCalls, roundAt, roundTimeMs, type Fetcher, type Round } from "../src";
 import { nextMessage, publicKeyFromSecret, readPublished, resolveControl, scheduleWithControl, signControlWithSecret, cfgOf, type KV } from "../src/control";
 
@@ -332,5 +332,110 @@ describe("pause file read from a cached public copy", () => {
     expect(viaPublic).toBeGreaterThan(0);
     expect(viaApi).toBe(0);
     expect(a.rt.view().mode).toBe("live");
+  });
+});
+
+describe("brand breaks, reward lines and two tickets on real phones", () => {
+  const setCfg = async (o: { tickets?: number; rewards?: unknown; breaks?: unknown }) =>
+    env.DB.prepare("UPDATE engagement SET tickets=?, config=? WHERE id=?").bind(o.tickets ?? 1, JSON.stringify({ rewards: o.rewards, breaks: o.breaks }), EID).run();
+  const breaks = [{ after: 5, seconds: 30, kind: "speech", title: "CEO message" }, { after: 40, seconds: 45, kind: "youtube", title: "Our story", mediaUrl: "https://youtu.be/abc" }];
+  const refWith = (b: any[]) => deriveCalls(EID, (scheduleFull(null, START, 2, b, 90) as number[]).map((r) => rnd(r)));
+
+  test("a brand break pauses the numbers for exactly its length, shows its card, and everyone's logs stay identical", async () => {
+    await setCfg({ breaks });
+    const ps = Array.from({ length: 6 }, (_, i) => mkPhone(200 + i));
+    for (const p of ps) { await p.rt.boot(); await p.rt.join(p.phone); }
+    let sawBreak = false; const during = new Set<number>(); let title = "";
+    for (let i = 0; i < 260; i++) {
+      await step(ps);
+      const v = ps[0]!.rt.view();
+      if (v.brk) { sawBreak = true; title = v.brk.title; if (v.brk.title === "CEO message") during.add(v.log.length); expect(v.brk.secondsLeft).toBeGreaterThanOrEqual(0); }
+      if (v.brk) for (const p of ps) expect(p.rt.view().brk?.title).toBe(v.brk.title); // all phones show the same card at the same time (within a tick)
+    }
+    expect(sawBreak).toBe(true);
+    expect(during.size).toBe(1); // the log did not grow while the break was showing
+    expect([...during][0]).toBe(5);
+    const ref = refWith(breaks);
+    for (const p of ps) expect(p.rt.view().log).toEqual(ref);
+    expect(ps[0]!.rt.view().brk).toBeNull();
+    expect(title.length).toBeGreaterThan(0);
+  });
+  test("a phone that opens the page in the middle of a break shows the card and then the same numbers as everyone", async () => {
+    await setCfg({ breaks });
+    const early = mkPhone(210); await early.rt.boot(); await early.rt.join(early.phone);
+    for (let i = 0; i < 18; i++) await step([early]); // call 5 is at ~round 10; the break runs ~10 rounds after it
+    const late = mkPhone(211); await late.rt.boot(); await late.rt.join(late.phone);
+    let sawCard = late.rt.view().brk !== null;
+    await step([early, late]); sawCard = sawCard || late.rt.view().brk !== null;
+    for (let i = 0; i < 250; i++) { await step([early, late]); if (late.rt.view().brk) sawCard = true; }
+    expect(late.rt.view().log).toEqual(refWith(breaks));
+    expect(early.rt.view().log).toEqual(late.rt.view().log);
+    expect(sawCard).toBe(true);
+  });
+  test("a break together with a signed pause: both delay the calls and the logs still match the organizer's reference", async () => {
+    await registerKey(); await setCfg({ breaks });
+    const ps = [mkPhone(220), mkPhone(221)];
+    for (const p of ps) { await p.rt.boot(); await p.rt.join(p.phone); }
+    for (let i = 0; i < 30; i++) await step(ps);
+    expect((await publish({ action: "pause", pauseForRounds: 20 })).status).toBe(200);
+    for (let i = 0; i < 260; i++) await step(ps);
+    const f = (await readPublished(kvOf(), EID))!; const st = resolveControl(cfgOf(f), f.messages);
+    const ref = deriveCalls(EID, (scheduleFull(st, START, 2, breaks as any, 90) as number[]).map((r) => rnd(r)));
+    for (const p of ps) expect(p.rt.view().log).toEqual(ref);
+  });
+  test("only the houses with a reward are claimed and shown; the rest are not in play", async () => {
+    await setCfg({ rewards: [{ pattern: "top", scope: "ticket", ordinal: 1, text: "Voucher" }, { pattern: "full", scope: "ticket", ordinal: 1, text: "Hamper" }] });
+    const a = mkPhone(230); await a.rt.boot(); await a.rt.join(a.phone);
+    for (let i = 0; i < 200; i++) await step([a]);
+    const v = a.rt.view();
+    expect(new Set(v.claimed)).toEqual(new Set(["top", "full"]));
+    expect(Object.keys(v.myIdx).sort()).toEqual(["full", "top"]);
+    const n = (await (await D.headCall("GET", `/api/z/${EID}/claims`, undefined, { "x-organizer": SECRET })).json() as any).claims.filter((c: any) => c.pid === a.rt.pid).length;
+    expect(n).toBe(2);
+  });
+  test("two tickets: the phone holds two different tickets, claims the two-ticket house, and the organizer's settlement agrees with the phone's own numbers", async () => {
+    await setCfg({ tickets: 2, rewards: [{ pattern: "full", scope: "ticket", ordinal: 1, text: "Hamper" }, { pattern: "full", scope: "ticket", ordinal: 2, text: "Mug" }, { pattern: "full", scope: "two_ticket", ordinal: 1, text: "Grand" }] });
+    const ps = Array.from({ length: 12 }, (_, i) => mkPhone(240 + i));
+    for (const p of ps) { await p.rt.boot(); await p.rt.join(p.phone); }
+    for (let i = 0; i < 220; i++) await step(ps);
+    const v = ps[0]!.rt.view();
+    expect(v.tickets).toHaveLength(2);
+    expect(JSON.stringify(v.tickets[0])).not.toBe(JSON.stringify(v.tickets[1]));
+    expect(new Set(v.claimed)).toEqual(new Set(["full", "full2"]));
+    const ref = refWith([]);
+    const cfg = { tickets: 2 as const, rewards: [{ pattern: "full" as const, scope: "ticket" as const, ordinal: 1, text: "" }, { pattern: "full" as const, scope: "ticket" as const, ordinal: 2, text: "" }, { pattern: "full" as const, scope: "two_ticket" as const, ordinal: 1, text: "" }], breaks: [] };
+    const pids = (await (await D.headCall("GET", `/api/z/${EID}/participants`, undefined, { "x-organizer": SECRET })).json() as any).participants.map((x: any) => x.pid);
+    const claims = (await (await D.headCall("GET", `/api/z/${EID}/claims`, undefined, { "x-organizer": SECRET })).json() as any).claims;
+    expect(checkClaims(EID, claims, ref, cfg).bad).toEqual([]);
+    const settled = settleAll(EID, pids, ref, cfg);
+    expect(settled.map((s) => `${s.pattern}#${s.ordinal}`).sort()).toEqual(["full#1", "full#2", "full2#1"].filter((k) => settled.some((s) => `${s.pattern}#${s.ordinal}` === k)).sort());
+    expect((await D.headCall("POST", `/api/z/${EID}/settle`, { results: settled.map((s) => ({ pattern: s.pattern, ordinal: s.ordinal, idx: s.idx, pids: s.pids })) }, { "x-organizer": SECRET })).status).toBe(200);
+    // each phone can tell whether it received a published reward line by comparing its own completion call with the published one
+    await step(ps, 16000);
+    const pub = ps[0]!.rt.view().results;
+    expect(pub.length).toBe(settled.length);
+    for (const r of pub) { const mine = settled.find((s) => s.pattern === r.pattern && s.ordinal === r.ordinal)!; expect(r.idx).toBe(mine.idx); expect(r.count).toBe(mine.pids.length); }
+  });
+});
+
+describe("lucky draw on phones", () => {
+  test("every phone sees the draw; after the organizer publishes, exactly the winners are told they won", async () => {
+    await env.DB.prepare("UPDATE engagement SET config=? WHERE id=?").bind(JSON.stringify({ breaks: [{ after: 10, seconds: 30, kind: "lucky", title: "Lucky draw", winners: 3 }] }), EID).run();
+    const ps = Array.from({ length: 8 }, (_, i) => mkPhone(300 + i));
+    for (const p of ps) { await p.rt.boot(); await p.rt.join(p.phone); }
+    let sawCard = false;
+    for (let i = 0; i < 60; i++) { await step(ps); const b = ps[0]!.rt.view().brk; if (b) { sawCard = true; expect(b.kind).toBe("lucky"); expect(b.winners).toBe(3); } }
+    expect(sawCard).toBe(true);
+    for (const p of ps) expect(p.rt.view().lucky).toEqual([{ ordinal: 1, title: "Lucky draw", winners: 3, published: false, won: false }]);
+    // the organizer's console draws from the participant list with the public randomness of the round that ends the break
+    const brk = { after: 10, seconds: 30, kind: "lucky" as const, title: "Lucky draw", winners: 3 as const };
+    const round = luckyRound(null, START, 2, [brk], brk)!;
+    const pids = (await (await D.headCall("GET", `/api/z/${EID}/participants`, undefined, { "x-organizer": SECRET })).json() as any).participants.map((x: any) => x.pid);
+    const winners = luckyWinners(EID, 10, rnd(round), pids, 3);
+    expect(winners).toHaveLength(3);
+    expect((await D.headCall("POST", `/api/z/${EID}/settle`, { results: [{ pattern: "lucky", ordinal: 1, idx: 10, pids: winners }] }, { "x-organizer": SECRET })).status).toBe(200);
+    await step(ps, 16000);
+    for (const p of ps) { const v = p.rt.view(); expect(v.lucky[0]!.published).toBe(true); expect(v.lucky[0]!.won).toBe(winners.includes(p.rt.pid!)); }
+    expect(ps.filter((p) => p.rt.view().lucky[0]!.won)).toHaveLength(3);
   });
 });

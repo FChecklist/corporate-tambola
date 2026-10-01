@@ -49,7 +49,7 @@ describe("joining", () => {
     expect(r.startRound).toBe(1000);
     expect(r.callSeconds).toBe(6);
     expect(r.pid).toHaveLength(16);
-    expect(Object.keys(r).sort()).toEqual(["callSeconds", "pid", "startRound", "trackClaims"]);
+    expect(Object.keys(r).sort()).toEqual(["breaks", "callSeconds", "pid", "rewards", "startRound", "tickets", "trackClaims"]);
   });
   test("the same number joining twice, even typed differently, is one participant and one write", async () => {
     const a = await (await call("POST", "/api/z/ENG1/join", { phone: "+91 98765-43210" })).json() as any;
@@ -135,7 +135,7 @@ describe("settling and results", () => {
     await call("POST", "/api/z/ENG1/settle", { results: [{ pattern: "full", idx: 70, pids: ["secretpid1", "secretpid2"] }] }, org);
     const txt = await (await call("GET", "/api/z/ENG1/results")).text();
     expect(txt.includes("secretpid")).toBe(false);
-    expect(JSON.parse(txt).results[0]).toEqual({ pattern: "full", idx: 70, count: 2 });
+    expect(JSON.parse(txt).results[0]).toEqual({ pattern: "full", ordinal: 1, idx: 70, count: 2 });
   });
   test("a malformed result changes nothing", async () => {
     expect((await call("POST", "/api/z/ENG1/settle", { results: [{ pattern: "top", idx: 1, pids: "no" }] }, org)).status).toBe(400);
@@ -202,7 +202,7 @@ describe("roster, history, erase and 365-day retention", () => {
       expect((await call(m, p, m === "POST" ? {} : undefined)).status).toBe(403);
   });
   test("info is public and holds only what a phone needs", async () => {
-    expect(await (await call("GET", "/api/z/ENG1/info")).json()).toEqual({ startRound: 1000, callSeconds: 6, trackClaims: true, controlUrl: null });
+    expect(await (await call("GET", "/api/z/ENG1/info")).json()).toMatchObject({ startRound: 1000, callSeconds: 6, trackClaims: true, controlUrl: null, tickets: 1, breaks: [] });
   });
   test("the organizer sees ids and names, never phone numbers or hashes", async () => {
     await join(1);
@@ -542,5 +542,125 @@ describe("pause file served from a cached static copy", () => {
     expect(store.has("c/OLD99.json")).toBe(true);
     await call("POST", "/api/purge", {}, plat);
     expect(store.has("c/OLD99.json")).toBe(false);
+  });
+});
+
+describe("tickets, reward lines and brand breaks", () => {
+  const FUT = Math.floor((T / 1000 - 1692803367) / 3) + 1 + 4000;
+  const mk = (extra: Record<string, unknown> = {}, id = "CFG01") => call("POST", "/api/z", { id, startRound: FUT, callSeconds: 9, cap: 50, ...extra }, org);
+  const info = async (id = "CFG01") => (await (await call("GET", `/api/z/${id}/info`)).json()) as any;
+  test("an engagement with nothing set shows phones the plain defaults", async () => {
+    await mk();
+    const i = await info();
+    expect(i.tickets).toBe(1);
+    expect(i.rewards).toHaveLength(7);
+    expect(i.breaks).toEqual([]);
+  });
+  test("settings given at creation are kept and shown to every phone; bad ones refuse the whole creation", async () => {
+    const good = { tickets: 2, rewards: [{ pattern: "full", ordinal: 1, text: "Hamper" }, { pattern: "full", scope: "two_ticket", text: "Grand hamper" }], breaks: [{ after: 40, seconds: 45, kind: "speech", title: "CEO message" }] };
+    expect((await mk(good)).status).toBe(200);
+    const i = await info();
+    expect(i).toMatchObject({ tickets: 2, breaks: [{ after: 40, seconds: 45, kind: "speech", title: "CEO message" }] });
+    expect(i.rewards.map((r: any) => r.text)).toEqual(["Hamper", "Grand hamper"]);
+    expect((await mk({ breaks: [{ after: 5, seconds: 20, kind: "speech", title: "x" }] }, "CFG02")).status).toBe(400);
+    expect((await mk({ tickets: 5 }, "CFG03")).status).toBe(400);
+    expect(raw.query("SELECT COUNT(*) c FROM engagement WHERE id IN ('CFG02','CFG03')").get()).toEqual({ c: 0 });
+  });
+  test("joining returns the settings too, so a phone never needs a second call", async () => {
+    await mk({ tickets: 2, rewards: [{ pattern: "full", text: "Hamper" }] });
+    const r = await (await join(1, "CFG01")).json() as any;
+    expect(r.tickets).toBe(2);
+    expect(r.rewards[0].text).toBe("Hamper");
+  });
+  test("settings can be changed before the start and never after, and a bad change changes nothing", async () => {
+    await mk();
+    expect((await call("PATCH", "/api/z/CFG01/settings", { tickets: 2, rewards: [{ pattern: "top", text: "Voucher" }], breaks: [{ after: 20, seconds: 30, kind: "speech", title: "Welcome" }] }, org)).status).toBe(200);
+    expect(await info()).toMatchObject({ tickets: 2, rewards: [{ pattern: "top", text: "Voucher" }], breaks: [{ after: 20 }] });
+    expect((await call("PATCH", "/api/z/CFG01/settings", { breaks: [{ after: 20, seconds: 31, kind: "speech", title: "Welcome" }] }, org)).status).toBe(400);
+    expect((await info()).breaks).toHaveLength(1);
+    await call("POST", "/api/z", { id: "STARTED1", startRound: 5, callSeconds: 6, cap: 5 }, org);
+    expect((await call("PATCH", "/api/z/STARTED1/settings", { tickets: 2 }, org)).status).toBe(409);
+  });
+  test("results carry which reward line each outcome is for, and a line can be re-published", async () => {
+    await mk({ tickets: 1, rewards: [{ pattern: "full", ordinal: 1 }, { pattern: "full", ordinal: 2 }] });
+    const body = (idx: number) => ({ results: [{ pattern: "full", ordinal: 1, idx, pids: ["a"] }, { pattern: "full", ordinal: 2, idx: idx + 3, pids: ["b", "c"] }] });
+    expect((await call("POST", "/api/z/CFG01/settle", body(50), org)).status).toBe(200);
+    expect((await call("POST", "/api/z/CFG01/settle", body(51), org)).status).toBe(200);
+    const r = await (await call("GET", "/api/z/CFG01/results")).json() as any;
+    expect(r.results).toEqual([{ pattern: "full", ordinal: 1, idx: 51, count: 1 }, { pattern: "full", ordinal: 2, idx: 54, count: 2 }]);
+    expect((await call("POST", "/api/z/CFG01/settle", { results: [{ pattern: "full", ordinal: 6, idx: 1, pids: [] }] }, org)).status).toBe(400);
+    expect((await call("POST", "/api/z/CFG01/settle", { results: [{ pattern: "full2", ordinal: 1, idx: 1, pids: [] }] }, org)).status).toBe(200);
+  });
+});
+
+describe("lucky draw results", () => {
+  const FUT = Math.floor((T / 1000 - 1692803367) / 3) + 1 + 4000;
+  beforeEach(async () => {
+    await call("POST", "/api/z", { id: "LUCK1", startRound: FUT, callSeconds: 9, cap: 50, breaks: [{ after: 20, seconds: 30, kind: "lucky", title: "Lucky draw", winners: 3 }] }, org);
+  });
+  const pub = async () => (await (await call("GET", "/api/z/LUCK1/results")).json()) as any;
+  test("only the organizer's own console publishes winners, and they are shown by opaque ids so each phone can tell if it won", async () => {
+    expect((await call("POST", "/api/z/LUCK1/settle", { results: [{ pattern: "lucky", ordinal: 1, idx: 20, pids: ["aa11", "bb22", "cc33"] }] })).status).toBe(403);
+    expect((await call("POST", "/api/z/LUCK1/settle", { results: [{ pattern: "lucky", ordinal: 1, idx: 20, pids: ["aa11", "bb22", "cc33"] }] }, org)).status).toBe(200);
+    const r = await pub();
+    expect(r.results[0]).toEqual({ pattern: "lucky", ordinal: 1, idx: 20, count: 3, winners: ["aa11", "bb22", "cc33"] });
+  });
+  test("house results still carry counts only", async () => {
+    await call("POST", "/api/z/LUCK1/settle", { results: [{ pattern: "full", ordinal: 1, idx: 70, pids: ["secretpid"] }] }, org);
+    expect(JSON.stringify(await pub()).includes("secretpid")).toBe(false);
+  });
+  test("a draw that is not in the engagement's settings, or with too many winners, is refused", async () => {
+    expect((await call("POST", "/api/z/LUCK1/settle", { results: [{ pattern: "lucky", ordinal: 2, idx: 20, pids: ["a"] }] }, org)).status).toBe(400);
+    expect((await call("POST", "/api/z/LUCK1/settle", { results: [{ pattern: "lucky", ordinal: 1, idx: 20, pids: Array.from({ length: 11 }, (_, i) => "p" + i) }] }, org)).status).toBe(400);
+    expect((await call("POST", "/api/z/LUCK1/settle", { results: [{ pattern: "lucky", ordinal: 1, idx: 20, pids: [1, 2] }] }, org)).status).toBe(400);
+    expect((await pub()).results).toEqual([]);
+  });
+  test("re-publishing a draw replaces it rather than adding a second set of winners", async () => {
+    await call("POST", "/api/z/LUCK1/settle", { results: [{ pattern: "lucky", ordinal: 1, idx: 20, pids: ["a"] }] }, org);
+    await call("POST", "/api/z/LUCK1/settle", { results: [{ pattern: "lucky", ordinal: 1, idx: 20, pids: ["b"] }] }, org);
+    expect((await pub()).results.map((x: any) => x.winners)).toEqual([["b"]]);
+  });
+  test("an engagement with no lucky draw refuses lucky results", async () => {
+    await call("POST", "/api/z", { id: "PLAIN1", startRound: FUT, callSeconds: 9, cap: 50 }, org);
+    expect((await call("POST", "/api/z/PLAIN1/settle", { results: [{ pattern: "lucky", ordinal: 1, idx: 20, pids: ["a"] }] }, org)).status).toBe(400);
+  });
+});
+
+describe("an organizer's own sign-in keys", () => {
+  const plat = { "x-organizer": SECRET };
+  let a1 = "", other = "";
+  beforeEach(async () => { a1 = ((await (await call("POST", "/api/org", {}, plat)).json()) as any).organizerKey; other = ((await (await call("POST", "/api/org", {}, plat)).json()) as any).organizerKey; });
+  const list = async (k: string) => (await (await call("GET", "/api/org/keys", undefined, { "x-organizer": k })).json()) as any;
+  test("lists only their own keys, marks the one in use, and never shows a key", async () => {
+    const l = await list(a1);
+    expect(l.keys).toHaveLength(1);
+    expect(l.keys[0]).toMatchObject({ kind: "master", revoked: false, thisOne: true });
+    expect(JSON.stringify(l).includes(a1)).toBe(false);
+    expect((await list(other)).keys).toHaveLength(1);
+    expect((await call("GET", "/api/org/keys")).status).toBe(403);
+  });
+  test("an old key can be retired from another signed-in key, and then stops working at once", async () => {
+    const aiK = ((await (await call("POST", "/api/org/ai", {}, { "x-organizer": a1 })).json()) as any).aiKey;
+    const l = await list(a1);
+    const ai = l.keys.find((k: any) => k.kind === "ai");
+    expect((await call("POST", "/api/org/keys/revoke", { id: ai.id }, { "x-organizer": a1 })).status).toBe(200);
+    expect((await call("GET", "/api/history", undefined, { "x-organizer": aiK })).status).toBe(403);
+    expect((await list(a1)).keys.find((k: any) => k.id === ai.id).revoked).toBe(true);
+  });
+  test("you cannot retire the key you are using, and the AI key cannot manage keys", async () => {
+    const mine = (await list(a1)).keys[0];
+    const r = await call("POST", "/api/org/keys/revoke", { id: mine.id }, { "x-organizer": a1 });
+    expect(r.status).toBe(409);
+    expect((await call("GET", "/api/history", undefined, { "x-organizer": a1 })).status).toBe(200);
+    const aiK = ((await (await call("POST", "/api/org/ai", {}, { "x-organizer": a1 })).json()) as any).aiKey;
+    expect((await call("GET", "/api/org/keys", undefined, { "x-organizer": aiK })).status).toBe(403);
+    expect((await call("POST", "/api/org/keys/revoke", { id: mine.id }, { "x-organizer": aiK })).status).toBe(403);
+  });
+  test("one organizer cannot retire another's key, and a bad id is refused", async () => {
+    const theirs = (await list(other)).keys[0];
+    const r = await (await call("POST", "/api/org/keys/revoke", { id: theirs.id }, { "x-organizer": a1 })).json() as any;
+    expect(r.revoked).toBe(0);
+    expect((await call("GET", "/api/history", undefined, { "x-organizer": other })).status).toBe(200);
+    for (const id of ["zz", "", 5, "../../../etc"]) expect((await call("POST", "/api/org/keys/revoke", { id }, { "x-organizer": a1 })).status).toBe(400);
   });
 });

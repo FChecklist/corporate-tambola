@@ -9,7 +9,7 @@
   const ss = { get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch {} } };
   let secret = ss.get("ctz-org") || "";
   let eid = q.get("e") || "";
-  const NAMES = { early5: "Early Five", top: "Top line", mid: "Middle line", bot: "Bottom line", corners: "Four corners", star: "Star", full: "Full house" };
+  const NAMES = { full2: "Full Two-Ticket House", early5: "Early Five", top: "Top line", mid: "Middle line", bot: "Bottom line", corners: "Four corners", star: "Star", full: "Full house" };
   const call = async (method, path, body) => {
     const r = await fetch(BASE + path, { method, headers: { "content-type": "application/json", "x-organizer": secret }, body: body === undefined ? undefined : JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
@@ -40,8 +40,80 @@
       <div class="zcard"><h2>Your free AI assistant</h2>
         <p class="zsmall" style="margin-top:0">Included with every engagement. Give this message to ChatGPT, Claude or Gemini and it does the work for you: sets up the engagement, loads your list, schedules it and watches it. It cannot publish results, erase data or pause by itself, and it cannot change the rules.</p>
         ${S.aiMsg ? `<textarea class="zlink" id="aimsg" rows="7" readonly style="width:100%">${esc(S.aiMsg)}</textarea><button class="zbtn s alt" id="aicopy">Copy message</button><button class="zbtn s alt" id="airevoke">Stop this link</button>` : `<button class="zbtn s" id="aimake">Create my AI work link</button>`}</div>
+      ${(S.keys || []).length ? `<div class="zcard"><h2>Your sign-in keys</h2>${S.keys.map((k) => `<div class="zrow"><span>${k.kind === "ai" ? "AI assistant link" : "Organizer key"} · made ${new Date(k.created_ms).toLocaleDateString()}${k.thisOne ? " · in use now" : ""}</span>${k.revoked ? `<i>retired</i>` : k.thisOne ? `<i>active</i>` : `<button class="zbtn s alt" data-retire="${k.id}">Retire</button>`}</div>`).join("")}<p class="zsmall">If you ever lose a key or think someone has it, sign in with another one and retire it here.</p></div>` : ""}
       ${(S.sugs || []).length ? `<div class="zcard"><h2>Ideas to improve Corporate Tambola</h2><p class="zsmall" style="margin-top:0">Suggested by organizers' AI assistants. We review them all.</p>${S.sugs.map((x) => `<div class="zrow"><span>${esc(x.title)}${x.yours ? " · yours" : ""}</span><i>${x.votes} · ${esc(x.status.replace("_", " "))}</i></div>`).join("")}</div>` : ""}
       ${S.note ? `<div class="zbanner info">${esc(S.note)}</div>` : ""}`;
+  }
+  const HOUSE_WORDS = [[/^(full two[- ]ticket( house)?|two[- ]ticket|full2)$/i, "full2"], [/^(early ?five|early ?5|early5)$/i, "early5"], [/^(top( line)?)$/i, "top"], [/^(middle( line)?|mid)$/i, "mid"], [/^(bottom( line)?|bot)$/i, "bot"], [/^(four )?corners$/i, "corners"], [/^star$/i, "star"], [/^(full( house)?)$/i, "full"]];
+  const ORD = (k) => ["", "1st", "2nd", "3rd"][k] || k + "th";
+  function lineLabel(s) {
+    const lines = (S.cfg && S.cfg.rewards || []).filter((l) => (l.scope === "two_ticket" ? "full2" : l.pattern) === s.pattern);
+    const line = lines.find((l) => l.ordinal === s.ordinal);
+    return (lines.length > 1 ? ORD(s.ordinal) + " " : "") + NAMES[s.pattern] + (line && line.text ? " (" + line.text + ")" : "");
+  }
+  function rewardsToText(c) {
+    return c.rewards.map((l) => (l.scope === "two_ticket" ? "full2" : l.pattern) + ": " + l.text).join("\n");
+  }
+  function textToRewards(txt, tickets) {
+    const seen = {}; const out = [];
+    for (const raw of txt.split(/\r?\n/)) {
+      const line = raw.trim(); if (!line) continue;
+      const m = line.match(/^([A-Za-z0-9 -]+?)\s*[:\-]\s*(.*)$/) || [null, line, ""];
+      const hit = HOUSE_WORDS.find(([re]) => re.test(m[1].trim()));
+      if (!hit) throw new Error("I did not recognise \"" + m[1].trim() + "\". Use early5, top, mid, bot, corners, star, full or full2.");
+      const key = hit[1]; seen[key] = (seen[key] || 0) + 1;
+      out.push({ pattern: key === "full2" ? "full" : key, scope: key === "full2" ? "two_ticket" : "ticket", ordinal: seen[key], text: m[2].trim() });
+    }
+    return out;
+  }
+  function luckyAdminCard() {
+    const L = (S.cfg && S.cfg.breaks || []).filter((b) => b.kind === "lucky");
+    if (!L.length) return "";
+    return `<div class="zcard"><h2>Lucky draws</h2>${L.map((b, i) => { const d = S.lucky && S.lucky[i]; return `<div class="zrow"><span>${esc(b.title)} · ${b.winners || 3} ${(b.winners || 3) === 1 ? "person" : "people"}</span>${d ? (d.published ? `<em>Published</em>` : `<button class="zbtn s" data-lucky="${i}">Publish ${d.winners.length} winner${d.winners.length === 1 ? "" : "s"}</button>`) : `<i>after the break ends</i>`}</div>${d && !d.published ? `<div class="zsmall" style="margin:0 0 6px">${esc(d.winners.map((p) => (S.people.find((x) => x.pid === p) || {}).name || "Participant").join(", "))}</div>` : ""}`; }).join("")}
+      <p class="zsmall">Winners are picked from everyone on your list using the public randomness of the round that ends the break, so nobody can influence the draw. Check the names, then publish.</p></div>`;
+  }
+  async function computeLucky(now) {
+    const L = (S.cfg.breaks || []).filter((b) => b.kind === "lucky"); const out = [];
+    const st = S.st || null; const stride = S.info.callSeconds / 3;
+    for (let i = 0; i < L.length; i++) {
+      const round = ZG.luckyRound(st, S.info.startRound, stride, S.cfg.breaks, L[i]);
+      if (round === null || now === null || round > now) { out.push(null); continue; }
+      const x = S.luckyRand && S.luckyRand[round] ? S.luckyRand[round] : await ZG.fetchRound(round);
+      if (!x) { out.push(null); continue; }
+      (S.luckyRand = S.luckyRand || {})[round] = x;
+      const winners = ZG.luckyWinners(eid, L[i].after, x.randomness, S.people.map((p) => p.pid), L[i].winners || 3);
+      out.push({ winners, published: (S.published || []).some((r) => r.pattern === "lucky" && r.ordinal === i + 1) });
+    }
+    return out;
+  }
+  function settingsCard() {
+    const c = S.cfg || ZG.defaultCfg();
+    const rows = [0, 1, 2].map((i) => { const b = c.breaks[i] || {}; return `<div class="zgrid" style="margin-bottom:8px"><div><label>After how many numbers</label><input type="number" min="1" max="89" data-bk="after" data-i="${i}" value="${b.after ?? ""}"></div><div><label>Seconds (15 to 600)</label><input type="number" min="15" max="600" step="3" data-bk="seconds" data-i="${i}" value="${b.seconds ?? ""}"></div>
+      <div><label>Kind</label><select data-bk="kind" data-i="${i}">${["speech", "slides", "youtube", "file", "lucky"].map((k) => `<option value="${k}" ${b.kind === k ? "selected" : ""}>${{ speech: "Speech", slides: "Slides", youtube: "YouTube link", file: "Video file link", lucky: "Lucky draw" }[k]}</option>`).join("")}</select></div>
+      <div><label>Title</label><input data-bk="title" data-i="${i}" maxlength="80" value="${esc(b.title || "")}"></div>
+      <div><label>Lucky draw: how many people</label><select data-bk="winners" data-i="${i}">${[1, 3, 5, 10].map((n) => `<option value="${n}" ${(b.winners || 3) === n ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+      <div style="grid-column:1/-1"><label>Link (https://, for YouTube or a video file)</label><input data-bk="mediaUrl" data-i="${i}" value="${esc(b.mediaUrl || "")}"></div></div>`; }).join("");
+    return `<div class="zcard zform"><h2>Tickets, rewards and brand breaks</h2>
+      <p class="zsmall" style="margin-top:0">You can change these until the first number is called.</p>
+      <label for="tix">Tickets for each participant</label><select id="tix"><option value="1" ${c.tickets === 1 ? "selected" : ""}>1 ticket</option><option value="2" ${c.tickets === 2 ? "selected" : ""}>2 tickets</option></select>
+      <label for="rw">What each house wins: one per line, like <code>full: Gift hamper</code>. Write a house twice for a 2nd reward. Houses: early5, top, mid, bot, corners, star, full, and full2 (Full Two-Ticket House, needs 2 tickets). Only houses you list are in play.</label>
+      <textarea id="rw" rows="6" style="width:100%;box-sizing:border-box;font-size:15px;border:1px solid var(--line);border-radius:10px;padding:8px">${esc(rewardsToText(c))}</textarea>
+      <label style="margin-top:14px">Brand breaks (up to 3): the numbers pause while your message or video is shown</label>${rows}
+      <button class="zbtn s" id="savecfg">Save</button></div>`;
+  }
+  function readSettings() {
+    const tickets = Number(document.getElementById("tix").value);
+    const rewards = textToRewards(document.getElementById("rw").value, tickets);
+    const breaks = [];
+    for (let i = 0; i < 3; i++) {
+      const g = (k) => (document.querySelector(`[data-bk="${k}"][data-i="${i}"]`) || {}).value || "";
+      if (!g("after") && !g("seconds") && !g("title") && !g("mediaUrl")) continue;
+      const b = { after: Number(g("after")), seconds: Number(g("seconds")), kind: g("kind") || "speech", title: g("title").trim() };
+      if (g("mediaUrl").trim()) b.mediaUrl = g("mediaUrl").trim();
+      if (b.kind === "lucky") b.winners = Number(g("winners") || 3);
+      breaks.push(b);
+    }
+    return { tickets, rewards, breaks };
   }
   function engView() {
     const link = location.origin + (BASE ? "" : "") + "/z.html?e=" + encodeURIComponent(eid) + (BASE ? "&api=" + encodeURIComponent(BASE) : "");
@@ -57,11 +129,13 @@
         <label for="roster">Paste one person per line: name, mobile number</label><textarea id="roster" rows="4" style="width:100%;box-sizing:border-box;font-size:15px;border:1px solid var(--line);border-radius:10px;padding:8px"></textarea>
         <button class="zbtn s" id="addroster">Add to list</button>
         <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="closed" style="width:auto;min-height:0" ${S.closed ? "checked" : ""}> Invite only (people not on the list cannot join)</label></div>
+      ${luckyAdminCard()}
+      ${S.started ? "" : settingsCard()}
       <div class="zcard"><h2>Controls</h2>
         <button class="zbtn s" data-ctl="pause" ${paused ? "disabled" : ""}>Pause</button><button class="zbtn s alt" data-ctl="resume" ${paused ? "" : "disabled"}>Resume</button><button class="zbtn s bad" data-ctl="stop">End engagement</button>
         <p class="zsmall">A pause reaches every phone about 30 to 40 seconds after you press it, because phones check in every few seconds. ${paused ? "<b>Paused now.</b>" : ""} ${S.ctlNote ? esc(S.ctlNote) : ""}</p></div>
       <div class="zcard"><h2>Rewards · from the public number log</h2>
-        ${S.settledPreview.length ? S.settledPreview.map((s) => `<div class="zrow"><span>${NAMES[s.pattern]} · call ${s.idx + 1}</span><em>${s.pids.length} participant${s.pids.length === 1 ? "" : "s"}${s.names ? " · " + esc(s.names) : ""}</em></div>`).join("") : "<p class=zsmall>No pattern is complete yet.</p>"}
+        ${S.settledPreview.length ? S.settledPreview.map((s) => `<div class="zrow"><span>${esc(lineLabel(s))} · call ${s.idx + 1}</span><em>${s.pids.length} participant${s.pids.length === 1 ? "" : "s"}${s.names ? " · " + esc(s.names) : ""}</em></div>`).join("") : "<p class=zsmall>No pattern is complete yet.</p>"}
         <p class="zsmall">Claims received: ${S.claims.length}. ${bad ? `<b>${bad} not valid</b> (they do not match the public log and are ignored).` : "All claims so far match the public log."}</p>
         <button class="zbtn s" id="settle" ${S.settledPreview.length ? "" : "disabled"}>Publish results to participants</button>
         <button class="zbtn s alt" id="csv" ${S.settledPreview.length ? "" : "disabled"}>Download report</button></div>
@@ -70,29 +144,32 @@
   }
   function draw(v) { $app.innerHTML = v; bind(); }
 
-  async function refreshHome() { try { S.sugs = (await call("GET", "/api/z/suggestions")).suggestions.slice(0, 6); } catch { S.sugs = []; } try { S.history = await call("GET", "/api/history"); } catch (e) { if (e.status === 403) { secret = ""; return draw(loginView("That organizer key was not accepted.")); } } draw(homeView()); }
+  async function refreshHome() { try { S.keys = (await call("GET", "/api/org/keys")).keys; } catch { S.keys = []; } try { S.sugs = (await call("GET", "/api/z/suggestions")).suggestions.slice(0, 6); } catch { S.sugs = []; } try { S.history = await call("GET", "/api/history"); } catch (e) { if (e.status === 403) { secret = ""; return draw(loginView("That organizer key was not accepted.")); } } draw(homeView()); }
 
   async function refreshEng() {
     try {
       S.info = await fetch(BASE + `/api/z/${eid}/info`).then((r) => r.json());
-      const pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed;
+      const pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed; S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks };
       S.claims = (await call("GET", `/api/z/${eid}/claims`)).claims;
       try { S.reqs = (await call("GET", `/api/z/${eid}/control/request`)).requests; } catch { S.reqs = []; }
       const cf = await fetch(BASE + `/api/z/${eid}/control`).then((r) => (r.ok ? r.json() : null));
       S.control = null; S.cf = cf;
       const now = await latestRound();
       let sched;
-      if (cf) { const st = ZG.resolveControl(ZG.cfgOf(cf), cf.messages); S.st = st; S.control = { pausedNow: now !== null && st.intervals.some((i) => now >= i.start && now < i.end) }; sched = ZG.scheduleWithControl(st, S.info.startRound, S.info.callSeconds / 3, 90); }
-      else sched = ZG.scheduleFor(S.info.startRound, S.info.callSeconds);
+      if (cf) { const st = ZG.resolveControl(ZG.cfgOf(cf), cf.messages); S.st = st; S.control = { pausedNow: now !== null && st.intervals.some((i) => now >= i.start && now < i.end) }; sched = ZG.scheduleFull(st, S.info.startRound, S.info.callSeconds / 3, S.cfg.breaks, 90); }
+      else sched = ZG.scheduleFull(null, S.info.startRound, S.info.callSeconds / 3, S.cfg.breaks, 90);
+      S.started = now !== null && now >= S.info.startRound;
+      try { S.published = (await fetch(BASE + `/api/z/${eid}/results`).then((r) => r.json())).results || []; } catch { S.published = S.published || []; }
       if (!S.store) S.store = new ZG.RoundStore({});
       const upto = sched.filter((r) => r !== null && now !== null && r <= now);
       await Promise.all(upto.filter((r) => !S.store.rounds.has(r)).slice(0, 12).map((r, i) => (now - r <= 2 ? S.store.fetchLive(r, i) : S.store.fetchBackfill(r, i))));
       S.store.verifySome(3);
       S.log = ZG.logFrom(eid, sched.filter((r) => r !== null), S.store, upto.length);
       const pids = S.people.map((p) => p.pid);
-      S.checked = ZG.checkClaims(eid, S.claims.map((c) => ({ pid: c.pid, pattern: c.pattern, idx: c.idx })), S.log);
+      S.checked = ZG.checkClaims(eid, S.claims.map((c) => ({ pid: c.pid, pattern: c.pattern, idx: c.idx })), S.log, S.cfg);
       const nm = new Map(S.people.map((p) => [p.pid, p.name]));
-      S.settledPreview = ZG.settleAll(eid, pids, S.log).map((s) => ({ ...s, names: s.pids.length <= 3 ? s.pids.map((p) => nm.get(p) || "Participant").join(", ") : "" }));
+      S.settledPreview = ZG.settleAll(eid, pids, S.log, S.cfg).map((s) => ({ ...s, names: s.pids.length <= 3 ? s.pids.map((p) => nm.get(p) || "Participant").join(", ") : "" }));
+      S.lucky = await computeLucky(now);
     } catch (e) { S.note = e.status === 404 ? "That engagement was not found." : "Could not refresh. Retrying…"; }
     if (eid) draw(engView());
   }
@@ -133,13 +210,14 @@
       try { const r = await TBControl.publish(eid, { token: secret, base: BASE, prefix: "/api/z" }, action, action === "pause" ? { pauseForRounds: 600 } : {}); S.ctlNote = r.status === 200 ? action[0].toUpperCase() + action.slice(1) + " sent. Phones follow within about 40 seconds." : (r.data && r.data.error) || "Not accepted."; } catch (e) { S.ctlNote = e.message; }
       refreshEng();
     }));
-    if ($("settle")) $("settle").onclick = async () => { try { await call("POST", `/api/z/${eid}/settle`, { results: S.settledPreview.map(({ pattern, idx, pids }) => ({ pattern, idx, pids })) }); S.note = "Results published to participants."; } catch (e) { S.note = e.message; } refreshEng(); };
+    if ($("settle")) $("settle").onclick = async () => { try { await call("POST", `/api/z/${eid}/settle`, { results: S.settledPreview.map(({ pattern, ordinal, idx, pids }) => ({ pattern, ordinal, idx, pids })) }); S.note = "Results published to participants."; } catch (e) { S.note = e.message; } refreshEng(); };
     if ($("csv")) $("csv").onclick = () => {
       const nm = new Map(S.people.map((p) => [p.pid, p.name || ""]));
       const rows = [["Reward", "Call number", "Participant"]];
-      for (const s of S.settledPreview) for (const p of s.pids) rows.push([NAMES[s.pattern], s.idx + 1, nm.get(p) || p]);
+      for (const s of S.settledPreview) for (const p of s.pids) rows.push([lineLabel(s), s.idx + 1, nm.get(p) || p]);
       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([rows.map((r) => r.map((x) => '"' + String(x).replace(/"/g, '""') + '"').join(",")).join("\n")], { type: "text/csv" })); a.download = eid + "-rewards.csv"; a.click();
     };
+    document.querySelectorAll("[data-retire]").forEach((b) => (b.onclick = async () => { if (!confirm("Retire this key? It will stop working at once.")) return; try { await call("POST", "/api/org/keys/revoke", { id: b.dataset.retire }); S.note = "Key retired."; } catch (e) { S.note = e.message; } refreshHome(); }));
     if ($("aimake")) $("aimake").onclick = async () => {
       try { const r = await call("POST", "/api/org/ai", {}); const origin = BASE || location.origin; S.aiMsg = "You are my Corporate Tambola assistant. Read the instructions at " + origin + "/api/z/ai-manifest, then do what I ask using that API. Send this key in the x-organizer header on every call: " + r.aiKey + ". Keep the key private. Tell me before you do anything that cannot be undone."; } catch (e) { S.note = e.message; }
       draw(homeView());
@@ -159,10 +237,19 @@
       refreshEng();
     };
     if ($("closed")) $("closed").onchange = async () => { try { await call("PATCH", `/api/z/${eid}/settings`, { closed: $("closed").checked }); S.note = $("closed").checked ? "Only people on the list can join." : "Anyone with the link can join."; } catch (e) { S.note = e.message; } refreshEng(); };
+    document.querySelectorAll("[data-lucky]").forEach((b) => (b.onclick = async () => {
+      const i = Number(b.dataset.lucky); const d = S.lucky[i];
+      try { await call("POST", `/api/z/${eid}/settle`, { results: [{ pattern: "lucky", ordinal: i + 1, idx: S.cfg.breaks.filter((x) => x.kind === "lucky")[i].after, pids: d.winners }] }); S.note = "Lucky draw winners published."; } catch (e) { S.note = e.message; }
+      refreshEng();
+    }));
+    if ($("savecfg")) $("savecfg").onclick = async () => {
+      try { const v = readSettings(); const r = await call("PATCH", `/api/z/${eid}/settings`, v); S.cfg = { tickets: r.tickets, rewards: r.rewards, breaks: r.breaks }; S.note = "Saved."; } catch (e) { S.note = e.message; }
+      refreshEng();
+    };
     if ($("erase")) $("erase").onclick = async () => { if (!confirm("Erase all participant data for this engagement? This cannot be undone.")) return; try { const r = await call("POST", `/api/z/${eid}/erase`, {}); S.note = r.erased + " participants erased."; } catch (e) { S.note = e.message; } refreshEng(); };
   }
 
   if (!secret) draw(loginView("")); else if (eid) refreshEng(); else refreshHome();
-  setInterval(() => { if (eid && secret && !document.hidden) refreshEng(); }, 5000);
+  setInterval(() => { const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; /* never wipe what the organizer is typing */ if (eid && secret && !document.hidden) refreshEng(); }, 5000);
   window.__zc = S;
 })();

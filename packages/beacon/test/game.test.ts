@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { bytesToHex } from "@noble/hashes/utils";
 import { sha256 } from "@noble/hashes/sha256";
-import { ALL_PATTERNS, RoundStore, checkClaims, completionIndex, logFrom, settleAll, stillToWin, ticketFor } from "../src/game";
+import { ALL_PATTERNS, RoundStore, callRoundFull, checkClaims, completionIndex, completionIndexKey, logFrom, luckyRound, luckyWinners, settleAll, stillToWin, ticketFor } from "../src/game";
+import { createHash } from "node:crypto";
 import { deriveCalls, scheduleFor, verifyRound, type Fetcher, type Round } from "../src";
 import { ticketNumbers } from "../../shared/src/ticket";
 
@@ -53,8 +54,8 @@ describe("settlement from the public log", () => {
   test("every pattern has winners and they are the earliest completers", () => {
     expect(settled.map((s) => s.pattern).sort()).toEqual([...ALL_PATTERNS].sort());
     for (const s of settled) {
-      for (const p of pids) expect(completionIndex(ticketFor(E, p), s.pattern, LOG)).toBeGreaterThanOrEqual(s.idx);
-      for (const w of s.pids) expect(completionIndex(ticketFor(E, w), s.pattern, LOG)).toBe(s.idx);
+      for (const p of pids) expect(completionIndexKey([ticketFor(E, p)], s.pattern, LOG)).toBeGreaterThanOrEqual(s.idx);
+      for (const w of s.pids) expect(completionIndexKey([ticketFor(E, w)], s.pattern, LOG)).toBe(s.idx);
     }
   });
   test("a tie at the same call shares the reward", () => {
@@ -169,5 +170,37 @@ describe("round store: backfill by agreement, then background signature check", 
     expect(s.verifySome(2)).toBe(3);
     expect(s.verifySome(2)).toBe(1);
     expect(s.verifySome(2)).toBe(0);
+  });
+});
+
+describe("lucky draw winners", () => {
+  const people = Array.from({ length: 500 }, (_, i) => "lp" + i);
+  const R = "ab".repeat(32);
+  test("the same list, break and randomness always give the same winners, in the same order, whatever order the list is in", () => {
+    const a = luckyWinners("E1", 30, R, people, 5);
+    expect(luckyWinners("E1", 30, R, people, 5)).toEqual(a);
+    expect(luckyWinners("E1", 30, R, [...people].reverse(), 5)).toEqual(a);
+  });
+  test("picks exactly n different people from the list, never more than are listed, never a stranger", () => {
+    for (const n of [1, 3, 5, 10]) { const w = luckyWinners("E1", 30, R, people, n); expect(w).toHaveLength(n); expect(new Set(w).size).toBe(n); expect(w.every((p) => people.includes(p))).toBe(true); }
+    expect(luckyWinners("E1", 30, R, ["a", "b"], 10)).toHaveLength(2);
+    expect(luckyWinners("E1", 30, R, [], 3)).toEqual([]);
+    expect(luckyWinners("E1", 30, R, ["a", "a", "a"], 3)).toEqual(["a"]);
+  });
+  test("a different engagement, break position or randomness gives a different draw", () => {
+    const base = luckyWinners("E1", 30, R, people, 5);
+    expect(luckyWinners("E2", 30, R, people, 5)).not.toEqual(base);
+    expect(luckyWinners("E1", 31, R, people, 5)).not.toEqual(base);
+    expect(luckyWinners("E1", 30, "cd".repeat(32), people, 5)).not.toEqual(base);
+  });
+  test("it is fair: over many different randomness values every participant is picked about equally often", () => {
+    const hits = new Map<string, number>(); const small = Array.from({ length: 20 }, (_, i) => "f" + i);
+    for (let t = 0; t < 4000; t++) for (const p of luckyWinners("E1", 30, createHash("sha256").update("r" + t).digest("hex"), small, 3)) hits.set(p, (hits.get(p) ?? 0) + 1);
+    for (const p of small) { const c = hits.get(p) ?? 0; expect(c).toBeGreaterThan(450); expect(c).toBeLessThan(750); } // expected 600
+  });
+  test("the draw round is the one in which the break ends", () => {
+    const b = { after: 5, seconds: 30, kind: "lucky" as const, title: "D", winners: 3 as const };
+    const prev = callRoundFull(null, 1000, 2, [b], 4)!;
+    expect(luckyRound(null, 1000, 2, [b], b)).toBe(prev + 1 + 10);
   });
 });

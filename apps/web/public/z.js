@@ -30,7 +30,39 @@
     <button class="zbtn" id="go">Get my ticket</button>
     <p class="zsmall">Your number is used only to give you the same ticket if you come back. Nobody else sees it.</p></div>`;
 
-  const ticketHtml = (t, called) => `<div class="zticket" aria-label="Your ticket">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div class="${called.has(v) ? "m" : ""}">${v}</div>`).join("")}</div>`;
+  const ticketHtml = (t, called, label) => `<div class="zticket" aria-label="${label}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div class="${called.has(v) ? "m" : ""}">${v}</div>`).join("")}</div>`;
+  const ordinalName = (k) => ["", "1st", "2nd", "3rd"][k] || k + "th";
+  const KEYNAME = (key) => (key === "full2" ? "Full Two-Ticket House" : NAMES[key]);
+
+  function luckyCard(v) {
+    if (!v.lucky.length) return "";
+    const rows = v.lucky.map((l) => `<div class="zrow"><span>${esc(l.title)}<br><small class="zsmall" style="margin:0">${l.winners} ${l.winners === 1 ? "person is" : "people are"} picked at random</small></span>${l.published ? (l.won ? `<em>You won!</em>` : `<i>Not this time</i>`) : `<i>at the end of the break</i>`}</div>`).join("");
+    return `<div class="zcard"><h2>Lucky draw</h2>${rows}</div>`;
+  }
+  function breakCard(b) {
+    const act = b.mediaUrl ? `<a class="zbtn s" style="display:inline-flex;align-items:center;text-decoration:none;margin-top:10px" target="_blank" rel="noopener noreferrer" href="${esc(b.mediaUrl)}">${b.kind === "youtube" ? "Watch the video" : "Open"}</a>` : "";
+    const what = b.kind === "lucky" ? `${b.winners || 3} ${b.winners === 1 ? "person is" : "people are"} picked at random when this break ends. Everyone has an equal chance.` : b.kind === "speech" ? "Please listen to the host." : b.kind === "slides" ? "Please look at the screen." : "";
+    return `<div class="zcard zbreak" role="status"><h2>A short break</h2><div style="font:700 20px var(--sans,inherit);margin:2px 0 4px">${esc(b.title)}</div><div class="zsmall" style="margin:0">${what} The numbers continue in ${b.secondsLeft}s.</div>${act}</div>`;
+  }
+
+  function stillToWinRows(v) {
+    const keys = ZG.keysInPlay(v.cfg.rewards);
+    return keys.map((key) => {
+      const lines = ZG.linesFor(v.cfg.rewards, key);
+      const n = ZG.stillToWin(v.tickets, key, v.log);
+      const mine = v.myIdx[key];
+      return lines.map((line) => {
+        const total = lines.length;
+        const name = (total > 1 ? ordinalName(line.ordinal) + " " : "") + KEYNAME(key);
+        const res = v.results.find((r) => r.pattern === key && r.ordinal === line.ordinal);
+        let right;
+        if (res) right = mine === res.idx ? `<em>Yours${res.count > 1 ? " · shared by " + res.count : ""}</em>` : `<i>Awarded${res.count > 1 ? " to " + res.count : ""}</i>`;
+        else if (line.ordinal === 1) right = mine >= 0 ? `<em>Complete</em>` : `<i>${n} to go</i>`;
+        else right = `<i>after the ${ordinalName(line.ordinal - 1)}</i>`;
+        return `<div class="zrow"><span>${esc(name)}${line.text ? `<br><small class="zsmall" style="margin:0">${esc(line.text)}</small>` : ""}</span>${right}</div>`;
+      }).join("");
+    }).join("");
+  }
 
   function playView(v) {
     const called = new Set(v.log);
@@ -42,21 +74,19 @@
     else if (v.mode === "hold") banners.push(`<div class="zbanner warn">Checking with the organizer… numbers will continue in a moment.</div>`);
     else if (v.mode === "blind") banners.push(`<div class="zbanner warn">Cannot reach the organizer's controls right now. Play continues; a pause may appear late.</div>`);
     if (v.phase === "ended" && !v.stopped) banners.push(`<div class="zbanner ok">All 90 numbers have been called. Thank you for taking part.</div>`);
-    const sub = v.phase === "ended" ? "" : v.log.length === 0 ? (v.nextCallInSec !== null ? "First number in " + fmt(v.nextCallInSec) : "Getting ready…") : v.paused || v.mode === "hold" ? "" : v.nextCallInSec !== null ? "Next number in " + v.nextCallInSec + "s" : "";
-    const still = v.ticket ? ZG.ALL_PATTERNS.map((p) => {
-      const n = ZG.stillToWin(v.ticket, p, v.log);
-      const res = v.results.find((r) => r.pattern === p);
-      const right = v.claimed.includes(p) ? `<em>Complete${res ? (res.count > 1 ? " · shared by " + res.count : " · reward awarded") : ""}</em>` : `<i>${n} to go</i>`;
-      return `<div class="zrow"><span>${NAMES[p]}</span>${right}</div>`;
-    }).join("") : "";
+    const sub = v.phase === "ended" || v.brk ? "" : v.log.length === 0 ? (v.nextCallInSec !== null ? "First number in " + fmt(v.nextCallInSec) : "Getting ready…") : v.paused || v.mode === "hold" ? "" : v.nextCallInSec !== null ? "Next number in " + v.nextCallInSec + "s" : "";
+    const still = v.tickets.length ? stillToWinRows(v) : "";
     const chk = v.pendingChecks > 0 ? `<p class="zsmall">Double-checking ${v.pendingChecks} earlier number${v.pendingChecks === 1 ? "" : "s"} in the background.</p>` : "";
+    const tix = v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : "Your ticket")).join("");
     return `<div class="zhead"><b>Corporate Tambola</b><button class="zsnd" id="snd" aria-pressed="${sound}">${sound ? "Sound on" : "Sound off"}</button></div>
       ${banners.join("")}
+      ${v.brk ? breakCard(v.brk) : ""}
       <div class="zcard"><div class="zball"><div class="zbig ${last ? "" : "none"}" id="big" aria-live="assertive" aria-label="${last ? "Number " + last : "No number yet"}">${last ?? "–"}</div></div>
         <div class="zsub">${sub}</div>
         <div class="zlast" aria-label="Recent numbers">${v.log.slice(-7, -1).reverse().map((n) => `<span>${n}</span>`).join("")}</div></div>
-      <div class="zcard"><h2>Your ticket</h2>${v.ticket ? ticketHtml(v.ticket, called) : ""}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
+      <div class="zcard"><h2>${v.tickets.length > 1 ? "Your tickets" : "Your ticket"}</h2>${tix}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
       <div class="zcard"><h2>Still to win</h2>${still}${chk}</div>
+      ${luckyCard(v)}
       <div class="zcard"><h2>All numbers · ${v.log.length} of 90 called</h2><div class="zboard">${Array.from({ length: 90 }, (_, i) => `<div class="${called.has(i + 1) ? "c" : ""}">${i + 1}</div>`).join("")}</div></div>`;
   }
 

@@ -1,8 +1,9 @@
 // The whole phone-side engagement loop, with no UI, so it can be tested without a browser and then wrapped by a thin page.
 // It talks to exactly two things: the public beacon (through BeaconOpts) and our one small store (through deps.api).
-import { generateTicket, type PatternId, type Ticket } from "../../shared/src/ticket";
+import { generateTicket, type Ticket } from "../../shared/src/ticket";
 import { ControlTracker, SAFETY_FAST, SAFETY_STANDARD, pausedAt, type ControlConfig } from "./control";
-import { ALL_PATTERNS, RoundStore, completionIndex, ticketFor } from "./game";
+import { defaultCfg, keysInPlay, validateCfg, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import { RoundStore, activeBreak, callRoundFull, completionIndexKey, ticketsFor } from "./game";
 import { NUMBERS, QUICKNET, fetchRound, pickNumber, roundAt, roundTimeMs, type BeaconOpts } from "./index";
 
 export interface PhoneDeps {
@@ -22,8 +23,15 @@ export type Phase = "boot" | "missing" | "join" | "play" | "ended";
 export interface RuntimeView {
   phase: Phase; error: string | null; pid: string | null; ticket: Ticket | null; log: number[]; nowRound: number | null;
   startRound: number; callSeconds: number; mode: "live" | "hold" | "blind" | "none"; paused: boolean; stopped: boolean;
-  claimed: PatternId[]; unsent: number; results: { pattern: PatternId; idx: number; count: number }[]; pendingChecks: number; discarded: number;
+  claimed: PatternKey[]; unsent: number; results: { pattern: PatternKey | "lucky"; ordinal: number; idx: number; count: number; winners?: string[] }[]; pendingChecks: number; discarded: number;
   nextCallInSec: number | null;
+  tickets: Ticket[]; cfg: EngagementCfg;
+  /** The brand break showing right now, with seconds left; null when none. */
+  brk: { title: string; kind: BreakCfg["kind"]; mediaUrl?: string; secondsLeft: number; winners?: number } | null;
+  /** My earliest completion (0-based call index) of each house in play so far, or -1. */
+  myIdx: Partial<Record<PatternKey, number>>;
+  /** Each lucky draw of this engagement: whether its winners are published yet and whether this phone is one of them. */
+  lucky: { ordinal: number; title: string; winners: number; published: boolean; won: boolean }[];
 }
 
 export class PhoneRuntime {
@@ -31,6 +39,8 @@ export class PhoneRuntime {
   error: string | null = null;
   pid: string | null = null;
   ticket: Ticket | null = null;
+  tickets: Ticket[] = [];
+  cfg: EngagementCfg = defaultCfg();
   startRound = 0;
   callSeconds = 0;
   trackClaims = true;
@@ -38,7 +48,7 @@ export class PhoneRuntime {
   store: RoundStore;
   tracker: ControlTracker | null = null;
   results: RuntimeView["results"] = [];
-  private claimed = new Set<PatternId>();
+  private claimed = new Set<PatternKey>();
   private offsetMs: number | null = null; // utc - mono
   private syncedAtMono = -Infinity;
   private lastControlPoll = -Infinity;
@@ -71,7 +81,7 @@ export class PhoneRuntime {
   async boot(): Promise<void> {
     try {
       const info = await this.deps.api("GET", `/api/z/${this.eid}/info`);
-      this.startRound = info.startRound; this.callSeconds = info.callSeconds; this.trackClaims = info.trackClaims !== false; this.controlUrl = typeof info.controlUrl === "string" ? info.controlUrl : null;
+      this.startRound = info.startRound; this.callSeconds = info.callSeconds; this.trackClaims = info.trackClaims !== false; this.controlUrl = typeof info.controlUrl === "string" ? info.controlUrl : null; this.readCfg(info);
     } catch (e: any) {
       this.phase = e?.status === 404 ? "missing" : "boot";
       this.error = e?.status === 404 ? "This engagement link is not valid." : "Could not reach the engagement. Check your connection.";
@@ -83,8 +93,13 @@ export class PhoneRuntime {
     this.error = null;
   }
 
+  /** Tickets, rewards and brand breaks come from the engagement's public settings; anything malformed falls back to the plain engagement. */
+  private readCfg(info: any) {
+    const v = validateCfg({ tickets: info?.tickets, rewards: info?.rewards, breaks: info?.breaks });
+    this.cfg = v.ok ? v.cfg : defaultCfg();
+  }
   private adopt(pid: string) {
-    this.pid = pid; this.ticket = ticketFor(this.eid, pid); this.phase = "play";
+    this.pid = pid; this.tickets = ticketsFor(this.eid, pid, this.cfg.tickets); this.ticket = this.tickets[0]!; this.phase = "play";
   }
 
   /** Joins with a mobile number. The same number again returns the same participant (and the same ticket). */
@@ -92,6 +107,7 @@ export class PhoneRuntime {
     try {
       const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name });
       this.startRound = r.startRound; this.callSeconds = r.callSeconds; this.trackClaims = r.trackClaims !== false;
+      if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined) this.readCfg(r);
       this.deps.store.set(this.key("pid"), r.pid);
       this.adopt(r.pid); this.error = null;
       return true;
@@ -127,7 +143,7 @@ export class PhoneRuntime {
     return this.tracker!.mode(now);
   }
   private roundFor(k: number): number | null {
-    return this.tracker ? this.tracker.callRound(this.startRound, this.stride, k) : this.startRound + k * this.stride;
+    return callRoundFull(this.tracker ? this.tracker.state : null, this.startRound, this.stride, this.cfg.breaks, k);
   }
 
   /** One pass of the loop. Call about once a second. Safe to call while offline (it simply makes no progress). */
@@ -178,13 +194,13 @@ export class PhoneRuntime {
   private unsent = 0;
   private claimLen = -1;
   private async autoClaim() {
-    if (!this.ticket || !this.pid) return;
+    if (!this.tickets.length || !this.pid) return;
     if (this.logCache.length === this.claimLen && this.unsent === 0) return; // nothing new has been called and nothing is waiting to be sent
     this.claimLen = this.logCache.length;
     this.unsent = 0;
-    for (const p of ALL_PATTERNS) {
+    for (const p of keysInPlay(this.cfg.rewards)) {
       if (this.claimed.has(p)) continue;
-      const idx = completionIndex(this.ticket, p, this.logCache);
+      const idx = completionIndexKey(this.tickets, p, this.logCache);
       if (idx < 0) continue;
       try {
         if (this.trackClaims) await this.deps.api("POST", `/api/z/${this.eid}/claims`, { pid: this.pid, claims: [{ pattern: p, idx }] });
@@ -201,6 +217,28 @@ export class PhoneRuntime {
     try { this.results = (await this.deps.api("GET", `/api/z/${this.eid}/results`)).results ?? this.results; } catch { /* shown next time */ }
   }
 
+  private currentBreak(now: number | null): RuntimeView["brk"] {
+    if (now === null || this.phase !== "play" || !this.cfg.breaks.length) return null;
+    const a = activeBreak(this.tracker ? this.tracker.state : null, this.startRound, this.stride, this.cfg.breaks, now);
+    if (!a || this.offsetMs === null) return null;
+    return { title: a.brk.title, kind: a.brk.kind, ...(a.brk.mediaUrl ? { mediaUrl: a.brk.mediaUrl } : {}), ...(a.brk.winners ? { winners: a.brk.winners } : {}), secondsLeft: Math.max(0, Math.round((roundTimeMs(a.endsAtRound) - (this.deps.mono() + this.offsetMs)) / 1000)) };
+  }
+  private luckyView(): RuntimeView["lucky"] {
+    const out: RuntimeView["lucky"] = []; let n = 0;
+    for (const b of this.cfg.breaks) {
+      if (b.kind !== "lucky") continue;
+      n++;
+      const r = this.results.find((x) => x.pattern === "lucky" && x.ordinal === n);
+      out.push({ ordinal: n, title: b.title, winners: b.winners ?? 3, published: !!r, won: !!r && !!this.pid && (r.winners ?? []).includes(this.pid) });
+    }
+    return out;
+  }
+  private myIdx(): Partial<Record<PatternKey, number>> {
+    const o: Partial<Record<PatternKey, number>> = {};
+    if (this.tickets.length) for (const k of keysInPlay(this.cfg.rewards)) o[k] = completionIndexKey(this.tickets, k, this.logCache);
+    return o;
+  }
+
   view(): RuntimeView {
     const now = this.nowRound;
     const st = this.tracker?.state;
@@ -210,6 +248,7 @@ export class PhoneRuntime {
       mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: !!st && now !== null && pausedAt(st, now), stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
       claimed: [...this.claimed], unsent: this.unsent, results: this.results, pendingChecks: this.store.pending(), discarded: this.store.discarded,
       nextCallInSec: nextRound !== null && now !== null && this.offsetMs !== null ? Math.max(0, Math.round((roundTimeMs(nextRound) - (this.deps.mono() + this.offsetMs)) / 1000)) : null,
+      tickets: this.tickets, cfg: this.cfg, brk: this.currentBreak(now), myIdx: this.myIdx(), lucky: this.luckyView(),
     };
   }
 }

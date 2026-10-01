@@ -1,12 +1,23 @@
 // The phone-side game: everything a phone (or the organizer's console) needs to play and to check an engagement
 // from the public beacon alone. Pure and deterministic: no server, no phone clock.
 import { generateTicket, patternNumbers, ticketNumbers, type PatternId, type Ticket } from "../../shared/src/ticket";
+import { PATTERN_ORDER, breakShift, defaultCfg, keysInPlay, linesFor, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import type { ControlState } from "./control";
+import { sha256 } from "@noble/hashes/sha256";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
 import { NUMBERS, fetchRound, pickNumber, seededRand, verifyRound, type BeaconOpts, type Round } from "./index";
 
-export const ALL_PATTERNS: readonly PatternId[] = ["early5", "top", "mid", "bot", "corners", "star", "full"];
+export const ALL_PATTERNS: readonly PatternId[] = PATTERN_ORDER;
 
-/** The same ticket on every device for (engagement, participant). */
+/** The same ticket on every device for (engagement, participant). The first ticket keeps its original seed so existing links never change. */
 export const ticketFor = (engagementId: string, pid: string): Ticket => generateTicket(seededRand(`${engagementId}|${pid}`));
+/** One or two tickets per participant; the second is always different from the first. */
+export function ticketsFor(engagementId: string, pid: string, n: 1 | 2 = 1): Ticket[] {
+  const a = ticketFor(engagementId, pid);
+  if (n === 1) return [a];
+  for (let i = 2; i < 40; i++) { const b = generateTicket(seededRand(`${engagementId}|${pid}|${i}`)); if (JSON.stringify(b) !== JSON.stringify(a)) return [a, b]; }
+  throw new Error("Could not make a second ticket.");
+}
 
 /** Index (0-based call number) at which the ticket first completes the pattern, or -1 if it never does within `log`. */
 export function completionIndex(t: Ticket, pat: PatternId, log: readonly number[]): number {
@@ -22,41 +33,109 @@ export function completionIndex(t: Ticket, pat: PatternId, log: readonly number[
   return -1;
 }
 
-export interface Settled { pattern: PatternId; idx: number; pids: string[] }
+/** Earliest completion of a house by a participant's tickets: the best of their tickets, or all 30 numbers across two tickets for the two-ticket house. */
+export function completionIndexKey(tickets: readonly Ticket[], key: PatternKey, log: readonly number[]): number {
+  if (key === "full2") {
+    if (tickets.length < 2) return -1;
+    const left = new Set(tickets.flatMap(ticketNumbers));
+    for (let i = 0; i < log.length; i++) if (left.delete(log[i]!) && left.size === 0) return i;
+    return -1;
+  }
+  let best = -1;
+  for (const t of tickets) { const i = completionIndex(t, key, log); if (i >= 0 && (best < 0 || i < best)) best = i; }
+  return best;
+}
+
+export interface Settled { pattern: PatternKey; ordinal: number; idx: number; pids: string[] }
 
 /**
- * The organizer console's settlement: from the public log and the participant list alone, who completed each pattern first.
- * Claims are not needed to decide this (a phone with no network still wins), they only cross-check it. Ties share the reward.
+ * The organizer console's settlement: from the public log, the participant list and the engagement's own settings alone, who completed each house first.
+ * Claims are not needed to decide this (a phone with no network still gets its reward), they only cross-check it.
+ * Ties share the reward. The 1st reward of a house goes to whoever completes it at the earliest call; the 2nd to whoever completes it at the next
+ * distinct call; and so on.
  */
-export function settleAll(engagementId: string, pids: readonly string[], log: readonly number[]): Settled[] {
-  const out: Settled[] = [];
-  for (const pattern of ALL_PATTERNS) {
-    let best = Infinity; let winners: string[] = [];
-    for (const pid of pids) {
-      const i = completionIndex(ticketFor(engagementId, pid), pattern, log);
+export function settleAll(engagementId: string, pids: readonly string[], log: readonly number[], cfg: EngagementCfg = defaultCfg()): Settled[] {
+  const keys = keysInPlay(cfg.rewards);
+  const best = new Map<PatternKey, Map<number, string[]>>(keys.map((k) => [k, new Map()]));
+  for (const pid of pids) {
+    const tk = ticketsFor(engagementId, pid, cfg.tickets);
+    for (const k of keys) {
+      const i = completionIndexKey(tk, k, log);
       if (i < 0) continue;
-      if (i < best) { best = i; winners = [pid]; } else if (i === best) winners.push(pid);
+      const g = best.get(k)!; const arr = g.get(i); if (arr) arr.push(pid); else g.set(i, [pid]);
     }
-    if (winners.length) out.push({ pattern, idx: best, pids: winners });
+  }
+  const out: Settled[] = [];
+  for (const k of keys) {
+    const groups = [...best.get(k)!.entries()].sort((a, b) => a[0] - b[0]);
+    for (const line of linesFor(cfg.rewards, k)) { const g = groups[line.ordinal - 1]; if (g) out.push({ pattern: k, ordinal: line.ordinal, idx: g[0], pids: g[1] }); }
   }
   return out;
 }
 
-export interface Claim { pid: string; pattern: PatternId; idx: number }
+export interface Claim { pid: string; pattern: PatternKey; idx: number }
 /** A claim is accepted only if recomputing it from the public log gives exactly the same call index. */
-export const checkClaims = (engagementId: string, claims: readonly Claim[], log: readonly number[]) => {
-  const good: Claim[] = []; const bad: Claim[] = [];
-  for (const c of claims) (completionIndex(ticketFor(engagementId, c.pid), c.pattern, log) === c.idx ? good : bad).push(c);
+export const checkClaims = (engagementId: string, claims: readonly Claim[], log: readonly number[], cfg: EngagementCfg = defaultCfg()) => {
+  const good: Claim[] = []; const bad: Claim[] = []; const cache = new Map<string, Ticket[]>();
+  for (const c of claims) {
+    let tk = cache.get(c.pid); if (!tk) { tk = ticketsFor(engagementId, c.pid, cfg.tickets); cache.set(c.pid, tk); }
+    (completionIndexKey(tk, c.pattern, log) === c.idx ? good : bad).push(c);
+  }
   return { good, bad };
 };
 
-/** How many numbers each pattern still needs for this ticket after the calls so far ("still to win"). */
-export const stillToWin = (t: Ticket, pat: PatternId, log: readonly number[]): number => {
+/** How many numbers each house still needs for this participant after the calls so far ("still to win"). */
+export const stillToWin = (t: Ticket | readonly Ticket[], pat: PatternKey, log: readonly number[]): number => {
+  const tickets: readonly Ticket[] = Array.isArray((t as any)[0]?.[0]) ? (t as unknown as readonly Ticket[]) : [t as unknown as Ticket];
   const called = new Set(log);
-  const need = patternNumbers(t, pat);
-  if (!need) return Math.max(0, 5 - ticketNumbers(t).filter((n) => called.has(n)).length);
-  return need.filter((n) => !called.has(n)).length;
+  if (pat === "full2") return tickets.length < 2 ? 30 : tickets.flatMap(ticketNumbers).filter((n) => !called.has(n)).length;
+  let min = Infinity;
+  for (const tk of tickets) {
+    const need = patternNumbers(tk, pat);
+    const left = !need ? Math.max(0, 5 - ticketNumbers(tk).filter((n) => called.has(n)).length) : need.filter((n) => !called.has(n)).length;
+    if (left < min) min = left;
+  }
+  return min;
 };
+
+/**
+ * Lucky draw: picks `n` participants from the list using the public randomness of the round that ends the break. Nobody can know the round's
+ * randomness beforehand, and anyone holding the participant list can recompute the winners. Every participant is equally likely; nobody wins twice.
+ */
+export function luckyWinners(engagementId: string, breakAfter: number, randomnessHex: string, pids: readonly string[], n: number): string[] {
+  const rank = (pid: string) => bytesToHex(sha256(utf8ToBytes(`CT1-LUCKY|${engagementId}|${breakAfter}|${randomnessHex}|${pid}`)));
+  return [...new Set(pids)].map((pid) => [rank(pid), pid] as const).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)).slice(0, Math.max(0, n)).map((x) => x[1]);
+}
+/** The beacon round whose randomness decides a lucky draw: the round in which the break ends. */
+export function luckyRound(st: ControlState | null, start: number, stride: number, breaks: readonly BreakCfg[], b: BreakCfg): number | null {
+  const prev = callRoundFull(st, start, stride, breaks, b.after - 1);
+  return prev === null ? null : prev + 1 + b.seconds / 3;
+}
+
+/* ---------------- the schedule, with brand breaks and the organizer's pauses ---------------- */
+
+/**
+ * The beacon round call k uses: the plain schedule, pushed later by every brand break that starts at or before it, and then by every pause the
+ * organizer signed. Breaks are part of the engagement's public settings, so every phone computes the same schedule.
+ */
+export function callRoundFull(st: ControlState | null, start: number, stride: number, breaks: readonly BreakCfg[], k: number): number | null {
+  let a = start + k * stride + breakShift(breaks, k);
+  if (st) { for (const i of st.intervals) if (a >= i.start) a += i.end - i.start; if (st.stopRound !== null && a >= st.stopRound) return null; }
+  return a;
+}
+export const scheduleFull = (st: ControlState | null, start: number, stride: number, breaks: readonly BreakCfg[], count = NUMBERS): (number | null)[] =>
+  Array.from({ length: count }, (_, k) => callRoundFull(st, start, stride, breaks, k));
+
+/** The brand break showing at `nowRound`, if any: it starts right after the call it follows and lasts its stated length. */
+export function activeBreak(st: ControlState | null, start: number, stride: number, breaks: readonly BreakCfg[], nowRound: number): { brk: BreakCfg; endsAtRound: number } | null {
+  for (const b of breaks) {
+    const prev = callRoundFull(st, start, stride, breaks, b.after - 1);
+    if (prev === null) continue;
+    const from = prev + 1, to = from + b.seconds / 3;
+    if (nowRound >= from && nowRound < to) return { brk: b, endsAtRound: to };
+  }
+  return null;
+}
 
 /**
  * Rounds a phone holds for an engagement. Past rounds (a late joiner) are accepted provisionally when two different mirrors
