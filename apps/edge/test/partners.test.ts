@@ -63,11 +63,11 @@ describe("enrolling as a sales partner", () => {
 describe("a referred purchase", () => {
   let key = "";
   beforeEach(async () => { key = (await enroll()).partnerKey; });
-  test("a paid purchase through the link is attributed; commission waits for a rate and records the taxable value", async () => {
+  test("a paid purchase through the link is attributed; the partner earns 50% of the taxable value (never of the GST)", async () => {
     const r = await (await buy({ ref: "9811122233" })).json() as any;
     expect(r.result.ok).toBe(true);
     const c = raw.query("SELECT partner_code, base, currency, rate, amount, status FROM commission").get() as any;
-    expect(c).toMatchObject({ partner_code: "9811122233", currency: "INR", rate: null, amount: null, status: "pending_rate" });
+    expect(c).toMatchObject({ partner_code: "9811122233", currency: "INR", rate: 0.5, amount: 749.5, status: "accrued" });
     expect(c.base).toBe(1499); // 500 participants = Rs 1,499 software price before GST; commission is never paid on GST
   });
   test("no purchase, no commission: an unpaid or unknown-code or no-code order writes nothing", async () => {
@@ -89,16 +89,20 @@ describe("a referred purchase", () => {
     await buy({ ref: "9811122233", phone: "+91 98111 22233" });
     expect(raw.query("SELECT status, reason FROM commission").get()).toEqual({ status: "blocked", reason: "self_referral" });
   });
-  test("once a rate is decided it applies to every waiting sale, exactly once", async () => {
-    await buy({ ref: "9811122233" }); await buy({ ref: "9811122233", pack: 1000 });
+  test("the launch prices give the partner exactly half of the software price: 100 = Rs 999, 250 = Rs 1,299, 500 = Rs 1,499", async () => {
+    for (const [pack, base, earn] of [[100, 999, 499.5], [250, 1299, 649.5], [500, 1499, 749.5]] as const) {
+      await buy({ ref: "9811122233", pack });
+      const c = raw.query("SELECT base, rate, amount, status FROM commission ORDER BY id DESC LIMIT 1").get() as any;
+      expect(c).toEqual({ base, rate: 0.5, amount: earn, status: "accrued" });
+    }
+  });
+  test("a rate set later by us still works for any sale that was waiting (old rows), exactly once", async () => {
+    raw.run("INSERT INTO commission(payment_id,partner_code,base,currency,rate,amount,status,created_ms) VALUES('old-1','9811122233',1000,'INR',NULL,NULL,'pending_rate',1)");
     expect((await call("POST", "/api/partners/commission/rate", { rate: 0.1 }, plat)).status).toBe(200);
     expect((await call("POST", "/api/partners/commission/rate", { rate: 0.2 }, plat)).status).toBe(200); // nothing left to change
-    const rows = raw.query("SELECT base, rate, amount, status FROM commission ORDER BY id").all() as any[];
-    expect(rows.map((r) => r.status)).toEqual(["accrued", "accrued"]);
-    expect(rows[0]).toMatchObject({ rate: 0.1, amount: 149.9 });
-    expect(rows[1]!.amount).toBeCloseTo(rows[1]!.base * 0.1, 2);
+    expect(raw.query("SELECT base, rate, amount, status FROM commission").get()).toEqual({ base: 1000, rate: 0.1, amount: 100, status: "accrued" });
   });
-  test("a rate set up front applies at once; absurd rates are refused", async () => {
+  test("a lower rate can be set by the owner; absurd rates (above 50%) are refused", async () => {
     env.PARTNER_COMMISSION_RATE = "0.15";
     await buy({ ref: "9811122233" });
     expect(raw.query("SELECT rate, amount, status FROM commission").get()).toEqual({ rate: 0.15, amount: 224.85, status: "accrued" });
@@ -141,13 +145,13 @@ describe("what a partner can see", () => {
     const mine = await (await call("GET", "/api/partner/me", undefined, { "x-partner": b.partnerKey })).json() as any;
     expect(mine.totals.sales).toBe(1);
   });
-  test("with no rate yet the partner sees the sales waiting, not invented money", async () => {
+  test("the partner sees the 50% earned on each sale, never who bought", async () => {
     const a = await enroll();
     await buy({ ref: "9811122233" });
     const me = await (await call("GET", "/api/partner/me", undefined, { "x-partner": a.partnerKey })).json() as any;
-    expect(me.totals).toMatchObject({ sales: 1, accruedInr: 0, waitingForRate: 1 });
-    expect(me.rateAnnounced).toBe(false);
-    expect(me.sales[0].amount).toBeNull();
+    expect(me.totals).toMatchObject({ sales: 1, accruedInr: 749.5, waitingForRate: 0 });
+    expect(me.rateAnnounced).toBe(true); expect(me.rate).toBe(0.5);
+    expect(me.sales[0].amount).toBe(749.5); expect(JSON.stringify(me.sales)).not.toMatch(/boss|acme|@/i);
   });
   test("a wrong or missing key sees nothing", async () => {
     await enroll();

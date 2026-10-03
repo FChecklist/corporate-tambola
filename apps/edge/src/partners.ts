@@ -10,6 +10,8 @@ import type { D1, Env } from "./worker";
 import type { PayEnv } from "./pay";
 
 export const ATTRIBUTION_DAYS = 30;
+/** The commission every partner earns on the software price (before GST) of a paid, referred purchase. Owner decision 2026-10-03: 50%. PARTNER_COMMISSION_RATE can lower it (never above 50%). */
+export const COMMISSION_RATE = 0.5;
 export const PARTNER_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS partner (code TEXT PRIMARY KEY, key_hash TEXT NOT NULL, name TEXT, source TEXT, enrolled_ms INTEGER NOT NULL, consent_ms INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'active')`,
   `CREATE TABLE IF NOT EXISTS commission (id INTEGER PRIMARY KEY AUTOINCREMENT, payment_id TEXT UNIQUE NOT NULL, partner_code TEXT NOT NULL, base REAL NOT NULL, currency TEXT NOT NULL, rate REAL, amount REAL, status TEXT NOT NULL, reason TEXT, created_ms INTEGER NOT NULL, paid_ref TEXT, paid_ms INTEGER)`,
@@ -33,9 +35,10 @@ export async function recordCommission(env: PayEnv, p: { id: string; ref?: strin
     if (!partner) return; // unknown or stopped code: the purchase is simply not attributed
     let status = "pending_rate", reason: string | null = null, rate: number | null = null, amount: number | null = null;
     if (p.buyer_phone_hash && p.buyer_phone_hash === (await phoneHashFor(env, partner.code))) { status = "blocked"; reason = "self_referral"; }
-    else if (env.PARTNER_COMMISSION_RATE !== undefined && env.PARTNER_COMMISSION_RATE !== "") {
-      const x = Number(env.PARTNER_COMMISSION_RATE);
-      if (x >= 0 && x <= 0.5) { rate = x; amount = r2(base * x); status = "accrued"; }
+    else {
+      const set = env.PARTNER_COMMISSION_RATE !== undefined && env.PARTNER_COMMISSION_RATE !== "" ? Number(env.PARTNER_COMMISSION_RATE) : NaN;
+      const x = set >= 0 && set <= 0.5 ? set : COMMISSION_RATE; // 50% unless the owner chose something lower
+      rate = x; amount = r2(base * x); status = "accrued";
     }
     await env.DB.prepare("INSERT OR IGNORE INTO commission(payment_id,partner_code,base,currency,rate,amount,status,reason,created_ms) VALUES(?,?,?,?,?,?,?,?,?)").bind(p.id, partner.code, base, p.currency, rate, amount, status, reason, now).run();
   } catch { /* a ledger problem must never undo a paid purchase; the payment row still carries the ref so it can be rebuilt */ }
@@ -80,7 +83,7 @@ export async function partnerRoute(req: Request, env: PayEnv, now: number, spend
     return json({
       code: m.code, name: m.name, state: m.state, link: `${origin}/?ref=${m.code}`, attributionDays: ATTRIBUTION_DAYS,
       totals: { sales: rows.length, accruedInr: sum("accrued"), paidInr: sum("paid"), waitingForRate: rows.filter((r: any) => r.status === "pending_rate").length, blocked: rows.filter((r: any) => r.status === "blocked").length },
-      rateAnnounced: rows.some((r: any) => r.rate !== null) || (env.PARTNER_COMMISSION_RATE !== undefined && env.PARTNER_COMMISSION_RATE !== ""),
+      rateAnnounced: true, rate: COMMISSION_RATE,
       sales: rows.map((r: any) => ({ date: r.created_ms, pack: r.pack, currency: r.currency, status: r.status, reason: r.reason, amount: r.amount })), // never who bought
     });
   }

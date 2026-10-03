@@ -3,6 +3,8 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 
 setDefaultTimeout(30_000);
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { newWorld, openPage, roundAt, roundMs, T, type Page } from "./harness";
 import { publicKeyFromSecret } from "../../../packages/beacon/src/control";
@@ -324,4 +326,36 @@ describe("console: results go out on their own, and a person can move to a new p
     expect((await o.api("POST", "/api/z/UI-MOVE/join", { phone: "9855555555", device: "2".repeat(32) })).status).toBe(200);
     expect((await o.api("POST", "/api/z/UI-MOVE/join", { phone: "9855555555", device: "1".repeat(32) })).status).toBe(423);
   }, 60_000);
+});
+
+describe("Refer & Earn page", () => {
+  const html = () => readFileSync(join(import.meta.dir, "../public/partner.html"), "utf8");
+  test("the page pitches 50%, lists every pack with exactly half of its price, and has a working calculator", async () => {
+    const o = await organizer(); const p = await page(o, "/partner.html", "partner.html", ["common.js", "partner.js"]);
+    const doc = p.win.document; const body = doc.body.textContent!.replace(/\s+/g, " ");
+    expect(body).toMatch(/Earn 50% every time a company plays/); expect(body).toMatch(/mobile number is your code/i);
+    const packs: number[][] = p.win.TB.PACKS;
+    expect(packs.slice(0, 3).map((x) => [x[0], x[1]])).toEqual([[100, 999], [250, 1299], [500, 1499]]); // the launch prices
+    const rows = [...doc.querySelectorAll("#earn-table .rrow:not(.rh)")].map((r: any) => r.textContent.replace(/\s+/g, " "));
+    expect(rows.length).toBe(packs.length);
+    expect(rows[0]).toMatch(/999/); expect(rows[0]).toMatch(/499\.50/); expect(rows[1]).toMatch(/649\.50/); expect(rows[2]).toMatch(/749\.50/);
+    (doc.getElementById("calc-n") as any).value = "4"; (doc.getElementById("calc-pack") as any).value = "0"; (doc.getElementById("calc-n") as any).dispatchEvent(new p.win.Event("input"));
+    expect(doc.getElementById("calc-out")!.textContent).toBe("₹1,998"); // 4 sales x Rs 499.50
+  });
+  test("joining takes only a mobile number: the code is its 10 digits, the link is /?ref=<code>, and the page switches to the partner's own dashboard", async () => {
+    const o = await organizer(); const p = await page(o, "/partner.html", "partner.html", ["common.js", "partner.js"]);
+    await p.waitFor((x) => /Get your link in 20 seconds/.test(x));
+    (p.$("#ph") as any).value = "+91 98765 43210"; (p.$("#ok") as any).checked = true; p.click("#join");
+    const t = await p.waitFor(() => !!p.win.document.getElementById("dash")?.textContent?.includes("Your link"));
+    const dash = p.win.document.getElementById("dash")!.textContent!;
+    expect(dash).toMatch(/9876543210/); expect(dash).toMatch(/\/\?ref=9876543210/); expect(dash).toMatch(/Your partner key/);
+    expect(p.win.document.body.classList.contains("signed")).toBe(true);
+    expect(p.errors).toEqual([]);
+  });
+  test("the page is linked from the home page and listed for search engines, and ships with its stylesheet", () => {
+    expect(readFileSync(join(import.meta.dir, "../public/index.html"), "utf8")).toContain('href="/partner.html"');
+    expect(readFileSync(join(import.meta.dir, "../public/sitemap.xml"), "utf8")).toContain("/partner.html");
+    expect(readFileSync(join(import.meta.dir, "../../../pages/build.mjs"), "utf8")).toContain('"partner.css"');
+    expect(html()).toContain('href="/partner.css"');
+  });
 });

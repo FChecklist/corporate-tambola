@@ -266,6 +266,7 @@
 
   function paint() {
     const v = rt.view();
+    if (!v.won) v.won = []; // an older saved copy of the game code during an update: never break the screen
     if (v.phase === "missing" || v.phase === "boot") { $app.innerHTML = `<p class="zmsg">${esc(v.error || "Loading…")}</p>`; return; }
     if (v.phase === "join") { const f = document.getElementById("ph"); if (f && document.activeElement === f) return; $app.innerHTML = joinView(v.error); bindJoin(); return; }
     const fresh = syncPrizes(v);

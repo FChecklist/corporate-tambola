@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const SRC = join(import.meta.dir, "../apps/web/public"), OUT = join(import.meta.dir, "public");
 rmSync(OUT, { recursive: true, force: true }); mkdirSync(OUT, { recursive: true });
-const FILES = ["index.html", "manifest.webmanifest", "zsw.js", "pwa.js", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "site.js", "theme.js", "rum.js", "robots.txt", "sitemap.xml", "ct4f9c2e7a1b8d3056ae91c4d7f20b6a38.txt", "site.css", "common.js", "app.css", "fonts.css", "legal.html", "partner.html", "partner.js", "z.html", "z.js", "z.css", "zc.html", "zc.js", "zc.css", "zgame.js", "control.js", "audio.js", "pay.html", "pay.js", "big.html", "big.js", "big.css"];
+const FILES = ["index.html", "manifest.webmanifest", "zsw.js", "pwa.js", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "site.js", "theme.js", "rum.js", "robots.txt", "sitemap.xml", "ct4f9c2e7a1b8d3056ae91c4d7f20b6a38.txt", "site.css", "common.js", "app.css", "fonts.css", "legal.html", "partner.html", "partner.js", "partner.css", "z.html", "z.js", "z.css", "zc.html", "zc.js", "zc.css", "zgame.js", "control.js", "audio.js", "pay.html", "pay.js", "big.html", "big.js", "big.css"];
 for (const f of FILES) { if (!existsSync(join(SRC, f))) throw new Error("missing " + f); cpSync(join(SRC, f), join(OUT, f)); }
 for (const d of ["fonts", "img"]) cpSync(join(SRC, d), join(OUT, d), { recursive: true });
 // security headers; styles allow inline because the pages set a few style attributes, scripts stay locked to our own files

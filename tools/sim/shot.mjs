@@ -1,0 +1,11 @@
+import { createRequire } from "node:module";
+const require = createRequire("C:/ct/ct/package.json");
+const { chromium } = require("playwright-core");
+const [url, out, w, h, full] = [process.argv[2], process.argv[3], Number(process.argv[4] || 390), Number(process.argv[5] || 844), process.argv[6] === "full"];
+const b = await chromium.launch({ executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
+const p = await (await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1 })).newPage();
+const errs = []; p.on("pageerror", (e) => errs.push(String(e))); p.on("console", (m) => { if (m.type() === "error") errs.push(m.text()); });
+await p.goto(url, { waitUntil: "load" }); await p.waitForTimeout(1200);
+await p.screenshot({ path: out, fullPage: full });
+console.log("errors:", JSON.stringify(errs.filter((e) => !/404|Failed to load resource/.test(e))));
+await b.close();

@@ -1,6 +1,6 @@
 /** Packs are sold as "Up to N participants" (glossary). [participants, INR software price excl. 18% GST, USD all-inclusive (INR incl. GST / 70, rounded)]. */
 export const PACKS: ReadonlyArray<readonly [number, number, number]> = [
-  [100, 499, 8], [250, 999, 17], [500, 1499, 25], [750, 1799, 30], [1000, 1999, 34], [2500, 3999, 67], [5000, 6249, 105], [10000, 9999, 169],
+  [100, 999, 17], [250, 1299, 22], [500, 1499, 25], [750, 1799, 30], [1000, 1999, 34], [2500, 3999, 67], [5000, 6249, 105], [10000, 9999, 169],
 ];
 export const GST = 0.18;
 export type Currency = "INR" | "USD";

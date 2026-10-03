@@ -1,7 +1,7 @@
 /* Corporate Tambola, Refer & earn. A sales partner's reference code is their mobile number; their unique link is /?ref=<code>.
    Anyone may join (a participant from their ticket, or anyone from this page). Nothing is shown to anyone but the partner themselves. */
 (function () {
-  const $app = document.getElementById("app");
+  const $app = document.getElementById("app"), $dash = document.getElementById("dash");
   const q = new URLSearchParams(location.search);
   const BASE = (q.get("api") || "").replace(/\/$/, "");
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -20,28 +20,22 @@
     const text = "Corporate Tambola makes your company engagement unforgettable. Take a look: " + link;
     return `<div class="zlink" id="mylink">${esc(link)}</div>
       <p class="zsmall">Your reference code is your mobile number: <b>${esc(code)}</b>. Anyone who buys through your link is counted for you.</p>
-      <button class="zbtn s" id="copy">Copy my link</button>
+      <button class="zbtn s" id="copy">Copy my link</button> <button class="zbtn s alt" id="nshare" style="display:none">Share&hellip;</button>
       <a class="zbtn s alt" style="display:inline-flex;align-items:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(text)}">Share on WhatsApp</a>`;
-  }
-  function pitch() {
-    return `<div class="zcard"><h2>Refer &amp; earn</h2>
-      <p style="margin:0 0 8px">Know a company that would love a live Tambola for its people? Tell them about Corporate Tambola. When they buy through your link, you earn a commission.</p>
-      <ul class="zsmall" style="margin:0;padding-left:18px"><li>Your mobile number is your reference code.</li><li>You get your own link to share.</li><li>You can see your sales here. Buyers' details are never shown to you.</li><li>The commission is explained to every partner before the first payout.</li></ul></div>`;
   }
   function enrollView() {
     const phone = ls.get("ctz-phone") || "";
     const fromTicket = q.get("from") === "ticket";
-    return `<div class="zhead"><b>Corporate Tambola</b></div>${pitch()}
-      <div class="zcard zform"><h2>${fromTicket ? "Join as a sales partner" : "Join Refer &amp; earn"}</h2>
+    return `<div class="zcard zform"><h2>${fromTicket ? "Start earning: get your link" : "Get your link in 20 seconds"}</h2>
         <label for="ph">Your mobile number</label><input id="ph" inputmode="tel" autocomplete="tel" value="${esc(phone)}" placeholder="98765 43210">
         <label for="nm">Your name (optional)</label><input id="nm" autocomplete="name" maxlength="60">
-        <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;color:var(--ink)"><input type="checkbox" id="ok" style="width:auto;min-height:0;margin-top:3px"> <span>I would like to join Refer &amp; earn and receive updates about it on this mobile number.</span></label>
+        <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;color:var(--ink);font-size:14px"><input type="checkbox" id="ok" style="width:auto;min-height:0;margin-top:3px"> <span>I would like to join Refer &amp; earn and receive updates about it on this mobile number.</span></label>
         ${S.err ? `<div class="zbanner bad" role="alert">${esc(S.err)}</div>` : ""}
-        <button class="zbtn" id="join">Get my link</button>
+        <button class="zbtn" id="join">Get my link and start earning</button>
         <p class="zsmall">Already joined? <a href="#" id="signin">Sign in with your partner key</a></p></div>`;
   }
   function signinView() {
-    return `<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard zform"><h2>Sign in</h2>
+    return `<div class="zcard zform"><h2>Sign in to see your sales</h2>
       <label for="pk">Your partner key</label><input id="pk" type="password" autocomplete="off" placeholder="ctp_…">
       ${S.err ? `<div class="zbanner bad" role="alert">${esc(S.err)}</div>` : ""}
       <button class="zbtn" id="go">Show my sales</button>
@@ -60,9 +54,10 @@
   }
   const statusText = (s) => ({ pending_rate: "Counted", accrued: "Earned", paid: "Paid", blocked: "Not counted (own purchase)", void: "Cancelled" }[s.status] || s.status);
 
-  function draw(v) { $app.innerHTML = v; bind(); }
+  function draw(v, dash) { document.body.classList.toggle("signed", !!dash); (dash ? $dash : $app).innerHTML = v; if (dash) $app.innerHTML = ""; bind(); }
   function bind() {
     const $ = (id) => document.getElementById(id);
+    if ($("nshare") && navigator.share) { $("nshare").style.display = ""; $("nshare").onclick = () => navigator.share({ title: "Corporate Tambola", text: "Corporate Tambola makes your company engagement unforgettable. Take a look:", url: document.getElementById("mylink").textContent }).catch(() => {}); }
     if ($("copy")) $("copy").onclick = () => { try { navigator.clipboard.writeText(document.getElementById("mylink").textContent); $("copy").textContent = "Copied"; } catch {} };
     if ($("join")) $("join").onclick = async () => {
       S.err = "";
@@ -77,13 +72,31 @@
     if ($("signin")) $("signin").onclick = (e) => { e.preventDefault(); S.err = ""; draw(signinView()); };
     if ($("back")) $("back").onclick = (e) => { e.preventDefault(); S.err = ""; draw(enrollView()); };
     if ($("go")) $("go").onclick = async () => { const k = $("pk").value.trim(); try { await api("GET", "/api/partner/me", undefined, k); ls.set("ctz-pkey", k); S.err = ""; S.fresh = null; await load(); } catch (e) { S.err = e.status === 403 ? "That key was not recognised." : e.message; draw(signinView()); } };
-    if ($("out")) $("out").onclick = () => { ls.del("ctz-pkey"); S.me = null; S.fresh = null; draw(enrollView()); };
+    if ($("out")) $("out").onclick = () => { ls.del("ctz-pkey"); S.me = null; S.fresh = null; $dash.innerHTML = ""; draw(enrollView()); };
   }
   async function load() {
     const k = ls.get("ctz-pkey");
     if (!k) return draw(enrollView());
-    try { S.me = await api("GET", "/api/partner/me", undefined, k); draw(dashView()); }
+    try { S.me = await api("GET", "/api/partner/me", undefined, k); draw(dashView(), true); }
     catch (e) { if (e.status === 403) { ls.del("ctz-pkey"); draw(enrollView()); } else { $app.innerHTML = `<p class="zmsg">${esc(e.message)}</p>`; } }
   }
+  
+  // ---------- earnings table and calculator (prices come from the same list the checkout uses) ----------
+  const RATE = 0.5, packs = (window.TB && window.TB.PACKS) || [];
+  const money = (n) => "₹" + Number(n).toLocaleString("en-IN", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  const table = document.getElementById("earn-table");
+  if (table && packs.length) {
+    table.innerHTML = `<div class="rrow rh" role="row"><span>Pack</span><span>Software price</span><span>You earn (50%)</span></div>` + packs.map((p, i) => `<div class="rrow${i === 2 ? " hot" : ""}" role="row"><span>Up to <b>${p[0].toLocaleString("en-IN")}</b> people</span><span>${money(p[1])} <small>+ GST</small></span><span><b class="e">${money(p[1] * RATE)}</b> per sale</span></div>`).join("");
+    const top = document.getElementById("top-earn"); if (top) top.textContent = money(Math.floor(packs[packs.length - 1][1] * RATE));
+    const sel = document.getElementById("calc-pack"), n = document.getElementById("calc-n"), out = document.getElementById("calc-out"), nv = document.getElementById("calc-nv");
+    sel.innerHTML = packs.map((p, i) => `<option value="${i}"${i === 2 ? " selected" : ""}>Up to ${p[0].toLocaleString("en-IN")} people (${money(p[1])} + GST)</option>`).join("");
+    const calc = () => { nv.textContent = n.value; out.textContent = money(Number(n.value) * packs[Number(sel.value)][1] * RATE); };
+    sel.onchange = calc; n.oninput = calc; calc();
+  }
+  // the sticky "get my link" bar steps aside while the form (or the last call to action) is on screen
+  try {
+    const bar = document.querySelector(".rsticky"), watch = [document.getElementById("join"), document.querySelector(".rfinal")].filter(Boolean), seen = new Set();
+    if (bar && "IntersectionObserver" in window) { const io = new IntersectionObserver((es) => { for (const e of es) e.isIntersecting ? seen.add(e.target) : seen.delete(e.target); bar.classList.toggle("off", seen.size > 0); }); watch.forEach((w) => io.observe(w)); }
+  } catch {}
   load();
 })();
