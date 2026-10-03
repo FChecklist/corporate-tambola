@@ -41,7 +41,7 @@ export const payMode = (env: PayEnv) => (rzpOf(env) ? "razorpay" : env.TEST_MODE
 
 async function body(req: Request, max = 4096): Promise<any | null> { const t = await req.text(); if (t.length > max) return null; try { const v = JSON.parse(t); return v && typeof v === "object" ? v : null; } catch { return null; } }
 
-const KEYRE = /ctk_[0-9a-f]{48}/g;
+const KEYRE = /ct[ka]_[0-9a-f]{48}/g;
 /**
  * Mail goes out through Resend (the same account and verified sending domain DPDP already uses, so no extra cost). Only organizers, the people who bought,
  * are ever e-mailed; participants are reached by mobile number only. In production the mail body is never kept: a sent mail leaves no body behind, and a

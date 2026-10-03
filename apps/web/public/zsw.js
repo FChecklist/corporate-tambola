@@ -1,0 +1,64 @@
+/*
+ * Corporate Tambola service worker for the live (zero-server) pages.
+ * The whole game (screens, game logic, voice player, fonts, icons) is saved on the phone or laptop the first time
+ * the link is opened, and the game then runs from that copy. This is a static file: it costs us no server work and
+ * uses the participant's own storage and memory.
+ *  - /api/* and every other web address (the randomness beacon) are never touched: always live.
+ *  - Pages: network first (new versions arrive when online), the saved copy when offline.
+ *  - Other files: the saved copy at once, refreshed quietly in the background.
+ */
+const CACHE = "ct-game-v1";
+const FILES = ["/z.html", "/zc.html", "/big.html", "/z.js", "/zc.js", "/big.js", "/zgame.js", "/control.js", "/audio.js", "/common.js",
+  "/app.css", "/z.css", "/big.css", "/fonts.css", "/pwa.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png",
+  "/fonts/Fraunces-italic-500.woff2", "/fonts/Fraunces-normal-500-700.woff2", "/fonts/IBMPlexMono-normal-500.woff2", "/fonts/Inter-normal-400.woff2"];
+
+async function tell(m) { for (const c of await self.clients.matchAll()) c.postMessage({ type: "ct-sw", ...m }); }
+
+async function saveAll() {
+  const cache = await caches.open(CACHE);
+  let done = 0;
+  await Promise.all(FILES.map(async (f) => {
+    const res = await fetch(f, { cache: "reload" });
+    if (!res.ok) throw new Error("save " + f);
+    await cache.put(f, res);
+    done++;
+    tell({ state: "saving", done, total: FILES.length });
+  }));
+  tell({ state: "ready", done: FILES.length, total: FILES.length });
+}
+
+self.addEventListener("install", (e) => e.waitUntil(saveAll().then(() => self.skipWaiting(), () => self.skipWaiting())));
+self.addEventListener("activate", (e) => e.waitUntil((async () => {
+  for (const k of await caches.keys()) if (k !== CACHE && k.startsWith("ct-game-")) await caches.delete(k);
+  await self.clients.claim();
+})()));
+self.addEventListener("message", (e) => {
+  if (!e.data || e.data.type !== "status") return;
+  e.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    let have = 0;
+    for (const f of FILES) if (await cache.match(f)) have++;
+    if (have < FILES.length) { try { await saveAll(); return; } catch {} }
+    tell({ state: have === FILES.length ? "ready" : "partial", done: have, total: FILES.length });
+  })());
+});
+
+self.addEventListener("fetch", (e) => {
+  const req = e.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
+  if (url.origin !== location.origin || url.pathname.startsWith("/api/") || url.pathname === "/zsw.js") return;
+  if (!FILES.includes(url.pathname)) return; // payment page, legal pages and anything else stay normal
+  const key = url.pathname;
+  e.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    if (req.mode === "navigate") {
+      try { const res = await fetch(req); if (res.ok) cache.put(key, res.clone()); return res; }
+      catch { return (await cache.match(key)) || Response.error(); }
+    }
+    const hit = await cache.match(key);
+    const refresh = fetch(req).then((res) => { if (res.ok) cache.put(key, res.clone()); return res; }).catch(() => null);
+    if (hit) { e.waitUntil(refresh); return hit; }
+    return (await refresh) || Response.error();
+  })());
+});

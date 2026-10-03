@@ -120,6 +120,8 @@ const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers
 /** The message an organizer pastes into any AI chat. The key in it is the scoped AI key: it cannot publish, pay, erase or settle. */
 export const aiMessage = (origin: string, key: string) =>
   `You are my Corporate Tambola assistant. Read the instructions at ${origin}/api/z/ai-manifest, then do what I ask using that API. Send this key in the x-organizer header on every call: ${key}. Keep the key private. Talk to me like a friendly event planner: follow the "conversation" steps in that manifest in order, ask me ONE question at a time, give me 2 to 4 options with your recommendation, and wait for my answer. Never assume. Then set everything up for me: create the engagement, rewards, brand breaks, my participant list and the schedule. Tell me before you do anything that cannot be undone. When it is ready, give me the link the API returns: I will open it, confirm my email and mobile number, publish it (publishing is free) and pay before the start time, because without payment the engagement will not begin. Never try to publish or pay yourself. Help me with every step, and remind me about the payment before the start.`;
+/** The e-mail wrapper around the AI work link: the same text as Option 1 on the screen. */
+export const aiMailBody = (msg: string) => `Option 1: let your AI do the work. Copy everything between the lines below and paste it into any AI chat (ChatGPT, Claude, Gemini, Copilot). It will ask you simple questions one at a time and set up your engagement. It cannot publish, pay or erase anything: you do those yourself.\n\n--------\n${msg}\n--------\n\nKeep this e-mail private: the link works like a key to your engagement drafts.`;
 /** Runs the daily clean-up (365-day purge, one more try for unsent mail) the first time an organizer-side request arrives each UTC day. Never slows or fails the request. */
 export async function housekeeping(env: Env, now: number): Promise<void> {
   try {
@@ -259,7 +261,9 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
       env.DB.prepare("INSERT INTO organizer_email(email_hash,org) VALUES(?,?)").bind(eh, org),
       env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(ipk, String(used + 1), String(used + 1)),
     ]);
-    return json({ ok: true, token, aiKey, aiMessage: aiMessage((env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, aiKey) });
+    const startMsg = aiMessage((env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, aiKey);
+    await sendMail(env as PayEnv, env.DB, email, "Your Corporate Tambola AI work link", aiMailBody(startMsg), now); // same link as Option 1 on the screen, kept in the organizer's inbox
+    return json({ ok: true, token, aiKey, aiMessage: startMsg });
   }
   if (req.method === "POST" && p === "/api/auth/email") {
     const b = await body(req);
@@ -608,8 +612,10 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
       ...(ent ? [env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(eid, ent.id)] : []),
     ]);
     const paid = !!(ent || free), startMs = roundMs(e.start_round);
-    if (!paid) await sendMail(env as PayEnv, env.DB, cEmail, `Your engagement ${eid} is published: pay before ${istTime(startMs)}`,
-      `Your engagement ${eid} is published and open to your participants.\n\nShare this link with them:\n${shareUrl}\n\nIMPORTANT: payment is due before the start (${istTime(startMs)}). If it is not paid by then, the engagement will not begin and everyone you invited will be left waiting. You can pay any time before the start, and it takes about 2 minutes:\n${payUrl}\n\nYou can also open the big screen for the room: ${origin}/big.html?e=${eid}`, now);
+    const pubAi = "cta_" + randHex(24); // an extra AI key (the one already in use keeps working) so the mail carries a fresh, working AI work link
+    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + pubAi), e.org, "ai", now).run();
+    await sendMail(env as PayEnv, env.DB, cEmail, paid ? `Your engagement ${eid} is published and paid` : `Your engagement ${eid} is published: pay before ${istTime(startMs)}`,
+      `Your engagement ${eid} is published and open to your participants.\n\nShare this link with them:\n${shareUrl}\n\n${paid ? "" : `IMPORTANT: payment is due before the start (${istTime(startMs)}). If it is not paid by then, the engagement will not begin and everyone you invited will be left waiting. You can pay any time before the start, and it takes about 2 minutes:\n${payUrl}\n\n`}You can also open the big screen for the room: ${origin}/big.html?e=${eid}\n\n${aiMailBody(aiMessage(origin, pubAi))}`, now);
     return json({ ok: true, published: true, paid, startMs, payUrl, shareUrl, confirmed: { email: cEmail, phone: cPhone.slice(-10) } });
   }
   if (action === "claims" && req.method === "GET") {

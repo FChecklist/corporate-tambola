@@ -3,7 +3,9 @@
   const ZG = window.ZG;
   const $app = document.getElementById("app");
   const q = new URLSearchParams(location.search);
-  const EID = (q.get("e") || location.hash.replace(/^#/, "") || "").trim();
+  const LAST = "ct-last-eid";
+  let EID = (q.get("e") || location.hash.replace(/^#/, "") || "").trim();
+  try { if (EID) localStorage.setItem(LAST, EID); else EID = localStorage.getItem(LAST) || ""; } catch {} // the installed app opens without the link: use the last game
   const BASE = (q.get("api") || "").replace(/\/$/, "");
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
