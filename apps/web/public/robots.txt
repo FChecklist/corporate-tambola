@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /pay.html
+Disallow: /z.html
+Disallow: /zc.html
+Disallow: /big.html
+
+Sitemap: https://corporate-tambola.pages.dev/sitemap.xml

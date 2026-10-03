@@ -1,7 +1,6 @@
-/** Packs are sold as "Up to N participants" (glossary). [participants, INR incl. 18% GST, USD]. */
+/** Packs are sold as "Up to N participants" (glossary). [participants, INR software price excl. 18% GST, USD all-inclusive (INR incl. GST / 70, rounded)]. */
 export const PACKS: ReadonlyArray<readonly [number, number, number]> = [
-  [100, 500, 79], [250, 1000, 149], [500, 1500, 249], [750, 1800, 329],
-  [1000, 2000, 399], [2500, 4000, 799], [5000, 6250, 1299], [10000, 10000, 1999],
+  [100, 499, 8], [250, 999, 17], [500, 1499, 25], [750, 1799, 30], [1000, 1999, 34], [2500, 3999, 67], [5000, 6249, 105], [10000, 9999, 169],
 ];
 export const GST = 0.18;
 export type Currency = "INR" | "USD";
@@ -11,8 +10,8 @@ export function price(pack: number, currency: Currency): { total: number; base: 
   const p = PACKS.find((x) => x[0] === pack);
   if (!p) throw new RangeError(`unknown pack ${pack}`);
   if (currency === "INR") {
-    const base = r2(p[1] / (1 + GST));
-    return { total: p[1], base, tax: r2(p[1] - base) };
+    const tax = r2(p[1] * GST);
+    return { total: r2(p[1] + tax), base: p[1], tax };
   }
   return { total: p[2], base: p[2], tax: 0 };
 }

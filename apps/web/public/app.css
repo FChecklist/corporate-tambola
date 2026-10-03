@@ -282,3 +282,28 @@ details.chk ul{margin:0 0 10px;padding-left:18px;font-size:13px}
 .gdate{width:48px;text-align:center;border-right:1px solid var(--line);padding-right:10px}.gdate b{display:block;font:600 22px var(--serif)}.gdate span{font-size:11px;color:var(--muted);text-transform:uppercase}
 
 .rfoot{margin:6px 0 18px;text-align:center;font-size:12px}.rfoot a{color:var(--muted,#6F6166);text-decoration:underline;text-underline-offset:3px;display:inline-block;padding:10px 12px;min-height:24px}
+
+.svis{flex-direction:column;align-items:center}
+.vtop{list-style:none;margin:0 0 18px;padding:0;display:flex;gap:clamp(14px,2.2vw,32px);justify-content:center}
+.vtop li{display:flex;align-items:center;gap:6px;font:600 11px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:#EBD9DE}
+.vtop .ic{width:15px;height:15px;stroke:var(--gold);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.vbot{margin:40px 0 0;font:500 11px/1.4 var(--sans);letter-spacing:.1em;color:rgba(235,217,222,.75);text-align:center}
+
+/* colour themes: maroon (default), US studio blue, emerald. Set by theme.js on <html data-theme> */
+html[data-theme="maroon"]{--t1:#3A0B18;--t2:#5A1426;--t3:#8E2240}
+html[data-theme="blue"]{--wine:#0B3D91;--wine2:#1553B8;--deep:#061B45;--t1:#04193F;--t2:#0B3D91;--t3:#1E5FD0}
+html[data-theme="emerald"]{--wine:#0B5D55;--wine2:#127A6F;--deep:#052623;--t1:#04201D;--t2:#0B5D55;--t3:#17977F}
+html[data-theme] .site{background:radial-gradient(1000px 600px at 78% 45%,rgba(224,184,114,.2),transparent 60%),radial-gradient(700px 500px at 0% 0%,var(--t3) 0%,transparent 60%),linear-gradient(135deg,var(--t1),var(--t2) 55%,var(--t1))}
+html[data-theme] .howhero,html[data-theme] .legaltop{background:linear-gradient(135deg,var(--t1),var(--t2))}
+html[data-theme] .chip.on{background:#fff}
+.tdots{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:60;display:flex;gap:9px;padding:6px 10px;border-radius:99px;background:rgba(0,0,0,.28);backdrop-filter:blur(4px)}
+.tdots button{width:14px;height:14px;padding:0;border-radius:50%;border:2px solid rgba(255,255,255,.55);cursor:pointer}
+.tdots button[aria-pressed="true"]{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.35)}
+.tdots button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+@media (max-width:960px){.tdots{top:4px;padding:4px 8px;gap:8px}.tdots button{width:11px;height:11px}.site .snav{padding-top:26px}}
+
+.chg{display:block;font:500 9px/1.2 var(--sans);letter-spacing:.04em;text-transform:none;opacity:.8;margin-top:1px}
+#payBtn .bt{display:flex;flex-direction:column;align-items:center;line-height:1.15}
+#payBtn .bt small{font:500 10px/1.2 var(--sans);opacity:.8;letter-spacing:.03em}
+
+@media (min-width:1100px){.benef{grid-template-columns:repeat(4,1fr)}}

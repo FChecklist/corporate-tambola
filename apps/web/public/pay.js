@@ -33,7 +33,7 @@
     if (!pack) return `${head}<div class="zcard"><h2>A custom arrangement is needed</h2><p class="zsmall" style="margin-top:0">An engagement for more than 10,000 participants is arranged with us directly. Please write to us from the contact page.</p></div>`;
     const x = TB.price(pack, S.cur);
     const sum = S.cur === "INR"
-      ? `<div class="zrow"><span>Software</span><em>${TB.money(x.base, "INR")}</em></div><div class="zrow"><span>GST 18%</span><em>${TB.money(x.tax, "INR")}</em></div><div class="zrow"><span><b>Total</b></span><em><b>${TB.money(x.total, "INR")}</b></em></div>`
+      ? `<div class="zrow"><span>Price of Software</span><em>${TB.money(x.base, "INR")}</em></div><div class="zrow"><span>GST 18%</span><em>${TB.money(x.tax, "INR")}</em></div><div class="zrow"><span><b>Total</b></span><em><b>${TB.money(x.total, "INR")}</b></em></div>`
       : `<div class="zrow"><span><b>Total</b></span><em><b>${TB.money(x.total, "USD")}</b></em></div><p class="zsmall">No tax added. Billed in US dollars.</p>`;
     const off = S.mode === "off";
     return `${head}

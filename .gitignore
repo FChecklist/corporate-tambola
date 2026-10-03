@@ -7,3 +7,4 @@ config/company.json
 *.sqlite*
 pages/public/
 .wrangler-state/
+config/telemetry-report-key.txt

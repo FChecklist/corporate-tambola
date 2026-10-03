@@ -18,13 +18,14 @@
       el.innerHTML = ["INR", "USD"].map((k) => `<button type="button" class="${S.cur === k ? "on" : ""}" aria-pressed="${S.cur === k}" data-c="${k}">${k === "INR" ? "₹ INR" : "US$"}</button>`).join("");
     });
     $("pack").innerHTML = TB.PACKS.map(([n]) => `<option value="${n}" ${n === S.pack ? "selected" : ""}>Up to ${nf(n)} participants</option>`).join("");
-    $("heroBrk").innerHTML = breakdown(S.pack, S.cur);
+    if ($("heroBrk")) $("heroBrk").innerHTML = breakdown(S.pack, S.cur);
     $("packs").innerHTML = TB.PACKS.map(([n]) => {
-      const x = TB.price(n, S.cur);
-      return `<div class="pack"><span class="up">Up to</span><span class="n">${nf(n)} participants</span><span class="tot">${TB.money(x.total, S.cur)}</span><div class="brk">${breakdown(n, S.cur)}</div>${`<button type="button" class="btn ${n === S.pack ? "" : "line"}" data-buy="${n}" aria-label="Create an engagement for up to ${nf(n)} participants">Create Engagement ${ic("arrow")}</button>`}</div>`;
+      const x = TB.price(n, S.cur), shown = S.cur === "INR" ? x.base : x.total, was = S.cur === "INR" ? shown * 2 + 1 : shown * 2;
+      const tag = n === 500 ? '<i class="badge">Most popular</i>' : n === 250 ? '<i class="badge b2">2nd most popular</i>' : "";
+      return `<div class="prow${n === 500 ? " pop" : n === 250 ? " pop2" : ""}"><div class="pl"><b>Up to ${nf(n)} participants</b>${tag ? `<span>${tag}</span>` : ""}</div><div class="pr"><span class="pt"><span class="was">${TB.money(was, S.cur)}</span><span class="tot"><small>Only</small> ${TB.money(shown, S.cur)}</span>${S.cur === "INR" ? '<em class="gstn">GST applicable</em>' : ""}</span><i class="off">50% discount applied</i><button type="button" class="btn ${n === 500 ? "" : "line"}" data-buy="${n}" aria-label="Create an engagement for up to ${nf(n)} participants">Create ${ic("arrow")}</button></div></div>`;
     }).join("");
-    if (FREE.on) { $("priceNote").textContent = "You build and publish your engagement for free. You pay before it starts: if it is not paid by the start time, it will not begin. " + (S.cur === "INR" ? "Prices in Indian rupees include 18% GST." : "Prices in US dollars. No tax added."); return; }
-    $("priceNote").textContent = S.cur === "INR" ? "Prices in Indian rupees include 18% GST. Billed in India." : "Prices in US dollars. No tax added. Billed outside India.";
+    if (FREE.on) { $("priceNote").textContent = "You build and publish your engagement for free. You pay before it starts: if it is not paid by the start time, it will not begin. " + (S.cur === "INR" ? "Prices in Indian rupees, before 18% GST. The full amount, with GST, is shown when you publish." : "Prices in US dollars, all-inclusive."); return; }
+    $("priceNote").textContent = S.cur === "INR" ? "Prices in Indian rupees, before 18% GST. The full amount, with GST, is shown when you publish. Billed in India." : "Prices in US dollars, all-inclusive. Billed outside India.";
   }
   document.addEventListener("click", (e) => {
     const c = e.target.closest("[data-c]"); if (c) { S.cur = c.dataset.c; renderPrices(); if ($("ordSum")) sumRefresh(); return; }
@@ -47,8 +48,8 @@
   function sumHTML(pack, cur) {
     const x = TB.price(pack, cur);
     return cur === "INR"
-      ? `<div class="kv"><span>Software</span><b>${TB.money(x.base, cur)}</b></div><div class="kv"><span>GST 18%</span><b>${TB.money(x.tax, cur)}</b></div><div class="kv t"><span>Total</span><b>${TB.money(x.total, cur)}</b></div>`
-      : `<div class="kv"><span>Software</span><b>${TB.money(x.base, cur)}</b></div><div class="kv"><span>Tax</span><b>None added</b></div><div class="kv t"><span>Total</span><b>${TB.money(x.total, cur)}</b></div><p class="tiny muted" style="margin:0 0 10px">No tax added · billed in US dollars</p>`;
+      ? `<div class="kv"><span>Price of Software</span><b>${TB.money(x.base, cur)}</b></div><div class="kv"><span>GST 18%</span><b>${TB.money(x.tax, cur)}</b></div><div class="kv t"><span>Total</span><b>${TB.money(x.total, cur)}</b></div>`
+      : `<div class="kv"><span>Price of Software</span><b>${TB.money(x.base, cur)}</b></div><div class="kv"><span>Tax</span><b>None added</b></div><div class="kv t"><span>Total</span><b>${TB.money(x.total, cur)}</b></div><p class="tiny muted" style="margin:0 0 10px">No tax added · billed in US dollars</p>`;
   }
   function sumRefresh() { $("ordSum").innerHTML = sumHTML(ORDER.pack, S.cur); }
   function taxField() {

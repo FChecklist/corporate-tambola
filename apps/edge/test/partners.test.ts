@@ -67,7 +67,7 @@ describe("a referred purchase", () => {
     expect(r.result.ok).toBe(true);
     const c = raw.query("SELECT partner_code, base, currency, rate, amount, status FROM commission").get() as any;
     expect(c).toMatchObject({ partner_code: "9811122233", currency: "INR", rate: null, amount: null, status: "pending_rate" });
-    expect(c.base).toBe(1271.19); // Rs 1,500 incl. GST for 500 participants -> taxable value, commission is never paid on GST
+    expect(c.base).toBe(1499); // 500 participants = Rs 1,499 software price before GST; commission is never paid on GST
   });
   test("no purchase, no commission: an unpaid or unknown-code or no-code order writes nothing", async () => {
     await buy({ ref: "9000000000" }); await buy({});
@@ -94,13 +94,13 @@ describe("a referred purchase", () => {
     expect((await call("POST", "/api/partners/commission/rate", { rate: 0.2 }, plat)).status).toBe(200); // nothing left to change
     const rows = raw.query("SELECT base, rate, amount, status FROM commission ORDER BY id").all() as any[];
     expect(rows.map((r) => r.status)).toEqual(["accrued", "accrued"]);
-    expect(rows[0]).toMatchObject({ rate: 0.1, amount: 127.12 });
+    expect(rows[0]).toMatchObject({ rate: 0.1, amount: 149.9 });
     expect(rows[1]!.amount).toBeCloseTo(rows[1]!.base * 0.1, 2);
   });
   test("a rate set up front applies at once; absurd rates are refused", async () => {
     env.PARTNER_COMMISSION_RATE = "0.15";
     await buy({ ref: "9811122233" });
-    expect(raw.query("SELECT rate, amount, status FROM commission").get()).toEqual({ rate: 0.15, amount: 190.68, status: "accrued" });
+    expect(raw.query("SELECT rate, amount, status FROM commission").get()).toEqual({ rate: 0.15, amount: 224.85, status: "accrued" });
     for (const rate of [-0.1, 0.51, "x", null]) expect((await call("POST", "/api/partners/commission/rate", { rate }, plat)).status).toBe(400);
   });
   test("a refunded purchase can be voided, but a paid-out one cannot", async () => {
@@ -133,7 +133,7 @@ describe("what a partner can see", () => {
     const me = await (await call("GET", "/api/partner/me", undefined, { "x-partner": a.partnerKey })).json() as any;
     expect(me.code).toBe("9811122233");
     expect(me.totals.sales).toBe(2);
-    expect(me.totals.accruedInr).toBeCloseTo(127.12 + 169.49, 1);
+    expect(me.totals.accruedInr).toBeCloseTo(149.9 + 199.9, 1);
     expect(me.rateAnnounced).toBe(true);
     const txt = JSON.stringify(me);
     expect(/Secret Buyer|private@buyer|@/.test(txt.replace(/"link":"[^"]*"/, ""))).toBe(false);
