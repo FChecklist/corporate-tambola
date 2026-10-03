@@ -12,6 +12,11 @@ const FILES = ["/z.html", "/zc.html", "/big.html", "/z.js", "/zc.js", "/big.js",
   "/app.css", "/z.css", "/big.css", "/fonts.css", "/pwa.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png",
   "/fonts/Fraunces-italic-500.woff2", "/fonts/Fraunces-normal-500-700.woff2", "/fonts/IBMPlexMono-normal-500.woff2", "/fonts/Inter-normal-400.woff2"];
 
+// A saved copy must be a plain answer (not a redirect) or the browser refuses to show it from the saved set.
+async function clean(res) { return new Response(await res.blob(), { status: 200, headers: { "content-type": res.headers.get("content-type") || "application/octet-stream" } }); }
+// The host may show /z.html as /z; both mean the same saved page.
+function keyOf(pathname) { if (FILES.includes(pathname)) return pathname; const h = pathname.replace(/\/$/, "") + ".html"; return FILES.includes(h) ? h : null; }
+
 async function tell(m) { for (const c of await self.clients.matchAll()) c.postMessage({ type: "ct-sw", ...m }); }
 
 async function saveAll() {
@@ -20,7 +25,7 @@ async function saveAll() {
   await Promise.all(FILES.map(async (f) => {
     const res = await fetch(f, { cache: "reload" });
     if (!res.ok) throw new Error("save " + f);
-    await cache.put(f, res);
+    await cache.put(f, await clean(res));
     done++;
     tell({ state: "saving", done, total: FILES.length });
   }));
@@ -48,16 +53,17 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== location.origin || url.pathname.startsWith("/api/") || url.pathname === "/zsw.js") return;
-  if (!FILES.includes(url.pathname)) return; // payment page, legal pages and anything else stay normal
-  const key = url.pathname;
+  const key = keyOf(url.pathname);
+  if (!key) return; // payment page, legal pages and anything else stay normal
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
     if (req.mode === "navigate") {
-      try { const res = await fetch(req); if (res.ok) cache.put(key, res.clone()); return res; }
-      catch { return (await cache.match(key)) || Response.error(); }
+      try { const res = await fetch(key, { cache: "no-store" }); if (res.ok) { const c = await clean(res); cache.put(key, c.clone()); return c; } }
+      catch {}
+      return (await cache.match(key)) || Response.error();
     }
     const hit = await cache.match(key);
-    const refresh = fetch(req).then((res) => { if (res.ok) cache.put(key, res.clone()); return res; }).catch(() => null);
+    const refresh = fetch(key).then(async (res) => { if (res.ok) { const c = await clean(res); cache.put(key, c.clone()); return c; } return res; }).catch(() => null);
     if (hit) { e.waitUntil(refresh); return hit; }
     return (await refresh) || Response.error();
   })());
