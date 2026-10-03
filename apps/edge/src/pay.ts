@@ -100,7 +100,7 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
       await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`pub/${meta.eid}`, String(now)).run(); // paying also publishes
       const st = await db.prepare("SELECT start_round FROM engagement WHERE id=?").bind(meta.eid).first<{ start_round: number }>();
       if (st && (1692803367 + (st.start_round - 1) * 3) * 1000 <= now) { // it was held because it was not paid at its start time: it now starts in about 3 minutes, for everyone already waiting
-        restart = Math.floor((now / 1000 - 1692803367) / 3) + 1 + 60;
+        restart = Math.floor((now / 1000 - 1692803367) / 3) + 1 + 60 - 40; // 3 minutes to the first number: the 2-minute setup window (GRACE_ROUNDS = 40) is part of those 3 minutes
         await db.prepare("UPDATE engagement SET start_round=? WHERE id=?").bind(restart, meta.eid).run();
       }
     }

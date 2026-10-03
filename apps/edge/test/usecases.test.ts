@@ -173,7 +173,7 @@ describe("C. publish and pay", () => {
     expect((await j(await call("GET", "/api/z/LATE-PAY/info", undefined, {}, late))).locked).toBe(true);
     const c = await j(await checkout(o, "LATE-PAY", {}, late));
     const v = await j(await settle(c.paymentId, c.razorpay.orderId, "pay_late", late));
-    expect(v.published).toBe(true); expect(v.restartedAtMs).toBeGreaterThanOrEqual(late + 170_000); expect(v.restartedAtMs).toBeLessThanOrEqual(late + 190_000);
+    expect(v.published).toBe(true); expect(v.restartedAtMs).toBeGreaterThanOrEqual(late + 50_000); expect(v.restartedAtMs).toBeLessThanOrEqual(late + 70_000); // the clock time shown to people; the first number follows 2 minutes later (setup window), about 3 minutes after paying
     const info = await j(await call("GET", "/api/z/LATE-PAY/info", undefined, {}, late + 1000));
     expect(info.locked).toBeFalsy(); expect(info.startMs).toBe(v.restartedAtMs);
     expect((await call("GET", "/api/z/LATE-PAY/control", undefined, {}, late + 1000)).status).toBe(404);
