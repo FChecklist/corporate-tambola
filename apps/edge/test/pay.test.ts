@@ -54,7 +54,7 @@ describe("checkout", () => {
   test("a valid checkout creates one Razorpay order for the right amount in paise and one unpaid payment row", async () => {
     const r = await (await buy()).json() as any;
     expect(r.mode).toBe("razorpay");
-    expect(r.razorpay.amount).toBe(176882); // 500 participants = Rs 1,500 incl. GST
+    expect(r.razorpay.amount).toBe(471882); // 500 participants = Rs 3,999 + 18% GST = Rs 4,718.82
     expect(r.razorpay.name).toBe("CORPORATE TAMBOLA");
     expect(rz.orders).toHaveLength(1);
     expect(raw.query("SELECT status FROM payment").get()).toEqual({ status: "created" });
@@ -99,14 +99,14 @@ describe("verify (the buyer's browser says it paid)", () => {
     expect(raw.query("SELECT COUNT(*) c FROM outbox").get()).toEqual({ c: 1 });
   });
   test("a wrong signature is refused and nothing is granted", async () => {
-    rz.payments.pay_1 = { id: "pay_1", order_id: orderId, status: "captured", amount: 176882 };
+    rz.payments.pay_1 = { id: "pay_1", order_id: orderId, status: "captured", amount: 471882 };
     const r = await call("POST", "/api/payments/verify", { paymentId, razorpay_order_id: orderId, razorpay_payment_id: "pay_1", razorpay_signature: "deadbeef" });
     expect(r.status).toBe(400);
     expect(raw.query("SELECT COUNT(*) c FROM entitlement").get()).toEqual({ c: 0 });
   });
   test("a valid signature for the wrong amount, wrong order, failed or unknown payment grants nothing", async () => {
     expect((await complete(paymentId, orderId, "pay_2", "captured", 100)).status).toBe(400);
-    rz.orders.push({ id: "order_other", amount: 176882, currency: "INR" });
+    rz.orders.push({ id: "order_other", amount: 471882, currency: "INR" });
     expect((await complete(paymentId, "order_other", "pay_3")).status).toBe(404);
     expect((await complete(paymentId, orderId, "pay_4", "failed")).status).toBe(402);
     const r = await call("POST", "/api/payments/verify", { paymentId, razorpay_order_id: orderId, razorpay_payment_id: "pay_ghost", razorpay_signature: hmac("sek", `${orderId}|pay_ghost`) });
@@ -128,7 +128,7 @@ describe("webhook (the buyer closed the tab)", () => {
   let paymentId = "", orderId = "";
   beforeEach(async () => { const r = await (await buy()).json() as any; paymentId = r.paymentId; orderId = r.razorpay.orderId; });
   const hook = (ev: unknown, secret = "whsec") => { const raw = JSON.stringify(ev); return call("POST", "/api/payments/webhook", raw, { "x-razorpay-signature": hmac(secret, raw) }); };
-  const captured = (amount = 176882) => ({ event: "payment.captured", payload: { payment: { entity: { id: "pay_w1", order_id: orderId, amount } } } });
+  const captured = (amount = 471882) => ({ event: "payment.captured", payload: { payment: { entity: { id: "pay_w1", order_id: orderId, amount } } } });
   test("a signed capture fulfils, and a repeat delivery does not double up", async () => {
     expect((await hook(captured())).status).toBe(200);
     expect((await hook(captured())).status).toBe(200);
@@ -151,7 +151,7 @@ describe("webhook (the buyer closed the tab)", () => {
   });
   test("the browser verify arriving after the webhook returns the same result without a second grant", async () => {
     await hook(captured());
-    rz.payments.pay_w1 = { id: "pay_w1", order_id: orderId, status: "captured", amount: 176882 };
+    rz.payments.pay_w1 = { id: "pay_w1", order_id: orderId, status: "captured", amount: 471882 };
     const r = await call("POST", "/api/payments/verify", { paymentId, razorpay_order_id: orderId, razorpay_payment_id: "pay_w1", razorpay_signature: hmac("sek", `${orderId}|pay_w1`) });
     expect(r.status).toBe(200);
     expect(raw.query("SELECT COUNT(*) c FROM entitlement").get()).toEqual({ c: 1 });
@@ -226,7 +226,7 @@ describe("invoices", () => {
     const r = await (await buy()).json() as any; const f = await (await complete(r.paymentId, r.razorpay.orderId)).json() as any;
     const html = await (await call("GET", f.invoiceUrl)).text();
     expect(html).not.toContain("DRAFT:");
-    expect(html).toContain("1,499.00"); // software price before GST
+    expect(html).toContain("3,999.00"); // software price before GST
   });
 });
 

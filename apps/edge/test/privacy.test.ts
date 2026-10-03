@@ -189,6 +189,11 @@ describe("the report and the deletion", () => {
     const pdf = new TextDecoder("latin1").decode(m.attachments[0]!.content);
     expect(pdf.startsWith("%PDF-1.4")).toBe(true); expect(pdf).toMatch(/%%EOF\s*$/);
     for (const needle of ["Organizer Olga", "Guest 3", "98765 00001", "98765 00002", "Zed ??", "organizer", "Full House", "Top Line", "Early Five", "boss@acme.com", "Sent on:", "deleted", "365th day", "backups"]) expect(pdf.toLowerCase()).toContain(needle.toLowerCase().replace("backups", "backups"));
+    for (const needle of ["Our commitment to your data", "permanently deleted from our systems within 24 hours", "DPDP", "GDPR", "California Consumer Privacy Act", "advertising", "encryption", "winners record"]) expect(pdf).toContain(needle);
+    expect(pdf).not.toMatch(/personal data(?! protection)/i); expect(m.text).not.toMatch(/personal data(?! protection)/i); // the Act's own name is the only place the words appear
+    expect(m.text).toMatch(/DPDP Act/); expect(m.text).toMatch(/CCPA/);
+    expect(pdf + m.text).not.toMatch(/the law requires|required by law/i); // we do not say why we hold the organizer's details
+    expect(pdf).not.toMatch(/(rs|inr|usd|price)[^\n(]{0,12}per (person|participant|head|user)/i); // no per-person price is ever shown (tickets per person is a game setting, not a price)
     expect(pdf).toMatch(/Who invited whom/); expect(pdf).toMatch(/\+- Guest 3/); // the tree: Olga invited 2, who invited 3..
     expect(raw.query("SELECT report_ms FROM life").get()).not.toEqual({ report_ms: null });
     expect(raw.query("SELECT COUNT(*) c FROM kv WHERE k LIKE 'rpt%'").get()).toEqual({ c: 1 + 1 }); // working copies exist until the deletion (state + one sealed chunk)

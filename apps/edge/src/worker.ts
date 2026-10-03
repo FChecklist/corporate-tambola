@@ -545,7 +545,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
       await erasePersonal(env, tok, now, "email");
       done.push(tok);
     }
-    if (done.length) await sendMail(env as PayEnv, env.DB, from, `Deleted: participant data of ${done.join(", ")}`, `As you asked, we have permanently deleted every participant's name, mobile number, seat and invitation record for: ${done.join(", ")}.\n\nWe keep, as the law requires, your details as organizer / host / co-host and the winners record (prize, round, time, seat; no names or numbers) until their 365 days end. Backups roll off within 7 days.\n\nCorporate Tambola`, now);
+    if (done.length) await sendMail(env as PayEnv, env.DB, from, `Deleted: participant data of ${done.join(", ")}`, `As you asked, we have permanently deleted every participant's name, mobile number, seat and invitation record for: ${done.join(", ")}.\n\nWe keep, your details as organizer / host / co-host and the winners record (prize, round, time, seat; no names or numbers) until their 365 days end. Backups roll off within 7 days.\n\nCorporate Tambola`, now);
     return json({ ok: true, action: done.length ? "deleted" : "no-match", engagements: done });
   }
   if (req.method === "POST" && p === "/api/lifecycle/tick") { // run every minute by the scheduled job: reports, deletions, reminders. Idempotent and bounded per call.

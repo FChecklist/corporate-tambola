@@ -12,6 +12,9 @@ import type { PayEnv } from "./pay";
 export const ATTRIBUTION_DAYS = 30;
 /** The commission every partner earns on the software price (before GST) of a paid, referred purchase. Owner decision 2026-10-03: 50%. PARTNER_COMMISSION_RATE can lower it (never above 50%). */
 export const COMMISSION_RATE = 0.5;
+/** What the partner who first brought a customer earns when that customer buys again within a year. */
+export const REPEAT_COMMISSION_RATE = 0.2;
+export const REPEAT_WINDOW_DAYS = 365;
 export const PARTNER_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS partner (code TEXT PRIMARY KEY, key_hash TEXT NOT NULL, name TEXT, source TEXT, enrolled_ms INTEGER NOT NULL, consent_ms INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'active')`,
   `CREATE TABLE IF NOT EXISTS commission (id INTEGER PRIMARY KEY AUTOINCREMENT, payment_id TEXT UNIQUE NOT NULL, partner_code TEXT NOT NULL, base REAL NOT NULL, currency TEXT NOT NULL, rate REAL, amount REAL, status TEXT NOT NULL, reason TEXT, created_ms INTEGER NOT NULL, paid_ref TEXT, paid_ms INTEGER)`,
@@ -30,14 +33,21 @@ export const phoneHashFor = (env: Env, code: string) => sha(`${env.PHONE_SALT ??
 /** Called when a payment is fulfilled. Writes at most one commission row per payment; never throws into the purchase. */
 export async function recordCommission(env: PayEnv, p: { id: string; ref?: string | null; buyer_phone_hash?: string | null; currency: string }, base: number, now: number): Promise<void> {
   try {
-    if (!p.ref) return;
-    const partner = await env.DB.prepare("SELECT code FROM partner WHERE code=? AND state='active'").bind(p.ref).first<{ code: string }>();
+    // a customer belongs to the partner who first brought them for 12 months: their repeat purchases earn that partner the repeat rate, whether or not a link was used again
+    const email = String((p as any).email ?? "").trim().toLowerCase();
+    const since = now - REPEAT_WINDOW_DAYS * 86_400_000;
+    const earlier = email ? await env.DB.prepare("SELECT c.partner_code AS code FROM payment pay LEFT JOIN commission c ON c.payment_id=pay.id AND c.status<>'void' WHERE lower(pay.email)=? AND pay.status='paid' AND pay.id<>? AND pay.paid_ms>? ORDER BY pay.paid_ms LIMIT 1").bind(email, p.id, since).first<{ code: string | null }>() : null;
+    const repeat = !!earlier;
+    const code = earlier?.code ?? p.ref;
+    if (!code) return;
+    const partner = await env.DB.prepare("SELECT code FROM partner WHERE code=? AND state='active'").bind(code).first<{ code: string }>();
     if (!partner) return; // unknown or stopped code: the purchase is simply not attributed
     let status = "pending_rate", reason: string | null = null, rate: number | null = null, amount: number | null = null;
     if (p.buyer_phone_hash && p.buyer_phone_hash === (await phoneHashFor(env, partner.code))) { status = "blocked"; reason = "self_referral"; }
     else {
       const set = env.PARTNER_COMMISSION_RATE !== undefined && env.PARTNER_COMMISSION_RATE !== "" ? Number(env.PARTNER_COMMISSION_RATE) : NaN;
-      const x = set >= 0 && set <= 0.5 ? set : COMMISSION_RATE; // 50% unless the owner chose something lower
+      const first = set >= 0 && set <= 0.5 ? set : COMMISSION_RATE; // 50% on a customer's first purchase, unless the owner chose something lower
+      const x = repeat ? Math.min(REPEAT_COMMISSION_RATE, first) : first; // 20% when the customer buys again within 12 months
       rate = x; amount = r2(base * x); status = "accrued";
     }
     await env.DB.prepare("INSERT OR IGNORE INTO commission(payment_id,partner_code,base,currency,rate,amount,status,reason,created_ms) VALUES(?,?,?,?,?,?,?,?,?)").bind(p.id, partner.code, base, p.currency, rate, amount, status, reason, now).run();
@@ -83,7 +93,7 @@ export async function partnerRoute(req: Request, env: PayEnv, now: number, spend
     return json({
       code: m.code, name: m.name, state: m.state, link: `${origin}/?ref=${m.code}`, attributionDays: ATTRIBUTION_DAYS,
       totals: { sales: rows.length, accruedInr: sum("accrued"), paidInr: sum("paid"), waitingForRate: rows.filter((r: any) => r.status === "pending_rate").length, blocked: rows.filter((r: any) => r.status === "blocked").length },
-      rateAnnounced: true, rate: COMMISSION_RATE,
+      rateAnnounced: true, rate: COMMISSION_RATE, repeatRate: REPEAT_COMMISSION_RATE,
       sales: rows.map((r: any) => ({ date: r.created_ms, pack: r.pack, currency: r.currency, status: r.status, reason: r.reason, amount: r.amount })), // never who bought
     });
   }

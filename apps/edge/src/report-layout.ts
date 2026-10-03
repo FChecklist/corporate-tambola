@@ -50,12 +50,12 @@ export function layoutReport(d: ReportData): Uint8Array {
   pdf.box("Sent to you", [
     `E-mail address: ${d.organizerEmail}`,
     `Sent on: ${istFull(d.sentAtMs)}  (${utcFull(d.sentAtMs)})`,
-    "This PDF is the complete record of your engagement, including the names and mobile numbers of everyone who took part. Please keep it safe: it is the only copy of this personal data that exists once we delete ours.",
+    "This PDF is the complete record of your engagement, including the names and mobile numbers of everyone who took part. Please keep it safe: it is the only copy of this data that exists once we delete ours.",
   ], [0.93, 0.96, 1], NAVY);
 
   pdf.box("What we keep, and what we delete", [
     `We have given you ALL the data we hold about the people in this engagement. Within 24 hours of the game ending, and no later than ${istFull(d.personalDeleteAtMs)}, we permanently delete from our systems every participant's name, mobile number, join record, ticket assignment and invite link record. After that nobody at Corporate Tambola, and nothing in our software or database, holds them.`,
-    "We keep, for 365 days, only: (1) the details of the organizer, host and co-hosts (name, e-mail, mobile number), because the law requires us to hold these; and (2) the winners record: which prize, which round, at what time, and the ticket seat number. The winners record does not contain names or mobile numbers.",
+    "We keep, for 365 days, only: (1) the details of the organizer, host and co-hosts (name, e-mail, mobile number); and (2) the winners record: which prize, which round, at what time, and the ticket seat number. The winners record does not contain names or mobile numbers.",
     `Everything about this engagement, including those two records, is permanently deleted at 00:00 hours (IST) on ${istDate(d.fullDeleteAtMs)}, which is the end of the 365th day.`,
     `Backups of our database roll off within ${d.backupDays} days, so any copy of deleted data in a backup is gone within ${d.backupDays} days of the deletion.`,
     "For your next game you can reuse the people list until it is deleted (the reuse button in your console), or upload your own list again afterwards from this report.",
@@ -129,6 +129,21 @@ export function layoutReport(d: ReportData): Uint8Array {
     ["Organizer / host / co-host details and the winners record", `00:00 hours IST, ${istDate(d.fullDeleteAtMs)}`],
   ]);
   pdf.para("You can ask us to delete everything sooner: press 'Erase' in your console, ask your AI assistant to request it (you confirm in your console), or e-mail us from your registered address.", { size: 9 });
+
+  pdf.h1("8. Our commitment to your data");
+  pdf.box("All of it is deleted. Here is exactly what, and when.", [
+    `1. Everything about the people in this engagement (every name, mobile number, seat, join record and invite record) is permanently deleted from our systems within 24 hours of the game ending, and no later than ${istFull(d.personalDeleteAtMs)}. You have all of it in this report; after that we hold none of it.`,
+    "2. We keep only two things, for 365 days: the details of the organizer, host and co-hosts (name, e-mail address and mobile number), and the winners record (which prize, which round, at what time, which seat number). The winners record has no names and no mobile numbers.",
+    `3. At 00:00 hours IST on ${istDate(d.fullDeleteAtMs)}, the end of the 365th day, everything else is permanently deleted too.`,
+    `4. Backups of our database roll off within ${d.backupDays} days, so no copy of deleted data remains after that.`,
+    "5. Names and mobile numbers are stored encrypted while we hold them, and only your own game's report is ever built from them.",
+  ]);
+  pdf.box("The laws we follow", [
+    "Corporate Tambola is built to follow India's Digital Personal Data Protection Act, 2023 (DPDP Act), the European Union's General Data Protection Regulation (GDPR) and the United Kingdom's equivalent, and the privacy laws of the United States, including state laws such as the California Consumer Privacy Act (CCPA / CPRA).",
+    "In practice this means: we collect only the data needed to run your game; we use it only for that purpose; we protect it with encryption; we keep it for the shortest time we can and tell you exactly how long; we never sell it or use it for advertising; and the people who took part, and you, can ask us to show, correct or delete their data at any time.",
+    "You are the organizer of your game and decide who takes part; we process the data on your behalf. To exercise any right, or to ask us anything, reply to the e-mail this report came with.",
+  ], [0.93, 0.96, 1], NAVY);
+  pdf.para(`Sent on ${istFull(d.sentAtMs)} to ${d.organizerEmail}.`, { size: 8.5, color: [0.4, 0.43, 0.48] });
   return pdf.build();
 }
 
@@ -172,7 +187,7 @@ export function layoutPeoplePart(d: ReportData, people: ReportPerson[], k: numbe
   pdf.para("Corporate Tambola", { font: "F2", size: 11, color: GOLD, gap: 2 });
   pdf.para(`People, part ${k} of ${n}  |  Engagement ${d.engagementId}`, { font: "F2", size: 16, color: WHITE });
   pdf.y = pdf.H - 70 - 14;
-  pdf.box("Sent to you", [`E-mail address: ${d.organizerEmail}`, `Sent on: ${istFull(d.sentAtMs)}  (${utcFull(d.sentAtMs)})`, `Personal data is deleted from our systems by ${istFull(d.personalDeleteAtMs)}. Keep these PDFs safe: they are the only copy.`], [0.93, 0.96, 1], NAVY);
+  pdf.box("Sent to you", [`E-mail address: ${d.organizerEmail}`, `Sent on: ${istFull(d.sentAtMs)}  (${utcFull(d.sentAtMs)})`, `All data about the people is deleted from our systems by ${istFull(d.personalDeleteAtMs)}. Keep these PDFs safe: they are the only copy.`], [0.93, 0.96, 1], NAVY);
   treeSection(pdf, people); listSection(pdf, people);
   return pdf.build();
 }

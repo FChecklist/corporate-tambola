@@ -87,7 +87,7 @@
   TB.initials = (s) => (s || "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   TB.money = (n, cur) => cur === "INR" ? "₹" + Number(n).toLocaleString("en-IN", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 }) : "US$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
   // [participants, INR incl. 18% GST, USD]
-  TB.PACKS = [[100, 999, 17], [250, 1299, 22], [500, 1499, 25], [750, 1799, 30], [1000, 1999, 34], [2500, 3999, 67], [5000, 6249, 105], [10000, 9999, 169]];
+  TB.PACKS = [[100, 1999, 34], [250, 2999, 51], [500, 3999, 67], [750, 4999, 84], [1000, 5999, 101], [2500, 9999, 169], [5000, 14999, 253], [10000, 24999, 421]];
   TB.price = (pack, cur) => { const p = TB.PACKS.find((x) => x[0] === pack); if (cur === "INR") { const t = Math.round(p[1] * 0.18 * 100) / 100; return { total: Math.round((p[1] + t) * 100) / 100, base: p[1], tax: t }; } return { total: p[2], base: p[2], tax: 0 }; };
   TB.guessCurrency = () => { try { return /^Asia\/(Kolkata|Calcutta)$/.test(Intl.DateTimeFormat().resolvedOptions().timeZone) ? "INR" : "USD"; } catch { return "USD"; } };
 

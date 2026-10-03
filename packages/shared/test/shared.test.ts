@@ -71,9 +71,9 @@ describe("spoken phrase (owner decision: digits then words, single digits not re
 describe("pricing and breaks", () => {
   test("GST split for India, no tax abroad", () => {
     const p = price(1000, "INR");
-    expect(p.total).toBe(2358.82);
-    expect(Math.abs(p.base + p.tax - 2358.82)).toBeLessThan(0.011);
-    expect(price(1000, "USD")).toEqual({ total: 34, base: 34, tax: 0 });
+    expect(p.total).toBe(7078.82);
+    expect(Math.abs(p.base + p.tax - 7078.82)).toBeLessThan(0.011);
+    expect(price(1000, "USD")).toEqual({ total: 101, base: 101, tax: 0 });
   });
   test("break positions are near-equal and capped at 3", () => {
     expect(proposeBreakPositions(3)).toEqual([22, 45, 67]);

@@ -364,14 +364,15 @@ describe("Refer & Earn page", () => {
   test("the page pitches 50%, lists every pack with exactly half of its price, and has a working calculator", async () => {
     const o = await organizer(); const p = await page(o, "/partner.html", "partner.html", ["common.js", "partner.js"]);
     const doc = p.win.document; const body = doc.body.textContent!.replace(/\s+/g, " ");
-    expect(body).toMatch(/Earn 50% every time a company plays/); expect(body).toMatch(/mobile number is your code/i);
+    expect(body).toMatch(/Earn 50% on every new company you bring/); expect(body).toMatch(/20% more every time that company buys again/); expect(body).toMatch(/mobile number is your code/i);
     const packs: number[][] = p.win.TB.PACKS;
-    expect(packs.slice(0, 3).map((x) => [x[0], x[1]])).toEqual([[100, 999], [250, 1299], [500, 1499]]); // the launch prices
+    expect(packs.slice(0, 3).map((x) => [x[0], x[1]])).toEqual([[100, 1999], [250, 2999], [500, 3999]]); // the launch prices
     const rows = [...doc.querySelectorAll("#earn-table .rrow:not(.rh)")].map((r: any) => r.textContent.replace(/\s+/g, " "));
     expect(rows.length).toBe(packs.length);
-    expect(rows[0]).toMatch(/999/); expect(rows[0]).toMatch(/499\.50/); expect(rows[1]).toMatch(/649\.50/); expect(rows[2]).toMatch(/749\.50/);
+    expect(rows[0]).toMatch(/1,999/); expect(rows[0]).toMatch(/999\.50/); expect(rows[1]).toMatch(/1,499\.50/); expect(rows[2]).toMatch(/1,999\.50/);
+    expect(body).not.toMatch(/per person|per participant|per head/i); // we never show a per-person price
     (doc.getElementById("calc-n") as any).value = "4"; (doc.getElementById("calc-pack") as any).value = "0"; (doc.getElementById("calc-n") as any).dispatchEvent(new p.win.Event("input"));
-    expect(doc.getElementById("calc-out")!.textContent).toBe("₹1,998"); // 4 sales x Rs 499.50
+    expect(doc.getElementById("calc-out")!.textContent).toBe("₹3,998"); // 4 first purchases x Rs 999.50
   });
   test("joining takes only a mobile number: the code is its 10 digits, the link is /?ref=<code>, and the page switches to the partner's own dashboard", async () => {
     const o = await organizer(); const p = await page(o, "/partner.html", "partner.html", ["common.js", "partner.js"]);

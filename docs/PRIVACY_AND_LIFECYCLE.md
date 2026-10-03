@@ -8,7 +8,7 @@ The promise we make, and what the software does to keep it. Nothing here is kept
 |---|---|---|
 | Participants' names and mobile numbers | **within 24 hours of the game ending** (the job deletes them 22 hours after the end) | AES-256-GCM sealed (`apps/edge/src/pii.ts`), key = HKDF of the Worker secret `DATA_KEY`, never in the database; fresh nonce per record. The database also holds a salted one-way hash of the number (to find a person who comes back), deleted with the rest |
 | Seats, device ids (hashed), invite links, join times, claims, over-votes | same 24 hours | plain rows, deleted together |
-| Organizer / host / co-host details (name, e-mail, mobile) | 365 days (the law requires us to hold them) | `contact/<id>` |
+| Organizer / host / co-host details (name, e-mail, mobile) | 365 days | `contact/<id>` |
 | Winners record: seat, prize, round, time | 365 days | `winner` table: no names, no numbers |
 | Everything else about the engagement | 00:00 IST at the end of the 365th day after the game ended | `eraseEverything` |
 | Backups of the database | roll off within **7 days** of any deletion | Cloudflare D1 |

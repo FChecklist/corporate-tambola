@@ -214,11 +214,12 @@ const bodyFor = (eid: string, d: ReportData, i: number, n: number) => [
   `This is everything we hold about the people in your engagement. We have given you all of it.`, ``,
   `What happens to the data:`,
   `- By ${istFull(d.personalDeleteAtMs)} (within 24 hours of the game ending) we permanently delete every participant's name, mobile number, seat, join record and invite record from our systems.`,
-  `- For 365 days we keep only: the organizer, host and co-host details (the law requires us to hold these), and the winners record (which prize, which round, what time, which seat; no names or numbers).`,
+  `- For 365 days we keep only: the organizer, host and co-host details, and the winners record (which prize, which round, what time, which seat; no names or numbers).`,
   `- Everything about this engagement is permanently deleted at 00:00 hours IST on ${istDate(d.fullDeleteAtMs)} (the end of the 365th day).`,
   `- Backups of our database roll off within ${d.backupDays} days of any deletion.`, ``,
-  `Please keep the attached PDF safe: it is the only copy of this personal data once ours is deleted. For your next game you can reuse the people list until it is deleted, or upload your list again from this report.`, ``,
+  `Please keep the attached PDF safe: it is the only copy of this data once ours is deleted. For your next game you can reuse the people list until it is deleted, or upload your list again from this report.`, ``,
   `You can ask us to delete everything sooner: press Erase in your console, ask your AI assistant to request it (you confirm in your console), or reply to this e-mail from your registered address.`, ``,
+  `Corporate Tambola is built to follow India's DPDP Act, the EU and UK GDPR and US privacy laws (including CCPA / CPRA): we collect only what is needed to run your game, protect it with encryption, keep it for the shortest time we can, never sell it, and honour every request to see, correct or delete data.`, ``,
   `Sent on ${istFull(d.sentAtMs)} to ${d.organizerEmail}.`, `Corporate Tambola`,
 ].join("\n");
 
