@@ -2,7 +2,7 @@
 // It talks to exactly two things: the public beacon (through BeaconOpts) and our one small store (through deps.api).
 import { generateTicket, patternNumbers, ticketNumbers, type Ticket } from "../../shared/src/ticket";
 import { ALL_SAFETIES, ControlTracker, SAFETY_FAST, SAFETY_STANDARD, pausedAt, type ControlConfig } from "./control";
-import { GRACE_ROUNDS, defaultCfg, keysInPlay, linesFor, roundEid, validateCfg, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import { GRACE_ROUNDS, LATE_LAG_ROUNDS, defaultCfg, keysInPlay, linesFor, roundEid, validateCfg, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
 import { PrizeEngine, countFromOf } from "./prize-engine";
 import { RoundStore, activeBreak, activeIntermission, callRoundR, completionIndexKey, ticketsFor } from "./game";
 import { NUMBERS, QUICKNET, fetchRound, pickNumber, roundAt, roundTimeMs, type BeaconOpts } from "./index";
@@ -442,7 +442,8 @@ export class PhoneRuntime {
     const cf = this.myCountFrom;
     if (!cf) return null;
     const hidden = this.maskedLog(this.cur).filter((n) => n === 0).length;
-    const secondsUntil = now === null || this.offsetMs === null ? 0 : Math.max(0, Math.round((roundTimeMs(cf) - (this.deps.mono() + this.offsetMs)) / 1000));
+    const secondsUntil = now === null || this.offsetMs === null ? LATE_LAG_ROUNDS * 3 : // clock not synced yet: assume the full wait rather than telling them their numbers have started
+       Math.max(0, Math.round((roundTimeMs(cf) - (this.deps.mono() + this.offsetMs)) / 1000));
     return { countFromRound: cf, secondsUntil, hidden };
   }
 
