@@ -8,3 +8,5 @@ config/company.json
 pages/public/
 .wrangler-state/
 config/telemetry-report-key.txt
+config/live-secrets.txt
+config/platform-key.txt
