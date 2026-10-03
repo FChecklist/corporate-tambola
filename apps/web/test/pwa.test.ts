@@ -43,4 +43,11 @@ describe("installable app (PWA)", () => {
   test("an installed app opens the last game: the phone page remembers its engagement", () => {
     expect(readFileSync(join(PUB, "z.js"), "utf8")).toContain("ct-last-eid");
   });
+  test("it works silently: no banner, no button, no text of ours on any page; news only through the browser's own notification permission", () => {
+    const js = readFileSync(join(PUB, "pwa.js"), "utf8");
+    expect(js).not.toMatch(/createElement|innerHTML|textContent|Install app|Saving the game|saved on this device|Remind me/i); // nothing is drawn
+    expect(js).toContain("preventDefault"); expect(js).toContain("Notification.permission"); expect(js).toContain("/api/notices"); expect(js).toContain("periodicSync");
+    expect(sw).toContain("periodicsync"); expect(sw).toContain("notificationclick"); expect(sw).toContain('Notification.permission !== "granted"');
+    expect(js + sw).not.toMatch(/pushManager|subscribe\(/); // no push subscription: we never receive an address of the visitor
+  });
 });

@@ -314,3 +314,18 @@ describe("the scheduled job's key", () => {
     expect((await call("POST", "/api/lifecycle/tick", {}, { "x-cron-key": "job-key-0123456789abcdef" })).status).toBe(403);
   });
 });
+
+describe("silent news", () => {
+  test("the public notice list is the same for everyone, empty by default, and only we (platform key) can publish; nothing about readers is stored", async () => {
+    expect(await j(await call("GET", "/api/notices"))).toEqual({ notices: [] });
+    expect((await call("POST", "/api/notices", { notices: [{ id: "n1", title: "Hello", body: "News" }] })).status).toBe(403);
+    expect((await call("POST", "/api/notices", { notices: [{ id: "n1", title: "Hello", body: "News" }] }, { "x-organizer": "wrong" })).status).toBe(403);
+    for (const bad of [{ notices: "x" }, { notices: [{ id: "n 1", title: "T", body: "b" }] }, { notices: [{ id: "n1", title: "", body: "b" }] }, { notices: [{ id: "n1", title: "T", body: "b", url: "https://evil.example" }] }, { notices: Array.from({ length: 11 }, (_, i) => ({ id: "n" + i, title: "T", body: "b" })) }]) expect((await call("POST", "/api/notices", bad, org)).status).toBe(400);
+    expect((await call("POST", "/api/notices", { notices: [{ id: "buy-1", title: "New: games for 5,000 people", body: "Tap to see the new packs", url: "/#pricing" }] }, org)).status).toBe(200);
+    const r = await call("GET", "/api/notices"); const b = await j(r);
+    expect(b.notices).toEqual([{ id: "buy-1", title: "New: games for 5,000 people", body: "Tap to see the new packs", url: "/#pricing", at: T }]);
+    expect(r.headers.get("cache-control")).toMatch(/public/);
+    const old = await j(await call("GET", "/api/notices", undefined, {}, T + 31 * 86_400_000)); expect(old.notices).toEqual([]); // a month-old notice is gone
+    expect((raw.query("SELECT COUNT(*) c FROM kv WHERE k LIKE 'notices%'").get() as any).c).toBe(1); // one list, no per-reader rows
+  });
+});

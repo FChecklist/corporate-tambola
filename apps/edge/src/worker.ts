@@ -548,6 +548,19 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (done.length) await sendMail(env as PayEnv, env.DB, from, `Deleted: participant data of ${done.join(", ")}`, `As you asked, we have permanently deleted every participant's name, mobile number, seat and invitation record for: ${done.join(", ")}.\n\nWe keep, your details as organizer / host / co-host and the winners record (prize, round, time, seat; no names or numbers) until their 365 days end. Backups roll off within 7 days.\n\nCorporate Tambola`, now);
     return json({ ok: true, action: done.length ? "deleted" : "no-match", engagements: done });
   }
+  if (req.method === "GET" && p === "/api/notices") { // our public news list: the same for everyone, nothing about the reader is stored or asked
+    const raw = (await env.DB.prepare("SELECT v FROM kv WHERE k='notices'").first<{ v: string }>())?.v ?? "[]";
+    return new Response(JSON.stringify({ notices: (JSON.parse(raw) as any[]).filter((n) => now - (n.at ?? 0) < 30 * 86_400_000).slice(-10) }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=300" } });
+  }
+  if (req.method === "POST" && p === "/api/notices") { // only we can publish news (platform key): up to 10 current items, each shown once per device
+    if (!a.plat) return deny(a);
+    const b = await body(req, 8192);
+    const items = Array.isArray(b?.notices) ? b.notices : null;
+    if (!items || items.length > 10 || items.some((n: any) => typeof n?.id !== "string" || !/^[A-Za-z0-9_-]{2,40}$/.test(n.id) || typeof n.title !== "string" || n.title.length < 1 || n.title.length > 80 || typeof n.body !== "string" || n.body.length > 200 || (n.url !== undefined && !(typeof n.url === "string" && /^\/[^\s]*$/.test(n.url)))))
+      return json({ error: "Send up to 10 notices: {id, title (max 80), body (max 200), url (a path on this site, optional)}." }, 400);
+    await env.DB.prepare("INSERT INTO kv(k,v) VALUES('notices',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(JSON.stringify(items.map((n: any) => ({ id: n.id, title: n.title, body: n.body, ...(n.url ? { url: n.url } : {}), at: now })))).run();
+    return json({ ok: true, count: items.length });
+  }
   if (req.method === "POST" && p === "/api/lifecycle/tick") { // run every minute by the scheduled job: reports, deletions, reminders. Idempotent and bounded per call.
     const jobKey = req.headers.get("x-cron-key") ?? "";
     const jobSecret = (env.CRON_KEY ?? "").trim(); // a secret pasted in with a trailing line break still matches
