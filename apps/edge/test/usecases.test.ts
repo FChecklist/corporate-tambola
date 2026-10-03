@@ -368,7 +368,9 @@ describe("D. participants", () => {
     const o = await published("NAME-1");
     await call("POST", "/api/z/NAME-1/join", { phone: phone(1), name: "<script>alert(1)</script>`x`" + "y".repeat(200) });
     const list = await j(await call("GET", "/api/z/NAME-1/participants", undefined, o.h));
-    expect(list.participants[0].name).not.toMatch(/[<>`]/); expect(list.participants[0].name.length).toBeLessThanOrEqual(60);
+    expect(list.participants[0].name).toBeUndefined(); // the list never carries names: they are sealed
+    const nm = (await j(await call("GET", `/api/z/NAME-1/names?pids=${list.participants[0].pid}`, undefined, o.h))).names[list.participants[0].pid] as string;
+    expect(nm).not.toMatch(/[<>`]/); expect(nm.length).toBeLessThanOrEqual(60);
   });
   test("UC-35 phones never learn it is unpaid, never see others' numbers, and the held message does not mention money", async () => {
     const o = await published("PRIV-1");

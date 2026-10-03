@@ -6,7 +6,15 @@ import type { PatternId, Scope } from "../../shared/src/ticket";
 export type PatternKey = PatternId | "full2"; // "full2" = Full Two-Ticket House (all 30 numbers across both tickets)
 export interface RewardLine { pattern: PatternId; scope: Scope; ordinal: number; text: string }
 export interface BreakCfg { after: number; seconds: number; kind: "file" | "youtube" | "slides" | "speech" | "lucky"; title: string; mediaUrl?: string; winners?: 1 | 3 | 5 | 10; /** How a lucky draw is shown on phones. The winners are drawn the same way either way; a scratch card only changes the reveal. */ style?: "draw" | "scratch" }
-export interface EngagementCfg { tickets: 1 | 2; rewards: RewardLine[]; breaks: BreakCfg[]; rounds: number }
+/** Who a participant may invite. The organizer switches this on and picks the kinds of guests; each participant may invite at most `per` people (the organizer, hosts and co-hosts any number), and the invitees may invite in turn. */
+export const INVITE_CATEGORIES: ReadonlyArray<{ id: string; label: string }> = [
+  { id: "family", label: "Family members" }, { id: "colleagues", label: "Colleagues" }, { id: "friends", label: "Friends" }, { id: "dealers", label: "Dealers" }, { id: "vendors", label: "Vendors" },
+  { id: "customers", label: "Customers" }, { id: "partners", label: "Business partners" }, { id: "franchisees", label: "Franchisees" }, { id: "neighbours", label: "Neighbours and community" }, { id: "guests", label: "Other guests" },
+];
+export interface InviteCfg { on: boolean; per: number; cats: string[] }
+export const MAX_INVITES_PER_PERSON = 10;
+export const defaultInvites = (): InviteCfg => ({ on: false, per: 4, cats: ["family", "colleagues"] });
+export interface EngagementCfg { tickets: 1 | 2; rewards: RewardLine[]; breaks: BreakCfg[]; rounds: number; invites?: InviteCfg }
 export const MAX_ROUNDS = 5;
 /** The game starts this many 3 s beacon rounds (2 minutes) after the time the organizer gave: the last 2 minutes are "setting up, waiting for everyone to join". */
 export const GRACE_ROUNDS = 40;
@@ -26,7 +34,7 @@ export const LUCKY_WINNERS = [1, 3, 5, 10] as const;
 
 /** One reward line for each house, no text: what an engagement has until the organizer says otherwise. */
 export const defaultRewards = (): RewardLine[] => PATTERN_ORDER.map((pattern) => ({ pattern, scope: "ticket", ordinal: 1, text: "" }));
-export const defaultCfg = (): EngagementCfg => ({ tickets: 1, rewards: defaultRewards(), breaks: [], rounds: 1 });
+export const defaultCfg = (): EngagementCfg => ({ tickets: 1, rewards: defaultRewards(), breaks: [], rounds: 1, invites: defaultInvites() });
 
 export const keyOfLine = (l: Pick<RewardLine, "pattern" | "scope">): PatternKey => (l.scope === "two_ticket" ? "full2" : l.pattern);
 export const lineKey = (l: RewardLine) => `${keyOfLine(l)}#${l.ordinal}`;
@@ -46,8 +54,8 @@ const cleanText = (s: unknown, max: number) => (typeof s === "string" ? s.replac
 const YT = /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i;
 
 /** Validates what the organizer sent. Returns the cleaned config, or a plain-English reason. Missing parts keep their defaults. */
-export function validateCfg(input: { tickets?: unknown; rewards?: unknown; breaks?: unknown; rounds?: unknown }, base: EngagementCfg = defaultCfg()): { ok: true; cfg: EngagementCfg } | { ok: false; error: string } {
-  const cfg: EngagementCfg = { tickets: base.tickets, rewards: base.rewards, breaks: base.breaks, rounds: base.rounds ?? 1 };
+export function validateCfg(input: { tickets?: unknown; rewards?: unknown; breaks?: unknown; rounds?: unknown; invites?: unknown }, base: EngagementCfg = defaultCfg()): { ok: true; cfg: EngagementCfg } | { ok: false; error: string } {
+  const cfg: EngagementCfg = { tickets: base.tickets, rewards: base.rewards, breaks: base.breaks, rounds: base.rounds ?? 1, invites: base.invites ?? defaultInvites() };
   if (input.rounds !== undefined) {
     if (!Number.isInteger(input.rounds) || (input.rounds as number) < 1 || (input.rounds as number) > MAX_ROUNDS) return { ok: false, error: `An engagement has 1 to ${MAX_ROUNDS} rounds.` };
     cfg.rounds = input.rounds as number;
@@ -103,6 +111,17 @@ export function validateCfg(input: { tickets?: unknown; rewards?: unknown; break
     out.sort((a, b) => a.after - b.after);
     for (let i = 1; i < out.length; i++) if (out[i]!.after === out[i - 1]!.after) return { ok: false, error: "Two breaks cannot start at the same number." };
     cfg.breaks = out;
+  }
+  if (input.invites !== undefined) {
+    const v = input.invites as any;
+    if (!v || typeof v !== "object" || typeof v.on !== "boolean") return { ok: false, error: "Invites: say whether they are on or off." };
+    const per = v.per === undefined ? cfg.invites!.per : v.per;
+    if (!Number.isInteger(per) || per < 1 || per > MAX_INVITES_PER_PERSON) return { ok: false, error: `Each person can invite 1 to ${MAX_INVITES_PER_PERSON} people.` };
+    const cats = v.cats === undefined ? cfg.invites!.cats : v.cats;
+    if (!Array.isArray(cats) || cats.some((c: unknown) => !INVITE_CATEGORIES.some((k) => k.id === c))) return { ok: false, error: "Pick the kinds of guests from the list." };
+    const uniq = [...new Set(cats as string[])];
+    if (v.on && uniq.length < 1) return { ok: false, error: "Pick at least one kind of guest people may invite." };
+    cfg.invites = { on: v.on, per, cats: uniq };
   }
   return { ok: true, cfg };
 }

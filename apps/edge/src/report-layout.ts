@@ -5,6 +5,8 @@ import { GOLD, NAVY, PdfDoc, WHITE, type Column } from "./pdf";
 export interface ReportPerson { seat: number | null; name: string | null; phone: string | null; joinedMs: number | null; late: boolean; role: string | null; invitedBy: number | null; onRoster: boolean; joined: boolean }
 export interface ReportWinner { seat: number | null; name: string | null; phone: string | null; role: string | null; verified: boolean; callNo: number | null; atMs: number | null }
 export interface ReportPrize { round: number; label: string; text: string; winners: ReportWinner[] }
+export interface Agg { joined: number; onRoster: number; notJoined: number; late: number; viaInvite: number; inviters: number; topInviter: [number, number] | null; roles: number; joinedInTime: number; firstJoinMs: number | null }
+export const emptyAgg = (): Agg => ({ joined: 0, onRoster: 0, notJoined: 0, late: 0, viaInvite: 0, inviters: 0, topInviter: null, roles: 0, joinedInTime: 0, firstJoinMs: null });
 export interface ReportData {
   engagementId: string; organizerEmail: string; sentAtMs: number;
   scheduledMs: number; firstNumberMs: number; endMs: number; endReason: string; wasHeld: boolean;
@@ -16,6 +18,8 @@ export interface ReportData {
   timeline: { callNo: number; atMs: number; present: number; late: number }[];
   breaks: { after: number; kind: string; title: string }[];
   personalDeleteAtMs: number; fullDeleteAtMs: number; backupDays: number;
+  /** Totals about the people, when the list itself is spread over several PDFs. */
+  agg?: Agg; omitPeople?: boolean; totalPeople?: number;
 }
 
 const IST = 5.5 * 3_600_000;
@@ -81,8 +85,8 @@ export function layoutReport(d: ReportData): Uint8Array {
 
   // ---- 3 prizes and winners
   pdf.h1("3. Prizes and winners");
-  const total = d.prizes.length, won = d.prizes.filter((p) => p.winners.length).length;
-  pdf.para(`${total} prize lines were set up; ${won} were won (${total - won} not won).`, { size: 9.5, gap: 4 });
+  { const t0 = d.prizes.length, w0 = d.prizes.filter((p) => p.winners.length).length;
+  pdf.para(`${t0} prize lines were set up; ${w0} were won (${t0 - w0} not won).`, { size: 9.5, gap: 4 }); }
   for (const pr of d.prizes) {
     pdf.h2(`${d.rounds > 1 ? `Round ${pr.round}  |  ` : ""}${pr.label}${pr.text ? `   -   ${pr.text}` : ""}`);
     if (!pr.winners.length) { pdf.para("Not won.", { size: 9, color: [0.4, 0.43, 0.48] }); continue; }
@@ -96,44 +100,27 @@ export function layoutReport(d: ReportData): Uint8Array {
   pdf.para("'Checked: by console' means your console recomputed the result from the public numbers; 'by phone' means the winner's own phone reported it. Both come from the same public numbers; the second has not been double-checked by your console.", { size: 8.5 });
 
   // ---- 4 statistics
+  const total = d.prizes.length, won = d.prizes.filter((p) => p.winners.length).length;
+  const g: Agg = d.agg ?? aggOf(d.people);
+  const rate = g.joinedInTime && g.firstJoinMs ? `${(g.joinedInTime / Math.max(1, (d.firstNumberMs - g.firstJoinMs) / 60000)).toFixed(1)} people per minute` : "-";
   pdf.h1("4. Statistics");
-  const joined = d.people.filter((p) => p.joined), onRoster = d.people.filter((p) => p.onRoster);
-  const late = joined.filter((p) => p.late), inv = new Map<number, number>();
-  for (const p of d.people) if (p.invitedBy) inv.set(p.invitedBy, (inv.get(p.invitedBy) ?? 0) + 1);
-  const top = [...inv.entries()].sort((a, b) => b[1] - a[1])[0];
-  const roles = d.people.filter((p) => p.role);
   pdf.table([{ head: "Measure", width: 52 }, { head: "Value", width: 48 }], [
-    ["People who took part (joined)", String(joined.length)],
-    ["On your invitation list", String(onRoster.length)],
-    ["Invited but never joined", String(d.people.filter((p) => p.onRoster && !p.joined).length)],
-    ["Joined after the first number (late)", String(late.length)],
-    ["Joined through someone's invite link", String(d.people.filter((p) => p.invitedBy).length)],
-    ["People who invited at least one person", String(inv.size)],
-    ["Most invites by one person", top ? `${top[1]} (seat ${top[0]})` : "0"],
-    ["Organizer / host / co-host with a ticket", String(roles.length)],
+    ["People who took part (joined)", String(g.joined)],
+    ["On your invitation list", String(g.onRoster)],
+    ["Invited but never joined", String(g.notJoined)],
+    ["Joined after the first number (late)", String(g.late)],
+    ["Joined through someone's invite link", String(g.viaInvite)],
+    ["People who invited at least one person", String(g.inviters)],
+    ["Most invites by one person", g.topInviter ? `${g.topInviter[1]} (seat ${g.topInviter[0]})` : "0"],
+    ["Organizer / host / co-host with a ticket", String(g.roles)],
     ["Prize lines won / not won", `${won} / ${total - won}`],
     ["Total prize wins (a tie shares a prize)", String(d.prizes.reduce((n, p) => n + p.winners.length, 0))],
     ["Prize wins by organizer / host / co-host", String(d.prizes.reduce((n, p) => n + p.winners.filter((w) => w.role).length, 0))],
-    ["Average join rate before the start", joined.length ? `${(joined.filter((p) => !p.late).length / Math.max(1, (d.firstNumberMs - Math.min(...joined.map((p) => p.joinedMs ?? d.firstNumberMs))) / 60000)).toFixed(1)} people per minute` : "-"],
+    ["Average join rate before the start", rate],
   ]);
 
-  // ---- 5 the invite tree
-  pdf.h1("5. Who invited whom");
-  pdf.para("Each person's share link records who sent it. 'Direct' means they came through the organizer's own link or list.", { size: 9, gap: 4 });
-  const bySeat = new Map<number, ReportPerson>(); for (const p of d.people) if (p.seat !== null) bySeat.set(p.seat, p);
-  const kids = new Map<number | null, ReportPerson[]>();
-  for (const p of d.people) { const k = p.invitedBy && bySeat.has(p.invitedBy) ? p.invitedBy : null; (kids.get(k) ?? kids.set(k, []).get(k)!).push(p); }
-  const lines: string[] = []; const seen = new Set<number>();
-  const walk = (k: number | null, depth: number) => { for (const c of kids.get(k) ?? []) { if (lines.length >= 4000) return; if (c.seat !== null) { if (seen.has(c.seat)) continue; seen.add(c.seat); } lines.push(`${"    ".repeat(Math.min(depth, 12))}${depth ? "+- " : ""}${c.name || "(no name)"}  seat ${c.seat ?? "-"}  ${mob(c.phone)}${c.role ? "  [" + c.role + "]" : ""}`); if (c.seat !== null) walk(c.seat, depth + 1); } };
-  walk(null, 0);
-  if (!lines.length) pdf.para("Nobody shared an invite link in this game.", { size: 9 });
-  else { for (const l of lines) pdf.pre(l); if (lines.length >= 4000) pdf.para("(The list is cut at 4,000 lines.)", { size: 8.5 }); }
-
-  // ---- 6 everybody
-  pdf.h1("6. Everyone, with name and mobile number");
-  pdf.para(`${d.people.length} people. 'Joined' is the time they opened the link (IST). Names in scripts other than Latin letters print as ? in this PDF.`, { size: 9, gap: 4 });
-  const cols: Column[] = [{ head: "Seat", width: 5, align: "r" }, { head: "Name", width: 24 }, { head: "Mobile", width: 12 }, { head: "Joined", width: 8 }, { head: "Late", width: 4 }, { head: "Role", width: 9 }, { head: "By", width: 5, align: "r" }, { head: "List", width: 4 }];
-  pdf.table(cols, [...d.people].sort((a, b) => (a.seat ?? 1e9) - (b.seat ?? 1e9)).map((p) => [p.seat === null ? "-" : String(p.seat), p.name || "(no name)", mob(p.phone), p.joinedMs ? hm(p.joinedMs) : "-", p.late ? "yes" : "", p.role || "", p.invitedBy ? String(p.invitedBy) : "", p.onRoster ? "yes" : ""]), { zebra: true });
+  if (d.omitPeople) { pdf.h1("5. Who invited whom, and 6. Everyone"); pdf.para(`This game had ${d.totalPeople} people, so the invite tree and the full list (names and mobile numbers) come in the following e-mails, in parts of up to 1,500 people each.`, { size: 9.5 }); }
+  else { treeSection(pdf, d.people); listSection(pdf, d.people); }
 
   pdf.h1("7. When your data is deleted");
   pdf.table([{ head: "Data", width: 62 }, { head: "Deleted by", width: 48 }], [
@@ -142,5 +129,50 @@ export function layoutReport(d: ReportData): Uint8Array {
     ["Organizer / host / co-host details and the winners record", `00:00 hours IST, ${istDate(d.fullDeleteAtMs)}`],
   ]);
   pdf.para("You can ask us to delete everything sooner: press 'Erase' in your console, ask your AI assistant to request it (you confirm in your console), or e-mail us from your registered address.", { size: 9 });
+  return pdf.build();
+}
+
+const aggOf = (people: ReportPerson[]): Agg => {
+  const g = emptyAgg(), inv = new Map<number, number>();
+  for (const p of people) {
+    if (p.joined) { g.joined++; if (p.late) g.late++; else { g.joinedInTime++; if (p.joinedMs && (g.firstJoinMs === null || p.joinedMs < g.firstJoinMs)) g.firstJoinMs = p.joinedMs; } }
+    if (p.onRoster) g.onRoster++; if (p.onRoster && !p.joined) g.notJoined++;
+    if (p.invitedBy) { g.viaInvite++; inv.set(p.invitedBy, (inv.get(p.invitedBy) ?? 0) + 1); }
+    if (p.role) g.roles++;
+  }
+  g.inviters = inv.size; const top = [...inv.entries()].sort((a, b) => b[1] - a[1])[0]; g.topInviter = top ? [top[0], top[1]] : null;
+  return g;
+};
+export { aggOf };
+
+function treeSection(pdf: PdfDoc, people: ReportPerson[]) {
+  pdf.h1("5. Who invited whom");
+  pdf.para("Each person's share link records who sent it. People at the left edge came through the organizer's own link or list.", { size: 9, gap: 4 });
+  const bySeat = new Map<number, ReportPerson>(); for (const p of people) if (p.seat !== null) bySeat.set(p.seat, p);
+  const kids = new Map<number | null, ReportPerson[]>();
+  for (const p of people) { const k = p.invitedBy && bySeat.has(p.invitedBy) ? p.invitedBy : null; (kids.get(k) ?? kids.set(k, []).get(k)!).push(p); }
+  const lines: string[] = []; const seen = new Set<number>();
+  const walk = (k: number | null, depth: number) => { for (const c of kids.get(k) ?? []) { if (lines.length >= 4000) return; if (c.seat !== null) { if (seen.has(c.seat)) continue; seen.add(c.seat); } lines.push(`${"    ".repeat(Math.min(depth, 12))}${depth ? "+- " : ""}${c.name || "(no name)"}  seat ${c.seat ?? "-"}  ${mob(c.phone)}${c.role ? "  [" + c.role + "]" : ""}${c.invitedBy && !bySeat.has(c.invitedBy) ? `  (invited by seat ${c.invitedBy}, listed in another part)` : ""}`); if (c.seat !== null) walk(c.seat, depth + 1); } };
+  walk(null, 0);
+  if (!lines.length) pdf.para("Nobody shared an invite link in this game.", { size: 9 });
+  else { for (const l of lines) pdf.pre(l); if (lines.length >= 4000) pdf.para("(The list is cut at 4,000 lines.)", { size: 8.5 }); }
+}
+function listSection(pdf: PdfDoc, people: ReportPerson[]) {
+  pdf.h1("6. Everyone, with name and mobile number");
+  pdf.para(`${people.length} people. 'Joined' is the time they opened the link (IST). Names in scripts other than Latin letters print as ? in this PDF.`, { size: 9, gap: 4 });
+  const cols: Column[] = [{ head: "Seat", width: 5, align: "r" }, { head: "Name", width: 24 }, { head: "Mobile", width: 12 }, { head: "Joined", width: 8 }, { head: "Late", width: 4 }, { head: "Role", width: 9 }, { head: "By", width: 5, align: "r" }, { head: "List", width: 4 }];
+  pdf.table(cols, [...people].sort((a, b) => (a.seat ?? 1e9) - (b.seat ?? 1e9)).map((p) => [p.seat === null ? "-" : String(p.seat), p.name || "(no name)", mob(p.phone), p.joinedMs ? hm(p.joinedMs) : "-", p.late ? "yes" : "", p.role || "", p.invitedBy ? String(p.invitedBy) : "", p.onRoster ? "yes" : ""]), { zebra: true });
+}
+/** One of the extra PDFs of a big game: the invite tree and the list for up to 1,500 people. */
+export function layoutPeoplePart(d: ReportData, people: ReportPerson[], k: number, n: number): Uint8Array {
+  const pdf = new PdfDoc();
+  pdf.footer = `Corporate Tambola  |  Engagement ${d.engagementId}  |  people part ${k} of ${n}  |  sent ${istFull(d.sentAtMs)}`;
+  pdf.rect(0, pdf.H, pdf.W, 70, NAVY); pdf.rect(0, pdf.H - 70, pdf.W, 3, GOLD);
+  pdf.y = pdf.H - 26;
+  pdf.para("Corporate Tambola", { font: "F2", size: 11, color: GOLD, gap: 2 });
+  pdf.para(`People, part ${k} of ${n}  |  Engagement ${d.engagementId}`, { font: "F2", size: 16, color: WHITE });
+  pdf.y = pdf.H - 70 - 14;
+  pdf.box("Sent to you", [`E-mail address: ${d.organizerEmail}`, `Sent on: ${istFull(d.sentAtMs)}  (${utcFull(d.sentAtMs)})`, `Personal data is deleted from our systems by ${istFull(d.personalDeleteAtMs)}. Keep these PDFs safe: they are the only copy.`], [0.93, 0.96, 1], NAVY);
+  treeSection(pdf, people); listSection(pdf, people);
   return pdf.build();
 }

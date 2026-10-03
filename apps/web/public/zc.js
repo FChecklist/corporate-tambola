@@ -96,6 +96,10 @@
       for (let i = 0; i < L.length; i++) { const d = S.lucky && S.lucky[i]; if (d && !d.published && !luckySent.has(i)) { await call("POST", `/api/z/${eid}/settle`, { results: [{ pattern: "lucky", ordinal: i + 1, idx: L[i].after, pids: d.winners }] }); luckySent.add(i); } }
     } catch (e) { /* the next refresh tries again */ }
   }
+  async function namesFor(ids) {
+    const nm = S.nameCache || (S.nameCache = new Map()), want = ids.filter((p) => !nm.has(p));
+    for (let i = 0; i < want.length; i += 50) { try { const r = await call("GET", `/api/z/${eid}/names?pids=${want.slice(i, i + 50).join(",")}`); for (const [k, v] of Object.entries(r.names || {})) nm.set(k, v); } catch { /* shown as Participant */ } }
+  }
   async function computeLucky(now) {
     const L = (S.cfg.breaks || []).filter((b) => b.kind === "lucky"); const out = [];
     const st = S.st || null; const stride = S.info.callSeconds / 3;
@@ -109,6 +113,15 @@
       out.push({ winners, published: (S.published || []).some((r) => r.pattern === "lucky" && r.ordinal === i + 1) });
     }
     return out;
+  }
+  /** The organizer's invitation policy: whether participants may invite, how many each, and which kinds of guests. */
+  function invitesBlock(c) {
+    const iv = c.invites || { on: false, per: 4, cats: ["family", "colleagues"] };
+    const boxes = (ZG.INVITE_CATEGORIES || []).map((k) => `<label style="display:flex;gap:6px;align-items:center;margin:2px 0;font-weight:400"><input type="checkbox" data-invcat="${k.id}" style="width:auto;min-height:0" ${iv.cats.includes(k.id) ? "checked" : ""}> ${esc(k.label)}</label>`).join("");
+    return `<div style="margin-top:14px;padding:10px 12px;border:1px solid var(--line);border-radius:10px"><label style="display:flex;gap:8px;align-items:center;font-weight:700"><input type="checkbox" id="invon" style="width:auto;min-height:0" ${iv.on ? "checked" : ""}> Let participants invite their colleagues / family members</label>
+      <p class="zsmall" style="margin:4px 0 8px">Each person gets an Invite button with their own link. You decide how many people each can invite and who. The organizer, hosts and co-hosts can invite any number. Guests can invite in turn, so a chain forms and the report shows who invited whom.</p>
+      <label for="invper">Most people one participant can invite</label><input id="invper" type="number" min="1" max="10" value="${iv.per}" style="max-width:90px">
+      <div class="zsmall" style="margin:8px 0 2px">Kinds of guests they can invite</div><div style="columns:2;column-gap:16px">${boxes}</div></div>`;
   }
   function settingsCard() {
     const c = S.cfg || ZG.defaultCfg();
@@ -125,6 +138,7 @@
       <label for="rw">What each house wins: one per line, like <code>full: Gift hamper</code>. Write a house twice for a 2nd reward. Houses: early5, top, mid, bot, corners, star, full, and full2 (Full Two-Ticket House, needs 2 tickets). Only houses you list are in play.</label>
       <textarea id="rw" rows="6" style="width:100%;box-sizing:border-box;font-size:15px;border:1px solid var(--line);border-radius:10px;padding:8px">${esc(rewardsToText(c))}</textarea>
       <label style="margin-top:14px">Brand breaks (up to 3): the numbers pause while your message or video is shown</label>${rows}
+      ${invitesBlock(c)}
       <button class="zbtn s" id="savecfg">Save</button></div>`;
   }
   function readSettings() {
@@ -139,7 +153,9 @@
       if (b.kind === "lucky") { b.winners = Number(g("winners") || 3); if (g("style") === "scratch") b.style = "scratch"; }
       breaks.push(b);
     }
-    return { tickets, rewards, breaks, rounds: Number(document.getElementById("rnd").value) };
+    const cats = [...document.querySelectorAll("[data-invcat]")].filter((b) => b.checked).map((b) => b.dataset.invcat);
+    const invites = { on: document.getElementById("invon").checked, per: Number(document.getElementById("invper").value) || 4, cats };
+    return { tickets, rewards, breaks, rounds: Number(document.getElementById("rnd").value), invites };
   }
   /** Published but not paid: the one thing that matters now. The organizer sent the link to everyone, so the engagement must start. */
   function payDueCard() {
@@ -190,6 +206,7 @@
       ${S.draft ? `<div class="zcard" style="border:2px solid #c9a24a"><h2>Your engagement is a draft</h2><p class="zsmall" style="margin-top:0">Set it up first (by hand or with your AI) and watch it take shape here. Participants cannot see or join a draft. When you are happy with it, publish it: <b>publishing is free</b>. You confirm your details, get your link, and send it to everyone. You pay before the start time, and it begins the moment you have.</p>${S.pubOpen ? `<label for="pubEmail">Your email (for the invoice)</label><input id="pubEmail" type="email" value="${esc(S.contact.email)}" autocomplete="email"><label for="pubPhone">Your mobile number</label><input id="pubPhone" type="tel" value="${esc(S.contact.phone)}" autocomplete="tel" placeholder="98765 43210"><button class="zbtn" id="pubgo">Confirm and publish</button><button class="zbtn s alt" id="pubcancel">Back</button>` : `<button class="zbtn" id="publishopen">Publish my engagement, free</button>`}${S.pubNote ? `<p class="zsmall"><b>${esc(S.pubNote)}</b></p>` : ""}</div>` : `<div class="zcard"><h2>Share with participants</h2><div class="zlink">${esc(link)}</div><button class="zbtn s alt" id="copy">Copy link</button><a class="zbtn s alt" href="/big.html?e=${encodeURIComponent(eid)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block">Open the big screen</a><p class="zsmall">The big screen shows the numbers to a whole room on a projector or TV. Open it on the laptop that is connected to the screen.</p></div>`}
       <div class="zgrid"><div class="zcard"><h2>Participants</h2><div class="zstat">${S.people.length}</div></div><div class="zcard"><h2>Numbers called${S.cfg.rounds > 1 ? " · round " + S.round + " of " + S.cfg.rounds : ""}</h2><div class="zstat">${S.log.length} / 90</div></div></div>
       ${(S.reqs || []).length ? `<div class="zcard"><h2>Your AI assistant is asking</h2>${S.reqs.map((r) => `<div class="zrow"><span>${esc(r.action)}${r.note ? " · " + esc(r.note) : ""}</span></div>`).join("")}<button class="zbtn s" id="reqok">Approve (${esc(S.reqs[0].action)})</button><button class="zbtn s alt" id="reqno">Dismiss</button></div>` : ""}
+      ${statsCard()}${playCard()}
       <div class="zcard zform"><h2>Invite list</h2>
         <label for="roster">Paste one person per line: name, mobile number</label><textarea id="roster" rows="4" style="width:100%;box-sizing:border-box;font-size:15px;border:1px solid var(--line);border-radius:10px;padding:8px"></textarea>
         <button class="zbtn s" id="addroster">Add to list</button>
@@ -207,8 +224,43 @@
       <div class="zcard zform"><h2>Change of phone</h2>
         <p class="zsmall" style="margin-top:0">A ticket plays on one phone only. If someone lost or changed their phone, enter their mobile number: the next phone they join with keeps their ticket.</p>
         <label for="ubph">Their mobile number</label><input id="ubph" inputmode="tel" autocomplete="off" placeholder="98765 43210"><button class="zbtn s" id="unbind">Let them move to a new phone</button></div>
-      <div class="zcard"><h2>Participant data</h2><button class="zbtn s alt" id="erase">Erase all participant data for this engagement</button>
-        <p class="zsmall">Participant data is kept for 365 days and then deleted automatically. You can erase it sooner at any time.</p></div>`;
+      ${dataCard()}`;
+  }
+  const ist = (ms) => new Date(ms + 5.5 * 3600000).toISOString().replace("T", ", ").slice(0, 20) + " IST";
+  /** The moment the numbers start, the console shows how the game is going: who is in, who came late, who came through an invitation. */
+  function statsCard() {
+    if (!S.started || S.draft) return "";
+    const ps = S.people, late = ps.filter((p) => p.jr > 0).length, viaInv = ps.filter((p) => p.inv).length, roles = ps.filter((p) => p.role).length;
+    const byCat = {}; for (const p of ps) if (p.inv && p.cat) byCat[p.cat] = (byCat[p.cat] || 0) + 1;
+    const label = (id) => ((ZG.INVITE_CATEGORIES || []).find((k) => k.id === id) || { label: id }).label;
+    const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<div class="zrow"><span>${esc(label(k))}</span><em>${n}</em></div>`).join("");
+    return `<div class="zcard" style="border:2px solid #c9a24a"><h2>The game has begun</h2>
+      <div class="zgrid"><div><div class="zstat">${ps.length}</div><div class="zsmall">people in the game</div></div><div><div class="zstat">${late}</div><div class="zsmall">joined after the first number</div></div><div><div class="zstat">${viaInv}</div><div class="zsmall">came through an invitation</div></div><div><div class="zstat">${S.settledPreview.length}</div><div class="zsmall">prizes won so far</div></div></div>
+      ${cats ? `<h3 style="margin:10px 0 2px;font-size:13px">Invitations by kind of guest</h3>${cats}` : ""}${roles ? `<p class="zsmall" style="margin:8px 0 0">${roles} organizer / host / co-host ${roles === 1 ? "seat" : "seats"} playing along.</p>` : ""}
+      <p class="zsmall" style="margin:8px 0 0">When the game ends we e-mail you the complete report as a PDF: when it started, how many people at each stage, every prize and winner, who invited whom, all statistics, and every name and mobile number.</p></div>`;
+  }
+  /** Organizer, host and co-hosts may hold a ticket like anyone, with no advantage: the numbers are public and appear for everyone at the same moment. */
+  function playCard() {
+    if (S.draft) return "";
+    const url = `${location.origin}/z.html?e=${encodeURIComponent(eid)}`;
+    return `<div class="zcard zform"><h2>Play along with your own ticket</h2>
+      <p class="zsmall" style="margin-top:0">You, your hosts and co-hosts can play too. Nobody has an advantage: the numbers come from the public randomness, you see each one at the same moment as everyone, and pausing shows nothing early. Your seat is marked in the report and you stay out of lucky draws.</p>
+      <div class="zlink">${esc(url)}</div>
+      <p class="zsmall" style="margin:8px 0 4px">After you have opened the link and joined, mark your seat here:</p>
+      <label for="mkph">Mobile number</label><input id="mkph" inputmode="tel" placeholder="98765 43210">
+      <label for="mkrole">This person is the</label><select id="mkrole"><option value="organizer">Organizer</option><option value="host">Host</option><option value="co-host">Co-host</option><option value="none">Nobody special (remove the mark)</option></select>
+      <button class="zbtn s" id="mark">Mark this seat</button></div>`;
+  }
+  function dataCard() {
+    const l = S.life;
+    const when = l ? `<div class="zrow"><span>Names, mobile numbers, seats and invitations of participants</span><em>deleted by ${esc(ist(l.personalDeleteAtMs))}${l.purged ? " (done)" : ""}</em></div>
+      <div class="zrow"><span>Complete report e-mailed to you</span><em>${l.reportSent ? "sent" : l.purged ? "not sent" : "after the game ends"}</em></div>
+      <div class="zrow"><span>Your details as organizer / host / co-host, and the winners record</span><em>kept until 00:00 IST, ${esc(ist(l.fullDeleteAtMs).slice(0, 10))}</em></div>
+      <div class="zrow"><span>Backups of deleted data</span><em>roll off within ${l.backupDays} days</em></div>` : "";
+    return `<div class="zcard"><h2>Participant data</h2>
+      <p class="zsmall" style="margin-top:0">We do not keep your participants' data. Within 24 hours of the game ending we send you the complete report and then delete every participant's name and mobile number from our systems.</p>${when}
+      <button class="zbtn s alt" id="erase" style="margin-top:8px">Delete all participant data now</button>
+      <p class="zsmall">You can also e-mail us from your registered address, or ask your AI assistant to request the deletion and then confirm it here. The report is e-mailed first when the game has already ended.</p></div>`;
   }
   function draw(v) { $app.innerHTML = v; bind(); }
 
@@ -219,7 +271,7 @@
       S.info = await call("GET", `/api/z/${eid}/info`); S.draft = !!S.info.draft; S.unpaid = !!S.info.unpaid; S.locked = !!S.info.locked;
       let pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed;
       while (S.people.length < pr.total) { const more = await call("GET", `/api/z/${eid}/participants?offset=${S.people.length}`); if (!more.participants.length) break; S.people.push(...more.participants); } // a long list arrives in pages
-      S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, rounds: pr.rounds || 1 };
+      S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, rounds: pr.rounds || 1, invites: pr.invites };
       S.claims = S.role === "host" ? [] : (await call("GET", `/api/z/${eid}/claims`)).claims;
       try { S.reqs = S.role === "host" ? [] : (await call("GET", `/api/z/${eid}/control/request`)).requests; } catch { S.reqs = []; }
       if (!S.started && !S.draft && S.role !== "host") { try { const k = await TBControl.ensureKey(eid, { token: secret, base: BASE, prefix: "/api/z" }); if (!k.ok && !S.ctlNote) S.ctlNote = k.reason || ""; } catch { /* the pause is optional; the engagement does not depend on it */ } } // an engagement made by the AI has no pause key until the organizer opens it here
@@ -249,10 +301,13 @@
       const callRoundsOf = {}; for (let r = 1; r <= S.cfg.rounds; r++) callRoundsOf[r] = schedOf(r).filter((x) => x !== null);
       const late = { countFrom: cfOf, callRounds: callRoundsOf };
       S.checked = ZG.checkClaims(eid, S.claims.map((c) => ({ pid: c.pid, pattern: c.pattern, idx: c.idx, round: c.round })), S.logs, S.cfg, late);
-      const nm = new Map(S.people.map((p) => [p.pid, p.name]));
-      S.settledPreview = [];
-      for (let r = 1; r <= S.cfg.rounds; r++) if (S.logs[r].length) S.settledPreview.push(...ZG.settleAll(eid, pids, S.logs[r], S.cfg, r, { countFrom: cfOf, callRounds: callRoundsOf[r] }).map((s) => ({ ...s, names: s.pids.length <= 3 ? s.pids.map((p) => nm.get(p) || "Participant").join(", ") : "" })));
+      const nm = S.nameCache || (S.nameCache = new Map()); // names are sealed on our side: the console asks for the few it shows (winners), 50 at a time
+      const settled = [];
+      for (let r = 1; r <= S.cfg.rounds; r++) if (S.logs[r].length) settled.push(...ZG.settleAll(eid, pids, S.logs[r], S.cfg, r, { countFrom: cfOf, callRounds: callRoundsOf[r] }));
+      await namesFor([...new Set(settled.filter((x) => x.pids.length <= 3).flatMap((x) => x.pids))]);
+      S.settledPreview = settled.map((x) => ({ ...x, names: x.pids.length <= 3 ? x.pids.map((p) => nm.get(p) || "Participant").join(", ") : "" }));
       S.lucky = await computeLucky(now);
+      try { S.life = await call("GET", `/api/z/${eid}/life`); } catch { S.life = null; }
       if (S.role !== "host" && !S.locked) await autoPublish(); // winners hear without anyone pressing a button
     } catch (e) { S.note = e.status === 404 ? "That engagement was not found." : e.status === 403 ? "Your sign-in has expired or does not belong to this engagement. Open the home page and sign in again." : "Could not refresh. Retrying…"; }
     if (eid) draw(S.cfg && S.info ? engView() : `<div class="zhead"><b>Engagement ${esc(eid)}</b><button class="zsnd" id="back">All engagements</button></div><div class="zbanner info">${esc(S.note || "Loading…")}</div>`);
@@ -319,8 +374,8 @@
     }));
     if ($("settle")) $("settle").onclick = async () => { try { const all = S.settledPreview.map(({ pattern, ordinal, round, idx, pids }) => ({ pattern, ordinal, round, idx, pids })); for (let i = 0; i < all.length; i += 40) await call("POST", `/api/z/${eid}/settle`, { results: all.slice(i, i + 40) }); S.note = "Results published to participants."; } catch (e) { S.note = e.message; } refreshEng(); };
     if ($("unbind")) $("unbind").onclick = async () => { try { await call("POST", `/api/z/${eid}/unbind`, { phone: $("ubph").value }); S.note = "Done. The next phone they join with keeps their ticket."; } catch (e) { S.note = e.message; } refreshEng(); };
-    if ($("csv")) $("csv").onclick = () => {
-      const nm = new Map(S.people.map((p) => [p.pid, p.name || ""]));
+    if ($("csv")) $("csv").onclick = async () => {
+      await namesFor([...new Set(S.settledPreview.flatMap((x) => x.pids))]); const nm = S.nameCache;
       const rows = [["Reward", "Call number", "Participant"]];
       for (const s of S.settledPreview) for (const p of s.pids) rows.push([lineLabel(s), s.idx + 1, nm.get(p) || p]);
       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([rows.map((r) => r.map((x) => '"' + String(x).replace(/"/g, '""') + '"').join(",")).join("\n")], { type: "text/csv" })); a.download = eid + "-rewards.csv"; a.click();
@@ -351,10 +406,11 @@
       refreshEng();
     }));
     if ($("savecfg")) $("savecfg").onclick = async () => {
-      try { const v = readSettings(); const r = await call("PATCH", `/api/z/${eid}/settings`, v); S.cfg = { tickets: r.tickets, rewards: r.rewards, breaks: r.breaks, rounds: r.rounds || 1 }; S.note = "Saved."; } catch (e) { S.note = e.message; }
+      try { const v = readSettings(); const r = await call("PATCH", `/api/z/${eid}/settings`, v); S.cfg = { tickets: r.tickets, rewards: r.rewards, breaks: r.breaks, rounds: r.rounds || 1, invites: r.invites }; S.note = "Saved."; } catch (e) { S.note = e.message; }
       refreshEng();
     };
-    if ($("erase")) $("erase").onclick = async () => { if (!confirm("Erase all participant data for this engagement? This cannot be undone.")) return; try { const r = await call("POST", `/api/z/${eid}/erase`, {}); S.note = r.erased + " participants erased."; } catch (e) { S.note = e.message; } refreshEng(); };
+    if ($("mark")) $("mark").onclick = async () => { try { await call("POST", `/api/z/${eid}/mark`, { phone: $("mkph").value, role: $("mkrole").value }); S.note = "Marked."; } catch (e) { S.note = e.message; } refreshEng(); };
+    if ($("erase")) $("erase").onclick = async () => { if (!confirm("Delete every participant's name and mobile number now? This cannot be undone. The winners record stays.")) return; try { const r = await call("POST", `/api/z/${eid}/erase`, {}); S.note = r.erased + " participants erased."; } catch (e) { S.note = e.message; } refreshEng(); };
   }
 
   (async () => {

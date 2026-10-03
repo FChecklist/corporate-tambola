@@ -50,7 +50,7 @@ describe("joining", () => {
     expect(r.startRound).toBe(1000);
     expect(r.callSeconds).toBe(6);
     expect(r.pid).toMatch(/^1x[0-9a-f]{12}$/); // seat number + hash: the seat makes the ticket collision-free
-    expect(Object.keys(r).sort()).toEqual(["breaks", "callSeconds", "jr", "pid", "rewards", "rounds", "startRound", "tickets", "trackClaims"]);
+    expect(Object.keys(r).sort()).toEqual(["breaks", "callSeconds", "invites", "jr", "pid", "rewards", "rounds", "startRound", "tickets", "trackClaims"]);
   });
   test("the same number joining twice, even typed differently, is one participant and one write", async () => {
     const a = await (await call("POST", "/api/z/ENG1/join", { phone: "+91 98765-43210" })).json() as any;
@@ -71,7 +71,9 @@ describe("joining", () => {
   });
   test("names are cleaned and cut", async () => {
     await call("POST", "/api/z/ENG1/join", { phone: phone(2), name: "<script>alert(1)</script>`x`" + "y".repeat(200) });
-    const n = (raw.query("SELECT name FROM participant").get() as any).name as string;
+    expect((raw.query("SELECT name FROM participant").get() as any).name).toBeNull(); // names are sealed, never stored in the clear
+    const pid = (raw.query("SELECT pid FROM participant").get() as any).pid as string;
+    const n = ((await (await call("GET", `/api/z/ENG1/names?pids=${pid}`, undefined, org)).json()) as any).names[pid] as string;
     expect(/[<>`]/.test(n)).toBe(false);
     expect(n.length).toBeLessThanOrEqual(60);
   });

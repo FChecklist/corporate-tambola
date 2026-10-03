@@ -53,6 +53,20 @@ export async function sendMail(env: PayEnv, db: D1, to: string, subject: string,
   const ok = await resendSend(env, to, subject, text);
   await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,?)").bind(to, subject, ok ? "" : text.replace(KEYRE, "ctk_(blanked; use the key shown when you paid, or sign in with an e-mailed code)"), now, ok ? 1 : 0).run();
 }
+/** Mail sent with attachments in a test run (no mail key): the tests read the PDFs from here. Never used in production. */
+export const sentReports: { to: string; subject: string; text: string; attachments: { filename: string; content: Uint8Array }[] }[] = [];
+const toB64 = (u: Uint8Array) => { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); };
+/** E-mails the engagement report. The attachment is passed straight to the mail service and is never stored or logged here. Returns false when it could not be sent (the caller tries again). */
+export async function sendReportMail(env: PayEnv, to: string, subject: string, text: string, attachments: { filename: string; content: Uint8Array }[]): Promise<boolean> {
+  if (!env.RESEND_API_KEY) { sentReports.push({ to, subject, text, attachments }); return true; }
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
+      body: JSON.stringify({ from: env.MAIL_FROM ?? "Corporate Tambola <tambola@veridian-aios.com>", to: [to], subject, text, attachments: attachments.map((a) => ({ filename: a.filename, content: toB64(a.content) })), ...(env.MAIL_REPLY_TO ? { reply_to: env.MAIL_REPLY_TO } : {}), headers: { "Auto-Submitted": "auto-generated" } }),
+    });
+    return r.ok;
+  } catch { return false; }
+}
 async function resendSend(env: PayEnv, to: string, subject: string, text: string): Promise<boolean> {
   try {
     const r = await fetch("https://api.resend.com/emails", {

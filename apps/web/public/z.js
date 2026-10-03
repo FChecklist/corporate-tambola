@@ -14,9 +14,10 @@
     try { r = await fetch(BASE + path, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }); }
     catch { throw new Error("offline"); }
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw Object.assign(new Error(j.error || "http " + r.status), { status: r.status });
+    if (!r.ok) throw Object.assign(new Error(j.error || "http " + r.status), { status: r.status, code: j.code });
     return j;
   };
+  const INVITE_FROM = Number(q.get("from")) || 0, INVITE_CAT = q.get("c") || "";
   const NAMES = { early5: "Early Five", top: "Top line", mid: "Middle line", bot: "Bottom line", corners: "Four corners", star: "Star", full: "Full house" };
   const getPublic = async (url) => { let r; try { r = await fetch(url, { cache: "no-store" }); } catch { throw new Error("offline"); } if (!r.ok) throw Object.assign(new Error("http " + r.status), { status: r.status }); return r.json(); };
   const rt = new ZG.PhoneRuntime(EID, { api, getPublic, beacon: {}, mono: () => performance.now(), store });
@@ -27,7 +28,7 @@
   const fmt = (s) => (s >= 90 ? Math.round(s / 60) + " min" : s + "s");
 
   const joinView = (msg) => `<div class="zhead"><b>Corporate Tambola</b></div>
-    <div class="zcard zform"><h2>Join the engagement</h2>
+    <div class="zcard zform"><h2>Join the engagement</h2>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
     <label for="ph">Your mobile number</label><input id="ph" inputmode="tel" autocomplete="tel" placeholder="98765 43210">
     <label for="nm">Your name (shown only to the organizer)</label><input id="nm" autocomplete="name" maxlength="60">
     ${msg ? `<div class="zbanner bad" role="alert">${esc(msg)}</div>` : ""}
@@ -210,6 +211,40 @@
     if (l.secondsUntil > 0) return `<div class="zcard zbreak" role="status"><h2>You joined after the game began</h2><div class="zsetup">Numbers called before you joined are gone, and prizes already awarded stay awarded.</div><div class="zcount" aria-live="off">${clock(l.secondsUntil)}</div><p class="zsmall" style="margin:0">until your numbers start. Your ticket is ready below.</p></div>`;
     return `<div class="zcard"><div class="zsmall" style="margin:0">You joined after the game began, so you play from your first number. ${l.hidden} number${l.hidden === 1 ? " was" : "s were"} called before you.</div></div>`;
   }
+  // ---------- invite your colleagues / family members (when the organizer allows it) ----------
+  let inviteCat = "", inviteInfo = null, inviteAt = -Infinity;
+  const seatOf = (pid) => { const m = /^(\d+)x/.exec(pid || ""); return m ? Number(m[1]) : 0; };
+  async function loadInvites(v) {
+    if (!v.pid || !(v.cfg.invites && v.cfg.invites.on) || performance.now() - inviteAt < 45000) return;
+    inviteAt = performance.now();
+    try { inviteInfo = await api("GET", `/api/z/${EID}/invites?pid=${encodeURIComponent(v.pid)}`); } catch { /* shown next time */ }
+  }
+  const inviteLink = (v) => `${location.origin}/z.html?e=${encodeURIComponent(EID)}&from=${seatOf(v.pid)}${inviteCat ? "&c=" + encodeURIComponent(inviteCat) : ""}`;
+  function inviteCard(v) {
+    const iv = v.cfg.invites;
+    if (!iv || !iv.on || !seatOf(v.pid)) return "";
+    const cats = (ZG.INVITE_CATEGORIES || []).filter((c) => iv.cats.includes(c.id));
+    if (!cats.length) return "";
+    if (!inviteCat || !cats.some((c) => c.id === inviteCat)) inviteCat = cats[0].id;
+    const used = inviteInfo ? inviteInfo.used : 0, unl = inviteInfo && inviteInfo.unlimited, left = Math.max(0, iv.per - used);
+    const counter = unl ? "You can invite as many people as you like." : `You can invite up to <b>${iv.per}</b> people. You have invited <b>${used}</b>${left ? `, so <b>${left}</b> ${left === 1 ? "invitation is" : "invitations are"} left` : ". You have used all your invitations"}.`;
+    const chips = cats.map((c) => `<button type="button" class="zchip${c.id === inviteCat ? " on" : ""}" data-icat="${esc(c.id)}">${esc(c.label)}</button>`).join("");
+    const link = inviteLink(v), kind = (cats.find((c) => c.id === inviteCat) || cats[0]).label.toLowerCase();
+    const text = "Join me for Corporate Tambola! Open this link, enter your mobile number and you get your own ticket: " + link;
+    return `<div class="zcard zinvite"><h2>Invite your colleagues / family members</h2>
+      <p class="zsmall" style="margin:0 0 8px">${counter}</p>
+      ${!unl && !left ? "" : `<div class="zsmall" style="margin:0 0 4px">Who are you inviting?</div><div class="zchips">${chips}</div>
+      <div class="zlink" id="invlink" style="margin-top:8px">${esc(link)}</div>
+      <button class="zbtn s" id="invshare">Share invitation (${esc(kind)})</button>
+      <a class="zbtn s alt" style="display:inline-flex;align-items:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(text)}">WhatsApp</a>
+      <button class="zbtn s alt" id="invcopy">Copy link</button>
+      <p class="zsmall" style="margin:8px 0 0">Your guest joins with their own mobile number and gets their own ticket. ${unl ? "" : `Your link stops working after ${iv.per} people have joined through it.`}</p>`}</div>`;
+  }
+  function bindInvite(v) {
+    document.querySelectorAll("[data-icat]").forEach((b) => (b.onclick = () => { inviteCat = b.dataset.icat; paint(); }));
+    const sh = document.getElementById("invshare"); if (sh) sh.onclick = async () => { const data = { title: "Corporate Tambola", text: "Join me for Corporate Tambola! Open this link, enter your mobile number and you get your own ticket:", url: inviteLink(v) }; try { if (navigator.share) { await navigator.share(data); return; } } catch { return; } try { await navigator.clipboard.writeText(data.text + " " + data.url); sh.textContent = "Link copied"; } catch { sh.textContent = data.url; } };
+    const cp = document.getElementById("invcopy"); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(inviteLink(v)); cp.textContent = "Copied"; } catch { cp.textContent = "Press and hold the link above to copy"; } };
+  }
   function breakCard(b) {
     const inPage = !!mediaKind(b);
     const act = b.mediaUrl ? (inPage ? `<div id="mslot" class="zmslot"></div><a class="zsmall" target="_blank" rel="noopener noreferrer" href="${esc(b.mediaUrl)}">Trouble playing? Open it in a new tab</a>` : `<a class="zbtn s" style="display:inline-flex;align-items:center;text-decoration:none;margin-top:10px" target="_blank" rel="noopener noreferrer" href="${esc(b.mediaUrl)}">${b.kind === "youtube" ? "Watch the video" : "Open"}</a>`) : "";
@@ -271,6 +306,7 @@
         <div class="zlast" aria-label="Recent numbers">${v.log.slice(-7, -1).reverse().map((n) => `<span>${n}</span>`).join("")}</div></div>
       <div class="zcard${curWins.length ? " zwon" : ""}"><h2>${v.tickets.length > 1 ? "Your tickets" : "Your ticket"}</h2>${ribbon}${tix}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
       ${v.phase === "ended" ? "" : prizesCard()}
+      ${inviteCard(v)}
       <div class="zcard"><h2>Still to win</h2>${still}${chk}</div>
       ${luckyCard(v)}
       <div class="zcard"><h2>${v.rounds > 1 ? "Round " + v.round + " of " + v.rounds + " · " : ""}${v.late ? "Numbers since you joined · " + v.log.length : "All numbers · " + v.log.length + " of 90"} called</h2><div class="zboard">${Array.from({ length: 90 }, (_, i) => `<div class="${called.has(i + 1) ? "c" : ""}">${i + 1}</div>`).join("")}</div></div>`;
@@ -283,7 +319,7 @@
     if (v.phase === "join") { const f = document.getElementById("ph"); if (f && document.activeElement === f) return; $app.innerHTML = joinView(v.error); bindJoin(); return; }
     const fresh = syncPrizes(v);
     $app.innerHTML = playView(v);
-    syncMedia(v); bindShare();
+    syncMedia(v); bindShare(); loadInvites(v); bindInvite(v);
     if (fresh.length) showHurray(fresh);
     const s = document.getElementById("snd");
     if (s) s.onclick = async () => { sound = !sound; store.set("ctz-sound", sound ? "on" : "off"); if (window.TBAudio) { TBAudio.enabled = sound; if (sound) await TBAudio.unlock(); } paint(); };
@@ -301,7 +337,7 @@
       if (window.TBAudio) TBAudio.unlock();
       const typed = document.getElementById("ph").value;
       store.set("ctz-phone", typed.replace(/\D/g, "").slice(-10)); // kept on this phone only, so Refer & earn can fill it in for you
-      const ok = await rt.join(typed, document.getElementById("nm").value.trim());
+      const ok = await rt.join(typed, document.getElementById("nm").value.trim(), INVITE_FROM ? { from: INVITE_FROM, cat: INVITE_CAT } : undefined);
       if (ok) { paint(); start(); } else { go.disabled = false; paint(); } // show the ticket screen at once: the first tick may take a few seconds on a slow network
     };
   }

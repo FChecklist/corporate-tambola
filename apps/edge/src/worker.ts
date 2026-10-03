@@ -12,6 +12,8 @@
 //   nobody        - phones: join, send claims, read results counts, read the engagement info and the signed control file.
 
 import { GRACE_ROUNDS, defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
+import { openPii, sealPii } from "./pii";
+import { acceptOver, acceptWon, endBoundMs, eraseEverything, erasePersonal, fullDeleteAt, lifecycleTick, personalDeleteAt, recordWinners } from "./lifecycle";
 import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
@@ -23,6 +25,8 @@ export interface D1 { prepare(sql: string): D1Stmt; batch(s: D1Stmt[]): Promise<
 export interface R2Like { put(key: string, value: string, opts?: unknown): Promise<unknown>; delete(key: string): Promise<unknown> }
 export interface Env {
   DB: D1; ORGANIZER_SECRET?: string; DAILY_WRITE_BUDGET?: string; PHONE_SALT?: string;
+  /** The secret that seals names and mobile numbers at rest (AES-256-GCM). Never stored in the database. */
+  DATA_KEY?: string;
   /** Optional: a public R2 bucket behind a cached custom domain. Phones then read the pause file from the CDN and never invoke the Worker for it. */
   CONTROL_R2?: R2Like; CONTROL_BASE?: string;
 }
@@ -44,8 +48,20 @@ export const PAGE = 2000;
 export const CLAIM_TRACKING_MAX_CAP = 500;
 const tracks = (e: { cap: number }) => e.cap <= CLAIM_TRACKING_MAX_CAP;
 /** The part of the settings every phone needs, public by design: how many tickets, what each house wins, and when the brand breaks are. */
-const pub = (e: any) => { const c = cfgOf(e); return { tickets: c.tickets, rewards: c.rewards, breaks: c.breaks, rounds: c.rounds }; };
-const cfgJson = (c: EngagementCfg) => JSON.stringify({ rewards: c.rewards, breaks: c.breaks, rounds: c.rounds });
+const pub = (e: any) => { const c = cfgOf(e); return { tickets: c.tickets, rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites }; };
+const cfgJson = (c: EngagementCfg) => JSON.stringify({ rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites });
+
+/** Privacy and lifecycle: sealed personal data, the role / inviter / invite kind / source of a seat, when each game ended, the winners record that outlives the personal data, and the votes that tell us a game is over. */
+export const PRIVACY_SCHEMA: string[] = [
+  `ALTER TABLE participant ADD COLUMN pii TEXT`,
+  `ALTER TABLE seat ADD COLUMN role TEXT`,
+  `ALTER TABLE seat ADD COLUMN inv INTEGER`,
+  `ALTER TABLE seat ADD COLUMN cat TEXT`,
+  `ALTER TABLE seat ADD COLUMN src TEXT`,
+  `CREATE TABLE IF NOT EXISTS life (eid TEXT PRIMARY KEY, end_ms INTEGER NOT NULL, end_src TEXT NOT NULL, report_ms INTEGER, report_state TEXT, purged_ms INTEGER, tries INTEGER NOT NULL DEFAULT 0, notified INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS winner (eid TEXT NOT NULL, round INTEGER NOT NULL, pattern TEXT NOT NULL, ordinal INTEGER NOT NULL, seat INTEGER NOT NULL, idx INTEGER, at_ms INTEGER, src TEXT NOT NULL, PRIMARY KEY (eid, round, pattern, ordinal, seat))`,
+  `CREATE TABLE IF NOT EXISTS overvote (eid TEXT NOT NULL, seat INTEGER NOT NULL, at_ms INTEGER NOT NULL, PRIMARY KEY (eid, seat))`,
+];
 
 export const SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS engagement (id TEXT PRIMARY KEY, start_round INTEGER NOT NULL, call_seconds INTEGER NOT NULL, cap INTEGER NOT NULL, created_ms INTEGER NOT NULL, org TEXT, closed INTEGER NOT NULL DEFAULT 0, pack INTEGER, tickets INTEGER NOT NULL DEFAULT 1, config TEXT)`,
@@ -68,12 +84,13 @@ export const SCHEMA: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS seat_pid ON seat (eid, pid)`,
   // the beacon round a seat joined in, when that was after the game began (0 = joined in time): every phone counts that person's numbers from there
   `ALTER TABLE seat ADD COLUMN jr INTEGER`,
+  ...PRIVACY_SCHEMA,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
 /** What the organizer set for this engagement (tickets per participant, reward lines, brand breaks); plain defaults when nothing was set. */
 const cfgOf = (e: { tickets?: number; config?: string | null }): EngagementCfg => {
-  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds }); if (v.ok) return v.cfg; } catch { /* fall through */ }
+  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites }); if (v.ok) return v.cfg; } catch { /* fall through */ }
   return defaultCfg();
 };
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
@@ -502,21 +519,36 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const r = await q.all<any>();
     return json({ engagements: (r.results ?? []).map((x: any) => ({ ...x, startsAtIST: istTime(roundMs(x.start_round)) })), retentionDays: RETENTION_DAYS });
   }
+  if (req.method === "POST" && p === "/api/lifecycle/tick") { // run every few minutes by the scheduled job: reports, deletions, reminders. Idempotent and bounded per call.
+    if (!a.plat) return deny(a);
+    return json({ ok: true, ...(await lifecycleTick(env as any, now)), purged: await purgeOld(env, now) });
+  }
   if (req.method === "POST" && p === "/api/purge") { // run daily (Cron trigger) or by hand: removes everything older than the retention period
     if (!a.plat) return deny(a);
     return json({ ok: true, purged: await purgeOld(env, now) });
   }
-  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats)$/);
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life)$/);
   if (!m) return json({ error: "Not found", hint: "Read the list of what you can do at /api/z/ai-manifest. Engagement routes look like /api/z/{id}/summary, /settings, /roster, /participants, /results, /publish." }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
   if (!e) return json({ error: "No such engagement." }, 404);
+  const digitsOf = (raw: unknown): string | null => { const d = String(raw ?? "").replace(/\D/g, ""); return d.length < 10 || d.length > 15 ? null : d; };
   const phoneHash = async (raw: unknown): Promise<string | null> => {
-    const d = String(raw ?? "").replace(/\D/g, "");
-    if (d.length < 10 || d.length > 15) return null;
+    const d = digitsOf(raw);
+    if (!d) return null;
     return sha(`${env.PHONE_SALT ?? env.ORGANIZER_SECRET ?? "ct"}|${d.slice(-10)}`); // +91 98765 43210, 098765 43210 and 9876543210 are the same person; one hash in every engagement so a roster can be reused without storing the number
   };
   const pidOf = async (ph: string) => (await sha(`${eid}|${ph}`)).slice(0, 16);
+  const lateNow = () => { const nr = roundOfMs(now); return nr > e.start_round + GRACE_ROUNDS ? nr : 0; }; // joined after the first number: that round, else 0
+  /** Gives a person a seat (and so a collision-free ticket) and a sealed record of their name and number. Both rows go in together, with the head-count (and, for an invited person, the inviter's quota) checked inside the insert, so a crowd arriving at the same instant can never pass a limit or share a seat. */
+  const addSeat = async (ph: string, pii: string, dev: string | null, jr: number, o: { inv?: number | null; cat?: string | null; src: string; invLimit?: number | null; joinedMs?: number }) => {
+    const tail = (await pidOf(ph)).slice(0, 12);
+    await env.DB.batch([
+      env.DB.prepare("INSERT OR IGNORE INTO seat(eid,seq,pid,ph,dev,jr,inv,cat,src) SELECT ?, s, s || 'x' || ?, ?, ?, ?, ?, ?, ? FROM (SELECT COALESCE(MAX(seq),0)+1 AS s FROM seat WHERE eid=?) WHERE (SELECT COUNT(*) FROM participant WHERE eid=?) < ? AND (? IS NULL OR (SELECT COUNT(*) FROM seat WHERE eid=? AND inv=?) < ?)")
+        .bind(eid, tail, ph, dev, jr, o.inv ?? null, o.cat ?? null, o.src, eid, eid, e.cap, o.invLimit ?? null, eid, o.inv ?? null, o.invLimit ?? 0),
+      env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,pii,joined_ms) SELECT eid, pid, ph, NULL, ?, ? FROM seat WHERE eid=? AND ph=?").bind(pii, o.joinedMs ?? now, eid, ph),
+    ]);
+  };
   const cleanName = (n: unknown) => (typeof n === "string" ? n.replace(/[<>`]/g, "").slice(0, 60) : null);
 
   if (a.kind === "host" && !HOST_ACTIONS.has(action!)) return deny(a);
@@ -527,30 +559,44 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   if (locked && !can(a, e) && (action === "info" || action === "join")) await nudge(env, e.id, "lockmail", now, `Your engagement ${e.id} could not begin: payment is due`, `Your participants opened your link, but your engagement ${e.id} could not begin because payment has not been received.\n\nPay now and it starts in about 3 minutes, for everyone already waiting: ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${e.id}`);
   if (action === "join" && req.method === "POST") {
     const b = await body(req);
-    const ph = await phoneHash(b?.phone);
-    if (!ph) return json({ error: "Enter a valid mobile number." }, 400);
+    const digits = digitsOf(b?.phone), ph = await phoneHash(b?.phone);
+    if (!ph || !digits) return json({ error: "Enter a valid mobile number." }, 400);
     const dev = typeof b?.device === "string" && /^[0-9a-f]{16,64}$/.test(b.device) ? (await sha(`dev|${eid}|${b.device}`)).slice(0, 32) : null; // one ticket, one device: the phone's own random id, only its hash is kept
     const reply = (pid: string, extra: object = {}) => json({ pid, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), ...pub(e), ...extra });
-    const nowRound = roundOfMs(now), lateRound = nowRound > e.start_round + GRACE_ROUNDS ? nowRound : 0; // joined after the first number: that round, else 0
+    const lateRound = lateNow();
     const have = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.pid AS seat, s.jr AS jr FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; seat: string | null; jr: number | null }>();
     if (have) {
       if (have.seat && have.dev && have.dev !== dev) return json({ error: "This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it.", code: "other-phone" }, 423);
-      if (have.seat && !have.dev && dev) { if (!(await spend(env, now))) return BUSY(); await env.DB.prepare("UPDATE seat SET dev=? WHERE eid=? AND pid=? AND dev IS NULL").bind(dev, eid, have.pid).run(); } // the organizer let this person move: the first device to come back keeps the ticket
+      if (have.seat && !have.dev && dev) { // first device to open the link of someone who was on the list (or whom the organizer let move) keeps the ticket
+        if (!(await spend(env, now, 2))) return BUSY();
+        await env.DB.batch([env.DB.prepare("UPDATE seat SET dev=? WHERE eid=? AND pid=? AND dev IS NULL").bind(dev, eid, have.pid), env.DB.prepare("UPDATE participant SET joined_ms=? WHERE eid=? AND pid=? AND joined_ms<?").bind(now, eid, have.pid, now)]);
+        const nm = cleanName(b?.name);
+        if (nm) { const old = await env.DB.prepare("SELECT pii FROM participant WHERE eid=? AND pid=?").bind(eid, have.pid).first<{ pii: string | null }>(); const o = await openPii(env, old?.pii); if (o && !o.name) await env.DB.prepare("UPDATE participant SET pii=? WHERE eid=? AND pid=?").bind(await sealPii(env, { phone: o.phone, name: nm }), eid, have.pid).run(); }
+      }
       return reply(have.pid, { again: true, jr: have.jr ?? 0 }); // same number twice = same participant
     }
     if (e.closed) return json({ error: "This engagement is by invitation. Ask your organizer to add your number." }, 403);
     if (!dev) return json({ error: "Please refresh this page and try again." }, 400);
     const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
     if ((n?.c ?? 0) >= e.cap) return json({ error: "This engagement is full." }, 409);
+    // invited through someone's link? Only when the organizer has switched invitations on, only for the kinds of guests they allowed, and only up to the inviter's quota (organizer, hosts and co-hosts: no quota)
+    const inviteCfg = cfgOf(e).invites;
+    let inv: number | null = null, cat: string | null = null, invLimit: number | null = null;
+    if (inviteCfg?.on && Number.isInteger(b?.from) && b.from >= 1) {
+      const inviter = await env.DB.prepare("SELECT seq, role FROM seat WHERE eid=? AND seq=?").bind(eid, b.from).first<{ seq: number; role: string | null }>();
+      if (inviter) {
+        inv = inviter.seq; cat = typeof b?.cat === "string" && inviteCfg.cats.includes(b.cat) ? b.cat : null;
+        if (!inviter.role) {
+          invLimit = inviteCfg.per;
+          const used = (await env.DB.prepare("SELECT COUNT(*) AS c FROM seat WHERE eid=? AND inv=?").bind(eid, inv).first<{ c: number }>())?.c ?? 0;
+          if (used >= inviteCfg.per) return json({ error: `This invitation has already been used by ${inviteCfg.per} people, which is the most one person can invite. Please ask your organizer for the main link.`, code: "invite-full" }, 409);
+        }
+      }
+    }
     if (!(await spend(env, now, 2))) return BUSY();
-    const tail = (await pidOf(ph)).slice(0, 12);
-    // seat number = one more than the highest so far; the pid carries it ("<seat>x<hash>") so every phone can make the same collision-free ticket. Both rows are written together and the cap is checked inside the insert, so a crowd arriving at the same instant can never pass the limit or share a seat.
-    await env.DB.batch([
-      env.DB.prepare("INSERT OR IGNORE INTO seat(eid,seq,pid,ph,dev,jr) SELECT ?, s, s || 'x' || ?, ?, ?, ? FROM (SELECT COALESCE(MAX(seq),0)+1 AS s FROM seat WHERE eid=?) WHERE (SELECT COUNT(*) FROM participant WHERE eid=?) < ?").bind(eid, tail, ph, dev, lateRound, eid, eid, e.cap),
-      env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,joined_ms) SELECT eid, pid, ph, ?, ? FROM seat WHERE eid=? AND ph=?").bind(cleanName(b?.name), now, eid, ph),
-    ]);
+    await addSeat(ph, await sealPii(env, { phone: digits, name: cleanName(b?.name) }), dev, lateRound, { inv, cat, src: "link", invLimit });
     const row = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.jr AS jr FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; jr: number | null }>();
-    if (!row) return json({ error: "This engagement is full." }, 409); // lost the race for the last place
+    if (!row) return invLimit !== null ? json({ error: `This invitation has already been used by ${inviteCfg!.per} people, which is the most one person can invite. Please ask your organizer for the main link.`, code: "invite-full" }, 409) : json({ error: "This engagement is full." }, 409); // lost a race for the last place
     if (row.dev && row.dev !== dev) return json({ error: "This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it.", code: "other-phone" }, 423);
     return reply(row.pid, { jr: row.jr ?? 0 });
   }
@@ -671,10 +717,43 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   if (action === "participants" && req.method === "GET") {
     if (!can(a, e)) return deny(a);
     const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || PAGE, 1), PAGE), offset = Math.max(Number(url.searchParams.get("offset")) || 0, 0);
-    const r = await env.DB.prepare("SELECT p.pid AS pid, p.name AS name, COALESCE(s.jr,0) AS jr FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? ORDER BY p.joined_ms, p.pid LIMIT ? OFFSET ?").bind(eid, limit, offset).all<any>();
+    const r = await env.DB.prepare("SELECT p.pid AS pid, COALESCE(s.jr,0) AS jr, s.role AS role, s.inv AS inv, s.cat AS cat FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? ORDER BY p.joined_ms, p.pid LIMIT ? OFFSET ?").bind(eid, limit, offset).all<any>(); // ids only: names are sealed and are opened one small batch at a time (see /names)
     const total = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
     return json({ participants: r.results ?? [], total, offset, limit, closed: !!e.closed, cap: e.cap, ...pub(e) });
   }
+  if (action === "names" && req.method === "GET") { // the organizer's console asks for the names of a few people (winners); never a whole list in one request
+    if (!can(a, e, true)) return deny(a);
+    const ids = (url.searchParams.get("pids") ?? "").split(",").filter((x) => /^[0-9a-z]{3,40}$/.test(x)).slice(0, 60);
+    const out: Record<string, string> = {};
+    for (const id of ids) { const r = await env.DB.prepare("SELECT pii FROM participant WHERE eid=? AND pid=?").bind(eid, id).first<{ pii: string | null }>(); const o = await openPii(env, r?.pii); if (o?.name) out[id] = o.name; }
+    return json({ names: out });
+  }
+  if (action === "mark" && req.method === "POST") { // the organizer says which seat is the organizer's, a host's or a co-host's: they may play, are flagged in the report, stay out of lucky draws and may invite without a limit
+    if (!can(a, e, true)) return deny(a);
+    const b = await body(req);
+    const ph = await phoneHash(b?.phone);
+    const role = b?.role === "none" ? null : ["organizer", "host", "co-host"].includes(b?.role) ? b.role : undefined;
+    if (!ph || role === undefined) return json({ error: "Give the mobile number and a role (organizer, host, co-host or none)." }, 400);
+    if (!(await spend(env, now))) return BUSY();
+    const r = await env.DB.prepare("UPDATE seat SET role=? WHERE eid=? AND ph=?").bind(role, eid, ph).run();
+    return (r.meta?.changes ?? 0) > 0 ? json({ ok: true }) : json({ error: "That number has not joined yet. Ask them to open the game link first." }, 404);
+  }
+  if (action === "invites" && req.method === "GET") { // how many people this participant has invited so far (their own id is the key to ask)
+    const pid = url.searchParams.get("pid") ?? "";
+    const me = await env.DB.prepare("SELECT seq, role FROM seat WHERE eid=? AND pid=?").bind(eid, pid).first<{ seq: number; role: string | null }>();
+    if (!me) return json({ error: "Not a participant of this engagement." }, 403);
+    const c = cfgOf(e).invites;
+    const used = (await env.DB.prepare("SELECT COUNT(*) AS c FROM seat WHERE eid=? AND inv=?").bind(eid, me.seq).first<{ c: number }>())?.c ?? 0;
+    return json({ on: !!c?.on, per: c?.per ?? 0, used, unlimited: !!me.role, seat: me.seq, cats: c?.cats ?? [] });
+  }
+  if (action === "life" && req.method === "GET") { // the organizer's view of when the game ends and when each kind of data is deleted
+    if (!can(a, e)) return deny(a);
+    const l = await env.DB.prepare("SELECT * FROM life WHERE eid=?").bind(eid).first<any>();
+    const end = l && l.end_src === "phones" ? l.end_ms : await endBoundMs(env, e);
+    return json({ endMs: end, endSrc: l?.end_src ?? "schedule", reportSent: !!l?.report_ms, reportState: l?.report_state ?? null, purged: !!l?.purged_ms, personalDeleteAtMs: personalDeleteAt(end), fullDeleteAtMs: fullDeleteAt(end), backupDays: 7, started: now >= roundMs(e.start_round + GRACE_ROUNDS) });
+  }
+  if (action === "won" && req.method === "POST") return acceptWon(env, e, eid!, await body(req), now, json, spend);
+  if (action === "over" && req.method === "POST") return acceptOver(env, e, eid!, await body(req), now, json, spend);
   if (action === "settle" && req.method === "POST") { // only the organizer's own console (which recomputed it from the public log), never the AI
     if (!can(a, e, true)) return deny(a);
     const b = await body(req, 65_536);
@@ -684,32 +763,32 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     for (const x of b.results) if (x.pattern === "lucky" && ((x.ordinal ?? 1) > luckyCount || x.pids.length > 10 || x.pids.some((p: unknown) => typeof p !== "string"))) return json({ error: "That lucky draw does not exist in this engagement." }, 400);
     if (!(await spend(env, now, b.results.length))) return BUSY();
     for (const x of b.results) await env.DB.prepare("INSERT INTO settled(eid,pattern,ordinal,round,idx,pids) VALUES(?,?,?,?,?,?) ON CONFLICT(eid,pattern,ordinal,round) DO UPDATE SET idx=excluded.idx, pids=excluded.pids").bind(eid, x.pattern, x.ordinal ?? 1, x.round ?? 1, x.idx, JSON.stringify(x.pids.slice(0, 500))).run();
+    await recordWinners(env, e, eid!, b.results, now); // the winners record (seat, prize, round, time) outlives the personal data
     return json({ ok: true });
   }
-  if (action === "erase" && req.method === "POST") { // right to erasure: everything about the people of this engagement, nothing else
+  if (action === "erase" && req.method === "POST") { // right to erasure: every name, number, seat and invite of this engagement's people. The winners record and the organizer's own details stay, as the report says.
     if (!can(a, e, true)) return deny(a);
     const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
     if (!(await spend(env, now, (n?.c ?? 0) + 1))) return BUSY();
-    await env.DB.batch([
-      env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(eid),
-      env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM seat WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`seats-base/${eid}`),
-    ]);
+    await erasePersonal(env, eid!, now, "organizer");
     return json({ ok: true, erased: n?.c ?? 0 });
   }
-  if (action === "reuse" && req.method === "POST") { // copy the people of an earlier engagement into this one (their phones get a new participant id)
+  if (action === "reuse" && req.method === "POST") { // copy the people of an earlier engagement into this one (while that list still exists); the sealed records are copied as they are
     if (!can(a, e)) return deny(a);
     const b = await body(req);
     if (!b || !ID.test(b.from ?? "") || b.from === eid) return json({ error: "Pick an earlier engagement." }, 400);
     const src = await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(b.from).first<{ org: string | null }>();
     if (!src || !can(a, src)) return json({ error: "Pick an earlier engagement." }, 400); // someone else's roster is never reachable
-    const old = await env.DB.prepare("SELECT phone_hash, name FROM participant WHERE eid=?").bind(b.from).all<any>();
+    const old = await env.DB.prepare("SELECT phone_hash, pii FROM participant WHERE eid=? ORDER BY joined_ms, pid").bind(b.from).all<any>();
     const rows = old.results ?? [];
+    if (!rows.length) return json({ error: "That engagement's people list has already been deleted (personal data is deleted within 24 hours of a game ending). Upload your list again.", code: "gone" }, 410);
     if (rows.length > e.cap) return json({ error: "This engagement is smaller than the earlier roster." }, 409);
-    if (!(await spend(env, now, rows.length))) return BUSY();
-    let copied = 0;
+    if (!(await spend(env, now, rows.length * 2))) return BUSY();
+    let copied = 0; const jr = lateNow();
     for (const r of rows) {
-      const x = await env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,joined_ms) VALUES(?,?,?,?,?)").bind(eid, await pidOf(r.phone_hash), r.phone_hash, r.name, now).run();
-      copied += x.meta?.changes ?? 0;
+      if (await env.DB.prepare("SELECT 1 AS x FROM participant WHERE eid=? AND phone_hash=?").bind(eid, r.phone_hash).first()) continue;
+      await addSeat(r.phone_hash, r.pii, null, jr, { src: "reuse" });
+      copied++;
     }
     return json({ ok: true, copied });
   }
@@ -719,14 +798,15 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (!b || !Array.isArray(b.people) || b.people.length < 1 || b.people.length > 100) return json({ error: "Send between 1 and 100 people at a time." }, 400);
     const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
     let room = e.cap - (have?.c ?? 0);
-    const todo: { ph: string; name: string | null }[] = []; let invalid = 0;
-    for (const x of b.people) { const ph = await phoneHash(x?.phone); if (!ph) { invalid++; continue; } todo.push({ ph, name: cleanName(x?.name) }); }
-    if (!(await spend(env, now, todo.length))) return BUSY();
-    let added = 0, skipped = 0;
+    const todo: { ph: string; digits: string; name: string | null }[] = []; let invalid = 0;
+    for (const x of b.people) { const ph = await phoneHash(x?.phone), digits = digitsOf(x?.phone); if (!ph || !digits) { invalid++; continue; } todo.push({ ph, digits, name: cleanName(x?.name) }); }
+    if (!(await spend(env, now, todo.length * 2))) return BUSY();
+    let added = 0, skipped = 0; const jr = lateNow();
     for (const t of todo) {
       if (room <= 0) { skipped++; continue; }
-      const r = await env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,joined_ms) VALUES(?,?,?,?,?)").bind(eid, await pidOf(t.ph), t.ph, t.name, now).run();
-      if (r.meta?.changes) { added++; room--; } else skipped++;
+      if (await env.DB.prepare("SELECT 1 AS x FROM participant WHERE eid=? AND phone_hash=?").bind(eid, t.ph).first()) { skipped++; continue; }
+      await addSeat(t.ph, await sealPii(env, { phone: t.digits, name: t.name }), null, jr, { src: "roster" });
+      added++; room--;
     }
     return json({ ok: true, added, skipped, invalid });
   }
@@ -735,7 +815,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (!unpaid && roundMs(e.start_round) <= now) return json({ error: "The engagement has already started, so it can no longer be changed." }, 409);
     const b = await body(req);
     if (!b) return json({ error: "Check the details." }, 400);
-    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds }, cfgOf(e));
+    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, invites: b.invites }, cfgOf(e));
     if (!vc.ok) return json({ error: vc.error }, 400);
     const next = { start_round: b.startRound ?? e.start_round, call_seconds: b.callSeconds ?? e.call_seconds, cap: b.cap ?? e.cap, closed: b.closed === undefined ? e.closed : b.closed ? 1 : 0 };
     if (!Number.isInteger(next.start_round) || !Number.isInteger(next.call_seconds) || next.call_seconds % 3 || next.call_seconds < 6 || !Number.isInteger(next.cap) || next.cap < 1 || next.cap > 100000) return json({ error: "Check the details." }, 400);
@@ -760,19 +840,18 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
 
 /** Deletes engagements (and their people, claims and results) older than the 365-day retention period. */
 export async function purgeOld(env: Env, now: number): Promise<number> {
-  const cutoff = now - RETENTION_DAYS * 86_400_000;
-  const old = await env.DB.prepare("SELECT id FROM engagement WHERE created_ms < ? OR (pack=0 AND created_ms < ?)").bind(cutoff, now - DRAFT_DAYS * 86_400_000).all<{ id: string }>();
+  // an engagement goes at 00:00 IST at the end of the 365th day after its game ended (created + 365 days if it never ran), and a draft nobody published after DRAFT_DAYS
+  const loose = now - (RETENTION_DAYS - 2) * 86_400_000;
+  const old = await env.DB.prepare("SELECT e.id AS id, e.created_ms AS created_ms, e.pack AS pack, l.end_ms AS end_ms FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE e.created_ms < ? OR (e.pack=0 AND e.created_ms < ?)").bind(loose, now - DRAFT_DAYS * 86_400_000).all<{ id: string; created_ms: number; pack: number; end_ms: number | null }>();
   let n = 0;
-  for (const { id } of old.results ?? []) {
-    await env.DB.batch([
-      env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(id),
-      env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM seat WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`seats-base/${id}`), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
-      env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`), env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
-    ]);
-    try { await env.CONTROL_R2?.delete(controlKey(id)); } catch { /* the object expires with its engagement anyway */ }
+  for (const x of old.results ?? []) {
+    const due = x.end_ms != null ? now >= fullDeleteAt(x.end_ms) : x.created_ms < now - RETENTION_DAYS * 86_400_000 || (x.pack === 0 && x.created_ms < now - DRAFT_DAYS * 86_400_000);
+    if (!due) continue;
+    await eraseEverything(env, x.id);
+    try { await env.CONTROL_R2?.delete(controlKey(x.id)); } catch { /* the object expires with its engagement anyway */ }
     n++;
   }
   return n;
 }
 
-export default { fetch: (req: Request, env: Env) => handle(req, env), scheduled: async (_e: unknown, env: Env) => { await purgeOld(env, Date.now()); await retryOutbox(env as PayEnv, Date.now()); } };
+export default { fetch: (req: Request, env: Env) => handle(req, env), scheduled: async (_e: unknown, env: Env) => { await lifecycleTick(env as any, Date.now()); await purgeOld(env, Date.now()); await retryOutbox(env as PayEnv, Date.now()); } };

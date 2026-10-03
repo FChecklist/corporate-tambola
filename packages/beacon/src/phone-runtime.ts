@@ -130,7 +130,7 @@ export class PhoneRuntime {
 
   /** Tickets, rewards and brand breaks come from the engagement's public settings; anything malformed falls back to the plain engagement. */
   private readCfg(info: any) {
-    const v = validateCfg({ tickets: info?.tickets, rewards: info?.rewards, breaks: info?.breaks, rounds: info?.rounds });
+    const v = validateCfg({ tickets: info?.tickets, rewards: info?.rewards, breaks: info?.breaks, rounds: info?.rounds, invites: info?.invites });
     this.cfg = v.ok ? v.cfg : defaultCfg();
   }
   private adopt(pid: string) {
@@ -155,9 +155,9 @@ export class PhoneRuntime {
   }
 
   /** Joins with a mobile number. The same number again returns the same participant (and the same ticket). */
-  async join(phone: string, name?: string): Promise<boolean> {
+  async join(phone: string, name?: string, invite?: { from?: number; cat?: string }): Promise<boolean> {
     try {
-      const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name, device: this.device() });
+      const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name, device: this.device(), ...(invite && Number.isInteger(invite.from) ? { from: invite.from, cat: invite.cat } : {}) });
       this.scheduledRound = r.startRound; this.startRound = r.startRound + GRACE_ROUNDS; this.callSeconds = r.callSeconds; this.trackClaims = r.trackClaims !== false;
       if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined) this.readCfg(r);
       this.deps.store.set(this.key("pid"), r.pid);
@@ -165,7 +165,7 @@ export class PhoneRuntime {
       this.adopt(r.pid); this.error = null;
       return true;
     } catch (e: any) {
-      this.error = e?.status === 423 ? String(e.message || "This ticket is already on another phone.") : e?.status === 409 ? "This engagement is full." : e?.status === 400 ? "Enter a valid mobile number." : e?.status === 503 ? "It is a busy day. Please try again in a few minutes." : "Could not join. Check your connection and try again.";
+      this.error = e?.status === 423 || e?.code === "invite-full" ? String(e.message || "This ticket is already on another phone.") : e?.status === 409 ? "This engagement is full." : e?.status === 400 ? "Enter a valid mobile number." : e?.status === 503 ? "It is a busy day. Please try again in a few minutes." : "Could not join. Check your connection and try again.";
       return false;
     }
   }
