@@ -3,6 +3,7 @@
 import { generateTicket, patternNumbers, ticketNumbers, type Ticket } from "../../shared/src/ticket";
 import { ALL_SAFETIES, ControlTracker, SAFETY_FAST, SAFETY_STANDARD, pausedAt, type ControlConfig } from "./control";
 import { GRACE_ROUNDS, defaultCfg, keysInPlay, linesFor, roundEid, validateCfg, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import { PrizeEngine, countFromOf } from "./prize-engine";
 import { RoundStore, activeBreak, activeIntermission, callRoundR, completionIndexKey, ticketsFor } from "./game";
 import { NUMBERS, QUICKNET, fetchRound, pickNumber, roundAt, roundTimeMs, type BeaconOpts } from "./index";
 
@@ -15,6 +16,8 @@ export interface PhoneDeps {
   store: { get(k: string): string | null; set(k: string, v: string): void };
   /** Optional: reads a public (CDN-cached) JSON file by absolute URL; used for the pause file when the engagement publishes one, so the Worker is not hit every few seconds. */
   getPublic?(url: string): Promise<any>;
+  /** Test hook only: never end the engagement early because every prize was awarded (lets a test watch all 90 numbers). */
+  noEarlyEnd?: boolean;
   /** Test hook only. */
   verify?: (x: { round: number; signature: string; randomness: string }) => boolean;
 }
@@ -47,6 +50,10 @@ export interface RuntimeView {
   allAwarded: boolean;
   /** The engagement ended because every prize was awarded (not because all 90 numbers were called). */
   endedByPrizes: boolean;
+  /** Joined after the first number: numbers called before `countFromRound` are gone for this phone. `secondsUntil` > 0 means the phone's own numbers have not started yet; `hidden` is how many numbers were called before it joined. */
+  late: { countFromRound: number; secondsUntil: number; hidden: number } | null;
+  /** The winners were worked out on this phone from the public seat list (true), or taken from the organizer's published results (false). */
+  localWinners: boolean;
 }
 
 export class PhoneRuntime {
@@ -108,13 +115,14 @@ export class PhoneRuntime {
   async boot(): Promise<void> {
     try {
       const info = await this.deps.api("GET", `/api/z/${this.eid}/info`);
-      this.scheduledRound = info.startRound; this.startRound = info.startRound + GRACE_ROUNDS; this.callSeconds = info.callSeconds; this.trackClaims = info.trackClaims !== false; this.controlUrl = typeof info.controlUrl === "string" ? info.controlUrl : null; this.locked = !!info.locked; this.gated = info.locked !== undefined; this.readCfg(info);
+      this.cap = Number(info.cap) || 0; this.scheduledRound = info.startRound; this.startRound = info.startRound + GRACE_ROUNDS; this.callSeconds = info.callSeconds; this.trackClaims = info.trackClaims !== false; this.controlUrl = typeof info.controlUrl === "string" ? info.controlUrl : null; this.locked = !!info.locked; this.gated = info.locked !== undefined; this.readCfg(info);
     } catch (e: any) {
       this.phase = e?.status === 404 ? "missing" : "boot";
       this.error = e?.status === 404 ? "This engagement link is not valid." : "Could not reach the engagement. Check your connection.";
       return;
     }
     const pid = this.deps.store.get(this.key("pid"));
+    this.myJr = Number(this.deps.store.get(this.key("jr")) ?? 0) || 0;
     try { for (const p of JSON.parse(this.deps.store.get(this.key("claimed")) ?? "[]")) this.claimedAll.add(String(p).includes(":") ? String(p) : `1:${p}`); } catch { /* fresh start */ }
     if (pid) this.adopt(pid); else this.phase = "join";
     this.error = null;
@@ -153,6 +161,7 @@ export class PhoneRuntime {
       this.scheduledRound = r.startRound; this.startRound = r.startRound + GRACE_ROUNDS; this.callSeconds = r.callSeconds; this.trackClaims = r.trackClaims !== false;
       if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined) this.readCfg(r);
       this.deps.store.set(this.key("pid"), r.pid);
+      this.myJr = Number(r.jr) > 0 ? Number(r.jr) : 0; this.deps.store.set(this.key("jr"), String(this.myJr));
       this.adopt(r.pid); this.error = null;
       return true;
     } catch (e: any) {
@@ -237,20 +246,29 @@ export class PhoneRuntime {
     if (live) for (let r = 1; r <= Math.max(1, started); r++) this.buildLog(now, r); // on hold we keep showing what we had, and reveal nothing new
     this.setCurrent(Math.max(1, started));
     if (m !== "blind") await this.autoClaim(); // never claim from a log that might be missing a pause we could not hear about
+    await this.pollSeats(now);
+    this.syncEngines(Math.max(1, started));
     await this.pollResults();
     const stopped = this.tracker?.state.stopRound != null && now >= this.tracker.state.stopRound;
-    const byPrizes = this.cur >= this.cfg.rounds && this.prizesAwarded(this.cur) && this.breaksPlayed(now);
+    const byPrizes = !this.deps.noEarlyEnd && this.cur >= this.cfg.rounds && this.prizesAwarded(this.cur) && this.breaksPlayed(now);
     if (byPrizes) this.prizesEnded = true;
     if ((this.cur >= this.cfg.rounds && (this.logs[this.cur - 1]?.length ?? 0) >= NUMBERS) || stopped || byPrizes) this.phase = "ended";
     return this.view();
   }
 
+  private get myCountFrom() { return countFromOf(this.myJr); }
+  /** Round `round`'s calls as this phone may count them: numbers called before it could count become 0, so call positions stay the same for everyone. */
+  private maskedLog(round: number): number[] {
+    const log = this.logs[round - 1] ?? [], cf = this.myCountFrom;
+    if (!cf) return log;
+    return log.map((n, k) => ((this.roundFor(k, round) ?? Infinity) >= cf ? n : 0));
+  }
   private builtDiscards = 0;
   private builtMsgs = 0;
   /** Extends a round's call log with newly available rounds instead of recomputing all 90 calls every second. Rebuilds from scratch only if a provisional round was thrown away or an organizer message arrived. */
   private buildLog(now: number, round: number): number[] {
     const msgs = this.tracker?.log.length ?? 0;
-    if (this.store.discarded !== this.builtDiscards || msgs !== this.builtMsgs) { this.logs = this.logs.map(() => []); this.builtDiscards = this.store.discarded; this.builtMsgs = msgs; } // a new organizer message can move later calls: re-derive
+    if (this.store.discarded !== this.builtDiscards || msgs !== this.builtMsgs) { this.logs = this.logs.map(() => []); this.logResets++; this.builtDiscards = this.store.discarded; this.builtMsgs = msgs; } // a new organizer message can move later calls: re-derive
     while (this.logs.length < round) this.logs.push([]);
     const out = this.logs[round - 1]!;
     const id = roundEid(this.eid, round);
@@ -267,6 +285,19 @@ export class PhoneRuntime {
   private unsent = 0;
   /** Set once the last prize of the last round was awarded and every break has been played. */
   private prizesEnded = false;
+  /** The beacon round this phone joined in when that was after the game began (0: in time). */
+  private myJr = 0;
+  private cap = 0;
+  // every phone works out the winners itself from the public seat list
+  private seatList: { pid: string; countFrom: number }[] = [];
+  private seatUpto = 0;
+  private seatsFetched = false;
+  private lastSeatPoll = -Infinity;
+  private engines = new Map<number, PrizeEngine>();
+  private engineCursor = new Map<number, number>();
+  private engineReset = new Map<number, number>();
+  private logResets = 0;
+  private serverResults: NonNullable<RuntimeView["results"]> = [];
   private claimLens: number[] = [];
   private async autoClaim() {
     if (!this.pid) return;
@@ -275,7 +306,7 @@ export class PhoneRuntime {
     this.claimLens = lens;
     this.unsent = 0;
     for (let r = 1; r <= this.logs.length; r++) {
-      const tk = this.ticketsOf(r), log = this.logs[r - 1]!;
+      const tk = this.ticketsOf(r), log = this.maskedLog(r);
       if (!tk.length || !log.length) continue;
       for (const p of keysInPlay(this.cfg.rewards)) {
         const id = `${r}:${p}`;
@@ -306,13 +337,56 @@ export class PhoneRuntime {
   /** This phone completed a house but its result is not out yet: ask often so the winner hears quickly. */
   private waitingForResult(): boolean {
     if (!this.tickets.length) return false;
-    return keysInPlay(this.cfg.rewards).some((k) => completionIndexKey(this.tickets, k, this.logCache) >= 0 && !this.allResults.some((x) => x.pattern === k && (x.round ?? 1) === this.cur));
+    return keysInPlay(this.cfg.rewards).some((k) => completionIndexKey(this.tickets, k, this.maskedLog(this.cur)) >= 0 && !this.allResults.some((x) => x.pattern === k && (x.round ?? 1) === this.cur));
   }
+  /** Seat list polling: how often depends on the engagement's size so the free plan is never stretched, and always stays well inside the late-joiner lag. */
+  private seatEveryMs(): number { const c = this.cap; return c <= 250 ? 15_000 : c <= 1000 ? 25_000 : c <= 2500 ? 40_000 : 50_000; }
+  private async pollSeats(now: number) {
+    const m = this.deps.mono();
+    if (now < this.startRound || m - this.lastSeatPoll < (this.seatsFetched ? this.seatEveryMs() : 5_000) + (Math.floor(m) % 2000)) return;
+    this.lastSeatPoll = m;
+    try {
+      const r = await this.deps.api("GET", `/api/z/${this.eid}/seats?after=${this.seatUpto}`);
+      if (!r || !r.ready || !Array.isArray(r.seats)) return;
+      const known = new Set(this.seatList.map((x) => x.pid));
+      for (const [, pid, jr] of r.seats as [number, string, number][]) if (!known.has(pid)) { known.add(pid); this.seatList.push({ pid, countFrom: countFromOf(jr) }); }
+      this.seatUpto = Math.max(this.seatUpto, Number(r.upto) || 0);
+      this.seatsFetched = true;
+    } catch { /* the next poll tries again; until then the organizer's published results (if any) are used */ }
+  }
+  /** Brings each round's engine up to date with the seats and numbers this phone knows. Tickets are made in small slices so the screen never freezes. */
+  private syncEngines(started: number) {
+    if (!this.seatsFetched) return;
+    for (let r = 1; r <= started; r++) {
+      let e = this.engines.get(r);
+      if (!e) { e = new PrizeEngine(this.eid, this.cfg, r); this.engines.set(r, e); this.engineCursor.set(r, 0); this.engineReset.set(r, this.logResets); }
+      if (this.engineReset.get(r) !== this.logResets) { e.resetCalls(); this.engineReset.set(r, this.logResets); }
+      const cur = this.engineCursor.get(r)!;
+      if (cur < this.seatList.length) { e.addSeats(this.seatList.slice(cur)); this.engineCursor.set(r, this.seatList.length); }
+      e.work(25);
+      const log = this.logs[r - 1] ?? [];
+      for (let k = e.calls; k < log.length; k++) { const br = this.roundFor(k, r); if (br === null) break; e.feed(log[k]!, br); }
+    }
+  }
+  private get localOk(): boolean { return this.seatsFetched && this.engines.size > 0 && [...this.engines.values()].every((e) => e.pending === 0); }
   private async pollResults() {
     const m = this.deps.mono();
-    if (m - this.lastResultPoll < (this.waitingForResult() ? 4_000 : 15_000) || !this.logs.some((l) => l.length > 0)) return;
+    const local = this.localOk;
+    if (local) {
+      const mine: NonNullable<RuntimeView["results"]> = [];
+      for (const [r, e] of this.engines) for (const x of e.results()) mine.push({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, count: x.pids.length, round: r });
+      this.allResults = [...mine, ...this.serverResults.filter((x) => x.pattern === "lucky")];
+    }
+    // the organizer's published results: the fallback while the seat list is not here yet, and the only source for lucky draws
+    // (lucky draws: only once a draw's break has been reached and its winners are not out yet, and then every 10 s)
+    const luckyDue = this.cur === 1 && this.luckyView().some((l, i) => !l.published && this.logCache.length >= (this.cfg.breaks.filter((b) => b.kind === "lucky")[i]?.after ?? Infinity));
+    const needServer = !local || luckyDue;
+    if (!needServer || m - this.lastResultPoll < (local ? 10_000 : this.waitingForResult() ? 4_000 : 15_000) || !this.logs.some((l) => l.length > 0)) return;
     this.lastResultPoll = m;
-    try { this.allResults = (await this.deps.api("GET", `/api/z/${this.eid}/results`)).results ?? this.allResults; } catch { /* shown next time */ }
+    try {
+      this.serverResults = (await this.deps.api("GET", `/api/z/${this.eid}/results`)).results ?? this.serverResults;
+      this.allResults = this.localOk ? [...this.allResults.filter((x) => x.pattern !== "lucky"), ...this.serverResults.filter((x) => x.pattern === "lucky")] : this.serverResults;
+    } catch { /* shown next time */ }
   }
 
   private currentBreak(now: number | null): RuntimeView["brk"] {
@@ -333,13 +407,13 @@ export class PhoneRuntime {
   }
   private myIdx(): Partial<Record<PatternKey, number>> {
     const o: Partial<Record<PatternKey, number>> = {};
-    if (this.tickets.length) for (const k of keysInPlay(this.cfg.rewards)) o[k] = completionIndexKey(this.tickets, k, this.logCache);
+    if (this.tickets.length) { const ml = this.maskedLog(this.cur); for (const k of keysInPlay(this.cfg.rewards)) o[k] = completionIndexKey(this.tickets, k, ml); }
     return o;
   }
   private pastView(): RuntimeView["past"] {
     const out: RuntimeView["past"] = [];
     for (let r = 1; r < this.cur; r++) {
-      const tk = this.ticketsOf(r), log = this.logs[r - 1] ?? [];
+      const tk = this.ticketsOf(r), log = this.maskedLog(r);
       const got: { pattern: PatternKey; ordinal: number }[] = [];
       for (const x of this.allResults) {
         if ((x.round ?? 1) !== r || x.pattern === "lucky") continue;
@@ -355,12 +429,21 @@ export class PhoneRuntime {
     if (!this.pid) return out;
     for (const x of this.allResults) {
       if (x.pattern === "lucky") continue;
-      const r = x.round ?? 1, key = x.pattern as PatternKey, tk = this.ticketsOf(r), log = this.logs[r - 1] ?? [];
+      const r = x.round ?? 1, key = x.pattern as PatternKey, tk = this.ticketsOf(r), log = this.maskedLog(r);
       if (!tk.length || completionIndexKey(tk, key, log) !== x.idx) continue;
       const line = linesFor(this.cfg.rewards, key).find((l) => l.ordinal === x.ordinal);
       out.push({ round: r, pattern: key, ordinal: x.ordinal, text: line?.text ?? "", cells: winCells(tk, key, log, x.idx) });
     }
     return out;
+  }
+
+  private visibleLog(): number[] { const cf = this.myCountFrom; return cf ? this.maskedLog(this.cur).filter((n) => n > 0) : this.logCache; }
+  private lateView(now: number | null): RuntimeView["late"] {
+    const cf = this.myCountFrom;
+    if (!cf) return null;
+    const hidden = this.maskedLog(this.cur).filter((n) => n === 0).length;
+    const secondsUntil = now === null || this.offsetMs === null ? 0 : Math.max(0, Math.round((roundTimeMs(cf) - (this.deps.mono() + this.offsetMs)) / 1000));
+    return { countFromRound: cf, secondsUntil, hidden };
   }
 
   view(): RuntimeView {
@@ -374,14 +457,14 @@ export class PhoneRuntime {
     const inter = now !== null && this.cur < this.cfg.rounds ? activeIntermission(st ?? null, this.startRound, this.stride, this.cfg.breaks, this.cur + 1, now) : null;
     const claimedNow = keysInPlay(this.cfg.rewards).filter((k) => this.claimedAll.has(`${this.cur}:${k}`));
     return {
-      phase: this.phase, error: this.error, pid: this.pid, ticket: this.ticket, log: this.logCache, nowRound: now, startRound: this.startRound, scheduledRound: this.scheduledRound, callSeconds: this.callSeconds,
+      phase: this.phase, error: this.error, pid: this.pid, ticket: this.ticket, log: this.visibleLog(), nowRound: now, startRound: this.startRound, scheduledRound: this.scheduledRound, callSeconds: this.callSeconds,
       locked: this.locked, announcement: this.announcement,
       mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: !!st && now !== null && pausedAt(st, now), stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
       claimed: claimedNow, unsent: this.unsent, results: this.allResults.filter((x) => (x.round ?? 1) === this.cur), pendingChecks: this.store.pending(), discarded: this.store.discarded,
       nextCallInSec: nextRound !== null && now !== null ? secsTo(nextRound) : null,
       tickets: this.tickets, cfg: this.cfg, brk: this.currentBreak(now), myIdx: this.myIdx(), lucky: this.luckyView(),
       round: this.cur, rounds: this.cfg.rounds, intermission: inter ? { round: this.cur + 1, secondsLeft: secsTo(inter.endsAtRound) ?? 0 } : null, past: this.pastView(),
-      won: this.wonView(), allAwarded: this.prizesAwarded(this.cur), endedByPrizes: this.prizesEnded,
+      won: this.wonView(), allAwarded: this.prizesAwarded(this.cur), endedByPrizes: this.prizesEnded, late: this.lateView(now), localWinners: this.localOk,
     };
   }
 }

@@ -50,7 +50,7 @@ describe("joining", () => {
     expect(r.startRound).toBe(1000);
     expect(r.callSeconds).toBe(6);
     expect(r.pid).toMatch(/^1x[0-9a-f]{12}$/); // seat number + hash: the seat makes the ticket collision-free
-    expect(Object.keys(r).sort()).toEqual(["breaks", "callSeconds", "pid", "rewards", "rounds", "startRound", "tickets", "trackClaims"]);
+    expect(Object.keys(r).sort()).toEqual(["breaks", "callSeconds", "jr", "pid", "rewards", "rounds", "startRound", "tickets", "trackClaims"]);
   });
   test("the same number joining twice, even typed differently, is one participant and one write", async () => {
     const a = await (await call("POST", "/api/z/ENG1/join", { phone: "+91 98765-43210" })).json() as any;
@@ -780,3 +780,46 @@ describe("seats and one device per ticket", () => {
     expect((await joinAs("9800000002", "e".repeat(32))).status).toBe(200); // existing people still get back in
   });
 });
+
+describe("late joiners and the public seat list", () => {
+  const FUTURE = 32_800_000; // far in the future relative to T: not started
+  const nowRound = Math.floor((T / 1000 - 1692803367) / 3) + 1;
+  const joinAt = (phone: string, eid = "ENG1", at = T) => call("POST", `/api/z/${eid}/join`, { phone }, {}, at);
+  test("joining before the first number records round 0; joining after it records that round, and the join answer says so", async () => {
+    await create({ id: "SEAT-A", startRound: nowRound + 400, cap: 50 }); // starts in 20 minutes
+    const early = await (await joinAt("9800000001", "SEAT-A")).json() as any; expect(early.jr).toBe(0);
+    const later = await (await joinAt("9800000002", "SEAT-A", T + 23 * 60_000)).json() as any; // 2 min grace over: the game began
+    expect(later.jr).toBe(Math.floor(((T + 23 * 60_000) / 1000 - 1692803367) / 3) + 1);
+    const during = await (await joinAt("9800000003", "SEAT-A", T + 21 * 60_000)).json() as any; // inside the 2-minute setup window: counts from the start
+    expect(during.jr).toBe(0);
+  });
+  test("the seat list is not ready before the game begins, then lists every seat once, with no names or phone numbers", async () => {
+    await create({ id: "SEAT-B", startRound: nowround(400), cap: 50 });
+    expect(((await (await call("GET", "/api/z/SEAT-B/seats", undefined, {}, T)).json()) as any).ready).toBe(false);
+    for (let i = 1; i <= 5; i++) await joinAt("98000001" + String(i).padStart(2, "0"), "SEAT-B");
+    const at = T + 30 * 60_000;
+    const r = await (await call("GET", "/api/z/SEAT-B/seats", undefined, {}, at)).json() as any;
+    expect(r.ready).toBe(true); expect(r.seats.map((x: any) => x[0])).toEqual([1, 2, 3, 4, 5]); expect(r.upto).toBe(5);
+    expect(JSON.stringify(r)).not.toMatch(/98000001|name/);
+    expect(r.seats.every((x: any) => /^\d+x[0-9a-f]{12}$/.test(x[1]) && x[2] === 0)).toBe(true);
+  });
+  test("people who join later come as a small tail after the saved list, and the saved list is read once", async () => {
+    await create({ id: "SEAT-C", startRound: nowround(400), cap: 50 });
+    for (let i = 1; i <= 3; i++) await joinAt("98000002" + String(i).padStart(2, "0"), "SEAT-C");
+    const at = T + 30 * 60_000;
+    const first = await (await call("GET", "/api/z/SEAT-C/seats", undefined, {}, at)).json() as any; expect(first.upto).toBe(3);
+    expect(raw.query("SELECT COUNT(*) c FROM kv WHERE k='seats-base/SEAT-C'").get()).toEqual({ c: 1 });
+    await joinAt("9800000299", "SEAT-C", at + 1000); await joinAt("9800000298", "SEAT-C", at + 2000);
+    const tail = await (await call("GET", "/api/z/SEAT-C/seats?after=3", undefined, {}, at + 5000)).json() as any;
+    expect(tail.seats.map((x: any) => x[0])).toEqual([4, 5]); expect(tail.seats.every((x: any) => x[2] > 0)).toBe(true); expect(tail.upto).toBe(5);
+    const nothing = await (await call("GET", "/api/z/SEAT-C/seats?after=5", undefined, {}, at + 6000)).json() as any; expect(nothing.seats).toEqual([]); expect(nothing.upto).toBe(5);
+    const again = await (await call("GET", "/api/z/SEAT-C/seats", undefined, {}, at + 7000)).json() as any; expect(again.seats.length).toBe(3); // the saved list never changes: later seats come only as the tail
+  });
+  test("the organizer's participant list carries each join round, so the console counts what the phones count", async () => {
+    await create({ id: "SEAT-D", startRound: nowround(-400), cap: 50 }); // already started
+    await joinAt("9800000301", "SEAT-D");
+    const p = await (await call("GET", "/api/z/SEAT-D/participants", undefined, org)).json() as any;
+    expect(p.participants[0].jr).toBe(nowRound);
+  });
+});
+const nowround = (delta: number) => Math.floor((T / 1000 - 1692803367) / 3) + 1 + delta;

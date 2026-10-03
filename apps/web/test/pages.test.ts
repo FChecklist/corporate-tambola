@@ -270,35 +270,49 @@ describe("winners, the end, and break media on the phone", () => {
   /** Moves the pretend world clock to `secs` after the engagement's first call and lets the phone notice (its clock re-syncs on the next tick). */
   const at = (o: O, p: any, secs: number) => { const rt = p.win.__rt; o.world.now = p.win.ZG.roundTimeMs(rt.startRound) + secs * 1000; rt.syncedAtMono = -Infinity; };
   const until = async (cond: () => boolean, ms = 25000) => { const t0 = Date.now(); while (!cond()) { if (Date.now() - t0 > ms) throw new Error("timed out"); await new Promise((r) => setTimeout(r, 200)); } };
-  test("a winner sees Hurray with confetti, a congratulations ribbon with the winning numbers lit on the ticket, and a prize list that stays; when the last prize is awarded everyone sees the thank-you with a share button", async () => {
-    const o = await organizer(); const p = await joined(o, "UI-WIN1"); const rt = p.win.__rt; const doc = p.win.document;
-    at(o, p, 400); await until(() => rt.view().log.length >= 30);
-    const my = rt.view().myIdx; const key = Object.keys(my).find((k) => my[k] >= 0);
-    expect(key).toBeTruthy();
-    rt.allResults = [{ pattern: key, ordinal: 1, round: 1, idx: my[key], count: 1 }];
-    await until(() => !!doc.getElementById("hurray")); // the overlay sits outside the page area
+  const prizes = { rewards: [{ pattern: "early5", ordinal: 1, text: "Gift hamper" }, { pattern: "top", ordinal: 1, text: "Movie tickets" }, { pattern: "full", ordinal: 1, text: "Voucher 5000" }] };
+  test("a winner sees Hurray with confetti, a congratulations ribbon with the winning numbers lit on the ticket, and a prize list that stays; when the last prize is awarded the phone itself ends the game with the thank-you and a share button", async () => {
+    const o = await organizer(); const p = await joined(o, "UI-WIN1", prizes); const rt = p.win.__rt; const doc = p.win.document;
+    at(o, p, 400); // about 44 numbers out: this phone is the only player, so it has won the first houses
+    await until(() => !!doc.getElementById("hurray")); // worked out on the phone itself: nobody published anything
     expect(doc.getElementById("hurray")?.textContent).toMatch(/Congratulations, you won/);
     expect(doc.querySelector("#hurray canvas")).toBeTruthy();
     expect(await p.waitFor((x) => /Congratulations! You won/.test(x))).toMatch(/Your prizes/);
     expect(doc.querySelectorAll(".zticket div.w").length).toBeGreaterThan(0); // the winning numbers are lit
-    const saved = JSON.parse(p.win.localStorage.getItem("ctz-prizes:UI-WIN1") || "[]"); expect(saved.length).toBe(1); expect(saved[0].pattern).toBe(key);
-    (doc.getElementById("hurok") as any).click(); expect(doc.getElementById("hurray")).toBeNull();
+    const saved = JSON.parse(p.win.localStorage.getItem("ctz-prizes:UI-WIN1") || "[]"); expect(saved.length).toBeGreaterThan(0); expect(saved[0].text).toMatch(/Gift hamper|Movie tickets/);
+    expect(rt.view().localWinners).toBe(true);
+    (doc.getElementById("hurok") as any)?.click();
     await p.waitFor((x) => /Your prizes/.test(x)); // it stays after the overlay is gone
-    const all: any[] = []; for (const l of rt.cfg.rewards) { const k = l.scope === "two_ticket" ? "full2" : l.pattern; if (!all.some((x) => x.pattern === k && x.ordinal === l.ordinal)) all.push({ pattern: k, ordinal: l.ordinal, round: 1, idx: k === key && l.ordinal === 1 ? my[key] : 999, count: 1 }); }
-    rt.allResults = all; // every line awarded -> the game is over for everyone
-    const end = await p.waitFor((x) => /Game complete/.test(x));
-    expect(end).toMatch(/Thank you for joining our extended family of Corporate Tambola/); expect(end).toMatch(/Share with friends and colleagues/); expect(end).toMatch(/Your prizes/);
+    at(o, p, 1000); // every number is out
+    const end = await p.waitFor((x) => /Game complete/.test(x), 30000);
+    expect(end).toMatch(/Thank you for joining our extended family of Corporate Tambola/); expect(end).toMatch(/Share with friends and colleagues/); expect(end).toMatch(/Voucher 5000/);
     expect(doc.getElementById("shr")).toBeTruthy();
-    expect(rt.view().log.length).toBeLessThan(90); // it ended on the prizes, not on the last number
-  }, 60_000);
-  test("a player who won nothing still gets the thank-you and the share button when the last prize is awarded", async () => {
-    const o = await organizer(); const p = await joined(o, "UI-WIN2"); const rt = p.win.__rt;
-    at(o, p, 100); await until(() => rt.view().log.length >= 5);
-    const all: any[] = []; for (const l of rt.cfg.rewards) { const k = l.scope === "two_ticket" ? "full2" : l.pattern; if (!all.some((x) => x.pattern === k && x.ordinal === l.ordinal)) all.push({ pattern: k, ordinal: l.ordinal, round: 1, idx: 999, count: 1 }); }
-    rt.allResults = all;
-    const end = await p.waitFor((x) => /Game complete/.test(x));
+    expect(rt.view().endedByPrizes).toBe(true); expect(rt.view().log.length).toBeLessThan(90); // it ended on the prizes, not on the last number
+  }, 90_000);
+  test("a player who joined too late to win anything still gets the thank-you and the share button when the game ends, and no prizes are listed", async () => {
+    const o = await organizer({ FREE_LAUNCH: "1" }); await make(o, "UI-WIN2"); await o.api("PATCH", "/api/z/UI-WIN2/settings", prizes, o.aiKey); await publish(o, "UI-WIN2");
+    expect((await o.api("POST", "/api/z/UI-WIN2/join", { phone: "9877777777", device: "9".repeat(32) })).status).toBe(200); // the one player who joined in time
+    o.world.now = roundMs(START + 40) + 1_000_000; // the whole game has been played: the one player won everything
+    const p = await page(o, "/z?e=UI-WIN2", "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake3(win, () => o.world.now); } });
+    await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = "9833333333"; p.click("#go"); // joins now: far too late
+    const end = await p.waitFor((x) => /Game complete/.test(x), 40000);
     expect(end).toMatch(/extended family of Corporate Tambola/); expect(end).not.toMatch(/Your prizes/); expect(p.win.document.getElementById("hurray")).toBeNull();
-  }, 60_000);
+    expect(p.win.__rt.view().late).not.toBeNull(); expect(p.win.__rt.view().log).toEqual([]); // and it was never shown a single old number
+  }, 90_000);
+  test("a phone that joins mid-game is told old numbers are gone, counts down to its own first number, and then plays on from there", async () => {
+    const o = await organizer({ FREE_LAUNCH: "1" }); await make(o, "UI-LATE1"); await publish(o, "UI-LATE1");
+    expect((await o.api("POST", "/api/z/UI-LATE1/join", { phone: "9866666666", device: "8".repeat(32) })).status).toBe(200);
+    o.world.now = roundMs(START + 40) + 200_000; // about 22 numbers are already out
+    const p = await page(o, "/z?e=UI-LATE1", "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake3(win, () => o.world.now); } });
+    await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = "9833333333"; p.click("#go");
+    const t = await p.waitFor((x) => /You joined after the game began/.test(x));
+    expect(t).toMatch(/Numbers called before you joined are gone, and prizes already awarded stay awarded/); expect(t).toMatch(/\d\d:\d\d:\d\d/); expect(t).toMatch(/until your numbers start/);
+    expect(t).not.toMatch(/Your game is setting up|Starting in/); expect(p.win.__rt.view().log).toEqual([]);
+    o.world.now += 100_000; p.win.__rt.syncedAtMono = -Infinity; // past the 90-second count-from
+    const t2 = await p.waitFor((x) => /you play from your first number/.test(x), 30000);
+    expect(t2).toMatch(/numbers? (was|were) called before you/);
+    await p.waitFor(() => p.win.__rt.view().log.length > 0, 30000); expect(p.text()).toMatch(/Numbers since you joined/);
+  }, 90_000);
   test("a YouTube break plays inside the page (privacy-friendly player, autoplay, no leaving the ticket) and disappears when the break ends", async () => {
     const o = await organizer(); const p = await joined(o, "UI-MED1", { breaks: [{ after: 3, seconds: 60, kind: "youtube", title: "Welcome from our CEO", mediaUrl: "https://youtu.be/dQw4w9WgXcQ" }] }); const rt = p.win.__rt; const doc = p.win.document;
     for (let s = 20; s < 90 && !doc.querySelector("#ctmedia iframe"); s += 4) { at(o, p, s); await new Promise((r) => setTimeout(r, 1200)); }

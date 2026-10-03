@@ -105,7 +105,7 @@
       const x = S.luckyRand && S.luckyRand[round] ? S.luckyRand[round] : await ZG.fetchRound(round);
       if (!x) { out.push(null); continue; }
       (S.luckyRand = S.luckyRand || {})[round] = x;
-      const winners = ZG.luckyWinners(eid, L[i].after, x.randomness, S.people.map((p) => p.pid), L[i].winners || 3);
+      const winners = ZG.luckyWinners(eid, L[i].after, x.randomness, S.people.filter((p) => !(p.jr > 0) || ZG.countFromOf(p.jr) <= round).map((p) => p.pid), L[i].winners || 3); // only people whose numbers counted by then
       out.push({ winners, published: (S.published || []).some((r) => r.pattern === "lucky" && r.ordinal === i + 1) });
     }
     return out;
@@ -245,10 +245,13 @@
       S.round = Math.max(1, ...Object.keys(S.logs).filter((r) => S.logs[r].length > 0).map(Number));
       S.log = S.logs[S.round] || [];
       const pids = S.people.map((p) => p.pid);
-      S.checked = ZG.checkClaims(eid, S.claims.map((c) => ({ pid: c.pid, pattern: c.pattern, idx: c.idx, round: c.round })), S.logs, S.cfg);
+      const cfOf = new Map(S.people.filter((p) => p.jr > 0).map((p) => [p.pid, ZG.countFromOf(p.jr)])); // people who joined after the first number count from 90 s after joining
+      const callRoundsOf = {}; for (let r = 1; r <= S.cfg.rounds; r++) callRoundsOf[r] = schedOf(r).filter((x) => x !== null);
+      const late = { countFrom: cfOf, callRounds: callRoundsOf };
+      S.checked = ZG.checkClaims(eid, S.claims.map((c) => ({ pid: c.pid, pattern: c.pattern, idx: c.idx, round: c.round })), S.logs, S.cfg, late);
       const nm = new Map(S.people.map((p) => [p.pid, p.name]));
       S.settledPreview = [];
-      for (let r = 1; r <= S.cfg.rounds; r++) if (S.logs[r].length) S.settledPreview.push(...ZG.settleAll(eid, pids, S.logs[r], S.cfg, r).map((s) => ({ ...s, names: s.pids.length <= 3 ? s.pids.map((p) => nm.get(p) || "Participant").join(", ") : "" })));
+      for (let r = 1; r <= S.cfg.rounds; r++) if (S.logs[r].length) S.settledPreview.push(...ZG.settleAll(eid, pids, S.logs[r], S.cfg, r, { countFrom: cfOf, callRounds: callRoundsOf[r] }).map((s) => ({ ...s, names: s.pids.length <= 3 ? s.pids.map((p) => nm.get(p) || "Participant").join(", ") : "" })));
       S.lucky = await computeLucky(now);
       if (S.role !== "host" && !S.locked) await autoPublish(); // winners hear without anyone pressing a button
     } catch (e) { S.note = e.status === 404 ? "That engagement was not found." : e.status === 403 ? "Your sign-in has expired or does not belong to this engagement. Open the home page and sign in again." : "Could not refresh. Retrying…"; }

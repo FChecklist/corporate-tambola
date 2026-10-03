@@ -10,8 +10,8 @@ export interface EngagementCfg { tickets: 1 | 2; rewards: RewardLine[]; breaks: 
 export const MAX_ROUNDS = 5;
 /** The game starts this many 3 s beacon rounds (2 minutes) after the time the organizer gave: the last 2 minutes are "setting up, waiting for everyone to join". */
 export const GRACE_ROUNDS = 40;
-/** Someone who joins after the game began only sees numbers called from this many rounds (60 s) after joining, so every phone has heard about them before their first number counts. */
-export const LATE_LAG_ROUNDS = 20;
+/** Someone who joins after the game began only sees numbers called from this many rounds (90 s) after joining, so every phone has heard about them before their first number counts. */
+export const LATE_LAG_ROUNDS = 30;
 /** Between two rounds everyone waits this many 3 s beacon rounds (90 s) before the next round's first number. */
 export const INTERMISSION_ROUNDS = 30;
 /** Round 1 keeps the engagement's own id; later rounds use a derived id, so each round has its own numbers and its own tickets. */

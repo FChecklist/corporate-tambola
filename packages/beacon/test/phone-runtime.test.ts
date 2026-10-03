@@ -20,7 +20,7 @@ let env: Env; let t = 0; let T0 = 0;
 const D = {
   utc: () => T0 + t,
   headCall: (method: string, path: string, body?: unknown, h: Record<string, string> = {}) =>
-    handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...h }, body: body === undefined ? undefined : JSON.stringify(body) }), env, 1_700_000_000_000),
+    handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...h }, body: body === undefined ? undefined : JSON.stringify(body) }), env, T0 + t),
 };
 const api = (down: () => boolean = () => false): PhoneDeps["api"] => async (method, path, body) => {
   if (down()) throw new Error("offline");
@@ -37,9 +37,10 @@ const beaconFetcher = (opt: { blocked?: () => boolean } = {}): Fetcher => async 
   if (r > nowR) return { ok: false, status: 404, json: async () => ({}) };
   return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" } as Round) };
 };
-const mkPhone = (n: number, o: { down?: () => boolean; blocked?: () => boolean; locked?: () => boolean; eid?: string; onApi?: (path: string) => void } = {}) => {
+const mkPhone = (n: number, o: { earlyEnd?: boolean; down?: () => boolean; blocked?: () => boolean; locked?: () => boolean; eid?: string; onApi?: (path: string) => void } = {}) => {
   const mem = new Map<string, string>();
   const rt = new PhoneRuntime(o.eid ?? EID, {
+    noEarlyEnd: !o.earlyEnd,
     api: ((base) => (async (method: string, path: string, body?: unknown) => (o.onApi?.(path), o.locked?.() && /\/control$/.test(path) ? { locked: true } : base(method, path, body))) as PhoneDeps["api"])(api(o.down)), mono: () => t, store: { get: (k) => mem.get(k) ?? null, set: (k, v) => void mem.set(k, v) },
     beacon: { fetcher: beaconFetcher({ blocked: o.blocked }), mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 },
     verify: (x) => x.signature === "aa" && x.randomness === rnd(x.round),
@@ -131,12 +132,11 @@ describe("a crowd and the awkward cases", () => {
   test("40 phones, some late, some offline for a while, one behind a blocked network for a while: everyone ends with the identical log and the claims match the organizer's settlement", async () => {
     let off = false, blocked = false;
     const ps = Array.from({ length: 40 }, (_, i) => mkPhone(i + 10, i === 5 ? { down: () => off } : i === 6 ? { blocked: () => blocked } : {}));
-    for (const p of ps.slice(0, 30)) { await p.rt.boot(); await p.rt.join(p.phone); }
+    for (const p of ps) { await p.rt.boot(); await p.rt.join(p.phone); } // everyone joined in time; ten of them only open their phones mid-game
     for (let i = 0; i < 200; i++) {
       if (i === 20) off = true; if (i === 35) off = false;
       if (i === 40) blocked = true; if (i === 55) blocked = false;
-      if (i === 45) for (const p of ps.slice(30)) { await p.rt.boot(); await p.rt.join(p.phone); } // late joiners arrive mid-game
-      await step(ps);
+      await step(i < 45 ? ps.slice(0, 30) : ps); // the last ten open their phones at step 45
     }
     for (let i = 0; i < 6; i++) await step(ps);
     const ref = reference();
@@ -360,15 +360,14 @@ describe("a late joiner who cannot hear about a pause", () => {
     await registerKey();
     const a = mkPhone(170);
     await a.rt.boot(); await a.rt.join(a.phone);
+    const b = mkPhone(171); await b.rt.boot(); await b.rt.join(b.phone); // joined in time; opens its page only after the pause, with the control file unreachable
     for (let i = 0; i < 30; i++) await step([a]);
     expect((await publish({ action: "pause", pauseForRounds: 20 })).status).toBe(200);
     for (let i = 0; i < 20; i++) await step([a]);
     // a phone joins now, with the control file unreachable for a while
-    const b = mkPhone(171);
     let controlDown = true;
     const realApi = b.rt.deps.api;
     (b.rt.deps as any).api = async (m: string, p: string, x?: unknown) => { if (controlDown && p.endsWith("/control")) throw new Error("outage"); return realApi(m, p, x); };
-    await b.rt.boot(); await b.rt.join(b.phone);
     for (let i = 0; i < 40; i++) { await step([a, b]); expect(b.rt.view().log).toEqual([]); expect(b.rt.view().mode).toBe("hold"); }
     controlDown = false;
     for (let i = 0; i < 12; i++) await step([a, b]);
@@ -427,8 +426,8 @@ describe("brand breaks, reward lines and two tickets on real phones", () => {
   test("a phone that opens the page in the middle of a break shows the card and then the same numbers as everyone", async () => {
     await setCfg({ breaks });
     const early = mkPhone(210); await early.rt.boot(); await early.rt.join(early.phone);
+    const late = mkPhone(211); await late.rt.boot(); await late.rt.join(late.phone); // joined in time, but only opens the page mid-break
     for (let i = 0; i < 18; i++) await step([early]); // call 5 is at ~round 10; the break runs ~10 rounds after it
-    const late = mkPhone(211); await late.rt.boot(); await late.rt.join(late.phone);
     let sawCard = late.rt.view().brk !== null;
     await step([early, late]); sawCard = sawCard || late.rt.view().brk !== null;
     for (let i = 0; i < 250; i++) { await step([early, late]); if (late.rt.view().brk) sawCard = true; }
@@ -583,8 +582,8 @@ describe("two rounds on real phones", () => {
 });
 
 describe("winners hear it, and the engagement ends when the last prize is awarded", () => {
-  test("two phones: results published when the last line is complete -> each winner sees exactly their lines, everyone sees it ended, long before 90 numbers", async () => {
-    const a = mkPhone(11), b = mkPhone(12);
+  test("two phones work out the winners themselves from the public seat list: nobody publishes anything, each winner hears it, and everyone sees it ended long before 90 numbers", async () => {
+    const a = mkPhone(11, { earlyEnd: true }), b = mkPhone(12, { earlyEnd: true });
     for (const p of [a, b]) { await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true); }
     const pids = [a.rt.pid!, b.rt.pid!];
     const ref = reference();
@@ -593,22 +592,35 @@ describe("winners hear it, and the engagement ends when the last prize is awarde
     const need = keysInPlayLines(cfg);
     let K = 0; for (let k = 1; k <= 90 && !K; k++) { const got = settledAt(k); if (need.every((n) => got.some((x) => x.pattern === n.key && x.ordinal === n.ordinal))) K = k; }
     expect(K).toBeGreaterThan(0); expect(K).toBeLessThan(90); // with two players every line is awarded before the last number
-    for (let i = 0; i < 300 && a.rt.view().log.length < K; i++) await step([a, b]);
-    expect(a.rt.view().log.length).toBeGreaterThanOrEqual(K);
-    expect(a.rt.view().phase).not.toBe("ended"); // nothing published yet: it keeps playing
+    for (let i = 0; i < 300 && a.rt.view().phase !== "ended"; i++) await step([a, b]);
     const results = settledAt(K);
-    const r = await D.headCall("POST", `/api/z/${EID}/settle`, { results: results.map((x) => ({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, pids: x.pids })) }, { "x-organizer": SECRET });
-    expect(r.status).toBe(200);
-    for (let i = 0; i < 8; i++) await step([a, b], 5000);
+    expect((await (await D.headCall("GET", `/api/z/${EID}/results`)).json() as any).results).toEqual([]); // nobody published anything
     for (const [p, pid] of [[a, pids[0]!], [b, pids[1]!]] as const) {
       const v = p.rt.view();
-      expect(v.phase).toBe("ended"); expect(v.endedByPrizes).toBe(true); expect(v.allAwarded).toBe(true);
-      expect(v.log.length).toBeLessThan(90);
+      expect(v.phase).toBe("ended"); expect(v.endedByPrizes).toBe(true); expect(v.allAwarded).toBe(true); expect(v.localWinners).toBe(true);
+      expect(v.log.length).toBe(K); // it stopped at the call that awarded the last prize
       const mine = results.filter((x) => x.pids.includes(pid)).map((x) => `${x.pattern}:${x.ordinal}`).sort();
       expect(v.won.map((w) => `${w.pattern}:${w.ordinal}`).sort()).toEqual(mine);
       for (const w of v.won) expect(Array.isArray(w.cells)).toBe(true);
     }
     expect(a.rt.view().won.length + b.rt.view().won.length).toBeGreaterThanOrEqual(need.length); // every line has a winner
+  }, 60_000);
+  test("when the seat list cannot be reached, phones fall back to the results the organizer's console published", async () => {
+    const a = mkPhone(14, { earlyEnd: true }), b = mkPhone(15, { earlyEnd: true });
+    for (const p of [a, b]) { const real = p.rt.deps.api; (p.rt.deps as any).api = async (m: string, path: string, x?: unknown) => { if (/\/seats/.test(path)) throw new Error("outage"); return real(m, path, x); }; await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true); }
+    const pids = [a.rt.pid!, b.rt.pid!], ref = reference(), cfg = a.rt.cfg, need = keysInPlayLines(cfg);
+    const settledAt = (k: number) => settleAll(EID, pids, ref.slice(0, k), cfg, 1);
+    let K = 0; for (let k = 1; k <= 90 && !K; k++) { const got = settledAt(k); if (need.every((n) => got.some((x) => x.pattern === n.key && x.ordinal === n.ordinal))) K = k; }
+    for (let i = 0; i < 300 && a.rt.view().log.length < K; i++) await step([a, b]);
+    expect(a.rt.view().phase).not.toBe("ended"); expect(a.rt.view().localWinners).toBe(false); // nothing published, no seat list: it keeps playing
+    const results = settledAt(K);
+    expect((await D.headCall("POST", `/api/z/${EID}/settle`, { results: results.map((x) => ({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, pids: x.pids })) }, { "x-organizer": SECRET })).status).toBe(200);
+    for (let i = 0; i < 8; i++) await step([a, b], 5000);
+    for (const [p, pid] of [[a, pids[0]!], [b, pids[1]!]] as const) {
+      const v = p.rt.view();
+      expect(v.phase).toBe("ended"); expect(v.endedByPrizes).toBe(true);
+      expect(v.won.map((w) => `${w.pattern}:${w.ordinal}`).sort()).toEqual(results.filter((x) => x.pids.includes(pid)).map((x) => `${x.pattern}:${x.ordinal}`).sort());
+    }
   }, 60_000);
   test("a house nobody completes keeps the engagement running to the last number (never ends on a guess)", async () => {
     const a = mkPhone(13); await a.rt.boot(); await a.rt.join(a.phone);

@@ -60,14 +60,17 @@ export interface Settled { pattern: PatternKey; ordinal: number; idx: number; pi
  * Ties share the reward. The 1st reward of a house goes to whoever completes it at the earliest call; the 2nd to whoever completes it at the next
  * distinct call; and so on.
  */
-export function settleAll(engagementId: string, pids: readonly string[], log: readonly number[], cfg: EngagementCfg = defaultCfg(), round = 1): Settled[] {
+export function settleAll(engagementId: string, pids: readonly string[], log: readonly number[], cfg: EngagementCfg = defaultCfg(), round = 1, late?: { countFrom: ReadonlyMap<string, number>; callRounds: readonly number[] }): Settled[] {
   const eid = roundEid(engagementId, round);
   const keys = keysInPlay(cfg.rewards);
   const best = new Map<PatternKey, Map<number, string[]>>(keys.map((k) => [k, new Map()]));
   for (const pid of pids) {
     const tk = ticketsFor(eid, pid, cfg.tickets);
+    // someone who joined late counts only the numbers called from their `countFrom` beacon round on; earlier calls become 0 (a number no ticket has), so call indexes stay global
+    const cf = late?.countFrom.get(pid) ?? 0;
+    const mine = cf > 0 && late ? log.map((n, k) => ((late.callRounds[k] ?? Infinity) >= cf ? n : 0)) : log;
     for (const k of keys) {
-      const i = completionIndexKey(tk, k, log);
+      const i = completionIndexKey(tk, k, mine);
       if (i < 0) continue;
       const g = best.get(k)!; const arr = g.get(i); if (arr) arr.push(pid); else g.set(i, [pid]);
     }
@@ -82,7 +85,7 @@ export function settleAll(engagementId: string, pids: readonly string[], log: re
 
 export interface Claim { pid: string; pattern: PatternKey; idx: number; round?: number }
 /** A claim is accepted only if recomputing it from the public log gives exactly the same call index. */
-export const checkClaims = (engagementId: string, claims: readonly Claim[], log: readonly number[] | Readonly<Record<number, readonly number[]>>, cfg: EngagementCfg = defaultCfg()) => {
+export const checkClaims = (engagementId: string, claims: readonly Claim[], log: readonly number[] | Readonly<Record<number, readonly number[]>>, cfg: EngagementCfg = defaultCfg(), late?: { countFrom: ReadonlyMap<string, number>; callRounds: Readonly<Record<number, readonly number[]>> }) => {
   const good: Claim[] = []; const bad: Claim[] = []; const cache = new Map<string, Ticket[]>();
   for (const c of claims) {
     const round = c.round ?? 1;
@@ -90,7 +93,9 @@ export const checkClaims = (engagementId: string, claims: readonly Claim[], log:
     if (!l || round < 1 || round > cfg.rounds) { bad.push(c); continue; }
     const key = `${round}|${c.pid}`;
     let tk = cache.get(key); if (!tk) { tk = ticketsFor(roundEid(engagementId, round), c.pid, cfg.tickets); cache.set(key, tk); }
-    (completionIndexKey(tk, c.pattern, l) === c.idx ? good : bad).push(c);
+    const cf = late?.countFrom.get(c.pid) ?? 0, cr = late?.callRounds[round]; // a late joiner's claim is checked against the numbers that counted for them
+    const mine = cf > 0 && cr ? l.map((n, k) => ((cr[k] ?? Infinity) >= cf ? n : 0)) : l;
+    (completionIndexKey(tk, c.pattern, mine) === c.idx ? good : bad).push(c);
   }
   return { good, bad };
 };

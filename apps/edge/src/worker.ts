@@ -11,7 +11,7 @@
 //                   So an AI can never decide who wins, and never change what the public beacon decides.
 //   nobody        - phones: join, send claims, read results counts, read the engagement info and the signed control file.
 
-import { defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
+import { GRACE_ROUNDS, defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
 import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
@@ -66,6 +66,8 @@ export const SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS seat (eid TEXT NOT NULL, seq INTEGER NOT NULL, pid TEXT NOT NULL, ph TEXT NOT NULL, dev TEXT, PRIMARY KEY (eid, seq))`,
   `CREATE UNIQUE INDEX IF NOT EXISTS seat_phone ON seat (eid, ph)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS seat_pid ON seat (eid, pid)`,
+  // the beacon round a seat joined in, when that was after the game began (0 = joined in time): every phone counts that person's numbers from there
+  `ALTER TABLE seat ADD COLUMN jr INTEGER`,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
@@ -504,7 +506,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (!a.plat) return deny(a);
     return json({ ok: true, purged: await purgeOld(env, now) });
   }
-  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind)$/);
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats)$/);
   if (!m) return json({ error: "Not found", hint: "Read the list of what you can do at /api/z/ai-manifest. Engagement routes look like /api/z/{id}/summary, /settings, /roster, /participants, /results, /publish." }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
@@ -529,11 +531,12 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (!ph) return json({ error: "Enter a valid mobile number." }, 400);
     const dev = typeof b?.device === "string" && /^[0-9a-f]{16,64}$/.test(b.device) ? (await sha(`dev|${eid}|${b.device}`)).slice(0, 32) : null; // one ticket, one device: the phone's own random id, only its hash is kept
     const reply = (pid: string, extra: object = {}) => json({ pid, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), ...pub(e), ...extra });
-    const have = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.pid AS seat FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; seat: string | null }>();
+    const nowRound = roundOfMs(now), lateRound = nowRound > e.start_round + GRACE_ROUNDS ? nowRound : 0; // joined after the first number: that round, else 0
+    const have = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.pid AS seat, s.jr AS jr FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; seat: string | null; jr: number | null }>();
     if (have) {
       if (have.seat && have.dev && have.dev !== dev) return json({ error: "This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it.", code: "other-phone" }, 423);
       if (have.seat && !have.dev && dev) { if (!(await spend(env, now))) return BUSY(); await env.DB.prepare("UPDATE seat SET dev=? WHERE eid=? AND pid=? AND dev IS NULL").bind(dev, eid, have.pid).run(); } // the organizer let this person move: the first device to come back keeps the ticket
-      return reply(have.pid, { again: true }); // same number twice = same participant
+      return reply(have.pid, { again: true, jr: have.jr ?? 0 }); // same number twice = same participant
     }
     if (e.closed) return json({ error: "This engagement is by invitation. Ask your organizer to add your number." }, 403);
     if (!dev) return json({ error: "Please refresh this page and try again." }, 400);
@@ -543,13 +546,32 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const tail = (await pidOf(ph)).slice(0, 12);
     // seat number = one more than the highest so far; the pid carries it ("<seat>x<hash>") so every phone can make the same collision-free ticket. Both rows are written together and the cap is checked inside the insert, so a crowd arriving at the same instant can never pass the limit or share a seat.
     await env.DB.batch([
-      env.DB.prepare("INSERT OR IGNORE INTO seat(eid,seq,pid,ph,dev) SELECT ?, s, s || 'x' || ?, ?, ? FROM (SELECT COALESCE(MAX(seq),0)+1 AS s FROM seat WHERE eid=?) WHERE (SELECT COUNT(*) FROM participant WHERE eid=?) < ?").bind(eid, tail, ph, dev, eid, eid, e.cap),
+      env.DB.prepare("INSERT OR IGNORE INTO seat(eid,seq,pid,ph,dev,jr) SELECT ?, s, s || 'x' || ?, ?, ?, ? FROM (SELECT COALESCE(MAX(seq),0)+1 AS s FROM seat WHERE eid=?) WHERE (SELECT COUNT(*) FROM participant WHERE eid=?) < ?").bind(eid, tail, ph, dev, lateRound, eid, eid, e.cap),
       env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,joined_ms) SELECT eid, pid, ph, ?, ? FROM seat WHERE eid=? AND ph=?").bind(cleanName(b?.name), now, eid, ph),
     ]);
-    const row = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null }>();
+    const row = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.jr AS jr FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; jr: number | null }>();
     if (!row) return json({ error: "This engagement is full." }, 409); // lost the race for the last place
     if (row.dev && row.dev !== dev) return json({ error: "This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it.", code: "other-phone" }, 423);
-    return reply(row.pid);
+    return reply(row.pid, { jr: row.jr ?? 0 });
+  }
+  if (action === "seats" && req.method === "GET") {
+    // Public: seat number, participant id and join round of everyone who joined (no names, no phone numbers). Every phone reads this to work out the winners itself.
+    // The first answer after the game began is saved once as one stored text (so 10,000 phones read one row, not 10,000), and later joiners come as a small tail.
+    if (isDraft) return json({ error: "This engagement is not open yet." }, 403);
+    if (now < roundMs(e.start_round + GRACE_ROUNDS)) return json({ ready: false });
+    const after = Math.max(0, Math.floor(Number(url.searchParams.get("after")) || 0));
+    const key = `seats-base/${eid}`;
+    let base = (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(key).first<{ v: string }>())?.v ?? null;
+    let n = base ? Number(base.slice(base.lastIndexOf('"upto":') + 7, -1)) : 0;
+    if (!base) {
+      const rows = (await env.DB.prepare("SELECT seq, pid, COALESCE(jr,0) AS jr FROM seat WHERE eid=? ORDER BY seq").bind(eid).all<{ seq: number; pid: string; jr: number }>()).results ?? [];
+      n = rows.length ? rows[rows.length - 1]!.seq : 0;
+      base = `{"ready":true,"seats":[${rows.map((r) => `[${r.seq},"${r.pid}",${r.jr}]`).join(",")}],"upto":${n}}`;
+      if (await spend(env, now)) await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(key, base).run();
+    }
+    if (after < n) return new Response(base, { headers: { "content-type": "application/json", "cache-control": "public, max-age=20" } }); // the saved text as it is: nothing to parse
+    const rows = (await env.DB.prepare("SELECT seq, pid, COALESCE(jr,0) AS jr FROM seat WHERE eid=? AND seq>? ORDER BY seq LIMIT 2000").bind(eid, after).all<{ seq: number; pid: string; jr: number }>()).results ?? [];
+    return json({ ready: true, seats: rows.map((r) => [r.seq, r.pid, r.jr]), upto: rows.length ? rows[rows.length - 1]!.seq : after });
   }
   if (action === "unbind" && req.method === "POST") { // the organizer lets one person move their ticket to a new phone: the first device that comes back keeps it
     if (!can(a, e, true)) return deny(a);
@@ -649,7 +671,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   if (action === "participants" && req.method === "GET") {
     if (!can(a, e)) return deny(a);
     const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || PAGE, 1), PAGE), offset = Math.max(Number(url.searchParams.get("offset")) || 0, 0);
-    const r = await env.DB.prepare("SELECT pid, name FROM participant WHERE eid=? ORDER BY joined_ms, pid LIMIT ? OFFSET ?").bind(eid, limit, offset).all<any>();
+    const r = await env.DB.prepare("SELECT p.pid AS pid, p.name AS name, COALESCE(s.jr,0) AS jr FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? ORDER BY p.joined_ms, p.pid LIMIT ? OFFSET ?").bind(eid, limit, offset).all<any>();
     const total = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
     return json({ participants: r.results ?? [], total, offset, limit, closed: !!e.closed, cap: e.cap, ...pub(e) });
   }
@@ -670,7 +692,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (!(await spend(env, now, (n?.c ?? 0) + 1))) return BUSY();
     await env.DB.batch([
       env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(eid),
-      env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM seat WHERE eid=?").bind(eid),
+      env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM seat WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`seats-base/${eid}`),
     ]);
     return json({ ok: true, erased: n?.c ?? 0 });
   }
@@ -744,7 +766,7 @@ export async function purgeOld(env: Env, now: number): Promise<number> {
   for (const { id } of old.results ?? []) {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(id),
-      env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM seat WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
+      env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM seat WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`seats-base/${id}`), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
       env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`), env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
     ]);
     try { await env.CONTROL_R2?.delete(controlKey(id)); } catch { /* the object expires with its engagement anyway */ }
