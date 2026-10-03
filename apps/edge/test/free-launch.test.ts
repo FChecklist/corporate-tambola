@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { withDevice } from "./device";
 import { handle, type Env } from "../src/worker";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
@@ -6,7 +7,7 @@ import { makeD1 } from "./d1-sqlite";
 const T = Date.UTC(2026, 9, 1, 10, 0, 0);
 let env: PayEnv; let raw: ReturnType<typeof makeD1>["raw"];
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}, now = T) =>
-  handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: body === undefined ? undefined : JSON.stringify(body) }), env as Env, now);
+  handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: withDevice(method, path, body) }), env as Env, now);
 const roundAt = (ms: number) => Math.floor((ms / 1000 - 1692803367) / 3) + 1;
 const FUT = roundAt(T) + 1200; // an hour ahead
 const eng = (id: string, cap = 100) => ({ id, startRound: FUT, callSeconds: 6, cap });

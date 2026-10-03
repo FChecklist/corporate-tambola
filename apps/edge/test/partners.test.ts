@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { withDevice } from "./device";
 import { handle } from "../src/worker";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
@@ -6,7 +7,7 @@ import { makeD1 } from "./d1-sqlite";
 const T = Date.UTC(2026, 9, 1, 10, 0, 0);
 let env: PayEnv; let raw: ReturnType<typeof makeD1>["raw"];
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}, now = T) =>
-  handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body) }), env, now);
+  handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: withDevice(method, path, body) }), env, now);
 const plat = { "x-organizer": "plat" };
 const enroll = async (phone = "98111 22233", name = "Asha") => (await (await call("POST", "/api/partner/enroll", { phone, name, consent: true })).json()) as any;
 const buy = (o: Record<string, unknown> = {}) => call("POST", "/api/checkout", { org: "Acme Ltd", email: `b${Math.random().toString(36).slice(2, 7)}@acme.com`, country: "IN", taxId: "", pack: 500, currency: "INR", ...o });

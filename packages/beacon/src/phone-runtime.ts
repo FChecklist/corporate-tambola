@@ -131,17 +131,24 @@ export class PhoneRuntime {
     while (this.logs.length < round) this.logs.push([]);
   }
 
+  /** This device's own random id (made once, kept on the device). A ticket belongs to the one device that joined with it; the store only keeps a hash. */
+  private device(): string {
+    let d = this.deps.store.get("ctz:device");
+    if (!d || !/^[0-9a-f]{32}$/.test(d)) { d = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join(""); this.deps.store.set("ctz:device", d); }
+    return d;
+  }
+
   /** Joins with a mobile number. The same number again returns the same participant (and the same ticket). */
   async join(phone: string, name?: string): Promise<boolean> {
     try {
-      const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name });
+      const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name, device: this.device() });
       this.startRound = r.startRound; this.callSeconds = r.callSeconds; this.trackClaims = r.trackClaims !== false;
       if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined) this.readCfg(r);
       this.deps.store.set(this.key("pid"), r.pid);
       this.adopt(r.pid); this.error = null;
       return true;
     } catch (e: any) {
-      this.error = e?.status === 409 ? "This engagement is full." : e?.status === 400 ? "Enter a valid mobile number." : e?.status === 503 ? "It is a busy day. Please try again in a few minutes." : "Could not join. Check your connection and try again.";
+      this.error = e?.status === 423 ? String(e.message || "This ticket is already on another phone.") : e?.status === 409 ? "This engagement is full." : e?.status === 400 ? "Enter a valid mobile number." : e?.status === 503 ? "It is a busy day. Please try again in a few minutes." : "Could not join. Check your connection and try again.";
       return false;
     }
   }

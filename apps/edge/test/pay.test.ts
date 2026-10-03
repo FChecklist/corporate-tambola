@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { withDevice } from "./device";
 import { createHmac } from "node:crypto";
 import { handle, type Env } from "../src/worker";
 import type { PayEnv } from "../src/pay";
@@ -10,7 +11,7 @@ const realFetch = globalThis.fetch;
 let rz: { orders: any[]; payments: Record<string, any>; captured: string[] };
 const hmac = (secret: string, s: string) => createHmac("sha256", secret).update(s).digest("hex");
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}, now = T) =>
-  handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body) }), env as Env, now);
+  handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: withDevice(method, path, body) }), env as Env, now);
 const buy = (o: Record<string, unknown> = {}) => call("POST", "/api/checkout", { org: "Acme Ltd", email: "Boss@Acme.com", country: "IN", taxId: "", pack: 500, currency: "INR", ...o });
 
 beforeEach(() => {

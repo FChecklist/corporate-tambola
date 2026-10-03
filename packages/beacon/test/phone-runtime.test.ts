@@ -96,15 +96,22 @@ describe("a phone from first open to full house", () => {
       last = v.log.length;
     }
   });
-  test("the same number on a second phone gives the same participant and ticket; the ticket is kept after a reload", async () => {
+  test("one ticket, one device: the same number on a second phone is refused; the organizer can let it move; a reload on the same phone keeps the ticket", async () => {
     const a = mkPhone(3); await a.rt.boot(); await a.rt.join(a.phone);
-    const b = mkPhone(3); await b.rt.boot(); await b.rt.join("+91 " + a.phone.slice(0, 5) + " " + a.phone.slice(5));
-    expect(b.rt.pid).toBe(a.rt.pid);
-    expect(b.rt.ticket).toEqual(a.rt.ticket);
-    const c = new PhoneRuntime(EID, { ...a.rt.deps });
+    expect(a.rt.pid).toMatch(/^\d+x[0-9a-f]{12}$/);
+    const b = mkPhone(3); await b.rt.boot();
+    expect(await b.rt.join("+91 " + a.phone.slice(0, 5) + " " + a.phone.slice(5))).toBe(false); // different device, same number, even typed another way
+    expect(b.rt.error).toMatch(/another phone/i); expect(b.rt.pid).toBeNull();
+    const c = new PhoneRuntime(EID, { ...a.rt.deps }); // the same phone reloads: remembered, same ticket
     await c.boot();
-    expect(c.phase).toBe("play"); // remembered on this phone
-    expect(c.pid).toBe(a.rt.pid);
+    expect(c.phase).toBe("play"); expect(c.pid).toBe(a.rt.pid); expect(c.ticket).toEqual(a.rt.ticket);
+    expect(await c.join(a.phone)).toBe(true); // the same device asking again is simply let back in
+    const un = await D.headCall("POST", `/api/z/${EID}/unbind`, { phone: a.phone }, { "x-organizer": SECRET });
+    expect(un.status).toBe(200);
+    expect(await b.rt.join(a.phone)).toBe(true); // the organizer let this person move: the new phone keeps the ticket
+    expect(b.rt.pid).toBe(a.rt.pid); expect(b.rt.ticket).toEqual(a.rt.ticket);
+    const back = mkPhone(3); await back.rt.boot();
+    expect(await back.rt.join(a.phone)).toBe(false); // and now the old/any other phone is locked out again
   });
   test("a bad link says so and does nothing else", async () => {
     const x = new PhoneRuntime("NO-SUCH-ENG", mkPhone(4).rt.deps);

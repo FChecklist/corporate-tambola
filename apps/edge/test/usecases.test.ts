@@ -1,5 +1,6 @@
 // Use cases, exceptions and "what can go wrong". IDs match docs/USE_CASES.md (grep "UC-12").
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { withDevice } from "./device";
 import { createHmac } from "node:crypto";
 import { handle, housekeeping, purgeOld, type Env } from "../src/worker";
 import type { PayEnv } from "../src/pay";
@@ -20,7 +21,7 @@ const realFetch = globalThis.fetch;
 let rz: { orders: any[]; payments: Record<string, any>; mail: any[]; mailDown: boolean };
 
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}, now = T) =>
-  handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body) }), env as Env, now);
+  handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: withDevice(method, path, body) }), env as Env, now);
 const j = async (r: Response) => (await r.json()) as any;
 const eng = (id: string, over: Record<string, unknown> = {}) => ({ id, startRound: START, callSeconds: 6, cap: 100, ...over });
 const contact = { email: "boss@acme.com", phone: "98765 43210" };

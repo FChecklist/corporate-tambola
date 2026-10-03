@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { withDevice } from "./device";
 import { handle, type Env } from "../src/worker";
 import { makeD1 } from "./d1-sqlite";
 
@@ -7,7 +8,7 @@ let env: Env;
 let raw: ReturnType<typeof makeD1>["raw"];
 const T = Date.UTC(2026, 9, 1, 10, 0, 0);
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}, now = T) =>
-  handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body) }), env, now);
+  handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: withDevice(method, path, body) }), env, now);
 const org = { "x-organizer": SECRET };
 const create = (over: Record<string, unknown> = {}) => call("POST", "/api/z", { id: "ENG1", startRound: 1000, callSeconds: 6, cap: 400, ...over }, org);
 const phone = (i: number) => "9" + String(100000000 + i);
@@ -48,7 +49,7 @@ describe("joining", () => {
     const r = await (await join(1)).json() as any;
     expect(r.startRound).toBe(1000);
     expect(r.callSeconds).toBe(6);
-    expect(r.pid).toHaveLength(16);
+    expect(r.pid).toMatch(/^1x[0-9a-f]{12}$/); // seat number + hash: the seat makes the ticket collision-free
     expect(Object.keys(r).sort()).toEqual(["breaks", "callSeconds", "pid", "rewards", "rounds", "startRound", "tickets", "trackClaims"]);
   });
   test("the same number joining twice, even typed differently, is one participant and one write", async () => {
@@ -165,8 +166,8 @@ describe("free-plan guard and scale", () => {
     const rs = await Promise.all(Array.from({ length: 10000 }, (_, i) => join(i)));
     expect(rs.every((r) => r.status === 200)).toBe(true);
     expect((raw.query("SELECT COUNT(*) c FROM participant").get() as any).c).toBe(10000);
-    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(10002);
-    expect(10001).toBeLessThan(100000 * 0.2); // one 10,000-person engagement uses ~10% of D1's free daily writes
+    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(20002);
+    expect(20001).toBeLessThan(100000 * 0.25); // one 10,000-person engagement uses ~20% of D1's free daily writes
   }, 120_000);
   test("a large engagement stores no per-claim rows (winners come from the public numbers), so 10,000 phones claiming adds no writes", async () => {
     await create({ cap: 20000 });
@@ -176,7 +177,7 @@ describe("free-plan guard and scale", () => {
     for (let round = 0; round < 2; round++)
       await Promise.all(pids.slice(0, 2000).map((pid, i) => call("POST", "/api/z/ENG1/claims", { pid, claims: [{ pattern: pats[i % 7], idx: i % 90 }] })));
     expect((raw.query("SELECT COUNT(*) c FROM claim").get() as any).c).toBe(0);
-    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(10002); // 1 create + 1 entitlement-free + 10,000 joins
+    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(20002); // 1 create + 1 entitlement-free + 10,000 joins
   }, 120_000);
   test("a small engagement (up to 500) stores claims once each, even when sent twice", async () => {
     await create({ cap: 500 });
@@ -743,5 +744,39 @@ describe("big lists come in pages, and the daily clean-up runs by itself", () =>
     old("OLDTHREE");
     await call("GET", "/api/z/ENG1/info"); await join(1);
     expect((raw.query("SELECT COUNT(*) c FROM engagement WHERE id='OLDTHREE'").get() as any).c).toBe(1);
+  });
+});
+
+describe("seats and one device per ticket", () => {
+  const joinAs = (phone: string, device: string, eid = "ENG1") => call("POST", `/api/z/${eid}/join`, { phone, device });
+  test("every joiner gets the next seat number, so every ticket comes from a different place in the collision-free list", async () => {
+    await create({ cap: 100 });
+    const pids: string[] = [];
+    for (let i = 0; i < 30; i++) pids.push(((await (await joinAs(`98000000${String(i).padStart(2, "0")}`, "b".repeat(32))).json()) as any).pid);
+    expect(pids.map((p) => Number(p.split("x")[0]))).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
+    const { ticketsFor } = await import("../../../packages/beacon/src/game");
+    const keys = new Set(pids.flatMap((p) => ticketsFor("ENG1", p, 2).map((t) => JSON.stringify(t))));
+    expect(keys.size).toBe(60);
+  });
+  test("a second device with the same number is refused (423); the organizer can release it; only the organizer's own key can", async () => {
+    await create({ cap: 100 });
+    const first = await joinAs("9800000001", "c".repeat(32));
+    expect(first.status).toBe(200);
+    expect((await joinAs("+91 98000 00001", "c".repeat(32))).status).toBe(200); // same phone again
+    const other = await joinAs("9800000001", "d".repeat(32));
+    expect(other.status).toBe(423); expect(((await other.json()) as any).code).toBe("other-phone");
+    expect((await call("POST", "/api/z/ENG1/unbind", { phone: "9800000001" })).status).toBe(403); // a participant cannot release anyone
+    expect((await call("POST", "/api/z/ENG1/unbind", { phone: "9800000001" }, org)).status).toBe(200);
+    expect((await joinAs("9800000001", "d".repeat(32))).status).toBe(200); // the new phone now owns the ticket
+    expect((await joinAs("9800000001", "c".repeat(32))).status).toBe(423);
+    expect((await call("POST", "/api/z/ENG1/unbind", { phone: "9811111111" }, org)).status).toBe(404);
+  });
+  test("a join without a device id is asked to refresh, and a full engagement still refuses cleanly", async () => {
+    await create({ cap: 2 });
+    expect((await call("POST", "/api/z/ENG1/join", { phone: "9800000001", device: undefined })).status).toBe(400);
+    expect((await joinAs("9800000001", "e".repeat(32))).status).toBe(200);
+    expect((await joinAs("9800000002", "e".repeat(32))).status).toBe(200);
+    expect((await joinAs("9800000003", "e".repeat(32))).status).toBe(409);
+    expect((await joinAs("9800000002", "e".repeat(32))).status).toBe(200); // existing people still get back in
   });
 });

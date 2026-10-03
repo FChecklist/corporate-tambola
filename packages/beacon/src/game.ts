@@ -5,16 +5,22 @@ import { INTERMISSION_ROUNDS, PATTERN_ORDER, breakShift, defaultCfg, keysInPlay,
 import type { ControlState } from "./control";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
+import { positionOf, seatOfPid, ticketAt } from "./unique-ticket";
 import { NUMBERS, fetchRound, pickNumber, seededRand, verifyRound, type BeaconOpts, type Round } from "./index";
 
 export const ALL_PATTERNS: readonly PatternId[] = PATTERN_ORDER;
 
 /** The same ticket on every device for (engagement, participant). The first ticket keeps its original seed so existing links never change. */
-export const ticketFor = (engagementId: string, pid: string): Ticket => generateTicket(seededRand(`${engagementId}|${pid}`));
+export const ticketFor = (engagementId: string, pid: string): Ticket => {
+  const seat = seatOfPid(pid); // an id issued with a seat number gets a ticket from the collision-free list: no other ticket of the round can match it
+  return seat ? ticketAt(engagementId, positionOf(seat, 0)) : generateTicket(seededRand(`${engagementId}|${pid}`));
+};
 /** One or two tickets per participant; the second is always different from the first. */
 export function ticketsFor(engagementId: string, pid: string, n: 1 | 2 = 1): Ticket[] {
   const a = ticketFor(engagementId, pid);
   if (n === 1) return [a];
+  const seat = seatOfPid(pid);
+  if (seat) return [a, ticketAt(engagementId, positionOf(seat, 1))]; // the second ticket is the next position: different from every other ticket too
   for (let i = 2; i < 40; i++) { const b = generateTicket(seededRand(`${engagementId}|${pid}|${i}`)); if (JSON.stringify(b) !== JSON.stringify(a)) return [a, b]; }
   throw new Error("Could not make a second ticket.");
 }
