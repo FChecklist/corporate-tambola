@@ -533,7 +533,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     return json({ engagements: (r.results ?? []).map((x: any) => ({ ...x, startsAtIST: istTime(roundMs(x.start_round)) })), retentionDays: RETENTION_DAYS });
   }
   if (req.method === "POST" && p === "/api/inbound-email") { // the mail service forwards e-mail sent to our address; a deletion request counts only from the organizer's registered address
-    if (!env.INBOUND_SECRET || req.headers.get("x-inbound-secret") !== env.INBOUND_SECRET) return deny(a);
+    if (!(env.INBOUND_SECRET ?? "").trim() || (req.headers.get("x-inbound-secret") ?? "").trim() !== (env.INBOUND_SECRET ?? "").trim()) return deny(a);
     const b = await body(req, 200_000);
     const from = String(b?.from ?? "").toLowerCase().match(/[^\s<>"',;]+@[^\s<>"',;]+/)?.[0];
     const text = `${b?.subject ?? ""}\n${b?.text ?? ""}`;
@@ -550,7 +550,8 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   }
   if (req.method === "POST" && p === "/api/lifecycle/tick") { // run every minute by the scheduled job: reports, deletions, reminders. Idempotent and bounded per call.
     const jobKey = req.headers.get("x-cron-key") ?? "";
-    if (!a.plat && !(env.CRON_KEY && jobKey.length >= 16 && jobKey === env.CRON_KEY)) return deny(a);
+    const jobSecret = (env.CRON_KEY ?? "").trim(); // a secret pasted in with a trailing line break still matches
+    if (!a.plat && !(jobSecret.length >= 16 && jobKey.trim() === jobSecret)) return deny(a);
     return json({ ok: true, ...(await lifecycleTick(env as any, now)), purged: await purgeOld(env, now) });
   }
   if (req.method === "POST" && p === "/api/purge") { // run daily (Cron trigger) or by hand: removes everything older than the retention period
