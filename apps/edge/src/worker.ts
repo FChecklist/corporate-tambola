@@ -27,6 +27,10 @@ export interface Env {
   DB: D1; ORGANIZER_SECRET?: string; DAILY_WRITE_BUDGET?: string; PHONE_SALT?: string;
   /** The secret that seals names and mobile numbers at rest (AES-256-GCM). Never stored in the database. */
   DATA_KEY?: string;
+  /** Shared secret of the mail service's inbound webhook (e-mail to us asking for a deletion). */
+  INBOUND_SECRET?: string;
+  /** The scheduled job's own key (it can call only the lifecycle tick, nothing else). */
+  CRON_KEY?: string;
   /** Optional: a public R2 bucket behind a cached custom domain. Phones then read the pause file from the CDN and never invoke the Worker for it. */
   CONTROL_R2?: R2Like; CONTROL_BASE?: string;
 }
@@ -223,6 +227,7 @@ export const AI_MANIFEST = {
     { do: "See claims received", call: "GET /api/z/{id}/claims" },
     { do: "See published results", call: "GET /api/z/{id}/results" },
     { do: "Ask the organizer to pause, resume or stop (they approve in their console)", call: "POST /api/z/{id}/control/request {action: pause|resume|stop, note}" },
+    { do: "Ask for ALL participant names and mobile numbers of this engagement to be deleted (nothing is deleted until the organizer confirms in their console)", call: "POST /api/z/{id}/control/request {action: 'erase', note}" },
     { do: "Read the current pause status", call: "GET /api/z/{id}/control" },
     { do: "Suggest a feature, improvement or report we should build (shared with every organizer's AI, reviewed by us)", call: "POST /api/z/suggestions {kind: feature|improvement|report|bug|other, title, body}" },
     { do: "See everyone's suggestions and what we decided, and add your support to one", call: "GET /api/z/suggestions ; POST /api/z/suggestions/{id}/vote" },
@@ -418,8 +423,13 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (sub === "/request" && req.method === "POST") { // the AI (or organizer) asks; the organizer's browser approves by signing
       if (!can(a, ce)) return deny(a);
       const b = await body(req);
-      if (!b || !["pause", "resume", "stop"].includes(b.action)) return json({ error: "Ask for pause, resume or stop." }, 400);
+      if (!b || !["pause", "resume", "stop", "erase"].includes(b.action)) return json({ error: "Ask for pause, resume, stop or erase." }, 400);
       if (!(await spend(env, now))) return BUSY();
+      if (b.action === "erase") { // the AI may ASK to delete all participant data; only the organizer's own confirmation in their console does it
+        await nudge(env, cid!, `delreq-${day(now)}`, now, `Your AI assistant asked to delete all participant data: engagement ${cid}`, `Your AI assistant asked us to delete every participant's name and mobile number for engagement ${cid}.\n\nNothing has been deleted. To confirm, open your console and press Confirm on the request: ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html?e=${cid}\n\nIf you did not ask for this, ignore this message or press Dismiss in your console.`);
+        await env.DB.prepare("INSERT INTO ctl_request(eid,action,note,at_ms,open) VALUES(?,?,?,?,1)").bind(cid, "erase", typeof b.note === "string" ? b.note.replace(/[<>`]/g, "").slice(0, 200) : null, now).run();
+        return json({ ok: true, message: "Nothing has been deleted yet. The organizer has been asked and must confirm in their console (we also e-mailed them). Tell them to open the console and press Confirm." });
+      }
       await env.DB.prepare("INSERT INTO ctl_request(eid,action,note,at_ms,open) VALUES(?,?,?,?,1)").bind(cid, b.action, typeof b.note === "string" ? b.note.replace(/[<>`]/g, "").slice(0, 200) : null, now).run();
       return json({ ok: true, message: "The organizer has been asked and must approve it in their console." });
     }
@@ -519,8 +529,25 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const r = await q.all<any>();
     return json({ engagements: (r.results ?? []).map((x: any) => ({ ...x, startsAtIST: istTime(roundMs(x.start_round)) })), retentionDays: RETENTION_DAYS });
   }
-  if (req.method === "POST" && p === "/api/lifecycle/tick") { // run every few minutes by the scheduled job: reports, deletions, reminders. Idempotent and bounded per call.
-    if (!a.plat) return deny(a);
+  if (req.method === "POST" && p === "/api/inbound-email") { // the mail service forwards e-mail sent to our address; a deletion request counts only from the organizer's registered address
+    if (!env.INBOUND_SECRET || req.headers.get("x-inbound-secret") !== env.INBOUND_SECRET) return deny(a);
+    const b = await body(req, 200_000);
+    const from = String(b?.from ?? "").toLowerCase().match(/[^\s<>"',;]+@[^\s<>"',;]+/)?.[0];
+    const text = `${b?.subject ?? ""}\n${b?.text ?? ""}`;
+    if (!from || !/\bdelete\b|\berase\b/i.test(text)) return json({ ok: true, action: "none" });
+    const done: string[] = [];
+    for (const tok of [...new Set(text.match(/[A-Za-z0-9_-]{4,40}/g) ?? [])].slice(0, 80)) {
+      const c = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`contact/${tok}`).first<{ v: string }>();
+      if (!c || String(JSON.parse(c.v).email ?? "").toLowerCase() !== from) continue;
+      await erasePersonal(env, tok, now, "email");
+      done.push(tok);
+    }
+    if (done.length) await sendMail(env as PayEnv, env.DB, from, `Deleted: participant data of ${done.join(", ")}`, `As you asked, we have permanently deleted every participant's name, mobile number, seat and invitation record for: ${done.join(", ")}.\n\nWe keep, as the law requires, your details as organizer / host / co-host and the winners record (prize, round, time, seat; no names or numbers) until their 365 days end. Backups roll off within 7 days.\n\nCorporate Tambola`, now);
+    return json({ ok: true, action: done.length ? "deleted" : "no-match", engagements: done });
+  }
+  if (req.method === "POST" && p === "/api/lifecycle/tick") { // run every minute by the scheduled job: reports, deletions, reminders. Idempotent and bounded per call.
+    const jobKey = req.headers.get("x-cron-key") ?? "";
+    if (!a.plat && !(env.CRON_KEY && jobKey.length >= 16 && jobKey === env.CRON_KEY)) return deny(a);
     return json({ ok: true, ...(await lifecycleTick(env as any, now)), purged: await purgeOld(env, now) });
   }
   if (req.method === "POST" && p === "/api/purge") { // run daily (Cron trigger) or by hand: removes everything older than the retention period

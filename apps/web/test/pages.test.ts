@@ -263,7 +263,7 @@ describe("winners, the end, and break media on the phone", () => {
   const rtFake3 = (win: any, nowMs: () => number) => { const Orig = win.ZG.PhoneRuntime; win.ZG.PhoneRuntime = class extends Orig { constructor(eid: string, deps: any) { super(eid, { ...deps, beacon: { fetcher: async (url: string) => { const last = url.split("/").pop()!; const r = last === "latest" ? roundAt(nowMs()) : Number(last); return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" }) }; }, mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 }, verify: (x: any) => x.signature === "aa" }); } }; };
   async function joined(o: O, id: string, settings: Record<string, unknown> = {}) {
     await make(o, id); if (Object.keys(settings).length) await o.api("PATCH", `/api/z/${id}/settings`, settings, o.aiKey); await publish(o, id);
-    const p = await page(o, `/z?e=${id}`, "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake3(win, () => o.world.now); } });
+    const p = await page(o, `/z?e=${id}`, "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake3(win, () => o.world.now); win.Math = Object.assign(Object.create(Math), { random: () => 0 }); } });
     await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = "9833333333"; p.click("#go"); await p.waitFor((x) => /Your ticket|What you can win/.test(x));
     return p;
   }
@@ -288,6 +288,9 @@ describe("winners, the end, and break media on the phone", () => {
     expect(end).toMatch(/Thank you for joining our extended family of Corporate Tambola/); expect(end).toMatch(/Share with friends and colleagues/); expect(end).toMatch(/Voucher 5000/);
     expect(doc.getElementById("shr")).toBeTruthy();
     expect(rt.view().endedByPrizes).toBe(true); expect(rt.view().log.length).toBeLessThan(90); // it ended on the prizes, not on the last number
+    await until(() => (o.world.raw.query("SELECT COUNT(*) c FROM winner WHERE src='phone'").get() as any).c >= 3 && (o.world.raw.query("SELECT COUNT(*) c FROM overvote").get() as any).c >= 1); // the phone told our store about its wins and that the game is over
+    expect(o.world.raw.query("SELECT end_src FROM life").get()).toEqual({ end_src: "phones" });
+    expect(JSON.stringify(o.world.raw.query("SELECT * FROM winner").all())).not.toMatch(/Voucher|9833|Gift/); // seat, prize, round, time: no names or numbers
   }, 90_000);
   test("a player who joined too late to win anything still gets the thank-you and the share button when the game ends, and no prizes are listed", async () => {
     const o = await organizer({ FREE_LAUNCH: "1" }); await make(o, "UI-WIN2"); await o.api("PATCH", "/api/z/UI-WIN2/settings", prizes, o.aiKey); await publish(o, "UI-WIN2");
@@ -386,4 +389,50 @@ describe("Refer & Earn page", () => {
     expect(readFileSync(join(import.meta.dir, "../../../pages/build.mjs"), "utf8")).toContain('"partner.css"');
     expect(html()).toContain('href="/partner.css"');
   });
+});
+
+describe("invitations on the pages", () => {
+  const rtFake3 = (win: any, nowMs: () => number) => { const Orig = win.ZG.PhoneRuntime; win.ZG.PhoneRuntime = class extends Orig { constructor(eid: string, deps: any) { super(eid, { ...deps, beacon: { fetcher: async (url: string) => { const last = url.split("/").pop()!; const r = last === "latest" ? roundAt(nowMs()) : Number(last); return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" }) }; }, mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 }, verify: (x: any) => x.signature === "aa" }); } }; };
+  const paidOrg = () => organizer({ FREE_LAUNCH: "1" });
+  const setInvites = (o: O, id: string, invites: unknown) => o.api("PATCH", `/api/z/${id}/settings`, { invites }, o.aiKey);
+  test("a participant sees 'Invite your colleagues / family members' with only the kinds the organizer allowed, their own link per kind, and how many invitations are left", async () => {
+    const o = await paidOrg(); await make(o, "UI-INV1"); await setInvites(o, "UI-INV1", { on: true, per: 4, cats: ["family", "colleagues", "dealers"] }); await publish(o, "UI-INV1");
+    const p = await page(o, "/z?e=UI-INV1", "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake3(win, () => o.world.now); } });
+    await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = "9811111111"; p.click("#go");
+    const t = await p.waitFor((x) => /Invite your colleagues \/ family members/i.test(x) && /You have invited 0/.test(x));
+    expect(t).toMatch(/up to 4 people/); expect(t).toMatch(/4 invitations are left/); expect(t).toMatch(/Family members/); expect(t).toMatch(/Colleagues/); expect(t).toMatch(/Dealers/); expect(t).not.toMatch(/Vendors|Friends/);
+    const link = () => (p.win.document.getElementById("invlink") as any).textContent as string;
+    expect(link()).toMatch(/\/z\.html\?e=UI-INV1&from=1&c=family$/);
+    (p.win.document.querySelector('[data-icat="colleagues"]') as any).click();
+    await p.waitFor(() => /c=colleagues$/.test(link())); expect(p.text()).toMatch(/Share invitation \(colleagues\)/);
+    expect(p.win.document.querySelector('a[href^="https://wa.me/"]')).toBeTruthy(); expect(p.errors).toEqual([]);
+  }, 60_000);
+  test("with invitations off there is no invite card at all", async () => {
+    const o = await paidOrg(); await make(o, "UI-INV2"); await publish(o, "UI-INV2");
+    const p = await page(o, "/z?e=UI-INV2", "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake3(win, () => o.world.now); } });
+    await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = "9811111112"; p.click("#go"); await p.waitFor((x) => /Your ticket|What you can win/.test(x));
+    expect(p.text()).not.toMatch(/Invite your colleagues/i);
+  }, 60_000);
+  test("a guest opening an invitation link is told who it came from, joins with their own number, is recorded under the inviter, and the 5th guest of a 4-person link is told it is used up", async () => {
+    const o = await paidOrg(); await make(o, "UI-INV3"); await setInvites(o, "UI-INV3", { on: true, per: 4, cats: ["family", "colleagues"] }); await publish(o, "UI-INV3");
+    expect((await o.api("POST", "/api/z/UI-INV3/join", { phone: "9822222221", device: "1".repeat(32) })).status).toBe(200); // the inviter is seat 1
+    const guest = async (n: number) => { const p = await page(o, "/z?e=UI-INV3&from=1&c=colleagues", "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake3(win, () => o.world.now); } }); await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = "98222222" + String(30 + n); p.click("#go"); return p; };
+    const g1 = await guest(1); await g1.waitFor((x) => /Your ticket|What you can win|Starting in|Getting ready/.test(x));
+    expect(o.world.raw.query("SELECT inv, cat FROM seat WHERE seq=2").get()).toEqual({ inv: 1, cat: "colleagues" });
+    for (let n = 2; n <= 4; n++) await guest(n);
+    const g5 = await guest(5);
+    const msg = await g5.waitFor((x) => /most one person can invite/.test(x)); expect(msg).toMatch(/already been used by 4 people/); expect(o.world.raw.query("SELECT COUNT(*) c FROM seat WHERE inv=1").get()).toEqual({ c: 4 });
+    const fresh = await page(o, "/z?e=UI-INV3&from=1&c=colleagues", "z.html", ["audio.js", "zgame.js", "z.js"]); await fresh.waitFor((x) => /You were invited by a colleague or family member/.test(x));
+  }, 120_000);
+  test("the organizer's console saves the invitation policy: on/off, how many each, and the kinds of guests", async () => {
+    const o = await paidOrg(); await make(o, "UI-INV4"); await publish(o, "UI-INV4");
+    const p = await consolePage(o, "UI-INV4"); await p.waitFor((x) => /Let participants invite their colleagues/.test(x));
+    expect(p.win.document.querySelectorAll("[data-invcat]").length).toBe(10);
+    (p.$("#invon") as any).checked = true; (p.$("#invper") as any).value = "3";
+    for (const b of p.win.document.querySelectorAll("[data-invcat]") as any) b.checked = ["family", "vendors", "customers"].includes(b.dataset.invcat);
+    p.click("#savecfg"); await p.waitFor((x) => /Saved\./.test(x));
+    const info = await o.json(await o.api("GET", "/api/z/UI-INV4/info", undefined, o.token));
+    expect(info.invites).toEqual({ on: true, per: 3, cats: ["family", "customers", "vendors"].sort((a, b) => ["family", "colleagues", "friends", "dealers", "vendors", "customers"].indexOf(a) - ["family", "colleagues", "friends", "dealers", "vendors", "customers"].indexOf(b)) });
+    expect(p.errors).toEqual([]);
+  }, 60_000);
 });

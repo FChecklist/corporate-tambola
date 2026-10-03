@@ -124,6 +124,24 @@
     try { navigator.vibrate && navigator.vibrate([200, 100, 200, 100, 400]); } catch {}
     if (sound && window.TBAudio) TBAudio.say("Congratulations! You won " + list.map((w) => w.name).join(", ") + "!");
   }
+  // ---------- tell our store about this phone's wins and about the end, once each (tiny): the winners record and the end-of-game clock rely on it
+  const reportedKey = "ctz-reported:" + EID, overKey = "ctz-over:" + EID;
+  let reporting = false, overPending = false;
+  async function reportToStore(v) {
+    if (!v.pid) return;
+    try {
+      const done = new Set(JSON.parse(store.get(reportedKey) || "[]")), fresh = v.won.filter((w) => !done.has(winId(w)));
+      if (fresh.length && !reporting) {
+        reporting = true;
+        try { await api("POST", `/api/z/${EID}/won`, { pid: v.pid, wins: fresh.map((w) => ({ round: w.round, pattern: w.pattern, ordinal: w.ordinal, idx: w.idx })) }); for (const w of fresh) done.add(winId(w)); store.set(reportedKey, JSON.stringify([...done])); } catch { /* sent at the next paint */ }
+        reporting = false;
+      }
+      if (v.phase === "ended" && !store.get(overKey) && !overPending) {
+        overPending = true; // spread over a little time so a big crowd does not ask at the same second
+        setTimeout(async () => { try { await api("POST", `/api/z/${EID}/over`, { pid: v.pid }); store.set(overKey, "1"); } catch { /* tried again later */ } overPending = false; }, Math.floor(Math.random() * 45000));
+      }
+    } catch { /* never in the way of the game */ }
+  }
   function prizesCard() {
     if (!PRIZES.length) return "";
     const rows = PRIZES.slice().sort((a, b) => a.round - b.round).map((w) => `<div class="zrow"><span>${esc(w.name)}${w.text ? `<br><small class="zsmall" style="margin:0">${esc(w.text)}</small>` : ""}</span><em>${w.pattern === "lucky" ? "Lucky draw" : "Round " + w.round}</em></div>`).join("");
@@ -317,7 +335,7 @@
     if (!v.won) v.won = []; // an older saved copy of the game code during an update: never break the screen
     if (v.phase === "missing" || v.phase === "boot") { $app.innerHTML = `<p class="zmsg">${esc(v.error || "Loading…")}</p>`; return; }
     if (v.phase === "join") { const f = document.getElementById("ph"); if (f && document.activeElement === f) return; $app.innerHTML = joinView(v.error); bindJoin(); return; }
-    const fresh = syncPrizes(v);
+    const fresh = syncPrizes(v); reportToStore(v);
     $app.innerHTML = playView(v);
     syncMedia(v); bindShare(); loadInvites(v); bindInvite(v);
     if (fresh.length) showHurray(fresh);

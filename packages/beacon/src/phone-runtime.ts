@@ -45,7 +45,7 @@ export interface RuntimeView {
   /** For each earlier round, the reward lines this phone received (a line is received when this phone completed it at the call the organizer published). */
   past: { round: number; got: { pattern: PatternKey; ordinal: number }[] }[];
   /** Every reward line this phone won, in any round (a line is won when this phone completed it at the call the results name). `text` is what the organizer wrote for that line. */
-  won: { round: number; pattern: PatternKey; ordinal: number; text: string; cells: number[] }[];
+  won: { round: number; pattern: PatternKey; ordinal: number; text: string; cells: number[]; idx: number }[];
   /** True when every reward line of the round being played has been awarded. */
   allAwarded: boolean;
   /** The engagement ended because every prize was awarded (not because all 90 numbers were called). */
@@ -432,7 +432,7 @@ export class PhoneRuntime {
       const r = x.round ?? 1, key = x.pattern as PatternKey, tk = this.ticketsOf(r), log = this.maskedLog(r);
       if (!tk.length || completionIndexKey(tk, key, log) !== x.idx) continue;
       const line = linesFor(this.cfg.rewards, key).find((l) => l.ordinal === x.ordinal);
-      out.push({ round: r, pattern: key, ordinal: x.ordinal, text: line?.text ?? "", cells: winCells(tk, key, log, x.idx) });
+      out.push({ round: r, pattern: key, ordinal: x.ordinal, text: line?.text ?? "", cells: winCells(tk, key, log, x.idx), idx: x.idx });
     }
     return out;
   }

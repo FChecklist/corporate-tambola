@@ -263,3 +263,49 @@ describe("exact deletion dates", () => {
     expect((raw.query("SELECT COUNT(*) c FROM participant").get() as any).c).toBe(0); expect((raw.query("SELECT COUNT(*) c FROM winner").get() as any).c).toBe(1);
   });
 });
+
+describe("asking for deletion", () => {
+  const key = async () => { const r = await handle(new Request("http://x/api/start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "boss@acme.com" }) }), env, T); return (await j(r)) as { token: string; aiKey: string }; };
+  test("an AI assistant can only ASK for a deletion: nothing is deleted until the organizer confirms in their console, and the organizer is e-mailed", async () => {
+    const k = await key();
+    await call("POST", "/api/z", { id: "PRV-AI", startRound: roundOf(T - 2 * 3_600_000), callSeconds: 6, cap: 100 }, { "x-organizer": k.token });
+    await call("POST", "/api/z/PRV-AI/publish", { email: "boss@acme.com", phone: "9811122233" }, { "x-organizer": k.token }, T - 5 * 3_600_000);
+    await joinAs(1, "Asha", "PRV-AI");
+    expect((await call("POST", "/api/z/PRV-AI/erase", {}, { "x-organizer": k.aiKey })).status).toBe(403); // the AI key can never erase
+    const ask = await call("POST", "/api/z/PRV-AI/control/request", { action: "erase", note: "organizer said delete" }, { "x-organizer": k.aiKey });
+    expect(ask.status).toBe(200); expect((await j(ask)).message).toMatch(/Nothing has been deleted yet/);
+    expect((raw.query("SELECT COUNT(*) c FROM participant WHERE eid='PRV-AI'").get() as any).c).toBe(1);
+    expect((await j(await call("GET", "/api/z/PRV-AI/control/request", undefined, { "x-organizer": k.token }))).requests[0].action).toBe("erase");
+    const mail = raw.query("SELECT subject, body FROM outbox WHERE to_addr='boss@acme.com' ORDER BY id DESC LIMIT 1").get() as any;
+    expect(mail.subject).toMatch(/asked to delete all participant data/); expect(mail.body).toMatch(/Nothing has been deleted/);
+    expect((await call("POST", "/api/z/PRV-AI/erase", {}, { "x-organizer": k.token })).status).toBe(200); // the organizer's own confirmation
+    expect((raw.query("SELECT COUNT(*) c FROM participant WHERE eid='PRV-AI'").get() as any).c).toBe(0);
+  });
+  test("an e-mail to us asking for a deletion works only from the organizer's registered address and with the right secret", async () => {
+    (env as any).INBOUND_SECRET = "in-secret";
+    await create("PRV-MAIL"); await setContact("PRV-MAIL", "boss@acme.com"); await joinAs(1, "Asha", "PRV-MAIL"); await joinAs(2, "Bala", "PRV-MAIL");
+    const inbound = (b: unknown, secret = "in-secret") => call("POST", "/api/inbound-email", b, { "x-inbound-secret": secret });
+    expect((await inbound({ from: "boss@acme.com", subject: "Delete PRV-MAIL" }, "wrong")).status).toBe(403);
+    expect((await j(await inbound({ from: "Someone <stranger@evil.com>", subject: "Please delete PRV-MAIL", text: "delete everything" }))).action).toBe("no-match"); // not the organizer
+    expect((raw.query("SELECT COUNT(*) c FROM participant").get() as any).c).toBe(2);
+    expect((await j(await inbound({ from: "boss@acme.com", subject: "Hello", text: "thanks for the game PRV-MAIL" }))).action).toBe("none"); // no deletion wish
+    const ok = await j(await inbound({ from: "The Boss <Boss@Acme.com>", subject: "Re: your report", text: "Please DELETE all the data of PRV-MAIL now." }));
+    expect(ok.action).toBe("deleted"); expect(ok.engagements).toEqual(["PRV-MAIL"]);
+    expect((raw.query("SELECT COUNT(*) c FROM participant").get() as any).c).toBe(0);
+    const confirmation = raw.query("SELECT subject, body FROM outbox WHERE to_addr='boss@acme.com' ORDER BY id DESC LIMIT 1").get() as any;
+    expect(confirmation.subject).toMatch(/Deleted: participant data of PRV-MAIL/); expect(confirmation.body).toMatch(/365 days/);
+  });
+});
+
+describe("the scheduled job's key", () => {
+  test("the lifecycle tick accepts the platform key or the job's own key, and nothing else", async () => {
+    (env as any).CRON_KEY = "job-key-0123456789abcdef";
+    expect((await call("POST", "/api/lifecycle/tick", {}, { "x-cron-key": "wrong-wrong-wrong-wrong" })).status).toBe(403);
+    expect((await call("POST", "/api/lifecycle/tick", {}, { "x-cron-key": "short" })).status).toBe(403);
+    expect((await call("POST", "/api/lifecycle/tick", {})).status).toBe(403);
+    expect((await call("POST", "/api/lifecycle/tick", {}, { "x-cron-key": "job-key-0123456789abcdef" })).status).toBe(200);
+    expect((await call("POST", "/api/purge", {}, { "x-cron-key": "job-key-0123456789abcdef" })).status).toBe(403); // the job key opens only the one door
+    delete (env as any).CRON_KEY;
+    expect((await call("POST", "/api/lifecycle/tick", {}, { "x-cron-key": "job-key-0123456789abcdef" })).status).toBe(403);
+  });
+});

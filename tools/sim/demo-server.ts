@@ -17,7 +17,7 @@ const first = ["Asha", "Bala", "Chandra", "Deepa", "Eshan", "Farah", "Gopal", "H
 const device = "d".repeat(32); // the demo phone is seat 5
 for (let i = 1; i <= 12; i++) {
   const pid = `${i}x${String(i).padStart(12, "0")}`, ph = "h" + i, late = i > 10;
-  s.raw.run("INSERT INTO seat(eid,seq,pid,ph,dev,jr,inv,cat,src,role) VALUES(?,?,?,?,?,?,?,?,?,?)", [id, i, pid, ph, i === 5 ? (await sha(`dev|${id}|${device}`)).slice(0, 32) : "x" + i, late ? start + 40 + 15 : 0, i <= 3 ? null : i <= 8 ? (i % 3) + 1 : i - 6, i <= 3 ? null : ["family", "colleagues", "friends", "dealers"][i % 4], "link", i === 1 ? "organizer" : i === 2 ? "host" : null]);
+  s.raw.run("INSERT INTO seat(eid,seq,pid,ph,dev,jr,inv,cat,src,role) VALUES(?,?,?,?,?,?,?,?,?,?)", <any[]>[id, i, pid, ph, i === 5 ? (await sha(`dev|${id}|${device}`)).slice(0, 32) : "x" + i, late ? start + 40 + 15 : 0, i <= 3 ? null : i <= 8 ? (i % 3) + 1 : i - 6, i <= 3 ? null : ["family", "colleagues", "friends", "dealers"][i % 4], "link", i === 1 ? "organizer" : i === 2 ? "host" : null]);
   s.raw.run("INSERT INTO participant(eid,pid,phone_hash,name,pii,joined_ms) VALUES(?,?,?,NULL,?,?)", [id, pid, ph, await sealPii(s.env as any, { phone: `98765${String(40000 + i * 37).slice(-5)}`, name: `${first[i - 1]} ${last[i % 6]}` }), Date.now() - (14 - i) * 60_000]);
 }
 console.log("READY " + s.url + " pid5=5x000000000005");
