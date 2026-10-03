@@ -20,7 +20,7 @@ const st = await page.evaluate(async () => {
 });
 check("service worker active", st.active);
 check("whole game saved (22 files)", st.list.length === 22, st.list.length + " files");
-check("saved-on-device notice shown", /saved on this device/i.test(st.bar), st.bar);
+check("silent: nothing of ours is shown on the page", !st.bar, st.bar);
 const mf = await page.evaluate(async () => { const r = await fetch("/manifest.webmanifest"); return r.ok ? r.json() : null; });
 check("manifest served", !!mf && mf.display === "standalone");
 // go offline and reopen the game link
