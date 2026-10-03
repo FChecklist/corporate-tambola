@@ -191,10 +191,24 @@ describe("phone page", () => {
     const p = await phone(o, "UI-PH1"); await join(p);
     const t = await p.waitFor((x) => /What you can win/.test(x));
     expect(t).toMatch(/You are in\. See you at/); expect(t).toMatch(/Voucher 5000/); expect(t).toMatch(/Gift hamper/); expect(t).toMatch(/How it works/); expect(t).toMatch(/Check my sound/); expect(t).toMatch(/Add to my calendar/);
-    expect(t).toMatch(/until the first number/); expect(t).not.toMatch(/pay|unpaid|invoice/i);
+    expect(t).toMatch(/Starting in\s*\d\d:\d\d:\d\d/); expect(t).not.toMatch(/pay|unpaid|invoice/i); // hours:minutes:seconds to the time the organizer gave
     expect(decodeURIComponent((p.$("#addcal") as any).getAttribute("href"))).toMatch(/BEGIN:VEVENT[\s\S]*SUMMARY:Corporate Tambola/);
     expect(p.errors).toEqual([]);
   });
+  test("the clock counts down to the time given; at that exact time the phone says the game is setting up for 2 more minutes, and the first number comes 2 minutes later", async () => {
+    const o = await organizer(); await make(o, "UI-PH9"); await publish(o, "UI-PH9");
+    const p = await phone(o, "UI-PH9"); await join(p); const rt = p.win.__rt;
+    const before = await p.waitFor((x) => /Starting in\s*\d\d:\d\d:\d\d/.test(x));
+    const secs = (x: string) => { const m = /Starting in\s*(\d\d):(\d\d):(\d\d)/.exec(x)!; return +m[1]! * 3600 + +m[2]! * 60 + +m[3]!; };
+    expect(secs(before)).toBeGreaterThan(3000); expect(secs(before)).toBeLessThanOrEqual(3600); // about an hour to go
+    o.world.now = roundMs(rt.scheduledRound) + 5_000; rt.syncedAtMono = -Infinity; // the exact time arrives (plus a moment)
+    const setup = await p.waitFor((x) => /Your game is setting up/.test(x));
+    expect(setup).toMatch(/We are waiting 2 minutes more for everyone to join/); expect(setup).toMatch(/\d\d:\d\d:\d\d/); expect(setup).not.toMatch(/Starting in\s*\d\d:/);
+    expect(rt.view().log.length).toBe(0); // no number yet
+    o.world.now = roundMs(rt.scheduledRound) + 125_000; rt.syncedAtMono = -Infinity; // 2 minutes after the time given
+    await p.waitFor(() => rt.view().log.length >= 1);
+    expect(p.text()).not.toMatch(/Your game is setting up/);
+  }, 60_000);
   test("UC-28 a draft's link says it is not open yet", async () => {
     const o = await organizer(); await make(o, "UI-PH2");
     const p = await phone(o, "UI-PH2"); await p.waitFor((x) => /not open yet|Could not reach|not valid/i.test(x));

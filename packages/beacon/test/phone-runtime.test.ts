@@ -5,7 +5,7 @@ import { handle, type Env } from "../../../apps/edge/src/worker";
 import { makeD1 } from "../../../apps/edge/test/d1-sqlite";
 import { PhoneRuntime, type PhoneDeps } from "../src/phone-runtime";
 import { ALL_PATTERNS, callRoundR, checkClaims, completionIndex, luckyRound, luckyWinners, scheduleFull, settleAll, ticketFor } from "../src/game";
-import { defaultRewards, keysInPlay, linesFor, roundEid } from "../src/config";
+import { GRACE_ROUNDS, defaultRewards, keysInPlay, linesFor, roundEid } from "../src/config";
 import { deriveCalls, roundAt, roundTimeMs, type Fetcher, type Round } from "../src";
 import { nextMessage, publicKeyFromSecret, readPublished, resolveControl, scheduleWithControl, signControlWithSecret, cfgOf, type KV } from "../src/control";
 
@@ -53,7 +53,7 @@ beforeEach(async () => {
   const d = makeD1();
   env = { DB: d.db, ORGANIZER_SECRET: SECRET, DAILY_WRITE_BUDGET: "1000000" };
   T0 = roundTimeMs(START - 3); t = 0;
-  await D.headCall("POST", "/api/z", { id: EID, startRound: START, callSeconds: CALL_SECONDS, cap: 200 }, { "x-organizer": SECRET });
+  await D.headCall("POST", "/api/z", { id: EID, startRound: START - GRACE_ROUNDS, callSeconds: CALL_SECONDS, cap: 200 }, { "x-organizer": SECRET });
 });
 const registerKey = async () => (await D.headCall("PUT", `/api/z/${EID}/control/key`, { publicKey: publicKeyFromSecret(KEY) }, { "x-organizer": SECRET })).status;
 const publish = async (a: Parameters<typeof nextMessage>[2]) => {
@@ -305,7 +305,7 @@ describe("the free plan: how often phones ask about a pause", () => {
     expect(a.rt.view().log.length).toBeGreaterThan(20); // and it played normally
   });
   test("a mid-size engagement asks about every 30 seconds, a standard one every 9 to 12", async () => {
-    await D.headCall("POST", "/api/z", { id: "ENG-LEAN", startRound: START, callSeconds: CALL_SECONDS, cap: 800 }, { "x-organizer": SECRET });
+    await D.headCall("POST", "/api/z", { id: "ENG-LEAN", startRound: START - GRACE_ROUNDS, callSeconds: CALL_SECONDS, cap: 800 }, { "x-organizer": SECRET });
     await D.headCall("PUT", "/api/z/ENG-LEAN/control/key", { publicKey: publicKeyFromSecret(KEY) }, { "x-organizer": SECRET });
     const lean: string[] = [], std: string[] = [];
     const l = mkPhone(12, { eid: "ENG-LEAN", onApi: (p) => lean.push(p) });

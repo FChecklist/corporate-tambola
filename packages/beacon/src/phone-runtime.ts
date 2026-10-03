@@ -2,7 +2,7 @@
 // It talks to exactly two things: the public beacon (through BeaconOpts) and our one small store (through deps.api).
 import { generateTicket, patternNumbers, ticketNumbers, type Ticket } from "../../shared/src/ticket";
 import { ALL_SAFETIES, ControlTracker, SAFETY_FAST, SAFETY_STANDARD, pausedAt, type ControlConfig } from "./control";
-import { defaultCfg, keysInPlay, linesFor, roundEid, validateCfg, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import { GRACE_ROUNDS, defaultCfg, keysInPlay, linesFor, roundEid, validateCfg, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
 import { RoundStore, activeBreak, activeIntermission, callRoundR, completionIndexKey, ticketsFor } from "./game";
 import { NUMBERS, QUICKNET, fetchRound, pickNumber, roundAt, roundTimeMs, type BeaconOpts } from "./index";
 
@@ -23,7 +23,7 @@ export type Phase = "boot" | "missing" | "join" | "play" | "ended";
 export interface RuntimeView {
   phase: Phase; error: string | null; pid: string | null; ticket: Ticket | null; log: number[]; nowRound: number | null;
   locked: boolean;
-  startRound: number; callSeconds: number; mode: "live" | "hold" | "blind" | "none"; paused: boolean; stopped: boolean;
+  startRound: number; scheduledRound: number; callSeconds: number; mode: "live" | "hold" | "blind" | "none"; paused: boolean; stopped: boolean;
   claimed: PatternKey[]; unsent: number; results: { pattern: PatternKey | "lucky"; ordinal: number; idx: number; count: number; winners?: string[]; round?: number }[]; pendingChecks: number; discarded: number;
   nextCallInSec: number | null;
   tickets: Ticket[]; cfg: EngagementCfg;
@@ -57,6 +57,8 @@ export class PhoneRuntime {
   tickets: Ticket[] = [];
   cfg: EngagementCfg = defaultCfg();
   startRound = 0;
+  /** The time the organizer gave. The first number is GRACE_ROUNDS later (startRound above already includes it). */
+  scheduledRound = 0;
   callSeconds = 0;
   trackClaims = true;
   controlUrl: string | null = null;
@@ -106,7 +108,7 @@ export class PhoneRuntime {
   async boot(): Promise<void> {
     try {
       const info = await this.deps.api("GET", `/api/z/${this.eid}/info`);
-      this.startRound = info.startRound; this.callSeconds = info.callSeconds; this.trackClaims = info.trackClaims !== false; this.controlUrl = typeof info.controlUrl === "string" ? info.controlUrl : null; this.locked = !!info.locked; this.gated = info.locked !== undefined; this.readCfg(info);
+      this.scheduledRound = info.startRound; this.startRound = info.startRound + GRACE_ROUNDS; this.callSeconds = info.callSeconds; this.trackClaims = info.trackClaims !== false; this.controlUrl = typeof info.controlUrl === "string" ? info.controlUrl : null; this.locked = !!info.locked; this.gated = info.locked !== undefined; this.readCfg(info);
     } catch (e: any) {
       this.phase = e?.status === 404 ? "missing" : "boot";
       this.error = e?.status === 404 ? "This engagement link is not valid." : "Could not reach the engagement. Check your connection.";
@@ -148,7 +150,7 @@ export class PhoneRuntime {
   async join(phone: string, name?: string): Promise<boolean> {
     try {
       const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name, device: this.device() });
-      this.startRound = r.startRound; this.callSeconds = r.callSeconds; this.trackClaims = r.trackClaims !== false;
+      this.scheduledRound = r.startRound; this.startRound = r.startRound + GRACE_ROUNDS; this.callSeconds = r.callSeconds; this.trackClaims = r.trackClaims !== false;
       if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined) this.readCfg(r);
       this.deps.store.set(this.key("pid"), r.pid);
       this.adopt(r.pid); this.error = null;
@@ -164,7 +166,7 @@ export class PhoneRuntime {
     if (this.controlState === "none" && !this.locked) {
       // nothing can be paused here (no key was registered, and none can be after the start), so there is almost nothing to ask:
       // once the start has passed a hold can no longer begin, and before it we ask rarely, or every few seconds close to the start if it can be held
-      const toStart = this.startRound - now;
+      const toStart = this.scheduledRound - now; // a hold can only begin around the time the organizer gave
       if (toStart < -20) return;
       if (m - this.lastControlPoll < (this.gated && toStart < 40 ? 9_000 : 60_000) + (Math.floor(m) % 3000)) return;
     } else if (m - this.lastControlPoll < this.pollBaseMs + (Math.floor(m) % this.pollJitterMs)) return; // the profile's interval plus a little jitter so phones do not all poll together
@@ -190,7 +192,7 @@ export class PhoneRuntime {
   }
 
   private async reloadSchedule() {
-    try { const info = await this.deps.api("GET", `/api/z/${this.eid}/info`); this.startRound = info.startRound; this.callSeconds = info.callSeconds; this.gated = info.locked !== undefined; this.readCfg(info); } catch { /* the next poll tries again */ }
+    try { const info = await this.deps.api("GET", `/api/z/${this.eid}/info`); this.scheduledRound = info.startRound; this.startRound = info.startRound + GRACE_ROUNDS; this.callSeconds = info.callSeconds; this.gated = info.locked !== undefined; this.readCfg(info); } catch { /* the next poll tries again */ }
   }
   private modeAt(now: number): RuntimeView["mode"] {
     if (this.locked) return "hold";
@@ -372,7 +374,7 @@ export class PhoneRuntime {
     const inter = now !== null && this.cur < this.cfg.rounds ? activeIntermission(st ?? null, this.startRound, this.stride, this.cfg.breaks, this.cur + 1, now) : null;
     const claimedNow = keysInPlay(this.cfg.rewards).filter((k) => this.claimedAll.has(`${this.cur}:${k}`));
     return {
-      phase: this.phase, error: this.error, pid: this.pid, ticket: this.ticket, log: this.logCache, nowRound: now, startRound: this.startRound, callSeconds: this.callSeconds,
+      phase: this.phase, error: this.error, pid: this.pid, ticket: this.ticket, log: this.logCache, nowRound: now, startRound: this.startRound, scheduledRound: this.scheduledRound, callSeconds: this.callSeconds,
       locked: this.locked, announcement: this.announcement,
       mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: !!st && now !== null && pausedAt(st, now), stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
       claimed: claimedNow, unsent: this.unsent, results: this.allResults.filter((x) => (x.round ?? 1) === this.cur), pendingChecks: this.store.pending(), discarded: this.store.discarded,

@@ -8,6 +8,10 @@ export interface RewardLine { pattern: PatternId; scope: Scope; ordinal: number;
 export interface BreakCfg { after: number; seconds: number; kind: "file" | "youtube" | "slides" | "speech" | "lucky"; title: string; mediaUrl?: string; winners?: 1 | 3 | 5 | 10; /** How a lucky draw is shown on phones. The winners are drawn the same way either way; a scratch card only changes the reveal. */ style?: "draw" | "scratch" }
 export interface EngagementCfg { tickets: 1 | 2; rewards: RewardLine[]; breaks: BreakCfg[]; rounds: number }
 export const MAX_ROUNDS = 5;
+/** The game starts this many 3 s beacon rounds (2 minutes) after the time the organizer gave: the last 2 minutes are "setting up, waiting for everyone to join". */
+export const GRACE_ROUNDS = 40;
+/** Someone who joins after the game began only sees numbers called from this many rounds (60 s) after joining, so every phone has heard about them before their first number counts. */
+export const LATE_LAG_ROUNDS = 20;
 /** Between two rounds everyone waits this many 3 s beacon rounds (90 s) before the next round's first number. */
 export const INTERMISSION_ROUNDS = 30;
 /** Round 1 keeps the engagement's own id; later rounds use a derived id, so each round has its own numbers and its own tickets. */

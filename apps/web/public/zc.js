@@ -100,7 +100,7 @@
     const L = (S.cfg.breaks || []).filter((b) => b.kind === "lucky"); const out = [];
     const st = S.st || null; const stride = S.info.callSeconds / 3;
     for (let i = 0; i < L.length; i++) {
-      const round = ZG.luckyRound(st, S.info.startRound, stride, S.cfg.breaks, L[i]);
+      const round = ZG.luckyRound(st, S.info.startRound + ZG.GRACE_ROUNDS, stride, S.cfg.breaks, L[i]);
       if (round === null || now === null || round > now) { out.push(null); continue; }
       const x = S.luckyRand && S.luckyRand[round] ? S.luckyRand[round] : await ZG.fetchRound(round);
       if (!x) { out.push(null); continue; }
@@ -229,8 +229,8 @@
       let st = null;
       if (cf) { st = ZG.resolveControl(ZG.cfgOf(cf), cf.messages); S.st = st; S.control = { pausedNow: now !== null && st.intervals.some((i) => now >= i.start && now < i.end) }; } else S.st = null;
       const stride = S.info.callSeconds / 3;
-      const schedOf = (r) => Array.from({ length: 90 }, (_, k) => ZG.callRoundR(st, S.info.startRound, stride, S.cfg.breaks, r, k));
-      S.started = now !== null && now >= S.info.startRound;
+      const schedOf = (r) => Array.from({ length: 90 }, (_, k) => ZG.callRoundR(st, S.info.startRound + ZG.GRACE_ROUNDS, stride, S.cfg.breaks, r, k));
+      S.started = now !== null && now >= S.info.startRound + ZG.GRACE_ROUNDS;
       try { S.published = (await fetch(BASE + `/api/z/${eid}/results`).then((r) => r.json())).results || []; } catch { S.published = S.published || []; }
       if (!S.store) S.store = new ZG.RoundStore({});
       S.logs = {}; let budget = 60; // catch up quickly when the console is opened late

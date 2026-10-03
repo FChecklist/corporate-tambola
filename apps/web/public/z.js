@@ -22,6 +22,8 @@
   const rt = new ZG.PhoneRuntime(EID, { api, getPublic, beacon: {}, mono: () => performance.now(), store });
   let lastLen = 0, firstPaint = true, sound = store.get("ctz-sound") !== "off", timer = null;
   if (window.TBAudio) TBAudio.enabled = sound;
+  const clock = (s) => { s = Math.max(0, Math.round(s)); return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map((n) => String(n).padStart(2, "0")).join(":"); }; // 00:12:34
+  const GRACE_SECS = ZG.GRACE_ROUNDS * 3;
   const fmt = (s) => (s >= 90 ? Math.round(s / 60) + " min" : s + "s");
 
   const joinView = (msg) => `<div class="zhead"><b>Corporate Tambola</b></div>
@@ -61,18 +63,21 @@
     return `<div class="zcard"><h2>${scr ? "Scratch card" : "Lucky draw"}</h2>${rows}</div>`;
   }
   function icsFor(v) {
-    const ms = (1692803367 + (v.startRound - 1) * 3) * 1000, f = (d) => new Date(d).toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+    const ms = (1692803367 + (v.scheduledRound - 1) * 3) * 1000, f = (d) => new Date(d).toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
     const text = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Corporate Tambola//EN", "BEGIN:VEVENT", "UID:" + EID + "@corporate-tambola", "DTSTAMP:" + f(Date.now()), "DTSTART:" + f(ms), "DTEND:" + f(ms + 45 * 60000), "SUMMARY:Corporate Tambola engagement", "DESCRIPTION:Open " + location.origin + "/z?e=" + EID + " a few minutes early.", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
     return "data:text/calendar;charset=utf-8," + encodeURIComponent(text);
   }
   /** Before the first number: what to expect, what can be won, a sound check and a calendar entry. Everything here is known at boot, so it costs no extra requests. */
   function waitingRoom(v) {
     if (v.phase !== "play" || v.locked || v.log.length || v.nextCallInSec === null || v.nextCallInSec <= 0 || v.round > 1) return "";
-    const ms = (1692803367 + (v.startRound - 1) * 3) * 1000;
+    const ms = (1692803367 + (v.scheduledRound - 1) * 3) * 1000;
     const when = new Date(ms).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
     const prizes = ZG.keysInPlay(v.cfg.rewards).map((key) => ZG.linesFor(v.cfg.rewards, key).map((line) => `<li>${esc((ZG.linesFor(v.cfg.rewards, key).length > 1 ? ordinalName(line.ordinal) + " " : "") + KEYNAME(key))}${line.text ? ": <b>" + esc(line.text) + "</b>" : ""}</li>`).join("")).join("");
-    return `<div class="zcard zwait"><h2>You are in. See you at ${esc(when)}</h2>
-      <div class="zcount" aria-live="off">${fmt(v.nextCallInSec)}</div><p class="zsmall" style="margin-top:0">until the first number. Keep this page open: the numbers appear on their own.</p>
+    const toFirst = v.nextCallInSec, setup = toFirst <= GRACE_SECS;
+    const top = setup
+      ? `<h2>Your game is setting up</h2><div class="zsetup">We are waiting 2 minutes more for everyone to join.</div><div class="zcount" aria-live="off" id="cd">${clock(toFirst)}</div><p class="zsmall" style="margin-top:0">until the first number. Keep this page open: the numbers appear on their own.</p>`
+      : `<h2>You are in. See you at ${esc(when)}</h2><div class="zsmall" style="margin:0">Starting in</div><div class="zcount" aria-live="off" id="cd">${clock(toFirst - GRACE_SECS)}</div><p class="zsmall" style="margin-top:0">hours : minutes : seconds. Keep this page open: the numbers appear on their own.</p>`;
+    return `<div class="zcard zwait">${top}
       ${prizes ? `<h3>What you can win</h3><ul class="zlist">${prizes}</ul>` : ""}
       <h3>How it works</h3><ol class="zlist"><li>Your ticket is below. Numbers are called one by one and marked for you.</li><li>When a row or the whole ticket is complete you will see it. The software checks it, you do not need to shout.</li><li>The organizer hands over the rewards.</li></ol>
       <button class="zbtn s alt" id="soundtest">Check my sound</button><a class="zbtn s alt" id="addcal" download="engagement.ics" href="${icsFor(v)}">Add to my calendar</a></div>`;
@@ -242,7 +247,7 @@
     else if (v.mode === "hold") banners.push(`<div class="zbanner warn">Checking with the organizer… numbers will continue in a moment.</div>`);
     else if (v.mode === "blind") banners.push(`<div class="zbanner warn">Cannot reach the organizer's controls right now. Play continues; a pause may appear late.</div>`);
     if (v.phase === "ended" && !v.stopped && !v.endedByPrizes) banners.push(`<div class="zbanner ok">${v.rounds > 1 ? "All " + v.rounds + " rounds are finished." : "All 90 numbers have been called."} Thank you for taking part.</div>`);
-    const sub = v.phase === "ended" || v.locked || v.brk || v.intermission ? "" : v.log.length === 0 ? (v.nextCallInSec !== null ? "First number in " + fmt(v.nextCallInSec) : "Getting ready…") : v.paused || v.mode === "hold" ? "" : v.nextCallInSec !== null ? "Next number in " + v.nextCallInSec + "s" : "";
+    const sub = v.phase === "ended" || v.locked || v.brk || v.intermission ? "" : v.log.length === 0 ? (v.nextCallInSec !== null ? (v.nextCallInSec > GRACE_SECS ? "Starting in " + clock(v.nextCallInSec - GRACE_SECS) : "First number in " + clock(v.nextCallInSec)) : "Getting ready…") : v.paused || v.mode === "hold" ? "" : v.nextCallInSec !== null ? "Next number in " + v.nextCallInSec + "s" : "";
     const still = v.tickets.length ? stillToWinRows(v) : "";
     const chk = v.pendingChecks > 0 ? `<p class="zsmall">Double-checking ${v.pendingChecks} earlier number${v.pendingChecks === 1 ? "" : "s"} in the background.</p>` : "";
     const curWins = v.won.filter((w) => w.round === v.round), winSet = new Set(curWins.flatMap((w) => w.cells));
