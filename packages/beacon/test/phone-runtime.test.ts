@@ -5,7 +5,7 @@ import { handle, type Env } from "../../../apps/edge/src/worker";
 import { makeD1 } from "../../../apps/edge/test/d1-sqlite";
 import { PhoneRuntime, type PhoneDeps } from "../src/phone-runtime";
 import { ALL_PATTERNS, callRoundR, checkClaims, completionIndex, luckyRound, luckyWinners, scheduleFull, settleAll, ticketFor } from "../src/game";
-import { defaultRewards, roundEid } from "../src/config";
+import { defaultRewards, keysInPlay, linesFor, roundEid } from "../src/config";
 import { deriveCalls, roundAt, roundTimeMs, type Fetcher, type Round } from "../src";
 import { nextMessage, publicKeyFromSecret, readPublished, resolveControl, scheduleWithControl, signControlWithSecret, cfgOf, type KV } from "../src/control";
 
@@ -581,3 +581,40 @@ describe("two rounds on real phones", () => {
     for (const p of ps) { const v = p.rt.view(); expect(v.phase).toBe("ended"); expect(v.round).toBe(1); }
   });
 });
+
+describe("winners hear it, and the engagement ends when the last prize is awarded", () => {
+  test("two phones: results published when the last line is complete -> each winner sees exactly their lines, everyone sees it ended, long before 90 numbers", async () => {
+    const a = mkPhone(11), b = mkPhone(12);
+    for (const p of [a, b]) { await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true); }
+    const pids = [a.rt.pid!, b.rt.pid!];
+    const ref = reference();
+    const cfg = a.rt.cfg;
+    const settledAt = (k: number) => settleAll(EID, pids, ref.slice(0, k), cfg, 1);
+    const need = keysInPlayLines(cfg);
+    let K = 0; for (let k = 1; k <= 90 && !K; k++) { const got = settledAt(k); if (need.every((n) => got.some((x) => x.pattern === n.key && x.ordinal === n.ordinal))) K = k; }
+    expect(K).toBeGreaterThan(0); expect(K).toBeLessThan(90); // with two players every line is awarded before the last number
+    for (let i = 0; i < 300 && a.rt.view().log.length < K; i++) await step([a, b]);
+    expect(a.rt.view().log.length).toBeGreaterThanOrEqual(K);
+    expect(a.rt.view().phase).not.toBe("ended"); // nothing published yet: it keeps playing
+    const results = settledAt(K);
+    const r = await D.headCall("POST", `/api/z/${EID}/settle`, { results: results.map((x) => ({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, pids: x.pids })) }, { "x-organizer": SECRET });
+    expect(r.status).toBe(200);
+    for (let i = 0; i < 8; i++) await step([a, b], 5000);
+    for (const [p, pid] of [[a, pids[0]!], [b, pids[1]!]] as const) {
+      const v = p.rt.view();
+      expect(v.phase).toBe("ended"); expect(v.endedByPrizes).toBe(true); expect(v.allAwarded).toBe(true);
+      expect(v.log.length).toBeLessThan(90);
+      const mine = results.filter((x) => x.pids.includes(pid)).map((x) => `${x.pattern}:${x.ordinal}`).sort();
+      expect(v.won.map((w) => `${w.pattern}:${w.ordinal}`).sort()).toEqual(mine);
+      for (const w of v.won) expect(Array.isArray(w.cells)).toBe(true);
+    }
+    expect(a.rt.view().won.length + b.rt.view().won.length).toBeGreaterThanOrEqual(need.length); // every line has a winner
+  }, 60_000);
+  test("a house nobody completes keeps the engagement running to the last number (never ends on a guess)", async () => {
+    const a = mkPhone(13); await a.rt.boot(); await a.rt.join(a.phone);
+    for (let i = 0; i < 6; i++) await step([a], 5000);
+    const v = a.rt.view();
+    expect(v.allAwarded).toBe(false); expect(v.endedByPrizes).toBe(false); expect(v.phase).toBe("play");
+  });
+});
+const keysInPlayLines = (cfg: PhoneRuntime["cfg"]) => keysInPlay(cfg.rewards).flatMap((key) => linesFor(cfg.rewards, key).map((l) => ({ key, ordinal: l.ordinal })));

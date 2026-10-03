@@ -1,8 +1,8 @@
 // The whole phone-side engagement loop, with no UI, so it can be tested without a browser and then wrapped by a thin page.
 // It talks to exactly two things: the public beacon (through BeaconOpts) and our one small store (through deps.api).
-import { generateTicket, type Ticket } from "../../shared/src/ticket";
+import { generateTicket, patternNumbers, ticketNumbers, type Ticket } from "../../shared/src/ticket";
 import { ALL_SAFETIES, ControlTracker, SAFETY_FAST, SAFETY_STANDARD, pausedAt, type ControlConfig } from "./control";
-import { defaultCfg, keysInPlay, roundEid, validateCfg, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import { defaultCfg, keysInPlay, linesFor, roundEid, validateCfg, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
 import { RoundStore, activeBreak, activeIntermission, callRoundR, completionIndexKey, ticketsFor } from "./game";
 import { NUMBERS, QUICKNET, fetchRound, pickNumber, roundAt, roundTimeMs, type BeaconOpts } from "./index";
 
@@ -28,7 +28,7 @@ export interface RuntimeView {
   nextCallInSec: number | null;
   tickets: Ticket[]; cfg: EngagementCfg;
   /** The brand break showing right now, with seconds left; null when none. */
-  brk: { title: string; kind: BreakCfg["kind"]; mediaUrl?: string; secondsLeft: number; winners?: number } | null;
+  brk: { title: string; kind: BreakCfg["kind"]; mediaUrl?: string; secondsLeft: number; seconds: number; winners?: number } | null;
   /** My earliest completion (0-based call index) of each house in play so far, or -1. */
   myIdx: Partial<Record<PatternKey, number>>;
   /** Each lucky draw of this engagement: whether its winners are published yet and whether this phone is one of them. */
@@ -41,6 +41,12 @@ export interface RuntimeView {
   intermission: { round: number; secondsLeft: number } | null;
   /** For each earlier round, the reward lines this phone received (a line is received when this phone completed it at the call the organizer published). */
   past: { round: number; got: { pattern: PatternKey; ordinal: number }[] }[];
+  /** Every reward line this phone won, in any round (a line is won when this phone completed it at the call the results name). `text` is what the organizer wrote for that line. */
+  won: { round: number; pattern: PatternKey; ordinal: number; text: string; cells: number[] }[];
+  /** True when every reward line of the round being played has been awarded. */
+  allAwarded: boolean;
+  /** The engagement ended because every prize was awarded (not because all 90 numbers were called). */
+  endedByPrizes: boolean;
 }
 
 export class PhoneRuntime {
@@ -231,7 +237,9 @@ export class PhoneRuntime {
     if (m !== "blind") await this.autoClaim(); // never claim from a log that might be missing a pause we could not hear about
     await this.pollResults();
     const stopped = this.tracker?.state.stopRound != null && now >= this.tracker.state.stopRound;
-    if ((this.cur >= this.cfg.rounds && (this.logs[this.cur - 1]?.length ?? 0) >= NUMBERS) || stopped) this.phase = "ended";
+    const byPrizes = this.cur >= this.cfg.rounds && this.prizesAwarded(this.cur) && this.breaksPlayed(now);
+    if (byPrizes) this.prizesEnded = true;
+    if ((this.cur >= this.cfg.rounds && (this.logs[this.cur - 1]?.length ?? 0) >= NUMBERS) || stopped || byPrizes) this.phase = "ended";
     return this.view();
   }
 
@@ -255,6 +263,8 @@ export class PhoneRuntime {
   }
 
   private unsent = 0;
+  /** Set once the last prize of the last round was awarded and every break has been played. */
+  private prizesEnded = false;
   private claimLens: number[] = [];
   private async autoClaim() {
     if (!this.pid) return;
@@ -280,9 +290,25 @@ export class PhoneRuntime {
   }
 
   private allResults: NonNullable<RuntimeView["results"]> = [];
+  /** Every reward line of `round` has a published result. A house that fewer people complete than it has lines never gets here, and the engagement then runs to its last number as before. */
+  private prizesAwarded(round: number): boolean {
+    const keys = keysInPlay(this.cfg.rewards);
+    if (!keys.length) return false;
+    return keys.every((k) => linesFor(this.cfg.rewards, k).every((l) => this.allResults.some((x) => x.pattern === k && x.ordinal === l.ordinal && (x.round ?? 1) === round)));
+  }
+  /** Round 1 holds the brand breaks: the engagement does not end before the last one has been played. */
+  private breaksPlayed(now: number): boolean {
+    if (this.cur > 1 || !this.cfg.breaks.length) return true;
+    return this.cfg.breaks.every((b) => this.logCache.length >= b.after) && this.currentBreak(now) === null;
+  }
+  /** This phone completed a house but its result is not out yet: ask often so the winner hears quickly. */
+  private waitingForResult(): boolean {
+    if (!this.tickets.length) return false;
+    return keysInPlay(this.cfg.rewards).some((k) => completionIndexKey(this.tickets, k, this.logCache) >= 0 && !this.allResults.some((x) => x.pattern === k && (x.round ?? 1) === this.cur));
+  }
   private async pollResults() {
     const m = this.deps.mono();
-    if (m - this.lastResultPoll < 15_000 || !this.logs.some((l) => l.length > 0)) return;
+    if (m - this.lastResultPoll < (this.waitingForResult() ? 4_000 : 15_000) || !this.logs.some((l) => l.length > 0)) return;
     this.lastResultPoll = m;
     try { this.allResults = (await this.deps.api("GET", `/api/z/${this.eid}/results`)).results ?? this.allResults; } catch { /* shown next time */ }
   }
@@ -291,7 +317,7 @@ export class PhoneRuntime {
     if (now === null || this.phase !== "play" || !this.cfg.breaks.length || this.cur > 1) return null; // brand breaks belong to round 1
     const a = activeBreak(this.tracker ? this.tracker.state : null, this.startRound, this.stride, this.cfg.breaks, now);
     if (!a || this.offsetMs === null) return null;
-    return { title: a.brk.title, kind: a.brk.kind, ...(a.brk.mediaUrl ? { mediaUrl: a.brk.mediaUrl } : {}), ...(a.brk.winners ? { winners: a.brk.winners } : {}), secondsLeft: Math.max(0, Math.round((roundTimeMs(a.endsAtRound) - (this.deps.mono() + this.offsetMs)) / 1000)) };
+    return { title: a.brk.title, kind: a.brk.kind, ...(a.brk.mediaUrl ? { mediaUrl: a.brk.mediaUrl } : {}), ...(a.brk.winners ? { winners: a.brk.winners } : {}), seconds: a.brk.seconds, secondsLeft: Math.max(0, Math.round((roundTimeMs(a.endsAtRound) - (this.deps.mono() + this.offsetMs)) / 1000)) };
   }
   private luckyView(): RuntimeView["lucky"] {
     const out: RuntimeView["lucky"] = []; let n = 0;
@@ -322,6 +348,19 @@ export class PhoneRuntime {
     return out;
   }
 
+  private wonView(): RuntimeView["won"] {
+    const out: RuntimeView["won"] = [];
+    if (!this.pid) return out;
+    for (const x of this.allResults) {
+      if (x.pattern === "lucky") continue;
+      const r = x.round ?? 1, key = x.pattern as PatternKey, tk = this.ticketsOf(r), log = this.logs[r - 1] ?? [];
+      if (!tk.length || completionIndexKey(tk, key, log) !== x.idx) continue;
+      const line = linesFor(this.cfg.rewards, key).find((l) => l.ordinal === x.ordinal);
+      out.push({ round: r, pattern: key, ordinal: x.ordinal, text: line?.text ?? "", cells: winCells(tk, key, log, x.idx) });
+    }
+    return out;
+  }
+
   view(): RuntimeView {
     const now = this.nowRound;
     const st = this.tracker?.state;
@@ -340,8 +379,22 @@ export class PhoneRuntime {
       nextCallInSec: nextRound !== null && now !== null ? secsTo(nextRound) : null,
       tickets: this.tickets, cfg: this.cfg, brk: this.currentBreak(now), myIdx: this.myIdx(), lucky: this.luckyView(),
       round: this.cur, rounds: this.cfg.rounds, intermission: inter ? { round: this.cur + 1, secondsLeft: secsTo(inter.endsAtRound) ?? 0 } : null, past: this.pastView(),
+      won: this.wonView(), allAwarded: this.prizesAwarded(this.cur), endedByPrizes: this.prizesEnded,
     };
   }
+}
+
+/** The numbers on the ticket(s) that made the winning pattern, to light them up. Early Five: the five numbers hit by the winning call; two-ticket house: no highlight (every number counts). Empty when it cannot be told. */
+function winCells(tickets: readonly Ticket[], key: PatternKey, log: readonly number[], idx: number): number[] {
+  if (key === "full2") return [];
+  for (const t of tickets) {
+    if (completionIndexKey([t], key, log) !== idx) continue;
+    const need = patternNumbers(t, key as any);
+    if (need) return need;
+    const mine = new Set(ticketNumbers(t)); // Early Five: the first five of the ticket's numbers to be called
+    return log.slice(0, idx + 1).filter((n) => mine.has(n)).slice(0, 5);
+  }
+  return [];
 }
 
 export { generateTicket };

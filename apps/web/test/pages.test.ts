@@ -242,3 +242,86 @@ describe("scratch card on the phone", () => {
     o.world.now += 46_000; expect(await p.waitFor((x) => /Not this time/.test(x))).not.toMatch(/Scratch here/);
   });
 });
+
+describe("winners, the end, and break media on the phone", () => {
+  const rtFake3 = (win: any, nowMs: () => number) => { const Orig = win.ZG.PhoneRuntime; win.ZG.PhoneRuntime = class extends Orig { constructor(eid: string, deps: any) { super(eid, { ...deps, beacon: { fetcher: async (url: string) => { const last = url.split("/").pop()!; const r = last === "latest" ? roundAt(nowMs()) : Number(last); return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" }) }; }, mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 }, verify: (x: any) => x.signature === "aa" }); } }; };
+  async function joined(o: O, id: string, settings: Record<string, unknown> = {}) {
+    await make(o, id); if (Object.keys(settings).length) await o.api("PATCH", `/api/z/${id}/settings`, settings, o.aiKey); await publish(o, id);
+    const p = await page(o, `/z?e=${id}`, "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake3(win, () => o.world.now); } });
+    await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = "9833333333"; p.click("#go"); await p.waitFor((x) => /Your ticket|What you can win/.test(x));
+    return p;
+  }
+  /** Moves the pretend world clock to `secs` after the engagement's first call and lets the phone notice (its clock re-syncs on the next tick). */
+  const at = (o: O, p: any, secs: number) => { const rt = p.win.__rt; o.world.now = p.win.ZG.roundTimeMs(rt.startRound) + secs * 1000; rt.syncedAtMono = -Infinity; };
+  const until = async (cond: () => boolean, ms = 25000) => { const t0 = Date.now(); while (!cond()) { if (Date.now() - t0 > ms) throw new Error("timed out"); await new Promise((r) => setTimeout(r, 200)); } };
+  test("a winner sees Hurray with confetti, a congratulations ribbon with the winning numbers lit on the ticket, and a prize list that stays; when the last prize is awarded everyone sees the thank-you with a share button", async () => {
+    const o = await organizer(); const p = await joined(o, "UI-WIN1"); const rt = p.win.__rt; const doc = p.win.document;
+    at(o, p, 400); await until(() => rt.view().log.length >= 30);
+    const my = rt.view().myIdx; const key = Object.keys(my).find((k) => my[k] >= 0);
+    expect(key).toBeTruthy();
+    rt.allResults = [{ pattern: key, ordinal: 1, round: 1, idx: my[key], count: 1 }];
+    await until(() => !!doc.getElementById("hurray")); // the overlay sits outside the page area
+    expect(doc.getElementById("hurray")?.textContent).toMatch(/Congratulations, you won/);
+    expect(doc.querySelector("#hurray canvas")).toBeTruthy();
+    expect(await p.waitFor((x) => /Congratulations! You won/.test(x))).toMatch(/Your prizes/);
+    expect(doc.querySelectorAll(".zticket div.w").length).toBeGreaterThan(0); // the winning numbers are lit
+    const saved = JSON.parse(p.win.localStorage.getItem("ctz-prizes:UI-WIN1") || "[]"); expect(saved.length).toBe(1); expect(saved[0].pattern).toBe(key);
+    (doc.getElementById("hurok") as any).click(); expect(doc.getElementById("hurray")).toBeNull();
+    await p.waitFor((x) => /Your prizes/.test(x)); // it stays after the overlay is gone
+    const all: any[] = []; for (const l of rt.cfg.rewards) { const k = l.scope === "two_ticket" ? "full2" : l.pattern; if (!all.some((x) => x.pattern === k && x.ordinal === l.ordinal)) all.push({ pattern: k, ordinal: l.ordinal, round: 1, idx: k === key && l.ordinal === 1 ? my[key] : 999, count: 1 }); }
+    rt.allResults = all; // every line awarded -> the game is over for everyone
+    const end = await p.waitFor((x) => /Game complete/.test(x));
+    expect(end).toMatch(/Thank you for joining our extended family of Corporate Tambola/); expect(end).toMatch(/Share with friends and colleagues/); expect(end).toMatch(/Your prizes/);
+    expect(doc.getElementById("shr")).toBeTruthy();
+    expect(rt.view().log.length).toBeLessThan(90); // it ended on the prizes, not on the last number
+  }, 60_000);
+  test("a player who won nothing still gets the thank-you and the share button when the last prize is awarded", async () => {
+    const o = await organizer(); const p = await joined(o, "UI-WIN2"); const rt = p.win.__rt;
+    at(o, p, 100); await until(() => rt.view().log.length >= 5);
+    const all: any[] = []; for (const l of rt.cfg.rewards) { const k = l.scope === "two_ticket" ? "full2" : l.pattern; if (!all.some((x) => x.pattern === k && x.ordinal === l.ordinal)) all.push({ pattern: k, ordinal: l.ordinal, round: 1, idx: 999, count: 1 }); }
+    rt.allResults = all;
+    const end = await p.waitFor((x) => /Game complete/.test(x));
+    expect(end).toMatch(/extended family of Corporate Tambola/); expect(end).not.toMatch(/Your prizes/); expect(p.win.document.getElementById("hurray")).toBeNull();
+  }, 60_000);
+  test("a YouTube break plays inside the page (privacy-friendly player, autoplay, no leaving the ticket) and disappears when the break ends", async () => {
+    const o = await organizer(); const p = await joined(o, "UI-MED1", { breaks: [{ after: 3, seconds: 60, kind: "youtube", title: "Welcome from our CEO", mediaUrl: "https://youtu.be/dQw4w9WgXcQ" }] }); const rt = p.win.__rt; const doc = p.win.document;
+    for (let s = 20; s < 90 && !doc.querySelector("#ctmedia iframe"); s += 4) { at(o, p, s); await new Promise((r) => setTimeout(r, 1200)); }
+    const f = doc.querySelector("#ctmedia iframe") as any; expect(f).toBeTruthy();
+    expect(f.src).toMatch(/^https:\/\/www\.youtube-nocookie\.com\/embed\/dQw4w9WgXcQ\?/); expect(f.src).toMatch(/autoplay=1/); expect(f.getAttribute("allow")).toMatch(/autoplay/);
+    expect(doc.getElementById("mslot")).toBeTruthy(); expect(p.text()).toMatch(/Welcome from our CEO/);
+    at(o, p, 200); await until(() => !doc.querySelector("#ctmedia iframe")); // break over: the player is removed
+  }, 90_000);
+  test("a video file break plays in the page; a link that cannot be played inside the page stays a plain link", async () => {
+    const o = await organizer(); const p = await joined(o, "UI-MED2", { breaks: [{ after: 3, seconds: 60, kind: "file", title: "Our story", mediaUrl: "https://cdn.example.com/story.mp4" }] }); const doc = p.win.document;
+    for (let s = 20; s < 90 && !doc.querySelector("#ctmedia video"); s += 4) { at(o, p, s); await new Promise((r) => setTimeout(r, 1200)); }
+    expect((doc.querySelector("#ctmedia video") as any)?.src).toBe("https://cdn.example.com/story.mp4");
+    const o2 = await organizer(); const q = await joined(o2, "UI-MED3", { breaks: [{ after: 3, seconds: 60, kind: "file", title: "Our deck", mediaUrl: "https://example.com/deck.pdf" }] });
+    for (let s = 20; s < 90 && !/Our deck/.test(q.text()); s += 4) { at(o2, q, s); await new Promise((r) => setTimeout(r, 1200)); }
+    expect(q.text()).toMatch(/Our deck/); expect(q.win.document.querySelector("#ctmedia video, #ctmedia iframe, #ctmedia audio")).toBeNull(); expect(q.text()).toMatch(/Open/);
+  }, 120_000);
+});
+
+describe("console: results go out on their own, and a person can move to a new phone", () => {
+  const until = async (cond: () => Promise<boolean> | boolean, ms = 30000) => { const t0 = Date.now(); while (!(await cond())) { if (Date.now() - t0 > ms) throw new Error("timed out"); await new Promise((r) => setTimeout(r, 300)); } };
+  test("with the console open and numbers called, every completed house is published to participants without pressing anything", async () => {
+    const o = await organizer({ FREE_LAUNCH: "1" }); await make(o, "UI-AUTO"); await publish(o, "UI-AUTO");
+    expect((await o.api("POST", "/api/z/UI-AUTO/join", { phone: "9844444444", device: "f".repeat(32) })).status).toBe(200);
+    o.world.now = START_MS + 1_000_000; // every one of the 90 numbers is out: every house is complete for the one player
+    const p = await page(o, "/zc?e=UI-AUTO", "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" }, { afterLoad: (win, f) => { if (f === "zgame.js") { const Orig = win.ZG.RoundStore; win.ZG.RoundStore = class extends Orig { constructor() { super({ fetcher: async (url: string) => { const last = url.split("/").pop()!; const r = last === "latest" ? roundAt(o.world.now) : Number(last); return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" }) }; }, mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 }, (x: any) => x.signature === "aa"); } }; } } });
+    try { await until(async () => { const r = (await o.json(await o.api("GET", "/api/z/UI-AUTO/results"))) as any; return (r.results ?? []).length >= 7; }, 40000); } catch (e) { throw new Error("no results; console says: " + p.text().slice(p.text().indexOf("Rewards"), p.text().indexOf("Rewards") + 500) + " NOTE:" + p.text().slice(-300)); }
+    const r = (await o.json(await o.api("GET", "/api/z/UI-AUTO/results"))) as any;
+    expect(new Set(r.results.map((x: any) => x.pattern))).toEqual(new Set(["early5", "top", "mid", "bot", "corners", "star", "full"]));
+    expect(p.errors).toEqual([]);
+  }, 60_000);
+  test("'Change of phone': the organizer enters a number, and the next device that joins with it keeps the ticket", async () => {
+    const o = await organizer(); await make(o, "UI-MOVE"); await publish(o, "UI-MOVE");
+    expect((await o.api("POST", "/api/z/UI-MOVE/join", { phone: "9855555555", device: "1".repeat(32) })).status).toBe(200);
+    expect((await o.api("POST", "/api/z/UI-MOVE/join", { phone: "9855555555", device: "2".repeat(32) })).status).toBe(423);
+    const p = await consolePage(o, "UI-MOVE");
+    await p.waitFor((x) => /Change of phone/.test(x));
+    (p.$("#ubph") as any).value = "98555 55555"; p.click("#unbind");
+    await p.waitFor((x) => /next phone they join with keeps their ticket/i.test(x));
+    expect((await o.api("POST", "/api/z/UI-MOVE/join", { phone: "9855555555", device: "2".repeat(32) })).status).toBe(200);
+    expect((await o.api("POST", "/api/z/UI-MOVE/join", { phone: "9855555555", device: "1".repeat(32) })).status).toBe(423);
+  }, 60_000);
+});

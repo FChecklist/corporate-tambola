@@ -85,6 +85,17 @@
     return `<div class="zcard"><h2>Lucky draws</h2>${L.map((b, i) => { const d = S.lucky && S.lucky[i]; return `<div class="zrow"><span>${esc(b.title)} · ${b.winners || 3} ${(b.winners || 3) === 1 ? "person" : "people"}</span>${d ? (d.published ? `<em>Published</em>` : `<button class="zbtn s" data-lucky="${i}">Publish ${d.winners.length} winner${d.winners.length === 1 ? "" : "s"}</button>`) : `<i>after the break ends</i>`}</div>${d && !d.published ? `<div class="zsmall" style="margin:0 0 6px">${esc(d.winners.map((p) => (S.people.find((x) => x.pid === p) || {}).name || "Participant").join(", "))}</div>` : ""}`; }).join("")}
       <p class="zsmall">Winners are picked from everyone on your list using the public randomness of the round that ends the break, so nobody can influence the draw. Check the names, then publish.</p></div>`;
   }
+  let lastPub = ""; const luckySent = new Set();
+  /** Results and lucky-draw winners go out on their own while this page is open: the numbers are public, so there is nothing for a person to decide. */
+  async function autoPublish() {
+    try {
+      const all = S.settledPreview.map(({ pattern, ordinal, round, idx, pids }) => ({ pattern, ordinal, round, idx, pids }));
+      const sig = JSON.stringify(all.map((x) => [x.pattern, x.ordinal, x.round, x.idx, x.pids.length]));
+      if (all.length && sig !== lastPub) { for (let i = 0; i < all.length; i += 40) await call("POST", `/api/z/${eid}/settle`, { results: all.slice(i, i + 40) }); lastPub = sig; }
+      const L = (S.cfg.breaks || []).filter((b) => b.kind === "lucky");
+      for (let i = 0; i < L.length; i++) { const d = S.lucky && S.lucky[i]; if (d && !d.published && !luckySent.has(i)) { await call("POST", `/api/z/${eid}/settle`, { results: [{ pattern: "lucky", ordinal: i + 1, idx: L[i].after, pids: d.winners }] }); luckySent.add(i); } }
+    } catch (e) { /* the next refresh tries again */ }
+  }
   async function computeLucky(now) {
     const L = (S.cfg.breaks || []).filter((b) => b.kind === "lucky"); const out = [];
     const st = S.st || null; const stride = S.info.callSeconds / 3;
@@ -191,8 +202,11 @@
       <div class="zcard"><h2>Rewards · from the public number log</h2>
         ${S.settledPreview.length ? S.settledPreview.map((s) => `<div class="zrow"><span>${esc(lineLabel(s))} · call ${s.idx + 1}</span><em>${s.pids.length} participant${s.pids.length === 1 ? "" : "s"}${s.names ? " · " + esc(s.names) : ""}</em></div>`).join("") : "<p class=zsmall>No pattern is complete yet.</p>"}
         <p class="zsmall">Claims received: ${S.claims.length}. ${bad ? `<b>${bad} not valid</b> (they do not match the public log and are ignored).` : "All claims so far match the public log."}</p>
-        <button class="zbtn s" id="settle" ${S.settledPreview.length ? "" : "disabled"}>Publish results to participants</button>
+        <button class="zbtn s" id="settle" ${S.settledPreview.length ? "" : "disabled"}>Publish now</button><span class="zsmall"> Results are also published automatically while this page is open.</span>
         <button class="zbtn s alt" id="csv" ${S.settledPreview.length ? "" : "disabled"}>Download report</button></div>
+      <div class="zcard zform"><h2>Change of phone</h2>
+        <p class="zsmall" style="margin-top:0">A ticket plays on one phone only. If someone lost or changed their phone, enter their mobile number: the next phone they join with keeps their ticket.</p>
+        <label for="ubph">Their mobile number</label><input id="ubph" inputmode="tel" autocomplete="off" placeholder="98765 43210"><button class="zbtn s" id="unbind">Let them move to a new phone</button></div>
       <div class="zcard"><h2>Participant data</h2><button class="zbtn s alt" id="erase">Erase all participant data for this engagement</button>
         <p class="zsmall">Participant data is kept for 365 days and then deleted automatically. You can erase it sooner at any time.</p></div>`;
   }
@@ -236,6 +250,7 @@
       S.settledPreview = [];
       for (let r = 1; r <= S.cfg.rounds; r++) if (S.logs[r].length) S.settledPreview.push(...ZG.settleAll(eid, pids, S.logs[r], S.cfg, r).map((s) => ({ ...s, names: s.pids.length <= 3 ? s.pids.map((p) => nm.get(p) || "Participant").join(", ") : "" })));
       S.lucky = await computeLucky(now);
+      if (S.role !== "host" && !S.locked) await autoPublish(); // winners hear without anyone pressing a button
     } catch (e) { S.note = e.status === 404 ? "That engagement was not found." : e.status === 403 ? "Your sign-in has expired or does not belong to this engagement. Open the home page and sign in again." : "Could not refresh. Retrying…"; }
     if (eid) draw(S.cfg && S.info ? engView() : `<div class="zhead"><b>Engagement ${esc(eid)}</b><button class="zsnd" id="back">All engagements</button></div><div class="zbanner info">${esc(S.note || "Loading…")}</div>`);
   }
@@ -300,6 +315,7 @@
       refreshEng();
     }));
     if ($("settle")) $("settle").onclick = async () => { try { const all = S.settledPreview.map(({ pattern, ordinal, round, idx, pids }) => ({ pattern, ordinal, round, idx, pids })); for (let i = 0; i < all.length; i += 40) await call("POST", `/api/z/${eid}/settle`, { results: all.slice(i, i + 40) }); S.note = "Results published to participants."; } catch (e) { S.note = e.message; } refreshEng(); };
+    if ($("unbind")) $("unbind").onclick = async () => { try { await call("POST", `/api/z/${eid}/unbind`, { phone: $("ubph").value }); S.note = "Done. The next phone they join with keeps their ticket."; } catch (e) { S.note = e.message; } refreshEng(); };
     if ($("csv")) $("csv").onclick = () => {
       const nm = new Map(S.people.map((p) => [p.pid, p.name || ""]));
       const rows = [["Reward", "Call number", "Participant"]];
