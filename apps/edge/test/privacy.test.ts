@@ -2,6 +2,8 @@
 // the winners record outlives the personal data, the report is built and e-mailed, and everything is deleted on time.
 import { beforeEach, describe, expect, test } from "bun:test";
 import { withDevice } from "./device";
+import { settleByPhones } from "./settle";
+import { layoutPeoplePart, layoutReport } from "../src/report-layout";
 import { handle, purgeOld, type Env } from "../src/worker";
 import { makeD1 } from "./d1-sqlite";
 import { endBoundMs, fullDeleteAt, lifecycleTick, personalDeleteAt, PURGE_AFTER_MS } from "../src/lifecycle";
@@ -136,21 +138,20 @@ describe("invitations", () => {
 });
 
 describe("the winners record", () => {
-  test("results published by the console become winner rows (seat, prize, round, time, no names), and a phone's own report fills a gap but never overrides the console", async () => {
+  test("results the phones agree on become winner rows (seat, prize, round, time, no names); a phone's own word, and the console, change nothing", async () => {
     await create(); await joinAs(1, "Asha"); await joinAs(2, "Bala"); await joinAs(3, "Cara");
     const pids = (raw.query("SELECT pid FROM seat ORDER BY seq").all() as any[]).map((x) => x.pid);
-    expect((await call("POST", "/api/z/PRV-1/settle", { results: [{ pattern: "top", ordinal: 1, idx: 33, pids: [pids[0]!] }] }, org)).status).toBe(200);
-    expect(raw.query("SELECT round, pattern, ordinal, seat, idx, src FROM winner").all()).toEqual([{ round: 1, pattern: "top", ordinal: 1, seat: 1, idx: 33, src: "console" }]);
+    expect((await call("POST", "/api/z/PRV-1/settle", { results: [{ pattern: "top", ordinal: 1, idx: 33, pids: [pids[0]!] }] }, org)).status).toBe(403); // the organizer cannot post a winner
+    expect(raw.query("SELECT COUNT(*) c FROM winner").get()).toEqual({ c: 0 });
+    await settleByPhones(call, "PRV-1", [{ pattern: "top", idx: 33, pids: [pids[0]!] }], pids);
+    expect(raw.query("SELECT round, pattern, ordinal, seat, idx, src FROM winner").all()).toEqual([{ round: 1, pattern: "top", ordinal: 1, seat: 1, idx: 33, src: "phones" }]);
     const at = (raw.query("SELECT at_ms FROM winner").get() as any).at_ms; expect(at).toBeGreaterThan(T - 3 * 3_600_000); expect(at).toBeLessThan(T);
-    // a phone reports a different winner of the SAME checked prize: ignored. And a prize the console has not published: stored, marked as the phone's word.
-    expect((await call("POST", "/api/z/PRV-1/won", { pid: pids[1], wins: [{ round: 1, pattern: "top", ordinal: 1, idx: 33 }, { round: 1, pattern: "full", ordinal: 1, idx: 80 }] })).status).toBe(200);
-    expect(raw.query("SELECT pattern, seat, src FROM winner ORDER BY pattern").all()).toEqual([{ pattern: "full", seat: 2, src: "phone" }, { pattern: "top", seat: 1, src: "console" }]);
-    expect((await call("POST", "/api/z/PRV-1/won", { pid: "9x0000000000ab", wins: [{ round: 1, pattern: "full", ordinal: 1, idx: 80 }] })).status).toBe(403);
-    expect((await call("POST", "/api/z/PRV-1/won", { pid: pids[1], wins: [{ round: 1, pattern: "nonsense", ordinal: 1, idx: 1 }, { round: 9, pattern: "top", ordinal: 1, idx: 1 }] })).status).toBe(200);
-    expect(raw.query("SELECT COUNT(*) c FROM winner").get()).toEqual({ c: 2 });
-    // a later result for the same prize replaces the earlier console row
-    await call("POST", "/api/z/PRV-1/settle", { results: [{ pattern: "top", ordinal: 1, idx: 30, pids: [pids[2]!] }] }, org);
-    expect(raw.query("SELECT seat, idx FROM winner WHERE pattern='top'").all()).toEqual([{ seat: 3, idx: 30 }]);
+    // an older phone page still reporting its own win: accepted politely, recorded as nothing
+    expect((await call("POST", "/api/z/PRV-1/won", { pid: pids[1], wins: [{ round: 1, pattern: "full", ordinal: 1, idx: 80 }] })).status).toBe(200);
+    expect(raw.query("SELECT COUNT(*) c FROM winner").get()).toEqual({ c: 1 });
+    // a result already accepted is never replaced by later reports
+    await settleByPhones(call, "PRV-1", [{ pattern: "top", idx: 30, pids: [pids[2]!] }], pids);
+    expect(raw.query("SELECT seat, idx FROM winner WHERE pattern='top'").all()).toEqual([{ seat: 1, idx: 33 }]);
   });
   test("a game is over only when several different phones say so, and never before it could be", async () => {
     await create(); for (let i = 1; i <= 5; i++) await joinAs(i, "P" + i);
@@ -174,29 +175,59 @@ describe("the report and the deletion", () => {
     await joinAs(1, "Organizer Olga"); await call("POST", "/api/z/PRV-1/mark", { phone: "9876500001", role: "organizer" }, org, T - 3 * 3_600_000);
     for (let i = 2; i <= n; i++) await joinAs(i, i === 4 ? "Zed अन" : "Guest " + i, "PRV-1", { from: i === 2 ? 1 : 2, cat: "family" });
     const pids = (raw.query("SELECT pid FROM seat ORDER BY seq").all() as any[]).map((x) => x.pid);
-    await call("POST", "/api/z/PRV-1/settle", { results: [{ pattern: "full", ordinal: 1, idx: 80, pids: [pids[2]!] }, { pattern: "top", ordinal: 1, idx: 30, pids: [pids[0]!, pids[3]!] }] }, org);
+    await settleByPhones(call, "PRV-1", [{ pattern: "full", idx: 80, pids: [pids[2]!] }, { pattern: "top", idx: 30, pids: [pids[0]!, pids[3]!] }], pids);
     return pids;
   };
-  test("after the game ends the organizer gets one PDF with everything, naming the deadlines, and the sent time", async () => {
+  /** What the report page does in the organizer's browser: asks for the base, then the people 250 at a time, then lays the PDF out on that device. */
+  const buildReport = async (link: string) => {
+    const u = new URL(link); const eid = u.searchParams.get("e")!, k = u.searchParams.get("k")!;
+    const head = await j(await call("GET", `/api/report/${eid}?k=${k}&part=base`));
+    const people: any[] = [];
+    for (let i = 0; i < head.chunks; i++) people.push(...(await j(await call("GET", `/api/report/${eid}?k=${k}&part=people&i=${i}`))).people);
+    const parts = Math.max(1, Math.ceil(head.totalPeople / head.partSize));
+    const pdfs: Uint8Array[] = [];
+    if (parts === 1) pdfs.push(layoutReport({ ...head.base, people }));
+    else { pdfs.push(layoutReport({ ...head.base, people: [], omitPeople: true, totalPeople: head.totalPeople })); for (let i = 0; i < parts; i++) pdfs.push(layoutPeoplePart(head.base, people.slice(i * head.partSize, (i + 1) * head.partSize), i + 1, parts)); }
+    return { head, people, pdfs, text: pdfs.map((x) => new TextDecoder("latin1").decode(x)).join("\n") };
+  };
+  const linkOf = (m: { text: string }) => (m.text.match(/https?:\/\/\S+\/report\.html\?e=[A-Za-z0-9_-]+&k=[0-9a-f]+/) ?? [""])[0];
+  test("after the game ends the organizer gets one e-mail with a link (no attachment); the PDF is laid out on their own device from data the page fetches, naming the deadlines", async () => {
     await prep();
     const end = await endBoundMs(env as any, raw.query("SELECT * FROM engagement WHERE id='PRV-1'").get());
     expect((await tick(end - 60_000)).reportSteps).toBe(0); // still being played
     let guard = 0; while (!sentReports.length && guard++ < 20) await tick(end + 5 * 60_000);
     expect(sentReports.length).toBe(1);
     const m = sentReports[0]!;
-    expect(m.to).toBe("boss@acme.com"); expect(m.subject).toMatch(/PRV-1/); expect(m.attachments.length).toBe(1);
-    expect(m.text).toMatch(/everything we hold about the people/); expect(m.text).toMatch(/within 24 hours/); expect(m.text).toMatch(/365 days/); expect(m.text).toMatch(/7 days/); expect(m.text).toMatch(/winners record/);
-    const pdf = new TextDecoder("latin1").decode(m.attachments[0]!.content);
+    expect(m.to).toBe("boss@acme.com"); expect(m.subject).toMatch(/PRV-1/); expect(m.attachments.length).toBe(0);
+    expect(m.text).toMatch(/built on your own/); expect(m.text).toMatch(/within 24 hours/); expect(m.text).toMatch(/365 days/); expect(m.text).toMatch(/7 days/); expect(m.text).toMatch(/winners record/);
+    expect(m.text).toMatch(/DPDP Act/); expect(m.text).toMatch(/CCPA/); expect(m.text).not.toMatch(/personal data(?! protection)/i);
+    expect(m.text + "").not.toMatch(/the law requires|required by law/i);
+    const link = linkOf(m); expect(link).toMatch(/report\.html\?e=PRV-1&k=/);
+    const r = await buildReport(link); const pdf = r.text;
     expect(pdf.startsWith("%PDF-1.4")).toBe(true); expect(pdf).toMatch(/%%EOF\s*$/);
-    for (const needle of ["Organizer Olga", "Guest 3", "98765 00001", "98765 00002", "Zed ??", "organizer", "Full House", "Top Line", "Early Five", "boss@acme.com", "Sent on:", "deleted", "365th day", "backups"]) expect(pdf.toLowerCase()).toContain(needle.toLowerCase().replace("backups", "backups"));
-    for (const needle of ["Our commitment to your data", "permanently deleted from our systems within 24 hours", "DPDP", "GDPR", "California Consumer Privacy Act", "advertising", "encryption", "winners record"]) expect(pdf).toContain(needle);
-    expect(pdf).not.toMatch(/personal data(?! protection)/i); expect(m.text).not.toMatch(/personal data(?! protection)/i); // the Act's own name is the only place the words appear
-    expect(m.text).toMatch(/DPDP Act/); expect(m.text).toMatch(/CCPA/);
-    expect(pdf + m.text).not.toMatch(/the law requires|required by law/i); // we do not say why we hold the organizer's details
-    expect(pdf).not.toMatch(/(rs|inr|usd|price)[^\n(]{0,12}per (person|participant|head|user)/i); // no per-person price is ever shown (tickets per person is a game setting, not a price)
-    expect(pdf).toMatch(/Who invited whom/); expect(pdf).toMatch(/\+- Guest 3/); // the tree: Olga invited 2, who invited 3..
+    for (const needle of ["Organizer Olga", "Guest 3", "98765 00001", "98765 00002", "Zed ??", "organizer", "Full House", "Top Line", "Early Five", "boss@acme.com", "Sent on:", "deleted", "365th day", "backups"]) expect(pdf.toLowerCase()).toContain(needle.toLowerCase());
+    for (const needle of ["Our commitment to your data", "permanently deleted from our systems within 24 hours", "DPDP", "GDPR", "California Consumer Privacy Act", "advertising", "encryption", "winners record", "Agreed by", "Prize given"]) expect(pdf).toContain(needle);
+    expect(pdf).not.toMatch(/personal data(?! protection)/i);
+    expect(pdf).not.toMatch(/the law requires|required by law/i);
+    expect(pdf).not.toMatch(/(rs|inr|usd|price)[^\n(]{0,12}per (person|participant|head|user)/i);
+    expect(pdf).toMatch(/Who invited whom/); expect(pdf).toMatch(/\+- Guest 3/);
     expect(raw.query("SELECT report_ms FROM life").get()).not.toEqual({ report_ms: null });
-    expect(raw.query("SELECT COUNT(*) c FROM kv WHERE k LIKE 'rpt%'").get()).toEqual({ c: 1 + 1 }); // working copies exist until the deletion (state + one sealed chunk)
+    expect((raw.query("SELECT COUNT(*) c FROM kv WHERE k LIKE 'rpt%'").get() as any).c).toBeGreaterThanOrEqual(2); // working copies exist until the deletion
+    // the link is the credential: a wrong key, and a link for another engagement, open nothing
+    expect((await call("GET", `/api/report/PRV-1?k=${"0".repeat(40)}&part=base`)).status).toBe(403);
+    // the organizer (and the co-host) can also get the link from the console; the AI and strangers cannot
+    expect((await j(await call("GET", "/api/z/PRV-1/reportlink", undefined, org))).url).toBe(link);
+    expect((await call("GET", "/api/z/PRV-1/reportlink")).status).toBe(403);
+  });
+  test("the report shows what each winner confirmed, whether they changed it, and whether the prize was given", async () => {
+    const pids = await prep();
+    const dev = String(3).padStart(32, "0"); // joinAs(3) used this device
+    expect((await call("POST", "/api/z/PRV-1/confirm", { pid: pids[2], device: dev, name: "Gita Menon", phone: "9000000003" }, {}, T)).status).toBe(200);
+    expect((await call("POST", "/api/z/PRV-1/prizegiven", { round: 1, pattern: "full", ordinal: 1, seat: 3, given: true }, org, T)).status).toBe(200);
+    const end = await endBoundMs(env as any, raw.query("SELECT * FROM engagement WHERE id='PRV-1'").get());
+    let guard = 0; while (!sentReports.length && guard++ < 20) await tick(end + 5 * 60_000);
+    const r = await buildReport(linkOf(sentReports[0]!));
+    expect(r.text).toContain("Gita Menon"); expect(r.text).toContain("90000 00003"); expect(r.text).toMatch(/details changed after the game/); expect(r.text).toMatch(/joined as Guest 3/);
   });
   test("22 hours after the end every participant record is gone (working copies too); the winners record, the organizer's details and the engagement stay", async () => {
     await prep();
@@ -209,6 +240,8 @@ describe("the report and the deletion", () => {
     expect(out.purged).toBe(1);
     for (const t of ["participant", "seat", "claim", "settled", "overvote"]) expect((raw.query(`SELECT COUNT(*) c FROM ${t}`).get() as any).c).toBe(0);
     expect((raw.query("SELECT COUNT(*) c FROM kv WHERE k LIKE 'rpt%' OR k LIKE 'seats-base%'").get() as any).c).toBe(0);
+    const link = linkOf(sentReports[0]!);
+    expect((await call("GET", `/api/report/PRV-1?k=${new URL(link).searchParams.get("k")}&part=base`)).status).toBe(404); // the link no longer opens anything
     expect((raw.query("SELECT COUNT(*) c FROM winner").get() as any).c).toBe(3); // what, which round, when, which seat
     expect(JSON.stringify(raw.query("SELECT * FROM winner").all())).not.toMatch(/Olga|Guest|98765/);
     expect(raw.query("SELECT v FROM kv WHERE k='contact/PRV-1'").get()).toBeTruthy(); expect(raw.query("SELECT id FROM engagement").get()).toEqual({ id: "PRV-1" });
@@ -223,7 +256,7 @@ describe("the report and the deletion", () => {
     await tick(end + PURGE_AFTER_MS + 1000);
     expect((raw.query("SELECT COUNT(*) c FROM participant").get() as any).c).toBe(0);
   });
-  test("a big game is e-mailed in parts, each within the free plan's limits, and the parts together list every person once", async () => {
+  test("a big game: one link, the report page reads the people in pieces and lays out the parts on the device, which together list every person once", async () => {
     await create("PRV-BIG", { cap: 5000 }); await setContact("PRV-BIG");
     const N = 1620;
     for (let i = 1; i <= N; i++) {
@@ -232,11 +265,13 @@ describe("the report and the deletion", () => {
       raw.run("INSERT INTO participant(eid,pid,phone_hash,name,pii,joined_ms) VALUES(?,?,?,NULL,?,?)", ["PRV-BIG", `${i}x${String(i).padStart(12, "0")}`, "h" + i, pii, T - 3 * 3_600_000 + i * 1000]);
     }
     const end = await endBoundMs(env as any, raw.query("SELECT * FROM engagement WHERE id='PRV-BIG'").get());
-    let calls = 0; while (calls++ < 40) { await tick(end + 5 * 60_000); if (sentReports.length >= 3) break; }
-    expect(sentReports.length).toBe(3); expect(sentReports.map((m) => m.subject).join("|")).toMatch(/part 1 of 3.*part 2 of 3.*part 3 of 3/);
-    const text = sentReports.map((m) => new TextDecoder("latin1").decode(m.attachments[0]!.content)).join("\n");
-    expect(text).toMatch(/Person 1\b/); expect(text).toMatch(/Person 1620\b/); expect(text).toMatch(/1620 people/);
-    expect((text.match(/Person 777\b/g) ?? []).length).toBeGreaterThanOrEqual(1);
+    let calls = 0; while (calls++ < 40) { await tick(end + 5 * 60_000); if (sentReports.length >= 1) break; }
+    expect(sentReports.length).toBe(1); expect(sentReports[0]!.attachments.length).toBe(0);
+    const r = await buildReport(linkOf(sentReports[0]!));
+    expect(r.pdfs.length).toBe(3); // a summary and two people parts
+    expect(r.people.length).toBe(N);
+    expect(r.text).toMatch(/Person 1\b/); expect(r.text).toMatch(/Person 1620\b/); expect(r.text).toMatch(/1620 people/);
+    expect((r.text.match(/Person 777\b/g) ?? []).length).toBeGreaterThanOrEqual(1);
     expect(calls).toBeLessThan(25);
   }, 120_000);
 });
@@ -260,7 +295,7 @@ describe("exact deletion dates", () => {
   test("the scheduler's own door needs the platform key, and the console's Erase deletes personal data at once but keeps the winners record", async () => {
     await create(); await joinAs(1, "Asha"); await joinAs(2, "Bala");
     const pids = (raw.query("SELECT pid FROM seat ORDER BY seq").all() as any[]).map((x) => x.pid);
-    await call("POST", "/api/z/PRV-1/settle", { results: [{ pattern: "full", ordinal: 1, idx: 70, pids: [pids[1]!] }] }, org);
+    await settleByPhones(call, "PRV-1", [{ pattern: "full", idx: 70, pids: [pids[1]!] }], pids);
     expect((await call("POST", "/api/lifecycle/tick")).status).toBe(403);
     expect((await call("POST", "/api/lifecycle/tick", {}, org)).status).toBe(200);
     expect((await call("POST", "/api/z/PRV-1/erase", {})).status).toBe(403);

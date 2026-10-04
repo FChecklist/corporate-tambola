@@ -62,7 +62,7 @@ export async function endBoundMs(env: Env, e: any): Promise<number> {
 const lineLabel = (cfg: EngagementCfg, key: PatternKey, ordinal: number) => (linesFor(cfg.rewards, key).length > 1 ? ord(ordinal) + " " : "") + (NAMES[key] ?? key);
 
 /** Called when the organizer's console publishes results: the winners record gets one row per winning seat (never a name or a number). */
-export async function recordWinners(env: Env, e: any, eid: string, results: { pattern: string; ordinal?: number; round?: number; idx: number; pids: string[] }[], now: number): Promise<void> {
+export async function recordWinners(env: Env, e: any, eid: string, results: { pattern: string; ordinal?: number; round?: number; idx: number; pids: string[] }[], now: number, src = "console"): Promise<void> {
   try {
     const sch = await schedule(env, e);
     for (const x of results) {
@@ -71,32 +71,17 @@ export async function recordWinners(env: Env, e: any, eid: string, results: { pa
       if (x.pattern === "lucky") { const b = sch.cfg.breaks.filter((k) => k.kind === "lucky")[ordinal - 1]; const r = b ? luckyRound(sch.st, sch.start, sch.stride, sch.cfg.breaks, b) : null; at = r === null ? null : roundMs(r); }
       else at = await callTimeMs(env, e, round, x.idx, sch);
       const seats = x.pids.slice(0, 100).map(seatOfPid).filter((s): s is number => s !== null);
-      for (const seat of seats) await env.DB.prepare("INSERT INTO winner(eid,round,pattern,ordinal,seat,idx,at_ms,src) VALUES(?,?,?,?,?,?,?,'console') ON CONFLICT(eid,round,pattern,ordinal,seat) DO UPDATE SET idx=excluded.idx, at_ms=excluded.at_ms, src='console'").bind(eid, round, x.pattern, ordinal, seat, x.idx, at).run();
+      for (const seat of seats) await env.DB.prepare("INSERT INTO winner(eid,round,pattern,ordinal,seat,idx,at_ms,src) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(eid,round,pattern,ordinal,seat) DO UPDATE SET idx=excluded.idx, at_ms=excluded.at_ms, src=excluded.src").bind(eid, round, x.pattern, ordinal, seat, x.idx, at, src).run();
       // a later result for the same prize replaces an earlier one: seats that no longer win it are removed
       const keep = seats.length ? seats.map(() => "?").join(",") : "-1";
-      await env.DB.prepare(`DELETE FROM winner WHERE eid=? AND round=? AND pattern=? AND ordinal=? AND src='console' AND seat NOT IN (${keep})`).bind(eid, round, x.pattern, ordinal, ...seats).run();
+      await env.DB.prepare(`DELETE FROM winner WHERE eid=? AND round=? AND pattern=? AND ordinal=? AND src=? AND seat NOT IN (${keep})`).bind(eid, round, x.pattern, ordinal, src, ...seats).run();
     }
   } catch { /* the winners record is best effort here: phones report their own wins too */ }
 }
 
 /** A phone reporting a win of its own (so a game without an open console still has a winners record). Console-checked results always win over these. */
-export async function acceptWon(env: Env, e: any, eid: string, b: any, now: number, jsonFn: (o: unknown, s?: number) => Response, spend: (env: Env, now: number, n?: number) => Promise<boolean>): Promise<Response> {
-  const seat = typeof b?.pid === "string" ? seatOfPid(b.pid) : null;
-  if (!b || seat === null || !Array.isArray(b.wins) || b.wins.length < 1 || b.wins.length > 12) return jsonFn({ error: "Bad report." }, 400);
-  const who = await env.DB.prepare("SELECT 1 AS x FROM participant WHERE eid=? AND pid=?").bind(eid, b.pid).first();
-  if (!who) return jsonFn({ error: "Not a participant of this engagement." }, 403);
-  const cfg = cfgOfRow(e), valid = new Set(keysInPlay(cfg.rewards));
-  const sch = await schedule(env, e);
-  if (!(await spend(env, now, b.wins.length))) return jsonFn({ error: "Busy day. Please try again after midnight UTC." }, 503);
-  let stored = 0;
-  for (const w of b.wins) {
-    if (!valid.has(w?.pattern) || !Number.isInteger(w?.ordinal) || w.ordinal < 1 || w.ordinal > 5 || !Number.isInteger(w?.round) || w.round < 1 || w.round > cfg.rounds || !Number.isInteger(w?.idx) || w.idx < 0 || w.idx > 89) continue;
-    if (await env.DB.prepare("SELECT 1 AS x FROM winner WHERE eid=? AND round=? AND pattern=? AND ordinal=? AND src='console' LIMIT 1").bind(eid, w.round, w.pattern, w.ordinal).first()) continue; // the console's checked result stands
-    const at = await callTimeMs(env, e, w.round, w.idx, sch);
-    const r = await env.DB.prepare("INSERT OR IGNORE INTO winner(eid,round,pattern,ordinal,seat,idx,at_ms,src) VALUES(?,?,?,?,?,?,?,'phone')").bind(eid, w.round, w.pattern, w.ordinal, seat, w.idx, at).run();
-    stored += r.meta?.changes ?? 0;
-  }
-  return jsonFn({ ok: true, stored });
+export async function acceptWon(_env: Env, _e: any, _eid: string, _b: any, _now: number, jsonFn: (o: unknown, s?: number) => Response, _spend: (env: Env, now: number, n?: number) => Promise<boolean>): Promise<Response> {
+  return jsonFn({ ok: true, stored: 0 }); // kept so phones that still have the older page open get a clean answer; a phone's own word about a win is no longer recorded: results come only from several phones agreeing (see winners.ts)
 }
 
 /** A phone saying "the game is over for me". Several different phones must say so, and not before the game could plausibly be over, so one person cannot trigger the report and the deletion. */
@@ -123,9 +108,9 @@ export async function acceptOver(env: Env, e: any, eid: string, b: any, now: num
 /** Deletes every participant's name, number, seat, invite record, ticket link and working copy of the report. The winners record, the organizer's details and the engagement itself stay. */
 export async function erasePersonal(env: Env, eid: string, now: number, by: string): Promise<void> {
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(eid),
+    env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rvote WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rcand WHERE eid=?").bind(eid),
     env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM seat WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM overvote WHERE eid=?").bind(eid),
-    env.DB.prepare("DELETE FROM kv WHERE k=? OR k=? OR k LIKE ?").bind(`seats-base/${eid}`, `rpt/${eid}`, `rptc/${eid}/%`),
+    env.DB.prepare("DELETE FROM kv WHERE k=? OR k=? OR k=? OR k=? OR k LIKE ?").bind(`seats-base/${eid}`, `rpt/${eid}`, `rptopen/${eid}`, `rptremind/${eid}`, `rptc/${eid}/%`),
     env.DB.prepare("INSERT INTO life(eid,end_ms,end_src,purged_ms,report_state) VALUES(?,?, 'organizer', ?, ?) ON CONFLICT(eid) DO UPDATE SET purged_ms=?, report_state=COALESCE(life.report_state, ?)").bind(eid, now, now, by, now, by),
   ]);
 }
@@ -133,7 +118,7 @@ export async function erasePersonal(env: Env, eid: string, now: number, by: stri
 export async function eraseEverything(env: Env, id: string): Promise<void> {
   await erasePersonal(env, id, Date.now(), "retention");
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
+    env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM prize WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
     env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`),
     env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
   ]);
@@ -185,43 +170,63 @@ async function reportStep(env: LifeEnv, e: any, life: { end_ms: number }, now: n
   }
 
   if (st.stage === "send") {
-    const people: ReportPerson[] = [];
-    const parts = Math.max(1, Math.ceil(st.total / PART));
-    const cfg = sch.cfg;
-    const endMs = life.end_ms, first = roundMs(sch.start);
-    const open = async (from: number, to: number) => { const out: ReportPerson[] = []; for (let i = from; i < to; i++) { const t = await openText(env, (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(ckey(i)).first<{ v: string }>())?.v); if (t) out.push(...(JSON.parse(t) as ReportPerson[])); } return out; };
-    const perChunk = PART / CHUNK;
-    const total = parts + (parts > 1 ? 1 : 0); // the main report, plus one people part per 1,500 people when there are more than 1,500
-    const nowSent = now;
-    const base = await baseData(env, e, cfg, sch, st, email, nowSent, endMs, first);
-    let bytes: Uint8Array, name: string;
-    if (parts === 1) { people.push(...(await open(0, st.chunks))); await attachNames(env, base, people); bytes = layoutReport({ ...base, people }); name = `tambola-report-${eid}.pdf`; }
-    else if (st.sentParts === 0) { bytes = layoutReport({ ...base, people: [], omitPeople: true, totalPeople: st.total }); name = `tambola-report-${eid}-part-1-of-${total}-summary.pdf`; }
-    else { const k = st.sentParts - 1; const slice = await open(k * perChunk, Math.min(st.chunks, (k + 1) * perChunk)); bytes = layoutPeoplePart(base, slice, k + 1, parts); name = `tambola-report-${eid}-part-${st.sentParts + 1}-of-${total}-people.pdf`; }
-    const ok = await sendReportMail(env, email, subjectFor(eid, st.sentParts, total), bodyFor(eid, base, st.sentParts, total), [attach(name, bytes)]);
+    // The PDF is not made here: the e-mail carries a link, the organizer's own browser fetches the data in small pieces and lays the PDF out on their device.
+    const cfg = sch.cfg, endMs = life.end_ms, first = roundMs(sch.start);
+    const base = await baseData(env, e, cfg, sch, st, email, now, endMs, first);
+    const link = await reportLink(env, eid);
+    const ok = await sendReportMail(env, email, `Your Corporate Tambola engagement report ${eid}: open it before ${istFull(base.personalDeleteAtMs)}`, bodyFor(eid, base, link), []);
     if (!ok) return false; // try again at the next call
-    st.sentParts++;
-    if (st.sentParts >= (parts === 1 ? 1 : total)) { st.stage = "done"; await save(); return true; }
-    await save(); return false;
+    st.stage = "done"; await save(); return true;
   }
   return st.stage === "done";
 }
 
-const subjectFor = (eid: string, i: number, n: number) => `Your Corporate Tambola engagement report ${eid}${n > 1 ? ` (part ${i + 1} of ${n})` : ""}: complete data attached`;
-const bodyFor = (eid: string, d: ReportData, i: number, n: number) => [
+const bodyFor = (eid: string, d: ReportData, link: string) => [
   `Hello,`, ``,
-  `Your engagement ${eid} has ended. Attached${n > 1 ? ` (part ${i + 1} of ${n})` : ""} is the complete report: when the game started, how many people took part at each stage, every prize and who won it (name and mobile number), the invite tree, all statistics, and the name and mobile number of every participant.`, ``,
-  `This is everything we hold about the people in your engagement. We have given you all of it.`, ``,
+  `Your engagement ${eid} has ended. Your complete report is ready: when the game started, how many people took part at each stage, every prize and who won it, the invite tree, all statistics, and the name and mobile number of every participant.`, ``,
+  `Open it here (the PDF is built on your own computer or phone, so this link is all we send):`,
+  link, ``,
+  `The link works until ${istFull(d.personalDeleteAtMs)}, when we permanently delete the participants' details as promised. Please open it and save the PDF before then: it is the only copy of this data once ours is deleted. You can share the link with your co-host; anyone who has it can read the report, so share it carefully. Winners confirm the name and mobile number their prize goes to on their own phone; the report shows what they confirmed, whether they changed anything, and whether you have handed the prize over, so open it again after you have ticked "Prize given" in your console.`, ``,
   `What happens to the data:`,
   `- By ${istFull(d.personalDeleteAtMs)} (within 24 hours of the game ending) we permanently delete every participant's name, mobile number, seat, join record and invite record from our systems.`,
-  `- For 365 days we keep only: the organizer, host and co-host details, and the winners record (which prize, which round, what time, which seat; no names or numbers).`,
+  `- For 365 days we keep only: the organizer, host and co-host details, the log of what your AI assistant did, and the winners record (which prize, which round, what time, which seat, and the name and mobile number each winner confirmed so the prize can be handed over, with whether it was given).`,
   `- Everything about this engagement is permanently deleted at 00:00 hours IST on ${istDate(d.fullDeleteAtMs)} (the end of the 365th day).`,
   `- Backups of our database roll off within ${d.backupDays} days of any deletion.`, ``,
-  `Please keep the attached PDF safe: it is the only copy of this data once ours is deleted. For your next game you can reuse the people list until it is deleted, or upload your list again from this report.`, ``,
+  `The winners were worked out by the software from the public numbers and accepted only when several different phones agreed. You cannot choose or change a winner or a number, and neither can we.`, ``,
   `You can ask us to delete everything sooner: press Erase in your console, ask your AI assistant to request it (you confirm in your console), or reply to this e-mail from your registered address.`, ``,
   `Corporate Tambola is built to follow India's DPDP Act, the EU and UK GDPR and US privacy laws (including CCPA / CPRA): we collect only what is needed to run your game, protect it with encryption, keep it for the shortest time we can, never sell it, and honour every request to see, correct or delete data.`, ``,
   `Sent on ${istFull(d.sentAtMs)} to ${d.organizerEmail}.`, `Corporate Tambola`,
 ].join("\n");
+
+/** The report's link carries a key that only this engagement can have (derived from a server secret): whoever holds the link can open the report until the personal data is deleted. */
+async function reportKey(env: LifeEnv, eid: string): Promise<string> {
+  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(`report|${env.DATA_KEY ?? env.ORGANIZER_SECRET ?? "ct"}`), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(eid))), (b) => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
+}
+export async function reportLink(env: LifeEnv, eid: string): Promise<string> {
+  return `${((env as any).PUBLIC_ORIGIN ?? "https://corporate-tambola.pages.dev").replace(/\/$/, "")}/report.html?e=${encodeURIComponent(eid)}&k=${await reportKey(env, eid)}`;
+}
+/** What the report page asks for: `base` (everything except the people) and `people` (250 at a time). Valid only with the engagement's key, and only while the personal data still exists. */
+export async function reportApi(env: LifeEnv, eid: string, url: URL): Promise<Response> {
+  if ((url.searchParams.get("k") ?? "") !== (await reportKey(env, eid))) return json({ error: "This report link is not valid." }, 403);
+  const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
+  const life = await env.DB.prepare("SELECT * FROM life WHERE eid=?").bind(eid).first<any>();
+  const st: RptState | null = JSON.parse((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`rpt/${eid}`).first<{ v: string }>())?.v ?? "null");
+  if (!e || !life || !st || (st.stage !== "send" && st.stage !== "done")) return json({ error: "This report is not ready, or the participants' details have already been deleted (that happens within 24 hours of the game ending, as promised).", code: "gone" }, 404);
+  await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`rptopen/${eid}`, String(Date.now())).run();
+  const part = url.searchParams.get("part");
+  if (part === "people") {
+    const i = Number(url.searchParams.get("i"));
+    if (!Number.isInteger(i) || i < 0 || i >= st.chunks) return json({ people: [] });
+    const t = await openText(env, (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`rptc/${eid}/${i}`).first<{ v: string }>())?.v);
+    return json({ people: t ? (JSON.parse(t) as ReportPerson[]) : [] });
+  }
+  const sch = await schedule(env, e);
+  const contact = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`contact/${eid}`).first<{ v: string }>();
+  const email = contact ? (JSON.parse(contact.v).email as string) : "";
+  const base = await baseData(env, e, sch.cfg, sch, st, email, Date.now(), life.end_ms, roundMs(sch.start));
+  return json({ base, totalPeople: st.total, chunks: st.chunks, chunkSize: CHUNK, partSize: PART });
+}
 
 async function attachNames(_env: LifeEnv, _d: ReportData, _people: ReportPerson[]) { /* names are already inside the sealed chunks */ }
 
@@ -233,7 +238,15 @@ async function baseData(env: LifeEnv, e: any, cfg: EngagementCfg, sch: Awaited<R
     const r = await env.DB.prepare("SELECT p.pii AS pii, s.role AS role FROM seat s JOIN participant p ON p.eid=s.eid AND p.pid=s.pid WHERE s.eid=? AND s.seq=?").bind(eid, sNo).first<{ pii: string | null; role: string | null }>();
     const o = await openPii(env, r?.pii); seatInfo.set(sNo, { name: o?.name ?? null, phone: o?.phone ?? null, role: r?.role ?? null });
   }
-  const winnerOf = (w: any): ReportWinner => { const i = seatInfo.get(w.seat); return { seat: w.seat, name: i?.name ?? null, phone: i?.phone ?? null, role: i?.role ?? null, verified: w.src === "console", callNo: w.idx === null ? null : w.idx + 1, atMs: w.at_ms }; };
+  const prow = new Map<string, any>();
+  for (const r of (await env.DB.prepare("SELECT round, pattern, ordinal, seat, pii, orig, trail, confirmed_ms, given_ms FROM prize WHERE eid=?").bind(eid).all<any>()).results ?? []) prow.set(`${r.round}|${r.pattern}|${r.ordinal}|${r.seat}`, r);
+  const pinfo = new Map<string, { name: string | null; phone: string | null; confirmed: boolean; changedFrom: string | null; given: string | null }>();
+  for (const [k, r] of prow) {
+    const cur = await openPii(env, r.pii), orig = await openPii(env, r.orig);
+    let trail: any[] = []; try { trail = JSON.parse((await openText(env, r.trail)) ?? "[]"); } catch { /* none */ }
+    pinfo.set(k, { name: cur?.name ?? null, phone: cur?.phone ?? null, confirmed: !!r.confirmed_ms, changedFrom: trail.length ? `joined as ${orig?.name || "?"}, ${orig?.phone || "?"}` : null, given: r.given_ms ? istDate(r.given_ms) : null });
+  }
+  const winnerOf = (w: any): ReportWinner => { const i = seatInfo.get(w.seat), pz = pinfo.get(`${w.round}|${w.pattern}|${w.ordinal}|${w.seat}`); return { seat: w.seat, name: pz?.name ?? i?.name ?? null, phone: pz?.phone ?? i?.phone ?? null, role: i?.role ?? null, verified: w.src === "console" || w.src === "phones", callNo: w.idx === null ? null : w.idx + 1, atMs: w.at_ms, confirmed: pz?.confirmed ?? false, changedFrom: pz?.changedFrom ?? null, given: pz?.given ?? null }; };
   const prizes: ReportPrize[] = [];
   for (let round = 1; round <= cfg.rounds; round++) for (const key of keysInPlay(cfg.rewards)) for (const line of linesFor(cfg.rewards, key)) prizes.push({ round, label: lineLabel(cfg, key, line.ordinal), text: line.text, winners: wrows.filter((w: any) => w.round === round && w.pattern === key && w.ordinal === line.ordinal).map(winnerOf) });
   const lucky = cfg.breaks.filter((b) => b.kind === "lucky").map((b, i) => ({ title: b.title, winners: wrows.filter((w: any) => w.pattern === "lucky" && w.ordinal === i + 1).map(winnerOf) }));
@@ -246,6 +259,17 @@ async function baseData(env: LifeEnv, e: any, cfg: EngagementCfg, sch: Awaited<R
     agg: st.agg, people: [], prizes, lucky, timeline: st.tl, breaks: cfg.breaks.map((b) => ({ after: b.after, kind: b.kind, title: b.title })),
     personalDeleteAtMs: personalDeleteAt(endMs), fullDeleteAtMs: fullDeleteAt(endMs), backupDays: BACKUP_DAYS,
   };
+}
+
+/** Six hours before the participants' details are deleted: if the report link has not been opened yet, one reminder. */
+async function remindReport(env: LifeEnv, e: any, life: any, now: number) {
+  const eid = e.id as string;
+  if (await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k IN (?,?)").bind(`rptopen/${eid}`, `rptremind/${eid}`).first()) return;
+  const contact = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`contact/${eid}`).first<{ v: string }>();
+  const email = contact ? (JSON.parse(contact.v).email as string) : null;
+  await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`rptremind/${eid}`, String(now)).run();
+  if (!email) return;
+  await sendReportMail(env, email, `Reminder: open your Corporate Tambola report ${eid} before ${istFull(personalDeleteAt(life.end_ms))}`, `Hello,\n\nYour engagement ${eid} report has not been opened yet. The participants' details are permanently deleted at ${istFull(personalDeleteAt(life.end_ms))}, and the report cannot be made after that.\n\nOpen it here and save the PDF:\n${await reportLink(env, eid)}\n\nCorporate Tambola`, []);
 }
 
 // ------------------------------------------------------------------------------------------------ the scheduled tick
@@ -268,6 +292,7 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
         if (await reportStep(env, e, life, now)) { await env.DB.prepare("UPDATE life SET report_ms=?, report_state=COALESCE(report_state,'sent') WHERE eid=?").bind(now, e.id).run(); out.reportsDone++; }
         else await env.DB.prepare("UPDATE life SET tries=tries+1 WHERE eid=?").bind(e.id).run();
       }
+      if (life.report_ms && now >= personalDeleteAt(life.end_ms) - 6 * 3_600_000 && now < personalDeleteAt(life.end_ms)) await remindReport(env, e, life, now);
       if (now >= personalDeleteAt(life.end_ms)) { await erasePersonal(env, e.id, now, "auto"); out.purged++; }
     } catch { /* this engagement is tried again at the next tick; the others still run */ }
   }

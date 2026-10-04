@@ -2,9 +2,10 @@
 // It talks to exactly two things: the public beacon (through BeaconOpts) and our one small store (through deps.api).
 import { generateTicket, patternNumbers, ticketNumbers, type Ticket } from "../../shared/src/ticket";
 import { ALL_SAFETIES, ControlTracker, SAFETY_FAST, SAFETY_STANDARD, pausedAt, type ControlConfig } from "./control";
-import { GRACE_ROUNDS, LATE_LAG_ROUNDS, defaultCfg, keysInPlay, linesFor, roundEid, validateCfg, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import { GRACE_ROUNDS, LATE_LAG_ROUNDS, defaultCfg, keysInPlay, linesFor, roundEid, validateCfg, votersFor, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
 import { PrizeEngine, countFromOf } from "./prize-engine";
-import { RoundStore, activeBreak, activeIntermission, callRoundR, completionIndexKey, ticketsFor } from "./game";
+import { RoundStore, activeBreak, activeIntermission, callRoundR, completionIndexKey, luckyRound, luckyWinners, ticketsFor } from "./game";
+import { seatOfPid } from "./unique-ticket";
 import { NUMBERS, QUICKNET, fetchRound, pickNumber, roundAt, roundTimeMs, type BeaconOpts } from "./index";
 
 export interface PhoneDeps {
@@ -221,7 +222,7 @@ export class PhoneRuntime {
 
   /** One pass of the loop. Call about once a second. Safe to call while offline (it simply makes no progress). */
   async tick(): Promise<RuntimeView> {
-    if (this.phase === "ended") { await this.autoClaim(); await this.pollResults(); return this.view(); } // a claim that failed to send keeps being retried after the last call // the engagement is over, but the outcome is still worth fetching
+    if (this.phase === "ended") { await this.autoClaim(); await this.pollResults(); await this.castVotes(); return this.view(); } // a claim that failed to send keeps being retried after the last call // the engagement is over, but the outcome is still worth fetching
     if (this.phase !== "play") return this.view();
     if (!(await this.syncClock())) { this.error = "Waiting for the clock. Check your connection."; return this.view(); }
     this.error = null;
@@ -249,6 +250,7 @@ export class PhoneRuntime {
     await this.pollSeats(now);
     this.syncEngines(Math.max(1, started));
     await this.pollResults();
+    await this.castVotes();
     const stopped = this.tracker?.state.stopRound != null && now >= this.tracker.state.stopRound;
     const byPrizes = !this.deps.noEarlyEnd && this.cur >= this.cfg.rounds && this.prizesAwarded(this.cur) && this.breaksPlayed(now);
     if (byPrizes) this.prizesEnded = true;
@@ -293,6 +295,15 @@ export class PhoneRuntime {
   private seatUpto = 0;
   private seatsFetched = false;
   private lastSeatPoll = -Infinity;
+  /** The beacon round the newest seat list was asked for in: a lucky draw is only worked out from a list at least that fresh. */
+  private seatsFreshRound = 0;
+  private wantSeats = false;
+  // ---- winners are settled by phones, never by a person: this phone reports what it worked out, and the store accepts a result once enough different phones agree
+  private voted = new Set<string>();
+  private firstSeen = new Map<string, number>();
+  private lastVote = -Infinity;
+  private luckyLocal: { ordinal: number; idx: number; round: number; winners: string[] }[] = [];
+  private luckyBusy = false;
   private engines = new Map<number, PrizeEngine>();
   private engineCursor = new Map<number, number>();
   private engineReset = new Map<number, number>();
@@ -343,15 +354,16 @@ export class PhoneRuntime {
   private seatEveryMs(): number { const c = this.cap; return c <= 250 ? 15_000 : c <= 1000 ? 25_000 : c <= 2500 ? 40_000 : 50_000; }
   private async pollSeats(now: number) {
     const m = this.deps.mono();
-    if (now < this.startRound || m - this.lastSeatPoll < (this.seatsFetched ? this.seatEveryMs() : 5_000) + (Math.floor(m) % 2000)) return;
-    this.lastSeatPoll = m;
+    if (now < this.startRound || (!this.wantSeats && m - this.lastSeatPoll < (this.seatsFetched ? this.seatEveryMs() : 5_000) + (Math.floor(m) % 2000))) return;
+    this.lastSeatPoll = m; this.wantSeats = false;
+    const askedAt = this.nowRound ?? 0;
     try {
       const r = await this.deps.api("GET", `/api/z/${this.eid}/seats?after=${this.seatUpto}`);
       if (!r || !r.ready || !Array.isArray(r.seats)) return;
       const known = new Set(this.seatList.map((x) => x.pid));
       for (const [, pid, jr] of r.seats as [number, string, number][]) if (!known.has(pid)) { known.add(pid); this.seatList.push({ pid, countFrom: countFromOf(jr) }); }
       this.seatUpto = Math.max(this.seatUpto, Number(r.upto) || 0);
-      this.seatsFetched = true;
+      this.seatsFetched = true; this.seatsFreshRound = Math.max(this.seatsFreshRound, askedAt);
     } catch { /* the next poll tries again; until then the organizer's published results (if any) are used */ }
   }
   /** Brings each round's engine up to date with the seats and numbers this phone knows. Tickets are made in small slices so the screen never freezes. */
@@ -371,11 +383,13 @@ export class PhoneRuntime {
   private get localOk(): boolean { return this.seatsFetched && this.engines.size > 0 && [...this.engines.values()].every((e) => e.pending === 0); }
   private async pollResults() {
     const m = this.deps.mono();
+    const nowR = this.nowRound;
+    if (nowR !== null) await this.computeLucky(nowR);
     const local = this.localOk;
     if (local) {
       const mine: NonNullable<RuntimeView["results"]> = [];
       for (const [r, e] of this.engines) for (const x of e.results()) mine.push({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, count: x.pids.length, round: r });
-      this.allResults = [...mine, ...this.serverResults.filter((x) => x.pattern === "lucky")];
+      this.allResults = [...mine, ...this.luckyResults(), ...this.serverResults.filter((x) => x.pattern === "lucky" && !this.luckyLocal.some((l) => l.ordinal === x.ordinal))];
     }
     // the organizer's published results: the fallback while the seat list is not here yet, and the only source for lucky draws
     // (lucky draws: only once a draw's break has been reached and its winners are not out yet, and then every 10 s)
@@ -385,8 +399,58 @@ export class PhoneRuntime {
     this.lastResultPoll = m;
     try {
       this.serverResults = (await this.deps.api("GET", `/api/z/${this.eid}/results`)).results ?? this.serverResults;
-      this.allResults = this.localOk ? [...this.allResults.filter((x) => x.pattern !== "lucky"), ...this.serverResults.filter((x) => x.pattern === "lucky")] : this.serverResults;
+      this.allResults = this.localOk ? [...this.allResults.filter((x) => x.pattern !== "lucky"), ...this.luckyResults(), ...this.serverResults.filter((x) => x.pattern === "lucky" && !this.luckyLocal.some((l) => l.ordinal === x.ordinal))] : this.serverResults;
     } catch { /* shown next time */ }
+  }
+  private luckyResults(): NonNullable<RuntimeView["results"]> { return this.luckyLocal.map((l) => ({ pattern: "lucky" as const, ordinal: l.ordinal, idx: l.idx, count: l.winners.length, round: 1, winners: l.winners })); }
+  /** A lucky draw is worked out here, from the public randomness of the round that ends its break and the public seat list: the same on every phone, and nobody can steer it. */
+  private async computeLucky(now: number) {
+    if (this.luckyBusy || !this.seatsFetched) return;
+    const L = this.cfg.breaks.filter((b) => b.kind === "lucky");
+    if (!L.length) return;
+    this.luckyBusy = true;
+    try {
+      for (let i = 0; i < L.length; i++) {
+        if (this.luckyLocal.some((x) => x.ordinal === i + 1)) continue;
+        const round = luckyRound(this.tracker ? this.tracker.state : null, this.startRound, this.stride, this.cfg.breaks, L[i]!);
+        if (round === null || round > now) continue;
+        if (this.seatsFreshRound < round) { this.wantSeats = true; continue; } // the seat list must be at least as new as the draw
+        const x = this.store.rounds.get(round) ?? (await fetchRound(round, { ...this.deps.beacon, ...(this.deps.verify ? { verify: this.deps.verify as any } : {}) }, 0));
+        if (!x) continue;
+        const pids = this.seatList.filter((s) => s.countFrom <= round).map((s) => s.pid);
+        this.luckyLocal.push({ ordinal: i + 1, idx: L[i]!.after, round, winners: luckyWinners(this.eid, L[i]!.after, x.randomness, pids, L[i]!.winners || 3) });
+      }
+    } catch { /* tried again on the next pass */ } finally { this.luckyBusy = false; }
+  }
+  private sampled(seat: number, key: string, p: number): boolean {
+    if (p >= 1) return true;
+    let h = 2166136261; const s = seat + "|" + key;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return h / 4294967296 < p;
+  }
+  /** Reports this phone's own result for every prize to the store. Only a share of the phones speak up at first (so a big game stays inside the free request allowance); the rest join in, wave by wave, if no result appears. */
+  private async castVotes() {
+    const m = this.deps.mono();
+    if (!this.pid || !this.localOk || m - this.lastVote < 4_000) return;
+    const seat = seatOfPid(this.pid);
+    if (seat === null) return;
+    this.lastVote = m;
+    const people = Math.max(1, this.seatList.length), p0 = votersFor(people) / people;
+    const items: { key: string; body: object }[] = [];
+    for (const [r, e] of this.engines) for (const x of e.results()) items.push({ key: `${r}:${x.pattern}:${x.ordinal}`, body: { pattern: x.pattern, ordinal: x.ordinal, round: r, idx: x.idx, pids: [...x.pids].sort() } });
+    for (const l of this.luckyLocal) items.push({ key: `1:lucky:${l.ordinal}`, body: { pattern: "lucky", ordinal: l.ordinal, round: 1, idx: l.idx, pids: [...l.winners].sort() } });
+    const send: { key: string; body: object }[] = [];
+    for (const it of items) {
+      if (this.voted.has(it.key)) continue;
+      const first = this.firstSeen.get(it.key) ?? (this.firstSeen.set(it.key, m), m);
+      const wave = Math.min(12, Math.floor((m - first) / 30_000));
+      if (this.sampled(seat, it.key, Math.min(1, p0 * 2 ** wave))) send.push(it);
+    }
+    for (let i = 0; i < send.length; i += 3) {
+      const part = send.slice(i, i + 3);
+      try { await this.deps.api("POST", `/api/z/${this.eid}/vote`, { pid: this.pid, results: part.map((x) => x.body) }); for (const x of part) this.voted.add(x.key); }
+      catch { break; /* kept: the next pass reports it again */ }
+    }
   }
 
   private currentBreak(now: number | null): RuntimeView["brk"] {

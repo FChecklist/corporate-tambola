@@ -12,9 +12,16 @@ export const INVITE_CATEGORIES: ReadonlyArray<{ id: string; label: string }> = [
   { id: "customers", label: "Customers" }, { id: "partners", label: "Business partners" }, { id: "franchisees", label: "Franchisees" }, { id: "neighbours", label: "Neighbours and community" }, { id: "guests", label: "Other guests" },
 ];
 export interface InviteCfg { on: boolean; per: number; cats: string[] }
-export const MAX_INVITES_PER_PERSON = 10;
+export const MAX_INVITES_PER_PERSON = 4;
 export const defaultInvites = (): InviteCfg => ({ on: false, per: 4, cats: ["family", "colleagues"] });
 export interface EngagementCfg { tickets: 1 | 2; rewards: RewardLine[]; breaks: BreakCfg[]; rounds: number; invites?: InviteCfg }
+/**
+ * Who decides the winners: the software, never a person. Every phone works out the winners from the public numbers and reports them; our store accepts a result
+ * only when this many DIFFERENT phones (one ticket per phone) reported exactly the same winners. Tiny games need half their people; larger ones 5% (3 to 25).
+ */
+export const quorumFor = (people: number): number => (people <= 6 ? Math.max(1, Math.ceil(people / 2)) : Math.min(25, Math.max(3, Math.ceil(people * 0.05))));
+/** How many phones report each result (the rest stay quiet, to keep the free request allowance): everyone in a small game, four times the quorum in a big one. Silent phones step in if no result appears. */
+export const votersFor = (people: number): number => (people <= 12 ? people : 4 * quorumFor(people));
 export const MAX_ROUNDS = 5;
 /** The game starts this many 3 s beacon rounds (2 minutes) after the time the organizer gave: the last 2 minutes are "setting up, waiting for everyone to join". */
 export const GRACE_ROUNDS = 40;

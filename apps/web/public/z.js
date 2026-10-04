@@ -124,23 +124,52 @@
     try { navigator.vibrate && navigator.vibrate([200, 100, 200, 100, 400]); } catch {}
     if (sound && window.TBAudio) TBAudio.say("Congratulations! You won " + list.map((w) => w.name).join(", ") + "!");
   }
-  // ---------- tell our store about this phone's wins and about the end, once each (tiny): the winners record and the end-of-game clock rely on it
-  const reportedKey = "ctz-reported:" + EID, overKey = "ctz-over:" + EID;
-  let reporting = false, overPending = false;
+  // ---------- tell our store that the game is over for this phone, once (tiny): the end-of-game clock relies on it. Winners are reported by the game code itself, and only count when several phones agree.
+  const overKey = "ctz-over:" + EID;
+  let overPending = false;
   async function reportToStore(v) {
     if (!v.pid) return;
     try {
-      const done = new Set(JSON.parse(store.get(reportedKey) || "[]")), fresh = v.won.filter((w) => !done.has(winId(w)));
-      if (fresh.length && !reporting) {
-        reporting = true;
-        try { await api("POST", `/api/z/${EID}/won`, { pid: v.pid, wins: fresh.map((w) => ({ round: w.round, pattern: w.pattern, ordinal: w.ordinal, idx: w.idx })) }); for (const w of fresh) done.add(winId(w)); store.set(reportedKey, JSON.stringify([...done])); } catch { /* sent at the next paint */ }
-        reporting = false;
-      }
       if (v.phase === "ended" && !store.get(overKey) && !overPending) {
         overPending = true; // spread over a little time so a big crowd does not ask at the same second
         setTimeout(async () => { try { await api("POST", `/api/z/${EID}/over`, { pid: v.pid }); store.set(overKey, "1"); } catch { /* tried again later */ } overPending = false; }, Math.floor(Math.random() * 45000));
       }
     } catch { /* never in the way of the game */ }
+  }
+  // ---------- after the game, a winner confirms the name and mobile number the prize goes to (the organizer and co-host see any change, with the original) ----------
+  const CF = { loaded: false, loading: false, name: "", phone: "", confirmed: false, editing: false, edited: false, prizes: [], note: "", last: 0, busy: false };
+  const myDevice = () => store.get("ctz:device") || "";
+  async function loadCf(v) {
+    if (v.phase !== "ended" || !PRIZES.length || !v.pid || CF.loading || (CF.loaded && CF.confirmed) || Date.now() - CF.last < 15000) return;
+    CF.last = Date.now(); CF.loading = true;
+    try {
+      const r = await api("GET", `/api/z/${EID}/myprizes?pid=${encodeURIComponent(v.pid)}&device=${encodeURIComponent(myDevice())}`);
+      CF.prizes = r.prizes || []; if (!CF.edited) { CF.name = r.name || ""; CF.phone = r.phone || ""; } CF.confirmed = !!r.confirmed; CF.loaded = CF.prizes.length > 0;
+    } catch { /* tried again shortly */ }
+    CF.loading = false;
+  }
+  function confirmCard(v) {
+    if (v.phase !== "ended" || !PRIZES.length) return "";
+    if (!CF.loaded) return `<div class="zcard"><h2>Confirm where your prize goes</h2><p class="zsmall">Waiting for your result to be confirmed by the other phones. This takes a moment.</p></div>`;
+    if (CF.confirmed && !CF.editing) return `<div class="zcard"><h2>Details confirmed</h2><p style="margin:4px 0"><b>${esc(CF.name)}</b> &middot; ${esc(CF.phone)}</p><p class="zsmall">Your organizer has these details. <button class="zsnd" id="cfedit">Change</button></p></div>`;
+    return `<div class="zcard zform"><h2>Confirm your prize details</h2>
+      <p class="zsmall" style="margin:0 0 6px">Your organizer will use this name and mobile number to hand over your prize. Please check them and correct anything that is wrong. If you change them, your organizer and co-host will see both what you joined with and what you changed it to.</p>
+      <label for="cfnm">Your name</label><input id="cfnm" autocomplete="name" maxlength="60" value="${esc(CF.name)}">
+      <label for="cfph">Your mobile number</label><input id="cfph" inputmode="tel" autocomplete="tel" value="${esc(CF.phone)}">
+      ${CF.note ? `<div class="zbanner ${CF.note.startsWith("Thank") ? "ok" : "bad"}" role="alert">${esc(CF.note)}</div>` : ""}
+      <button class="zbtn" id="cfgo"${CF.busy ? " disabled" : ""}>Confirm</button></div>`;
+  }
+  function bindConfirm(v) {
+    const nm = document.getElementById("cfnm"), ph = document.getElementById("cfph"), go = document.getElementById("cfgo"), ed = document.getElementById("cfedit");
+    if (ed) ed.onclick = () => { CF.editing = true; CF.note = ""; paint(); };
+    if (nm) nm.oninput = () => { CF.name = nm.value; CF.edited = true; };
+    if (ph) ph.oninput = () => { CF.phone = ph.value; CF.edited = true; };
+    if (go) go.onclick = async () => {
+      CF.busy = true; CF.note = ""; paint();
+      try { const r = await api("POST", `/api/z/${EID}/confirm`, { pid: v.pid, device: myDevice(), name: CF.name, phone: CF.phone }); CF.confirmed = true; CF.editing = false; CF.edited = false; CF.note = ""; CF.last = 0; }
+      catch (e) { CF.note = (e && e.message) || "Could not save. Please try again."; }
+      CF.busy = false; paint();
+    };
   }
   function prizesCard() {
     if (!PRIZES.length) return "";
@@ -314,7 +343,7 @@
     const tix = v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : "Your ticket", winSet)).join("");
     return `<div class="zhead"><b>Corporate Tambola</b><button class="zsnd" id="snd" aria-pressed="${sound}">${sound ? "Sound on" : "Sound off"}</button></div>
       ${annBanner(v)}${banners.join("")}
-      ${v.phase === "ended" ? finalCard(v) + prizesCard() : ""}
+      ${v.phase === "ended" ? finalCard(v) + confirmCard(v) + prizesCard() : ""}
       ${waitingRoom(v)}
       ${lateCard(v)}
       ${roundCards(v)}
@@ -335,9 +364,10 @@
     if (!v.won) v.won = []; // an older saved copy of the game code during an update: never break the screen
     if (v.phase === "missing" || v.phase === "boot") { $app.innerHTML = `<p class="zmsg">${esc(v.error || "Loading…")}</p>`; return; }
     if (v.phase === "join") { const f = document.getElementById("ph"); if (f && document.activeElement === f) return; $app.innerHTML = joinView(v.error); bindJoin(); return; }
-    const fresh = syncPrizes(v); reportToStore(v);
+    const fresh = syncPrizes(v); reportToStore(v); loadCf(v);
+    { const af = document.activeElement; if (af && (af.id === "cfnm" || af.id === "cfph")) return; } // never wipe a form someone is typing in
     $app.innerHTML = playView(v);
-    syncMedia(v); bindShare(); loadInvites(v); bindInvite(v);
+    syncMedia(v); bindShare(); bindConfirm(v); loadInvites(v); bindInvite(v);
     if (fresh.length) showHurray(fresh);
     const s = document.getElementById("snd");
     if (s) s.onclick = async () => { sound = !sound; store.set("ctz-sound", sound ? "on" : "off"); if (window.TBAudio) { TBAudio.enabled = sound; if (sound) await TBAudio.unlock(); } paint(); };

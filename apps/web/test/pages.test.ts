@@ -288,7 +288,7 @@ describe("winners, the end, and break media on the phone", () => {
     expect(end).toMatch(/Thank you for joining our extended family of Corporate Tambola/); expect(end).toMatch(/Share with friends and colleagues/); expect(end).toMatch(/Voucher 5000/);
     expect(doc.getElementById("shr")).toBeTruthy();
     expect(rt.view().endedByPrizes).toBe(true); expect(rt.view().log.length).toBeLessThan(90); // it ended on the prizes, not on the last number
-    await until(() => (o.world.raw.query("SELECT COUNT(*) c FROM winner WHERE src='phone'").get() as any).c >= 3 && (o.world.raw.query("SELECT COUNT(*) c FROM overvote").get() as any).c >= 1); // the phone told our store about its wins and that the game is over
+    await until(() => (o.world.raw.query("SELECT COUNT(*) c FROM winner WHERE src='phones'").get() as any).c >= 3 && (o.world.raw.query("SELECT COUNT(*) c FROM overvote").get() as any).c >= 1); // the phone told our store about its wins and that the game is over
     expect(o.world.raw.query("SELECT end_src FROM life").get()).toEqual({ end_src: "phones" });
     expect(JSON.stringify(o.world.raw.query("SELECT * FROM winner").all())).not.toMatch(/Voucher|9833|Gift/); // seat, prize, round, time: no names or numbers
   }, 90_000);
@@ -336,15 +336,19 @@ describe("winners, the end, and break media on the phone", () => {
 
 describe("console: results go out on their own, and a person can move to a new phone", () => {
   const until = async (cond: () => Promise<boolean> | boolean, ms = 30000) => { const t0 = Date.now(); while (!(await cond())) { if (Date.now() - t0 > ms) throw new Error("timed out"); await new Promise((r) => setTimeout(r, 300)); } };
-  test("with the console open and numbers called, every completed house is published to participants without pressing anything", async () => {
+  test("the console only watches: with numbers called it publishes nothing and offers no Publish button; the phones settle the winners", async () => {
     const o = await organizer({ FREE_LAUNCH: "1" }); await make(o, "UI-AUTO"); await publish(o, "UI-AUTO");
-    expect((await o.api("POST", "/api/z/UI-AUTO/join", { phone: "9844444444", device: "f".repeat(32) })).status).toBe(200);
+    const j = await o.api("POST", "/api/z/UI-AUTO/join", { phone: "9844444444", device: "f".repeat(32) });
+    expect(j.status).toBe(200);
     o.world.now = START_MS + 1_000_000; // every one of the 90 numbers is out: every house is complete for the one player
     const p = await page(o, "/zc?e=UI-AUTO", "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" }, { afterLoad: (win, f) => { if (f === "zgame.js") { const Orig = win.ZG.RoundStore; win.ZG.RoundStore = class extends Orig { constructor() { super({ fetcher: async (url: string) => { const last = url.split("/").pop()!; const r = last === "latest" ? roundAt(o.world.now) : Number(last); return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" }) }; }, mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 }, (x: any) => x.signature === "aa"); } }; } } });
-    try { await until(async () => { const r = (await o.json(await o.api("GET", "/api/z/UI-AUTO/results"))) as any; return (r.results ?? []).length >= 7; }, 40000); } catch (e) { throw new Error("no results; console says: " + p.text().slice(p.text().indexOf("Rewards"), p.text().indexOf("Rewards") + 500) + " NOTE:" + p.text().slice(-300)); }
+    await p.waitFor((x) => /Rewards/.test(x), 30000);
+    await new Promise((r) => setTimeout(r, 1500));
     const r = (await o.json(await o.api("GET", "/api/z/UI-AUTO/results"))) as any;
-    expect(new Set(r.results.map((x: any) => x.pattern))).toEqual(new Set(["early5", "top", "mid", "bot", "corners", "star", "full"]));
-    expect(p.errors).toEqual([]);
+    expect(r.results).toEqual([]); // the organizer's page cannot settle anything
+    expect(p.$("#settle")).toBeFalsy();
+    expect(p.text()).toMatch(/cannot choose, change or remove a winner/);
+    expect((await o.api("POST", "/api/z/UI-AUTO/settle", { results: [{ pattern: "full", idx: 5, pids: [] }] }, o.token)).status).toBe(403);
   }, 60_000);
   test("'Change of phone': the organizer enters a number, and the next device that joins with it keeps the ticket", async () => {
     const o = await organizer(); await make(o, "UI-MOVE"); await publish(o, "UI-MOVE");

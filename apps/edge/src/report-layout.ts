@@ -3,7 +3,7 @@
 import { GOLD, NAVY, PdfDoc, WHITE, type Column } from "./pdf";
 
 export interface ReportPerson { seat: number | null; name: string | null; phone: string | null; joinedMs: number | null; late: boolean; role: string | null; invitedBy: number | null; onRoster: boolean; joined: boolean }
-export interface ReportWinner { seat: number | null; name: string | null; phone: string | null; role: string | null; verified: boolean; callNo: number | null; atMs: number | null }
+export interface ReportWinner { seat: number | null; name: string | null; phone: string | null; role: string | null; verified: boolean; callNo: number | null; atMs: number | null; /** the winner confirmed these details on their own phone after the game */ confirmed?: boolean; /** what they joined with, when they changed it after the game */ changedFrom?: string | null; /** the date the organizer ticked 'prize given' */ given?: string | null }
 export interface ReportPrize { round: number; label: string; text: string; winners: ReportWinner[] }
 export interface Agg { joined: number; onRoster: number; notJoined: number; late: number; viaInvite: number; inviters: number; topInviter: [number, number] | null; roles: number; joinedInTime: number; firstJoinMs: number | null }
 export const emptyAgg = (): Agg => ({ joined: 0, onRoster: 0, notJoined: 0, late: 0, viaInvite: 0, inviters: 0, topInviter: null, roles: 0, joinedInTime: 0, firstJoinMs: null });
@@ -90,14 +90,15 @@ export function layoutReport(d: ReportData): Uint8Array {
   for (const pr of d.prizes) {
     pdf.h2(`${d.rounds > 1 ? `Round ${pr.round}  |  ` : ""}${pr.label}${pr.text ? `   -   ${pr.text}` : ""}`);
     if (!pr.winners.length) { pdf.para("Not won.", { size: 9, color: [0.4, 0.43, 0.48] }); continue; }
-    pdf.table([{ head: "Seat", width: 5, align: "r" }, { head: "Name", width: 24 }, { head: "Mobile", width: 12 }, { head: "At call", width: 7, align: "r" }, { head: "Time", width: 9 }, { head: "Role", width: 12 }, { head: "Checked", width: 10 }],
-      pr.winners.map((w) => [w.seat === null ? "-" : String(w.seat), w.name || "(no name)", mob(w.phone), w.callNo === null ? "-" : String(w.callNo), w.atMs ? hm(w.atMs) : "-", w.role || "participant", w.verified ? "by console" : "by phone"]));
+    pdf.table([{ head: "Seat", width: 5, align: "r" }, { head: "Name", width: 21 }, { head: "Mobile", width: 12 }, { head: "At call", width: 6, align: "r" }, { head: "Time", width: 8 }, { head: "Role", width: 10 }, { head: "Agreed by", width: 8 }, { head: "Prize given", width: 12 }],
+      pr.winners.map((w) => [w.seat === null ? "-" : String(w.seat), w.name || "(no name)", mob(w.phone), w.callNo === null ? "-" : String(w.callNo), w.atMs ? hm(w.atMs) : "-", w.role || "participant", w.verified ? "phones" : "-", w.given ? w.given : "not yet"]));
+    for (const w of pr.winners) if (w.changedFrom) pdf.para(`Seat ${w.seat === null ? "-" : w.seat}: details changed after the game (${w.changedFrom}).`, { size: 8.5, color: [0.7, 0.15, 0.1] });
   }
   for (const l of d.lucky) {
     pdf.h2(`Lucky draw  -  ${l.title}`);
     pdf.table([{ head: "Seat", width: 5, align: "r" }, { head: "Name", width: 24 }, { head: "Mobile", width: 12 }], l.winners.map((w) => [w.seat === null ? "-" : String(w.seat), w.name || "(no name)", mob(w.phone)]));
   }
-  pdf.para("'Checked: by console' means your console recomputed the result from the public numbers; 'by phone' means the winner's own phone reported it. Both come from the same public numbers; the second has not been double-checked by your console.", { size: 8.5 });
+  pdf.para("Every winner here was worked out by the software from the public numbers, and was accepted only when several different phones reported exactly the same result ('Agreed by: phones'). Neither you nor anyone at Corporate Tambola can choose, change or remove a winner or a number. Names and mobile numbers are those the winner confirmed on their own phone after the game; if they changed them, that is shown under the table.", { size: 8.5 });
 
   // ---- 4 statistics
   const total = d.prizes.length, won = d.prizes.filter((p) => p.winners.length).length;

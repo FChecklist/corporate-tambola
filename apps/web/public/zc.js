@@ -82,19 +82,8 @@
   function luckyAdminCard() {
     const L = (S.cfg && S.cfg.breaks || []).filter((b) => b.kind === "lucky");
     if (!L.length) return "";
-    return `<div class="zcard"><h2>Lucky draws</h2>${L.map((b, i) => { const d = S.lucky && S.lucky[i]; return `<div class="zrow"><span>${esc(b.title)} · ${b.winners || 3} ${(b.winners || 3) === 1 ? "person" : "people"}</span>${d ? (d.published ? `<em>Published</em>` : `<button class="zbtn s" data-lucky="${i}">Publish ${d.winners.length} winner${d.winners.length === 1 ? "" : "s"}</button>`) : `<i>after the break ends</i>`}</div>${d && !d.published ? `<div class="zsmall" style="margin:0 0 6px">${esc(d.winners.map((p) => (S.people.find((x) => x.pid === p) || {}).name || "Participant").join(", "))}</div>` : ""}`; }).join("")}
-      <p class="zsmall">Winners are picked from everyone on your list using the public randomness of the round that ends the break, so nobody can influence the draw. Check the names, then publish.</p></div>`;
-  }
-  let lastPub = ""; const luckySent = new Set();
-  /** Results and lucky-draw winners go out on their own while this page is open: the numbers are public, so there is nothing for a person to decide. */
-  async function autoPublish() {
-    try {
-      const all = S.settledPreview.map(({ pattern, ordinal, round, idx, pids }) => ({ pattern, ordinal, round, idx, pids }));
-      const sig = JSON.stringify(all.map((x) => [x.pattern, x.ordinal, x.round, x.idx, x.pids.length]));
-      if (all.length && sig !== lastPub) { for (let i = 0; i < all.length; i += 40) await call("POST", `/api/z/${eid}/settle`, { results: all.slice(i, i + 40) }); lastPub = sig; }
-      const L = (S.cfg.breaks || []).filter((b) => b.kind === "lucky");
-      for (let i = 0; i < L.length; i++) { const d = S.lucky && S.lucky[i]; if (d && !d.published && !luckySent.has(i)) { await call("POST", `/api/z/${eid}/settle`, { results: [{ pattern: "lucky", ordinal: i + 1, idx: L[i].after, pids: d.winners }] }); luckySent.add(i); } }
-    } catch (e) { /* the next refresh tries again */ }
+    return `<div class="zcard"><h2>Lucky draws</h2>${L.map((b, i) => { const d = S.lucky && S.lucky[i]; const done = (S.published || []).some((r) => r.pattern === "lucky" && r.ordinal === i + 1); return `<div class="zrow"><span>${esc(b.title)} · ${b.winners || 3} ${(b.winners || 3) === 1 ? "person" : "people"}</span>${done ? `<em>Decided</em>` : d ? `<em>Being confirmed by the phones</em>` : `<i>after the break ends</i>`}</div>`; }).join("")}
+      <p class="zsmall">The software picks the winners from everyone who joined, using the public randomness of the round that ends the break. Nobody, including you, can choose or change them. A winner is confirmed when several different phones agree.</p></div>`;
   }
   async function namesFor(ids) {
     const nm = S.nameCache || (S.nameCache = new Map()), want = ids.filter((p) => !nm.has(p));
@@ -191,6 +180,8 @@
       <div class="zcard"><h2>Share with participants</h2><div class="zlink">${esc(link)}</div><a class="zbtn s alt" href="/big.html?e=${encodeURIComponent(eid)}" target="_blank" rel="noopener">Open the big screen</a></div>
       <div class="zgrid"><div class="zcard"><h2>Participants</h2><div class="zstat">${S.people.length}</div></div><div class="zcard"><h2>Numbers called</h2><div class="zstat">${S.log.length} / 90</div></div></div>
       ${announceCard()}
+      ${prizeCard()}
+      ${S.life && S.life.reportSent && !S.life.purged ? `<div class="zcard"><h2>Engagement report</h2><p class="zsmall">The report is built on your own device. Open it and save the PDF before the participants' details are deleted.</p><button class="zbtn s" id="rptopen">Open the report</button></div>` : ""}
       <div class="zcard"><p class="zsmall" style="margin:0">You are signed in as a co-host. The organizer controls the rest.</p></div>`;
   }
   function engView() {
@@ -212,6 +203,7 @@
         <button class="zbtn s" id="addroster">Add to list</button>
         <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="closed" style="width:auto;min-height:0" ${S.closed ? "checked" : ""}> Invite only (people not on the list cannot join)</label></div>
       ${luckyAdminCard()}
+      ${prizeCard()}
       ${S.started && !S.draft ? "" : settingsCard()}
       <div class="zcard"><h2>Controls</h2>
         <button class="zbtn s" data-ctl="pause" ${paused ? "disabled" : ""}>Pause</button><button class="zbtn s alt" data-ctl="resume" ${paused ? "" : "disabled"}>Resume</button><button class="zbtn s bad" data-ctl="stop">End engagement</button>
@@ -219,12 +211,13 @@
       <div class="zcard"><h2>Rewards · from the public number log</h2>
         ${S.settledPreview.length ? S.settledPreview.map((s) => `<div class="zrow"><span>${esc(lineLabel(s))} · call ${s.idx + 1}</span><em>${s.pids.length} participant${s.pids.length === 1 ? "" : "s"}${s.names ? " · " + esc(s.names) : ""}</em></div>`).join("") : "<p class=zsmall>No pattern is complete yet.</p>"}
         <p class="zsmall">Claims received: ${S.claims.length}. ${bad ? `<b>${bad} not valid</b> (they do not match the public log and are ignored).` : "All claims so far match the public log."}</p>
-        <button class="zbtn s" id="settle" ${S.settledPreview.length ? "" : "disabled"}>Publish now</button><span class="zsmall"> Results are also published automatically while this page is open.</span>
+        <p class="zsmall">Winners are decided by the software, from the public numbers, when several different phones agree. You cannot choose, change or remove a winner or a number. Confirmed so far: ${(S.published || []).filter((r) => r.pattern !== "lucky").length}.</p>
         <button class="zbtn s alt" id="csv" ${S.settledPreview.length ? "" : "disabled"}>Download report</button></div>
       <div class="zcard zform"><h2>Change of phone</h2>
         <p class="zsmall" style="margin-top:0">A ticket plays on one phone only. If someone lost or changed their phone, enter their mobile number: the next phone they join with keeps their ticket.</p>
         <label for="ubph">Their mobile number</label><input id="ubph" inputmode="tel" autocomplete="off" placeholder="98765 43210"><button class="zbtn s" id="unbind">Let them move to a new phone</button></div>
-      ${dataCard()}`;
+      ${dataCard()}
+      ${aiAuditCard()}`;
   }
   const ist = (ms) => new Date(ms + 5.5 * 3600000).toISOString().replace("T", ", ").slice(0, 20) + " IST";
   /** The moment the numbers start, the console shows how the game is going: who is in, who came late, who came through an invitation. */
@@ -251,15 +244,42 @@
       <label for="mkrole">This person is the</label><select id="mkrole"><option value="organizer">Organizer</option><option value="host">Host</option><option value="co-host">Co-host</option><option value="none">Nobody special (remove the mark)</option></select>
       <button class="zbtn s" id="mark">Mark this seat</button></div>`;
   }
+  const dmy = (ms) => new Date(ms).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
+  const prizeName = (p) => { const l = (S.cfg && S.cfg.rewards || []).find((x) => x.pattern === p.pattern && x.ordinal === p.ordinal); return p.pattern === "lucky" ? "Lucky draw " + p.ordinal : (PNAME[p.pattern] || p.pattern) + (p.ordinal > 1 ? " (" + p.ordinal + ")" : "") + (l && l.text ? " · " + l.text : ""); };
+  const PNAME = { early5: "Early Five", top: "Top Line", mid: "Middle Line", bot: "Bottom Line", corners: "Four Corners", star: "Star", full: "Full House", full2: "Full Two-Ticket House" };
+  /** Winners with the name and number they confirmed, any change they made after the game (with the original), and a tick for "prize given" with the date. */
+  function prizeCard() {
+    const P = S.prizes || [];
+    if (!S.started || S.draft) return "";
+    const rows = P.map((p, i) => `<div class="zrow" style="align-items:flex-start;gap:8px"><span style="flex:1"><b>${esc(p.name || "Participant")}</b> &middot; ${esc(p.phone || "")}<br><small class="zsmall" style="margin:0">${esc(prizeName(p))}${p.round > 1 ? " · round " + p.round : ""}${p.confirmed ? " · confirmed by the winner " + esc(dmy(p.confirmedMs)) : " · not confirmed by the winner yet"}</small>${p.changed ? `<br><small style="color:#b3261e"><b>Changed after the game.</b> Joined as ${esc(p.joinedWithName || "?")} · ${esc(p.joinedWithPhone || "?")}${(p.trail || []).map((t) => "; on " + esc(dmy(t.at)) + " changed to " + esc(t.name) + " · " + esc(t.phone)).join("")}</small>` : ""}</span>
+      <label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" style="width:auto;min-height:0" data-given="${i}" ${p.given ? "checked" : ""}> Prize given${p.given ? " " + esc(dmy(p.givenMs)) + (p.givenBy ? " by " + esc(p.givenBy) : "") : ""}</label></div>`).join("");
+    return `<div class="zcard"><h2>Winners and prize hand-over</h2>${rows || "<p class=zsmall>No winner is confirmed yet.</p>"}
+      <p class="zsmall">After the game each winner confirms their name and mobile number on their own phone. Anything they change is shown here together with what they joined with. Tick "Prize given" when you hand the prize over: the date is kept. These details are kept for 365 days with your engagement record.</p></div>`;
+  }
+  function bindPrizes() {
+    document.querySelectorAll("[data-given]").forEach((c) => (c.onchange = async () => {
+      const p = (S.prizes || [])[Number(c.dataset.given)]; if (!p) return;
+      try { await call("POST", `/api/z/${eid}/prizegiven`, { round: p.round, pattern: p.pattern, ordinal: p.ordinal, seat: p.seat, given: c.checked }); S.note = c.checked ? "Marked as given." : "Tick removed."; } catch (e) { S.note = e.message; }
+      refreshEng();
+    }));
+  }
+  /** Every call the organizer's external AI made: when, what, and from where. */
+  function aiAuditCard() {
+    if (S.role === "host") return "";
+    const T = S.aiTrail;
+    return `<div class="zcard"><h2>What your AI assistant did</h2>
+      ${T ? (T.length ? T.slice(0, 40).map((t) => `<div class="zrow"><span>${esc(dmy(t.at_ms))}<br><small class="zsmall" style="margin:0">${esc(t.method)} ${esc(t.path)} → ${esc(String(t.status))} · from ${esc(t.ip || "?")} ${esc(t.country || "")} · ${esc((t.ua || "").slice(0, 60))} · key ${esc(t.key_id || "")}</small></span></div>`).join("") : "<p class=zsmall>Your AI assistant has not made any call yet.</p>") : `<button class="zbtn s alt" id="aiaudit">Show the AI activity log</button>`}
+      <p class="zsmall">Every call your AI assistant makes is recorded with the time, the key used and where it came from. It is kept for 365 days.</p></div>`;
+  }
   function dataCard() {
     const l = S.life;
     const when = l ? `<div class="zrow"><span>Names, mobile numbers, seats and invitations of participants</span><em>deleted by ${esc(ist(l.personalDeleteAtMs))}${l.purged ? " (done)" : ""}</em></div>
-      <div class="zrow"><span>Complete report e-mailed to you</span><em>${l.reportSent ? "sent" : l.purged ? "not sent" : "after the game ends"}</em></div>
+      <div class="zrow"><span>Complete report: a link is e-mailed to you, and the PDF is built on your own device</span><em>${l.reportSent ? "link sent" : l.purged ? "not sent" : "after the game ends"}</em></div>
       <div class="zrow"><span>Your details as organizer / host / co-host, and the winners record</span><em>kept until 00:00 IST, ${esc(ist(l.fullDeleteAtMs).slice(0, 10))}</em></div>
       <div class="zrow"><span>Backups of deleted data</span><em>roll off within ${l.backupDays} days</em></div>` : "";
     return `<div class="zcard"><h2>Participant data</h2>
       <p class="zsmall" style="margin-top:0">We do not keep your participants' data. Within 24 hours of the game ending we send you the complete report and then delete every participant's name and mobile number from our systems.</p>${when}
-      <button class="zbtn s alt" id="erase" style="margin-top:8px">Delete all participant data now</button>
+      ${S.life && S.life.reportSent && !S.life.purged ? `<button class="zbtn s" id="rptopen" style="margin-top:8px">Open the report now</button> ` : ""}<button class="zbtn s alt" id="erase" style="margin-top:8px">Delete all participant data now</button>
       <p class="zsmall">You can also e-mail us from your registered address, or ask your AI assistant to request the deletion and then confirm it here. The report is e-mailed first when the game has already ended.</p></div>`;
   }
   function draw(v) { $app.innerHTML = v; bind(); }
@@ -308,7 +328,7 @@
       S.settledPreview = settled.map((x) => ({ ...x, names: x.pids.length <= 3 ? x.pids.map((p) => nm.get(p) || "Participant").join(", ") : "" }));
       S.lucky = await computeLucky(now);
       try { S.life = await call("GET", `/api/z/${eid}/life`); } catch { S.life = null; }
-      if (S.role !== "host" && !S.locked) await autoPublish(); // winners hear without anyone pressing a button
+      if (S.started && !S.draft) { try { S.prizes = (await call("GET", `/api/z/${eid}/prizes`)).prizes || []; } catch { S.prizes = S.prizes || []; } try { S.published = (await fetch(BASE + `/api/z/${eid}/results`).then((r) => r.json())).results || []; } catch { /* shown next time */ } } // the software decides the winners; this page only watches
     } catch (e) { S.note = e.status === 404 ? "That engagement was not found." : e.status === 403 ? "Your sign-in has expired or does not belong to this engagement. Open the home page and sign in again." : "Could not refresh. Retrying…"; }
     if (eid) draw(S.cfg && S.info ? engView() : `<div class="zhead"><b>Engagement ${esc(eid)}</b><button class="zsnd" id="back">All engagements</button></div><div class="zbanner info">${esc(S.note || "Loading…")}</div>`);
   }
@@ -372,7 +392,9 @@
       try { const r = await TBControl.publish(eid, { token: secret, base: BASE, prefix: "/api/z" }, action, action === "pause" ? { pauseForRounds: 600 } : {}); S.ctlNote = r.status === 200 ? action[0].toUpperCase() + action.slice(1) + " sent. Phones follow within about 40 seconds." : (r.data && r.data.error) || "Not accepted."; } catch (e) { S.ctlNote = e.message; }
       refreshEng();
     }));
-    if ($("settle")) $("settle").onclick = async () => { try { const all = S.settledPreview.map(({ pattern, ordinal, round, idx, pids }) => ({ pattern, ordinal, round, idx, pids })); for (let i = 0; i < all.length; i += 40) await call("POST", `/api/z/${eid}/settle`, { results: all.slice(i, i + 40) }); S.note = "Results published to participants."; } catch (e) { S.note = e.message; } refreshEng(); };
+    bindPrizes();
+    if ($("rptopen")) $("rptopen").onclick = async () => { try { const r = await call("GET", `/api/z/${eid}/reportlink`); if (r.url) window.open(r.url, "_blank", "noopener"); else S.note = "The report is not ready yet."; } catch (e) { S.note = e.message; draw(engView()); } };
+    if ($("aiaudit")) $("aiaudit").onclick = async () => { try { S.aiTrail = (await call("GET", "/api/org/ai/audit")).trail || []; } catch (e) { S.note = e.message; } draw(engView()); };
     if ($("unbind")) $("unbind").onclick = async () => { try { await call("POST", `/api/z/${eid}/unbind`, { phone: $("ubph").value }); S.note = "Done. The next phone they join with keeps their ticket."; } catch (e) { S.note = e.message; } refreshEng(); };
     if ($("csv")) $("csv").onclick = async () => {
       await namesFor([...new Set(S.settledPreview.flatMap((x) => x.pids))]); const nm = S.nameCache;
@@ -405,11 +427,6 @@
       refreshEng();
     };
     if ($("closed")) $("closed").onchange = async () => { try { await call("PATCH", `/api/z/${eid}/settings`, { closed: $("closed").checked }); S.note = $("closed").checked ? "Only people on the list can join." : "Anyone with the link can join."; } catch (e) { S.note = e.message; } refreshEng(); };
-    document.querySelectorAll("[data-lucky]").forEach((b) => (b.onclick = async () => {
-      const i = Number(b.dataset.lucky); const d = S.lucky[i];
-      try { await call("POST", `/api/z/${eid}/settle`, { results: [{ pattern: "lucky", ordinal: i + 1, idx: S.cfg.breaks.filter((x) => x.kind === "lucky")[i].after, pids: d.winners }] }); S.note = "Lucky draw winners published."; } catch (e) { S.note = e.message; }
-      refreshEng();
-    }));
     if ($("savecfg")) $("savecfg").onclick = async () => {
       try { const v = readSettings(); const r = await call("PATCH", `/api/z/${eid}/settings`, v); S.cfg = { tickets: r.tickets, rewards: r.rewards, breaks: r.breaks, rounds: r.rounds || 1, invites: r.invites }; S.note = "Saved."; } catch (e) { S.note = e.message; }
       refreshEng();

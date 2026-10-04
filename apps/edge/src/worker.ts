@@ -1,6 +1,6 @@
 // Cloudflare-Workers-shaped store for the zero-server design. It keeps only what must outlive phones: who joined, which claims were made,
 // and the settled results. It never draws numbers and never verifies BLS (a free Worker has ~10 ms CPU; one verify costs ~60 ms),
-// so the organizer's own console verifies claims against the public log and posts the settled result.
+// so winners are never posted by a person: every phone works them out from the public numbers and reports them, and a result is accepted when several different phones agree (winners.ts).
 // D1-compatible: env.DB only uses prepare/bind/run/all/first/batch.
 //
 // Who may do what:
@@ -8,15 +8,17 @@
 //   master key    - the organizer's own console: everything for that organizer's engagements, including publishing results, erasing, registering the pause key.
 //   AI key        - the organizer's external AI assistant: everything a person could do in the console EXCEPT publishing results, erasing data and
 //                   registering/using the pause signing key (pausing needs the organizer's own browser; the AI can only ask, see /control/request).
-//                   So an AI can never decide who wins, and never change what the public beacon decides.
+//                   So an AI can never decide who wins, and never change what the public beacon decides. Every AI call is written to an audit trail (winners.ts).
+//   Winners: nobody posts them. Phones report what they worked out and a result is accepted when several different phones agree (winners.ts, quorumFor).
 //   nobody        - phones: join, send claims, read results counts, read the engagement info and the signed control file.
 
 import { GRACE_ROUNDS, defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
 import { openPii, sealPii } from "./pii";
-import { acceptOver, acceptWon, endBoundMs, eraseEverything, erasePersonal, fullDeleteAt, lifecycleTick, personalDeleteAt, recordWinners } from "./lifecycle";
+import { acceptOver, acceptWon, endBoundMs, eraseEverything, erasePersonal, fullDeleteAt, lifecycleTick, personalDeleteAt, recordWinners, reportApi, reportLink } from "./lifecycle";
 import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
+import { WINNERS_SCHEMA, acceptVotes, auditAi, confirmPrize, listAiAudit, listPrizes, markGiven, myPrizes } from "./winners";
 import { PAUSE_MAX_PARTICIPANTS, safetyForCap, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 
 export interface D1Result<T = any> { results?: T[]; meta?: { changes?: number } }
@@ -89,6 +91,7 @@ export const SCHEMA: string[] = [
   // the beacon round a seat joined in, when that was after the game began (0 = joined in time): every phone counts that person's numbers from there
   `ALTER TABLE seat ADD COLUMN jr INTEGER`,
   ...PRIVACY_SCHEMA,
+  ...WINNERS_SCHEMA,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
@@ -195,12 +198,12 @@ async function authOf(req: Request, env: Env): Promise<Auth> {
 const can = (a: Auth, e: { org: string | null }, master = false) => a.plat || (!!a.org && e.org === a.org && (!master || a.kind === "master"));
 const deny = (a: Auth) => json({ error: a.kind === "ai" ? "Your AI assistant may not do this. Please do it yourself in the console." : a.kind === "host" ? "Only the organizer can do this. A co-host can watch the engagement and send messages to everyone." : "Not allowed." }, 403);
 /** What a co-host may touch: watching, and messages to everyone. Nothing that changes the engagement, the money or anyone's data. */
-const HOST_ACTIONS = new Set(["participants", "summary", "results", "info", "announce"]);
+const HOST_ACTIONS = new Set(["participants", "summary", "results", "info", "announce", "prizes", "prizegiven", "reportlink", "life"]);
 const MAX_HOSTS = 5;
 
 export const AI_MANIFEST = {
   name: "Corporate Tambola organizer API",
-  how: "Send your organizer AI key in the x-organizer header (or Authorization: Bearer). Every call is JSON. The numbers are drawn from public randomness on participants' phones; you cannot change them.",
+  how: "Send your organizer AI key in the x-organizer header (or Authorization: Bearer). Every call is JSON. The numbers are drawn from public randomness on participants' phones; you cannot change them. Every call you make is recorded (time, which key, what was asked, and where it came from) in an audit trail the organizer can read.",
   your_role: "You are the organizer's event planner. Talk with them in plain, friendly words, never in API terms. Work through the steps in `conversation` IN ORDER, ONE question at a time, offering 2 to 4 clear options with a recommended default, and wait for their answer before moving on. Never invent details for them. They can watch everything you create appear live in their console (the openUrl returned when you create the engagement).",
   conversation: [
     "1. The event and the guests: what is the occasion (for example a Diwali party, a dealer meet, a town hall) and who takes part (employees, their families, dealers, customers, vendors). This is only context for your suggestions; nothing needs to be saved.",
@@ -246,7 +249,7 @@ export const AI_MANIFEST = {
   ],
   suggestions_rules: "Describe the need and the benefit, not code. Never include names, phone numbers, e-mail addresses or anything about specific people. Suggestions are visible to all organizers' AI assistants without saying who wrote them. We review them and mark each one new, under_review, planned, shipped or declined.",
   you_cannot: [
-    "Publish results or decide winners (the organizer's console recomputes them from the public numbers)",
+    "Choose, publish, change or remove winners, numbers, tickets or anyone's reward (nobody can, not even the organizer: the software decides, and a result stands only when several different phones report exactly the same winners)",
     "Erase participant data (the organizer does that)",
     "Sign or send a pause yourself (only the organizer's own browser holds that key)",
     "Change the rules, the reward patterns, the numbers or anyone's ticket",
@@ -255,12 +258,22 @@ export const AI_MANIFEST = {
   ],
 };
 
+/** Every call made with an organizer's AI key is written to an audit trail (when, which key, what was asked, the answer, and where it came from). */
 async function route(req: Request, env: Env, now: number): Promise<Response> {
+  const a = await authOf(req, env);
+  const r = await route0(req, env, now, a);
+  if (a.kind === "ai" && a.org) {
+    const presented = req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+    await auditAi(env.DB, a.org, req, (await sha("key|" + presented)).slice(0, 10), r.status, now);
+  }
+  return r;
+}
+async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname;
-  const a = await authOf(req, env);
 
   if (req.method === "GET" && p === "/api/z/ai-manifest") return json(AI_MANIFEST);
+  { const rm = p.match(/^\/api\/report\/([A-Za-z0-9_-]{4,40})$/); if (rm && req.method === "GET") return reportApi(env as any, rm[1]!, url); } // the report page; the key in the link is the only credential
   const paid = await payRoute(req, env as PayEnv, now, (n) => spend(env, now, n));
   if (paid) return paid;
   const partnered = await partnerRoute(req, env as PayEnv, now, (n) => spend(env, now, n), a.plat);
@@ -378,6 +391,10 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const key = "cth_" + randHex(24);
     await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), a.org, "host", now).run();
     return json({ ok: true, hostKey: key });
+  }
+  if (req.method === "GET" && p === "/api/org/ai/audit") { // the organizer sees every call their external AI made; we can see all
+    if (a.kind !== "master" && !a.plat) return deny(a);
+    return listAiAudit(env.DB, a.plat ? null : a.org, json);
   }
   if (req.method === "POST" && p === "/api/org/ai/revoke") {
     if (a.kind !== "master" || !a.org) return deny(a);
@@ -571,7 +588,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (!a.plat) return deny(a);
     return json({ ok: true, purged: await purgeOld(env, now) });
   }
-  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life)$/);
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink)$/);
   if (!m) return json({ error: "Not found", hint: "Read the list of what you can do at /api/z/ai-manifest. Engagement routes look like /api/z/{id}/summary, /settings, /roster, /participants, /results, /publish." }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
@@ -588,8 +605,8 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   const addSeat = async (ph: string, pii: string, dev: string | null, jr: number, o: { inv?: number | null; cat?: string | null; src: string; invLimit?: number | null; joinedMs?: number }) => {
     const tail = (await pidOf(ph)).slice(0, 12);
     await env.DB.batch([
-      env.DB.prepare("INSERT OR IGNORE INTO seat(eid,seq,pid,ph,dev,jr,inv,cat,src) SELECT ?, s, s || 'x' || ?, ?, ?, ?, ?, ?, ? FROM (SELECT COALESCE(MAX(seq),0)+1 AS s FROM seat WHERE eid=?) WHERE (SELECT COUNT(*) FROM participant WHERE eid=?) < ? AND (? IS NULL OR (SELECT COUNT(*) FROM seat WHERE eid=? AND inv=?) < ?)")
-        .bind(eid, tail, ph, dev, jr, o.inv ?? null, o.cat ?? null, o.src, eid, eid, e.cap, o.invLimit ?? null, eid, o.inv ?? null, o.invLimit ?? 0),
+      env.DB.prepare("INSERT OR IGNORE INTO seat(eid,seq,pid,ph,dev,jr,inv,cat,src) SELECT ?, s, s || 'x' || ?, ?, ?, ?, ?, ?, ? FROM (SELECT COALESCE(MAX(seq),0)+1 AS s FROM seat WHERE eid=?) WHERE (SELECT COUNT(*) FROM participant WHERE eid=?) < ? AND (? IS NULL OR (SELECT COUNT(*) FROM seat WHERE eid=? AND inv=?) < ?) AND (? IS NULL OR NOT EXISTS (SELECT 1 FROM seat WHERE eid=? AND dev=?))")
+        .bind(eid, tail, ph, dev, jr, o.inv ?? null, o.cat ?? null, o.src, eid, eid, e.cap, o.invLimit ?? null, eid, o.inv ?? null, o.invLimit ?? 0, dev, eid, dev),
       env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,pii,joined_ms) SELECT eid, pid, ph, NULL, ?, ? FROM seat WHERE eid=? AND ph=?").bind(pii, o.joinedMs ?? now, eid, ph),
     ]);
   };
@@ -611,6 +628,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const have = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.pid AS seat, s.jr AS jr FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; seat: string | null; jr: number | null }>();
     if (have) {
       if (have.seat && have.dev && have.dev !== dev) return json({ error: "This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it.", code: "other-phone" }, 423);
+      if (have.seat && !have.dev && dev && (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first())) return json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket. Ask the person to open the link on their own phone.", code: "device-used" }, 409);
       if (have.seat && !have.dev && dev) { // first device to open the link of someone who was on the list (or whom the organizer let move) keeps the ticket
         if (!(await spend(env, now, 2))) return BUSY();
         await env.DB.batch([env.DB.prepare("UPDATE seat SET dev=? WHERE eid=? AND pid=? AND dev IS NULL").bind(dev, eid, have.pid), env.DB.prepare("UPDATE participant SET joined_ms=? WHERE eid=? AND pid=? AND joined_ms<?").bind(now, eid, have.pid, now)]);
@@ -621,6 +639,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     }
     if (e.closed) return json({ error: "This engagement is by invitation. Ask your organizer to add your number." }, 403);
     if (!dev) return json({ error: "Please refresh this page and try again." }, 400);
+    if (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) return json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket. Others can join from their own phones, using your invitation link if the organizer allowed it.", code: "device-used" }, 409);
     const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
     if ((n?.c ?? 0) >= e.cap) return json({ error: "This engagement is full." }, 409);
     // invited through someone's link? Only when the organizer has switched invitations on, only for the kinds of guests they allowed, and only up to the inviter's quota (organizer, hosts and co-hosts: no quota)
@@ -640,7 +659,7 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     if (!(await spend(env, now, 2))) return BUSY();
     await addSeat(ph, await sealPii(env, { phone: digits, name: cleanName(b?.name) }), dev, lateRound, { inv, cat, src: "link", invLimit });
     const row = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.jr AS jr FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; jr: number | null }>();
-    if (!row) return invLimit !== null ? json({ error: `This invitation has already been used by ${inviteCfg!.per} people, which is the most one person can invite. Please ask your organizer for the main link.`, code: "invite-full" }, 409) : json({ error: "This engagement is full." }, 409); // lost a race for the last place
+    if (!row) return (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) ? json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket.", code: "device-used" }, 409) : invLimit !== null ? json({ error: `This invitation has already been used by ${inviteCfg!.per} people, which is the most one person can invite. Please ask your organizer for the main link.`, code: "invite-full" }, 409) : json({ error: "This engagement is full." }, 409); // lost a race for the last place
     if (row.dev && row.dev !== dev) return json({ error: "This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it.", code: "other-phone" }, 423);
     return reply(row.pid, { jr: row.jr ?? 0 });
   }
@@ -798,18 +817,19 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   }
   if (action === "won" && req.method === "POST") return acceptWon(env, e, eid!, await body(req), now, json, spend);
   if (action === "over" && req.method === "POST") return acceptOver(env, e, eid!, await body(req), now, json, spend);
-  if (action === "settle" && req.method === "POST") { // only the organizer's own console (which recomputed it from the public log), never the AI
-    if (!can(a, e, true)) return deny(a);
-    const b = await body(req, 65_536);
-    if (!b || !Array.isArray(b.results) || b.results.length > 40) return json({ error: "Bad result." }, 400);
-    for (const x of b.results) if (!PATTERNS.has(x?.pattern) || !Number.isInteger(x?.idx) || !Array.isArray(x?.pids) || (x.ordinal !== undefined && (!Number.isInteger(x.ordinal) || x.ordinal < 1 || x.ordinal > 5)) || (x.round !== undefined && (!Number.isInteger(x.round) || x.round < 1 || x.round > cfgOf(e).rounds)) || (x.pattern === "lucky" && (x.round ?? 1) !== 1)) return json({ error: "Bad result." }, 400);
-    const luckyCount = cfgOf(e).breaks.filter((x) => x.kind === "lucky").length;
-    for (const x of b.results) if (x.pattern === "lucky" && ((x.ordinal ?? 1) > luckyCount || x.pids.length > 10 || x.pids.some((p: unknown) => typeof p !== "string"))) return json({ error: "That lucky draw does not exist in this engagement." }, 400);
-    if (!(await spend(env, now, b.results.length))) return BUSY();
-    for (const x of b.results) await env.DB.prepare("INSERT INTO settled(eid,pattern,ordinal,round,idx,pids) VALUES(?,?,?,?,?,?) ON CONFLICT(eid,pattern,ordinal,round) DO UPDATE SET idx=excluded.idx, pids=excluded.pids").bind(eid, x.pattern, x.ordinal ?? 1, x.round ?? 1, x.idx, JSON.stringify(x.pids.slice(0, 500))).run();
-    await recordWinners(env, e, eid!, b.results, now); // the winners record (seat, prize, round, time) outlives the personal data
-    return json({ ok: true });
+  if (action === "settle" && req.method === "POST") return json({ error: "Winners are decided by the software, from the public numbers, when several phones agree. Nobody can post or change them." }, 403);
+  if (action === "reportlink" && req.method === "GET") { // the organizer's / co-host's way to the report page (the PDF is made on their own device)
+    if (!can(a, e) || a.kind === "ai") return deny(a);
+    const life = await env.DB.prepare("SELECT report_ms FROM life WHERE eid=?").bind(eid).first<{ report_ms: number | null }>();
+    const st = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`rpt/${eid}`).first<{ v: string }>();
+    const stage = st ? (JSON.parse(st.v).stage as string) : null;
+    return json({ ready: stage === "send" || stage === "done", sent: !!life?.report_ms, url: stage === "send" || stage === "done" ? await reportLink(env as any, eid!) : null });
   }
+  if (action === "vote" && req.method === "POST") return acceptVotes(env as any, e, eid!, await body(req, 65_536), now, json, spend);
+  if (action === "confirm" && req.method === "POST") return confirmPrize(env as any, eid!, await body(req), now, json, spend);
+  if (action === "myprizes" && req.method === "GET") return myPrizes(env as any, eid!, url, json);
+  if (action === "prizes" && req.method === "GET") { if (!can(a, e) || a.kind === "ai") return deny(a); return listPrizes(env as any, eid!, json); }
+  if (action === "prizegiven" && req.method === "POST") { if (!can(a, e) || a.kind === "ai") return deny(a); return markGiven(env, eid!, await body(req), a.kind, now, json, spend); }
   if (action === "erase" && req.method === "POST") { // right to erasure: every name, number, seat and invite of this engagement's people. The winners record and the organizer's own details stay, as the report says.
     if (!can(a, e, true)) return deny(a);
     const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
@@ -887,6 +907,7 @@ export async function purgeOld(env: Env, now: number): Promise<number> {
   // an engagement goes at 00:00 IST at the end of the 365th day after its game ended (created + 365 days if it never ran), and a draft nobody published after DRAFT_DAYS
   const loose = now - (RETENTION_DAYS - 2) * 86_400_000;
   const old = await env.DB.prepare("SELECT e.id AS id, e.created_ms AS created_ms, e.pack AS pack, l.end_ms AS end_ms FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE e.created_ms < ? OR (e.pack=0 AND e.created_ms < ?)").bind(loose, now - DRAFT_DAYS * 86_400_000).all<{ id: string; created_ms: number; pack: number; end_ms: number | null }>();
+  await env.DB.prepare("DELETE FROM ai_audit WHERE at_ms < ?").bind(now - RETENTION_DAYS * 86_400_000).run().catch(() => undefined); // the AI's audit trail is kept as long as the organizer's own details
   let n = 0;
   for (const x of old.results ?? []) {
     const due = x.end_ms != null ? now >= fullDeleteAt(x.end_ms) : x.created_ms < now - RETENTION_DAYS * 86_400_000 || (x.pack === 0 && x.created_ms < now - DRAFT_DAYS * 86_400_000);

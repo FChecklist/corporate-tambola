@@ -68,6 +68,12 @@ const reference = (pauseState?: ReturnType<typeof resolveControl>) => {
   return deriveCalls(EID, sched.map((r) => rnd(r!)));
 };
 
+/** Several different phones report the same winners, which is how a result gets accepted (nobody, not even the organizer, can post one). */
+async function settleViaPhones(results: { pattern: string; ordinal?: number; round?: number; idx: number; pids: string[] }[], voters: string[]): Promise<number> {
+  let last = 200;
+  for (const pid of voters.slice(0, 30)) for (let i = 0; i < results.length; i += 3) last = (await D.headCall("POST", `/api/z/${EID}/vote`, { pid, results: results.slice(i, i + 3).map((x) => ({ ordinal: 1, round: 1, ...x })) })).status;
+  return last;
+}
 describe("a phone from first open to full house", () => {
   test("open, join, wait for the first call, play all 90 calls, claim every pattern, and match the public reference", async () => {
     const a = mkPhone(1);
@@ -149,8 +155,7 @@ describe("a crowd and the awkward cases", () => {
     expect(chk.bad).toEqual([]);
     expect(chk.good.length).toBe(40 * 7);
     const settled = settleAll(EID, pids, ref);
-    const post = await D.headCall("POST", `/api/z/${EID}/settle`, { results: settled }, { "x-organizer": SECRET });
-    expect(post.status).toBe(200);
+    expect(await settleViaPhones(settled, pids)).toBe(200);
     const pub = await (await D.headCall("GET", `/api/z/${EID}/results`)).json() as any;
     expect(pub.results.length).toBe(7);
     // every phone's own results view agrees
@@ -472,7 +477,7 @@ describe("brand breaks, reward lines and two tickets on real phones", () => {
     expect(checkClaims(EID, claims, ref, cfg).bad).toEqual([]);
     const settled = settleAll(EID, pids, ref, cfg);
     expect(settled.map((s) => `${s.pattern}#${s.ordinal}`).sort()).toEqual(["full#1", "full#2", "full2#1"].filter((k) => settled.some((s) => `${s.pattern}#${s.ordinal}` === k)).sort());
-    expect((await D.headCall("POST", `/api/z/${EID}/settle`, { results: settled.map((s) => ({ pattern: s.pattern, ordinal: s.ordinal, idx: s.idx, pids: s.pids })) }, { "x-organizer": SECRET })).status).toBe(200);
+    expect(await settleViaPhones(settled.map((s) => ({ pattern: s.pattern, ordinal: s.ordinal, idx: s.idx, pids: s.pids })), pids)).toBe(200);
     // each phone can tell whether it received a published reward line by comparing its own completion call with the published one
     await step(ps, 16000);
     const pub = ps[0]!.rt.view().results;
@@ -482,24 +487,25 @@ describe("brand breaks, reward lines and two tickets on real phones", () => {
 });
 
 describe("lucky draw on phones", () => {
-  test("every phone sees the draw; after the organizer publishes, exactly the winners are told they won", async () => {
+  test("every phone sees the draw; the phones work out the winners themselves from the public randomness and the seat list, and exactly the winners are told they won", async () => {
     await env.DB.prepare("UPDATE engagement SET config=? WHERE id=?").bind(JSON.stringify({ breaks: [{ after: 10, seconds: 30, kind: "lucky", title: "Lucky draw", winners: 3 }] }), EID).run();
     const ps = Array.from({ length: 8 }, (_, i) => mkPhone(300 + i));
     for (const p of ps) { await p.rt.boot(); await p.rt.join(p.phone); }
     let sawCard = false;
     for (let i = 0; i < 60; i++) { await step(ps); const b = ps[0]!.rt.view().brk; if (b) { sawCard = true; expect(b.kind).toBe("lucky"); expect(b.winners).toBe(3); } }
     expect(sawCard).toBe(true);
-    for (const p of ps) expect(p.rt.view().lucky).toEqual([{ ordinal: 1, title: "Lucky draw", winners: 3, style: "draw", published: false, won: false }]);
     // the organizer's console draws from the participant list with the public randomness of the round that ends the break
     const brk = { after: 10, seconds: 30, kind: "lucky" as const, title: "Lucky draw", winners: 3 as const };
     const round = luckyRound(null, START, 2, [brk], brk)!;
     const pids = (await (await D.headCall("GET", `/api/z/${EID}/participants`, undefined, { "x-organizer": SECRET })).json() as any).participants.map((x: any) => x.pid);
     const winners = luckyWinners(EID, 10, rnd(round), pids, 3);
     expect(winners).toHaveLength(3);
-    expect((await D.headCall("POST", `/api/z/${EID}/settle`, { results: [{ pattern: "lucky", ordinal: 1, idx: 10, pids: winners }] }, { "x-organizer": SECRET })).status).toBe(200);
-    await step(ps, 16000);
+    for (let i = 0; i < 12; i++) await step(ps, 16000);
     for (const p of ps) { const v = p.rt.view(); expect(v.lucky[0]!.published).toBe(true); expect(v.lucky[0]!.won).toBe(winners.includes(p.rt.pid!)); }
     expect(ps.filter((p) => p.rt.view().lucky[0]!.won)).toHaveLength(3);
+    // and the store holds the draw because several phones reported the same winners
+    const stored = ((await (await D.headCall("GET", `/api/z/${EID}/results`)).json()) as any).results.find((x: any) => x.pattern === "lucky");
+    expect(stored.winners).toEqual([...winners].sort());
   });
 });
 
@@ -547,7 +553,7 @@ describe("two rounds on real phones", () => {
     const pids = (await (await D.headCall("GET", `/api/z/${EID}/participants`, undefined, { "x-organizer": SECRET })).json() as any).participants.map((x: any) => x.pid);
     const settled = [...settleAll(EID, pids, logs[1], cfg, 1), ...settleAll(EID, pids, logs[2], cfg, 2)];
     expect(settled.filter((s) => s.round === 1)).toHaveLength(7); expect(settled.filter((s) => s.round === 2)).toHaveLength(7);
-    expect((await D.headCall("POST", `/api/z/${EID}/settle`, { results: settled.map((s) => ({ pattern: s.pattern, ordinal: s.ordinal, round: s.round, idx: s.idx, pids: s.pids })) }, { "x-organizer": SECRET })).status).toBe(200);
+    expect(await settleViaPhones(settled.map((s) => ({ pattern: s.pattern, ordinal: s.ordinal, round: s.round, idx: s.idx, pids: s.pids })), pids)).toBe(200);
     await step(ps, 16000);
     for (const p of ps) {
       const v = p.rt.view();
@@ -594,7 +600,10 @@ describe("winners hear it, and the engagement ends when the last prize is awarde
     expect(K).toBeGreaterThan(0); expect(K).toBeLessThan(90); // with two players every line is awarded before the last number
     for (let i = 0; i < 300 && a.rt.view().phase !== "ended"; i++) await step([a, b]);
     const results = settledAt(K);
-    expect((await (await D.headCall("GET", `/api/z/${EID}/results`)).json() as any).results).toEqual([]); // nobody published anything
+    for (let i = 0; i < 8; i++) await step([a, b], 5000); // the last reports reach the store
+    // nobody published anything: the phones agreed, and the store holds exactly what the software worked out
+    const stored = ((await (await D.headCall("GET", `/api/z/${EID}/results`)).json()) as any).results as { pattern: string; ordinal: number; idx: number; count: number }[];
+    expect(stored.map((x) => `${x.pattern}:${x.ordinal}:${x.idx}:${x.count}`).sort()).toEqual(results.map((x) => `${x.pattern}:${x.ordinal}:${x.idx}:${x.pids.length}`).sort());
     for (const [p, pid] of [[a, pids[0]!], [b, pids[1]!]] as const) {
       const v = p.rt.view();
       expect(v.phase).toBe("ended"); expect(v.endedByPrizes).toBe(true); expect(v.allAwarded).toBe(true); expect(v.localWinners).toBe(true);
@@ -605,17 +614,17 @@ describe("winners hear it, and the engagement ends when the last prize is awarde
     }
     expect(a.rt.view().won.length + b.rt.view().won.length).toBeGreaterThanOrEqual(need.length); // every line has a winner
   }, 60_000);
-  test("when the seat list cannot be reached, phones fall back to the results the organizer's console published", async () => {
+  test("a phone that cannot reach the seat list falls back to the results the other phones agreed on", async () => {
     const a = mkPhone(14, { earlyEnd: true }), b = mkPhone(15, { earlyEnd: true });
-    for (const p of [a, b]) { const real = p.rt.deps.api; (p.rt.deps as any).api = async (m: string, path: string, x?: unknown) => { if (/\/seats/.test(path)) throw new Error("outage"); return real(m, path, x); }; await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true); }
+    { const real = a.rt.deps.api; (a.rt.deps as any).api = async (m: string, path: string, x?: unknown) => { if (/\/seats/.test(path)) throw new Error("outage"); return real(m, path, x); }; }
+    for (const p of [a, b]) { await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true); }
     const pids = [a.rt.pid!, b.rt.pid!], ref = reference(), cfg = a.rt.cfg, need = keysInPlayLines(cfg);
     const settledAt = (k: number) => settleAll(EID, pids, ref.slice(0, k), cfg, 1);
     let K = 0; for (let k = 1; k <= 90 && !K; k++) { const got = settledAt(k); if (need.every((n) => got.some((x) => x.pattern === n.key && x.ordinal === n.ordinal))) K = k; }
-    for (let i = 0; i < 300 && a.rt.view().log.length < K; i++) await step([a, b]);
-    expect(a.rt.view().phase).not.toBe("ended"); expect(a.rt.view().localWinners).toBe(false); // nothing published, no seat list: it keeps playing
-    const results = settledAt(K);
-    expect((await D.headCall("POST", `/api/z/${EID}/settle`, { results: results.map((x) => ({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, pids: x.pids })) }, { "x-organizer": SECRET })).status).toBe(200);
+    for (let i = 0; i < 300 && a.rt.view().phase !== "ended"; i++) await step([a, b]);
     for (let i = 0; i < 8; i++) await step([a, b], 5000);
+    const results = settledAt(K);
+    expect(a.rt.view().localWinners).toBe(false); // it never had the seat list: it only heard the agreed results
     for (const [p, pid] of [[a, pids[0]!], [b, pids[1]!]] as const) {
       const v = p.rt.view();
       expect(v.phase).toBe("ended"); expect(v.endedByPrizes).toBe(true);
