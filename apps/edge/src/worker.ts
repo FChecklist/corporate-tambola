@@ -18,6 +18,7 @@ import { acceptOver, acceptWon, endBoundMs, eraseEverything, erasePersonal, full
 import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
+import { GET_BODY_MAX, LINK_KEY, CONVERSATION, aiPaste, manualJson, manualText, type LinkRole } from "./ai-link";
 import { WINNERS_SCHEMA, acceptVotes, auditAi, confirmPrize, listAiAudit, listPrizes, markGiven, myPrizes } from "./winners";
 import { PAUSE_MAX_PARTICIPANTS, safetyForCap, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 
@@ -147,11 +148,10 @@ const BUSY = () => json({ error: "Busy day. Please try again after midnight UTC.
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-organizer, x-partner, authorization", "access-control-allow-methods": "GET, POST, PUT, PATCH, OPTIONS", "access-control-max-age": "86400" };
 /** Phones load the app from Pages and call this Worker from another origin, so every answer carries open CORS (no cookies are used anywhere). */
-/** The message an organizer pastes into any AI chat. The key in it is the scoped AI key: it cannot publish, pay, erase or settle. */
-export const aiMessage = (origin: string, key: string) =>
-  `You are my Corporate Tambola assistant. Read the instructions at ${origin}/api/z/ai-manifest, then do what I ask using that API. Send this key in the x-organizer header on every call: ${key}. Keep the key private. Talk to me like a friendly event planner: follow the "conversation" steps in that manifest in order, ask me ONE question at a time, give me 2 to 4 options with your recommendation, and wait for my answer. Never assume. Then set everything up for me: create the engagement, rewards, brand breaks, my participant list and the schedule. Tell me before you do anything that cannot be undone. When it is ready, give me the link the API returns: I will open it, confirm my email and mobile number, publish it (publishing is free) and pay before the start time, because without payment the engagement will not begin. Never try to publish or pay yourself. Help me with every step, and remind me about the payment before the start.`;
+/** The message an organizer pastes into any AI chat: two short lines and the short link (/ai/<key>), which opens the complete manual. The key is only inside the link. The AI key cannot pay, publish, erase, pause or settle. */
+export const aiMessage = (origin: string, key: string) => aiPaste(origin, key);
 /** The e-mail wrapper around the AI work link: the same text as Option 1 on the screen. */
-export const aiMailBody = (msg: string) => `Option 1: let your AI do the work. Copy everything between the lines below and paste it into any AI chat (ChatGPT, Claude, Gemini, Copilot). It will ask you simple questions one at a time and set up your engagement. It cannot publish, pay or erase anything: you do those yourself.\n\n--------\n${msg}\n--------\n\nKeep this e-mail private: the link works like a key to your engagement drafts.`;
+export const aiMailBody = (msg: string) => `Option 1: let your AI do the work. Copy everything between the lines below and paste it into any AI chat (ChatGPT, Claude, Gemini, Copilot, DeepSeek, Z.ai). It will read your own instructions, ask you simple questions one at a time and set up your engagement. It can do what you can do in the console, except pay, publish, erase data or pause: you do those yourself.\n\n--------\n${msg}\n--------\n\nKeep this e-mail private: the link works like a key to your engagements.`;
 /** Runs the daily clean-up (365-day purge, one more try for unsent mail) the first time an organizer-side request arrives each UTC day. Never slows or fails the request. */
 export async function housekeeping(env: Env, now: number): Promise<void> {
   try {
@@ -172,6 +172,64 @@ export async function housekeeping(env: Env, now: number): Promise<void> {
 /** Safety net while the scheduled job is not running: an organizer-side request, or a phone saying the game is over, also nudges the lifecycle (at most once a minute per Worker instance). The scheduled job is the real clock. */
 let lastNudge = 0;
 export async function handle(req: Request, env: Env, now = Date.now(), waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
+  const pn = new URL(req.url).pathname;
+  if (pn === "/ai" || pn.startsWith("/ai/")) return aiLink(req, env, now, waitUntil);
+  return handle0(req, env, now, waitUntil);
+}
+
+const LINK_HEADERS = { "x-robots-tag": "noindex, nofollow", "referrer-policy": "no-referrer", "cache-control": "no-store", "x-content-type-options": "nosniff" };
+const linkText = (s: string, status = 200) => new Response(s, { status, headers: { "content-type": "text/plain; charset=utf-8", ...LINK_HEADERS } });
+/** Same answer for a mistyped, unknown, revoked or wrong-kind key: nothing to learn from it. */
+const linkGone = () => linkText("Not found.", 404);
+/**
+ * The short AI work link: /ai/<key> is the complete manual for that key's role, and /ai/<key>/<api path> is the normal /api/<api path> route with the key
+ * taken from the address instead of a header (so a chat AI that can only open web addresses can work). Only organizer-AI (cta_) and co-host (cth_) keys work here:
+ * an organizer's own sign-in key and the platform key are never accepted in an address. For browse-only AIs, GET plus _method=POST|PATCH and _body=<URL-encoded JSON> performs that action.
+ * The rewritten request carries the key in x-organizer, so the audit trail records it like any other AI call, with the /api path and no key in the path.
+ */
+async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
+  const url = new URL(req.url);
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...CORS, ...LINK_HEADERS } });
+  const m = url.pathname.match(/^\/ai\/([^/]+)(?:\/(.*))?$/s);
+  if (!m || !LINK_KEY.test(m[1]!)) return linkGone();
+  const key = m[1]!;
+  const a = await authOfKey(env, key);
+  if (a.plat || !a.org || (a.kind !== "ai" && a.kind !== "host")) return linkGone();
+  const origin = (env as PayEnv).PUBLIC_ORIGIN ?? url.origin;
+  const role: LinkRole = a.kind;
+  const rest = (m[2] ?? "").replace(/^api\//, "");
+  if (rest === "") {
+    if (req.method !== "GET" && req.method !== "HEAD") return linkText("This address is read with GET.", 405);
+    const keyId = (await sha("key|" + key)).slice(0, 10);
+    const work = auditAi(env.DB, a.org, new Request(origin + "/ai/manual", { method: "GET", headers: req.headers }), keyId, 200, now);
+    if (waitUntil) waitUntil(work); else await work;
+    const h = new Headers({ ...CORS, ...LINK_HEADERS });
+    if (url.searchParams.get("format") === "json") { h.set("content-type", "application/json; charset=utf-8"); return new Response(req.method === "HEAD" ? null : JSON.stringify(manualJson(origin, key, role, now)), { headers: h }); }
+    h.set("content-type", "text/plain; charset=utf-8");
+    return new Response(req.method === "HEAD" ? null : manualText(origin, key, role, now), { headers: h });
+  }
+  // the API call: same route, key in x-organizer
+  let method = req.method === "HEAD" ? "GET" : req.method, payload: string | null = null;
+  const q = new URLSearchParams(url.search);
+  const asked = q.get("_method"), asBody = q.get("_body");
+  q.delete("_method"); q.delete("_body");
+  if (req.method === "GET" && asked !== null) {
+    const mm = asked.toUpperCase();
+    if (mm !== "POST" && mm !== "PATCH") return linkText("_method must be POST or PATCH.", 400);
+    if (asBody !== null && asBody.length > GET_BODY_MAX) return linkText(`_body is too long (at most ${GET_BODY_MAX} characters). Send less per call: about 20 people for a roster.`, 413);
+    if (asBody !== null) { try { JSON.parse(asBody); } catch { return linkText("_body is not valid JSON after decoding. Write the JSON compactly and URL-encode it (encodeURIComponent), for example _body=%7B%22cap%22%3A120%7D .", 400); } }
+    method = mm; payload = asBody ?? "{}";
+  } else if (req.method !== "GET" && req.method !== "HEAD") payload = await req.text();
+  const h = new Headers({ "content-type": "application/json", "x-organizer": key, "x-ct-link": "1" });
+  for (const k of ["cf-connecting-ip", "user-agent", "cf-ipcountry"]) { const v = req.headers.get(k); if (v) h.set(k, v); }
+  const qs = q.toString();
+  const inner = new Request(`${url.origin}/api/${rest}${qs ? "?" + qs : ""}`, { method, headers: h, body: payload });
+  const r = await handle0(inner, env, now, waitUntil);
+  const out = new Headers(r.headers);
+  for (const [k, v] of Object.entries(LINK_HEADERS)) out.set(k, v);
+  return new Response(req.method === "HEAD" ? null : r.body, { status: r.status, headers: out });
+}
+async function handle0(req: Request, env: Env, now: number, waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (waitUntil && now - lastNudge > 60_000 && (req.headers.has("x-organizer") || /\/over$/.test(new URL(req.url).pathname))) { lastNudge = now; waitUntil(lifecycleTick(env as any, now).then(() => undefined, () => undefined)); }
   if ((req.method === "POST" && new URL(req.url).pathname === "/api/z") || new URL(req.url).pathname === "/api/history") { const h = housekeeping(env, now); if (waitUntil) waitUntil(h); else await h; }
@@ -188,7 +246,9 @@ function d1kv(env: Env): KV { return {
 
 interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | null }
 async function authOf(req: Request, env: Env): Promise<Auth> {
-  const presented = req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  return authOfKey(env, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""));
+}
+async function authOfKey(env: Env, presented: string): Promise<Auth> {
   if (!presented) return { plat: false, org: null, kind: null };
   if (env.ORGANIZER_SECRET && presented === env.ORGANIZER_SECRET) return { plat: true, org: null, kind: "platform" };
   const row = await env.DB.prepare("SELECT org, kind FROM organizer_key WHERE hash=? AND revoked=0").bind(await sha("key|" + presented)).first<{ org: string; kind: "master" | "ai" | "host" }>();
@@ -196,28 +256,18 @@ async function authOf(req: Request, env: Env): Promise<Auth> {
 }
 /** May this caller act on this engagement? `master` = needs the organizer's own key (or ours), not the AI's. */
 const can = (a: Auth, e: { org: string | null }, master = false) => a.plat || (!!a.org && e.org === a.org && (!master || a.kind === "master"));
-const deny = (a: Auth) => json({ error: a.kind === "ai" ? "Your AI assistant may not do this. Please do it yourself in the console." : a.kind === "host" ? "Only the organizer can do this. A co-host can watch the engagement and send messages to everyone." : "Not allowed." }, 403);
+/** The organizer's own key, their AI's key, or ours: for what an organizer may do that a co-host may not. */
+const canAi = (a: Auth, e: { org: string | null }) => a.plat || (!!a.org && e.org === a.org && (a.kind === "master" || a.kind === "ai"));
+const deny = (a: Auth) => json({ error: a.kind === "ai" ? "Your AI assistant may not do this. It is for the organizer to do themselves in their console: tell them plainly what needs doing and where (your instructions say how)." : a.kind === "host" ? "Only the organizer can do this. A co-host can watch the engagement and send messages to everyone." : "Not allowed." }, 403);
 /** What a co-host may touch: watching, and messages to everyone. Nothing that changes the engagement, the money or anyone's data. */
 const HOST_ACTIONS = new Set(["participants", "summary", "results", "info", "announce", "prizes", "prizegiven", "reportlink", "life"]);
 const MAX_HOSTS = 5;
 
 export const AI_MANIFEST = {
   name: "Corporate Tambola organizer API",
-  how: "Send your organizer AI key in the x-organizer header (or Authorization: Bearer). Every call is JSON. The numbers are drawn from public randomness on participants' phones; you cannot change them. Every call you make is recorded (time, which key, what was asked, and where it came from) in an audit trail the organizer can read.",
+  how: "Send your organizer AI key in the x-organizer header (or Authorization: Bearer). Easier for chat AIs: the same key in the address, https://<site>/ai/<key>, returns the full manual with ready-made addresses, and https://<site>/ai/<key>/z/{id}/summary works like /api/z/{id}/summary (GET-only tools add _method=POST|PATCH&_body=<URL-encoded JSON>). Every call is JSON. The numbers are drawn from public randomness on participants' phones; you cannot change them. Every call you make is recorded (time, which key, what was asked, and where it came from) in an audit trail the organizer can read.",
   your_role: "You are the organizer's event planner. Talk with them in plain, friendly words, never in API terms. Work through the steps in `conversation` IN ORDER, ONE question at a time, offering 2 to 4 clear options with a recommended default, and wait for their answer before moving on. Never invent details for them. They can watch everything you create appear live in their console (the openUrl returned when you create the engagement).",
-  conversation: [
-    "1. The event and the guests: what is the occasion (for example a Diwali party, a dealer meet, a town hall) and who takes part (employees, their families, dealers, customers, vendors). This is only context for your suggestions; nothing needs to be saved.",
-    "2. How many people at most. Recommend a limit a little above the headcount. See `packs` for the sizes. Building and publishing are free; payment is due before the start time.",
-    "3. Date and time, and their time zone (default Asia/Kolkata). Turn it into startRound with GET /api/z/schedule?at=<ISO time with offset> (the speed is not needed; this call only reads, so you may use it before the organizer has said yes). It must be in the future. Suggest at least 2 hours ahead so everyone can join.",
-    "4. Calling speed: 6 seconds fast, 9 normal (recommended), 12 relaxed, 15 slow. A full game is about 9, 14, 18 or 22 minutes of calling.",
-    "5. Tickets per person: 1 (simple) or 2 (more chances; adds the Full Two-Ticket House reward).",
-    "6. Rewards: which houses to reward (early5, top, mid, bot, corners, star, full, and full2 with two tickets) and how many winners for each (1st to 5th). Ask what each reward is, for example a gift voucher. Remind them that the organizer gives the rewards; we only provide the software.",
-    "7. Brand breaks (optional, at most 3): a company video, a YouTube link, slides, a speech or a lucky draw (1, 3, 5 or 10 winners), each after a number of calls.",
-    "8. Rounds (1 to 5 games, each with new numbers and tickets) and whether it is invite-only (only people on the list can join) or open to anyone with the link.",
-    "9. Participants (optional): ask them to paste lines like 'name, mobile number' and load them 100 at a time with the roster call (people:[{phone, name}]). A phone is 10 to 15 digits, spaces, dashes and a +91 prefix are fine. The answer says added (new on the list), skipped (already on the list, or over the limit) and invalid (not a phone number). Phone numbers are never shown back to anyone. If they prefer, they simply share the link.",
-    "10. Read back a short summary and ask for a clear yes. DO NOT call POST /api/z or any other write (settings, roster) until they have said yes. Then create the engagement (POST /api/z) and apply the details with PATCH settings. If they change their mind afterwards, apply the change and read back the new summary with GET /api/z/{id}/summary. Tell them it is a draft that nobody else can see yet, and that they can watch it take shape in their console.",
-    "11. When they say it is ready, call POST /api/z/{id}/publish and give them the link it returns. Be honest and clear: publishing is free but they must do it themselves in their console (they confirm their email and mobile number); they then share the participants link with everyone; and they must PAY BEFORE THE START TIME (say the exact local time) or the engagement will not begin and their guests will be left waiting. You cannot publish or pay for them. Offer to help with every step, answer their questions about payment, and offer to remind them before the start.",
-  ],
+  conversation: CONVERSATION.map((t) => t.replace(/\{api\}/g, "/api")),
   packs: PACKS.map(([n]) => ({ upTo: n, inr_including_gst: price(n, "INR").total, usd: price(n, "USD").total })),
   choices: { call_seconds: [6, 9, 12, 15], tickets: [1, 2], rewards: ["early5", "top", "mid", "bot", "corners", "star", "full", "full2 (two tickets)"], winners_per_reward: "1 to 5", break_kinds: ["file", "youtube", "slides", "speech", "lucky (1, 3, 5 or 10 winners)"], rounds: "1 to 5" },
   you_can: [
@@ -235,6 +285,13 @@ export const AI_MANIFEST = {
     { do: "Ask the organizer to pause, resume or stop (they approve in their console)", call: "POST /api/z/{id}/control/request {action: pause|resume|stop, note}" },
     { do: "Ask for ALL participant names and mobile numbers of this engagement to be deleted (nothing is deleted until the organizer confirms in their console)", call: "POST /api/z/{id}/control/request {action: 'erase', note}" },
     { do: "Read the current pause status", call: "GET /api/z/{id}/control" },
+    { do: "Send a message to every guest's phone and the big screen (160 characters; empty text clears it; once published)", call: "POST /api/z/{id}/announce {text}" },
+    { do: "See the winners to hand rewards to (mobile numbers partly hidden) and tick a reward as given", call: "GET /api/z/{id}/prizes ; POST /api/z/{id}/prizegiven {round, pattern, ordinal, seat, given}" },
+    { do: "Change of phone: let one person move their ticket to a new phone", call: "POST /api/z/{id}/unbind {phone}" },
+    { do: "Flag a seat as organizer, host or co-host", call: "POST /api/z/{id}/mark {phone, role: organizer|host|co-host|none}" },
+    { do: "Invitations: settle how many people each guest may invite and which kinds of guests, before the start", call: "PATCH /api/z/{id}/settings {invites: {on, per: 1-10, cats}}" },
+    { do: "Create a co-host key (watch, announce, tick rewards as given; up to 5)", call: "POST /api/org/host -> {hostKey, manualUrl}" },
+    { do: "Read the audit trail of AI calls, when the game ends, and whether the report is ready (the report address itself goes only to the organizer)", call: "GET /api/org/ai/audit ; GET /api/z/{id}/life ; GET /api/z/{id}/reportlink" },
     { do: "Suggest a feature, improvement or report we should build (shared with every organizer's AI, reviewed by us)", call: "POST /api/z/suggestions {kind: feature|improvement|report|bug|other, title, body}" },
     { do: "See everyone's suggestions and what we decided, and add your support to one", call: "GET /api/z/suggestions ; POST /api/z/suggestions/{id}/vote" },
   ],
@@ -249,12 +306,13 @@ export const AI_MANIFEST = {
   ],
   suggestions_rules: "Describe the need and the benefit, not code. Never include names, phone numbers, e-mail addresses or anything about specific people. Suggestions are visible to all organizers' AI assistants without saying who wrote them. We review them and mark each one new, under_review, planned, shipped or declined.",
   you_cannot: [
+    "Pay. Payment is always the organizer's own act on the payment page (payUrl in the summary).",
+    "Publish: the organizer confirms their own e-mail and mobile number and presses Publish. You prepare everything and hand over consoleUrl.",
     "Choose, publish, change or remove winners, numbers, tickets or anyone's reward (nobody can, not even the organizer: the software decides, and a result stands only when several different phones report exactly the same winners)",
-    "Erase participant data (the organizer does that)",
-    "Sign or send a pause yourself (only the organizer's own browser holds that key)",
-    "Change the rules, the reward patterns, the numbers or anyone's ticket",
+    "Erase participant data (you may ASK; the organizer confirms)",
+    "Pause, resume or stop a running game (you may ASK; only the organizer's own browser holds that signing key)",
+    "Create or retire the organizer's own sign-in keys, change their e-mail or delete the account",
     "Write or run code on the platform",
-    "Send messages to the guests' phones (the organizer or their co-host does that)",
   ],
 };
 
@@ -262,7 +320,7 @@ export const AI_MANIFEST = {
 async function route(req: Request, env: Env, now: number): Promise<Response> {
   const a = await authOf(req, env);
   const r = await route0(req, env, now, a);
-  if (a.kind === "ai" && a.org) {
+  if (a.org && (a.kind === "ai" || (a.kind === "host" && req.headers.get("x-ct-link") === "1"))) { // a co-host's calls are recorded too, when they come through a work link
     const presented = req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
     await auditAi(env.DB, a.org, req, (await sha("key|" + presented)).slice(0, 10), r.status, now);
   }
@@ -383,17 +441,17 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     return json({ ok: true, revoked: r.meta?.changes ?? 0 });
   }
   if (req.method === "GET" && p === "/api/whoami") return a.kind ? json({ kind: a.kind }) : deny(a); // the console uses this to show the right screen
-  if (req.method === "POST" && p === "/api/org/host") { // the organizer invites a co-host: a key that can watch and send messages to everyone, and nothing else
-    if (a.kind !== "master" || !a.org) return deny(a);
+  if (req.method === "POST" && p === "/api/org/host") { // the organizer (or their AI) invites a co-host: a key that can watch, send messages to everyone and tick prizes, and nothing else
+    if ((a.kind !== "master" && a.kind !== "ai") || !a.org) return deny(a);
     const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM organizer_key WHERE org=? AND kind='host' AND revoked=0").bind(a.org).first<{ c: number }>())?.c ?? 0;
     if (n >= MAX_HOSTS) return json({ error: `You can have up to ${MAX_HOSTS} co-hosts at a time. Retire one first.` }, 409);
     if (!(await spend(env, now, 2))) return BUSY();
     const key = "cth_" + randHex(24);
     await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), a.org, "host", now).run();
-    return json({ ok: true, hostKey: key });
+    return json({ ok: true, hostKey: key, manualUrl: `${(env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin}/ai/${key}` });
   }
-  if (req.method === "GET" && p === "/api/org/ai/audit") { // the organizer sees every call their external AI made; we can see all
-    if (a.kind !== "master" && !a.plat) return deny(a);
+  if (req.method === "GET" && p === "/api/org/ai/audit") { // the organizer sees every call their external AI made; we can see all (the AI may read its own trail)
+    if (a.kind !== "master" && a.kind !== "ai" && !a.plat) return deny(a);
     return listAiAudit(env.DB, a.plat ? null : a.org, json);
   }
   if (req.method === "POST" && p === "/api/org/ai/revoke") {
@@ -682,8 +740,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const rows = (await env.DB.prepare("SELECT seq, pid, COALESCE(jr,0) AS jr FROM seat WHERE eid=? AND seq>? ORDER BY seq LIMIT 2000").bind(eid, after).all<{ seq: number; pid: string; jr: number }>()).results ?? [];
     return json({ ready: true, seats: rows.map((r) => [r.seq, r.pid, r.jr]), upto: rows.length ? rows[rows.length - 1]!.seq : after });
   }
-  if (action === "unbind" && req.method === "POST") { // the organizer lets one person move their ticket to a new phone: the first device that comes back keeps it
-    if (!can(a, e, true)) return deny(a);
+  if (action === "unbind" && req.method === "POST") { // the organizer (or their AI) lets one person move their ticket to a new phone: the first device that comes back keeps it
+    if (!canAi(a, e)) return deny(a);
     const b = await body(req);
     const ph = await phoneHash(b?.phone);
     if (!ph) return json({ error: "Enter a valid mobile number." }, 400);
@@ -717,8 +775,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (action === "info" && req.method === "GET") return json({ ...(isDraft ? { draft: true } : {}), ...(unpaid && !isDraft ? { ...(can(a, e) ? { unpaid: true } : {}), locked } : {}), startMs: roundMs(e.start_round), cap: e.cap, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), ...pub(e) });
 
   // everything below is for the organizer (or their AI, where allowed)
-  if (action === "announce" && req.method === "POST") { // a message to every phone and the big screen. Organizer or co-host only: never the AI, never a stranger
-    if (!can(a, e) || a.kind === "ai") return deny(a);
+  if (action === "announce" && req.method === "POST") { // a message to every phone and the big screen. Organizer, their AI or a co-host; never a stranger
+    if (!can(a, e)) return deny(a);
     if (isDraft) return json({ error: "Publish the engagement first. Nobody can see a draft." }, 400);
     const b = await body(req, 2_048);
     const text = typeof b?.text === "string" ? b.text.replace(/[<>`]/g, "").replace(/\s+/g, " ").trim().slice(0, 160) : null;
@@ -737,7 +795,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const c = cfgOf(e), origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
     return json({ id: e.id, status: isDraft ? "draft" : unpaid ? (locked ? "published, NOT PAID, held because the start time passed" : "published, payment due before the start") : "published and paid",
       startsAtIST: istTime(roundMs(e.start_round)), startMs: roundMs(e.start_round), startRound: e.start_round, callSeconds: e.call_seconds, limit: e.cap, closed: !!e.closed,
-      tickets: c.tickets, rounds: c.rounds, rewards: c.rewards, breaks: c.breaks, participants: n,
+      tickets: c.tickets, rounds: c.rounds, rewards: c.rewards, breaks: c.breaks, invites: c.invites, participants: n,
       paid: !unpaid, ...(unpaid ? { pack: PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null, priceInrIncludingGst: PACKS.find((x) => x[0] >= e.cap) ? price(PACKS.find((x) => x[0] >= e.cap)![0], "INR").total : null, payBefore: istTime(roundMs(e.start_round)) } : { pack: e.pack }),
       gameMinutes: Math.round((90 * e.call_seconds * c.rounds + c.breaks.reduce((t: number, b: any) => t + b.seconds, 0) + (c.rounds - 1) * 90) / 60),
       consoleUrl: `${origin}/zc.html?e=${e.id}`, ...(isDraft ? {} : { shareUrl: `${origin}/z.html?e=${e.id}` }), ...(unpaid && !isDraft ? { payUrl: `${origin}/pay.html?e=${e.id}` } : {}) });
@@ -792,7 +850,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     return json({ names: out });
   }
   if (action === "mark" && req.method === "POST") { // the organizer says which seat is the organizer's, a host's or a co-host's: they may play, are flagged in the report, stay out of lucky draws and may invite without a limit
-    if (!can(a, e, true)) return deny(a);
+    if (!canAi(a, e)) return deny(a);
     const b = await body(req);
     const ph = await phoneHash(b?.phone);
     const role = b?.role === "none" ? null : ["organizer", "host", "co-host"].includes(b?.role) ? b.role : undefined;
@@ -819,17 +877,19 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (action === "over" && req.method === "POST") return acceptOver(env, e, eid!, await body(req), now, json, spend);
   if (action === "settle" && req.method === "POST") return json({ error: "Winners are decided by the software, from the public numbers, when several phones agree. Nobody can post or change them." }, 403);
   if (action === "reportlink" && req.method === "GET") { // the organizer's / co-host's way to the report page (the PDF is made on their own device)
-    if (!can(a, e) || a.kind === "ai") return deny(a);
+    if (!can(a, e)) return deny(a);
     const life = await env.DB.prepare("SELECT report_ms FROM life WHERE eid=?").bind(eid).first<{ report_ms: number | null }>();
     const st = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`rpt/${eid}`).first<{ v: string }>();
     const stage = st ? (JSON.parse(st.v).stage as string) : null;
-    return json({ ready: stage === "send" || stage === "done", sent: !!life?.report_ms, url: stage === "send" || stage === "done" ? await reportLink(env as any, eid!) : null });
+    const ready = stage === "send" || stage === "done";
+    if (a.kind === "ai") return json({ ready, sent: !!life?.report_ms, url: null, note: "The report holds every participant's name and number, so its address goes only to the organizer (it is e-mailed to them). Tell them to open their e-mail or their console." }); // the address is a key to personal data: it never travels through an outside AI
+    return json({ ready, sent: !!life?.report_ms, url: ready ? await reportLink(env as any, eid!) : null });
   }
   if (action === "vote" && req.method === "POST") return acceptVotes(env as any, e, eid!, await body(req, 65_536), now, json, spend);
   if (action === "confirm" && req.method === "POST") return confirmPrize(env as any, eid!, await body(req), now, json, spend);
   if (action === "myprizes" && req.method === "GET") return myPrizes(env as any, eid!, url, json);
-  if (action === "prizes" && req.method === "GET") { if (!can(a, e) || a.kind === "ai") return deny(a); return listPrizes(env as any, eid!, json); }
-  if (action === "prizegiven" && req.method === "POST") { if (!can(a, e) || a.kind === "ai") return deny(a); return markGiven(env, eid!, await body(req), a.kind, now, json, spend); }
+  if (action === "prizes" && req.method === "GET") { if (!can(a, e)) return deny(a); return listPrizes(env as any, eid!, json, a.kind === "ai"); }
+  if (action === "prizegiven" && req.method === "POST") { if (!can(a, e)) return deny(a); return markGiven(env, eid!, await body(req), a.kind, now, json, spend); }
   if (action === "erase" && req.method === "POST") { // right to erasure: every name, number, seat and invite of this engagement's people. The winners record and the organizer's own details stay, as the report says.
     if (!can(a, e, true)) return deny(a);
     const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
@@ -897,7 +957,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
         try { await env.CONTROL_R2?.delete(controlKey(eid!)); } catch { /* the object expires with its engagement anyway */ }
       }
     }
-    return json({ ok: true, startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed, tickets: vc.cfg.tickets, rewards: vc.cfg.rewards, breaks: vc.cfg.breaks, rounds: vc.cfg.rounds });
+    return json({ ok: true, startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed, tickets: vc.cfg.tickets, rewards: vc.cfg.rewards, breaks: vc.cfg.breaks, rounds: vc.cfg.rounds, invites: vc.cfg.invites });
   }
   return json({ error: "Not found" }, 404);
 }

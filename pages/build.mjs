@@ -16,5 +16,5 @@ const PAYHDR = `
   X-Frame-Options: DENY
 `;
 writeFileSync(join(OUT, "_headers"), `/pay.html${PAYHDR}/pay${PAYHDR}/z.html\n  Content-Security-Policy: ${CSP.replace(/ frame-src[^;]*;/, " frame-src https://www.youtube-nocookie.com;").replace("media-src 'self' blob:;", "media-src 'self' blob: https:;")}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  X-Frame-Options: DENY\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()\n/zc.html\n  Content-Security-Policy: ${CSP.replace(/ frame-src[^;]*;/, "")}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  X-Frame-Options: DENY\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()\n/*.js\n  Cache-Control: no-cache\n/img/*\n  Cache-Control: public, max-age=604800\n/pay.html\n  X-Robots-Tag: noindex\n/z.html\n  X-Robots-Tag: noindex\n/zc.html\n  X-Robots-Tag: noindex\n/big.html\n  X-Robots-Tag: noindex\n/partner.html\n  X-Robots-Tag: noindex\n/*.css\n  Cache-Control: no-cache\n/fonts/*\n  Cache-Control: public, max-age=31536000, immutable\n`);
-writeFileSync(join(OUT, "_routes.json"), JSON.stringify({ version: 1, include: ["/api/*"], exclude: [] }));
+writeFileSync(join(OUT, "_routes.json"), JSON.stringify({ version: 1, include: ["/api/*", "/ai/*"], exclude: [] }));
 console.log("pages/public ready");

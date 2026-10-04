@@ -366,7 +366,7 @@ describe("organizers, their AI assistant, and what the AI may not do", () => {
     expect((await call("POST", "/api/purge", {}, asA())).status).toBe(403);
     expect(raw.query("SELECT COUNT(*) c FROM settled").get()).toEqual({ c: 0 });
   });
-  test("every call the AI makes is written to an audit trail with where it came from; the organizer reads it, the AI and strangers cannot", async () => {
+  test("every call the AI makes is written to an audit trail with where it came from; the organizer and the AI itself read it, strangers cannot", async () => {
     await call("GET", "/api/z/MINE1/summary", undefined, { ...asA(), "cf-connecting-ip": "203.0.113.9", "user-agent": "ChatGPT-User/1.0", "cf-ipcountry": "US" });
     await call("POST", "/api/z/MINE1/erase", {}, asA());
     await call("GET", "/api/z/MINE1/summary", undefined, asM()); // the organizer's own calls are not part of the AI trail
@@ -374,7 +374,7 @@ describe("organizers, their AI assistant, and what the AI may not do", () => {
     expect(t.trail).toHaveLength(2);
     expect(t.trail.find((x: any) => x.path.endsWith("/summary"))).toMatchObject({ ip: "203.0.113.9", ua: "ChatGPT-User/1.0", country: "US", method: "GET", status: 200, eid: "MINE1" });
     expect(t.trail.find((x: any) => x.path.endsWith("/erase")).status).toBe(403);
-    expect((await call("GET", "/api/org/ai/audit", undefined, asA())).status).toBe(403);
+    expect((await call("GET", "/api/org/ai/audit", undefined, asA())).status).toBe(200); // the AI may read its own trail
     expect((await call("GET", "/api/org/ai/audit")).status).toBe(403);
   });
   test("the refusal explains itself plainly, and the manifest says what the AI cannot do", async () => {

@@ -165,3 +165,14 @@ Run: `bun test packages apps tools/control-worker` gives **479 passing, 0 failin
 | UC-100 | Organizer / co-host ticks "prize given" | Date kept; the report shows it |
 | UC-101 | Report | One e-mailed link; the PDF is laid out in the organizer's browser; link dead after the 22-hour deletion; reminder 6 hours before if never opened |
 | UC-102 | External AI works | Every call is written to the audit trail (time, key, request, status, network address, program, country); only the organizer (and we) can read it |
+
+## L. The short AI work link `/ai/<key>` (2026-10-05)
+| ID | Scenario | Expected |
+|---|---|---|
+| UC-103 | Organizer pastes the two-line message into a chat AI | The link opens the full manual as plain text (or `?format=json`); every address in it is absolute and carries the key; the key is nowhere else in the message |
+| UC-104 | AI that cannot set headers or POST | Calls `/ai/<key>/<api path>`; same answers as `/api/<path>` with the key in `x-organizer`; the audit trail records the `/api` path and the real method, never the key |
+| UC-105 | Browse-only AI performs an action | `GET .../path?_method=POST\|PATCH&_body=<URL-encoded JSON>` (body at most 6 KB, rosters about 20 people at a time); rejected on the normal `/api` routes, for other methods and when too long |
+| UC-106 | Unknown, mistyped, revoked, sign-in (`ctk_`) or platform key in an address | Identical plain `404 Not found.`; nothing recorded; the key is never echoed |
+| UC-107 | Organizer's AI does what an organizer does in the console | Announce to guests, invitation policy, mark seats, change of phone, prize-given ticks, prizes (mobile numbers cut to the last two digits), results/life/claims, create co-host key, read its own audit trail |
+| UC-108 | Organizer's AI tries payment, publish, erase, pause/stop, key management, winners | Refused or hand-over only (publish returns the console link; erase/pause are requests the organizer approves); the report address is never given to the AI |
+| UC-109 | Co-host key (`cth_`) through the link | A narrower manual; may watch, announce and tick prizes; everything else 403; its calls are audited too |

@@ -27,7 +27,7 @@ export function startLocal(o: { port?: number; secret?: string; dbFile?: string;
     port: o.port ?? Number(process.env.PORT ?? 8788),
     async fetch(req) {
       const u = new URL(req.url);
-      if (u.pathname.startsWith("/api/")) return handle(req, env);
+      if (u.pathname.startsWith("/api/") || u.pathname.startsWith("/ai/")) return handle(req, env);
       const rel = u.pathname === "/" ? "/index.html" : u.pathname;
       if (rel.includes("..")) return new Response("Not found", { status: 404 });
       const f = Bun.file(join(webDir, rel));

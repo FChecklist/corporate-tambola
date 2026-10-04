@@ -110,13 +110,16 @@ export async function myPrizes(env: Env & PiiEnv, eid: string, url: URL, json: J
 }
 
 /** The organizer's / co-host's list of winners with the details they confirmed, whether anything was changed after the game, and whether the prize has been given. */
-export async function listPrizes(env: Env & PiiEnv, eid: string, json: Json): Promise<Response> {
+/** `outside` = an outside AI is asking: mobile numbers are cut to their last two digits and the change history is left out, so a full number never travels through a chat. */
+export async function listPrizes(env: Env & PiiEnv, eid: string, json: Json, outside = false): Promise<Response> {
   const rows = (await env.DB.prepare("SELECT round, pattern, ordinal, seat, pii, orig, trail, confirmed_ms, given_ms, given_by FROM prize WHERE eid=? ORDER BY round, pattern, ordinal, seat LIMIT 400").bind(eid).all<any>()).results ?? [];
   const out = [];
   for (const r of rows) {
     const cur = await openPii(env, r.pii), orig = await openPii(env, r.orig);
     let trail: any[] = []; try { trail = JSON.parse((await openText(env, r.trail)) ?? "[]"); } catch { /* none */ }
-    out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, name: cur?.name ?? "", phone: cur?.phone ?? "", confirmed: !!r.confirmed_ms, confirmedMs: r.confirmed_ms ?? null,
+    const hide = (ph: string | undefined) => (outside ? (ph ? "XXXXXXXX" + ph.slice(-2) : "") : ph ?? "");
+    if (outside) out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, name: cur?.name ?? "", phone: hide(cur?.phone), confirmed: !!r.confirmed_ms, changed: trail.length > 0, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null });
+    else out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, name: cur?.name ?? "", phone: cur?.phone ?? "", confirmed: !!r.confirmed_ms, confirmedMs: r.confirmed_ms ?? null,
       changed: trail.length > 0, joinedWithName: orig?.name ?? "", joinedWithPhone: orig?.phone ?? "", trail, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null });
   }
   return json({ prizes: out });
@@ -126,7 +129,7 @@ export async function listPrizes(env: Env & PiiEnv, eid: string, json: Json): Pr
 export async function markGiven(env: Env, eid: string, b: any, kind: string | null, now: number, json: Json, spend: Spend): Promise<Response> {
   if (!b || !Number.isInteger(b.round) || !Number.isInteger(b.ordinal) || !Number.isInteger(b.seat) || typeof b.pattern !== "string" || typeof b.given !== "boolean") return json({ error: "Bad request." }, 400);
   if (!(await spend(env, now))) return json({ error: "Busy day. Please try again after midnight UTC." }, 503);
-  const r = await env.DB.prepare("UPDATE prize SET given_ms=?, given_by=? WHERE eid=? AND round=? AND pattern=? AND ordinal=? AND seat=?").bind(b.given ? now : null, b.given ? (kind === "host" ? "co-host" : "organizer") : null, eid, b.round, b.pattern, b.ordinal, b.seat).run();
+  const r = await env.DB.prepare("UPDATE prize SET given_ms=?, given_by=? WHERE eid=? AND round=? AND pattern=? AND ordinal=? AND seat=?").bind(b.given ? now : null, b.given ? (kind === "host" ? "co-host" : kind === "ai" ? "organizer's AI" : "organizer") : null, eid, b.round, b.pattern, b.ordinal, b.seat).run();
   return (r.meta?.changes ?? 0) > 0 ? json({ ok: true, givenMs: b.given ? now : null }) : json({ error: "No such reward." }, 404);
 }
 

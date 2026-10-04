@@ -496,7 +496,7 @@ describe("F. exceptions: what can go wrong", () => {
 describe("G. the organizer's AI", () => {
   test("UC-60 the manifest teaches the AI the conversation, the packs, the lucky draw, one reward line per winner, and the payment rules", async () => {
     const m = await j(await call("GET", "/api/z/ai-manifest"));
-    expect(m.conversation.length).toBe(11); expect(m.packs.length).toBeGreaterThan(5);
+    expect(m.conversation.length).toBe(12); expect(m.packs.length).toBeGreaterThan(5);
     const text = JSON.stringify(m);
     expect(text).toMatch(/lucky/); expect(text).toMatch(/winners\?: 1\|3\|5\|10/); expect(text).toMatch(/ONE winner of ONE house/); expect(text).toMatch(/GET \/api\/z\/\{id\}\/summary/);
     expect(m.payment_faq.join(" ")).toMatch(/late/i); expect(m.payment_faq.join(" ")).toMatch(/nothing is owed|no penalty/i); expect(m.payment_faq.join(" ")).toMatch(/limit does not have to match/i);
@@ -609,12 +609,12 @@ describe("I. announcements, co-hosts and scratch cards", () => {
     expect((await ann("ANN-1", o.h, "", T + 20_000)).status).toBe(200);
     expect((await ctl("ANN-1", T + 20_000)).ann).toBeUndefined();
   });
-  test("UC-80 messages are cleaned and cut, rate limited, not for drafts, and not for the AI or a stranger", async () => {
+  test("UC-80 messages are cleaned and cut, rate limited, not for drafts, and not for a stranger (the organizer's AI may send them)", async () => {
     const o = await organizer(); await live("ANN-2", o);
     await ann("ANN-2", o.h, "<b>Hello</b>   `team` " + "x".repeat(400));
     const t = (await ctl("ANN-2")).ann.text as string; expect(t).not.toMatch(/[<>`]/); expect(t.length).toBeLessThanOrEqual(160);
     expect((await ann("ANN-2", o.h, "again", T + 1000)).status).toBe(429);
-    expect((await ann("ANN-2", o.ai, "ai says hi", T + 60_000)).status).toBe(403);
+    expect((await ann("ANN-2", o.ai, "ai says hi", T + 60_000)).status).toBe(200);
     expect((await call("POST", "/api/z/ANN-2/announce", { text: "hi" }, {}, T + 60_000)).status).toBe(403);
     expect((await call("POST", "/api/z/ANN-2/announce", { notext: 1 }, o.h, T + 60_000)).status).toBe(400);
     await call("POST", "/api/z", eng("ANN-DRAFT"), o.h);

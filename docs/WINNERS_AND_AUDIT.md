@@ -22,7 +22,7 @@ A phone gets one ticket per engagement (hash of a random device id kept on the p
 One e-mail with a link. `/report.html` fetches `GET /api/report/{id}?k=...&part=base|people` and lays the PDF out in the organizer's browser (their RAM, not our server). Valid until the personal data is deleted.
 
 ## Audit trail of the external AI
-Every call made with an AI key is written to `ai_audit` (time, key id, method and path, status, network address, program, country). The organizer reads it in the console ("What your AI assistant did"); we can read all of it (`GET /api/org/ai/audit`). Kept 365 days.
+Every call made with an AI key is written to `ai_audit` (time, key id, method and path, status, network address, program, country). The organizer reads it in the console ("What your AI assistant did"); we can read all of it (`GET /api/org/ai/audit`). Kept 365 days. The short work link (`/ai/<key>`, see `docs/AI_LINK.md`) goes through the same trail: the manual read is one row (`GET /ai/manual`), every call is recorded with its `/api` path and real method, and a co-host key's calls through a link are recorded too. The AI may read its own trail. Widening what the AI may do (announce, prize-given ticks, change of phone, seat marks, co-host keys) does not touch this document's guarantees: numbers and winners are still decided only by the software, and the AI still cannot pay, publish, erase, pause or settle.
 
 ## Honest limits
 * The quorum protects against one or a few cheating phones. If more than the quorum of cheating phones with different numbers agree on a false result, it would be accepted. Joining needs a mobile number, one ticket per phone, and the organizer sees who joined.
