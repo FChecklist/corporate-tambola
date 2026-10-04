@@ -152,3 +152,16 @@ Run: `bun test packages apps tools/control-worker` gives **479 passing, 0 failin
 - Online payment itself is not testable end to end until Razorpay keys exist. Everything around it (order, signature check, webhook, late payment, tampering, duplicates) is tested with a stand-in gateway.
 - Phones check for the held state about every 6 to 9 seconds, so a late hold or a late release can take up to about 12 seconds to reach a phone.
 - Mail is a nudge only: nothing depends on a mail arriving.
+
+## K. Winners by the software, one ticket per phone, prize hand-over, report link, AI audit (2026-10-04)
+| ID | Scenario | Expected |
+|---|---|---|
+| UC-94 | Organizer, co-host, AI or a stranger posts a result (`/settle`) | Refused (403); nothing stored |
+| UC-95 | One phone reports a winner | Not accepted; accepted only when `quorumFor(people)` different phones report exactly the same winners |
+| UC-96 | Phones disagree, or a minority reports a made-up result | The agreed result stands; a made-up one is ignored; an accepted result is final |
+| UC-97 | Lucky draw | Every phone works it out from the public randomness and the seat list; accepted by the same quorum |
+| UC-98 | A second mobile number on the same phone | Refused (`device-used`); other phones still join; invitations (max 4 per person) still give each invitee their own ticket on their own phone |
+| UC-99 | A winner confirms name and mobile after the game | Only the phone holding the ticket can; a change keeps the original and an audit trail; organizer and co-host see both |
+| UC-100 | Organizer / co-host ticks "prize given" | Date kept; the report shows it |
+| UC-101 | Report | One e-mailed link; the PDF is laid out in the organizer's browser; link dead after the 22-hour deletion; reminder 6 hours before if never opened |
+| UC-102 | External AI works | Every call is written to the audit trail (time, key, request, status, network address, program, country); only the organizer (and we) can read it |
