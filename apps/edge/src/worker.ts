@@ -14,6 +14,7 @@
 
 import { GRACE_ROUNDS, defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
 import { openPii, openText, sealPii, sealText } from "./pii";
+import { TERMS_VERSION } from "./brand";
 import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, newUseAlertMail, signInMail } from "./mails";
 import { acceptOver, acceptWon, endBoundMs, eraseEverything, erasePersonal, fullDeleteAt, lifecycleTick, personalDeleteAt, recordWinners, reportApi, reportLink } from "./lifecycle";
 import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
@@ -100,6 +101,8 @@ export const SCHEMA: string[] = [
   `ALTER TABLE organizer_key ADD COLUMN expires_ms INTEGER`,
   // the one-click sign-in link in the sign-in e-mail: only its hash is kept, single use, same expiry as the 6-digit code
   `ALTER TABLE login_code ADD COLUMN link_hash TEXT`,
+  // the version of the Terms an organizer accepted by continuing (create engagement, sign in)
+  `CREATE TABLE IF NOT EXISTS organizer_terms (org TEXT NOT NULL, version TEXT NOT NULL, at_ms INTEGER NOT NULL, via TEXT NOT NULL, PRIMARY KEY (org, version))`,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
@@ -157,6 +160,10 @@ const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers
 /** Phones load the app from Pages and call this Worker from another origin, so every answer carries open CORS (no cookies are used anywhere). */
 /** The message an organizer pastes into any AI chat: two short lines and the short link (/ai/<key>), which opens the complete manual. The key is only inside the link. The AI key cannot pay, publish, erase, pause or settle. */
 export const aiMessage = (origin: string, key: string) => aiPaste(origin, key);
+/** Records that this organizer continued under the current Terms (no tick box: continuing is the acceptance). One row per organizer and version. */
+async function recordTerms(env: Env, org: string, now: number, via: string): Promise<void> {
+  try { await env.DB.prepare("INSERT OR IGNORE INTO organizer_terms(org,version,at_ms,via) VALUES(?,?,?,?)").bind(org, TERMS_VERSION, now, via).run(); } catch { /* never block a request on this */ }
+}
 /** The organizer's e-mail address for the dedicated AI-link mails (the one used at sign-up), kept sealed; older accounts fall back to the address confirmed at their latest publish. null when unknown. */
 async function orgEmail(env: Env, org: string): Promise<string | null> {
   try {
@@ -431,6 +438,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`aikey/${org}`, await sealText(env as any, aiKey)), // so the signed-in organizer can read their lasting link again (never mailed)
       env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(ipk, String(used + 1), String(used + 1)),
     ]);
+    await recordTerms(env, org, now, "start");
     const origin0 = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, startMsg = aiMessage(origin0, aiKey); // aiKey is the lasting key, shown only in the console
     await mailTempLink(env, req, org, "ai", "start", now, email); // the dedicated mail carries a separate key that expires in 24 hours
     return json({ ok: true, token, aiKey, aiMessage: startMsg });
@@ -471,6 +479,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!acct || !(await spend(env, now, 2))) return acct ? BUSY() : bad();
     const used = await env.DB.prepare("DELETE FROM login_code WHERE link_hash=? AND expires_ms>=?").bind(lh, now).run(); // single use: the first POST wins, the code dies with it
     if ((used.meta?.changes ?? 0) !== 1) return bad();
+    await recordTerms(env, acct.org, now, "signin-link");
     const token = "ctk_" + randHex(24); // the same kind of session key the 6-digit code creates
     await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + token), acct.org, "master", now).run();
     return json({ ok: true, token });
@@ -487,6 +496,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (row.code_hash !== (await sha("code|" + eh + "|" + code))) { await env.DB.prepare("UPDATE login_code SET attempts=attempts+1 WHERE email_hash=?").bind(eh).run(); return bad(); }
     const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
     if (!acct || !(await spend(env, now, 2))) return acct ? BUSY() : bad();
+    await recordTerms(env, acct.org, now, "signin-code");
     const token = "ctk_" + randHex(24); // a fresh organizer key; the old ones keep working until the organizer retires them
     await env.DB.batch([
       env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + token), acct.org, "master", now),
@@ -702,6 +712,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!(await spend(env, now, 2))) return BUSY();
     await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.closed ? 1 : 0, draft ? 0 : ent?.pack ?? b.cap, vc.cfg.tickets, cfgJson(vc.cfg)).run();
     if (ent) await env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(b.id, ent.id).run();
+    if (a.org) await recordTerms(env, a.org, now, "engagement");
     return json({ ok: true, draft, openUrl: `${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html?e=${b.id}` });
   }
   if (req.method === "GET" && p === "/api/history") {

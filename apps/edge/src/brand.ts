@@ -2,6 +2,9 @@
 // Every e-mail the service sends goes through sendMail / sendReportMail (pay.ts), which adds this footer and wraps plain mails in this header, so a mail without the brand cannot go out.
 // The name is always exactly "Corporate Tambola". The palette is the site's (wine, gold, ivory).
 
+/** The version of the Terms in force (the date at the top of /terms.html). Stored with the organizer when they continue. */
+export const TERMS_VERSION = "2026-10-05";
+
 export const BRAND = {
   name: "Corporate Tambola",
   tagline: "Live engagements for companies",

@@ -341,3 +341,5 @@ html[data-theme] .chip.on{background:#fff}
 /* small, quiet Privacy Policy link under forms that collect a number or an email */
 .spriv{margin:8px 0 0;text-align:center;font-size:11px;line-height:1.3;font-weight:400}.spriv a{color:var(--muted,#6b7385);font-weight:400;text-decoration:underline}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+.spriv.accept{font-size:11px}

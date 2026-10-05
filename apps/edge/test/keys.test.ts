@@ -11,7 +11,7 @@ describe("strict keys", () => {
   test("strict mode with every secret set: the service answers normally", async () => {
     const env = mk({ STRICT_KEYS: "1", ...ALL }); expect(missingKeys(env)).toEqual([]); expect((await hit(env)).status).toBe(403);
   });
-  for (const k of Object.keys(ALL)) test(`strict mode without ${k}: every request is refused with 503 and nothing else is said`, async () => {
+  for (const k of Object.keys(ALL) as (keyof typeof ALL)[]) test(`strict mode without ${k}: every request is refused with 503 and nothing else is said`, async () => {
     const { [k]: _gone, ...rest } = ALL; const env = mk({ STRICT_KEYS: "1", ...rest });
     expect(missingKeys(env)).toEqual([k]); const r = await hit(env); expect(r.status).toBe(503); expect(await r.text()).not.toContain(k);
   });

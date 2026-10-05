@@ -1,0 +1,129 @@
+// Builds the short document pages (Terms, Data processing terms, Sub-processors, Partner terms, Organizer guide) in the same style as legal.html.
+// Run: node tools/make-legal-pages.mjs   (writes apps/web/public/*.html; commit the result). The pages are plain static files: no new user flow.
+// The wording is a draft for lawyer review (see docs/compliance/DRAFTS_README.md); the public text carries no "draft" mark by owner decision.
+import { readFileSync, writeFileSync } from "node:fs";
+
+export const TERMS_VERSION = "2026-10-05";
+const PUB = new URL("../apps/web/public/", import.meta.url);
+const tpl = readFileSync(new URL("legal.html", PUB), "utf8");
+const nl = tpl.includes("\r\n") ? "\r\n" : "\n";
+const head = tpl.slice(0, tpl.indexOf('<main class="legal">'));
+const foot = tpl.slice(tpl.indexOf("</main>"));
+const FOOTNAV = '<nav class="fl" aria-label="Legal"><a href="/legal.html#rules">Rules</a><a href="/legal.html#privacy">Privacy</a><a href="/legal.html#disclaimer">Disclaimer</a><a href="/terms.html">Terms</a><a href="/dpa.html">Data processing</a><a href="/subprocessors.html">Sub-processors</a><a href="/organizer-guide.html">Organizer guide</a><a href="/partner-terms.html">Partner terms</a><a href="/partner.html">Refer &amp; earn</a><a href="/">Home</a></nav>';
+const newFoot = foot.replace(/<nav class="fl"[\s\S]*?<\/nav>/, FOOTNAV);
+export const footNav = FOOTNAV;
+const e = (s) => s.replace(/&(?!rsquo;|amp;)/g, "&amp;");
+
+const PAGES = {
+  "terms.html": { title: "Terms", h1: "Terms", lead: `Short and plain. Version ${TERMS_VERSION}.`, sections: [
+    ["organizer", "For organizers", [
+      "You run the game. We provide the software only.",
+      "You must be 18 or older, or act for a company.",
+      "You must not charge any fee, price, donation or purchase for taking part. Not directly, not indirectly.",
+      "Taking part must be voluntary. Tell your people what you do with their details.",
+      "You provide the prizes and hand them over. We never hold prizes or money for them.",
+      "You make sure the game is allowed under the law where you and your players are.",
+      "You are responsible for tax on prizes you give.",
+      "Do not register a child&rsquo;s number. See Players.",
+      "If you break these terms, we may stop your game.",
+    ]],
+    ["players", "For players", [
+      "Players are 18 or older.",
+      "A child may only watch, on a parent&rsquo;s or guardian&rsquo;s own ticket and phone, with that adult&rsquo;s permission.",
+      "Playing is free and voluntary. One ticket per phone.",
+      "The software decides every winner. Results are final.",
+    ]],
+    ["service", "The service", [
+      "The software is provided as it is. We do not promise it will never fail.",
+      "We are not responsible for prize handover, or for disputes between an organizer and players.",
+      "Our liability is limited to the fee you paid for the engagement in question.",
+    ]],
+    ["data", "Data", [
+      "Your use of Corporate Tambola is also covered by the <a href=\"/legal.html#privacy\">Privacy &amp; Data Policy</a>.",
+      "For the details you enter about your players, you are in charge and we are your processor. See the <a href=\"/dpa.html\">Data processing terms</a>.",
+    ]],
+    ["changes", "Changes and contact", [
+      "We may update these terms. The version date is at the top.",
+      "Questions: <a href=\"mailto:raajat.agarwal@gmail.com\">raajat.agarwal@gmail.com</a>.",
+    ]],
+  ] },
+  "dpa.html": { title: "Data processing terms", h1: "Data processing terms", lead: "For organizers. One page.", sections: [
+    ["roles", "Roles", ["You are in charge of the players&rsquo; details (the controller, or data fiduciary). We process them for you (the processor).", "We act only on your instructions: run your game and send you the report."]],
+    ["data", "What we process", ["Names and mobile numbers of players, and, if you switch invitations on, who invited whom and what kind of guest.", "Winners&rsquo; prize hand-over details, which winners confirm on their own phone."]],
+    ["security", "Security", ["Names and numbers are sealed in our database and are also encrypted in transit and at rest.", "Players never see each other&rsquo;s data.", "Access to your game is limited to you, your co-hosts and your AI assistant, as you choose."]],
+    ["delete", "Deletion", ["All player data is deleted within 24 hours after the game ends. Backups clear within 7 days.", "Winners&rsquo; prize details and the winners record stay 365 days, then are deleted automatically.", "You can delete a game&rsquo;s player data any time from your console."]],
+    ["help", "Helping you", ["We help you answer a player&rsquo;s request to see or delete their data. Use your console, or write to us.", "If we learn of a breach that affects your game, we tell you without undue delay."]],
+    ["subs", "Sub-processors", ["We use the <a href=\"/subprocessors.html\">sub-processors</a> on our list. Changes are shown there.", "Data may be processed in other countries by these providers, under their own safeguards."]],
+    ["end", "When it ends", ["When your account or the game ends, the deletion rules above apply.", "On request we give you the information that shows we follow these terms."]],
+  ] },
+  "subprocessors.html": { title: "Sub-processors", h1: "Sub-processors", lead: "The providers that help us run Corporate Tambola.", table: [
+    ["Cloudflare", "Hosting, database, network", "Global network. Locations as published by Cloudflare."],
+    ["Resend", "Sending e-mail to organizers", "United States, as published by Resend."],
+    ["Razorpay", "Organizer payments (never players)", "India, as published by Razorpay."],
+  ], sections: [
+    ["notes", "Also used", [
+      "drand: public random numbers. It receives no personal data.",
+      "YouTube (privacy-enhanced mode): only if an organizer adds a video break. The player&rsquo;s device contacts YouTube.",
+    ]],
+    ["change", "Changes", ["We update this page when the list changes."]],
+  ] },
+  "partner-terms.html": { title: "Partner terms", h1: "Partner terms", lead: "For Refer &amp; earn partners.", sections: [
+    ["role", "Your role", [
+      "You are an independent partner. You are not our employee or agent.",
+      "You may share your link. You may not make false promises about Corporate Tambola.",
+      "No spam. Message only people who expect to hear from you.",
+    ]],
+    ["pay", "Commission", [
+      "You earn commission on paid purchases by companies that came through your link, at the rates on the Refer &amp; earn page.",
+      "No payment from the buyer, no commission. Refunds and reversals reduce it.",
+      "We may refuse or reverse commission for self-referral or misuse.",
+    ]],
+    ["tax", "Tax (TDS note)", [
+      "Tax may be deducted at source from your commission, as the law requires.",
+      "GST may apply if you are registered. You are responsible for your own taxes.",
+      "We keep the details we need for payment and tax records.",
+    ]],
+    ["data", "Your details", ["We use your mobile number to run your partner account. See the <a href=\"/legal.html#privacy\">Privacy &amp; Data Policy</a>.", "You may stop at any time."]],
+  ] },
+  "organizer-guide.html": { title: "Organizer guide", h1: "Organizer guide", lead: "Short notes for a safe, simple game.", sections: [
+    ["rules", "Keep it a private game", [
+      "Invite people you know: employees, families, dealers, customers.",
+      "Never ask for a fee, a purchase or a donation to take part.",
+      "Taking part must be voluntary.",
+      "Players are 18 or older.",
+    ]],
+    ["law", "Check the law", [
+      "Some countries and states restrict games with prizes. You must check yours.",
+      "In the United States, prize promotions above a certain value may need registration. Check your state.",
+      "In India, prizes above INR 10,000 may carry tax deducted at source. Check with your tax adviser.",
+      "You are responsible for tax on the prizes you give.",
+    ]],
+    ["prizes", "Prizes", [
+      "You provide the prizes and hand them over.",
+      "Winners confirm their details on their own phone. Tick &ldquo;Prize given&rdquo; in your console.",
+    ]],
+    ["data", "Your players&rsquo; data", [
+      "Tell your players what you do with their details.",
+      "Names and numbers are deleted within 24 hours after the game. Open your report before then.",
+      "To delete earlier, use your console.",
+    ]],
+    ["pay", "Payment", ["Build and publish for free. Pay before the start, or the game will not begin."]],
+  ] },
+};
+
+for (const [file, p] of Object.entries(PAGES)) {
+  const toc = p.sections.map(([id, t]) => `<a href="#${id}">${t}</a>`).join("");
+  const table = p.table ? `  <section id="list" aria-labelledby="lh"><h2 id="lh">Providers</h2>${nl}    <ul>${nl}${p.table.map(([n, w, l]) => `      <li><b>${n}</b>: ${w}. ${l}</li>`).join(nl)}${nl}    </ul></section>${nl}${nl}` : "";
+  const secs = p.sections.map(([id, t, items]) => `  <section id="${id}" aria-labelledby="${id}h"><h2 id="${id}h">${t}</h2>${nl}    <ul>${nl}${items.map((i) => `      <li>${i}</li>`).join(nl)}${nl}    </ul></section>`).join(nl + nl);
+  const html = head.replace(/<title>[^<]*<\/title>/, `<title>${p.title} | Corporate Tambola</title>`) +
+    `<main class="legal">${nl}  <div class="eyebrow">Plain English</div>${nl}  <h1>${p.title}</h1>${nl}  <p class="muted">${p.lead}</p>${nl}${p.table ? "" : `  <div class="toc">${toc}</div>${nl}`}${nl}${table}${secs}${nl}` + newFoot;
+  writeFileSync(new URL(file, PUB), html);
+}
+// the footer navigation of legal.html and the home page links to every document
+for (const f of ["legal.html", "index.html"]) {
+  const u = new URL(f, PUB); let s = readFileSync(u, "utf8");
+  const next = s.replace(/<nav class="fl" aria-label="Legal">[\s\S]*?<\/nav>/, f === "index.html" ? FOOTNAV : FOOTNAV);
+  if (next === s && !s.includes('href="/terms.html"')) throw new Error("footer nav not found in " + f);
+  writeFileSync(u, next);
+}
+console.log("legal pages written, terms version", TERMS_VERSION);

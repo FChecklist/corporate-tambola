@@ -92,7 +92,7 @@ describe("mail that is not built by mails.ts gets the same brand when it is sent
 });
 
 describe("pages: one title pattern, icons, manifest, theme colour", () => {
-  const PAGES = ["index.html", "report.html", "legal.html", "partner.html", "pay.html", "big.html", "zc.html", "z.html", "ai-link.html", "signin.html", "404.html"];
+  const PAGES = ["index.html", "report.html", "legal.html", "terms.html", "dpa.html", "subprocessors.html", "partner-terms.html", "organizer-guide.html", "partner.html", "pay.html", "big.html", "zc.html", "z.html", "ai-link.html", "signin.html", "404.html"];
   for (const f of PAGES) {
     test(`${f}: title names Corporate Tambola exactly; favicon, touch icon, manifest and theme colour`, () => {
       const s = read("apps/web/public", f); const title = (s.match(/<title>([^<]*)<\/title>/) ?? [])[1]!;
