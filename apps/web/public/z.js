@@ -33,7 +33,7 @@
     <label for="nm">Your name (shown only to the organizer)</label><input id="nm" autocomplete="name" maxlength="60">
     ${msg ? `<div class="zbanner bad" role="alert">${esc(msg)}</div>` : ""}
     <button class="zbtn" id="go">Get my ticket</button>
-    <p class="zsmall">Your number is used only to give you the same ticket if you come back. Nobody else sees it.</p>
+    <p class="zsmall">We use your number for your ticket and, if you win, your prize. Your organizer sees it. Other players do not.</p>
     <p class="spriv"><a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy Policy</a></p></div>`;
 
   const ticketHtml = (t, called, label, win) => `<div class="zticket" aria-label="${label}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div class="${called.has(v) ? "m" : ""}${win && win.has(v) && called.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;
@@ -178,7 +178,7 @@
     return `<div class="zcard zprizes"><h2>Your prizes</h2>${rows}<p class="zsmall" style="margin:6px 0 0">Saved on this phone. Show this to your organizer to collect.</p></div>`;
   }
   let shareLink = location.origin + "/";
-  try { const c = (store.get("ctz-phone") || "").replace(/\D/g, ""); if (c.length === 10) fetch("/api/partner/check?code=" + c).then((r) => r.json()).then((j) => { if (j && j.valid) shareLink = location.origin + "/?ref=" + c; }).catch(() => {}); } catch {}
+  try { localStorage.removeItem("ctz-phone"); } catch {} // older versions saved the participant's own number on the phone: it is not kept any more
   function finalCard(v) {
     const n = PRIZES.length;
     return `<div class="zcard zfinal"><h2>Game complete</h2>
@@ -385,7 +385,6 @@
       go.disabled = true;
       if (window.TBAudio) TBAudio.unlock();
       const typed = document.getElementById("ph").value;
-      store.set("ctz-phone", typed.replace(/\D/g, "").slice(-10)); // kept on this phone only, so Refer & earn can fill it in for you
       const ok = await rt.join(typed, document.getElementById("nm").value.trim(), INVITE_FROM ? { from: INVITE_FROM, cat: INVITE_CAT } : undefined);
       if (ok) { paint(); start(); } else { go.disabled = false; paint(); } // show the ticket screen at once: the first tick may take a few seconds on a slow network
     };

@@ -50,7 +50,7 @@
         <label for="ph">Mobile number</label><input id="ph" type="tel" autocomplete="tel" value="${esc(S.phone)}" placeholder="98765 43210">
         ${S.err ? `<div class="zbanner bad">${esc(S.err)}</div>` : ""}
         <button class="zbtn" id="paygo" ${off || S.busy ? "disabled" : ""}>${S.busy ? "Processing…" : off ? "Payment opens soon" : "Pay " + TB.money(x.total, S.cur) + " securely with Razorpay"}</button>
-        <p class="zsmall">Secure payment by Razorpay. A GST invoice is emailed to you. See the <a href="/legal.html">terms, privacy and refund policy</a>.</p></div>`;
+        <p class="zsmall">Secure payment by Razorpay. A GST invoice is emailed to you. See the <a href="/legal.html#privacy">privacy policy</a>.</p></div>`;
   }
   function draw() { $app.innerHTML = view(); bind(); }
   function keep() { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { org: g("org"), tax: g("tax"), email: g("em"), phone: g("ph") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; }

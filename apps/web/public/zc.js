@@ -288,7 +288,7 @@
       <div class="zrow"><span>Your details as organizer / host / co-host, and the winners record</span><em>kept until 00:00 IST, ${esc(ist(l.fullDeleteAtMs).slice(0, 10))}</em></div>
       <div class="zrow"><span>Backups of deleted data</span><em>roll off within ${l.backupDays} days</em></div>` : "";
     return `<div class="zcard"><h2>Participant data</h2>
-      <p class="zsmall" style="margin-top:0">We do not keep your participants' data. Within 24 hours of the game ending we send you the complete report and then delete every participant's name and mobile number from our systems.</p>${when}
+      <p class="zsmall" style="margin-top:0">Within 24 hours of the game ending we send you the report, then delete every participant's name and number. Only winners' prize hand-over details stay, for 365 days.</p>${when}
       ${S.life && S.life.reportSent && !S.life.purged ? `<button class="zbtn s" id="rptopen" style="margin-top:8px">Open the report now</button> ` : ""}<button class="zbtn s alt" id="erase" style="margin-top:8px">Delete all participant data now</button>
       <p class="zsmall">You can also e-mail us from your registered address, or ask your AI assistant to request the deletion and then confirm it here. The report is e-mailed first when the game has already ended.</p></div>`;
   }

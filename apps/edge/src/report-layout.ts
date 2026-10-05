@@ -56,7 +56,7 @@ export function layoutReport(d: ReportData): Uint8Array {
 
   pdf.box("What we keep, and what we delete", [
     `We have given you ALL the data we hold about the people in this engagement. Within 24 hours of the game ending, and no later than ${istFull(d.personalDeleteAtMs)}, we permanently delete from our systems every participant's name, mobile number, join record, ticket assignment and invite link record. After that nobody at Corporate Tambola, and nothing in our software or database, holds them.`,
-    "We keep, for 365 days, only: (1) the details of the organizer, host and co-hosts (name, e-mail, mobile number); and (2) the winners record: which prize, which round, at what time, and the ticket seat number. The winners record does not contain names or mobile numbers.",
+    "We keep, for 365 days, only: (1) the details of the organizer, host and co-hosts (name, e-mail, mobile number); (2) the winners record: which prize, which round, at what time, and the ticket seat number; and (3) the name and mobile number each winner confirmed for the prize hand-over, with the date it was given. The winners record itself holds no names or numbers.",
     `Everything about this engagement, including those two records, is permanently deleted at 00:00 hours (IST) on ${istDate(d.fullDeleteAtMs)}, which is the end of the 365th day.`,
     `Backups of our database roll off within ${d.backupDays} days, so any copy of deleted data in a backup is gone within ${d.backupDays} days of the deletion.`,
     "For your next game you can reuse the people list until it is deleted (the reuse button in your console), or upload your own list again afterwards from this report.",

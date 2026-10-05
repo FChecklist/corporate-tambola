@@ -200,7 +200,7 @@ const bodyFor = (eid: string, d: ReportData, link: string) => [
 
 /** The report's link carries a key that only this engagement can have (derived from a server secret): whoever holds the link can open the report until the personal data is deleted. */
 async function reportKey(env: LifeEnv, eid: string): Promise<string> {
-  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(`report|${env.DATA_KEY ?? env.ORGANIZER_SECRET ?? "ct"}`), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(`report|${env.DATA_KEY ?? env.ORGANIZER_SECRET ?? "unset"}`), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(eid))), (b) => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
 }
 export async function reportLink(env: LifeEnv, eid: string): Promise<string> {

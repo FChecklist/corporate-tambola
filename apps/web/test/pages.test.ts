@@ -263,6 +263,14 @@ describe("phone page", () => {
   };
   const phone = (o: O, eid: string) => page(o, `/z?e=${eid}`, "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, () => o.world.now); } });
   const join = async (p: Page) => { await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = "9822222222"; (p.$("#nm") as any).value = "Asha"; p.click("#go"); };
+  test("the phone does not keep the participant's own mobile number and never sends it in an address", async () => {
+    const o = await organizer(); await make(o, "UI-NOPH"); await publish(o, "UI-NOPH");
+    const p = await phone(o, "UI-NOPH"); await join(p); await p.waitFor((x) => /You are in|Your ticket|What you can win/.test(x));
+    expect(p.win.localStorage.getItem("ctz-phone")).toBeNull();
+    expect(JSON.stringify(Object.fromEntries(Array.from({ length: p.win.localStorage.length }, (_, i) => [p.win.localStorage.key(i), p.win.localStorage.getItem(p.win.localStorage.key(i))])))).not.toContain("9822222222");
+    const z = readFileSync(new URL("../public/z.js", import.meta.url), "utf8");
+    expect(z).not.toContain("partner/check"); expect(z).not.toContain("store.set(\"ctz-phone\"");
+  });
   test("the join page has no consent tick box, only a small Privacy Policy link to the privacy section of the legal page", async () => {
     const o = await organizer(); await make(o, "UI-PRIV"); await publish(o, "UI-PRIV");
     const p = await phone(o, "UI-PRIV"); await p.waitFor((x) => /Join the engagement/.test(x));

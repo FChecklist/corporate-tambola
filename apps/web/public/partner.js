@@ -29,7 +29,7 @@
     return `<div class="zcard zform"><h2>${fromTicket ? "Start earning: get your link" : "Get your link in 20 seconds"}</h2>
         <label for="ph">Your mobile number</label><input id="ph" inputmode="tel" autocomplete="tel" value="${esc(phone)}" placeholder="98765 43210">
         <label for="nm">Your name (optional)</label><input id="nm" autocomplete="name" maxlength="60">
-        <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;color:var(--ink);font-size:14px"><input type="checkbox" id="ok" style="width:auto;min-height:0;margin-top:3px"> <span>I would like to join Refer &amp; earn and receive updates about it on this mobile number.</span></label>
+        <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;color:var(--ink);font-size:14px"><input type="checkbox" id="ok" style="width:auto;min-height:0;margin-top:3px"> <span>I would like to join Refer &amp; earn with this mobile number.</span></label>
         ${S.err ? `<div class="zbanner bad" role="alert">${esc(S.err)}</div>` : ""}
         <button class="zbtn" id="join">Get my link and start earning</button>
         <p class="zsmall">Already joined? <a href="#" id="signin">Sign in with your partner key</a></p></div>`;

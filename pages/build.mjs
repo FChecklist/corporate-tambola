@@ -9,12 +9,19 @@ for (const d of ["fonts", "img"]) cpSync(join(SRC, d), join(OUT, d), { recursive
 // security headers; styles allow inline because the pages set a few style attributes, scripts stay locked to our own files
 const CSP = "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self' blob:; connect-src 'self' https://cloudflareinsights.com https://api.drand.sh https://api2.drand.sh https://api3.drand.sh https://drand.cloudflare.com https://checkout.razorpay.com https://api.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 const PAYCSP = CSP.replace("script-src 'self' https://static.cloudflareinsights.com;", "script-src 'self' https://static.cloudflareinsights.com https://checkout.razorpay.com;"); // only the payment page loads Razorpay Checkout
-const PAYHDR = `
-  Content-Security-Policy: ${PAYCSP}
-  X-Content-Type-Options: nosniff
-  Referrer-Policy: no-referrer
-  X-Frame-Options: DENY
-`;
-writeFileSync(join(OUT, "_headers"), `/pay.html${PAYHDR}/pay${PAYHDR}/z.html\n  Content-Security-Policy: ${CSP.replace(/ frame-src[^;]*;/, " frame-src https://www.youtube-nocookie.com;").replace("media-src 'self' blob:;", "media-src 'self' blob: https:;")}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  X-Frame-Options: DENY\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()\n/zc.html\n  Content-Security-Policy: ${CSP.replace(/ frame-src[^;]*;/, "")}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  X-Frame-Options: DENY\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()\n/*.js\n  Cache-Control: no-cache\n/img/*\n  Cache-Control: public, max-age=604800\n/pay.html\n  X-Robots-Tag: noindex\n/z.html\n  X-Robots-Tag: noindex\n/zc.html\n  X-Robots-Tag: noindex\n/big.html\n  X-Robots-Tag: noindex\n/partner.html\n  X-Robots-Tag: noindex\n/*.css\n  Cache-Control: no-cache\n/fonts/*\n  Cache-Control: public, max-age=31536000, immutable\n`);
+const GAMECSP = CSP.replace(/ frame-src[^;]*;/, " frame-src https://www.youtube-nocookie.com;").replace("media-src 'self' blob:;", "media-src 'self' blob: https:;"); // the phone page may play a break video
+const PLAINCSP = CSP.replace(/ frame-src[^;]*;/, "");
+// Cloudflare Pages serves "/z.html" as "/z" (a 308), so every page needs a rule for BOTH spellings or the header silently never applies (found in the 2026-10-05 audit, G-07).
+const hdr = (csp, extra = "") => `\n  Content-Security-Policy: ${csp}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  X-Frame-Options: DENY\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()${extra}\n`;
+const NOINDEX = "\n  X-Robots-Tag: noindex";
+const PAGES = [ // [clean path, csp, noindex]
+  ["/pay", PAYCSP, true], ["/z", GAMECSP, true], ["/zc", PLAINCSP, true], ["/big", PLAINCSP, true], ["/report", PLAINCSP, true], ["/signin", PLAINCSP, true], ["/ai-link", PLAINCSP, true],
+  ["/partner", PLAINCSP, true], ["/legal", PLAINCSP, false], ["/404", PLAINCSP, true], ["/index", PLAINCSP, false],
+];
+let rules = "";
+for (const [path, csp, noindex] of PAGES) { const h = hdr(csp, noindex ? NOINDEX : ""); rules += `${path}.html${h}${path}${h}`; }
+rules += "/" + hdr(PLAINCSP);
+rules += "/*.js\n  Cache-Control: no-cache\n/img/*\n  Cache-Control: public, max-age=604800\n/*.css\n  Cache-Control: no-cache\n/fonts/*\n  Cache-Control: public, max-age=31536000, immutable\n";
+writeFileSync(join(OUT, "_headers"), rules);
 writeFileSync(join(OUT, "_routes.json"), JSON.stringify({ version: 1, include: ["/api/*", "/ai/*"], exclude: [] }));
 console.log("pages/public ready");

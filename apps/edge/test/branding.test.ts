@@ -117,14 +117,14 @@ describe("the legal page carries the owner's final text, and each line matches w
   test("anchors, headings, counts, and one short line each", () => {
     for (const id of ["rules", "privacy", "disclaimer"]) expect(html).toContain(`<section id="${id}"`);
     expect(html).toContain(">Rules</h2>"); expect(html).toContain(">Privacy &amp; Data Policy</h2>"); expect(html).toContain(">Disclaimer</h2>");
-    expect(items("rules").length).toBe(11); expect(items("privacy").length).toBe(9); expect(items("disclaimer").length).toBe(6);
+    expect(items("rules").length).toBe(11); expect(items("privacy").length).toBe(10); expect(items("disclaimer").length).toBe(6);
     for (const id of ["rules", "privacy", "disclaimer"]) for (const l of items(id)) expect(l.split(/\s+/).length).toBeLessThanOrEqual(30);
     expect(html).toMatch(/<p class="muted">[^<]{1,60}<\/p>/);
   });
-  test("the nine privacy lines, word for word, with typographic apostrophes", () => {
+  test("the ten privacy lines, word for word, with typographic apostrophes", () => {
     expect(items("privacy")).toEqual([
       "We delete all participant data from our systems within 24 hours after the game ends.", "All data is encrypted, in transit and at rest.", "Participants never see each other’s data.", "We provide the software. The organizer runs the game.", "Backups clear within 7 days.",
-      "No advertising cookies or trackers. We never sell data.", "Exception: winner prize details are kept for 365 days, so the organizer can confirm the prize was handed over. They are then deleted automatically.", "Designed to follow India’s DPDP Act 2023, EU GDPR and US CCPA.",
+      "No advertising cookies or trackers. We never sell data.", "Your phone keeps a random device id, your ticket and saved game files, so the game works offline.", "Exception: winner prize details are kept for 365 days, so the organizer can confirm the prize was handed over. They are then deleted automatically.", "Designed to follow India’s DPDP Act 2023, EU GDPR and US CCPA.",
       "Questions or requests: our Grievance Officer, raajat.agarwal@gmail.com. We reply within 30 days."]);
     expect(html).toContain('href="mailto:raajat.agarwal@gmail.com"');
   });
@@ -139,5 +139,29 @@ describe("the legal page carries the owner's final text, and each line matches w
     expect(lc).toMatch(/PURGE_AFTER_MS = 22 \* 3_600_000/); // 22 h is inside "within 24 hours"
     expect(lc).toMatch(/endMs \+ 365 \* DAY/); expect(lc).toMatch(/DELETE FROM prize WHERE eid=\?/); // prize details go with the 365-day deletion
     expect(lc).toMatch(/DELETE FROM participant WHERE eid=\?/); expect(lc).toMatch(/DELETE FROM seat WHERE eid=\?/);
+  });
+});
+
+describe("claims register: customer-facing text never says what the build does not do", () => {
+  const FILES = ["apps/web/public/index.html", "apps/web/public/legal.html", "apps/web/public/partner.html", "apps/web/public/z.js", "apps/web/public/zc.js", "apps/web/public/pay.js", "apps/web/public/site.js", "apps/web/public/partner.js", "apps/web/public/ai-link.js", "apps/edge/src/worker.ts", "apps/edge/src/lifecycle.ts", "apps/edge/src/report-layout.ts", "apps/edge/src/mails.ts", "apps/edge/src/ai-link.ts", "apps/edge/src/pay.ts"];
+  test("every mention of 365 days sits next to winners, prize, organizer, retention or AI-log wording", () => {
+    for (const f of FILES) {
+      const t = read(f);
+      for (const m of t.matchAll(/365[ -]?days?|365 DAY|365\s*\*\s*DAY|RETENTION_DAYS/gi)) {
+        const ctx = t.slice(Math.max(0, m.index! - 260), m.index! + 260).toLowerCase();
+        expect([f, /winner|prize|organi[sz]er|retention|retain|ai assistant|hand|record|engagement|deleted|purge|delete|everything|keep|kept/.test(ctx)]).toEqual([f, true]);
+        expect([f, /names and numbers are kept 365|contacts kept 365|reuse your list|reuse the data.{0,40}365/.test(ctx)]).toEqual([f, false]);
+      }
+    }
+  });
+  test("banned claims are gone", () => {
+    const BAN: [RegExp, string][] = [[/discount applied/i, "implies a past sale"], [/ISO\/IEC 27001/i, "unsupported certification"], [/Most popular/i, "popularity without data"], [/Nobody else sees it/i, "the organizer sees it"], [/We follow India/i, "soft wording only"], [/Built in line with/i, "soft wording only"], [/\b(fully |is |are )?compliant\b/i, "never claim compliance"], [/does not contain names or mobile/i, "winners' details are kept sealed"], [/We do not keep your participants' data/i, "prize details are kept"], [/refund policy/i, "no refund page"], [/\bterms, privacy/i, "no terms page yet"]];
+    for (const f of FILES) { const t = read(f); for (const [re, why] of BAN) expect([f, why, re.test(t)]).toEqual([f, why, false]); }
+  });
+  test("structured data prices equal the real packs", () => {
+    const h = read("apps/web/public/index.html"); const { PACKS } = require("../../../packages/shared/src/pricing") as typeof import("../../../packages/shared/src/pricing");
+    expect(h).toContain(`"lowPrice":"${Math.min(...PACKS.map((p) => p[1]))}"`); expect(h).toContain(`"highPrice":"${Math.max(...PACKS.map((p) => p[1]))}"`); expect(h).toContain(`"offerCount":"${PACKS.length}"`);
+    const site = read("apps/web/public/site.js"); expect(site).toContain("Festive offer: 50% off"); expect(site).toContain("Regular price after the festive offer"); expect(h).toContain("Festive offer: 50% off"); // owner decision: keep the offer, worded as a festive offer
+    expect(`${h}${site}`).not.toMatch(/Most popular|2nd most popular/); // the offer price is what is charged, and equals the structured-data price (lowPrice above)
   });
 });

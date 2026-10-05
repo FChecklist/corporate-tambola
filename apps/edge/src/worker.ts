@@ -35,6 +35,8 @@ export interface Env {
   INBOUND_SECRET?: string;
   /** The scheduled job's own key (it can call only the lifecycle tick, nothing else). */
   CRON_KEY?: string;
+  /** "1" on the live site: the Worker refuses every request (503) unless every secret below is set, so a missing key can never fall back to a built-in constant. */
+  STRICT_KEYS?: string;
   /** Optional: a public R2 bucket behind a cached custom domain. Phones then read the pause file from the CDN and never invoke the Worker for it. */
   CONTROL_R2?: R2Like; CONTROL_BASE?: string;
 }
@@ -228,7 +230,11 @@ export async function housekeeping(env: Env, now: number): Promise<void> {
 }
 /** Safety net while the scheduled job is not running: an organizer-side request, or a phone saying the game is over, also nudges the lifecycle (at most once a minute per Worker instance). The scheduled job is the real clock. */
 let lastNudge = 0;
+/** The names of the secrets this Worker needs in production (STRICT_KEYS=1) and does not have. Empty when strict mode is off (local runs and tests). */
+export const missingKeys = (env: Env): string[] => (env.STRICT_KEYS === "1" ? ["DATA_KEY", "PHONE_SALT", "ORGANIZER_SECRET", "CRON_KEY", "INBOUND_SECRET"].filter((k) => !String((env as any)[k] ?? "").trim()) : []);
+const keysMissing = (env: Env) => missingKeys(env).length > 0;
 export async function handle(req: Request, env: Env, now = Date.now(), waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
+  if (keysMissing(env)) return new Response(JSON.stringify({ error: "The service is not configured. Please try again later." }), { status: 503, headers: { "content-type": "application/json", "cache-control": "no-store" } });
   const pn = new URL(req.url).pathname;
   if (pn === "/ai" || pn.startsWith("/ai/")) return aiLink(req, env, now, waitUntil);
   return handle0(req, env, now, waitUntil);
@@ -360,7 +366,7 @@ export const AI_MANIFEST = {
     "If it is not paid by the start time the engagement does not begin: the guests who already joined see a waiting screen and nothing is shown to them. Nothing is charged and there is no penalty.",
     "If the organizer pays late, even hours later, the engagement starts about 3 minutes after the payment, for everyone already waiting, and they can also choose a new start time first.",
     "If they never pay, nothing is owed. They can create a new engagement whenever they like. Unpaid engagements are forgotten after 30 days.",
-    "Unused places are not refunded once an engagement is paid. The full terms are at /legal.html.",
+    "Unused places are not refunded once an engagement is paid. Rules and privacy are at /legal.html.",
   ],
   suggestions_rules: "Describe the need and the benefit, not code. Never include names, phone numbers, e-mail addresses or anything about specific people. Suggestions are visible to all organizers' AI assistants without saying who wrote them. We review them and mark each one new, under_review, planned, shipped or declined.",
   you_cannot: [
@@ -719,7 +725,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       await erasePersonal(env, tok, now, "email");
       done.push(tok);
     }
-    if (done.length) await sendMail(env as PayEnv, env.DB, from, `Deleted: participant data of ${done.join(", ")}`, `Done. We deleted all participant data for: ${done.join(", ")}.\n\nWe keep only the winners record (no names or numbers) and your organizer details, for up to 365 days.`, now);
+    if (done.length) await sendMail(env as PayEnv, env.DB, from, `Deleted: participant data of ${done.join(", ")}`, `Done. We deleted all participant data for: ${done.join(", ")}.\n\nWe keep the winners record (seat, prize, round, time) and winners' prize hand-over details for up to 365 days. We also keep your organizer details.`, now);
     return json({ ok: true, action: done.length ? "deleted" : "no-match", engagements: done });
   }
   if (req.method === "GET" && p === "/api/notices") { // our public news list: the same for everyone, nothing about the reader is stored or asked
