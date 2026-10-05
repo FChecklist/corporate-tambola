@@ -61,3 +61,7 @@ Short sentences, one idea each; nothing that explains instead of helping the nex
 Also shortened: delete-request and deletion-confirmation e-mails, the payment e-mail's first lines, the sign-in confirm page, the AI-link page, and the console's Option 1 card. Not shortened on purpose: the end-of-game report e-mail and PDF (they carry the data-handling notice the privacy tests check) and the legal pages.
 
 SW cache bumped to ct-game-v7 for this change (app.css changed again).
+
+## Privacy Policy link (2026-10-05)
+
+No consent tick box anywhere. A small quiet "Privacy Policy" link (11 px, muted, regular weight, centred, `target="_blank" rel="noopener"`) to `/legal.html#privacy` sits under the join page (participant mobile number and name), the create-engagement pop-up and the sign-in e-mail pop-up. Class `.spriv` in `app.css` and `z.css`; DOM tests in `apps/web/test/pages.test.ts`. SW cache `ct-game-v8`.

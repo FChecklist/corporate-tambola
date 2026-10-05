@@ -33,7 +33,8 @@
     <label for="nm">Your name (shown only to the organizer)</label><input id="nm" autocomplete="name" maxlength="60">
     ${msg ? `<div class="zbanner bad" role="alert">${esc(msg)}</div>` : ""}
     <button class="zbtn" id="go">Get my ticket</button>
-    <p class="zsmall">Your number is used only to give you the same ticket if you come back. Nobody else sees it.</p></div>`;
+    <p class="zsmall">Your number is used only to give you the same ticket if you come back. Nobody else sees it.</p>
+    <p class="spriv"><a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy Policy</a></p></div>`;
 
   const ticketHtml = (t, called, label, win) => `<div class="zticket" aria-label="${label}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div class="${called.has(v) ? "m" : ""}${win && win.has(v) && called.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;
   const ordinalName = (k) => ["", "1st", "2nd", "3rd"][k] || k + "th";

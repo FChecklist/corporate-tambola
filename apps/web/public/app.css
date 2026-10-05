@@ -337,3 +337,6 @@ html[data-theme] .chip.on{background:#fff}
 @media(max-width:400px){.openfree h2{font-size:26px}.rolepill{font-size:11px;padding:0 10px}}
 @media(max-width:480px){.openfree .sheethead{flex-wrap:wrap;justify-content:flex-end;row-gap:8px}.openfree .rolepill{order:3;margin-right:auto}.bgrid li{padding:9px 11px;font-size:14px}}
 @media(min-width:700px){.bgrid li:last-child:nth-child(odd){grid-column:1/-1}}
+
+/* small, quiet Privacy Policy link under forms that collect a number or an email */
+.spriv{margin:8px 0 0;text-align:center;font-size:11px;line-height:1.3;font-weight:400}.spriv a{color:var(--muted,#6b7385);font-weight:400;text-decoration:underline}

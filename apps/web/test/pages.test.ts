@@ -31,6 +31,7 @@ async function page(o: O, url: string, html: string, scripts: string[], session:
 const consolePage = (o: O, eid: string, key = o.token, session: Record<string, string> = {}) =>
   page(o, `/zc?e=${eid}`, "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": key, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com", ...session });
 
+const quietPrivacy = (root: any) => { const l = root.querySelectorAll(".spriv a"); expect(l.length).toBe(1); const a = l[0]; expect(a.textContent).toBe("Privacy Policy"); expect(a.getAttribute("href")).toBe("/legal.html#privacy"); expect(a.getAttribute("target")).toBe("_blank"); expect(a.getAttribute("rel")).toBe("noopener"); expect(root.querySelectorAll('input[type="checkbox"]').length).toBe(0); };
 describe("console (organizer page)", () => {
   test("UC-53 the home page shows the two options first, with the AI work link ready to copy", async () => {
     const o = await organizer();
@@ -262,6 +263,13 @@ describe("phone page", () => {
   };
   const phone = (o: O, eid: string) => page(o, `/z?e=${eid}`, "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, () => o.world.now); } });
   const join = async (p: Page) => { await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = "9822222222"; (p.$("#nm") as any).value = "Asha"; p.click("#go"); };
+  test("the join page has no consent tick box, only a small Privacy Policy link to the privacy section of the legal page", async () => {
+    const o = await organizer(); await make(o, "UI-PRIV"); await publish(o, "UI-PRIV");
+    const p = await phone(o, "UI-PRIV"); await p.waitFor((x) => /Join the engagement/.test(x));
+    quietPrivacy(p.win.document); expect(p.$("#go")).toBeTruthy();
+    for (const f of ["z.css", "app.css"]) expect(readFileSync(new URL("../public/" + f, import.meta.url), "utf8")).toMatch(/.spriv{[^}]*font-size:11px[^}]*font-weight:400/);
+    expect(readFileSync(new URL("../public/legal.html", import.meta.url), "utf8")).toContain('id="privacy"');
+  });
   test("UC-29 / UC-57 a guest joins a published engagement before payment and gets the waiting room: countdown, what can be won, how it works, sound check, calendar", async () => {
     const o = await organizer(); await make(o, "UI-PH1"); await o.api("PATCH", "/api/z/UI-PH1/settings", { rewards: [{ pattern: "full", ordinal: 1, text: "Voucher 5000" }, { pattern: "early5", ordinal: 1, text: "Gift hamper" }] }, o.aiKey); await publish(o, "UI-PH1");
     const p = await phone(o, "UI-PH1"); await join(p);
@@ -486,6 +494,7 @@ describe("Refer & Earn page", () => {
     expect(p.win.document.querySelector(".sheet .sbrand")!.getAttribute("aria-label")).toBe("Corporate Tambola"); expect(p.win.document.querySelector(".sheethead .rolepill")).toBeTruthy();
     expect((p.$("#frGo") as any).textContent).toMatch(/^s*Create my engagement/);
     p.win.document.dispatchEvent(new p.win.KeyboardEvent("keydown", { key: "Escape" })); await new Promise((r) => setTimeout(r, 50));
+    quietPrivacy(p.win.document.getElementById("sheet"));
     expect(p.win.document.getElementById("modal").classList.contains("hidden")).toBe(true);
     expect(p.errors).toEqual([]);
   });
