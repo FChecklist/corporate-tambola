@@ -59,3 +59,5 @@ Short sentences, one idea each; nothing that explains instead of helping the nex
 | Sign-in pop-up body and help line | 54 | 33 |
 
 Also shortened: delete-request and deletion-confirmation e-mails, the payment e-mail's first lines, the sign-in confirm page, the AI-link page, and the console's Option 1 card. Not shortened on purpose: the end-of-game report e-mail and PDF (they carry the data-handling notice the privacy tests check) and the legal pages.
+
+SW cache bumped to ct-game-v7 for this change (app.css changed again).
