@@ -29,11 +29,11 @@ describe("the sign-in e-mail", () => {
     await account(); const r = await ask();
     const m = outbox().find((x) => x.subject === SIGNIN_SUBJECT)!;
     expect(m.to_addr).toBe("boss@acme.com"); expect(SIGNIN_SUBJECT).toBe("Sign in to Corporate Tambola - choose how you want to continue");
-    for (const t of ["YOU ARE ALMOST IN", "Someone, hopefully you, asked to sign in to Corporate Tambola with this email address. Choose any ONE of the three ways below.", "OPTION 1 - LET YOUR AI DO THE WORK", "Sign in and get my AI work link", "ChatGPT, Claude, Gemini, Grok, DeepSeek, z.ai or any AI chat", "payment and publishing stay with you", "OPTION 2 - WORK ON YOUR OWN", "Open my console", "OPTION 3 - ALREADY HAVE THE SIGN-IN PAGE OPEN?", `Type this 6-digit code there: ${r.devCode}`, "It works for 10 minutes.", "If you did not ask to sign in, ignore this email; nobody can sign in without it. Do not forward it: the buttons and the code give access to your account."]) expect(m.body).toContain(t);
+    for (const t of ["YOU ARE ALMOST IN", "Choose one way to sign in.", "OPTION 1 - LET YOUR AI DO THE WORK", "Sign in and get my AI work link", "Your AI asks a few questions and sets it all up. You keep payment and publishing.", "OPTION 2 - WORK ON YOUR OWN", "Open my console", "OPTION 3 - SIGN-IN PAGE ALREADY OPEN?", `Type this 6-digit code there: ${r.devCode}`, "It works for 10 minutes.", "Did not ask for this? Ignore it. Do not forward it: it opens your account."]) expect(m.body).toContain(t);
     expect(m.body + m.subject).not.toMatch(LEAK); expect(m.body).not.toMatch(/Corporate Tambola account\. I am the owner/);
     expect(m.body).toContain(`${ORIGIN}/signin.html?t=${r.devToken}&go=ai`); expect(m.body).toContain(`${ORIGIN}/signin.html?t=${r.devToken}&go=console`);
     const b = signInMail(ORIGIN, "123456", "ab".repeat(24));
-    expect(b.html).toContain("You are almost in"); expect(b.html).toContain("Let your AI do the work"); expect(b.html).toContain("Work on your own"); expect(b.html).toContain("Already have the sign-in page open?"); expect(b.html).toContain("123456");
+    expect(b.html).toContain("You are almost in"); expect(b.html).toContain("Let your AI do the work"); expect(b.html).toContain("Work on your own"); expect(b.html).toContain("Sign-in page already open?"); expect(b.html).toContain("123456");
     expect(b.html + b.text).not.toMatch(LEAK);
     expect([...b.html.matchAll(/href="([^"]*)"/g)].map((x) => x[1]).filter((h) => !/^mailto:|legal.html$/.test(h!))).toEqual([`${ORIGIN}/signin.html?t=${"ab".repeat(24)}&amp;go=ai`, `${ORIGIN}/signin.html?t=${"ab".repeat(24)}&amp;go=console`]);
     expect(env.DB).toBeTruthy();

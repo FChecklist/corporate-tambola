@@ -40,16 +40,16 @@
   }));
   function optionsCard() {
     const ai = S.aiMsg
-      ? `<textarea class="zlink" id="aimsg" rows="4" readonly style="width:100%;box-sizing:border-box">${esc(S.aiMsg)}</textarea><button class="zbtn" id="aicopy" style="margin-top:8px">Copy my AI work link</button>${aiOptions(S.aiMsg)}<button class="zbtn s alt" id="aifresh">Get a fresh AI link</button><button class="zbtn s alt" id="aireplace">Replace my AI link</button><button class="zbtn s alt" id="airevoke">Stop this link</button><p class="zsmall" style="margin:8px 0 0">Lost the link, or shared it by mistake? <b>Get a fresh AI link</b> e-mails you a new link that works for 24 hours (the one in the box above keeps working). <b>Replace my AI link</b> stops every old link at once and makes a new one. Never forward those e-mails.</p>`
+      ? `<textarea class="zlink" id="aimsg" rows="4" readonly style="width:100%;box-sizing:border-box">${esc(S.aiMsg)}</textarea><button class="zbtn" id="aicopy" style="margin-top:8px">Copy my AI work link</button>${aiOptions(S.aiMsg)}<button class="zbtn s alt" id="aifresh">Get a fresh AI link</button><button class="zbtn s alt" id="aireplace">Replace my AI link</button><button class="zbtn s alt" id="airevoke">Stop this link</button><p class="zsmall" style="margin:8px 0 0"><b>Fresh link</b>: e-mailed, works 24 hours. <b>Replace</b>: stops every old link.</p>`
       : `<button class="zbtn" id="aimake">Get my AI work link</button>`;
     return `<div class="zcard" style="border:2px solid #c9a24a;background:#fffaf0"><div class="zsmall" style="font-weight:700;letter-spacing:.06em;color:#8a6a1a">OPTION 1 · THE EASY WAY · MOST ORGANIZERS CHOOSE THIS</div>
-      <h2 style="margin:6px 0 8px;font-size:22px">Let your free AI assistant do all the work for you.</h2>
-      <p style="margin:0 0 10px">Do not want to fill in forms? Copy your AI work link below and paste it into any AI chat: <b>ChatGPT, Gemini, Grok, Claude, DeepSeek, Z.ai</b> or any other. Then just tell it what you want, in your own words: <i>"Create an engagement for 300 employees this Friday at 4 pm, with a lucky draw."</i></p>
-      <p style="margin:0 0 10px">It sets up everything: the engagement, the rewards, your brand breaks, your participant list and the schedule. <b>You watch it happen right here on this page.</b> It can do whatever you can do on this page: settings, rewards, breaks, the guest list, messages to your guests, prizes. It is free with every engagement. Only four things stay with you: payment, pressing Publish (you confirm your e-mail and mobile number), erasing data, and pausing or stopping a running game. The AI never does those.</p>
+      <h2 style="margin:6px 0 8px;font-size:22px">Let your free AI assistant do the work.</h2>
+      <p style="margin:0 0 10px">Copy your AI work link and paste it into <b>ChatGPT, Gemini, Grok, Claude, DeepSeek, Z.ai</b> or any AI chat.</p>
+      <p style="margin:0 0 10px">It sets everything up. You keep four things: payment, Publish, erasing data, pause or stop.</p>
       ${ai}
       <hr style="border:0;border-top:1px solid #e6d9b8;margin:16px 0">
       <div class="zsmall" style="font-weight:700;letter-spacing:.06em;color:#555">OPTION 2 · DO IT YOURSELF</div>
-      <p style="margin:6px 0 8px">Prefer to click through it yourself? Create your engagement by hand in the console.</p>
+      <p style="margin:6px 0 8px">Prefer to click? Create your engagement by hand.</p>
       <a class="zbtn s alt" href="#newform" style="text-decoration:none;display:inline-block">Create engagement manually ↓</a></div>`;
   }
   function homeView() {

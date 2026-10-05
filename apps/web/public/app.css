@@ -336,3 +336,4 @@ html[data-theme] .chip.on{background:#fff}
 @media(min-width:700px){.bgrid{grid-template-columns:1fr 1fr}.sheet:has(.openfree){padding:22px 30px 26px}.openfree h2{font-size:34px}}
 @media(max-width:400px){.openfree h2{font-size:26px}.rolepill{font-size:11px;padding:0 10px}}
 @media(max-width:480px){.openfree .sheethead{flex-wrap:wrap;justify-content:flex-end;row-gap:8px}.openfree .rolepill{order:3;margin-right:auto}.bgrid li{padding:9px 11px;font-size:14px}}
+@media(min-width:700px){.bgrid li:last-child:nth-child(odd){grid-column:1/-1}}

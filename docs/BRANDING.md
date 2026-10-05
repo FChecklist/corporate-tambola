@@ -41,3 +41,21 @@ Deployed to the free Pages site. Pretty paths /z /zc /pay /big /report /legal /p
 Redesigned in `site.js` (`openFree`) and `app.css`: role pill "For the organizer or host", brand (logo mark + wordmark) top right beside the close button (same as the sign-in pop-up), eyebrow "Build it and publish it free.", title "Create your engagement", eight icon bullets (two columns from 700 px, one column on a phone), field "Your email" (placeholder you@example.com, `inputmode="email"`, `autocomplete="email"`), button "Create my engagement", trust line, and the note "Your console opens straight away: no password needed. We use your email for your invoice and to sign you back in later." The sheet is 780 px wide on desktop; Esc closes it; on a phone the top stays in view when it opens (focus goes to the dialog, the keypad opens when the field is tapped). The service-worker cache is bumped to `ct-game-v6` because `app.css` changed.
 
 Claims checked against the code before keeping them: unique tickets (`packages/beacon/src/unique-ticket.ts`, a keyed permutation, so no two tickets in an engagement can be equal); mobile number only, no app, no SMS, no password (join flow; the page is an installable web page, nothing to download); video or audio between numbers (brand breaks: file, YouTube, slides, speech, in `config.ts`); several prizes (reward lines) and a lucky draw (a break kind); participants never pay (payment is the organizer's only); invite-only or open with a link (`closed` flag); free AI assistant (the AI work link is included with every engagement). Corrected from the draft: deletion is stated as names and mobile numbers deleted within 24 hours after the game ends (they go 22 hours after the end; the winners record without names or numbers and the organizer's own details are kept up to 365 days, which the privacy text states), and "private" is described as invite-only or by link rather than "closed group" alone. The word "work" was dropped from the e-mail field. Payment is not in the eyebrow (owner request); it stays in the trust line ("Pay only before the start") and on the pricing and pay pages and in e-mails.
+
+## Brevity rule (2026-10-05, owner)
+
+Short sentences, one idea each; nothing that explains instead of helping the next click. Legal text lives on the legal pages (and in the report notice the law-facing tests require). The pop-up lists nine one-line bullets in this order: video/audio between numbers; several prizes and a lucky draw; closed-group corporate tambola (housie); unique tickets; own ticket for each participant; free AI assistant; participants never pay; participant data deleted within 24 hours of the game ending; "Built for DPDP Act, GDPR and US privacy laws" (the softer wording: no lawyer review is recorded in `docs/`, so "compliant" is not claimed). The do-not-forward warning is one sentence ("DO NOT FORWARD: this email holds your personal AI work link").
+
+| Text | Words before | Words after |
+|---|---|---|
+| AI-link e-mail (incl. the 40-word paste box) | 436 | 194 |
+| Co-host e-mail (incl. paste box) | 361 | 213 |
+| Sign-in e-mail | 143 | 88 |
+| New-use alert e-mail | 79 | 28 |
+| Publish e-mail | 86 | 32 |
+| Payment reminder e-mail | 43 | 26 |
+| "Could not begin" e-mail | 32 | 19 |
+| Create-engagement pop-up (all visible text, now 9 bullets) | 142 | 116 |
+| Sign-in pop-up body and help line | 54 | 33 |
+
+Also shortened: delete-request and deletion-confirmation e-mails, the payment e-mail's first lines, the sign-in confirm page, the AI-link page, and the console's Option 1 card. Not shortened on purpose: the end-of-game report e-mail and PDF (they carry the data-handling notice the privacy tests check) and the legal pages.

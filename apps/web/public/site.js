@@ -98,11 +98,11 @@
     TB.sheet(`${xbtn}<div class="openfree" role="group" aria-labelledby="ofTitle">
       <div class="sheethead"><span class="rolepill">For the organizer or host</span><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><svg class="ic" aria-hidden="true"><use href="#i-ticket"/></svg></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
       <div class="eyebrow ofeye">Build it and publish it free.</div><h2 id="ofTitle">Create your engagement</h2>
-      <ul class="bgrid"><li><span class="bico">${ic("users")}</span><span>A private tambola (housie) for your own people: invite-only, or open to anyone with your link</span></li><li><span class="bico">${ic("ticket")}</span><span>Every ticket is unique: no two tickets can ever be the same</span></li><li><span class="bico">${ic("phone")}</span><span>Each participant gets their own ticket on their phone, with a mobile number only: no app to download, no SMS, no password</span></li><li><span class="bico">${ic("play")}</span><span>Make your brand part of the game: play a video or audio message between numbers</span></li><li><span class="bico">${ic("trophy")}</span><span>Set several prizes, and add a lucky draw inside the game</span></li><li><span class="bico">${ic("gift")}</span><span>Participants never pay. You provide the rewards</span></li><li><span class="bico">${ic("star")}</span><span>Your free AI assistant can set everything up for you</span></li><li><span class="bico">${ic("shield")}</span><span>Privacy first: names and mobile numbers are deleted within 24 hours after the game ends</span></li></ul>
+      <ul class="bgrid"><li><span class="bico">${ic("play")}</span><span>Play a video or audio message between numbers</span></li><li><span class="bico">${ic("trophy")}</span><span>Set several prizes, and add a lucky draw</span></li><li><span class="bico">${ic("users")}</span><span>A closed-group corporate tambola (housie)</span></li><li><span class="bico">${ic("ticket")}</span><span>Every ticket is unique: no two can ever match</span></li><li><span class="bico">${ic("phone")}</span><span>Each participant gets their own ticket</span></li><li><span class="bico">${ic("star")}</span><span>A free AI assistant sets it up for you</span></li><li><span class="bico">${ic("gift")}</span><span>Participants never pay. You provide the rewards</span></li><li><span class="bico">${ic("trash")}</span><span>All participant data is deleted within 24 hours of the game ending</span></li><li><span class="bico">${ic("shield")}</span><span>Built for DPDP Act, GDPR and US privacy laws</span></li></ul>
       <form id="frForm" novalidate><label class="lb" for="fMail">Your email</label><input class="inp big" id="fMail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@example.com" aria-describedby="fErr"><div id="fErr" role="alert"></div>
       <button class="btn block big" style="margin-top:14px" type="submit" id="frGo">Create my engagement ${ic("arrow")}</button></form>
-      <p class="trust">${ic("shield")}Free to build and publish. No password. Pay only before the start.</p>
-      <p class="proto">Your console opens straight away: no password needed. We use your email for your invoice and to sign you back in later.</p></div>`);
+      <p class="trust">${ic("shield")}Free to build and publish. No password.</p>
+      <p class="proto">Your console opens at once. We use your email for your invoice and to sign you in later.</p></div>`);
     $("frForm").addEventListener("submit", async (e) => {
       e.preventDefault(); const m = $("fMail").value.trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) return setErr("Please enter a valid work email.");
@@ -162,12 +162,12 @@
   function codeView(email, devCode) {
     TB.sheet(`${xbtn}<div class="sheethead"><div class="eyebrow">Check your inbox</div><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><svg class="ic" aria-hidden="true"><use href="#i-ticket"/></svg></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
       <h2 id="cdTitle">Check your email</h2>
-      <p class="sheetbody">We have sent an email to <b class="sendto">${esc(email)}</b>. Please also look in your spam or junk folder. It gives you three ways to continue: tap a button in the email, or type the 6-digit passcode here. The passcode works for 10 minutes.</p>
+      <p class="sheetbody">We emailed <b class="sendto">${esc(email)}</b>. Tap a button in the email, or type the 6-digit passcode here. It works for 10 minutes. Check spam too.</p>
       ${devCode ? `<div class="note info devcode" role="note"><span>Local test mode: your passcode is <b>${esc(devCode)}</b></span><button type="button" class="btn sm" id="useCode">Use this passcode</button></div>` : ""}
       <form id="cdForm" novalidate><label class="lb" for="lCode">6-digit passcode</label><input class="inp mono codein" id="lCode" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="6" placeholder="••••••" aria-describedby="fErr cdHelp" autocapitalize="off" spellcheck="false"><div id="fErr" role="alert"></div>
       <button class="btn block big" style="margin-top:14px" type="submit" id="cdGo">Sign in</button></form>
       <button class="btn line block big" style="margin-top:8px" type="button" id="resend">Send me a new code</button>
-      <p class="sheethelp" id="cdHelp" role="status" aria-live="polite">Did not arrive after a minute? Check spam, or send a new code.</p>`);
+      <p class="sheethelp" id="cdHelp" role="status" aria-live="polite">Not there yet? Check spam, or send a new code.</p>`);
     const verify = async () => {
       const code = $("lCode").value.replace(/\D/g, "");
       if (code.length !== 6) return setErr("Enter the 6-digit passcode.");

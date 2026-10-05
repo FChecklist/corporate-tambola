@@ -317,7 +317,7 @@ describe("asking for deletion", () => {
     expect((raw.query("SELECT COUNT(*) c FROM participant WHERE eid='PRV-AI'").get() as any).c).toBe(1);
     expect((await j(await call("GET", "/api/z/PRV-AI/control/request", undefined, { "x-organizer": k.token }))).requests[0].action).toBe("erase");
     const mail = raw.query("SELECT subject, body FROM outbox WHERE to_addr='boss@acme.com' ORDER BY id DESC LIMIT 1").get() as any;
-    expect(mail.subject).toMatch(/asked to delete all participant data/); expect(mail.body).toMatch(/Nothing has been deleted/);
+    expect(mail.subject).toMatch(/asked to delete all participant data/); expect(mail.body).toMatch(/Nothing is deleted yet/);
     expect((await call("POST", "/api/z/PRV-AI/erase", {}, { "x-organizer": k.token })).status).toBe(200); // the organizer's own confirmation
     expect((raw.query("SELECT COUNT(*) c FROM participant WHERE eid='PRV-AI'").get() as any).c).toBe(0);
   });

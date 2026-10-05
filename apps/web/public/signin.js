@@ -7,7 +7,7 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const draw = (msg) => {
     app.innerHTML = `<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard zform"><h2>Continue to Corporate Tambola</h2>
-      <p class="zsmall" style="margin-top:0">${go === "/ai-link.html" ? "You will see your AI work link next." : "Your console opens next."} This button works once and for 10 minutes only.</p>
+      <p class="zsmall" style="margin-top:0">Works once, for 10 minutes.</p>
       ${msg ? `<div class="zbanner bad" role="alert">${esc(msg)}</div>` : ""}
       ${t ? `<button class="zbtn" id="go">Continue to Corporate Tambola</button>` : `<div class="zbanner bad">This sign-in link is incomplete. Please ask for a new one from the sign-in page.</div>`}
       <p class="zsmall"><a href="/#login">Back to the sign-in page</a></p></div>`;

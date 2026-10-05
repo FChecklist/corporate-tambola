@@ -4,7 +4,7 @@
   const app = document.getElementById("app");
   const ss = { get: (k) => { try { return sessionStorage.getItem(k) || ""; } catch { return ""; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch {} } };
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  const WARN = "IMPORTANT - DO NOT FORWARD YOUR AI WORK LINK OR THIS PAGE'S CONTENT TO ANYONE AS IT CONTAINS YOUR PERSONALIZED AI WORK LINK";
+  const WARN = "DO NOT FORWARD: this page shows your personal AI work link";
   let token = ss.get("ctz-org"), note = "";
   async function api(method, path, body, tk) {
     const r = await fetch(path, { method, headers: { "content-type": "application/json", "x-organizer": tk || token }, body: method === "GET" ? undefined : JSON.stringify(body || {}) });
@@ -17,7 +17,7 @@
   const AIOPEN = [["ChatGPT", "https://chatgpt.com/?q="], ["Grok", "https://grok.com/?q="], ["Claude", "https://claude.ai/new?q="]];
   const AICOPY = [["Gemini", "https://gemini.google.com/app?q="], ["DeepSeek", "https://chat.deepseek.com/"], ["z.ai", "https://chat.z.ai/"]];
   const aiOptions = (paste) => `<div class="zsmall" style="font-weight:700;margin:12px 0 6px">Open your AI with this already filled in</div><div style="display:flex;flex-wrap:wrap;gap:8px">${AIOPEN.map(([n, u]) => `<a class="zbtn s" data-ai="${n}" href="${u}${encodeURIComponent(paste)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:inline-block">${n}</a>`).join("")}</div>
-    <div class="zsmall" style="font-weight:700;margin:12px 0 6px">Copy it and open your AI, then press Ctrl+V and Send</div><div style="display:flex;flex-wrap:wrap;gap:8px">${AICOPY.map(([n, u]) => `<button class="zbtn s alt" type="button" data-aicopy="${n}" data-url="${u}${n === "Gemini" ? encodeURIComponent(paste) : ""}">${n}</button>`).join("")}</div><div class="zsmall" id="aicopied" role="status" style="margin-top:6px;font-weight:700;color:#0b6b3a"></div>`;
+    <div class="zsmall" style="font-weight:700;margin:12px 0 6px">Copy it, open your AI, press Ctrl+V and Send</div><div style="display:flex;flex-wrap:wrap;gap:8px">${AICOPY.map(([n, u]) => `<button class="zbtn s alt" type="button" data-aicopy="${n}" data-url="${u}${n === "Gemini" ? encodeURIComponent(paste) : ""}">${n}</button>`).join("")}</div><div class="zsmall" id="aicopied" role="status" style="margin-top:6px;font-weight:700;color:#0b6b3a"></div>`;
   const wireAiOptions = (root, paste) => root.querySelectorAll("[data-aicopy]").forEach((b) => (b.onclick = async () => {
     let ok = false; try { await navigator.clipboard.writeText(paste); ok = true; } catch {}
     const m = root.querySelector("#aicopied"); if (m) m.textContent = ok ? "Copied. Press Ctrl+V, then Send" : "Could not copy here: select the box above, copy it, then open " + b.dataset.aicopy + " and paste.";
@@ -26,7 +26,7 @@
   const bannerNote = () => (note ? `<div class="zbanner info">${esc(note)}</div>` : "");
 
   function signIn(msg, email, codeStep) {
-    shell(`<div class="zcard zform"><h2>Sign in as the organizer</h2><p class="zsmall" style="margin-top:0">Your AI work link is shown only to you. We send a 6-digit code to the e-mail address you signed up with. No password.</p>
+    shell(`<div class="zcard zform"><h2>Sign in as the organizer</h2><p class="zsmall" style="margin-top:0">Sign in to see your AI work link. We e-mail you a 6-digit code.</p>
       ${msg ? `<div class="zbanner bad">${esc(msg)}</div>` : ""}
       ${codeStep ? `<label for="cd">6-digit passcode sent to ${esc(email)}</label><input id="cd" inputmode="numeric" autocomplete="one-time-code" maxlength="8"><button class="zbtn" id="go">Show my AI work link</button>`
         : `<label for="em">Your work e-mail</label><input id="em" type="email" autocomplete="email" value="${esc(email || "")}" placeholder="you@company.com"><button class="zbtn" id="go">E-mail me a code</button>`}</div>`);
@@ -51,11 +51,11 @@
     try { r = await api("GET", "/api/org/ai/link"); } catch (e) { token = ""; ss.set("ctz-org", ""); return signIn(e.status === 403 ? "" : e.message, "", false); }
     shell(`${bannerNote()}<div class="zcard" style="border:2px solid #c9a24a;background:#fffaf0"><div class="zsmall" style="font-weight:700;letter-spacing:.06em;color:#8a6a1a">YOUR AI WORK LINK</div>
       ${r.aiMessage
-        ? `<p style="margin:8px 0">Copy everything in the box and paste it into any AI chat (ChatGPT, Claude, Gemini, Grok, DeepSeek, z.ai or any other). Answer its questions: it does all the work for you.</p><textarea class="zlink" id="msg" rows="5" readonly style="width:100%;box-sizing:border-box">${esc(r.aiMessage)}</textarea><button class="zbtn" id="cp" style="margin-top:8px">Copy my AI work link</button>${aiOptions(r.aiMessage)}`
+        ? `<p style="margin:8px 0">Copy the box. Paste it into any AI chat. It does the work.</p><textarea class="zlink" id="msg" rows="5" readonly style="width:100%;box-sizing:border-box">${esc(r.aiMessage)}</textarea><button class="zbtn" id="cp" style="margin-top:8px">Copy my AI work link</button>${aiOptions(r.aiMessage)}`
         : `<p style="margin:8px 0">You have no AI work link at the moment.</p><button class="zbtn" id="mk">Make my AI work link</button>`}
       <hr style="border:0;border-top:1px solid #e6d9b8;margin:16px 0">
-      <p class="zsmall" style="margin:0 0 8px">Get a fresh link: we e-mail you a new link that works for 24 hours. Your lasting link and other links keep working.</p><button class="zbtn s alt" id="fr">Get a fresh AI link</button>
-      <p class="zsmall" style="margin:14px 0 8px">Lost it or shared it by mistake? Replace stops every AI link at once and makes a new one.</p><button class="zbtn s alt" id="rp">Replace my AI link</button></div>
+      <p class="zsmall" style="margin:0 0 8px">Fresh link: we e-mail you one that works 24 hours.</p><button class="zbtn s alt" id="fr">Get a fresh AI link</button>
+      <p class="zsmall" style="margin:14px 0 8px">Lost it? Replace stops every AI link at once.</p><button class="zbtn s alt" id="rp">Replace my AI link</button></div>
       <p class="zsmall"><a href="/zc.html">Open my console</a></p>`);
     if (r.aiMessage) wireAiOptions(app, r.aiMessage);
     const on = (id, f) => { const b = document.getElementById(id); if (b) b.onclick = f; };

@@ -137,8 +137,8 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
   await db.prepare("INSERT OR IGNORE INTO invoice(token,payment_id,brand,fy,seq,number,issued_ms,data) VALUES(?,?,?,?,?,?,?,?)").bind(token, p.id, brand.id, fy, seq, number, now, JSON.stringify(data)).run();
   const origin = env.PUBLIC_ORIGIN ?? meta.origin ?? "";
   const lines = [
-    `Thank you. Your ${brand.name} engagement for up to ${p.pack} participants is ready to set up.`,
-    published ? `Your engagement is published. Share the link with your participants from your console: ${origin}/zc.html?e=${published}` : organizerKey ? `Your organizer key (keep it private, it is shown only once): ${organizerKey}\nOpen ${origin}/zc.html and paste it to begin.` : `Use your existing organizer key at ${origin}/zc.html to create this engagement.`,
+    `Thank you. Payment received for up to ${p.pack} participants.`,
+    published ? `Your engagement is live. Share the link from your console: ${origin}/zc.html?e=${published}` : organizerKey ? `Your organizer key (keep it private, it is shown only once): ${organizerKey}\nOpen ${origin}/zc.html and paste it to begin.` : `Use your existing organizer key at ${origin}/zc.html to create this engagement.`,
     `\nINVOICE\n${renderInvoiceText(data)}\nView or print it: ${origin}/api/invoice/${token}`,
   ];
   await sendMail(env, db, p.email, `${brand.name}: payment received, invoice ${number}`, lines.join("\n\n"), now);

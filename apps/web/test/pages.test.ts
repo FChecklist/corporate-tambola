@@ -37,7 +37,7 @@ describe("console (organizer page)", () => {
     const p = await page(o, "/zc", "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token, "ctz-aimsg": o.aiMessage });
     const t = await p.waitFor((x) => /OPTION 1/.test(x));
     expect(t.indexOf("OPTION 1")).toBeLessThan(t.indexOf("OPTION 2")); expect(t.indexOf("OPTION 2")).toBeLessThan(t.indexOf("Create your engagement"));
-    expect(t).toMatch(/ChatGPT, Gemini, Grok, Claude, DeepSeek, Z\.ai/); expect(t).toMatch(/Only four things stay with you: payment, pressing Publish/);
+    expect(t).toMatch(/ChatGPT, Gemini, Grok, Claude, DeepSeek, Z\.ai/); expect(t).toMatch(/You keep four things: payment, Publish, erasing data, pause or stop/);
     expect((p.$("#aimsg") as any).value).toContain("/ai/cta_"); expect((p.$("#aimsg") as any).value).toMatch(/my own Corporate Tambola account/i); expect(p.$("#aicopy")).toBeTruthy();
     expect(p.errors).toEqual([]);
   });
@@ -69,7 +69,7 @@ describe("console (organizer page)", () => {
     const t = await p.waitFor((x) => /YOUR AI WORK LINK/.test(x));
     const v = (p.$("#msg") as any).value as string; expect(v).toBe(o.aiMessage); expect(v.split("\n").length).toBe(2); expect(v).toContain("/ai/cta_");
     expect(p.$("#cp")).toBeTruthy(); expect(p.$("#fr")).toBeTruthy(); expect(p.$("#rp")).toBeTruthy();
-    expect((t.match(/IMPORTANT - DO NOT FORWARD YOUR AI WORK LINK/g) ?? []).length).toBe(2);
+    expect((t.match(/DO NOT FORWARD: this page shows your personal AI work link/g) ?? []).length).toBe(2);
     p.click("#fr"); await p.waitFor((x) => /fresh 24-hour link is on its way/.test(x));
     expect(p.errors).toEqual([]);
   });
@@ -106,7 +106,7 @@ describe("console (organizer page)", () => {
     const r = await o.json(await o.api("POST", "/api/auth/email", { email: "boss@acme.com" }));
     const p = await page(o, "/signin?t=" + r.devToken + "&go=ai", "signin.html", ["signin.js"], {});
     const t = await p.waitFor((x) => /Continue to Corporate Tambola/.test(x));
-    expect(t).toMatch(/AI work link next/); expect(t).not.toMatch(/cta_/); expect(p.win.sessionStorage.getItem("ctz-org")).toBeFalsy();
+    expect(t).toMatch(/Works once, for 10 minutes/); expect(t).not.toMatch(/cta_/); expect(p.win.sessionStorage.getItem("ctz-org")).toBeFalsy();
     expect(p.win.location.search).toBe(""); // the token left the address bar
     expect((await o.api("POST", "/api/auth/email", { email: "stranger@x.com" })).status).toBe(200);
     p.click("#go");
@@ -477,10 +477,10 @@ describe("Refer & Earn page", () => {
     p.click("#payBtn"); await new Promise((r) => setTimeout(r, 200));
     const t = (p.$("#sheet") as any).textContent as string; expect(t).toMatch(/Create your engagement/);
     expect(t).toContain("Build it and publish it free."); expect(t).not.toMatch(/Pay (only )?before it starts/); expect(t).toMatch(/For the organizer or host/);
-    for (const b of ["A private tambola (housie) for your own people", "Every ticket is unique: no two tickets can ever be the same", "no app to download, no SMS, no password", "play a video or audio message between numbers", "Set several prizes, and add a lucky draw inside the game", "Participants never pay. You provide the rewards", "Your free AI assistant can set everything up for you", "names and mobile numbers are deleted within 24 hours after the game ends"]) expect(t).toContain(b);
-    expect(p.win.document.querySelectorAll(".bgrid li").length).toBe(8); expect(p.win.document.querySelectorAll(".bgrid .bico svg").length).toBe(8);
-    expect(t).toMatch(/Free to build and publish. No password. Pay only before the start./); expect(t).toMatch(/Your console opens straight away: no password needed. We use your email for your invoice and to sign you back in later./);
-    expect(t).not.toMatch(/work email/i); expect(t).not.toMatch(/waiting for an email/);
+    for (const b of ["Play a video or audio message between numbers", "Set several prizes, and add a lucky draw", "A closed-group corporate tambola (housie)", "Every ticket is unique: no two can ever match", "Each participant gets their own ticket", "A free AI assistant sets it up for you", "Participants never pay. You provide the rewards", "All participant data is deleted within 24 hours of the game ending", "Built for DPDP Act, GDPR and US privacy laws"]) expect(t).toContain(b);
+    expect(p.win.document.querySelectorAll(".bgrid li").length).toBe(9); expect(p.win.document.querySelectorAll(".bgrid .bico svg").length).toBe(9); for (const li of p.win.document.querySelectorAll(".bgrid li")) expect(li.textContent.trim().split(/s+/).length).toBeLessThanOrEqual(13); // one short line each
+    expect(t).toContain("Free to build and publish. No password."); expect(t).toContain("Your console opens at once. We use your email for your invoice and to sign you in later.");
+    expect(t).not.toMatch(/work email/i); expect(t.split(/s+/).length).toBeLessThan(150);
     const f = p.$("#fMail") as any; expect(p.win.document.querySelector('label[for="fMail"]').textContent).toBe("Your email");
     expect(f.getAttribute("type")).toBe("email"); expect(f.getAttribute("inputmode")).toBe("email"); expect(f.getAttribute("autocomplete")).toBe("email"); expect(f.getAttribute("placeholder")).toBe("you@example.com");
     expect(p.win.document.querySelector(".sheet .sbrand")!.getAttribute("aria-label")).toBe("Corporate Tambola"); expect(p.win.document.querySelector(".sheethead .rolepill")).toBeTruthy();

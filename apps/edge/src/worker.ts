@@ -222,7 +222,7 @@ export async function housekeeping(env: Env, now: number): Promise<void> {
     const due = await env.DB.prepare("SELECT e.id, e.start_round FROM engagement e WHERE e.pack=0 AND EXISTS (SELECT 1 FROM kv WHERE k='pub/'||e.id)").all<{ id: string; start_round: number }>();
     for (const x of due.results ?? []) {
       const at = roundMs(x.start_round);
-      if (at > now && at - now < 36 * 3_600_000) await nudge(env, x.id, "remind", now, `Payment due before ${istTime(at)}: your engagement ${x.id}`, `Your engagement ${x.id} starts ${istTime(at)}. Payment has not been received yet. If it is not paid before the start, the engagement will not begin and everyone you invited will be left waiting.\n\nPay now (about 2 minutes): ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${x.id}`);
+      if (at > now && at - now < 36 * 3_600_000) await nudge(env, x.id, "remind", now, `Payment due before ${istTime(at)}: your engagement ${x.id}`, `Your engagement ${x.id} starts ${istTime(at)}. It is not paid yet, so it will not begin.\n\nPay now (about 2 minutes): ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${x.id}`);
     }
   } catch { /* try again on the next request */ }
 }
@@ -603,7 +603,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (!b || !["pause", "resume", "stop", "erase"].includes(b.action)) return json({ error: "Ask for pause, resume, stop or erase." }, 400);
       if (!(await spend(env, now))) return BUSY();
       if (b.action === "erase") { // the AI may ASK to delete all participant data; only the organizer's own confirmation in their console does it
-        await nudge(env, cid!, `delreq-${day(now)}`, now, `Your AI assistant asked to delete all participant data: engagement ${cid}`, `Your AI assistant asked us to delete every participant's name and mobile number for engagement ${cid}.\n\nNothing has been deleted. To confirm, open your console and press Confirm on the request: ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html?e=${cid}\n\nIf you did not ask for this, ignore this message or press Dismiss in your console.`);
+        await nudge(env, cid!, `delreq-${day(now)}`, now, `Your AI assistant asked to delete all participant data: engagement ${cid}`, `Your AI assistant asked to delete all participant data for ${cid}. Nothing is deleted yet.\n\nTo confirm, press Confirm in your console: ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html?e=${cid}\n\nNot you? Press Dismiss.`);
         await env.DB.prepare("INSERT INTO ctl_request(eid,action,note,at_ms,open) VALUES(?,?,?,?,1)").bind(cid, "erase", typeof b.note === "string" ? b.note.replace(/[<>`]/g, "").slice(0, 200) : null, now).run();
         return json({ ok: true, message: "Nothing has been deleted yet. The organizer has been asked and must confirm in their console (we also e-mailed them). Tell them to open the console and press Confirm." });
       }
@@ -719,7 +719,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       await erasePersonal(env, tok, now, "email");
       done.push(tok);
     }
-    if (done.length) await sendMail(env as PayEnv, env.DB, from, `Deleted: participant data of ${done.join(", ")}`, `As you asked, we have permanently deleted every participant's name, mobile number, seat and invitation record for: ${done.join(", ")}.\n\nWe keep, your details as organizer / host / co-host and the winners record (prize, round, time, seat; no names or numbers) until their 365 days end. Backups roll off within 7 days.\n\nCorporate Tambola`, now);
+    if (done.length) await sendMail(env as PayEnv, env.DB, from, `Deleted: participant data of ${done.join(", ")}`, `Done. We deleted all participant data for: ${done.join(", ")}.\n\nWe keep only the winners record (no names or numbers) and your organizer details, for up to 365 days.`, now);
     return json({ ok: true, action: done.length ? "deleted" : "no-match", engagements: done });
   }
   if (req.method === "GET" && p === "/api/notices") { // our public news list: the same for everyone, nothing about the reader is stored or asked
@@ -774,7 +774,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   const isDraft = unpaid && !(await isPublished(env, e));
   const locked = unpaid && !isDraft && roundMs(e.start_round) - LOCK_LEAD_MS <= now; // published but not paid by its start time: it does not begin
   if (isDraft && ((action === "join" && req.method === "POST") || (action === "info" && !can(a, e)))) return json({ error: "This engagement is not open yet." }, 403);
-  if (locked && !can(a, e) && (action === "info" || action === "join")) await nudge(env, e.id, "lockmail", now, `Your engagement ${e.id} could not begin: payment is due`, `Your participants opened your link, but your engagement ${e.id} could not begin because payment has not been received.\n\nPay now and it starts in about 3 minutes, for everyone already waiting: ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${e.id}`);
+  if (locked && !can(a, e) && (action === "info" || action === "join")) await nudge(env, e.id, "lockmail", now, `Your engagement ${e.id} could not begin: payment is due`, `Your engagement ${e.id} could not begin: payment is due.\n\nPay now and it starts in about 3 minutes: ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${e.id}`);
   if (action === "join" && req.method === "POST") {
     const b = await body(req);
     const digits = digitsOf(b?.phone), ph = await phoneHash(b?.phone);
@@ -924,7 +924,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     ]);
     const paid = !!(ent || free), startMs = roundMs(e.start_round);
     await sendMail(env as PayEnv, env.DB, cEmail, paid ? `Your engagement ${eid} is published and paid` : `Your engagement ${eid} is published: pay before ${istTime(startMs)}`,
-      `Your engagement ${eid} is published and open to your participants.\n\nShare this link with them:\n${shareUrl}\n\n${paid ? "" : `IMPORTANT: payment is due before the start (${istTime(startMs)}). If it is not paid by then, the engagement will not begin and everyone you invited will be left waiting. You can pay any time before the start, and it takes about 2 minutes:\n${payUrl}\n\n`}You can also open the big screen for the room: ${origin}/big.html?e=${eid}\n\nThis e-mail can be forwarded safely: it holds no secret link.`, now); // no AI work link here, ever: it has its own dedicated e-mail
+      `Your engagement ${eid} is live.\n\nShare this link: ${shareUrl}\n\n${paid ? "" : `Pay before ${istTime(startMs)} or it will not begin (about 2 minutes): ${payUrl}\n\n`}Big screen for the room: ${origin}/big.html?e=${eid}`, now);
     return json({ ok: true, published: true, paid, startMs, payUrl, shareUrl, confirmed: { email: cEmail, phone: cPhone.slice(-10) } });
   }
   if (action === "claims" && req.method === "GET") {

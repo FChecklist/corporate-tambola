@@ -64,12 +64,12 @@
   function codeView(email, devCode) {
     view(card(`<div class="sheethead"><div class="eyebrow">Check your inbox</div><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
       <h1 id="cdTitle">Check your email</h1>
-      <p class="sheetbody">We have sent an email to <b class="sendto">${esc(email)}</b>. Please also look in your spam or junk folder. It gives you three ways to continue: tap a button in the email, or type the 6-digit passcode here. The passcode works for 10 minutes.</p>
+      <p class="sheetbody">We emailed <b class="sendto">${esc(email)}</b>. Tap a button in the email, or type the 6-digit passcode here. It works for 10 minutes. Check spam too.</p>
       ${devCode ? `<div class="note info devcode" role="note"><span>Local test mode: your passcode is <b>${esc(devCode)}</b></span><button type="button" class="btn sm" id="useCode">Use this passcode</button></div>` : ""}
       <form id="cdForm" novalidate><label class="lb" for="lCode">6-digit passcode</label><input class="inp mono codein" id="lCode" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="6" placeholder="••••••" aria-describedby="fErr cdHelp" autocapitalize="off" spellcheck="false"><div id="fErr" role="alert"></div>
       <button class="btn block big" style="margin-top:14px" type="submit" id="cdGo">Sign in</button></form>
       <button class="btn line block big" style="margin-top:8px" type="button" id="resend">Send me a new code</button>
-      <p class="sheethelp" id="cdHelp" role="status" aria-live="polite">Did not arrive after a minute? Check spam, or send a new code.</p>`));
+      <p class="sheethelp" id="cdHelp" role="status" aria-live="polite">Not there yet? Check spam, or send a new code.</p>`));
     const verify = async () => {
       const c = $("lCode").value.replace(/\D/g, "");
       if (c.length !== 6) return setErr("Enter the 6-digit passcode.");

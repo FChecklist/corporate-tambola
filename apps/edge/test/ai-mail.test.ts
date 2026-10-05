@@ -37,7 +37,7 @@ describe("the dedicated mail builders", () => {
   test("organizer mail: own subject, warning at the top and the bottom, plain-text part, numbered steps, the paste as plain text (no hyperlink)", () => {
     const m = aiLinkMail(ORIGIN, KEY, "start", T + 86_400_000);
     expect(m.subject).toBe(AI_SUBJECT); expect(m.subject).toMatch(/personal AI work link/i);
-    expect(AI_WARNING).toBe("IMPORTANT - DO NOT FORWARD YOUR AI WORK LINK OR THIS EMAIL TO ANYONE AS IT CONTAINS YOUR PERSONALIZED AI WORK LINK");
+    expect(AI_WARNING).toBe("DO NOT FORWARD: this email holds your personal AI work link"); expect(AI_WARNING.length).toBeLessThan(70); // one line
     expect(m.text.startsWith(AI_WARNING)).toBe(true); expect(m.text.replace(footerText(ORIGIN), "").trim().endsWith(AI_WARNING)).toBe(true); // plain-text part, warning top and bottom
     expect(m.text.split(AI_WARNING).length).toBe(3);
     const h = m.html; const first = h.indexOf(AI_WARNING), last = h.lastIndexOf(AI_WARNING);
@@ -47,15 +47,15 @@ describe("the dedicated mail builders", () => {
     const hrefs = [...h.matchAll(/href\s*=\s*"([^"]*)"/gi)].map((x) => x[1]).filter((h) => !/^mailto:|legal.html$/.test(h!)); expect(hrefs).toEqual([`${ORIGIN}/ai-link.html`]); expect(h).toContain("Show my AI work link"); // the only link is the button to the sign-in page, never the key; the paste box is not a link
     expect(h).toContain(`${ORIGIN}/ai/${KEY}`); // but the text is in the box, to copy
     for (const t of ["ChatGPT", "Claude", "Gemini", "Grok", "DeepSeek", "z.ai"]) { expect(m.text).toContain(t); expect(h).toContain(t); }
-    expect(m.text).toMatch(/1\. Copy everything/); expect(m.text).toMatch(/2\. Paste it into any AI chat/); expect(m.text).toMatch(/3\. Answer its questions/); expect(m.text).toMatch(/does all the work for you/);
-    for (const t of [/payment/, /Publish/, /erasing/, /pausing or stopping/, /Replace my AI link/, /stops working at once/]) { expect(m.text).toMatch(t); expect(h).toMatch(t); }
+    expect(m.text).toMatch(/1\. Copy the box/); expect(m.text).toMatch(/2\. Paste it into any AI chat/); expect(m.text).toMatch(/3\. Answer its questions/); expect(m.text).toMatch(/does the work/);
+    for (const t of [/payment/, /publishing/, /erasing/, /pause or stop/, /Replace my AI link/, /stops at once/]) { expect(m.text).toMatch(t); expect(h).toMatch(t); }
     expect(m.text.split(KEY).length).toBe(2); expect(h.split(KEY).length).toBe(2); // the key appears once, inside the paste
     expect(m.text).toContain("MY OWN Corporate Tambola account");
   });
   test("a replacement mail says the old link has stopped", () => {
     const m = aiLinkMail(ORIGIN, KEY, "replace", T + 86_400_000);
-    expect(m.text).toMatch(/NEW personal AI work link/i); expect(m.text).toMatch(/Every older link stopped working at once/);
-    expect(m.text).toMatch(/WORKS FOR 24 HOURS ONLY/); expect(m.text).toMatch(/Show my AI work link/); expect(m.html).toMatch(/WORKS FOR 24 HOURS ONLY/);
+    expect(m.text).toMatch(/NEW personal AI work link/i); expect(m.text).toMatch(/Every older link stopped at once/);
+    expect(m.text).toMatch(/WORKS FOR 24 HOURS ONLY/); expect(m.text).toMatch(/Show my AI work link/i); expect(m.html).toMatch(/WORKS FOR 24 HOURS ONLY/);
   });
   test("co-host mail: whose engagement, a watch and announce role, own warning top and bottom, plain-text part, no hyperlink", () => {
     const k = "cth_" + "cd".repeat(24), m = coHostLinkMail(ORIGIN, k, "boss@acme.com", T + 86_400_000);
