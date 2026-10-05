@@ -16,6 +16,7 @@ const call = (method: string, path: string, body?: unknown, headers: Record<stri
 const roundAt = (ms: number) => Math.floor((ms / 1000 - 1692803367) / 3) + 1;
 const j = async (r: Response) => (await r.json()) as any;
 const contact = { email: "boss@acme.com", phone: "98765 43210" };
+const mailedKey = (b: string) => b.match(/cta_[0-9a-f]{48}/)![0];
 const outbox = () => raw.prepare("SELECT to_addr, subject, body FROM outbox ORDER BY id").all() as { to_addr: string; subject: string; body: string }[];
 const LEAK = /cta_[0-9a-f]|cth_[0-9a-f]|\/ai\//;
 const DEDICATED = new Set([AI_SUBJECT, HOST_SUBJECT]);
@@ -33,7 +34,7 @@ async function organizer() {
 describe("the dedicated mail builders", () => {
   const KEY = "cta_" + "ab".repeat(24);
   test("organizer mail: own subject, warning at the top and the bottom, plain-text part, numbered steps, the paste as plain text (no hyperlink)", () => {
-    const m = aiLinkMail(ORIGIN, KEY);
+    const m = aiLinkMail(ORIGIN, KEY, "start", T + 86_400_000);
     expect(m.subject).toBe(AI_SUBJECT); expect(m.subject).toMatch(/personal AI work link/i);
     expect(AI_WARNING).toBe("IMPORTANT - DO NOT FORWARD YOUR AI WORK LINK OR THIS EMAIL TO ANYONE AS IT CONTAINS YOUR PERSONALIZED AI WORK LINK");
     expect(m.text.startsWith(AI_WARNING)).toBe(true); expect(m.text.trim().endsWith(AI_WARNING)).toBe(true); // plain-text part, warning top and bottom
@@ -42,7 +43,7 @@ describe("the dedicated mail builders", () => {
     expect(first).toBeGreaterThan(0); expect(last).toBeGreaterThan(first);
     expect(first).toBeLessThan(h.indexOf("<h1")); expect(last).toBeGreaterThan(h.indexOf("WHAT TO DO")); expect(h.split(AI_WARNING).length).toBe(3);
     expect(h).toMatch(/#b71c1c/); // red
-    expect(h).not.toMatch(/<a[\s>]/i); expect(h).not.toMatch(/href\s*=/i); // never a clickable link: mail scanners open links
+    const hrefs = [...h.matchAll(/href\s*=\s*"([^"]*)"/gi)].map((x) => x[1]); expect(hrefs).toEqual([`${ORIGIN}/ai-link.html`]); expect(h).toContain("Show my AI work link"); // the only link is the button to the sign-in page, never the key; the paste box is not a link
     expect(h).toContain(`${ORIGIN}/ai/${KEY}`); // but the text is in the box, to copy
     for (const t of ["ChatGPT", "Claude", "Gemini", "Grok", "DeepSeek", "z.ai"]) { expect(m.text).toContain(t); expect(h).toContain(t); }
     expect(m.text).toMatch(/1\. Copy everything/); expect(m.text).toMatch(/2\. Paste it into any AI chat/); expect(m.text).toMatch(/3\. Answer its questions/); expect(m.text).toMatch(/does all the work for you/);
@@ -51,15 +52,17 @@ describe("the dedicated mail builders", () => {
     expect(m.text).toContain("MY OWN Corporate Tambola account");
   });
   test("a replacement mail says the old link has stopped", () => {
-    const m = aiLinkMail(ORIGIN, KEY, "replace");
-    expect(m.text).toMatch(/NEW personal AI work link/i); expect(m.text).toMatch(/old link stopped working at once/);
+    const m = aiLinkMail(ORIGIN, KEY, "replace", T + 86_400_000);
+    expect(m.text).toMatch(/NEW personal AI work link/i); expect(m.text).toMatch(/Every older link stopped working at once/);
+    expect(m.text).toMatch(/WORKS FOR 24 HOURS ONLY/); expect(m.text).toMatch(/Show my AI work link/); expect(m.html).toMatch(/WORKS FOR 24 HOURS ONLY/);
   });
   test("co-host mail: whose engagement, a watch and announce role, own warning top and bottom, plain-text part, no hyperlink", () => {
-    const k = "cth_" + "cd".repeat(24), m = coHostLinkMail(ORIGIN, k, "boss@acme.com");
+    const k = "cth_" + "cd".repeat(24), m = coHostLinkMail(ORIGIN, k, "boss@acme.com", T + 86_400_000);
+    expect(m.text).toMatch(/WORKS FOR 24 HOURS ONLY/);
     expect(m.subject).toBe(HOST_SUBJECT);
     expect(m.text.startsWith(HOST_WARNING)).toBe(true); expect(m.text.trim().endsWith(HOST_WARNING)).toBe(true); expect(m.html.split(HOST_WARNING).length).toBe(3);
     expect(m.text).toContain("boss@acme.com"); expect(m.text).toMatch(/watch and announce/i); expect(m.text).toMatch(/co-host/i);
-    expect(m.html).not.toMatch(/<a[\s>]/i); expect(m.html).not.toMatch(/href\s*=/i); expect(m.text).toContain(`${ORIGIN}/ai/${k}`);
+    expect([...m.html.matchAll(/href\s*=\s*"([^"]*)"/gi)].map((x) => x[1])).toEqual([`${ORIGIN}/zc.html`]); expect(m.text).toContain(`${ORIGIN}/ai/${k}`);
     expect(m.text).toMatch(/cannot change settings/);
   });
 });
@@ -69,7 +72,9 @@ describe("the AI link is in the dedicated mails and nowhere else", () => {
     const o = await organizer();
     const sent = outbox();
     expect(sent.length).toBe(1); expect(sent[0]!.to_addr).toBe("boss@acme.com"); expect(sent[0]!.subject).toBe(AI_SUBJECT);
-    expect(sent[0]!.body).toContain(o.msg); expect(sent[0]!.body.startsWith(AI_WARNING)).toBe(true);
+    expect(sent[0]!.body.startsWith(AI_WARNING)).toBe(true); expect(sent[0]!.body).toMatch(/WORKS FOR 24 HOURS ONLY/);
+    expect(sent[0]!.body).not.toContain(o.ai); expect(sent[0]!.body).not.toContain(o.msg); // the lasting key stays in the console; the mail has its own 24-hour key
+    const mk = mailedKey(sent[0]!.body); expect(mk).not.toBe(o.ai); expect((await call("GET", `/ai/${mk}`)).status).toBe(200);
   });
   test("publish, reminder, could-not-begin and every other mail of a full unpaid lifecycle carry no AI link; only the dedicated mails do", async () => {
     const { h } = await organizer();
@@ -99,7 +104,7 @@ describe("the AI link is in the dedicated mails and nowhere else", () => {
     const pages = ["report.html", "report.js", "reportgen.js", "z.html", "z.js", "zgame.js", "big.html", "big.js", "play.html", "play.js", "pay.html", "pay.js", "partner.html", "partner.js", "screen.js"];
     for (const f of pages) { let t = ""; try { t = read("apps/web/public", f); } catch { continue; } expect(t).not.toMatch(/cta_|cth_|\/ai\/|aiMessage/); }
     const w = read("apps/edge/src/worker.ts");
-    expect(w).not.toMatch(/aiMailBody/); expect((w.match(/aiLinkMail\(/g) ?? []).length).toBe(2); expect((w.match(/coHostLinkMail\(/g) ?? []).length).toBe(1); // start + replace; co-host creation
+    expect(w).not.toMatch(/aiMailBody/); expect((w.match(/aiLinkMail\(/g) ?? []).length).toBe(1); expect((w.match(/coHostLinkMail\(/g) ?? []).length).toBe(1); // start + replace; co-host creation
   });
 });
 
@@ -113,7 +118,9 @@ describe("Replace my AI link", () => {
     expect((await call("GET", `/ai/${o.ai}`)).status).toBe(404); expect((await call("GET", `/ai/${o.ai}/whoami`)).status).toBe(404);
     expect((await call("GET", "/api/whoami", undefined, { "x-organizer": o.ai })).status).toBe(403);
     expect((await call("GET", `/ai/${x.aiKey}`)).status).toBe(200); expect(await j(await call("GET", `/ai/${x.aiKey}/whoami`))).toEqual({ kind: "ai" });
-    const last = outbox().at(-1)!; expect(last.subject).toBe(AI_SUBJECT); expect(last.body).toContain(x.aiKey); expect(last.body).not.toContain(o.ai); expect(last.body).toMatch(/NEW personal AI work link/i);
+    const last = outbox().at(-1)!; expect(last.subject).toBe(AI_SUBJECT); expect(last.body).toMatch(/NEW personal AI work link/i);
+    expect(last.body).not.toContain(x.aiKey); expect(last.body).not.toContain(o.ai); // the mail carries its own 24-hour key, not the lasting one
+    const mk = mailedKey(last.body); expect(mk).not.toBe(x.aiKey); expect((await call("GET", `/ai/${mk}`)).status).toBe(200);
     const rows = raw.prepare("SELECT method, path, status FROM ai_audit WHERE path='/api/org/ai/replace'").all() as any[];
     expect(rows).toEqual([{ method: "POST", path: "/api/org/ai/replace", status: 200 }]);
     expect(JSON.stringify(raw.prepare("SELECT * FROM ai_audit").all())).not.toContain(x.aiKey);
@@ -140,7 +147,8 @@ describe("Replace my AI link", () => {
   test("a co-host key made later is e-mailed to the organizer in its own mail", async () => {
     const o = await organizer();
     const hk = await j(await call("POST", "/api/org/host", {}, o.h)); expect(hk.mailed).toBe(true);
-    const m = outbox().at(-1)!; expect(m.subject).toBe(HOST_SUBJECT); expect(m.to_addr).toBe("boss@acme.com"); expect(m.body).toContain(hk.hostKey); expect(m.body).toContain("boss@acme.com");
+    const m = outbox().at(-1)!; expect(m.subject).toBe(HOST_SUBJECT); expect(m.to_addr).toBe("boss@acme.com"); expect(m.body).not.toContain(hk.hostKey); expect(m.body).toContain("boss@acme.com"); expect(m.body).toMatch(/WORKS FOR 24 HOURS ONLY/);
+    const ck = m.body.match(/cth_[0-9a-f]{48}/)![0]; expect(ck).not.toBe(hk.hostKey); expect((await call("GET", `/ai/${ck}`)).status).toBe(200); expect((await call("GET", `/ai/${hk.hostKey}`)).status).toBe(200);
   });
 });
 
@@ -150,7 +158,7 @@ describe("opening the manual never changes anything", () => {
     await call("POST", "/api/z", { id: "SAFE-1", startRound: roundAt(T) + 1200, callSeconds: 6, cap: 100 }, o.h);
     const snap = () => {
       const tables = (raw.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('ai_audit','sqlite_sequence')").all() as { name: string }[]).map((t) => t.name).sort();
-      return JSON.stringify(tables.map((n) => [n, raw.prepare(`SELECT * FROM "${n}"`).all()]));
+      return JSON.stringify(tables.map((n) => [n, raw.prepare(n === "kv" ? `SELECT * FROM kv WHERE k NOT LIKE 'seen/%'` : `SELECT * FROM "${n}"`).all()])); // the only bookkeeping a read leaves is the unfamiliar-use baseline (seen/) and the audit line
     };
     const before = snap();
     for (let i = 0; i < 3; i++) {

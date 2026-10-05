@@ -33,7 +33,7 @@ describe("build first, pay to publish", () => {
     expect((await call("GET", "/api/history", undefined, { "x-organizer": o.ai })).status).toBe(200); // the AI link really works
     const sent = raw.prepare("SELECT to_addr, subject, body FROM outbox").all() as { to_addr: string; subject: string; body: string }[];
     expect(sent.length).toBe(1); expect(sent[0]!.to_addr).toBe("boss@acme.com"); expect(sent[0]!.subject).toMatch(/personal AI work link/i);
-    expect(sent[0]!.body).toContain(o.ai); expect(sent[0]!.body).toContain(o.aiMessage); // the exact text of Option 1, key included, so pasting it works
+    expect(sent[0]!.body).not.toContain(o.ai); expect(sent[0]!.body).toMatch(/\/ai\/cta_[0-9a-f]{48}/); expect(sent[0]!.body).toMatch(/24 HOURS/); // the mail has its own 24-hour key; the lasting one stays in the console
   });
   test("an email that already has an account is not let in by typing it: it is asked for the e-mailed code", async () => {
     await organizer();

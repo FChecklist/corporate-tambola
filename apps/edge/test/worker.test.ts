@@ -390,7 +390,7 @@ describe("organizers, their AI assistant, and what the AI may not do", () => {
     expect((await call("GET", "/api/z/MINE1/participants", undefined, asA())).status).toBe(403);
     expect((await call("GET", "/api/z/MINE1/participants", undefined, { "x-organizer": second })).status).toBe(200);
     const r = await (await call("POST", "/api/org/ai/revoke", {}, asM())).json() as any;
-    expect(r.revoked).toBe(1);
+    expect(r.revoked).toBeGreaterThanOrEqual(1); // the new key (and any 24-hour mailed key)
     expect((await call("GET", "/api/z/MINE1/participants", undefined, { "x-organizer": second })).status).toBe(403);
     expect((await call("GET", "/api/z/MINE1/participants", undefined, asM())).status).toBe(200);
   });

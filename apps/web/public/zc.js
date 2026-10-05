@@ -28,9 +28,19 @@
       ${msg ? `<div class="zbanner bad">${esc(msg)}</div>` : ""}<button class="zbtn" id="in">Continue</button></div><div class="zcard"><h2>Coming back?</h2><p class="zsmall" style="margin-top:0">Sign in with your work email: we send you a 6-digit code, no password.</p><a class="zbtn s alt" href="/#login" id="goLogin" style="text-decoration:none;display:inline-block">Sign in with email</a></div>`;
   }
   /** The two ways to work, shown first and prominently. Most organizers pick the AI. */
+  // Seven ways to hand the paste to an AI: three open the AI with the paste pre-filled (a web address), three copy it and open the site (Ctrl+V, Send), one plain copy.
+  const AIOPEN = [["ChatGPT", "https://chatgpt.com/?q="], ["Grok", "https://grok.com/?q="], ["Claude", "https://claude.ai/new?q="]];
+  const AICOPY = [["Gemini", "https://gemini.google.com/app?q="], ["DeepSeek", "https://chat.deepseek.com/"], ["z.ai", "https://chat.z.ai/"]];
+  const aiOptions = (paste) => `<div class="zsmall" style="font-weight:700;margin:12px 0 6px">Open your AI with this already filled in</div><div style="display:flex;flex-wrap:wrap;gap:8px">${AIOPEN.map(([n, u]) => `<a class="zbtn s" data-ai="${n}" href="${u}${encodeURIComponent(paste)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:inline-block">${n}</a>`).join("")}</div>
+    <div class="zsmall" style="font-weight:700;margin:12px 0 6px">Copy it and open your AI, then press Ctrl+V and Send</div><div style="display:flex;flex-wrap:wrap;gap:8px">${AICOPY.map(([n, u]) => `<button class="zbtn s alt" type="button" data-aicopy="${n}" data-url="${u}${n === "Gemini" ? encodeURIComponent(paste) : ""}">${n}</button>`).join("")}</div><div class="zsmall" id="aicopied" role="status" style="margin-top:6px;font-weight:700;color:#0b6b3a"></div>`;
+  const wireAiOptions = (root, paste) => root.querySelectorAll("[data-aicopy]").forEach((b) => (b.onclick = async () => {
+    let ok = false; try { await navigator.clipboard.writeText(paste); ok = true; } catch {}
+    const m = root.querySelector("#aicopied"); if (m) m.textContent = ok ? "Copied. Press Ctrl+V, then Send" : "Could not copy here: select the box above, copy it, then open " + b.dataset.aicopy + " and paste.";
+    try { window.open(b.dataset.url, "_blank", "noopener,noreferrer"); } catch {}
+  }));
   function optionsCard() {
     const ai = S.aiMsg
-      ? `<textarea class="zlink" id="aimsg" rows="4" readonly style="width:100%;box-sizing:border-box">${esc(S.aiMsg)}</textarea><button class="zbtn" id="aicopy" style="margin-top:8px">Copy my AI work link</button><button class="zbtn s alt" id="aireplace">Replace my AI link</button><button class="zbtn s alt" id="airevoke">Stop this link</button><p class="zsmall" style="margin:8px 0 0">Lost the link, or shared it by mistake? <b>Replace my AI link</b> stops the old one at once and makes a new one, e-mailed to you in its own message. Never forward that e-mail.</p>`
+      ? `<textarea class="zlink" id="aimsg" rows="4" readonly style="width:100%;box-sizing:border-box">${esc(S.aiMsg)}</textarea><button class="zbtn" id="aicopy" style="margin-top:8px">Copy my AI work link</button>${aiOptions(S.aiMsg)}<button class="zbtn s alt" id="aifresh">Get a fresh AI link</button><button class="zbtn s alt" id="aireplace">Replace my AI link</button><button class="zbtn s alt" id="airevoke">Stop this link</button><p class="zsmall" style="margin:8px 0 0">Lost the link, or shared it by mistake? <b>Get a fresh AI link</b> e-mails you a new link that works for 24 hours (the one in the box above keeps working). <b>Replace my AI link</b> stops every old link at once and makes a new one. Never forward those e-mails.</p>`
       : `<button class="zbtn" id="aimake">Get my AI work link</button>`;
     return `<div class="zcard" style="border:2px solid #c9a24a;background:#fffaf0"><div class="zsmall" style="font-weight:700;letter-spacing:.06em;color:#8a6a1a">OPTION 1 · THE EASY WAY · MOST ORGANIZERS CHOOSE THIS</div>
       <h2 style="margin:6px 0 8px;font-size:22px">Let your free AI assistant do all the work for you.</h2>
@@ -405,11 +415,13 @@
     document.querySelectorAll("[data-retire]").forEach((b) => (b.onclick = async () => { if (!confirm("Retire this key? It will stop working at once.")) return; try { await call("POST", "/api/org/keys/revoke", { id: b.dataset.retire }); S.note = "Key retired."; } catch (e) { S.note = e.message; } refreshHome(); }));
     const newLink = async (path, ask) => {
       if (ask && !confirm(ask)) return;
-      try { const r = await call("POST", path, {}); S.aiMsg = r.aiMessage; ss.set("ctz-aimsg", r.aiMessage); S.note = r.mailed ? "Your new AI work link is ready. The old one has stopped. We e-mailed the new one to you, in its own message." : "Your new AI work link is ready and the old one has stopped. Copy it from the box above (we have no e-mail address on file to send it to)."; } catch (e) { S.note = e.message; }
+      try { const r = await call("POST", path, {}); S.aiMsg = r.aiMessage; ss.set("ctz-aimsg", r.aiMessage); S.note = r.mailed ? "Your new AI work link is ready. The old links have stopped. A fresh 24-hour link is on its way to your e-mail." : "Your new AI work link is ready and the old one has stopped. Copy it from the box above (we have no e-mail address on file to send it to)."; } catch (e) { S.note = e.message; }
       draw(homeView());
     };
     if ($("aimake")) $("aimake").onclick = () => newLink("/api/org/ai/replace");
+    if ($("aifresh")) $("aifresh").onclick = async () => { try { const r = await call("POST", "/api/org/ai/fresh", {}); S.note = r.mailed ? "A fresh 24-hour AI link is on its way to your e-mail. Never forward that e-mail." : "We have no e-mail address to send it to. Use the link in the box above."; } catch (e) { S.note = e.message; } draw(homeView()); };
     if ($("aireplace")) $("aireplace").onclick = () => newLink("/api/org/ai/replace", "Replace your AI work link? The old link stops working at once, even if an AI is using it right now.");
+    if (S.aiMsg) wireAiOptions(document, S.aiMsg);
     if ($("aicopy")) $("aicopy").onclick = () => { try { navigator.clipboard.writeText(S.aiMsg); $("aicopy").textContent = "Copied. Now paste it into your AI chat"; } catch {} };
     if ($("airevoke")) $("airevoke").onclick = async () => { try { await call("POST", "/api/org/ai/revoke", {}); S.aiMsg = ""; ss.set("ctz-aimsg", ""); S.note = "Your AI work link has been stopped."; } catch (e) { S.note = e.message; } draw(homeView()); };
     if ($("reqok")) $("reqok").onclick = async () => {

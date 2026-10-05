@@ -19,9 +19,9 @@ const AI_STAYS = "Four things stay with you, always: payment, pressing Publish (
 const HOST_CAN = "Watch the game, send a short message to every guest's phone, and tick prizes as handed over.";
 const HOST_STAYS = "Nothing else: it cannot change settings, people, payment or data, and it cannot pause, stop or erase.";
 
-function shell(opts: { warning: string; title: string; intro: string; pasteLabel: string; paste: string; steps: string[]; can: string; stays: string; replace: string; footer: string }): { text: string; html: string } {
+function shell(opts: { warning: string; title: string; intro: string; pasteLabel: string; expiry: string; button: { label: string; url: string; note: string }; paste: string; steps: string[]; can: string; stays: string; replace: string; footer: string }): { text: string; html: string } {
   const text = [
-    opts.warning, "", opts.title.toUpperCase(), "", opts.intro, "",
+    opts.warning, "", opts.title.toUpperCase(), "", opts.intro, "", opts.expiry, "", `${opts.button.label.toUpperCase()}: ${opts.button.url}`, opts.button.note, "",
     opts.pasteLabel, "--------------------------------", opts.paste, "--------------------------------", "",
     "WHAT TO DO", ...opts.steps.map((s, i) => `${i + 1}. ${s}`), "",
     "WHAT IT CAN DO", opts.can, "", "WHAT STAYS WITH A PERSON", opts.stays, "",
@@ -36,9 +36,11 @@ function shell(opts: { warning: string; title: string; intro: string; pasteLabel
 <tr><td style="background:#1b2a41;border-radius:10px 10px 0 0;padding:14px 22px;color:#f1d58a;font-size:13px;letter-spacing:.08em;font-weight:700;">CORPORATE TAMBOLA</td></tr>
 ${warn("16px 22px 0")}
 <tr><td style="padding:18px 22px 4px;"><h1 style="margin:0;font-size:24px;line-height:1.25;color:#1b2a41;">${esc(opts.title)}</h1><p style="margin:10px 0 0;font-size:15px;line-height:1.5;">${esc(opts.intro)}</p></td></tr>
+<tr><td style="padding:12px 22px 0;"><div style="background:#fff4d6;border:1px solid #c9a24a;border-radius:8px;padding:10px 14px;font-size:14px;line-height:1.45;color:#5a4208;"><b>${esc(opts.expiry)}</b></div></td></tr>
+<tr><td align="center" style="padding:16px 22px 4px;"><a href="${esc(opts.button.url)}" style="display:inline-block;background:#c9a24a;color:#1b2a41;font-weight:700;font-size:16px;text-decoration:none;padding:13px 26px;border-radius:8px;">${esc(opts.button.label)}</a><div style="font-size:12px;color:#666;margin-top:8px;line-height:1.45;">${esc(opts.button.note)}</div></td></tr>
 <tr><td style="padding:14px 22px 6px;"><div style="font-size:12px;font-weight:700;letter-spacing:.06em;color:#8a6a1a;margin-bottom:6px;">${esc(opts.pasteLabel)}</div>
 <div style="background:#fffaf0;border:2px dashed #c9a24a;border-radius:8px;padding:14px;font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:1.5;color:#111;white-space:pre-wrap;overflow-wrap:anywhere;text-decoration:none;">${esc(opts.paste)}</div>
-<div style="font-size:12px;color:#666;margin-top:6px;">This is plain text on purpose, not a clickable link. Select it, copy it, and paste it into your AI chat.</div></td></tr>
+<div style="font-size:12px;color:#666;margin-top:6px;">The link in the box is plain text on purpose (nothing here can be clicked to open it). Select it, copy it, and paste it into your AI chat.</div></td></tr>
 <tr><td style="padding:14px 22px 0;"><div style="font-size:12px;font-weight:700;letter-spacing:.06em;color:#8a6a1a;margin-bottom:6px;">WHAT TO DO</div>
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%">${opts.steps.map((s, i) => `<tr><td valign="top" width="30" style="padding:4px 0;"><div style="width:24px;height:24px;border-radius:12px;background:#1b2a41;color:#f1d58a;text-align:center;line-height:24px;font-size:13px;font-weight:700;">${i + 1}</div></td><td style="padding:4px 0;font-size:15px;line-height:1.45;">${esc(s)}</td></tr>`).join("")}</table></td></tr>
 <tr><td style="padding:14px 22px 0;"><div style="font-size:12px;font-weight:700;letter-spacing:.06em;color:#0b6b3a;margin-bottom:4px;">WHAT IT CAN DO</div><div style="font-size:14px;line-height:1.5;">${esc(opts.can)}</div></td></tr>
@@ -51,11 +53,16 @@ ${warn("8px 22px 20px")}
 }
 
 /** The organizer's dedicated AI-link mail: sent when the account is created and when the link is replaced, and nowhere else. */
-export function aiLinkMail(origin: string, key: string, why: "start" | "replace" = "start"): BuiltMail {
+const istStamp = (ms: number) => new Date(ms).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }) + " IST";
+export const LINK_MAIL_TTL_MS = 24 * 3_600_000;
+const FRESH = "Press \"Show my AI work link\" in this e-mail (or \"Get a fresh AI link\" in your console) for a new one. Your own long-lasting link is shown only after you sign in, never in an e-mail.";
+export function aiLinkMail(origin: string, key: string, why: "start" | "replace" | "fresh", expiresMs: number): BuiltMail {
   const { text, html } = shell({
     warning: AI_WARNING,
-    title: why === "replace" ? "Your NEW personal AI work link" : "Your personal AI work link",
-    intro: why === "replace" ? "You replaced your AI work link. The new one is below. The old link stopped working at once." : "Let a free AI assistant do the work for you. Everything it needs is behind the link in the box below.",
+    title: why === "replace" ? "Your NEW personal AI work link" : why === "fresh" ? "Your fresh personal AI work link" : "Your personal AI work link",
+    intro: why === "replace" ? "You replaced your AI work link. Every older link stopped working at once. A new one is below." : "Let a free AI assistant do the work for you. Everything it needs is behind the link in the box below.",
+    expiry: `THIS LINK WORKS FOR 24 HOURS ONLY (until ${istStamp(expiresMs)}). After that it stops. ${FRESH}`,
+    button: { label: "Show my AI work link", url: `${origin}/ai-link.html`, note: "The button works only for you: it asks you to sign in as the organizer (with your e-mailed 6-digit code). It always gives you a fresh link, so you can use it again after these 24 hours." },
     pasteLabel: "COPY EVERYTHING IN THIS BOX",
     paste: aiPaste(origin, key),
     steps: [
@@ -64,18 +71,20 @@ export function aiLinkMail(origin: string, key: string, why: "start" | "replace"
       "Answer its questions, one at a time, in your own words. It does all the work for you.",
     ],
     can: AI_CAN, stays: AI_STAYS,
-    replace: "Open your console and press \"Replace my AI link\" (sign in with your e-mailed 6-digit code if asked). The old link stops working at once and a new one is made and e-mailed to you.",
+    replace: "Open your console and press \"Replace my AI link\" (sign in with your e-mailed 6-digit code if asked). Every AI link stops working at once. To get a new 24-hour link by e-mail, press \"Get a fresh AI link\"; the button above always shows your current link after you sign in.",
     footer: "We never put this link in any other e-mail (publish, payment, reminders, invoices, reports), and it is not in any report or guest page. If you ever see it somewhere else, replace it.",
   });
   return { subject: AI_SUBJECT, text, html };
 }
 
 /** A co-host's link, e-mailed to the organizer who made it. Role: watch and announce only. `owner` names whose engagements it belongs to. */
-export function coHostLinkMail(origin: string, key: string, owner: string): BuiltMail {
+export function coHostLinkMail(origin: string, key: string, owner: string, expiresMs: number): BuiltMail {
   const { text, html } = shell({
     warning: HOST_WARNING,
     title: "A co-host AI work link",
     intro: `This link belongs to the Corporate Tambola engagements of ${owner}. It is for a co-host: a watch and announce role only. Hand it over by pasting the box to the person you chose, not by forwarding this e-mail.`,
+    expiry: `THIS CO-HOST LINK WORKS FOR 24 HOURS ONLY (until ${istStamp(expiresMs)}). For a lasting co-host link, use the one your console showed when you made the co-host.`,
+    button: { label: "Open my console", url: `${origin}/zc.html`, note: "Your console (after you sign in) shows the lasting co-host link made for you and lets you retire co-host keys." },
     pasteLabel: "THE CO-HOST PASTES THIS INTO THEIR AI CHAT",
     paste: aiPaste(origin, key).replace("MY OWN Corporate Tambola account. I am the owner,", `the Corporate Tambola account of ${owner}. I am their co-host,`),
     steps: [
@@ -88,4 +97,17 @@ export function coHostLinkMail(origin: string, key: string, owner: string): Buil
     footer: "A co-host link is a key to watching and announcing for your engagements. It is never put in a publish, payment, report or guest e-mail.",
   });
   return { subject: HOST_SUBJECT, text, html };
+}
+
+/** A plain alert, no link and no key in it: an AI link was used from somewhere new. */
+export function newUseAlertMail(info: { when: string; country: string; program: string; kind: "AI" | "co-host" }): BuiltMail {
+  const text = [
+    `Someone new used your ${info.kind} work link`, "",
+    `When: ${info.when}`, `Country: ${info.country || "unknown"}`, `Program: ${info.program || "unknown"}`, "",
+    "This is normal if you just opened your link in a different AI chat or from another network.",
+    "If this was not you, open your Corporate Tambola console and press \"Replace my AI link\": every AI link stops working at once.", "",
+    "We send at most one of these a day for each link. This e-mail contains no link and no key.", "",
+  ].join("\n");
+  const html = `<!doctype html><html><body style="margin:0;background:#f4efe3;font-family:Arial,Helvetica,sans-serif;color:#222;"><div style="max-width:560px;margin:20px auto;background:#fff;border:1px solid #e6d9b8;border-radius:10px;padding:20px 22px;"><div style="color:#8a6a1a;font-size:12px;font-weight:700;letter-spacing:.08em;">CORPORATE TAMBOLA</div><h1 style="font-size:21px;color:#1b2a41;margin:8px 0;">Someone new used your ${esc(info.kind)} work link</h1><p style="font-size:15px;line-height:1.5;">When: ${esc(info.when)}<br>Country: ${esc(info.country || "unknown")}<br>Program: ${esc(info.program || "unknown")}</p><p style="font-size:14px;line-height:1.5;">This is normal if you just opened your link in a different AI chat or from another network. If this was not you, open your console and press <b>Replace my AI link</b>: every AI link stops working at once.</p><p style="font-size:12px;color:#666;">At most one of these a day for each link. This e-mail contains no link and no key.</p></div></body></html>`;
+  return { subject: `Someone new used your ${info.kind} work link`, text, html };
 }

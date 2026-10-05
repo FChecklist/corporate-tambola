@@ -47,11 +47,59 @@ describe("console (organizer page)", () => {
     await p.waitFor((x) => /OPTION 1/.test(x));
     expect(p.text()).toMatch(/Replace my AI link/); p.win.confirm = () => true;
     p.click("#aireplace");
-    await p.waitFor((x) => /e-mailed the new one to you, in its own message/.test(x));
+    await p.waitFor((x) => /A fresh 24-hour link is on its way to your e-mail/.test(x));
     const v = (p.$("#aimsg") as any).value as string; const nk = v.match(/cta_[0-9a-f]{48}/)![0];
     expect(nk).not.toBe(o.aiKey);
     expect((await o.api("GET", `/ai/${o.aiKey}`)).status).toBe(404); expect((await o.api("GET", `/ai/${nk}`)).status).toBe(200);
     expect(p.errors).toEqual([]);
+  });
+  test("Get a fresh AI link (console) mails a 24-hour link; the lasting box is unchanged", async () => {
+    const o = await organizer();
+    const p = await page(o, "/zc", "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token, "ctz-aimsg": o.aiMessage });
+    await p.waitFor((x) => /OPTION 1/.test(x)); p.click("#aifresh");
+    await p.waitFor((x) => /fresh 24-hour AI link is on its way/.test(x));
+    expect((p.$("#aimsg") as any).value).toBe(o.aiMessage); expect(p.errors).toEqual([]);
+  });
+  test("Show my AI work link (the e-mail's button): asks for the organizer's sign-in; once signed in shows the two-line paste with Copy, Fresh and Replace and the do-not-forward warnings", async () => {
+    const o = await organizer();
+    const anon = await page(o, "/ai-link", "ai-link.html", ["ai-link.js"], {});
+    const t0 = await anon.waitFor((x) => /Sign in as the organizer/.test(x));
+    expect(t0).not.toMatch(/cta_/); expect(t0).toMatch(/6-digit code/); expect(anon.$("#msg")).toBeFalsy();
+    const p = await page(o, "/ai-link", "ai-link.html", ["ai-link.js"], { "ctz-org": o.token });
+    const t = await p.waitFor((x) => /YOUR AI WORK LINK/.test(x));
+    const v = (p.$("#msg") as any).value as string; expect(v).toBe(o.aiMessage); expect(v.split("\n").length).toBe(2); expect(v).toContain("/ai/cta_");
+    expect(p.$("#cp")).toBeTruthy(); expect(p.$("#fr")).toBeTruthy(); expect(p.$("#rp")).toBeTruthy();
+    expect((t.match(/IMPORTANT - DO NOT FORWARD YOUR AI WORK LINK/g) ?? []).length).toBe(2);
+    p.click("#fr"); await p.waitFor((x) => /fresh 24-hour link is on its way/.test(x));
+    expect(p.errors).toEqual([]);
+  });
+  const checkSeven = async (p: any, paste: string) => {
+    const hrefOf = (n: string) => new URL((p.$(`[data-ai="${n}"]`) as any).href);
+    for (const [n, origin, path] of [["ChatGPT", "https://chatgpt.com", "/"], ["Grok", "https://grok.com", "/"], ["Claude", "https://claude.ai", "/new"]] as const) {
+      const el = p.$(`[data-ai="${n}"]`) as any, u = hrefOf(n);
+      expect(u.origin).toBe(origin); expect(u.pathname).toBe(path); expect(u.searchParams.get("q")).toBe(paste); // the two lines and the link, URL-encoded
+      expect(el.href).toContain("?q=" + encodeURIComponent(paste)); expect(el.getAttribute("target")).toBe("_blank"); expect(el.getAttribute("rel")).toBe("noopener noreferrer");
+    }
+    const opened: string[] = []; let copied = ""; p.win.open = (u: string) => { opened.push(u); return null; };
+    Object.defineProperty(p.win.navigator, "clipboard", { value: { writeText: async (t: string) => { copied = t; } }, configurable: true });
+    for (const [n, origin] of [["Gemini", "https://gemini.google.com"], ["DeepSeek", "https://chat.deepseek.com"], ["z.ai", "https://chat.z.ai"]] as const) {
+      copied = ""; p.click(`[data-aicopy="${n}"]`); await p.waitFor((x: string) => /Copied\. Press Ctrl\+V, then Send/.test(x));
+      expect(copied).toBe(paste); expect(new URL(opened.at(-1)!).origin).toBe(origin);
+    }
+    expect(new URL(opened[0]!).pathname).toBe("/app"); expect(new URL(opened[0]!).searchParams.get("q")).toBe(paste); // Gemini: a harmless prefill attempt
+    expect(opened[1]).toBe("https://chat.deepseek.com/"); expect(opened[2]).toBe("https://chat.z.ai/");
+  };
+  test("seven ways to hand the paste to an AI on the sign-in page: three pre-filled addresses, three copy-and-open buttons, one plain copy", async () => {
+    const o = await organizer();
+    const p = await page(o, "/ai-link", "ai-link.html", ["ai-link.js"], { "ctz-org": o.token });
+    await p.waitFor((x) => /YOUR AI WORK LINK/.test(x)); expect(p.$("#cp")).toBeTruthy();
+    await checkSeven(p, o.aiMessage);
+  });
+  test("the same seven ways sit in the console's Option 1 box", async () => {
+    const o = await organizer();
+    const p = await page(o, "/zc", "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token, "ctz-aimsg": o.aiMessage });
+    await p.waitFor((x) => /OPTION 1/.test(x)); expect(p.$("#aicopy")).toBeTruthy();
+    await checkSeven(p, o.aiMessage);
   });
   test("UC-54 draft: the organizer publishes (free) after confirming email and mobile, then sees the payment-due card and the share link", async () => {
     const o = await organizer(); await make(o, "UI-DRAFT");

@@ -41,7 +41,7 @@ describe("the paste text and the manual", () => {
     expect(o.msg).not.toMatch(/x-organizer/i); expect(o.msg).not.toMatch(/ai-manifest/);
     expect(aiMessage(ORIGIN, "cta_x")).toContain("/ai/cta_x");
     const mail = raw.prepare("SELECT body FROM outbox ORDER BY id DESC LIMIT 1").get() as { body: string };
-    expect(mail.body).toContain(o.msg);
+    expect(mail.body).not.toContain(o.msg); expect(mail.body).not.toContain(o.ai); expect(mail.body).toMatch(/\/ai\/cta_[0-9a-f]{48}/); // the mail has its own 24-hour key
   });
   test("GET /ai/<key> returns the complete organizer manual as plain text, with absolute keyed addresses, rules, refusals and no header demand", async () => {
     const o = await organizer();

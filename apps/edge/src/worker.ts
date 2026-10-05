@@ -14,7 +14,7 @@
 
 import { GRACE_ROUNDS, defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
 import { openPii, openText, sealPii, sealText } from "./pii";
-import { aiLinkMail, coHostLinkMail } from "./mails";
+import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, newUseAlertMail } from "./mails";
 import { acceptOver, acceptWon, endBoundMs, eraseEverything, erasePersonal, fullDeleteAt, lifecycleTick, personalDeleteAt, recordWinners, reportApi, reportLink } from "./lifecycle";
 import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
@@ -94,6 +94,8 @@ export const SCHEMA: string[] = [
   `ALTER TABLE seat ADD COLUMN jr INTEGER`,
   ...PRIVACY_SCHEMA,
   ...WINNERS_SCHEMA,
+  // a key made only for an e-mail lives 24 hours: after expires_ms it is treated like an unknown key (null = never expires, as before)
+  `ALTER TABLE organizer_key ADD COLUMN expires_ms INTEGER`,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
@@ -161,16 +163,49 @@ async function orgEmail(env: Env, org: string): Promise<string | null> {
     return c ? (JSON.parse(c.v).email as string) : null;
   } catch { return null; }
 }
-/** Replaces the organizer's AI work link: every existing AI key stops at once, a new one is made, the dedicated mail goes to the organizer. The only mail that ever carries an AI link. */
-async function replaceAiLink(env: Env, req: Request, org: string, now: number, why: "start" | "replace"): Promise<{ aiKey: string; aiMessage: string; mailed: boolean }> {
+/** Mints a key that works for 24 hours only and e-mails it in the dedicated mail: the only way an AI link ever travels by e-mail. The lasting key never leaves the console. Returns mailed:false (and the paste, so it is not lost) when no address is known or the mail failed. */
+async function mailTempLink(env: Env, req: Request, org: string, kind: "ai" | "host", why: "start" | "replace" | "fresh", now: number, knownEmail?: string): Promise<{ mailed: boolean; expiresMs: number; aiMessage?: string }> {
+  const key = (kind === "ai" ? "cta_" : "cth_") + randHex(24), expiresMs = now + LINK_MAIL_TTL_MS;
+  await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,expires_ms) VALUES(?,?,?,0,?,?)").bind(await sha("key|" + key), org, kind, now, expiresMs).run();
+  const origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
+  const to = knownEmail ?? (await orgEmail(env, org));
+  let mailed = false;
+  if (to) { const m = kind === "ai" ? aiLinkMail(origin, key, why, expiresMs) : coHostLinkMail(origin, key, to, expiresMs); mailed = await sendMail(env as PayEnv, env.DB, to, m.subject, m.text, now, { html: m.html, secret: true }); }
+  return { mailed, expiresMs, ...(mailed ? {} : { aiMessage: aiMessage(origin, key) }) };
+}
+/** Replaces the organizer's AI work link: every AI key (lasting and 24-hour) stops at once, a new lasting key is made for the console, and a fresh 24-hour key goes out in the dedicated mail. */
+async function replaceAiLink(env: Env, req: Request, org: string, now: number): Promise<{ aiKey: string; aiMessage: string; mailed: boolean }> {
   await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE org=? AND kind='ai'").bind(org).run();
   const key = "cta_" + randHex(24);
   await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), org, "ai", now).run();
+  await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`aikey/${org}`, await sealText(env as any, key)).run();
   const origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
-  const to = await orgEmail(env, org);
-  let mailed = false;
-  if (to) { const m = aiLinkMail(origin, key, why); mailed = await sendMail(env as PayEnv, env.DB, to, m.subject, m.text, now, { html: m.html, secret: true }); }
-  return { aiKey: key, aiMessage: aiMessage(origin, key), mailed };
+  const t = await mailTempLink(env, req, org, "ai", "replace", now);
+  return { aiKey: key, aiMessage: aiMessage(origin, key), mailed: t.mailed };
+}
+/** Alert (once per key per 24 h): an AI or co-host key was used from a country, network prefix or program this key has not been seen from. The very first use sets the baseline and never alerts. The alert carries no link and no key. */
+async function noteUse(env: Env, org: string, kind: "ai" | "host", keyId: string, req: Request, now: number): Promise<void> {
+  try {
+    const country = (req.headers.get("cf-ipcountry") ?? "").toUpperCase().slice(0, 4);
+    const ip = req.headers.get("cf-connecting-ip") ?? "";
+    const prefix = ip.includes(":") ? ip.split(":").slice(0, 3).join(":") : ip.split(".").slice(0, 3).join(".");
+    const ua = (req.headers.get("user-agent") ?? "").trim(); const fam = (ua.split(/[\/\s(;]/)[0] ?? "").toLowerCase().slice(0, 40);
+    const row = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`seen/${keyId}`).first<{ v: string }>();
+    const seen: { c: string[]; p: string[]; u: string[] } = row ? JSON.parse(row.v) : { c: [], p: [], u: [] };
+    const fresh = { c: !!country && !seen.c.includes(country), p: !!prefix && !seen.p.includes(prefix), u: !!fam && !seen.u.includes(fam) };
+    if (row && !fresh.c && !fresh.p && !fresh.u) return;
+    const add = (arr: string[], v: string) => { if (v && !arr.includes(v)) arr.push(v); if (arr.length > 40) arr.shift(); };
+    add(seen.c, country); add(seen.p, prefix); add(seen.u, fam);
+    await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`seen/${keyId}`, JSON.stringify(seen)).run();
+    if (!row) return; // first use of this key: the baseline
+    const last = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`alert/${keyId}`).first<{ v: string }>();
+    if (last && now - Number(last.v) < 86_400_000) return;
+    const to = await orgEmail(env, org);
+    if (!to) return;
+    await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`alert/${keyId}`, String(now)).run();
+    const m = newUseAlertMail({ when: istTime(now), country, program: ua.slice(0, 60), kind: kind === "ai" ? "AI" : "co-host" });
+    await sendMail(env as PayEnv, env.DB, to, m.subject, m.text, now, { html: m.html });
+  } catch { /* an alert must never break the work */ }
 }
 /** Runs the daily clean-up (365-day purge, one more try for unsent mail) the first time an organizer-side request arrives each UTC day. Never slows or fails the request. */
 export async function housekeeping(env: Env, now: number): Promise<void> {
@@ -213,7 +248,7 @@ async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promi
   const m = url.pathname.match(/^\/ai\/([^/]+)(?:\/(.*))?$/s);
   if (!m || !LINK_KEY.test(m[1]!)) return linkGone();
   const key = m[1]!;
-  const a = await authOfKey(env, key);
+  const a = await authOfKey(env, key, now);
   if (a.plat || !a.org || (a.kind !== "ai" && a.kind !== "host")) return linkGone();
   const origin = (env as PayEnv).PUBLIC_ORIGIN ?? url.origin;
   const role: LinkRole = a.kind;
@@ -223,6 +258,7 @@ async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promi
     const keyId = (await sha("key|" + key)).slice(0, 10);
     const work = auditAi(env.DB, a.org, new Request(origin + "/ai/manual", { method: "GET", headers: req.headers }), keyId, 200, now);
     if (waitUntil) waitUntil(work); else await work;
+    await noteUse(env, a.org, role === "ai" ? "ai" : "host", keyId, req, now);
     const h = new Headers({ ...CORS, ...LINK_HEADERS });
     if (url.searchParams.get("format") === "json") { h.set("content-type", "application/json; charset=utf-8"); return new Response(req.method === "HEAD" ? null : JSON.stringify(manualJson(origin, key, role, now)), { headers: h }); }
     h.set("content-type", "text/plain; charset=utf-8");
@@ -265,13 +301,13 @@ function d1kv(env: Env): KV { return {
 }; }
 
 interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | null }
-async function authOf(req: Request, env: Env): Promise<Auth> {
-  return authOfKey(env, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""));
+async function authOf(req: Request, env: Env, now: number): Promise<Auth> {
+  return authOfKey(env, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), now);
 }
-async function authOfKey(env: Env, presented: string): Promise<Auth> {
+async function authOfKey(env: Env, presented: string, now: number): Promise<Auth> {
   if (!presented) return { plat: false, org: null, kind: null };
   if (env.ORGANIZER_SECRET && presented === env.ORGANIZER_SECRET) return { plat: true, org: null, kind: "platform" };
-  const row = await env.DB.prepare("SELECT org, kind FROM organizer_key WHERE hash=? AND revoked=0").bind(await sha("key|" + presented)).first<{ org: string; kind: "master" | "ai" | "host" }>();
+  const row = await env.DB.prepare("SELECT org, kind FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(await sha("key|" + presented), now).first<{ org: string; kind: "master" | "ai" | "host" }>();
   return row ? { plat: false, org: row.org, kind: row.kind } : { plat: false, org: null, kind: null };
 }
 /** May this caller act on this engagement? `master` = needs the organizer's own key (or ours), not the AI's. */
@@ -338,11 +374,13 @@ export const AI_MANIFEST = {
 
 /** Every call made with an organizer's AI key is written to an audit trail (when, which key, what was asked, the answer, and where it came from). */
 async function route(req: Request, env: Env, now: number): Promise<Response> {
-  const a = await authOf(req, env);
+  const a = await authOf(req, env, now);
   const r = await route0(req, env, now, a);
   if (a.org && (a.kind === "ai" || (a.kind === "host" && req.headers.get("x-ct-link") === "1"))) { // a co-host's calls are recorded too, when they come through a work link
     const presented = req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-    await auditAi(env.DB, a.org, req, (await sha("key|" + presented)).slice(0, 10), r.status, now);
+    const kid = (await sha("key|" + presented)).slice(0, 10);
+    await auditAi(env.DB, a.org, req, kid, r.status, now);
+    if (r.status !== 403) await noteUse(env, a.org, a.kind === "ai" ? "ai" : "host", kid, req, now);
   }
   return r;
 }
@@ -382,11 +420,11 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + aiKey), org, "ai", now),
       env.DB.prepare("INSERT INTO organizer_email(email_hash,org) VALUES(?,?)").bind(eh, org),
       env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`orgmail/${org}`, await sealText(env as any, email)),
+      env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`aikey/${org}`, await sealText(env as any, aiKey)), // so the signed-in organizer can read their lasting link again (never mailed)
       env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(ipk, String(used + 1), String(used + 1)),
     ]);
-    const origin0 = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, startMsg = aiMessage(origin0, aiKey);
-    const dm = aiLinkMail(origin0, aiKey, "start"); // the dedicated mail: the same link as Option 1 on the screen, and the only mail that ever carries it
-    await sendMail(env as PayEnv, env.DB, email, dm.subject, dm.text, now, { html: dm.html, secret: true });
+    const origin0 = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, startMsg = aiMessage(origin0, aiKey); // aiKey is the lasting key, shown only in the console
+    await mailTempLink(env, req, org, "ai", "start", now, email); // the dedicated mail carries a separate key that expires in 24 hours
     return json({ ok: true, token, aiKey, aiMessage: startMsg });
   }
   if (req.method === "POST" && p === "/api/auth/email") {
@@ -440,10 +478,24 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (req.method === "POST" && (p === "/api/org/ai" || p === "/api/org/ai/replace")) { // signed-in organizer only (an AI key can never mint or replace its own link); the old AI link dies at once
     if (a.kind !== "master" || !a.org) return deny(a);
     if (!(await spend(env, now, 3))) return BUSY();
-    const r = await replaceAiLink(env, req, a.org, now, "replace");
+    const r = await replaceAiLink(env, req, a.org, now);
     const presented = req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\sXX/i, "");
     await auditAi(env.DB, a.org, new Request(new URL(req.url).origin + "/api/org/ai/replace", { method: "POST", headers: req.headers }), (await sha("key|" + presented)).slice(0, 10), 200, now);
     return json({ ok: true, ...r });
+  }
+  if (req.method === "GET" && p === "/api/org/ai/link") { // the signed-in organizer reads their lasting AI link again (the page "Show my AI work link"); never an AI key, never in a mail
+    if (a.kind !== "master" || !a.org) return deny(a);
+    const sealed = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`aikey/${a.org}`).first<{ v: string }>();
+    const key = await openText(env as any, sealed?.v);
+    const live = key ? await env.DB.prepare("SELECT 1 AS x FROM organizer_key WHERE hash=? AND revoked=0").bind(await sha("key|" + key)).first() : null;
+    return json({ ok: true, aiMessage: key && live ? aiMessage((env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, key) : null });
+  }
+  if (req.method === "POST" && p === "/api/org/ai/fresh") { // "Get a fresh AI link": a new 24-hour key, e-mailed to the organizer; the lasting key and other links are untouched
+    if (a.kind !== "master" || !a.org) return deny(a);
+    const live = (await env.DB.prepare("SELECT COUNT(*) AS c FROM organizer_key WHERE org=? AND kind='ai' AND revoked=0 AND expires_ms>?").bind(a.org, now).first<{ c: number }>())?.c ?? 0;
+    if (live >= 5) return json({ error: "You already asked for several fresh links today. Use the latest e-mail, or press Replace my AI link." }, 429);
+    if (!(await spend(env, now, 3))) return BUSY();
+    return json({ ok: true, ...(await mailTempLink(env, req, a.org, "ai", "fresh", now)) });
   }
   if (req.method === "GET" && p === "/api/org/keys") { // the organizer sees their own sign-in keys (never the keys themselves) and can retire old ones
     if (a.kind !== "master" || !a.org) return deny(a);
@@ -465,14 +517,14 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (req.method === "GET" && p === "/api/whoami") return a.kind ? json({ kind: a.kind }) : deny(a); // the console uses this to show the right screen
   if (req.method === "POST" && p === "/api/org/host") { // the organizer (or their AI) invites a co-host: a key that can watch, send messages to everyone and tick prizes, and nothing else
     if ((a.kind !== "master" && a.kind !== "ai") || !a.org) return deny(a);
-    const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM organizer_key WHERE org=? AND kind='host' AND revoked=0").bind(a.org).first<{ c: number }>())?.c ?? 0;
+    const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM organizer_key WHERE org=? AND kind='host' AND revoked=0 AND expires_ms IS NULL").bind(a.org).first<{ c: number }>())?.c ?? 0;
     if (n >= MAX_HOSTS) return json({ error: `You can have up to ${MAX_HOSTS} co-hosts at a time. Retire one first.` }, 409);
     if (!(await spend(env, now, 2))) return BUSY();
     const key = "cth_" + randHex(24);
     await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), a.org, "host", now).run();
-    const hOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, hTo = await orgEmail(env, a.org);
-    if (hTo) { const m = coHostLinkMail(hOrigin, key, hTo); await sendMail(env as PayEnv, env.DB, hTo, m.subject, m.text, now, { html: m.html, secret: true }); } // dedicated mail to the organizer only
-    return json({ ok: true, hostKey: key, manualUrl: `${hOrigin}/ai/${key}`, mailed: !!hTo });
+    const hOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
+    const hm = await mailTempLink(env, req, a.org, "host", "start", now); // dedicated mail to the organizer only, with a separate 24-hour co-host key
+    return json({ ok: true, hostKey: key, manualUrl: `${hOrigin}/ai/${key}`, mailed: hm.mailed });
   }
   if (req.method === "GET" && p === "/api/org/ai/audit") { // the organizer sees every call their external AI made; we can see all (the AI may read its own trail)
     if (a.kind !== "master" && a.kind !== "ai" && !a.plat) return deny(a);
@@ -482,6 +534,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (a.kind !== "master" || !a.org) return deny(a);
     if (!(await spend(env, now))) return BUSY();
     const r = await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE org=? AND kind='ai' AND revoked=0").bind(a.org).run();
+    await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`aikey/${a.org}`).run();
     return json({ ok: true, revoked: r.meta?.changes ?? 0 });
   }
 
