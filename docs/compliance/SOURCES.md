@@ -46,17 +46,23 @@ All accessed on **2026-10-05** unless stated. Tools: WebSearch (returns result s
 | S39 | Q | Search results: https://www.kennedyslaw.com/en/thought-leadership/article/2026/the-2025-european-commission-eu-digital-omnibus-package-the-e-privacy-directive, https://www.globalpolicywatch.com/2026/02/eu-regulators-issue-opinion-on-revisions-of-gdpr-and-other-data-laws/ | Digital Omnibus GDPR/ePrivacy proposals and EDPB/EDPS opinion. |
 | S40 | P (local product docs) | `C:\ct\tambola\docs\PRIVACY_AND_LIFECYCLE.md`, `C:\ct\tambola\docs\WINNERS_AND_AUDIT.md`, `C:\ct\tambola\apps\web\public\legal.html`; `C:\ct\ct-shortlink\dpdp-app\OPERATIONS.md`, `USE-CASES.md` (headings and selected passages) | Product facts for context only. No code was audited. |
 
+| S41 | S (web reproduction of the official text; not the Gazette) | https://www.dpdpa.com/dpdpa2023/chapter-2/section5.html, section6.html, section7.html, section8.html, section9.html; https://www.dpdpa.com/dpdpa2023/chapter-4/section16.html; https://www.dpdpa.com/dpdparules/rule1.html, rule3.html, rule6.html, rule7.html, rule8.html, rule10.html, rule14.html, rule15.html | Read 2026-10-05 (audit Step 0) through WebFetch, which returns a model-written extract of the page, so wording is close to verbatim but not guaranteed character for character. Used to verify s5, s6, s7(a), s7(i), s8(1)-(11), s9, s16 and Rules 1(2), 3, 6, 7, 8, 10, 14, 15. See register section 1.0a. Not read from this site: Rule 8's Third Schedule table (schedule3 URL returned 404), Rules 4, 5, 9, 11, 12, 13, sections 10-14 and 17. |
+| S42 | A (vendor documentation) | https://developers.cloudflare.com/d1/reference/time-travel/ | Read 2026-10-05. D1 Time Travel is always on and cannot be disabled; restore window 7 days on the Workers Free plan, 30 days on Workers Paid. Basis for checklist F03. |
+| S43 | A (vendor documentation) | https://developers.cloudflare.com/d1/configuration/data-location/ | Read 2026-10-05. D1 picks a primary location near where the database was created, location hints are not guaranteed, jurisdictions limited to EU/FedRAMP/US; India cannot be chosen. Basis for J01. |
+| S44 | P (live observation) | DNS queries and HTTP requests made 2026-10-05 against corporate-tambola.pages.dev, shobhakamalsolutions.pages.dev and veridian-aios.com | Live headers, page text, DKIM/SPF/DMARC records. Recorded in AUDIT_TAMBOLA.md. |
+| S45 | Q | WebSearch snippets: Resend log retention (conflicting 1, 7, 30 or 60 days across vendor blogs); Cloudflare log retention (edge logs short-lived) | Not authoritative. Resend's own page (resend.com/docs/knowledge-base/how-long-are-logs-retained) returned 404. Treat Resend retention as UNVERIFIED. |
+
 (IDs S11 is intentionally unused so that numbering stays stable with the register.)
 
 ## Sources I tried and could NOT read
 
 | URL | Result | Consequence |
 |---|---|---|
-| https://www.meity.gov.in/static/uploads/2024/06/2bf1f0e9f04e6fb4f8fef35e82c42aa5.pdf (DPDP Act text) | HTTP 403 | Act not read in primary text. |
+| https://www.meity.gov.in/static/uploads/2024/06/2bf1f0e9f04e6fb4f8fef35e82c42aa5.pdf (DPDP Act text) | HTTP 403 (again on 2026-10-05, also for the meity.gov.in Rules PDF I tried) | Act sections 5-9 and 16 were read instead through S41 (dpdpa.com). Still not the Gazette. |
 | https://www.indiacode.nic.in/bitstream/123456789/22037/1/a2023-22.pdf (Act on India Code) | HTTP 403 | Same. |
 | https://prsindia.org/files/bills_acts/acts_parliament/2023/Digital_Personal_Data_Protection_Act,_2023.pdf | Connection refused | Same. |
 | https://www.jsalaw.com/wp-content/uploads/2025/11/JSA-Prism-InfoTech-November-2025-DPDP-Rules.Final_.pdf | HTTP 403 | Rules not read in primary text (search listing only). |
-| Gazette G.S.R. 843(E)-846(E) (egazette.gov.in) | Not attempted successfully (government sites blocked) | Rule numbers unverified against the Gazette. |
+| Gazette G.S.R. 843(E)-846(E) (egazette.gov.in) | Not attempted successfully (government sites blocked); web.archive.org is blocked for this tool; Rules 1, 3, 6, 7, 8, 10, 14, 15 read via S41 | Rule numbers now agree with S41 for those eight rules, but the Gazette itself is still unread. |
 | https://ca.hoganlovells.com/en/publications/indias-digital-personal-data-protection-act-2023-brought-into-force- | HTTP 403 | Snippet only. |
 | https://www.mondaq.com/india/data-protection/1830402/... (2026 milestones) | Fetch error | Search snippet only. |
 | https://dpdp.myndsolution.com/wiki/timeline/index.md | HTTP 503 | |
@@ -74,4 +80,4 @@ All accessed on **2026-10-05** unless stated. Tools: WebSearch (returns result s
 * Employment law of individual countries; works-council rules.
 * Any tax outside what is listed.
 * Consumer protection law of the EU/UK beyond a passing mention.
-* Actual product behaviour: no code, database or live site was audited.
+* Actual product behaviour: no code, database or live site was audited **when this file was first written**. The audit of 2026-10-05 is in `AUDIT_TAMBOLA.md`.
