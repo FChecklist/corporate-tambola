@@ -12,7 +12,7 @@ import {
 } from "../../../packages/billing/src";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import type { D1, Env } from "./worker";
-import { partnerCode, phoneHashFor, recordCommission } from "./partners";
+import { partnerCode, phoneHashFor, recordCommission, refCode } from "./partners";
 
 export interface PayEnv extends Env {
   RAZORPAY_KEY_ID?: string; RAZORPAY_KEY_SECRET?: string; RAZORPAY_WEBHOOK_SECRET?: string; RAZORPAY_BASE_URL?: string; RAZORPAY_INTERNATIONAL?: string;
@@ -187,7 +187,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
       try { order = await createOrder(rzp, { amountMinor: toMinor(pr.total), currency: cur, receipt: id, notes: { brand: brand.name, product: "engagement", pack: String(pack), organization: meta.org.slice(0, 80), payment_ref: id } }); }
       catch (e: any) { return json({ error: `The payment service said: ${e.message}` }, 502); }
     }
-    const ref = partnerCode(b.ref); // from the buyer's own browser (valid for 30 days after the link was opened); checked against real partners when the payment is fulfilled
+    const ref = refCode(b.ref); // from the buyer's own browser (valid for 30 days after the link was opened); checked against real partners when the payment is fulfilled
     const bph = partnerCode(b.phone); // optional, only used to spot a partner buying through their own link
     await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,ref,buyer_phone_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), pack, cur, pr.total, pr.tax, order?.id ?? null, "created", now, JSON.stringify(meta), ref, bph ? await phoneHashFor(env, bph) : null).run();
     if (!rzp) { const f = await fulfil(env, id, now, spend); return "result" in f ? json({ mode: "test", paymentId: id, result: f.result }) : json({ error: f.error }, f.status); }

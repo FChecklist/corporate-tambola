@@ -1,5 +1,5 @@
 // Refer & earn: sales partners who sell Corporate Tambola.
-//   - A partner's reference code IS their 10-digit mobile number. Their unique link is  /?ref=<code>  and anyone who buys through it is attributed to them.
+//   - A partner's reference code is a random 8-character code (no mobile number in it); the number and e-mail are kept only as salted hashes. Enrolling needs an e-mailed 6-digit code, and the answer never says whether a number or e-mail is already enrolled. Their link is  /?ref=<code>.
 //   - Anyone can enrol (a participant from the ticket, or a stranger from the page) by giving a mobile number and agreeing; they get a private partner key (shown once)
 //     to see their own sales. Nobody else can see a partner's sales, and a partner never sees who the buyer is (only date, pack and amount).
 //   - A commission row is written when a referred purchase is PAID (never earlier). The commission RATE is not decided yet: rows wait as `pending_rate` with the
@@ -7,7 +7,7 @@
 //   - Attribution lasts ATTRIBUTION_DAYS from the click (kept in the buyer's own browser); the server only checks the code is a real, active partner.
 //   - Payouts are made by us, outside this Worker (KYC, TDS and the payout channel are decided separately); here we only record that a payout was made.
 import type { D1, Env } from "./worker";
-import type { PayEnv } from "./pay";
+import { sendMail, type PayEnv } from "./pay";
 
 export const ATTRIBUTION_DAYS = 30;
 /** The commission every partner earns on the software price (before GST) of a paid, referred purchase. Owner decision 2026-10-03: 50%. PARTNER_COMMISSION_RATE can lower it (never above 50%). */
@@ -26,9 +26,13 @@ const randHex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(
 const r2 = (x: number) => Math.round(x * 100) / 100;
 async function body(req: Request, max = 2048): Promise<any | null> { const t = await req.text(); if (t.length > max) return null; try { const v = JSON.parse(t); return v && typeof v === "object" ? v : null; } catch { return null; } }
 
-/** The 10-digit code for a mobile number as typed (+91 98765 43210, 098765 43210, 9876543210 are one person). */
+/** A partner's public code: 8 letters and digits (no I, O, 0, 1), random. Never derived from anything personal. */
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+export const newRefCode = (): string => Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
+export const refCode = (raw: unknown): string | null => { const c = String(raw ?? "").trim().toUpperCase(); return /^[A-HJ-NP-Z2-9]{8}$/.test(c) ? c : null; };
+/** The 10 digits of a mobile number as typed (+91 98765 43210, 098765 43210, 9876543210 are one person). */
 export const partnerCode = (raw: unknown): string | null => { const d = String(raw ?? "").replace(/\D/g, ""); return d.length >= 10 && d.length <= 15 ? d.slice(-10) : null; };
-export const phoneHashFor = (env: Env, code: string) => sha(`${env.PHONE_SALT ?? env.ORGANIZER_SECRET ?? "ct"}|${code}`); // same recipe the join route uses for participants
+export const phoneHashFor = (env: Env, code: string) => sha(`${env.PHONE_SALT ?? env.ORGANIZER_SECRET ?? "unset"}|${code}`); // same recipe the join route uses for participants
 
 /** Called when a payment is fulfilled. Writes at most one commission row per payment; never throws into the purchase. */
 export async function recordCommission(env: PayEnv, p: { id: string; ref?: string | null; buyer_phone_hash?: string | null; currency: string }, base: number, now: number): Promise<void> {
@@ -40,10 +44,10 @@ export async function recordCommission(env: PayEnv, p: { id: string; ref?: strin
     const repeat = !!earlier;
     const code = earlier?.code ?? p.ref;
     if (!code) return;
-    const partner = await env.DB.prepare("SELECT code FROM partner WHERE code=? AND state='active'").bind(code).first<{ code: string }>();
+    const partner = await env.DB.prepare("SELECT code, phone_hash FROM partner WHERE code=? AND state='active'").bind(code).first<{ code: string; phone_hash: string | null }>();
     if (!partner) return; // unknown or stopped code: the purchase is simply not attributed
     let status = "pending_rate", reason: string | null = null, rate: number | null = null, amount: number | null = null;
-    if (p.buyer_phone_hash && p.buyer_phone_hash === (await phoneHashFor(env, partner.code))) { status = "blocked"; reason = "self_referral"; }
+    if (p.buyer_phone_hash && partner.phone_hash && p.buyer_phone_hash === partner.phone_hash) { status = "blocked"; reason = "self_referral"; }
     else {
       const set = env.PARTNER_COMMISSION_RATE !== undefined && env.PARTNER_COMMISSION_RATE !== "" ? Number(env.PARTNER_COMMISSION_RATE) : NaN;
       const first = set >= 0 && set <= 0.5 ? set : COMMISSION_RATE; // 50% on a customer's first purchase, unless the owner chose something lower
@@ -60,24 +64,71 @@ export async function partnerRoute(req: Request, env: PayEnv, now: number, spend
   const busy = () => json({ error: "Busy day. Please try again after midnight UTC." }, 503);
   const origin = env.PUBLIC_ORIGIN ?? url.origin;
 
-  if (req.method === "GET" && p === "/api/partner/check") { // the landing page asks whether a ?ref= code is real, to show "referred by a partner"
-    const c = partnerCode(url.searchParams.get("code"));
+  const ipHash = async () => (await sha("pip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16);
+  const dayKey = new Date(now).toISOString().slice(0, 10);
+  /** Counts one try against a daily limit kept by network (a salted-free hash that is deleted after two days by the retention sweep). */
+  const overLimit = async (kind: string, max: number): Promise<boolean> => {
+    const k = `plim/${kind}/${dayKey}/${await ipHash()}`;
+    const n = Number((await db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0);
+    if (n >= max) return true;
+    await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(k, String(n + 1), String(n + 1)).run();
+    return false;
+  };
+  const validEmail = (v: unknown): string => { const e = typeof v === "string" ? v.trim().toLowerCase() : ""; return /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(e) ? e : ""; };
+
+  if (req.method === "GET" && p === "/api/partner/check") { // the landing page asks whether a ?ref= code is real, to show "referred by a partner"; limited per network so codes cannot be tried one after another
+    if (await overLimit("check", 60)) return json({ valid: false });
+    const c = refCode(url.searchParams.get("code"));
     const row = c ? await db.prepare("SELECT code FROM partner WHERE code=? AND state='active'").bind(c).first() : null;
     return json({ valid: !!row });
   }
 
+  // Step 1: the answer is the same whether or not the number or e-mail is already enrolled, so nobody can find out who is a partner.
   if (req.method === "POST" && p === "/api/partner/enroll") {
     const b = await body(req);
-    const code = partnerCode(b?.phone);
-    if (!b || !code) return json({ error: "Enter a valid mobile number." }, 400);
+    const digits = partnerCode(b?.phone), email = validEmail(b?.email);
+    if (!b || !digits) return json({ error: "Enter a valid mobile number." }, 400);
+    if (!email) return json({ error: "Enter a valid e-mail address. We send you a code." }, 400);
     if (b.consent !== true) return json({ error: "Please agree to join Refer & earn." }, 400);
+    if (await overLimit("enroll", 10)) return json({ error: "Too many tries from this network today. Please try again tomorrow." }, 429);
     const name = typeof b.name === "string" ? b.name.replace(/[<>`]/g, "").trim().slice(0, 60) : "";
-    const have = await db.prepare("SELECT code FROM partner WHERE code=?").bind(code).first();
-    if (have) return json({ ok: true, existed: true, code, link: `${origin}/?ref=${code}`, message: "This number is already enrolled. Sign in with your partner key to see your sales." });
-    if (!(await spend(2))) return busy();
-    const key = "ctp_" + randHex(20);
-    await db.prepare("INSERT OR IGNORE INTO partner(code,key_hash,name,source,enrolled_ms,consent_ms,state) VALUES(?,?,?,?,?,?, 'active')").bind(code, await sha("partner|" + key), name || null, b.source === "ticket" ? "ticket" : "direct", now, now).run();
-    return json({ ok: true, code, partnerKey: key, link: `${origin}/?ref=${code}` });
+    const ph = await phoneHashFor(env, digits), eh = await sha("pemail|" + email);
+    const have = await db.prepare("SELECT code FROM partner WHERE phone_hash=? OR email_hash=?").bind(ph, eh).first();
+    const win = await db.prepare("SELECT v FROM kv WHERE k=?").bind(`penr/${eh}`).first<{ v: string }>();
+    const prev = win ? JSON.parse(win.v) : null;
+    if (prev && now - prev.t < 60_000 * 60 && prev.n >= 5) return json({ ok: true, sent: true }); // quietly stop mailing: no more than 5 a hour per address
+    if (!(await spend(3))) return busy();
+    const n = prev && now - prev.t < 3_600_000 ? prev.n + 1 : 1, t0 = prev && now - prev.t < 3_600_000 ? prev.t : now;
+    let devCode: string | undefined;
+    if (have) {
+      await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`penr/${eh}`, JSON.stringify({ t: t0, n })).run();
+      await sendMail(env, db, email, "Refer & earn: you already have an account", `This e-mail address or mobile number is already enrolled in Refer & earn.\n\nSign in with your partner key: ${origin}/partner.html\n\nLost the key? Reply to this e-mail.`, now);
+    } else {
+      const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000));
+      await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`penr/${eh}`, JSON.stringify({ t: t0, n, c: await sha("pcode|" + eh + "|" + code), x: now + 600_000, ph, nm: name, src: b.source === "ticket" ? "ticket" : "direct", a: 0 })).run();
+      await sendMail(env, db, email, "Your Refer & earn code", `Your code is ${code}. It works for 10 minutes.\n\nIf you did not ask for it, ignore this e-mail.`, now);
+      if (env.TEST_MODE === "1") devCode = code;
+    }
+    return json({ ok: true, sent: true, ...(devCode ? { devCode } : {}) });
+  }
+  // Step 2: the code from the e-mail. Only now is the partner created: random public code, private key shown once.
+  if (req.method === "POST" && p === "/api/partner/enroll/verify") {
+    const b = await body(req);
+    const email = validEmail(b?.email), code = typeof b?.code === "string" ? b.code.replace(/\D/g, "") : "";
+    const bad = () => json({ error: "That code is not right or has expired. Please ask for a new one." }, 400);
+    if (!email || code.length !== 6) return bad();
+    const eh = await sha("pemail|" + email);
+    const row = await db.prepare("SELECT v FROM kv WHERE k=?").bind(`penr/${eh}`).first<{ v: string }>();
+    const e = row ? JSON.parse(row.v) : null;
+    if (!e || !e.c || e.x < now || e.a >= 5) return bad();
+    if (e.c !== (await sha("pcode|" + eh + "|" + code))) { e.a++; await db.prepare("UPDATE kv SET v=? WHERE k=?").bind(JSON.stringify(e), `penr/${eh}`).run(); return bad(); }
+    if (!(await spend(3))) return busy();
+    const have = await db.prepare("SELECT code FROM partner WHERE phone_hash=? OR email_hash=?").bind(e.ph, eh).first();
+    if (have) { await db.prepare("DELETE FROM kv WHERE k=?").bind(`penr/${eh}`).run(); return bad(); }
+    const key = "ctp_" + randHex(20), ref = newRefCode();
+    await db.prepare("INSERT OR IGNORE INTO partner(code,key_hash,name,source,enrolled_ms,consent_ms,state,phone_hash,email_hash) VALUES(?,?,?,?,?,?, 'active',?,?)").bind(ref, await sha("partner|" + key), e.nm || null, e.src, now, now, e.ph, eh).run();
+    await db.prepare("DELETE FROM kv WHERE k=?").bind(`penr/${eh}`).run();
+    return json({ ok: true, code: ref, partnerKey: key, link: `${origin}/?ref=${ref}` });
   }
 
   const me = async () => {
@@ -115,7 +166,7 @@ export async function partnerRoute(req: Request, env: PayEnv, now: number, spend
   }
   if (req.method === "POST" && p === "/api/partners/payout") { // we paid the partner outside this system; record it once
     const b = await body(req);
-    const code = partnerCode(b?.code);
+    const code = refCode(b?.code);
     if (!b || !code || typeof b.reference !== "string" || b.reference.length < 3) return json({ error: "Give the partner code and the payment reference." }, 400);
     const r = await db.prepare("UPDATE commission SET status='paid', paid_ref=?, paid_ms=? WHERE partner_code=? AND status='accrued'").bind(b.reference.slice(0, 80), now, code).run();
     return json({ ok: true, paidRows: r.meta?.changes ?? 0 });
@@ -128,7 +179,7 @@ export async function partnerRoute(req: Request, env: PayEnv, now: number, spend
   }
   if (req.method === "POST" && p === "/api/partners/state") {
     const b = await body(req);
-    const code = partnerCode(b?.code);
+    const code = refCode(b?.code);
     if (!b || !code || !["active", "blocked"].includes(b.state)) return json({ error: "Give the partner code and a state (active or blocked)." }, 400);
     await db.prepare("UPDATE partner SET state=? WHERE code=?").bind(b.state, code).run();
     return json({ ok: true });

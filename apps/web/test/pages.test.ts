@@ -118,6 +118,15 @@ describe("console (organizer page)", () => {
     await again.waitFor((x) => /not valid any more/.test(x));
     expect(again.win.sessionStorage.getItem("ctz-org")).toBeFalsy();
   });
+  test("the console has an Add people card: the owner pastes name, number lines and they are added; the AI never sees them", async () => {
+    const o = await organizer(); await make(o, "UI-ROST"); await publish(o, "UI-ROST");
+    const p = await consolePage(o, "UI-ROST"); await p.waitFor((x) => /Add people/.test(x));
+    expect(p.text()).toMatch(/your AI never sees them/);
+    (p.$("#rosterTxt") as any).value = ["Asha Verma, 98765 43210", "Bala 9876543211", "9876543212", "not a number"].join("\n"); p.click("#rosterGo");
+    await p.waitFor((x) => /3 added, 1 not valid/.test(x));
+    expect((await o.json(await o.api("GET", "/api/z/UI-ROST/participants?limit=10", undefined, o.token))).total).toBe(3);
+    expect(p.errors).toEqual([]);
+  });
   test("UC-54 draft: the organizer publishes (free) after confirming email and mobile, then sees the payment-due card and the share link", async () => {
     const o = await organizer(); await make(o, "UI-DRAFT");
     const p = await consolePage(o, "UI-DRAFT");
@@ -274,7 +283,7 @@ describe("phone page", () => {
   test("the join page has no consent tick box, only a small Privacy Policy link to the privacy section of the legal page", async () => {
     const o = await organizer(); await make(o, "UI-PRIV"); await publish(o, "UI-PRIV");
     const p = await phone(o, "UI-PRIV"); await p.waitFor((x) => /Join the engagement/.test(x));
-    quietPrivacy(p.win.document); expect(p.$("#go")).toBeTruthy();
+    quietPrivacy(p.win.document); expect(p.$("#go")).toBeTruthy(); expect(p.win.document.body.textContent).toContain("Players are 18 or older."); expect(p.win.document.querySelectorAll(".spriv").length).toBe(2);
     for (const f of ["z.css", "app.css"]) expect(readFileSync(new URL("../public/" + f, import.meta.url), "utf8")).toMatch(/.spriv{[^}]*font-size:11px[^}]*font-weight:400/);
     expect(readFileSync(new URL("../public/legal.html", import.meta.url), "utf8")).toContain('id="privacy"');
   });
@@ -467,7 +476,7 @@ describe("Refer & Earn page", () => {
   test("the page pitches 50%, lists every pack with exactly half of its price, and has a working calculator", async () => {
     const o = await organizer(); const p = await page(o, "/partner.html", "partner.html", ["common.js", "partner.js"]);
     const doc = p.win.document; const body = doc.body.textContent!.replace(/\s+/g, " ");
-    expect(body).toMatch(/Earn 50% on every new company you bring/); expect(body).toMatch(/20% more every time that company buys again/); expect(body).toMatch(/mobile number is your code/i);
+    expect(body).toMatch(/Earn 50% on every new company you bring/); expect(body).toMatch(/20% more every time that company buys again/); expect(body).toMatch(/random code/i); expect(body).not.toMatch(/mobile number is your code/i);
     const packs: number[][] = p.win.TB.PACKS;
     expect(packs.slice(0, 3).map((x) => [x[0], x[1]])).toEqual([[100, 1999], [250, 2999], [500, 3999]]); // the launch prices
     const rows = [...doc.querySelectorAll("#earn-table .rrow:not(.rh)")].map((r: any) => r.textContent.replace(/\s+/g, " "));
@@ -477,13 +486,16 @@ describe("Refer & Earn page", () => {
     (doc.getElementById("calc-n") as any).value = "4"; (doc.getElementById("calc-pack") as any).value = "0"; (doc.getElementById("calc-n") as any).dispatchEvent(new p.win.Event("input"));
     expect(doc.getElementById("calc-out")!.textContent).toBe("₹3,998"); // 4 first purchases x Rs 999.50
   });
-  test("joining takes only a mobile number: the code is its 10 digits, the link is /?ref=<code>, and the page switches to the partner's own dashboard", async () => {
+  test("joining takes a mobile number and an e-mailed code: the code is random, the link is /?ref=<code>, and the page switches to the partner's own dashboard", async () => {
     const o = await organizer(); const p = await page(o, "/partner.html", "partner.html", ["common.js", "partner.js"]);
     await p.waitFor((x) => /Get your link in 20 seconds/.test(x));
-    (p.$("#ph") as any).value = "+91 98765 43210"; (p.$("#ok") as any).checked = true; p.click("#join");
+    (p.$("#ph") as any).value = "+91 98765 43210"; (p.$("#em") as any).value = "partner@example.com"; (p.$("#ok") as any).checked = true; p.click("#join");
+    await p.waitFor((x) => /Check your email/.test(x));
+    const mailed = (o.world.raw.prepare("SELECT body FROM outbox WHERE to_addr='partner@example.com' ORDER BY id DESC").get() as any).body.match(/\b\d{6}\b/)[0];
+    (p.$("#cd") as any).value = mailed; p.click("#cdgo");
     const t = await p.waitFor(() => !!p.win.document.getElementById("dash")?.textContent?.includes("Your link"));
     const dash = p.win.document.getElementById("dash")!.textContent!;
-    expect(dash).toMatch(/9876543210/); expect(dash).toMatch(/\/\?ref=9876543210/); expect(dash).toMatch(/Your partner key/);
+    expect(dash).not.toMatch(/9876543210/); expect(dash).toMatch(/\/\?ref=[A-HJ-NP-Z2-9]{8}/); expect(dash).toMatch(/Your partner key/);
     expect(p.win.document.body.classList.contains("signed")).toBe(true);
     expect(p.errors).toEqual([]);
   });

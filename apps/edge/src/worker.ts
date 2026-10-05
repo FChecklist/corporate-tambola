@@ -103,6 +103,9 @@ export const SCHEMA: string[] = [
   `ALTER TABLE login_code ADD COLUMN link_hash TEXT`,
   // the version of the Terms an organizer accepted by continuing (create engagement, sign in)
   `CREATE TABLE IF NOT EXISTS organizer_terms (org TEXT NOT NULL, version TEXT NOT NULL, at_ms INTEGER NOT NULL, via TEXT NOT NULL, PRIMARY KEY (org, version))`,
+  // partner codes are random; the partner's mobile number and e-mail are kept only as salted hashes
+  `ALTER TABLE partner ADD COLUMN phone_hash TEXT`,
+  `ALTER TABLE partner ADD COLUMN email_hash TEXT`,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
@@ -154,6 +157,8 @@ async function spend(env: Env, now: number, n = 1): Promise<boolean> {
   await env.DB.prepare("INSERT INTO usage(day,writes) VALUES(?,?) ON CONFLICT(day) DO UPDATE SET writes=writes+?").bind(d, n, n).run();
   return true;
 }
+/** An AI key (or a co-host) never receives or sends names and mobile numbers: the organizer loads the list in the console. */
+const CONSOLE_ONLY = () => json({ error: "Names and mobile numbers are handled by the owner in the console, not by the AI. Ask the owner to paste the list in the Participants card. You can set the limit with settings and refer to people by ticket number." }, 403);
 const BUSY = () => json({ error: "Busy day. Please try again after midnight UTC." }, 503);
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-organizer, x-partner, authorization", "access-control-allow-methods": "GET, POST, PUT, PATCH, OPTIONS", "access-control-max-age": "86400" };
@@ -348,7 +353,7 @@ export const AI_MANIFEST = {
     { do: "Create an engagement. It is saved as a free draft that participants cannot see yet; nothing is paid at this step", call: "POST /api/z {id, startRound, callSeconds (6|9|12|15), cap, closed?}  -> {ok, draft, openUrl}" },
     { do: "When everything is set up, tell the organizer it is ready. Publishing is free but only the organizer can do it (they confirm their email and mobile number), and payment is due before the start time or the engagement will not begin. This returns a link: give it to the organizer and help them through every step, but never try to publish or pay yourself", call: "POST /api/z/{id}/publish -> {published:false, needsOrganizer:true, consoleUrl} (the organizer opens consoleUrl, confirms their details and presses Publish; afterwards the same call returns payUrl, the payment page, and shareUrl, the link for guests)" },
     { do: "Change start time, speed, cap, invite-only, tickets per participant (1 or 2), reward lines and brand breaks (up to 3) and rounds (1 to 5 games, each with new numbers and new tickets) before the first number", call: "PATCH /api/z/{id}/settings {startRound?, callSeconds?, cap?, closed?, tickets?, rounds?, rewards?: [{pattern: early5|top|mid|bot|corners|star|full, scope?: ticket|two_ticket, ordinal?: 1-5, text}], breaks?: [{after: 1-89 numbers called, seconds: 15-600 in steps of 3, kind: file|youtube|slides|speech|lucky, title, mediaUrl?: https link (not for lucky), winners?: 1|3|5|10 (lucky only, default 3), style?: draw|scratch (lucky only; scratch shows a scratch card on phones, the winners are drawn the same fair way)}]}. IMPORTANT: rewards, breaks and every list you send REPLACE what was saved, they are not merged, so always send the complete list (to change one reward, read the summary, change it, send them all). A media link must be https; for kind youtube it must be a YouTube link; for file it must be a direct link the phones can open (a video, audio, image or PDF file), which we cannot check for you. A reward line is ONE winner of ONE house: for three winners of the full house send three lines with ordinal 1, 2 and 3. For the two-ticket full house use pattern full with scope two_ticket (ordinal 1-5). Names for the organizer: early5 = Early Five, top = Top line, mid = Middle line, bot = Bottom line, corners = Four corners, star = Star, full = Full house. A lucky draw is a break: {after: 60, seconds: 60, kind: lucky, title: Lucky draw, winners: 3}. Worked example: PATCH /api/z/{id}/settings {startRound: 33146812, callSeconds: 9, cap: 250, tickets: 2, rounds: 1, rewards: [{pattern: early5, ordinal: 1, text: Gift hamper}, {pattern: full, ordinal: 1, text: Voucher 5000}, {pattern: full, ordinal: 2, text: Voucher 3000}, {pattern: full, scope: two_ticket, ordinal: 1, text: iPad}], breaks: [{after: 30, seconds: 90, kind: youtube, title: Anniversary film, mediaUrl: https://www.youtube.com/watch?v=...}, {after: 60, seconds: 60, kind: lucky, title: Lucky draw, winners: 3}]}" },
-    { do: "Load participants (invite list)", call: "POST /api/z/{id}/roster {people:[{phone,name}]} up to 100 per call" },
+    { do: "Participants: the OWNER loads the invite list in the Participants card of their console. Names and mobile numbers never pass through the AI (a roster call from an AI key answers 403). Set the limit with settings.", call: "(owner, in the console)" },
     { do: "Reuse an earlier engagement's people", call: "POST /api/z/{id}/reuse {from}" },
     { do: "See who joined (names and ids only, never phone numbers)", call: "GET /api/z/{id}/participants" },
     { do: "See claims received", call: "GET /api/z/{id}/claims" },
@@ -357,7 +362,7 @@ export const AI_MANIFEST = {
     { do: "Ask for ALL participant names and mobile numbers of this engagement to be deleted (nothing is deleted until the organizer confirms in their console)", call: "POST /api/z/{id}/control/request {action: 'erase', note}" },
     { do: "Read the current pause status", call: "GET /api/z/{id}/control" },
     { do: "Send a message to every guest's phone and the big screen (160 characters; empty text clears it; once published)", call: "POST /api/z/{id}/announce {text}" },
-    { do: "See the winners to hand rewards to (mobile numbers partly hidden) and tick a reward as given", call: "GET /api/z/{id}/prizes ; POST /api/z/{id}/prizegiven {round, pattern, ordinal, seat, given}" },
+    { do: "See the winners to hand rewards to, by ticket number (names and numbers stay in the console), and tick a reward as given", call: "GET /api/z/{id}/prizes ; POST /api/z/{id}/prizegiven {round, pattern, ordinal, seat, given}" },
     { do: "Change of phone: let one person move their ticket to a new phone", call: "POST /api/z/{id}/unbind {phone}" },
     { do: "Flag a seat as organizer, host or co-host", call: "POST /api/z/{id}/mark {phone, role: organizer|host|co-host|none}" },
     { do: "Invitations: settle how many people each guest may invite and which kinds of guests, before the start", call: "PATCH /api/z/{id}/settings {invites: {on, per: 1-10, cats}}" },
@@ -762,7 +767,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!a.plat) return deny(a);
     return json({ ok: true, purged: await purgeOld(env, now) });
   }
-  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink)$/);
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget)$/);
   if (!m) return json({ error: "Not found", hint: "Read the list of what you can do at /api/z/ai-manifest. Engagement routes look like /api/z/{id}/summary, /settings, /roster, /participants, /results, /publish." }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
@@ -771,7 +776,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   const phoneHash = async (raw: unknown): Promise<string | null> => {
     const d = digitsOf(raw);
     if (!d) return null;
-    return sha(`${env.PHONE_SALT ?? env.ORGANIZER_SECRET ?? "ct"}|${d.slice(-10)}`); // +91 98765 43210, 098765 43210 and 9876543210 are the same person; one hash in every engagement so a roster can be reused without storing the number
+    return sha(`${env.PHONE_SALT ?? env.ORGANIZER_SECRET ?? "unset"}|${d.slice(-10)}`); // +91 98765 43210, 098765 43210 and 9876543210 are the same person; one hash in every engagement so a roster can be reused without storing the number
   };
   const pidOf = async (ph: string) => (await sha(`${eid}|${ph}`)).slice(0, 16);
   const lateNow = () => { const nr = roundOfMs(now); return nr > e.start_round + GRACE_ROUNDS ? nr : 0; }; // joined after the first number: that round, else 0
@@ -856,13 +861,37 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const rows = (await env.DB.prepare("SELECT seq, pid, COALESCE(jr,0) AS jr FROM seat WHERE eid=? AND seq>? ORDER BY seq LIMIT 2000").bind(eid, after).all<{ seq: number; pid: string; jr: number }>()).results ?? [];
     return json({ ready: true, seats: rows.map((r) => [r.seq, r.pid, r.jr]), upto: rows.length ? rows[rows.length - 1]!.seq : after });
   }
-  if (action === "unbind" && req.method === "POST") { // the organizer (or their AI) lets one person move their ticket to a new phone: the first device that comes back keeps it
-    if (!canAi(a, e)) return deny(a);
+  if ((action === "person" || action === "forget") && req.method === "POST") { // a participant asks the organizer to see, or to delete, their own data: the organizer does it in the console (never an AI)
+    if (!can(a, e, true)) return deny(a);
     const b = await body(req);
     const ph = await phoneHash(b?.phone);
     if (!ph) return json({ error: "Enter a valid mobile number." }, 400);
+    const seat = await env.DB.prepare("SELECT seq, pid, role FROM seat WHERE eid=? AND ph=?").bind(eid, ph).first<{ seq: number; pid: string; role: string | null }>();
+    if (!seat) return json({ error: "That number has not joined this engagement." }, 404);
+    if (action === "person") {
+      const row = await env.DB.prepare("SELECT pii FROM participant WHERE eid=? AND pid=?").bind(eid, seat.pid).first<{ pii: string | null }>();
+      const who = await openPii(env as any, row?.pii);
+      return json({ ok: true, seat: seat.seq, name: who?.name ?? "", role: seat.role ?? "" });
+    }
+    const running = now >= roundMs(e.start_round) && now < (await endBoundMs(env as any, e));
+    if (running) return json({ error: "The game is running. Please delete this person after it ends." }, 409);
+    if (!(await spend(env, now, 4))) return BUSY();
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM participant WHERE eid=? AND pid=?").bind(eid, seat.pid), env.DB.prepare("DELETE FROM seat WHERE eid=? AND seq=?").bind(eid, seat.seq),
+      env.DB.prepare("DELETE FROM claim WHERE eid=? AND pid=?").bind(eid, seat.pid),
+      env.DB.prepare("UPDATE prize SET pii=NULL, orig=NULL, trail=NULL WHERE eid=? AND seat=?").bind(eid, seat.seq), // the prize record keeps no identity once the person asks
+    ]);
+    return json({ ok: true, deleted: true });
+  }
+  if (action === "unbind" && req.method === "POST") { // the organizer (or their AI) lets one person move their ticket to a new phone: the first device that comes back keeps it
+    if (!canAi(a, e)) return deny(a);
+    const b = await body(req);
+    const seatNo = Number.isInteger(b?.seat) && b.seat > 0 ? (b.seat as number) : 0;
+    if (a.kind === "ai" && !seatNo) return CONSOLE_ONLY(); // an AI names the ticket by its number, never by a mobile number
+    const ph = seatNo ? "" : await phoneHash(b?.phone);
+    if (!seatNo && !ph) return json({ error: "Enter a valid mobile number." }, 400);
     if (!(await spend(env, now))) return BUSY();
-    const r = await env.DB.prepare("UPDATE seat SET dev=NULL WHERE eid=? AND ph=?").bind(eid, ph).run();
+    const r = seatNo ? await env.DB.prepare("UPDATE seat SET dev=NULL WHERE eid=? AND seq=?").bind(eid, seatNo).run() : await env.DB.prepare("UPDATE seat SET dev=NULL WHERE eid=? AND ph=?").bind(eid, ph).run();
     return (r.meta?.changes ?? 0) > 0 ? json({ ok: true }) : json({ error: "That number has not joined this engagement." }, 404);
   }
   if (action === "claims" && req.method === "POST") {
@@ -966,11 +995,13 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (action === "mark" && req.method === "POST") { // the organizer says which seat is the organizer's, a host's or a co-host's: they may play, are flagged in the report, stay out of lucky draws and may invite without a limit
     if (!canAi(a, e)) return deny(a);
     const b = await body(req);
-    const ph = await phoneHash(b?.phone);
+    const seatNo = Number.isInteger(b?.seat) && b.seat > 0 ? (b.seat as number) : 0;
+    if (a.kind === "ai" && !seatNo) return CONSOLE_ONLY();
+    const ph = seatNo ? "" : await phoneHash(b?.phone);
     const role = b?.role === "none" ? null : ["organizer", "host", "co-host"].includes(b?.role) ? b.role : undefined;
-    if (!ph || role === undefined) return json({ error: "Give the mobile number and a role (organizer, host, co-host or none)." }, 400);
+    if ((!ph && !seatNo) || role === undefined) return json({ error: "Give the ticket number (or the mobile number) and a role (organizer, host, co-host or none)." }, 400);
     if (!(await spend(env, now))) return BUSY();
-    const r = await env.DB.prepare("UPDATE seat SET role=? WHERE eid=? AND ph=?").bind(role, eid, ph).run();
+    const r = seatNo ? await env.DB.prepare("UPDATE seat SET role=? WHERE eid=? AND seq=?").bind(role, eid, seatNo).run() : await env.DB.prepare("UPDATE seat SET role=? WHERE eid=? AND ph=?").bind(role, eid, ph).run();
     return (r.meta?.changes ?? 0) > 0 ? json({ ok: true }) : json({ error: "That number has not joined yet. Ask them to open the game link first." }, 404);
   }
   if (action === "invites" && req.method === "GET") { // how many people this participant has invited so far (their own id is the key to ask)
@@ -1002,7 +1033,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (action === "vote" && req.method === "POST") return acceptVotes(env as any, e, eid!, await body(req, 65_536), now, json, spend);
   if (action === "confirm" && req.method === "POST") return confirmPrize(env as any, eid!, await body(req), now, json, spend);
   if (action === "myprizes" && req.method === "GET") return myPrizes(env as any, eid!, url, json);
-  if (action === "prizes" && req.method === "GET") { if (!can(a, e)) return deny(a); return listPrizes(env as any, eid!, json, a.kind === "ai"); }
+  if (action === "prizes" && req.method === "GET") { if (!can(a, e)) return deny(a); return listPrizes(env as any, eid!, json, a.kind === "ai" || (a.kind === "host" && req.headers.get("x-ct-link") === "1")); } // an AI (or a co-host's AI link) sees ticket numbers only
   if (action === "prizegiven" && req.method === "POST") { if (!can(a, e)) return deny(a); return markGiven(env, eid!, await body(req), a.kind, now, json, spend); }
   if (action === "erase" && req.method === "POST") { // right to erasure: every name, number, seat and invite of this engagement's people. The winners record and the organizer's own details stay, as the report says.
     if (!can(a, e, true)) return deny(a);
@@ -1032,6 +1063,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   }
   if (action === "roster" && req.method === "POST") { // an invite list: these people are on the engagement before they open the link
     if (!can(a, e)) return deny(a);
+    if (a.kind === "ai") return CONSOLE_ONLY();
     const b = await body(req, 32_768);
     if (!b || !Array.isArray(b.people) || b.people.length < 1 || b.people.length > 100) return json({ error: "Send between 1 and 100 people at a time." }, 400);
     const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
@@ -1077,7 +1109,31 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
 }
 
 /** Deletes engagements (and their people, claims and results) older than the 365-day retention period. */
+/**
+ * Housekeeping for everything that is not an engagement (see docs/RETENTION.md for the schedule). Runs with the daily purge. Never throws.
+ * network-address hashes (start/, linkfail/, plim/): 2 days; sign-in codes: 1 day after they expire; partner sign-up codes (penr/): 1 day;
+ * "new place" records (seen/, alert/): when their key is no longer live; e-mailed 24-hour keys: 7 days after they expire; retired keys: 90 days; daily counters: 90 days.
+ */
+export async function retentionSweep(env: Env, now: number): Promise<void> {
+  const DAY = 86_400_000, db = env.DB;
+  const safe = async (f: () => Promise<unknown>) => { try { await f(); } catch { /* one failing step must not stop the others */ } };
+  const cutoff = new Date(now - 2 * DAY).toISOString().slice(0, 10);
+  await safe(async () => {
+    const r = await db.prepare("SELECT k FROM kv WHERE k LIKE 'start/%' OR k LIKE 'linkfail/%' OR k LIKE 'plim/%' LIMIT 2000").all<{ k: string }>();
+    for (const x of r.results ?? []) { const d = x.k.match(/\d{4}-\d{2}-\d{2}/)?.[0]; if (d && d < cutoff) await db.prepare("DELETE FROM kv WHERE k=?").bind(x.k).run(); }
+  });
+  await safe(() => db.prepare("DELETE FROM login_code WHERE expires_ms < ?").bind(now - DAY).run());
+  await safe(async () => {
+    const r = await db.prepare("SELECT k, v FROM kv WHERE k LIKE 'penr/%' LIMIT 2000").all<{ k: string; v: string }>();
+    for (const x of r.results ?? []) { let t = 0; try { t = JSON.parse(x.v).t ?? 0; } catch { /* unreadable: drop it */ } if (now - t > DAY) await db.prepare("DELETE FROM kv WHERE k=?").bind(x.k).run(); }
+  });
+  await safe(() => db.prepare("DELETE FROM kv WHERE (k LIKE 'seen/%' OR k LIKE 'alert/%') AND substr(k, instr(k, '/') + 1) NOT IN (SELECT substr(hash, 1, 10) FROM organizer_key WHERE revoked=0 AND (expires_ms IS NULL OR expires_ms > ?))").bind(now).run());
+  await safe(() => db.prepare("DELETE FROM organizer_key WHERE expires_ms IS NOT NULL AND expires_ms < ?").bind(now - 7 * DAY).run());
+  await safe(() => db.prepare("DELETE FROM organizer_key WHERE revoked=1 AND created_ms < ?").bind(now - 90 * DAY).run());
+  await safe(() => db.prepare("DELETE FROM usage WHERE day < ?").bind(new Date(now - 90 * DAY).toISOString().slice(0, 10)).run());
+}
 export async function purgeOld(env: Env, now: number): Promise<number> {
+  await retentionSweep(env, now);
   // an engagement goes at 00:00 IST at the end of the 365th day after its game ended (created + 365 days if it never ran), and a draft nobody published after DRAFT_DAYS
   const loose = now - (RETENTION_DAYS - 2) * 86_400_000;
   const old = await env.DB.prepare("SELECT e.id AS id, e.created_ms AS created_ms, e.pack AS pack, l.end_ms AS end_ms FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE e.created_ms < ? OR (e.pack=0 AND e.created_ms < ?)").bind(loose, now - DRAFT_DAYS * 86_400_000).all<{ id: string; created_ms: number; pack: number; end_ms: number | null }>();

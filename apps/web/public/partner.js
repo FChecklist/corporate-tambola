@@ -1,4 +1,4 @@
-/* Corporate Tambola, Refer & earn. A sales partner's reference code is their mobile number; their unique link is /?ref=<code>.
+/* Corporate Tambola, Refer & earn. A sales partner's reference code is a random 8-character code; their unique link is /?ref=<code>.
    Anyone may join (a participant from their ticket, or anyone from this page). Nothing is shown to anyone but the partner themselves. */
 (function () {
   const $app = document.getElementById("app"), $dash = document.getElementById("dash");
@@ -19,20 +19,27 @@
   function shareBlock(code, link) {
     const text = "Corporate Tambola makes your company engagement unforgettable. Take a look: " + link;
     return `<div class="zlink" id="mylink">${esc(link)}</div>
-      <p class="zsmall">Your reference code is your mobile number: <b>${esc(code)}</b>. Anyone who buys through your link is counted for you.</p>
+      <p class="zsmall">Your code: <b>${esc(code)}</b>. Anyone who buys through your link is counted for you.</p>
       <button class="zbtn s" id="copy">Copy my link</button> <button class="zbtn s alt" id="nshare" style="display:none">Share&hellip;</button>
       <a class="zbtn s alt" style="display:inline-flex;align-items:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(text)}">Share on WhatsApp</a>`;
   }
   function enrollView() {
-    const phone = ls.get("ctz-phone") || "";
     const fromTicket = q.get("from") === "ticket";
     return `<div class="zcard zform"><h2>${fromTicket ? "Start earning: get your link" : "Get your link in 20 seconds"}</h2>
-        <label for="ph">Your mobile number</label><input id="ph" inputmode="tel" autocomplete="tel" value="${esc(phone)}" placeholder="98765 43210">
+        <label for="ph">Your mobile number</label><input id="ph" inputmode="tel" autocomplete="tel" placeholder="98765 43210">
+        <label for="em">Your e-mail (we send you a code)</label><input id="em" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com">
         <label for="nm">Your name (optional)</label><input id="nm" autocomplete="name" maxlength="60">
         <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;color:var(--ink);font-size:14px"><input type="checkbox" id="ok" style="width:auto;min-height:0;margin-top:3px"> <span>I would like to join Refer &amp; earn with this mobile number.</span></label>
         ${S.err ? `<div class="zbanner bad" role="alert">${esc(S.err)}</div>` : ""}
         <button class="zbtn" id="join">Get my link and start earning</button>
         <p class="zsmall">Already joined? <a href="#" id="signin">Sign in with your partner key</a></p></div>`;
+  }
+  function codeView() {
+    return `<div class="zcard zform"><h2>Check your email</h2><p class="zsmall" style="margin-top:0">We emailed <b>${esc(S.email)}</b>. Type the 6-digit code here. It works for 10 minutes.</p>
+      <label for="cd">6-digit code</label><input id="cd" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="6" placeholder="••••••">
+      ${S.err ? `<div class="zbanner bad" role="alert">${esc(S.err)}</div>` : ""}
+      <button class="zbtn" id="cdgo">Get my link</button>
+      <p class="zsmall"><a href="#" id="back">Back</a></p></div>`;
   }
   function signinView() {
     return `<div class="zcard zform"><h2>Sign in to see your sales</h2>
@@ -61,13 +68,18 @@
     if ($("copy")) $("copy").onclick = () => { try { navigator.clipboard.writeText(document.getElementById("mylink").textContent); $("copy").textContent = "Copied"; } catch {} };
     if ($("join")) $("join").onclick = async () => {
       S.err = "";
-      if (!$("ok").checked) { S.err = "Please tick the box to join."; return draw(enrollView()); }
+      if (!$("ok") || !$("ok").checked) { S.err = "Please tick the box to join."; return draw(enrollView()); }
       $("join").disabled = true;
       try {
-        const r = await api("POST", "/api/partner/enroll", { phone: $("ph").value, name: $("nm").value.trim(), consent: true, source: q.get("from") === "ticket" ? "ticket" : "direct" });
-        if (r.partnerKey) { ls.set("ctz-pkey", r.partnerKey); S.fresh = r.partnerKey; await load(); }
-        else { S.err = r.message || "This number is already enrolled."; draw(signinView()); }
+        S.email = $("em").value.trim();
+        await api("POST", "/api/partner/enroll", { phone: $("ph").value, email: S.email, name: $("nm").value.trim(), consent: true, source: q.get("from") === "ticket" ? "ticket" : "direct" });
+        draw(codeView());
       } catch (e) { S.err = e.message; draw(enrollView()); }
+    };
+    if ($("cdgo")) $("cdgo").onclick = async () => {
+      S.err = ""; $("cdgo").disabled = true;
+      try { const r = await api("POST", "/api/partner/enroll/verify", { email: S.email, code: $("cd").value }); ls.set("ctz-pkey", r.partnerKey); S.fresh = r.partnerKey; await load(); }
+      catch (e) { S.err = e.message; draw(codeView()); }
     };
     if ($("signin")) $("signin").onclick = (e) => { e.preventDefault(); S.err = ""; draw(signinView()); };
     if ($("back")) $("back").onclick = (e) => { e.preventDefault(); S.err = ""; draw(enrollView()); };

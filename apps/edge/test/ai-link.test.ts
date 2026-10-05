@@ -130,7 +130,8 @@ describe("GET-only fallback (_method and _body)", () => {
     const p = await call("GET", `/ai/${o.ai}/z/GET-1/settings?_method=PATCH&_body=${q({ tickets: 2, rewards: [{ pattern: "full", ordinal: 1, text: "TV" }] })}`); expect(p.status).toBe(200);
     expect((await j(await call("GET", `/ai/${o.ai}/z/GET-1/summary`))).tickets).toBe(2);
     const people = Array.from({ length: 20 }, (_, i) => ({ phone: "98765" + String(10000 + i), name: "P" + i }));
-    expect((await j(await call("GET", `/ai/${o.ai}/z/GET-1/roster?_method=POST&_body=${q({ people })}`))).added).toBe(20);
+    const refused = await call("GET", `/ai/${o.ai}/z/GET-1/roster?_method=POST&_body=${q({ people })}`); expect(refused.status).toBe(403); expect((await refused.text())).toMatch(/console/); // names and numbers never pass through the AI
+    expect((await j(await call("POST", "/api/z/GET-1/roster", { people }, o.h))).added).toBe(20); // the owner loads them in the console
     expect(auditRows().at(-1)!.method).toBe("POST");
   });
   test("a bad _method is refused, an oversized _body is refused, and a missing _body means an empty one", async () => {
@@ -209,8 +210,8 @@ describe("what the organizer's AI may and may not do now", () => {
     const o = await liveEngagement("CAP-2");
     const sealed = await sealPii(env as any, { phone: "9876543210", name: "Asha" });
     raw.prepare("INSERT INTO prize(eid,round,pattern,ordinal,seat,pii,orig,trail,confirmed_ms) VALUES('CAP-2',1,'full',1,1,?,?,NULL,1)").run(sealed, sealed);
-    const aiView = await j(await call("GET", `/ai/${o.ai}/z/CAP-2/prizes`)); expect(aiView.prizes[0].name).toBe("Asha"); expect(aiView.prizes[0].phone).toBe("XXXXXXXX10");
-    expect(JSON.stringify(aiView)).not.toContain("9876543210");
+    const aiView = await j(await call("GET", `/ai/${o.ai}/z/CAP-2/prizes`)); expect(aiView.prizes[0].name).toBeUndefined(); expect(aiView.prizes[0].phone).toBeUndefined(); expect(aiView.prizes[0].seat).toBe(1);
+    expect(JSON.stringify(aiView)).not.toMatch(/9876543210|3210|Asha/);
     const own = await j(await call("GET", "/api/z/CAP-2/prizes", undefined, o.h)); expect(own.prizes[0].phone).toBe("9876543210"); // the organizer sees it in full
     expect((await call("POST", `/ai/${o.ai}/z/CAP-2/prizegiven`, { round: 1, pattern: "full", ordinal: 1, seat: 1, given: true })).status).toBe(200);
     expect((raw.prepare("SELECT given_by FROM prize WHERE eid='CAP-2'").get() as any).given_by).toBe("organizer's AI");
@@ -218,9 +219,10 @@ describe("what the organizer's AI may and may not do now", () => {
   test("it may mark a seat, and move a ticket to a new phone (change of phone)", async () => {
     const o = await liveEngagement("CAP-3");
     await call("POST", "/api/z/CAP-3/join", { phone: "9876543210", name: "Asha" });
-    expect((await call("POST", `/ai/${o.ai}/z/CAP-3/mark`, { phone: "9876543210", role: "co-host" })).status).toBe(200);
+    expect((await call("POST", `/ai/${o.ai}/z/CAP-3/mark`, { seat: 1, role: "co-host" })).status).toBe(200);
     expect((raw.prepare("SELECT role FROM seat WHERE eid='CAP-3'").get() as any).role).toBe("co-host");
-    expect((await call("POST", `/ai/${o.ai}/z/CAP-3/unbind`, { phone: "9876543210" })).status).toBe(200);
+    expect((await call("POST", `/ai/${o.ai}/z/CAP-3/mark`, { phone: "9876543210", role: "host" })).status).toBe(403); expect((await call("POST", `/ai/${o.ai}/z/CAP-3/unbind`, { phone: "9876543210" })).status).toBe(403); // an AI never names a person by number
+    expect((await call("POST", `/ai/${o.ai}/z/CAP-3/unbind`, { seat: 1 })).status).toBe(200);
     expect((raw.prepare("SELECT dev FROM seat WHERE eid='CAP-3'").get() as any).dev).toBeNull();
   });
   test("it may set the invitation policy, read results, life, claims and the control status", async () => {

@@ -34,6 +34,7 @@
     ${msg ? `<div class="zbanner bad" role="alert">${esc(msg)}</div>` : ""}
     <button class="zbtn" id="go">Get my ticket</button>
     <p class="zsmall">We use your number for your ticket and, if you win, your prize. Your organizer sees it. Other players do not.</p>
+    <p class="spriv">Players are 18 or older.</p>
     <p class="spriv"><a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy Policy</a></p></div>`;
 
   const ticketHtml = (t, called, label, win) => `<div class="zticket" aria-label="${label}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div class="${called.has(v) ? "m" : ""}${win && win.has(v) && called.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;

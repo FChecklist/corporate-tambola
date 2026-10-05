@@ -465,7 +465,7 @@ describe("F. exceptions: what can go wrong", () => {
   test("UC-50 the AI key can build and read, but never publish, pay, erase, settle, retire keys or mint keys", async () => {
     const o = await organizer(); await call("POST", "/api/z", eng("AI-1"), o.ai); // it can create (a draft)
     expect((await call("PATCH", "/api/z/AI-1/settings", { cap: 150 }, o.ai)).status).toBe(200);
-    expect((await call("POST", "/api/z/AI-1/roster", { people: [{ phone: phone(3), name: "Z" }] }, o.ai)).status).toBe(200);
+    expect((await call("POST", "/api/z/AI-1/roster", { people: [{ phone: phone(3), name: "Z" }] }, o.ai)).status).toBe(403); // names and numbers are loaded by the owner in the console, never by the AI
     expect((await call("GET", "/api/history", undefined, o.ai)).status).toBe(200);
     expect(engRow("AI-1").pack).toBe(0);
     const pub = await j(await call("POST", "/api/z/AI-1/publish", contact, o.ai)); expect(pub.needsOrganizer).toBe(true); expect(engRow("AI-1").pack).toBe(0);
@@ -555,7 +555,7 @@ describe("G2. the organizer's AI: round 2 findings", () => {
   });
   test("UC-67 the manifest says: no writes before the yes, rewards replace the list, what skipped/invalid mean, and does not ask for the speed in the schedule call", async () => {
     const t = JSON.stringify(await j(await call("GET", "/api/z/ai-manifest")));
-    expect(t).toMatch(/DO NOT call POST \/api\/z or any other write/); expect(t).toMatch(/REPLACE what was saved/); expect(t).toMatch(/skipped \(already on the list/); expect(t).not.toMatch(/schedule\?at=[^"]*callSeconds/);
+    expect(t).toMatch(/DO NOT call POST \/api\/z or any other write/); expect(t).toMatch(/REPLACE what was saved/); expect(t).toMatch(/OWNER loads the invite list/); expect(t).not.toMatch(/schedule\?at=[^"]*callSeconds/);
   });
 });
 

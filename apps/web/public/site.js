@@ -81,8 +81,8 @@
   // ---------- refer & earn: remember who sent this visitor for 30 days (kept in this browser only) ----------
   const REF = (() => {
     try {
-      const p = new URLSearchParams(location.search).get("ref"); const d = p ? p.replace(/\D/g, "").slice(-10) : "";
-      if (d.length === 10) localStorage.setItem("ctz-ref", JSON.stringify({ code: d, at: Date.now() }));
+      const p = new URLSearchParams(location.search).get("ref"); const d = p && /^[A-Za-z2-9]{8}$/.test(p.trim()) ? p.trim().toUpperCase() : "";
+      if (d) localStorage.setItem("ctz-ref", JSON.stringify({ code: d, at: Date.now() }));
       const v = JSON.parse(localStorage.getItem("ctz-ref") || "null");
       if (v && Date.now() - v.at < 30 * 86400000) return v.code;
       localStorage.removeItem("ctz-ref");

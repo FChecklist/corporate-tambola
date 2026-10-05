@@ -350,7 +350,8 @@ describe("organizers, their AI assistant, and what the AI may not do", () => {
   });
   test("the AI can do the organizer's work: create, load an invite list, change settings, read people and claims, reuse", async () => {
     expect((await call("POST", "/api/z", { id: "BYAI1", startRound: FUTURE, callSeconds: 9, cap: 10 }, asA())).status).toBe(200);
-    const r = await (await call("POST", "/api/z/BYAI1/roster", { people: [{ phone: phone(1), name: "A" }, { phone: phone(2), name: "B" }, { phone: "12" }] }, asA())).json() as any;
+    const r = await (await call("POST", "/api/z/BYAI1/roster", { people: [{ phone: phone(1), name: "A" }, { phone: phone(2), name: "B" }, { phone: "12" }] }, asM())).json() as any; // the owner loads the list; an AI key is refused (names and numbers never pass through the AI)
+    expect((await call("POST", "/api/z/BYAI1/roster", { people: [{ phone: phone(9), name: "Z" }] }, asA())).status).toBe(403);
     expect(r).toMatchObject({ added: 2, invalid: 1 });
     expect((await call("PATCH", "/api/z/BYAI1/settings", { callSeconds: 12 }, asA())).status).toBe(200);
     expect(((await (await call("GET", "/api/z/BYAI1/participants", undefined, asA())).json()) as any).participants).toHaveLength(2);

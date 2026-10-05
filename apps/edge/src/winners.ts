@@ -118,7 +118,7 @@ export async function listPrizes(env: Env & PiiEnv, eid: string, json: Json, out
     const cur = await openPii(env, r.pii), orig = await openPii(env, r.orig);
     let trail: any[] = []; try { trail = JSON.parse((await openText(env, r.trail)) ?? "[]"); } catch { /* none */ }
     const hide = (ph: string | undefined) => (outside ? (ph ? "XXXXXXXX" + ph.slice(-2) : "") : ph ?? "");
-    if (outside) out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, name: cur?.name ?? "", phone: hide(cur?.phone), confirmed: !!r.confirmed_ms, changed: trail.length > 0, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null });
+    if (outside) out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, confirmed: !!r.confirmed_ms, changed: trail.length > 0, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null });
     else out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, name: cur?.name ?? "", phone: cur?.phone ?? "", confirmed: !!r.confirmed_ms, confirmedMs: r.confirmed_ms ?? null,
       changed: trail.length > 0, joinedWithName: orig?.name ?? "", joinedWithPhone: orig?.phone ?? "", trail, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null });
   }

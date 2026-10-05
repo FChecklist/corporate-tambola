@@ -223,6 +223,12 @@
         <p class="zsmall">Claims received: ${S.claims.length}. ${bad ? `<b>${bad} not valid</b> (they do not match the public log and are ignored).` : "All claims so far match the public log."}</p>
         <p class="zsmall">Winners are decided by the software, from the public numbers, when several different phones agree. You cannot choose, change or remove a winner or a number. Confirmed so far: ${(S.published || []).filter((r) => r.pattern !== "lucky").length}.</p>
         <button class="zbtn s alt" id="csv" ${S.settledPreview.length ? "" : "disabled"}>Download report</button></div>
+      <div class="zcard zform"><h2>Add people</h2>
+        <p class="zsmall" style="margin-top:0">One person per line: name, mobile number. Names and numbers stay here: your AI never sees them.</p>
+        <label for="rosterTxt">Your list</label><textarea id="rosterTxt" class="inp" rows="5" placeholder="Asha, 98765 43210" autocomplete="off"></textarea><button class="zbtn s" id="rosterGo">Add them</button></div>
+      <div class="zcard zform"><h2>A player's own data</h2>
+        <p class="zsmall" style="margin-top:0">A player asks to see or delete their data? Enter their mobile number. Only you can do this.</p>
+        <label for="pdph">Their mobile number</label><input id="pdph" inputmode="tel" autocomplete="off" placeholder="98765 43210"><button class="zbtn s alt" id="pdsee">Show what we hold</button> <button class="zbtn s" id="pddel">Delete their data</button></div>
       <div class="zcard zform"><h2>Change of phone</h2>
         <p class="zsmall" style="margin-top:0">A ticket plays on one phone only. If someone lost or changed their phone, enter their mobile number: the next phone they join with keeps their ticket.</p>
         <label for="ubph">Their mobile number</label><input id="ubph" inputmode="tel" autocomplete="off" placeholder="98765 43210"><button class="zbtn s" id="unbind">Let them move to a new phone</button></div>
@@ -405,6 +411,15 @@
     bindPrizes();
     if ($("rptopen")) $("rptopen").onclick = async () => { try { const r = await call("GET", `/api/z/${eid}/reportlink`); if (r.url) window.open(r.url, "_blank", "noopener"); else S.note = "The report is not ready yet."; } catch (e) { S.note = e.message; draw(engView()); } };
     if ($("aiaudit")) $("aiaudit").onclick = async () => { try { S.aiTrail = (await call("GET", "/api/org/ai/audit")).trail || []; } catch (e) { S.note = e.message; } draw(engView()); };
+    if ($("rosterGo")) $("rosterGo").onclick = async () => {
+      const people = $("rosterTxt").value.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => { const m = l.match(/^(.*?)[,;\t ]+([+()\d][\d ()+-]{8,})$/) || l.match(/^()([+()\d][\d ()+-]{8,})$/); return m ? { name: m[1].trim(), phone: m[2].trim() } : { name: l, phone: "" }; });
+      if (!people.length) { S.note = "Paste your list first."; return refreshEng(); }
+      let added = 0, skipped = 0, invalid = 0;
+      try { for (let i = 0; i < people.length; i += 100) { const r = await call("POST", `/api/z/${eid}/roster`, { people: people.slice(i, i + 100) }); added += r.added || 0; skipped += r.skipped || 0; invalid += r.invalid || 0; } S.note = `${added} added${skipped ? ", " + skipped + " skipped" : ""}${invalid ? ", " + invalid + " not valid" : ""}.`; $("rosterTxt").value = ""; } catch (e) { S.note = e.message; }
+      refreshEng();
+    };
+    if ($("pdsee")) $("pdsee").onclick = async () => { try { const r = await call("POST", `/api/z/${eid}/person`, { phone: $("pdph").value }); S.note = `Ticket ${r.seat}${r.name ? ", " + r.name : ""}${r.role ? ", " + r.role : ""}. We hold only their name and number.`; } catch (e) { S.note = e.message; } refreshEng(); };
+    if ($("pddel")) $("pddel").onclick = async () => { if (!confirm("Delete this player's name and number now? This cannot be undone.")) return; try { await call("POST", `/api/z/${eid}/forget`, { phone: $("pdph").value }); S.note = "Done. Their data is deleted."; } catch (e) { S.note = e.message; } refreshEng(); };
     if ($("unbind")) $("unbind").onclick = async () => { try { await call("POST", `/api/z/${eid}/unbind`, { phone: $("ubph").value }); S.note = "Done. The next phone they join with keeps their ticket."; } catch (e) { S.note = e.message; } refreshEng(); };
     if ($("csv")) $("csv").onclick = async () => {
       await namesFor([...new Set(S.settledPreview.flatMap((x) => x.pids))]); const nm = S.nameCache;
