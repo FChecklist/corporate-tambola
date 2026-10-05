@@ -13,7 +13,8 @@
 //   nobody        - phones: join, send claims, read results counts, read the engagement info and the signed control file.
 
 import { GRACE_ROUNDS, defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
-import { openPii, sealPii } from "./pii";
+import { openPii, openText, sealPii, sealText } from "./pii";
+import { aiLinkMail, coHostLinkMail } from "./mails";
 import { acceptOver, acceptWon, endBoundMs, eraseEverything, erasePersonal, fullDeleteAt, lifecycleTick, personalDeleteAt, recordWinners, reportApi, reportLink } from "./lifecycle";
 import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
@@ -150,8 +151,27 @@ const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers
 /** Phones load the app from Pages and call this Worker from another origin, so every answer carries open CORS (no cookies are used anywhere). */
 /** The message an organizer pastes into any AI chat: two short lines and the short link (/ai/<key>), which opens the complete manual. The key is only inside the link. The AI key cannot pay, publish, erase, pause or settle. */
 export const aiMessage = (origin: string, key: string) => aiPaste(origin, key);
-/** The e-mail wrapper around the AI work link: the same text as Option 1 on the screen. */
-export const aiMailBody = (msg: string) => `Option 1: let your AI do the work. Copy everything between the lines below and paste it into any AI chat (ChatGPT, Claude, Gemini, Copilot, DeepSeek, Z.ai). It will read your own instructions, ask you simple questions one at a time and set up your engagement. It can do what you can do in the console, except pay, publish, erase data or pause: you do those yourself.\n\n--------\n${msg}\n--------\n\nKeep this e-mail private: the link works like a key to your engagements.`;
+/** The organizer's e-mail address for the dedicated AI-link mails (the one used at sign-up), kept sealed; older accounts fall back to the address confirmed at their latest publish. null when unknown. */
+async function orgEmail(env: Env, org: string): Promise<string | null> {
+  try {
+    const sealed = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`orgmail/${org}`).first<{ v: string }>();
+    const e = await openText(env as any, sealed?.v);
+    if (e) return e;
+    const c = await env.DB.prepare("SELECT v FROM kv WHERE k LIKE 'contact/%' AND substr(k,9) IN (SELECT id FROM engagement WHERE org=? ORDER BY created_ms DESC) LIMIT 1").bind(org).first<{ v: string }>();
+    return c ? (JSON.parse(c.v).email as string) : null;
+  } catch { return null; }
+}
+/** Replaces the organizer's AI work link: every existing AI key stops at once, a new one is made, the dedicated mail goes to the organizer. The only mail that ever carries an AI link. */
+async function replaceAiLink(env: Env, req: Request, org: string, now: number, why: "start" | "replace"): Promise<{ aiKey: string; aiMessage: string; mailed: boolean }> {
+  await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE org=? AND kind='ai'").bind(org).run();
+  const key = "cta_" + randHex(24);
+  await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), org, "ai", now).run();
+  const origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
+  const to = await orgEmail(env, org);
+  let mailed = false;
+  if (to) { const m = aiLinkMail(origin, key, why); mailed = await sendMail(env as PayEnv, env.DB, to, m.subject, m.text, now, { html: m.html, secret: true }); }
+  return { aiKey: key, aiMessage: aiMessage(origin, key), mailed };
+}
 /** Runs the daily clean-up (365-day purge, one more try for unsent mail) the first time an organizer-side request arrives each UTC day. Never slows or fails the request. */
 export async function housekeeping(env: Env, now: number): Promise<void> {
   try {
@@ -361,10 +381,12 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + token), org, "master", now),
       env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + aiKey), org, "ai", now),
       env.DB.prepare("INSERT INTO organizer_email(email_hash,org) VALUES(?,?)").bind(eh, org),
+      env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`orgmail/${org}`, await sealText(env as any, email)),
       env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(ipk, String(used + 1), String(used + 1)),
     ]);
-    const startMsg = aiMessage((env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, aiKey);
-    await sendMail(env as PayEnv, env.DB, email, "Your Corporate Tambola AI work link", aiMailBody(startMsg), now); // same link as Option 1 on the screen, kept in the organizer's inbox
+    const origin0 = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, startMsg = aiMessage(origin0, aiKey);
+    const dm = aiLinkMail(origin0, aiKey, "start"); // the dedicated mail: the same link as Option 1 on the screen, and the only mail that ever carries it
+    await sendMail(env as PayEnv, env.DB, email, dm.subject, dm.text, now, { html: dm.html, secret: true });
     return json({ ok: true, token, aiKey, aiMessage: startMsg });
   }
   if (req.method === "POST" && p === "/api/auth/email") {
@@ -415,13 +437,13 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), org, "master", now).run();
     return json({ ok: true, organizerKey: key });
   }
-  if (req.method === "POST" && p === "/api/org/ai") { // the organizer's own key mints the AI key; a new one replaces the old one
+  if (req.method === "POST" && (p === "/api/org/ai" || p === "/api/org/ai/replace")) { // signed-in organizer only (an AI key can never mint or replace its own link); the old AI link dies at once
     if (a.kind !== "master" || !a.org) return deny(a);
-    if (!(await spend(env, now, 2))) return BUSY();
-    await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE org=? AND kind='ai'").bind(a.org).run();
-    const key = "cta_" + randHex(24);
-    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), a.org, "ai", now).run();
-    return json({ ok: true, aiKey: key, aiMessage: aiMessage((env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, key) });
+    if (!(await spend(env, now, 3))) return BUSY();
+    const r = await replaceAiLink(env, req, a.org, now, "replace");
+    const presented = req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\sXX/i, "");
+    await auditAi(env.DB, a.org, new Request(new URL(req.url).origin + "/api/org/ai/replace", { method: "POST", headers: req.headers }), (await sha("key|" + presented)).slice(0, 10), 200, now);
+    return json({ ok: true, ...r });
   }
   if (req.method === "GET" && p === "/api/org/keys") { // the organizer sees their own sign-in keys (never the keys themselves) and can retire old ones
     if (a.kind !== "master" || !a.org) return deny(a);
@@ -448,7 +470,9 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!(await spend(env, now, 2))) return BUSY();
     const key = "cth_" + randHex(24);
     await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), a.org, "host", now).run();
-    return json({ ok: true, hostKey: key, manualUrl: `${(env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin}/ai/${key}` });
+    const hOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, hTo = await orgEmail(env, a.org);
+    if (hTo) { const m = coHostLinkMail(hOrigin, key, hTo); await sendMail(env as PayEnv, env.DB, hTo, m.subject, m.text, now, { html: m.html, secret: true }); } // dedicated mail to the organizer only
+    return json({ ok: true, hostKey: key, manualUrl: `${hOrigin}/ai/${key}`, mailed: !!hTo });
   }
   if (req.method === "GET" && p === "/api/org/ai/audit") { // the organizer sees every call their external AI made; we can see all (the AI may read its own trail)
     if (a.kind !== "master" && a.kind !== "ai" && !a.plat) return deny(a);
@@ -824,10 +848,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       ...(ent ? [env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(eid, ent.id)] : []),
     ]);
     const paid = !!(ent || free), startMs = roundMs(e.start_round);
-    const pubAi = "cta_" + randHex(24); // an extra AI key (the one already in use keeps working) so the mail carries a fresh, working AI work link
-    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + pubAi), e.org, "ai", now).run();
     await sendMail(env as PayEnv, env.DB, cEmail, paid ? `Your engagement ${eid} is published and paid` : `Your engagement ${eid} is published: pay before ${istTime(startMs)}`,
-      `Your engagement ${eid} is published and open to your participants.\n\nShare this link with them:\n${shareUrl}\n\n${paid ? "" : `IMPORTANT: payment is due before the start (${istTime(startMs)}). If it is not paid by then, the engagement will not begin and everyone you invited will be left waiting. You can pay any time before the start, and it takes about 2 minutes:\n${payUrl}\n\n`}You can also open the big screen for the room: ${origin}/big.html?e=${eid}\n\n${aiMailBody(aiMessage(origin, pubAi))}`, now);
+      `Your engagement ${eid} is published and open to your participants.\n\nShare this link with them:\n${shareUrl}\n\n${paid ? "" : `IMPORTANT: payment is due before the start (${istTime(startMs)}). If it is not paid by then, the engagement will not begin and everyone you invited will be left waiting. You can pay any time before the start, and it takes about 2 minutes:\n${payUrl}\n\n`}You can also open the big screen for the room: ${origin}/big.html?e=${eid}\n\nThis e-mail can be forwarded safely: it holds no secret link.`, now); // no AI work link here, ever: it has its own dedicated e-mail
     return json({ ok: true, published: true, paid, startMs, payUrl, shareUrl, confirmed: { email: cEmail, phone: cPhone.slice(-10) } });
   }
   if (action === "claims" && req.method === "GET") {

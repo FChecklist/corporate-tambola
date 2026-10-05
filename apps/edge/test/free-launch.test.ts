@@ -32,7 +32,7 @@ describe("build first, pay to publish", () => {
     expect(o.aiMessage).toContain(`https://tambola.test/ai/${o.ai}`); expect(o.aiMessage).toMatch(/MY OWN Corporate Tambola account/); expect(o.aiMessage.split(String.fromCharCode(10)).length).toBe(2);
     expect((await call("GET", "/api/history", undefined, { "x-organizer": o.ai })).status).toBe(200); // the AI link really works
     const sent = raw.prepare("SELECT to_addr, subject, body FROM outbox").all() as { to_addr: string; subject: string; body: string }[];
-    expect(sent.length).toBe(1); expect(sent[0]!.to_addr).toBe("boss@acme.com"); expect(sent[0]!.subject).toMatch(/AI work link/i);
+    expect(sent.length).toBe(1); expect(sent[0]!.to_addr).toBe("boss@acme.com"); expect(sent[0]!.subject).toMatch(/personal AI work link/i);
     expect(sent[0]!.body).toContain(o.ai); expect(sent[0]!.body).toContain(o.aiMessage); // the exact text of Option 1, key included, so pasting it works
   });
   test("an email that already has an account is not let in by typing it: it is asked for the e-mailed code", async () => {
@@ -75,8 +75,10 @@ describe("build first, pay to publish", () => {
     expect(info.unpaid).toBeUndefined(); expect(info.locked).toBe(false); // participants are never told it is unpaid
     expect(((await (await call("GET", "/api/z/PUB-1/info", undefined, h)).json()) as any).unpaid).toBe(true); // the organizer is
     const mail = raw.prepare("SELECT subject, body FROM outbox WHERE to_addr=? ORDER BY id DESC LIMIT 1").get("boss@acme.com") as { subject: string; body: string };
-    expect(mail.subject).toMatch(/pay before/i); expect(mail.body).toMatch(/will not begin/); const mailedKey = mail.body.match(/cta_[0-9a-f]{48}/)![0];
-    expect(mail.body).toMatch(/\/ai\/cta_[0-9a-f]{48}/); expect((await call("GET", "/api/history", undefined, { "x-organizer": mailedKey })).status).toBe(200); // the e-mailed AI link works
+    expect(mail.subject).toMatch(/pay before/i); expect(mail.body).toMatch(/will not begin/);
+    expect(mail.body).toContain("/pay.html?e=PUB-1"); expect(mail.body).toContain("/z.html?e=PUB-1");
+    expect(mail.body).not.toMatch(/cta_|cth_|\/ai\//); // the publish mail is forwardable: the AI work link has its own dedicated e-mail
+    expect((await call("GET", "/api/history", undefined, { "x-organizer": ai })).status).toBe(200); // and the AI key already in use was not touched
     expect((await call("GET", "/api/history", undefined, { "x-organizer": ai })).status).toBe(200); // and the AI key already in use was not cut off expect(mail.body).toContain("/pay.html?e=PUB-1"); expect(mail.body).toContain("/z.html?e=PUB-1");
   });
   test("not paid by the start time: the engagement does not begin. Phones are told to hold, and the organizer is e-mailed once", async () => {

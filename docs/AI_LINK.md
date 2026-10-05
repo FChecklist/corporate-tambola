@@ -6,7 +6,7 @@ Background: in another project a very long pasted prompt failed in ChatGPT, Gemi
 
 ## What the organizer pastes
 
-Two short lines and the link (shown as Option 1 in the console and e-mailed at sign-up and at publish):
+Two short lines and the link (shown as Option 1 in the console and e-mailed in its own dedicated mail, see "Where the link may travel" below):
 
 ```
 This is the API documentation and instructions for MY OWN Corporate Tambola account. I am the owner, and I am asking you to read it and help me with it.
@@ -14,6 +14,17 @@ Please open it now (a plain GET request) and follow it: https://corporate-tambol
 ```
 
 Wording: from PROJEXA testing, "open this link and follow it" was refused as prompt injection about one time in three by a careful AI; presenting the link as the owner's own API documentation worked every time. The key appears only inside the link.
+
+## Where the link may travel (2026-10-05, owner rule)
+
+* The AI work link (`cta_`) and a co-host link (`cth_`) are sent ONLY in dedicated e-mails to the organizer, built in `apps/edge/src/mails.ts` (`aiLinkMail`, `coHostLinkMail`): own subject ("Your personal AI work link - Corporate Tambola"), HTML plus plain-text parts, a red warning at the top AND the bottom ("IMPORTANT - DO NOT FORWARD YOUR AI WORK LINK OR THIS EMAIL TO ANYONE AS IT CONTAINS YOUR PERSONALIZED AI WORK LINK"), the two-line paste in a box as PLAIN TEXT (never an `<a>` hyperlink, because mail scanners open links), three numbered steps, what the AI can do, what stays with a human, and how to replace a lost link. The co-host mail names whose engagements it is, says it is a watch-and-announce role, and carries its own warning.
+* When it is sent: at `/api/start` (sign-up) and whenever the organizer replaces the link. The publish mail no longer carries any AI link (no extra `cta_` key is minted at publish), so it can be forwarded safely; reminders, "could not begin", invoices, report-link and partner mails never carried one. No report page, PDF or guest page carries one (checked by `apps/edge/test/ai-mail.test.ts`).
+* The organizer's address for these mails is kept sealed (`orgmail/<org>` in kv, AES-GCM like names and numbers); older accounts fall back to the address confirmed at their latest publish; with none known the new paste is shown in the console only (`mailed: false`). A mail that could not be sent keeps no body at all (nothing with a key is retried later); the organizer replaces the link to get a fresh one.
+* Honest limit: mail apps may turn a bare web address in the box into a tappable link on their own; we never create one, and the warning plus the "replace" button are the remedy.
+
+### Replace my AI link
+
+Console card (Option 1, "Replace my AI link") and `POST /api/org/ai/replace` (the older `POST /api/org/ai` does the same): signed-in organizer key only; an AI key, a co-host key, the platform key or a stranger gets 403, also when attempted through an AI link. Every existing AI key is revoked at once (the old `/ai/<old>` answers 404), a new one is minted, the new paste is returned (`aiMessage`, `mailed`) and e-mailed in the dedicated mail, and the call is written to the AI audit trail as `POST /api/org/ai/replace`. Opening the manual (`GET`/`HEAD /ai/<key>`) changes nothing except its audit line, which nothing relies on (mail scanners and chat tools open it too).
 
 ## What the link serves
 
@@ -72,3 +83,7 @@ Honest limits: both simulated AIs are Claude sub-agents, not ChatGPT, Gemini, z.
 ## Live verification (2026-10-05, https://corporate-tambola.pages.dev)
 
 Deployed with the normal recipe (free Pages + Functions + D1, no new add-ons, no D1 migration needed). A throwaway organizer was minted with the platform key (`POST /api/org`, then `POST /api/org/ai`), not through `/api/start` (which e-mails). Checked with curl: the minted paste is two lines (300 characters) with the key only in the link; `GET /ai/<key>` returned 200, `text/plain; charset=utf-8`, `x-robots-tag: noindex, nofollow`, `referrer-policy: no-referrer`, `cache-control: no-store`, 19.8 KB with 36 absolute keyed addresses; `?format=json` 200; whoami, history, schedule through the link; the header path and `/api/z/ai-manifest` still 200; unknown and malformed keys `404 Not found.`; GET-only create, settings (with invitations), roster (2 fake numbers) and summary; announce on a draft 400; publish returned the console hand-over; erase through GET mode and through a real POST both 403; minting a key 403; `_method=DELETE` 400; `_method` on `/api` ignored (404); a co-host key got its own narrower manual, could read the summary and was refused a settings change (403); the audit trail listed all calls with `/api` paths and the key appeared nowhere in it. Afterwards every key of that test organizer (organizer, AI, co-host) was revoked directly in D1 (both links now answer 404). The test draft `AILINK-LIVECHECK` (two fake roster entries) was left in place; it is forgotten automatically after the 30-day draft rule.
+
+## Live verification of the dedicated mail and Replace (2026-10-05)
+
+See the end of this file's last commit message and the session report; results of the live curl checks are listed below.

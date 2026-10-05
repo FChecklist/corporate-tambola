@@ -41,17 +41,19 @@ export const payMode = (env: PayEnv) => (rzpOf(env) ? "razorpay" : env.TEST_MODE
 
 async function body(req: Request, max = 4096): Promise<any | null> { const t = await req.text(); if (t.length > max) return null; try { const v = JSON.parse(t); return v && typeof v === "object" ? v : null; } catch { return null; } }
 
-const KEYRE = /ct[ka]_[0-9a-f]{48}/g;
+const KEYRE = /ct[kah]_[0-9a-f]{48}/g;
 /**
  * Mail goes out through Resend (the same account and verified sending domain DPDP already uses, so no extra cost). Only organizers, the people who bought,
  * are ever e-mailed; participants are reached by mobile number only. In production the mail body is never kept: a sent mail leaves no body behind, and a
  * mail that could not be sent is kept (with any organizer key blanked out) only so the daily job can try again, then it is dropped after 3 days.
  * Without RESEND_API_KEY (local/test) the mail simply stays in the outbox so it can be read.
  */
-export async function sendMail(env: PayEnv, db: D1, to: string, subject: string, text: string, now: number) {
-  if (!env.RESEND_API_KEY) { await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,0)").bind(to, subject, text, now).run(); return; }
-  const ok = await resendSend(env, to, subject, text);
-  await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,?)").bind(to, subject, ok ? "" : text.replace(KEYRE, "ctk_(blanked; use the key shown when you paid, or sign in with an e-mailed code)"), now, ok ? 1 : 0).run();
+export async function sendMail(env: PayEnv, db: D1, to: string, subject: string, text: string, now: number, opts: { html?: string; secret?: boolean } = {}): Promise<boolean> {
+  // `secret` = the mail carries a personal AI work link: if it cannot be sent, no body is kept at all (nothing to retry later; the organizer can replace the link and get a fresh mail).
+  if (!env.RESEND_API_KEY) { await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,0)").bind(to, subject, text, now).run(); return true; }
+  const ok = await resendSend(env, to, subject, text, opts.html);
+  await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,?)").bind(to, subject, ok ? "" : opts.secret ? "" : text.replace(KEYRE, "ctk_(blanked; use the key shown when you paid, or sign in with an e-mailed code)"), now, ok ? 1 : 0).run();
+  return ok;
 }
 /** Mail sent with attachments in a test run (no mail key): the tests read the PDFs from here. Never used in production. */
 export const sentReports: { to: string; subject: string; text: string; attachments: { filename: string; content: Uint8Array }[] }[] = [];
@@ -67,11 +69,11 @@ export async function sendReportMail(env: PayEnv, to: string, subject: string, t
     return r.ok;
   } catch { return false; }
 }
-async function resendSend(env: PayEnv, to: string, subject: string, text: string): Promise<boolean> {
+async function resendSend(env: PayEnv, to: string, subject: string, text: string, html?: string): Promise<boolean> {
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({ from: env.MAIL_FROM ?? "Corporate Tambola <tambola@veridian-aios.com>", to: [to], subject, text, ...(env.MAIL_REPLY_TO ? { reply_to: env.MAIL_REPLY_TO } : {}), headers: { "Auto-Submitted": "auto-generated" } }),
+      body: JSON.stringify({ from: env.MAIL_FROM ?? "Corporate Tambola <tambola@veridian-aios.com>", to: [to], subject, text, ...(html ? { html } : {}), ...(env.MAIL_REPLY_TO ? { reply_to: env.MAIL_REPLY_TO } : {}), headers: { "Auto-Submitted": "auto-generated" } }),
     });
     return r.ok;
   } catch { return false; }

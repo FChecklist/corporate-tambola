@@ -371,7 +371,8 @@ describe("organizers, their AI assistant, and what the AI may not do", () => {
     await call("POST", "/api/z/MINE1/erase", {}, asA());
     await call("GET", "/api/z/MINE1/summary", undefined, asM()); // the organizer's own calls are not part of the AI trail
     const t = (await (await call("GET", "/api/org/ai/audit", undefined, asM())).json()) as any;
-    expect(t.trail).toHaveLength(2);
+    expect(t.trail).toHaveLength(3); // the two AI calls and the organizer's own "replace my AI link" (audited too)
+    expect(t.trail.filter((x: any) => x.path === "/api/org/ai/replace")).toHaveLength(1);
     expect(t.trail.find((x: any) => x.path.endsWith("/summary"))).toMatchObject({ ip: "203.0.113.9", ua: "ChatGPT-User/1.0", country: "US", method: "GET", status: 200, eid: "MINE1" });
     expect(t.trail.find((x: any) => x.path.endsWith("/erase")).status).toBe(403);
     expect((await call("GET", "/api/org/ai/audit", undefined, asA())).status).toBe(200); // the AI may read its own trail

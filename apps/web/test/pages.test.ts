@@ -41,6 +41,18 @@ describe("console (organizer page)", () => {
     expect((p.$("#aimsg") as any).value).toContain("/ai/cta_"); expect((p.$("#aimsg") as any).value).toMatch(/my own Corporate Tambola account/i); expect(p.$("#aicopy")).toBeTruthy();
     expect(p.errors).toEqual([]);
   });
+  test("Replace my AI link: the button replaces the key, the box shows the new paste, the old link is dead, the new one answers", async () => {
+    const o = await organizer();
+    const p = await page(o, "/zc", "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token, "ctz-aimsg": o.aiMessage });
+    await p.waitFor((x) => /OPTION 1/.test(x));
+    expect(p.text()).toMatch(/Replace my AI link/); p.win.confirm = () => true;
+    p.click("#aireplace");
+    await p.waitFor((x) => /e-mailed the new one to you, in its own message/.test(x));
+    const v = (p.$("#aimsg") as any).value as string; const nk = v.match(/cta_[0-9a-f]{48}/)![0];
+    expect(nk).not.toBe(o.aiKey);
+    expect((await o.api("GET", `/ai/${o.aiKey}`)).status).toBe(404); expect((await o.api("GET", `/ai/${nk}`)).status).toBe(200);
+    expect(p.errors).toEqual([]);
+  });
   test("UC-54 draft: the organizer publishes (free) after confirming email and mobile, then sees the payment-due card and the share link", async () => {
     const o = await organizer(); await make(o, "UI-DRAFT");
     const p = await consolePage(o, "UI-DRAFT");
