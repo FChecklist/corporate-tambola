@@ -41,7 +41,7 @@ describe("build first, pay to publish", () => {
     expect(r.exists).toBe(true); expect(r.token).toBeUndefined();
     await call("POST", "/api/auth/email", { email: "boss@acme.com" });
     const mail = raw.prepare("SELECT body FROM outbox WHERE to_addr=? ORDER BY id DESC LIMIT 1").get("boss@acme.com") as { body: string };
-    const code = mail.body.match(/\d{6}/)![0];
+    const code = mail.body.match(/\b\d{6}\b/)![0];
     expect(((await (await call("POST", "/api/auth/verify", { email: "boss@acme.com", code })).json()) as any).token).toMatch(/^ctk_/);
   });
   test("a network address can open only a few new organizer accounts a day", async () => {

@@ -1,7 +1,8 @@
 .zapp{max-width:520px;margin:0 auto;padding:14px 16px 40px;min-height:100vh;min-height:100dvh;color:var(--ink)}
 .zmsg{text-align:center;color:var(--muted);margin:30vh 0 0}
 .zhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
-.zhead b{font:700 15px var(--sans,inherit);color:var(--wine)}
+.zhead b{font:700 15px var(--sans,inherit);color:var(--wine);display:inline-flex;align-items:center;gap:8px}
+.zhead b::before{content:"";flex:0 0 24px;width:24px;height:24px;border-radius:6px;background:url(/icon-192.png) center/cover}
 .zsnd{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;min-height:36px}
 .zcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
 .zcard h2{margin:0 0 8px;font:700 13px var(--sans,inherit);letter-spacing:.08em;text-transform:uppercase;color:var(--goldd)}

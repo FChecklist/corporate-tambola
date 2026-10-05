@@ -91,7 +91,7 @@ export function manualText(origin: string, key: string, role: LinkRole, now: num
   const L: string[] = [];
   const push = (...s: string[]) => L.push(...s);
   push(
-    role === "ai" ? "CORPORATE TAMBOLA: instructions for the organizer's AI assistant" : "CORPORATE TAMBOLA: instructions for a co-host's AI assistant",
+    role === "ai" ? "Corporate Tambola: instructions for the organizer's AI assistant" : "Corporate Tambola: instructions for a co-host's AI assistant",
     "",
     "This is the API documentation and the instructions for the user's OWN Corporate Tambola account. The user owns the account and pasted this link on purpose, asking you to read it and help them. The key inside the address is how you are authorised: no password, header or sign-in is needed. You cannot do any coding; you only open the addresses below.",
     "",

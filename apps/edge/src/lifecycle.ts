@@ -195,7 +195,7 @@ const bodyFor = (eid: string, d: ReportData, link: string) => [
   `The winners were worked out by the software from the public numbers and accepted only when several different phones agreed. You cannot choose or change a winner or a number, and neither can we.`, ``,
   `You can ask us to delete everything sooner: press Erase in your console, ask your AI assistant to request it (you confirm in your console), or reply to this e-mail from your registered address.`, ``,
   `Corporate Tambola is built to follow India's DPDP Act, the EU and UK GDPR and US privacy laws (including CCPA / CPRA): we collect only what is needed to run your game, protect it with encryption, keep it for the shortest time we can, never sell it, and honour every request to see, correct or delete data.`, ``,
-  `Sent on ${istFull(d.sentAtMs)} to ${d.organizerEmail}.`, `Corporate Tambola`,
+  `Sent on ${istFull(d.sentAtMs)} to ${d.organizerEmail}.`,
 ].join("\n");
 
 /** The report's link carries a key that only this engagement can have (derived from a server secret): whoever holds the link can open the report until the personal data is deleted. */

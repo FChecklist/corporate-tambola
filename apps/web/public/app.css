@@ -307,3 +307,15 @@ html[data-theme] .chip.on{background:#fff}
 #payBtn .bt small{font:500 10px/1.2 var(--sans);opacity:.8;letter-spacing:.03em}
 
 @media (min-width:1100px){.benef{grid-template-columns:repeat(4,1fr)}}
+/* sign-in pop-up: brand top right beside the close button, clear hierarchy, big tap targets (mobile first) */
+.sheethead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-right:52px;min-height:40px;margin-bottom:6px}
+.sheethead .eyebrow{flex:1 1 auto;min-width:0;white-space:nowrap}
+.sbrand{display:inline-flex;align-items:center;gap:7px;flex:0 0 auto;color:var(--wine);white-space:nowrap}
+.sbrand .mark{width:26px;height:26px;flex:0 0 26px;border-radius:7px}.sbrand .mark .ic{width:15px;height:15px}
+.sbrand .word{font:700 14px/1 var(--serif);color:var(--wine)}.sbrand .word i{font-style:normal;color:var(--goldd)}
+.sheetbody{margin:0 0 14px;color:var(--ink);font-size:15px;line-height:1.55}.sheetbody .sendto{word-break:break-all}
+.sheet .btn.big{min-height:50px;font-size:16px}
+.sheet .codein{min-height:54px;font-size:26px;letter-spacing:.4em;text-align:center}
+.sheet .inp:focus,.sheet .btn:focus-visible,.xbtn:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.sheethelp{margin:12px 0 0;font-size:13px;color:var(--muted,#6b5b57);text-align:center}
+@media(max-width:400px){.sheethead .eyebrow{font-size:9.5px;letter-spacing:.12em}.sbrand .word{font-size:13px}}

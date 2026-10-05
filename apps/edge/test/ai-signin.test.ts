@@ -35,7 +35,7 @@ describe("the sign-in e-mail", () => {
     const b = signInMail(ORIGIN, "123456", "ab".repeat(24));
     expect(b.html).toContain("You are almost in"); expect(b.html).toContain("Let your AI do the work"); expect(b.html).toContain("Work on your own"); expect(b.html).toContain("Already have the sign-in page open?"); expect(b.html).toContain("123456");
     expect(b.html + b.text).not.toMatch(LEAK);
-    expect([...b.html.matchAll(/href="([^"]*)"/g)].map((x) => x[1])).toEqual([`${ORIGIN}/signin.html?t=${"ab".repeat(24)}&amp;go=ai`, `${ORIGIN}/signin.html?t=${"ab".repeat(24)}&amp;go=console`]);
+    expect([...b.html.matchAll(/href="([^"]*)"/g)].map((x) => x[1]).filter((h) => !/^mailto:|legal.html$/.test(h!))).toEqual([`${ORIGIN}/signin.html?t=${"ab".repeat(24)}&amp;go=ai`, `${ORIGIN}/signin.html?t=${"ab".repeat(24)}&amp;go=console`]);
     expect(env.DB).toBeTruthy();
     expect(JSON.stringify(raw.prepare("SELECT * FROM login_code").all())).not.toContain(r.devToken); // only a hash is kept
   });

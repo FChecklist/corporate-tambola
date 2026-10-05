@@ -18,7 +18,7 @@ export interface Brand {
   line: string; // one-line description on the invoice
 }
 export const BRANDS: Record<BrandId, Brand> = {
-  corporate_tambola: { id: "corporate_tambola", name: "CORPORATE TAMBOLA", domain: "corporate-tambola.example", invoicePrefix: "CT", theme: "#5A1426", line: "Live engagement software" },
+  corporate_tambola: { id: "corporate_tambola", name: "Corporate Tambola", domain: "corporate-tambola.example", invoicePrefix: "CT", theme: "#5A1426", line: "Live engagement software" },
   dpdp: { id: "dpdp", name: "dpdp.VERIDIAN-AIOS.COM", domain: "dpdp.veridian-aios.com", invoicePrefix: "DPDP", theme: "#0E7C6E", line: "Data protection compliance software" },
   projexa: { id: "projexa", name: "projexa-ai.com", domain: "projexa-ai.com", invoicePrefix: "PXA", theme: "#1C2B3A", line: "Project management software" },
   dewberry: { id: "dewberry", name: "dewberry.in", domain: "dewberry.in", invoicePrefix: "DEW", theme: "#5B3A8C", line: "Software solutions" },

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { withDevice } from "./device";
 import { handle, housekeeping, type Env } from "../src/worker";
 import { AI_SUBJECT, AI_WARNING, HOST_SUBJECT, HOST_WARNING, aiLinkMail, coHostLinkMail } from "../src/mails";
+import { footerText } from "../src/brand";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
 
@@ -37,13 +38,13 @@ describe("the dedicated mail builders", () => {
     const m = aiLinkMail(ORIGIN, KEY, "start", T + 86_400_000);
     expect(m.subject).toBe(AI_SUBJECT); expect(m.subject).toMatch(/personal AI work link/i);
     expect(AI_WARNING).toBe("IMPORTANT - DO NOT FORWARD YOUR AI WORK LINK OR THIS EMAIL TO ANYONE AS IT CONTAINS YOUR PERSONALIZED AI WORK LINK");
-    expect(m.text.startsWith(AI_WARNING)).toBe(true); expect(m.text.trim().endsWith(AI_WARNING)).toBe(true); // plain-text part, warning top and bottom
+    expect(m.text.startsWith(AI_WARNING)).toBe(true); expect(m.text.replace(footerText(ORIGIN), "").trim().endsWith(AI_WARNING)).toBe(true); // plain-text part, warning top and bottom
     expect(m.text.split(AI_WARNING).length).toBe(3);
     const h = m.html; const first = h.indexOf(AI_WARNING), last = h.lastIndexOf(AI_WARNING);
     expect(first).toBeGreaterThan(0); expect(last).toBeGreaterThan(first);
     expect(first).toBeLessThan(h.indexOf("<h1")); expect(last).toBeGreaterThan(h.indexOf("WHAT TO DO")); expect(h.split(AI_WARNING).length).toBe(3);
     expect(h).toMatch(/#b71c1c/); // red
-    const hrefs = [...h.matchAll(/href\s*=\s*"([^"]*)"/gi)].map((x) => x[1]); expect(hrefs).toEqual([`${ORIGIN}/ai-link.html`]); expect(h).toContain("Show my AI work link"); // the only link is the button to the sign-in page, never the key; the paste box is not a link
+    const hrefs = [...h.matchAll(/href\s*=\s*"([^"]*)"/gi)].map((x) => x[1]).filter((h) => !/^mailto:|legal.html$/.test(h!)); expect(hrefs).toEqual([`${ORIGIN}/ai-link.html`]); expect(h).toContain("Show my AI work link"); // the only link is the button to the sign-in page, never the key; the paste box is not a link
     expect(h).toContain(`${ORIGIN}/ai/${KEY}`); // but the text is in the box, to copy
     for (const t of ["ChatGPT", "Claude", "Gemini", "Grok", "DeepSeek", "z.ai"]) { expect(m.text).toContain(t); expect(h).toContain(t); }
     expect(m.text).toMatch(/1\. Copy everything/); expect(m.text).toMatch(/2\. Paste it into any AI chat/); expect(m.text).toMatch(/3\. Answer its questions/); expect(m.text).toMatch(/does all the work for you/);
@@ -60,9 +61,9 @@ describe("the dedicated mail builders", () => {
     const k = "cth_" + "cd".repeat(24), m = coHostLinkMail(ORIGIN, k, "boss@acme.com", T + 86_400_000);
     expect(m.text).toMatch(/WORKS FOR 24 HOURS ONLY/);
     expect(m.subject).toBe(HOST_SUBJECT);
-    expect(m.text.startsWith(HOST_WARNING)).toBe(true); expect(m.text.trim().endsWith(HOST_WARNING)).toBe(true); expect(m.html.split(HOST_WARNING).length).toBe(3);
+    expect(m.text.startsWith(HOST_WARNING)).toBe(true); expect(m.text.replace(footerText(ORIGIN), "").trim().endsWith(HOST_WARNING)).toBe(true); expect(m.html.split(HOST_WARNING).length).toBe(3);
     expect(m.text).toContain("boss@acme.com"); expect(m.text).toMatch(/watch and announce/i); expect(m.text).toMatch(/co-host/i);
-    expect([...m.html.matchAll(/href\s*=\s*"([^"]*)"/gi)].map((x) => x[1])).toEqual([`${ORIGIN}/zc.html`]); expect(m.text).toContain(`${ORIGIN}/ai/${k}`);
+    expect([...m.html.matchAll(/href\s*=\s*"([^"]*)"/gi)].map((x) => x[1]).filter((h) => !/^mailto:|legal.html$/.test(h!))).toEqual([`${ORIGIN}/zc.html`]); expect(m.text).toContain(`${ORIGIN}/ai/${k}`);
     expect(m.text).toMatch(/cannot change settings/);
   });
 });

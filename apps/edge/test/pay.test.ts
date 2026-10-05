@@ -55,7 +55,7 @@ describe("checkout", () => {
     const r = await (await buy()).json() as any;
     expect(r.mode).toBe("razorpay");
     expect(r.razorpay.amount).toBe(471882); // 500 participants = Rs 3,999 + 18% GST = Rs 4,718.82
-    expect(r.razorpay.name).toBe("CORPORATE TAMBOLA");
+    expect(r.razorpay.name).toBe("Corporate Tambola");
     expect(rz.orders).toHaveLength(1);
     expect(raw.query("SELECT status FROM payment").get()).toEqual({ status: "created" });
   });

@@ -185,7 +185,7 @@
   /** What a co-host sees: the numbers, who is here, the big screen, and the message box. Nothing that changes anything. */
   function hostView() {
     const link = location.origin + "/z.html?e=" + encodeURIComponent(eid);
-    return `<div class="zhead"><b>Co-host · ${esc(eid)}</b></div>
+    return `<div class="zhead"><b>Corporate Tambola · Co-host · ${esc(eid)}</b></div>
       ${S.note ? `<div class="zbanner info">${esc(S.note)}</div>` : ""}
       <div class="zcard"><h2>Share with participants</h2><div class="zlink">${esc(link)}</div><a class="zbtn s alt" href="/big.html?e=${encodeURIComponent(eid)}" target="_blank" rel="noopener">Open the big screen</a></div>
       <div class="zgrid"><div class="zcard"><h2>Participants</h2><div class="zstat">${S.people.length}</div></div><div class="zcard"><h2>Numbers called</h2><div class="zstat">${S.log.length} / 90</div></div></div>
@@ -200,7 +200,7 @@
     const bad = S.checked ? S.checked.bad.length : 0;
     const c = S.control;
     const paused = c && c.pausedNow;
-    return `<div class="zhead"><b>Engagement ${esc(eid)}</b><button class="zsnd" id="back">All engagements</button></div>
+    return `<div class="zhead"><b>Corporate Tambola · ${esc(eid)}</b><button class="zsnd" id="back">All engagements</button></div>
       ${S.note ? `<div class="zbanner info">${esc(S.note)}</div>` : ""}
       ${payDueCard()}
       ${announceCard()}${hostsCard()}
@@ -340,7 +340,7 @@
       try { S.life = await call("GET", `/api/z/${eid}/life`); } catch { S.life = null; }
       if (S.started && !S.draft) { try { S.prizes = (await call("GET", `/api/z/${eid}/prizes`)).prizes || []; } catch { S.prizes = S.prizes || []; } try { S.published = (await fetch(BASE + `/api/z/${eid}/results`).then((r) => r.json())).results || []; } catch { /* shown next time */ } } // the software decides the winners; this page only watches
     } catch (e) { S.note = e.status === 404 ? "That engagement was not found." : e.status === 403 ? "Your sign-in has expired or does not belong to this engagement. Open the home page and sign in again." : "Could not refresh. Retrying…"; }
-    if (eid) draw(S.cfg && S.info ? engView() : `<div class="zhead"><b>Engagement ${esc(eid)}</b><button class="zsnd" id="back">All engagements</button></div><div class="zbanner info">${esc(S.note || "Loading…")}</div>`);
+    if (eid) draw(S.cfg && S.info ? engView() : `<div class="zhead"><b>Corporate Tambola · ${esc(eid)}</b><button class="zsnd" id="back">All engagements</button></div><div class="zbanner info">${esc(S.note || "Loading…")}</div>`);
   }
 
   function bind() {
@@ -453,7 +453,7 @@
   (async () => {
     if (secret) { try { S.role = (await call("GET", "/api/whoami")).kind === "host" ? "host" : ""; } catch { /* an old or wrong key is handled by the screens below */ } }
     if (!secret) draw(loginView(""));
-    else if (S.role === "host" && !eid) draw(`<div class="zhead"><b>Co-host</b></div><div class="zcard"><p style="margin:0">Open the co-host link your organizer sent you. It opens the engagement directly.</p></div>`);
+    else if (S.role === "host" && !eid) draw(`<div class="zhead"><b>Corporate Tambola · Co-host</b></div><div class="zcard"><p style="margin:0">Open the co-host link your organizer sent you. It opens the engagement directly.</p></div>`);
     else if (eid) refreshEng(); else refreshHome();
   })();
   setInterval(() => { const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; /* never wipe what the organizer is typing */ if (!secret || document.hidden) return; if (eid) refreshEng(); else if (S.role !== "host") refreshHome(); }, 5000);

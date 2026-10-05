@@ -5,6 +5,7 @@
 //   fulfil    -> idempotent: organizer (new or existing by e-mail) gets one ENTITLEMENT for the pack, an invoice is issued, mail is sent
 // An entitlement is what lets an organizer create one engagement of up to `pack` participants; without one, creating is refused.
 // Needs the `nodejs_compat` flag (billing uses node:crypto HMAC). Test mode (env.TEST_MODE = "1", never in production) fulfils without Razorpay.
+import { plainToHtml, withFooter } from "./brand";
 import {
   BRANDS, DEFAULT_COMPANY, companyGaps, createOrder, fetchPayment, capturePayment, financialYear, formatInvoiceNumber, renderInvoiceHtml, renderInvoiceText, splitGst, toMinor,
   verifyPaymentSignature, verifyWebhookSignature, type Company, type InvoiceData, type RazorpayConfig,
@@ -50,8 +51,10 @@ const KEYRE = /ct[kah]_[0-9a-f]{48}/g;
  */
 export async function sendMail(env: PayEnv, db: D1, to: string, subject: string, text: string, now: number, opts: { html?: string; secret?: boolean } = {}): Promise<boolean> {
   // `secret` = the mail carries a personal AI work link: if it cannot be sent, no body is kept at all (nothing to retry later; the organizer can replace the link and get a fresh mail).
+  const html = opts.html ?? plainToHtml(subject, text, env.PUBLIC_ORIGIN); // every mail carries the brand header and footer, whoever built it
+  text = withFooter(text, env.PUBLIC_ORIGIN);
   if (!env.RESEND_API_KEY) { await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,0)").bind(to, subject, text, now).run(); return true; }
-  const ok = await resendSend(env, to, subject, text, opts.html);
+  const ok = await resendSend(env, to, subject, text, html);
   await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,?)").bind(to, subject, ok ? "" : opts.secret ? "" : text.replace(KEYRE, "ctk_(blanked; use the key shown when you paid, or sign in with an e-mailed code)"), now, ok ? 1 : 0).run();
   return ok;
 }
@@ -60,11 +63,12 @@ export const sentReports: { to: string; subject: string; text: string; attachmen
 const toB64 = (u: Uint8Array) => { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); };
 /** E-mails the engagement report. The attachment is passed straight to the mail service and is never stored or logged here. Returns false when it could not be sent (the caller tries again). */
 export async function sendReportMail(env: PayEnv, to: string, subject: string, text: string, attachments: { filename: string; content: Uint8Array }[]): Promise<boolean> {
+  const html = plainToHtml(subject, text, env.PUBLIC_ORIGIN); text = withFooter(text, env.PUBLIC_ORIGIN);
   if (!env.RESEND_API_KEY) { sentReports.push({ to, subject, text, attachments }); return true; }
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({ from: env.MAIL_FROM ?? "Corporate Tambola <tambola@veridian-aios.com>", to: [to], subject, text, attachments: attachments.map((a) => ({ filename: a.filename, content: toB64(a.content) })), ...(env.MAIL_REPLY_TO ? { reply_to: env.MAIL_REPLY_TO } : {}), headers: { "Auto-Submitted": "auto-generated" } }),
+      body: JSON.stringify({ from: env.MAIL_FROM ?? "Corporate Tambola <tambola@veridian-aios.com>", to: [to], subject, text, html, attachments: attachments.map((a) => ({ filename: a.filename, content: toB64(a.content) })), ...(env.MAIL_REPLY_TO ? { reply_to: env.MAIL_REPLY_TO } : {}), headers: { "Auto-Submitted": "auto-generated" } }),
     });
     return r.ok;
   } catch { return false; }

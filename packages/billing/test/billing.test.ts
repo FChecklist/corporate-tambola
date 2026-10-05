@@ -7,7 +7,7 @@ import {
 
 describe("brands", () => {
   test("four brands, each with its own invoice series and name exactly as given", () => {
-    expect(Object.values(BRANDS).map((b) => b.name)).toEqual(["CORPORATE TAMBOLA", "dpdp.VERIDIAN-AIOS.COM", "projexa-ai.com", "dewberry.in"]);
+    expect(Object.values(BRANDS).map((b) => b.name)).toEqual(["Corporate Tambola", "dpdp.VERIDIAN-AIOS.COM", "projexa-ai.com", "dewberry.in"]);
     expect(new Set(Object.values(BRANDS).map((b) => b.invoicePrefix)).size).toBe(4);
   });
   test("one legal entity on every invoice", () => { expect(DEFAULT_COMPANY.legalName).toBe("SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED"); });
@@ -52,7 +52,7 @@ const invoice = (draft: boolean, company = DEFAULT_COMPANY): InvoiceData => ({
 describe("invoice rendering", () => {
   test("brand is the title and the legal entity is named as the supplier", () => {
     const html = renderInvoiceHtml(invoice(false));
-    expect(html).toContain("<h1>CORPORATE TAMBOLA</h1>");
+    expect(html).toContain("<h1>Corporate Tambola</h1>");
     expect(html).toContain("A product of <b>SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED</b>");
     expect(html).toContain("CT/2026-27/000001");
   });
@@ -103,10 +103,10 @@ describe("Orders API client (against a local stand-in for api.razorpay.com)", ()
     } });
     try {
       const cfg = { keyId: "rzp_test_abc", keySecret: "sec", baseUrl: `http://localhost:${srv.port}/v1` };
-      const o = await createOrder(cfg, { amountMinor: 100000, currency: "INR", receipt: "ord_1", notes: { brand: "CORPORATE TAMBOLA", product: "engagement" } });
+      const o = await createOrder(cfg, { amountMinor: 100000, currency: "INR", receipt: "ord_1", notes: { brand: "Corporate Tambola", product: "engagement" } });
       expect(o.id).toBe("order_TEST1");
       expect(seen.auth).toBe("Basic " + Buffer.from("rzp_test_abc:sec").toString("base64"));
-      expect(seen.body).toMatchObject({ amount: 100000, currency: "INR", notes: { brand: "CORPORATE TAMBOLA" } });
+      expect(seen.body).toMatchObject({ amount: 100000, currency: "INR", notes: { brand: "Corporate Tambola" } });
       await expect(createOrder(cfg, { amountMinor: 1, currency: "INR", receipt: "r", notes: {} })).rejects.toThrow("minimum amount");
     } finally { srv.stop(true); }
   });
