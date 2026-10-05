@@ -263,3 +263,18 @@ Primary text read on gdpr-info.eu, an unofficial reproduction of the Official Jo
 8. Does the platform target EU/UK organizers, so that Art 27 representatives and SCCs are needed (EU-15, EU-16, UK-01)?
 9. UK gambling position of a free prize bingo (UK-04).
 10. Where is the line between a template and legal advice for the D product (IN-33, VEN-04)?
+
+---
+
+## 11. Ten highest-risk areas for a product like this (my judgement, not a finding about the code)
+
+1. **Participant is charged anything (entry fee, ticket, donation, buy-to-play)**: turns a free game into an "online money game" (India, up to 3 years' imprisonment for offering) and a lottery in the US and UK (GAME-IN-01, US-GAM-01).
+2. **Unverified privacy promises** ("no cookies", "no IP", "deleted in 24 hours", "7-day backups", "never sell"): each is an enforceable representation (MKT-04, EU-18, F01 to F03).
+3. **Deletion clock vs logging duties**: 22-hour deletion vs one-year log retention in DPDP Rule 6/8(3) and 180-day CERT-In logs (IN-08, IN-10, IN-31).
+4. **Minors**: "family members" and school customers; DPDP s9 and COPPA/GDPR Art 8 (IN-13, EU-05, US-02).
+5. **Lawful basis in an employer setting**: consent is weak between employer and employee; s7(i) is unsettled for a voluntary game (IN-06, EU-19).
+6. **Cross-border chain**: EU organizer to India platform to US vendors, India with no EU adequacy, DPF appeal pending (EU-16, EU-17).
+7. **Compliance claims by a compliance vendor**: "DPDP compliant", "we sell protection", "consent manager", "attestation", "audit-ready" (MKT-02, VEN-01 to VEN-05, IN-19).
+8. **AI access**: bearer-secret work links, prompt injection from participant names or inbound mail, and the "personal-data-free projection" claim (AI-02, AI-04).
+9. **Winnings tax and state gambling law borne by the organizer** (TDS 30% over INR 10,000, state housie enforcement, NY/FL registration) which the platform must warn about (GAME-IN-04, GAME-IN-06, US-GAM-02).
+10. **Contract gaps**: no processor DPA with CCPA terms and SCCs for organizers/customers, and no public sub-processor list (EU-10, US-CA-02, IN-21).
