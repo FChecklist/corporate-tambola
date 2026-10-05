@@ -117,14 +117,14 @@ describe("the legal page carries the owner's final text, and each line matches w
   test("anchors, headings, counts, and one short line each", () => {
     for (const id of ["rules", "privacy", "disclaimer"]) expect(html).toContain(`<section id="${id}"`);
     expect(html).toContain(">Rules</h2>"); expect(html).toContain(">Privacy &amp; Data Policy</h2>"); expect(html).toContain(">Disclaimer</h2>");
-    expect(items("rules").length).toBe(11); expect(items("privacy").length).toBe(11); expect(items("disclaimer").length).toBe(6);
+    expect(items("rules").length).toBe(11); expect(items("privacy").length).toBe(12); expect(items("disclaimer").length).toBe(6);
     for (const id of ["rules", "privacy", "disclaimer"]) for (const l of items(id)) expect(l.split(/\s+/).length).toBeLessThanOrEqual(30);
-    expect(html).toMatch(/<p class="muted">[^<]{1,60}<\/p>/);
+    expect(html).toMatch(/<p class="muted">[^<]{1,80}<\/p>/);
   });
-  test("the eleven privacy lines, word for word, with typographic apostrophes", () => {
+  test("the twelve privacy lines, word for word, with typographic apostrophes", () => {
     expect(items("privacy")).toEqual([
       "We delete all participant data from our systems within 24 hours after the game ends.", "All data is encrypted, in transit and at rest.", "Participants never see each other’s data.", "We provide the software. The organizer runs the game.", "Backups clear within 7 days.",
-      "No advertising cookies or trackers. We never sell data.", "Your phone keeps a random device id, your ticket and saved game files, so the game works offline.", "Exception: winner prize details are kept for 365 days, so the organizer can confirm the prize was handed over. They are then deleted automatically.", "Designed to follow India’s DPDP Act 2023, EU GDPR and US CCPA.", "You may also complain to the Data Protection Board of India.",
+      "No advertising cookies or trackers. We never sell data.", "Your phone keeps a random device id, your ticket and saved game files, so the game works offline.", "Exception: winner prize details are kept for 365 days, so the organizer can confirm the prize was handed over. They are then deleted automatically.", "Designed to follow India’s DPDP Act 2023, EU GDPR and US CCPA.", "Your phone contacts drand for public random numbers, and YouTube (privacy mode) only if your organizer adds a video.", "You may also complain to the Data Protection Board of India.",
       "Questions or requests: our Grievance Officer, raajat.agarwal@gmail.com. We reply within 30 days."]);
     expect(html).toContain('href="mailto:raajat.agarwal@gmail.com"');
   });
@@ -134,7 +134,7 @@ describe("the legal page carries the owner's final text, and each line matches w
   test("the rules say only what the software does (no claims, no manual cutting, no blocking), and the privacy timings match lifecycle.ts", () => {
     const r = items("rules").join(" ");
     expect(r).not.toMatch(/Cut your own|Late claims|wrong claim|block your ticket|for fun/i);
-    expect(r).toContain("Numbers 1 to 90 are drawn at random by the software."); expect(r).toContain("The 2nd Full House can only follow the 1st."); expect(r).toContain("One ticket per phone.");
+    expect(r).toContain("Numbers 1 to 90 come from a public random beacon."); expect(r).not.toMatch(/No one can choose or change|not even the organizer|twice|every claim is checked/); expect(r).toContain("The 2nd Full House can only follow the 1st."); expect(r).toContain("One ticket per phone.");
     const lc = read("apps/edge/src/lifecycle.ts");
     expect(lc).toMatch(/PURGE_AFTER_MS = 22 \* 3_600_000/); // 22 h is inside "within 24 hours"
     expect(lc).toMatch(/endMs \+ 365 \* DAY/); expect(lc).toMatch(/DELETE FROM prize WHERE eid=\?/); // prize details go with the 365-day deletion

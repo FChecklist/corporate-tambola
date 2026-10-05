@@ -61,7 +61,7 @@ export async function recordCommission(env: PayEnv, p: { id: string; ref?: strin
 export async function partnerRoute(req: Request, env: PayEnv, now: number, spend: (n: number) => Promise<boolean>, platform: boolean): Promise<Response | null> {
   const url = new URL(req.url); const p = url.pathname; const db: D1 = env.DB;
   if (!p.startsWith("/api/partner") && !p.startsWith("/api/partners")) return null;
-  const busy = () => json({ error: "Busy day. Please try again after midnight UTC." }, 503);
+  const busy = () => json({ error: "It is very busy right now. Please try again in a few minutes." }, 503);
   const origin = env.PUBLIC_ORIGIN ?? url.origin;
 
   const ipHash = async () => (await sha("pip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16);
@@ -131,6 +131,13 @@ export async function partnerRoute(req: Request, env: PayEnv, now: number, spend
     return json({ ok: true, code: ref, partnerKey: key, link: `${origin}/?ref=${ref}` });
   }
 
+  if (req.method === "POST" && p === "/api/partner/close") { // a partner closes their own account: the partner row (name, hashes, key) goes; commission rows stay as accounting records, without any link to a person
+    const k = req.headers.get("x-partner") ?? "";
+    const mine = k ? await db.prepare("SELECT code FROM partner WHERE key_hash=?").bind(await sha("partner|" + k)).first<{ code: string }>() : null;
+    if (!mine) return json({ error: "Not allowed." }, 403);
+    await db.prepare("DELETE FROM partner WHERE code=?").bind(mine.code).run();
+    return json({ ok: true, closed: true });
+  }
   const me = async () => {
     const k = req.headers.get("x-partner") ?? "";
     if (!k) return null;

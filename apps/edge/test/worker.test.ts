@@ -18,7 +18,7 @@ const join = (i: number, eid = "ENG1", now = T) => call("POST", `/api/z/${eid}/j
 beforeEach(() => {
   const d = makeD1();
   raw = d.raw;
-  env = { DB: d.db, ORGANIZER_SECRET: SECRET, DAILY_WRITE_BUDGET: "80000" };
+  env = { DB: d.db, ORGANIZER_SECRET: SECRET, DAILY_WRITE_BUDGET: "80000", JOIN_PER_IP_DAY: "1000000", JOIN_PER_IP_MINUTE: "1000000" } as any;
 });
 
 describe("engagement set-up", () => {

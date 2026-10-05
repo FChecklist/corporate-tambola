@@ -152,7 +152,7 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
 export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n: number) => Promise<boolean>): Promise<Response | null> {
   const url = new URL(req.url); const p = url.pathname; const db = env.DB;
   const rzp = rzpOf(env); const mode = payMode(env);
-  const busy = () => json({ error: "Busy day. Please try again after midnight UTC." }, 503);
+  const busy = () => json({ error: "It is very busy right now. Please try again in a few minutes." }, 503);
 
   if (req.method === "GET" && p === "/api/payments/status") { const co = company(env); return json({ mode, freeLaunch: freeLaunch(env), freeCap: FREE_CAP, brand: brand.name, legalEntity: co.legalName, missingCompanyDetails: companyGaps(co), international: env.RAZORPAY_INTERNATIONAL === "1" }); }
 

@@ -65,6 +65,7 @@
       <button class="zbtn" id="mk">Create engagement</button><p class="zsmall">You build it first, at no cost. Payment is asked only when you publish. The first number is called one minute after the start time. Numbers come from public randomness that nobody, including us, can know in advance.</p></div>
       ${(S.keys || []).length ? `<div class="zcard"><h2>Your sign-in keys</h2>${S.keys.map((k) => `<div class="zrow"><span>${k.kind === "ai" ? "AI assistant link" : "Organizer key"} · made ${new Date(k.created_ms).toLocaleDateString()}${k.thisOne ? " · in use now" : ""}</span>${k.revoked ? `<i>retired</i>` : k.thisOne ? `<i>active</i>` : `<button class="zbtn s alt" data-retire="${k.id}">Retire</button>`}</div>`).join("")}<p class="zsmall">If you ever lose a key or think someone has it, sign in with another one and retire it here.</p></div>` : ""}
       ${(S.sugs || []).length ? `<div class="zcard"><h2>Ideas to improve Corporate Tambola</h2><p class="zsmall" style="margin-top:0">Suggested by organizers' AI assistants. We review them all.</p>${S.sugs.map((x) => `<div class="zrow"><span>${esc(x.title)}${x.yours ? " · yours" : ""}</span><i>${x.votes} · ${esc(x.status.replace("_", " "))}</i></div>`).join("")}</div>` : ""}
+      <div class="zcard"><h2>Close my organizer account</h2><p class="zsmall" style="margin-top:0">This deletes your account and all your engagements. Payment records stay, as the law requires. It cannot be undone.</p><button class="zbtn s alt" id="closeacct">Close my organizer account</button></div>
       ${S.note ? `<div class="zbanner info">${esc(S.note)}</div>` : ""}`;
   }
   const HOUSE_WORDS = [[/^(full two[- ]ticket( house)?|two[- ]ticket|full2)$/i, "full2"], [/^(early ?five|early ?5|early5)$/i, "early5"], [/^(top( line)?)$/i, "top"], [/^(middle( line)?|mid)$/i, "mid"], [/^(bottom( line)?|bot)$/i, "bot"], [/^(four )?corners$/i, "corners"], [/^star$/i, "star"], [/^(full( house)?)$/i, "full"]];
@@ -93,7 +94,7 @@
     const L = (S.cfg && S.cfg.breaks || []).filter((b) => b.kind === "lucky");
     if (!L.length) return "";
     return `<div class="zcard"><h2>Lucky draws</h2>${L.map((b, i) => { const d = S.lucky && S.lucky[i]; const done = (S.published || []).some((r) => r.pattern === "lucky" && r.ordinal === i + 1); return `<div class="zrow"><span>${esc(b.title)} · ${b.winners || 3} ${(b.winners || 3) === 1 ? "person" : "people"}</span>${done ? `<em>Decided</em>` : d ? `<em>Being confirmed by the phones</em>` : `<i>after the break ends</i>`}</div>`; }).join("")}
-      <p class="zsmall">The software picks the winners from everyone who joined, using the public randomness of the round that ends the break. Nobody, including you, can choose or change them. A winner is confirmed when several different phones agree.</p></div>`;
+      <p class="zsmall">The software picks the winners from everyone who joined, using public random numbers. You and we cannot choose them. A winner is confirmed when several phones agree.</p></div>`;
   }
   async function namesFor(ids) {
     const nm = S.nameCache || (S.nameCache = new Map()), want = ids.filter((p) => !nm.has(p));
@@ -221,7 +222,7 @@
       <div class="zcard"><h2>Rewards · from the public number log</h2>
         ${S.settledPreview.length ? S.settledPreview.map((s) => `<div class="zrow"><span>${esc(lineLabel(s))} · call ${s.idx + 1}</span><em>${s.pids.length} participant${s.pids.length === 1 ? "" : "s"}${s.names ? " · " + esc(s.names) : ""}</em></div>`).join("") : "<p class=zsmall>No pattern is complete yet.</p>"}
         <p class="zsmall">Claims received: ${S.claims.length}. ${bad ? `<b>${bad} not valid</b> (they do not match the public log and are ignored).` : "All claims so far match the public log."}</p>
-        <p class="zsmall">Winners are decided by the software, from the public numbers, when several different phones agree. You cannot choose, change or remove a winner or a number. Confirmed so far: ${(S.published || []).filter((r) => r.pattern !== "lucky").length}.</p>
+        <p class="zsmall">Numbers come from a public random beacon. Winners are confirmed when several phones agree. You and we cannot choose or change them in the software. Confirmed so far: ${(S.published || []).filter((r) => r.pattern !== "lucky").length}.</p>
         <button class="zbtn s alt" id="csv" ${S.settledPreview.length ? "" : "disabled"}>Download report</button></div>
       <div class="zcard zform"><h2>Add people</h2>
         <p class="zsmall" style="margin-top:0">One person per line: name, mobile number. Names and numbers stay here: your AI never sees them.</p>
@@ -295,7 +296,7 @@
       <div class="zrow"><span>Backups of deleted data</span><em>roll off within ${l.backupDays} days</em></div>` : "";
     return `<div class="zcard"><h2>Participant data</h2>
       <p class="zsmall" style="margin-top:0">Within 24 hours of the game ending we send you the report, then delete every participant's name and number. Only winners' prize hand-over details stay, for 365 days.</p>${when}
-      ${S.life && S.life.reportSent && !S.life.purged ? `<button class="zbtn s" id="rptopen" style="margin-top:8px">Open the report now</button> ` : ""}<button class="zbtn s alt" id="erase" style="margin-top:8px">Delete all participant data now</button>
+      ${S.life && S.life.reportSent && !S.life.purged ? `<button class="zbtn s" id="rptopen" style="margin-top:8px">Open the report now</button> <button class="zbtn s alt" id="rptnew" style="margin-top:8px">New report link</button> ` : ""}<button class="zbtn s alt" id="erase" style="margin-top:8px">Delete all participant data now</button>
       <p class="zsmall">You can also e-mail us from your registered address, or ask your AI assistant to request the deletion and then confirm it here. The report is e-mailed first when the game has already ended.</p></div>`;
   }
   function draw(v) { $app.innerHTML = v; bind(); }
@@ -409,6 +410,7 @@
       refreshEng();
     }));
     bindPrizes();
+    if ($("rptnew")) $("rptnew").onclick = async () => { if (!confirm("Make a new report link? The old link, including the one in your e-mail, stops working at once.")) return; try { const r = await call("POST", `/api/z/${eid}/reportlink`, {}); if (r.url) window.open(r.url, "_blank", "noopener"); S.note = "New report link made. The old one has stopped."; } catch (e) { S.note = e.message; } refreshEng(); };
     if ($("rptopen")) $("rptopen").onclick = async () => { try { const r = await call("GET", `/api/z/${eid}/reportlink`); if (r.url) window.open(r.url, "_blank", "noopener"); else S.note = "The report is not ready yet."; } catch (e) { S.note = e.message; draw(engView()); } };
     if ($("aiaudit")) $("aiaudit").onclick = async () => { try { S.aiTrail = (await call("GET", "/api/org/ai/audit")).trail || []; } catch (e) { S.note = e.message; } draw(engView()); };
     if ($("rosterGo")) $("rosterGo").onclick = async () => {
@@ -432,6 +434,10 @@
       if (ask && !confirm(ask)) return;
       try { const r = await call("POST", path, {}); S.aiMsg = r.aiMessage; ss.set("ctz-aimsg", r.aiMessage); S.note = r.mailed ? "Your new AI work link is ready. The old links have stopped. A fresh 24-hour link is on its way to your e-mail." : "Your new AI work link is ready and the old one has stopped. Copy it from the box above (we have no e-mail address on file to send it to)."; } catch (e) { S.note = e.message; }
       draw(homeView());
+    };
+    if ($("closeacct")) $("closeacct").onclick = async () => {
+      if (!confirm("Close your organizer account? Your account and all your engagements are deleted now. This cannot be undone.")) return;
+      try { await call("POST", "/api/org/close", { confirm: true }); try { sessionStorage.clear(); } catch {} location.href = "/"; } catch (e) { S.note = e.message; draw(homeView()); }
     };
     if ($("aimake")) $("aimake").onclick = () => newLink("/api/org/ai/replace");
     if ($("aifresh")) $("aifresh").onclick = async () => { try { const r = await call("POST", "/api/org/ai/fresh", {}); S.note = r.mailed ? "A fresh 24-hour AI link is on its way to your e-mail. Never forward that e-mail." : "We have no e-mail address to send it to. Use the link in the box above."; } catch (e) { S.note = e.message; } draw(homeView()); };

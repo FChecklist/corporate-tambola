@@ -45,7 +45,8 @@ describe("installable app (PWA)", () => {
   });
   test("it works silently: no banner, no button, no text of ours on any page; news only through the browser's own notification permission", () => {
     const js = readFileSync(join(PUB, "pwa.js"), "utf8");
-    expect(js).not.toMatch(/createElement|innerHTML|textContent|Install app|Saving the game|saved on this device|Remind me/i); // nothing is drawn
+    expect(js).not.toMatch(/innerHTML|Install app|Saving the game|saved on this device|Remind me/i); // nothing is drawn, except one small "Notify me" button
+    expect((js.match(/createElement/g) ?? []).length).toBe(1); expect(js).toContain("Notify me"); expect(js).not.toContain("pointerdown"); // the permission question comes only from a tap on that button
     expect(js).toContain("preventDefault"); expect(js).toContain("Notification.permission"); expect(js).toContain("/api/notices"); expect(js).toContain("periodicSync");
     expect(sw).toContain("periodicsync"); expect(sw).toContain("notificationclick"); expect(sw).toContain('Notification.permission !== "granted"');
     expect(js + sw).not.toMatch(/pushManager|subscribe\(/); // no push subscription: we never receive an address of the visitor

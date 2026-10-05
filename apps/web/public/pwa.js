@@ -21,12 +21,17 @@
       }
     } catch { /* never in the way of anything */ }
   }
-  // the browser's own permission question, asked once, at the visitor's first tap (our page shows nothing around it)
+  // The browser's own permission question is asked ONLY after the visitor taps a clear "Notify me" button (never on the first tap of the page).
   const KEY = "ct-asked";
-  function askOnce() {
-    try { if (!("Notification" in window) || Notification.permission !== "default" || localStorage.getItem(KEY)) return; localStorage.setItem(KEY, "1"); Notification.requestPermission().then(() => navigator.serviceWorker.getRegistration().then((r) => r && news(r))).catch(() => {}); } catch { /* ignore */ }
+  function notifyButton() {
+    try {
+      if (!("Notification" in window) || Notification.permission !== "default" || localStorage.getItem(KEY)) return;
+      const b = document.createElement("button"); b.type = "button"; b.id = "ct-notify"; b.textContent = "Notify me"; b.setAttribute("aria-label", "Notify me about news from Corporate Tambola");
+      b.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:50;min-height:36px;padding:0 14px;border-radius:999px;border:1px solid #D9E1F0;background:#fff;color:#0B3D91;font:600 12px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.12);cursor:pointer";
+      b.onclick = () => { try { localStorage.setItem(KEY, "1"); } catch { /* ignore */ } b.remove(); Notification.requestPermission().then(() => navigator.serviceWorker.getRegistration().then((r) => r && news(r))).catch(() => {}); };
+      document.body.appendChild(b);
+    } catch { /* never in the way of anything */ }
   }
-  document.addEventListener("pointerdown", askOnce, { once: true, passive: true });
 
   window.addEventListener("load", async () => {
     try {
@@ -35,7 +40,7 @@
       try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch { /* ignore */ }
       try { if (reg.periodicSync) await reg.periodicSync.register("ct-news", { minInterval: 12 * 3600 * 1000 }); } catch { /* not available here */ }
       if (reg.active) reg.active.postMessage({ type: "status" });
-      news(reg);
+      news(reg); notifyButton();
     } catch { /* ignore */ }
   });
 })();

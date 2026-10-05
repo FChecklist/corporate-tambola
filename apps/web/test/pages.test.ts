@@ -455,7 +455,7 @@ describe("console: results go out on their own, and a person can move to a new p
     const r = (await o.json(await o.api("GET", "/api/z/UI-AUTO/results"))) as any;
     expect(r.results).toEqual([]); // the organizer's page cannot settle anything
     expect(p.$("#settle")).toBeFalsy();
-    expect(p.text()).toMatch(/cannot choose, change or remove a winner/);
+    expect(p.text()).toMatch(/You and we cannot choose or change them in the software/);
     expect((await o.api("POST", "/api/z/UI-AUTO/settle", { results: [{ pattern: "full", idx: 5, pids: [] }] }, o.token)).status).toBe(403);
   }, 60_000);
   test("'Change of phone': the organizer enters a number, and the next device that joins with it keeps the ticket", async () => {

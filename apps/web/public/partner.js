@@ -57,7 +57,8 @@
       <div class="zcard"><h2>Your link</h2>${shareBlock(m.code, m.link)}</div>
       <div class="zgrid"><div class="zcard"><h2>Sales</h2><div class="zstat">${t.sales}</div></div><div class="zcard"><h2>Earned so far</h2><div class="zstat">${inr(t.accruedInr + t.paidInr)}</div><p class="zsmall" style="margin:4px 0 0">${t.paidInr ? inr(t.paidInr) + " paid" : "None paid yet"}</p></div></div>
       ${!m.rateAnnounced && t.waitingForRate ? `<div class="zbanner info">${t.waitingForRate} sale${t.waitingForRate === 1 ? " is" : "s are"} counted for you. The commission will be announced soon and applied to them.</div>` : ""}
-      <div class="zcard"><h2>Your sales</h2>${rows}<p class="zsmall">A person who opens your link counts for ${m.attributionDays} days. Buyers' details are never shown.</p></div>`;
+      <div class="zcard"><h2>Your sales</h2>${rows}<p class="zsmall">A person who opens your link counts for ${m.attributionDays} days. Buyers' details are never shown.</p></div>
+      <p class="zsmall"><a href="#" id="pclose">Close my partner account</a></p>`;
   }
   const statusText = (s) => ({ pending_rate: "Counted", accrued: "Earned", paid: "Paid", blocked: "Not counted (own purchase)", void: "Cancelled" }[s.status] || s.status);
 
@@ -84,6 +85,7 @@
     if ($("signin")) $("signin").onclick = (e) => { e.preventDefault(); S.err = ""; draw(signinView()); };
     if ($("back")) $("back").onclick = (e) => { e.preventDefault(); S.err = ""; draw(enrollView()); };
     if ($("go")) $("go").onclick = async () => { const k = $("pk").value.trim(); try { await api("GET", "/api/partner/me", undefined, k); ls.set("ctz-pkey", k); S.err = ""; S.fresh = null; await load(); } catch (e) { S.err = e.status === 403 ? "That key was not recognised." : e.message; draw(signinView()); } };
+    if ($("pclose")) $("pclose").onclick = async (e) => { e.preventDefault(); if (!confirm("Close your partner account? Your details are deleted. Payment records stay, as the law requires.")) return; try { await api("POST", "/api/partner/close", {}, ls.get("ctz-pkey")); } catch (er) { S.err = er.message; return; } ls.del("ctz-pkey"); S.me = null; S.fresh = null; $dash.innerHTML = ""; draw(enrollView()); };
     if ($("out")) $("out").onclick = () => { ls.del("ctz-pkey"); S.me = null; S.fresh = null; $dash.innerHTML = ""; draw(enrollView()); };
   }
   async function load() {

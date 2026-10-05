@@ -159,7 +159,17 @@ async function spend(env: Env, now: number, n = 1): Promise<boolean> {
 }
 /** An AI key (or a co-host) never receives or sends names and mobile numbers: the organizer loads the list in the console. */
 const CONSOLE_ONLY = () => json({ error: "Names and mobile numbers are handled by the owner in the console, not by the AI. Ask the owner to paste the list in the Participants card. You can set the limit with settings and refer to people by ticket number." }, 403);
-const BUSY = () => json({ error: "Busy day. Please try again after midnight UTC." }, 503);
+/** One network address may open only so many NEW seats a day (an office behind one address is far below this): protects the shared daily write budget from a script. */
+const JOIN_PER_IP_DAY = 1500, JOIN_PER_IP_MINUTE = 200;
+async function joinOverLimit(env: Env, req: Request, now: number): Promise<boolean> {
+  try {
+    const ip = (await sha("jip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16), perDay = Number((env as any).JOIN_PER_IP_DAY ?? JOIN_PER_IP_DAY), perMin = Number((env as any).JOIN_PER_IP_MINUTE ?? JOIN_PER_IP_MINUTE);
+    const bump = async (k: string, max: number) => { const n = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0); if (n >= max) return true; await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(k, String(n + 1), String(n + 1)).run(); return false; };
+    const iso = new Date(now).toISOString();
+    return (await bump(`jbm/${iso.slice(0, 16)}/${ip}`, perMin)) || (await bump(`jlim/${iso.slice(0, 10)}/${ip}`, perDay));
+  } catch { return false; }
+}
+const BUSY = () => json({ error: "It is very busy right now. Please try again in a few minutes." }, 503);
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-organizer, x-partner, authorization", "access-control-allow-methods": "GET, POST, PUT, PATCH, OPTIONS", "access-control-max-age": "86400" };
 /** Phones load the app from Pages and call this Worker from another origin, so every answer carries open CORS (no cookies are used anywhere). */
@@ -573,6 +583,22 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (a.kind !== "master" && a.kind !== "ai" && !a.plat) return deny(a);
     return listAiAudit(env.DB, a.plat ? null : a.org, json);
   }
+  if (req.method === "POST" && p === "/api/org/close") { // "Close my organizer account": only the organizer's own sign-in key, never an AI key. Deletes the account and every engagement; payment and invoice records stay because the law requires them.
+    if (a.kind !== "master" || !a.org) return deny(a);
+    const b = await body(req);
+    if (b?.confirm !== true) return json({ error: "Please confirm in your console." }, 400);
+    const engs = (await env.DB.prepare("SELECT * FROM engagement WHERE org=?").bind(a.org).all<any>()).results ?? [];
+    for (const g of engs) if (now >= roundMs(g.start_round) && now < (await endBoundMs(env as any, g))) return json({ error: "A game is running. Close the account after it ends." }, 409);
+    if (!(await spend(env, now, 8 + engs.length * 4))) return BUSY();
+    for (const g of engs) await eraseEverything(env as any, g.id);
+    const keys = (await env.DB.prepare("SELECT hash FROM organizer_key WHERE org=?").bind(a.org).all<{ hash: string }>()).results ?? [];
+    for (const k of keys) await env.DB.prepare("DELETE FROM kv WHERE k=? OR k=?").bind(`seen/${k.hash.slice(0, 10)}`, `alert/${k.hash.slice(0, 10)}`).run();
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM kv WHERE k=? OR k=?").bind(`orgmail/${a.org}`, `aikey/${a.org}`), env.DB.prepare("DELETE FROM organizer_email WHERE org=?").bind(a.org),
+      env.DB.prepare("DELETE FROM organizer_terms WHERE org=?").bind(a.org), env.DB.prepare("DELETE FROM ai_audit WHERE org=?").bind(a.org), env.DB.prepare("DELETE FROM organizer_key WHERE org=?").bind(a.org),
+    ]);
+    return json({ ok: true, closed: true, engagementsDeleted: engs.length });
+  }
   if (req.method === "POST" && p === "/api/org/ai/revoke") {
     if (a.kind !== "master" || !a.org) return deny(a);
     if (!(await spend(env, now))) return BUSY();
@@ -734,15 +760,26 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const from = String(b?.from ?? "").toLowerCase().match(/[^\s<>"',;]+@[^\s<>"',;]+/)?.[0];
     const text = `${b?.subject ?? ""}\n${b?.text ?? ""}`;
     if (!from || !/\bdelete\b|\berase\b/i.test(text)) return json({ ok: true, action: "none" });
-    const done: string[] = [];
+    // The sender field of an e-mail can be forged, so it is never enough: the first mail only makes us send a 6-digit code to the registered address; the deletion happens when a reply carrying that code arrives.
+    const done: string[] = [], asked: string[] = [];
+    const codes = [...new Set(text.match(/\b\d{6}\b/g) ?? [])].slice(0, 5);
     for (const tok of [...new Set(text.match(/[A-Za-z0-9_-]{4,40}/g) ?? [])].slice(0, 80)) {
       const c = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`contact/${tok}`).first<{ v: string }>();
       if (!c || String(JSON.parse(c.v).email ?? "").toLowerCase() !== from) continue;
-      await erasePersonal(env, tok, now, "email");
-      done.push(tok);
+      const registered = String(JSON.parse(c.v).email);
+      const pend = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`delreq/${tok}`).first<{ v: string }>();
+      const pv = pend ? JSON.parse(pend.v) : null;
+      let confirmed = false;
+      if (pv && pv.x > now) for (const cd of codes) if ((await sha(`delcode|${tok}|${cd}`)) === pv.c) confirmed = true;
+      if (confirmed) { await erasePersonal(env, tok, now, "email"); await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`delreq/${tok}`).run(); done.push(tok); continue; }
+      if (pv && pv.x > now && now - pv.t < 300_000) continue; // a code was sent a moment ago: do not send another
+      const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000));
+      await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`delreq/${tok}`, JSON.stringify({ c: await sha(`delcode|${tok}|${code}`), x: now + 1_800_000, t: now })).run();
+      await sendMail(env as PayEnv, env.DB, registered, `Confirm the deletion of participant data: ${tok}`, `We got a request to delete all participant data for ${tok}. Nothing is deleted yet.\n\nTo confirm, reply to the e-mail you sent with this code: ${code}\n\nIt works for 30 minutes. Not you? Ignore this e-mail.`, now);
+      asked.push(tok);
     }
     if (done.length) await sendMail(env as PayEnv, env.DB, from, `Deleted: participant data of ${done.join(", ")}`, `Done. We deleted all participant data for: ${done.join(", ")}.\n\nWe keep the winners record (seat, prize, round, time) and winners' prize hand-over details for up to 365 days. We also keep your organizer details.`, now);
-    return json({ ok: true, action: done.length ? "deleted" : "no-match", engagements: done });
+    return json({ ok: true, action: done.length ? "deleted" : asked.length ? "confirm-sent" : "no-match", engagements: done });
   }
   if (req.method === "GET" && p === "/api/notices") { // our public news list: the same for everyone, nothing about the reader is stored or asked
     const raw = (await env.DB.prepare("SELECT v FROM kv WHERE k='notices'").first<{ v: string }>())?.v ?? "[]";
@@ -835,7 +872,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
         }
       }
     }
-    if (!(await spend(env, now, 2))) return BUSY();
+    if (await joinOverLimit(env, req, now)) return json({ error: "It is busy right now. Please try again in a few minutes.", code: "busy" }, 429);
+    if (!(await spend(env, now, 2))) return json({ error: "It is very busy right now. Please try again in a few minutes.", code: "busy" }, 503);
     await addSeat(ph, await sealPii(env, { phone: digits, name: cleanName(b?.name) }), dev, lateRound, { inv, cat, src: "link", invLimit });
     const row = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.jr AS jr FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; jr: number | null }>();
     if (!row) return (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) ? json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket.", code: "device-used" }, 409) : invLimit !== null ? json({ error: `This invitation has already been used by ${inviteCfg!.per} people, which is the most one person can invite. Please ask your organizer for the main link.`, code: "invite-full" }, 409) : json({ error: "This engagement is full." }, 409); // lost a race for the last place
@@ -1021,6 +1059,12 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (action === "won" && req.method === "POST") return acceptWon(env, e, eid!, await body(req), now, json, spend);
   if (action === "over" && req.method === "POST") return acceptOver(env, e, eid!, await body(req), now, json, spend);
   if (action === "settle" && req.method === "POST") return json({ error: "Winners are decided by the software, from the public numbers, when several phones agree. Nobody can post or change them." }, 403);
+  if (action === "reportlink" && req.method === "POST") { // the organizer replaces the report link (lost it, shared it by mistake): the old link stops at once. Never an AI or a co-host.
+    if (!can(a, e, true)) return deny(a);
+    if (!(await spend(env, now, 2))) return BUSY();
+    await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`rptsalt/${eid}`, randHex(12)).run();
+    return json({ ok: true, url: await reportLink(env as any, eid!) });
+  }
   if (action === "reportlink" && req.method === "GET") { // the organizer's / co-host's way to the report page (the PDF is made on their own device)
     if (!can(a, e)) return deny(a);
     const life = await env.DB.prepare("SELECT report_ms FROM life WHERE eid=?").bind(eid).first<{ report_ms: number | null }>();
@@ -1119,12 +1163,12 @@ export async function retentionSweep(env: Env, now: number): Promise<void> {
   const safe = async (f: () => Promise<unknown>) => { try { await f(); } catch { /* one failing step must not stop the others */ } };
   const cutoff = new Date(now - 2 * DAY).toISOString().slice(0, 10);
   await safe(async () => {
-    const r = await db.prepare("SELECT k FROM kv WHERE k LIKE 'start/%' OR k LIKE 'linkfail/%' OR k LIKE 'plim/%' LIMIT 2000").all<{ k: string }>();
+    const r = await db.prepare("SELECT k FROM kv WHERE k LIKE 'start/%' OR k LIKE 'linkfail/%' OR k LIKE 'plim/%' OR k LIKE 'jlim/%' OR k LIKE 'jbm/%' LIMIT 2000").all<{ k: string }>();
     for (const x of r.results ?? []) { const d = x.k.match(/\d{4}-\d{2}-\d{2}/)?.[0]; if (d && d < cutoff) await db.prepare("DELETE FROM kv WHERE k=?").bind(x.k).run(); }
   });
   await safe(() => db.prepare("DELETE FROM login_code WHERE expires_ms < ?").bind(now - DAY).run());
   await safe(async () => {
-    const r = await db.prepare("SELECT k, v FROM kv WHERE k LIKE 'penr/%' LIMIT 2000").all<{ k: string; v: string }>();
+    const r = await db.prepare("SELECT k, v FROM kv WHERE k LIKE 'penr/%' OR k LIKE 'delreq/%' LIMIT 2000").all<{ k: string; v: string }>();
     for (const x of r.results ?? []) { let t = 0; try { t = JSON.parse(x.v).t ?? 0; } catch { /* unreadable: drop it */ } if (now - t > DAY) await db.prepare("DELETE FROM kv WHERE k=?").bind(x.k).run(); }
   });
   await safe(() => db.prepare("DELETE FROM kv WHERE (k LIKE 'seen/%' OR k LIKE 'alert/%') AND substr(k, instr(k, '/') + 1) NOT IN (SELECT substr(hash, 1, 10) FROM organizer_key WHERE revoked=0 AND (expires_ms IS NULL OR expires_ms > ?))").bind(now).run());

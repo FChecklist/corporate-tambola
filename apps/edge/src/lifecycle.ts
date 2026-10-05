@@ -119,7 +119,7 @@ export async function eraseEverything(env: Env, id: string): Promise<void> {
   await erasePersonal(env, id, Date.now(), "retention");
   await env.DB.batch([
     env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM prize WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
-    env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`),
+    env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`rptsalt/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`),
     env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
   ]);
 }
@@ -201,7 +201,8 @@ const bodyFor = (eid: string, d: ReportData, link: string) => [
 /** The report's link carries a key that only this engagement can have (derived from a server secret): whoever holds the link can open the report until the personal data is deleted. */
 async function reportKey(env: LifeEnv, eid: string): Promise<string> {
   const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(`report|${env.DATA_KEY ?? env.ORGANIZER_SECRET ?? "unset"}`), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(eid))), (b) => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
+  const salt = (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`rptsalt/${eid}`).first<{ v: string }>())?.v ?? ""; // the organizer can replace the link: a new salt makes every older link useless
+  return Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(salt ? `${eid}|${salt}` : eid))), (b) => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
 }
 export async function reportLink(env: LifeEnv, eid: string): Promise<string> {
   return `${((env as any).PUBLIC_ORIGIN ?? "https://corporate-tambola.pages.dev").replace(/\/$/, "")}/report.html?e=${encodeURIComponent(eid)}&k=${await reportKey(env, eid)}`;
