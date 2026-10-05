@@ -95,11 +95,14 @@
   TB.api("GET", "/api/payments/status").then((s) => { PAYMODE = s.mode; }).catch(() => {});
   // ---------- free launch: create an organizer account with a work email; the key arrives only through the e-mailed code ----------
   function openFree() {
-    TB.sheet(`${xbtn}<div class="eyebrow">Build it and publish it free. Pay before it starts.</div><h2>Create your engagement</h2>
-      <ul class="facts"><li>${ic("ticket")}Every participant gets their own ticket on their phone</li><li>${ic("phone")}Mobile number only. No SMS, no app, no password for participants</li><li>${ic("gift")}Participants never pay. You give the rewards</li><li>${ic("users")}Free AI assistant for you, the organizer</li></ul>
-      <form id="frForm" novalidate><label class="lb" for="fMail">Your work email</label><input class="inp" id="fMail" type="email" autocomplete="email" placeholder="you@company.com"><div id="fErr"></div>
-      <button class="btn block" style="margin-top:14px" type="submit" id="frGo">Create my engagement ${ic("arrow")}</button></form>
-      <p class="proto">Your console opens straight away: no password and no waiting for an email. Your email is used for your invoice and to sign you back in later.</p>`);
+    TB.sheet(`${xbtn}<div class="openfree" role="group" aria-labelledby="ofTitle">
+      <div class="sheethead"><span class="rolepill">For the organizer or host</span><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><svg class="ic" aria-hidden="true"><use href="#i-ticket"/></svg></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
+      <div class="eyebrow ofeye">Build it and publish it free.</div><h2 id="ofTitle">Create your engagement</h2>
+      <ul class="bgrid"><li><span class="bico">${ic("users")}</span><span>A private tambola (housie) for your own people: invite-only, or open to anyone with your link</span></li><li><span class="bico">${ic("ticket")}</span><span>Every ticket is unique: no two tickets can ever be the same</span></li><li><span class="bico">${ic("phone")}</span><span>Each participant gets their own ticket on their phone, with a mobile number only: no app to download, no SMS, no password</span></li><li><span class="bico">${ic("play")}</span><span>Make your brand part of the game: play a video or audio message between numbers</span></li><li><span class="bico">${ic("trophy")}</span><span>Set several prizes, and add a lucky draw inside the game</span></li><li><span class="bico">${ic("gift")}</span><span>Participants never pay. You provide the rewards</span></li><li><span class="bico">${ic("star")}</span><span>Your free AI assistant can set everything up for you</span></li><li><span class="bico">${ic("shield")}</span><span>Privacy first: names and mobile numbers are deleted within 24 hours after the game ends</span></li></ul>
+      <form id="frForm" novalidate><label class="lb" for="fMail">Your email</label><input class="inp big" id="fMail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@example.com" aria-describedby="fErr"><div id="fErr" role="alert"></div>
+      <button class="btn block big" style="margin-top:14px" type="submit" id="frGo">Create my engagement ${ic("arrow")}</button></form>
+      <p class="trust">${ic("shield")}Free to build and publish. No password. Pay only before the start.</p>
+      <p class="proto">Your console opens straight away: no password needed. We use your email for your invoice and to sign you back in later.</p></div>`);
     $("frForm").addEventListener("submit", async (e) => {
       e.preventDefault(); const m = $("fMail").value.trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) return setErr("Please enter a valid work email.");
@@ -111,7 +114,7 @@
         location.href = "/zc.html";
       } catch (x) { b.disabled = false; setErr(x.message); }
     });
-    focusFirst("fMail");
+    if (matchMedia("(min-width:700px)").matches) focusFirst("fMail"); else { const sh = document.getElementById("sheet"); if (sh) { sh.setAttribute("tabindex", "-1"); sh.focus({ preventScroll: true }); sh.scrollTop = 0; } } // on a phone the top of the pop-up stays in view; the keypad opens when the field is tapped
   }
   async function pay() {
     const org = $("oName").value.trim(), email = $("oMail").value.trim().toLowerCase(), country = $("oCty").value, taxId = $("oGst").value.trim().toUpperCase();

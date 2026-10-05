@@ -319,3 +319,20 @@ html[data-theme] .chip.on{background:#fff}
 .sheet .inp:focus,.sheet .btn:focus-visible,.xbtn:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .sheethelp{margin:12px 0 0;font-size:13px;color:var(--muted,#6b5b57);text-align:center}
 @media(max-width:400px){.sheethead .eyebrow{font-size:9.5px;letter-spacing:.12em}.sbrand .word{font-size:13px}}
+
+/* create-engagement pop-up: wide on desktop, two columns of icon bullets, one column on a phone */
+.sheet:has(.openfree){max-width:780px;max-height:94vh;overflow-y:auto}
+.openfree .sheethead{padding-right:52px}
+.rolepill{display:inline-flex;align-items:center;min-height:28px;padding:0 12px;border-radius:999px;background:var(--gold2,#F3D9A4);color:var(--wine);font:700 12px var(--sans);letter-spacing:.02em;white-space:nowrap}
+.openfree .ofeye{margin:8px 0 2px;text-transform:none;letter-spacing:.02em;font-size:13px;font-weight:600;line-height:1.35}
+.openfree h2{font-size:30px;line-height:1.15;margin:4px 0 14px}
+.bgrid{list-style:none;margin:0 0 16px;padding:0;display:grid;grid-template-columns:1fr;gap:10px}
+.bgrid li{display:flex;gap:12px;align-items:flex-start;font-size:14.5px;line-height:1.45;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.bgrid .bico{flex:0 0 34px;width:34px;height:34px;border-radius:10px;background:var(--wine);color:var(--gold);display:grid;place-items:center}
+.bgrid .bico .ic{width:18px;height:18px}
+.openfree .inp.big{min-height:52px;font-size:17px}
+.trust{display:flex;gap:8px;align-items:center;justify-content:center;margin:12px 0 0;font-size:13px;font-weight:600;color:var(--ok,#1F7A55)}.trust .ic{width:16px;height:16px}
+.openfree .proto{text-align:center}
+@media(min-width:700px){.bgrid{grid-template-columns:1fr 1fr}.sheet:has(.openfree){padding:22px 30px 26px}.openfree h2{font-size:34px}}
+@media(max-width:400px){.openfree h2{font-size:26px}.rolepill{font-size:11px;padding:0 10px}}
+@media(max-width:480px){.openfree .sheethead{flex-wrap:wrap;justify-content:flex-end;row-gap:8px}.openfree .rolepill{order:3;margin-right:auto}.bgrid li{padding:9px 11px;font-size:14px}}

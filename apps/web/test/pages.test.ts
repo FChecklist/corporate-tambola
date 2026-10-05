@@ -471,6 +471,24 @@ describe("Refer & Earn page", () => {
     expect(p.win.document.body.classList.contains("signed")).toBe(true);
     expect(p.errors).toEqual([]);
   });
+  test("Create your engagement pop-up: brand top right, role pill, eight true bullets, an email field (not work email), one button, trust line, Esc closes, the sign-up still works", async () => {
+    const o = await organizer();
+    const p = await page(o, "/", "index.html", ["common.js", "site.js"], {});
+    p.click("#payBtn"); await new Promise((r) => setTimeout(r, 200));
+    const t = (p.$("#sheet") as any).textContent as string; expect(t).toMatch(/Create your engagement/);
+    expect(t).toContain("Build it and publish it free."); expect(t).not.toMatch(/Pay (only )?before it starts/); expect(t).toMatch(/For the organizer or host/);
+    for (const b of ["A private tambola (housie) for your own people", "Every ticket is unique: no two tickets can ever be the same", "no app to download, no SMS, no password", "play a video or audio message between numbers", "Set several prizes, and add a lucky draw inside the game", "Participants never pay. You provide the rewards", "Your free AI assistant can set everything up for you", "names and mobile numbers are deleted within 24 hours after the game ends"]) expect(t).toContain(b);
+    expect(p.win.document.querySelectorAll(".bgrid li").length).toBe(8); expect(p.win.document.querySelectorAll(".bgrid .bico svg").length).toBe(8);
+    expect(t).toMatch(/Free to build and publish. No password. Pay only before the start./); expect(t).toMatch(/Your console opens straight away: no password needed. We use your email for your invoice and to sign you back in later./);
+    expect(t).not.toMatch(/work email/i); expect(t).not.toMatch(/waiting for an email/);
+    const f = p.$("#fMail") as any; expect(p.win.document.querySelector('label[for="fMail"]').textContent).toBe("Your email");
+    expect(f.getAttribute("type")).toBe("email"); expect(f.getAttribute("inputmode")).toBe("email"); expect(f.getAttribute("autocomplete")).toBe("email"); expect(f.getAttribute("placeholder")).toBe("you@example.com");
+    expect(p.win.document.querySelector(".sheet .sbrand")!.getAttribute("aria-label")).toBe("Corporate Tambola"); expect(p.win.document.querySelector(".sheethead .rolepill")).toBeTruthy();
+    expect((p.$("#frGo") as any).textContent).toMatch(/^s*Create my engagement/);
+    p.win.document.dispatchEvent(new p.win.KeyboardEvent("keydown", { key: "Escape" })); await new Promise((r) => setTimeout(r, 50));
+    expect(p.win.document.getElementById("modal").classList.contains("hidden")).toBe(true);
+    expect(p.errors).toEqual([]);
+  });
   test("the page is linked from the home page and listed for search engines, and ships with its stylesheet", () => {
     expect(readFileSync(join(import.meta.dir, "../public/index.html"), "utf8")).toContain('href="/partner.html"');
     expect(readFileSync(join(import.meta.dir, "../public/sitemap.xml"), "utf8")).toContain("/partner.html");
