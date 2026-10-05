@@ -31,3 +31,7 @@ Guard: `apps/edge/test/branding.test.ts` fails if an exported `*Mail` builder la
 * The in-game phone screens and the tickets keep their own look (they are the product, not a touch point of the company).
 * Internal tool pages (`console.html`, `play.html`, `screen.html`, `confirm.html`) are not shipped to the live site; `confirm.html` got the new pop-up copy anyway so it matches.
 * A failed e-mail is retried as plain text (the HTML part is not kept), so a retried mail carries the footer but not the header.
+
+## Live check (2026-10-05)
+
+Deployed to the free Pages site. Pretty paths /z /zc /pay /big /report /legal /partner /ai-link /signin answer 200; an unknown path now answers the branded 404 page; the live manifest says "Corporate Tambola"; live titles follow the pattern; the sign-in pop-up (opened with an address that has no account, so no e-mail is sent) renders the new copy with the brand top right at 390 and 900 px, numeric keypad and one-time-code autocomplete. No e-mail was sent to anyone.
