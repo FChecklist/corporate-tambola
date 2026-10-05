@@ -86,4 +86,4 @@ Deployed with the normal recipe (free Pages + Functions + D1, no new add-ons, no
 
 ## Live verification of the dedicated mail and Replace (2026-10-05)
 
-See the end of this file's last commit message and the session report; results of the live curl checks are listed below.
+Deployed free (Pages + Functions + D1, no migration, no add-on). Throwaway organizer minted with the platform key (no e-mail address on file, so no mail was sent anywhere). Checked with curl: first AI link 200; `POST /api/org/ai/replace` with the organizer key 200 (`mailed: false`, as expected without an address); the old link then 404 and the new one 200; the AI key, the AI link route, the platform key and an anonymous caller all got 403 on both replace routes and the new link kept working; the audit trail showed `POST /api/org/ai/replace`; `zc.js` live contains the new button. Afterwards the AI link was revoked (404) and the test organizer key was retired directly in D1 (403). The HTML mail itself was checked by rendering it in Chrome (screenshots reviewed at 700 and 390 px wide; long address wraps inside the box); no real e-mail was sent.
