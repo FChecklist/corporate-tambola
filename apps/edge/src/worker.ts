@@ -14,7 +14,7 @@
 
 import { GRACE_ROUNDS, defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
 import { openPii, openText, sealPii, sealText } from "./pii";
-import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, newUseAlertMail } from "./mails";
+import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, newUseAlertMail, signInMail } from "./mails";
 import { acceptOver, acceptWon, endBoundMs, eraseEverything, erasePersonal, fullDeleteAt, lifecycleTick, personalDeleteAt, recordWinners, reportApi, reportLink } from "./lifecycle";
 import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
@@ -96,6 +96,8 @@ export const SCHEMA: string[] = [
   ...WINNERS_SCHEMA,
   // a key made only for an e-mail lives 24 hours: after expires_ms it is treated like an unknown key (null = never expires, as before)
   `ALTER TABLE organizer_key ADD COLUMN expires_ms INTEGER`,
+  // the one-click sign-in link in the sign-in e-mail: only its hash is kept, single use, same expiry as the 6-digit code
+  `ALTER TABLE login_code ADD COLUMN link_hash TEXT`,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
@@ -434,18 +436,38 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const eh = await sha("email|" + email);
     const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
     const test = (env as PayEnv).TEST_MODE === "1";
-    let devCode: string | undefined;
+    let devCode: string | undefined, devToken: string | undefined;
     if (acct) { // an unknown address gets the same answer, so nobody can find out who has an account
       const row = await env.DB.prepare("SELECT win_start, sent FROM login_code WHERE email_hash=?").bind(eh).first<{ win_start: number; sent: number }>();
       const fresh = !row || now - row.win_start > 3_600_000;
       if (!fresh && row!.sent >= 5) return json({ error: "Too many codes requested. Please try again in an hour." }, 429);
       if (!(await spend(env, now, 2))) return BUSY();
-      const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000));
-      await env.DB.prepare("INSERT INTO login_code(email_hash,code_hash,expires_ms,attempts,win_start,sent) VALUES(?,?,?,0,?,1) ON CONFLICT(email_hash) DO UPDATE SET code_hash=excluded.code_hash, expires_ms=excluded.expires_ms, attempts=0, win_start=?, sent=?").bind(eh, await sha("code|" + eh + "|" + code), now + 600_000, fresh ? now : row!.win_start, fresh ? now : row!.win_start, fresh ? 1 : row!.sent + 1).run();
-      await sendMail(env as PayEnv, env.DB, email, "Your Corporate Tambola sign-in code", `Your sign-in code is ${code}. It works for 10 minutes. If you did not ask for it, ignore this message.`, now);
-      if (test) devCode = code;
+      const linkToken = randHex(24), code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000));
+      await env.DB.prepare("INSERT INTO login_code(email_hash,code_hash,expires_ms,attempts,win_start,sent,link_hash) VALUES(?,?,?,0,?,1,?) ON CONFLICT(email_hash) DO UPDATE SET code_hash=excluded.code_hash, expires_ms=excluded.expires_ms, attempts=0, win_start=?, sent=?, link_hash=excluded.link_hash").bind(eh, await sha("code|" + eh + "|" + code), now + 600_000, fresh ? now : row!.win_start, await sha("link|" + linkToken), fresh ? now : row!.win_start, fresh ? 1 : row!.sent + 1).run();
+      const sm = signInMail((env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, code, linkToken); // no AI key or paste here: the buttons lead to the signed-in page
+      await sendMail(env as PayEnv, env.DB, email, sm.subject, sm.text, now, { html: sm.html, secret: true });
+      if (test) { devCode = code; devToken = linkToken; }
     }
-    return json({ ok: true, ...(devCode ? { devCode } : {}) });
+    return json({ ok: true, ...(devCode ? { devCode, devToken } : {}) });
+  }
+  if (req.method === "POST" && p === "/api/auth/link") { // the confirm page POSTs here; opening the link (GET, a mail scanner) consumes nothing
+    const b = await body(req);
+    const t = typeof b?.token === "string" && /^[0-9a-f]{48}$/.test(b.token) ? b.token : "";
+    const fk = `linkfail/${day(now)}/${(await sha("ip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16)}`;
+    const fails = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(fk).first<{ v: string }>())?.v ?? 0);
+    if (fails >= 20) return json({ error: "Too many tries from this network. Please use the 6-digit code, or try again tomorrow." }, 429);
+    const bad = async () => { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(fk, String(fails + 1), String(fails + 1)).run(); return json({ error: "This sign-in link is not valid any more. Please ask for a new one from the sign-in page." }, 400); };
+    if (!t) return bad();
+    const lh = await sha("link|" + t);
+    const row = await env.DB.prepare("SELECT email_hash, expires_ms FROM login_code WHERE link_hash=?").bind(lh).first<{ email_hash: string; expires_ms: number }>();
+    if (!row || row.expires_ms < now) return bad();
+    const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(row.email_hash).first<{ org: string }>();
+    if (!acct || !(await spend(env, now, 2))) return acct ? BUSY() : bad();
+    const used = await env.DB.prepare("DELETE FROM login_code WHERE link_hash=? AND expires_ms>=?").bind(lh, now).run(); // single use: the first POST wins, the code dies with it
+    if ((used.meta?.changes ?? 0) !== 1) return bad();
+    const token = "ctk_" + randHex(24); // the same kind of session key the 6-digit code creates
+    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + token), acct.org, "master", now).run();
+    return json({ ok: true, token });
   }
   if (req.method === "POST" && p === "/api/auth/verify") {
     const b = await body(req);

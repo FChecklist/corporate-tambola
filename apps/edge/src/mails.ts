@@ -111,3 +111,34 @@ export function newUseAlertMail(info: { when: string; country: string; program: 
   const html = `<!doctype html><html><body style="margin:0;background:#f4efe3;font-family:Arial,Helvetica,sans-serif;color:#222;"><div style="max-width:560px;margin:20px auto;background:#fff;border:1px solid #e6d9b8;border-radius:10px;padding:20px 22px;"><div style="color:#8a6a1a;font-size:12px;font-weight:700;letter-spacing:.08em;">CORPORATE TAMBOLA</div><h1 style="font-size:21px;color:#1b2a41;margin:8px 0;">Someone new used your ${esc(info.kind)} work link</h1><p style="font-size:15px;line-height:1.5;">When: ${esc(info.when)}<br>Country: ${esc(info.country || "unknown")}<br>Program: ${esc(info.program || "unknown")}</p><p style="font-size:14px;line-height:1.5;">This is normal if you just opened your link in a different AI chat or from another network. If this was not you, open your console and press <b>Replace my AI link</b>: every AI link stops working at once.</p><p style="font-size:12px;color:#666;">At most one of these a day for each link. This e-mail contains no link and no key.</p></div></body></html>`;
   return { subject: `Someone new used your ${info.kind} work link`, text, html };
 }
+
+export const SIGNIN_SUBJECT = "Sign in to Corporate Tambola - choose how you want to continue";
+/** The sign-in e-mail for an existing account: three ways in. It carries NO AI key or paste: the two buttons are single-use sign-in links (10 minutes) that lead to the signed-in pages, and the 6-digit code is the fallback. */
+export function signInMail(origin: string, code: string, token: string): BuiltMail {
+  const aiUrl = `${origin}/signin.html?t=${token}&go=ai`, consoleUrl = `${origin}/signin.html?t=${token}&go=console`;
+  const intro = "Someone, hopefully you, asked to sign in to Corporate Tambola with this email address. Choose any ONE of the three ways below.";
+  const o1 = "Copy the prompt into ChatGPT, Claude, Gemini, Grok, DeepSeek, z.ai or any AI chat. It asks you simple questions and sets everything up; payment and publishing stay with you.";
+  const foot = "If you did not ask to sign in, ignore this email; nobody can sign in without it. Do not forward it: the buttons and the code give access to your account.";
+  const text = [
+    "YOU ARE ALMOST IN", "", intro, "",
+    "OPTION 1 - LET YOUR AI DO THE WORK", o1, `Sign in and get my AI work link: ${aiUrl}`, "",
+    "OPTION 2 - WORK ON YOUR OWN", `Open my console: ${consoleUrl}`, "",
+    "OPTION 3 - ALREADY HAVE THE SIGN-IN PAGE OPEN?", `Type this 6-digit code there: ${code}`, "It works for 10 minutes.", "",
+    "The two buttons work once, for 10 minutes.", "", foot, "",
+  ].join("\n");
+  const card = (n: string, title: string, body: string) => `<tr><td style="padding:12px 22px 0;"><div style="border:1px solid #e6d9b8;border-radius:10px;background:#fffaf0;padding:14px 16px;"><div style="font-size:12px;font-weight:700;letter-spacing:.06em;color:#8a6a1a;">OPTION ${n}</div><div style="font-size:18px;font-weight:700;color:#1b2a41;margin:3px 0 6px;">${esc(title)}</div>${body}</div></td></tr>`;
+  const btn = (label: string, url: string) => `<a href="${esc(url)}" style="display:inline-block;background:#c9a24a;color:#1b2a41;font-weight:700;font-size:16px;text-decoration:none;padding:12px 22px;border-radius:8px;">${esc(label)}</a>`;
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in to Corporate Tambola</title></head>
+<body style="margin:0;background:#f4efe3;font-family:Arial,Helvetica,sans-serif;color:#222;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4efe3;"><tr><td align="center" style="padding:20px 10px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;border-radius:10px;border:1px solid #e6d9b8;">
+<tr><td style="background:#1b2a41;border-radius:10px 10px 0 0;padding:14px 22px;color:#f1d58a;font-size:13px;letter-spacing:.08em;font-weight:700;">CORPORATE TAMBOLA</td></tr>
+<tr><td style="padding:20px 22px 4px;"><h1 style="margin:0;font-size:26px;line-height:1.25;color:#1b2a41;">You are almost in</h1><p style="margin:10px 0 0;font-size:15px;line-height:1.5;">${esc(intro)}</p></td></tr>
+${card("1", "Let your AI do the work", `<p style="margin:0 0 12px;font-size:14px;line-height:1.5;">${esc(o1)}</p>${btn("Sign in and get my AI work link", aiUrl)}`)}
+${card("2", "Work on your own", `<p style="margin:0 0 12px;font-size:14px;line-height:1.5;">Sign in and open your console to build your engagement yourself.</p>${btn("Open my console", consoleUrl)}`)}
+${card("3", "Already have the sign-in page open?", `<p style="margin:0 0 8px;font-size:14px;line-height:1.5;">Type this 6-digit code there:</p><div style="font-family:Consolas,'Courier New',monospace;font-size:30px;letter-spacing:.3em;font-weight:700;color:#1b2a41;background:#fff;border:2px dashed #c9a24a;border-radius:8px;padding:8px 14px;display:inline-block;">${esc(code)}</div><p style="margin:8px 0 0;font-size:13px;color:#555;">It works for 10 minutes.</p>`)}
+<tr><td style="padding:14px 22px 4px;font-size:12px;color:#666;line-height:1.5;">The two buttons work once, for 10 minutes. ${esc(foot)}</td></tr>
+<tr><td style="padding:6px 22px 20px;"><div style="background:#fdecea;border:1px solid #c0392b;border-radius:8px;padding:10px 12px;color:#b71c1c;font-weight:700;font-size:13px;text-align:center;">Do not forward this e-mail: the buttons and the code give access to your account.</div></td></tr>
+</table></td></tr></table></body></html>`;
+  return { subject: SIGNIN_SUBJECT, text, html };
+}

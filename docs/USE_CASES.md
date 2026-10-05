@@ -185,3 +185,4 @@ Run: `bun test packages apps tools/control-worker` gives **479 passing, 0 failin
 | UC-116 | Co-host key made | A lasting co-host key for the console; the mail to the organizer carries a separate 24-hour co-host key, says whose engagements and that it is watch/announce only |
 | UC-117 | A link is used from a new country, network or program | One plain alert e-mail without any link or key, at most one per key per 24 h; the first use never alerts |
 | UC-118 | A mail scanner or chat tool opens `/ai/<key>` | Nothing changes except the audit line and the alert baseline |
+| UC-119 | Existing account asks to sign in | One mail with three ways: AI-link button, console button, 6-digit code; no AI key or paste in it; the buttons are single-use 10-minute links that go through a confirm page, so a mail scanner opening them signs nobody in |

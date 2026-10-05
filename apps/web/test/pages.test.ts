@@ -101,6 +101,22 @@ describe("console (organizer page)", () => {
     await p.waitFor((x) => /OPTION 1/.test(x)); expect(p.$("#aicopy")).toBeTruthy();
     await checkSeven(p, o.aiMessage);
   });
+  test("sign-in e-mail link page: opening it consumes nothing; the button starts the session once and goes to the AI-link page; a used link says so", async () => {
+    const o = await organizer({ TEST_MODE: "1" });
+    const r = await o.json(await o.api("POST", "/api/auth/email", { email: "boss@acme.com" }));
+    const p = await page(o, "/signin?t=" + r.devToken + "&go=ai", "signin.html", ["signin.js"], {});
+    const t = await p.waitFor((x) => /Continue to Corporate Tambola/.test(x));
+    expect(t).toMatch(/AI work link next/); expect(t).not.toMatch(/cta_/); expect(p.win.sessionStorage.getItem("ctz-org")).toBeFalsy();
+    expect(p.win.location.search).toBe(""); // the token left the address bar
+    expect((await o.api("POST", "/api/auth/email", { email: "stranger@x.com" })).status).toBe(200);
+    p.click("#go");
+    await new Promise((res) => setTimeout(res, 400));
+    expect(p.win.sessionStorage.getItem("ctz-org")).toMatch(/^ctk_[0-9a-f]{48}$/);
+    const again = await page(o, "/signin?t=" + r.devToken + "&go=console", "signin.html", ["signin.js"], {});
+    await again.waitFor((x) => /Continue to Corporate Tambola/.test(x)); again.click("#go");
+    await again.waitFor((x) => /not valid any more/.test(x));
+    expect(again.win.sessionStorage.getItem("ctz-org")).toBeFalsy();
+  });
   test("UC-54 draft: the organizer publishes (free) after confirming email and mobile, then sees the payment-due card and the share link", async () => {
     const o = await organizer(); await make(o, "UI-DRAFT");
     const p = await consolePage(o, "UI-DRAFT");
