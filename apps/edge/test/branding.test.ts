@@ -109,3 +109,35 @@ describe("pages: one title pattern, icons, manifest, theme colour", () => {
     const lay = read("apps/edge/src/report-layout.ts"); expect(lay).toContain("BRAND.support"); expect(lay).toContain("BRAND.legalPath"); expect(lay).toMatch(/pdf\.footer = `Corporate Tambola/);
   });
 });
+
+describe("the legal page carries the owner's final text, and each line matches what the code does", () => {
+  const html = read("apps/web/public/legal.html");
+  const sec = (id: string) => { const m = html.match(new RegExp(`<section id="${id}"[\\s\\S]*?</section>`)); expect(m).toBeTruthy(); return m![0]; };
+  const items = (id: string) => [...sec(id).matchAll(/<li>([\s\S]*?)<\/li>/g)].map((x) => x[1]!.replace(/<[^>]+>/g, "").replace(/&rsquo;/g, "’").replace(/&amp;/g, "&"));
+  test("anchors, headings, counts, and one short line each", () => {
+    for (const id of ["rules", "privacy", "disclaimer"]) expect(html).toContain(`<section id="${id}"`);
+    expect(html).toContain(">Rules</h2>"); expect(html).toContain(">Privacy &amp; Data Policy</h2>"); expect(html).toContain(">Disclaimer</h2>");
+    expect(items("rules").length).toBe(11); expect(items("privacy").length).toBe(9); expect(items("disclaimer").length).toBe(6);
+    for (const id of ["rules", "privacy", "disclaimer"]) for (const l of items(id)) expect(l.split(/\s+/).length).toBeLessThanOrEqual(30);
+    expect(html).toMatch(/<p class="muted">[^<]{1,60}<\/p>/);
+  });
+  test("the nine privacy lines, word for word, with typographic apostrophes", () => {
+    expect(items("privacy")).toEqual([
+      "We delete all participant data from our systems within 24 hours after the game ends.", "All data is encrypted, in transit and at rest.", "Participants never see each other’s data.", "We provide the software. The organizer runs the game.", "Backups clear within 7 days.",
+      "No advertising cookies or trackers. We never sell data.", "Exception: winner prize details are kept for 365 days, so the organizer can confirm the prize was handed over. They are then deleted automatically.", "Designed to follow India’s DPDP Act 2023, EU GDPR and US CCPA.",
+      "Questions or requests: our Grievance Officer, raajat.agarwal@gmail.com. We reply within 30 days."]);
+    expect(html).toContain('href="mailto:raajat.agarwal@gmail.com"');
+  });
+  test("the six disclaimer lines, word for word", () => {
+    expect(items("disclaimer")).toEqual(["This is a private game for a closed group, run by the organizer named on your ticket.", "Corporate Tambola provides the software only. Participants pay nothing to play.", "The organizer provides and hands over the prizes.", "The software decides the winners. Results are final.", "The organizer makes sure the game is allowed under local law.", "We are not responsible for prize handover or for disputes between the organizer and participants."]);
+  });
+  test("the rules say only what the software does (no claims, no manual cutting, no blocking), and the privacy timings match lifecycle.ts", () => {
+    const r = items("rules").join(" ");
+    expect(r).not.toMatch(/Cut your own|Late claims|wrong claim|block your ticket|for fun/i);
+    expect(r).toContain("Numbers 1 to 90 are drawn at random by the software."); expect(r).toContain("The 2nd Full House can only follow the 1st."); expect(r).toContain("One ticket per phone.");
+    const lc = read("apps/edge/src/lifecycle.ts");
+    expect(lc).toMatch(/PURGE_AFTER_MS = 22 \* 3_600_000/); // 22 h is inside "within 24 hours"
+    expect(lc).toMatch(/endMs \+ 365 \* DAY/); expect(lc).toMatch(/DELETE FROM prize WHERE eid=\?/); // prize details go with the 365-day deletion
+    expect(lc).toMatch(/DELETE FROM participant WHERE eid=\?/); expect(lc).toMatch(/DELETE FROM seat WHERE eid=\?/);
+  });
+});
