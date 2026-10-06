@@ -21,6 +21,7 @@ import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { GET_BODY_MAX, LINK_KEY, CONVERSATION, aiPaste, manualJson, manualText, type LinkRole } from "./ai-link";
+import { AUDIT_SCHEMA, auditRequest, analyzeChain, loadRows, logAccess, setHold, toCsv, verifyChain, closeAuditFor, sweepAudit, type AuditEnv } from "./audit";
 import { WINNERS_SCHEMA, acceptVotes, auditAi, confirmPrize, listAiAudit, listPrizes, markGiven, myPrizes } from "./winners";
 import { PAUSE_MAX_PARTICIPANTS, safetyForCap, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 
@@ -40,6 +41,8 @@ export interface Env {
   STRICT_KEYS?: string;
   /** Optional: a public R2 bucket behind a cached custom domain. Phones then read the pause file from the CDN and never invoke the Worker for it. */
   CONTROL_R2?: R2Like; CONTROL_BASE?: string;
+  /** Optional: an OpenAI-compatible chat endpoint the OWNER's 'analyze' route may send MASKED aggregates to (never IPs, device ids or names). */
+  ANALYZE_AI_URL?: string; ANALYZE_AI_KEY?: string; ANALYZE_AI_MODEL?: string;
 }
 const controlKey = (id: string) => `c/${id}.json`;
 const controlUrl = (env: Env, id: string) => (env.CONTROL_BASE && env.CONTROL_R2 ? `${env.CONTROL_BASE.replace(/\/$/, "")}/${controlKey(id)}` : null);
@@ -106,6 +109,8 @@ export const SCHEMA: string[] = [
   // partner codes are random; the partner's mobile number and e-mail are kept only as salted hashes
   `ALTER TABLE partner ADD COLUMN phone_hash TEXT`,
   `ALTER TABLE partner ADD COLUMN email_hash TEXT`,
+  // the internal audit log (append-only, hash-chained, sealed), the owner's access log, deletion certificates and anonymous statistics, legal holds
+  ...AUDIT_SCHEMA,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
@@ -307,7 +312,8 @@ async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promi
     method = mm; payload = asBody ?? "{}";
   } else if (req.method !== "GET" && req.method !== "HEAD") payload = await req.text();
   const h = new Headers({ "content-type": "application/json", "x-organizer": key, "x-ct-link": "1" });
-  for (const k of ["cf-connecting-ip", "user-agent", "cf-ipcountry"]) { const v = req.headers.get(k); if (v) h.set(k, v); }
+  for (const k of ["cf-connecting-ip", "user-agent", "cf-ipcountry", "cf-ray", "x-request-id", "x-ct-tz", "x-ct-client-ms", "x-ai-model", "x-ai-version", "x-ai-session", "x-ai-machine"]) { const v = req.headers.get(k); if (v) h.set(k, v); }
+  { const asn = (req as any).cf?.asn; if (asn) h.set("x-ct-asn", String(asn)); } // the real network number the Worker saw, passed on to the audit log
   const qs = q.toString();
   const inner = new Request(`${url.origin}/api/${rest}${qs ? "?" + qs : ""}`, { method, headers: h, body: payload });
   const r = await handle0(inner, env, now, waitUntil);
@@ -373,9 +379,9 @@ export const AI_MANIFEST = {
     { do: "Read the current pause status", call: "GET /api/z/{id}/control" },
     { do: "Send a message to every guest's phone and the big screen (160 characters; empty text clears it; once published)", call: "POST /api/z/{id}/announce {text}" },
     { do: "See the winners to hand rewards to, by ticket number (names and numbers stay in the console), and tick a reward as given", call: "GET /api/z/{id}/prizes ; POST /api/z/{id}/prizegiven {round, pattern, ordinal, seat, given}" },
-    { do: "Change of phone: let one person move their ticket to a new phone", call: "POST /api/z/{id}/unbind {phone}" },
-    { do: "Flag a seat as organizer, host or co-host", call: "POST /api/z/{id}/mark {phone, role: organizer|host|co-host|none}" },
-    { do: "Invitations: settle how many people each guest may invite and which kinds of guests, before the start", call: "PATCH /api/z/{id}/settings {invites: {on, per: 1-10, cats}}" },
+    { do: "Change of phone: let one person move their ticket to a new phone", call: "POST /api/z/{id}/unbind {seat} (the ticket number; the console takes a mobile number, an AI never does)" },
+    { do: "Flag a seat as organizer, host or co-host", call: "POST /api/z/{id}/mark {seat, role: organizer|host|co-host|none} (the ticket number; an AI never names a mobile number)" },
+    { do: "Invitations: settle how many people each guest may invite and which kinds of guests, before the start", call: "PATCH /api/z/{id}/settings {invites: {on, per: 1-4, cats}}" },
     { do: "Create a co-host key (watch, announce, tick rewards as given; up to 5)", call: "POST /api/org/host -> {hostKey, manualUrl}" },
     { do: "Read the audit trail of AI calls, when the game ends, and whether the report is ready (the report address itself goes only to the organizer)", call: "GET /api/org/ai/audit ; GET /api/z/{id}/life ; GET /api/z/{id}/reportlink" },
     { do: "Suggest a feature, improvement or report we should build (shared with every organizer's AI, reviewed by us)", call: "POST /api/z/suggestions {kind: feature|improvement|report|bug|other, title, body}" },
@@ -405,13 +411,17 @@ export const AI_MANIFEST = {
 /** Every call made with an organizer's AI key is written to an audit trail (when, which key, what was asked, the answer, and where it came from). */
 async function route(req: Request, env: Env, now: number): Promise<Response> {
   const a = await authOf(req, env, now);
+  const peek = req.method === "GET" || req.method === "HEAD" ? null : req.clone(); // the internal audit log reads the body from this copy; the route reads the original
   const r = await route0(req, env, now, a);
+  let kidForLog: string | null = null;
   if (a.org && (a.kind === "ai" || (a.kind === "host" && req.headers.get("x-ct-link") === "1"))) { // a co-host's calls are recorded too, when they come through a work link
     const presented = req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
     const kid = (await sha("key|" + presented)).slice(0, 10);
+    kidForLog = kid;
     await auditAi(env.DB, a.org, req, kid, r.status, now);
     if (r.status !== 403) await noteUse(env, a.org, a.kind === "ai" ? "ai" : "host", kid, req, now);
-  }
+  } else if (a.org && a.kind) kidForLog = (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 10);
+  await auditRequest(env as AuditEnv, req, peek, a, r.status, now, kidForLog);
   return r;
 }
 async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Response> {
@@ -532,7 +542,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (a.kind !== "master" || !a.org) return deny(a);
     if (!(await spend(env, now, 3))) return BUSY();
     const r = await replaceAiLink(env, req, a.org, now);
-    const presented = req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\sXX/i, "");
+    const presented = req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
     await auditAi(env.DB, a.org, new Request(new URL(req.url).origin + "/api/org/ai/replace", { method: "POST", headers: req.headers }), (await sha("key|" + presented)).slice(0, 10), 200, now);
     return json({ ok: true, ...r });
   }
@@ -583,6 +593,25 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (a.kind !== "master" && a.kind !== "ai" && !a.plat) return deny(a);
     return listAiAudit(env.DB, a.plat ? null : a.org, json);
   }
+  { // OWNER ONLY (platform key, never through an AI work link): the internal audit log. No organizer, co-host, participant or AI route reads it. Every use is written to the access log.
+    const om = p.match(/^\/api\/owner\/audit\/(access|(sys|org:[0-9a-f]{16}|[A-Za-z0-9_-]{4,40}))(?:\/(verify|analyze|hold))?$/);
+    if (om) {
+      const what = om[1] === "access" ? "access" : om[3] ?? "download", chain = om[2] ?? "", ownerOk = a.plat && req.headers.get("x-ct-link") !== "1";
+      if (!ownerOk) { await logAccess(env.DB, now, "denied:" + what, chain || null, null, 0, false, a.kind ?? "anonymous"); return json({ error: "Not found" }, 404); }
+      const aenv = env as AuditEnv;
+      if (what === "access") { const r = await env.DB.prepare("SELECT at_ms, action, eid, fmt, row_count, ok, note FROM audit_access ORDER BY id DESC LIMIT 500").all<any>(); await logAccess(env.DB, now, "read-access-log", null, null, (r.results ?? []).length); return json({ access: r.results ?? [] }); }
+      if (what === "verify" && req.method === "GET") { const v = await verifyChain(env.DB, chain); await logAccess(env.DB, now, "verify", chain, null, v.rows, v.ok); return json(v); }
+      if (what === "analyze" && req.method === "POST") { const out = await analyzeChain(aenv, chain); await logAccess(env.DB, now, "analyze", chain, out.summarizedBy, out.aggregate.rows); return json(out); }
+      if (what === "hold" && req.method === "POST") { const b = await body(req); await setHold(env.DB, chain, b?.on === true, now, typeof b?.note === "string" ? b.note : null); await logAccess(env.DB, now, b?.on === true ? "hold-on" : "hold-off", chain, null, 0); return json({ ok: true, held: b?.on === true }); }
+      if (what === "download" && req.method === "GET") {
+        const fmt = url.searchParams.get("format") === "csv" ? "csv" : "json", limit = Math.min(5000, Math.max(1, Number(url.searchParams.get("limit")) || 5000)), offset = Math.max(0, Number(url.searchParams.get("offset")) || 0);
+        const rows = await loadRows(aenv, chain, limit, offset);
+        await logAccess(env.DB, now, "download", chain, fmt, rows.length);
+        return fmt === "csv" ? new Response(toCsv(rows), { headers: { "content-type": "text/csv; charset=utf-8", "cache-control": "no-store", "content-disposition": `attachment; filename="audit-${chain.replace(/[^A-Za-z0-9_-]/g, "_")}.csv"` } }) : json({ chain, rows });
+      }
+      return json({ error: "Not found" }, 404);
+    }
+  }
   if (req.method === "POST" && p === "/api/org/close") { // "Close my organizer account": only the organizer's own sign-in key, never an AI key. Deletes the account and every engagement; payment and invoice records stay because the law requires them.
     if (a.kind !== "master" || !a.org) return deny(a);
     const b = await body(req);
@@ -595,7 +624,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     for (const k of keys) await env.DB.prepare("DELETE FROM kv WHERE k=? OR k=?").bind(`seen/${k.hash.slice(0, 10)}`, `alert/${k.hash.slice(0, 10)}`).run();
     await env.DB.batch([
       env.DB.prepare("DELETE FROM kv WHERE k=? OR k=?").bind(`orgmail/${a.org}`, `aikey/${a.org}`), env.DB.prepare("DELETE FROM organizer_email WHERE org=?").bind(a.org),
-      env.DB.prepare("DELETE FROM organizer_terms WHERE org=?").bind(a.org), env.DB.prepare("DELETE FROM ai_audit WHERE org=?").bind(a.org), env.DB.prepare("DELETE FROM organizer_key WHERE org=?").bind(a.org),
+      env.DB.prepare("DELETE FROM organizer_terms WHERE org=?").bind(a.org), env.DB.prepare("DELETE FROM ai_audit WHERE org=?").bind(a.org), env.DB.prepare("DELETE FROM audit_log WHERE chain=?").bind("org:" + a.org), env.DB.prepare("DELETE FROM organizer_key WHERE org=?").bind(a.org),
     ]);
     return json({ ok: true, closed: true, engagementsDeleted: engs.length });
   }
@@ -738,7 +767,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const draft = !a.plat && !ent;
     if (draft) {
       const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM engagement WHERE org=? AND pack=0").bind(a.org).first<{ c: number }>())?.c ?? 0;
-      if (n >= MAX_DRAFTS) return json({ error: `You have ${MAX_DRAFTS} unpublished drafts. Publish or delete one first.` }, 409);
+      if (n >= MAX_DRAFTS) return json({ error: `You have ${MAX_DRAFTS} unpublished drafts. Publish one, or let one lapse: an unpublished draft is forgotten after ${DRAFT_DAYS} days, and closing your organizer account deletes them all.` }, 409);
     }
     if (!(await spend(env, now, 2))) return BUSY();
     await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.closed ? 1 : 0, draft ? 0 : ent?.pack ?? b.cap, vc.cfg.tickets, cfgJson(vc.cfg)).run();
@@ -1181,12 +1210,13 @@ export async function purgeOld(env: Env, now: number): Promise<number> {
   // an engagement goes at 00:00 IST at the end of the 365th day after its game ended (created + 365 days if it never ran), and a draft nobody published after DRAFT_DAYS
   const loose = now - (RETENTION_DAYS - 2) * 86_400_000;
   const old = await env.DB.prepare("SELECT e.id AS id, e.created_ms AS created_ms, e.pack AS pack, l.end_ms AS end_ms FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE e.created_ms < ? OR (e.pack=0 AND e.created_ms < ?)").bind(loose, now - DRAFT_DAYS * 86_400_000).all<{ id: string; created_ms: number; pack: number; end_ms: number | null }>();
-  await env.DB.prepare("DELETE FROM ai_audit WHERE at_ms < ?").bind(now - RETENTION_DAYS * 86_400_000).run().catch(() => undefined); // the AI's audit trail is kept as long as the organizer's own details
+  await env.DB.prepare("DELETE FROM ai_audit WHERE at_ms < ?").bind(now - RETENTION_DAYS * 86_400_000).run().catch(() => undefined);
+  await sweepAudit(env.DB, now, RETENTION_DAYS); // the AI's audit trail is kept as long as the organizer's own details
   let n = 0;
   for (const x of old.results ?? []) {
     const due = x.end_ms != null ? now >= fullDeleteAt(x.end_ms) : x.created_ms < now - RETENTION_DAYS * 86_400_000 || (x.pack === 0 && x.created_ms < now - DRAFT_DAYS * 86_400_000);
     if (!due) continue;
-    await eraseEverything(env, x.id);
+    await eraseEverything(env, x.id, now);
     try { await env.CONTROL_R2?.delete(controlKey(x.id)); } catch { /* the object expires with its engagement anyway */ }
     n++;
   }

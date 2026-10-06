@@ -3,6 +3,7 @@
 //   2. 22 hours after the end (we promise 24) every participant's name, number, seat, invite record and ticket link is deleted, the report's working copies too;
 //   3. only the organizer / host / co-host details and the winners record (seat, prize, round, time) remain, until 00:00 IST at the end of the 365th day, then everything goes.
 // Called by the scheduled job (and, as a fallback, by any outside timer with the platform key). Every call does a bounded amount of work and can be repeated safely.
+import { closeAuditFor } from "./audit";
 import { GRACE_ROUNDS, INVITE_CATEGORIES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
 import { callRoundR, luckyRound } from "../../../packages/beacon/src/game";
 import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../../../packages/beacon/src/control";
@@ -115,8 +116,9 @@ export async function erasePersonal(env: Env, eid: string, now: number, by: stri
   ]);
 }
 /** Everything about an engagement, at the end of its 365 days (or for a draft nobody published). */
-export async function eraseEverything(env: Env, id: string): Promise<void> {
-  await erasePersonal(env, id, Date.now(), "retention");
+export async function eraseEverything(env: Env, id: string, now = Date.now()): Promise<void> {
+  if (!(await closeAuditFor(env as any, id, now))) return; // a legal hold: nothing of this engagement is deleted until it is lifted
+  await erasePersonal(env, id, now, "retention");
   await env.DB.batch([
     env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM prize WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
     env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`rptsalt/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`),
