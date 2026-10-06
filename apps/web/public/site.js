@@ -19,10 +19,17 @@
     });
     $("pack").innerHTML = TB.PACKS.map(([n]) => `<option value="${n}" ${n === S.pack ? "selected" : ""}>Up to ${nf(n)} participants</option>`).join("");
     if ($("heroBrk")) $("heroBrk").innerHTML = breakdown(S.pack, S.cur);
-    $("packs").innerHTML = TB.PACKS.map(([n]) => {
-      const x = TB.price(n, S.cur), shown = S.cur === "INR" ? x.base : x.total, was = S.cur === "INR" ? shown * 2 + 1 : shown * 2; // "was" is the regular price that applies after the festive offer
-      return `<div class="prow"><div class="pl"><b>Up to ${nf(n)} participants</b></div><div class="pr"><span class="pt"><span class="was" title="Regular price after the festive offer"><span class="sr">Regular price </span>${TB.money(was, S.cur)}</span><span class="tot"><small>Festive price</small> ${TB.money(shown, S.cur)}</span>${S.cur === "INR" ? '<em class="gstn">GST applicable</em>' : ""}</span><i class="off">Festive offer: 50% off</i><button type="button" class="btn ${n === 500 ? "" : "line"}" data-buy="${n}" aria-label="Create an engagement for up to ${nf(n)} participants">Create ${ic("arrow")}</button></div></div>`;
-    }).join("");
+    { // one price card: the organizer picks the size, then sees the festive price (never a list of every pack)
+      const n = S.pack, x = TB.price(n, S.cur), shown = S.cur === "INR" ? x.base : x.total, was = S.cur === "INR" ? shown * 2 + 1 : shown * 2; // "was" is the regular price that applies after the festive offer
+      const opts = TB.PACKS.map(([k]) => `<option value="${k}" ${k === n ? "selected" : ""}>Up to ${nf(k)} participants</option>`).join("");
+      const perks = ["All features included", "Free AI assistant to build your game", "Build it free, pay just before the game starts", "No fee to create or edit your game", "All participant data deleted within 24 hours", "One small amount, easy to pay and claim back"];
+      $("packs").innerHTML = `<div class="pcard"><div class="pwho"><label for="pack2">How many participants?</label><div class="selwrap"><select id="pack2" aria-label="Number of participants">${opts}</select><svg class="ic chev"><use href="#i-chev"/></svg></div></div>` +
+        `<div class="pmain"><div class="pburst" title="Festive offer: 50% off"><b>50% OFF</b><span>Festive offer</span><span class="sr">Festive offer: 50% off</span></div>` +
+        `<div class="pamt"><span class="was" title="Regular price after the festive offer"><span class="sr">Regular price after the festive offer </span>${TB.money(was, S.cur)}</span>` +
+        `<span class="tot"><small>Festive price</small> ${TB.money(shown, S.cur)}</span>${S.cur === "INR" ? '<em class="gstn">+ GST</em>' : ""}</div>` +
+        `<button type="button" class="btn pcta" data-buy="${n}" aria-label="Create an engagement for up to ${nf(n)} participants">Create your game ${ic("arrow")}</button></div>` +
+        `<ul class="pperks">${perks.map((t) => `<li><span class="tick" aria-hidden="true">&#10003;</span>${t}</li>`).join("")}</ul></div>`;
+    }
     if (FREE.on) { $("priceNote").textContent = "You build and publish your engagement for free. You pay before it starts: if it is not paid by the start time, it will not begin. " + (S.cur === "INR" ? "Prices in Indian rupees, before 18% GST. The full amount, with GST, is shown when you publish." : "Prices in US dollars, all-inclusive."); return; }
     $("priceNote").textContent = S.cur === "INR" ? "Prices in Indian rupees, before 18% GST. The full amount, with GST, is shown when you publish. Billed in India." : "Prices in US dollars, all-inclusive. Billed outside India.";
   }
@@ -33,6 +40,7 @@
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") TB.closeSheet(); });
   $("pack").addEventListener("change", (e) => { S.pack = +e.target.value; renderPrices(); });
+  document.addEventListener("change", (e) => { if (e.target && e.target.id === "pack2") { S.pack = +e.target.value; renderPrices(); const f = $("pack2"); if (f) f.focus(); } });
   $("payBtn").addEventListener("click", () => openCheckout(S.pack));
   $("loginLink").addEventListener("click", (e) => { e.preventDefault(); openLogin(""); });
 
