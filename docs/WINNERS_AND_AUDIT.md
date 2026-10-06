@@ -28,3 +28,6 @@ Every call made with an AI key is written to `ai_audit` (time, key id, method an
 * The quorum protects against one or a few cheating phones. If more than the quorum of cheating phones with different numbers agree on a false result, it would be accepted. Joining needs a mobile number, one ticket per phone, and the organizer sees who joined.
 * One phone could still be a second phone for a different person if they clear the browser's saved data (a new device id), then use a different number.
 * Nothing in a browser can be made uncopyable. Copying is deterred by law (terms and copyright), not by code.
+
+## Internal audit log (2026-10-06)
+The per-AI trail above (`ai_audit`) stays as the organizer's own view of what their AI did. Beside it, `audit_log` (`apps/edge/src/audit.ts`) is the internal, sealed, hash-chained log of everything in an engagement. It is owner-only (platform key): `GET /api/owner/audit/<id>[?format=csv]`, `/verify`, `POST /analyze`, `POST /hold`, `GET /api/owner/audit/access`. Full description: `docs/PRIVACY_AND_LIFECYCLE.md`.
