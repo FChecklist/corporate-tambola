@@ -22,7 +22,7 @@
     { // one price card: the organizer picks the size, then sees the festive price (never a list of every pack)
       const n = S.pack, x = TB.price(n, S.cur), shown = S.cur === "INR" ? x.base : x.total, was = S.cur === "INR" ? shown * 2 + 1 : shown * 2; // "was" is the regular price that applies after the festive offer
       const opts = TB.PACKS.map(([k]) => `<option value="${k}" ${k === n ? "selected" : ""}>Up to ${nf(k)} participants</option>`).join("");
-      const perks = ["All features included", "Free AI assistant to build your game", "Build it free, pay just before the game starts", "No fee to create or edit your game", "All participant data deleted within 24 hours", "One small amount, easy to pay and claim back"];
+      const perks = ["All features included", "Free AI assistant to build your game", "Unlimited fun for your company&rsquo;s extended family", "Your brand and message breaks: play your video or audio", "Everyone engaged", "Create positive vibes", "Build it free, pay just before the game starts", "No fee to create or edit your game", "All participant data deleted within 24 hours", "A small amount, simple for HR / Admin to pay and claim back"];
       $("packs").innerHTML = `<div class="pcard"><div class="pwho"><label for="pack2">How many participants?</label><div class="selwrap"><select id="pack2" aria-label="Number of participants">${opts}</select><svg class="ic chev"><use href="#i-chev"/></svg></div></div>` +
         `<div class="pmain"><div class="pburst" title="Festive offer: 50% off"><b>50% OFF</b><span>Festive offer</span><span class="sr">Festive offer: 50% off</span></div>` +
         `<div class="pamt"><span class="was" title="Regular price after the festive offer"><span class="sr">Regular price after the festive offer </span>${TB.money(was, S.cur)}</span>` +
@@ -201,4 +201,27 @@
   }
   const hashLogin = () => { if (location.hash === "#login") openLogin(""); };
   window.addEventListener("hashchange", hashLogin); hashLogin();
+})();
+
+// ---------- small sticky bar: appears after scrolling; the brand returns to the top, the button jumps to the price card ----------
+(function () {
+  if (document.getElementById("topbar")) return;
+  var bar = document.createElement("div");
+  bar.id = "topbar"; bar.setAttribute("role", "navigation"); bar.setAttribute("aria-label", "Quick links"); bar.hidden = true;
+  bar.innerHTML = '<button type="button" class="tb-brand" id="tbTop" aria-label="Back to the top"><span class="tb-mark" aria-hidden="true">&#9733;</span><b>Corporate Tambola</b><span class="tb-up" aria-hidden="true">&#8593; Top</span></button>' +
+    '<a class="tb-cta" id="tbBuy" href="#pricing">Create your game</a>';
+  document.body.appendChild(bar);
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches, shown = false, tick = 0;
+  function onScroll() {
+    if (tick) return; tick = requestAnimationFrame(function () {
+      tick = 0; var show = (window.scrollY || document.documentElement.scrollTop || 0) > 360;
+      if (show !== shown) { shown = show; bar.hidden = !show; bar.classList.toggle("on", show); }
+    });
+  }
+  window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
+  document.getElementById("tbTop").addEventListener("click", function () { window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" }); });
+  document.getElementById("tbBuy").addEventListener("click", function (e) {
+    var t = document.getElementById("pricing"); if (!t) return; e.preventDefault();
+    t.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  });
 })();

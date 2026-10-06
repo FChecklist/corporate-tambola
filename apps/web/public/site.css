@@ -144,3 +144,15 @@ body{overflow-x:hidden}
 .pwho select{font-size:15px;padding-right:38px}
 @media (max-width:560px){.pburst{width:96px;height:96px}.pburst b{font-size:22px}.pwho .selwrap{max-width:none}.pmain{padding:14px}}
 @media (max-width:560px){.pwho select{font-size:14px;padding-left:10px;padding-right:32px}}
+
+/* sticky quick bar (appears after scrolling): brand = back to top, button = jump to the price card */
+#topbar{position:fixed;top:0;left:0;right:0;z-index:60;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px max(14px,env(safe-area-inset-left));background:rgba(46,8,18,.94);backdrop-filter:blur(6px);box-shadow:0 6px 18px rgba(0,0,0,.25);transform:translateY(-100%);transition:transform .22s ease}
+#topbar.on{transform:none}
+#topbar[hidden]{display:none}
+#topbar .tb-brand{display:inline-flex;align-items:center;gap:10px;background:none;border:0;color:#fff;cursor:pointer;padding:6px 4px;min-height:44px;font:700 17px var(--serif)}
+#topbar .tb-mark{width:28px;height:28px;border-radius:8px;background:var(--gold);color:var(--deep);display:inline-flex;align-items:center;justify-content:center;font-size:15px}
+#topbar .tb-up{font:600 12px var(--sans);color:var(--gold2);letter-spacing:.06em;text-transform:uppercase;border:1px solid rgba(243,217,164,.45);border-radius:99px;padding:3px 9px}
+#topbar .tb-cta{background:var(--gold);color:var(--deep);font:800 14px var(--sans);text-decoration:none;border-radius:10px;padding:0 16px;min-height:44px;display:inline-flex;align-items:center;white-space:nowrap}
+#topbar .tb-cta:hover{background:var(--gold2)}
+@media (max-width:420px){#topbar .tb-brand b{display:none}#topbar .tb-cta{flex:1;justify-content:center}}
+@media (prefers-reduced-motion:reduce){#topbar{transition:none}}
