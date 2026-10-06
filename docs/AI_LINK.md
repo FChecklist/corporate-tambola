@@ -49,7 +49,7 @@ Files: `apps/edge/src/ai-link.ts` (the words), `apps/edge/src/worker.ts` (`aiLin
 | Action (console) | Organizer AI (`cta_`) | Co-host (`cth_`) | Why |
 |---|---|---|---|
 | Create engagement, settings (time, speed, limit, tickets, rewards, breaks, rounds, invite-only, invitation policy) | allowed (draft, before the first number) | no | same as before; invitations added to the summary |
-| Load roster, reuse an earlier list | allowed | no | |
+| Load roster, reuse an earlier list | **no: owner only, in the console** (an AI key gets 403 for any roster call; names and numbers never pass through an AI) | no | corrected 2026-10-06; the earlier "allowed" was out of date |
 | Read summary, participants (ids only), info, results, claims, life, history, pause status | allowed | summary/info/participants/results/life | |
 | Announce to guests | **now allowed** (once published; 160 chars, 1 per 5 s) | allowed | a text to phones, no data or money |
 | Mark a seat organizer/host/co-host, change of phone (unbind) | **now allowed** | no | organizer-level housekeeping, audited |
