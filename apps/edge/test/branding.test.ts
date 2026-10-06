@@ -117,14 +117,14 @@ describe("the legal page carries the owner's final text, and each line matches w
   test("anchors, headings, counts, and one short line each", () => {
     for (const id of ["rules", "privacy", "disclaimer"]) expect(html).toContain(`<section id="${id}"`);
     expect(html).toContain(">Rules</h2>"); expect(html).toContain(">Privacy &amp; Data Policy</h2>"); expect(html).toContain(">Disclaimer</h2>");
-    expect(items("rules").length).toBe(11); expect(items("privacy").length).toBe(12); expect(items("disclaimer").length).toBe(6);
+    expect(items("rules").length).toBe(11); expect(items("privacy").length).toBe(13); expect(items("disclaimer").length).toBe(6);
     for (const id of ["rules", "privacy", "disclaimer"]) for (const l of items(id)) expect(l.split(/\s+/).length).toBeLessThanOrEqual(30);
     expect(html).toMatch(/<p class="muted">[^<]{1,80}<\/p>/);
   });
-  test("the twelve privacy lines, word for word, with typographic apostrophes", () => {
+  test("the thirteen privacy lines, word for word, with typographic apostrophes", () => {
     expect(items("privacy")).toEqual([
       "We delete all participant data from our systems within 24 hours after the game ends.", "All data is encrypted, in transit and at rest.", "Participants never see each other’s data.", "We provide the software. The organizer runs the game.", "Backups clear within 7 days.",
-      "No advertising cookies or trackers. We never sell data.", "Your phone keeps a random device id, your ticket and saved game files, so the game works offline.", "Exception: winner prize details are kept for 365 days, so the organizer can confirm the prize was handed over. They are then deleted automatically.", "Designed to follow India’s DPDP Act 2023, EU GDPR and US CCPA.", "Your phone contacts drand for public random numbers, and YouTube (privacy mode) only if your organizer adds a video.", "You may also complain to the Data Protection Board of India.",
+      "No advertising cookies or trackers. We never sell data.", "Your phone keeps a random device id, your ticket and saved game files, so the game works offline.", "Exception: winner prize details are kept for 365 days, so the organizer can confirm the prize was handed over. They are then deleted automatically.", "Fair play. We keep a private, encrypted record of game activity to keep every game fair. Only we can see it. Removed automatically 365 days after your game ends.", "Designed to follow India’s DPDP Act 2023, EU GDPR and US CCPA.", "Your phone contacts drand for public random numbers, and YouTube (privacy mode) only if your organizer adds a video.", "You may also complain to the Data Protection Board of India.",
       "Questions or requests: our Grievance Officer, raajat.agarwal@gmail.com. We reply within 30 days."]);
     expect(html).toContain('href="mailto:raajat.agarwal@gmail.com"');
   });
