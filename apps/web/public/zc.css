@@ -11,3 +11,4 @@
 .zc .lastbar b{color:var(--gold2)}
 .zc .lastbar button{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:8px;min-height:36px;padding:0 12px;margin-left:6px}
 .zc table{width:100%;border-collapse:collapse;font-size:14px}.zc td,.zc th{padding:6px 4px;border-top:1px solid var(--line2);text-align:left}
+.ztest{background:#FFF4D6;color:#5B4300;border-bottom:1px solid #E8D39A;padding:8px 14px;font-size:14px;text-align:center}

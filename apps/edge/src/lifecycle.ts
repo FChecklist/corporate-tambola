@@ -124,6 +124,14 @@ export async function erasePersonal(env: Env, eid: string, now: number, by: stri
 export async function eraseEverything(env: Env, id: string, now = Date.now()): Promise<void> {
   if (!(await closeAuditFor(env as any, id, now))) return; // a legal hold: nothing of this engagement is deleted until it is lifted
   await erasePersonal(env, id, now, "retention");
+  await deleteEngagementRows(env, id);
+}
+/** TEST-mode clean-up (test-data.ts): everything about an engagement, EXCEPT the append-only internal audit log and its certificates, and without a legal-hold check (test data is never held). */
+export async function purgeTestEngagement(env: Env, id: string, now = Date.now()): Promise<void> {
+  await erasePersonal(env, id, now, "test-purge");
+  await deleteEngagementRows(env, id);
+}
+async function deleteEngagementRows(env: Env, id: string): Promise<void> {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM prize WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
     env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`rptsalt/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`),

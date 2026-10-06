@@ -8,6 +8,7 @@
 //   - Payouts are made by us, outside this Worker (KYC, TDS and the payout channel are decided separately); here we only record that a payout was made.
 import type { D1, Env } from "./worker";
 import { sendMail, type PayEnv } from "./pay";
+import { testFlag } from "./mode";
 
 export const ATTRIBUTION_DAYS = 30;
 /** The commission every partner earns on the software price (before GST) of a paid, referred purchase. Owner decision 2026-10-03: 50%. PARTNER_COMMISSION_RATE can lower it (never above 50%). */
@@ -44,7 +45,7 @@ export async function recordCommission(env: PayEnv, p: { id: string; ref?: strin
     const repeat = !!earlier;
     const code = earlier?.code ?? p.ref;
     if (!code) return;
-    const partner = await env.DB.prepare("SELECT code, phone_hash FROM partner WHERE code=? AND state='active'").bind(code).first<{ code: string; phone_hash: string | null }>();
+    const partner = await env.DB.prepare("SELECT code, phone_hash, is_test FROM partner WHERE code=? AND state='active'").bind(code).first<{ code: string; phone_hash: string | null; is_test: number }>();
     if (!partner) return; // unknown or stopped code: the purchase is simply not attributed
     let status = "pending_rate", reason: string | null = null, rate: number | null = null, amount: number | null = null;
     if (p.buyer_phone_hash && partner.phone_hash && p.buyer_phone_hash === partner.phone_hash) { status = "blocked"; reason = "self_referral"; }
@@ -54,7 +55,7 @@ export async function recordCommission(env: PayEnv, p: { id: string; ref?: strin
       const x = repeat ? Math.min(REPEAT_COMMISSION_RATE, first) : first; // 20% when the customer buys again within 12 months
       rate = x; amount = r2(base * x); status = "accrued";
     }
-    await env.DB.prepare("INSERT OR IGNORE INTO commission(payment_id,partner_code,base,currency,rate,amount,status,reason,created_ms) VALUES(?,?,?,?,?,?,?,?,?)").bind(p.id, partner.code, base, p.currency, rate, amount, status, reason, now).run();
+    await env.DB.prepare("INSERT OR IGNORE INTO commission(payment_id,partner_code,base,currency,rate,amount,status,reason,created_ms,is_test) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(p.id, partner.code, base, p.currency, rate, amount, status, reason, now, (p as any).is_test || partner.is_test ? 1 : 0).run(); // a test payment or a test partner makes a test commission: it never counts in real figures
   } catch { /* a ledger problem must never undo a paid purchase; the payment row still carries the ref so it can be rebuilt */ }
 }
 
@@ -126,7 +127,7 @@ export async function partnerRoute(req: Request, env: PayEnv, now: number, spend
     const have = await db.prepare("SELECT code FROM partner WHERE phone_hash=? OR email_hash=?").bind(e.ph, eh).first();
     if (have) { await db.prepare("DELETE FROM kv WHERE k=?").bind(`penr/${eh}`).run(); return bad(); }
     const key = "ctp_" + randHex(20), ref = newRefCode();
-    await db.prepare("INSERT OR IGNORE INTO partner(code,key_hash,name,source,enrolled_ms,consent_ms,state,phone_hash,email_hash) VALUES(?,?,?,?,?,?, 'active',?,?)").bind(ref, await sha("partner|" + key), e.nm || null, e.src, now, now, e.ph, eh).run();
+    await db.prepare("INSERT OR IGNORE INTO partner(code,key_hash,name,source,enrolled_ms,consent_ms,state,phone_hash,email_hash,is_test) VALUES(?,?,?,?,?,?, 'active',?,?,?)").bind(ref, await sha("partner|" + key), e.nm || null, e.src, now, now, e.ph, eh, await testFlag(env)).run();
     await db.prepare("DELETE FROM kv WHERE k=?").bind(`penr/${eh}`).run();
     return json({ ok: true, code: ref, partnerKey: key, link: `${origin}/?ref=${ref}` });
   }
@@ -141,12 +142,12 @@ export async function partnerRoute(req: Request, env: PayEnv, now: number, spend
   const me = async () => {
     const k = req.headers.get("x-partner") ?? "";
     if (!k) return null;
-    return db.prepare("SELECT code, name, state, enrolled_ms FROM partner WHERE key_hash=?").bind(await sha("partner|" + k)).first<{ code: string; name: string | null; state: string; enrolled_ms: number }>();
+    return db.prepare("SELECT code, name, state, enrolled_ms, is_test FROM partner WHERE key_hash=?").bind(await sha("partner|" + k)).first<{ code: string; name: string | null; state: string; enrolled_ms: number; is_test: number }>();
   };
   if (req.method === "GET" && p === "/api/partner/me") {
     const m = await me();
     if (!m) return json({ error: "Not allowed." }, 403);
-    const rows = (await db.prepare("SELECT c.payment_id, c.base, c.currency, c.rate, c.amount, c.status, c.reason, c.created_ms, pay.pack FROM commission c LEFT JOIN payment pay ON pay.id=c.payment_id WHERE c.partner_code=? ORDER BY c.id DESC LIMIT 200").bind(m.code).all<any>()).results ?? [];
+    const rows = (await db.prepare("SELECT c.payment_id, c.base, c.currency, c.rate, c.amount, c.status, c.reason, c.created_ms, pay.pack FROM commission c LEFT JOIN payment pay ON pay.id=c.payment_id WHERE c.partner_code=? AND c.is_test=? ORDER BY c.id DESC LIMIT 200").bind(m.code, m.is_test ? 1 : 0).all<any>()).results ?? [];
     const sum = (st: string) => r2(rows.filter((r: any) => r.status === st && r.currency === "INR").reduce((s: number, r: any) => s + (r.amount ?? 0), 0));
     return json({
       code: m.code, name: m.name, state: m.state, link: `${origin}/?ref=${m.code}`, attributionDays: ATTRIBUTION_DAYS,
@@ -159,14 +160,15 @@ export async function partnerRoute(req: Request, env: PayEnv, now: number, spend
   // ---- us (platform) ----
   if (!platform) return json({ error: "Not allowed." }, 403);
   if (req.method === "GET" && p === "/api/partners") {
-    const rows = (await db.prepare("SELECT p.code, p.name, p.state, p.source, p.enrolled_ms, (SELECT COUNT(*) FROM commission c WHERE c.partner_code=p.code) AS sales, (SELECT COALESCE(SUM(amount),0) FROM commission c WHERE c.partner_code=p.code AND status='accrued') AS accrued FROM partner p ORDER BY p.enrolled_ms DESC LIMIT 500").all<any>()).results ?? [];
+    const t = url.searchParams.get("mode") === "test" ? 1 : 0; // the owner's list shows real partners unless the test ones are asked for
+    const rows = (await db.prepare("SELECT p.code, p.name, p.state, p.source, p.enrolled_ms, (SELECT COUNT(*) FROM commission c WHERE c.partner_code=p.code AND c.is_test=?) AS sales, (SELECT COALESCE(SUM(amount),0) FROM commission c WHERE c.partner_code=p.code AND status='accrued' AND c.is_test=?) AS accrued FROM partner p WHERE p.is_test=? ORDER BY p.enrolled_ms DESC LIMIT 500").bind(t, t, t).all<any>()).results ?? [];
     return json({ partners: rows });
   }
   if (req.method === "POST" && p === "/api/partners/commission/rate") { // set the rate once it is decided; applies to every sale still waiting for one
     const b = await body(req);
     const rate = Number(b?.rate);
     if (!b || typeof b.rate !== "number" || !(rate >= 0 && rate <= 0.5)) return json({ error: "Rate must be between 0 and 0.5 (50%)." }, 400);
-    const rows = (await db.prepare("SELECT id, base FROM commission WHERE status='pending_rate'").all<any>()).results ?? [];
+    const rows = (await db.prepare("SELECT id, base FROM commission WHERE status='pending_rate' AND is_test=0").all<any>()).results ?? [];
     if (!(await spend(rows.length + 1))) return busy();
     for (const r of rows) await db.prepare("UPDATE commission SET rate=?, amount=?, status='accrued' WHERE id=? AND status='pending_rate'").bind(rate, r2(r.base * rate), r.id).run();
     return json({ ok: true, applied: rows.length });
@@ -175,7 +177,7 @@ export async function partnerRoute(req: Request, env: PayEnv, now: number, spend
     const b = await body(req);
     const code = refCode(b?.code);
     if (!b || !code || typeof b.reference !== "string" || b.reference.length < 3) return json({ error: "Give the partner code and the payment reference." }, 400);
-    const r = await db.prepare("UPDATE commission SET status='paid', paid_ref=?, paid_ms=? WHERE partner_code=? AND status='accrued'").bind(b.reference.slice(0, 80), now, code).run();
+    const r = await db.prepare("UPDATE commission SET status='paid', paid_ref=?, paid_ms=? WHERE partner_code=? AND status='accrued' AND is_test=0").bind(b.reference.slice(0, 80), now, code).run();
     return json({ ok: true, paidRows: r.meta?.changes ?? 0 });
   }
   if (req.method === "POST" && p === "/api/partners/commission/void") { // a refunded purchase earns nothing

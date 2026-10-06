@@ -10,6 +10,7 @@
 //     smaller visitor-tracking allowance (VISIT_DAILY_WRITES, default 20,000), so marketing numbers can never starve the games.
 //   - Reports are owner-only (platform key, same as the audit log) and every read is written to the audit access log.
 import { parseUa } from "./audit";
+import { isTestMode, orgIsTest } from "./mode";
 import type { D1, Env } from "./worker";
 
 export interface VisitEnv extends Env { VISIT_KEY?: string; VISIT_DAILY_WRITES?: string; PUBLIC_ORIGIN?: string }
@@ -170,6 +171,7 @@ export async function beaconRoute(req: Request, env: VisitEnv, now: number, spen
   if (rateLimited("ip/" + (iph || ip || "local"), now) || rateLimited("sid/" + b.sid, now)) return none(429);
   if (!b.evs.length) return none();
   const db = env.DB, cap = Number(env.VISIT_DAILY_WRITES ?? VISIT_DAILY_WRITES), cf = (req as any).cf ?? {};
+  const testNow = await isTestMode(env); // TEST mode (mode.ts): visits are kept apart (is_test) and never reach the owner's reports
   const bot = botName(ua), private_ = !bot && (b.gpc || gpcOn(req));
   const day = new Date(now).toISOString().slice(0, 10);
   const country = String(cf.country ?? req.headers.get("cf-ipcountry") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3);
@@ -178,6 +180,7 @@ export async function beaconRoute(req: Request, env: VisitEnv, now: number, spen
   if (!evs.length) return none();
   const stage = Math.max(0, ...evs.map((e) => (e.k === "act" ? (e.n === "pack" ? 2 : e.n === "create" ? 3 : 0) : e.k === "sec" && e.n === "pricing" ? 1 : 0)));
 
+  if (private_ && testNow) return none(); // not even an anonymous counter for a test visit
   if (private_) { // counts only: nothing that could point back to one visitor
     const bump = (dim: string, k: string, n = 1, ms = 0) => db.prepare("INSERT INTO visit_agg(day,dim,k,n,ms) VALUES(?,?,?,?,?) ON CONFLICT(day,dim,k) DO UPDATE SET n=n+excluded.n, ms=ms+excluded.ms").bind(day, dim, k, n, ms);
     const s = [];
@@ -202,8 +205,8 @@ export async function beaconRoute(req: Request, env: VisitEnv, now: number, spen
     const vno = vid ? ((await db.prepare("SELECT COUNT(*) AS c FROM visit_session WHERE vid=?").bind(vid).first<{ c: number }>())?.c ?? 0) + 1 : 1;
     const ino = iph && !bot ? ((await db.prepare("SELECT COUNT(*) AS c FROM visit_session WHERE iph=?").bind(iph).first<{ c: number }>())?.c ?? 0) + 1 : 1;
     const { browser, os } = parseUa(ua);
-    stmts.push(db.prepare("INSERT OR IGNORE INTO visit_session(sid,vid,iph,ipshort,first_ms,last_ms,landing,src,ref_host,utm_source,utm_medium,utm_campaign,partner,device,browser,os,lang,country,city,is_bot,visit_no,ip_visit_no) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-      .bind(b.sid, vid || null, iph || null, shortIp(ip) || null, now, now, landing, src, label || null, b.utm.s || null, b.utm.m || null, b.utm.c || null, b.partner || null, b.dv || null, bot ? bot : browser, os, b.lang || null, country || null, city || null, bot ? 1 : 0, vno, ino));
+    stmts.push(db.prepare("INSERT OR IGNORE INTO visit_session(sid,vid,iph,ipshort,first_ms,last_ms,landing,src,ref_host,utm_source,utm_medium,utm_campaign,partner,device,browser,os,lang,country,city,is_bot,visit_no,ip_visit_no,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .bind(b.sid, vid || null, iph || null, shortIp(ip) || null, now, now, landing, src, label || null, b.utm.s || null, b.utm.m || null, b.utm.c || null, b.partner || null, b.dv || null, bot ? bot : browser, os, b.lang || null, country || null, city || null, bot ? 1 : 0, vno, ino, testNow ? 1 : 0));
   }
   const last = [...evs].reverse().find((e) => e.k === "exit");
   for (const e of evs) stmts.push(db.prepare("INSERT INTO visit_event(sid,at_ms,kind,path,name,val,n) VALUES(?,?,?,?,?,?,?)").bind(b.sid, now, e.k, e.p, e.n || null, e.v || null, e.k === "sec" ? e.m : e.k === "exit" ? e.m : e.num));
@@ -219,6 +222,7 @@ export async function beaconRoute(req: Request, env: VisitEnv, now: number, spen
 /** Called when an organizer account is made (via "start") or signs in: ties the visitor's earlier visits to that organizer, so later steps are counted against the first source. */
 export async function linkVisitor(env: VisitEnv, req: Request, org: string, via: "start" | "signin", now: number, email = ""): Promise<void> {
   try {
+    if (await isTestMode(env)) return; // a test account never claims a real visitor's earlier visits
     const hdrVid = req.headers.get("x-ct-vid") ?? "", sid = /^[a-f0-9]{16,32}$/.test(req.headers.get("x-ct-vs") ?? "") ? req.headers.get("x-ct-vs")! : "";
     const vid = gpcOn(req) ? "" : /^[a-f0-9]{32}$/.test(hdrVid) ? hdrVid : cookieVid(req);
     const eh = await emailHash(env, email);
@@ -230,7 +234,7 @@ export async function linkVisitor(env: VisitEnv, req: Request, org: string, via:
 /** A later funnel step for an organizer: counted once, against the visitor's first visit. With no visit on record (private browsing or a direct link) it only raises an anonymous counter. */
 export async function recordFunnelForOrg(env: { DB: D1 }, org: string | null | undefined, step: Step, now: number): Promise<void> {
   try {
-    if (!org) return;
+    if (!org || (await orgIsTest(env, org))) return; // a test account never counts in the funnel
     const db = env.DB, s = await db.prepare("SELECT sid FROM visit_session WHERE org=? AND is_bot=0 ORDER BY first_ms ASC LIMIT 1").bind(org).first<{ sid: string }>();
     if (!s) { await db.prepare("INSERT INTO visit_agg(day,dim,k,n,ms) VALUES(?,?,?,1,0) ON CONFLICT(day,dim,k) DO UPDATE SET n=n+1").bind(new Date(now).toISOString().slice(0, 10), "gpc_fun", step).run(); return; }
     if (await db.prepare("SELECT 1 AS x FROM visit_event WHERE sid=? AND kind='fun' AND name=? LIMIT 1").bind(s.sid, step).first()) return;
@@ -278,12 +282,12 @@ export function parseRange(sp: URLSearchParams, now: number): { from: number; to
   if (to - from > 366 * DAY) from = to - 366 * DAY;
   return { from, to };
 }
-export async function visitsSummary(env: VisitEnv, from: number, to: number) {
+export async function visitsSummary(env: VisitEnv, from: number, to: number, test = false) {
   const db = env.DB;
-  const rows = (await db.prepare("SELECT sid,vid,iph,first_ms,last_ms,src,ref_host,landing,device,lang,country,city,is_bot,visit_no,ip_visit_no,pages,exit_path,exit_section,exit_ms,exit_scroll,stage,browser FROM visit_session WHERE first_ms>=? AND first_ms<? ORDER BY first_ms LIMIT 50000").bind(from, to).all<SessRow>()).results ?? [];
+  const rows = (await db.prepare("SELECT sid,vid,iph,first_ms,last_ms,src,ref_host,landing,device,lang,country,city,is_bot,visit_no,ip_visit_no,pages,exit_path,exit_section,exit_ms,exit_scroll,stage,browser FROM visit_session WHERE first_ms>=? AND first_ms<? AND is_test=? ORDER BY first_ms LIMIT 50000").bind(from, to, test ? 1 : 0).all<SessRow>()).results ?? [];
   const base = summarize(rows);
-  const sec = (await db.prepare("SELECT e.path AS path, e.name AS name, COUNT(DISTINCT e.sid||'|'||e.path) AS views, COALESCE(SUM(e.n),0) AS dwell FROM visit_event e JOIN visit_session s ON s.sid=e.sid WHERE e.kind='sec' AND e.at_ms>=? AND e.at_ms<? AND s.is_bot=0 GROUP BY e.path, e.name ORDER BY views DESC LIMIT 60").bind(from, to).all<any>()).results ?? [];
-  const act = (await db.prepare("SELECT e.name AS name, e.n AS num, e.val AS val, COUNT(*) AS c FROM visit_event e JOIN visit_session s ON s.sid=e.sid WHERE e.kind='act' AND e.at_ms>=? AND e.at_ms<? AND s.is_bot=0 GROUP BY e.name, e.n, e.val ORDER BY c DESC LIMIT 300").bind(from, to).all<any>()).results ?? [];
+  const sec = (await db.prepare("SELECT e.path AS path, e.name AS name, COUNT(DISTINCT e.sid||'|'||e.path) AS views, COALESCE(SUM(e.n),0) AS dwell FROM visit_event e JOIN visit_session s ON s.sid=e.sid WHERE e.kind='sec' AND e.at_ms>=? AND e.at_ms<? AND s.is_bot=0 AND s.is_test=? GROUP BY e.path, e.name ORDER BY views DESC LIMIT 60").bind(from, to, test ? 1 : 0).all<any>()).results ?? [];
+  const act = (await db.prepare("SELECT e.name AS name, e.n AS num, e.val AS val, COUNT(*) AS c FROM visit_event e JOIN visit_session s ON s.sid=e.sid WHERE e.kind='act' AND e.at_ms>=? AND e.at_ms<? AND s.is_bot=0 AND s.is_test=? GROUP BY e.name, e.n, e.val ORDER BY c DESC LIMIT 300").bind(from, to, test ? 1 : 0).all<any>()).results ?? [];
   const actions = new Map<string, number>(), size = new Map<number, { size: number; n: number; shown: { price: string; n: number }[] }>(), cur = new Map<string, number>();
   for (const a of act) {
     actions.set(a.name, (actions.get(a.name) ?? 0) + a.c);
@@ -293,7 +297,7 @@ export async function visitsSummary(env: VisitEnv, from: number, to: number) {
   const d0 = new Date(from).toISOString().slice(0, 10), d1 = new Date(to - 1).toISOString().slice(0, 10);
   const agg = (await db.prepare("SELECT day, dim, k, n, ms FROM visit_agg WHERE day>=? AND day<=? ORDER BY day, dim, k LIMIT 3000").bind(d0, d1).all<any>()).results ?? [];
   return {
-    from, to, fromDay: d0, toDay: d1, ...base,
+    from, to, fromDay: d0, toDay: d1, mode: test ? "test" : "live", ...base,
     sections: sec.map((s: any) => ({ section: s.path + "#" + s.name, views: s.views, avgDwellMs: s.views ? Math.round(s.dwell / s.views) : 0 })),
     actions: [...actions.entries()].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n),
     sizeChoice: [...size.values()].sort((a, b) => a.size - b.size), currencyChoice: [...cur.entries()].map(([currency, n]) => ({ currency, n })),
@@ -318,6 +322,9 @@ export async function visitsJourney(env: VisitEnv, id: string) {
 /** 365 days after a session began, its totals go into anonymous per-day rows and the session and its events are deleted. A few days of catch-up per call. */
 export async function sweepVisits(env: { DB: D1 }, now: number, days = VISIT_RETENTION_DAYS, maxDays = 7): Promise<{ days: number; sessions: number }> {
   const db = env.DB, cutoff = now - days * DAY, out = { days: 0, sessions: 0 };
+  // test visits are never rolled into the anonymous totals: they are simply forgotten with the same age limit
+  await db.prepare("DELETE FROM visit_event WHERE sid IN (SELECT sid FROM visit_session WHERE is_test=1 AND first_ms<?)").bind(cutoff).run();
+  await db.prepare("DELETE FROM visit_session WHERE is_test=1 AND first_ms<?").bind(cutoff).run();
   for (let i = 0; i < maxDays; i++) {
     const m = (await db.prepare("SELECT MIN(first_ms) AS m FROM visit_session WHERE first_ms<?").bind(cutoff).first<{ m: number | null }>())?.m;
     if (m == null) break;

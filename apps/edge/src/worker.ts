@@ -20,6 +20,8 @@ import { acceptOver, acceptWon, endBoundMs, eraseEverything, erasePersonal, full
 import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
+import { MODE_SCHEMA, modeRoute, orgIsTest, testFlag } from "./mode";
+import { purgeTestData } from "./test-data";
 import { GET_BODY_MAX, LINK_KEY, CONVERSATION, aiPaste, manualJson, manualText, type LinkRole } from "./ai-link";
 import { AUDIT_SCHEMA, auditRequest, analyzeChain, loadRows, logAccess, setHold, toCsv, verifyChain, closeAuditFor, sweepAudit, type AuditEnv } from "./audit";
 import { VISIT_SCHEMA, beaconRoute, linkVisitor, parseRange, recordFunnelForOrg, visitsJourney, visitsSummary, type VisitEnv } from "./visits";
@@ -116,6 +118,8 @@ export const SCHEMA: string[] = [
   ...AUDIT_SCHEMA,
   // first-party visitor-journey tracking of the public pages, and its anonymous per-day totals
   ...VISIT_SCHEMA,
+  // TEST / LIVE mode (mode.ts): the mode row, the owner's e-mail allow-list, the mail event log and the is_test flags
+  ...MODE_SCHEMA,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
@@ -202,7 +206,7 @@ async function orgEmail(env: Env, org: string): Promise<string | null> {
 /** Mints a key that works for 24 hours only and e-mails it in the dedicated mail: the only way an AI link ever travels by e-mail. The lasting key never leaves the console. Returns mailed:false (and the paste, so it is not lost) when no address is known or the mail failed. */
 async function mailTempLink(env: Env, req: Request, org: string, kind: "ai" | "host", why: "start" | "replace" | "fresh", now: number, knownEmail?: string): Promise<{ mailed: boolean; expiresMs: number; aiMessage?: string }> {
   const key = (kind === "ai" ? "cta_" : "cth_") + randHex(24), expiresMs = now + LINK_MAIL_TTL_MS;
-  await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,expires_ms) VALUES(?,?,?,0,?,?)").bind(await sha("key|" + key), org, kind, now, expiresMs).run();
+  await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,expires_ms,is_test) VALUES(?,?,?,0,?,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0))").bind(await sha("key|" + key), org, kind, now, expiresMs, org).run(); // a key of a test account is a test key too
   const origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
   const to = knownEmail ?? (await orgEmail(env, org));
   let mailed = false;
@@ -213,7 +217,7 @@ async function mailTempLink(env: Env, req: Request, org: string, kind: "ai" | "h
 async function replaceAiLink(env: Env, req: Request, org: string, now: number): Promise<{ aiKey: string; aiMessage: string; mailed: boolean }> {
   await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE org=? AND kind='ai'").bind(org).run();
   const key = "cta_" + randHex(24);
-  await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), org, "ai", now).run();
+  await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0))").bind(await sha("key|" + key), org, "ai", now, org).run();
   await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`aikey/${org}`, await sealText(env as any, key)).run();
   const origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
   const t = await mailTempLink(env, req, org, "ai", "replace", now);
@@ -434,13 +438,14 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   const p = url.pathname;
 
   if (req.method === "GET" && p === "/api/z/ai-manifest") return json(AI_MANIFEST);
+  { const mr = await modeRoute(req, env as any, now, a.plat && req.headers.get("x-ct-link") !== "1", (n) => purgeTestData(env, n)); if (mr) return mr; } // TEST/LIVE switch, allow-list, purge (mode.ts): owner only, except the public read of the word TEST or LIVE
   if (p === "/api/v/b") return beaconRoute(req, env as VisitEnv, now, (n) => spend(env, now, n)); // public-page visit tracking (visits.ts); never the live game
   { // OWNER ONLY (platform key, never through an AI work link): visitor-journey reports. Every read is written to the access log; anybody else gets the same 404 as an unknown address.
     const vm = p.match(/^\/api\/owner\/visits\/(summary|journey\/([A-Za-z0-9_]{32,40}))$/);
     if (vm) {
       const ownerOk = a.plat && req.headers.get("x-ct-link") !== "1", what = vm[1] === "summary" ? "visits-summary" : "visits-journey";
       if (!ownerOk || req.method !== "GET") { await logAccess(env.DB, now, "denied:" + what, null, null, 0, false, a.kind ?? "anonymous"); return json({ error: "Not found" }, 404); }
-      if (what === "visits-summary") { const { from, to } = parseRange(url.searchParams, now); const out = await visitsSummary(env as VisitEnv, from, to); await logAccess(env.DB, now, what, null, null, out.humans.sessions + out.bots.sessions); return json(out); }
+      if (what === "visits-summary") { const { from, to } = parseRange(url.searchParams, now); const out = await visitsSummary(env as VisitEnv, from, to, url.searchParams.get("mode") === "test"); await logAccess(env.DB, now, what, null, null, out.humans.sessions + out.bots.sessions); return json(out); }
       const out = await visitsJourney(env as VisitEnv, vm[2]!);
       await logAccess(env.DB, now, what, null, null, out?.visits ?? 0, !!out);
       return out ? json(out) : json({ error: "Not found" }, 404);
@@ -471,11 +476,11 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const used = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(ipk).first<{ v: string }>())?.v ?? 0);
     if (used >= STARTS_PER_DAY) return json({ error: "Too many new engagements from this network today. Please try again tomorrow." }, 429);
     if (!(await spend(env, now, 6))) return BUSY();
-    const org = randHex(8), token = "ctk_" + randHex(24), aiKey = "cta_" + randHex(24);
+    const org = randHex(8), token = "ctk_" + randHex(24), aiKey = "cta_" + randHex(24), test = await testFlag(env); // an account made in TEST mode is flagged is_test
     await env.DB.batch([
-      env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + token), org, "master", now),
-      env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + aiKey), org, "ai", now),
-      env.DB.prepare("INSERT INTO organizer_email(email_hash,org) VALUES(?,?)").bind(eh, org),
+      env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,?)").bind(await sha("key|" + token), org, "master", now, test),
+      env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,?)").bind(await sha("key|" + aiKey), org, "ai", now, test),
+      env.DB.prepare("INSERT INTO organizer_email(email_hash,org,is_test) VALUES(?,?,?)").bind(eh, org, test),
       env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`orgmail/${org}`, await sealText(env as any, email)),
       env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`aikey/${org}`, await sealText(env as any, aiKey)), // so the signed-in organizer can read their lasting link again (never mailed)
       env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(ipk, String(used + 1), String(used + 1)),
@@ -525,7 +530,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     await recordTerms(env, acct.org, now, "signin-link");
     await linkVisitor(env as VisitEnv, req, acct.org, "signin", now);
     const token = "ctk_" + randHex(24); // the same kind of session key the 6-digit code creates
-    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + token), acct.org, "master", now).run();
+    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0))").bind(await sha("key|" + token), acct.org, "master", now, acct.org).run();
     return json({ ok: true, token });
   }
   if (req.method === "POST" && p === "/api/auth/verify") {
@@ -544,7 +549,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     await linkVisitor(env as VisitEnv, req, acct.org, "signin", now, email);
     const token = "ctk_" + randHex(24); // a fresh organizer key; the old ones keep working until the organizer retires them
     await env.DB.batch([
-      env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + token), acct.org, "master", now),
+      env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0))").bind(await sha("key|" + token), acct.org, "master", now, acct.org),
       env.DB.prepare("DELETE FROM login_code WHERE email_hash=?").bind(eh),
     ]);
     return json({ ok: true, token });
@@ -555,7 +560,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!a.plat) return deny(a);
     if (!(await spend(env, now))) return BUSY();
     const org = randHex(8), key = "ctk_" + randHex(24);
-    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), org, "master", now).run();
+    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,?)").bind(await sha("key|" + key), org, "master", now, await testFlag(env)).run();
     return json({ ok: true, organizerKey: key });
   }
   if (req.method === "POST" && (p === "/api/org/ai" || p === "/api/org/ai/replace")) { // signed-in organizer only (an AI key can never mint or replace its own link); the old AI link dies at once
@@ -604,7 +609,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (n >= MAX_HOSTS) return json({ error: `You can have up to ${MAX_HOSTS} co-hosts at a time. Retire one first.` }, 409);
     if (!(await spend(env, now, 2))) return BUSY();
     const key = "cth_" + randHex(24);
-    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + key), a.org, "host", now).run();
+    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0))").bind(await sha("key|" + key), a.org, "host", now, a.org).run();
     const hOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
     const hm = await mailTempLink(env, req, a.org, "host", "start", now); // dedicated mail to the organizer only, with a separate 24-hour co-host key
     return json({ ok: true, hostKey: key, manualUrl: `${hOrigin}/ai/${key}`, mailed: hm.mailed });
@@ -790,7 +795,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (n >= MAX_DRAFTS) return json({ error: `You have ${MAX_DRAFTS} unpublished drafts. Publish one, or let one lapse: an unpublished draft is forgotten after ${DRAFT_DAYS} days, and closing your organizer account deletes them all.` }, 409);
     }
     if (!(await spend(env, now, 2))) return BUSY();
-    await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.closed ? 1 : 0, draft ? 0 : ent?.pack ?? b.cap, vc.cfg.tickets, cfgJson(vc.cfg)).run();
+    const isTestEng = (await testFlag(env)) === 1 || (await orgIsTest(env, a.org)) ? 1 : 0; // made in TEST mode, or by a test account
+    await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.closed ? 1 : 0, draft ? 0 : ent?.pack ?? b.cap, vc.cfg.tickets, cfgJson(vc.cfg), isTestEng).run();
     if (ent) await env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(b.id, ent.id).run();
     if (a.org) await recordTerms(env, a.org, now, "engagement");
     return json({ ok: true, draft, openUrl: `${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html?e=${b.id}` });
@@ -798,7 +804,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (req.method === "GET" && p === "/api/history") {
     if (!a.plat && !a.org) return deny(a);
     const q = a.plat
-      ? env.DB.prepare("SELECT e.id, e.created_ms, e.start_round, e.call_seconds, e.closed, (e.pack=0) AS draft, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e ORDER BY e.created_ms DESC LIMIT 50")
+      ? env.DB.prepare("SELECT e.id, e.created_ms, e.start_round, e.call_seconds, e.closed, (e.pack=0) AS draft, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e WHERE e.is_test=? ORDER BY e.created_ms DESC LIMIT 50").bind(url.searchParams.get("mode") === "test" ? 1 : 0) // the owner's list shows real engagements unless the test ones are asked for
       : env.DB.prepare("SELECT e.id, e.created_ms, e.start_round, e.call_seconds, e.closed, (e.pack=0) AS draft, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e WHERE e.org=? ORDER BY e.created_ms DESC LIMIT 50").bind(a.org);
     const r = await q.all<any>();
     return json({ engagements: (r.results ?? []).map((x: any) => ({ ...x, startsAtIST: istTime(roundMs(x.start_round)) })), retentionDays: RETENTION_DAYS });

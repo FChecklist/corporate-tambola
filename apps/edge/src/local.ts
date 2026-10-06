@@ -18,10 +18,11 @@ export function sqliteD1(file: string): { db: D1; raw: Database } {
   return { db: { prepare: (s) => stmt(s), batch: async (xs) => Promise.all(xs.map((x) => x.run())) }, raw };
 }
 
-export function startLocal(o: { port?: number; secret?: string; dbFile?: string; webDir?: string; budget?: string } = {}) {
+export function startLocal(o: { port?: number; secret?: string; dbFile?: string; webDir?: string; budget?: string; mode?: "TEST" | "LIVE" } = {}) {
   const webDir = o.webDir ?? join(import.meta.dir, "../../web/public");
   const { db, raw } = sqliteD1(o.dbFile ?? ":memory:");
   const pe = process.env;
+  { const m = (o.mode ?? pe.CT_MODE ?? "").toUpperCase(); if (m === "TEST" || m === "LIVE") raw.run("UPDATE mode SET mode=?, changed_ms=?, reason=? WHERE id=1", [m, Date.now(), "local start (CT_MODE / startLocal mode)"]); } // docs/TEST_AND_LIVE_MODE.md: run the local tools against TEST mode
   const env: PayEnv = { DB: db, TEST_MODE: pe.TEST_MODE, COMPANY_JSON: pe.COMPANY_JSON, PUBLIC_ORIGIN: pe.PUBLIC_ORIGIN, RAZORPAY_KEY_ID: pe.RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET: pe.RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET: pe.RAZORPAY_WEBHOOK_SECRET, RAZORPAY_BASE_URL: pe.RAZORPAY_BASE_URL, RESEND_API_KEY: pe.RESEND_API_KEY, MAIL_FROM: pe.MAIL_FROM, MAIL_REPLY_TO: pe.MAIL_REPLY_TO, ORGANIZER_SECRET: o.secret ?? process.env.ORGANIZER_SECRET ?? "local-organizer-secret", DAILY_WRITE_BUDGET: o.budget ?? process.env.DAILY_WRITE_BUDGET ?? "80000" };
   const server = Bun.serve({
     port: o.port ?? Number(process.env.PORT ?? 8788),

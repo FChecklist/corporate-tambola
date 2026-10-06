@@ -14,8 +14,9 @@ import {
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import type { D1, Env } from "./worker";
 import { partnerCode, phoneHashFor, recordCommission, refCode } from "./partners";
+import { getMode, mailGate, testFlag, type ModeEnv } from "./mode";
 
-export interface PayEnv extends Env {
+export interface PayEnv extends Env, Pick<ModeEnv, "OWNER_EMAIL" | "TEST_MAIL_ALLOW"> {
   RAZORPAY_KEY_ID?: string; RAZORPAY_KEY_SECRET?: string; RAZORPAY_WEBHOOK_SECRET?: string; RAZORPAY_BASE_URL?: string; RAZORPAY_INTERNATIONAL?: string;
   PARTNER_COMMISSION_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; FREE_LAUNCH?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string;
 }
@@ -52,6 +53,8 @@ const KEYRE = /ct[kah]_[0-9a-f]{48}/g;
  */
 export async function sendMail(env: PayEnv, db: D1, to: string, subject: string, text: string, now: number, opts: { html?: string; secret?: boolean } = {}): Promise<boolean> {
   // `secret` = the mail carries a personal AI work link: if it cannot be sent, no body is kept at all (nothing to retry later; the organizer can replace the link and get a fresh mail).
+  // TEST mode (mode.ts): only the owner's allow-list is ever e-mailed; everyone else is dropped and logged. Not sent = false, and no body is kept.
+  if ((await getMode(env)) === "TEST") { if (!(await mailGate(env, to, subject, now))) return false; subject = "[TEST] " + subject; }
   const html = opts.html ?? plainToHtml(subject, text, env.PUBLIC_ORIGIN); // every mail carries the brand header and footer, whoever built it
   text = withFooter(text, env.PUBLIC_ORIGIN);
   if (!env.RESEND_API_KEY) { await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,0)").bind(to, subject, text, now).run(); return true; }
@@ -64,6 +67,7 @@ export const sentReports: { to: string; subject: string; text: string; attachmen
 const toB64 = (u: Uint8Array) => { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); };
 /** E-mails the engagement report. The attachment is passed straight to the mail service and is never stored or logged here. Returns false when it could not be sent (the caller tries again). */
 export async function sendReportMail(env: PayEnv, to: string, subject: string, text: string, attachments: { filename: string; content: Uint8Array }[]): Promise<boolean> {
+  if ((await getMode(env)) === "TEST") { if (!(await mailGate(env, to, subject, Date.now()))) return true; subject = "[TEST] " + subject; } // dropped on purpose and logged: counts as handled so the report steps carry on
   const html = plainToHtml(subject, text, env.PUBLIC_ORIGIN); text = withFooter(text, env.PUBLIC_ORIGIN);
   if (!env.RESEND_API_KEY) { sentReports.push({ to, subject, text, attachments }); return true; }
   try {
@@ -86,7 +90,7 @@ async function resendSend(env: PayEnv, to: string, subject: string, text: string
 /** Daily job: tries unsent mail once more (only mail with a body worth retrying), and forgets anything older than 3 days. */
 export async function retryOutbox(env: PayEnv, now: number): Promise<{ retried: number; dropped: number }> {
   const db = env.DB; let retried = 0;
-  if (env.RESEND_API_KEY) {
+  if (env.RESEND_API_KEY && (await getMode(env)) !== "TEST") { // in TEST mode nothing queued earlier is sent: it is only ever the owner's allow-list that gets mail
     const rows = (await db.prepare("SELECT id, to_addr, subject, body FROM outbox WHERE sent=0 AND body<>'' AND at_ms>?").bind(now - 3 * 86_400_000).all<any>()).results ?? [];
     for (const r of rows) if (await resendSend(env, r.to_addr, r.subject, r.body)) { await db.prepare("UPDATE outbox SET sent=1, body='' WHERE id=?").bind(r.id).run(); retried++; }
   }
@@ -104,12 +108,13 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
   const eh = await sha("email|" + p.email.toLowerCase());
   let org: string | null = meta.orgId ?? (await db.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>())?.org ?? null;
   let organizerKey: string | null = null;
+  const test = p.is_test ? 1 : 0; // a payment made in TEST mode (mode.ts): everything it creates is flagged too
   if (meta.orgId) await db.prepare("INSERT OR IGNORE INTO organizer_email(email_hash,org) VALUES(?,?)").bind(eh, meta.orgId).run(); // the confirmed email can sign this organizer in too
   if (!org) { // a first purchase makes the organizer; the key is shown once (and mailed)
     org = randHex(8); organizerKey = "ctk_" + randHex(24);
     await db.batch([
-      db.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + organizerKey), org, "master", now),
-      db.prepare("INSERT INTO organizer_email(email_hash,org) VALUES(?,?)").bind(eh, org),
+      db.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,?)").bind(await sha("key|" + organizerKey), org, "master", now, test),
+      db.prepare("INSERT INTO organizer_email(email_hash,org,is_test) VALUES(?,?,?)").bind(eh, org, test),
     ]);
   }
   await db.prepare("INSERT OR IGNORE INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,?,NULL,?)").bind("ent_" + p.id, org, p.pack, p.id, now).run();
@@ -131,9 +136,12 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
   const fy = financialYear(new Date(now));
   const tax = splitGst(p.amount, p.currency, co.stateCode, meta.taxId);
   const token = "inv_" + randHex(16);
-  const seq = ((await db.prepare("SELECT COALESCE(MAX(seq),0) AS m FROM invoice WHERE brand=? AND fy=?").bind(brand.id, fy).first<{ m: number }>())?.m ?? 0) + 1;
-  const number = formatInvoiceNumber(brand, fy, seq);
-  const data: InvoiceData = { number, issuedAt: now, brand, company: co, draft: companyGaps(co).length > 0, buyer: { name: meta.org, gstin: meta.taxId || undefined, email: p.email, country: meta.country }, currency: p.currency,
+  // a test payment never uses a number of the real series: it gets a negative sequence and a TEST- number, and the invoice is marked as a draft
+  const seq = test
+    ? -(((await db.prepare("SELECT COUNT(*) AS c FROM invoice WHERE brand=? AND fy=? AND seq<0").bind(brand.id, fy).first<{ c: number }>())?.c ?? 0) + 1)
+    : ((await db.prepare("SELECT COALESCE(MAX(seq),0) AS m FROM invoice WHERE brand=? AND fy=? AND seq>0").bind(brand.id, fy).first<{ m: number }>())?.m ?? 0) + 1;
+  const number = test ? `TEST-${fy}-${-seq}` : formatInvoiceNumber(brand, fy, seq);
+  const data: InvoiceData = { number, issuedAt: now, brand, company: co, draft: !!test || companyGaps(co).length > 0, buyer: { name: meta.org, gstin: meta.taxId || undefined, email: p.email, country: meta.country }, currency: p.currency,
     lines: [{ description: `${brand.name}: up to ${p.pack} participants (one engagement)`, quantity: 1, amount: tax.taxable }], tax, paymentRef: p.rzp_payment_id ?? undefined, orderRef: p.id };
   await db.prepare("INSERT OR IGNORE INTO invoice(token,payment_id,brand,fy,seq,number,issued_ms,data) VALUES(?,?,?,?,?,?,?,?)").bind(token, p.id, brand.id, fy, seq, number, now, JSON.stringify(data)).run();
   const origin = env.PUBLIC_ORIGIN ?? meta.origin ?? "";
@@ -157,9 +165,13 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
   const rzp = rzpOf(env); const mode = payMode(env);
   const busy = () => json({ error: "It is very busy right now. Please try again in a few minutes." }, 503);
 
-  if (req.method === "GET" && p === "/api/payments/status") { const co = company(env); return json({ mode, freeLaunch: freeLaunch(env), freeCap: FREE_CAP, brand: brand.name, legalEntity: co.legalName, missingCompanyDetails: companyGaps(co), international: env.RAZORPAY_INTERNATIONAL === "1" }); }
+  if (req.method === "GET" && p === "/api/payments/status") { const co = company(env); return json({ mode: (await getMode(env)) === "TEST" ? "test" : mode, siteMode: await getMode(env), freeLaunch: freeLaunch(env), freeCap: FREE_CAP, brand: brand.name, legalEntity: co.legalName, missingCompanyDetails: companyGaps(co), international: env.RAZORPAY_INTERNATIONAL === "1" }); }
 
-  if (req.method === "POST" && p === "/api/checkout") {
+  if (req.method === "POST" && (p === "/api/checkout" || p === "/api/payments/test")) {
+    // TEST mode (mode.ts): no Razorpay order is ever made; the payment is a labelled test payment that is marked paid at once, flagged is_test, and publishes the draft it was made for. LIVE refuses the labelled path.
+    const siteTest = (await testFlag(env)) === 1;
+    if (p === "/api/payments/test" && !siteTest) return json({ error: "Test payments are only available while the service is in test mode." }, 403);
+    const rzp = siteTest ? null : rzpOf(env), mode = siteTest ? "test" : payMode(env);
     if (mode === "off") return json({ error: "Payments are not switched on yet. Please try again later." }, 503);
     const b = await body(req);
     // a signed-in organizer paying to publish their own draft: the pack is the smallest one that fits the draft, and the payment is bound to them and to it
@@ -192,8 +204,8 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     }
     const ref = refCode(b.ref); // from the buyer's own browser (valid for 30 days after the link was opened); checked against real partners when the payment is fulfilled
     const bph = partnerCode(b.phone); // optional, only used to spot a partner buying through their own link
-    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,ref,buyer_phone_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), pack, cur, pr.total, pr.tax, order?.id ?? null, "created", now, JSON.stringify(meta), ref, bph ? await phoneHashFor(env, bph) : null).run();
-    if (!rzp) { const f = await fulfil(env, id, now, spend); return "result" in f ? json({ mode: "test", paymentId: id, result: f.result }) : json({ error: f.error }, f.status); }
+    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,ref,buyer_phone_hash,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), pack, cur, pr.total, pr.tax, order?.id ?? null, "created", now, JSON.stringify(meta), ref, bph ? await phoneHashFor(env, bph) : null, siteTest ? 1 : 0).run();
+    if (!rzp) { const f = await fulfil(env, id, now, spend); return "result" in f ? json({ mode: "test", paymentId: id, result: f.result, ...(siteTest ? { testPayment: true, label: "TEST payment: nothing was charged." } : {}) }) : json({ error: f.error }, f.status); }
     return json({ mode: "razorpay", paymentId: id, razorpay: { keyId: rzp.keyId, orderId: order.id, amount: toMinor(pr.total), currency: cur, name: brand.name, description: `Up to ${pack} participants`, prefill: { email: b.email.trim() }, notes: { brand: brand.name }, theme: { color: brand.theme } } });
   }
 

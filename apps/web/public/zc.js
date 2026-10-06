@@ -471,6 +471,8 @@
     if ($("erase")) $("erase").onclick = async () => { if (!confirm("Delete every participant's name and mobile number now? This cannot be undone. The winners record stays.")) return; try { const r = await call("POST", `/api/z/${eid}/erase`, {}); S.note = r.erased + " participants erased."; } catch (e) { S.note = e.message; } refreshEng(); };
   }
 
+  // TEST mode (owner-controlled, see docs/TEST_AND_LIVE_MODE.md): a calm notice in the organizer console ONLY. Public pages, participant phones and e-mails never carry it.
+  (async () => { try { const m = await (await fetch(BASE + "/api/mode", { cache: "no-store" })).json(); if (m && m.mode === "TEST" && !document.getElementById("testmode")) { const b = document.createElement("div"); b.id = "testmode"; b.className = "ztest"; b.setAttribute("role", "status"); b.textContent = "TEST MODE: nothing here is real. No one outside the owner’s test list is e-mailed, and nothing is charged."; const app = document.getElementById("app"); app.parentNode.insertBefore(b, app); } } catch (e) { /* no banner when the mode cannot be read */ } })();
   (async () => {
     if (secret) { try { S.role = (await call("GET", "/api/whoami")).kind === "host" ? "host" : ""; } catch { /* an old or wrong key is handled by the screens below */ } }
     if (!secret) draw(loginView(""));

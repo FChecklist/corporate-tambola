@@ -10,6 +10,6 @@ Why this needs your attention later (a lawyer should confirm the details for eac
 
 What to do:
 
-1. Pick an end date for the festive offer and show it ("Festive offer until 31 December").
+1. When the owner has decided how long the festive offer runs, decide with the lawyer whether and how to show it. No end date is written anywhere in the code, pages, e-mails or documents; the owner gives it later.
 2. When it ends, either charge the regular price shown, or remove the crossed price.
 3. Review this note with your lawyer before you advertise outside India.
