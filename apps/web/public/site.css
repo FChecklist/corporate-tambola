@@ -156,3 +156,4 @@ body{overflow-x:hidden}
 #topbar .tb-cta:hover{background:var(--gold2)}
 @media (max-width:420px){#topbar .tb-brand b{display:none}#topbar .tb-cta{flex:1;justify-content:center}}
 @media (prefers-reduced-motion:reduce){#topbar{transition:none}}
+#pricing{scroll-margin-top:76px}
