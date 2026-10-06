@@ -1,7 +1,11 @@
 User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /ai/
 Disallow: /pay.html
+Disallow: /signin.html
+Disallow: /ai-link.html
+Disallow: /report.html
 Disallow: /z.html
 Disallow: /zc.html
 Disallow: /big.html

@@ -22,6 +22,7 @@ import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { GET_BODY_MAX, LINK_KEY, CONVERSATION, aiPaste, manualJson, manualText, type LinkRole } from "./ai-link";
 import { AUDIT_SCHEMA, auditRequest, analyzeChain, loadRows, logAccess, setHold, toCsv, verifyChain, closeAuditFor, sweepAudit, type AuditEnv } from "./audit";
+import { VISIT_SCHEMA, beaconRoute, linkVisitor, parseRange, recordFunnelForOrg, visitsJourney, visitsSummary, type VisitEnv } from "./visits";
 import { WINNERS_SCHEMA, acceptVotes, auditAi, confirmPrize, listAiAudit, listPrizes, markGiven, myPrizes } from "./winners";
 import { PAUSE_MAX_PARTICIPANTS, safetyForCap, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 
@@ -33,6 +34,8 @@ export interface Env {
   DB: D1; ORGANIZER_SECRET?: string; DAILY_WRITE_BUDGET?: string; PHONE_SALT?: string;
   /** The secret that seals names and mobile numbers at rest (AES-256-GCM). Never stored in the database. */
   DATA_KEY?: string;
+  /** Optional: the key that hashes network addresses for the public-page visit tracking (visits.ts); when absent it is derived from DATA_KEY. VISIT_DAILY_WRITES caps that tracking's share of the daily write allowance (default 20,000). */
+  VISIT_KEY?: string; VISIT_DAILY_WRITES?: string;
   /** Shared secret of the mail service's inbound webhook (e-mail to us asking for a deletion). */
   INBOUND_SECRET?: string;
   /** The scheduled job's own key (it can call only the lifecycle tick, nothing else). */
@@ -111,6 +114,8 @@ export const SCHEMA: string[] = [
   `ALTER TABLE partner ADD COLUMN email_hash TEXT`,
   // the internal audit log (append-only, hash-chained, sealed), the owner's access log, deletion certificates and anonymous statistics, legal holds
   ...AUDIT_SCHEMA,
+  // first-party visitor-journey tracking of the public pages, and its anonymous per-day totals
+  ...VISIT_SCHEMA,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
@@ -176,7 +181,7 @@ async function joinOverLimit(env: Env, req: Request, now: number): Promise<boole
 }
 const BUSY = () => json({ error: "It is very busy right now. Please try again in a few minutes." }, 503);
 
-const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-organizer, x-partner, authorization", "access-control-allow-methods": "GET, POST, PUT, PATCH, OPTIONS", "access-control-max-age": "86400" };
+const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-organizer, x-partner, authorization, x-ct-vid, x-ct-vs", "access-control-allow-methods": "GET, POST, PUT, PATCH, OPTIONS", "access-control-max-age": "86400" };
 /** Phones load the app from Pages and call this Worker from another origin, so every answer carries open CORS (no cookies are used anywhere). */
 /** The message an organizer pastes into any AI chat: two short lines and the short link (/ai/<key>), which opens the complete manual. The key is only inside the link. The AI key cannot pay, publish, erase, pause or settle. */
 export const aiMessage = (origin: string, key: string) => aiPaste(origin, key);
@@ -429,6 +434,18 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   const p = url.pathname;
 
   if (req.method === "GET" && p === "/api/z/ai-manifest") return json(AI_MANIFEST);
+  if (p === "/api/v/b") return beaconRoute(req, env as VisitEnv, now, (n) => spend(env, now, n)); // public-page visit tracking (visits.ts); never the live game
+  { // OWNER ONLY (platform key, never through an AI work link): visitor-journey reports. Every read is written to the access log; anybody else gets the same 404 as an unknown address.
+    const vm = p.match(/^\/api\/owner\/visits\/(summary|journey\/([A-Za-z0-9_]{32,40}))$/);
+    if (vm) {
+      const ownerOk = a.plat && req.headers.get("x-ct-link") !== "1", what = vm[1] === "summary" ? "visits-summary" : "visits-journey";
+      if (!ownerOk || req.method !== "GET") { await logAccess(env.DB, now, "denied:" + what, null, null, 0, false, a.kind ?? "anonymous"); return json({ error: "Not found" }, 404); }
+      if (what === "visits-summary") { const { from, to } = parseRange(url.searchParams, now); const out = await visitsSummary(env as VisitEnv, from, to); await logAccess(env.DB, now, what, null, null, out.humans.sessions + out.bots.sessions); return json(out); }
+      const out = await visitsJourney(env as VisitEnv, vm[2]!);
+      await logAccess(env.DB, now, what, null, null, out?.visits ?? 0, !!out);
+      return out ? json(out) : json({ error: "Not found" }, 404);
+    }
+  }
   { const rm = p.match(/^\/api\/report\/([A-Za-z0-9_-]{4,40})$/); if (rm && req.method === "GET") return reportApi(env as any, rm[1]!, url, now); } // the report page; the key in the link is the only credential
   const paid = await payRoute(req, env as PayEnv, now, (n) => spend(env, now, n));
   if (paid) return paid;
@@ -464,6 +481,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(ipk, String(used + 1), String(used + 1)),
     ]);
     await recordTerms(env, org, now, "start");
+    await linkVisitor(env as VisitEnv, req, org, "start", now, email); // ties the visitor's earlier visits to this new organizer (no-op when nothing was tracked)
     const origin0 = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, startMsg = aiMessage(origin0, aiKey); // aiKey is the lasting key, shown only in the console
     await mailTempLink(env, req, org, "ai", "start", now, email); // the dedicated mail carries a separate key that expires in 24 hours
     return json({ ok: true, token, aiKey, aiMessage: startMsg });
@@ -505,6 +523,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const used = await env.DB.prepare("DELETE FROM login_code WHERE link_hash=? AND expires_ms>=?").bind(lh, now).run(); // single use: the first POST wins, the code dies with it
     if ((used.meta?.changes ?? 0) !== 1) return bad();
     await recordTerms(env, acct.org, now, "signin-link");
+    await linkVisitor(env as VisitEnv, req, acct.org, "signin", now);
     const token = "ctk_" + randHex(24); // the same kind of session key the 6-digit code creates
     await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + token), acct.org, "master", now).run();
     return json({ ok: true, token });
@@ -522,6 +541,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
     if (!acct || !(await spend(env, now, 2))) return acct ? BUSY() : bad();
     await recordTerms(env, acct.org, now, "signin-code");
+    await linkVisitor(env as VisitEnv, req, acct.org, "signin", now, email);
     const token = "ctk_" + randHex(24); // a fresh organizer key; the old ones keep working until the organizer retires them
     await env.DB.batch([
       env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms) VALUES(?,?,?,0,?)").bind(await sha("key|" + token), acct.org, "master", now),
@@ -1036,6 +1056,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       ...(ent ? [env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(eid, ent.id)] : []),
     ]);
     const paid = !!(ent || free), startMs = roundMs(e.start_round);
+    await recordFunnelForOrg(env as VisitEnv, e.org, "published", now);
     await sendMail(env as PayEnv, env.DB, cEmail, paid ? `Your engagement ${eid} is published and paid` : `Your engagement ${eid} is published: pay before ${istTime(startMs)}`,
       `Your engagement ${eid} is live.\n\nShare this link: ${shareUrl}\n\n${paid ? "" : `Pay before ${istTime(startMs)} or it will not begin (about 2 minutes): ${payUrl}\n\n`}Big screen for the room: ${origin}/big.html?e=${eid}`, now);
     return json({ ok: true, published: true, paid, startMs, payUrl, shareUrl, confirmed: { email: cEmail, phone: cPhone.slice(-10) } });

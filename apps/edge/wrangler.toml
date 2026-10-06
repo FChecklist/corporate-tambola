@@ -27,6 +27,7 @@ COMPANY_JSON = '{"cin":"U74999UP2017PTC098453","gstin":"09AAZCS4477M1Z3","pan":"
 # Secrets are never written in files. Set them once, by hand:
 #   wrangler secret put ORGANIZER_SECRET   (our platform key)
 #   wrangler secret put PHONE_SALT         (random 32+ characters; keeps phone hashes unguessable)
+#   wrangler secret put VISIT_KEY          (optional, random 32+ characters; keys the hash of visitors' network addresses on the public pages. Without it the key is derived from DATA_KEY)
 
 # Optional but recommended at scale: serve the pause file from the CDN instead of the Worker (phones poll it every ~9 s).
 # Create a public bucket, attach a custom domain with caching, then:

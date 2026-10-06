@@ -5,6 +5,7 @@
 //   fulfil    -> idempotent: organizer (new or existing by e-mail) gets one ENTITLEMENT for the pack, an invoice is issued, mail is sent
 // An entitlement is what lets an organizer create one engagement of up to `pack` participants; without one, creating is refused.
 // Needs the `nodejs_compat` flag (billing uses node:crypto HMAC). Test mode (env.TEST_MODE = "1", never in production) fulfils without Razorpay.
+import { recordFunnelForOrg } from "./visits";
 import { plainToHtml, withFooter } from "./brand";
 import {
   BRANDS, DEFAULT_COMPANY, companyGaps, createOrder, fetchPayment, capturePayment, financialYear, formatInvoiceNumber, renderInvoiceHtml, renderInvoiceText, splitGst, toMinor,
@@ -145,6 +146,8 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
   await recordCommission(env, p, tax.taxable, now); // refer & earn: a commission row for a referred, PAID purchase only
   const result = { ok: true, orderId: p.id, pack: p.pack, total: p.amount, tax: p.tax, currency: p.currency, invoiceUrl: `/api/invoice/${token}`, invoiceNumber: number, organizerKey, newOrganizer: !!organizerKey, published: !!published, eid: published, restartedAtMs: restart ? (1692803367 + (restart - 1) * 3) * 1000 : null };
   await db.prepare("UPDATE payment SET status='paid', paid_ms=?, org=?, result=? WHERE id=?").bind(now, org, JSON.stringify(result), p.id).run();
+  if (published) await recordFunnelForOrg({ DB: db }, org, "published", now); // marketing funnel (visits.ts): counted once, against the visitor's first visit
+  await recordFunnelForOrg({ DB: db }, org, "paid", now);
   return { result };
 }
 

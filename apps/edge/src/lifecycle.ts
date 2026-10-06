@@ -4,6 +4,7 @@
 //      and the participants' personal part of the audit log is crypto-shredded (audit.ts `shredParticipantAudit`: its per-engagement key is destroyed, the hash chain still verifies);
 //   3. only the organizer / host / co-host details and the winners record (seat, prize, round, time) remain, until 00:00 IST at the end of the 365th day, then everything goes.
 // Called by the scheduled job (and, as a fallback, by any outside timer with the platform key). Every call does a bounded amount of work and can be repeated safely.
+import { sweepVisits } from "./visits";
 import { closeAuditFor, isHeld, shredParticipantAudit } from "./audit";
 import { GRACE_ROUNDS, INVITE_CATEGORIES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
 import { callRoundR, luckyRound } from "../../../packages/beacon/src/game";
@@ -308,6 +309,11 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
   try {
     const late = (await env.DB.prepare("SELECT DISTINCT p.eid AS eid FROM audit_pii p JOIN life l ON l.eid=p.eid WHERE l.end_ms + ? <= ? AND NOT EXISTS (SELECT 1 FROM legal_hold h WHERE h.eid=p.eid) LIMIT 25").bind(PURGE_AFTER_MS, now).all<{ eid: string }>()).results ?? [];
     for (const x of late) await shredParticipantAudit(env as any, x.eid, now);
+  } catch { /* tried again at the next tick */ }
+  // public-page visit records older than 365 days: rolled into anonymous per-day totals, then deleted (once a day, a few days of catch-up at a time)
+  try {
+    const d = new Date(now).toISOString().slice(0, 10), last = await env.DB.prepare("SELECT v FROM kv WHERE k='visit_sweep_day'").first<{ v: string }>();
+    if (last?.v !== d) { await env.DB.prepare("INSERT INTO kv(k,v) VALUES('visit_sweep_day',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(d).run(); await sweepVisits(env, now); }
   } catch { /* tried again at the next tick */ }
   return out;
 }

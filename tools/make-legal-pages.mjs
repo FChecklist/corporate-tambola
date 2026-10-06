@@ -9,6 +9,25 @@ const tpl = readFileSync(new URL("legal.html", PUB), "utf8");
 const nl = tpl.includes("\r\n") ? "\r\n" : "\n";
 const head = tpl.slice(0, tpl.indexOf('<main class="legal">'));
 const foot = tpl.slice(tpl.indexOf("</main>"));
+// Search-engine and sharing tags, one set per page (unique description, canonical, Open Graph, Twitter card). Written idempotently: old copies are removed first, so the template's own tags never leak into the other pages.
+const SITE = "https://corporate-tambola.pages.dev";
+const META = {
+  "legal.html": ["Rules, privacy and disclaimer", "The rules of a Corporate Tambola game, how participant names and mobile numbers are deleted within 24 hours, and the disclaimer. Plain English."],
+  "terms.html": ["Terms", "The short, plain-English terms for organizers who run a Corporate Tambola engagement for their company."],
+  "dpa.html": ["Data processing terms", "Data processing terms for organizers: what we do with your participants' details, on one page."],
+  "subprocessors.html": ["Sub-processors", "The providers that help us run Corporate Tambola, and what each one receives."],
+  "partner-terms.html": ["Partner terms", "The terms for Corporate Tambola's Refer and earn partners, in plain English."],
+  "organizer-guide.html": ["Organizer guide", "Short notes for a safe, simple Corporate Tambola: how to set up, share, run and close an engagement."],
+};
+const attr = (v) => v.replace(/&(?!amp;|rsquo;|ldquo;|rdquo;)/g, "&amp;").replace(/"/g, "&quot;");
+export function withSeo(html, file) {
+  const [t, d] = META[file], title = `${t} | Corporate Tambola`, url = `${SITE}/${file}`;
+  const strip = html.replace(/[ \t]*<meta name="description"[^>]*>\r?\n?/g, "").replace(/[ \t]*<link rel="canonical"[^>]*>\r?\n?/g, "").replace(/[ \t]*<meta property="og:[^>]*>\r?\n?/g, "").replace(/[ \t]*<meta name="twitter:[^>]*>\r?\n?/g, "");
+  const tags = [`<meta name="description" content="${attr(d)}">`, `<link rel="canonical" href="${url}">`,
+    `<meta property="og:type" content="website"><meta property="og:site_name" content="Corporate Tambola"><meta property="og:title" content="${attr(title)}"><meta property="og:description" content="${attr(d)}"><meta property="og:url" content="${url}"><meta property="og:image" content="${SITE}/img/ticket.webp"><meta property="og:image:alt" content="The tambola ticket a participant sees on their phone"><meta property="og:locale" content="en_IN">`,
+    `<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${attr(title)}"><meta name="twitter:description" content="${attr(d)}"><meta name="twitter:image" content="${SITE}/img/ticket.webp">`].join(nl);
+  return strip.replace(/(<title>[^<]*<\/title>)\r?\n?/, (m, a) => a + nl + tags + nl);
+}
 const FOOTNAV = '<nav class="fl" aria-label="Legal"><a href="/legal.html#rules">Rules</a><a href="/legal.html#privacy">Privacy</a><a href="/legal.html#disclaimer">Disclaimer</a><a href="/terms.html">Terms</a><a href="/dpa.html">Data processing</a><a href="/subprocessors.html">Sub-processors</a><a href="/organizer-guide.html">Organizer guide</a><a href="/partner-terms.html">Partner terms</a><a href="/partner.html">Refer &amp; earn</a><a href="/">Home</a></nav>';
 const newFoot = foot.replace(/<nav class="fl"[\s\S]*?<\/nav>/, FOOTNAV);
 export const footNav = FOOTNAV;
@@ -62,8 +81,8 @@ const PAGES = {
     ["Razorpay", "Organizer payments (never players)", "India, as published by Razorpay."],
   ], sections: [
     ["notes", "Also used", [
-      "drand: public random numbers. It receives no personal data.",
-      "YouTube (privacy-enhanced mode): only if an organizer adds a video break. The player&rsquo;s device contacts YouTube.",
+      "drand: public random numbers. Your phone contacts it; we send it no personal data.",
+      "YouTube (privacy mode): only if an organizer adds a video break. The player&rsquo;s phone contacts YouTube.",
     ]],
     ["change", "Changes", ["We update this page when the list changes."]],
   ] },
@@ -117,13 +136,13 @@ for (const [file, p] of Object.entries(PAGES)) {
   const secs = p.sections.map(([id, t, items]) => `  <section id="${id}" aria-labelledby="${id}h"><h2 id="${id}h">${t}</h2>${nl}    <ul>${nl}${items.map((i) => `      <li>${i}</li>`).join(nl)}${nl}    </ul></section>`).join(nl + nl);
   const html = head.replace(/<title>[^<]*<\/title>/, `<title>${p.title} | Corporate Tambola</title>`) +
     `<main class="legal">${nl}  <div class="eyebrow">Plain English</div>${nl}  <h1>${p.title}</h1>${nl}  <p class="muted">${p.lead}</p>${nl}${p.table ? "" : `  <div class="toc">${toc}</div>${nl}`}${nl}${table}${secs}${nl}` + newFoot;
-  writeFileSync(new URL(file, PUB), html);
+  writeFileSync(new URL(file, PUB), withSeo(html, file));
 }
 // the footer navigation of legal.html and the home page links to every document
 for (const f of ["legal.html", "index.html"]) {
   const u = new URL(f, PUB); let s = readFileSync(u, "utf8");
   const next = s.replace(/<nav class="fl" aria-label="Legal">[\s\S]*?<\/nav>/, f === "index.html" ? FOOTNAV : FOOTNAV);
   if (next === s && !s.includes('href="/terms.html"')) throw new Error("footer nav not found in " + f);
-  writeFileSync(u, next);
+  writeFileSync(u, f === "legal.html" ? withSeo(next, f) : next);
 }
 console.log("legal pages written, terms version", TERMS_VERSION);
