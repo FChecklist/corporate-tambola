@@ -44,3 +44,30 @@ export async function openPii(env: PiiEnv, sealed: string | null | undefined): P
   if (t === null) return null;
   try { const o = JSON.parse(t); return { phone: String(o.p ?? ""), name: o.n == null ? null : String(o.n) }; } catch { return null; }
 }
+
+// ------------------------------------------------------------------------------------------------ per-engagement participant key (crypto-shredding)
+// Personal details of an engagement's PARTICIPANTS in the audit log are sealed under a key of their own: HKDF(DATA_KEY, salt = a random 32-byte value made for that engagement and kept
+// in `eng_key`, info = "participant/<engagement id>"). Destroying the salt (and the sealed blobs) makes those details unrecoverable even for someone who holds DATA_KEY, because the
+// key can no longer be derived. Deriving from DATA_KEY + id alone would NOT be shreddable (DATA_KEY lives as long as the platform), which is why a stored random salt is used.
+const secretOf = (env: PiiEnv) => (env.DATA_KEY ? "k|" + env.DATA_KEY : env.ORGANIZER_SECRET ? "fallback|" + env.ORGANIZER_SECRET : "");
+async function engKey(env: PiiEnv, eid: string, saltHex: string): Promise<CryptoKey> {
+  const secret = secretOf(env);
+  if (!secret) throw new Error("no data key configured");
+  const salt = Uint8Array.from(saltHex.match(/../g) ?? [], (h) => parseInt(h, 16));
+  const base = await crypto.subtle.importKey("raw", enc.encode(secret), "HKDF", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "HKDF", hash: "SHA-256", salt, info: enc.encode("participant/" + eid) }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+const engAad = (eid: string) => enc.encode("corporate-tambola/participant/v1/" + eid);
+/** Seals text under an engagement's participant key. Format "e1.<nonce>.<ciphertext>". */
+export async function sealEng(env: PiiEnv, eid: string, saltHex: string, text: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: engAad(eid) }, await engKey(env, eid, saltHex), enc.encode(text)));
+  return `e1.${b64(iv)}.${b64(ct)}`;
+}
+/** Opens text sealed by `sealEng`; null when the salt is gone (shredded), the blob was altered, or it is not ours. */
+export async function openEng(env: PiiEnv, eid: string, saltHex: string | null | undefined, sealed: string | null | undefined): Promise<string | null> {
+  if (!sealed || !saltHex) return null;
+  const p = sealed.split(".");
+  if (p.length !== 3 || p[0] !== "e1") return null;
+  try { return dec.decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(p[1]!), additionalData: engAad(eid) }, await engKey(env, eid, saltHex), unb64(p[2]!))); } catch { return null; }
+}

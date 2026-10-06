@@ -6,7 +6,11 @@
 //   - Never recorded: passwords, one-time codes, card or bank data, keys (see `redact`).
 //   - The log is deleted with its engagement at 365 days (`closeAuditFor`); before that an anonymous statistics row and a deletion certificate (no personal data) are written and kept for good.
 //     A `legal_hold` row stops that deletion until it is lifted.
-import { openText, sealText, type PiiEnv } from "./pii";
+//   - PARTICIPANTS' personal details (their rows' IP, user agent, raw device id, field changes) are NOT kept in `audit_log.sealed`: they live in `audit_pii`, sealed under a per-engagement key
+//     (pii.ts `sealEng`: HKDF of DATA_KEY with a random salt stored in `eng_key`). The hash chain covers only the non-personal core of each row plus `pdig` = SHA-256 of that sealed blob.
+//     23 hours after the game ends `shredParticipantAudit` deletes the blobs AND the salt and writes a `shred` marker: the personal part is unrecoverable and `verifyChain` still passes,
+//     because it never needs the blob. Rows of the organizer, host, co-host, AI key and the winners' prize confirmations ("prize" events) keep everything until 365 days.
+import { openEng, openText, sealEng, sealText, type PiiEnv } from "./pii";
 import type { D1, Env } from "./worker";
 
 export const AUDIT_SCHEMA: string[] = [
@@ -18,6 +22,12 @@ export const AUDIT_SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS audit_cert (eid TEXT PRIMARY KEY, deleted_ms INTEGER NOT NULL, row_count INTEGER NOT NULL, final_hash TEXT NOT NULL, first_ms INTEGER, last_ms INTEGER)`,
   `CREATE TABLE IF NOT EXISTS audit_stats (eid TEXT PRIMARY KEY, deleted_ms INTEGER NOT NULL, stats TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS legal_hold (eid TEXT PRIMARY KEY, at_ms INTEGER NOT NULL, note TEXT)`,
+  // 0011: participants' personal part of a log row, sealed under a per-engagement key that can be destroyed (crypto-shredding); pdig = SHA-256 of the sealed blob, covered by the chain
+  `ALTER TABLE audit_log ADD COLUMN pdig TEXT`,
+  `CREATE TABLE IF NOT EXISTS audit_pii (chain TEXT NOT NULL, seq INTEGER NOT NULL, eid TEXT NOT NULL, sealed TEXT NOT NULL, PRIMARY KEY (chain, seq))`,
+  `CREATE INDEX IF NOT EXISTS audit_pii_eid ON audit_pii (eid)`,
+  `CREATE TABLE IF NOT EXISTS eng_key (eid TEXT PRIMARY KEY, salt TEXT NOT NULL, made_ms INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS shred (eid TEXT PRIMARY KEY, shredded_ms INTEGER NOT NULL, row_count INTEGER NOT NULL)`,
 ];
 
 export type Actor = "organizer" | "host" | "cohost" | "participant" | "ai_key" | "system" | "owner";
@@ -152,21 +162,42 @@ export interface RecordIn {
   eid: string | null; org: string | null; actor: Actor; event: string; target: string | null; status: number | null; now: number;
   details: Record<string, unknown>; country?: string; asn?: string; aiVendor?: string | null; keyId?: string | null; proof?: string | null; mismatch?: boolean; corr: string;
 }
-const rowHash = (r: { chain: string; seq: number; prev: string; at: number; actor: string; event: string; target: string | null; corr: string; status: number | null; country: string | null; asn: string | null; vendor: string | null; key: string | null; proof: string | null; mismatch: number; sealed: string }) =>
-  sha(JSON.stringify([r.chain, r.seq, r.prev, r.at, r.actor, r.event, r.target, r.corr, r.status, r.country, r.asn, r.vendor, r.key, r.proof, r.mismatch, r.sealed]));
+const rowHash = (r: { chain: string; seq: number; prev: string; at: number; actor: string; event: string; target: string | null; corr: string; status: number | null; country: string | null; asn: string | null; vendor: string | null; key: string | null; proof: string | null; mismatch: number; sealed: string; pdig?: string | null }) =>
+  sha(JSON.stringify([r.chain, r.seq, r.prev, r.at, r.actor, r.event, r.target, r.corr, r.status, r.country, r.asn, r.vendor, r.key, r.proof, r.mismatch, r.sealed, ...(r.pdig ? [r.pdig] : [])]));
+/** Participant rows keep their personal part apart (shreddable). Winners' prize confirmations are kept whole for 365 days. */
+const splitsPersonal = (r: { actor: string; eid: string | null; event: string }) => r.actor === "participant" && !!r.eid && !/^prize/.test(r.event);
+export const isShredded = async (db: D1, eid: string) => !!(await db.prepare("SELECT 1 AS x FROM shred WHERE eid=?").bind(eid).first());
+/** The engagement's random participant-key salt; made on first use. Null once shredded (a shredded engagement never gets a new one). */
+async function engSalt(env: AuditEnv, eid: string, now: number): Promise<string | null> {
+  const get = async () => (await env.DB.prepare("SELECT salt FROM eng_key WHERE eid=?").bind(eid).first<{ salt: string }>())?.salt ?? null;
+  const have = await get(); if (have) return have;
+  if (await isShredded(env.DB, eid)) return null;
+  const salt = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join("");
+  await env.DB.prepare("INSERT OR IGNORE INTO eng_key(eid,salt,made_ms) VALUES(?,?,?)").bind(eid, salt, now).run();
+  return get();
+}
 export const chainOf = (eid: string | null, org: string | null) => (eid ? eid : org ? "org:" + org : "sys");
 
 /** Appends one row to a chain. Never throws: the log must not break the work it records. Returns true when written. */
 export async function appendAudit(env: AuditEnv, r: RecordIn): Promise<boolean> {
   try {
-    const chain = chainOf(r.eid, r.org), sealed = await sealText(env, JSON.stringify(r.details));
+    const chain = chainOf(r.eid, r.org), split = splitsPersonal(r);
+    const json = JSON.stringify(r.details);
+    let sealed = "", pii: string | null = null, pdig: string | null = null;
+    if (!split) sealed = await sealText(env, json);
+    else {
+      const salt = await engSalt(env, r.eid!, r.now); // null = already shredded: a late participant row keeps its non-personal core only
+      if (salt) { pii = await sealEng(env, r.eid!, salt, json); pdig = await sha(pii); }
+    }
     for (let attempt = 0; attempt < 4; attempt++) {
       const last = await env.DB.prepare("SELECT seq, row_hash FROM audit_log WHERE chain=? ORDER BY seq DESC LIMIT 1").bind(chain).first<{ seq: number; row_hash: string }>();
       const seq = (last?.seq ?? 0) + 1, prev = last?.row_hash ?? GENESIS;
-      const f = { chain, seq, prev, at: r.now, actor: r.actor, event: r.event, target: r.target, corr: r.corr, status: r.status, country: r.country || null, asn: r.asn || null, vendor: r.aiVendor ?? null, key: r.keyId ?? null, proof: r.proof ?? null, mismatch: r.mismatch ? 1 : 0, sealed };
+      // a participant's network number is personal too: it lives in the sealed part only
+      const f = { chain, seq, prev, at: r.now, actor: r.actor, event: r.event, target: r.target, corr: r.corr, status: r.status, country: r.country || null, asn: split ? null : r.asn || null, vendor: r.aiVendor ?? null, key: r.keyId ?? null, proof: r.proof ?? null, mismatch: r.mismatch ? 1 : 0, sealed, pdig };
       try {
-        await env.DB.prepare("INSERT INTO audit_log(chain,seq,eid,org,at_ms,actor,event,target,corr,status,country,asn,ai_vendor,key_id,proof,mismatch,sealed,prev_hash,row_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-          .bind(chain, seq, r.eid, r.org, r.now, r.actor, r.event, r.target, r.corr, r.status, f.country, f.asn, f.vendor, f.key, f.proof, f.mismatch, sealed, prev, await rowHash(f)).run();
+        const ins = env.DB.prepare("INSERT INTO audit_log(chain,seq,eid,org,at_ms,actor,event,target,corr,status,country,asn,ai_vendor,key_id,proof,mismatch,sealed,prev_hash,row_hash,pdig) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+          .bind(chain, seq, r.eid, r.org, r.now, r.actor, r.event, r.target, r.corr, r.status, f.country, f.asn, f.vendor, f.key, f.proof, f.mismatch, sealed, prev, await rowHash(f), pdig);
+        if (pii) await env.DB.batch([ins, env.DB.prepare("INSERT INTO audit_pii(chain,seq,eid,sealed) VALUES(?,?,?,?)").bind(chain, seq, r.eid, pii)]); else await ins.run();
         return true;
       } catch { /* another request took this sequence number: read the new head and try again */ }
     }
@@ -231,9 +262,18 @@ export async function logAccess(db: D1, now: number, action: string, eid: string
 export async function loadRows(env: AuditEnv, chain: string, limit = 5000, offset = 0): Promise<OpenRow[]> {
   const r = await env.DB.prepare("SELECT * FROM audit_log WHERE chain=? ORDER BY seq ASC LIMIT ? OFFSET ?").bind(chain, limit, offset).all<any>();
   const out: OpenRow[] = [];
+  const salts = new Map<string, string | null>();
   for (const x of r.results ?? []) {
-    const t = await openText(env, x.sealed);
-    out.push({ id: x.id, chain: x.chain, seq: x.seq, eid: x.eid, org: x.org, at_ms: x.at_ms, at_utc: new Date(x.at_ms).toISOString(), actor: x.actor, event: x.event, target: x.target, corr: x.corr, status: x.status, country: x.country, asn: x.asn, ai_vendor: x.ai_vendor, key_id: x.key_id, proof: x.proof, mismatch: !!x.mismatch, details: t === null ? { unreadable: true } : JSON.parse(t), prev_hash: x.prev_hash, row_hash: x.row_hash });
+    let details: any;
+    if (x.pdig) { // a participant row: the personal part is separate and may have been shredded
+      const eid = x.eid as string;
+      if (!salts.has(eid)) salts.set(eid, (await env.DB.prepare("SELECT salt FROM eng_key WHERE eid=?").bind(eid).first<{ salt: string }>())?.salt ?? null);
+      const pii = (await env.DB.prepare("SELECT sealed FROM audit_pii WHERE chain=? AND seq=?").bind(x.chain, x.seq).first<{ sealed: string }>())?.sealed ?? null;
+      const t = pii ? await openEng(env, eid, salts.get(eid), pii) : null;
+      details = t !== null ? JSON.parse(t) : pii ? { unreadable: true } : { personal_data_erased: true };
+    } else if (x.sealed === "") details = { personal_data_erased: true };
+    else { const t = await openText(env, x.sealed); details = t === null ? { unreadable: true } : JSON.parse(t); }
+    out.push({ id: x.id, chain: x.chain, seq: x.seq, eid: x.eid, org: x.org, at_ms: x.at_ms, at_utc: new Date(x.at_ms).toISOString(), actor: x.actor, event: x.event, target: x.target, corr: x.corr, status: x.status, country: x.country, asn: x.asn, ai_vendor: x.ai_vendor, key_id: x.key_id, proof: x.proof, mismatch: !!x.mismatch, details, prev_hash: x.prev_hash, row_hash: x.row_hash });
   }
   return out;
 }
@@ -249,13 +289,21 @@ export function toCsv(rows: OpenRow[]): string {
 export async function verifyChain(db: D1, chain: string): Promise<{ ok: boolean; rows: number; brokenAtSeq: number | null; reason: string | null; headHash: string }> {
   const r = await db.prepare("SELECT * FROM audit_log WHERE chain=? ORDER BY seq ASC").bind(chain).all<any>();
   let prev: string | null = null, expectSeq: number | null = null, n = 0, head = GENESIS;
+  const piiRows = new Map<number, string>();
+  for (const p of (await db.prepare("SELECT seq, sealed FROM audit_pii WHERE chain=?").bind(chain).all<any>()).results ?? []) piiRows.set(p.seq, p.sealed);
+  const shredded = await isShredded(db, chain);
   for (const x of r.results ?? []) {
     n++;
     if (expectSeq !== null && x.seq !== expectSeq) return { ok: false, rows: n, brokenAtSeq: x.seq, reason: "a row is missing before this one", headHash: head };
     if (prev !== null && x.prev_hash !== prev) return { ok: false, rows: n, brokenAtSeq: x.seq, reason: "this row does not follow the one before it", headHash: head };
     if (prev === null && x.seq === 1 && x.prev_hash !== GENESIS) return { ok: false, rows: n, brokenAtSeq: x.seq, reason: "the first row does not start the chain", headHash: head };
-    const h = await rowHash({ chain: x.chain, seq: x.seq, prev: x.prev_hash, at: x.at_ms, actor: x.actor, event: x.event, target: x.target, corr: x.corr, status: x.status, country: x.country, asn: x.asn, vendor: x.ai_vendor, key: x.key_id, proof: x.proof, mismatch: x.mismatch, sealed: x.sealed });
+    const h = await rowHash({ chain: x.chain, seq: x.seq, prev: x.prev_hash, at: x.at_ms, actor: x.actor, event: x.event, target: x.target, corr: x.corr, status: x.status, country: x.country, asn: x.asn, vendor: x.ai_vendor, key: x.key_id, proof: x.proof, mismatch: x.mismatch, sealed: x.sealed, pdig: x.pdig });
     if (h !== x.row_hash) return { ok: false, rows: n, brokenAtSeq: x.seq, reason: "this row was changed", headHash: head };
+    if (x.pdig) { // the personal part, while it exists, must be the one the chain committed to; once shredded it is rightly gone (the chain never needed it)
+      const blob = piiRows.get(x.seq);
+      if (blob !== undefined && (await sha(blob)) !== x.pdig) return { ok: false, rows: n, brokenAtSeq: x.seq, reason: "this row's personal part was changed", headHash: head };
+      if (blob === undefined && !shredded) return { ok: false, rows: n, brokenAtSeq: x.seq, reason: "this row's personal part is missing without a recorded erasure", headHash: head };
+    }
     prev = x.row_hash; head = x.row_hash; expectSeq = x.seq + 1;
   }
   return { ok: true, rows: n, brokenAtSeq: null, reason: null, headHash: head };
@@ -328,9 +376,32 @@ export async function closeAuditFor(env: AuditEnv, eid: string, now: number): Pr
   await db.prepare("INSERT OR IGNORE INTO audit_cert(eid,deleted_ms,row_count,final_hash,first_ms,last_ms) VALUES(?,?,?,?,?,?)").bind(eid, now, s?.n ?? 0, head?.row_hash ?? GENESIS, s?.f ?? null, s?.l ?? null).run();
   await db.prepare("DELETE FROM audit_log WHERE chain=?").bind(eid).run();
   await db.prepare("DELETE FROM ai_audit WHERE eid=?").bind(eid).run();
+  await db.prepare("DELETE FROM audit_pii WHERE eid=?").bind(eid).run();
+  await db.prepare("DELETE FROM eng_key WHERE eid=?").bind(eid).run();
+  await db.prepare("DELETE FROM shred WHERE eid=?").bind(eid).run();
   return true;
 }
 /** Rows that belong to no live engagement (sign-ins, refused attempts, calls to ids that never existed) go 365 days after they were written. A held engagement still exists, so its rows stay. */
 export async function sweepAudit(db: D1, now: number, days = 365): Promise<void> {
   await db.prepare("DELETE FROM audit_log WHERE at_ms < ? AND (eid IS NULL OR eid NOT IN (SELECT id FROM engagement))").bind(now - days * 86_400_000).run().catch(() => undefined);
+  await db.prepare("DELETE FROM audit_pii WHERE NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.chain=audit_pii.chain AND a.seq=audit_pii.seq)").run().catch(() => undefined);
+  await db.prepare("DELETE FROM eng_key WHERE eid NOT IN (SELECT id FROM engagement)").run().catch(() => undefined);
+  await db.prepare("DELETE FROM shred WHERE eid NOT IN (SELECT id FROM engagement)").run().catch(() => undefined);
+}
+
+/**
+ * Crypto-shreds the participants' personal part of an engagement's audit log (23 hours after the game ends, or when the organizer erases earlier): deletes every sealed blob and the
+ * engagement's key salt, then records a `shred` marker (engagement id, time, number of rows; nothing personal). Idempotent. A legal hold set by the owner suspends it (returns false).
+ * The chain still verifies afterwards: it covers only the non-personal core and the blobs' digests, never the blobs themselves.
+ */
+export async function shredParticipantAudit(env: AuditEnv, eid: string, now: number): Promise<boolean> {
+  const db = env.DB;
+  if (await isHeld(db, eid)) return false;
+  const n = (await db.prepare("SELECT COUNT(*) AS c FROM audit_pii WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
+  await db.batch([
+    db.prepare("DELETE FROM audit_pii WHERE eid=?").bind(eid),
+    db.prepare("DELETE FROM eng_key WHERE eid=?").bind(eid),
+    db.prepare("INSERT OR IGNORE INTO shred(eid,shredded_ms,row_count) VALUES(?,?,?)").bind(eid, now, n),
+  ]);
+  return true;
 }

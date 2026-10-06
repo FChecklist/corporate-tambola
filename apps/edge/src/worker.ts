@@ -429,7 +429,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   const p = url.pathname;
 
   if (req.method === "GET" && p === "/api/z/ai-manifest") return json(AI_MANIFEST);
-  { const rm = p.match(/^\/api\/report\/([A-Za-z0-9_-]{4,40})$/); if (rm && req.method === "GET") return reportApi(env as any, rm[1]!, url); } // the report page; the key in the link is the only credential
+  { const rm = p.match(/^\/api\/report\/([A-Za-z0-9_-]{4,40})$/); if (rm && req.method === "GET") return reportApi(env as any, rm[1]!, url, now); } // the report page; the key in the link is the only credential
   const paid = await payRoute(req, env as PayEnv, now, (n) => spend(env, now, n));
   if (paid) return paid;
   const partnered = await partnerRoute(req, env as PayEnv, now, (n) => spend(env, now, n), a.plat);

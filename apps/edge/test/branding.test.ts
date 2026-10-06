@@ -136,7 +136,7 @@ describe("the legal page carries the owner's final text, and each line matches w
     expect(r).not.toMatch(/Cut your own|Late claims|wrong claim|block your ticket|for fun/i);
     expect(r).toContain("Numbers 1 to 90 come from a public random beacon."); expect(r).not.toMatch(/No one can choose or change|not even the organizer|twice|every claim is checked/); expect(r).toContain("The 2nd Full House can only follow the 1st."); expect(r).toContain("One ticket per phone.");
     const lc = read("apps/edge/src/lifecycle.ts");
-    expect(lc).toMatch(/PURGE_AFTER_MS = 22 \* 3_600_000/); // 22 h is inside "within 24 hours"
+    expect(lc).toMatch(/PURGE_AFTER_MS = 23 \* 3_600_000/); // 23 h is inside "within 24 hours"
     expect(lc).toMatch(/endMs \+ 365 \* DAY/); expect(lc).toMatch(/DELETE FROM prize WHERE eid=\?/); // prize details go with the 365-day deletion
     expect(lc).toMatch(/DELETE FROM participant WHERE eid=\?/); expect(lc).toMatch(/DELETE FROM seat WHERE eid=\?/);
   });

@@ -1,9 +1,10 @@
 // The life of an engagement's personal data. When a game ends (as seen from the public schedule, or sooner when enough phones say so):
 //   1. the organizer's report is built from the sealed records and e-mailed as PDF(s), in small steps because a free Worker has ~10 ms of CPU per call;
-//   2. 22 hours after the end (we promise 24) every participant's name, number, seat, invite record and ticket link is deleted, the report's working copies too;
+//   2. the report link stops working 22 hours after the end; 23 hours after the end (we promise 24) every participant's name, number, seat, invite record and ticket link is deleted, the report's working copies too,
+//      and the participants' personal part of the audit log is crypto-shredded (audit.ts `shredParticipantAudit`: its per-engagement key is destroyed, the hash chain still verifies);
 //   3. only the organizer / host / co-host details and the winners record (seat, prize, round, time) remain, until 00:00 IST at the end of the 365th day, then everything goes.
 // Called by the scheduled job (and, as a fallback, by any outside timer with the platform key). Every call does a bounded amount of work and can be repeated safely.
-import { closeAuditFor } from "./audit";
+import { closeAuditFor, isHeld, shredParticipantAudit } from "./audit";
 import { GRACE_ROUNDS, INVITE_CATEGORIES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
 import { callRoundR, luckyRound } from "../../../packages/beacon/src/game";
 import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../../../packages/beacon/src/control";
@@ -15,7 +16,8 @@ import type { D1, Env } from "./worker";
 
 export const GENESIS = 1692803367;
 export const roundMs = (r: number) => (GENESIS + (r - 1) * 3) * 1000;
-export const PURGE_AFTER_MS = 22 * 3_600_000;      // personal data goes this long after the game ended (the promise is 24 hours)
+export const PURGE_AFTER_MS = 23 * 3_600_000;      // participants' personal data (and the personal part of their audit rows) goes this long after the game ended (the promise is 24 hours)
+export const REPORT_LINK_MS = 22 * 3_600_000;      // the organizer's report link stops working this long after the game ended, an hour before the deletion
 export const REPORT_AFTER_MS = 3 * 60_000;         // the report starts a few minutes after the end, so late wins have been recorded
 export const BACKUP_DAYS = 7;
 const IST = 5.5 * 3_600_000, DAY = 86_400_000;
@@ -34,6 +36,7 @@ const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { sta
 /** 00:00 IST at the end of the 365th day after the game ended: when everything about the engagement is deleted. */
 export const fullDeleteAt = (endMs: number): number => { const t = endMs + 365 * DAY; const istDay = Math.floor((t + IST) / DAY); return (istDay + 1) * DAY - IST; };
 export const personalDeleteAt = (endMs: number) => endMs + PURGE_AFTER_MS;
+export const reportLinkUntil = (endMs: number) => endMs + REPORT_LINK_MS;
 
 export function cfgOfRow(e: { tickets?: number; config?: string | null }): EngagementCfg {
   try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites }); if (v.ok) return v.cfg; } catch { /* plain defaults */ }
@@ -106,7 +109,7 @@ export async function acceptOver(env: Env, e: any, eid: string, b: any, now: num
 }
 
 // ------------------------------------------------------------------------------------------------ deletion
-/** Deletes every participant's name, number, seat, invite record, ticket link and working copy of the report. The winners record, the organizer's details and the engagement itself stay. */
+/** Deletes every participant's name, number, seat, invite record, ticket link and working copy of the report, and crypto-shreds the participants' personal part of the audit log (unless the owner set a legal hold). The winners record, the prize hand-over record, the organizer's details and the engagement itself stay. */
 export async function erasePersonal(env: Env, eid: string, now: number, by: string): Promise<void> {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rvote WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rcand WHERE eid=?").bind(eid),
@@ -114,6 +117,7 @@ export async function erasePersonal(env: Env, eid: string, now: number, by: stri
     env.DB.prepare("DELETE FROM kv WHERE k=? OR k=? OR k=? OR k=? OR k LIKE ?").bind(`seats-base/${eid}`, `rpt/${eid}`, `rptopen/${eid}`, `rptremind/${eid}`, `rptc/${eid}/%`),
     env.DB.prepare("INSERT INTO life(eid,end_ms,end_src,purged_ms,report_state) VALUES(?,?, 'organizer', ?, ?) ON CONFLICT(eid) DO UPDATE SET purged_ms=?, report_state=COALESCE(life.report_state, ?)").bind(eid, now, now, by, now, by),
   ]);
+  await shredParticipantAudit(env as any, eid, now); // best effort inside: a held engagement keeps its log until the hold is lifted, then the tick shreds it
 }
 /** Everything about an engagement, at the end of its 365 days (or for a draft nobody published). */
 export async function eraseEverything(env: Env, id: string, now = Date.now()): Promise<void> {
@@ -122,6 +126,7 @@ export async function eraseEverything(env: Env, id: string, now = Date.now()): P
   await env.DB.batch([
     env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM prize WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
     env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`rptsalt/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`),
+    env.DB.prepare("DELETE FROM shred WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM eng_key WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM audit_pii WHERE eid=?").bind(id), // erasePersonal above wrote a fresh shred marker
     env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
   ]);
 }
@@ -176,7 +181,7 @@ async function reportStep(env: LifeEnv, e: any, life: { end_ms: number }, now: n
     const cfg = sch.cfg, endMs = life.end_ms, first = roundMs(sch.start);
     const base = await baseData(env, e, cfg, sch, st, email, now, endMs, first);
     const link = await reportLink(env, eid);
-    const ok = await sendReportMail(env, email, `Your Corporate Tambola engagement report ${eid}: open it before ${istFull(base.personalDeleteAtMs)}`, bodyFor(eid, base, link), []);
+    const ok = await sendReportMail(env, email, `Your Corporate Tambola engagement report ${eid}: open it before ${istFull(reportLinkUntil(endMs))}`, bodyFor(eid, base, link), []);
     if (!ok) return false; // try again at the next call
     st.stage = "done"; await save(); return true;
   }
@@ -188,7 +193,7 @@ const bodyFor = (eid: string, d: ReportData, link: string) => [
   `Your engagement ${eid} has ended. Your complete report is ready: when the game started, how many people took part at each stage, every prize and who won it, the invite tree, all statistics, and the name and mobile number of every participant.`, ``,
   `Open it here (the PDF is built on your own computer or phone, so this link is all we send):`,
   link, ``,
-  `The link works until ${istFull(d.personalDeleteAtMs)}, when we permanently delete the participants' details as promised. Please open it and save the PDF before then: it is the only copy of this data once ours is deleted. You can share the link with your co-host; anyone who has it can read the report, so share it carefully. Winners confirm the name and mobile number their prize goes to on their own phone; the report shows what they confirmed, whether they changed anything, and whether you have handed the prize over, so open it again after you have ticked "Prize given" in your console.`, ``,
+  `The link works until ${istFull(reportLinkUntil(d.endMs))}; the participants' details are permanently deleted at ${istFull(d.personalDeleteAtMs)}, as promised. Please open it and save the PDF before then: it is the only copy of this data once ours is deleted. You can share the link with your co-host; anyone who has it can read the report, so share it carefully. Winners confirm the name and mobile number their prize goes to on their own phone; the report shows what they confirmed, whether they changed anything, and whether you have handed the prize over, so open it again after you have ticked "Prize given" in your console.`, ``,
   `What happens to the data:`,
   `- By ${istFull(d.personalDeleteAtMs)} (within 24 hours of the game ending) we permanently delete every participant's name, mobile number, seat, join record and invite record from our systems.`,
   `- For 365 days we keep only: the organizer, host and co-host details, the log of what your AI assistant did, and the winners record (which prize, which round, what time, which seat, and the name and mobile number each winner confirmed so the prize can be handed over, with whether it was given).`,
@@ -210,13 +215,13 @@ export async function reportLink(env: LifeEnv, eid: string): Promise<string> {
   return `${((env as any).PUBLIC_ORIGIN ?? "https://corporate-tambola.pages.dev").replace(/\/$/, "")}/report.html?e=${encodeURIComponent(eid)}&k=${await reportKey(env, eid)}`;
 }
 /** What the report page asks for: `base` (everything except the people) and `people` (250 at a time). Valid only with the engagement's key, and only while the personal data still exists. */
-export async function reportApi(env: LifeEnv, eid: string, url: URL): Promise<Response> {
+export async function reportApi(env: LifeEnv, eid: string, url: URL, now = Date.now()): Promise<Response> {
   if ((url.searchParams.get("k") ?? "") !== (await reportKey(env, eid))) return json({ error: "This report link is not valid." }, 403);
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
   const life = await env.DB.prepare("SELECT * FROM life WHERE eid=?").bind(eid).first<any>();
   const st: RptState | null = JSON.parse((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`rpt/${eid}`).first<{ v: string }>())?.v ?? "null");
-  if (!e || !life || !st || (st.stage !== "send" && st.stage !== "done")) return json({ error: "This report is not ready, or the participants' details have already been deleted (that happens within 24 hours of the game ending, as promised).", code: "gone" }, 404);
-  await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`rptopen/${eid}`, String(Date.now())).run();
+  if (!e || !life || !st || (st.stage !== "send" && st.stage !== "done") || now >= reportLinkUntil(life.end_ms)) return json({ error: "This report is not ready, or the link has closed and the participants' details are being or have been deleted (that happens within 24 hours of the game ending, as promised).", code: "gone" }, 404);
+  await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`rptopen/${eid}`, String(now)).run();
   const part = url.searchParams.get("part");
   if (part === "people") {
     const i = Number(url.searchParams.get("i"));
@@ -227,7 +232,7 @@ export async function reportApi(env: LifeEnv, eid: string, url: URL): Promise<Re
   const sch = await schedule(env, e);
   const contact = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`contact/${eid}`).first<{ v: string }>();
   const email = contact ? (JSON.parse(contact.v).email as string) : "";
-  const base = await baseData(env, e, sch.cfg, sch, st, email, Date.now(), life.end_ms, roundMs(sch.start));
+  const base = await baseData(env, e, sch.cfg, sch, st, email, now, life.end_ms, roundMs(sch.start));
   return json({ base, totalPeople: st.total, chunks: st.chunks, chunkSize: CHUNK, partSize: PART });
 }
 
@@ -264,7 +269,7 @@ async function baseData(env: LifeEnv, e: any, cfg: EngagementCfg, sch: Awaited<R
   };
 }
 
-/** Six hours before the participants' details are deleted: if the report link has not been opened yet, one reminder. */
+/** Six hours before the report link closes: if it has not been opened yet, one reminder. */
 async function remindReport(env: LifeEnv, e: any, life: any, now: number) {
   const eid = e.id as string;
   if (await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k IN (?,?)").bind(`rptopen/${eid}`, `rptremind/${eid}`).first()) return;
@@ -272,7 +277,7 @@ async function remindReport(env: LifeEnv, e: any, life: any, now: number) {
   const email = contact ? (JSON.parse(contact.v).email as string) : null;
   await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`rptremind/${eid}`, String(now)).run();
   if (!email) return;
-  await sendReportMail(env, email, `Reminder: open your Corporate Tambola report ${eid} before ${istFull(personalDeleteAt(life.end_ms))}`, `Hello,\n\nYour engagement ${eid} report has not been opened yet. The participants' details are permanently deleted at ${istFull(personalDeleteAt(life.end_ms))}, and the report cannot be made after that.\n\nOpen it here and save the PDF:\n${await reportLink(env, eid)}\n\nCorporate Tambola`, []);
+  await sendReportMail(env, email, `Reminder: open your Corporate Tambola report ${eid} before ${istFull(reportLinkUntil(life.end_ms))}`, `Hello,\n\nYour engagement ${eid} report has not been opened yet. The link closes at ${istFull(reportLinkUntil(life.end_ms))} and the participants' details are permanently deleted at ${istFull(personalDeleteAt(life.end_ms))}, and the report cannot be made after that.\n\nOpen it here and save the PDF:\n${await reportLink(env, eid)}\n\nCorporate Tambola`, []);
 }
 
 // ------------------------------------------------------------------------------------------------ the scheduled tick
@@ -295,10 +300,15 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
         if (await reportStep(env, e, life, now)) { await env.DB.prepare("UPDATE life SET report_ms=?, report_state=COALESCE(report_state,'sent') WHERE eid=?").bind(now, e.id).run(); out.reportsDone++; }
         else await env.DB.prepare("UPDATE life SET tries=tries+1 WHERE eid=?").bind(e.id).run();
       }
-      if (life.report_ms && now >= personalDeleteAt(life.end_ms) - 6 * 3_600_000 && now < personalDeleteAt(life.end_ms)) await remindReport(env, e, life, now);
-      if (now >= personalDeleteAt(life.end_ms)) { await erasePersonal(env, e.id, now, "auto"); out.purged++; }
+      if (life.report_ms && now >= reportLinkUntil(life.end_ms) - 6 * 3_600_000 && now < reportLinkUntil(life.end_ms)) await remindReport(env, e, life, now);
+      if (now >= personalDeleteAt(life.end_ms) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "auto"); out.purged++; } // an owner-set legal hold suspends this too
     } catch { /* this engagement is tried again at the next tick; the others still run */ }
   }
+  // engagements whose participant rows are already gone (organizer erased early, or a hold was lifted since) but whose participants' audit part is still sealed: shred it once the 23 hours are over
+  try {
+    const late = (await env.DB.prepare("SELECT DISTINCT p.eid AS eid FROM audit_pii p JOIN life l ON l.eid=p.eid WHERE l.end_ms + ? <= ? AND NOT EXISTS (SELECT 1 FROM legal_hold h WHERE h.eid=p.eid) LIMIT 25").bind(PURGE_AFTER_MS, now).all<{ eid: string }>()).results ?? [];
+    for (const x of late) await shredParticipantAudit(env as any, x.eid, now);
+  } catch { /* tried again at the next tick */ }
   return out;
 }
 
