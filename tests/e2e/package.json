@@ -1,0 +1,1 @@
+{ "name": "tambola-e2e", "private": true, "type": "module", "scripts": { "local": "E2E_TARGET=local node ../../node_modules/@playwright/test/cli.js test -c playwright.config.ts" } }
