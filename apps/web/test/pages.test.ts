@@ -476,7 +476,7 @@ describe("Refer & Earn page", () => {
   test("the page pitches 50%, lists every pack with exactly half of its price, and has a working calculator", async () => {
     const o = await organizer(); const p = await page(o, "/partner.html", "partner.html", ["common.js", "partner.js"]);
     const doc = p.win.document; const body = doc.body.textContent!.replace(/\s+/g, " ");
-    expect(body).toMatch(/Earn 50% on every new company you bring/); expect(body).toMatch(/20% more every time that company buys again/); expect(body).toMatch(/random code/i); expect(body).not.toMatch(/mobile number is your code/i);
+    expect(body).toMatch(/Earn up to 50% on every game you bring/); expect(body).not.toMatch(/20% more every time/); expect(body).toMatch(/random code/i); expect(body).not.toMatch(/mobile number is your code/i);
     const packs: number[][] = p.win.TB.PACKS;
     expect(packs.slice(0, 3).map((x) => [x[0], x[1]])).toEqual([[100, 1999], [250, 2999], [500, 3999]]); // the launch prices
     const rows = [...doc.querySelectorAll("#earn-table .rrow:not(.rh)")].map((r: any) => r.textContent.replace(/\s+/g, " "));

@@ -93,7 +93,7 @@ const PAGES = {
       "No spam. Message only people who expect to hear from you.",
     ]],
     ["pay", "Commission", [
-      "You earn commission on paid purchases by companies that came through your link, at the rates on the Refer &amp; earn page.",
+      "You earn up to half of the software price (before GST) on a company's first purchase, and 20% on its later purchases within 12 months.",
       "No payment from the buyer, no commission. Refunds and reversals reduce it.",
       "We may refuse or reverse commission for self-referral or misuse.",
     ]],
