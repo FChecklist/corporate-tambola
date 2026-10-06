@@ -93,7 +93,8 @@ const PAGES = {
       "No spam. Message only people who expect to hear from you.",
     ]],
     ["pay", "Commission", [
-      "You earn up to half of the software price (before GST) on a company's first purchase, and 20% on its later purchases within 12 months.",
+      "You earn up to half of the software price (before GST) on every game a company buys through your link, including repeat purchases within 12 months.",
+      "Commission rates can change from time to time under our management policy. A change applies to purchases made after it and is shown on your partner page.",
       "No payment from the buyer, no commission. Refunds and reversals reduce it.",
       "We may refuse or reverse commission for self-referral or misuse.",
     ]],

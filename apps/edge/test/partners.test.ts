@@ -135,16 +135,16 @@ describe("a referred purchase", () => {
       expect(c).toEqual({ base, rate: 0.5, amount: earn, status: "accrued" });
     }
   });
-  test("the same customer buying again within 12 months earns the partner who first brought them 20%, even when they come back without the link", async () => {
+  test("the same customer buying again within 12 months earns the partner who first brought them 50%, even when they come back without the link", async () => {
     await buy({ ref: CODE, pack: 500, email: "loyal@buyer.example" });
     await buy({ pack: 250, email: "Loyal@Buyer.example" }); // no link this time, same customer
     const rows = raw.query("SELECT base, rate, amount, partner_code FROM commission ORDER BY id").all() as any[];
-    expect(rows).toEqual([{ base: 3999, rate: 0.5, amount: 1999.5, partner_code: CODE }, { base: 2999, rate: 0.2, amount: 599.8, partner_code: CODE }]);
+    expect(rows).toEqual([{ base: 3999, rate: 0.5, amount: 1999.5, partner_code: CODE }, { base: 2999, rate: 0.5, amount: 1499.5, partner_code: CODE }]);
   });
   test("after 12 months a returning customer is new again (50%), and a customer who first bought with no partner never earns a later link-user more than the repeat rate", async () => {
     await buy({ pack: 100, email: "plain@buyer.example" }); // no partner at all
     await buy({ ref: CODE, pack: 100, email: "plain@buyer.example" }); // a link used for a customer who already bought: repeat rate
-    expect(raw.query("SELECT rate, amount FROM commission").get()).toEqual({ rate: 0.2, amount: 399.8 });
+    expect(raw.query("SELECT rate, amount FROM commission").get()).toEqual({ rate: 0.5, amount: 999.5 });
     raw.run("UPDATE payment SET paid_ms = paid_ms - ?", [400 * 86_400_000]); // a year and more later
     await buy({ ref: CODE, pack: 100, email: "plain@buyer.example" });
     expect(raw.query("SELECT rate FROM commission ORDER BY id DESC LIMIT 1").get()).toEqual({ rate: 0.5 });
@@ -203,7 +203,7 @@ describe("what a partner can see", () => {
     await buy({ ref: CODE });
     const me = await (await call("GET", "/api/partner/me", undefined, { "x-partner": a.partnerKey })).json() as any;
     expect(me.totals).toMatchObject({ sales: 1, accruedInr: 1999.5, waitingForRate: 0 });
-    expect(me.rateAnnounced).toBe(true); expect(me.rate).toBe(0.5); expect(me.repeatRate).toBe(0.2);
+    expect(me.rateAnnounced).toBe(true); expect(me.rate).toBe(0.5); expect(me.repeatRate).toBe(0.5);
     expect(me.sales[0].amount).toBe(1999.5); expect(JSON.stringify(me.sales)).not.toMatch(/boss|acme|@/i);
   });
   test("a wrong or missing key sees nothing", async () => {

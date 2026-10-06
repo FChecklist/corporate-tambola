@@ -13,8 +13,8 @@ import { testFlag } from "./mode";
 export const ATTRIBUTION_DAYS = 30;
 /** The commission every partner earns on the software price (before GST) of a paid, referred purchase. Owner decision 2026-10-03: 50%. PARTNER_COMMISSION_RATE can lower it (never above 50%). */
 export const COMMISSION_RATE = 0.5;
-/** What the partner who first brought a customer earns when that customer buys again within a year. */
-export const REPEAT_COMMISSION_RATE = 0.2;
+/** What the partner who first brought a customer earns when that customer buys again within a year. Owner decision 2026-10-06: the same up to 50% as a first purchase. */
+export const REPEAT_COMMISSION_RATE = 0.5;
 export const REPEAT_WINDOW_DAYS = 365;
 export const PARTNER_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS partner (code TEXT PRIMARY KEY, key_hash TEXT NOT NULL, name TEXT, source TEXT, enrolled_ms INTEGER NOT NULL, consent_ms INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'active')`,
@@ -52,7 +52,7 @@ export async function recordCommission(env: PayEnv, p: { id: string; ref?: strin
     else {
       const set = env.PARTNER_COMMISSION_RATE !== undefined && env.PARTNER_COMMISSION_RATE !== "" ? Number(env.PARTNER_COMMISSION_RATE) : NaN;
       const first = set >= 0 && set <= 0.5 ? set : COMMISSION_RATE; // 50% on a customer's first purchase, unless the owner chose something lower
-      const x = repeat ? Math.min(REPEAT_COMMISSION_RATE, first) : first; // 20% when the customer buys again within 12 months
+      const x = repeat ? Math.min(REPEAT_COMMISSION_RATE, first) : first; // the same up-to-50% when the customer buys again within 12 months (owner decision 2026-10-06)
       rate = x; amount = r2(base * x); status = "accrued";
     }
     await env.DB.prepare("INSERT OR IGNORE INTO commission(payment_id,partner_code,base,currency,rate,amount,status,reason,created_ms,is_test) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(p.id, partner.code, base, p.currency, rate, amount, status, reason, now, (p as any).is_test || partner.is_test ? 1 : 0).run(); // a test payment or a test partner makes a test commission: it never counts in real figures
