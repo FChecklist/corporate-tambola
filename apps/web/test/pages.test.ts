@@ -196,11 +196,11 @@ describe("console (organizer page)", () => {
   });
   test("UC-82 the break editor can make a lucky draw a scratch card", async () => {
     const o = await organizer(); await make(o, "UI-SCR");
-    const p = await consolePage(o, "UI-SCR"); await p.waitFor((x) => /Tickets, rewards and brand breaks/.test(x));
+    const p = await consolePage(o, "UI-SCR"); await p.waitFor((x) => /Tickets, rewards and brand moments/.test(x));
     const set = (sel: string, v: string) => { const el = p.$(sel) as any; el.value = v; };
-    set('[data-bk="after"][data-i="0"]', "40"); set('[data-bk="seconds"][data-i="0"]', "60"); set('[data-bk="kind"][data-i="0"]', "lucky"); set('[data-bk="title"][data-i="0"]', "Scratch and win"); set('[data-bk="style"][data-i="0"]', "scratch");
+    set('[data-bk="seconds"][data-i="0"]', "60"); set('[data-bk="kind"][data-i="0"]', "lucky"); set('[data-bk="title"][data-i="0"]', "Scratch and win"); set('[data-bk="style"][data-i="0"]', "scratch");
     p.click("#savecfg"); await p.waitFor((x) => /Saved/.test(x));
-    expect((await o.json(await o.api("GET", "/api/z/UI-SCR/summary", undefined, o.aiKey))).breaks[0].style).toBe("scratch");
+    const sm = await o.json(await o.api("GET", "/api/z/UI-SCR/summary", undefined, o.aiKey)); expect(sm.breaks[0].style).toBe("scratch"); expect(sm.breaks[0].after).toBe(45); // no number typed: the software put it halfway
   });
 });
 
@@ -569,5 +569,90 @@ describe("invitations on the pages", () => {
     const info = await o.json(await o.api("GET", "/api/z/UI-INV4/info", undefined, o.token));
     expect(info.invites).toEqual({ on: true, per: 3, cats: ["family", "customers", "vendors"].sort((a, b) => ["family", "colleagues", "friends", "dealers", "vendors", "customers"].indexOf(a) - ["family", "colleagues", "friends", "dealers", "vendors", "customers"].indexOf(b)) });
     expect(p.errors).toEqual([]);
+  }, 60_000);
+});
+
+describe("opening and closing brand moments on the phone", () => {
+  const rtFake4 = (win: any, nowMs: () => number) => { const Orig = win.ZG.PhoneRuntime; win.ZG.PhoneRuntime = class extends Orig { constructor(eid: string, deps: any) { super(eid, { ...deps, beacon: { fetcher: async (url: string) => { const last = url.split("/").pop()!; const r = last === "latest" ? roundAt(nowMs()) : Number(last); return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" }) }; }, mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 }, verify: (x: any) => x.signature === "aa" }); } }; };
+  async function joined(o: O, id: string, settings: Record<string, unknown>) {
+    await make(o, id); await o.api("PATCH", `/api/z/${id}/settings`, settings, o.aiKey); await publish(o, id);
+    const p = await page(o, `/z?e=${id}`, "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake4(win, () => o.world.now); win.Math = Object.assign(Object.create(Math), { random: () => 0 }); } });
+    await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = "9833333333"; p.click("#go"); await p.waitFor((x) => /Your ticket|What you can win/.test(x));
+    return p;
+  }
+  const at = (o: O, p: any, secs: number) => { const rt = p.win.__rt; o.world.now = p.win.ZG.roundTimeMs(rt.startRound) + secs * 1000; rt.syncedAtMono = -Infinity; };
+  const until = async (cond: () => boolean, ms = 25000) => { const t0 = Date.now(); while (!cond()) { if (Date.now() - t0 > ms) throw new Error("timed out"); await new Promise((r) => setTimeout(r, 200)); } };
+  const settle = () => new Promise((r) => setTimeout(r, 1200));
+
+  test("an opening plays only in the 2 minutes before the first number, with its video inside the page, and is gone once the numbers start", async () => {
+    const o = await organizer(); const p = await joined(o, "UI-OPN1", { opening: [{ kind: "youtube", title: "Welcome from our CEO", mediaUrl: "https://youtu.be/dQw4w9WgXcQ", seconds: 60 }] }); const doc = p.win.document;
+    at(o, p, -400); await settle(); expect(p.text()).not.toMatch(/A message from your organizer/); // far too early: just the countdown
+    for (let s = -110; s < -50 && !doc.querySelector("#ctmedia iframe"); s += 6) { at(o, p, s); await settle(); }
+    expect(p.text()).toMatch(/A message from your organizer/); expect(p.text()).toMatch(/Welcome from our CEO/);
+    const f = doc.querySelector("#ctmedia iframe") as any; expect(f).toBeTruthy(); expect(f.src).toMatch(/^https:\/\/www\.youtube-nocookie\.com\/embed\/dQw4w9WgXcQ\?/);
+    at(o, p, 30); await until(() => !doc.querySelector("#ctmedia iframe")); expect(p.text()).not.toMatch(/A message from your organizer/); // numbers have started
+  }, 90_000);
+  test("two openings (2 tickets) follow one another inside the same 2 minutes", async () => {
+    const o = await organizer(); const p = await joined(o, "UI-OPN2", { tickets: 2, opening: [{ kind: "speech", title: "First hello", seconds: 30 }, { kind: "speech", title: "Second hello", seconds: 30 }] });
+    at(o, p, -110); await p.waitFor((x) => /First hello/.test(x), 20000); expect(p.text()).not.toMatch(/Second hello/);
+    at(o, p, -75); await p.waitFor((x) => /Second hello/.test(x), 20000); expect(p.text()).not.toMatch(/First hello/);
+    at(o, p, -40); await until(() => !/Second hello|First hello/.test(p.text())); // both done: nothing more until the first number
+  }, 90_000);
+  test("a closing plays on the final screen, and with two closings a button moves to the next", async () => {
+    const o = await organizer(); const p = await joined(o, "UI-CLS1", { tickets: 2, closing: [{ kind: "speech", title: "Thank you from the CEO" }, { kind: "youtube", title: "Our year in pictures", mediaUrl: "https://youtu.be/dQw4w9WgXcQ" }] }); const doc = p.win.document;
+    at(o, p, 400); await settle(); expect(p.text()).not.toMatch(/Thank you from your organizer/); // not before the end
+    at(o, p, 1000); await p.waitFor((x) => /Thank you from your organizer/.test(x), 40000);
+    expect(p.text()).toMatch(/Thank you from the CEO/); expect(p.text()).toMatch(/Next message \(1 of 2\)/);
+    p.click("#cnext"); await p.waitFor((x) => /Our year in pictures/.test(x), 20000);
+    await until(() => !!doc.querySelector("#ctmedia iframe")); expect(p.text()).not.toMatch(/Next message/);
+  }, 120_000);
+  test("a closing video does not start before the game has ended", async () => {
+    const o = await organizer(); const p = await joined(o, "UI-CLS2", { closing: [{ kind: "youtube", title: "Our year in pictures", mediaUrl: "https://youtu.be/dQw4w9WgXcQ" }] }); const doc = p.win.document;
+    at(o, p, 400); await settle(); await settle(); expect(doc.querySelector("#ctmedia iframe")).toBeNull(); expect(p.text()).not.toMatch(/Our year in pictures/);
+    at(o, p, 1000); await until(() => !!doc.querySelector("#ctmedia iframe"), 40000); expect(p.text()).toMatch(/Our year in pictures/);
+  }, 90_000);
+  test("with none set, a phone shows no opening and no closing card", async () => {
+    const o = await organizer(); const p = await joined(o, "UI-NONE1", {});
+    at(o, p, -100); await settle(); expect(p.text()).not.toMatch(/A message from your organizer/);
+    at(o, p, 1000); await p.waitFor((x) => /Thank you for taking part|Game complete/.test(x), 40000); expect(p.text()).not.toMatch(/Thank you from your organizer/);
+  }, 90_000);
+});
+
+describe("testing a brand moment without a game", () => {
+  const prev = (o: O, hash: string) => page(o, "/preview.html" + hash, "preview.html", ["preview.js"]);
+  test("the console says what kind of link was pasted: YouTube, video file and audio file play inside the game; any other page does not", async () => {
+    const o = await organizer(); await make(o, "UI-LNK1");
+    const p = await consolePage(o, "UI-LNK1"); await p.waitFor((x) => /Your brand moments/.test(x));
+    const set = (v: string) => { const el = p.win.document.querySelector('[data-bk="mediaUrl"][data-i="0"]') as any; el.value = v; el.dispatchEvent(new p.win.Event("input")); return (p.win.document.querySelector('[data-lk="bk0"]') as any).textContent as string; };
+    expect(set("https://youtu.be/dQw4w9WgXcQ")).toMatch(/YouTube video: plays inside the game/);
+    expect(set("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toMatch(/plays inside the game/);
+    expect(set("https://cdn.acme.com/film.mp4")).toMatch(/Video file: plays inside the game/);
+    expect(set("https://cdn.acme.com/song.mp3?x=1")).toMatch(/Audio file: plays inside the game/);
+    expect(set("https://drive.google.com/file/d/abc/view")).toMatch(/will NOT play inside the game/);
+    expect(set("https://vimeo.com/123456")).toMatch(/will NOT play inside the game/);
+    expect(set("http://acme.com/a.mp4")).toMatch(/must start with https/);
+    expect(set("")).toMatch(/guests see your message only/);
+  }, 60_000);
+  test("the Test button opens a page that shows the break like a guest's phone: the real video inside the page, a ticket under it, and everything gone when the break ends", async () => {
+    const o = await organizer(); await make(o, "UI-LNK2");
+    const p = await consolePage(o, "UI-LNK2"); await p.waitFor((x) => /Your brand moments/.test(x));
+    let opened = ""; (p.win as any).open = (u: string) => { opened = u; return null; };
+    const q = (k: string, v: string) => { const el = p.win.document.querySelector(`[data-bk="${k}"][data-i="0"]`) as any; el.value = v; el.dispatchEvent(new p.win.Event("input")); };
+    q("kind", "youtube"); q("title", "Welcome from our CEO"); q("mediaUrl", "https://youtu.be/dQw4w9WgXcQ"); q("seconds", "15");
+    (p.win.document.querySelector('[data-test="bk"][data-i="0"]') as any).click();
+    expect(opened).toMatch(/^\/preview\.html#/);
+    const h = new URLSearchParams(opened.split("#")[1]); expect([h.get("w"), h.get("k"), h.get("t"), h.get("u"), h.get("s")]).toEqual(["break", "youtube", "Welcome from our CEO", "https://youtu.be/dQw4w9WgXcQ", "15"]);
+    const v = await prev(o, "#" + opened.split("#")[1]);
+    await v.waitFor((x) => /A short break/.test(x)); const doc = v.win.document;
+    expect(v.text()).toMatch(/Test only/); expect(v.text()).toMatch(/This link plays inside the game/); expect(v.text()).toMatch(/Welcome from our CEO/); expect(v.text()).toMatch(/Your ticket \(sample\)/);
+    expect((doc.querySelector("#ctmedia iframe") as any).src).toMatch(/^https:\/\/www\.youtube-nocookie\.com\/embed\/dQw4w9WgXcQ\?/);
+    expect(v.text()).toMatch(/The numbers continue in \d+s/);
+  }, 60_000);
+  test("a link that cannot play inside the game is flagged on the test page, and a break with no link shows the message only", async () => {
+    const o = await organizer();
+    const a = await prev(o, "#w=break&k=file&t=Our%20deck&u=" + encodeURIComponent("https://example.com/deck.pdf") + "&s=30");
+    await a.waitFor((x) => /A short break/.test(x)); expect(a.text()).toMatch(/will NOT play inside the game/); expect(a.win.document.querySelector("#ctmedia iframe, #ctmedia video, #ctmedia audio")).toBeNull();
+    const b = await prev(o, "#w=closing&k=speech&t=Thank%20you");
+    await b.waitFor((x) => /Thank you from your organizer/.test(x)); expect(b.text()).toMatch(/guests see your message only/); expect(b.text()).not.toMatch(/numbers continue/);
   }, 60_000);
 });

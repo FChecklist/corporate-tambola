@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { activeBreak, callRoundFull, checkClaims, completionIndexKey, scheduleFull, settleAll, stillToWin, ticketFor, ticketsFor } from "../src/game";
-import { breakShift, defaultCfg, keysInPlay, roundEid, validateCfg, type BreakCfg, type EngagementCfg } from "../src/config";
+import { OPENING_WINDOW_SECONDS, autoAfter, brandMomentsFor, breakShift, defaultCfg, keysInPlay, roundEid, validateCfg, type BreakCfg, type EngagementCfg } from "../src/config";
 import { deriveCalls } from "../src";
 import { createHash } from "node:crypto";
 import { ticketNumbers } from "../../shared/src/ticket";
@@ -179,5 +179,83 @@ describe("rounds", () => {
     expect(roundEid("E1", 1)).toBe("E1");
     expect(roundEid("E1", 2)).toBe("E1~r2");
     expect(new Set([1, 2, 3, 4, 5].map((r) => roundEid("E1", r))).size).toBe(5);
+  });
+});
+
+describe("five brand moments for each ticket: openings, during the game, closings", () => {
+  const msg = (o: Record<string, unknown> = {}) => ({ kind: "speech", title: "Welcome from Acme", ...o });
+  const mid = (o: Record<string, unknown> = {}) => ({ kind: "speech", title: "A word from Acme", ...o });
+  const good = (i: any, base?: any) => { const v = validateCfg(i, base); if (!v.ok) throw new Error(v.error); return v.cfg; };
+  const refused = (i: any, base?: any) => { const v = validateCfg(i, base); expect(v.ok).toBe(false); return v.ok ? "" : v.error; };
+
+  test("even spread: the k-th of n moments goes after round(90 x k / (n + 1)), for n = 1 to 6", () => {
+    const table: Record<number, number[]> = { 1: [45], 2: [30, 60], 3: [23, 45, 68], 4: [18, 36, 54, 72], 5: [15, 30, 45, 60, 75], 6: [13, 26, 39, 51, 64, 77] };
+    for (const n of [1, 2, 3, 4, 5, 6]) expect(Array.from({ length: n }, (_, i) => autoAfter(n, i + 1))).toEqual(table[n]!);
+  });
+
+  test("the allowance follows the tickets: 1 ticket gives 1 + 3 + 1 = 5, 2 tickets give 2 + 6 + 2 = 10", () => {
+    expect(brandMomentsFor(1)).toBe(5); expect(brandMomentsFor(2)).toBe(10);
+    const c1 = good({ tickets: 1, opening: [msg()], breaks: [mid(), mid(), mid()], closing: [msg()] });
+    expect([c1.opening!.length, c1.breaks.length, c1.closing!.length]).toEqual([1, 3, 1]);
+    refused({ tickets: 1, breaks: [mid(), mid(), mid(), mid()] });
+    refused({ tickets: 1, opening: [msg(), msg()] });
+    refused({ tickets: 1, closing: [msg(), msg()] });
+    const c2 = good({ tickets: 2, opening: [msg({ seconds: 60 }), msg({ seconds: 60 })], breaks: [mid(), mid(), mid(), mid(), mid(), mid()], closing: [msg(), msg()] });
+    expect([c2.opening!.length, c2.breaks.length, c2.closing!.length]).toEqual([2, 6, 2]);
+    refused({ tickets: 2, breaks: Array.from({ length: 7 }, () => mid()) });
+    refused({ tickets: 2, opening: [msg(), msg(), msg()] });
+  });
+
+  test("breaks with no number typed are placed evenly, last for 60 s unless told, and are marked automatic", () => {
+    const c = good({ tickets: 2, breaks: [mid(), mid({ seconds: 120 }), mid()] });
+    expect(c.breaks.map((b) => b.after)).toEqual([23, 45, 68]);
+    expect(c.breaks.map((b) => b.seconds)).toEqual([60, 120, 60]);
+    expect(c.breaks.every((b) => b.auto === true)).toBe(true);
+  });
+
+  test("saving again re-spreads: adding a fourth automatic break moves the others; explicit numbers never move", () => {
+    const three = good({ tickets: 2, breaks: [mid(), mid(), mid()] });
+    const four = good({ tickets: 2, breaks: [...three.breaks, mid()] }, three);
+    expect(four.breaks.map((b) => b.after)).toEqual([18, 36, 54, 72]);
+    const old = good({ breaks: [{ after: 20, seconds: 30, kind: "speech", title: "Old game" }] });
+    expect(old.breaks[0]!.after).toBe(20); expect(old.breaks[0]!.auto).toBeUndefined();
+    const mixed = good({ breaks: [{ after: 10, seconds: 30, kind: "speech", title: "Fixed" }, mid(), mid()] });
+    expect(mixed.breaks.map((b) => b.after)).toEqual([10, 30, 60]);
+  });
+
+  test("going from 2 tickets to 1 is refused while more than one ticket's worth is switched on, and says what to do", () => {
+    const two = good({ tickets: 2, opening: [msg({ seconds: 30 }), msg({ seconds: 30 })], breaks: [mid(), mid(), mid(), mid()] });
+    const why = refused({ tickets: 1 }, two);
+    expect(why).toContain("1 ticket per person"); expect(why).toContain("5 brand moments"); expect(why).toContain("switch some off");
+    expect(good({ tickets: 1, opening: [msg()], breaks: [mid(), mid(), mid()] }, two).tickets).toBe(1);
+  });
+
+  test("an opening plays inside the 2 minutes before the first number: 15 to 120 s in steps of 3, 60 s by default, together at most 120 s", () => {
+    expect(OPENING_WINDOW_SECONDS).toBe(120);
+    expect(good({ opening: [msg()] }).opening![0]!.seconds).toBe(60);
+    for (const sec of [14, 16, 123, 0, "60", null]) if (sec !== null) refused({ opening: [msg({ seconds: sec })] });
+    refused({ tickets: 2, opening: [msg({ seconds: 90 }), msg({ seconds: 60 })] });
+    expect(good({ tickets: 2, opening: [msg({ seconds: 60 }), msg({ seconds: 60 })] }).opening!.length).toBe(2);
+  });
+
+  test("a closing carries no time; a lucky draw can only be placed during the game; links follow the same safe rules", () => {
+    expect(good({ closing: [msg({ seconds: 99 })] }).closing![0]!.seconds).toBeUndefined();
+    refused({ opening: [{ kind: "lucky", title: "Draw" }] }); refused({ closing: [{ kind: "lucky", title: "Draw" }] });
+    refused({ closing: [{ kind: "file", title: "Thanks" }] });
+    refused({ closing: [{ kind: "youtube", title: "Thanks", mediaUrl: "https://evil.example/x" }] });
+    refused({ opening: [msg({ mediaUrl: "http://acme.com/a.mp4" })] });
+    expect(good({ closing: [{ kind: "youtube", title: "Thanks", mediaUrl: "https://youtu.be/abcdefghijk" }] }).closing![0]!.mediaUrl).toContain("youtu.be");
+    refused({ opening: [msg({ title: "x" })] });
+  });
+
+  test("lucky draws are placed together with the other during-the-game moments, in the order added", () => {
+    const c = good({ tickets: 2, breaks: [mid(), { kind: "lucky", title: "Lucky draw: watch", winners: 1 }, mid()] });
+    expect(c.breaks.map((b) => [b.kind, b.after])).toEqual([["speech", 23], ["lucky", 45], ["speech", 68]]);
+  });
+
+  test("nothing set gives no openings and no closings, and old saved settings still load", () => {
+    const d = defaultCfg(); expect(d.opening).toEqual([]); expect(d.closing).toEqual([]);
+    const old = good({ tickets: 1, rewards: undefined, breaks: [{ after: 31, seconds: 60, kind: "speech", title: "Saved earlier" }], rounds: 1 });
+    expect(old.opening).toEqual([]); expect(old.closing).toEqual([]);
   });
 });

@@ -245,7 +245,7 @@
     mediaHost.style.display = "block"; mediaHost.style.left = r.left + scrollX + "px"; mediaHost.style.top = r.top + scrollY + "px"; mediaHost.style.width = r.width + "px"; mediaHost.style.height = r.height + "px";
   }
   function syncMedia(v) {
-    const b = v.brk, kind = b ? mediaKind(b) : null, key = b && kind ? b.title + "|" + b.mediaUrl : "";
+    const b = slotNow(v), kind = b ? mediaKind(b) : null, key = b && kind ? b.title + "|" + b.mediaUrl : "";
     if (key !== mediaKey) {
       mediaHost.textContent = ""; mediaHost.style.display = "none"; mediaHost.style.background = "#000"; mediaKey = key;
       if (key) startMedia(b, kind);
@@ -294,9 +294,37 @@
     const sh = document.getElementById("invshare"); if (sh) sh.onclick = async () => { const data = { title: "Corporate Tambola", text: "Join me for Corporate Tambola! Open this link, enter your mobile number and you get your own ticket:", url: inviteLink(v) }; try { if (navigator.share) { await navigator.share(data); return; } } catch { return; } try { await navigator.clipboard.writeText(data.text + " " + data.url); sh.textContent = "Link copied"; } catch { sh.textContent = data.url; } };
     const cp = document.getElementById("invcopy"); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(inviteLink(v)); cp.textContent = "Copied"; } catch { cp.textContent = "Press and hold the link above to copy"; } };
   }
-  function breakCard(b) {
+  function mediaAct(b) {
     const inPage = !!mediaKind(b);
-    const act = b.mediaUrl ? (inPage ? `<div id="mslot" class="zmslot"></div><a class="zsmall" target="_blank" rel="noopener noreferrer" href="${esc(b.mediaUrl)}">Trouble playing? Open it in a new tab</a>` : `<a class="zbtn s" style="display:inline-flex;align-items:center;text-decoration:none;margin-top:10px" target="_blank" rel="noopener noreferrer" href="${esc(b.mediaUrl)}">${b.kind === "youtube" ? "Watch the video" : "Open"}</a>`) : "";
+    return b.mediaUrl ? (inPage ? `<div id="mslot" class="zmslot"></div><a class="zsmall" target="_blank" rel="noopener noreferrer" href="${esc(b.mediaUrl)}">Trouble playing? Open it in a new tab</a>` : `<a class="zbtn s" style="display:inline-flex;align-items:center;text-decoration:none;margin-top:10px" target="_blank" rel="noopener noreferrer" href="${esc(b.mediaUrl)}">${b.kind === "youtube" ? "Watch the video" : "Open"}</a>`) : "";
+  }
+  // ---------- the OPENING plays while everyone waits for the first number; the CLOSING plays on the final screen ----------
+  let closingIdx = 0;
+  function openingNow(v) {
+    const list = (v.cfg && v.cfg.opening) || [];
+    if (!list.length || v.phase !== "play" || v.locked || v.stopped || v.paused || v.late || v.brk || v.log.length > 0 || v.nextCallInSec === null || v.nextCallInSec > GRACE_SECS) return null;
+    const elapsed = GRACE_SECS - v.nextCallInSec; let from = 0; // the openings follow one another inside the 2 minutes before the first number
+    for (const o of list) { const len = o.seconds || 60; if (elapsed < from + len) return Object.assign({}, o, { seconds: len, secondsLeft: Math.max(1, Math.round(from + len - elapsed)) }); from += len; }
+    return null;
+  }
+  function closingNow(v) {
+    const list = (v.cfg && v.cfg.closing) || [];
+    if (!list.length || v.phase !== "ended") return null;
+    const i = Math.min(closingIdx, list.length - 1);
+    return Object.assign({}, list[i], { seconds: 0, secondsLeft: 0, n: i + 1, of: list.length });
+  }
+  const slotNow = (v) => v.brk || openingNow(v) || closingNow(v);
+  const slotWhat = (b) => (b.kind === "speech" ? "Please listen to the host." : b.kind === "slides" ? "Please look at the screen." : "");
+  function openingCard(v) {
+    const b = openingNow(v); if (!b) return "";
+    return `<div class="zcard zbreak" role="status"><h2>A message from your organizer</h2><div style="font:700 20px var(--sans,inherit);margin:2px 0 4px">${esc(b.title)}</div><div class="zsmall" style="margin:0">${slotWhat(b)} The game starts in a moment.</div>${mediaAct(b)}</div>`;
+  }
+  function closingCard(v) {
+    const b = closingNow(v); if (!b) return "";
+    return `<div class="zcard zbreak" role="status"><h2>Thank you from your organizer</h2><div style="font:700 20px var(--sans,inherit);margin:2px 0 4px">${esc(b.title)}</div><div class="zsmall" style="margin:0">${slotWhat(b)}</div>${mediaAct(b)}${b.n < b.of ? `<button class="zbtn s alt" id="cnext" type="button" style="margin-top:10px">Next message (${b.n} of ${b.of})</button>` : ""}</div>`;
+  }
+  function breakCard(b) {
+    const act = mediaAct(b);
     const what = b.kind === "lucky" ? `${b.winners || 3} ${b.winners === 1 ? "person is" : "people are"} picked at random when this break ends. Everyone has an equal chance.` : b.kind === "speech" ? "Please listen to the host." : b.kind === "slides" ? "Please look at the screen." : "";
     return `<div class="zcard zbreak" role="status"><h2>A short break</h2><div style="font:700 20px var(--sans,inherit);margin:2px 0 4px">${esc(b.title)}</div><div class="zsmall" style="margin:0">${what} The numbers continue in ${b.secondsLeft}s.</div>${act}</div>`;
   }
@@ -345,8 +373,9 @@
     const tix = v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : "Your ticket", winSet)).join("");
     return `<div class="zhead"><b>Corporate Tambola</b><button class="zsnd" id="snd" aria-pressed="${sound}">${sound ? "Sound on" : "Sound off"}</button></div>
       ${annBanner(v)}${banners.join("")}
-      ${v.phase === "ended" ? finalCard(v) + confirmCard(v) + prizesCard() : ""}
+      ${v.phase === "ended" ? finalCard(v) + closingCard(v) + confirmCard(v) + prizesCard() : ""}
       ${waitingRoom(v)}
+      ${openingCard(v)}
       ${lateCard(v)}
       ${roundCards(v)}
       ${v.brk ? breakCard(v.brk) : ""}
@@ -375,6 +404,7 @@
     if (s) s.onclick = async () => { sound = !sound; store.set("ctz-sound", sound ? "on" : "off"); if (window.TBAudio) { TBAudio.enabled = sound; if (sound) await TBAudio.unlock(); } paint(); };
     if (v.log.length > lastLen) { if (!firstPaint && v.log.length === lastLen + 1 && sound && window.TBAudio) TBAudio.play(v.log[v.log.length - 1]); lastLen = v.log.length; }
     firstPaint = false;
+    const cn = document.getElementById("cnext"); if (cn) cn.onclick = () => { closingIdx += 1; paint(); };
     const ok = document.getElementById("annok"); if (ok) ok.onclick = () => { annSeen = v.announcement.id; paint(); };
     if (v.announcement && v.announcement.id !== annSpoken) { annSpoken = v.announcement.id; if (sound && window.TBAudio) TBAudio.say(v.announcement.text); try { navigator.vibrate && navigator.vibrate(120); } catch {} }
     document.querySelectorAll("[data-scr]").forEach((b) => (b.onclick = () => { scratched.add(Number(b.dataset.scr)); paint(); }));

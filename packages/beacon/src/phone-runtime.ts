@@ -131,7 +131,7 @@ export class PhoneRuntime {
 
   /** Tickets, rewards and brand breaks come from the engagement's public settings; anything malformed falls back to the plain engagement. */
   private readCfg(info: any) {
-    const v = validateCfg({ tickets: info?.tickets, rewards: info?.rewards, breaks: info?.breaks, rounds: info?.rounds, invites: info?.invites });
+    const v = validateCfg({ tickets: info?.tickets, rewards: info?.rewards, breaks: info?.breaks, rounds: info?.rounds, invites: info?.invites, opening: info?.opening, closing: info?.closing });
     this.cfg = v.ok ? v.cfg : defaultCfg();
   }
   private adopt(pid: string) {
@@ -160,7 +160,7 @@ export class PhoneRuntime {
     try {
       const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name, device: this.device(), ...(invite && Number.isInteger(invite.from) ? { from: invite.from, cat: invite.cat } : {}) });
       this.scheduledRound = r.startRound; this.startRound = r.startRound + GRACE_ROUNDS; this.callSeconds = r.callSeconds; this.trackClaims = r.trackClaims !== false;
-      if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined) this.readCfg(r);
+      if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined || r.opening !== undefined || r.closing !== undefined) this.readCfg(r);
       this.deps.store.set(this.key("pid"), r.pid);
       this.myJr = Number(r.jr) > 0 ? Number(r.jr) : 0; this.deps.store.set(this.key("jr"), String(this.myJr));
       this.adopt(r.pid); this.error = null;

@@ -51,7 +51,7 @@ describe("joining", () => {
     expect(r.startRound).toBe(1000);
     expect(r.callSeconds).toBe(6);
     expect(r.pid).toMatch(/^1x[0-9a-f]{12}$/); // seat number + hash: the seat makes the ticket collision-free
-    expect(Object.keys(r).sort()).toEqual(["breaks", "callSeconds", "invites", "jr", "pid", "rewards", "rounds", "startRound", "tickets", "trackClaims"]);
+    expect(Object.keys(r).sort()).toEqual(["breaks", "callSeconds", "closing", "invites", "jr", "opening", "pid", "rewards", "rounds", "startRound", "tickets", "trackClaims"]);
   });
   test("the same number joining twice, even typed differently, is one participant and one write", async () => {
     const a = await (await call("POST", "/api/z/ENG1/join", { phone: "+91 98765-43210" })).json() as any;
@@ -899,3 +899,59 @@ describe("late joiners and the public seat list", () => {
   });
 });
 const nowround = (delta: number) => Math.floor((T / 1000 - 1692803367) / 3) + 1 + delta;
+
+describe("brand moments: five for each ticket, placed by the software", () => {
+  const FUT = Math.floor((T / 1000 - 1692803367) / 3) + 1 + 4000;
+  const mk = (extra: Record<string, unknown> = {}, id = "BM01") => call("POST", "/api/z", { id, startRound: FUT, callSeconds: 9, cap: 50, ...extra }, org);
+  const info = async (id = "BM01") => (await (await call("GET", `/api/z/${id}/info`)).json()) as any;
+  const mid = (o: Record<string, unknown> = {}) => ({ kind: "speech", title: "A word from Acme", ...o });
+  const open = { kind: "youtube", title: "Welcome", mediaUrl: "https://youtu.be/abcdefghijk" };
+  test("an engagement created with openings, a closing and automatic breaks shows every phone where each one goes", async () => {
+    expect((await mk({ tickets: 2, opening: [open, { kind: "speech", title: "Hello", seconds: 30 }], breaks: [mid(), mid(), mid()], closing: [{ kind: "speech", title: "Thank you" }] })).status).toBe(200);
+    const i = await info();
+    expect(i.breaks.map((b: any) => b.after)).toEqual([23, 45, 68]);
+    expect(i.opening.map((x: any) => x.title)).toEqual(["Welcome", "Hello"]);
+    expect(i.closing).toEqual([{ kind: "speech", title: "Thank you" }]);
+  });
+  test("a phone that joins is told about the opening and the closing too", async () => {
+    await mk({ opening: [{ kind: "speech", title: "Hello" }], closing: [{ kind: "speech", title: "Bye" }] });
+    const r = (await (await join(1, "BM01")).json()) as any;
+    expect(r.opening[0].title).toBe("Hello"); expect(r.closing[0].title).toBe("Bye");
+  });
+  test("the summary shows the allowance for the organizer and the AI", async () => {
+    await mk({ tickets: 2 });
+    const sm = (await (await call("GET", "/api/z/BM01/summary", undefined, org)).json()) as any;
+    expect(sm.brandMomentsAllowed).toBe(10);
+    await mk({ tickets: 1 }, "BM02");
+    expect(((await (await call("GET", "/api/z/BM02/summary", undefined, org)).json()) as any).brandMomentsAllowed).toBe(5);
+  });
+  test("one ticket allows 1 + 3 + 1; a fourth during-the-game moment, or a second opening, is refused", async () => {
+    expect((await mk({ tickets: 1, breaks: [mid(), mid(), mid(), mid()] })).status).toBe(400);
+    expect((await mk({ tickets: 1, opening: [open, open] }, "BM03")).status).toBe(400);
+    expect((await mk({ tickets: 1, opening: [open], breaks: [mid(), mid(), mid()], closing: [{ kind: "speech", title: "Bye" }] }, "BM04")).status).toBe(200);
+  });
+  test("changing from 2 tickets to 1 is refused while too many are switched on, with a plain reason, and nothing is saved", async () => {
+    await mk({ tickets: 2, opening: [{ kind: "speech", title: "One", seconds: 30 }, { kind: "speech", title: "Two", seconds: 30 }], breaks: [mid(), mid(), mid(), mid()] });
+    const r = await call("PATCH", "/api/z/BM01/settings", { tickets: 1 }, org);
+    expect(r.status).toBe(400);
+    expect(((await r.json()) as any).error).toContain("switch some off");
+    expect((await info()).tickets).toBe(2);
+    expect((await call("PATCH", "/api/z/BM01/settings", { tickets: 1, opening: [open], breaks: [mid(), mid()] }, org)).status).toBe(200);
+    expect(await info()).toMatchObject({ tickets: 1, breaks: [{ after: 30 }, { after: 60 }] });
+  });
+  test("saving the breaks again spreads them again; an older break with its own number keeps it", async () => {
+    await mk({ tickets: 2, breaks: [mid(), mid()] });
+    expect((await info()).breaks.map((b: any) => b.after)).toEqual([30, 60]);
+    const cur = (await info()).breaks;
+    await call("PATCH", "/api/z/BM01/settings", { breaks: [...cur, mid()] }, org);
+    expect((await info()).breaks.map((b: any) => b.after)).toEqual([23, 45, 68]);
+    await mk({ breaks: [{ after: 20, seconds: 30, kind: "speech", title: "Old style" }] }, "BM05");
+    expect((await info("BM05")).breaks[0]).toMatchObject({ after: 20, seconds: 30 });
+  });
+  test("the AI manual teaches the new rules and no longer says breaks repeat in every round", async () => {
+    const { manualText } = await import("../src/ai-link");
+    const t = manualText("https://x.example", "cta_" + "a".repeat(48), "ai", T);
+    expect(t).toContain("5 for each ticket"); expect(t).toContain("ROUND 1 only"); expect(t).toContain("opening"); expect(t).toContain("closing");
+    expect(t).not.toContain("breaks repeat in every round");
+  });
+});

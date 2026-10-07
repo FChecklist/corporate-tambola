@@ -125,37 +125,59 @@
   }
   function settingsCard() {
     const c = S.cfg || ZG.defaultCfg();
-    const rows = [0, 1, 2].map((i) => { const b = c.breaks[i] || {}; return `<div class="zgrid" style="margin-bottom:8px"><div><label>After how many numbers</label><input type="number" min="1" max="89" data-bk="after" data-i="${i}" value="${b.after ?? ""}"></div><div><label>Seconds (15 to 600)</label><input type="number" min="15" max="600" step="3" data-bk="seconds" data-i="${i}" value="${b.seconds ?? ""}"></div>
-      <div><label>Kind</label><select data-bk="kind" data-i="${i}">${["speech", "slides", "youtube", "file", "lucky"].map((k) => `<option value="${k}" ${b.kind === k ? "selected" : ""}>${{ speech: "Speech", slides: "Slides", youtube: "YouTube link", file: "Video file link", lucky: "Lucky draw" }[k]}</option>`).join("")}</select></div>
-      <div><label>Title</label><input data-bk="title" data-i="${i}" maxlength="80" value="${esc(b.title || "")}"></div>
-      <div><label>Lucky draw: how it is shown</label><select data-bk="style" data-i="${i}"><option value="draw" ${b.style !== "scratch" ? "selected" : ""}>A draw</option><option value="scratch" ${b.style === "scratch" ? "selected" : ""}>A scratch card</option></select></div>
-      <div><label>Lucky draw: how many people</label><select data-bk="winners" data-i="${i}">${[1, 3, 5, 10].map((n) => `<option value="${n}" ${(b.winners || 3) === n ? "selected" : ""}>${n}</option>`).join("")}</select></div>
-      <div style="grid-column:1/-1"><label>Link (https://, for YouTube or a video file)</label><input data-bk="mediaUrl" data-i="${i}" value="${esc(b.mediaUrl || "")}"></div></div>`; }).join("");
-    return `<div class="zcard zform"><h2>Tickets, rewards and brand breaks</h2>
+    const KINDS = { speech: "Message to read out", slides: "Slides", youtube: "YouTube link", file: "Video or audio file link", lucky: "Lucky draw" };
+    const kindOpts = (sel, withLucky) => Object.keys(KINDS).filter((k) => withLucky || k !== "lucky").map((k) => `<option value="${k}" ${sel === k ? "selected" : ""}>${KINDS[k]}</option>`).join("");
+    const slotRow = (grp, i, b, o) => `<div class="zgrid bmrow" data-grp="${grp}" data-row="${i}" style="margin-bottom:8px;padding:8px;border:1px dashed var(--line);border-radius:10px">
+      <div><label>What is it</label><select data-${grp}="kind" data-i="${i}">${kindOpts(b.kind, o.lucky)}</select></div>
+      <div><label>Your message or title (up to 80 characters)</label><input data-${grp}="title" data-i="${i}" maxlength="80" value="${esc(b.title || "")}"></div>
+      ${o.seconds ? `<div><label>How long (seconds)</label><input type="number" min="15" max="${o.seconds}" step="3" data-${grp}="seconds" data-i="${i}" value="${b.seconds ?? 60}"></div>` : ""}
+      ${o.lucky ? `<div><label>Lucky draw: how it is shown</label><select data-${grp}="style" data-i="${i}"><option value="draw" ${b.style !== "scratch" ? "selected" : ""}>A draw</option><option value="scratch" ${b.style === "scratch" ? "selected" : ""}>A scratch card</option></select></div>
+      <div><label>Lucky draw: how many people win</label><select data-${grp}="winners" data-i="${i}">${[1, 3, 5, 10].map((n) => `<option value="${n}" ${(b.winners || 3) === n ? "selected" : ""}>${n}</option>`).join("")}</select></div>` : ""}
+      <div style="grid-column:1/-1"><label>Video or audio link, if you have one (https://: a YouTube link, or a direct link to a video or audio file)</label><input data-${grp}="mediaUrl" data-i="${i}" value="${esc(b.mediaUrl || "")}"></div>
+      <div style="grid-column:1/-1"><div class="zsmall" data-lk="${grp}${i}" style="margin:0 0 6px"></div><button type="button" class="zbtn s alt" data-test="${grp}" data-i="${i}">Test it like a real guest</button></div>
+      ${o.legacy && b.after && !b.auto ? `<div style="grid-column:1/-1" class="zsmall">Set earlier to play after number ${b.after}. <label style="display:inline;font-weight:400"><input type="checkbox" data-bk="autoplace" data-i="${i}" style="width:auto;min-height:0"> Place it automatically instead</label><input type="hidden" data-bk="after" data-i="${i}" value="${b.after}"></div>` : ""}</div>`;
+    const op = c.opening || [], cl = c.closing || [];
+    const openRows = [0, 1].map((i) => slotRow("op", i, op[i] || {}, { seconds: 120 })).join("");
+    const midRows = [0, 1, 2, 3, 4, 5].map((i) => slotRow("bk", i, c.breaks[i] || {}, { seconds: 600, lucky: true, legacy: true })).join("");
+    const closeRows = [0, 1].map((i) => slotRow("cl", i, cl[i] || {}, {})).join("");
+    return `<div class="zcard zform"><h2>Tickets, rewards and brand moments</h2>
       <p class="zsmall" style="margin-top:0">You can change these until the first number is called.</p>
       <label for="rnd">Rounds (each round is a full game of 90 numbers with new tickets; a short wait separates them)</label><select id="rnd">${[1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${(c.rounds || 1) === n ? "selected" : ""}>${n} round${n === 1 ? "" : "s"}</option>`).join("")}</select>
       <label for="tix">Tickets for each participant</label><select id="tix"><option value="1" ${c.tickets === 1 ? "selected" : ""}>1 ticket</option><option value="2" ${c.tickets === 2 ? "selected" : ""}>2 tickets</option></select>
       <label for="rw">What each house wins: one per line, like <code>full: Gift hamper</code>. Write a house twice for a 2nd reward. Houses: early5, top, mid, bot, corners, star, full, and full2 (Full Two-Ticket House, needs 2 tickets). Only houses you list are in play.</label>
       <textarea id="rw" rows="6" style="width:100%;box-sizing:border-box;font-size:15px;border:1px solid var(--line);border-radius:10px;padding:8px">${esc(rewardsToText(c))}</textarea>
-      <label style="margin-top:14px">Brand breaks (up to 3): the numbers pause while your message or video is shown</label>${rows}
+      <h3 style="margin:16px 0 4px;font-size:16px">Your brand moments</h3>
+      <p class="zsmall" style="margin:0 0 4px">Show your own message, a video or audio on every guest's phone. You get 5 for each ticket each guest holds (5 with 1 ticket, 10 with 2). Use any one or more.</p>
+      <div id="bmcount" class="zsmall" style="font-weight:700;margin:0 0 8px"></div>
+      <label style="margin-top:8px">Before the game starts (plays while guests wait for the first number)</label><div data-sec="op">${openRows}</div>
+      <label style="margin-top:8px">During the game (the numbers pause while it is shown). The software spreads them evenly: one goes about halfway, two at a third and two thirds, and so on.</label><div data-sec="bk">${midRows}</div>
+      <label style="margin-top:8px">At the end of the game (plays on the final screen)</label><div data-sec="cl">${closeRows}</div>
       ${invitesBlock(c)}
       <button class="zbtn s" id="savecfg">Save</button></div>`;
   }
   function readSettings() {
     const tickets = Number(document.getElementById("tix").value);
     const rewards = textToRewards(document.getElementById("rw").value, tickets);
-    const breaks = [];
-    for (let i = 0; i < 3; i++) {
-      const g = (k) => (document.querySelector(`[data-bk="${k}"][data-i="${i}"]`) || {}).value || "";
-      if (!g("after") && !g("seconds") && !g("title") && !g("mediaUrl")) continue;
-      const b = { after: Number(g("after")), seconds: Number(g("seconds")), kind: g("kind") || "speech", title: g("title").trim() };
+    const grab = (grp, i) => { const g = (k) => (document.querySelector(`[data-${grp}="${k}"][data-i="${i}"]`) || {}).value || ""; return g; };
+    const row = (grp, i, extra) => {
+      const g = grab(grp, i), row = document.querySelector(`.bmrow[data-grp="${grp}"][data-row="${i}"]`);
+      if (!row || row.style.display === "none" || (!g("title").trim() && !g("mediaUrl").trim())) return null;
+      const b = { kind: g("kind") || "speech", title: g("title").trim() };
+      if (g("seconds")) b.seconds = Number(g("seconds"));
       if (g("mediaUrl").trim()) b.mediaUrl = g("mediaUrl").trim();
+      if (extra) extra(b, g, i);
+      return b;
+    };
+    const opening = [0, 1].map((i) => row("op", i)).filter(Boolean);
+    const closing = [0, 1].map((i) => row("cl", i)).filter(Boolean);
+    const breaks = [0, 1, 2, 3, 4, 5].map((i) => row("bk", i, (b, g) => {
+      const auto = document.querySelector(`[data-bk="autoplace"][data-i="${i}"]`);
+      if (g("after") && !(auto && auto.checked)) b.after = Number(g("after")); // an older break keeps its number unless the organizer lets the software place it
       if (b.kind === "lucky") { b.winners = Number(g("winners") || 3); if (g("style") === "scratch") b.style = "scratch"; }
-      breaks.push(b);
-    }
+    })).filter(Boolean);
     const cats = [...document.querySelectorAll("[data-invcat]")].filter((b) => b.checked).map((b) => b.dataset.invcat);
     const invites = { on: document.getElementById("invon").checked, per: Number(document.getElementById("invper").value) || 4, cats };
-    return { tickets, rewards, breaks, rounds: Number(document.getElementById("rnd").value), invites };
+    return { tickets, rewards, breaks, opening, closing, rounds: Number(document.getElementById("rnd").value), invites };
   }
   /** Published but not paid: the one thing that matters now. The organizer sent the link to everyone, so the engagement must start. */
   function payDueCard() {
@@ -308,7 +330,7 @@
       S.info = await call("GET", `/api/z/${eid}/info`); S.draft = !!S.info.draft; S.unpaid = !!S.info.unpaid; S.locked = !!S.info.locked;
       let pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed;
       while (S.people.length < pr.total) { const more = await call("GET", `/api/z/${eid}/participants?offset=${S.people.length}`); if (!more.participants.length) break; S.people.push(...more.participants); } // a long list arrives in pages
-      S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, rounds: pr.rounds || 1, invites: pr.invites };
+      S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, opening: pr.opening || [], closing: pr.closing || [], rounds: pr.rounds || 1, invites: pr.invites };
       S.claims = S.role === "host" ? [] : (await call("GET", `/api/z/${eid}/claims`)).claims;
       try { S.reqs = S.role === "host" ? [] : (await call("GET", `/api/z/${eid}/control/request`)).requests; } catch { S.reqs = []; }
       if (!S.started && !S.draft && S.role !== "host") { try { const k = await TBControl.ensureKey(eid, { token: secret, base: BASE, prefix: "/api/z" }); if (!k.ok && !S.ctlNote) S.ctlNote = k.reason || ""; } catch { /* the pause is optional; the engagement does not depend on it */ } } // an engagement made by the AI has no pause key until the organizer opens it here
@@ -463,8 +485,40 @@
       refreshEng();
     };
     if ($("closed")) $("closed").onchange = async () => { try { await call("PATCH", `/api/z/${eid}/settings`, { closed: $("closed").checked }); S.note = $("closed").checked ? "Only people on the list can join." : "Anyone with the link can join."; } catch (e) { S.note = e.message; } refreshEng(); };
+    { // what kind of link is it, and a test page that shows it exactly as a guest's phone would
+      const ytC = (u) => /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:[^#]*&)?v=|shorts\/|embed\/|live\/))([A-Za-z0-9_-]{11})/.test(u);
+      const linkInfo = (u) => {
+        if (!u) return { ok: true, text: "No link: guests see your message only." };
+        if (!/^https:\/\/[^\s<>"'`]+$/i.test(u)) return { ok: false, text: "The link must start with https:// and have no spaces." };
+        if (ytC(u)) return { ok: true, text: "YouTube video: plays inside the game. If its owner has switched off showing it on other sites it will not play, so press the test button." };
+        if (/\.(mp4|webm|m4v|mov|ogv)([?#]|$)/i.test(u)) return { ok: true, text: "Video file: plays inside the game." };
+        if (/\.(mp3|m4a|aac|wav|ogg|oga)([?#]|$)/i.test(u)) return { ok: true, text: "Audio file: plays inside the game." };
+        return { ok: false, text: "This link will NOT play inside the game: it opens in a new tab and takes guests out of the game. Use a YouTube link, or a direct link to a video (.mp4) or audio (.mp3) file." };
+      };
+      const val = (grp, i, k) => (document.querySelector(`[data-${grp}="${k}"][data-i="${i}"]`) || {}).value || "";
+      const refresh = (grp, i) => { const el = document.querySelector(`[data-lk="${grp}${i}"]`); if (!el) return; const r = linkInfo(val(grp, i, "mediaUrl").trim()); el.textContent = r.text; el.style.color = r.ok ? "" : "#a02020"; };
+      document.querySelectorAll(".bmrow").forEach((row) => { const grp = row.dataset.grp, i = row.dataset.row; refresh(grp, i); row.querySelectorAll("input,select").forEach((x) => x.addEventListener("input", () => refresh(grp, i))); });
+      document.querySelectorAll("[data-test]").forEach((btn) => (btn.onclick = () => {
+        const grp = btn.dataset.test, i = btn.dataset.i, w = { op: "opening", bk: "break", cl: "closing" }[grp];
+        const sec = val(grp, i, "seconds");
+        const h = new URLSearchParams({ w, k: val(grp, i, "kind") || "speech", t: val(grp, i, "title").trim() || "Your message", u: val(grp, i, "mediaUrl").trim(), ...(sec ? { s: sec } : {}) });
+        window.open("/preview.html#" + h.toString(), "_blank", "noopener");
+      }));
+    }
+    if ($("tix") && $("bmcount")) { // the brand moments follow the tickets: 1 + 3 + 1 for one ticket, 2 + 6 + 2 for two
+      const sync = () => {
+        const t = Number($("tix").value) || 1, lim = { op: t, bk: 3 * t, cl: t }; let used = 0, dropped = 0;
+        for (const grp of ["op", "bk", "cl"]) document.querySelectorAll(`.bmrow[data-grp="${grp}"]`).forEach((r) => {
+          const i = Number(r.dataset.row), shown = i < lim[grp]; r.style.display = shown ? "" : "none";
+          const has = (r.querySelector(`[data-${grp}="title"]`).value.trim() || r.querySelector(`[data-${grp}="mediaUrl"]`).value.trim());
+          if (has) { if (shown) used++; else dropped++; }
+        });
+        $("bmcount").textContent = `Brand moments: ${used} of ${5 * t} used (you have ${t} ticket${t === 1 ? "" : "s"} per person)` + (dropped ? `. ${dropped} more than the allowance, not saved: switch some off.` : "");
+      };
+      $("tix").onchange = sync; document.querySelectorAll(".bmrow input, .bmrow select").forEach((x) => x.addEventListener("input", sync)); sync();
+    }
     if ($("savecfg")) $("savecfg").onclick = async () => {
-      try { const v = readSettings(); const r = await call("PATCH", `/api/z/${eid}/settings`, v); S.cfg = { tickets: r.tickets, rewards: r.rewards, breaks: r.breaks, rounds: r.rounds || 1, invites: r.invites }; S.note = "Saved."; } catch (e) { S.note = e.message; }
+      try { const v = readSettings(); const r = await call("PATCH", `/api/z/${eid}/settings`, v); S.cfg = { tickets: r.tickets, rewards: r.rewards, breaks: r.breaks, opening: r.opening || [], closing: r.closing || [], rounds: r.rounds || 1, invites: r.invites }; S.note = "Saved."; } catch (e) { S.note = e.message; }
       refreshEng();
     };
     if ($("mark")) $("mark").onclick = async () => { try { await call("POST", `/api/z/${eid}/mark`, { phone: $("mkph").value, role: $("mkrole").value }); S.note = "Marked."; } catch (e) { S.note = e.message; } refreshEng(); };

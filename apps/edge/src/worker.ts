@@ -12,7 +12,7 @@
 //   Winners: nobody posts them. Phones report what they worked out and a result is accepted when several different phones agree (winners.ts, quorumFor).
 //   nobody        - phones: join, send claims, read results counts, read the engagement info and the signed control file.
 
-import { GRACE_ROUNDS, defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
+import { GRACE_ROUNDS, brandMomentsFor, defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
 import { openPii, openText, sealPii, sealText } from "./pii";
 import { TERMS_VERSION } from "./brand";
 import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, newUseAlertMail, signInMail } from "./mails";
@@ -67,8 +67,8 @@ export const PAGE = 2000;
 export const CLAIM_TRACKING_MAX_CAP = 500;
 const tracks = (e: { cap: number }) => e.cap <= CLAIM_TRACKING_MAX_CAP;
 /** The part of the settings every phone needs, public by design: how many tickets, what each house wins, and when the brand breaks are. */
-const pub = (e: any) => { const c = cfgOf(e); return { tickets: c.tickets, rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites }; };
-const cfgJson = (c: EngagementCfg) => JSON.stringify({ rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites });
+const pub = (e: any) => { const c = cfgOf(e); return { tickets: c.tickets, rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing }; };
+const cfgJson = (c: EngagementCfg) => JSON.stringify({ rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing });
 
 /** Privacy and lifecycle: sealed personal data, the role / inviter / invite kind / source of a seat, when each game ended, the winners record that outlives the personal data, and the votes that tell us a game is over. */
 export const PRIVACY_SCHEMA: string[] = [
@@ -125,7 +125,7 @@ export const SCHEMA: string[] = [
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
 /** What the organizer set for this engagement (tickets per participant, reward lines, brand breaks); plain defaults when nothing was set. */
 const cfgOf = (e: { tickets?: number; config?: string | null }): EngagementCfg => {
-  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites }); if (v.ok) return v.cfg; } catch { /* fall through */ }
+  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, opening: j.opening, closing: j.closing }); if (v.ok) return v.cfg; } catch { /* fall through */ }
   return defaultCfg();
 };
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
@@ -377,7 +377,7 @@ export const AI_MANIFEST = {
     { do: "List engagements and head-counts", call: "GET /api/history" },
     { do: "Create an engagement. It is saved as a free draft that participants cannot see yet; nothing is paid at this step", call: "POST /api/z {id, startRound, callSeconds (6|9|12|15), cap, closed?}  -> {ok, draft, openUrl}" },
     { do: "When everything is set up, tell the organizer it is ready. Publishing is free but only the organizer can do it (they confirm their email and mobile number), and payment is due before the start time or the engagement will not begin. This returns a link: give it to the organizer and help them through every step, but never try to publish or pay yourself", call: "POST /api/z/{id}/publish -> {published:false, needsOrganizer:true, consoleUrl} (the organizer opens consoleUrl, confirms their details and presses Publish; afterwards the same call returns payUrl, the payment page, and shareUrl, the link for guests)" },
-    { do: "Change start time, speed, cap, invite-only, tickets per participant (1 or 2), reward lines and brand breaks (up to 3) and rounds (1 to 5 games, each with new numbers and new tickets) before the first number", call: "PATCH /api/z/{id}/settings {startRound?, callSeconds?, cap?, closed?, tickets?, rounds?, rewards?: [{pattern: early5|top|mid|bot|corners|star|full, scope?: ticket|two_ticket, ordinal?: 1-5, text}], breaks?: [{after: 1-89 numbers called, seconds: 15-600 in steps of 3, kind: file|youtube|slides|speech|lucky, title, mediaUrl?: https link (not for lucky), winners?: 1|3|5|10 (lucky only, default 3), style?: draw|scratch (lucky only; scratch shows a scratch card on phones, the winners are drawn the same fair way)}]}. IMPORTANT: rewards, breaks and every list you send REPLACE what was saved, they are not merged, so always send the complete list (to change one reward, read the summary, change it, send them all). A media link must be https; for kind youtube it must be a YouTube link; for file it must be a direct link the phones can open (a video, audio, image or PDF file), which we cannot check for you. A reward line is ONE winner of ONE house: for three winners of the full house send three lines with ordinal 1, 2 and 3. For the two-ticket full house use pattern full with scope two_ticket (ordinal 1-5). Names for the organizer: early5 = Early Five, top = Top line, mid = Middle line, bot = Bottom line, corners = Four corners, star = Star, full = Full house. A lucky draw is a break: {after: 60, seconds: 60, kind: lucky, title: Lucky draw, winners: 3}. Worked example: PATCH /api/z/{id}/settings {startRound: 33146812, callSeconds: 9, cap: 250, tickets: 2, rounds: 1, rewards: [{pattern: early5, ordinal: 1, text: Gift hamper}, {pattern: full, ordinal: 1, text: Voucher 5000}, {pattern: full, ordinal: 2, text: Voucher 3000}, {pattern: full, scope: two_ticket, ordinal: 1, text: iPad}], breaks: [{after: 30, seconds: 90, kind: youtube, title: Anniversary film, mediaUrl: https://www.youtube.com/watch?v=...}, {after: 60, seconds: 60, kind: lucky, title: Lucky draw, winners: 3}]}" },
+    { do: "Change start time, speed, cap, invite-only, tickets per participant (1 or 2), reward lines and brand moments (5 per ticket: opening, during the game, closing; 1 ticket = 5, 2 tickets = 10) and rounds (1 to 5 games, each with new numbers and new tickets) before the first number", call: "PATCH /api/z/{id}/settings {startRound?, callSeconds?, cap?, closed?, tickets?, rounds?, rewards?: [{pattern: early5|top|mid|bot|corners|star|full, scope?: ticket|two_ticket, ordinal?: 1-5, text}], breaks?: [{after?: 1-89 numbers called (leave it out: the software spreads them evenly), seconds?: 15-600 in steps of 3 (default 60), kind: file|youtube|slides|speech|lucky, title, mediaUrl?: https link (not for lucky), winners?: 1|3|5|10 (lucky only, default 3), style?: draw|scratch (lucky only; scratch shows a scratch card on phones, the winners are drawn the same fair way)}], opening?: [{kind: file|youtube|slides|speech, title, mediaUrl?, seconds?: 15-120}], closing?: [{kind: file|youtube|slides|speech, title, mediaUrl?}]}. IMPORTANT: rewards, breaks and every list you send REPLACE what was saved, they are not merged, so always send the complete list (to change one reward, read the summary, change it, send them all). A media link must be https; for kind youtube it must be a YouTube link; for file it must be a direct link the phones can open (a video, audio, image or PDF file), which we cannot check for you. A reward line is ONE winner of ONE house: for three winners of the full house send three lines with ordinal 1, 2 and 3. For the two-ticket full house use pattern full with scope two_ticket (ordinal 1-5). Names for the organizer: early5 = Early Five, top = Top line, mid = Middle line, bot = Bottom line, corners = Four corners, star = Star, full = Full house. A lucky draw is a break: {after: 60, seconds: 60, kind: lucky, title: Lucky draw, winners: 3}. Worked example: PATCH /api/z/{id}/settings {startRound: 33146812, callSeconds: 9, cap: 250, tickets: 2, rounds: 1, rewards: [{pattern: early5, ordinal: 1, text: Gift hamper}, {pattern: full, ordinal: 1, text: Voucher 5000}, {pattern: full, ordinal: 2, text: Voucher 3000}, {pattern: full, scope: two_ticket, ordinal: 1, text: iPad}], breaks: [{after: 30, seconds: 90, kind: youtube, title: Anniversary film, mediaUrl: https://www.youtube.com/watch?v=...}, {after: 60, seconds: 60, kind: lucky, title: Lucky draw, winners: 3}]}" },
     { do: "Participants: the OWNER loads the invite list in the Participants card of their console. Names and mobile numbers never pass through the AI (a roster call from an AI key answers 403). Set the limit with settings.", call: "(owner, in the console)" },
     { do: "Reuse an earlier engagement's people", call: "POST /api/z/{id}/reuse {from}" },
     { do: "See who joined (names and ids only, never phone numbers)", call: "GET /api/z/{id}/participants" },
@@ -781,7 +781,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const b = await body(req);
     if (!b || !ID.test(b.id ?? "") || !Number.isInteger(b.startRound) || !Number.isInteger(b.callSeconds) || b.callSeconds % 3 || b.callSeconds < 6 || !Number.isInteger(b.cap) || b.cap < 1 || b.cap > 100000)
       return json({ error: "Check the engagement details." }, 400);
-    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds });
+    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, opening: b.opening, closing: b.closing });
     if (!vc.ok) return json({ error: vc.error }, 400);
     const have = await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(b.id).first<{ org: string | null }>();
     if (have) return json({ ok: true, existed: true }); // creating twice never overwrites (and never reveals whose it is)
@@ -1033,7 +1033,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const c = cfgOf(e), origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
     return json({ id: e.id, status: isDraft ? "draft" : unpaid ? (locked ? "published, NOT PAID, held because the start time passed" : "published, payment due before the start") : "published and paid",
       startsAtIST: istTime(roundMs(e.start_round)), startMs: roundMs(e.start_round), startRound: e.start_round, callSeconds: e.call_seconds, limit: e.cap, closed: !!e.closed,
-      tickets: c.tickets, rounds: c.rounds, rewards: c.rewards, breaks: c.breaks, invites: c.invites, participants: n,
+      tickets: c.tickets, rounds: c.rounds, rewards: c.rewards, breaks: c.breaks, opening: c.opening, closing: c.closing, invites: c.invites, brandMomentsAllowed: brandMomentsFor(c.tickets), participants: n,
       paid: !unpaid, ...(unpaid ? { pack: PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null, priceInrIncludingGst: PACKS.find((x) => x[0] >= e.cap) ? price(PACKS.find((x) => x[0] >= e.cap)![0], "INR").total : null, payBefore: istTime(roundMs(e.start_round)) } : { pack: e.pack }),
       gameMinutes: Math.round((90 * e.call_seconds * c.rounds + c.breaks.reduce((t: number, b: any) => t + b.seconds, 0) + (c.rounds - 1) * 90) / 60),
       consoleUrl: `${origin}/zc.html?e=${e.id}`, ...(isDraft ? {} : { shareUrl: `${origin}/z.html?e=${e.id}` }), ...(unpaid && !isDraft ? { payUrl: `${origin}/pay.html?e=${e.id}` } : {}) });
@@ -1185,7 +1185,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!unpaid && roundMs(e.start_round) <= now) return json({ error: "The engagement has already started, so it can no longer be changed." }, 409);
     const b = await body(req);
     if (!b) return json({ error: "Check the details." }, 400);
-    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, invites: b.invites }, cfgOf(e));
+    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, invites: b.invites, opening: b.opening, closing: b.closing }, cfgOf(e));
     if (!vc.ok) return json({ error: vc.error }, 400);
     const next = { start_round: b.startRound ?? e.start_round, call_seconds: b.callSeconds ?? e.call_seconds, cap: b.cap ?? e.cap, closed: b.closed === undefined ? e.closed : b.closed ? 1 : 0 };
     if (!Number.isInteger(next.start_round) || !Number.isInteger(next.call_seconds) || next.call_seconds % 3 || next.call_seconds < 6 || !Number.isInteger(next.cap) || next.cap < 1 || next.cap > 100000) return json({ error: "Check the details." }, 400);
@@ -1203,7 +1203,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
         try { await env.CONTROL_R2?.delete(controlKey(eid!)); } catch { /* the object expires with its engagement anyway */ }
       }
     }
-    return json({ ok: true, startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed, tickets: vc.cfg.tickets, rewards: vc.cfg.rewards, breaks: vc.cfg.breaks, rounds: vc.cfg.rounds, invites: vc.cfg.invites });
+    return json({ ok: true, startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed, tickets: vc.cfg.tickets, rewards: vc.cfg.rewards, breaks: vc.cfg.breaks, opening: vc.cfg.opening, closing: vc.cfg.closing, rounds: vc.cfg.rounds, invites: vc.cfg.invites });
   }
   return json({ error: "Not found" }, 404);
 }
