@@ -50,7 +50,8 @@
       <hr style="border:0;border-top:1px solid #e6d9b8;margin:16px 0">
       <div class="zsmall" style="font-weight:700;letter-spacing:.06em;color:#555">OPTION 2 · DO IT YOURSELF</div>
       <p style="margin:6px 0 8px">Prefer to click? Create your engagement by hand.</p>
-      <a class="zbtn s alt" href="#newform" style="text-decoration:none;display:inline-block">Create engagement manually ↓</a></div>`;
+      <a class="zbtn s alt" href="#newform" style="text-decoration:none;display:inline-block">Create engagement manually ↓</a>
+      <p class="zsmall" style="margin:12px 0 0">New here? <a href="/demo.html" target="_blank" rel="noopener">Try the free 70-second demo</a> first: a real mini-game, nothing to type.</p></div>`;
   }
   function homeView() {
     const h = S.history;

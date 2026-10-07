@@ -656,3 +656,71 @@ describe("testing a brand moment without a game", () => {
     await b.waitFor((x) => /Thank you from your organizer/.test(x)); expect(b.text()).toMatch(/guests see your message only/); expect(b.text()).not.toMatch(/numbers continue/);
   }, 60_000);
 });
+
+describe("the free demo game", () => {
+  const REAL_NOW = Date.now.bind(Date), REAL_PERF = performance.now.bind(performance);
+  /** Opens demo.html with its own clock running `k` times faster than real time, so the minute-long demo takes about 18 seconds. */
+  async function demo(o: O, hash = "", opts: { video?: string; k?: number } = {}) {
+    const k = opts.k ?? 4, T0 = REAL_NOW(), P0 = REAL_PERF(); const calls: string[] = [];
+    const p = await page(o, "/demo.html" + hash, "demo.html", ["audio.js", "zgame.js", "demo-config.js", "demo.js", "z.js"], {}, { afterLoad: (win, f) => {
+      if (f === "audio.js") { (win as any).__CT_DEMO_CLOCK = { now: () => T0 + (REAL_PERF() - P0) * k, mono: () => P0 + (REAL_PERF() - P0) * k }; const of = (win as any).fetch; (win as any).fetch = (...a: any[]) => { calls.push(String(a[0])); return of ? of(...a) : Promise.reject(new Error("no network")); }; }
+      if (f === "demo-config.js" && opts.video !== undefined) (win as any).CT_DEMO_VIDEO = opts.video;
+    } });
+    return { p, calls, T0 };
+  }
+  const until = async (cond: () => boolean, ms = 60000) => { const t0 = Date.now(); while (!cond()) { if (Date.now() - t0 > ms) throw new Error("timed out"); await new Promise((r) => setTimeout(r, 100)); } };
+  /** Plays a run to its end and checks everything the owner specified. */
+  async function playToEnd(o: O, hash: string) {
+    const { p, calls } = await demo(o, hash); const doc = p.win.document; const rt = p.win.__rt;
+    let sawBreak = false, ticketDuringBreak = false, logDuringBreak = -1, breakGone = false;
+    await until(() => {
+      const view = rt.view(); const t = p.text();
+      if (/A short message from your host/.test(t)) { sawBreak = true; logDuringBreak = view.log.length; ticketDuringBreak = !!doc.querySelector(".zticket"); }
+      else if (sawBreak) breakGone = true;
+      return view.phase === "ended";
+    }, 90000);
+    expect(sawBreak).toBe(true); expect(logDuringBreak).toBe(3); expect(ticketDuringBreak).toBe(true); expect(breakGone).toBe(true);
+    expect(rt.view().log).toEqual([1, 23, 80, 9, 50, 60]); // exactly the scripted numbers, in order, by the real number-drawing code
+    expect(rt.view().won.map((w: any) => w.pattern)).toEqual(["corners"]); expect(rt.view().won[0].idx).toBe(5); // Four corners, on the 6th number, by the real winner check
+    const end = await p.waitFor((x) => /That was the demo/.test(x), 20000);
+    expect(end).toMatch(/You won Four corners/); expect(end).toMatch(/Create my game/); expect(end).toMatch(/Run demo again/);
+    expect(end).not.toMatch(/Confirm your prize details|Confirm where your prize goes/); // a demo asks for no name or number
+    expect(calls.filter((u) => /\/api\//.test(u))).toEqual([]); // nothing was sent to our server
+    return p;
+  }
+
+  test("before anyone presses anything: a real ticket marked DEMO, a Run Demo button, and nothing happening: no countdown, no time, no date, no number to type", async () => {
+    const o = await organizer(); const { p } = await demo(o); const doc = p.win.document; const rt = p.win.__rt;
+    await p.waitFor((x) => /Run Demo/.test(x)); const t = p.text();
+    expect(t).toMatch(/Demo ticket/); expect(doc.querySelector(".zdemotag")?.textContent).toBe("DEMO"); expect(doc.querySelectorAll(".zticket div").length).toBe(27); // a real 3 x 9 ticket
+    expect(doc.getElementById("drun")?.textContent).toBe("Run Demo");
+    let copied = ""; Object.defineProperty(p.win.navigator, "clipboard", { value: { writeText: async (x: string) => { copied = x; } }, configurable: true });
+    p.click("#dcopy"); await until(() => copied !== "", 3000); expect(copied).toMatch(/^http:\/\/localhost\/demo\.html$/); // the plain address, no time in it: anyone who opens it runs their own demo
+    expect(t).not.toMatch(/Starting in|Join the engagement|Your mobile number|\d\d:\d\d:\d\d/);
+    await new Promise((r) => setTimeout(r, 2500)); // many demo-seconds pass: still nothing runs by itself
+    expect(rt.view().log).toEqual([]); expect(doc.querySelectorAll(".zticket div.m").length).toBe(0);
+  }, 60_000);
+
+  test("pressing Run Demo starts a fresh run 3 seconds later; the whole demo then plays by itself to the end; and Run demo again plays it a second time, identically", async () => {
+    const o = await organizer(); const { p: idle } = await demo(o); await idle.waitFor((x) => /Run Demo/.test(x));
+    idle.click("#drun"); const hash = idle.win.location.hash; expect(hash).toMatch(/^#r=\d+$/); // the press sets the start: nothing else is needed
+    const first = await playToEnd(o, hash);
+    expect(first.win.document.getElementById("dagain2")?.textContent).toBe("Run demo again");
+    first.click("#dagain2"); const again = first.win.location.hash; expect(again).toMatch(/^#r=\d+$/); expect(again).not.toBe(hash);
+    await playToEnd(o, again); // the second run is the same game again
+  }, 240_000);
+
+  test("the break is the owner's YouTube video when one is set: it plays inside the page for the break, the ticket stays, and the player is gone after it", async () => {
+    const o = await organizer(); const { p } = await demo(o, "#r=" + (REAL_NOW() + 3000), { video: "https://youtu.be/dQw4w9WgXcQ" }); const doc = p.win.document;
+    await until(() => !!doc.querySelector("#ctmedia iframe"), 60000);
+    expect((doc.querySelector("#ctmedia iframe") as any).src).toMatch(/^https:\/\/www\.youtube-nocookie\.com\/embed\/dQw4w9WgXcQ\?/);
+    expect(p.text()).toMatch(/A short video from your host/); expect(doc.querySelector(".zticket")).toBeTruthy();
+    await until(() => !doc.querySelector("#ctmedia iframe"), 60000);
+    expect(p.win.__rt.view().log.length).toBeGreaterThanOrEqual(3);
+  }, 150_000);
+
+  test("an old address (a run that ended long ago) shows the Run Demo screen again, not a half-finished game", async () => {
+    const o = await organizer(); const { p } = await demo(o, "#r=" + (REAL_NOW() - 600000));
+    await p.waitFor((x) => /Run Demo/.test(x)); expect(p.win.__rt.view().log).toEqual([]);
+  }, 60_000);
+});

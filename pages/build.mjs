@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const SRC = join(import.meta.dir, "../apps/web/public"), OUT = join(import.meta.dir, "public");
 rmSync(OUT, { recursive: true, force: true }); mkdirSync(OUT, { recursive: true });
-const FILES = ["index.html", "report.html", "report.js", "reportgen.js", "manifest.webmanifest", "zsw.js", "pwa.js", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "site.js", "theme.js", "rum.js", "v.js", "owner-visits.html", "owner-visits.js", "robots.txt", "sitemap.xml", "ct4f9c2e7a1b8d3056ae91c4d7f20b6a38.txt", "site.css", "common.js", "app.css", "fonts.css", "legal.html", "terms.html", "dpa.html", "subprocessors.html", "partner-terms.html", "organizer-guide.html", "partner.html", "partner.js", "partner.css", "404.html", "ai-link.html", "ai-link.js", "signin.html", "signin.js", "z.html", "z.js", "z.css", "preview.html", "preview.js", "zc.html", "zc.js", "zc.css", "zgame.js", "control.js", "audio.js", "pay.html", "pay.js", "big.html", "big.js", "big.css"];
+const FILES = ["index.html", "report.html", "report.js", "reportgen.js", "manifest.webmanifest", "zsw.js", "pwa.js", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "site.js", "theme.js", "rum.js", "v.js", "owner-visits.html", "owner-visits.js", "robots.txt", "sitemap.xml", "ct4f9c2e7a1b8d3056ae91c4d7f20b6a38.txt", "site.css", "common.js", "app.css", "fonts.css", "legal.html", "terms.html", "dpa.html", "subprocessors.html", "partner-terms.html", "organizer-guide.html", "partner.html", "partner.js", "partner.css", "404.html", "ai-link.html", "ai-link.js", "signin.html", "signin.js", "z.html", "z.js", "z.css", "preview.html", "preview.js", "demo.html", "demo.js", "demo-config.js", "zc.html", "zc.js", "zc.css", "zgame.js", "control.js", "audio.js", "pay.html", "pay.js", "big.html", "big.js", "big.css"];
 for (const f of FILES) { if (!existsSync(join(SRC, f))) throw new Error("missing " + f); cpSync(join(SRC, f), join(OUT, f)); }
 for (const d of ["fonts", "img"]) cpSync(join(SRC, d), join(OUT, d), { recursive: true });
 // security headers; styles allow inline because the pages set a few style attributes, scripts stay locked to our own files
@@ -15,7 +15,7 @@ const PLAINCSP = CSP.replace(/ frame-src[^;]*;/, "");
 const hdr = (csp, extra = "") => `\n  Content-Security-Policy: ${csp}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  X-Frame-Options: DENY\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()${extra}\n`;
 const NOINDEX = "\n  X-Robots-Tag: noindex";
 const PAGES = [ // [clean path, csp, noindex]
-  ["/pay", PAYCSP, true], ["/z", GAMECSP, true], ["/preview", GAMECSP, true], ["/zc", PLAINCSP, true], ["/big", PLAINCSP, true], ["/report", PLAINCSP, true], ["/signin", PLAINCSP, true], ["/owner-visits", PLAINCSP, true], ["/ai-link", PLAINCSP, true],
+  ["/pay", PAYCSP, true], ["/z", GAMECSP, true], ["/preview", GAMECSP, true], ["/demo", GAMECSP, true], ["/zc", PLAINCSP, true], ["/big", PLAINCSP, true], ["/report", PLAINCSP, true], ["/signin", PLAINCSP, true], ["/owner-visits", PLAINCSP, true], ["/ai-link", PLAINCSP, true],
   ["/partner", PLAINCSP, true], ["/legal", PLAINCSP, false], ["/terms", PLAINCSP, false], ["/dpa", PLAINCSP, false], ["/subprocessors", PLAINCSP, false], ["/partner-terms", PLAINCSP, false], ["/organizer-guide", PLAINCSP, false], ["/404", PLAINCSP, true], ["/index", PLAINCSP, false],
 ];
 let rules = "";
