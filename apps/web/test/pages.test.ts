@@ -672,14 +672,14 @@ describe("the free demo game", () => {
   /** Plays a run to its end and checks everything the owner specified. */
   async function playToEnd(o: O, hash: string) {
     const { p, calls } = await demo(o, hash); const doc = p.win.document; const rt = p.win.__rt;
-    let sawBreak = false, ticketDuringBreak = false, logDuringBreak = -1, breakGone = false;
+    let sawBreak = false, sawBuiltInVideo = false, ticketDuringBreak = false, logDuringBreak = -1, breakGone = false;
     await until(() => {
       const view = rt.view(); const t = p.text();
-      if (/A short message from your host/.test(t)) { sawBreak = true; logDuringBreak = view.log.length; ticketDuringBreak = !!doc.querySelector(".zticket"); }
+      if (/How brand breaks work/.test(t)) { sawBreak = true; sawBuiltInVideo = sawBuiltInVideo || !!doc.querySelector("#ctmedia video"); logDuringBreak = view.log.length; ticketDuringBreak = !!doc.querySelector(".zticket"); }
       else if (sawBreak) breakGone = true;
       return view.phase === "ended";
     }, 90000);
-    expect(sawBreak).toBe(true); expect(logDuringBreak).toBe(3); expect(ticketDuringBreak).toBe(true); expect(breakGone).toBe(true);
+    expect(sawBreak).toBe(true); expect(sawBuiltInVideo).toBe(true); expect((doc.querySelector("#ctmedia video") as any)?.src ?? "").toBe(""); /* the player is gone after the break */ expect(logDuringBreak).toBe(3); expect(ticketDuringBreak).toBe(true); expect(breakGone).toBe(true);
     expect(rt.view().log).toEqual([1, 23, 80, 9, 50, 60]); // exactly the scripted numbers, in order, by the real number-drawing code
     expect(rt.view().won.map((w: any) => w.pattern)).toEqual(["corners"]); expect(rt.view().won[0].idx).toBe(5); // Four corners, on the 6th number, by the real winner check
     const end = await p.waitFor((x) => /That was the demo/.test(x), 20000);

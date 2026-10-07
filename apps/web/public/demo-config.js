@@ -1,4 +1,5 @@
-// The free demo's break video. Put ONE YouTube link here (a 15-second clip is best: the break lasts 15 seconds), for example
+// The free demo's break normally plays our built-in 15-second explainer video (demo-break.mp4: how brand breaks work).
+// To play YOUR OWN video there instead, put one YouTube link here (a 15-second clip fits best), for example
 //   window.CT_DEMO_VIDEO = "https://youtu.be/XXXXXXXXXXX";
-// Leave it empty and the demo's break shows a short written message instead, so the demo works either way.
+// Leave it empty to keep the built-in video.
 window.CT_DEMO_VIDEO = "";

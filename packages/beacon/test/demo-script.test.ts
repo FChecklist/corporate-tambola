@@ -3,7 +3,7 @@ import { completionIndexKey, ticketsFor, activeBreak, callRoundR } from "../src/
 import { roundEid, validateCfg } from "../src/config";
 import { pickNumber } from "../src/index";
 import { patternNumbers } from "../../shared/src/ticket";
-import { DEMO_BREAK_AFTER, DEMO_BREAK_SECONDS, DEMO_CALL_SECONDS, DEMO_CORNERS, DEMO_EID, DEMO_PID, DEMO_RAND, DEMO_SEQ, demoCfg, demoRandomnessFor, demoRoundOf } from "../src/demo-script";
+import { DEMO_BREAK_VIDEO, DEMO_BREAK_AFTER, DEMO_BREAK_SECONDS, DEMO_CALL_SECONDS, DEMO_CORNERS, DEMO_EID, DEMO_PID, DEMO_RAND, DEMO_SEQ, demoCfg, demoRandomnessFor, demoRoundOf } from "../src/demo-script";
 
 // Everything about the demo is re-derived here with the REAL game code, so the preloaded script cannot drift from the real game.
 const ticket = ticketsFor(roundEid(DEMO_EID, 1), DEMO_PID, 1)[0]!;
@@ -34,10 +34,10 @@ describe("the free demo game", () => {
     for (let k = 0; k < 6; k++) expect(demoRandomnessFor(first, demoRoundOf(first, k))).toBe(DEMO_RAND[k]!);
     expect(demoRandomnessFor(first, first + 1)).toBeNull(); expect(demoRandomnessFor(first, demoRoundOf(first, 5) + 1)).toBeNull();
   });
-  test("the demo settings are valid game settings: one prize, Four corners, one break; a YouTube link makes it a video, anything else a message", () => {
+  test("the demo settings are valid game settings: one prize, Four corners, one break; a YouTube link plays that, anything else plays the built-in video", () => {
     for (const url of ["https://youtu.be/abcdefghijk", "https://www.youtube.com/watch?v=abcdefghijk", "", "https://example.com/x", undefined]) { const v = validateCfg(demoCfg(url as any)); expect(v.ok).toBe(true); }
     const yt = demoCfg("https://youtu.be/abcdefghijk"); expect(yt.breaks[0]).toMatchObject({ kind: "youtube", seconds: 15, after: 3, mediaUrl: "https://youtu.be/abcdefghijk" });
-    const none = demoCfg(""); expect(none.breaks[0]!.kind).toBe("speech"); expect(none.breaks[0]!.mediaUrl).toBeUndefined();
+    const none = demoCfg(""); expect(none.breaks[0]).toMatchObject({ kind: "file", mediaUrl: DEMO_BREAK_VIDEO, seconds: 15, title: "How brand breaks work" }); expect(DEMO_BREAK_VIDEO).toBe("/demo-break.mp4");
     expect(yt.rewards.map((r) => r.pattern)).toEqual(["corners"]);
   });
 });

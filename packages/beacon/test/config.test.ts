@@ -259,3 +259,11 @@ describe("five brand moments for each ticket: openings, during the game, closing
     expect(old.opening).toEqual([]); expect(old.closing).toEqual([]);
   });
 });
+
+describe("a media file kept on our own site", () => {
+  const brk = (u: string) => ({ breaks: [{ after: 30, seconds: 30, kind: "file", title: "Explainer", mediaUrl: u }] });
+  test("a plain path to a media file on the site is accepted (the demo's built-in video); anything with folders, other types or tricks is refused", () => {
+    expect(validateCfg(brk("/demo-break.mp4")).ok).toBe(true);
+    for (const u of ["/a/b.mp4", "//evil.example/x.mp4", "/x.html", "/x.mp4?y=1", "/../x.mp4", "demo.mp4", "/x.mp4 ", "/.mp4x", "javascript:alert(1)", "http://acme.com/v.mp4"]) expect([u, validateCfg(brk(u)).ok]).toEqual([u, false]);
+  });
+});

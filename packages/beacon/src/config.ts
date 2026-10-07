@@ -71,6 +71,8 @@ export const breakShift = (breaks: readonly BreakCfg[], k: number): number => br
 
 const cleanText = (s: unknown, max: number) => (typeof s === "string" ? s.replace(/[<>`]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "");
 const YT = /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i;
+/** A media file kept on our own site (for example the demo's built-in video): a path with no folders, and only a media file type. */
+export const SITE_MEDIA = /^\/[A-Za-z0-9._-]{1,80}\.(mp4|webm|m4a|mp3)$/i;
 
 /** Validates what the organizer sent. Returns the cleaned config, or a plain-English reason. Missing parts keep their defaults. */
 export function validateCfg(input: { tickets?: unknown; rewards?: unknown; breaks?: unknown; rounds?: unknown; invites?: unknown; opening?: unknown; closing?: unknown; name?: unknown }, base: EngagementCfg = defaultCfg()): { ok: true; cfg: EngagementCfg } | { ok: false; error: string } {
@@ -121,7 +123,7 @@ export function validateCfg(input: { tickets?: unknown; rewards?: unknown; break
       if (title.length < 2) return { ok: false, error: "Give each break a short title." };
       let mediaUrl: string | undefined;
       if (b?.mediaUrl !== undefined && b.mediaUrl !== "") {
-        if (typeof b.mediaUrl !== "string" || b.mediaUrl.length > 300 || !/^https:\/\/[^\s<>"'`]+$/i.test(b.mediaUrl)) return { ok: false, error: "The link must start with https:// and have no spaces." };
+        if (typeof b.mediaUrl !== "string" || b.mediaUrl.length > 300 || !(/^https:\/\/[^\s<>"'`]+$/i.test(b.mediaUrl) || SITE_MEDIA.test(b.mediaUrl))) return { ok: false, error: "The link must start with https:// and have no spaces." };
         if (kind === "youtube" && !YT.test(b.mediaUrl)) return { ok: false, error: "A YouTube break needs a YouTube link." };
         mediaUrl = b.mediaUrl;
       }
@@ -148,7 +150,7 @@ export function validateCfg(input: { tickets?: unknown; rewards?: unknown; break
       if (title.length < 2) return { ok: false, error: "Give each brand moment a short message or title." };
       let mediaUrl: string | undefined;
       if (b?.mediaUrl !== undefined && b.mediaUrl !== "") {
-        if (typeof b.mediaUrl !== "string" || b.mediaUrl.length > 300 || !/^https:\/\/[^\s<>"'`]+$/i.test(b.mediaUrl)) return { ok: false, error: "The link must start with https:// and have no spaces." };
+        if (typeof b.mediaUrl !== "string" || b.mediaUrl.length > 300 || !(/^https:\/\/[^\s<>"'`]+$/i.test(b.mediaUrl) || SITE_MEDIA.test(b.mediaUrl))) return { ok: false, error: "The link must start with https:// and have no spaces." };
         if (kind === "youtube" && !YT.test(b.mediaUrl)) return { ok: false, error: "A YouTube moment needs a YouTube link." };
         mediaUrl = b.mediaUrl;
       }

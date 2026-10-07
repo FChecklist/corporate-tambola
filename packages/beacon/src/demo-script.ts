@@ -28,12 +28,14 @@ export const demoRoundOf = (first: number, k: number): number => first + k * DEM
 export const demoRandomnessFor = (first: number, r: number): string | null => { for (let k = 0; k < DEMO_RAND.length; k++) if (demoRoundOf(first, k) === r) return DEMO_RAND[k]!; return null; };
 /** Seconds from the first number to the end of the demo: the last scripted number plus a few seconds for the result and the Hurray. */
 export const DEMO_PLAY_SECONDS = (DEMO_RAND.length - 1) * DEMO_CALL_SECONDS + DEMO_BREAK_SECONDS;
-/** The settings of the demo game. A YouTube link makes the break a video; anything else (or nothing) makes it a message only. */
+/** The break's built-in explainer: a 15-second video kept on our own site (made by tools/make-demo-video.py). */
+export const DEMO_BREAK_VIDEO = "/demo-break.mp4";
+/** The settings of the demo game. The break plays the built-in explainer video; if the owner sets a YouTube link in demo-config.js, that plays instead. */
 export function demoCfg(videoUrl?: string): EngagementCfg {
   const yt = /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(videoUrl || "");
   return {
     tickets: 1, rounds: 1, opening: [], closing: [],
     rewards: [{ pattern: "corners", scope: "ticket", ordinal: 1, text: "Demo prize: Four corners" }],
-    breaks: [{ after: DEMO_BREAK_AFTER, seconds: DEMO_BREAK_SECONDS, kind: yt ? "youtube" : "speech", title: yt ? "A short video from your host" : "A short message from your host", ...(yt ? { mediaUrl: videoUrl } : {}) }],
+    breaks: [{ after: DEMO_BREAK_AFTER, seconds: DEMO_BREAK_SECONDS, kind: yt ? "youtube" : "file", title: yt ? "A short video from your host" : "How brand breaks work", mediaUrl: yt ? videoUrl : DEMO_BREAK_VIDEO }],
   };
 }
