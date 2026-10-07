@@ -148,7 +148,7 @@ describe("GET-only fallback (_method and _body)", () => {
     expect(bad.status).toBe(400); expect(await bad.text()).toMatch(/URL-encode/);
     await call("GET", `/ai/${o.ai}/z/GET-5/settings?_method=PATCH&_body=${q({ invites: { on: true, per: 2, cats: ["dealers"] } })}`);
     expect((await j(await call("GET", `/ai/${o.ai}/z/GET-5/summary`))).invites).toEqual({ on: true, per: 2, cats: ["dealers"] });
-    const m = await (await linkGet(o.ai)).text(); expect(m).toContain("franchisees"); expect(m.length).toBeLessThan(21_000);
+    const m = await (await linkGet(o.ai)).text(); expect(m).toContain("franchisees"); expect(m.length).toBeLessThan(29_000); // the short front door (rules, choices, the 10 facts) comes FIRST, so a chatbot that cuts the page short still has what it needs
   });
   test("it works only under /ai/<key>/: on the normal API a GET with _method is just a GET", async () => {
     const o = await organizer();

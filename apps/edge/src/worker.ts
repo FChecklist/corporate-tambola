@@ -22,7 +22,10 @@ import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { MODE_SCHEMA, modeRoute, orgIsTest, testFlag } from "./mode";
 import { purgeTestData } from "./test-data";
-import { GET_BODY_MAX, LINK_KEY, CONVERSATION, aiPaste, manualJson, manualText, type LinkRole } from "./ai-link";
+import { frontDoorText, nextHint, GET_BODY_MAX, LINK_KEY, CONVERSATION, aiPaste, manualJson, manualText, type LinkRole } from "./ai-link";
+import { factsText } from "./ai-facts";
+import { mapJson, mapText } from "./ai-functions";
+import { goScreen, screenJson, screenText } from "./ai-go";
 import { AUDIT_SCHEMA, auditRequest, analyzeChain, loadRows, logAccess, setHold, toCsv, verifyChain, closeAuditFor, sweepAudit, type AuditEnv } from "./audit";
 import { VISIT_SCHEMA, beaconRoute, linkVisitor, parseRange, recordFunnelForOrg, visitsJourney, visitsSummary, type VisitEnv } from "./visits";
 import { WINNERS_SCHEMA, acceptVotes, auditAi, confirmPrize, listAiAudit, listPrizes, markGiven, myPrizes } from "./winners";
@@ -67,8 +70,8 @@ export const PAGE = 2000;
 export const CLAIM_TRACKING_MAX_CAP = 500;
 const tracks = (e: { cap: number }) => e.cap <= CLAIM_TRACKING_MAX_CAP;
 /** The part of the settings every phone needs, public by design: how many tickets, what each house wins, and when the brand breaks are. */
-const pub = (e: any) => { const c = cfgOf(e); return { tickets: c.tickets, rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing }; };
-const cfgJson = (c: EngagementCfg) => JSON.stringify({ rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing });
+const pub = (e: any) => { const c = cfgOf(e); return { tickets: c.tickets, rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.name ? { name: c.name } : {}) }; };
+const cfgJson = (c: EngagementCfg) => JSON.stringify({ rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.name ? { name: c.name } : {}) });
 
 /** Privacy and lifecycle: sealed personal data, the role / inviter / invite kind / source of a seat, when each game ended, the winners record that outlives the personal data, and the votes that tell us a game is over. */
 export const PRIVACY_SCHEMA: string[] = [
@@ -125,7 +128,7 @@ export const SCHEMA: string[] = [
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
 /** What the organizer set for this engagement (tickets per participant, reward lines, brand breaks); plain defaults when nothing was set. */
 const cfgOf = (e: { tickets?: number; config?: string | null }): EngagementCfg => {
-  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, opening: j.opening, closing: j.closing }); if (v.ok) return v.cfg; } catch { /* fall through */ }
+  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, opening: j.opening, closing: j.closing, name: j.name }); if (v.ok) return v.cfg; } catch { /* fall through */ }
   return defaultCfg();
 };
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
@@ -308,6 +311,31 @@ async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promi
     h.set("content-type", "text/plain; charset=utf-8");
     return new Response(req.method === "HEAD" ? null : manualText(origin, key, role, now), { headers: h });
   }
+  if (rest === "start" || rest === "map" || rest === "facts" || rest === "go" || rest.startsWith("go/")) { // the front door, the list of functions, the facts, and the guided step links
+    if (req.method !== "GET" && req.method !== "HEAD") return linkText("These addresses are read with GET.", 405);
+    const kind = rest === "start" || rest === "map" || rest === "facts" ? rest : "go";
+    const keyId = (await sha("key|" + key)).slice(0, 10);
+    const work = auditAi(env.DB, a.org, new Request(origin + "/ai/" + kind, { method: "GET", headers: req.headers }), keyId, 200, now);
+    if (waitUntil) waitUntil(work); else await work;
+    await noteUse(env, a.org, role === "ai" ? "ai" : "host", keyId, req, now);
+    const hh = new Headers({ ...CORS, ...LINK_HEADERS }); const asJson = url.searchParams.get("format") === "json";
+    hh.set("content-type", asJson ? "application/json; charset=utf-8" : "text/plain; charset=utf-8");
+    const base = `${origin}/ai/${key}`, put = (t: string, j?: unknown) => new Response(req.method === "HEAD" ? null : asJson ? JSON.stringify(j ?? { text: t }) : t, { headers: hh });
+    if (rest === "start") return put(frontDoorText(origin, key, role));
+    if (role !== "ai") return linkText("This is for the organizer's AI link. A co-host's AI link reads the game and messages guests (see the instructions at the main address).", 403);
+    if (rest === "map") return put(mapText(base, origin), mapJson(base, origin));
+    if (rest === "facts") return put(factsText(`${origin}/trust.html`), { facts: (await import("./ai-facts")).FACTS });
+    const apiAs = async (method: string, path: string, body?: unknown) => {
+      const gh = new Headers({ "content-type": "application/json", "x-organizer": key, "x-ct-link": "1" });
+      for (const k of ["cf-connecting-ip", "user-agent", "cf-ipcountry", "cf-ray", "x-request-id", "x-ai-model", "x-ai-version", "x-ai-session", "x-ai-machine"]) { const v = req.headers.get(k); if (v) gh.set(k, v); }
+      const rr = await handle0(new Request(`${url.origin}/api/${path}`, { method, headers: gh, body: body === undefined ? undefined : JSON.stringify(body) }), env, now, waitUntil);
+      let jj: any = null; try { jj = await rr.json(); } catch { /* an empty answer */ }
+      if (rr.status >= 400 && jj && typeof jj.error === "string" && !jj.next) jj.next = nextHint(rr.status, jj.error, base, origin, path);
+      return { status: rr.status, json: jj };
+    };
+    const screen = await goScreen({ base, origin, now, api: apiAs }, rest === "go" ? "" : rest.slice(3), url.searchParams);
+    return put(screenText(screen), screenJson(screen));
+  }
   // the API call: same route, key in x-organizer
   let method = req.method === "HEAD" ? "GET" : req.method, payload: string | null = null;
   const q = new URLSearchParams(url.search);
@@ -328,6 +356,11 @@ async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promi
   const r = await handle0(inner, env, now, waitUntil);
   const out = new Headers(r.headers);
   for (const [k, v] of Object.entries(LINK_HEADERS)) out.set(k, v);
+  if (role === "ai" && r.status >= 400 && (r.headers.get("content-type") || "").includes("json")) { // a refusal also says what to do next, so the AI does not retry blindly
+    const t = await r.text(); let j: any = null; try { j = JSON.parse(t); } catch { /* not JSON */ }
+    if (j && typeof j.error === "string" && !j.next) { j.next = nextHint(r.status, j.error, `${origin}/ai/${key}`, origin, rest); out.delete("content-length"); return new Response(req.method === "HEAD" ? null : JSON.stringify(j), { status: r.status, headers: out }); }
+    return new Response(req.method === "HEAD" ? null : t, { status: r.status, headers: out });
+  }
   return new Response(req.method === "HEAD" ? null : r.body, { status: r.status, headers: out });
 }
 async function handle0(req: Request, env: Env, now: number, waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
@@ -781,7 +814,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const b = await body(req);
     if (!b || !ID.test(b.id ?? "") || !Number.isInteger(b.startRound) || !Number.isInteger(b.callSeconds) || b.callSeconds % 3 || b.callSeconds < 6 || !Number.isInteger(b.cap) || b.cap < 1 || b.cap > 100000)
       return json({ error: "Check the engagement details." }, 400);
-    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, opening: b.opening, closing: b.closing });
+    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, opening: b.opening, closing: b.closing, name: b.name });
     if (!vc.ok) return json({ error: vc.error }, 400);
     const have = await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(b.id).first<{ org: string | null }>();
     if (have) return json({ ok: true, existed: true }); // creating twice never overwrites (and never reveals whose it is)
@@ -1031,12 +1064,19 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!can(a, e)) return deny(a);
     const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
     const c = cfgOf(e), origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
+    const links = { console: `${origin}/zc.html?e=${e.id}`, ...(isDraft ? { publishHandover: `${origin}/zc.html?e=${e.id}&do=publish` } : { guest: `${origin}/z.html?e=${e.id}`, bigScreen: `${origin}/big.html?e=${e.id}` }), ...(unpaid && !isDraft ? { pay: `${origin}/pay.html?e=${e.id}` } : {}), testBrandMoment: `${origin}/preview.html`, demo: `${origin}/demo.html` };
+    const nextSteps = [
+      { step: "Name the prizes", who: "the organizer, or the AI if told what each prize is", done: c.rewards.some((r) => r.text.length > 0) },
+      { step: "Publish (free): the organizer confirms their e-mail and mobile and taps once", who: "the organizer", done: !isDraft, ...(isDraft ? { link: `${origin}/zc.html?e=${e.id}&do=publish` } : {}) },
+      { step: "Pay before the start time", who: "the organizer only", done: !isDraft && !unpaid, ...(unpaid && !isDraft ? { link: links.pay, deadline: istTime(roundMs(e.start_round)) } : {}) },
+      { step: "Share the guest link and load the guest list", who: "the organizer", done: n > 0 },
+    ];
     return json({ id: e.id, status: isDraft ? "draft" : unpaid ? (locked ? "published, NOT PAID, held because the start time passed" : "published, payment due before the start") : "published and paid",
       startsAtIST: istTime(roundMs(e.start_round)), startMs: roundMs(e.start_round), startRound: e.start_round, callSeconds: e.call_seconds, limit: e.cap, closed: !!e.closed,
-      tickets: c.tickets, rounds: c.rounds, rewards: c.rewards, breaks: c.breaks, opening: c.opening, closing: c.closing, invites: c.invites, brandMomentsAllowed: brandMomentsFor(c.tickets), participants: n,
+      tickets: c.tickets, rounds: c.rounds, rewards: c.rewards, breaks: c.breaks, opening: c.opening, closing: c.closing, invites: c.invites, brandMomentsAllowed: brandMomentsFor(c.tickets), participants: n, ...(c.name ? { name: c.name } : {}),
       paid: !unpaid, ...(unpaid ? { pack: PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null, priceInrIncludingGst: PACKS.find((x) => x[0] >= e.cap) ? price(PACKS.find((x) => x[0] >= e.cap)![0], "INR").total : null, payBefore: istTime(roundMs(e.start_round)) } : { pack: e.pack }),
       gameMinutes: Math.round((90 * e.call_seconds * c.rounds + c.breaks.reduce((t: number, b: any) => t + b.seconds, 0) + (c.rounds - 1) * 90) / 60),
-      consoleUrl: `${origin}/zc.html?e=${e.id}`, ...(isDraft ? {} : { shareUrl: `${origin}/z.html?e=${e.id}` }), ...(unpaid && !isDraft ? { payUrl: `${origin}/pay.html?e=${e.id}` } : {}) });
+      links, nextSteps, consoleUrl: `${origin}/zc.html?e=${e.id}`, ...(isDraft ? {} : { shareUrl: `${origin}/z.html?e=${e.id}` }), ...(unpaid && !isDraft ? { payUrl: `${origin}/pay.html?e=${e.id}` } : {}) });
   }
   if (action === "publish" && req.method === "POST") { // free: the organizer confirms their details, shares the link, and pays before the start (or it will not begin)
     const origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
@@ -1185,7 +1225,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!unpaid && roundMs(e.start_round) <= now) return json({ error: "The engagement has already started, so it can no longer be changed." }, 409);
     const b = await body(req);
     if (!b) return json({ error: "Check the details." }, 400);
-    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, invites: b.invites, opening: b.opening, closing: b.closing }, cfgOf(e));
+    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, invites: b.invites, opening: b.opening, closing: b.closing, name: b.name }, cfgOf(e));
     if (!vc.ok) return json({ error: vc.error }, 400);
     const next = { start_round: b.startRound ?? e.start_round, call_seconds: b.callSeconds ?? e.call_seconds, cap: b.cap ?? e.cap, closed: b.closed === undefined ? e.closed : b.closed ? 1 : 0 };
     if (!Number.isInteger(next.start_round) || !Number.isInteger(next.call_seconds) || next.call_seconds % 3 || next.call_seconds < 6 || !Number.isInteger(next.cap) || next.cap < 1 || next.cap > 100000) return json({ error: "Check the details." }, 400);
@@ -1203,7 +1243,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
         try { await env.CONTROL_R2?.delete(controlKey(eid!)); } catch { /* the object expires with its engagement anyway */ }
       }
     }
-    return json({ ok: true, startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed, tickets: vc.cfg.tickets, rewards: vc.cfg.rewards, breaks: vc.cfg.breaks, opening: vc.cfg.opening, closing: vc.cfg.closing, rounds: vc.cfg.rounds, invites: vc.cfg.invites });
+    return json({ ok: true, startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed, tickets: vc.cfg.tickets, rewards: vc.cfg.rewards, breaks: vc.cfg.breaks, opening: vc.cfg.opening, closing: vc.cfg.closing, ...(vc.cfg.name ? { name: vc.cfg.name } : {}), rounds: vc.cfg.rounds, invites: vc.cfg.invites });
   }
   return json({ error: "Not found" }, 404);
 }

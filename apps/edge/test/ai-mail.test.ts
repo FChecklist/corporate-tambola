@@ -100,7 +100,7 @@ describe("the AI link is in the dedicated mails and nowhere else", () => {
   test("no other source that builds a mail, a PDF, a report or a guest page can carry an AI link", () => {
     const root = join(import.meta.dir, "..", "..", "..");
     const read = (...p: string[]) => readFileSync(join(root, ...p), "utf8");
-    const edge = readdirSync(join(root, "apps/edge/src")).filter((f) => f.endsWith(".ts") && !["ai-link.ts", "mails.ts", "worker.ts", "local.ts"].includes(f));
+    const edge = readdirSync(join(root, "apps/edge/src")).filter((f) => f.endsWith(".ts") && !["ai-link.ts", "ai-facts.ts", "ai-functions.ts", "ai-go.ts", "mails.ts", "worker.ts", "local.ts"].includes(f));
     for (const f of edge) expect(read("apps/edge/src", f)).not.toMatch(/aiPaste|aiMessage|aiLinkMail|coHostLinkMail|cta_|cth_|\/ai\//);
     const pages = ["report.html", "report.js", "reportgen.js", "z.html", "z.js", "zgame.js", "big.html", "big.js", "play.html", "play.js", "pay.html", "pay.js", "partner.html", "partner.js", "screen.js"];
     for (const f of pages) { let t = ""; try { t = read("apps/web/public", f); } catch { continue; } expect(t).not.toMatch(/cta_|cth_|\/ai\/|aiMessage/); }

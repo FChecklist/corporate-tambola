@@ -143,7 +143,7 @@ describe("the legal page carries the owner's final text, and each line matches w
 });
 
 describe("claims register: customer-facing text never says what the build does not do", () => {
-  const FILES = ["apps/web/public/index.html", "apps/web/public/legal.html", "apps/web/public/partner.html", "apps/web/public/z.js", "apps/web/public/zc.js", "apps/web/public/pay.js", "apps/web/public/site.js", "apps/web/public/partner.js", "apps/web/public/ai-link.js", "apps/edge/src/worker.ts", "apps/edge/src/lifecycle.ts", "apps/edge/src/report-layout.ts", "apps/edge/src/mails.ts", "apps/edge/src/ai-link.ts", "apps/edge/src/pay.ts"];
+  const FILES = ["apps/web/public/trust.html", "apps/web/public/llms.txt", "apps/web/public/demo.js", "apps/web/public/preview.js", "apps/edge/src/ai-facts.ts", "apps/edge/src/ai-go.ts", "apps/web/public/index.html", "apps/web/public/legal.html", "apps/web/public/partner.html", "apps/web/public/z.js", "apps/web/public/zc.js", "apps/web/public/pay.js", "apps/web/public/site.js", "apps/web/public/partner.js", "apps/web/public/ai-link.js", "apps/edge/src/worker.ts", "apps/edge/src/lifecycle.ts", "apps/edge/src/report-layout.ts", "apps/edge/src/mails.ts", "apps/edge/src/ai-link.ts", "apps/edge/src/pay.ts"];
   test("every mention of 365 days sits next to winners, prize, organizer, retention or AI-log wording", () => {
     for (const f of FILES) {
       const t = read(f);
