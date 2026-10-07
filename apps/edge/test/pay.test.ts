@@ -45,6 +45,15 @@ describe("checkout", () => {
     env.RAZORPAY_KEY_ID = undefined; env.RAZORPAY_KEY_SECRET = undefined;
     expect((await buy()).status).toBe(503);
   });
+  test("the minimum to pay is a name and an e-mail: organisation, mobile, country and GSTIN are optional; the buyer's details are handed to Razorpay's window", async () => {
+    const r = await buy({ org: undefined, name: "Asha Rao", country: undefined, taxId: undefined, phone: "98765 43210", phoneCode: "91" });
+    expect(r.status).toBe(200); const j = (await r.json()) as any;
+    expect(j.razorpay.prefill).toEqual({ email: "Boss@Acme.com", name: "Asha Rao", contact: "+919876543210" });
+    const bare = await buy({ org: undefined, name: "Asha Rao", phone: undefined, phoneCode: undefined }); expect(bare.status).toBe(200);
+    expect(((await bare.json()) as any).razorpay.prefill).toEqual({ email: "Boss@Acme.com", name: "Asha Rao" });
+    expect((await buy({ org: undefined, name: "A" })).status).toBe(400); expect((await buy({ org: undefined, name: "" })).status).toBe(400); expect((await buy({ org: undefined })).status).toBe(400);
+    expect((await buy({ name: "Asha Rao", taxId: "BAD" })).status).toBe(400); // a GSTIN is optional, a wrong one is still refused
+  });
   test("bad packs, bad e-mails, missing names and oversize bodies are refused before anything is created", async () => {
     for (const o of [{ pack: 123 }, { pack: "x" }, { email: "nope" }, { email: "" }, { org: "" }, { org: "A" }]) expect((await buy(o)).status).toBe(400);
     expect((await call("POST", "/api/checkout", "x".repeat(9000))).status).toBe(400);

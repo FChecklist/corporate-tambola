@@ -447,10 +447,11 @@ describe("payment page", () => {
   test("UC-9 / UC-55 test-payment mode end to end in the page: validation first, then paid, published, and told when it begins", async () => {
     const o = await organizer({ TEST_MODE: "1" }); await make(o, "UI-PAY2", { cap: 100 }); await publish(o, "UI-PAY2");
     const p = await payPage(o, "UI-PAY2"); await p.waitFor((x) => /Billing details/.test(x));
-    p.click("#paygo"); await p.waitFor((x) => /organization name/i.test(x));
-    (p.$("#org") as any).value = "Acme Industries";
-    p.click("#paygo"); await p.waitFor((x) => /GSTIN/i.test(x) && /valid/i.test(x)); // India needs a GSTIN on this page
-    (p.$("#org") as any).value = "Acme Industries"; (p.$("#tax") as any).value = "27ABCDE1234F1Z5";
+    expect(p.$("select#pcode")).toBeTruthy(); expect((p.$("select#pcode") as any).value).toBe("91"); expect((p.$("select#cty") as any).value).toBe("IN"); // India and +91 are already chosen
+    p.click("#paygo"); await p.waitFor((x) => /your name/i.test(x)); // only a name and an e-mail are needed
+    (p.$("#nm") as any).value = "Asha Rao"; (p.$("#tax") as any).value = "BAD-GSTIN";
+    p.click("#paygo"); await p.waitFor((x) => /GSTIN/i.test(x) && /valid/i.test(x)); // a GSTIN is optional, but a wrong one is caught
+    (p.$("#tax") as any).value = ""; // no organization, no GSTIN, no mobile: still pays
     p.click("#paygo");
     const t = await p.waitFor((x) => /Payment received/i.test(x));
     expect(t).toMatch(/will begin on time/); expect(t).toMatch(/Open my engagement/);
@@ -460,7 +461,7 @@ describe("payment page", () => {
     const o = await organizer({ TEST_MODE: "1" }); await make(o, "UI-PAY3"); await publish(o, "UI-PAY3");
     o.world.now = START_MS + HOUR;
     const p = await payPage(o, "UI-PAY3"); await p.waitFor((x) => /waiting for your payment now/i.test(x));
-    (p.$("#org") as any).value = "Acme"; (p.$("#tax") as any).value = "27ABCDE1234F1Z5"; p.click("#paygo");
+    (p.$("#nm") as any).value = "Asha Rao"; p.click("#paygo");
     expect(await p.waitFor((x) => /Payment received/i.test(x))).toMatch(/It begins at/);
   });
   test("UC-55 an already paid engagement says so; a stranger's engagement is not shown", async () => {

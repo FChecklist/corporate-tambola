@@ -6,7 +6,7 @@
   let secret = ""; try { secret = sessionStorage.getItem("ctz-org") || ""; } catch {}
   const ss = (k) => { try { return sessionStorage.getItem(k) || ""; } catch { return ""; } };
   const nf = (n) => Number(n).toLocaleString("en-IN");
-  const S = { info: null, mode: "", cur: "INR", err: "", busy: false, done: null, email: ss("ctz-email"), phone: ss("ctz-phone"), country: TB.guessCountry() };
+  const S = { info: null, mode: "", cur: "INR", err: "", busy: false, done: null, email: ss("ctz-email"), phone: ss("ctz-phone"), name: ss("ctz-name"), pcode: "91", country: "IN" }; // India and +91 unless they change them: fewest taps to pay
   S.cur = S.country === "IN" ? "INR" : "USD";
 
   const call = async (method, path, body) => {
@@ -43,17 +43,19 @@
         <div class="zrow"><span>Participants</span><em>Up to ${nf(pack)}</em></div>${sum}
         <p class="zsmall">Every participant gets their own ticket on their phone. Participants never pay: you give the rewards. Unused places are not refunded.</p>${S.info.startMs ? `<p class="zsmall"><b>Pay before ${esc(new Date(S.info.startMs).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))}.</b> If it is not paid by then, the engagement will not begin.${S.info.locked ? " It is waiting for your payment now: pay and it starts in about 3 minutes." : ""}</p>` : ""}</div>
       <div class="zcard zform"><h2>Billing details</h2>
-        <label for="org">Organization name</label><input id="org" autocomplete="organization" value="${esc(S.org || "")}" placeholder="e.g. Acme Industries">
-        <label for="cty">Country of your organization</label><select id="cty">${TB.countryOpts(S.country)}</select>
-        <label for="tax">${S.country === "IN" ? "GSTIN (for your GST invoice)" : "Company tax / VAT number (optional)"}</label><input id="tax" autocomplete="off" maxlength="${S.country === "IN" ? 15 : 30}" value="${esc(S.tax || "")}" placeholder="${S.country === "IN" ? "e.g. 27ABCDE1234F1Z5" : "Shown on your invoice"}" style="text-transform:uppercase">
-        <label for="em">Email (invoice)</label><input id="em" type="email" autocomplete="email" value="${esc(S.email)}">
-        <label for="ph">Mobile number</label><input id="ph" type="tel" autocomplete="tel" value="${esc(S.phone)}" placeholder="98765 43210">
+        <label for="nm">Name</label><input id="nm" autocomplete="name" value="${esc(S.name || "")}" placeholder="Your full name">
+        <label for="em">Email (your invoice comes here)</label><input id="em" type="email" autocomplete="email" value="${esc(S.email)}" placeholder="you@company.com">
+        <label for="ph">Mobile <span class="zsmall" style="display:inline">(optional)</span></label>
+        <div style="display:flex;gap:8px"><select id="pcode" aria-label="Country code" style="flex:0 0 112px">${TB.COUNTRIES.map(([c, n, d]) => `<option value="${d}" ${String(d) === String(S.pcode) ? "selected" : ""}>${c} +${d}</option>`).join("")}</select><input id="ph" type="tel" autocomplete="tel-national" value="${esc(S.phone)}" placeholder="98765 43210" style="flex:1;min-width:0"></div>
+        <label for="org">Organization name <span class="zsmall" style="display:inline">(optional)</span></label><input id="org" autocomplete="organization" value="${esc(S.org || "")}" placeholder="e.g. Acme Industries">
+        <label for="cty">Country of your organization <span class="zsmall" style="display:inline">(optional)</span></label><select id="cty">${TB.countryOpts(S.country)}</select>
+        <label for="tax">${S.country === "IN" ? "GSTIN (for your GST invoice)" : "Company tax / VAT number"} <span class="zsmall" style="display:inline">(optional)</span></label><input id="tax" autocomplete="off" maxlength="${S.country === "IN" ? 15 : 30}" value="${esc(S.tax || "")}" placeholder="${S.country === "IN" ? "e.g. 27ABCDE1234F1Z5" : "Shown on your invoice"}" style="text-transform:uppercase">
         ${S.err ? `<div class="zbanner bad">${esc(S.err)}</div>` : ""}
         <button class="zbtn" id="paygo" ${off || S.busy ? "disabled" : ""}>${S.busy ? "Processing…" : off ? "Payment opens soon" : "Pay " + TB.money(x.total, S.cur) + " securely with Razorpay"}</button>
         <p class="zsmall">Secure payment by Razorpay. A GST invoice is emailed to you. See the <a href="/legal.html#privacy">privacy policy</a>.</p></div>`;
   }
   function draw() { $app.innerHTML = view(); bind(); }
-  function keep() { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { org: g("org"), tax: g("tax"), email: g("em"), phone: g("ph") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; }
+  function keep() { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { name: g("nm"), org: g("org"), tax: g("tax"), email: g("em"), phone: g("ph"), pcode: g("pcode") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; }
 
   function bind() {
     const $ = (id) => document.getElementById(id);
@@ -61,17 +63,17 @@
     if ($("goLogin")) $("goLogin").onclick = () => { try { sessionStorage.setItem("ctz-next", "/pay.html?e=" + encodeURIComponent(eid)); } catch {} };
     if ($("paygo")) $("paygo").onclick = async () => {
       keep(); S.err = "";
-      const org = (S.org || "").trim(), email = (S.email || "").trim().toLowerCase(), tax = (S.tax || "").trim().toUpperCase();
-      if (org.length < 2) { S.err = "Please enter your organization name."; return draw(); }
+      const nm = (S.name || "").trim(), org = (S.org || "").trim(), email = (S.email || "").trim().toLowerCase(), tax = (S.tax || "").trim().toUpperCase();
+      if (nm.length < 2) { S.err = "Please enter your name."; return draw(); }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { S.err = "Please enter a valid email."; return draw(); }
-      if (S.country === "IN" && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(tax)) { S.err = "Please enter a valid 15-character GSTIN, like 27ABCDE1234F1Z5."; return draw(); }
+      if (S.country === "IN" && tax && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(tax)) { S.err = "Please enter a valid 15-character GSTIN, like 27ABCDE1234F1Z5."; return draw(); }
       S.busy = true; draw();
       try {
         let ref = ""; try { const v = JSON.parse(localStorage.getItem("ctz-ref") || "null"); if (v && Date.now() - v.at < 30 * 86400000) ref = v.code; } catch {}
-        let r = await call("POST", "/api/checkout", { eid, org, email, country: S.country, taxId: tax, currency: S.cur, phone: S.phone, ref });
+        let r = await call("POST", "/api/checkout", { eid, name: nm, org, email, country: S.country, taxId: tax, currency: S.cur, phone: S.phone, phoneCode: S.pcode, ref });
         if (r.mode === "razorpay") r = await TB.pay(r.razorpay, r.paymentId); // opens Razorpay Checkout; the server verifies the payment
         else if (r.result) r = r.result; // local test mode answers with the finished order
-        try { sessionStorage.setItem("ctz-email", email); } catch {}
+        try { sessionStorage.setItem("ctz-email", email); sessionStorage.setItem("ctz-name", nm); } catch {}
         S.done = r;
       } catch (e) { S.err = e.cancelled ? e.message : e.message; }
       S.busy = false; draw();

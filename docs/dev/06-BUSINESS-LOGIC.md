@@ -21,7 +21,7 @@ sequenceDiagram
   participant B as Browser (pay.js / site.js)
   participant W as Worker pay.ts
   participant R as Razorpay
-  B->>W: POST /api/checkout {pack,email,org,country,taxId, eid?, x-organizer?}
+  B->>W: POST /api/checkout {name,email (required); org?,country?,taxId?,phone?,phoneCode?, pack|eid?, x-organizer?}
   W->>W: validate, if key+eid: bind org + draft, pack = smallest fitting cap
   W->>R: create order (amount in paise, receipt = pay_id)
   W-->>B: {mode:"razorpay", razorpay:{keyId, orderId, amount...}}
@@ -186,3 +186,5 @@ Kind `lucky` break with `winners` 1 | 3 | 5 | 10 (default 3) and `style` `draw` 
 | F-10 (Med) | 250 colleagues behind one address: 200/min cap | **present** by design (`JOIN_PER_IP_MINUTE`) |
 | F-11 (Low) | `lifecycleTick` looks at 25 engagements per call | **present** (`lifecycle.ts:296`) |
 | F-02 (Low) | Co-host key could file pause/stop/erase requests | **fixed**: the Co-host gate (`worker.ts:505`) blocks control routes |
+
+**Minimum to pay (2026-10-07):** only `name` and `email` are required. `org`, `country` (default IN), `taxId` (GSTIN, checked only if given and country is IN), `phone` + `phoneCode` (default 91) are optional. An older caller that sends only `org` still works (it is used as the name). Name, e-mail and (if given) mobile are passed to Razorpay Checkout as `prefill` so the buyer does not type them again; the invoice is made out to the organisation if given, else to the name (`apps/edge/src/pay.ts`, test `apps/edge/test/pay.test.ts`).
