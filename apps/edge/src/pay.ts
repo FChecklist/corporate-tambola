@@ -124,6 +124,7 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
     if ((up.meta?.changes ?? 0) > 0) {
       await db.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(meta.eid, "ent_" + p.id).run(); published = meta.eid;
       await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`pub/${meta.eid}`, String(now)).run(); // paying also publishes
+      if (meta.paidBy) await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`paidby/${meta.eid}`, JSON.stringify({ by: meta.paidBy, ms: now })).run(); // who paid: organizer, host or co-host
       const st = await db.prepare("SELECT start_round FROM engagement WHERE id=?").bind(meta.eid).first<{ start_round: number }>();
       if (st && (1692803367 + (st.start_round - 1) * 3) * 1000 <= now) { // it was held because it was not paid at its start time: it now starts in about 3 minutes, for everyone already waiting
         restart = Math.floor((now / 1000 - 1692803367) / 3) + 1 + 60 - 40; // 3 minutes to the first number: the 2-minute setup window (GRACE_ROUNDS = 40) is part of those 3 minutes
@@ -159,6 +160,8 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
   return { result };
 }
 
+/** Which keys may pay a game of their account, and how the payment is shown. */
+const PAYER: Record<string, string> = { master: "organizer", host: "host", cohost: "co-host" };
 /** Returns a Response for payment routes, or null when the path is not one of ours. */
 export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n: number) => Promise<boolean>): Promise<Response | null> {
   const url = new URL(req.url); const p = url.pathname; const db = env.DB;
@@ -175,11 +178,12 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     if (mode === "off") return json({ error: "Payments are not switched on yet. Please try again later." }, 503);
     const b = await body(req);
     // a signed-in organizer paying to publish their own draft: the pack is the smallest one that fits the draft, and the payment is bound to them and to it
-    let boundOrg: string | null = null, boundEid: string | null = null, boundPack: number | null = null;
+    let boundOrg: string | null = null, boundEid: string | null = null, boundPack: number | null = null, paidBy: string | null = null;
     const presented = (req.headers.get("x-organizer") ?? "").trim();
     if (presented && typeof b?.eid === "string") {
       const k = await db.prepare("SELECT org, kind FROM organizer_key WHERE hash=? AND revoked=0").bind(await sha("key|" + presented)).first<{ org: string; kind: string }>();
-      if (!k || k.kind !== "master") return json({ error: "Please sign in again." }, 403);
+      if (!k || !(k.kind in PAYER)) return json({ error: "Please sign in again." }, 403); // the Organizer, a Host or a Co-host of this account may pay; one payment is enough for the game
+      paidBy = PAYER[k.kind]!;
       const eg = await db.prepare("SELECT org, cap, pack FROM engagement WHERE id=?").bind(b.eid).first<{ org: string | null; cap: number; pack: number | null }>();
       if (!eg || eg.org !== k.org) return json({ error: "No such engagement." }, 404);
       if (eg.pack !== 0) return json({ error: "This engagement is already published." }, 409);
@@ -196,7 +200,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     if (!(await spend(2))) return busy();
     const pr = price(pack, cur);
     const id = "pay_" + randHex(8);
-    const meta = { org: String(b.org).trim().slice(0, 120), country: typeof b.country === "string" ? b.country.slice(0, 2) : "IN", taxId: typeof b.taxId === "string" ? b.taxId.trim().slice(0, 20) : "", origin: env.PUBLIC_ORIGIN ?? url.origin, ...(boundOrg ? { orgId: boundOrg, eid: boundEid } : {}) };
+    const meta = { org: String(b.org).trim().slice(0, 120), country: typeof b.country === "string" ? b.country.slice(0, 2) : "IN", taxId: typeof b.taxId === "string" ? b.taxId.trim().slice(0, 20) : "", origin: env.PUBLIC_ORIGIN ?? url.origin, ...(boundOrg ? { orgId: boundOrg, eid: boundEid, paidBy } : {}) };
     let order: any = null;
     if (rzp) {
       try { order = await createOrder(rzp, { amountMinor: toMinor(pr.total), currency: cur, receipt: id, notes: { brand: brand.name, product: "engagement", pack: String(pack), organization: meta.org.slice(0, 80), payment_ref: id } }); }

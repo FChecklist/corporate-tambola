@@ -621,15 +621,15 @@ describe("I. announcements, co-hosts and scratch cards", () => {
     expect((await ann("ANN-DRAFT", o.h, "hi", T + 60_000)).status).toBe(400);
     const other = await organizer(); expect((await ann("ANN-2", other.h, "hijack", T + 60_000)).status).toBe(403);
   });
-  test("UC-81 a co-host can watch and send messages, and nothing else; at most five; retiring stops it at once", async () => {
+  test("UC-81 a Host through an AI work link can watch and send messages, and nothing else; at most five Hosts; retiring stops it at once", async () => {
     const o = await organizer(); await live("HOST-1", o);
     const hk = (await j(await call("POST", "/api/org/host", {}, o.h))).hostKey as string; expect(hk).toMatch(/^cth_/);
-    const h = { "x-organizer": hk };
+    const h = { "x-organizer": hk, "x-ct-link": "1" }; // an AI work link keeps the narrow rights (in the console a Host may do much more: see roles.test.ts)
     expect((await j(await call("GET", "/api/whoami", undefined, h))).kind).toBe("host"); expect((await j(await call("GET", "/api/whoami", undefined, o.h))).kind).toBe("master");
     expect((await ann("HOST-1", h, "Welcome everyone")).status).toBe(200);
     expect((await call("GET", "/api/z/HOST-1/participants", undefined, h)).status).toBe(200);
     expect((await call("GET", "/api/z/HOST-1/summary", undefined, h)).status).toBe(200);
-    for (const [m, p, body] of [["PATCH", "/api/z/HOST-1/settings", { cap: 5 }], ["POST", "/api/z/HOST-1/roster", { people: [{ phone: phone(5) }] }], ["POST", "/api/z/HOST-1/erase", {}], ["POST", "/api/z/HOST-1/settle", { results: [] }], ["POST", "/api/z/HOST-1/publish", contact], ["GET", "/api/z/HOST-1/claims"], ["PUT", "/api/z/HOST-1/control/key", { publicKey: "aa" }], ["POST", "/api/z", eng("HOSTMADE")], ["POST", "/api/org/host", {}], ["POST", "/api/org/ai", {}], ["GET", "/api/org/keys"], ["POST", "/api/org/keys/revoke", { id: "x" }], ["POST", "/api/checkout", { eid: "HOST-1", org: "X", email: "x@x.com" }]] as const)
+    for (const [m, p, body] of [["PATCH", "/api/z/HOST-1/settings", { cap: 5 }], ["POST", "/api/z/HOST-1/roster", { people: [{ phone: phone(5) }] }], ["POST", "/api/z/HOST-1/erase", {}], ["POST", "/api/z/HOST-1/settle", { results: [] }], ["POST", "/api/z/HOST-1/publish", contact], ["GET", "/api/z/HOST-1/claims"], ["PUT", "/api/z/HOST-1/control/key", { publicKey: "aa" }], ["POST", "/api/z", eng("HOSTMADE")], ["POST", "/api/org/host", {}], ["POST", "/api/org/ai", {}], ["GET", "/api/org/keys"], ["POST", "/api/org/keys/revoke", { id: "x" }]] as const)
       expect([401, 403, 503]).toContain((await call(m, p, body, h)).status);
     expect(engRow("HOSTMADE")).toBeFalsy();
     const keys = await j(await call("GET", "/api/org/keys", undefined, o.h)); const hostRow = keys.keys.find((k: any) => k.kind === "host");

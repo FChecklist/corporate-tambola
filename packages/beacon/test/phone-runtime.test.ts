@@ -509,6 +509,22 @@ describe("lucky draw on phones", () => {
   });
 });
 
+describe("lucky draw leaves out the people flagged as Organizer, Host or Co-host", () => {
+  test("a phone flagged before the game never wins a lucky draw, and the other phones agree on the winners", async () => {
+    await env.DB.prepare("UPDATE engagement SET config=? WHERE id=?").bind(JSON.stringify({ breaks: [{ after: 10, seconds: 30, kind: "lucky", title: "Lucky draw", winners: 10 }] }), EID).run();
+    const ps = Array.from({ length: 6 }, (_, i) => mkPhone(400 + i));
+    for (const p of ps) { await p.rt.boot(); await p.rt.join(p.phone); }
+    const flagged = ps[0]!, seat = Number(/^(\d+)x/.exec(flagged.rt.pid!)![1]);
+    expect((await D.headCall("POST", `/api/z/${EID}/mark`, { seat, role: "host" }, { "x-organizer": SECRET })).status).toBe(200);
+    for (let i = 0; i < 80; i++) await step(ps);
+    for (let i = 0; i < 12; i++) await step(ps, 16000);
+    const lucky = ps.map((p) => p.rt.view().lucky[0]);
+    for (const l of lucky) expect(l).toBeTruthy();
+    expect(flagged.rt.view().lucky[0]!.won).toBe(false); // 10 winners asked from 6 phones: everyone else wins, the flagged one does not
+    expect(ps.filter((p) => p.rt.view().lucky[0]!.won)).toHaveLength(5);
+  });
+});
+
 describe("two rounds on real phones", () => {
   const refRound = (r: number, st: any = null) => deriveCalls(roundEid(EID, r), Array.from({ length: 90 }, (_, k) => rnd(callRoundR(st, START, 2, [], r, k)!)));
   const two = { rewards: undefined as unknown, rounds: 2 };

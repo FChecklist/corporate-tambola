@@ -285,6 +285,7 @@
   function inviteCard(v) {
     const iv = v.cfg.invites;
     if (!iv || !iv.on || !seatOf(v.pid)) return "";
+    if (inviteInfo && inviteInfo.canInvite === false) return ""; // invited by a participant: plays, but has no invite link (two levels only)
     const cats = (ZG.INVITE_CATEGORIES || []).filter((c) => iv.cats.includes(c.id));
     if (!cats.length) return "";
     if (!inviteCat || !cats.some((c) => c.id === inviteCat)) inviteCat = cats[0].id;

@@ -105,9 +105,9 @@ describe("invitations", () => {
     expect(fifth.status).toBe(409); const b = await j(fifth); expect(b.code).toBe("invite-full"); expect(b.error).toMatch(/4 people/);
     expect(raw.query("SELECT COUNT(*) c FROM participant").get()).toEqual({ c: 5 }); // the 5th was not let in through that link
     expect(raw.query("SELECT inv, cat FROM seat WHERE seq=2").get()).toEqual({ inv: inviter, cat: "colleagues" });
-    // the chain goes on: an invitee can invite too
+    // two levels only: someone who was invited by a participant cannot invite; their link still lets the guest in but records no inviter
     expect((await joinAs(7, "Chain", "PRV-1", { from: 2, cat: "family" })).status).toBe(200);
-    expect(raw.query("SELECT inv FROM seat WHERE seq=6").get()).toEqual({ inv: 2 });
+    expect(raw.query("SELECT inv, cat FROM seat WHERE seq=6").get()).toEqual({ inv: null, cat: null });
   });
   test("a kind of guest the organizer did not allow is not recorded; an unknown inviter is ignored", async () => {
     await create(); await withInvites("PRV-1", { on: true, per: 4, cats: ["family"] });
@@ -120,10 +120,10 @@ describe("invitations", () => {
     await create(); await withInvites("PRV-1", { on: true, per: 2, cats: ["family"] });
     await joinAs(1, "Boss"); await joinAs(2, "Host");
     expect((await call("POST", "/api/z/PRV-1/mark", { phone: "9876500001", role: "organizer" })).status).toBe(403); // only the organizer can mark
-    expect((await call("POST", "/api/z/PRV-1/mark", { phone: "9876500001", role: "organizer" }, org)).status).toBe(200);
-    expect((await call("POST", "/api/z/PRV-1/mark", { phone: "9876500002", role: "co-host" }, org)).status).toBe(200);
-    expect((await call("POST", "/api/z/PRV-1/mark", { phone: "9876500002", role: "king" }, org)).status).toBe(400);
-    expect((await call("POST", "/api/z/PRV-1/mark", { phone: "9000000000", role: "host" }, org)).status).toBe(404);
+    expect((await call("POST", "/api/z/PRV-1/mark", { phone: "9876500001", role: "organizer" }, org, T - 4 * 3_600_000)).status).toBe(200);
+    expect((await call("POST", "/api/z/PRV-1/mark", { phone: "9876500002", role: "co-host" }, org, T - 4 * 3_600_000)).status).toBe(200);
+    expect((await call("POST", "/api/z/PRV-1/mark", { phone: "9876500002", role: "king" }, org, T - 4 * 3_600_000)).status).toBe(400);
+    expect((await call("POST", "/api/z/PRV-1/mark", { phone: "9000000000", role: "host" }, org, T - 4 * 3_600_000)).status).toBe(404);
     for (let i = 3; i <= 9; i++) expect((await joinAs(i, "G" + i, "PRV-1", { from: 2, cat: "family" })).status).toBe(200); // seven people from a co-host, quota is 2
     expect(raw.query("SELECT COUNT(*) c FROM seat WHERE inv=2").get()).toEqual({ c: 7 });
     expect(raw.query("SELECT role FROM seat WHERE seq=1").get()).toEqual({ role: "organizer" });
@@ -173,7 +173,7 @@ describe("the report and the deletion", () => {
     await create(); await call("PATCH", "/api/z/PRV-1/settings", { invites: { on: true, per: 4, cats: ["family", "colleagues"] } }, org, T - 4 * 3_600_000);
     await setContact("PRV-1");
     await joinAs(1, "Organizer Olga"); await call("POST", "/api/z/PRV-1/mark", { phone: "9876500001", role: "organizer" }, org, T - 3 * 3_600_000);
-    for (let i = 2; i <= n; i++) await joinAs(i, i === 4 ? "Zed अन" : "Guest " + i, "PRV-1", { from: i === 2 ? 1 : 2, cat: "family" });
+    for (let i = 2; i <= n; i++) await joinAs(i, i === 4 ? "Zed अन" : "Guest " + i, "PRV-1", { from: 1, cat: "family" });
     const pids = (raw.query("SELECT pid FROM seat ORDER BY seq").all() as any[]).map((x) => x.pid);
     await settleByPhones(call, "PRV-1", [{ pattern: "full", idx: 80, pids: [pids[2]!] }, { pattern: "top", idx: 30, pids: [pids[0]!, pids[3]!] }], pids);
     return pids;

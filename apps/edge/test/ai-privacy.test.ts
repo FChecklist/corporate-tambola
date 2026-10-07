@@ -75,7 +75,7 @@ describe("a player asks to see or delete their own data (console only)", () => {
     raw.prepare("UPDATE prize SET seat=(SELECT seq FROM seat WHERE eid='PLANT-1' AND ph IS NOT NULL ORDER BY seq LIMIT 1) WHERE eid='PLANT-1'").run();
     const see = await j(await call("POST", "/api/z/PLANT-1/person", { phone: PLANTED[0]!.phone }, o.h, T + 40 * 86_400_000));
     expect(see).toMatchObject({ ok: true, name: PLANTED[0]!.name }); expect(see.seat).toBeGreaterThan(0);
-    for (const hdr of <Record<string, string>[]>[{ "x-organizer": o.ai }, { "x-organizer": o.host }, {}]) for (const act of ["person", "forget"]) expect((await call("POST", `/api/z/PLANT-1/${act}`, { phone: PLANTED[0]!.phone }, hdr, T + 40 * 86_400_000)).status).toBe(403);
+    for (const hdr of <Record<string, string>[]>[{ "x-organizer": o.ai }, { "x-organizer": o.host, "x-ct-link": "1" }, { "x-organizer": ((await j(await call("POST", "/api/org/cohost", {}, o.h))).cohostKey) }, {}]) for (const act of ["person", "forget"]) expect((await call("POST", `/api/z/PLANT-1/${act}`, { phone: PLANTED[0]!.phone }, hdr, T + 40 * 86_400_000)).status).toBe(403);
     expect((await call("POST", `/ai/${o.ai}/z/PLANT-1/forget`, { phone: PLANTED[0]!.phone })).status).toBe(403);
     expect(prize().pii).toBeTruthy();
     const del = await call("POST", "/api/z/PLANT-1/forget", { phone: PLANTED[0]!.phone }, o.h, T + 40 * 86_400_000); expect(del.status).toBe(200);

@@ -156,13 +156,13 @@ Run: `bun test packages apps tools/control-worker` gives **479 passing, 0 failin
 ## K. Winners by the software, one ticket per phone, prize hand-over, report link, AI audit (2026-10-04)
 | ID | Scenario | Expected |
 |---|---|---|
-| UC-94 | Organizer, co-host, AI or a stranger posts a result (`/settle`) | Refused (403); nothing stored |
+| UC-94 | Organizer, Host, Co-host, AI or a stranger posts a result (`/settle`) | Refused (403); nothing stored |
 | UC-95 | One phone reports a winner | Not accepted; accepted only when `quorumFor(people)` different phones report exactly the same winners |
 | UC-96 | Phones disagree, or a minority reports a made-up result | The agreed result stands; a made-up one is ignored; an accepted result is final |
 | UC-97 | Lucky draw | Every phone works it out from the public randomness and the seat list; accepted by the same quorum |
 | UC-98 | A second mobile number on the same phone | Refused (`device-used`); other phones still join; invitations (max 4 per person) still give each invitee their own ticket on their own phone |
 | UC-99 | A winner confirms name and mobile after the game | Only the phone holding the ticket can; a change keeps the original and an audit trail; organizer and co-host see both |
-| UC-100 | Organizer / co-host ticks "prize given" | Date kept; the report shows it |
+| UC-100 | Organizer / Host ticks "prize given" | Date kept; the report shows it |
 | UC-101 | Report | One e-mailed link; the PDF is laid out in the organizer's browser; link dead after the 22-hour deletion; reminder 6 hours before if never opened |
 | UC-102 | External AI works | Every call is written to the audit trail (time, key, request, status, network address, program, country); only the organizer (and we) can read it |
 
@@ -182,7 +182,7 @@ Run: `bun test packages apps tools/control-worker` gives **479 passing, 0 failin
 | UC-113 | "Get a fresh AI link" | A new 24-hour key is mailed; the lasting key and other links keep working; organizer only; at most 5 live |
 | UC-114 | The mailed link at 23 h 59 min and 24 h | Works, then the same plain 404 as an unknown key; the lasting key never expires |
 | UC-115 | Signed-in "Show my AI work link" page | Asks for the organizer sign-in; shows the two-line paste with Copy, seven AI buttons (ChatGPT, Grok, Claude pre-filled; Gemini, DeepSeek, z.ai copy-and-open; plain copy), Fresh and Replace, warnings top and bottom |
-| UC-116 | Co-host key made | A lasting co-host key for the console; the mail to the organizer carries a separate 24-hour co-host key, says whose engagements and that it is watch/announce only |
+| UC-116 | Host key made | A lasting Host key for the console; the mail to the Organizer carries a separate 24-hour Host key for an AI link, says whose engagements and that through the link it is watch/announce only. A Co-host (`ctc_`) is made with `POST /api/org/cohost`: invites and pays only (tests: `apps/edge/test/roles.test.ts`) |
 | UC-117 | A link is used from a new country, network or program | One plain alert e-mail without any link or key, at most one per key per 24 h; the first use never alerts |
 | UC-118 | A mail scanner or chat tool opens `/ai/<key>` | Nothing changes except the audit line and the alert baseline |
 | UC-119 | Existing account asks to sign in | One mail with three ways: AI-link button, console button, 6-digit code; no AI key or paste in it; the buttons are single-use 10-minute links that go through a confirm page, so a mail scanner opening them signs nobody in |

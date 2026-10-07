@@ -63,7 +63,7 @@ describe("the front door", () => {
   });
   test("a co-host's AI link gets a short front door of its own and cannot use the organizer's guided path or map", async () => {
     const o = await organizer(); const hk = await j(await call("POST", `/ai/${o.key}/org/host`, {})); const hb = `${ORIGIN}/ai/${hk.hostKey}`;
-    expect((await open(`${hb}/start`)).text).toMatch(/co-host's AI assistant/);
+    expect((await open(`${hb}/start`)).text).toMatch(/Host's AI assistant/);
     expect((await open(`${hb}/go/new`)).status).toBe(403); expect((await open(`${hb}/map`)).status).toBe(403);
   });
 });
@@ -111,7 +111,7 @@ describe("the guided path, followed like an outside AI", () => {
     expect(choicesOf(menu).find((c) => /Pause or stop/.test(c.label))!.url).toBe(`${ORIGIN}/zc.html?e=DIWALI-1002&do=pause`);
     const links = await pick(menu, /Show the links/); expect(links).toContain(`${ORIGIN}/zc.html?e=DIWALI-1002`); expect(links).toMatch(/appear after you publish/);
     expect(await pick(menu, /How many have joined/)).toMatch(/0 people have joined DIWALI-1002/);
-    const helper = await pick(menu, /co-host link/); expect(helper).toMatch(/#host=cth_[0-9a-f]{48}/); expect(helper).toMatch(/that one person only/);
+    const helper = await pick(menu, /Host link/); expect(helper).toMatch(/#host=cth_[0-9a-f]{48}/); expect(helper).toMatch(/that one person only/);
     let c = await pick(menu, /Change the day or time/); c = await pick(c, /Sat 3 Oct/); expect(c).toMatch(/At what time/); c = await pick(c, /^7 pm/);
     expect(c).toMatch(/Done\. DIWALI-1002 now starts on/); expect(c).toMatch(/7 pm India time/);
     expect((await j(await call("GET", `/ai/${o.key}/z/DIWALI-1002/summary`))).startMs).toBe(Date.UTC(2026, 9, 3, 13, 30)); // 7 pm India time on Sat 3 Oct

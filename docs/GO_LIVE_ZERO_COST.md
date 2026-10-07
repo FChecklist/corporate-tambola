@@ -83,7 +83,7 @@ Two modes exist side by side. **Phone-run mode** (new, no server per engagement)
 Decisions on what is NOT in phone-run mode, and why (owner rule: reject what is not needed):
 - **Boosters** change who can win by adding items nobody can verify from the public numbers. Phone-run winners are recomputed by anyone from the public log; boosters would break that.
 - **Family passes** need people without a mobile number; the rule is that a mobile number is the only identifier. Family members take part with their own numbers (the roster takes any number).
-- **Team leads** need a team model and per-team reports nobody asked for; the co-host covers the stage need.
+- **Team leads** need a team model and per-team reports nobody asked for; the Host covers the stage need.
 - **Second-phone alerts** are not needed: the same number on two phones gets the same ticket, harmlessly.
 - **Live host voice** (a person speaking live to every phone) needs a streaming server, which is not free. Messages spoken by each phone's own voice give the same effect at no cost.
 | Cost per engagement | about zero (free plans) | a server process |

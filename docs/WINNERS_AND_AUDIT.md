@@ -1,21 +1,21 @@
 # Winners are decided by the software (as built, 2026-10-04)
 
-Owner rule: the organizer builds the game, sets the prizes, options and rules. The organizer, the co-host, the AI assistant and we **cannot choose, change or remove a winner, a "not valid" claim, a number or a ticket**. The software does all of it.
+Owner rule: the organizer builds the game, sets the prizes, options and rules. The Organizer, a Host, a Co-host, the AI assistant and we **cannot choose, change or remove a winner, a "not valid" claim, a number or a ticket**. The software does all of it.
 
 ## How a winner is decided
 1. Numbers come from public randomness (drand), checked by signature on every phone.
 2. Every phone works out all the winners (and each lucky draw) itself from the public numbers and the public seat list.
 3. Each phone reports its result to our store (`POST /api/z/{id}/vote`). A result is **accepted only when `quorumFor(people)` different phones report exactly the same winners** (tiny game: half of the people; otherwise 5%, between 3 and 25). One ticket = one phone = one vote.
 4. Only a share of the phones speak first (`votersFor`: everyone up to 12 people, else 4 x quorum), so a big game stays inside the free request allowance; silent phones join in every 30 s if no result appears.
-5. `POST /api/z/{id}/settle` now refuses everybody. A phone's own claim of a win (`/won`) is ignored. Console, organizer, co-host and AI have no write path to winners.
+5. `POST /api/z/{id}/settle` now refuses everybody. A phone's own claim of a win (`/won`) is ignored. Console, Organizer, Host and AI have no write path to winners.
 
 ## One ticket per phone
 A phone gets one ticket per engagement (hash of a random device id kept on the phone). A second number on the same phone is refused (`device-used`). The invitation feature still works: if the organizer switches it on, each participant can send their link to up to **4** other people, each of whom joins on their own phone.
 
 ## After the game: prize hand-over
 * The winner's phone shows "Confirm your prize details" (name and mobile number). They can correct them. Only the phone holding the ticket can confirm (device proof).
-* Any change is kept in an audit trail (what they joined with, what they changed it to, when) and shown to the organizer and co-host in the console and in the report.
-* The organizer / co-host tick **Prize given** per winner; the date is kept.
+* Any change is kept in an audit trail (what they joined with, what they changed it to, when) and shown to the Organizer and Host in the console and in the report.
+* The Organizer / Host tick **Prize given** per winner; the date is kept.
 * These details are kept 365 days with the engagement record (disclosed in the privacy text, the report and the e-mail).
 
 ## The report

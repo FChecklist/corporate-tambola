@@ -879,6 +879,15 @@ describe("late joiners and the public seat list", () => {
     expect(JSON.stringify(r)).not.toMatch(/98000001|name/);
     expect(r.seats.every((x: any) => /^\d+x[0-9a-f]{12}$/.test(x[1]) && x[2] === 0)).toBe(true);
   });
+  test("seats flagged as Organizer/Host/Co-host before the game are marked in the public list (so no phone puts them in a lucky draw); flagging is refused once the game began", async () => {
+    await create({ id: "SEAT-X", startRound: nowround(400), cap: 50 });
+    for (let i = 1; i <= 3; i++) await joinAt("98000009" + String(i).padStart(2, "0"), "SEAT-X");
+    expect((await call("POST", "/api/z/SEAT-X/mark", { seat: 2, role: "host" }, org, T)).status).toBe(200);
+    const r = await (await call("GET", "/api/z/SEAT-X/seats", undefined, {}, T + 30 * 60_000)).json() as any;
+    expect(r.seats.map((x: any) => x[3])).toEqual([0, 1, 0]);
+    const late = await call("POST", "/api/z/SEAT-X/mark", { seat: 3, role: "co-host" }, org, T + 30 * 60_000);
+    expect(late.status).toBe(409); expect(((await late.json()) as any).error).toMatch(/before the game begins/);
+  });
   test("people who join later come as a small tail after the saved list, and the saved list is read once", async () => {
     await create({ id: "SEAT-C", startRound: nowround(400), cap: 50 });
     for (let i = 1; i <= 3; i++) await joinAt("98000002" + String(i).padStart(2, "0"), "SEAT-C");

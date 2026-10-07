@@ -123,6 +123,8 @@ export const SCHEMA: string[] = [
   ...VISIT_SCHEMA,
   // TEST / LIVE mode (mode.ts): the mode row, the owner's e-mail allow-list, the mail event log and the is_test flags
   ...MODE_SCHEMA,
+  // roles (Organizer / Host / Co-host): a short private label on each Host and Co-host key (0014_roles.sql)
+  `ALTER TABLE organizer_key ADD COLUMN label TEXT`,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
@@ -174,7 +176,7 @@ async function spend(env: Env, now: number, n = 1): Promise<boolean> {
   await env.DB.prepare("INSERT INTO usage(day,writes) VALUES(?,?) ON CONFLICT(day) DO UPDATE SET writes=writes+?").bind(d, n, n).run();
   return true;
 }
-/** An AI key (or a co-host) never receives or sends names and mobile numbers: the organizer loads the list in the console. */
+/** An AI key (or a Host) never receives or sends names and mobile numbers: the organizer loads the list in the console. */
 const CONSOLE_ONLY = () => json({ error: "Names and mobile numbers are handled by the owner in the console, not by the AI. Ask the owner to paste the list in the Participants card. You can set the limit with settings and refer to people by ticket number." }, 403);
 /** One network address may open only so many NEW seats a day (an office behind one address is far below this): protects the shared daily write budget from a script. */
 const JOIN_PER_IP_DAY = 1500, JOIN_PER_IP_MINUTE = 200;
@@ -226,7 +228,7 @@ async function replaceAiLink(env: Env, req: Request, org: string, now: number): 
   const t = await mailTempLink(env, req, org, "ai", "replace", now);
   return { aiKey: key, aiMessage: aiMessage(origin, key), mailed: t.mailed };
 }
-/** Alert (once per key per 24 h): an AI or co-host key was used from a country, network prefix or program this key has not been seen from. The very first use sets the baseline and never alerts. The alert carries no link and no key. */
+/** Alert (once per key per 24 h): an AI or Host key was used from a country, network prefix or program this key has not been seen from. The very first use sets the baseline and never alerts. The alert carries no link and no key. */
 async function noteUse(env: Env, org: string, kind: "ai" | "host", keyId: string, req: Request, now: number): Promise<void> {
   try {
     const country = (req.headers.get("cf-ipcountry") ?? "").toUpperCase().slice(0, 4);
@@ -246,7 +248,7 @@ async function noteUse(env: Env, org: string, kind: "ai" | "host", keyId: string
     const to = await orgEmail(env, org);
     if (!to) return;
     await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`alert/${keyId}`, String(now)).run();
-    const m = newUseAlertMail({ when: istTime(now), country, program: ua.slice(0, 60), kind: kind === "ai" ? "AI" : "co-host", origin: (env as PayEnv).PUBLIC_ORIGIN });
+    const m = newUseAlertMail({ when: istTime(now), country, program: ua.slice(0, 60), kind: kind === "ai" ? "AI" : "Host", origin: (env as PayEnv).PUBLIC_ORIGIN });
     await sendMail(env as PayEnv, env.DB, to, m.subject, m.text, now, { html: m.html });
   } catch { /* an alert must never break the work */ }
 }
@@ -285,7 +287,7 @@ const linkText = (s: string, status = 200) => new Response(s, { status, headers:
 const linkGone = () => linkText("Not found.", 404);
 /**
  * The short AI work link: /ai/<key> is the complete manual for that key's role, and /ai/<key>/<api path> is the normal /api/<api path> route with the key
- * taken from the address instead of a header (so a chat AI that can only open web addresses can work). Only organizer-AI (cta_) and co-host (cth_) keys work here:
+ * taken from the address instead of a header (so a chat AI that can only open web addresses can work). Only Organizer-AI (cta_) and Host (cth_) keys work here:
  * an organizer's own sign-in key and the platform key are never accepted in an address. For browse-only AIs, GET plus _method=POST|PATCH and _body=<URL-encoded JSON> performs that action.
  * The rewritten request carries the key in x-organizer, so the audit trail records it like any other AI call, with the /api path and no key in the path.
  */
@@ -322,7 +324,7 @@ async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promi
     hh.set("content-type", asJson ? "application/json; charset=utf-8" : "text/plain; charset=utf-8");
     const base = `${origin}/ai/${key}`, put = (t: string, j?: unknown) => new Response(req.method === "HEAD" ? null : asJson ? JSON.stringify(j ?? { text: t }) : t, { headers: hh });
     if (rest === "start") return put(frontDoorText(origin, key, role));
-    if (role !== "ai") return linkText("This is for the organizer's AI link. A co-host's AI link reads the game and messages guests (see the instructions at the main address).", 403);
+    if (role !== "ai") return linkText("This is for the organizer's AI link. A Host's AI link reads the game and messages guests (see the instructions at the main address).", 403);
     if (rest === "map") return put(mapText(base, origin), mapJson(base, origin));
     if (rest === "facts") return put(factsText(`${origin}/trust.html`), { facts: (await import("./ai-facts")).FACTS });
     const apiAs = async (method: string, path: string, body?: unknown) => {
@@ -378,24 +380,35 @@ function d1kv(env: Env): KV { return {
   put: async (k, v) => { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, v).run(); },
 }; }
 
-interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | null }
+interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null; viaLink?: boolean }
 async function authOf(req: Request, env: Env, now: number): Promise<Auth> {
   return authOfKey(env, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), now);
 }
 async function authOfKey(env: Env, presented: string, now: number): Promise<Auth> {
   if (!presented) return { plat: false, org: null, kind: null };
   if (env.ORGANIZER_SECRET && presented === env.ORGANIZER_SECRET) return { plat: true, org: null, kind: "platform" };
-  const row = await env.DB.prepare("SELECT org, kind FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(await sha("key|" + presented), now).first<{ org: string; kind: "master" | "ai" | "host" }>();
+  const row = await env.DB.prepare("SELECT org, kind FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(await sha("key|" + presented), now).first<{ org: string; kind: "master" | "ai" | "host" | "cohost" }>();
   return row ? { plat: false, org: row.org, kind: row.kind } : { plat: false, org: null, kind: null };
 }
-/** May this caller act on this engagement? `master` = needs the organizer's own key (or ours), not the AI's. */
-const can = (a: Auth, e: { org: string | null }, master = false) => a.plat || (!!a.org && e.org === a.org && (!master || a.kind === "master"));
-/** The organizer's own key, their AI's key, or ours: for what an organizer may do that a co-host may not. */
-const canAi = (a: Auth, e: { org: string | null }) => a.plat || (!!a.org && e.org === a.org && (a.kind === "master" || a.kind === "ai"));
-const deny = (a: Auth) => json({ error: a.kind === "ai" ? "Your AI assistant may not do this. It is for the organizer to do themselves in their console: tell them plainly what needs doing and where (your instructions say how)." : a.kind === "host" ? "Only the organizer can do this. A co-host can watch the engagement and send messages to everyone." : "Not allowed." }, 403);
-/** What a co-host may touch: watching, and messages to everyone. Nothing that changes the engagement, the money or anyone's data. */
+/** May this caller act on this engagement? `master` = needs the organizer's own key, or a Host's (both are people, never the AI), or ours. A Co-host never passes: their rights are a few named routes only. */
+const can = (a: Auth, e: { org: string | null }, master = false) => a.plat || (!!a.org && e.org === a.org && a.kind !== "cohost" && (!master || a.kind === "master" || (a.kind === "host" && !a.viaLink)));
+/** The organizer's own key, a Host's, their AI's key, or ours. */
+const canAi = (a: Auth, e: { org: string | null }) => a.plat || (!!a.org && e.org === a.org && (a.kind === "master" || a.kind === "ai" || (a.kind === "host" && !a.viaLink)));
+const deny = (a: Auth) => json({ error: a.kind === "ai" ? "Your AI assistant may not do this. It is for the organizer to do themselves in their console: tell them plainly what needs doing and where (your instructions say how)." : a.kind === "host" ? "Only the Organizer can do this. A Host looks after the game, not the account." : a.kind === "cohost" ? "A Co-host can invite people and pay. Ask the Organizer or a Host for anything else." : "Not allowed." }, 403);
+/** What a Host may touch through an AI work link (x-ct-link): watching, and messages to everyone. Through the console a Host may do everything inside a game. */
 const HOST_ACTIONS = new Set(["participants", "summary", "results", "info", "announce", "prizes", "prizegiven", "reportlink", "life"]);
 const MAX_HOSTS = 5;
+const cleanLabel = (v: unknown): string => (typeof v === "string" ? v.replace(/[<>`]/g, "").trim().slice(0, 40) : "");
+/** Paid or pending, and (for a game paid after roles existed) who paid and when. */
+async function paymentOf(env: Env, e: { id: string }, unpaid: boolean): Promise<{ status: "paid" | "pending"; paidBy?: string; paidMs?: number }> {
+  if (unpaid) return { status: "pending" };
+  try { const r = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`paidby/${e.id}`).first<{ v: string }>(); const j = r ? JSON.parse(r.v) : null; if (j?.by) return { status: "paid", paidBy: j.by, paidMs: j.ms }; } catch { /* no record: paid before roles existed */ }
+  return { status: "paid" };
+}
+/** A Co-host's invite link carries `from` = COHOST_FROM + the first 7 hex of their key id (28 bits), so the old join page needs no change; people who join through it are tagged `co:<7 hex>` in `seat.src`. */
+const COHOST_FROM = 1_000_000_000;
+const broughtBy = async (env: Env, org: string, hex7: string | null): Promise<number> =>
+  (await env.DB.prepare(hex7 ? "SELECT COUNT(*) AS c FROM seat s JOIN engagement e ON e.id=s.eid WHERE e.org=? AND s.src=?" : "SELECT COUNT(*) AS c FROM seat s JOIN engagement e ON e.id=s.eid WHERE e.org=? AND s.src LIKE 'co:%'").bind(...(hex7 ? [org, "co:" + hex7] : [org])).first<{ c: number }>())?.c ?? 0;
 
 export const AI_MANIFEST = {
   name: "Corporate Tambola organizer API",
@@ -422,9 +435,10 @@ export const AI_MANIFEST = {
     { do: "Send a message to every guest's phone and the big screen (160 characters; empty text clears it; once published)", call: "POST /api/z/{id}/announce {text}" },
     { do: "See the winners to hand rewards to, by ticket number (names and numbers stay in the console), and tick a reward as given", call: "GET /api/z/{id}/prizes ; POST /api/z/{id}/prizegiven {round, pattern, ordinal, seat, given}" },
     { do: "Change of phone: let one person move their ticket to a new phone", call: "POST /api/z/{id}/unbind {seat} (the ticket number; the console takes a mobile number, an AI never does)" },
-    { do: "Flag a seat as organizer, host or co-host", call: "POST /api/z/{id}/mark {seat, role: organizer|host|co-host|none} (the ticket number; an AI never names a mobile number)" },
+    { do: "Flag a seat as Organizer, Host or Co-host", call: "POST /api/z/{id}/mark {seat, role: organizer|host|co-host|none} (the ticket number; an AI never names a mobile number)" },
     { do: "Invitations: settle how many people each guest may invite and which kinds of guests, before the start", call: "PATCH /api/z/{id}/settings {invites: {on, per: 1-4, cats}}" },
-    { do: "Create a co-host key (watch, announce, tick rewards as given; up to 5)", call: "POST /api/org/host -> {hostKey, manualUrl}" },
+    { do: "Create a Host key (up to 5 Hosts; through an AI link a Host may only watch, announce and tick prizes given)", call: "POST /api/org/host {label?} -> {hostKey, manualUrl, id, label}" },
+    { do: "Create a Co-host key (unlimited; a Co-host only invites people with an own link and pays)", call: "POST /api/org/cohost {label?} -> {cohostKey, link, id, label}. The people on the team: GET /api/org/team; remove one: POST /api/org/team/retire {id}" },
     { do: "Read the audit trail of AI calls, when the game ends, and whether the report is ready (the report address itself goes only to the organizer)", call: "GET /api/org/ai/audit ; GET /api/z/{id}/life ; GET /api/z/{id}/reportlink" },
     { do: "Suggest a feature, improvement or report we should build (shared with every organizer's AI, reviewed by us)", call: "POST /api/z/suggestions {kind: feature|improvement|report|bug|other, title, body}" },
     { do: "See everyone's suggestions and what we decided, and add your support to one", call: "GET /api/z/suggestions ; POST /api/z/suggestions/{id}/vote" },
@@ -453,6 +467,7 @@ export const AI_MANIFEST = {
 /** Every call made with an organizer's AI key is written to an audit trail (when, which key, what was asked, the answer, and where it came from). */
 async function route(req: Request, env: Env, now: number): Promise<Response> {
   const a = await authOf(req, env, now);
+  if (a.kind === "host" && req.headers.get("x-ct-link") === "1") a.viaLink = true; // a Host's AI work link keeps the narrow rights
   const peek = req.method === "GET" || req.method === "HEAD" ? null : req.clone(); // the internal audit log reads the body from this copy; the route reads the original
   const r = await route0(req, env, now, a);
   let kidForLog: string | null = null;
@@ -487,6 +502,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   { const rm = p.match(/^\/api\/report\/([A-Za-z0-9_-]{4,40})$/); if (rm && req.method === "GET") return reportApi(env as any, rm[1]!, url, now); } // the report page; the key in the link is the only credential
   const paid = await payRoute(req, env as PayEnv, now, (n) => spend(env, now, n));
   if (paid) return paid;
+  if (a.kind === "cohost" && !(req.method === "GET" && (p === "/api/whoami" || p === "/api/notices" || /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/cohost$/.test(p)))) return deny(a); // a Co-host: the header, the invite link, payment (above) and nothing else
   const partnered = await partnerRoute(req, env as PayEnv, now, (n) => spend(env, now, n), a.plat);
   if (partnered) return partnered;
 
@@ -639,13 +655,41 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (req.method === "POST" && p === "/api/org/host") { // the organizer (or their AI) invites a co-host: a key that can watch, send messages to everyone and tick prizes, and nothing else
     if ((a.kind !== "master" && a.kind !== "ai") || !a.org) return deny(a);
     const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM organizer_key WHERE org=? AND kind='host' AND revoked=0 AND expires_ms IS NULL").bind(a.org).first<{ c: number }>())?.c ?? 0;
-    if (n >= MAX_HOSTS) return json({ error: `You can have up to ${MAX_HOSTS} co-hosts at a time. Retire one first.` }, 409);
+    if (n >= MAX_HOSTS) return json({ error: `You can have up to ${MAX_HOSTS} Hosts at a time. Retire one first.` }, 409);
     if (!(await spend(env, now, 2))) return BUSY();
-    const key = "cth_" + randHex(24);
-    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0))").bind(await sha("key|" + key), a.org, "host", now, a.org).run();
+    const key = "cth_" + randHex(24), label = cleanLabel((await body(req))?.label), kh = await sha("key|" + key);
+    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test,label) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0),?)").bind(kh, a.org, "host", now, a.org, label).run();
     const hOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
     const hm = await mailTempLink(env, req, a.org, "host", "start", now); // dedicated mail to the organizer only, with a separate 24-hour co-host key
-    return json({ ok: true, hostKey: key, manualUrl: `${hOrigin}/ai/${key}`, mailed: hm.mailed });
+    return json({ ok: true, hostKey: key, manualUrl: `${hOrigin}/ai/${key}`, mailed: hm.mailed, id: kh.slice(0, 10), label });
+  }
+  if (req.method === "GET" && p === "/api/org/team") { // who is on the team (never the keys): the Organizer, their AI and a Host may look; a Co-host may not
+    if ((a.kind !== "master" && a.kind !== "ai" && a.kind !== "host") || !a.org) return deny(a);
+    const rows = (await env.DB.prepare("SELECT hash, kind, label, created_ms FROM organizer_key WHERE org=? AND revoked=0 AND expires_ms IS NULL AND kind IN ('host','cohost') ORDER BY created_ms").bind(a.org).all<{ hash: string; kind: string; label: string | null; created_ms: number }>()).results ?? [];
+    const cohosts = [];
+    for (const r of rows.filter((x) => x.kind === "cohost")) cohosts.push({ id: r.hash.slice(0, 10), label: r.label ?? "", createdMs: r.created_ms, brought: await broughtBy(env, a.org, r.hash.slice(0, 7)) });
+    return json({ maxHosts: MAX_HOSTS, hosts: rows.filter((x) => x.kind === "host").map((r) => ({ id: r.hash.slice(0, 10), label: r.label ?? "", createdMs: r.created_ms })), cohosts });
+  }
+  if (req.method === "POST" && p === "/api/org/cohost") { // the Organizer, their AI or a Host adds a Co-host: a key that can invite people with an own link and pay, nothing else. No limit.
+    if ((a.kind !== "master" && a.kind !== "ai" && a.kind !== "host") || !a.org) return deny(a);
+    if (!(await spend(env, now, 2))) return BUSY();
+    const key = "ctc_" + randHex(24), label = cleanLabel((await body(req))?.label), kh = await sha("key|" + key);
+    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test,label) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0),?)").bind(kh, a.org, "cohost", now, a.org, label).run();
+    const cOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
+    return json({ ok: true, cohostKey: key, link: `${cOrigin}/zc.html?k=${key}`, id: kh.slice(0, 10), label });
+  }
+  if (req.method === "POST" && p === "/api/org/team/retire") { // the Organizer retires Hosts or Co-hosts; a Host retires Co-hosts only
+    if ((a.kind !== "master" && a.kind !== "host") || !a.org) return deny(a);
+    const b = await body(req);
+    const id = typeof b?.id === "string" && /^[0-9a-f]{10}$/.test(b.id) ? b.id : "";
+    if (!id) return json({ error: "Pick a person from the list." }, 400);
+    const row = await env.DB.prepare("SELECT hash, kind FROM organizer_key WHERE org=? AND substr(hash,1,10)=? AND revoked=0 AND kind IN ('host','cohost')").bind(a.org, id).first<{ hash: string; kind: string }>();
+    if (!row) return json({ error: "That person is not on your team." }, 404);
+    if (row.kind === "host" && a.kind !== "master") return deny(a);
+    const me = await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")));
+    if (row.hash === me) return json({ error: "That is the key you are using right now." }, 409);
+    await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE hash=?").bind(row.hash).run();
+    return json({ ok: true, revoked: 1 });
   }
   if (req.method === "GET" && p === "/api/org/ai/audit") { // the organizer sees every call their external AI made; we can see all (the AI may read its own trail)
     if (a.kind !== "master" && a.kind !== "ai" && !a.plat) return deny(a);
@@ -892,7 +936,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!a.plat) return deny(a);
     return json({ ok: true, purged: await purgeOld(env, now) });
   }
-  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget)$/);
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget|cohost)$/);
   if (!m) return json({ error: "Not found", hint: "Read the list of what you can do at /api/z/ai-manifest. Engagement routes look like /api/z/{id}/summary, /settings, /roster, /participants, /results, /publish." }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
@@ -916,9 +960,18 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   };
   const cleanName = (n: unknown) => (typeof n === "string" ? n.replace(/[<>`]/g, "").slice(0, 60) : null);
 
-  if (a.kind === "host" && !HOST_ACTIONS.has(action!)) return deny(a);
+  if (a.kind === "host" && req.headers.get("x-ct-link") === "1" && !HOST_ACTIONS.has(action!)) return deny(a); // a Host's AI work link keeps its narrow rights; the Host in the console may do everything inside a game
   const unpaid = e.pack === 0;
   const isDraft = unpaid && !(await isPublished(env, e));
+  const payment = await paymentOf(env, e, unpaid);
+  if (action === "cohost" && req.method === "GET") { // the small game header a Co-host sees: no names, no list, no settings
+    if (!a.plat && !(a.org && a.org === e.org)) return deny(a);
+    const kid = a.kind === "cohost" ? (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 7) : null;
+    const c = cfgOf(e), origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
+    const joined = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
+    const pk = unpaid ? PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null : e.pack;
+    return json({ name: c.name || e.id, startMs: roundMs(e.start_round), cap: e.cap, joined, brought: await broughtBy(env, e.org, kid), price: pk ? price(pk, "INR").total : null, payment, inviteLink: kid && !isDraft ? `${origin}/z.html?e=${e.id}&from=${COHOST_FROM + parseInt(kid, 16)}` : null });
+  }
   const locked = unpaid && !isDraft && roundMs(e.start_round) - LOCK_LEAD_MS <= now; // published but not paid by its start time: it does not begin
   if (isDraft && ((action === "join" && req.method === "POST") || (action === "info" && !can(a, e)))) return json({ error: "This engagement is not open yet." }, 403);
   if (locked && !can(a, e) && (action === "info" || action === "join")) await nudge(env, e.id, "lockmail", now, `Your engagement ${e.id} could not begin: payment is due`, `Your engagement ${e.id} could not begin: payment is due.\n\nPay now and it starts in about 3 minutes: ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${e.id}`);
@@ -949,9 +1002,14 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     // invited through someone's link? Only when the organizer has switched invitations on, only for the kinds of guests they allowed, and only up to the inviter's quota (organizer, hosts and co-hosts: no quota)
     const inviteCfg = cfgOf(e).invites;
     let inv: number | null = null, cat: string | null = null, invLimit: number | null = null;
-    if (inviteCfg?.on && Number.isInteger(b?.from) && b.from >= 1) {
-      const inviter = await env.DB.prepare("SELECT seq, role FROM seat WHERE eid=? AND seq=?").bind(eid, b.from).first<{ seq: number; role: string | null }>();
-      if (inviter) {
+    let coSrc: string | null = null;
+    if (Number.isInteger(b?.from) && b.from >= COHOST_FROM && e.org) { // a Co-host's own link: always allowed (a Co-host invites any number), no quota, tagged so they can see how many they brought
+      const hex = (b.from - COHOST_FROM).toString(16).padStart(7, "0");
+      if (hex.length === 7 && await env.DB.prepare("SELECT 1 AS x FROM organizer_key WHERE org=? AND kind='cohost' AND revoked=0 AND substr(hash,1,7)=?").bind(e.org, hex).first()) coSrc = "co:" + hex;
+    } else if (inviteCfg?.on && Number.isInteger(b?.from) && b.from >= 1) {
+      const inviter = await env.DB.prepare("SELECT seq, role, inv FROM seat WHERE eid=? AND seq=?").bind(eid, b.from).first<{ seq: number; role: string | null; inv: number | null }>();
+      // only two levels: a person who was themselves invited by a participant cannot invite; their link still lets the guest in, but records no inviter
+      if (inviter && (inviter.role || inviter.inv === null)) {
         inv = inviter.seq; cat = typeof b?.cat === "string" && inviteCfg.cats.includes(b.cat) ? b.cat : null;
         if (!inviter.role) {
           invLimit = inviteCfg.per;
@@ -962,7 +1020,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     }
     if (await joinOverLimit(env, req, now)) return json({ error: "It is busy right now. Please try again in a few minutes.", code: "busy" }, 429);
     if (!(await spend(env, now, 2))) return json({ error: "It is very busy right now. Please try again in a few minutes.", code: "busy" }, 503);
-    await addSeat(ph, await sealPii(env, { phone: digits, name: cleanName(b?.name) }), dev, lateRound, { inv, cat, src: "link", invLimit });
+    await addSeat(ph, await sealPii(env, { phone: digits, name: cleanName(b?.name) }), dev, lateRound, { inv, cat, src: coSrc ?? "link", invLimit });
     const row = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.jr AS jr FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; jr: number | null }>();
     if (!row) return (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) ? json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket.", code: "device-used" }, 409) : invLimit !== null ? json({ error: `This invitation has already been used by ${inviteCfg!.per} people, which is the most one person can invite. Please ask your organizer for the main link.`, code: "invite-full" }, 409) : json({ error: "This engagement is full." }, 409); // lost a race for the last place
     if (row.dev && row.dev !== dev) return json({ error: "This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it.", code: "other-phone" }, 423);
@@ -978,14 +1036,14 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     let base = (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(key).first<{ v: string }>())?.v ?? null;
     let n = base ? Number(base.slice(base.lastIndexOf('"upto":') + 7, -1)) : 0;
     if (!base) {
-      const rows = (await env.DB.prepare("SELECT seq, pid, COALESCE(jr,0) AS jr FROM seat WHERE eid=? ORDER BY seq").bind(eid).all<{ seq: number; pid: string; jr: number }>()).results ?? [];
+      const rows = (await env.DB.prepare("SELECT seq, pid, COALESCE(jr,0) AS jr, CASE WHEN role IS NULL THEN 0 ELSE 1 END AS ex FROM seat WHERE eid=? ORDER BY seq").bind(eid).all<{ seq: number; pid: string; jr: number; ex: number }>()).results ?? [];
       n = rows.length ? rows[rows.length - 1]!.seq : 0;
-      base = `{"ready":true,"seats":[${rows.map((r) => `[${r.seq},"${r.pid}",${r.jr}]`).join(",")}],"upto":${n}}`;
+      base = `{"ready":true,"seats":[${rows.map((r) => `[${r.seq},"${r.pid}",${r.jr},${r.ex}]`).join(",")}],"upto":${n}}`;
       if (await spend(env, now)) await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(key, base).run();
     }
     if (after < n) return new Response(base, { headers: { "content-type": "application/json", "cache-control": "public, max-age=20" } }); // the saved text as it is: nothing to parse
-    const rows = (await env.DB.prepare("SELECT seq, pid, COALESCE(jr,0) AS jr FROM seat WHERE eid=? AND seq>? ORDER BY seq LIMIT 2000").bind(eid, after).all<{ seq: number; pid: string; jr: number }>()).results ?? [];
-    return json({ ready: true, seats: rows.map((r) => [r.seq, r.pid, r.jr]), upto: rows.length ? rows[rows.length - 1]!.seq : after });
+    const rows = (await env.DB.prepare("SELECT seq, pid, COALESCE(jr,0) AS jr, CASE WHEN role IS NULL THEN 0 ELSE 1 END AS ex FROM seat WHERE eid=? AND seq>? ORDER BY seq LIMIT 2000").bind(eid, after).all<{ seq: number; pid: string; jr: number; ex: number }>()).results ?? [];
+    return json({ ready: true, seats: rows.map((r) => [r.seq, r.pid, r.jr, r.ex]), upto: rows.length ? rows[rows.length - 1]!.seq : after });
   }
   if ((action === "person" || action === "forget") && req.method === "POST") { // a participant asks the organizer to see, or to delete, their own data: the organizer does it in the console (never an AI)
     if (!can(a, e, true)) return deny(a);
@@ -1074,7 +1132,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     return json({ id: e.id, status: isDraft ? "draft" : unpaid ? (locked ? "published, NOT PAID, held because the start time passed" : "published, payment due before the start") : "published and paid",
       startsAtIST: istTime(roundMs(e.start_round)), startMs: roundMs(e.start_round), startRound: e.start_round, callSeconds: e.call_seconds, limit: e.cap, closed: !!e.closed,
       tickets: c.tickets, rounds: c.rounds, rewards: c.rewards, breaks: c.breaks, opening: c.opening, closing: c.closing, invites: c.invites, brandMomentsAllowed: brandMomentsFor(c.tickets), participants: n, ...(c.name ? { name: c.name } : {}),
-      paid: !unpaid, ...(unpaid ? { pack: PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null, priceInrIncludingGst: PACKS.find((x) => x[0] >= e.cap) ? price(PACKS.find((x) => x[0] >= e.cap)![0], "INR").total : null, payBefore: istTime(roundMs(e.start_round)) } : { pack: e.pack }),
+      paid: !unpaid, payment, ...(unpaid ? { pack: PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null, priceInrIncludingGst: PACKS.find((x) => x[0] >= e.cap) ? price(PACKS.find((x) => x[0] >= e.cap)![0], "INR").total : null, payBefore: istTime(roundMs(e.start_round)) } : { pack: e.pack }),
       gameMinutes: Math.round((90 * e.call_seconds * c.rounds + c.breaks.reduce((t: number, b: any) => t + b.seconds, 0) + (c.rounds - 1) * 90) / 60),
       links, nextSteps, consoleUrl: `${origin}/zc.html?e=${e.id}`, ...(isDraft ? {} : { shareUrl: `${origin}/z.html?e=${e.id}` }), ...(unpaid && !isDraft ? { payUrl: `${origin}/pay.html?e=${e.id}` } : {}) });
   }
@@ -1134,17 +1192,18 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const ph = seatNo ? "" : await phoneHash(b?.phone);
     const role = b?.role === "none" ? null : ["organizer", "host", "co-host"].includes(b?.role) ? b.role : undefined;
     if ((!ph && !seatNo) || role === undefined) return json({ error: "Give the ticket number (or the mobile number) and a role (organizer, host, co-host or none)." }, 400);
+    if (now >= roundMs(e.start_round + GRACE_ROUNDS)) return json({ error: "Flag your own team before the game begins. Every phone draws the lucky winners from the same list, so it cannot change once the game has started." }, 409);
     if (!(await spend(env, now))) return BUSY();
     const r = seatNo ? await env.DB.prepare("UPDATE seat SET role=? WHERE eid=? AND seq=?").bind(role, eid, seatNo).run() : await env.DB.prepare("UPDATE seat SET role=? WHERE eid=? AND ph=?").bind(role, eid, ph).run();
     return (r.meta?.changes ?? 0) > 0 ? json({ ok: true }) : json({ error: "That number has not joined yet. Ask them to open the game link first." }, 404);
   }
   if (action === "invites" && req.method === "GET") { // how many people this participant has invited so far (their own id is the key to ask)
     const pid = url.searchParams.get("pid") ?? "";
-    const me = await env.DB.prepare("SELECT seq, role FROM seat WHERE eid=? AND pid=?").bind(eid, pid).first<{ seq: number; role: string | null }>();
+    const me = await env.DB.prepare("SELECT seq, role, inv FROM seat WHERE eid=? AND pid=?").bind(eid, pid).first<{ seq: number; role: string | null; inv: number | null }>();
     if (!me) return json({ error: "Not a participant of this engagement." }, 403);
     const c = cfgOf(e).invites;
     const used = (await env.DB.prepare("SELECT COUNT(*) AS c FROM seat WHERE eid=? AND inv=?").bind(eid, me.seq).first<{ c: number }>())?.c ?? 0;
-    return json({ on: !!c?.on, per: c?.per ?? 0, used, unlimited: !!me.role, seat: me.seq, cats: c?.cats ?? [] });
+    return json({ on: !!c?.on, per: c?.per ?? 0, used, unlimited: !!me.role, canInvite: !!me.role || me.inv === null, seat: me.seq, cats: c?.cats ?? [] });
   }
   if (action === "life" && req.method === "GET") { // the organizer's view of when the game ends and when each kind of data is deleted
     if (!can(a, e)) return deny(a);

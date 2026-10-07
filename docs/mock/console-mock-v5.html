@@ -1,0 +1,190 @@
+<h2 class="sr-only">Mock of the single-page console: colourful numbered sections that talk you through each step, a payment status shown to everyone, Organizer, Host and Co-host roles, a pre-answered help section and a back-to-top link</h2>
+<style>
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+#mk button{font-family:inherit}
+#mk .ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 8px;font-size:13px;color:var(--text-secondary)}
+#mk .pill{padding:5px 12px;border-radius:999px;font-size:13px;cursor:pointer;border:0.5px solid var(--border-strong);background:transparent;color:var(--text-primary)}
+#mk .pill.on{background:var(--text-primary);color:var(--surface-2);border-color:var(--text-primary)}
+#mk .frame{border:0.5px solid var(--border-strong);border-radius:12px;background:var(--surface-2);overflow:hidden}
+#mk .phonewrap{display:flex;justify-content:center;background:var(--surface-1);border-radius:12px;padding:14px 0}
+#mk .phone{width:318px;border:2px solid var(--border-stronger);border-radius:26px;background:var(--surface-2);overflow:hidden}
+#mk .bar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:0.5px solid var(--border);flex-wrap:wrap}
+#mk .role{font-size:12px;padding:3px 10px;border-radius:999px;background:var(--bg-tint-blue);color:var(--text-tint-blue)}
+#mk .paid{font-size:12px;padding:3px 10px;border-radius:999px;background:var(--bg-tint-green);color:var(--text-tint-green)}
+#mk .pend{font-size:12px;padding:3px 10px;border-radius:999px;background:var(--bg-tint-yellow);color:var(--text-tint-yellow)}
+#mk .paynote{padding:7px 14px;border-bottom:0.5px solid var(--border);background:var(--bg-tint-yellow);color:var(--text-tint-yellow);font-size:11px;line-height:1.55}
+#mk .ai{padding:10px 14px;border-bottom:0.5px solid var(--border);background:var(--surface-1)}
+#mk .prog{padding:8px 14px 6px;border-bottom:0.5px solid var(--border)}
+#mk .track{height:6px;border-radius:3px;background:var(--surface-1);overflow:hidden;margin-top:5px}
+#mk .fill{height:6px;background:var(--text-tint-green);transition:width .4s}
+#mk .jump{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--text-secondary)}
+#mk .dot{width:22px;height:22px;border-radius:50%;border:0;font-size:11px;font-weight:500;cursor:pointer}
+#mk .body{display:grid;grid-template-columns:196px minmax(0,1fr)}
+#mk .side{border-right:0.5px solid var(--border);padding:12px;background:var(--surface-1)}
+#mk .main{padding:12px 14px}
+#mk .syn{display:flex;gap:8px;align-items:flex-start;padding:7px 6px;border-radius:8px;cursor:pointer;font-size:12px}
+#mk .syn.act{background:var(--surface-2);outline:0.5px solid var(--border-strong)}
+#mk .num{flex:none;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500}
+#mk .sec{border:0.5px solid var(--border);border-radius:14px;margin:0 0 10px;overflow:hidden}
+#mk .sech{display:flex;gap:10px;align-items:center;padding:10px 12px;cursor:pointer}
+#mk .secb{padding:6px 12px 12px;animation:in .22s ease-out}
+@keyframes in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+#mk .say{display:flex;gap:8px;align-items:center;font-size:12px;padding:6px 10px;border-radius:10px;margin:2px 0 4px}
+#mk .lbl{font-size:12px;color:var(--text-secondary);margin:12px 0 5px;display:block}
+#mk .chips{display:flex;gap:6px;flex-wrap:wrap}
+#mk .chip{display:inline-flex;gap:6px;align-items:center;padding:5px 11px;border-radius:8px;font-size:13px;cursor:pointer;border:0.5px solid var(--border-strong);background:transparent;color:var(--text-primary)}
+#mk .chip:before{content:"";width:12px;height:12px;border-radius:3px;border:1px solid var(--border-stronger);flex:none}
+#mk .chip.on{background:var(--bg-accent);border-color:var(--border-accent);color:var(--text-accent)}
+#mk .chip.on:before{background:var(--text-accent);border-color:var(--text-accent);box-shadow:inset 0 0 0 2px var(--bg-accent)}
+#mk .rowl{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 8px;border:0.5px solid var(--border);border-radius:8px;margin:0 0 5px;font-size:13px;background:var(--surface-2)}
+#mk .box{border:0.5px solid var(--border);border-radius:10px;padding:8px 10px;margin:0 0 6px;background:var(--surface-2)}
+#mk .next{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--bg-accent);color:var(--text-accent);margin:0 0 10px;font-size:13px}
+#mk .small{font-size:12px;color:var(--text-secondary);margin:6px 0 0}
+#mk .tabs{display:flex;border-top:0.5px solid var(--border);background:var(--surface-1)}
+#mk .tab{flex:1;text-align:center;padding:8px 2px;font-size:11px;color:var(--text-secondary);cursor:pointer}
+#mk .toast{margin:0 0 8px;padding:8px 10px;border-radius:8px;background:var(--bg-warning);color:var(--text-warning);font-size:12px}
+#mk .q{border:0.5px solid var(--border);border-radius:10px;margin:0 0 6px;background:var(--surface-2)}
+#mk .qh{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;font-size:13px;cursor:pointer}
+#mk .qa{padding:0 10px 10px;font-size:12px;color:var(--text-secondary);animation:in .2s ease-out}
+@media (max-width:640px){#mk .body{grid-template-columns:minmax(0,1fr)}#mk .side{display:none}}
+</style>
+<div id="mk">
+<div class="ctl"><span>Mock: view as</span><span id="roles"></span></div>
+<div class="ctl"><span>Screen</span><span id="devs"></span><span id="devnote"></span></div>
+<div class="ctl"><span>Payment</span><span id="pays"></span></div>
+<div id="out"></div>
+</div>
+<script>
+(function(){
+var C8=['blue','aqua','violet','magenta','green','orange','yellow','red'];
+var FULL=[[1,'Your game','blue','Pick the occasion, day and time.','Hello. Let us start with the basics.'],[2,'How it plays','aqua','Choose the size and the style.','Good. Now, how should it play?'],[3,'Prizes','violet','Tick the prizes. Pick what each one is.','Now the fun part: prizes.'],[4,'Brand moments','magenta','Add your message or video. Test it first.','Want your brand in the breaks?'],[5,'Invite and share','green','Share the link. Add helpers if you like.','Time to bring people in.'],[6,'Check, publish and pay','orange','Check everything. Then publish and pay.','Almost there. One last look.'],[7,'Game day','yellow','Run the game. Message your guests.','It is game day.'],[8,'After the game','red','Get your report. Erase data if you want.','That was fun. Here is what is left.']];
+var R={
+organizer:{label:'Organizer',steps:FULL,note:'You made this game. You can do everything.'},
+host:{label:'Host',steps:FULL,note:'You have the organizer\'s rights for this game. Not the account.'},
+cohost:{label:'Co-host',steps:[[1,"Today's game",'blue','See the game and its payment.','Hi. Here is the game.'],[2,'Invite people','green','Send your link to your people.','Bring your people in.'],[3,'Payment','orange','Anyone can pay. Then the game is on.','One more thing: payment.']],note:'You can invite people and pay. Nothing else.'},
+refer:{label:'Refer and Earn Partner',steps:[[1,'Your referral link','aqua','Copy it. Share it.','Share this link.'],[2,'Who joined through you','blue','See who joined.','Here is who joined.'],[3,'What you have earned','green','See your earnings.','Here is what you earned.'],[4,'Payout details','orange','Tell us how to pay you.','How should we pay you?'],[5,'Terms','magenta','Read how it works.','The small print.']],note:'You earn when people you refer pay.'},
+sales:{label:'Sales Partner',steps:[[1,'Your prospects','blue','Keep track of companies.','Who are you talking to?'],[2,'Free demo to share','aqua','Send the demo link.','Show them the game.'],[3,'Orders you brought','orange','See orders you brought.','Here are your orders.'],[4,'Your commission','green','See what you earned.','Here is your commission.'],[5,'Sales material','violet','Price list and facts.','Everything to share.']],note:'You bring in organizers.'}
+};
+var PT=[['voucher','Gift voucher','Rs','Amount, for example 1000'],['hamper','Gift hamper','','What is in it? (optional)'],['phone','Smartphone','','Which one? (optional)'],['watch','Smart watch','','Which one? (optional)'],['earbuds','Earbuds or headphones','','Which one? (optional)'],['tablet','Tablet or laptop','','Which one? (optional)'],['holiday','Holiday or weekend stay','','Where?'],['dinner','Dinner or restaurant voucher','Rs','Amount, for example 2000'],['movie','Movie tickets','','How many tickets?'],['dayoff','Extra day off','',''],['other','Something else','','Type the prize'],['later','I will decide later','',''],['none','No prize','','']];
+var HS=[['early5','Early Five'],['top','Top line'],['mid','Middle line'],['bot','Bottom line'],['corners','Four corners'],['star','Star'],['full','Full house']];
+var KS=['Type a message','YouTube link','Paste video file link','Paste audio file link'];
+var OCC=['Diwali party','Dealer meet','Annual day','Team party','Customer event','Family day','Other'];
+var HELP=[['How do I start?','Open step 1 and tap your choices. Your game saves as you go.'],['Can the AI do this for me?','Yes. Copy your AI link at the top and paste it in any AI chat.'],['Who pays?','Any one of the Organizer, a Host or a Co-host. Only one payment is needed. Guests pay nothing.'],['What if nobody pays?','The game does not begin. Nothing is charged. Once one payment is made, the game is on.'],['Can I change things later?','Yes, until the game starts. Open the step and change it.'],['How do I add a video?','Open Brand moments and paste the link. Tap Test it to see what guests see.'],['What do guests see?','A ticket on their phone. No app to install.'],['Is my guests\' data safe?','It is encrypted. Names and numbers are erased within 24 hours after the game.'],['What is a lucky draw?','A draw during the game. The software picks the winners from everyone playing.'],['How do I stop the game?','Open Game day and tap Pause or End. Organizer and Hosts can do this.'],['Who do I contact?','Write to our Grievance Officer. We reply within 30 days.']];
+var S={role:'organizer',dev:'laptop',open:3,ph:'full',sheet:false,toast:'',install:true,paid:false,q:-1,
+done:{organizer:{1:1,2:1},host:{1:1,2:1},cohost:{1:1},refer:{1:1},sales:{}},
+v:{occ:'Diwali party',oname:'',day:'Tomorrow',dayo:'',time:'4 pm',timeo:'',cap:'250',tix:'1',spd:'9 seconds',rnd:'1',join:'Anyone with the link',inv:false,per:'4',k_family:true,k_colleagues:true,k_friends:false,k_dealers:false,k_customers:false,
+bundle:'Classic',h_early5:true,h_top:true,h_mid:false,h_bot:false,h_corners:false,h_star:false,h_full:true,n_early5:'1',n_top:'1',n_mid:'1',n_bot:'1',n_corners:'1',n_star:'1',n_full:'1',
+pt_early5:'voucher',pd_early5:'500',pt_top:'hamper',pd_top:'',pt_full:'voucher',pd_full:'1000',pt_mid:'later',pt_bot:'later',pt_corners:'later',pt_star:'later',pt_lucky:'phone',pd_lucky:'',
+op:true,opk:KS[1],opv:'',opt:'A message from your organizer',mid:'1',m1k:KS[1],m1v:'https://youtu.be/dQw4w9WgXcQ',m1t:'A message from your organizer',m2k:KS[0],m2v:'',m3k:KS[0],m3v:'',lucky:false,lw:'1',ls:'A draw',cl:false,clk:KS[0],clv:'',clt:'A message from your organizer',
+helpers:false,nh:'1',msg:'Welcome! The game starts soon.',msgo:'',pay:'Bank transfer',payid:''}};
+var PRICE={'100':'2,358.82','250':'3,538.82','500':'4,718.82','1000':'7,078.82'};
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}
+function tintx(c){return 'background:var(--bg-tint-'+c+');color:var(--text-tint-'+c+')'}
+function chips(k,opts){return '<div class="chips">'+opts.map(function(o){return '<button class="chip'+(S.v[k]==o?' on':'')+'" data-chip="'+k+'" data-val="'+esc(o)+'">'+o+'</button>'}).join('')+'</div>'}
+function chk(k,t){return '<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:6px 0"><input type="checkbox" data-k="'+k+'"'+(S.v[k]?' checked':'')+'> '+t+'</label>'}
+function btn(t,id,ic){return '<button data-act="'+id+'">'+(ic?'<i class="ti ti-'+ic+'" aria-hidden="true" style="margin-right:5px"></i>':'')+t+'</button>'}
+function inp(k,ph,w){return '<input data-t="'+k+'" placeholder="'+esc(ph)+'" value="'+esc(S.v[k])+'" style="'+(w||'flex:1;min-width:140px')+'">'}
+function ptype(key){return PT.filter(function(p){return p[0]==S.v['pt_'+key]})[0]}
+function ptext(key){var p=ptype(key);if(!p)return 'Not chosen';if(p[0]=='later')return 'Decide later';if(p[0]=='none')return 'No prize';var d=S.v['pd_'+key];return p[1]+(d?(p[2]?': Rs '+d:': '+d):'')}
+function pchoose(key){var p=ptype(key);var h='<div class="chips">'+PT.map(function(x){return '<button class="chip'+(S.v['pt_'+key]==x[0]?' on':'')+'" data-pt="'+key+'" data-val="'+x[0]+'">'+x[1]+'</button>'}).join('')+'</div>';
+if(p&&p[3])h+='<div style="display:flex;gap:8px;align-items:center;margin-top:8px">'+(p[2]?'<span>'+p[2]+'</span>':'')+inp('pd_'+key,p[3])+'</div>';
+if(p&&p[0]=='later')h+='<p class="small">Fine. We will remind you before you publish.</p>';
+if(p&&p[0]=='none')h+='<p class="small">The ticket shows "No prize". The winner is still announced.</p>';
+return h}
+function linkNote(k,v){if(k==KS[0]||!v)return '';var ok=/youtu\.?be/.test(v)?'YouTube link: plays inside the game':/\.mp4/.test(v)?'Video file: plays inside the game':/\.mp3/.test(v)?'Audio file: plays inside the game':'';return ok?'<p class="small" style="color:var(--text-success)"><i class="ti ti-circle-check" aria-hidden="true"></i> '+ok+'</p>':'<p class="small" style="color:var(--text-danger)"><i class="ti ti-alert-triangle" aria-hidden="true"></i> This opens a new tab. Use a YouTube link or a direct file link.</p>'}
+function kind(p){var k=S.v[p+'k'],v=S.v[p+'v'];var ph=k==KS[0]?'Type your message (up to 80 characters)':k==KS[1]?'Paste the YouTube link':k==KS[2]?'Paste the video file link':'Paste the audio file link';
+return chips(p+'k',KS)+'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'+inp(p+'v',ph)+(k!=KS[0]?btn('Test it','test','player-play'):'')+'</div>'+linkNote(k,v)+(k!=KS[0]?'<span class="lbl" style="margin-top:8px">Title guests see</span>'+inp(p+'t','Title',''):'')}
+function used(){var n=0;if(S.v.op)n++;n+=Number(S.v.mid);if(S.v.cl)n++;if(S.v.lucky)n++;return n}
+function nprizes(){return HS.filter(function(h){return S.v['h_'+h[0]]}).length}
+function dayText(){return S.v.day=='Pick another date'?(S.v.dayo||'a date'):S.v.day}
+function timeText(){return S.v.time=='Other time'?(S.v.timeo||'a time'):S.v.time}
+function house(h){var on=S.v['h_'+h[0]],act=S.ph==h[0]&&on;
+return '<div class="box"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" data-k="h_'+h[0]+'"'+(on?' checked':'')+'> '+h[1]+'</label>'+(on&&!act?'<span style="display:flex;gap:8px;align-items:center"><span class="small" style="margin:0">'+S.v['n_'+h[0]]+' winner'+(S.v['n_'+h[0]]=='1'?'':'s')+' · '+esc(ptext(h[0]))+'</span><button data-ph="'+h[0]+'">Change</button></span>':'')+'</div>'+(act?'<span class="lbl" style="margin-top:8px">How many winners?</span>'+chips('n_'+h[0],['1','2','3','4','5'])+'<span class="lbl">What is the prize?</span>'+pchoose(h[0]):'')+'</div>'}
+function payRow(){var due=dayText()+', '+timeText();
+if(S.paid)return '<div class="rowl" style="background:var(--bg-success);border-color:var(--border-success)"><span><b style="font-weight:500;color:var(--text-success)">Paid</b><br><span class="small">Paid by Anita (Host) on 2 Oct, 3:12 pm. The game is on.</span></span><i class="ti ti-circle-check" style="color:var(--text-success);font-size:20px" aria-hidden="true"></i></div>';
+return '<div class="rowl"><span><b>Pay</b> before '+due+'<br><span class="small">Rs '+PRICE[S.v.cap]+' with GST. Pay once, from any one of you.</span></span>'+btn('Pay','pay','credit-card')+'</div>'}
+function readback(){var v=S.v,w=0,rows=[['Game',(v.occ=='Other'?(v.oname||'Your game'):v.occ)+', '+dayText()+', '+timeText(),1],['People and play','Up to '+v.cap+', '+v.tix+' ticket'+(v.tix=='1'?'':'s')+', '+v.spd+', '+v.join,2]];
+var pr=HS.filter(function(h){return v['h_'+h[0]]});pr.forEach(function(h){if(v['pt_'+h[0]]=='later')w++});
+rows.push(['Prizes',pr.length+' prizes'+(w?' ('+w+' to decide)':''),3],['Brand moments',used()+' of '+(5*Number(v.tix)),4]);
+return rows.map(function(r){return '<div class="rowl"><span><span class="small" style="margin:0">'+r[0]+'</span><br>'+esc(r[1])+'</span><button data-open="'+r[2]+'">Change</button></div>'}).join('')+(w?'<p class="small" style="color:var(--text-warning)"><i class="ti ti-alert-triangle" aria-hidden="true"></i> '+w+' prize'+(w==1?' says':'s say')+' "decide later". You can still publish.</p>':'')}
+function form(role,n){var v=S.v;
+if(role=='organizer'||role=='host'){
+if(n==1)return '<span class="lbl">What is the occasion?</span>'+chips('occ',OCC)+(v.occ=='Other'?'<div style="margin-top:8px">'+inp('oname','Name your game','width:100%')+'</div>':'')+'<span class="lbl">Which day? (India time)</span>'+chips('day',['Today','Tomorrow','Sat 3 Oct','Sun 4 Oct','Pick another date'])+(v.day=='Pick another date'?'<div style="margin-top:8px"><input type="date" data-t="dayo" value="'+esc(v.dayo)+'"></div>':'')+'<span class="lbl">What time does it start?</span>'+chips('time',['10 am','12 pm','4 pm','6 pm','7 pm','8 pm','Other time'])+(v.time=='Other time'?'<div style="margin-top:8px"><input type="time" data-t="timeo" value="'+esc(v.timeo)+'"></div>':'')+'<p class="small">Guests can join before. The first number comes 2 minutes after the start.</p>';
+if(n==2)return '<span class="lbl">How many people at most?</span>'+['100','250','500','1000'].map(function(c){return '<button class="chip'+(v.cap==c?' on':'')+'" data-chip="cap" data-val="'+c+'" style="display:flex;width:100%;justify-content:space-between;margin:0 0 5px"><span>Up to '+c+' people</span><span style="color:var(--text-secondary)">Rs '+PRICE[c]+' with GST</span></button>'}).join('')+'<p class="small">Invited guests count too.</p><span class="lbl">Tickets for each person</span>'+chips('tix',['1','2'])+'<span class="lbl">How fast are the numbers?</span>'+chips('spd',['6 seconds','9 seconds','12 seconds','15 seconds'])+'<span class="lbl">How many rounds?</span>'+chips('rnd',['1','2','3','4','5'])+'<span class="lbl">Who can join?</span>'+chips('join',['Anyone with the link','Only people on my list'])+chk('inv','Let each guest invite family or colleagues')+(v.inv?'<div class="box"><span class="small" style="margin:0">How many each?</span>'+chips('per',['1','2','3','4'])+'<span class="lbl">Which kinds of guests?</span><div class="chips">'+chk('k_family','Family')+chk('k_colleagues','Colleagues')+chk('k_friends','Friends')+chk('k_dealers','Dealers')+chk('k_customers','Customers')+'</div></div>':'');
+if(n==3)return '<span class="lbl">Start from</span>'+chips('bundle',['Classic','Simple','Rich','Choose myself'])+'<span class="lbl">Tick the prizes. Open one at a time.</span>'+HS.map(house).join('')+'<p class="small">You give the prizes. We provide the software.</p>';
+if(n==4)return '<p class="small" style="margin:8px 0">5 moments for each ticket. Used: <b>'+used()+' of '+(5*Number(v.tix))+'</b></p><span class="lbl">Before the game starts</span>'+chk('op','Show something while guests wait')+(v.op?'<div class="box">'+kind('op')+'</div>':'')+'<span class="lbl">During the game (placed evenly)</span><span class="small" style="margin:0 0 5px;display:block">How many?</span>'+chips('mid',['0','1','2','3'])+['1','2','3'].filter(function(i){return Number(v.mid)>=Number(i)}).map(function(i){return '<div class="box" style="margin-top:8px"><b style="font-weight:500;font-size:13px">Moment '+i+'</b>'+kind('m'+i)+'</div>'}).join('')+chk('lucky','Add a lucky draw')+(v.lucky?'<div class="box"><span class="small" style="margin:0">How many winners?</span>'+chips('lw',['1','3','5','10'])+'<span class="lbl">How should it look?</span>'+chips('ls',['A draw','A scratch card'])+'<span class="lbl">What is the prize?</span>'+pchoose('lucky')+'</div>':'')+'<span class="lbl">At the end of the game</span>'+chk('cl','Show something on the last screen')+(v.cl?'<div class="box">'+kind('cl')+'</div>':'');
+if(n==5)return '<span class="lbl">Guest link</span><div class="rowl"><span style="font-family:var(--font-mono);font-size:11px">corporate-tambola.pages.dev/z.html?e=DIWALI-1002</span>'+btn('Copy','copy','copy')+'</div><span class="lbl">Big screen</span><div class="rowl"><span>Numbers and winners. No personal data.</span>'+btn('Open','big','device-desktop')+'</div><span class="lbl">Your guest list</span><div class="rowl"><span>You add names and numbers yourself.</span>'+btn('Add my list','list','users')+'</div><p class="small">Your AI never sees guest names or numbers.</p>'+chk('helpers','I want co-hosts to invite people')+(v.helpers?'<div class="box"><span class="small" style="margin:0">How many?</span>'+chips('nh',['1','2','3','4','5'])+'<div style="margin-top:8px">'+btn('Create the co-host links','host','user-plus')+'</div></div>':'');
+if(n==6)return '<span class="lbl">Check your game</span>'+readback()+'<div class="rowl" style="margin-top:10px"><span><b>Publish</b> (free)<br><span class="small">Confirm your e-mail and mobile. One tap.</span></span>'+btn('Publish','pub','rocket')+'</div>'+payRow();
+if(n==7)return '<span class="lbl">Controls</span><div class="chips">'+btn('Pause','x','player-pause')+btn('Resume','x','player-play')+btn('End the game','x','player-stop')+'</div><span class="lbl">Message to every phone</span>'+chips('msg',['Welcome! The game starts soon.','Dinner is served','Rewards at the stage in 10 minutes','Thank you for joining','Write my own'])+(v.msg=='Write my own'?'<div style="margin-top:8px">'+inp('msgo','Type your message (up to 160 characters)','width:100%')+'</div>':'')+'<div style="margin-top:8px">'+btn('Send','send','send')+'</div><span class="lbl">Prizes handed over</span><label class="rowl"><span><input type="checkbox"> Ticket 14: Early Five</span><span class="small">tick when given</span></label>';
+return '<div class="rowl"><span>Report by e-mail about 3 minutes after the game. Open it within 22 hours.</span></div><div class="rowl"><span>Guest names and numbers are erased within 24 hours.</span><span class="small">automatic</span></div>'+btn('Erase guest data now','erase','trash')+'<p class="small">You tap once to confirm. Winners and your details stay 365 days.</p>';}
+if(role=='cohost'){
+if(n==1)return '<div class="rowl"><span>'+(v.occ=='Other'?'Your game':v.occ)+', '+dayText()+', '+timeText()+'</span><span class="small">read only</span></div><div class="rowl"><span>38 people joined of '+v.cap+'</span><span class="small">numbers called 0 of 90</span></div><p class="small">You cannot change the game.</p>';
+if(n==2)return '<span class="lbl">Your own invite link</span><div class="rowl"><span style="font-family:var(--font-mono);font-size:11px">corporate-tambola.pages.dev/z.html?e=DIWALI-1002&amp;from=7</span>'+btn('Copy','copy','copy')+'</div><div class="chips" style="margin-top:8px">'+btn('Share on WhatsApp','x','brand-whatsapp')+btn('Send by e-mail','x','mail')+'</div><div class="rowl" style="margin-top:8px"><span>People you brought</span><b>12</b></div><p class="small">You can invite as many people as you like.</p>';
+return '<p class="small" style="margin:8px 0">Status: <b>'+(S.paid?'Paid':'Payment pending')+'</b></p>'+payRow();}
+if(role=='refer'){
+if(n==1)return '<div class="rowl"><span style="font-family:var(--font-mono);font-size:11px">corporate-tambola.pages.dev/?ref=ASHA7</span>'+btn('Copy','copy','copy')+'</div><div class="chips" style="margin-top:8px">'+btn('Share on WhatsApp','x','brand-whatsapp')+btn('Send by e-mail','x','mail')+'</div><p class="small">You earn when an organizer you referred pays.</p>';
+if(n==2)return '<div class="rowl"><span>People who opened your link</span><b>24</b></div><div class="rowl"><span>Organizers who created a game</span><b>5</b></div><div class="rowl"><span>Organizers who paid</span><b>2</b></div>';
+if(n==3)return '<div class="rowl"><span>Earned so far</span><b>Rs 3,500</b></div><div class="rowl"><span>Waiting to be paid</span><b>Rs 1,750</b></div><p class="small">Up to 50% of the price before GST.</p>';
+if(n==4)return '<span class="lbl">How should we pay you?</span>'+chips('pay',['Bank transfer','UPI'])+'<div style="margin-top:8px">'+inp('payid',v.pay=='UPI'?'Your UPI ID':'Account number','width:100%')+'</div><p class="small">We ask for tax details once. Kept private.</p>';
+return '<p class="small" style="margin:8px 0">How commission works, when it is paid, and what not to do.</p>'+btn('Open the partner terms','x','file-text');}
+if(n==1)return '<div class="rowl"><span>Companies you are talking to</span><b>7</b></div>'+btn('Add a prospect','x','plus');
+if(n==2)return '<p class="small" style="margin:8px 0">A real ticket and a real mini-game. One button, nothing to type.</p><div class="rowl"><span style="font-family:var(--font-mono);font-size:11px">corporate-tambola.pages.dev/demo.html</span>'+btn('Copy','copy','copy')+'</div>';
+if(n==3)return '<div class="rowl"><span>Orders through you</span><b>3</b></div><div class="rowl"><span>Paid</span><b>2</b></div>';
+if(n==4)return '<div class="rowl"><span>Commission earned</span><b>Rs 5,200</b></div><div class="rowl"><span>Waiting to be paid</span><b>Rs 1,300</b></div>';
+return '<div class="rowl"><span>Price list and what the software does</span>'+btn('Open','x','file-text')+'</div><div class="rowl"><span>The 10 facts on safety and privacy</span>'+btn('Open','x','shield-check')+'</div>';}
+function sum(role,n){var v=S.v;if(role=='organizer'||role=='host'){return [(v.occ=='Other'?(v.oname||'Your game'):v.occ)+', '+dayText()+', '+timeText(),'Up to '+v.cap+', '+v.tix+' ticket'+(v.tix=='1'?'':'s')+', '+v.spd,nprizes()+' prizes ('+v.bundle+')',used()+' of '+(5*Number(v.tix))+' moments','Guest link ready',S.paid?'Paid. The game is on':'Payment pending','Opens when the game starts','After the game'][n-1]||''}
+if(role=='cohost'){return [dayText()+', '+timeText(),'12 people brought',S.paid?'Paid':'Payment pending'][n-1]||''}
+return ''}
+function steps(){return R[S.role].steps}
+function ndone(){return steps().filter(function(s){return S.done[S.role][s[0]]}).length}
+function nextStep(){var a=steps();for(var i=0;i<a.length;i++){if(!S.done[S.role][a[i][0]])return a[i]}return null}
+function secHtml(s){var n=s[0],isopen=S.open==n,d=S.done[S.role][n],c=s[2];
+return '<div class="sec" id="sec'+n+'" style="'+(isopen?'border:1.5px solid var(--text-tint-'+c+')':'')+'"><div class="sech" data-open="'+n+'" style="background:var(--bg-tint-'+c+')"><span class="num" style="background:var(--text-tint-'+c+');color:var(--surface-2)">'+n+'</span><span style="flex:1;min-width:0"><span style="font-size:14px;font-weight:500;color:var(--text-tint-'+c+')">'+s[1]+'</span><br><span style="font-size:11px;color:var(--text-tint-'+c+')">'+(isopen||!(sum(S.role,n))?s[3]:esc(sum(S.role,n)))+'</span></span>'+(d?'<i class="ti ti-circle-check" style="color:var(--text-tint-'+c+');font-size:20px" aria-label="Done"></i>':'<i class="ti ti-chevron-'+(isopen?'up':'down')+'" style="color:var(--text-tint-'+c+')" aria-hidden="true"></i>')+'</div>'+(isopen?'<div class="secb"><div class="say" style="'+tintx(c)+'"><i class="ti ti-message-circle" aria-hidden="true"></i><span>'+(d?'Saved. You can change it any time.':s[4])+'</span></div>'+form(S.role,n)+'<div style="margin-top:12px">'+btn('Save and continue','cont','arrow-right')+'</div></div>':'')+'</div>'}
+function synHtml(){return steps().map(function(s){var d=S.done[S.role][s[0]];return '<div class="syn'+(S.open==s[0]?' act':'')+'" data-open="'+s[0]+'"><span class="num" style="background:var(--text-tint-'+s[2]+');color:var(--surface-2)">'+s[0]+'</span><span style="flex:1;min-width:0"><span style="font-weight:500">'+s[1]+'</span><br><span style="color:var(--text-secondary)">'+esc(sum(S.role,s[0])||(d?'Done':'To do'))+'</span></span><i class="ti ti-'+(d?'circle-check':'circle')+'" style="color:'+(d?'var(--text-success)':'var(--text-muted)')+'" aria-hidden="true"></i></div>'}).join('')}
+function aiHtml(){var org=S.role=='organizer';if(S.role=='host'||S.role=='cohost')return '';
+return '<div class="ai"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><i class="ti ti-pin" aria-hidden="true" style="color:var(--text-secondary)"></i><b style="font-size:14px;font-weight:500">'+(org?'Your AI assistant work link':S.role=='refer'?'Your referral link':'Your demo link')+'</b>'+btn('Copy','copyai','copy')+'</div><div class="small" style="margin:6px 0 0">'+(org?'Copy and paste it in any AI chat, like ChatGPT, Gemini, Claude, Grok, DeepSeek, z.ai and others. Copy it as many times as you like.':'Copy it and share it as many times as you like.')+'</div></div>'}
+function nextHtml(){var n=nextStep();if(!n)return '<div class="next" style="background:var(--bg-success);color:var(--text-success)"><span><b style="font-weight:500">All done.</b> Nothing else to do.</span></div>';return '<div class="next"><span><b style="font-weight:500">Next:</b> '+n[1]+'. '+n[4]+'</span><button data-open="'+n[0]+'" style="border-color:var(--border-accent);color:var(--text-accent)">Go <i class="ti ti-arrow-right" aria-hidden="true"></i></button></div>'}
+function progHtml(){var t=steps().length,d=ndone(),p=Math.round(d*100/t);return '<div class="prog"><div style="display:flex;justify-content:space-between;font-size:12px"><span>Your progress · saved</span><span><b style="font-weight:500">'+d+' of '+t+' done</b> · '+p+'%</span></div><div class="track"><div class="fill" style="width:'+p+'%"></div></div><div class="jump"><span>Jump to</span>'+steps().map(function(s){return '<button class="dot" data-open="'+s[0]+'" aria-label="Step '+s[0]+': '+s[1]+'" style="'+tintx(s[2])+(S.open==s[0]?';outline:2px solid var(--text-tint-'+s[2]+')':'')+'">'+s[0]+'</button>'}).join('')+'<button class="pill" data-act="help" style="padding:2px 10px;font-size:11px">Help</button></div></div>'}
+function payNote(){var g=S.role=='organizer'||S.role=='host'||S.role=='cohost';if(!g||S.paid)return '';return '<div class="paynote" role="note"><b style="font-weight:500">A payment is pending for this game.</b> Just one of you needs to make it: the Organizer, a Host or a Co-host. Guests pay nothing. It is for this one game only, with no commitment and no repeat charges.</div>'}
+function barHtml(){var g=S.role=='organizer'||S.role=='host'||S.role=='cohost';return '<div class="bar"><span style="font-weight:500;font-size:14px">Corporate Tambola</span><span class="role" aria-label="Your role">'+R[S.role].label+(S.role=='host'?' 1 of 3':'')+'</span>'+(g?'<span class="'+(S.paid?'paid':'pend')+'" aria-label="Payment status">'+(S.paid?'Paid':'Payment pending')+'</span><span class="small" style="margin:0;flex:1;text-align:right">'+(S.v.occ=='Other'?'Your game':S.v.occ)+' · '+dayText()+', '+timeText()+'</span>':'<span class="small" style="margin:0;flex:1;text-align:right">Partner area</span>')+'</div>'}
+function helpHtml(){return '<div class="sec" id="help" style="margin-top:14px;border:1.5px solid var(--border-strong)"><div class="sech" style="background:var(--surface-1);cursor:default"><span class="num" style="background:var(--text-primary);color:var(--surface-2)"><i class="ti ti-help" aria-hidden="true"></i></span><span style="flex:1"><span style="font-size:14px;font-weight:500">Help</span><br><span style="font-size:11px;color:var(--text-secondary)">Tap a question. The answer is short.</span></span></div><div class="secb">'+HELP.map(function(q,i){return '<div class="q"><div class="qh" data-q="'+i+'"><span>'+q[0]+'</span><i class="ti ti-chevron-'+(S.q==i?'up':'down')+'" aria-hidden="true"></i></div>'+(S.q==i?'<div class="qa">'+q[1]+'</div>':'')+'</div>'}).join('')+'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'+btn('Back to your steps','steps','arrow-up')+btn('Back to top','top','chevron-up')+'</div></div></div>'}
+function mainHtml(){return '<div id="top"></div>'+(S.toast?'<div class="toast">'+esc(S.toast)+'</div>':'')+'<div class="small" style="margin:0 0 8px">'+R[S.role].note+'</div>'+nextHtml()+steps().map(secHtml).join('')+helpHtml()}
+function sheetHtml(){return '<div style="padding:8px 10px;border-bottom:0.5px solid var(--border);background:var(--surface-1)"><div style="font-size:12px;color:var(--text-secondary);margin:2px 6px 4px">Your game at a glance</div>'+synHtml()+'</div>'}
+function draw(){
+var ph=S.dev=='phone',h='';
+if(ph){h='<div class="phonewrap"><div class="phone">'+(S.install?'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:var(--bg-accent);color:var(--text-accent);font-size:11px"><span><i class="ti ti-download" aria-hidden="true"></i> Add to your home screen</span><button data-act="noinst" style="border:0;background:transparent;color:inherit;font-size:11px;padding:0">Not now</button></div>':'')+barHtml()+payNote()+aiHtml()+progHtml()+(S.sheet?sheetHtml():'')+'<div class="main">'+mainHtml()+'</div><div class="tabs"><span class="tab" data-act="sheet"><i class="ti ti-list-details" style="font-size:18px" aria-hidden="true"></i><br>Steps</span><span class="tab" data-open="'+(nextStep()?nextStep()[0]:1)+'"><i class="ti ti-arrow-right" style="font-size:18px" aria-hidden="true"></i><br>Next</span><span class="tab" data-act="help"><i class="ti ti-help" style="font-size:18px" aria-hidden="true"></i><br>Help</span><span class="tab" data-act="top"><i class="ti ti-chevron-up" style="font-size:18px" aria-hidden="true"></i><br>Top</span></div></div></div>'}
+else{h='<div class="frame">'+barHtml()+payNote()+aiHtml()+progHtml()+'<div class="body"><div class="side"><div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><span class="num" style="background:var(--text-primary);color:var(--surface-2)">'+R[S.role].label.charAt(0)+'</span><span style="font-size:12px"><span style="color:var(--text-secondary)">You are</span><br><b style="font-weight:500">'+R[S.role].label+'</b></span></div><div style="font-size:12px;color:var(--text-secondary);margin:0 6px 4px">Your game at a glance</div>'+synHtml()+((S.role=='organizer'||S.role=='host'||S.role=='cohost')?'<div style="margin:10px 6px 0;font-size:12px;color:var(--text-secondary)">Price: Rs '+PRICE[S.v.cap]+' with GST<br>Payment: <b style="font-weight:500">'+(S.paid?'Paid':'Pending')+'</b></div>':'')+'</div><div class="main">'+mainHtml()+'</div></div></div>'}
+document.getElementById('out').innerHTML=h;
+document.getElementById('roles').innerHTML=Object.keys(R).map(function(k){return '<button class="pill'+(S.role==k?' on':'')+'" data-role="'+k+'">'+R[k].label+'</button>'}).join(' ');
+document.getElementById('devs').innerHTML=['laptop','phone'].map(function(k){return '<button class="pill'+(S.dev==k?' on':'')+'" data-dev="'+k+'">'+(k=='laptop'?'Laptop view':'Phone view (installable app)')+'</button>'}).join(' ');
+document.getElementById('pays').innerHTML=[false,true].map(function(k){return '<button class="pill'+(S.paid==k?' on':'')+'" data-paid="'+k+'">'+(k?'Paid':'Payment pending')+'</button>'}).join(' ');
+document.getElementById('devnote').textContent=ph?'':'scaled down to fit this window';
+}
+function msg(t){S.toast=t;draw()}
+function bundleSet(b){var set={Classic:['early5','top','mid','bot','full'],Simple:['early5','full'],Rich:['early5','top','mid','bot','corners','star','full']}[b];if(!set)return;HS.forEach(function(h){S.v['h_'+h[0]]=set.indexOf(h[0])>=0})}
+function go(id){var e=document.getElementById(id);if(e&&e.scrollIntoView){try{e.scrollIntoView({behavior:'smooth',block:'start'})}catch(x){}}}
+document.getElementById('mk').addEventListener('click',function(e){
+var t=e.target.closest('[data-role],[data-dev],[data-paid],[data-open],[data-chip],[data-pt],[data-ph],[data-q],[data-act]');if(!t)return;
+if(t.dataset.role){S.role=t.dataset.role;S.toast='';S.sheet=false;S.q=-1;S.open=nextStep()?nextStep()[0]:1;return draw()}
+if(t.dataset.dev){S.dev=t.dataset.dev;return draw()}
+if(t.dataset.paid){S.paid=t.dataset.paid=='true';return draw()}
+if(t.dataset.open){S.open=Number(t.dataset.open);S.sheet=false;S.toast='';draw();return go('sec'+S.open)}
+if(t.dataset.chip){S.v[t.dataset.chip]=t.dataset.val;if(t.dataset.chip=='bundle')bundleSet(t.dataset.val);return draw()}
+if(t.dataset.pt){S.v['pt_'+t.dataset.pt]=t.dataset.val;return draw()}
+if(t.dataset.ph){S.ph=t.dataset.ph;return draw()}
+if(t.dataset.q){var i=Number(t.dataset.q);S.q=S.q==i?-1:i;return draw()}
+var a=t.dataset.act;S.toast='';
+if(a=='help'){S.q=S.q<0?0:S.q;draw();return go('help')}
+if(a=='top'){draw();return go('top')}
+if(a=='steps'){draw();return go('sec'+S.open)}
+if(a=='sheet'){S.sheet=!S.sheet;return draw()}
+if(a=='noinst'){S.install=false;return draw()}
+if(a=='cont'){S.done[S.role][S.open]=1;var n=nextStep();S.open=n?n[0]:S.open;draw();return go('sec'+S.open)}
+if(a=='pay'){S.paid=true;S.toast='Mock: payment recorded. The game is on.';return draw()}
+var T={copyai:'Copied. Paste it into your AI chat. Copy it again any time.',copy:'Link copied.',test:'Opens a page that shows this exactly as a guest sees it.',pub:'Mock: opens the Publish card. You tap once.',erase:'Mock: asks you to confirm first.',send:'Sent to every phone.',host:'Co-host links created. Send each to one person only.',list:'Mock: opens the guest list box.',big:'Opens the big-screen page.',x:'Mock: not wired in this preview.'};
+msg(T[a]||'')});
+document.getElementById('mk').addEventListener('change',function(e){var k=e.target.dataset.k;if(!k)return;S.v[k]=e.target.checked;if(k.indexOf('h_')==0&&e.target.checked)S.ph=k.slice(2);draw()});
+document.getElementById('mk').addEventListener('input',function(e){var k=e.target.dataset.t;if(k)S.v[k]=e.target.value});
+draw();
+})();
+</script>

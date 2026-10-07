@@ -33,7 +33,7 @@ export const AUDIT_SCHEMA: string[] = [
 export type Actor = "organizer" | "host" | "cohost" | "participant" | "ai_key" | "system" | "owner";
 export const GENESIS = "0".repeat(64);
 export interface AuditEnv extends Env, PiiEnv { ANALYZE_AI_URL?: string; ANALYZE_AI_KEY?: string; ANALYZE_AI_MODEL?: string }
-interface AuthLike { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | null }
+interface AuthLike { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null }
 
 const enc = new TextEncoder();
 const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(s))), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -206,7 +206,7 @@ export async function appendAudit(env: AuditEnv, r: RecordIn): Promise<boolean> 
 }
 
 const actorOf = (a: AuthLike, req: Request, hadKey: boolean): Actor =>
-  a.plat ? "owner" : a.kind === "master" ? "organizer" : a.kind === "ai" ? "ai_key" : a.kind === "host" ? "cohost" : hadKey ? "participant" : "participant";
+  a.plat ? "owner" : a.kind === "master" ? "organizer" : a.kind === "ai" ? "ai_key" : a.kind === "host" ? "host" : a.kind === "cohost" ? "cohost" : hadKey ? "participant" : "participant";
 
 /**
  * Records what one request did. `peek` is a clone of the request taken BEFORE the route read the body. Called once per request by worker.ts; only writes and AI calls,

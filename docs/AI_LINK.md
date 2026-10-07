@@ -21,7 +21,7 @@ Three layers together:
 
 * **A. The e-mail's button.** The dedicated mail (`apps/edge/src/mails.ts`, `aiLinkMail`; subject "Your personal AI work link - Corporate Tambola"; HTML + plain text; red do-not-forward warning top and bottom; numbered steps) has a prominent button "Show my AI work link" to `/ai-link.html` (`apps/web/public/ai-link.html|js`). The address holds no secret. The page asks the organizer to sign in with the existing 6-digit e-mailed code (or uses the console's own session), then shows the lasting two-line paste in a box with Copy, seven ways to hand it to an AI (below), "Get a fresh AI link" and "Replace my AI link", with the warning top and bottom. A forwarded copy of the mail is useless to anyone else. The lasting key is kept sealed (`aikey/<org>` in kv) so the signed-in organizer can read it again (`GET /api/org/ai/link`, organizer key only; AI, co-host, mailed and platform keys get 403). It is never e-mailed.
 * **B. The mail's own box uses a separate 24-hour key.** The plain-text paste box in the mail (never a hyperlink) carries a key minted only for the mail, valid 24 hours (`organizer_key.expires_ms`, D1 migration `0006_link_expiry.sql`; after expiry it is the same plain 404 as an unknown key; keys with no expiry are unaffected). The mail says plainly how long it works and that the button gives a fresh one. "Get a fresh AI link" (`POST /api/org/ai/fresh`, organizer key only, at most 5 live) mints and mails another 24-hour key without touching the lasting key. Co-host: a lasting `cth_` key is returned to the console; the mail carries a separate 24-hour co-host key, names whose engagements it is, says it is a watch-and-announce role, and has its own warning (its button opens the console). Co-host keys made for mail do not use up the 5 co-host places.
-* **C. Unfamiliar-use alert.** When an AI or co-host key is used (manual read or API call) from a country, network prefix (IPv4 /24, IPv6 /48) or program family not seen before for that key, the organizer gets ONE plain e-mail (no link, no key: "someone new used your AI link; replace it if this was not you"), at most once per key per 24 hours. The first use only sets the baseline. State: `seen/<keyId>` and `alert/<keyId>` in kv. The alert is also noisy by design when a different AI vendor is tried; the 24-hour limit caps it.
+* **C. Unfamiliar-use alert.** When an AI or Host key is used (manual read or API call) from a country, network prefix (IPv4 /24, IPv6 /48) or program family not seen before for that key, the organizer gets ONE plain e-mail (no link, no key: "someone new used your AI link; replace it if this was not you"), at most once per key per 24 hours. The first use only sets the baseline. State: `seen/<keyId>` and `alert/<keyId>` in kv. The alert is also noisy by design when a different AI vendor is tried; the 24-hour limit caps it.
 
 Where else: the publish mail (share and pay links) carries no AI link and is safe to forward; reminders, "could not begin", invoices, report-link and partner mails never did; no report page, PDF or guest page carries one (source scan in `apps/edge/test/ai-mail.test.ts`). The organizer's address for these mails is kept sealed (`orgmail/<org>`, same AES-GCM as names and numbers); older accounts fall back to the address confirmed at their latest publish; with none known the paste is returned in the answer (`mailed: false`). A mail that could not be sent keeps no body at all. Honest limit: a mail app may turn the plain-text address in the box into a tappable link on its own, and a mail scanner may then open it; that is why the mailed key lasts only 24 hours and the alert exists.
 
@@ -44,18 +44,27 @@ Opens the AI with the paste pre-filled (`target=_blank rel="noopener noreferrer"
 
 Files: `apps/edge/src/ai-link.ts` (the words), `apps/edge/src/worker.ts` (`aiLink()` routing, `canAi`, manifest), `pages/functions/ai/[[path]].ts` (Pages Function), `pages/build.mjs` (`_routes.json` includes `/ai/*`), `apps/edge/test/ai-link.test.ts`.
 
-## Organizer and co-host actions: who may do what
+## Roles (2026-10-07): Organizer, Host, Co-host
 
-| Action (console) | Organizer AI (`cta_`) | Co-host (`cth_`) | Why |
+Words in the product: **Organizer** (1), **Host** (up to 5), **Co-host** (no limit). Full spec: `ROLES_AND_CONSOLE_SPEC.md`.
+
+* **Organizer** (master key): everything, including the account (sign-in keys, e-mail, AI link, close account), adds Hosts and Co-hosts, pays.
+* **Host** (`cth_`, `organizer_key.kind = 'host'`): everything inside a game (change game, prizes, brand moments, guest invites, publish, game day, guest list), adds Co-hosts, pays. Cannot touch the account or add a Host. **Honest note: the old `cth_` key, once described here as a "co-host" that could only watch, is now the Host key and its console rights are wider.** Through an AI work link (`x-ct-link`) a Host keeps the narrow rights below (watch, announce, tick prizes).
+* **Co-host** (`ctc_`, kind `cohost`, new): invites people with an own link and sees how many they brought, pays. Everything else answers 403. No AI link. Reads `GET /api/z/{id}/cohost`.
+* Team calls: `GET /api/org/team`, `POST /api/org/host {label?}`, `POST /api/org/cohost {label?}`, `POST /api/org/team/retire {id}`. Payment: any of the three may pay (`POST /api/checkout`); one payment is enough; `payment: {status, paidBy, paidMs}` is in `GET /api/z/{id}/summary`.
+
+## Organizer and Host (AI link) actions: who may do what
+
+| Action (console) | Organizer AI (`cta_`) | Host through an AI link (`cth_`) | Why |
 |---|---|---|---|
 | Create engagement, settings (time, speed, limit, tickets, rewards, breaks, rounds, invite-only, invitation policy) | allowed (draft, before the first number) | no | same as before; invitations added to the summary |
 | Load roster, reuse an earlier list | **no: owner only, in the console** (an AI key gets 403 for any roster call; names and numbers never pass through an AI) | no | corrected 2026-10-06; the earlier "allowed" was out of date |
 | Read summary, participants (ids only), info, results, claims, life, history, pause status | allowed | summary/info/participants/results/life | |
 | Announce to guests | **now allowed** (once published; 160 chars, 1 per 5 s) | allowed | a text to phones, no data or money |
-| Mark a seat organizer/host/co-host, change of phone (unbind) | **now allowed** | no | organizer-level housekeeping, audited |
+| Mark a seat Organizer/Host/Co-host, change of phone (unbind) | **now allowed** | no | organizer-level housekeeping, audited |
 | Read prizes | **now allowed**, mobile numbers cut to the last two digits | allowed (full) | a full number should not travel through an outside chat |
 | Tick "prize given" | **now allowed** (recorded as "organizer's AI") | allowed | |
-| Create a co-host key | **now allowed** (max 5); the answer gives the co-host's own AI link | no | narrow key |
+| Create a Host key | **now allowed** (max 5); the answer gives the Host's own AI link | no | narrow key |
 | Read the AI audit trail | **now allowed** (own) | no | |
 | Report link | status only; the address is withheld | full | the address is a key to every name and number; it is e-mailed to the organizer |
 | Payment | never | never | a human act on the payment page |

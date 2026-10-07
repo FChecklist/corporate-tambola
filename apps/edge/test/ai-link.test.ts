@@ -71,7 +71,7 @@ describe("the paste text and the manual", () => {
     const o = await organizer();
     const hk = await j(await call("POST", "/api/org/host", {}, o.h)); expect(hk.hostKey).toMatch(/^cth_/); expect(hk.manualUrl).toBe(`${ORIGIN}/ai/${hk.hostKey}`);
     const t = await (await linkGet(hk.hostKey)).text();
-    expect(t).toMatch(/co-host's AI assistant/); expect(t).toMatch(/You help a co-host/); expect(t).toContain(`${ORIGIN}/ai/${hk.hostKey}/z/{id}/announce`);
+    expect(t).toMatch(/Host's AI assistant/); expect(t).toMatch(/You help a Host/); expect(t).toContain(`${ORIGIN}/ai/${hk.hostKey}/z/{id}/announce`);
     expect(t).not.toMatch(/PATCH .*settings/); expect(t).not.toContain("/roster"); expect(t).not.toMatch(/org\/host/);
   });
   test("the header-based manifest still works and now lists the new things and the link", async () => {

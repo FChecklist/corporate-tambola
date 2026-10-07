@@ -25,13 +25,13 @@ async function game(o: { h: Record<string, string> }, id: string, startOffset = 
 }
 
 describe("replace the report link (G-07)", () => {
-  test("the organizer makes a new link: the old key stops, the new one works; an AI key, a co-host and strangers cannot", async () => {
+  test("the organizer makes a new link: the old key stops, the new one works; an AI key, a Co-host and strangers cannot", async () => {
     const o = await org(); await game(o, "RPT-1");
     const before = await reportLink(env as any, "RPT-1"); const kOld = before.match(/k=([0-9a-f]{40})/)![1]!;
     const ok = (k: string) => call("GET", `/api/report/RPT-1?k=${k}&part=base`);
     expect((await ok(kOld)).status).not.toBe(403);
-    const hk = await j(await call("POST", "/api/org/host", {}, o.h));
-    for (const hdr of <Record<string, string>[]>[{ "x-organizer": o.ai }, { "x-organizer": hk.hostKey }, {}]) expect((await call("POST", "/api/z/RPT-1/reportlink", {}, hdr)).status).toBe(403);
+    const hk = await j(await call("POST", "/api/org/cohost", {}, o.h));
+    for (const hdr of <Record<string, string>[]>[{ "x-organizer": o.ai }, { "x-organizer": hk.cohostKey }, {}]) expect((await call("POST", "/api/z/RPT-1/reportlink", {}, hdr)).status).toBe(403);
     expect((await ok(kOld)).status).not.toBe(403); // refused callers changed nothing
     const r = await j(await call("POST", "/api/z/RPT-1/reportlink", {}, o.h)); const kNew = r.url.match(/k=([0-9a-f]{40})/)![1]!;
     expect(kNew).not.toBe(kOld); expect((await ok(kOld)).status).toBe(403); expect((await ok(kNew)).status).not.toBe(403);
@@ -64,7 +64,7 @@ describe("Close my organizer account", () => {
     const o = await org(); await game(o, "CLS-3", 0);
     const r = await call("POST", "/api/org/close", { confirm: true }, o.h, T + 5 * 60_000); expect(r.status).toBe(409);
     expect((raw.prepare("SELECT COUNT(*) AS c FROM engagement").get() as any).c).toBe(1);
-    const z = rd("zc.js"); expect(z).toContain("Close my organizer account"); expect(z).toContain("This cannot be undone.");
+    const z = rd("zc.js"); expect(z).toContain("Close my account"); expect(z).toContain("This cannot be undone.");
   });
 });
 

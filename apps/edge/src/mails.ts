@@ -1,4 +1,4 @@
-// The one place that builds an e-mail carrying an AI work link (organizer: cta_, co-host: cth_).
+// The one place that builds an e-mail carrying an AI work link (organizer: cta_, Host: cth_).
 // Rule: a link to the AI work manual travels ONLY in these dedicated mails, to the organizer alone. No other mail (publish, payment, reminders, invoices,
 // report, partners, invitations) and no report/PDF/guest page may carry one: mail scanners open links, forwarded mails leak them, and the key is a credential.
 // The paste text is shown as plain text in a box, never as a hyperlink.
@@ -6,9 +6,9 @@
 import { aiPaste } from "./ai-link";
 
 export const AI_WARNING = "DO NOT FORWARD: this email holds your personal AI work link";
-export const HOST_WARNING = "DO NOT FORWARD: this email holds a co-host AI work link";
+export const HOST_WARNING = "DO NOT FORWARD: this email holds a Host AI work link";
 export const AI_SUBJECT = "Your personal AI work link - Corporate Tambola";
-export const HOST_SUBJECT = "A co-host AI work link for your Corporate Tambola account";
+export const HOST_SUBJECT = "A Host AI work link for your Corporate Tambola account";
 
 export interface BuiltMail { subject: string; text: string; html: string }
 
@@ -67,26 +67,26 @@ export function aiLinkMail(origin: string, key: string, why: "start" | "replace"
   return { subject: AI_SUBJECT, text, html };
 }
 
-/** A co-host's link, e-mailed to the organizer who made it. Role: watch and announce only. `owner` names whose engagements it belongs to. */
+/** A Host's link, e-mailed to the organizer who made it. Role: watch and announce only. `owner` names whose engagements it belongs to. */
 export function coHostLinkMail(origin: string, key: string, owner: string, expiresMs: number): BuiltMail {
   const { text, html } = shell({
     origin, warning: HOST_WARNING,
-    title: "A co-host AI work link",
-    intro: `For the Corporate Tambola engagements of ${owner}. Watch and announce only. Give it to your co-host by pasting the box. Do not forward this email.`,
-    expiry: `THIS CO-HOST LINK WORKS FOR 24 HOURS ONLY (until ${istStamp(expiresMs)}).`,
-    button: { label: "Open my console", url: `${origin}/zc.html`, note: "Your lasting co-host link is in your console." },
-    pasteLabel: "YOUR CO-HOST PASTES THIS INTO AN AI CHAT",
-    paste: aiPaste(origin, key).replace("MY OWN Corporate Tambola account. I am the owner,", `the Corporate Tambola account of ${owner}. I am their co-host,`),
-    steps: ["Copy the box. Give it only to your co-host.", "They paste it into any AI chat.", "They ask how the game is going, or to message the guests."],
+    title: "A Host AI work link",
+    intro: `For the Corporate Tambola engagements of ${owner}. Watch and announce only. Give it to your Host by pasting the box. Do not forward this email.`,
+    expiry: `THIS HOST LINK WORKS FOR 24 HOURS ONLY (until ${istStamp(expiresMs)}).`,
+    button: { label: "Open my console", url: `${origin}/zc.html`, note: "Your lasting Host link is in your console." },
+    pasteLabel: "YOUR HOST PASTES THIS INTO AN AI CHAT",
+    paste: aiPaste(origin, key).replace("MY OWN Corporate Tambola account. I am the owner,", `the Corporate Tambola account of ${owner}. I am their Host,`),
+    steps: ["Copy the box. Give it only to your Host.", "They paste it into any AI chat.", "They ask how the game is going, or to message the guests."],
     can: HOST_CAN, stays: HOST_STAYS,
-    replace: "Retire the co-host key in your console and make a new one. The old link stops at once.",
+    replace: "Retire the Host key in your console and make a new one. The old link stops at once.",
     footer: "",
   });
   return { subject: HOST_SUBJECT, text, html };
 }
 
 /** A plain alert, no link and no key in it: an AI link was used from somewhere new. */
-export function newUseAlertMail(info: { when: string; country: string; program: string; kind: "AI" | "co-host"; origin?: string }): BuiltMail {
+export function newUseAlertMail(info: { when: string; country: string; program: string; kind: "AI" | "Host"; origin?: string }): BuiltMail {
   const text = [
     `Someone new used your ${info.kind} work link`, "",
     `When: ${info.when}`, `Country: ${info.country || "unknown"}`, `Program: ${info.program || "unknown"}`, "",

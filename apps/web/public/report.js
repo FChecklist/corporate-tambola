@@ -33,7 +33,7 @@
     draw(`<div class="zcard"><h2>Your report is ready</h2>
       <p class="zsmall">It was made on this device. Save it now: the participants' details are deleted from our systems by ${esc(new Date(base.personalDeleteAtMs).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }))} IST, and this report cannot be made after that.</p>
       ${files.map((f) => `<p><a class="zbtn" style="display:inline-flex;text-decoration:none;align-items:center" href="${f.url}" download="${esc(f.name)}">Save ${esc(f.name)}</a></p>`).join("")}
-      <p class="zsmall">You can share this link with your co-host. Anyone who has it can read the report, so share it carefully. Open it again later to include any prize you have since marked as given.</p></div>`);
+      <p class="zsmall">You can share this link with a Host. Anyone who has it can read the report, so share it carefully. Open it again later to include any prize you have since marked as given.</p></div>`);
   }
   run().catch((e) => draw(`<div class="zcard"><h2>Something went wrong</h2><p class="zsmall">${esc(e && e.message || "Please try again.")}</p></div>`));
 })();

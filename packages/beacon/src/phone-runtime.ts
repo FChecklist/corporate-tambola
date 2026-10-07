@@ -291,7 +291,7 @@ export class PhoneRuntime {
   private myJr = 0;
   private cap = 0;
   // every phone works out the winners itself from the public seat list
-  private seatList: { pid: string; countFrom: number }[] = [];
+  private seatList: { pid: string; countFrom: number; ex?: boolean }[] = [];
   private seatUpto = 0;
   private seatsFetched = false;
   private lastSeatPoll = -Infinity;
@@ -361,7 +361,7 @@ export class PhoneRuntime {
       const r = await this.deps.api("GET", `/api/z/${this.eid}/seats?after=${this.seatUpto}`);
       if (!r || !r.ready || !Array.isArray(r.seats)) return;
       const known = new Set(this.seatList.map((x) => x.pid));
-      for (const [, pid, jr] of r.seats as [number, string, number][]) if (!known.has(pid)) { known.add(pid); this.seatList.push({ pid, countFrom: countFromOf(jr) }); }
+      for (const [, pid, jr, ex] of r.seats as [number, string, number, number?][]) if (!known.has(pid)) { known.add(pid); this.seatList.push({ pid, countFrom: countFromOf(jr), ex: ex === 1 }); }
       this.seatUpto = Math.max(this.seatUpto, Number(r.upto) || 0);
       this.seatsFetched = true; this.seatsFreshRound = Math.max(this.seatsFreshRound, askedAt);
     } catch { /* the next poll tries again; until then the organizer's published results (if any) are used */ }
@@ -417,7 +417,7 @@ export class PhoneRuntime {
         if (this.seatsFreshRound < round) { this.wantSeats = true; continue; } // the seat list must be at least as new as the draw
         const x = this.store.rounds.get(round) ?? (await fetchRound(round, { ...this.deps.beacon, ...(this.deps.verify ? { verify: this.deps.verify as any } : {}) }, 0));
         if (!x) continue;
-        const pids = this.seatList.filter((s) => s.countFrom <= round).map((s) => s.pid);
+        const pids = this.seatList.filter((s) => s.countFrom <= round && !s.ex).map((s) => s.pid); // the Organizer, Hosts and Co-hosts (flagged before the game) stay out of lucky draws
         this.luckyLocal.push({ ordinal: i + 1, idx: L[i]!.after, round, winners: luckyWinners(this.eid, L[i]!.after, x.randomness, pids, L[i]!.winners || 3) });
       }
     } catch { /* tried again on the next pass */ } finally { this.luckyBusy = false; }

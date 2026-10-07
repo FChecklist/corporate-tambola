@@ -1,5 +1,7 @@
 # Corporate Tambola: the AI work prompt for organizers, hosts, co-hosts and sales people
 
+> Roles update 2026-10-07: the product words are now Organizer, Host (up to 5, key `cth_`; the key older text below calls a "co-host") and Co-host (no limit, key `ctc_`, no AI link; invites people and pays). Where this document says "co-host" for a `cth_` key, read "Host". See `ROLES_AND_CONSOLE_SPEC.md` and `AI_LINK.md`.
+
 Verified 2026-10-06 against the local git tree (HEAD `c8c9f7f`), the live site https://corporate-tambola.pages.dev (GET requests only), and the rendered manual (`manualText()` in `apps/edge/src/ai-link.ts`, 19,842 characters, 43 absolute https addresses). Nothing in the code was changed. Not committed.
 
 Read order: Part B is the thing a person pastes. Part A is the verified address list behind it. Part C is the step-by-step script (the same flows the AI walks through, plus what the human clicks). Part D lists the places where the code, the manual and the requirement disagree.
@@ -349,7 +351,7 @@ Console home: **Get a fresh AI link** (24-hour key, e-mailed, at most 5 live), *
 
 ## C22. Co-host
 
-Console card "Co-host" -> **Create a co-host link** -> **Copy co-host link** (shown once). Or the AI: `POST <L>/org/host {}` -> `{hostKey, manualUrl}`. Give it to the owner only, with: send it privately to that one person; it can watch, message everyone and tick prizes, nothing else; the owner can retire it in "Your sign-in keys" -> Retire.
+Console "Your team" -> add a Host (up to 5) -> copy the private link (shown once). Or the AI: `POST <L>/org/host {}` -> `{hostKey, manualUrl}`. Give it to the owner only, with: send it privately to that one person; through an AI link it can watch, message everyone and tick prizes, nothing else (in the console a Host runs the whole game, but not the account); Co-hosts (no limit) are added in the console only; the owner can retire it in "Your sign-in keys" -> Retire.
 
 ## C23. Closing checklist
 
