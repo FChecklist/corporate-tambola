@@ -10,6 +10,10 @@
   let secret = ss.get("ctz-org") || "";
   { const m = location.hash.match(/^#host=(cth_[0-9a-f]{48})$/); if (m) { secret = m[1]; ss.set("ctz-org", secret); history.replaceState(null, "", location.pathname + location.search); } }
   let eid = q.get("e") || "";
+  const ACT = (q.get("do") || "").toLowerCase(); // a hand-over link from the AI assistant: opens the exact card; the organizer presses the button
+  const QUICK = q.get("quick") === "1";
+  // A browser AI may open this page in a new tab, and a tab holds the key only for itself: another open tab of the same browser can hand it over (same site, same browser, never stored).
+  const bc = typeof BroadcastChannel === "function" ? new BroadcastChannel("ctz-org-key") : null;
   const NAMES = { full2: "Full Two-Ticket House", early5: "Early Five", top: "Top line", mid: "Middle line", bot: "Bottom line", corners: "Four corners", star: "Star", full: "Full house" };
   const call = async (method, path, body) => {
     const r = await fetch(BASE + path, { method, headers: { "content-type": "application/json", "x-organizer": secret }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -48,9 +52,10 @@
       <p style="margin:0 0 10px">It sets everything up. You keep four things: payment, Publish, erasing data, pause or stop.</p>
       ${ai}
       <hr style="border:0;border-top:1px solid #e6d9b8;margin:16px 0">
-      <div class="zsmall" style="font-weight:700;letter-spacing:.06em;color:#555">OPTION 2 · DO IT YOURSELF</div>
-      <p style="margin:6px 0 8px">Prefer to click? Create your engagement by hand.</p>
-      <a class="zbtn s alt" href="#newform" style="text-decoration:none;display:inline-block">Create engagement manually ↓</a>
+      <div class="zsmall" style="font-weight:700;letter-spacing:.06em;color:#555">OPTION 2 · AI IN YOUR BROWSER, OR DO IT YOURSELF</div>
+      <p style="margin:6px 0 8px">Use an AI that works in your web browser (Claude in Chrome, Gemini in Chrome, ChatGPT Atlas, Perplexity Comet): switch on <b>AI helper mode</b> above, so it never sees a guest's name or number, then ask it to open this page and set up your game with the Quick setup form. It stops at Publish, erase, pause and stop, and it never pays.</p>
+      <p style="margin:6px 0 8px">Prefer to click yourself?</p>
+      <a class="zbtn s" href="/zc.html?quick=1" style="text-decoration:none;display:inline-block">Quick setup form (date and time pickers)</a> <a class="zbtn s alt" href="#newform" style="text-decoration:none;display:inline-block">Create engagement manually ↓</a>
       <p class="zsmall" style="margin:12px 0 0">New here? <a href="/demo.html" target="_blank" rel="noopener">Try the free 70-second demo</a> first: a real mini-game, nothing to type.</p></div>`;
   }
   function homeView() {
@@ -58,7 +63,7 @@
     const last = h && h.engagements[0];
     const bar = last ? `<div class="lastbar"><span>LAST ENGAGEMENT WAS ON <b>${fmtDay(last.created_ms)}</b> · ${last.participants} participants</span><span><button data-reuse="${esc(last.id)}">REUSE THE DATA</button><button data-hist="1">HISTORY</button></span></div>` : "";
     const hist = S.showHist && h ? `<div class="zcard"><h2>History · kept ${h.retentionDays} days</h2><table>${h.engagements.map((e) => `<tr><td>${esc(e.id)}</td><td>${fmtDay(e.created_ms)}</td><td>${e.participants} people${e.draft ? " · draft" : ""}</td><td><button class="zbtn s alt" data-open="${esc(e.id)}">Open</button><button class="zbtn s alt" data-reuse="${esc(e.id)}">Reuse</button></td></tr>`).join("")}</table></div>` : "";
-    return `<div class="zhead"><b>Corporate Tambola · Organizer</b></div>${optionsCard()}${bar}${hist}
+    return `<div class="zhead"><b>Corporate Tambola · Organizer</b></div>${shieldSwitch()}${optionsCard()}${bar}${hist}
       <div class="zcard zform" id="newform"><h2>Create your engagement</h2>
       <label for="mins">Starts in (minutes)</label><input id="mins" type="number" min="1" max="1440" value="10">
       <label for="spd">Calling speed</label><select id="spd"><option value="6">Fast · 6 seconds</option><option value="9" selected>Normal · 9 seconds</option><option value="12">Relaxed · 12 seconds</option><option value="15">Slow · 15 seconds</option></select>
@@ -98,6 +103,7 @@
       <p class="zsmall">The software picks the winners from everyone who joined, using public random numbers. You and we cannot choose them. A winner is confirmed when several phones agree.</p></div>`;
   }
   async function namesFor(ids) {
+    if (S.shield) return; // AI helper mode: names are never fetched
     const nm = S.nameCache || (S.nameCache = new Map()), want = ids.filter((p) => !nm.has(p));
     for (let i = 0; i < want.length; i += 50) { try { const r = await call("GET", `/api/z/${eid}/names?pids=${want.slice(i, i + 50).join(",")}`); for (const [k, v] of Object.entries(r.names || {})) nm.set(k, v); } catch { /* shown as Participant */ } }
   }
@@ -225,10 +231,10 @@
     const c = S.control;
     const paused = c && c.pausedNow;
     return `<div class="zhead"><b>Corporate Tambola · ${esc(eid)}</b><button class="zsnd" id="back">All engagements</button></div>
-      ${S.note ? `<div class="zbanner info">${esc(S.note)}</div>` : ""}
+      ${actBanner()}${shieldSwitch()}${S.note ? `<div class="zbanner info">${esc(S.note)}</div>` : ""}
       ${payDueCard()}
       ${announceCard()}${hostsCard()}
-      ${S.draft ? `<div class="zcard" style="border:2px solid #c9a24a"><h2>Your engagement is a draft</h2><p class="zsmall" style="margin-top:0">Set it up first (by hand or with your AI) and watch it take shape here. Participants cannot see or join a draft. When you are happy with it, publish it: <b>publishing is free</b>. You confirm your details, get your link, and send it to everyone. You pay before the start time, and it begins the moment you have.</p>${S.pubOpen ? `<label for="pubEmail">Your email (for the invoice)</label><input id="pubEmail" type="email" value="${esc(S.contact.email)}" autocomplete="email"><label for="pubPhone">Your mobile number</label><input id="pubPhone" type="tel" value="${esc(S.contact.phone)}" autocomplete="tel" placeholder="98765 43210"><button class="zbtn" id="pubgo">Confirm and publish</button><button class="zbtn s alt" id="pubcancel">Back</button>` : `<button class="zbtn" id="publishopen">Publish my engagement, free</button>`}${S.pubNote ? `<p class="zsmall"><b>${esc(S.pubNote)}</b></p>` : ""}</div>` : `<div class="zcard"><h2>Share with participants</h2><div class="zlink">${esc(link)}</div><button class="zbtn s alt" id="copy">Copy link</button><a class="zbtn s alt" href="/big.html?e=${encodeURIComponent(eid)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block">Open the big screen</a><p class="zsmall">The big screen shows the numbers to a whole room on a projector or TV. Open it on the laptop that is connected to the screen.</p></div>`}
+      ${S.draft ? `<div class="zcard" style="border:2px solid #c9a24a"><h2>Your engagement is a draft</h2><p class="zsmall" style="margin-top:0">Set it up first (by hand or with your AI) and watch it take shape here. Participants cannot see or join a draft. When you are happy with it, publish it: <b>publishing is free</b>. You confirm your details, get your link, and send it to everyone. You pay before the start time, and it begins the moment you have.</p>${S.pubOpen ? `<label for="pubEmail">Your email (for the invoice)</label><input id="pubEmail" type="email" value="${S.shield ? "" : esc(S.contact.email)}" autocomplete="email"><label for="pubPhone">Your mobile number</label><input id="pubPhone" type="tel" value="${S.shield ? "" : esc(S.contact.phone)}" autocomplete="tel" placeholder="98765 43210"><button class="zbtn" id="pubgo">Confirm and publish</button><button class="zbtn s alt" id="pubcancel">Back</button>` : `<button class="zbtn" id="publishopen">Publish my engagement, free</button>`}${S.pubNote ? `<p class="zsmall"><b>${esc(S.pubNote)}</b></p>` : ""}</div>` : `<div class="zcard"><h2>Share with participants</h2><div class="zlink">${esc(link)}</div><button class="zbtn s alt" id="copy">Copy link</button><a class="zbtn s alt" href="/big.html?e=${encodeURIComponent(eid)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block">Open the big screen</a><p class="zsmall">The big screen shows the numbers to a whole room on a projector or TV. Open it on the laptop that is connected to the screen.</p></div>`}
       <div class="zgrid"><div class="zcard"><h2>Participants</h2><div class="zstat">${S.people.length}</div></div><div class="zcard"><h2>Numbers called${S.cfg.rounds > 1 ? " · round " + S.round + " of " + S.cfg.rounds : ""}</h2><div class="zstat">${S.log.length} / 90</div></div></div>
       ${(S.reqs || []).length ? `<div class="zcard"><h2>Your AI assistant is asking</h2>${S.reqs.map((r) => `<div class="zrow"><span>${esc(r.action)}${r.note ? " · " + esc(r.note) : ""}</span></div>`).join("")}<button class="zbtn s${S.reqs[0].action === "erase" ? " bad" : ""}" id="reqok">${S.reqs[0].action === "erase" ? "Confirm: delete all participant data" : "Approve (" + esc(S.reqs[0].action) + ")"}</button><button class="zbtn s alt" id="reqno">Dismiss</button></div>` : ""}
       ${statsCard()}${playCard()}
@@ -246,7 +252,7 @@
         ${S.settledPreview.length ? S.settledPreview.map((s) => `<div class="zrow"><span>${esc(lineLabel(s))} · call ${s.idx + 1}</span><em>${s.pids.length} participant${s.pids.length === 1 ? "" : "s"}${s.names ? " · " + esc(s.names) : ""}</em></div>`).join("") : "<p class=zsmall>No pattern is complete yet.</p>"}
         <p class="zsmall">Claims received: ${S.claims.length}. ${bad ? `<b>${bad} not valid</b> (they do not match the public log and are ignored).` : "All claims so far match the public log."}</p>
         <p class="zsmall">Numbers come from a public random beacon. Winners are confirmed when several phones agree. You and we cannot choose or change them in the software. Confirmed so far: ${(S.published || []).filter((r) => r.pattern !== "lucky").length}.</p>
-        <button class="zbtn s alt" id="csv" ${S.settledPreview.length ? "" : "disabled"}>Download report</button></div>
+        <button class="zbtn s alt" id="csv" ${S.settledPreview.length && !S.shield ? "" : "disabled"}>Download report</button></div>
       <div class="zcard zform"><h2>Add people</h2>
         <p class="zsmall" style="margin-top:0">One person per line: name, mobile number. Names and numbers stay here: your AI never sees them.</p>
         <label for="rosterTxt">Your list</label><textarea id="rosterTxt" class="inp" rows="5" placeholder="Asha, 98765 43210" autocomplete="off"></textarea><button class="zbtn s" id="rosterGo">Add them</button></div>
@@ -259,6 +265,74 @@
       ${dataCard()}
       ${aiAuditCard()}`;
   }
+
+  // ---------- Quick setup: the same five screens as one form, with a real date and time picker (the AI route and the browser-AI route both use it) ----------
+  const QHOUSES = [["early5", "Early Five"], ["top", "Top line"], ["mid", "Middle line"], ["bot", "Bottom line"], ["corners", "Four corners"], ["star", "Star"], ["full", "Full house"]];
+  const QBUNDLES = { classic: { early5: 1, top: 1, mid: 1, bot: 1, full: 1 }, simple: { early5: 1, full: 1 }, rich: { early5: 1, top: 1, mid: 1, bot: 1, corners: 1, star: 1, full: 3 } };
+  const QOCC = [["Diwali party", "DIWALI"], ["Dealer meet", "DEALER-MEET"], ["Annual day", "ANNUAL-DAY"], ["Team party", "TEAM-PARTY"], ["Customer event", "CUSTOMER-EVENT"], ["Family day", "FAMILY-DAY"], ["Corporate event", "EVENT"]];
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const istNow = () => new Date(Date.now() + 5.5 * 3600000);
+  const istDateStr = (d) => `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+  function quickView() {
+    const tomorrow = new Date(istNow().getTime() + 86400000);
+    const packs = (S.packs || []).map((k) => `<option value="${k.upTo}" ${k.upTo === 250 ? "selected" : ""}>Up to ${k.upTo} people: Rs ${Number(k.inr_including_gst).toLocaleString("en-IN", { minimumFractionDigits: 2 })} including GST (about USD ${k.usd})</option>`).join("");
+    const houses = QHOUSES.map(([k, n]) => `<div class="zgrid" style="margin-bottom:6px;align-items:end"><label style="display:flex;gap:6px;align-items:center;font-weight:700;margin:0" for="qk-h-${k}"><input type="checkbox" id="qk-h-${k}" data-qh="${k}" style="width:auto;min-height:0" ${QBUNDLES.classic[k] ? "checked" : ""}> ${n}</label><div><label for="qk-n-${k}">Winners</label><select id="qk-n-${k}">${[1, 2, 3, 4, 5].map((x) => `<option value="${x}">${x}</option>`).join("")}</select></div><div style="grid-column:1/-1"><label for="qk-t-${k}">What is the prize? (up to 80 characters; you can fill this in later)</label><input id="qk-t-${k}" maxlength="80"></div></div>`).join("");
+    return `<div class="zhead"><b>Corporate Tambola · Quick setup</b><button class="zsnd" id="back">All engagements</button></div>${shieldSwitch()}
+      <div class="zcard zform"><h2>1. Which game?</h2>
+        <label for="qk-name">Name of the game (optional)</label><input id="qk-name" maxlength="60" placeholder="Diwali party">
+        <label for="qk-occ">Occasion</label><select id="qk-occ">${QOCC.map(([l, c]) => `<option value="${c}">${l}</option>`).join("")}</select>
+        <label for="qk-date">Day (India time)</label><input id="qk-date" type="date" value="${istDateStr(tomorrow)}" min="${istDateStr(istNow())}">
+        <label for="qk-time">Start time (India time)</label><input id="qk-time" type="time" value="16:00" step="300">
+        <p class="zsmall" style="margin:4px 0 0">Guests can join before. The first number is called 2 minutes after the start time. Choose a time at least 2 hours ahead.</p></div>
+      <div class="zcard zform"><h2>2. How will it play?</h2>
+        <label for="qk-cap">How many people at most? (people invited by your guests count too)</label><select id="qk-cap">${packs || '<option value="250">Up to 250</option>'}</select>
+        <fieldset style="border:0;padding:0;margin:10px 0 0"><legend style="font-weight:700">Tickets for each person</legend><label style="display:inline;font-weight:400" for="qk-t1"><input type="radio" name="qk-tix" id="qk-t1" value="1" checked style="width:auto;min-height:0"> 1 ticket</label> <label style="display:inline;font-weight:400" for="qk-t2"><input type="radio" name="qk-tix" id="qk-t2" value="2" style="width:auto;min-height:0"> 2 tickets (more chances)</label></fieldset>
+        <label for="qk-spd">Speed</label><select id="qk-spd"><option value="6">Fast: a number every 6 seconds</option><option value="9" selected>Normal: every 9 seconds (recommended)</option><option value="12">Relaxed: every 12 seconds</option><option value="15">Slow: every 15 seconds</option></select>
+        <label for="qk-rnd">Rounds</label><select id="qk-rnd">${[1, 2, 3, 4, 5].map((n) => `<option value="${n}">${n} round${n === 1 ? "" : "s"}</option>`).join("")}</select>
+        <fieldset style="border:0;padding:0;margin:10px 0 0"><legend style="font-weight:700">Who can join?</legend><label style="display:inline;font-weight:400" for="qk-j1"><input type="radio" name="qk-join" id="qk-j1" value="open" checked style="width:auto;min-height:0"> Anyone with the link</label> <label style="display:inline;font-weight:400" for="qk-j2"><input type="radio" name="qk-join" id="qk-j2" value="closed" style="width:auto;min-height:0"> Only people on my list</label></fieldset>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:10px" for="qk-inv"><input type="checkbox" id="qk-inv" style="width:auto;min-height:0"> Let each guest invite up to 4 family or colleagues</label></div>
+      <div class="zcard zform"><h2>3. Prizes</h2>
+        <fieldset style="border:0;padding:0;margin:0 0 8px"><legend style="font-weight:700">Start from</legend><label style="display:inline;font-weight:400" for="qk-b1"><input type="radio" name="qk-bundle" id="qk-b1" value="classic" checked style="width:auto;min-height:0"> Classic</label> <label style="display:inline;font-weight:400" for="qk-b2"><input type="radio" name="qk-bundle" id="qk-b2" value="simple" style="width:auto;min-height:0"> Simple (Early Five and Full house)</label> <label style="display:inline;font-weight:400" for="qk-b3"><input type="radio" name="qk-bundle" id="qk-b3" value="rich" style="width:auto;min-height:0"> Rich (every house)</label></fieldset>${houses}
+        <p class="zsmall" style="margin:4px 0 0">You give the prizes; we only provide the software. Videos, messages and a lucky draw are added on the next page.</p></div>
+      <div class="zcard zform"><h2>4. Check and save</h2><div id="qk-summary" class="zsmall" aria-live="polite"></div><div id="qk-err" class="zbanner bad" role="alert" style="display:none"></div>
+        <button class="zbtn" id="qk-save" type="button">Yes, save my draft</button><p class="zsmall">Nothing is charged. Nobody else can see a draft. Next you publish it (free) and pay before the start time.</p></div>`;
+  }
+  function quickRead() {
+    const v = (id) => document.getElementById(id).value, chk = (id) => document.getElementById(id).checked, radio = (name) => (document.querySelector(`input[name="${name}"]:checked`) || {}).value;
+    const [y, mo, d] = v("qk-date").split("-").map(Number), [h, mi] = (v("qk-time") || "16:00").split(":").map(Number);
+    const startMs = Date.UTC(y, mo - 1, d, h, mi) - 5.5 * 3600000;
+    const rewards = []; for (const [k] of QHOUSES) if (chk("qk-h-" + k)) { const n = Number(v("qk-n-" + k)) || 1, t = v("qk-t-" + k).trim().slice(0, 80); for (let o = 1; o <= n; o++) rewards.push({ pattern: k, ordinal: o, text: t }); }
+    return { name: v("qk-name").trim(), occ: v("qk-occ"), startMs, cap: Number(v("qk-cap")), tickets: Number(radio("qk-tix")) || 1, speed: Number(v("qk-spd")), rounds: Number(v("qk-rnd")), closed: radio("qk-join") === "closed", invite: chk("qk-inv"), rewards };
+  }
+  function bindQuick() {
+    const $q = (id) => document.getElementById(id);
+    const sum = () => {
+      try { const r = quickRead(); const when = new Date(r.startMs + 5.5 * 3600000).toISOString(); const ok = r.startMs > Date.now();
+        $q("qk-summary").textContent = `${r.name || "Your game"}: ${when.slice(0, 10)} at ${when.slice(11, 16)} India time${ok ? "" : " (that time has passed: choose a later one)"}; up to ${r.cap} people; ${r.tickets} ticket${r.tickets === 1 ? "" : "s"} each, a number every ${r.speed} seconds, ${r.rounds} round${r.rounds === 1 ? "" : "s"}; ${r.closed ? "only people on your list" : "anyone with the link"}; ${r.rewards.length} prize${r.rewards.length === 1 ? "" : "s"}.`; } catch { $q("qk-summary").textContent = ""; }
+    };
+    document.querySelectorAll('[name="qk-bundle"]').forEach((b) => (b.onchange = () => { const set = QBUNDLES[b.value]; for (const [k] of QHOUSES) { $q("qk-h-" + k).checked = !!set[k]; $q("qk-n-" + k).value = String(set[k] || 1); } sum(); }));
+    $app.querySelectorAll("input,select").forEach((x) => x.addEventListener("input", sum)); sum();
+    $q("qk-save").onclick = async () => {
+      const err = $q("qk-err"); err.style.display = "none";
+      try {
+        const r = quickRead(); if (!(r.startMs > Date.now())) throw new Error("Please choose a start time in the future (at least 2 hours ahead is best).");
+        if (!r.rewards.length) throw new Error("Tick at least one prize.");
+        const md = new Date(r.startMs + 5.5 * 3600000), base = `${(r.name ? r.name.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) : "") || r.occ}-${pad2(md.getUTCMonth() + 1)}${pad2(md.getUTCDate())}`.slice(0, 36);
+        let id = base, made = null;
+        for (let i = 1; i <= 9 && !made; i++) {
+          id = i === 1 ? base : `${base}-${i}`;
+          const res = await call("POST", "/api/z", { id, ...(r.name ? { name: r.name } : {}), startRound: ZG.roundAt(r.startMs), callSeconds: r.speed, cap: r.cap, tickets: r.tickets, rounds: r.rounds, rewards: r.rewards, closed: r.closed });
+          if (!res.existed) made = res;
+        }
+        if (!made) throw new Error("Could not find a free game code. Try a different name.");
+        if (r.invite) await call("PATCH", `/api/z/${id}/settings`, { invites: { on: true, per: 4, cats: ["family", "colleagues"] } });
+        let k = { ok: false, reason: "" }; try { k = await TBControl.ensureKey(id, { token: secret, base: BASE, prefix: "/api/z" }); } catch { /* the pause key is optional: the game does not depend on it */ }
+        S.note = "Your draft is saved. Add your brand messages, videos or a lucky draw below if you want, then publish it (free)." + (k.ok || !k.reason ? "" : " Pause control is unavailable: " + k.reason);
+        eid = id; history.replaceState(null, "", "?e=" + id + (BASE ? "&api=" + encodeURIComponent(BASE) : "")); S.store = null; lastHtml = ""; refreshEng();
+      } catch (e) { err.textContent = e.message; err.style.display = ""; }
+    };
+  }
+  async function openQuick() { try { S.packs = (await fetch(BASE + "/api/z/ai-manifest").then((r) => r.json())).packs || []; } catch { S.packs = []; } draw(quickView()); }
   const ist = (ms) => new Date(ms + 5.5 * 3600000).toISOString().replace("T", ", ").slice(0, 20) + " IST";
   /** The moment the numbers start, the console shows how the game is going: who is in, who came late, who came through an invitation. */
   function statsCard() {
@@ -291,7 +365,7 @@
   function prizeCard() {
     const P = S.prizes || [];
     if (!S.started || S.draft) return "";
-    const rows = P.map((p, i) => `<div class="zrow" style="align-items:flex-start;gap:8px"><span style="flex:1"><b>${esc(p.name || "Participant")}</b> &middot; ${esc(p.phone || "")}<br><small class="zsmall" style="margin:0">${esc(prizeName(p))}${p.round > 1 ? " · round " + p.round : ""}${p.confirmed ? " · confirmed by the winner " + esc(dmy(p.confirmedMs)) : " · not confirmed by the winner yet"}</small>${p.changed ? `<br><small style="color:#b3261e"><b>Changed after the game.</b> Joined as ${esc(p.joinedWithName || "?")} · ${esc(p.joinedWithPhone || "?")}${(p.trail || []).map((t) => "; on " + esc(dmy(t.at)) + " changed to " + esc(t.name) + " · " + esc(t.phone)).join("")}</small>` : ""}</span>
+    const rows = P.map((p, i) => `<div class="zrow" style="align-items:flex-start;gap:8px"><span style="flex:1"><b>${S.shield ? "Ticket " + esc(String(p.seat)) : esc(p.name || "Participant")}</b>${S.shield ? "" : " &middot; " + esc(p.phone || "")}<br><small class="zsmall" style="margin:0">${esc(prizeName(p))}${p.round > 1 ? " · round " + p.round : ""}${p.confirmed ? " · confirmed by the winner " + esc(dmy(p.confirmedMs)) : " · not confirmed by the winner yet"}</small>${p.changed && !S.shield ? `<br><small style="color:#b3261e"><b>Changed after the game.</b> Joined as ${esc(p.joinedWithName || "?")} · ${esc(p.joinedWithPhone || "?")}${(p.trail || []).map((t) => "; on " + esc(dmy(t.at)) + " changed to " + esc(t.name) + " · " + esc(t.phone)).join("")}</small>` : ""}</span>
       <label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" style="width:auto;min-height:0" data-given="${i}" ${p.given ? "checked" : ""}> Prize given${p.given ? " " + esc(dmy(p.givenMs)) + (p.givenBy ? " by " + esc(p.givenBy) : "") : ""}</label></div>`).join("");
     return `<div class="zcard"><h2>Winners and prize hand-over</h2>${rows || "<p class=zsmall>No winner is confirmed yet.</p>"}
       <p class="zsmall">After the game each winner confirms their name and mobile number on their own phone. Anything they change is shown here together with what they joined with. Tick "Prize given" when you hand the prize over: the date is kept. These details are kept for 365 days with your engagement record.</p></div>`;
@@ -322,13 +396,53 @@
       ${S.life && S.life.reportSent && !S.life.purged ? `<button class="zbtn s" id="rptopen" style="margin-top:8px">Open the report now</button> <button class="zbtn s alt" id="rptnew" style="margin-top:8px">New report link</button> ` : ""}<button class="zbtn s alt" id="erase" style="margin-top:8px">Delete all participant data now</button>
       <p class="zsmall">You can also e-mail us from your registered address, or ask your AI assistant to request the deletion and then confirm it here. The report is e-mailed first when the game has already ended.</p></div>`;
   }
-  function draw(v) { $app.innerHTML = v; bind(); }
+  // ---------- AI helper mode: an AI that works in the browser reads this page, so the mode hides every guest's name and mobile number (and the organizer's own e-mail and mobile) ----------
+  S.shield = ss.get("ctz-shield") === "1";
+  const shieldSwitch = () => `<div class="zcard" style="padding:8px 12px"><label style="display:flex;gap:8px;align-items:center;font-weight:700;margin:0" for="shield"><input type="checkbox" id="shield" style="width:auto;min-height:0" ${S.shield ? "checked" : ""}> AI helper mode</label><div class="zsmall" style="margin:2px 0 0">${S.shield ? "ON: guests' names and mobile numbers are hidden on this page, so an AI that works in your browser cannot see them. To load your guest list, look up a guest or move a ticket to a new phone, switch this off." : "Using an AI that works in your browser (Claude in Chrome, Gemini in Chrome, ChatGPT Atlas, Comet)? Switch this on first: it hides every guest's name and mobile number from the AI."}</div></div>`;
+  const ACTTEXT = { publish: "Publishing is free. Check your e-mail and mobile number, then press \"Confirm and publish\" yourself.", erase: "Press \"Delete all participant data now\" only if you want every guest's name and number erased. It cannot be undone.", pause: "Press \"Pause\" to pause the running game for everyone.", stop: "Press \"End engagement\" only if the game should end for everyone. It cannot be undone." };
+  const actBanner = () => (ACT && ACTTEXT[ACT] && eid ? `<div class="zbanner info" role="status" id="actbanner"><b>Your AI assistant brought you here.</b> ${ACTTEXT[ACT]} Nobody but you can press it.</div>` : "");
+  function markAct() { // the one button the AI asked about is outlined and scrolled into view; it is never pressed for you
+    if (!ACT || !eid || S.actMarked === eid + ACT) return;
+    const el = ACT === "publish" ? document.getElementById("pubgo") || document.getElementById("publishopen") : ACT === "erase" ? document.getElementById("erase") : document.querySelector(`[data-ctl="${ACT === "stop" ? "stop" : "pause"}"]`);
+    if (!el) return; S.actMarked = eid + ACT; el.style.outline = "4px solid #E4572E"; el.style.outlineOffset = "3px"; try { el.scrollIntoView({ block: "center" }); } catch { /* not every browser */ }
+  }
+  /** Every field gets a label that is really linked to it, every note is announced, every button has a name: an AI (or a screen reader) reads the page by these. */
+  function a11y() {
+    let n = 0;
+    $app.querySelectorAll("label").forEach((l) => {
+      if (l.getAttribute("for") || l.querySelector("input,select,textarea")) return;
+      const t = l.nextElementSibling; const ctl = t && (/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) ? t : t.querySelector && t.querySelector("input,select,textarea"));
+      if (!ctl) return;
+      if (!ctl.id) { const d = ctl.dataset || {}; ctl.id = "f-" + (d.bk ? "bk-" + d.bk : d.op ? "op-" + d.op : d.cl ? "cl-" + d.cl : "x" + ++n) + (d.i !== undefined ? "-" + d.i : ""); }
+      l.setAttribute("for", ctl.id);
+    });
+    $app.querySelectorAll("input,select,textarea").forEach((c) => { if (!c.getAttribute("aria-label") && !(c.id && $app.querySelector(`label[for="${c.id}"]`)) && !c.closest("label")) { const ph = c.getAttribute("placeholder"); if (ph) c.setAttribute("aria-label", ph); } });
+    $app.querySelectorAll(".zbanner:not([role]), .zsmall[id]:not([role])").forEach((b) => { if (b.classList.contains("zbanner")) b.setAttribute("role", "status"); });
+    $app.querySelectorAll("button:not([aria-label])").forEach((b) => { if (!b.textContent.trim() && b.title) b.setAttribute("aria-label", b.title); });
+  }
+  function applyShield() {
+    if (!S.shield) return;
+    const note = `<div class="zcard" id="shieldnote"><h2>Guest names and numbers are hidden</h2><p class="zsmall" style="margin:0">AI helper mode is on, so this page does not show or take any guest's name or mobile number: the guest list, looking up a guest, moving a ticket to a new phone, marking a seat and the report. Switch AI helper mode off (at the top) to use them yourself.</p></div>`;
+    let noted = false;
+    for (const id of ["roster", "rosterTxt", "pdph", "ubph", "mkph", "rptopen", "rptnew"]) {
+      const el = document.getElementById(id); if (!el) continue;
+      const card = el.closest(".zcard"); if (!card) { el.remove(); continue; }
+      const closed = id === "roster" ? document.getElementById("closed") : null; const lbl = closed ? closed.closest("label") : null;
+      if (!noted) { card.insertAdjacentHTML("beforebegin", note); noted = true; }
+      if (lbl) { const holder = document.getElementById("shieldnote"); if (holder) holder.appendChild(lbl); }
+      if (card.id !== "shieldnote") card.remove();
+    }
+  }
+  let lastHtml = "";
+  /** Redraws only when something really changed: an AI (or a person) working on the page keeps the same elements instead of having them replaced every few seconds. */
+  function draw(v) { if (v === lastHtml && $app.firstChild) return; lastHtml = v; $app.innerHTML = v; bind(); a11y(); applyShield(); markAct(); }
 
   async function refreshHome() { try { S.keys = (await call("GET", "/api/org/keys")).keys; } catch { S.keys = []; } try { S.sugs = (await call("GET", "/api/z/suggestions")).suggestions.slice(0, 6); } catch { S.sugs = []; } try { S.history = await call("GET", "/api/history"); } catch (e) { if (e.status === 403) { secret = ""; return draw(loginView("That organizer key was not accepted.")); } } draw(homeView()); }
 
   async function refreshEng() {
     try {
       S.info = await call("GET", `/api/z/${eid}/info`); S.draft = !!S.info.draft; S.unpaid = !!S.info.unpaid; S.locked = !!S.info.locked;
+      if (ACT === "publish" && S.draft && !S.actOpened) { S.pubOpen = true; S.actOpened = true; } // the AI's hand-over link: the publish card is open and waiting for the organizer's own tap
       let pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed;
       while (S.people.length < pr.total) { const more = await call("GET", `/api/z/${eid}/participants?offset=${S.people.length}`); if (!more.participants.length) break; S.people.push(...more.participants); } // a long list arrives in pages
       S.cfg = { tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, opening: pr.opening || [], closing: pr.closing || [], rounds: pr.rounds || 1, invites: pr.invites };
@@ -365,7 +479,7 @@
       const settled = [];
       for (let r = 1; r <= S.cfg.rounds; r++) if (S.logs[r].length) settled.push(...ZG.settleAll(eid, pids, S.logs[r], S.cfg, r, { countFrom: cfOf, callRounds: callRoundsOf[r] }));
       await namesFor([...new Set(settled.filter((x) => x.pids.length <= 3).flatMap((x) => x.pids))]);
-      S.settledPreview = settled.map((x) => ({ ...x, names: x.pids.length <= 3 ? x.pids.map((p) => nm.get(p) || "Participant").join(", ") : "" }));
+      S.settledPreview = settled.map((x) => ({ ...x, names: x.pids.length <= 3 && !S.shield ? x.pids.map((p) => nm.get(p) || "Participant").join(", ") : "" }));
       S.lucky = await computeLucky(now);
       try { S.life = await call("GET", `/api/z/${eid}/life`); } catch { S.life = null; }
       if (S.started && !S.draft) { try { S.prizes = (await call("GET", `/api/z/${eid}/prizes`)).prizes || []; } catch { S.prizes = S.prizes || []; } try { S.published = (await fetch(BASE + `/api/z/${eid}/results`).then((r) => r.json())).results || []; } catch { /* shown next time */ } } // the software decides the winners; this page only watches
@@ -375,6 +489,8 @@
 
   function bind() {
     const $ = (id) => document.getElementById(id);
+    if ($("shield")) $("shield").onchange = () => { S.shield = $("shield").checked; ss.set("ctz-shield", S.shield ? "1" : "0"); S.nameCache = null; lastHtml = ""; if (QUICK && !eid) return draw(quickView()); if (eid) refreshEng(); else draw(homeView()); };
+    if ($("qk-save")) bindQuick();
     if ($("goLogin")) $("goLogin").onclick = () => { try { sessionStorage.setItem("ctz-next", location.pathname + location.search); } catch {} };
     if ($("in")) $("in").onclick = () => { secret = $("sec").value.trim(); ss.set("ctz-org", secret); refreshHome(); };
     if ($("mk")) $("mk").onclick = async () => {
@@ -528,12 +644,20 @@
 
   // TEST mode (owner-controlled, see docs/TEST_AND_LIVE_MODE.md): a calm notice in the organizer console ONLY. Public pages, participant phones and e-mails never carry it.
   (async () => { try { const m = await (await fetch(BASE + "/api/mode", { cache: "no-store" })).json(); if (m && m.mode === "TEST" && !document.getElementById("testmode")) { const b = document.createElement("div"); b.id = "testmode"; b.className = "ztest"; b.setAttribute("role", "status"); b.textContent = "TEST MODE: nothing here is real. No one outside the owner’s test list is e-mailed, and nothing is charged."; const app = document.getElementById("app"); app.parentNode.insertBefore(b, app); } } catch (e) { /* no banner when the mode cannot be read */ } })();
-  (async () => {
+  let inited = false;
+  async function init() {
+    inited = true;
     if (secret) { try { S.role = (await call("GET", "/api/whoami")).kind === "host" ? "host" : ""; } catch { /* an old or wrong key is handled by the screens below */ } }
     if (!secret) draw(loginView(""));
     else if (S.role === "host" && !eid) draw(`<div class="zhead"><b>Corporate Tambola · Co-host</b></div><div class="zcard"><p style="margin:0">Open the co-host link your organizer sent you. It opens the engagement directly.</p></div>`);
-    else if (eid) refreshEng(); else refreshHome();
-  })();
-  setInterval(() => { const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; /* never wipe what the organizer is typing */ if (!secret || document.hidden) return; if (eid) refreshEng(); else if (S.role !== "host") refreshHome(); }, 5000);
+    else if (eid) refreshEng(); else if (QUICK) openQuick(); else refreshHome();
+  }
+  if (bc) bc.onmessage = async (e) => { // another tab offers its key: use it only if it really works (an old or foreign key is ignored)
+    const d = e.data || {};
+    if (d.ask && secret && S.role !== "host") bc.postMessage({ key: secret });
+    else if (d.key && !secret && !inited) { try { const r = await fetch(BASE + "/api/whoami", { headers: { "x-organizer": String(d.key) } }); if (r.ok && !secret && !inited) { secret = String(d.key); ss.set("ctz-org", secret); init(); } } catch { /* offline: ignore */ } }
+  };
+  (async () => { if (!secret && bc) { bc.postMessage({ ask: true }); await new Promise((r) => setTimeout(r, 350)); } if (!inited) init(); })();
+  setInterval(() => { const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; /* never wipe what the organizer is typing */ if (!secret || document.hidden) return; if (eid) refreshEng(); else if (QUICK) return; else if (S.role !== "host") refreshHome(); }, 5000);
   window.__zc = S;
 })();

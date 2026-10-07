@@ -724,3 +724,95 @@ describe("the free demo game", () => {
     await p.waitFor((x) => /Run Demo/.test(x)); expect(p.win.__rt.view().log).toEqual([]);
   }, 60_000);
 });
+
+describe("the console for an AI that works in the browser", () => {
+  const quickPage = (o: O, session: Record<string, string> = {}) => page(o, `/zc?quick=1`, "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com", ...session });
+  const until = async (cond: () => boolean, ms = 20000) => { const t0 = Date.now(); while (!cond()) { if (Date.now() - t0 > ms) throw new Error("timed out"); await new Promise((r) => setTimeout(r, 100)); } };
+  const set = (p: any, sel: string, v: string) => { const el = p.$(sel) as any; el.value = v; el.dispatchEvent(new p.win.Event("input", { bubbles: true })); el.dispatchEvent(new p.win.Event("change", { bubbles: true })); };
+
+  test("a hand-over link from the AI opens the exact card and outlines the one button; nothing is pressed for the organizer", async () => {
+    const o = await organizer(); await make(o, "UI-ACT1");
+    const pub = await consolePage(o, "UI-ACT1"); // the normal page first, for comparison
+    await pub.waitFor((x) => /Publish my engagement, free/.test(x));
+    const a = await page(o, `/zc?e=UI-ACT1&do=publish`, "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token, "ctz-email": "boss@acme.com" });
+    await a.waitFor((x) => /Your AI assistant brought you here/.test(x));
+    expect(a.text()).toMatch(/Confirm and publish/); expect(a.$("#pubEmail")).toBeTruthy(); // the card is already open
+    expect((a.$("#pubgo") as any).style.outline).toMatch(/solid/); // the button to press is outlined
+    const sm = await o.json(await o.api("GET", "/api/z/UI-ACT1/summary", undefined, o.aiKey)); expect(sm.status).toBe("draft"); // and it was NOT pressed
+    await publish(o, "UI-ACT1");
+    const e = await page(o, `/zc?e=UI-ACT1&do=erase`, "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token });
+    await e.waitFor((x) => /Delete all participant data now/.test(x)); await until(() => /solid/.test((e.$("#erase") as any).style.outline)); expect(e.text()).toMatch(/Your AI assistant brought you here/);
+    const c = await page(o, `/zc?e=UI-ACT1&do=pause`, "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token });
+    await c.waitFor((x) => /Controls/.test(x)); await until(() => /solid/.test((c.$('[data-ctl="pause"]') as any).style.outline));
+    const n = await page(o, `/zc?e=UI-ACT1`, "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token }); await n.waitFor((x) => /Controls/.test(x)); expect(n.text()).not.toMatch(/brought you here/); // an ordinary visit shows no such banner
+  }, 90_000);
+
+  test("AI helper mode: no guest name or mobile number is on the page, the guest-list and look-up cards are replaced by one notice, the organizer's own e-mail and mobile are not prefilled; switching it off brings them back", async () => {
+    const o = await organizer(); await make(o, "UI-SHD1"); await publish(o, "UI-SHD1");
+    expect((await o.api("POST", "/api/z/UI-SHD1/roster", { people: [{ name: "Ravi Kulkarni", phone: "9876501234" }] }, o.token)).status).toBe(200);
+    expect((await o.api("POST", "/api/z/UI-SHD1/join", { phone: "9811122233", name: "Meera Shah", device: "a".repeat(32) })).status).toBe(200);
+    const on = await consolePage(o, "UI-SHD1", o.token, { "ctz-shield": "1", "ctz-phone": "9000011111" }); await on.waitFor((x) => /AI helper mode/.test(x) && /Guest names and numbers are hidden/.test(x));
+    const t = on.text(); for (const secret of ["Ravi", "Kulkarni", "Meera", "Shah", "9876501234", "9811122233", "9000011111", "boss@acme.com"]) expect(t).not.toContain(secret);
+    for (const id of ["#roster", "#rosterTxt", "#pdph", "#ubph", "#mkph", "#rptopen", "#rptnew"]) expect(on.$(id)).toBeNull(); // the cards that take or show guest data are gone
+    expect(on.$("#closed")).toBeTruthy(); // "invite only" is not personal data, so it stays
+    expect(on.$("#shield")).toBeTruthy(); expect((on.$("#shield") as any).checked).toBe(true);
+    expect(on.$("#erase")).toBeTruthy(); // the hand-over buttons stay
+    const off = await consolePage(o, "UI-SHD1", o.token, {}); await off.waitFor((x) => /Invite list/.test(x)); expect(off.$("#roster")).toBeTruthy(); expect(off.$("#pdph")).toBeTruthy(); expect((off.$("#shield") as any).checked).toBe(false);
+  }, 90_000);
+
+  test("AI helper mode also keeps the organizer's own e-mail and mobile out of the Publish card; with it off they are prefilled for the organizer", async () => {
+    const o = await organizer(); await make(o, "UI-SHD2");
+    const on = await page(o, `/zc?e=UI-SHD2&do=publish`, "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token, "ctz-email": "boss@acme.com", "ctz-phone": "9000011111", "ctz-shield": "1" });
+    await on.waitFor((x) => /Confirm and publish/.test(x)); expect((on.$("#pubEmail") as any).value).toBe(""); expect((on.$("#pubPhone") as any).value).toBe(""); expect(on.text()).not.toMatch(/boss@acme\.com|9000011111/);
+    const off = await page(o, `/zc?e=UI-SHD2&do=publish`, "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token, "ctz-email": "boss@acme.com", "ctz-phone": "9000011111" });
+    await off.waitFor((x) => /Confirm and publish/.test(x)); expect((off.$("#pubEmail") as any).value).toBe("boss@acme.com"); expect((off.$("#pubPhone") as any).value).toBe("9000011111");
+  }, 60_000);
+  test("every field on the console is reachable by name: each label is linked to its field, nothing unlabelled, and the page keeps the same elements when nothing has changed", async () => {
+    const o = await organizer(); await make(o, "UI-A11Y1");
+    const p = await consolePage(o, "UI-A11Y1"); await p.waitFor((x) => /Your brand moments/.test(x)); const doc = p.win.document;
+    const bad: string[] = [];
+    for (const f of Array.from(doc.querySelectorAll("input, select, textarea")) as any[]) {
+      if (f.type === "hidden") continue;
+      const named = (f.id && doc.querySelector(`label[for="${f.id}"]`)) || f.closest("label") || f.getAttribute("aria-label");
+      if (!named) bad.push(`${f.tagName.toLowerCase()}#${f.id}.${f.getAttribute("data-bk") || f.getAttribute("data-op") || f.getAttribute("data-cl") || ""}`);
+    }
+    expect(bad).toEqual([]);
+    for (const l of Array.from(doc.querySelectorAll("label[for]")) as any[]) expect([l.getAttribute("for"), !!doc.getElementById(l.getAttribute("for"))]).toEqual([l.getAttribute("for"), true]); // no label points at nothing
+    const ids = Array.from(doc.querySelectorAll("[id]")).map((e: any) => e.id); expect(new Set(ids).size).toBe(ids.length); // ids are unique
+    expect(doc.querySelector('[data-bk="title"][data-i="0"]')!.getAttribute("id")).toBe("f-bk-title-0"); // the brand-moment rows have stable names
+    const btn = p.$("#savecfg") as any; await new Promise((r) => setTimeout(r, 6000)); expect(btn.isConnected).toBe(true); expect(p.$("#savecfg")).toBe(btn); // the 5-second refresh did not replace the page's elements
+  }, 90_000);
+
+  test("Quick setup: real date and time pickers, the five screens as one form; saving makes the draft with the right start, size, tickets, prizes and name, then opens it", async () => {
+    const o = await organizer(); const p = await quickPage(o); await p.waitFor((x) => /1\. Which game\?/.test(x) && /Up to 250 people/.test(x)); const doc = p.win.document;
+    expect((p.$("#qk-date") as any).type).toBe("date"); expect((p.$("#qk-time") as any).type).toBe("time"); // real pickers
+    expect(p.text()).toMatch(/Rs 2,358\.82 including GST/); // prices come from the software's own list
+    const tomorrow = new Date(Date.now() + 5.5 * 3600000 + 2 * 86400000); const d = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
+    set(p, "#qk-name", "Diwali party"); set(p, "#qk-date", d); set(p, "#qk-time", "18:30"); set(p, "#qk-cap", "500"); const radio = (on: string, off: string) => { (p.$(off) as any).checked = false; (p.$(on) as any).checked = true; (p.$(on) as any).dispatchEvent(new p.win.Event("input", { bubbles: true })); }; radio("#qk-t2", "#qk-t1"); set(p, "#qk-spd", "12"); radio("#qk-j2", "#qk-j1"); (p.$("#qk-inv") as any).checked = true; (p.$("#qk-inv") as any).dispatchEvent(new p.win.Event("input", { bubbles: true }));
+    set(p, "#qk-t-full", "Voucher 5000"); set(p, "#qk-n-full", "2");
+    await until(() => /Diwali party: \d{4}-\d\d-\d\d at 18:30 India time; up to 500 people; 2 tickets each, a number every 12 seconds, 1 round; only people on your list; 6 prizes/.test(p.text()), 8000).catch(() => { throw new Error("summary was: " + (p.$("#qk-summary") as any)?.textContent); });
+    p.click("#qk-save"); await p.waitFor((x) => /Your draft is saved/.test(x), 8000).catch(() => { throw new Error("save failed; error box: " + (p.$("#qk-err") as any)?.textContent + " | errors: " + p.errors.join("; ")); });
+    const hist = await o.json(await o.api("GET", "/api/history", undefined, o.aiKey)); expect(hist.engagements.length).toBe(1);
+    const id = hist.engagements[0].id; expect(id).toMatch(/^DIWALI-PARTY-\d{4}$/);
+    const sm = await o.json(await o.api("GET", `/api/z/${id}/summary`, undefined, o.aiKey));
+    expect(sm).toMatchObject({ name: "Diwali party", limit: 500, tickets: 2, callSeconds: 12, rounds: 1, closed: true, status: "draft" });
+    expect(sm.startMs).toBe(Date.parse(d + "T18:30:00+05:30")); // exactly the picked day and time in India time
+    expect(sm.rewards.filter((r: any) => r.pattern === "full").map((r: any) => r.text)).toEqual(["Voucher 5000", "Voucher 5000"]); expect(sm.invites).toMatchObject({ on: true, per: 4 });
+    expect(p.text()).toMatch(/Your brand moments/); // it opened the game, ready for videos and messages
+  }, 90_000);
+
+  test("Quick setup refuses a start time that has passed and tells the organizer plainly; it saves nothing", async () => {
+    const o = await organizer(); const p = await quickPage(o); await p.waitFor((x) => /1\. Which game\?/.test(x));
+    set(p, "#qk-date", "2020-01-01"); set(p, "#qk-time", "10:00"); p.click("#qk-save");
+    await until(() => (p.$("#qk-err") as any).style.display !== "none"); expect((p.$("#qk-err") as any).textContent).toMatch(/start time in the future/);
+    expect((await o.json(await o.api("GET", "/api/history", undefined, o.aiKey))).engagements.length).toBe(0);
+  }, 60_000);
+
+  test("a second tab of the same browser is signed in by the first, without storing the key anywhere", async () => {
+    const o = await organizer();
+    const first = await page(o, `/zc`, "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token, "ctz-aimsg": o.aiMessage }); await first.waitFor((x) => /OPTION 1/.test(x));
+    const second = await page(o, `/zc`, "zc.html", ["zgame.js", "control.js", "zc.js"], {}); // no key in this tab's session
+    await second.waitFor((x) => /OPTION 1/.test(x), 10000); // it asked the other tab and was signed in
+    expect(second.text()).not.toMatch(/Your organizer key/);
+  }, 60_000);
+});
