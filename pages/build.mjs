@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const SRC = join(import.meta.dir, "../apps/web/public"), OUT = join(import.meta.dir, "public");
 rmSync(OUT, { recursive: true, force: true }); mkdirSync(OUT, { recursive: true });
-const FILES = ["index.html", "report.html", "report.js", "reportgen.js", "manifest.webmanifest", "zsw.js", "pwa.js", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "site.js", "theme.js", "rum.js", "v.js", "owner-visits.html", "owner-visits.js", "robots.txt", "sitemap.xml", "ct4f9c2e7a1b8d3056ae91c4d7f20b6a38.txt", "site.css", "common.js", "app.css", "fonts.css", "legal.html", "terms.html", "dpa.html", "subprocessors.html", "partner-terms.html", "organizer-guide.html", "brochure.html", "brochure.pdf", "partner.html", "partner.js", "partner.css", "404.html", "ai-link.html", "ai-link.js", "signin.html", "signin.js", "z.html", "z.js", "z.css", "preview.html", "preview.js", "demo.html", "demo.js", "demo-config.js", "demo-break.mp4", "trust.html", "llms.txt", "zc.html", "zc.js", "zc.css", "zgame.js", "control.js", "audio.js", "pay.html", "pay.js", "big.html", "big.js", "big.css"];
+const FILES = ["index.html", "report.html", "report.js", "reportgen.js", "manifest.webmanifest", "zsw.js", "pwa.js", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "site.js", "theme.js", "rum.js", "v.js", "owner-visits.html", "owner-visits.js", "robots.txt", "sitemap.xml", "ct4f9c2e7a1b8d3056ae91c4d7f20b6a38.txt", "site.css", "common.js", "app.css", "fonts.css", "legal.html", "terms.html", "dpa.html", "subprocessors.html", "partner-terms.html", "organizer-guide.html", "brochure.html", "brochure.pdf", "partner.html", "partner.js", "partner.css", "404.html", "ai-link.html", "ai-link.js", "signin.html", "signin.js", "google.js", "z.html", "z.js", "z.css", "preview.html", "preview.js", "demo.html", "demo.js", "demo-config.js", "demo-break.mp4", "trust.html", "llms.txt", "zc.html", "zc.js", "zc.css", "zgame.js", "control.js", "audio.js", "pay.html", "pay.js", "paylink.html", "paylink.js", "big.html", "big.js", "big.css"];
 for (const f of FILES) { if (!existsSync(join(SRC, f))) throw new Error("missing " + f); cpSync(join(SRC, f), join(OUT, f)); }
 for (const d of ["fonts", "img"]) cpSync(join(SRC, d), join(OUT, d), { recursive: true });
 // security headers; styles allow inline because the pages set a few style attributes, scripts stay locked to our own files
@@ -11,17 +11,19 @@ const CSP = "default-src 'self'; script-src 'self' https://static.cloudflareinsi
 const PAYCSP = CSP.replace("script-src 'self' https://static.cloudflareinsights.com;", "script-src 'self' https://static.cloudflareinsights.com https://checkout.razorpay.com;"); // only the payment page loads Razorpay Checkout
 const GAMECSP = CSP.replace(/ frame-src[^;]*;/, " frame-src https://www.youtube-nocookie.com;").replace("media-src 'self' blob:;", "media-src 'self' blob: https:;"); // the phone page may play a break video
 const PLAINCSP = CSP.replace(/ frame-src[^;]*;/, "");
+// "Continue with Google" (Google Identity Services): its script, frame, connection and style are allowed ONLY on the pages that show the button (signin, index, zc; the Host setup lives in zc)
+const GOOGLECSP = PLAINCSP.replace("script-src 'self' https://static.cloudflareinsights.com;", "script-src 'self' https://static.cloudflareinsights.com https://accounts.google.com/gsi/client;").replace("style-src 'self' 'unsafe-inline';", "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style;").replace("connect-src 'self'", "connect-src 'self' https://accounts.google.com/gsi/").replace("frame-ancestors", "frame-src https://accounts.google.com/gsi/; frame-ancestors");
 // Cloudflare Pages serves "/z.html" as "/z" (a 308), so every page needs a rule for BOTH spellings or the header silently never applies (found in the 2026-10-05 audit, G-07).
 const hdr = (csp, extra = "") => `\n  Content-Security-Policy: ${csp}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  X-Frame-Options: DENY\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()${extra}\n`;
 const NOINDEX = "\n  X-Robots-Tag: noindex";
 const PAGES = [ // [clean path, csp, noindex]
-  ["/pay", PAYCSP, true], ["/z", GAMECSP, true], ["/preview", GAMECSP, true], ["/demo", GAMECSP, true], ["/trust", PLAINCSP, false], ["/zc", PLAINCSP, true], ["/big", PLAINCSP, true], ["/report", PLAINCSP, true], ["/signin", PLAINCSP, true], ["/owner-visits", PLAINCSP, true], ["/ai-link", PLAINCSP, true],
-  ["/partner", PLAINCSP, true], ["/legal", PLAINCSP, false], ["/terms", PLAINCSP, false], ["/dpa", PLAINCSP, false], ["/subprocessors", PLAINCSP, false], ["/partner-terms", PLAINCSP, false], ["/organizer-guide", PLAINCSP, false], ["/brochure", PLAINCSP, false], ["/404", PLAINCSP, true], ["/index", PLAINCSP, false],
+  ["/pay", PAYCSP, true], ["/paylink", PAYCSP, true], ["/z", GAMECSP, true], ["/preview", GAMECSP, true], ["/demo", GAMECSP, true], ["/trust", PLAINCSP, false], ["/zc", GOOGLECSP, true], ["/big", PLAINCSP, true], ["/report", PLAINCSP, true], ["/signin", GOOGLECSP, true], ["/owner-visits", PLAINCSP, true], ["/ai-link", PLAINCSP, true],
+  ["/partner", PLAINCSP, true], ["/legal", PLAINCSP, false], ["/terms", PLAINCSP, false], ["/dpa", PLAINCSP, false], ["/subprocessors", PLAINCSP, false], ["/partner-terms", PLAINCSP, false], ["/organizer-guide", PLAINCSP, false], ["/brochure", PLAINCSP, false], ["/404", PLAINCSP, true], ["/index", GOOGLECSP, false],
 ];
 let rules = "";
 for (const [path, csp, noindex] of PAGES) { const h = hdr(csp, noindex ? NOINDEX : ""); rules += `${path}.html${h}${path}${h}`; }
-rules += "/" + hdr(PLAINCSP);
+rules += "/" + hdr(GOOGLECSP);
 rules += "/*.js\n  Cache-Control: no-cache\n/img/*\n  Cache-Control: public, max-age=604800\n/*.css\n  Cache-Control: no-cache\n/fonts/*\n  Cache-Control: public, max-age=31536000, immutable\n";
 writeFileSync(join(OUT, "_headers"), rules);
-writeFileSync(join(OUT, "_routes.json"), JSON.stringify({ version: 1, include: ["/api/*", "/ai/*"], exclude: [] }));
+writeFileSync(join(OUT, "_routes.json"), JSON.stringify({ version: 1, include: ["/api/*", "/ai/*", "/j/*"], exclude: [] }));
 console.log("pages/public ready");

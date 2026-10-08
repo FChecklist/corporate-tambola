@@ -74,8 +74,9 @@ Legend: **Y** allowed; **-** refused (403); **hand** = the AI prepares and gives
 | **Account**: AI link read / replace / fresh / revoke | Y | - | - | - | - | - | - | same |
 | **Account**: change e-mail | (none: e-mail is the sign-in identity; not editable by any route) | | | | | | | - |
 | **Account**: close account | Y | - | - | - | - | - | - | `/api/org/close` |
-| Add a **Host** (max 5) | Y | **-** | - | - | Y | - | - | `/api/org/host` `kind master or ai` |
-| Add a **Co-host** (no limit) | Y | Y | - | - | Y | - | - | `/api/org/cohost` |
+| Add a **Host** (max 5; needs the Host's e-mail) | Y | **-** | - | - | Y | - | - | `/api/org/host` `kind master or ai`; link e-mailed to the Host |
+| Add a **Co-host** (no limit; name + mobile, for ONE game, no e-mail) | Y | Y | - | - | **-** (a mobile number is never given to an AI) | - | - | `/api/org/cohost` |
+| **Cancel a game** (`cancel-preview`, `cancel`, `confirmations: 3`) | Y | Y | - | - | **-** | Y | - | `can(a,e,true)`; paid + started = refused |
 | List the team | Y | Y | - | **-** | Y | - | - | `/api/org/team` |
 | Retire Hosts and Co-hosts | Y | **Co-hosts only** | - | - | - | - | - | `/api/org/team/retire` |
 | Read the small game header | Y | Y | - | **Y** | Y | Y | - | `GET /api/z/{id}/cohost` |
@@ -123,6 +124,14 @@ Tests: `privacy.test.ts` ("one person can invite at most 4", "the organizer, hos
 ## 8. Platform owner
 
 Single key `ORGANIZER_SECRET`. It "can act on any engagement" (`can()` returns true for `plat`) - the single-tenant/local mode - **but** none of the account routes. It alone reaches the owner routes (mode, test-mail, purge, visits, audit, partners admin, notices, suggestions status, purge, lifecycle tick). Owner routes ignore a key arriving through the AI link (`x-ct-link: 1`), answering 404, and write `audit_access`.
+
+## 8b. The Host first open and device keys (Phase 4, `apps/edge/src/hostsetup.ts`)
+
+- The Organizer adds a Host with a name and at least one of e-mail or mobile (`POST /api/org/host`). The Host's personal link is a **one-time entry**: it works for 7 days and only until the Host has confirmed an e-mail (6-digit code or Google). A new link from the Organizer (`POST /api/org/host/link`) cancels the old one.
+- Until the Host has a confirmed e-mail AND a mobile number, every Host route answers `403 {code:'host-setup'}` except `GET /api/whoami` (which says `ready:false`), `/api/host/setup*`, `/api/auth/*`, `/api/paylink/*` and `GET /api/notices` (gate at the top of `route0` in `worker.ts`). A Host reached through an AI work link keeps its narrow rights and is not gated.
+- Confirming the e-mail spends the link key and returns a **device key** (a new `organizer_key` row of kind `host` with `host_id` = the Host's identity row). Later devices sign in with the e-mail code (`/api/auth/email` + `/verify`) or Google (`/api/auth/google`, intent `signin`); `host_login` maps the confirmed e-mail to the Host. If the same e-mail is also an Organizer's, the Organizer's account wins.
+- The Host's list owner and the Co-hosts they add are keyed by the identity row (`a.hid`), so every device sees the same lists. Retiring the Host (`POST /api/org/team/retire`) stops the identity row and every device key and deletes the e-mail mapping.
+- Pay links (`POST /api/z/{id}/paylink`): Organizer, Host (setup finished) and the Co-host of that game; an AI key gets 403.
 
 ## 9. Tests that pin this down
 

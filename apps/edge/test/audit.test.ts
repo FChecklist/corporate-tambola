@@ -142,7 +142,7 @@ describe("hash chain and tamper detection", () => {
 describe("only the owner reads it, and every owner use is logged", () => {
   test("organizer, AI key, co-host, a participant and a stranger get a plain 404 and each attempt is logged as denied", async () => {
     const o = await withEngagement();
-    const host = await j(await call("POST", "/api/org/host", {}, o.h)); const hostKey = host.hostKey as string;
+    const host = await j(await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, o.h)); const hostKey = host.hostKey as string;
     for (const h of [o.h, { "x-organizer": o.ai }, { "x-organizer": hostKey }, {}, { "x-organizer": "wrong" }]) {
       for (const path of ["/api/owner/audit/EVT1", "/api/owner/audit/EVT1/verify", "/api/org/audit", "/api/owner/audit/access"]) {
         const r = await call("GET", path, undefined, h as any);

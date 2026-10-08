@@ -25,7 +25,7 @@ Written 2026-10-07 by reading the real code. If you are an AI, read `README-FOR-
 | `00-OVERVIEW.md` | What the product is, who uses it, price packs, zero-cost architecture in 6 lines, glossary of every term |
 | `01-ARCHITECTURE.md` | Components, request path and data-flow diagrams, trust model, security and privacy design, local vs production |
 | `02-FILE-MAP.md` | Every file in the repository with its purpose and who uses it (generated list, hand-described) |
-| `03-DATABASE.md` | All 41 D1 tables + `telemetry`, columns, writers/readers, retention, migrations 0001-0014 and how to apply, ER diagram, `kv` key families |
+| `03-DATABASE.md` | All 43 D1 tables + `telemetry`, columns, writers/readers, retention, migrations 0001-0015 and how to apply, ER diagram, `kv` key families |
 | `04-API-REFERENCE.md` | Every HTTP route: auth, request, response, errors, side effects, D1 write cost, handler line; the `/ai/<key>` link routes |
 | `05-ROLES-AND-PERMISSIONS.md` | Key kinds and prefixes, how auth is resolved, permission matrix, Host vs Organizer-only, Co-host and AI limits, invitations rule, payment by any role |
 | `06-BUSINESS-LOGIC.md` | Every rule (pricing, payment, draft/publish/lock, commissions, brand moments, lucky draws, rounds, tickets, quorum, deletion clocks, tracking, audit) with where and which test proves it; known weaknesses |

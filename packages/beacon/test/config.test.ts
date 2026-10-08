@@ -267,3 +267,11 @@ describe("a media file kept on our own site", () => {
     for (const u of ["/a/b.mp4", "//evil.example/x.mp4", "/x.html", "/x.mp4?y=1", "/../x.mp4", "demo.mp4", "/x.mp4 ", "/.mp4x", "javascript:alert(1)", "http://acme.com/v.mp4"]) expect([u, validateCfg(brk(u)).ok]).toEqual([u, false]);
   });
 });
+
+describe("guest invitations: each guest may invite 1 to 10 people (default 4)", () => {
+  test("10 is the most; 0 and 11 are refused; the default stays 4", () => {
+    expect(validateCfg({ invites: { on: true, per: 10, cats: ["family"] } }).ok).toBe(true);
+    for (const per of [0, 11, 2.5]) expect(validateCfg({ invites: { on: true, per, cats: ["family"] } }).ok).toBe(false);
+    expect(defaultCfg().invites!.per).toBe(4);
+  });
+});

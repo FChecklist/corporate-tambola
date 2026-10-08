@@ -21,7 +21,7 @@ describe("the document pages", () => {
   const DOCS: Record<string, string[]> = {
     "terms.html": ["For organizers", "For players", "You must not charge any fee, price, donation or purchase for taking part", "You must be 18 or older", "Taking part must be voluntary", "You provide the prizes and hand them over", "You make sure the game is allowed under the law", "Players are 18 or older", "parent&rsquo;s or guardian&rsquo;s own ticket", `Version ${TERMS_VERSION}`, "/dpa.html"],
     "dpa.html": ["controller", "processor", "All player data is deleted within 24 hours", "Backups clear within 7 days", "365 days", "without undue delay", "/subprocessors.html"],
-    "subprocessors.html": ["Cloudflare", "Resend", "Razorpay", "drand", "YouTube"],
+    "subprocessors.html": ["Cloudflare", "Resend", "Razorpay", "Google", "drand", "YouTube"],
     "partner-terms.html": ["independent partner", "No spam", "Tax may be deducted at source", "GST may apply", "No payment from the buyer, no commission"],
     "organizer-guide.html": ["Never ask for a fee", "Players are 18 or older", "INR 10,000", "tax deducted at source", "Check your state", "Pay before the start"],
   };

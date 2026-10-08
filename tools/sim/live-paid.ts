@@ -1,6 +1,6 @@
 // Real-time check of the two money cases against a LOCAL server in test-payment mode (TEST_MODE=1: no real money) and the REAL public beacon.
 //   A. pays before the start: the engagement begins on time and every phone shows the same numbers as the public reference.
-//   B. does not pay: held at the start; then pays LATE: it begins about 3 minutes later for the phones that were waiting, with the same numbers for all.
+//   B. does not pay: held at the start; then pays LATE: the first number comes 2 minutes after the payment for the phones that were waiting, with the same numbers for all.
 // Run: TEST_MODE=1 PORT=8799 bun run zlocal   (another terminal)   then   BASE=http://localhost:8799 bun run tools/sim/live-paid.ts [phones=3]
 import { PhoneRuntime } from "../../packages/beacon/src/phone-runtime";
 import { fetchRound, deriveCalls } from "../../packages/beacon/src";
@@ -59,7 +59,7 @@ while (Date.now() - t0 < 9 * 60_000) {
   if (!paidLate && nowR >= startB + 10) { // well past the start: it has been held; now the organizer pays
     ok(phonesB.every((p) => p.rt.view().locked && p.rt.view().log.length === 0), "B: held at the start, no number shown");
     paidLate = await pay(key, B); newStart = (paidLate.restartedAtMs ? Math.round((paidLate.restartedAtMs / 1000 - 1692803367) / 3) + 1 : 0);
-    ok(!!paidLate && paidLate.restartedAtMs > Date.now() + 100_000 && paidLate.restartedAtMs < Date.now() + 200_000, "B: paid late, it begins in about 3 minutes");
+    ok(!!paidLate && paidLate.restartedAtMs > Date.now() - 10_000 && paidLate.restartedAtMs < Date.now() + 10_000, "B: paid late, the first number follows 2 minutes after the payment");
   }
   if (paidLate && phonesB.some((p) => p.rt.view().log.length > 0)) sawNumberB = true;
   if (va.log.length >= 8) doneA = true;

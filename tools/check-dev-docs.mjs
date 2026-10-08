@@ -98,7 +98,7 @@ for (const w of ["/vote", "/status", "/start", "/map", "/facts", "/go"]) routeWo
 for (const r of routeStrings) { if (r === "/api" || r === "/ai") continue; if (!api.includes(r)) fail("b", `route string "${r}" (apps/edge/src) is missing from 04-API-REFERENCE.md`); }
 for (const w of routeWords) { if (!api.includes(w)) fail("b", `route segment "${w}" (regex in apps/edge/src) is missing from 04-API-REFERENCE.md`); }
 // the engagement action list in the router regex must each appear as /api/z/{id}/<action>
-const router = read("apps/edge/src/worker.ts").match(/\\\/api\\\/z\\\/\(\[A-Za-z0-9_-\]\{4,40\}\)\\\/\(([a-z|]+)\)\$/);
+const router = read("apps/edge/src/worker.ts").match(/\\\/api\\\/z\\\/\(\[A-Za-z0-9_-\]\{4,40\}\)\\\/\(([a-z|-]+)\)\$/);
 if (!router) fail("b", "could not find the engagement action regex in worker.ts (checker needs updating)");
 else for (const a of router[1].split("|")) if (!new RegExp("/api/z/\\{id\\}/" + a + "\\b").test(api)) fail("b", `engagement action "${a}" is not documented as /api/z/{id}/${a}`);
 // the Pages functions

@@ -70,19 +70,23 @@ export interface InvoiceData {
   number: string; issuedAt: number; brand: Brand; company: Company; draft: boolean;
   buyer: { name: string; gstin?: string; email?: string; country?: string };
   currency: "INR" | "USD"; lines: { description: string; quantity: number; amount: number }[]; tax: TaxSplit; paymentRef?: string; orderRef?: string;
+  /** "credit_note" = a GST credit note for a refund (same layout, own number series, names the invoice it reduces). Default: a tax invoice. */
+  kind?: "invoice" | "credit_note"; originalNumber?: string;
 }
+const titleOf = (i: InvoiceData) => (i.kind === "credit_note" ? "CREDIT NOTE" : "TAX INVOICE");
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 const money = (n: number, cur: string) => (cur === "INR" ? "₹" : "US$") + n.toLocaleString(cur === "INR" ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function renderInvoiceText(i: InvoiceData): string {
   const c = i.company, t = i.tax;
   const rows = i.lines.map((l) => `  ${l.description} x ${l.quantity}: ${money(l.amount, i.currency)}`).join("\n");
-  return `${i.draft ? "DRAFT - " : ""}TAX INVOICE
+  return `${i.draft ? "DRAFT - " : ""}${titleOf(i)}
 ${i.brand.name}
 A product of ${c.legalName}
 ${c.addressLines.join(", ")}${c.gstin ? `\nGSTIN: ${c.gstin}` : ""}${c.cin ? `  CIN: ${c.cin}` : ""}${c.pan ? `  PAN: ${c.pan}` : ""}
 
-Invoice number: ${i.number}
+${i.kind === "credit_note" ? "Credit note number" : "Invoice number"}: ${i.number}${i.originalNumber ? `
+Against invoice: ${i.originalNumber}` : ""}
 Date: ${new Date(i.issuedAt).toISOString().slice(0, 10)}
 Billed to: ${i.buyer.name}${i.buyer.gstin ? `  GSTIN: ${i.buyer.gstin}` : ""}
 
@@ -105,7 +109,7 @@ export function renderInvoiceHtml(i: InvoiceData): string {
 h1{font:700 26px/1.1 Georgia,serif;margin:0;color:${esc(b.theme)};letter-spacing:.02em}.sub{color:#6b6258;font-size:13px}.top{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;border-bottom:3px solid ${esc(b.theme)};padding-bottom:16px}
 .draft{background:#fff3cd;border:1px solid #e0c36a;padding:8px 12px;border-radius:8px;margin:12px 0;font-size:13px}table{width:100%;border-collapse:collapse;margin-top:18px}td,th{padding:9px 6px;border-bottom:1px solid #e7e0d4;text-align:left}th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#6b6258}.r{text-align:right}tfoot td{font-weight:700;border-bottom:0}
 .meta{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:18px}.foot{margin-top:22px;font-size:12px;color:#6b6258}@media print{body{background:#fff}.sheet{box-shadow:none;margin:0}}@media(max-width:560px){.meta{grid-template-columns:1fr}}</style></head><body><div class="sheet">
-<div class="top"><div><h1>${esc(b.name)}</h1><div class="sub">${esc(b.line)}<br>A product of <b>${esc(c.legalName)}</b></div></div><div class="sub r" style="text-align:right"><b>TAX INVOICE</b><br>${esc(i.number)}<br>${new Date(i.issuedAt).toISOString().slice(0, 10)}</div></div>
+<div class="top"><div><h1>${esc(b.name)}</h1><div class="sub">${esc(b.line)}<br>A product of <b>${esc(c.legalName)}</b></div></div><div class="sub r" style="text-align:right"><b>${titleOf(i)}</b><br>${esc(i.number)}${i.originalNumber ? `<br>Against invoice ${esc(i.originalNumber)}` : ""}<br>${new Date(i.issuedAt).toISOString().slice(0, 10)}</div></div>
 ${i.draft ? `<div class="draft">DRAFT: the supplier's registration details are not complete yet, so this is not yet a valid tax invoice.</div>` : ""}
 <div class="meta"><div><b>Supplier</b><br>${esc(c.legalName)}<br>${c.addressLines.map(esc).join("<br>")}${c.gstin ? `<br>GSTIN: ${esc(c.gstin)}` : ""}${c.cin ? `<br>CIN: ${esc(c.cin)}` : ""}${c.pan ? `<br>PAN: ${esc(c.pan)}` : ""}</div>
 <div><b>Billed to</b><br>${esc(i.buyer.name)}${i.buyer.gstin ? `<br>GSTIN: ${esc(i.buyer.gstin)}` : ""}${i.buyer.email ? `<br>${esc(i.buyer.email)}` : ""}<br>Place of supply: ${esc(t.placeOfSupply)}</div></div>
@@ -125,6 +129,13 @@ export async function createOrder(cfg: RazorpayConfig, o: { amountMinor: number;
   const r = await fetch(`${base(cfg)}/orders`, { method: "POST", headers: { authorization: basic(cfg), "content-type": "application/json" }, body: JSON.stringify({ amount: o.amountMinor, currency: o.currency, receipt: o.receipt.slice(0, 40), notes: o.notes }) });
   const data: any = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data?.error?.description ?? `Razorpay refused the order (${r.status})`);
+  return data;
+}
+/** Refunds a captured payment (partly or fully) to the original payment method. Amount in paise. Razorpay answers with the refund and its status (pending / processed / failed). */
+export async function createRefund(cfg: RazorpayConfig, paymentId: string, o: { amountMinor: number; notes?: Record<string, string>; receipt?: string }): Promise<{ id: string; status: string; amount: number }> {
+  const r = await fetch(`${base(cfg)}/payments/${encodeURIComponent(paymentId)}/refund`, { method: "POST", headers: { authorization: basic(cfg), "content-type": "application/json" }, body: JSON.stringify({ amount: o.amountMinor, speed: "normal", ...(o.receipt ? { receipt: o.receipt.slice(0, 40) } : {}), ...(o.notes ? { notes: o.notes } : {}) }) });
+  const data: any = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data?.error?.description ?? `Razorpay refused the refund (${r.status})`);
   return data;
 }
 export async function fetchPayment(cfg: RazorpayConfig, paymentId: string): Promise<any> {

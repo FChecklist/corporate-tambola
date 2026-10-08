@@ -28,7 +28,7 @@ async function setup() {
   await call("POST", "/api/z/PLANT-1/roster", { people: [PLANTED[1]] }, h); // the owner loads a list in the console
   const sealed = await sealPii(env as any, { phone: PLANTED[2]!.phone, name: PLANTED[2]!.name });
   raw.prepare("INSERT INTO prize(eid,round,pattern,ordinal,seat,pii,orig,trail,confirmed_ms) VALUES('PLANT-1',1,'full',1,1,?,?,?,?)").run(sealed, sealed, null, T);
-  const host = await j(await call("POST", "/api/org/host", {}, h));
+  const host = await j(await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, h));
   return { h, ai: x.aiKey as string, host: host.hostKey as string };
 }
 

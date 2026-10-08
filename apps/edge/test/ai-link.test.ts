@@ -69,7 +69,7 @@ describe("the paste text and the manual", () => {
   });
   test("a co-host key gets a narrower manual shaped for that role", async () => {
     const o = await organizer();
-    const hk = await j(await call("POST", "/api/org/host", {}, o.h)); expect(hk.hostKey).toMatch(/^cth_/); expect(hk.manualUrl).toBe(`${ORIGIN}/ai/${hk.hostKey}`);
+    const hk = await j(await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, o.h)); expect(hk.hostKey).toMatch(/^cth_/); expect(hk.manualUrl).toBe(`${ORIGIN}/ai/${hk.hostKey}`);
     const t = await (await linkGet(hk.hostKey)).text();
     expect(t).toMatch(/Host's AI assistant/); expect(t).toMatch(/You help a Host/); expect(t).toContain(`${ORIGIN}/ai/${hk.hostKey}/z/{id}/announce`);
     expect(t).not.toMatch(/PATCH .*settings/); expect(t).not.toContain("/roster"); expect(t).not.toMatch(/org\/host/);
@@ -117,7 +117,7 @@ describe("key in the address behaves exactly like the header", () => {
     expect(JSON.stringify(trail)).not.toContain(o.ai);
   });
   test("a co-host's link calls are audited as well", async () => {
-    const o = await organizer(); const hk = await j(await call("POST", `/ai/${o.ai}/org/host`, {}));
+    const o = await organizer(); const hk = await j(await call("POST", "/api/org/host", { email: "host@acme.com", mobile: "9876500009" }, o.h));
     await linkGet(hk.hostKey); await call("GET", `/ai/${hk.hostKey}/whoami`);
     expect(auditRows().slice(-2).map((r) => r.path)).toEqual(["/ai/manual", "/api/whoami"]);
   });
@@ -233,7 +233,7 @@ describe("what the organizer's AI may and may not do now", () => {
   });
   test("it may create a co-host key and gets its own link for them, but the report address never reaches it", async () => {
     const o = await liveEngagement("CAP-5");
-    const hk = await j(await call("POST", `/ai/${o.ai}/org/host`, {})); expect(hk.manualUrl).toContain("/ai/cth_");
+    const hk = await j(await call("POST", "/api/org/host", { email: "host@acme.com", mobile: "9876500009" }, o.h)); expect(hk.manualUrl).toContain("/ai/cth_");
     const rep = await j(await call("GET", `/ai/${o.ai}/z/CAP-5/reportlink`)); expect(rep.url).toBeNull(); expect(rep.note).toMatch(/e-mailed to them/);
   });
   test("it still cannot pay, publish, erase, pause, settle, touch winners, or manage the organizer's keys", async () => {
@@ -253,7 +253,7 @@ describe("what the organizer's AI may and may not do now", () => {
     expect((raw.prepare("SELECT COUNT(*) AS c FROM kv WHERE k='pub/CAP-7'").get() as any).c).toBe(0);
   });
   test("a co-host key keeps its narrow rights through the link", async () => {
-    const o = await liveEngagement("CAP-8"); const hk = await j(await call("POST", "/api/org/host", {}, o.h));
+    const o = await liveEngagement("CAP-8"); const hk = await j(await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, o.h));
     expect((await call("POST", `/ai/${hk.hostKey}/z/CAP-8/announce`, { text: "Hello" })).status).toBe(200);
     expect((await call("GET", `/ai/${hk.hostKey}/z/CAP-8/summary`)).status).toBe(200);
     for (const [m, p, b] of [["PATCH", "/z/CAP-8/settings", { cap: 9 }], ["POST", "/z/CAP-8/roster", { people: [{ phone: "9876543210" }] }], ["POST", "/z/CAP-8/unbind", { phone: "9876543210" }], ["POST", "/z/CAP-8/mark", { phone: "9876543210", role: "host" }], ["POST", "/org/host", {}], ["POST", "/z", eng("CAP-H")], ["POST", "/z/CAP-8/erase", {}]] as const)

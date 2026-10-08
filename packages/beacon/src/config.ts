@@ -15,9 +15,29 @@ export const INVITE_CATEGORIES: ReadonlyArray<{ id: string; label: string }> = [
   { id: "customers", label: "Customers" }, { id: "partners", label: "Business partners" }, { id: "franchisees", label: "Franchisees" }, { id: "neighbours", label: "Neighbours and community" }, { id: "guests", label: "Other guests" },
 ];
 export interface InviteCfg { on: boolean; per: number; cats: string[] }
-export const MAX_INVITES_PER_PERSON = 4;
+/** The company's own mark on every ticket: a name, one of 8 fixed colours and, optionally, a small logo kept INSIDE the game's settings as a data URL (nothing is ever fetched from outside). */
+export interface BrandCfg { name: string; color: string; logo?: string }
+export const BRAND_COLORS: readonly string[] = ["#0B3D91", "#1B7F5C", "#B3261E", "#6A1B9A", "#C26A00", "#00798C", "#37474F", "#AD1457"];
+export const BRAND_NAME_MAX = 40;
+/** A logo is a PNG, JPEG or WebP of at most 30 KB (decoded). It is checked by its first bytes, not by what the sender called it. */
+export const BRAND_LOGO_MAX_BYTES = 30 * 1024;
+const LOGO_RE = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
+/** Returns the decoded size and true type of a logo data URL, or a plain reason it cannot be used. */
+export function checkBrandLogo(v: unknown): { ok: true; bytes: number } | { ok: false; error: string } {
+  if (typeof v !== "string" || v.length > Math.ceil(BRAND_LOGO_MAX_BYTES / 3) * 4 + 40) return { ok: false, error: `The logo must be a PNG, JPEG or WebP picture of at most ${BRAND_LOGO_MAX_BYTES / 1024} KB.` };
+  const m = LOGO_RE.exec(v);
+  if (!m || m[2]!.length % 4 !== 0) return { ok: false, error: "The logo must be a PNG, JPEG or WebP picture." };
+  let raw: string;
+  try { raw = atob(m[2]!); } catch { return { ok: false, error: "The logo picture could not be read." }; }
+  if (raw.length > BRAND_LOGO_MAX_BYTES) return { ok: false, error: `The logo is too big. Keep it under ${BRAND_LOGO_MAX_BYTES / 1024} KB.` };
+  const b = (i: number) => raw.charCodeAt(i);
+  const real = raw.length >= 12 && b(0) === 0x89 && b(1) === 0x50 && b(2) === 0x4e && b(3) === 0x47 ? "png" : raw.length >= 3 && b(0) === 0xff && b(1) === 0xd8 && b(2) === 0xff ? "jpeg" : raw.length >= 12 && raw.slice(0, 4) === "RIFF" && raw.slice(8, 12) === "WEBP" ? "webp" : "";
+  if (!real || real !== m[1]) return { ok: false, error: "The logo must really be a PNG, JPEG or WebP picture." };
+  return { ok: true, bytes: raw.length };
+}
+export const MAX_INVITES_PER_PERSON = 10;
 export const defaultInvites = (): InviteCfg => ({ on: false, per: 4, cats: ["family", "colleagues"] });
-export interface EngagementCfg { /** A friendly name the organizer gives the game (optional, up to 60 characters). */ name?: string; tickets: 1 | 2; rewards: RewardLine[]; breaks: BreakCfg[]; rounds: number; invites?: InviteCfg; /** Before the first number (at most one per ticket). Always present after validateCfg. */ opening?: BrandSlot[]; /** On the final screen (at most one per ticket). Always present after validateCfg. */ closing?: BrandSlot[] }
+export interface EngagementCfg { /** A friendly name the organizer gives the game (optional, up to 60 characters). */ name?: string; tickets: 1 | 2; rewards: RewardLine[]; breaks: BreakCfg[]; rounds: number; invites?: InviteCfg; /** Before the first number (at most one per ticket). Always present after validateCfg. */ opening?: BrandSlot[]; /** On the final screen (at most one per ticket). Always present after validateCfg. */ closing?: BrandSlot[]; /** The company's mark on the ticket (name, colour, optional logo). Absent = the plain ticket. */ brand?: BrandCfg }
 /**
  * Who decides the winners: the software, never a person. Every phone works out the winners from the public numbers and reports them; our store accepts a result
  * only when this many DIFFERENT phones (one ticket per phone) reported exactly the same winners. Tiny games need half their people; larger ones 5% (3 to 25).
@@ -75,8 +95,8 @@ const YT = /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i;
 export const SITE_MEDIA = /^\/[A-Za-z0-9._-]{1,80}\.(mp4|webm|m4a|mp3)$/i;
 
 /** Validates what the organizer sent. Returns the cleaned config, or a plain-English reason. Missing parts keep their defaults. */
-export function validateCfg(input: { tickets?: unknown; rewards?: unknown; breaks?: unknown; rounds?: unknown; invites?: unknown; opening?: unknown; closing?: unknown; name?: unknown }, base: EngagementCfg = defaultCfg()): { ok: true; cfg: EngagementCfg } | { ok: false; error: string } {
-  const cfg: EngagementCfg & { opening: BrandSlot[]; closing: BrandSlot[] } = { tickets: base.tickets, rewards: base.rewards, breaks: base.breaks, rounds: base.rounds ?? 1, invites: base.invites ?? defaultInvites(), opening: base.opening ?? [], closing: base.closing ?? [], ...(base.name ? { name: base.name } : {}) };
+export function validateCfg(input: { tickets?: unknown; rewards?: unknown; breaks?: unknown; rounds?: unknown; invites?: unknown; opening?: unknown; closing?: unknown; name?: unknown; brand?: unknown }, base: EngagementCfg = defaultCfg()): { ok: true; cfg: EngagementCfg } | { ok: false; error: string } {
+  const cfg: EngagementCfg & { opening: BrandSlot[]; closing: BrandSlot[] } = { tickets: base.tickets, rewards: base.rewards, breaks: base.breaks, rounds: base.rounds ?? 1, invites: base.invites ?? defaultInvites(), opening: base.opening ?? [], closing: base.closing ?? [], ...(base.name ? { name: base.name } : {}), ...(base.brand ? { brand: base.brand } : {}) };
   if (input.rounds !== undefined) {
     if (!Number.isInteger(input.rounds) || (input.rounds as number) < 1 || (input.rounds as number) > MAX_ROUNDS) return { ok: false, error: `An engagement has 1 to ${MAX_ROUNDS} rounds.` };
     cfg.rounds = input.rounds as number;
@@ -137,6 +157,21 @@ export function validateCfg(input: { tickets?: unknown; rewards?: unknown; break
     cfg.breaks = out;
   }
   if (input.name !== undefined) { const nm = cleanText(input.name, 60); if (nm) cfg.name = nm; else delete cfg.name; }
+  if (input.brand !== undefined) { // null (or an empty object) removes the brand; otherwise the whole brand is replaced
+    const bd = input.brand as any;
+    if (bd === null || (typeof bd === "object" && !Array.isArray(bd) && Object.keys(bd).length === 0)) delete cfg.brand;
+    else {
+      if (typeof bd !== "object" || Array.isArray(bd)) return { ok: false, error: "The brand needs a name and a colour." };
+      for (const k of Object.keys(bd)) if (k !== "name" && k !== "color" && k !== "logo") return { ok: false, error: "The brand has only a name, a colour and a logo." };
+      const nm = typeof bd.name === "string" ? bd.name.replace(/[<>`"'&\\]/g, "").replace(/\s+/g, " ").trim() : "";
+      if (nm.length < 1 || nm.length > BRAND_NAME_MAX) return { ok: false, error: `The brand name is 1 to ${BRAND_NAME_MAX} characters.` };
+      const color = typeof bd.color === "string" ? bd.color.trim().toUpperCase() : "";
+      if (!BRAND_COLORS.includes(color)) return { ok: false, error: "Pick one of the brand colours from the list." };
+      let logo: string | undefined;
+      if (bd.logo !== undefined && bd.logo !== null && bd.logo !== "") { const lg = checkBrandLogo(bd.logo); if (!lg.ok) return lg; logo = bd.logo as string; }
+      cfg.brand = { name: nm, color, ...(logo ? { logo } : {}) };
+    }
+  }
   for (const [field, label, max, isOpening] of [["opening", "before the game starts", maxEdgeFor(cfg.tickets), true], ["closing", "at the end of the game", maxEdgeFor(cfg.tickets), false]] as const) {
     const raw = (input as any)[field];
     if (raw === undefined) continue;

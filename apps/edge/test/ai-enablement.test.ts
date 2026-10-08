@@ -62,7 +62,7 @@ describe("the front door", () => {
     expect(m).not.toMatch(/ctk_/);
   });
   test("a co-host's AI link gets a short front door of its own and cannot use the organizer's guided path or map", async () => {
-    const o = await organizer(); const hk = await j(await call("POST", `/ai/${o.key}/org/host`, {})); const hb = `${ORIGIN}/ai/${hk.hostKey}`;
+    const o = await organizer(); const hk = await j(await call("POST", "/api/org/host", { email: "host@acme.com", mobile: "9876500009" }, { "x-organizer": o.token })); const hb = `${ORIGIN}/ai/${hk.hostKey}`;
     expect((await open(`${hb}/start`)).text).toMatch(/Host's AI assistant/);
     expect((await open(`${hb}/go/new`)).status).toBe(403); expect((await open(`${hb}/map`)).status).toBe(403);
   });
@@ -111,7 +111,7 @@ describe("the guided path, followed like an outside AI", () => {
     expect(choicesOf(menu).find((c) => /Pause or stop/.test(c.label))!.url).toBe(`${ORIGIN}/zc.html?e=DIWALI-1002&do=pause`);
     const links = await pick(menu, /Show the links/); expect(links).toContain(`${ORIGIN}/zc.html?e=DIWALI-1002`); expect(links).toMatch(/appear after you publish/);
     expect(await pick(menu, /How many have joined/)).toMatch(/0 people have joined DIWALI-1002/);
-    const helper = await pick(menu, /Host link/); expect(helper).toMatch(/#host=cth_[0-9a-f]{48}/); expect(helper).toMatch(/that one person only/);
+    const helper = await pick(menu, /Host link/); expect(helper).toMatch(/only the owner enters those, in the console/); expect(helper).not.toMatch(/#host=cth_/); // the AI never handles a Host's mobile number or e-mail
     let c = await pick(menu, /Change the day or time/); c = await pick(c, /Sat 3 Oct/); expect(c).toMatch(/At what time/); c = await pick(c, /^7 pm/);
     expect(c).toMatch(/Done\. DIWALI-1002 now starts on/); expect(c).toMatch(/7 pm India time/);
     expect((await j(await call("GET", `/ai/${o.key}/z/DIWALI-1002/summary`))).startMs).toBe(Date.UTC(2026, 9, 3, 13, 30)); // 7 pm India time on Sat 3 Oct
@@ -148,7 +148,8 @@ describe("every function in the list does what the list says", () => {
       publish: async () => { const r = await j(await A("POST", `z/${ID}/publish`, {})); expect(r.needsOrganizer).toBe(true); expect(r.consoleUrl).toContain(ID); },
       pay: async () => { expect(existsSync(join(root, "apps/web/public/pay.html"))).toBe(true); expect((await A("POST", `z/${ID}/checkout`, {})).status).not.toBe(200); },
       links: async () => { const s = await j(await A("GET", `z/${ID}/summary`)); expect(s.links.testBrandMoment).toBe(`${ORIGIN}/preview.html`); },
-      helpers: async () => { expect((await j(await A("POST", "org/host", {}))).hostKey).toMatch(/^cth_/); },
+      helpers: async () => { const r = await A("POST", "org/host", { email: "host@acme.com", mobile: "9876500009" }); expect(r.status).toBe(403); expect((await j(r)).error).toMatch(/console/); expect((await A("POST", "org/cohost", { label: "Ravi", phone: "9876500002", e: ID })).status).toBe(403); },
+      people: async () => { for (const [m, p] of [["GET", `z/${ID}/people`], ["POST", `z/${ID}/people`], ["GET", `z/${ID}/people/export`], ["GET", `z/${ID}/waiting`], ["POST", `z/${ID}/waiting/all`]]) expect((await A(m!, p!, m === "POST" ? { people: [{ name: "X", phone: "9876543210" }], decision: "admit" } : undefined)).status).toBe(403); },
       announce: async () => { const r = await A("POST", `z/${ID}/announce`, { text: "hi" }); expect(r.status).toBe(400); expect((await j(r)).next).toMatch(/publish/i); },
       "who-joined": async () => { const r = await j(await A("GET", `z/${ID}/participants`)); expect(r.total).toBe(0); expect(JSON.stringify(r)).not.toMatch(/phone|mobile/i); },
       "mark-seat": async () => { expect((await A("POST", `z/${ID}/mark`, { seat: 1, role: "host" })).status).not.toBe(403); expect((await A("POST", `z/${ID}/unbind`, { seat: 1 })).status).not.toBe(403); expect((await A("POST", `z/${ID}/unbind`, { phone: "9876543210" })).status).toBe(403); /* a phone number is never accepted from an AI */ },
@@ -159,6 +160,7 @@ describe("every function in the list does what the list says", () => {
       erase: async () => { expect((await A("POST", `z/${ID}/erase`, {})).status).toBe(403); const r = await j(await A("POST", `z/${ID}/control/request`, { action: "erase", note: "x" })); expect(r.ok).toBe(true); },
       audit: async () => { expect((await A("GET", "org/ai/audit")).status).toBe(200); },
       ideas: async () => { expect((await A("POST", "z/suggestions", { kind: "feature", title: "A nicer thing", body: "It would help organizers a lot." })).status).toBe(200); },
+      cancel: async () => { expect((await A("POST", `z/${ID}/cancel`, { confirmations: 3 })).status).toBe(403); expect((await A("GET", `z/${ID}/cancel-preview`)).status).toBe(403); expect((await j(await A("GET", `z/${ID}/summary`))).cancelled).toBeUndefined(); },
       "sign-in": async () => { expect(existsSync(join(root, "apps/web/public/zc.html"))).toBe(true); expect((await A("POST", "org/ai/replace", {})).status).toBe(403); /* an AI can never mint or retire keys */ },
     };
     expect(Object.keys(checks).sort()).toEqual(FUNCTIONS.map((f) => f.id).sort()); // a function added to the list without a check here fails this test

@@ -164,7 +164,7 @@ describe("C. publish and pay", () => {
     expect(await purgeOld(env as Env, T + 31 * DAY)).toBeGreaterThanOrEqual(1);
     expect(engRow("CASE-1")).toBeFalsy();
   });
-  test("UC-12 pay AFTER the start time: it begins about 3 minutes later for everyone already waiting", async () => {
+  test("UC-12 pay AFTER the start time: the first number comes 2 minutes after the payment for everyone already waiting", async () => {
     withGateway();
     const o = await organizer();
     await call("POST", "/api/z", eng("LATE-PAY"), o.h);
@@ -173,7 +173,7 @@ describe("C. publish and pay", () => {
     expect((await j(await call("GET", "/api/z/LATE-PAY/info", undefined, {}, late))).locked).toBe(true);
     const c = await j(await checkout(o, "LATE-PAY", {}, late));
     const v = await j(await settle(c.paymentId, c.razorpay.orderId, "pay_late", late));
-    expect(v.published).toBe(true); expect(v.restartedAtMs).toBeGreaterThanOrEqual(late + 50_000); expect(v.restartedAtMs).toBeLessThanOrEqual(late + 70_000); // the clock time shown to people; the first number follows 2 minutes later (setup window), about 3 minutes after paying
+    expect(v.published).toBe(true); expect(v.restartedAtMs).toBeGreaterThanOrEqual(late); expect(v.restartedAtMs).toBeLessThanOrEqual(late + 4_000); expect(v.restartedAtMs + 120_000 - late).toBeGreaterThanOrEqual(115_000); expect(v.restartedAtMs + 120_000 - late).toBeLessThanOrEqual(124_000); // the start moves to the next round; the first number follows the 2-minute setup window, so 2 minutes after paying
     const info = await j(await call("GET", "/api/z/LATE-PAY/info", undefined, {}, late + 1000));
     expect(info.locked).toBeFalsy(); expect(info.startMs).toBe(v.restartedAtMs);
     expect((await call("GET", "/api/z/LATE-PAY/control", undefined, {}, late + 1000)).status).toBe(404);
@@ -623,18 +623,18 @@ describe("I. announcements, co-hosts and scratch cards", () => {
   });
   test("UC-81 a Host through an AI work link can watch and send messages, and nothing else; at most five Hosts; retiring stops it at once", async () => {
     const o = await organizer(); await live("HOST-1", o);
-    const hk = (await j(await call("POST", "/api/org/host", {}, o.h))).hostKey as string; expect(hk).toMatch(/^cth_/);
+    const hk = (await j(await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, o.h))).hostKey as string; expect(hk).toMatch(/^cth_/);
     const h = { "x-organizer": hk, "x-ct-link": "1" }; // an AI work link keeps the narrow rights (in the console a Host may do much more: see roles.test.ts)
     expect((await j(await call("GET", "/api/whoami", undefined, h))).kind).toBe("host"); expect((await j(await call("GET", "/api/whoami", undefined, o.h))).kind).toBe("master");
     expect((await ann("HOST-1", h, "Welcome everyone")).status).toBe(200);
     expect((await call("GET", "/api/z/HOST-1/participants", undefined, h)).status).toBe(200);
     expect((await call("GET", "/api/z/HOST-1/summary", undefined, h)).status).toBe(200);
-    for (const [m, p, body] of [["PATCH", "/api/z/HOST-1/settings", { cap: 5 }], ["POST", "/api/z/HOST-1/roster", { people: [{ phone: phone(5) }] }], ["POST", "/api/z/HOST-1/erase", {}], ["POST", "/api/z/HOST-1/settle", { results: [] }], ["POST", "/api/z/HOST-1/publish", contact], ["GET", "/api/z/HOST-1/claims"], ["PUT", "/api/z/HOST-1/control/key", { publicKey: "aa" }], ["POST", "/api/z", eng("HOSTMADE")], ["POST", "/api/org/host", {}], ["POST", "/api/org/ai", {}], ["GET", "/api/org/keys"], ["POST", "/api/org/keys/revoke", { id: "x" }]] as const)
+    for (const [m, p, body] of [["PATCH", "/api/z/HOST-1/settings", { cap: 5 }], ["POST", "/api/z/HOST-1/roster", { people: [{ phone: phone(5) }] }], ["POST", "/api/z/HOST-1/erase", {}], ["POST", "/api/z/HOST-1/settle", { results: [] }], ["POST", "/api/z/HOST-1/publish", contact], ["GET", "/api/z/HOST-1/claims"], ["PUT", "/api/z/HOST-1/control/key", { publicKey: "aa" }], ["POST", "/api/z", eng("HOSTMADE")], ["POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }], ["POST", "/api/org/ai", {}], ["GET", "/api/org/keys"], ["POST", "/api/org/keys/revoke", { id: "x" }]] as const)
       expect([401, 403, 503]).toContain((await call(m, p, body, h)).status);
     expect(engRow("HOSTMADE")).toBeFalsy();
     const keys = await j(await call("GET", "/api/org/keys", undefined, o.h)); const hostRow = keys.keys.find((k: any) => k.kind === "host");
-    for (let i = 0; i < 4; i++) expect((await call("POST", "/api/org/host", {}, o.h)).status).toBe(200);
-    expect((await call("POST", "/api/org/host", {}, o.h)).status).toBe(409);
+    for (let i = 0; i < 4; i++) expect((await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, o.h)).status).toBe(200);
+    expect((await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, o.h)).status).toBe(409);
     // retire it with a second master key, as in real life
     await call("POST", "/api/auth/email", { email: o.email }); const code = outbox("%Sign in to Corporate Tambola%").at(-1)!.body.match(/\b\d{6}\b/)![0];
     const m2 = (await j(await call("POST", "/api/auth/verify", { email: o.email, code }))).token as string;

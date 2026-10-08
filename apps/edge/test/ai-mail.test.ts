@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { withDevice } from "./device";
 import { handle, housekeeping, type Env } from "../src/worker";
-import { AI_SUBJECT, AI_WARNING, HOST_SUBJECT, HOST_WARNING, aiLinkMail, coHostLinkMail } from "../src/mails";
+import { AI_SUBJECT, AI_WARNING, HOST_LINK_SUBJECT, HOST_SUBJECT, HOST_WARNING, aiLinkMail, coHostLinkMail } from "../src/mails";
 import { footerText } from "../src/brand";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
@@ -20,7 +20,7 @@ const contact = { email: "boss@acme.com", phone: "98765 43210" };
 const mailedKey = (b: string) => b.match(/cta_[0-9a-f]{48}/)![0];
 const outbox = () => raw.prepare("SELECT to_addr, subject, body FROM outbox ORDER BY id").all() as { to_addr: string; subject: string; body: string }[];
 const LEAK = /cta_[0-9a-f]|cth_[0-9a-f]|\/ai\//;
-const DEDICATED = new Set([AI_SUBJECT, HOST_SUBJECT]);
+const DEDICATED = new Set([AI_SUBJECT, HOST_SUBJECT, HOST_LINK_SUBJECT]); // HOST_LINK_SUBJECT: the Host's OWN console link, e-mailed to the Host only
 
 beforeEach(() => {
   const d = makeD1(); raw = d.raw;
@@ -81,7 +81,7 @@ describe("the AI link is in the dedicated mails and nowhere else", () => {
     const { h } = await organizer();
     await call("POST", "/api/z", { id: "MAIL-1", startRound: roundAt(T + 30 * 3_600_000), callSeconds: 6, cap: 500 }, h);
     expect((await call("POST", "/api/z/MAIL-1/publish", contact, h)).status).toBe(200);
-    expect((await call("POST", "/api/org/host", {}, h)).status).toBe(200);
+    expect((await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, h)).status).toBe(200);
     expect((await call("POST", "/api/org/ai/replace", {}, h)).status).toBe(200);
     await housekeeping(env as Env, T + 86_400_000); // payment reminder
     await call("GET", "/api/z/MAIL-1/info", undefined, {}, T + 40 * 3_600_000); // start passed unpaid: the "could not begin" mail
@@ -133,7 +133,7 @@ describe("Replace my AI link", () => {
   });
   test("an AI key, a co-host key, the platform key and strangers cannot replace it", async () => {
     const o = await organizer();
-    const hk = await j(await call("POST", "/api/org/host", {}, o.h));
+    const hk = await j(await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, o.h));
     for (const hdr of <Record<string, string>[]>[{ "x-organizer": o.ai }, { "x-organizer": hk.hostKey }, { "x-organizer": "plat" }, {}, { "x-organizer": "cta_" + "0".repeat(48) }])
       for (const path of ["/api/org/ai/replace", "/api/org/ai"]) expect((await call("POST", path, {}, hdr)).status).toBe(403);
     expect((await call("POST", `/ai/${o.ai}/org/ai/replace`, {})).status).toBe(403); // not through the AI link either
@@ -147,7 +147,7 @@ describe("Replace my AI link", () => {
   });
   test("a co-host key made later is e-mailed to the organizer in its own mail", async () => {
     const o = await organizer();
-    const hk = await j(await call("POST", "/api/org/host", {}, o.h)); expect(hk.mailed).toBe(true);
+    const hk = await j(await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, o.h)); expect(hk.mailed).toBe(true);
     const m = outbox().at(-1)!; expect(m.subject).toBe(HOST_SUBJECT); expect(m.to_addr).toBe("boss@acme.com"); expect(m.body).not.toContain(hk.hostKey); expect(m.body).toContain("boss@acme.com"); expect(m.body).toMatch(/WORKS FOR 24 HOURS ONLY/);
     const ck = m.body.match(/cth_[0-9a-f]{48}/)![0]; expect(ck).not.toBe(hk.hostKey); expect((await call("GET", `/ai/${ck}`)).status).toBe(200); expect((await call("GET", `/ai/${hk.hostKey}`)).status).toBe(200);
   });

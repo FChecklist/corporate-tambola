@@ -112,15 +112,15 @@ export async function myPrizes(env: Env & PiiEnv, eid: string, url: URL, json: J
 /** The organizer's / co-host's list of winners with the details they confirmed, whether anything was changed after the game, and whether the prize has been given. */
 /** `outside` = an outside AI is asking: mobile numbers are cut to their last two digits and the change history is left out, so a full number never travels through a chat. */
 export async function listPrizes(env: Env & PiiEnv, eid: string, json: Json, outside = false): Promise<Response> {
-  const rows = (await env.DB.prepare("SELECT round, pattern, ordinal, seat, pii, orig, trail, confirmed_ms, given_ms, given_by FROM prize WHERE eid=? ORDER BY round, pattern, ordinal, seat LIMIT 400").bind(eid).all<any>()).results ?? [];
+  const rows = (await env.DB.prepare("SELECT prize.round AS round, prize.pattern AS pattern, prize.ordinal AS ordinal, prize.seat AS seat, prize.pii AS pii, prize.orig AS orig, prize.trail AS trail, prize.confirmed_ms AS confirmed_ms, prize.given_ms AS given_ms, prize.given_by AS given_by, COALESCE(s.blocked,0) AS removed FROM prize LEFT JOIN seat s ON s.eid=prize.eid AND s.seq=prize.seat WHERE prize.eid=? ORDER BY prize.round, prize.pattern, prize.ordinal, prize.seat LIMIT 400").bind(eid).all<any>()).results ?? [];
   const out = [];
   for (const r of rows) {
     const cur = await openPii(env, r.pii), orig = await openPii(env, r.orig);
     let trail: any[] = []; try { trail = JSON.parse((await openText(env, r.trail)) ?? "[]"); } catch { /* none */ }
     const hide = (ph: string | undefined) => (outside ? (ph ? "XXXXXXXX" + ph.slice(-2) : "") : ph ?? "");
-    if (outside) out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, confirmed: !!r.confirmed_ms, changed: trail.length > 0, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null });
+    if (outside) out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, confirmed: !!r.confirmed_ms, changed: trail.length > 0, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null, ...(r.removed ? { notGiven: "removed" } : {}) });
     else out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, name: cur?.name ?? "", phone: cur?.phone ?? "", confirmed: !!r.confirmed_ms, confirmedMs: r.confirmed_ms ?? null,
-      changed: trail.length > 0, joinedWithName: orig?.name ?? "", joinedWithPhone: orig?.phone ?? "", trail, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null });
+      changed: trail.length > 0, joinedWithName: orig?.name ?? "", joinedWithPhone: orig?.phone ?? "", trail, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null, ...(r.removed ? { notGiven: "removed" } : {}) }); // a person removed during the game keeps the win, but the prize is not given
   }
   return json({ prizes: out });
 }
@@ -128,6 +128,7 @@ export async function listPrizes(env: Env & PiiEnv, eid: string, json: Json, out
 /** The organizer / co-host ticks "prize given" (with the date) or takes the tick back. */
 export async function markGiven(env: Env, eid: string, b: any, kind: string | null, now: number, json: Json, spend: Spend): Promise<Response> {
   if (!b || !Number.isInteger(b.round) || !Number.isInteger(b.ordinal) || !Number.isInteger(b.seat) || typeof b.pattern !== "string" || typeof b.given !== "boolean") return json({ error: "Bad request." }, 400);
+  if (b.given && (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND seq=? AND blocked=1").bind(eid, b.seat).first())) return json({ error: "Not given: this person was removed from the game.", code: "removed" }, 409);
   if (!(await spend(env, now))) return json({ error: "Busy day. Please try again after midnight UTC." }, 503);
   const r = await env.DB.prepare("UPDATE prize SET given_ms=?, given_by=? WHERE eid=? AND round=? AND pattern=? AND ordinal=? AND seat=?").bind(b.given ? now : null, b.given ? (kind === "host" ? "co-host" : kind === "ai" ? "organizer's AI" : "organizer") : null, eid, b.round, b.pattern, b.ordinal, b.seat).run();
   return (r.meta?.changes ?? 0) > 0 ? json({ ok: true, givenMs: b.given ? now : null }) : json({ error: "No such reward." }, 404);

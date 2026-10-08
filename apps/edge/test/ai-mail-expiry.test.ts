@@ -46,7 +46,7 @@ describe("the e-mailed link lasts 24 hours", () => {
     expect(fresh).not.toBe(first); expect(fresh).not.toBe(o.ai);
     for (const k of [fresh, first, o.ai]) expect((await call("GET", `/ai/${k}`, undefined, {}, T + 4 * H)).status).toBe(200);
     expect((await call("GET", `/ai/${first}`, undefined, {}, T + 24 * H + 30 * 60_000)).status).toBe(404); expect((await call("GET", `/ai/${fresh}`, undefined, {}, T + 24 * H + 30 * 60_000)).status).toBe(200); // each key has its own 24 hours
-    const hk = await j(await call("POST", "/api/org/host", {}, o.h));
+    const hk = await j(await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, o.h));
     for (const hdr of <Record<string, string>[]>[{ "x-organizer": o.ai }, { "x-organizer": hk.hostKey }, { "x-organizer": fresh }, { "x-organizer": "plat" }, {}]) expect((await call("POST", "/api/org/ai/fresh", {}, hdr)).status).toBe(403);
     expect((await call("POST", `/ai/${o.ai}/org/ai/fresh`, {})).status).toBe(403);
   });
@@ -56,8 +56,8 @@ describe("the e-mailed link lasts 24 hours", () => {
     expect((await call("POST", "/api/org/ai/fresh", {}, o.h)).status).toBe(429);
     const x = await j(await call("POST", "/api/org/ai/replace", {}, o.h));
     expect((await call("GET", `/ai/${first}`)).status).toBe(404); expect((await call("GET", `/ai/${o.ai}`)).status).toBe(404); expect((await call("GET", `/ai/${x.aiKey}`)).status).toBe(200);
-    for (let i = 0; i < 5; i++) expect((await call("POST", "/api/org/host", {}, o.h)).status).toBe(200);
-    expect((await call("POST", "/api/org/host", {}, o.h)).status).toBe(409);
+    for (let i = 0; i < 5; i++) expect((await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, o.h)).status).toBe(200);
+    expect((await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, o.h)).status).toBe(409);
   });
   test("an organizer with no e-mail on file gets the 24-hour paste in the answer (mailed: false)", async () => {
     const mk = await j(await call("POST", "/api/org", {}, { "x-organizer": "plat" }));
@@ -71,7 +71,7 @@ describe("Show my AI work link: the signed-in read behind the e-mail's button", 
     const o = await organizer(); const mailKey = mailedKey(outbox()[0]!.body);
     const r = await j(await call("GET", "/api/org/ai/link", undefined, o.h));
     expect(r.aiMessage).toContain(`/ai/${o.ai}`); expect(r.aiMessage.split("\n").length).toBe(2); expect(r.aiMessage).not.toContain(mailKey);
-    const hk = await j(await call("POST", "/api/org/host", {}, o.h));
+    const hk = await j(await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, o.h));
     for (const hdr of <Record<string, string>[]>[{ "x-organizer": o.ai }, { "x-organizer": mailKey }, { "x-organizer": hk.hostKey }, { "x-organizer": "plat" }, {}]) expect((await call("GET", "/api/org/ai/link", undefined, hdr)).status).toBe(403);
     expect((await call("GET", `/ai/${o.ai}/org/ai/link`)).status).toBe(403);
     const x = await j(await call("POST", "/api/org/ai/replace", {}, o.h));

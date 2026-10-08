@@ -15,11 +15,16 @@
 import { GRACE_ROUNDS, brandMomentsFor, defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
 import { openPii, openText, sealPii, sealText } from "./pii";
 import { TERMS_VERSION } from "./brand";
-import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, newUseAlertMail, signInMail } from "./mails";
+import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, hostLinkMail, newUseAlertMail, signInMail } from "./mails";
+import { cancelGame, cancelPreview, refundView, teamEmails } from "./cancel";
 import { acceptOver, acceptWon, endBoundMs, eraseEverything, erasePersonal, fullDeleteAt, lifecycleTick, personalDeleteAt, recordWinners, reportApi, reportLink } from "./lifecycle";
 import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
+import { PEOPLE_SCHEMA, COHOST_FROM, HOST_FROM, ORG_FROM, COHOST_LIMIT_DEFAULT, COHOST_LIMIT_MIN, COHOST_LIMIT_MAX, WAITING_MAX, addWaiting, chainOf, cleanPhone, fromCodeOf, inviterOf, joinLinkPage, limitOfInviter, listCount, parseFrom, peopleRoute, personByPhone, personByToken, srcOf, waitingWho, type PersonRow } from "./people";
+import { PAYLINK_SCHEMA, PAYLINK_TOKEN, createPayLink, packFor } from "./paylink";
+import { HOST_LINK_TTL_MS, HOST_SCHEMA, confirmHostEmail, emailHashOf, hostForEmail, hostKeyStatus, hostSetupRoute, hostStateRow, identityRow, maskEmail, maskMobile, mintDeviceKey, retireHost } from "./hostsetup";
+import { googleClientId, verifyGoogleCredential } from "./google";
 import { MODE_SCHEMA, modeRoute, orgIsTest, testFlag } from "./mode";
 import { purgeTestData } from "./test-data";
 import { frontDoorText, nextHint, GET_BODY_MAX, LINK_KEY, CONVERSATION, aiPaste, manualJson, manualText, type LinkRole } from "./ai-link";
@@ -51,6 +56,8 @@ export interface Env {
   CONTROL_R2?: R2Like; CONTROL_BASE?: string;
   /** Optional: an OpenAI-compatible chat endpoint the OWNER's 'analyze' route may send MASKED aggregates to (never IPs, device ids or names). */
   ANALYZE_AI_URL?: string; ANALYZE_AI_KEY?: string; ANALYZE_AI_MODEL?: string;
+  /** Optional and public (it is not a secret): the Google sign-in client id. Without it the "Continue with Google" button is hidden and /api/auth/google answers 404. */
+  GOOGLE_CLIENT_ID?: string;
 }
 const controlKey = (id: string) => `c/${id}.json`;
 const controlUrl = (env: Env, id: string) => (env.CONTROL_BASE && env.CONTROL_R2 ? `${env.CONTROL_BASE.replace(/\/$/, "")}/${controlKey(id)}` : null);
@@ -70,8 +77,10 @@ export const PAGE = 2000;
 export const CLAIM_TRACKING_MAX_CAP = 500;
 const tracks = (e: { cap: number }) => e.cap <= CLAIM_TRACKING_MAX_CAP;
 /** The part of the settings every phone needs, public by design: how many tickets, what each house wins, and when the brand breaks are. */
-const pub = (e: any) => { const c = cfgOf(e); return { tickets: c.tickets, rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.name ? { name: c.name } : {}) }; };
-const cfgJson = (c: EngagementCfg) => JSON.stringify({ rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.name ? { name: c.name } : {}) });
+/** The brand strip as phones see it: the full brand (with the logo) from `info`; everywhere else only name and colour (a logo can be 40 KB and a 10,000-person list must not carry it). */
+const brandOut = (c: EngagementCfg, withLogo: boolean) => (c.brand ? { brand: withLogo ? c.brand : { name: c.brand.name, color: c.brand.color, ...(c.brand.logo ? { hasLogo: true } : {}) } } : {});
+const pub = (e: any, withLogo = false) => { const c = cfgOf(e); return { tickets: c.tickets, rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.name ? { name: c.name } : {}), ...brandOut(c, withLogo) }; };
+const cfgJson = (c: EngagementCfg) => JSON.stringify({ rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.name ? { name: c.name } : {}), ...(c.brand ? { brand: c.brand } : {}) });
 
 /** Privacy and lifecycle: sealed personal data, the role / inviter / invite kind / source of a seat, when each game ended, the winners record that outlives the personal data, and the votes that tell us a game is over. */
 export const PRIVACY_SCHEMA: string[] = [
@@ -125,12 +134,28 @@ export const SCHEMA: string[] = [
   ...MODE_SCHEMA,
   // roles (Organizer / Host / Co-host): a short private label on each Host and Co-host key (0014_roles.sql)
   `ALTER TABLE organizer_key ADD COLUMN label TEXT`,
+  // cancel a game, refund, credit note, Host e-mail, Co-host bound to one game (0015_cancel_refund.sql)
+  `ALTER TABLE engagement ADD COLUMN cancelled_ms INTEGER`,
+  `ALTER TABLE engagement ADD COLUMN cancelled_by TEXT`,
+  `ALTER TABLE organizer_key ADD COLUMN email_sealed TEXT`,
+  `ALTER TABLE organizer_key ADD COLUMN eid TEXT`,
+  `ALTER TABLE organizer_key ADD COLUMN pii TEXT`,
+  `ALTER TABLE payment ADD COLUMN eid TEXT`,
+  `ALTER TABLE payment ADD COLUMN confirming_ms INTEGER`,
+  `CREATE INDEX IF NOT EXISTS payment_eid ON payment (eid)`,
+  `CREATE TABLE IF NOT EXISTS refund (payment_id TEXT PRIMARY KEY, eid TEXT, org TEXT, currency TEXT NOT NULL, paid REAL NOT NULL, fee REAL NOT NULL, refund REAL NOT NULL, refund_status TEXT NOT NULL, rzp_refund_id TEXT, is_test INTEGER NOT NULL DEFAULT 0, note TEXT, requested_ms INTEGER NOT NULL, updated_ms INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS credit_note (token TEXT PRIMARY KEY, payment_id TEXT UNIQUE NOT NULL, brand TEXT NOT NULL, fy TEXT NOT NULL, seq INTEGER NOT NULL, number TEXT NOT NULL, issued_ms INTEGER NOT NULL, data TEXT NOT NULL, UNIQUE (brand, fy, seq))`,
+  // people, links and joining (0016_people.sql): one list per inviter, personal links, the waiting room, a blocked flag for removed seats
+  ...PEOPLE_SCHEMA,
+  // brand on the ticket needs no table (it lives in the game's settings); pay links anyone can open, and the Host first open (0017_brand_paylink_google.sql)
+  ...PAYLINK_SCHEMA,
+  ...HOST_SCHEMA,
 ];
 
 const PATTERNS = new Set(["early5", "top", "mid", "bot", "corners", "star", "full", "full2", "lucky"]);
 /** What the organizer set for this engagement (tickets per participant, reward lines, brand breaks); plain defaults when nothing was set. */
 const cfgOf = (e: { tickets?: number; config?: string | null }): EngagementCfg => {
-  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, opening: j.opening, closing: j.closing, name: j.name }); if (v.ok) return v.cfg; } catch { /* fall through */ }
+  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, opening: j.opening, closing: j.closing, name: j.name, brand: j.brand }); if (v.ok) return v.cfg; } catch { /* fall through */ }
   return defaultCfg();
 };
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
@@ -138,6 +163,8 @@ const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))), (b) => b.toString(16).padStart(2, "0")).join("");
 const randHex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
 const MAX_BODY = 4096;
+/** Settings and game creation may carry a brand logo (at most 30 KB decoded, about 40 KB as text). */
+const BRAND_BODY_MAX = 60_000;
 const ID = /^[A-Za-z0-9_-]{4,40}$/;
 const GENESIS = 1692803367; // drand quicknet; round r is published at GENESIS + (r-1)*3 s (UTC)
 const roundMs = (r: number) => (GENESIS + (r - 1) * 3) * 1000;
@@ -278,6 +305,7 @@ export async function handle(req: Request, env: Env, now = Date.now(), waitUntil
   if (keysMissing(env)) return new Response(JSON.stringify({ error: "The service is not configured. Please try again later." }), { status: 503, headers: { "content-type": "application/json", "cache-control": "no-store" } });
   const pn = new URL(req.url).pathname;
   if (pn === "/ai" || pn.startsWith("/ai/")) return aiLink(req, env, now, waitUntil);
+  if (req.method === "GET" && pn.startsWith("/j/")) return joinLinkPage(env, decodeURIComponent(pn.slice(3)).replace(/\/$/, ""), (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, (e) => cfgOf(e).name || e.id); // the short personal link (people.ts)
   return handle0(req, env, now, waitUntil);
 }
 
@@ -365,6 +393,32 @@ async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promi
   }
   return new Response(req.method === "HEAD" ? null : r.body, { status: r.status, headers: out });
 }
+/** A fresh Host key (the personal link, or the key for one device of a Host). */
+const newHostKey = (): string => "cth_" + randHex(24);
+/** The WhatsApp button for a Host who has only a mobile number: opens WhatsApp to that number with the one-time link ready to send (the Organizer presses send). */
+const waLinkFor = (digits: string, name: string, link: string): string => `https://wa.me/${digits}?text=${encodeURIComponent(`${name ? "Hello " + name + ", you" : "You"} are a Host of a Corporate Tambola game. Open your link to finish your setup (it works once, for 7 days): ${link}`)}`;
+/** A brand-new organizer account for a work e-mail (used by the first-time start and by Google sign-up): the console key, the lasting AI key (shown only in the console), and the 24-hour AI-link mail. */
+async function createOrganizer(env: Env, req: Request, email: string, now: number, via: "start" | "signin-google"): Promise<{ ok: true; token: string; aiKey: string; aiMessage: string } | { error: string; status: number }> {
+  const eh = await sha("email|" + email);
+    const ipk = `start/${day(now)}/${(await sha("ip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16)}`;
+    const used = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(ipk).first<{ v: string }>())?.v ?? 0);
+    if (used >= STARTS_PER_DAY) return { error: "Too many new engagements from this network today. Please try again tomorrow.", status: 429 };
+    if (!(await spend(env, now, 6))) return { error: "busy", status: 503 };
+    const org = randHex(8), token = "ctk_" + randHex(24), aiKey = "cta_" + randHex(24), test = await testFlag(env); // an account made in TEST mode is flagged is_test
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,?)").bind(await sha("key|" + token), org, "master", now, test),
+      env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,?)").bind(await sha("key|" + aiKey), org, "ai", now, test),
+      env.DB.prepare("INSERT INTO organizer_email(email_hash,org,is_test) VALUES(?,?,?)").bind(eh, org, test),
+      env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`orgmail/${org}`, await sealText(env as any, email)),
+      env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`aikey/${org}`, await sealText(env as any, aiKey)), // so the signed-in organizer can read their lasting link again (never mailed)
+      env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(ipk, String(used + 1), String(used + 1)),
+    ]);
+    await recordTerms(env, org, now, via);
+    await linkVisitor(env as VisitEnv, req, org, "start", now, email); // ties the visitor's earlier visits to this new organizer (no-op when nothing was tracked)
+    const origin0 = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, startMsg = aiMessage(origin0, aiKey); // aiKey is the lasting key, shown only in the console
+    await mailTempLink(env, req, org, "ai", "start", now, email); // the dedicated mail carries a separate key that expires in 24 hours
+    return { ok: true, token, aiKey, aiMessage: startMsg };
+}
 async function handle0(req: Request, env: Env, now: number, waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (waitUntil && now - lastNudge > 60_000 && (req.headers.has("x-organizer") || /\/over$/.test(new URL(req.url).pathname))) { lastNudge = now; waitUntil(lifecycleTick(env as any, now).then(() => undefined, () => undefined)); }
@@ -380,15 +434,22 @@ function d1kv(env: Env): KV { return {
   put: async (k, v) => { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, v).run(); },
 }; }
 
-interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null; viaLink?: boolean }
+interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null; viaLink?: boolean; eid?: string | null; /** A Host: the identity the key belongs to and whether the first-open setup (confirmed e-mail + mobile) is finished. */ hid?: string; hostReady?: boolean }
 async function authOf(req: Request, env: Env, now: number): Promise<Auth> {
   return authOfKey(env, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), now);
 }
 async function authOfKey(env: Env, presented: string, now: number): Promise<Auth> {
   if (!presented) return { plat: false, org: null, kind: null };
   if (env.ORGANIZER_SECRET && presented === env.ORGANIZER_SECRET) return { plat: true, org: null, kind: "platform" };
-  const row = await env.DB.prepare("SELECT org, kind FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(await sha("key|" + presented), now).first<{ org: string; kind: "master" | "ai" | "host" | "cohost" }>();
-  return row ? { plat: false, org: row.org, kind: row.kind } : { plat: false, org: null, kind: null };
+  const kh = await sha("key|" + presented);
+  const row = await env.DB.prepare("SELECT org, kind, eid, host_id FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(kh, now).first<{ org: string; kind: "master" | "ai" | "host" | "cohost"; eid: string | null; host_id: string | null }>();
+  if (!row) return { plat: false, org: null, kind: null };
+  if (row.kind === "host") { // a Host's first-open link works once and for 7 days; the console works only after setup (hostsetup.ts)
+    const hs = await hostKeyStatus(env.DB, kh, row.host_id, now);
+    if (!hs.usable) return { plat: false, org: null, kind: null };
+    return { plat: false, org: row.org, kind: "host", eid: row.eid ?? null, hid: hs.hid, hostReady: hs.ready };
+  }
+  return { plat: false, org: row.org, kind: row.kind, eid: row.eid ?? null };
 }
 /** May this caller act on this engagement? `master` = needs the organizer's own key, or a Host's (both are people, never the AI), or ours. A Co-host never passes: their rights are a few named routes only. */
 const can = (a: Auth, e: { org: string | null }, master = false) => a.plat || (!!a.org && e.org === a.org && a.kind !== "cohost" && (!master || a.kind === "master" || (a.kind === "host" && !a.viaLink)));
@@ -398,15 +459,20 @@ const deny = (a: Auth) => json({ error: a.kind === "ai" ? "Your AI assistant may
 /** What a Host may touch through an AI work link (x-ct-link): watching, and messages to everyone. Through the console a Host may do everything inside a game. */
 const HOST_ACTIONS = new Set(["participants", "summary", "results", "info", "announce", "prizes", "prizegiven", "reportlink", "life"]);
 const MAX_HOSTS = 5;
+/** A payment the gateway has not confirmed yet shows as "Confirming your payment..." for this long; after that it is simply pending again. */
+const CONFIRMING_WINDOW_MS = 30 * 60_000;
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
 const cleanLabel = (v: unknown): string => (typeof v === "string" ? v.replace(/[<>`]/g, "").trim().slice(0, 40) : "");
 /** Paid or pending, and (for a game paid after roles existed) who paid and when. */
-async function paymentOf(env: Env, e: { id: string }, unpaid: boolean): Promise<{ status: "paid" | "pending"; paidBy?: string; paidMs?: number }> {
-  if (unpaid) return { status: "pending" };
+async function paymentOf(env: Env, e: { id: string }, unpaid: boolean, now: number): Promise<{ status: "paid" | "pending" | "confirming"; paidBy?: string; paidMs?: number }> {
+  if (unpaid) { // "Confirming your payment...": the buyer finished paying but the gateway has not confirmed it yet (never shown as Paid before that)
+    try { if (await env.DB.prepare("SELECT 1 AS x FROM payment WHERE eid=? AND status<>'paid' AND confirming_ms IS NOT NULL AND confirming_ms>?").bind(e.id, now - CONFIRMING_WINDOW_MS).first()) return { status: "confirming" }; } catch { /* no payment record: pending */ }
+    return { status: "pending" };
+  }
   try { const r = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`paidby/${e.id}`).first<{ v: string }>(); const j = r ? JSON.parse(r.v) : null; if (j?.by) return { status: "paid", paidBy: j.by, paidMs: j.ms }; } catch { /* no record: paid before roles existed */ }
   return { status: "paid" };
 }
 /** A Co-host's invite link carries `from` = COHOST_FROM + the first 7 hex of their key id (28 bits), so the old join page needs no change; people who join through it are tagged `co:<7 hex>` in `seat.src`. */
-const COHOST_FROM = 1_000_000_000;
 const broughtBy = async (env: Env, org: string, hex7: string | null): Promise<number> =>
   (await env.DB.prepare(hex7 ? "SELECT COUNT(*) AS c FROM seat s JOIN engagement e ON e.id=s.eid WHERE e.org=? AND s.src=?" : "SELECT COUNT(*) AS c FROM seat s JOIN engagement e ON e.id=s.eid WHERE e.org=? AND s.src LIKE 'co:%'").bind(...(hex7 ? [org, "co:" + hex7] : [org])).first<{ c: number }>())?.c ?? 0;
 
@@ -437,8 +503,8 @@ export const AI_MANIFEST = {
     { do: "Change of phone: let one person move their ticket to a new phone", call: "POST /api/z/{id}/unbind {seat} (the ticket number; the console takes a mobile number, an AI never does)" },
     { do: "Flag a seat as Organizer, Host or Co-host", call: "POST /api/z/{id}/mark {seat, role: organizer|host|co-host|none} (the ticket number; an AI never names a mobile number)" },
     { do: "Invitations: settle how many people each guest may invite and which kinds of guests, before the start", call: "PATCH /api/z/{id}/settings {invites: {on, per: 1-4, cats}}" },
-    { do: "Create a Host key (up to 5 Hosts; through an AI link a Host may only watch, announce and tick prizes given)", call: "POST /api/org/host {label?} -> {hostKey, manualUrl, id, label}" },
-    { do: "Create a Co-host key (unlimited; a Co-host only invites people with an own link and pays)", call: "POST /api/org/cohost {label?} -> {cohostKey, link, id, label}. The people on the team: GET /api/org/team; remove one: POST /api/org/team/retire {id}" },
+    { do: "Create a Host key (up to 5 Hosts; through an AI link a Host may only watch, announce and tick prizes given)", call: "POST /api/org/host {label, email?, mobile?} (at least one of email or mobile) -> {hostKey, manualUrl, id, label}. The AI cannot call it (403). A Host must have an e-mail address or a mobile number (the owner gives it); their own one-time console link (7 days) is e-mailed to the Host, or sent by the owner on WhatsApp" },
+    { do: "Co-hosts (unlimited; a Co-host has a name and a mobile number, no e-mail, belongs to one game, only invites people with an own link and pays) are added by the Organizer or a Host in the console, never through an AI link", call: "The people on the team: GET /api/org/team (or GET /api/org/team?e={game id}); remove one: POST /api/org/team/retire {id}" },
     { do: "Read the audit trail of AI calls, when the game ends, and whether the report is ready (the report address itself goes only to the organizer)", call: "GET /api/org/ai/audit ; GET /api/z/{id}/life ; GET /api/z/{id}/reportlink" },
     { do: "Suggest a feature, improvement or report we should build (shared with every organizer's AI, reviewed by us)", call: "POST /api/z/suggestions {kind: feature|improvement|report|bug|other, title, body}" },
     { do: "See everyone's suggestions and what we decided, and add your support to one", call: "GET /api/z/suggestions ; POST /api/z/suggestions/{id}/vote" },
@@ -448,7 +514,7 @@ export const AI_MANIFEST = {
     "Price is per engagement, by size: the smallest pack that covers the limit (see `packs`, prices include GST in India). The limit does not have to match a pack size; people beyond the limit cannot join.",
     "The organizer pays on the payment page, any time before the start time, online through Razorpay (the page shows the methods available). It takes about 2 minutes, and a GST invoice is emailed.",
     "If it is not paid by the start time the engagement does not begin: the guests who already joined see a waiting screen and nothing is shown to them. Nothing is charged and there is no penalty.",
-    "If the organizer pays late, even hours later, the engagement starts about 3 minutes after the payment, for everyone already waiting, and they can also choose a new start time first.",
+    "If the organizer pays late, even hours later, the first number comes 2 minutes after the payment is confirmed, for everyone already waiting, and they can also choose a new start time first.",
     "If they never pay, nothing is owed. They can create a new engagement whenever they like. Unpaid engagements are forgotten after 30 days.",
     "Unused places are not refunded once an engagement is paid. Rules and privacy are at /legal.html.",
   ],
@@ -459,7 +525,8 @@ export const AI_MANIFEST = {
     "Choose, publish, change or remove winners, numbers, tickets or anyone's reward (nobody can, not even the organizer: the software decides, and a result stands only when several different phones report exactly the same winners)",
     "Erase participant data (you may ASK; the organizer confirms)",
     "Pause, resume or stop a running game (you may ASK; only the organizer's own browser holds that signing key)",
-    "Create or retire the organizer's own sign-in keys, change their e-mail or delete the account",
+    "Create or retire the organizer's own sign-in keys, change their e-mail or delete the account, or sign in with Google",
+    "Make a pay link that anyone can open (POST /api/z/{id}/paylink answers 403 to an AI key: only the Organizer, a Host or a Co-host makes one)",
     "Write or run code on the platform",
   ],
 };
@@ -484,6 +551,9 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
 async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname;
+  // A Host whose first-open setup is not finished (confirmed e-mail + mobile number) can do nothing but finish it (hostsetup.ts). Public routes stay public.
+  if (a.kind === "host" && !a.viaLink && a.hostReady === false && !(p === "/api/whoami" || p.startsWith("/api/host/setup") || p.startsWith("/api/auth/") || p.startsWith("/api/paylink/") || (p === "/api/notices" && req.method === "GET")))
+    return json({ error: "Please finish your setup first: confirm your e-mail address and add your mobile number.", code: "host-setup" }, 403);
 
   if (req.method === "GET" && p === "/api/z/ai-manifest") return json(AI_MANIFEST);
   { const mr = await modeRoute(req, env as any, now, a.plat && req.headers.get("x-ct-link") !== "1", (n) => purgeTestData(env, n)); if (mr) return mr; } // TEST/LIVE switch, allow-list, purge (mode.ts): owner only, except the public read of the word TEST or LIVE
@@ -502,7 +572,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   { const rm = p.match(/^\/api\/report\/([A-Za-z0-9_-]{4,40})$/); if (rm && req.method === "GET") return reportApi(env as any, rm[1]!, url, now); } // the report page; the key in the link is the only credential
   const paid = await payRoute(req, env as PayEnv, now, (n) => spend(env, now, n));
   if (paid) return paid;
-  if (a.kind === "cohost" && !(req.method === "GET" && (p === "/api/whoami" || p === "/api/notices" || /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/cohost$/.test(p)))) return deny(a); // a Co-host: the header, the invite link, payment (above) and nothing else
+  if (a.kind === "cohost" && !(req.method === "GET" && (p === "/api/whoami" || p === "/api/notices" || /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/cohost$/.test(p))) && !/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(people|waiting)(\/|$)/.test(p) && !(req.method === "POST" && /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/paylink$/.test(p))) return deny(a); // a Co-host: the header, the invite link, payment (above) and nothing else
   const partnered = await partnerRoute(req, env as PayEnv, now, (n) => spend(env, now, n), a.plat);
   if (partnered) return partnered;
 
@@ -521,24 +591,9 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(email)) return json({ error: "Please enter a valid work email." }, 400);
     const eh = await sha("email|" + email);
     if (await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first()) return json({ ok: true, exists: true });
-    const ipk = `start/${day(now)}/${(await sha("ip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16)}`;
-    const used = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(ipk).first<{ v: string }>())?.v ?? 0);
-    if (used >= STARTS_PER_DAY) return json({ error: "Too many new engagements from this network today. Please try again tomorrow." }, 429);
-    if (!(await spend(env, now, 6))) return BUSY();
-    const org = randHex(8), token = "ctk_" + randHex(24), aiKey = "cta_" + randHex(24), test = await testFlag(env); // an account made in TEST mode is flagged is_test
-    await env.DB.batch([
-      env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,?)").bind(await sha("key|" + token), org, "master", now, test),
-      env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,?)").bind(await sha("key|" + aiKey), org, "ai", now, test),
-      env.DB.prepare("INSERT INTO organizer_email(email_hash,org,is_test) VALUES(?,?,?)").bind(eh, org, test),
-      env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`orgmail/${org}`, await sealText(env as any, email)),
-      env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`aikey/${org}`, await sealText(env as any, aiKey)), // so the signed-in organizer can read their lasting link again (never mailed)
-      env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(ipk, String(used + 1), String(used + 1)),
-    ]);
-    await recordTerms(env, org, now, "start");
-    await linkVisitor(env as VisitEnv, req, org, "start", now, email); // ties the visitor's earlier visits to this new organizer (no-op when nothing was tracked)
-    const origin0 = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, startMsg = aiMessage(origin0, aiKey); // aiKey is the lasting key, shown only in the console
-    await mailTempLink(env, req, org, "ai", "start", now, email); // the dedicated mail carries a separate key that expires in 24 hours
-    return json({ ok: true, token, aiKey, aiMessage: startMsg });
+    const made = await createOrganizer(env, req, email, now, "start");
+    if ("error" in made) return made.status === 503 ? BUSY() : json({ error: made.error }, made.status);
+    return json({ ok: true, token: made.token, aiKey: made.aiKey, aiMessage: made.aiMessage });
   }
   if (req.method === "POST" && p === "/api/auth/email") {
     const b = await body(req);
@@ -546,20 +601,78 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(email)) return json({ error: "Please enter a valid work email." }, 400);
     const eh = await sha("email|" + email);
     const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
+    const hostAcct = acct ? null : await hostForEmail(env.DB, eh); // a Host who confirmed this address signs in the same way (no Organizer account for it)
     const test = (env as PayEnv).TEST_MODE === "1";
     let devCode: string | undefined, devToken: string | undefined;
-    if (acct) { // an unknown address gets the same answer, so nobody can find out who has an account
+    if (acct || hostAcct) { // an unknown address gets the same answer, so nobody can find out who has an account
       const row = await env.DB.prepare("SELECT win_start, sent FROM login_code WHERE email_hash=?").bind(eh).first<{ win_start: number; sent: number }>();
       const fresh = !row || now - row.win_start > 3_600_000;
       if (!fresh && row!.sent >= 5) return json({ error: "Too many codes requested. Please try again in an hour." }, 429);
       if (!(await spend(env, now, 2))) return BUSY();
       const linkToken = randHex(24), code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000));
       await env.DB.prepare("INSERT INTO login_code(email_hash,code_hash,expires_ms,attempts,win_start,sent,link_hash) VALUES(?,?,?,0,?,1,?) ON CONFLICT(email_hash) DO UPDATE SET code_hash=excluded.code_hash, expires_ms=excluded.expires_ms, attempts=0, win_start=?, sent=?, link_hash=excluded.link_hash").bind(eh, await sha("code|" + eh + "|" + code), now + 600_000, fresh ? now : row!.win_start, await sha("link|" + linkToken), fresh ? now : row!.win_start, fresh ? 1 : row!.sent + 1).run();
+      if (hostAcct) { // a Host gets the code only (no AI-link options, no one-click link): the code is single use and ends in 10 minutes
+        await env.DB.prepare("UPDATE login_code SET link_hash=NULL WHERE email_hash=?").bind(eh).run();
+        await sendMail(env as PayEnv, env.DB, email, "Your Corporate Tambola sign-in code", `Your 6-digit code is ${code}.
+
+Type it on the sign-in page. It works for 10 minutes.
+
+Did not ask for this? Ignore this e-mail.`, now, { secret: true });
+        if (test) devCode = code;
+      } else {
       const sm = signInMail((env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, code, linkToken); // no AI key or paste here: the buttons lead to the signed-in page
       await sendMail(env as PayEnv, env.DB, email, sm.subject, sm.text, now, { html: sm.html, secret: true });
       if (test) { devCode = code; devToken = linkToken; }
+      }
     }
     return json({ ok: true, ...(devCode ? { devCode, devToken } : {}) });
+  }
+  if (req.method === "GET" && p === "/api/auth/config") return json({ google: googleClientId(env) }); // the public Google client id, or null: the pages show "Continue with Google" only when it is there
+  if (req.method === "POST" && p === "/api/auth/google") { // "Continue with Google": proves the e-mail with Google, then does exactly what the e-mail code does (google.ts, hostsetup.ts)
+    if (!googleClientId(env)) return json({ error: "Not found" }, 404);
+    const b = await body(req, 8192);
+    const intent = b?.intent;
+    if (intent !== "signup" && intent !== "signin" && intent !== "host") return json({ error: "Say whether you are signing up, signing in or finishing a Host setup." }, 400);
+    const fk = `linkfail/${day(now)}/${(await sha("ip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16)}`; // the same per-network failure allowance as the sign-in link
+    const fails = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(fk).first<{ v: string }>())?.v ?? 0);
+    if (fails >= 20) return json({ error: "Too many tries from this network. Please use an e-mail code, or try again tomorrow." }, 429);
+    const bad = async (msg: string, code?: string) => { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(fk, String(fails + 1), String(fails + 1)).run(); return json({ error: msg, ...(code ? { code } : {}) }, 400); };
+    const g = await verifyGoogleCredential(env, b.credential, now);
+    if (!g.ok) return bad("That Google sign-in could not be checked. Please try again, or use an e-mail code.", "google-failed");
+    const email = g.email, eh = await sha("email|" + email);
+    if (intent === "host") { // a Host finishing the first open: Google confirms the e-mail the Organizer added them with
+      const hk = typeof b.hostKey === "string" ? b.hostKey : "";
+      const ha = hk ? await authOfKey(env, hk, now) : null;
+      const kh = hk ? await sha("key|" + hk) : "";
+      const ident = ha && ha.kind === "host" && ha.hid === kh ? await env.DB.prepare("SELECT expires_ms FROM organizer_key WHERE hash=?").bind(kh).first<{ expires_ms: number | null }>() : null;
+      if (!ha || !ident || ident.expires_ms !== null || !ha.org) return bad("This link has been used or has expired. Ask the Organizer for a new one, or sign in with your e-mail.", "host-link-gone");
+      const row = await identityRow(env.DB, ha.hid!), onFile = row?.email_sealed ? await openText(env as any, row.email_sealed) : null;
+      if (onFile && onFile.toLowerCase() !== email) return json({ error: `This link is for ${maskEmail(onFile)}`, code: "email-mismatch" }, 403);
+      if (!(await spend(env, now, 3))) return BUSY();
+      const done = await confirmHostEmail(env, ha.hid!, ha.org, email, newHostKey(), now);
+      return json({ ok: true, token: done.token, kind: "host", ready: done.ready, needMobile: done.needMobile });
+    }
+    const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
+    if (acct) { // exactly the 6-digit code's sign-in, without the code
+      if (!(await spend(env, now, 2))) return BUSY();
+      await recordTerms(env, acct.org, now, "signin-google");
+      await linkVisitor(env as VisitEnv, req, acct.org, "signin", now, email);
+      const token = "ctk_" + randHex(24);
+      await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0))").bind(await sha("key|" + token), acct.org, "master", now, acct.org).run();
+      return json({ ok: true, token, created: false });
+    }
+    if (intent === "signup") {
+      const made = await createOrganizer(env, req, email, now, "signin-google");
+      if ("error" in made) return made.status === 503 ? BUSY() : json({ error: made.error }, made.status);
+      return json({ ok: true, token: made.token, aiKey: made.aiKey, aiMessage: made.aiMessage, created: true });
+    }
+    const hostAcct = await hostForEmail(env.DB, eh);
+    if (hostAcct) {
+      if (!(await spend(env, now, 2))) return BUSY();
+      const hs = await hostStateRow(env.DB, hostAcct.host_id);
+      return json({ ok: true, token: await mintDeviceKey(env, hostAcct.host_id, newHostKey(), now), kind: "host", ready: !!hs?.verified_ms && !!hs?.mobile_ok });
+    }
+    return json({ error: "There is no account for this Google e-mail yet. Choose sign up to make one.", code: "no-account" }, 404);
   }
   if (req.method === "POST" && p === "/api/auth/link") { // the confirm page POSTs here; opening the link (GET, a mail scanner) consumes nothing
     const b = await body(req);
@@ -593,7 +706,14 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!row || row.expires_ms < now || row.attempts >= 5) return bad();
     if (row.code_hash !== (await sha("code|" + eh + "|" + code))) { await env.DB.prepare("UPDATE login_code SET attempts=attempts+1 WHERE email_hash=?").bind(eh).run(); return bad(); }
     const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
-    if (!acct || !(await spend(env, now, 2))) return acct ? BUSY() : bad();
+    if (!acct) { // not an Organizer: a Host who confirmed this address gets a fresh key for this device
+      const hostAcct = await hostForEmail(env.DB, eh);
+      if (!hostAcct || !(await spend(env, now, 2))) return hostAcct ? BUSY() : bad();
+      await env.DB.prepare("DELETE FROM login_code WHERE email_hash=?").bind(eh).run();
+      const hs = await hostStateRow(env.DB, hostAcct.host_id);
+      return json({ ok: true, token: await mintDeviceKey(env, hostAcct.host_id, newHostKey(), now), kind: "host", ready: !!hs?.verified_ms && !!hs?.mobile_ok });
+    }
+    if (!(await spend(env, now, 2))) return BUSY();
     await recordTerms(env, acct.org, now, "signin-code");
     await linkVisitor(env as VisitEnv, req, acct.org, "signin", now, email);
     const token = "ctk_" + randHex(24); // a fresh organizer key; the old ones keep working until the organizer retires them
@@ -651,34 +771,114 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const r = await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE org=? AND substr(hash,1,10)=? AND revoked=0").bind(a.org, id).run();
     return json({ ok: true, revoked: r.meta?.changes ?? 0 });
   }
-  if (req.method === "GET" && p === "/api/whoami") return a.kind ? json({ kind: a.kind }) : deny(a); // the console uses this to show the right screen
-  if (req.method === "POST" && p === "/api/org/host") { // the organizer (or their AI) invites a co-host: a key that can watch, send messages to everyone and tick prizes, and nothing else
-    if ((a.kind !== "master" && a.kind !== "ai") || !a.org) return deny(a);
-    const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM organizer_key WHERE org=? AND kind='host' AND revoked=0 AND expires_ms IS NULL").bind(a.org).first<{ c: number }>())?.c ?? 0;
+  if (req.method === "GET" && p === "/api/whoami") return a.kind ? json({ kind: a.kind, ...(a.kind === "host" && !a.viaLink ? { ready: a.hostReady === true } : {}) }) : deny(a); // the console uses this to show the right screen
+  if (p.startsWith("/api/host/setup")) { // a Host finishing the first open: confirm an e-mail (code; Google is /api/auth/google) and add a mobile number (hostsetup.ts)
+    if (a.kind !== "host" || a.viaLink || !a.org || !a.hid) return deny(a);
+    const hr = await hostSetupRoute({
+      req, env, now, p, hid: a.hid, org: a.org, presented: req.headers.get("x-organizer") || "", origin: (env as PayEnv).PUBLIC_ORIGIN ?? url.origin,
+      json, body, spend: (n = 1) => spend(env, now, n), busy: BUSY, cleanPhone, newKey: newHostKey, test: (env as PayEnv).TEST_MODE === "1",
+      sendMail: (to, subject, text) => sendMail(env as PayEnv, env.DB, to, subject, text, now, { secret: true }),
+    });
+    if (hr) return hr;
+  }
+  { // a pay link anyone can open (paylink.ts): the Organizer, a Host or a Co-host of the game makes it; one open link per game, a new one cancels the old
+    const plm = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/paylink$/);
+    if (plm && req.method === "POST") {
+      if (a.kind === "ai") return json({ error: "A pay link is for people to make themselves. It is not available through an AI link. Ask the owner to make it in the console (Check, publish and pay)." }, 403);
+      if (!a.org || a.viaLink || (a.kind !== "master" && a.kind !== "host" && a.kind !== "cohost")) return deny(a);
+      const pe = await env.DB.prepare("SELECT id, org, cap, pack, cancelled_ms FROM engagement WHERE id=?").bind(plm[1]!).first<{ id: string; org: string | null; cap: number; pack: number | null; cancelled_ms: number | null }>();
+      if (!pe || pe.org !== a.org) return json({ error: "No such engagement." }, 404);
+      if (a.kind === "cohost" && a.eid && a.eid !== pe.id) return json({ error: "Your Co-host link is for a different game." }, 403);
+      if (pe.cancelled_ms) return json({ error: "This game was cancelled. It cannot be paid for." }, 409);
+      if (pe.pack !== 0) return json({ error: "This game is already paid for.", code: "already-paid" }, 409);
+      if (!packFor(pe.cap)) return json({ error: "That many participants needs a custom arrangement. Please write to us." }, 400);
+      if (!(await spend(env, now, 2))) return BUSY();
+      const made = await createPayLink(env.DB, pe.id, a.org, a.kind, now);
+      return json({ url: `${(env as PayEnv).PUBLIC_ORIGIN ?? url.origin}/paylink.html?t=${made.token}`, expiresMs: made.expiresMs });
+    }
+  }
+  if (req.method === "POST" && p === "/api/org/host") { // the Organizer (or their AI) adds a Host: up to 5, each with a name and AT LEAST ONE of e-mail or mobile. A Host's own one-time link is e-mailed to the Host (if there is an e-mail) or sent by the Organizer on WhatsApp.
+    if (a.kind === "ai") return json({ error: "A Host needs a mobile number or an e-mail address. Only the owner enters those, in the console (Your team). Tell the organizer to add the Host there." }, 403);
+    if (a.kind !== "master" || !a.org) return deny(a);
+    const hb = await body(req);
+    const hEmail = typeof hb?.email === "string" ? hb.email.trim().toLowerCase() : "";
+    const rawMob = hb?.mobile ?? hb?.phone, hasMob = rawMob !== undefined && rawMob !== null && String(rawMob).trim() !== "";
+    if (!hEmail && !hasMob) return json({ error: "Please give the Host's e-mail address or mobile number (at least one). Their own link is sent there." }, 400);
+    if (hEmail && !EMAIL_RE.test(hEmail)) return json({ error: "That e-mail address does not look right. Please check it." }, 400);
+    const hMob = hasMob ? cleanPhone(rawMob) : null;
+    if (hMob && !hMob.ok) return json({ error: "Please check the Host's mobile number. " + hMob.why }, 400);
+    const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM organizer_key WHERE org=? AND kind='host' AND revoked=0 AND expires_ms IS NULL AND (host_id IS NULL OR host_id=hash)").bind(a.org).first<{ c: number }>())?.c ?? 0;
     if (n >= MAX_HOSTS) return json({ error: `You can have up to ${MAX_HOSTS} Hosts at a time. Retire one first.` }, 409);
-    if (!(await spend(env, now, 2))) return BUSY();
-    const key = "cth_" + randHex(24), label = cleanLabel((await body(req))?.label), kh = await sha("key|" + key);
-    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test,label) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0),?)").bind(kh, a.org, "host", now, a.org, label).run();
-    const hOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
-    const hm = await mailTempLink(env, req, a.org, "host", "start", now); // dedicated mail to the organizer only, with a separate 24-hour co-host key
-    return json({ ok: true, hostKey: key, manualUrl: `${hOrigin}/ai/${key}`, mailed: hm.mailed, id: kh.slice(0, 10), label });
+    if (!(await spend(env, now, 4))) return BUSY();
+    const key = "cth_" + randHex(24), label = cleanLabel(hb?.label), kh = await sha("key|" + key);
+    const sealedEmail = hEmail ? await sealText(env as any, hEmail) : null, sealedWho = hMob && hMob.ok ? await sealPii(env, { phone: hMob.digits, name: label || null }) : null; // the Host's e-mail and mobile are kept sealed, on the key row
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test,label,email_sealed,pii,created_by,host_id) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0),?,?,?,'o',?)").bind(kh, a.org, "host", now, a.org, label, sealedEmail, sealedWho, kh),
+      env.DB.prepare("INSERT INTO host_state(host_id,org,link_exp_ms,mobile_ok) VALUES(?,?,?,?)").bind(kh, a.org, now + HOST_LINK_TTL_MS, hMob ? 1 : 0),
+    ]);
+    const hOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, hLink = `${hOrigin}/zc.html?k=${key}`;
+    let hostMailed = false;
+    if (hEmail) { const hostMail = hostLinkMail(hOrigin, key, label); hostMailed = await sendMail(env as PayEnv, env.DB, hEmail, hostMail.subject, hostMail.text, now, { html: hostMail.html, secret: true }); } // to the Host only
+    const hm = await mailTempLink(env, req, a.org, "host", "start", now); // the dedicated Host AI-link mail (24-hour key) still goes to the Organizer, as before
+    return json({ ok: true, hostKey: key, link: hLink, manualUrl: `${hOrigin}/ai/${key}`, mailed: hm.mailed, emailed: hostMailed, id: kh.slice(0, 10), label, ...(hEmail ? { email: hEmail } : {}), ...(hMob && hMob.ok ? { mobileMasked: maskMobile(hMob.digits), waLink: waLinkFor(hMob.digits, label, hLink) } : {}), expiresMs: now + HOST_LINK_TTL_MS });
   }
-  if (req.method === "GET" && p === "/api/org/team") { // who is on the team (never the keys): the Organizer, their AI and a Host may look; a Co-host may not
+  if (req.method === "POST" && p === "/api/org/host/link") { // the Organizer sends a Host a NEW first-open link: the old link stops at once. Only for a Host who has not confirmed their e-mail yet (later they sign in with it).
+    if (a.kind === "ai") return json({ error: "Only the owner sends a Host's link, in the console (Your team)." }, 403);
+    if (a.kind !== "master" || !a.org) return deny(a);
+    const lb = await body(req);
+    const lid = typeof lb?.id === "string" && /^[0-9a-f]{10}$/.test(lb.id) ? lb.id : "";
+    if (!lid) return json({ error: "Pick a Host from the list." }, 400);
+    const hr = await env.DB.prepare("SELECT hash, label, email_sealed, pii FROM organizer_key WHERE org=? AND substr(hash,1,10)=? AND kind='host' AND revoked=0 AND expires_ms IS NULL AND (host_id IS NULL OR host_id=hash)").bind(a.org, lid).first<{ hash: string; label: string | null; email_sealed: string | null; pii: string | null }>();
+    if (!hr) return json({ error: "That person is not on your team." }, 404);
+    const hst = await hostStateRow(env.DB, hr.hash);
+    if (hst?.verified_ms) return json({ error: "This Host has already finished setup and signs in with their e-mail. If they cannot get in, retire them and add them again.", code: "host-active" }, 409);
+    if (!(await spend(env, now, 4))) return BUSY();
+    const nk = "cth_" + randHex(24), nh = await sha("key|" + nk);
+    await env.DB.batch([
+      env.DB.prepare("UPDATE organizer_key SET hash=?, host_id=?, created_ms=? WHERE hash=?").bind(nh, nh, now, hr.hash),
+      env.DB.prepare("INSERT INTO host_state(host_id,org,link_exp_ms,mobile_ok) VALUES(?,?,?,?) ON CONFLICT(host_id) DO NOTHING").bind(hr.hash, a.org, now + HOST_LINK_TTL_MS, hr.pii ? 1 : 0),
+      env.DB.prepare("UPDATE host_state SET host_id=?, link_exp_ms=?, spent=0, pend_hash=NULL, pend_sealed=NULL WHERE host_id=?").bind(nh, now + HOST_LINK_TTL_MS, hr.hash),
+    ]);
+    const lOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, lLink = `${lOrigin}/zc.html?k=${nk}`;
+    const lEmail = await openText(env as any, hr.email_sealed), lWho = await openPii(env as any, hr.pii);
+    let lMailed = false;
+    if (lEmail) { const m = hostLinkMail(lOrigin, nk, hr.label ?? ""); lMailed = await sendMail(env as PayEnv, env.DB, lEmail, m.subject, m.text, now, { html: m.html, secret: true }); }
+    return json({ ok: true, link: lLink, hostKey: nk, id: nh.slice(0, 10), label: hr.label ?? "", emailed: lMailed, expiresMs: now + HOST_LINK_TTL_MS, ...(lWho?.phone ? { mobileMasked: maskMobile(lWho.phone), waLink: waLinkFor(lWho.phone, hr.label ?? "", lLink) } : {}) });
+  }
+  if (req.method === "GET" && p === "/api/org/team") { // who is on the team (never the keys): the Organizer, their AI and a Host may look; a Co-host may not. ?e=<game> lists that game's Co-hosts. Host e-mails only for the Organizer and Hosts.
     if ((a.kind !== "master" && a.kind !== "ai" && a.kind !== "host") || !a.org) return deny(a);
-    const rows = (await env.DB.prepare("SELECT hash, kind, label, created_ms FROM organizer_key WHERE org=? AND revoked=0 AND expires_ms IS NULL AND kind IN ('host','cohost') ORDER BY created_ms").bind(a.org).all<{ hash: string; kind: string; label: string | null; created_ms: number }>()).results ?? [];
+    const forGame = url.searchParams.get("e");
+    const rows = (await env.DB.prepare("SELECT hash, kind, label, created_ms, email_sealed, eid, pii FROM organizer_key WHERE org=? AND revoked=0 AND expires_ms IS NULL AND kind IN ('host','cohost') AND (host_id IS NULL OR host_id=hash) ORDER BY created_ms").bind(a.org).all<{ hash: string; kind: string; label: string | null; created_ms: number; email_sealed: string | null; eid: string | null; pii: string | null }>()).results ?? [];
     const cohosts = [];
-    for (const r of rows.filter((x) => x.kind === "cohost")) cohosts.push({ id: r.hash.slice(0, 10), label: r.label ?? "", createdMs: r.created_ms, brought: await broughtBy(env, a.org, r.hash.slice(0, 7)) });
-    return json({ maxHosts: MAX_HOSTS, hosts: rows.filter((x) => x.kind === "host").map((r) => ({ id: r.hash.slice(0, 10), label: r.label ?? "", createdMs: r.created_ms })), cohosts });
+    for (const r of rows.filter((x) => x.kind === "cohost" && (!forGame || x.eid === forGame))) {
+      const who = a.kind === "ai" ? null : await openPii(env as any, r.pii); // an AI never sees a mobile number
+      cohosts.push({ id: r.hash.slice(0, 10), label: r.label ?? "", createdMs: r.created_ms, eid: r.eid, ...(who ? { phoneMasked: "******" + who.phone.slice(-4) } : {}), brought: await broughtBy(env, a.org, r.hash.slice(0, 7)) });
+    }
+    const hosts = [];
+    for (const r of rows.filter((x) => x.kind === "host")) {
+      const hst = await hostStateRow(env.DB, r.hash), emailOk = !!hst?.verified_ms, mobileOk = !!hst?.mobile_ok || !!r.pii;
+      const setup = emailOk && mobileOk ? "ready" : emailOk ? "needs-mobile" : hst && !hst.spent && now > hst.link_exp_ms ? "link-expired" : "waiting-for-host"; // what the Organizer sees next to a Host: ready, or why not (a new link can be sent for the last two)
+      hosts.push({ id: r.hash.slice(0, 10), label: r.label ?? "", createdMs: r.created_ms, setup, emailConfirmed: emailOk, hasMobile: mobileOk, ...(hst && !emailOk ? { linkExpiresMs: hst.link_exp_ms } : {}), ...(a.kind !== "ai" && r.email_sealed ? { email: await openText(env as any, r.email_sealed) } : {}) });
+    }
+    return json({ maxHosts: MAX_HOSTS, hosts, cohosts });
   }
-  if (req.method === "POST" && p === "/api/org/cohost") { // the Organizer, their AI or a Host adds a Co-host: a key that can invite people with an own link and pay, nothing else. No limit.
-    if ((a.kind !== "master" && a.kind !== "ai" && a.kind !== "host") || !a.org) return deny(a);
+  if (req.method === "POST" && p === "/api/org/cohost") { // the Organizer or a Host adds a Co-host for ONE game: a name and a mobile number (no e-mail). The key invites people with an own link and pays, nothing else. No limit.
+    if ((a.kind !== "master" && a.kind !== "host") || !a.org) return a.kind === "ai" ? json({ error: "A Co-host needs a name and a mobile number. Only the owner enters those, in the console." }, 403) : deny(a);
+    const cb = await body(req);
+    const cName = cleanLabel(cb?.label), cDigits = String(cb?.phone ?? "").replace(/\D/g, "").replace(/^0+/, "");
+    if (cName.length < 2) return json({ error: "Please give the Co-host's name." }, 400);
+    if (cDigits.length < 10 || cDigits.length > 15) return json({ error: "Please give a valid mobile number for the Co-host." }, 400);
+    const cEid = typeof cb?.e === "string" ? cb.e : typeof cb?.eid === "string" ? cb.eid : "";
+    const cg = ID.test(cEid) ? await env.DB.prepare("SELECT id, org, cancelled_ms FROM engagement WHERE id=?").bind(cEid).first<{ id: string; org: string | null; cancelled_ms: number | null }>() : null;
+    if (!cg || cg.org !== a.org) return json({ error: "Choose which game this Co-host is for." }, 400);
+    if (cg.cancelled_ms) return json({ error: "That game was cancelled." }, 409);
     if (!(await spend(env, now, 2))) return BUSY();
-    const key = "ctc_" + randHex(24), label = cleanLabel((await body(req))?.label), kh = await sha("key|" + key);
-    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test,label) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0),?)").bind(kh, a.org, "cohost", now, a.org, label).run();
+    const key = "ctc_" + randHex(24), kh = await sha("key|" + key);
+    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test,label,eid,pii,created_by) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0),?,?,?,?)").bind(kh, a.org, "cohost", now, a.org, cName, cEid, await sealPii(env, { phone: cDigits, name: cName }), a.kind === "host" ? "h:" + (a.hid ?? (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 7)).slice(0, 7) : "o").run(); // name in the label, mobile sealed; both erased with the game's participant data
     const cOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
-    return json({ ok: true, cohostKey: key, link: `${cOrigin}/zc.html?k=${key}`, id: kh.slice(0, 10), label });
+    return json({ ok: true, cohostKey: key, link: `${cOrigin}/zc.html?k=${key}`, id: kh.slice(0, 10), label: cName, eid: cEid, phoneMasked: "******" + cDigits.slice(-4) });
   }
-  if (req.method === "POST" && p === "/api/org/team/retire") { // the Organizer retires Hosts or Co-hosts; a Host retires Co-hosts only
+  if (req.method === "POST" && p === "/api/org/team/retire") { // the Organizer retires Hosts or Co-hosts; a Host retires Co-hosts only. The key stops at once; a Co-host's name and mobile are erased.
     if ((a.kind !== "master" && a.kind !== "host") || !a.org) return deny(a);
     const b = await body(req);
     const id = typeof b?.id === "string" && /^[0-9a-f]{10}$/.test(b.id) ? b.id : "";
@@ -688,7 +888,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (row.kind === "host" && a.kind !== "master") return deny(a);
     const me = await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")));
     if (row.hash === me) return json({ error: "That is the key you are using right now." }, 409);
-    await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE hash=?").bind(row.hash).run();
+    if (row.kind === "host") await retireHost(env.DB, row.hash); // the identity row, every device key and the e-mail sign-in
+    else await env.DB.prepare("UPDATE organizer_key SET revoked=1, pii=NULL, email_sealed=NULL WHERE hash=?").bind(row.hash).run();
     return json({ ok: true, revoked: 1 });
   }
   if (req.method === "GET" && p === "/api/org/ai/audit") { // the organizer sees every call their external AI made; we can see all (the AI may read its own trail)
@@ -727,6 +928,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     await env.DB.batch([
       env.DB.prepare("DELETE FROM kv WHERE k=? OR k=?").bind(`orgmail/${a.org}`, `aikey/${a.org}`), env.DB.prepare("DELETE FROM organizer_email WHERE org=?").bind(a.org),
       env.DB.prepare("DELETE FROM organizer_terms WHERE org=?").bind(a.org), env.DB.prepare("DELETE FROM ai_audit WHERE org=?").bind(a.org), env.DB.prepare("DELETE FROM audit_log WHERE chain=?").bind("org:" + a.org), env.DB.prepare("DELETE FROM organizer_key WHERE org=?").bind(a.org),
+      env.DB.prepare("DELETE FROM host_state WHERE org=?").bind(a.org), env.DB.prepare("DELETE FROM host_login WHERE org=?").bind(a.org), env.DB.prepare("DELETE FROM paylink WHERE org=?").bind(a.org),
     ]);
     return json({ ok: true, closed: true, engagementsDeleted: engs.length });
   }
@@ -745,7 +947,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const kv = d1kv(env);
     if (!sub && req.method === "GET") {
       const f = await readPublished(kv, cid!);
-      const ge = await env.DB.prepare("SELECT id, pack, start_round FROM engagement WHERE id=?").bind(cid).first<{ id: string; pack: number | null; start_round: number }>();
+      const ge = await env.DB.prepare("SELECT id, pack, start_round, cancelled_ms FROM engagement WHERE id=?").bind(cid).first<{ id: string; pack: number | null; start_round: number; cancelled_ms: number | null }>();
+      if (ge?.cancelled_ms) return new Response(JSON.stringify({ ...(f ?? {}), cancelled: true }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } }); // phones and the big screen: "This game was cancelled by the organizer"
       if (ge && ge.pack === 0 && roundMs(ge.start_round) - LOCK_LEAD_MS <= now && (await isPublished(env, ge))) // published, unpaid, start time reached: phones hold, nothing is shown
         return new Response(JSON.stringify({ ...(f ?? {}), locked: true }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } });
       if (f) { // the organizer's latest message rides along with the pause file phones already ask for, so it costs no extra requests
@@ -855,10 +1058,10 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (req.method === "POST" && p === "/api/z") {
     if (!a.plat && !a.org) return deny(a);
     if (a.kind === "host") return deny(a);
-    const b = await body(req);
+    const b = await body(req, BRAND_BODY_MAX); // room for a brand logo (30 KB picture = about 40 KB of text)
     if (!b || !ID.test(b.id ?? "") || !Number.isInteger(b.startRound) || !Number.isInteger(b.callSeconds) || b.callSeconds % 3 || b.callSeconds < 6 || !Number.isInteger(b.cap) || b.cap < 1 || b.cap > 100000)
       return json({ error: "Check the engagement details." }, 400);
-    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, opening: b.opening, closing: b.closing, name: b.name });
+    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, opening: b.opening, closing: b.closing, name: b.name, brand: b.brand });
     if (!vc.ok) return json({ error: vc.error }, 400);
     const have = await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(b.id).first<{ org: string | null }>();
     if (have) return json({ ok: true, existed: true }); // creating twice never overwrites (and never reveals whose it is)
@@ -873,7 +1076,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     }
     if (!(await spend(env, now, 2))) return BUSY();
     const isTestEng = (await testFlag(env)) === 1 || (await orgIsTest(env, a.org)) ? 1 : 0; // made in TEST mode, or by a test account
-    await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.closed ? 1 : 0, draft ? 0 : ent?.pack ?? b.cap, vc.cfg.tickets, cfgJson(vc.cfg), isTestEng).run();
+    await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.whoCanJoin === "list" || (b.whoCanJoin === undefined && b.closed) ? 1 : 0, draft ? 0 : ent?.pack ?? b.cap, vc.cfg.tickets, cfgJson(vc.cfg), isTestEng).run(); // the console sends whoCanJoin "list"; the API default stays "anyone"
     if (ent) await env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(b.id, ent.id).run();
     if (a.org) await recordTerms(env, a.org, now, "engagement");
     return json({ ok: true, draft, openUrl: `${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html?e=${b.id}` });
@@ -936,7 +1139,22 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!a.plat) return deny(a);
     return json({ ok: true, purged: await purgeOld(env, now) });
   }
-  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget|cohost)$/);
+  { // people, links and waiting room (people.ts): one list per inviter. Organizer, Host, Co-host and a level-1 guest only; an AI key and an AI work link are refused inside.
+    const pm = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(people|waiting|me)((?:\/[A-Za-z0-9_-]+){0,2})$/);
+    if (pm) {
+      const pe = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(pm[1]!).first<any>();
+      if (!pe) return json({ error: "No such engagement." }, 404);
+      const presented = req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+      const isDraftP = pe.pack === 0 && !(await isPublished(env, pe));
+      return peopleRoute({
+        req, env, now, url, e: pe, eid: pe.id, tail: pm[2]! + pm[3]!, a, keyId7: a.kind === "host" && a.hid ? a.hid.slice(0, 7) : presented ? (await sha("key|" + presented)).slice(0, 7) : "", /* a Host keeps one list on every device (their identity, not the device key) */ viaLink: req.headers.get("x-ct-link") === "1",
+        origin: (env as PayEnv).PUBLIC_ORIGIN ?? url.origin, gameName: cfgOf(pe).name || pe.id, invites: cfgOf(pe).invites ?? { on: false, per: 4, cats: [] }, started: now >= roundMs(pe.start_round), draft: isDraftP, cancelled: !!pe.cancelled_ms,
+        json, body, spend: (n = 1) => spend(env, now, n), busy: BUSY, endBound: () => endBoundMs(env as any, pe), istTime,
+        sendMail: (to, subject, text) => sendMail(env as PayEnv, env.DB, to, subject, text, now), orgEmail: async () => (await teamEmails(env as PayEnv, pe.org, pe.id)).organizer,
+      });
+    }
+  }
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget|cohost|cancel-preview|cancel)$/);
   if (!m) return json({ error: "Not found", hint: "Read the list of what you can do at /api/z/ai-manifest. Engagement routes look like /api/z/{id}/summary, /settings, /roster, /participants, /results, /publish." }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
@@ -949,13 +1167,15 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   };
   const pidOf = async (ph: string) => (await sha(`${eid}|${ph}`)).slice(0, 16);
   const lateNow = () => { const nr = roundOfMs(now); return nr > e.start_round + GRACE_ROUNDS ? nr : 0; }; // joined after the first number: that round, else 0
-  /** Gives a person a seat (and so a collision-free ticket) and a sealed record of their name and number. Both rows go in together, with the head-count (and, for an invited person, the inviter's quota) checked inside the insert, so a crowd arriving at the same instant can never pass a limit or share a seat. */
-  const addSeat = async (ph: string, pii: string, dev: string | null, jr: number, o: { inv?: number | null; cat?: string | null; src: string; invLimit?: number | null; joinedMs?: number }) => {
+  /** Gives a person a seat (and so a collision-free ticket) and a sealed record of their name and number. The rows go in together, with the head-count and (for a person who joins under a limited inviter: a Co-host or a level-1 guest) that inviter's list limit checked inside the insert, so a crowd arriving at the same instant can never pass a limit or share a seat. `ownerId` also puts the person on the inviter's list (people.ts); roster / reuse give none. */
+  const addSeat = async (ph: string, pii: string, dev: string | null, jr: number, o: { inv?: number | null; cat?: string | null; src: string; guardId?: string | null; guardLimit?: number | null; ownerId?: string | null; role?: string | null; joinedMs?: number }) => {
     const tail = (await pidOf(ph)).slice(0, 12);
     await env.DB.batch([
-      env.DB.prepare("INSERT OR IGNORE INTO seat(eid,seq,pid,ph,dev,jr,inv,cat,src) SELECT ?, s, s || 'x' || ?, ?, ?, ?, ?, ?, ? FROM (SELECT COALESCE(MAX(seq),0)+1 AS s FROM seat WHERE eid=?) WHERE (SELECT COUNT(*) FROM participant WHERE eid=?) < ? AND (? IS NULL OR (SELECT COUNT(*) FROM seat WHERE eid=? AND inv=?) < ?) AND (? IS NULL OR NOT EXISTS (SELECT 1 FROM seat WHERE eid=? AND dev=?))")
-        .bind(eid, tail, ph, dev, jr, o.inv ?? null, o.cat ?? null, o.src, eid, eid, e.cap, o.invLimit ?? null, eid, o.inv ?? null, o.invLimit ?? 0, dev, eid, dev),
+      env.DB.prepare("INSERT OR IGNORE INTO seat(eid,seq,pid,ph,dev,jr,inv,cat,src,role) SELECT ?, s, s || 'x' || ?, ?, ?, ?, ?, ?, ?, ? FROM (SELECT COALESCE(MAX(seq),0)+1 AS s FROM seat WHERE eid=?) WHERE (SELECT COUNT(*) FROM participant WHERE eid=?) < ? AND (? IS NULL OR (SELECT COUNT(*) FROM person WHERE eid=? AND inviter=? AND status<>'removed' AND role IS NULL) < ?) AND (? IS NULL OR NOT EXISTS (SELECT 1 FROM seat WHERE eid=? AND dev=?))")
+        .bind(eid, tail, ph, dev, jr, o.inv ?? null, o.cat ?? null, o.src, o.role ?? null, eid, eid, e.cap, o.guardId ?? null, eid, o.guardId ?? null, o.guardLimit ?? 0, dev, eid, dev),
       env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,pii,joined_ms) SELECT eid, pid, ph, NULL, ?, ? FROM seat WHERE eid=? AND ph=?").bind(pii, o.joinedMs ?? now, eid, ph),
+      env.DB.prepare("UPDATE person SET status='joined', joined_ms=? WHERE eid=? AND ph=? AND status='invited' AND EXISTS (SELECT 1 FROM seat WHERE eid=? AND ph=?)").bind(now, eid, ph, eid, ph),
+      env.DB.prepare("INSERT OR IGNORE INTO person(eid,id,ph,pii,inviter,role,status,added_ms,joined_ms) SELECT ?, ?, ph, ?, ?, ?, 'joined', ?, ? FROM seat WHERE eid=? AND ph=? AND ? IS NOT NULL").bind(eid, randHex(6), pii, o.ownerId ?? null, o.role ?? null, now, now, eid, ph, o.ownerId ?? null),
     ]);
   };
   const cleanName = (n: unknown) => (typeof n === "string" ? n.replace(/[<>`]/g, "").slice(0, 60) : null);
@@ -963,68 +1183,121 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (a.kind === "host" && req.headers.get("x-ct-link") === "1" && !HOST_ACTIONS.has(action!)) return deny(a); // a Host's AI work link keeps its narrow rights; the Host in the console may do everything inside a game
   const unpaid = e.pack === 0;
   const isDraft = unpaid && !(await isPublished(env, e));
-  const payment = await paymentOf(env, e, unpaid);
+  const payment = await paymentOf(env, e, unpaid, now);
+  const cancelled = !!e.cancelled_ms; // a cancelled game can only be read (and its guests' data erased on request): nobody joins, nothing is changed, published or paid
+  if (cancelled && req.method === "POST" && action === "join") return json({ error: "This game was cancelled by the organizer.", code: "cancelled", cancelled: true }, 403);
+  if (cancelled && req.method !== "GET" && !["erase", "forget", "person", "cancel"].includes(action!)) return json({ error: "This game was cancelled by the organizer.", code: "cancelled", cancelled: true }, 409);
+  if (action === "cancel-preview" && req.method === "GET") { // what cancelling would do, and the refund in numbers: Organizer and Host only
+    if (!can(a, e, true)) return deny(a);
+    return json(await cancelPreview(env as PayEnv, e, now));
+  }
+  if (action === "cancel" && req.method === "POST") { // three confirmations in the console, three required here
+    if (!can(a, e, true)) return deny(a);
+    const cb = await body(req, 512);
+    if (cb?.confirmations !== 3) return json({ error: "Please confirm three times to cancel the game.", code: "confirmations" }, 400);
+    if (!cancelled && !(await spend(env, now, 14))) return BUSY();
+    const out = await cancelGame(env as PayEnv, e, now, a.plat ? "platform" : a.kind!);
+    return json(out.body, out.status);
+  }
   if (action === "cohost" && req.method === "GET") { // the small game header a Co-host sees: no names, no list, no settings
     if (!a.plat && !(a.org && a.org === e.org)) return deny(a);
+    if (a.kind === "cohost" && a.eid && a.eid !== e.id) return json({ error: "Your Co-host link is for a different game." }, 403); // a Co-host belongs to one game
     const kid = a.kind === "cohost" ? (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 7) : null;
     const c = cfgOf(e), origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
     const joined = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
     const pk = unpaid ? PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null : e.pack;
-    return json({ name: c.name || e.id, startMs: roundMs(e.start_round), cap: e.cap, joined, brought: await broughtBy(env, e.org, kid), price: pk ? price(pk, "INR").total : null, payment, inviteLink: kid && !isDraft ? `${origin}/z.html?e=${e.id}&from=${COHOST_FROM + parseInt(kid, 16)}` : null });
+    return json({ name: c.name || e.id, startMs: roundMs(e.start_round), cap: e.cap, joined, brought: await broughtBy(env, e.org, kid), price: pk ? price(pk, "INR").total : null, payment, ...(cancelled ? { cancelled: true } : {}), inviteLink: kid && !isDraft && !cancelled ? `${origin}/z.html?e=${e.id}&from=${COHOST_FROM + parseInt(kid, 16)}` : null });
   }
-  const locked = unpaid && !isDraft && roundMs(e.start_round) - LOCK_LEAD_MS <= now; // published but not paid by its start time: it does not begin
+  const locked = unpaid && !isDraft && !cancelled && roundMs(e.start_round) - LOCK_LEAD_MS <= now; // published but not paid by its start time: it does not begin
   if (isDraft && ((action === "join" && req.method === "POST") || (action === "info" && !can(a, e)))) return json({ error: "This engagement is not open yet." }, 403);
-  if (locked && !can(a, e) && (action === "info" || action === "join")) await nudge(env, e.id, "lockmail", now, `Your engagement ${e.id} could not begin: payment is due`, `Your engagement ${e.id} could not begin: payment is due.\n\nPay now and it starts in about 3 minutes: ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${e.id}`);
+  if (locked && !can(a, e) && (action === "info" || action === "join")) await nudge(env, e.id, "lockmail", now, `Your engagement ${e.id} could not begin: payment is due`, `Your engagement ${e.id} could not begin: payment is due.\n\nPay now and the first number comes 2 minutes after your payment is confirmed: ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${e.id}`);
   if (action === "join" && req.method === "POST") {
     const b = await body(req);
-    const digits = digitsOf(b?.phone), ph = await phoneHash(b?.phone);
+    // a personal link (/j/<token>) stands for one listed person: their number is then not typed at all. The strong proof is the secret in the link, a typed number is only matched to a list.
+    let tok: PersonRow | null = null, tokPii: { phone: string; name: string | null } | null = null;
+    if (typeof b?.token === "string" && b.token) {
+      tok = await personByToken(env, eid!, b.token);
+      if (!tok || tok.status === "removed") return json({ error: "This link is not valid any more. Please ask the person who invited you to send it again.", code: "link-gone" }, 404);
+      tokPii = await openPii(env, tok.pii);
+    }
+    const typedGiven = typeof b?.phone === "string" ? b.phone.trim() !== "" : b?.phone != null;
+    const typedDigits = digitsOf(b?.phone), typedPh = await phoneHash(b?.phone);
+    if (typedGiven && !typedPh) return json({ error: "Enter a valid mobile number." }, 400);
+    let digits = typedDigits ?? tokPii?.phone ?? null;
+    const ph = typedPh ?? tok?.ph ?? null;
     if (!ph || !digits) return json({ error: "Enter a valid mobile number." }, 400);
+    const otherNumber = !!(tok && typedPh && typedPh !== tok.ph); // somebody else opened this person's link
     const dev = typeof b?.device === "string" && /^[0-9a-f]{16,64}$/.test(b.device) ? (await sha(`dev|${eid}|${b.device}`)).slice(0, 32) : null; // one ticket, one device: the phone's own random id, only its hash is kept
     const reply = (pid: string, extra: object = {}) => json({ pid, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), ...pub(e), ...extra });
     const lateRound = lateNow();
-    const have = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.pid AS seat, s.jr AS jr FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; seat: string | null; jr: number | null }>();
+    const have = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.pid AS seat, s.jr AS jr, s.blocked AS blocked, s.role AS role FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; seat: string | null; jr: number | null; blocked: number | null; role: string | null }>();
+    const removedReply = () => json({ error: "You were removed from this game by the organizer.", code: "removed", removed: true }, 403);
     if (have) {
-      if (have.seat && have.dev && have.dev !== dev) return json({ error: "This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it.", code: "other-phone" }, 423);
+      if (have.blocked) return removedReply();
+      if (have.seat && have.dev && have.dev !== dev) {
+        if (tok && !typedPh) return json({ error: "This link was already opened on another phone. If you are someone else, type your own mobile number to ask to join. If it is you on a new phone, ask whoever invited you to send the link again.", code: "link-used", needPhone: true }, 423);
+        return json({ error: "This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it.", code: "other-phone" }, 423);
+      }
       if (have.seat && !have.dev && dev && (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first())) return json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket. Ask the person to open the link on their own phone.", code: "device-used" }, 409);
       if (have.seat && !have.dev && dev) { // first device to open the link of someone who was on the list (or whom the organizer let move) keeps the ticket
         if (!(await spend(env, now, 2))) return BUSY();
-        await env.DB.batch([env.DB.prepare("UPDATE seat SET dev=? WHERE eid=? AND pid=? AND dev IS NULL").bind(dev, eid, have.pid), env.DB.prepare("UPDATE participant SET joined_ms=? WHERE eid=? AND pid=? AND joined_ms<?").bind(now, eid, have.pid, now)]);
+        await env.DB.batch([env.DB.prepare("UPDATE seat SET dev=? WHERE eid=? AND pid=? AND dev IS NULL").bind(dev, eid, have.pid), env.DB.prepare("UPDATE participant SET joined_ms=? WHERE eid=? AND pid=? AND joined_ms<?").bind(now, eid, have.pid, now), env.DB.prepare("UPDATE person SET status='joined', joined_ms=? WHERE eid=? AND ph=? AND status='invited'").bind(now, eid, ph)]);
         const nm = cleanName(b?.name);
         if (nm) { const old = await env.DB.prepare("SELECT pii FROM participant WHERE eid=? AND pid=?").bind(eid, have.pid).first<{ pii: string | null }>(); const o = await openPii(env, old?.pii); if (o && !o.name) await env.DB.prepare("UPDATE participant SET pii=? WHERE eid=? AND pid=?").bind(await sealPii(env, { phone: o.phone, name: nm }), eid, have.pid).run(); }
       }
-      return reply(have.pid, { again: true, jr: have.jr ?? 0 }); // same number twice = same participant
+      return reply(have.pid, { again: true, jr: have.jr ?? 0, ...(have.role ? { role: have.role } : {}) }); // same number twice = same participant
     }
-    if (e.closed) return json({ error: "This engagement is by invitation. Ask your organizer to add your number." }, 403);
+    const pr = await personByPhone(env, eid!, ph); // is this number on any list of the game?
+    if (pr?.status === "removed") return removedReply();
     if (!dev) return json({ error: "Please refresh this page and try again." }, 400);
     if (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) return json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket. Others can join from their own phones, using your invitation link if the organizer allowed it.", code: "device-used" }, 409);
     const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
     if ((n?.c ?? 0) >= e.cap) return json({ error: "This engagement is full." }, 409);
-    // invited through someone's link? Only when the organizer has switched invitations on, only for the kinds of guests they allowed, and only up to the inviter's quota (organizer, hosts and co-hosts: no quota)
+    // who owns the link this person came through? Only used when they are on no list.
     const inviteCfg = cfgOf(e).invites;
-    let inv: number | null = null, cat: string | null = null, invLimit: number | null = null;
-    let coSrc: string | null = null;
-    if (Number.isInteger(b?.from) && b.from >= COHOST_FROM && e.org) { // a Co-host's own link: always allowed (a Co-host invites any number), no quota, tagged so they can see how many they brought
-      const hex = (b.from - COHOST_FROM).toString(16).padStart(7, "0");
-      if (hex.length === 7 && await env.DB.prepare("SELECT 1 AS x FROM organizer_key WHERE org=? AND kind='cohost' AND revoked=0 AND substr(hash,1,7)=?").bind(e.org, hex).first()) coSrc = "co:" + hex;
-    } else if (inviteCfg?.on && Number.isInteger(b?.from) && b.from >= 1) {
-      const inviter = await env.DB.prepare("SELECT seq, role, inv FROM seat WHERE eid=? AND seq=?").bind(eid, b.from).first<{ seq: number; role: string | null; inv: number | null }>();
+    let owner: string | null = null, cat: string | null = null;
+    const fo = parseFrom(b?.from);
+    if (otherNumber) owner = tok!.inviter; // a different number on a personal link asks the link owner's chain
+    else if (fo?.kind === "org" && e.org) owner = "o";
+    else if ((fo?.kind === "host" || fo?.kind === "cohost") && e.org) { // a Host's or a Co-host's own common link
+      if (await env.DB.prepare("SELECT 1 AS x FROM organizer_key WHERE org=? AND kind=? AND revoked=0 AND (eid IS NULL OR eid=?) AND substr(hash,1,7)=?").bind(e.org, fo.kind, e.id, fo.hex).first()) owner = inviterOf(fo);
+    } else if (fo?.kind === "guest" && inviteCfg?.on) { // a level-1 guest's common link, only while the organizer allows guest invitations
+      const inviter = await env.DB.prepare("SELECT seq, role, inv, blocked FROM seat WHERE eid=? AND seq=?").bind(eid, fo.seq).first<{ seq: number; role: string | null; inv: number | null; blocked: number | null }>();
       // only two levels: a person who was themselves invited by a participant cannot invite; their link still lets the guest in, but records no inviter
-      if (inviter && (inviter.role || inviter.inv === null)) {
-        inv = inviter.seq; cat = typeof b?.cat === "string" && inviteCfg.cats.includes(b.cat) ? b.cat : null;
-        if (!inviter.role) {
-          invLimit = inviteCfg.per;
-          const used = (await env.DB.prepare("SELECT COUNT(*) AS c FROM seat WHERE eid=? AND inv=?").bind(eid, inv).first<{ c: number }>())?.c ?? 0;
-          if (used >= inviteCfg.per) return json({ error: `This invitation has already been used by ${inviteCfg.per} people, which is the most one person can invite. Please ask your organizer for the main link.`, code: "invite-full" }, 409);
-        }
-      }
+      if (inviter && !inviter.blocked && (inviter.role || inviter.inv === null)) { owner = "s:" + inviter.seq; cat = typeof b?.cat === "string" && inviteCfg.cats.includes(b.cat) ? b.cat : null; }
+    }
+    const via = otherNumber ? "personal-link" : fo ? "common-link" : "direct";
+    const target = owner ?? "o";
+    const lateName = cleanName(b?.name);
+    const wait = async (overlimit: boolean, limit: number | null) => { // the waiting room: no place is used while someone waits
+      if (await joinOverLimit(env, req, now)) return json({ error: "It is busy right now. Please try again in a few minutes.", code: "busy" }, 429);
+      if (!(await spend(env, now, 2))) return json({ error: "It is very busy right now. Please try again in a few minutes.", code: "busy" }, 503);
+      const w = await addWaiting({ env, eid: eid!, e, now }, { ph, digits: digits!, name: lateName || tokPii?.name || null, via, inviter: target, overlimit });
+      if ("full" in w) return json({ error: "Many people are waiting for an answer right now. Please try again a little later.", code: "waiting-full" }, 429);
+      if (w.status === "declined") return json({ error: "This game could not add you. Please talk to whoever invited you.", code: "declined", declined: true, wid: w.id }, 403);
+      const who = await waitingWho({ env, e, eid: eid! }, overlimit ? "o" : target);
+      const msg = `Your request is with ${who}. You can come in as soon as they say yes.`;
+      return overlimit
+        ? json({ error: `This invitation has already been used by ${limit} people, which is the most one person can invite. ${msg}`, code: "invite-full", waiting: true, wid: w.id, with: who }, 409)
+        : json({ error: `This engagement is by invitation. ${msg}`, code: "waiting", waiting: true, wid: w.id, with: who }, 403);
+    };
+    let inviter: string | null = null, role: string | null = null, guardId: string | null = null, guardLimit: number | null = null, pii: string;
+    if (pr) { inviter = pr.inviter; role = pr.role; const pp = await openPii(env, pr.pii); digits = pp?.phone || digits; pii = lateName && pp && !pp.name ? await sealPii(env, { phone: pp.phone, name: lateName }) : pr.pii; }
+    else {
+      if (e.closed) return wait(false, null); // "Only people on a list": everyone else waits for an answer
+      const limit = await limitOfInviter({ env, eid: eid!, e, invites: inviteCfg ?? { on: false, per: 4 } }, target);
+      if (limit !== null && (await listCount(env.DB, eid!, target)) >= limit) return wait(true, limit);
+      inviter = target; if (limit !== null) { guardId = target; guardLimit = limit; }
+      pii = await sealPii(env, { phone: digits, name: lateName || tokPii?.name || null });
     }
     if (await joinOverLimit(env, req, now)) return json({ error: "It is busy right now. Please try again in a few minutes.", code: "busy" }, 429);
-    if (!(await spend(env, now, 2))) return json({ error: "It is very busy right now. Please try again in a few minutes.", code: "busy" }, 503);
-    await addSeat(ph, await sealPii(env, { phone: digits, name: cleanName(b?.name) }), dev, lateRound, { inv, cat, src: coSrc ?? "link", invLimit });
-    const row = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.jr AS jr FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; jr: number | null }>();
-    if (!row) return (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) ? json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket.", code: "device-used" }, 409) : invLimit !== null ? json({ error: `This invitation has already been used by ${inviteCfg!.per} people, which is the most one person can invite. Please ask your organizer for the main link.`, code: "invite-full" }, 409) : json({ error: "This engagement is full." }, 409); // lost a race for the last place
+    if (!(await spend(env, now, 3))) return json({ error: "It is very busy right now. Please try again in a few minutes.", code: "busy" }, 503);
+    const inv = inviter.startsWith("s:") ? Number(inviter.slice(2)) : null;
+    await addSeat(ph, pii, dev, lateRound, { inv, cat: inv !== null ? cat : null, src: srcOf(inviter), ownerId: inviter, guardId, guardLimit, role });
+    const row = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.jr AS jr, s.role AS role FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; jr: number | null; role: string | null }>();
+    if (!row) return (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) ? json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket.", code: "device-used" }, 409) : guardId !== null ? wait(true, guardLimit) : json({ error: "This engagement is full." }, 409); // lost a race for the last place
     if (row.dev && row.dev !== dev) return json({ error: "This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it.", code: "other-phone" }, 423);
-    return reply(row.pid, { jr: row.jr ?? 0 });
+    return reply(row.pid, { jr: row.jr ?? 0, ...(row.role ? { role: row.role } : {}) });
   }
   if (action === "seats" && req.method === "GET") {
     // Public: seat number, participant id and join round of everyone who joined (no names, no phone numbers). Every phone reads this to work out the winners itself.
@@ -1082,8 +1355,9 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const b = await body(req);
     const list = Array.isArray(b?.claims) ? b.claims.slice(0, 7) : null;
     if (!b || typeof b.pid !== "string" || !list) return json({ error: "Bad claim." }, 400);
-    const who = await env.DB.prepare("SELECT pid FROM participant WHERE eid=? AND pid=?").bind(eid, b.pid).first();
+    const who = await env.DB.prepare("SELECT p.pid AS pid, s.blocked AS blocked FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.pid=?").bind(eid, b.pid).first<{ pid: string; blocked: number | null }>();
     if (!who) return json({ error: "Not a participant of this engagement." }, 403);
+    if (who.blocked) return json({ error: "You were removed from this game by the organizer.", code: "removed", removed: true }, 403); // the seat stays in the public list, the phone stops
     if (!tracks(e)) return json({ ok: true, stored: 0, tracked: false }); // large engagement: winners are worked out from the public numbers, nothing is stored per claim
     let stored = 0;
     const maxRound = cfgOf(e).rounds;
@@ -1101,7 +1375,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     // public: counts only, no ids. The one exception is a lucky draw, whose winners are shown by their opaque ticket ids so each phone can tell whether it won
     return json({ results: (r.results ?? []).map((x: any) => ({ pattern: x.pattern, ordinal: x.ordinal, round: x.round, idx: x.idx, count: JSON.parse(x.pids).length, ...(x.pattern === "lucky" ? { winners: JSON.parse(x.pids) } : {}) })) });
   }
-  if (action === "info" && req.method === "GET") return json({ ...(isDraft ? { draft: true } : {}), ...(unpaid && !isDraft ? { ...(can(a, e) ? { unpaid: true } : {}), locked } : {}), startMs: roundMs(e.start_round), cap: e.cap, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), ...pub(e) });
+  if (action === "info" && req.method === "GET") return json({ ...(cancelled ? { cancelled: true, message: "This game was cancelled by the organizer.", cancelledMs: e.cancelled_ms } : {}), ...(isDraft ? { draft: true } : {}), ...(unpaid && !isDraft ? { ...(can(a, e) ? { unpaid: true } : {}), locked } : {}), startMs: roundMs(e.start_round), cap: e.cap, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), whoCanJoin: e.closed ? "list" : "anyone", ...pub(e, true) });
 
   // everything below is for the organizer (or their AI, where allowed)
   if (action === "announce" && req.method === "POST") { // a message to every phone and the big screen. Organizer, their AI or a co-host; never a stranger
@@ -1129,9 +1403,10 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       { step: "Pay before the start time", who: "the organizer only", done: !isDraft && !unpaid, ...(unpaid && !isDraft ? { link: links.pay, deadline: istTime(roundMs(e.start_round)) } : {}) },
       { step: "Share the guest link and load the guest list", who: "the organizer", done: n > 0 },
     ];
-    return json({ id: e.id, status: isDraft ? "draft" : unpaid ? (locked ? "published, NOT PAID, held because the start time passed" : "published, payment due before the start") : "published and paid",
-      startsAtIST: istTime(roundMs(e.start_round)), startMs: roundMs(e.start_round), startRound: e.start_round, callSeconds: e.call_seconds, limit: e.cap, closed: !!e.closed,
-      tickets: c.tickets, rounds: c.rounds, rewards: c.rewards, breaks: c.breaks, opening: c.opening, closing: c.closing, invites: c.invites, brandMomentsAllowed: brandMomentsFor(c.tickets), participants: n, ...(c.name ? { name: c.name } : {}),
+    const refundRow = cancelled ? await env.DB.prepare("SELECT * FROM refund WHERE eid=? LIMIT 1").bind(e.id).first<any>() : null;
+    return json({ id: e.id, ...(cancelled ? { cancelled: true, cancelledMs: e.cancelled_ms, cancelledBy: e.cancelled_by, refund: refundView(refundRow) } : {}), status: cancelled ? "cancelled by the organizer" : isDraft ? "draft" : unpaid ? (locked ? "published, NOT PAID, held because the start time passed" : "published, payment due before the start") : "published and paid",
+      startsAtIST: istTime(roundMs(e.start_round)), startMs: roundMs(e.start_round), startRound: e.start_round, callSeconds: e.call_seconds, limit: e.cap, closed: !!e.closed, whoCanJoin: e.closed ? "list" : "anyone", coHostLimit: e.cohost_limit ?? COHOST_LIMIT_DEFAULT, guestInvites: cfgOf(e).invites,
+      tickets: c.tickets, rounds: c.rounds, rewards: c.rewards, breaks: c.breaks, opening: c.opening, closing: c.closing, invites: c.invites, brandMomentsAllowed: brandMomentsFor(c.tickets), participants: n, ...(c.name ? { name: c.name } : {}), ...(c.brand ? { brand: c.brand } : {}),
       paid: !unpaid, payment, ...(unpaid ? { pack: PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null, priceInrIncludingGst: PACKS.find((x) => x[0] >= e.cap) ? price(PACKS.find((x) => x[0] >= e.cap)![0], "INR").total : null, payBefore: istTime(roundMs(e.start_round)) } : { pack: e.pack }),
       gameMinutes: Math.round((90 * e.call_seconds * c.rounds + c.breaks.reduce((t: number, b: any) => t + b.seconds, 0) + (c.rounds - 1) * 90) / 60),
       links, nextSteps, consoleUrl: `${origin}/zc.html?e=${e.id}`, ...(isDraft ? {} : { shareUrl: `${origin}/z.html?e=${e.id}` }), ...(unpaid && !isDraft ? { payUrl: `${origin}/pay.html?e=${e.id}` } : {}) });
@@ -1199,11 +1474,11 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   }
   if (action === "invites" && req.method === "GET") { // how many people this participant has invited so far (their own id is the key to ask)
     const pid = url.searchParams.get("pid") ?? "";
-    const me = await env.DB.prepare("SELECT seq, role, inv FROM seat WHERE eid=? AND pid=?").bind(eid, pid).first<{ seq: number; role: string | null; inv: number | null }>();
+    const me = await env.DB.prepare("SELECT seq, role, inv, blocked FROM seat WHERE eid=? AND pid=?").bind(eid, pid).first<{ seq: number; role: string | null; inv: number | null; blocked: number | null }>();
     if (!me) return json({ error: "Not a participant of this engagement." }, 403);
     const c = cfgOf(e).invites;
-    const used = (await env.DB.prepare("SELECT COUNT(*) AS c FROM seat WHERE eid=? AND inv=?").bind(eid, me.seq).first<{ c: number }>())?.c ?? 0;
-    return json({ on: !!c?.on, per: c?.per ?? 0, used, unlimited: !!me.role, canInvite: !!me.role || me.inv === null, seat: me.seq, cats: c?.cats ?? [] });
+    const used = Math.max((await env.DB.prepare("SELECT COUNT(*) AS c FROM seat WHERE eid=? AND inv=?").bind(eid, me.seq).first<{ c: number }>())?.c ?? 0, await listCount(env.DB, eid!, "s:" + me.seq)); // people on their list (joined or not) or seats under them
+    return json({ on: !!c?.on, per: c?.per ?? 0, used, unlimited: !!me.role, canInvite: !me.blocked && (!!me.role || me.inv === null), seat: me.seq, cats: c?.cats ?? [], removed: !!me.blocked, whoCanJoin: e.closed ? "list" : "anyone" });
   }
   if (action === "life" && req.method === "GET") { // the organizer's view of when the game ends and when each kind of data is deleted
     if (!can(a, e)) return deny(a);
@@ -1282,18 +1557,20 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (action === "settings" && (req.method === "PATCH" || req.method === "POST")) { // only before the first number can possibly have been called
     if (!can(a, e)) return deny(a);
     if (!unpaid && roundMs(e.start_round) <= now) return json({ error: "The engagement has already started, so it can no longer be changed." }, 409);
-    const b = await body(req);
+    const b = await body(req, BRAND_BODY_MAX);
     if (!b) return json({ error: "Check the details." }, 400);
-    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, invites: b.invites, opening: b.opening, closing: b.closing, name: b.name }, cfgOf(e));
+    if (b.whoCanJoin !== undefined && b.whoCanJoin !== "list" && b.whoCanJoin !== "anyone") return json({ error: "Who can join: choose \"list\" (only people on a list) or \"anyone\" (anyone with the link)." }, 400);
+    if (b.coHostLimit !== undefined && (!Number.isInteger(b.coHostLimit) || b.coHostLimit < COHOST_LIMIT_MIN || b.coHostLimit > COHOST_LIMIT_MAX)) return json({ error: `A Co-host can list ${COHOST_LIMIT_MIN} to ${COHOST_LIMIT_MAX} people.` }, 400);
+    const vc = validateCfg({ tickets: b.tickets, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, invites: b.invites !== undefined ? b.invites : b.guestInvites, opening: b.opening, closing: b.closing, name: b.name, brand: b.brand }, cfgOf(e)); // guestInvites is the console's name for invites
     if (!vc.ok) return json({ error: vc.error }, 400);
-    const next = { start_round: b.startRound ?? e.start_round, call_seconds: b.callSeconds ?? e.call_seconds, cap: b.cap ?? e.cap, closed: b.closed === undefined ? e.closed : b.closed ? 1 : 0 };
+    const next = { start_round: b.startRound ?? e.start_round, call_seconds: b.callSeconds ?? e.call_seconds, cap: b.cap ?? e.cap, closed: b.whoCanJoin !== undefined ? (b.whoCanJoin === "list" ? 1 : 0) : b.closed === undefined ? e.closed : b.closed ? 1 : 0, cohost_limit: b.coHostLimit ?? e.cohost_limit ?? null }; // whoCanJoin "list" is the same switch as the older `closed`
     if (!Number.isInteger(next.start_round) || !Number.isInteger(next.call_seconds) || next.call_seconds % 3 || next.call_seconds < 6 || !Number.isInteger(next.cap) || next.cap < 1 || next.cap > 100000) return json({ error: "Check the details." }, 400);
     if (roundMs(next.start_round) <= now) return json({ error: "Pick a start time in the future." }, 400);
     const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
     if (!a.plat && e.pack !== 0 && next.cap > (e.pack ?? e.cap)) return json({ error: `Your pack allows up to ${e.pack ?? e.cap} participants. Buy a bigger pack to raise the limit.` }, 402);
     if (next.cap < (have?.c ?? 0)) return json({ error: "The limit cannot be lower than the people already on the list." }, 409);
     if (!(await spend(env, now))) return BUSY();
-    await env.DB.prepare("UPDATE engagement SET start_round=?, call_seconds=?, cap=?, closed=?, tickets=?, config=? WHERE id=?").bind(next.start_round, next.call_seconds, next.cap, next.closed, vc.cfg.tickets, cfgJson(vc.cfg), eid).run();
+    await env.DB.prepare("UPDATE engagement SET start_round=?, call_seconds=?, cap=?, closed=?, tickets=?, config=?, cohost_limit=? WHERE id=?").bind(next.start_round, next.call_seconds, next.cap, next.closed, vc.cfg.tickets, cfgJson(vc.cfg), next.cohost_limit, eid).run();
     { // the pause profile depends on the size: if no pause has been sent yet and the size moved to another profile, forget the unused key so the console registers the right one
       const f = await readPublished(d1kv(env), eid!);
       const sf = safetyForCap(next.cap);
@@ -1302,7 +1579,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
         try { await env.CONTROL_R2?.delete(controlKey(eid!)); } catch { /* the object expires with its engagement anyway */ }
       }
     }
-    return json({ ok: true, startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed, tickets: vc.cfg.tickets, rewards: vc.cfg.rewards, breaks: vc.cfg.breaks, opening: vc.cfg.opening, closing: vc.cfg.closing, ...(vc.cfg.name ? { name: vc.cfg.name } : {}), rounds: vc.cfg.rounds, invites: vc.cfg.invites });
+    return json({ ok: true, startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed, whoCanJoin: next.closed ? "list" : "anyone", coHostLimit: next.cohost_limit ?? COHOST_LIMIT_DEFAULT, guestInvites: vc.cfg.invites, tickets: vc.cfg.tickets, rewards: vc.cfg.rewards, breaks: vc.cfg.breaks, opening: vc.cfg.opening, closing: vc.cfg.closing, ...(vc.cfg.name ? { name: vc.cfg.name } : {}), ...(vc.cfg.brand ? { brand: vc.cfg.brand } : {}), rounds: vc.cfg.rounds, invites: vc.cfg.invites });
   }
   return json({ error: "Not found" }, 404);
 }

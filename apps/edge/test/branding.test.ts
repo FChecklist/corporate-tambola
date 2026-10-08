@@ -31,6 +31,7 @@ afterEach(() => { globalThis.fetch = realFetch; });
 const SAMPLES: Record<string, () => Mails.BuiltMail> = {
   aiLinkMail: () => Mails.aiLinkMail(ORIGIN, "cta_" + "a".repeat(48), "start", T + 86_400_000),
   coHostLinkMail: () => Mails.coHostLinkMail(ORIGIN, "cth_" + "b".repeat(48), "boss@acme.com", T + 86_400_000),
+  hostLinkMail: () => Mails.hostLinkMail(ORIGIN, "cth_" + "e".repeat(48), "Priya"),
   newUseAlertMail: () => Mails.newUseAlertMail({ when: "now", country: "IN", program: "x", kind: "AI", origin: ORIGIN }),
   signInMail: () => Mails.signInMail(ORIGIN, "123456", "c".repeat(48)),
 };
@@ -75,7 +76,7 @@ describe("mail that is not built by mails.ts gets the same brand when it is sent
     await call("POST", "/api/z/BRAND-1/publish", { email: "boss@acme.com", phone: "98765 43210" }, h);
     const use = (ip: string, c: string, now: number) => call("GET", `/ai/${o.aiKey}`, undefined, { "cf-connecting-ip": ip, "cf-ipcountry": c, "user-agent": "ChatGPT-User/1" }, now);
     await use("1.2.3.4", "US", T); await use("5.6.7.8", "DE", T + 1000);
-    await call("POST", "/api/org/host", {}, h); await call("POST", "/api/org/ai/replace", {}, h); await call("POST", "/api/org/ai/fresh", {}, h);
+    await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, h); await call("POST", "/api/org/ai/replace", {}, h); await call("POST", "/api/org/ai/fresh", {}, h);
     await call("POST", "/api/auth/email", { email: "boss@acme.com" });
     await housekeeping(env as Env, T + 86_400_000);
     await call("GET", "/api/z/BRAND-1/info", undefined, {}, T + 40 * 3_600_000);

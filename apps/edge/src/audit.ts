@@ -113,8 +113,8 @@ export function ctxOf(req: Request): Ctx {
 }
 
 // ------------------------------------------------------------------------------------------------ what happened
-const ENG = /^\/api\/z\/([A-Za-z0-9_-]{4,40})\/([a-z]+)(?:\/([a-z/]+))?$/;
-const AI_FORBIDDEN = /(^|\/)(publish|erase|control|forget|settle)(\/|$)|^\/api\/(checkout|payments|org\/close)/;
+const ENG = /^\/api\/z\/([A-Za-z0-9_-]{4,40})\/([a-z]+)(?:\/([A-Za-z0-9/_-]+))?$/;
+const AI_FORBIDDEN = /(^|\/)(publish|erase|control|forget|settle|people|waiting|paylink)(\/|$)|^\/api\/(checkout|payments|org\/close)/;
 /** Name the event and its target for a request, or null when it is not worth a row (plain reads by phones, the schedulers). */
 export function classify(method: string, path: string, status: number, actor: Actor, body: any): { event: string; target: string | null; eid: string | null } | null {
   const ok = status >= 200 && status < 300;
@@ -130,11 +130,13 @@ export function classify(method: string, path: string, status: number, actor: Ac
     else if (a === "vote" || a === "over") event = "vote";
     else if (a === "settings") event = writes ? "edit" : null;
     else if (a === "publish") event = "publish";
+    else if (a === "cancel") event = writes ? "cancel" : null;
     else if (a === "announce") event = "announce";
     else if (a === "confirm" || a === "prizegiven") event = "prize";
     else if (a === "erase" || a === "forget" || a === "person") event = writes ? "erase_request" : null;
     else if (a === "unbind") event = "unbind";
     else if (a === "invites") event = writes ? "invite" : null;
+    else if (a === "people" || a === "waiting") event = writes ? (sub === "" ? "invite" : "edit") : null;
     else if (a === "control") event = sub === "request" ? ({ pause: "pause", resume: "resume", stop: "stop", erase: "erase_request" } as Record<string, string>)[String(body?.action)] ?? "control_request" : sub === "key" ? "control_key" : writes ? ({ pause: "pause", resume: "resume", stop: "stop", start: "start" } as Record<string, string>)[String(body?.action)] ?? "control" : null;
     else if (a === "mark" || a === "roster" || a === "reuse" || a === "seats") event = writes ? "edit" : null;
     else if (writes) event = "edit";
@@ -142,7 +144,7 @@ export function classify(method: string, path: string, status: number, actor: Ac
   } else if (path === "/api/z" && method === "POST") event = "create";
   else if (path === "/api/start") event = "create";
   else if (/^\/api\/auth\//.test(path)) event = ok ? "login" : "login_failed";
-  else if (/^\/api\/(checkout|payments)\//.test(path) || path === "/api/checkout") { if (method === "GET") return null; event = "pay"; }
+  else if (/^\/api\/(checkout|payments|paylink)\//.test(path) || path === "/api/checkout") { if (method === "GET") return null; event = "pay"; }
   else if (path === "/api/org/host") event = "invite";
   else if (/^\/api\/org\/(ai|keys)/.test(path)) event = method === "GET" ? (actor === "ai_key" ? "ai_read" : null) : "edit";
   else if (path === "/api/org/close") event = "delete";
@@ -218,7 +220,7 @@ export async function auditRequest(env: AuditEnv, req: Request, peek: Request | 
     let body: any = null, bodyNote: string | null = null;
     if (peek) {
       const len = Number(peek.headers.get("content-length") ?? "0");
-      if (/\/(roster|reuse)$/.test(path) || len > 16384) bodyNote = "not copied (size or roster)";
+      if (/\/(roster|reuse|people|resend)$/.test(path) || len > 16384) bodyNote = "not copied (size or roster)";
       else { try { const t = await peek.text(); bodyNote = t ? null : "empty"; body = t && t.length <= 16384 ? JSON.parse(t) : null; } catch { body = null; bodyNote = "not json"; } }
     }
     const hadKey = !!(req.headers.get("x-organizer") || req.headers.get("authorization"));

@@ -85,6 +85,20 @@ export function coHostLinkMail(origin: string, key: string, owner: string, expir
   return { subject: HOST_SUBJECT, text, html };
 }
 
+export const HOST_LINK_SUBJECT = "You are a Host: your Corporate Tambola link";
+export const HOST_LINK_WARNING = "DO NOT FORWARD: this email holds your personal Host link";
+/** The Host's OWN link (their console), e-mailed to the Host when the Organizer adds them. Not an AI link; it opens the Host's console. Only the Organizer and Hosts have an e-mail. */
+export function hostLinkMail(origin: string, key: string, name: string): BuiltMail {
+  const url = `${origin}/zc.html?k=${key}`;
+  const hello = name ? `Hello ${name},` : "Hello,";
+  const text = [HOST_LINK_WARNING, "", hello, "You have been added as a Host of a Corporate Tambola game.", "As a Host you can look after the game, add Co-hosts and pay. Only the Organizer can change the account.", "", `OPEN MY CONSOLE: ${url}`, "", "This link is only for you. Keep it private. Do not forward it.", "", HOST_LINK_WARNING, "", footerText(origin), ""].join("\n");
+  const warn = `<tr><td style="padding:16px 22px 0;"><div style="background:#fdecea;border:2px solid #c0392b;border-radius:8px;padding:12px 14px;color:#b71c1c;font-weight:700;font-size:14px;line-height:1.4;text-align:center;">${esc(HOST_LINK_WARNING)}</div></td></tr>`;
+  const html = pageHtml("You are a Host", `${warn}<tr><td style="padding:18px 22px 4px;"><h1 style="margin:0;font-size:24px;line-height:1.25;color:#0B3D91;">You are a Host</h1><p style="margin:10px 0 0;font-size:15px;line-height:1.5;">${esc(hello)} You have been added as a Host of a Corporate Tambola game. You can look after the game, add Co-hosts and pay. Only the Organizer can change the account.</p></td></tr>
+<tr><td align="center" style="padding:16px 22px 4px;"><a href="${esc(url)}" style="display:inline-block;background:#E0B872;color:#0B3D91;font-weight:700;font-size:16px;text-decoration:none;padding:13px 26px;border-radius:8px;">Open my console</a></td></tr>
+<tr><td style="padding:12px 22px 6px;font-size:13px;color:#666;line-height:1.5;">This link is only for you. Keep it private. Do not forward it.</td></tr>${warn.replace("16px 22px 0", "8px 22px 20px")}`, origin);
+  return { subject: HOST_LINK_SUBJECT, text, html };
+}
+
 /** A plain alert, no link and no key in it: an AI link was used from somewhere new. */
 export function newUseAlertMail(info: { when: string; country: string; program: string; kind: "AI" | "Host"; origin?: string }): BuiltMail {
   const text = [

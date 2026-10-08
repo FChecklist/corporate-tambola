@@ -34,7 +34,7 @@ Building and publishing are free. The organizer pays before the start time. If i
 | UC-9 | Publish (free) with confirmed email and mobile, then pay before the start | Entitlement created, engagement paid, begins on time, organizer e-mailed the link and what is due |
 | UC-10 | Published, never paid, start time reached | Phones hold and show nothing; control says locked; organizer e-mailed once ("could not begin") |
 | UC-11 | After UC-10 the organizer comes back later | Can create a new engagement; the unpaid one is forgotten after 30 days |
-| UC-12 | Pay AFTER the start time passed | Starts in about 3 minutes for everyone already waiting; phones unlock and read the new start |
+| UC-12 | Pay AFTER the start time passed | The first number comes 2 minutes after the payment is confirmed, for everyone already waiting; phones unlock and read the new start |
 | UC-13 | Publish twice, or publish two tabs at once | One publish, no error, no double e-mail |
 | UC-14 | Payment confirmed by the gateway webhook only (browser closed) | Same result as paying in the browser |
 | UC-15 | Two payments for the same engagement | Second one is not wasted: kept as a credit for the next engagement |

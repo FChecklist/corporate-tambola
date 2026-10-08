@@ -3,7 +3,7 @@
 import { BRAND } from "./brand";
 import { GOLD, NAVY, PdfDoc, WHITE, type Column } from "./pdf";
 
-export interface ReportPerson { seat: number | null; name: string | null; phone: string | null; joinedMs: number | null; late: boolean; role: string | null; invitedBy: number | null; onRoster: boolean; joined: boolean }
+export interface ReportPerson { seat: number | null; name: string | null; phone: string | null; joinedMs: number | null; late: boolean; role: string | null; invitedBy: number | null; onRoster: boolean; joined: boolean; /** the list this person is on: Organizer, Host <name>, Co-host <name> (a guest's own invitees show under that guest) */ via?: string | null; /** who let them in from the waiting room or put them back */ admittedBy?: string | null; removed?: boolean }
 export interface ReportWinner { seat: number | null; name: string | null; phone: string | null; role: string | null; verified: boolean; callNo: number | null; atMs: number | null; /** the winner confirmed these details on their own phone after the game */ confirmed?: boolean; /** what they joined with, when they changed it after the game */ changedFrom?: string | null; /** the date the organizer ticked 'prize given' */ given?: string | null }
 export interface ReportPrize { round: number; label: string; text: string; winners: ReportWinner[] }
 export interface Agg { joined: number; onRoster: number; notJoined: number; late: number; viaInvite: number; inviters: number; topInviter: [number, number] | null; roles: number; joinedInTime: number; firstJoinMs: number | null }
@@ -163,15 +163,26 @@ const aggOf = (people: ReportPerson[]): Agg => {
 };
 export { aggOf };
 
-function treeSection(pdf: PdfDoc, people: ReportPerson[]) {
-  pdf.h1("5. Who invited whom");
-  pdf.para("Each person's share link records who sent it. People at the left edge came through the organizer's own link or list.", { size: 9, gap: 4 });
+/** The who-invited-whom lines: grouped by the list people came from (Organizer, Host, Co-host), guests under their own inviter, and who admitted whom. */
+export function treeLines(people: ReportPerson[]): string[] {
   const bySeat = new Map<number, ReportPerson>(); for (const p of people) if (p.seat !== null) bySeat.set(p.seat, p);
   const kids = new Map<number | null, ReportPerson[]>();
   for (const p of people) { const k = p.invitedBy && bySeat.has(p.invitedBy) ? p.invitedBy : null; (kids.get(k) ?? kids.set(k, []).get(k)!).push(p); }
   const lines: string[] = []; const seen = new Set<number>();
-  const walk = (k: number | null, depth: number) => { for (const c of kids.get(k) ?? []) { if (lines.length >= 4000) return; if (c.seat !== null) { if (seen.has(c.seat)) continue; seen.add(c.seat); } lines.push(`${"    ".repeat(Math.min(depth, 12))}${depth ? "+- " : ""}${c.name || "(no name)"}  seat ${c.seat ?? "-"}  ${mob(c.phone)}${c.role ? "  [" + c.role + "]" : ""}${c.invitedBy && !bySeat.has(c.invitedBy) ? `  (invited by seat ${c.invitedBy}, listed in another part)` : ""}`); if (c.seat !== null) walk(c.seat, depth + 1); } };
-  walk(null, 0);
+  const walk = (k: number | null, depth: number) => { for (const c of kids.get(k) ?? []) { if (lines.length >= 4000) return; if (c.seat !== null) { if (seen.has(c.seat)) continue; seen.add(c.seat); } lines.push(`${"    ".repeat(Math.min(depth, 12))}${depth ? "+- " : ""}${c.name || "(no name)"}  seat ${c.seat ?? "-"}  ${mob(c.phone)}${c.role ? "  [" + c.role + "]" : ""}${c.admittedBy ? "  (admitted by " + c.admittedBy + ")" : ""}${c.removed ? "  (removed)" : ""}${c.invitedBy && !bySeat.has(c.invitedBy) ? `  (invited by seat ${c.invitedBy}, listed in another part)` : ""}`); if (c.seat !== null) walk(c.seat, depth + 1); } };
+  // roots are grouped under the list they came from, so the tree reads Organizer -> Host -> Co-host -> guest -> guest's guest
+  const order = ["Organizer", ...[...new Set(people.map((p) => p.via).filter((v): v is string => !!v && v !== "Organizer" && v.startsWith("Host")))].sort(), ...[...new Set(people.map((p) => p.via).filter((v): v is string => !!v && v.startsWith("Co-host")))].sort()];
+  const roots = kids.get(null) ?? [];
+  if (roots.some((p) => p.via)) {
+    const rest = new Map<string, ReportPerson[]>(); for (const p of roots) { const k = p.via ?? "Organizer"; (rest.get(k) ?? rest.set(k, []).get(k)!).push(p); }
+    for (const grp of [...order, ...[...rest.keys()].filter((k) => !order.includes(k))]) { const g = rest.get(grp); if (!g) continue; lines.push(`[${grp}]`); kids.set(null, g); walk(null, 1); }
+  } else walk(null, 0);
+  return lines;
+}
+function treeSection(pdf: PdfDoc, people: ReportPerson[]) {
+  pdf.h1("5. Who invited whom");
+  pdf.para("Each person's share link records who sent it. People at the left edge came through the organizer's own link or list.", { size: 9, gap: 4 });
+  const lines = treeLines(people);
   if (!lines.length) pdf.para("Nobody shared an invite link in this game.", { size: 9 });
   else { for (const l of lines) pdf.pre(l); if (lines.length >= 4000) pdf.para("(The list is cut at 4,000 lines.)", { size: 8.5 }); }
 }

@@ -13,6 +13,7 @@ import { seatOfPid } from "../../../packages/beacon/src/unique-ticket";
 import { openPii, openText, sealText, type PiiEnv } from "./pii";
 import { layoutReport, layoutPeoplePart, istDate, istFull, emptyAgg, type Agg, type ReportData, type ReportPerson, type ReportPrize, type ReportWinner } from "./report-layout";
 import { sendReportMail, type PayEnv } from "./pay";
+import { eraseCohostsSql, mailDataDeleted } from "./cancel";
 import type { D1, Env } from "./worker";
 
 export const GENESIS = 1692803367;
@@ -114,8 +115,9 @@ export async function acceptOver(env: Env, e: any, eid: string, b: any, now: num
 export async function erasePersonal(env: Env, eid: string, now: number, by: string): Promise<void> {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rvote WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rcand WHERE eid=?").bind(eid),
-    env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM seat WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM overvote WHERE eid=?").bind(eid),
+    env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM seat WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM person WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM waiting WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM overvote WHERE eid=?").bind(eid),
     env.DB.prepare("DELETE FROM kv WHERE k=? OR k=? OR k=? OR k=? OR k LIKE ?").bind(`seats-base/${eid}`, `rpt/${eid}`, `rptopen/${eid}`, `rptremind/${eid}`, `rptc/${eid}/%`),
+    env.DB.prepare(eraseCohostsSql).bind(eid), // the game's Co-hosts: name, mobile number and key go with the participants' data
     env.DB.prepare("INSERT INTO life(eid,end_ms,end_src,purged_ms,report_state) VALUES(?,?, 'organizer', ?, ?) ON CONFLICT(eid) DO UPDATE SET purged_ms=?, report_state=COALESCE(life.report_state, ?)").bind(eid, now, now, by, now, by),
   ]);
   await shredParticipantAudit(env as any, eid, now); // best effort inside: a held engagement keeps its log until the hold is lifted, then the tick shreds it
@@ -135,7 +137,7 @@ async function deleteEngagementRows(env: Env, id: string): Promise<void> {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM prize WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
     env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`rptsalt/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`, `paidby/${id}`),
-    env.DB.prepare("DELETE FROM shred WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM eng_key WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM audit_pii WHERE eid=?").bind(id), // erasePersonal above wrote a fresh shred marker
+    env.DB.prepare("DELETE FROM organizer_key WHERE eid=? AND kind='cohost'").bind(id), env.DB.prepare("DELETE FROM shred WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM eng_key WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM audit_pii WHERE eid=?").bind(id), // erasePersonal above wrote a fresh shred marker
     env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
   ]);
 }
@@ -162,12 +164,15 @@ async function reportStep(env: LifeEnv, e: any, life: { end_ms: number }, now: n
       for (const callNo of nums) st.tl.push({ callNo, atMs: (await callTimeMs(env, e, 1, callNo, sch)) ?? 0, present: 0, late: 0 });
     }
     if (st.next < st.total) {
-      const rows = (await env.DB.prepare("SELECT p.pid AS pid, p.pii AS pii, p.joined_ms AS joined_ms, s.seq AS seq, COALESCE(s.jr,0) AS jr, s.role AS role, s.inv AS inv, s.dev AS dev, s.src AS src FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? ORDER BY COALESCE(s.seq, 1000000), p.pid LIMIT ? OFFSET ?").bind(eid, CHUNK, st.next).all<any>()).results ?? [];
+      const rows = (await env.DB.prepare("SELECT p.pid AS pid, p.pii AS pii, p.joined_ms AS joined_ms, s.seq AS seq, COALESCE(s.jr,0) AS jr, s.role AS role, s.inv AS inv, s.dev AS dev, s.src AS src, pe.inviter AS via, pe.approved_by AS appr, pe.removed_ms AS rmv FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid LEFT JOIN person pe ON pe.eid=p.eid AND pe.ph=p.phone_hash WHERE p.eid=? ORDER BY COALESCE(s.seq, 1000000), p.pid LIMIT ? OFFSET ?").bind(eid, CHUNK, st.next).all<any>()).results ?? [];
       const people: ReportPerson[] = [];
+      const keyLabels = new Map<string, string>(); // who is "Host Asha" / "Co-host Ravi" in the who-invited-whom tree
+      for (const k of (await env.DB.prepare("SELECT substr(hash,1,7) AS h, kind, label FROM organizer_key WHERE org=? AND kind IN ('host','cohost')").bind(e.org).all<any>()).results ?? []) keyLabels.set((k.kind === "host" ? "h:" : "c:") + k.h, `${k.kind === "host" ? "Host" : "Co-host"}${k.label ? " " + k.label : ""}`);
+      const labelOf = (id: string | null | undefined): string | null => (!id ? null : id === "o" ? "Organizer" : id.startsWith("s:") ? null : keyLabels.get(id) ?? (id.startsWith("h:") ? "Host" : "Co-host"));
       for (const r of rows) {
         const o = await openPii(env, r.pii);
         const joined = r.seq === null || r.dev !== null;
-        people.push({ seat: r.seq ?? null, name: o?.name ?? null, phone: o?.phone ?? null, joinedMs: r.joined_ms ?? null, late: r.jr > 0, role: r.role ?? null, invitedBy: r.inv ?? null, onRoster: r.src === "roster" || r.src === "reuse", joined });
+        people.push({ seat: r.seq ?? null, name: o?.name ?? null, phone: o?.phone ?? null, joinedMs: r.joined_ms ?? null, late: r.jr > 0, role: r.role ?? null, invitedBy: r.inv ?? null, onRoster: r.src === "roster" || r.src === "reuse" || r.src === "list", joined, via: labelOf(r.via), admittedBy: r.appr ? labelOf(r.appr) : null, removed: !!r.rmv });
         if (joined) for (const t of st.tl) if ((r.joined_ms ?? 0) <= t.atMs) { t.present++; if (r.jr > 0) t.late++; }
         const g = st.agg; // totals for the summary, kept as we go so a big game's summary needs no second look at the people
         if (joined) { g.joined++; if (r.jr > 0) g.late++; else { g.joinedInTime++; if (r.joined_ms && (g.firstJoinMs === null || r.joined_ms < g.firstJoinMs)) g.firstJoinMs = r.joined_ms; } }
@@ -297,6 +302,11 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
   for (const e of rows) {
     out.checked++;
     try {
+      if (e.cancelled_ms) { // a cancelled game: no report; the 23-hour clock runs from the cancel time
+        await env.DB.prepare("INSERT INTO life(eid,end_ms,end_src) VALUES(?,?,'cancel') ON CONFLICT(eid) DO UPDATE SET end_ms=excluded.end_ms, end_src='cancel' WHERE life.purged_ms IS NULL").bind(e.id, e.cancelled_ms).run();
+        if (now >= personalDeleteAt(e.cancelled_ms) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "cancel"); out.purged++; await mailDataDeleted(env as any, e, now); }
+        continue;
+      }
       let life = await env.DB.prepare("SELECT * FROM life WHERE eid=?").bind(e.id).first<any>();
       if (!life || life.end_src !== "phones") { // until phones confirm the end, the scheduled end (with the organizer's pauses) is the end, and is re-read each time
         const end = await endBoundMs(env, e);
@@ -310,9 +320,19 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
         else await env.DB.prepare("UPDATE life SET tries=tries+1 WHERE eid=?").bind(e.id).run();
       }
       if (life.report_ms && now >= reportLinkUntil(life.end_ms) - 6 * 3_600_000 && now < reportLinkUntil(life.end_ms)) await remindReport(env, e, life, now);
-      if (now >= personalDeleteAt(life.end_ms) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "auto"); out.purged++; } // an owner-set legal hold suspends this too
+      if (now >= personalDeleteAt(life.end_ms) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "auto"); out.purged++; await mailDataDeleted(env as any, e, now); } // an owner-set legal hold suspends this too
     } catch { /* this engagement is tried again at the next tick; the others still run */ }
   }
+  // a game's Co-hosts (name + mobile) go 23 hours after it ends even when nobody ever joined, so no participant erasure ever ran for it
+  try {
+    const open = (await env.DB.prepare("SELECT DISTINCT eid FROM organizer_key WHERE kind='cohost' AND revoked=0 AND eid IS NOT NULL LIMIT 25").all<{ eid: string }>()).results ?? [];
+    for (const k of open) {
+      const g = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(k.eid).first<any>();
+      const l = await env.DB.prepare("SELECT end_ms, purged_ms FROM life WHERE eid=?").bind(k.eid).first<any>();
+      const endMs = !g ? 0 : g.cancelled_ms ? g.cancelled_ms : l?.end_ms ?? (await endBoundMs(env, g));
+      if ((!g || l?.purged_ms || now >= personalDeleteAt(endMs)) && !(await isHeld(env.DB, k.eid))) await env.DB.prepare(eraseCohostsSql).bind(k.eid).run();
+    }
+  } catch { /* tried again at the next tick */ }
   // engagements whose participant rows are already gone (organizer erased early, or a hold was lifted since) but whose participants' audit part is still sealed: shred it once the 23 hours are over
   try {
     const late = (await env.DB.prepare("SELECT DISTINCT p.eid AS eid FROM audit_pii p JOIN life l ON l.eid=p.eid WHERE l.end_ms + ? <= ? AND NOT EXISTS (SELECT 1 FROM legal_hold h WHERE h.eid=p.eid) LIMIT 25").bind(PURGE_AFTER_MS, now).all<{ eid: string }>()).results ?? [];

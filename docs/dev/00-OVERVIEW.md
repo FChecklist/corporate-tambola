@@ -62,7 +62,7 @@ Price is **per engagement, by size** (not per ticket, not a subscription). Sourc
 
 1. Static files (`apps/web/public`, filtered by `pages/build.mjs` into `pages/public`) are served by **Cloudflare Pages**.
 2. `/api/*` and `/ai/*` are served by **Pages Functions** (`pages/functions/api/[[path]].ts`, `pages/functions/ai/[[path]].ts`) that all call the single `handle()` in `apps/edge/src/worker.ts`.
-3. State is in **D1** (binding `DB`), 41 tables + one runtime-created `telemetry` table (`03-DATABASE.md`).
+3. State is in **D1** (binding `DB`), 43 tables + one runtime-created `telemetry` table (`03-DATABASE.md`).
 4. A separate **cron Worker** (`apps/cron`) POSTs `/api/lifecycle/tick` every minute with a job key.
 5. Phones fetch numbers **directly from the public drand beacon** (`api.drand.sh` etc.), never through our servers.
 6. Mail goes through **Resend** with a shared verified domain (`veridian-aios.com`), card payments through **Razorpay**.

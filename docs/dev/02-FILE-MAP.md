@@ -42,12 +42,16 @@ Counts: 333 files.
 | `apps/edge/migrations/0011_participant_shred.sql` | D1 migration: `audit_log.pdig`, `audit_pii`, `eng_key`, `shred` | applied by `wrangler d1 migrations apply`; equality with `SCHEMA` enforced by `apps/edge/test/migrations.test.ts` |
 | `apps/edge/migrations/0012_visits.sql` | D1 migration: `visit_session`, `visit_event`, `visit_agg` | applied by `wrangler d1 migrations apply`; equality with `SCHEMA` enforced by `apps/edge/test/migrations.test.ts` |
 | `apps/edge/migrations/0013_test_live_mode.sql` | D1 migration: `mode`, `test_mail_allow`, `mail_event`, `is_test` columns | applied by `wrangler d1 migrations apply`; equality with `SCHEMA` enforced by `apps/edge/test/migrations.test.ts` |
+| `apps/edge/migrations/0015_cancel_refund.sql` | D1 migration: cancel columns, Host e-mail / Co-host binding columns, `payment.eid/confirming_ms`, tables `refund` and `credit_note` | applied by `wrangler d1 migrations apply`; equality with `SCHEMA` enforced by `apps/edge/test/migrations.test.ts` |
+| `apps/edge/migrations/0016_people.sql` | D1 migration: `organizer_key.created_by`, `engagement.cohost_limit`, `seat.blocked`, tables `person` and `waiting` | applied by hand before deploying people.ts |
+| `apps/edge/migrations/0017_brand_paylink_google.sql` | D1 migration (Phase 3/4): tables `paylink`, `host_state`, `host_login`, column `organizer_key.host_id`, backfill of `host_state` for existing Hosts | applied by hand before deploying; equality with `SCHEMA` enforced by `apps/edge/test/migrations.test.ts` |
 | `apps/edge/migrations/0014_roles.sql` | D1 migration: `organizer_key.label` (untracked/new) | applied by `wrangler d1 migrations apply`; equality with `SCHEMA` enforced by `apps/edge/test/migrations.test.ts` |
 | `apps/edge/package.json` | Workspace package `@tambola/edge` |  |
 | `apps/edge/src/ai-facts.ts` | The 10 FACTS + `FACT_RULES` + `factsText` | `/ai/<key>/facts`, front door, `trust-page.ts` |
 | `apps/edge/src/ai-functions.ts` | The FUNCTIONS registry (29 functions, `who: ai\|handover\|human`), `mapText`, `mapJson`, `WHO_WORDS` | `/ai/<key>/map`, front door; frozen by `ai-enablement.test.ts` |
 | `apps/edge/src/ai-go.ts` | Guided step links `goScreen`, `screenText`, `screenJson`, `OCCASIONS`, `PRESET_MESSAGES`, `startMsOf`, `startRoundOf` | `/ai/<key>/go...` via `worker.ts` |
 | `apps/edge/src/ai-link.ts` | AI manual text/JSON: `aiPaste`, `manualText`, `manualJson`, `frontDoorText`, `nextHint`, `ORG_ENDPOINTS`, `HOST_ENDPOINTS`, `AI_CANNOT`, `CONVERSATION`, `LINK_KEY`, `GET_BODY_MAX` | called by `worker.ts` `aiLink` |
+| `apps/edge/src/cancel.ts` | Cancel a game and the refund: `cancelPreview`, `cancelGame`, `refundPayment` (one per payment), `refundNumbers`/`REFUND_FEE_RATE` (0.0236), `issueCreditNote`, `teamEmails`, `mailDataDeleted`, `eraseCohostsSql` | called by `worker.ts` (cancel routes) and `lifecycle.ts` (erase, tick); tests `cancel.test.ts` |
 | `apps/edge/src/audit.ts` | Internal audit log: `AUDIT_SCHEMA`, `classify`, `auditRequest`, `appendAudit`, `verifyChain`, `loadRows`, `toCsv`, `analyzeChain`, `setHold`, `closeAuditFor`, `sweepAudit`, `shredParticipantAudit`, `logAccess`, `redact`, vendor detection | called by `worker.ts`, `lifecycle.ts`, `mode.ts`, `visits.ts` |
 | `apps/edge/src/brand.ts` | Brand + e-mail look: `BRAND`, `TERMS_VERSION` (2026-10-05), `withFooter`, `plainToHtml`, `pageHtml`, `footerText` | used by `pay.ts` (`sendMail`), `mails.ts`, `worker.ts` |
 | `apps/edge/src/lifecycle.ts` | Life of a game's data: `lifecycleTick`, report steps (`reportStep`, `reportApi`, `reportLink`), `acceptOver`, `acceptWon` (stub), `recordWinners`, `erasePersonal`, `eraseEverything`, `purgeTestEngagement`, deletion clocks `PURGE_AFTER_MS`, `REPORT_LINK_MS`, `fullDeleteAt`, `endBoundMs` | called by `worker.ts`, `winners.ts`, `test-data.ts` |
@@ -57,6 +61,10 @@ Counts: 333 files.
 | `apps/edge/src/partners.ts` | Refer & earn: `partnerRoute`, `recordCommission`, `PARTNER_SCHEMA`, constants `COMMISSION_RATE 0.5`, `REPEAT_COMMISSION_RATE`, `ATTRIBUTION_DAYS 30` | called by `worker.ts` and `pay.ts` (`fulfil`) |
 | `apps/edge/src/pay.ts` | Payments: `payRoute` (checkout, `/api/payments/*`, invoice), `fulfil`, `sendMail`/`sendReportMail`/`retryOutbox` (Resend), `PAY_SCHEMA`, `payMode`, `freeLaunch` | called by `worker.ts`, `lifecycle.ts` (report mail), `partners.ts`; env type `PayEnv` |
 | `apps/edge/src/pdf.ts` | Small dependency-free PDF writer (A4 text, tables, colour bands, standard fonts) | used by `report-layout.ts`, bundled into `reportgen.js` |
+| `apps/edge/src/people.ts` | Phase 2 people module: `PEOPLE_SCHEMA` (0016), number cleaning (`cleanPhone`), link codes (`from=`), the routes `/people`, `/people/export`, `/people/me`, `/people/{id}/remove|resend`, `/waiting`, `/waiting/{id}`, `/waiting/all` and the public `/me`, the waiting-room helpers and the `/j/<token>` page | `worker.ts` (routing, `join`, `settings`), `lifecycle.ts` |
+| `apps/edge/src/google.ts` | "Continue with Google": verifies a Google ID token with Web Crypto (RS256 signature against Google's published keys, `iss`, `aud`, `exp`, `email_verified`), key cache, `setGoogleKeyProvider` for tests | `worker.ts` (`/api/auth/google`) |
+| `apps/edge/src/hostsetup.ts` | The Host first open: `HOST_SCHEMA` (0017), the one-time link and device keys, `/api/host/setup*`, e-mail sign-in mapping (`host_login`), retiring a Host | `worker.ts` |
+| `apps/edge/src/paylink.ts` | Pay links anyone can open: `PAYLINK_SCHEMA` (0017), creating a link, looking a token up, the public view (name, start, price) | `worker.ts`, `pay.ts` |
 | `apps/edge/src/pii.ts` | AES-256-GCM sealing: `sealText`, `openText`, `sealPii`, `openPii`, per-engagement `sealEng`/`openEng` (HKDF from `DATA_KEY`) | used by worker, lifecycle, winners, audit |
 | `apps/edge/src/report-browser.ts` | Entry of the `reportgen.js` bundle (exposes layout functions on `window`) | `bun run build:report` |
 | `apps/edge/src/report-layout.ts` | Engagement report layout: `layoutReport`, `layoutPeoplePart`, types `ReportData`, `ReportPerson`, `ReportPrize`, `emptyAgg`, `istDate`, `istFull` | used by `lifecycle.ts` (data shape), `report-browser.ts`, `tools/sim/sample-report.ts` |
@@ -85,6 +93,14 @@ Counts: 333 files.
 | `apps/edge/test/pay.test.ts` | checkout, verify, webhook, invoice, mail, sign-in codes | run: `bun test apps/edge/test/pay.test.ts` |
 | `apps/edge/test/privacy.test.ts` | sealed data, invitations, winners record, report, deletion clocks | run: `bun test apps/edge/test/privacy.test.ts` |
 | `apps/edge/test/retention.test.ts` | `retentionSweep` windows | run: `bun test apps/edge/test/retention.test.ts` |
+| `apps/edge/test/cancel.test.ts` | Round 2: cancel + refund + credit note + commission void, Host e-mail, Co-host bound to a game, "Confirming your payment", 2-minute late start, "data deleted" e-mail | run: `bun test apps/edge/test/cancel.test.ts` |
+| `apps/edge/test/people.test.ts` | Phase 2: number cleaning, one list per inviter with first-wins, limits, personal links and `/j/<token>`, common links and "who can join", waiting room (one by one and approve all), remove (before and during the game), CSV export, AI refusal, report tree |
+| `apps/edge/test/brand-ticket.test.ts` | Phase 3: the brand on the ticket (name, 8-colour palette, logo type/size/first-bytes checks, injection, settings/info/summary) | run: `bun test apps/edge/test/brand-ticket.test.ts` |
+| `apps/edge/test/csp-google.test.ts` | Phase 3/4 headers: Google allowed only on signin, index (and "/"), zc; pay-link page has the Razorpay rules (reads `pages/build.mjs`) | run: `bun test apps/edge/test/csp-google.test.ts` |
+| `apps/edge/test/google-fake.ts` | Test helper: a fake Google signing key and ID tokens (tests never call Google) | `google-signin.test.ts`, `host-setup.test.ts` |
+| `apps/edge/test/google-signin.test.ts` | Phase 4: "Continue with Google" token checks, sign-up, sign-in, limits | run: `bun test apps/edge/test/google-signin.test.ts` |
+| `apps/edge/test/host-setup.test.ts` | Phase 4: Host first open (at least one of e-mail or mobile, gate `host-setup`, e-mail code, 7-day one-time link, new link, device sign-in, retire, Google for Hosts); uses `makeD1({ strictHosts: true })` | run: `bun test apps/edge/test/host-setup.test.ts` |
+| `apps/edge/test/paylink.test.ts` | Phase 3: pay link (who makes it, public view, expiry, replacement, checkout bound to the game, paid-by-link, refund) | run: `bun test apps/edge/test/paylink.test.ts` |
 | `apps/edge/test/roles.test.ts` | Organizer/Host/Co-host roles and payments (untracked/new) | run: `bun test apps/edge/test/roles.test.ts` |
 | `apps/edge/test/settle.ts` | Test helper: puts a winners result in place by posting agreeing votes | backend tests |
 | `apps/edge/test/shred.test.ts` | audit crypto-shredding, 22 h/23 h constants, hold | run: `bun test apps/edge/test/shred.test.ts` |
@@ -172,6 +188,9 @@ Counts: 333 files.
 | `apps/web/public/partner.js` | Partner enrol / dashboard logic | `partner.html` |
 | `apps/web/public/pay.html` | Publish and pay page shell | `pay.js` |
 | `apps/web/public/pay.js` | Pay page logic (`/api/checkout`, Razorpay, verify) | `pay.html` |
+| `apps/web/public/paylink.html` | The page behind a pay link anyone can open (written in Phase 3/4 by the page agent) | `/paylink.html?t=<token>` |
+| `apps/web/public/paylink.js` | Logic of that page: `GET /api/paylink/{token}`, `POST /api/paylink/{token}/checkout`, Razorpay, verify | `paylink.html` |
+| `apps/web/public/google.js` | Shared "Continue with Google" helper for the home, sign-in and Host setup screens (`GET /api/auth/config`, `POST /api/auth/google`) | `signin.html`, `index.html`, `zc.html` |
 | `apps/web/public/play.css` | LEGACY participant page styles | not shipped |
 | `apps/web/public/play.html` | LEGACY participant page (`/e/CODE`) | not shipped |
 | `apps/web/public/play.js` | LEGACY participant logic (71 KB, WebSocket) | not shipped |
@@ -207,6 +226,7 @@ Counts: 333 files.
 | `apps/web/public/zsw.js` | Live service worker: cache `ct-game-v10`, network-first pages, saved game files | registered by `pwa.js` |
 | `apps/web/test/harness.ts` | happy-dom page harness (real scripts + real Worker + in-memory DB) | page tests |
 | `apps/web/test/pages.test.ts` | Page behaviour (UC-53..57, console roles, pay, phone, demo, preview) 80 tests | `bun test apps/web/test` |
+| `apps/web/test/phone-guest.test.ts` | Phases 2 to 4 on the guest phone and the public pages, running the page scripts in a DOM against the real Worker | run: `bun test apps/web/test/phone-guest.test.ts` |
 | `apps/web/test/pwa.test.ts` | Manifest, service-worker file set, shipped by build |  |
 | `apps/web/test/seo.test.ts` | Sitemap, robots, titles, structured data |  |
 | `apps/web/test/testmode-banner.test.ts` | TEST banner only in console |  |
@@ -230,6 +250,8 @@ Counts: 333 files.
 
 | File | Purpose | Key exports / used by |
 |---|---|---|
+| `docs/GOOGLE_SIGNIN_SETUP.md` | The owner's steps in Google Cloud Console for "Continue with Google" (no secrets) | read when setting up `GOOGLE_CLIENT_ID` |
+| `docs/PHASE2_SERVER_CONTRACT.md` | What the Phase 2 server actually provides (routes, shapes) and what the phone page and console must do | read with `04-API-REFERENCE.md` |
 | `docs/AI_LINK_AND_PAUSE_DESIGN.md` | Design: external AI link + unscheduled pause without a server (2026-10-01) | read with `KNOWN-DOC-DRIFT.md` in mind |
 | `docs/AI_LINK.md` | The short AI work link: design, mails, roles, rights table | read with `KNOWN-DOC-DRIFT.md` in mind |
 | `docs/AI_WORK_PROMPT_ORGANIZER.md` | Long AI work prompt for organizers/hosts/co-hosts/sales (57 KB; some drift) | read with `KNOWN-DOC-DRIFT.md` in mind |
@@ -329,6 +351,7 @@ Counts: 333 files.
 |---|---|---|
 | `pages/build.mjs` | Pages build: whitelist copy of `apps/web/public` into `pages/public`, writes `_headers` (CSP per page class) and `_routes.json` | `bun run pages:build`, `pages:deploy` |
 | `pages/functions/ai/[[path]].ts` | Pages Function for `/ai/*` -> `handle()` | Cloudflare Pages |
+| `pages/functions/j/[[path]].ts` | Pages Function for the personal invitation link `/j/*` -> `handle()` | Cloudflare Pages |
 | `pages/functions/api/[[path]].ts` | Pages Function for `/api/*` -> `handle()` | Cloudflare Pages |
 | `pages/functions/api/telemetry.ts` | Pages Function for `/api/telemetry` (own D1 table `telemetry`, report with `REPORT_KEY`) | `rum.js` |
 | `pages/launch.py` | One-shot launch: creates D1, loads ONLY `0001_init.sql`, creates Pages project, sets secrets/vars, deploys, smoke-tests | owner laptop (needs Cloudflare env tokens) |
@@ -470,3 +493,5 @@ Counts: 333 files.
 | `tools/sim/shot.mjs` | Simulation/tool: Screenshot helper | run manually (see `10-OPERATIONS.md`) |
 | `docs/Corporate_Tambola_Roles_and_Rules.xlsx` | Role and rules workbook: matrix, differences from the owner draft, payment/organizer/participant ideas, data timeline, decisions, limits and prices | owner-approved 2026-10-08 |
 | `docs/ROLES_AND_CONSOLE_SPEC_2.md` | Round 2 spec: cancel and refund, e-mail rule, chain, remove, waiting room, ticket brand, preview, pay link | agents building phases 1 to 3 |
+| `docs/ROLES_AND_CONSOLE_SPEC_3.md` | Phase 2 spec: one list per inviter, personal and common links, "who can join", waiting room, remove, chain | agents building the people screens and routes |
+| `docs/ROLES_AND_CONSOLE_SPEC_4.md` | Later spec following spec 3 (read it before the console work) | agents building the console |

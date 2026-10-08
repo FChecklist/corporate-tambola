@@ -35,6 +35,12 @@ export const refCode = (raw: unknown): string | null => { const c = String(raw ?
 export const partnerCode = (raw: unknown): string | null => { const d = String(raw ?? "").replace(/\D/g, ""); return d.length >= 10 && d.length <= 15 ? d.slice(-10) : null; };
 export const phoneHashFor = (env: Env, code: string) => sha(`${env.PHONE_SALT ?? env.ORGANIZER_SECRET ?? "unset"}|${code}`); // same recipe the join route uses for participants
 
+/** A refunded purchase earns the partner nothing: pending and accrued commission on that payment is voided (one already paid out is left alone). Returns how many rows changed; safe to call twice. */
+export async function voidCommission(db: D1, paymentId: string, reason = "refund"): Promise<number> {
+  const r = await db.prepare("UPDATE commission SET status='void', reason=? WHERE payment_id=? AND status IN ('pending_rate','accrued')").bind(reason, paymentId).run();
+  return r.meta?.changes ?? 0;
+}
+
 /** Called when a payment is fulfilled. Writes at most one commission row per payment; never throws into the purchase. */
 export async function recordCommission(env: PayEnv, p: { id: string; ref?: string | null; buyer_phone_hash?: string | null; currency: string }, base: number, now: number): Promise<void> {
   try {
@@ -183,8 +189,7 @@ export async function partnerRoute(req: Request, env: PayEnv, now: number, spend
   if (req.method === "POST" && p === "/api/partners/commission/void") { // a refunded purchase earns nothing
     const b = await body(req);
     if (!b || typeof b.paymentId !== "string") return json({ error: "Give the payment id." }, 400);
-    const r = await db.prepare("UPDATE commission SET status='void', reason=? WHERE payment_id=? AND status IN ('pending_rate','accrued')").bind(typeof b.reason === "string" ? b.reason.slice(0, 120) : "refund", b.paymentId).run();
-    return json({ ok: true, voided: r.meta?.changes ?? 0 });
+    return json({ ok: true, voided: await voidCommission(db, b.paymentId, typeof b.reason === "string" ? b.reason.slice(0, 120) : "refund") });
   }
   if (req.method === "POST" && p === "/api/partners/state") {
     const b = await body(req);

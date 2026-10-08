@@ -49,6 +49,7 @@ export async function purgeTestData(env: Env, now: number): Promise<Record<strin
   await each(db, orgs, (m) => `DELETE FROM suggestion WHERE org IN (${m})`);
   await each(db, orgs, (m) => `DELETE FROM entitlement WHERE org IN (${m})`);
   await each(db, orgs, (m) => `DELETE FROM organizer_email WHERE org IN (${m})`);
+  for (const t of ["host_state", "host_login", "paylink"]) await each(db, orgs, (m) => `DELETE FROM ${t} WHERE org IN (${m})`); // Host first-open state, e-mail sign-in of Hosts, pay links
   out.accounts = orgs.length;
   await each(db, orgs, (m) => `DELETE FROM organizer_key WHERE org IN (${m})`);
   out.keys = (await db.prepare("DELETE FROM organizer_key WHERE is_test=1").run()).meta?.changes ?? 0;

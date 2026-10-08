@@ -15,6 +15,11 @@ Helpers: `d1-sqlite.ts` (`makeD1()` applies `SCHEMA` to `bun:sqlite`, same prepa
 | `free-launch.test.ts` | 17 | the organizer journey: start without payment, drafts, publish free, held unpaid, move start, reminder, entitlement publish, AI hand-over, contact confirmation, 30-day draft forgetting, `FREE_LAUNCH` |
 | `pay.test.ts` | 42 | checkout, Razorpay order, verify/webhook (signatures, amounts, idempotency), entitlement per purchase, invoice numbering/GST/DRAFT, mail handling, sign-in codes, bound payment to draft |
 | `roles.test.ts` | 14 (untracked) | Organizer/Host/Co-host rules (see `05-ROLES-AND-PERMISSIONS.md` section 9) |
+| `brand-ticket.test.ts` | 10 | Phase 3 brand on the ticket: name, 8-colour palette, logo type/size/first bytes, injection, settings/info/summary |
+| `paylink.test.ts` | 16 | Phase 3 pay link: who makes it, public view, expiry, replacement, checkout bound to the game, paid-by-link, refund |
+| `google-signin.test.ts` | 10 | Phase 4 "Continue with Google": token checks with a fake signing key (never calls Google), sign-up, sign-in, limits |
+| `host-setup.test.ts` | 25 | Phase 4 Host first open: strict harness `makeD1({ strictHosts: true })`; the default harness finishes a new Host's setup by a trigger so other tests can use Host keys |
+| `csp-google.test.ts` | 3 | Phase 3/4 headers in `pages/build.mjs` |
 | `partners.test.ts` | 25 | refer-and-earn: enrol with e-mail code, no enumeration, limits, commission 50% and repeat rule, self-referral, void/payout/rate, partner visibility |
 | `privacy.test.ts` | 25 | sealed data, participant list without names, invitations (limit 4, kinds, races), winners record, game-over votes, report e-mail/link, 22 h/23 h/365 d clocks, erase and e-mail deletion requests, notices |
 | `shred.test.ts` | 10 | audit crypto-shredding, chain still verifies, hold, constants (22 h / 23 h) |

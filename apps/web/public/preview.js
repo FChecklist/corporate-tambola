@@ -6,6 +6,7 @@
   const $app = document.getElementById("app");
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const q = new URLSearchParams(location.hash.replace(/^#/, ""));
+  if (q.get("w") === "ticket") { ticketPreview(); return; }
   const when = ["break", "opening", "closing"].includes(q.get("w")) ? q.get("w") : "break";
   const b = { kind: q.get("k") || "speech", title: (q.get("t") || "Your message").slice(0, 80), mediaUrl: q.get("u") || "", seconds: Math.max(15, Math.min(600, Number(q.get("s")) || 60)) };
   if (b.mediaUrl && !/^https:\/\/[^\s<>"'`]+$/i.test(b.mediaUrl)) b.mediaUrl = "";
@@ -84,4 +85,53 @@
     timer = setInterval(() => { const left = Math.round((endsAt - Date.now()) / 1000); const el = document.querySelector(".zbreak .zsmall"); if (left <= 0) { clearInterval(timer); paint(0); } else if (el && when === "break") el.textContent = `${what} The numbers continue in ${left}s.`.trim(); }, 1000);
   }
   run();
+  // ---------- "See what guests see": a sample ticket, marked PREVIEW. #w=ticket&e=<game id> reads the game's PUBLIC settings (a read only, with the signed-in tab's own key when there is one);
+  // without a game it uses the sample values in the address: n=<company name> c=<#colour> p=<prize|prize> b=<break title> l=<lucky draw title>. Nothing here ever writes anything. ----------
+  function ticketPreview() {
+    const NAMES = { early5: "Early Five", top: "Top line", mid: "Middle line", bot: "Bottom line", corners: "Four corners", star: "Star", full: "Full house", full2: "Full Two-Ticket House" };
+    const lin = (h) => { const c = parseInt(h, 16) / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const cleanBrand = (b) => {
+      if (!b || typeof b !== "object") return null;
+      const name = String(b.name == null ? "" : b.name).replace(/\s+/g, " ").trim().slice(0, 60);
+      let color = String(b.color || ""); if (/^#[0-9a-f]{3}$/i.test(color)) color = "#" + color.slice(1).split("").map((c) => c + c).join("");
+      if (!/^#[0-9a-f]{6}$/i.test(color)) color = "#0B3D91";
+      const logo = typeof b.logo === "string" && b.logo.length < 90000 && /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(b.logo) ? b.logo : "";
+      if (!name && !logo) return null;
+      const L = 0.2126 * lin(color.slice(1, 3)) + 0.7152 * lin(color.slice(3, 5)) + 0.0722 * lin(color.slice(5, 7));
+      return { name, color, logo, fg: 1.05 / (L + 0.05) >= (L + 0.05) / 0.05 ? "#ffffff" : "#111111" };
+    };
+    const sample = [[4, 0, 23, 0, 41, 0, 0, 72, 85], [0, 12, 0, 34, 0, 56, 0, 78, 0], [7, 0, 29, 0, 0, 58, 63, 0, 90]];
+    const eid = (q.get("e") || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+    let key = ""; try { key = sessionStorage.getItem("ctz-org") || ""; } catch {}
+    const fromHash = () => ({
+      brand: q.get("n") ? { name: q.get("n"), color: q.get("c") || "" } : null,
+      rewards: (q.get("p") || "").split("|").map((t) => t.trim()).filter(Boolean).slice(0, 8).map((t, i) => ({ pattern: "", ordinal: 1, text: t })),
+      breaks: q.get("b") ? [{ kind: "speech", title: q.get("b").slice(0, 80), seconds: 60 }] : [],
+      lucky: q.get("l") ? q.get("l").slice(0, 80) : "",
+    });
+    function draw(d, note) {
+      const brand = cleanBrand(d.brand);
+      const rewards = d.rewards && d.rewards.length ? d.rewards : [{ pattern: "early5", ordinal: 1, text: "" }, { pattern: "corners", ordinal: 1, text: "" }, { pattern: "full", ordinal: 1, text: "" }];
+      const prizeLi = rewards.map((r) => { const nm = r.pattern ? (NAMES[r.pattern] || r.pattern) : ""; const t = r.text ? String(r.text) : ""; return `<li>${esc((r.ordinal > 1 ? r.ordinal + "nd " : "") + nm)}${nm && t ? ": " : ""}${t ? "<b>" + esc(t) + "</b>" : ""}</li>`; }).join("");
+      const brk = (d.breaks || []).find((x) => x && x.kind !== "lucky");
+      const lucky = (d.breaks || []).find((x) => x && x.kind === "lucky");
+      const luckyTitle = lucky ? lucky.title : d.lucky || "Lucky draw prize";
+      const luckyN = lucky && lucky.winners ? lucky.winners : 3;
+      $app.innerHTML = `<div class="zhead"><b>Corporate Tambola</b></div>
+        <div class="zbanner info" role="note"><b>PREVIEW.</b> This is a sample ticket, not a real one. Nothing is saved, nobody is told, and no game is running.${note ? " " + esc(note) : ""}</div>
+        ${brand ? `<div class="zbrand" id="pvbrand">${brand.logo ? `<img class="zblogo" alt="" src="${esc(brand.logo)}">` : ""}${brand.name ? `<b>${esc(brand.name)}</b>` : ""}</div><div class="zpow">Powered by Corporate Tambola</div>` : `<div class="zcard"><div class="zsmall" style="margin:0">No company name or colour is set yet, so guests see no strip at the top. Set them in the Brand step to see it here.</div></div>`}
+        <div class="zcard"><h2>Your ticket <span class="zdemotag">PREVIEW</span></h2><div class="zticket" aria-label="Sample ticket">${sample.flat().map((n) => n ? `<div>${n}</div>` : `<div class="e"></div>`).join("")}</div></div>
+        <div class="zcard"><h2>What you can win</h2><ul class="zlist">${prizeLi}</ul></div>
+        <div class="zcard zbreak"><h2>A short break</h2><div style="font:700 20px var(--sans,inherit);margin:2px 0 4px">${esc(brk ? brk.title : "A message from your organizer")}</div><div class="zsmall" style="margin:0">Please listen to the host. The numbers continue in ${esc(String(brk && brk.seconds ? brk.seconds : 60))}s.</div></div>
+        <div class="zcard"><h2>Lucky draw</h2><div class="zrow"><span>${esc(luckyTitle)}<br><small class="zsmall" style="margin:0">${luckyN} ${luckyN === 1 ? "person is" : "people are"} picked at random</small></span><i>at the end of the break</i></div></div>`;
+      const b = document.getElementById("pvbrand"); if (b && brand) { b.style.background = brand.color; b.style.color = brand.fg; }
+    }
+    try { document.title = "See what guests see | Corporate Tambola"; } catch {}
+    $app.innerHTML = `<p class="zmsg">Loading…</p>`;
+    if (!eid) return draw(fromHash(), "");
+    fetch(`/api/z/${encodeURIComponent(eid)}/info`, { method: "GET", headers: key ? { "x-organizer": key } : {} })
+      .then((r) => { if (!r.ok) throw new Error("http " + r.status); return r.json(); })
+      .then((j) => draw({ brand: j.brand, rewards: Array.isArray(j.rewards) ? j.rewards : [], breaks: Array.isArray(j.breaks) ? j.breaks : [], lucky: "" }, ""))
+      .catch(() => draw(fromHash(), "We could not read your game just now, so this shows sample words."));
+  }
 })();

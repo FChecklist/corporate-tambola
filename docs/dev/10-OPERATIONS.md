@@ -20,6 +20,7 @@ Read via `env.<NAME>` in the Worker / Pages Function. Found by scanning `apps/ed
 | `DAILY_WRITE_BUDGET` | var | free-plan D1 write guard (default **80,000**) | `worker.ts:172` | `pages/wrangler.toml` `[vars]` = "80000" | default |
 | `JOIN_PER_IP_DAY`, `JOIN_PER_IP_MINUTE` | var (optional) | per-address new-seat caps (defaults 1500 / 200) | `worker.ts:185` | var | defaults |
 | `PUBLIC_ORIGIN` | var | the site's own origin used in links, mails and report URLs (`https://corporate-tambola.pages.dev`) | `worker.ts`, `lifecycle.ts`, `partners.ts` | `pages/wrangler.toml` | falls back to the request's origin or `https://corporate-tambola.pages.dev` |
+| `GOOGLE_CLIENT_ID` | var (optional, public - not a secret) | the OAuth client id of "Continue with Google". Unset = the button is hidden and `POST /api/auth/google` answers 404. Steps to get it: `docs/GOOGLE_SIGNIN_SETUP.md`. The pages that show the button (`signin`, `index`, `zc`) are the only ones whose CSP allows Google (`pages/build.mjs`, `GOOGLECSP`) |
 | `MAIL_FROM` | var | From header (`Corporate Tambola <tambola@veridian-aios.com>`, shared verified Resend domain) | `pay.ts:76,85` | `pages/wrangler.toml` | same default |
 | `MAIL_REPLY_TO` | var (optional) | reply-to address | `pay.ts` | var | none |
 | `RESEND_API_KEY` | secret | sends mail (Resend). Docs say the key originally copied was the shared full-access DPDP key; a send-only Tambola key was to be created (owner step) | `pay.ts:60` | Pages secret | mails stay in the `outbox` table (local/test behaviour) |

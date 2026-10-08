@@ -54,6 +54,17 @@ Single validator: `validateCfg` in `packages/beacon/src/config.ts`.
 5. Add retention for any new personal data to `erasePersonal`/`deleteEngagementRows` (`lifecycle.ts`), `retentionSweep` (`worker.ts:1315`) and `test-data.ts`; update `03-DATABASE.md` and `docs/RETENTION.md`.
 6. Apply to production first (`10-OPERATIONS.md` section 4). The local SQLite file cannot be re-opened with a changed schema: delete it.
 
+### 1.6b Change who is on a game's lists, links or the waiting room
+
+Edit `apps/edge/src/people.ts` (routes, cleaning, limits) and the `join` / `addSeat` / `settings` blocks of `apps/edge/src/worker.ts`; a schema change goes in `PEOPLE_SCHEMA` AND a new migration file (the two must match, `apps/edge/test/migrations.test.ts`). Names and numbers must stay sealed and unreachable by an AI key (`callerOf` in `people.ts`; a test in `apps/edge/test/ai-enablement.test.ts` checks it). Run `apps/edge/test/people.test.ts`, `privacy.test.ts`, `roles.test.ts`, `worker.test.ts`. Trap: a limit is enforced twice on purpose (a pre-check for the message, a guard inside the seat insert for the race): change both.
+
+### 1.6c Change the Host first open, pay links or Google sign-in
+
+- Host first open: `apps/edge/src/hostsetup.ts` (state, device keys, `/api/host/setup*`) and the gate at the top of `route0` plus `authOfKey` in `apps/edge/src/worker.ts`. Test with `makeD1({ strictHosts: true })` (`apps/edge/test/host-setup.test.ts`); other tests use the default harness, whose trigger finishes a new Host's setup so they can use a Host key at once.
+- Pay links: `apps/edge/src/paylink.ts` and the `paylink` branch of `payRoute` in `apps/edge/src/pay.ts`. Tests: `apps/edge/test/paylink.test.ts`.
+- Google: `apps/edge/src/google.ts` and `/api/auth/google` in `worker.ts`. Tests inject a fake key set with `trust()` from `apps/edge/test/google-fake.ts`; never call Google from a test. The CSP for the pages that show the button is `GOOGLECSP` in `pages/build.mjs`.
+- A new key prefix literal (`cth_`) must stay in `worker.ts` (a test forbids it in other source files); hostsetup.ts receives the new key from the caller.
+
 ### 1.7 Add an AI function to the registry
 The list `FUNCTIONS` in `apps/edge/src/ai-functions.ts` is the single registry (map, front door, manual refer to it) and is **frozen by a test**.
 1. Add `{id, name, who: "ai"|"handover"|"human", what, call?, body?, go?, console?, say}`.
@@ -83,3 +94,4 @@ The list `FUNCTIONS` in `apps/edge/src/ai-functions.ts` is the single registry (
 16. **`docs/` contradictions**: see `KNOWN-DOC-DRIFT.md` before trusting an older doc.
 17. **Hard-coded origin** `https://corporate-tambola.pages.dev` appears in `trust-page.ts`, `tools/make-sitemap.mjs`, `lifecycle.ts:224` (fallback), `apps/cron`, `pages/wrangler.toml`, `llms.txt`/sitemap outputs.
 18. **Local server restart**: a persistent SQLite file cannot be re-opened (duplicate column); delete it.
+19. **Cancelled games and the e-mail rule.** A cancelled game (`engagement.cancelled_ms`) answers 409 to every write except `erase`/`forget`/`person`/`cancel` (gate right after `paymentOf` in `worker.ts`); a new engagement write route is covered automatically, a new PUBLIC read should say `cancelled` if guests would otherwise see a live game. Never add an e-mail field for a Co-host or a guest: only the Organizer and Hosts have one (`docs/ROLES_AND_CONSOLE_SPEC_2.md`). A new place that stores a Co-host's name/mobile must be erased by `eraseCohostsSql` (`cancel.ts`).

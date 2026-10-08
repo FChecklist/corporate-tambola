@@ -41,7 +41,7 @@
       <div class="zcard"><h2>Your order</h2>
         <div class="zrow"><span>Engagement</span><em>${esc(eid)}</em></div>
         <div class="zrow"><span>Participants</span><em>Up to ${nf(pack)}</em></div>${sum}
-        <p class="zsmall">Every participant gets their own ticket on their phone. Participants never pay: you give the rewards. Unused places are not refunded.</p>${S.info.startMs ? `<p class="zsmall"><b>Pay before ${esc(new Date(S.info.startMs).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))}.</b> If it is not paid by then, the engagement will not begin.${S.info.locked ? " It is waiting for your payment now: pay and it starts in about 3 minutes." : ""}</p>` : ""}</div>
+        <p class="zsmall">Every participant gets their own ticket on their phone. Participants never pay: you give the rewards. Unused places are not refunded.</p>${S.info.startMs ? `<p class="zsmall"><b>Pay before ${esc(new Date(S.info.startMs).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))}.</b> If it is not paid by then, the engagement will not begin.${S.info.locked ? " It is waiting for your payment now: pay and it starts 2 minutes after your payment." : ""}</p>` : ""}</div>
       <div class="zcard zform"><h2>Billing details</h2>
         <label for="nm">Name</label><input id="nm" autocomplete="name" value="${esc(S.name || "")}" placeholder="Your full name">
         <label for="em">Email (your invoice comes here)</label><input id="em" type="email" autocomplete="email" value="${esc(S.email)}" placeholder="you@company.com">
@@ -50,9 +50,20 @@
         <label for="org">Organization name <span class="zsmall" style="display:inline">(optional)</span></label><input id="org" autocomplete="organization" value="${esc(S.org || "")}" placeholder="e.g. Acme Industries">
         <label for="cty">Country of your organization <span class="zsmall" style="display:inline">(optional)</span></label><select id="cty">${TB.countryOpts(S.country)}</select>
         <label for="tax">${S.country === "IN" ? "GSTIN (for your GST invoice)" : "Company tax / VAT number"} <span class="zsmall" style="display:inline">(optional)</span></label><input id="tax" autocomplete="off" maxlength="${S.country === "IN" ? 15 : 30}" value="${esc(S.tax || "")}" placeholder="${S.country === "IN" ? "e.g. 27ABCDE1234F1Z5" : "Shown on your invoice"}" style="text-transform:uppercase">
-        ${S.err ? `<div class="zbanner bad">${esc(S.err)}</div>` : ""}
-        <button class="zbtn" id="paygo" ${off || S.busy ? "disabled" : ""}>${S.busy ? "Processing…" : off ? "Payment opens soon" : "Pay " + TB.money(x.total, S.cur) + " securely with Razorpay"}</button>
+        ${S.err ? `<div class="zbanner bad">${esc(S.err)}</div>` : ""}${S.busy ? `<div class="zbanner info" role="status">Confirming your payment with Razorpay. Please keep this page open. Your game starts only after Razorpay confirms.</div>` : ""}
+        <button class="zbtn" id="paygo" ${off || S.busy ? "disabled" : ""}>${S.busy ? "Confirming your payment…" : off ? "Payment opens soon" : "Pay " + TB.money(x.total, S.cur) + " securely with Razorpay"}</button>
         <p class="zsmall">Secure payment by Razorpay. A GST invoice is emailed to you. See the <a href="/legal.html#privacy">privacy policy</a>.</p></div>`;
+  }
+  // The server answers 202 {confirming:true} while Razorpay still says the payment is only created or authorized. We ask every 4 seconds, for up to 5 minutes, until the game itself says Paid.
+  async function waitForConfirm(first) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < 300000) {
+      await new Promise((ok) => setTimeout(ok, 4000));
+      let st = null;
+      try { st = (await call("GET", `/api/z/${eid}/summary`)).payment; } catch { try { st = (await call("GET", `/api/z/${eid}/cohost`)).payment; } catch { /* keep asking */ } }
+      if (st && st.status === "paid") return { ok: true, eid, pack: (S.info && packFor(S.info.cap)) || 0, total: 0, currency: S.cur };
+    }
+    throw new Error("We are still waiting for Razorpay to confirm your payment. Nothing is lost: your game starts as soon as it is confirmed. You can close this page and open your game to see the status.");
   }
   function draw() { $app.innerHTML = view(); bind(); }
   function keep() { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { name: g("nm"), org: g("org"), tax: g("tax"), email: g("em"), phone: g("ph"), pcode: g("pcode") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; }
@@ -74,6 +85,7 @@
         if (r.mode === "razorpay") r = await TB.pay(r.razorpay, r.paymentId); // opens Razorpay Checkout; the server verifies the payment
         else if (r.result) r = r.result; // local test mode answers with the finished order
         try { sessionStorage.setItem("ctz-email", email); sessionStorage.setItem("ctz-name", nm); } catch {}
+        if (r && r.confirming) r = await waitForConfirm(r); // Razorpay has not confirmed yet: keep asking, never mark it paid early
         S.done = r;
       } catch (e) { S.err = e.cancelled ? e.message : e.message; }
       S.busy = false; draw();

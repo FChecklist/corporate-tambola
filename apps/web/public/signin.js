@@ -10,7 +10,10 @@
       <p class="zsmall" style="margin-top:0">Works once, for 10 minutes.</p>
       ${msg ? `<div class="zbanner bad" role="alert">${esc(msg)}</div>` : ""}
       ${t ? `<button class="zbtn" id="go">Continue to Corporate Tambola</button>` : `<div class="zbanner bad">This sign-in link is incomplete. Please ask for a new one from the sign-in page.</div>`}
-      <p class="zsmall"><a href="/#login">Back to the sign-in page</a></p></div>`;
+      <p id="gOr" class="gor" hidden>or</p><div id="gWrap" class="gwrap" hidden></div>
+      <p class="zsmall"><a href="/#login">Back to the sign-in page</a> to get an e-mail code.</p></div>`;
+    const gw = document.getElementById("gWrap"); // "Continue with Google" shows only when the server has a Google client id; it signs in exactly like the e-mail does
+    if (gw && window.TB && TB.google) TB.google.mount(gw, { intent: "signin", onDone: (j) => { try { sessionStorage.setItem("ctz-org", j.token); } catch {} location.replace(go); }, onError: (m) => draw(m) }).then((shown) => { const o = document.getElementById("gOr"); if (o && shown) o.hidden = false; }).catch(() => {});
     const b = document.getElementById("go");
     if (b) b.onclick = async () => {
       b.disabled = true;

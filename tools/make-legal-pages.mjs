@@ -3,7 +3,7 @@
 // The wording is a draft for lawyer review (see docs/compliance/DRAFTS_README.md); the public text carries no "draft" mark by owner decision.
 import { readFileSync, writeFileSync } from "node:fs";
 
-export const TERMS_VERSION = "2026-10-05";
+export const TERMS_VERSION = "2026-10-08";
 const PUB = new URL("../apps/web/public/", import.meta.url);
 const tpl = readFileSync(new URL("legal.html", PUB), "utf8");
 const nl = tpl.includes("\r\n") ? "\r\n" : "\n";
@@ -46,6 +46,14 @@ const PAGES = {
       "Do not register a child&rsquo;s number. See Players.",
       "If you break these terms, we may stop your game.",
     ]],
+    ["payment", "Payment and refunds", [
+      "Building and publishing are free. You pay before the start time.",
+      "Cancel before the start time and we give back what you paid, minus the payment-gateway charge.", "The charge is 2.36%: 2% plus 18% GST on that charge. We show the exact amount before you confirm.",
+      "The money goes back to the way you paid. You also get a GST credit note.",
+      "Once the start time has passed, a paid game cannot be cancelled and is not refunded. You can still end the game.",
+      "A game that was never paid for can be cancelled at any time. Nothing is charged.",
+      "Unused places are not refunded.",
+    ]],
     ["players", "For players", [
       "Players are 18 or older.",
       "A child may only watch, on a parent&rsquo;s or guardian&rsquo;s own ticket and phone, with that adult&rsquo;s permission.",
@@ -56,6 +64,10 @@ const PAGES = {
       "The software is provided as it is. We do not promise it will never fail.",
       "We are not responsible for prize handover, or for disputes between an organizer and players.",
       "Our liability is limited to the fee you paid for the engagement in question.",
+    ]],
+    ["signin", "Signing in", [
+      "You sign in with a 6-digit code sent to your e-mail, or with &ldquo;Continue with Google&rdquo; if you choose. We use Google only to confirm your e-mail address.",
+      "A Host&rsquo;s personal link works once, for 7 days. After the Host confirms an e-mail and adds a mobile number, the Host signs in with an e-mail code or Google.",
     ]],
     ["data", "Data", [
       "Your use of Corporate Tambola is also covered by the <a href=\"/legal.html#privacy\">Privacy &amp; Data Policy</a>.",
@@ -78,11 +90,13 @@ const PAGES = {
   "subprocessors.html": { title: "Sub-processors", h1: "Sub-processors", lead: "The providers that help us run Corporate Tambola.", table: [
     ["Cloudflare", "Hosting, database, network", "Global network. Locations as published by Cloudflare."],
     ["Resend", "Sending e-mail to organizers", "United States, as published by Resend."],
+    ["Google", "Optional &ldquo;Continue with Google&rdquo; sign-in for organizers and Hosts (only if you press the button)", "United States, as published by Google."],
     ["Razorpay", "Organizer payments (never players)", "India, as published by Razorpay."],
   ], sections: [
     ["notes", "Also used", [
       "drand: public random numbers. Your phone contacts it; we send it no personal data.",
       "YouTube (privacy mode): only if an organizer adds a video break. The player&rsquo;s phone contacts YouTube.",
+      "Google Sign-In: only if an organizer or Host presses Continue with Google. Google confirms the e-mail; we keep that address and nothing else. Players never meet Google.",
     ]],
     ["change", "Changes", ["We update this page when the list changes."]],
   ] },
@@ -127,7 +141,7 @@ const PAGES = {
       "Names and numbers are deleted within 24 hours after the game. Open your report before then.",
       "To delete earlier, use your console.",
     ]],
-    ["pay", "Payment", ["Build and publish for free. Pay before the start, or the game will not begin."]],
+    ["pay", "Payment", ["Build and publish for free. Pay before the start, or the game will not begin.", "To cancel, tap Cancel this game in your console. Before the start you get a refund minus the payment-gateway charge. Once the start time has passed, a paid game cannot be cancelled."]],
   ] },
 };
 

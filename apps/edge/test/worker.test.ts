@@ -210,8 +210,8 @@ describe("free-plan guard and scale", () => {
     const rs = await Promise.all(Array.from({ length: 10000 }, (_, i) => join(i)));
     expect(rs.every((r) => r.status === 200)).toBe(true);
     expect((raw.query("SELECT COUNT(*) c FROM participant").get() as any).c).toBe(10000);
-    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(20002);
-    expect(20001).toBeLessThan(100000 * 0.25); // one 10,000-person engagement uses ~20% of D1's free daily writes
+    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(30002);
+    expect(30001).toBeLessThan(100000 * 0.4); // one 10,000-person engagement uses ~30% of D1's free daily writes (3 per join: seat, participant, person list row)
   }, 120_000);
   test("a large engagement stores no per-claim rows (winners come from the public numbers), so 10,000 phones claiming adds no writes", async () => {
     await create({ cap: 20000 });
@@ -221,8 +221,8 @@ describe("free-plan guard and scale", () => {
     for (let round = 0; round < 2; round++)
       await Promise.all(pids.slice(0, 2000).map((pid, i) => call("POST", "/api/z/ENG1/claims", { pid, claims: [{ pattern: pats[i % 7], idx: i % 90 }] })));
     expect((raw.query("SELECT COUNT(*) c FROM claim").get() as any).c).toBe(0);
-    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(20002); // 1 create + 1 entitlement-free + 10,000 joins
-  }, 120_000);
+    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(30002); // 1 create + 1 entitlement-free + 10,000 joins at 3 units (seat, participant, person)
+  }, 300_000);
   test("a small engagement (up to 500) stores claims once each, even when sent twice", async () => {
     await create({ cap: 500 });
     const pids: string[] = [];
@@ -831,7 +831,7 @@ describe("seats and one device per ticket", () => {
     expect((await inv("9800000010", "1".repeat(32))).status).toBe(200); // the invited person comes on their own phone
     expect((await inv("9800000011", "d".repeat(32))).status).toBe(409); // the inviter's own phone cannot take the invited ticket
     await create({ id: "ENG9", startRound: Math.floor((T / 1000 - 1692803367) / 3) + 1 + 2000 });
-    expect((await call("PATCH", "/api/z/ENG9/settings", { invites: { on: true, per: 5, cats: ["family"] } }, org)).status).toBe(400); // at most 4 invitations each
+    expect((await call("PATCH", "/api/z/ENG9/settings", { invites: { on: true, per: 11, cats: ["family"] } }, org)).status).toBe(400); // at most 10 invitations each (was 4 before the people lists)
     expect((await call("PATCH", "/api/z/ENG9/settings", { invites: { on: true, per: 4, cats: ["family"] } }, org)).status).toBe(200);
   });
   test("a second device with the same number is refused (423); the organizer can release it; only the organizer's own key can", async () => {

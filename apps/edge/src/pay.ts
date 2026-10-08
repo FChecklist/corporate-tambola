@@ -12,13 +12,15 @@ import {
   verifyPaymentSignature, verifyWebhookSignature, type Company, type InvoiceData, type RazorpayConfig,
 } from "../../../packages/billing/src";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
+import { GRACE_ROUNDS } from "../../../packages/beacon/src/config";
 import type { D1, Env } from "./worker";
 import { partnerCode, phoneHashFor, recordCommission, refCode } from "./partners";
 import { getMode, mailGate, testFlag, type ModeEnv } from "./mode";
+import { lookupPayLink, packFor, payLinkPublic } from "./paylink";
 
 export interface PayEnv extends Env, Pick<ModeEnv, "OWNER_EMAIL" | "TEST_MAIL_ALLOW"> {
   RAZORPAY_KEY_ID?: string; RAZORPAY_KEY_SECRET?: string; RAZORPAY_WEBHOOK_SECRET?: string; RAZORPAY_BASE_URL?: string; RAZORPAY_INTERNATIONAL?: string;
-  PARTNER_COMMISSION_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; FREE_LAUNCH?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string;
+  PARTNER_COMMISSION_RATE?: string; REFUND_FEE_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; FREE_LAUNCH?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string;
 }
 
 export const PAY_SCHEMA = [
@@ -33,12 +35,16 @@ const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { sta
 const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))), (b) => b.toString(16).padStart(2, "0")).join("");
 const randHex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
 const brand = BRANDS.corporate_tambola;
+/** Payment attempts one network address may start through pay links in a day. */
+const PAYLINK_PER_IP_DAY = 30;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
 
-const company = (env: PayEnv): Company => { try { return { ...DEFAULT_COMPANY, ...(env.COMPANY_JSON ? JSON.parse(env.COMPANY_JSON) : {}) }; } catch { return DEFAULT_COMPANY; } };
+export const company = (env: PayEnv): Company => { try { return { ...DEFAULT_COMPANY, ...(env.COMPANY_JSON ? JSON.parse(env.COMPANY_JSON) : {}) }; } catch { return DEFAULT_COMPANY; } };
 const rzpOf = (env: PayEnv): (RazorpayConfig) | null => (env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET ? { keyId: env.RAZORPAY_KEY_ID, keySecret: env.RAZORPAY_KEY_SECRET, webhookSecret: env.RAZORPAY_WEBHOOK_SECRET, baseUrl: env.RAZORPAY_BASE_URL } : null);
 /** Optional switch (env FREE_LAUNCH="1"): small engagements (up to FREE_CAP participants) may be published without a purchase. Building a draft is always free. */
 export const FREE_CAP = 100, MAX_DRAFTS = 10;
+/** A game held for payment begins this many rounds (3 s each = 2 minutes) after the payment is confirmed. */
+export const LATE_PAY_LEAD_ROUNDS = 40;
 export const freeLaunch = (env: PayEnv) => env.FREE_LAUNCH === "1";
 export const payMode = (env: PayEnv) => (rzpOf(env) ? "razorpay" : env.TEST_MODE === "1" ? "test" : "off");
 
@@ -120,14 +126,14 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
   await db.prepare("INSERT OR IGNORE INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,?,NULL,?)").bind("ent_" + p.id, org, p.pack, p.id, now).run();
   let published: string | null = null, restart: number | null = null;
   if (meta.eid) { // publish the draft this payment was made for (only if it is still an unpublished draft of the same organizer)
-    const up = await db.prepare("UPDATE engagement SET pack=? WHERE id=? AND org=? AND pack=0").bind(p.pack, meta.eid, org).run();
+    const up = await db.prepare("UPDATE engagement SET pack=? WHERE id=? AND org=? AND pack=0 AND cancelled_ms IS NULL").bind(p.pack, meta.eid, org).run(); // a cancelled game is never published by a late payment
     if ((up.meta?.changes ?? 0) > 0) {
       await db.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(meta.eid, "ent_" + p.id).run(); published = meta.eid;
       await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`pub/${meta.eid}`, String(now)).run(); // paying also publishes
       if (meta.paidBy) await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`paidby/${meta.eid}`, JSON.stringify({ by: meta.paidBy, ms: now })).run(); // who paid: organizer, host or co-host
       const st = await db.prepare("SELECT start_round FROM engagement WHERE id=?").bind(meta.eid).first<{ start_round: number }>();
-      if (st && (1692803367 + (st.start_round - 1) * 3) * 1000 <= now) { // it was held because it was not paid at its start time: it now starts in about 3 minutes, for everyone already waiting
-        restart = Math.floor((now / 1000 - 1692803367) / 3) + 1 + 60 - 40; // 3 minutes to the first number: the 2-minute setup window (GRACE_ROUNDS = 40) is part of those 3 minutes
+      if (st && (1692803367 + (st.start_round - 1) * 3) * 1000 <= now) { // it was held because it was not paid at its start time: the first number now comes 2 minutes after the payment was confirmed, for everyone already waiting
+        restart = Math.floor((now / 1000 - 1692803367) / 3) + 2 + LATE_PAY_LEAD_ROUNDS - GRACE_ROUNDS; // 2 minutes to the first number: the 2-minute setup window (GRACE_ROUNDS = 40) is all of it, so the clock start is the next round
         await db.prepare("UPDATE engagement SET start_round=? WHERE id=?").bind(restart, meta.eid).run();
       }
     }
@@ -170,7 +176,15 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
 
   if (req.method === "GET" && p === "/api/payments/status") { const co = company(env); return json({ mode: (await getMode(env)) === "TEST" ? "test" : mode, siteMode: await getMode(env), freeLaunch: freeLaunch(env), freeCap: FREE_CAP, brand: brand.name, legalEntity: co.legalName, missingCompanyDetails: companyGaps(co), international: env.RAZORPAY_INTERNATIONAL === "1" }); }
 
-  if (req.method === "POST" && (p === "/api/checkout" || p === "/api/payments/test")) {
+  // The public pay link (paylink.ts): anyone holding the token sees the game's name, start and price, and may pay for THIS game only.
+  const plm = p.match(/^\/api\/paylink\/([0-9a-f]{48})(\/checkout)?$/);
+  if (plm && !plm[2] && req.method === "GET") {
+    const v = await lookupPayLink(db, plm[1]!, now);
+    if (!v) return json({ error: "Not found" }, 404);
+    let name = v.e.id; try { const c = v.e.config ? JSON.parse(v.e.config) : {}; if (typeof c.name === "string" && c.name) name = c.name; } catch { /* the id is the name */ }
+    return json(payLinkPublic(v, name, (1692803367 + (v.e.start_round - 1) * 3) * 1000, url.searchParams.get("currency") === "USD" ? "USD" : "INR"));
+  }
+  if (req.method === "POST" && (p === "/api/checkout" || p === "/api/payments/test" || !!plm?.[2])) {
     // TEST mode (mode.ts): no Razorpay order is ever made; the payment is a labelled test payment that is marked paid at once, flagged is_test, and publishes the draft it was made for. LIVE refuses the labelled path.
     const siteTest = (await testFlag(env)) === 1;
     if (p === "/api/payments/test" && !siteTest) return json({ error: "Test payments are only available while the service is in test mode." }, 403);
@@ -180,12 +194,27 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     // a signed-in organizer paying to publish their own draft: the pack is the smallest one that fits the draft, and the payment is bound to them and to it
     let boundOrg: string | null = null, boundEid: string | null = null, boundPack: number | null = null, paidBy: string | null = null;
     const presented = (req.headers.get("x-organizer") ?? "").trim();
-    if (presented && typeof b?.eid === "string") {
-      const k = await db.prepare("SELECT org, kind FROM organizer_key WHERE hash=? AND revoked=0").bind(await sha("key|" + presented)).first<{ org: string; kind: string }>();
+    if (plm) { // the pay link binds the payment to its game; the payer needs no account and no key (and a key sent along is ignored)
+      const pv = await lookupPayLink(db, plm[1]!, now);
+      if (!pv) return json({ error: "Not found" }, 404);
+      if (pv.status !== "open") return json({ error: pv.status === "paid" ? "This game has already been paid for." : pv.status === "cancelled" ? "This game was cancelled by the organizer. It cannot be paid for." : pv.status === "confirming" ? "A payment for this game is being confirmed. Please wait a few minutes." : "This pay link has expired. Ask for a new one.", status: pv.status }, 409);
+      boundPack = packFor(pv.e.cap);
+      if (!boundPack) return json({ error: "That many participants needs a custom arrangement. Please write to us." }, 400);
+      boundOrg = pv.link.org; boundEid = pv.link.eid; paidBy = "link";
+      try { // the same free-plan guard as other public writes: a few attempts per network address per day, and a daily write budget
+        const ipk = `plim/${new Date(now).toISOString().slice(0, 10)}/pl${(await sha("ip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16)}`;
+        const used = Number((await db.prepare("SELECT v FROM kv WHERE k=?").bind(ipk).first<{ v: string }>())?.v ?? 0);
+        if (used >= PAYLINK_PER_IP_DAY) return json({ error: "Too many payment attempts from this network today. Please try again tomorrow." }, 429);
+        await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(ipk, String(used + 1), String(used + 1)).run();
+      } catch { /* never block a payment on the counter */ }
+    } else if (presented && typeof b?.eid === "string") {
+      const k = await db.prepare("SELECT org, kind, eid FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(await sha("key|" + presented), now).first<{ org: string; kind: string; eid: string | null }>();
       if (!k || !(k.kind in PAYER)) return json({ error: "Please sign in again." }, 403); // the Organizer, a Host or a Co-host of this account may pay; one payment is enough for the game
       paidBy = PAYER[k.kind]!;
-      const eg = await db.prepare("SELECT org, cap, pack FROM engagement WHERE id=?").bind(b.eid).first<{ org: string | null; cap: number; pack: number | null }>();
+      const eg = await db.prepare("SELECT org, cap, pack, cancelled_ms FROM engagement WHERE id=?").bind(b.eid).first<{ org: string | null; cap: number; pack: number | null; cancelled_ms: number | null }>();
       if (!eg || eg.org !== k.org) return json({ error: "No such engagement." }, 404);
+      if (k.kind === "cohost" && k.eid && k.eid !== b.eid) return json({ error: "Your Co-host link is for a different game." }, 403); // a Co-host belongs to one game
+      if (eg.cancelled_ms) return json({ error: "This game was cancelled by the organizer. It cannot be paid for." }, 409);
       if (eg.pack !== 0) return json({ error: "This engagement is already published." }, 409);
       boundPack = PACKS.find((x) => x[0] >= eg.cap)?.[0] ?? null;
       if (!boundPack) return json({ error: "That many participants needs a custom arrangement. Please write to us." }, 400);
@@ -213,7 +242,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     }
     const ref = refCode(b.ref); // from the buyer's own browser (valid for 30 days after the link was opened); checked against real partners when the payment is fulfilled
     const bph = partnerCode(b.phone); // optional, only used to spot a partner buying through their own link
-    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,ref,buyer_phone_hash,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), pack, cur, pr.total, pr.tax, order?.id ?? null, "created", now, JSON.stringify(meta), ref, bph ? await phoneHashFor(env, bph) : null, siteTest ? 1 : 0).run();
+    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,ref,buyer_phone_hash,is_test,eid) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), pack, cur, pr.total, pr.tax, order?.id ?? null, "created", now, JSON.stringify(meta), ref, bph ? await phoneHashFor(env, bph) : null, siteTest ? 1 : 0, boundEid).run();
     if (!rzp) { const f = await fulfil(env, id, now, spend); return "result" in f ? json({ mode: "test", paymentId: id, result: f.result, ...(siteTest ? { testPayment: true, label: "TEST payment: nothing was charged." } : {}) }) : json({ error: f.error }, f.status); }
     return json({ mode: "razorpay", paymentId: id, razorpay: { keyId: rzp.keyId, orderId: order.id, amount: toMinor(pr.total), currency: cur, name: brand.name, description: `Up to ${pack} participants`, prefill: { email: b.email.trim(), name: payerName.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name }, theme: { color: brand.theme } } });
   }
@@ -226,10 +255,15 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     if (row.status === "paid") return json(JSON.parse(row.result));
     if (!verifyPaymentSignature(rzp.keySecret, String(b.razorpay_order_id), String(b.razorpay_payment_id), String(b.razorpay_signature)))
       return json({ error: "The payment could not be verified. If money was taken it will be refunded." }, 400);
+    // "Confirming your payment...": from the moment the buyer's browser reports a correctly signed payment until the gateway itself says the money arrived, the game shows that soft state. It is never Paid before the gateway confirms.
+    const marked = row.eid && (await spend(1));
+    if (marked) await db.prepare("UPDATE payment SET confirming_ms=? WHERE id=? AND status<>'paid'").bind(now, row.id).run();
+    const unconfirm = async () => { if (marked) await db.prepare("UPDATE payment SET confirming_ms=NULL WHERE id=? AND status<>'paid'").bind(row.id).run(); };
     const pay = await fetchPayment(rzp, String(b.razorpay_payment_id)).catch(() => null);
-    if (!pay || pay.order_id !== b.razorpay_order_id || Number(pay.amount) !== toMinor(row.amount)) return json({ error: "The payment details did not match the order." }, 400);
+    if (!pay || pay.order_id !== b.razorpay_order_id || Number(pay.amount) !== toMinor(row.amount)) { await unconfirm(); return json({ error: "The payment details did not match the order." }, 400); }
+    if (pay.status === "created") { await db.prepare("UPDATE payment SET rzp_payment_id=COALESCE(rzp_payment_id,?) WHERE id=?").bind(String(b.razorpay_payment_id), row.id).run(); return json({ confirming: true, paid: false, message: "Confirming your payment..." }, 202); } // the page asks again in a few seconds; the gateway's webhook finishes it too
     if (pay.status === "authorized") await capturePayment(rzp, pay.id, toMinor(row.amount), row.currency).catch(() => null);
-    else if (pay.status !== "captured") return json({ error: `The payment is ${pay.status}. Nothing was charged to your order.` }, 402);
+    else if (pay.status !== "captured") { await unconfirm(); return json({ error: `The payment is ${pay.status}. Nothing was charged to your order.` }, 402); }
     await db.prepare("UPDATE payment SET rzp_payment_id=? WHERE id=?").bind(String(b.razorpay_payment_id), row.id).run();
     const f = await fulfil(env, row.id, now, spend);
     return "result" in f ? json(f.result) : json({ error: f.error }, f.status);
@@ -242,6 +276,10 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     let ev: any; try { ev = JSON.parse(raw); } catch { return json({ error: "Bad body." }, 400); }
     const ent = ev?.payload?.payment?.entity, ord = ev?.payload?.order?.entity;
     const orderId = ent?.order_id ?? ord?.id;
+    if (ev.event === "payment.authorized" && orderId) { // the gateway has the money but has not captured it yet: the buyer sees "Confirming your payment..." and nothing is marked Paid
+      await db.prepare("UPDATE payment SET confirming_ms=? WHERE rzp_order_id=? AND status<>'paid'").bind(now, orderId).run();
+      return json({ ok: true, confirming: true });
+    }
     if (!["payment.captured", "order.paid"].includes(ev.event) || !orderId) return json({ ok: true, ignored: ev.event });
     const row = await db.prepare("SELECT * FROM payment WHERE rzp_order_id=?").bind(orderId).first<any>();
     if (!row) return json({ ok: true, ignored: "unknown order" });
@@ -251,6 +289,11 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     return "result" in f ? json({ ok: true, fulfilled: row.id }) : json({ error: f.error }, f.status);
   }
 
+  const cm = p.match(/^\/api\/credit-note\/(cn_[0-9a-f]{32})$/); // the GST credit note issued with a refund
+  if (req.method === "GET" && cm) {
+    const r = await db.prepare("SELECT data FROM credit_note WHERE token=?").bind(cm[1]).first<{ data: string }>();
+    return r ? new Response(renderInvoiceHtml(JSON.parse(r.data)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex" } }) : json({ error: "Not found" }, 404);
+  }
   const im = p.match(/^\/api\/invoice\/(inv_[0-9a-f]{32})$/);
   if (req.method === "GET" && im) {
     const r = await db.prepare("SELECT data FROM invoice WHERE token=?").bind(im[1]).first<{ data: string }>();

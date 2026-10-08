@@ -10,13 +10,42 @@
   const BASE = (q.get("api") || "").replace(/\/$/, "");
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const store = DEMO ? DEMO.store : { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
-  const api = DEMO ? DEMO.api : async (method, path, body) => {
+  const rawApi = DEMO ? DEMO.api : async (method, path, body) => {
     let r;
     try { r = await fetch(BASE + path, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }); }
     catch { throw new Error("offline"); }
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw Object.assign(new Error(j.error || "http " + r.status), { status: r.status, code: j.code });
+    if (!r.ok) throw Object.assign(new Error(j.error || "http " + r.status), { status: r.status, code: j.code, body: j });
     return j;
+  };
+  // ---------- what the game's public settings say besides the plan: the brand strip, a cancelled game; and a personal invite link's token ----------
+  const TOKEN = (q.get("t") || "").trim().slice(0, 80); // a personal link: sent as `token` when joining, so no mobile number is needed
+  const INFO = { brand: null, cancelled: null };
+  const cleanBrand = (b) => {
+    if (!b || typeof b !== "object") return null;
+    const name = String(b.name == null ? "" : b.name).replace(/\s+/g, " ").trim().slice(0, 60);
+    let color = String(b.color || ""); if (/^#[0-9a-f]{3}$/i.test(color)) color = "#" + color.slice(1).split("").map((c) => c + c).join("");
+    if (!/^#[0-9a-f]{6}$/i.test(color)) color = "#0B3D91";
+    const logo = typeof b.logo === "string" && b.logo.length < 90000 && /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(b.logo) ? b.logo : ""; // only a small picture that travels inside the settings: never an outside address
+    if (!name && !logo) return null;
+    const lin = (h) => { const c = parseInt(h, 16) / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const L = 0.2126 * lin(color.slice(1, 3)) + 0.7152 * lin(color.slice(3, 5)) + 0.0722 * lin(color.slice(5, 7));
+    return { name, color, logo, fg: (1.05 / (L + 0.05)) >= ((L + 0.05) / 0.05) ? "#ffffff" : "#111111" }; // whichever of white and near-black reads better on the colour
+  };
+  const noteInfo = (r, fromJoin) => {
+    if (!r || typeof r !== "object") return;
+    if ("brand" in r && !(fromJoin && INFO.brand)) INFO.brand = cleanBrand(r.brand); // a join answer carries the brand without its logo: never let it replace the full one read from info
+    if ("cancelled" in r || "startRound" in r) INFO.cancelled = r.cancelled ? { message: String(r.message || "").slice(0, 200) } : null;
+  };
+  let lastJoin = null; // what the server said when a join was refused: the page decides what to show from it
+  const api = async (method, path, body) => {
+    const isJoin = method === "POST" && /\/join$/.test(path);
+    const sent = isJoin && TOKEN && body && typeof body === "object" && !body.token ? Object.assign({}, body, { token: TOKEN }) : body;
+    try {
+      const r = await rawApi(method, path, sent);
+      if (isJoin) { lastJoin = null; noteInfo(r, true); } else if (method === "GET" && /\/info$/.test(path)) noteInfo(r);
+      return r;
+    } catch (e) { if (isJoin) lastJoin = { status: e && e.status, code: (e && e.code) || (e && e.body && e.body.code) || "", body: (e && e.body) || {}, message: String((e && e.message) || "") }; throw e; }
   };
   const INVITE_FROM = Number(q.get("from")) || 0, INVITE_CAT = q.get("c") || "";
   const NAMES = { early5: "Early Five", top: "Top line", mid: "Middle line", bot: "Bottom line", corners: "Four corners", star: "Star", full: "Full house" };
@@ -28,15 +57,79 @@
   const GRACE_SECS = ZG.GRACE_ROUNDS * 3;
   const fmt = (s) => (s >= 90 ? Math.round(s / 60) + " min" : s + "s");
 
-  const joinView = (msg) => `<div class="zhead"><b>Corporate Tambola</b></div>
+  // ---------- the company strip at the top of the ticket page (colour and name set by the organizer; the small picture travels inside the settings) ----------
+  const brandStrip = () => {
+    const b = INFO.brand; if (!b) return "";
+    return `<div class="zbrand" data-bg="${esc(b.color)}" data-fg="${esc(b.fg)}">${b.logo ? `<img class="zblogo" alt="" src="${esc(b.logo)}">` : ""}${b.name ? `<b>${esc(b.name)}</b>` : ""}</div><div class="zpow">Powered by Corporate Tambola</div>`;
+  };
+  const paintBrand = () => document.querySelectorAll(".zbrand").forEach((el) => { el.style.background = el.dataset.bg; el.style.color = el.dataset.fg; }); // set from the script, so a strict style policy never blocks the colour
+
+  // ---------- joining: a personal link needs no number; a number may be asked for; a request may have to wait to be let in; a person may have been removed ----------
+  const J = { mode: "", phone: "", name: "", wid: "", who: "", timer: null, polling: false, note: "" };
+  const inviteOf = () => (INVITE_FROM ? { from: INVITE_FROM, cat: INVITE_CAT } : undefined);
+  const joinView = (msg) => {
+    if (J.mode === "removed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>You are not on this game's list</h2><p class="zsmall" style="margin:0">You were removed from this game, so there is no ticket for you here. If you think this is a mistake, please ask the person who invited you.</p></div>`;
+    if (J.mode === "gone") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This link is not active any more</h2><p class="zsmall" style="margin:0">Please ask the person who invited you for a new link.</p></div>`;
+    if (J.mode === "waiting") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard zwait" role="status"><h2>Please wait a moment</h2><p style="margin:0 0 6px">${J.note ? esc(J.note) : `Your request to join has gone to ${J.who ? esc(J.who) : "the organizer"}.`}</p><p class="zsmall" style="margin:0">Keep this page open. As soon as you are let in, your ticket appears here.</p></div>`;
+    if (J.mode === "declined" || J.mode === "lapsed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>${J.mode === "declined" ? "Your request was not accepted" : "This request has run out"}</h2><p class="zsmall" style="margin:0 0 8px">${J.mode === "declined" ? "You are not on the list for this game. Please ask the person who invited you." : "Nobody answered in time. You can ask again."}</p>${J.mode === "lapsed" ? `<button class="zbtn s" id="again" type="button">Ask again</button>` : ""}</div>`;
+    const personal = !!TOKEN && J.mode !== "needPhone"; // a personal link is made for one person: no number to type unless the server asks
+    return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div>
     <div class="zcard zform"><h2>Join the engagement</h2>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
-    <label for="ph">Your mobile number</label><input id="ph" inputmode="tel" autocomplete="tel" placeholder="98765 43210">
-    <label for="nm">Your name (shown only to the organizer)</label><input id="nm" autocomplete="name" maxlength="60">
+    ${J.mode === "needPhone" ? `<div class="zbanner info" role="status" style="margin:0 0 8px">${J.note ? esc(J.note) : "This link was already opened on another phone. Please type your mobile number to get your ticket."}</div>` : ""}
+    ${personal ? `<p class="zsmall" style="margin:0 0 6px">Your personal link is ready. Press the button to get your ticket.</p>` : `<label for="ph">Your mobile number</label><input id="ph" inputmode="tel" autocomplete="tel" placeholder="98765 43210" value="${esc(J.mode === "needPhone" ? J.phone : "")}">`}
+    ${personal ? "" : `<label for="nm">Your name (shown only to the organizer)</label><input id="nm" autocomplete="name" maxlength="60" value="${esc(J.name)}">`}
     ${msg ? `<div class="zbanner bad" role="alert">${esc(msg)}</div>` : ""}
     <button class="zbtn" id="go">Get my ticket</button>
     <p class="zsmall">We use your number for your ticket and, if you win, your prize. Your organizer sees it. Other players do not.</p>
     <p class="spriv">Players are 18 or older.</p>
     <p class="spriv"><a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy Policy</a></p></div>`;
+  };
+  const cancelledView = () => `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This game was cancelled</h2><p class="zsmall" style="margin:0">${esc((INFO.cancelled && INFO.cancelled.message) || "The organizer cancelled this game.")} There is nothing to do on this page. Thank you for your interest.</p></div>`;
+  const removedView = () => `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>You have been removed from this game</h2><p class="zsmall" style="margin:0">This phone no longer plays in this game. If you think this is a mistake, please ask the person who invited you.</p></div>`;
+  // what the server's "me" answer says about this ticket: removed, and (for a guest invited straight by the organizer's side) whether they may invite
+  const ME = { at: -Infinity, removed: false, canInvite: false, per: 0, used: 0, loaded: false };
+  async function pollMe(v) {
+    if (DEMO || !v.pid || performance.now() - ME.at < 90000 + (Math.floor(performance.now()) % 30000)) return;
+    ME.at = performance.now();
+    try {
+      const r = await api("GET", `/api/z/${EID}/me?pid=${encodeURIComponent(v.pid)}`);
+      ME.loaded = true; ME.removed = r.removed === true || r.state === "removed"; ME.canInvite = r.canInvite === true; ME.per = Number(r.per) || 0; ME.used = Number(r.used) || 0;
+      if (ME.removed) paint();
+    } catch (e) {
+      if (e && e.status === 404 && /not a participant/i.test(String(e.message || ""))) { ME.removed = true; paint(); } // removed before the start: the server has deleted the seat, so it no longer knows this ticket
+      /* any other trouble: asked again later */
+    }
+  }
+  function waitPoll() {
+    clearInterval(J.timer); J.timer = setInterval(async () => {
+      if (J.mode !== "waiting" || !J.wid || J.polling) return;
+      J.polling = true;
+      try {
+        const r = await api("GET", `/api/z/${EID}/me?wid=${encodeURIComponent(J.wid)}`);
+        if (r.with) J.who = String(r.with).slice(0, 60);
+        if (r.state === "admitted") { clearInterval(J.timer); await doJoin(); }
+        else if (r.state === "declined" || r.state === "lapsed" || r.state === "removed") { clearInterval(J.timer); J.mode = r.state === "removed" ? "removed" : r.state; paint(); }
+      } catch { /* the next look tries again */ }
+      J.polling = false;
+    }, 5000);
+  }
+  /** Joins with what is typed (or just the token). Shows a ticket, or the calm screen that fits the answer. */
+  async function doJoin() {
+    const ok = await rt.join(J.phone, J.name, inviteOf());
+    if (ok) {
+      J.mode = ""; clearInterval(J.timer);
+      if (TOKEN) { try { const u = new URLSearchParams(location.search); u.delete("t"); history.replaceState(null, "", location.pathname + (u.toString() ? "?" + u : "")); } catch {} } // the personal token leaves the address bar once it has done its job
+      paint(); start(); return true;
+    }
+    const l = lastJoin || {}, b = l.body || {}, code = l.code || b.code || "";
+    if (code === "removed") { J.mode = "removed"; rt.error = null; clearInterval(J.timer); }
+    else if (code === "waiting" || b.waiting) { J.mode = "waiting"; J.wid = String(b.wid || J.wid || ""); J.who = String(b.with || J.who || "").slice(0, 60); J.note = String(b.error || l.message || "").slice(0, 300) || (code === "invite-full" ? "The person who invited you has used all their invitations, so your request has gone to the organizer." : ""); rt.error = null; waitPoll(); }
+    else if (code === "declined" || b.declined) { J.mode = "declined"; rt.error = null; clearInterval(J.timer); }
+    else if (code === "link-used" || b.needPhone) { J.mode = "needPhone"; J.note = ""; rt.error = null; }
+    else if (code === "link-gone" || /link-gone/.test(l.message || "")) { J.mode = "gone"; rt.error = null; }
+    else if (J.mode === "waiting") J.mode = ""; // let in, but the join failed another way: show the usual message
+    paint(); return false;
+  }
 
   const ticketHtml = (t, called, label, win) => `<div class="zticket" aria-label="${label}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div class="${called.has(v) ? "m" : ""}${win && win.has(v) && called.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;
   const ordinalName = (k) => ["", "1st", "2nd", "3rd"][k] || k + "th";
@@ -308,6 +401,62 @@
     const sh = document.getElementById("invshare"); if (sh) sh.onclick = async () => { const data = { title: "Corporate Tambola", text: "Join me for Corporate Tambola! Open this link, enter your mobile number and you get your own ticket:", url: inviteLink(v) }; try { if (navigator.share) { await navigator.share(data); return; } } catch { return; } try { await navigator.clipboard.writeText(data.text + " " + data.url); sh.textContent = "Link copied"; } catch { sh.textContent = data.url; } };
     const cp = document.getElementById("invcopy"); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(inviteLink(v)); cp.textContent = "Copied"; } catch { cp.textContent = "Press and hold the link above to copy"; } };
   }
+  // ---------- My invites: for a guest who may invite (level 1) only. Their own small list: add, send on WhatsApp, resend, remove. A guest invited by a guest sees nothing. ----------
+  const MI = { people: [], limit: 0, used: 0, loaded: false, at: -Infinity, busy: false, note: "", bad: false, ask: "", name: "", phone: "" };
+  const miQ = (v) => `?me=${encodeURIComponent(v.pid)}`;
+  async function loadMine(v, force) {
+    if (DEMO || !ME.canInvite || !v.pid || MI.busy) return;
+    if (!force && performance.now() - MI.at < 60000) return;
+    MI.at = performance.now();
+    try {
+      const r = await api("GET", `/api/z/${EID}/people${miQ(v)}`);
+      MI.people = Array.isArray(r.people) ? r.people : []; MI.limit = Number(r.limit) || 0; MI.used = Number(r.used) || 0; MI.loaded = true;
+      if (force) paint();
+    } catch (e) { if (e && e.status === 403) { ME.canInvite = false; paint(); } } // the organizer switched invitations off, or this guest may not invite
+  }
+  const waOk = (u) => (typeof u === "string" && /^https:\/\/wa\.me\//.test(u) ? u : "");
+  function mineCard(v) {
+    if (DEMO || !ME.canInvite) return "";
+    const left = Math.max(0, MI.limit - MI.used);
+    const counter = !MI.loaded ? "Getting your list…" : MI.limit ? `You can invite up to <b>${MI.limit}</b> people. You have invited <b>${MI.used}</b>${left ? `, so <b>${left}</b> ${left === 1 ? "place is" : "places are"} left` : ". You have used all your places"}.` : "";
+    const started = v.log.length > 0 || !!v.late || v.phase === "ended"; // a guest can take a name off their list only before the game starts
+    const rows = MI.people.map((p) => {
+      const wa = waOk(p.waLink), gone = p.status === "removed";
+      return `<div class="zrow zmi"><span>${esc(p.name || "Guest")}<br><small class="zsmall" style="margin:0">${esc(p.maskedPhone || "")} · ${gone ? "Removed" : p.status === "joined" ? "Joined" : "Invited"}</small></span>
+        <span class="zmia">${!gone && p.status !== "joined" && wa ? `<a class="zbtn s" target="_blank" rel="noopener" href="${esc(wa)}" style="text-decoration:none;display:inline-flex;align-items:center">Send on WhatsApp</a>` : ""}
+        ${!gone && p.status !== "joined" ? `<button class="zbtn s alt" type="button" data-mire="${esc(p.id)}">Send a new link</button>` : ""}
+        ${!gone && !started ? (MI.ask === p.id ? `<button class="zbtn s" type="button" data-miyes="${esc(p.id)}">Yes, remove</button><button class="zbtn s alt" type="button" data-mino="1">No</button>` : `<button class="zbtn s alt" type="button" data-mirm="${esc(p.id)}">Remove</button>`) : ""}</span></div>`;
+    }).join("");
+    return `<div class="zcard zinvite" id="mine"><h2>My invites</h2><p class="zsmall" style="margin:0 0 8px">${counter}</p>${rows}
+      ${MI.loaded && !left && MI.limit ? "" : `<div class="zform"><label for="mi-name">Name</label><input id="mi-name" autocomplete="off" maxlength="60" value="${esc(MI.name)}"><label for="mi-phone">Mobile number</label><input id="mi-phone" inputmode="tel" autocomplete="off" value="${esc(MI.phone)}" placeholder="98765 43210"><button class="zbtn s" id="mi-add" type="button"${MI.busy ? " disabled" : ""}>Add to my invites</button></div>`}
+      ${MI.note ? `<div class="zbanner ${MI.bad ? "bad" : "ok"}" role="status" style="margin-top:8px">${esc(MI.note)}</div>` : ""}</div>`;
+  }
+  function bindMine(v) {
+    if (!document.getElementById("mine")) return;
+    const nm = document.getElementById("mi-name"), ph = document.getElementById("mi-phone"), add = document.getElementById("mi-add");
+    if (nm) nm.oninput = () => { MI.name = nm.value; };
+    if (ph) ph.oninput = () => { MI.phone = ph.value; };
+    const act = async (fn, okNote) => {
+      MI.busy = true; MI.note = ""; MI.bad = false; paint();
+      try { await fn(); MI.note = okNote || ""; } catch (e) { MI.bad = true; MI.note = (e && e.status !== 0 && e.message && !/^http \d+$|^offline$/.test(e.message) ? e.message : "Could not do that. Please try again."); }
+      MI.busy = false; await loadMine(v, true); paint();
+    };
+    if (add) add.onclick = () => {
+      const name = (nm.value || "").trim(), phone = (ph.value || "").trim();
+      if (name.length < 2) { MI.bad = true; MI.note = "Please type their name."; return paint(); }
+      if (phone.replace(/\D/g, "").length < 10) { MI.bad = true; MI.note = "Please type their mobile number."; return paint(); }
+      act(async () => {
+        const r = await api("POST", `/api/z/${EID}/people${miQ(v)}`, { people: [{ name, phone }], me: v.pid });
+        if (r.invalid && r.invalid.length) throw new Error("That number does not look right. Please check it.");
+        if (r.duplicates) throw new Error("That number is already invited.");
+        MI.name = ""; MI.phone = "";
+      }, "Added. Press Send on WhatsApp next to their name.");
+    };
+    document.querySelectorAll("[data-mire]").forEach((b) => (b.onclick = () => act(async () => { await api("POST", `/api/z/${EID}/people/${encodeURIComponent(b.dataset.mire)}/resend${miQ(v)}`, { me: v.pid }); }, "A new link is ready. Press Send on WhatsApp.")));
+    document.querySelectorAll("[data-mirm]").forEach((b) => (b.onclick = () => { MI.ask = b.dataset.mirm; paint(); }));
+    document.querySelectorAll("[data-mino]").forEach((b) => (b.onclick = () => { MI.ask = ""; paint(); }));
+    document.querySelectorAll("[data-miyes]").forEach((b) => (b.onclick = () => { const id = b.dataset.miyes; MI.ask = ""; act(async () => { await api("POST", `/api/z/${EID}/people/${encodeURIComponent(id)}/remove${miQ(v)}`, { me: v.pid }); }, "Removed. Your place is free again."); }));
+  }
   function mediaAct(b) {
     const inPage = !!mediaKind(b);
     return b.mediaUrl ? (inPage ? `<div id="mslot" class="zmslot"></div><a class="zsmall" target="_blank" rel="noopener noreferrer" href="${esc(b.mediaUrl)}">Trouble playing? Open it in a new tab</a>` : `<a class="zbtn s" style="display:inline-flex;align-items:center;text-decoration:none;margin-top:10px" target="_blank" rel="noopener noreferrer" href="${esc(b.mediaUrl)}">${b.kind === "youtube" ? "Watch the video" : "Open"}</a>`) : "";
@@ -385,7 +534,7 @@
     const curWins = v.won.filter((w) => w.round === v.round), winSet = new Set(curWins.flatMap((w) => w.cells));
     const ribbon = curWins.length ? `<div class="zwin" role="status">&#127881; Congratulations! You won ${curWins.map((w) => esc(lineName(v.cfg, w.pattern, w.ordinal))).join(", ")}${curWins.some((w) => w.text) ? " &middot; " + curWins.filter((w) => w.text).map((w) => esc(w.text)).join(", ") : ""}</div>` : "";
     const tix = v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : DEMO ? "Demo ticket" : "Your ticket", winSet)).join("");
-    return `<div class="zhead"><b>Corporate Tambola</b><button class="zsnd" id="snd" aria-pressed="${sound}">${sound ? "Sound on" : "Sound off"}</button></div>
+    return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b><button class="zsnd" id="snd" aria-pressed="${sound}">${sound ? "Sound on" : "Sound off"}</button></div>
       ${demoCard(v)}${annBanner(v)}${banners.join("")}
       ${v.phase === "ended" ? finalCard(v) + closingCard(v) + confirmCard(v) + prizesCard() : ""}
       ${waitingRoom(v)}
@@ -398,7 +547,7 @@
         <div class="zlast" aria-label="Recent numbers">${v.log.slice(-7, -1).reverse().map((n) => `<span>${n}</span>`).join("")}</div></div>
       <div class="zcard${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Demo ticket <span class="zdemotag">DEMO</span>' : v.tickets.length > 1 ? "Your tickets" : "Your ticket"}</h2>${ribbon}${tix}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
       ${v.phase === "ended" ? "" : prizesCard()}
-      ${inviteCard(v)}
+      ${mineCard(v)}${inviteCard(v)}
       <div class="zcard"><h2>Still to win</h2>${still}${chk}</div>
       ${luckyCard(v)}
       <div class="zcard"><h2>${v.rounds > 1 ? "Round " + v.round + " of " + v.rounds + " · " : ""}${v.late ? "Numbers since you joined · " + v.log.length : "All numbers · " + v.log.length + " of 90"} called</h2><div class="zboard">${Array.from({ length: 90 }, (_, i) => `<div class="${called.has(i + 1) ? "c" : ""}">${i + 1}</div>`).join("")}</div></div>`;
@@ -408,11 +557,13 @@
     const v = rt.view();
     if (!v.won) v.won = []; // an older saved copy of the game code during an update: never break the screen
     if (v.phase === "missing" || v.phase === "boot") { $app.innerHTML = `<p class="zmsg">${esc(v.error || "Loading…")}</p>`; return; }
-    if (v.phase === "join") { const f = document.getElementById("ph"); if (f && document.activeElement === f) return; $app.innerHTML = joinView(v.error); bindJoin(); return; }
-    const fresh = syncPrizes(v); reportToStore(v); loadCf(v);
-    { const af = document.activeElement; if (af && (af.id === "cfnm" || af.id === "cfph")) return; } // never wipe a form someone is typing in
+    if (INFO.cancelled) { if (timer) { clearInterval(timer); timer = null; } clearInterval(J.timer); mediaHost.style.display = "none"; $app.innerHTML = cancelledView(); paintBrand(); return; } // a cancelled game: one calm screen, nothing else
+    if (v.phase === "join") { const f = document.getElementById("ph") || document.getElementById("nm"); if (f && document.activeElement === f) return; $app.innerHTML = joinView(J.mode ? null : v.error); paintBrand(); bindJoin(); return; }
+    if (ME.removed) { if (timer) { clearInterval(timer); timer = null; } mediaHost.style.display = "none"; $app.innerHTML = removedView(); paintBrand(); return; } // taken off the list: the phone stops
+    const fresh = syncPrizes(v); reportToStore(v); loadCf(v); pollMe(v);
+    { const af = document.activeElement; if (af && (af.id === "cfnm" || af.id === "cfph" || af.id === "mi-name" || af.id === "mi-phone")) return; } // never wipe a form someone is typing in
     $app.innerHTML = playView(v);
-    syncMedia(v); bindShare(); bindDemo(); bindConfirm(v); loadInvites(v); bindInvite(v);
+    paintBrand(); syncMedia(v); bindShare(); bindDemo(); bindConfirm(v); loadInvites(v); bindInvite(v); loadMine(v); bindMine(v);
     if (fresh.length) showHurray(fresh);
     const s = document.getElementById("snd");
     if (s) s.onclick = async () => { sound = !sound; store.set("ctz-sound", sound ? "on" : "off"); if (window.TBAudio) { TBAudio.enabled = sound; if (sound) await TBAudio.unlock(); } paint(); };
@@ -425,13 +576,14 @@
     const st = document.getElementById("soundtest"); if (st) st.onclick = async () => { if (window.TBAudio) { TBAudio.enabled = true; await TBAudio.unlock(); TBAudio.test(); } };
   }
   function bindJoin() {
-    const go = document.getElementById("go");
+    const again = document.getElementById("again"); if (again) again.onclick = () => { J.mode = ""; J.wid = ""; paint(); };
+    const go = document.getElementById("go"); if (!go) return;
     go.onclick = async () => {
       go.disabled = true;
       if (window.TBAudio) TBAudio.unlock();
-      const typed = document.getElementById("ph").value;
-      const ok = await rt.join(typed, document.getElementById("nm").value.trim(), INVITE_FROM ? { from: INVITE_FROM, cat: INVITE_CAT } : undefined);
-      if (ok) { paint(); start(); } else { go.disabled = false; paint(); } // show the ticket screen at once: the first tick may take a few seconds on a slow network
+      const ph = document.getElementById("ph"), nm = document.getElementById("nm");
+      J.phone = ph ? ph.value : J.phone; J.name = nm ? nm.value.trim() : J.name;
+      await doJoin(); // shows the ticket screen at once on success: the first tick may take a few seconds on a slow network
     };
   }
   async function loop() { try { await rt.tick(); } catch { /* the loop must never die */ } paint(); }

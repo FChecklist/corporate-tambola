@@ -162,3 +162,6 @@ body{overflow-x:hidden}
 @media (max-width:560px){.snav .links a.how.demo{display:inline-flex}.snav{flex-wrap:wrap}.snav .links{flex:1 1 100%;justify-content:flex-start;min-width:0}.snav .links a{white-space:nowrap}}
 /* phones: the home hero must never be wider than the screen (a grid column of 1fr grows to its widest child) */
 @media (max-width:960px){.smain{grid-template-columns:minmax(0,1fr)}.smain>*{min-width:0}}
+/* "Continue with Google" (only when the server has a client id) */
+.gwrap{margin:12px 0 4px;display:flex;justify-content:center;min-height:44px}.gwrap[hidden],.gor[hidden]{display:none}
+.gor{margin:6px 0;text-align:center;font-size:13px;color:var(--muted,#6b7385)}.ggnote{margin:0;text-align:center;font-size:13px}

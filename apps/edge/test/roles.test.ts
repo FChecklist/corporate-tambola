@@ -28,11 +28,11 @@ afterEach(() => { globalThis.fetch = realFetch; });
 
 let ip = 0;
 const start = async (email: string) => (await j(await handle(new Request("http://x/api/start", { method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": `9.9.9.${++ip}` }, body: JSON.stringify({ email }) }), env as Env, T))).token as string;
-const team = async (org = "boss@acme.com") => {
+const team = async (org = "boss@acme.com", gid = "ROLE-1") => {
   const master = await start(org);
-  await call("POST", "/api/z", { id: "ROLE-1", startRound: 99999999, callSeconds: 9, cap: 300 }, master);
-  const host = (await j(await call("POST", "/api/org/host", { label: "Priya" }, master))).hostKey as string;
-  const cohost = (await j(await call("POST", "/api/org/cohost", { label: "Ravi" }, master))).cohostKey as string;
+  await call("POST", "/api/z", { id: gid, startRound: 99999999, callSeconds: 9, cap: 300 }, master);
+  const host = (await j(await call("POST", "/api/org/host", { mobile: "9876500009", label: "Priya", email: "priya@acme.com" }, master))).hostKey as string;
+  const cohost = (await j(await call("POST", "/api/org/cohost", { label: "Ravi", phone: "9876500001", e: gid }, master))).cohostKey as string;
   return { master, host, cohost };
 };
 const pay = (key: string, eid = "ROLE-1") => call("POST", "/api/checkout", { eid, org: "Acme Ltd", email: "boss@acme.com", country: "IN", taxId: "", currency: "INR" }, key);
@@ -64,16 +64,16 @@ describe("who is who", () => {
 describe("adding and retiring people", () => {
   test("a Host may add a Co-host but not a Host; the sixth Host is refused", async () => {
     const t = await team();
-    expect((await call("POST", "/api/org/cohost", {}, t.host)).status).toBe(200);
-    expect((await call("POST", "/api/org/host", {}, t.host)).status).toBe(403);
-    for (let i = 0; i < 4; i++) expect((await call("POST", "/api/org/host", {}, t.master)).status).toBe(200);
-    expect((await call("POST", "/api/org/host", {}, t.master)).status).toBe(409); // 5 active already
+    expect((await call("POST", "/api/org/cohost", { label: "Meera", phone: "9876500002", e: "ROLE-1" }, t.host)).status).toBe(200);
+    expect((await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, t.host)).status).toBe(403);
+    for (let i = 0; i < 4; i++) expect((await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, t.master)).status).toBe(200);
+    expect((await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, t.master)).status).toBe(409); // 5 active already
   });
   test("a Co-host cannot add anyone; Co-hosts have no limit", async () => {
     const t = await team();
     expect((await call("POST", "/api/org/cohost", {}, t.cohost)).status).toBe(403);
-    expect((await call("POST", "/api/org/host", {}, t.cohost)).status).toBe(403);
-    for (let i = 0; i < 8; i++) expect((await call("POST", "/api/org/cohost", {}, t.master)).status).toBe(200);
+    expect((await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, t.cohost)).status).toBe(403);
+    for (let i = 0; i < 8; i++) expect((await call("POST", "/api/org/cohost", { label: "Guest " + i, phone: "98765001" + String(i).padStart(2, "0"), e: "ROLE-1" }, t.master)).status).toBe(200);
   });
   test("the Organizer retires a Host or Co-host; a Host retires a Co-host only", async () => {
     const t = await team();
@@ -117,7 +117,7 @@ describe("what each role may do", () => {
     expect(Object.keys(h).sort()).toEqual(["brought", "cap", "inviteLink", "joined", "name", "payment", "price", "startMs"]);
     expect(h).toMatchObject({ cap: 300, joined: 0, brought: 0, payment: { status: "pending" } });
     expect(h.inviteLink).toBeNull(); // a draft cannot take guests yet
-    const other = await team("other@rival.com");
+    const other = await team("other@rival.com", "ROLE-2");
     expect((await call("GET", "/api/z/ROLE-1/cohost", undefined, other.cohost)).status).toBe(403); // another account's Co-host
   });
 });
@@ -144,7 +144,7 @@ describe("paying", () => {
     expect((await pay(t.cohost)).status).toBe(409);
   });
   test("a key of another account cannot pay", async () => {
-    const t = await team(); const o = await team("other@rival.com");
+    const t = await team(); const o = await team("other@rival.com", "ROLE-2");
     expect((await pay(o.cohost)).status).toBe(404);
   });
 });
