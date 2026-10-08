@@ -8,7 +8,7 @@ Show a small box under the talking line of each open step, **12 px, grey-brown t
 
 1 Your game: "This is the basics. Pick the occasion, the day and the time. Times are India time. Guests can join before the start. The first number comes 2 minutes after the start. You can change all this until the game starts."
 
-2 How it plays: "Pick the biggest crowd you expect. The price is for this size. Who can join: 'Only people on a list' keeps it private, and people not on a list wait for you to let them in. 'Anyone with the link' lets people in at once. Tickets, speed and rounds can stay as they are. Each guest can invite family or colleagues if you switch it on."
+2 How it plays: "Pick the biggest crowd you expect, or type your own number. You see the price when you pay. Who can join: 'Only people on a list' keeps it private, and people not on a list wait for you to let them in. 'Anyone with the link' lets people in at once. Tickets, speed and rounds can stay as they are. Each guest can invite family or colleagues if you switch it on."
 
 3 Prizes: "Tick the prizes you will give. Pick what each one is. 'I will decide later' is fine until you publish. 'No prize' shows on the ticket as 'No prize'. You give the prizes. We provide the software. The software picks the winners. Nobody can change them, not even us."
 
