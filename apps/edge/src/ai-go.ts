@@ -17,7 +17,8 @@ export interface GoCtx { base: string; origin: string; now: number; api: (method
 const IST = 19_800_000;
 export const OCCASIONS: Record<string, { label: string; code: string }> = {
   diwali: { label: "Diwali party", code: "DIWALI" }, dealer: { label: "Dealer meet", code: "DEALER-MEET" }, annual: { label: "Annual day", code: "ANNUAL-DAY" },
-  team: { label: "Team party", code: "TEAM-PARTY" }, customer: { label: "Customer event", code: "CUSTOMER-EVENT" }, family: { label: "Family day", code: "FAMILY-DAY" }, other: { label: "Corporate event", code: "EVENT" },
+  team: { label: "Team party", code: "TEAM-PARTY" }, customer: { label: "Customer event", code: "CUSTOMER-EVENT" }, family: { label: "Family day", code: "FAMILY-DAY" },
+  weekend: { label: "Weekend Fun", code: "WEEKEND-FUN" }, christmas: { label: "Christmas Party", code: "CHRISTMAS-PARTY" }, eid: { label: "Eid Party", code: "EID-PARTY" }, holi: { label: "Holi Party", code: "HOLI-PARTY" }, other: { label: "Corporate event", code: "EVENT" },
 };
 const SLOTS = ["1000", "1200", "1600", "1800", "1900", "2000"];
 export const PRESET_MESSAGES = ["Welcome! The game starts soon. Please keep this page open.", "The game starts in about 10 minutes. Please keep this page open.", "Thank you for joining. Good luck, everyone!", "A short break is coming. Please stay on this page."];

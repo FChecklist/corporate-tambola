@@ -403,6 +403,15 @@ describe("console (organizer page)", () => {
     expect(sm.whoCanJoin).toBe("anyone"); expect(pw.st.patches.some((b: any) => b.whoCanJoin === "anyone")).toBe(true); // the console sends the new game setting
     expect(p.errors).toEqual([]);
   });
+  test("Your game: the occasion chips include Weekend Fun, Christmas Party, Eid Party and Holi Party, and choosing one names the game", async () => {
+    const o = await organizer(); await make(o, "UI-OCC");
+    const p = await consolePage(o, "UI-OCC"); await p.waitFor((x) => /Hello/.test(x));
+    const chips = [...p.win.document.querySelectorAll('[data-ck="occ"]')].map((e: any) => e.textContent.trim());
+    expect(chips).toEqual(["Diwali party", "Dealer meet", "Annual day", "Team party", "Customer event", "Family day", "Weekend Fun", "Christmas Party", "Eid Party", "Holi Party", "Other"]);
+    p.click('[data-ck="occ"][data-v="Eid Party"]'); p.click('[data-ck="day"][data-v="other"]'); setField(p, "#f-dayo", "2026-10-05"); p.click('[data-ck="time"][data-v="other"]'); setField(p, "#f-timeo", "18:30");
+    p.click('[data-save="1"]'); await p.waitFor((x) => /Saved\./.test(x));
+    expect((await o.json(await o.api("GET", "/api/z/UI-OCC/summary", undefined, o.aiKey))).name).toBe("Eid Party");
+  });
   test("Your game: occasion, day and time are chips; saving sets the name and the exact start in India time; a past time is refused politely", async () => {
     const o = await organizer(); await make(o, "UI-WHEN");
     const p = await consolePage(o, "UI-WHEN"); await p.waitFor((x) => /Hello/.test(x));

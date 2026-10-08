@@ -81,7 +81,7 @@
   const WHO = { organizer: "Organizer", host: "Host", "co-host": "Co-host", cohost: "Co-host" };
 
   // ---------- the choices (the form state: it lives here, so a refresh never loses what you are typing) ----------
-  const OCC = ["Diwali party", "Dealer meet", "Annual day", "Team party", "Customer event", "Family day", "Other"];
+  const OCC = ["Diwali party", "Dealer meet", "Annual day", "Team party", "Customer event", "Family day", "Weekend Fun", "Christmas Party", "Eid Party", "Holi Party", "Other"];
   const TIMES = [["10:00", "10 am"], ["12:00", "12 pm"], ["16:00", "4 pm"], ["18:00", "6 pm"], ["19:00", "7 pm"], ["20:00", "8 pm"], ["other", "Other time"]];
   const HS = [["early5", "Early Five"], ["top", "Top line"], ["mid", "Middle line"], ["bot", "Bottom line"], ["corners", "Four corners"], ["star", "Star"], ["full", "Full house"], ["full2", "Full Two-Ticket House"]];
   const BUNDLES = { Classic: { early5: 1, top: 1, mid: 1, bot: 1, full: 1 }, Simple: { early5: 1, full: 1 }, Rich: { early5: 1, top: 1, mid: 1, bot: 1, corners: 1, star: 1, full: 3 } };
