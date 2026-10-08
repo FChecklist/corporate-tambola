@@ -157,3 +157,8 @@ body{overflow-x:hidden}
 @media (max-width:420px){#topbar .tb-brand b{display:none}#topbar .tb-cta{flex:1;justify-content:center}}
 @media (prefers-reduced-motion:reduce){#topbar{transition:none}}
 #pricing{scroll-margin-top:76px}
+/* header with 8 links: wrap neatly on any width; Demo stays visible on phones, the other links are in the footer */
+.snav .links{flex-wrap:wrap;justify-content:flex-end;row-gap:6px}
+@media (max-width:560px){.snav .links a.how.demo{display:inline-flex}.snav{flex-wrap:wrap}.snav .links{flex:1 1 100%;justify-content:flex-start;min-width:0}.snav .links a{white-space:nowrap}}
+/* phones: the home hero must never be wider than the screen (a grid column of 1fr grows to its widest child) */
+@media (max-width:960px){.smain{grid-template-columns:minmax(0,1fr)}.smain>*{min-width:0}}

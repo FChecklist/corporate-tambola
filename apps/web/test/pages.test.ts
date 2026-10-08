@@ -917,6 +917,12 @@ describe("the free demo game", () => {
     return p;
   }
 
+  test("stage links open the demo at one moment: ?stage=middle shows the break, ?stage=end shows the finished game, ?stage=before the idle ticket", async () => {
+    const o = await organizer();
+    const mid = await demo(o, "?stage=middle", { k: 1 }); await mid.p.waitFor((x) => /How brand breaks work/.test(x), 20000); expect(mid.p.win.__rt.view().log.length).toBe(3);
+    const end = await demo(o, "?stage=end", { k: 1 }); await end.p.waitFor((x) => /That was the demo/.test(x), 30000); expect(end.p.text()).toMatch(/You won Four corners/);
+    const before = await demo(o, "?stage=before", { k: 1 }); await before.p.waitFor((x) => /Run Demo/.test(x)); expect(before.p.text()).not.toMatch(/That was the demo|How brand breaks work/);
+  }, 90_000);
   test("before anyone presses anything: a real ticket marked DEMO, a Run Demo button, and nothing happening: no countdown, no time, no date, no number to type", async () => {
     const o = await organizer(); const { p } = await demo(o); const doc = p.win.document; const rt = p.win.__rt;
     await p.waitFor((x) => /Run Demo/.test(x)); const t = p.text();

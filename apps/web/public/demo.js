@@ -12,7 +12,11 @@
   const CHAIN = "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971";
   const LEAD_MS = 3000; // the first number comes 3 seconds after "Run Demo" is pressed
   const RUN_WINDOW_MS = 150000; // an address older than this shows the idle screen again instead of a half-finished demo
-  const R = Number(new URLSearchParams(location.hash.replace(/^#/, "")).get("r")) || 0;
+  // Links to see the ticket at one moment of the game: demo.html?stage=before | start | middle | end (each opens a fresh run placed at that moment). Pressing Run Demo always wins.
+  const STAGE_AT = { start: 3000, middle: -22000, end: -66000 }; // where the first number is, compared with now: just about to come / the break is showing / the winner has just been found
+  const stage = new URLSearchParams(location.search).get("stage") || "";
+  const stageR = Object.prototype.hasOwnProperty.call(STAGE_AT, stage) ? clock.now() + STAGE_AT[stage] : 0;
+  const R = Number(new URLSearchParams(location.hash.replace(/^#/, "")).get("r")) || stageR || 0;
   const running = R > 0 && clock.now() <= R + RUN_WINDOW_MS && R <= clock.now() + 60000;
   // Idle (not pressed yet): the first number is "tomorrow", so nothing happens until the button is pressed.
   const S = running ? R : clock.now() + 24 * 3600 * 1000;
