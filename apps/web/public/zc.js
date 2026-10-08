@@ -76,7 +76,7 @@
     if (S.coh && typeof S.coh.payment === "string") return { paid: S.coh.payment === "paid", confirming: S.coh.payment === "confirming", paidBy: "", paidMs: 0 };
     return { paid: !!S.info && !S.draft && !S.unpaid, paidBy: "", paidMs: 0 };
   }
-  const payLabel = (p) => (p.paid ? "Paid" : p.confirming ? "Confirming your payment..." : "Payment pending");
+  const payLabel = (p) => (p.paid ? "Paid" : p.confirming ? "Confirming your payment..." : "Payment pending for this game");
   const isCancelled = () => !!(S.cancelDone || (S.sum && (S.sum.cancelled || S.sum.status === "cancelled")) || (S.coh && S.coh.cancelled) || (S.info && S.info.cancelled));
   const WHO = { organizer: "Organizer", host: "Host", "co-host": "Co-host", cohost: "Co-host" };
 
@@ -689,11 +689,11 @@
       <div class="zc-jump"><span>Jump to</span>${st.map((s) => `<button type="button" class="zc-dot" data-open="${s[0]}" aria-label="Step ${s[0]}: ${esc(s[1])}" style="background:var(--bg-tint-${s[2]});color:var(--text-tint-${s[2]})${S.open === s[0] ? `;outline:2px solid var(--text-tint-${s[2]})` : ""}">${s[0]}</button>`).join("")}<button type="button" class="zc-pillbtn" data-act="help">Help</button></div></div>`;
   }
   function sum(n) {
-    if (role() === "cohost") { const c = S.coh; if (!c) return ""; return [c.startMs ? when(c.startMs) : "", `${Number(c.brought) || 0} ${Number(c.brought) === 1 ? "person" : "people"} brought`, payState().paid ? "Paid" : "Payment pending"][n - 1] || ""; }
+    if (role() === "cohost") { const c = S.coh; if (!c) return ""; return [c.startMs ? when(c.startMs) : "", `${Number(c.brought) || 0} ${Number(c.brought) === 1 ? "person" : "people"} brought`, payState().paid ? "Paid" : "Payment pending for this game"][n - 1] || ""; }
     const c = S.cfg, inf = S.info; if (!c || !inf) return "";
     const t = c.tickets, used = (c.opening || []).length + (c.breaks || []).length + (c.closing || []).length, T = S.team;
     return [`${c.name || "Your game"}, ${when(inf.startMs)}`, `Up to ${inf.cap}, ${t} ticket${t === 1 ? "" : "s"}, ${inf.callSeconds} seconds`, `${(c.rewards || []).length} prizes`, `${used} of ${5 * t} moments`,
-      T ? `${pl((T.hosts || []).length, "Host", "Hosts")}, ${pl((T.cohosts || []).length, "Co-host", "Co-hosts")}` : "", S.draft ? "Guest link ready after publishing" : "Guest link ready", payState().paid ? "Paid. The game is on" : S.draft ? "Not published yet" : "Payment pending", S.started ? "The game is on" : "Opens when the game starts", "Your report, then erasing data"][n - 1] || "";
+      T ? `${pl((T.hosts || []).length, "Host", "Hosts")}, ${pl((T.cohosts || []).length, "Co-host", "Co-hosts")}` : "", S.draft ? "Guest link ready after publishing" : "Guest link ready", payState().paid ? "Paid. The game is on" : S.draft ? "Not published yet" : "Payment pending for this game", S.started ? "The game is on" : "Opens when the game starts", "Your report, then erasing data"][n - 1] || "";
   }
   // "About this step": a short, always-visible write-up under each talking line (docs/ROLES_AND_CONSOLE_SPEC_4.md, A). At most 5 short lines each.
   const ABOUT = {

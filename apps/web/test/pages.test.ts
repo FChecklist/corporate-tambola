@@ -232,7 +232,7 @@ describe("console (organizer page)", () => {
   test("the role pill, the payment pill and the one-payment notice: pending shows the notice; paid hides it and says who paid", async () => {
     const o = await organizer(); await make(o, "UI-PAYP"); await publish(o, "UI-PAYP");
     const p = await consolePage(o, "UI-PAYP"); await p.waitFor((x) => /Last step/i.test(x));
-    expect(p.$("#rolepill")!.textContent).toBe("Organizer"); expect(p.$("#paypill")!.textContent).toBe("Payment pending"); expect(p.$("#paypill")!.className).toMatch(/zc-pill-pend/);
+    expect(p.$("#rolepill")!.textContent).toBe("Organizer"); expect(p.$("#paypill")!.textContent).toBe("Payment pending for this game"); expect(p.$("#paypill")!.className).toMatch(/zc-pill-pend/);
     const note = p.$("#paynote")!; expect(note.getAttribute("role")).toBe("note"); expect(note.textContent).toMatch(/Just one of you needs to make it: the Organizer, a Host or a Co-host\. Guests pay nothing/);
     o.world.raw.prepare("UPDATE engagement SET pack=100 WHERE id='UI-PAYP'").run(); // paid (the same signal the payment page uses)
     const q = await consolePage(o, "UI-PAYP"); await q.waitFor((x) => /Hello|Your game/.test(x));
@@ -275,12 +275,12 @@ describe("console (organizer page)", () => {
     const p = await consolePage(o, "UI-COH", ck);
     await p.waitFor((x) => /Hi\. Here is the game/.test(x));
     expect(sections(p)).toEqual(["Today's game", "Invite people", "Payment"]);
-    expect(p.$("#rolepill")!.textContent).toBe("Co-host"); expect(p.$("#paypill")!.textContent).toBe("Payment pending"); expect(p.$("#paynote")).toBeTruthy(); expect(p.$("#aistrip")).toBeNull();
+    expect(p.$("#rolepill")!.textContent).toBe("Co-host"); expect(p.$("#paypill")!.textContent).toBe("Payment pending for this game"); expect(p.$("#paynote")).toBeTruthy(); expect(p.$("#aistrip")).toBeNull();
     expect(p.text()).toMatch(/1 person joined of 100/); expect(p.text()).toMatch(/You cannot change the game/); expect(p.text()).toMatch(/What you can do/); expect(p.text()).toMatch(/Invite people with their own link/); expect(p.text()).not.toMatch(/Add Hosts and Co-hosts/);
     openStep(p, 2); const t2 = await p.waitFor((x) => /Your own invite link/.test(x));
     expect(t2).toMatch(/localhost\/z\.html\?e=UI-COH&from=\d+/); expect(t2).toMatch(/People you brought\s*1(?!\d)/); expect(t2).toMatch(/You can invite as many people as you like/);
     expect(t2).toContain("Want your guests to invite their own friends? Ask the Organizer or a Host to switch it on. You cannot switch it on yourself.");
-    openStep(p, 3); const t3 = await p.waitFor((x) => /Status: Payment pending/.test(x)); expect((p.$('a[href^="/pay.html"]') as any).getAttribute("href")).toBe("/pay.html?e=UI-COH"); expect(t3).toMatch(/Rs 2,358\.82 with GST\. Pay once, from any one of you/);
+    openStep(p, 3); const t3 = await p.waitFor((x) => /Status: Payment pending for this game/.test(x)); expect((p.$('a[href^="/pay.html"]') as any).getAttribute("href")).toBe("/pay.html?e=UI-COH"); expect(t3).toMatch(/Rs 2,358\.82 with GST\. Pay once, from any one of you/);
     for (const banned of [/Publish/, /Erase/, /Controls/, /guest list/i, /Your team/, /AI assistant/, /Message to everyone/, /Close my account/]) expect(p.text()).not.toMatch(banned);
     expect(p.errors).toEqual([]);
     o.world.raw.prepare("UPDATE engagement SET pack=100 WHERE id='UI-COH'").run(); o.world.raw.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").run("paidby/UI-COH", JSON.stringify({ by: "organizer", ms: START_MS - HOUR }));
