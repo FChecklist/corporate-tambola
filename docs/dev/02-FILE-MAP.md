@@ -230,7 +230,7 @@ Counts: 333 files.
 | `apps/web/public/zc.html` | Organizer console shell | `zc.js` |
 | `apps/web/public/zc.js` | Organizer console (being rewritten per `docs/ROLES_AND_CONSOLE_SPEC.md`) | `zc.html` |
 | `apps/web/public/zgame.js` | BUNDLE (generated, 124 KB): `window.ZG` | from `packages/beacon/src/zgame-browser.ts` |
-| `apps/web/public/zsw.js` | Live service worker: cache `ct-game-v15`, network-first pages, saved game files | registered by `pwa.js` |
+| `apps/web/public/zsw.js` | Live service worker: cache `ct-game-v16`, network-first pages, saved game files | registered by `pwa.js` |
 | `apps/web/test/harness.ts` | happy-dom page harness (real scripts + real Worker + in-memory DB) | page tests |
 | `apps/web/test/pages.test.ts` | Page behaviour (UC-53..57, console roles, pay, phone, demo, preview) 80 tests | `bun test apps/web/test` |
 | `apps/web/test/houses-pages.test.ts` | Tests: house names and how-to-win lines on the pages match `PRIZE_HOUSES` | `bun test apps/web` |

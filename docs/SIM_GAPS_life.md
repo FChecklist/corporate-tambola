@@ -2,7 +2,6 @@
 
 Fixed 2026-10-09: LIFE-02 (a draft with a start time was kept 365 days; now forgotten after 30 days unless published), LIFE-05 (a game paid wholly from credit earned a second commission row), LIFE-06 (credit applied to a game that closed as "did not start" or was forgotten stayed locked; now restored), LIFE-07 (cancel mail promised "credit until" a date already past), LIFE-08 (game made smaller after credit was applied kept the excess; now partly restored).
 
-Still open (documented, not fixed):
-- LIFE-01: the "payment pending" reminder (unpaid game within 36 h) is only sent when the Organizer's console asks, not by the scheduled job alone.
-- LIFE-03: the day-365 deletion instant. The code deletes at the first IST midnight after end+365 days; the scenario expects 23:59:59 IST of that day to still keep it. Owner/wording decision needed (privacy text names the date).
-- LIFE-04: payment, invoice and entitlement rows are deleted with the engagement at day 365; docs/RETENTION.md says invoices are kept for the law. Needs the owner's CA to decide.
+Fixed since (checked 2026-10-09 by running the scenarios): LIFE-01 (the 36-hour "payment pending" reminder is sent by the scheduled job alone, L13 passes), LIFE-03 (the day-365 deletion is at 00:00 IST after day 365, 23:59:59 IST still keeps it, S05/S07 pass), LIFE-04 (payments, invoices and organizer invoice details are kept for ever, owner rule 2026-10-09).
+
+Still open: none known.

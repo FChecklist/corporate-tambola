@@ -1130,6 +1130,27 @@ describe("console round 2 (cancel, confirming, team, e-mail rule, AI switch)", (
     expect(p.errors).toEqual([]);
   });
 
+  test("Cancelled PAID game: the console offers 'Move my game to this date' for 30 days; picking a date puts the game back on (real Worker)", async () => {
+    const o = await organizer(); await make(o, "UI-MOVE", { name: "Holi Fun" }); await publish(o, "UI-MOVE");
+    o.world.raw.prepare("UPDATE engagement SET pack=100 WHERE id='UI-MOVE'").run(); // paid
+    expect((await o.api("POST", "/api/z/UI-MOVE/cancel", { confirmations: 3 }, o.token)).status).toBe(200);
+    const p = await consolePage(o, "UI-MOVE"); await p.waitFor((x) => /This game was cancelled/.test(x)); openStep(p, 7);
+    expect(p.$("#moveblock")).toBeTruthy(); expect(p.$("#movego")!.textContent).toBe("Move my game to this date"); expect(p.text()).toMatch(/You can move this game to a new date until/); expect(p.text()).toMatch(/Your payment then stays with this game/);
+    const dt = p.$("#movedt") as any; const d = new Date(Date.now() + 5 * 86_400_000); const pad = (n: number) => String(n).padStart(2, "0");
+    dt.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T10:00`; p.click("#movego");
+    await p.waitFor((x) => !/This game was cancelled/.test(x) && /Holi Fun/.test(x)); // the cancelled banner is gone, the game is back
+    const row = o.world.raw.prepare("SELECT cancelled_ms, start_round FROM engagement WHERE id='UI-MOVE'").get() as any; expect(row.cancelled_ms).toBeNull(); // read back from the server, not just the message
+    expect((await o.json(await o.api("GET", "/api/z/UI-MOVE/summary", undefined, o.token))).cancelled).toBeFalsy();
+    expect(p.errors).toEqual([]);
+  });
+  test("Cancelled PAID game: a past date is refused on the page and nothing is sent", async () => {
+    const o = await organizer(); await make(o, "UI-MOVE2"); await publish(o, "UI-MOVE2");
+    o.world.raw.prepare("UPDATE engagement SET pack=100 WHERE id='UI-MOVE2'").run();
+    await o.api("POST", "/api/z/UI-MOVE2/cancel", { confirmations: 3 }, o.token);
+    const p = await consolePage(o, "UI-MOVE2"); await p.waitFor((x) => /This game was cancelled/.test(x)); openStep(p, 7);
+    (p.$("#movedt") as any).value = "2001-01-01T10:00"; p.click("#movego"); await p.waitFor((x) => /Please pick a new date and time in the future/.test(x));
+    expect((o.world.raw.prepare("SELECT cancelled_ms FROM engagement WHERE id='UI-MOVE2'").get() as any).cancelled_ms).not.toBeNull();
+  });
   test("Cancel game: 'No, keep it' at any step sends nothing; and when the game cannot be cancelled the friendly reason shows and no confirm button", async () => {
     const o = await organizer(); await make(o, "UI-CANNO"); await publish(o, "UI-CANNO");
     const posts: any[] = [];
@@ -1177,7 +1198,7 @@ describe("console round 2 (cancel, confirming, team, e-mail rule, AI switch)", (
     setField(p, "#hostlabel", "Meena"); setField(p, "#hostphone", "98765 43210"); setField(p, "#hostemail", "not-an-email"); p.click("#hostadd"); await p.waitFor((x) => /check the Host's e-mail/.test(x)); expect(posts.length).toBe(0);
     setField(p, "#hostlabel", "Meena"); setField(p, "#hostphone", "123"); setField(p, "#hostemail", "meena@acme.com"); p.click("#hostadd"); await p.waitFor((x) => /check the Host's mobile number/.test(x)); expect(posts.length).toBe(0);
     setField(p, "#hostlabel", "Meena"); setField(p, "#hostphone", "98765 43210"); setField(p, "#hostemail", "meena@acme.com"); p.click("#hostadd"); await p.waitFor(() => posts.length === 1);
-    expect(posts[0]).toEqual(["host", { label: "Meena", mobile: "98765 43210", email: "meena@acme.com" }]);
+    expect(posts[0]).toEqual(["host", { label: "Meena", e: "UI-TM2", mobile: "98765 43210", email: "meena@acme.com" }]);
     // Co-host: name and mobile, never an e-mail
     await p.waitFor((x) => /Host added/.test(x));
     expect(p.$("#cohostemail")).toBeNull(); const co = p.$("#cohostphone").parentElement; expect(co.querySelector('input[type="email"]')).toBeNull(); expect(co.querySelector("#hostemail")).toBeNull();
@@ -1397,7 +1418,7 @@ describe("console phase 2: wording fixes, My people, waiting room, remove, play 
     setField(p, "#hostlabel", "Meena"); p.click("#hostadd"); await p.waitFor((x) => /Host's mobile number or e-mail/.test(x)); expect(w.st.calls.some((c: any) => c[1] === "/api/org/host")).toBe(false);
     setField(p, "#hostlabel", "Meena"); setField(p, "#hostphone", "12345"); p.click("#hostadd"); await p.waitFor((x) => /check the Host's mobile number/.test(x)); expect(w.st.calls.some((c: any) => c[1] === "/api/org/host")).toBe(false);
     setField(p, "#hostlabel", "Meena"); setField(p, "#hostphone", "98765 43210"); p.click("#hostadd"); await p.waitFor((x) => /Send their link on WhatsApp/.test(x));
-    expect(w.st.calls.find((c: any) => c[1] === "/api/org/host")[2]).toEqual({ label: "Meena", mobile: "98765 43210" });
+    expect(w.st.calls.find((c: any) => c[1] === "/api/org/host")[2]).toEqual({ label: "Meena", e: "UI-HWA", mobile: "98765 43210" });
     const a = p.$("a[data-hostwa]") as any; expect(a.getAttribute("href").startsWith("https://wa.me/919876543210?text=")).toBe(true); expect(decodeURIComponent(a.getAttribute("href"))).toMatch(/#host=cth_[0-9a-f]{48}/);
     setField(p, "#hostlabel", "Anita"); setField(p, "#hostemail", "anita@acme.com"); p.click("#hostadd"); await p.waitFor((x) => /Your Hosts: 2 of 5/.test(x) && /We sent their link to their e-mail/.test(x)); expect(p.win.document.querySelectorAll("a[data-hostwa]").length).toBe(1); // the e-mailed Host has no WhatsApp button
   });
@@ -1556,7 +1577,7 @@ describe("console: Send a new link to a Host, and a Host who opens the console w
     const w = spy(); const p = await consolePage(o, "UI-NLK", o.token, {}, { afterLoad: w.hook }); await p.waitFor(() => !!p.$('.zc-dot[data-open="5"]')); openStep(p, 5);
     await p.waitFor((x) => /Waiting for them to open the link/.test(x)); expect(p.$("[data-newlink]")!.textContent).toBe("Send a new link");
     p.click("[data-newlink]"); await p.waitFor((x) => /A new link is on its way to their e-mail\. The old one has stopped\./.test(x));
-    expect(w.st.calls.find((c: any) => c[1] === "/api/org/host/link")[2]).toEqual({ id: added.id });
+    expect(w.st.calls.find((c: any) => c[1] === "/api/org/host/link")[2]).toEqual({ id: added.id, e: "UI-NLK" });
     const row = p.$(".zc-person") as any; const href = (row.querySelector("a[data-hostwa]") as any).getAttribute("href"); expect(href.startsWith("https://wa.me/919876543210?text=")).toBe(true);
     const fresh = row.querySelector(".zlink").textContent as string; expect(fresh).toMatch(/\/zc\.html\?e=UI-NLK#host=cth_[0-9a-f]{48}/); expect(row.querySelector("[data-copyteam]")).toBeTruthy();
     expect(decodeURIComponent(href)).toContain(fresh.split("#host=")[1]);

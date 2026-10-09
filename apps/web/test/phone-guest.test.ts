@@ -119,6 +119,19 @@ describe("joining: personal link, waiting, removed, cancelled", () => {
     expect(calls.some((c) => c.m === "GET" && /\/me\?wid=/.test(c.u))).toBe(true);
     expect(p.errors).toEqual([]);
   });
+  test("the waiting screen survives a reload: the page opens straight on 'please wait', keeps asking, and the ticket opens when let in", async () => {
+    const o = await organizer(); await listOnly(o, "PG-WT3");
+    const first = await phoneAt(o, "/z?e=PG-WT3"); await typeJoin(first, "9822266666"); await first.waitFor((x) => /Please wait a moment/.test(x));
+    const saved = first.win.localStorage.getItem("ctz-wait-PG-WT3"); expect(saved).toBeTruthy(); await first.close(); // the old page is gone, as in a real reload
+    const calls: Call[] = []; const p = await phoneAt(o, "/z?e=PG-WT3", calls, (win) => win.localStorage.setItem("ctz-wait-PG-WT3", saved!)); // the same phone after a reload
+    await p.waitFor((x) => /Please wait a moment/.test(x)); expect(p.text()).not.toMatch(/Join the engagement/); expect(!!p.$("#go")).toBe(false);
+    const w = await o.json(await o.api("GET", "/api/z/PG-WT3/waiting", undefined, o.token)); expect(w.waiting.length).toBe(1);
+    await o.api("POST", `/api/z/PG-WT3/waiting/${w.waiting[0].id}`, { decision: "admit" }, o.token);
+    await p.waitFor((x) => SEEN.test(x), 20_000);
+    expect(calls.some((c) => c.m === "POST" && /\/join$/.test(c.u) && c.b.phone === "9822266666")).toBe(true); // it joined with what was typed before the reload
+    expect(p.win.localStorage.getItem("ctz-wait-PG-WT3") || "").toBe(""); // and forgot the waiting note
+    expect(p.errors).toEqual([]);
+  });
   test("a request that is declined ends with a calm message and no ticket", async () => {
     const o = await organizer(); await listOnly(o, "PG-WT2");
     const p = await phoneAt(o, "/z?e=PG-WT2"); await typeJoin(p, "9822244444"); await p.waitFor((x) => /Please wait a moment/.test(x));

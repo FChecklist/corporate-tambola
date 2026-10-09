@@ -551,7 +551,7 @@
   const cloneButton = () => (canRun() && eid ? `<div class="zc-chips zc-gap"><button type="button" class="zc-btn zc-btn-s zc-btn-alt" data-clonebtn="1">Create a new game like this one</button></div>` : "");
   /** A cancelled PAID game can be moved to a new date for 30 days after the cancel (the payment stays with the game). */
   function moveBlock() {
-    const I = S.info || {}, M = S.move || {};
+    const I = Object.assign({}, S.info, S.sum), M = S.move || {};
     if (!I.rescheduleUntilMs) return "";
     if (M.done) return `<p class="zc-small" id="movedone" role="status"><b>Your game is moved.</b> Send your guests the link again: they need to join again.</p>`;
     const until = esc(dayIst(I.rescheduleUntilMs));
@@ -1289,7 +1289,7 @@
         if (!email && !hp) { S.teamNote = "Please type the Host's mobile number or e-mail."; return redraw(); }
         if (hp && hp.replace(/\D/g, "").length < 10) { S.teamNote = "Please check the Host's mobile number."; return redraw(); }
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { S.teamNote = "Please check the Host's e-mail."; return redraw(); }
-        body = { label: name, ...(hp ? { mobile: hp } : {}), ...(email ? { email } : {}) }; S.lastHostWa = !email && hp ? cleanPhone(hp) : null;
+        body = { label: name, ...(eid ? { e: eid } : {}), ...(hp ? { mobile: hp } : {}), ...(email ? { email } : {}) }; S.lastHostWa = !email && hp ? cleanPhone(hp) : null;
       }
       else { const phone = val("cohostphone"); if (!name) { S.teamNote = "Please type the Co-host's name."; return redraw(); } if (phone.replace(/\D/g, "").length < 10) { S.teamNote = "Please type the Co-host's mobile number."; return redraw(); } body = { label: name, phone, eid, e: eid }; }
       const path = kind === "host" ? "/api/org/host" : "/api/org/cohost";
@@ -1309,7 +1309,7 @@
     }));
     all("[data-newlink]", (b) => (b.onclick = async () => {
       try {
-        const r = await call("POST", "/api/org/host/link", { id: b.dataset.newlink }), nid = r.id || b.dataset.newlink, key = r.hostKey || "";
+        const r = await call("POST", "/api/org/host/link", { id: b.dataset.newlink, ...(eid ? { e: eid } : {}) }), nid = r.id || b.dataset.newlink, key = r.hostKey || "";
         S.teamLinks[nid] = key ? `${location.origin}/zc.html?e=${encodeURIComponent(eid)}#host=${key}` : r.link || ""; // the old link has stopped
         const m = String(r.waLink || "").match(/wa\.me\/(\d{8,15})/); if (m) S.teamWa[nid] = { d: m[1], name: r.label || b.dataset.label || "" }; else delete S.teamWa[nid];
         S.teamNote = r.emailed ? "A new link is on its way to their e-mail. The old one has stopped." : "A new link is ready. The old one has stopped. Send it to that one person only.";

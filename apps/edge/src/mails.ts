@@ -88,8 +88,8 @@ export function coHostLinkMail(origin: string, key: string, owner: string, expir
 export const HOST_LINK_SUBJECT = "You are a Host: your Corporate Tambola link";
 export const HOST_LINK_WARNING = "DO NOT FORWARD: this email holds your personal Host link";
 /** The Host's OWN link (their console), e-mailed to the Host when the Organizer adds them. Not an AI link; it opens the Host's console. Only the Organizer and Hosts have an e-mail. */
-export function hostLinkMail(origin: string, key: string, name: string): BuiltMail {
-  const url = `${origin}/zc.html?k=${key}`;
+export function hostLinkMail(origin: string, key: string, name: string, eid = ""): BuiltMail {
+  const url = `${origin}/zc.html?k=${key}${eid ? "&e=" + encodeURIComponent(eid) : ""}`; // with a game id the link opens that game
   const hello = name ? `Hello ${name},` : "Hello,";
   const text = [HOST_LINK_WARNING, "", hello, "You have been added as a Host of a Corporate Tambola game.", "As a Host you can look after the game, add Co-hosts and pay. Only the Organizer can change the account.", "", `OPEN MY CONSOLE: ${url}`, "", "This link is only for you. Keep it private. Do not forward it.", "", HOST_LINK_WARNING, "", footerText(origin), ""].join("\n");
   const warn = `<tr><td style="padding:16px 22px 0;"><div style="background:#fdecea;border:2px solid #c0392b;border-radius:8px;padding:12px 14px;color:#b71c1c;font-weight:700;font-size:14px;line-height:1.4;text-align:center;">${esc(HOST_LINK_WARNING)}</div></td></tr>`;

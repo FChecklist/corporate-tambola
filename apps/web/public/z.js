@@ -108,6 +108,17 @@
       /* any other trouble: asked again later */
     }
   }
+  // The waiting screen survives a reload: what the person typed and the waiting number are kept on this phone only until they are let in, declined, removed or start again.
+  const WAITKEY = "ctz-wait-" + EID;
+  const saveWait = () => { try { store.set(WAITKEY, JSON.stringify({ wid: J.wid, who: J.who, note: J.note, phone: J.phone, name: J.name, at: Date.now() })); } catch {} };
+  const clearWait = () => { try { localStorage.removeItem(WAITKEY); } catch {} try { store.set(WAITKEY, ""); } catch {} };
+  function restoreWait() {
+    if (DEMO || J.mode) return;
+    let w = null; try { w = JSON.parse(store.get(WAITKEY) || "null"); } catch { w = null; }
+    if (!w || !w.wid || Date.now() - Number(w.at || 0) > 7 * 86400000) { clearWait(); return; }
+    J.mode = "waiting"; J.wid = String(w.wid); J.who = String(w.who || ""); J.note = String(w.note || ""); J.phone = String(w.phone || ""); J.name = String(w.name || "");
+    waitPoll();
+  }
   function waitPoll() {
     clearInterval(J.timer); J.timer = setInterval(async () => {
       if (J.mode !== "waiting" || !J.wid || J.polling) return;
@@ -116,7 +127,7 @@
         const r = await api("GET", `/api/z/${EID}/me?wid=${encodeURIComponent(J.wid)}`);
         if (r.with) J.who = String(r.with).slice(0, 60);
         if (r.state === "admitted") { clearInterval(J.timer); await doJoin(); }
-        else if (r.state === "declined" || r.state === "lapsed" || r.state === "removed") { clearInterval(J.timer); J.mode = r.state === "removed" ? "removed" : r.state; paint(); }
+        else if (r.state === "declined" || r.state === "lapsed" || r.state === "removed") { clearInterval(J.timer); clearWait(); J.mode = r.state === "removed" ? "removed" : r.state; paint(); }
       } catch { /* the next look tries again */ }
       J.polling = false;
     }, 5000);
@@ -125,14 +136,14 @@
   async function doJoin() {
     const ok = await rt.join(J.phone, J.name, inviteOf());
     if (ok) {
-      J.mode = ""; clearInterval(J.timer);
+      J.mode = ""; clearInterval(J.timer); clearWait();
       if (TOKEN) { try { const u = new URLSearchParams(location.search); u.delete("t"); history.replaceState(null, "", location.pathname + (u.toString() ? "?" + u : "")); } catch {} } // the personal token leaves the address bar once it has done its job
       paint(); start(); return true;
     }
     const l = lastJoin || {}, b = l.body || {}, code = l.code || b.code || "";
     if (code === "did-not-start" || b.didNotStart) { INFO.dns = true; rt.error = null; clearInterval(J.timer); }
     else if (code === "removed") { J.mode = "removed"; rt.error = null; clearInterval(J.timer); }
-    else if (code === "waiting" || b.waiting) { J.mode = "waiting"; J.wid = String(b.wid || J.wid || ""); J.who = String(b.with || J.who || "").slice(0, 60); J.note = String(b.error || l.message || "").slice(0, 300) || (code === "invite-full" ? "The person who invited you has used all their invitations, so your request has gone to the organizer." : ""); rt.error = null; waitPoll(); }
+    else if (code === "waiting" || b.waiting) { J.mode = "waiting"; J.wid = String(b.wid || J.wid || ""); J.who = String(b.with || J.who || "").slice(0, 60); J.note = String(b.error || l.message || "").slice(0, 300) || (code === "invite-full" ? "The person who invited you has used all their invitations, so your request has gone to the organizer." : ""); rt.error = null; saveWait(); waitPoll(); }
     else if (code === "declined" || b.declined) { J.mode = "declined"; rt.error = null; clearInterval(J.timer); }
     else if (code === "link-used" || b.needPhone) { J.mode = "needPhone"; J.note = ""; rt.error = null; }
     else if (code === "link-gone" || /link-gone/.test(l.message || "")) { J.mode = "gone"; rt.error = null; }
@@ -587,7 +598,7 @@
     const st = document.getElementById("soundtest"); if (st) st.onclick = async () => { if (window.TBAudio) { TBAudio.enabled = true; await TBAudio.unlock(); TBAudio.test(); } };
   }
   function bindJoin() {
-    const again = document.getElementById("again"); if (again) again.onclick = () => { J.mode = ""; J.wid = ""; paint(); };
+    const again = document.getElementById("again"); if (again) again.onclick = () => { J.mode = ""; J.wid = ""; clearWait(); paint(); };
     const go = document.getElementById("go"); if (!go) return;
     go.onclick = async () => {
       go.disabled = true;
@@ -601,6 +612,6 @@
   function start() { if (timer) return; loop(); timer = setInterval(loop, 1000); }
 
   if (!EID) { $app.innerHTML = `<p class="zmsg">This link is incomplete. Please ask your organizer for the engagement link.</p>`; return; }
-  rt.boot().then(() => { paint(); if (rt.phase === "play") start(); });
+  rt.boot().then(() => { if (rt.phase === "play") clearWait(); else restoreWait(); paint(); if (rt.phase === "play") start(); });
   window.__rt = rt;
 })();

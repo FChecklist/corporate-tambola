@@ -177,6 +177,11 @@ const TOO_FAR = "A game can be set at most 30 days ahead. Please pick a day with
 /** Settings and game creation may carry a brand logo (at most 30 KB decoded, about 40 KB as text). */
 const BRAND_BODY_MAX = 60_000;
 const ID = /^[A-Za-z0-9_-]{4,40}$/;
+/** A game id sent with a Host link request, kept only if it is a game of this account (so a link can never point into someone else's game); otherwise "". */
+async function ownGameId(env: Env, org: string, v: unknown): Promise<string> {
+  if (typeof v !== "string" || !ID.test(v)) return "";
+  return (await env.DB.prepare("SELECT 1 AS x FROM engagement WHERE id=? AND org=?").bind(v, org).first()) ? v : "";
+}
 const GENESIS = 1692803367; // drand quicknet; round r is published at GENESIS + (r-1)*3 s (UTC)
 const roundMs = (r: number) => (GENESIS + (r - 1) * 3) * 1000;
 /** An unpaid engagement is held from this long BEFORE its start, so every phone (they check every few seconds) knows before the first number would be shown. */
@@ -838,14 +843,15 @@ Did not ask for this? Ignore this e-mail.`, now, { secret: true });
     if (n >= MAX_HOSTS) return json({ error: `You can have up to ${MAX_HOSTS} Hosts at a time. Retire one first.` }, 409);
     if (!(await spend(env, now, 4))) return BUSY();
     const key = "cth_" + randHex(24), label = cleanLabel(hb?.label), kh = await sha("key|" + key);
+    const hGame = await ownGameId(env, a.org, hb?.e); // added from inside a game: the Host's link opens that game
     const sealedEmail = hEmail ? await sealText(env as any, hEmail) : null, sealedWho = hMob && hMob.ok ? await sealPii(env, { phone: hMob.digits, name: label || null }) : null; // the Host's e-mail and mobile are kept sealed, on the key row
     await env.DB.batch([
       env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test,label,email_sealed,pii,created_by,host_id) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0),?,?,?,'o',?)").bind(kh, a.org, "host", now, a.org, label, sealedEmail, sealedWho, kh),
       env.DB.prepare("INSERT INTO host_state(host_id,org,link_exp_ms,mobile_ok) VALUES(?,?,?,?)").bind(kh, a.org, now + HOST_LINK_TTL_MS, hMob ? 1 : 0),
     ]);
-    const hOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, hLink = `${hOrigin}/zc.html?k=${key}`;
+    const hOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, hLink = `${hOrigin}/zc.html?k=${key}${hGame ? "&e=" + encodeURIComponent(hGame) : ""}`;
     let hostMailed = false;
-    if (hEmail) { const hostMail = hostLinkMail(hOrigin, key, label); hostMailed = await sendMail(env as PayEnv, env.DB, hEmail, hostMail.subject, hostMail.text, now, { html: hostMail.html, secret: true }); } // to the Host only
+    if (hEmail) { const hostMail = hostLinkMail(hOrigin, key, label, hGame); hostMailed = await sendMail(env as PayEnv, env.DB, hEmail, hostMail.subject, hostMail.text, now, { html: hostMail.html, secret: true }); } // to the Host only
     const hm = await mailTempLink(env, req, a.org, "host", "start", now); // the dedicated Host AI-link mail (24-hour key) still goes to the Organizer, as before
     return json({ ok: true, hostKey: key, link: hLink, manualUrl: `${hOrigin}/ai/${key}`, mailed: hm.mailed, emailed: hostMailed, id: kh.slice(0, 10), label, ...(hEmail ? { email: hEmail } : {}), ...(hMob && hMob.ok ? { mobileMasked: maskMobile(hMob.digits), waLink: waLinkFor(hMob.digits, label, hLink) } : {}), expiresMs: now + HOST_LINK_TTL_MS });
   }
@@ -866,10 +872,11 @@ Did not ask for this? Ignore this e-mail.`, now, { secret: true });
       env.DB.prepare("INSERT INTO host_state(host_id,org,link_exp_ms,mobile_ok) VALUES(?,?,?,?) ON CONFLICT(host_id) DO NOTHING").bind(hr.hash, a.org, now + HOST_LINK_TTL_MS, hr.pii ? 1 : 0),
       env.DB.prepare("UPDATE host_state SET host_id=?, link_exp_ms=?, spent=0, pend_hash=NULL, pend_sealed=NULL WHERE host_id=?").bind(nh, now + HOST_LINK_TTL_MS, hr.hash),
     ]);
-    const lOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, lLink = `${lOrigin}/zc.html?k=${nk}`;
+    const lGame = await ownGameId(env, a.org, lb?.e);
+    const lOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin, lLink = `${lOrigin}/zc.html?k=${nk}${lGame ? "&e=" + encodeURIComponent(lGame) : ""}`;
     const lEmail = await openText(env as any, hr.email_sealed), lWho = await openPii(env as any, hr.pii);
     let lMailed = false;
-    if (lEmail) { const m = hostLinkMail(lOrigin, nk, hr.label ?? ""); lMailed = await sendMail(env as PayEnv, env.DB, lEmail, m.subject, m.text, now, { html: m.html, secret: true }); }
+    if (lEmail) { const m = hostLinkMail(lOrigin, nk, hr.label ?? "", lGame); lMailed = await sendMail(env as PayEnv, env.DB, lEmail, m.subject, m.text, now, { html: m.html, secret: true }); }
     return json({ ok: true, link: lLink, hostKey: nk, id: nh.slice(0, 10), label: hr.label ?? "", emailed: lMailed, expiresMs: now + HOST_LINK_TTL_MS, ...(lWho?.phone ? { mobileMasked: maskMobile(lWho.phone), waLink: waLinkFor(lWho.phone, hr.label ?? "", lLink) } : {}) });
   }
   if (req.method === "GET" && p === "/api/org/team") { // who is on the team (never the keys): the Organizer, their AI and a Host may look; a Co-host may not. ?e=<game> lists that game's Co-hosts. Host e-mails only for the Organizer and Hosts.
