@@ -54,6 +54,7 @@ Counts: 333 files.
 | `apps/edge/src/ai-link.ts` | AI manual text/JSON: `aiPaste`, `manualText`, `manualJson`, `frontDoorText`, `nextHint`, `ORG_ENDPOINTS`, `HOST_ENDPOINTS`, `AI_CANNOT`, `CONVERSATION`, `LINK_KEY`, `GET_BODY_MAX` | called by `worker.ts` `aiLink` |
 | `apps/edge/src/cancel.ts` | Cancel a game (no refunds): `cancelPreview`, `cancelGame` (a paid game becomes credit), `paymentsOfGame`, `teamEmails` (re-exported from `credit.ts`), `mailDataDeleted` (also the "did not start" wording), `mailErasureHeadsUp`, `eraseCohostsSql` | called by `worker.ts` (cancel routes) and `lifecycle.ts` (erase, tick); tests `cancel.test.ts`, `credit.test.ts` |
 | `apps/edge/src/credit.ts` | Credit instead of refunds (spec 6): `CREDIT_SCHEMA`, `creditExpiryMs`/`creditLastDay`, `creditFromPayment`, `applyCreditToGame`, `restoreCreditUses`, `creditRoute` (`GET /api/org/credit`, `POST /api/z/{id}/pay-with-credit`), `creditTick` (lapse and the 30-day/3-day/lapse mails), `teamEmails`, `mailTeam` | called by `worker.ts`, `pay.ts`, `cancel.ts`, `lifecycle.ts`; tests `credit.test.ts` |
+| `apps/edge/src/legal.ts` | What the law makes us keep for ever (owner order 2026-10-09): `LEGAL_SCHEMA`, `keepLegalParty(db, eid, now)` writes the permanent `legal_party` record (organizer name, e-mail, mobile, and who paid) when a game is paid and again just before the game's own rows are deleted. Payment, invoice and entitlement rows are never deleted by code. |
 | `apps/edge/src/clone.ts` | "Create a new game like this one" (spec 5 B): `cloneGame`, `copyPeople` | called by `worker.ts` (`POST /api/z/{id}/clone`); tests `clone.test.ts` |
 | `apps/edge/src/audit.ts` | Internal audit log: `AUDIT_SCHEMA`, `classify`, `auditRequest`, `appendAudit`, `verifyChain`, `loadRows`, `toCsv`, `analyzeChain`, `setHold`, `closeAuditFor`, `sweepAudit`, `shredParticipantAudit`, `logAccess`, `redact`, vendor detection | called by `worker.ts`, `lifecycle.ts`, `mode.ts`, `visits.ts` |
 | `apps/edge/src/brand.ts` | Brand + e-mail look: `BRAND`, `TERMS_VERSION` (2026-10-05), `withFooter`, `plainToHtml`, `pageHtml`, `footerText` | used by `pay.ts` (`sendMail`), `mails.ts`, `worker.ts` |
@@ -229,7 +230,7 @@ Counts: 333 files.
 | `apps/web/public/zc.html` | Organizer console shell | `zc.js` |
 | `apps/web/public/zc.js` | Organizer console (being rewritten per `docs/ROLES_AND_CONSOLE_SPEC.md`) | `zc.html` |
 | `apps/web/public/zgame.js` | BUNDLE (generated, 124 KB): `window.ZG` | from `packages/beacon/src/zgame-browser.ts` |
-| `apps/web/public/zsw.js` | Live service worker: cache `ct-game-v14`, network-first pages, saved game files | registered by `pwa.js` |
+| `apps/web/public/zsw.js` | Live service worker: cache `ct-game-v15`, network-first pages, saved game files | registered by `pwa.js` |
 | `apps/web/test/harness.ts` | happy-dom page harness (real scripts + real Worker + in-memory DB) | page tests |
 | `apps/web/test/pages.test.ts` | Page behaviour (UC-53..57, console roles, pay, phone, demo, preview) 80 tests | `bun test apps/web/test` |
 | `apps/web/test/houses-pages.test.ts` | Tests: house names and how-to-win lines on the pages match `PRIZE_HOUSES` | `bun test apps/web` |

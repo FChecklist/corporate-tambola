@@ -63,4 +63,21 @@ export default [
       t.check("the guest sees the Host's last brand with the logo", /Host Brand 2/.test(await t.text(p.page)) && !!(await logoBox(p.page)));
     },
   },
+  {
+    id: "S09-04", name: "The installed app (service worker) shows the logo and company name again with the network OFF",
+    async run(t) {
+      const org = await t.org("o"); const g = await t.game(org, { publish: false });
+      await org.settings(g.id, { brand: { name: "Offline Foods", color: "#1B7F5C", logo: await dataUrlOf(tinyPng("off-logo.png", 128, 128)) } }); await org.publish(g.id);
+      const x = await t.open({ device: "mobile" });
+      await x.page.goto(`${H.SIM}/z?e=${g.id}`); await x.page.waitForTimeout(1500);
+      await x.page.waitForFunction(() => navigator.serviceWorker && navigator.serviceWorker.controller ? true : navigator.serviceWorker.getRegistration().then((r) => !!(r && r.active)), null, { timeout: 15000 }).catch(() => {});
+      await x.page.waitForTimeout(3000);
+      t.check("the strip with the logo shows online", !!(await logoBox(x.page)) && /Offline Foods/.test(await t.text(x.page)));
+      await x.ctx.setOffline(true); await x.page.reload().catch(() => {}); await x.page.waitForTimeout(2500);
+      const off = await t.text(x.page);
+      t.check("with the network off the page still opens (saved on the device)", off.length > 40, off.slice(0, 160));
+      t.check("and still shows the company name and the logo", /Offline Foods/.test(off) && !!(await logoBox(x.page)), off.slice(0, 200));
+      await t.shot(x.page, "offline-brand"); await x.ctx.setOffline(false);
+    },
+  },
 ];

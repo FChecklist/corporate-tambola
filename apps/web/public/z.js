@@ -34,10 +34,12 @@
   };
   const noteInfo = (r, fromJoin) => {
     if (!r || typeof r !== "object") return;
-    if ("brand" in r && !(fromJoin && INFO.brand)) INFO.brand = cleanBrand(r.brand); // a join answer carries the brand without its logo: never let it replace the full one read from info
+    if ("brand" in r && !(fromJoin && INFO.brand)) { INFO.brand = cleanBrand(r.brand); if (!DEMO && EID && INFO.brand && INFO.brand.logo !== undefined) { try { store.set("ctz:" + EID + ":brand", JSON.stringify(INFO.brand)); } catch { /* storage full or blocked: the strip just is not kept */ } } } // a join answer carries the brand without its logo: never let it replace the full one read from info
     if (r.didNotStart === true) INFO.dns = true; else if ("startRound" in r && !fromJoin) INFO.dns = false;
     if ("cancelled" in r || "startRound" in r) INFO.cancelled = r.cancelled ? { message: String(r.message || "").slice(0, 200) } : null;
   };
+  if (!DEMO && EID) { try { const kept = JSON.parse(store.get("ctz:" + EID + ":brand") || "null"); if (kept && typeof kept === "object") INFO.brand = cleanBrand(kept); } catch { /* nothing kept yet */ } } // the installed app shows the organizer's logo and name even before (or without) the network
+  window.addEventListener("online", () => { if (window.__ctzOff) location.reload(); }); // back online while the page could not reach the game: open it again by itself
   let lastJoin = null; // what the server said when a join was refused: the page decides what to show from it
   const api = async (method, path, body) => {
     const isJoin = method === "POST" && /\/join$/.test(path);
@@ -564,8 +566,8 @@
   function paint() {
     const v = rt.view();
     if (!v.won) v.won = []; // an older saved copy of the game code during an update: never break the screen
-    if (INFO.dns) { if (timer) { clearInterval(timer); timer = null; } clearInterval(J.timer); mediaHost.style.display = "none"; $app.innerHTML = dnsView(); paintBrand(); return; } // a game that did not start: one calm screen, nobody can join or pay
-    if (v.phase === "missing" || v.phase === "boot") { $app.innerHTML = `<p class="zmsg">${esc(v.error || "Loading…")}</p>`; return; }
+    if (INFO.dns) { if (timer) { clearInterval(timer); timer = null; } clearInterval(J.timer); mediaHost.style.display = "none"; $app.innerHTML = dnsView(); window.__ctzOff = v.phase === "boot"; paintBrand(); return; } // a game that did not start: one calm screen, nobody can join or pay
+    if (v.phase === "missing" || v.phase === "boot") { $app.innerHTML = (INFO.brand || v.phase === "boot" ? brandStrip() : "") + `<p class="zmsg">${esc(v.phase === "boot" && !navigator.onLine ? "No connection right now. Your ticket is safe on this phone. This page opens the game by itself when you are back online." : v.error || "Loading…")}</p>`; paintBrand(); return; }
     if (INFO.cancelled) { if (timer) { clearInterval(timer); timer = null; } clearInterval(J.timer); mediaHost.style.display = "none"; $app.innerHTML = cancelledView(); paintBrand(); return; } // a cancelled game: one calm screen, nothing else
     if (v.phase === "join") { const f = document.getElementById("ph") || document.getElementById("nm"); if (f && document.activeElement === f) return; $app.innerHTML = joinView(J.mode ? null : v.error); paintBrand(); bindJoin(); return; }
     if (ME.removed) { if (timer) { clearInterval(timer); timer = null; } mediaHost.style.display = "none"; $app.innerHTML = removedView(); paintBrand(); return; } // taken off the list: the phone stops

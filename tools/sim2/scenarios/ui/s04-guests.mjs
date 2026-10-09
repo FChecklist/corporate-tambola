@@ -165,7 +165,7 @@ export default [
       const phone = nextPhone(); const add = await org.addPeople(g.id, [{ name: "Rita", phone }, { name: "Sam", phone: nextPhone() }]);
       const x = await t.open({ device: "mobile" }); await guestJoinUi(x.page, g.id, phone, "Rita"); await x.page.waitForTimeout(2500);
       const c = await openConsole(t, org, g.id, { device: "laptop" }); await openPeople(c.page);
-      const rm = c.page.locator("#sec6 .zc-prow button:has-text('Remove')").first();
+      const rm = c.page.locator("#sec6 .zc-prow:has-text('Rita') button:has-text('Remove')").first(); // Rita's own row (the list order is not fixed)
       t.check("a Remove button is on the person's row", (await rm.count()) > 0);
       if (await rm.count()) {
         await rm.click(); await c.page.waitForTimeout(800);
