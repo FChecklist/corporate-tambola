@@ -131,7 +131,7 @@ export default async function gen({ R, L }) {
   out.push({ name: "money|partner commission is earned on the sale and stays when the game is cancelled; credit use earns nothing new", run: async (t) => {
     const pemail = `sim+partner${t.R.int(1e6)}@example.com`; t.allow(pemail); const partner = await A.Partner.enroll(pemail, mobile(t.R)); t.check("partner has a code", !!partner.code, partner.code);
     const org = await t.newOrg(); const g = await t.game(org, { cap: 100 }); await org.publish(g.id, mobile(t.R)); const q = await org.api("POST", "/api/payments/test", { eid: g.id, email: org.email, org: "Gupta Agro", country: "IN", ref: partner.code }); t.expect("pay with a partner's code", q, "ok");
-    const c0 = await A.sql("SELECT status, base FROM commission WHERE partner_code=?", [partner.code]); t.eq("one commission written", c0.length, 1); t.check("commission is on the software price before GST", c0[0]?.base === 1999, JSON.stringify(c0));
+    const c0 = await A.sql("SELECT status, base FROM commission WHERE partner_code=?", [partner.code]); t.eq("one commission written", c0.length, 1); t.check("commission is on the software price (no GST is charged)", c0[0]?.base === 2399, JSON.stringify(c0));
     await org.cancel(g.id); const c1 = await A.sql("SELECT status FROM commission WHERE partner_code=?", [partner.code]); t.check("commission not voided by the cancel", c1.length === 1 && c1[0].status !== "void", JSON.stringify(c1));
     const g2 = await openGame(t, org, 100); await org.api("POST", `/api/z/${g2.id}/pay-with-credit`, {}); const c2 = await A.sql("SELECT COUNT(*) c FROM commission WHERE partner_code=?", [partner.code]); t.eq("using credit earns no new commission", c2[0].c, 1); if (c2[0].c !== 1) t.check("detail", false, JSON.stringify(await A.sql("SELECT payment_id, base, rate, amount, status FROM commission WHERE partner_code=?", [partner.code])));
   } });
@@ -142,9 +142,9 @@ export default async function gen({ R, L }) {
   } });
 
   // ---------- invoice ----------
-  out.push({ name: "money|the invoice of a paid game: GST split, test label, number series", run: async (t) => {
+  out.push({ name: "money|the invoice of a paid game: whole price, no GST rows, test label, number series", run: async (t) => {
     const org = await t.newOrg(); const g = await paidGame(t, org, 500); const rows = await A.sql("SELECT i.token, i.number FROM invoice i JOIN payment p ON p.id=i.payment_id WHERE p.eid=?", [g.id]); t.eq("one invoice", rows.length, 1);
-    if (!rows[0]) return; const r = await fetch(`${SIM}/api/invoice/${rows[0].token}`); const txt = await r.text(); t.eq("served", r.status, 200); t.check("shows the base price and GST", txt.includes("3,999") || txt.includes("3999"), txt.slice(0, 100)); t.check("a test invoice is labelled", /TEST/.test(txt) || /TEST/.test(rows[0].number), rows[0].number);
+    if (!rows[0]) return; const r = await fetch(`${SIM}/api/invoice/${rows[0].token}`); const txt = await r.text(); t.eq("served", r.status, 200); t.check("shows the whole price and no GST rows", (txt.includes("4,699") || txt.includes("4699")) && !/CGST|SGST|IGST/.test(txt), txt.slice(0, 100)); t.check("a test invoice is labelled", /TEST/.test(txt) || /TEST/.test(rows[0].number), rows[0].number);
     t.check("noindex header", (r.headers.get("x-robots-tag") ?? "").includes("noindex"));
   } });
   return out;

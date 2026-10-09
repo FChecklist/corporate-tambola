@@ -111,7 +111,7 @@ sc("X19", "cancel mail wording: no refund promise anywhere; the rule sentence an
   const m = (await w.mails(org.email, "Game cancelled"))[0];
   w.expect("contains 'We do not give refunds'", /We do not give refunds/.test(m.text), m.text);
   w.expect("never promises money back", !/(money back|refund of|will be refunded|we will refund|refunded to)/i.test(m.text), m.text);
-  const credit = (await w.credits(org)).credits[0]; w.expect("contains the last-day date from the credit", m.text.includes(credit.lastDay), `${credit.lastDay} not in mail`); w.expect("amount in rupees", m.text.includes("Rs 2,358.82"), m.text.slice(0, 200));
+  const credit = (await w.credits(org)).credits[0]; w.expect("contains the last-day date from the credit", m.text.includes(credit.lastDay), `${credit.lastDay} not in mail`); w.expect("amount in rupees", m.text.includes("Rs 2,399"), m.text.slice(0, 200));
 });
 sc("X20", "cancel by the platform owner works too and says so", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 5 * HOUR, pay: true });

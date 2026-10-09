@@ -10,22 +10,22 @@ describe("brands", () => {
     expect(Object.values(BRANDS).map((b) => b.name)).toEqual(["Corporate Tambola", "dpdp.VERIDIAN-AIOS.COM", "projexa-ai.com", "dewberry.in"]);
     expect(new Set(Object.values(BRANDS).map((b) => b.invoicePrefix)).size).toBe(4);
   });
-  test("one legal entity on every invoice", () => { expect(DEFAULT_COMPANY.legalName).toBe("SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED"); });
+  test("one legal entity on every invoice", () => { expect(DEFAULT_COMPANY.legalName).toBe("IT Services by Rajat Agarwal"); });
 });
 
 describe("GST", () => {
   test("same state: CGST + SGST 9% each; amounts add back to the total", () => {
-    const t = splitGst(2000, "INR", "27", "27ABCDE1234F1Z5");
+    const t = splitGst(2000, "INR", "27", "27ABCDE1234F1Z5", true);
     expect(t.mode).toBe("intra");
     expect(t.cgst).toBe(t.sgst);
     expect(Math.abs(t.taxable + t.cgst + t.sgst - 2000)).toBeLessThan(0.011);
   });
   test("different state: IGST 18%", () => {
-    const t = splitGst(1180, "INR", "27", "29ABCDE1234F1Z5");
+    const t = splitGst(1180, "INR", "27", "29ABCDE1234F1Z5", true);
     expect(t).toMatchObject({ mode: "inter", taxable: 1000, igst: 180, cgst: 0 });
   });
-  test("supplier state unknown: never claims CGST/SGST", () => { expect(splitGst(1180, "INR", "", "27ABCDE1234F1Z5").mode).toBe("inter"); });
-  test("US dollar sale (export of services): no GST charged", () => { expect(splitGst(399, "USD", "27", undefined)).toMatchObject({ mode: "export", igst: 0, total: 399 }); });
+  test("supplier state unknown: never claims CGST/SGST", () => { expect(splitGst(1180, "INR", "", "27ABCDE1234F1Z5", true).mode).toBe("inter"); });
+  test("US dollar sale (export of services): no GST charged", () => { expect(splitGst(399, "USD", "27", undefined, true)).toMatchObject({ mode: "export", igst: 0, total: 399 }); });
 });
 
 describe("invoice numbers", () => {
@@ -43,31 +43,51 @@ describe("invoice numbers", () => {
   });
 });
 
-const invoice = (draft: boolean, company = DEFAULT_COMPANY): InvoiceData => ({
+const invoice = (draft: boolean, company = DEFAULT_COMPANY, gstOn = true): InvoiceData => ({
   number: "CT/2026-27/000001", issuedAt: Date.UTC(2026, 9, 1), brand: BRANDS.corporate_tambola, company, draft,
   buyer: { name: "Acme <script>alert(1)</script> Industries", gstin: "27ABCDE1234F1Z5", email: "hr@acme.com" }, currency: "INR",
-  lines: [{ description: "Corporate Tambola, up to 250 participants", quantity: 1, amount: 847.46 }], tax: splitGst(1000, "INR", "27", "27ABCDE1234F1Z5"), paymentRef: "pay_123",
+  lines: [{ description: "Corporate Tambola, up to 250 participants", quantity: 1, amount: 847.46 }], tax: splitGst(1000, "INR", "27", "27ABCDE1234F1Z5", gstOn), paymentRef: "pay_123",
 });
 
 describe("invoice rendering", () => {
   test("brand is the title and the legal entity is named as the supplier", () => {
     const html = renderInvoiceHtml(invoice(false));
     expect(html).toContain("<h1>Corporate Tambola</h1>");
-    expect(html).toContain("A product of <b>SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED</b>");
+    expect(html).toContain("A product of <b>IT Services by Rajat Agarwal</b>");
     expect(html).toContain("CT/2026-27/000001");
   });
   test("buyer text is escaped", () => { expect(renderInvoiceHtml(invoice(false))).not.toContain("<script>"); });
   test("an invoice with missing supplier details says DRAFT instead of pretending to be valid", () => {
-    expect(companyGaps(DEFAULT_COMPANY)).toEqual(["GSTIN", "state code", "registered address", "SAC code"]);
+    expect(companyGaps(DEFAULT_COMPANY, true)).toEqual(["GSTIN", "state code", "registered address", "SAC code"]);
     expect(renderInvoiceHtml(invoice(true))).toContain("DRAFT");
     expect(renderInvoiceText(invoice(true))).toContain("DRAFT - TAX INVOICE");
-    expect(companyGaps({ ...DEFAULT_COMPANY, gstin: "x", stateCode: "27", addressLines: ["a"], sacCode: "998314" })).toEqual([]);
+    expect(companyGaps({ ...DEFAULT_COMPANY, gstin: "x", stateCode: "27", addressLines: ["a"], sacCode: "998314" }, true)).toEqual([]);
   });
   test("text invoice shows CGST/SGST for the same state", () => {
     const t = renderInvoiceText(invoice(false));
     expect(t).toContain("CGST 9%");
     expect(t).toContain("SGST 9%");
     expect(t).toContain("pay_123");
+  });
+});
+
+describe("no GST (the seller is not registered, owner decision 2026-10-09)", () => {
+  test("GST is off by default: the price is the whole amount, no tax lines", () => {
+    const t = splitGst(2399, "INR", "", undefined);
+    expect(t).toMatchObject({ mode: "none", taxable: 2399, total: 2399, cgst: 0, sgst: 0, igst: 0 });
+    expect(companyGaps(DEFAULT_COMPANY)).toEqual([]); // nothing else is needed on a receipt
+  });
+  test("the receipt says INVOICE, names the seller plainly, and carries no GST, GSTIN, place of supply or tax rows", () => {
+    const inv = invoice(false, DEFAULT_COMPANY, false);
+    const html = renderInvoiceHtml(inv), text = renderInvoiceText(inv);
+    expect(html).toContain("<b>INVOICE</b>"); expect(html).not.toContain("TAX INVOICE");
+    expect(html).toContain("IT Services by Rajat Agarwal"); expect(html).toContain("rajatsiroffice@gmail.com"); expect(html).toContain("+91 96503 97480");
+    expect(html).not.toMatch(/CGST|SGST|IGST|Taxable value|Place of supply|A product of/); expect(html).toContain("GST is not charged");
+    expect(text).toMatch(/^INVOICE/); expect(text).not.toMatch(/CGST|SGST|IGST|Taxable value|A product of|GSTIN: 09/); expect(text).toContain("TOTAL");
+  });
+  test("the seller is never a company: no Shobha Kamal, no CIN, no company PAN, no GSTIN, no address", () => {
+    expect(DEFAULT_COMPANY).toMatchObject({ legalName: "IT Services by Rajat Agarwal", cin: "", pan: "", gstin: "", addressLines: [], email: "rajatsiroffice@gmail.com", phone: "+91 96503 97480" });
+    expect(JSON.stringify(DEFAULT_COMPANY)).not.toMatch(/shobha/i);
   });
 });
 

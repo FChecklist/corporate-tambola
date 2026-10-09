@@ -17,7 +17,7 @@ import { SIM } from "../../lib/env.mjs";
 
 export { MIN, HOUR, DAY, SIM, sql, call, mailbox, Organizer, Host, Guest, platform, roundAt, roundTimeMs };
 export const IST = 19_800_000;
-export const PACKS = { 100: 2358.82, 250: 3538.82, 500: 4718.82, 750: 5898.82, 1000: 7078.82 }; // INR incl. 18% GST (packages/shared/src/pricing.ts)
+export const PACKS = { 100: 2399, 250: 3499, 500: 4699, 750: 5899, 1000: 7099 }; // INR, no GST (packages/shared/src/pricing.ts)
 const sha = (s) => createHash("sha256").update(s).digest("hex");
 const post = async (path, body = {}) => (await fetch(SIM + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).json();
 

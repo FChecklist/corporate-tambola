@@ -57,7 +57,7 @@ const FY = financialYear(new Date());
 try {
   console.log("Razorpay integration test (stand-in for api.razorpay.com)\n");
   const st = await http("GET", "/api/payments/status");
-  check("payments mode is razorpay; brand and legal entity are right; missing supplier details are listed (not guessed)", st.data.mode === "razorpay" && st.data.brand === "CORPORATE TAMBOLA" && st.data.legalEntity === "SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED" && st.data.missingCompanyDetails.includes("GSTIN"), JSON.stringify(st.data.missingCompanyDetails));
+  check("payments mode is razorpay; brand and seller are right; with GST off nothing is missing", st.data.mode === "razorpay" && st.data.brand === "CORPORATE TAMBOLA" && st.data.legalEntity === "IT Services by Rajat Agarwal" && st.data.missingCompanyDetails.length === 0, JSON.stringify(st.data.missingCompanyDetails));
 
   // 1. checkout creates an order, nothing is delivered before payment
   const co = await http("POST", "/api/checkout", buyer);
@@ -86,13 +86,13 @@ try {
   check("verifying again is safe: same engagement, no second engagement, no second invoice", again.data.engagementCode === ok.data.engagementCode && (await rooms()) === 1 && again.data.invoiceNumber === num1);
 
   const inv = await http("GET", ok.data.invoiceUrl);
-  check("invoice page: BRAND is the title, the legal entity is the supplier, GST split present", typeof inv.data === "string" && inv.data.includes("<h1>CORPORATE TAMBOLA</h1>") && inv.data.includes("A product of <b>SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED</b>") && inv.data.includes(num1) && /IGST 18%|CGST 9%/.test(inv.data));
-  check("invoice says DRAFT while supplier GSTIN/address are missing (never pretends to be a valid tax invoice)", inv.data.includes("DRAFT"));
+  check("invoice page: BRAND is the title, the seller is named, no GST rows", typeof inv.data === "string" && inv.data.includes("<h1>CORPORATE TAMBOLA</h1>") && inv.data.includes("IT Services by Rajat Agarwal") && inv.data.includes(num1) && !/IGST|CGST|SGST/.test(inv.data));
+  check("with GST off the invoice is not a draft and never calls itself a tax invoice", !inv.data.includes("DRAFT") && !inv.data.includes("TAX INVOICE"));
   const unknownInv = await http("GET", "/invoice/inv_doesnotexist");
   check("an invoice cannot be guessed", unknownInv.status === 404);
   await sleep(300);
   const mails = readdirSync(DATA + "/outbox").map((f) => readFileSync(DATA + "/outbox/" + f, "utf8")).filter((t) => t.includes(buyer.email));
-  check("the order email contains the invoice and a link to print it", mails.some((t) => t.includes("TAX INVOICE") && t.includes(num1) && t.includes("/invoice/inv_") && t.includes("A product of SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED")));
+  check("the order email contains the invoice and a link to print it", mails.some((t) => t.includes("INVOICE") && !t.includes("TAX INVOICE") && t.includes(num1) && t.includes("/invoice/inv_") && t.includes("Seller: IT Services by Rajat Agarwal")));
 
   // 4. second purchase paid but the browser is closed: the webhook delivers
   const co2 = await http("POST", "/api/checkout", { ...buyer, pack: 500 });

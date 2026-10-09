@@ -105,8 +105,8 @@ describe("a referred purchase", () => {
     const r = await (await buy({ ref: CODE })).json() as any;
     expect(r.result.ok).toBe(true);
     const c = raw.query("SELECT partner_code, base, currency, rate, amount, status FROM commission").get() as any;
-    expect(c).toMatchObject({ partner_code: CODE, currency: "INR", rate: 0.5, amount: 1999.5, status: "accrued" });
-    expect(c.base).toBe(3999); // 500 participants = Rs 3,999 software price before GST; commission is never paid on GST
+    expect(c).toMatchObject({ partner_code: CODE, currency: "INR", rate: 0.5, amount: 2349.5, status: "accrued" });
+    expect(c.base).toBe(4699); // 500 participants = Rs 4,699 software price (no GST is charged); commission is 50% of it
   });
   test("no purchase, no commission: an unpaid or unknown-code or no-code order writes nothing", async () => {
     await buy({ ref: "9000000000" }); await buy({});
@@ -127,9 +127,9 @@ describe("a referred purchase", () => {
     await buy({ ref: CODE, phone: "+91 98111 22233" });
     expect(raw.query("SELECT status, reason FROM commission").get()).toEqual({ status: "blocked", reason: "self_referral" });
   });
-  test("a customer's first purchase earns the partner half of the software price: 100 = Rs 1,999, 250 = Rs 2,999, 500 = Rs 3,999", async () => {
+  test("a customer's first purchase earns the partner half of the software price: 100 = Rs 2,399, 250 = Rs 3,499, 500 = Rs 4,699", async () => {
     let n = 0;
-    for (const [pack, base, earn] of [[100, 1999, 999.5], [250, 2999, 1499.5], [500, 3999, 1999.5]] as const) {
+    for (const [pack, base, earn] of [[100, 2399, 1199.5], [250, 3499, 1749.5], [500, 4699, 2349.5]] as const) {
       await buy({ ref: CODE, pack, email: `new${++n}@buyer.example` });
       const c = raw.query("SELECT base, rate, amount, status FROM commission ORDER BY id DESC LIMIT 1").get() as any;
       expect(c).toEqual({ base, rate: 0.5, amount: earn, status: "accrued" });
@@ -139,12 +139,12 @@ describe("a referred purchase", () => {
     await buy({ ref: CODE, pack: 500, email: "loyal@buyer.example" });
     await buy({ pack: 250, email: "Loyal@Buyer.example" }); // no link this time, same customer
     const rows = raw.query("SELECT base, rate, amount, partner_code FROM commission ORDER BY id").all() as any[];
-    expect(rows).toEqual([{ base: 3999, rate: 0.5, amount: 1999.5, partner_code: CODE }, { base: 2999, rate: 0.5, amount: 1499.5, partner_code: CODE }]);
+    expect(rows).toEqual([{ base: 4699, rate: 0.5, amount: 2349.5, partner_code: CODE }, { base: 3499, rate: 0.5, amount: 1749.5, partner_code: CODE }]);
   });
   test("after 12 months a returning customer is new again (50%), and a customer who first bought with no partner never earns a later link-user more than the repeat rate", async () => {
     await buy({ pack: 100, email: "plain@buyer.example" }); // no partner at all
     await buy({ ref: CODE, pack: 100, email: "plain@buyer.example" }); // a link used for a customer who already bought: repeat rate
-    expect(raw.query("SELECT rate, amount FROM commission").get()).toEqual({ rate: 0.5, amount: 999.5 });
+    expect(raw.query("SELECT rate, amount FROM commission").get()).toEqual({ rate: 0.5, amount: 1199.5 });
     raw.run("UPDATE payment SET paid_ms = paid_ms - ?", [400 * 86_400_000]); // a year and more later
     await buy({ ref: CODE, pack: 100, email: "plain@buyer.example" });
     expect(raw.query("SELECT rate FROM commission ORDER BY id DESC LIMIT 1").get()).toEqual({ rate: 0.5 });
@@ -158,7 +158,7 @@ describe("a referred purchase", () => {
   test("a lower rate can be set by the owner; absurd rates (above 50%) are refused", async () => {
     env.PARTNER_COMMISSION_RATE = "0.15";
     await buy({ ref: CODE });
-    expect(raw.query("SELECT rate, amount, status FROM commission").get()).toEqual({ rate: 0.15, amount: 599.85, status: "accrued" });
+    expect(raw.query("SELECT rate, amount, status FROM commission").get()).toEqual({ rate: 0.15, amount: 704.85, status: "accrued" });
     for (const rate of [-0.1, 0.51, "x", null]) expect((await call("POST", "/api/partners/commission/rate", { rate }, plat)).status).toBe(400);
   });
   test("a refunded purchase can be voided, but a paid-out one cannot", async () => {
@@ -191,7 +191,7 @@ describe("what a partner can see", () => {
     const me = await (await call("GET", "/api/partner/me", undefined, { "x-partner": a.partnerKey })).json() as any;
     expect(me.code).toBe(CODE);
     expect(me.totals.sales).toBe(2);
-    expect(me.totals.accruedInr).toBeCloseTo(399.9 + 599.9, 1);
+    expect(me.totals.accruedInr).toBeCloseTo(469.9 + 709.9, 1);
     expect(me.rateAnnounced).toBe(true);
     const txt = JSON.stringify(me);
     expect(/Secret Buyer|private@buyer|@/.test(txt.replace(/"link":"[^"]*"/, ""))).toBe(false);
@@ -202,9 +202,9 @@ describe("what a partner can see", () => {
     const a = await enroll();
     await buy({ ref: CODE });
     const me = await (await call("GET", "/api/partner/me", undefined, { "x-partner": a.partnerKey })).json() as any;
-    expect(me.totals).toMatchObject({ sales: 1, accruedInr: 1999.5, waitingForRate: 0 });
+    expect(me.totals).toMatchObject({ sales: 1, accruedInr: 2349.5, waitingForRate: 0 });
     expect(me.rateAnnounced).toBe(true); expect(me.rate).toBe(0.5); expect(me.repeatRate).toBe(0.5);
-    expect(me.sales[0].amount).toBe(1999.5); expect(JSON.stringify(me.sales)).not.toMatch(/boss|acme|@/i);
+    expect(me.sales[0].amount).toBe(2349.5); expect(JSON.stringify(me.sales)).not.toMatch(/boss|acme|@/i);
   });
   test("a wrong or missing key sees nothing", async () => {
     await enroll();

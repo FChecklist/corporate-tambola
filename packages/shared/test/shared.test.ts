@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   normalize, generateTicket, isValidTicket, ticketNumbers, patternNumbers, spokenPhrase, numberWords,
-  price, proposeBreakPositions, rewardName, maskNumber,
+  price, PACKS, proposeBreakPositions, rewardName, maskNumber,
 } from "../src";
 
 describe("phone numbers (handout section 12, default country IN)", () => {
@@ -69,11 +69,19 @@ describe("spoken phrase (owner decision: digits then words, single digits not re
 });
 
 describe("pricing and breaks", () => {
-  test("GST split for India, no tax abroad", () => {
-    const p = price(1000, "INR");
-    expect(p.total).toBe(7078.82);
-    expect(Math.abs(p.base + p.tax - 7078.82)).toBeLessThan(0.011);
+  test("no GST is charged: the rupee price is the whole amount; no tax abroad either", () => {
+    expect(price(1000, "INR")).toEqual({ total: 7099, base: 7099, tax: 0 });
     expect(price(1000, "USD")).toEqual({ total: 101, base: 101, tax: 0 });
+  });
+  test("owner rule 2026-10-09: every price is the old GST-inclusive price (list price + 18%) rounded to the nearest number ending in 99", () => {
+    const oldList = [1999, 2999, 3999, 4999, 5999, 9999, 14999, 24999];
+    const nearest99 = (x: number) => { const lo = Math.floor((x + 1) / 100) * 100 - 1, hi = lo + 100; return x - lo <= hi - x ? lo : hi; };
+    PACKS.forEach(([n, inr], i) => {
+      expect(inr % 100).toBe(99);
+      expect(inr).toBe(nearest99(Math.round(oldList[i]! * 1.18 * 100) / 100));
+      expect(price(n, "INR").total).toBe(inr);
+    });
+    expect(PACKS.map((p) => p[1])).toEqual([2399, 3499, 4699, 5899, 7099, 11799, 17699, 29499]);
   });
   test("break positions are near-equal and capped at 3", () => {
     expect(proposeBreakPositions(3)).toEqual([22, 45, 67]);

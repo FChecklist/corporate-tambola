@@ -1,8 +1,8 @@
 /**
- * Shared billing for every product of SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED.
- *   - one Razorpay account, one legal entity on every invoice
- *   - the BRAND is what the customer sees: checkout name, invoice title, invoice number series
- *   - GST invoices computed here, so every product issues them the same way
+ * Shared billing.
+ *   - one Razorpay account; the seller on a receipt is "IT Services by Rajat Agarwal" (shown only at payment and on the receipt)
+ *   - the BRAND is what the customer sees: invoice title, invoice number series
+ *   - GST is OFF (the seller is not registered): invoices carry no tax lines. GST_ENABLED is the one switch; when it is true the same code issues GST invoices as before.
  * Pure functions + a thin Razorpay REST client (public API: https://razorpay.com/docs/api/). No secrets are stored here.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -26,18 +26,21 @@ export const BRANDS: Record<BrandId, Brand> = {
 export const brandOf = (id: string): Brand => BRANDS[id as BrandId] ?? BRANDS.corporate_tambola;
 
 // ---------------------------------------------------------------- legal entity (filled from config/company.json, never guessed)
+/** The seller is not registered for GST (owner, 2026-10-09). Set to true only after registering; then a GSTIN, state code and SAC code must be filled in company.json / COMPANY_JSON. */
+export const GST_ENABLED = false;
 export interface Company {
   legalName: string; cin: string; pan: string; gstin: string; stateCode: string; stateName: string;
   addressLines: string[]; email: string; phone: string; sacCode: string; sacDescription: string;
   bank: { name: string; accountNumber: string; ifsc: string }; invoiceFooter: string;
 }
 export const DEFAULT_COMPANY: Company = {
-  legalName: "SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED", cin: "", pan: "", gstin: "", stateCode: "", stateName: "", addressLines: [], email: "", phone: "",
-  sacCode: "", sacDescription: "Software solutions and products", bank: { name: "", accountNumber: "", ifsc: "" }, invoiceFooter: "This is a computer generated invoice.",
+  legalName: "IT Services by Rajat Agarwal", cin: "", pan: "", gstin: "", stateCode: "", stateName: "", addressLines: [], email: "rajatsiroffice@gmail.com", phone: "+91 96503 97480",
+  sacCode: "", sacDescription: "Software solutions and products", bank: { name: "", accountNumber: "", ifsc: "" }, invoiceFooter: "This is a computer generated invoice. GST is not charged.",
 };
 /** Which required details are still missing (a real tax invoice needs these). */
-export function companyGaps(c: Company): string[] {
+export function companyGaps(c: Company, gstOn: boolean = GST_ENABLED): string[] {
   const g: string[] = [];
+  if (!gstOn) return g; // no GST: nothing else is needed on a receipt
   if (!c.gstin) g.push("GSTIN"); if (!c.stateCode) g.push("state code"); if (!c.addressLines.length) g.push("registered address"); if (!c.sacCode) g.push("SAC code");
   return g;
 }
@@ -45,9 +48,10 @@ export function companyGaps(c: Company): string[] {
 // ---------------------------------------------------------------- GST
 export const GST_RATE = 0.18;
 const r2 = (x: number) => Math.round(x * 100) / 100;
-export interface TaxSplit { taxable: number; cgst: number; sgst: number; igst: number; total: number; mode: "intra" | "inter" | "export"; placeOfSupply: string }
+export interface TaxSplit { taxable: number; cgst: number; sgst: number; igst: number; total: number; mode: "intra" | "inter" | "export" | "none"; placeOfSupply: string }
 /** Price is GST-inclusive for INR. Same state => CGST+SGST, different state => IGST. USD (export of services) => no GST here (CA to confirm LUT). */
-export function splitGst(totalInclusive: number, currency: "INR" | "USD", supplierState: string, buyerGstin: string | undefined): TaxSplit {
+export function splitGst(totalInclusive: number, currency: "INR" | "USD", supplierState: string, buyerGstin: string | undefined, gstOn: boolean = GST_ENABLED): TaxSplit {
+  if (!gstOn) return { taxable: totalInclusive, cgst: 0, sgst: 0, igst: 0, total: totalInclusive, mode: "none", placeOfSupply: "" }; // not registered: the price is the whole amount
   if (currency === "USD") return { taxable: totalInclusive, cgst: 0, sgst: 0, igst: 0, total: totalInclusive, mode: "export", placeOfSupply: "Outside India" };
   const taxable = r2(totalInclusive / (1 + GST_RATE));
   const tax = r2(totalInclusive - taxable);
@@ -75,7 +79,7 @@ export interface InvoiceData {
   /** A plain sentence printed under the totals (e.g. "Paid from credit of invoice ..."). */
   note?: string;
 }
-const titleOf = (i: InvoiceData) => (i.kind === "credit_note" ? "CREDIT NOTE" : "TAX INVOICE");
+const titleOf = (i: InvoiceData) => (i.kind === "credit_note" ? "CREDIT NOTE" : i.tax.mode === "none" ? "INVOICE" : "TAX INVOICE");
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 const money = (n: number, cur: string) => (cur === "INR" ? "₹" : "US$") + n.toLocaleString(cur === "INR" ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -84,8 +88,7 @@ export function renderInvoiceText(i: InvoiceData): string {
   const rows = i.lines.map((l) => `  ${l.description} x ${l.quantity}: ${money(l.amount, i.currency)}`).join("\n");
   return `${i.draft ? "DRAFT - " : ""}${titleOf(i)}
 ${i.brand.name}
-A product of ${c.legalName}
-${c.addressLines.join(", ")}${c.gstin ? `\nGSTIN: ${c.gstin}` : ""}${c.cin ? `  CIN: ${c.cin}` : ""}${c.pan ? `  PAN: ${c.pan}` : ""}
+${t.mode === "none" ? `Seller: ${c.legalName}${c.email ? `\n${c.email}` : ""}${c.phone ? `  ${c.phone}` : ""}` : `A product of ${c.legalName}\n${c.addressLines.join(", ")}${c.gstin ? `\nGSTIN: ${c.gstin}` : ""}${c.cin ? `  CIN: ${c.cin}` : ""}${c.pan ? `  PAN: ${c.pan}` : ""}`}
 
 ${i.kind === "credit_note" ? "Credit note number" : "Invoice number"}: ${i.number}${i.originalNumber ? `
 Against invoice: ${i.originalNumber}` : ""}
@@ -93,12 +96,11 @@ Date: ${new Date(i.issuedAt).toISOString().slice(0, 10)}
 Billed to: ${i.buyer.name}${i.buyer.gstin ? `  GSTIN: ${i.buyer.gstin}` : ""}${i.buyer.phone ? `  Mobile: ${i.buyer.phone}` : ""}
 
 ${rows}
-  Taxable value: ${money(t.taxable, i.currency)}
-${t.mode === "intra" ? `  CGST 9%: ${money(t.cgst, i.currency)}\n  SGST 9%: ${money(t.sgst, i.currency)}` : t.mode === "inter" ? `  IGST 18%: ${money(t.igst, i.currency)}` : "  GST: not charged (export of services)"}
+${t.mode === "none" ? "" : `  Taxable value: ${money(t.taxable, i.currency)}\n`}${t.mode === "none" ? "" : t.mode === "intra" ? `  CGST 9%: ${money(t.cgst, i.currency)}\n  SGST 9%: ${money(t.sgst, i.currency)}` : t.mode === "inter" ? `  IGST 18%: ${money(t.igst, i.currency)}` : "  GST: not charged (export of services)"}
   TOTAL: ${money(t.total, i.currency)}
 ${i.paymentRef ? `Paid via Razorpay, payment ${i.paymentRef}` : ""}${i.note ? `
 ${i.note}` : ""}
-${c.sacCode ? `SAC ${c.sacCode} - ${c.sacDescription}` : c.sacDescription}
+${c.sacCode && t.mode !== "none" ? `SAC ${c.sacCode} - ${c.sacDescription}` : c.sacDescription}
 ${c.invoiceFooter}`;
 }
 
@@ -112,13 +114,13 @@ export function renderInvoiceHtml(i: InvoiceData): string {
 h1{font:700 26px/1.1 Georgia,serif;margin:0;color:${esc(b.theme)};letter-spacing:.02em}.sub{color:#6b6258;font-size:13px}.top{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;border-bottom:3px solid ${esc(b.theme)};padding-bottom:16px}
 .draft{background:#fff3cd;border:1px solid #e0c36a;padding:8px 12px;border-radius:8px;margin:12px 0;font-size:13px}table{width:100%;border-collapse:collapse;margin-top:18px}td,th{padding:9px 6px;border-bottom:1px solid #e7e0d4;text-align:left}th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#6b6258}.r{text-align:right}tfoot td{font-weight:700;border-bottom:0}
 .meta{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:18px}.foot{margin-top:22px;font-size:12px;color:#6b6258}@media print{body{background:#fff}.sheet{box-shadow:none;margin:0}}@media(max-width:560px){.meta{grid-template-columns:1fr}}</style></head><body><div class="sheet">
-<div class="top"><div><h1>${esc(b.name)}</h1><div class="sub">${esc(b.line)}<br>A product of <b>${esc(c.legalName)}</b></div></div><div class="sub r" style="text-align:right"><b>${titleOf(i)}</b><br>${esc(i.number)}${i.originalNumber ? `<br>Against invoice ${esc(i.originalNumber)}` : ""}<br>${new Date(i.issuedAt).toISOString().slice(0, 10)}</div></div>
-${i.draft ? `<div class="draft">DRAFT: the supplier's registration details are not complete yet, so this is not yet a valid tax invoice.</div>` : ""}
-<div class="meta"><div><b>Supplier</b><br>${esc(c.legalName)}<br>${c.addressLines.map(esc).join("<br>")}${c.gstin ? `<br>GSTIN: ${esc(c.gstin)}` : ""}${c.cin ? `<br>CIN: ${esc(c.cin)}` : ""}${c.pan ? `<br>PAN: ${esc(c.pan)}` : ""}</div>
-<div><b>Billed to</b><br>${esc(i.buyer.name)}${i.buyer.gstin ? `<br>GSTIN: ${esc(i.buyer.gstin)}` : ""}${i.buyer.email ? `<br>${esc(i.buyer.email)}` : ""}${i.buyer.phone ? `<br>${esc(i.buyer.phone)}` : ""}<br>Place of supply: ${esc(t.placeOfSupply)}</div></div>
+<div class="top"><div><h1>${esc(b.name)}</h1><div class="sub">${esc(b.line)}${t.mode === "none" ? "" : `<br>A product of <b>${esc(c.legalName)}</b>`}</div></div><div class="sub r" style="text-align:right"><b>${titleOf(i)}</b><br>${esc(i.number)}${i.originalNumber ? `<br>Against invoice ${esc(i.originalNumber)}` : ""}<br>${new Date(i.issuedAt).toISOString().slice(0, 10)}</div></div>
+${i.draft ? `<div class="draft">${t.mode === "none" ? "DRAFT (test payment)." : "DRAFT: the supplier's registration details are not complete yet, so this is not yet a valid tax invoice."}</div>` : ""}
+<div class="meta"><div><b>Supplier</b><br>${esc(c.legalName)}${t.mode === "none" ? `${c.email ? `<br>${esc(c.email)}` : ""}${c.phone ? `<br>${esc(c.phone)}` : ""}` : ""}<br>${c.addressLines.map(esc).join("<br>")}${c.gstin ? `<br>GSTIN: ${esc(c.gstin)}` : ""}${c.cin ? `<br>CIN: ${esc(c.cin)}` : ""}${c.pan ? `<br>PAN: ${esc(c.pan)}` : ""}</div>
+<div><b>Billed to</b><br>${esc(i.buyer.name)}${i.buyer.gstin ? `<br>GSTIN: ${esc(i.buyer.gstin)}` : ""}${i.buyer.email ? `<br>${esc(i.buyer.email)}` : ""}${i.buyer.phone ? `<br>${esc(i.buyer.phone)}` : ""}${t.mode === "none" ? "" : `<br>Place of supply: ${esc(t.placeOfSupply)}`}</div></div>
 <table><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Amount</th></tr></thead><tbody>${i.lines.map((l) => `<tr><td>${esc(l.description)}</td><td class="r">${l.quantity}</td><td class="r">${money(l.amount, i.currency)}</td></tr>`).join("")}</tbody>
-<tfoot><tr><td colspan="2">Taxable value</td><td class="r">${money(t.taxable, i.currency)}</td></tr>${taxRows.replace(/<tr><td>/g, '<tr><td colspan="2">').replace(/<td class="r">/g, '<td class="r">')}<tr><td colspan="2">TOTAL</td><td class="r">${money(t.total, i.currency)}</td></tr></tfoot></table>
-<div class="foot">${i.paymentRef ? `Paid online via Razorpay. Payment reference: ${esc(i.paymentRef)}.<br>` : ""}${i.note ? `${esc(i.note)}<br>` : ""}${c.sacCode ? `SAC ${esc(c.sacCode)}: ` : ""}${esc(c.sacDescription)}.${c.bank.accountNumber ? `<br>Bank: ${esc(c.bank.name)}, A/c ${esc(c.bank.accountNumber)}, IFSC ${esc(c.bank.ifsc)}` : ""}<br>${esc(c.invoiceFooter)}</div></div></body></html>`;
+<tfoot>${t.mode === "none" ? "" : `<tr><td colspan="2">Taxable value</td><td class="r">${money(t.taxable, i.currency)}</td></tr>`}${t.mode === "none" ? "" : taxRows.replace(/<tr><td>/g, '<tr><td colspan="2">').replace(/<td class="r">/g, '<td class="r">')}<tr><td colspan="2">TOTAL</td><td class="r">${money(t.total, i.currency)}</td></tr></tfoot></table>
+<div class="foot">${i.paymentRef ? `Paid online via Razorpay. Payment reference: ${esc(i.paymentRef)}.<br>` : ""}${i.note ? `${esc(i.note)}<br>` : ""}${c.sacCode && t.mode !== "none" ? `SAC ${esc(c.sacCode)}: ` : ""}${esc(c.sacDescription)}.${c.bank.accountNumber ? `<br>Bank: ${esc(c.bank.name)}, A/c ${esc(c.bank.accountNumber)}, IFSC ${esc(c.bank.ifsc)}` : ""}<br>${esc(c.invoiceFooter)}</div></div></body></html>`;
 }
 
 // ---------------------------------------------------------------- Razorpay (public REST API)

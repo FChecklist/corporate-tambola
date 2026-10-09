@@ -1,7 +1,12 @@
-/** Packs are sold as "Up to N participants" (glossary). [participants, INR software price excl. 18% GST, USD all-inclusive (INR incl. GST / 70, rounded)]. */
+/**
+ * Packs are sold as "Up to N participants" (glossary). [participants, INR price the customer pays, USD price].
+ * Owner decision 2026-10-09: the seller is not registered for GST, so NO GST is charged. The INR price is the old GST-inclusive price rounded to the nearest number ending in 99
+ * (for example 1999 + 18% = 2358.82 -> 2399). GST_ON is the one switch: when the seller registers, set it to true and GST (18%) is added ON TOP of these prices (review the prices first).
+ */
 export const PACKS: ReadonlyArray<readonly [number, number, number]> = [
-  [100, 1999, 34], [250, 2999, 51], [500, 3999, 67], [750, 4999, 84], [1000, 5999, 101], [2500, 9999, 169], [5000, 14999, 253], [10000, 24999, 421],
+  [100, 2399, 34], [250, 3499, 51], [500, 4699, 67], [750, 5899, 84], [1000, 7099, 101], [2500, 11799, 169], [5000, 17699, 253], [10000, 29499, 421],
 ];
+export const GST_ON = false;
 export const GST = 0.18;
 export type Currency = "INR" | "USD";
 const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -10,7 +15,7 @@ export function price(pack: number, currency: Currency): { total: number; base: 
   const p = PACKS.find((x) => x[0] === pack);
   if (!p) throw new RangeError(`unknown pack ${pack}`);
   if (currency === "INR") {
-    const tax = r2(p[1] * GST);
+    const tax = GST_ON ? r2(p[1] * GST) : 0;
     return { total: r2(p[1] + tax), base: p[1], tax };
   }
   return { total: p[2], base: p[2], tax: 0 };

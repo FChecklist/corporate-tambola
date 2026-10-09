@@ -4,7 +4,7 @@ For Corporate Tambola. A breach is any loss, leak or unauthorised use of persona
 
 ## 1. Spot it (who, what)
 * Signs: an unfamiliar-use alert mail to an organizer; a spike in `ai_audit` rows; 403 or 503 bursts; a vendor notice (Cloudflare, Resend, Razorpay); a report from a player or organizer; a leaked key.
-* Owner of this runbook: the owner (Rajat Agarwal). The Grievance Officer contact is `raajat.agarwal@gmail.com`.
+* Owner of this runbook: the owner (Rajat Agarwal). The Grievance Officer contact is `rajatsiroffice@gmail.com`.
 
 ## 2. Contain (first hour)
 1. Write down the time and what you saw. Do not delete evidence.

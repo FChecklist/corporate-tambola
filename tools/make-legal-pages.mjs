@@ -51,7 +51,7 @@ const PAGES = {
       "You can pay at any time until the guest data is erased. A late payment starts the game 2 minutes after it is confirmed.",
       "We do not give refunds. If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days. Unused credit lapses at the end of day 365.",
       "The credit belongs to your organizer account. We show the exact amount and date before you confirm.",
-      "We e-mail you before it lapses. No GST credit note is raised for credit that lapses.",
+      "We e-mail you before it lapses. No credit note is raised for credit that lapses.",
       "Instead of cancelling, you can change the date of the game. A game time can be set at most 30 days ahead.",
       "Once the start time has passed, a paid game cannot be cancelled. You can still end the game.",
       "A game that was never paid for can be cancelled at any time. Nothing is charged.",
@@ -80,7 +80,7 @@ const PAGES = {
     ]],
     ["changes", "Changes and contact", [
       "We may update these terms. The version date is at the top.",
-      "Questions: <a href=\"mailto:raajat.agarwal@gmail.com\">raajat.agarwal@gmail.com</a>.",
+      "Questions: <a href=\"mailto:rajatsiroffice@gmail.com\">rajatsiroffice@gmail.com</a>.",
     ]],
   ] },
   "dpa.html": { title: "Data processing terms", h1: "Data processing terms", lead: "For organizers. One page.", sections: [
@@ -112,7 +112,7 @@ const PAGES = {
       "No spam. Message only people who expect to hear from you.",
     ]],
     ["pay", "Commission", [
-      "You earn up to half of the software price (before GST) on every game a company buys through your link, including repeat purchases within 12 months.",
+      "You earn up to half of the software price on every game a company buys through your link, including repeat purchases within 12 months.",
       "Commission rates can change from time to time under our management policy. A change applies to purchases made after it and is shown on your partner page.",
       "No payment from the buyer, no commission.",
       "A sale stays as earned if the buyer cancels the game. We do not give refunds: the payment becomes credit.",
@@ -121,7 +121,7 @@ const PAGES = {
     ]],
     ["tax", "Tax (TDS note)", [
       "Tax may be deducted at source from your commission, as the law requires.",
-      "GST may apply if you are registered. You are responsible for your own taxes.",
+      "You are responsible for your own taxes.",
       "We keep the details we need for payment and tax records.",
     ]],
     ["data", "Your details", ["We use your mobile number to run your partner account. See the <a href=\"/legal.html#privacy\">Privacy &amp; Data Policy</a>.", "You may stop at any time."]],

@@ -37,7 +37,7 @@
     const avail = S.cur === "INR" && !applied && Number(S.info.credit) > 0 ? Number(S.info.credit) : 0;
     const until = S.info.creditExpiresMs ? new Date(S.info.creditExpiresMs - 1).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" }) : "";
     const sum = (S.cur === "INR"
-      ? `<div class="zrow"><span>Price of Software</span><em>${TB.money(x.base, "INR")}</em></div><div class="zrow"><span>GST 18%</span><em>${TB.money(x.tax, "INR")}</em></div><div class="zrow"><span><b>Total</b></span><em><b>${TB.money(x.total, "INR")}</b></em></div>`
+      ? `<div class="zrow"><span><b>Total</b></span><em><b>${TB.money(x.total, "INR")}</b></em></div>`
       : `<div class="zrow"><span><b>Total</b></span><em><b>${TB.money(x.total, "USD")}</b></em></div><p class="zsmall">No tax added. Billed in US dollars.</p>`)
       + (applied ? `<div class="zrow"><span>Your credit used</span><em>- ${TB.money(applied, "INR")}</em></div><div class="zrow"><span><b>To pay now</b></span><em><b>${TB.money(toPay, "INR")}</b></em></div>` : "");
     const off = S.mode === "off";
@@ -55,10 +55,10 @@
         <div style="display:flex;gap:8px"><select id="pcode" aria-label="Country code" style="flex:0 0 112px">${TB.COUNTRIES.map(([c, n, d]) => `<option value="${d}" ${String(d) === String(S.pcode) ? "selected" : ""}>${c} +${d}</option>`).join("")}</select><input id="ph" type="tel" autocomplete="tel-national" value="${esc(S.phone)}" placeholder="98765 43210" style="flex:1;min-width:0"></div>
         <label for="org">Organization name <span class="zsmall" style="display:inline">(optional)</span></label><input id="org" autocomplete="organization" value="${esc(S.org || "")}" placeholder="e.g. Acme Industries">
         <label for="cty">Country of your organization <span class="zsmall" style="display:inline">(optional)</span></label><select id="cty">${TB.countryOpts(S.country)}</select>
-        <label for="tax">${S.country === "IN" ? "GSTIN (for your GST invoice)" : "Company tax / VAT number"} <span class="zsmall" style="display:inline">(optional)</span></label><input id="tax" autocomplete="off" maxlength="${S.country === "IN" ? 15 : 30}" value="${esc(S.tax || "")}" placeholder="${S.country === "IN" ? "e.g. 27ABCDE1234F1Z5" : "Shown on your invoice"}" style="text-transform:uppercase">
+        ${S.country === "IN" ? "" : `<label for="tax">Company tax / VAT number <span class="zsmall" style="display:inline">(optional)</span></label><input id="tax" autocomplete="off" maxlength="30" value="${esc(S.tax || "")}" placeholder="Shown on your invoice" style="text-transform:uppercase">`}
         ${S.err ? `<div class="zbanner bad">${esc(S.err)}</div>` : ""}${S.busy ? `<div class="zbanner info" role="status">Confirming your payment with Razorpay. Please keep this page open. Your game starts only after Razorpay confirms.</div>` : ""}
         <button class="zbtn" id="paygo" ${off || S.busy ? "disabled" : ""}>${S.busy ? "Confirming your payment…" : off ? "Payment opens soon" : "Pay " + TB.money(applied ? toPay : x.total, S.cur) + " securely with Razorpay"}</button>
-        <p class="zsmall">Secure payment by Razorpay. A GST invoice is emailed to you. See the <a href="/legal.html#privacy">privacy policy</a>.</p></div>`;
+        <p class="zsmall">Secure payment by Razorpay. Payment to <a href="https://itservices-rajat-agarwal.pages.dev/" rel="noopener" target="_blank">IT Services by Rajat Agarwal</a>. An invoice is emailed to you. See the <a href="/legal.html#privacy">privacy policy</a>.</p></div>`;
   }
   // The server answers 202 {confirming:true} while Razorpay still says the payment is only created or authorized. We ask every 4 seconds, for up to 5 minutes, until the game itself says Paid.
   async function waitForConfirm(first) {

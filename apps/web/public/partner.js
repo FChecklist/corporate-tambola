@@ -100,10 +100,10 @@
   const money = (n) => "₹" + Number(n).toLocaleString("en-IN", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
   const table = document.getElementById("earn-table");
   if (table && packs.length) {
-    table.innerHTML = `<div class="rrow rh" role="row"><span>Pack</span><span>Software price</span><span>You earn, first purchase (50%)</span></div>` + packs.map((p, i) => `<div class="rrow${i === 2 ? " hot" : ""}" role="row"><span>Up to <b>${p[0].toLocaleString("en-IN")}</b> people</span><span>${money(p[1])} <small>+ GST</small></span><span><b class="e">${money(p[1] * RATE)}</b> per sale</span></div>`).join("");
+    table.innerHTML = `<div class="rrow rh" role="row"><span>Pack</span><span>Software price</span><span>You earn, first purchase (50%)</span></div>` + packs.map((p, i) => `<div class="rrow${i === 2 ? " hot" : ""}" role="row"><span>Up to <b>${p[0].toLocaleString("en-IN")}</b> people</span><span>${money(p[1])}</span><span><b class="e">${money(p[1] * RATE)}</b> per sale</span></div>`).join("");
     const top = document.getElementById("top-earn"); if (top) top.textContent = money(Math.floor(packs[packs.length - 1][1] * RATE));
     const sel = document.getElementById("calc-pack"), n = document.getElementById("calc-n"), out = document.getElementById("calc-out"), nv = document.getElementById("calc-nv");
-    sel.innerHTML = packs.map((p, i) => `<option value="${i}"${i === 2 ? " selected" : ""}>Up to ${p[0].toLocaleString("en-IN")} people (${money(p[1])} + GST)</option>`).join("");
+    sel.innerHTML = packs.map((p, i) => `<option value="${i}"${i === 2 ? " selected" : ""}>Up to ${p[0].toLocaleString("en-IN")} people (${money(p[1])})</option>`).join("");
     const calc = () => { nv.textContent = n.value; out.textContent = money(Number(n.value) * packs[Number(sel.value)][1] * RATE); };
     sel.onchange = calc; n.oninput = calc; calc();
   }

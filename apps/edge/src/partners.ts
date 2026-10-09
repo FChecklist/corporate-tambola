@@ -11,7 +11,7 @@ import { sendMail, type PayEnv } from "./pay";
 import { testFlag } from "./mode";
 
 export const ATTRIBUTION_DAYS = 30;
-/** The commission every partner earns on the software price (before GST) of a paid, referred purchase. Owner decision 2026-10-03: 50%. PARTNER_COMMISSION_RATE can lower it (never above 50%). */
+/** The commission every partner earns on the software price (no GST is charged) of a paid, referred purchase. Owner decision 2026-10-03: 50%. PARTNER_COMMISSION_RATE can lower it (never above 50%). */
 export const COMMISSION_RATE = 0.5;
 /** What the partner who first brought a customer earns when that customer buys again within a year. Owner decision 2026-10-06: the same up to 50% as a first purchase. */
 export const REPEAT_COMMISSION_RATE = 0.5;

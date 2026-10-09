@@ -305,7 +305,7 @@ export default [
       t.check("pill says Payment pending", /Payment pending/i.test(await t.text(x.page)));
       await openStep(x.page, 8);
       const price = await t.text(x.page, "#sec8");
-      t.check("Pay step shows the price with GST", /Rs\s?[\d,]+(\.\d\d)?\s+with GST/i.test(price), price.slice(300, 520));
+      t.check("Pay step shows the price (no GST)", /Rs\s?[\d,]+/i.test(price), price.slice(300, 520));
       t.check("Copy payment link button exists", !!(await x.page.$("#copypaylink")));
       await t.shot(x.page, "step8-pending");
     },

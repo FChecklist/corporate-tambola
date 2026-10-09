@@ -87,9 +87,10 @@
   TB.plural = (n, a, b) => n + " " + (n === 1 ? a : b || a + "s");
   TB.initials = (s) => (s || "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   TB.money = (n, cur) => cur === "INR" ? "₹" + Number(n).toLocaleString("en-IN", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 }) : "US$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
-  // [participants, INR incl. 18% GST, USD]
-  TB.PACKS = [[100, 1999, 34], [250, 2999, 51], [500, 3999, 67], [750, 4999, 84], [1000, 5999, 101], [2500, 9999, 169], [5000, 14999, 253], [10000, 24999, 421]];
-  TB.price = (pack, cur) => { const p = TB.PACKS.find((x) => x[0] === pack); if (cur === "INR") { const t = Math.round(p[1] * 0.18 * 100) / 100; return { total: Math.round((p[1] + t) * 100) / 100, base: p[1], tax: t }; } return { total: p[2], base: p[2], tax: 0 }; };
+  // [participants, INR price (no GST is charged), USD]. Mirror of packages/shared/src/pricing.ts.
+  TB.GST_ON = false;
+  TB.PACKS = [[100, 2399, 34], [250, 3499, 51], [500, 4699, 67], [750, 5899, 84], [1000, 7099, 101], [2500, 11799, 169], [5000, 17699, 253], [10000, 29499, 421]];
+  TB.price = (pack, cur) => { const p = TB.PACKS.find((x) => x[0] === pack); if (cur === "INR") { const t = TB.GST_ON ? Math.round(p[1] * 0.18 * 100) / 100 : 0; return { total: Math.round((p[1] + t) * 100) / 100, base: p[1], tax: t }; } return { total: p[2], base: p[2], tax: 0 }; };
   TB.guessCurrency = () => { try { return /^Asia\/(Kolkata|Calcutta)$/.test(Intl.DateTimeFormat().resolvedOptions().timeZone) ? "INR" : "USD"; } catch { return "USD"; } };
 
   // ---- countries (dial codes shown in the number field; the server does the real validation) ----

@@ -1,11 +1,14 @@
 # Razorpay: what is built, and the steps only you can do
 
-Legal entity on every invoice: **SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED**. Brands (what the customer sees): **CORPORATE TAMBOLA**, **dpdp.VERIDIAN-AIOS.COM**, **projexa-ai.com**, **dewberry.in**. All are software solutions and products.
+> **Updated 2026-10-09:** the seller is now **IT Services by Rajat Agarwal** (an individual, not registered for GST). No GST is charged: the price is the whole amount, and the receipt is a plain INVOICE, not a tax invoice. Where this document talks about GST, a company, a tax invoice or a GSTIN, read it as superseded by this note. The one switch is `GST_ENABLED` in `packages/billing/src/index.ts` and `GST_ON` in `packages/shared/src/pricing.ts`.
+
+
+Legal entity on every invoice: **IT Services by Rajat Agarwal**. Brands (what the customer sees): **CORPORATE TAMBOLA**, **dpdp.VERIDIAN-AIOS.COM**, **projexa-ai.com**, **dewberry.in**. All are software solutions and products.
 
 ## What is already built (and tested, 23/23 checks against a stand-in for Razorpay's public API)
 - `packages/billing`: the four brands, GST invoice maths (CGST+SGST same state, IGST other state, none for dollar sales), **brand-wise invoice numbers per financial year** (`CT/2026-27/000001`, `DPDP/...`, `PXA/...`, `DEW/...`), invoice HTML and text, and the Razorpay client (Orders API, payment lookup, capture, signature checks from the public docs).
 - Corporate Tambola checkout: our server creates the Razorpay **Order** (amount in paise, **brand name as the checkout name**, brand and product in the order notes) -> the browser opens Razorpay Checkout -> the server **verifies the signature and asks Razorpay what really happened** before delivering anything -> engagement created, **brand-wise tax invoice issued**, email sent with the invoice. A webhook delivers the purchase if the buyer closes the tab. Replays and tampering (wrong amount, wrong order, bad signature) deliver nothing. Upgrades ("raise limit") pay only the difference and are invoiced. Without keys, production cannot sell anything.
-- The invoice title is the BRAND; the supplier is always the legal entity ("A product of SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED"). Until the company details below are filled, invoices say **DRAFT** instead of pretending to be valid tax invoices.
+- The invoice title is the BRAND; the supplier is always the legal entity ("A product of IT Services by Rajat Agarwal"). Until the company details below are filled, invoices say **DRAFT** instead of pretending to be valid tax invoices.
 
 ## What I could NOT do, and why
 Claude in Chrome silently refuses to open dashboard.razorpay.com for my session (the tab stays blank; example.com opens fine), so I could not read or change your dashboard. The Claude panel you have open inside your Razorpay tab is a different session that I cannot reach. So nothing in your Razorpay account has been cleaned or changed by me. Public search also did not show the company's GSTIN, CIN or address, so I have not guessed any.

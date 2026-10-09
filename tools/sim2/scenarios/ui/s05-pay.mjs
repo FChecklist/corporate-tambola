@@ -13,7 +13,7 @@ export default [
       await x.page.goto(`${H.SIM}/pay.html?e=${g.id}`);
       await x.page.waitForSelector("#paygo");
       const txt0 = await t.text(x.page);
-      t.check("order summary shows pack, price, GST and total", /Up to 100/.test(txt0) && /GST 18%/.test(txt0) && /2,358\.82/.test(txt0), txt0.slice(0, 220));
+      t.check("order summary shows pack, price and total (no GST)", /Up to 100/.test(txt0) && !/GST/.test(txt0) && /2,399/.test(txt0), txt0.slice(0, 220));
       await payOnPage(x.page, { email: org.email });
       await x.page.waitForFunction(() => /PAYMENT RECEIVED/i.test(document.body.innerText), null, { timeout: 15000 });
       t.check("'Payment received' page with an invoice", /invoice/i.test(await t.text(x.page)));
@@ -86,7 +86,7 @@ export default [
       const p = await t.open({ device: "mobile" });
       await p.page.goto(link); await p.page.waitForTimeout(1800);
       const ptxt = await t.text(p.page);
-      t.check("stranger sees the price with GST and a single Pay button", /2,358\.82/.test(ptxt) && !!(await p.page.$("#paygo")), ptxt.slice(0, 260));
+      t.check("stranger sees the price and a single Pay button", /2,399/.test(ptxt) && !!(await p.page.$("#paygo")), ptxt.slice(0, 260));
       t.check("no sign-in is asked; only name + e-mail are required fields", !(await p.page.$('input[type=password]')));
       await t.shot(p.page, "paylink-stranger");
       await p.page.fill("#nm", "Stranger Sam"); await p.page.fill("#em", t.mail("stranger")); if (await p.page.$("#org")) await p.page.fill("#org", "Sam Ltd"); await p.page.click("#paygo");
@@ -129,14 +129,14 @@ export default [
       t.check("1st confirmation says there is no refund and offers 'Change the date instead'", /no refund/i.test(await t.text(c.page, "#sec7")) && !!(await c.page.$("#cancelresched")));
       await c.page.click("#cancel1"); await c.page.waitForSelector("#cancel2");
       const t2 = await t.text(c.page, "#sec7");
-      t.check("2nd confirmation shows the credit amount and its end date", /Your credit: Rs 2,358\.82/.test(t2) && /valid until \d/.test(t2), t2.slice(t2.search(/Your credit/), t2.search(/Your credit/) + 160));
+      t.check("2nd confirmation shows the credit amount and its end date", /Your credit: Rs 2,399/.test(t2) && /valid until \d/.test(t2), t2.slice(t2.search(/Your credit/), t2.search(/Your credit/) + 160));
       t.check("Submit is disabled until the box is ticked", await c.page.isDisabled("#cancel2") || true);
       await c.page.check("#cancelagree"); await c.page.click("#cancel2");
       await c.page.waitForSelector("#cancel3, #cancelfinal, #sec7 button:has-text('Yes, this game is cancelled')", { timeout: 6000 });
       await c.page.click("#cancel3, #cancelfinal, #sec7 button:has-text('Yes, this game is cancelled')"); await c.page.waitForTimeout(1500);
       t.check("game is cancelled", /cancel/i.test((await org.summary(g1.id)).body.status ?? ""), (await org.summary(g1.id)).body.status);
       const cr = (await org.api("GET", "/api/org/credit")).body.credits ?? [];
-      t.check("one active credit of the amount paid", cr.length === 1 && cr[0].status === "active" && Math.abs(cr[0].remainingInr - 2358.82) < 0.02, JSON.stringify(cr).slice(0, 220));
+      t.check("one active credit of the amount paid", cr.length === 1 && cr[0].status === "active" && Math.abs(cr[0].remainingInr - 2399) < 0.02, JSON.stringify(cr).slice(0, 220));
       const days = (cr[0]?.expiresMs - Date.now()) / 86400000;
       t.check("valid for 365 days", days > 363 && days < 367, days.toFixed(1));
       { const ml = await H.mailbox.list({ to: org.email }); t.check("a credit e-mail went to the Organizer (cancel mail naming the credit)", ml.some((m) => /credit/i.test(m.subject + " " + m.text) && /cancel/i.test(m.subject)), ml.map((m) => m.subject).join(" | ").slice(0, 300)); }
@@ -144,7 +144,7 @@ export default [
       const g2 = await t.game(org, { pay: false });
       const c2 = await openConsole(t, org, g2.id, { device: "laptop" }); await openStep(c2.page, 8);
       const txt8 = await t.text(c2.page, "#sec8");
-      t.check("Pay step offers the credit", /credit of Rs 2,358\.82/.test(txt8) && /Use my credit/i.test(txt8), txt8.slice(txt8.search(/credit/i), txt8.search(/credit/i) + 200));
+      t.check("Pay step offers the credit", /credit of Rs 2,399/.test(txt8) && /Use my credit/i.test(txt8), txt8.slice(txt8.search(/credit/i), txt8.search(/credit/i) + 200));
       const btn = c2.page.locator("#sec8 button:has-text('Use my credit')").first();
       if (await btn.count()) { await btn.click(); await c2.page.waitForTimeout(2000); }
       t.check("game 2 is paid, marked as paid by credit (paidVia credit)", (await payStatus(org, g2.id)) === "paid" && (await org.summary(g2.id)).body.payment?.paidVia === "credit", JSON.stringify((await org.summary(g2.id)).body.payment));

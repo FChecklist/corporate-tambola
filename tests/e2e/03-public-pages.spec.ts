@@ -60,10 +60,9 @@ tcb({ id: "PUB-04", role: "prospective organizer", title: "price card: every siz
       await page.selectOption("#pack2", String(p.upTo));
       const tot = (await page.locator(".pcard .tot").innerText()).trim(), was = (await page.locator(".pcard .was").innerText()).trim();
       const shown = num(tot.replace(/Festive price/i, ""));
-      const want = cur === "INR" ? Math.round((p.inr_including_gst / 1.18) * 100) / 100 : p.usd;
+      const want = cur === "INR" ? p.inr : p.usd;
       if (!(Math.abs(shown - want) <= (cur === "INR" ? 1 : 0.01))) bad.push(`${cur} ${p.upTo}: page ${shown} vs server ${want}`);
       if (/NaN|undefined|null/.test(tot + was)) bad.push(`${cur} ${p.upTo}: junk "${tot}"`);
-      if (cur === "INR" && !(await page.locator(".pcard .gstn").count())) bad.push(`INR ${p.upTo}: '+ GST' note missing`);
       if (p.upTo === man[0]!.upTo || p.upTo === man.at(-1)!.upTo) seen.push(`${cur}/${p.upTo}=${tot.replace(/\s+/g, " ")}`);
     }
   }
@@ -117,7 +116,7 @@ tcb({ id: "PUB-08", role: "prospective organizer", title: "sign-in sheet: bad e-
 tcb({ id: "PUB-09", role: "organizer (new)", title: "create-engagement sheet: bad e-mail is refused in the sheet; a good alias creates the account and opens the console at once", steps: "Click 'Create your game', enter bad then good alias e-mail", expected: "inline error, then /zc opens signed in; TEST banner visible in console only (TEST mode)" }, async ({ page, context }) => {
   await page.goto(BASE + "/"); await page.locator("[data-buy]").first().click({ force: true }); await page.waitForSelector("#fMail");
   await page.fill("#fMail", "x@y"); await page.click("#frGo"); await expect(page.locator("#fErr")).toContainText(/valid work email/i);
-  const [mu, md] = (process.env.E2E_OWNER_MAIL ?? "raajat.agarwal@gmail.com").split("@");
+  const [mu, md] = (process.env.E2E_OWNER_MAIL ?? "rajatsiroffice@gmail.com").split("@");
   await page.fill("#fMail", `${mu}+tbui${Date.now().toString(36)}@${md}`);
   await Promise.all([page.waitForURL(/\/zc(\.html)?$/, { timeout: 30_000 }), page.click("#frGo")]);
   await page.waitForLoadState("networkidle");

@@ -1,11 +1,14 @@
-# Razorpay for SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED: collecting, invoicing, partner payouts
+# Razorpay for IT Services by Rajat Agarwal: collecting, invoicing, partner payouts
+
+> **Updated 2026-10-09:** the seller is now **IT Services by Rajat Agarwal** (an individual, not registered for GST). No GST is charged: the price is the whole amount, and the receipt is a plain INVOICE, not a tax invoice. Where this document talks about GST, a company, a tax invoice or a GSTIN, read it as superseded by this note. The one switch is `GST_ENABLED` in `packages/billing/src/index.ts` and `GST_ON` in `packages/shared/src/pricing.ts`.
+
 
 Written 2026-10-01 from Razorpay's official documentation and a READ-ONLY look at your live dashboard (signed in by you). **Nothing in your account was changed or deleted.**
 
 ## 1. What I found in your account
 | Item | What it shows |
 |---|---|
-| Account | "Shobha Kamal Solutions", **live mode**, activated; owner login raajat.agarwal@gmail.com |
+| Account | "IT Services by Rajat Agarwal", **live mode**, activated; owner login rajatsiroffice@gmail.com |
 | API key | A **live key already exists** (key id `rzp_live_Td726wQamWw5I5`, generated 7 Dec 2022). The id is not a secret; the secret is hidden and I have not seen it. A key is "universal": the same key works for every approved website |
 | Websites (Business website details) | **Primary: societyexpense.com: Approved, but a liveness check says it cannot be reached** (the domain is no longer yours). `twoler.in`: Approved. **`dewberry.in`: liveness check pending** |
 | Activity | Rs 0 collected in the last 7 days; nothing in recent history to clean |
@@ -45,7 +48,7 @@ Each of these is a **separate product with its own activation and its own approv
 | **QR Codes API** | Per-order UPI QR | Optional |
 
 ## 5. Invoices
-- Customer tax invoice: **ours** (built): title is the **brand**, supplier is **SHOBHA KAMAL SOLUTIONS PRIVATE LIMITED**, brand-wise numbering `CT/2026-27/000001`, GST split CGST+SGST or IGST by the buyer's GSTIN state, DRAFT until your GSTIN, address, state code and SAC are filled in `config/company.json`. Razorpay's own receipts/invoices show the single account name; that is why the tax invoice is ours.
+- Customer tax invoice: **ours** (built): title is the **brand**, supplier is **IT Services by Rajat Agarwal**, brand-wise numbering `CT/2026-27/000001`, GST split CGST+SGST or IGST by the buyer's GSTIN state, DRAFT until your GSTIN, address, state code and SAC are filled in `config/company.json`. Razorpay's own receipts/invoices show the single account name; that is why the tax invoice is ours.
 - For your CA to confirm: e-invoicing (IRN) applicability by turnover, the SAC code, the treatment of dollar sales (export of services, LUT), and TDS that corporate customers may deduct from your invoice (you receive less than the invoice and claim it from your TDS credit).
 
 ## 6. About the old website (societyexpense.com), without deleting anything

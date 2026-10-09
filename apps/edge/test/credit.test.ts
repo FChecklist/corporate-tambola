@@ -39,7 +39,7 @@ afterEach(() => { globalThis.fetch = realFetch; });
 
 let ip = 0, lastAi = "";
 const start = async (email: string) => { const r = await j(await handle(new Request("http://x/api/start", { method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": `9.9.9.${++ip}` }, body: JSON.stringify({ email }) }), env as Env, T)); lastAi = r.aiKey as string; return r.token as string; };
-/** Organizer + a Host (own e-mail) + a Co-host for game GAME-1 (300 places = the 500 pack, Rs 4,718.82 with GST), starting 3 hours after T. */
+/** Organizer + a Host (own e-mail) + a Co-host for game GAME-1 (300 places = the 500 pack, Rs 4,699, no GST), starting 3 hours after T. */
 const team = async () => {
   const master = await start("boss@acme.com"); const ai = lastAi;
   await game(master, "GAME-1", 300, T + 3 * H);
@@ -58,7 +58,7 @@ const paidWithMoney = async (key: string, eid: string, now = T) => { const c = a
 const cancelIt = (key: string, eid: string, now = T) => call("POST", `/api/z/${eid}/cancel`, { confirmations: 3 }, key, now);
 const withCredit = (key: string | undefined, eid: string, now = T, body: unknown = {}) => call("POST", `/api/z/${eid}/pay-with-credit`, body, key, now);
 const credits = async (key: string, now = T) => j(await call("GET", "/api/org/credit", undefined, key, now));
-const paidOf = (cap: number) => ({ 100: 2358.82, 250: 3538.82, 300: 4718.82, 750: 5898.82 } as Record<number, number>)[cap]!;
+const paidOf = (cap: number) => ({ 100: 2399, 250: 3499, 300: 4699, 750: 5899 } as Record<number, number>)[cap]!;
 
 describe("cancel: a paid game becomes credit, never a refund", () => {
   test("cancel a paid game before the start: credit of exactly what was paid, valid to the end of day 365 in India time", async () => {
@@ -162,16 +162,16 @@ describe("using credit: pay-with-credit", () => {
   test("credit < price: ALL of it is used and only the difference is paid through the normal checkout, bound to the same game", async () => {
     const t = await setup(); await game(t.master, "GAME-3", 750, T + 6 * H);
     const r = await j(await withCredit(t.master, "GAME-3"));
-    expect(r).toEqual({ ok: true, paid: false, usedInr: paidOf(300), toPayInr: 1180 });
+    expect(r).toEqual({ ok: true, paid: false, usedInr: paidOf(300), toPayInr: 1200 });
     expect((await credits(t.master)).activeTotalInr).toBe(0);
     expect(raw.prepare("SELECT pack FROM engagement WHERE id='GAME-3'").get()).toEqual({ pack: 0 });
     const c = await j(await pay(t.master, "GAME-3"));
-    expect(c.razorpay.amount).toBe(118000); // paise: exactly the difference
-    expect(raw.prepare("SELECT amount, pack FROM payment WHERE id=?").get(c.paymentId)).toEqual({ amount: 1180, pack: 750 });
+    expect(c.razorpay.amount).toBe(120000); // paise: exactly the difference
+    expect(raw.prepare("SELECT amount, pack FROM payment WHERE id=?").get(c.paymentId)).toEqual({ amount: 1200, pack: 750 });
     const done = await j(await complete(c)); expect(done.published).toBe(true);
     expect((await j(await call("GET", "/api/z/GAME-3/summary", undefined, t.master))).paid).toBe(true);
     const inv = raw.prepare("SELECT data FROM invoice WHERE payment_id=?").get(c.paymentId) as any; const d = JSON.parse(inv.data);
-    expect(d.tax.total).toBe(1180); expect(d.note).toMatch(/Paid from credit of invoice/); expect(d.lines[0].description).toMatch(/balance after credit/);
+    expect(d.tax.total).toBe(1200); expect(d.note).toMatch(/Paid from credit of invoice/); expect(d.lines[0].description).toMatch(/balance after credit/);
   });
   test("asking twice (or two taps at once) never uses credit twice: a game can never get more credit than its price", async () => {
     const t = await setup(); await game(t.master, "GAME-2", 100, T + 6 * H);
@@ -219,12 +219,12 @@ describe("using credit: pay-with-credit", () => {
     expect(first.expiresMs).toBeLessThan(second.expiresMs);
     await game(t.master, "GAME-8", 750, LATER + 5 * H, LATER);
     const r = await j(await withCredit(t.master, "GAME-8", LATER));
-    expect(r).toMatchObject({ paid: true, usedInr: paidOf(750), toPayInr: 0 }); // the older Rs 4,718.82 first, then Rs 1,180 of the newer one
+    expect(r).toMatchObject({ paid: true, usedInr: paidOf(750), toPayInr: 0 }); // the older Rs 4,699 first, then Rs 1,200 of the newer one
     const after = await credits(t.master, LATER);
     expect(after.credits.find((x: any) => x.sourceGame === "GAME-1").uses).toEqual([{ game: "GAME-8", amountInr: paidOf(300), atMs: LATER }]);
     expect(after.credits.find((x: any) => x.sourceGame === "GAME-1").status).toBe("used");
-    expect(after.credits.find((x: any) => x.sourceGame === "GAME-7").uses).toEqual([{ game: "GAME-8", amountInr: 1180, atMs: LATER }]);
-    expect(after.credits.find((x: any) => x.sourceGame === "GAME-7").remainingInr).toBe(Math.round((paidOf(100) - 1180) * 100) / 100);
+    expect(after.credits.find((x: any) => x.sourceGame === "GAME-7").uses).toEqual([{ game: "GAME-8", amountInr: 1200, atMs: LATER }]);
+    expect(after.credits.find((x: any) => x.sourceGame === "GAME-7").remainingInr).toBe(Math.round((paidOf(100) - 1200) * 100) / 100);
   });
   test("oldest first within one draw: a small game takes only the older credit", async () => {
     const t = await team(); const LATER = T + 10 * DAY;
@@ -283,9 +283,9 @@ describe("credit that has not been used is never visible to, or used by, an outs
     const t = await setup(); await game(t.master, "GAME-3", 750, T + 6 * H);
     await withCredit(t.master, "GAME-3");
     const link = await j(await call("POST", "/api/z/GAME-3/paylink", {}, t.master)); const tok = tokenOf(link.url);
-    const body = await (await call("GET", `/api/paylink/${tok}`)).text(); expect(JSON.parse(body).price.total).toBe(1180); expect(body).not.toMatch(/credit/i);
+    const body = await (await call("GET", `/api/paylink/${tok}`)).text(); expect(JSON.parse(body).price.total).toBe(1200); expect(body).not.toMatch(/credit/i);
     const c = await j(await call("POST", `/api/paylink/${tok}/checkout`, { name: "Finance", email: "fin@acme.com" }, undefined, T, "7.7.7.8"));
-    expect(c.razorpay.amount).toBe(118000);
+    expect(c.razorpay.amount).toBe(120000);
   });
 });
 

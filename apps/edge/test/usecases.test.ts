@@ -544,13 +544,13 @@ describe("G2. the organizer's AI: round 2 findings", () => {
     const p = await j(await call("POST", "/api/z/LINK-1/publish", {}, o.ai)); expect(p.payUrl).toContain("/pay.html?e=LINK-1"); expect(p.shareUrl).toContain("/z.html?e=LINK-1");
     expect((await j(await call("GET", "/api/z/LINK-1/summary", undefined, o.ai))).payUrl).toBe(p.payUrl); // the summary agrees
   });
-  test("UC-66 the summary says what is due: pack, price with GST, pay-before time, paid flag and the game length", async () => {
+  test("UC-66 the summary says what is due: pack, price, pay-before time, paid flag and the game length", async () => {
     const o = await organizer();
     await call("POST", "/api/z", eng("DUE-1", { cap: 480, callSeconds: 12 }), o.ai);
     await call("PATCH", "/api/z/DUE-1/settings", { rounds: 2, breaks: [{ after: 20, seconds: 120, kind: "speech", title: "MD address" }] }, o.ai);
     await call("POST", "/api/z/DUE-1/publish", contact, o.h);
     const s = await j(await call("GET", "/api/z/DUE-1/summary", undefined, o.ai));
-    expect(s.paid).toBe(false); expect(s.pack).toBe(500); expect(s.priceInrIncludingGst).toBeGreaterThan(1000); expect(s.payUntil).toMatch(/IST/);
+    expect(s.paid).toBe(false); expect(s.pack).toBe(500); expect(s.priceInr).toBeGreaterThan(1000); expect(s.payUntil).toMatch(/IST/);
     expect(s.gameMinutes).toBe(Math.round((90 * 12 * 2 + 120 + 90) / 60)); // two rounds of 90 calls, one break, one intermission
   });
   test("UC-67 the manifest says: no writes before the yes, rewards replace the list, what skipped/invalid mean, and does not ask for the speed in the schedule call", async () => {

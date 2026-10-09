@@ -8,7 +8,7 @@ export const TERMS_VERSION = "2026-10-09";
 export const BRAND = {
   name: "Corporate Tambola",
   tagline: "Live engagements for companies",
-  support: "raajat.agarwal@gmail.com", // the contact address the site's legal page publishes
+  support: "rajatsiroffice@gmail.com", // the contact address the site's legal page publishes
   legalPath: "/legal.html",
   defaultOrigin: "https://corporate-tambola.pages.dev",
   wine: "#0B3D91", gold: "#E0B872", gold2: "#F3D9A4", ivory: "#F4F7FC", line: "#D9E1F0",

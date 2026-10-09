@@ -32,7 +32,7 @@
     if (!i.price) return calm("A custom arrangement is needed", "A game this big is arranged with us directly. Please write to us from the contact page.");
     const p = i.price, cur = p.currency || "INR";
     const sum = cur === "INR"
-      ? `<div class="zrow"><span>Price of Software</span><em>${TB.money(p.base, "INR")}</em></div><div class="zrow"><span>GST 18%</span><em>${TB.money(p.gst, "INR")}</em></div><div class="zrow"><span><b>Total</b></span><em><b>${TB.money(p.total, "INR")}</b></em></div>`
+      ? `<div class="zrow"><span><b>Total</b></span><em><b>${TB.money(p.total, "INR")}</b></em></div>`
       : `<div class="zrow"><span><b>Total</b></span><em><b>${TB.money(p.total, cur)}</b></em></div><p class="zsmall">No tax added.</p>`;
     return `${head}
       <div class="zcard"><h2>${esc(i.game && i.game.name ? i.game.name : "Your game")}</h2>
@@ -44,10 +44,10 @@
         ${S.more ? `<label for="ph">Mobile <span class="zsmall" style="display:inline">(optional)</span></label>
         <div style="display:flex;gap:8px"><select id="pcode" aria-label="Country code" style="flex:0 0 112px">${TB.COUNTRIES.map(([c, n, d]) => `<option value="${d}" ${String(d) === String(S.pcode) ? "selected" : ""}>${c} +${d}</option>`).join("")}</select><input id="ph" type="tel" autocomplete="tel-national" value="${esc(S.phone)}" placeholder="98765 43210" style="flex:1;min-width:0"></div>
         <label for="org">Organization <span class="zsmall" style="display:inline">(optional)</span></label><input id="org" autocomplete="organization" value="${esc(S.org)}" placeholder="e.g. Acme Industries">
-        <label for="tax">GSTIN <span class="zsmall" style="display:inline">(optional, for a GST invoice)</span></label><input id="tax" autocomplete="off" maxlength="15" value="${esc(S.tax)}" placeholder="e.g. 27ABCDE1234F1Z5" style="text-transform:uppercase">` : `<button class="zsnd" id="more" type="button" style="margin-top:8px">Add a mobile number, organization or GSTIN (optional)</button>`}
+` : `<button class="zsnd" id="more" type="button" style="margin-top:8px">Add a mobile number or organization (optional)</button>`}
         ${S.err ? `<div class="zbanner bad" role="alert">${esc(S.err)}</div>` : ""}${S.busy ? `<div class="zbanner info" role="status">Confirming your payment with Razorpay. Please keep this page open.</div>` : ""}
         <button class="zbtn" id="paygo" ${S.busy ? "disabled" : ""}>${S.busy ? "Confirming your payment…" : "Pay " + TB.money(p.total, cur) + " securely with Razorpay"}</button>
-        <p class="zsmall">Secure payment by Razorpay. A GST invoice is e-mailed to you. See the <a href="/legal.html#privacy">privacy policy</a>.</p></div>`;
+        <p class="zsmall">Secure payment by Razorpay. Payment to <a href="https://itservices-rajat-agarwal.pages.dev/" rel="noopener" target="_blank">IT Services by Rajat Agarwal</a>. An invoice is e-mailed to you. See the <a href="/legal.html#privacy">privacy policy</a>.</p></div>`;
   }
   function keep() { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { name: g("nm"), email: g("em"), phone: g("ph"), pcode: g("pcode"), org: g("org"), tax: g("tax") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; }
   function draw() { $app.innerHTML = view(); bind(); }

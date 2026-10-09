@@ -1,6 +1,6 @@
 # Branding: Corporate Tambola, the same everywhere
 
-The name is spelled exactly **Corporate Tambola** (never in capitals, never "Tambola" alone as the product name). The palette is the site's: brand blue `#0B3D91`, gold `#E0B872`, light blue-white background. The logo mark is the ticket icon (`/icon-192.png`, blue square with the gold ticket); the wordmark is "Corporate Tambola." in the serif face. One support address (the one the legal page publishes): `raajat.agarwal@gmail.com`. One legal link: `/legal.html`.
+The name is spelled exactly **Corporate Tambola** (never in capitals, never "Tambola" alone as the product name). The palette is the site's: brand blue `#0B3D91`, gold `#E0B872`, light blue-white background. The logo mark is the ticket icon (`/icon-192.png`, blue square with the gold ticket); the wordmark is "Corporate Tambola." in the serif face. One support address (the one the legal page publishes): `rajatsiroffice@gmail.com`. One legal link: `/legal.html`.
 
 Single source for e-mail: `apps/edge/src/brand.ts` (`BRAND`, `headerHtml`, `footerHtml`, `footerText`, `pageHtml`, `plainToHtml`, `withFooter`). Every e-mail goes through `sendMail` / `sendReportMail` (`apps/edge/src/pay.ts`), which add the footer to the text part and wrap any plain mail in the branded HTML, so a mail without the brand cannot go out. The six builders in `apps/edge/src/mails.ts` use the same header and footer rows.
 

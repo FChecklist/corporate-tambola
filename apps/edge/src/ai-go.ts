@@ -37,7 +37,7 @@ const timeLabel = (t: string) => { const h = Number(t.slice(0, 2)); return `${h 
 export const startMsOf = (d: string, t: string): number => { const [y, m, dd] = d.split("-").map(Number); return Date.UTC(y!, m! - 1, dd!, Number(t.slice(0, 2)), Number(t.slice(2))) - IST; };
 export const startRoundOf = (ms: number): number => roundAt(ms);
 const validDay = (d: string | null) => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d), validTime = (t: string | null) => !!t && SLOTS.includes(t);
-const money = (n: number) => `Rs ${price(n, "INR").total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} including GST (about USD ${price(n, "USD").total})`;
+const money = (n: number) => `Rs ${price(n, "INR").total.toLocaleString("en-IN")} (about USD ${price(n, "USD").total})`;
 const packFor = (cap: number) => PACKS.find((p) => p[0] >= cap)?.[0] ?? null;
 
 /** The params a step carries forward, in a stable short order. */

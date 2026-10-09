@@ -39,7 +39,7 @@ describe("checkout", () => {
   test("status says which mode is on and what company details are still missing", async () => {
     const s = await (await call("GET", "/api/payments/status")).json() as any;
     expect(s.mode).toBe("razorpay");
-    expect(s.legalEntity).toMatch(/SHOBHA KAMAL SOLUTIONS/i);
+    expect(s.legalEntity).toMatch(/IT Services by Rajat Agarwal/i);
     expect(Array.isArray(s.missingCompanyDetails)).toBe(true);
   });
   test("without keys and without test mode nothing can be bought", async () => {
@@ -64,8 +64,8 @@ describe("checkout", () => {
   test("a valid checkout creates one Razorpay order for the right amount in paise and one unpaid payment row", async () => {
     const r = await (await buy()).json() as any;
     expect(r.mode).toBe("razorpay");
-    expect(r.razorpay.amount).toBe(471882); // 500 participants = Rs 3,999 + 18% GST = Rs 4,718.82
-    expect(r.razorpay.name).toBe("Corporate Tambola");
+    expect(r.razorpay.amount).toBe(469900); // 500 participants = Rs 4,699 (no GST)
+    expect(r.razorpay.name).toBe("IT Services by Rajat Agarwal"); expect(r.razorpay.description).toContain("Corporate Tambola"); // the seller is named in the Razorpay window, the product in the description
     expect(rz.orders).toHaveLength(1);
     expect(raw.query("SELECT status FROM payment").get()).toEqual({ status: "created" });
   });
@@ -109,14 +109,14 @@ describe("verify (the buyer's browser says it paid)", () => {
     expect(raw.query("SELECT COUNT(*) c FROM outbox").get()).toEqual({ c: 1 });
   });
   test("a wrong signature is refused and nothing is granted", async () => {
-    rz.payments.pay_1 = { id: "pay_1", order_id: orderId, status: "captured", amount: 471882 };
+    rz.payments.pay_1 = { id: "pay_1", order_id: orderId, status: "captured", amount: 469900 };
     const r = await call("POST", "/api/payments/verify", { paymentId, razorpay_order_id: orderId, razorpay_payment_id: "pay_1", razorpay_signature: "deadbeef" });
     expect(r.status).toBe(400);
     expect(raw.query("SELECT COUNT(*) c FROM entitlement").get()).toEqual({ c: 0 });
   });
   test("a valid signature for the wrong amount, wrong order, failed or unknown payment grants nothing", async () => {
     expect((await complete(paymentId, orderId, "pay_2", "captured", 100)).status).toBe(400);
-    rz.orders.push({ id: "order_other", amount: 471882, currency: "INR" });
+    rz.orders.push({ id: "order_other", amount: 469900, currency: "INR" });
     expect((await complete(paymentId, "order_other", "pay_3")).status).toBe(404);
     expect((await complete(paymentId, orderId, "pay_4", "failed")).status).toBe(402);
     const r = await call("POST", "/api/payments/verify", { paymentId, razorpay_order_id: orderId, razorpay_payment_id: "pay_ghost", razorpay_signature: hmac("sek", `${orderId}|pay_ghost`) });
@@ -138,7 +138,7 @@ describe("webhook (the buyer closed the tab)", () => {
   let paymentId = "", orderId = "";
   beforeEach(async () => { const r = await (await buy()).json() as any; paymentId = r.paymentId; orderId = r.razorpay.orderId; });
   const hook = (ev: unknown, secret = "whsec") => { const raw = JSON.stringify(ev); return call("POST", "/api/payments/webhook", raw, { "x-razorpay-signature": hmac(secret, raw) }); };
-  const captured = (amount = 471882) => ({ event: "payment.captured", payload: { payment: { entity: { id: "pay_w1", order_id: orderId, amount } } } });
+  const captured = (amount = 469900) => ({ event: "payment.captured", payload: { payment: { entity: { id: "pay_w1", order_id: orderId, amount } } } });
   test("a signed capture fulfils, and a repeat delivery does not double up", async () => {
     expect((await hook(captured())).status).toBe(200);
     expect((await hook(captured())).status).toBe(200);
@@ -161,7 +161,7 @@ describe("webhook (the buyer closed the tab)", () => {
   });
   test("the browser verify arriving after the webhook returns the same result without a second grant", async () => {
     await hook(captured());
-    rz.payments.pay_w1 = { id: "pay_w1", order_id: orderId, status: "captured", amount: 471882 };
+    rz.payments.pay_w1 = { id: "pay_w1", order_id: orderId, status: "captured", amount: 469900 };
     const r = await call("POST", "/api/payments/verify", { paymentId, razorpay_order_id: orderId, razorpay_payment_id: "pay_w1", razorpay_signature: hmac("sek", `${orderId}|pay_w1`) });
     expect(r.status).toBe(200);
     expect(raw.query("SELECT COUNT(*) c FROM entitlement").get()).toEqual({ c: 1 });
@@ -221,22 +221,24 @@ describe("invoices", () => {
     for (let i = 0; i < 3; i++) { const r = await (await buy({ email: `u${i}@x.com` })).json() as any; const f = await (await complete(r.paymentId, r.razorpay.orderId, "pay_i" + i)).json() as any; nums.push(f.invoiceNumber); urls.push(f.invoiceUrl); }
     expect(nums.map((n) => Number(n.split("/").pop()))).toEqual([1, 2, 3]);
     const html = await (await call("GET", urls[0]!)).text();
-    expect(html).toContain("SHOBHA KAMAL");
+    expect(html).toContain("IT Services by Rajat Agarwal");
     expect(html).toContain(nums[0]!);
     expect((await call("GET", "/api/invoice/inv_" + "0".repeat(32))).status).toBe(404);
     expect((await call("GET", "/api/invoice/anything")).status).toBe(404);
   });
-  test("missing company details make the invoice a DRAFT, never a fake valid one", async () => {
+  test("no GST (the seller is not registered): the receipt is a plain INVOICE from IT Services by Rajat Agarwal for the whole amount, not a draft, with no tax rows", async () => {
     const r = await (await buy()).json() as any; const f = await (await complete(r.paymentId, r.razorpay.orderId)).json() as any;
     const html = await (await call("GET", f.invoiceUrl)).text();
-    expect(html).toContain("DRAFT:");
+    expect(html).not.toContain("DRAFT"); expect(html).toContain("<b>INVOICE</b>"); expect(html).not.toContain("TAX INVOICE");
+    expect(html).toContain("IT Services by Rajat Agarwal"); expect(html).toContain("rajatsiroffice@gmail.com"); expect(html).toContain("4,699.00");
+    expect(html).not.toMatch(/CGST|SGST|IGST|Taxable value|Place of supply|GSTIN|SHOBHA/i);
+    expect(f.tax).toBe(0); expect(f.total).toBe(4699);
   });
-  test("with the company details filled in, the invoice is not a draft and splits GST", async () => {
-    env.COMPANY_JSON = JSON.stringify({ gstin: "07AAAAA0000A1Z5", pan: "AAAAA0000A", stateCode: "07", stateName: "Delhi", sacCode: "998439", addressLines: ["1 Test Road", "New Delhi"], email: "billing@x.test" });
+  test("filling in a GSTIN in the configuration does not switch GST on: only the code switch GST_ENABLED does (owner decision 2026-10-09)", async () => {
+    env.COMPANY_JSON = JSON.stringify({ gstin: "07AAAAA0000A1Z5", stateCode: "07", sacCode: "998439", email: "billing@x.test" });
     const r = await (await buy()).json() as any; const f = await (await complete(r.paymentId, r.razorpay.orderId)).json() as any;
     const html = await (await call("GET", f.invoiceUrl)).text();
-    expect(html).not.toContain("DRAFT:");
-    expect(html).toContain("3,999.00"); // software price before GST
+    expect(html).not.toMatch(/CGST|SGST|IGST|Taxable value/); expect(html).toContain("4,699.00"); expect(f.tax).toBe(0);
   });
 });
 

@@ -228,7 +228,7 @@ describe("the pay link page (no sign-in)", () => {
     const o = await organizer({ TEST_MODE: "1" }); await published(o, "PG-PL1", {}, { name: "Diwali Night" }); const t = await linkOf(o, "PG-PL1");
     const calls: Call[] = []; const p = await pl(o, t, calls);
     const txt = await p.waitFor((x) => /Diwali Night/.test(x));
-    expect(txt).toMatch(/₹/); expect(txt).toMatch(/GST 18%/); expect(txt).toMatch(/Total/); expect(txt).not.toMatch(/Please sign in/i); expect(!!p.$("#nm")).toBe(true); expect(!!p.$("#em")).toBe(true); expect(!!p.$("#ph")).toBe(false); // mobile, organization and GSTIN only on request
+    expect(txt).toMatch(/₹/); expect(txt).not.toMatch(/GST/); expect(txt).toMatch(/Payment to IT Services by Rajat Agarwal/); expect(txt).toMatch(/Total/); expect(txt).not.toMatch(/Please sign in/i); expect(!!p.$("#nm")).toBe(true); expect(!!p.$("#em")).toBe(true); expect(!!p.$("#ph")).toBe(false); // mobile, organization and GSTIN only on request
     expect(p.win.location.search).toBe(""); // the secret left the address bar
     p.click("#paygo"); await p.waitFor((x) => /Please enter your name/.test(x)); expect(calls.filter((c) => c.m === "POST")).toEqual([]); // nothing is sent until name and e-mail are good
     (p.$("#nm") as any).value = "Neha Shah"; (p.$("#em") as any).value = "neha@acme.com"; p.click("#paygo");

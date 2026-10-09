@@ -10,7 +10,7 @@
   function breakdown(pack, cur) {
     const x = TB.price(pack, cur);
     return cur === "INR"
-      ? `<span>Software <b>${TB.money(x.base, "INR")}</b></span><span>GST 18% <b>${TB.money(x.tax, "INR")}</b></span><span>Total <b>${TB.money(x.total, "INR")}</b></span>`
+      ? `<span>Total <b>${TB.money(x.total, "INR")}</b></span>`
       : `<span>Total <b>${TB.money(x.total, "USD")}</b></span><span>No tax added · billed in US dollars</span>`;
   }
   function renderPrices() {
@@ -26,12 +26,12 @@
       $("packs").innerHTML = `<div class="pcard"><div class="pwho"><label for="pack2">How many participants?</label><div class="selwrap"><select id="pack2" aria-label="Number of participants">${opts}</select><svg class="ic chev"><use href="#i-chev"/></svg></div></div>` +
         `<div class="pmain"><div class="pburst" title="Festive offer: 50% off"><b>50% OFF</b><span>Festive offer</span><span class="sr">Festive offer: 50% off</span></div>` +
         `<div class="pamt"><span class="was" title="Regular price after the festive offer"><span class="sr">Regular price after the festive offer </span>${TB.money(was, S.cur)}</span>` +
-        `<span class="tot"><small>Festive price</small> ${TB.money(shown, S.cur)}</span>${S.cur === "INR" ? '<em class="gstn">+ GST</em>' : ""}</div>` +
+        `<span class="tot"><small>Festive price</small> ${TB.money(shown, S.cur)}</span></div>` +
         `<button type="button" class="btn pcta" data-buy="${n}" aria-label="Create an engagement for up to ${nf(n)} participants">Create your game ${ic("arrow")}</button></div>` +
         `<ul class="pperks">${perks.map((t) => `<li><span class="tick" aria-hidden="true">&#10003;</span>${t}</li>`).join("")}</ul></div>`;
     }
-    if (FREE.on) { $("priceNote").textContent = "You build and publish your engagement for free. You pay before it starts: if it is not paid by the start time, it will not begin. " + (S.cur === "INR" ? "Prices in Indian rupees, before 18% GST. The full amount, with GST, is shown when you publish." : "Prices in US dollars, all-inclusive."); return; }
-    $("priceNote").textContent = S.cur === "INR" ? "Prices in Indian rupees, before 18% GST. The full amount, with GST, is shown when you publish. Billed in India." : "Prices in US dollars, all-inclusive. Billed outside India.";
+    if (FREE.on) { $("priceNote").textContent = "You build and publish your engagement for free. You pay before it starts: if it is not paid by the start time, it will not begin. " + (S.cur === "INR" ? "Prices in Indian rupees." : "Prices in US dollars."); return; }
+    $("priceNote").textContent = S.cur === "INR" ? "Prices in Indian rupees. Billed in India." : "Prices in US dollars. Billed outside India.";
   }
   document.addEventListener("click", (e) => {
     const c = e.target.closest("[data-c]"); if (c) { S.cur = c.dataset.c; renderPrices(); if ($("ordSum")) sumRefresh(); return; }
@@ -58,14 +58,14 @@
   function sumHTML(pack, cur) {
     const x = TB.price(pack, cur);
     return cur === "INR"
-      ? `<div class="kv"><span>Price of Software</span><b>${TB.money(x.base, cur)}</b></div><div class="kv"><span>GST 18%</span><b>${TB.money(x.tax, cur)}</b></div><div class="kv t"><span>Total</span><b>${TB.money(x.total, cur)}</b></div>`
+      ? `<div class="kv t"><span>Total</span><b>${TB.money(x.total, cur)}</b></div>`
       : `<div class="kv"><span>Price of Software</span><b>${TB.money(x.base, cur)}</b></div><div class="kv"><span>Tax</span><b>None added</b></div><div class="kv t"><span>Total</span><b>${TB.money(x.total, cur)}</b></div><p class="tiny muted" style="margin:0 0 10px">No tax added · billed in US dollars</p>`;
   }
   function sumRefresh() { $("ordSum").innerHTML = sumHTML(ORDER.pack, S.cur); }
   function taxField() {
     const c = $("oCty").value, india = c === "IN";
     $("taxBox").innerHTML = india
-      ? `<label class="lb" for="oGst">GSTIN (for your GST invoice)</label><input class="inp" id="oGst" maxlength="15" autocomplete="off" placeholder="e.g. 27ABCDE1234F1Z5" style="text-transform:uppercase">`
+      ? `<input type="hidden" id="oGst" value="">`
       : `<label class="lb" for="oGst">Company tax / VAT number (optional)</label><input class="inp" id="oGst" maxlength="30" autocomplete="off" placeholder="Shown on your invoice">`;
     S.cur = india ? "INR" : "USD"; renderPrices(); sumRefresh();
   }
@@ -84,7 +84,7 @@
         <div id="taxBox"></div><div id="fErr"></div>
         <button class="btn block" style="margin-top:16px" type="submit" id="payGo">${ic("lock")} ${PAYMODE === "razorpay" ? "Pay securely with Razorpay" : PAYMODE === "off" ? "Payments are not switched on yet" : "Pay (local test payment)"}</button>
       </form>
-      <p class="proto">${PAYMODE === "razorpay" ? "Secure payment by Razorpay. We do not give refunds. If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days. Unused credit lapses at the end of day 365. The organizer keeps the credit in their account. Once it has started, a paid game cannot be cancelled. A GST invoice is emailed to you." : "Local test payment: no real money is taken. Unused places are not credited."}</p>`);
+      <p class="proto">${PAYMODE === "razorpay" ? "Secure payment by Razorpay. We do not give refunds. If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days. Unused credit lapses at the end of day 365. The organizer keeps the credit in their account. Once it has started, a paid game cannot be cancelled. Payment to <a href='https://itservices-rajat-agarwal.pages.dev/' rel='noopener' target='_blank'>IT Services by Rajat Agarwal</a>. An invoice is emailed to you." : "Local test payment: no real money is taken. Unused places are not credited."}</p>`);
     $("oCty").addEventListener("change", taxField);
     $("coForm").addEventListener("submit", (e) => { e.preventDefault(); pay(); });
     taxField(); focusFirst("oName");
@@ -132,8 +132,6 @@
     const org = $("oName").value.trim(), email = $("oMail").value.trim().toLowerCase(), country = $("oCty").value, taxId = $("oGst").value.trim().toUpperCase();
     if (org.length < 2) return setErr("Please enter your organization name.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return setErr("Please enter a valid work email.");
-    if (country === "IN" && !taxId) return setErr("Please enter your GSTIN.");
-    if (country === "IN" && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(taxId)) return setErr("This GSTIN does not look right. It has 15 characters, like 27ABCDE1234F1Z5.");
     setErr("");
     const btn = $("payGo"); btn.disabled = true; const keep = btn.innerHTML; btn.textContent = "Processing…";
     try {

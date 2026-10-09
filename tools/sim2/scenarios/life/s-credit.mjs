@@ -18,7 +18,7 @@ sc("K01", "cancel a PAID game: the whole payment becomes credit, valid until the
   const c = await cr(w, org); w.eq("one credit", c.length, 1);
   w.eq("amount = total paid incl. GST", c[0].amountInr, P100); w.eq("remaining = amount", c[0].remainingInr, P100); w.eq("expires at the end of day 365 IST", c[0].expiresMs, expiryOf(paidAt));
   w.eq("lastDay is the IST date of the last usable day", c[0].lastDay, lastDayOf(expiryOf(paidAt))); w.eq("status active", c[0].status, "active");
-  const m = (await w.mails(org.email, "Game cancelled"))[0]; w.expect("mail: amount and date", m.text.includes("Rs 2,358.82") && m.text.includes(c[0].lastDay), m.text.slice(0, 300));
+  const m = (await w.mails(org.email, "Game cancelled"))[0]; w.expect("mail: amount and date", m.text.includes("Rs 2,399") && m.text.includes(c[0].lastDay), m.text.slice(0, 300));
   w.eq("no refund call: no outbound request left the box", (await (await fetch("http://localhost:8803/__sim/health")).json()).blockedFetches, []);
 });
 sc("K02", "cancel an UNPAID game: no credit at all", async (w) => {
@@ -52,7 +52,7 @@ sc("K06", "credit BIGGER than the price: the remainder stays active with the SAM
   const org = await w.org(); const { paidAt } = await paidThenCancelled(w, org, { cap: 500 }); const g2 = await w.game(org, { leadMs: 4 * DAY });
   const r = await payCredit(org, g2.id); w.expect("paid by credit", r.body.paid === true && r.body.usedInr === P100, JSON.stringify(r.body));
   const c = (await cr(w, org))[0]; w.expect("remaining = difference, still active", c.status === "active" && Math.abs(c.remainingInr - (P500 - P100)) < 0.005, JSON.stringify(c));
-  w.eq("expiry unchanged", c.expiresMs, expiryOf(paidAt)); const m = (await w.mails(org.email, "of credit used"))[0]; w.expect("mail states what is left", /still has Rs 2,360 left/.test(m.text), m.text);
+  w.eq("expiry unchanged", c.expiresMs, expiryOf(paidAt)); const m = (await w.mails(org.email, "of credit used"))[0]; w.expect("mail states what is left", /still has Rs 2,300 left/.test(m.text), m.text);
   w.eq("active total", (await w.credits(org)).activeTotalInr, Math.round((P500 - P100) * 100) / 100);
 });
 sc("K07", "TWO credits: the one that lapses first is used first, then the second for the rest", async (w) => {
@@ -140,7 +140,7 @@ sc("K18", "cancel a game that was paid FROM CREDIT: the credit comes back to the
   const org = await w.org(); const { paidAt } = await paidThenCancelled(w, org); const g2 = await w.game(org, { leadMs: 20 * DAY }); await payCredit(org, g2.id);
   await w.goTo((await w.now()) + 10 * DAY, DAY); const r = await org.cancel(g2.id); w.expect("cancelled, credit shown", r.status === 200 && r.body.credit?.amountInr === P100, JSON.stringify(r.body));
   const c = await cr(w, org); w.eq("still ONE credit row", c.length, 1); w.expect("active again, remaining full, expiry NOT stretched", c[0].status === "active" && c[0].remainingInr === P100 && c[0].expiresMs === expiryOf(paidAt), JSON.stringify(c[0]));
-  const m = (await w.mails(org.email, "Game cancelled")); w.expect("the cancel mail of the credit-paid game states the credit and the SAME last day", m.some((x) => x.text.includes("Rs 2,358.82") && x.text.includes(lastDayOf(expiryOf(paidAt))) && x.subject.includes(g2.id)), m.map((x) => x.text).join(" | ").slice(0, 400));
+  const m = (await w.mails(org.email, "Game cancelled")); w.expect("the cancel mail of the credit-paid game states the credit and the SAME last day", m.some((x) => x.text.includes("Rs 2,399") && x.text.includes(lastDayOf(expiryOf(paidAt))) && x.subject.includes(g2.id)), m.map((x) => x.text).join(" | ").slice(0, 400));
 });
 sc("K19", "cancel a game paid by credit AND cash: credit goes back, the cash becomes a new credit with its own date", async (w) => {
   const org = await w.org(); const a = await paidThenCancelled(w, org); await w.goTo((await w.now()) + 2 * DAY, DAY); const g2 = await w.game(org, { leadMs: 5 * DAY, cap: 250 });
@@ -178,7 +178,7 @@ sc("K24", "partner commission stays as earned when the game is cancelled; paying
   const g = await w.game(org, { leadMs: 3 * DAY }); const r = await org.api("POST", "/api/payments/test", { eid: g.id, email: org.email, org: "Sim Org", ref: partner.code }); w.expect("paid with the partner code", r.status === 200, JSON.stringify(r.body).slice(0, 160));
   const before = await sql("SELECT status, COUNT(*) c FROM commission GROUP BY status"); w.expect("a commission was earned", before.reduce((t, x) => t + x.c, 0) >= 1, JSON.stringify(before));
   await org.cancel(g.id); const after = await sql("SELECT status, COUNT(*) c FROM commission GROUP BY status"); w.eq("commission unchanged by the cancel (not voided)", after, before);
-  const g2 = await w.game(org, { leadMs: 4 * DAY }); await payCredit(org, g2.id); w.eq("paying by credit adds no commission MONEY", (await sql("SELECT ROUND(SUM(amount),2) s FROM commission"))[0].s, 999.5); w.eq("paying by credit adds no commission ROW", await sql("SELECT status, COUNT(*) c FROM commission GROUP BY status"), before);
+  const g2 = await w.game(org, { leadMs: 4 * DAY }); await payCredit(org, g2.id); w.eq("paying by credit adds no commission MONEY", (await sql("SELECT ROUND(SUM(amount),2) s FROM commission"))[0].s, 1199.5); w.eq("paying by credit adds no commission ROW", await sql("SELECT status, COUNT(*) c FROM commission GROUP BY status"), before);
 });
 sc("K25", "IST day edge: a payment at 23:59:59 IST and one at 00:00:00 IST the next day lapse one calendar day apart, both at an IST midnight", async (w) => {
   const midnight = (Math.floor(((await w.now()) + IST) / DAY) + 1) * DAY - IST; // the next 00:00 IST
@@ -248,7 +248,7 @@ sc("K37", "credit applied partly to an unpaid game, then the game is cancelled: 
 });
 sc("K38", "credit applied to a big game, then the size is LOWERED so the credit now covers more than the price: the excess must go back", async (w) => {
   const org = await w.org(); await paidThenCancelled(w, org, { cap: 500 }); const g2 = await w.game(org, { leadMs: 4 * DAY, cap: 750 });
-  const r1 = await payCredit(org, g2.id); w.expect("partly applied (all 4718.82)", r1.body.paid === false && r1.body.usedInr === P500, JSON.stringify(r1.body));
+  const r1 = await payCredit(org, g2.id); w.expect("partly applied (all 4699)", r1.body.paid === false && r1.body.usedInr === P500, JSON.stringify(r1.body));
   const s = await org.settings(g2.id, { cap: 100 }); w.expect("size lowered to 100 (unpaid game may change)", s.status === 200, `${s.status} ${JSON.stringify(s.body).slice(0, 120)}`);
   const r2 = await payCredit(org, g2.id); w.expect("game is now covered by credit", r2.status === 200 && r2.body.paid === true, JSON.stringify(r2.body));
   w.eq("credit taken by the game = the new price exactly", await sumUses(g2.id), P100);
