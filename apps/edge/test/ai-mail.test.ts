@@ -86,7 +86,7 @@ describe("the AI link is in the dedicated mails and nowhere else", () => {
     await housekeeping(env as Env, T + 86_400_000); // payment reminder
     await call("GET", "/api/z/MAIL-1/info", undefined, {}, T + 40 * 3_600_000); // start passed unpaid: the "could not begin" mail
     const sent = outbox(); const subjects = sent.map((m) => m.subject);
-    expect(subjects.some((s) => /published/i.test(s))).toBe(true); expect(subjects.some((s) => /^Payment due before/.test(s))).toBe(true); expect(subjects.some((s) => /could not begin/i.test(s))).toBe(true);
+    expect(subjects.some((s) => /published/i.test(s))).toBe(true); expect(subjects.some((s) => /^Payment pending for your game/.test(s))).toBe(true); expect(subjects.some((s) => /could not begin/i.test(s))).toBe(true);
     for (const m of sent) {
       if (DEDICATED.has(m.subject)) { expect(m.body).toMatch(LEAK); continue; }
       expect(m.body + "\n" + m.subject).not.toMatch(LEAK); // forwardable

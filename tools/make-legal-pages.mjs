@@ -3,7 +3,7 @@
 // The wording is a draft for lawyer review (see docs/compliance/DRAFTS_README.md); the public text carries no "draft" mark by owner decision.
 import { readFileSync, writeFileSync } from "node:fs";
 
-export const TERMS_VERSION = "2026-10-08";
+export const TERMS_VERSION = "2026-10-09";
 const PUB = new URL("../apps/web/public/", import.meta.url);
 const tpl = readFileSync(new URL("legal.html", PUB), "utf8");
 const nl = tpl.includes("\r\n") ? "\r\n" : "\n";
@@ -46,13 +46,18 @@ const PAGES = {
       "Do not register a child&rsquo;s number. See Players.",
       "If you break these terms, we may stop your game.",
     ]],
-    ["payment", "Payment and refunds", [
-      "Building and publishing are free. You pay before the start time.",
-      "Cancel before the start time and we give back what you paid, minus the payment-gateway charge.", "The charge is 2.36%: 2% plus 18% GST on that charge. We show the exact amount before you confirm.",
-      "The money goes back to the way you paid. You also get a GST credit note.",
-      "Once the start time has passed, a paid game cannot be cancelled and is not refunded. You can still end the game.",
+    ["payment", "Payment and credit", [
+      "Building and publishing are free. A game does not begin until it is paid for.",
+      "You can pay at any time until the guest data is erased. A late payment starts the game 2 minutes after it is confirmed.",
+      "We do not give refunds. If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days. Unused credit lapses at the end of day 365.",
+      "The credit belongs to your organizer account. We show the exact amount and date before you confirm.",
+      "We e-mail you before it lapses. No GST credit note is raised for credit that lapses.",
+      "Instead of cancelling, you can change the date of the game. A game time can be set at most 30 days ahead.",
+      "Once the start time has passed, a paid game cannot be cancelled. You can still end the game.",
       "A game that was never paid for can be cancelled at any time. Nothing is charged.",
-      "Unused places are not refunded.",
+      "A game that was not paid for closes when its guest data is erased, 23 hours after it was meant to end.",
+      "You can then create a new game like it. The settings stay for 30 days.",
+      "Unused places are not credited once the game has started.",
     ]],
     ["players", "For players", [
       "Players are 18 or older.",
@@ -82,7 +87,7 @@ const PAGES = {
     ["roles", "Roles", ["You are in charge of the players&rsquo; details (the controller, or data fiduciary). We process them for you (the processor).", "We act only on your instructions: run your game and send you the report."]],
     ["data", "What we process", ["Names and mobile numbers of players, and, if you switch invitations on, who invited whom and what kind of guest.", "Winners&rsquo; prize hand-over details, which winners confirm on their own phone."]],
     ["security", "Security", ["Names and numbers are sealed in our database and are also encrypted in transit and at rest.", "Players never see each other&rsquo;s data.", "Access to your game is limited to you, your co-hosts and your AI assistant, as you choose."]],
-    ["delete", "Deletion", ["All player data is deleted within 24 hours after the game ends. Backups clear within 7 days.", "Winners&rsquo; prize details and the winners record stay 365 days, then are deleted automatically.", "You can delete a game&rsquo;s player data any time from your console."]],
+    ["delete", "Deletion", ["All player data is deleted within 24 hours after the game ends. Backups clear within 7 days.", "A game that did not start (nobody paid) is treated the same way: its player data is deleted 23 hours after it was meant to end.", "Its people lists, waiting requests and personal links go too. Its settings stay for 30 days so you can reuse them.", "Winners&rsquo; prize details and the winners record stay 365 days, then are deleted automatically.", "You can delete a game&rsquo;s player data any time from your console."]],
     ["help", "Helping you", ["We help you answer a player&rsquo;s request to see or delete their data. Use your console, or write to us.", "If we learn of a breach that affects your game, we tell you without undue delay."]],
     ["subs", "Sub-processors", ["We use the <a href=\"/subprocessors.html\">sub-processors</a> on our list. Changes are shown there.", "Data may be processed in other countries by these providers, under their own safeguards."]],
     ["end", "When it ends", ["When your account or the game ends, the deletion rules above apply.", "On request we give you the information that shows we follow these terms."]],
@@ -109,7 +114,9 @@ const PAGES = {
     ["pay", "Commission", [
       "You earn up to half of the software price (before GST) on every game a company buys through your link, including repeat purchases within 12 months.",
       "Commission rates can change from time to time under our management policy. A change applies to purchases made after it and is shown on your partner page.",
-      "No payment from the buyer, no commission. Refunds and reversals reduce it.",
+      "No payment from the buyer, no commission.",
+      "A sale stays as earned if the buyer cancels the game. We do not give refunds: the payment becomes credit.",
+      "Using credit is not a new sale and earns no new commission.",
       "We may refuse or reverse commission for self-referral or misuse.",
     ]],
     ["tax", "Tax (TDS note)", [
@@ -141,7 +148,7 @@ const PAGES = {
       "Names and numbers are deleted within 24 hours after the game. Open your report before then.",
       "To delete earlier, use your console.",
     ]],
-    ["pay", "Payment", ["Build and publish for free. Pay before the start, or the game will not begin.", "To cancel, tap Cancel this game in your console. Before the start you get a refund minus the payment-gateway charge. Once the start time has passed, a paid game cannot be cancelled."]],
+    ["pay", "Payment", ["Build and publish for free. The game does not begin until it is paid for.", "You can pay at any time until the guest data is erased. A late payment starts the game 2 minutes after it is confirmed.", "To cancel, tap Cancel this game in your console.", "We do not give refunds. If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days. Unused credit lapses at the end of day 365.", "Once the start time has passed, a paid game cannot be cancelled.", "Want another game like this one? Tap Create a new game like this one. Your credit is offered first on the Pay step."]],
   ] },
 };
 

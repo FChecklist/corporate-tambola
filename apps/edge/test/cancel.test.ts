@@ -3,11 +3,11 @@ import { createHmac } from "node:crypto";
 import { withDevice } from "./device";
 import { handle, type Env } from "../src/worker";
 import { lifecycleTick, PURGE_AFTER_MS } from "../src/lifecycle";
-import { refundNumbers, refundPayment, REFUND_FEE_RATE } from "../src/cancel";
+import { creditExpiryMs } from "../src/credit";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
 
-// Round 2: cancel a game (Organizer and Host), the refund, the credit note, the Host e-mail, the Co-host bound to one game, "Confirming your payment",
+// Round 2 (rewritten for spec 6: NO REFUNDS, a cancelled paid game becomes credit, see credit.test.ts): cancel a game (Organizer and Host), the Host e-mail, the Co-host bound to one game, "Confirming your payment",
 // and the "your guests' personal data has been deleted" e-mail. See docs/ROLES_AND_CONSOLE_SPEC_2.md items 1 to 7.
 const T = Date.UTC(2026, 9, 1, 10, 0, 0);
 const H = 3_600_000;
@@ -62,18 +62,15 @@ const cancelIt = (key: string, now = T, confirmations = 3) => call("POST", "/api
 const paymentRow = () => raw.prepare("SELECT * FROM payment WHERE status='paid'").get() as any;
 
 describe("cancel: who, when, how many confirmations", () => {
-  test("cancel-preview: unpaid game = no money; paid game = the exact numbers (paid minus the gateway charge)", async () => {
+  test("cancel-preview: unpaid game = no money; paid game = the credit it would leave (the amount paid, valid 365 days), never a refund", async () => {
     const t = await team();
     const u = await j(await call("GET", "/api/z/CAN-1/cancel-preview", undefined, t.master));
-    expect(u).toEqual({ canCancel: true, paid: false, refund: null });
+    expect(u).toEqual({ canCancel: true, paid: false, credit: null });
     await paidGame(t);
     const p = await j(await call("GET", "/api/z/CAN-1/cancel-preview", undefined, t.master));
     const paid = paymentRow().amount;
     expect(p.canCancel).toBe(true); expect(p.paid).toBe(true);
-    expect(p.refund.paidInr).toBe(paid); expect(p.refund.feeInr).toBe(Math.round(paid * REFUND_FEE_RATE * 100) / 100);
-    expect(p.refund.refundInr).toBe(Math.round((paid - p.refund.feeInr) * 100) / 100);
-    expect(p.refund.feeNote).toContain("2.36%");
-    expect(REFUND_FEE_RATE).toBe(0.0236);
+    expect(p.credit.amountInr).toBe(paid); expect(p.credit.expiresMs).toBe(creditExpiryMs(T)); expect(p).not.toHaveProperty("refund");
   });
   test("only the Organizer and a Host can cancel; a Co-host, an AI key, a stranger and no key cannot", async () => {
     const t = await team();
@@ -100,7 +97,7 @@ describe("cancel: who, when, how many confirmations", () => {
     const r = await cancelIt(t.master, after);
     expect(r.status).toBe(409); expect((await j(r)).error).toMatch(/End the game/);
     expect(raw.prepare("SELECT cancelled_ms FROM engagement WHERE id='CAN-1'").get()).toEqual({ cancelled_ms: null });
-    expect(raw.prepare("SELECT COUNT(*) AS c FROM refund").get()).toEqual({ c: 0 });
+    expect(raw.prepare("SELECT COUNT(*) AS c FROM credit").get()).toEqual({ c: 0 });
     // the same far-later time on an unpaid game is fine
     await call("POST", "/api/z", { id: "CAN-2", startRound: START, callSeconds: 9, cap: 100 }, t.master);
     expect((await call("POST", "/api/z/CAN-2/cancel", { confirmations: 3 }, t.master, after)).status).toBe(200);
@@ -122,7 +119,7 @@ describe("cancel: what guests and everybody see afterwards", () => {
     expect((await pay(t.master)).status).toBe(409);
     expect((await pay(t.cohost)).status).toBe(403); // the Co-host key was retired at the cancel
     const s = await j(await call("GET", "/api/z/CAN-1/summary", undefined, t.master));
-    expect(s.cancelled).toBe(true); expect(s.status).toMatch(/cancelled/); expect(s.refund.refund_status).toBe("processed");
+    expect(s.cancelled).toBe(true); expect(s.status).toMatch(/cancelled/); expect(s.cancelCredit.amountInr).toBe(paymentRow().amount); expect(s).not.toHaveProperty("refund");
     expect((await call("POST", "/api/z/CAN-1/cancel", { confirmations: 3 }, t.master)).status).toBe(200); // saying it twice is harmless
   });
   test("an unpublished-payment game that was cancelled never sends the 'payment is due' nudge to guests who open it", async () => {
@@ -148,14 +145,16 @@ describe("cancel: what guests and everybody see afterwards", () => {
 });
 
 describe("cancel e-mails", () => {
-  test("the Organizer, each Host and the payer are told, with the exact refund numbers; a Host's cancel says so", async () => {
+  test("the Organizer and each Host are told, with the credit amount and date, never a refund; the payer and the Co-host (no e-mail) are not; a Host's cancel says so", async () => {
     const t = await team(); await paidGame(t);
     expect((await cancelIt(t.host)).status).toBe(200);
-    const paid = paymentRow().amount, n = refundNumbers(paid, REFUND_FEE_RATE);
-    for (const to of ["boss@acme.com", "priya@acme.com", "payer@acme.com"]) {
+    const paid = paymentRow().amount;
+    for (const to of ["boss@acme.com", "priya@acme.com"]) {
       const m = mailsTo(to).find((x) => /^Game cancelled/.test(x.subject))!; expect(m).toBeTruthy();
-      expect(m.body).toContain("cancelled by a Host"); expect(m.body).toContain(n.refundInr.toLocaleString("en-IN", { minimumFractionDigits: 2 })); expect(m.body).toContain("2.36%");
+      expect(m.body).toContain("cancelled by a Host"); expect(m.body).toContain("stays as credit until"); expect(m.body).toContain(paid.toLocaleString("en-IN")); expect(m.body).toContain("We do not give refunds.");
+      expect(m.body).not.toMatch(/refund of|2\.36|credit note/i);
     }
+    expect(mailsTo("payer@acme.com").some((x) => /^Game cancelled/.test(x.subject))).toBe(false);
   });
   test("when the Organizer cancels, the Organizer (not only a Host) is mailed; addresses are not repeated", async () => {
     const t = await team(); await paidGame(t);
@@ -165,101 +164,24 @@ describe("cancel e-mails", () => {
   });
 });
 
-describe("refund", () => {
-  test("with Razorpay keys: one refund call for exactly paid minus the charge, to the original payment; record = processed", async () => {
+describe("no refund machinery is left", () => {
+  test("cancelling a paid game makes no Razorpay call, no refund row, no credit note, and leaves the partner's commission alone", async () => {
     const t = await team(); await paidGame(t);
-    const paid = paymentRow().amount;
-    const r = await j(await cancelIt(t.master));
-    expect(r.ok).toBe(true); expect(r.cancelled).toBe(true);
-    expect(refundCalls).toHaveLength(1); expect(refundCalls[0].payment).toBe("pay_1");
-    const n = refundNumbers(paid, REFUND_FEE_RATE);
-    expect(refundCalls[0].amount).toBe(Math.round(n.refundInr * 100));
-    expect(r.refund).toMatchObject({ paidInr: paid, feeInr: n.feeInr, refundInr: n.refundInr, refund_status: "processed", test: false });
-    expect(raw.prepare("SELECT refund_status, rzp_refund_id, refund, fee, paid FROM refund").get()).toEqual({ refund_status: "processed", rzp_refund_id: "rfnd_1", refund: n.refundInr, fee: n.feeInr, paid });
-  });
-  test("REFUND_FEE_RATE overrides the default charge; nonsense falls back to 2.36%", async () => {
-    (env as any).REFUND_FEE_RATE = "0.05";
-    const t = await team(); await paidGame(t);
-    const p = await j(await call("GET", "/api/z/CAN-1/cancel-preview", undefined, t.master));
-    expect(p.refund.feeInr).toBe(Math.round(paymentRow().amount * 0.05 * 100) / 100);
-    (env as any).REFUND_FEE_RATE = "banana";
-    expect((await j(await call("GET", "/api/z/CAN-1/cancel-preview", undefined, t.master))).refund.feeNote).toContain("2.36%");
-  });
-  test("a pending refund stays 'requested'; a failed one is recorded 'failed' and the owner is told", async () => {
-    refundStatus = "pending";
-    const t = await team(); await paidGame(t);
-    await cancelIt(t.master);
-    expect(raw.prepare("SELECT refund_status FROM refund").get()).toEqual({ refund_status: "pending".replace("pending", "requested") });
-    raw.run("DELETE FROM refund"); raw.run("DELETE FROM credit_note");
-    refundFails = true;
-    const p = paymentRow();
-    await refundPayment(env, p, "CAN-1", p.org, T);
-    expect(raw.prepare("SELECT refund_status, note FROM refund").get()).toMatchObject({ refund_status: "failed" });
-    expect(mailsTo("owner@platform.test").some((m) => /Refund FAILED/.test(m.subject))).toBe(true);
-  });
-  test("with no Razorpay keys the refund is recorded 'requested' and the platform owner is e-mailed to do it by hand", async () => {
-    const t = await team(); await paidGame(t);
-    delete (env as any).RAZORPAY_KEY_ID; delete (env as any).RAZORPAY_KEY_SECRET;
+    raw.prepare("INSERT INTO commission(payment_id,partner_code,base,currency,rate,amount,status,created_ms) VALUES(?,?,?,?,?,?,?,?)").run(paymentRow().id, "BBBBBBBB", 1000, "INR", 0.5, 500, "accrued", 1);
     const before = razorpayCalls;
     const r = await j(await cancelIt(t.master));
     expect(razorpayCalls).toBe(before); expect(refundCalls).toHaveLength(0);
-    expect(r.refund.refund_status).toBe("requested");
-    expect(raw.prepare("SELECT refund_status FROM refund").get()).toEqual({ refund_status: "requested" });
-    const m = mailsTo("owner@platform.test").find((x) => /Refund to process/.test(x.subject))!;
-    expect(m).toBeTruthy(); expect(m.body).toContain("pay_1"); expect(m.body).toContain("refund_status = requested");
+    expect(r.credit).toMatchObject({ amountInr: paymentRow().amount }); expect(r).not.toHaveProperty("refund");
+    expect(raw.prepare("SELECT COUNT(*) AS c FROM refund").get()).toEqual({ c: 0 });
+    expect(raw.prepare("SELECT COUNT(*) AS c FROM credit_note").get()).toEqual({ c: 0 });
+    expect(raw.prepare("SELECT status FROM commission WHERE partner_code='BBBBBBBB'").get()).toEqual({ status: "accrued" });
+    expect(mailsTo("owner@platform.test")).toHaveLength(0); // nobody has a refund to process by hand
   });
-  test("TEST mode: no Razorpay call at all; a labelled test refund", async () => {
-    delete (env as any).RAZORPAY_KEY_ID; delete (env as any).RAZORPAY_KEY_SECRET; (env as any).TEST_MODE = "1";
-    const master = await start("boss@acme.com");
-    await call("POST", "/api/z", { id: "CAN-1", startRound: START, callSeconds: 9, cap: 300 }, master);
-    expect((await j(await pay(master))).mode).toBe("test");
-    const r = await j(await cancelIt(master));
-    expect(razorpayCalls).toBe(0);
-    expect(r.refund).toMatchObject({ refund_status: "processed", test: true }); expect(r.refund.label).toMatch(/TEST/);
-    expect(raw.prepare("SELECT is_test, rzp_refund_id FROM refund").get()).toMatchObject({ is_test: 1 });
-  });
-  test("one refund per payment: cancelling twice, and refunding the same payment twice, pay out once", async () => {
-    const t = await team(); await paidGame(t);
-    await cancelIt(t.master); await cancelIt(t.host); await cancelIt(t.master);
-    expect(refundCalls).toHaveLength(1);
-    const p = paymentRow();
-    const again = await refundPayment(env, p, "CAN-1", p.org, T + 1000);
-    expect(again.created).toBe(false); expect(refundCalls).toHaveLength(1);
-    expect(raw.prepare("SELECT COUNT(*) AS c FROM refund").get()).toEqual({ c: 1 });
-    expect(raw.prepare("SELECT COUNT(*) AS c FROM credit_note").get()).toEqual({ c: 1 });
-    expect(mailsTo("boss@acme.com").filter((m) => /^Game cancelled/.test(m.subject))).toHaveLength(1);
-  });
-  test("two people cancelling at the same moment still refund once", async () => {
-    const t = await team(); await paidGame(t);
-    const rs = await Promise.all([cancelIt(t.master), cancelIt(t.host)]);
-    for (const r of rs) expect(r.status).toBe(200);
-    expect(refundCalls.length).toBeLessThanOrEqual(1); expect(raw.prepare("SELECT COUNT(*) AS c FROM refund").get()).toEqual({ c: 1 });
-  });
-  test("a GST credit note is issued for the refund, in its own series, naming the invoice it reduces", async () => {
-    const t = await team(); await paidGame(t);
-    const r = await j(await cancelIt(t.master));
-    const cn = raw.prepare("SELECT token, number, seq, data FROM credit_note").get() as any;
-    const inv = raw.prepare("SELECT number FROM invoice").get() as any;
-    expect(cn.number).toMatch(/^CT-CN\/\d{4}-\d{2}\/000001$/); expect(cn.seq).toBe(1);
-    const d = JSON.parse(cn.data); expect(d.kind).toBe("credit_note"); expect(d.originalNumber).toBe(inv.number); expect(d.tax.total).toBe(r.refund.refundInr);
-    const html = await (await call("GET", `/api/credit-note/${cn.token}`)).text();
-    expect(html).toContain("CREDIT NOTE"); expect(html).toContain(inv.number); expect(html).not.toContain("TAX INVOICE");
-    expect((await call("GET", "/api/credit-note/cn_" + "0".repeat(32))).status).toBe(404);
-    expect(mailsTo("payer@acme.com").find((m) => /^Game cancelled/.test(m.subject))!.body).toContain(`/api/credit-note/${cn.token}`);
-  });
-  test("a referral partner's commission on the refunded sale is voided (a paid-out one is left alone)", async () => {
-    const t = await team(); await paidGame(t);
-    raw.run("INSERT INTO commission(payment_id,partner_code,base,currency,rate,amount,status,created_ms) VALUES('pay_x','AAAAAAAA',100,'INR',0.5,50,'paid',1)");
-    raw.prepare("INSERT INTO commission(payment_id,partner_code,base,currency,rate,amount,status,created_ms) VALUES(?,?,?,?,?,?,?,?)").run(paymentRow().id, "BBBBBBBB", 1000, "INR", 0.5, 500, "accrued", 1);
-    await cancelIt(t.master);
-    expect(raw.prepare("SELECT status, reason FROM commission WHERE partner_code='BBBBBBBB'").get()).toEqual({ status: "void", reason: "refund" });
-    expect((raw.prepare("SELECT status FROM commission WHERE partner_code='AAAAAAAA'").get() as any).status).toBe("paid");
-  });
-  test("a game published with an earlier payment's place (entitlement) refunds that payment", async () => {
-    const t = await team(); await paidGame(t);
-    expect(raw.prepare("SELECT eid FROM entitlement").get()).toEqual({ eid: "CAN-1" });
-    const r = await j(await cancelIt(t.master));
-    expect(r.refund.refundInr).toBeGreaterThan(0);
+  test("the source has no refund fee, no Razorpay refund call and no REFUND_FEE_RATE any more", async () => {
+    for (const f of ["../src/cancel.ts", "../src/pay.ts", "../src/credit.ts", "../src/worker.ts", "../../../packages/billing/src/index.ts"]) {
+      const t = await Bun.file(new URL(f, import.meta.url)).text();
+      expect([f, /REFUND_FEE_RATE|createRefund|refundPayment|issueCreditNote|\/refund`/.test(t)]).toEqual([f, false]);
+    }
   });
 });
 

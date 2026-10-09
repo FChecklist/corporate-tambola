@@ -45,13 +45,16 @@ Counts: 333 files.
 | `apps/edge/migrations/0015_cancel_refund.sql` | D1 migration: cancel columns, Host e-mail / Co-host binding columns, `payment.eid/confirming_ms`, tables `refund` and `credit_note` | applied by `wrangler d1 migrations apply`; equality with `SCHEMA` enforced by `apps/edge/test/migrations.test.ts` |
 | `apps/edge/migrations/0016_people.sql` | D1 migration: `organizer_key.created_by`, `engagement.cohost_limit`, `seat.blocked`, tables `person` and `waiting` | applied by hand before deploying people.ts |
 | `apps/edge/migrations/0017_brand_paylink_google.sql` | D1 migration (Phase 3/4): tables `paylink`, `host_state`, `host_login`, column `organizer_key.host_id`, backfill of `host_state` for existing Hosts | applied by hand before deploying; equality with `SCHEMA` enforced by `apps/edge/test/migrations.test.ts` |
+| `apps/edge/migrations/0018_credit_retention_clone.sql` | D1 migration (spec 5 and 6): tables `credit`, `credit_use`, column `engagement.unplayed_ms` | apply BEFORE deploying the code that reads it; equality with `SCHEMA` enforced by `apps/edge/test/migrations.test.ts` |
 | `apps/edge/migrations/0014_roles.sql` | D1 migration: `organizer_key.label` (untracked/new) | applied by `wrangler d1 migrations apply`; equality with `SCHEMA` enforced by `apps/edge/test/migrations.test.ts` |
 | `apps/edge/package.json` | Workspace package `@tambola/edge` |  |
 | `apps/edge/src/ai-facts.ts` | The 10 FACTS + `FACT_RULES` + `factsText` | `/ai/<key>/facts`, front door, `trust-page.ts` |
 | `apps/edge/src/ai-functions.ts` | The FUNCTIONS registry (29 functions, `who: ai\|handover\|human`), `mapText`, `mapJson`, `WHO_WORDS` | `/ai/<key>/map`, front door; frozen by `ai-enablement.test.ts` |
 | `apps/edge/src/ai-go.ts` | Guided step links `goScreen`, `screenText`, `screenJson`, `OCCASIONS`, `PRESET_MESSAGES`, `startMsOf`, `startRoundOf` | `/ai/<key>/go...` via `worker.ts` |
 | `apps/edge/src/ai-link.ts` | AI manual text/JSON: `aiPaste`, `manualText`, `manualJson`, `frontDoorText`, `nextHint`, `ORG_ENDPOINTS`, `HOST_ENDPOINTS`, `AI_CANNOT`, `CONVERSATION`, `LINK_KEY`, `GET_BODY_MAX` | called by `worker.ts` `aiLink` |
-| `apps/edge/src/cancel.ts` | Cancel a game and the refund: `cancelPreview`, `cancelGame`, `refundPayment` (one per payment), `refundNumbers`/`REFUND_FEE_RATE` (0.0236), `issueCreditNote`, `teamEmails`, `mailDataDeleted`, `eraseCohostsSql` | called by `worker.ts` (cancel routes) and `lifecycle.ts` (erase, tick); tests `cancel.test.ts` |
+| `apps/edge/src/cancel.ts` | Cancel a game (no refunds): `cancelPreview`, `cancelGame` (a paid game becomes credit), `paymentsOfGame`, `teamEmails` (re-exported from `credit.ts`), `mailDataDeleted` (also the "did not start" wording), `mailErasureHeadsUp`, `eraseCohostsSql` | called by `worker.ts` (cancel routes) and `lifecycle.ts` (erase, tick); tests `cancel.test.ts`, `credit.test.ts` |
+| `apps/edge/src/credit.ts` | Credit instead of refunds (spec 6): `CREDIT_SCHEMA`, `creditExpiryMs`/`creditLastDay`, `creditFromPayment`, `applyCreditToGame`, `restoreCreditUses`, `creditRoute` (`GET /api/org/credit`, `POST /api/z/{id}/pay-with-credit`), `creditTick` (lapse and the 30-day/3-day/lapse mails), `teamEmails`, `mailTeam` | called by `worker.ts`, `pay.ts`, `cancel.ts`, `lifecycle.ts`; tests `credit.test.ts` |
+| `apps/edge/src/clone.ts` | "Create a new game like this one" (spec 5 B): `cloneGame`, `copyPeople` | called by `worker.ts` (`POST /api/z/{id}/clone`); tests `clone.test.ts` |
 | `apps/edge/src/audit.ts` | Internal audit log: `AUDIT_SCHEMA`, `classify`, `auditRequest`, `appendAudit`, `verifyChain`, `loadRows`, `toCsv`, `analyzeChain`, `setHold`, `closeAuditFor`, `sweepAudit`, `shredParticipantAudit`, `logAccess`, `redact`, vendor detection | called by `worker.ts`, `lifecycle.ts`, `mode.ts`, `visits.ts` |
 | `apps/edge/src/brand.ts` | Brand + e-mail look: `BRAND`, `TERMS_VERSION` (2026-10-05), `withFooter`, `plainToHtml`, `pageHtml`, `footerText` | used by `pay.ts` (`sendMail`), `mails.ts`, `worker.ts` |
 | `apps/edge/src/lifecycle.ts` | Life of a game's data: `lifecycleTick`, report steps (`reportStep`, `reportApi`, `reportLink`), `acceptOver`, `acceptWon` (stub), `recordWinners`, `erasePersonal`, `eraseEverything`, `purgeTestEngagement`, deletion clocks `PURGE_AFTER_MS`, `REPORT_LINK_MS`, `fullDeleteAt`, `endBoundMs` | called by `worker.ts`, `winners.ts`, `test-data.ts` |
@@ -93,7 +96,10 @@ Counts: 333 files.
 | `apps/edge/test/pay.test.ts` | checkout, verify, webhook, invoice, mail, sign-in codes | run: `bun test apps/edge/test/pay.test.ts` |
 | `apps/edge/test/privacy.test.ts` | sealed data, invitations, winners record, report, deletion clocks | run: `bun test apps/edge/test/privacy.test.ts` |
 | `apps/edge/test/retention.test.ts` | `retentionSweep` windows | run: `bun test apps/edge/test/retention.test.ts` |
-| `apps/edge/test/cancel.test.ts` | Round 2: cancel + refund + credit note + commission void, Host e-mail, Co-host bound to a game, "Confirming your payment", 2-minute late start, "data deleted" e-mail | run: `bun test apps/edge/test/cancel.test.ts` |
+| `apps/edge/test/cancel.test.ts` | Round 2: cancel (who, when, three confirmations), what guests see, cancel e-mails, "no refund machinery is left", Host e-mail, Co-host bound to a game, "Confirming your payment", 2-minute late start, "data deleted" e-mail | run: `bun test apps/edge/test/cancel.test.ts` |
+| `apps/edge/test/credit.test.ts` | Spec 6: cancel -> credit, `GET /api/org/credit`, `pay-with-credit` (full, partial, remainder, oldest first, once, never below zero), pay-link isolation, payment after a cancel, lapse at the end of day 365 IST and the five mails | run: `bun test apps/edge/test/credit.test.ts` |
+| `apps/edge/test/unplayed.test.ts` | Spec 5 A: erasure of a game that did not start, the closed state, reschedule moves the clock, no payment cut-off, heads-up and after mails, settings kept 30 days, the 30-day limit | run: `bun test apps/edge/test/unplayed.test.ts` |
+| `apps/edge/test/clone.test.ts` | Spec 5 B: `POST /api/z/{id}/clone` (who, what is and is not copied, start pending, draft limit, people list, audit) | run: `bun test apps/edge/test/clone.test.ts` |
 | `apps/edge/test/people.test.ts` | Phase 2: number cleaning, one list per inviter with first-wins, limits, personal links and `/j/<token>`, common links and "who can join", waiting room (one by one and approve all), remove (before and during the game), CSV export, AI refusal, report tree |
 | `apps/edge/test/brand-ticket.test.ts` | Phase 3: the brand on the ticket (name, 8-colour palette, logo type/size/first-bytes checks, injection, settings/info/summary) | run: `bun test apps/edge/test/brand-ticket.test.ts` |
 | `apps/edge/test/csp-google.test.ts` | Phase 3/4 headers: Google allowed only on signin, index (and "/"), zc; pay-link page has the Razorpay rules (reads `pages/build.mjs`) | run: `bun test apps/edge/test/csp-google.test.ts` |
@@ -223,9 +229,10 @@ Counts: 333 files.
 | `apps/web/public/zc.html` | Organizer console shell | `zc.js` |
 | `apps/web/public/zc.js` | Organizer console (being rewritten per `docs/ROLES_AND_CONSOLE_SPEC.md`) | `zc.html` |
 | `apps/web/public/zgame.js` | BUNDLE (generated, 124 KB): `window.ZG` | from `packages/beacon/src/zgame-browser.ts` |
-| `apps/web/public/zsw.js` | Live service worker: cache `ct-game-v10`, network-first pages, saved game files | registered by `pwa.js` |
+| `apps/web/public/zsw.js` | Live service worker: cache `ct-game-v14`, network-first pages, saved game files | registered by `pwa.js` |
 | `apps/web/test/harness.ts` | happy-dom page harness (real scripts + real Worker + in-memory DB) | page tests |
 | `apps/web/test/pages.test.ts` | Page behaviour (UC-53..57, console roles, pay, phone, demo, preview) 80 tests | `bun test apps/web/test` |
+| `apps/web/test/houses-pages.test.ts` | Tests: house names and how-to-win lines on the pages match `PRIZE_HOUSES` | `bun test apps/web` |
 | `apps/web/test/phone-guest.test.ts` | Phases 2 to 4 on the guest phone and the public pages, running the page scripts in a DOM against the real Worker | run: `bun test apps/web/test/phone-guest.test.ts` |
 | `apps/web/test/pwa.test.ts` | Manifest, service-worker file set, shipped by build |  |
 | `apps/web/test/seo.test.ts` | Sitemap, robots, titles, structured data |  |
@@ -291,11 +298,12 @@ Counts: 333 files.
 | File | Purpose | Key exports / used by |
 |---|---|---|
 | `packages/beacon/package.json` | Workspace package; deps `@noble/curves`, `@noble/hashes` |  |
-| `packages/beacon/src/config.ts` | `EngagementCfg` + `validateCfg` + constants `GRACE_ROUNDS`, `LATE_LAG_ROUNDS`, `INTERMISSION_ROUNDS`, `MAX_ROUNDS`, `quorumFor`, `votersFor`, brand-moment allowance functions, `INVITE_CATEGORIES`, pattern order | Worker, console, phones |
+| `packages/beacon/src/config.ts` | `EngagementCfg` + `validateCfg` + constants `GRACE_ROUNDS`, `LATE_LAG_ROUNDS`, `INTERMISSION_ROUNDS`, `MAX_ROUNDS`, `quorumFor`, `votersFor`, brand-moment allowance functions, `INVITE_CATEGORIES`, `PRIZE_HOUSES` (id, label, how to win, maximum winners), `HOUSE_ORDER`, `maxWinnersFor`, pattern order | Worker, console, phones |
 | `packages/beacon/src/control-browser.ts` | Entry of the `control.js` bundle (IndexedDB key) | `bun run build:control` |
 | `packages/beacon/src/control.ts` | Signed pause/resume/extend/stop: `signControl`, `verifyControlSig`, `acceptLog`, `resolveControl`, safety profiles, `safetyForCap`, `PAUSE_MAX_PARTICIPANTS`, `registerKey`, `publishControl`, `readPublished`, `ControlTracker` | Worker `control` routes, phones, console |
 | `packages/beacon/src/demo-script.ts` | Scripted free-demo game (`DEMO_*`, `demoCfg`) | `demo.js` |
-| `packages/beacon/src/game.ts` | Pure game logic: tickets, `settleAll`, `luckyWinners`, schedule with breaks/pauses/rounds, `RoundStore`, `logFrom` | phones, `lifecycle.ts`, tests |
+| `packages/beacon/src/game.ts` | Pure game logic: tickets, `settleAll`, `unluckyAt`, `unluckyPick`, `luckyWinners`, schedule with breaks/pauses/rounds, `RoundStore`, `logFrom` | phones, `lifecycle.ts`, tests |
+| `packages/beacon/src/house-rules.ts` | What each house asks of one ticket: `ruleOf`, `ticketCompletion`, `ticketStillNeeds`, `winningNumbers` | `game.ts`, `prize-engine.ts`, `phone-runtime.ts` |
 | `packages/beacon/src/index.ts` | drand quicknet client + number picking: `QUICKNET`, `verifyRound`, `fetchRound`, `scheduleFor`, `pickNumber`, `deriveCalls`, `syncCalls`, `seededRand`, `NUMBERS`; re-exports control | phones, Worker (via game/lifecycle), tests |
 | `packages/beacon/src/phone-runtime.ts` | `PhoneRuntime`: the entire phone loop without UI | `zgame-browser.ts` -> `z.js` |
 | `packages/beacon/src/prize-engine.ts` | `PrizeEngine`: incremental winner computation (equals `settleAll`), `countFromOf` | `phone-runtime.ts` |
@@ -306,6 +314,8 @@ Counts: 333 files.
 | `packages/beacon/test/control.test.ts` | Tests: signed control | `bun test packages/beacon` |
 | `packages/beacon/test/demo-script.test.ts` | Tests: demo script re-derived | `bun test packages/beacon` |
 | `packages/beacon/test/game.test.ts` | Tests: tickets, settle, schedule | `bun test packages/beacon` |
+| `packages/beacon/test/houses-runtime.test.ts` | Tests: real phones play the new houses and Unlucky, removed seat, per-house maximum at the Worker | `bun test packages/beacon` |
+| `packages/beacon/test/houses.test.ts` | Tests: every new house rule, engine equals `settleAll`, Unlucky, maximum winners | `bun test packages/beacon` |
 | `packages/beacon/test/late-joiner.test.ts` | Tests: late joiner counting | `bun test packages/beacon` |
 | `packages/beacon/test/phone-runtime.test.ts` | Tests: phone runtime | `bun test packages/beacon` |
 | `packages/beacon/test/prize-engine.test.ts` | Tests: prize engine equals settleAll | `bun test packages/beacon` |
@@ -491,7 +501,51 @@ Counts: 333 files.
 | `tools/sim/run.ts` | Simulation/tool: LEGACY full-cycle run on the server | run manually (see `10-OPERATIONS.md`) |
 | `tools/sim/sample-report.ts` | Simulation/tool: Sample report PDF | run manually (see `10-OPERATIONS.md`) |
 | `tools/sim/shot.mjs` | Simulation/tool: Screenshot helper | run manually (see `10-OPERATIONS.md`) |
+
+## `tools/sim2/` (the 2026-10-08 simulation campaign, see `docs/SIMULATION_PLAN.md`; nothing here may touch the live site)
+
+| File | Purpose | Used by |
+|---|---|---|
+| `tools/sim2/README.md` | How to run the simulation | people |
+| `tools/sim2/server.ts` | Runs the exact Worker code against a database with a controllable clock | the campaign |
+| `tools/sim2/db.ts` | Opens or resets the simulation database | `server.ts` |
+| `tools/sim2/import-live.ts` | Imports a read-only export of the live database into the simulation copy | the lead, once per run |
+| `tools/sim2/parity.mjs` | Parity proof: schema, files and code against live (read-only) | the lead |
+| `tools/sim2/parity-schema.ts` | Schema side of the parity proof | `parity.mjs` |
+| `tools/sim2/crowd.ts` | Crowds of phones through the phone runtime | the campaign |
+| `tools/sim2/pages.ts` | Page checks at several widths | the campaign |
+| `tools/sim2/smoke.mjs` | A short end-to-end smoke run | people |
+| `tools/sim2/whatsapp/server.ts` | The local WhatsApp simulator | the campaign |
+| `tools/sim2/lib/api.mjs` | API helper | scenarios |
+| `tools/sim2/lib/beacon.mjs` | Deterministic fake randomness beacon | scenarios |
+| `tools/sim2/lib/browser.mjs` | Browser helper | scenarios |
+| `tools/sim2/lib/clock.mjs` | Clock control | scenarios |
+| `tools/sim2/lib/env.mjs` | Simulation environment | scenarios |
+| `tools/sim2/lib/index.mjs` | Library entry | scenarios |
+| `tools/sim2/lib/invariants.mjs` | Invariant checks | the campaign |
+| `tools/sim2/lib/stack.mjs` | Starts the whole stack | the campaign |
+| `tools/sim2/lib/whatsapp.mjs` | WhatsApp simulator client | scenarios |
+| `tools/sim2/scenarios/life/server.ts` | Life sim server on port 8803 and its own database; reset wipes tables in place | the campaign |
+| `tools/sim2/scenarios/life/port.mjs` | Points the shared harness at port 8803 | the campaign |
+| `tools/sim2/scenarios/life/lib.mjs` | World helper, scenario registry and runner for the life scenarios | the campaign |
+| `tools/sim2/scenarios/life/run.mjs` | Runs the life scenarios for one seed and writes sim/life-result-N.json | the campaign |
+| `tools/sim2/scenarios/life/known.mjs` | Maps failing assertions to the defect ids in docs/SIM_GAPS_life.md | the campaign |
+| `tools/sim2/scenarios/life/crowd50.mjs` | 50 games in the same minute with mixed outcomes, through crowd.ts | the campaign |
+| `tools/sim2/scenarios/life/s-resched.mjs` | Scenarios R01-R20: rescheduling and the 30-day limit | the campaign |
+| `tools/sim2/scenarios/life/s-late.mjs` | Scenarios L01-L18: late payment and unpaid holds | the campaign |
+| `tools/sim2/scenarios/life/s-erase.mjs` | Scenarios E01-E18: erasure of played, unplayed and cancelled games | the campaign |
+| `tools/sim2/scenarios/life/s-clone.mjs` | Scenarios C01-C12: create a new game like this one | the campaign |
+| `tools/sim2/scenarios/life/s-retention.mjs` | Scenarios S01-S14: 30-day, draft and 365-day retention | the campaign |
+| `tools/sim2/scenarios/life/s-cancel.mjs` | Scenarios X01-X21: cancelling at every stage | the campaign |
+| `tools/sim2/scenarios/life/s-credit.mjs` | Scenarios K01-K38: credit instead of refunds | the campaign |
+| `tools/sim2/scenarios/life/s-mail.mjs` | Scenarios M01-M07 and P01-P08: mail recipients and the report link | the campaign |
 | `docs/Corporate_Tambola_Roles_and_Rules.xlsx` | Role and rules workbook: matrix, differences from the owner draft, payment/organizer/participant ideas, data timeline, decisions, limits and prices | owner-approved 2026-10-08 |
 | `docs/ROLES_AND_CONSOLE_SPEC_2.md` | Round 2 spec: cancel and refund, e-mail rule, chain, remove, waiting room, ticket brand, preview, pay link | agents building phases 1 to 3 |
 | `docs/ROLES_AND_CONSOLE_SPEC_3.md` | Phase 2 spec: one list per inviter, personal and common links, "who can join", waiting room, remove, chain | agents building the people screens and routes |
 | `docs/ROLES_AND_CONSOLE_SPEC_4.md` | Later spec following spec 3 (read it before the console work) | agents building the console |
+| `docs/ROLES_AND_CONSOLE_SPEC_5.md` | Spec 5: data retention for games that are not played, rescheduling, the 30-day limit, "Create a new game like this one" | agents build from it; implemented in `apps/edge/src/lifecycle.ts`, `apps/edge/src/clone.ts` |
+| `docs/ROLES_AND_CONSOLE_SPEC_6.md` | Spec 6: NO REFUNDS, a cancelled paid game becomes credit for 365 days (replaces every refund rule of specs 2 and 5) | implemented in `apps/edge/src/credit.ts`, `apps/edge/src/cancel.ts` |
+| `docs/SIMULATION_PLAN.md` | The simulation and test campaign ordered on 2026-10-08 (parity, live-copy database, controllable clock, WhatsApp simulator, scenario library, campaign runner) | built in `tools/sim2/` |
+| `docs/SIM_GAPS.md` | Findings of the simulation campaign (id, what, how to reproduce, severity, fix status) | written by the campaign |
+| `docs/SIM_GAPS_life.md` | Defects found by the life scenarios (time travel, credit, erasure, 50 games in one minute) | whoever fixes them |
+| `docs/SIM_PARITY_REPORT.md` | Parity report: live schema and files against the local copy | written by `tools/sim2/parity.mjs` |

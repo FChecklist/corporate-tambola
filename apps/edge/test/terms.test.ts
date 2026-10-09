@@ -23,7 +23,7 @@ describe("the document pages", () => {
     "dpa.html": ["controller", "processor", "All player data is deleted within 24 hours", "Backups clear within 7 days", "365 days", "without undue delay", "/subprocessors.html"],
     "subprocessors.html": ["Cloudflare", "Resend", "Razorpay", "Google", "drand", "YouTube"],
     "partner-terms.html": ["independent partner", "No spam", "Tax may be deducted at source", "GST may apply", "No payment from the buyer, no commission"],
-    "organizer-guide.html": ["Never ask for a fee", "Players are 18 or older", "INR 10,000", "tax deducted at source", "Check your state", "Pay before the start"],
+    "organizer-guide.html": ["Never ask for a fee", "Players are 18 or older", "INR 10,000", "tax deducted at source", "Check your state", "The game does not begin until it is paid for"],
   };
   for (const [f, needles] of Object.entries(DOCS)) test(`${f}: brand header and footer, title pattern, the right statements, no draft mark, no tick box, short lines`, () => {
     const h = rd(f);
@@ -31,7 +31,7 @@ describe("the document pages", () => {
     for (const n of needles) expect(h).toContain(n);
     expect(h).not.toMatch(/DRAFT|lawyer review|type="checkbox"/i);
     expect(h).not.toMatch(/\bcompliant\b|certified by/i);
-    for (const l of h.match(/<li>[\s\S]*?<\/li>/g) ?? []) expect(l.replace(/<[^>]+>/g, "").split(/\s+/).length).toBeLessThanOrEqual(32);
+    for (const l of h.match(/<li>[\s\S]*?<\/li>/g) ?? []) expect(l.replace(/<[^>]+>/g, "").split(/\s+/).length).toBeLessThanOrEqual(36); // 36: the owner's credit sentence ("We do not give refunds. If you cancel a paid game before it starts, ... lapses at the end of day 365.") is 35 words
     for (const l of LINKS) expect(h).toContain(`href="${l}"`);
   });
   test("the home page and the legal page link every document in the footer; the build ships them with headers; the sitemap lists them", () => {

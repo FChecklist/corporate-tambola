@@ -53,7 +53,7 @@ Price is **per engagement, by size** (not per ticket, not a subscription). Sourc
 
 - The site shows these as a "Festive offer: 50% off" with a regular price struck out (`apps/web/public/site.js:27`); the **charged price is the table above** (test `apps/edge/test/branding.test.ts` "structured data prices equal the real packs").
 - An engagement's `cap` need not equal a pack size; the **smallest pack >= cap** is charged (`worker.ts` summary, `pay.ts:190`). Above 10,000 needs "a custom arrangement" (`pay.ts:191`). Hard server limit of `cap` is 100,000 (`worker.ts:859`).
-- Unused places are never refunded after payment (`AI_MANIFEST.payment_faq`, `worker.ts:453`).
+- **We do not give refunds.** If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days; unused credit lapses at the end of day 365 (India time). Unused places are not credited once the game has started (`AI_MANIFEST.payment_faq` in `apps/edge/src/worker.ts`; mechanics in `06-BUSINESS-LOGIC.md` section 3c).
 - **Refer & Earn**: partners earn **50% of the taxable (pre-GST) value** of a referred, paid purchase, and the same 50% on the same customer's repeat purchases within 365 days (`apps/edge/src/partners.ts:15-18`).
 - Cost to us: zero fixed cost by design (Cloudflare free plan, Resend free mail, shared domain). Daily D1 write guard **80,000** of Cloudflare's 100,000 (`worker.ts:172`).
 - Optional launch switch `FREE_LAUNCH=1`: engagements up to 100 participants publish already paid (`pay.ts:41`).
@@ -77,7 +77,7 @@ Price is **per engagement, by size** (not per ticket, not a subscription). Sourc
 | **seat** | A participant's place number `seq` (1,2,3...) in an engagement; it picks their ticket from the collision-free list | `seat` table, `packages/beacon/src/unique-ticket.ts` |
 | **pid** | Participant id `"<seq>x<12 hex>"`, derived as `seq + 'x' + sha256(eid|phone_hash)[:12]` | `worker.ts:950,954`, `PID` regex in `winners.ts:26` |
 | **ticket** | 3x9 grid, 15 numbers; 1 or 2 per participant (`tickets` 1/2) | `packages/shared/src/ticket.ts` |
-| **house / pattern** | A winning shape: `early5, top, mid, bot, corners, star, full` (+ `full2` = two-ticket full house) | `config.ts` `PATTERN_ORDER`, `PatternKey` |
+| **house / pattern** | A winning shape or number set: the houses in `PRIZE_HOUSES` (`early5, early7, early10, top, mid, bot, twolines, corners, star, plus, frame, topbottom, midcorners, odd5, even5, low5, high5, full`, `full2` = two-ticket full house) plus `unlucky` (fewest marked at the first Full House) | `config.ts` `PRIZE_HOUSES`, `PatternKey` |
 | **reward line** | One winner of one house with the prize text: `{pattern, scope, ordinal, text}` (ordinal 1-5) | `config.ts` `RewardLine` |
 | **round** | One of up to 5 plays inside an engagement, each with new numbers and tickets. Later rounds use derived id `<eid>~r<n>` | `config.ts` `roundEid` |
 | **call / number call** | The k-th (0-89) number drawn; call k of a round uses beacon round `start + k*stride` | `beacon/src/index.ts:103`, `game.ts` |

@@ -10,3 +10,9 @@ pages/public/
 config/telemetry-report-key.txt
 config/live-secrets.txt
 config/platform-key.txt
+
+# simulation (tools/sim2)
+sim/
+
+# UI simulation screenshots (tools/sim2/scenarios/ui)
+/test-results/

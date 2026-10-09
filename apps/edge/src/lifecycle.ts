@@ -6,14 +6,15 @@
 // Called by the scheduled job (and, as a fallback, by any outside timer with the platform key). Every call does a bounded amount of work and can be repeated safely.
 import { sweepVisits } from "./visits";
 import { closeAuditFor, isHeld, shredParticipantAudit } from "./audit";
-import { GRACE_ROUNDS, INVITE_CATEGORIES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
+import { GRACE_ROUNDS, INVITE_CATEGORIES, PRIZE_HOUSES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
 import { callRoundR, luckyRound } from "../../../packages/beacon/src/game";
 import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../../../packages/beacon/src/control";
 import { seatOfPid } from "../../../packages/beacon/src/unique-ticket";
 import { openPii, openText, sealText, type PiiEnv } from "./pii";
 import { layoutReport, layoutPeoplePart, istDate, istFull, emptyAgg, type Agg, type ReportData, type ReportPerson, type ReportPrize, type ReportWinner } from "./report-layout";
 import { sendReportMail, type PayEnv } from "./pay";
-import { eraseCohostsSql, mailDataDeleted } from "./cancel";
+import { eraseCohostsSql, mailDataDeleted, mailErasureHeadsUp } from "./cancel";
+import { creditTick } from "./credit";
 import type { D1, Env } from "./worker";
 
 export const GENESIS = 1692803367;
@@ -22,10 +23,13 @@ export const PURGE_AFTER_MS = 23 * 3_600_000;      // participants' personal dat
 export const REPORT_LINK_MS = 22 * 3_600_000;      // the organizer's report link stops working this long after the game ended, an hour before the deletion
 export const REPORT_AFTER_MS = 3 * 60_000;         // the report starts a few minutes after the end, so late wins have been recorded
 export const BACKUP_DAYS = 7;
+export const UNPLAYED_WARN_MS = 6 * 3_600_000;       // the heads-up e-mail for a game that did not start goes out this long before its guests' data is erased
+export const SETTINGS_KEEP_MS = 30 * 86_400_000;      // the settings of a game that did not start (occasion, prizes, brand...) stay this long after it closed, so the Organizer can reuse them
+export const MAX_AHEAD_MS = 30 * 86_400_000;          // a game time can be set at most this far ahead
 const IST = 5.5 * 3_600_000, DAY = 86_400_000;
 const CHUNK = 250;                                  // people opened per call while preparing a report (keeps a call within a free Worker's CPU)
 const PART = 1500;                                  // people per PDF; a bigger game is e-mailed as several parts
-const NAMES: Record<string, string> = { early5: "Early Five", top: "Top Line", mid: "Middle Line", bot: "Bottom Line", corners: "Four Corners", star: "Star", full: "Full House", full2: "Full Two-Ticket House" };
+const NAMES: Record<string, string> = Object.fromEntries(PRIZE_HOUSES.map((h) => [h.id, h.label]));
 const ord = (n: number) => ["", "1st", "2nd", "3rd"][n] ?? `${n}th`;
 
 type LifeEnv = Env & PiiEnv & PayEnv;
@@ -41,7 +45,7 @@ export const personalDeleteAt = (endMs: number) => endMs + PURGE_AFTER_MS;
 export const reportLinkUntil = (endMs: number) => endMs + REPORT_LINK_MS;
 
 export function cfgOfRow(e: { tickets?: number; config?: string | null }): EngagementCfg {
-  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites }); if (v.ok) return v.cfg; } catch { /* plain defaults */ }
+  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* plain defaults */ }
   return (validateCfg({}) as { ok: true; cfg: EngagementCfg }).cfg;
 }
 
@@ -62,6 +66,13 @@ export async function endBoundMs(env: Env, e: any): Promise<number> {
   const last = callRoundR(s.st, s.start, s.stride, s.cfg.breaks, s.cfg.rounds, 89);
   if (last !== null) return roundMs(last) + 60_000;
   return roundMs(s.st?.stopRound ?? s.start) + 60_000;
+}
+
+/** When this game's guest data will be (or was) erased: 23 hours after it ended, after it was cancelled, or, for a game nobody paid for, after it was meant to end. Follows the newest schedule. */
+export async function erasureOf(env: Env, e: any): Promise<number> {
+  if (e.cancelled_ms) return personalDeleteAt(e.cancelled_ms);
+  if (e.pack !== 0) { const l = await env.DB.prepare("SELECT end_ms, end_src FROM life WHERE eid=?").bind(e.id).first<{ end_ms: number; end_src: string }>(); if (l && l.end_src === "phones") return personalDeleteAt(l.end_ms); }
+  return personalDeleteAt(await endBoundMs(env, e));
 }
 
 // ------------------------------------------------------------------------------------------------ winners record
@@ -116,7 +127,7 @@ export async function erasePersonal(env: Env, eid: string, now: number, by: stri
   await env.DB.batch([
     env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rvote WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rcand WHERE eid=?").bind(eid),
     env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM seat WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM person WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM waiting WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM overvote WHERE eid=?").bind(eid),
-    env.DB.prepare("DELETE FROM kv WHERE k=? OR k=? OR k=? OR k=? OR k LIKE ?").bind(`seats-base/${eid}`, `rpt/${eid}`, `rptopen/${eid}`, `rptremind/${eid}`, `rptc/${eid}/%`),
+    env.DB.prepare("DELETE FROM kv WHERE k=? OR k=? OR k=? OR k=? OR k LIKE ? OR k=?").bind(`seats-base/${eid}`, `rpt/${eid}`, `rptopen/${eid}`, `rptremind/${eid}`, `rptc/${eid}/%`, `seats-blk/${eid}`),
     env.DB.prepare(eraseCohostsSql).bind(eid), // the game's Co-hosts: name, mobile number and key go with the participants' data
     env.DB.prepare("INSERT INTO life(eid,end_ms,end_src,purged_ms,report_state) VALUES(?,?, 'organizer', ?, ?) ON CONFLICT(eid) DO UPDATE SET purged_ms=?, report_state=COALESCE(life.report_state, ?)").bind(eid, now, now, by, now, by),
   ]);
@@ -294,11 +305,45 @@ async function remindReport(env: LifeEnv, e: any, life: any, now: number) {
   await sendReportMail(env, email, `Reminder: open your Corporate Tambola report ${eid} before ${istFull(reportLinkUntil(life.end_ms))}`, `Hello,\n\nYour engagement ${eid} report has not been opened yet. The link closes at ${istFull(reportLinkUntil(life.end_ms))} and the participants' details are permanently deleted at ${istFull(personalDeleteAt(life.end_ms))}, and the report cannot be made after that.\n\nOpen it here and save the PDF:\n${await reportLink(env, eid)}\n\nCorporate Tambola`, []);
 }
 
+// ------------------------------------------------------------------------------------------------ games that did not start
+/**
+ * A game that was never paid for (so its first number was never called). Its guests' names and numbers, people lists, waiting requests, personal links and Co-host details are erased
+ * 23 hours after its scheduled END (the same end estimate a played game uses), following the NEWEST schedule: a reschedule moves the clock. Organizer and Host data, payments and invoices stay.
+ * A published game is then CLOSED (`unplayed_ms`): nobody can join or pay. Six hours before, the Organizer and Hosts get a heads-up (once per erasure time); right after, an "it did not start" mail.
+ * A draft nobody published is erased the same way but is not "closed" (it is forgotten after 30 days as before). Safe to repeat.
+ */
+export async function unplayedPass(env: LifeEnv, now: number): Promise<number> {
+  let purged = 0;
+  const roundAtMs = (ms: number) => Math.floor((ms / 1000 - GENESIS) / 3) + 1;
+  const rows = (await env.DB.prepare("SELECT e.* FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE e.pack IS 0 AND e.cancelled_ms IS NULL AND e.unplayed_ms IS NULL AND l.purged_ms IS NULL AND e.start_round <= ? ORDER BY e.start_round LIMIT 25").bind(roundAtMs(now - PURGE_AFTER_MS + UNPLAYED_WARN_MS)).all<any>()).results ?? [];
+  for (const e of rows) {
+    try {
+      const erase = personalDeleteAt(await endBoundMs(env, e));
+      const published = !!(await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`pub/${e.id}`).first());
+      if (published && now >= erase - UNPLAYED_WARN_MS && now < erase) { // one heads-up per erasure time (a reschedule is a new time, so it is a new heads-up)
+        const flag = `unplayed-warn/${e.id}`, seen = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(flag).first<{ v: string }>();
+        if (seen?.v !== String(erase)) { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(flag, String(erase)).run(); await mailErasureHeadsUp(env as any, e, erase, now); }
+      }
+      if (now >= erase && !(await isHeld(env.DB, e.id))) {
+        await erasePersonal(env, e.id, now, "unplayed");
+        if (published) {
+          await env.DB.prepare("UPDATE engagement SET unplayed_ms=? WHERE id=? AND unplayed_ms IS NULL AND pack=0").bind(now, e.id).run();
+          await env.DB.prepare("DELETE FROM kv WHERE k=? OR k=?").bind(`ann/${e.id}`, `unplayed-warn/${e.id}`).run();
+          await mailDataDeleted(env as any, e, now, { didNotStart: true });
+        }
+        purged++;
+      }
+    } catch { /* this game is tried again at the next tick */ }
+  }
+  return purged;
+}
+
 // ------------------------------------------------------------------------------------------------ the scheduled tick
 /** Runs the lifecycle for engagements that still hold personal data. Bounded: at most 25 engagements, one report step each. */
 export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checked: number; reportSteps: number; reportsDone: number; purged: number }> {
   const out = { checked: 0, reportSteps: 0, reportsDone: 0, purged: 0 };
-  const rows = (await env.DB.prepare("SELECT e.* FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE l.purged_ms IS NULL AND EXISTS (SELECT 1 FROM participant p WHERE p.eid=e.id) ORDER BY e.start_round LIMIT 25").all<any>()).results ?? [];
+  // paid (or cancelled) games that still hold personal data: guests, people on a list, waiting requests. A game nobody paid for is the "did not start" pass below.
+  const rows = (await env.DB.prepare("SELECT e.*, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS npart FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE l.purged_ms IS NULL AND (e.pack IS NOT 0 OR e.cancelled_ms IS NOT NULL) AND (EXISTS (SELECT 1 FROM participant p WHERE p.eid=e.id) OR EXISTS (SELECT 1 FROM person q WHERE q.eid=e.id) OR EXISTS (SELECT 1 FROM waiting w WHERE w.eid=e.id)) ORDER BY e.start_round LIMIT 25").all<any>()).results ?? [];
   for (const e of rows) {
     out.checked++;
     try {
@@ -314,6 +359,10 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
         life = await env.DB.prepare("SELECT * FROM life WHERE eid=?").bind(e.id).first<any>();
       }
       if (!life || now < life.end_ms + REPORT_AFTER_MS) continue; // still being played
+      if (!e.npart) { // a game that was played with nobody joined (only a people list): no report to make; the list goes 23 hours after the end like everyone's data
+        if (now >= personalDeleteAt(life.end_ms) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "auto"); out.purged++; await mailDataDeleted(env as any, e, now); }
+        continue;
+      }
       if (!life.report_ms && life.report_state !== "no-email") {
         out.reportSteps++;
         if (await reportStep(env, e, life, now)) { await env.DB.prepare("UPDATE life SET report_ms=?, report_state=COALESCE(report_state,'sent') WHERE eid=?").bind(now, e.id).run(); out.reportsDone++; }
@@ -323,6 +372,9 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
       if (now >= personalDeleteAt(life.end_ms) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "auto"); out.purged++; await mailDataDeleted(env as any, e, now); } // an owner-set legal hold suspends this too
     } catch { /* this engagement is tried again at the next tick; the others still run */ }
   }
+  // games that did not start (nobody paid, or still a draft): guest data goes 23 hours after the game was MEANT to end; a published one is then closed ("This game did not start")
+  try { out.purged += await unplayedPass(env, now); } catch { /* tried again at the next tick */ }
+  try { const c = await creditTick(env as any, now); (out as any).creditLapsed = c.lapsed; (out as any).creditMails = c.mailed; } catch { /* tried again at the next tick */ }
   // a game's Co-hosts (name + mobile) go 23 hours after it ends even when nobody ever joined, so no participant erasure ever ran for it
   try {
     const open = (await env.DB.prepare("SELECT DISTINCT eid FROM organizer_key WHERE kind='cohost' AND revoked=0 AND eid IS NOT NULL LIMIT 25").all<{ eid: string }>()).results ?? [];

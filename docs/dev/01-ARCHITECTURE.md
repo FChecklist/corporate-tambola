@@ -82,6 +82,7 @@ flowchart LR
 | `src/config.ts` | `EngagementCfg` types and `validateCfg()`: the single validator used by Worker, console and phones; constants `GRACE_ROUNDS=40`, `LATE_LAG_ROUNDS=30`, `INTERMISSION_ROUNDS=30`, `quorumFor`, `votersFor`, brand-moment allowance functions |
 | `src/game.ts` | `ticketFor/ticketsFor`, `settleAll`, `completionIndex*`, `luckyWinners`, schedule math with breaks and pauses (`callRoundR`, `callRoundFull`, `unshiftedRound`), `RoundStore`, `logFrom` |
 | `src/unique-ticket.ts` | Collision-free ticket list: ticket for seat s and ticket index w is `ticketAt(eid, 2*(s-1)+w)`; keyed permutation over about 880,000 row shapes x 2^29 number sets |
+| `src/house-rules.ts` | What each house asks of one ticket (`ruleOf`): shared by the engine, `settleAll`, claims and the page |
 | `src/prize-engine.ts` | Incremental winner engine (one unit per ticket) that equals `settleAll` (proved by test) |
 | `src/control.ts` | Signed control messages, `acceptLog`, `resolveControl`, safety profiles (`SAFETY_STANDARD/FAST/LEAN30/LEAN60`), `PAUSE_MAX_PARTICIPANTS=2000`, `safetyForCap`, `registerKey/publishControl/readPublished` (KV interface), `ControlTracker` |
 | `src/phone-runtime.ts` | The whole phone loop without UI: `PhoneRuntime` class (Phase `boot|missing|join|play|ended`) |

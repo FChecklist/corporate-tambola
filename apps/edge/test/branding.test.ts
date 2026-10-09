@@ -83,7 +83,7 @@ describe("mail that is not built by mails.ts gets the same brand when it is sent
     const rows = raw.prepare("SELECT subject, body FROM outbox").all() as { subject: string; body: string }[];
     expect(rows.length).toBeGreaterThanOrEqual(8);
     for (const r of rows) { expect([r.subject, hasFooter(r.body)]).toEqual([r.subject, true]); expect(r.body + r.subject).not.toMatch(/CORPORATE TAMBOLA|Corporate Tambola Tambola/); }
-    expect(rows.some((r) => /Someone new used/.test(r.subject))).toBe(true); expect(rows.some((r) => /could not begin/.test(r.subject))).toBe(true); expect(rows.some((r) => /^Payment due before/.test(r.subject))).toBe(true);
+    expect(rows.some((r) => /Someone new used/.test(r.subject))).toBe(true); expect(rows.some((r) => /could not begin/.test(r.subject))).toBe(true); expect(rows.some((r) => /^Payment pending for your game/.test(r.subject))).toBe(true);
   });
   test("pay.ts and nothing else talks to the mail service, and both senders add the brand", () => {
     const pay = read("apps/edge/src/pay.ts");
@@ -118,13 +118,13 @@ describe("the legal page carries the owner's final text, and each line matches w
   test("anchors, headings, counts, and one short line each", () => {
     for (const id of ["rules", "privacy", "disclaimer"]) expect(html).toContain(`<section id="${id}"`);
     expect(html).toContain(">Rules</h2>"); expect(html).toContain(">Privacy &amp; Data Policy</h2>"); expect(html).toContain(">Disclaimer</h2>");
-    expect(items("rules").length).toBe(11); expect(items("privacy").length).toBe(14); expect(items("disclaimer").length).toBe(6);
+    expect(items("rules").length).toBe(11); expect(items("privacy").length).toBe(15); expect(items("disclaimer").length).toBe(6);
     for (const id of ["rules", "privacy", "disclaimer"]) for (const l of items(id)) expect(l.split(/\s+/).length).toBeLessThanOrEqual(30);
     expect(html).toMatch(/<p class="muted">[^<]{1,80}<\/p>/);
   });
-  test("the fourteen privacy lines, word for word, with typographic apostrophes", () => {
+  test("the fifteen privacy lines, word for word, with typographic apostrophes", () => {
     expect(items("privacy")).toEqual([
-      "We delete all participant data from our systems within 24 hours after the game ends.", "All data is encrypted, in transit and at rest.", "Participants never see each other’s data.", "We provide the software. The organizer runs the game.", "Backups clear within 7 days.",
+      "We delete all participant data from our systems within 24 hours after the game ends.", "A game that never starts is treated the same way: its guests’ names and numbers are deleted 23 hours after the time it was meant to end.", "All data is encrypted, in transit and at rest.", "Participants never see each other’s data.", "We provide the software. The organizer runs the game.", "Backups clear within 7 days.",
       "No advertising cookies or trackers. We never sell data.", "Your phone keeps a random device id, your ticket and saved game files, so the game works offline.", "Exception: winner prize details are kept for 365 days, so the organizer can confirm the prize was handed over. They are then deleted automatically.", "Fair play. We keep a private, encrypted record of game activity to keep every game fair. Only we can see it. Removed automatically 365 days after your game ends.", "Public pages: a first-party visitor id and shortened network address, never names or mobile numbers, kept 365 days. With Global Privacy Control or Do Not Track, we only count visits.", "Designed to follow India’s DPDP Act 2023, EU GDPR and US CCPA.", "Your phone contacts drand for public random numbers, and YouTube (privacy mode) only if your organizer adds a video.", "You may also complain to the Data Protection Board of India.",
       "Questions or requests: our Grievance Officer, raajat.agarwal@gmail.com. We reply within 30 days."]);
     expect(html).toContain('href="mailto:raajat.agarwal@gmail.com"');
@@ -150,7 +150,7 @@ describe("claims register: customer-facing text never says what the build does n
       const t = read(f);
       for (const m of t.matchAll(/365[ -]?days?|365 DAY|365\s*\*\s*DAY|RETENTION_DAYS/gi)) {
         const ctx = t.slice(Math.max(0, m.index! - 260), m.index! + 260).toLowerCase();
-        expect([f, /winner|prize|organi[sz]er|retention|retain|ai assistant|hand|record|engagement|deleted|purge|delete|everything|keep|kept/.test(ctx)]).toEqual([f, true]);
+        expect([f, /winner|prize|credit|organi[sz]er|retention|retain|ai assistant|hand|record|engagement|deleted|purge|delete|everything|keep|kept/.test(ctx)]).toEqual([f, true]);
         expect([f, /names and numbers are kept 365|contacts kept 365|reuse your list|reuse the data.{0,40}365/.test(ctx)]).toEqual([f, false]);
       }
     }

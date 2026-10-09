@@ -188,6 +188,13 @@ export async function chainOf(db: D1, eid: string, inviter: string): Promise<str
 
 const csvCell = (v: unknown) => { let s = String(v ?? ""); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 
+/** Removed seats stay in the public seat list (winners must be identical on every phone) but cannot win Unlucky: their ids are kept in one small public list that phones read with the seats. */
+async function refreshBlocked(db: D1, eid: string): Promise<void> {
+  try {
+    const rows = (await db.prepare("SELECT pid FROM seat WHERE eid=? AND blocked=1").bind(eid).all<{ pid: string }>()).results ?? [];
+    await db.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").bind(`seats-blk/${eid}`, JSON.stringify(rows.map((r) => r.pid))).run();
+  } catch { /* the next removal or restore writes it again; until then Unlucky treats these seats as present */ }
+}
 async function batched(db: D1, stmts: ReturnType<D1["prepare"]>[]): Promise<{ meta?: { changes?: number } }[]> {
   const out: { meta?: { changes?: number } }[] = [];
   for (let i = 0; i < stmts.length; i += 50) out.push(...(await db.batch(stmts.slice(i, i + 50))));
@@ -215,6 +222,7 @@ export async function peopleRoute(c: Ctx): Promise<Response> {
   const got = await callerOf(c, bodyObj?.me);
   if ("res" in got) return got.res;
   const who = got.who;
+  if (c.e.unplayed_ms && method !== "GET") return c.json({ error: "This game did not start. Your details have been erased.", code: "did-not-start", didNotStart: true }, 409);
   if (c.cancelled && method !== "GET") return c.json({ error: "This game was cancelled by the organizer.", code: "cancelled", cancelled: true }, 409);
 
   if (parts[0] === "waiting") {
@@ -303,6 +311,7 @@ async function addPeople(c: Ctx, who: Caller, b: any): Promise<Response> {
   const waitingNow = todo.filter((t) => waits.has(t.ph) && waits.get(t.ph).status !== "admitted");
   for (const t of waitingNow) stmts.push(db.prepare("UPDATE waiting SET status='admitted', decided_by=?, decided_ms=? WHERE eid=? AND ph=?").bind(who.id, c.now, c.eid, t.ph));
   const res = await batched(db, stmts);
+  if (c.started && revive.length) await refreshBlocked(db, c.eid);
   // stmts are in the order fresh..., revive (+seat update)..., waiting...: map the person inserts back by position
   let i = 0; const done: typeof todo = [];
   for (const t of fresh) { if ((res[i++]?.meta?.changes ?? 0) > 0) done.push(t); else duplicates++; }
@@ -368,6 +377,7 @@ async function removePerson(c: Ctx, who: Caller, id: string, b: any): Promise<Re
     else stmts.push(db.prepare("DELETE FROM claim WHERE eid=? AND pid IN (SELECT pid FROM seat WHERE eid=? AND ph=?)").bind(c.eid, c.eid, t.ph), db.prepare("DELETE FROM participant WHERE eid=? AND phone_hash=?").bind(c.eid, t.ph), db.prepare("DELETE FROM seat WHERE eid=? AND ph=?").bind(c.eid, t.ph));
   }
   await batched(db, stmts);
+  if (c.started) await refreshBlocked(db, c.eid);
   if (who.kind === "host") { // a Host's removal tells the Organizer (the people are not named: the Organizer sees them in the console)
     try { const to = await c.orgEmail(); if (to) await c.sendMail(to, `A Host removed ${targets.length === 1 ? "someone" : targets.length + " people"} from ${c.gameName}`, `${(await labelsOf(c))(who.id)} removed ${targets.length === 1 ? "one person" : targets.length + " people"} from ${c.gameName} at ${c.istTime(c.now)}.\n\nYou can see who in your console, under My people.`); } catch { /* a mail is a nudge, never a requirement */ }
   }
@@ -584,7 +594,7 @@ export async function joinLinkPage(env: Env, token: string, origin: string, game
   const row = await env.DB.prepare("SELECT eid, pii, status FROM person WHERE tok_hash=?").bind(await tokenHash(token)).first<{ eid: string; pii: string; status: string }>();
   if (!row || row.status === "removed") return gone();
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(row.eid).first<any>();
-  if (!e || e.cancelled_ms) return gone();
+  if (!e || e.cancelled_ms || e.unplayed_ms) return gone();
   const pii = await openPii(env, row.pii), first = (pii?.name ?? "").trim().split(/\s+/)[0] ?? "", game = gameNameOf(e);
   const target = `${origin}/z.html?e=${encodeURIComponent(row.eid)}&t=${encodeURIComponent(token.toLowerCase())}`;
   const title = `You are invited to ${game}`, desc = `${first ? first + ", tap" : "Tap"} to open your ticket. Corporate Tambola needs no app and no sign-up.`;

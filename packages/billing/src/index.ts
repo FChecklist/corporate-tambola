@@ -72,6 +72,8 @@ export interface InvoiceData {
   currency: "INR" | "USD"; lines: { description: string; quantity: number; amount: number }[]; tax: TaxSplit; paymentRef?: string; orderRef?: string;
   /** "credit_note" = a GST credit note for a refund (same layout, own number series, names the invoice it reduces). Default: a tax invoice. */
   kind?: "invoice" | "credit_note"; originalNumber?: string;
+  /** A plain sentence printed under the totals (e.g. "Paid from credit of invoice ..."). */
+  note?: string;
 }
 const titleOf = (i: InvoiceData) => (i.kind === "credit_note" ? "CREDIT NOTE" : "TAX INVOICE");
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
@@ -94,7 +96,8 @@ ${rows}
   Taxable value: ${money(t.taxable, i.currency)}
 ${t.mode === "intra" ? `  CGST 9%: ${money(t.cgst, i.currency)}\n  SGST 9%: ${money(t.sgst, i.currency)}` : t.mode === "inter" ? `  IGST 18%: ${money(t.igst, i.currency)}` : "  GST: not charged (export of services)"}
   TOTAL: ${money(t.total, i.currency)}
-${i.paymentRef ? `Paid via Razorpay, payment ${i.paymentRef}` : ""}
+${i.paymentRef ? `Paid via Razorpay, payment ${i.paymentRef}` : ""}${i.note ? `
+${i.note}` : ""}
 ${c.sacCode ? `SAC ${c.sacCode} - ${c.sacDescription}` : c.sacDescription}
 ${c.invoiceFooter}`;
 }
@@ -115,7 +118,7 @@ ${i.draft ? `<div class="draft">DRAFT: the supplier's registration details are n
 <div><b>Billed to</b><br>${esc(i.buyer.name)}${i.buyer.gstin ? `<br>GSTIN: ${esc(i.buyer.gstin)}` : ""}${i.buyer.email ? `<br>${esc(i.buyer.email)}` : ""}<br>Place of supply: ${esc(t.placeOfSupply)}</div></div>
 <table><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Amount</th></tr></thead><tbody>${i.lines.map((l) => `<tr><td>${esc(l.description)}</td><td class="r">${l.quantity}</td><td class="r">${money(l.amount, i.currency)}</td></tr>`).join("")}</tbody>
 <tfoot><tr><td colspan="2">Taxable value</td><td class="r">${money(t.taxable, i.currency)}</td></tr>${taxRows.replace(/<tr><td>/g, '<tr><td colspan="2">').replace(/<td class="r">/g, '<td class="r">')}<tr><td colspan="2">TOTAL</td><td class="r">${money(t.total, i.currency)}</td></tr></tfoot></table>
-<div class="foot">${i.paymentRef ? `Paid online via Razorpay. Payment reference: ${esc(i.paymentRef)}.<br>` : ""}${c.sacCode ? `SAC ${esc(c.sacCode)}: ` : ""}${esc(c.sacDescription)}.${c.bank.accountNumber ? `<br>Bank: ${esc(c.bank.name)}, A/c ${esc(c.bank.accountNumber)}, IFSC ${esc(c.bank.ifsc)}` : ""}<br>${esc(c.invoiceFooter)}</div></div></body></html>`;
+<div class="foot">${i.paymentRef ? `Paid online via Razorpay. Payment reference: ${esc(i.paymentRef)}.<br>` : ""}${i.note ? `${esc(i.note)}<br>` : ""}${c.sacCode ? `SAC ${esc(c.sacCode)}: ` : ""}${esc(c.sacDescription)}.${c.bank.accountNumber ? `<br>Bank: ${esc(c.bank.name)}, A/c ${esc(c.bank.accountNumber)}, IFSC ${esc(c.bank.ifsc)}` : ""}<br>${esc(c.invoiceFooter)}</div></div></body></html>`;
 }
 
 // ---------------------------------------------------------------- Razorpay (public REST API)
@@ -131,13 +134,7 @@ export async function createOrder(cfg: RazorpayConfig, o: { amountMinor: number;
   if (!r.ok) throw new Error(data?.error?.description ?? `Razorpay refused the order (${r.status})`);
   return data;
 }
-/** Refunds a captured payment (partly or fully) to the original payment method. Amount in paise. Razorpay answers with the refund and its status (pending / processed / failed). */
-export async function createRefund(cfg: RazorpayConfig, paymentId: string, o: { amountMinor: number; notes?: Record<string, string>; receipt?: string }): Promise<{ id: string; status: string; amount: number }> {
-  const r = await fetch(`${base(cfg)}/payments/${encodeURIComponent(paymentId)}/refund`, { method: "POST", headers: { authorization: basic(cfg), "content-type": "application/json" }, body: JSON.stringify({ amount: o.amountMinor, speed: "normal", ...(o.receipt ? { receipt: o.receipt.slice(0, 40) } : {}), ...(o.notes ? { notes: o.notes } : {}) }) });
-  const data: any = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data?.error?.description ?? `Razorpay refused the refund (${r.status})`);
-  return data;
-}
+// There is deliberately NO refund call here: the service does not give refunds (a cancelled paid game becomes credit, docs/ROLES_AND_CONSOLE_SPEC_6.md).
 export async function fetchPayment(cfg: RazorpayConfig, paymentId: string): Promise<any> {
   const r = await fetch(`${base(cfg)}/payments/${encodeURIComponent(paymentId)}`, { headers: { authorization: basic(cfg) } });
   const data: any = await r.json().catch(() => ({}));

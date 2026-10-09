@@ -92,7 +92,7 @@ describe("the guided path, followed like an outside AI", () => {
     expect(sm.rewards.map((r: any) => r.pattern)).toEqual(["early5", "top", "mid", "bot", "full"]);
     expect(sm.breaks).toMatchObject([{ kind: "lucky", winners: 1, after: 45 }]); // placed by the software
     expect(sm.links.publishHandover).toBe(`${ORIGIN}/zc.html?e=DIWALI-1002&do=publish`); expect(sm.links.console).toBe(`${ORIGIN}/zc.html?e=DIWALI-1002`);
-    expect(sm.nextSteps.map((s: any) => s.step)).toEqual(["Name the prizes", expect.stringMatching(/^Publish/), "Pay before the start time", "Share the guest link and load the guest list"]);
+    expect(sm.nextSteps.map((s: any) => s.step)).toEqual(["Name the prizes", expect.stringMatching(/^Publish/), "Pay (the game does not begin until it is paid)", "Share the guest link and load the guest list"]);
     expect(sm.nextSteps.every((s: any) => s.done === false)).toBe(true);
   });
   test("a second game on the same day gets its own code, never overwriting the first", async () => {
@@ -161,6 +161,8 @@ describe("every function in the list does what the list says", () => {
       audit: async () => { expect((await A("GET", "org/ai/audit")).status).toBe(200); },
       ideas: async () => { expect((await A("POST", "z/suggestions", { kind: "feature", title: "A nicer thing", body: "It would help organizers a lot." })).status).toBe(200); },
       cancel: async () => { expect((await A("POST", `z/${ID}/cancel`, { confirmations: 3 })).status).toBe(403); expect((await A("GET", `z/${ID}/cancel-preview`)).status).toBe(403); expect((await j(await A("GET", `z/${ID}/summary`))).cancelled).toBeUndefined(); },
+      credit: async () => { expect((await A("POST", `z/${ID}/pay-with-credit`, {})).status).toBe(403); expect((await A("GET", "org/credit")).status).toBe(403); },
+      clone: async () => { expect((await A("POST", `z/${ID}/clone`, {})).status).toBe(403); },
       "sign-in": async () => { expect(existsSync(join(root, "apps/web/public/zc.html"))).toBe(true); expect((await A("POST", "org/ai/replace", {})).status).toBe(403); /* an AI can never mint or retire keys */ },
     };
     expect(Object.keys(checks).sort()).toEqual(FUNCTIONS.map((f) => f.id).sort()); // a function added to the list without a check here fails this test

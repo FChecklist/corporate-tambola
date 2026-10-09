@@ -30,6 +30,11 @@ export async function purgeTestData(env: Env, now: number): Promise<Record<strin
   await each(db, pl, (m) => `DELETE FROM invoice WHERE payment_id IN (${m})`);
   await each(db, pl, (m) => `DELETE FROM entitlement WHERE payment_id IN (${m})`);
   await each(db, pl, (m) => `DELETE FROM commission WHERE payment_id IN (${m})`);
+  await each(db, orgs, (m) => `DELETE FROM credit_use WHERE credit_id IN (SELECT id FROM credit WHERE org IN (${m}))`); // credit made while testing
+  await each(db, pl, (m) => `DELETE FROM credit_use WHERE credit_id IN (SELECT id FROM credit WHERE payment_id IN (${m}))`);
+  await db.prepare("DELETE FROM credit_use WHERE credit_id IN (SELECT id FROM credit WHERE is_test=1)").run();
+  await each(db, orgs, (m) => `DELETE FROM credit WHERE org IN (${m})`);
+  out.credits = ((await db.prepare("DELETE FROM credit WHERE is_test=1").run()).meta?.changes ?? 0);
   out.payments = await each(db, pl, (m) => `DELETE FROM payment WHERE id IN (${m})`);
   // 3. partners (a partner who joined in TEST) and any commission row flagged test
   const partners = await col(db, "SELECT code FROM partner WHERE is_test=1");

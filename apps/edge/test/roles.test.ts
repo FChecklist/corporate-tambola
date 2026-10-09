@@ -7,6 +7,7 @@ import { makeD1 } from "./d1-sqlite";
 
 // Roles: Organizer (master), Host (cth_, up to 5), Co-host (ctc_, unlimited). See docs/ROLES_AND_CONSOLE_SPEC.md.
 const T = Date.UTC(2026, 9, 1, 10, 0, 0);
+const FAR_START = Math.floor(((T + 2 * 86_400_000) / 1000 - 1692803367) / 3) + 1; // a game two days ahead (a game time can be at most 30 days ahead)
 let env: PayEnv; let raw: ReturnType<typeof makeD1>["raw"];
 const realFetch = globalThis.fetch;
 let orders: any[]; let payments: Record<string, any>;
@@ -30,7 +31,7 @@ let ip = 0;
 const start = async (email: string) => (await j(await handle(new Request("http://x/api/start", { method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": `9.9.9.${++ip}` }, body: JSON.stringify({ email }) }), env as Env, T))).token as string;
 const team = async (org = "boss@acme.com", gid = "ROLE-1") => {
   const master = await start(org);
-  await call("POST", "/api/z", { id: gid, startRound: 99999999, callSeconds: 9, cap: 300 }, master);
+  await call("POST", "/api/z", { id: gid, startRound: FAR_START, callSeconds: 9, cap: 300 }, master);
   const host = (await j(await call("POST", "/api/org/host", { mobile: "9876500009", label: "Priya", email: "priya@acme.com" }, master))).hostKey as string;
   const cohost = (await j(await call("POST", "/api/org/cohost", { label: "Ravi", phone: "9876500001", e: gid }, master))).cohostKey as string;
   return { master, host, cohost };
@@ -114,7 +115,7 @@ describe("what each role may do", () => {
   test("a Co-host reads only the small game header, with an own invite link", async () => {
     const t = await team();
     const h = await j(await call("GET", "/api/z/ROLE-1/cohost", undefined, t.cohost));
-    expect(Object.keys(h).sort()).toEqual(["brought", "cap", "inviteLink", "joined", "name", "payment", "price", "startMs"]);
+    expect(Object.keys(h).sort()).toEqual(["brought", "cap", "credit", "creditApplied", "creditExpiresMs", "didNotStart", "erasureMs", "inviteLink", "joined", "name", "payment", "price", "startMs", "waitingFor"]);
     expect(h).toMatchObject({ cap: 300, joined: 0, brought: 0, payment: { status: "pending" } });
     expect(h.inviteLink).toBeNull(); // a draft cannot take guests yet
     const other = await team("other@rival.com", "ROLE-2");

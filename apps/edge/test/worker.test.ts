@@ -8,6 +8,7 @@ const SECRET = "org-secret";
 let env: Env;
 let raw: ReturnType<typeof makeD1>["raw"];
 const T = Date.UTC(2026, 9, 1, 10, 0, 0);
+const FAR_START = Math.floor(((T + 2 * 86_400_000) / 1000 - 1692803367) / 3) + 1; // a game two days ahead (a game time can be at most 30 days ahead)
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}, now = T) =>
   handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: withDevice(method, path, body) }), env, now);
 const org = { "x-organizer": SECRET };
@@ -536,7 +537,7 @@ describe("the shared suggestion board for every organizer's AI", () => {
     expect((await call("POST", "/api/z/suggestions", { kind: "feature", title: "Fresh idea next day", body: "A perfectly reasonable description of the need." }, asA(), T + 86_400_001 + 1)).status).toBe(200);
   });
   test("a suggestion gives no one a way to run code or touch another organizer's engagements", async () => {
-    await call("POST", "/api/z", { id: "OTHERS1", startRound: 99999999, callSeconds: 9, cap: 5 }, plat);
+    await call("POST", "/api/z", { id: "OTHERS1", startRound: FAR_START, callSeconds: 9, cap: 5 }, plat);
     for (const path of ["/api/z/OTHERS1/participants", "/api/z/OTHERS1/claims", "/api/z/OTHERS1/roster", "/api/z/OTHERS1/erase", "/api/z/OTHERS1/settle", "/api/z/OTHERS1/settings"])
       expect([403, 404, 405]).toContain((await call(path.endsWith("participants") || path.endsWith("claims") ? "GET" : "POST", path, {}, asA())).status);
   });

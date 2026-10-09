@@ -10,6 +10,7 @@ import { makeD1 } from "./d1-sqlite";
 import { CLIENT_ID, claims, makeIdp, trust, type Idp } from "./google-fake";
 
 const T = Date.UTC(2026, 9, 8, 10, 0, 0), DAY = 86_400_000;
+const FAR_START = Math.floor(((T + 2 * 86_400_000) / 1000 - 1692803367) / 3) + 1; // a game two days ahead (a game time can be at most 30 days ahead)
 let env: PayEnv; let raw: ReturnType<typeof makeD1>["raw"]; let idp: Idp; let ip = 0;
 const call = (method: string, path: string, body?: unknown, key?: string, now = T) =>
   handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", "cf-connecting-ip": "4.4.4.4", ...(key ? { "x-organizer": key } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }), env as Env, now);
@@ -25,7 +26,7 @@ afterEach(() => setGoogleKeyProvider());
 
 const organizer = async (email = "boss@acme.com") => {
   const st = await j(await handle(new Request("http://x/api/start", { method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": `3.3.3.${++ip}` }, body: JSON.stringify({ email }) }), env as Env, T));
-  await call("POST", "/api/z", { id: "HOST-1", startRound: 99999999, callSeconds: 9, cap: 100 }, st.token);
+  await call("POST", "/api/z", { id: "HOST-1", startRound: FAR_START, callSeconds: 9, cap: 100 }, st.token);
   return { master: st.token as string, ai: st.aiKey as string };
 };
 const addHost = async (master: string, body: Record<string, unknown>, now = T) => j(await call("POST", "/api/org/host", { label: "Priya", ...body }, master, now));

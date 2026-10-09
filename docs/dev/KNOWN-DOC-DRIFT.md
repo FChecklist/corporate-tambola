@@ -54,3 +54,7 @@ Kinds: **DOC** = document is stale; **CODE?** = code or a user-facing promise is
 | 34 | `ORGANIZER_SECRET` created by `pages/launch.py` starts with `ctp_`, the same prefix as partner keys (unrelated; do not infer a role from the prefix) | `pages/launch.py:52` |
 | 35 | Line endings: 86 working-tree files are CRLF, 209 LF, 8 mixed (index is LF; `core.autocrlf=true`) | `git ls-files --eol` |
 | 36 | `docs/E2E_TEST_CASES.md` is **generated** by `tests/e2e/make-register.mjs`; do not hand-edit | file header |
+
+## Refund wording in older documents (spec 6, 2026-10-08)
+
+`docs/ROLES_AND_CONSOLE_SPEC_2.md` (items 1 and 2), `docs/ROLES_AND_CONSOLE_SPEC_4.md` (the "Check, publish and pay" write-up), `docs/RAZORPAY_COLLECT_AND_PAYOUT.md` and `docs/compliance/*` may still describe a refund minus the gateway charge. That rule is gone: **there are no refunds**; a cancelled paid game becomes credit for 365 days (`docs/ROLES_AND_CONSOLE_SPEC_6.md`). Trust the code (`apps/edge/src/credit.ts`, `apps/edge/src/cancel.ts`). Likewise the 24-hour payment cut-off of the first draft of spec 5 does not exist: a game can be paid until its guest data is erased.

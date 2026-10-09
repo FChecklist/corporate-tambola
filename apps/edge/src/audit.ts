@@ -113,8 +113,8 @@ export function ctxOf(req: Request): Ctx {
 }
 
 // ------------------------------------------------------------------------------------------------ what happened
-const ENG = /^\/api\/z\/([A-Za-z0-9_-]{4,40})\/([a-z]+)(?:\/([A-Za-z0-9/_-]+))?$/;
-const AI_FORBIDDEN = /(^|\/)(publish|erase|control|forget|settle|people|waiting|paylink)(\/|$)|^\/api\/(checkout|payments|org\/close)/;
+const ENG = /^\/api\/z\/([A-Za-z0-9_-]{4,40})\/([a-z]+(?:-[a-z]+)*)(?:\/([A-Za-z0-9/_-]+))?$/;
+const AI_FORBIDDEN = /(^|\/)(publish|erase|control|forget|settle|people|waiting|paylink|clone|pay-with-credit)(\/|$)|^\/api\/(checkout|payments|org\/close)/;
 /** Name the event and its target for a request, or null when it is not worth a row (plain reads by phones, the schedulers). */
 export function classify(method: string, path: string, status: number, actor: Actor, body: any): { event: string; target: string | null; eid: string | null } | null {
   const ok = status >= 200 && status < 300;
@@ -131,6 +131,8 @@ export function classify(method: string, path: string, status: number, actor: Ac
     else if (a === "settings") event = writes ? "edit" : null;
     else if (a === "publish") event = "publish";
     else if (a === "cancel") event = writes ? "cancel" : null;
+    else if (a === "clone") event = writes ? "clone" : null;
+    else if (a === "pay-with-credit") event = writes ? "pay" : null;
     else if (a === "announce") event = "announce";
     else if (a === "confirm" || a === "prizegiven") event = "prize";
     else if (a === "erase" || a === "forget" || a === "person") event = writes ? "erase_request" : null;

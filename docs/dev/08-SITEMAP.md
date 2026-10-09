@@ -25,7 +25,7 @@ https://corporate-tambola.pages.dev
 |   '-- /signin.html          Landing of the sign-in e-mail's buttons (single-use link)
 |
 |-- ORGANIZER AREA (noindex)
-|   |-- /zc.html              Console (single page, 9 steps; Co-host 3 steps; partners' screens)
+|   |-- /zc.html              Console (single page, 10 steps; Co-host 3 steps; partners' screens)
 |   |-- /pay.html             Publish and pay
 |   |-- /ai-link.html         "Show my AI work link" (fresh 24 h link, replace)
 |   |-- /preview.html         Test your brand moment (link tester)
@@ -79,15 +79,16 @@ Spec: `docs/ROLES_AND_CONSOLE_SPEC.md`, mock `docs/mock/console-mock-v5.html`. O
 
 | # | Section (colour) | Organizer | Host | Co-host | Main APIs |
 |---|---|---|---|---|---|
-| 1 | Your game (blue) | Y | Y | - | `POST /api/z`, `GET/PATCH /api/z/{id}/settings`, `GET /api/z/{id}/summary`, `/info` |
-| 2 | How it plays (teal) - tickets, speed, rounds, invite option | Y | Y | - | `PATCH settings` |
-| 3 | Prizes (amber) - 10 popular prize chips + "I will decide later" + "No prize" | Y | Y | - | `PATCH settings {rewards}` |
-| 4 | Brand moments (pink) - Type a message / YouTube / video link / audio link, "Test it" | Y | Y | - | `PATCH settings {opening, breaks, closing}`; `preview.html` |
-| 5 | Your team (green) - three role cards; Hosts n of 5; Co-hosts (no limit); copy private link; remove | Y (adds Hosts + Co-hosts) | Y (adds Co-hosts) | - | `GET /api/org/team`, `POST /api/org/host`, `/api/org/cohost`, `/api/org/team/retire` |
-| 6 | Invite and share (yellow) - Guest link, Big screen, Your guest list (type / paste from Excel / upload; WhatsApp or e-mail invites) | Y | Y | (Co-host sees own link in "Invite people") | `POST roster`, `reuse`, `mark` |
-| 7 | Check, publish and pay (orange) | Y | Y | Payment only (step 3 of Co-host) | `POST publish`, `POST /api/checkout` |
-| 8 | Game day (violet) - pause/resume/end/announce, prizes given, requests from the AI | Y | Y | - | `control/key`, `control` (signed), `control/request`, `announce`, `prizes`, `prizegiven`, `participants` |
-| 9 | After the game (red) - report link, winners hand-over, erase, close | Y (account: keys, AI link, close) | Y (no account actions) | - | `reportlink`, `life`, `erase`, `/api/org/keys*`, `/api/org/ai/*`, `/api/org/close` |
+| 1 | Date and time of the game (blue) | Y | Y | - | `POST /api/z`, `GET/PATCH /api/z/{id}/settings`, `GET /api/z/{id}/summary`, `/info` |
+| 2 | Number of participants (teal) - size, tickets, gap, rounds, who can join, guest invites | Y | Y | - | `PATCH settings` |
+| 3 | Set Prizes (violet) - 10 popular prize chips + "I will decide later" + "No prize" | Y | Y | - | `PATCH settings {rewards}` |
+| 4 | Set Brand Moments (magenta) - also company name, colour, logo - Type a message / YouTube / video link / audio link, "Test it" | Y | Y | - | `PATCH settings {opening, breaks, closing}`; `preview.html` |
+| 5 | Make hosts and co-hosts (green) - three role cards; Hosts n of 5; Co-hosts (no limit); copy private link; remove | Y (adds Hosts + Co-hosts) | Y (adds Co-hosts) | - | `GET /api/org/team`, `POST /api/org/host`, `/api/org/cohost`, `/api/org/team/retire` |
+| 6 | Invite and Share links (yellow) - Guest link, Big screen, My people (contacts / type / paste / CSV; WhatsApp only) | Y | Y | (Co-host sees own link in "Invite people") | `POST roster`, `reuse`, `mark` |
+| 7 | Check and publish (orange) - no price here; cancel; See what guests see | Y | Y | - | `POST publish`, `cancel-preview`, `cancel` |
+| 8 | Pay (lime) - the only place the price is shown; Pay, Paid, Copy payment link | Y | Y | Payment (step 3 of Co-host) | `POST /api/checkout`, `POST /api/z/{id}/paylink` |
+| 9 | Game day (violet) - pause/resume/end/announce, prizes given, requests from the AI | Y | Y | - | `control/key`, `control` (signed), `control/request`, `announce`, `prizes`, `prizegiven`, `participants` |
+| 10 | After the game (red) - report link, winners hand-over, erase, close | Y (account: keys, AI link, close) | Y (no account actions) | - | `reportlink`, `life`, `erase`, `/api/org/keys*`, `/api/org/ai/*`, `/api/org/close` |
 | - | Pinned strip (Organizer only): AI assistant work link with Copy | Y | - | - | `GET /api/org/ai/link` |
 | - | Help (pre-answered questions) | Y | Y | Y | - |
 | Co-host | Today's game / Invite people / Payment | - | - | Y | `GET /api/z/{id}/cohost`, `POST /api/checkout` |

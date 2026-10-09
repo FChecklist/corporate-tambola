@@ -20,7 +20,7 @@
   };
   // ---------- what the game's public settings say besides the plan: the brand strip, a cancelled game; and a personal invite link's token ----------
   const TOKEN = (q.get("t") || "").trim().slice(0, 80); // a personal link: sent as `token` when joining, so no mobile number is needed
-  const INFO = { brand: null, cancelled: null };
+  const INFO = { brand: null, cancelled: null, dns: false }; // dns = "this game did not start": nobody paid, the time and 23 hours passed, the guest data was erased
   const cleanBrand = (b) => {
     if (!b || typeof b !== "object") return null;
     const name = String(b.name == null ? "" : b.name).replace(/\s+/g, " ").trim().slice(0, 60);
@@ -35,6 +35,7 @@
   const noteInfo = (r, fromJoin) => {
     if (!r || typeof r !== "object") return;
     if ("brand" in r && !(fromJoin && INFO.brand)) INFO.brand = cleanBrand(r.brand); // a join answer carries the brand without its logo: never let it replace the full one read from info
+    if (r.didNotStart === true) INFO.dns = true; else if ("startRound" in r && !fromJoin) INFO.dns = false;
     if ("cancelled" in r || "startRound" in r) INFO.cancelled = r.cancelled ? { message: String(r.message || "").slice(0, 200) } : null;
   };
   let lastJoin = null; // what the server said when a join was refused: the page decides what to show from it
@@ -49,6 +50,10 @@
   };
   const INVITE_FROM = Number(q.get("from")) || 0, INVITE_CAT = q.get("c") || "";
   const NAMES = { early5: "Early Five", top: "Top line", mid: "Middle line", bot: "Bottom line", corners: "Four corners", star: "Star", full: "Full house" };
+  // the newer houses come from the one shared table (ZG.PRIZE_HOUSES); the seven original names above keep their spelling
+  ZG.PRIZE_HOUSES.forEach((h) => { if (!NAMES[h.id]) NAMES[h.id] = h.label; });
+  const HOW = Object.fromEntries(ZG.PRIZE_HOUSES.map((h) => [h.id, h.how]));
+  const howLine = (key) => (HOW[key] ? `<small class="zsmall zhow" style="margin:0">${esc(HOW[key])}</small>` : "");
   const getPublic = DEMO ? DEMO.getPublic : async (url) => { let r; try { r = await fetch(url, { cache: "no-store" }); } catch { throw new Error("offline"); } if (!r.ok) throw Object.assign(new Error("http " + r.status), { status: r.status }); return r.json(); };
   const rt = new ZG.PhoneRuntime(EID, DEMO ? { api, getPublic, beacon: DEMO.beacon, verify: DEMO.verify, mono: DEMO.mono, store } : { api, getPublic, beacon: {}, mono: () => performance.now(), store });
   let lastLen = 0, firstPaint = true, sound = store.get("ctz-sound") !== "off", timer = null;
@@ -85,15 +90,16 @@
     <p class="spriv"><a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy Policy</a></p></div>`;
   };
   const cancelledView = () => `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This game was cancelled</h2><p class="zsmall" style="margin:0">${esc((INFO.cancelled && INFO.cancelled.message) || "The organizer cancelled this game.")} There is nothing to do on this page. Thank you for your interest.</p></div>`;
+  const dnsView = () => `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This game did not start</h2><p class="zsmall" style="margin:0">This game did not start. Your details have been erased. There is nothing to do on this page. Thank you for your interest.</p></div>`;
   const removedView = () => `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>You have been removed from this game</h2><p class="zsmall" style="margin:0">This phone no longer plays in this game. If you think this is a mistake, please ask the person who invited you.</p></div>`;
   // what the server's "me" answer says about this ticket: removed, and (for a guest invited straight by the organizer's side) whether they may invite
-  const ME = { at: -Infinity, removed: false, canInvite: false, per: 0, used: 0, loaded: false };
+  const ME = { at: -Infinity, role: null, removed: false, canInvite: false, per: 0, used: 0, loaded: false };
   async function pollMe(v) {
     if (DEMO || !v.pid || performance.now() - ME.at < 90000 + (Math.floor(performance.now()) % 30000)) return;
     ME.at = performance.now();
     try {
       const r = await api("GET", `/api/z/${EID}/me?pid=${encodeURIComponent(v.pid)}`);
-      ME.loaded = true; ME.removed = r.removed === true || r.state === "removed"; ME.canInvite = r.canInvite === true; ME.per = Number(r.per) || 0; ME.used = Number(r.used) || 0;
+      ME.loaded = true; ME.removed = r.removed === true || r.state === "removed"; ME.canInvite = r.canInvite === true; ME.per = Number(r.per) || 0; ME.used = Number(r.used) || 0; ME.role = r.role || null;
       if (ME.removed) paint();
     } catch (e) {
       if (e && e.status === 404 && /not a participant/i.test(String(e.message || ""))) { ME.removed = true; paint(); } // removed before the start: the server has deleted the seat, so it no longer knows this ticket
@@ -122,7 +128,8 @@
       paint(); start(); return true;
     }
     const l = lastJoin || {}, b = l.body || {}, code = l.code || b.code || "";
-    if (code === "removed") { J.mode = "removed"; rt.error = null; clearInterval(J.timer); }
+    if (code === "did-not-start" || b.didNotStart) { INFO.dns = true; rt.error = null; clearInterval(J.timer); }
+    else if (code === "removed") { J.mode = "removed"; rt.error = null; clearInterval(J.timer); }
     else if (code === "waiting" || b.waiting) { J.mode = "waiting"; J.wid = String(b.wid || J.wid || ""); J.who = String(b.with || J.who || "").slice(0, 60); J.note = String(b.error || l.message || "").slice(0, 300) || (code === "invite-full" ? "The person who invited you has used all their invitations, so your request has gone to the organizer." : ""); rt.error = null; waitPoll(); }
     else if (code === "declined" || b.declined) { J.mode = "declined"; rt.error = null; clearInterval(J.timer); }
     else if (code === "link-used" || b.needPhone) { J.mode = "needPhone"; J.note = ""; rt.error = null; }
@@ -170,7 +177,7 @@
     if (DEMO) return DEMO.running ? `<div class="zcard zwait"><h2>Starting in <span id="cd">${Math.max(0, v.nextCallInSec)}</span> seconds</h2><p class="zsmall" style="margin:0">Watch your ticket below: each number is marked for you.</p></div>` : "";
     const ms = (1692803367 + (v.scheduledRound - 1) * 3) * 1000;
     const when = new Date(ms).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-    const prizes = ZG.keysInPlay(v.cfg.rewards).map((key) => ZG.linesFor(v.cfg.rewards, key).map((line) => `<li>${esc((ZG.linesFor(v.cfg.rewards, key).length > 1 ? ordinalName(line.ordinal) + " " : "") + KEYNAME(key))}${line.text ? ": <b>" + esc(line.text) + "</b>" : ""}</li>`).join("")).join("");
+    const prizes = ZG.keysInPlay(v.cfg.rewards).map((key) => ZG.linesFor(v.cfg.rewards, key).map((line) => `<li>${esc((ZG.linesFor(v.cfg.rewards, key).length > 1 ? ordinalName(line.ordinal) + " " : "") + KEYNAME(key))}${line.text ? ": <b>" + esc(line.text) + "</b>" : ""}<br>${howLine(key)}</li>`).join("")).join("");
     const toFirst = v.nextCallInSec, setup = toFirst <= GRACE_SECS;
     const top = setup
       ? `<h2>Your game is setting up</h2><div class="zsetup">We are waiting 2 minutes more for everyone to join.</div><div class="zcount" aria-live="off" id="cd">${clock(toFirst)}</div><p class="zsmall" style="margin-top:0">until the first number. Keep this page open: the numbers appear on their own.</p>`
@@ -213,7 +220,7 @@
     const box = document.createElement("div"); box.id = "hurray"; box.className = "zhurray"; box.setAttribute("role", "alertdialog"); box.setAttribute("aria-live", "assertive");
     const what = list.map((w) => esc(w.name)).join(", ");
     const prize = list.filter((w) => w.text).map((w) => `<div class="zhp">${esc(w.text)}</div>`).join("");
-    box.innerHTML = `<canvas class="zconf" aria-hidden="true"></canvas><div class="zhcard"><div class="zhbig">Hurray!</div><div class="zhsub">Congratulations, you won</div><div class="zhwhat">${what}</div>${prize}<button class="zbtn" id="hurok">Wonderful</button></div>`;
+    box.innerHTML = `<canvas class="zconf" aria-hidden="true"></canvas><div class="zhcard"><div class="zhbig">Hurray!</div><div class="zhsub">Congratulations, you won</div><div class="zhwhat">${what}</div>${list.length === 1 && HOW[list[0].pattern] ? `<div class="zhsub">${esc(HOW[list[0].pattern])}</div>` : ""}${prize}<button class="zbtn" id="hurok">Wonderful</button></div>`;
     document.body.appendChild(box);
     const done = () => { if (box.isConnected) box.remove(); };
     box.querySelector("#hurok").onclick = done; setTimeout(done, 15000);
@@ -270,7 +277,7 @@
   }
   function prizesCard() {
     if (!PRIZES.length) return "";
-    const rows = PRIZES.slice().sort((a, b) => a.round - b.round).map((w) => `<div class="zrow"><span>${esc(w.name)}${w.text ? `<br><small class="zsmall" style="margin:0">${esc(w.text)}</small>` : ""}</span><em>${w.pattern === "lucky" ? "Lucky draw" : "Round " + w.round}</em></div>`).join("");
+    const rows = PRIZES.slice().sort((a, b) => a.round - b.round).map((w) => `<div class="zrow"><span>${esc(w.name)}${w.text ? `<br><small class="zsmall" style="margin:0">${esc(w.text)}</small>` : ""}${HOW[w.pattern] ? "<br>" + howLine(w.pattern) : ""}</span><em>${w.pattern === "lucky" ? "Lucky draw" : "Round " + w.round}</em></div>`).join("");
     return `<div class="zcard zprizes"><h2>Your prizes</h2>${rows}<p class="zsmall" style="margin:6px 0 0">Saved on this phone. Show this to your organizer to collect.</p></div>`;
   }
   let shareLink = location.origin + "/";
@@ -496,17 +503,18 @@
     const keys = ZG.keysInPlay(v.cfg.rewards);
     return keys.map((key) => {
       const lines = ZG.linesFor(v.cfg.rewards, key);
-      const n = ZG.stillToWin(v.tickets, key, v.log);
+      const n = key === "unlucky" ? 0 : ZG.stillToWin(v.tickets, key, v.log);
       const mine = v.myIdx[key];
       return lines.map((line) => {
         const total = lines.length;
         const name = (total > 1 ? ordinalName(line.ordinal) + " " : "") + KEYNAME(key);
         const res = v.results.find((r) => r.pattern === key && r.ordinal === line.ordinal);
         let right;
-        if (res) right = mine === res.idx ? `<em>Yours${res.count > 1 ? " · shared by " + res.count : ""}</em>` : `<i>Awarded${res.count > 1 ? " to " + res.count : ""}</i>`;
-        else if (line.ordinal === 1) right = mine >= 0 ? `<em>Complete</em>` : `<i>${n} to go</i>`;
+        if (key === "unlucky") right = res ? ((res.winners || []).includes(v.pid) ? `<em>Yours</em>` : `<i>Awarded</i>`) : `<i>decided at the first Full House</i>`;
+        else if (res) right = mine === res.idx ? `<em>Yours${res.count > 1 ? " · shared by " + res.count : ""}</em>` : `<i>Awarded${res.count > 1 ? " to " + res.count : ""}</i>`;
+        else if (line.ordinal === 1) right = mine >= 0 ? `<em>Complete</em>` : n >= 99 ? `<i>not possible on your ticket</i>` : `<i>${n} to go</i>`;
         else right = `<i>after the ${ordinalName(line.ordinal - 1)}</i>`;
-        return `<div class="zrow"><span>${esc(name)}${line.text ? `<br><small class="zsmall" style="margin:0">${esc(line.text)}</small>` : ""}</span>${right}</div>`;
+        return `<div class="zrow"><span>${esc(name)}${line.text ? `<br><small class="zsmall" style="margin:0">${esc(line.text)}</small>` : ""}<br>${howLine(key)}</span>${right}</div>`;
       }).join("");
     }).join("");
   }
@@ -522,7 +530,7 @@
     const last = v.log[v.log.length - 1];
     const banners = [];
     if (v.error) banners.push(`<div class="zbanner warn" role="alert">${esc(v.error)}</div>`);
-    if (v.locked) banners.push(`<div class="zbanner warn"><b>Waiting for the organizer.</b> This engagement cannot begin until the organizer finishes setting it up. Your ticket is safe. Keep this page open: it begins as soon as they are done.</div>`);
+    if (v.locked) banners.push(ME.role === "organizer" || ME.role === "host" ? `<div class="zbanner warn" role="status"><b>Payment pending for this game.</b> The game starts 2 minutes after the payment is confirmed. Open your console to pay. Your ticket is safe. Keep this page open.</div>` : `<div class="zbanner warn" role="status"><b>Waiting for the Organizer or Host to start the game.</b> Your ticket is safe. Keep this page open: it begins as soon as they are done.</div>`);
     else if (v.stopped) banners.push(`<div class="zbanner info">The organizer has ended this engagement.</div>`);
     else if (v.paused) banners.push(`<div class="zbanner info">Paused by the organizer. It will carry on shortly.</div>`);
     else if (v.mode === "hold" && v.nowRound !== null) banners.push(`<div class="zbanner warn">Checking with the organizer… numbers will continue in a moment.</div>`);
@@ -556,6 +564,7 @@
   function paint() {
     const v = rt.view();
     if (!v.won) v.won = []; // an older saved copy of the game code during an update: never break the screen
+    if (INFO.dns) { if (timer) { clearInterval(timer); timer = null; } clearInterval(J.timer); mediaHost.style.display = "none"; $app.innerHTML = dnsView(); paintBrand(); return; } // a game that did not start: one calm screen, nobody can join or pay
     if (v.phase === "missing" || v.phase === "boot") { $app.innerHTML = `<p class="zmsg">${esc(v.error || "Loading…")}</p>`; return; }
     if (INFO.cancelled) { if (timer) { clearInterval(timer); timer = null; } clearInterval(J.timer); mediaHost.style.display = "none"; $app.innerHTML = cancelledView(); paintBrand(); return; } // a cancelled game: one calm screen, nothing else
     if (v.phase === "join") { const f = document.getElementById("ph") || document.getElementById("nm"); if (f && document.activeElement === f) return; $app.innerHTML = joinView(J.mode ? null : v.error); paintBrand(); bindJoin(); return; }

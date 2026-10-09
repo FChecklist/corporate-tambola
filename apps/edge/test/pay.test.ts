@@ -6,6 +6,7 @@ import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
 
 const T = Date.UTC(2026, 9, 1, 10, 0, 0);
+const FAR_START = Math.floor(((T + 2 * 86_400_000) / 1000 - 1692803367) / 3) + 1; // a game two days ahead (a game time can be at most 30 days ahead)
 let env: PayEnv; let raw: ReturnType<typeof makeD1>["raw"];
 const realFetch = globalThis.fetch;
 let rz: { orders: any[]; payments: Record<string, any>; captured: string[] };
@@ -383,7 +384,7 @@ describe("paying to publish a draft", () => {
   const pay = (key: string, eid: string, extra: Record<string, unknown> = {}) => call("POST", "/api/checkout", { eid, org: "Acme Ltd", email: "boss@acme.com", country: "IN", taxId: "", currency: "INR", ...extra }, { "x-organizer": key });
   test("the payment is bound to the signed-in organizer and publishes their draft", async () => {
     const key = await start("boss@acme.com", "1.1.1.1");
-    await call("POST", "/api/z", { id: "PAYD-1", startRound: 99999999, callSeconds: 9, cap: 300 }, { "x-organizer": key });
+    await call("POST", "/api/z", { id: "PAYD-1", startRound: FAR_START, callSeconds: 9, cap: 300 }, { "x-organizer": key });
     expect((await call("POST", "/api/z/PAYD-1/join", { phone: "9876543210" })).status).toBe(403); // a draft: closed to participants
     const c = await (await pay(key, "PAYD-1", { pack: 100000 })).json() as any; // the client's pack is ignored: the draft decides
     expect(c.mode).toBe("razorpay"); expect(rz.orders[0].amount).toBe(1 * rz.orders[0].amount); expect(c.razorpay.description).toMatch(/500/);
@@ -395,7 +396,7 @@ describe("paying to publish a draft", () => {
   });
   test("nobody can pay for, or publish, someone else's draft; a published one is not paid for twice", async () => {
     const a = await start("a@acme.com", "1.1.1.1"), b = await start("b@other.com", "2.2.2.2");
-    await call("POST", "/api/z", { id: "PAYD-2", startRound: 99999999, callSeconds: 9, cap: 100 }, { "x-organizer": a });
+    await call("POST", "/api/z", { id: "PAYD-2", startRound: FAR_START, callSeconds: 9, cap: 100 }, { "x-organizer": a });
     expect((await pay(b, "PAYD-2")).status).toBe(404);
     expect((await pay("ctk_bogus", "PAYD-2")).status).toBe(403);
     const c = await (await pay(a, "PAYD-2")).json() as any; await complete(c.paymentId, c.razorpay.orderId, "pay_2");
@@ -403,7 +404,7 @@ describe("paying to publish a draft", () => {
   });
   test("a draft that is too big for any pack needs a custom arrangement", async () => {
     const key = await start("big@acme.com", "3.3.3.3");
-    await call("POST", "/api/z", { id: "PAYD-3", startRound: 99999999, callSeconds: 9, cap: 100000 }, { "x-organizer": key });
+    await call("POST", "/api/z", { id: "PAYD-3", startRound: FAR_START, callSeconds: 9, cap: 100000 }, { "x-organizer": key });
     expect((await pay(key, "PAYD-3")).status).toBe(400);
   });
 });

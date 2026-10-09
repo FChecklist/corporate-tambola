@@ -84,7 +84,7 @@
         <div id="taxBox"></div><div id="fErr"></div>
         <button class="btn block" style="margin-top:16px" type="submit" id="payGo">${ic("lock")} ${PAYMODE === "razorpay" ? "Pay securely with Razorpay" : PAYMODE === "off" ? "Payments are not switched on yet" : "Pay (local test payment)"}</button>
       </form>
-      <p class="proto">${PAYMODE === "razorpay" ? "Secure payment by Razorpay. Cancel before the start time for a refund minus the payment-gateway charge (2.36%). No refund once it has started. Unused places are not refunded. A GST invoice is emailed to you." : "Local test payment: no real money is taken. Unused places are not refunded."}</p>`);
+      <p class="proto">${PAYMODE === "razorpay" ? "Secure payment by Razorpay. We do not give refunds. If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days. Unused credit lapses at the end of day 365. The organizer keeps the credit in their account. Once it has started, a paid game cannot be cancelled. A GST invoice is emailed to you." : "Local test payment: no real money is taken. Unused places are not credited."}</p>`);
     $("oCty").addEventListener("change", taxField);
     $("coForm").addEventListener("submit", (e) => { e.preventDefault(); pay(); });
     taxField(); focusFirst("oName");

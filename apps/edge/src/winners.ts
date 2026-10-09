@@ -5,7 +5,7 @@
 //   - Each accepted winner gets a prize record: the winner confirms their name and mobile number on their own phone after the game (every change is kept as an audit trail and
 //     shown to the organizer / co-host), and the organizer / co-host ticks "prize given" with the date.
 //   - Every call the organizer's external AI makes is written to an audit trail with where it came from.
-import { keysInPlay, quorumFor } from "../../../packages/beacon/src/config";
+import { keysInPlay, linesFor, quorumFor } from "../../../packages/beacon/src/config";
 import { seatOfPid } from "../../../packages/beacon/src/unique-ticket";
 import { openPii, openText, sealPii, sealText, type PiiEnv } from "./pii";
 import { cfgOfRow, recordWinners } from "./lifecycle";
@@ -39,7 +39,7 @@ export async function acceptVotes(env: Env & PiiEnv, e: any, eid: string, b: any
   let accepted = 0, counted = 0; const done: string[] = [];
   for (const x of b.results) {
     const lucky = x?.pattern === "lucky";
-    if ((!lucky && !valid.has(x?.pattern)) || (lucky && (!Number.isInteger(x?.ordinal) || x.ordinal < 1 || x.ordinal > luckyCount)) || !Number.isInteger(x?.ordinal) || x.ordinal < 1 || x.ordinal > 5
+    if ((!lucky && !valid.has(x?.pattern)) || (lucky && (!Number.isInteger(x?.ordinal) || x.ordinal < 1 || x.ordinal > luckyCount)) || !Number.isInteger(x?.ordinal) || x.ordinal < 1 || (!lucky && !linesFor(cfg.rewards, x.pattern).some((l) => l.ordinal === x.ordinal))
       || !Number.isInteger(x?.round) || x.round < 1 || x.round > cfg.rounds || (lucky && x.round !== 1) || !Number.isInteger(x?.idx) || x.idx < 0 || x.idx > 89
       || !Array.isArray(x?.pids) || x.pids.length < 1 || x.pids.length > (lucky ? 10 : 500) || x.pids.some((p: unknown) => typeof p !== "string" || !PID.test(p))) continue;
     if (await env.DB.prepare("SELECT 1 AS x FROM settled WHERE eid=? AND round=? AND pattern=? AND ordinal=?").bind(eid, x.round, x.pattern, x.ordinal).first()) { done.push(`${x.round}:${x.pattern}:${x.ordinal}`); continue; }

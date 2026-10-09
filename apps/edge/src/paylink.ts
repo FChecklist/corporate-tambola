@@ -29,18 +29,19 @@ export async function createPayLink(db: D1, eid: string, org: string, by: string
   return { token, expiresMs };
 }
 
-export type PayLinkStatus = "open" | "paid" | "expired" | "cancelled" | "confirming";
-export interface PayLinkView { link: { eid: string; org: string }; e: { id: string; org: string | null; cap: number; pack: number | null; start_round: number; config: string | null; cancelled_ms: number | null; tickets?: number }; status: PayLinkStatus }
+export type PayLinkStatus = "open" | "paid" | "expired" | "cancelled" | "confirming" | "closed";
+export interface PayLinkView { link: { eid: string; org: string }; e: { id: string; org: string | null; cap: number; pack: number | null; start_round: number; config: string | null; cancelled_ms: number | null; unplayed_ms?: number | null; tickets?: number }; status: PayLinkStatus }
 
 /** Looks a token up and works out where the payment stands. null = no such link (the same answer for a wrong, old or mistyped token). */
 export async function lookupPayLink(db: D1, token: string, now: number): Promise<PayLinkView | null> {
   if (!PAYLINK_TOKEN.test(token)) return null;
   const link = await db.prepare("SELECT eid, org, exp_ms, revoked FROM paylink WHERE hash=?").bind(await payLinkHash(token)).first<{ eid: string; org: string; exp_ms: number; revoked: number }>();
   if (!link) return null;
-  const e = await db.prepare("SELECT id, org, cap, pack, start_round, config, cancelled_ms, tickets FROM engagement WHERE id=?").bind(link.eid).first<PayLinkView["e"]>();
+  const e = await db.prepare("SELECT id, org, cap, pack, start_round, config, cancelled_ms, unplayed_ms, tickets FROM engagement WHERE id=?").bind(link.eid).first<PayLinkView["e"]>();
   if (!e || e.org !== link.org) return null;
   let status: PayLinkStatus;
   if (e.cancelled_ms) status = "cancelled";
+  else if (e.unplayed_ms) status = "closed"; // the game did not start and its guest data was erased: nobody can pay for it any more
   else if (e.pack !== 0) status = "paid";
   else if (link.revoked || now > link.exp_ms) status = "expired";
   else {

@@ -4,6 +4,8 @@ Same style rules as specs 1 to 3 (owner non-technical; plain words; short senten
 
 ## A. "About this step" write-ups (console, Organizer and Host)
 
+**Owner change 2026-10-09: the console now has TEN steps (7 Check and publish, 8 Pay, 9 Game day, 10 After the game). The write-ups below keep their wording; the payment sentences of old step 7 moved to the new step 8 Pay (see `ABOUT` in `zc.js`).**
+
 Show a small box under the talking line of each open step, **12 px, grey-brown text, a short title "About this step", at most 5 short lines**, always visible (no extra tap). Use exactly this wording (edit only to keep it true to the code):
 
 1 Your game: "This is the basics. Pick the occasion, the day and the time. Times are India time. Guests can join before the start. The first number comes 2 minutes after the start. You can change all this until the game starts."

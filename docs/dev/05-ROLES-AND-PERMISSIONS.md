@@ -76,7 +76,10 @@ Legend: **Y** allowed; **-** refused (403); **hand** = the AI prepares and gives
 | **Account**: close account | Y | - | - | - | - | - | - | `/api/org/close` |
 | Add a **Host** (max 5; needs the Host's e-mail) | Y | **-** | - | - | Y | - | - | `/api/org/host` `kind master or ai`; link e-mailed to the Host |
 | Add a **Co-host** (no limit; name + mobile, for ONE game, no e-mail) | Y | Y | - | - | **-** (a mobile number is never given to an AI) | - | - | `/api/org/cohost` |
-| **Cancel a game** (`cancel-preview`, `cancel`, `confirmations: 3`) | Y | Y | - | - | **-** | Y | - | `can(a,e,true)`; paid + started = refused |
+| **Cancel a game** (`cancel-preview`, `cancel`, `confirmations: 3`); a paid game becomes credit | Y | Y | - | - | **-** | Y | - | `can(a,e,true)`; paid + started = refused |
+| **Create a new game like this one** (`POST /api/z/{id}/clone`) | Y | Y | - | - | **-** | Y | - | `can(a,e,true)` (AI key 403, Co-host 403) |
+| **See the account's credit** (`GET /api/org/credit`) | Y | Y | - | - | **-** | - | - | `creditRoute`: Organizer and Host only |
+| **Use credit for a game** (`POST /api/z/{id}/pay-with-credit`) | Y | Y | - | **Y** (own game) | **-** | - | - | `creditRoute`: Organizer, Host, Co-host of that game; never AI or a work link |
 | List the team | Y | Y | - | **-** | Y | - | - | `/api/org/team` |
 | Retire Hosts and Co-hosts | Y | **Co-hosts only** | - | - | - | - | - | `/api/org/team/retire` |
 | Read the small game header | Y | Y | - | **Y** | Y | Y | - | `GET /api/z/{id}/cohost` |

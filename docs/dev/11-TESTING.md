@@ -14,9 +14,12 @@ Helpers: `d1-sqlite.ts` (`makeD1()` applies `SCHEMA` to `bun:sqlite`, same prepa
 | `usecases.test.ts` | 58 | UC-1..UC-82 server use cases: sign-in codes, key refusal, publish/pay paths, held/late payment, webhook, credits, GSTIN, mail down, budget, tenant isolation, AI manifest/worked examples/summary read-back, pause profiles by size, announcements, Host via link, scratch lucky draw |
 | `free-launch.test.ts` | 17 | the organizer journey: start without payment, drafts, publish free, held unpaid, move start, reminder, entitlement publish, AI hand-over, contact confirmation, 30-day draft forgetting, `FREE_LAUNCH` |
 | `pay.test.ts` | 42 | checkout, Razorpay order, verify/webhook (signatures, amounts, idempotency), entitlement per purchase, invoice numbering/GST/DRAFT, mail handling, sign-in codes, bound payment to draft |
+| `credit.test.ts` | 27 | Spec 6, no refunds: cancel -> credit with the right amount and expiry, `GET /api/org/credit`, `pay-with-credit` in full / partly (top-up) / with a remainder, oldest-expiring first, once and never below zero, pay-link isolation, payment after a cancel, lapse at the end of day 365 IST, the five mails once each |
+| `unplayed.test.ts` | 22 | Spec 5 A: erasure of a game that did not start (and the played-game rule unchanged), closed state, reschedule moves the clock, no payment cut-off, heads-up and after mails, settings kept 30 days, the 30-day limit |
+| `clone.test.ts` | 11 | Spec 5 B: `POST /api/z/{id}/clone` (who, what is and is not copied, start pending, draft limit, people list, audit, closed/cancelled sources) |
 | `roles.test.ts` | 14 (untracked) | Organizer/Host/Co-host rules (see `05-ROLES-AND-PERMISSIONS.md` section 9) |
 | `brand-ticket.test.ts` | 10 | Phase 3 brand on the ticket: name, 8-colour palette, logo type/size/first bytes, injection, settings/info/summary |
-| `paylink.test.ts` | 16 | Phase 3 pay link: who makes it, public view, expiry, replacement, checkout bound to the game, paid-by-link, refund |
+| `paylink.test.ts` | 16 | Phase 3 pay link: who makes it, public view, expiry, replacement, checkout bound to the game, paid-by-link, cancel -> credit |
 | `google-signin.test.ts` | 10 | Phase 4 "Continue with Google": token checks with a fake signing key (never calls Google), sign-up, sign-in, limits |
 | `host-setup.test.ts` | 25 | Phase 4 Host first open: strict harness `makeD1({ strictHosts: true })`; the default harness finishes a new Host's setup by a trigger so other tests can use Host keys |
 | `csp-google.test.ts` | 3 | Phase 3/4 headers in `pages/build.mjs` |
@@ -62,6 +65,7 @@ Helpers: `d1-sqlite.ts` (`makeD1()` applies `SCHEMA` to `bun:sqlite`, same prepa
 | `game.test.ts` | 34 | tickets, `settleAll`, lucky winners, schedule with breaks/pauses/rounds |
 | `phone-runtime.test.ts` | 36 | the phone loop without UI: join, numbers, votes, pauses, late joiner, breaks, mirrors failing |
 | `prize-engine.test.ts`, `late-joiner.test.ts`, `unique-ticket.test.ts`, `demo-script.test.ts` | 7, 3, 7, 6 | incremental engine equals `settleAll`; late joiner counting; no two tickets equal; demo script re-derived from the real functions |
+| `houses.test.ts`, `houses-runtime.test.ts` (beacon), `houses-pages.test.ts` (web) | 33, 4, 4 | every house rule, engine equals `settleAll` for all houses, Unlucky (fewest marked, tie-break, exclusions, late joiners), maximum winners and old games, real phones agree with the whole-log settlement |
 | `packages/shared/test/shared.test.ts` | 11 | phone normalisation, upload parsing, pricing |
 | `packages/billing/test/billing.test.ts` | 16 | GST split, invoice numbers/render, signatures |
 | `packages/engine/test/engine.test.ts`, `surprise.test.ts` | 32, 33 | **legacy** server engine |

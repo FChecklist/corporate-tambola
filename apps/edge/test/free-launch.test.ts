@@ -75,7 +75,7 @@ describe("build first, pay to publish", () => {
     expect(info.unpaid).toBeUndefined(); expect(info.locked).toBe(false); // participants are never told it is unpaid
     expect(((await (await call("GET", "/api/z/PUB-1/info", undefined, h)).json()) as any).unpaid).toBe(true); // the organizer is
     const mail = raw.prepare("SELECT subject, body FROM outbox WHERE to_addr=? ORDER BY id DESC LIMIT 1").get("boss@acme.com") as { subject: string; body: string };
-    expect(mail.subject).toMatch(/pay before/i); expect(mail.body).toMatch(/will not begin/);
+    expect(mail.subject).toMatch(/payment pending/i); expect(mail.body).toMatch(/does not begin until it is paid/);
     expect(mail.body).toContain("/pay.html?e=PUB-1"); expect(mail.body).toContain("/z.html?e=PUB-1");
     expect(mail.body).not.toMatch(/cta_|cth_|\/ai\//); // the publish mail is forwardable: the AI work link has its own dedicated e-mail
     expect((await call("GET", "/api/history", undefined, { "x-organizer": ai })).status).toBe(200); // and the AI key already in use was not touched
@@ -109,7 +109,7 @@ describe("build first, pay to publish", () => {
     await call("POST", "/api/z/REM-1/publish", ok, h);
     const { housekeeping } = await import("../src/worker");
     await housekeeping(env as Env, T + 86_400_000); await housekeeping(env as Env, T + 2 * 86_400_000); // the next day: 6 hours to go; the day after: already started
-    const n = (raw.prepare("SELECT COUNT(*) AS c FROM outbox WHERE to_addr='boss@acme.com' AND subject LIKE 'Payment due before%'").get() as any).c;
+    const n = (raw.prepare("SELECT COUNT(*) AS c FROM outbox WHERE to_addr='boss@acme.com' AND subject LIKE 'Payment pending for your game%'").get() as any).c;
     expect(n).toBe(1);
   });
   test("after a pack is bought, publishing counts as paid at once", async () => {

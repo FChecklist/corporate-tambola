@@ -91,7 +91,7 @@ Run **targeted** tests; the full suite is large. Project rule file `C:\ct\HEAVY_
 ```
 # 0. get the repo green locally (targeted tests, typecheck), rebuild bundles if you touched shared logic:
 bun run build:zgame ; bun run build:control ; bun run build:report
-# 1. apply NEW D1 migrations to the live database BEFORE deploying code that reads them (0013, 0014 say so)
+# 1. apply NEW D1 migrations to the live database BEFORE deploying code that reads them (0013, 0014, 0018 say so; 0018 adds the credit tables and engagement.unplayed_ms)
 wrangler d1 execute corporate-tambola --remote --file apps/edge/migrations/0014_roles.sql     # example
 # 2. build the static output and deploy
 bun run pages:deploy

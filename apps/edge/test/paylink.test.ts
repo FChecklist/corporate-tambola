@@ -158,12 +158,13 @@ describe("paying through the link", () => {
     const v = await call("POST", "/api/payments/verify", { paymentId: c.paymentId, razorpay_order_id: c.razorpay.orderId, razorpay_payment_id: "pay_1", razorpay_signature: "0".repeat(64) });
     expect(v.status).toBe(400); expect((await view(tok)).status).toBe("open");
   });
-  test("refund as today: the Organizer cancels the paid game, the refund and the credit note follow, and the link says cancelled", async () => {
+  test("no refund: the Organizer cancels the paid game, the payment stays as credit, no refund row, and the link says cancelled", async () => {
     const t = await team(); const tok = tokenOf((await link(t.master)).body.url);
     await complete(await j(await pay(tok)));
-    const pre = await j(await call("GET", "/api/z/PL-1/cancel-preview", undefined, t.master)); expect(pre.paid).toBe(true); expect(pre.refund.refundInr).toBeGreaterThan(0);
+    const pre = await j(await call("GET", "/api/z/PL-1/cancel-preview", undefined, t.master)); expect(pre.paid).toBe(true); expect(pre.credit.amountInr).toBeGreaterThan(0);
     expect((await call("POST", "/api/z/PL-1/cancel", { confirmations: 3 }, t.master)).status).toBe(200);
-    expect(raw.prepare("SELECT COUNT(*) AS c FROM refund").get()).toEqual({ c: 1 });
+    expect(raw.prepare("SELECT COUNT(*) AS c FROM refund").get()).toEqual({ c: 0 });
+    expect(raw.prepare("SELECT COUNT(*) AS c FROM credit").get()).toEqual({ c: 1 });
     expect((await view(tok)).status).toBe("cancelled");
   });
   test("the same free-plan guard as other public writes: 30 attempts a day from one network, then 429; another network is fine", async () => {

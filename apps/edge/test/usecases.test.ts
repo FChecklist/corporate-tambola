@@ -139,7 +139,7 @@ describe("C. publish and pay", () => {
     await call("POST", "/api/z", eng("CASE-2", { cap: 300 }), o.h);
     const pub = await j(await call("POST", "/api/z/CASE-2/publish", contact, o.h));
     expect(pub.published).toBe(true); expect(pub.paid).toBe(false);
-    expect(outbox("%pay before%").length).toBe(1);
+    expect(outbox("%payment pending%").length).toBe(1);
     const c = await j(await checkout(o, "CASE-2", {}, T + 10 * 60_000));
     expect(c.mode).toBe("razorpay"); expect(c.razorpay.description).toMatch(/500/);
     const v = await j(await settle(c.paymentId, c.razorpay.orderId, "pay_1", T + 11 * 60_000));
@@ -185,7 +185,7 @@ describe("C. publish and pay", () => {
     await call("POST", "/api/z", eng("DOUBLE-1"), o.h);
     const rs = await Promise.all([1, 2, 3, 4].map(() => call("POST", "/api/z/DOUBLE-1/publish", contact, o.h)));
     for (const r of rs) expect(r.status).toBe(200);
-    expect(outbox("%pay before%").length).toBeLessThanOrEqual(2); // a simultaneous retry may e-mail again, but never more than once per tab
+    expect(outbox("%payment pending%").length).toBeLessThanOrEqual(2); // a simultaneous retry may e-mail again, but never more than once per tab
     const again = await j(await call("POST", "/api/z/DOUBLE-1/publish", contact, o.h));
     expect(again.already).toBe(true);
     expect((raw.prepare("SELECT COUNT(*) AS c FROM kv WHERE k='pub/DOUBLE-1'").get() as any).c).toBe(1);
@@ -317,7 +317,7 @@ describe("C. publish and pay", () => {
     await mk("REM-NEAR", T + 30 * HOUR); await mk("REM-FAR", T + 200 * HOUR); await mk("REM-DRAFT", T + 30 * HOUR, false); await mk("REM-PAID", T + 30 * HOUR);
     raw.prepare("UPDATE engagement SET pack=100 WHERE id='REM-PAID'").run();
     await housekeeping(env as Env, T + DAY); await housekeeping(env as Env, T + 2 * DAY); await housekeeping(env as Env, T + 3 * DAY); // only REM-NEAR is ever inside the 36 hours
-    const reminders = outbox("Payment due before%");
+    const reminders = outbox("Payment pending for your game%");
     expect(reminders.length).toBe(1); expect(reminders[0]!.body).toContain("REM-NEAR");
   });
   test("UC-27 with a credit in hand, publishing is paid at once", async () => {
@@ -550,7 +550,7 @@ describe("G2. the organizer's AI: round 2 findings", () => {
     await call("PATCH", "/api/z/DUE-1/settings", { rounds: 2, breaks: [{ after: 20, seconds: 120, kind: "speech", title: "MD address" }] }, o.ai);
     await call("POST", "/api/z/DUE-1/publish", contact, o.h);
     const s = await j(await call("GET", "/api/z/DUE-1/summary", undefined, o.ai));
-    expect(s.paid).toBe(false); expect(s.pack).toBe(500); expect(s.priceInrIncludingGst).toBeGreaterThan(1000); expect(s.payBefore).toMatch(/IST/);
+    expect(s.paid).toBe(false); expect(s.pack).toBe(500); expect(s.priceInrIncludingGst).toBeGreaterThan(1000); expect(s.payUntil).toMatch(/IST/);
     expect(s.gameMinutes).toBe(Math.round((90 * 12 * 2 + 120 + 90) / 60)); // two rounds of 90 calls, one break, one intermission
   });
   test("UC-67 the manifest says: no writes before the yes, rewards replace the list, what skipped/invalid mean, and does not ask for the speed in the schedule call", async () => {

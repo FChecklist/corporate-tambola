@@ -17,10 +17,11 @@ import type { D1, Env } from "./worker";
 import { partnerCode, phoneHashFor, recordCommission, refCode } from "./partners";
 import { getMode, mailGate, testFlag, type ModeEnv } from "./mode";
 import { lookupPayLink, packFor, payLinkPublic } from "./paylink";
+import { creditAppliedFor, creditFromPayment, creditUsesFor, mailCreditCreated, restoreCreditUses, rs } from "./credit";
 
 export interface PayEnv extends Env, Pick<ModeEnv, "OWNER_EMAIL" | "TEST_MAIL_ALLOW"> {
   RAZORPAY_KEY_ID?: string; RAZORPAY_KEY_SECRET?: string; RAZORPAY_WEBHOOK_SECRET?: string; RAZORPAY_BASE_URL?: string; RAZORPAY_INTERNATIONAL?: string;
-  PARTNER_COMMISSION_RATE?: string; REFUND_FEE_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; FREE_LAUNCH?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string;
+  PARTNER_COMMISSION_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; FREE_LAUNCH?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string;
 }
 
 export const PAY_SCHEMA = [
@@ -104,7 +105,7 @@ export async function retryOutbox(env: PayEnv, now: number): Promise<{ retried: 
   return { retried, dropped: old.meta?.changes ?? 0 };
 }
 
-async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: number) => Promise<boolean>) {
+export async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: number) => Promise<boolean>) {
   const db = env.DB;
   const p = await db.prepare("SELECT * FROM payment WHERE id=?").bind(paymentId).first<any>();
   if (!p) return { error: "Unknown payment.", status: 404 };
@@ -123,14 +124,17 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
       db.prepare("INSERT INTO organizer_email(email_hash,org,is_test) VALUES(?,?,?)").bind(eh, org, test),
     ]);
   }
-  await db.prepare("INSERT OR IGNORE INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,?,NULL,?)").bind("ent_" + p.id, org, p.pack, p.id, now).run();
+  // NO REFUNDS (docs/ROLES_AND_CONSOLE_SPEC_6.md): a payment that arrives for a game that was cancelled, or that closed as "did not start", is kept as CREDIT for the account. It buys no pack.
+  const closedGame = meta.eid ? await db.prepare("SELECT id, org, config, cancelled_ms, unplayed_ms FROM engagement WHERE id=? AND org=?").bind(meta.eid, org).first<any>() : null;
+  const closed = !!(closedGame && (closedGame.cancelled_ms || closedGame.unplayed_ms));
+  if (!closed) await db.prepare("INSERT OR IGNORE INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,?,NULL,?)").bind("ent_" + p.id, org, p.pack, p.id, now).run();
   let published: string | null = null, restart: number | null = null;
   if (meta.eid) { // publish the draft this payment was made for (only if it is still an unpublished draft of the same organizer)
-    const up = await db.prepare("UPDATE engagement SET pack=? WHERE id=? AND org=? AND pack=0 AND cancelled_ms IS NULL").bind(p.pack, meta.eid, org).run(); // a cancelled game is never published by a late payment
+    const up = await db.prepare("UPDATE engagement SET pack=? WHERE id=? AND org=? AND pack=0 AND cancelled_ms IS NULL AND unplayed_ms IS NULL").bind(p.pack, meta.eid, org).run(); // a cancelled game is never published by a late payment
     if ((up.meta?.changes ?? 0) > 0) {
       await db.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(meta.eid, "ent_" + p.id).run(); published = meta.eid;
       await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`pub/${meta.eid}`, String(now)).run(); // paying also publishes
-      if (meta.paidBy) await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`paidby/${meta.eid}`, JSON.stringify({ by: meta.paidBy, ms: now })).run(); // who paid: organizer, host or co-host
+      if (meta.paidBy) await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`paidby/${meta.eid}`, JSON.stringify({ by: meta.paidBy, ms: now, ...(meta.viaCredit ? { via: "credit" } : {}) })).run(); // who paid: organizer, host or co-host (and "credit" when credit paid for it)
       const st = await db.prepare("SELECT start_round FROM engagement WHERE id=?").bind(meta.eid).first<{ start_round: number }>();
       if (st && (1692803367 + (st.start_round - 1) * 3) * 1000 <= now) { // it was held because it was not paid at its start time: the first number now comes 2 minutes after the payment was confirmed, for everyone already waiting
         restart = Math.floor((now / 1000 - 1692803367) / 3) + 2 + LATE_PAY_LEAD_ROUNDS - GRACE_ROUNDS; // 2 minutes to the first number: the 2-minute setup window (GRACE_ROUNDS = 40) is all of it, so the clock start is the next round
@@ -138,6 +142,9 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
       }
     }
   }
+  if (published && typeof meta.creditInr === "number") await restoreCreditUses(db, published, now, meta.creditInr); // credit applied after this checkout was opened is given back: the game is already covered
+  const cuses = published ? await creditUsesFor(db, published) : [];
+  const creditTotal = Math.round(cuses.reduce((t, u) => t + u.amount, 0) * 100) / 100;
   // invoice: brand-wise numbering per financial year; the legal entity is always the supplier; missing supplier details => DRAFT, never a fake valid invoice
   const co = company(env);
   const fy = financialYear(new Date(now));
@@ -149,25 +156,28 @@ async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: nu
     : ((await db.prepare("SELECT COALESCE(MAX(seq),0) AS m FROM invoice WHERE brand=? AND fy=? AND seq>0").bind(brand.id, fy).first<{ m: number }>())?.m ?? 0) + 1;
   const number = test ? `TEST-${fy}-${-seq}` : formatInvoiceNumber(brand, fy, seq);
   const data: InvoiceData = { number, issuedAt: now, brand, company: co, draft: !!test || companyGaps(co).length > 0, buyer: { name: meta.org || meta.name || "", gstin: meta.taxId || undefined, email: p.email, country: meta.country }, currency: p.currency,
-    lines: [{ description: `${brand.name}: up to ${p.pack} participants (one engagement)`, quantity: 1, amount: tax.taxable }], tax, paymentRef: p.rzp_payment_id ?? undefined, orderRef: p.id };
+    lines: [{ description: closed ? `${brand.name}: payment received after the game closed (kept as credit)` : `${brand.name}: up to ${p.pack} participants (one engagement)${creditTotal > 0 ? (p.amount > 0 ? ", balance after credit" : ", paid from credit") : ""}`, quantity: 1, amount: tax.taxable }], tax, paymentRef: p.rzp_payment_id ?? undefined, orderRef: p.id,
+    ...(creditTotal > 0 ? { note: `${cuses.map((u) => `Paid from credit of invoice ${u.invoice ?? u.credit_id}: ${rs(u.amount, p.currency)}`).join("; ")}. No new GST is charged on the part paid from credit: it was invoiced when the credit arose.` } : {}) };
   await db.prepare("INSERT OR IGNORE INTO invoice(token,payment_id,brand,fy,seq,number,issued_ms,data) VALUES(?,?,?,?,?,?,?,?)").bind(token, p.id, brand.id, fy, seq, number, now, JSON.stringify(data)).run();
   const origin = env.PUBLIC_ORIGIN ?? meta.origin ?? "";
+  const keptCredit = closed ? await creditFromPayment(db, { ...p, paid_ms: now }, org, meta.eid, now, "late") : null; // a payment for a cancelled or closed game: credit, never a refund
   const lines = [
-    `Thank you. Payment received for up to ${p.pack} participants.`,
-    published ? `Your engagement is live. Share the link from your console: ${origin}/zc.html?e=${published}` : organizerKey ? `Your organizer key (keep it private, it is shown only once): ${organizerKey}\nOpen ${origin}/zc.html and paste it to begin.` : `Use your existing organizer key at ${origin}/zc.html to create this engagement.`,
+    closed ? `Thank you. Your payment was received after the game "${meta.eid}" had been cancelled or closed. We do not give refunds: it stays as credit for the organizer's next game${keptCredit ? ` until ${new Date(keptCredit.expires_ms - 1).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" })}` : ""}.` : `Thank you. Payment received for up to ${p.pack} participants.`,
+    closed ? "The organizer has been told." : published ? `Your engagement is live. Share the link from your console: ${origin}/zc.html?e=${published}` : organizerKey ? `Your organizer key (keep it private, it is shown only once): ${organizerKey}\nOpen ${origin}/zc.html and paste it to begin.` : `Use your existing organizer key at ${origin}/zc.html to create this engagement.`,
     `\nINVOICE\n${renderInvoiceText(data)}\nView or print it: ${origin}/api/invoice/${token}`,
   ];
   await sendMail(env, db, p.email, `${brand.name}: payment received, invoice ${number}`, lines.join("\n\n"), now);
   await recordCommission(env, p, tax.taxable, now); // refer & earn: a commission row for a referred, PAID purchase only
-  const result = { ok: true, orderId: p.id, pack: p.pack, total: p.amount, tax: p.tax, currency: p.currency, invoiceUrl: `/api/invoice/${token}`, invoiceNumber: number, organizerKey, newOrganizer: !!organizerKey, published: !!published, eid: published, restartedAtMs: restart ? (1692803367 + (restart - 1) * 3) * 1000 : null };
+  const result = { ok: true, orderId: p.id, pack: p.pack, total: p.amount, tax: p.tax, currency: p.currency, invoiceUrl: `/api/invoice/${token}`, invoiceNumber: number, organizerKey, newOrganizer: !!organizerKey, published: !!published, eid: published, restartedAtMs: restart ? (1692803367 + (restart - 1) * 3) * 1000 : null, ...(keptCredit ? { creditKept: true, creditId: keptCredit.id, creditExpiresMs: keptCredit.expires_ms } : {}) };
   await db.prepare("UPDATE payment SET status='paid', paid_ms=?, org=?, result=? WHERE id=?").bind(now, org, JSON.stringify(result), p.id).run();
+  if (keptCredit && closedGame) await mailCreditCreated(env, keptCredit, closedGame, "late", now); // the Organizer and the Hosts are told once; the payer got the receipt above
   if (published) await recordFunnelForOrg({ DB: db }, org, "published", now); // marketing funnel (visits.ts): counted once, against the visitor's first visit
   await recordFunnelForOrg({ DB: db }, org, "paid", now);
   return { result };
 }
 
 /** Which keys may pay a game of their account, and how the payment is shown. */
-const PAYER: Record<string, string> = { master: "organizer", host: "host", cohost: "co-host" };
+export const PAYER: Record<string, string> = { master: "organizer", host: "host", cohost: "co-host" };
 /** Returns a Response for payment routes, or null when the path is not one of ours. */
 export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n: number) => Promise<boolean>): Promise<Response | null> {
   const url = new URL(req.url); const p = url.pathname; const db = env.DB;
@@ -182,7 +192,11 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     const v = await lookupPayLink(db, plm[1]!, now);
     if (!v) return json({ error: "Not found" }, 404);
     let name = v.e.id; try { const c = v.e.config ? JSON.parse(v.e.config) : {}; if (typeof c.name === "string" && c.name) name = c.name; } catch { /* the id is the name */ }
-    return json(payLinkPublic(v, name, (1692803367 + (v.e.start_round - 1) * 3) * 1000, url.searchParams.get("currency") === "USD" ? "USD" : "INR"));
+    const pub = payLinkPublic(v, name, (1692803367 + (v.e.start_round - 1) * 3) * 1000, url.searchParams.get("currency") === "USD" ? "USD" : "INR");
+    // the full price, unless the person who made the link had already applied credit to this game: then (and only then) the reduced amount is what gets charged. The credit itself is never shown.
+    const credited = pub.price && v.status === "open" ? await creditAppliedFor(db, v.e.id) : 0;
+    if (pub.price && credited > 0 && pub.price.currency === "INR") { const total = Math.max(0, Math.round((pub.price.total - credited) * 100) / 100); pub.price = { ...pub.price, total, base: Math.round((total / 1.18) * 100) / 100, gst: Math.round((total - total / 1.18) * 100) / 100 }; }
+    return json(pub);
   }
   if (req.method === "POST" && (p === "/api/checkout" || p === "/api/payments/test" || !!plm?.[2])) {
     // TEST mode (mode.ts): no Razorpay order is ever made; the payment is a labelled test payment that is marked paid at once, flagged is_test, and publishes the draft it was made for. LIVE refuses the labelled path.
@@ -197,7 +211,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     if (plm) { // the pay link binds the payment to its game; the payer needs no account and no key (and a key sent along is ignored)
       const pv = await lookupPayLink(db, plm[1]!, now);
       if (!pv) return json({ error: "Not found" }, 404);
-      if (pv.status !== "open") return json({ error: pv.status === "paid" ? "This game has already been paid for." : pv.status === "cancelled" ? "This game was cancelled by the organizer. It cannot be paid for." : pv.status === "confirming" ? "A payment for this game is being confirmed. Please wait a few minutes." : "This pay link has expired. Ask for a new one.", status: pv.status }, 409);
+      if (pv.status !== "open") return json({ error: pv.status === "paid" ? "This game has already been paid for." : pv.status === "cancelled" ? "This game was cancelled by the organizer. It cannot be paid for." : pv.status === "closed" ? "This game did not start and is closed. It cannot be paid for." : pv.status === "confirming" ? "A payment for this game is being confirmed. Please wait a few minutes." : "This pay link has expired. Ask for a new one.", status: pv.status }, 409);
       boundPack = packFor(pv.e.cap);
       if (!boundPack) return json({ error: "That many participants needs a custom arrangement. Please write to us." }, 400);
       boundOrg = pv.link.org; boundEid = pv.link.eid; paidBy = "link";
@@ -211,11 +225,13 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
       const k = await db.prepare("SELECT org, kind, eid FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(await sha("key|" + presented), now).first<{ org: string; kind: string; eid: string | null }>();
       if (!k || !(k.kind in PAYER)) return json({ error: "Please sign in again." }, 403); // the Organizer, a Host or a Co-host of this account may pay; one payment is enough for the game
       paidBy = PAYER[k.kind]!;
-      const eg = await db.prepare("SELECT org, cap, pack, cancelled_ms FROM engagement WHERE id=?").bind(b.eid).first<{ org: string | null; cap: number; pack: number | null; cancelled_ms: number | null }>();
+      const eg = await db.prepare("SELECT org, cap, pack, cancelled_ms, unplayed_ms FROM engagement WHERE id=?").bind(b.eid).first<{ org: string | null; cap: number; pack: number | null; cancelled_ms: number | null; unplayed_ms: number | null }>();
       if (!eg || eg.org !== k.org) return json({ error: "No such engagement." }, 404);
       if (k.kind === "cohost" && k.eid && k.eid !== b.eid) return json({ error: "Your Co-host link is for a different game." }, 403); // a Co-host belongs to one game
       if (eg.cancelled_ms) return json({ error: "This game was cancelled by the organizer. It cannot be paid for." }, 409);
+      if (eg.unplayed_ms) return json({ error: "This game did not start and is closed. It cannot be paid for.", code: "did-not-start" }, 409);
       if (eg.pack !== 0) return json({ error: "This engagement is already published." }, 409);
+      if (await db.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`startpending/${b.eid}`).first()) return json({ error: "Pick the date and time of this game first.", code: "start-pending" }, 400);
       boundPack = PACKS.find((x) => x[0] >= eg.cap)?.[0] ?? null;
       if (!boundPack) return json({ error: "That many participants needs a custom arrangement. Please write to us." }, 400);
       boundOrg = k.org; boundEid = b.eid;
@@ -232,9 +248,14 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     if ((typeof b.country !== "string" || b.country.slice(0, 2) === "IN") && typeof b.taxId === "string" && b.taxId.trim() && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(b.taxId.trim().toUpperCase())) return json({ error: "That GSTIN does not look right. It has 15 characters, like 27ABCDE1234F1Z5." }, 400);
     if (cur === "USD" && rzp && env.RAZORPAY_INTERNATIONAL !== "1") return json({ error: "Payments in US dollars are not switched on yet. Please pay in Indian rupees or write to us." }, 400);
     if (!(await spend(2))) return busy();
-    const pr = price(pack, cur);
+    const full = price(pack, cur);
+    // credit already applied to THIS game (by the Organizer, a Host or a Co-host, before this checkout) reduces what is charged; nothing else about credit is ever shown or used here
+    const credited = boundEid ? Math.round((await creditAppliedFor(db, boundEid)) * 100) / 100 : 0;
+    const cash = Math.round((full.total - credited) * 100) / 100;
+    if (boundEid && credited > 0 && cash < 1) return json({ error: "Credit already covers this game. Tap Use my credit to finish.", code: "use-credit" }, 409);
+    const pr = credited > 0 ? { total: cash, base: cur === "INR" ? Math.round((cash / 1.18) * 100) / 100 : cash, tax: cur === "INR" ? Math.round((cash - cash / 1.18) * 100) / 100 : 0 } : full;
     const id = "pay_" + randHex(8);
-    const meta = { org: orgName.slice(0, 120), name: payerName.slice(0, 120), country: typeof b.country === "string" ? b.country.slice(0, 2) : "IN", taxId: typeof b.taxId === "string" ? b.taxId.trim().slice(0, 20) : "", origin: env.PUBLIC_ORIGIN ?? url.origin, ...(boundOrg ? { orgId: boundOrg, eid: boundEid, paidBy } : {}) };
+    const meta = { org: orgName.slice(0, 120), name: payerName.slice(0, 120), country: typeof b.country === "string" ? b.country.slice(0, 2) : "IN", taxId: typeof b.taxId === "string" ? b.taxId.trim().slice(0, 20) : "", origin: env.PUBLIC_ORIGIN ?? url.origin, ...(boundOrg ? { orgId: boundOrg, eid: boundEid, paidBy, ...(credited > 0 ? { creditInr: credited } : {}) } : {}) };
     let order: any = null;
     if (rzp) {
       try { order = await createOrder(rzp, { amountMinor: toMinor(pr.total), currency: cur, receipt: id, notes: { brand: brand.name, product: "engagement", pack: String(pack), organization: (meta.org || meta.name).slice(0, 80), payment_ref: id } }); }

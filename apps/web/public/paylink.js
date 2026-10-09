@@ -27,6 +27,7 @@
     if (st === "paid") return calm("This game is already paid for", "Nothing more is needed. You can close this page.");
     if (st === "expired") return calm("This payment link has run out", "A payment link works for 7 days. Please ask the person who sent it to make a new one.");
     if (st === "cancelled") return calm("This game was cancelled", "There is nothing to pay. Please speak to the organizer.");
+    if (st === "closed") return calm("This game did not start", "This game did not start and is closed. There is nothing to pay. Please speak to the organizer.");
     if (st === "confirming" && !S.busy) return calm("Confirming a payment", "A payment for this game is being confirmed. Please wait a few minutes. If it goes through, this page will say the game is paid.");
     if (!i.price) return calm("A custom arrangement is needed", "A game this big is arranged with us directly. Please write to us from the contact page.");
     const p = i.price, cur = p.currency || "INR";
