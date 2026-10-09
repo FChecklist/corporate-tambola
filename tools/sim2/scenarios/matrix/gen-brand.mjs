@@ -5,9 +5,10 @@ export default async function gen({ R, L }) {
   const out = [];
   const b64 = (bytes) => Buffer.from(bytes).toString("base64");
   const pad = (head, n) => { const a = new Uint8Array(n); a.set(head); return a; };
-  const PNG = (n = 200) => `data:image/png;base64,${b64(pad([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], n))}`;
-  const JPG = (n = 200) => `data:image/jpeg;base64,${b64(pad([0xff, 0xd8, 0xff, 0xe0], n))}`;
-  const WEBP = (n = 200) => { const a = pad([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50], n); return `data:image/webp;base64,${b64(a)}`; };
+  // real picture headers: the server reads the size in pixels (96 x 96) from the first bytes
+  const PNG = (n = 200) => `data:image/png;base64,${b64(pad([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 96, 0, 0, 0, 96], n))}`;
+  const JPG = (n = 200) => `data:image/jpeg;base64,${b64(pad([0xff, 0xd8, 0xff, 0xc0, 0, 17, 8, 0, 96, 0, 96, 3, 1, 0x11, 0, 2, 0x11, 1], n))}`;
+  const WEBP = (n = 200) => { const a = pad([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x58, 10, 0, 0, 0, 0, 0, 0, 0, 95, 0, 0, 95, 0, 0], n); return `data:image/webp;base64,${b64(a)}`; };
   const COLORS = ["#0B3D91", "#1B7F5C", "#B3261E", "#6A1B9A", "#C26A00", "#00798C", "#37474F", "#AD1457"];
   async function draft(t, o = {}) { const org = await t.newOrg(); const g = await t.game(org, { cap: 50, tickets: o.tickets ?? 1, days: 6 }); if (!g.r.ok) throw new Error("create " + JSON.stringify(g.r.body)); return { org, g }; }
   const info = async (org, id) => (await A.call("GET", `/api/z/${id}/info`, undefined, org.h)).body;

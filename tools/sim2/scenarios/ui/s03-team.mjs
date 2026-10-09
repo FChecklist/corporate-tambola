@@ -242,7 +242,7 @@ export default [
     async run(t) {
       const org = await t.org("o"); const g1 = await t.game(org), g2 = await t.game(org);
       const c = await org.inviteCohost({ label: "Chandra", phone: nextPhone(), e: g1.id });
-      const key = /k=(ct[hc]_[0-9a-f]+)/.exec(c.link)?.[1];
+      const key = c.cohostKey; t.check("the Co-host link carries the game and the key (in the part of the address the server never sees)", c.link.includes(`e=${g1.id}`) && c.link.includes(`#cohost=${key}`), c.link);
       const ca = (m, p, b) => H.call(m, p, b, { "x-organizer": key });
       t.check("works for its own game", (await ca("GET", `/api/z/${g1.id}/cohost`)).ok);
       const other = await ca("GET", `/api/z/${g2.id}/cohost`);

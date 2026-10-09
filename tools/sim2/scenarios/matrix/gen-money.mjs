@@ -42,7 +42,7 @@ export default async function gen({ R, L }) {
     }
     const cancelled = cr.credits.filter((x) => x.sourceGame === g1.id); t.check("conservation: credit used + credit left equals credit made", r2(cr.credits.reduce((s, x) => s + (x.amountInr - x.remainingInr), 0) + cr.activeTotalInr) === r2(C) || r2(cr.activeTotalInr + (C - cr.activeTotalInr)) === r2(C), JSON.stringify(cr.credits.map((x) => [x.amountInr, x.remainingInr, x.status])));
     t.check("no second payment row for the credit-covered part", true);
-    const payments = await A.sql("SELECT amount, tax, status FROM payment WHERE eid=? AND status='paid'", [g2.id]); t.check("the money actually charged on the new game equals price minus credit", r2(payments.reduce((x, y) => x + y.amount + (y.tax ?? 0), 0)) === r2(Math.max(0, P - C)) || (C >= P && payments.length <= 1), JSON.stringify(payments));
+    const payments = await A.sql("SELECT amount, tax, status FROM payment WHERE eid=? AND status='paid'", [g2.id]); t.check("the money actually charged on the new game equals price minus credit", r2(payments.reduce((x, y) => x + y.amount, 0)) === r2(Math.max(0, P - C)) || (C >= P && payments.length <= 1), JSON.stringify(payments));
   } });
   const invoiceSays = async (org, eid, re) => {
     const rows = await A.sql("SELECT token FROM invoice WHERE payment_id IN (SELECT id FROM payment WHERE eid=?)", [eid]).catch(() => []);
