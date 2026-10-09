@@ -1659,7 +1659,8 @@ export async function purgeOld(env: Env, now: number): Promise<number> {
   await sweepAudit(env.DB, now, RETENTION_DAYS); // the AI's audit trail is kept as long as the organizer's own details
   let n = 0;
   for (const x of old.results ?? []) {
-    const due = x.unplayed_ms != null ? now >= x.unplayed_ms + SETTINGS_KEEP_MS : x.end_ms != null ? now >= fullDeleteAt(x.end_ms) : x.created_ms < now - RETENTION_DAYS * 86_400_000 || (x.pack === 0 && x.created_ms < now - DRAFT_DAYS * 86_400_000);
+    const draftDue = x.pack === 0 && x.unplayed_ms == null && x.created_ms < now - DRAFT_DAYS * 86_400_000 && !(await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`pub/${x.id}`).first()); // a draft nobody published is forgotten after 30 days, even with a start time (and so a life row)
+    const due = draftDue ? true : x.unplayed_ms != null ? now >= x.unplayed_ms + SETTINGS_KEEP_MS : x.end_ms != null ? now >= fullDeleteAt(x.end_ms) : x.created_ms < now - RETENTION_DAYS * 86_400_000 || (x.pack === 0 && x.created_ms < now - DRAFT_DAYS * 86_400_000);
     if (!due) continue;
     await eraseEverything(env, x.id, now);
     try { await env.CONTROL_R2?.delete(controlKey(x.id)); } catch { /* the object expires with its engagement anyway */ }

@@ -44,6 +44,7 @@ export async function voidCommission(db: D1, paymentId: string, reason = "refund
 /** Called when a payment is fulfilled. Writes at most one commission row per payment; never throws into the purchase. */
 export async function recordCommission(env: PayEnv, p: { id: string; ref?: string | null; buyer_phone_hash?: string | null; currency: string }, base: number, now: number): Promise<void> {
   try {
+    if (!((p as any).amount > 0)) return; // a game paid wholly from credit is not a new sale: the commission was earned on the original payment
     // a customer belongs to the partner who first brought them for 12 months: their repeat purchases earn that partner the repeat rate, whether or not a link was used again
     const email = String((p as any).email ?? "").trim().toLowerCase();
     const since = now - REPEAT_WINDOW_DAYS * 86_400_000;

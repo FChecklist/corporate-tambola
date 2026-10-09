@@ -4,6 +4,7 @@
 //      and the participants' personal part of the audit log is crypto-shredded (audit.ts `shredParticipantAudit`: its per-engagement key is destroyed, the hash chain still verifies);
 //   3. only the organizer / host / co-host details and the winners record (seat, prize, round, time) remain, until 00:00 IST at the end of the 365th day, then everything goes.
 // Called by the scheduled job (and, as a fallback, by any outside timer with the platform key). Every call does a bounded amount of work and can be repeated safely.
+import { restoreCreditUses } from "./credit";
 import { sweepVisits } from "./visits";
 import { closeAuditFor, isHeld, shredParticipantAudit } from "./audit";
 import { GRACE_ROUNDS, INVITE_CATEGORIES, PRIZE_HOUSES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
@@ -136,6 +137,7 @@ export async function erasePersonal(env: Env, eid: string, now: number, by: stri
 /** Everything about an engagement, at the end of its 365 days (or for a draft nobody published). */
 export async function eraseEverything(env: Env, id: string, now = Date.now()): Promise<void> {
   if (!(await closeAuditFor(env as any, id, now))) return; // a legal hold: nothing of this engagement is deleted until it is lifted
+  try { if ((await env.DB.prepare("SELECT pack FROM engagement WHERE id=?").bind(id).first<{ pack: number }>())?.pack === 0) await restoreCreditUses(env.DB, id, now); } catch { /* credit stays where it is; the next try repeats */ } // credit applied to a game that is forgotten goes back to the account
   await erasePersonal(env, id, now, "retention");
   await deleteEngagementRows(env, id);
 }
@@ -328,6 +330,7 @@ export async function unplayedPass(env: LifeEnv, now: number): Promise<number> {
         await erasePersonal(env, e.id, now, "unplayed");
         if (published) {
           await env.DB.prepare("UPDATE engagement SET unplayed_ms=? WHERE id=? AND unplayed_ms IS NULL AND pack=0").bind(now, e.id).run();
+          if ((await env.DB.prepare("SELECT pack FROM engagement WHERE id=?").bind(e.id).first<{ pack: number }>())?.pack === 0) await restoreCreditUses(env.DB, e.id, now); // a game that never started and closed: credit applied to it comes back
           await env.DB.prepare("DELETE FROM kv WHERE k=? OR k=?").bind(`ann/${e.id}`, `unplayed-warn/${e.id}`).run();
           await mailDataDeleted(env as any, e, now, { didNotStart: true });
         }

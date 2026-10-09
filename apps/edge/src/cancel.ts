@@ -81,7 +81,7 @@ export async function cancelGame(env: PayEnv, e: any, now: number, by: string): 
     `The game "${name}" (${e.id}) was cancelled by ${who} on ${istStamp(now)}. It was due to start on ${istStamp(roundMs(e.start_round))}.`,
     "Guests who open the link are told: This game was cancelled by the organizer. Their names and mobile numbers are deleted within 24 hours.",
     credit && e.pack !== 0
-      ? `Your game is cancelled. Your payment of ${rs(credit.amountInr)} stays as credit until ${creditLastDay(credit.expiresMs)}. Use it for your next game.${test ? " (This is a TEST game: nothing was really paid.)" : ""}\n\n${NO_REFUND_LINE}`
+      ? `Your game is cancelled. ${credit.expiresMs <= now ? `The credit from your payment of ${rs(credit.amountInr)} lapsed on ${creditLastDay(credit.expiresMs)}, 365 days after the payment, so there is nothing left to use.` : `Your payment of ${rs(credit.amountInr)} stays as credit until ${creditLastDay(credit.expiresMs)}. Use it for your next game.`}${test ? " (This is a TEST game: nothing was really paid.)" : ""}\n\n${NO_REFUND_LINE}`
       : e.pack !== 0 ? "Nothing was paid for this game through this service, so there is no credit." : "The game had not been paid for, so no money is involved.",
     ...(e.pack === 0 && credit ? [`The credit you had applied to this game (${rs(credit.amountInr)}) is back in your account, valid until ${creditLastDay(credit.expiresMs)}.`] : []),
   ];

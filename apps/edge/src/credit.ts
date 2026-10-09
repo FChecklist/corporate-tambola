@@ -103,7 +103,14 @@ export async function restoreCreditUses(db: D1, eid: string, now: number, keepIn
   for (const u of uses) {
     if (excess <= 0) break;
     const amt = paise(u.amount_inr);
-    if (amt > excess) continue; // uses are whole; a use bigger than the excess stays (the excess is always a sum of whole uses in practice)
+    if (amt > excess) { // the use is bigger than the excess: shrink it and give only the excess back (a game made smaller after credit was applied)
+      const part = excess / 100;
+      const shr = await db.prepare("UPDATE credit_use SET amount_inr=ROUND(amount_inr-?,2) WHERE id=? AND status='applied' AND CAST(ROUND(amount_inr*100) AS INTEGER)=?").bind(part, u.id, amt).run();
+      if ((shr.meta?.changes ?? 0) === 0) continue;
+      await db.prepare("UPDATE credit SET remaining_inr=CASE WHEN expires_ms>? THEN ROUND(remaining_inr+?,2) ELSE remaining_inr END, lapsed_inr=CASE WHEN expires_ms>? THEN lapsed_inr ELSE ROUND(lapsed_inr+?,2) END, status=CASE WHEN expires_ms>? THEN 'active' ELSE 'expired' END WHERE id=?")
+        .bind(now, part, now, part, now, u.credit_id).run();
+      out.push({ credit_id: u.credit_id, amount: r2(part) }); excess = 0; break;
+    }
     const flip = await db.prepare("UPDATE credit_use SET status='restored', restored_ms=? WHERE id=? AND status='applied'").bind(now, u.id).run();
     if ((flip.meta?.changes ?? 0) === 0) continue;
     await db.prepare("UPDATE credit SET remaining_inr=CASE WHEN expires_ms>? THEN ROUND(remaining_inr+?,2) ELSE remaining_inr END, lapsed_inr=CASE WHEN expires_ms>? THEN lapsed_inr ELSE ROUND(lapsed_inr+?,2) END, status=CASE WHEN expires_ms>? THEN 'active' ELSE 'expired' END WHERE id=?")
@@ -151,7 +158,7 @@ export async function mailCreditCreated(env: PayEnv, c: CreditRow, e: { id: stri
   const claim = await env.DB.prepare("UPDATE credit SET mail_created_ms=? WHERE id=? AND mail_created_ms IS NULL").bind(now, c.id).run();
   if ((claim.meta?.changes ?? 0) === 0) return; // one of each per credit
   const lines = why === "cancel"
-    ? [`Your game "${gameName(e)}" (${e.id}) is cancelled. Your payment of ${rs(c.total_inr, c.currency)} stays as credit until ${lapseDate(c)}. Use it for your next game.`]
+    ? [c.expires_ms <= now ? `Your game "${gameName(e)}" (${e.id}) is cancelled. The credit from your payment of ${rs(c.total_inr, c.currency)} lapsed on ${lapseDate(c)}, 365 days after the payment, so there is nothing left to use.` : `Your game "${gameName(e)}" (${e.id}) is cancelled. Your payment of ${rs(c.total_inr, c.currency)} stays as credit until ${lapseDate(c)}. Use it for your next game.`]
     : [`A payment of ${rs(c.total_inr, c.currency)} arrived for the game "${gameName(e)}" (${e.id}) after it was cancelled or closed. It stays as credit until ${lapseDate(c)}. Use it for your next game.`];
   await mailTeam(env, c.org, c.eid ?? e.id, why === "cancel" ? `Your credit of ${rs(c.total_inr, c.currency)}: ${gameName(e)}` : `A payment became credit: ${gameName(e)}`, [...lines, NO_REFUND_LINE, `Open your console and choose "Use my credit" on the Pay step of your next game.`].join("\n\n"), now);
 }
@@ -236,6 +243,7 @@ export async function creditRoute(req: Request, env: PayEnv, now: number, spend:
   if (await db.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`startpending/${e.id}`).first()) return json({ error: "Pick the date and time of this game first.", code: "start-pending" }, 400);
   if (await db.prepare("SELECT 1 AS x FROM payment WHERE eid=? AND status<>'paid' AND confirming_ms IS NOT NULL AND confirming_ms>?").bind(e.id, now - 30 * 60_000).first()) return json({ error: "A payment for this game is being confirmed. Please wait a few minutes.", code: "confirming" }, 409);
   if (!(await spend(4))) return json({ error: "It is very busy right now. Please try again in a few minutes." }, 503);
+  if (paise(await creditAppliedFor(db, e.id)) > paise(total)) await restoreCreditUses(db, e.id, now, total); // the game got smaller since credit was applied: the excess goes back
   const before = await creditAppliedFor(db, e.id);
   const got = await applyCreditToGame(db, a.org, e.id, total, cur, now);
   const due = r2(total - got.appliedInr);
