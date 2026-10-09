@@ -549,10 +549,19 @@
   /** "Your credit: Rs 2,358.82, valid until 14 Jun 2027." (no refund: a paid game that is cancelled becomes credit for 365 days) */
   const creditText = (c) => (c ? `Your credit: ${money(c.amountInr)}, valid until ${dayIst(c.expiresMs)}.` : "");
   const cloneButton = () => (canRun() && eid ? `<div class="zc-chips zc-gap"><button type="button" class="zc-btn zc-btn-s zc-btn-alt" data-clonebtn="1">Create a new game like this one</button></div>` : "");
+  /** A cancelled PAID game can be moved to a new date for 30 days after the cancel (the payment stays with the game). */
+  function moveBlock() {
+    const I = S.info || {}, M = S.move || {};
+    if (!I.rescheduleUntilMs) return "";
+    if (M.done) return `<p class="zc-small" id="movedone" role="status"><b>Your game is moved.</b> Send your guests the link again: they need to join again.</p>`;
+    const until = esc(dayIst(I.rescheduleUntilMs));
+    if (I.canReschedule === false) return `<p class="zc-small" id="movecant">This game can no longer be moved. Your payment stays as credit for a new game.</p>`;
+    return `<div id="moveblock"><p class="zc-small"><b>You can move this game to a new date until ${until}.</b> Your payment then stays with this game and nothing more is due. If you use the credit for another game first, this game can no longer be moved.</p><div class="zc-chips"><input type="datetime-local" id="movedt" aria-label="New date and time"> <button type="button" class="zc-btn zc-btn-s" id="movego"${M.busy ? " disabled" : ""}>Move my game to this date</button></div>${M.err ? `<p class="zc-small zc-warnt" role="status" id="moveerr">${esc(M.err)}</p>` : ""}</div>`;
+  }
   function cancelBlock() {
     if (!canRun() || !S.info || S.draft) return "";
     const C = S.cancel || { stage: 0 }, name = (S.cfg && S.cfg.name) || (S.info && S.info.name) || "this game";
-    if (isCancelled()) return `<div class="zc-block" id="cancelled"><h3>This game was cancelled</h3>${small("Guests see that the game was cancelled. Nothing more is needed from you.")}${C.credit ? `<p class="zc-small" id="creditnote"><b>Your payment of ${esc(money(C.credit.amountInr))} stays as credit until ${esc(dayIst(C.credit.expiresMs))}.</b> Use it for your next game.</p>` : small("If you had paid, your payment stays as credit for your next game. You can see it in Your account.")}${cloneButton()}</div>`;
+    if (isCancelled()) return `<div class="zc-block" id="cancelled"><h3>This game was cancelled</h3>${small("Guests see that the game was cancelled. Nothing more is needed from you.")}${C.credit ? `<p class="zc-small" id="creditnote"><b>Your payment of ${esc(money(C.credit.amountInr))} stays as credit until ${esc(dayIst(C.credit.expiresMs))}.</b> Use it for your next game.</p>` : small("If you had paid, your payment stays as credit for your next game. You can see it in Your account.")}${moveBlock()}${cloneButton()}</div>`;
     let b = "";
     if (C.stage === 0) b = small("You can cancel before the game starts. Guests will be told.") + `<div class="zc-chips"><button type="button" class="zc-btn zc-btn-s zc-btn-bad" id="cancelopen">Cancel this game</button></div>`;
     else if (C.err) b = `<p class="zc-small zc-warnt" role="status">${esc(C.err)}</p><div class="zc-chips"><button type="button" class="zc-btn zc-btn-s zc-btn-alt" id="cancelback">Close</button></div>`;
@@ -1248,6 +1257,14 @@
       S.cancel = { stage: 1, preview: null, err: "" }; redraw();
       try { S.cancel.preview = await call("GET", `/api/z/${eid}/cancel-preview`); } catch (e) { S.cancel.err = e.status === 404 ? "Cancelling is not switched on yet. Please try again a little later." : friendly(e); }
       redraw();
+    };
+    if ($("movego")) $("movego").onclick = async () => {
+      const v = (($("movedt") || {}).value || ""), ms = v ? new Date(v).getTime() : NaN;
+      if (!(ms > Date.now())) { S.move = { err: "Please pick a new date and time in the future." }; return redraw(); }
+      S.move = { busy: true }; redraw();
+      try { await call("POST", `/api/z/${eid}/reopen`, { startRound: ZG.roundAt(ms) }); S.move = { done: true }; S.cancelDone = false; S.note = "Your game was moved to the new date."; }
+      catch (e) { S.move = { err: friendly(e) }; }
+      refreshEng();
     };
     if ($("cancelback")) $("cancelback").onclick = () => { S.cancel = { stage: 0 }; redraw(); };
     if ($("cancel1")) $("cancel1").onclick = () => { S.cancel.stage = 2; redraw(); };

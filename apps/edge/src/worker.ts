@@ -16,7 +16,7 @@ import { GRACE_ROUNDS, HOUSE_ORDER, PRIZE_HOUSES, brandMomentsFor, defaultCfg, v
 import { openPii, openText, sealPii, sealText } from "./pii";
 import { TERMS_VERSION } from "./brand";
 import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, hostLinkMail, newUseAlertMail, signInMail } from "./mails";
-import { cancelGame, cancelPreview, teamEmails } from "./cancel";
+import { cancelGame, cancelPreview, reopenGame, teamEmails } from "./cancel";
 import { LEGAL_SCHEMA } from "./legal";
 import { CREDIT_SCHEMA, activeCreditSummary, creditAppliedFor, creditRoute } from "./credit";
 import { cloneGame } from "./clone";
@@ -1186,7 +1186,7 @@ Did not ask for this? Ignore this e-mail.`, now, { secret: true });
       });
     }
   }
-  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget|cohost|cancel-preview|cancel|clone)$/);
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget|cohost|cancel-preview|cancel|reopen|clone)$/);
   if (!m) return json({ error: "Not found", hint: "Read the list of what you can do at /api/z/ai-manifest. Engagement routes look like /api/z/{id}/summary, /settings, /roster, /participants, /results, /publish." }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
@@ -1222,7 +1222,7 @@ Did not ask for this? Ignore this e-mail.`, now, { secret: true });
   if (didNotStart && req.method === "POST" && action === "join") return json({ error: DNS_MSG, code: "did-not-start", didNotStart: true }, 403);
   if (didNotStart && req.method !== "GET" && !["erase", "forget", "person", "cancel", "clone"].includes(action!)) return json({ error: DNS_MSG, code: "did-not-start", didNotStart: true }, 409);
   if (cancelled && req.method === "POST" && action === "join") return json({ error: "This game was cancelled by the organizer.", code: "cancelled", cancelled: true }, 403);
-  if (cancelled && req.method !== "GET" && !["erase", "forget", "person", "cancel", "clone"].includes(action!)) return json({ error: "This game was cancelled by the organizer.", code: "cancelled", cancelled: true }, 409);
+  if (cancelled && req.method !== "GET" && !["erase", "forget", "person", "cancel", "reopen", "clone"].includes(action!)) return json({ error: "This game was cancelled by the organizer.", code: "cancelled", cancelled: true }, 409);
   if (action === "cancel-preview" && req.method === "GET") { // what cancelling would do, and the refund in numbers: Organizer and Host only
     if (!can(a, e, true)) return deny(a);
     return json(await cancelPreview(env as PayEnv, e, now));
@@ -1233,6 +1233,13 @@ Did not ask for this? Ignore this e-mail.`, now, { secret: true });
     if (cb?.confirmations !== 3) return json({ error: "Please confirm three times to cancel the game.", code: "confirmations" }, 400);
     if (!cancelled && !(await spend(env, now, 14))) return BUSY();
     const out = await cancelGame(env as PayEnv, e, now, a.plat ? "platform" : a.kind!);
+    return json(out.body, out.status);
+  }
+  if (action === "reopen" && req.method === "POST") { // a cancelled PAID game moved to a new date within 30 days of the cancel (cancel.ts): Organizer and Host only, never an AI key or a Co-host
+    if (!can(a, e, true)) return deny(a);
+    const rb = await body(req, 512);
+    if (!(await spend(env, now, 14))) return BUSY();
+    const out = await reopenGame(env as PayEnv, e, rb?.startRound, now, a.plat ? "platform" : a.kind!, MAX_AHEAD_MS);
     return json(out.body, out.status);
   }
   if (action === "clone" && req.method === "POST") { // "Create a new game like this one": Organizer and Host (equal rights), never an AI key or a Co-host (clone.ts)
@@ -1450,7 +1457,7 @@ Did not ask for this? Ignore this e-mail.`, now, { secret: true });
     const cpv = cancelled ? await cancelPreview(env as PayEnv, e, now) : null; // what a cancelled game left in the account (credit, never a refund)
     const startPending = !!(await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`startpending/${e.id}`).first());
     const creditNow = mayPay(a, e) && unpaid && !cancelled && !didNotStart ? await activeCreditSummary(env.DB, e.org!, now) : null;
-    return json({ id: e.id, ...(cancelled ? { cancelled: true, cancelledMs: e.cancelled_ms, cancelledBy: e.cancelled_by, cancelCredit: cpv?.credit ?? null } : {}),
+    return json({ id: e.id, ...(cancelled ? { cancelled: true, cancelledMs: e.cancelled_ms, cancelledBy: e.cancelled_by, cancelCredit: cpv?.credit ?? null, ...(cpv && e.pack !== 0 ? { rescheduleUntilMs: cpv.rescheduleUntilMs, canReschedule: cpv.canReschedule } : {}) } : {}),
       waitingFor: locked ? "organizer" : null, didNotStart, erasureMs: await erasureOf(env, e), ...(startPending ? { startPending: true } : {}),
       credit: creditNow ? creditNow.activeTotalInr : null, creditExpiresMs: creditNow ? creditNow.nextExpiryMs : null, creditApplied: creditNow ? await creditAppliedFor(env.DB, e.id) : null,
       status: didNotStart ? "did not start (closed)" : cancelled ? "cancelled by the organizer" : isDraft ? "draft" : unpaid ? (locked ? "published, NOT PAID, held because the start time passed" : "published, payment due before the start") : "published and paid",
