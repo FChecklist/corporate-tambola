@@ -300,6 +300,7 @@ describe("roster, history, erase and 365-day retention", () => {
     await call("POST", "/api/z", { id: "OLD1", startRound: 5, callSeconds: 6, cap: 10 }, org, T - 366 * D);
     await join(5, "OLD1", T - 366 * D);
     await call("POST", "/api/z", { id: "EDGE", startRound: 5, callSeconds: 6, cap: 10 }, org, T - 364 * D);
+
     const r = await (await call("POST", "/api/purge", {}, org)).json() as any;
     expect(r.purged).toBe(1);
     expect(raw.query("SELECT id FROM engagement ORDER BY id").all()).toEqual([{ id: "EDGE" }, { id: "ENG1" }]);

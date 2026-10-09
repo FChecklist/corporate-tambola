@@ -12,7 +12,7 @@ body{background:var(--bg)}
 .bp{overflow:visible}
 .bphd{border-radius:18px 18px 0 0}
 .stub{border-radius:0 0 18px 18px}
-.bphd .meta .pill{font-size:11.5px}
+.bphd .meta .pill{font-size:12px}
 .strip2{min-height:86px}
 .strip2>div:nth-child(2){flex:1;min-width:0}
 .strip2 .sln{overflow-wrap:anywhere}
@@ -20,7 +20,7 @@ body{background:var(--bg)}
 .spill{min-height:40px;min-width:40px;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
 .spill.icon{padding:0;width:40px;border-radius:50%}
 .spill.talk{border-color:#7CF0B5;color:#7CF0B5}
-.strip2 .talkchip{display:inline-flex;gap:5px;align-items:center;margin-bottom:3px;border:1px solid #7CF0B5;color:#7CF0B5;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700}
+.strip2 .talkchip{display:inline-flex;gap:5px;align-items:center;margin-bottom:3px;border:1px solid #7CF0B5;color:#7CF0B5;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700}
 .ball{font-variant-numeric:tabular-nums}
 
 /* ticket grid: 9 columns on a phone, so cells are taller than wide to keep a 44px tap target */
@@ -41,15 +41,15 @@ button.cell.cut{color:var(--gold2)}
 .pzr .nm{background:none;border:0;padding:0;text-align:left;cursor:pointer;display:block;width:100%}
 .pzr .nm b{display:block;font-size:13.5px}
 .pzr .nm small{display:block}
-.pzr em{overflow-wrap:anywhere;font-family:var(--mono);font-size:10.5px}
+.pzr em{overflow-wrap:anywhere;font-family:var(--mono);font-size:12px}
 .pzr .rt{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .cl{min-height:40px;min-width:72px;font-size:13px}
 .pzr.later{opacity:.6}
 .pzr.won .nm b,.pzr.won .nm small{text-decoration:line-through;color:var(--muted)}
 .mine{color:var(--ok);font-weight:700}
-.plinks a{font:700 10px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);text-decoration:underline;text-underline-offset:3px;min-height:40px;display:inline-flex;align-items:center}
+.plinks a{font:700 12px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);text-decoration:underline;text-underline-offset:3px;min-height:40px;display:inline-flex;align-items:center}
 .mrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:0 14px 10px}
-.tid{font:500 11.5px var(--mono);color:var(--muted);overflow-wrap:anywhere}
+.tid{font:500 12px var(--mono);color:var(--muted);overflow-wrap:anywhere}
 
 /* floating banners (claim check, result, emergency, reconnecting) */
 .bnr{position:fixed;left:0;right:0;bottom:78px;z-index:60;display:grid;gap:6px;padding:0 10px;pointer-events:none;justify-items:center}
@@ -59,7 +59,7 @@ button.cell.cut{color:var(--gold2)}
 .bnr ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:5px}
 .bnr li{display:flex;gap:8px;align-items:flex-start}
 .bnr li .ic{margin-top:2px}
-.bnr .you{display:inline-block;margin-left:6px;background:var(--gold);color:var(--deep);border-radius:999px;padding:0 8px;font-size:11px;font-weight:700}
+.bnr .you{display:inline-block;margin-left:6px;background:var(--gold);color:var(--deep);border-radius:999px;padding:0 8px;font-size:12px;font-weight:700}
 
 /* menu inside a sheet */
 .sheet .pmenu{position:static;width:auto;border:0;box-shadow:none;padding:0}
@@ -86,13 +86,13 @@ button.cell.cut{color:var(--gold2)}
 div.cell.num.auto{font:700 15px var(--sans);color:var(--ink);cursor:default}
 div.cell.num.auto.cut{color:var(--gold2)}
 .still{padding:7px 14px 8px;background:#FFF8EC;border-bottom:1px solid var(--line)}
-.still .stt{font:700 9px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--goldd);margin-bottom:2px}
+.still .stt{font:700 12px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--goldd);margin-bottom:2px}
 .still .stg{display:flex;gap:6px;justify-content:space-between}
 .still .sti{flex:1;min-width:0;text-align:center;border-left:1px solid var(--line);line-height:1.15}
 .still .sti:first-child{border-left:0;text-align:left}
 .still .sti b{display:inline-block;font:600 20px var(--serif);color:var(--wine);font-variant-numeric:tabular-nums}
-.still .sti span{display:block;font-size:11px;color:var(--muted)}
-.still .stnext{font-size:11.5px;color:var(--muted);margin-top:3px}
+.still .sti span{display:block;font-size:12px;color:var(--muted)}
+.still .stnext{font-size:12px;color:var(--muted);margin-top:3px}
 .still .stdone{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:600;color:var(--ok)}
 .pop{animation:stpop .7s ease-out}
 @keyframes stpop{0%{transform:scale(1)}35%{transform:scale(1.6);color:var(--ok)}100%{transform:scale(1)}}
@@ -110,8 +110,8 @@ button.bchip.joker{border:0;background:linear-gradient(180deg,#E6C58A,#C9A45F);c
 .mov.scratch .movc h2{font-size:21px;margin:6px 0}
 .movtop{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left}
 .mov.lucky .eyebrow{color:var(--gold)}
-.bump{display:inline-block;margin-left:8px;background:var(--gold);color:var(--deep);border-radius:999px;padding:1px 9px;font-size:10px;letter-spacing:.12em}
-.movballw{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--gold2)}
+.bump{display:inline-block;margin-left:8px;background:var(--gold);color:var(--deep);border-radius:999px;padding:1px 9px;font-size:12px;letter-spacing:.12em}
+.movballw{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gold2)}
 .mov.scratch .movballw{color:var(--muted)}
 .movballw b{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#fff,#F3E6CB 55%,#D9C29A);color:var(--wine);font:600 17px var(--serif)}
 .movp{font-size:15px;line-height:1.45;margin:6px 0}

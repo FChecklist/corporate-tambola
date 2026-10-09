@@ -609,11 +609,13 @@ describe("I. announcements, co-hosts and scratch cards", () => {
     expect((await ann("ANN-1", o.h, "", T + 20_000)).status).toBe(200);
     expect((await ctl("ANN-1", T + 20_000)).ann).toBeUndefined();
   });
-  test("UC-80 messages are cleaned and cut, rate limited, not for drafts, and not for a stranger (the organizer's AI may send them)", async () => {
+  test("UC-80 messages are cleaned, a too long one is refused with the reason, rate limited, not for drafts, and not for a stranger (the organizer's AI may send them)", async () => {
     const o = await organizer(); await live("ANN-2", o);
-    await ann("ANN-2", o.h, "<b>Hello</b>   `team` " + "x".repeat(400));
-    const t = (await ctl("ANN-2")).ann.text as string; expect(t).not.toMatch(/[<>`]/); expect(t.length).toBeLessThanOrEqual(160);
-    expect((await ann("ANN-2", o.h, "again", T + 1000)).status).toBe(429);
+    const tooLong = await ann("ANN-2", o.h, "<b>Hello</b>   `team` " + "x".repeat(400)); expect(tooLong.status).toBe(400); expect(JSON.stringify(await tooLong.json())).toMatch(/160/); // refused with the reason, never silently cut
+    expect((await ctl("ANN-2")).ann).toBeUndefined();
+    expect((await ann("ANN-2", o.h, "<b>Hello</b>   `team` " + "x".repeat(100), T + 6_000)).status).toBe(200);
+    const t = (await ctl("ANN-2", T + 6_000)).ann.text as string; expect(t).not.toMatch(/[<>`]/); expect(t.length).toBeLessThanOrEqual(160); expect(t).toContain("team"); expect(t).toContain("Hello");
+    expect((await ann("ANN-2", o.h, "again", T + 7_000)).status).toBe(429);
     expect((await ann("ANN-2", o.ai, "ai says hi", T + 60_000)).status).toBe(200);
     expect((await call("POST", "/api/z/ANN-2/announce", { text: "hi" }, {}, T + 60_000)).status).toBe(403);
     expect((await call("POST", "/api/z/ANN-2/announce", { notext: 1 }, o.h, T + 60_000)).status).toBe(400);

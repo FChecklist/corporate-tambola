@@ -268,15 +268,19 @@
     const b = S.f.brand;
     return `<div class="zc-block" id="brandbox"><h3>Your brand on the ticket</h3>${small("Shown at the top of every guest's ticket. All of it is optional.")}${lbl("f-brand-name", "Company name")}${inp("brand.name", { max: 40, ph: "Company name" })}
       <span class="zc-lbl" id="gl-brandcolor">Accent colour</span><div class="zc-chips" role="group" aria-labelledby="gl-brandcolor">${BRAND_COLORS.map(([v, l]) => `<button type="button" class="zc-chip${b.color === v ? " on" : ""}" data-ck="brand.color" data-v="${v}" aria-pressed="${b.color === v}"><span class="zc-sw" style="background:${v}" aria-hidden="true"></span>${l}</button>`).join("")}</div>
-      ${lbl("brandlogo", "Small logo (optional)")}<input id="brandlogo" class="zc-in" type="file" accept="image/png,image/jpeg">${b.logo ? `<div class="zc-logo"><img src="${esc(b.logo)}" alt="Your logo" width="48" height="48"><button type="button" class="zc-mini zc-danger" id="logorm">Remove logo</button></div>` : ""}${S.logoNote ? `<p class="zc-small zc-warnt" id="logonote" role="status">${esc(S.logoNote)}</p>` : small("We make it small for you, under 30 KB.")}
+      ${lbl("brandlogo", "Small logo (optional)")}<input id="brandlogo" class="zc-in" type="file" accept="image/png,image/jpeg,image/webp">${small(LOGO_RULES)}${b.logo ? `<div class="zc-logo"><img src="${esc(b.logo)}" alt="Your logo" width="48" height="48"><button type="button" class="zc-mini zc-danger" id="logorm">Remove logo</button></div>` : ""}${S.logoNote ? `<p class="zc-small zc-warnt" id="logonote" role="status">${esc(S.logoNote)}</p>` : small("We make it small for you, under 30 KB.")}
       ${previewButton()}</div>`;
   }
+  // The logo rules (the same numbers as packages/beacon/src/config.ts, which the server enforces)
+  const LOGO_RULES = "PNG, JPEG or WebP, up to 5 MB, at least 64 x 64 pixels, square or wide (at most 4 times wider than tall). Best: a square 256 x 256 picture with a white or see-through background. We shrink it to fit (30 KB, 192 pixels) and show it 30 pixels high on every ticket, in the browser and in the installed app.";
   /** Shrinks the chosen picture in the browser to a PNG or JPEG data URL of at most 30 KB. Nothing is sent anywhere else. */
   async function fitLogo(file) {
-    const url = URL.createObjectURL(file);
+    // read as a data: URL (the page's security policy allows data: images, not blob: ones)
+    const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error("bad")); r.readAsDataURL(file); });
     const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("bad")); i.src = url; });
-    try { URL.revokeObjectURL(url); } catch { /* fine */ }
     const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height; if (!w0 || !h0) throw new Error("bad");
+    if (Math.min(w0, h0) < 64) throw new Error("small");
+    if (Math.max(w0, h0) > 4 * Math.min(w0, h0)) throw new Error("thin");
     const bytes = (d) => Math.ceil((d.length - d.indexOf(",") - 1) * 3 / 4);
     for (const side of [192, 144, 112, 80, 56]) {
       const k = Math.min(1, side / Math.max(w0, h0)), W = Math.max(1, Math.round(w0 * k)), H = Math.max(1, Math.round(h0 * k));
@@ -371,10 +375,10 @@
     let h = roleCards() + (S.teamNote ? `<div class="zc-toast" role="status">${esc(S.teamNote)}</div>` : "");
     if (!T && S.teamErr) h += `<p class="zc-small zc-warnt" role="status">${esc(S.teamErr)}</p>`;
     h += `<span class="zc-lbl zc-sec">Your Hosts: ${hosts.length} of ${max}</span>` + hosts.map((p) => teamRow(p, "host")).join("");
-    if (isOrg()) h += `<div class="zc-inline"><label class="zc-sr" for="hostlabel">Name of the new Host</label><input id="hostlabel" class="zc-in" maxlength="40" placeholder="Name" autocomplete="off" required><label class="zc-sr" for="hostphone">Mobile number of the new Host</label><input id="hostphone" class="zc-in" inputmode="tel" placeholder="Mobile number, 98765 43210" autocomplete="off"><label class="zc-sr" for="hostemail">E-mail of the new Host</label><input id="hostemail" class="zc-in" type="email" maxlength="120" placeholder="E-mail (their link is sent here)" autocomplete="off"><button type="button" class="zc-btn zc-btn-s" id="hostadd"${hosts.length >= max ? " disabled" : ""}>Add a Host</button></div>${hosts.length >= max ? small(`You have the most Hosts allowed (${max}). Remove one to add another.`) : small("A Host needs a name and a mobile number or an e-mail, or both. With an e-mail we send their private link there. With only a mobile number, you send it on WhatsApp.")}`;
+    if (isOrg()) h += `<div class="zc-inline"><label class="zc-sr" for="hostlabel">Name of the new Host</label><input id="hostlabel" value="${esc((S.tv || {}).hostlabel || "")}" class="zc-in" maxlength="40" placeholder="Name" autocomplete="off" required><label class="zc-sr" for="hostphone">Mobile number of the new Host</label><input id="hostphone" value="${esc((S.tv || {}).hostphone || "")}" class="zc-in" inputmode="tel" placeholder="Mobile number, 98765 43210" autocomplete="off"><label class="zc-sr" for="hostemail">E-mail of the new Host</label><input id="hostemail" value="${esc((S.tv || {}).hostemail || "")}" class="zc-in" type="email" maxlength="120" placeholder="E-mail (their link is sent here)" autocomplete="off"><button type="button" class="zc-btn zc-btn-s" id="hostadd"${hosts.length >= max ? " disabled" : ""}>Add a Host</button></div>${hosts.length >= max ? small(`You have the most Hosts allowed (${max}). Remove one to add another.`) : small("A Host needs a name and a mobile number or an e-mail, or both. With an e-mail we send their private link there. With only a mobile number, you send it on WhatsApp.")}`;
     else h += small("Only the Organizer adds Hosts.");
     h += `<span class="zc-lbl zc-sec">Your Co-hosts: ${co.length} (no limit)</span>` + co.map((p) => teamRow(p, "cohost")).join("");
-    h += `<div class="zc-inline"><label class="zc-sr" for="cohostlabel">Name of the new Co-host</label><input id="cohostlabel" class="zc-in" maxlength="40" placeholder="Name" autocomplete="off" required><label class="zc-sr" for="cohostphone">Mobile number of the new Co-host</label><input id="cohostphone" class="zc-in" inputmode="tel" placeholder="Mobile number, 98765 43210" autocomplete="off" required><button type="button" class="zc-btn zc-btn-s" id="cohostadd">Add a Co-host</button></div>`;
+    h += `<div class="zc-inline"><label class="zc-sr" for="cohostlabel">Name of the new Co-host</label><input id="cohostlabel" value="${esc((S.tv || {}).cohostlabel || "")}" class="zc-in" maxlength="40" placeholder="Name" autocomplete="off" required><label class="zc-sr" for="cohostphone">Mobile number of the new Co-host</label><input id="cohostphone" value="${esc((S.tv || {}).cohostphone || "")}" class="zc-in" inputmode="tel" placeholder="Mobile number, 98765 43210" autocomplete="off" required><button type="button" class="zc-btn zc-btn-s" id="cohostadd">Add a Co-host</button></div>`;
     if (isOrg()) h += `<span class="zc-lbl" id="gl-cohl">Each Co-host can add up to</span><div class="zc-chips" role="group" aria-labelledby="gl-cohl">${[10, 50, 100, 250, 500, 1000].map((n) => `<button type="button" class="zc-chip${coLimit() === n ? " on" : ""}" data-cohl="${n}" aria-pressed="${coLimit() === n}">${n} people</button>`).join("")}</div>${small("This is for each Co-host. You can change it any time.")}`;
     h += `<p class="zc-small" id="emailrule">${EMAIL_RULE}</p>`;
     return h + small("Send it to that one person only.") + cont(5);
@@ -981,7 +985,7 @@
     try { S.keys = (await call("GET", "/api/org/keys")).keys; } catch { S.keys = []; }
     try { S.sugs = (await call("GET", "/api/z/suggestions")).suggestions.slice(0, 6); } catch { S.sugs = []; }
     await loadCredits();
-    try { S.history = await call("GET", "/api/history"); } catch (e) { if (e.status === 403) { secret = ""; S.loginMsg = "That sign-in key was not accepted."; } }
+    try { S.history = await call("GET", "/api/history"); } catch (e) { if (e.status === 403) { secret = ""; S.loginMsg = "That sign-in key or link was not accepted. A link you were sent may have expired, been replaced, or the game may have been cancelled: please ask the Organizer."; } }
     redraw();
   }
   async function loadAccount() { try { S.keys = (await call("GET", "/api/org/keys")).keys; } catch { S.keys = []; } await loadCredits(); redraw(); }
@@ -1051,14 +1055,17 @@
       try { S.life = await call("GET", `/api/z/${eid}/life`); } catch { S.life = null; }
       if (S.started && !S.draft) { try { S.prizes = (await call("GET", `/api/z/${eid}/prizes`)).prizes || []; } catch { S.prizes = S.prizes || []; } try { S.published = (await fetch(BASE + `/api/z/${eid}/results`).then((r) => r.json())).results || []; } catch { /* shown next time */ } } // the software decides the winners; this page only watches
       syncForm(); initOpen(); if (needPeople()) await loadPeople();
-    } catch (e) { S.note = e.status === 404 ? "That game was not found." : e.status === 403 ? "Your sign-in has expired or does not belong to this engagement. Open the home page and sign in again." : "Could not refresh. Retrying…"; }
+    } catch (e) { S.note = e.status === 404 ? "That game was not found." : e.status === 403 ? (S.deadLink = true, "Your sign-in has expired or does not belong to this engagement. Open the home page and sign in again.") : "Could not refresh. Retrying…"; }
     redraw();
   }
 
   // ---------- drawing ----------
+  /** A link that no longer opens the game (cancelled, retired, replaced): a plain page, with none of the Organizer's controls. */
+  const deadLinkView = () => frame(`<div class="zc-body"><div class="zc-main"><div class="zc-block" id="deadlink"><h3>This link no longer opens the game</h3><p style="margin:0">The game may have been cancelled, or the Organizer replaced your link with a new one. Please ask the Organizer.</p></div></div></div>`, false);
   let lastHtml = "";
   function view() {
     if (!secret) return loginView(S.loginMsg || "");
+    if (S.deadLink && /^ct[hc]_/.test(secret)) return deadLinkView(); // a Host or Co-host key (cth_ / ctc_) that the server no longer accepts
     if (role() === "host" && S.setup && S.setup.ready === false) return setupView();
     const r = role();
     if (r === "partner") return partnerView();
@@ -1257,6 +1264,7 @@
     // the team
     const person = async (kind) => {
       const val = (id) => (($(id) || {}).value || "").trim(), name = val(kind + "label");
+      S.tv = { [kind + "label"]: name, [kind + "phone"]: val(kind + "phone"), ...(kind === "host" ? { hostemail: val("hostemail") } : {}) }; // what was typed stays on the screen if something needs a correction
       let body;
       if (kind === "host") {
         const email = val("hostemail"), hp = val("hostphone");
@@ -1272,7 +1280,7 @@
         const r = await call("POST", path, body);
         const key = r.hostKey || r.cohostKey || "", id = r.id || (key ? key.slice(0, 10) : ""), hash = kind === "host" ? "host" : "cohost";
         S.teamLinks[id] = key ? `${location.origin}/zc.html?e=${encodeURIComponent(eid)}#${hash}=${key}` : r.link || ""; if (kind === "host" && S.lastHostWa) S.teamWa[id] = { d: S.lastHostWa, name: name };
-        S.teamNote = kind === "host" ? (S.lastHostWa ? "Host added. Send their link on WhatsApp, to that one person only." : "Host added. We sent their link to their e-mail.") : "Co-host added. Send the link to that one person only."; await refreshTeam();
+        S.teamNote = kind === "host" ? (S.lastHostWa ? "Host added. Send their link on WhatsApp, to that one person only." : "Host added. We sent their link to their e-mail.") : "Co-host added. Send the link to that one person only."; S.tv = {}; await refreshTeam();
       } catch (e) { S.teamNote = friendly(e); redraw(); }
     };
     if ($("hostadd")) $("hostadd").onclick = () => person("host");
@@ -1320,8 +1328,9 @@
     }));
     if ($("brandlogo")) $("brandlogo").onchange = async () => {
       const f = $("brandlogo").files && $("brandlogo").files[0]; if (!f) return;
-      if (!/^image\/(png|jpeg)$/.test(f.type || "")) { S.logoNote = "Please choose a PNG or JPEG picture."; return redraw(); }
-      try { S.f.brand.logo = await fitLogo(f); S.logoNote = ""; } catch { S.logoNote = "We could not use that picture. Try a smaller or simpler one."; }
+      if (!/^image\/(png|jpeg|webp)$/.test(f.type || "")) { S.logoNote = "Please choose a PNG, JPEG or WebP picture."; return redraw(); }
+      if (f.size > 5 * 1024 * 1024) { S.logoNote = "That picture is bigger than 5 MB. Please choose a smaller one."; return redraw(); }
+      try { S.f.brand.logo = await fitLogo(f); S.logoNote = ""; } catch (e) { S.logoNote = e && e.message === "small" ? "That picture is too small. It must be at least 64 x 64 pixels." : e && e.message === "thin" ? "That picture is too long and thin. It may be at most 4 times wider than tall." : "We could not use that picture. Try a smaller or simpler one."; }
       redraw();
     };
     if ($("logorm")) $("logorm").onclick = () => { S.f.brand.logo = ""; S.logoNote = ""; redraw(); };
@@ -1410,7 +1419,7 @@
     if ($("reqno")) $("reqno").onclick = async () => { try { await call("POST", `/api/z/${eid}/control/request/clear`, {}); } catch {} refreshEng(); };
     // history and the account
     all("[data-hist]", (b) => (b.onclick = () => { S.showHist = !S.showHist; redraw(); }));
-    all("[data-clonebtn]", (b) => (b.onclick = () => { const from = b.dataset.from || eid; S.clone = { from, hasPeople: b.dataset.people !== undefined ? b.dataset.people === "1" : hasOldPeople(), withPeople: false, err: "" }; redraw(); go("clonepanel"); }));
+    all("[data-clonebtn]", (b) => (b.onclick = async () => { if (b.dataset.people === undefined && !S.pp.list && !(S.people || []).length) { try { await loadPeople(); } catch { /* the panel then asks the old way */ } } const from = b.dataset.from || eid; S.clone = { from, hasPeople: b.dataset.people !== undefined ? b.dataset.people === "1" : hasOldPeople(), withPeople: false, err: "" }; redraw(); go("clonepanel"); }));
     if ($("clonepeople")) $("clonepeople").onchange = () => { S.clone.withPeople = $("clonepeople").checked; redraw(); };
     if ($("cloneno")) $("cloneno").onclick = () => { S.clone = null; redraw(); };
     if ($("clonego")) $("clonego").onclick = async () => {

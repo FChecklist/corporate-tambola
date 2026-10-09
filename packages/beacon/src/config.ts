@@ -64,7 +64,30 @@ export interface BrandCfg { name: string; color: string; logo?: string }
 export const BRAND_COLORS: readonly string[] = ["#0B3D91", "#1B7F5C", "#B3261E", "#6A1B9A", "#C26A00", "#00798C", "#37474F", "#AD1457"];
 export const BRAND_NAME_MAX = 40;
 /** A logo is a PNG, JPEG or WebP of at most 30 KB (decoded). It is checked by its first bytes, not by what the sender called it. */
-export const BRAND_LOGO_MAX_BYTES = 30 * 1024;
+export const BRAND_LOGO_MAX_BYTES = 30 * 1024;
+/** The logo rules, shown to the Organizer and enforced by the page and by the server alike.
+ *  Upload: PNG, JPEG or WebP, at most 5 MB, at least 64 x 64 pixels, no wider than 4 times its height (or the other way round).
+ *  Kept with the game: a PNG, JPEG or WebP of at most 30 KB whose longest side is 48 to 192 pixels (the page shrinks the upload to fit).
+ *  On the ticket it is drawn at most 30 pixels high and 96 wide, on a white tile, so it reads on every brand colour, in the browser and in the installed app. */
+export const LOGO_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+export const LOGO_MIN_SIDE = 64;
+export const LOGO_MAX_RATIO = 4;
+export const LOGO_STORED_MIN_SIDE = 48;
+export const LOGO_STORED_MAX_SIDE = 192;
+export const LOGO_RULES_TEXT = "PNG, JPEG or WebP, up to 5 MB, at least 64 x 64 pixels, square or wide (at most 4 times wider than tall). Best: a square 256 x 256 picture with a white or see-through background. We shrink it to fit (30 KB, 192 pixels) and show it 30 pixels high on every ticket, in the browser and in the installed app.";
+/** Width and height of a PNG, JPEG or WebP from its first bytes (a string of raw characters), or null when they cannot be read. */
+export function logoSize(raw: string, kind: string): { w: number; h: number } | null {
+  const b = (i: number) => raw.charCodeAt(i);
+  if (kind === "png") return raw.length >= 24 ? { w: ((b(16) << 24) | (b(17) << 16) | (b(18) << 8) | b(19)) >>> 0, h: ((b(20) << 24) | (b(21) << 16) | (b(22) << 8) | b(23)) >>> 0 } : null;
+  if (kind === "jpeg") { let i = 2; while (i + 9 < raw.length) { if (b(i) !== 0xff) { i++; continue; } const m = b(i + 1); if (m === 0xff) { i++; continue; } if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return { h: (b(i + 5) << 8) | b(i + 6), w: (b(i + 7) << 8) | b(i + 8) }; i += 2 + ((b(i + 2) << 8) | b(i + 3)); } return null; }
+  if (kind === "webp") {
+    const t = raw.slice(12, 16);
+    if (t === "VP8 " && raw.length >= 30) return { w: (b(26) | (b(27) << 8)) & 0x3fff, h: (b(28) | (b(29) << 8)) & 0x3fff };
+    if (t === "VP8L" && raw.length >= 25) { const v = b(21) | (b(22) << 8) | (b(23) << 16) | (b(24) * 16777216); return { w: (v & 0x3fff) + 1, h: ((v >>> 14) & 0x3fff) + 1 }; }
+    if (t === "VP8X" && raw.length >= 30) return { w: (b(24) | (b(25) << 8) | (b(26) << 16)) + 1, h: (b(27) | (b(28) << 8) | (b(29) << 16)) + 1 };
+  }
+  return null;
+}
 const LOGO_RE = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
 /** Returns the decoded size and true type of a logo data URL, or a plain reason it cannot be used. */
 export function checkBrandLogo(v: unknown): { ok: true; bytes: number } | { ok: false; error: string } {
@@ -77,6 +100,12 @@ export function checkBrandLogo(v: unknown): { ok: true; bytes: number } | { ok: 
   const b = (i: number) => raw.charCodeAt(i);
   const real = raw.length >= 12 && b(0) === 0x89 && b(1) === 0x50 && b(2) === 0x4e && b(3) === 0x47 ? "png" : raw.length >= 3 && b(0) === 0xff && b(1) === 0xd8 && b(2) === 0xff ? "jpeg" : raw.length >= 12 && raw.slice(0, 4) === "RIFF" && raw.slice(8, 12) === "WEBP" ? "webp" : "";
   if (!real || real !== m[1]) return { ok: false, error: "The logo must really be a PNG, JPEG or WebP picture." };
+  const d = logoSize(raw, real);
+  if (!d || !d.w || !d.h) return { ok: false, error: "The logo picture could not be read." };
+  const long = Math.max(d.w, d.h), short = Math.min(d.w, d.h);
+  if (long > LOGO_STORED_MAX_SIDE) return { ok: false, error: `The logo is too large. Its longest side may be at most ${LOGO_STORED_MAX_SIDE} pixels.` };
+  if (long < LOGO_STORED_MIN_SIDE) return { ok: false, error: `The logo is too small. Its longest side must be at least ${LOGO_STORED_MIN_SIDE} pixels.` };
+  if (long > short * LOGO_MAX_RATIO) return { ok: false, error: `The logo is too long and thin. It may be at most ${LOGO_MAX_RATIO} times wider than tall.` };
   return { ok: true, bytes: raw.length };
 }
 export const MAX_INVITES_PER_PERSON = 10;

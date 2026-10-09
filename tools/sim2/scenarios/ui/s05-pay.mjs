@@ -186,7 +186,7 @@ export default [
       const info = (await H.call("GET", `/api/paylink/${tok}`)).body;
       t.check("the pay link shows the full price (no credit leak)", !/credit/i.test(JSON.stringify(info)) && info.price?.total > 2300, JSON.stringify(info).slice(0, 220));
       const x = await t.open({ device: "mobile" }); await x.page.goto(link); await x.page.waitForTimeout(1800);
-      t.check("the pay link page never mentions credit", !/credit/i.test(await t.text(x.page)));
+      t.check("the pay link page never offers or shows anyone's credit (the footer link to the rules may say the word)", !/your credit|use my credit|credit of|credit:|credit valid/i.test(await t.text(x.page)));
       const steal = await other.api("POST", `/api/z/${g2.id}/pay-with-credit`, {});
       t.check("another organizer cannot spend this credit on this game", !steal.ok, `${steal.status}`);
     },

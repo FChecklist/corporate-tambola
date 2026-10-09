@@ -17,6 +17,7 @@ import { openPii, openText, sealPii, sealText } from "./pii";
 import { TERMS_VERSION } from "./brand";
 import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, hostLinkMail, newUseAlertMail, signInMail } from "./mails";
 import { cancelGame, cancelPreview, teamEmails } from "./cancel";
+import { LEGAL_SCHEMA } from "./legal";
 import { CREDIT_SCHEMA, activeCreditSummary, creditAppliedFor, creditRoute } from "./credit";
 import { cloneGame } from "./clone";
 import { acceptOver, acceptWon, endBoundMs, eraseEverything, erasePersonal, erasureOf, fullDeleteAt, lifecycleTick, MAX_AHEAD_MS, personalDeleteAt, SETTINGS_KEEP_MS, recordWinners, reportApi, reportLink } from "./lifecycle";
@@ -154,6 +155,7 @@ export const SCHEMA: string[] = [
   ...HOST_SCHEMA,
   // credit instead of refunds, games that did not start, create a game like this one (0018_credit_retention_clone.sql)
   ...CREDIT_SCHEMA,
+  ...LEGAL_SCHEMA,
 ];
 
 const PATTERNS = new Set<string>([...HOUSE_ORDER.filter((k) => k !== "unlucky"), "lucky"]); // houses a phone may claim (Unlucky is never claimed: it is decided by comparing tickets)
@@ -285,6 +287,16 @@ async function noteUse(env: Env, org: string, kind: "ai" | "host", keyId: string
     await sendMail(env as PayEnv, env.DB, to, m.subject, m.text, now, { html: m.html });
   } catch { /* an alert must never break the work */ }
 }
+/** Published but unpaid games starting within 36 hours: one reminder to the organizer (`nudge` sends it once per game). Run by the scheduled job every minute, and by the daily housekeeping. */
+export async function remindUnpaid(env: Env, now: number): Promise<void> {
+  try {
+    const due = await env.DB.prepare("SELECT e.id, e.start_round FROM engagement e WHERE e.pack=0 AND EXISTS (SELECT 1 FROM kv WHERE k='pub/'||e.id)").all<{ id: string; start_round: number }>();
+    for (const x of due.results ?? []) {
+      const at = roundMs(x.start_round);
+      if (at > now && at - now < 36 * 3_600_000) await nudge(env, x.id, "remind", now, `Payment pending for your game ${x.id}: it starts ${istTime(at)}`, `Your game ${x.id} starts ${istTime(at)}. It is not paid yet, and a game that is not paid for does not begin.\n\nYou can pay at any time until the guest data is erased (23 hours after the game was meant to end). If you pay late, the first number comes 2 minutes after the payment is confirmed.\n\nPay now (about 2 minutes): ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${x.id}`);
+    }
+  } catch { /* tried again at the next tick */ }
+}
 /** Runs the daily clean-up (365-day purge, one more try for unsent mail) the first time an organizer-side request arrives each UTC day. Never slows or fails the request. */
 export async function housekeeping(env: Env, now: number): Promise<void> {
   try {
@@ -294,12 +306,7 @@ export async function housekeeping(env: Env, now: number): Promise<void> {
     await env.DB.prepare("INSERT INTO kv(k,v) VALUES('housekeeping_day',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(d).run(); // claim the day first so two requests do not both run it
     await purgeOld(env, now);
     await retryOutbox(env as PayEnv, now);
-    // published but unpaid, starting within 36 hours: one reminder to the organizer
-    const due = await env.DB.prepare("SELECT e.id, e.start_round FROM engagement e WHERE e.pack=0 AND EXISTS (SELECT 1 FROM kv WHERE k='pub/'||e.id)").all<{ id: string; start_round: number }>();
-    for (const x of due.results ?? []) {
-      const at = roundMs(x.start_round);
-      if (at > now && at - now < 36 * 3_600_000) await nudge(env, x.id, "remind", now, `Payment pending for your game ${x.id}: it starts ${istTime(at)}`, `Your game ${x.id} starts ${istTime(at)}. It is not paid yet, and a game that is not paid for does not begin.\n\nYou can pay at any time until the guest data is erased (23 hours after the game was meant to end). If you pay late, the first number comes 2 minutes after the payment is confirmed.\n\nPay now (about 2 minutes): ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${x.id}`);
-    }
+    await remindUnpaid(env, now);
   } catch { /* try again on the next request */ }
 }
 /** Safety net while the scheduled job is not running: an organizer-side request, or a phone saying the game is over, also nudges the lifecycle (at most once a minute per Worker instance). The scheduled job is the real clock. */
@@ -892,7 +899,7 @@ Did not ask for this? Ignore this e-mail.`, now, { secret: true });
     const key = "ctc_" + randHex(24), kh = await sha("key|" + key);
     await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test,label,eid,pii,created_by) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0),?,?,?,?)").bind(kh, a.org, "cohost", now, a.org, cName, cEid, await sealPii(env, { phone: cDigits, name: cName }), a.kind === "host" ? "h:" + (a.hid ?? (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 7)).slice(0, 7) : "o").run(); // name in the label, mobile sealed; both erased with the game's participant data
     const cOrigin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
-    return json({ ok: true, cohostKey: key, link: `${cOrigin}/zc.html?k=${key}`, id: kh.slice(0, 10), label: cName, eid: cEid, phoneMasked: "******" + cDigits.slice(-4) });
+    return json({ ok: true, cohostKey: key, link: cEid ? `${cOrigin}/zc.html?e=${encodeURIComponent(cEid)}#cohost=${key}` : `${cOrigin}/zc.html?k=${key}`, id: kh.slice(0, 10), label: cName, eid: cEid, phoneMasked: "******" + cDigits.slice(-4) });
   }
   if (req.method === "POST" && p === "/api/org/team/retire") { // the Organizer retires Hosts or Co-hosts; a Host retires Co-hosts only. The key stops at once; a Co-host's name and mobile are erased.
     if ((a.kind !== "master" && a.kind !== "host") || !a.org) return deny(a);
@@ -1152,6 +1159,7 @@ Did not ask for this? Ignore this e-mail.`, now, { secret: true });
     const jobKey = req.headers.get("x-cron-key") ?? "";
     const jobSecret = (env.CRON_KEY ?? "").trim(); // a secret pasted in with a trailing line break still matches
     if (!a.plat && !(jobSecret.length >= 16 && jobKey.trim() === jobSecret)) return deny(a);
+    await remindUnpaid(env, now);
     return json({ ok: true, ...(await lifecycleTick(env as any, now)), purged: await purgeOld(env, now) });
   }
   if (req.method === "POST" && p === "/api/purge") { // run daily (Cron trigger) or by hand: removes everything older than the retention period
@@ -1412,8 +1420,9 @@ Did not ask for this? Ignore this e-mail.`, now, { secret: true });
     if (!can(a, e)) return deny(a);
     if (isDraft) return json({ error: "Publish the engagement first. Nobody can see a draft." }, 400);
     const b = await body(req, 2_048);
-    const text = typeof b?.text === "string" ? b.text.replace(/[<>`]/g, "").replace(/\s+/g, " ").trim().slice(0, 160) : null;
+    const text = typeof b?.text === "string" ? b.text.replace(/[<>`]/g, "").replace(/\s+/g, " ").trim() : null;
     if (text === null) return json({ error: "Write the message to send." }, 400);
+    if (text.length > 160) return json({ error: `A message can be at most 160 characters. Yours has ${text.length}. Please shorten it.`, code: "too-long" }, 400); // refused, not silently cut: guests would read half a sentence
     const last = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`ann/${eid}`).first<{ v: string }>();
     if (last && now - (JSON.parse(last.v).at ?? 0) < 5_000) return json({ error: "Please wait a few seconds before sending another message." }, 429);
     if (!(await spend(env, now))) return BUSY();
@@ -1660,7 +1669,9 @@ export async function purgeOld(env: Env, now: number): Promise<number> {
   let n = 0;
   for (const x of old.results ?? []) {
     const draftDue = x.pack === 0 && x.unplayed_ms == null && x.created_ms < now - DRAFT_DAYS * 86_400_000 && !(await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`pub/${x.id}`).first()); // a draft nobody published is forgotten after 30 days, even with a start time (and so a life row)
-    const due = draftDue ? true : x.unplayed_ms != null ? now >= x.unplayed_ms + SETTINGS_KEEP_MS : x.end_ms != null ? now >= fullDeleteAt(x.end_ms) : x.created_ms < now - RETENTION_DAYS * 86_400_000 || (x.pack === 0 && x.created_ms < now - DRAFT_DAYS * 86_400_000);
+    let endMs: number | null = x.end_ms; // a game that never held personal data has no end clock yet: its end is the cancel time, or the scheduled end
+    if (endMs == null && x.unplayed_ms == null && !draftDue) { const row = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(x.id).first<any>(); if (row && row.pack !== 0) endMs = Math.max(x.created_ms, row.cancelled_ms ?? (await endBoundMs(env as any, row))); }
+    const due = draftDue ? true : x.unplayed_ms != null ? now >= x.unplayed_ms + SETTINGS_KEEP_MS : endMs != null ? now >= fullDeleteAt(endMs) : x.created_ms < now - RETENTION_DAYS * 86_400_000 || (x.pack === 0 && x.created_ms < now - DRAFT_DAYS * 86_400_000);
     if (!due) continue;
     await eraseEverything(env, x.id, now);
     try { await env.CONTROL_R2?.delete(controlKey(x.id)); } catch { /* the object expires with its engagement anyway */ }

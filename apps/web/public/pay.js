@@ -113,10 +113,10 @@
     if (!eid) { S.err = "No engagement was chosen."; return draw(); }
     try {
       const st = await fetch("/api/payments/status").then((r) => r.json()); S.mode = st.mode;
+      const h = await call("GET", `/api/z/${eid}/cohost`); // only the Organizer, a Host or a Co-host of THIS game's account passes; anyone else gets a 403 and a calm message
       try { S.info = await call("GET", `/api/z/${eid}/info`); }
       catch (e0) { // a Co-host may pay but cannot read the game: use the small game header they are allowed
         if (e0.status !== 403) throw e0;
-        const h = await call("GET", `/api/z/${eid}/cohost`);
         S.info = { cap: h.cap, startMs: h.startMs, draft: !h.inviteLink, unpaid: !h.payment || h.payment.status !== "paid", credit: h.credit, creditExpiresMs: h.creditExpiresMs, creditApplied: h.creditApplied, erasureMs: h.erasureMs };
       }
     } catch (e) { S.err = e.status === 403 || e.status === 404 ? "We could not open this engagement with your sign-in. Open it from your console." : e.message; }

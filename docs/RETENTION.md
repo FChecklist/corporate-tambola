@@ -20,11 +20,12 @@ Everything is kept in one Cloudflare D1 database (table `kv` holds small keyed r
 | Mail outbox | `outbox` | A mail that was sent keeps no body. An unsent mail without a key: 3 days. An unsent mail with a link: no body at all | Deleted |
 | Visits to the public pages (source, landing page, device, language, country and city, sections seen with time, choices made, exit page and section, first-party visitor id, shortened network address, keyed hash of the address, funnel step, organizer id once an account is made; never names or mobile numbers) | `visit_session`, `visit_event` | 365 days after the visit began | Rolled into anonymous per-day totals (`visit_agg`, kept), then deleted by the lifecycle tick. With Global Privacy Control or Do Not Track only the totals are kept |
 | Daily write counters | `usage` | 90 days | Deleted by the sweep |
-| Payments, invoices, entitlements | `payment`, `invoice`, `entitlement` | Tax and accounting records: keep as the law requires (India GST: 6 years is the usual rule; ask the lawyer or accountant) | Not deleted by code. Owner decision |
+| Payments, invoices, entitlements | `payment`, `invoice`, `entitlement` | For ever, as the law requires (owner order 2026-10-09) | Never deleted by code (TEST-mode clean-up only removes test payments) |
+| Organizer's invoice details (name, e-mail, mobile) and who paid (name, organisation, e-mail, mobile, country, GSTIN) | `legal_party` (a copy per paid game, written at payment and again just before the game is deleted), and the payment and invoice rows | For ever, as the law requires | Never deleted by code |
 | Partner account (name, random code, hashes of phone and e-mail, key hash) and commissions | `partner`, `commission` | While the partner is active; commissions as accounting records | Partner row deleted by "Close my partner account"; commission rows stay without any link to a person |
 | Ideas from organizers' AI assistants (no names or numbers) | `suggestion`, `suggestion_vote` | Until we remove them | Not deleted by code |
 
 ## Open (decisions, not code)
 
-* Legal retention period for invoices and payments, and for partner commission records.
+* Partner commission records (kept as accounting records). Payments, invoices, organizer invoice details and payer details are kept for ever by owner order.
 * Whether the one-year log rule in DPDP Rule 6(1)(e) reaches any of the above. A lawyer must decide.

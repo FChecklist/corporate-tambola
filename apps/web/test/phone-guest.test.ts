@@ -9,7 +9,7 @@ setDefaultTimeout(60_000);
 const HOUR = 3_600_000, DAY = 24 * HOUR;
 const START = roundAt(T) + 1200; // one hour after T
 const rnd = (r: number) => createHash("sha256").update("fake" + r).digest("hex");
-const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgAAAAAAAAAAAAAAAAAAAAAAAAAAA="; // a 96 x 96 picture header (the server checks the size in pixels: 48 to 192 on the longest side)
 let open: Page[] = [];
 afterEach(async () => { for (const p of open) await p.close(); open = []; setGoogleKeyProvider(); });
 
@@ -70,10 +70,10 @@ describe("brand strip on the ticket page", () => {
     const p = await phoneAt(o, "/z?e=PG-BR2"); await typeJoin(p, "9822222223"); await p.waitFor((x) => SEEN.test(x));
     const s = p.win.document.querySelector(".zbrand") as any; expect(s.style.color).toMatch(/#111111|rgb\(17, ?17, ?17\)/i); expect(!!s.querySelector("img")).toBe(false);
   });
-  test("no brand set: no strip, no 'Powered by' line, nothing breaks", async () => {
+  test("no brand set: the ticket carries CORPORATE TAMBOLA in writing, no 'Powered by' line, nothing breaks", async () => {
     const o = await organizer(); await published(o, "PG-BR3");
     const p = await phoneAt(o, "/z?e=PG-BR3"); await typeJoin(p, "9822222224"); await p.waitFor((x) => SEEN.test(x));
-    expect(!!p.win.document.querySelector(".zbrand")).toBe(false); expect(p.text()).not.toMatch(/Powered by/); expect(p.errors).toEqual([]);
+    const d = p.win.document.querySelector(".zbrand") as any; expect(d.textContent.trim()).toBe("CORPORATE TAMBOLA"); expect(d.querySelector("img")).toBeNull(); expect(p.text()).not.toMatch(/Powered by/); expect(p.errors).toEqual([]); // no brand set: our own name in writing, no second 'Powered by' line
   });
   test("a hostile brand is shown as plain text: no markup from the name, an outside logo address is dropped, a bad colour falls back", async () => {
     const o = await organizer(); await published(o, "PG-BR4");
@@ -201,7 +201,7 @@ describe("See what guests see (ticket preview)", () => {
     await p.waitFor((x) => /Voucher 5000/.test(x)); expect(p.win.document.querySelector(".zbrand").textContent).toContain("Acme Foods"); expect(p.text()).toMatch(/Full house/);
     expect(calls.filter((c) => c.m !== "GET")).toEqual([]); expect(calls.some((c) => /\/api\/z\/PG-PV1\/info$/.test(c.u))).toBe(true);
     await published(o, "PG-PV2"); const q = await prev(o, "#w=ticket&e=PG-PV2", [], { "ctz-org": o.token });
-    await q.waitFor((x) => /No company name or colour is set yet/.test(x)); expect(!!q.win.document.querySelector(".zbrand")).toBe(false); expect(q.text()).toMatch(/PREVIEW/);
+    await q.waitFor((x) => /No company name or logo is set yet/.test(x)); expect((q.win.document.querySelector(".zbrand") as any).textContent).toBe("CORPORATE TAMBOLA"); expect(q.text()).toMatch(/PREVIEW/);
   });
   test("the older break test still works beside it", async () => {
     const o = await organizer(); const p = await prev(o, "#w=break&k=speech&t=Hello"); await p.waitFor((x) => /A short break/.test(x)); expect(p.text()).toMatch(/Test only/);

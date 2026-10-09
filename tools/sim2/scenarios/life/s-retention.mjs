@@ -35,7 +35,7 @@ sc("S04", "PLAYED game: records stay until 00:00 IST at the end of day 365, gone
 sc("S05", "the day-365 instant is 00:00 IST: 23:59:59 IST on day 365 keeps it, 00:00:00 IST removes it", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, pay: true });
   const full = g.fullDeleteMs; w.eq("it is an IST midnight", (full + IST) % DAY, 0);
-  await w.tickAt(full - 1000); w.expect("23:59:59 IST: kept", !(await gone(w, g.id))); await w.tickAt(full); w.expect("00:00:00 IST: gone", await gone(w, g.id));
+  await w.tickAt(g.endMs + 2 * HOUR); /* the scheduled job runs every minute in real life, so the game has its end clock long before day 365 */ await w.tickAt(full - 1000); w.expect("23:59:59 IST: kept", !(await gone(w, g.id))); await w.tickAt(full); w.expect("00:00:00 IST: gone", await gone(w, g.id));
 });
 sc("S06", "a cancelled paid game with guests is purged 365 days after the CANCEL, at the next IST midnight", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 5 * DAY, pay: true, guests: 1 }); await w.goTo(g.startMs - 2 * DAY, DAY); const at = await w.now(); await org.cancel(g.id);
@@ -48,11 +48,15 @@ sc("S07", "a cancelled game that never had a guest is also purged on the same IS
   await w.tickAt(full - 1); w.expect("kept 1 ms before the IST midnight", !(await gone(w, g.id)));
   await w.tickAt(full); w.expect("gone at the IST midnight after cancel+365d", await gone(w, g.id), `still there; created_ms ${e.created_ms}`);
 });
-sc("S08", "payment, invoice and entitlement records: what the code does at day 365 (SIMULATION_PLAN says purged; docs/RETENTION.md says kept for the law)", async (w) => {
+sc("S08", "payment, invoice and entitlement records, the organizer's invoice details and who paid are kept for ever (the law); the game itself is gone at day 365", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, pay: true });
   await w.tickAt(g.fullDeleteMs); w.expect("engagement purged", await gone(w, g.id));
   const left = { payment: (await sql("SELECT COUNT(*) c FROM payment WHERE eid=?", [g.id]))[0].c, invoice: (await sql("SELECT COUNT(*) c FROM invoice"))[0].c, entitlement: (await sql("SELECT COUNT(*) c FROM entitlement WHERE eid=?", [g.id]))[0].c };
-  w.expect("payment/invoice/entitlement records purged with the engagement at day 365", left.payment + left.invoice + left.entitlement === 0, JSON.stringify(left));
+  w.expect("payment, invoice and entitlement are all still there", left.payment >= 1 && left.invoice >= 1 && left.entitlement >= 1, JSON.stringify(left));
+  const lp = (await sql("SELECT * FROM legal_party WHERE eid=?", [g.id]))[0];
+  w.expect("the permanent record of the organizer and the payer exists (name, e-mail)", !!lp && !!lp.organizer_email && !!lp.payer_email && !!lp.payer_name, JSON.stringify(lp));
+  w.eq("nothing else of the game is left (contact, publish marker)", (await sql("SELECT COUNT(*) c FROM kv WHERE k IN (?,?)", ["contact/" + g.id, "pub/" + g.id]))[0].c, 0);
+  await w.tickAt(g.fullDeleteMs + 400 * DAY); w.expect("still there 400 days later", (await sql("SELECT COUNT(*) c FROM payment WHERE eid=?", [g.id]))[0].c >= 1 && (await sql("SELECT COUNT(*) c FROM legal_party WHERE eid=?", [g.id]))[0].c === 1);
 });
 sc("S09", "credit records are kept 1 year after they lapse, then deleted", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 5 * DAY, pay: true }); await org.cancel(g.id);

@@ -68,7 +68,7 @@ export const formatInvoiceNumber = (brand: Brand, fy: string, seq: number) => `$
 // ---------------------------------------------------------------- invoice
 export interface InvoiceData {
   number: string; issuedAt: number; brand: Brand; company: Company; draft: boolean;
-  buyer: { name: string; gstin?: string; email?: string; country?: string };
+  buyer: { name: string; gstin?: string; email?: string; phone?: string; country?: string };
   currency: "INR" | "USD"; lines: { description: string; quantity: number; amount: number }[]; tax: TaxSplit; paymentRef?: string; orderRef?: string;
   /** "credit_note" = a GST credit note for a refund (same layout, own number series, names the invoice it reduces). Default: a tax invoice. */
   kind?: "invoice" | "credit_note"; originalNumber?: string;
@@ -90,7 +90,7 @@ ${c.addressLines.join(", ")}${c.gstin ? `\nGSTIN: ${c.gstin}` : ""}${c.cin ? `  
 ${i.kind === "credit_note" ? "Credit note number" : "Invoice number"}: ${i.number}${i.originalNumber ? `
 Against invoice: ${i.originalNumber}` : ""}
 Date: ${new Date(i.issuedAt).toISOString().slice(0, 10)}
-Billed to: ${i.buyer.name}${i.buyer.gstin ? `  GSTIN: ${i.buyer.gstin}` : ""}
+Billed to: ${i.buyer.name}${i.buyer.gstin ? `  GSTIN: ${i.buyer.gstin}` : ""}${i.buyer.phone ? `  Mobile: ${i.buyer.phone}` : ""}
 
 ${rows}
   Taxable value: ${money(t.taxable, i.currency)}
@@ -115,7 +115,7 @@ h1{font:700 26px/1.1 Georgia,serif;margin:0;color:${esc(b.theme)};letter-spacing
 <div class="top"><div><h1>${esc(b.name)}</h1><div class="sub">${esc(b.line)}<br>A product of <b>${esc(c.legalName)}</b></div></div><div class="sub r" style="text-align:right"><b>${titleOf(i)}</b><br>${esc(i.number)}${i.originalNumber ? `<br>Against invoice ${esc(i.originalNumber)}` : ""}<br>${new Date(i.issuedAt).toISOString().slice(0, 10)}</div></div>
 ${i.draft ? `<div class="draft">DRAFT: the supplier's registration details are not complete yet, so this is not yet a valid tax invoice.</div>` : ""}
 <div class="meta"><div><b>Supplier</b><br>${esc(c.legalName)}<br>${c.addressLines.map(esc).join("<br>")}${c.gstin ? `<br>GSTIN: ${esc(c.gstin)}` : ""}${c.cin ? `<br>CIN: ${esc(c.cin)}` : ""}${c.pan ? `<br>PAN: ${esc(c.pan)}` : ""}</div>
-<div><b>Billed to</b><br>${esc(i.buyer.name)}${i.buyer.gstin ? `<br>GSTIN: ${esc(i.buyer.gstin)}` : ""}${i.buyer.email ? `<br>${esc(i.buyer.email)}` : ""}<br>Place of supply: ${esc(t.placeOfSupply)}</div></div>
+<div><b>Billed to</b><br>${esc(i.buyer.name)}${i.buyer.gstin ? `<br>GSTIN: ${esc(i.buyer.gstin)}` : ""}${i.buyer.email ? `<br>${esc(i.buyer.email)}` : ""}${i.buyer.phone ? `<br>${esc(i.buyer.phone)}` : ""}<br>Place of supply: ${esc(t.placeOfSupply)}</div></div>
 <table><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Amount</th></tr></thead><tbody>${i.lines.map((l) => `<tr><td>${esc(l.description)}</td><td class="r">${l.quantity}</td><td class="r">${money(l.amount, i.currency)}</td></tr>`).join("")}</tbody>
 <tfoot><tr><td colspan="2">Taxable value</td><td class="r">${money(t.taxable, i.currency)}</td></tr>${taxRows.replace(/<tr><td>/g, '<tr><td colspan="2">').replace(/<td class="r">/g, '<td class="r">')}<tr><td colspan="2">TOTAL</td><td class="r">${money(t.total, i.currency)}</td></tr></tfoot></table>
 <div class="foot">${i.paymentRef ? `Paid online via Razorpay. Payment reference: ${esc(i.paymentRef)}.<br>` : ""}${i.note ? `${esc(i.note)}<br>` : ""}${c.sacCode ? `SAC ${esc(c.sacCode)}: ` : ""}${esc(c.sacDescription)}.${c.bank.accountNumber ? `<br>Bank: ${esc(c.bank.name)}, A/c ${esc(c.bank.accountNumber)}, IFSC ${esc(c.bank.ifsc)}` : ""}<br>${esc(c.invoiceFooter)}</div></div></body></html>`;

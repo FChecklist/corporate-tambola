@@ -19,7 +19,7 @@
 .zticket div.e{background:transparent}
 .zticket div.m{background:var(--wine);color:#fff}
 .zboard{display:grid;grid-template-columns:repeat(10,1fr);gap:3px}
-.zboard div{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:11px;border-radius:5px;background:var(--sunk);color:var(--faint)}
+.zboard div{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:12px;border-radius:5px;background:var(--sunk);color:var(--faint)}
 .zboard div.c{background:var(--gold);color:var(--deep);font-weight:700}
 .zrow{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line2);font-size:14px}
 .zrow:first-of-type{border-top:0}
@@ -73,17 +73,17 @@ a.zbtn#addcal{margin-left:6px}
 
 
 /* small, quiet Privacy Policy link under forms that collect a number or an email */
-.spriv{margin:8px 0 0;text-align:center;font-size:11px;line-height:1.3;font-weight:400}.spriv a{color:var(--muted,#6b7385);font-weight:400;text-decoration:underline}
+.spriv{margin:8px 0 0;text-align:center;font-size:12px;line-height:1.3;font-weight:400}.spriv a{color:var(--muted,#6b7385);font-weight:400;text-decoration:underline}
 
-.spriv.accept{font-size:11px}
-.zdemotag{display:inline-block;background:#E4572E;color:#fff;font:800 11px/1 system-ui,sans-serif;letter-spacing:.12em;padding:4px 7px;border-radius:6px;vertical-align:middle}
+.spriv.accept{font-size:12px}
+.zdemotag{display:inline-block;background:#E4572E;color:#fff;font:800 12px/1 system-ui,sans-serif;letter-spacing:.12em;padding:4px 7px;border-radius:6px;vertical-align:middle}
 .zdemo{border:2px dashed #E4572E}
 
 /* the organizer's company strip at the top of the ticket page (colours are set from the script) and the small credit under it */
 .zbrand{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:#0B3D91;color:#fff;font:700 16px/1.25 var(--sans,inherit);min-width:0}
 .zbrand b{min-width:0;overflow-wrap:anywhere}
 .zblogo{width:auto;height:30px;max-width:96px;object-fit:contain;border-radius:4px;background:rgba(255,255,255,.9);padding:2px;flex:0 0 auto}
-.zpow{margin:4px 2px 8px;font-size:11px;line-height:1.3;color:var(--muted,#6b7385);text-align:right}
+.zpow{margin:4px 2px 8px;font-size:12px;line-height:1.3;color:var(--muted,#6b7385);text-align:right}
 /* My invites */
 .zmi{align-items:flex-start;gap:8px;flex-wrap:wrap}
 .zmia{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}

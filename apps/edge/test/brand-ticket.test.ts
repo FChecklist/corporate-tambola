@@ -13,7 +13,11 @@ const call = (method: string, path: string, body?: unknown, key?: string, raw0?:
   handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...(key ? { "x-organizer": key } : {}) }, body: raw0 ?? (body === undefined ? undefined : JSON.stringify(body)) }), env as Env, T);
 const j = async (r: Response) => (await r.json()) as any;
 const dataUrl = (mime: string, bytes: number[], pad = 0) => `data:${mime};base64,${Buffer.from([...bytes, ...new Array(pad).fill(1)]).toString("base64")}`;
-const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0], JPG = [0xff, 0xd8, 0xff, 0xe0, 0, 0], WEBP = [..."RIFF"].map((c) => c.charCodeAt(0)).concat([0, 0, 0, 0], [..."WEBP"].map((c) => c.charCodeAt(0)));
+const be32 = (n: number) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255], le24 = (n: number) => [n & 255, (n >> 8) & 255, (n >> 16) & 255];
+const pngOf = (w: number, h: number) => [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, ...be32(w), ...be32(h)];
+const jpgOf = (w: number, h: number) => [0xff, 0xd8, 0xff, 0xc0, 0, 17, 8, (h >> 8) & 255, h & 255, (w >> 8) & 255, w & 255, 3, 1, 0x11, 0, 2, 0x11, 1];
+const webpOf = (w: number, h: number) => [..."RIFF"].map((c) => c.charCodeAt(0)).concat([0, 0, 0, 0], [..."WEBP"].map((c) => c.charCodeAt(0)), [..."VP8X"].map((c) => c.charCodeAt(0)), [10, 0, 0, 0], [0, 0, 0, 0], le24(w - 1), le24(h - 1));
+const PNG = pngOf(96, 96), JPG = jpgOf(96, 96), WEBP = webpOf(96, 96);
 const png = (pad = 0) => dataUrl("image/png", PNG, pad), jpeg = (pad = 0) => dataUrl("image/jpeg", JPG, pad), webp = (pad = 0) => dataUrl("image/webp", WEBP, pad);
 const C0 = BRAND_COLORS[0]!;
 
@@ -44,6 +48,13 @@ describe("validateCfg: the brand rules", () => {
   test("the colour must be one of the 8 palette values (no free hex, no css, no names)", () => {
     for (const c of ["#123456", "red", "#0B3D9", "#0B3D91; background:url(//evil)", "url(x)", "", 7, null]) expect(validateCfg({ brand: { name: "A", color: c as any } }).ok).toBe(false);
     for (const c of BRAND_COLORS) expect(validateCfg({ brand: { name: "A", color: c } }).ok).toBe(true);
+  });
+  test("a logo's size in pixels: 48 to 192 on the longest side, at most 4 times wider than tall, read from the picture's own header", () => {
+    for (const [name, mk, mime] of [["png", pngOf, "image/png"], ["jpeg", jpgOf, "image/jpeg"], ["webp", webpOf, "image/webp"]] as const) {
+      const ok = (w: number, h: number) => checkBrandLogo(dataUrl(mime, mk(w, h))).ok;
+      expect([name, ok(96, 96), ok(192, 192), ok(192, 48), ok(48, 48)]).toEqual([name, true, true, true, true]);
+      expect([name, ok(193, 96), ok(47, 47), ok(192, 40), ok(2000, 2000)]).toEqual([name, false, false, false, false]);
+    }
   });
   test("a logo: only png, jpeg or webp data URLs, at most 30 KB decoded, and the first bytes must match the type", () => {
     const edge = png(BRAND_LOGO_MAX_BYTES - PNG.length), over = png(BRAND_LOGO_MAX_BYTES - PNG.length + 1);

@@ -5,6 +5,7 @@
 //   3. only the organizer / host / co-host details and the winners record (seat, prize, round, time) remain, until 00:00 IST at the end of the 365th day, then everything goes.
 // Called by the scheduled job (and, as a fallback, by any outside timer with the platform key). Every call does a bounded amount of work and can be repeated safely.
 import { restoreCreditUses } from "./credit";
+import { keepLegalParty } from "./legal";
 import { sweepVisits } from "./visits";
 import { closeAuditFor, isHeld, shredParticipantAudit } from "./audit";
 import { GRACE_ROUNDS, INVITE_CATEGORIES, PRIZE_HOUSES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
@@ -147,6 +148,7 @@ export async function purgeTestEngagement(env: Env, id: string, now = Date.now()
   await deleteEngagementRows(env, id);
 }
 async function deleteEngagementRows(env: Env, id: string): Promise<void> {
+  await keepLegalParty(env.DB, id, Date.now()); // the law keeps payments, invoices, the organizer's invoice details and who paid, for ever: copy them out before the game's own rows go
   await env.DB.batch([
     env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM prize WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
     env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`rptsalt/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`, `paidby/${id}`),
@@ -224,7 +226,7 @@ const bodyFor = (eid: string, d: ReportData, link: string) => [
   `What happens to the data:`,
   `- By ${istFull(d.personalDeleteAtMs)} (within 24 hours of the game ending) we permanently delete every participant's name, mobile number, seat, join record and invite record from our systems.`,
   `- For 365 days we keep only: the organizer, host and co-host details, the log of what your AI assistant did, and the winners record (which prize, which round, what time, which seat, and the name and mobile number each winner confirmed so the prize can be handed over, with whether it was given).`,
-  `- Everything about this engagement is permanently deleted at 00:00 hours IST on ${istDate(d.fullDeleteAtMs)} (the end of the 365th day).`,
+  `- Everything about this engagement is permanently deleted at 00:00 hours IST on ${istDate(d.fullDeleteAtMs)} (the end of the 365th day). The only things kept after that are the payment and invoice records, the organizer's details on the invoice (name, e-mail, mobile) and who paid, because invoices and payment records have to be kept for tax and accounting.`,
   `- Backups of our database roll off within ${d.backupDays} days of any deletion.`, ``,
   `The winners were worked out by the software from the public numbers and accepted only when several different phones agreed. You cannot choose or change a winner or a number, and neither can we.`, ``,
   `You can ask us to delete everything sooner: press Erase in your console, ask your AI assistant to request it (you confirm in your console), or reply to this e-mail from your registered address.`, ``,
@@ -293,6 +295,7 @@ async function baseData(env: LifeEnv, e: any, cfg: EngagementCfg, sch: Awaited<R
     rounds: cfg.rounds, callSeconds: e.call_seconds, ticketsPerPerson: cfg.tickets, cap: e.cap, inviteOnly: !!e.closed, numbersCalled: early ? Math.max(1, ...wrows.map((w: any) => (w.idx ?? 0) + 1)) : 90,
     agg: st.agg, people: [], prizes, lucky, timeline: st.tl, breaks: cfg.breaks.map((b) => ({ after: b.after, kind: b.kind, title: b.title })),
     personalDeleteAtMs: personalDeleteAt(endMs), fullDeleteAtMs: fullDeleteAt(endMs), backupDays: BACKUP_DAYS,
+    ...(cfg.brand ? { brand: { name: cfg.brand.name, ...(cfg.brand.logo ? { logo: cfg.brand.logo } : {}) } } : {}),
   };
 }
 

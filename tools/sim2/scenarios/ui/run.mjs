@@ -68,6 +68,7 @@ const SCEN_TIMEOUT = Number(process.env.UI_SCEN_TIMEOUT ?? 240000);
 for (const sc of todo) {
   await ensureStack(); await track.refresh();
   const t = makeT(sc, shared); const t0 = Date.now(); let error = null;
+  try { t.mailBase = (await H.mailbox.list()).length; } catch { t.mailBase = 0; } // mails that existed before this scenario started (so a check looks only at what THIS scenario's game sent)
   try {
     await Promise.race([sc.run(t), new Promise((_, no) => setTimeout(() => no(new Error(`scenario timeout after ${SCEN_TIMEOUT / 1000} s`)), SCEN_TIMEOUT))]);
   } catch (e) { error = String(e?.stack ?? e).split("\n").slice(0, 4).join(" | ").slice(0, 600); }

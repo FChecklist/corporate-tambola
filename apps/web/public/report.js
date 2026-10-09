@@ -11,6 +11,12 @@
     if (!r.ok) throw Object.assign(new Error(j.error || "http " + r.status), { status: r.status });
     return j;
   };
+  // the organizer's logo as raw pixels for the PDF (drawn on white, so see-through parts print white)
+  const logoPixels = (url) => new Promise((res) => {
+    const i = new Image();
+    i.onload = () => { try { const w = i.naturalWidth, h = i.naturalHeight, c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, w, h); g.drawImage(i, 0, 0); const d = g.getImageData(0, 0, w, h).data, out = []; const hx = (n) => (n < 16 ? "0" : "") + n.toString(16); for (let k = 0; k < d.length; k += 4) out.push(hx(d[k]) + hx(d[k + 1]) + hx(d[k + 2])); res({ w, h, hex: out.join("") }); } catch { res(null); } };
+    i.onerror = () => res(null); i.src = url;
+  });
   const files = [];
   const save = (bytes, name) => { const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" })); files.push({ url, name }); };
   async function run() {
@@ -19,7 +25,8 @@
     const pg = (t) => { const e = document.getElementById("pg"); if (e) e.textContent = t; };
     let head;
     try { head = await get("base"); } catch (e) { draw(`<div class="zcard"><h2>${e.status === 404 ? "This report is no longer available" : "Could not open the report"}</h2><p class="zsmall">${esc(e.message)}</p></div>`); return; }
-    const base = head.base, per = Math.max(1, Math.round(head.partSize / head.chunkSize)), people = [];
+    const base = head.base; if (base.brand && base.brand.logo) { const px = await logoPixels(base.brand.logo); if (px) base.logoPix = px; }
+    const per = Math.max(1, Math.round(head.partSize / head.chunkSize)), people = [];
     for (let i = 0; i < head.chunks; i++) { pg(`Reading the participants… ${Math.min(head.totalPeople, (i + 1) * head.chunkSize)} of ${head.totalPeople}`); people.push(...(await get("people", "&i=" + i)).people); }
     pg("Laying out the PDF on your device…");
     await new Promise((r) => setTimeout(r, 30));

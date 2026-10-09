@@ -186,11 +186,19 @@ export default [
       const { org, x, eid } = await startGameUi(t);
       await openStep(x.page, 4);
       await x.page.fill("#f-brand-name", "Sim Industries"); await chip(x.page, "brand.color", "#1B7F5C");
+      t.check("the logo rules are on the screen (formats, 5 MB, 64 x 64 minimum, shape)", /PNG, JPEG or WebP/.test(await t.text(x.page, "#brandbox")) && /5 MB/.test(await t.text(x.page, "#brandbox")) && /64 x 64/.test(await t.text(x.page, "#brandbox")) && /256 x 256/.test(await t.text(x.page, "#brandbox")));
+      await x.page.setInputFiles("#brandlogo", tinyPng("logo-small.png", 32, 32)); await x.page.waitForTimeout(1200);
+      t.check("a too small picture (32 x 32) is refused with a plain reason", /too small/i.test(await t.text(x.page, "#brandbox")), (await t.text(x.page, "#brandbox")).slice(0, 300));
+      await x.page.setInputFiles("#brandlogo", tinyPng("logo-thin.png", 500, 100)); await x.page.waitForTimeout(1200);
+      t.check("a too long and thin picture (400 x 60) is refused with a plain reason", /long and thin/i.test(await t.text(x.page, "#brandbox")), (await t.text(x.page, "#brandbox")).slice(0, 300));
+      await x.page.setInputFiles("#brandlogo", tinyPng("logo-big.png", 1500, 1500)); await x.page.waitForTimeout(2500);
+      t.check("a big picture (1500 x 1500) is shrunk to fit, not refused", !!(await x.page.$("#brandbox .zc-logo img")), (await t.text(x.page, "#brandbox")).slice(0, 300));
       await x.page.setInputFiles("#brandlogo", tinyPng()); await x.page.waitForTimeout(1500);
       await saveStep(x.page, 4);
       const b = (await org.info(eid)).body.brand;
       t.check("brand name and colour stored", b?.name === "Sim Industries" && b?.color === "#1B7F5C", JSON.stringify(b)?.slice(0, 120));
       t.check("logo stored as a small data URL (no outside request)", /^data:image\//.test(b?.logo ?? ""), (b?.logo ?? "").slice(0, 40));
+      { const L = b?.logo ?? ""; const bytes = Math.floor((L.length - L.indexOf(",") - 1) * 3 / 4); t.check("the stored logo is at most 30 KB", bytes > 0 && bytes <= 30720, String(bytes)); }
       await org.publish(eid);
       const p = await t.open({ device: "mobile", token: org.token });
       await p.page.goto(`${H.SIM}/preview.html#w=ticket&e=${eid}`); await p.page.waitForTimeout(2000);

@@ -130,7 +130,7 @@ export default [
       t.check("pay page: no pay button for a cancelled game", !(await o.page.$("#paygo")) || /cancel/i.test(await t.text(o.page)), (await t.text(o.page)).slice(0, 160));
       const p = await t.open({ device: "mobile" }); await p.page.goto(pl); await p.page.waitForTimeout(1800);
       t.check("pay link: no pay button, a calm message", !(await p.page.$("#paygo")) && (await t.text(p.page)).length > 30, (await t.text(p.page)).slice(0, 160));
-      const c = await t.open({ device: "mobile" }); await c.page.goto(cohostUrl(g.id, co)); await c.page.waitForTimeout(2500);
+      const c = await t.open({ device: "mobile" }); await c.page.goto(cohostUrl(g.id, co)); await c.page.waitForTimeout(2500); await t.shot(c.page, "cancelled-cohost");
       t.check("Co-host view: readable cancelled state (key keeps working only to read)", /cancel/i.test(await t.text(c.page)), (await t.text(c.page)).slice(0, 200));
       const info = (await org.info(g.id)).body;
       t.check("API info says cancelled", JSON.stringify(info).toLowerCase().includes("cancel"), JSON.stringify(info).slice(0, 160));
@@ -171,9 +171,9 @@ export default [
       const opt = c.page.locator("input[type=checkbox]:near(:text('people list'))").first();
       const txt = await t.text(c.page, "#sec7");
       t.note("clone panel: " + txt.slice(txt.search(/like this one/i), txt.search(/like this one/i) + 300));
-      const tick = c.page.locator("#sec7 input[type=checkbox]").first();
+      const tick = c.page.locator("#clonepeople");
       if (await tick.count()) await tick.check();
-      const go = c.page.locator("#sec7 button:has-text('Create'), #sec7 button:has-text('Make')").last();
+      const go = c.page.locator("#clonego");
       await go.click(); await c.page.waitForFunction((old) => new URL(location.href).searchParams.get("e") !== old, g.id, { timeout: 10000 }).catch(() => {});
       const nid = new URL(c.page.url()).searchParams.get("e");
       t.check("the console moved to a new game id", nid && nid !== g.id, String(nid));
@@ -235,6 +235,7 @@ export default [
     resetAfter: true,
     async run(t) {
       const org = await t.org("o"); const g = await t.game(org, { lead: 8 * H.MIN, pay: false, settings: { whoCanJoin: "anyone" } });
+      const m0 = (await H.mailbox.list()).length; // mails before this scenario's own: the check below looks only at what this game sent
       const p = nextPhone(); await joinApi(g.id, p, "Late Lena");
       await H.clock.advance(3 * H.HOUR); await t.shared.track.refresh();
       const c = await openConsole(t, org, g.id, { device: "laptop" });
@@ -242,18 +243,18 @@ export default [
       t.check("console: a did-not-start / erased-at line is shown", /did not start|will be erased|not start/i.test(ct), ct.slice(0, 260));
       await t.shot(c.page, "did-not-start-console");
       const s = (await org.summary(g.id)).body;
-      t.check("summary status says did not start", /did not start/i.test(s.status ?? ""), s.status);
+      t.check("before the erasure the game is HELD (payment pending), not yet closed: it can still be paid", /not paid|held|pending/i.test(s.status ?? "") && !/did not start/i.test(s.status ?? ""), s.status);
       const gu = await t.open({ device: "mobile" }); await gu.page.goto(`${H.SIM}/z?e=${g.id}`); await gu.page.waitForTimeout(2500);
-      t.check("guest page still reads waiting wording until erasure", /Waiting for the Organizer or Host|did not start/i.test(await guestText(gu.page)), (await guestText(gu.page)).slice(0, 200));
+      t.check("a new visitor before the erasure can still open the page (waiting wording or the join form for the waiting room)", /Waiting for the Organizer or Host|did not start|Get my ticket/i.test(await guestText(gu.page)), (await guestText(gu.page)).slice(0, 200));
       // the heads-up e-mail about 6 hours before the erasure, then the erasure itself
-      await H.clock.advanceWithTicks(20 * H.HOUR, 10 * H.MIN);
-      const heads = await H.mailbox.list({ to: org.email, subject: "erase" });
+      await H.clock.advanceWithTicks(21 * H.HOUR, 10 * H.MIN);
+      const heads = await H.mailbox.list({ to: org.email, subject: "time has passed" });
       t.check("a heads-up e-mail to the Organizer about the coming erasure (once)", heads.length >= 1 && heads.length <= 2, heads.map((m) => m.subject).join(" | ").slice(0, 200));
       const people = (await H.sql("SELECT COUNT(*) c FROM participant WHERE eid=?", [g.id]))[0].c;
       t.check("after end + 23 h the guest's data is gone", people === 0, `participants left ${people}`);
       const after = await H.mailbox.list({ to: org.email });
-      t.check("the Organizer got the 'we erased the guest list' e-mail", after.some((m) => /erased|deleted/i.test(m.subject)), after.map((m) => m.subject).join(" | ").slice(0, 240));
-      const all = await H.mailbox.list(); t.check("no e-mail went to any guest", all.every((m) => t.team.has(m.to.toLowerCase())), all.filter((m) => !t.team.has(m.to.toLowerCase())).map((m) => m.to).join(","));
+      t.check("the Organizer got the 'we erased the guest list' e-mail", after.some((m) => /did not start|erased|deleted/i.test(m.subject)), after.map((m) => m.subject).join(" | ").slice(0, 900));
+      const all = (await H.mailbox.list()).slice(m0); t.check("no e-mail went to any guest", all.every((m) => t.team.has(m.to.toLowerCase())), all.filter((m) => !t.team.has(m.to.toLowerCase())).map((m) => m.to).join(","));
     },
   },
   {
@@ -271,7 +272,7 @@ export default [
       await H.clock.advanceWithTicks(27 * H.DAY, 6 * H.HOUR);
       const m3 = await H.mailbox.list({ to: org.email, subject: "lapse" });
       t.check("3 days before: a second e-mail, one of each only", m3.length >= 2 && m3.length <= 3, m3.map((m) => m.subject).join(" | "));
-      await H.clock.set(cr0.expiresMs - 60_000); await H.clock.advanceWithTicks(5 * H.MIN, H.MIN);
+      await H.clock.set(cr0.expiresMs - 120_000); await H.clock.advanceWithTicks(60_000, 30_000); // stops one minute before the end of day 365
       const cr1 = (await org.api("GET", "/api/org/credit")).body.credits[0];
       t.check("one minute before the end of day 365 the credit is still active", cr1.status === "active", cr1.status);
       await H.clock.advanceWithTicks(H.DAY, H.HOUR);

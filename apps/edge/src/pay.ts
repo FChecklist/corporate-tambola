@@ -14,6 +14,7 @@ import {
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { GRACE_ROUNDS } from "../../../packages/beacon/src/config";
 import type { D1, Env } from "./worker";
+import { keepLegalParty } from "./legal";
 import { partnerCode, phoneHashFor, recordCommission, refCode } from "./partners";
 import { getMode, mailGate, testFlag, type ModeEnv } from "./mode";
 import { lookupPayLink, packFor, payLinkPublic } from "./paylink";
@@ -155,7 +156,7 @@ export async function fulfil(env: PayEnv, paymentId: string, now: number, spend:
     ? -(((await db.prepare("SELECT COUNT(*) AS c FROM invoice WHERE brand=? AND fy=? AND seq<0").bind(brand.id, fy).first<{ c: number }>())?.c ?? 0) + 1)
     : ((await db.prepare("SELECT COALESCE(MAX(seq),0) AS m FROM invoice WHERE brand=? AND fy=? AND seq>0").bind(brand.id, fy).first<{ m: number }>())?.m ?? 0) + 1;
   const number = test ? `TEST-${fy}-${-seq}` : formatInvoiceNumber(brand, fy, seq);
-  const data: InvoiceData = { number, issuedAt: now, brand, company: co, draft: !!test || companyGaps(co).length > 0, buyer: { name: meta.org || meta.name || "", gstin: meta.taxId || undefined, email: p.email, country: meta.country }, currency: p.currency,
+  const data: InvoiceData = { number, issuedAt: now, brand, company: co, draft: !!test || companyGaps(co).length > 0, buyer: { name: meta.org || meta.name || "", gstin: meta.taxId || undefined, email: p.email, phone: meta.phone || undefined, country: meta.country }, currency: p.currency,
     lines: [{ description: closed ? `${brand.name}: payment received after the game closed (kept as credit)` : `${brand.name}: up to ${p.pack} participants (one engagement)${creditTotal > 0 ? (p.amount > 0 ? ", balance after credit" : ", paid from credit") : ""}`, quantity: 1, amount: tax.taxable }], tax, paymentRef: p.rzp_payment_id ?? undefined, orderRef: p.id,
     ...(creditTotal > 0 ? { note: `${cuses.map((u) => `Paid from credit of invoice ${u.invoice ?? u.credit_id}: ${rs(u.amount, p.currency)}`).join("; ")}. No new GST is charged on the part paid from credit: it was invoiced when the credit arose.` } : {}) };
   await db.prepare("INSERT OR IGNORE INTO invoice(token,payment_id,brand,fy,seq,number,issued_ms,data) VALUES(?,?,?,?,?,?,?,?)").bind(token, p.id, brand.id, fy, seq, number, now, JSON.stringify(data)).run();
@@ -170,6 +171,7 @@ export async function fulfil(env: PayEnv, paymentId: string, now: number, spend:
   await recordCommission(env, p, tax.taxable, now); // refer & earn: a commission row for a referred, PAID purchase only
   const result = { ok: true, orderId: p.id, pack: p.pack, total: p.amount, tax: p.tax, currency: p.currency, invoiceUrl: `/api/invoice/${token}`, invoiceNumber: number, organizerKey, newOrganizer: !!organizerKey, published: !!published, eid: published, restartedAtMs: restart ? (1692803367 + (restart - 1) * 3) * 1000 : null, ...(keptCredit ? { creditKept: true, creditId: keptCredit.id, creditExpiresMs: keptCredit.expires_ms } : {}) };
   await db.prepare("UPDATE payment SET status='paid', paid_ms=?, org=?, result=? WHERE id=?").bind(now, org, JSON.stringify(result), p.id).run();
+  if (meta.eid) { try { await keepLegalParty(db, meta.eid, now); } catch { /* the deletion step copies it again */ } } // permanent record of who paid and the organizer's invoice details
   if (keptCredit && closedGame) await mailCreditCreated(env, keptCredit, closedGame, "late", now); // the Organizer and the Hosts are told once; the payer got the receipt above
   if (published) await recordFunnelForOrg({ DB: db }, org, "published", now); // marketing funnel (visits.ts): counted once, against the visitor's first visit
   await recordFunnelForOrg({ DB: db }, org, "paid", now);
@@ -255,7 +257,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     if (boundEid && credited > 0 && cash < 1) return json({ error: "Credit already covers this game. Tap Use my credit to finish.", code: "use-credit" }, 409);
     const pr = credited > 0 ? { total: cash, base: cur === "INR" ? Math.round((cash / 1.18) * 100) / 100 : cash, tax: cur === "INR" ? Math.round((cash - cash / 1.18) * 100) / 100 : 0 } : full;
     const id = "pay_" + randHex(8);
-    const meta = { org: orgName.slice(0, 120), name: payerName.slice(0, 120), country: typeof b.country === "string" ? b.country.slice(0, 2) : "IN", taxId: typeof b.taxId === "string" ? b.taxId.trim().slice(0, 20) : "", origin: env.PUBLIC_ORIGIN ?? url.origin, ...(boundOrg ? { orgId: boundOrg, eid: boundEid, paidBy, ...(credited > 0 ? { creditInr: credited } : {}) } : {}) };
+    const meta = { org: orgName.slice(0, 120), name: payerName.slice(0, 120), ...(contact ? { phone: contact } : {}), country: typeof b.country === "string" ? b.country.slice(0, 2) : "IN", taxId: typeof b.taxId === "string" ? b.taxId.trim().slice(0, 20) : "", origin: env.PUBLIC_ORIGIN ?? url.origin, ...(boundOrg ? { orgId: boundOrg, eid: boundEid, paidBy, ...(credited > 0 ? { creditInr: credited } : {}) } : {}) };
     let order: any = null;
     if (rzp) {
       try { order = await createOrder(rzp, { amountMinor: toMinor(pr.total), currency: cur, receipt: id, notes: { brand: brand.name, product: "engagement", pack: String(pack), organization: (meta.org || meta.name).slice(0, 80), payment_ref: id } }); }

@@ -1,3 +1,4 @@
+import { deflateSync } from "node:zlib";
 // Shared kit of the UI scenario suite (tools/sim2/scenarios/ui): the scenario context `t`, console/guest/pay UI helpers and the fake Google script.
 // Everything runs against the suite's OWN sim server (:8804) and WhatsApp simulator (:8891): run.mjs sets SIM_PORT / WA_PORT before this file is imported.
 // Nothing here touches the live site: the harness blocks every non-localhost request in each browser context.
@@ -22,10 +23,12 @@ export const nextPhone = () => "9" + String(300000000 + (Date.now() % 1000000) *
 /** the scenario context handed to each scenario's run(t) */
 export function makeT(sc, shared) {
   const t = {
-    id: sc.id, name: sc.name, H, shared, checks: [], notes: [], pages: [], team: new Set(), shots: [],
+    id: sc.id, name: sc.name, H, shared, checks: [], notes: [], pages: [], team: (shared.allTeam ??= new Set()), /* every Organizer and Host address of this run: a mail from an earlier scenario's game still goes to ITS Organizer */ shots: [],
     check(name, ok, detail = "") { t.checks.push({ name, ok: !!ok, detail: String(detail ?? "").slice(0, 400) }); return !!ok; },
     note(msg) { t.notes.push(String(msg).slice(0, 300)); },
     ip: nextIp, mail: nextMail, phone: nextPhone,
+    /** every mail sent since this scenario started */
+    async mails() { return (await H.mailbox.list()).slice(t.mailBase ?? 0); },
     /** opens a tracked browser context (closed by the runner); same options as the harness `open` */
     async open(o = {}) {
       await shared.track.refresh();
@@ -138,8 +141,15 @@ export async function sweep(t, x, url, label, { widths = WIDTHS, minPx = 12, wai
 
 /** a tiny valid PNG (1x1 transparent) written to a temp file for logo uploads */
 import { writeFileSync } from "node:fs";
-export function tinyPng(name = "logo.png") {
+/** A real PNG picture of w x h pixels (a green square with a white ring), written without any library. 256 x 256 by default: a normal logo upload. */
+export function tinyPng(name = "logo.png", w = 256, h = 256) {
   const f = join(SHOTS, name);
-  writeFileSync(f, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64"));
+  const crcT = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (buf) => { let c = 0xffffffff; for (const x of buf) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (t, d) => { const l = Buffer.alloc(4); l.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(t), d]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([l, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++) { raw[y * (w * 3 + 1)] = 0; for (let x = 0; x < w; x++) { const d = Math.hypot(x - w / 2, y - h / 2), ring = d > Math.min(w, h) * 0.3 && d < Math.min(w, h) * 0.4, o = y * (w * 3 + 1) + 1 + x * 3; raw[o] = ring ? 255 : 27; raw[o + 1] = ring ? 255 : 127; raw[o + 2] = ring ? 255 : 92; } }
+  writeFileSync(f, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]));
   return f;
 }

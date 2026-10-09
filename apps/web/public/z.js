@@ -64,7 +64,7 @@
 
   // ---------- the company strip at the top of the ticket page (colour and name set by the organizer; the small picture travels inside the settings) ----------
   const brandStrip = () => {
-    const b = INFO.brand; if (!b) return "";
+    const b = INFO.brand; if (!b) return `<div class="zbrand" data-bg="#0B3D91" data-fg="#ffffff"><b>CORPORATE TAMBOLA</b></div>`; // no company brand set: the ticket carries our own name in writing
     return `<div class="zbrand" data-bg="${esc(b.color)}" data-fg="${esc(b.fg)}">${b.logo ? `<img class="zblogo" alt="" src="${esc(b.logo)}">` : ""}${b.name ? `<b>${esc(b.name)}</b>` : ""}</div><div class="zpow">Powered by Corporate Tambola</div>`;
   };
   const paintBrand = () => document.querySelectorAll(".zbrand").forEach((el) => { el.style.background = el.dataset.bg; el.style.color = el.dataset.fg; }); // set from the script, so a strict style policy never blocks the colour

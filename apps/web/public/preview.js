@@ -121,11 +121,12 @@
       const luckyN = lucky && lucky.winners ? lucky.winners : 3;
       $app.innerHTML = `<div class="zhead"><b>Corporate Tambola</b></div>
         <div class="zbanner info" role="note"><b>PREVIEW.</b> This is a sample ticket, not a real one. Nothing is saved, nobody is told, and no game is running.${note ? " " + esc(note) : ""}</div>
-        ${brand ? `<div class="zbrand" id="pvbrand">${brand.logo ? `<img class="zblogo" alt="" src="${esc(brand.logo)}">` : ""}${brand.name ? `<b>${esc(brand.name)}</b>` : ""}</div><div class="zpow">Powered by Corporate Tambola</div>` : `<div class="zcard"><div class="zsmall" style="margin:0">No company name or colour is set yet, so guests see no strip at the top. Set them in the Brand step to see it here.</div></div>`}
+        ${brand ? `<div class="zbrand" id="pvbrand">${brand.logo ? `<img class="zblogo" alt="" src="${esc(brand.logo)}">` : ""}${brand.name ? `<b>${esc(brand.name)}</b>` : ""}</div><div class="zpow">Powered by Corporate Tambola</div>` : `<div class="zbrand" id="pvbrand0">CORPORATE TAMBOLA</div><div class="zsmall" style="margin:4px 0 0">No company name or logo is set yet, so guests see our name. Set yours in the Brand step to see it here.</div>`}
         <div class="zcard"><h2>Your ticket <span class="zdemotag">PREVIEW</span></h2><div class="zticket" aria-label="Sample ticket">${sample.flat().map((n) => n ? `<div>${n}</div>` : `<div class="e"></div>`).join("")}</div></div>
         <div class="zcard"><h2>What you can win</h2><ul class="zlist">${prizeLi}</ul></div>
         <div class="zcard zbreak"><h2>A short break</h2><div style="font:700 20px var(--sans,inherit);margin:2px 0 4px">${esc(brk ? brk.title : "A message from your organizer")}</div><div class="zsmall" style="margin:0">Please listen to the host. The numbers continue in ${esc(String(brk && brk.seconds ? brk.seconds : 60))}s.</div></div>
         <div class="zcard"><h2>Lucky draw</h2><div class="zrow"><span>${esc(luckyTitle)}<br><small class="zsmall" style="margin:0">${luckyN} ${luckyN === 1 ? "person is" : "people are"} picked at random</small></span><i>at the end of the break</i></div></div>`;
+      const b0 = document.getElementById("pvbrand0"); if (b0) { b0.style.background = "#0B3D91"; b0.style.color = "#ffffff"; }
       const b = document.getElementById("pvbrand"); if (b && brand) { b.style.background = brand.color; b.style.color = brand.fg; }
     }
     try { document.title = "See what guests see | Corporate Tambola"; } catch {}

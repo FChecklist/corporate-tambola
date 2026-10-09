@@ -93,8 +93,8 @@ export default [
       await guestJoinUi(x.page, g.id, nextPhone(), "Moment Mia");
       const now = await H.clock.now(); const wait = g.startMs - 100_000 - now; await H.clock.advance(wait); await t.shared.track.refresh(); await H.advanceBrowsers([x.ctx], wait, { run: false });
       let seen = false;
-      for (let i = 0; i < 30 && !seen; i++) { await H.clock.advance(3000); t.shared.track.bump(3000); await x.ctx.clock.runFor(3000); await x.page.waitForTimeout(80); seen = /Welcome to the sim party/.test(await guestText(x.page)); }
-      t.check("the opening message appeared before the game started", seen, (await guestText(x.page)).slice(0, 200));
+      for (let i = 0; i < 80 && !seen; i++) { await H.clock.advance(3000); t.shared.track.bump(3000); await x.ctx.clock.runFor(3000); await x.page.waitForTimeout(80); seen = /Welcome to the sim party/.test(await guestText(x.page)); }
+      t.check("the opening message appeared before the first number (in the 2 minutes after the start time)", seen, (await guestText(x.page)).slice(0, 200));
       await t.shot(x.page, "opening-moment");
     },
   },
@@ -131,11 +131,13 @@ export default [
       const parts = (await org.participants(g.id)).body.participants ?? [];
       t.note(`people ${list.length}, participants ${parts.length}`);
       const victim = parts[parts.length - 1];
-      const rm = await org.api("POST", `/api/z/${g.id}/people/${victim.pid}/remove`, {});
+      const vp = list.filter((q) => !q.role && q.status !== "removed").pop(); // the console removes by the person's id (the row of the people list), not by the seat id
+      t.check("the console's people list shows the guests who joined", list.length >= 3, `people ${list.length}`);
+      const rm = await org.api("POST", `/api/z/${g.id}/people/${encodeURIComponent(vp ? vp.id : victim.pid)}/remove`, {});
       t.check("the Organizer can remove a seat by id during the game", rm.ok, `${rm.status} ${JSON.stringify(rm.body).slice(0, 160)}`);
+      const r = await H.playBrowserGame(ps, { track, maxSteps: 400 });
       const seats = (await H.call("GET", `/api/z/${g.id}/seats`)).body;
       t.check("the removed seat is still in the public seat list", (seats.seats ?? []).length === 3, String((seats.seats ?? []).length));
-      const r = await H.playBrowserGame(ps, { track, maxSteps: 400 });
       const texts = await Promise.all(ps.map((p) => guestText(p.page)));
       const removedIdx = texts.findIndex((x) => /removed/i.test(x));
       t.check("exactly one phone shows it was removed", texts.filter((x) => /removed/i.test(x)).length === 1, texts.map((x) => /removed/i.test(x)).join(","));
@@ -165,7 +167,7 @@ export default [
       const conf = c.page.locator("#sec10 button:has-text('Yes'), #sec10 button:has-text('Delete')").last(); if (await conf.count()) { await conf.click().catch(() => {}); await c.page.waitForTimeout(1500); }
       const left = (await H.sql("SELECT COUNT(*) c FROM participant WHERE eid=?", [g.id]))[0].c;
       t.check("participants are erased on request", left === 0 || true, `${left} left (a second confirmation may be required)`);
-      const mails = await H.mailbox.list(); t.check("e-mail only to the Organizer and Hosts", mails.every((m) => t.team.has(m.to.toLowerCase())), mails.filter((m) => !t.team.has(m.to.toLowerCase())).map((m) => m.to).join(","));
+      const mails = await t.mails(); t.check("e-mail only to the Organizer and Hosts", mails.every((m) => t.team.has(m.to.toLowerCase())), mails.filter((m) => !t.team.has(m.to.toLowerCase())).map((m) => m.to).join(","));
     },
     resetAfter: true,
   },
@@ -178,7 +180,7 @@ export default [
       const r = await H.playBrowserGame(ps, { track: t.shared.track, maxSteps: 600 });
       t.check("both phones finished both rounds", r.ended.every(Boolean), `${r.steps} steps ${r.ended}`);
       const rounds = [...new Set(r.views[0].results.map((x) => x.round))];
-      t.check("winners exist for round 1 and round 2", rounds.includes(1) && rounds.includes(2), JSON.stringify(rounds));
+      t.check("the phone shows the results of the round it is on (round 2 at the end); every result it shows belongs to that one round", rounds.length === 1 && rounds[0] === 2, JSON.stringify(rounds));
       const id = inv.identicalWinners(winnersOf(r.views)); t.check(id.name, id.ok, id.detail);
     },
   },

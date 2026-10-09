@@ -459,7 +459,7 @@ describe("console (organizer page)", () => {
     // the phone layout has its own bottom tabs and a steps sheet
     expect(Array.from(p.win.document.querySelectorAll(".zc-tab")).map((e: any) => e.textContent)).toEqual(["Steps", "Next", "Help", "Top"]);
     p.click('.zc-tab[data-act="sheet"]'); expect(p.$(".zc-sheet")!.textContent).toMatch(/Your game at a glance/); p.click('.zc-tab[data-act="sheet"]'); expect(p.$(".zc-sheet")).toBeNull();
-    const css = readFileSync(new URL("../public/zc.css", import.meta.url), "utf8"); expect(css).toMatch(/@media \(max-width:640px\)/); expect(css).toMatch(/\.zc-side\{display:none\}/); expect(css).toMatch(/\.zc-paynote\{[^}]*font-size:11px/);
+    const css = readFileSync(new URL("../public/zc.css", import.meta.url), "utf8"); expect(css).toMatch(/@media \(max-width:640px\)/); expect(css).toMatch(/\.zc-side\{display:none\}/); expect(css).toMatch(/\.zc-paynote\{[^}]*font-size:12px/);
     expect(p.errors).toEqual([]);
   });
 });
@@ -545,7 +545,7 @@ describe("phone page", () => {
     const o = await organizer(); await make(o, "UI-PRIV"); await publish(o, "UI-PRIV");
     const p = await phone(o, "UI-PRIV"); await p.waitFor((x) => /Join the engagement/.test(x));
     quietPrivacy(p.win.document); expect(p.$("#go")).toBeTruthy(); expect(p.win.document.body.textContent).toContain("Players are 18 or older."); expect(p.win.document.querySelectorAll(".spriv").length).toBe(2);
-    for (const f of ["z.css", "app.css"]) expect(readFileSync(new URL("../public/" + f, import.meta.url), "utf8")).toMatch(/.spriv{[^}]*font-size:11px[^}]*font-weight:400/);
+    for (const f of ["z.css", "app.css"]) expect(readFileSync(new URL("../public/" + f, import.meta.url), "utf8")).toMatch(/.spriv{[^}]*font-size:12px[^}]*font-weight:400/);
     expect(readFileSync(new URL("../public/legal.html", import.meta.url), "utf8")).toContain('id="privacy"');
   });
   test("UC-29 / UC-57 a guest joins a published engagement before payment and gets the waiting room: countdown, what can be won, how it works, sound check, calendar", async () => {
@@ -1435,14 +1435,15 @@ describe("console: About this step write-ups (spec 4, A)", () => {
 });
 
 const PNG1 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-const JPG1 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/";
+const JPG1 = "data:image/jpeg;base64,/9j/wAARCABgAGADAREAAhEBAxEB"; // a 96 x 96 JPEG header: the server reads the size in pixels
 /** Pretend picture tools for the page (the test DOM cannot decode pictures): a picture 400x200 whose PNG and JPEG answers are given. */
 const pictureTools = (png: string, jpg: string) => (win: any) => {
-  win.Image = class { onload: any; naturalWidth = 400; naturalHeight = 200; set src(_v: string) { setTimeout(() => this.onload && this.onload(), 0); } };
+  win.Image = class { onload: any; naturalWidth = win.__w ?? 400; naturalHeight = win.__h ?? 200; set src(_v: string) { setTimeout(() => this.onload && this.onload(), 0); } };
   win.URL.createObjectURL = () => "blob:logo"; win.URL.revokeObjectURL = () => {};
   win.HTMLCanvasElement.prototype.getContext = () => ({ fillRect() {}, drawImage() {}, set fillStyle(_v: string) {} });
   win.HTMLCanvasElement.prototype.toDataURL = (type: string) => (type === "image/png" ? png : jpg);
 };
+const aFile = (p: Page, name: string, type: string, bytes = 8) => new (p.win as any).File([new Uint8Array(bytes)], name, { type }); // a real file object: the page reads it as a data: URL (the page's security policy blocks blob: pictures)
 const chooseFile = (p: Page, sel: string, file: any) => { const inp = p.$(sel) as any; Object.defineProperty(inp, "files", { value: [file], configurable: true }); inp.dispatchEvent(new p.win.Event("change", { bubbles: true })); };
 describe("console phase 3: brand on the ticket, See what guests see, payment link (real Worker)", () => {
   const open4 = async (o: O, id: string, w = spy(), key = o.token) => { const p = await consolePage(o, id, key, {}, { afterLoad: w.hook }); await p.waitFor((x) => /Hello|Last step|Your game/i.test(x)); openStep(p, 4); await p.waitFor((x) => /Your brand on the ticket/.test(x)); return p; };
@@ -1453,7 +1454,7 @@ describe("console phase 3: brand on the ticket, See what guests see, payment lin
     const w = spy({}, pictureTools(big, JPG1)); const p = await open4(o, "UI-BRAND", w);
     expect(p.win.document.querySelectorAll('#brandbox [data-ck="brand.color"]').length).toBe(8); expect(p.win.document.querySelectorAll("select").length).toBe(0);
     setField(p, "#f-brand-name", "Acme Foods"); p.click('[data-ck="brand.color"][data-v="#1B7F5C"]'); expect(p.$('[data-ck="brand.color"][data-v="#1B7F5C"]')!.getAttribute("aria-pressed")).toBe("true");
-    chooseFile(p, "#brandlogo", { name: "logo.png", type: "image/png" }); await p.waitFor(() => !!p.$(".zc-logo img"));
+    chooseFile(p, "#brandlogo", aFile(p, "logo.png", "image/png")); await p.waitFor(() => !!p.$(".zc-logo img"));
     const shown = (p.$(".zc-logo img") as any).getAttribute("src"); expect(shown).toBe(JPG1); // the PNG was too big, the JPEG fits
     p.click('[data-save="4"]'); await p.waitFor((x) => /Saved\./.test(x));
     expect(w.st.patches.at(-1).brand).toEqual({ name: "Acme Foods", color: "#1B7F5C", logo: shown });
@@ -1469,8 +1470,12 @@ describe("console phase 3: brand on the ticket, See what guests see, payment lin
     const p = await open4(o, "UI-BRAND2", w);
     setField(p, "#f-brand-name", "Acme"); p.click('[data-save="4"]'); await p.waitFor((x) => /Pick an accent colour/.test(x)); expect(w.st.patches.length).toBe(0);
     setField(p, "#f-brand-name", ""); p.click('[data-ck="brand.color"][data-v="#AD1457"]'); p.click('[data-save="4"]'); await p.waitFor((x) => /Add your company name/.test(x)); expect(w.st.patches.length).toBe(0);
-    chooseFile(p, "#brandlogo", { name: "logo.png", type: "image/png" }); await p.waitFor((x) => /could not use that picture/.test(x)); expect(p.$(".zc-logo")).toBeNull();
-    chooseFile(p, "#brandlogo", { name: "x.gif", type: "image/gif" }); await p.waitFor((x) => /PNG or JPEG/.test(x));
+    chooseFile(p, "#brandlogo", aFile(p, "logo.png", "image/png")); await p.waitFor((x) => /could not use that picture/.test(x)); expect(p.$(".zc-logo")).toBeNull();
+    chooseFile(p, "#brandlogo", aFile(p, "x.gif", "image/gif")); await p.waitFor((x) => /PNG, JPEG or WebP picture/.test(x));
+    chooseFile(p, "#brandlogo", aFile(p, "huge.png", "image/png", 5 * 1024 * 1024 + 1)); await p.waitFor((x) => /bigger than 5 MB/.test(x));
+    (p.win as any).__w = 40; (p.win as any).__h = 40; chooseFile(p, "#brandlogo", aFile(p, "tiny.png", "image/png")); await p.waitFor((x) => /too small.*64 x 64/.test(x));
+    (p.win as any).__w = 500; (p.win as any).__h = 100; chooseFile(p, "#brandlogo", aFile(p, "thin.png", "image/png")); await p.waitFor((x) => /too long and thin/.test(x));
+    expect(p.text()).toMatch(/PNG, JPEG or WebP, up to 5 MB, at least 64 x 64 pixels/); // the rules are on the screen
   });
 
   test("See what guests see: a button for the Organizer and Host (steps 4 and 7) that opens the preview page in a new tab; a Co-host has none", async () => {
