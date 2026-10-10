@@ -110,7 +110,10 @@ export class PrizeEngine {
       this.push(s, mask, left, false, new Uint8Array(0));
     }
     // numbers already called that count for this seat
-    for (let u = first; u < this.unitPid.length; u++) for (let j = 0; j < this.callNum.length; j++) this.apply(u, j, this.callNum[j]!, this.callBr[j]!);
+    // CALL BY CALL (oldest first) across all of this seat's units, exactly as if the seat had been here from the start: "their other ticket got there first" in `apply` must be decided by call order.
+    // Going ticket by ticket instead made a two-ticket seat whose SECOND ticket completed a house earlier keep the FIRST ticket's later completion, so a phone that built its tickets late (every late
+    // joiner) saw a different tie than every other phone (found by the 20-game rehearsal, G11, and covered by prize-engine.test.ts).
+    for (let j = 0; j < this.callNum.length; j++) for (let u = first; u < this.unitPid.length; u++) this.apply(u, j, this.callNum[j]!, this.callBr[j]!);
   }
   private push(s: SeatIn, mask: Uint32Array, left: Uint8Array, isTicket: boolean, nums: Uint8Array) {
     const u = this.unitPid.length;

@@ -63,7 +63,9 @@ export function splitGst(totalInclusive: number, currency: "INR" | "USD", suppli
 
 // ---------------------------------------------------------------- invoice numbers: brand-wise, per Indian financial year (Apr-Mar)
 export function financialYear(d: Date): string {
-  const y = d.getUTCFullYear(), m = d.getUTCMonth();
+  // The Indian financial year starts on 1 April IST (00:00 IST = 18:30 UTC the day before): working it out from the UTC clock gave the OLD year's invoice number to a payment made between 00:00 and 05:30 IST on 1 April (found by the 20-game rehearsal, G10/G13)
+  const ist = new Date(d.getTime() + 19_800_000);
+  const y = ist.getUTCFullYear(), m = ist.getUTCMonth();
   const start = m >= 3 ? y : y - 1;
   return `${start}-${String((start + 1) % 100).padStart(2, "0")}`;
 }

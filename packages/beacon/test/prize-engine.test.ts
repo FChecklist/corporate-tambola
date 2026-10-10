@@ -77,3 +77,27 @@ describe("the engine gives exactly what settleAll gives", () => {
     expect(e.results().length).toBeGreaterThan(0); expect(feed / 90).toBeLessThan(50);
   }, 120_000);
 });
+
+describe("seats built AFTER numbers were called (every late joiner's phone) give the same winners as seats built before (20-game rehearsal G11)", () => {
+  // found in the rehearsal: build() replayed the called numbers ticket by ticket, so for a participant with TWO tickets "their other ticket got there first" kept the LATER completion
+  // of the first ticket and dropped the EARLIER one of the second ticket. A phone that built the tickets late then saw a different tie (2 winners instead of 3) than every other phone.
+  for (const tickets of [1, 2] as const) {
+    test(`${tickets} ticket(s): 300 seats, engine A has the seats from the start, engine B gets the same seats only after 40 numbers were called`, () => {
+      const cfg = cfgOf(tickets); const eid = "PE-LATEBUILD-" + tickets, pids = mkPids(300), log = shuffle("latebuild" + tickets), br = (k: number) => 5000 + k * 3;
+      const a = new PrizeEngine(eid, cfg); a.addSeats(pids.map((pid) => ({ pid, countFrom: 0 }))); a.work(10_000);
+      const b = new PrizeEngine(eid, cfg);
+      for (let k = 0; k < 90; k++) { a.feed(log[k]!, br(k)); b.feed(log[k]!, br(k)); if (k === 39) { b.addSeats(pids.map((pid) => ({ pid, countFrom: 0 }))); b.work(10_000); } }
+      expect(norm(b.results())).toEqual(norm(a.results()));
+      expect(norm(a.results())).toEqual(norm(settleAll(eid, pids, log, cfg)));
+    });
+  }
+  test("a two-ticket seat whose SECOND ticket completes first is recorded at the earlier call", () => {
+    // search for a seat whose second ticket completes Early Five before its first ticket does, then check a late-built engine records the earlier call
+    const cfg = cfgOf(2, { rewards: [{ pattern: "early5", scope: "ticket", ordinal: 1, text: "e" }] as any }); const eid = "PE-ORDER";
+    const pids = mkPids(400), log = shuffle("order");
+    const whole = settleAll(eid, pids, log, cfg);
+    const late = new PrizeEngine(eid, cfg); for (let k = 0; k < 90; k++) late.feed(log[k]!, 100 + k * 3);
+    late.addSeats(pids.map((pid) => ({ pid, countFrom: 0 }))); late.work(10_000);
+    expect(norm(late.results())).toEqual(norm(whole));
+  });
+});

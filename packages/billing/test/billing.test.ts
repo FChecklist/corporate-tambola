@@ -31,7 +31,7 @@ describe("GST", () => {
 describe("invoice numbers", () => {
   test("Indian financial year runs April to March", () => {
     expect(financialYear(new Date("2026-10-01T00:00:00Z"))).toBe("2026-27");
-    expect(financialYear(new Date("2027-03-31T23:00:00Z"))).toBe("2026-27");
+    expect(financialYear(new Date("2027-03-31T18:00:00Z"))).toBe("2026-27"); // 23:30 IST on 31 March (the old line used 23:00 UTC = 04:30 IST on 1 April, which is already the new year)
     expect(financialYear(new Date("2027-04-01T00:00:00Z"))).toBe("2027-28");
     expect(financialYear(new Date("2026-01-15T00:00:00Z"))).toBe("2025-26");
   });
@@ -160,5 +160,15 @@ describe("invoice details (2026-10-10 owner list)", () => {
     expect(renderInvoiceHtml(i)).not.toContain("<script>x");
     const t = renderInvoiceText(base());
     expect(t).toContain("Paid on:"); expect(t).toContain("Paid for: Diwali Dhamaka"); expect(t).toContain("UPI"); expect(t).toContain("Organizer:"); expect(t).toContain(INVOICE_KEEP_NOTE);
+  });
+});
+
+describe("financial year is counted in Indian time (rehearsal G10/G13)", () => {
+  test("the year turns at 00:00 IST on 1 April, not at 00:00 UTC", () => {
+    expect(financialYear(new Date(Date.UTC(2027, 2, 31, 18, 29, 59)))).toBe("2026-27"); // 23:59:59 IST on 31 March
+    expect(financialYear(new Date(Date.UTC(2027, 2, 31, 18, 30, 0)))).toBe("2027-28");  // 00:00:00 IST on 1 April
+    expect(financialYear(new Date(Date.UTC(2027, 3, 1, 0, 8, 0)))).toBe("2027-28");
+    expect(financialYear(new Date(Date.UTC(2027, 2, 31, 12, 0, 0)))).toBe("2026-27");   // 17:30 IST on 31 March
+    expect(financialYear(new Date(Date.UTC(2026, 11, 31, 20, 0, 0)))).toBe("2026-27");  // 1 January IST is still the same year
   });
 });
