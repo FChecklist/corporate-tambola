@@ -108,6 +108,31 @@ export async function retryOutbox(env: PayEnv, now: number): Promise<{ retried: 
   return { retried, dropped: old.meta?.changes ?? 0 };
 }
 
+/** The public "Payment Testing" page (Rs 1 / US$ 1, owner order 2026-10-10): a REAL payment that buys nothing. It never touches packs, credit, commission or the real invoice series; the receipt is numbered PAYTEST-<year>-<n> and the row is flagged is_test so it stays out of the owner's reports. */
+async function fulfilPaytest(env: PayEnv, p: any, meta: any, now: number) {
+  const db = env.DB;
+  const co = company(env), fy = financialYear(new Date(now));
+  const rz = rzpOf(env); let pinfo: ReturnType<typeof paymentInfo> | undefined;
+  if (rz && p.rzp_payment_id) { try { pinfo = paymentInfo(await fetchPayment(rz, p.rzp_payment_id)); } catch { /* the receipt still prints without it */ } }
+  const seq = -(((await db.prepare("SELECT COUNT(*) AS c FROM invoice WHERE brand=? AND fy=? AND seq<0").bind(brand.id, fy).first<{ c: number }>())?.c ?? 0) + 1);
+  const number = `PAYTEST-${fy}-${-seq}`;
+  const tax = splitGst(p.amount, p.currency, co.stateCode, undefined);
+  const data: InvoiceData = { number, issuedAt: now, brand, company: co, draft: false, buyer: { name: meta.name, email: p.email, phone: meta.phone || undefined, country: meta.country }, currency: p.currency,
+    lines: [{ description: `${brand.name}: payment test (nothing was bought)`, quantity: 1, amount: tax.taxable }], tax, paymentRef: p.rzp_payment_id ?? undefined, orderRef: p.id, paidAtMs: pinfo?.createdAtMs ?? now,
+    organizer: { name: meta.name, email: p.email, phone: meta.phone || undefined }, ...(pinfo ? { pay: pinfo } : {}), note: "This receipt is for a payment test. No game, pack or credit was bought." };
+  const token = "inv_" + randHex(16);
+  await db.prepare("INSERT OR IGNORE INTO invoice(token,payment_id,brand,fy,seq,number,issued_ms,data) VALUES(?,?,?,?,?,?,?,?)").bind(token, p.id, brand.id, fy, seq, number, now, JSON.stringify(data)).run();
+  const origin = env.PUBLIC_ORIGIN ?? meta.origin ?? "";
+  await sendMail(env, db, p.email, `${brand.name}: payment test received, receipt ${number}`, `Thank you. Your payment test worked. Nothing was bought.
+
+INVOICE
+${renderInvoiceText(data)}
+View or print it: ${origin}/api/invoice/${token}`, now);
+  const result = { ok: true, paytest: true, orderId: p.id, total: p.amount, currency: p.currency, invoiceUrl: `/api/invoice/${token}`, invoiceNumber: number };
+  await db.prepare("UPDATE payment SET status='paid', paid_ms=?, result=? WHERE id=?").bind(now, JSON.stringify(result), p.id).run();
+  return { result };
+}
+
 export async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: number) => Promise<boolean>) {
   const db = env.DB;
   const p = await db.prepare("SELECT * FROM payment WHERE id=?").bind(paymentId).first<any>();
@@ -115,6 +140,7 @@ export async function fulfil(env: PayEnv, paymentId: string, now: number, spend:
   if (p.status === "paid") return { result: JSON.parse(p.result ?? "{}") };
   if (!(await spend(6))) return { error: "Busy day. Your payment is safe; this will complete shortly.", status: 503 };
   const meta = JSON.parse(p.meta);
+  if (meta.paytest) return fulfilPaytest(env, p, meta, now);
   const eh = await sha("email|" + p.email.toLowerCase());
   let org: string | null = meta.orgId ?? (await db.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>())?.org ?? null;
   let organizerKey: string | null = null;
@@ -280,6 +306,32 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,ref,buyer_phone_hash,is_test,eid) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), pack, cur, pr.total, pr.tax, order?.id ?? null, "created", now, JSON.stringify(meta), ref, bph ? await phoneHashFor(env, bph) : null, siteTest ? 1 : 0, boundEid).run();
     if (!rzp) { const f = await fulfil(env, id, now, spend); return "result" in f ? json({ mode: "test", paymentId: id, result: f.result, ...(siteTest ? { testPayment: true, label: "TEST payment: nothing was charged." } : {}) }) : json({ error: f.error }, f.status); }
     return json({ mode: "razorpay", paymentId: id, razorpay: { keyId: rzp.keyId, orderId: order.id, amount: toMinor(pr.total), currency: cur, name: "IT Services by Rajat Agarwal", description: `${brand.name}: up to ${pack} participants`, prefill: { email: b.email.trim(), name: payerName.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name }, theme: { color: brand.theme }, ...(cur === "INR" ? { config: UPI_FIRST } : {}) } });
+  }
+
+  const ptm = p.match(/^\/api\/payments\/paytest\/(pay_[0-9a-f]{16})$/); // the test page asks while Razorpay is still confirming
+  if (req.method === "GET" && ptm) {
+    const row = await db.prepare("SELECT status, result, meta FROM payment WHERE id=?").bind(ptm[1]).first<any>();
+    let m: any = {}; try { m = JSON.parse(row?.meta ?? "{}"); } catch { m = {}; }
+    if (!row || !m.paytest) return json({ error: "Not found" }, 404);
+    return row.status === "paid" ? json(JSON.parse(row.result)) : json({ confirming: true }, 202);
+  }
+  if (req.method === "POST" && p === "/api/payments/paytest") { // Payment Testing: Rs 1 from India, US$ 1 from abroad; buys nothing; anyone, any number of times
+    if (!rzp || (await getMode(env)) === "TEST") return json({ error: "Online payments are not switched on." }, 503);
+    const b = await body(req);
+    if (!b || typeof b.email !== "string" || !EMAIL.test(b.email.trim())) return json({ error: "Enter a valid e-mail address." }, 400);
+    const nm = typeof b.name === "string" ? b.name.trim() : ""; if (nm.length < 2) return json({ error: "Enter your name." }, 400);
+    const cty = typeof b.country === "string" && /^[A-Z]{2}$/.test(b.country) ? b.country : "IN", cur = cty === "IN" ? "INR" : "USD";
+    if (cur === "USD" && env.RAZORPAY_INTERNATIONAL !== "1") return json({ error: "Payments in US dollars are not switched on yet. Please try again later." }, 400);
+    const dial = typeof b.phoneCode === "string" && /^\d{1,4}$/.test(b.phoneCode) ? b.phoneCode : "91", digits = typeof b.phone === "string" ? b.phone.replace(/\D/g, "").replace(/^0+/, "") : "";
+    const contact = digits.length >= 6 && digits.length <= 14 ? `+${dial}${digits}` : "";
+    if (!(await spend(2))) return busy();
+    const id = "pay_" + randHex(8);
+    let order: any;
+    try { order = await createOrder(rzp, { amountMinor: 100, currency: cur, receipt: id, notes: { brand: brand.name, product: "payment test", payment_ref: id } }); }
+    catch (e: any) { return json({ error: `The payment service said: ${e.message}` }, 502); }
+    const meta = { paytest: true, name: nm.slice(0, 120), ...(contact ? { phone: contact } : {}), country: cty, origin: env.PUBLIC_ORIGIN ?? url.origin };
+    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?,1)").bind(id, null, b.email.trim().toLowerCase(), 0, cur, 1, 0, order.id, "created", now, JSON.stringify(meta)).run();
+    return json({ mode: "razorpay", paymentId: id, razorpay: { keyId: rzp.keyId, orderId: order.id, amount: 100, currency: cur, name: "IT Services by Rajat Agarwal", description: `${brand.name}: payment test`, prefill: { email: b.email.trim(), name: nm.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name }, theme: { color: brand.theme }, ...(cur === "INR" ? { config: UPI_FIRST } : {}) } });
   }
 
   if (req.method === "POST" && p === "/api/payments/verify") {

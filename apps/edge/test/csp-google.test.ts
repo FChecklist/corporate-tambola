@@ -27,5 +27,5 @@ test("the Google rules allow Google's sign-in script, frame, connection and styl
 
 test("the pay-link page is served with the Razorpay rules, and paylink.html / paylink.js are in the build's file list", () => {
   expect(src).toContain('["/paylink", PAYCSP, true]');
-  expect(src).toMatch(/"pay\.html", "pay\.js", "paylink\.html", "paylink\.js"/);
+  expect(src).toMatch(/"pay\.html", "pay\.js", "paytest\.html", "paytest\.js", "paylink\.html", "paylink\.js"/);
 });

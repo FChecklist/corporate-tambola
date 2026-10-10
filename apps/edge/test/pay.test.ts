@@ -427,3 +427,43 @@ describe("invoice carries Razorpay's own record (owner list 2026-10-10)", () => 
     expect(html).not.toContain("asha.rao@okicici");
   });
 });
+
+describe("Payment Testing page (Rs 1 / US$ 1, buys nothing)", () => {
+  const start = (o: Record<string, unknown> = {}) => call("POST", "/api/payments/paytest", { name: "Asha Rao", email: "asha@acme.in", country: "IN", ...o });
+  const payIt = async (r: any, payId = "pay_T1") => {
+    rz.payments[payId] = { id: payId, order_id: r.razorpay.orderId, status: "captured", amount: r.razorpay.amount, currency: r.razorpay.currency, method: "upi", vpa: "asha@okicici", created_at: Math.floor(T / 1000) };
+    return call("POST", "/api/payments/verify", { paymentId: r.paymentId, razorpay_order_id: r.razorpay.orderId, razorpay_payment_id: payId, razorpay_signature: hmac("sek", `${r.razorpay.orderId}|${payId}`) });
+  };
+  test("India pays Rs 1 with UPI first; the order is for exactly 100 paise", async () => {
+    const r = (await (await start()).json()) as any;
+    expect(r.razorpay.amount).toBe(100); expect(r.razorpay.currency).toBe("INR"); expect(r.razorpay.config.display.sequence[0]).toBe("block.upi"); expect(rz.orders[0].amount).toBe(100);
+  });
+  test("abroad pays US$ 1, only once international is on", async () => {
+    expect((await start({ country: "US" })).status).toBe(400);
+    env.RAZORPAY_INTERNATIONAL = "1";
+    const r = (await (await start({ country: "US" })).json()) as any; expect(r.razorpay.currency).toBe("USD"); expect(r.razorpay.amount).toBe(100);
+  });
+  test("a paid test gives a PAYTEST receipt and buys nothing: no entitlement, no credit, no real invoice number used", async () => {
+    const r = (await (await start()).json()) as any; const v = (await (await payIt(r)).json()) as any;
+    expect(v.ok).toBe(true); expect(v.paytest).toBe(true); expect(v.invoiceNumber).toMatch(/^PAYTEST-\d{4}-\d{2}-1$/);
+    expect(raw.query("SELECT COUNT(*) c FROM entitlement").get()).toEqual({ c: 0 });
+    expect(raw.query("SELECT COUNT(*) c FROM invoice WHERE seq>0").get()).toEqual({ c: 0 });
+    expect(raw.query("SELECT is_test FROM payment").get()).toEqual({ is_test: 1 });
+    const html = await (await call("GET", v.invoiceUrl)).text(); for (const x of ["payment test", "Razorpay: UPI", "Terms and conditions", "No game, pack or credit was bought"]) expect(html).toContain(x);
+    const st = await call("GET", `/api/payments/paytest/${r.paymentId}`); expect(((await st.json()) as any).ok).toBe(true);
+  });
+  test("testing again and again works, each with its own receipt; the webhook finishes a test too", async () => {
+    const a = (await (await start()).json()) as any; await payIt(a, "pay_A");
+    const b = (await (await start()).json()) as any;
+    rz.payments["pay_B"] = { id: "pay_B", order_id: b.razorpay.orderId, status: "captured", amount: 100, currency: "INR", method: "card", card: { network: "Visa", type: "debit", last4: "4242" } };
+    const body = JSON.stringify({ event: "payment.captured", payload: { payment: { entity: { id: "pay_B", order_id: b.razorpay.orderId, amount: 100 } } } });
+    expect((await call("POST", "/api/payments/webhook", body, { "x-razorpay-signature": hmac("whsec", body) })).status).toBe(200);
+    expect(raw.query("SELECT COUNT(*) c FROM invoice WHERE number LIKE 'PAYTEST-%'").get()).toEqual({ c: 2 });
+    expect(raw.query("SELECT COUNT(*) c FROM entitlement").get()).toEqual({ c: 0 });
+  });
+  test("bad input is refused before any order is created", async () => {
+    for (const o of [{ email: "nope" }, { name: "A" }]) expect((await start(o)).status).toBe(400);
+    expect(rz.orders.length).toBe(0);
+    expect((await call("GET", "/api/payments/paytest/pay_0000000000000000")).status).toBe(404);
+  });
+});
