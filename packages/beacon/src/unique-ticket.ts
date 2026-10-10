@@ -10,6 +10,8 @@ import { sha256 } from "@noble/hashes/sha256";
 import { utf8ToBytes } from "@noble/hashes/utils";
 import { columnRange, type Ticket } from "../../shared/src/ticket";
 
+/** 2^61 - 1, a prime (see ticketAt). */
+const MIX_PRIME = 2305843009213693951n;
 /** Number sets used per row shape. The smallest real count over all shapes is about 1.4e12, so this is safely inside every shape. */
 export const SETS_PER_SHAPE = 2 ** 29;
 
@@ -84,8 +86,12 @@ export function ticketAt(engagementId: string, position: number): Ticket {
   const sh = shapes(), V = sh.length;
   const p = permute(position, V * SETS_PER_SHAPE, keyOf(engagementId));
   const shape = sh[p % V]!;
-  let rest = (p - (p % V)) / V;
   const rows = [ROW5[(shape >> 14) & 127]!, ROW5[(shape >> 7) & 127]!, ROW5[shape & 127]!];
+  // The number-set code is below 2^29, but a shape has 1.3e12 to 9e12 number sets. Read as plain mixed-radix digits that code only reaches the FIRST columns' digits: the high columns (the 60s, 70s, 80s)
+  // almost always got their lowest numbers, so 70 and 80 were on EVERY ticket and 75-79 and 83-90 on none; when 70 or 80 was called late, hundreds of tickets completed the Full House at the same call
+  // (found by the 20-game rehearsal, G04). Multiplying by a large prime modulo the shape's number-set count spreads the code over the whole space. The count has only prime factors up to 11, so the
+  // prime is coprime to it and the map is one-to-one: different positions still give different tickets.
+  let rest = Number((BigInt((p - (p % V)) / V) * MIX_PRIME) % BigInt(setsOfShape(shape)));
   const t: Ticket = [[], [], []];
   for (let c = 0; c < 9; c++) {
     const present = [0, 1, 2].filter((r) => (rows[r]! >> c) & 1);

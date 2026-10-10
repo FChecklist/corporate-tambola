@@ -3,6 +3,7 @@
 // sees every part in about 70 seconds: 3 numbers, a 15-second break (their sample video), 3 numbers, and Four corners completed on the 6th number.
 // How the script was made: one fixed ticket (seat 1 of the engagement "DEMO"); the 6 numbers are 4 corners and 2 other ticket numbers in an order
 // that finishes the corners on the 6th call; DEMO_RAND are the "public random" values that make pickNumber() return exactly those numbers.
+// If the ticket generator ever changes again, regenerate the three constants with `bun tools/make-demo-script.ts` (done on 2026-10-10 when the generator was fixed to spread numbers evenly).
 // A test (packages/beacon/test/demo-script.test.ts) re-derives everything with the real functions, so this cannot drift from the game.
 import type { EngagementCfg } from "./config";
 
@@ -11,15 +12,15 @@ export const DEMO_PID = "1xd3d3d3d3d3d3";
 export const DEMO_CALL_SECONDS = 9;
 export const DEMO_BREAK_AFTER = 3;
 export const DEMO_BREAK_SECONDS = 15;
-export const DEMO_SEQ = [1, 23, 80, 9, 50, 60] as const;
-export const DEMO_CORNERS = [1, 80, 9, 60] as const;
+export const DEMO_SEQ = [1, 18, 80, 9, 49, 61] as const;
+export const DEMO_CORNERS = [1, 80, 9, 61] as const;
 export const DEMO_RAND: readonly string[] = [
-  "dedf0d5500000000000000000000000000000000000000000000000000000000",
-  "dedf1d1500000000000000000000000000000000000000000000000000000000",
-  "dedf2d2800000000000000000000000000000000000000000000000000000000",
-  "dedf3d8200000000000000000000000000000000000000000000000000000000",
-  "dedf4d1300000000000000000000000000000000000000000000000000000000",
-  "dedf5d1510000000000000000000000000000000000000000000000000000000",
+  "dedf0d00a9000000000000000000000000000000000000000000000000000000",
+  "dedf1d0055000000000000000000000000000000000000000000000000000000",
+  "dedf2d00ef000000000000000000000000000000000000000000000000000000",
+  "dedf3d004e000000000000000000000000000000000000000000000000000000",
+  "dedf4d004d000000000000000000000000000000000000000000000000000000",
+  "dedf5d006c000000000000000000000000000000000000000000000000000000",
 ];
 export const DEMO_STRIDE = DEMO_CALL_SECONDS / 3; // beacon rounds between two numbers
 /** The beacon round in which call `k` (0-based) happens when the first number is in round `first`: the break pushes the later calls later. */

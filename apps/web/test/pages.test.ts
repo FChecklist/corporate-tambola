@@ -634,14 +634,14 @@ describe("winners, the end, and break media on the phone", () => {
   const until = async (cond: () => boolean, ms = 25000) => { const t0 = Date.now(); while (!cond()) { if (Date.now() - t0 > ms) throw new Error("timed out"); await new Promise((r) => setTimeout(r, 200)); } };
   const prizes = { rewards: [{ pattern: "early5", ordinal: 1, text: "Gift hamper" }, { pattern: "top", ordinal: 1, text: "Movie tickets" }, { pattern: "full", ordinal: 1, text: "Voucher 5000" }] };
   test("a winner sees Hurray with confetti, a congratulations ribbon with the winning numbers lit on the ticket, and a prize list that stays; when the last prize is awarded the phone itself ends the game with the thank-you and a share button", async () => {
-    const o = await organizer(); const p = await joined(o, "UI-WIN1", prizes); const rt = p.win.__rt; const doc = p.win.document;
+    const o = await organizer(); const p = await joined(o, "UI-WINA", prizes); const rt = p.win.__rt; const doc = p.win.document;
     at(o, p, 400); // about 44 numbers out: this phone is the only player, so it has won the first houses
     await until(() => !!doc.getElementById("hurray")); // worked out on the phone itself: nobody published anything
     expect(doc.getElementById("hurray")?.textContent).toMatch(/Congratulations, you won/);
     expect(doc.querySelector("#hurray canvas")).toBeTruthy();
     expect(await p.waitFor((x) => /Congratulations! You won/.test(x))).toMatch(/Your prizes/);
     expect(doc.querySelectorAll(".zticket div.w").length).toBeGreaterThan(0); // the winning numbers are lit
-    const saved = JSON.parse(p.win.localStorage.getItem("ctz-prizes:UI-WIN1") || "[]"); expect(saved.length).toBeGreaterThan(0); expect(saved[0].text).toMatch(/Gift hamper|Movie tickets/);
+    const saved = JSON.parse(p.win.localStorage.getItem("ctz-prizes:UI-WINA") || "[]"); expect(saved.length).toBeGreaterThan(0); expect(saved[0].text).toMatch(/Gift hamper|Movie tickets/);
     expect(rt.view().localWinners).toBe(true);
     (doc.getElementById("hurok") as any)?.click();
     await p.waitFor((x) => /Your prizes/.test(x)); // it stays after the overlay is gone
@@ -657,7 +657,7 @@ describe("winners, the end, and break media on the phone", () => {
     (p.$("#cfnm") as any).value = "Asha Rao"; (p.$("#cfph") as any).value = "98765 43210"; (p.$("#cfph") as any).dispatchEvent(new p.win.Event("input")); (p.$("#cfnm") as any).dispatchEvent(new p.win.Event("input"));
     p.click("#cfgo");
     await p.waitFor((x) => /Details confirmed/.test(x), 20000);
-    const list = (await o.json(await o.api("GET", "/api/z/UI-WIN1/prizes", undefined, o.token))) as any;
+    const list = (await o.json(await o.api("GET", "/api/z/UI-WINA/prizes", undefined, o.token))) as any;
     expect(list.prizes.length).toBeGreaterThan(0); expect(list.prizes[0]).toMatchObject({ name: "Asha Rao", phone: "9876543210", confirmed: true, changed: true });
     expect(JSON.stringify(o.world.raw.query("SELECT * FROM winner").all())).not.toMatch(/Voucher|9833|Gift/); // seat, prize, round, time: no names or numbers
   }, 90_000);
@@ -941,7 +941,7 @@ describe("the free demo game", () => {
       return view.phase === "ended";
     }, 90000);
     expect(sawBreak).toBe(true); expect(sawBuiltInVideo).toBe(true); expect((doc.querySelector("#ctmedia video") as any)?.src ?? "").toBe(""); /* the player is gone after the break */ expect(logDuringBreak).toBe(3); expect(ticketDuringBreak).toBe(true); expect(breakGone).toBe(true);
-    expect(rt.view().log).toEqual([1, 23, 80, 9, 50, 60]); // exactly the scripted numbers, in order, by the real number-drawing code
+    expect(rt.view().log).toEqual([1, 18, 80, 9, 49, 61]); // exactly the scripted numbers, in order, by the real number-drawing code
     expect(rt.view().won.map((w: any) => w.pattern)).toEqual(["corners"]); expect(rt.view().won[0].idx).toBe(5); // Four corners, on the 6th number, by the real winner check
     const end = await p.waitFor((x) => /That was the demo/.test(x), 20000);
     expect(end).toMatch(/You won Four corners/); expect(end).toMatch(/Create my game/); expect(end).toMatch(/Run demo again/);

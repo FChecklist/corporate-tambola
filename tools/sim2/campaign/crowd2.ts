@@ -8,6 +8,7 @@
 import { PhoneRuntime } from "../../../packages/beacon/src/phone-runtime";
 import { callRoundR } from "../../../packages/beacon/src/game";
 import { deriveCalls } from "../../../packages/beacon/src";
+import { PrizeEngine } from "../../../packages/beacon/src/prize-engine";
 import { GRACE_ROUNDS, roundEid } from "../../../packages/beacon/src/config";
 // @ts-ignore plain JS module shared with the node harness (no declaration file on purpose)
 import { fakeFetcher, fakeVerify, randomnessOf, roundTimeMs } from "../lib/beacon.mjs";
@@ -116,6 +117,12 @@ const cfg = (joinedFull[0]?.v.cfg ?? info) as any;
 const rounds = cfg.rounds ?? 1;
 const ref: number[][] = [];
 for (let r = 1; r <= rounds; r++) ref.push(deriveCalls(roundEid(EID, r), Array.from({ length: 90 }, (_, k) => randomnessOf(callRoundR(null as any, START + GRACE_ROUNDS, STRIDE, cfg.breaks ?? [], r, k)!, SEED))));
+// THE REFEREE: an independent recomputation of every round from the public numbers and the public seat list (one fresh engine per round, seats first, then the calls in order).
+// Its answer must equal what the phones showed and what the server published. Printed per round as "pattern|ordinal|idx|count".
+const referee: string[][] = []; { const rt0: any = joinedFull[0]?.p.rt; if (rt0?.seatList) for (let r = 1; r <= rounds; r++) {
+  const eng = new PrizeEngine(roundEid(EID, r), cfg, r); eng.addSeats(rt0.seatList.map((x: any) => ({ pid: x.pid, countFrom: x.countFrom, ex: x.ex, blk: x.blk }))); eng.work(1e9);
+  for (let k = 0; k < 90; k++) { const br = callRoundR(null as any, START + GRACE_ROUNDS, STRIDE, cfg.breaks ?? [], r, k)!; eng.feed(ref[r - 1]![k]!, br, randomnessOf(br, SEED)); }
+  eng.setOver(true); referee.push(eng.results().map((q: any) => `${r}|${q.pattern}|${q.ordinal}|${q.idx}|${q.pids.length}`).sort()); } }
 const canon = (res: any[]) => JSON.stringify([...res].map((r) => `${r.round ?? 1}|${r.pattern}|${r.ordinal}|${r.idx}|${r.count ?? ""}`).sort());
 const groups = new Map<string, number>(); for (const x of ended) groups.set(canon(x.v.results), (groups.get(canon(x.v.results)) ?? 0) + 1);
 const full = ended.filter((x) => x.v.log.every((n: number, i: number) => n === ref[rounds - 1]![i + (x.v.late?.hidden ?? 0)])); // a game may end early when every prize is awarded: the log is then a prefix of the 90
@@ -132,6 +139,7 @@ const groupDiag: any[] = []; if (groups.size > 1) { const gl = [...groups].sort(
   const minority = ended.find((x) => canon(x.v.results) === gl[1]![0]), majority = ended.find((x) => canon(x.v.results) === gl[0]![0]);
   groupDiag.push({ diveMajority: majority ? dive(majority) : null, diveMinority: minority ? dive(minority) : null });
   groupDiag.unshift({ biggest: gl[0]![1], results: [...ref].slice(0, 40) }); }
+const phoneState = (() => { const x = joinedFull[0]; if (!x) return null; const v: any = x.v; return { round: v.round, rounds: v.rounds, logLen: v.log.length, allAwarded: v.allAwarded, endedByPrizes: v.endedByPrizes, intermission: v.intermission, phase: v.phase, results: v.results.map((r: any) => `${r.round ?? 1}|${r.pattern}|${r.ordinal}|${r.idx}|${r.count ?? ""}`), past: v.past, nowRound: v.nowRound, startRound: v.startRound }; })();
 const resultsFinal = await (await fetch(`${BASE}/api/z/${EID}/results`)).json() as any;
 const confirmed: any[] = [];
 for (const x of joined.filter((x) => x.v.won?.length).slice(0, CONFIRM)) { // a winner confirms name and mobile on their own phone (device proof)
@@ -140,4 +148,4 @@ for (const x of joined.filter((x) => x.v.won?.length).slice(0, CONFIRM)) { // a 
 }
 const wonCounts = joined.reduce((n: number, x) => n + (x.v.won?.length ?? 0), 0);
 const lvlInfo = INV ? { l1Joined: phones.filter((q) => q.lvl === 1 && q.rt.pid).length, l2Joined: phones.filter((q) => q.lvl === 2 && q.rt.pid).length, l2Via: phones.filter((q) => q.lvl === 2 && q.via !== null).map((q) => ({ phone: q.phone, from: q.via })).slice(0, 2000) } : null;
-console.log(JSON.stringify({ groupDiag, fullPhones: phones.filter((q) => q.full).length, ghostPhones: phones.filter((q) => !q.full).length, joinedFull: joinedFull.length, waitStats, actionResults, confirmed, wonCounts, lvlInfo, offlineCount: phones.filter((q) => q.offFrom >= 0).length, ok: !failures.length, phones: N, joined: joined.length, ended: ended.length, steps: step, seconds: +((Date.now() - t0) / 1000).toFixed(1), logsEqual: `${full.length}/${ended.length}`, groups: [...groups].map(([c, n]) => ({ count: n, results: JSON.parse(c).length })), results: ended[0]?.v.results ?? [], published: resultsFinal.results ?? [], reference: ref[rounds - 1], perPhone: ended.slice(0, 400).map((x) => ({ phone: x.p.phone, canon: sha(canon(x.v.results)).slice(0, 8) })), failures, badDetail, phases: views.reduce((m: any, x) => (m[x.v.phase] = (m[x.v.phase] ?? 0) + 1, m), {}), sample: views.slice(0, 3).map((x) => ({ firstMismatch: x.v.log.findIndex((n: number, i: number) => n !== ref[rounds - 1]![i + (x.v.late?.hidden ?? 0)]), logHead: x.v.log.slice(0, 6), refHead: ref[rounds - 1]!.slice(0, 6), phone: x.p.phone, phase: x.v.phase, error: x.v.error, log: x.v.log.length, nowRound: x.v.nowRound, startRound: x.v.startRound, mode: x.v.mode, locked: x.v.locked, late: x.v.late })), phoneErrors: phones.flatMap((p) => p.failed).slice(0, 5) }));
+console.log(JSON.stringify({ referee, phoneState, groupDiag, fullPhones: phones.filter((q) => q.full).length, ghostPhones: phones.filter((q) => !q.full).length, joinedFull: joinedFull.length, waitStats, actionResults, confirmed, wonCounts, lvlInfo, offlineCount: phones.filter((q) => q.offFrom >= 0).length, ok: !failures.length, phones: N, joined: joined.length, ended: ended.length, steps: step, seconds: +((Date.now() - t0) / 1000).toFixed(1), logsEqual: `${full.length}/${ended.length}`, groups: [...groups].map(([c, n]) => ({ count: n, results: JSON.parse(c).length })), results: ended[0]?.v.results ?? [], published: resultsFinal.results ?? [], reference: ref[rounds - 1], perPhone: ended.slice(0, 400).map((x) => ({ phone: x.p.phone, canon: sha(canon(x.v.results)).slice(0, 8) })), failures, badDetail, phases: views.reduce((m: any, x) => (m[x.v.phase] = (m[x.v.phase] ?? 0) + 1, m), {}), sample: views.slice(0, 3).map((x) => ({ firstMismatch: x.v.log.findIndex((n: number, i: number) => n !== ref[rounds - 1]![i + (x.v.late?.hidden ?? 0)]), logHead: x.v.log.slice(0, 6), refHead: ref[rounds - 1]!.slice(0, 6), phone: x.p.phone, phase: x.v.phase, error: x.v.error, log: x.v.log.length, nowRound: x.v.nowRound, startRound: x.v.startRound, mode: x.v.mode, locked: x.v.locked, late: x.v.late })), phoneErrors: phones.flatMap((p) => p.failed).slice(0, 5) }));

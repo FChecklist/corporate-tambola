@@ -41,3 +41,28 @@ describe("collision-free tickets", () => {
     expect(seen.size).toBe(20_000);
   }, 120_000);
 });
+
+describe("numbers are spread evenly over the tickets (20-game rehearsal G04)", () => {
+  // Before the fix the number-set code only reached the first columns' digits: 70 and 80 were on EVERY ticket, 75-79 and 83-90 on none, and 64-69 on almost none.
+  // Whenever 70 or 80 was called late, every ticket that was otherwise complete won the Full House at the same call (a 963-way tie in a 1000-person game).
+  for (const eid of ["G04-r1", "SOME-OTHER", "PXA-2"]) {
+    test(`${eid}: 6,000 tickets: every number from 1 to 90 is on about 1 ticket in 6 (within 20% of the expected count)`, () => {
+      const N = 6000, cnt = new Array(91).fill(0);
+      for (let i = 0; i < N; i++) { const t = ticketAt(eid, i); for (const row of t) for (const n of row) if (n !== null) cnt[n]++; }
+      const expected = (N * 15) / 90; // 1000
+      const off = cnt.map((c, n) => [n, c] as const).filter(([n, c]) => n >= 1 && Math.abs(c - expected) > expected * 0.2);
+      expect(off).toEqual([]);
+    });
+  }
+  test("each column of the ticket uses its whole range: the 70s column shows all of 70 to 79, the 80s column all of 80 to 90", () => {
+    const seen = new Set<number>(); for (let i = 0; i < 3000; i++) for (const row of ticketAt("RANGE", i)) for (const n of row) if (n !== null) seen.add(n);
+    for (let n = 1; n <= 90; n++) expect(seen.has(n)).toBe(true);
+  });
+  test("with 1,000 tickets the first Full House does not wait for one particular number: over 100 call orders it is never later than call 80", () => {
+    const sets: Set<number>[] = Array.from({ length: 1000 }, (_, i) => new Set(ticketAt("G04-r1", i).flat().filter((n): n is number => n !== null)));
+    let seed = 7; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 0x100000000);
+    let worst = 0;
+    for (let k = 0; k < 100; k++) { const order = Array.from({ length: 90 }, (_, i) => i + 1).sort(() => rnd() - 0.5); const pos = new Array(91); order.forEach((n, i) => (pos[n] = i)); let best = 999; for (const s of sets) { let m = 0; for (const n of s) if (pos[n] > m) m = pos[n]; if (m < best) best = m; } worst = Math.max(worst, best); }
+    expect(worst).toBeLessThanOrEqual(80);
+  });
+});

@@ -113,7 +113,7 @@ const crowdPhones = () => Array.from({ length: PHONES }, (_, i) => ({ name: fake
 await section(`people list (${/^list/.test(spec.j) ? "list-only game" : "open game"})`, async () => {
   if (!/^list/.test(spec.j)) return;
   const all = crowdPhones(); const onList = spec.j === "list+waiting" ? all.slice(0, Math.floor(PHONES * 0.85)) : spec.j === "list+invites" ? all.filter((_, i) => i < Math.floor(PHONES * 0.1) || i >= Math.floor(PHONES * 0.1) + Math.min(Math.floor(PHONES * 0.25), Math.floor(PHONES * 0.1) * 4)) : all; // level-2 guests are NOT on the list: they come in through an invitation and the waiting room
-  for (let i = 0; i < onList.length; i += 250) { const r = await org.api("POST", `/api/z/${gameId}/people`, { people: onList.slice(i, i + 250) }); if (!r.ok) throw new Error("people batch " + i + ": " + JSON.stringify(r.body).slice(0, 300)); }
+  for (let i = 0; i < onList.length; i += 200) { const r = await org.api("POST", `/api/z/${gameId}/people`, { people: onList.slice(i, i + 200) }); if (!r.ok) throw new Error("people batch " + i + ": " + JSON.stringify(r.body).slice(0, 300)); }
   const n = (await sql("SELECT COUNT(*) c FROM person WHERE eid=?", [gameId]))[0].c; eq(`${onList.length} people are on the list`, n, onList.length);
   ctx.listed = onList.length;
 });
@@ -248,7 +248,7 @@ await section(`play: ${PHONES} phones (${spec.tickets} ticket${spec.tickets === 
   await new Promise((r) => p.on("close", r)); clearInterval(iv);
   const line = buf.trim().split("\n").filter((l) => l.startsWith("{")).pop();
   try { crowd = JSON.parse(line); } catch { chk("the phone crowd produced a result", false, buf.slice(-500)); return; }
-  crowd.peakMB = peak; if (crowd.groupDiag?.length) summaryExtra.groupDiag = crowd.groupDiag; crowd.wallSeconds = Math.round((Date.now() - t0) / 1000); ctx.crowd = crowd;
+  crowd.peakMB = peak; summaryExtra.phoneState = crowd.phoneState; summaryExtra.referee = crowd.referee; if (crowd.groupDiag?.length) summaryExtra.groupDiag = crowd.groupDiag; crowd.wallSeconds = Math.round((Date.now() - t0) / 1000); ctx.crowd = crowd;
   console.log(`${stamp()} crowd: joined ${crowd.joined}/${crowd.phones} (${crowd.joinedFull} full phones, ${crowd.ghostPhones} ghosts), ended ${crowd.ended}, ${crowd.steps} steps, ${crowd.wallSeconds}s wall, crowd process peak ~${peak} MB`);
   chk(`every full phone that joined finished (${crowd.ended}/${crowd.joinedFull})`, crowd.ended === crowd.joinedFull, JSON.stringify(crowd.failures?.slice(0, 3)));
   const needJoin = args.waiting ? Math.floor(PHONES * 0.8) : Math.floor(PHONES * 0.9);
