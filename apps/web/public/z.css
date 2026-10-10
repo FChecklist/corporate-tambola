@@ -91,3 +91,13 @@ a.zbtn#addcal{margin-left:6px}
 .gor{margin:6px 0;text-align:center;font-size:13px;color:var(--muted,#6b7385)}.ggnote{margin:0;text-align:center}
 .zmia .zbtn{width:auto;flex:1 1 auto;min-height:40px;margin-top:0;padding:8px 12px;font-size:14px}
 #mine .zform .zbtn{margin-top:10px}
+/* a phone held sideways: the number on the left, the ticket and the rest on the right, so the ticket is visible without scrolling */
+@media (orientation:landscape) and (max-height:520px){
+.zapp{max-width:none;display:grid;grid-template-columns:minmax(220px,300px) minmax(0,1fr);column-gap:12px;align-content:start;padding:8px max(12px,env(safe-area-inset-right)) 24px max(12px,env(safe-area-inset-left));min-height:0}
+.zapp>*{grid-column:2;margin-top:0}
+.zapp>.zbrand,.zapp>.zhead{grid-column:1/-1}
+.zapp>.zbrand{padding:6px 12px;margin-bottom:6px}
+.zapp>.zhead{margin-bottom:6px}
+.zapp>.zcard:has(.zball){grid-column:1;grid-row:3/span 6;position:sticky;top:8px;align-self:start}
+.zapp .zbig{zoom:.8}
+}

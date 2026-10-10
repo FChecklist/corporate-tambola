@@ -6,7 +6,7 @@ import { CHROME, SHOTS, SIM, playwright } from "./env.mjs";
 import { routeBeacon } from "./beacon.mjs";
 import { routeWhatsApp } from "./whatsapp.mjs";
 
-export async function launchChrome({ headless = true } = {}) { return playwright().chromium.launch({ executablePath: CHROME, headless, args: ["--disable-extensions", "--no-first-run"] }); }
+export async function launchChrome({ headless = true } = {}) { return playwright().chromium.launch({ executablePath: CHROME, headless, args: ["--disable-extensions", "--no-first-run", "--disable-gpu"] }); }
 
 /** The simulated UTC as a function the beacon route can call. Re-sync with refresh() after moving the server clock. */
 export async function trackClock() {

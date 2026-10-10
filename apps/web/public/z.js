@@ -565,7 +565,7 @@
       ${v.brk ? breakCard(v.brk) : ""}
       <div class="zcard"><div class="zball"><div class="zbig ${last ? "" : "none"}" id="big" aria-live="assertive" aria-label="${last ? "Number " + last : "No number yet"}">${last ?? "–"}</div></div>
         <div class="zsub">${sub}</div>
-        <div class="zlast" aria-label="Recent numbers">${v.log.slice(-7, -1).reverse().map((n) => `<span>${n}</span>`).join("")}</div></div>
+        <div class="zlast" aria-label="Recent numbers">${v.log.slice(-4, -1).reverse().map((n) => `<span>${n}</span>`).join("")}</div></div>
       <div class="zcard${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Demo ticket <span class="zdemotag">DEMO</span>' : v.tickets.length > 1 ? "Your tickets" : "Your ticket"}</h2>${ribbon}${tix}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}

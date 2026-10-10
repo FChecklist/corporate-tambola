@@ -8,7 +8,7 @@ const G = 1692803367, nowRound = Math.floor((Date.now() / 1000 - G) / 3) + 1;
 const sha = async (t: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t))), (b) => b.toString(16).padStart(2, "0")).join("");
 const id = "DEMO-DAY", start = nowRound - 40 - 25; // the first number was called about 75 seconds ago
 const call = (m: string, p: string, b?: unknown) => fetch(s.url + p, { method: m, headers: { "content-type": "application/json", "x-organizer": "demo" }, body: b === undefined ? undefined : JSON.stringify(b) });
-await call("POST", "/api/z", { id, startRound: start, callSeconds: 6, cap: 200 });
+await call("POST", "/api/z", { id, startRound: start, callSeconds: Number(process.env.DEMO_GAP ?? 6), cap: 200 });
 await call("PATCH", `/api/z/${id}/settings`, { invites: { on: true, per: 4, cats: ["family", "colleagues", "friends", "dealers", "vendors"] }, rewards: [{ pattern: "early5", ordinal: 1, text: "Gift hamper" }, { pattern: "top", ordinal: 1, text: "Movie tickets" }, { pattern: "full", ordinal: 1, text: "Weekend getaway" }] }).catch(() => {});
 // the engagement already started, so settings were refused: write the policy straight into its stored settings for the demo
 s.raw.run("UPDATE engagement SET config=? WHERE id=?", [JSON.stringify({ rewards: [{ pattern: "early5", scope: "ticket", ordinal: 1, text: "Gift hamper" }, { pattern: "top", scope: "ticket", ordinal: 1, text: "Movie tickets" }, { pattern: "full", scope: "ticket", ordinal: 1, text: "Weekend getaway voucher" }], breaks: [], rounds: 1, invites: { on: true, per: 4, cats: ["family", "colleagues", "friends", "dealers", "vendors"] } }), id]);
