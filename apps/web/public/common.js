@@ -132,7 +132,7 @@
     const open = () => {
       try {
         const box = new window.Razorpay({
-          key: rz.keyId, order_id: rz.orderId, amount: rz.amount, currency: rz.currency, name: rz.name, description: rz.description, prefill: rz.prefill, notes: rz.notes, theme: rz.theme,
+          key: rz.keyId, order_id: rz.orderId, amount: rz.amount, currency: rz.currency, name: rz.name, description: rz.description, prefill: rz.prefill, notes: rz.notes, theme: rz.theme, ...(rz.config ? { config: rz.config } : {}),
           handler: async (resp) => {
             try { resolve(await TB.api("POST", "/api/payments/verify", { paymentId, razorpay_order_id: resp.razorpay_order_id, razorpay_payment_id: resp.razorpay_payment_id, razorpay_signature: resp.razorpay_signature })); }
             catch (e) { reject(e); }

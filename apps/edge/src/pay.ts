@@ -8,7 +8,7 @@
 import { recordFunnelForOrg } from "./visits";
 import { plainToHtml, withFooter } from "./brand";
 import {
-  BRANDS, DEFAULT_COMPANY, companyGaps, createOrder, fetchPayment, capturePayment, financialYear, formatInvoiceNumber, renderInvoiceHtml, renderInvoiceText, splitGst, toMinor,
+  BRANDS, DEFAULT_COMPANY, companyGaps, createOrder, fetchPayment, capturePayment, paymentInfo, financialYear, formatInvoiceNumber, renderInvoiceHtml, renderInvoiceText, splitGst, toMinor,
   verifyPaymentSignature, verifyWebhookSignature, type Company, type InvoiceData, type RazorpayConfig,
 } from "../../../packages/billing/src";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
@@ -42,6 +42,8 @@ const PAYLINK_PER_IP_DAY = 30;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
 
 export const company = (env: PayEnv): Company => { try { return { ...DEFAULT_COMPANY, ...(env.COMPANY_JSON ? JSON.parse(env.COMPANY_JSON) : {}) }; } catch { return DEFAULT_COMPANY; } };
+/** Indian payers see UPI first (on a phone this opens their UPI app); cards and net banking stay one tap away. USD payers get Razorpay's normal international card screen. */
+const UPI_FIRST = { display: { blocks: { upi: { name: "Pay with UPI", instruments: [{ method: "upi" }] }, other: { name: "Cards, net banking, wallets", instruments: [{ method: "card" }, { method: "netbanking" }, { method: "wallet" }] } }, sequence: ["block.upi", "block.other"], preferences: { show_default_blocks: false } } };
 const rzpOf = (env: PayEnv): (RazorpayConfig) | null => (env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET ? { keyId: env.RAZORPAY_KEY_ID, keySecret: env.RAZORPAY_KEY_SECRET, webhookSecret: env.RAZORPAY_WEBHOOK_SECRET, baseUrl: env.RAZORPAY_BASE_URL } : null);
 /** Optional switch (env FREE_LAUNCH="1"): small engagements (up to FREE_CAP participants) may be published without a purchase. Building a draft is always free. */
 export const FREE_CAP = 100, MAX_DRAFTS = 10;
@@ -156,8 +158,18 @@ export async function fulfil(env: PayEnv, paymentId: string, now: number, spend:
     ? -(((await db.prepare("SELECT COUNT(*) AS c FROM invoice WHERE brand=? AND fy=? AND seq<0").bind(brand.id, fy).first<{ c: number }>())?.c ?? 0) + 1)
     : ((await db.prepare("SELECT COALESCE(MAX(seq),0) AS m FROM invoice WHERE brand=? AND fy=? AND seq>0").bind(brand.id, fy).first<{ m: number }>())?.m ?? 0) + 1;
   const number = test ? `TEST-${fy}-${-seq}` : formatInvoiceNumber(brand, fy, seq);
+  // what Razorpay itself recorded (method, masked UPI id / card tail, bank reference, its own time): printed on the invoice and kept in the payment's meta. A failed lookup never blocks the invoice.
+  const rz = rzpOf(env); let pinfo: ReturnType<typeof paymentInfo> | undefined;
+  if (rz && p.rzp_payment_id && !test) { try { pinfo = paymentInfo(await fetchPayment(rz, p.rzp_payment_id)); await db.prepare("UPDATE payment SET meta=? WHERE id=?").bind(JSON.stringify({ ...meta, rzp: pinfo }), p.id).run(); } catch { pinfo = meta.rzp; } } else if (meta.rzp) pinfo = meta.rzp;
+  const eidForInvoice = meta.eid ?? published ?? undefined;
+  let gameName: string | undefined, gameStart: number | undefined, contact: any = {};
+  if (eidForInvoice) {
+    try { const g = await db.prepare("SELECT config, start_round FROM engagement WHERE id=?").bind(eidForInvoice).first<{ config: string | null; start_round: number }>(); if (g) { try { const c = g.config ? JSON.parse(g.config) : {}; if (typeof c.name === "string" && c.name) gameName = c.name.slice(0, 120); } catch { /* the id is the name */ } gameStart = (1692803367 + (g.start_round - 1) * 3) * 1000; } } catch { /* optional */ }
+    try { const r = await db.prepare("SELECT v FROM kv WHERE k=?").bind(`contact/${eidForInvoice}`).first<{ v: string }>(); contact = r ? JSON.parse(r.v) : {}; } catch { contact = {}; }
+  }
+  const organizer = { name: meta.paidBy && meta.paidBy !== "organizer" ? contact.name : meta.name ?? contact.name, org: meta.org || undefined, email: contact.email ?? p.email, phone: contact.phone ? String(contact.phone) : meta.phone };
   const data: InvoiceData = { number, issuedAt: now, brand, company: co, draft: !!test || companyGaps(co).length > 0, buyer: { name: meta.org || meta.name || "", gstin: meta.taxId || undefined, email: p.email, phone: meta.phone || undefined, country: meta.country }, currency: p.currency,
-    lines: [{ description: closed ? `${brand.name}: payment received after the game closed (kept as credit)` : `${brand.name}: up to ${p.pack} participants (one engagement)${creditTotal > 0 ? (p.amount > 0 ? ", balance after credit" : ", paid from credit") : ""}`, quantity: 1, amount: tax.taxable }], tax, paymentRef: p.rzp_payment_id ?? undefined, orderRef: p.id,
+    lines: [{ description: closed ? `${brand.name}: payment received after the game closed (kept as credit)` : `${brand.name}: up to ${p.pack} participants (one engagement)${creditTotal > 0 ? (p.amount > 0 ? ", balance after credit" : ", paid from credit") : ""}`, quantity: 1, amount: tax.taxable }], tax, paymentRef: p.rzp_payment_id ?? undefined, orderRef: p.id, paidAtMs: pinfo?.createdAtMs ?? now, ...(eidForInvoice ? { game: { id: eidForInvoice, ...(gameName ? { name: gameName } : {}), ...(gameStart ? { startMs: gameStart } : {}) } } : {}), organizer, ...(pinfo ? { pay: pinfo } : {}),
     ...(creditTotal > 0 ? { note: `${cuses.map((u) => `Paid from credit of invoice ${u.invoice ?? u.credit_id}: ${rs(u.amount, p.currency)}`).join("; ")}.` } : {}) };
   await db.prepare("INSERT OR IGNORE INTO invoice(token,payment_id,brand,fy,seq,number,issued_ms,data) VALUES(?,?,?,?,?,?,?,?)").bind(token, p.id, brand.id, fy, seq, number, now, JSON.stringify(data)).run();
   const origin = env.PUBLIC_ORIGIN ?? meta.origin ?? "";
@@ -267,7 +279,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     const bph = partnerCode(b.phone); // optional, only used to spot a partner buying through their own link
     await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,ref,buyer_phone_hash,is_test,eid) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), pack, cur, pr.total, pr.tax, order?.id ?? null, "created", now, JSON.stringify(meta), ref, bph ? await phoneHashFor(env, bph) : null, siteTest ? 1 : 0, boundEid).run();
     if (!rzp) { const f = await fulfil(env, id, now, spend); return "result" in f ? json({ mode: "test", paymentId: id, result: f.result, ...(siteTest ? { testPayment: true, label: "TEST payment: nothing was charged." } : {}) }) : json({ error: f.error }, f.status); }
-    return json({ mode: "razorpay", paymentId: id, razorpay: { keyId: rzp.keyId, orderId: order.id, amount: toMinor(pr.total), currency: cur, name: "IT Services by Rajat Agarwal", description: `${brand.name}: up to ${pack} participants`, prefill: { email: b.email.trim(), name: payerName.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name }, theme: { color: brand.theme } } });
+    return json({ mode: "razorpay", paymentId: id, razorpay: { keyId: rzp.keyId, orderId: order.id, amount: toMinor(pr.total), currency: cur, name: "IT Services by Rajat Agarwal", description: `${brand.name}: up to ${pack} participants`, prefill: { email: b.email.trim(), name: payerName.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name }, theme: { color: brand.theme }, ...(cur === "INR" ? { config: UPI_FIRST } : {}) } });
   }
 
   if (req.method === "POST" && p === "/api/payments/verify") {

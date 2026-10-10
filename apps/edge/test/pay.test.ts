@@ -410,3 +410,20 @@ describe("paying to publish a draft", () => {
     expect((await pay(key, "PAYD-3")).status).toBe(400);
   });
 });
+
+describe("invoice carries Razorpay's own record (owner list 2026-10-10)", () => {
+  test("INR checkout opens UPI first; USD checkout does not force it", async () => {
+    const a = (await (await buy()).json()) as any; expect(a.razorpay.config.display.sequence[0]).toBe("block.upi"); expect(a.razorpay.config.display.blocks.upi.instruments).toEqual([{ method: "upi" }]);
+    env.RAZORPAY_INTERNATIONAL = "1";
+    const u = (await (await buy({ currency: "USD", country: "US" })).json()) as any; expect(u.razorpay.currency).toBe("USD"); expect(u.razorpay.config).toBeUndefined();
+  });
+  test("after a UPI payment the invoice shows method, masked UPI id, bank reference, IST time, payer and Razorpay ids, plus page 2 terms", async () => {
+    const r = (await (await buy({ name: "Asha Rao", phone: "98765 43210", phoneCode: "91" })).json()) as any;
+    rz.payments["pay_U1"] = { id: "pay_U1", order_id: r.razorpay.orderId, status: "captured", amount: r.razorpay.amount, currency: "INR", method: "upi", vpa: "asha.rao@okicici", created_at: Math.floor(T / 1000), email: "Boss@Acme.com", contact: "+919876543210", acquirer_data: { rrn: "111122223333" } };
+    const v = await call("POST", "/api/payments/verify", { paymentId: r.paymentId, razorpay_order_id: r.razorpay.orderId, razorpay_payment_id: "pay_U1", razorpay_signature: hmac("sek", `${r.razorpay.orderId}|pay_U1`) });
+    const j = (await v.json()) as any; expect(j.ok).toBe(true);
+    const html = await (await call("GET", j.invoiceUrl)).text();
+    for (const x of ["Paid on (IST)", "15:30:00 IST", "Razorpay: UPI", "UPI ID as", "@okicici", "111122223333", "pay_U1", r.razorpay.orderId, "Asha Rao", "+919876543210", "Terms and conditions", "kept for invoice, tax and accounting purposes"]) expect(html).toContain(x);
+    expect(html).not.toContain("asha.rao@okicici");
+  });
+});

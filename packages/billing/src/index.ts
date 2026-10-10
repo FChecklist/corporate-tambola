@@ -78,7 +78,56 @@ export interface InvoiceData {
   kind?: "invoice" | "credit_note"; originalNumber?: string;
   /** A plain sentence printed under the totals (e.g. "Paid from credit of invoice ..."). */
   note?: string;
+  /** The moment the payment was captured (the invoice itself is issued at issuedAt). Printed in IST. */
+  paidAtMs?: number;
+  /** What was paid for. */
+  game?: { id: string; name?: string; startMs?: number };
+  /** The organizer of the game (may be a different person from the payer when a Host or Co-host paid). */
+  organizer?: { name?: string; email?: string; phone?: string; org?: string };
+  /** What Razorpay reported for this payment (see paymentInfo). */
+  pay?: PaymentInfo;
 }
+
+/** The part of Razorpay's payment record that is printed on the invoice. Never holds a full card number or a full UPI id. */
+export interface PaymentInfo {
+  paymentId?: string; orderId?: string; status?: string; method?: string; methodLabel?: string; detail?: string; bank?: string; wallet?: string; network?: string;
+  international?: boolean; email?: string; contact?: string; currency?: string; amountMinor?: number; createdAtMs?: number; rrn?: string; authCode?: string; upiTxnId?: string;
+}
+const maskVpa = (v: string) => { const [u, h] = String(v).split("@"); return h ? `${(u ?? "").slice(0, 2)}${"*".repeat(Math.max(2, (u ?? "").length - 2))}@${h}` : "****"; };
+/** Turns Razorpay's payment entity (GET /payments/:id) into the printable summary. Unknown fields are simply left out. */
+export function paymentInfo(raw: any): PaymentInfo {
+  if (!raw || typeof raw !== "object") return {};
+  const m = String(raw.method ?? "");
+  const lab: Record<string, string> = { upi: "UPI", card: "Card", netbanking: "Net banking", wallet: "Wallet", emi: "EMI", paylater: "Pay later", bank_transfer: "Bank transfer" };
+  let detail = "";
+  if (m === "upi") detail = raw.vpa ? `UPI ID ${maskVpa(raw.vpa)}` : "UPI";
+  else if (m === "card" && raw.card) detail = `${raw.card.network ?? ""} ${raw.card.type ?? ""} card ending ${raw.card.last4 ?? "****"}`.replace(/\s+/g, " ").trim();
+  else if (m === "netbanking") detail = raw.bank ? `Bank ${raw.bank}` : "";
+  else if (m === "wallet") detail = raw.wallet ? `Wallet ${raw.wallet}` : "";
+  const acq = raw.acquirer_data ?? {};
+  return {
+    paymentId: raw.id, orderId: raw.order_id, status: raw.status, method: m, methodLabel: lab[m] ?? (m || undefined), detail: detail || undefined, bank: raw.bank ?? undefined, wallet: raw.wallet ?? undefined,
+    network: raw.card?.network ?? undefined, international: raw.international === true ? true : undefined, email: raw.email, contact: raw.contact, currency: raw.currency, amountMinor: typeof raw.amount === "number" ? raw.amount : undefined,
+    createdAtMs: typeof raw.created_at === "number" ? raw.created_at * 1000 : undefined, rrn: acq.rrn ?? undefined, authCode: acq.auth_code ?? undefined, upiTxnId: acq.upi_transaction_id ?? undefined,
+  };
+}
+/** "10 Oct 2026, 14:32:07 IST" for any instant. */
+export const istStamp = (ms: number) => new Date(ms + 19_800_000).toLocaleString("en-GB", { timeZone: "UTC", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) + " IST";
+
+/** The text kept on every invoice (owner order 2026-10-10). */
+export const INVOICE_KEEP_NOTE = "The details on this invoice (including the payer's, the organizer's and the payment details reported by Razorpay) are kept for invoice, tax and accounting purposes only, as the law requires, and are not used for anything else.";
+/** Page 2 of every invoice. Kept in step with the Terms page of the service (no refunds; cancelled paid game becomes credit). */
+export const INVOICE_TERMS: string[] = [
+  "This invoice is issued by IT Services by Rajat Agarwal for the service named on page 1. Online payments are processed by Razorpay.",
+  "We do not give refunds. If a paid game is cancelled before it starts, the payment stays as credit on the organizer's account and can be used for another game. Credit lapses 365 days after the payment date. No credit note is raised for credit that lapses.",
+  "A payment buys one engagement for up to the number of participants named on the invoice. Participants never pay; rewards are given by the organizer. Unused places are not credited once the game has started.",
+  "Prices are in the currency shown. Payments from India are in Indian rupees (INR); payments from outside India are in US dollars (USD). Bank, card and currency-conversion charges of the payer's own bank are the payer's own.",
+  "Where GST applies it is shown on page 1. Where it is not charged, the invoice says so. The payer is responsible for any withholding tax, VAT or duty that applies in the payer's own country.",
+  "The organizer is responsible for the rewards, the participants' consent and the conduct of the game. The service runs the game software and does not take part in the draw of rewards.",
+  "Invoice, payment, payer and organizer details are kept for invoice, tax and accounting purposes, for as long as the law requires. All other game data is deleted as described in the Privacy page.",
+  "Disputes are handled first by e-mail to the seller at the address on page 1. Indian law applies and the courts of the seller's place of business have jurisdiction, unless the payer's own consumer law says otherwise.",
+  "This is a computer generated invoice. It needs no signature.",
+];
 const titleOf = (i: InvoiceData) => (i.kind === "credit_note" ? "CREDIT NOTE" : i.tax.mode === "none" ? "INVOICE" : "TAX INVOICE");
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 const money = (n: number, cur: string) => (cur === "INR" ? "₹" : "US$") + n.toLocaleString(cur === "INR" ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -92,16 +141,33 @@ ${t.mode === "none" ? `Seller: ${c.legalName}${c.email ? `\n${c.email}` : ""}${c
 
 ${i.kind === "credit_note" ? "Credit note number" : "Invoice number"}: ${i.number}${i.originalNumber ? `
 Against invoice: ${i.originalNumber}` : ""}
-Date: ${new Date(i.issuedAt).toISOString().slice(0, 10)}
-Billed to: ${i.buyer.name}${i.buyer.gstin ? `  GSTIN: ${i.buyer.gstin}` : ""}${i.buyer.phone ? `  Mobile: ${i.buyer.phone}` : ""}
+Issued: ${istStamp(i.issuedAt)}${i.paidAtMs ? `
+Paid on: ${istStamp(i.paidAtMs)}` : ""}
+${i.game ? `Paid for: ${i.game.name ? `${i.game.name} (${i.game.id})` : i.game.id}
+` : ""}Billed to: ${i.buyer.name}${i.buyer.gstin ? `  GSTIN: ${i.buyer.gstin}` : ""}${i.buyer.phone ? `  Mobile: ${i.buyer.phone}` : ""}
 
 ${rows}
 ${t.mode === "none" ? "" : `  Taxable value: ${money(t.taxable, i.currency)}\n`}${t.mode === "none" ? "" : t.mode === "intra" ? `  CGST 9%: ${money(t.cgst, i.currency)}\n  SGST 9%: ${money(t.sgst, i.currency)}` : t.mode === "inter" ? `  IGST 18%: ${money(t.igst, i.currency)}` : "  GST: not charged (export of services)"}
   TOTAL: ${money(t.total, i.currency)}
-${i.paymentRef ? `Paid via Razorpay, payment ${i.paymentRef}` : ""}${i.note ? `
+${i.paymentRef || i.pay ? `Paid via Razorpay${i.pay?.methodLabel ? ` (${i.pay.methodLabel}${i.pay.detail ? `, ${i.pay.detail}` : ""})` : ""}, payment ${i.pay?.paymentId ?? i.paymentRef}${i.pay?.orderId ? `, order ${i.pay.orderId}` : ""}` : ""}${i.organizer && (i.organizer.name || i.organizer.email || i.organizer.phone) ? `
+Organizer: ${[i.organizer.name, i.organizer.email, i.organizer.phone].filter(Boolean).join(", ")}` : ""}
+${INVOICE_KEEP_NOTE}${i.note ? `
 ${i.note}` : ""}
 ${c.sacCode && t.mode !== "none" ? `SAC ${c.sacCode} - ${c.sacDescription}` : c.sacDescription}
 ${c.invoiceFooter}`;
+}
+
+/** Page-1 blocks added 2026-10-10: what was paid for, when (IST), how, the payer, the organizer and Razorpay's own record. */
+function renderDetailsHtml(i: InvoiceData): string {
+  const rows = (kv: [string, unknown][]) => `<table class="kv">${kv.filter(([, v]) => v !== undefined && v !== null && v !== "").map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table>`;
+  const pi = i.pay, paid = i.paidAtMs;
+  const out: string[] = [];
+  out.push(`<div class="meta"><div class="box"><b>Paid for</b>${rows([["Game", i.game ? (i.game.name ? `${i.game.name} (${i.game.id})` : i.game.id) : undefined], ["Game starts", i.game?.startMs ? istStamp(i.game.startMs) : undefined], ["Service", i.lines[0]?.description]])}</div>
+<div class="box"><b>Paid on / via</b>${rows([["Paid on (IST)", paid ? istStamp(paid) : undefined], ["Paid via", pi?.methodLabel ? `Razorpay: ${pi.methodLabel}` : i.paymentRef ? "Razorpay" : undefined], ["Payment details", pi?.detail], ["Amount paid", money(i.tax.total, i.currency)]])}</div></div>`);
+  out.push(`<div class="meta"><div class="box"><b>Payer (paid by)</b>${rows([["Name", i.buyer.name], ["E-mail", i.buyer.email], ["Mobile", i.buyer.phone], ["Country", i.buyer.country], ["Tax ID", i.buyer.gstin]])}</div>
+<div class="box"><b>Organizer</b>${rows([["Name", i.organizer?.name], ["Organization", i.organizer?.org], ["E-mail", i.organizer?.email], ["Mobile", i.organizer?.phone]])}</div></div>`);
+  if (pi || i.paymentRef || i.orderRef) out.push(`<div class="box" style="margin-top:14px"><b>Payment record from Razorpay</b>${rows([["Razorpay payment ID", pi?.paymentId ?? i.paymentRef], ["Razorpay order ID", pi?.orderId], ["Our reference", i.orderRef], ["Status", pi?.status], ["Method", pi?.methodLabel], ["Details", pi?.detail], ["Card network", pi?.network], ["International card", pi?.international ? "Yes" : undefined], ["Currency / amount", pi?.currency && pi.amountMinor !== undefined ? `${pi.currency} ${(pi.amountMinor / 100).toFixed(2)}` : undefined], ["Razorpay time (IST)", pi?.createdAtMs ? istStamp(pi.createdAtMs) : undefined], ["Bank reference (RRN)", pi?.rrn], ["UPI transaction ID", pi?.upiTxnId], ["Authorisation code", pi?.authCode], ["E-mail given to Razorpay", pi?.email], ["Mobile given to Razorpay", pi?.contact]])}</div>`);
+  return out.join("");
 }
 
 export function renderInvoiceHtml(i: InvoiceData): string {
@@ -113,14 +179,16 @@ export function renderInvoiceHtml(i: InvoiceData): string {
 <style>body{font:15px/1.5 Inter,system-ui,sans-serif;color:#1c1a18;margin:0;background:#f4efe6}.sheet{max-width:780px;margin:24px auto;background:#fff;padding:36px;border-radius:12px;box-shadow:0 2px 14px #0002}
 h1{font:700 26px/1.1 Georgia,serif;margin:0;color:${esc(b.theme)};letter-spacing:.02em}.sub{color:#6b6258;font-size:13px}.top{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;border-bottom:3px solid ${esc(b.theme)};padding-bottom:16px}
 .draft{background:#fff3cd;border:1px solid #e0c36a;padding:8px 12px;border-radius:8px;margin:12px 0;font-size:13px}table{width:100%;border-collapse:collapse;margin-top:18px}td,th{padding:9px 6px;border-bottom:1px solid #e7e0d4;text-align:left}th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#6b6258}.r{text-align:right}tfoot td{font-weight:700;border-bottom:0}
-.meta{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:18px}.foot{margin-top:22px;font-size:12px;color:#6b6258}@media print{body{background:#fff}.sheet{box-shadow:none;margin:0}}@media(max-width:560px){.meta{grid-template-columns:1fr}}</style></head><body><div class="sheet">
-<div class="top"><div><h1>${esc(b.name)}</h1><div class="sub">${esc(b.line)}${t.mode === "none" ? "" : `<br>A product of <b>${esc(c.legalName)}</b>`}</div></div><div class="sub r" style="text-align:right"><b>${titleOf(i)}</b><br>${esc(i.number)}${i.originalNumber ? `<br>Against invoice ${esc(i.originalNumber)}` : ""}<br>${new Date(i.issuedAt).toISOString().slice(0, 10)}</div></div>
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:18px}.foot{margin-top:22px;font-size:12px;color:#6b6258}.box{border:1px solid #e7e0d4;border-radius:8px;padding:10px 12px;font-size:13px}.box b{display:block;margin-bottom:2px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#6b6258}.kv{width:100%;margin-top:6px}.kv td{padding:3px 6px;border-bottom:1px dotted #e7e0d4;font-size:13px}.kv td:first-child{color:#6b6258;width:38%}.terms ol{padding-left:20px}.terms li{margin:8px 0;font-size:13px}@media print{body{background:#fff}.sheet{box-shadow:none;margin:0;border-radius:0}.terms{page-break-before:always;break-before:page}}@media(max-width:560px){.meta{grid-template-columns:1fr}}</style></head><body><div class="sheet">
+<div class="top"><div><h1>${esc(b.name)}</h1><div class="sub">${esc(b.line)}${t.mode === "none" ? "" : `<br>A product of <b>${esc(c.legalName)}</b>`}</div></div><div class="sub r" style="text-align:right"><b>${titleOf(i)}</b><br>${esc(i.number)}${i.originalNumber ? `<br>Against invoice ${esc(i.originalNumber)}` : ""}<br>Issued ${esc(istStamp(i.issuedAt))}</div></div>
 ${i.draft ? `<div class="draft">${t.mode === "none" ? "DRAFT (test payment)." : "DRAFT: the supplier's registration details are not complete yet, so this is not yet a valid tax invoice."}</div>` : ""}
 <div class="meta"><div><b>Supplier</b><br>${esc(c.legalName)}${t.mode === "none" ? `${c.email ? `<br>${esc(c.email)}` : ""}${c.phone ? `<br>${esc(c.phone)}` : ""}` : ""}<br>${c.addressLines.map(esc).join("<br>")}${c.gstin ? `<br>GSTIN: ${esc(c.gstin)}` : ""}${c.cin ? `<br>CIN: ${esc(c.cin)}` : ""}${c.pan ? `<br>PAN: ${esc(c.pan)}` : ""}</div>
 <div><b>Billed to</b><br>${esc(i.buyer.name)}${i.buyer.gstin ? `<br>GSTIN: ${esc(i.buyer.gstin)}` : ""}${i.buyer.email ? `<br>${esc(i.buyer.email)}` : ""}${i.buyer.phone ? `<br>${esc(i.buyer.phone)}` : ""}${t.mode === "none" ? "" : `<br>Place of supply: ${esc(t.placeOfSupply)}`}</div></div>
+${renderDetailsHtml(i)}
 <table><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Amount</th></tr></thead><tbody>${i.lines.map((l) => `<tr><td>${esc(l.description)}</td><td class="r">${l.quantity}</td><td class="r">${money(l.amount, i.currency)}</td></tr>`).join("")}</tbody>
 <tfoot>${t.mode === "none" ? "" : `<tr><td colspan="2">Taxable value</td><td class="r">${money(t.taxable, i.currency)}</td></tr>`}${t.mode === "none" ? "" : taxRows.replace(/<tr><td>/g, '<tr><td colspan="2">').replace(/<td class="r">/g, '<td class="r">')}<tr><td colspan="2">TOTAL</td><td class="r">${money(t.total, i.currency)}</td></tr></tfoot></table>
-<div class="foot">${i.paymentRef ? `Paid online via Razorpay. Payment reference: ${esc(i.paymentRef)}.<br>` : ""}${i.note ? `${esc(i.note)}<br>` : ""}${c.sacCode && t.mode !== "none" ? `SAC ${esc(c.sacCode)}: ` : ""}${esc(c.sacDescription)}.${c.bank.accountNumber ? `<br>Bank: ${esc(c.bank.name)}, A/c ${esc(c.bank.accountNumber)}, IFSC ${esc(c.bank.ifsc)}` : ""}<br>${esc(c.invoiceFooter)}</div></div></body></html>`;
+<div class="foot">${i.pay || !i.paymentRef ? "" : `Paid online via Razorpay. Payment reference: ${esc(i.paymentRef)}.<br>`}${i.note ? `${esc(i.note)}<br>` : ""}${c.sacCode && t.mode !== "none" ? `SAC ${esc(c.sacCode)}: ` : ""}${esc(c.sacDescription)}.${c.bank.accountNumber ? `<br>Bank: ${esc(c.bank.name)}, A/c ${esc(c.bank.accountNumber)}, IFSC ${esc(c.bank.ifsc)}` : ""}<br>${esc(c.invoiceFooter)}<br><b>${esc(INVOICE_KEEP_NOTE)}</b></div></div>
+<div class="sheet terms"><h2>Terms and conditions</h2><div class="sub">${esc(b.name)} · ${titleOf(i)} ${esc(i.number)}</div><ol>${INVOICE_TERMS.map((x) => `<li>${esc(x)}</li>`).join("")}</ol><div class="foot">Seller: ${esc(c.legalName)}${c.email ? ` · ${esc(c.email)}` : ""}${c.phone ? ` · ${esc(c.phone)}` : ""}</div></div></body></html>`;
 }
 
 // ---------------------------------------------------------------- Razorpay (public REST API)

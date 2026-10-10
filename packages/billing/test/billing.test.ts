@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
 import {
   BRANDS, DEFAULT_COMPANY, companyGaps, createOrder, financialYear, formatInvoiceNumber, renderInvoiceHtml, renderInvoiceText, splitGst, toMinor,
-  verifyPaymentSignature, verifyWebhookSignature, type InvoiceData,
+  verifyPaymentSignature, verifyWebhookSignature, paymentInfo, istStamp, INVOICE_KEEP_NOTE, type InvoiceData,
 } from "../src";
 
 describe("brands", () => {
@@ -129,5 +129,36 @@ describe("Orders API client (against a local stand-in for api.razorpay.com)", ()
       expect(seen.body).toMatchObject({ amount: 100000, currency: "INR", notes: { brand: "Corporate Tambola" } });
       await expect(createOrder(cfg, { amountMinor: 1, currency: "INR", receipt: "r", notes: {} })).rejects.toThrow("minimum amount");
     } finally { srv.stop(true); }
+  });
+});
+
+describe("invoice details (2026-10-10 owner list)", () => {
+  const raw = { id: "pay_ABC", order_id: "order_XYZ", status: "captured", method: "upi", vpa: "rajat.agarwal@okhdfc", amount: 129900, currency: "INR", created_at: 1791642727, email: "a@b.co", contact: "+919650397480", acquirer_data: { rrn: "628812345678", upi_transaction_id: "UTX1" } };
+  const base = (): InvoiceData => ({ number: "CT/2026-27/000007", issuedAt: 1791642730000, brand: BRANDS.corporate_tambola!, company: DEFAULT_COMPANY, draft: false, buyer: { name: "Asha Rao", email: "asha@acme.in", phone: "+919800000000", country: "IN" }, currency: "INR", lines: [{ description: "Corporate Tambola: up to 250 participants", quantity: 1, amount: 1299 }], tax: splitGst(1299, "INR", "", undefined, false), paymentRef: "pay_ABC", orderRef: "pay_1", paidAtMs: 1791642727000, game: { id: "eng_1", name: "Diwali Dhamaka", startMs: 1791700000000 }, organizer: { name: "Asha Rao", email: "host@acme.in", phone: "+919811111111", org: "Acme" }, pay: paymentInfo(raw) });
+  test("IST stamp is IST, with date, time and zone", () => { expect(istStamp(Date.UTC(2026, 9, 10, 20, 0, 0))).toBe("11 Oct 2026, 01:30:00 IST"); });
+  test("paymentInfo masks the UPI id and keeps method, bank reference and times", () => {
+    const p = paymentInfo(raw);
+    expect(p.methodLabel).toBe("UPI"); expect(p.detail).toBe("UPI ID ra***********@okhdfc"); expect(p.rrn).toBe("628812345678");
+    expect(JSON.stringify(p)).not.toContain("rajat.agarwal");
+    expect(paymentInfo({ id: "p", method: "card", card: { network: "Visa", type: "credit", last4: "1111" } }).detail).toBe("Visa credit card ending 1111");
+    expect(paymentInfo(null)).toEqual({});
+  });
+  test("page 1 shows game, paid-on (IST), paid-via, payer, organizer, Razorpay record and the keep-for-invoice note", () => {
+    const h = renderInvoiceHtml(base());
+    for (const x of ["Diwali Dhamaka (eng_1)", "Paid on (IST)", "IST", "Razorpay: UPI", "UPI ID ra", "Amount paid", "asha@acme.in", "+919800000000", "host@acme.in", "+919811111111", "Razorpay payment ID", "pay_ABC", "order_XYZ", "628812345678", "a@b.co", "+919650397480", INVOICE_KEEP_NOTE.replace(/'/g, "&#39;")]) expect(h).toContain(x);
+  });
+  test("page 2 is a separate printed page with the terms", () => {
+    const h = renderInvoiceHtml(base());
+    expect(h).toContain('class="sheet terms"'); expect(h).toContain("page-break-before:always"); expect(h).toContain("We do not give refunds"); expect(h.indexOf("Terms and conditions")).toBeGreaterThan(h.indexOf("TOTAL"));
+  });
+  test("USD invoice (outside India) says no GST and prints US$", () => {
+    const h = renderInvoiceHtml({ ...base(), currency: "USD", tax: splitGst(17, "USD", "", undefined, false), buyer: { name: "Bob", email: "b@x.com", country: "US" } });
+    expect(h).toContain("US$17.00");
+  });
+  test("details are escaped and the text mail carries the same facts", () => {
+    const i = base(); i.organizer = { name: "<script>x</script>" };
+    expect(renderInvoiceHtml(i)).not.toContain("<script>x");
+    const t = renderInvoiceText(base());
+    expect(t).toContain("Paid on:"); expect(t).toContain("Paid for: Diwali Dhamaka"); expect(t).toContain("UPI"); expect(t).toContain("Organizer:"); expect(t).toContain(INVOICE_KEEP_NOTE);
   });
 });
