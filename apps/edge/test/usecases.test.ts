@@ -141,7 +141,7 @@ describe("C. publish and pay", () => {
     expect(pub.published).toBe(true); expect(pub.paid).toBe(false);
     expect(outbox("%payment pending%").length).toBe(1);
     const c = await j(await checkout(o, "CASE-2", {}, T + 10 * 60_000));
-    expect(c.mode).toBe("razorpay"); expect(c.razorpay.description).toMatch(/500/);
+    expect(c.mode).toBe("razorpay"); expect(c.razorpay.notes.participants).toBe("500");
     const v = await j(await settle(c.paymentId, c.razorpay.orderId, "pay_1", T + 11 * 60_000));
     expect(v.published).toBe(true); expect(v.restartedAtMs).toBeNull(); // paid in time: the start does not move
     expect(engRow("CASE-2").pack).toBe(500); expect(engRow("CASE-2").start_round).toBe(START);
