@@ -3,6 +3,7 @@ Allow: /
 Disallow: /api/
 Disallow: /ai/
 Disallow: /pay.html
+Disallow: /paytest.html
 Disallow: /signin.html
 Disallow: /ai-link.html
 Disallow: /report.html

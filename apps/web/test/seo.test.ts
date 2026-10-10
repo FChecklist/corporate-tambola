@@ -5,8 +5,8 @@ import { PACKS } from "../../../packages/shared/src/pricing";
 
 const PUB = new URL("../public/", import.meta.url), ORIGIN = "https://corporate-tambola.pages.dev";
 const rd = (f: string) => readFileSync(new URL(f, PUB), "utf8");
-const INDEXABLE = ["index.html", "partner.html", "legal.html", "terms.html", "dpa.html", "subprocessors.html", "partner-terms.html", "organizer-guide.html", "trust.html", "brochure.html"];
-const NOINDEX = ["signin.html", "pay.html", "ai-link.html", "report.html", "z.html", "zc.html", "big.html", "404.html", "owner-visits.html"];
+const INDEXABLE = ["index.html", "partner.html", "legal.html", "terms.html", "dpa.html", "subprocessors.html", "partner-terms.html", "organizer-guide.html", "trust.html", "brochure.html", "about.html", "contact.html", "pricing.html", "refund-policy.html"];
+const NOINDEX = ["signin.html", "pay.html", "paytest.html", "ai-link.html", "report.html", "z.html", "zc.html", "big.html", "404.html", "owner-visits.html"];
 const urlOf = (f: string) => ORIGIN + (f === "index.html" ? "/" : "/" + f);
 const meta = (h: string, re: RegExp) => (h.match(re) ?? [])[1] ?? "";
 

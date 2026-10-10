@@ -156,7 +156,7 @@ describe("claims register: customer-facing text never says what the build does n
     }
   });
   test("banned claims are gone", () => {
-    const BAN: [RegExp, string][] = [[/discount applied/i, "implies a past sale"], [/ISO\/IEC 27001/i, "unsupported certification"], [/Most popular/i, "popularity without data"], [/Nobody else sees it/i, "the organizer sees it"], [/We follow India/i, "soft wording only"], [/Built in line with/i, "soft wording only"], [/\b(fully |is |are )?compliant\b/i, "never claim compliance"], [/does not contain names or mobile/i, "winners' details are kept sealed"], [/We do not keep your participants' data/i, "prize details are kept"], [/refund policy/i, "no refund page"], [/\bterms, privacy/i, "no terms page yet"]];
+    const BAN: [RegExp, string][] = [[/discount applied/i, "implies a past sale"], [/ISO\/IEC 27001/i, "unsupported certification"], [/Most popular/i, "popularity without data"], [/Nobody else sees it/i, "the organizer sees it"], [/We follow India/i, "soft wording only"], [/Built in line with/i, "soft wording only"], [/\b(fully |is |are )?compliant\b/i, "never claim compliance"], [/does not contain names or mobile/i, "winners' details are kept sealed"], [/We do not keep your participants' data/i, "prize details are kept"], [/\bterms, privacy/i, "no terms page yet"]];
     for (const f of FILES) { const t = read(f); for (const [re, why] of BAN) expect([f, why, re.test(t)]).toEqual([f, why, false]); }
   });
   test("structured data prices equal the real packs", () => {
