@@ -119,7 +119,7 @@ async function fulfilPaytest(env: PayEnv, p: any, meta: any, now: number) {
   const seq = -(((await db.prepare("SELECT COUNT(*) AS c FROM invoice WHERE brand=? AND fy=? AND seq<0").bind(brand.id, fy).first<{ c: number }>())?.c ?? 0) + 1);
   const number = `PAYTEST-${fy}-${-seq}`;
   const tax = splitGst(p.amount, p.currency, co.stateCode, undefined);
-  const data: InvoiceData = { number, issuedAt: now, brand, company: co, draft: false, buyer: { name: meta.name, email: p.email, phone: meta.phone || undefined, country: meta.country }, currency: p.currency,
+  const data: InvoiceData = { number, issuedAt: now, brand, company: co, draft: false, buyer: { name: meta.org || meta.name, gstin: meta.taxId || undefined, email: p.email, phone: meta.phone || undefined, country: meta.country }, currency: p.currency,
     lines: [{ description: `${brand.name}: payment test (nothing was bought)`, quantity: 1, amount: tax.taxable }], tax, paymentRef: p.rzp_payment_id ?? undefined, orderRef: p.id, paidAtMs: pinfo?.createdAtMs ?? now,
     organizer: { name: meta.name, email: p.email, phone: meta.phone || undefined }, ...(pinfo ? { pay: pinfo } : {}), note: "This receipt is for a payment test. No game, pack or credit was bought." };
   const token = "inv_" + randHex(16);
@@ -331,7 +331,9 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     let order: any;
     try { order = await createOrder(rzp, { amountMinor: 100, currency: cur, receipt: id, notes: { brand: brand.name, product: "payment test", payment_ref: id } }); }
     catch (e: any) { return json({ error: `The payment service said: ${e.message}` }, 502); }
-    const meta = { paytest: true, name: nm.slice(0, 120), ...(contact ? { phone: contact } : {}), country: cty, origin: env.PUBLIC_ORIGIN ?? url.origin };
+    const taxId = typeof b.taxId === "string" ? b.taxId.trim().toUpperCase().slice(0, 20) : "";
+    if (cty === "IN" && taxId && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(taxId)) return json({ error: "That GSTIN does not look right. It has 15 characters, like 27ABCDE1234F1Z5." }, 400);
+    const meta = { paytest: true, name: nm.slice(0, 120), ...(typeof b.org === "string" && b.org.trim() ? { org: b.org.trim().slice(0, 120) } : {}), ...(taxId ? { taxId } : {}), ...(contact ? { phone: contact } : {}), country: cty, origin: env.PUBLIC_ORIGIN ?? url.origin };
     await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?,1)").bind(id, null, b.email.trim().toLowerCase(), 0, cur, 1, 0, order.id, "created", now, JSON.stringify(meta)).run();
     return json({ mode: "razorpay", paymentId: id, ...hopOf(env), razorpay: { keyId: rzp.keyId, orderId: order.id, amount: 100, currency: cur, name: brand.name, description: "(close group housie software) | owned and made by IT Services by Rajat Agarwal", prefill: { email: b.email.trim(), name: nm.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name }, theme: { color: brand.theme }, ...(cur === "INR" ? { config: UPI_FIRST } : {}) } });
   }

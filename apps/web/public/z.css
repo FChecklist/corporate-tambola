@@ -121,3 +121,5 @@ a.zbtn#addcal{margin-left:6px}
 .pb-own i{display:block;font:500 13px var(--sans,inherit)}
 .pb-own b{display:block;font:800 19px var(--sans,inherit);letter-spacing:.05em;margin:2px 0 8px}
 .pb-own em{display:inline-block;font:600 12px var(--sans,inherit);font-style:normal;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.2)}
+
+input.pfill{color:#8a8f98!important}

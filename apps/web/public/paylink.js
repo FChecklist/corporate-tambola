@@ -6,7 +6,7 @@
   if (token) { try { sessionStorage.setItem("ctz-pl", token); } catch {} } else { try { token = sessionStorage.getItem("ctz-pl") || ""; } catch {} } // a refresh of this tab still works
   if (!/^[0-9a-f]{48}$/.test(token)) token = ""; // anything else is not one of our links (and never goes into an address)
   try { history.replaceState(null, "", location.pathname); } catch {} // the secret leaves the address bar at once
-  const S = { info: null, err: "", busy: false, done: null, gone: false, name: "", email: "", phone: "", pcode: "91", org: "", tax: "", country: "IN", more: false };
+  const S = { info: null, err: "", busy: false, done: null, gone: false, ...(() => { const v = TB.payer.load(); return { name: v.name || "", email: v.email || "", phone: v.phone || "", org: v.org || "", tax: v.tax || "" }; })(), pcode: "91", country: "IN", more: true };
   const call = async (method, path, body) => {
     let r;
     try { r = await fetch(path, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }); }
@@ -39,19 +39,20 @@
         <div class="pgame"><div class="zrow"><span>Game</span><em><b>${esc(i.game && i.game.name ? i.game.name : "Your game")}</b></em></div>${i.game && i.game.id ? `<div class="zrow"><span><b>GAME ID</b></span><em><b class="mono">${esc(i.game.id)}</b></em></div>` : ""}${i.game && i.game.participants ? `<div class="zrow"><span>Players</span><em>Up to ${esc(String(i.game.participants))}</em></div>` : ""}</div>
         ${i.game && i.game.startMs ? `<div class="zrow"><span>Date</span><em>${esc(when(i.game.startMs))}</em></div>` : ""}${sum}
         <p class="zsmall">You are paying for this one game only. Players never pay.</p></div>
-      <div class="zcard zform"><h2>Who is paying</h2>
-        <label for="nm">Name</label><input id="nm" autocomplete="name" value="${esc(S.name)}" placeholder="Your full name">
-        <label for="em">E-mail (the invoice comes here)</label><input id="em" type="email" autocomplete="email" value="${esc(S.email)}" placeholder="you@company.com">
+      <div class="zcard zform"><h2>Details</h2>
+        <label for="nm">Name</label><input id="nm" autocomplete="name" value="${esc(S.name)}" placeholder="Full name">
+        <label for="em">E-mail (the invoice comes here)</label><input id="em" type="email" autocomplete="email" value="${esc(S.email)}" placeholder="Email">
         ${S.more ? `<label for="ph">Mobile <span class="zsmall" style="display:inline">(optional)</span></label>
-        <div style="display:flex;gap:8px"><select id="pcode" aria-label="Country code" style="flex:0 0 112px">${TB.COUNTRIES.map(([c, n, d]) => `<option value="${d}" ${String(d) === String(S.pcode) ? "selected" : ""}>${c} +${d}</option>`).join("")}</select><input id="ph" type="tel" autocomplete="tel-national" value="${esc(S.phone)}" placeholder="98765 43210" style="flex:1;min-width:0"></div>
-        <label for="org">Organization <span class="zsmall" style="display:inline">(optional)</span></label><input id="org" autocomplete="organization" value="${esc(S.org)}" placeholder="e.g. Acme Industries">
+        <div style="display:flex;gap:8px"><select id="pcode" aria-label="Country code" style="flex:0 0 112px">${TB.COUNTRIES.map(([c, n, d]) => `<option value="${d}" ${String(d) === String(S.pcode) ? "selected" : ""}>${c} +${d}</option>`).join("")}</select><input id="ph" type="tel" autocomplete="tel-national" value="${esc(S.phone)}" placeholder="Mobile number" style="flex:1;min-width:0"></div>
+        <label for="org">Company name <span class="zsmall" style="display:inline">(optional)</span></label><input id="org" autocomplete="organization" value="${esc(S.org)}" placeholder="Company name">
+        <label for="tax">GST / Tax number <span class="zsmall" style="display:inline">(optional)</span></label><input id="tax" autocomplete="off" maxlength="30" value="${esc(S.tax || "")}" placeholder="GST / Tax number" style="text-transform:uppercase">
 ` : `<button class="zsnd" id="more" type="button" style="margin-top:8px">Add a mobile number or organization (optional)</button>`}
         ${S.err ? `<div class="zbanner bad" role="alert">${esc(S.err)}</div>` : ""}${S.busy ? `<div class="zbanner info" role="status">Confirming your payment with Razorpay. Please keep this page open.</div>` : ""}
         <button class="zbtn" id="paygo" ${S.busy ? "disabled" : ""}>${S.busy ? "Confirming your payment…" : "Pay " + TB.money(p.total, cur) + " securely with Razorpay"}</button>
         <p class="zsmall">Secure payment by Razorpay. Payment to <a href="https://itservices-rajat-agarwal.pages.dev/" rel="noopener" target="_blank">IT Services by Rajat Agarwal</a>. An invoice is e-mailed to you. See the <a href="/legal.html#privacy">privacy policy</a>.</p></div>`;
   }
   function keep() { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { name: g("nm"), email: g("em"), phone: g("ph"), pcode: g("pcode"), org: g("org"), tax: g("tax") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; }
-  function draw() { $app.innerHTML = view(); bind(); }
+  function draw() { $app.innerHTML = view(); bind(); TB.payer.mark($app); }
 
   // Razorpay may say the payment is only created for a while: ask this link every 4 seconds, for up to 5 minutes, until the server says paid. Never mark it paid early.
   async function waitForConfirm() {
@@ -71,6 +72,7 @@
       if (nm.length < 2) { S.err = "Please enter your name."; return draw(); }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { S.err = "Please enter a valid e-mail."; return draw(); }
       if (tax && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(tax)) { S.err = "Please enter a valid 15-character GSTIN, like 27ABCDE1234F1Z5."; return draw(); }
+      TB.payer.save(S);
       S.busy = true; draw();
       try {
         const body = { name: nm, email, country: S.country };

@@ -154,6 +154,12 @@
   TB.payBrand = () => `<div class="pbrand"><div class="pb-name">CORPORATE TAMBOLA</div><div class="pb-sub">(close group housie software)</div><div class="pb-pay"><b>&#128274; Safe and secure payment through RAZORPAY</b><span>An RBI-regulated payment gateway trusted by businesses across India. Your card, UPI or bank details go to Razorpay only: we never see or store them. All data handled as required by India's DPDP Act, US Privacy Laws, EU GDPR.</span></div><div class="pb-own"><i>Software owned and made by</i><b>IT SERVICES BY RAJAT AGARWAL</b><em>Your payment is made to IT Services by Rajat Agarwal</em></div></div>`;
   // After a payment: which game, who was paid, and the two reference numbers the organizer can quote.
   TB.payReceipt = (d, gameId) => { const e = TB.esc, g = gameId || d.eid; return `<div class="prcpt"><b>Payment confirmed</b><p>${g ? `For game ID <b class="mono">${e(g)}</b>, you` : "You"} have made the payment to <b>IT Services by Rajat Agarwal</b> through Razorpay.</p><p>Your Razorpay transaction ID is <b class="mono">${e(d.razorpayPaymentId || "being confirmed, see your e-mail")}</b>.<br>Your Corporate Tambola payment confirmation ID is <b class="mono">${e(d.orderId || "")}</b>.</p></div>`; };
+  // Payer details are remembered in this browser only (never sent anywhere until they pay). They show in grey and can be edited in place; typing turns the text normal.
+  TB.payer = {
+    load() { try { const v = JSON.parse(localStorage.getItem("ct-payer") || "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; } },
+    save(o) { try { const keep = {}; for (const k of ["name", "email", "phone", "pcode", "org", "tax"]) if (typeof o[k] === "string" && o[k].trim()) keep[k] = o[k].trim().slice(0, 120); localStorage.setItem("ct-payer", JSON.stringify(keep)); } catch { /* private mode: fine */ } },
+    mark(root) { const v = TB.payer.load(); for (const [id, k] of [["nm", "name"], ["em", "email"], ["ph", "phone"], ["org", "org"], ["tax", "tax"]]) { const e = root.querySelector("#" + id); if (!e || !v[k] || e.value !== v[k]) continue; e.classList.add("pfill"); e.addEventListener("input", () => e.classList.remove("pfill"), { once: true }); } },
+  };
   TB.pay = (rz, paymentId, hop) => hop ? payViaHop(rz, paymentId, hop) : new Promise((resolve, reject) => {    const open = () => {
       try {
         const box = new window.Razorpay({
