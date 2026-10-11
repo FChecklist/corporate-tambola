@@ -123,3 +123,5 @@ a.zbtn#addcal{margin-left:6px}
 .pb-own em{display:inline-block;font:600 12px var(--sans,inherit);font-style:normal;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.2)}
 
 input.pfill{color:#8a8f98!important}
+
+.pstmt{margin:0 0 10px;padding:12px 14px;border-radius:12px;background:#fff7e0;border:2px solid #f59f00;font:600 15px/1.5 var(--sans,inherit);color:#4a2c00}.pstmt .mono{word-break:break-all}
