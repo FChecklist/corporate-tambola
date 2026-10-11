@@ -13,5 +13,6 @@ database_id = "4a6a1d3f-f1c7-44ac-b0ce-4cebd749a8de"
 [vars]
 DAILY_WRITE_BUDGET = "80000"
 PUBLIC_ORIGIN = "https://corporate-tambola.pages.dev"
+PAY_HOP_URL = "https://itservices-rajat-agarwal.pages.dev/payframe/"   # Option 1: the Razorpay window runs on the website registered with Razorpay
 MAIL_FROM = "Corporate Tambola <tambola@veridian-aios.com>"
 COMPANY_JSON = '{"email":"rajatsiroffice@gmail.com","phone":"(+91) 96503 97480","sacDescription":"Software solutions and products"}'

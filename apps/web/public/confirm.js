@@ -147,7 +147,7 @@
       <button class="btn gold block" id="payNow">${ic("lock")} Pay now</button>`));
     $("payNow").addEventListener("click", async () => {
       $("payNow").disabled = true; setErr("");
-      try { const paid = await TB.pay(r.razorpay, r.paymentId); data.results.forEach((x) => { if (x.result && x.result.mode === "razorpay") x.result = paid; }); done(data, status); }
+      try { const paid = await TB.pay(r.razorpay, r.paymentId, r.hop); data.results.forEach((x) => { if (x.result && x.result.mode === "razorpay") x.result = paid; }); done(data, status); }
       catch (e) { $("payNow").disabled = false; setErr(e.message); }
     });
   }

@@ -174,3 +174,16 @@ describe("paying through the link", () => {
     expect((await pay(tok, {}, T, "7.7.7.8")).status).toBe(200);
   });
 });
+
+describe("Option 1: the Razorpay window runs on the registered website", () => {
+  test("checkout names the hop page only when PAY_HOP_URL is set and well formed", async () => {
+    const body = { org: "Acme Ltd", email: "boss@acme.test", pack: 100, name: "Asha" };
+    const off = await j(await call("POST", "/api/checkout", body));
+    expect(off.mode).toBe("razorpay"); expect(off.hop).toBeUndefined();
+    (env as any).PAY_HOP_URL = "https://itservices-rajat-agarwal.pages.dev/payframe/";
+    const on = await j(await call("POST", "/api/checkout", body));
+    expect(on.hop).toBe("https://itservices-rajat-agarwal.pages.dev/payframe/");
+    (env as any).PAY_HOP_URL = "javascript:alert(1)";
+    expect((await j(await call("POST", "/api/checkout", body))).hop).toBeUndefined();
+  });
+});

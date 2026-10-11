@@ -22,7 +22,7 @@ import { creditAppliedFor, creditFromPayment, creditUsesFor, mailCreditCreated, 
 
 export interface PayEnv extends Env, Pick<ModeEnv, "OWNER_EMAIL" | "TEST_MAIL_ALLOW"> {
   RAZORPAY_KEY_ID?: string; RAZORPAY_KEY_SECRET?: string; RAZORPAY_WEBHOOK_SECRET?: string; RAZORPAY_BASE_URL?: string; RAZORPAY_INTERNATIONAL?: string;
-  PARTNER_COMMISSION_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; FREE_LAUNCH?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string;
+  PARTNER_COMMISSION_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; FREE_LAUNCH?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string; PAY_HOP_URL?: string;
 }
 
 export const PAY_SCHEMA = [
@@ -44,6 +44,8 @@ const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
 export const company = (env: PayEnv): Company => { try { return { ...DEFAULT_COMPANY, ...(env.COMPANY_JSON ? JSON.parse(env.COMPANY_JSON) : {}) }; } catch { return DEFAULT_COMPANY; } };
 /** Indian payers see UPI first (on a phone this opens their UPI app); cards and net banking stay one tap away. USD payers get Razorpay's normal international card screen. */
 const UPI_FIRST = { display: { blocks: { upi: { name: "Pay with UPI", instruments: [{ method: "upi" }] }, other: { name: "Cards, net banking, wallets", instruments: [{ method: "card" }, { method: "netbanking" }, { method: "wallet" }] } }, sequence: ["block.upi", "block.other"], preferences: { show_default_blocks: false } } };
+/** Option 1 (2026-10-11): the Razorpay window runs inside a page of the website that is registered with Razorpay (IT Services by Rajat Agarwal), shown in a frame on our payment screen. Unset = the window opens on our own page as before. */
+const hopOf = (env: PayEnv): { hop?: string } => (env.PAY_HOP_URL && /^https:\/\/[a-z0-9.-]+\/[A-Za-z0-9/_-]*$/.test(env.PAY_HOP_URL) ? { hop: env.PAY_HOP_URL } : {});
 const rzpOf = (env: PayEnv): (RazorpayConfig) | null => (env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET ? { keyId: env.RAZORPAY_KEY_ID, keySecret: env.RAZORPAY_KEY_SECRET, webhookSecret: env.RAZORPAY_WEBHOOK_SECRET, baseUrl: env.RAZORPAY_BASE_URL } : null);
 /** Optional switch (env FREE_LAUNCH="1"): small engagements (up to FREE_CAP participants) may be published without a purchase. Building a draft is always free. */
 export const FREE_CAP = 100, MAX_DRAFTS = 10;
@@ -305,7 +307,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     const bph = partnerCode(b.phone); // optional, only used to spot a partner buying through their own link
     await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,ref,buyer_phone_hash,is_test,eid) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), pack, cur, pr.total, pr.tax, order?.id ?? null, "created", now, JSON.stringify(meta), ref, bph ? await phoneHashFor(env, bph) : null, siteTest ? 1 : 0, boundEid).run();
     if (!rzp) { const f = await fulfil(env, id, now, spend); return "result" in f ? json({ mode: "test", paymentId: id, result: f.result, ...(siteTest ? { testPayment: true, label: "TEST payment: nothing was charged." } : {}) }) : json({ error: f.error }, f.status); }
-    return json({ mode: "razorpay", paymentId: id, razorpay: { keyId: rzp.keyId, orderId: order.id, amount: toMinor(pr.total), currency: cur, name: brand.name, description: "(close group housie) | IT Services by Rajat Agarwal", prefill: { email: b.email.trim(), name: payerName.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name, participants: String(pack) }, theme: { color: brand.theme }, ...(cur === "INR" ? { config: UPI_FIRST } : {}) } });
+    return json({ mode: "razorpay", paymentId: id, ...hopOf(env), razorpay: { keyId: rzp.keyId, orderId: order.id, amount: toMinor(pr.total), currency: cur, name: brand.name, description: "(close group housie) | IT Services by Rajat Agarwal", prefill: { email: b.email.trim(), name: payerName.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name, participants: String(pack) }, theme: { color: brand.theme }, ...(cur === "INR" ? { config: UPI_FIRST } : {}) } });
   }
 
   const ptm = p.match(/^\/api\/payments\/paytest\/(pay_[0-9a-f]{16})$/); // the test page asks while Razorpay is still confirming
@@ -331,7 +333,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     catch (e: any) { return json({ error: `The payment service said: ${e.message}` }, 502); }
     const meta = { paytest: true, name: nm.slice(0, 120), ...(contact ? { phone: contact } : {}), country: cty, origin: env.PUBLIC_ORIGIN ?? url.origin };
     await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?,1)").bind(id, null, b.email.trim().toLowerCase(), 0, cur, 1, 0, order.id, "created", now, JSON.stringify(meta)).run();
-    return json({ mode: "razorpay", paymentId: id, razorpay: { keyId: rzp.keyId, orderId: order.id, amount: 100, currency: cur, name: brand.name, description: "(close group housie) | IT Services by Rajat Agarwal", prefill: { email: b.email.trim(), name: nm.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name }, theme: { color: brand.theme }, ...(cur === "INR" ? { config: UPI_FIRST } : {}) } });
+    return json({ mode: "razorpay", paymentId: id, ...hopOf(env), razorpay: { keyId: rzp.keyId, orderId: order.id, amount: 100, currency: cur, name: brand.name, description: "(close group housie) | IT Services by Rajat Agarwal", prefill: { email: b.email.trim(), name: nm.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name }, theme: { color: brand.theme }, ...(cur === "INR" ? { config: UPI_FIRST } : {}) } });
   }
 
   if (req.method === "POST" && p === "/api/payments/verify") {

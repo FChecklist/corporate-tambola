@@ -128,8 +128,29 @@
   };
 
   // ---- payments: Razorpay Checkout (the brand is the checkout name). The SERVER verifies the payment; the browser only reports it. ----
-  TB.pay = (rz, paymentId) => new Promise((resolve, reject) => {
-    const open = () => {
+  // Option 1: when the server names a "hop" page (the website registered with Razorpay), the Razorpay window runs inside that page, shown in a frame over this one.
+  // Razorpay then only ever sees the registered website. The frame sends back the signed result, and the SERVER still verifies it exactly as before.
+  const payViaHop = (rz, paymentId, hop) => new Promise((resolve, reject) => {
+    const origin = new URL(hop).origin; const done = (fn, v) => { window.removeEventListener("message", onMsg); wrap.remove(); fn(v); };
+    const wrap = document.createElement("div"); wrap.setAttribute("role", "dialog"); wrap.setAttribute("aria-label", "Secure payment");
+    wrap.style.cssText = "position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.45)";
+    const fr = document.createElement("iframe"); fr.src = hop; fr.title = "Secure payment"; fr.setAttribute("allow", "payment"); fr.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent"; wrap.appendChild(fr);
+    const opts = { key: rz.keyId, order_id: rz.orderId, amount: rz.amount, currency: rz.currency, name: rz.name, description: rz.description, prefill: rz.prefill, notes: rz.notes, theme: rz.theme, ...(rz.config ? { config: rz.config } : {}) };
+    const timer = setTimeout(() => done(reject, new Error("Could not reach the payment service. Check your internet and try again.")), 30000);
+    const onMsg = async (ev) => {
+      if (ev.origin !== origin || ev.source !== fr.contentWindow || !ev.data) return;
+      const d = ev.data;
+      if (d.t === "ready") { clearTimeout(timer); fr.contentWindow.postMessage({ t: "open", opts }, origin); }
+      else if (d.t === "dismissed") done(reject, Object.assign(new Error("Payment was cancelled. Nothing was charged."), { cancelled: true }));
+      else if (d.t === "failed") done(reject, new Error(String(d.message || "The payment failed. Nothing was charged.").slice(0, 300)));
+      else if (d.t === "paid" && d.resp) {
+        try { const v = await TB.api("POST", "/api/payments/verify", { paymentId, razorpay_order_id: d.resp.razorpay_order_id, razorpay_payment_id: d.resp.razorpay_payment_id, razorpay_signature: d.resp.razorpay_signature }); done(resolve, v); }
+        catch (e) { done(reject, e); }
+      }
+    };
+    window.addEventListener("message", onMsg); document.body.appendChild(wrap);
+  });
+  TB.pay = (rz, paymentId, hop) => hop ? payViaHop(rz, paymentId, hop) : new Promise((resolve, reject) => {    const open = () => {
       try {
         const box = new window.Razorpay({
           key: rz.keyId, order_id: rz.orderId, amount: rz.amount, currency: rz.currency, name: rz.name, description: rz.description, prefill: rz.prefill, notes: rz.notes, theme: rz.theme, ...(rz.config ? { config: rz.config } : {}),

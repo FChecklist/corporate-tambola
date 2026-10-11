@@ -77,7 +77,7 @@
         if ((S.org || "").trim()) body.org = S.org.trim();
         if (tax) body.taxId = tax;
         let r = await call("POST", `/api/paylink/${token}/checkout`, body);
-        if (r.mode === "razorpay") r = await TB.pay(r.razorpay, r.paymentId); // opens Razorpay Checkout; the SERVER verifies the payment
+        if (r.mode === "razorpay") r = await TB.pay(r.razorpay, r.paymentId, r.hop); // opens Razorpay Checkout; the SERVER verifies the payment
         else if (r.result) r = r.result; // local test mode answers with the finished order
         if (r && r.confirming) r = await waitForConfirm();
         S.done = r || { ok: true };

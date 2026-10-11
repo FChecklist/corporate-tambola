@@ -136,7 +136,7 @@
     const btn = $("payGo"); btn.disabled = true; const keep = btn.innerHTML; btn.textContent = "Processing…";
     try {
       let r = await TB.api("POST", "/api/checkout", { org, email, country, taxId, pack: ORDER.pack, currency: S.cur, ref: (() => { try { const v = JSON.parse(localStorage.getItem("ctz-ref") || "null"); return v && Date.now() - v.at < 30 * 86400000 ? v.code : ""; } catch { return ""; } })(), phone: ($("oPh") ? $("oPh").value.trim() : "") });
-      if (r.mode === "razorpay") r = await TB.pay(r.razorpay, r.paymentId); // opens Razorpay Checkout; the server verifies the payment
+      if (r.mode === "razorpay") r = await TB.pay(r.razorpay, r.paymentId, r.hop); // opens Razorpay Checkout; the server verifies the payment
       else if (r.result) r = Object.assign({ mode: r.mode }, r.result); // local test mode answers with the finished order
       ORDER = Object.assign(ORDER, { org, email, mode: r.mode }, r);
       done();

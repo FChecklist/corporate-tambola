@@ -45,7 +45,7 @@
       S.busy = true; draw();
       try {
         const r = await TB.api("POST", "/api/payments/paytest", { name: S.name.trim(), email: S.email.trim().toLowerCase(), country: S.country, phone: S.phone, phoneCode: S.pcode });
-        let res = await TB.pay(r.razorpay, r.paymentId); // opens Razorpay Checkout; the server verifies the payment
+        let res = await TB.pay(r.razorpay, r.paymentId, r.hop); // opens Razorpay Checkout; the server verifies the payment
         if (res && res.confirming) res = await waitForConfirm(r.paymentId);
         S.done = res;
       } catch (e) { S.err = e.message; }
