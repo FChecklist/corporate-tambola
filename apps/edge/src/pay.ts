@@ -300,7 +300,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     const meta = { org: orgName.slice(0, 120), name: payerName.slice(0, 120), ...(contact ? { phone: contact } : {}), country: typeof b.country === "string" ? b.country.slice(0, 2) : "IN", taxId: typeof b.taxId === "string" ? b.taxId.trim().slice(0, 20) : "", origin: env.PUBLIC_ORIGIN ?? url.origin, ...(boundOrg ? { orgId: boundOrg, eid: boundEid, paidBy, ...(credited > 0 ? { creditInr: credited } : {}) } : {}) };
     let order: any = null;
     if (rzp) {
-      try { order = await createOrder(rzp, { amountMinor: toMinor(pr.total), currency: cur, receipt: id, notes: { brand: brand.name, product: "engagement", pack: String(pack), organization: (meta.org || meta.name).slice(0, 80), payment_ref: id } }); }
+      try { order = await createOrder(rzp, { amountMinor: toMinor(pr.total), currency: cur, receipt: id, notes: { brand: brand.name, product: "corporate_tambola", variation: `pack_${pack}`, pack: String(pack), currency: cur, organization: (meta.org || meta.name).slice(0, 80), payment_ref: id } }); }
       catch (e: any) { return json({ error: `The payment service said: ${e.message}` }, 502); }
     }
     const ref = refCode(b.ref); // from the buyer's own browser (valid for 30 days after the link was opened); checked against real partners when the payment is fulfilled
@@ -329,7 +329,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     if (!(await spend(2))) return busy();
     const id = "pay_" + randHex(8);
     let order: any;
-    try { order = await createOrder(rzp, { amountMinor: 100, currency: cur, receipt: id, notes: { brand: brand.name, product: "payment test", payment_ref: id } }); }
+    try { order = await createOrder(rzp, { amountMinor: 100, currency: cur, receipt: id, notes: { brand: brand.name, product: "corporate_tambola", variation: "payment_test", payment_ref: id } }); }
     catch (e: any) { return json({ error: `The payment service said: ${e.message}` }, 502); }
     const taxId = typeof b.taxId === "string" ? b.taxId.trim().toUpperCase().slice(0, 20) : "";
     if (cty === "IN" && taxId && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(taxId)) return json({ error: "That GSTIN does not look right. It has 15 characters, like 27ABCDE1234F1Z5." }, 400);
