@@ -91,7 +91,7 @@ describe("what the link shows: the game's name, start and price, and nothing els
     const t = await team(); const tok = tokenOf((await link(t.master)).body.url);
     const v = await view(tok); const p = price(500, "INR"); // 300 places need the 500 pack
     expect(Object.keys(v).sort()).toEqual(["game", "price", "status"]);
-    expect(v.game).toEqual({ name: "Diwali Tambola", startMs: (1692803367 + (START - 1) * 3) * 1000 }); expect(Object.keys(v.game).sort()).toEqual(["name", "startMs"]);
+    expect(v.game).toEqual({ name: "Diwali Tambola", participants: 500, startMs: (1692803367 + (START - 1) * 3) * 1000 }); expect(Object.keys(v.game).sort()).toEqual(["name", "participants", "startMs"]); // the pack is shown so the payer sees what is being paid for; the game ID stays private to a link holder
     expect(v.price).toEqual({ base: p.base, gst: p.tax, total: p.total, currency: "INR" }); expect(v.status).toBe("open");
     const text = JSON.stringify(v); for (const secret of ["PL-1", "boss", "acme", "cap", "300", t.master, "org"]) expect([secret, text.includes(secret)]).toEqual([secret, false]);
     expect((await j(await call("GET", `/api/paylink/${tok}?currency=USD`))).price).toEqual({ base: 67, gst: 0, total: 67, currency: "USD" });

@@ -35,7 +35,8 @@
       ? `<div class="zrow"><span><b>Total</b></span><em><b>${TB.money(p.total, "INR")}</b></em></div>`
       : `<div class="zrow"><span><b>Total</b></span><em><b>${TB.money(p.total, cur)}</b></em></div><p class="zsmall">No tax added.</p>`;
     return `${head}
-      <div class="zcard"><h2>${esc(i.game && i.game.name ? i.game.name : "Your game")}</h2>
+      <div class="zcard"><h2>Game details</h2>
+        <div class="pgame"><div class="zrow"><span>Game</span><em><b>${esc(i.game && i.game.name ? i.game.name : "Your game")}</b></em></div>${i.game && i.game.id ? `<div class="zrow"><span><b>GAME ID</b></span><em><b class="mono">${esc(i.game.id)}</b></em></div>` : ""}${i.game && i.game.participants ? `<div class="zrow"><span>Players</span><em>Up to ${esc(String(i.game.participants))}</em></div>` : ""}</div>
         ${i.game && i.game.startMs ? `<div class="zrow"><span>Date</span><em>${esc(when(i.game.startMs))}</em></div>` : ""}${sum}
         <p class="zsmall">You are paying for this one game only. Players never pay.</p></div>
       <div class="zcard zform"><h2>Who is paying</h2>

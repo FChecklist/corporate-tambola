@@ -56,5 +56,5 @@ export async function lookupPayLink(db: D1, token: string, now: number): Promise
 export function payLinkPublic(v: PayLinkView, name: string, startMs: number, currency: "INR" | "USD" = "INR") {
   const pack = packFor(v.e.cap);
   const pr = pack ? price(pack, currency) : null;
-  return { game: { name, startMs }, price: pr ? { base: pr.base, gst: pr.tax, total: pr.total, currency } : null, status: v.status };
+  return { game: { name, startMs, participants: pack ?? undefined }, price: pr ? { base: pr.base, gst: pr.tax, total: pr.total, currency } : null, status: v.status };
 }

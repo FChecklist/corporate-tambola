@@ -108,3 +108,5 @@ a.zbtn#addcal{margin-left:6px}
 .pb-own{font:500 13px/1.45 var(--sans,inherit);margin-top:10px}.pb-own b{font:800 16px var(--sans,inherit);letter-spacing:.04em}
 .pb-pay{font:600 12px/1.4 var(--sans,inherit);margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,.45)}
 .prcpt{margin:10px 0;padding:12px 14px;border-radius:12px;background:#e8f8ee;border:2px solid #1f9d55;color:#0b3d22}.prcpt p{margin:6px 0;font-size:14px;line-height:1.5}.prcpt .mono{word-break:break-all}
+.pb-own span{font-size:12px;font-weight:600;opacity:.95}
+.pgame{margin:10px 0;padding:12px 14px;border-radius:12px;background:#fff7e0;border:2px solid #f59f00}.pgame b.mono{font-size:15px;word-break:break-all}
