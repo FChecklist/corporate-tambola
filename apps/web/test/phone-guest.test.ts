@@ -230,7 +230,7 @@ describe("the pay link page (no sign-in)", () => {
     const txt = await p.waitFor((x) => /Diwali Night/.test(x));
     expect(txt).toMatch(/₹/); expect(txt).not.toMatch(/plus GST/); expect(txt).toMatch(/Payment to IT Services by Rajat Agarwal/); expect(txt).toMatch(/Total/); expect(txt).not.toMatch(/Please sign in/i); expect(!!p.$("#nm")).toBe(true); expect(!!p.$("#em")).toBe(true); expect(!!p.$("#ph")).toBe(true); // the Details block asks for mobile, company name and GST / Tax number (all optional)
     expect(p.win.location.search).toBe(""); // the secret left the address bar
-    p.click("#paygo"); await p.waitFor((x) => /Please enter your name/.test(x)); expect(calls.filter((c) => c.m === "POST")).toEqual([]); // nothing is sent until name and e-mail are good
+    p.click("#paygo"); await p.waitFor((x) => /Please enter your name/.test(x)); expect(calls.filter((c) => c.m === "POST" && !c.u.endsWith("/api/proforma"))).toEqual([]); // nothing is sent until name and e-mail are good
     (p.$("#nm") as any).value = "Neha Shah"; (p.$("#em") as any).value = "neha@acme.com"; p.click("#paygo");
     await p.waitFor((x) => /Payment received/.test(x), 20_000);
     const post = calls.find((c) => c.m === "POST" && /\/checkout$/.test(c.u))!; expect(post.u).toBe(`/api/paylink/${t}/checkout`); expect(post.b).toMatchObject({ name: "Neha Shah", email: "neha@acme.com" });

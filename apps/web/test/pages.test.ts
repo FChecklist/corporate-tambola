@@ -475,7 +475,7 @@ describe("payment page", () => {
     const p = await payPage(o, "UI-PAY1");
     const t = await p.waitFor((x) => /Payment is for Game ID/.test(x));
     expect(t).toMatch(/Online payment opens soon/); expect(t).toMatch(/Up to 250/); expect(t).not.toMatch(/plus GST/); 
-    expect((p.$("#paygo") as any).disabled).toBe(true);
+    expect((p.$("#paygo") as any).disabled).toBe(true); expect(p.$("#pfpay")).toBeTruthy(); // the proforma invoice with its Pay now button sits above the details
   });
   test("UC-9 / UC-55 test-payment mode end to end in the page: validation first, then paid, published, and told when it begins", async () => {
     const o = await organizer({ TEST_MODE: "1" }); await make(o, "UI-PAY2", { cap: 100 }); await publish(o, "UI-PAY2");
@@ -488,6 +488,7 @@ describe("payment page", () => {
     p.click("#paygo");
     const t = await p.waitFor((x) => /Payment received/i.test(x));
     expect(t).toMatch(/will begin on time/); expect(t).toMatch(/Open my engagement/);
+    expect(p.$("#invbody")).toBeTruthy(); expect((p.$("#invpdf") as any).getAttribute("href")).toMatch(/\/api\/invoice\/inv_[0-9a-f]{32}\.pdf$/); expect(p.$("#invwa")).toBeTruthy(); expect(p.$("#invsend")).toBeTruthy(); // the invoice itself, PDF, WhatsApp and e-mail on the done screen
     expect((o.world.raw.prepare("SELECT pack FROM engagement WHERE id='UI-PAY2'").get() as any).pack).toBe(100);
   });
   test("UC-12 / UC-55 paying while held: the page says when it will begin", async () => {

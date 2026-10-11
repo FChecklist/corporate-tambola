@@ -187,3 +187,24 @@ describe("Option 1: the Razorpay window runs on the registered website", () => {
     expect((await j(await call("POST", "/api/checkout", body))).hop).toBeUndefined();
   });
 });
+
+describe("proforma invoice (same template, NOT PAID, before paying)", () => {
+  const pf = (body: Record<string, unknown>, headers?: string) => call("POST", "/api/proforma", body, headers);
+  test("the pay link and a signed-in organizer each get the proforma; it says NOT PAID, names the game and uses no invoice number or record", async () => {
+    const t = await team(); const l = await link(t.master); const tok = (l.body.url as string).split("t=")[1]!;
+    const r = await pf({ link: tok, name: "Finance Fiona", email: "fiona@acme.com" }); expect(r.status).toBe(200);
+    const b = await j(r); expect(b.ok).toBe(true); expect(b.number).toMatch(/^PF-/); expect(b.total).toBeGreaterThan(0);
+    for (const x of ["PROFORMA INVOICE (NOT PAID)", "NOT PAID", "Finance Fiona", "Terms and conditions", "Payment status"]) expect(b.html).toContain(x);
+    expect(b.html).not.toContain("Paid on (IST)");
+    const o = await pf({ eid: "PL-1", name: "Boss" }, t.master); expect(o.status).toBe(200); expect((await j(o)).html).toContain("PROFORMA INVOICE (NOT PAID)");
+    expect((raw.prepare("SELECT COUNT(*) AS c FROM invoice").get() as any).c).toBe(0);
+  });
+  test("a stranger, a bad link, no sign-in, or an already paid game get nothing", async () => {
+    const t = await team();
+    expect((await pf({ link: "0".repeat(48) })).status).toBe(404);
+    expect((await pf({ eid: "PL-1" })).status).toBe(404);
+    expect((await pf({ eid: "PL-1" }, "ctk_" + "a".repeat(48))).status).toBe(403);
+    raw.prepare("UPDATE engagement SET pack=100 WHERE id='PL-1'").run();
+    expect((await pf({ eid: "PL-1" }, t.master)).status).toBe(409);
+  });
+});

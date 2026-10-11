@@ -21,7 +21,7 @@
 
   function view() {
     if (!token || S.gone) return calm("This payment link is not working", "It may be incomplete or it may have been replaced. Please ask the person who sent it for a new link.");
-    if (S.done) return `${head}<div class="zcard" role="status" style="border:2px solid #2e7d4f"><h2>Payment received. Thank you.</h2>${TB.payReceipt ? TB.payReceipt(S.done) : ""}<p class="zsmall" style="margin:0">The game is paid for.${S.done.invoiceUrl ? ` <a href="${esc(S.done.invoiceUrl)}" target="_blank" rel="noopener">View the invoice ${esc(S.done.invoiceNumber || "")}</a>. We also e-mailed it to you.` : " We e-mail the invoice to the address you gave."} You can close this page.</p></div>`;
+    if (S.done) return `${head}<div class="zcard" role="status" style="border:2px solid #2e7d4f"><h2>Payment received. Thank you.</h2>${TB.payReceipt ? TB.payReceipt(S.done) : ""}<p class="zsmall" style="margin:0">The game is paid for. You can close this page.</p>${S.done.invoiceUrl ? `${TB.invoiceBox ? TB.invoiceBox(S.done, S.email) : ""}<p class="zsmall">We also e-mailed it to you and to the organizer.</p>` : `<p class="zsmall">We e-mail the invoice to the address you gave.</p>`}</div>`;
     if (!S.info) return `${head}<p class="zmsg">${S.err ? esc(S.err) : "Loading…"}</p>`;
     const i = S.info, st = i.status;
     if (st === "paid") return calm("This game is already paid for", "Nothing more is needed. You can close this page.");
@@ -40,6 +40,7 @@
         <div class="pgame"><div class="zrow"><span>Game</span><em><b>${esc(i.game && i.game.name ? i.game.name : "Your game")}</b></em></div>${i.game && i.game.id ? `<div class="zrow"><span><b>GAME ID</b></span><em><b class="mono">${esc(i.game.id)}</b></em></div>` : ""}${i.game && i.game.participants ? `<div class="zrow"><span>Players</span><em>Up to ${esc(String(i.game.participants))}</em></div>` : ""}</div>
         ${i.game && i.game.startMs ? `<div class="zrow"><span>Date</span><em>${esc(when(i.game.startMs))}</em></div>` : ""}${sum}
         <p class="zsmall">You are paying for this one game only. Players never pay.</p></div>
+      ${TB.proformaBox ? TB.proformaBox() : ""}
       <div class="zcard zform"><h2>Details</h2>
         <label for="nm">Name</label><input id="nm" autocomplete="name" value="${esc(S.name)}" placeholder="Full name">
         <label for="em">E-mail (the invoice comes here)</label><input id="em" type="email" autocomplete="email" value="${esc(S.email)}" placeholder="Email">
@@ -53,7 +54,7 @@
         <p class="zsmall">Secure payment by Razorpay. Payment to <a href="https://itservices-rajat-agarwal.pages.dev/" rel="noopener" target="_blank">IT Services by Rajat Agarwal</a>. An invoice is e-mailed to you. See the <a href="/legal.html#privacy">privacy policy</a>.</p></div>`;
   }
   function keep() { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { name: g("nm"), email: g("em"), phone: g("ph"), pcode: g("pcode"), org: g("org"), tax: g("tax") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; }
-  function draw() { $app.innerHTML = view(); bind(); TB.payer.mark($app); }
+  function draw() { $app.innerHTML = view(); bind(); TB.payer.mark($app); if (S.done && TB.invoiceWire) TB.invoiceWire(S.done); else if (TB.proformaWire && S.info && S.info.price) TB.proformaWire(() => call("POST", "/api/proforma", { link: token, currency: (S.info.price.currency || "INR"), name: S.name || "", email: S.email || "", phone: S.phone || "", org: S.org || "", taxId: S.tax || "", country: S.country })); }
 
   // Razorpay may say the payment is only created for a while: ask this link every 4 seconds, for up to 5 minutes, until the server says paid. Never mark it paid early.
   async function waitForConfirm() {

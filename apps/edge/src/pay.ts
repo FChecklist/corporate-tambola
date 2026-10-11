@@ -397,6 +397,36 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     const r = await db.prepare("SELECT data FROM credit_note WHERE token=?").bind(cm[1]).first<{ data: string }>();
     return r ? new Response(renderInvoiceHtml(JSON.parse(r.data)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex" } }) : json({ error: "Not found" }, 404);
   }
+  // The PROFORMA invoice (same template as the invoice, "NOT PAID"): shown before payment, with a Pay now button on the page. Nothing is stored and no invoice number is used up.
+  if (req.method === "POST" && p === "/api/proforma") {
+    const b = await body(req); if (!b) return json({ error: "Bad request." }, 400);
+    const presented = (req.headers.get("x-organizer") ?? "").trim();
+    let eid: string | null = null;
+    if (typeof b.link === "string") { const pv = await lookupPayLink(db, b.link, now); if (!pv || pv.status !== "open") return json({ error: "Not found" }, 404); eid = pv.e.id; }
+    else if (presented && typeof b.eid === "string") {
+      const k = await db.prepare("SELECT org, kind, eid FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(await sha("key|" + presented), now).first<{ org: string; kind: string; eid: string | null }>();
+      const eg = k && (k.kind in PAYER) ? await db.prepare("SELECT org FROM engagement WHERE id=?").bind(b.eid).first<{ org: string | null }>() : null;
+      if (!k || !eg || eg.org !== k.org || (k.kind === "cohost" && k.eid && k.eid !== b.eid)) return json({ error: "Please sign in again." }, 403);
+      eid = b.eid;
+    }
+    if (!eid) return json({ error: "Not found" }, 404);
+    const g = await db.prepare("SELECT cap, pack, config, start_round FROM engagement WHERE id=?").bind(eid).first<{ cap: number; pack: number | null; config: string | null; start_round: number }>();
+    if (!g || g.pack !== 0) return json({ error: "This game is not waiting for payment." }, 409);
+    const pack = PACKS.find((x) => x[0] >= g.cap)?.[0]; if (!pack) return json({ error: "That many participants needs a custom arrangement. Please write to us." }, 400);
+    const cur = b.currency === "USD" ? "USD" : "INR", co = company(env), fy = financialYear(new Date(now));
+    const credited = Math.round((await creditAppliedFor(db, eid)) * 100) / 100, total = Math.max(0, Math.round((price(pack, cur).total - credited) * 100) / 100);
+    const tax = splitGst(total, cur, co.stateCode, typeof b.taxId === "string" && b.taxId.trim() ? b.taxId.trim().toUpperCase() : undefined);
+    let gameName: string | undefined; try { const c = g.config ? JSON.parse(g.config) : {}; if (typeof c.name === "string" && c.name) gameName = c.name.slice(0, 120); } catch { /* the id is the name */ }
+    const s = (x: unknown, n: number) => (typeof x === "string" ? x.trim().slice(0, n) : "");
+    const data: InvoiceData = { kind: "proforma", number: `PF-${fy}-${eid}`.slice(0, 60), issuedAt: now, brand, company: co, draft: false, currency: cur,
+      buyer: { name: s(b.org, 120) || s(b.name, 120) || "(your name)", gstin: s(b.taxId, 20) || undefined, email: s(b.email, 120) || undefined, phone: s(b.phone, 20) || undefined, country: s(b.country, 2) || undefined },
+      lines: [{ description: `${brand.name}: up to ${pack} participants (one engagement)${credited > 0 ? ", balance after credit" : ""}`, quantity: 1, amount: tax.taxable }], tax, orderRef: eid,
+      game: { id: eid, name: gameName, startMs: (1692803367 + (g.start_round - 1) * 3) * 1000 }, organizer: { name: s(b.name, 120) || undefined, org: s(b.org, 120) || undefined, email: s(b.email, 120) || undefined },
+      note: "This is a proforma invoice. It is NOT PAID and is not a tax invoice. Pay now to receive your invoice, and the same invoice is e-mailed to you and to the organizer." };
+    const full = renderInvoiceHtml(data), style = full.match(/<style>[\s\S]*?<\/style>/)?.[0] ?? "";
+    const html = style + full.replace(/^[\s\S]*?<\/head>\s*(<body[^>]*>)?/i, "").replace(/<\/body>\s*<\/html>\s*$/i, "");
+    return json({ ok: true, number: data.number, total, currency: cur, html });
+  }
   // The invoice shown on the payment-done screen: the invoice markup alone (drawn inside a shadow root by the page), a real PDF to download, and "e-mail it to me".
   const ix = p.match(/^\/api\/invoice\/(inv_[0-9a-f]{32})(\.fragment|\.pdf|\/email)$/);
   if (ix) {

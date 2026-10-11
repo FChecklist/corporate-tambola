@@ -77,7 +77,7 @@ export interface InvoiceData {
   buyer: { name: string; gstin?: string; email?: string; phone?: string; country?: string };
   currency: "INR" | "USD"; lines: { description: string; quantity: number; amount: number }[]; tax: TaxSplit; paymentRef?: string; orderRef?: string;
   /** "credit_note" = a GST credit note for a refund (same layout, own number series, names the invoice it reduces). Default: a tax invoice. */
-  kind?: "invoice" | "credit_note"; originalNumber?: string;
+  kind?: "invoice" | "credit_note" | "proforma"; originalNumber?: string;
   /** A plain sentence printed under the totals (e.g. "Paid from credit of invoice ..."). */
   note?: string;
   /** The moment the payment was captured (the invoice itself is issued at issuedAt). Printed in IST. */
@@ -130,7 +130,7 @@ export const INVOICE_TERMS: string[] = [
   "Disputes are handled first by e-mail to the seller at the address on page 1. Indian law applies and the courts of the seller's place of business have jurisdiction, unless the payer's own consumer law says otherwise.",
   "This is a computer generated invoice. It needs no signature.",
 ];
-const titleOf = (i: InvoiceData) => (i.kind === "credit_note" ? "CREDIT NOTE" : i.tax.mode === "none" ? "INVOICE" : "TAX INVOICE");
+const titleOf = (i: InvoiceData) => (i.kind === "credit_note" ? "CREDIT NOTE" : i.kind === "proforma" ? "PROFORMA INVOICE (NOT PAID)" : i.tax.mode === "none" ? "INVOICE" : "TAX INVOICE");
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 const money = (n: number, cur: string) => (cur === "INR" ? "₹" : "US$") + n.toLocaleString(cur === "INR" ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -141,7 +141,7 @@ export function renderInvoiceText(i: InvoiceData): string {
 ${i.brand.name}
 ${t.mode === "none" ? `Seller: ${c.legalName}${c.email ? `\n${c.email}` : ""}${c.phone ? `  ${c.phone}` : ""}` : `A product of ${c.legalName}\n${c.addressLines.join(", ")}${c.gstin ? `\nGSTIN: ${c.gstin}` : ""}${c.cin ? `  CIN: ${c.cin}` : ""}${c.pan ? `  PAN: ${c.pan}` : ""}`}
 
-${i.kind === "credit_note" ? "Credit note number" : "Invoice number"}: ${i.number}${i.originalNumber ? `
+${i.kind === "credit_note" ? "Credit note number" : i.kind === "proforma" ? "Proforma number" : "Invoice number"}: ${i.number}${i.originalNumber ? `
 Against invoice: ${i.originalNumber}` : ""}
 Issued: ${istStamp(i.issuedAt)}${i.paidAtMs ? `
 Paid on: ${istStamp(i.paidAtMs)}` : ""}
@@ -164,9 +164,9 @@ function renderDetailsHtml(i: InvoiceData): string {
   const rows = (kv: [string, unknown][]) => `<table class="kv">${kv.filter(([, v]) => v !== undefined && v !== null && v !== "").map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table>`;
   const pi = i.pay, paid = i.paidAtMs;
   const out: string[] = [];
-  out.push(`<div class="meta"><div class="box"><b>Paid for</b>${rows([["Game", i.game ? (i.game.name ? `${i.game.name} (${i.game.id})` : i.game.id) : undefined], ["Game starts", i.game?.startMs ? istStamp(i.game.startMs) : undefined], ["Service", i.lines[0]?.description]])}</div>
-<div class="box"><b>Paid on / via</b>${rows([["Paid on (IST)", paid ? istStamp(paid) : undefined], ["Paid via", pi?.methodLabel ? `Razorpay: ${pi.methodLabel}` : i.paymentRef ? "Razorpay" : undefined], ["Payment details", pi?.detail], ["Amount paid", money(i.tax.total, i.currency)]])}</div></div>`);
-  out.push(`<div class="meta"><div class="box"><b>Payer (paid by)</b>${rows([["Name", i.buyer.name], ["E-mail", i.buyer.email], ["Mobile", i.buyer.phone], ["Country", i.buyer.country], ["Tax ID", i.buyer.gstin]])}</div>
+  out.push(`<div class="meta"><div class="box"><b>${i.kind === "proforma" ? "To be paid for" : "Paid for"}</b>${rows([["Game", i.game ? (i.game.name ? `${i.game.name} (${i.game.id})` : i.game.id) : undefined], ["Game starts", i.game?.startMs ? istStamp(i.game.startMs) : undefined], ["Service", i.lines[0]?.description]])}</div>
+<div class="box"><b>${i.kind === "proforma" ? "Payment status" : "Paid on / via"}</b>${i.kind === "proforma" ? rows([["Status", "NOT PAID"], ["Amount to pay", money(i.tax.total, i.currency)], ["Pay with", "Razorpay: UPI, cards, net banking"]]) : rows([["Paid on (IST)", paid ? istStamp(paid) : undefined], ["Paid via", pi?.methodLabel ? `Razorpay: ${pi.methodLabel}` : i.paymentRef ? "Razorpay" : undefined], ["Payment details", pi?.detail], ["Amount paid", money(i.tax.total, i.currency)]])}</div></div>`);
+  out.push(`<div class="meta"><div class="box"><b>${i.kind === "proforma" ? "Payer (to pay)" : "Payer (paid by)"}</b>${rows([["Name", i.buyer.name], ["E-mail", i.buyer.email], ["Mobile", i.buyer.phone], ["Country", i.buyer.country], ["Tax ID", i.buyer.gstin]])}</div>
 <div class="box"><b>Organizer</b>${rows([["Name", i.organizer?.name], ["Organization", i.organizer?.org], ["E-mail", i.organizer?.email], ["Mobile", i.organizer?.phone]])}</div></div>`);
   if (pi || i.paymentRef || i.orderRef) out.push(`<div class="box" style="margin-top:14px"><b>Payment record from Razorpay</b>${rows([["Razorpay payment ID", pi?.paymentId ?? i.paymentRef], ["Razorpay order ID", pi?.orderId], ["Our reference", i.orderRef], ["Status", pi?.status], ["Method", pi?.methodLabel], ["Details", pi?.detail], ["Card network", pi?.network], ["International card", pi?.international ? "Yes" : undefined], ["Currency / amount", pi?.currency && pi.amountMinor !== undefined ? `${pi.currency} ${(pi.amountMinor / 100).toFixed(2)}` : undefined], ["Razorpay time (IST)", pi?.createdAtMs ? istStamp(pi.createdAtMs) : undefined], ["Bank reference (RRN)", pi?.rrn], ["UPI transaction ID", pi?.upiTxnId], ["Authorisation code", pi?.authCode], ["E-mail given to Razorpay", pi?.email], ["Mobile given to Razorpay", pi?.contact]])}</div>`);
   return out.join("");

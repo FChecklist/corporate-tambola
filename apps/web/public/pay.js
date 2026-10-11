@@ -24,7 +24,7 @@
       const d = S.done;
       return `${head}<div class="zcard" style="border:2px solid #2e7d4f"><h2>Payment received. Your engagement will begin on time.</h2>${TB.payReceipt ? TB.payReceipt(d, d.eid || eid) : ""}
         <p style="margin:0 0 10px">${d.paidFromCredit ? "Paid from your credit. " : ""}Thank you. Your engagement for up to <b>${nf(d.pack)}</b> participants is confirmed.${d.restartedAtMs ? ` It begins at <b>${esc(new Date(d.restartedAtMs).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }))}</b>, for everyone already waiting.` : " Share the link with your participants from your console if you have not already."}</p>
-        ${d.invoiceUrl ? `<p class="zsmall"><a href="${esc(d.invoiceUrl)}" target="_blank" rel="noopener">View your invoice ${esc(d.invoiceNumber || "")}</a>. We also emailed it to you.</p>` : ""}
+        ${d.invoiceUrl ? `${TB.invoiceBox ? TB.invoiceBox(d, S.email) : ""}<p class="zsmall">We also emailed it to you and to the organizer.</p>` : ""}
         <a class="zbtn" href="/zc.html?e=${encodeURIComponent(d.eid || eid)}" style="text-decoration:none;display:inline-block">Open my engagement</a></div>`;
     }
     if (!S.info) return `${head}<p class="zmsg">${S.err ? esc(S.err) : "Loading…"}</p>`;
@@ -49,6 +49,7 @@
         ${sum}
         <p class="zsmall">Every participant gets their own ticket on their phone. Participants never pay: you give the rewards. We do not give refunds. If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days. Unused credit lapses at the end of day 365. The credit belongs to your organizer account.</p>${S.info.startMs ? `<p class="zsmall"><b>Payment pending.</b> The game does not begin until it is paid for. Starts ${esc(new Date(S.info.startMs).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))}. You can pay at any time until the guest data is erased${S.info.erasureMs ? ` (${esc(new Date(S.info.erasureMs).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))})` : ""}.${S.info.locked ? " It is waiting for your payment now: pay and it starts 2 minutes after your payment is confirmed." : " If you pay after the start time, it starts 2 minutes after your payment is confirmed."}</p>` : ""}</div>
       ${avail ? `<div class="zcard" style="border:2px solid #2e7d4f"><h2>Use your credit</h2><p class="zsmall" style="margin-top:0">You have credit of <b>${TB.money(avail, "INR")}</b>${until ? ` (valid until ${esc(until)})` : ""}. Use it for this game.</p>${S.err && S.creditErr ? `<div class="zbanner bad">${esc(S.err)}</div>` : ""}<button class="zbtn" id="usecredit" ${S.busy ? "disabled" : ""}>Use my credit</button></div>` : ""}
+      ${TB.proformaBox ? TB.proformaBox() : ""}
       <div class="zcard zform"><h2>Details</h2>
         <label for="nm">Name</label><input id="nm" autocomplete="name" value="${esc(S.name || "")}" placeholder="Full name">
         <label for="em">Email (your invoice comes here)</label><input id="em" type="email" autocomplete="email" value="${esc(S.email)}" placeholder="Email">
@@ -72,7 +73,7 @@
     }
     throw new Error("We are still waiting for Razorpay to confirm your payment. Nothing is lost: your game starts as soon as it is confirmed. You can close this page and open your game to see the status.");
   }
-  function draw() { $app.innerHTML = view(); bind(); TB.payer.mark($app); }
+  function draw() { $app.innerHTML = view(); bind(); TB.payer.mark($app); if (S.done && TB.invoiceWire) TB.invoiceWire(S.done); else if (TB.proformaWire && S.info) TB.proformaWire(() => call("POST", "/api/proforma", { eid, currency: S.cur, name: S.name || "", email: S.email || "", phone: S.phone || "", org: S.org || "", taxId: S.tax || "", country: S.country })); }
   function keep() { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { name: g("nm"), org: g("org"), tax: g("tax"), email: g("em"), phone: g("ph"), pcode: g("pcode") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; }
 
   function bind() {

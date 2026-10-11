@@ -8,7 +8,7 @@
       const d = S.done;
       return `${head}<div class="zcard" style="border:2px solid #2e7d4f"><h2>Payment received. The test worked.</h2>${TB.payReceipt ? TB.payReceipt(d, "Payment test (no game)") : ""}
         <p style="margin:0 0 10px">You paid <b>${esc(TB.money(d.total, d.currency))}</b>. Nothing was bought and nothing else will happen.</p>
-        <p class="zsmall"><a href="${esc(d.invoiceUrl)}" target="_blank" rel="noopener">View your invoice ${esc(d.invoiceNumber || "")}</a> (print it to keep it). We also e-mailed it to you.</p>
+        ${TB.invoiceBox ? TB.invoiceBox(d, S.email) : ""}<p class="zsmall">We also e-mailed it to you.</p>
         <button class="zbtn" id="again">Test again</button></div>`;
     }
     const cur = S.country === "IN" ? "INR" : "USD", amt = TB.money(1, cur);
@@ -27,7 +27,7 @@
         <p class="zsmall">Secure payment by Razorpay to IT Services by Rajat Agarwal. Your name, e-mail and payment details are kept for invoice purposes. No refunds are given for test payments.</p></div>`;
   }
   const keep = () => { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { name: g("nm"), email: g("em"), phone: g("ph"), pcode: g("pcode"), org: g("org"), tax: g("tax") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; };
-  const draw = () => { $app.innerHTML = view(); bind(); TB.payer.mark($app); };
+  const draw = () => { $app.innerHTML = view(); bind(); TB.payer.mark($app); if (S.done && TB.invoiceWire) TB.invoiceWire(S.done); };
   async function waitForConfirm(paymentId) {
     const t0 = Date.now();
     while (Date.now() - t0 < 300000) {
