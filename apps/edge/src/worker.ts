@@ -18,6 +18,7 @@ import { TERMS_VERSION } from "./brand";
 import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, hostLinkMail, newUseAlertMail, signInMail } from "./mails";
 import { cancelGame, cancelPreview, reopenGame, teamEmails } from "./cancel";
 import { LEGAL_SCHEMA } from "./legal";
+import { LEDGER_SCHEMA } from "./ledger";
 import { CREDIT_SCHEMA, activeCreditSummary, creditAppliedFor, creditRoute } from "./credit";
 import { cloneGame } from "./clone";
 import { acceptOver, acceptWon, endBoundMs, eraseEverything, erasePersonal, erasureOf, fullDeleteAt, lifecycleTick, MAX_AHEAD_MS, personalDeleteAt, SETTINGS_KEEP_MS, recordWinners, reportApi, reportLink } from "./lifecycle";
@@ -156,6 +157,8 @@ export const SCHEMA: string[] = [
   // credit instead of refunds, games that did not start, create a game like this one (0018_credit_retention_clone.sql)
   ...CREDIT_SCHEMA,
   ...LEGAL_SCHEMA,
+  // one clear payment ledger for every product and website, plus the webhook log (0020_payment_ledger.sql)
+  ...LEDGER_SCHEMA,
 ];
 
 const PATTERNS = new Set<string>([...HOUSE_ORDER.filter((k) => k !== "unlucky"), "lucky"]); // houses a phone may claim (Unlucky is never claimed: it is decided by comparing tickets)

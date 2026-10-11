@@ -15,6 +15,7 @@ import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { GRACE_ROUNDS } from "../../../packages/beacon/src/config";
 import type { D1, Env } from "./worker";
 import { keepLegalParty } from "./legal";
+import { ledgerFields, logWebhook, siteOf, type HookRecord } from "./ledger";
 import { partnerCode, phoneHashFor, recordCommission, refCode } from "./partners";
 import { getMode, mailGate, testFlag, type ModeEnv } from "./mode";
 import { lookupPayLink, packFor, payLinkPublic } from "./paylink";
@@ -305,7 +306,8 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     }
     const ref = refCode(b.ref); // from the buyer's own browser (valid for 30 days after the link was opened); checked against real partners when the payment is fulfilled
     const bph = partnerCode(b.phone); // optional, only used to spot a partner buying through their own link
-    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,ref,buyer_phone_hash,is_test,eid) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), pack, cur, pr.total, pr.tax, order?.id ?? null, "created", now, JSON.stringify(meta), ref, bph ? await phoneHashFor(env, bph) : null, siteTest ? 1 : 0, boundEid).run();
+    const lf = ledgerFields(siteOf(meta.origin), "game_pack", `pack_${pack}`, boundOrg ?? null);
+    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,ref,buyer_phone_hash,is_test,eid,site,product,product_type,product_ref,payer_user) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), pack, cur, pr.total, pr.tax, order?.id ?? null, "created", now, JSON.stringify(meta), ref, bph ? await phoneHashFor(env, bph) : null, siteTest ? 1 : 0, boundEid, lf.site, lf.product, lf.productType, lf.productRef, lf.payerUser).run();
     if (!rzp) { const f = await fulfil(env, id, now, spend); return "result" in f ? json({ mode: "test", paymentId: id, result: f.result, ...(siteTest ? { testPayment: true, label: "TEST payment: nothing was charged." } : {}) }) : json({ error: f.error }, f.status); }
     return json({ mode: "razorpay", paymentId: id, ...hopOf(env), razorpay: { keyId: rzp.keyId, orderId: order.id, amount: toMinor(pr.total), currency: cur, name: brand.name, description: "(close group housie software) | owned and made by IT Services by Rajat Agarwal", prefill: { email: b.email.trim(), name: payerName.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name, participants: String(pack) }, theme: { color: brand.theme }, ...(cur === "INR" ? { config: UPI_FIRST } : {}) } });
   }
@@ -334,7 +336,8 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     const taxId = typeof b.taxId === "string" ? b.taxId.trim().toUpperCase().slice(0, 20) : "";
     if (cty === "IN" && taxId && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(taxId)) return json({ error: "That GSTIN does not look right. It has 15 characters, like 27ABCDE1234F1Z5." }, 400);
     const meta = { paytest: true, name: nm.slice(0, 120), ...(typeof b.org === "string" && b.org.trim() ? { org: b.org.trim().slice(0, 120) } : {}), ...(taxId ? { taxId } : {}), ...(contact ? { phone: contact } : {}), country: cty, origin: env.PUBLIC_ORIGIN ?? url.origin };
-    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?,1)").bind(id, null, b.email.trim().toLowerCase(), 0, cur, 1, 0, order.id, "created", now, JSON.stringify(meta)).run();
+    const lf = ledgerFields(siteOf(meta.origin), "payment_test", "payment_test", null);
+    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,is_test,site,product,product_type,product_ref,payer_user) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), 0, cur, 1, 0, order.id, "created", now, JSON.stringify(meta), lf.site, lf.product, lf.productType, lf.productRef, lf.payerUser).run();
     return json({ mode: "razorpay", paymentId: id, ...hopOf(env), razorpay: { keyId: rzp.keyId, orderId: order.id, amount: 100, currency: cur, name: brand.name, description: "(close group housie software) | owned and made by IT Services by Rajat Agarwal", prefill: { email: b.email.trim(), name: nm.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name }, theme: { color: brand.theme }, ...(cur === "INR" ? { config: UPI_FIRST } : {}) } });
   }
 
@@ -362,22 +365,27 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
 
   if (req.method === "POST" && p === "/api/payments/webhook") {
     const raw = await req.text();
+    const eventId = req.headers.get("x-razorpay-event-id");
+    const hook = async (res: Response, outcome: string, f: Partial<HookRecord> = {}) => { await logWebhook(db, { now, eventId, signatureOk: true, outcome, status: res.status, ...f }); return res; }; // every webhook call leaves a row in webhook_log
     if (!rzp?.webhookSecret) return json({ error: "Webhook secret is not set." }, 503);
-    if (raw.length > 100_000 || !verifyWebhookSignature(rzp.webhookSecret, raw, req.headers.get("x-razorpay-signature") ?? "")) return json({ error: "Bad signature." }, 400);
-    let ev: any; try { ev = JSON.parse(raw); } catch { return json({ error: "Bad body." }, 400); }
+    if (raw.length > 100_000 || !verifyWebhookSignature(rzp.webhookSecret, raw, req.headers.get("x-razorpay-signature") ?? "")) return hook(json({ error: "Bad signature." }, 400), "bad signature", { signatureOk: false });
+    let ev: any; try { ev = JSON.parse(raw); } catch { return hook(json({ error: "Bad body." }, 400), "bad body"); }
     const ent = ev?.payload?.payment?.entity, ord = ev?.payload?.order?.entity;
     const orderId = ent?.order_id ?? ord?.id;
+    const seen: Partial<HookRecord> = { event: typeof ev?.event === "string" ? ev.event.slice(0, 60) : null, orderId: orderId ?? null, rzpPaymentId: ent?.id ?? null, amountMinor: Number.isFinite(Number(ent?.amount)) ? Number(ent.amount) : null };
     if (ev.event === "payment.authorized" && orderId) { // the gateway has the money but has not captured it yet: the buyer sees "Confirming your payment..." and nothing is marked Paid
       await db.prepare("UPDATE payment SET confirming_ms=? WHERE rzp_order_id=? AND status<>'paid'").bind(now, orderId).run();
-      return json({ ok: true, confirming: true });
+      const pr = await db.prepare("SELECT id FROM payment WHERE rzp_order_id=?").bind(orderId).first<{ id: string }>();
+      return hook(json({ ok: true, confirming: true }), "confirming", { ...seen, paymentId: pr?.id });
     }
-    if (!["payment.captured", "order.paid"].includes(ev.event) || !orderId) return json({ ok: true, ignored: ev.event });
+    if (!["payment.captured", "order.paid"].includes(ev.event) || !orderId) return hook(json({ ok: true, ignored: ev.event }), "ignored: not a payment event", seen);
     const row = await db.prepare("SELECT * FROM payment WHERE rzp_order_id=?").bind(orderId).first<any>();
-    if (!row) return json({ ok: true, ignored: "unknown order" });
-    if (Number(ent?.amount ?? toMinor(row.amount)) !== toMinor(row.amount)) return json({ ok: true, ignored: "amount mismatch" }); // never fulfil an order that was paid a different amount
+    if (!row) return hook(json({ ok: true, ignored: "unknown order" }), "ignored: unknown order", seen);
+    if (Number(ent?.amount ?? toMinor(row.amount)) !== toMinor(row.amount)) return hook(json({ ok: true, ignored: "amount mismatch" }), "ignored: amount mismatch", { ...seen, paymentId: row.id }); // never fulfil an order that was paid a different amount
     if (ent?.id) await db.prepare("UPDATE payment SET rzp_payment_id=COALESCE(rzp_payment_id,?) WHERE id=?").bind(ent.id, row.id).run();
+    const wasPaid = row.status === "paid";
     const f = await fulfil(env, row.id, now, spend);
-    return "result" in f ? json({ ok: true, fulfilled: row.id }) : json({ error: f.error }, f.status);
+    return "result" in f ? hook(json({ ok: true, fulfilled: row.id }), wasPaid ? "already paid (no change)" : "marked paid by webhook", { ...seen, paymentId: row.id }) : hook(json({ error: f.error }, f.status), `failed: ${f.error}`, { ...seen, paymentId: row.id });
   }
 
   const cm = p.match(/^\/api\/credit-note\/(cn_[0-9a-f]{32})$/); // the GST credit note issued with a refund

@@ -159,6 +159,16 @@ describe("webhook (the buyer closed the tab)", () => {
     expect(await (await hook(captured(100))).json()).toMatchObject({ ignored: "amount mismatch" });
     expect(raw.query("SELECT COUNT(*) c FROM entitlement").get()).toEqual({ c: 0 });
   });
+  test("every webhook call is logged: what it said, which payment it matched, what was done (and bad signatures too)", async () => {
+    await hook(captured()); await hook(captured()); await hook(captured(), "wrong"); await hook({ event: "payment.failed", payload: {} });
+    const rows = raw.query("SELECT event, signature_ok, outcome, http_status, payment_id, rzp_order_id, rzp_payment_id, amount_minor FROM webhook_log ORDER BY id").all() as any[];
+    expect(rows.map((r) => r.outcome)).toEqual(["marked paid by webhook", "already paid (no change)", "bad signature", "ignored: not a payment event"]);
+    expect(rows[0]).toMatchObject({ event: "payment.captured", signature_ok: 1, http_status: 200, payment_id: paymentId, rzp_order_id: orderId, rzp_payment_id: "pay_w1", amount_minor: 469900 });
+    expect(rows[2]).toMatchObject({ signature_ok: 0, http_status: 400, payment_id: null });
+    const led = raw.query("SELECT * FROM payment_ledger WHERE payment_id=?").get(paymentId) as any;
+    expect(led).toMatchObject({ product: "corporate_tambola", product_name: "Corporate Tambola", product_type: "game_pack", product_ref: "pack_500", status: "paid", webhooks_received: 2 });
+    expect(led.site).toBeTruthy(); expect(led.payer_email).toContain("@");
+  });
   test("the browser verify arriving after the webhook returns the same result without a second grant", async () => {
     await hook(captured());
     rz.payments.pay_w1 = { id: "pay_w1", order_id: orderId, status: "captured", amount: 469900 };
