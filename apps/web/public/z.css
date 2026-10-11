@@ -110,3 +110,14 @@ a.zbtn#addcal{margin-left:6px}
 .prcpt{margin:10px 0;padding:12px 14px;border-radius:12px;background:#e8f8ee;border:2px solid #1f9d55;color:#0b3d22}.prcpt p{margin:6px 0;font-size:14px;line-height:1.5}.prcpt .mono{word-break:break-all}
 .pb-own span{font-size:12px;font-weight:600;opacity:.95}
 .pgame{margin:10px 0;padding:12px 14px;border-radius:12px;background:#fff7e0;border:2px solid #f59f00}.pgame b.mono{font-size:15px;word-break:break-all}
+
+.pbrand{padding:20px 18px 18px}
+.pb-name{font-size:32px;text-shadow:0 2px 6px rgba(0,0,0,.25)}
+.pb-sub{font:600 13px var(--sans,inherit);opacity:.95;margin:4px 0 14px}
+.pb-pay{font:600 14px/1.5 var(--sans,inherit);margin:0;padding:14px 4px;border-top:1px solid rgba(255,255,255,.4);border-bottom:1px solid rgba(255,255,255,.4)}
+.pb-pay b{display:block;font:800 16px var(--sans,inherit);margin-bottom:4px}
+.pb-pay span{display:block;font-weight:500;max-width:640px;margin:0 auto}
+.pb-own{margin:0;padding-top:14px}
+.pb-own i{display:block;font:500 13px var(--sans,inherit)}
+.pb-own b{display:block;font:800 19px var(--sans,inherit);letter-spacing:.05em;margin:2px 0 8px}
+.pb-own em{display:inline-block;font:600 12px var(--sans,inherit);font-style:normal;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.2)}
