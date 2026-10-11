@@ -15,13 +15,13 @@
     if (!r.ok) throw Object.assign(new Error(j.error || "Something went wrong. Please try again."), { status: r.status, body: j });
     return j;
   };
-  const head = `<div class="zhead"><b>Corporate Tambola · Payment</b></div>`;
+  const head = `<div class="zhead"><b>Corporate Tambola · Payment</b></div>${TB.payBrand ? TB.payBrand() : ""}`;
   const when = (ms) => { try { return new Date(ms).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return ""; } };
   const calm = (title, text) => `${head}<div class="zcard" role="status"><h2>${esc(title)}</h2><p class="zsmall" style="margin:0">${text}</p></div>`;
 
   function view() {
     if (!token || S.gone) return calm("This payment link is not working", "It may be incomplete or it may have been replaced. Please ask the person who sent it for a new link.");
-    if (S.done) return calm("Payment received. Thank you.", `The game is paid for.${S.done.invoiceUrl ? ` <a href="${esc(S.done.invoiceUrl)}" target="_blank" rel="noopener">View the invoice ${esc(S.done.invoiceNumber || "")}</a>. We also e-mailed it to you.` : " We e-mail the invoice to the address you gave."} You can close this page.`);
+    if (S.done) return `${head}<div class="zcard" role="status" style="border:2px solid #2e7d4f"><h2>Payment received. Thank you.</h2>${TB.payReceipt ? TB.payReceipt(S.done) : ""}<p class="zsmall" style="margin:0">The game is paid for.${S.done.invoiceUrl ? ` <a href="${esc(S.done.invoiceUrl)}" target="_blank" rel="noopener">View the invoice ${esc(S.done.invoiceNumber || "")}</a>. We also e-mailed it to you.` : " We e-mail the invoice to the address you gave."} You can close this page.</p></div>`;
     if (!S.info) return `${head}<p class="zmsg">${S.err ? esc(S.err) : "Loading…"}</p>`;
     const i = S.info, st = i.status;
     if (st === "paid") return calm("This game is already paid for", "Nothing more is needed. You can close this page.");

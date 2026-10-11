@@ -2,11 +2,11 @@
 (function () {
   const TB = window.TB, esc = TB.esc, $app = document.getElementById("app");
   const S = { country: "IN", pcode: "91", err: "", busy: false, done: null, name: "", email: "", phone: "" };
-  const head = `<div class="zhead"><b>Corporate Tambola · Payment testing</b><a class="zsnd" href="/" style="text-decoration:none">Home</a></div>`;
+  const head = `<div class="zhead"><b>Corporate Tambola · Payment testing</b><a class="zsnd" href="/" style="text-decoration:none">Home</a></div>${TB.payBrand ? TB.payBrand() : ""}`;
   function view() {
     if (S.done) {
       const d = S.done;
-      return `${head}<div class="zcard" style="border:2px solid #2e7d4f"><h2>Payment received. The test worked.</h2>
+      return `${head}<div class="zcard" style="border:2px solid #2e7d4f"><h2>Payment received. The test worked.</h2>${TB.payReceipt ? TB.payReceipt(d, "Payment test (no game)") : ""}
         <p style="margin:0 0 10px">You paid <b>${esc(TB.money(d.total, d.currency))}</b>. Nothing was bought and nothing else will happen.</p>
         <p class="zsmall"><a href="${esc(d.invoiceUrl)}" target="_blank" rel="noopener">View your invoice ${esc(d.invoiceNumber || "")}</a> (print it to keep it). We also e-mailed it to you.</p>
         <button class="zbtn" id="again">Test again</button></div>`;

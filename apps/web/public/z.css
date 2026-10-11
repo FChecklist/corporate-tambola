@@ -101,3 +101,10 @@ a.zbtn#addcal{margin-left:6px}
 .zapp>.zcard:has(.zball){grid-column:1;grid-row:3/span 6;position:sticky;top:8px;align-self:start}
 .zapp .zbig{zoom:.8}
 }
+
+.pbrand{margin:0 0 12px;padding:18px 16px;border-radius:16px;text-align:center;color:#fff;background:linear-gradient(135deg,#8a0f3c 0%,#e8590c 62%,#f59f00 100%);box-shadow:0 6px 18px rgba(138,15,60,.28)}
+.pb-name{font:800 30px/1.1 var(--sans,inherit);letter-spacing:.06em}
+.pb-sub{font:500 12px var(--sans,inherit);opacity:.95;margin-top:3px}
+.pb-own{font:500 13px/1.45 var(--sans,inherit);margin-top:10px}.pb-own b{font:800 16px var(--sans,inherit);letter-spacing:.04em}
+.pb-pay{font:600 12px/1.4 var(--sans,inherit);margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,.45)}
+.prcpt{margin:10px 0;padding:12px 14px;border-radius:12px;background:#e8f8ee;border:2px solid #1f9d55;color:#0b3d22}.prcpt p{margin:6px 0;font-size:14px;line-height:1.5}.prcpt .mono{word-break:break-all}
