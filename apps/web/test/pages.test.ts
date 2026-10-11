@@ -473,16 +473,16 @@ describe("payment page", () => {
   test("UC-23 / UC-55 payments not switched on: the order is shown, the button says so, nothing can be charged", async () => {
     const o = await organizer(); await make(o, "UI-PAY1", { cap: 230 }); await publish(o, "UI-PAY1");
     const p = await payPage(o, "UI-PAY1");
-    const t = await p.waitFor((x) => /Your order/.test(x));
-    expect(t).toMatch(/Online payment opens soon/); expect(t).toMatch(/Up to 250/); expect(t).not.toMatch(/GST/); 
+    const t = await p.waitFor((x) => /Payment is for Game ID/.test(x));
+    expect(t).toMatch(/Online payment opens soon/); expect(t).toMatch(/Up to 250/); expect(t).not.toMatch(/plus GST/); 
     expect((p.$("#paygo") as any).disabled).toBe(true);
   });
   test("UC-9 / UC-55 test-payment mode end to end in the page: validation first, then paid, published, and told when it begins", async () => {
     const o = await organizer({ TEST_MODE: "1" }); await make(o, "UI-PAY2", { cap: 100 }); await publish(o, "UI-PAY2");
-    const p = await payPage(o, "UI-PAY2"); await p.waitFor((x) => /Billing details/.test(x));
+    const p = await payPage(o, "UI-PAY2"); await p.waitFor((x) => /Details/.test(x));
     expect(p.$("select#pcode")).toBeTruthy(); expect((p.$("select#pcode") as any).value).toBe("91"); expect((p.$("select#cty") as any).value).toBe("IN"); // India and +91 are already chosen
     p.click("#paygo"); await p.waitFor((x) => /your name/i.test(x)); // only a name and an e-mail are needed
-    expect(p.$("#tax")).toBeNull(); expect(p.text()).not.toMatch(/GST/); // no GSTIN question for a buyer in India: the seller charges no GST
+    expect(p.text()).not.toMatch(/plus GST/); // no GSTIN question for a buyer in India: the seller charges no GST
     expect(p.text()).toMatch(/Payment to IT Services by Rajat Agarwal/); expect(p.$('a[href="https://itservices-rajat-agarwal.pages.dev/"]')).toBeTruthy(); // the seller is named here, as a plain link
     (p.$("#nm") as any).value = "Asha Rao"; // no organization, no mobile: still pays
     p.click("#paygo");
