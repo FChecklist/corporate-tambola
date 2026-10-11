@@ -462,6 +462,18 @@ describe("Payment Testing page (Rs 1 / US$ 1, buys nothing)", () => {
     const html = await (await call("GET", v.invoiceUrl)).text(); for (const x of ["payment test", "Razorpay: UPI", "Terms and conditions", "No game, pack or credit was bought"]) expect(html).toContain(x);
     const st = await call("GET", `/api/payments/paytest/${r.paymentId}`); expect(((await st.json()) as any).ok).toBe(true);
   });
+  test("the invoice shows on the done screen: inline markup, a real PDF, and e-mail it to any address (5 at most)", async () => {
+    const r = (await (await start()).json()) as any; const v = (await (await payIt(r)).json()) as any;
+    const frag = await call("GET", `${v.invoiceUrl}.fragment`); expect(frag.status).toBe(200);
+    const fh = await frag.text(); expect(fh).toContain("<style>"); expect(fh).toContain("payment test"); expect(fh).not.toContain("<html"); expect(fh).not.toContain("<!doctype");
+    const pdf = await call("GET", `${v.invoiceUrl}.pdf`); expect(pdf.status).toBe(200); expect(pdf.headers.get("content-type")).toBe("application/pdf"); expect(pdf.headers.get("content-disposition")).toContain(v.invoiceNumber);
+    const bytes = new Uint8Array(await pdf.arrayBuffer()); expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-"); expect(bytes.length).toBeGreaterThan(900);
+    expect((await call("POST", `${v.invoiceUrl}/email`, { to: "nope" })).status).toBe(400);
+    for (let i = 0; i < 5; i++) expect((await call("POST", `${v.invoiceUrl}/email`, { to: "friend@acme.in" })).status).toBe(200);
+    expect((await call("POST", `${v.invoiceUrl}/email`, { to: "friend@acme.in" })).status).toBe(429);
+    expect(raw.query("SELECT COUNT(*) c FROM outbox WHERE to_addr='friend@acme.in' AND body LIKE '%.pdf%'").get()).toEqual({ c: 5 });
+    expect((await call("GET", "/api/invoice/inv_00000000000000000000000000000000.pdf")).status).toBe(404);
+  });
   test("testing again and again works, each with its own receipt; the webhook finishes a test too", async () => {
     const a = (await (await start()).json()) as any; await payIt(a, "pay_A");
     const b = (await (await start()).json()) as any;

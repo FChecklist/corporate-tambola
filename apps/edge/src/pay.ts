@@ -15,6 +15,7 @@ import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { GRACE_ROUNDS } from "../../../packages/beacon/src/config";
 import type { D1, Env } from "./worker";
 import { keepLegalParty } from "./legal";
+import { PdfDoc, NAVY } from "./pdf";
 import { ledgerFields, logWebhook, siteOf, type HookRecord } from "./ledger";
 import { partnerCode, phoneHashFor, recordCommission, refCode } from "./partners";
 import { getMode, mailGate, testFlag, type ModeEnv } from "./mode";
@@ -209,6 +210,9 @@ export async function fulfil(env: PayEnv, paymentId: string, now: number, spend:
     `\nINVOICE\n${renderInvoiceText(data)}\nView or print it: ${origin}/api/invoice/${token}`,
   ];
   await sendMail(env, db, p.email, `${brand.name}: payment received, invoice ${number}`, lines.join("\n\n"), now);
+  // the same invoice goes to the organizer's own e-mail when someone else paid (a Co-host or a pay link) or the organizer's e-mail differs from the payer's
+  const orgMail = typeof organizer.email === "string" ? organizer.email.trim().toLowerCase() : "";
+  if (orgMail && EMAIL.test(orgMail) && orgMail !== p.email.trim().toLowerCase()) await sendMail(env, db, orgMail, `${brand.name}: invoice ${number} for your game`, `An invoice for your game${eidForInvoice ? ` ${eidForInvoice}` : ""} was issued by ${brand.name}.\n\nINVOICE\n${renderInvoiceText(data)}\n\nView or print it: ${origin}/api/invoice/${token}\nDownload the PDF: ${origin}/api/invoice/${token}.pdf`, now);
   await recordCommission(env, p, tax.taxable, now); // refer & earn: a commission row for a referred, PAID purchase only
   const result = { ok: true, orderId: p.id, pack: p.pack, total: p.amount, tax: p.tax, currency: p.currency, invoiceUrl: `/api/invoice/${token}`, invoiceNumber: number, razorpayPaymentId: p.rzp_payment_id ?? null, organizerKey, newOrganizer: !!organizerKey, published: !!published, eid: published, restartedAtMs: restart ? (1692803367 + (restart - 1) * 3) * 1000 : null, ...(keptCredit ? { creditKept: true, creditId: keptCredit.id, creditExpiresMs: keptCredit.expires_ms } : {}) };
   await db.prepare("UPDATE payment SET status='paid', paid_ms=?, org=?, result=? WHERE id=?").bind(now, org, JSON.stringify(result), p.id).run();
@@ -392,6 +396,35 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
   if (req.method === "GET" && cm) {
     const r = await db.prepare("SELECT data FROM credit_note WHERE token=?").bind(cm[1]).first<{ data: string }>();
     return r ? new Response(renderInvoiceHtml(JSON.parse(r.data)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex" } }) : json({ error: "Not found" }, 404);
+  }
+  // The invoice shown on the payment-done screen: the invoice markup alone (drawn inside a shadow root by the page), a real PDF to download, and "e-mail it to me".
+  const ix = p.match(/^\/api\/invoice\/(inv_[0-9a-f]{32})(\.fragment|\.pdf|\/email)$/);
+  if (ix) {
+    const r = await db.prepare("SELECT data, number FROM invoice WHERE token=?").bind(ix[1]).first<{ data: string; number: string }>();
+    if (!r) return json({ error: "Not found" }, 404);
+    const data: InvoiceData = JSON.parse(r.data);
+    const origin = env.PUBLIC_ORIGIN ?? url.origin;
+    if (req.method === "GET" && ix[2] === ".fragment") {
+      const full = renderInvoiceHtml(data), style = full.match(/<style>[\s\S]*?<\/style>/)?.[0] ?? "";
+      const body = full.replace(/^[\s\S]*?<\/head>\s*(<body[^>]*>)?/i, "").replace(/<\/body>\s*<\/html>\s*$/i, "");
+      return new Response(style + body, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex" } });
+    }
+    if (req.method === "GET" && ix[2] === ".pdf") {
+      const pdf = new PdfDoc(); pdf.footer = `${data.brand.name} · ${r.number}`;
+      pdf.para(data.brand.name, { font: "F2", size: 18, color: NAVY }); pdf.gap(8);
+      for (const line of renderInvoiceText(data).split("\n").slice(1)) { if (line.trim()) pdf.para(line, { size: 10 }); else pdf.gap(7); }
+      return new Response(pdf.build() as unknown as BodyInit, { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="invoice-${r.number.replace(/[^A-Za-z0-9._-]/g, "_")}.pdf"`, "cache-control": "no-store", "x-robots-tag": "noindex" } });
+    }
+    if (req.method === "POST" && ix[2] === "/email") {
+      const b = await body(req); const to = b && typeof b.to === "string" ? b.to.trim().toLowerCase() : "";
+      if (!EMAIL.test(to)) return json({ error: "Enter a valid e-mail address." }, 400);
+      const k = `invmail/${ix[1]}`, used = Number((await db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0);
+      if (used >= 5) return json({ error: "This invoice has already been e-mailed 5 times." }, 429);
+      if (!(await spend(1))) return busy();
+      await db.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").bind(k, String(used + 1)).run();
+      await sendMail(env, db, to, `${data.brand.name}: invoice ${r.number}`, `Your invoice.\n\nINVOICE\n${renderInvoiceText(data)}\n\nView or print it: ${origin}/api/invoice/${ix[1]}\nDownload the PDF: ${origin}/api/invoice/${ix[1]}.pdf`, now);
+      return json({ ok: true });
+    }
   }
   const im = p.match(/^\/api\/invoice\/(inv_[0-9a-f]{32})$/);
   if (req.method === "GET" && im) {
