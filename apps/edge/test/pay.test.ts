@@ -489,3 +489,53 @@ describe("Payment Testing page (Rs 1 / US$ 1, buys nothing)", () => {
     expect((await call("GET", "/api/payments/paytest/pay_0000000000000000")).status).toBe(404);
   });
 });
+
+describe("central payments (every order opens through IT Services by Rajat Agarwal)", () => {
+  let central: { orders: any[]; verifies: any[]; up: boolean };
+  beforeEach(() => {
+    central = { orders: [], verifies: [], up: true };
+    env.PAY_SERVICE_KEY = "psk_test"; env.PAY_SERVICE_URL = "https://central.test";
+    const inner = (globalThis as any).fetch;
+    (globalThis as any).fetch = async (url: string, init?: any) => {
+      const u = String(url);
+      if (u === "https://central.test/api/pay/order") {
+        if (!central.up) throw new Error("down");
+        const b = JSON.parse(init.body); central.orders.push({ key: init.headers["x-site-key"], ...b });
+        const o = { id: "order_c" + central.orders.length, amount: b.amount_minor, currency: b.currency, receipt: b.payment_ref, status: "created" }; rz.orders.push(o);
+        return new Response(JSON.stringify({ ok: true, orderId: o.id, keyId: "rzp_test_x" }), { status: 200 });
+      }
+      if (u === "https://central.test/api/pay/verify") { central.verifies.push({ key: init.headers["x-site-key"], ...JSON.parse(init.body) }); return new Response("{}", { status: 200 }); }
+      return inner(url, init);
+    };
+  });
+  test("a sale is opened centrally with the ledger path: this website / sales / the pack as the plan", async () => {
+    const r = await (await buy()).json() as any;
+    expect(r.razorpay.orderId).toBe("order_c1");
+    expect(central.orders).toHaveLength(1);
+    expect(central.orders[0]).toMatchObject({ key: "psk_test", site: "corporate-tambola.pages.dev", product: "corporate_tambola", plan: "pack_500", amount_minor: 469900, currency: "INR" });
+    expect(central.orders[0].payment_ref).toMatch(/^pay_[0-9a-f]{16}$/);
+  });
+  test("the payment test is the payment_test plan", async () => {
+    const r = await call("POST", "/api/payments/paytest", { email: "a@b.co", name: "Asha Rao", country: "IN" });
+    expect(r.status).toBe(200);
+    expect(central.orders[0]).toMatchObject({ plan: "payment_test", amount_minor: 100 });
+  });
+  test("a verified payment is reported to the central ledger", async () => {
+    const r = await (await buy()).json() as any;
+    const done = await complete(r.paymentId, r.razorpay.orderId);
+    expect(done.status).toBe(200);
+    expect(central.verifies).toHaveLength(1);
+    expect(central.verifies[0]).toMatchObject({ key: "psk_test", site: "corporate-tambola.pages.dev", razorpay_order_id: "order_c1", razorpay_payment_id: "pay_1" });
+  });
+  test("if the central service is down the sale still works, opened directly with Razorpay", async () => {
+    central.up = false;
+    const r = await buy(); expect(r.status).toBe(200);
+    expect(central.orders).toHaveLength(0);
+    expect(rz.orders).toHaveLength(1);
+  });
+  test("without PAY_SERVICE_KEY nothing goes to the central service", async () => {
+    env.PAY_SERVICE_KEY = undefined;
+    expect((await buy()).status).toBe(200);
+    expect(central.orders).toHaveLength(0);
+  });
+});

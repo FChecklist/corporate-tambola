@@ -9,7 +9,7 @@ import { recordFunnelForOrg } from "./visits";
 import { plainToHtml, withFooter } from "./brand";
 import {
   BRANDS, DEFAULT_COMPANY, companyGaps, createOrder, fetchPayment, capturePayment, paymentInfo, financialYear, formatInvoiceNumber, renderInvoiceHtml, renderInvoiceText, splitGst, toMinor,
-  verifyPaymentSignature, verifyWebhookSignature, type Company, type InvoiceData, type RazorpayConfig,
+  verifyPaymentSignature, verifyWebhookSignature, type Company, type CreatedOrder, type InvoiceData, type RazorpayConfig,
 } from "../../../packages/billing/src";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { GRACE_ROUNDS } from "../../../packages/beacon/src/config";
@@ -24,7 +24,7 @@ import { creditAppliedFor, creditFromPayment, creditUsesFor, mailCreditCreated, 
 
 export interface PayEnv extends Env, Pick<ModeEnv, "OWNER_EMAIL" | "TEST_MAIL_ALLOW"> {
   RAZORPAY_KEY_ID?: string; RAZORPAY_KEY_SECRET?: string; RAZORPAY_WEBHOOK_SECRET?: string; RAZORPAY_BASE_URL?: string; RAZORPAY_INTERNATIONAL?: string;
-  PARTNER_COMMISSION_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; FREE_LAUNCH?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string; PAY_HOP_URL?: string;
+  PARTNER_COMMISSION_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; FREE_LAUNCH?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string; PAY_HOP_URL?: string; PAY_SERVICE_KEY?: string; PAY_SERVICE_URL?: string; PAY_SITE?: string;
 }
 
 export const PAY_SCHEMA = [
@@ -49,6 +49,29 @@ const UPI_FIRST = { display: { blocks: { upi: { name: "Pay with UPI", instrument
 /** Option 1 (2026-10-11): the Razorpay window runs inside a page of the website that is registered with Razorpay (IT Services by Rajat Agarwal), shown in a frame on our payment screen. Unset = the window opens on our own page as before. */
 const hopOf = (env: PayEnv): { hop?: string } => (env.PAY_HOP_URL && /^https:\/\/[a-z0-9.-]+\/[A-Za-z0-9/_-]*$/.test(env.PAY_HOP_URL) ? { hop: env.PAY_HOP_URL } : {});
 const rzpOf = (env: PayEnv): (RazorpayConfig) | null => (env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET ? { keyId: env.RAZORPAY_KEY_ID, keySecret: env.RAZORPAY_KEY_SECRET, webhookSecret: env.RAZORPAY_WEBHOOK_SECRET, baseUrl: env.RAZORPAY_BASE_URL } : null);
+/**
+ * Central payments (owner order 2026-10-12): every order is opened through IT Services by Rajat Agarwal, so every rupee sits in its ONE Razorpay ledger as
+ * razorpay / IT Services / <website> / <stream> / <plan>. This site is the "sales" stream; the plan is the pack (pack_250) or payment_test.
+ * Without PAY_SERVICE_KEY, or if the central service cannot be reached, the order is opened directly with Razorpay exactly as before (the webhook still reaches the ledger).
+ */
+const centralOf = (env: PayEnv) => (env.PAY_SERVICE_KEY ? { url: (env.PAY_SERVICE_URL ?? "https://itservices-rajat-agarwal.pages.dev").replace(/\/+$/, ""), key: env.PAY_SERVICE_KEY, site: env.PAY_SITE ?? "corporate-tambola.pages.dev" } : null);
+async function placeOrder(env: PayEnv, rzp: RazorpayConfig, o: { amountMinor: number; currency: "INR" | "USD"; receipt: string; notes: Record<string, string>; plan: string; user?: string | null; email?: string }): Promise<CreatedOrder> {
+  const c = centralOf(env);
+  if (c) {
+    try {
+      const r = await fetch(`${c.url}/api/pay/order`, { method: "POST", headers: { "content-type": "application/json", "x-site-key": c.key }, body: JSON.stringify({ site: c.site, product: "corporate_tambola", plan: o.plan, amount_minor: o.amountMinor, currency: o.currency, payment_ref: o.receipt, ...(o.user ? { user: o.user } : {}), ...(o.email ? { payer_email: o.email } : {}) }), signal: AbortSignal.timeout(6000) });
+      const d: any = await r.json().catch(() => ({}));
+      if (r.ok && d.orderId) return { id: d.orderId, amount: o.amountMinor, currency: o.currency, receipt: o.receipt, status: "created" };
+      console.warn("central order refused", r.status, d?.error);
+    } catch (e) { console.warn("central order unreachable", String(e)); }
+  }
+  return createOrder(rzp, o);
+}
+/** After a correctly signed payment: tell the central ledger (best effort, never blocks or fails the buyer; the central webhook records it too). */
+async function reportToCentral(env: PayEnv, b: any): Promise<void> {
+  const c = centralOf(env); if (!c) return;
+  try { await fetch(`${c.url}/api/pay/verify`, { method: "POST", headers: { "content-type": "application/json", "x-site-key": c.key }, body: JSON.stringify({ site: c.site, razorpay_order_id: String(b.razorpay_order_id), razorpay_payment_id: String(b.razorpay_payment_id), razorpay_signature: String(b.razorpay_signature) }), signal: AbortSignal.timeout(4000) }); } catch { /* the webhook records it */ }
+}
 /** Optional switch (env FREE_LAUNCH="1"): small engagements (up to FREE_CAP participants) may be published without a purchase. Building a draft is always free. */
 export const FREE_CAP = 100, MAX_DRAFTS = 10;
 /** A game held for payment begins this many rounds (3 s each = 2 minutes) after the payment is confirmed. */
@@ -305,7 +328,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     const meta = { org: orgName.slice(0, 120), name: payerName.slice(0, 120), ...(contact ? { phone: contact } : {}), country: typeof b.country === "string" ? b.country.slice(0, 2) : "IN", taxId: typeof b.taxId === "string" ? b.taxId.trim().slice(0, 20) : "", origin: env.PUBLIC_ORIGIN ?? url.origin, ...(boundOrg ? { orgId: boundOrg, eid: boundEid, paidBy, ...(credited > 0 ? { creditInr: credited } : {}) } : {}) };
     let order: any = null;
     if (rzp) {
-      try { order = await createOrder(rzp, { amountMinor: toMinor(pr.total), currency: cur, receipt: id, notes: { brand: brand.name, product: "corporate_tambola", variation: `pack_${pack}`, pack: String(pack), currency: cur, organization: (meta.org || meta.name).slice(0, 80), payment_ref: id } }); }
+      try { order = await placeOrder(env, rzp, { amountMinor: toMinor(pr.total), currency: cur, receipt: id, plan: `pack_${pack}`, user: boundOrg ?? null, email: b.email.trim().toLowerCase(), notes: { brand: brand.name, site: env.PAY_SITE ?? "corporate-tambola.pages.dev", stream: "sales", product: "corporate_tambola", plan: `pack_${pack}`, variation: `pack_${pack}`, pack: String(pack), currency: cur, organization: (meta.org || meta.name).slice(0, 80), payment_ref: id } }); }
       catch (e: any) { return json({ error: `The payment service said: ${e.message}` }, 502); }
     }
     const ref = refCode(b.ref); // from the buyer's own browser (valid for 30 days after the link was opened); checked against real partners when the payment is fulfilled
@@ -335,7 +358,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     if (!(await spend(2))) return busy();
     const id = "pay_" + randHex(8);
     let order: any;
-    try { order = await createOrder(rzp, { amountMinor: 100, currency: cur, receipt: id, notes: { brand: brand.name, product: "corporate_tambola", variation: "payment_test", payment_ref: id } }); }
+    try { order = await placeOrder(env, rzp, { amountMinor: 100, currency: cur, receipt: id, plan: "payment_test", email: b.email.trim().toLowerCase(), notes: { brand: brand.name, site: env.PAY_SITE ?? "corporate-tambola.pages.dev", stream: "sales", product: "corporate_tambola", plan: "payment_test", variation: "payment_test", payment_ref: id } }); }
     catch (e: any) { return json({ error: `The payment service said: ${e.message}` }, 502); }
     const taxId = typeof b.taxId === "string" ? b.taxId.trim().toUpperCase().slice(0, 20) : "";
     if (cty === "IN" && taxId && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(taxId)) return json({ error: "That GSTIN does not look right. It has 15 characters, like 27ABCDE1234F1Z5." }, 400);
@@ -363,6 +386,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     if (pay.status === "authorized") await capturePayment(rzp, pay.id, toMinor(row.amount), row.currency).catch(() => null);
     else if (pay.status !== "captured") { await unconfirm(); return json({ error: `The payment is ${pay.status}. Nothing was charged to your order.` }, 402); }
     await db.prepare("UPDATE payment SET rzp_payment_id=? WHERE id=?").bind(String(b.razorpay_payment_id), row.id).run();
+    await reportToCentral(env, b);
     const f = await fulfil(env, row.id, now, spend);
     return "result" in f ? json(f.result) : json({ error: f.error }, f.status);
   }
