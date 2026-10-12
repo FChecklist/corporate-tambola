@@ -2,7 +2,9 @@
 
 Owner brief: a second game like Corporate Tambola (close-group housie), but 75-ball Bingo, for the US market and for India. Online, played by hundreds and thousands, simple, a game people already know.
 
-Status: SPEC ONLY. Nothing is built. Everything marked "reuse" is taken from what Corporate Tambola already does today (code in `C:\ct\tambola`); everything marked "new" or "decision" is not built or not decided.
+Status: SPEC ONLY. Nothing is built.
+
+**Owner rule (2026-10-12): Corporate Bingo and Corporate Tambola are completely separate products. No file, package, database, project or secret is shared.** Wherever this spec says "reuse", it means *copy the idea or the code once into the Bingo repository, then it belongs to Bingo only*; Bingo never imports from the Tambola repository. Everything marked "new" or "decision" is not built or not decided.
 
 ---------------------------------------------------------------------------------------------------
 
@@ -13,7 +15,7 @@ An organizer (a company, a team lead, an HR or events person) creates a Bingo ga
 1. **Known game.** Nobody needs to learn rules. The rules screen is five lines.
 2. **Phones do the work.** Every phone runs the same engine and reaches the same state; the server is not involved while the game runs. Cost per game stays flat as players grow (free Cloudflare plan, see section 12).
 3. **Winners decided by software only.** A phone reports a win as a vote; a win counts when enough different phones agree. No human can announce, change or dispute a winner. (reuse: `packages/beacon/src/prize-engine.ts`, `docs/WINNERS_AND_AUDIT.md`)
-4. **One card per phone, unique cards.** Cards come from a collision-free keyed generator; a card is bound to one device. (reuse: `unique-ticket.ts`, device binding)
+4. **One card per phone, unique cards.** Cards come from a collision-free keyed generator; a card is bound to one device. (copied from Tambola once: `unique-ticket.ts`, device binding)
 5. **Pay before start; publishing is free.** Same commercial rule as Tambola. No refunds, only credit for 365 days. (reuse)
 6. **Guests are never e-mailed.** Only the organizer and Hosts get mail. (reuse)
 7. **Honest limits are stated, not hidden.** See section 16.
@@ -22,9 +24,16 @@ An organizer (a company, a team lead, an HR or events person) creates a Bingo ga
 | Question | Recommendation | Why |
 |---|---|---|
 | Name | **Corporate Bingo** (US marketing line: "Team Bingo for remote and hybrid teams") | Same family as Corporate Tambola; "Bingo" is the word Americans search for. |
-| Same website as Tambola or a new one? | **A new website, `corporate-bingo.pages.dev`**, same code base switched by a game type, own database, own legal pages. | Your ledger template is `razorpay / IT Services / <website> / <stream> / <plan>`. A separate website gives Bingo its own clean income lines for tax. US wording, dollars-first pricing and terms are different from the India housie site. |
+| Same website as Tambola or a new one? | **A new, separate product: `corporate-bingo.pages.dev`**, in its **own git repository** (`FChecklist/corporate-bingo`, private), own Cloudflare Pages project, own D1 database, own secrets and keys, own legal pages. No shared files. | Your ledger template is `razorpay / IT Services / <website> / <stream> / <plan>`. A separate website gives Bingo its own clean income lines for tax. US wording, dollars-first pricing and terms are different from the India housie site. |
 | Seller | IT Services by Rajat Agarwal (same legal entity, same Razorpay account). | Registered website and one ledger. |
 | Currency | US$ first on the US site; INR also supported. | US customers. Needs Razorpay international approval first (section 13). |
+
+### 3.1 Separation rules (binding)
+1. **Own repository.** Created by copying the Tambola code once (a snapshot), then renamed and trimmed to Bingo. After that nothing is imported from, linked to or synced with `C:\ct	ambola`. No git submodule, no shared package, no symlink, no copied-by-script build step.
+2. **Own everything else:** Cloudflare Pages project `corporate-bingo`, D1 database `corporate-bingo`, Resend sender and templates, secrets (`DATA_KEY`, `CRON_KEY`, `INBOUND_SECRET`, `PAY_SERVICE_KEY` and so on, all newly generated), cron worker `corporate-bingo-cron`, brand, logo, fonts, copy, legal pages, sitemap, analytics.
+3. **Only meeting point: IT Services by Rajat Agarwal**, as the common payment service and ledger, exactly as for every other website. Bingo calls it with its own site key; nothing else is shared with Tambola.
+4. **Fixes do not travel by themselves.** A bug fixed in Tambola is not fixed in Bingo, and the other way round. Each product has its own backlog. The cost of this choice is double maintenance; the benefit is that a change to one can never break the other. A fix that matters to both is made twice, on purpose, with its own test.
+5. **Names:** every identifier, storage key, cache name, cookie and table prefix that says `ct`/`tambola`/`housie` is renamed in Bingo (for example `cb` / `bingo`), so the two products cannot collide even on the same browser.
 
 ## 4. The game rules (75-ball Bingo)
 
@@ -50,7 +59,7 @@ An organizer (a company, a team lead, an HR or events person) creates a Bingo ga
 - A guest who joins late counts only numbers called after their join plus the late-join delay (reuse: `LATE_LAG_ROUNDS` = 90 s rule and the masked call log).
 
 ### 4.4 Prizes ("houses")
-Each prize is one **reward line**: pattern + scope (everyone, or per group) + ordinal (1st, 2nd, ...) + prize text. Reuse the whole reward-line model (`RewardLine`, `PRIZE_HOUSES`, `maxWinnersFor`).
+Each prize is one **reward line**: pattern + scope (everyone, or per group) + ordinal (1st, 2nd, ...) + prize text. The reward-line model (`RewardLine`, `PRIZE_HOUSES`, `maxWinnersFor`) is copied from Tambola into the Bingo repository and then belongs to Bingo.
 
 | Pattern id | What the guest must complete | Squares | Max winners |
 |---|---|---|---|
@@ -75,8 +84,8 @@ Each prize is one **reward line**: pattern + scope (everyone, or per group) + or
 - The software, not a person, says who won, and anyone can re-check a win from the public call log.
 - Honest limit: a hacked browser cannot be made impossible; a win is accepted only when enough different phones agree (the quorum rule), so one phone cannot invent a win.
 
-## 5. Everything around the game (all reuse)
-| Feature | Source today | Bingo change |
+## 5. Everything around the game (copied once from Tambola into the Bingo repository, then independent)
+| Feature | Copied from (Tambola, once) | Bingo change |
 |---|---|---|
 | Roles: Organizer, Host (<= 5), Co-host (watch and announce), AI key | `ROLES_AND_CONSOLE_SPEC_*.md` | none |
 | 9-step console, big screen `/big.html` | worker, `apps/web` | big screen shows the call board and last numbers |
@@ -103,8 +112,8 @@ Create engagement -> settings (name, date and time, size, speed, card count, aut
 ## 8. Sizes and limits
 Same pack ladder as Corporate Tambola: up to 100, 250, 500, 750, 1,000, 2,500, 5,000, 10,000 players. Same free-plan guards: the daily write guard (80,000), pause-check scaling by size, claims stored only up to a size limit, join costs 2 database writes. (reuse `pricing.ts`, `PACKS`, mode guards). A Bingo game has fewer numbers (75 vs 90) so it is never heavier than a Tambola game of the same size.
 
-## 9. Pricing (decision needed)
-Start with the same ladder, shown in US$ on the US site and INR on the India site; no GST while the seller is not GST registered. Starting proposal (to be confirmed by the owner):
+## 9. Pricing (DECIDED 2026-10-12: keep the Corporate Tambola price ladder)
+The same ladder, shown in US$ and INR; no GST while the seller is not GST registered. The numbers are written into Bingo's own pricing file (`packages/shared/src/pricing.ts` of the Bingo repository). It is a copy: if the owner later changes Tambola prices, Bingo prices do not change unless changed there too.
 
 | Players | US$ | INR |
 |---|---|---|
@@ -116,7 +125,7 @@ Start with the same ladder, shown in US$ on the US site and INR on the India sit
 | 2,500 | 169 | 11,799 |
 | 5,000 | 253 | 17,699 |
 | 10,000 | 421 | 29,499 |
-These are Tambola's numbers; US customers may expect round figures ($29/$49/$79...). Decide before building the price page.
+Plan ids on the central ledger: `bingo_pack_100` ... `bingo_pack_10000` and `payment_test`.
 
 ## 10. Data and rules for the build ("new" work)
 1. Game type: add `game: "tambola" | "bingo"` to the engagement config; every Bingo-specific rule keys on it. Existing games are `tambola`.
@@ -139,7 +148,7 @@ These are Tambola's numbers; US customers may expect round figures ($29/$49/$79.
 - Load: 2,000 and 5,000 simulated phones; write counts inside the free-plan guard.
 
 ## 12. Cost
-Zero new server cost: same free Cloudflare Pages + Functions + D1 as Tambola (a new D1 database for the Bingo site, free). Mail through the same Resend account. No new paid service. (Owner rule: never add paid add-ons without a yes.)
+Zero new server cost: its own free Cloudflare Pages project, Functions and D1 database (separate from Tambola's). Mail through the same Resend account. No new paid service. (Owner rule: never add paid add-ons without a yes.)
 
 ## 13. Money (in and out) through IT Services by Rajat Agarwal
 - Every Bingo sale is an order opened through the central payment service: ledger line `razorpay / IT Services / Corporate Bingo / sales / bingo_pack_<N>`. New site key for `corporate-bingo.pages.dev` (one `site` row, `plan_catalog` rows for each pack). No new code path in the central service.
@@ -169,16 +178,16 @@ The tier idea discussed on 2026-10-12 (cumulative billing; 10% at 5,000, 20% at 
 | Phase | Work | Exit test |
 |---|---|---|
 | B0 | Decisions (section 18) and the Razorpay prerequisites | Owner answers; webhook fixed; international approved |
-| B1 | Card generator, call order, patterns, parity | Unit and parity tests green |
+| B1 | Create the private repository `corporate-bingo` by a one-time copy of the Tambola code; rename everything (section 3.1 rule 5); then write the card generator, call order, patterns and parity | Repository builds alone with no path to `C:\ct	ambola`; unit and parity tests green |
 | B2 | Phone UI: card, call board, daub mode, voice | 2-phone real-Chrome game finishes with identical winners |
 | B3 | Console, settings page, AI manifest, report wording | UI scenarios green |
-| B4 | New site, database, central payment plan, legal pages, accessibility | Rs 1 / US$ 1 real payment appears in the central ledger as `Corporate Bingo / sales / payment_test` |
+| B4 | Own Pages project, own D1 database, own secrets and cron, central payment site key and plans, legal pages, accessibility | Rs 1 / US$ 1 real payment appears in the central ledger as `Corporate Bingo / sales / payment_test` |
 | B5 | Full simulation: life-cycle, matrix, 30-phone, 2,000- and 5,000-phone loads | All green, writes inside the guard |
 | B6 | Soft launch with 2-3 friendly organizers, then public | First paid game end to end, report received, data deleted on time |
 
 ## 18. Decisions the owner must make
 1. ~~Name and site (section 3)~~ DECIDED 2026-10-12: Corporate Bingo, a separate website similar to Corporate Tambola.
-2. Pricing numbers (section 9): keep Tambola's ladder or use round US$ figures.
+2. ~~Pricing~~ DECIDED 2026-10-12: Tambola's price ladder.
 3. Guest identity for the US (section 15.1): name only, or e-mail required by the organizer.
 4. Refer and earn tiers (section 14).
 5. Default prize set (section 4.4): Line, Four corners, X, Blackout.
@@ -201,3 +210,6 @@ The tier idea discussed on 2026-10-12 (cumulative billing; 10% at 5,000, 20% at 
 - BG-12 No guest e-mail address or number is ever mailed; only the organizer and Hosts receive mail.
 - BG-13 A 5,000-phone simulated game finishes inside the free-plan write guard.
 - BG-14 The card and call board pass the accessibility check and fit a 390 px phone without sideways scrolling.
+- BG-15 Separation: the Bingo repository contains no import, path, submodule or link to the Tambola repository; a search for `tambola`, `housie` and `ct4f` finds nothing except history notes; it builds, tests and deploys with Tambola's folder deleted.
+- BG-16 Separation: Bingo has its own Cloudflare Pages project, D1 database, secrets, cron worker, sender identity and storage and cache names; changing or deleting any of these in Tambola changes nothing in Bingo.
+- BG-17 The price ladder equals Tambola's at the time of building, held in Bingo's own pricing file.
