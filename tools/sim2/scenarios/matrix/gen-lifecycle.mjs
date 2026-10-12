@@ -167,7 +167,7 @@ export default async function gen({ R, L }) {
     const tok = /[?&]t=([^&\s]+)/.exec(pl.body.url ?? pl.body.link ?? "")?.[1]; t.check("link has a token", !!tok, JSON.stringify(pl.body).slice(0, 200)); if (!tok) return;
     const view = await A.call("GET", `/api/paylink/${tok}`); t.expect("open without a key", view, "ok"); const txt = JSON.stringify(view.body);
     t.check("price with GST is shown", txt.includes(String(totalFor(50))), txt.slice(0, 200)); t.check("no Organizer e-mail or key leaks", !txt.includes(org.email) && !/ctk_|cta_|cth_/.test(txt), txt.slice(0, 200));
-    t.check("no guest or credit data leaks", !/credit|participants|phone/i.test(txt) || !/\d{10}/.test(txt), txt.slice(0, 200));
+    t.check("no guest or credit data leaks", !/credit|phone/i.test(txt) && !/(?<!\d)\d{10}(?!\d)/.test(txt), txt.slice(0, 200)); // the pack size (participants: N) and the start time (13 digits) are meant to be shown; a phone number or credit is not
     const bad = await A.call("GET", `/api/paylink/${"0".repeat(32)}`); t.expect("a wrong token is refused calmly", bad, "refuse");
   } });
 
