@@ -29,7 +29,7 @@ An organizer (a company, a team lead, an HR or events person) creates a Bingo ga
 | Currency | US$ first on the US site; INR also supported. | US customers. Needs Razorpay international approval first (section 13). |
 
 ### 3.1 Separation rules (binding)
-1. **Own repository.** Created by copying the Tambola code once (a snapshot), then renamed and trimmed to Bingo. After that nothing is imported from, linked to or synced with `C:\ct	ambola`. No git submodule, no shared package, no symlink, no copied-by-script build step.
+1. **Own repository.** Created by copying the Tambola code once (a snapshot), then renamed and trimmed to Bingo. After that nothing is imported from, linked to or synced with `C:\ct\tambola`. No git submodule, no shared package, no symlink, no copied-by-script build step.
 2. **Own everything else:** Cloudflare Pages project `corporate-bingo`, D1 database `corporate-bingo`, Resend sender and templates, secrets (`DATA_KEY`, `CRON_KEY`, `INBOUND_SECRET`, `PAY_SERVICE_KEY` and so on, all newly generated), cron worker `corporate-bingo-cron`, brand, logo, fonts, copy, legal pages, sitemap, analytics.
 3. **Only meeting point: IT Services by Rajat Agarwal**, as the common payment service and ledger, exactly as for every other website. Bingo calls it with its own site key; nothing else is shared with Tambola.
 4. **Fixes do not travel by themselves.** A bug fixed in Tambola is not fixed in Bingo, and the other way round. Each product has its own backlog. The cost of this choice is double maintenance; the benefit is that a change to one can never break the other. A fix that matters to both is made twice, on purpose, with its own test.
@@ -178,7 +178,7 @@ The tier idea discussed on 2026-10-12 (cumulative billing; 10% at 5,000, 20% at 
 | Phase | Work | Exit test |
 |---|---|---|
 | B0 | Decisions (section 18) and the Razorpay prerequisites | Owner answers; webhook fixed; international approved |
-| B1 | Create the private repository `corporate-bingo` by a one-time copy of the Tambola code; rename everything (section 3.1 rule 5); then write the card generator, call order, patterns and parity | Repository builds alone with no path to `C:\ct	ambola`; unit and parity tests green |
+| B1 | Create the private repository `corporate-bingo` by a one-time copy of the Tambola code; rename everything (section 3.1 rule 5); then write the card generator, call order, patterns and parity | Repository builds alone with no path to `C:\ct\tambola`; unit and parity tests green |
 | B2 | Phone UI: card, call board, daub mode, voice | 2-phone real-Chrome game finishes with identical winners |
 | B3 | Console, settings page, AI manifest, report wording | UI scenarios green |
 | B4 | Own Pages project, own D1 database, own secrets and cron, central payment site key and plans, legal pages, accessibility | Rs 1 / US$ 1 real payment appears in the central ledger as `Corporate Bingo / sales / payment_test` |
