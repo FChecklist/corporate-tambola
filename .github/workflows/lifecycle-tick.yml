@@ -1,0 +1,19 @@
+name: Housekeeping tick
+# Asks the site to do its housekeeping: send finished games' reports, delete participant data on time, delete games at the end of their 365 days.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+permissions: {}
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ask the site to do its housekeeping
+        env:
+          CRON_KEY: ${{ secrets.CRON_KEY }}
+        run: |
+          code=$(curl -s -o /tmp/out -w "%{http_code}" -X POST "https://corporate-tambola.pages.dev/api/lifecycle/tick" -H "x-cron-key: $CRON_KEY" -H "content-type: application/json" -d '{}')
+          echo "status $code"; head -c 200 /tmp/out; echo
+          test "$code" = "200"
