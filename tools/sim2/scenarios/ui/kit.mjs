@@ -2,7 +2,7 @@ import { deflateSync } from "node:zlib";
 // Shared kit of the UI scenario suite (tools/sim2/scenarios/ui): the scenario context `t`, console/guest/pay UI helpers and the fake Google script.
 // Everything runs against the suite's OWN sim server (:8804) and WhatsApp simulator (:8891): run.mjs sets SIM_PORT / WA_PORT before this file is imported.
 // Nothing here touches the live site: the harness blocks every non-localhost request in each browser context.
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as H from "../../lib/index.mjs";
 
@@ -12,6 +12,7 @@ mkdirSync(SHOTS, { recursive: true });
 export const WIDTHS = [360, 768, 1280, 1920];
 const sleep = H.sleep;
 
+let CUR = null; // the context of the scenario that is running now (the runner runs one scenario at a time); lets the helpers below record their checks in it
 let ipSeq = 0, mailSeq = 0;
 /** a fresh simulated network address for each caller (per-address limits behave per phone) */
 export const nextIp = () => { ipSeq++; return `10.${40 + (ipSeq >> 16 & 15)}.${ipSeq >> 8 & 255}.${ipSeq & 255 || 1}`; };
@@ -55,7 +56,76 @@ export function makeT(sc, shared) {
     /** polls fn until truthy */
     async until(fn, { timeout = 8000, step = 150, what = "condition" } = {}) { const t0 = Date.now(); let last; while (Date.now() - t0 < timeout) { try { last = await fn(); if (last) return last; } catch { /* retry */ } await sleep(step); } throw new Error(`timeout waiting for ${what}`); },
   };
+  CUR = t;
   return t;
+}
+
+// ---------------------------------------------------------------- Terms boxes (server-enforced since 2026-10-13)
+const CONSENT = JSON.parse(readFileSync(join(H.ROOT, "apps/edge/src/consent-text.json"), "utf8"));
+/** every box wording the server can show (kinds K1..K9, boxes A/B), to compare what a person reads on the page with the one source file */
+export const CONSENT_WORDS = new Set(Object.values(CONSENT).filter((v) => v && typeof v === "object").flatMap((k) => Object.values(k)));
+/**
+ * Ticks the Terms boxes on the screen like a person would. `scope` = CSS selector of the area that holds them (default: the whole page; give one when two sets are on the page),
+ * `btn` = selector of the button that must stay disabled until every box is ticked.
+ * Checks (recorded in t): the boxes are not ticked in advance, the button is disabled before and enabled after, the words are the server's own wording.
+ * Returns { labels, count }.
+ */
+export async function tickTerms(t, page, { btn, scope = "body", what = "Terms boxes", only, enabledAfter = true } = {}) {
+  const sel = `${scope} input[data-box]`;
+  await page.waitForSelector(sel, { state: "visible", timeout: 10000 });
+  const boxes = page.locator(sel); const n = await boxes.count();
+  const labels = [], pre = [];
+  for (let i = 0; i < n; i++) {
+    const b = boxes.nth(i); if (only && !only.includes(await b.getAttribute("data-box"))) continue;
+    const id = await b.getAttribute("id"); labels.push((await page.locator(`label[for="${id}"]`).innerText().catch(() => "")).replace(/\s+/g, " ").trim()); pre.push(await b.isChecked());
+  }
+  t.check(`${what}: no box is ticked in advance`, pre.length > 0 && pre.every((x) => !x), JSON.stringify(pre));
+  t.check(`${what}: the words are the server's own wording`, labels.length > 0 && labels.every((l) => CONSENT_WORDS.has(l)), labels.join(" | ").slice(0, 200));
+  if (btn) t.check(`${what}: the button is disabled until every box is ticked`, await page.locator(btn).first().isDisabled(), btn);
+  for (let i = 0; i < n; i++) {
+    const b = boxes.nth(i); if (only && !only.includes(await b.getAttribute("data-box"))) continue;
+    if (await b.isChecked()) continue;
+    const id = await b.getAttribute("id");
+    // tap the words at their left edge (the way a person taps the line; the links sit further right), fall back to the box itself
+    await page.locator(`label[for="${id}"]`).click({ position: { x: 4, y: 4 }, timeout: 3000 }).catch(() => {});
+    if (!(await b.isChecked())) await b.check({ force: true, timeout: 3000 }).catch(() => {});
+  }
+  const all = []; for (let i = 0; i < n; i++) all.push(await boxes.nth(i).isChecked());
+  t.check(`${what}: every box can be ticked`, all.every(Boolean), JSON.stringify(all));
+  if (btn && enabledAfter) { await page.waitForTimeout(80); t.check(`${what}: the button is enabled once every box is ticked`, !(await page.locator(btn).first().isDisabled()), btn); }
+  return { labels, count: n };
+}
+
+/** Quietly ticks every box of one point (K1..K6) on the screen, with no checks recorded (for the manual-screens scripts). */
+export async function tickKind(page, kind) {
+  await page.waitForSelector(`[data-cbc="${kind}"] input[data-box]`, { timeout: 8000 }).catch(() => {});
+  for (const b of await page.locator(`[data-cbc="${kind}"] input[data-box]`).all()) if (!(await b.isChecked())) await b.check({ force: true }).catch(() => {});
+}
+/** Ticks the boxes when this screen shows any (some screens of this game ask nothing); returns whether it found boxes. */
+export async function tickIfAny(t, page, opts) {
+  const found = await page.waitForSelector(`${opts.scope || "body"} input[data-box]`, { state: "visible", timeout: 1500 }).then(() => true).catch(() => false);
+  if (found) await tickTerms(t, page, opts);
+  return found;
+}
+/** The home-page sign-in sheet as a person: e-mail, the Terms box (K2), "Email me a code". Waits for the code box. */
+export async function askCodeUi(page, email) {
+  await page.goto(H.SIM + "/#login"); await page.fill("#lMail", email);
+  await tickIfAny(CUR, page, { scope: "[data-cbc='K2']", btn: "#lgGo", what: "Sign-in" }); await page.click("#lgGo"); await page.waitForSelector("#lCode");
+}
+/** A Host or Co-host who opened the console for the first time on this device meets ONE box (K5) before anything else: ticks it and carries on. No-op when the console opens straight away. */
+export async function passK5Gate(page, { timeout = 15000 } = {}) {
+  await page.waitForSelector(".zc-sech, #roleaccept, #mk, #finishsetup", { timeout: Math.min(timeout, 9000) }).catch(() => {});
+  if (await page.$("#roleaccept")) {
+    await tickTerms(CUR, page, { scope: "#roleaccept [data-cbc='K5']", btn: "#roleacceptgo", what: "Co-host role box (K5)" });
+    await page.click("#roleacceptgo"); await page.waitForSelector(".zc-sech, #mk", { timeout });
+  }
+}
+/** The API way of the same K5 acceptance for a Co-host key (what the one-time box does when ticked). */
+export const acceptRole = (key) => H.call("POST", "/api/org/role/accept", {}, { "x-organizer": key });
+/** Host first-open, e-mail step: the box (K5) first, then "Send me a code". */
+export async function setupSendUi(page, email) {
+  await page.fill("#setupemail", email);
+  await tickTerms(CUR, page, { scope: "[data-cbc='K5']", btn: "#setupsend", what: "Host setup" }); await page.click("#setupsend"); await page.waitForSelector("#setupcode");
 }
 
 // ---------------------------------------------------------------- console helpers
@@ -68,6 +138,11 @@ export async function openConsole(t, org, eid, { device = "laptop", token, w, h,
 /** the people block of step 6 (My people): opens the step and waits until the list has loaded */
 export async function openPeople(page) {
   await openStep(page, 6); await page.waitForSelector("#sec6 #gcount", { timeout: 10000 }); await page.waitForTimeout(300);
+  await tickGuestList(page);
+}
+/** Step 6, "My people": ticks the guest-list box (K6: "I am allowed to use these names and numbers ... The people have been told"); until it is ticked the Add / Paste / Upload buttons stay disabled. */
+export async function tickGuestList(page) {
+  await tickTerms(CUR, page, { scope: "[data-cbc='K6']", btn: "#gadd, #rosterGo, #gcontacts, #gfile", what: "Guest list" });
 }
 /** presses SEND on the WhatsApp simulator page (waits for the page script, retries: the harness' pressSend can click before the handler is attached) */
 export async function waSend(wp) {
@@ -95,20 +170,38 @@ export async function saveStep(page, n) { await page.click(`#sec${n} [data-save=
 export async function uiPublish(page, email, phone = "9811122233") {
   await openStep(page, 7);
   await page.click("#publishopen"); await page.waitForSelector("#pubEmail");
-  await page.fill("#pubEmail", email); await page.fill("#pubPhone", phone); await page.click("#pubgo");
+  await page.fill("#pubEmail", email); await page.fill("#pubPhone", phone);
+  await tickTerms(CUR, page, { scope: "[data-cbc='K1']", btn: "#pubgo", what: "Publish" }); // K1: both boxes
+  await page.click("#pubgo");
   await page.waitForSelector("#cancelopen", { timeout: 15000 });
 }
 /** the pay page as a person: fills name + e-mail, presses the (test) payment button and waits for the finished state */
 export async function payOnPage(page, { name = "Sim Payer", email, org = "Sim Org Ltd", phone = "9811122233" } = {}) {
   await page.waitForSelector("#paygo", { timeout: 15000 });
   await page.fill("#nm", name); await page.fill("#em", email); if (await page.$("#org")) await page.fill("#org", org); if (await page.$("#ph")) await page.fill("#ph", phone);
+  await tickTerms(CUR, page, { scope: "[data-cbc='K3']", btn: "#paygo", what: "Pay" }); // K3
   await page.click("#paygo");
 }
 export async function payStatus(org, eid) { return (await org.summary(eid)).body.payment?.status ?? "?"; }
 
 // ---------------------------------------------------------------- guest helpers
+/** The join form as a person meets it: the Terms boxes (K4) first, the name field opens only after they are ticked, the Join button after a name is typed. The page must already be at /z?e=<game>. */
+export async function joinForm(page, phone, name) {
+  await page.waitForSelector("[data-cbc='K4'] input[data-box]", { timeout: 15000 });
+  await tickTerms(CUR, page, { scope: "[data-cbc='K4']", btn: "#go", what: "Join" }); // K4: both boxes, Join stays off until they are ticked
+  if (await page.$("#ph")) await page.fill("#ph", phone);
+  if (await page.$("#nm")) await page.fill("#nm", name);
+  await page.click("#go");
+}
+/** The page a guest meets from a personal link: the boxes (K4), a nickname (taken from the list if the page offers one, else `name`), then Join. */
+export async function joinFromLink(page, name = "Link Guest") {
+  await page.waitForSelector("#go", { timeout: 12000 }).catch(() => {});
+  if (await page.$("[data-cbc='K4'] input[data-box]")) await tickTerms(CUR, page, { scope: "[data-cbc='K4']", btn: "#go", what: "Join (personal link)" });
+  if ((await page.$("#nm")) && !(await page.inputValue("#nm"))) await page.fill("#nm", name);
+  const b = await page.$("#go"); if (b) { await b.click(); await page.waitForTimeout(3000); }
+}
 export async function guestJoinUi(page, eid, phone, name) {
-  await page.goto(`${H.SIM}/z?e=${eid}`); await page.waitForSelector("#ph"); await page.fill("#ph", phone); await page.fill("#nm", name); await page.click("#go");
+  await page.goto(`${H.SIM}/z?e=${eid}`); await joinForm(page, phone, name);
 }
 export const guestText = async (page) => (await page.innerText("body").catch(() => "")).replace(/\s+/g, " ");
 

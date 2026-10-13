@@ -1,7 +1,7 @@
 // Not a test: captures REAL screens of the running app (local sim stack, same pages as the live site) for the user manuals.
 // Run: node tools/sim2/scenarios/ui/run.mjs --file s99      Output: C:/ct/ct/tambola-manuals/shots/*.png
 import { mkdirSync } from "node:fs";
-import { H, openConsole, openStep, guestJoinUi, nextPhone, nextMail, cohostUrl, payOnPage, uiPublish, chip } from "./kit.mjs";
+import { H, openConsole, openStep, guestJoinUi, nextPhone, nextMail, cohostUrl, payOnPage, uiPublish, chip, tickKind } from "./kit.mjs";
 
 const OUT = "C:/ct/ct/tambola-manuals/shots"; mkdirSync(OUT, { recursive: true });
 const CSS = `.__hl{outline:4px solid #F5820A!important;outline-offset:3px!important;border-radius:6px}
@@ -53,7 +53,7 @@ export default [
         await p.click("#payBtn"); await p.waitForTimeout(500);
         await snap(p, "signup-form", ["#fMail", "#frGo"]);
         await p.fill("#fMail", email); await snap(p, "signup-filled", ["#fMail", "#frGo"]);
-        await p.click("#frGo"); await p.waitForURL(/\/zc/, { timeout: 15000 }); await p.waitForSelector("#mk"); await p.waitForTimeout(800);
+        await tickKind(p, "K2"); await p.click("#frGo"); await p.waitForURL(/\/zc/, { timeout: 15000 }); await p.waitForSelector("#mk"); await p.waitForTimeout(800);
         await snap(p, "org-console-empty", ["#mk"]);
         await p.click("#mk"); await p.waitForSelector(".zc-sech", { timeout: 15000 }); await p.waitForTimeout(1000);
         await snap(p, "org-console-new", [".zc-sech[data-open='1']", "#paypill"]);
@@ -73,7 +73,7 @@ export default [
         await openStep(p, 7); await p.click("#publishopen"); await p.waitForSelector("#pubEmail"); await p.waitForTimeout(400);
         await p.fill("#pubEmail", email); await p.fill("#pubPhone", "9811122233");
         await el(p, "org-publish-dialog", "#sec7", ["#pubEmail", "#pubPhone", "#pubgo"]);
-        await p.click("#pubgo"); await p.waitForSelector("#cancelopen", { timeout: 15000 }); await p.waitForTimeout(800);
+        await tickKind(p, "K1"); await p.click("#pubgo"); await p.waitForSelector("#cancelopen", { timeout: 15000 }); await p.waitForTimeout(800);
         await el(p, "org-published", "#sec7", ["#cancelopen"]);
         await snap(p, "org-console-published", ["#paypill"]);
       });
@@ -87,7 +87,7 @@ export default [
         await snap(p, "pay-page", ["#nm", "#em"], { full: true });
         await p.fill("#nm", "Rajesh Kumar"); await p.fill("#em", email); if (await p.$("#org")) await p.fill("#org", "Sunrise Industries Pvt Ltd"); if (await p.$("#ph")) await p.fill("#ph", "9811122233");
         await snap(p, "pay-page-filled", ["#nm", "#em", "#org", "#paygo"], { full: true });
-        await p.click("#paygo"); await p.waitForTimeout(4000);
+        await tickKind(p, "K3"); await p.click("#paygo"); await p.waitForTimeout(4000);
         await snap(p, "pay-done", [], { full: true });
       });
       await ok("back-console", async () => {

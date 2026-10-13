@@ -1,5 +1,5 @@
 // Not a test: second batch of manual screens (host, co-host, guests, game day, partner). See s99-manual-shots.mjs.
-import { H, openConsole, openStep, guestJoinUi, nextPhone, cohostUrl, waSend, clickWa } from "./kit.mjs";
+import { H, openConsole, openStep, guestJoinUi, nextPhone, cohostUrl, waSend, clickWa, tickKind } from "./kit.mjs";
 import { snap, el } from "./s99-manual-shots.mjs";
 
 const closeExcept = async (t, keep = []) => { for (const x of [...t.pages]) if (!keep.some((k) => k.page === x.page)) { await x.close().catch(() => {}); t.pages.splice(t.pages.indexOf(x), 1); } };
@@ -24,7 +24,7 @@ export default [
         const h = await t.open({ device: "mobile" }); const p = h.page;
         await p.goto(inv.link); await p.waitForSelector("#finishsetup", { timeout: 15000 }); await p.waitForTimeout(600);
         await snap(p, "host-setup-1", ["#setupemail", "#setupsend"]);
-        await p.fill("#setupemail", hostMail); await p.click("#setupsend"); await p.waitForSelector("#setupcode");
+        await p.fill("#setupemail", hostMail); await tickKind(p, "K5"); await p.click("#setupsend"); await p.waitForSelector("#setupcode");
         const m = await H.mailbox.waitFor({ to: hostMail, timeout: 8000 }); await p.fill("#setupcode", H.mailbox.code(m));
         await snap(p, "host-setup-2", ["#setupcode", "#setupverify"]);
         await p.click("#setupverify"); await p.waitForFunction(() => !document.getElementById("setupcode"), null, { timeout: 15000 });
@@ -64,7 +64,7 @@ export default [
         await l1p.goto(`${H.SIM}/z?e=${g.id}`); await l1p.waitForSelector("#ph"); await l1p.waitForTimeout(700);
         await snap(l1p, "guest-join-form", []);
         await l1p.fill("#ph", nums[0]); await l1p.fill("#nm", names[0]); await snap(l1p, "guest-join-filled", ["#ph", "#nm", "#go"]);
-        await l1p.click("#go"); await l1p.waitForTimeout(3500);
+        await tickKind(l1p, "K4"); await l1p.click("#go"); await l1p.waitForTimeout(3500);
         await snap(l1p, "guest-l1-ticket-wait", [], { tall: true }); await snap(l1p, "guest-l1-full", [], { tall: true });
         if (await l1p.$("#mi-add")) {
           friend = nextPhone(); await l1p.fill("#mi-name", "Sneha Kapoor"); await l1p.fill("#mi-phone", friend);
@@ -81,7 +81,7 @@ export default [
         await waSend(wp); const msg = await H.wa.waitFor(friend, { match: "/j/" });
         l2 = await H.openLinkAsRecipient(t.shared.open, friend, msg); t.pages.push({ ...l2, label: "friend" });
         await l2.page.waitForTimeout(1500); await snap(l2.page, "guest-l2-link", ["#go"]);
-        if (await l2.page.$("#go")) { await l2.page.click("#go"); await l2.page.waitForTimeout(3000); }
+        if (await l2.page.$("#go")) { await tickKind(l2.page, "K4"); await l2.page.click("#go"); await l2.page.waitForTimeout(3000); }
         await snap(l2.page, "guest-l2-ticket", [], { tall: true }); await snap(l2.page, "guest-l2-full", [], { tall: true });
       });
       await closeExcept(t, [l1, l2].filter(Boolean));

@@ -1,7 +1,7 @@
 // Group 4: guests and people. Personal links through the WhatsApp simulator, common link, "Who can join" (list / anyone), waiting room (admit, decline, Approve all, who approved),
 // removing people before and during the game, a forwarded personal link, guests who invite (level 1 / level 2), limits and first-wins.
-import { H, openConsole, openStep, openPeople, clickWa, waSend, guestJoinUi, guestText, joinApi, nextPhone, nextIp } from "./kit.mjs";
-const startButton = async (page) => { await page.waitForSelector("#go", { timeout: 10000 }).catch(() => {}); const b = await page.$("#go"); if (b) { await b.click(); await page.waitForTimeout(3000); } };
+import { H, openConsole, openStep, openPeople, clickWa, waSend, guestJoinUi, guestText, joinApi, nextPhone, nextIp, joinForm, joinFromLink, tickTerms } from "./kit.mjs";
+const startButton = (page) => joinFromLink(page);
 
 const INV = { on: true, per: 2, cats: ["family", "colleagues"] };
 /** a paid, published game with a list policy */
@@ -109,7 +109,7 @@ export default [
       const org = await t.org("o"); const g = await listGame(t, org, { who: "anyone" });
       const x = await t.open({ device: "mobile" });
       await x.page.goto(`${H.SIM}/z?e=${g.id}`); await x.page.waitForSelector("#ph");
-      await x.page.fill("#ph", "123"); await x.page.fill("#nm", ""); await x.page.click("#go"); await x.page.waitForTimeout(800);
+      await joinForm(x.page, "123", ""); await x.page.waitForTimeout(800);
       t.check("a bad number gives a message and no ticket", !/YOU ARE IN/i.test(await guestText(x.page)) && /number|valid|mobile/i.test(await guestText(x.page)), (await guestText(x.page)).slice(0, 200));
       await guestJoinUi(x.page, g.id, nextPhone(), "Open Olga"); await x.page.waitForTimeout(3000);
       t.check("a stranger joins at once in 'anyone' mode", /YOU ARE IN|Starting in/i.test(await guestText(x.page)), (await guestText(x.page)).slice(0, 140));
@@ -214,7 +214,7 @@ export default [
       t.check("level-1 guest sees the 'My invites' card", !!card, (await guestText(x.page)).slice(0, 220));
       if (card) {
         const friend = nextPhone();
-        await x.page.fill("#mi-name", "Friend Fay"); await x.page.fill("#mi-phone", friend); await x.page.click("#mi-add"); await x.page.waitForTimeout(1200);
+        await tickTerms(t, x.page, { scope: "[data-cbc='K6']", btn: "#mi-add", what: "My invites" }); await x.page.fill("#mi-name", "Friend Fay"); await x.page.fill("#mi-phone", friend); await x.page.click("#mi-add"); await x.page.waitForTimeout(1200);
         t.check("the invite is stored under the guest (list of 1)", /Friend Fay|1 of 2|invited <b>1|invited 1/i.test(await guestText(x.page)) || (await peopleOf(org, g.id)).some((q) => /Friend/.test(q.name ?? "")), (await guestText(x.page)).slice(-260));
         const wa = x.page.locator("a[href*='wa.me'], a[href*='whatsapp']").first();
         if (await wa.count()) { const wp = await clickWa(x.page, wa, { send: false }); await wp.waitForLoadState("load"); t.check("the guest's WhatsApp button reaches the simulator with a link", /\/j\//.test(await wp.inputValue("#msg")), (await wp.inputValue("#msg")).slice(0, 100)); await waSend(wp); const msg = await H.wa.waitFor(friend, { match: "/j/" });

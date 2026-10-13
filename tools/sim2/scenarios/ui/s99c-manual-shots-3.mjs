@@ -1,5 +1,5 @@
 // Not a test: third batch of manual screens (partner / refer and earn, sales team material). See s99-manual-shots.mjs.
-import { H, nextPhone, nextMail } from "./kit.mjs";
+import { H, nextPhone, nextMail, tickKind } from "./kit.mjs";
 import { snap, el } from "./s99-manual-shots.mjs";
 const ok = async (label, fn) => { try { await fn(); } catch (e) { console.log("STEP FAILED", label, String(e).slice(0, 240)); } };
 
@@ -32,13 +32,13 @@ export default [
         const b = await t.open({ device: "laptop" }); const bp = b.page;
         await bp.goto(`${H.SIM}/?ref=${ref}`); await bp.waitForTimeout(1200);
         const buyer = "hr@brightpath.example.com"; t.team.add(buyer);
-        await bp.click("#payBtn"); await bp.fill("#fMail", buyer); await bp.click("#frGo"); await bp.waitForURL(/\/zc/, { timeout: 15000 }); await bp.waitForSelector("#mk");
+        await bp.click("#payBtn"); await bp.fill("#fMail", buyer); await tickKind(bp, "K2"); await bp.click("#frGo"); await bp.waitForURL(/\/zc/, { timeout: 15000 }); await bp.waitForSelector("#mk");
         await bp.click("#mk"); await bp.waitForSelector(".zc-sech"); await bp.waitForTimeout(800);
         const key = await bp.evaluate(() => sessionStorage.getItem("ctz-org")); const eid = new URL(bp.url()).searchParams.get("e");
         const o = new H.Organizer(buyer, key);
         const r = await o.publish(eid); console.log("publish", r.ok);
         await bp.goto(`${H.SIM}/pay?e=${eid}`); await bp.waitForSelector("#paygo", { timeout: 15000 });
-        await bp.fill("#nm", "Neha Gupta"); await bp.fill("#em", buyer); if (await bp.$("#org")) await bp.fill("#org", "Brightpath Services"); await bp.click("#paygo"); await bp.waitForTimeout(4000);
+        await bp.fill("#nm", "Neha Gupta"); await bp.fill("#em", buyer); if (await bp.$("#org")) await bp.fill("#org", "Brightpath Services"); await tickKind(bp, "K3"); await bp.click("#paygo"); await bp.waitForTimeout(4000);
         await p.reload(); await p.waitForTimeout(2500); await snap(p, "partner-dashboard-sale", [], { tall: true });
       });
     },

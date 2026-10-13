@@ -1,6 +1,6 @@
 // Group 8: every public page, the game pages and the console at 360 / 768 / 1280 / 1920 px: horizontal overflow, text under 12 px, console errors, screenshots (test-results/sim-ui/).
 // 12 scenarios: three families (public pages, game-state pages, console views) x four widths.
-import { H, openConsole, openStep, guestJoinUi, nextPhone, WIDTHS, cohostUrl } from "./kit.mjs";
+import { H, openConsole, openStep, guestJoinUi, nextPhone, WIDTHS, cohostUrl, joinForm, passK5Gate } from "./kit.mjs";
 
 const DEV = { 360: ["mobile", 360, 740], 768: ["tablet", 768, 1024], 1280: ["laptop", 1280, 800], 1920: ["wide", 1920, 1080] };
 const PUBLIC = ["/", "/signin.html", "/organizer-guide.html", "/trust.html", "/terms.html", "/legal.html", "/dpa.html", "/subprocessors.html", "/partner.html", "/partner-terms.html", "/demo.html", "/brochure.html", "/ai-link.html", "/this-page-does-not-exist"];
@@ -47,7 +47,7 @@ for (const w of WIDTHS) {
       const x = await t.open({ device: dev, w: vw, h: vh });
       await pass(t, x, w, [`/z?e=${g.id}`], { wait: 900 });
       // waiting room page
-      await x.page.fill("#ph", nextPhone()); await x.page.fill("#nm", "Waiting Wes"); await x.page.click("#go"); await x.page.waitForTimeout(2000); await t.shot(x.page, `waiting-${w}`);
+      await joinForm(x.page, nextPhone(), "Waiting Wes"); await x.page.waitForTimeout(2000); await t.shot(x.page, `waiting-${w}`);
       const m1 = await H.measure(x.page); t.check(`waiting page: no overflow at ${w}`, !m1.overflowX, JSON.stringify(m1.wideElements));
       // the listed guest's ticket page
       const y = await t.open({ device: dev, w: vw, h: vh });
@@ -86,7 +86,7 @@ for (const w of WIDTHS) {
       const h = await t.open({ device: dev, w: vw, h: vh, token: hf.token });
       await pass(t, h, w, [`/zc?e=${g.id}`], { wait: 1500 });
       const k = await t.open({ device: dev, w: vw, h: vh });
-      await k.page.goto(cohostUrl(g.id, co)); await k.page.waitForTimeout(2200);
+      await k.page.goto(cohostUrl(g.id, co)); await passK5Gate(k.page); await k.page.waitForTimeout(2200);
       const m = await H.measure(k.page); await t.shot(k.page, `cohost-${w}`);
       t.check(`Co-host view: no overflow at ${w}`, !m.overflowX, JSON.stringify(m.wideElements));
       t.check(`Co-host view: no text under 12 px at ${w}`, m.smallText.length === 0, JSON.stringify(m.smallText));

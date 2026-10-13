@@ -53,6 +53,7 @@ export default [
       const r2 = await host({ brand: { name: "Host Brand 2", color: "#6A1B9A", logo: await dataUrlOf(tinyPng("host-logo2.png", 100, 100)) } });
       t.check("the Host can change it again", r2.status === 200 && (await org.info(g.id)).body.brand?.name === "Host Brand 2", `${r2.status}`);
       const c = await org.inviteCohost({ label: "Chandra", phone: t.phone(), e: g.id });
+      await (await import("./kit.mjs")).acceptRole(c.cohostKey);
       const rc = await H.call("PATCH", `/api/z/${g.id}/settings`, { brand: { name: "Hack", color: "#6A1B9A" } }, { "x-organizer": c.cohostKey });
       t.check("a Co-host cannot change the brand", rc.status === 403 || rc.status === 401, `${rc.status}`);
       const small = await host({ brand: { name: "X", color: "#6A1B9A", logo: await dataUrlOf(tinyPng("tiny.png", 20, 20)) } });

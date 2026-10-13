@@ -19,7 +19,7 @@ const consentKind = (method, path, body) => {
   if (path === "/api/host/setup/email" || path === "/api/org/role/accept") return "K5";
   if (/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/publish$/.test(path)) return "K1";
   if (/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/join$/.test(path)) return "K4";
-  if (/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(roster|people)$/.test(path)) return "K6";
+  if (/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(roster|people)(\?.*)?$/.test(path)) return "K6";
   return null;
 };
 const withConsent = (method, path, body) => {

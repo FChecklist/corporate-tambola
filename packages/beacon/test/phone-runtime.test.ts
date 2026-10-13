@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { bytesToHex } from "@noble/hashes/utils";
 import { sha256 } from "@noble/hashes/sha256";
-import { handle, type Env } from "../../../apps/edge/src/worker";
+import { type Env } from "../../../apps/edge/src/worker";
+import { handle } from "../../../apps/edge/test/with-terms";
 import { makeD1 } from "../../../apps/edge/test/d1-sqlite";
 import { PhoneRuntime, type PhoneDeps } from "../src/phone-runtime";
 import { ALL_PATTERNS, callRoundR, checkClaims, completionIndex, luckyRound, luckyWinners, scheduleFull, settleAll, ticketFor } from "../src/game";

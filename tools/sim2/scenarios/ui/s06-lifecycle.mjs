@@ -1,5 +1,5 @@
 // Group 6: cancel (three confirmations, every 'No' path), reschedule, clone, unpaid messages for each role, the did-not-start screen, erasure and credit e-mails over time.
-import { H, openConsole, openStep, guestText, joinApi, nextPhone, saveStep, chip, cohostUrl } from "./kit.mjs";
+import { H, openConsole, openStep, guestText, joinApi, nextPhone, saveStep, chip, cohostUrl, joinForm, passK5Gate } from "./kit.mjs";
 
 const cancelViaUi = async (page, { stopAt = 4 } = {}) => {
   await openStep(page, 7); await page.click("#cancelopen"); await page.waitForSelector("#cancel1");
@@ -130,7 +130,7 @@ export default [
       t.check("pay page: no pay button for a cancelled game", !(await o.page.$("#paygo")) || /cancel/i.test(await t.text(o.page)), (await t.text(o.page)).slice(0, 160));
       const p = await t.open({ device: "mobile" }); await p.page.goto(pl); await p.page.waitForTimeout(1800);
       t.check("pay link: no pay button, a calm message", !(await p.page.$("#paygo")) && (await t.text(p.page)).length > 30, (await t.text(p.page)).slice(0, 160));
-      const c = await t.open({ device: "mobile" }); await c.page.goto(cohostUrl(g.id, co)); await c.page.waitForTimeout(2500); await t.shot(c.page, "cancelled-cohost");
+      const c = await t.open({ device: "mobile" }); await c.page.goto(cohostUrl(g.id, co)); await passK5Gate(c.page); await c.page.waitForTimeout(2500); await t.shot(c.page, "cancelled-cohost");
       t.check("Co-host view: readable cancelled state (key keeps working only to read)", /cancel/i.test(await t.text(c.page)), (await t.text(c.page)).slice(0, 200));
       const info = (await org.info(g.id)).body;
       t.check("API info says cancelled", JSON.stringify(info).toLowerCase().includes("cancel"), JSON.stringify(info).slice(0, 160));
@@ -141,7 +141,7 @@ export default [
     async run(t) {
       const org = await t.org("o"); const g = await t.game(org, { lead: 5 * H.HOUR, pay: true, settings: { whoCanJoin: "anyone" } });
       const guest = await t.open({ device: "mobile" });
-      await guest.page.goto(`${H.SIM}/z?e=${g.id}`); await guest.page.fill("#ph", nextPhone()); await guest.page.fill("#nm", "Moved Mina"); await guest.page.click("#go"); await guest.page.waitForTimeout(2500);
+      await guest.page.goto(`${H.SIM}/z?e=${g.id}`); await joinForm(guest.page, nextPhone(), "Moved Mina"); await guest.page.waitForTimeout(2500);
       const c = await openConsole(t, org, g.id, { device: "laptop" }); await openStep(c.page, 1);
       const days = await c.page.$$eval('[data-ck="day"]', (els) => els.map((e) => e.dataset.v).filter((v) => v !== "other"));
       const old = (await org.info(g.id)).body.startMs;
@@ -212,7 +212,7 @@ export default [
       const org = await t.org("o"); const g = await t.game(org, { lead: 8 * H.MIN, pay: false, settings: { whoCanJoin: "anyone" } });
       const co = await org.inviteCohost({ label: "Chandra", phone: nextPhone(), e: g.id });
       const hm = t.mail("h"); const inv = await org.inviteHost({ label: "Hema", email: hm, mobile: nextPhone() }); const hf = await new H.Host(inv.hostKey).firstOpen({ email: hm, mobile: nextPhone() });
-      const gu = await t.open({ device: "mobile" }); await gu.page.goto(`${H.SIM}/z?e=${g.id}`); await gu.page.fill("#ph", nextPhone()); await gu.page.fill("#nm", "Pending Pia"); await gu.page.click("#go"); await gu.page.waitForTimeout(2500);
+      const gu = await t.open({ device: "mobile" }); await gu.page.goto(`${H.SIM}/z?e=${g.id}`); await joinForm(gu.page, nextPhone(), "Pending Pia"); await gu.page.waitForTimeout(2500);
       await H.clock.advance(12 * H.MIN); await t.shared.track.refresh(); await H.advanceBrowsers([gu.ctx], 12 * H.MIN, { run: false });
       await gu.page.reload(); await gu.page.waitForTimeout(3000);
       t.check("guest: 'Waiting for the Organizer or Host to start the game.' and no payment wording", /Waiting for the Organizer or Host to start the game/i.test(await guestText(gu.page)) && !/payment|pay /i.test(await guestText(gu.page)), (await guestText(gu.page)).slice(0, 260));
@@ -221,7 +221,7 @@ export default [
       t.check("Organizer: 'Payment pending for this game'", /Payment pending for this game/i.test(await t.text(o.page)), (await t.text(o.page)).slice(0, 160));
       const h = await t.open({ device: "laptop", token: hf.token }); await h.page.goto(`${H.SIM}/zc?e=${g.id}`); await h.page.waitForSelector(".zc-sech");
       t.check("Host: 'Payment pending for this game'", /Payment pending for this game/i.test(await t.text(h.page)), (await t.text(h.page)).slice(0, 160));
-      const c = await t.open({ device: "mobile" }); await c.page.goto(cohostUrl(g.id, co)); await c.page.waitForSelector(".zc-sech"); await c.page.waitForTimeout(800);
+      const c = await t.open({ device: "mobile" }); await c.page.goto(cohostUrl(g.id, co)); await passK5Gate(c.page); await c.page.waitForSelector(".zc-sech"); await c.page.waitForTimeout(800);
       const ctxt = await t.text(c.page);
       t.check("Co-host: waiting wording, not 'Payment pending'", /Waiting for the Organizer or Host/i.test(ctxt) || /Payment/i.test(ctxt), ctxt.slice(0, 220));
       t.note("co-host unpaid text: " + ctxt.slice(0, 200));

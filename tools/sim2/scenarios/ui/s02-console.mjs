@@ -1,5 +1,5 @@
 // Group 2: the ten console steps filled by tapping (Organizer): date and time, size and rules, every prize house, prize kinds, brand, moments, team, people, publish.
-import { H, openConsole, openStep, chip, chipOn, saveStep, uiPublish, tinyPng } from "./kit.mjs";
+import { H, openConsole, openStep, chip, chipOn, saveStep, uiPublish, tinyPng, tickTerms, tickGuestList } from "./kit.mjs";
 
 const eidOf = (page) => new URL(page.url()).searchParams.get("e");
 /** from the empty console: tap 'Start a new game' and return the game id */
@@ -277,7 +277,7 @@ export default [
       const { org, x, eid } = await startGameUi(t);
       await org.publish(eid);
       await x.page.reload(); await x.page.waitForSelector(".zc-sech");
-      await openStep(x.page, 6);
+      await openStep(x.page, 6); await tickGuestList(x.page);
       await x.page.fill("#gname", "Asha Rao"); await x.page.fill("#gphone", "98765 43210"); await x.page.click("#gadd"); await x.page.waitForTimeout(900);
       let p = (await org.people(eid)).body.people ?? [];
       t.check("one person added by typing (spaces cleaned)", p.length === 1, JSON.stringify(p).slice(0, 160));
@@ -315,7 +315,8 @@ export default [
     async run(t) {
       const { org, x, eid } = await startGameUi(t);
       await openStep(x.page, 7); await x.page.click("#publishopen"); await x.page.waitForSelector("#pubEmail");
-      await x.page.fill("#pubEmail", "nope"); await x.page.fill("#pubPhone", "123"); await x.page.click("#pubgo"); await x.page.waitForTimeout(900);
+      await x.page.fill("#pubEmail", "nope"); await x.page.fill("#pubPhone", "123");
+      await tickTerms(t, x.page, { scope: "[data-cbc='K1']", btn: "#pubgo", what: "Publish" }); await x.page.click("#pubgo"); await x.page.waitForTimeout(900);
       t.check("a message is shown", /e-?mail|mobile|number/i.test(await t.text(x.page, "#sec7")));
       t.check("still a draft", /draft/i.test((await org.summary(eid)).body.status ?? ""), (await org.summary(eid)).body.status);
       await x.page.click("#pubcancel"); await x.page.waitForTimeout(300);
@@ -327,7 +328,8 @@ export default [
     async run(t) {
       const email = t.mail("j"); t.team.add(email);
       const x = await t.open({ device: "mobile" });
-      await x.page.goto(H.SIM + "/"); await x.page.click("#payBtn"); await x.page.fill("#fMail", email); await x.page.click("#frGo");
+      await x.page.goto(H.SIM + "/"); await x.page.click("#payBtn"); await x.page.fill("#fMail", email);
+      await tickTerms(t, x.page, { scope: "[data-cbc='K2']", btn: "#frGo", what: "Sign-up" }); await x.page.click("#frGo");
       await x.page.waitForURL(/\/zc/, { timeout: 15000 }); await x.page.waitForSelector("#mk"); await x.page.click("#mk"); await x.page.waitForSelector(".zc-sech");
       await x.page.waitForFunction(() => /[?&]e=/.test(location.search), null, { timeout: 8000 });
       const eid = eidOf(x.page);
@@ -342,7 +344,8 @@ export default [
       const org = new H.Organizer(email, await x.page.evaluate(() => sessionStorage.getItem("ctz-org")));
       // step 8: the pay page in the same tab
       await openStep(x.page, 8); await x.page.click("a[href*='/pay.html']"); await x.page.waitForURL(/pay/, { timeout: 10000 });
-      await x.page.waitForSelector("#paygo"); await x.page.fill("#nm", "Journey Payer"); await x.page.fill("#em", email); await x.page.fill("#org", "Journey Co"); await x.page.click("#paygo");
+      await x.page.waitForSelector("#paygo"); await x.page.fill("#nm", "Journey Payer"); await x.page.fill("#em", email); await x.page.fill("#org", "Journey Co");
+      await tickTerms(t, x.page, { scope: "[data-cbc='K3']", btn: "#paygo", what: "Pay" }); await x.page.click("#paygo");
       await t.until(async () => (await org.summary(eid)).body.payment?.status === "paid", { what: "payment paid", timeout: 15000 });
       t.check("paid through the pay page (test payment)", true);
       await x.page.goto(`${H.SIM}/zc?e=${eid}`); await x.page.waitForSelector(".zc-sech");
