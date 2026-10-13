@@ -343,3 +343,5 @@ html[data-theme] .chip.on{background:#fff}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 .spriv.accept{font-size:12px}
+
+/*gb-fix*/.tdots{top:48px!important}@media (max-width:960px){.tdots{top:46px!important}}

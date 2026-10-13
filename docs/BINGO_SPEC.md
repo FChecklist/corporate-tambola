@@ -1,4 +1,4 @@
-# Corporate Bingo: product and build specification (draft 1, 2026-10-12)
+# Corporate Bingo: product and build specification (version 1, 2026-10-12)
 
 Owner brief: a second game like Corporate Tambola (close-group housie), but 75-ball Bingo, for the US market and for India. Online, played by hundreds and thousands, simple, a game people already know.
 
