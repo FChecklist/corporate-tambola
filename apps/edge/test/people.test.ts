@@ -1,6 +1,7 @@
 // Phase 2: people, links and joining (docs/ROLES_AND_CONSOLE_SPEC_3.md, apps/edge/src/people.ts).
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { cleanPhone, parseFrom, fromCodeOf, COHOST_FROM, HOST_FROM, ORG_FROM, phoneHashOf } from "../src/people";
 import { makeD1 } from "./d1-sqlite";

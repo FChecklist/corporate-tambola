@@ -1,7 +1,8 @@
 // The e-mailed link lasts 24 hours; "Get a fresh AI link"; the signed-in "Show my AI work link" read; the alert on unfamiliar use.
 import { beforeEach, describe, expect, test } from "bun:test";
 import { withDevice } from "./device";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import { AI_SUBJECT } from "../src/mails";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";

@@ -2,7 +2,8 @@
 // A Host is added with a name and AT LEAST ONE of e-mail or mobile. The personal link is a one-time entry that lasts 7 days. The console works only after the Host has a
 // confirmed e-mail (a 6-digit code, or Google) AND a mobile number. Later devices sign in by e-mail code or Google. These tests use the strict rule (no test shortcut).
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { setGoogleKeyProvider } from "../src/google";
 import { teamEmails } from "../src/cancel";

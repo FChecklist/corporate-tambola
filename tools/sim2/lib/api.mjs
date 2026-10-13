@@ -1,5 +1,6 @@
 // API clients for each role, built on real HTTP calls to the sim server (no in-process shortcuts), plus the e-mail sink client.
 import { createHash, randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { PLATFORM_KEY, SIM, sleep } from "./env.mjs";
 import { clock } from "./clock.mjs";
 import { roundAt, roundTimeMs } from "./beacon.mjs";
@@ -8,10 +9,29 @@ export const sha = (s) => createHash("sha256").update(s).digest("hex");
 export const deviceOf = (s) => sha("dev|" + s).slice(0, 32);
 export const phoneOf = (i) => "98" + String(10000000 + i).slice(-8);
 
+// The simulated people tick the Terms boxes the way a person does on the page (apps/edge/src/consent.ts): the server refuses these actions without them.
+const CONSENT_TEXT = JSON.parse(readFileSync(new URL("../../../apps/edge/src/consent-text.json", import.meta.url), "utf8"));
+const consentKind = (method, path, body) => {
+  if (method !== "POST") return null;
+  if (path === "/api/start") return "K2";
+  if (path === "/api/auth/google") return body && body.intent === "host" ? "K5" : body && body.intent === "signup" ? "K2" : null;
+  if (path === "/api/checkout" || path === "/api/payments/test" || path === "/api/payments/paytest" || /^\/api\/paylink\/[0-9a-f]{48}\/checkout$/.test(path)) return "K3";
+  if (path === "/api/host/setup/email" || path === "/api/org/role/accept") return "K5";
+  if (/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/publish$/.test(path)) return "K1";
+  if (/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/join$/.test(path)) return "K4";
+  if (/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(roster|people)$/.test(path)) return "K6";
+  return null;
+};
+const withConsent = (method, path, body) => {
+  const k = consentKind(method, path, body);
+  if (!k || !body || typeof body !== "object" || body.consent) return body;
+  return { ...body, consent: { v: CONSENT_TEXT.version, boxes: Object.keys(CONSENT_TEXT[k]) } };
+};
+
 /** One HTTP call; returns { status, body } (body parsed as JSON when possible, else { text }). `ip` = the simulated address of the caller (per-address limits). */
 export async function call(method, path, body, headers = {}, { base = SIM, ip } = {}) {
   const h = { "content-type": "application/json", ...(ip ? { "x-sim-ip": ip } : {}), ...headers };
-  const r = await fetch(base + path, { method, headers: h, body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body), redirect: "manual" });
+  const r = await fetch(base + path, { method, headers: h, body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(withConsent(method, path, body)), redirect: "manual" });
   const text = await r.text(); let j; try { j = JSON.parse(text); } catch { j = { text }; }
   return { status: r.status, body: j, ok: r.ok };
 }

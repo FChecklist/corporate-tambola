@@ -2,7 +2,8 @@
 // Nothing is ever fetched from outside: a logo is a data URL whose type, size and first bytes are all checked here, on the server.
 import { beforeEach, describe, expect, test } from "bun:test";
 import { BRAND_COLORS, BRAND_LOGO_MAX_BYTES, checkBrandLogo, validateCfg } from "../../../packages/beacon/src/config";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
 

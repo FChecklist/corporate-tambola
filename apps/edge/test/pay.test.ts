@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { withDevice } from "./device";
 import { createHmac } from "node:crypto";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
 

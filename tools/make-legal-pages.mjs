@@ -1,9 +1,9 @@
 // Builds the short document pages (Terms, Data processing terms, Sub-processors, Partner terms, Organizer guide) in the same style as legal.html.
 // Run: node tools/make-legal-pages.mjs   (writes apps/web/public/*.html; commit the result). The pages are plain static files: no new user flow.
-// The wording is a draft for lawyer review (see docs/compliance/DRAFTS_README.md); the public text carries no "draft" mark by owner decision.
+// The Terms page and the Legal position page are the two files in tools/legal/ (their {{TERMS_VERSION}} is replaced by the one constant in apps/edge/src/brand.ts).
 import { readFileSync, writeFileSync } from "node:fs";
 
-export const TERMS_VERSION = "2026-10-09";
+export const TERMS_VERSION = /TERMS_VERSION = "([^"]+)"/.exec(readFileSync(new URL("../apps/edge/src/brand.ts", import.meta.url), "utf8"))[1]; // one constant: apps/edge/src/brand.ts
 const PUB = new URL("../apps/web/public/", import.meta.url);
 const tpl = readFileSync(new URL("legal.html", PUB), "utf8");
 const nl = tpl.includes("\r\n") ? "\r\n" : "\n";
@@ -13,6 +13,8 @@ const foot = tpl.slice(tpl.indexOf("</main>"));
 const SITE = "https://corporate-tambola.pages.dev";
 const META = {
   "legal.html": ["Rules, privacy and disclaimer", "The rules of a Corporate Tambola game, how participant names and mobile numbers are deleted within 24 hours, and the disclaimer. Plain English."],
+  "legal-position.html": ["Legal position", "The legal position on which Corporate Tambola is supplied: software only, no stake from players, closed groups, data erased within 24 hours."],
+  "refund-policy.html": ["Refund policy", "Cancellation, rescheduling and refund policy for Corporate Tambola: you pay per game, there is no refund after payment, and a paid game can be moved to any date within 365 days."],
   "terms.html": ["Terms", "The short, plain-English terms for organizers who run a Corporate Tambola engagement for their company."],
   "dpa.html": ["Data processing terms", "Data processing terms for organizers: what we do with your participants' details, on one page."],
   "subprocessors.html": ["Sub-processors", "The providers that help us run Corporate Tambola, and what each one receives."],
@@ -28,13 +30,16 @@ export function withSeo(html, file) {
     `<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${attr(title)}"><meta name="twitter:description" content="${attr(d)}"><meta name="twitter:image" content="${SITE}/img/ticket.webp">`].join(nl);
   return strip.replace(/(<title>[^<]*<\/title>)\r?\n?/, (m, a) => a + nl + tags + nl);
 }
-const FOOTNAV = '<nav class="fl" aria-label="Legal"><a href="/legal.html#rules">Rules</a><a href="/legal.html#privacy">Privacy</a><a href="/legal.html#disclaimer">Disclaimer</a><a href="/terms.html">Terms</a><a href="/dpa.html">Data processing</a><a href="/subprocessors.html">Sub-processors</a><a href="/organizer-guide.html">Organizer guide</a><a href="/partner-terms.html">Partner terms</a><a href="/partner.html">Refer &amp; earn</a><a href="/demo.html">Demo</a><a href="/brochure.pdf">Brochure</a><a href="/">Home</a></nav>';
+const FOOTNAV = '<nav class="fl" aria-label="Legal"><a href="/legal.html#rules">Rules</a><a href="/legal.html#privacy">Privacy</a><a href="/legal.html#disclaimer">Disclaimer</a><a href="/terms.html">Terms</a><a href="/legal-position.html">Legal position</a><a href="/dpa.html">Data processing</a><a href="/subprocessors.html">Sub-processors</a><a href="/organizer-guide.html">Organizer guide</a><a href="/partner-terms.html">Partner terms</a><a href="/partner.html">Refer &amp; earn</a><a href="/demo.html">Demo</a><a href="/brochure.pdf">Brochure</a><a href="/">Home</a></nav>';
 const newFoot = foot.replace(/<nav class="fl"[\s\S]*?<\/nav>/, FOOTNAV);
 export const footNav = FOOTNAV;
 const e = (s) => s.replace(/&(?!rsquo;|amp;)/g, "&amp;");
 
+const frag = (f) => readFileSync(new URL("legal/" + f, import.meta.url), "utf8").replace(/\r\n/g, "\n").replace(/\{\{TERMS_VERSION\}\}/g, TERMS_VERSION);
 const PAGES = {
-  "terms.html": { title: "Terms", h1: "Terms", lead: `Short and plain. Version ${TERMS_VERSION}.`, sections: [
+  "legal-position.html": { title: "Legal position", frag: "legal-position.frag.html" },
+  "refund-policy.html": { title: "Cancellation, rescheduling and refund policy", frag: "refund-policy.frag.html" },
+  "terms.html": { title: "Terms", frag: "terms.frag.html", h1: "Terms", lead: `Version ${TERMS_VERSION}.`, sections: [
     ["organizer", "For organizers", [
       "You run the game. We provide the software only.",
       "You must be 18 or older, or act for a company.",
@@ -52,7 +57,7 @@ const PAGES = {
       "We do not give refunds. If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days. Unused credit lapses at the end of day 365.",
       "The credit belongs to your organizer account. We show the exact amount and date before you confirm.",
       "We e-mail you before it lapses. No credit note is raised for credit that lapses.",
-      "Instead of cancelling, you can change the date of the game. A game time can be set at most 30 days ahead.",
+      "Instead of cancelling, you can change the date of the game. A paid game can be moved to any date within 365 days of the payment.",
       "Once the start time has passed, a paid game cannot be cancelled. You can still end the game.",
       "A game that was never paid for can be cancelled at any time. Nothing is charged.",
       "A game that was not paid for closes when its guest data is erased, 23 hours after it was meant to end.",
@@ -153,6 +158,11 @@ const PAGES = {
 };
 
 for (const [file, p] of Object.entries(PAGES)) {
+  if (p.frag) { // a ready-made page body (tools/legal/): inside the site's own page head and footer
+    const page = head.replace(/<title>[^<]*<\/title>/, `<title>${p.title} | Corporate Tambola</title>`) + `<main class="legal doc">${nl}${frag(p.frag).replace(/\n/g, nl)}${nl}` + newFoot;
+    writeFileSync(new URL(file, PUB), withSeo(page, file));
+    continue;
+  }
   const toc = p.sections.map(([id, t]) => `<a href="#${id}">${t}</a>`).join("");
   const table = p.table ? `  <section id="list" aria-labelledby="lh"><h2 id="lh">Providers</h2>${nl}    <ul>${nl}${p.table.map(([n, w, l]) => `      <li><b>${n}</b>: ${w}. ${l}</li>`).join(nl)}${nl}    </ul></section>${nl}${nl}` : "";
   const secs = p.sections.map(([id, t, items]) => `  <section id="${id}" aria-labelledby="${id}h"><h2 id="${id}h">${t}</h2>${nl}    <ul>${nl}${items.map((i) => `      <li>${i}</li>`).join(nl)}${nl}    </ul></section>`).join(nl + nl);

@@ -1,6 +1,7 @@
 // Retention holes closed (G-09): address hashes, sign-in codes, "new place" records, e-mailed keys, retired keys and counters expire. See docs/RETENTION.md.
 import { beforeEach, describe, expect, test } from "bun:test";
-import { handle, purgeOld, type Env } from "../src/worker";
+import { purgeOld, type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
 

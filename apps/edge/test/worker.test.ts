@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { deviceOf, withDevice } from "./device";
 import { settleByPhones } from "./settle";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import { makeD1 } from "./d1-sqlite";
 
 const SECRET = "org-secret";

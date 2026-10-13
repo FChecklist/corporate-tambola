@@ -9,6 +9,7 @@
 // A Host is identified by `host_id` = the hash of the key row the Organizer created (the "identity row"); device keys are extra organizer_key rows whose host_id points at it.
 // Only the Organizer and Hosts have e-mail addresses; nothing here is available to an AI key (the setup routes need a Host key, the new-link route the Organizer's own key).
 import { openPii, openText, sealPii, sealText } from "./pii";
+import { consentMissing, recordConsent } from "./consent";
 import type { D1, Env } from "./worker";
 
 export const HOST_LINK_TTL_MS = 7 * 86_400_000;
@@ -119,6 +120,7 @@ export async function hostSetupRoute(c: HostCtx): Promise<Response | null> {
     if (st?.verified_ms) return c.json({ error: "Your e-mail is already confirmed. Sign in with it on other devices.", code: "already-verified" }, 409);
     const row = await identityRow(db, c.hid), onFile = row?.email_sealed ? await openText(env as any, row.email_sealed) : null;
     if (onFile && onFile.toLowerCase() !== email) return c.json({ error: `This link is for ${maskEmail(onFile)}`, code: "email-mismatch" }, 409);
+    { const cm = consentMissing(b, "K5"); if (cm) return cm; } // K5: the Host accepts the role ("I will not charge any player...") before the first open goes on
     const eh = await emailHashOf(email);
     const lc = await db.prepare("SELECT win_start, sent FROM login_code WHERE email_hash=?").bind(eh).first<{ win_start: number; sent: number }>();
     const fresh = !lc || now - lc.win_start > 3_600_000;
@@ -129,6 +131,7 @@ export async function hostSetupRoute(c: HostCtx): Promise<Response | null> {
       db.prepare("INSERT INTO login_code(email_hash,code_hash,expires_ms,attempts,win_start,sent,link_hash) VALUES(?,?,?,0,?,1,NULL) ON CONFLICT(email_hash) DO UPDATE SET code_hash=excluded.code_hash, expires_ms=excluded.expires_ms, attempts=0, win_start=?, sent=?, link_hash=NULL").bind(eh, await sha("code|" + eh + "|" + code), now + 600_000, fresh ? now : lc!.win_start, fresh ? now : lc!.win_start, fresh ? 1 : lc!.sent + 1),
       db.prepare("INSERT INTO host_state(host_id,org,pend_hash,pend_sealed,link_exp_ms) VALUES(?,?,?,?,?) ON CONFLICT(host_id) DO UPDATE SET pend_hash=excluded.pend_hash, pend_sealed=excluded.pend_sealed").bind(c.hid, c.org, eh, await sealText(env as any, email), now + HOST_LINK_TTL_MS),
     ]);
+    await recordConsent(db, { subject: "h:" + c.hid.slice(0, 16), kind: "K5", ref: c.org, now });
     await c.sendMail(email, "Your Corporate Tambola code", `Your 6-digit code is ${code}.\n\nType it on the page where you are finishing your Host setup. It works for 10 minutes.\n\nDid not ask for this? Ignore this e-mail.`);
     return c.json({ ok: true, ...(c.test ? { devCode: code } : {}) });
   }

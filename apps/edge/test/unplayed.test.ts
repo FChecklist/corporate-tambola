@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
 import { withDevice } from "./device";
-import { handle, purgeOld, type Env } from "../src/worker";
+import { purgeOld, type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import { endBoundMs, lifecycleTick, personalDeleteAt, PURGE_AFTER_MS } from "../src/lifecycle";
 const MAX_AHEAD_MS = 30 * 86_400_000, SETTINGS_KEEP_MS = 30 * 86_400_000, UNPLAYED_WARN_MS = 6 * 3_600_000; // the owner's numbers, written out here on purpose: the test must not follow a changed constant
 import type { PayEnv } from "../src/pay";
@@ -281,7 +282,7 @@ describe("a game time is at most 30 days ahead", () => {
     expect((await call("POST", "/api/z", body(okAt), master)).status).toBe(200);
     for (const [key, id] of [[master, "FAR-2"], [ai, "FAR-3"], ["plat", "FAR-4"]] as const) {
       const r = await call("POST", "/api/z", { ...body(T + MAX_AHEAD_MS + 60_000), id }, key);
-      expect(r.status).toBe(400); const b = await j(r); expect(b.code).toBe("too-far"); expect(b.error).toBe("A game can be set at most 30 days ahead. Please pick a day within the next 30 days.");
+      expect(r.status).toBe(400); const b = await j(r); expect(b.code).toBe("too-far"); expect(b.error).toBe("A game that is not paid for yet can be set at most 30 days ahead. Please pick a day within the next 30 days. Once it is paid you can move it to any day within 365 days of the payment.");
     }
     expect(count("SELECT COUNT(*) AS c FROM engagement")).toBe(1);
   });

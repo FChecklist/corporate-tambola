@@ -60,12 +60,12 @@ const hostKey = async (o: O, label = "Anita", ready = true) => {
   if (ready) o.world.raw.prepare("UPDATE host_state SET verified_ms=?, mobile_ok=1").run(Date.now()); // as if the Host had finished "Finish setup" (that screen has its own tests)
   return k;
 };
-const cohostKey = async (o: O, eid = "UI-COH", label = "Ravi") => (await o.json(await o.api("POST", "/api/org/cohost", { label, phone: "9811100099", eid }, o.token))).cohostKey as string;
+const cohostKey = async (o: O, eid = "UI-COH", label = "Ravi") => { const k = (await o.json(await o.api("POST", "/api/org/cohost", { label, phone: "9811100099", eid }, o.token))).cohostKey as string; await o.api("POST", "/api/org/role/accept", {}, k); return k; }; // the Co-host has taken the role (the box is ticked)
 const keyId = (key: string) => createHash("sha256").update("key|" + key).digest("hex").slice(0, 10);
 const teamOf = async (o: O) => o.json(await o.api("GET", "/api/org/team", undefined, o.token));
 const COHOST_FROM = 1_000_000_000; // the Worker's own number: a Co-host's invite link carries it plus the first 7 hex of their key id
 
-const quietPrivacy = (root: any) => { const l = root.querySelectorAll(".spriv a"); expect(l.length).toBe(1); const a = l[0]; expect(a.textContent).toBe("Privacy Policy"); expect(a.getAttribute("href")).toBe("/legal.html#privacy"); expect(a.getAttribute("target")).toBe("_blank"); expect(a.getAttribute("rel")).toBe("noopener"); expect(root.querySelectorAll('input[type="checkbox"]').length).toBe(0); };
+const quietPrivacy = (root: any) => { const l = root.querySelectorAll(".spriv a"); expect(l.length).toBe(1); const a = l[0]; expect(a.textContent).toBe("Privacy Policy"); expect(a.getAttribute("href")).toBe("/legal.html#privacy"); expect(a.getAttribute("target")).toBe("_blank"); expect(a.getAttribute("rel")).toBe("noopener"); expect(root.querySelectorAll('input[type="checkbox"]').length).toBe(2); };
 /**
  * A pass-through for the real Worker that RECORDS every /api call the page makes (st.calls = [method, path, body], st.patches, st.posts)
  * and can answer chosen paths itself: over["POST /api/z/ID/paylink"] = (method, body, url) => body | { status, body }.
@@ -297,7 +297,7 @@ describe("console (organizer page)", () => {
       await p.waitFor((x) => /Hi\. Here is the game/.test(x));
       expect(p.win.location.hash).toBe(""); expect(p.win.location.search).toBe("?e=UI-COH"); expect(p.win.sessionStorage.getItem("ctz-org")).toBe(ck);
     }
-    const link = (await o.json(await o.api("POST", "/api/org/cohost", { label: "Link", phone: "9811100077", eid: "UI-COH" }, o.token))).link as string; // the link the Worker hands out opens the Co-host view too (add the game to it)
+    const made = await o.json(await o.api("POST", "/api/org/cohost", { label: "Link", phone: "9811100077", eid: "UI-COH" }, o.token)); await o.api("POST", "/api/org/role/accept", {}, made.cohostKey); const link = made.link as string; // the link the Worker hands out opens the Co-host view too (add the game to it)
     const p = await page(o, "/zc?e=UI-COH&" + link.split("?")[1], "zc.html", ZC_SCRIPTS, {}); await p.waitFor((x) => /Hi\. Here is the game/.test(x));
   });
   test("a Co-host without a game link is told to open the link they were sent, and the console does not crash", async () => {
@@ -542,7 +542,7 @@ describe("phone page", () => {
     const z = readFileSync(new URL("../public/z.js", import.meta.url), "utf8");
     expect(z).not.toContain("partner/check"); expect(z).not.toContain("store.set(\"ctz-phone\"");
   });
-  test("the join page has no consent tick box, only a small Privacy Policy link to the privacy section of the legal page", async () => {
+  test("the join page has the two Terms boxes, and a small Privacy Policy link to the privacy section of the legal page", async () => {
     const o = await organizer(); await make(o, "UI-PRIV"); await publish(o, "UI-PRIV");
     const p = await phone(o, "UI-PRIV"); await p.waitFor((x) => /Join the engagement/.test(x));
     quietPrivacy(p.win.document); expect(p.$("#go")).toBeTruthy(); expect(p.win.document.body.textContent).toContain("Players are 18 or older."); expect(p.win.document.querySelectorAll(".spriv").length).toBe(2);
@@ -776,7 +776,7 @@ describe("Refer & Earn page", () => {
     expect(p.win.document.querySelector(".sheet .sbrand")!.getAttribute("aria-label")).toBe("Corporate Tambola"); expect(p.win.document.querySelector(".sheethead .rolepill")).toBeTruthy();
     expect((p.$("#frGo") as any).textContent).toMatch(/^s*Create my engagement/);
     p.win.document.dispatchEvent(new p.win.KeyboardEvent("keydown", { key: "Escape" })); await new Promise((r) => setTimeout(r, 50));
-    { const sh = p.win.document.getElementById("sheet")!; const l = [...sh.querySelectorAll(".spriv a")] as any[]; expect(l.map((x) => x.getAttribute("href"))).toEqual(["/terms.html", "/legal.html#privacy"]); expect(sh.querySelector(".spriv")!.textContent).toBe("By continuing you accept the Terms and the Privacy & Data Policy."); for (const x of l) { expect(x.getAttribute("target")).toBe("_blank"); expect(x.getAttribute("rel")).toBe("noopener"); } expect(sh.querySelectorAll('input[type="checkbox"]').length).toBe(0); }
+    { const sh = p.win.document.getElementById("sheet")!; const l = [...sh.querySelectorAll(".spriv a")] as any[]; expect(l.map((x) => x.getAttribute("href"))).toEqual(["/terms.html", "/legal.html#privacy"]); expect(sh.querySelector(".spriv")!.textContent).toBe("Read the Terms and the Privacy & Data Policy before you tick the box."); for (const x of l) { expect(x.getAttribute("target")).toBe("_blank"); expect(x.getAttribute("rel")).toBe("noopener"); } expect(sh.querySelectorAll('input[type="checkbox"]').length).toBe(1); /* the Terms box */ }
     expect(p.win.document.getElementById("modal").classList.contains("hidden")).toBe(true);
     expect(p.errors).toEqual([]);
   });
@@ -1290,7 +1290,7 @@ describe("console phase 2: wording fixes, My people, waiting room, remove, play 
     const p = await ready(o, "UI-PPL", w); await myPeople(p);
     setField(p, "#gname", "Asha Verma"); setField(p, "#gphone", "+91 98765-43210"); p.click("#gadd");
     await p.waitFor((x) => /1 good, 0 duplicates removed, 0 look wrong/.test(x));
-    expect(w.st.calls.find((c: any) => c[0] === "POST" && c[1].endsWith("/people"))[2]).toEqual({ people: [{ name: "Asha Verma", phone: "+919876543210" }] });
+    expect(w.st.calls.find((c: any) => c[0] === "POST" && c[1].endsWith("/people"))[2]).toEqual({ consent: { v: "2026-10-13", boxes: ["A"] }, people: [{ name: "Asha Verma", phone: "+919876543210" }] });
     const server = (await listOf(o, "UI-PPL")).people[0]; expect(server).toMatchObject({ name: "Asha Verma", status: "invited" });
     const row = p.$(".zc-prow")!; expect(row.textContent).toMatch(/Asha Verma/); expect(row.textContent).toMatch(/\*{6}3210/); expect(row.textContent).toMatch(/Invited/); expect(p.text()).not.toMatch(/9876543210/);
     const a = p.$("a[data-wa]") as any; expect(a.getAttribute("href")).toBe(server.waLink); expect(a.getAttribute("href").startsWith("https://wa.me/919876543210?text=")).toBe(true);
@@ -1566,7 +1566,7 @@ describe("console phase 4: Finish setup for a new Host, and Continue with Google
     o.world.raw.prepare("UPDATE host_state SET verified_ms=NULL, mobile_ok=0, spent=0").run();
     const h = await consolePage(o, "UI-GOO", hk, {}, { afterLoad: spy({ "POST /api/auth/google": (_m, b) => { bodies.push(b); return { status: 403, body: { error: "This link is for a***@acme.com", code: "email-mismatch" } }; } }, google).hook });
     await h.waitFor((x) => /Finish setup/.test(x) && /Continue with Google/.test(x)); h.win.__gi.callback({ credential: "tok2" }); await h.waitFor((x) => /This link is for a\*\*\*@acme\.com/.test(x));
-    expect(bodies).toEqual([{ credential: "tok2", intent: "host", hostKey: hk }]);
+    expect(bodies).toEqual([{ credential: "tok2", intent: "host", hostKey: hk, consent: { v: "2026-10-13", boxes: ["A"] } }]);
   }, 60_000);
 });
 

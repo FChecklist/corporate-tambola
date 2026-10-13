@@ -1,6 +1,7 @@
 // The Worker refuses to run in production without its secrets (no built-in fallback keys).
 import { describe, expect, test } from "bun:test";
-import { handle, missingKeys, type Env } from "../src/worker";
+import { missingKeys, type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import { makeD1 } from "./d1-sqlite";
 
 const ALL = { DATA_KEY: "d", PHONE_SALT: "p", ORGANIZER_SECRET: "o", CRON_KEY: "c", INBOUND_SECRET: "i" };

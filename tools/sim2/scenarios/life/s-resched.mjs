@@ -1,4 +1,4 @@
-// R-scenarios: rescheduling (earlier, later, many times), the 30-day limit, and what the erasure clock does when the time moves. Spec: docs/ROLES_AND_CONSOLE_SPEC_5.md A.3, A.5.
+// R-scenarios: rescheduling (earlier, later, many times), the 30-day limit of a game that is not paid for yet, the 365-day window of a paid game, and what the erasure clock does when the time moves. Spec: docs/ROLES_AND_CONSOLE_SPEC_5.md A.3, A.5.
 import { sc, HOUR, MIN, DAY, roundAt, roundTimeMs, sql, call } from "./lib.mjs";
 
 const MAX = 30 * DAY;
@@ -53,6 +53,11 @@ sc("R06", "the 30-day edge: the last round inside 30 days is accepted, the next 
   w.expect("round at exactly now+30d is inside the window (sanity)", roundTimeMs(ok) <= now + MAX && roundTimeMs(bad) > now + MAX);
   let r = await org.settings(g.id, { startRound: ok }); w.expect("last round inside 30 days accepted", r.status === 200, JSON.stringify(r.body).slice(0, 160));
   r = await org.settings(g.id, { startRound: bad }); w.expect("first round beyond 30 days refused", r.status === 400 && r.body.code === "too-far", JSON.stringify(r.body).slice(0, 160));
+});
+sc("R06b", "a PAID game can be moved to day 364 after the payment and not to day 366 (code after-paid-window)", async (w) => {
+  const org = await w.org(); const g = await w.game(org, { leadMs: 8 * HOUR, pay: true });
+  let r = await org.settings(g.id, { startRound: await w.roundIn(364 * DAY) }); w.expect("day 364 accepted", r.status === 200, JSON.stringify(r.body).slice(0, 160));
+  r = await org.settings(g.id, { startRound: await w.roundIn(366 * DAY) }); w.expect("day 366 refused", r.status === 400 && r.body.code === "after-paid-window", JSON.stringify(r.body).slice(0, 160));
 });
 sc("R07", "PAID game moved before its start: payment kept, still paid, one payment only", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 8 * HOUR, pay: true, guests: 2 });

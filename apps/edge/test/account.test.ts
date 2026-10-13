@@ -2,7 +2,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { withDevice } from "./device";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import { reportLink } from "../src/lifecycle";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";

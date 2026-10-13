@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
 import { withDevice } from "./device";
-import { handle, purgeOld, type Env } from "../src/worker";
+import { purgeOld, type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import { lifecycleTick } from "../src/lifecycle";
 const MAX_AHEAD_MS = 30 * 86_400_000; // written out on purpose: the test must not follow a changed constant
 import type { PayEnv } from "../src/pay";

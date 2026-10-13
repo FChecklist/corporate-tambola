@@ -1,7 +1,8 @@
 // An AI key (the organizer's, or a co-host's link) never receives a participant's name or mobile number, on any route it can read. The owner's console still can.
 import { beforeEach, describe, expect, test } from "bun:test";
 import { withDevice } from "./device";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import { manualJson, manualText } from "../src/ai-link";
 import { sealPii } from "../src/pii";
 import type { PayEnv } from "../src/pay";

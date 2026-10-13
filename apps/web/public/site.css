@@ -67,6 +67,10 @@ body{overflow-x:hidden}
 .legal h2{font:600 26px var(--serif);margin:0 0 10px}
 .legal section{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin:22px 0;box-shadow:var(--shadow)}
 .legal li{margin:7px 0;color:var(--ink2)}
+.legal.doc h2{font:600 22px var(--serif);margin:26px 0 8px}
+.legal.doc p,.legal.doc li{color:var(--ink2);line-height:1.6;margin:8px 0}
+.legal.doc ol{padding-left:22px}
+.tw{overflow-x:auto;margin:14px 0}.tw table{border-collapse:collapse;width:100%;font-size:14px}.tw th,.tw td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}.tw th{background:var(--surface)}
 .legal ul{padding-left:20px}
 .legaltop{background:linear-gradient(135deg,#3A0B18,#5A1426);color:var(--ivory)}
 .legaltop .sin{display:flex;align-items:center;gap:12px;padding-top:14px;padding-bottom:14px}

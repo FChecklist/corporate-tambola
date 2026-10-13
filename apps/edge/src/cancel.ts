@@ -11,9 +11,14 @@ import type { D1 } from "./worker";
 
 export { teamEmails };
 const r2 = (x: number) => Math.round(x * 100) / 100;
-/** Owner order 2026-10-09: a PAID game that was cancelled can be moved to a new date for 30 days after the cancel. After that only the credit (365 days from the payment) remains. */
-export const RESCHEDULE_WINDOW_MS = 30 * 86_400_000;
-export const rescheduleUntilMs = (cancelledMs: number): number => cancelledMs + RESCHEDULE_WINDOW_MS;
+/** A game is paid per game and there is no refund. A PAID game can be moved to any date up to 365 days from the day of payment (the end of the last day, India time), and so can a cancelled one while its money is still here.
+ *  This is the end of that window (the moment the credit lapses) for a game, or null when the game has no payment on record. An unpaid draft is capped at 30 days instead (lifecycle.ts MAX_AHEAD_MS). */
+export async function paidWindowEndMs(db: D1, eid: string): Promise<number | null> { return (await creditIfCancelled(db, eid))?.expiresMs ?? null; }
+/** The same for an entitlement (a pack bought before the game was made): 365 days from its payment. */
+export async function entitlementWindowEndMs(db: D1, entId: string): Promise<number | null> {
+  const r = await db.prepare("SELECT p.paid_ms AS paid_ms FROM entitlement en JOIN payment p ON p.id=en.payment_id WHERE en.id=?").bind(entId).first<{ paid_ms: number | null }>();
+  return r?.paid_ms ? creditExpiryMs(r.paid_ms) : null;
+}
 const GENESIS = 1692803367;
 const roundMs = (r: number) => (GENESIS + (r - 1) * 3) * 1000;
 const istStamp = (ms: number) => new Date(ms).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) + " IST";
@@ -46,21 +51,21 @@ async function creditOfCancelled(db: D1, eid: string): Promise<CreditView | null
 }
 
 /** Can this game be cancelled right now, and what would it leave in the account? (GET /api/z/{id}/cancel-preview) */
-export async function cancelPreview(env: PayEnv, e: any, now: number): Promise<{ canCancel: boolean; reason?: string; paid: boolean; cancelled?: boolean; credit: { amountInr: number; expiresMs: number; id?: string } | null; rescheduleUntilMs?: number; canReschedule?: boolean; rescheduleReason?: string; rescheduleDays?: number; maxStartMs?: number }> {
+export async function cancelPreview(env: PayEnv, e: any, now: number): Promise<{ canCancel: boolean; reason?: string; paid: boolean; cancelled?: boolean; credit: { amountInr: number; expiresMs: number; id?: string } | null; rescheduleUntilMs?: number; canReschedule?: boolean; rescheduleReason?: string; moveUntilMs?: number; maxStartMs?: number }> {
   const paid = e.pack !== 0;
   if (e.cancelled_ms) {
     const c = await creditOfCancelled(env.DB, e.id), rb = await reopenBlocker(env.DB, e, now);
-    return { canCancel: false, reason: "This game is already cancelled.", paid, cancelled: true, credit: c, ...(paid ? { rescheduleUntilMs: rescheduleUntilMs(e.cancelled_ms) } : {}), canReschedule: !rb.reason, ...(rb.reason ? { rescheduleReason: rb.reason } : { maxStartMs: Math.min(rb.maxStartMs, now + 30 * 86_400_000) }) };
+    return { canCancel: false, reason: "This game is already cancelled.", paid, cancelled: true, credit: c, ...(paid ? { rescheduleUntilMs: (await paidWindowEndMs(env.DB, e.id)) ?? e.cancelled_ms + 365 * 86_400_000 } : {}), canReschedule: !rb.reason, ...(rb.reason ? { rescheduleReason: rb.reason } : { maxStartMs: rb.maxStartMs }) };
   }
   if (paid && roundMs(e.start_round) <= now) return { canCancel: false, reason: "The start time has passed and this game is paid, so it cannot be cancelled now. Please use End the game instead.", paid, credit: null };
   if (e.unplayed_ms) return { canCancel: false, reason: "This game did not start and is closed. You can create a new game like this one.", paid, credit: null };
   const c = await creditIfCancelled(env.DB, e.id); // a paid game: what was paid. Any game: credit that had been applied to it comes back
-  return { canCancel: true, paid, credit: c ? { amountInr: c.amountInr, expiresMs: c.expiresMs } : null, ...(paid ? { rescheduleDays: 30 } : {}) };
+  return { canCancel: true, paid, credit: c ? { amountInr: c.amountInr, expiresMs: c.expiresMs } : null, ...(paid && c ? { moveUntilMs: c.expiresMs } : {}) };
 }
 
 /**
- * Can a cancelled PAID game still be moved to a new date? Three things must hold: (1) 30 days have not passed since the cancel; (2) the credit that the cancel made from this game's payments has not been
- * used for another game (the money is then no longer here to move back); (3) every part of that money is still alive (not past day 365 after its payment). The latest allowed start is just before the first lapse,
+ * Can a cancelled PAID game still be moved to a new date? Two things must hold: (1) the credit that the cancel made from this game's payments has not been
+ * used for another game (the money is then no longer here to move back); (2) every part of that money is still alive (not past day 365 after its payment). The latest allowed start is just before the first lapse,
  * so a moved game is always played inside the 365 days. Returns the reason in plain words, or the latest allowed start.
  */
 type RestoredUse = { id: number; credit_id: string; amount_inr: number; exp: number };
@@ -68,7 +73,6 @@ async function reopenBlocker(db: D1, e: any, now: number): Promise<{ reason?: st
   const none = { maxStartMs: 0, made: [] as CreditRow[], restored: [] as RestoredUse[] };
   if (!e.cancelled_ms) return { ...none, reason: "This game is not cancelled." };
   if (e.pack === 0) return { ...none, reason: "Nothing was paid for this game, so there is nothing to move. You can create a new game like this one." };
-  if (now >= rescheduleUntilMs(e.cancelled_ms)) return { ...none, reason: `This game can no longer be moved: it was cancelled more than 30 days ago (the last day was ${creditLastDay(rescheduleUntilMs(e.cancelled_ms))}). Your payment stays as credit for a new game.` };
   const made = (await db.prepare("SELECT * FROM credit WHERE eid=? AND kind='cancel' AND status<>'revived' ORDER BY created_ms, id").bind(e.id).all<CreditRow>()).results ?? [];
   const restored = (await db.prepare("SELECT cu.id AS id, cu.credit_id AS credit_id, cu.amount_inr AS amount_inr, c.expires_ms AS exp FROM credit_use cu JOIN credit c ON c.id=cu.credit_id WHERE cu.eid=? AND cu.status='restored'").bind(e.id).all<RestoredUse>()).results ?? [];
   for (const c of made) {
@@ -77,24 +81,23 @@ async function reopenBlocker(db: D1, e: any, now: number): Promise<{ reason?: st
   }
   for (const u of restored) if (u.exp <= now) return { ...none, reason: "Part of the credit that paid for this game has lapsed, so the game can no longer be moved." };
   const exps = [...made.map((c) => c.expires_ms), ...restored.map((u) => u.exp)];
-  return { maxStartMs: exps.length ? Math.min(...exps) - 1 : Number.MAX_SAFE_INTEGER, made, restored };
+  return { maxStartMs: exps.length ? Math.min(...exps) - 1 : e.cancelled_ms + 365 * 86_400_000 - 1, made, restored }; // a paid game with no payment on record (made by the platform): 365 days from the cancel
 }
 
 /**
- * Moves a cancelled PAID game to a new date (owner order 2026-10-09). The game keeps its payment: the credit that the cancel made is taken back out of the account (marked `revived`, so the money can never be
+ * Moves a cancelled PAID game to a new date, any date up to 365 days from the payment. The game keeps its payment: the credit that the cancel made is taken back out of the account (marked `revived`, so the money can never be
  * spent twice), credit that had paid for the game goes back onto the game, the cancel mark is cleared and the new start time is set. Guests must join again (their data was erased 23 hours after the cancel).
- * `maxAheadMs` = how far ahead a game time may be set. Every step that changes money is guarded and undone if a later step fails.
+ * Every step that changes money is guarded and undone if a later step fails.
  */
-export async function reopenGame(env: PayEnv, e: any, startRound: unknown, now: number, by: string, maxAheadMs: number): Promise<{ status: number; body: any }> {
+export async function reopenGame(env: PayEnv, e: any, startRound: unknown, now: number, by: string): Promise<{ status: number; body: any }> {
   const db = env.DB;
   const fail = (status: number, error: string, code: string) => ({ status, body: { error, code } });
   if (!e.cancelled_ms) return fail(409, "This game is not cancelled.", "not-cancelled");
   const rb = await reopenBlocker(db, e, now);
-  if (rb.reason) return fail(409, rb.reason, e.pack === 0 ? "unpaid" : now >= rescheduleUntilMs(e.cancelled_ms) ? "window-closed" : "credit-gone");
+  if (rb.reason) return fail(409, rb.reason, e.pack === 0 ? "unpaid" : "credit-gone");
   if (typeof startRound !== "number" || !Number.isInteger(startRound) || startRound < 1) return fail(400, "Pick the new start date and time.", "start");
   const startMs = roundMs(startRound);
   if (startMs <= now) return fail(400, "Pick a start time in the future.", "start");
-  if (startMs > now + maxAheadMs) return fail(400, "A game can be set at most 30 days ahead.", "too-far");
   if (startMs > rb.maxStartMs) return fail(400, `Pick a date on or before ${creditLastDay(rb.maxStartMs + 1)}: the money for this game must be used within 365 days of the payment.`, "after-credit-end");
   const undo: (() => Promise<unknown>)[] = [];
   const rollback = async () => { for (const u of undo.reverse()) { try { await u(); } catch { /* best effort: every step above is guarded, so money is never half moved */ } } };
@@ -157,13 +160,13 @@ export async function cancelGame(env: PayEnv, e: any, now: number, by: string): 
     `The game "${name}" (${e.id}) was cancelled by ${who} on ${istStamp(now)}. It was due to start on ${istStamp(roundMs(e.start_round))}.`,
     "Guests who open the link are told: This game was cancelled by the organizer. Their names and mobile numbers are deleted within 24 hours.",
     credit && e.pack !== 0
-      ? `Your game is cancelled. ${credit.expiresMs <= now ? `The credit from your payment of ${rs(credit.amountInr)} lapsed on ${creditLastDay(credit.expiresMs)}, 365 days after the payment, so there is nothing left to use.` : `Your payment of ${rs(credit.amountInr)} stays as credit until ${creditLastDay(credit.expiresMs)}. Use it for your next game.`}${test ? " (This is a TEST game: nothing was really paid.)" : ""}\n\n${NO_REFUND_LINE}${credit.expiresMs <= now ? "" : `\n\nYou can also move this game to a new date until ${istStamp(rescheduleUntilMs(now))}: open it in your console and choose a new date. Your payment then stays with this game. If you use the credit for another game first, this game can no longer be moved.`}`
+      ? `Your game is cancelled. ${credit.expiresMs <= now ? `The credit from your payment of ${rs(credit.amountInr)} lapsed on ${creditLastDay(credit.expiresMs)}, 365 days after the payment, so there is nothing left to use.` : `Your payment of ${rs(credit.amountInr)} stays as credit until ${creditLastDay(credit.expiresMs)}. Use it for your next game.`}${test ? " (This is a TEST game: nothing was really paid.)" : ""}\n\n${NO_REFUND_LINE}${credit.expiresMs <= now ? "" : `\n\nYou can also move this game to a new date until ${creditLastDay(credit.expiresMs)}: open it in your console and choose a new date. Your payment then stays with this game. If you use the credit for another game first, this game can no longer be moved.`}`
       : e.pack !== 0 ? "Nothing was paid for this game through this service, so there is no credit." : "The game had not been paid for, so no money is involved.",
     ...(e.pack === 0 && credit ? [`The credit you had applied to this game (${rs(credit.amountInr)}) is back in your account, valid until ${creditLastDay(credit.expiresMs)}.`] : []),
   ];
   for (const c of made) await db.prepare("UPDATE credit SET mail_created_ms=? WHERE id=? AND mail_created_ms IS NULL").bind(now, c.id).run(); // this mail is the "credit created" mail: one of each per credit
   await mailTeam(env, e.org, e.id, `Game cancelled: ${name}`, lines.join("\n\n"), now);
-  return { status: 200, body: { ok: true, cancelled: true, credit: view(credit), ...(e.pack !== 0 ? { rescheduleUntilMs: rescheduleUntilMs(now) } : {}) } };
+  return { status: 200, body: { ok: true, cancelled: true, credit: view(credit), ...(e.pack !== 0 && credit ? { rescheduleUntilMs: credit.expiresMs } : {}) } };
 }
 
 /**

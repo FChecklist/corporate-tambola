@@ -1,6 +1,7 @@
 // TEST / LIVE mode (src/mode.ts, test-data.ts, migration 0013). Plain words: docs/TEST_AND_LIVE_MODE.md.
 import { beforeEach, describe, expect, test } from "bun:test";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import { retryOutbox, sendReportMail, sentReports, type PayEnv } from "../src/pay";
 import { normMail, setMode, getMode } from "../src/mode";
 import { resetRate } from "../src/visits";

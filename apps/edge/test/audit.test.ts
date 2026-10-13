@@ -1,7 +1,8 @@
 // The internal audit log: sealed at rest, hash-chained, owner-only, every owner use logged, AI provenance, deletion certificate and legal hold.
 import { beforeEach, describe, expect, test } from "bun:test";
 import { withDevice } from "./device";
-import { handle, purgeOld, type Env } from "../src/worker";
+import { purgeOld, type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { analyzeChain, classify, maskedAggregate, redact, vendorOfModel, vendorOfUa, loadRows, GENESIS } from "../src/audit";
 import { makeD1 } from "./d1-sqlite";

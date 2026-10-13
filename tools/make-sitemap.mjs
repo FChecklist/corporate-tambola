@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 const ORIGIN = "https://corporate-tambola.pages.dev";
-export const PAGES = [["index.html", "/", "weekly", "1.0"], ["partner.html", "/partner.html", "monthly", "0.7"], ["legal.html", "/legal.html", "monthly", "0.3"], ["terms.html", "/terms.html", "monthly", "0.3"], ["dpa.html", "/dpa.html", "monthly", "0.3"], ["subprocessors.html", "/subprocessors.html", "monthly", "0.3"], ["partner-terms.html", "/partner-terms.html", "monthly", "0.3"], ["organizer-guide.html", "/organizer-guide.html", "monthly", "0.3"]];
+export const PAGES = [["index.html", "/", "weekly", "1.0"], ["partner.html", "/partner.html", "monthly", "0.7"], ["legal.html", "/legal.html", "monthly", "0.3"], ["terms.html", "/terms.html", "monthly", "0.3"], ["legal-position.html", "/legal-position.html", "monthly", "0.3"], ["dpa.html", "/dpa.html", "monthly", "0.3"], ["subprocessors.html", "/subprocessors.html", "monthly", "0.3"], ["partner-terms.html", "/partner-terms.html", "monthly", "0.3"], ["organizer-guide.html", "/organizer-guide.html", "monthly", "0.3"]];
 const git = (...a) => { try { return execFileSync("git", a, { cwd: new URL("../", import.meta.url), encoding: "utf8" }).trim(); } catch { return ""; } };
 const today = new Date().toISOString().slice(0, 10);
 const lastmod = (f) => { const p = "apps/web/public/" + f; return git("status", "--porcelain", "--", p) ? today : git("log", "-1", "--format=%cs", "--", p) || today; };

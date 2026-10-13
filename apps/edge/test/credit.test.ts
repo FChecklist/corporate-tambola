@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
 import { withDevice } from "./device";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import { lifecycleTick } from "../src/lifecycle";
 import { applyCreditToGame, creditExpiryMs, creditLastDay, creditTick } from "../src/credit";
 import type { PayEnv } from "../src/pay";

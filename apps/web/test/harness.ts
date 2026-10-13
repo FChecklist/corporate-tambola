@@ -3,7 +3,9 @@
 import { Window } from "happy-dom";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { handle, type Env } from "../../edge/src/worker";
+import { type Env } from "../../edge/src/worker";
+import { handle } from "../../edge/test/with-terms"; // the test API (`api`) ticks the boxes a person would; the pages themselves (`win.fetch`) use the real Worker and tick their own
+import { handle as realHandle } from "../../edge/src/worker";
 import { makeD1 } from "../../edge/test/d1-sqlite";
 
 const PUB = join(import.meta.dir, "../public");
@@ -24,7 +26,7 @@ export function newWorld(extra: Record<string, string> = {}) {
 export type Page = { win: any; text: () => string; html: () => string; $: (sel: string) => any; click: (sel: string) => void; waitFor: (pred: (text: string) => boolean, ms?: number) => Promise<string>; close: () => Promise<void>; errors: string[] };
 
 /** scripts: file names under apps/web/public, in the order the page loads them. */
-export async function openPage(world: { env: Env; now: number }, o: { url: string; html: string; scripts: string[]; session?: Record<string, string>; beaconNowMs?: () => number; afterLoad?: (win: any, file: string) => void }): Promise<Page> {
+export async function openPage(world: { env: Env; now: number }, o: { url: string; html: string; scripts: string[]; tick?: boolean; session?: Record<string, string>; beaconNowMs?: () => number; afterLoad?: (win: any, file: string) => void }): Promise<Page> {
   const win: any = new Window({ url: o.url, settings: { disableJavaScriptFileLoading: true, disableCSSFileLoading: true } });
   const errors: string[] = [];
   // the page scripts run as `with (window)`: the typed arrays a real browser has must be visible to them too
@@ -34,7 +36,7 @@ export async function openPage(world: { env: Env; now: number }, o: { url: strin
   win.fetch = async (input: any, init?: any) => { // the page talks to the real Worker; nothing else is reachable
     const u = new URL(String(input), "http://localhost");
     if (u.origin !== "http://localhost") throw new Error("offline: " + u.origin);
-    return handle(new Request(u, init), world.env, world.now);
+    return realHandle(new Request(u, init), world.env, world.now);
   };
   // inside the page scope the DOM window shadows the real globals; fill in anything it does not provide
   for (const k of ["encodeURIComponent", "decodeURIComponent", "encodeURI", "decodeURI", "parseInt", "parseFloat", "isNaN", "isFinite", "Math", "JSON", "Date", "Array", "Object", "Promise", "Set", "Map", "WeakMap", "String", "Number", "Boolean", "RegExp", "Error", "TypeError", "RangeError", "Uint8Array", "Uint32Array", "ArrayBuffer", "DataView", "Symbol", "Intl", "BigInt", "TextEncoder", "TextDecoder", "atob", "btoa", "crypto", "Blob", "URL", "URLSearchParams", "setTimeout", "clearTimeout", "setInterval", "clearInterval", "queueMicrotask", "structuredClone", "Request", "Response", "Headers"])
@@ -44,9 +46,17 @@ export async function openPage(world: { env: Env; now: number }, o: { url: strin
   try { Object.defineProperty(win, "indexedDB", { value: undefined, configurable: true }); } catch { /* the signing-key store needs a real browser; the page treats it as unavailable */ }
   win.addEventListener("error", (e: any) => errors.push(String(e?.message ?? e)));
   win.addEventListener("unhandledrejection", (e: any) => errors.push(String(e?.reason?.message ?? e?.reason ?? e)));
-  for (const f of o.scripts) {
+  for (const f of o.scripts.includes("consent.js") ? o.scripts : ["consent.js", ...o.scripts]) {
     const code = readFileSync(join(PUB, f), "utf8");
     try { new Function("window", `with (window) { ${code}\n}`).call(win, win); } catch (e: any) { errors.push(f + ": " + e.message); }
+    if (f === "consent.js" && win.CBConsent && o.tick !== false) { // the person in these tests ticks every Terms box on the page (pass tick:false to see the unticked page)
+      const wire0 = win.CBConsent.wire;
+      win.CBConsent.wire = (root: any, kind: string, store: any, btn: any) => {
+        const refresh = wire0(root, kind, store, btn);
+        root.querySelectorAll(`[data-cbc="${kind}"] input[type=checkbox]`).forEach((i: any) => { i.checked = true; (store ?? {})[i.dataset.box] = true; });
+        refresh(); return refresh;
+      };
+    }
     o.afterLoad?.(win, f);
     if (f === "zgame.js" && win.ZG) { // the real public randomness is not reachable from a test: the clock is the test's own
       win.ZG.fetchRound = async () => ({ round: roundAt(o.beaconNowMs ? o.beaconNowMs() : world.now), randomness: "00".repeat(32), signature: "aa" });

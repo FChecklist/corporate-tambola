@@ -1,5 +1,5 @@
 /*
- * Number calling audio (owner decision): the voice only says the number, twice.
+ * Number calling audio: the voice only says the number, twice.
  *   24 -> "Next number is two four, twenty-four. Number twenty-four."     7 -> "Next number is seven. Number seven."
  * Plan: 90 pre-recorded clips (one fixed female Indian-English voice) are downloaded once to the device and
  * cached (Cache Storage), decoded into memory, and played when the tiny {call} message arrives.

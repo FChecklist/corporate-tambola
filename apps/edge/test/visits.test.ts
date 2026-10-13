@@ -1,6 +1,7 @@
 // First-party visitor-journey tracking of the public pages (visits.ts, migration 0012): addresses, keys, privacy signals, bots, beacon limits, the funnel, linking to a sale, owner-only reports, retention.
 import { beforeEach, describe, expect, test } from "bun:test";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import { lifecycleTick } from "../src/lifecycle";
 import { PUBLIC_PATHS, STEPS, botName, classifySource, ipHash, normPath, parseBeacon, parseRange, rateLimited, recordFunnelForOrg, resetRate, shortIp, summarize, sweepVisits, type SessRow } from "../src/visits";
 import { makeD1 } from "./d1-sqlite";

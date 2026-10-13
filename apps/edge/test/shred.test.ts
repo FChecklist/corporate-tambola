@@ -2,7 +2,8 @@
 // the organizer's / host's rows and the winners' prize confirmations stay for 365 days, and a legal hold (owner-set) suspends both the shredding and the 365-day deletion.
 import { beforeEach, describe, expect, test } from "bun:test";
 import { withDevice } from "./device";
-import { handle, purgeOld, type Env } from "../src/worker";
+import { purgeOld, type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { appendAudit, loadRows, verifyChain, shredParticipantAudit } from "../src/audit";
 import { endBoundMs, lifecycleTick, PURGE_AFTER_MS, REPORT_LINK_MS, erasePersonal } from "../src/lifecycle";

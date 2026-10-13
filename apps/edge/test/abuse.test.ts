@@ -1,6 +1,7 @@
 // G-15: a script cannot burn the shared daily write budget by joining; a friendly "busy" answer; invited-number rules stay.
 import { beforeEach, describe, expect, test } from "bun:test";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
 

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
 import { withDevice } from "./device";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
 
@@ -115,7 +116,7 @@ describe("what each role may do", () => {
   test("a Co-host reads only the small game header, with an own invite link", async () => {
     const t = await team();
     const h = await j(await call("GET", "/api/z/ROLE-1/cohost", undefined, t.cohost));
-    expect(Object.keys(h).sort()).toEqual(["brought", "cap", "credit", "creditApplied", "creditExpiresMs", "didNotStart", "erasureMs", "inviteLink", "joined", "name", "payment", "price", "startMs", "waitingFor"]);
+    expect(Object.keys(h).sort()).toEqual(["brought", "cap", "credit", "creditApplied", "creditExpiresMs", "didNotStart", "erasureMs", "inviteLink", "joined", "name", "payment", "price", "roleAccepted", "startMs", "waitingFor"]);
     expect(h).toMatchObject({ cap: 300, joined: 0, brought: 0, payment: { status: "pending" } });
     expect(h.inviteLink).toBeNull(); // a draft cannot take guests yet
     const other = await team("other@rival.com", "ROLE-2");

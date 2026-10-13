@@ -6,7 +6,7 @@
   let secret = ""; try { secret = sessionStorage.getItem("ctz-org") || ""; } catch {}
   const ss = (k) => { try { return sessionStorage.getItem(k) || ""; } catch { return ""; } };
   const nf = (n) => Number(n).toLocaleString("en-IN");
-  const S = { credited: 0, info: null, mode: "", cur: "INR", err: "", busy: false, done: null, ...(() => { const v = TB.payer.load(); return { email: ss("ctz-email") || v.email || "", phone: ss("ctz-phone") || v.phone || "", name: ss("ctz-name") || v.name || "", org: v.org || "", tax: v.tax || "" }; })(), pcode: "91", country: "IN" }; // India and +91 unless they change them: fewest taps to pay
+  const S = { k3: {}, credited: 0, info: null, mode: "", cur: "INR", err: "", busy: false, done: null, ...(() => { const v = TB.payer.load(); return { email: ss("ctz-email") || v.email || "", phone: ss("ctz-phone") || v.phone || "", name: ss("ctz-name") || v.name || "", org: v.org || "", tax: v.tax || "" }; })(), pcode: "91", country: "IN" }; // India and +91 unless they change them: fewest taps to pay
   S.cur = S.country === "IN" ? "INR" : "USD";
 
   const call = async (method, path, body) => {
@@ -58,8 +58,9 @@
         <label for="org">Company name <span class="zsmall" style="display:inline">(optional)</span></label><input id="org" autocomplete="organization" value="${esc(S.org || "")}" placeholder="Company name">
         <label for="cty">Country of your organization <span class="zsmall" style="display:inline">(optional)</span></label><select id="cty">${TB.countryOpts(S.country)}</select>
         <label for="tax">GST / Tax number <span class="zsmall" style="display:inline">(optional)</span></label><input id="tax" autocomplete="off" maxlength="30" value="${esc(S.tax || "")}" placeholder="GST / Tax number" style="text-transform:uppercase">
+        ${CBConsent.html("K3")}
         ${S.err ? `<div class="zbanner bad">${esc(S.err)}</div>` : ""}${S.busy ? `<div class="zbanner info" role="status">Confirming your payment with Razorpay. Please keep this page open. Your game starts only after Razorpay confirms.</div>` : ""}
-        <button class="zbtn" id="paygo" ${off || S.busy ? "disabled" : ""}>${S.busy ? "Confirming your payment…" : off ? "Payment opens soon" : "Pay " + TB.money(applied ? toPay : x.total, S.cur) + " securely with Razorpay"}</button>
+        <button class="zbtn" id="paygo" data-needs="K3" disabled aria-disabled="true" ${off || S.busy ? 'data-hold="1"' : ""}>${S.busy ? "Confirming your payment…" : off ? "Payment opens soon" : "Pay " + TB.money(applied ? toPay : x.total, S.cur) + " securely with Razorpay"}</button>
         <p class="zsmall">Secure payment by Razorpay. Payment to <a href="https://itservices-rajat-agarwal.pages.dev/" rel="noopener" target="_blank">IT Services by Rajat Agarwal</a>. An invoice is emailed to you. See the <a href="/legal.html#privacy">privacy policy</a>.</p></div>`;
   }
   // The server answers 202 {confirming:true} while Razorpay still says the payment is only created or authorized. We ask every 4 seconds, for up to 5 minutes, until the game itself says Paid.
@@ -73,7 +74,7 @@
     }
     throw new Error("We are still waiting for Razorpay to confirm your payment. Nothing is lost: your game starts as soon as it is confirmed. You can close this page and open your game to see the status.");
   }
-  function draw() { $app.innerHTML = view(); bind(); TB.payer.mark($app); if (S.done && TB.invoiceWire) TB.invoiceWire(S.done); else if (TB.proformaWire && S.info) TB.proformaWire(() => call("POST", "/api/proforma", { eid, currency: S.cur, name: S.name || "", email: S.email || "", phone: S.phone || "", org: S.org || "", taxId: S.tax || "", country: S.country })); }
+  function draw() { $app.innerHTML = view(); bind(); CBConsent.wire($app, "K3", S.k3); TB.payer.mark($app); if (S.done && TB.invoiceWire) TB.invoiceWire(S.done); else if (TB.proformaWire && S.info) TB.proformaWire(() => call("POST", "/api/proforma", { eid, currency: S.cur, name: S.name || "", email: S.email || "", phone: S.phone || "", org: S.org || "", taxId: S.tax || "", country: S.country })); }
   function keep() { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { name: g("nm"), org: g("org"), tax: g("tax"), email: g("em"), phone: g("ph"), pcode: g("pcode") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; }
 
   function bind() {
@@ -92,6 +93,8 @@
     };
     if ($("paygo")) $("paygo").onclick = async () => {
       keep(); S.err = "";
+      if (!CBConsent.all($app, "K3")) { S.err = "Please tick the box to continue."; return draw(); }
+      const consent = CBConsent.payload($app, "K3");
       const nm = (S.name || "").trim(), org = (S.org || "").trim(), email = (S.email || "").trim().toLowerCase(), tax = (S.tax || "").trim().toUpperCase();
       if (nm.length < 2) { S.err = "Please enter your name."; return draw(); }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { S.err = "Please enter a valid email."; return draw(); }
@@ -100,7 +103,7 @@
       S.busy = true; draw();
       try {
         let ref = ""; try { const v = JSON.parse(localStorage.getItem("ctz-ref") || "null"); if (v && Date.now() - v.at < 30 * 86400000) ref = v.code; } catch {}
-        let r = await call("POST", "/api/checkout", { eid, name: nm, org, email, country: S.country, taxId: tax, currency: S.cur, phone: S.phone, phoneCode: S.pcode, ref });
+        let r = await call("POST", "/api/checkout", { consent, eid, name: nm, org, email, country: S.country, taxId: tax, currency: S.cur, phone: S.phone, phoneCode: S.pcode, ref });
         if (r.mode === "razorpay") r = await TB.pay(r.razorpay, r.paymentId, r.hop); // opens Razorpay Checkout; the server verifies the payment
         else if (r.result) r = r.result; // local test mode answers with the finished order
         try { sessionStorage.setItem("ctz-email", email); sessionStorage.setItem("ctz-name", nm); } catch {}

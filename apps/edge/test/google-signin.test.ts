@@ -1,6 +1,7 @@
 // Phase 4: "Continue with Google" (docs/ROLES_AND_CONSOLE_SPEC_4.md section C item 1, docs/GOOGLE_SIGNIN_SETUP.md). Google is replaced by a fake signing key (google-fake.ts): no test calls Google.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { setGoogleKeyProvider, verifyGoogleCredential } from "../src/google";
 import { makeD1 } from "./d1-sqlite";

@@ -1,7 +1,8 @@
 // Phase 3: a pay link anyone can open (docs/ROLES_AND_CONSOLE_SPEC_4.md section B, spec 2 item 13, apps/edge/src/paylink.ts).
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
-import { handle, type Env } from "../src/worker";
+import { type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { price } from "../../../packages/shared/src/pricing";
 import { makeD1 } from "./d1-sqlite";

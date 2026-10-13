@@ -1,7 +1,8 @@
 // The short AI work link (/ai/<key>): manual per role, key-in-path API, GET-only fallback, no leaks, audit, and the widened organizer-AI rights.
 import { beforeEach, describe, expect, test } from "bun:test";
 import { withDevice } from "./device";
-import { handle, aiMessage, type Env } from "../src/worker";
+import { aiMessage, type Env } from "../src/worker";
+import { handle } from "./with-terms";
 import { sealPii } from "../src/pii";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";

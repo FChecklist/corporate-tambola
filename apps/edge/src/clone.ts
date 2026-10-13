@@ -47,7 +47,7 @@ export async function cloneGame(env: Env, e: any, b: any, now: number, origin: s
   if (b?.startRound !== undefined && b.startRound !== null) {
     if (!Number.isInteger(b.startRound)) return json({ error: "Check the start time." }, 400);
     if (roundMs(b.startRound) <= now) return json({ error: "Pick a start time in the future." }, 400);
-    if (roundMs(b.startRound) > now + MAX_AHEAD_MS) return json({ error: "A game can be set at most 30 days ahead. Please pick a day within the next 30 days.", code: "too-far" }, 400);
+    if (roundMs(b.startRound) > now + MAX_AHEAD_MS) return json({ error: "A game that is not paid for yet can be set at most 30 days ahead. Please pick a day within the next 30 days.", code: "too-far" }, 400);
     startRound = b.startRound;
   }
   if (org) {

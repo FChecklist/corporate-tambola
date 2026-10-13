@@ -49,12 +49,13 @@
         <label for="org">Company name <span class="zsmall" style="display:inline">(optional)</span></label><input id="org" autocomplete="organization" value="${esc(S.org)}" placeholder="Company name">
         <label for="tax">GST / Tax number <span class="zsmall" style="display:inline">(optional)</span></label><input id="tax" autocomplete="off" maxlength="30" value="${esc(S.tax || "")}" placeholder="GST / Tax number" style="text-transform:uppercase">
 ` : `<button class="zsnd" id="more" type="button" style="margin-top:8px">Add a mobile number or organization (optional)</button>`}
+        ${CBConsent.html("K3")}
         ${S.err ? `<div class="zbanner bad" role="alert">${esc(S.err)}</div>` : ""}${S.busy ? `<div class="zbanner info" role="status">Confirming your payment with Razorpay. Please keep this page open.</div>` : ""}
-        <button class="zbtn" id="paygo" ${S.busy ? "disabled" : ""}>${S.busy ? "Confirming your payment…" : "Pay " + TB.money(p.total, cur) + " securely with Razorpay"}</button>
+        <button class="zbtn" id="paygo" data-needs="K3" disabled aria-disabled="true" ${S.busy ? 'data-hold="1"' : ""}>${S.busy ? "Confirming your payment…" : "Pay " + TB.money(p.total, cur) + " securely with Razorpay"}</button>
         <p class="zsmall">Secure payment by Razorpay. Payment to <a href="https://itservices-rajat-agarwal.pages.dev/" rel="noopener" target="_blank">IT Services by Rajat Agarwal</a>. An invoice is e-mailed to you. See the <a href="/legal.html#privacy">privacy policy</a>.</p></div>`;
   }
   function keep() { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { name: g("nm"), email: g("em"), phone: g("ph"), pcode: g("pcode"), org: g("org"), tax: g("tax") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; }
-  function draw() { $app.innerHTML = view(); bind(); TB.payer.mark($app); if (S.done && TB.invoiceWire) TB.invoiceWire(S.done); else if (TB.proformaWire && S.info && S.info.price) TB.proformaWire(() => call("POST", "/api/proforma", { link: token, currency: (S.info.price.currency || "INR"), name: S.name || "", email: S.email || "", phone: S.phone || "", org: S.org || "", taxId: S.tax || "", country: S.country })); }
+  function draw() { $app.innerHTML = view(); bind(); CBConsent.wire($app, "K3", S.k3); TB.payer.mark($app); if (S.done && TB.invoiceWire) TB.invoiceWire(S.done); else if (TB.proformaWire && S.info && S.info.price) TB.proformaWire(() => call("POST", "/api/proforma", { link: token, currency: (S.info.price.currency || "INR"), name: S.name || "", email: S.email || "", phone: S.phone || "", org: S.org || "", taxId: S.tax || "", country: S.country })); }
 
   // Razorpay may say the payment is only created for a while: ask this link every 4 seconds, for up to 5 minutes, until the server says paid. Never mark it paid early.
   async function waitForConfirm() {
@@ -70,6 +71,8 @@
     if ($("more")) $("more").onclick = () => { keep(); S.more = true; draw(); };
     if ($("paygo")) $("paygo").onclick = async () => {
       keep(); S.err = "";
+      if (!CBConsent.all($app, "K3")) { S.err = "Please tick the box to continue."; return draw(); }
+      const consent = CBConsent.payload($app, "K3");
       const nm = (S.name || "").trim(), email = (S.email || "").trim().toLowerCase(), tax = (S.tax || "").trim().toUpperCase();
       if (nm.length < 2) { S.err = "Please enter your name."; return draw(); }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { S.err = "Please enter a valid e-mail."; return draw(); }
@@ -77,7 +80,7 @@
       TB.payer.save(S);
       S.busy = true; draw();
       try {
-        const body = { name: nm, email, country: S.country };
+        const body = { consent, name: nm, email, country: S.country };
         if ((S.phone || "").trim()) { body.phone = S.phone.trim(); body.phoneCode = S.pcode; }
         if ((S.org || "").trim()) body.org = S.org.trim();
         if (tax) body.taxId = tax;
