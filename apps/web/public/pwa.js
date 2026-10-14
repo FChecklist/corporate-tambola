@@ -27,7 +27,7 @@
     try {
       if (!("Notification" in window) || Notification.permission !== "default" || localStorage.getItem(KEY)) return;
       const b = document.createElement("button"); b.type = "button"; b.id = "ct-notify"; b.textContent = "Notify me"; b.setAttribute("aria-label", "Notify me about news from Corporate Tambola");
-      b.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:50;min-height:36px;padding:0 14px;border-radius:999px;border:1px solid #D9E1F0;background:#fff;color:#0B3D91;font:600 12px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.12);cursor:pointer";
+      b.style.cssText = "position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));z-index:50;min-height:44px;padding:0 16px;border-radius:999px;border:2px solid #7A1C33;background:#fff;color:#7A1C33;font:700 13px system-ui,sans-serif;box-shadow:0 3px 10px rgba(0,0,0,.18);cursor:pointer";
       b.onclick = () => { try { localStorage.setItem(KEY, "1"); } catch { /* ignore */ } b.remove(); Notification.requestPermission().then(() => navigator.serviceWorker.getRegistration().then((r) => r && news(r))).catch(() => {}); };
       document.body.appendChild(b);
     } catch { /* never in the way of anything */ }

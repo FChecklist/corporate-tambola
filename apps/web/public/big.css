@@ -35,3 +35,5 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,syste
 
 .top .brand{display:flex;align-items:center;gap:12px}
 .blogo{height:44px;width:auto;max-width:160px;object-fit:contain;background:rgba(255,255,255,.92);border-radius:6px;padding:3px}
+
+#ct-notify{display:none}

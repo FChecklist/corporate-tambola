@@ -65,11 +65,11 @@
   const fmt = (s) => (s >= 90 ? Math.round(s / 60) + " min" : s + "s");
 
   // ---------- the company strip at the top of the ticket page (colour and name set by the organizer; the small picture travels inside the settings) ----------
-  const brandStrip = () => {
-    const b = INFO.brand; if (!b) return `<div class="zbrand" data-bg="#0B3D91" data-fg="#ffffff"><b>CORPORATE TAMBOLA</b></div>`; // no company brand set: the ticket carries our own name in writing
-    return `<div class="zbrand" data-bg="${esc(b.color)}" data-fg="${esc(b.fg)}">${b.logo ? `<img class="zblogo" alt="" src="${esc(b.logo)}">` : ""}${b.name ? `<b>${esc(b.name)}</b>` : ""}</div><div class="zpow">Powered by Corporate Tambola</div>`;
+  const brandStrip = (sndBtn) => {
+    const b = INFO.brand; if (!b) return `<div class="zbar"><div class="zbrand zdef" data-bg="#0B3D91" data-fg="#ffffff"><b>CORPORATE TAMBOLA</b></div>${sndBtn || ""}</div>`; // no company brand set: the ticket carries our own name in writing
+    return `<div class="zbar"><div class="zbrand" data-bg="${esc(b.color)}" data-fg="${esc(b.fg)}">${b.logo ? `<img class="zblogo" alt="" src="${esc(b.logo)}">` : ""}${b.name ? `<b>${esc(b.name)}</b>` : ""}</div>${sndBtn || ""}</div><div class="zpow">Powered by Corporate Tambola</div>`;
   };
-  const paintBrand = () => document.querySelectorAll(".zbrand").forEach((el) => { el.style.background = el.dataset.bg; el.style.color = el.dataset.fg; }); // set from the script, so a strict style policy never blocks the colour
+  const paintBrand = () => document.querySelectorAll(".zbrand").forEach((el) => { if (!el.classList.contains("zdef")) el.style.background = el.dataset.bg; el.style.color = el.dataset.fg; }); // set from the script, so a strict style policy never blocks the colour
 
   // ---------- joining: a personal link needs no number; a number may be asked for; a request may have to wait to be let in; a person may have been removed ----------
   const J = { k4: {}, consent: null, mode: "", phone: "", name: "", wid: "", who: "", timer: null, polling: false, note: "" };
@@ -81,7 +81,9 @@
     if (J.mode === "declined" || J.mode === "lapsed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>${J.mode === "declined" ? "Your request was not accepted" : "This request has run out"}</h2><p class="zsmall" style="margin:0 0 8px">${J.mode === "declined" ? "You are not on the list for this game. Please ask the person who invited you." : "Nobody answered in time. You can ask again."}</p>${J.mode === "lapsed" ? `<button class="zbtn s" id="again" type="button">Ask again</button>` : ""}</div>`;
     const personal = !!TOKEN && J.mode !== "needPhone"; // a personal link is made for one person: no number to type unless the server asks
     return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div>
-    <div class="zcard zform"><h2>Join the engagement</h2>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
+    <div class="zcard zform zjoin"><h2>Join the engagement</h2>
+    <ol class="zsteps" aria-label="How to join"><li><b>1</b><span>Tick the boxes</span></li><li><b>2</b><span>${personal ? "Press the button" : "Type your number"}</span></li><li><b>3</b><span>Get your ticket</span></li></ol>
+    <p class="zgoalline" style="margin:0 0 6px">A ticket fills up as numbers are called. Complete a row or the whole ticket to win a prize. The software checks every ticket: no need to shout.</p>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
     ${J.mode === "needPhone" ? `<div class="zbanner info" role="status" style="margin:0 0 8px">${J.note ? esc(J.note) : "This link was already opened on another phone. Please type your mobile number to get your ticket."}</div>` : ""}
     ${DEMO ? "" : CBConsent.html("K4")}
     ${personal ? `<p class="zsmall" style="margin:0 0 6px">Your personal link is ready. Press the button to get your ticket.</p>` : `<label for="ph">Your mobile number</label><input id="ph" inputmode="tel" autocomplete="tel" placeholder="98765 43210" value="${esc(J.mode === "needPhone" ? J.phone : "")}">`}
@@ -152,7 +154,7 @@
     paint(); return false;
   }
 
-  const ticketHtml = (t, called, label, win) => `<div class="zticket" aria-label="${label}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div class="${called.has(v) ? "m" : ""}${win && win.has(v) && called.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;
+  const ticketHtml = (t, called, label, win) => `<div class="zticket" aria-label="${label}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div class="${called.has(v) ? "m" : ""}${called.has(v) && NEWCALL === v ? " pop" : ""}${win && win.has(v) && called.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;
   const ordinalName = (k) => ["", "1st", "2nd", "3rd"][k] || k + "th";
   const KEYNAME = (key) => (key === "full2" ? "Full Two-Ticket House" : NAMES[key]);
 
@@ -197,6 +199,7 @@
       ? `<h2>Your game is setting up</h2><div class="zsetup">We are waiting 2 minutes more for everyone to join.</div><div class="zcount" aria-live="off" id="cd">${clock(toFirst)}</div><p class="zsmall" style="margin-top:0">until the first number. Keep this page open: the numbers appear on their own.</p>`
       : `<h2>You are in. See you at ${esc(when)}</h2><div class="zsmall" style="margin:0">Starting in</div><div class="zcount" aria-live="off" id="cd">${clock(toFirst - GRACE_SECS)}</div><p class="zsmall" style="margin-top:0">hours : minutes : seconds. Keep this page open: the numbers appear on their own.</p>`;
     return `<div class="zcard zwait">${top}
+      <div class="zdo"><b>What to do:</b> nothing yet. Keep this page open. Your ticket marks every number for you.</div>
       ${prizes ? `<h3>What you can win</h3><ul class="zlist">${prizes}</ul>` : ""}
       <h3>How it works</h3><ol class="zlist"><li>Your ticket is below. Numbers are called one by one and marked for you.</li><li>When a row or the whole ticket is complete you will see it. The software checks it, you do not need to shout.</li><li>The organizer hands over the rewards.</li></ol>
       <button class="zbtn s alt" id="soundtest">Check my sound</button><a class="zbtn s alt" id="addcal" download="engagement.ics" href="${icsFor(v)}">Add to my calendar</a></div>`;
@@ -310,8 +313,10 @@
     if (DEMO) return `<div class="zcard zfinal"><h2>That was the demo <span class="zdemotag">DEMO</span></h2><div class="zfbig">${PRIZES.length ? "You won Four corners." : "You saw how a game runs."}</div><p class="zsmall" style="font-size:15px;margin:6px 0 10px">A real game has 90 numbers, many prizes, your own brand messages and videos, lucky draws and a report. You build it in about five minutes and nobody pays until you are ready.</p><a class="zbtn" style="display:inline-flex;align-items:center;text-decoration:none" href="/">Create my game</a> <button class="zbtn s alt" id="dagain2" type="button">Run demo again</button> <button class="zbtn s alt" id="dcopy2" type="button">Copy the demo link</button></div>`;
     const n = PRIZES.length;
     return `<div class="zcard zfinal"><h2>Game complete</h2>
-      <div class="zfbig">Thank you for joining our extended family of Corporate Tambola.</div>
-      <p class="zsmall" style="font-size:15px;margin:6px 0 10px">${n ? "You won " + n + " prize" + (n === 1 ? "" : "s") + ". They are listed below and stay on this phone." : "Every game is a good game. We hope you had fun, and we would love to see you at the next one."}</p>
+      <div class="zmedal" aria-hidden="true">${n ? "&#127942;" : "&#127922;"}</div>
+      <div class="zfbig">${n ? "You won " + n + (n === 1 ? " prize!" : " prizes!") : "Well played!"}</div>
+      <p class="zsmall zthanks">Thank you for joining our extended family of Corporate Tambola.</p>
+      <p class="zsmall" style="font-size:15px;margin:6px 0 10px">${n ? "Your prizes are listed below and stay on this phone. Show them to your organizer to collect." : "No prize this time. Every game is a good game, and the next one is another chance."}</p>
       <button class="zbtn" id="shr">Share with friends and colleagues</button>
       <a class="zbtn s alt" style="display:inline-flex;align-items:center;text-decoration:none;margin-top:8px" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent("I just played Corporate Tambola with my team. Bring it to your company: " + shareLink)}">WhatsApp</a>
       <p class="zsmall" style="margin:10px 0 0"><a href="/partner.html?from=ticket">Earn 50% by sharing: Refer &amp; earn</a></p></div>`;
@@ -542,6 +547,28 @@
     if (!a || a.id === annSeen) return "";
     return `<div class="zbanner info zann" role="alert"><b>Message from the organizer</b><br>${esc(a.text)} <button class="zsnd" id="annok">OK</button></div>`;
   }
+  // ---------- short, friendly movement (about 200 to 400 ms; none with "reduce motion"). Each one plays once, when the thing it shows first appears (the page redraws itself every second). ----------
+  const MOTION = () => { try { return !matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
+  const COUNTS = {};
+  const countUps = () => document.querySelectorAll("[data-count]").forEach((el) => {
+    const key = el.dataset.ck || el.id || "c", to = Number(el.dataset.count), from = COUNTS[key] === undefined ? to : COUNTS[key]; COUNTS[key] = to;
+    if (from === to || !MOTION()) { el.textContent = String(to); return; }
+    const t0 = performance.now(); (function f(t) { const k = Math.min(1, (t - t0) / 350); el.textContent = String(Math.round(from + (to - from) * k)); if (k < 1 && el.isConnected) requestAnimationFrame(f); })(t0);
+  });
+  let NEWCALL = 0; // the number called since the last redraw (0 = none): its ball drops in and its place on the ticket is stamped
+  const rangeOf = (n) => Math.min(8, Math.floor((n - 1) / 10)); // a colour per ten numbers: 1-10, 11-20 ... 81-90
+  /** the big ball, a state chip, one plain line about what to do, and the last numbers as small balls */
+  function callCard(v, last, sub) {
+    const secs = v.nextCallInSec, running = v.phase === "play" && !v.locked && !v.paused && !v.brk && !v.intermission && v.log.length > 0;
+    const tone = v.phase === "ended" ? "end" : v.paused || v.locked ? "pause" : running ? (secs !== null && secs <= 3 ? "go" : "soon") : "wait";
+    const chip = v.phase === "ended" ? "Game over" : v.paused ? "Paused" : v.locked ? "Waiting to start" : !v.log.length ? "Get ready" : running && secs !== null ? "Next number in " + secs + "s" : "Numbers coming";
+    const total = v.late ? "since you joined" : "of 90";
+    const recent = v.log.slice(-4, -1).reverse();
+    return `<div class="zcard zcall"><div class="zchiprow"><span class="zchip2 ${tone}">${esc(chip)}</span><span class="zchip2 plain"><b data-count="${v.log.length}" data-ck="called">${v.log.length}</b>&nbsp;${total} called</span></div>
+        <div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
+        <div class="zsub">${sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">Your ticket marks every number for you. Just watch.</p>`}
+        <div class="zlast" aria-label="Recent numbers">${recent.map((n, i) => `<span class="r${rangeOf(n)}${NEWCALL && i === 0 ? " pop" : ""}">${n}</span>`).join("")}</div></div>`;
+  }
   function playView(v) {
     const called = new Set(v.log);
     const last = v.log[v.log.length - 1];
@@ -559,7 +586,8 @@
     const curWins = v.won.filter((w) => w.round === v.round), winSet = new Set(curWins.flatMap((w) => w.cells));
     const ribbon = curWins.length ? `<div class="zwin" role="status">&#127881; Congratulations! You won ${curWins.map((w) => esc(lineName(v.cfg, w.pattern, w.ordinal))).join(", ")}${curWins.some((w) => w.text) ? " &middot; " + curWins.filter((w) => w.text).map((w) => esc(w.text)).join(", ") : ""}</div>` : "";
     const tix = v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : DEMO ? "Demo ticket" : "Your ticket", winSet)).join("");
-    return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b><button class="zsnd" id="snd" aria-pressed="${sound}">${sound ? "Sound on" : "Sound off"}</button></div>
+    const sndBtn = `<button class="zsnd zsndin" id="snd" aria-pressed="${sound}">${sound ? "&#128266; Sound on" : "&#128263; Sound off"}</button>`;
+    return `${brandStrip(sndBtn)}
       ${demoCard(v)}${annBanner(v)}${banners.join("")}
       ${v.phase === "ended" ? finalCard(v) + closingCard(v) + confirmCard(v) + prizesCard() : ""}
       ${waitingRoom(v)}
@@ -567,9 +595,7 @@
       ${lateCard(v)}
       ${roundCards(v)}
       ${v.brk ? breakCard(v.brk) : ""}
-      <div class="zcard"><div class="zball"><div class="zbig ${last ? "" : "none"}" id="big" aria-live="assertive" aria-label="${last ? "Number " + last : "No number yet"}">${last ?? "–"}</div></div>
-        <div class="zsub">${sub}</div>
-        <div class="zlast" aria-label="Recent numbers">${v.log.slice(-4, -1).reverse().map((n) => `<span>${n}</span>`).join("")}</div></div>
+      ${callCard(v, last, sub)}
       <div class="zcard${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Demo ticket <span class="zdemotag">DEMO</span>' : v.tickets.length > 1 ? "Your tickets" : "Your ticket"}</h2>${ribbon}${tix}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}
@@ -588,7 +614,9 @@
     if (ME.removed) { if (timer) { clearInterval(timer); timer = null; } mediaHost.style.display = "none"; $app.innerHTML = removedView(); paintBrand(); return; } // taken off the list: the phone stops
     const fresh = syncPrizes(v); reportToStore(v); loadCf(v); pollMe(v);
     { const af = document.activeElement; if (af && (af.id === "cfnm" || af.id === "cfph" || af.id === "mi-name" || af.id === "mi-phone")) return; } // never wipe a form someone is typing in
+    NEWCALL = v.log.length > lastLen && !firstPaint && MOTION() ? v.log[v.log.length - 1] : 0;
     $app.innerHTML = playView(v);
+    countUps();
     paintBrand(); syncMedia(v); bindShare(); bindDemo(); bindConfirm(v); loadInvites(v); bindInvite(v); loadMine(v); bindMine(v);
     if (fresh.length) showHurray(fresh);
     const s = document.getElementById("snd");

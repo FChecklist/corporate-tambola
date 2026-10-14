@@ -14,11 +14,11 @@
 .zsub{text-align:center;color:var(--muted);font-size:13px;min-height:18px}
 .zlast{display:flex;gap:6px;justify-content:center;margin-top:6px}
 .zlast span{width:34px;height:34px;border-radius:50%;background:var(--sunk);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
-.zticket{display:grid;grid-template-columns:repeat(9,1fr);gap:3px}
+.zticket{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:3px}
 .zticket div{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:6px;background:var(--sunk);font-weight:700;font-size:clamp(13px,4vw,18px)}
 .zticket div.e{background:transparent}
 .zticket div.m{background:var(--wine);color:#fff}
-.zboard{display:grid;grid-template-columns:repeat(10,1fr);gap:3px}
+.zboard{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:3px}
 .zboard div{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:12px;border-radius:5px;background:var(--sunk);color:var(--faint)}
 .zboard div.c{background:var(--gold);color:var(--deep);font-weight:700}
 .zrow{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line2);font-size:14px}
@@ -95,10 +95,10 @@ a.zbtn#addcal{margin-left:6px}
 @media (orientation:landscape) and (max-height:520px){
 .zapp{max-width:none;display:grid;grid-template-columns:minmax(220px,300px) minmax(0,1fr);column-gap:12px;align-content:start;padding:8px max(12px,env(safe-area-inset-right)) 24px max(12px,env(safe-area-inset-left));min-height:0}
 .zapp>*{grid-column:2;margin-top:0}
-.zapp>.zbrand,.zapp>.zhead{grid-column:1/-1}
+.zapp>.zbrand,.zapp>.zbar,.zapp>.zhead{grid-column:1/-1}
 .zapp>.zbrand{padding:6px 12px;margin-bottom:6px}
 .zapp>.zhead{margin-bottom:6px}
-.zapp>.zcard:has(.zball){grid-column:1;grid-row:3/span 6;position:sticky;top:8px;align-self:start}
+.zapp>.zcard:has(.zball){grid-column:1;grid-row:2/span 8;position:sticky;top:8px;align-self:start}
 .zapp .zbig{zoom:.8}
 }
 
@@ -125,3 +125,123 @@ a.zbtn#addcal{margin-left:6px}
 input.pfill{color:#8a8f98!important}
 
 .pstmt{margin:0 0 10px;padding:12px 14px;border-radius:12px;background:#fff7e0;border:2px solid #f59f00;font:600 15px/1.5 var(--sans,inherit);color:#4a2c00}.pstmt .mono{word-break:break-all}
+
+/* ===== colour system (player screens). Every pair of text and background keeps WCAG AA contrast. Tokens: grape #7A1C33 (headings), coral #E5303B, orange #E8590C, sun #FFB703, green #0B7F4A, sky #1565D8, rose #D6246B ===== */
+:root{--zgrape:#7A1C33;--zcoral:#E5303B;--zorange:#E8590C;--zsun:#FFB703;--zgreen:#0B7F4A;--zsky:#1565D8;--zrose:#D6246B}
+body{background:linear-gradient(180deg,#FFF1D6 0,#FFE3EA 34%,#E6ECFF 70%,#FFF6DC 100%) fixed;min-height:100vh}
+.zapp{padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(40px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+.zhead{margin-bottom:8px}
+.zhead b{color:var(--zgrape)}
+.zhead2{margin:6px 0 4px}
+.zgoal{font:700 14px/1.3 var(--sans,inherit);color:#2E0812;min-width:0}
+.zsnd{border:2px solid #D9A5B6;background:#fff;color:#2E0812;font-weight:700;min-height:44px;padding:6px 14px;white-space:nowrap}
+.zcard{background:#fff;border:2px solid #E9C3CF;border-radius:18px;padding:14px;margin:12px 0;box-shadow:0 6px 16px -10px rgba(122,28,51,.45)}
+.zcard h2{display:inline-block;margin:0 0 10px;padding:3px 12px;border-radius:999px;background:#F8E3EA;color:var(--zgrape);font:800 12px/1.4 var(--sans,inherit);letter-spacing:.08em}
+.zboardcard h2{background:#E0ECFF;color:#0F4AA8}.zprizecard h2,.zprizes h2{background:#FFEFC2;color:#7A3A00}.zfinal h2{background:#FFE9A6;color:#6B3200}.zwait h2{background:#E6ECFF;color:#0B3D91}
+.zbrand{border-radius:16px;box-shadow:0 4px 0 rgba(0,0,0,.18)}
+.zbrand.zdef{background:linear-gradient(100deg,#0B3D91 0%,#7A1C33 60%,#B3126B 100%);font-size:15px;letter-spacing:.06em;justify-content:center;text-align:center}
+.zbtn{min-height:52px;border-radius:14px;background:linear-gradient(180deg,#B02A5A,#7A1C33);box-shadow:0 3px 0 #4A0F20;font-size:17px}
+.zbtn:disabled,.zbtn[aria-disabled=true]{box-shadow:none}
+.zbtn.alt{background:#fff;color:var(--zgrape);border:2px solid var(--zgrape);box-shadow:none}
+.zbtn.s{min-height:44px;font-size:15px}
+.zsmall{color:#4B4560}
+.zbanner{border-radius:14px}
+.zlink{background:#FBEAEE}
+/* the join screen */
+.zsteps{display:flex;gap:8px;list-style:none;margin:0 0 10px;padding:0}
+.zsteps li{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;font:700 13px/1.25 var(--sans,inherit);color:#2E0812;background:#FDF0F3;border-radius:12px;padding:8px 4px}
+.zsteps b{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--zorange);color:#fff;font-size:15px}
+.zsteps li:nth-child(2) b{background:var(--zsky)}.zsteps li:nth-child(3) b{background:var(--zgreen)}
+.zgoalline{font-size:15px;line-height:1.4;margin-bottom:6px;color:#2A2140}
+.zform input[type=text],.zform input:not([type]),.zform input[type=tel]{border:2px solid #D9A5B6;border-radius:12px;min-height:50px}
+.zform input:focus{outline:3px solid #FFB703;outline-offset:1px}
+.cbc-tick{width:26px;height:26px;margin-top:0}
+.cbc .cbc-box{padding:6px 0}
+/* waiting room */
+.zwait .zcount{font:800 46px/1.1 var(--sans,inherit);color:#7A1C33;background:#FDF0F3;border-radius:16px;padding:8px 12px;text-align:center;margin:8px 0}
+.zdo{background:#E4F6EA;color:#0B4F2C;border-radius:12px;padding:10px 12px;margin:10px 0;font-size:15px;font-weight:600}
+.zlist li{margin:6px 0}
+.zrules li{background:#FDF0F3;border-radius:10px;padding:6px 10px;margin:6px 0;font-size:15px}
+.zsetup{background:#FFEFC2;border-color:#FFB703;color:#5A3300}
+/* prizes, standings, crowd */
+.zprize{align-items:center;gap:10px;padding:10px 0}
+.ztrophy{font-size:26px;flex:0 0 auto;line-height:1}
+.zpname{display:flex;flex-direction:column;min-width:0;flex:1 1 auto}
+.zpname b{font-size:16px;color:#2E0812}
+.zpname small{margin-top:2px}
+.zwonchip,.zdonechip,.zopenchip{flex:0 0 auto;border-radius:999px;padding:4px 10px;font:800 12px var(--sans,inherit)!important;font-style:normal;white-space:nowrap}
+.zwonchip{background:#0B7F4A;color:#fff!important}.zdonechip{background:#E8E5F0;color:#3B3550!important}.zopenchip{background:#FFE2A8;color:#6B3200!important}
+.zbar,.bh{background:linear-gradient(180deg,#7B3FE4,#1565D8)}
+.cbar.me .bh{background:linear-gradient(180deg,#FFB703,#E8590C);box-shadow:none}
+.zrk.you{background:#E7F7EE}.zr{color:var(--zorange)}
+.zcard.zwon{border-color:#FFB703;background:#FFF9E4}
+.zwin{background:linear-gradient(90deg,#FFF3C4,#FFE08A);border-color:#FFB703;color:#4A2A00}
+.zfinal{background:linear-gradient(180deg,#FFF9E4,#fff)}
+.zmedal{font-size:64px;line-height:1.1;margin:2px 0}
+.zfinal .zfbig{color:var(--zgrape);font-size:26px}
+.zchip{border:2px solid #D9A5B6;min-height:44px;padding:8px 14px}
+.zchip.on{background:var(--zgrape);border-color:var(--zgrape)}
+.zref{min-height:44px;display:inline-flex;align-items:center;padding:8px 6px}
+.zsnd,.zbtn.s{min-height:44px}
+.zscratch{min-height:44px}
+/* the small "Notify me" button: a quiet round bell in the corner, never over the board */
+@media (max-width:359px){.zsteps li{font-size:12px}.zwait .zcount{font-size:38px}}
+
+.zapp{padding-bottom:max(76px,env(safe-area-inset-bottom))}
+.zbtn:active:not(:disabled),.zsnd:active,.zchip:active,.zticket button:active{transform:translateY(2px) scale(.985)}
+.zbtn,.zsnd,.zchip{transition:transform .12s ease,box-shadow .12s ease,background-color .12s ease}
+.zbrand.zdef b{font-size:14px;letter-spacing:.04em;line-height:1.2}
+.zgoalline{font-size:15px;line-height:1.4}
+
+
+/* ===== the called number: a glossy ball (a colour for every ten numbers) that drops in, recent numbers as small balls, clear marks on the ticket ===== */
+.r0{--lc:#1565D8;--lcd:#0A3C8C}.r1{--lc:#D61F3A;--lcd:#8E0F23}.r2{--lc:#7B3FE4;--lcd:#4B1FA8}.r3{--lc:#0B8A4B;--lcd:#065C30}.r4{--lc:#C2410C;--lcd:#7C2A06}.r5{--lc:#0E7490;--lcd:#094A5E}.r6{--lc:#B3126B;--lcd:#740A45}.r7{--lc:#8A4B16;--lcd:#583009}.r8{--lc:#475569;--lcd:#27303D}
+.zchiprow{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:6px}
+.zchip2{display:inline-flex;align-items:center;border-radius:999px;padding:3px 10px;font:800 12px/1.3 var(--sans,inherit)}
+.zchip2.plain{background:#FDF0F3;color:#2E0812;font-weight:700}.zchip2.go{background:#0B7F4A;color:#fff}.zchip2.soon{background:#C2410C;color:#fff}.zchip2.wait{background:#1565D8;color:#fff}.zchip2.pause{background:#FFB703;color:#2A1B00}.zchip2.end{background:#475569;color:#fff}
+.zball{padding:4px 0 2px}
+.zbig{position:relative;width:150px;height:150px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;
+ background:radial-gradient(circle at 30% 24%,rgba(255,255,255,.9) 0 5%,rgba(255,255,255,0) 20%),radial-gradient(circle at 50% 45%,var(--lc,#374151) 0 64%,var(--lcd,#1F2937) 100%);box-shadow:0 8px 0 rgba(0,0,0,.18),0 12px 22px -8px rgba(0,0,0,.45)}
+.zbig span{display:flex;align-items:center;justify-content:center;width:92px;height:92px;border-radius:50%;background:#fff;color:#111;font:900 54px/1 var(--sans,inherit);font-variant-numeric:tabular-nums;box-shadow:inset 0 -4px 0 rgba(0,0,0,.12)}
+.zbig.none{background:#F3ECE0;color:#5C4B50;box-shadow:0 6px 0 rgba(0,0,0,.08);font:800 34px var(--sans,inherit)}
+.zsub{font:700 15px var(--sans,inherit);color:#2E0812;min-height:22px;margin-top:6px;text-align:center}
+.zwhat{text-align:center}
+.zlast{gap:8px;margin-top:10px}
+.zlast span{min-width:46px;width:auto;height:46px;border-radius:50%;background:radial-gradient(circle at 30% 24%,rgba(255,255,255,.65) 0 6%,rgba(255,255,255,0) 22%),radial-gradient(circle at 50% 45%,var(--lc) 0 66%,var(--lcd) 100%);color:#fff;box-shadow:0 3px 0 rgba(0,0,0,.2);font:800 17px var(--sans,inherit);display:flex;align-items:center;justify-content:center}
+.zticket div{border-radius:8px;background:#F6EFE0;box-shadow:inset 0 -3px 0 rgba(0,0,0,.07);color:#2E0812;font-weight:800}
+.zticket div.e{background:transparent;box-shadow:none}
+.zticket div.m{background:linear-gradient(145deg,#B02A5A,#7A1C33);color:#fff;box-shadow:inset 0 0 0 3px #FFD76A,0 0 0 1px #7A1C33;text-shadow:0 1px 0 rgba(0,0,0,.25)}
+.zticket div.w{background:linear-gradient(135deg,#FFE08A,#FFB703);color:#2A1B00;box-shadow:inset 0 0 0 3px #fff,0 0 0 2px #E8A200;text-shadow:none}
+.zboard div.c{background:var(--gold);color:#2A1B00}
+.zcard.zwon{border-color:#FFB703;background:#FFF9E4}
+@media (prefers-reduced-motion:no-preference){
+@keyframes ballin{0%{transform:translateY(-46px) scale(.4) rotate(-120deg);opacity:0}55%{transform:translateY(8px) scale(1.08) rotate(8deg);opacity:1}80%{transform:translateY(-4px) scale(.98)}100%{transform:none;opacity:1}}
+.zbig.pop{animation:ballin .4s cubic-bezier(.2,.8,.3,1)}
+@keyframes lastin{from{transform:translateX(-26px) scale(.5);opacity:0}to{transform:none;opacity:1}}
+.zlast span.pop{animation:lastin .3s ease-out}
+@keyframes stamp{0%{transform:scale(1.5);opacity:.2}60%{transform:scale(.92)}100%{transform:scale(1);opacity:1}}
+.zticket div.m.pop{animation:stamp .3s ease-out}
+@keyframes zpopK{0%{transform:scale(.3);opacity:0}60%{transform:scale(1.25)}100%{transform:scale(1);opacity:1}}
+.zmedal,.zwonchip{animation:zpopK .4s ease-out}
+}
+.zmedal{font-size:64px;line-height:1.1;margin:2px 0}
+.zdo{background:#E4F6EA;color:#0B4F2C;border-radius:12px;padding:10px 12px;margin:10px 0;font-size:15px;font-weight:600}
+@media (max-width:359px){.zbig{width:132px;height:132px}.zbig span{width:80px;height:80px;font-size:46px}.zlast span{min-width:42px;height:42px}}
+
+body:has(.zticket) #ct-notify,body:has(.zcall) #ct-notify{display:none}
+
+.zboard div,.zticket div,.zticket button{min-width:0;overflow:hidden}
+.zboard div{line-height:1}
+.zticket .free{font-size:clamp(12px,3.4vw,14px)}
+.zhbig{color:#B45309;text-shadow:none}
+
+.zboard div{color:#5E4F55}
+.zboard div.c{color:#2A1B00}
+body:has(#go) #ct-notify{display:none}
+
+/* the Sound button sits inside the company strip but is not part of it (the strip's own text stays the company name) */
+.zbar{position:relative}
+.zbar .zbrand{padding:6px 128px 6px 14px;min-height:56px}
+.zbar .zsndin{position:absolute;right:6px;top:6px;margin:0;min-height:44px;min-width:44px;padding:2px 10px;font-size:12px;display:inline-flex;align-items:center}
+.zbar .zbrand.zdef{justify-content:flex-start;text-align:left}
+.zbar .zbrand.zdef b{font-size:14px;letter-spacing:.04em;line-height:1.2}
