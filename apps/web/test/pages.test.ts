@@ -1290,7 +1290,7 @@ describe("console phase 2: wording fixes, My people, waiting room, remove, play 
     const p = await ready(o, "UI-PPL", w); await myPeople(p);
     setField(p, "#gname", "Asha Verma"); setField(p, "#gphone", "+91 98765-43210"); p.click("#gadd");
     await p.waitFor((x) => /1 good, 0 duplicates removed, 0 look wrong/.test(x));
-    expect(w.st.calls.find((c: any) => c[0] === "POST" && c[1].endsWith("/people"))[2]).toEqual({ consent: { v: "2026-10-13", boxes: ["A"] }, people: [{ name: "Asha Verma", phone: "+919876543210" }] });
+    expect(w.st.calls.find((c: any) => c[0] === "POST" && c[1].endsWith("/people"))[2]).toEqual({ consent: { v: "2026-10-14", boxes: ["A"] }, people: [{ name: "Asha Verma", phone: "+919876543210" }] });
     const server = (await listOf(o, "UI-PPL")).people[0]; expect(server).toMatchObject({ name: "Asha Verma", status: "invited" });
     const row = p.$(".zc-prow")!; expect(row.textContent).toMatch(/Asha Verma/); expect(row.textContent).toMatch(/\*{6}3210/); expect(row.textContent).toMatch(/Invited/); expect(p.text()).not.toMatch(/9876543210/);
     const a = p.$("a[data-wa]") as any; expect(a.getAttribute("href")).toBe(server.waLink); expect(a.getAttribute("href").startsWith("https://wa.me/919876543210?text=")).toBe(true);
@@ -1566,7 +1566,7 @@ describe("console phase 4: Finish setup for a new Host, and Continue with Google
     o.world.raw.prepare("UPDATE host_state SET verified_ms=NULL, mobile_ok=0, spent=0").run();
     const h = await consolePage(o, "UI-GOO", hk, {}, { afterLoad: spy({ "POST /api/auth/google": (_m, b) => { bodies.push(b); return { status: 403, body: { error: "This link is for a***@acme.com", code: "email-mismatch" } }; } }, google).hook });
     await h.waitFor((x) => /Finish setup/.test(x) && /Continue with Google/.test(x)); h.win.__gi.callback({ credential: "tok2" }); await h.waitFor((x) => /This link is for a\*\*\*@acme\.com/.test(x));
-    expect(bodies).toEqual([{ credential: "tok2", intent: "host", hostKey: hk, consent: { v: "2026-10-13", boxes: ["A"] } }]);
+    expect(bodies).toEqual([{ credential: "tok2", intent: "host", hostKey: hk, consent: { v: "2026-10-14", boxes: ["A"] } }]);
   }, 60_000);
 });
 

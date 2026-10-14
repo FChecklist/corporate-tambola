@@ -200,13 +200,13 @@ describe("the report and the deletion", () => {
     expect(sentReports.length).toBe(1);
     const m = sentReports[0]!;
     expect(m.to).toBe("boss@acme.com"); expect(m.subject).toMatch(/PRV-1/); expect(m.attachments.length).toBe(0);
-    expect(m.text).toMatch(/built on your own/); expect(m.text).toMatch(/within 24 hours/); expect(m.text).toMatch(/365 days/); expect(m.text).toMatch(/7 days/); expect(m.text).toMatch(/winners record/);
+    expect(m.text).toMatch(/built on your own/); expect(m.text).toMatch(/within 24 hours/); expect(m.text).toMatch(/365 days/); expect(m.text).not.toMatch(/backup/i); expect(m.text).toMatch(/winners record/);
     expect(m.text).toMatch(/DPDP Act/); expect(m.text).toMatch(/CCPA/); expect(m.text).not.toMatch(/personal data(?! protection)/i);
     expect(m.text + "").not.toMatch(/the law requires|required by law/i);
     const link = linkOf(m); expect(link).toMatch(/report\.html\?e=PRV-1&k=/);
     const r = await buildReport(link); const pdf = r.text;
     expect(pdf.startsWith("%PDF-1.4")).toBe(true); expect(pdf).toMatch(/%%EOF\s*$/);
-    for (const needle of ["Organizer Olga", "Guest 3", "98765 00001", "98765 00002", "Zed ??", "organizer", "Full House", "Top Line", "Early Five", "boss@acme.com", "Sent on:", "deleted", "365th day", "backups"]) expect(pdf.toLowerCase()).toContain(needle.toLowerCase());
+    for (const needle of ["Organizer Olga", "Guest 3", "98765 00001", "98765 00002", "Zed ??", "organizer", "Full House", "Top Line", "Early Five", "boss@acme.com", "Sent on:", "deleted", "365th day"]) expect(pdf.toLowerCase()).toContain(needle.toLowerCase());
     for (const needle of ["Our commitment to your data", "permanently deleted from our systems within 24 hours", "DPDP", "GDPR", "California Consumer Privacy Act", "advertising", "encryption", "winners record", "Agreed by", "Prize given"]) expect(pdf).toContain(needle);
     expect(pdf).not.toMatch(/personal data(?! protection)/i);
     expect(pdf).not.toMatch(/the law requires|required by law/i);

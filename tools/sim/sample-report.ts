@@ -30,7 +30,7 @@ const data: ReportData = {
   rounds: 1, callSeconds: 6, ticketsPerPerson: 1, cap: 100, inviteOnly: false, numbersCalled: 81, people, prizes,
   lucky: [{ title: "Scratch and win", winners: [w(9, 45), w(18, 45), w(33, 45)].map((x) => ({ ...x })) }],
   timeline, breaks: [{ after: 45, kind: "lucky", title: "Scratch and win" }],
-  personalDeleteAtMs: end + 22 * 3_600_000, fullDeleteAtMs: Date.UTC(2027, 9, 3, 18, 30, 0), backupDays: 7,
+  personalDeleteAtMs: end + 22 * 3_600_000, fullDeleteAtMs: Date.UTC(2027, 9, 3, 18, 30, 0),
 };
 const pdf = layoutReport(data);
 await Bun.write(out, pdf);

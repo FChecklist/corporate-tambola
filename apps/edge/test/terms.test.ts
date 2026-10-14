@@ -24,7 +24,7 @@ describe("the document pages", () => {
   const DOCS: Record<string, string[]> = {
     "terms.html": ["Corporate Tambola — Terms and Conditions", "IT SERVICES BY RAJAT AGARWAL", `Version ${TERMS_VERSION}`, "We make software. We do not run the games.", "Players pay us nothing", "within twenty-four (24) hours after the Game ends", "no refund", "Consent boxes and records", "Grievance Officer", "Section 8(2)"],
     "legal-position.html": ["Corporate Tambola — Legal Position Statement", "IT SERVICES BY RAJAT AGARWAL", `Version ${TERMS_VERSION}`, "Statement 1", "Online Gaming Act", "Undertakings given by IT Services"],
-    "dpa.html": ["controller", "processor", "All player data is deleted within 24 hours", "Backups clear within 7 days", "365 days", "without undue delay", "/subprocessors.html"],
+    "dpa.html": ["controller", "processor", "All player data is deleted within 24 hours", "365 days", "without undue delay", "/subprocessors.html"],
     "subprocessors.html": ["Cloudflare", "Resend", "Razorpay", "Google", "drand", "YouTube"],
     "partner-terms.html": ["independent partner", "No spam", "Tax may be deducted at source", "You are responsible for your own taxes", "No payment from the buyer, no commission"],
     "organizer-guide.html": ["Never ask for a fee", "Players are 18 or older", "INR 10,000", "tax deducted at source", "Check your state", "The game does not begin until it is paid for"],
@@ -62,7 +62,6 @@ describe("the document pages", () => {
     const t = rd("terms.html").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
     expect(t).toMatch(/within twenty-four \(24\) hours after the Game ends/);
     expect(t).toMatch(/Details of a winner \(name and prize\) are kept for 365 days/);
-    expect(t).toMatch(/Encrypted backups are overwritten within 7 days/);
     const l = rd("legal.html").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
     expect(l).toMatch(/24 hours/); expect(l).toMatch(/365 days/); expect(l).toMatch(/7 days/);
   });

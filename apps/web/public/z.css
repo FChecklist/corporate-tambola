@@ -5,7 +5,7 @@
 .zhead b::before{content:"";flex:0 0 24px;width:24px;height:24px;border-radius:6px;background:url(/icon-192.png) center/cover}
 .zsnd{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;min-height:36px}
 .zcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
-.zcard h2{margin:0 0 8px;font:700 13px var(--sans,inherit);letter-spacing:.08em;text-transform:uppercase;color:var(--goldd)}
+.zcard h2{margin:0 0 8px;font:700 13px var(--sans,inherit);letter-spacing:.08em;text-transform:uppercase;color:var(--golddt)}
 .zbanner{border-radius:12px;padding:12px 14px;margin:10px 0;font-weight:600}
 .zbanner.warn{background:var(--warnbg);color:var(--warn)}.zbanner.info{background:var(--infobg);color:var(--info)}.zbanner.ok{background:var(--okbg);color:var(--ok)}.zbanner.bad{background:var(--badbg);color:var(--bad)}
 .zball{display:flex;align-items:center;justify-content:center;gap:16px;padding:8px 0}

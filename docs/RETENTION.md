@@ -4,7 +4,8 @@ Everything is kept in one Cloudflare D1 database (table `kv` holds small keyed r
 
 | Data | Where | Kept | Then |
 |---|---|---|---|
-| Participant name and mobile number (sealed), seat, invitation record, tickets, votes, claims, working copies of the report | `participant`, `seat`, `claim`, `settled`, `rvote`, `rcand`, `overvote`, `kv seats-base/ rpt*` | 22 hours after the game ends | Deleted (`erasePersonal`). Backups clear within 7 days |
+| Participant name and mobile number (sealed), seat, invitation record, tickets, votes, claims, working copies of the report | `participant`, `seat`, `claim`, `settled`, `rvote`, `rcand`, `overvote`, `kv seats-base/ rpt*` | 22 hours after the game ends | Deleted (`erasePersonal`). |
+| A player's request to see, correct or delete their data (card id, kind, short note, times: no name, no number) | `data_request` | 22 hours after the game ends, with the participants | Deleted (`erasePersonal`); again with the game at 365 days |
 | Winners record (seat, prize, round, time) | `winner` | 365 days after the game ends | Deleted with the engagement |
 | Winner's prize hand-over details (name and number as confirmed, change trail, given date), sealed | `prize` | 365 days | Deleted with the engagement |
 | Engagement, its settings, the end-of-game clock | `engagement`, `life`, `ctl_request`, `kv control/ contact/ pub/ ann/` | Until 00:00 IST at the end of day 365 after the game ended. An unpublished draft: 30 days | Deleted (`eraseEverything`) |

@@ -39,7 +39,7 @@ body{overflow-x:hidden}
 .pricehead .cur button{padding:8px 16px;font-size:13px;min-height:40px}
 .packs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
 .pack{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--shadow)}
-.pack .up{font:600 12px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--goldd)}
+.pack .up{font:600 12px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--golddt)}
 .pack .n{font:600 26px var(--serif)}
 .pack .tot{font:700 22px var(--mono);margin-top:4px}
 .pack .brk{margin:0;font-size:12px}

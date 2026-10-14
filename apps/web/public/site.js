@@ -27,7 +27,7 @@
         `<div class="pmain"><div class="pburst" title="Festive offer: 50% off"><b>50% OFF</b><span>Festive offer</span><span class="sr">Festive offer: 50% off</span></div>` +
         `<div class="pamt"><span class="was" title="Regular price after the festive offer"><span class="sr">Regular price after the festive offer </span>${TB.money(was, S.cur)}</span>` +
         `<span class="tot"><small>Festive price</small> ${TB.money(shown, S.cur)}</span></div>` +
-        `<button type="button" class="btn pcta" data-buy="${n}" aria-label="Create an engagement for up to ${nf(n)} participants">Create your game ${ic("arrow")}</button></div>` +
+        `<button type="button" class="btn pcta" data-buy="${n}" aria-label="Create your game for up to ${nf(n)} participants">Create your game ${ic("arrow")}</button></div>` +
         `<ul class="pperks">${perks.map((t) => `<li><span class="tick" aria-hidden="true">&#10003;</span>${t}</li>`).join("")}</ul></div>`;
     }
     if (FREE.on) { $("priceNote").textContent = "You build and publish your engagement for free. You pay before it starts: if it is not paid by the start time, it will not begin. " + (S.cur === "INR" ? "Prices in Indian rupees." : "Prices in US dollars."); return; }

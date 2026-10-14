@@ -15,7 +15,7 @@ Corporate Tambola runs on free Cloudflare services: Pages (site and API), D1 (da
 ## Backups
 * D1 keeps point-in-time history (Time Travel) for a limited window on the free plan. Export a copy any time: `wrangler d1 export corporate-tambola --remote --output backup.sql` (the file holds sealed names and numbers; keep it private and delete it after the restore drill).
 * The code and migrations are in git. Secrets are in Cloudflare and in `config/live-secrets.txt` (git-ignored, on the owner's laptop). Keep a second private copy of that file (password manager). Without `DATA_KEY` sealed rows cannot be opened.
-* Backups age out: Cloudflare history clears on its own schedule, which is why we say "backups clear within 7 days". Check the plan's window if it changes.
+* We make no promise about how long Cloudflare keeps that history, and the pages say nothing about a backup period. If a backup process of our own is built, say so on the Privacy page and in the data map first.
 
 ## Restore drill (do twice a year, on a scratch database; never on the live one)
 1. `wrangler d1 create corporate-tambola-drill`.

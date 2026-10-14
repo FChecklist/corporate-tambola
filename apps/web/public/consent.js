@@ -3,7 +3,7 @@
    The words Terms, Privacy and Refund Policy inside a label are links to the site's own pages and open in a new tab. */
 (function () {
   const C = (window.CBConsent = {});
-  C.version = "2026-10-13";
+  C.version = "2026-10-14";
   C.text = {
     K1: {
       A: "I have read and agree to the Terms & Conditions, the Privacy Policy and the Refund Policy.",

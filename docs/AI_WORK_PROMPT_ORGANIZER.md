@@ -343,7 +343,7 @@ Within 24 hours of the game ending the organizer is e-mailed ONE link (`/report?
 
 ## C20. Erase participant data (HUMAN confirms)
 
-The AI may ask: `POST <L>/z/<ID>/control/request {action:"erase", note}`. Nothing is deleted; the organizer is e-mailed. The person opens the console: card "Your AI assistant is asking" -> **Confirm: delete all participant data** (a browser confirmation follows) or **Dismiss**. Or the card "Participant data" -> **Delete all participant data now**. The winners record and the organizer's details stay. Automatic deletion: names and numbers within 24 hours of the end; winners' hand-over details and the winners record 365 days; backups roll off within 7 days.
+The AI may ask: `POST <L>/z/<ID>/control/request {action:"erase", note}`. Nothing is deleted; the organizer is e-mailed. The person opens the console: card "Your AI assistant is asking" -> **Confirm: delete all participant data** (a browser confirmation follows) or **Dismiss**. Or the card "Participant data" -> **Delete all participant data now**. The winners record and the organizer's details stay. Automatic deletion: names and numbers within 24 hours of the end; winners' hand-over details and the winners record 365 days.
 
 ## C21. Manage the AI link (HUMAN)
 

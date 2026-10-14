@@ -3,7 +3,7 @@
 // The name is always exactly "Corporate Tambola". The palette is the site's (wine, gold, ivory).
 
 /** The version of the Terms in force (the date at the top of /terms.html). Stored with the organizer when they continue. */
-export const TERMS_VERSION = "2026-10-13";
+export const TERMS_VERSION = "2026-10-14";
 
 export const BRAND = {
   name: "Corporate Tambola",
