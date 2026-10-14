@@ -14,6 +14,7 @@
 //                        -> table mail_bounce; GET /api/owner/mail-events shows bounced / complained / delivered, newest first.
 // A recipient is kept as a one-way hash plus a masked form (j***@example.com) so the owner can recognise it; nothing else about the person. Rows are deleted after 90 days.
 import { logAccess } from "./audit";
+import { PURGE_AFTER_MS } from "./lifecycle";
 import type { D1, Env } from "./worker";
 
 export const GAME_NAME = "Corporate Tambola";
@@ -83,6 +84,25 @@ export async function countError(db: D1, now: number): Promise<void> {
     m.set(k, n + 1); if (m.size > 20) for (const old of [...m.keys()].slice(0, m.size - 20)) m.delete(old);
     await db.prepare("INSERT INTO kv(k,v) VALUES(?,'1') ON CONFLICT(k) DO UPDATE SET v=CAST(v AS INTEGER)+1").bind(k).run();
   } catch { /* best effort */ }
+}
+/** The promise to players is "within 24 hours"; the job deletes at 23 (PURGE_AFTER_MS). The alarm rises when a game is this much later than that and its players' data is still there (the 5-minute tick normally clears a game within minutes). */
+export const OVERDUE_GRACE_MS = 30 * 60_000;
+/** A game the tick has not looked at yet (no `life` row) is taken to have ended this long after its scheduled start at the latest (5 rounds of 90 numbers is under 3 hours; breaks and pauses are added generously). */
+const LONGEST_GAME_MS = 12 * 3_600_000;
+/**
+ * The 24-hour promise watched from outside: how many games are past 23 hours after their end (plus a short grace) and still hold their players' data, and how long the oldest has waited.
+ * Two sources: games the tick already knows (a `life` row that is not purged) and games it has not looked at at all (a scheduled start long ago, players still stored), so a dead clock is seen too.
+ * A game under an owner's legal hold is left out: its data is kept on purpose.
+ */
+export async function overduePurge(db: D1, now: number): Promise<{ count: number; oldestHours: number | null }> {
+  const lateBy = PURGE_AFTER_MS + OVERDUE_GRACE_MS;
+  const holds = "NOT EXISTS (SELECT 1 FROM legal_hold h WHERE h.eid=";
+  const data = (id: string) => `(EXISTS (SELECT 1 FROM participant p WHERE p.eid=${id}) OR EXISTS (SELECT 1 FROM person q WHERE q.eid=${id}) OR EXISTS (SELECT 1 FROM waiting w WHERE w.eid=${id}))`;
+  const known = (await db.prepare(`SELECT l.eid AS eid, l.end_ms AS end_ms FROM life l WHERE l.purged_ms IS NULL AND l.end_ms + ? < ? AND ${holds}l.eid) AND ${data("l.eid")} LIMIT 200`).bind(lateBy, now).all<{ eid: string; end_ms: number }>()).results ?? [];
+  const startMs = "((1692803367 + (e.start_round - 1) * 3) * 1000)"; // lifecycle.ts roundMs()
+  const unseen = (await db.prepare(`SELECT e.id AS eid, ${startMs} + ? AS end_ms FROM engagement e WHERE NOT EXISTS (SELECT 1 FROM life l WHERE l.eid=e.id) AND e.cancelled_ms IS NULL AND ${startMs} + ? + ? < ? AND ${holds}e.id) AND ${data("e.id")} LIMIT 200`).bind(LONGEST_GAME_MS, LONGEST_GAME_MS, lateBy, now).all<{ eid: string; end_ms: number }>()).results ?? [];
+  const ends = [...known, ...unseen].map((r) => r.end_ms);
+  return { count: ends.length, oldestHours: ends.length ? Math.round(((now - Math.min(...ends) - PURGE_AFTER_MS) / 3_600_000) * 10) / 10 : null };
 }
 /** 5xx answers in the last 60 minutes (the current 10-minute bucket and the five before it). */
 export async function errorsLastHour(db: D1, now: number): Promise<number> {
@@ -178,9 +198,11 @@ export async function adminRoute(req: Request, env: AdminEnv, now: number, owner
   const url = new URL(req.url), p = url.pathname;
   if (p === "/api/status/health") {
     if (req.method !== "GET" && req.method !== "HEAD") return jsonRes({ error: "Not found" }, 404);
-    let dbOk = true, errors = 0;
+    let dbOk = true, errors = 0, overdue = { count: 0, oldestHours: null as number | null };
     try { errors = await errorsLastHour(env.DB, now); } catch { dbOk = false; }
-    return jsonRes({ ok: dbOk, errors_last_hour: errors, threshold: ERROR_ALERT_THRESHOLD, maintenance: await siteIsOff(env.DB, now), at: new Date(now).toISOString() });
+    try { overdue = await overduePurge(env.DB, now); } catch { dbOk = false; }
+    // ok turns false when a game is past its 23-hour deletion and its players' data is still stored: the scheduler's uptime check fails on it (the 24-hour promise has an alarm)
+    return jsonRes({ ok: dbOk && overdue.count === 0, errors_last_hour: errors, threshold: ERROR_ALERT_THRESHOLD, overdue_purge: overdue.count, overdue_hours: overdue.oldestHours, maintenance: await siteIsOff(env.DB, now), at: new Date(now).toISOString() });
   }
   if (p === "/api/mail/events") return mailEventsWebhook(req, env, now, spend);
   const m = p.match(/^\/api\/owner\/(site|organizer|data-requests|mail-events|errors)$/);

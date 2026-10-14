@@ -14,7 +14,7 @@ import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../
 import { seatOfPid } from "../../../packages/beacon/src/unique-ticket";
 import { openPii, openText, sealText, type PiiEnv } from "./pii";
 import { layoutReport, layoutPeoplePart, istDate, istFull, emptyAgg, type Agg, type ReportData, type ReportPerson, type ReportPrize, type ReportWinner } from "./report-layout";
-import { sendReportMail, type PayEnv } from "./pay";
+import { purgeOutbox, retryOutbox, sendReportMail, type PayEnv } from "./pay";
 import { eraseCohostsSql, mailDataDeleted, mailErasureHeadsUp } from "./cancel";
 import { creditTick } from "./credit";
 import type { D1, Env } from "./worker";
@@ -225,7 +225,7 @@ const bodyFor = (eid: string, d: ReportData, link: string) => [
   `What happens to the data:`,
   `- By ${istFull(d.personalDeleteAtMs)} (within 24 hours of the game ending) we permanently delete every participant's name, mobile number, seat, join record and invite record from our systems.`,
   `- For 365 days we keep only: the organizer, host and co-host details, the log of what your AI assistant did, and the winners record (which prize, which round, what time, which seat, and the name and mobile number each winner confirmed so the prize can be handed over, with whether it was given).`,
-  `- Everything about this engagement is permanently deleted at 00:00 hours IST on ${istDate(d.fullDeleteAtMs)} (the end of the 365th day). The only things kept after that are the payment and invoice records, the organizer's details on the invoice (name, e-mail, mobile) and who paid, because invoices and payment records have to be kept for tax and accounting.`,
+  `- Everything about this engagement is permanently deleted at 00:00 hours IST on ${istDate(d.fullDeleteAtMs)} (the end of the 365th day). We keep billing data for audit and tax reasons.`,
   ``,
   `The winners were worked out by the software from the public numbers and accepted only when several different phones agreed. You cannot choose or change a winner or a number, and neither can we.`, ``,
   `You can ask us to delete everything sooner: press Erase in your console, ask your AI assistant to request it (you confirm in your console), or reply to this e-mail from your registered address.`, ``,
@@ -399,6 +399,13 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
   try {
     const bare = (await env.DB.prepare("SELECT e.* FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE l.eid IS NULL AND e.pack IS NOT 0 AND e.cancelled_ms IS NULL AND NOT EXISTS (SELECT 1 FROM participant p WHERE p.eid=e.id) AND NOT EXISTS (SELECT 1 FROM person q WHERE q.eid=e.id) AND NOT EXISTS (SELECT 1 FROM waiting w WHERE w.eid=e.id) ORDER BY e.start_round LIMIT 25").all<any>()).results ?? [];
     for (const e of bare) { const end = await endBoundMs(env, e); if (now >= end) await env.DB.prepare("INSERT OR IGNORE INTO life(eid,end_ms,end_src,purged_ms,report_state) VALUES(?,?,'schedule',?,'no-guests')").bind(e.id, end, now).run(); }
+  } catch { /* tried again at the next tick */ }
+  // the mail log (recipient address and subject of mail sent) keeps nothing older than 3 days: forgotten every hour from THIS clock, not only when an organizer happens to visit; unsent mail gets one more try a day
+  try {
+    const h = new Date(now).toISOString().slice(0, 13), lastH = await env.DB.prepare("SELECT v FROM kv WHERE k='outbox_sweep_hour'").first<{ v: string }>();
+    if (lastH?.v !== h) { await env.DB.prepare("INSERT INTO kv(k,v) VALUES('outbox_sweep_hour',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(h).run(); (out as any).outboxDropped = await purgeOutbox(env.DB, now); }
+    const d = h.slice(0, 10), lastD = await env.DB.prepare("SELECT v FROM kv WHERE k='outbox_retry_day'").first<{ v: string }>();
+    if (lastD?.v !== d) { await env.DB.prepare("INSERT INTO kv(k,v) VALUES('outbox_retry_day',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(d).run(); (out as any).outboxRetried = (await retryOutbox(env, now)).retried; }
   } catch { /* tried again at the next tick */ }
   // public-page visit records older than 365 days: rolled into anonymous per-day totals, then deleted (once a day, a few days of catch-up at a time)
   try {
