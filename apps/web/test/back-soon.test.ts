@@ -25,9 +25,9 @@ describe("the Back soon cover (rum.js)", () => {
     expect((await q.win.fetch("/api/notices")).status).toBe(200); await tick(); expect(q.win.document.getElementById("back-soon")).toBeNull();
   });
   test("an ordinary 503 (not the owner's switch) does not cover the page", async () => {
-    const w = newWorld();
+    const w = newWorld(); let armed = false;
     const p = await openPage(w.world, { url: "http://localhost/", html: "index.html", scripts: ["rum.js"], afterLoad: (win, f) => { // before rum.js loads: the page's own fetch answers one address with an ordinary 503
-      if (f !== "consent.js") return; const real = win.fetch;
+      if (armed) return; armed = true; const real = win.fetch;
       win.fetch = async (u: any, i: any) => (String(u).includes("/api/odd") ? new Response(JSON.stringify({ error: "busy" }), { status: 503, headers: { "content-type": "application/json" } }) : real(u, i));
     } }); open.push(p);
     expect((await p.win.fetch("/api/odd")).status).toBe(503); await tick();
