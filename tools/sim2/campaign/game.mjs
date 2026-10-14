@@ -54,7 +54,7 @@ const defaultRewardsList = () => ["early5", "top", "mid", "bot", "corners", "sta
 const fetchInvoice = async (url) => (await fetch(BASE + url)).text();
 const invoiceChecks = async (label, invoiceUrl, want) => {
   const h = await fetchInvoice(invoiceUrl);
-  for (const x of ["Paid on (IST)", " IST", "Terms and conditions", "kept for invoice, tax and accounting purposes", "Razorpay payment ID", "Payer (paid by)", "Organizer", ...(want.contains ?? [])]) chk(`${label}: invoice shows "${x}"`, h.includes(x), "missing in the invoice");
+  for (const x of ["Paid on (IST)", " IST", "Terms and conditions", "We keep billing data for audit and tax reasons", "Razorpay payment ID", "Payer (paid by)", "Organizer", ...(want.contains ?? [])]) chk(`${label}: invoice shows "${x}"`, h.includes(x), "missing in the invoice");
   for (const x of want.absent ?? []) chk(`${label}: invoice does not show "${x}"`, !h.includes(x), "found in the invoice");
   return h;
 };

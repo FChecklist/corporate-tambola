@@ -2,7 +2,7 @@
 
 Owner requirements (2026-10-01): players use **mobile phones only**; server cost zero; AI cost zero (the organizer's own AI, on the organizer's own machine); no server RAM during a game; hundreds to thousands of simultaneous players. Corporate-firewall cases for phones are out of scope (mirror fallback stays, no effort spent on office networks).
 
-Branch `feat/ai-link-and-pause` (worktree `C:/ct/tb-wt-ai`). Nothing is deployed, nothing pushed.
+Design note for the AI link and the pause control. It is built and live (see `/version.json` on the site and `docs/DEPLOYS.md`); the branch `feat/ai-link-and-pause` was merged.
 
 ## 0. Summary
 

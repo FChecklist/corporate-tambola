@@ -117,6 +117,18 @@ describe("2 and 3. accepted with the tick; the row is read back from the databas
     expect((await call("POST", "/api/z/CON-8/join", { name: "Maya Lopez", phone: "98765 43212", device: dev(2) })).status).toBe(200);
     expect(rows("K4")).toHaveLength(1);
   });
+  test("K4 adults only: box B says only that the person is 18 or older (no parent's-device alternative); box A says what is kept; neither is ticked for the person; a join with only A is refused; the exact wording is hashed with the row", async () => {
+    const [a, b] = boxesOf("K4").map((x) => (CONSENT_TEXT.K4 as any)[x] as string); expect(b).toBe("I am 18 or older.");
+    expect(wordingOf("K4").join(" ")).not.toMatch(/parent|guardian|device with/i);
+    for (const part of ["deleted within 24 hours", "who invited me is recorded until then", "my name, mobile number and prize record are kept for 365 days", "We keep billing data for audit and tax reasons.", "Hindi on request"]) expect(a).toContain(part);
+    expect(a).not.toMatch(/forever|for ever|permanent/i);
+    await published("CON-A18"); const body = { name: "Maya Lopez", phone: "98765 43219", device: dev(1) };
+    expect((await call("POST", "/api/z/CON-A18/join", { ...body, consent: { v: CONSENT_VERSION, boxes: ["A"] } })).status).toBe(400); // the age box is required by the server
+    expect((await call("POST", "/api/z/CON-A18/join", { ...body, consent: { v: CONSENT_VERSION, boxes: ["B"] } })).status).toBe(400);
+    expect((await call("POST", "/api/z/CON-A18/join", { ...body, consent: { v: "2026-10-14", boxes: ["A", "B"] } })).status).toBe(400); // the old version no longer counts
+    expect((await call("POST", "/api/z/CON-A18/join", { ...body, consent: ticks("K4") }, undefined, T + 9)).status).toBe(200);
+    expect(rows("K4")[0]).toMatchObject({ boxes: "A,B", version: CONSENT_VERSION, text_hash: hashOf("K4") });
+  });
   test("K5 Host setup and Co-host role", async () => {
     const master = await organizer(); await draft(master, "CON-9");
     const host = (await j(await call("POST", "/api/org/host", { label: "Priya", email: "priya@acme.com" }, master))).hostKey as string;
@@ -178,7 +190,7 @@ describe("5. the wording on the pages is the agreed wording", () => {
     const host = win.document.createElement("div"); host.innerHTML = win.CBConsent.html("K1"); win.document.body.appendChild(host);
     for (const i of Array.from(host.querySelectorAll("input[type=checkbox]")) as any[]) { expect(i.checked).toBe(false); expect(host.querySelector(`label[for="${i.id}"]`)).toBeTruthy(); }
     const hrefs = Array.from(host.querySelectorAll("label a")).map((a: any) => [a.textContent, a.getAttribute("href"), a.getAttribute("target"), a.getAttribute("rel")]);
-    expect(hrefs).toEqual([["Terms & Conditions", "/terms.html", "_blank", "noopener"], ["Privacy Policy", "/legal.html#privacy", "_blank", "noopener"], ["Refund Policy", "/refund-policy.html", "_blank", "noopener"]]);
+    expect(hrefs).toEqual([["Terms & Conditions", "/terms.html", "_blank", "noopener"], ["Privacy Policy", "/privacy.html", "_blank", "noopener"], ["Refund Policy", "/refund-policy.html", "_blank", "noopener"]]);
   });
   test("the button stays disabled (and aria-disabled) until every box of the point is ticked", () => {
     const win = pageWindow();

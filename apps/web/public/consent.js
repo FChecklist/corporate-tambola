@@ -3,7 +3,7 @@
    The words Terms, Privacy and Refund Policy inside a label are links to the site's own pages and open in a new tab. */
 (function () {
   const C = (window.CBConsent = {});
-  C.version = "2026-10-14";
+  C.version = "2026-10-15";
   C.text = {
     K1: {
       A: "I have read and agree to the Terms & Conditions, the Privacy Policy and the Refund Policy.",
@@ -12,13 +12,13 @@
     K2: { A: "I have read and agree to the Terms & Conditions and the Privacy Policy." },
     K3: { A: "I agree to the Terms and the Refund Policy. I understand there is no refund; my payment stays as credit." },
     K4: {
-      A: "I agree that my name and mobile number are used for this game only and deleted within 24 hours after it ends. I know who invited me is recorded until then.",
-      B: "I am 18 or older, or I am on a parent's or guardian's device with their permission.",
+      A: "I agree that my name and mobile number are used for this game only and deleted within 24 hours after it ends. I know who invited me is recorded until then. If I win, my name, mobile number and prize record are kept for 365 days so the prize can be handed over. We keep billing data for audit and tax reasons. This notice is available in Hindi on request.",
+      B: "I am 18 or older.",
     },
     K5: { A: "I will not charge any player. I will hand over prizes as the organizer decides. I follow the Terms." },
     K6: { A: "I am allowed to use these names and numbers for this game. The people have been told." },
   };
-  const LINKS = [["Terms & Conditions", "/terms.html"], ["Privacy Policy", "/legal.html#privacy"], ["Refund Policy", "/refund-policy.html"], ["Terms", "/terms.html"]];
+  const LINKS = [["Terms & Conditions", "/terms.html"], ["Privacy Policy", "/privacy.html"], ["Refund Policy", "/refund-policy.html"], ["Terms", "/terms.html"]];
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const linkify = (t) => { // the label text stays exactly the wording; only the page names become links
     let out = "", i = 0;

@@ -6,10 +6,10 @@ Short version: a player gives a name and a mobile number. The organizer is the c
 
 ## 1. The player notice (the two boxes shown before the name is asked)
 
-The wording is in `apps/edge/src/consent-text.json` (point K4); the page fetches it from `GET /api/consent/text?kind=K4`. Two boxes, never ticked in advance, both before any name field works:
+The wording is in `apps/edge/src/consent-text.json` (point K4) and is copied into `apps/web/public/consent.js`, which the join page renders (a test keeps the two identical); the join page does not fetch it from the server. Terms version 2026-10-15. Two boxes, never ticked in advance, both before any name field works:
 
-- A: the name and the mobile number are used for this game only and deleted within 24 hours after it ends; who invited the player is recorded until then.
-- B: the player is 18 or older, or is on a parent's or guardian's device with their permission.
+- A: the name and the mobile number are used for this game only and deleted within 24 hours after it ends; who invited the player is recorded until then; a winner's name, mobile number and prize record are kept for 365 days so the prize can be handed over; "We keep billing data for audit and tax reasons."; and the notice is available in Hindi on request. The same wording is in the Terms table, the stand-alone Privacy page (`/privacy.html`) and the organizer's report.
+- B: the player is 18 or older. Adults only: there is no parent's-device alternative (DPDP Act section 9); the box is never ticked in advance, the server refuses a join without it, and a join under an older Terms version is refused.
 
 The Join button stays disabled until both are ticked, and the server refuses a join without them. The server stores one row per acceptance in `consent_log`: the ticket id, the point (K4), the game id, the Terms version, the boxes, a hash of the exact wording, and the time. It holds no name, number, address or device. When the Terms version changes, the next join asks again.
 

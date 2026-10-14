@@ -11,6 +11,7 @@ import { openPii } from "./pii";
 import type { D1, D1Stmt } from "./worker";
 import { sendMail, type PayEnv } from "./pay";
 import { ownerAddress } from "./owner-mail";
+import { BRAND } from "./brand";
 
 /** The answer time we promise a player. ONE constant: change it here and the page, the e-mails and the tests all follow. */
 export const PROMISE_DAYS = 7;
@@ -18,7 +19,8 @@ export const PROMISE_TEXT = `within ${PROMISE_DAYS} days`;
 /** What this game calls a player's place in it (card, ticket, board, place): the one word the answers and e-mails use. */
 export const NOUN = "ticket";
 const Noun = NOUN[0]!.toUpperCase() + NOUN.slice(1);
-export const REQUEST_KINDS = ["access", "correction", "erasure"] as const;
+/** "nomination" is the right to name another person who may use these rights for you if you cannot (DPDP Act, section 14). The row lands in the owner's request queue like any other; the person is named by e-mail to BRAND.support. */
+export const REQUEST_KINDS = ["access", "correction", "erasure", "nomination"] as const;
 export type RequestKind = (typeof REQUEST_KINDS)[number];
 /** A player may send at most this many requests per game (the same kind twice while one is open is answered with the first). */
 export const MAX_REQUESTS_PER_PLAYER = 5;
@@ -124,7 +126,7 @@ export async function heldAbout(c: RightsCtx, s: Seat): Promise<{ what: string; 
 }
 
 const cleanNote = (n: unknown): string => (typeof n === "string" ? n.replace(/[<>`]/g, "").replace(/\s+/g, " ").trim().slice(0, 300) : "");
-const KIND_WORDS: Record<RequestKind, string> = { access: "to see what is held about them", correction: "to correct their details", erasure: "to be deleted" };
+const KIND_WORDS: Record<RequestKind, string> = { access: "to see what is held about them", correction: "to correct their details", erasure: "to be deleted", nomination: "to name another person who may use their rights for them (DPDP Act, section 14)" };
 
 async function mailBoth(c: RightsCtx, id: string, kind: RequestKind, seat: Seat, name: string, note: string, due: number, erased: boolean): Promise<void> {
   const subjectEnd = `${c.gameName} (${NOUN} ${seat.seq})`;
@@ -134,7 +136,7 @@ async function mailBoth(c: RightsCtx, id: string, kind: RequestKind, seat: Seat,
     `We promised the player an answer ${PROMISE_TEXT}, by ${istDay(due)}.`,
   ];
   const orgBody = [...base, ...(name ? [`Name the player gave: ${name}`] : []), ...(note ? [`Note from the player: ${note}`] : []), "",
-    erased ? "The player's name and place were deleted at once, as they asked. Nothing more is needed from you." : kind === "access" ? "The player has already been shown what we hold. Please answer anything more they ask." : "You are the one who holds this name for the game. Please answer the player.",
+    erased ? "The player's name and place were deleted at once, as they asked. Nothing more is needed from you." : kind === "nomination" ? `The player has been asked to write to ${BRAND.support} with the name of the person they nominate. Please answer the player.` : kind === "access" ? "The player has already been shown what we hold. Please answer anything more they ask." : "You are the one who holds this name for the game. Please answer the player.",
     `Request number: ${id}`].join("\n");
   const ownerBody = [...base, `Organizer informed: yes`, "", erased ? "Deleted at once." : "Open.", `Request number: ${id}`].join("\n");
   try { const to = await c.orgEmail(); if (to) await sendMail(c.env, c.db, to, `A player's data request: ${subjectEnd}`, orgBody, c.now); } catch { /* the request is stored; a mail is a nudge */ }
@@ -150,7 +152,7 @@ export async function requestRoute(c: RightsCtx): Promise<Response> {
     const rows = (await c.db.prepare("SELECT id, kind, created_ms, due_ms, status, done_ms FROM data_request WHERE eid=? AND pid=? ORDER BY created_ms").bind(c.eid, s.pid).all<any>()).results ?? [];
     return c.json({ promiseDays: PROMISE_DAYS, promise: PROMISE_TEXT, requests: rows.map((r: any) => ({ id: r.id, kind: r.kind, status: r.status, receivedMs: r.created_ms, answerByMs: r.due_ms, doneMs: r.done_ms ?? null })) });
   }
-  if (!REQUEST_KINDS.includes(kind)) return c.json({ error: "Please choose what you want: to see your data, to correct it, or to delete it.", code: "bad-kind" }, 400);
+  if (!REQUEST_KINDS.includes(kind)) return c.json({ error: "Please choose what you want: to see your data, to correct it, to delete it, or to name another person.", code: "bad-kind" }, 400);
   const note = cleanNote(c.b?.note);
   if (kind === "correction" && note.length < 2) return c.json({ error: "Please write what should be corrected.", code: "note-needed" }, 400);
   const mine = (await c.db.prepare("SELECT id, kind, status, created_ms, due_ms FROM data_request WHERE eid=? AND pid=?").bind(c.eid, s.pid).all<any>()).results ?? [];
@@ -168,6 +170,6 @@ export async function requestRoute(c: RightsCtx): Promise<Response> {
   await mailBoth(c, id, kind, s, name, note, due, erased);
   return c.json({
     ok: true, id, kind, status: erased ? "done" : "open", promiseDays: PROMISE_DAYS, promise: PROMISE_TEXT, receivedMs: c.now, answerByMs: due, ...(held ? { held } : {}), ...(erased ? { erased: true } : {}),
-    message: erased ? "Done. Your name and your place were deleted just now. We told the organizer." : `We have your request. You will have your answer ${PROMISE_TEXT}, by ${istDay(due)}.`,
+    message: erased ? "Done. Your name and your place were deleted just now. We told the organizer." : kind === "nomination" ? `We have your request. To name the person, please write to ${BRAND.support} with their name and how to reach them. You will have your answer ${PROMISE_TEXT}, by ${istDay(due)}.` : `We have your request. You will have your answer ${PROMISE_TEXT}, by ${istDay(due)}.`,
   });
 }

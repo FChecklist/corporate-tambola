@@ -60,7 +60,7 @@ export function layoutReport(d: ReportData): Uint8Array {
   pdf.box("What we keep, and what we delete", [
     `We have given you ALL the data we hold about the people in this engagement. Within 24 hours of the game ending, and no later than ${istFull(d.personalDeleteAtMs)}, we permanently delete from our systems every participant's name, mobile number, join record, ticket assignment and invite link record. After that nobody at Corporate Tambola, and nothing in our software or database, holds them.`,
     "We keep, for 365 days, only: (1) the details of the organizer, host and co-hosts (name, e-mail, mobile number); (2) the winners record: which prize, which round, at what time, and the ticket seat number; and (3) the name and mobile number each winner confirmed for the prize hand-over, with the date it was given. The winners record itself holds no names or numbers.",
-    `Everything about this engagement, including those two records, is permanently deleted at 00:00 hours (IST) on ${istDate(d.fullDeleteAtMs)}, which is the end of the 365th day. The only things kept after that are the payment and invoice records, the organizer's details on the invoice (name, e-mail, mobile) and who paid, because invoices and payment records have to be kept for tax and accounting.`,
+    `Everything about this engagement, including those two records, is permanently deleted at 00:00 hours (IST) on ${istDate(d.fullDeleteAtMs)}, which is the end of the 365th day. We keep billing data for audit and tax reasons.`,
     "For your next game you can reuse the people list until it is deleted (the reuse button in your console), or upload your own list again afterwards from this report.",
   ]);
 
@@ -136,8 +136,8 @@ export function layoutReport(d: ReportData): Uint8Array {
   pdf.h1("8. Our commitment to your data");
   pdf.box("All of it is deleted. Here is exactly what, and when.", [
     `1. Everything about the people in this engagement (every name, mobile number, seat, join record and invite record) is permanently deleted from our systems within 24 hours of the game ending, and no later than ${istFull(d.personalDeleteAtMs)}. You have all of it in this report; after that we hold none of it.`,
-    "2. We keep only two things, for 365 days: the details of the organizer, host and co-hosts (name, e-mail address and mobile number), and the winners record (which prize, which round, at what time, which seat number). The winners record has no names and no mobile numbers.",
-    `3. At 00:00 hours IST on ${istDate(d.fullDeleteAtMs)}, the end of the 365th day, everything else is permanently deleted too. The only things kept after that are the payment and invoice records, the organizer's details on the invoice (name, e-mail, mobile) and who paid, because invoices and payment records have to be kept for tax and accounting.`,
+    "2. We keep only these, for 365 days: the details of the organizer, host and co-hosts (name, e-mail address and mobile number), the winners record (which prize, which round, at what time, which seat number), and the name and mobile number each winner confirmed for the prize hand-over. The winners record itself has no names and no mobile numbers.",
+    `3. At 00:00 hours IST on ${istDate(d.fullDeleteAtMs)}, the end of the 365th day, everything else is permanently deleted too. We keep billing data for audit and tax reasons.`,
     "4. Names and mobile numbers are stored encrypted while we hold them, and only your own game's report is ever built from them.",
   ]);
   pdf.box("The laws we follow", [

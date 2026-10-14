@@ -17,7 +17,7 @@ const j = async (r: Response) => (await r.json()) as any;
 const rd = (f: string) => readFileSync(new URL("../../web/public/" + f, import.meta.url), "utf8");
 const rows = () => raw.prepare("SELECT org, version, via, at_ms FROM organizer_terms ORDER BY at_ms, via").all() as { org: string; version: string; via: string; at_ms: number }[];
 beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: "https://tambola.test", DATA_KEY: "k", TEST_MODE: "1" }; });
-const LINKS = ["/terms.html", "/legal-position.html", "/dpa.html", "/subprocessors.html", "/organizer-guide.html", "/partner-terms.html"];
+const LINKS = ["/terms.html", "/legal-position.html", "/dpa.html", "/subprocessors.html", "/organizer-guide.html"]; // the uniform footer (games-ops/footer/ufooter.py) links these documents; the partner terms are linked from the Refer and earn page
 const LEGAL_PAGES = ["terms.html", "legal.html", "refund-policy.html", "about.html", "contact.html", "pricing.html", "partner-terms.html", "subprocessors.html", "dpa.html", "legal-position.html"];
 
 describe("the document pages", () => {
@@ -31,7 +31,7 @@ describe("the document pages", () => {
   };
   for (const [f, needles] of Object.entries(DOCS)) test(`${f}: brand header and footer, title pattern, the right statements, no tick box on the page itself`, () => {
     const h = rd(f);
-    expect(h).toMatch(/<title>[^<]+ \| Corporate Tambola<\/title>/); expect(h).toContain('class="legaltop"'); expect(h).toContain('class="foot"'); expect(h).toContain('rel="icon"');
+    expect(h).toMatch(/<title>[^<]+ \| Corporate Tambola<\/title>/); expect(h).toContain('class="legaltop"'); expect(h).toContain('<footer class="uf"'); expect(h).toContain('rel="icon"');
     for (const n of needles) expect(h).toContain(n);
     expect(h).not.toMatch(/type="checkbox"/i);
     expect(h).not.toMatch(/\bcompliant\b|certified by/i);
@@ -48,6 +48,7 @@ describe("the document pages", () => {
   test("the pages are named in the footer of every page that has a legal footer, in the sitemap, and in the build", () => {
     for (const f of LEGAL_PAGES) expect([f, rd(f).includes('<a href="/legal-position.html">Legal position</a>')]).toEqual([f, true]);
     for (const f of ["index.html", "legal.html"]) for (const l of LINKS) expect(rd(f)).toContain(`href="${l}"`);
+    expect(rd("partner.html")).toContain('href="/partner-terms.html"');
     const b = readFileSync(new URL("../../../pages/build.mjs", import.meta.url), "utf8");
     for (const n of ["terms", "legal-position", "dpa", "subprocessors", "partner-terms", "organizer-guide"]) { expect(b).toContain(`"${n}.html"`); expect(b).toContain(`["/${n}", PLAINCSP`); expect(rd("sitemap.xml")).toContain(`/${n}.html`); }
     expect(b).toContain('"consent.js"');
@@ -61,7 +62,7 @@ describe("the document pages", () => {
   test("one set of retention facts: legal.html, terms.html and the data-processing terms say the same (24 hours; 365 days; 7 days; winner details 365 days)", () => {
     const t = rd("terms.html").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
     expect(t).toMatch(/within twenty-four \(24\) hours after the Game ends/);
-    expect(t).toMatch(/Details of a winner \(name and prize\) are kept for 365 days/);
+    expect(t).toMatch(/Details of a winner \(name, mobile number and prize\) are kept for 365 days/);
     const l = rd("legal.html").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
     expect(l).toMatch(/24 hours/); expect(l).toMatch(/365 days/); expect(l).toMatch(/7 days/);
   });

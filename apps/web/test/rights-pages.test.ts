@@ -63,12 +63,25 @@ describe("the player page offers the player's rights", () => {
     await until(p, () => !!p.$("#rt-hold"));
     p.click("#rt-hold"); await until(p, () => !!p.$("#rt-form"));
     expect(body(p)).toMatch(/within 7 days/);
-    expect(Array.from(p.win.document.querySelectorAll('input[name="rt-kind"]')).map((i: any) => i.value)).toEqual(["access", "correction", "erasure"]);
+    expect(Array.from(p.win.document.querySelectorAll('input[name="rt-kind"]')).map((i: any) => i.value)).toEqual(["access", "correction", "erasure", "nomination"]);
     p.click("#rt-send");
     await until(p, () => /We have your request/.test(body(p)));
     expect(body(p)).toMatch(/Maya Lopez/); expect(body(p)).toMatch(/within 7 days/); expect(body(p)).toMatch(/Your \w+ number/);
     expect(o.world.raw.query("SELECT kind, status FROM data_request").all()).toEqual([{ kind: "access", status: "open" }]);
     expect(count(o, "SELECT COUNT(*) c FROM seat WHERE eid='RP-3'")).toBe(1); // asking to see is not deleting
+  });
+  test("Name another person (DPDP Act s14): choosing it shows the e-mail route; sending asks for 'nomination' and nothing is deleted", async () => {
+    const o = await organizer(); const p = await player(o, "RP-N");
+    await until(p, () => !!p.$("#rt-hold"));
+    p.click("#rt-hold"); await until(p, () => !!p.$("#rt-form"));
+    expect((p.$("#rt-nom") as any).hidden).toBe(true);
+    (p.win.document.querySelector('input[value="nomination"]') as any).click(); await new Promise((r) => setTimeout(r, 20));
+    expect((p.$("#rt-nom") as any).hidden).toBe(false); expect(body(p)).toContain("rajatsiroffice@gmail.com"); expect(p.$("#rt-nom a")!.getAttribute("href")).toBe("mailto:rajatsiroffice@gmail.com");
+    expect(p.$("#rt-send").textContent).toBe("Send"); expect((p.$("#rt-warn") as any).hidden).toBe(true);
+    p.click("#rt-send");
+    await until(p, () => /We have your request/.test(body(p)));
+    expect(o.world.raw.query("SELECT kind, status FROM data_request").all()).toEqual([{ kind: "nomination", status: "open" }]);
+    expect(count(o, "SELECT COUNT(*) c FROM seat WHERE eid='RP-N'")).toBe(1); // nothing is deleted
   });
   test("Delete me: the erasure choice warns, then deletes at once", async () => {
     const o = await organizer(); const p = await player(o, "RP-4");

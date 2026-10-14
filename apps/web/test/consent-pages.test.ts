@@ -40,8 +40,8 @@ describe("K4 the join page", () => {
     const doc = p.win.document, boxes = Array.from(doc.querySelectorAll('[data-cbc="K4"] input[type=checkbox]')) as any[];
     expect(boxes.map((b) => b.checked)).toEqual([false, false]);
     expect(Array.from(doc.querySelectorAll('[data-cbc="K4"] label')).map((l: any) => l.textContent)).toEqual([
-      "I agree that my name and mobile number are used for this game only and deleted within 24 hours after it ends. I know who invited me is recorded until then.",
-      "I am 18 or older, or I am on a parent's or guardian's device with their permission."]);
+      "I agree that my name and mobile number are used for this game only and deleted within 24 hours after it ends. I know who invited me is recorded until then. If I win, my name, mobile number and prize record are kept for 365 days so the prize can be handed over. We keep billing data for audit and tax reasons. This notice is available in Hindi on request.",
+      "I am 18 or older."]);
     const html = p.html(); expect(html.indexOf('data-cbc="K4"')).toBeGreaterThan(-1); expect(html.indexOf('data-cbc="K4"')).toBeLessThan(html.indexOf('id="nm"')); // before any name field
     const go = p.$("#go") as any;
     expect([go.disabled, go.getAttribute("aria-disabled")]).toEqual([true, "true"]);
