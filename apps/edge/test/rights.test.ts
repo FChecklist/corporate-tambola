@@ -5,7 +5,7 @@ import { type Env } from "../src/worker";
 import { handle } from "./with-terms";
 import { makeD1 } from "./d1-sqlite";
 import { erasePersonal } from "../src/lifecycle";
-import { PROMISE_DAYS, PROMISE_TEXT, MAX_REQUESTS_PER_PLAYER } from "../src/rights";
+import { PROMISE_DAYS, PROMISE_TEXT, MAX_REQUESTS_PER_PLAYER, NOUN } from "../src/rights";
 import { OWNER_NOTIFY_EMAIL } from "../src/owner-mail";
 
 const T = Date.UTC(2026, 9, 1, 10, 0, 0);
@@ -92,14 +92,14 @@ describe("U6 / D7: what do you hold about me, correct it, delete me", () => {
     expect(PROMISE_DAYS).toBe(7); expect(b.promiseDays).toBe(7); expect(b.promise).toBe("within 7 days"); expect(PROMISE_TEXT).toBe("within 7 days");
     expect(b.answerByMs).toBe(T + 7 * 86_400_000); expect(b.status).toBe("open");
     expect(b.message).toMatch(/within 7 days/);
-    const held = JSON.stringify(b.held); expect(held).toContain("Maya Lopez"); expect(held).toMatch(/card number/i);
+    const held = JSON.stringify(b.held); expect(held).toContain("Maya Lopez"); expect(held).toMatch(new RegExp(NOUN + " number", "i"));
     const row = raw.query("SELECT * FROM data_request").get() as any;
     expect(row).toMatchObject({ eid: "RQ-1", pid: a, kind: "access", status: "open", created_ms: T, due_ms: T + 7 * 86_400_000 });
     // mail: the organizer's own address and the owner's address, each once
     const m = mails(); const toOrg = m.filter((x) => x.to_addr === orgMail && /data request/i.test(x.subject)); const toOwner = m.filter((x) => x.to_addr === OWNER_NOTIFY_EMAIL);
     expect(OWNER_NOTIFY_EMAIL).toBe("raajat.agarwal@gmail.com");
     expect(toOrg.length).toBe(1); expect(toOwner.length).toBe(1);
-    expect(toOrg[0]!.body).toContain("within 7 days"); expect(toOrg[0]!.body).toContain("Maya Lopez"); expect(toOrg[0]!.body).toContain("Card number: 1");
+    expect(toOrg[0]!.body).toContain("within 7 days"); expect(toOrg[0]!.body).toContain("Maya Lopez"); expect(toOrg[0]!.body).toContain(NOUN[0]!.toUpperCase() + NOUN.slice(1) + " number: 1");
     expect(toOwner[0]!.body).toContain("within 7 days"); expect(toOwner[0]!.body).not.toContain("Maya"); // the owner's note names no player
   });
   test("asking the same thing twice while it is open gives the first answer and sends no second e-mail", async () => {
@@ -164,5 +164,19 @@ describe("the request rows do not outlive the game", () => {
   test("the deletion code names the table (so a new table cannot be forgotten)", async () => {
     const life = await Bun.file(new URL("../src/lifecycle.ts", import.meta.url)).text();
     expect((life.match(/DELETE FROM data_request/g) ?? []).length).toBeGreaterThanOrEqual(2); // erasePersonal and deleteEngagementRows
+  });
+});
+
+describe("the answer time the pages promise is the one constant", () => {
+  test("the Privacy page(s) and the data map say the same number of days as PROMISE_DAYS (change the constant and this test shows every place to change)", async () => {
+    const root = new URL("../../../", import.meta.url);
+    const plain = (h: string) => h.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    for (const f of ["apps/web/public/legal.html", "apps/web/public/privacy.html"]) {
+      const file = Bun.file(new URL(f, root)); if (!(await file.exists())) continue;
+      const t = plain(await file.text()); if (!/A player can leave/.test(t)) continue; // the page that carries the player's rights sentence
+      expect([f, t.includes(`We answer within ${PROMISE_DAYS} days.`)]).toEqual([f, true]);
+    }
+    const doc = await Bun.file(new URL("docs/PRIVACY_AND_LIFECYCLE.md", root)).text();
+    expect(doc).toContain(`(\`PROMISE_DAYS = ${PROMISE_DAYS}\``);
   });
 });

@@ -301,7 +301,7 @@ export default [
       t.check("the page says, in plain words, that the player left and the name was deleted", /You have left the game/.test(txt) && /deleted/i.test(txt), txt.slice(0, 220));
       t.check("the Organizer's count is back to zero", (await org.participants(g.id)).body.total === 0, String((await org.participants(g.id)).body.total));
       t.check("no name is left in the database", (await H.sql("SELECT COUNT(*) c FROM participant WHERE eid=?", [g.id]))[0].c === 0, "");
-      t.check("this phone forgot the game too", (await x.page.evaluate(() => localStorage.getItem("cbz:device"))) === null, "");
+      t.check("this phone forgot the game too", (await x.page.evaluate(() => localStorage.getItem("ctz:device"))) === null, "");
       const y = await t.open({ device: "mobile" });
       await guestJoinUi(y.page, g.id, nextPhone(), "Leah Again"); await y.page.waitForTimeout(3000);
       t.check("a player who left can join again as a new player", (await org.participants(g.id)).body.total === 1, String((await org.participants(g.id)).body.total));

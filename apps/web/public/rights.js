@@ -11,9 +11,9 @@
     try {
       const q = new URLSearchParams(location.search);
       const eid = (q.get("e") || location.hash.replace(/^#/, "") || localStorage.getItem("ct-last-eid") || "").trim();
-      const v = window.__rt && window.__rt.view ? window.__rt.view() : null;
+      const pid = eid ? localStorage.getItem("ctz:" + eid + ":pid") || "" : ""; // the phone code (zgame.js) keeps the player id here
       const device = localStorage.getItem("ctz:device") || "";
-      return eid && v && v.pid && device ? { eid, pid: v.pid, device } : null;
+      return eid && pid && device ? { eid, pid, device } : null;
     } catch (e) { return null; }
   };
   /*WHO-END*/
@@ -39,10 +39,10 @@
     ".rt-dlg textarea{width:100%;box-sizing:border-box;min-height:80px;font:inherit;border:1px solid #6B7F7D;border-radius:8px;padding:8px}" +
     ".rt-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}.rt-dlg button.rt-b{min-height:44px;padding:8px 16px;border-radius:10px;border:2px solid #0B5D5B;background:#0B5D5B;color:#fff;font:700 16px system-ui,sans-serif;cursor:pointer}" +
     ".rt-dlg button.rt-b.alt{background:#fff;color:#0B5D5B}.rt-dlg button.rt-b.bad{background:#B42318;border-color:#B42318}" +
-    ".rt-dlg .rt-err{color:#B42318;font-weight:700}.rt-dlg dl{margin:8px 0;padding:0}.rt-dlg dt{font-weight:700;margin-top:8px}.rt-dlg dd{margin:0}.rt-done{max-width:520px;margin:0 auto;padding:30vh 16px 0;text-align:center;font:18px/1.5 system-ui,sans-serif;color:#14302F}.rt-done a{color:#0B5D5B}";
+    ".rt-dlg .rt-err{color:#B42318;font-weight:700}.rt-dlg dl{margin:8px 0;padding:0}.rt-dlg dt{font-weight:700;margin-top:8px}.rt-dlg dd{margin:0}.rt-over{position:fixed;inset:0;z-index:2147483000;background:#fff;max-width:none;overflow:auto}.rt-done{max-width:520px;margin:0 auto;padding:30vh 16px 0;text-align:center;font:18px/1.5 system-ui,sans-serif;color:#14302F}.rt-done a{color:#0B5D5B}";
   document.head.appendChild(css);
 
-  let bar = null, dlg = null;
+  let bar = null, dlg = null, left = false, timer = null;
   function ensureDialog() {
     if (dlg) return dlg;
     dlg = document.createElement("dialog"); dlg.className = "rt-dlg"; dlg.setAttribute("aria-labelledby", "rt-title");
@@ -57,8 +57,12 @@
     try { const pre = GAME_PREFIX(who.eid); for (const k of Object.keys(localStorage)) if (k.indexOf(pre) === 0) localStorage.removeItem(k); for (const k of EXTRA_KEYS) localStorage.removeItem(k); } catch (e) { /* nothing more to forget */ }
   }
   function finished(message) {
-    close();
-    document.body.innerHTML = '<main class="rt-done"><p>' + esc(message) + '</p><p><a href="/">Back to the home page</a></p></main>';
+    close(); left = true; clearInterval(timer);
+    if (bar) { bar.remove(); bar = null; }
+    for (const el of Array.from(document.body.children)) el.setAttribute("inert", ""); // the game underneath stays as it is, but nothing in it can be used any more
+    const o = document.createElement("main"); o.className = "rt-done rt-over"; o.setAttribute("role", "status");
+    o.innerHTML = "<p>" + esc(message) + '</p><p><a href="/">Back to the home page</a></p>';
+    document.body.appendChild(o);
   }
 
   function leaveDialog() {
@@ -106,6 +110,7 @@
   }
 
   function paint() {
+    if (left) return;
     const who = WHO();
     if (!who) { if (bar) { bar.remove(); bar = null; } return; }
     if (bar) return;
@@ -114,6 +119,6 @@
     document.body.appendChild(bar);
     bar.querySelector("#rt-hold").onclick = requestDialog; bar.querySelector("#rt-leave").onclick = leaveDialog;
   }
-  paint(); setInterval(paint, 1000);
+  paint(); timer = setInterval(paint, 1000);
   window.__rights = { open: requestDialog, leave: leaveDialog, gameName: GAME_NAME };
 })();

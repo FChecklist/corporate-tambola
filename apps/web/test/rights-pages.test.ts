@@ -66,7 +66,7 @@ describe("the player page offers the player's rights", () => {
     expect(Array.from(p.win.document.querySelectorAll('input[name="rt-kind"]')).map((i: any) => i.value)).toEqual(["access", "correction", "erasure"]);
     p.click("#rt-send");
     await until(p, () => /We have your request/.test(body(p)));
-    expect(body(p)).toMatch(/Maya Lopez/); expect(body(p)).toMatch(/within 7 days/); expect(body(p)).toMatch(/Your card number/);
+    expect(body(p)).toMatch(/Maya Lopez/); expect(body(p)).toMatch(/within 7 days/); expect(body(p)).toMatch(/Your \w+ number/);
     expect(o.world.raw.query("SELECT kind, status FROM data_request").all()).toEqual([{ kind: "access", status: "open" }]);
     expect(count(o, "SELECT COUNT(*) c FROM seat WHERE eid='RP-3'")).toBe(1); // asking to see is not deleting
   });

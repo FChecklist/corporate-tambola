@@ -15,6 +15,9 @@ import { ownerAddress } from "./owner-mail";
 /** The answer time we promise a player. ONE constant: change it here and the page, the e-mails and the tests all follow. */
 export const PROMISE_DAYS = 7;
 export const PROMISE_TEXT = `within ${PROMISE_DAYS} days`;
+/** What this game calls a player's place in it (card, ticket, board, place): the one word the answers and e-mails use. */
+export const NOUN = "ticket";
+const Noun = NOUN[0]!.toUpperCase() + NOUN.slice(1);
 export const REQUEST_KINDS = ["access", "correction", "erasure"] as const;
 export type RequestKind = (typeof REQUEST_KINDS)[number];
 /** A player may send at most this many requests per game (the same kind twice while one is open is answered with the first). */
@@ -57,10 +60,10 @@ interface Seat { seq: number; pid: string; ph: string; dev: string | null; src: 
 /** The player's own seat, or the answer to send: needs the card id and the phone's own device id, and the phone must be the one that holds the card. */
 async function ownSeat(c: RightsCtx): Promise<Seat | Response> {
   const pid = typeof c.b?.pid === "string" ? c.b.pid : "", device = typeof c.b?.device === "string" ? c.b.device : "";
-  if (!/^[0-9a-z]{3,40}$/.test(pid) || !/^[0-9a-f]{16,64}$/.test(device)) return c.json({ error: "Please open this from the phone that holds your card.", code: "bad-request" }, 400);
+  if (!/^[0-9a-z]{3,40}$/.test(pid) || !/^[0-9a-f]{16,64}$/.test(device)) return c.json({ error: `Please open this from the phone that holds your ${NOUN}.`, code: "bad-request" }, 400);
   const dev = (await sha(`dev|${c.eid}|${device}`)).slice(0, 32);
   const s = await c.db.prepare("SELECT seq, pid, ph, dev, src, inv, role, blocked FROM seat WHERE eid=? AND pid=? AND dev=?").bind(c.eid, pid, dev).first<Seat>();
-  if (!s) return c.json({ error: "This is not the phone that holds this card. Nobody can ask for another player.", code: "not-your-card" }, 403);
+  if (!s) return c.json({ error: `This is not the phone that holds this ${NOUN}. Nobody can ask for another player.`, code: "not-your-card" }, 403);
   return s;
 }
 
@@ -108,14 +111,14 @@ export async function heldAbout(c: RightsCtx, s: Seat): Promise<{ what: string; 
   const who = await openPii(c.env as any, p?.pii);
   out.push({ what: "Your name for this game", value: who?.name ? who.name : "none" });
   if (who?.phone) out.push({ what: "Your mobile number (given by the organizer's list)", value: "ending " + who.phone.slice(-2) });
-  out.push({ what: "Your card number", value: String(s.seq) });
+  out.push({ what: `Your ${NOUN} number`, value: String(s.seq) });
   if (p?.joined_ms) out.push({ what: "When you joined", value: istTime(p.joined_ms) });
-  out.push({ what: "How you joined", value: s.inv !== null ? `through the invite of card ${s.inv}` : "through a game link" });
+  out.push({ what: "How you joined", value: s.inv !== null ? `through the invite of ${NOUN} ${s.inv}` : "through a game link" });
   const claims = (await c.db.prepare("SELECT COUNT(*) AS n FROM claim WHERE eid=? AND pid=?").bind(c.eid, s.pid).first<{ n: number }>())?.n ?? 0;
   out.push({ what: "Your winning claims", value: String(claims) });
   const pr = (await c.db.prepare("SELECT pii FROM prize WHERE eid=? AND seat=? AND pii IS NOT NULL").bind(c.eid, s.seq).all<{ pii: string }>()).results ?? [];
   if (pr.length) { const w = await openPii(c.env as any, pr[0]!.pii); out.push({ what: "Details you confirmed to collect a prize", value: `${w?.name ?? ""}${w?.phone ? ", mobile ending " + w.phone.slice(-2) : ""}`.trim() || "yes" }); }
-  out.push({ what: "Your phone", value: "only a scrambled form of its random id, to keep one card to one phone" });
+  out.push({ what: "Your phone", value: `only a scrambled form of its random id, to keep one ${NOUN} to one phone` });
   out.push({ what: "Deleted for good", value: istTime(await c.erasureMs()) + " at the latest (within 24 hours after the game ends)" });
   return out;
 }
@@ -124,10 +127,10 @@ const cleanNote = (n: unknown): string => (typeof n === "string" ? n.replace(/[<
 const KIND_WORDS: Record<RequestKind, string> = { access: "to see what is held about them", correction: "to correct their details", erasure: "to be deleted" };
 
 async function mailBoth(c: RightsCtx, id: string, kind: RequestKind, seat: Seat, name: string, note: string, due: number, erased: boolean): Promise<void> {
-  const subjectEnd = `${c.gameName} (card ${seat.seq})`;
+  const subjectEnd = `${c.gameName} (${NOUN} ${seat.seq})`;
   const base = [
     `A player of "${c.gameName}" has asked ${KIND_WORDS[kind]}.`, "",
-    `Game: ${c.gameName} (${c.eid})`, `Card number: ${seat.seq}`, `Request: ${kind}`, `Received: ${istTime(c.now)}`,
+    `Game: ${c.gameName} (${c.eid})`, `${Noun} number: ${seat.seq}`, `Request: ${kind}`, `Received: ${istTime(c.now)}`,
     `We promised the player an answer ${PROMISE_TEXT}, by ${istDay(due)}.`,
   ];
   const orgBody = [...base, ...(name ? [`Name the player gave: ${name}`] : []), ...(note ? [`Note from the player: ${note}`] : []), "",
