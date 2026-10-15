@@ -343,7 +343,7 @@
 
   function stripModel() {
     const p = G.pause && G.pause.kind;
-    if (G.status === "starting") return { cls: "", ball: ic("clock"), eb: "Engagement starting", ln: "The first number is coming", sub: `${ic("clock")} <span id="cds"></span> Your software is ready.` };
+    if (G.status === "starting") return { cls: "", ball: ic("clock"), eb: "Engagement starting", ln: "The first number is coming", sub: `${ic("clock")} <span id="cds"></span> Your ticket is ready.` };
     if (G.status === "open") return { cls: "", ball: ic("clock"), eb: "Engagement starts", ln: G.eng.startsAt ? TB.fmtDT(G.eng.startsAt) : "Soon", sub: "The organizer presses Start. The first number will appear here." };
     if (p === "claim") return { cls: "pz", ball: ic("pause"), eb: "Paused · claim received", ln: "Checking a claim...", sub: "The software is checking it. Everyone waits." };
     if (p === "result") {
@@ -683,7 +683,7 @@
   // ================= OPTIONAL FEATURES: rounds, still to win, boosters, lucky draw, scratch card =================
   const REDUCED = () => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
   const BNAME = { joker: "Joker", extra: "Extra ticket", pass: "Lucky draw pass" };
-  const SCR = { gift: "You won a gift! Your organizer will give it", joker: "You won a Joker", extra: "Extra ticket won (used in the next round)", pass: "Lucky draw pass won (used in the next draw)", none: "Better luck next time" };
+  const SCR = { gift: "You won a gift! Your organizer will give it to you", joker: "You won a Joker", extra: "Extra ticket won (used in the next round)", pass: "Lucky draw pass won (used in the next draw)", none: "Better luck next time" };
   const prizeText = (p) => p === "gift" ? "a gift" : p === "booster" ? "a booster (Joker, Extra ticket or Lucky draw pass)" : p === "mix" ? "a gift or a booster" : BNAME[p] ? "a " + BNAME[p] : "a reward";
   let refreshT = null;
   function refreshSoon() { clearTimeout(refreshT); refreshT = setTimeout(() => reload(), 700); }

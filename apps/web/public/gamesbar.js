@@ -7,7 +7,7 @@
   var bar = document.createElement("div"); bar.className = "cg-bar";
   var wrap = document.createElement("div"); wrap.className = "cg-wrap"; bar.appendChild(wrap);
   var home = document.createElement("a"); home.className = "cg-home"; home.href = "https://corporate-games.pages.dev/?from=tambola"; home.textContent = "Corporate Games"; wrap.appendChild(home);
-  var line = document.createElement("span"); line.className = "cg-line"; line.textContent = "close group, online engagement"; wrap.appendChild(line);
+  var line = document.createElement("span"); line.className = "cg-line"; line.textContent = "closed group, online engagement"; wrap.appendChild(line);
   var nav = document.createElement("nav"); nav.setAttribute("aria-label", "Corporate Games"); wrap.appendChild(nav);
   GAMES.forEach(function (g) {
     var a = document.createElement("a"); a.href = g[1]; a.textContent = g[0];
