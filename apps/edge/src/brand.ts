@@ -8,11 +8,16 @@ export const TERMS_VERSION = "2026-10-15";
 export const BRAND = {
   name: "Corporate Tambola",
   tagline: "Live engagements for companies",
-  support: "rajatsiroffice@gmail.com", // the contact address the site's legal page publishes
+  tag: "Tambola", // the product tag at the start of every subject sent to people
+  support: "hello@corporatetambola.com", // the contact address the site's legal page publishes
   legalPath: "/legal.html",
-  defaultOrigin: "https://corporate-tambola.pages.dev",
+  defaultOrigin: "https://corporatetambola.com",
   wine: "#0B3D91", gold: "#E0B872", gold2: "#F3D9A4", ivory: "#F4F7FC", line: "#D9E1F0",
 } as const;
+
+/** "[Tambola] " at the start of every subject (once). */
+export const mailTag = `[${BRAND.tag}] `;
+export const tagSubject = (s: string) => (s.startsWith(mailTag) ? s : mailTag + s);
 
 export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const base = (origin?: string) => (origin || BRAND.defaultOrigin).replace(/\/+$/, "");
@@ -31,7 +36,7 @@ export function headerHtml(origin?: string): string {
 /** The footer row of every HTML e-mail: name, support address, legal link. */
 export function footerHtml(origin?: string): string {
   const o = base(origin);
-  return `<tr data-brand="footer"><td style="border-top:1px solid ${BRAND.line};background:${BRAND.ivory};border-radius:0 0 10px 10px;padding:14px 22px;font-size:12px;line-height:1.6;color:#6b5b57;"><b style="color:${BRAND.wine};">${BRAND.name}</b> &middot; ${BRAND.tagline}<br>Questions? Write to <a href="mailto:${BRAND.support}" style="color:${BRAND.wine};">${BRAND.support}</a><br><a href="${o}${BRAND.legalPath}" style="color:${BRAND.wine};">Rules, privacy and disclaimer</a></td></tr>`;
+  return `<tr data-brand="footer"><td style="border-top:1px solid ${BRAND.line};background:${BRAND.ivory};border-radius:0 0 10px 10px;padding:14px 22px;font-size:12px;line-height:1.6;color:#6b5b57;"><b style="color:${BRAND.wine};">${BRAND.name}</b> &middot; ${BRAND.tagline}<br>Questions? Write to <a href="mailto:${BRAND.support}?subject=${encodeURIComponent(mailTag)}" style="color:${BRAND.wine};">${BRAND.support}</a><br><a href="${o}${BRAND.legalPath}" style="color:${BRAND.wine};">Rules, privacy and disclaimer</a></td></tr>`;
 }
 
 /** The full HTML page around some rows. */

@@ -12,7 +12,7 @@ export const LOCAL_PORT = Number(process.env.E2E_PORT ?? 8791);
 export const BASE = process.env.E2E_BASE ?? (TARGET === "local" ? `http://localhost:${LOCAL_PORT}` : "https://corporate-tambola.pages.dev");
 export const IS_LIVE = TARGET === "live";
 export const GENESIS = 1692803367;
-export const OWNER_MAIL = process.env.E2E_OWNER_MAIL ?? "rajatsiroffice@gmail.com";
+export const OWNER_MAIL = process.env.E2E_OWNER_MAIL ?? "hello@corporatetambola.com";
 /** A page address on the target. The real site (Cloudflare Pages) answers clean paths (/legal); the local stand-in serves files, so it needs /legal.html. */
 export const u = (p: string) => BASE + (IS_LIVE || p === "/" || p.startsWith("/api") || p.startsWith("/ai/") || /\.[a-z]{2,4}(\?|#|$)/.test(p.split("?")[0]!) ? p : p.replace(/^\/([A-Za-z0-9_-]+)(?=([?#].*)?$)/, "/$1.html"));
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

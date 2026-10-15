@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { PACKS } from "../../../packages/shared/src/pricing";
 
-const PUB = new URL("../public/", import.meta.url), ORIGIN = "https://corporate-tambola.pages.dev";
+const PUB = new URL("../public/", import.meta.url), ORIGIN = "https://corporatetambola.com";
 const rd = (f: string) => readFileSync(new URL(f, PUB), "utf8");
 const INDEXABLE = ["index.html", "partner.html", "legal.html", "terms.html", "privacy.html", "legal-position.html", "dpa.html", "subprocessors.html", "partner-terms.html", "organizer-guide.html", "trust.html", "brochure.html", "about.html", "contact.html", "pricing.html", "refund-policy.html"];
 const NOINDEX = ["signin.html", "pay.html", "paytest.html", "ai-link.html", "report.html", "z.html", "zc.html", "big.html", "404.html", "owner-visits.html"];
@@ -41,7 +41,7 @@ describe("each indexable page", () => {
     expect(desc.length).toBeGreaterThanOrEqual(50); expect(desc.length).toBeLessThanOrEqual(320);
     expect(titles.has(title)).toBe(false); titles.set(title, f); expect(descs.has(desc)).toBe(false); descs.set(desc, f);
     expect(h.match(/<link rel="canonical"/g)?.length).toBe(1); expect(meta(h, /<link rel="canonical" href="([^"]+)"/)).toBe(urlOf(f));
-    expect(meta(h, /<meta property="og:url" content="([^"]+)"/)).toBe(urlOf(f)); expect(h).toMatch(/<meta property="og:title" content="[^"]+"/); expect(h).toMatch(/<meta property="og:description" content="[^"]+"/); expect(h).toMatch(/<meta property="og:image" content="https:\/\/corporate-tambola\.pages\.dev\/[^"]+"/);
+    expect(meta(h, /<meta property="og:url" content="([^"]+)"/)).toBe(urlOf(f)); expect(h).toMatch(/<meta property="og:title" content="[^"]+"/); expect(h).toMatch(/<meta property="og:description" content="[^"]+"/); expect(h).toMatch(/<meta property="og:image" content="https:\/\/corporatetambola\.com\/[^"]+"/);
     expect(h).toContain('<meta name="twitter:card" content="summary_large_image">'); expect(h).toMatch(/<meta name="twitter:title" content="[^"]+"/);
     expect(h).not.toMatch(/name="robots" content="[^"]*noindex/); expect(h).toMatch(/<html lang="en">/); expect(h).toContain('name="viewport"');
     for (const tag of ['name="description"', 'rel="canonical"', 'property="og:title"', 'name="twitter:card"']) expect(h.split(tag).length).toBe(2); // each exactly once
@@ -63,7 +63,7 @@ describe("each indexable page", () => {
     for (const w of ["Inter-normal-400.woff2", "Fraunces-normal-500-700.woff2"]) expect(h).toContain(`<link rel="preload" href="/fonts/${w}" as="font" type="font/woff2" crossorigin>`);
     for (const s of h.match(/<script\b[^>]*\bsrc="[^"]+"[^>]*>/g) ?? []) if (!/theme\.js|consent\.js|common\.js|google\.js|site\.js/.test(s)) expect(s).toMatch(/\bdefer\b/); // theme.js must run first (no flash of the wrong colours); common.js and site.js are the last thing in the body
     expect(h).toMatch(/<script src="\/common\.js"><\/script><script src="\/google\.js"><\/script><script src="\/site\.js"><\/script>\s*<\/body>/); // the page scripts sit at the very end
-    expect(h.replace(/<footer class="uf"[\s\S]*?<\/footer>/, "")).not.toMatch(/(src|href)="https?:\/\/(?!corporate-tambola\.pages\.dev|shobhakamalsolutions\.pages\.dev)/); // the uniform footer names the sister products on purpose
+    expect(h.replace(/<footer class="uf"[\s\S]*?<\/footer>/, "")).not.toMatch(/(src|href)="https?:\/\/(?!corporatetambola\.com|shobhakamalsolutions\.pages\.dev)/); // the uniform footer names the sister products on purpose
     expect(rd("../../../pages/build.mjs" as any).includes("max-age=31536000, immutable")).toBe(true);
   });
 });

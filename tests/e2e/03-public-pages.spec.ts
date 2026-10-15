@@ -116,7 +116,7 @@ tcb({ id: "PUB-08", role: "prospective organizer", title: "sign-in sheet: bad e-
 tcb({ id: "PUB-09", role: "organizer (new)", title: "create-engagement sheet: bad e-mail is refused in the sheet; a good alias creates the account and opens the console at once", steps: "Click 'Create your game', enter bad then good alias e-mail", expected: "inline error, then /zc opens signed in; TEST banner visible in console only (TEST mode)" }, async ({ page, context }) => {
   await page.goto(BASE + "/"); await page.locator("[data-buy]").first().click({ force: true }); await page.waitForSelector("#fMail");
   await page.fill("#fMail", "x@y"); await page.click("#frGo"); await expect(page.locator("#fErr")).toContainText(/valid work email/i);
-  const [mu, md] = (process.env.E2E_OWNER_MAIL ?? "rajatsiroffice@gmail.com").split("@");
+  const [mu, md] = (process.env.E2E_OWNER_MAIL ?? "hello@corporatetambola.com").split("@");
   await page.fill("#fMail", `${mu}+tbui${Date.now().toString(36)}@${md}`);
   await Promise.all([page.waitForURL(/\/zc(\.html)?$/, { timeout: 30_000 }), page.click("#frGo")]);
   await page.waitForLoadState("networkidle");

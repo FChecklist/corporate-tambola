@@ -1,4 +1,4 @@
-# Corporate Tambola on Cloudflare Pages + Functions + D1: free plan only, no custom domain (https://corporate-tambola.pages.dev).
+# Corporate Tambola on Cloudflare Pages + Functions + D1: free plan only, no custom domain (https://corporatetambola.com).
 # Deploy with:  bun run pages:deploy   (see README.md in this folder). Secrets are NOT in this file.
 name = "corporate-tambola"
 pages_build_output_dir = "public"
@@ -12,7 +12,7 @@ database_id = "4a6a1d3f-f1c7-44ac-b0ce-4cebd749a8de"
 
 [vars]
 DAILY_WRITE_BUDGET = "80000"
-PUBLIC_ORIGIN = "https://corporate-tambola.pages.dev"
+PUBLIC_ORIGIN = "https://corporatetambola.com"
 PAY_HOP_URL = "https://itservices-rajat-agarwal.pages.dev/payframe/"   # Option 1: the Razorpay window runs on the website registered with Razorpay
-MAIL_FROM = "Corporate Tambola <tambola@veridian-aios.com>"
-COMPANY_JSON = '{"email":"rajatsiroffice@gmail.com","phone":"(+91) 96503 97480","sacDescription":"Software solutions and products"}'
+MAIL_FROM = "Corporate Tambola <hello@corporatetambola.com>"
+COMPANY_JSON = '{"email":"hello@corporatetambola.com","phone":"(+91) 96503 97480","sacDescription":"Software solutions and products"}'

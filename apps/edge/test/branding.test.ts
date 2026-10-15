@@ -84,7 +84,7 @@ describe("mail that is not built by mails.ts gets the same brand when it is sent
     const rows = raw.prepare("SELECT subject, body FROM outbox").all() as { subject: string; body: string }[];
     expect(rows.length).toBeGreaterThanOrEqual(8);
     for (const r of rows) { expect([r.subject, hasFooter(r.body)]).toEqual([r.subject, true]); expect(r.body + r.subject).not.toMatch(/CORPORATE TAMBOLA|Corporate Tambola Tambola/); }
-    expect(rows.some((r) => /Someone new used/.test(r.subject))).toBe(true); expect(rows.some((r) => /could not begin/.test(r.subject))).toBe(true); expect(rows.some((r) => /^Payment pending for your game/.test(r.subject))).toBe(true);
+    expect(rows.some((r) => /Someone new used/.test(r.subject))).toBe(true); expect(rows.some((r) => /could not begin/.test(r.subject))).toBe(true); expect(rows.some((r) => /^\[Tambola\] Payment pending for your game/.test(r.subject))).toBe(true);
   });
   test("pay.ts and nothing else talks to the mail service, and both senders add the brand", () => {
     const pay = read("apps/edge/src/pay.ts");
@@ -126,8 +126,8 @@ describe("the legal page carries the owner's final text, and each line matches w
   test("the sixteen privacy lines, word for word, with typographic apostrophes", () => {
     expect(items("privacy")).toEqual([
       "We delete all participant data from our systems within 24 hours after the game ends.", "A game that never starts is treated the same way: its guests’ names and numbers are deleted 23 hours after the time it was meant to end.", "All data is encrypted, in transit and at rest.", "Where the data is: the website runs on Cloudflare’s global network. The database is kept in Cloudflare’s Asia-Pacific region.", "Participants never see each other’s data.", "A player can leave at any time, ask what we hold about them, or ask us to delete it, from the game page. We answer within 7 days.", "We provide the software. The organizer runs the game.", "No advertising cookies or trackers. We never sell data.", "Your phone keeps only the items listed under “What your device keeps” below. We use no other cookie.", "Exception: winner prize details are kept for 365 days, so the organizer can confirm the prize was handed over. They are then deleted automatically.", "Fair play. We keep a private, encrypted record of game activity to keep every game fair. Only we can see it. Removed automatically 365 days after your game ends.", "Public pages: a first-party visitor id and shortened network address, never names or mobile numbers, kept 365 days. With Global Privacy Control or Do Not Track, we only count visits.", "Designed to follow India’s DPDP Act 2023, EU GDPR and US CCPA.", "Your phone contacts drand for public random numbers, and YouTube (privacy mode) only if your organizer adds a video.", "You may also complain to the Data Protection Board of India.",
-      "Questions or requests: our Grievance Officer, Rajat Agarwal, rajatsiroffice@gmail.com. We reply within 30 days. The full notice is the Privacy Policy page."]);
-    expect(html).toContain('href="mailto:rajatsiroffice@gmail.com"');
+      "Questions or requests: our Grievance Officer, Rajat Agarwal, hello@corporatetambola.com. We reply within 30 days. The full notice is the Privacy Policy page."]);
+    expect(html).toContain('href="mailto:hello@corporatetambola.com?subject=%5BTambola%5D%20"');
   });
   test("the six disclaimer lines, word for word", () => {
     expect(items("disclaimer")).toEqual(["This is a private game for a closed group, run by the organizer named on your ticket.", "Corporate Tambola provides the software only. Participants pay nothing to play.", "The organizer provides and hands over the prizes.", "The software decides the winners. Results are final.", "The organizer makes sure the game is allowed under local law.", "We are not responsible for prize handover or for disputes between the organizer and participants."]);

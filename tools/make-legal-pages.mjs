@@ -10,7 +10,7 @@ const nl = tpl.includes("\r\n") ? "\r\n" : "\n";
 const head = tpl.slice(0, tpl.indexOf('<main class="legal">'));
 const foot = tpl.slice(tpl.indexOf("</main>"));
 // Search-engine and sharing tags, one set per page (unique description, canonical, Open Graph, Twitter card). Written idempotently: old copies are removed first, so the template's own tags never leak into the other pages.
-const SITE = "https://corporate-tambola.pages.dev";
+const SITE = "https://corporatetambola.com";
 const META = {
   "legal.html": ["Rules, privacy and disclaimer", "The rules of a Corporate Tambola game, how participant names and mobile numbers are deleted within 24 hours, and the disclaimer. Plain English."],
   "legal-position.html": ["Legal position", "The legal position on which Corporate Tambola is supplied: software only, no stake from players, closed groups, data erased within 24 hours."],
@@ -86,7 +86,7 @@ const PAGES = {
     ]],
     ["changes", "Changes and contact", [
       "We may update these terms. The version date is at the top.",
-      "Questions: <a href=\"mailto:rajatsiroffice@gmail.com\">rajatsiroffice@gmail.com</a>.",
+      "Questions: <a href=\"mailto:hello@corporatetambola.com?subject=%5BTambola%5D%20\">hello@corporatetambola.com</a>.",
     ]],
   ] },
   "dpa.html": { title: "Data processing terms", h1: "Data processing terms", lead: "For organizers. One page.", sections: [

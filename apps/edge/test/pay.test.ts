@@ -243,7 +243,7 @@ describe("invoices", () => {
     const r = await (await buy()).json() as any; const f = await (await complete(r.paymentId, r.razorpay.orderId)).json() as any;
     const html = await (await call("GET", f.invoiceUrl)).text();
     expect(html).not.toContain("DRAFT"); expect(html).toContain("<b>INVOICE</b>"); expect(html).not.toContain("TAX INVOICE");
-    expect(html).toContain("IT Services by Rajat Agarwal"); expect(html).toContain("rajatsiroffice@gmail.com"); expect(html).toContain("4,699.00");
+    expect(html).toContain("IT Services by Rajat Agarwal"); expect(html).toContain("hello@corporatetambola.com"); expect(html).toContain("4,699.00");
     expect(html).not.toMatch(/CGST|SGST|IGST|Taxable value|Place of supply|GSTIN|SHOBHA/i);
     expect(f.tax).toBe(0); expect(f.total).toBe(4699);
   });
@@ -345,7 +345,7 @@ describe("e-mail through Resend (organizers only)", () => {
     const r = await (await buy({ email: "Boss@Acme.com" })).json() as any;
     expect(sent.filter((m) => !m.to.includes(OWNER_NOTIFY_EMAIL))).toHaveLength(1); // the buyer's mail; the owner gets a separate short note (E9)
     const ownerNote = sent.filter((m) => m.to.includes(OWNER_NOTIFY_EMAIL)); expect(ownerNote).toHaveLength(1); expect(ownerNote[0].text).not.toContain(r.result.organizerKey);
-    expect(sent[0]).toMatchObject({ from: "Corporate Tambola <tambola@veridian-aios.com>", to: ["boss@acme.com"], reply_to: "help@veridian-aios.com", headers: { "Auto-Submitted": "auto-generated" } });
+    expect(sent[0]).toMatchObject({ from: "Corporate Tambola <hello@corporatetambola.com>", to: ["boss@acme.com"], reply_to: "help@veridian-aios.com", headers: { "Auto-Submitted": "auto-generated" } });
     expect(sent[0].auth).toBe("Bearer re_test_dummy");
     expect(sent[0].text).toContain(r.result.organizerKey);
     expect(sent[0].text).toContain("INVOICE");

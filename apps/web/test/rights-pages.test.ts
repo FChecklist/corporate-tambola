@@ -76,7 +76,7 @@ describe("the player page offers the player's rights", () => {
     p.click("#rt-hold"); await until(p, () => !!p.$("#rt-form"));
     expect((p.$("#rt-nom") as any).hidden).toBe(true);
     (p.win.document.querySelector('input[value="nomination"]') as any).click(); await new Promise((r) => setTimeout(r, 20));
-    expect((p.$("#rt-nom") as any).hidden).toBe(false); expect(body(p)).toContain("rajatsiroffice@gmail.com"); expect(p.$("#rt-nom a")!.getAttribute("href")).toBe("mailto:rajatsiroffice@gmail.com");
+    expect((p.$("#rt-nom") as any).hidden).toBe(false); expect(body(p)).toContain("hello@corporatetambola.com"); expect(p.$("#rt-nom a")!.getAttribute("href")).toBe("mailto:hello@corporatetambola.com?subject=%5BTambola%5D%20");
     expect(p.$("#rt-send").textContent).toBe("Send"); expect((p.$("#rt-warn") as any).hidden).toBe(true);
     p.click("#rt-send");
     await until(p, () => /We have your request/.test(body(p)));

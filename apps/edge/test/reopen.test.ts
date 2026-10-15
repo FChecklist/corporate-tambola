@@ -86,11 +86,11 @@ describe("reopen: a cancelled paid game moved to a new date within 365 days of t
     expect(refundCalls.length).toBe(0);
     expect(eng().cancelled_by).toBeNull();
     const jn = await join("9811100001"); expect(jn.status).toBe(200); // guests can join the moved game again
-    expect(outbox().some((m) => m.subject.startsWith("Your game is back on"))).toBe(true);
+    expect(outbox().some((m) => m.subject.includes("Your game is back on"))).toBe(true);
   });
   test("the cancel mail tells the owner the game can be moved, and until when", async () => {
     const t = await team(); await paidGame(t); await cancelIt(t.master);
-    const m = outbox().find((x) => x.subject.startsWith("Game cancelled"))!;
+    const m = outbox().find((x) => x.subject.includes("Game cancelled"))!;
     expect(m.body).toContain("move this game to a new date until"); expect(m.body).toContain("If you use the credit for another game first");
   });
   test("30 days after the cancel the game can still be moved; day 364 of the payment is allowed, day 366 is refused; after the money lapses it cannot be moved but the credit story is over", async () => {

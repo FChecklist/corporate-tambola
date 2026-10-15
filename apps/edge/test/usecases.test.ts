@@ -318,7 +318,7 @@ describe("C. publish and pay", () => {
     await mk("REM-NEAR", T + 30 * HOUR); await mk("REM-FAR", T + 200 * HOUR); await mk("REM-DRAFT", T + 30 * HOUR, false); await mk("REM-PAID", T + 30 * HOUR);
     raw.prepare("UPDATE engagement SET pack=100 WHERE id='REM-PAID'").run();
     await housekeeping(env as Env, T + DAY); await housekeeping(env as Env, T + 2 * DAY); await housekeeping(env as Env, T + 3 * DAY); // only REM-NEAR is ever inside the 36 hours
-    const reminders = outbox("Payment pending for your game%");
+    const reminders = outbox("%Payment pending for your game%");
     expect(reminders.length).toBe(1); expect(reminders[0]!.body).toContain("REM-NEAR");
   });
   test("UC-27 with a credit in hand, publishing is paid at once", async () => {
