@@ -37,7 +37,7 @@
   const say = (t) => { const l = $("live"); if (l) l.textContent = t; };
   let pollT = null, waitWs = null;
   function show(html) { clearInterval(pollT); if (waitWs) { waitWs.close(); waitWs = null; } app.innerHTML = `<div class="pw">${html}</div>`; window.scrollTo(0, 0); }
-  const ptop = (menu) => `<div class="ptop"><span class="mark">${ic("ticket")}</span><span class="word">Corporate Tambola<i>.</i></span>${menu ? `<button class="av" data-act="menu" aria-label="Menu" aria-haspopup="dialog">${ic("menu")}</button>` : ""}</div>`;
+  const ptop = (menu) => `<div class="ptop"><span class="mark"><img src="/logo-mark.svg" alt="" width="34" height="34"></span><span class="word">Corporate Tambola<i>.</i></span>${menu ? `<button class="av" data-act="menu" aria-label="Menu" aria-haspopup="dialog">${ic("menu")}</button>` : ""}</div>`;
   function errCard(k) {
     const [i, t, x] = ERRS[k] || ERRS.badlink;
     show(`${ptop()}<div class="pcard center"><div class="res no">${ic(i)}</div><h2>${t}</h2><p class="lead">${x}</p></div>`);

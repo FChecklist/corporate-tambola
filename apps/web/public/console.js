@@ -107,7 +107,7 @@
     root.innerHTML = `${topbar("")}<div class="rolecard"><div class="pcard center"><div class="res no">${ic("alert")}</div><h2>${esc(msg)}</h2>${extra || ""}</div></div>`;
   }
   function topbar(right) {
-    return `<div class="ctop"><div class="ctin"><a href="/" style="border:0;padding:0;display:flex;align-items:center;gap:10px;color:#fff"><span class="mark">${ic("ticket")}</span><span class="word">Corporate <i>Tambola</i></span></a><span class="sp"></span>${right || ""}</div></div>`;
+    return `<div class="ctop"><div class="ctin"><a href="/" style="border:0;padding:0;display:flex;align-items:center;gap:10px;color:#fff"><span class="mark"><img src="/logo-mark.svg" alt="" width="34" height="34"></span><span class="word">Corporate <i>Tambola</i></span></a><span class="sp"></span>${right || ""}</div></div>`;
   }
 
   // ---------------------------------------------------------------- patching (never destroys typed text)

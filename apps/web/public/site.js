@@ -107,7 +107,7 @@
   // ---------- free launch: create an organizer account with a work email; the key arrives only through the e-mailed code ----------
   function openFree() {
     TB.sheet(`${xbtn}<div class="openfree" role="group" aria-labelledby="ofTitle">
-      <div class="sheethead"><span class="rolepill">For the organizer or host</span><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><svg class="ic" aria-hidden="true"><use href="#i-ticket"/></svg></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
+      <div class="sheethead"><span class="rolepill">For the organizer or host</span><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><img src="/logo-mark.svg" alt="" width="26" height="26"></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
       <div class="eyebrow ofeye">Build it and publish it free.</div><h2 id="ofTitle">Create your engagement</h2>
       <ul class="bgrid"><li><span class="bico">${ic("play")}</span><span>Play a video or audio message between numbers</span></li><li><span class="bico">${ic("trophy")}</span><span>Set several prizes, and add a lucky draw</span></li><li><span class="bico">${ic("users")}</span><span>A closed-group corporate tambola (housie)</span></li><li><span class="bico">${ic("ticket")}</span><span>Every ticket is unique: no two can ever match</span></li><li><span class="bico">${ic("phone")}</span><span>Each participant gets their own ticket</span></li><li><span class="bico">${ic("star")}</span><span>A free AI assistant sets it up for you</span></li><li><span class="bico">${ic("gift")}</span><span>Participants never pay. You provide the rewards</span></li><li><span class="bico">${ic("trash")}</span><span>All participant data is deleted within 24 hours of the game ending</span></li><li><span class="bico">${ic("shield")}</span><span>Built for DPDP Act, GDPR and US privacy laws</span></li></ul>
       <div id="k2wrap">${CBConsent.html("K2")}</div>${gBox}<form id="frForm" novalidate><label class="lb" for="fMail">Your email</label><input class="inp big" id="fMail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@example.com" aria-describedby="fErr"><div id="fErr" role="alert"></div>
@@ -176,7 +176,7 @@
     } catch (e) { if (btn) btn.disabled = false; const f = $("fErr"); if (f) f.innerHTML = err(e.message); else TB.toast(esc(e.message)); }
   }
   function codeView(email, devCode) {
-    TB.sheet(`${xbtn}<div class="sheethead"><div class="eyebrow">Check your inbox</div><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><svg class="ic" aria-hidden="true"><use href="#i-ticket"/></svg></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
+    TB.sheet(`${xbtn}<div class="sheethead"><div class="eyebrow">Check your inbox</div><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><img src="/logo-mark.svg" alt="" width="26" height="26"></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
       <h2 id="cdTitle">Check your email</h2>
       <p class="sheetbody">We emailed <b class="sendto">${esc(email)}</b>. Tap a button in the email, or type the 6-digit passcode here. It works for 10 minutes. Check spam too.</p>
       ${devCode ? `<div class="note info devcode" role="note"><span>Local test mode: your passcode is <b>${esc(devCode)}</b></span><button type="button" class="btn sm" id="useCode">Use this passcode</button></div>` : ""}
@@ -215,7 +215,7 @@
   if (document.getElementById("topbar")) return;
   var bar = document.createElement("div");
   bar.id = "topbar"; bar.setAttribute("role", "navigation"); bar.setAttribute("aria-label", "Quick links"); bar.hidden = true;
-  bar.innerHTML = '<button type="button" class="tb-brand" id="tbTop" aria-label="Back to the top"><span class="tb-mark" aria-hidden="true">&#9733;</span><b>Corporate Tambola</b><span class="tb-up" aria-hidden="true">&#8593; Top</span></button>' +
+  bar.innerHTML = '<button type="button" class="tb-brand" id="tbTop" aria-label="Back to the top"><span class="tb-mark" aria-hidden="true"><img src="/logo-mark.svg" alt="" width="28" height="28"></span><b>Corporate Tambola</b><span class="tb-up" aria-hidden="true">&#8593; Top</span></button>' +
     '<a class="tb-cta" id="tbBuy" href="#pricing">Create your game</a>';
   document.body.appendChild(bar);
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches, shown = false, tick = 0;

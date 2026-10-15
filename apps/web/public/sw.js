@@ -7,7 +7,7 @@
  * - API calls and the WebSocket are never cached or intercepted: during an engagement the only traffic is
  *   the tiny pushed messages and the participant's own claims.
  */
-const CACHE = "tb-app-v1";
+const CACHE = "tb-app-v2";
 const CONCURRENCY = 4;
 
 async function manifest() {
