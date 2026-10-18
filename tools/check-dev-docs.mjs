@@ -82,7 +82,7 @@ for (const [doc, md] of Object.entries(text)) {
 
 // ---------------------------------------------------------------- (b) routes
 const api = text["04-API-REFERENCE.md"] ?? "";
-const ROUTE_FILES = ["worker.ts", "pay.ts", "partners.ts", "mode.ts", "visits.ts", "lifecycle.ts", "audit.ts"].map((f) => `apps/edge/src/${f}`);
+const ROUTE_FILES = ["worker.ts", "pay.ts", "partners.ts", "helpdesk.ts", "mode.ts", "visits.ts", "lifecycle.ts", "audit.ts"].map((f) => `apps/edge/src/${f}`);
 const routeStrings = new Set(), routeWords = new Set();
 for (const f of ROUTE_FILES) {
   const src = read(f);

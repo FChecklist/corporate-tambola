@@ -54,3 +54,15 @@ Port it to the real console: same sections, same wording, same colours, same beh
 - Help section at the bottom (pre-answered questions), Back to top / back to steps, short hints.
 - Keep working: AI helper mode (shield hides guest names/numbers), `?quick=1`, hand-over links `?e=ID&do=publish|erase|pause|stop`, BroadcastChannel sign-in sharing, the existing a11y labelling, existing control/pause signing, results auto-publishing, reports. Do not regress anything the existing console tests cover; update those tests to the new wording/structure.
 - Words: the product says Organizer, Host, Co-host everywhere (the old UI called the watch-only key "co-host"; that key is now the Host).
+
+## Help Desk (2026-10-19)
+
+A Refer & earn partner can prepare games for an Organizer who allowed it (`docs/HELPDESK_SPEC.md`, `apps/edge/src/helpdesk.ts`). It uses only the roles above:
+
+| Who | Is | Can | Cannot |
+|---|---|---|---|
+| Helper, before publish | an AI key of the Organizer's account (made when the Organizer taps Allow) | create a game, change settings and prizes, ask the Organizer to publish | publish, pay, see sign-in keys, change the e-mail, add Hosts, close the account |
+| Organizer | Organizer | allow and stop a helper, publish with one tap (an e-mailed link) | |
+| Helper, after publish | a Host marked `Help desk` | everything a Host can | use one of the Organizer's 5 Host places |
+
+The Organizer can stop a helper at any time: the helper's key and Host end at once, published games stay. A paid game the helper prepared earns the helper Refer & earn commission (same rate, repeat rule and self-referral block).

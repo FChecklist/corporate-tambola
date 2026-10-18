@@ -255,6 +255,28 @@ All handled by `payRoute` (`pay.ts:166`), **before the Co-host gate**, so any ke
 
 ---
 
+## 6b. Help Desk - `helpdeskRoute` `helpdesk.ts` (spec: `docs/HELPDESK_SPEC.md`)
+
+A partner (the helper) prepares games for an Organizer; the Organizer publishes with one tap. Helper routes use the Refer & earn key in `x-partner`. The helper works through an AI key of the Organizer's account (`organizer_key.kind='ai'`, `created_by='d'`), so the game's own AI rules apply: it cannot publish, pay, see keys, add Hosts or close the account.
+
+| Route | Auth | Request | Response | Rules | Cost |
+|---|---|---|---|---|---|
+| `POST /api/helpdesk/join` | PARTNER | `{email}` | `{ok, joined:true}` | 403 unless the e-mail is the one the partner enrolled with; the e-mail is kept sealed | 2 |
+| `GET /api/helpdesk/me` | PARTNER | - | `{joined:false}` or `{joined, code, clients:[{id, orgEmailMasked, state, games:[{eid, title?, published, consoleUrl?}], consoleUrl?, aiLink?, hostLink}], maxClients}` | the console and AI link (with the key) only for an `active` client; addresses masked | - |
+| `POST /api/helpdesk/invite` | PARTNER (joined) | `{email, name?}` | `{ok, id}` the same whether or not the address has an account | 5 an hour per helper, 3 a day per Organizer address across helpers, no duplicate `invited`/`active` link, not the helper's own address, 50 clients at most; mails a link (14 days) | 4 |
+| `POST /api/helpdesk/request-publish` | PARTNER or the helper's AI key | `{linkId, eid}` (an AI key needs only `{eid}`) | `{ok, sent:true}` | only an unpublished game made through that link, of that Organizer; once per 10 minutes per game; a new link replaces the old one; mails the Organizer a link (7 days, single use) | 4 |
+| `GET /api/helpdesk/accept/info?t=` | PUB (token) | - | `{helperName, state, forEmailMasked, version:'HD1', promise:[...]}` | 404 wrong token; `state` `expired` after 14 days | - |
+| `POST /api/helpdesk/accept` | M (signed in) | `{t, consent:true}` | `{ok, state:'active', helperName}` | 403 unless signed in as the account of the invited address; 410 used/expired; makes the helper's AI key, records the HD1 tick, mails the helper | 6 |
+| `POST /api/helpdesk/stop` | the token `{t}`, or M `{linkId}`, or PARTNER `{linkId}` | - | `{ok, state:'stopped'}` | revokes the helper's AI key and the desk Host at once, ends open approvals and their keys; published games stay | 4 |
+| `GET /api/helpdesk/mine` | M | - | `{helpers:[{id, helperName, state, acceptedMs, stoppedMs, games}]}` | the Organizer's helpers | - |
+| `GET /api/helpdesk/approve/info?t=` | PUB (token) | - | `{eid, helperName, state:'waiting' or 'published', summary}` | 404 wrong token; 410 used, expired or stopped | - |
+| `POST /api/helpdesk/approve/start` | PUB (token) | `{t}` | `{ok, key (ctk_...), expiresMs, eid}` a master key for 30 minutes (`created_by='dp'`) | the page then calls the existing `POST /api/z/{id}/publish` with it | 3 |
+| `POST /api/helpdesk/approve/done` | PUB (token) | `{t}` | `{ok, published:true}` | 409 `not-published` until the game is published; marks the token used, revokes the temporary key, makes the helper's desk Host (not counted in the 5 Hosts), mails the helper the Host link | 8 |
+
+Hooks elsewhere: game creation by a helper's key writes `helpdesk_game` (`worker.ts`); checkout sets the payment's `ref` to the helper's partner code (`pay.ts`); `POST /api/org/ai`, `/api/org/ai/replace` and `/api/org/ai/revoke` leave the helper's key alone; the Host count and `GET /api/org/team` treat `created_by='d'` Hosts specially (label `Help desk: <name>`, `helpDesk:true`); the unfamiliar-use alert skips them; the helper's AI manual (`GET /ai/<key>`) carries the Help Desk paragraph.
+
+---
+
 ## 7. Owner-only (PLAT, never through an AI link) - non-owners get the same `404 {"error":"Not found"}` and the attempt is written to `audit_access`
 
 | Route | Request | Response | Handler |

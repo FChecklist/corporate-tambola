@@ -136,6 +136,10 @@ Single key `ORGANIZER_SECRET`. It "can act on any engagement" (`can()` returns t
 - The Host's list owner and the Co-hosts they add are keyed by the identity row (`a.hid`), so every device sees the same lists. Retiring the Host (`POST /api/org/team/retire`) stops the identity row and every device key and deletes the e-mail mapping.
 - Pay links (`POST /api/z/{id}/paylink`): Organizer, Host (setup finished) and the Co-host of that game; an AI key gets 403.
 
+## 8c. Help Desk (a partner prepares games, the Organizer publishes)
+
+`apps/edge/src/helpdesk.ts` adds no new power. The helper works through an **AI key** of the Organizer's account (`kind 'ai'`, `created_by 'd'`, label `Help desk`): everything an AI key may do (create and change a game), nothing it may not (publish, pay, see keys, add Hosts, close the account). The Organizer publishes through the game's own publish route with a 30-minute master key (`created_by 'dp'`) that the one-tap page opens and `approve/done` revokes. After publishing, the helper is a **desk Host** (`kind 'host'`, `created_by 'd'`, label `Help desk: <name>`): a normal Host in every way except that it does not count toward `MAX_HOSTS` (5), shows in `GET /api/org/team` with `helpDesk:true`, is skipped by the unfamiliar-use alert, and ends at once with the link (`stopLink`). `POST /api/org/ai`, `/replace` and `/revoke` never revoke a `created_by 'd'` AI key. Routes: `04-API-REFERENCE.md` section 6b. Tests: `apps/edge/test/helpdesk.test.ts`.
+
 ## 9. Tests that pin this down
 
 | Test file | Proves |

@@ -45,6 +45,7 @@ Counts: 333 files.
 | `apps/edge/migrations/0015_cancel_refund.sql` | D1 migration: cancel columns, Host e-mail / Co-host binding columns, `payment.eid/confirming_ms`, tables `refund` and `credit_note` | applied by `wrangler d1 migrations apply`; equality with `SCHEMA` enforced by `apps/edge/test/migrations.test.ts` |
 | `apps/edge/migrations/0016_people.sql` | D1 migration: `organizer_key.created_by`, `engagement.cohost_limit`, `seat.blocked`, tables `person` and `waiting` | applied by hand before deploying people.ts |
 | `apps/edge/migrations/0017_brand_paylink_google.sql` | D1 migration (Phase 3/4): tables `paylink`, `host_state`, `host_login`, column `organizer_key.host_id`, backfill of `host_state` for existing Hosts | applied by hand before deploying; equality with `SCHEMA` enforced by `apps/edge/test/migrations.test.ts` |
+| `apps/edge/migrations/0025_helpdesk.sql` | D1 migration: tables `helpdesk_helper`, `helpdesk_link`, `helpdesk_game`, `helpdesk_pub` (kept identical to `HELPDESK_SCHEMA`) | `apps/edge/test/migrations.test.ts` |
 | `apps/edge/migrations/0018_credit_retention_clone.sql` | D1 migration (spec 5 and 6): tables `credit`, `credit_use`, column `engagement.unplayed_ms` | apply BEFORE deploying the code that reads it; equality with `SCHEMA` enforced by `apps/edge/test/migrations.test.ts` |
 | `apps/edge/migrations/0014_roles.sql` | D1 migration: `organizer_key.label` (untracked/new) | applied by `wrangler d1 migrations apply`; equality with `SCHEMA` enforced by `apps/edge/test/migrations.test.ts` |
 | `apps/edge/package.json` | Workspace package `@tambola/edge` |  |
@@ -61,6 +62,7 @@ Counts: 333 files.
 | `apps/edge/src/lifecycle.ts` | Life of a game's data: `lifecycleTick`, report steps (`reportStep`, `reportApi`, `reportLink`), `acceptOver`, `acceptWon` (stub), `recordWinners`, `erasePersonal`, `eraseEverything`, `purgeTestEngagement`, deletion clocks `PURGE_AFTER_MS`, `REPORT_LINK_MS`, `fullDeleteAt`, `endBoundMs` | called by `worker.ts`, `winners.ts`, `test-data.ts` |
 | `apps/edge/src/local.ts` | Local stand-in: `sqliteD1`, `startLocal`, `localOrganizerKey`; run as `bun run zlocal` | tests, tools/sim, e2e local server |
 | `apps/edge/src/mails.ts` | The dedicated mails carrying AI links and sign-in: `aiLinkMail`, `coHostLinkMail` (the Host link mail), `newUseAlertMail`, `signInMail`, `LINK_MAIL_TTL_MS` (24 h) | called only from `worker.ts` (a test forbids other sources) |
+| `apps/edge/src/helpdesk.ts` | Help Desk: `helpdeskRoute` (join, invite, accept, request-publish, approve start/done, stop), `HELPDESK_SCHEMA`, `noteHelperGame`, `helperRefFor`, `stopLink`, `helperClosed`, `HELPER_MANUAL_NOTE`, the HD1 promise text | called by `worker.ts` (route, game-creation hook, AI manual, close account), `pay.ts` (`ref` override), `partners.ts` (partner close) |
 | `apps/edge/src/mode.ts` | TEST/LIVE mode: `getMode`, `setMode`, `testFlag`, `orgIsTest`, mail allow-list (`allowList`, `mailGate`, `normMail`), `modeRoute`, `MODE_SCHEMA` | called by `worker.ts`, `pay.ts`, `partners.ts`, `visits.ts` |
 | `apps/edge/src/partners.ts` | Refer & earn: `partnerRoute`, `recordCommission`, `PARTNER_SCHEMA`, constants `COMMISSION_RATE 0.5`, `REPEAT_COMMISSION_RATE`, `ATTRIBUTION_DAYS 30` | called by `worker.ts` and `pay.ts` (`fulfil`) |
 | `apps/edge/src/pay.ts` | Payments: `payRoute` (checkout, `/api/payments/*`, invoice), `fulfil`, `sendMail`/`sendReportMail`/`retryOutbox` (Resend), `PAY_SCHEMA`, `payMode`, `freeLaunch` | called by `worker.ts`, `lifecycle.ts` (report mail), `partners.ts`; env type `PayEnv` |
@@ -93,6 +95,7 @@ Counts: 333 files.
 | `apps/edge/test/keys.test.ts` | STRICT_KEYS | run: `bun test apps/edge/test/keys.test.ts` |
 | `apps/edge/test/migrations.test.ts` | migrations 0001..0014 equal SCHEMA (list `FILES` must be extended for a new migration) | run: `bun test apps/edge/test/migrations.test.ts` |
 | `apps/edge/test/mode.test.ts` | TEST/LIVE mode, allow-list, is_test, purge | run: `bun test apps/edge/test/mode.test.ts` |
+| `apps/edge/test/helpdesk.test.ts` | Help Desk rules: joining, invitation limits, accept, the helper's key, request-publish, the one-tap approval, the desk Host, stop, commission | run: `bun test apps/edge/test/helpdesk.test.ts` |
 | `apps/edge/test/partners.test.ts` | refer & earn rules and commissions | run: `bun test apps/edge/test/partners.test.ts` |
 | `apps/edge/test/pay.test.ts` | checkout, verify, webhook, invoice, mail, sign-in codes | run: `bun test apps/edge/test/pay.test.ts` |
 | `apps/edge/test/privacy.test.ts` | sealed data, invitations, winners record, report, deletion clocks | run: `bun test apps/edge/test/privacy.test.ts` |
@@ -190,6 +193,12 @@ Counts: 333 files.
 | `apps/web/public/owner-visits.html` | Owner-only visit report page (noindex) | `owner-visits.js` |
 | `apps/web/public/owner-visits.js` | Owner report viewer (`textContent` only) | `owner-visits.html` |
 | `apps/web/public/partner-terms.html` | Partner terms | generated |
+| `apps/web/public/helpdesk-accept.html` | The Organizer's Help Desk invitation page (noindex) | `helpdesk-accept.js` |
+| `apps/web/public/helpdesk-accept.js` | Invitation page logic: who asks, the promise, sign-in, Allow, Stop | `helpdesk-accept.html` |
+| `apps/web/public/helpdesk-approve.html` | The Organizer's one-tap publish page (noindex) | `helpdesk-approve.js` |
+| `apps/web/public/helpdesk-approve.js` | One-tap publish logic: summary, confirm e-mail and mobile, Terms boxes, Publish | `helpdesk-approve.html` |
+| `apps/web/public/helpdesk.html` | Help Desk home for the helper (indexable) | `helpdesk.js` |
+| `apps/web/public/helpdesk.js` | Helper page logic: turn on, add an Organizer, clients, Open console, Copy my AI link, Ask the Organizer to publish | `helpdesk.html` |
 | `apps/web/public/partner.css` | Refer & earn page styles | `partner.html` |
 | `apps/web/public/partner.html` | Refer & earn page | `partner.js` |
 | `apps/web/public/partner.js` | Partner enrol / dashboard logic | `partner.html` |
@@ -231,6 +240,7 @@ Counts: 333 files.
 | `apps/web/public/zc.js` | Organizer console (being rewritten per `docs/ROLES_AND_CONSOLE_SPEC.md`) | `zc.html` |
 | `apps/web/public/zgame.js` | BUNDLE (generated, 124 KB): `window.ZG` | from `packages/beacon/src/zgame-browser.ts` |
 | `apps/web/public/zsw.js` | Live service worker: cache `ct-game-v16`, network-first pages, saved game files | registered by `pwa.js` |
+| `apps/web/test/helpdesk-pages.test.ts` | the three Help Desk pages run against the real Worker (helper page, invitation page with sign-in and Allow/Stop, one-tap publish page) and their shipping rules | run: `bun test apps/web/test/helpdesk-pages.test.ts` |
 | `apps/web/test/harness.ts` | happy-dom page harness (real scripts + real Worker + in-memory DB) | page tests |
 | `apps/web/test/pages.test.ts` | Page behaviour (UC-53..57, console roles, pay, phone, demo, preview) 80 tests | `bun test apps/web/test` |
 | `apps/web/test/houses-pages.test.ts` | Tests: house names and how-to-win lines on the pages match `PRIZE_HOUSES` | `bun test apps/web` |
@@ -448,6 +458,7 @@ Counts: 333 files.
 
 | File | Purpose | Key exports / used by |
 |---|---|---|
+| `docs/HELPDESK_SPEC.md` | The owner-approved Help Desk design | `apps/edge/src/helpdesk.ts` |
 | `tools/make-legal-pages.mjs` | Builds terms/dpa/subprocessors/partner-terms/organizer-guide pages | `node tools/make-legal-pages.mjs` |
 
 ## `tools/make-sitemap.mjs/`
