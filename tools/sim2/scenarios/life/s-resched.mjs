@@ -11,7 +11,7 @@ sc("R01", "unpaid game moved EARLIER: start, end and erasure time all move earli
   const life = await w.life(org, g.id);
   w.expect("start moved ~4h earlier", Math.abs((g.startMs - (await startOf(w, org, g.id))) - 4 * HOUR) < 10_000);
   w.expect("erasure moved the same 4h earlier", Math.abs((g.erasureMs - life.personalDeleteAtMs) - 4 * HOUR) < 10_000, `${g.erasureMs - life.personalDeleteAtMs}`);
-  w.eq("erasure = end + 23h", life.personalDeleteAtMs - life.endMs, 23 * HOUR);
+  w.eq("erasure = end + 20h", life.personalDeleteAtMs - life.endMs, 20 * HOUR);
 });
 sc("R02", "unpaid game moved LATER: erasure moves later by the same amount", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR });
@@ -29,7 +29,7 @@ sc("R03", "rescheduled 12 times (both directions): the clock follows only the NE
   }
   const life = await w.life(org, g.id);
   w.expect("start is the last chosen time", (await startOf(w, org, g.id)) === last);
-  w.expect("erasure = last end + 23h", life.personalDeleteAtMs === life.endMs + 23 * HOUR && life.endMs > last && life.endMs - last < 20 * MIN, JSON.stringify(life));
+  w.expect("erasure = last end + 20h", life.personalDeleteAtMs === life.endMs + 20 * HOUR && life.endMs > last && life.endMs - last < 20 * MIN, JSON.stringify(life));
   const early = g.erasureMs; // the very first erasure time is long gone or not: data must be there unless the last time is before it
   if (life.personalDeleteAtMs > early + HOUR) { await w.tickAt(early + HOUR); w.expect("data of the FIRST schedule is not erased when the game moved later", (await w.personal(g.id)) >= 4, JSON.stringify(await w.personalRows(g.id))); }
   await w.tickAt(life.personalDeleteAtMs - 1); w.expect("data present 1 ms before the newest erasure time", (await w.personal(g.id)) >= 4);

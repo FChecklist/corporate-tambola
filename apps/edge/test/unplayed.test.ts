@@ -8,7 +8,7 @@ const MAX_AHEAD_MS = 30 * 86_400_000, SETTINGS_KEEP_MS = 30 * 86_400_000, UNPLAY
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
 
-// Spec 5 A (docs/ROLES_AND_CONSOLE_SPEC_5.md): a game that did not start. No separate payment cut-off: pay at any time until the guest data is erased (scheduled end + 23 h), a late payment starts 2 minutes after
+// Spec 5 A (docs/ROLES_AND_CONSOLE_SPEC_5.md): a game that did not start. No separate payment cut-off: pay at any time until the guest data is erased (scheduled end + 20 h), a late payment starts 2 minutes after
 // confirmation; unpaid = Organizer/Host see "Payment pending", everyone else "Waiting for the Organizer or Host"; after the erasure the game is closed ("This game did not start. Your details have been erased.");
 // settings stay 30 days; a game time is at most 30 days ahead; the clock follows the newest time; heads-up 6 h before and a mail after, once each.
 const T = Date.UTC(2026, 9, 1, 10, 0, 0);
@@ -76,8 +76,8 @@ const withPersonalData = async (t: { master: string }) => {
   const p = personal(); expect(p.participants).toBe(1); expect(p.people).toBeGreaterThanOrEqual(2); expect(p.waiting).toBe(1); expect(p.cohosts).toBe(1);
 };
 
-describe("a game that did not start: guest data is erased at the scheduled end + 23 hours", () => {
-  test("nothing is erased before end + 23 h; at end + 23 h guests, lists, waiting requests, links and Co-host details are all gone, and the game is closed", async () => {
+describe("a game that did not start: guest data is erased at the scheduled end + 20 hours", () => {
+  test("nothing is erased before end + 20 h; at end + 20 h guests, lists, waiting requests, links and Co-host details are all gone, and the game is closed", async () => {
     const t = await team(); await withPersonalData(t);
     const at = await eraseAt();
     expect(at).toBe((await endOf()) + PURGE_AFTER_MS);
@@ -97,7 +97,7 @@ describe("a game that did not start: guest data is erased at the scheduled end +
     expect(raw.prepare("SELECT email_sealed FROM organizer_key WHERE kind='host'").get()).toMatchObject({ email_sealed: expect.stringMatching(/^v1\./) });
     expect(row().cap).toBe(300); expect(JSON.parse(row().config)).toBeTruthy();
   });
-  test("a PLAYED game keeps the old rule (23 h after it ends); only a game nobody paid for follows the new pass", async () => {
+  test("a PLAYED game keeps the old rule (20 h after it ends); only a game nobody paid for follows the new pass", async () => {
     const t = await team();
     const c = await j(await pay(t.master)); expect((await j(await complete(c))).published).toBe(true);
     await join("9876543210", "Asha");
@@ -107,7 +107,7 @@ describe("a game that did not start: guest data is erased at the scheduled end +
     expect(row().unplayed_ms).toBeNull(); // a played game is not "did not start"
     expect(raw.prepare("SELECT purged_ms FROM life WHERE eid='UNP-1'").get()).toMatchObject({ purged_ms: expect.any(Number) });
   });
-  test("a played game with nobody who joined, only a people list, loses the list 23 h after the end", async () => {
+  test("a played game with nobody who joined, only a people list, loses the list 20 h after the end", async () => {
     const t = await team();
     const c = await j(await pay(t.master)); await complete(c);
     await people(t.master, [{ name: "Ben", phone: "9876543211" }]);

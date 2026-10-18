@@ -18,7 +18,7 @@ sc("S02", "a draft nobody published is forgotten after 30 days (present at 29d23
   await w.tickAt(created + 30 * DAY - HOUR); w.expect("present at day 29 + 23h", !(await gone(w, g.id)));
   await w.tickAt(created + 30 * DAY + 2); w.expect("gone after day 30", await gone(w, g.id));
 });
-sc("S03", "an unpublished draft with a people list: the list is erased at end+23h, the draft itself at day 30", async (w) => {
+sc("S03", "an unpublished draft with a people list: the list is erased at end+20h, the draft itself at day 30", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, publish: false, people: 3 });
   await w.tickAt(g.erasureMs); w.eq("list erased", await w.personal(g.id), 0); w.expect("draft kept (settings are not personal)", !(await gone(w, g.id)));
   await w.tickAt((await w.engagement(g.id)).created_ms + 30 * DAY + 2); w.expect("draft forgotten at day 30", await gone(w, g.id));

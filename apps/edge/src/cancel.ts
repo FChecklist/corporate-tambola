@@ -3,7 +3,7 @@
 //     Paid: only BEFORE the start time. Once the start time has passed a paid game has started, so it cannot be cancelled.
 //   - Cancelling a PAID game turns what was paid into CREDIT for the account, valid 365 days from the date of the original payment (credit.ts). Credit that had been used to pay for the game
 //     comes back to the same credit with the same expiry. There is no refund, no gateway call, no refund fee, no credit note, and the partner's commission on the sale stays as earned.
-//   - The guests' names and numbers are erased 23 hours after the cancel time by the normal lifecycle tick (lifecycle.ts); a Co-host's name and number go at once.
+//   - The guests' names and numbers are erased 20 hours after the cancel time by the normal lifecycle tick (lifecycle.ts); a Co-host's name and number go at once.
 // Nothing here may carry an AI link (mails.ts is the only place that builds those).
 import { creditExpiryMs, creditFromPayment, creditLastDay, mailTeam, NO_REFUND_LINE, restoreCreditUses, rs, teamEmails, type CreditRow } from "./credit";
 import type { PayEnv } from "./pay";
@@ -86,7 +86,7 @@ async function reopenBlocker(db: D1, e: any, now: number): Promise<{ reason?: st
 
 /**
  * Moves a cancelled PAID game to a new date, any date up to 365 days from the payment. The game keeps its payment: the credit that the cancel made is taken back out of the account (marked `revived`, so the money can never be
- * spent twice), credit that had paid for the game goes back onto the game, the cancel mark is cleared and the new start time is set. Guests must join again (their data was erased 23 hours after the cancel).
+ * spent twice), credit that had paid for the game goes back onto the game, the cancel mark is cleared and the new start time is set. Guests must join again (their data was erased 20 hours after the cancel).
  * Every step that changes money is guarded and undone if a later step fails.
  */
 export async function reopenGame(env: PayEnv, e: any, startRound: unknown, now: number, by: string): Promise<{ status: number; body: any }> {
@@ -121,7 +121,7 @@ export async function reopenGame(env: PayEnv, e: any, startRound: unknown, now: 
   // 3) the game itself comes back, with its new time
   const up = await db.prepare("UPDATE engagement SET cancelled_ms=NULL, cancelled_by=NULL, start_round=? WHERE id=? AND cancelled_ms=? AND pack<>0").bind(startRound, e.id, e.cancelled_ms).run();
   if ((up.meta?.changes ?? 0) === 0) { await rollback(); return fail(409, "Please try again.", "busy"); }
-  await db.prepare("DELETE FROM life WHERE eid=? AND report_ms IS NULL").bind(e.id).run(); // the 23-hour clock of the cancel no longer applies; the game gets a fresh lifecycle
+  await db.prepare("DELETE FROM life WHERE eid=? AND report_ms IS NULL").bind(e.id).run(); // the 20-hour clock of the cancel no longer applies; the game gets a fresh lifecycle
   await db.prepare("DELETE FROM kv WHERE k=?").bind(`startpending/${e.id}`).run();
   await db.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").bind(`reopened/${e.id}/${now}`, JSON.stringify({ by, ms: now, wasCancelledMs: e.cancelled_ms, startRound })).run(); // the trail: who moved it, and when
   let name = e.id; try { name = JSON.parse(e.config ?? "{}").name || e.id; } catch { /* the id */ }
@@ -131,7 +131,7 @@ export async function reopenGame(env: PayEnv, e: any, startRound: unknown, now: 
 }
 
 
-/** A Co-host's name and mobile number, and their key, go away (at the 23-hour erasure of the game's participant data, or at cancel). */
+/** A Co-host's name and mobile number, and their key, go away (at the 20-hour erasure of the game's participant data, or at cancel). */
 export const eraseCohostsSql = "UPDATE organizer_key SET revoked=1, label=NULL, pii=NULL WHERE eid=? AND kind='cohost'";
 
 /**

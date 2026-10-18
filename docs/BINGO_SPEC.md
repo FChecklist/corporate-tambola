@@ -206,7 +206,7 @@ The tier idea discussed on 2026-10-12 (cumulative billing; 10% at 5,000, 20% at 
 - BG-08 One card per device per game (two if the organizer allows two).
 - BG-09 Unpaid games do not begin; a late payment starts the first call two minutes after confirmation.
 - BG-10 Orders for the Bingo site appear in the central ledger as `Corporate Bingo / sales / bingo_pack_<N>` and a paid test payment is recorded there.
-- BG-11 The report arrives about 3 minutes after the end, the link works for 22 hours, guest data is deleted at end + 23 hours, winners are kept 365 days.
+- BG-11 The report arrives about 3 minutes after the end, the link works for 19 hours, guest data is deleted at end + 20 hours, winners are kept 365 days.
 - BG-12 No guest e-mail address or number is ever mailed; only the organizer and Hosts receive mail.
 - BG-13 A 5,000-phone simulated game finishes inside the free-plan write guard.
 - BG-14 The card and call board pass the accessibility check and fit a 390 px phone without sideways scrolling.

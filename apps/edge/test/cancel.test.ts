@@ -130,7 +130,7 @@ describe("cancel: what guests and everybody see afterwards", () => {
     await call("GET", "/api/z/CAN-1/info", undefined, undefined, T + 4 * H);
     expect(outbox("%could not begin%")).toHaveLength(0);
   });
-  test("guests' names and numbers are erased 23 hours after the CANCEL time (not the start time), and the Organizer and Host are told", async () => {
+  test("guests' names and numbers are erased 20 hours after the CANCEL time (not the start time), and the Organizer and Host are told", async () => {
     const t = await team(); await paidGame(t);
     await join("9876543210", "Asha"); await join("9876543211", "Ben");
     const at = T + 30 * 60_000;
@@ -316,9 +316,9 @@ describe("Co-host: name + mobile (no e-mail), bound to one game", () => {
     expect((await call("GET", "/api/whoami", undefined, t.cohost)).status).toBe(403);
     expect(raw.prepare("SELECT label, pii, revoked FROM organizer_key WHERE kind='cohost'").get()).toEqual({ label: null, pii: null, revoked: 1 });
   });
-  test("name and mobile are erased by the automatic 23-hour deletion, even if nobody joined", async () => {
+  test("name and mobile are erased by the automatic 20-hour deletion, even if nobody joined", async () => {
     const t = await team(); await paidGame(t);
-    await lifecycleTick(env as any, T + 3 * H + 22 * H); // the game ended long before; 23 h after the end has not passed yet
+    await lifecycleTick(env as any, T + 3 * H + 17 * H); // the game ended long before; 20 h after the end has not passed yet
     expect((raw.prepare("SELECT revoked FROM organizer_key WHERE kind='cohost'").get() as any).revoked).toBe(0);
     await lifecycleTick(env as any, T + 3 * H + 40 * H);
     expect(raw.prepare("SELECT label, pii, revoked FROM organizer_key WHERE kind='cohost'").get()).toEqual({ label: null, pii: null, revoked: 1 });

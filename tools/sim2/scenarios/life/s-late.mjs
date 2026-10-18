@@ -107,7 +107,7 @@ sc("L13b", "reminder: sent when the Organizer's first request of the next UTC da
   await org.history(); w.eq("one reminder", await w.mailCount(org.email, "Payment pending for your game"), 1);
   await w.go(HOUR, 30 * MIN); await org.history(); w.eq("still one", await w.mailCount(org.email, "Payment pending for your game"), 1);
 });
-sc("L14", "unpaid draft that was never published: guest data goes at end+23h but the draft is NOT closed", async (w) => {
+sc("L14", "unpaid draft that was never published: guest data goes at end+20h but the draft is NOT closed", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, publish: false, people: 3 });
   await w.tickAt(g.erasureMs - 1); w.expect("list present just before", (await w.personal(g.id)) >= 3);
   await w.tickAt(g.erasureMs); w.eq("list erased", await w.personal(g.id), 0);
@@ -119,10 +119,10 @@ sc("L15", "paying long before a far start: no restart, start time untouched", as
   const r = await org.pay(g.id); w.expect("no restart", r.status === 200 && !r.body.result.restartedAtMs, JSON.stringify(r.body.result));
   w.expect("start untouched", (await w.summary(org, g.id)).startMs === g.startMs);
 });
-sc("L16", "late-paid game: guest data is erased 23h after the NEW end, not after the old one", async (w) => {
+sc("L16", "late-paid game: guest data is erased 20h after the NEW end, not after the old one", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, guests: 2 });
   const payAt = g.startMs + 8 * HOUR; await w.goTo(payAt, 30 * MIN); await org.pay(g.id);
-  const life = await w.life(org, g.id); w.expect("erasure moved to ~payAt + 2min + game + 23h", life.personalDeleteAtMs > payAt + 23 * HOUR && life.personalDeleteAtMs < payAt + 24 * HOUR, `${(life.personalDeleteAtMs - payAt) / HOUR} h`);
+  const life = await w.life(org, g.id); w.expect("erasure moved to ~payAt + 2min + game + 20h", life.personalDeleteAtMs > payAt + 20 * HOUR && life.personalDeleteAtMs < payAt + 24 * HOUR, `${(life.personalDeleteAtMs - payAt) / HOUR} h`);
   await w.tickAt(g.erasureMs + HOUR); w.expect("data survives the old erasure time", (await w.personal(g.id)) >= 2);
   await w.tickAt(life.personalDeleteAtMs); w.eq("gone at the new one", await w.personal(g.id), 0);
 });

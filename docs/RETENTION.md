@@ -2,10 +2,20 @@
 
 Everything is kept in one Cloudflare D1 database (table `kv` holds small keyed records). The daily housekeeping (`purgeOld`, run from the first organizer request each UTC day) and the scheduled tick (`lifecycleTick`, every 5 minutes) enforce this schedule; the tick also clears the mail log every hour and retries unsent mail once a day. Tests: `apps/edge/test/retention.test.ts`, `apps/edge/test/privacy.test.ts`.
 
+## The 24-hour promise and a late scheduler (decision of 2026-10-19)
+
+The promise to players is "deleted within 24 hours of the game ending". Two facts decide how it is kept:
+
+1. GitHub's free scheduler (the `game-ticks` workflow in the separate scheduler repository) runs the tick about every 2 hours, not every 5 minutes, and GitHub may skip a run. The Cloudflare cron worker (`apps/cron`) would run it every minute, but deploying it needs a Workers API token (owner-only, see `docs/GO_TO_MARKET.md`).
+2. So the deletion time is chosen so that a tick up to 3 hours late still keeps the promise: **`PURGE_AFTER_MS` = 20 hours** (was 23) and **`REPORT_LINK_MS` = 19 hours** (was 22; the report link must close before the data goes). 20 + 3 = 23 hours, an hour inside the promise.
+3. A **lazy tick** (`lazyTick` in `apps/edge/src/worker.ts`): any `/api` request that reaches the Worker also starts the same housekeeping as `POST /api/lifecycle/tick` (`runTick`) when the last tick (`kv tick_last_ms`) is older than 5 minutes. It runs through `waitUntil`, so it never delays or breaks the answer; it is single-flight (one flag per Worker instance, and one row claimed in D1 across instances); it looks at the clock at most once a minute per instance; and it does nothing when no `waitUntil` exists. With any traffic at all the real delay is minutes, not hours. The health read (`GET /api/status/health`) turns `ok:false` when a game's players are still stored 23 hours after its end (`OVERDUE_GRACE_MS` = 3 hours after the 20-hour deletion).
+
+Tests: `apps/edge/test/param-life.test.ts` (timing rows from 1 hour to 23 hours 59 minutes after the end, the lazy tick, idempotency). Wording: the public pages keep saying "within 24 hours" (true with either clock); the pages that state the exact time for a game that never started say "20 hours".
+
 | Data | Where | Kept | Then |
 |---|---|---|---|
-| Participant name and mobile number (sealed), seat, invitation record, tickets, votes, claims, working copies of the report | `participant`, `seat`, `claim`, `settled`, `rvote`, `rcand`, `overvote`, `kv seats-base/ rpt*` | 23 hours after the game ends (the promise to players is 24) | Deleted (`erasePersonal`). |
-| A player's request to see, correct or delete their data (card id, kind, short note, times: no name, no number) | `data_request` | 23 hours after the game ends, with the participants | Deleted (`erasePersonal`); again with the game at 365 days |
+| Participant name and mobile number (sealed), seat, invitation record, tickets, votes, claims, working copies of the report | `participant`, `seat`, `claim`, `settled`, `rvote`, `rcand`, `overvote`, `kv seats-base/ rpt*` | 20 hours after the game ends (the promise to players is 24) | Deleted (`erasePersonal`). |
+| A player's request to see, correct or delete their data (card id, kind, short note, times: no name, no number) | `data_request` | 20 hours after the game ends, with the participants | Deleted (`erasePersonal`); again with the game at 365 days |
 | Winners record (seat, prize, round, time) | `winner` | 365 days after the game ends | Deleted with the engagement |
 | Winner's prize hand-over details (name and number as confirmed, change trail, given date), sealed | `prize` | 365 days | Deleted with the engagement |
 | Engagement, its settings, the end-of-game clock | `engagement`, `life`, `ctl_request`, `kv control/ contact/ pub/ ann/` | Until 00:00 IST at the end of day 365 after the game ended. An unpublished draft: 30 days | Deleted (`eraseEverything`) |

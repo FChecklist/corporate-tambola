@@ -27,7 +27,7 @@
 1. Money: fake Razorpay order, signature check, webhook signature, nobody charged twice, the invoice (IST date and time, paid for, paid via, payer, organizer, Razorpay record, page-2 terms, keep-note), invoice numbers in order, `PAYTEST` page flows.
 2. Roles: the full permission matrix (what Host and Co-host can and cannot do); one ticket per phone; the waiting room; invite limits (level 2 cannot invite).
 3. Play: every phone shows the same numbers as the public reference; identical winners on all 1,000 phones; per-house maximum winners; lucky-draw winners are real participants, drawn once; Unlucky goes to the right ticket; breaks pause the numbers for the right seconds; late joiners see only their own numbers.
-4. After the game: prizes confirmed and "prize given"; the report e-mail; guest data erased 23 hours after the end; all personal data gone; the 365-day records kept; e-mail only to the team.
+4. After the game: prizes confirmed and "prize given"; the report e-mail; guest data erased 20 hours after the end; all personal data gone; the 365-day records kept; e-mail only to the team.
 5. Safety: free-plan write budget (80,000 per day), no outbound requests, no script errors.
 
 ## The loop

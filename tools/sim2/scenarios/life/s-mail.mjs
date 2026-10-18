@@ -1,5 +1,5 @@
 // M-scenarios (e-mails only to Organizer / Host) and P-scenarios (the organizer's report link lifecycle).
-// Spec: docs/ROLES_AND_CONSOLE_SPEC_5.md A.7, docs/PRIVACY_AND_LIFECYCLE.md (report link: 3 min after the end, reminder 6 h before it closes, closes at 22 h, data erased at 23 h).
+// Spec: docs/ROLES_AND_CONSOLE_SPEC_5.md A.7, docs/PRIVACY_AND_LIFECYCLE.md (report link: 3 min after the end, reminder 6 h before it closes, closes at 19 h, data erased at 20 h).
 import { sc, HOUR, MIN, DAY, sql, call, mailbox } from "./lib.mjs";
 
 const reportUrl = (m) => /https?:\/\/[^\s]+report\.html\?e=[^\s&]+&k=[0-9a-f]+/.exec(m.text)?.[0];
@@ -44,21 +44,21 @@ sc("M07", "the report mail goes to the Organizer only (never to Hosts or anyone 
   w.eq("Host got none", await w.mailCount(host.email, "engagement report"), 0);
 });
 
-sc("P01", "report mail: not before 3 minutes after the end, exactly one at 3 minutes, with the closing time (end+22h) in it", async (w) => {
+sc("P01", "report mail: not before 3 minutes after the end, exactly one at 3 minutes, with the closing time (end+19h) in it", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, pay: true, guests: 3 });
   await w.tickAt(g.endMs + 3 * MIN - 1000); w.eq("none at 2m59", await w.mailCount(org.email, "engagement report"), 0);
   await w.tickAt(g.endMs + 3 * MIN); await w.go(2 * MIN, 30_000); w.eq("one at 3m", await w.mailCount(org.email, "engagement report"), 1);
   const m = (await w.mails(org.email, "engagement report"))[0]; w.expect("mail has the report link", !!reportUrl(m), m.text.slice(0, 300));
-  const when = new Date(g.endMs + 22 * HOUR).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" }); w.expect("subject names the closing day", m.subject.includes("open it before"), m.subject); void when;
+  const when = new Date(g.endMs + 19 * HOUR).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" }); w.expect("subject names the closing day", m.subject.includes("open it before"), m.subject); void when;
   await w.go(2 * HOUR, 10 * MIN); w.eq("still one", await w.mailCount(org.email, "engagement report"), 1);
 });
-sc("P02", "report link works until end+22h, answers 'gone' from then on, while guest data lives until end+23h", async (w) => {
+sc("P02", "report link works until end+19h, answers 'gone' from then on, while guest data lives until end+20h", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, pay: true, guests: 3 });
   await w.goTo(g.endMs + 10 * MIN, 5 * MIN); const url = reportUrl((await w.mails(org.email, "engagement report"))[0]); w.expect("link found", !!url);
-  await w.tickAt(g.endMs + 22 * HOUR - 1); const ok = await api(url); w.expect("works 1 ms before 22h", ok.status === 200 && ok.body.base, `${ok.status} ${JSON.stringify(ok.body).slice(0, 120)}`);
-  await w.tickAt(g.endMs + 22 * HOUR); const closed = await api(url); w.expect("gone at 22h (404 code gone)", closed.status === 404 && closed.body.code === "gone", `${closed.status} ${JSON.stringify(closed.body).slice(0, 120)}`);
-  w.expect("guest data still held between 22h and 23h", (await w.personal(g.id)) >= 3);
-  await w.tickAt(g.endMs + 23 * HOUR); w.eq("erased at 23h", await w.personal(g.id), 0);
+  await w.tickAt(g.endMs + 19 * HOUR - 1); const ok = await api(url); w.expect("works 1 ms before 19h", ok.status === 200 && ok.body.base, `${ok.status} ${JSON.stringify(ok.body).slice(0, 120)}`);
+  await w.tickAt(g.endMs + 19 * HOUR); const closed = await api(url); w.expect("gone at 19h (404 code gone)", closed.status === 404 && closed.body.code === "gone", `${closed.status} ${JSON.stringify(closed.body).slice(0, 120)}`);
+  w.expect("guest data still held between 19h and 20h", (await w.personal(g.id)) >= 3);
+  await w.tickAt(g.endMs + 20 * HOUR); w.eq("erased at 20h", await w.personal(g.id), 0);
 });
 sc("P03", "reminder 6 hours before the link closes, once, only if the report was not opened", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, pay: true, guests: 2 });
@@ -90,6 +90,6 @@ sc("P07", "no report for a game that did not start, nor for a cancelled game", a
 sc("P08", "report link answer carries the game's totals and the deletion times, not guest data in the base part", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, pay: true, guests: 3 }); await w.goTo(g.endMs + 10 * MIN, 5 * MIN);
   const r = await api(reportUrl((await w.mails(org.email, "engagement report"))[0])); w.eq("200", r.status, 200);
-  w.eq("personal delete time in the report = end+23h", r.body.base?.personalDeleteAtMs, g.endMs + 23 * HOUR); w.eq("people counted", r.body.totalPeople, 3);
+  w.eq("personal delete time in the report = end+20h", r.body.base?.personalDeleteAtMs, g.endMs + 20 * HOUR); w.eq("people counted", r.body.totalPeople, 3);
   w.expect("base part holds no planted guest string", !w.planted.some((s) => JSON.stringify(r.body.base).includes(s)));
 });

@@ -1,6 +1,6 @@
 // The life of an engagement's personal data. When a game ends (as seen from the public schedule, or sooner when enough phones say so):
 //   1. the organizer's report is built from the sealed records and e-mailed as PDF(s), in small steps because a free Worker has ~10 ms of CPU per call;
-//   2. the report link stops working 22 hours after the end; 23 hours after the end (we promise 24) every participant's name, number, seat, invite record and ticket link is deleted, the report's working copies too,
+//   2. the report link stops working 19 hours after the end; 20 hours after the end (we promise 24; a tick up to 3 hours late still stays inside it) every participant's name, number, seat, invite record and ticket link is deleted, the report's working copies too,
 //      and the participants' personal part of the audit log is crypto-shredded (audit.ts `shredParticipantAudit`: its per-engagement key is destroyed, the hash chain still verifies);
 //   3. only the organizer / host / co-host details and the winners record (seat, prize, round, time) remain, until 00:00 IST at the end of the 365th day, then everything goes.
 // Called by the scheduled job (and, as a fallback, by any outside timer with the platform key). Every call does a bounded amount of work and can be repeated safely.
@@ -21,8 +21,8 @@ import type { D1, Env } from "./worker";
 
 export const GENESIS = 1692803367;
 export const roundMs = (r: number) => (GENESIS + (r - 1) * 3) * 1000;
-export const PURGE_AFTER_MS = 23 * 3_600_000;      // participants' personal data (and the personal part of their audit rows) goes this long after the game ended (the promise is 24 hours)
-export const REPORT_LINK_MS = 22 * 3_600_000;      // the organizer's report link stops working this long after the game ended, an hour before the deletion
+export const PURGE_AFTER_MS = 20 * 3_600_000;      // participants' personal data (and the personal part of their audit rows) goes this long after the game ended. The promise is 24 hours and the job may run up to 3 hours late (GitHub's scheduler; the lazy tick in worker.ts usually keeps it within minutes), so 20 + 3 = 20 hours stays inside it (docs/RETENTION.md)
+export const REPORT_LINK_MS = 19 * 3_600_000;      // the organizer's report link stops working this long after the game ended, an hour before the deletion
 export const REPORT_AFTER_MS = 3 * 60_000;         // the report starts a few minutes after the end, so late wins have been recorded
 export const UNPLAYED_WARN_MS = 6 * 3_600_000;       // the heads-up e-mail for a game that did not start goes out this long before its guests' data is erased
 export const SETTINGS_KEEP_MS = 30 * 86_400_000;      // the settings of a game that did not start (occasion, prizes, brand...) stay this long after it closed, so the Organizer can reuse them
@@ -69,7 +69,7 @@ export async function endBoundMs(env: Env, e: any): Promise<number> {
   return roundMs(s.st?.stopRound ?? s.start) + 60_000;
 }
 
-/** When this game's guest data will be (or was) erased: 23 hours after it ended, after it was cancelled, or, for a game nobody paid for, after it was meant to end. Follows the newest schedule. */
+/** When this game's guest data will be (or was) erased: 20 hours after it ended, after it was cancelled, or, for a game nobody paid for, after it was meant to end. Follows the newest schedule. */
 export async function erasureOf(env: Env, e: any): Promise<number> {
   if (e.cancelled_ms) return personalDeleteAt(e.cancelled_ms);
   if (e.pack !== 0) { const l = await env.DB.prepare("SELECT end_ms, end_src FROM life WHERE eid=?").bind(e.id).first<{ end_ms: number; end_src: string }>(); if (l && l.end_src === "phones") return personalDeleteAt(l.end_ms); }
@@ -312,7 +312,7 @@ async function remindReport(env: LifeEnv, e: any, life: any, now: number) {
 // ------------------------------------------------------------------------------------------------ games that did not start
 /**
  * A game that was never paid for (so its first number was never called). Its guests' names and numbers, people lists, waiting requests, personal links and Co-host details are erased
- * 23 hours after its scheduled END (the same end estimate a played game uses), following the NEWEST schedule: a reschedule moves the clock. Organizer and Host data, payments and invoices stay.
+ * 20 hours after its scheduled END (the same end estimate a played game uses), following the NEWEST schedule: a reschedule moves the clock. Organizer and Host data, payments and invoices stay.
  * A published game is then CLOSED (`unplayed_ms`): nobody can join or pay. Six hours before, the Organizer and Hosts get a heads-up (once per erasure time); right after, an "it did not start" mail.
  * A draft nobody published is erased the same way but is not "closed" (it is forgotten after 30 days as before). Safe to repeat.
  */
@@ -352,7 +352,7 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
   for (const e of rows) {
     out.checked++;
     try {
-      if (e.cancelled_ms) { // a cancelled game: no report; the 23-hour clock runs from the cancel time
+      if (e.cancelled_ms) { // a cancelled game: no report; the 20-hour clock runs from the cancel time
         await env.DB.prepare("INSERT INTO life(eid,end_ms,end_src) VALUES(?,?,'cancel') ON CONFLICT(eid) DO UPDATE SET end_ms=excluded.end_ms, end_src='cancel' WHERE life.purged_ms IS NULL").bind(e.id, e.cancelled_ms).run();
         if (now >= personalDeleteAt(e.cancelled_ms) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "cancel"); out.purged++; await mailDataDeleted(env as any, e, now); }
         continue;
@@ -364,7 +364,7 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
         life = await env.DB.prepare("SELECT * FROM life WHERE eid=?").bind(e.id).first<any>();
       }
       if (!life || now < life.end_ms + REPORT_AFTER_MS) continue; // still being played
-      if (!e.npart) { // a game that was played with nobody joined (only a people list): no report to make; the list goes 23 hours after the end like everyone's data
+      if (!e.npart) { // a game that was played with nobody joined (only a people list): no report to make; the list goes 20 hours after the end like everyone's data
         if (now >= personalDeleteAt(life.end_ms) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "auto"); out.purged++; await mailDataDeleted(env as any, e, now); }
         continue;
       }
@@ -377,10 +377,10 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
       if (now >= personalDeleteAt(life.end_ms) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "auto"); out.purged++; await mailDataDeleted(env as any, e, now); } // an owner-set legal hold suspends this too
     } catch { /* this engagement is tried again at the next tick; the others still run */ }
   }
-  // games that did not start (nobody paid, or still a draft): guest data goes 23 hours after the game was MEANT to end; a published one is then closed ("This game did not start")
+  // games that did not start (nobody paid, or still a draft): guest data goes 20 hours after the game was MEANT to end; a published one is then closed ("This game did not start")
   try { out.purged += await unplayedPass(env, now); } catch { /* tried again at the next tick */ }
   try { const c = await creditTick(env as any, now); (out as any).creditLapsed = c.lapsed; (out as any).creditMails = c.mailed; } catch { /* tried again at the next tick */ }
-  // a game's Co-hosts (name + mobile) go 23 hours after it ends even when nobody ever joined, so no participant erasure ever ran for it
+  // a game's Co-hosts (name + mobile) go 20 hours after it ends even when nobody ever joined, so no participant erasure ever ran for it
   try {
     const open = (await env.DB.prepare("SELECT DISTINCT eid FROM organizer_key WHERE kind='cohost' AND revoked=0 AND eid IS NOT NULL LIMIT 25").all<{ eid: string }>()).results ?? [];
     for (const k of open) {
@@ -390,7 +390,7 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
       if ((!g || l?.purged_ms || now >= personalDeleteAt(endMs)) && !(await isHeld(env.DB, k.eid))) await env.DB.prepare(eraseCohostsSql).bind(k.eid).run();
     }
   } catch { /* tried again at the next tick */ }
-  // engagements whose participant rows are already gone (organizer erased early, or a hold was lifted since) but whose participants' audit part is still sealed: shred it once the 23 hours are over
+  // engagements whose participant rows are already gone (organizer erased early, or a hold was lifted since) but whose participants' audit part is still sealed: shred it once the 20 hours are over
   try {
     const late = (await env.DB.prepare("SELECT DISTINCT p.eid AS eid FROM audit_pii p JOIN life l ON l.eid=p.eid WHERE l.end_ms + ? <= ? AND NOT EXISTS (SELECT 1 FROM legal_hold h WHERE h.eid=p.eid) LIMIT 25").bind(PURGE_AFTER_MS, now).all<{ eid: string }>()).results ?? [];
     for (const x of late) await shredParticipantAudit(env as any, x.eid, now);

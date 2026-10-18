@@ -29,7 +29,7 @@ export async function oneTicketPerPhone(eid) {
   return res("one ticket per phone", !a.length && !b.length, `${a.length} repeated numbers, ${b.length} devices on several seats`);
 }
 const PERSONAL = ["participant", "seat", "person", "waiting", "claim", "settled", "rvote", "rcand", "overvote"];
-/** After erasure (23 h after the end, or the Organizer pressing Erase) nothing about the people is left; `planted` strings (names, numbers) must be nowhere in these tables. */
+/** After erasure (20 h after the end, or the Organizer pressing Erase) nothing about the people is left; `planted` strings (names, numbers) must be nowhere in these tables. */
 export async function noPersonalDataAfterErasure(eid, planted = []) {
   const left = {};
   for (const t of PERSONAL) { const r = await sql(`SELECT COUNT(*) c FROM ${t} WHERE eid=?`, [eid]); if (r[0].c) left[t] = r[0].c; }

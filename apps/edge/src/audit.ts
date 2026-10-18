@@ -8,7 +8,7 @@
 //     A `legal_hold` row stops that deletion until it is lifted.
 //   - PARTICIPANTS' personal details (their rows' IP, user agent, raw device id, field changes) are NOT kept in `audit_log.sealed`: they live in `audit_pii`, sealed under a per-engagement key
 //     (pii.ts `sealEng`: HKDF of DATA_KEY with a random salt stored in `eng_key`). The hash chain covers only the non-personal core of each row plus `pdig` = SHA-256 of that sealed blob.
-//     23 hours after the game ends `shredParticipantAudit` deletes the blobs AND the salt and writes a `shred` marker: the personal part is unrecoverable and `verifyChain` still passes,
+//     20 hours after the game ends `shredParticipantAudit` deletes the blobs AND the salt and writes a `shred` marker: the personal part is unrecoverable and `verifyChain` still passes,
 //     because it never needs the blob. Rows of the organizer, host, co-host, AI key and the winners' prize confirmations ("prize" events) keep everything until 365 days.
 import { openEng, openText, sealEng, sealText, type PiiEnv } from "./pii";
 import type { D1, Env } from "./worker";
@@ -417,7 +417,7 @@ export async function sweepAudit(db: D1, now: number, days = 365, anonDays = ANO
 }
 
 /**
- * Crypto-shreds the participants' personal part of an engagement's audit log (23 hours after the game ends, or when the organizer erases earlier): deletes every sealed blob and the
+ * Crypto-shreds the participants' personal part of an engagement's audit log (20 hours after the game ends, or when the organizer erases earlier): deletes every sealed blob and the
  * engagement's key salt, then records a `shred` marker (engagement id, time, number of rows; nothing personal). Idempotent. A legal hold set by the owner suspends it (returns false).
  * The chain still verifies afterwards: it covers only the non-personal core and the blobs' digests, never the blobs themselves.
  */

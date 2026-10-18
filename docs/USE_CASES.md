@@ -163,7 +163,7 @@ Run: `bun test packages apps tools/control-worker` gives **479 passing, 0 failin
 | UC-98 | A second mobile number on the same phone | Refused (`device-used`); other phones still join; invitations (max 4 per person) still give each invitee their own ticket on their own phone |
 | UC-99 | A winner confirms name and mobile after the game | Only the phone holding the ticket can; a change keeps the original and an audit trail; organizer and co-host see both |
 | UC-100 | Organizer / Host ticks "prize given" | Date kept; the report shows it |
-| UC-101 | Report | One e-mailed link; the PDF is laid out in the organizer's browser; link dead after the 22-hour deletion; reminder 6 hours before if never opened |
+| UC-101 | Report | One e-mailed link; the PDF is laid out in the organizer's browser; link dead after the 19-hour deletion; reminder 6 hours before if never opened |
 | UC-102 | External AI works | Every call is written to the audit trail (time, key, request, status, network address, program, country); only the organizer (and we) can read it |
 
 ## L. The short AI work link `/ai/<key>` (2026-10-05)

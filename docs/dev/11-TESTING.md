@@ -2,6 +2,10 @@
 
 Runner: `bun test` (built-in, `bun:test`). Test counts below are the number of `test(...)`/`it(...)` calls counted on 2026-10-07 (parametrised or loop-generated tests count once). To count again: `grep -c '^\s*\(test\|it\)(' <file>`.
 
+## 0. The table-driven suite (added 2026-10-19, go-to-market pass)
+
+`apps/edge/test/param-*.test.ts` and `apps/web/test/gtm-site.test.ts` are loop-generated: every row of every table is its own named `test(...)`, so the count in a run (about 900) is far larger than the number of `test(` calls in the files. They use the real `handle()`, the in-memory D1, the outbox table as the mailbox and a stand-in for Razorpay (`param-harness.ts`), no browser, and run in about a minute: `bun test apps/edge/test/param-*.test.ts apps/web/test/gtm-site.test.ts --timeout 120000`. Which file covers what is in `02-FILE-MAP.md`. Findings of the first run are in `docs/GO_TO_MARKET.md`.
+
 ## 1. Test map: file -> what it covers
 
 ### 1.1 Backend (`apps/edge/test`, in-memory SQLite D1 stand-in)

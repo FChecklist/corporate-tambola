@@ -20,7 +20,7 @@ Every 5xx answer is counted in a 10-minute bucket in the `kv` table (`err/...`).
 
 ## The 24-hour deletion alarm (A8)
 
-The health read also counts `overdue_purge`: games that are more than 30 minutes past their 23-hour deletion and still hold players' details (a game under a legal hold is left out; a game the tick has never looked at is found from its scheduled start plus 12 hours). When it is above 0, `ok` is `false` and `overdue_hours` says how long the oldest has waited; the same uptime check fails on `ok: false` and GitHub e-mails the owner. Look at the `game-ticks` schedule first (`cron.job_run_details`), then run `POST /api/lifecycle/tick` once by hand.
+The health read also counts `overdue_purge`: games that are more than 3 hours past their 20-hour deletion (23 hours after the game ended, an hour before the 24-hour promise would break) and still hold players' details (a game under a legal hold is left out; a game the tick has never looked at is found from its scheduled start plus 12 hours). When it is above 0, `ok` is `false` and `overdue_hours` says how long the oldest has waited; the same uptime check fails on `ok: false` and GitHub e-mails the owner. Look at the `game-ticks` schedule first (`cron.job_run_details`), then run `POST /api/lifecycle/tick` once by hand.
 
 ## Mail bounce log - owner steps
 

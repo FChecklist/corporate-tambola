@@ -251,7 +251,7 @@ export default [
       const heads = await H.mailbox.list({ to: org.email, subject: "time has passed" });
       t.check("a heads-up e-mail to the Organizer about the coming erasure (once)", heads.length >= 1 && heads.length <= 2, heads.map((m) => m.subject).join(" | ").slice(0, 200));
       const people = (await H.sql("SELECT COUNT(*) c FROM participant WHERE eid=?", [g.id]))[0].c;
-      t.check("after end + 23 h the guest's data is gone", people === 0, `participants left ${people}`);
+      t.check("after end + 20 h the guest's data is gone", people === 0, `participants left ${people}`);
       const after = await H.mailbox.list({ to: org.email });
       t.check("the Organizer got the 'we erased the guest list' e-mail", after.some((m) => /did not start|erased|deleted/i.test(m.subject)), after.map((m) => m.subject).join(" | ").slice(0, 900));
       const all = (await H.mailbox.list()).slice(m0); t.check("no e-mail went to any guest", all.every((m) => t.team.has(m.to.toLowerCase())), all.filter((m) => !t.team.has(m.to.toLowerCase())).map((m) => m.to).join(","));

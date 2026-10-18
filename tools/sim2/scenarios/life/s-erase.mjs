@@ -1,11 +1,11 @@
-// E-scenarios: erasure of guest data (23 h after the end, for played AND unplayed games, after a cancel), what stays, and the mails around it.
+// E-scenarios: erasure of guest data (20 h after the end, for played AND unplayed games, after a cancel), what stays, and the mails around it.
 // Spec: docs/ROLES_AND_CONSOLE_SPEC_5.md A.1-A.4, A.7; docs/PRIVACY_AND_LIFECYCLE.md.
 import { sc, HOUR, MIN, DAY, sql, call, mailbox } from "./lib.mjs";
 
 const PERSONAL = ["participant", "seat", "person", "waiting", "claim", "settled", "rvote", "rcand", "overvote"];
 const rowsAll = async (eid) => { const o = {}; for (const t of PERSONAL) { const c = (await sql(`SELECT COUNT(*) c FROM ${t} WHERE eid=?`, [eid]))[0].c; if (c) o[t] = c; } return o; };
 
-sc("E01", "PLAYED game: guests, people list and Co-host details exist 1 ms before end+23h and are all gone AT end+23h", async (w) => {
+sc("E01", "PLAYED game: guests, people list and Co-host details exist 1 ms before end+20h and are all gone AT end+20h", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, pay: true, guests: 3, people: 2 });
   await org.inviteCohost({ label: "Chitra", phone: "9822200021", e: g.id });
   await w.goTo(g.endMs + 10 * MIN, 5 * MIN); // the game was played (time passed), the report went out
@@ -14,16 +14,16 @@ sc("E01", "PLAYED game: guests, people list and Co-host details exist 1 ms befor
   w.expect("guests present 1 ms before", (await w.personal(g.id)) >= 5, JSON.stringify(await rowsAll(g.id)));
   w.eq("Co-host details present 1 ms before", await w.cohostRows(g.id), 1);
   await w.tickAt(g.erasureMs);
-  w.eq("every personal table empty at end+23h", await rowsAll(g.id), {});
+  w.eq("every personal table empty at end+20h", await rowsAll(g.id), {});
   w.eq("Co-host name/number gone", await w.cohostRows(g.id), 0);
   w.expect("life row says purged", (await sql("SELECT purged_ms FROM life WHERE eid=?", [g.id]))[0]?.purged_ms != null);
 });
-sc("E02", "the minute the data goes: first tick on or after end+23h, never at 22h59 and never later than 23h01", async (w) => {
+sc("E02", "the minute the data goes: first tick on or after end+20h, never at 22h59 and never later than 23h01", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, pay: true, guests: 2 });
-  await w.goTo(g.endMs + 22 * HOUR, 30 * MIN);
+  await w.goTo(g.endMs + 19 * HOUR, 30 * MIN);
   let gone = null;
-  for (let t = g.endMs + 22 * HOUR; t <= g.endMs + 23 * HOUR + 2 * MIN; t += MIN) { await w.tickAt(t); if (!(await w.personal(g.id))) { gone = t; break; } }
-  w.expect("erased within [23h, 23h01]", gone !== null && gone >= g.endMs + 23 * HOUR && gone <= g.endMs + 23 * HOUR + MIN, gone === null ? "never" : `at end+${(gone - g.endMs) / MIN} min`);
+  for (let t = g.endMs + 19 * HOUR; t <= g.endMs + 20 * HOUR + 2 * MIN; t += MIN) { await w.tickAt(t); if (!(await w.personal(g.id))) { gone = t; break; } }
+  w.expect("erased within [20h, 23h01]", gone !== null && gone >= g.endMs + 20 * HOUR && gone <= g.endMs + 20 * HOUR + MIN, gone === null ? "never" : `at end+${(gone - g.endMs) / MIN} min`);
 });
 sc("E03", "after the erasure exactly one 'data deleted' mail goes to the Organizer (and each Host); nobody else; repeats send nothing", async (w) => {
   const org = await w.org(); const host = await w.host(org); const g = await w.game(org, { leadMs: 2 * HOUR, pay: true, guests: 2 });
@@ -59,31 +59,31 @@ sc("E06", "UNPLAYED erasure does not touch Organizer/Host data: sign-in, history
   w.expect("Organizer e-mail still stored (orgmail)", (await sql("SELECT COUNT(*) c FROM kv WHERE k LIKE 'orgmail/%'"))[0].c >= 1);
   w.expect("Host e-mail still stored", (await sql("SELECT COUNT(*) c FROM organizer_key WHERE kind='host' AND email_sealed IS NOT NULL AND revoked=0"))[0].c >= 1);
 });
-sc("E07", "PLAYED game with ZERO guests but a people list: the list goes at end+23h with the same mail", async (w) => {
+sc("E07", "PLAYED game with ZERO guests but a people list: the list goes at end+20h with the same mail", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, pay: true, people: 3 });
   await w.goTo(g.erasureMs - HOUR, 30 * MIN); w.expect("list present", (await w.personal(g.id)) >= 3);
   await w.tickAt(g.erasureMs); w.eq("list gone", await w.personal(g.id), 0); w.eq("one deleted mail", await w.mailCount(org.email, "personal data has been deleted"), 1);
 });
-sc("E08", "PLAYED game with only a Co-host (nobody joined): Co-host details still go at end+23h", async (w) => {
+sc("E08", "PLAYED game with only a Co-host (nobody joined): Co-host details still go at end+20h", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, pay: true });
   await org.inviteCohost({ label: "Chitra", phone: "9822200022", e: g.id });
   await w.tickAt(g.erasureMs - 1); w.eq("present", await w.cohostRows(g.id), 1);
   await w.tickAt(g.erasureMs); w.eq("gone", await w.cohostRows(g.id), 0);
 });
-sc("E09", "CANCELLED paid game: Co-host details go AT cancel; guests 23 h after the CANCEL time (not the game time)", async (w) => {
+sc("E09", "CANCELLED paid game: Co-host details go AT cancel; guests 20 h after the CANCEL time (not the game time)", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 5 * DAY, pay: true, guests: 3, people: 2 });
   await org.inviteCohost({ label: "Chitra", phone: "9822200023", e: g.id }); await w.goTo(g.startMs - 3 * DAY, DAY);
   const cancelAt = await w.now(); const r = await org.cancel(g.id); w.expect("cancelled", r.status === 200);
   w.eq("Co-host gone at once", await w.cohostRows(g.id), 0);
-  await w.tickAt(cancelAt + 23 * HOUR - 1); w.expect("guests still there 1 ms before cancel+23h", (await w.personal(g.id)) >= 5);
-  await w.tickAt(cancelAt + 23 * HOUR); w.eq("guests gone at cancel+23h", await w.personal(g.id), 0);
+  await w.tickAt(cancelAt + 20 * HOUR - 1); w.expect("guests still there 1 ms before cancel+20h", (await w.personal(g.id)) >= 5);
+  await w.tickAt(cancelAt + 20 * HOUR); w.eq("guests gone at cancel+20h", await w.personal(g.id), 0);
   w.eq("one deleted mail", await w.mailCount(org.email, "personal data has been deleted"), 1);
 });
 sc("E10", "CANCELLED unpaid game: same, clock from the cancel time", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 3 * DAY, guests: 2 });
   await w.goTo(g.startMs - DAY, 6 * HOUR); const cancelAt = await w.now(); await org.cancel(g.id);
-  await w.tickAt(cancelAt + 23 * HOUR - 1); w.expect("present", (await w.personal(g.id)) >= 2);
-  await w.tickAt(cancelAt + 23 * HOUR); w.eq("gone", await w.personal(g.id), 0);
+  await w.tickAt(cancelAt + 20 * HOUR - 1); w.expect("present", (await w.personal(g.id)) >= 2);
+  await w.tickAt(cancelAt + 20 * HOUR); w.eq("gone", await w.personal(g.id), 0);
 });
 sc("E11", "winners record, payment and invoice stay after the guest erasure (only personal data goes)", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, pay: true, guests: 2 });
@@ -127,7 +127,7 @@ sc("E15", "UNPLAYED game with a Co-host: Co-host details erased with the guests,
 sc("E16", "deletion dates add up (no backup claim is made)", async (w) => {
   const org = await w.org(); const g = await w.game(org, { leadMs: 2 * HOUR, pay: true });
   const l = await w.life(org, g.id); w.expect("the life API makes no backup claim", l.backupDays === undefined, String(l.backupDays));
-  w.eq("personalDeleteAt = end + 23 h", l.personalDeleteAtMs - l.endMs, 23 * HOUR);
+  w.eq("personalDeleteAt = end + 20 h", l.personalDeleteAtMs - l.endMs, 20 * HOUR);
   w.expect("fullDeleteAt is 00:00 IST after end + 365 d", (l.fullDeleteAtMs + 19_800_000) % DAY === 0 && l.fullDeleteAtMs > l.endMs + 365 * DAY && l.fullDeleteAtMs <= l.endMs + 366 * DAY, `${l.fullDeleteAtMs}`);
 });
 sc("E17", "a guest who joins in the last minutes before the erasure is erased with everyone else", async (w) => {

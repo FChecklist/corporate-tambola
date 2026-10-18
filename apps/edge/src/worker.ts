@@ -320,7 +320,7 @@ export async function remindUnpaid(env: Env, now: number): Promise<void> {
     const due = await env.DB.prepare("SELECT e.id, e.start_round, (SELECT v FROM kv WHERE k='pub/'||e.id) AS pub FROM engagement e WHERE e.pack=0 AND EXISTS (SELECT 1 FROM kv WHERE k='pub/'||e.id)").all<{ id: string; start_round: number; pub: string }>();
     for (const x of due.results ?? []) {
       const at = roundMs(x.start_round);
-      if (at > now && at - now < 36 * 3_600_000 && now - (Number(x.pub) || 0) >= 2 * 3_600_000) await nudge(env, x.id, "remind", now, `Payment pending for your game ${x.id}: it starts ${istTime(at)}`, `Your game ${x.id} starts ${istTime(at)}. It is not paid yet, and a game that is not paid for does not begin.\n\nYou can pay at any time until the guest data is erased (23 hours after the game was meant to end). If you pay late, the first number comes 2 minutes after the payment is confirmed.\n\nPay now (about 2 minutes): ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${x.id}`);
+      if (at > now && at - now < 36 * 3_600_000 && now - (Number(x.pub) || 0) >= 2 * 3_600_000) await nudge(env, x.id, "remind", now, `Payment pending for your game ${x.id}: it starts ${istTime(at)}`, `Your game ${x.id} starts ${istTime(at)}. It is not paid yet, and a game that is not paid for does not begin.\n\nYou can pay at any time until the guest data is erased (20 hours after the game was meant to end). If you pay late, the first number comes 2 minutes after the payment is confirmed.\n\nPay now (about 2 minutes): ${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/pay.html?e=${x.id}`);
     }
   } catch { /* tried again at the next tick */ }
 }
@@ -336,6 +336,30 @@ export async function housekeeping(env: Env, now: number): Promise<void> {
     await remindUnpaid(env, now);
     await helpdeskSweep(env.DB, now);
   } catch { /* try again on the next request */ }
+}
+/** Everything the scheduled job does on each call (POST /api/lifecycle/tick), in one place so the lazy tick below runs exactly the same housekeeping. Records when it last ran (`tick_last_ms`). */
+export async function runTick(env: Env, now: number) {
+  await adminTick(env.DB, now); // old error counters and old mail events go (admin.ts)
+  await remindUnpaid(env, now);
+  const ledgerC = await ledgerCTick(env as PayEnv, now); // ledger C -> B: a few commission rows and, every 30 minutes, the monthly figures (ledgerc.ts)
+  const life = await lifecycleTick(env as any, now);
+  const purged = await purgeOld(env, now);
+  try { await env.DB.prepare("INSERT INTO kv(k,v) VALUES('tick_last_ms',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(String(now)).run(); } catch { /* the stamp only spares a repeat */ }
+  return { ...life, purged, ledgerC };
+}
+/** The lazy tick (go-to-market fix, docs/RETENTION.md): GitHub's scheduler runs the real tick only about every 2 hours, but the promise to players is deletion within 24 hours. So any /api request also runs the same housekeeping when the last tick is older than LAZY_TICK_MS. It never delays the answer (waitUntil), never throws, and only one run starts at a time (an in-memory flag per instance, and one row claimed in D1 across instances). */
+export const LAZY_TICK_MS = 5 * 60_000;
+let lazyBusy = false, lazyCheckedAt = 0;
+export function lazyTickReset() { lazyBusy = false; lazyCheckedAt = 0; }
+async function lazyTick(env: Env, now: number): Promise<void> {
+  if (lazyBusy) return;
+  lazyBusy = true;
+  try {
+    lazyCheckedAt = now;
+    const claimed = await env.DB.prepare("INSERT INTO kv(k,v) VALUES('tick_last_ms',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v WHERE CAST(kv.v AS INTEGER) <= ?").bind(String(now), now - LAZY_TICK_MS).run();
+    if ((claimed.meta?.changes ?? 0) < 1) return; // a tick ran within the last 5 minutes (or another instance just claimed the slot)
+    await runTick(env, now);
+  } catch { /* the next request tries again */ } finally { lazyBusy = false; }
 }
 /** Safety net while the scheduled job is not running: an organizer-side request, or a phone saying the game is over, also nudges the lifecycle (at most once a minute per Worker instance). The scheduled job is the real clock. */
 let lastNudge = 0;
@@ -473,6 +497,7 @@ async function createOrganizer(env: Env, req: Request, email: string, now: numbe
 }
 async function handle0(req: Request, env: Env, now: number, waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+  if (waitUntil && !lazyBusy && now - lazyCheckedAt >= 60_000 && /^\/api\//.test(new URL(req.url).pathname) && new URL(req.url).pathname !== "/api/lifecycle/tick") { lazyCheckedAt = now; try { waitUntil(lazyTick(env, now)); } catch { /* never blocks or breaks a request */ } } // the lazy tick: at most one look a minute per instance
   if (waitUntil && now - lastNudge > 60_000 && (req.headers.has("x-organizer") || /\/over$/.test(new URL(req.url).pathname))) { lastNudge = now; waitUntil(lifecycleTick(env as any, now).then(() => undefined, () => undefined)); }
   if ((req.method === "POST" && new URL(req.url).pathname === "/api/z") || new URL(req.url).pathname === "/api/history") { const h = housekeeping(env, now); if (waitUntil) waitUntil(h); else await h; }
   const r = await route(req, env, now);
@@ -573,7 +598,7 @@ export const AI_MANIFEST = {
     "Building and publishing are free. Only the organizer publishes (they confirm their email and mobile number), and only the organizer pays; you never do either.",
     "Price is per engagement, by size: the smallest pack that covers the limit (see `packs`, the price in rupees is the whole amount: no GST is added). The limit does not have to match a pack size; people beyond the limit cannot join.",
     "The organizer pays on the payment page, online through Razorpay (the page shows the methods available). It takes about 2 minutes, and an invoice is emailed. The payment page names the seller, IT Services by Rajat Agarwal. Credit from an earlier cancelled game can pay for it (the Pay step offers it first).",
-    "No payment, no game. There is no separate payment cut-off: the game can be paid at any time until the guests' data is erased (23 hours after the game was meant to end). Until it is paid the Organizer and Hosts see \"Payment pending for this game\" and everyone else sees \"Waiting for the Organizer or Host to start the game.\" Nothing is charged and there is no penalty.",
+    "No payment, no game. There is no separate payment cut-off: the game can be paid at any time until the guests' data is erased (20 hours after the game was meant to end). Until it is paid the Organizer and Hosts see \"Payment pending for this game\" and everyone else sees \"Waiting for the Organizer or Host to start the game.\" Nothing is charged and there is no penalty.",
     "If the organizer pays late, even hours later, the first number comes 2 minutes after the payment is confirmed, for everyone already waiting, and they can also choose a new start time first (at most 30 days ahead while it is not paid for). After the guest data is erased the game is closed (\"This game did not start. Your details have been erased.\"): nobody can join or pay, and the Organizer can create a new game like it.",
     "If they never pay, nothing is owed. They can create a new engagement whenever they like. The settings of a game that did not start stay for 30 days, then they are forgotten (as unpublished drafts are).",
     "We do not give refunds. If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days. Unused credit lapses at the end of day 365. The credit stays in the organizer's account. Unused places are not credited once the game has started. Rules and privacy are at /legal.html.",
@@ -660,8 +685,10 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   /* ---- start: a new organizer enters a work email and the console opens at once (no mail is sent). An email that already has an account is
      asked for the e-mailed code instead, so nobody can open someone else's console by typing their address. ---- */
   if (req.method === "GET" && p === "/api/z/schedule") { // a helper for the organizer's AI: a date and time becomes a start round
-    const at = Date.parse(url.searchParams.get("at") ?? "");
-    if (!Number.isFinite(at)) return json({ error: "Give a date and time with a time zone, like at=2026-10-03T16:00:00+05:30." }, 400);
+    const atText = (url.searchParams.get("at") ?? "").trim(), at = Date.parse(atText);
+    // A time without a zone would be read in the server's zone (UTC) and a game meant for 4 pm India time would start at 9:30 pm: refuse it instead of guessing (found by the parameterised suite, docs/dev F-06).
+    const hasZone = /\d:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(atText);
+    if (!Number.isFinite(at) || !hasZone) return json({ error: "Give a date and time with a time zone, like at=2026-10-03T16:00:00+05:30 (India time is +05:30). A time without a zone is not accepted because it could start your game at the wrong hour." }, 400);
     let capMs = now + MAX_AHEAD_MS, paidCap = false; // a game that is not paid for yet: 30 days. A paid game of the caller (?e=<id>): up to 365 days from the payment
     const se = url.searchParams.get("e");
     if (se && ID.test(se)) { const g = await env.DB.prepare("SELECT id, org, pack FROM engagement WHERE id=?").bind(se).first<any>(); if (g && g.pack !== 0 && can(a, g)) { const end = await paidWindowEndMs(env.DB, se); if (end) { capMs = end - 1; paidCap = true; } } }
@@ -1226,10 +1253,7 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
     const jobKey = req.headers.get("x-cron-key") ?? "";
     const jobSecret = (env.CRON_KEY ?? "").trim(); // a secret pasted in with a trailing line break still matches
     if (!a.plat && !(jobSecret.length >= 16 && jobKey.trim() === jobSecret)) return deny(a);
-    await adminTick(env.DB, now); // old error counters and old mail events go (admin.ts)
-    await remindUnpaid(env, now);
-    const ledgerC = await ledgerCTick(env as PayEnv, now); // ledger C -> B: a few commission rows and, every 30 minutes, the monthly figures (ledgerc.ts)
-    return json({ ok: true, ...(await lifecycleTick(env as any, now)), purged: await purgeOld(env, now), ledgerC });
+    return json({ ok: true, ...(await runTick(env, now)) });
   }
   if (req.method === "POST" && p === "/api/purge") { // run daily (Cron trigger) or by hand: removes everything older than the retention period
     if (!a.plat) return deny(a);
@@ -1281,7 +1305,7 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
   const isDraft = unpaid && !(await isPublished(env, e));
   const payment = await paymentOf(env, e, unpaid, now);
   const cancelled = !!e.cancelled_ms; // a cancelled game can only be read (and its guests' data erased on request): nobody joins, nothing is changed, published or paid
-  const didNotStart = !!e.unplayed_ms; // a game nobody paid for whose time and 23 hours went by: its guest data is erased and it is closed. Nobody joins, nobody pays; settings stay 30 days so a new game can be made like it.
+  const didNotStart = !!e.unplayed_ms; // a game nobody paid for whose time and 20 hours went by: its guest data is erased and it is closed. Nobody joins, nobody pays; settings stay 30 days so a new game can be made like it.
   const DNS_MSG = "This game did not start. Your details have been erased.";
   if (didNotStart && req.method === "POST" && action === "join") return json({ error: DNS_MSG, code: "did-not-start", didNotStart: true }, 403);
   if (didNotStart && req.method !== "GET" && !["erase", "forget", "person", "cancel", "clone", "leave", "datareq"].includes(action!)) return json({ error: DNS_MSG, code: "did-not-start", didNotStart: true }, 409);

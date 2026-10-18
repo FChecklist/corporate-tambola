@@ -98,7 +98,7 @@ const paidTwice = await inv.nobodyPaidTwice(); check(paidTwice.name, paidTwice.o
 
 // ---- erasure expectations (read now: reschedules and late payments have moved the clocks)
 for (const g of games) {
-  if (g.kind === "cancel") g.expectErase = g.cancelAt + 23 * HOUR;
+  if (g.kind === "cancel") g.expectErase = g.cancelAt + 20 * HOUR;
   else { const l = (await g.org.life(g.id)).body; g.expectErase = l.personalDeleteAtMs; }
 }
 const everyPending = () => games.filter((g) => !g.erasedAt);
@@ -120,7 +120,7 @@ const lag = games.map((g) => (g.erasedAt ?? Infinity) - g.expectErase);
 for (const g of everyPending()) console.log(`NOT ERASED ${g.id} kind=${g.kind} expect=${new Date(g.expectErase).toISOString()} rows=${JSON.stringify(await w.personalRows(g.id))}`);
 check("every game's guest data is erased", lag.every(Number.isFinite), `${lag.filter((x) => !Number.isFinite(x)).length} not erased`);
 check("erasure on time: within 5 minutes of the promised time for all 50 (cron minute ticks, 25 games per tick)", lag.every((x) => x >= 0 && x <= 5 * MIN), `max lag ${Math.max(...lag) / MIN} min`);
-check("promise kept: every erasure inside 24 h of the game's end", games.every((g) => g.kind === "cancel" ? true : (g.erasedAt ?? Infinity) - ((g.expectErase) - 23 * HOUR) < 24 * HOUR), "");
+check("promise kept: every erasure inside 24 h of the game's end", games.every((g) => g.kind === "cancel" ? true : (g.erasedAt ?? Infinity) - ((g.expectErase) - 20 * HOUR) < 24 * HOUR), "");
 
 // ---- after: states, personal data, mail, budget
 for (const g of games) {

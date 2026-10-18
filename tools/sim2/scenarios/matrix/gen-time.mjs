@@ -1,5 +1,5 @@
 // Family "time": everything that needs the simulated clock to move (these run last, the clock is put back after each one). India-time edges (midnight, year end, leap day), the hold at the start,
-// late payment, rescheduling and cancelling after the start, the 23-hour erasure rule for every kind of game that did not play and for one that did, 30-day drafts and settings, credit lapse at the end of
+// late payment, rescheduling and cancelling after the start, the 20-hour erasure rule for every kind of game that did not play and for one that did, 30-day drafts and settings, credit lapse at the end of
 // day 365 (India time) with its e-mails, oldest-expiring credit first, the report link, rate limits.   Rules: docs/ROLES_AND_CONSOLE_SPEC_5.md and _6.md, docs/dev/06-BUSINESS-LOGIC.md sections 3, 3b, 3c, 3d, 10.
 export default async function gen({ R, L }) {
   const { A, clock, MIN, HOUR, DAY, mobile, personName, istLabel, istDate, istMidnight, totalFor, r2, roundFrom, roundTimeMs, startAt } = L;
@@ -86,20 +86,20 @@ export default async function gen({ R, L }) {
     const iv = await org.api("GET", `/api/z/${g.id}/life`); t.expect("life", iv, "ok"); t.check("life says when the data is deleted", /\d{13}/.test(JSON.stringify(iv.body)), JSON.stringify(iv.body).slice(0, 200));
   });
 
-  // ---------- the 23-hour rule: data of a game that did not play, of a played game, of a cancelled game ----------
+  // ---------- the 20-hour rule: data of a game that did not play, of a played game, of a cancelled game ----------
   const ERASE_CASES = [
     ["unpaid and published", async (t) => { const { org, g } = await listGame(t, { days: 2 }); return { org, g, at: (s) => s.erasureMs }; }],
-    ["paid (the clock plays it: erased 23 h after its end)", async (t) => { const { org, g } = await listGame(t, { days: 2, paid: true }); return { org, g, at: (s) => s.erasureMs, paid: true }; }],
+    ["paid (the clock plays it: erased 20 h after its end)", async (t) => { const { org, g } = await listGame(t, { days: 2, paid: true }); return { org, g, at: (s) => s.erasureMs, paid: true }; }],
     ["a draft that was never published", async (t) => { const { org, g } = await listGame(t, { days: 2, publish: false }); return { org, g, at: (s) => s.erasureMs, noJoin: true }; }],
     ["rescheduled while unpaid", async (t) => { const { org, g } = await listGame(t, { days: 2 }); const nr = roundFrom((await clock.now()) + 6 * DAY); t.expect("reschedule", await org.settings(g.id, { startRound: nr }), "ok"); return { org, g, at: (s) => s.erasureMs, moved: true }; }],
     ["rescheduled while paid", async (t) => { const { org, g } = await listGame(t, { days: 2, paid: true }); const nr = roundFrom((await clock.now()) + 6 * DAY); t.expect("reschedule", await org.settings(g.id, { startRound: nr }), "ok"); return { org, g, at: (s) => s.erasureMs, moved: true, paid: true }; }],
-    ["cancelled while paid (erased 23 h after the cancel)", async (t) => { const { org, g } = await listGame(t, { days: 5, paid: true }); return { org, g, cancel: true, at: () => 0 }; }],
+    ["cancelled while paid (erased 20 h after the cancel)", async (t) => { const { org, g } = await listGame(t, { days: 5, paid: true }); return { org, g, cancel: true, at: () => 0 }; }],
     ["cancelled while unpaid", async (t) => { const { org, g } = await listGame(t, { days: 5 }); return { org, g, cancel: true, at: () => 0 }; }],
   ];
   for (const [label, mk] of ERASE_CASES) add(`erase|${label}: data present just before, gone just after; the Organizer's and Host's own data stays`, async (t) => {
     const w = await mk(t); const { org, g } = w; const p = await populate(t, org, g, { join: !w.noJoin }); const host = await t.host(org); let cancelAt = 0;
     if (w.cancel) { t.expect("cancel", await org.cancel(g.id), "ok"); cancelAt = await clock.now(); }
-    const s = await sum(org, g.id); const at = w.cancel ? cancelAt + 23 * HOUR : w.at(s);
+    const s = await sum(org, g.id); const at = w.cancel ? cancelAt + 20 * HOUR : w.at(s);
     t.check("the erasure time is known and in the future", at > (await clock.now()), `${at}`);
     const before = await personalLeft(g.id); t.check("personal data exists before", before.person > 0 || before.participant > 0, JSON.stringify(before));
     const pay0 = (await A.sql("SELECT COUNT(*) c FROM payment WHERE eid=?", [g.id]))[0].c;
@@ -131,13 +131,13 @@ export default async function gen({ R, L }) {
     await goto(old.erasureMs + HOUR, 4); t.eq("the old game's copy is erased on its own clock", (await personalLeft(g.id)).person ?? 0, 0); const kept = await personalLeft(c.body.id); t.check("the new game keeps its list", (kept.person ?? 0) === 3, JSON.stringify(kept));
     const s2 = await sum(org, c.body.id); await goto(s2.erasureMs + HOUR, 4); t.eq("the new game's list goes on the new clock", await personalLeft(c.body.id), {});
   });
-  add("erase|a PLAYED game (the clock runs it) sends the Organizer one report link, the link closes after 22 h, data goes at 23 h", async (t) => {
-    const { org, g } = await listGame(t, { days: 2, paid: true }); await populate(t, org, g); const s = await sum(org, g.id); const life0 = (await org.life(g.id)).body; const endMs = life0.endMs ?? life0.end ?? (s.erasureMs - 23 * HOUR);
+  add("erase|a PLAYED game (the clock runs it) sends the Organizer one report link, the link closes after 19 h, data goes at 20 h", async (t) => {
+    const { org, g } = await listGame(t, { days: 2, paid: true }); await populate(t, org, g); const s = await sum(org, g.id); const life0 = (await org.life(g.id)).body; const endMs = life0.endMs ?? life0.end ?? (s.erasureMs - 20 * HOUR);
     await goto(endMs + 10 * MIN, 4); const rep = (await A.mailbox.list({ to: org.email })).filter((m) => /report/i.test(m.subject)); t.eq("one report e-mail to the Organizer", rep.length, 1); t.check("it carries a link and no attachment of names", /https?:\/\//.test(rep[0]?.text ?? ""), (rep[0]?.text ?? "").slice(0, 160));
     t.check("no report went to anyone else", (await A.mailbox.list()).filter((m) => /report/i.test(m.subject)).every((m) => m.to === org.email));
-    await goto(endMs + 17 * HOUR, 3); const rem = (await A.mailbox.list({ to: org.email })).filter((m) => /closes|reminder|report/i.test(m.subject)); t.check("a reminder before the link closes (at most one more)", rem.length >= 1 && rem.length <= 2, rem.map((m) => m.subject).join(" | "));
-    await goto(endMs + 21 * HOUR, 3); t.check("people still stored at 21 h", (await personalLeft(g.id)).participant > 0); await goto(endMs + 22 * HOUR + 10 * MIN, 3); const rl = await org.api("GET", `/api/z/${g.id}/reportlink`); t.check("the report link is closed after 22 h", rl.status < 500, JSON.stringify(rl.body).slice(0, 160));
-    await goto(endMs + 23 * HOUR + 10 * MIN, 5); t.eq("at 23 h the names and numbers are gone", await personalLeft(g.id), {}); t.check("the winners record is kept", (await sum(org, g.id)).status !== undefined);
+    await goto(endMs + 15 * HOUR, 3); const rem = (await A.mailbox.list({ to: org.email })).filter((m) => /closes|reminder|report/i.test(m.subject)); t.check("a reminder before the link closes (at most one more)", rem.length >= 1 && rem.length <= 2, rem.map((m) => m.subject).join(" | "));
+    await goto(endMs + 19 * HOUR + 5 * MIN, 3); t.check("people still stored at 19 h", (await personalLeft(g.id)).participant > 0); await goto(endMs + 19 * HOUR + 10 * MIN, 3); const rl = await org.api("GET", `/api/z/${g.id}/reportlink`); t.check("the report link is closed after 19 h", rl.status < 500, JSON.stringify(rl.body).slice(0, 160));
+    await goto(endMs + 20 * HOUR + 10 * MIN, 5); t.eq("at 20 h the names and numbers are gone", await personalLeft(g.id), {}); t.check("the winners record is kept", (await sum(org, g.id)).status !== undefined);
   });
 
   // ---------- 30-day rules ----------
@@ -153,12 +153,12 @@ export default async function gen({ R, L }) {
     await goto(s.erasureMs + 32 * DAY, 4); await org.history(); const gone = await org.summary(g.id); t.check("32 days after: settings forgotten", gone.status === 404 || /gone|not found/i.test(JSON.stringify(gone.body)), `HTTP ${gone.status}`);
   });
   add("keep|a played game with zero guests follows the played-game rule (spec 5 A2): it has an end, a life record and its 365 days count from the end", async (t) => {
-    const { org, g } = await listGame(t, { days: 2, paid: true }); const s = await sum(org, g.id); const endMs = s.erasureMs - 23 * HOUR; await goto(endMs + 10 * MIN, 4);
+    const { org, g } = await listGame(t, { days: 2, paid: true }); const s = await sum(org, g.id); const endMs = s.erasureMs - 20 * HOUR; await goto(endMs + 10 * MIN, 4);
     const lr = await A.sql("SELECT l.end_ms, e.unplayed_ms FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE e.id=?", [g.id]); t.check("a life record with the end time exists", lr[0] && lr[0].end_ms != null, JSON.stringify(lr));
     const rep = (await A.mailbox.list({ to: org.email })).filter((m) => /report/i.test(m.subject)); t.check("the Organizer is still told the game is over (report or note)", rep.length >= 0, `${rep.length} report mails`);
   });
   add("keep|day 365: everything about a played game goes at 00:00 India time after the 365th day, not a second earlier", async (t) => {
-    const { org, g } = await listGame(t, { days: 2, paid: true }); await populate(t, org, g, { guests: 2, invited: 0 }); const s = await sum(org, g.id); const endMs = s.erasureMs - 23 * HOUR; const last = istMidnight(endMs + 365 * DAY) + DAY; // 00:00 IST after day 365
+    const { org, g } = await listGame(t, { days: 2, paid: true }); await populate(t, org, g, { guests: 2, invited: 0 }); const s = await sum(org, g.id); const endMs = s.erasureMs - 20 * HOUR; const last = istMidnight(endMs + 365 * DAY) + DAY; // 00:00 IST after day 365
     await goto(endMs + 10 * MIN, 4); const lr = await A.sql("SELECT l.end_ms, l.end_src, e.unplayed_ms FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE e.id=?", [g.id]); t.check("a played game with no guests has a life record after its end (so the 365 days count from the end)", lr[0] && lr[0].end_ms != null, JSON.stringify(lr)); t.eq("the server announces the same cut", (await org.life(g.id)).body.fullDeleteAtMs, last); await goto(endMs + 100 * DAY, 2); t.expect("day 100: present", await org.summary(g.id), "ok"); await goto(last - 2 * HOUR, 2); t.expect("two hours before the cut: present", await org.summary(g.id), "ok");
     await clock.set(last - 1000); await clock.tick(); t.expect("one second before: present", await org.summary(g.id), "ok"); await goto(last + 5 * MIN, 4); const r = await org.summary(g.id); t.check("after the cut it is gone", r.status === 404 || r.status === 403 || /not found|gone/i.test(JSON.stringify(r.body)), `HTTP ${r.status} ${JSON.stringify(r.body).slice(0, 100)}`);
     t.expect("the Organizer's account still works", await org.whoami(), "ok");

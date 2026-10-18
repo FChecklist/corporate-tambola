@@ -20,7 +20,7 @@
   };
   // ---------- what the game's public settings say besides the plan: the brand strip, a cancelled game; and a personal invite link's token ----------
   const TOKEN = (q.get("t") || "").trim().slice(0, 80); // a personal link: sent as `token` when joining, so no mobile number is needed
-  const INFO = { brand: null, cancelled: null, dns: false }; // dns = "this game did not start": nobody paid, the time and 23 hours passed, the guest data was erased
+  const INFO = { brand: null, cancelled: null, dns: false }; // dns = "this game did not start": nobody paid, the time and 20 hours passed, the guest data was erased
   const cleanBrand = (b) => {
     if (!b || typeof b !== "object") return null;
     const name = String(b.name == null ? "" : b.name).replace(/\s+/g, " ").trim().slice(0, 60);

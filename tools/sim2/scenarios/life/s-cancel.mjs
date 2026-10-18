@@ -122,5 +122,5 @@ sc("X21", "cancel with 40 guests and a people list: the cancel itself is fast an
   const org = await w.org(); const g = await w.game(org, { leadMs: 5 * HOUR, pay: true, guests: 40, people: 30 });
   const t0 = Date.now(); const r = await org.cancel(g.id); const ms = Date.now() - t0;
   w.expect("cancelled", r.status === 200); w.expect("under 3 s on the simulator", ms < 3000, `${ms} ms`);
-  await w.tickAt((await w.engagement(g.id)).cancelled_ms + 23 * HOUR); w.eq("all 70 gone at cancel+23h", await w.personal(g.id), 0);
+  await w.tickAt((await w.engagement(g.id)).cancelled_ms + 20 * HOUR); w.eq("all 70 gone at cancel+20h", await w.personal(g.id), 0);
 });

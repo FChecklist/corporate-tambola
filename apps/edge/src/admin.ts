@@ -85,12 +85,12 @@ export async function countError(db: D1, now: number): Promise<void> {
     await db.prepare("INSERT INTO kv(k,v) VALUES(?,'1') ON CONFLICT(k) DO UPDATE SET v=CAST(v AS INTEGER)+1").bind(k).run();
   } catch { /* best effort */ }
 }
-/** The promise to players is "within 24 hours"; the job deletes at 23 (PURGE_AFTER_MS). The alarm rises when a game is this much later than that and its players' data is still there (the 5-minute tick normally clears a game within minutes). */
-export const OVERDUE_GRACE_MS = 30 * 60_000;
+/** The promise to players is "within 24 hours"; the job deletes at 20 (PURGE_AFTER_MS) and may run up to 3 hours late. The alarm rises when a game is more than 3 hours later than that (20 hours after its end, an hour before the promise would break) and its players' data is still there. */
+export const OVERDUE_GRACE_MS = 3 * 3_600_000;
 /** A game the tick has not looked at yet (no `life` row) is taken to have ended this long after its scheduled start at the latest (5 rounds of 90 numbers is under 3 hours; breaks and pauses are added generously). */
 const LONGEST_GAME_MS = 12 * 3_600_000;
 /**
- * The 24-hour promise watched from outside: how many games are past 23 hours after their end (plus a short grace) and still hold their players' data, and how long the oldest has waited.
+ * The 24-hour promise watched from outside: how many games are past 20 hours after their end (plus a short grace) and still hold their players' data, and how long the oldest has waited.
  * Two sources: games the tick already knows (a `life` row that is not purged) and games it has not looked at at all (a scheduled start long ago, players still stored), so a dead clock is seen too.
  * A game under an owner's legal hold is left out: its data is kept on purpose.
  */
@@ -201,7 +201,7 @@ export async function adminRoute(req: Request, env: AdminEnv, now: number, owner
     let dbOk = true, errors = 0, overdue = { count: 0, oldestHours: null as number | null };
     try { errors = await errorsLastHour(env.DB, now); } catch { dbOk = false; }
     try { overdue = await overduePurge(env.DB, now); } catch { dbOk = false; }
-    // ok turns false when a game is past its 23-hour deletion and its players' data is still stored: the scheduler's uptime check fails on it (the 24-hour promise has an alarm)
+    // ok turns false when a game is past its 20-hour deletion and its players' data is still stored: the scheduler's uptime check fails on it (the 24-hour promise has an alarm)
     return jsonRes({ ok: dbOk && overdue.count === 0, errors_last_hour: errors, threshold: ERROR_ALERT_THRESHOLD, overdue_purge: overdue.count, overdue_hours: overdue.oldestHours, maintenance: await siteIsOff(env.DB, now), at: new Date(now).toISOString() });
   }
   if (p === "/api/mail/events") return mailEventsWebhook(req, env, now, spend);

@@ -300,7 +300,7 @@ await section("results: prizes, lucky draws, unlucky, invites, devices", async (
 });
 
 // ---------------------------------------------------------------- 7. after the game: report, erasure, records kept (time travel)
-await section("after the game: report e-mail, erasure after 23 hours, records kept", async () => {
+await section("after the game: report e-mail, erasure after 20 hours, records kept", async () => {
   if (!crowd) return;
   const lastNow = await clock.now(); const life = (await org.life(gameId)).body;
   chk("the lifecycle gives an end time and an erasure time", life.endMs && life.personalDeleteAtMs, JSON.stringify(life).slice(0, 250));
@@ -310,7 +310,7 @@ await section("after the game: report e-mail, erasure after 23 hours, records ke
   await clock.set(life.personalDeleteAtMs - 10 * MIN); await clock.tick(); const still = (await sql("SELECT COUNT(*) c FROM participant WHERE eid=?", [gameId]))[0].c; chk("10 minutes before the erasure time nothing is erased yet", still > 0, `${still}`);
   await clock.advanceWithTicks(40 * MIN, 5 * MIN);
   const left = {}; for (const t of ["participant", "seat", "person", "waiting", "claim", "settled"]) left[t] = (await sql(`SELECT COUNT(*) c FROM ${t} WHERE eid=?`, [gameId]))[0].c;
-  eq("guest data is erased 23 hours after the end", Object.values(left).reduce((a, b) => a + b, 0), 0);
+  eq("guest data is erased 20 hours after the end", Object.values(left).reduce((a, b) => a + b, 0), 0);
   const nop = await inv.noPersonalDataAfterErasure(gameId, [fakeName(3)]); chk(nop.name, nop.ok, nop.detail);
   const kept = { invoices: (await sql("SELECT COUNT(*) c FROM invoice"))[0].c, payments: (await sql("SELECT COUNT(*) c FROM payment WHERE status='paid'"))[0].c, winners: (await sql("SELECT COUNT(*) c FROM winner WHERE eid=?", [gameId])).catch?.(() => [{ c: -1 }]) };
   chk("the invoice and the paid payment are still kept", kept.invoices > 0 && kept.payments > 0, JSON.stringify(kept));

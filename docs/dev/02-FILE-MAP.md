@@ -104,6 +104,15 @@ Counts: 333 files.
 | `apps/edge/test/credit.test.ts` | Spec 6: cancel -> credit, `GET /api/org/credit`, `pay-with-credit` (full, partial, remainder, oldest first, once, never below zero), pay-link isolation, payment after a cancel, lapse at the end of day 365 IST and the five mails | run: `bun test apps/edge/test/credit.test.ts` |
 | `apps/edge/test/unplayed.test.ts` | Spec 5 A: erasure of a game that did not start, the closed state, reschedule moves the clock, no payment cut-off, heads-up and after mails, settings kept 30 days, the 30-day limit | run: `bun test apps/edge/test/unplayed.test.ts` |
 | `apps/edge/test/clone.test.ts` | Spec 5 B: `POST /api/z/{id}/clone` (who, what is and is not copied, start pending, draft limit, people list, audit) | run: `bun test apps/edge/test/clone.test.ts` |
+| `apps/edge/test/param-harness.ts` | Shared world for the table-driven suite: in-memory D1, fake Razorpay, fake mailbox (outbox table), helpers to make organizers, games, payments and joins |
+| `apps/edge/test/param-config.test.ts` | Table-driven: packs x price, free publish, start-time edges, speeds, rounds, tickets, prize houses, brand moments, lucky draws (200+ named tests) |
+| `apps/edge/test/param-matrix.test.ts` | Every role (master, AI, Host, Co-host, other organizer, platform, partner key, nobody) against every route (270+ named tests) |
+| `apps/edge/test/param-people.test.ts` | Phone formats, guest list sizes, invitation policies, unicode / script / SQL-looking text in every free-text field |
+| `apps/edge/test/param-money.test.ts` | Payment paths (who pays, pay link, gateway answers, webhook, replay, late payment), cancel and credit, reschedule and clone, the 365-day window |
+| `apps/edge/test/param-life.test.ts` | Deletion timing incl. a late tick, report link, lazy tick, idempotency, players' own requests, rate and spend limits, TEST/LIVE mail, Help Desk parameter sets |
+| `apps/edge/test/param-extra.test.ts` | Regressions the suite found (zone-less start time), one person one number across routes, hostile text on invoices and join pages |
+| `apps/edge/test/param-journey.test.ts` | The first game of a new Organizer end to end, with the clock driven only by ordinary requests (lazy tick) |
+| `apps/web/test/gtm-site.test.ts` | Go-to-market audit of the static site: prices, contact details, seller name, links, alt text, robots, sitemap, share cards, PWA, deletion wording |
 | `apps/edge/test/people.test.ts` | Phase 2: number cleaning, one list per inviter with first-wins, limits, personal links and `/j/<token>`, common links and "who can join", waiting room (one by one and approve all), remove (before and during the game), CSV export, AI refusal, report tree |
 | `apps/edge/test/brand-ticket.test.ts` | Phase 3: the brand on the ticket (name, 8-colour palette, logo type/size/first-bytes checks, injection, settings/info/summary) | run: `bun test apps/edge/test/brand-ticket.test.ts` |
 | `apps/edge/test/csp-google.test.ts` | Phase 3/4 headers: Google allowed only on signin, index (and "/"), zc; pay-link page has the Razorpay rules (reads `pages/build.mjs`) | run: `bun test apps/edge/test/csp-google.test.ts` |

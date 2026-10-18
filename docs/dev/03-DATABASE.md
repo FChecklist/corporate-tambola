@@ -147,7 +147,7 @@ Phase 2 additions to this group (`people.ts`, migration 0016):
 
 | Table | Columns | Written by | Read by | Retention |
 |---|---|---|---|---|
-| **person** | `eid, id` (PK, 12 hex), `ph NN` (phone hash, UNIQUE per game: first list wins), `pii NN` (sealed name + number), `inviter NN` (`o` Organizer, `h:<7 hex>` Host, `c:<7 hex>` Co-host, `s:<seat>` level-1 guest), `role` (`organizer`/`host`/`co-host` for a team member's own play seat), `status NN` (`invited`/`joined`/`removed`), `tok_hash` (UNIQUE: hash of the personal-link token), `tok_sealed` (the token, sealed so the inviter can be shown the link again), `approved_by`/`approved_ms` (who let them in from the waiting room), `added_ms`, `joined_ms`, `removed_ms`, `removed_by` | `/people*`, `join`, `/waiting*` | the people routes, report | erased with the guests' data (`erasePersonal`, the 23-hour rule) |
+| **person** | `eid, id` (PK, 12 hex), `ph NN` (phone hash, UNIQUE per game: first list wins), `pii NN` (sealed name + number), `inviter NN` (`o` Organizer, `h:<7 hex>` Host, `c:<7 hex>` Co-host, `s:<seat>` level-1 guest), `role` (`organizer`/`host`/`co-host` for a team member's own play seat), `status NN` (`invited`/`joined`/`removed`), `tok_hash` (UNIQUE: hash of the personal-link token), `tok_sealed` (the token, sealed so the inviter can be shown the link again), `approved_by`/`approved_ms` (who let them in from the waiting room), `added_ms`, `joined_ms`, `removed_ms`, `removed_by` | `/people*`, `join`, `/waiting*` | the people routes, report | erased with the guests' data (`erasePersonal`, the 20-hour rule) |
 | **waiting** | `eid, id` (PK), `ph NN` (UNIQUE per game: one request per number), `pii NN` (sealed), `via NN` (`personal-link`/`common-link`/`direct`), `inviter NN` (link owner), `chain NN` (",id,id," of the owner and the people above them: who may answer), `overlimit` (0/1: came over the owner's limit, only Organizer/Host see it), `status NN` (`waiting`/`admitted`/`declined`), `at_ms`, `decided_by`, `decided_ms` | `join`, `/waiting*`, `/people` (listing a waiting number admits it) | the waiting routes, `/me?wid=` | same as `person` |
 
 Phase 3/4 additions (`paylink.ts`, `hostsetup.ts`, migration 0017):
@@ -263,4 +263,4 @@ Phase 3/4 additions (`paylink.ts`, `hostsetup.ts`, migration 0017):
 | Payments, invoices, commissions, suggestions, `mail_event` | not deleted by code | |
 | Backups | roll off within 7 days of a deletion (Cloudflare) | |
 
-`docs/RETENTION.md` says participants' data goes at "22 hours" - the code is **23 hours**; see `KNOWN-DOC-DRIFT.md`.
+`docs/RETENTION.md` says participants' data goes at "19 hours" - the code is **20 hours**; see `KNOWN-DOC-DRIFT.md`.

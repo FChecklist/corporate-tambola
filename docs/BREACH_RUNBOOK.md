@@ -15,7 +15,7 @@ For Corporate Tambola. A breach is any loss, leak or unauthorised use of persona
 
 ## 3. Assess (same day)
 * What data, how many people, which engagements (`SELECT eid ...`), over what period.
-* Names and numbers are sealed (AES-256-GCM) in the database: a copy of the database without `DATA_KEY` is not readable. Winners' prize details are sealed the same way. Participant data is deleted 23 hours after a game ends (the promise to players is 24 hours), so a leak of an old copy covers only games that were live or recent.
+* Names and numbers are sealed (AES-256-GCM) in the database: a copy of the database without `DATA_KEY` is not readable. Winners' prize details are sealed the same way. Participant data is deleted 20 hours after a game ends (the promise to players is 24 hours), so a leak of an old copy covers only games that were live or recent.
 * Was `DATA_KEY` exposed? If yes, assume all sealed rows of live games are exposed.
 * Decide: is there a likely risk to people? Write the decision and the reason.
 

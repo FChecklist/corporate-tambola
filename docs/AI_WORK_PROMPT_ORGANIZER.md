@@ -295,7 +295,7 @@ A lucky draw is a break: `{after:60, seconds:60, kind:"lucky", title:"Lucky draw
 
 ## C10. Guests list (human only)
 
-The AI never receives names or mobile numbers (a roster call answers 403). The person pastes the list, one person per line `name, mobile number`, in the console: card "Invite list" -> "Add to list", or card "Add people" -> "Add them". Both do the same; 100 people per call are chunked automatically; the answer reads "N added, N skipped, N not valid". Or they just share the guest link. Reuse: console "REUSE THE DATA" or history "Reuse" (new engagement with the earlier people, while that list exists: it is deleted 22 hours after that game ended), or the AI calls `POST <L>/z/<ID>/reuse {from:<earlier id>}` with no names passing through it.
+The AI never receives names or mobile numbers (a roster call answers 403). The person pastes the list, one person per line `name, mobile number`, in the console: card "Invite list" -> "Add to list", or card "Add people" -> "Add them". Both do the same; 100 people per call are chunked automatically; the answer reads "N added, N skipped, N not valid". Or they just share the guest link. Reuse: console "REUSE THE DATA" or history "Reuse" (new engagement with the earlier people, while that list exists: it is deleted 19 hours after that game ended), or the AI calls `POST <L>/z/<ID>/reuse {from:<earlier id>}` with no names passing through it.
 Players asking about their data: console card "A player's own data": "Show what we hold" / "Delete their data" (organizer only; refused while the game runs).
 
 ## C11. Flag tickets and change of phone
@@ -334,7 +334,7 @@ The AI calls `POST <L>/z/<ID>/publish` once: it returns `{needsOrganizer:true, c
 
 ## C18. Download the report (HUMAN)
 
-Within 24 hours of the game ending the organizer is e-mailed ONE link (`/report?e=<ID>&k=...`). The PDF is built in the organizer's own browser (parts of up to 1,500 people); press the **Save tambola-report-<ID>.pdf** button(s). Or in the console: card "Participant data" -> **Open the report now**; **New report link** makes a new address and kills the old one. The link works only until participants' details are deleted (22 hours after the end). The report holds every name and number: share it carefully. The AI can read `GET <L>/z/<ID>/reportlink` for `ready` and `sent` only.
+Within 24 hours of the game ending the organizer is e-mailed ONE link (`/report?e=<ID>&k=...`). The PDF is built in the organizer's own browser (parts of up to 1,500 people); press the **Save tambola-report-<ID>.pdf** button(s). Or in the console: card "Participant data" -> **Open the report now**; **New report link** makes a new address and kills the old one. The link works only until participants' details are deleted (19 hours after the end). The report holds every name and number: share it carefully. The AI can read `GET <L>/z/<ID>/reportlink` for `ready` and `sent` only.
 
 ## C19. Other downloads
 
