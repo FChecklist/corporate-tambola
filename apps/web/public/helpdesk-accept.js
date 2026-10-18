@@ -15,22 +15,22 @@
     if (!r.ok) { const e = new Error(j.error || "Something went wrong. Please try again."); e.status = r.status; e.code = j.code; throw e; }
     return j;
   }
-  const shell = (inner) => { app.innerHTML = `<div class="zhead"><b>Corporate Tambola · Help Desk</b></div>${inner}`; };
+  const shell = (inner) => { app.innerHTML = `<div class="zhead"><h1 class="hdh"><b>Corporate Tambola · Help Desk</b></h1></div>${inner}`; };
   const promise = () => `<ol class="zsmall" style="padding-left:20px;line-height:1.5">${info.promise.map((l) => `<li style="margin:6px 0">${esc(l)}</li>`).join("")}</ol>`;
   const bad = (m) => (m ? `<div class="zbanner bad" role="alert">${esc(m)}</div>` : "");
 
-  function closed(text) { shell(`<div class="zcard"><h2>Help Desk</h2><p>${esc(text)}</p><p class="zsmall"><a href="/">Corporate Tambola home</a></p></div>`); }
+  function closed(text) { shell(`<div class="zcard"><h2>Help Desk</h2><p>${esc(text)}</p><p class="zsmall"><a class="hdl" href="/">Corporate Tambola home</a></p></div>`); }
   function signIn() {
     const C = window.CBConsent;
     shell(`<div class="zcard zform"><h2>${esc(info.helperName)} asks to prepare games for you</h2>
       <p class="zsmall" style="margin-top:0">Nothing is published or paid without your OK. First sign in with the e-mail this was sent to (${esc(info.forEmailMasked)}).</p>${promise()}
       ${bad(state.msg)}
       ${state.codeStep && !state.newAcct ? `<label for="cd">6-digit code sent to ${esc(state.email)}</label><input id="cd" inputmode="numeric" autocomplete="one-time-code" maxlength="8"><button class="zbtn" id="go">Sign in</button>
-        <p class="zsmall"><a href="#" id="mk">No account yet? Make one</a></p>`
+        <p class="zsmall"><a href="#" class="hdl" id="mk">No account yet? Make one</a></p>`
         : state.newAcct ? `<label for="em">Your work e-mail</label><input id="em" type="email" autocomplete="email" value="${esc(state.email)}">${C ? C.html("K2") : ""}<button class="zbtn" id="go"${C ? ' data-needs="K2"' : ""}>Make my account</button>`
         : `<label for="em">Your work e-mail</label><input id="em" type="email" autocomplete="email" value="${esc(state.email)}" placeholder="you@company.com"><button class="zbtn" id="go">E-mail me a code</button>
-        <p class="zsmall"><a href="#" id="mk">No account yet? Make one</a></p>`}
-      <p class="zsmall"><a href="#" id="stop">I do not want this</a></p></div>`);
+        <p class="zsmall"><a href="#" class="hdl" id="mk">No account yet? Make one</a></p>`}
+      <p class="zsmall"><a href="#" class="hdl" id="stop">I do not want this</a></p></div>`);
     if (state.newAcct && C) C.wire(app, "K2", {});
     const go = document.getElementById("go");
     const mk = document.getElementById("mk"); if (mk) mk.onclick = (e) => { e.preventDefault(); state.newAcct = true; state.codeStep = false; state.msg = ""; state.email = (document.getElementById("em") || {}).value || state.email; signIn(); };
@@ -58,7 +58,7 @@
     shell(`<div class="zcard zform"><h2>${esc(info.helperName)} asks to prepare games for you</h2>${promise()}
       <p class="zsmall">By tapping Allow you agree to the five points above.</p>${bad(state.msg)}
       <button class="zbtn" id="ok">Allow</button> <button class="zbtn alt" id="no">Not now</button>
-      <p class="zsmall"><a href="#" id="out">Use a different e-mail</a></p></div>`);
+      <p class="zsmall"><a href="#" class="hdl" id="out">Use a different e-mail</a></p></div>`);
     document.getElementById("ok").onclick = async (ev) => {
       ev.target.disabled = true;
       try { await api("POST", "/api/helpdesk/accept", { t, consent: true }); info.state = "active"; active(); }
@@ -69,7 +69,7 @@
   }
   function active() {
     shell(`<div class="zcard"><h2>Done</h2><p>${esc(info.helperName)} can now prepare games for you. You publish each one with one tap, and you can stop this at any time.</p>${bad(state.msg)}
-      <button class="zbtn alt" id="stop">Stop Help Desk</button><p class="zsmall"><a href="/zc.html">Open my console</a></p></div>`);
+      <button class="zbtn alt" id="stop">Stop Help Desk</button><p class="zsmall"><a class="hdl" href="/zc.html">Open my console</a></p></div>`);
     document.getElementById("stop").onclick = () => stop();
   }
   async function stop() {

@@ -14,13 +14,13 @@
     if (!r.ok) { const e = new Error(j.error || "Something went wrong. Please try again."); e.status = r.status; e.code = j.code; throw e; }
     return j;
   }
-  const shell = (inner) => { app.innerHTML = `<div class="zhead"><b>Corporate Tambola · Publish your game</b></div>${inner}`; };
-  const closed = (text) => shell(`<div class="zcard"><h2>Publish your game</h2><p>${esc(text)}</p><p class="zsmall"><a href="/">Corporate Tambola home</a></p></div>`);
-  const prizeLine = (r) => `<li>${esc(r.text || r.house || r.id || "Prize")}</li>`;
+  const shell = (inner) => { app.innerHTML = `<div class="zhead"><h1 class="hdh"><b>Corporate Tambola · Publish your game</b></h1></div>${inner}`; };
+  const closed = (text) => shell(`<div class="zcard"><h2>Publish your game</h2><p>${esc(text)}</p><p class="zsmall"><a class="hdl" href="/">Corporate Tambola home</a></p></div>`);
+  const prizeLine = (r) => `<li>${esc(r.label || r.pattern || "Prize")}${r.ordinal > 1 ? " (" + esc(r.ordinal) + ")" : ""}${r.text ? ": " + esc(r.text) : ""}</li>`;
   function summaryCard() {
     const s = info.summary;
     if (!s) return `<p class="zsmall">Game ${esc(info.eid)}</p>`;
-    const rewards = Array.isArray(s.rewards) ? s.rewards.filter((r) => r && (r.text || r.house)) : [];
+    const rewards = Array.isArray(s.rewards) ? s.rewards.filter((r) => r && (r.label || r.pattern || r.text)) : [];
     return `<div class="zsmall" style="line-height:1.6"><b>${esc(s.name || info.eid)}</b><br>Starts: ${esc(s.startsAtIST || "")}<br>Up to ${esc(s.limit)} people${s.tickets ? ", " + esc(s.tickets) + " ticket" + (s.tickets === 1 ? "" : "s") + " each" : ""}${s.rounds ? ", " + esc(s.rounds) + " round" + (s.rounds === 1 ? "" : "s") : ""}${s.gameMinutes ? ", about " + esc(s.gameMinutes) + " minutes" : ""}<br>Who can join: ${s.whoCanJoin === "list" ? "only people on your list" : "anyone with the link"}${s.breaks ? "<br>Brand moments: " + esc(s.breaks) : ""}${s.priceInr ? "<br>Price when you pay: Rs " + esc(s.priceInr) : ""}</div>
       ${rewards.length ? `<div class="zsmall" style="margin-top:8px"><b>Prizes</b></div><ul class="zsmall" style="margin:4px 0 0;padding-left:20px">${rewards.map(prizeLine).join("")}</ul>` : ""}`;
   }
@@ -49,8 +49,8 @@
   function published(pub) {
     shell(`<div class="zcard"><h2>Published</h2><p>Your game is live. ${esc(info.helperName)} is now a Host of it and can change it like any Host.</p>
       ${pub && pub.shareUrl ? `<p class="zsmall">Share link for guests:</p><div class="zlink">${esc(pub.shareUrl)}</div>` : ""}
-      ${pub && pub.payUrl && pub.paid === false ? `<p class="zsmall">The game begins once it is paid for. <a href="${esc(pub.payUrl)}">Pay now</a></p>` : ""}
-      <p class="zsmall"><a href="/zc.html">Open my console</a></p></div>`);
+      ${pub && pub.payUrl && pub.paid === false ? `<p class="zsmall">The game begins once it is paid for. <a class="hdl" href="${esc(pub.payUrl)}">Pay now</a></p>` : ""}
+      <p class="zsmall"><a class="hdl" href="/zc.html">Open my console</a></p></div>`);
   }
   (async () => {
     if (!/^[0-9a-f]{48}$/.test(t)) return closed("This link is incomplete. Please open the link from the e-mail again.");

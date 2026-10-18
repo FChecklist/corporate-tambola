@@ -105,6 +105,16 @@ describe("Help Desk pages", () => {
     await again.waitFor((x) => /already been used/.test(x));
     expect(p.errors).toEqual([]);
   });
+  test("regressions found by the real-Chrome simulation (S12): Sign out is not hidden, text links are 40 px targets, the token pages have one main heading, the prize list never depends on prize text, the console says 'Not published' for an AI key", () => {
+    const hd = readFileSync(join(PUB, "helpdesk.js"), "utf8");
+    expect(hd).not.toMatch(/class="zhead"/); // partner.css hides .zhead inside the hero card: the signed-in header (and its Sign out) must not use it
+    expect(hd).toMatch(/class="hdl" id="out"/);
+    for (const f of ["helpdesk-accept.js", "helpdesk-approve.js"]) { const j = readFileSync(join(PUB, f), "utf8"); expect(j).toContain('<h1 class="hdh">'); expect(j).toContain('class="hdl"'); }
+    expect(readFileSync(join(PUB, "z.css"), "utf8")).toMatch(/\.hdl\{[^}]*min-height:40px/);
+    expect(readFileSync(join(PUB, "partner.css"), "utf8")).toMatch(/\.rbrand,\.rhome\{[^}]*min-height:40px/);
+    const ap = readFileSync(join(PUB, "helpdesk-approve.js"), "utf8"); expect(ap).toContain("r.label || r.pattern"); expect(ap).not.toContain("r.house");
+    expect(readFileSync(join(PUB, "zc.js"), "utf8")).toContain("pr && pr.needsOrganizer"); // an AI key's Publish only hands the link over: the console must not say "Published."
+  });
   test("the pages are shipped: in the build list, noindex for the two token pages, indexable home, linked from the partner page and the guide", () => {
     const build = readFileSync(join(import.meta.dir, "../../../pages/build.mjs"), "utf8");
     for (const f of ["helpdesk.html", "helpdesk.js", "helpdesk-accept.html", "helpdesk-accept.js", "helpdesk-approve.html", "helpdesk-approve.js"]) expect(build).toContain(`"${f}"`);

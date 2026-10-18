@@ -11,6 +11,7 @@ import { sendMail, type PayEnv } from "./pay";
 import { openText, sealText } from "./pii";
 import { HOST_LINK_TTL_MS, hostStateRow, maskEmail, mintDeviceKey, retireHost } from "./hostsetup";
 import { helpDeskPublishedMail } from "./mails";
+import { houseLabel } from "../../../packages/beacon/src/config";
 
 export const HELPDESK_SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS helpdesk_helper (partner_code TEXT PRIMARY KEY, email_sealed TEXT NOT NULL, joined_ms INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'active')`,
@@ -332,7 +333,7 @@ export async function helpdeskRoute(req: Request, env: PayEnv, now: number, spen
     const sum = await ctx.summary(a.pub.org, a.pub.eid);
     const published = (await isDraft(a.pub.eid)) === false;
     return json({ eid: a.pub.eid, helperName: await helperName(db, a.link!.partner_code), state: published ? "published" : "waiting",
-      summary: sum ? { id: sum.id, name: sum.name ?? null, startsAtIST: sum.startsAtIST, limit: sum.limit, tickets: sum.tickets, rounds: sum.rounds, gameMinutes: sum.gameMinutes, rewards: sum.rewards, breaks: Array.isArray(sum.breaks) ? sum.breaks.length : 0, whoCanJoin: sum.whoCanJoin, status: sum.status, priceInr: sum.priceInr ?? null } : null });
+      summary: sum ? { id: sum.id, name: sum.name ?? null, startsAtIST: sum.startsAtIST, limit: sum.limit, tickets: sum.tickets, rounds: sum.rounds, gameMinutes: sum.gameMinutes, rewards: Array.isArray(sum.rewards) ? sum.rewards.map((r: any) => ({ label: houseLabel(r?.scope === "two_ticket" ? "full2" : String(r?.pattern ?? "")), pattern: r?.pattern ?? null, ordinal: r?.ordinal ?? 1, text: typeof r?.text === "string" ? r.text : "" })) : [], breaks: Array.isArray(sum.breaks) ? sum.breaks.length : 0, whoCanJoin: sum.whoCanJoin, status: sum.status, priceInr: sum.priceInr ?? null } : null });
   }
   if (req.method === "POST" && p === "/api/helpdesk/approve/start") {
     const b = await body(req); const a = await approval(b?.t); if (!a) return json({ error: "Not found" }, 404);

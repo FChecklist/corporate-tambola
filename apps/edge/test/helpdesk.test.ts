@@ -225,6 +225,8 @@ describe("the one-tap publish approval", () => {
     expect((await call("POST", "/api/helpdesk/approve/done", { t: "b".repeat(48) })).status).toBe(404);
     const info = await j(await call("GET", `/api/helpdesk/approve/info?t=${t}`));
     expect(info).toMatchObject({ eid: "HD-GAME-1", helperName: "Asha", state: "waiting" }); expect(info.summary).toMatchObject({ name: "Annual Day", limit: 300, status: "draft" });
+    // the Organizer reads which prizes the helper set up: every line carries its house name even when its prize text is empty (a game made with the default prizes)
+    expect(info.summary.rewards.length).toBeGreaterThan(0); expect(info.summary.rewards.every((r: any) => typeof r.label === "string" && r.label.length > 0 && r.label !== r.pattern)).toBe(true); expect(info.summary.rewards.map((r: any) => r.label)).toContain("Early Five");
     const s = await j(await call("POST", "/api/helpdesk/approve/start", { t }));
     expect(s.key).toMatch(/^ctk_[0-9a-f]{48}$/); expect(s.expiresMs).toBe(T + 30 * 60_000);
     expect(raw.query("SELECT kind, created_by, expires_ms FROM organizer_key WHERE hash=(SELECT tmp_key_hash FROM helpdesk_pub)").get()).toEqual({ kind: "master", created_by: "dp", expires_ms: T + 30 * 60_000 });
