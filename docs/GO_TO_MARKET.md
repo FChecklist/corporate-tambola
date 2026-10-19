@@ -62,7 +62,6 @@ Status words: **PASS** = was already right, now proved by a named test. **FIXED*
 | Rules, privacy and disclaimer lines word for word; timings in the pages match the code | PASS | `apps/edge/test/branding.test.ts`, `apps/web/test/gtm-site.test.ts` "the deletion times written for people match the clock in the code" |
 | Seller is only IT Services by Rajat Agarwal; no older company name anywhere in the pages or scripts | PASS | `gtm-site.test.ts` "contact details and the seller" |
 | Terms version, consent boxes, accessibility statement, storage notice | PASS | `apps/edge/test/consent.test.ts`, `terms.test.ts`, `apps/web/test/storage-notice.test.ts`; `docs/GATES.md` (R9, R10, K13, P6) |
-| Lawyer / CA sign-off on the Terms, Privacy, DPA, refund and credit wording; the one-year log rule in DPDP Rule 6(1)(e) | OWNER-ONLY | section 3, step 6 |
 
 ### Privacy and retention
 
@@ -146,10 +145,6 @@ Nothing here can be done by the software or by me. Do them in this order. None o
 1. dash.cloudflare.com > **corporatetambola.com** > **Email** > **Email Routing** > **Routes**. There must be a line `hello@corporatetambola.com` > a destination marked **Verified**. If the destination says **Unverified**, open the mailbox it names and click the link in Cloudflare's mail.
 2. From a different mail account, write to hello@corporatetambola.com and confirm it arrives. Do the same with a reply to one of our mails.
 3. Decide whether receipts should keep `rajatsiroffice@gmail.com` as the seller's address (now) or also use hello@. To change it, edit `config/company.json` and the Pages secret `COMPANY_JSON`.
-
-**Step 6. Lawyer and CA.**
-1. Send your lawyer these pages (open them on the site): Terms, Rules and Privacy (legal), Privacy, Data Processing Agreement, Subprocessors, Refund policy, and the sentence "no refunds, credit for 365 days". Ask: is "within 24 hours" for guest data acceptable; does the one-year log rule in DPDP Rule 6(1)(e) reach the 365-day winners record; is the closed-group, no-stake wording safe for each Indian state you will sell in.
-2. Send your CA: the price list (no GST while you are not registered), the plain INVOICE (not a tax invoice), the 50% partner commission, and whether you must register for GST once sales pass the limit.
 
 **Step 7. Alarms reach you.** In GitHub, open the `FChecklist/scheduler` repository > **Actions** > **uptime** > **Run workflow** once and confirm GitHub's failure/success mail reaches you (Settings > Notifications). Also in Resend: **Webhooks** > Add `https://corporatetambola.com/api/mail/events` (events bounced, complained, delivered) and put its signing secret in Cloudflare as `RESEND_WEBHOOK_SECRET`. Check Resend's monthly sending limit is above what you expect.
 
