@@ -2,7 +2,7 @@
 (function () {
   const $ = TB.$, esc = TB.esc, ic = TB.ic;
   const nf = (n) => Number(n).toLocaleString("en-IN");
-  const S = { cur: TB.guessCurrency(), pack: 1000 };
+  const S = { cur: TB.guessCurrency(), pack: 250 };
   const FREE = { on: true, cap: 1e9 }; // the process: sign in, build the engagement, pay only when publishing
   let ORDER = null;
 

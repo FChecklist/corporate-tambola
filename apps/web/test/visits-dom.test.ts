@@ -75,7 +75,7 @@ describe("v.js on the home page", () => {
     const s = await site(); await s.flush(); const before = s.sent.length;
     s.p.click(".pcta"); await s.drain();
     expect(s.sent.length).toBe(before + 1);
-    const create = s.sent[s.sent.length - 1]!.body.e.find((e: any) => e.n === "create"); expect(create).toMatchObject({ k: "act", n: "create", z: 1000 }); expect(create.v).toMatch(/^(INR|USD) /);
+    const create = s.sent[s.sent.length - 1]!.body.e.find((e: any) => e.n === "create"); expect(create).toMatchObject({ k: "act", n: "create", z: 250 }); expect(create.v).toMatch(/^(INR|USD) /);
     s.p.click('[data-c="USD"]'); s.p.click("#loginLink"); await s.drain(); await s.flush();
     const names = s.sent.flatMap((x) => x.body.e).filter((e: any) => e.k === "act").map((e: any) => e.n);
     expect(names).toEqual(expect.arrayContaining(["create", "cur", "signin_open"]));

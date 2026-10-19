@@ -114,7 +114,7 @@ export default [
       t.check("the replaced link page has no Pay button and asks for a new link", !(await x.page.$("#paygo")) && /new one|new link|cancel|no longer|replaced|run out|expired/i.test(await t.text(x.page)), (await t.text(x.page)).slice(0, 200));
       await H.clock.advance(8 * H.DAY); await t.shared.track.refresh();
       const s3 = (await H.call("GET", `/api/paylink/${tok(l2)}`)).body;
-      t.check("after 8 days the link has expired", /expired/i.test(s3.status), JSON.stringify(s3).slice(0, 120));
+      t.check("after 8 days the link can no longer be paid (expired, or closed once the housekeeping erased the unplayed game)", /^(expired|closed)$/i.test(s3.status), "status=" + s3.status);
       const y = await t.open({ device: "mobile" }); await y.page.goto(l2); await y.page.waitForTimeout(1800);
       t.check("expired link page: no Pay button, a calm message", !(await y.page.$("#paygo")) && (await t.text(y.page)).length > 40, (await t.text(y.page)).slice(0, 200));
       await t.shot(y.page, "paylink-expired");
