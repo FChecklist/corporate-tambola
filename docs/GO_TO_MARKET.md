@@ -51,7 +51,7 @@ Status words: **PASS** = was already right, now proved by a named test. **FIXED*
 | **The partner page promised 20% on repeat purchases; the code pays 50%** (owner decision 2026-10-06) | **FIXED** | `apps/web/public/partner.html`; `apps/web/test/gtm-site.test.ts` "the partner page's repeat-purchase promise matches the code" |
 | **The brochure (page and PDF) showed an old GST-inclusive price table** (Rs 1,999 to 24,999 for 6 packs) | **FIXED** (page and PDF, regenerated with `node tools/make-brochure.mjs`, one A4 page) | `apps/web/public/brochure.html`; `gtm-site.test.ts` "prices are the price table" (every rupee amount on every page is a pack price) |
 | **The owner's Razorpay steps gave the wrong webhook address** (`/api/webhooks/razorpay`, which belongs to the old stand-alone server) | **FIXED** | `docs/RAZORPAY_OWNER_STEPS.md`; `param-extra.test.ts` "owner documents name the routes the Worker really answers" |
-| Razorpay webhook secret set in Cloudflare | OWNER-ONLY | section 3, step 1 |
+| Razorpay webhook secret | PASS (corrected 2026-10-19) | The IT Services central ledger (`/api/pay/ledger?view=webhooks`) shows 14 signature failures on 12 Oct (before the fix) and a signed Razorpay connectivity check accepted and forwarded with status 200 on 13 Oct 17:58 UTC; no payment event has failed since. Section 3, step 1 is no longer an open step. Still unproven: a real paid order passing through it (step 2) |
 | A first real paid purchase, and the window shows the right amount on the registered host (gate Y3) | OWNER-ONLY | section 3, step 2 |
 | International (dollar) cards | OWNER-ONLY | section 3, step 3 |
 
@@ -155,3 +155,9 @@ Nothing here can be done by the software or by me. Do them in this order. None o
 ## 4. What would change this table
 
 Any failing test in `param-*.test.ts` or `gtm-site.test.ts` turns its row back to not proven. New page text with a price, an address or an hour count is checked by `gtm-site.test.ts` automatically.
+
+## 5. Evening re-run, 2026-10-19 (after the first run was cut short by memory)
+
+- Whole repository: `bun test apps packages` 2,435 pass, 0 fail (before the site edits); web tests 395 pass after the edits.
+- Real-Chrome scenarios (`tools/sim2/scenarios/ui`): the first all-at-once run passed 89 of 137 and 48 errored with server 500s while the laptop had under 0.5 GB free. Each of those was re-run alone with enough memory: all pass except S99-02 (manual screenshots, skipped). Two real findings, both fixed: S05-06 expected `expired` after 8 days but the new lazy tick makes an unpaid unplayed game `closed` (test now accepts both; behaviour is correct); the new WhatsApp link had an accessible name that did not contain its visible words (fixed, S10-01/S10-02 pass).
+- Site edits: WhatsApp pill (no call link) in the home header and 12 information pages, home default pack 250, one small plain line under the hero. Not yet deployed.
