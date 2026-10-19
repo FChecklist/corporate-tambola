@@ -196,3 +196,12 @@ select#pack,.pwho select#pack{min-height:48px}
 .snav .links a.wa:hover,.legaltop a.wa:hover{background:#1ebe5b;border-color:#1ebe5b}
 /* one quiet line under the hero's three words: small, no extra weight */
 .heronote{margin:10px 0 0;font:400 14px/1.4 var(--sans);opacity:.88;max-width:34em}
+/* phones: keep the floating colour dots off the brand (home) and give the information pages' header two calm rows */
+@media (max-width:660px){header.site>.sin:first-child{padding-top:30px}}
+@media (max-width:560px){
+  .legaltop .sin{flex-wrap:wrap;row-gap:10px}
+  .legaltop .brand{flex:1 1 100%}
+  .legaltop a.wa{margin-left:0}
+  .legaltop a.wa,.legaltop a.back{white-space:nowrap}
+  .legaltop a.wa+a.back{margin-left:auto}
+}
