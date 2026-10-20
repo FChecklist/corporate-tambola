@@ -83,7 +83,7 @@ describe("report mail and the report link", () => {
   }
   test("a wrong key never opens the report", async () => {
     const g = await played(3); let guard = 0; while (!sentReports.length && guard++ < 20) await tick(g.end + 5 * MIN);
-    for (const k of ["0".repeat(40), "", "abc", link().k.slice(0, -1) + "0"]) expect([403, 404]).toContain((await call("GET", `/api/report/${g.id}?k=${k}&part=base`, undefined, {}, g.end + 10 * MIN)).status);
+    for (const k of ["0".repeat(40), "", "abc", link().k.slice(0, -1) + (link().k.endsWith("0") ? "1" : "0")]) expect([403, 404]).toContain((await call("GET", `/api/report/${g.id}?k=${k}&part=base`, undefined, {}, g.end + 10 * MIN)).status);
   });
   test("the organizer gets a reminder before the link closes and a mail when the data is deleted, once each", async () => {
     const g = await played(3); let guard = 0; while (!sentReports.length && guard++ < 20) await tick(g.end + 5 * MIN);

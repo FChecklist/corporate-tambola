@@ -570,3 +570,16 @@ Counts: 333 files.
 | `docs/SIM_GAPS.md` | Findings of the simulation campaign (id, what, how to reproduce, severity, fix status) | written by the campaign |
 | `docs/SIM_GAPS_life.md` | Defects found by the life scenarios (time travel, credit, erasure, 50 games in one minute) | whoever fixes them |
 | `docs/SIM_PARITY_REPORT.md` | Parity report: live schema and files against the local copy | written by `tools/sim2/parity.mjs` |
+
+## The error log (added 2026-10-20; plain-words guide in `docs/ERROR_LOG.md`)
+
+| File | What it is | Used by |
+|---|---|---|
+| `apps/web/public/blackbox.js` | The recorder that runs on each visitor's own device: trail of the last 40 actions, builds one complete error report, sends it once, queues it offline (`ctz-bbq`) | every page that has `rum.js`, plus demo and preview |
+| `pages/functions/api/blackbox.ts` | The error box: stores and groups reports, serves open errors to the owner, records fixes; tables `error_group`, `error_report` | `blackbox.js`, `tools/errorlog/*` |
+| `apps/edge/src/errorbox.ts` | Stores the Worker's own errors (route, message, stack, cleaned) in the same tables | `worker.ts` front door |
+| `tools/errorlog/pull.mjs` | Pulls the open errors into plain reports in `errors/inbox/` | the owner's AI |
+| `tools/errorlog/resolve.mjs` | Marks an error fixed with the file paths and the fix; appends `errors/FIXED.md` | the owner's AI |
+| `errors/FIXED.md` | The readable history of every fix | the owner |
+| `docs/ERROR_LOG.md`, `docs/ERROR_FIX_PLAYBOOK.md`, `docs/ERROR_LOG_GAP_ANALYSIS.md` | Owner guide, the AI's job description, and the gap analysis this was built from | the owner, the owner's AI |
+| `apps/web/test/blackbox.test.ts` | Proves capture, cleaning, grouping, fix and reopen, server-side errors, and that pages carry the recorder | `bun test` |
