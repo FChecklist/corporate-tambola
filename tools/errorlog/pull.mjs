@@ -7,8 +7,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const BASE = (process.env.ERRORLOG_URL ?? "https://corporatetambola.com").replace(/\/$/, "");
-const KEY = (process.env.REPORT_KEY ?? (() => { try { return readFileSync(join(ROOT, "config/telemetry-report-key.txt"), "utf8"); } catch { return ""; } })()).trim();
-if (!KEY) { console.error("No report key: put it in config/telemetry-report-key.txt"); process.exit(2); }
+const fromFile = (f, re) => { try { const t = readFileSync(join(ROOT, f), "utf8"); return re ? (t.match(re) ?? [])[1] ?? "" : t; } catch { return ""; } };
+const KEY = (process.env.REPORT_KEY || fromFile("config/telemetry-report-key.txt") || fromFile("config/live-secrets.txt", /^REPORT_KEY=(\S+)/m)).trim(); // kept off GitHub
+if (!KEY) { console.error("No report key: it is in config/live-secrets.txt (REPORT_KEY=...) or config/telemetry-report-key.txt"); process.exit(2); }
 const H = { authorization: `Bearer ${KEY}` };
 const status = process.argv.includes("--all") ? "all" : "open";
 const list = await fetch(`${BASE}/api/blackbox?status=${status}`, { headers: H });

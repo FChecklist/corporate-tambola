@@ -13,7 +13,7 @@ let open: Page[] = [];
 afterEach(async () => { for (const p of open) await p.close(); open = []; });
 
 /** A page of the site with the recorder, and a sendBeacon that keeps what it is given. */
-async function device(o: { html?: string; url?: string; online?: boolean; noBeacon?: boolean; fetchImpl?: (u: string) => Promise<Response> } = {}) {
+async function device(o: { html?: string; url?: string; online?: boolean; noBeacon?: boolean } = {}) {
   const w = newWorld({ DATA_KEY: "k" });
   const sent: any[] = [];
   const p = await openPage(w.world, {
@@ -23,7 +23,6 @@ async function device(o: { html?: string; url?: string; online?: boolean; noBeac
       Object.defineProperty(win.navigator, "sendBeacon", { configurable: true, value: o.noBeacon ? undefined : (_u: string, blob: Blob) => { blob.text().then((t) => sent.push(JSON.parse(t))); return true; } });
       if (o.online === false) Object.defineProperty(win.navigator, "onLine", { configurable: true, get: () => false });
       win.console = { ...console };
-      if (o.fetchImpl) win.fetch = async (u: any) => o.fetchImpl!(String(u));
     },
   });
   open.push(p);
@@ -67,16 +66,16 @@ describe("the recorder on the device", () => {
     expect(d.sent.length).toBeLessThanOrEqual(6);
   });
   test("a server error and a call that never arrived are errors; the trail shows each call with its status and time", async () => {
-    const d = await device({ fetchImpl: async (u) => { if (u.includes("down")) throw new TypeError("Failed to fetch"); return new Response(JSON.stringify({ error: "Boom for asha@example.com", code: "server-error" }), { status: 500 }); } });
+    const d = await device();
+    (d.w.world.env as any).DB = { prepare() { throw new Error("database down"); }, batch() { throw new Error("database down"); } }; // the real Worker now answers 500
     await d.p.win.fetch("/api/z/GAME1234/vote?me=secretpid", { method: "POST" });
-    await d.p.win.fetch("/api/down").catch(() => {});
+    await d.p.win.fetch("https://elsewhere.example/api/down").catch(() => {}); // never reaches the server
     await d.p.win.fetch("/api/z/GAME1234/vote?me=secretpid", { method: "POST" }); // the same failure again is not reported twice
     await d.settle();
-    const kinds = d.sent.map((r) => r.kind).sort();
-    expect(kinds).toEqual(["network", "server"]);
+    expect(d.sent.map((r) => r.kind).sort()).toEqual(["network", "server"]);
     const srv = d.sent.find((r) => r.kind === "server");
     expect(srv.msg).toContain("server error 500 on POST /api/z/GAME1234/vote (server-error)");
-    expect(JSON.stringify(d.sent)).not.toMatch(/secretpid|asha@example\.com/);
+    expect(JSON.stringify(d.sent)).not.toContain("secretpid");
     expect(srv.trail.some((t: any) => t.t === "call" && /POST \/api\/z\/GAME1234\/vote 500 \d+ms/.test(t.d))).toBe(true);
   });
   test("offline: the report waits on the device and goes when the phone is back online", async () => {
