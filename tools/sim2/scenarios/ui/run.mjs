@@ -61,6 +61,8 @@ const track = await H.trackClock();
 const browser = await H.launchChrome();
 const open = H.opener(browser, { track });
 const shared = { browser, open, track };
+// warm-up: the very first page a fresh Chrome opens is slower and can be clicked again by the test while it settles; a throwaway page takes that hit so no scenario does
+try { const w = await open({ device: "laptop" }); await w.page.goto(H.SIM + "/"); await w.page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {}); await H.sleep(1500); await w.ctx.close().catch(() => {}); } catch { /* not fatal */ }
 
 // ---- run
 const results = []; const t00 = Date.now();

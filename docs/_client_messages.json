@@ -1,0 +1,242 @@
+{
+"Your AI work link is ready. We also e-mailed you a 24-hour link.": [
+"ai-link.js:63"
+],
+"Replaced. The old links have stopped. A new 24-hour link is on its way to your e-mail.": [
+"ai-link.js:65"
+],
+"Waiting for the clock\u2026": [
+"big.js:22"
+],
+"We could not reach the service. Please check your internet and try again.": [
+"common.js:37",
+"paylink.js:13",
+"zc.js:26"
+],
+"Could not reach the payment service. Check your internet and try again.": [
+"common.js:139",
+"common.js:193"
+],
+"Payment was cancelled. Nothing was charged.": [
+"common.js:144",
+"common.js:186"
+],
+"Could not open the payment window. Please try again.": [
+"common.js:190"
+],
+"Please enter a valid work email.": [
+"confirm.js:57",
+"site.js:123",
+"site.js:139"
+],
+"Enter the 6-digit passcode.": [
+"confirm.js:75",
+"site.js:189"
+],
+"This request has expired. Ask your AI to draft it again.": [
+"confirm.js:116"
+],
+"Open this link in the browser where you set up this engagement: that is where your signing key is kept.": [
+"confirm.js:130"
+],
+"That address already has an account. Use the code we send.": [
+"helpdesk-accept.js:44"
+],
+"Please enter a valid e-mail.": [
+"helpdesk-accept.js:49",
+"helpdesk-approve.js:37",
+"paylink.js:78"
+],
+"Please sign in again.": [
+"helpdesk-accept.js:65"
+],
+"Please enter your mobile number.": [
+"helpdesk-approve.js:38"
+],
+"Help Desk is on.": [
+"helpdesk.js:55"
+],
+"The invitation is on its way.": [
+"helpdesk.js:57"
+],
+"We e-mailed the Organizer. They publish with one tap.": [
+"helpdesk.js:58"
+],
+"Please tick the box to join.": [
+"partner.js:72"
+],
+"We are still waiting for Razorpay to confirm your payment. Nothing is lost: your game starts as soon as it is confirmed. You can close this page and open your game to see the status.": [
+"pay.js:75"
+],
+"Please tick the box to continue.": [
+"pay.js:96",
+"paylink.js:74",
+"paytest.js:46"
+],
+"Please enter your name.": [
+"pay.js:99",
+"paylink.js:77",
+"paytest.js:48"
+],
+"Please enter a valid email.": [
+"pay.js:100",
+"paytest.js:49"
+],
+"Please enter a valid 15-character GSTIN, like 27ABCDE1234F1Z5.": [
+"pay.js:101",
+"paylink.js:79",
+"paytest.js:51"
+],
+"No engagement was chosen.": [
+"pay.js:119"
+],
+"We are still waiting for Razorpay to confirm your payment. Nothing is lost: the game is marked paid as soon as it is confirmed. You can close this page and open the link again later to see the status.": [
+"paylink.js:67"
+],
+"Razorpay has not confirmed yet. If money was taken, your invoice will be e-mailed to you once it is.": [
+"paytest.js:38"
+],
+"strict-origin-when-cross-origin": [
+"preview.js:38",
+"screen.js:173",
+"z.js:359"
+],
+"No connection right now. Please try again when you are online.": [
+"rights.js:24"
+],
+"Please enter your organization name.": [
+"site.js:138"
+],
+"Please type their name.": [
+"z.js:475"
+],
+"Please type their mobile number.": [
+"z.js:476"
+],
+"That number does not look right. Please check it.": [
+"z.js:479"
+],
+"That number is already invited.": [
+"z.js:480"
+],
+"That sign-in key or link was not accepted. A link you were sent may have expired, been replaced, or the game may have been cancelled: please ask the Organizer.": [
+"zc.js:1013"
+],
+"Pick the day and the time.": [
+"zc.js:1131"
+],
+"Please give the number of players, for example 180.": [
+"zc.js:1155"
+],
+"For more than 10,000 players, please write to us and we will arrange it.": [
+"zc.js:1155"
+],
+"Pick at least one kind of guest.": [
+"zc.js:1155"
+],
+"Tick at least one prize.": [
+"zc.js:1156",
+"zc.js:1189"
+],
+"Add your company name for the top of the ticket, or clear the colour and logo.": [
+"zc.js:1159"
+],
+"Pick an accent colour for your company strip.": [
+"zc.js:1160"
+],
+"Could not find a free game code. Try a different name.": [
+"zc.js:1193"
+],
+"Your draft is saved. Add your brand messages, videos or a lucky draw below if you want, then publish it (free).": [
+"zc.js:1195"
+],
+"Your draft is saved. Open each step and tap your choices.": [
+"zc.js:1204"
+],
+"Your game was moved to the new date.": [
+"zc.js:1286"
+],
+"The game was cancelled.": [
+"zc.js:1298"
+],
+"Please type the Host's name.": [
+"zc.js:1309"
+],
+"Please type the Host's mobile number or e-mail.": [
+"zc.js:1310"
+],
+"Please check the Host's mobile number.": [
+"zc.js:1311"
+],
+"Please check the Host's e-mail.": [
+"zc.js:1312"
+],
+"Please type the Co-host's name.": [
+"zc.js:1315"
+],
+"Please type the Co-host's mobile number.": [
+"zc.js:1315"
+],
+"Removed. Their link has stopped.": [
+"zc.js:1329"
+],
+"Please choose a PNG, JPEG or WebP picture.": [
+"zc.js:1369"
+],
+"That picture is bigger than 5 MB. Please choose a smaller one.": [
+"zc.js:1370"
+],
+"Anyone with this link can pay for this game. It works until the game is paid or for 7 days.": [
+"zc.js:1376"
+],
+"Type your own mobile number, then press the button again.": [
+"zc.js:1398",
+"zc.js:1409"
+],
+"That number looks wrong. Please check it.": [
+"zc.js:1403",
+"zc.js:1409"
+],
+"Your play link is on its way to your WhatsApp.": [
+"zc.js:1409"
+],
+"Done. Their data is deleted.": [
+"zc.js:1414"
+],
+"Done. The next phone they join with keeps their ticket.": [
+"zc.js:1415"
+],
+"Write a message first.": [
+"zc.js:1419"
+],
+"Sent. Phones show and speak it within about a minute.": [
+"zc.js:1420"
+],
+"Message cleared.": [
+"zc.js:1423"
+],
+"New report link made. The old one has stopped.": [
+"zc.js:1444"
+],
+"The report is not ready yet.": [
+"zc.js:1445"
+],
+"Your new game is ready to check. Pick the date and time, then publish.": [
+"zc.js:1469"
+],
+"Key retired.": [
+"zc.js:1491"
+],
+"Your AI work link has been stopped.": [
+"zc.js:1509"
+],
+"Please type your e-mail.": [
+"zc.js:1511"
+],
+"The code has 6 digits.": [
+"zc.js:1516"
+],
+"Please check your mobile number.": [
+"zc.js:1517"
+]
+}

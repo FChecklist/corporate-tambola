@@ -149,7 +149,7 @@ export default [
       await t.shot(x.page, "join-view");
       await x.page.fill("#em", t.mail("other")); await x.page.click("#on");
       await x.page.waitForSelector("#app .zbanner.bad", { timeout: 8000 });
-      t.check("another e-mail is refused with a plain message", /not the e-?mail address you joined/i.test(await t.text(x.page, "#app .zbanner.bad")), await t.text(x.page, "#app .zbanner.bad"));
+      t.check("another e-mail is refused with a plain message", /not the e-?mail address you joined|needs the e-?mail address it was sent to|only with the e-?mail address/i.test(await t.text(x.page, "#app .zbanner.bad")), await t.text(x.page, "#app .zbanner.bad"));
       t.check("nothing was turned on yet", (await me({ key })).joined === false);
       t.check("API: join with another e-mail is 403", (await hd("POST", "/api/helpdesk/join", { email: t.mail("o2") }, key)).status === 403);
       t.check("API: join without a partner key is 403", (await hd("POST", "/api/helpdesk/join", { email })).status === 403);

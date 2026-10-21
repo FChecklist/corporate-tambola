@@ -162,7 +162,7 @@
   // ---------- login ----------
   function openLogin(email) {
     TB.sheet(`${xbtn}<div class="eyebrow">Organizer login</div><h2>Sign in with your work email</h2><p class="muted small">Participants never log in here. They join with your link. We email you a 6-digit code: no password.</p>
-      ${gBox}<form id="lgForm" novalidate><label class="lb" for="lMail">Work email</label><input class="inp" id="lMail" type="email" autocomplete="email" placeholder="you@company.com" value="${esc(email || "")}"><div id="fErr"></div>
+      ${gBox}<form id="lgForm" novalidate><label class="lb" for="lMail">Work email</label><input class="inp" id="lMail" data-need="1" type="email" autocomplete="email" placeholder="you@company.com" value="${esc(email || "")}"><div id="fErr"></div>
       <button class="btn block" style="margin-top:14px" type="submit" id="lgGo">Email me a code ${ic("arrow")}</button></form>
       <p class="spriv accept">Our <a href="/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy &amp; Data Policy</a> are on our site.</p>`);
     $("lgForm").addEventListener("submit", (e) => { e.preventDefault(); const m = $("lMail").value.trim().toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) return setErr("Please enter a valid work email."); askCode(m, $("lgGo")); });

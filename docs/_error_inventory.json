@@ -1,0 +1,2410 @@
+[
+{
+"file": "admin.ts",
+"line": 149,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "admin.ts",
+"line": 151,
+"status": 413,
+"code": null,
+"msg": "Too large"
+},
+{
+"file": "admin.ts",
+"line": 153,
+"status": 400,
+"code": null,
+"msg": "Bad signature"
+},
+{
+"file": "admin.ts",
+"line": 154,
+"status": 400,
+"code": null,
+"msg": "Bad request"
+},
+{
+"file": "admin.ts",
+"line": 162,
+"status": 503,
+"code": null,
+"msg": "busy"
+},
+{
+"file": "admin.ts",
+"line": 175,
+"status": 400,
+"code": null,
+"msg": "Give the organizer's e-mail address: ?email=name@company.com"
+},
+{
+"file": "admin.ts",
+"line": 200,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "admin.ts",
+"line": 211,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "admin.ts",
+"line": 215,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "admin.ts",
+"line": 227,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "admin.ts",
+"line": 239,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "admin.ts",
+"line": 243,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "admin.ts",
+"line": 250,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "admin.ts",
+"line": 258,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "clone.ts",
+"line": 48,
+"status": 400,
+"code": null,
+"msg": "Check the start time."
+},
+{
+"file": "clone.ts",
+"line": 49,
+"status": 400,
+"code": null,
+"msg": "Pick a start time in the future."
+},
+{
+"file": "clone.ts",
+"line": 50,
+"status": 400,
+"code": "too-far",
+"msg": "A game that is not paid for yet can be set at most 30 days ahead. Please pick a day within the next 30 days."
+},
+{
+"file": "clone.ts",
+"line": 55,
+"status": 409,
+"code": "draft-limit",
+"msg": "You have ${MAX_DRAFTS} unpublished drafts. Publish one, or let one lapse: an unpublished draft is forgotten after 30 days, and closing your organizer account deletes them all."
+},
+{
+"file": "clone.ts",
+"line": 57,
+"status": 503,
+"code": null,
+"msg": "It is very busy right now. Please try again in a few minutes."
+},
+{
+"file": "clone.ts",
+"line": 69,
+"status": 503,
+"code": null,
+"msg": "Could not make a new game code. Please try again."
+},
+{
+"file": "consent.ts",
+"line": 39,
+"status": 400,
+"code": "consent-required",
+"msg": "Please tick the box to continue."
+},
+{
+"file": "credit.ts",
+"line": 228,
+"status": 403,
+"code": null,
+"msg": "Paying is for people to do themselves. Ask the owner to use their credit in the console."
+},
+{
+"file": "credit.ts",
+"line": 229,
+"status": 403,
+"code": null,
+"msg": "Not allowed."
+},
+{
+"file": "credit.ts",
+"line": 231,
+"status": 404,
+"code": null,
+"msg": "No such engagement."
+},
+{
+"file": "credit.ts",
+"line": 232,
+"status": 403,
+"code": null,
+"msg": "Your Co-host link is for a different game."
+},
+{
+"file": "credit.ts",
+"line": 233,
+"status": 409,
+"code": "cancelled",
+"msg": "This game was cancelled. It cannot be paid for."
+},
+{
+"file": "credit.ts",
+"line": 234,
+"status": 409,
+"code": "did-not-start",
+"msg": "This game did not start and is closed. It cannot be paid for."
+},
+{
+"file": "credit.ts",
+"line": 236,
+"status": 400,
+"code": null,
+"msg": "That many participants needs a custom arrangement. Please write to us."
+},
+{
+"file": "credit.ts",
+"line": 244,
+"status": 400,
+"code": "start-pending",
+"msg": "Pick the date and time of this game first."
+},
+{
+"file": "credit.ts",
+"line": 245,
+"status": 409,
+"code": "confirming",
+"msg": "A payment for this game is being confirmed. Please wait a few minutes."
+},
+{
+"file": "credit.ts",
+"line": 246,
+"status": 503,
+"code": null,
+"msg": "It is very busy right now. Please try again in a few minutes."
+},
+{
+"file": "helpdesk.ts",
+"line": 154,
+"status": 503,
+"code": null,
+"msg": "It is very busy right now. Please try again in a few minutes."
+},
+{
+"file": "helpdesk.ts",
+"line": 155,
+"status": 403,
+"code": null,
+"msg": "Not allowed."
+},
+{
+"file": "helpdesk.ts",
+"line": 187,
+"status": 400,
+"code": null,
+"msg": "Enter the e-mail address you joined Refer & earn with."
+},
+{
+"file": "helpdesk.ts",
+"line": 188,
+"status": 403,
+"code": null,
+"msg": "That is not the e-mail address you joined Refer & earn with."
+},
+{
+"file": "helpdesk.ts",
+"line": 227,
+"status": 400,
+"code": null,
+"msg": "Enter the Organizer's e-mail address."
+},
+{
+"file": "helpdesk.ts",
+"line": 229,
+"status": 400,
+"code": null,
+"msg": "Enter the Organizer's e-mail address, not your own."
+},
+{
+"file": "helpdesk.ts",
+"line": 232,
+"status": 409,
+"code": null,
+"msg": "You can have up to ${MAX_CLIENTS} clients at a time."
+},
+{
+"file": "helpdesk.ts",
+"line": 233,
+"status": 409,
+"code": null,
+"msg": "You already have this client."
+},
+{
+"file": "helpdesk.ts",
+"line": 236,
+"status": 429,
+"code": null,
+"msg": "That is enough invitations for this hour. Please try again later."
+},
+{
+"file": "helpdesk.ts",
+"line": 237,
+"status": 429,
+"code": null,
+"msg": "That address has had enough invitations today. Please try again tomorrow."
+},
+{
+"file": "helpdesk.ts",
+"line": 258,
+"status": 404,
+"code": null,
+"msg": "That client is not active."
+},
+{
+"file": "helpdesk.ts",
+"line": 259,
+"status": 400,
+"code": null,
+"msg": "Say which game."
+},
+{
+"file": "helpdesk.ts",
+"line": 261,
+"status": 404,
+"code": null,
+"msg": "That game was not prepared through this client."
+},
+{
+"file": "helpdesk.ts",
+"line": 263,
+"status": 409,
+"code": "already-published",
+"msg": "That game is already published."
+},
+{
+"file": "helpdesk.ts",
+"line": 265,
+"status": 429,
+"code": "wait",
+"msg": "The Organizer was asked a moment ago. Please wait a few minutes before asking again."
+},
+{
+"file": "helpdesk.ts",
+"line": 280,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "helpdesk.ts",
+"line": 285,
+"status": 403,
+"code": "sign-in",
+"msg": "Please sign in first."
+},
+{
+"file": "helpdesk.ts",
+"line": 286,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "helpdesk.ts",
+"line": 288,
+"status": 400,
+"code": "consent-required",
+"msg": "Please tap Allow to agree."
+},
+{
+"file": "helpdesk.ts",
+"line": 290,
+"status": 403,
+"code": "wrong-account",
+"msg": "This invitation was sent to a different e-mail address. Sign in with the address it was sent to."
+},
+{
+"file": "helpdesk.ts",
+"line": 309,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "helpdesk.ts",
+"line": 331,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "helpdesk.ts",
+"line": 339,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "helpdesk.ts",
+"line": 341,
+"status": 404,
+"code": null,
+"msg": "That game no longer exists."
+},
+{
+"file": "helpdesk.ts",
+"line": 352,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "helpdesk.ts",
+"line": 355,
+"status": 409,
+"code": "not-published",
+"msg": "The game is not published yet."
+},
+{
+"file": "helpdesk.ts",
+"line": 382,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "hostsetup.ts",
+"line": 102,
+"status": 400,
+"code": null,
+"msg": "Please give your mobile number. "
+},
+{
+"file": "hostsetup.ts",
+"line": 104,
+"status": 409,
+"code": "already-set",
+"msg": "Your mobile number is already saved. Ask the Organizer to change it."
+},
+{
+"file": "hostsetup.ts",
+"line": 118,
+"status": 400,
+"code": null,
+"msg": "Please enter a valid e-mail address."
+},
+{
+"file": "hostsetup.ts",
+"line": 120,
+"status": 409,
+"code": "already-verified",
+"msg": "Your e-mail is already confirmed. Sign in with it on other devices."
+},
+{
+"file": "hostsetup.ts",
+"line": 122,
+"status": 409,
+"code": "email-mismatch",
+"msg": "This link is for ${maskEmail(onFile)}"
+},
+{
+"file": "hostsetup.ts",
+"line": 127,
+"status": 429,
+"code": null,
+"msg": "Too many codes requested. Please try again in an hour."
+},
+{
+"file": "hostsetup.ts",
+"line": 141,
+"status": 400,
+"code": null,
+"msg": "Enter the 6-digit code."
+},
+{
+"file": "hostsetup.ts",
+"line": 143,
+"status": 400,
+"code": null,
+"msg": "That code is not right or has expired. Please ask for a new one."
+},
+{
+"file": "ledgerc.ts",
+"line": 257,
+"status": 400,
+"code": null,
+"msg": "month must be YYYY-MM"
+},
+{
+"file": "lifecycle.ts",
+"line": 108,
+"status": 400,
+"code": null,
+"msg": "Bad report."
+},
+{
+"file": "lifecycle.ts",
+"line": 110,
+"status": 403,
+"code": null,
+"msg": "Not a participant of this engagement."
+},
+{
+"file": "lifecycle.ts",
+"line": 113,
+"status": 503,
+"code": null,
+"msg": "Busy day. Please try again after midnight UTC."
+},
+{
+"file": "lifecycle.ts",
+"line": 247,
+"status": 403,
+"code": null,
+"msg": "This report link is not valid."
+},
+{
+"file": "lifecycle.ts",
+"line": 251,
+"status": 404,
+"code": "gone",
+"msg": "This report is not ready, or the link has closed and the participants' details are being or have been deleted (that happens within 24 hours of the game ending, as promised)."
+},
+{
+"file": "mode.ts",
+"line": 100,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "mode.ts",
+"line": 104,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "mode.ts",
+"line": 107,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "mode.ts",
+"line": 109,
+"status": 400,
+"code": null,
+"msg": "Say which mode: TEST or LIVE."
+},
+{
+"file": "mode.ts",
+"line": 118,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "mode.ts",
+"line": 120,
+"status": 400,
+"code": null,
+"msg": "Enter a valid e-mail address."
+},
+{
+"file": "mode.ts",
+"line": 122,
+"status": 400,
+"code": null,
+"msg": "Give an address to add or to remove."
+},
+{
+"file": "mode.ts",
+"line": 126,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "partners.ts",
+"line": 75,
+"status": 503,
+"code": null,
+"msg": "It is very busy right now. Please try again in a few minutes."
+},
+{
+"file": "partners.ts",
+"line": 101,
+"status": 400,
+"code": null,
+"msg": "Enter a valid mobile number."
+},
+{
+"file": "partners.ts",
+"line": 102,
+"status": 400,
+"code": null,
+"msg": "Enter a valid e-mail address. We send you a code."
+},
+{
+"file": "partners.ts",
+"line": 103,
+"status": 400,
+"code": null,
+"msg": "Please agree to join Refer & earn."
+},
+{
+"file": "partners.ts",
+"line": 104,
+"status": 429,
+"code": null,
+"msg": "Too many tries from this network today. Please try again tomorrow."
+},
+{
+"file": "partners.ts",
+"line": 129,
+"status": 400,
+"code": null,
+"msg": "That code is not right or has expired. Please ask for a new one."
+},
+{
+"file": "partners.ts",
+"line": 148,
+"status": 403,
+"code": null,
+"msg": "Not allowed."
+},
+{
+"file": "partners.ts",
+"line": 160,
+"status": 403,
+"code": null,
+"msg": "Not allowed."
+},
+{
+"file": "partners.ts",
+"line": 172,
+"status": 403,
+"code": null,
+"msg": "Not allowed."
+},
+{
+"file": "partners.ts",
+"line": 181,
+"status": 400,
+"code": null,
+"msg": "Rate must be between 0 and 0.5 (50%)."
+},
+{
+"file": "partners.ts",
+"line": 190,
+"status": 400,
+"code": null,
+"msg": "Give the partner code and the payment reference."
+},
+{
+"file": "partners.ts",
+"line": 197,
+"status": 400,
+"code": null,
+"msg": "Give the payment id."
+},
+{
+"file": "partners.ts",
+"line": 205,
+"status": 400,
+"code": null,
+"msg": "Give the partner code and a state (active or blocked)."
+},
+{
+"file": "partners.ts",
+"line": 209,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "pay.ts",
+"line": 177,
+"status": 404,
+"code": null,
+"msg": "Unknown payment."
+},
+{
+"file": "pay.ts",
+"line": 179,
+"status": 503,
+"code": null,
+"msg": "Busy day. Your payment is safe; this will complete shortly."
+},
+{
+"file": "pay.ts",
+"line": 268,
+"status": 503,
+"code": null,
+"msg": "It is very busy right now. Please try again in a few minutes."
+},
+{
+"file": "pay.ts",
+"line": 276,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "pay.ts",
+"line": 287,
+"status": 403,
+"code": null,
+"msg": "Test payments are only available while the service is in test mode."
+},
+{
+"file": "pay.ts",
+"line": 289,
+"status": 503,
+"code": null,
+"msg": "Payments are not switched on yet. Please try again later."
+},
+{
+"file": "pay.ts",
+"line": 296,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "pay.ts",
+"line": 299,
+"status": 400,
+"code": null,
+"msg": "That many participants needs a custom arrangement. Please write to us."
+},
+{
+"file": "pay.ts",
+"line": 304,
+"status": 429,
+"code": null,
+"msg": "Too many payment attempts from this network today. Please try again tomorrow."
+},
+{
+"file": "pay.ts",
+"line": 309,
+"status": 403,
+"code": null,
+"msg": "Please sign in again."
+},
+{
+"file": "pay.ts",
+"line": 312,
+"status": 404,
+"code": null,
+"msg": "No such engagement."
+},
+{
+"file": "pay.ts",
+"line": 313,
+"status": 403,
+"code": null,
+"msg": "Your Co-host link is for a different game."
+},
+{
+"file": "pay.ts",
+"line": 314,
+"status": 409,
+"code": null,
+"msg": "This game was cancelled by the organizer. It cannot be paid for."
+},
+{
+"file": "pay.ts",
+"line": 315,
+"status": 409,
+"code": "did-not-start",
+"msg": "This game did not start and is closed. It cannot be paid for."
+},
+{
+"file": "pay.ts",
+"line": 316,
+"status": 409,
+"code": null,
+"msg": "This engagement is already published."
+},
+{
+"file": "pay.ts",
+"line": 317,
+"status": 400,
+"code": "start-pending",
+"msg": "Pick the date and time of this game first."
+},
+{
+"file": "pay.ts",
+"line": 319,
+"status": 400,
+"code": null,
+"msg": "That many participants needs a custom arrangement. Please write to us."
+},
+{
+"file": "pay.ts",
+"line": 323,
+"status": 400,
+"code": null,
+"msg": "Choose a pack."
+},
+{
+"file": "pay.ts",
+"line": 325,
+"status": 400,
+"code": null,
+"msg": "Enter a valid e-mail address."
+},
+{
+"file": "pay.ts",
+"line": 328,
+"status": 400,
+"code": null,
+"msg": "Enter your name."
+},
+{
+"file": "pay.ts",
+"line": 332,
+"status": 400,
+"code": null,
+"msg": "That GSTIN does not look right. It has 15 characters, like 27ABCDE1234F1Z5."
+},
+{
+"file": "pay.ts",
+"line": 333,
+"status": 400,
+"code": null,
+"msg": "Payments in US dollars are not switched on yet. Please pay in Indian rupees or write to us."
+},
+{
+"file": "pay.ts",
+"line": 339,
+"status": 409,
+"code": "use-credit",
+"msg": "Credit already covers this game. Tap Use my credit to finish."
+},
+{
+"file": "pay.ts",
+"line": 347,
+"status": 502,
+"code": null,
+"msg": "The payment service said: ${e.message}"
+},
+{
+"file": "pay.ts",
+"line": 361,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "pay.ts",
+"line": 365,
+"status": 503,
+"code": null,
+"msg": "Online payments are not switched on."
+},
+{
+"file": "pay.ts",
+"line": 367,
+"status": 400,
+"code": null,
+"msg": "Enter a valid e-mail address."
+},
+{
+"file": "pay.ts",
+"line": 369,
+"status": 400,
+"code": null,
+"msg": "Enter your name."
+},
+{
+"file": "pay.ts",
+"line": 371,
+"status": 400,
+"code": null,
+"msg": "Payments in US dollars are not switched on yet. Please try again later."
+},
+{
+"file": "pay.ts",
+"line": 379,
+"status": 502,
+"code": null,
+"msg": "The payment service said: ${e.message}"
+},
+{
+"file": "pay.ts",
+"line": 381,
+"status": 400,
+"code": null,
+"msg": "That GSTIN does not look right. It has 15 characters, like 27ABCDE1234F1Z5."
+},
+{
+"file": "pay.ts",
+"line": 389,
+"status": 400,
+"code": null,
+"msg": "Online payments are not switched on."
+},
+{
+"file": "pay.ts",
+"line": 392,
+"status": 404,
+"code": null,
+"msg": "We could not match this payment."
+},
+{
+"file": "pay.ts",
+"line": 395,
+"status": 400,
+"code": null,
+"msg": "The payment could not be verified. If money was taken it will be refunded."
+},
+{
+"file": "pay.ts",
+"line": 401,
+"status": 400,
+"code": null,
+"msg": "The payment details did not match the order."
+},
+{
+"file": "pay.ts",
+"line": 406,
+"status": 402,
+"code": null,
+"msg": "The payment is ${pay.status}. Nothing was charged to your order."
+},
+{
+"file": "pay.ts",
+"line": 419,
+"status": 503,
+"code": null,
+"msg": "Webhook secret is not set."
+},
+{
+"file": "pay.ts",
+"line": 420,
+"status": 400,
+"code": null,
+"msg": "Bad signature."
+},
+{
+"file": "pay.ts",
+"line": 421,
+"status": 400,
+"code": null,
+"msg": "Bad body."
+},
+{
+"file": "pay.ts",
+"line": 464,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "pay.ts",
+"line": 468,
+"status": 400,
+"code": null,
+"msg": "Bad request."
+},
+{
+"file": "pay.ts",
+"line": 471,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "pay.ts",
+"line": 475,
+"status": 403,
+"code": null,
+"msg": "Please sign in again."
+},
+{
+"file": "pay.ts",
+"line": 478,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "pay.ts",
+"line": 480,
+"status": 409,
+"code": null,
+"msg": "This game is not waiting for payment."
+},
+{
+"file": "pay.ts",
+"line": 481,
+"status": 400,
+"code": null,
+"msg": "That many participants needs a custom arrangement. Please write to us."
+},
+{
+"file": "pay.ts",
+"line": 500,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "pay.ts",
+"line": 516,
+"status": 400,
+"code": null,
+"msg": "Enter a valid e-mail address."
+},
+{
+"file": "pay.ts",
+"line": 518,
+"status": 429,
+"code": null,
+"msg": "This invoice has already been e-mailed 5 times."
+},
+{
+"file": "pay.ts",
+"line": 528,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "people.ts",
+"line": 129,
+"status": 403,
+"code": null,
+"msg": "Not allowed."
+},
+{
+"file": "people.ts",
+"line": 133,
+"status": 403,
+"code": null,
+"msg": "Your Co-host link is for a different game."
+},
+{
+"file": "people.ts",
+"line": 136,
+"status": 403,
+"code": null,
+"msg": "Not allowed."
+},
+{
+"file": "people.ts",
+"line": 139,
+"status": 403,
+"code": null,
+"msg": "Please sign in, or open your ticket link first."
+},
+{
+"file": "people.ts",
+"line": 141,
+"status": 403,
+"code": null,
+"msg": "Not a participant of this game."
+},
+{
+"file": "people.ts",
+"line": 142,
+"status": 403,
+"code": "removed",
+"msg": "You were removed from this game."
+},
+{
+"file": "people.ts",
+"line": 143,
+"status": 403,
+"code": null,
+"msg": "Your team seat invites through the console, not through the ticket."
+},
+{
+"file": "people.ts",
+"line": 144,
+"status": 403,
+"code": null,
+"msg": "Guests invited by a guest can play but cannot invite more people."
+},
+{
+"file": "people.ts",
+"line": 145,
+"status": 403,
+"code": null,
+"msg": "The organizer has not switched on guest invitations for this game."
+},
+{
+"file": "people.ts",
+"line": 223,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "people.ts",
+"line": 230,
+"status": 409,
+"code": "did-not-start",
+"msg": "This game did not start. Your details have been erased."
+},
+{
+"file": "people.ts",
+"line": 231,
+"status": 409,
+"code": "cancelled",
+"msg": "This game was cancelled by the organizer."
+},
+{
+"file": "people.ts",
+"line": 237,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "people.ts",
+"line": 246,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "people.ts",
+"line": 268,
+"status": 400,
+"code": null,
+"msg": "Send at least one person: {people:[{name, phone}]}."
+},
+{
+"file": "people.ts",
+"line": 270,
+"status": 413,
+"code": "too-many",
+"msg": "Send up to ${MAX_ADD_BATCH} people at a time; the console sends a bigger list in several parts."
+},
+{
+"file": "people.ts",
+"line": 271,
+"status": 409,
+"code": null,
+"msg": "The game has ended, so no one can be added."
+},
+{
+"file": "people.ts",
+"line": 300,
+"status": 409,
+"code": "over-cap",
+"msg": "This game is for ${c.e.cap} people and ${total} are already on the lists. Nothing was added."
+},
+{
+"file": "people.ts",
+"line": 336,
+"status": 403,
+"code": null,
+"msg": "Only the Organizer and Hosts can download a list."
+},
+{
+"file": "people.ts",
+"line": 351,
+"status": 404,
+"code": null,
+"msg": "No such person."
+},
+{
+"file": "people.ts",
+"line": 353,
+"status": 404,
+"code": null,
+"msg": "No such person on your list."
+},
+{
+"file": "people.ts",
+"line": 361,
+"status": 403,
+"code": null,
+"msg": "Once the game has started only the Organizer or a Host can remove people."
+},
+{
+"file": "people.ts",
+"line": 362,
+"status": 409,
+"code": null,
+"msg": "That is a team member's own seat. Retire the team member instead."
+},
+{
+"file": "people.ts",
+"line": 398,
+"status": 409,
+"code": null,
+"msg": "That person was removed. Add them again first."
+},
+{
+"file": "people.ts",
+"line": 399,
+"status": 403,
+"code": null,
+"msg": "Once the game has started only the Organizer or a Host can send a link again."
+},
+{
+"file": "people.ts",
+"line": 407,
+"status": 409,
+"code": null,
+"msg": "They have already joined with their first number. Their ticket can move to a new phone, but not to a new number."
+},
+{
+"file": "people.ts",
+"line": 408,
+"status": 409,
+"code": "duplicate",
+"msg": "That number is already invited."
+},
+{
+"file": "people.ts",
+"line": 418,
+"status": 409,
+"code": "duplicate",
+"msg": "That number is already invited."
+},
+{
+"file": "people.ts",
+"line": 425,
+"status": 403,
+"code": null,
+"msg": "Your ticket link is the one you were sent."
+},
+{
+"file": "people.ts",
+"line": 438,
+"status": 400,
+"code": "need-phone",
+"msg": "We need your mobile number to make your play link."
+},
+{
+"file": "people.ts",
+"line": 442,
+"status": 409,
+"code": null,
+"msg": "That number was removed from this game. Add it back from My people first."
+},
+{
+"file": "people.ts",
+"line": 476,
+"status": 404,
+"code": null,
+"msg": "No such request."
+},
+{
+"file": "people.ts",
+"line": 478,
+"status": 400,
+"code": null,
+"msg": "Say admit or decline."
+},
+{
+"file": "people.ts",
+"line": 481,
+"status": 404,
+"code": null,
+"msg": "No such request."
+},
+{
+"file": "people.ts",
+"line": 483,
+"status": 409,
+"code": null,
+"msg": "The game has ended, so this request has lapsed."
+},
+{
+"file": "people.ts",
+"line": 489,
+"status": 409,
+"code": "over-limit",
+"msg": "Your list is full (${lim} people). Remove someone first."
+},
+{
+"file": "people.ts",
+"line": 490,
+"status": 409,
+"code": "over-cap",
+"msg": "This game is for ${c.e.cap} people and all places are taken."
+},
+{
+"file": "people.ts",
+"line": 504,
+"status": 400,
+"code": null,
+"msg": "Say admit or decline."
+},
+{
+"file": "people.ts",
+"line": 506,
+"status": 409,
+"code": null,
+"msg": "The game has ended, so these requests have lapsed."
+},
+{
+"file": "people.ts",
+"line": 548,
+"status": 404,
+"code": null,
+"msg": "Not a participant of this game."
+},
+{
+"file": "people.ts",
+"line": 555,
+"status": 404,
+"code": null,
+"msg": "That request is not here any more."
+},
+{
+"file": "people.ts",
+"line": 561,
+"status": 400,
+"code": null,
+"msg": "Say which: ?pid=<your ticket id> or ?wid=<your request id>."
+},
+{
+"file": "rights.ts",
+"line": 65,
+"status": 400,
+"code": "bad-request",
+"msg": "Please open this from the phone that holds your ${NOUN}."
+},
+{
+"file": "rights.ts",
+"line": 68,
+"status": 403,
+"code": "not-your-card",
+"msg": "This is not the phone that holds this ${NOUN}. Nobody can ask for another player."
+},
+{
+"file": "rights.ts",
+"line": 104,
+"status": 503,
+"code": "busy",
+"msg": "It is busy right now. Please try again in a few minutes."
+},
+{
+"file": "rights.ts",
+"line": 155,
+"status": 400,
+"code": "bad-kind",
+"msg": "Please choose what you want: to see your data, to correct it, to delete it, or to name another person."
+},
+{
+"file": "rights.ts",
+"line": 157,
+"status": 400,
+"code": "note-needed",
+"msg": "Please write what should be corrected."
+},
+{
+"file": "rights.ts",
+"line": 161,
+"status": 429,
+"code": "too-many",
+"msg": "You have already sent several requests for this game. Please wait for our answer."
+},
+{
+"file": "rights.ts",
+"line": 162,
+"status": 503,
+"code": "busy",
+"msg": "It is busy right now. Please try again in a few minutes."
+},
+{
+"file": "winners.ts",
+"line": 33,
+"status": 400,
+"code": null,
+"msg": "Bad report."
+},
+{
+"file": "winners.ts",
+"line": 35,
+"status": 403,
+"code": null,
+"msg": "Not a participant of this engagement."
+},
+{
+"file": "winners.ts",
+"line": 48,
+"status": 503,
+"code": null,
+"msg": "Busy day. Your report is kept on your phone and will be sent again."
+},
+{
+"file": "winners.ts",
+"line": 79,
+"status": 400,
+"code": null,
+"msg": "Bad request."
+},
+{
+"file": "winners.ts",
+"line": 82,
+"status": 403,
+"code": null,
+"msg": "This is not the phone that holds this ticket."
+},
+{
+"file": "winners.ts",
+"line": 84,
+"status": 404,
+"code": null,
+"msg": "No reward recorded for this ticket."
+},
+{
+"file": "winners.ts",
+"line": 86,
+"status": 400,
+"code": null,
+"msg": "Please write your name."
+},
+{
+"file": "winners.ts",
+"line": 87,
+"status": 400,
+"code": null,
+"msg": "Please enter a valid mobile number."
+},
+{
+"file": "winners.ts",
+"line": 88,
+"status": 503,
+"code": null,
+"msg": "Busy day. Please try again after midnight UTC."
+},
+{
+"file": "winners.ts",
+"line": 104,
+"status": 400,
+"code": null,
+"msg": "Bad request."
+},
+{
+"file": "winners.ts",
+"line": 106,
+"status": 403,
+"code": null,
+"msg": "This is not the phone that holds this ticket."
+},
+{
+"file": "winners.ts",
+"line": 130,
+"status": 400,
+"code": null,
+"msg": "Bad request."
+},
+{
+"file": "winners.ts",
+"line": 131,
+"status": 409,
+"code": "removed",
+"msg": "Not given: this person was removed from the game."
+},
+{
+"file": "winners.ts",
+"line": 132,
+"status": 503,
+"code": null,
+"msg": "Busy day. Please try again after midnight UTC."
+},
+{
+"file": "winners.ts",
+"line": 134,
+"status": 404,
+"code": null,
+"msg": "No such reward."
+},
+{
+"file": "worker.ts",
+"line": 242,
+"status": 403,
+"code": null,
+"msg": "Names and mobile numbers are handled by the owner in the console, not by the AI. Ask the owner to paste the list in the Participants card. You can set the limit with settings and refer to people by ticket number."
+},
+{
+"file": "worker.ts",
+"line": 253,
+"status": 503,
+"code": null,
+"msg": "It is very busy right now. Please try again in a few minutes."
+},
+{
+"file": "worker.ts",
+"line": 375,
+"status": 500,
+"code": "server-error",
+"msg": "Something went wrong. Please try again."
+},
+{
+"file": "worker.ts",
+"line": 380,
+"status": 503,
+"code": null,
+"msg": "The service is not configured. Please try again later."
+},
+{
+"file": "worker.ts",
+"line": 481,
+"status": 429,
+"code": null,
+"msg": "Too many new engagements from this network today. Please try again tomorrow."
+},
+{
+"file": "worker.ts",
+"line": 482,
+"status": 503,
+"code": null,
+"msg": "busy"
+},
+{
+"file": "worker.ts",
+"line": 624,
+"status": 403,
+"code": "ai-not-allowed",
+"msg": "A Host's AI assistant cannot pay or manage the team. The Host does this in their own console."
+},
+{
+"file": "worker.ts",
+"line": 643,
+"status": 403,
+"code": "host-setup",
+"msg": "Please finish your setup first: confirm your e-mail address and add your mobile number."
+},
+{
+"file": "worker.ts",
+"line": 650,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "worker.ts",
+"line": 659,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "worker.ts",
+"line": 663,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "worker.ts",
+"line": 676,
+"status": 400,
+"code": "consent-required",
+"msg": "Please tick the box to continue."
+},
+{
+"file": "worker.ts",
+"line": 692,
+"status": 400,
+"code": null,
+"msg": "Give a date and time with a time zone, like at=2026-10-03T16:00:00+05:30 (India time is +05:30). A time without a zone is not accepted because it could start your game at the wrong hour."
+},
+{
+"file": "worker.ts",
+"line": 698,
+"status": null,
+"code": null,
+"msg": "That time has already passed. Pick a time in the future."
+},
+{
+"file": "worker.ts",
+"line": 703,
+"status": 400,
+"code": null,
+"msg": "Please enter a valid work email."
+},
+{
+"file": "worker.ts",
+"line": 714,
+"status": 400,
+"code": null,
+"msg": "Please enter a valid work email."
+},
+{
+"file": "worker.ts",
+"line": 723,
+"status": 429,
+"code": null,
+"msg": "Too many codes requested. Please try again in an hour."
+},
+{
+"file": "worker.ts",
+"line": 745,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "worker.ts",
+"line": 748,
+"status": 400,
+"code": null,
+"msg": "Say whether you are signing up, signing in or finishing a Host setup."
+},
+{
+"file": "worker.ts",
+"line": 751,
+"status": 429,
+"code": null,
+"msg": "Too many tries from this network. Please use an e-mail code, or try again tomorrow."
+},
+{
+"file": "worker.ts",
+"line": 763,
+"status": 403,
+"code": "email-mismatch",
+"msg": "This link is for ${maskEmail(onFile)}"
+},
+{
+"file": "worker.ts",
+"line": 790,
+"status": 404,
+"code": "no-account",
+"msg": "There is no account for this Google e-mail yet. Choose sign up to make one."
+},
+{
+"file": "worker.ts",
+"line": 797,
+"status": 429,
+"code": null,
+"msg": "Too many tries from this network. Please use the 6-digit code, or try again tomorrow."
+},
+{
+"file": "worker.ts",
+"line": 798,
+"status": 400,
+"code": null,
+"msg": "This sign-in link is not valid any more. Please ask for a new one from the sign-in page."
+},
+{
+"file": "worker.ts",
+"line": 816,
+"status": 400,
+"code": null,
+"msg": "Enter the 6-digit code."
+},
+{
+"file": "worker.ts",
+"line": 819,
+"status": 400,
+"code": null,
+"msg": "That code is not right or has expired. Please ask for a new one."
+},
+{
+"file": "worker.ts",
+"line": 866,
+"status": 429,
+"code": null,
+"msg": "You already asked for several fresh links today. Use the latest e-mail, or press Replace my AI link."
+},
+{
+"file": "worker.ts",
+"line": 880,
+"status": 400,
+"code": null,
+"msg": "Pick a key from the list."
+},
+{
+"file": "worker.ts",
+"line": 882,
+"status": 409,
+"code": null,
+"msg": "That is the key you are using right now. Sign in with another key first."
+},
+{
+"file": "worker.ts",
+"line": 900,
+"status": 403,
+"code": null,
+"msg": "A pay link is for people to make themselves. It is not available through an AI link. Ask the owner to make it in the console (Check, publish and pay)."
+},
+{
+"file": "worker.ts",
+"line": 903,
+"status": 404,
+"code": null,
+"msg": "No such engagement."
+},
+{
+"file": "worker.ts",
+"line": 904,
+"status": 403,
+"code": null,
+"msg": "Your Co-host link is for a different game."
+},
+{
+"file": "worker.ts",
+"line": 905,
+"status": 409,
+"code": null,
+"msg": "This game was cancelled. It cannot be paid for."
+},
+{
+"file": "worker.ts",
+"line": 906,
+"status": 409,
+"code": "already-paid",
+"msg": "This game is already paid for."
+},
+{
+"file": "worker.ts",
+"line": 907,
+"status": 400,
+"code": null,
+"msg": "That many participants needs a custom arrangement. Please write to us."
+},
+{
+"file": "worker.ts",
+"line": 914,
+"status": 403,
+"code": null,
+"msg": "A Host needs a mobile number or an e-mail address. Only the owner enters those, in the console (Your team). Tell the organizer to add the Host there."
+},
+{
+"file": "worker.ts",
+"line": 919,
+"status": 400,
+"code": null,
+"msg": "Please give the Host's e-mail address or mobile number (at least one). Their own link is sent there."
+},
+{
+"file": "worker.ts",
+"line": 920,
+"status": 400,
+"code": null,
+"msg": "That e-mail address does not look right. Please check it."
+},
+{
+"file": "worker.ts",
+"line": 922,
+"status": 400,
+"code": null,
+"msg": "Please check the Host's mobile number. "
+},
+{
+"file": "worker.ts",
+"line": 924,
+"status": 409,
+"code": null,
+"msg": "You can have up to ${MAX_HOSTS} Hosts at a time. Retire one first."
+},
+{
+"file": "worker.ts",
+"line": 940,
+"status": 403,
+"code": null,
+"msg": "Only the owner sends a Host's link, in the console (Your team)."
+},
+{
+"file": "worker.ts",
+"line": 944,
+"status": 400,
+"code": null,
+"msg": "Pick a Host from the list."
+},
+{
+"file": "worker.ts",
+"line": 946,
+"status": 404,
+"code": null,
+"msg": "That person is not on your team."
+},
+{
+"file": "worker.ts",
+"line": 948,
+"status": 409,
+"code": "host-active",
+"msg": "This Host has already finished setup and signs in with their e-mail. If they cannot get in, retire them and add them again."
+},
+{
+"file": "worker.ts",
+"line": 981,
+"status": 403,
+"code": null,
+"msg": "A Co-host needs a name and a mobile number. Only the owner enters those, in the console."
+},
+{
+"file": "worker.ts",
+"line": 984,
+"status": 400,
+"code": null,
+"msg": "Please give the Co-host's name."
+},
+{
+"file": "worker.ts",
+"line": 985,
+"status": 400,
+"code": null,
+"msg": "Please give a valid mobile number for the Co-host."
+},
+{
+"file": "worker.ts",
+"line": 988,
+"status": 400,
+"code": null,
+"msg": "Choose which game this Co-host is for."
+},
+{
+"file": "worker.ts",
+"line": 989,
+"status": 409,
+"code": null,
+"msg": "That game was cancelled."
+},
+{
+"file": "worker.ts",
+"line": 1000,
+"status": 400,
+"code": null,
+"msg": "Pick a person from the list."
+},
+{
+"file": "worker.ts",
+"line": 1002,
+"status": 404,
+"code": null,
+"msg": "That person is not on your team."
+},
+{
+"file": "worker.ts",
+"line": 1005,
+"status": 409,
+"code": null,
+"msg": "That is the key you are using right now."
+},
+{
+"file": "worker.ts",
+"line": 1018,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "worker.ts",
+"line": 1030,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "worker.ts",
+"line": 1036,
+"status": 400,
+"code": null,
+"msg": "Please confirm in your console."
+},
+{
+"file": "worker.ts",
+"line": 1038,
+"status": 409,
+"code": null,
+"msg": "A game is running. Close the account after it ends."
+},
+{
+"file": "worker.ts",
+"line": 1079,
+"status": 400,
+"code": null,
+"msg": "Bad message."
+},
+{
+"file": "worker.ts",
+"line": 1086,
+"status": 404,
+"code": null,
+"msg": "No such engagement."
+},
+{
+"file": "worker.ts",
+"line": 1090,
+"status": 400,
+"code": null,
+"msg": "Bad key."
+},
+{
+"file": "worker.ts",
+"line": 1093,
+"status": 409,
+"code": null,
+"msg": "Pause is available for engagements of up to ${PAUSE_MAX_PARTICIPANTS.toLocaleString(\"en-IN\")} participants. Larger ones run without it, which keeps every phone's traffic off the free plan's daily allowance."
+},
+{
+"file": "worker.ts",
+"line": 1101,
+"status": 400,
+"code": null,
+"msg": "Ask for pause, resume, stop or erase."
+},
+{
+"file": "worker.ts",
+"line": 1121,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "worker.ts",
+"line": 1140,
+"status": 400,
+"code": null,
+"msg": "Give a kind (feature, improvement, report, bug or other), a short title (4 to 120 characters) and a description (10 to 2000 characters)."
+},
+{
+"file": "worker.ts",
+"line": 1141,
+"status": 400,
+"code": null,
+"msg": "Please do not include e-mail addresses or phone numbers, or anything about specific people. Describe the need in general terms."
+},
+{
+"file": "worker.ts",
+"line": 1143,
+"status": 429,
+"code": null,
+"msg": "That is plenty for today. Please try again tomorrow."
+},
+{
+"file": "worker.ts",
+"line": 1157,
+"status": 404,
+"code": null,
+"msg": "No such suggestion."
+},
+{
+"file": "worker.ts",
+"line": 1167,
+"status": 400,
+"code": null,
+"msg": "Pick a status."
+},
+{
+"file": "worker.ts",
+"line": 1171,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "worker.ts",
+"line": 1181,
+"status": 400,
+"code": null,
+"msg": "Check the engagement details."
+},
+{
+"file": "worker.ts",
+"line": 1196,
+"status": 409,
+"code": null,
+"msg": "You have ${MAX_DRAFTS} unpublished drafts. Publish one, or let one lapse: an unpublished draft is forgotten after ${DRAFT_DAYS} days, and closing your organizer account deletes them all."
+},
+{
+"file": "worker.ts",
+"line": 1249,
+"status": 400,
+"code": null,
+"msg": "Send up to 10 notices: {id, title (max 80), body (max 200), url (a path on this site, optional)}."
+},
+{
+"file": "worker.ts",
+"line": 1267,
+"status": 404,
+"code": null,
+"msg": "No such engagement."
+},
+{
+"file": "worker.ts",
+"line": 1279,
+"status": 404,
+"code": null,
+"msg": "Not found"
+},
+{
+"file": "worker.ts",
+"line": 1282,
+"status": 404,
+"code": null,
+"msg": "No such engagement."
+},
+{
+"file": "worker.ts",
+"line": 1313,
+"status": 403,
+"code": "cancelled",
+"msg": "This game was cancelled by the organizer."
+},
+{
+"file": "worker.ts",
+"line": 1314,
+"status": 409,
+"code": "cancelled",
+"msg": "This game was cancelled by the organizer."
+},
+{
+"file": "worker.ts",
+"line": 1322,
+"status": 400,
+"code": "confirmations",
+"msg": "Please confirm three times to cancel the game."
+},
+{
+"file": "worker.ts",
+"line": 1340,
+"status": 403,
+"code": null,
+"msg": "Your Co-host link is for a different game."
+},
+{
+"file": "worker.ts",
+"line": 1350,
+"status": 403,
+"code": null,
+"msg": "This engagement is not open yet."
+},
+{
+"file": "worker.ts",
+"line": 1358,
+"status": 404,
+"code": "link-gone",
+"msg": "This link is not valid any more. Please ask the person who invited you to send it again."
+},
+{
+"file": "worker.ts",
+"line": 1363,
+"status": 400,
+"code": null,
+"msg": "Enter a valid mobile number."
+},
+{
+"file": "worker.ts",
+"line": 1366,
+"status": 400,
+"code": null,
+"msg": "Enter a valid mobile number."
+},
+{
+"file": "worker.ts",
+"line": 1374,
+"status": 403,
+"code": "removed",
+"msg": "You were removed from this game by the organizer."
+},
+{
+"file": "worker.ts",
+"line": 1380,
+"status": 423,
+"code": "link-used",
+"msg": "This link was already opened on another phone. If you are someone else, type your own mobile number to ask to join. If it is you on a new phone, ask whoever invited you to send the link again."
+},
+{
+"file": "worker.ts",
+"line": 1381,
+"status": 423,
+"code": "other-phone",
+"msg": "This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it."
+},
+{
+"file": "worker.ts",
+"line": 1383,
+"status": 409,
+"code": "device-used",
+"msg": "This phone already holds a ticket in this engagement. One phone, one ticket. Ask the person to open the link on their own phone."
+},
+{
+"file": "worker.ts",
+"line": 1397,
+"status": 400,
+"code": null,
+"msg": "Please refresh this page and try again."
+},
+{
+"file": "worker.ts",
+"line": 1398,
+"status": 409,
+"code": "device-used",
+"msg": "This phone already holds a ticket in this engagement. One phone, one ticket. Others can join from their own phones, using your invitation link if the organizer allowed it."
+},
+{
+"file": "worker.ts",
+"line": 1400,
+"status": 409,
+"code": null,
+"msg": "This engagement is full."
+},
+{
+"file": "worker.ts",
+"line": 1418,
+"status": 429,
+"code": "busy",
+"msg": "It is busy right now. Please try again in a few minutes."
+},
+{
+"file": "worker.ts",
+"line": 1419,
+"status": 503,
+"code": "busy",
+"msg": "It is very busy right now. Please try again in a few minutes."
+},
+{
+"file": "worker.ts",
+"line": 1422,
+"status": 429,
+"code": "waiting-full",
+"msg": "Many people are waiting for an answer right now. Please try again a little later."
+},
+{
+"file": "worker.ts",
+"line": 1423,
+"status": 403,
+"code": "declined",
+"msg": "This game could not add you. Please talk to whoever invited you."
+},
+{
+"file": "worker.ts",
+"line": 1427,
+"status": 409,
+"code": "invite-full",
+"msg": "This invitation has already been used by ${limit} people, which is the most one person can invite. ${msg}"
+},
+{
+"file": "worker.ts",
+"line": 1428,
+"status": 403,
+"code": "waiting",
+"msg": "This engagement is by invitation. ${msg}"
+},
+{
+"file": "worker.ts",
+"line": 1439,
+"status": 429,
+"code": "busy",
+"msg": "It is busy right now. Please try again in a few minutes."
+},
+{
+"file": "worker.ts",
+"line": 1440,
+"status": 503,
+"code": "busy",
+"msg": "It is very busy right now. Please try again in a few minutes."
+},
+{
+"file": "worker.ts",
+"line": 1444,
+"status": 409,
+"code": "device-used",
+"msg": "This phone already holds a ticket in this engagement. One phone, one ticket."
+},
+{
+"file": "worker.ts",
+"line": 1444,
+"status": 409,
+"code": "device-used",
+"msg": "This engagement is full."
+},
+{
+"file": "worker.ts",
+"line": 1445,
+"status": 423,
+"code": "other-phone",
+"msg": "This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it."
+},
+{
+"file": "worker.ts",
+"line": 1456,
+"status": 403,
+"code": null,
+"msg": "This engagement is not open yet."
+},
+{
+"file": "worker.ts",
+"line": 1477,
+"status": 400,
+"code": null,
+"msg": "Enter a valid mobile number."
+},
+{
+"file": "worker.ts",
+"line": 1479,
+"status": 404,
+"code": null,
+"msg": "That number has not joined this engagement."
+},
+{
+"file": "worker.ts",
+"line": 1486,
+"status": 409,
+"code": null,
+"msg": "The game is running. Please delete this person after it ends."
+},
+{
+"file": "worker.ts",
+"line": 1501,
+"status": 400,
+"code": null,
+"msg": "Enter a valid mobile number."
+},
+{
+"file": "worker.ts",
+"line": 1504,
+"status": 404,
+"code": null,
+"msg": "That number has not joined this engagement."
+},
+{
+"file": "worker.ts",
+"line": 1509,
+"status": 400,
+"code": null,
+"msg": "Bad claim."
+},
+{
+"file": "worker.ts",
+"line": 1511,
+"status": 403,
+"code": null,
+"msg": "Not a participant of this engagement."
+},
+{
+"file": "worker.ts",
+"line": 1512,
+"status": 403,
+"code": "removed",
+"msg": "You were removed from this game by the organizer."
+},
+{
+"file": "worker.ts",
+"line": 1519,
+"status": 503,
+"code": null,
+"msg": "Busy day. Your claim is kept on your phone and will be sent again."
+},
+{
+"file": "worker.ts",
+"line": 1536,
+"status": 400,
+"code": null,
+"msg": "Publish the engagement first. Nobody can see a draft."
+},
+{
+"file": "worker.ts",
+"line": 1539,
+"status": 400,
+"code": null,
+"msg": "Write the message to send."
+},
+{
+"file": "worker.ts",
+"line": 1540,
+"status": 400,
+"code": "too-long",
+"msg": "A message can be at most 160 characters. Yours has ${text.length}. Please shorten it."
+},
+{
+"file": "worker.ts",
+"line": 1542,
+"status": 429,
+"code": null,
+"msg": "Please wait a few seconds before sending another message."
+},
+{
+"file": "worker.ts",
+"line": 1585,
+"status": 400,
+"code": null,
+"msg": "Please confirm a valid email address."
+},
+{
+"file": "worker.ts",
+"line": 1586,
+"status": 400,
+"code": null,
+"msg": "Please confirm a valid mobile number. "
+},
+{
+"file": "worker.ts",
+"line": 1587,
+"status": 400,
+"code": "start-pending",
+"msg": "The start time has passed or has not been chosen. Please choose a new start time first."
+},
+{
+"file": "worker.ts",
+"line": 1630,
+"status": 400,
+"code": null,
+"msg": "Give the ticket number (or the mobile number) and a role (organizer, host, co-host or none)."
+},
+{
+"file": "worker.ts",
+"line": 1631,
+"status": 409,
+"code": null,
+"msg": "Flag your own team before the game begins. Every phone draws the lucky winners from the same list, so it cannot change once the game has started."
+},
+{
+"file": "worker.ts",
+"line": 1634,
+"status": 404,
+"code": null,
+"msg": "That number has not joined yet. Ask them to open the game link first."
+},
+{
+"file": "worker.ts",
+"line": 1639,
+"status": 403,
+"code": null,
+"msg": "Not a participant of this engagement."
+},
+{
+"file": "worker.ts",
+"line": 1652,
+"status": 403,
+"code": null,
+"msg": "Winners are decided by the software, from the public numbers, when several phones agree. Nobody can post or change them."
+},
+{
+"file": "worker.ts",
+"line": 1683,
+"status": 400,
+"code": null,
+"msg": "Pick an earlier engagement."
+},
+{
+"file": "worker.ts",
+"line": 1685,
+"status": 400,
+"code": null,
+"msg": "Pick an earlier engagement."
+},
+{
+"file": "worker.ts",
+"line": 1688,
+"status": 410,
+"code": "gone",
+"msg": "That engagement's people list has already been deleted (personal data is deleted within 24 hours of a game ending). Upload your list again."
+},
+{
+"file": "worker.ts",
+"line": 1689,
+"status": 409,
+"code": null,
+"msg": "This engagement is smaller than the earlier roster."
+},
+{
+"file": "worker.ts",
+"line": 1703,
+"status": 400,
+"code": null,
+"msg": "Send between 1 and 100 people at a time."
+},
+{
+"file": "worker.ts",
+"line": 1722,
+"status": 409,
+"code": null,
+"msg": "The engagement has already started, so it can no longer be changed."
+},
+{
+"file": "worker.ts",
+"line": 1724,
+"status": 400,
+"code": null,
+"msg": "Check the details."
+},
+{
+"file": "worker.ts",
+"line": 1725,
+"status": 400,
+"code": null,
+"msg": "Who can join: choose \\\"list\\\" (only people on a list) or \\\"anyone\\\" (anyone with the link)."
+},
+{
+"file": "worker.ts",
+"line": 1726,
+"status": 400,
+"code": null,
+"msg": "A Co-host can list ${COHOST_LIMIT_MIN} to ${COHOST_LIMIT_MAX} people."
+},
+{
+"file": "worker.ts",
+"line": 1731,
+"status": 400,
+"code": null,
+"msg": "Check the details."
+},
+{
+"file": "worker.ts",
+"line": 1732,
+"status": 400,
+"code": null,
+"msg": "Pick a start time in the future."
+},
+{
+"file": "worker.ts",
+"line": 1738,
+"status": 402,
+"code": null,
+"msg": "Your pack allows up to ${e.pack ?? e.cap} participants. Buy a bigger pack to raise the limit."
+},
+{
+"file": "worker.ts",
+"line": 1739,
+"status": 409,
+"code": null,
+"msg": "The limit cannot be lower than the people already on the list."
+},
+{
+"file": "worker.ts",
+"line": 1756,
+"status": 404,
+"code": null,
+"msg": "Not found"
+}
+]

@@ -1,0 +1,225 @@
+404	admin.ts:149	Not found
+413	admin.ts:151	Too large
+400	admin.ts:153	Bad signature
+400	admin.ts:154	Bad request
+503	admin.ts:162	busy
+400	admin.ts:175	Give the organizer's e-mail address: ?email=name@company.com
+400	clone.ts:48	Check the start time.
+400	clone.ts:49	Pick a start time in the future.
+400	clone.ts:50	A game that is not paid for yet can be set at most 30 days ahead. Please pick a day within the next 30 days.
+409	clone.ts:55	You have {x} unpublished drafts. Publish one, or let one lapse: an unpublished draft is forgotten after 30 days, and closing your organizer account deletes them all.
+503	clone.ts:57	It is very busy right now. Please try again in a few minutes.
+503	clone.ts:69	Could not make a new game code. Please try again.
+400	consent.ts:39	Please tick the box to continue.
+403	credit.ts:228	Paying is for people to do themselves. Ask the owner to use their credit in the console.
+403	credit.ts:229	Not allowed.
+404	credit.ts:231	No such engagement.
+403	credit.ts:232	Your Co-host link is for a different game.
+409	credit.ts:233	This game was cancelled. It cannot be paid for.
+409	credit.ts:234	This game did not start and is closed. It cannot be paid for.
+400	credit.ts:236	That many participants needs a custom arrangement. Please write to us.
+400	credit.ts:244	Pick the date and time of this game first.
+409	credit.ts:245	A payment for this game is being confirmed. Please wait a few minutes.
+400	helpdesk.ts:187	Enter the e-mail address you joined Refer & earn with.
+403	helpdesk.ts:188	That is not the e-mail address you joined Refer & earn with.
+400	helpdesk.ts:227	Enter the Organizer's e-mail address.
+400	helpdesk.ts:229	Enter the Organizer's e-mail address, not your own.
+409	helpdesk.ts:232	You can have up to {x} clients at a time.
+409	helpdesk.ts:233	You already have this client.
+429	helpdesk.ts:236	That is enough invitations for this hour. Please try again later.
+429	helpdesk.ts:237	That address has had enough invitations today. Please try again tomorrow.
+404	helpdesk.ts:258	That client is not active.
+400	helpdesk.ts:259	Say which game.
+404	helpdesk.ts:261	That game was not prepared through this client.
+409	helpdesk.ts:263	That game is already published.
+429	helpdesk.ts:265	The Organizer was asked a moment ago. Please wait a few minutes before asking again.
+403	helpdesk.ts:285	Please sign in first.
+400	helpdesk.ts:288	Please tap Allow to agree.
+403	helpdesk.ts:290	This invitation was sent to a different e-mail address. Sign in with the address it was sent to.
+404	helpdesk.ts:341	That game no longer exists.
+409	helpdesk.ts:355	The game is not published yet.
+400	hostsetup.ts:102	Please give your mobile number. 
+409	hostsetup.ts:104	Your mobile number is already saved. Ask the Organizer to change it.
+400	hostsetup.ts:118	Please enter a valid e-mail address.
+409	hostsetup.ts:120	Your e-mail is already confirmed. Sign in with it on other devices.
+409	hostsetup.ts:122	This link is for {x}
+429	hostsetup.ts:127	Too many codes requested. Please try again in an hour.
+400	hostsetup.ts:141	Enter the 6-digit code.
+400	hostsetup.ts:143	That code is not right or has expired. Please ask for a new one.
+400	ledgerc.ts:257	month must be YYYY-MM
+400	lifecycle.ts:108	Bad report.
+403	lifecycle.ts:110	Not a participant of this engagement.
+503	lifecycle.ts:113	Busy day. Please try again after midnight UTC.
+403	lifecycle.ts:247	This report link is not valid.
+404	lifecycle.ts:251	This report is not ready, or the link has closed and the participants' details are being or have been deleted (that happens within 24 hours of the game ending, as promised).
+400	mode.ts:109	Say which mode: TEST or LIVE.
+400	mode.ts:120	Enter a valid e-mail address.
+400	mode.ts:122	Give an address to add or to remove.
+400	partners.ts:101	Enter a valid mobile number.
+400	partners.ts:102	Enter a valid e-mail address. We send you a code.
+400	partners.ts:103	Please agree to join Refer & earn.
+429	partners.ts:104	Too many tries from this network today. Please try again tomorrow.
+400	partners.ts:181	Rate must be between 0 and 0.5 (50%).
+400	partners.ts:190	Give the partner code and the payment reference.
+400	partners.ts:197	Give the payment id.
+400	partners.ts:205	Give the partner code and a state (active or blocked).
+404	pay.ts:177	Unknown payment.
+503	pay.ts:179	Busy day. Your payment is safe; this will complete shortly.
+403	pay.ts:287	Test payments are only available while the service is in test mode.
+503	pay.ts:289	Payments are not switched on yet. Please try again later.
+429	pay.ts:304	Too many payment attempts from this network today. Please try again tomorrow.
+403	pay.ts:309	Please sign in again.
+409	pay.ts:314	This game was cancelled by the organizer. It cannot be paid for.
+409	pay.ts:316	This engagement is already published.
+400	pay.ts:323	Choose a pack.
+400	pay.ts:328	Enter your name.
+400	pay.ts:332	That GSTIN does not look right. It has 15 characters, like 27ABCDE1234F1Z5.
+400	pay.ts:333	Payments in US dollars are not switched on yet. Please pay in Indian rupees or write to us.
+409	pay.ts:339	Credit already covers this game. Tap Use my credit to finish.
+502	pay.ts:347	The payment service said: {x}
+503	pay.ts:365	Online payments are not switched on.
+400	pay.ts:371	Payments in US dollars are not switched on yet. Please try again later.
+404	pay.ts:392	We could not match this payment.
+400	pay.ts:395	The payment could not be verified. If money was taken it will be refunded.
+400	pay.ts:401	The payment details did not match the order.
+402	pay.ts:406	The payment is {x}. Nothing was charged to your order.
+503	pay.ts:419	Webhook secret is not set.
+400	pay.ts:420	Bad signature.
+400	pay.ts:421	Bad body.
+400	pay.ts:468	Bad request.
+409	pay.ts:480	This game is not waiting for payment.
+429	pay.ts:518	This invoice has already been e-mailed 5 times.
+403	people.ts:139	Please sign in, or open your ticket link first.
+403	people.ts:141	Not a participant of this game.
+403	people.ts:142	You were removed from this game.
+403	people.ts:143	Your team seat invites through the console, not through the ticket.
+403	people.ts:144	Guests invited by a guest can play but cannot invite more people.
+403	people.ts:145	The organizer has not switched on guest invitations for this game.
+409	people.ts:230	This game did not start. Your details have been erased.
+409	people.ts:231	This game was cancelled by the organizer.
+400	people.ts:268	Send at least one person: {people:[{name, phone}]}.
+413	people.ts:270	Send up to {x} people at a time; the console sends a bigger list in several parts.
+409	people.ts:271	The game has ended, so no one can be added.
+409	people.ts:300	This game is for {x} people and {x} are already on the lists. Nothing was added.
+403	people.ts:336	Only the Organizer and Hosts can download a list.
+404	people.ts:351	No such person.
+404	people.ts:353	No such person on your list.
+403	people.ts:361	Once the game has started only the Organizer or a Host can remove people.
+409	people.ts:362	That is a team member's own seat. Retire the team member instead.
+409	people.ts:398	That person was removed. Add them again first.
+403	people.ts:399	Once the game has started only the Organizer or a Host can send a link again.
+409	people.ts:407	They have already joined with their first number. Their ticket can move to a new phone, but not to a new number.
+409	people.ts:408	That number is already invited.
+403	people.ts:425	Your ticket link is the one you were sent.
+400	people.ts:438	We need your mobile number to make your play link.
+409	people.ts:442	That number was removed from this game. Add it back from My people first.
+404	people.ts:476	No such request.
+400	people.ts:478	Say admit or decline.
+409	people.ts:483	The game has ended, so this request has lapsed.
+409	people.ts:489	Your list is full ({x} people). Remove someone first.
+409	people.ts:490	This game is for {x} people and all places are taken.
+409	people.ts:506	The game has ended, so these requests have lapsed.
+404	people.ts:555	That request is not here any more.
+400	people.ts:561	Say which: ?pid=<your ticket id> or ?wid=<your request id>.
+400	rights.ts:65	Please open this from the phone that holds your {x}.
+403	rights.ts:68	This is not the phone that holds this {x}. Nobody can ask for another player.
+503	rights.ts:104	It is busy right now. Please try again in a few minutes.
+400	rights.ts:155	Please choose what you want: to see your data, to correct it, to delete it, or to name another person.
+400	rights.ts:157	Please write what should be corrected.
+429	rights.ts:161	You have already sent several requests for this game. Please wait for our answer.
+503	winners.ts:48	Busy day. Your report is kept on your phone and will be sent again.
+403	winners.ts:82	This is not the phone that holds this ticket.
+404	winners.ts:84	No reward recorded for this ticket.
+400	winners.ts:86	Please write your name.
+400	winners.ts:87	Please enter a valid mobile number.
+409	winners.ts:131	Not given: this person was removed from the game.
+404	winners.ts:134	No such reward.
+403	worker.ts:242	Names and mobile numbers are handled by the owner in the console, not by the AI. Ask the owner to paste the list in the Participants card. You can set the limit with settings and refer to people by ticket number.
+500	worker.ts:375	Something went wrong. Please try again.
+503	worker.ts:380	The service is not configured. Please try again later.
+429	worker.ts:481	Too many new engagements from this network today. Please try again tomorrow.
+403	worker.ts:624	A Host's AI assistant cannot pay or manage the team. The Host does this in their own console.
+403	worker.ts:643	Please finish your setup first: confirm your e-mail address and add your mobile number.
+400	worker.ts:692	Give a date and time with a time zone, like at=2026-10-03T16:00:00+05:30 (India time is +05:30). A time without a zone is not accepted because it could start your game at the wrong hour.
+None	worker.ts:698	That time has already passed. Pick a time in the future.
+400	worker.ts:703	Please enter a valid work email.
+400	worker.ts:748	Say whether you are signing up, signing in or finishing a Host setup.
+429	worker.ts:751	Too many tries from this network. Please use an e-mail code, or try again tomorrow.
+404	worker.ts:790	There is no account for this Google e-mail yet. Choose sign up to make one.
+429	worker.ts:797	Too many tries from this network. Please use the 6-digit code, or try again tomorrow.
+400	worker.ts:798	This sign-in link is not valid any more. Please ask for a new one from the sign-in page.
+429	worker.ts:866	You already asked for several fresh links today. Use the latest e-mail, or press Replace my AI link.
+400	worker.ts:880	Pick a key from the list.
+409	worker.ts:882	That is the key you are using right now. Sign in with another key first.
+403	worker.ts:900	A pay link is for people to make themselves. It is not available through an AI link. Ask the owner to make it in the console (Check, publish and pay).
+409	worker.ts:906	This game is already paid for.
+403	worker.ts:914	A Host needs a mobile number or an e-mail address. Only the owner enters those, in the console (Your team). Tell the organizer to add the Host there.
+400	worker.ts:919	Please give the Host's e-mail address or mobile number (at least one). Their own link is sent there.
+400	worker.ts:920	That e-mail address does not look right. Please check it.
+400	worker.ts:922	Please check the Host's mobile number. 
+409	worker.ts:924	You can have up to {x} Hosts at a time. Retire one first.
+403	worker.ts:940	Only the owner sends a Host's link, in the console (Your team).
+400	worker.ts:944	Pick a Host from the list.
+404	worker.ts:946	That person is not on your team.
+409	worker.ts:948	This Host has already finished setup and signs in with their e-mail. If they cannot get in, retire them and add them again.
+403	worker.ts:981	A Co-host needs a name and a mobile number. Only the owner enters those, in the console.
+400	worker.ts:984	Please give the Co-host's name.
+400	worker.ts:985	Please give a valid mobile number for the Co-host.
+400	worker.ts:988	Choose which game this Co-host is for.
+409	worker.ts:989	That game was cancelled.
+400	worker.ts:1000	Pick a person from the list.
+409	worker.ts:1005	That is the key you are using right now.
+400	worker.ts:1036	Please confirm in your console.
+409	worker.ts:1038	A game is running. Close the account after it ends.
+400	worker.ts:1079	Bad message.
+400	worker.ts:1090	Bad key.
+409	worker.ts:1093	Pause is available for engagements of up to {x} participants. Larger ones run without it, which keeps every phone's traffic off the free plan's daily allowance.
+400	worker.ts:1101	Ask for pause, resume, stop or erase.
+400	worker.ts:1140	Give a kind (feature, improvement, report, bug or other), a short title (4 to 120 characters) and a description (10 to 2000 characters).
+400	worker.ts:1141	Please do not include e-mail addresses or phone numbers, or anything about specific people. Describe the need in general terms.
+429	worker.ts:1143	That is plenty for today. Please try again tomorrow.
+404	worker.ts:1157	No such suggestion.
+400	worker.ts:1167	Pick a status.
+400	worker.ts:1181	Check the engagement details.
+409	worker.ts:1196	You have {x} unpublished drafts. Publish one, or let one lapse: an unpublished draft is forgotten after {x} days, and closing your organizer account deletes them all.
+400	worker.ts:1249	Send up to 10 notices: {id, title (max 80), body (max 200), url (a path on this site, optional)}.
+400	worker.ts:1322	Please confirm three times to cancel the game.
+403	worker.ts:1350	This engagement is not open yet.
+404	worker.ts:1358	This link is not valid any more. Please ask the person who invited you to send it again.
+403	worker.ts:1374	You were removed from this game by the organizer.
+423	worker.ts:1380	This link was already opened on another phone. If you are someone else, type your own mobile number to ask to join. If it is you on a new phone, ask whoever invited you to send the link again.
+423	worker.ts:1381	This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it.
+409	worker.ts:1383	This phone already holds a ticket in this engagement. One phone, one ticket. Ask the person to open the link on their own phone.
+400	worker.ts:1397	Please refresh this page and try again.
+409	worker.ts:1398	This phone already holds a ticket in this engagement. One phone, one ticket. Others can join from their own phones, using your invitation link if the organizer allowed it.
+409	worker.ts:1400	This engagement is full.
+429	worker.ts:1422	Many people are waiting for an answer right now. Please try again a little later.
+403	worker.ts:1423	This game could not add you. Please talk to whoever invited you.
+409	worker.ts:1427	This invitation has already been used by {x} people, which is the most one person can invite. {x}
+403	worker.ts:1428	This engagement is by invitation. {x}
+409	worker.ts:1444	This phone already holds a ticket in this engagement. One phone, one ticket.
+404	worker.ts:1479	That number has not joined this engagement.
+409	worker.ts:1486	The game is running. Please delete this person after it ends.
+400	worker.ts:1509	Bad claim.
+503	worker.ts:1519	Busy day. Your claim is kept on your phone and will be sent again.
+400	worker.ts:1536	Publish the engagement first. Nobody can see a draft.
+400	worker.ts:1539	Write the message to send.
+400	worker.ts:1540	A message can be at most 160 characters. Yours has {x}. Please shorten it.
+429	worker.ts:1542	Please wait a few seconds before sending another message.
+400	worker.ts:1585	Please confirm a valid email address.
+400	worker.ts:1586	Please confirm a valid mobile number. 
+400	worker.ts:1587	The start time has passed or has not been chosen. Please choose a new start time first.
+400	worker.ts:1630	Give the ticket number (or the mobile number) and a role (organizer, host, co-host or none).
+409	worker.ts:1631	Flag your own team before the game begins. Every phone draws the lucky winners from the same list, so it cannot change once the game has started.
+404	worker.ts:1634	That number has not joined yet. Ask them to open the game link first.
+403	worker.ts:1652	Winners are decided by the software, from the public numbers, when several phones agree. Nobody can post or change them.
+400	worker.ts:1683	Pick an earlier engagement.
+410	worker.ts:1688	That engagement's people list has already been deleted (personal data is deleted within 24 hours of a game ending). Upload your list again.
+409	worker.ts:1689	This engagement is smaller than the earlier roster.
+400	worker.ts:1703	Send between 1 and 100 people at a time.
+409	worker.ts:1722	The engagement has already started, so it can no longer be changed.
+400	worker.ts:1724	Check the details.
+400	worker.ts:1725	Who can join: choose \"list\" (only people on a list) or \"anyone\" (anyone with the link).
+400	worker.ts:1726	A Co-host can list {x} to {x} people.
+402	worker.ts:1738	Your pack allows up to {x} participants. Buy a bigger pack to raise the limit.
+409	worker.ts:1739	The limit cannot be lower than the people already on the list.

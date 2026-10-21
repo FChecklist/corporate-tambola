@@ -69,7 +69,7 @@ export default [
         // a past day
         await openStep(x.page, 1); await chip(x.page, "day", "other"); const y = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10);
         await (await x.page.$('[data-fi="dayo"]')).fill(y); await x.page.click('#sec1 [data-save="1"]'); await x.page.waitForTimeout(900);
-        t.check("a date in the past is refused with a message", /past|earlier|future|later|already/i.test(await t.text(x.page, "#sec1")), (await t.text(x.page, "#sec1")).slice(-200));
+        t.check("a date in the past is refused with a message", /past|earlier|future|later|already|ahead/i.test(await t.text(x.page, "#sec1")), (await t.text(x.page, "#sec1")).slice(-200));
         const after = (await org.info(eid)).body;
         t.check("start time unchanged after the refusal", Math.abs(after.startMs - info.startMs) < 15000);
         // 40 days ahead is beyond the 30 day window

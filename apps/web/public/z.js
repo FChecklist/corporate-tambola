@@ -15,7 +15,7 @@
     try { r = await fetch(BASE + path, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }); }
     catch { throw new Error("offline"); }
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw Object.assign(new Error(j.error || "http " + r.status), { status: r.status, code: j.code, body: j });
+    if (!r.ok) { const err = Object.assign(new Error(j.error || "http " + r.status), { status: r.status, code: j.code, body: j }); if (window.CTG) CTG.wrap(err, { what: method + " " + path.split("?")[0].replace(/\/[A-Za-z0-9_-]{6,}(?=\/|$)/g, "/...") }); throw err; }
     return j;
   };
   // ---------- what the game's public settings say besides the plan: the brand strip, a cancelled game; and a personal invite link's token ----------
