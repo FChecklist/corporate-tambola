@@ -43,8 +43,9 @@ export async function routeBeacon(ctx, { nowMs, seed = "sim", base }) {
     return route.fulfill({ status: 200, body: JSON.stringify(fakeRound(r, seed)), headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
   });
   await ctx.route(/\/(zgame|control|z|big|zc|report|preview)\.js(\?.*)?$/, async (route) => {
-    const resp = await route.fetch();
-    let body = await resp.text(); const name = new URL(route.request().url()).pathname.slice(1);
+    let resp, body;
+    try { resp = await route.fetch(); body = await resp.text(); } catch { return route.abort().catch(() => {}); } // the page was closed while this file was loading: nothing to patch
+    const name = new URL(route.request().url()).pathname.slice(1);
     if (/shortSignatures\.verify\(/.test(body)) { const p = patchBundle(body); body = p.text; patched[name] = p.replaced; }
     return route.fulfill({ response: resp, body, headers: { ...resp.headers(), "content-length": String(Buffer.byteLength(body)) } });
   });
