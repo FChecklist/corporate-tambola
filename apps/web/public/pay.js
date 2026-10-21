@@ -25,7 +25,8 @@
       return `${head}<div class="zcard" style="border:2px solid #2e7d4f"><h2>Payment received. Your engagement will begin on time.</h2>${TB.payReceipt ? TB.payReceipt(d, d.eid || eid) : ""}
         <p style="margin:0 0 10px">${d.paidFromCredit ? "Paid from your credit. " : ""}Thank you. Your engagement for up to <b>${nf(d.pack)}</b> participants is confirmed.${d.restartedAtMs ? ` It begins at <b>${esc(new Date(d.restartedAtMs).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }))}</b>, for everyone already waiting.` : " Share the link with your participants from your console if you have not already."}</p>
         ${d.invoiceUrl ? `${TB.invoiceBox ? TB.invoiceBox(d, S.email) : ""}<p class="zsmall">We also emailed it to you and to the organizer.</p>` : ""}
-        <a class="zbtn" href="/zc.html?e=${encodeURIComponent(d.eid || eid)}" style="text-decoration:none;display:inline-block">Open my engagement</a></div>`;
+        <a class="zbtn" href="/zc.html?e=${encodeURIComponent(d.eid || eid)}" style="text-decoration:none;display:inline-block">Open my engagement</a>
+        <p class="zsmall" id="goNote" aria-live="polite" style="margin:10px 0 0">Opening your engagement page in a few seconds. <button type="button" class="zlink" id="goStay" style="background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer">Stay on this page</button></p></div>`;
     }
     if (!S.info) return `${head}<p class="zmsg">${S.err ? esc(S.err) : "Loading…"}</p>`;
     const pack = packFor(S.info.cap);
@@ -109,9 +110,20 @@
         try { sessionStorage.setItem("ctz-email", email); sessionStorage.setItem("ctz-name", nm); } catch {}
         if (r && r.confirming) r = await waitForConfirm(r); // Razorpay has not confirmed yet: keep asking, never mark it paid early
         S.done = r;
+        goAuto(r.eid || eid); // once the payment is confirmed the organizer lands on the engagement page by themselves (the receipt is also e-mailed)
       } catch (e) { S.err = e.cancelled ? e.message : e.message; }
       S.busy = false; draw();
     };
+  }
+
+  let autoT = null;
+  function goAuto(id) {
+    clearTimeout(autoT);
+    autoT = setTimeout(() => {
+      const stay = document.getElementById("goStay"); if (!stay) return; // already left, or the page was redrawn
+      try { window.location.assign("/zc.html?e=" + encodeURIComponent(id)); } catch {}
+    }, 7000);
+    setTimeout(() => { const b = document.getElementById("goStay"); if (b) b.onclick = () => { clearTimeout(autoT); const n = document.getElementById("goNote"); if (n) n.textContent = "You can open your engagement any time with the button above."; }; }, 0);
   }
 
   (async () => {
