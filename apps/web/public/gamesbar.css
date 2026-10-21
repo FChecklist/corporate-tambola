@@ -13,3 +13,6 @@
 
 /* on a phone the row of games scrolls sideways: a soft fade on the right shows there is more */
 @media (max-width:720px){.cg-wrap{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);scrollbar-width:none;padding-right:28px}.cg-wrap::-webkit-scrollbar{display:none}}
+
+/* the owner asked for this top line to be hidden on the Corporate Tambola website; the games are still listed in the footer ("More from us") */
+.cg-bar{display:none !important}
