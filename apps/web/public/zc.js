@@ -15,6 +15,7 @@
   let eid = q.get("e") || "";
   const ACT = (q.get("do") || "").toLowerCase(); // a hand-over link from the AI assistant: opens the exact card; the organizer presses the button
   const QUICK = q.get("quick") === "1";
+  const NEWDEMO = q.get("demo") === "1"; // from the website: start a free demo game (up to 10 people) right away
   // A browser AI may open this page in a new tab, and a tab holds the key only for itself: another open tab of the same browser can hand it over (same site, same browser, never stored).
   const bc = typeof BroadcastChannel === "function" ? new BroadcastChannel("ctz-org-key") : null;
   const OLD_HOUSES = [{ id: "early5", label: "Early Five", how: "Be the first to mark any 5 of your numbers.", max: 5 }, { id: "top", label: "Top Line", how: "Mark all 5 numbers of the top line.", max: 5 }, { id: "mid", label: "Middle Line", how: "Mark all 5 numbers of the middle line.", max: 5 }, { id: "bot", label: "Bottom Line", how: "Mark all 5 numbers of the bottom line.", max: 5 }, { id: "corners", label: "Four Corners", how: "Mark the first and last number of the top and bottom lines.", max: 5 }, { id: "star", label: "Star", how: "Mark the four corners and the centre number of the middle line.", max: 5 }, { id: "full", label: "Full House", how: "Mark all 15 numbers of your ticket.", max: 5 }, { id: "full2", label: "Full Two-Ticket House", how: "Mark all 30 numbers across your two tickets.", max: 5 }];
@@ -952,7 +953,7 @@
     const main0 = clonePanel();
     const hist = S.showHist && h ? `<div class="zc-block"><h3>History · kept ${h.retentionDays} days</h3>${h.engagements.map((e) => `<div class="zc-rowl"><span>${esc(e.id)} · ${fmtDay(e.created_ms)} · ${e.participants} people${e.draft ? " · draft" : ""}</span><span><button type="button" class="zc-mini" data-open-game="${esc(e.id)}">Open</button> <button type="button" class="zc-mini" data-reuse="${esc(e.id)}">Reuse</button> <button type="button" class="zc-mini" data-clonebtn="1" data-from="${esc(e.id)}" data-people="${e.participants > 0 && !e.erased ? 1 : 0}">Create a new game like this one</button></span></div>`).join("")}</div>` : "";
     const main = `${S.note ? `<div class="zc-toast" role="status">${esc(S.note)}</div>` : ""}${main0}<div class="zc-small zc-rolenote">${esc(ROLE_NOTE.organizer)}</div>
-      <div class="zc-block"><h3>Start a new game</h3>${small("You build it first, at no cost. You pay only when you publish. The first number is called two minutes after the start time.")}<div class="zc-chips"><button type="button" class="zc-btn zc-btn-s" id="mk">Start a new game</button><a class="zc-chip" href="/zc.html?quick=1">Quick setup form</a></div></div>${bar}${hist}${acctHtml()}`;
+      <div class="zc-block"><h3>Start a new game</h3>${small("You build it first, at no cost. You pay only when you publish. The first number is called two minutes after the start time.")}<div class="zc-chips"><button type="button" class="zc-btn zc-btn-s" id="mk">Start a new game</button><button type="button" class="zc-btn zc-btn-s zc-btn-alt" id="mkdemo">Start a free demo game</button><a class="zc-chip" href="/zc.html?quick=1">Quick setup form</a></div>${small("A demo game is free, for up to 10 people. Every screen says DEMO GAME. You can make it a real game at any time.")}</div>${bar}${hist}${acctHtml()}`;
     return frame(`<div class="zc-body"><div class="zc-main">${main}</div></div>`, false);
   }
   // ---------- Quick setup: the first three steps as one form, with a real date and time picker (the AI route and the browser-AI route use it) ----------
@@ -1217,7 +1218,7 @@
 
   // ---------- quick setup: make the draft ----------
   async function makeDraft(r, id, hasName) {
-    const res = await call("POST", "/api/z", { id, ...(r.name ? { name: r.name } : {}), startRound: ZG.roundAt(r.startMs), callSeconds: r.speed, cap: r.cap, tickets: r.tickets, rounds: r.rounds, rewards: r.rewards, whoCanJoin: r.who });
+    const res = await call("POST", "/api/z", { id, ...(r.name ? { name: r.name } : {}), startRound: ZG.roundAt(r.startMs), callSeconds: r.speed, cap: r.cap, tickets: r.tickets, rounds: r.rounds, rewards: r.rewards, whoCanJoin: r.who, ...(r.demo ? { demo: true } : {}) });
     return res;
   }
   async function afterCreate(id, r) {
@@ -1245,8 +1246,9 @@
       refreshEng();
     } catch (e) { err.textContent = e.message; err.style.display = ""; }
   }
-  async function startNew() {
+  async function startNew(demo) {
     const saved = S.f; S.f = quickDefault(); const rr = quickRead(); S.f = saved;
+    if (demo) { rr.cap = DEMO_CAP; rr.demo = true; } // a free demo game: up to 10 people, every screen says DEMO GAME
     const id = randId();
     await makeDraft({ ...rr, name: "" }, id);
     const k = await afterCreate(id, rr);
@@ -1284,6 +1286,8 @@
     if ($("in")) $("in").onclick = () => { secret = $("sec").value.trim(); ss.set("ctz-org", secret); S.loginMsg = ""; bootstrap(); };
     if ($("back")) $("back").onclick = () => { eid = ""; S.cfg = null; S.info = null; S.f = null; S.fFor = ""; S.openInit = ""; S.note = ""; S.sum = null; history.replaceState(null, "", location.pathname + (BASE ? "?api=" + encodeURIComponent(BASE) : "")); refreshHome(); };
     if ($("mk")) $("mk").onclick = async () => { $("mk").disabled = true; try { await startNew(); } catch (e) { noteAndDraw(friendly(e)); } };
+    if ($("mkdemo")) $("mkdemo").onclick = async () => { $("mkdemo").disabled = true; try { await startNew(true); } catch (e) { noteAndDraw(friendly(e)); } };
+    if (NEWDEMO && !eid && secret && !S.autoDemo && $("mkdemo")) { S.autoDemo = true; $("mkdemo").click(); } // the website's "Start a free demo game" link lands here signed in
     // moving around
     all("[data-open]", (b) => (b.onclick = () => openStep(Number(b.dataset.open))));
     all("[data-acct]", (b) => (b.onclick = () => { S.acctOpen = !(S.acctOpen === null ? !eid : S.acctOpen); redraw(); if (S.acctOpen) { go("acct"); if (!Array.isArray(S.keys)) loadAccount(); } }));

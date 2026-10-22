@@ -134,3 +134,18 @@ describe("the pay page makes a demo a real game", () => {
     expect(p.$('[data-pack="100"]')!.getAttribute("aria-pressed")).toBe("true"); expect(p.text()).toMatch(/Pay ₹2,399 securely/);
   });
 });
+
+describe("the website's way in: Start a free demo game", () => {
+  test("the console opened with ?demo=1 (signed in) starts a free demo draft by itself: up to 10 people, demo on; the Start block also offers the button", async () => {
+    const o = await organizer();
+    const p = await page(o, "/zc?demo=1", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" });
+    await p.waitFor((x) => /Your draft is saved/.test(x), 15000);
+    const hist = await o.json(await o.api("GET", "/api/history", undefined, o.aiKey));
+    const g = hist.engagements[0]; const r = row(o, g.id);
+    expect(r.cap).toBe(10); expect(JSON.parse(r.config || "{}").demo).toBe(true);
+    expect(p.text()).toMatch(/DEMO GAME/);
+    const p2 = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" });
+    await p2.waitFor((x) => /Start a new game/.test(x), 15000);
+    expect(p2.$("#mkdemo")).toBeTruthy(); expect(p2.text()).toMatch(/A demo game is free, for up to 10 people/);
+  });
+});
