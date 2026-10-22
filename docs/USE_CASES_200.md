@@ -1,6 +1,6 @@
 # Corporate Tambola: the use cases that are tested
 
-Written 2026-10-22. One line per use case; each is a real-Chrome (Playwright) scenario in `tools/sim2/scenarios/ui/` unless marked otherwise. The number of checks is from the last full run. Status: PASS = ran green in the last run, NEW = written today and not yet in a full run, being built / planned = see the end.
+Written 2026-10-22. One line per use case; each is a real-Chrome (Playwright) scenario in `tools/sim2/scenarios/ui/` unless marked otherwise. The number of checks is from the last full run. Status: PASS = ran green in the release run of 2026-10-22 (or its fix re-runs), planned = see the end.
 
 | Use case | Area | What is tested | Checks | Status |
 |---|---|---|---|---|
@@ -163,32 +163,46 @@ Written 2026-10-22. One line per use case; each is a real-Chrome (Playwright) sc
 | 157. S18-03 | Many winners, tie rules, prizes list, organizer board | Ties share: the same game with the sharing rule; each prize position is a later call, and people finishing together share it |  | NEW |
 | 158. S18-04 | Many winners, tie rules, prizes list, organizer board | Only the organizer has the board: the board page without the key says so; with the key it shows the 90 numbers; the number screen shows the prizes and no board |  | NEW |
 | 159. S18-05 | Many winners, tie rules, prizes list, organizer board | The Bumper: with two tickets the Full Two-Ticket House can have many winners; the prizes list names 1st, 2nd... positions; a 101st winner is refused with a plain message |  | NEW |
-| 160. S98-01 |  | Probe: list every step and control of the Organizer console |  | NEW |
-| 161. S98-02 |  | Probe: the Publish button before anything is filled |  | NEW |
-| 162. S98-03 |  | Probe: a personal link with a wrong token, after pressing the button |  | NEW |
-| 163. S98-04 |  | Probe: Refer and earn enrolment |  | NEW |
-| 164. S98-05 |  | Probe: how many enrolment calls one click makes, with and without the new scripts |  | NEW |
-| 165. S98-06 |  | Probe: partner page slips |  | NEW |
-| 166. S98-07 |  | Probe: the pay link page |  | NEW |
-| 167. S99-01 |  | manual screens: organizer |  | NEW |
-| 168. S99-02 |  | manual screens: host, co-host, guests, game day |  | NEW |
-| 169. S99-03 |  | manual screens: partner (refer and earn) |  | NEW |
-| 170. S99-04 |  | manual screens: partner enrol, dashboard, referred sale; sales material |  | NEW |
-| 171. S19-01..08 | Demo game (free, up to 10) | Demo game: make, 10 join, 11th refused kindly, publish free, play with watermark, convert mid-game, convert after end (clone), conversion payment fails -> guide |  | being built |
-| 172. S20-01..06 | Host calls the numbers (manual mode) | Host calls: 3 phones + board + number screen get numbers only on presses, identical; pause during host mode; a Host presses from their link; press while pending refused kindly; auto mode regression |  | being built |
-| 173. S21-01..05 | Real housie play mode | Real housie mode: player taps their own numbers; Claim button; wrong mark refused kindly; organizer sees who claimed; easy mode unchanged |  | planned |
-| 174. S23-01 | Exceptions and abuse | Exception: the beacon (public random numbers) is unreachable for a while: phones wait calmly, resume with the same numbers |  | planned |
-| 175. S23-02 | Exceptions and abuse | Exception: the store is down during a game: phones keep playing from public data, claims are sent later exactly once |  | planned |
-| 176. S23-03 | Exceptions and abuse | Exception: two organizers edit the same game at once: the second save is refused or merged, never silently lost |  | planned |
-| 177. S23-04 | Exceptions and abuse | Exception: a guest opens the same personal link on three phones: one ticket, the others told kindly |  | planned |
-| 178. S23-05 | Exceptions and abuse | Exception: an expired or tampered sign-in link: a calm message, nothing created |  | planned |
-| 179. S23-06 | Exceptions and abuse | Exception: a payment webhook arrives twice and out of order: one fulfilment |  | planned |
-| 180. S23-07 | Exceptions and abuse | Exception: the organizer's clock is wrong by an hour: the game still starts on the public clock |  | planned |
-| 181. S23-08 | Exceptions and abuse | Exception: a phone with JavaScript blocked or an old browser: a readable message, no blank page |  | planned |
-| 182. S23-09 | Exceptions and abuse | Exception: 250 people join in one minute from one office network: all get seats, none blocked |  | planned |
-| 183. S23-10 | Exceptions and abuse | Exception: the organizer deletes a person mid-game who already won a prize: the prize record stays, the phone is told |  | planned |
+| 160. S19-01 | Demo game (free, up to 10) | Make a demo in the console: tick the demo chip in step 2 (the size drops to 10, bigger sizes vanish), 12 people is refused in place by the guide, publishing is free: DEMO GAME badge, no payment pending, no payment row, a DEMO GAME mail |  | NEW |
+| 161. S19-02 | Demo game (free, up to 10) | Ten phones join a demo (one of them a real Chrome phone that sees the watermark); the eleventh phone is told kindly that the game is full, with the guide |  | NEW |
+| 162. S19-03 | Demo game (free, up to 10) | A demo made by the API publishes free from the console: step 7 says nothing to pay, the pay page offers Make this a real game, the number screen and the board carry the badge |  | NEW |
+| 163. S19-04 | Demo game (free, up to 10) | Two Chrome phones play a demo to the end: the watermark stays all through, both end, identical winners, the final screen still says DEMO GAME |  | NEW |
+| 164. S19-05 | Demo game (free, up to 10) | Make this a real game DURING the demo: the game carries on (same numbers), the watermark goes within a minute, the number screen drops its badge, an eleventh person joins, the console says Paid |  | NEW |
+| 165. S19-06 | Demo game (free, up to 10) | After the demo has ended: step 8 offers Make a real game like this one; it makes a NEW real draft (no demo mark, same prizes), nothing paid or published, ready for the usual publish and pay |  | NEW |
+| 166. S19-07 | Demo game (free, up to 10) | Exception: the conversion payment fails on our side (500): the guide says it is not the person's doing, nothing is charged, offers Try again; Try again then really makes it a real game |  | NEW |
+| 167. S19-08 | Demo game (free, up to 10) | The pay page conversion as a person: pick another pack on the page, pay (test payment), the page says the demo is now a real game, the console shows Paid and the DEMO GAME badge is gone |  | NEW |
+| 168. S20-01 | Host calls the numbers (manual mode) | Host mode: 3 phones, the board and the number screen show the same numbers, only when the Organizer presses Next number; nothing moves on its own |  | NEW |
+| 169. S20-02 | Host calls the numbers (manual mode) | Host mode: a pause in the middle. A press while paused is refused with a calm message; after Resume the presses go on |  | NEW |
+| 170. S20-03 | Host calls the numbers (manual mode) | A Host (not the Organizer) presses Next number from their own console link; their key signs beside the Organizer's |  | NEW |
+| 171. S20-04 | Host calls the numbers (manual mode) | Exception: a press while the previous number is still on its way is refused kindly, and is not counted |  | NEW |
+| 172. S20-05 | Host calls the numbers (manual mode) | Host mode with a brand break after 2 numbers: the break shows on the phones; a press during it is refused; after it the press counts |  | NEW |
+| 173. S20-06 | Host calls the numbers (manual mode) | Auto mode still plays by itself (S07-01): two phones play a whole game with no press, identical winners, no JavaScript errors |  | NEW |
+| 174. S23-01 | Exceptions and abuse | Exception: the public clock (random numbers) is unreachable from one phone for a minute; that phone waits calmly, shows no error page, and ends with the same numbers and winners as the others |  | NEW |
+| 175. S23-02 | Exceptions and abuse | Exception: our store answers 'busy' to one phone for a while mid-game; numbers keep coming (they are public), the phone keeps its claims and sends them later exactly once, winners identical |  | NEW |
+| 176. S23-03 | Exceptions and abuse | Exception: two consoles (a laptop and a tablet) change the same draft at the same time; the later save wins, nothing breaks, both consoles show the same game after a refresh |  | NEW |
+| 177. S23-04 | Exceptions and abuse | Exception: the same mobile number joins again from a fresh browser; it does not get a second ticket, it is told calmly that its ticket is on another phone, and the organizer's list still has one person |  | NEW |
+| 178. S23-05 | Exceptions and abuse | Exception: the organizer ends the game while a phone is offline; when it is back the phone shows the ended game and the same results as everyone else |  | NEW |
+| 179. S24-01 | Many people at once (real and demo game) | Real game with five phones, the organizer's console, the board and the number screen all at once: identical numbers and winners everywhere, prizes with several winners, the console lists the winners at the end |  | NEW |
+| 180. S24-02 | Many people at once (real and demo game) | Demo game with five phones: every ticket carries the DEMO GAME mark; the organizer makes it a real game mid-game; the mark goes, a sixth person joins, and all six end with the same winners |  | NEW |
+| 181. S98-01 |  | Probe: list every step and control of the Organizer console |  | NEW |
+| 182. S98-02 |  | Probe: the Publish button before anything is filled |  | NEW |
+| 183. S98-03 |  | Probe: a personal link with a wrong token, after pressing the button |  | NEW |
+| 184. S98-04 |  | Probe: Refer and earn enrolment |  | NEW |
+| 185. S98-05 |  | Probe: how many enrolment calls one click makes, with and without the new scripts |  | NEW |
+| 186. S98-06 |  | Probe: partner page slips |  | NEW |
+| 187. S98-07 |  | Probe: the pay link page |  | NEW |
+| 188. S99-01 |  | manual screens: organizer |  | NEW |
+| 189. S99-02 |  | manual screens: host, co-host, guests, game day |  | NEW |
+| 190. S99-03 |  | manual screens: partner (refer and earn) |  | NEW |
+| 191. S99-04 |  | manual screens: partner enrol, dashboard, referred sale; sales material |  | NEW |
+| 192. S21-01..05 | Real housie play mode | Real housie play mode (organizer's choice per game): player taps their own numbers; Claim button; wrong mark refused kindly; organizer sees who claimed; easy mode unchanged |  | planned, not in release B |
+| 193. S23-06 | Exceptions and abuse | Exception: a payment webhook arrives twice and out of order: one fulfilment |  | planned |
+| 194. S23-07 | Exceptions and abuse | Exception: the organizer's clock is wrong by an hour: the game still starts on the public clock |  | planned |
+| 195. S23-08 | Exceptions and abuse | Exception: a phone with JavaScript blocked or an old browser: a readable message, no blank page |  | planned |
+| 196. S23-09 | Exceptions and abuse | Exception: 250 people join in one minute from one office network: all get seats, none blocked |  | planned |
+| 197. S23-10 | Exceptions and abuse | Exception: the organizer deletes a person mid-game who already won a prize: the prize record stays, the phone is told |  | planned |
 
-Total: 183 use cases listed (170 scenario files on disk or in the last run, 13 planned lines, several of which stand for 5 to 8 scenarios each).
+Total: 197 use cases listed (191 scenario files on disk or in the last run, 6 planned lines, several of which stand for 5 to 8 scenarios each).
 
 ## Unit-level use cases (not in Chrome)
 
