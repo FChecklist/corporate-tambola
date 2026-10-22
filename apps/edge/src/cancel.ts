@@ -21,6 +21,8 @@ export async function entitlementWindowEndMs(db: D1, entId: string): Promise<num
 }
 const GENESIS = 1692803367;
 const roundMs = (r: number) => (GENESIS + (r - 1) * 3) * 1000;
+/** A free DEMO GAME (config.demo): published with pack = its own size, nothing ever paid. */
+const demoGame = (e: { config?: string | null }) => { try { return !!(e.config && JSON.parse(e.config).demo); } catch { return false; } };
 const istStamp = (ms: number) => new Date(ms).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) + " IST";
 
 /** What cancelling (or having cancelled) a paid game leaves the account: one amount and the earliest date any of it lapses. */
@@ -161,7 +163,7 @@ export async function cancelGame(env: PayEnv, e: any, now: number, by: string): 
     "Guests who open the link are told: This game was cancelled by the organizer. Their names and mobile numbers are deleted within 24 hours.",
     credit && e.pack !== 0
       ? `Your game is cancelled. ${credit.expiresMs <= now ? `The credit from your payment of ${rs(credit.amountInr)} lapsed on ${creditLastDay(credit.expiresMs)}, 365 days after the payment, so there is nothing left to use.` : `Your payment of ${rs(credit.amountInr)} stays as credit until ${creditLastDay(credit.expiresMs)}. Use it for your next game.`}${test ? " (This is a TEST game: nothing was really paid.)" : ""}\n\n${NO_REFUND_LINE}${credit.expiresMs <= now ? "" : `\n\nYou can also move this game to a new date until ${creditLastDay(credit.expiresMs)}: open it in your console and choose a new date. Your payment then stays with this game. If you use the credit for another game first, this game can no longer be moved.`}`
-      : e.pack !== 0 ? "Nothing was paid for this game through this service, so there is no credit." : "The game had not been paid for, so no money is involved.",
+      : e.pack !== 0 ? (demoGame(e) ? "This was a free DEMO GAME, so no money is involved." : "Nothing was paid for this game through this service, so there is no credit.") : "The game had not been paid for, so no money is involved.",
     ...(e.pack === 0 && credit ? [`The credit you had applied to this game (${rs(credit.amountInr)}) is back in your account, valid until ${creditLastDay(credit.expiresMs)}.`] : []),
   ];
   for (const c of made) await db.prepare("UPDATE credit SET mail_created_ms=? WHERE id=? AND mail_created_ms IS NULL").bind(now, c.id).run(); // this mail is the "credit created" mail: one of each per credit

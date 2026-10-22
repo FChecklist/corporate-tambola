@@ -9,6 +9,7 @@
 import { sealText } from "./pii";
 import { newToken, tokenHash, randHex } from "./people";
 import { MAX_AHEAD_MS } from "./lifecycle";
+import { DEMO_CAP } from "../../../packages/beacon/src/config";
 import { MAX_DRAFTS } from "./pay";
 import { orgIsTest, testFlag } from "./mode";
 import type { D1, Env } from "./worker";
@@ -60,10 +61,16 @@ export async function cloneGame(env: Env, e: any, b: any, now: number, origin: s
   const pending = startRound === null;
   const sr = startRound ?? roundAt(now + MAX_AHEAD_MS - 60_000); // parked inside the 30-day window until a time is chosen
   const test = (await testFlag(env)) === 1 || (await orgIsTest(env, org)) ? 1 : 0;
+  // A DEMO GAME is not copied as a demo unless asked (`demo: true`): "Make a real game like this one" gives a normal draft with the same settings, to publish and pay for like any other.
+  let cfg0: any = {}; try { cfg0 = e.config ? JSON.parse(e.config) : {}; } catch { cfg0 = {}; }
+  const wasDemo = cfg0.demo === true, keepDemo = b?.demo === true;
+  if (keepDemo) cfg0.demo = true; else delete cfg0.demo;
+  const configOut = e.config ? JSON.stringify(cfg0) : e.config;
+  const capOut = keepDemo ? Math.min(e.cap, DEMO_CAP) : e.cap;
   for (let i = 0; i < 6 && !made; i++) {
     id = `${base}-${suffix()}`;
     const r = await db.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config,is_test,cohost_limit) VALUES(?,?,?,?,?,?,?,0,?,?,?,?)")
-      .bind(id, sr, e.call_seconds, e.cap, now, org, e.closed ? 1 : 0, e.tickets, e.config, test, e.cohost_limit ?? null).run();
+      .bind(id, sr, e.call_seconds, capOut, now, org, e.closed ? 1 : 0, e.tickets, configOut, test, e.cohost_limit ?? null).run();
     made = (r.meta?.changes ?? 0) > 0;
   }
   if (!made) return json({ error: "Could not make a new game code. Please try again." }, 503);
@@ -78,8 +85,9 @@ export async function cloneGame(env: Env, e: any, b: any, now: number, origin: s
   const copied = [
     "Occasion and name", "Number of players", "Tickets for each person", "Gap between numbers", "Who can join", "Co-host limit",
     ...(cfg.rounds ? ["Rounds"] : []), ...(cfg.invites ? ["Guest invites"] : []), ...(Array.isArray(cfg.rewards) && cfg.rewards.length ? ["Prizes (all houses and their texts)"] : []),
-    ...(cfg.brand ? ["Brand strip"] : []), ...((cfg.breaks?.length || cfg.opening || cfg.closing) ? ["Brand moments and lucky draw"] : []),
+    ...(cfg.brand ? ["Brand strip"] : []), ...((cfg.breaks?.length || cfg.opening || cfg.closing) ? ["Brand moments and lucky draw"] : []), ...(keepDemo ? ["Demo game (free, up to 10 people)"] : []),
   ];
-  return json({ ok: true, id, openUrl: `${origin}/zc.html?e=${id}`, copied, peopleCopied, ...(peopleNote ? { peopleNote } : {}), needsStart: pending, startRound: sr, from: e.id, message: "Your new game is ready to check. Pick the date and time, then publish. This is a new game. Nothing is paid or published yet." });
+  return json({ ok: true, id, openUrl: `${origin}/zc.html?e=${id}`, copied, peopleCopied, ...(peopleNote ? { peopleNote } : {}), needsStart: pending, startRound: sr, from: e.id, ...(keepDemo ? { demo: true } : {}), ...(wasDemo && !keepDemo ? { fromDemo: true } : {}),
+    message: wasDemo && !keepDemo ? "Your new real game is ready to check. It is not a demo: pick the date and time and the number of people, then publish and pay. Nothing is paid or published yet." : "Your new game is ready to check. Pick the date and time, then publish. This is a new game. Nothing is paid or published yet." });
 }
 

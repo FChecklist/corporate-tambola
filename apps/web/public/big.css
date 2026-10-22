@@ -40,3 +40,5 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,syste
 #ct-notify{display:none}
 
 .ps{margin-top:2vh;background:rgba(255,255,255,.08);border-radius:14px;padding:1.2vh 1.6vw}.ps h2{margin:0 0 .6vh;font-size:2.4vh;color:#FFD27A}.ps ul{list-style:none;margin:0;padding:0;columns:2}.ps li{font-size:2.6vh;padding:.4vh 0;break-inside:avoid}.ps li.done{opacity:.6}.ps li.done s{text-decoration:line-through}.ps li.done small{font-size:1.6vh;font-weight:700;letter-spacing:.04em;margin-left:.6vw}
+/* a DEMO GAME: the badge beside the brand on the number screen and the board */
+.demotag{display:inline-block;background:#E4572E;color:#fff;font:800 clamp(14px,1.6vw,22px)/1 system-ui,sans-serif;letter-spacing:.12em;padding:.35em .6em;border-radius:.4em;vertical-align:middle;margin-left:.6em}

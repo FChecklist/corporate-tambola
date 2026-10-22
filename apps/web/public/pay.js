@@ -6,7 +6,9 @@
   let secret = ""; try { secret = sessionStorage.getItem("ctz-org") || ""; } catch {}
   const ss = (k) => { try { return sessionStorage.getItem(k) || ""; } catch { return ""; } };
   const nf = (n) => Number(n).toLocaleString("en-IN");
-  const S = { k3: {}, credited: 0, info: null, mode: "", cur: "INR", err: "", busy: false, done: null, ...(() => { const v = TB.payer.load(); return { email: ss("ctz-email") || v.email || "", phone: ss("ctz-phone") || v.phone || "", name: ss("ctz-name") || v.name || "", org: v.org || "", tax: v.tax || "" }; })(), pcode: "91", country: "IN" }; // India and +91 unless they change them: fewest taps to pay
+  // A DEMO GAME (free, up to 10 people) is made a real game here: the payer CHOOSES the pack (`pack` in the address, from the console's step 8, or the chips below); the server clears the demo mark and raises the size on a confirmed payment.
+  const qPack = Number(TB.qs("pack")) || 0;
+  const S = { k3: {}, credited: 0, info: null, mode: "", cur: "INR", err: "", busy: false, done: null, pack: TB.PACKS.some((x) => x[0] === qPack) ? qPack : 0, ...(() => { const v = TB.payer.load(); return { email: ss("ctz-email") || v.email || "", phone: ss("ctz-phone") || v.phone || "", name: ss("ctz-name") || v.name || "", org: v.org || "", tax: v.tax || "" }; })(), pcode: "91", country: "IN" }; // India and +91 unless they change them: fewest taps to pay
   S.cur = S.country === "IN" ? "INR" : "USD";
 
   const call = async (method, path, body) => {
@@ -17,20 +19,23 @@
   };
   const head = `<div class="zhead"><b>Corporate Tambola · Publish engagement</b><a class="zsnd" href="/zc.html?e=${encodeURIComponent(eid)}" style="text-decoration:none">Back to my engagement</a></div>${TB.payBrand ? TB.payBrand() : ""}`;
   const packFor = (cap) => { const p = TB.PACKS.find((x) => x[0] >= cap); return p ? p[0] : null; };
+  const isDemo = () => !!(S.info && S.info.demo);
+  /** the pack being paid for: the smallest that fits the game, or, for a demo game being made real, the one the payer chose */
+  const packNow = () => (isDemo() ? (S.pack || packFor(S.info.cap)) : packFor(S.info.cap));
 
   function view() {
     if (!secret) return `${head}<div class="zcard"><h2>Please sign in first</h2><p class="zsmall" style="margin-top:0">Open your console from the home page, or sign in with your work email: we send you a 6-digit code.</p><a class="zbtn" href="/#login" id="goLogin" style="text-decoration:none;display:inline-block">Sign in with email</a></div>`;
     if (S.done) {
       const d = S.done;
-      return `${head}<div class="zcard" style="border:2px solid #2e7d4f"><h2>Payment received. Your engagement will begin on time.</h2>${TB.payReceipt ? TB.payReceipt(d, d.eid || eid) : ""}
-        <p style="margin:0 0 10px">${d.paidFromCredit ? "Paid from your credit. " : ""}Thank you. Your engagement for up to <b>${nf(d.pack)}</b> participants is confirmed.${d.restartedAtMs ? ` It begins at <b>${esc(new Date(d.restartedAtMs).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }))}</b>, for everyone already waiting.` : " Share the link with your participants from your console if you have not already."}</p>
+      return `${head}<div class="zcard" style="border:2px solid #2e7d4f"><h2>${d.converted ? "Payment received. Your demo game is now a real game." : "Payment received. Your engagement will begin on time."}</h2>${TB.payReceipt ? TB.payReceipt(d, d.eid || eid) : ""}
+        <p style="margin:0 0 10px">${d.paidFromCredit ? "Paid from your credit. " : ""}Thank you. Your ${d.converted ? "game" : "engagement"} for up to <b>${nf(d.pack)}</b> participants is confirmed.${d.converted ? " It carries on exactly as it is: the same link, the same people, the same numbers. The DEMO GAME mark goes away on the next refresh and more people can join." : ""}${d.restartedAtMs ? ` It begins at <b>${esc(new Date(d.restartedAtMs).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }))}</b>, for everyone already waiting.` : " Share the link with your participants from your console if you have not already."}</p>
         ${d.invoiceUrl ? `${TB.invoiceBox ? TB.invoiceBox(d, S.email) : ""}<p class="zsmall">We also emailed it to you and to the organizer.</p>` : ""}
         <a class="zbtn" href="/zc.html?e=${encodeURIComponent(d.eid || eid)}" style="text-decoration:none;display:inline-block">Open my engagement</a>
         <p class="zsmall" id="goNote" aria-live="polite" style="margin:10px 0 0">Opening your engagement page in a few seconds. <button type="button" class="zlink" id="goStay" style="background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer">Stay on this page</button></p></div>`;
     }
     if (!S.info) return `${head}<p class="zmsg">${S.err ? esc(S.err) : "Loading…"}</p>`;
-    const pack = packFor(S.info.cap);
-    if (!S.info.draft && !S.info.unpaid) return `${head}<div class="zcard"><h2>This engagement is already paid and published</h2><a class="zbtn" href="/zc.html?e=${encodeURIComponent(eid)}" style="text-decoration:none;display:inline-block">Open my engagement</a></div>`;
+    const pack = packNow();
+    if (!S.info.draft && !S.info.unpaid && !isDemo()) return `${head}<div class="zcard"><h2>This engagement is already paid and published</h2><a class="zbtn" href="/zc.html?e=${encodeURIComponent(eid)}" style="text-decoration:none;display:inline-block">Open my engagement</a></div>`;
     if (!pack) return `${head}<div class="zcard"><h2>A custom arrangement is needed</h2><p class="zsmall" style="margin-top:0">An engagement for more than 10,000 participants is arranged with us directly. Please write to us from the contact page.</p></div>`;
     const x = TB.price(pack, S.cur);
     const applied = S.cur === "INR" ? Math.max(Number(S.credited) || 0, Number(S.info.creditApplied) || 0) : 0; // credit already put on this game (by you, or by a Host); it comes off what you pay
@@ -44,11 +49,12 @@
     const off = S.mode === "off";
     return `${head}
       ${off ? `<div class="zbanner info"><b>Online payment opens soon.</b> Your engagement is saved and nothing is lost. Come back to this page when payment is switched on. Until then it stays held at its start time.</div>` : ""}
-      <div class="zcard"><h2>Payment</h2>
+      ${isDemo() ? `<div class="zcard zdemo" id="makereal"><h2><span class="zdemotag">DEMO GAME</span> Make this a real game</h2><p class="zsmall" style="margin-top:0">This is a free demo game for up to ${nf(S.info.cap)} people. Choose how many people the real game is for and pay. The game carries on exactly as it is: the same link, the same people, the same numbers. The DEMO GAME mark goes away on the next refresh and more people can join.</p><div class="zchips" role="group" aria-label="How many people?">${TB.PACKS.map((k) => `<button type="button" class="zbtn s${k[0] === pack ? "" : " alt"}" data-pack="${k[0]}" aria-pressed="${k[0] === pack}">Up to ${nf(k[0])} \u00b7 ${TB.money(TB.price(k[0], S.cur).total, S.cur)}</button>`).join(" ")}</div></div>` : ""}
+      <div class="zcard"><h2>${isDemo() ? "Payment for the real game" : "Payment"}</h2>
         <p class="pstmt">Payment is for Game ID <b class="mono">${esc(eid)}</b>; Amount <b>${TB.money(applied ? toPay : x.total, S.cur)}</b>;</p>
         <div class="pgame"><div class="zrow"><span><b>GAME ID</b></span><em><b class="mono">${esc(eid)}</b></em></div>${S.info.startMs ? `<div class="zrow"><span>Starts</span><em>${esc(new Date(S.info.startMs).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))}</em></div>` : ""}<div class="zrow"><span>Players</span><em>Up to ${nf(pack)}</em></div></div>
         ${sum}
-        <p class="zsmall">Every participant gets their own ticket on their phone. Participants never pay: you give the rewards. We do not give refunds. If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days. Unused credit lapses at the end of day 365. The credit belongs to your organizer account.</p>${S.info.startMs ? `<p class="zsmall"><b>Payment pending.</b> The game does not begin until it is paid for. Starts ${esc(new Date(S.info.startMs).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))}. You can pay at any time until the guest data is erased${S.info.erasureMs ? ` (${esc(new Date(S.info.erasureMs).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))})` : ""}.${S.info.locked ? " It is waiting for your payment now: pay and it starts 2 minutes after your payment is confirmed." : " If you pay after the start time, it starts 2 minutes after your payment is confirmed."}</p>` : ""}</div>
+        <p class="zsmall">Every participant gets their own ticket on their phone. Participants never pay: you give the rewards. We do not give refunds. If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days. Unused credit lapses at the end of day 365. The credit belongs to your organizer account.</p>${S.info.startMs && !isDemo() ? `<p class="zsmall"><b>Payment pending.</b> The game does not begin until it is paid for. Starts ${esc(new Date(S.info.startMs).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))}. You can pay at any time until the guest data is erased${S.info.erasureMs ? ` (${esc(new Date(S.info.erasureMs).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))})` : ""}.${S.info.locked ? " It is waiting for your payment now: pay and it starts 2 minutes after your payment is confirmed." : " If you pay after the start time, it starts 2 minutes after your payment is confirmed."}</p>` : ""}</div>
       ${avail ? `<div class="zcard" style="border:2px solid #2e7d4f"><h2>Use your credit</h2><p class="zsmall" style="margin-top:0">You have credit of <b>${TB.money(avail, "INR")}</b>${until ? ` (valid until ${esc(until)})` : ""}. Use it for this game.</p>${S.err && S.creditErr ? `<div class="zbanner bad">${esc(S.err)}</div>` : ""}<button class="zbtn" id="usecredit" ${S.busy ? "disabled" : ""}>Use my credit</button></div>` : ""}
       ${TB.proformaBox ? TB.proformaBox() : ""}
       <div class="zcard zform"><h2>Details</h2>
@@ -71,16 +77,17 @@
       await new Promise((ok) => setTimeout(ok, 4000));
       let st = null;
       try { st = (await call("GET", `/api/z/${eid}/summary`)).payment; } catch { try { st = (await call("GET", `/api/z/${eid}/cohost`)).payment; } catch { /* keep asking */ } }
-      if (st && st.status === "paid") return { ok: true, eid, pack: (S.info && packFor(S.info.cap)) || 0, total: 0, currency: S.cur };
+      if (st && st.status === "paid") return { ok: true, eid, pack: (S.info && packNow()) || 0, total: 0, currency: S.cur, ...(S.info && S.info.demo ? { converted: true } : {}) };
     }
     throw new Error("We are still waiting for Razorpay to confirm your payment. Nothing is lost: your game starts as soon as it is confirmed. You can close this page and open your game to see the status.");
   }
-  function draw() { $app.innerHTML = view(); bind(); CBConsent.wire($app, "K3", S.k3); TB.payer.mark($app); if (S.done && TB.invoiceWire) TB.invoiceWire(S.done); else if (TB.proformaWire && S.info) TB.proformaWire(() => call("POST", "/api/proforma", { eid, currency: S.cur, name: S.name || "", email: S.email || "", phone: S.phone || "", org: S.org || "", taxId: S.tax || "", country: S.country })); }
+  function draw() { $app.innerHTML = view(); bind(); CBConsent.wire($app, "K3", S.k3); TB.payer.mark($app); if (S.done && TB.invoiceWire) TB.invoiceWire(S.done); else if (TB.proformaWire && S.info) TB.proformaWire(() => call("POST", "/api/proforma", { eid, currency: S.cur, name: S.name || "", email: S.email || "", phone: S.phone || "", org: S.org || "", taxId: S.tax || "", country: S.country, ...(isDemo() ? { pack: packNow() } : {}) })); }
   function keep() { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { name: g("nm"), org: g("org"), tax: g("tax"), email: g("em"), phone: g("ph"), pcode: g("pcode") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; }
 
   function bind() {
     const $ = (id) => document.getElementById(id);
     if ($("cty")) $("cty").onchange = () => { keep(); S.country = $("cty").value; S.cur = S.country === "IN" ? "INR" : "USD"; draw(); };
+    $app.querySelectorAll("[data-pack]").forEach((b) => (b.onclick = () => { keep(); S.pack = Number(b.dataset.pack); draw(); })); // a demo game being made real: the payer picks the size
     if ($("goLogin")) $("goLogin").onclick = () => { try { sessionStorage.setItem("ctz-next", "/pay.html?e=" + encodeURIComponent(eid)); } catch {} };
     if ($("usecredit")) $("usecredit").onclick = async () => {
       S.err = ""; S.creditErr = false; S.busy = true; draw();
@@ -104,7 +111,7 @@
       S.busy = true; draw();
       try {
         let ref = ""; try { const v = JSON.parse(localStorage.getItem("ctz-ref") || "null"); if (v && Date.now() - v.at < 30 * 86400000) ref = v.code; } catch {}
-        let r = await call("POST", "/api/checkout", { consent, eid, name: nm, org, email, country: S.country, taxId: tax, currency: S.cur, phone: S.phone, phoneCode: S.pcode, ref });
+        let r = await call("POST", "/api/checkout", { consent, eid, name: nm, org, email, country: S.country, taxId: tax, currency: S.cur, phone: S.phone, phoneCode: S.pcode, ref, ...(isDemo() ? { pack: packNow() } : {}) });
         if (r.mode === "razorpay") r = await TB.pay(r.razorpay, r.paymentId, r.hop); // opens Razorpay Checkout; the server verifies the payment
         else if (r.result) r = r.result; // local test mode answers with the finished order
         try { sessionStorage.setItem("ctz-email", email); sessionStorage.setItem("ctz-name", nm); } catch {}
