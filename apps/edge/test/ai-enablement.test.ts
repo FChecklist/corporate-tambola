@@ -79,38 +79,50 @@ describe("the guided path, followed like an outside AI", () => {
     t = await pick(t, /Diwali party/); expect(t).toMatch(/How many people at most/); expect(t).toMatch(/Rs 2,399 \(about USD/); // price from the software's own list
     t = await pick(t, /Up to 250/); expect(t).toMatch(/recommended choices/);
     t = await pick(t, /2 tickets/); expect(t).toMatch(/2 tickets per person/); // a toggle: same screen, changed
-    t = await pick(t, /Looks good/); expect(t).toMatch(/Which prizes/);
-    t = await pick(t, /^Classic/); expect(t).toMatch(/lucky draw/);
-    t = await pick(t, /Add one lucky draw/);
-    expect(t).toMatch(/clear yes/); expect(t).toMatch(/Nothing has been saved yet/); expect(t).toMatch(/Fri 2 Oct, 4 pm India time/); expect(t).toMatch(/up to 250/);
+    t = await pick(t, /Looks good/); expect(t).toMatch(/Which prizes/); expect(t).toMatch(/settings address \(the one write I may build myself/); // prize names are free text: the sanctioned exception, said plainly
+    t = await pick(t, /^Classic/); expect(t).toMatch(/How many Full House winners/);
+    t = await pick(t, /^1 Full House winner$/); expect(t).toMatch(/How many winners for each line prize/);
+    t = await pick(t, /^1 winner for each line/); expect(t).toMatch(/brand moment/); expect(t).toMatch(/speak live/); expect(t).toMatch(/after number 45/);
+    t = await pick(t, /^A lucky draw/);
+    expect(t).toMatch(/clear yes/); expect(t).toMatch(/Nothing has been saved yet/); expect(t).toMatch(/Fri 2 Oct 2026, 4 pm India time/); expect(t).toMatch(/up to 250/);
+    expect(t).toMatch(/press Claim before the next number; a wrong claim is a Bogey; two Bogeys on the same prize/); // the real-housie rule, in one line, at the read-back
     expect((await j(await call("GET", `/ai/${o.key}/history`))).engagements.length).toBe(0); // the read-back saved nothing
     t = await pick(t, /Yes, save my draft/); expect(t).toMatch(/Your draft is saved\. Its code is DIWALI-1002/); expect(t).toMatch(/Nobody else can see it/);
     expect(t).toContain(`${ORIGIN}/zc.html?e=DIWALI-1002&do=publish`); // the one-tap hand-over for publishing
-    expect(t).toMatch(/I never pay/);
+    expect(t).toContain(`${ORIGIN}/pay.html?e=DIWALI-1002`); // the pay link, already for a draft
+    expect(t).toMatch(/I never pay/); expect(t).toMatch(/a wrong claim is a Bogey/);
+    const next = choicesOf(t).map((c) => c.label); // the next steps are links
+    expect(next).toEqual(expect.arrayContaining([expect.stringMatching(/Write the welcome message/), expect.stringMatching(/Load the guest list/), expect.stringMatching(/^Publish/), expect.stringMatching(/^Pay/)]));
+    expect(choicesOf(t).find((c) => /Write the welcome message/.test(c.label))!.url).toBe(`${o.base}/go/msg?id=DIWALI-1002`);
     const sm = await j(await call("GET", `/ai/${o.key}/z/DIWALI-1002/summary`));
     expect(sm).toMatchObject({ id: "DIWALI-1002", name: "Diwali party, Fri 2 Oct", tickets: 2, limit: 250, callSeconds: 9, rounds: 1, closed: false, status: "draft" });
     expect(sm.startMs).toBe(Date.UTC(2026, 9, 2, 10, 30)); // 4 pm India time tomorrow
     expect(sm.rewards.map((r: any) => r.pattern)).toEqual(["early5", "top", "mid", "bot", "full"]);
     expect(sm.breaks).toMatchObject([{ kind: "lucky", winners: 1, after: 45 }]); // placed by the software
     expect(sm.links.publishHandover).toBe(`${ORIGIN}/zc.html?e=DIWALI-1002&do=publish`); expect(sm.links.console).toBe(`${ORIGIN}/zc.html?e=DIWALI-1002`);
+    expect(sm.links.pay).toBe(`${ORIGIN}/pay.html?e=DIWALI-1002`); expect(sm.links.guest).toBeUndefined(); expect(sm.links.bigScreen).toBeUndefined(); // pay already for a draft; guest link and number screen only once published
+    expect(sm.ties).toBe("next"); expect(sm.callMode).toBe("auto");
     expect(sm.nextSteps.map((s: any) => s.step)).toEqual(["Name the prizes", expect.stringMatching(/^Publish/), "Pay (the game does not begin until it is paid)", "Share the guest link and load the guest list"]);
     expect(sm.nextSteps.every((s: any) => s.done === false)).toBe(true);
   });
   test("a second game on the same day gets its own code, never overwriting the first", async () => {
     const o = await organizer();
-    const run = async () => { let t = (await open(`${o.base}/go/new`)).text; t = await pick(t, /^Tomorrow/); t = await pick(t, /^4 pm/); t = await pick(t, /Diwali/); t = await pick(t, /Up to 100/); t = await pick(t, /Looks good/); t = await pick(t, /^Simple/); t = await pick(t, /No lucky draw/); return pick(t, /Yes, save/); };
+    const run = async () => { let t = (await open(`${o.base}/go/new`)).text; t = await pick(t, /^Tomorrow/); t = await pick(t, /^4 pm/); t = await pick(t, /Diwali/); t = await pick(t, /Up to 100/); t = await pick(t, /Looks good/); t = await pick(t, /^Simple/); t = await pick(t, /^1 Full House winner$/); expect(t).toMatch(/brand moment/); /* Simple has no line prizes: straight to the extras */ t = await pick(t, /No brand moment/); return pick(t, /Yes, save/); };
     expect(await run()).toMatch(/code is DIWALI-1002\./); expect(await run()).toMatch(/code is DIWALI-1002-2\./);
   });
   test("existing game: only games not yet started are listed; change the time, links, who joined, helper link, message (after publishing only), and the one-tap hand-overs", async () => {
     const o = await organizer(); given.clear();
-    let t = (await open(`${o.base}/go/new`)).text; t = await pick(t, /^Tomorrow/); t = await pick(t, /^4 pm/); t = await pick(t, /Diwali/); t = await pick(t, /Up to 100/); t = await pick(t, /Looks good/); t = await pick(t, /^Classic/); t = await pick(t, /No lucky draw/); await pick(t, /Yes, save/);
+    let t = (await open(`${o.base}/go/new`)).text; t = await pick(t, /^Tomorrow/); t = await pick(t, /^4 pm/); t = await pick(t, /Diwali/); t = await pick(t, /Up to 100/); t = await pick(t, /Looks good/); t = await pick(t, /^Classic/); t = await pick(t, /^1 Full House winner$/); t = await pick(t, /^1 winner for each line/); t = await pick(t, /No brand moment/); await pick(t, /Yes, save/);
     const start = (await open(`${o.base}/go`)).text;
     let g = await pick(start, /Change a game that has not started/); expect(g).toMatch(/DIWALI-1002/); expect(g).toMatch(/\(draft\)/);
     g = await pick(g, /DIWALI-1002/); expect(g).toMatch(/Game DIWALI-1002: draft/); expect(g).toMatch(/Publish \(free\)/);
     const menu = g; expect(menu).not.toMatch(/Send a message to every guest/); // nobody can see a draft
     expect(choicesOf(menu).find((c) => /Erase all guest data/.test(c.label))!.url).toBe(`${ORIGIN}/zc.html?e=DIWALI-1002&do=erase`);
     expect(choicesOf(menu).find((c) => /Pause or stop/.test(c.label))!.url).toBe(`${ORIGIN}/zc.html?e=DIWALI-1002&do=pause`);
-    const links = await pick(menu, /Show the links/); expect(links).toContain(`${ORIGIN}/zc.html?e=DIWALI-1002`); expect(links).toMatch(/appear after you publish/);
+    const links = await pick(menu, /Show the links/); expect(links).toContain(`${ORIGIN}/zc.html?e=DIWALI-1002`); expect(links).toMatch(/After you publish, two more links appear here: the guest link .* and the number screen/);
+    expect(links).toContain(`${ORIGIN}/pay.html?e=DIWALI-1002`); expect(links).toContain(`${ORIGIN}/zc.html?e=DIWALI-1002&do=publish`); expect(links).toMatch(/Your board: open it from your console, step 6, 'Open my board' \(it carries your private key, so I cannot give it\)/);
+    expect(links).not.toMatch(/z\.html\?e=|big\.html\?e=/); // nothing is invented before publishing
+    expect(links).toMatch(/308 and moves to the same name without \.html/); // the AI is told the 308 to /zc or /pay is normal
     expect(await pick(menu, /How many have joined/)).toMatch(/0 people have joined DIWALI-1002/);
     const helper = await pick(menu, /Host link/); expect(helper).toMatch(/only the owner enters those, in the console/); expect(helper).not.toMatch(/#host=cth_/); // the AI never handles a Host's mobile number or e-mail
     let c = await pick(menu, /Change the day or time/); c = await pick(c, /Sat 3 Oct/); expect(c).toMatch(/At what time/); c = await pick(c, /^7 pm/);

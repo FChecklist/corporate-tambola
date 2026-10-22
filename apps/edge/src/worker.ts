@@ -1600,7 +1600,8 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
     const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
     const c = cfgOf(e), origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
     const demoGame = !!c.demo;
-    const links = { console: `${origin}/zc.html?e=${e.id}`, ...(isDraft ? { publishHandover: `${origin}/zc.html?e=${e.id}&do=publish` } : { guest: `${origin}/z.html?e=${e.id}`, bigScreen: `${origin}/big.html?e=${e.id}` }), ...((unpaid || demoGame) && !isDraft ? { pay: `${origin}/pay.html?e=${e.id}` } : {}), ...(demoGame && !isDraft ? { makeRealGame: `${origin}/pay.html?e=${e.id}` } : {}), testBrandMoment: `${origin}/preview.html`, demo: `${origin}/demo.html` };
+    // the pay link is given already for a draft (the organizer pays after publishing, but the AI must be able to hand it over now); the guest link and the number screen only exist once published
+    const links = { console: `${origin}/zc.html?e=${e.id}`, ...(isDraft ? { publishHandover: `${origin}/zc.html?e=${e.id}&do=publish` } : { guest: `${origin}/z.html?e=${e.id}`, bigScreen: `${origin}/big.html?e=${e.id}` }), ...(unpaid || demoGame ? { pay: `${origin}/pay.html?e=${e.id}` } : {}), ...(demoGame && !isDraft ? { makeRealGame: `${origin}/pay.html?e=${e.id}` } : {}), testBrandMoment: `${origin}/preview.html`, demo: `${origin}/demo.html` };
     const nextSteps = [
       { step: "Name the prizes", who: "the organizer, or the AI if told what each prize is", done: c.rewards.some((r) => r.text.length > 0) },
       { step: demoGame ? "Publish (free): the organizer confirms their e-mail and mobile and taps once. A DEMO GAME starts without any payment" : "Publish (free): the organizer confirms their e-mail and mobile and taps once", who: "the organizer", done: !isDraft, ...(isDraft ? { link: `${origin}/zc.html?e=${e.id}&do=publish` } : {}) },
