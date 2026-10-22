@@ -14,7 +14,7 @@ for (const [tag, vp, mob] of [["laptop", { width: 1366, height: 768 }, false], [
   // a new game, the way a person starts it
   let ctx = await ctxFor(vp, mob), page = await ctx.newPage();
   await page.goto(`${BASE}/zc.html`, { waitUntil: "load" }); console.log(tag, "home console loaded in", await loaded(page), "s");
-  const btn = page.getByRole("button", { name: "Start a new game", exact: true }); if (await btn.count()) { await btn.first().click(); await page.waitForTimeout(2500); }
+  const btn = page.getByRole("button", { name: "Start a new game", exact: true }); if (await btn.count()) { await btn.first().click(); await page.waitForSelector(".zc-prog", { timeout: 30000 }).catch(() => {}); await page.waitForTimeout(1500); }
   await shots(page, `${tag}-new`);
   const newId = new URL(page.url()).searchParams.get("e"); console.log(tag, "new draft id", newId);
   await ctx.close();

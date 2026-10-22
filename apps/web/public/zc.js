@@ -96,7 +96,7 @@
   /** A DEMO GAME: the organizer's free game for up to 10 people (server: config.demo). Published free, never held for payment; "Make this a real game" (step 8, the pay page) turns it into a paid game of a chosen size at any time. */
   const DEMO_CAP = 10;
   const isDemo = () => !!((S.info && S.info.demo) || (S.sum && S.sum.demo) || (S.coh && S.coh.demo));
-  const payLabel = (p) => (isDemo() && p.paid ? "DEMO GAME \u00b7 free" : p.paid ? "Paid" : p.confirming ? "Confirming your payment..." : "Payment pending for this game");
+  const payLabel = (p) => (isDemo() && p.paid ? "DEMO GAME \u00b7 free" : p.paid ? "Paid" : p.confirming ? "Confirming your payment..." : S.draft ? "Draft \u00b7 not published yet" : "Payment pending for this game");
   const isCancelled = () => !!(S.cancelDone || (S.sum && (S.sum.cancelled || S.sum.status === "cancelled")) || (S.coh && S.coh.cancelled) || (S.info && S.info.cancelled));
   const WHO = { organizer: "Organizer", host: "Host", "co-host": "Co-host", cohost: "Co-host" };
 
@@ -815,7 +815,7 @@
       + `<span class="zc-where">${esc(gameLabel())}</span>${isOrg() && eid ? `<button type="button" class="zc-mini" id="back">All games</button>` : ""}</header>`;
   }
   function payNote() {
-    if (!inGame() || role() === "partner" || payState().paid || isCancelled() || didNotStart()) return "";
+    if (!inGame() || role() === "partner" || payState().paid || isCancelled() || didNotStart() || S.draft) return ""; // a draft has nothing to pay yet: publishing (step 7) comes first
     if (payState().confirming) return `<div class="zc-paynote" id="paynote" role="note"><b>Confirming your payment...</b> This takes a moment. The game starts only after the bank says yes. Nothing more to do.</div>`;
     return `<div class="zc-paynote" id="paynote" role="note"><b>A payment is pending for this game.</b> Just one of you needs to make it: the Organizer, a Host or a Co-host. Guests pay nothing. It is for this one game only, with no commitment and no repeat charges.${erasureMsOf() && role() !== "cohost" ? ` <span id="erasurestrip">Guest data will be erased on ${esc(dmy(erasureMsOf()))} if the game does not start.</span>` : ""}</div>`;
   }
