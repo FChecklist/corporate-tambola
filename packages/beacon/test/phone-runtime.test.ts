@@ -6,7 +6,7 @@ import { type Env } from "../../../apps/edge/src/worker";
 import { handle } from "../../../apps/edge/test/with-terms";
 import { makeD1 } from "../../../apps/edge/test/d1-sqlite";
 import { PhoneRuntime, type PhoneDeps } from "../src/phone-runtime";
-import { ALL_PATTERNS, callRoundR, checkClaims, completionIndex, luckyRound, luckyWinners, scheduleFull, settleAll, ticketFor } from "../src/game";
+import { ALL_PATTERNS, callRoundR, checkClaims, completionIndex, hostGameOf, luckyRound, luckyWinners, scheduleFull, settleAll, ticketFor } from "../src/game";
 import { GRACE_ROUNDS, defaultRewards, keysInPlay, linesFor, roundEid } from "../src/config";
 import { deriveCalls, roundAt, roundTimeMs, type Fetcher, type Round } from "../src";
 import { nextMessage, publicKeyFromSecret, readPublished, resolveControl, scheduleWithControl, signControlWithSecret, cfgOf, type KV } from "../src/control";
@@ -658,3 +658,103 @@ describe("winners hear it, and the engagement ends when the last prize is awarde
   });
 });
 const keysInPlayLines = (cfg: PhoneRuntime["cfg"]) => keysInPlay(cfg.rewards).flatMap((key) => linesFor(cfg.rewards, key).map((l) => ({ key, ordinal: l.ordinal })));
+
+describe("host mode: a Host presses a button for each number", () => {
+  const HID = "ENG-HOST-1";
+  const mkHost = async (extra: Record<string, unknown> = {}) => {
+    expect((await D.headCall("POST", "/api/z", { id: HID, startRound: START - GRACE_ROUNDS, callSeconds: 6, cap: 200, callMode: "host", ...extra }, { "x-organizer": SECRET })).status).toBe(200);
+    expect((await D.headCall("PUT", `/api/z/${HID}/control/key`, { publicKey: publicKeyFromSecret(KEY) }, { "x-organizer": SECRET })).status).toBe(200);
+  };
+  const send = async (a: Parameters<typeof nextMessage>[2]) => {
+    const f = (await readPublished(kvOf(), HID))!;
+    const r = await D.headCall("POST", `/api/z/${HID}/control`, { message: signControlWithSecret(KEY, nextMessage(f, roundAt(D.utc()), a)) });
+    return { status: r.status, body: (await r.json()) as any };
+  };
+  const press = () => send({ action: "next" });
+  const nexts = async (cfg: PhoneRuntime["cfg"]) => { const f = (await readPublished(kvOf(), HID))!; return resolveControl(cfgOf(f, hostGameOf(cfg)), f.messages).nextRounds; };
+  /** steps until every phone shows `n` numbers; returns the seconds it took (-1 if it never did within `max` steps) */
+  const untilCount = async (ps: ReturnType<typeof mkPhone>[], n: number, max = 12) => { for (let i = 1; i <= max; i++) { await step(ps); if (ps.every((p) => p.rt.view().log.length >= n)) return i * 3; } return -1; };
+  const phonesOf = async (ids: number[], o: Parameters<typeof mkPhone>[1] = {}) => { const ps = ids.map((n) => mkPhone(n, { ...o, eid: HID })); for (const p of ps) { await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true); } return ps; };
+
+  test("two phones get numbers only on presses, identical, within about 15 s of each press; the beacon round of each press decides the number", async () => {
+    await mkHost();
+    const ps = await phonesOf([201, 202]);
+    expect(ps[0]!.rt.view().callMode).toBe("host");
+    for (let i = 0; i < 12; i++) await step(ps); // well past the start: nothing is called without a press
+    for (const p of ps) { const v = p.rt.view(); expect(v.log).toEqual([]); expect(v.waitingForHost).toBe(true); expect(v.nextCallInSec).toBeNull(); expect(v.mode).toBe("live"); }
+    const delays: number[] = [];
+    for (let k = 1; k <= 5; k++) {
+      const r = await press(); expect(r.status).toBe(200);
+      const d = await untilCount(ps, k); expect(d).toBeGreaterThan(0); expect(d).toBeLessThanOrEqual(15); delays.push(d);
+      await step(ps, 2000);
+    }
+    const rounds = await nexts(ps[0]!.rt.cfg); expect(rounds.length).toBe(5);
+    const ref = deriveCalls(HID, rounds.map((r) => rnd(r)));
+    for (const p of ps) { expect(p.rt.view().log).toEqual(ref); expect(p.rt.view().waitingForHost).toBe(true); }
+    for (let i = 0; i < 10; i++) await step(ps); // and again nothing more without a press
+    for (const p of ps) expect(p.rt.view().log.length).toBe(5);
+    console.log(`host mode press-to-phone delays (s): ${delays.join(", ")}`);
+  });
+  test("a press while the game is paused is refused with a plain message, no number appears, and presses go on after the resume", async () => {
+    await mkHost();
+    const ps = await phonesOf([211, 212]);
+    for (let i = 0; i < 6; i++) await step(ps);
+    expect((await press()).status).toBe(200); await untilCount(ps, 1);
+    const pz = await send({ action: "pause", pauseForRounds: 20 }); expect(pz.status).toBe(200);
+    const f = (await readPublished(kvOf(), HID))!; const iv = resolveControl(cfgOf(f), f.messages).intervals[0]!;
+    while (roundAt(D.utc()) < iv.start + 2) await step(ps);
+    for (const p of ps) expect(p.rt.view().paused).toBe(true);
+    const r = await press(); expect(r.status).toBe(422); expect(r.body.error).toBe("The game is paused. Press Resume first, then the next number.");
+    while (roundAt(D.utc()) < iv.end + 1) { await step(ps); for (const p of ps) expect(p.rt.view().log.length).toBe(1); }
+    expect((await press()).status).toBe(200);
+    expect(await untilCount(ps, 2)).toBeGreaterThan(0);
+    expect(ps[0]!.rt.view().log).toEqual(ps[1]!.rt.view().log);
+  });
+  test("a break after N numbers: the phones show it after the N-th number; the next press is refused until it is over; then it counts", async () => {
+    await mkHost({ breaks: [{ after: 2, seconds: 30, kind: "speech", title: "A word from our sponsor" }] });
+    const ps = await phonesOf([221, 222]);
+    for (let i = 0; i < 6; i++) await step(ps);
+    for (const k of [1, 2]) { expect((await press()).status).toBe(200); expect(await untilCount(ps, k)).toBeGreaterThan(0); }
+    await step(ps);
+    for (const p of ps) { const v = p.rt.view(); expect(v.brk?.title).toBe("A word from our sponsor"); expect(v.waitingForHost).toBe(false); }
+    const early = await press(); expect(early.status).toBe(422); expect(early.body.error).toMatch(/break is still on/);
+    const [, two] = await nexts(ps[0]!.rt.cfg);
+    while (roundAt(D.utc()) < two! + 1 + 10) await step(ps);
+    for (const p of ps) expect(p.rt.view().brk).toBeNull();
+    expect((await press()).status).toBe(200);
+    expect(await untilCount(ps, 3)).toBeGreaterThan(0);
+    expect(ps[0]!.rt.view().log).toEqual(ps[1]!.rt.view().log);
+  });
+  test("the game ends when every prize is awarded, after however many presses that takes", async () => {
+    await mkHost({ rewards: [{ pattern: "early5", scope: "ticket", ordinal: 1, text: "" }, { pattern: "top", scope: "ticket", ordinal: 1, text: "" }] }); // two quick prizes: the game is over long before 90 presses
+    const ps = await phonesOf([231, 232], { earlyEnd: true });
+    const pids = ps.map((p) => p.rt.pid!), cfg = ps[0]!.rt.cfg, need = keysInPlayLines(cfg);
+    expect(need.length).toBe(2);
+    for (let i = 0; i < 6; i++) await step(ps);
+    let presses = 0;
+    for (let k = 0; k < 90 && ps.some((p) => p.rt.view().phase !== "ended"); k++) { if ((await press()).status === 200) presses++; for (let i = 0; i < 3; i++) await step(ps); }
+    for (let i = 0; i < 8; i++) await step(ps, 5000);
+    const rounds = await nexts(cfg); const ref = deriveCalls(HID, rounds.map((r) => rnd(r)));
+    const settledAt = (k: number) => settleAll(HID, pids, ref.slice(0, k), cfg, 1, undefined, { randomness: rounds.slice(0, k).map((r) => rnd(r)) });
+    let K = 0; for (let k = 1; k <= ref.length && !K; k++) { const got = settledAt(k); if (need.every((n) => got.some((x) => x.pattern === n.key && x.ordinal === n.ordinal))) K = k; }
+    expect(K).toBeGreaterThan(0); expect(K).toBeLessThan(90);
+    for (const p of ps) { const v = p.rt.view(); expect(v.phase).toBe("ended"); expect(v.endedByPrizes).toBe(true); expect(v.log).toEqual(ref.slice(0, K)); }
+    expect(presses).toBeGreaterThanOrEqual(K);
+  }, 90_000);
+  test("a 2-round game: the presses continue into round 2 after the usual intermission, with new numbers on every phone", async () => {
+    await mkHost({ rounds: 2 });
+    const ps = await phonesOf([241, 242]);
+    for (let i = 0; i < 6; i++) await step(ps);
+    for (let k = 1; k <= 90; k++) { expect((await press()).status).toBe(200); for (let i = 0; i < 3; i++) await step(ps); }
+    for (let i = 0; i < 4; i++) await step(ps);
+    for (const p of ps) { const v = p.rt.view(); expect(v.log.length).toBe(90); expect(v.round).toBe(1); expect(v.phase).toBe("play"); expect(v.intermission?.round).toBe(2); }
+    const soon = await press(); expect(soon.status).toBe(422); expect(soon.body.error).toMatch(/break is still on/);
+    const last = (await nexts(ps[0]!.rt.cfg))[89]!;
+    while (roundAt(D.utc()) < last + 1 + 30) await step(ps);
+    expect((await press()).status).toBe(200);
+    for (let i = 0; i < 8; i++) await step(ps);
+    const r2 = (await nexts(ps[0]!.rt.cfg))[90]!;
+    for (const p of ps) { const v = p.rt.view(); expect(v.round).toBe(2); expect(v.log).toEqual(deriveCalls(roundEid(HID, 2), [rnd(r2)])); expect(v.past.length).toBe(1); }
+    expect(ps[0]!.rt.view().log).toEqual(ps[1]!.rt.view().log);
+  }, 120_000);
+});

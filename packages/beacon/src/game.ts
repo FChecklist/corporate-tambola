@@ -2,7 +2,10 @@
 // from the public beacon alone. Pure and deterministic: no server, no phone clock.
 import { generateTicket, ticketNumbers, type PatternId, type Ticket } from "../../shared/src/ticket";
 import { INTERMISSION_ROUNDS, PATTERN_ORDER, breakShift, keyOfLine, defaultCfg, keysInPlay, linesFor, roundEid, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
-import type { ControlState } from "./control";
+import { hostCallRound, type ControlState, type GameOpts } from "./control";
+
+/** What the control file needs from the game's public settings (who calls the numbers, the breaks and rounds a press must respect): pass it to cfgOf / publishControl. */
+export const hostGameOf = (cfg: Pick<EngagementCfg, "callMode" | "breaks" | "rounds">): GameOpts => ({ callMode: cfg.callMode === "host" ? "host" : "auto", breaks: cfg.breaks, rounds: cfg.rounds });
 import { ticketCompletion, ticketStillNeeds } from "./house-rules";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
@@ -189,6 +192,7 @@ export function unshiftedRound(start: number, stride: number, breaks: readonly B
 }
 /** The beacon round call k of round `round` uses, with the organizer's signed pauses applied. Null when the engagement was stopped before it. */
 export function callRoundR(st: ControlState | null, start: number, stride: number, breaks: readonly BreakCfg[], round: number, k: number): number | null {
+  if (st?.host) return hostCallRound(st, (round - 1) * NUMBERS + k); // host mode: the k-th press of the whole game (Infinity until it is pressed)
   let a = unshiftedRound(start, stride, breaks, round, k);
   if (st) { for (const i of st.intervals) if (a >= i.start) a += i.end - i.start; if (st.stopRound !== null && a >= st.stopRound) return null; }
   return a;
@@ -206,8 +210,10 @@ export const scheduleFull = (st: ControlState | null, start: number, stride: num
 /** The intermission before `round` (2..), if it is showing at `nowRound`: it starts right after the previous round's last call and ends when this round's first call is due. */
 export function activeIntermission(st: ControlState | null, start: number, stride: number, breaks: readonly BreakCfg[], round: number, nowRound: number): { endsAtRound: number } | null {
   if (round < 2) return null;
-  const prevLast = callRoundR(st, start, stride, breaks, round - 1, NUMBERS - 1), first = callRoundR(st, start, stride, breaks, round, 0);
-  if (prevLast === null || first === null) return null;
+  const prevLast = callRoundR(st, start, stride, breaks, round - 1, NUMBERS - 1);
+  let first = callRoundR(st, start, stride, breaks, round, 0);
+  if (prevLast === null || first === null || prevLast === Infinity) return null;
+  if (first === Infinity) first = prevLast + 1 + INTERMISSION_ROUNDS; // host mode, not pressed yet: the intermission lasts its usual length, then the Host's next press starts the round
   return nowRound > prevLast && nowRound < first ? { endsAtRound: first } : null;
 }
 

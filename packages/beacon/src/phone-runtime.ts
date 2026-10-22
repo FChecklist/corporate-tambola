@@ -2,10 +2,10 @@
 // It talks to exactly two things: the public beacon (through BeaconOpts) and our one small store (through deps.api).
 import { generateTicket, type Ticket } from "../../shared/src/ticket";
 import { winningNumbers } from "./house-rules";
-import { ALL_SAFETIES, ControlTracker, SAFETY_FAST, SAFETY_STANDARD, pausedAt, type ControlConfig } from "./control";
+import { ALL_SAFETIES, ControlTracker, SAFETY_FAST, SAFETY_STANDARD, hostControlOf, pausedAt, type ControlConfig } from "./control";
 import { GRACE_ROUNDS, LATE_LAG_ROUNDS, defaultCfg, keysInPlay, linesFor, roundEid, validateCfg, votersFor, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
 import { PrizeEngine, countFromOf } from "./prize-engine";
-import { RoundStore, activeBreak, activeIntermission, callRoundR, completionIndexKey, luckyRound, luckyWinners, ticketsFor } from "./game";
+import { RoundStore, activeBreak, activeIntermission, callRoundR, completionIndexKey, hostGameOf, luckyRound, luckyWinners, ticketsFor } from "./game";
 import { seatOfPid } from "./unique-ticket";
 import { NUMBERS, QUICKNET, fetchRound, pickNumber, roundAt, roundTimeMs, type BeaconOpts } from "./index";
 
@@ -56,6 +56,10 @@ export interface RuntimeView {
   late: { countFromRound: number; secondsUntil: number; hidden: number } | null;
   /** The winners were worked out on this phone from the public seat list (true), or taken from the organizer's published results (false). */
   localWinners: boolean;
+  /** Who calls the numbers: the software (auto) or a Host pressing a button for each number (host). */
+  callMode: "auto" | "host";
+  /** Host mode, game running: the last number has reached this phone and the Host has not pressed for the next one yet. */
+  waitingForHost: boolean;
 }
 
 export class PhoneRuntime {
@@ -133,9 +137,11 @@ export class PhoneRuntime {
 
   /** Tickets, rewards and brand breaks come from the engagement's public settings; anything malformed falls back to the plain engagement. */
   private readCfg(info: any) {
-    const v = validateCfg({ tickets: info?.tickets, ties: info?.ties, rewards: info?.rewards, breaks: info?.breaks, rounds: info?.rounds, invites: info?.invites, opening: info?.opening, closing: info?.closing }, undefined, { stored: true });
+    const v = validateCfg({ tickets: info?.tickets, ties: info?.ties, rewards: info?.rewards, breaks: info?.breaks, rounds: info?.rounds, invites: info?.invites, opening: info?.opening, closing: info?.closing, callMode: info?.callMode === "host" ? "host" : undefined }, undefined, { stored: true });
     this.cfg = v.ok ? v.cfg : defaultCfg();
+    if (this.tracker) Object.assign(this.tracker.cfg, hostControlOf(hostGameOf(this.cfg))); // the settings are locked once the game starts; before that a re-read keeps the control rules in step
   }
+  private get hostMode() { return this.cfg.callMode === "host"; }
   private adopt(pid: string) {
     this.pid = pid; this.ticketMemo.clear(); this.setCurrent(1); this.phase = "play";
   }
@@ -162,7 +168,7 @@ export class PhoneRuntime {
     try {
       const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name, device: this.device(), ...(invite && Number.isInteger(invite.from) ? { from: invite.from, cat: invite.cat } : {}) });
       this.scheduledRound = r.startRound; this.startRound = r.startRound + GRACE_ROUNDS; this.callSeconds = r.callSeconds; this.trackClaims = r.trackClaims !== false;
-      if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined || r.opening !== undefined || r.closing !== undefined) this.readCfg(r);
+      if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined || r.opening !== undefined || r.closing !== undefined || r.callMode !== undefined) this.readCfg(r);
       this.deps.store.set(this.key("pid"), r.pid);
       this.myJr = Number(r.jr) > 0 ? Number(r.jr) : 0; this.deps.store.set(this.key("jr"), String(this.myJr));
       this.adopt(r.pid); this.error = null;
@@ -192,14 +198,17 @@ export class PhoneRuntime {
     const wasLocked = this.locked; this.locked = !!body?.locked;
     if (wasLocked && !this.locked) await this.reloadSchedule(); // paid at last: the start time has moved, read it again
     if (!body?.pubKey) { this.tracker?.failed(now); return; }
+    // the Hosts' console keys ride in the same file as the organizer's key (trusted the same way, on first use); the list only grows, and never beyond the team's size
+    const hostKeys: string[] = Array.isArray(body.hostKeys) ? body.hostKeys.filter((k: unknown): k is string => typeof k === "string" && /^[0-9a-f]{64}$/i.test(k)).slice(0, 5) : [];
     if (!this.tracker) {
-      const cfg: ControlConfig = { pubKey: body.pubKey, maxPauseRounds: body.maxPauseRounds, leadRounds: body.leadRounds };
+      const cfg: ControlConfig = { pubKey: body.pubKey, maxPauseRounds: body.maxPauseRounds, leadRounds: body.leadRounds, hostKeys, ...hostControlOf(hostGameOf(this.cfg)) };
       this.controlFast = body.leadRounds === SAFETY_FAST.leadRounds;
       const safety = ALL_SAFETIES.find((s) => s.leadRounds === body.leadRounds) ?? SAFETY_STANDARD;
       if (safety !== SAFETY_FAST && safety !== SAFETY_STANDARD) { this.pollBaseMs = Math.round(safety.pollMaxSec * 750); this.pollJitterMs = Math.round(safety.pollMaxSec * 250); }
       else { this.pollBaseMs = this.controlFast ? 6_000 : 9_000; this.pollJitterMs = 3_000; }
+      if (this.hostMode) { this.pollBaseMs = 5_000; this.pollJitterMs = 2_000; } // a Host's press must reach every phone within seconds: the fast safety's timer (5 to 7 s), whatever the game's size
       this.tracker = new ControlTracker(cfg, this.eid, safety, now);
-    }
+    } else if (hostKeys.length > (this.tracker.cfg.hostKeys?.length ?? 0)) this.tracker.cfg.hostKeys = [...new Set([...(this.tracker.cfg.hostKeys ?? []), ...hostKeys])].slice(0, 5);
     if (await this.tracker.ingest(now, body)) this.controlState = "known";
   }
 
@@ -271,7 +280,7 @@ export class PhoneRuntime {
   private builtMsgs = 0;
   /** Extends a round's call log with newly available rounds instead of recomputing all 90 calls every second. Rebuilds from scratch only if a provisional round was thrown away or an organizer message arrived. */
   private buildLog(now: number, round: number): number[] {
-    const msgs = this.tracker?.log.length ?? 0;
+    const msgs = this.tracker ? this.tracker.log.filter((m) => m.action !== "next").length : 0; // a Host's press only adds a call at the end: nothing earlier moves, so no re-derivation
     if (this.store.discarded !== this.builtDiscards || msgs !== this.builtMsgs) { this.logs = this.logs.map(() => []); this.logResets++; this.builtDiscards = this.store.discarded; this.builtMsgs = msgs; } // a new organizer message can move later calls: re-derive
     while (this.logs.length < round) this.logs.push([]);
     const out = this.logs[round - 1]!;
@@ -528,19 +537,23 @@ export class PhoneRuntime {
     const done = this.logCache.length >= NUMBERS;
     const nextInRound = !done ? this.roundFor(this.logCache.length) : null;
     const nextRoundFirst = done && this.cur < this.cfg.rounds ? this.roundFor(0, this.cur + 1) : null;
-    const nextRound = nextInRound ?? nextRoundFirst;
+    const nextRound0 = nextInRound ?? nextRoundFirst;
+    const nextRound = nextRound0 !== null && Number.isFinite(nextRound0) ? nextRound0 : null; // host mode: Infinity = the Host has not pressed yet, so there is no countdown
     const secsTo = (br: number) => (this.offsetMs === null ? null : Math.max(0, Math.round((roundTimeMs(br) - (this.deps.mono() + this.offsetMs)) / 1000)));
     const inter = now !== null && this.cur < this.cfg.rounds ? activeIntermission(st ?? null, this.startRound, this.stride, this.cfg.breaks, this.cur + 1, now) : null;
     const claimedNow = keysInPlay(this.cfg.rewards).filter((k) => this.claimedAll.has(`${this.cur}:${k}`));
+    const isPaused = !!st && now !== null && pausedAt(st, now);
+    const waitingForHost = this.hostMode && this.phase === "play" && !this.locked && !isPaused && now !== null && now >= this.startRound && nextRound0 === Infinity && !inter && this.currentBreak(now) === null;
     return {
       phase: this.phase, error: this.error, pid: this.pid, ticket: this.ticket, log: this.visibleLog(), nowRound: now, startRound: this.startRound, scheduledRound: this.scheduledRound, callSeconds: this.callSeconds,
       locked: this.locked, announcement: this.announcement,
-      mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: !!st && now !== null && pausedAt(st, now), stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
+      mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: isPaused, stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
       claimed: claimedNow, unsent: this.unsent, results: this.allResults.filter((x) => (x.round ?? 1) === this.cur), pendingChecks: this.store.pending(), discarded: this.store.discarded,
       nextCallInSec: nextRound !== null && now !== null ? secsTo(nextRound) : null,
       tickets: this.tickets, cfg: this.cfg, brk: this.currentBreak(now), myIdx: this.myIdx(), lucky: this.luckyView(),
       round: this.cur, rounds: this.cfg.rounds, intermission: inter ? { round: this.cur + 1, secondsLeft: secsTo(inter.endsAtRound) ?? 0 } : null, past: this.pastView(),
       won: this.wonView(), allAwarded: this.prizesAwarded(this.cur), endedByPrizes: this.prizesEnded, late: this.lateView(now), localWinners: this.localOk,
+      callMode: this.hostMode ? "host" : "auto", waitingForHost,
     };
   }
 }

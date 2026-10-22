@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { ed25519 } from "@noble/curves/ed25519";
 import {
-  ControlTracker, SAFETY_FAST, SAFETY_STANDARD, acceptLog, callRound, deriveSafety, describeControl, generateOrganizerKey, nextMessage, pausedAt,
-  publishControl, readPublished, registerKey, resolveControl, scheduleWithControl, signControl, signControlWithSecret, verifyControlSig,
+  ControlTracker, MAX_HOST_KEYS, NEXT_LEAD_ROUNDS, NEXT_REFUSALS, SAFETY_FAST, SAFETY_STANDARD, acceptLog, addHostKey, callRound, deriveSafety, describeControl, generateOrganizerKey, hostGapsFor, nextMessage, pausedAt,
+  pickNumber, publicKeyFromSecret, publishControl, readPublished, registerKey, resolveControl, scheduleWithControl, signControl, signControlWithSecret, verifyControlSig,
   type ControlConfig, type ControlMsg, type KV, type UnsignedControl,
 } from "../src";
+import { callRoundR, hostGameOf } from "../src/game";
 
 const ID = "ABC1234";
 const secret = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
@@ -194,5 +195,112 @@ describe("publishing (same code runs in the local server and in a Cloudflare Wor
     expect(await publishControl(store, ID, mk(1, "resume", 2050, 2000))).toMatchObject({ ok: false, status: 422 }); // not paused
     expect((await readPublished(store, ID))!.messages.length).toBe(0);
     void f;
+  });
+});
+
+describe("host mode: a press releases the next number, the beacon still decides which", () => {
+  // breaks after 3 numbers (30 s = 10 rounds) and a second round (intermission 30 rounds before press 90)
+  const H: ControlConfig = { ...cfg, callMode: "host", hostGaps: hostGapsFor([{ after: 3, seconds: 30 }], 2), maxNexts: 180 };
+  const nx = (seq: number, signedAt: number, lead = NEXT_LEAD_ROUNDS) => mk(seq, "next", signedAt + lead, signedAt);
+  test("the gaps come from the game's settings: every break and the intermission before each later round", () => {
+    expect(H.hostGaps).toEqual([{ at: 3, rounds: 10 }, { at: 90, rounds: 30 }]);
+    expect(hostGameOf({ callMode: "host", breaks: [{ after: 3, seconds: 30, kind: "speech", title: "x" }], rounds: 2 })).toEqual({ callMode: "host", breaks: [{ after: 3, seconds: 30, kind: "speech", title: "x" }], rounds: 2 });
+  });
+  test("a press must be signed exactly NEXT_LEAD_ROUNDS before the round it names: too early, too late or with a pause end it is ignored", () => {
+    const st = resolveControl(H, [nx(1, 1000, 1), nx(2, 1000, 3), nx(3, 1000, 0), mk(4, "next", 1002, 1000, 1010), nx(5, 1000)]);
+    expect(st.ignored.map((x) => x.why)).toEqual([NEXT_REFUSALS.lead, NEXT_REFUSALS.lead, NEXT_REFUSALS.lead, NEXT_REFUSALS.lead]);
+    expect(st.nextRounds).toEqual([1002]); expect(st.host).toBe(true);
+  });
+  test("order: every press names a later round than the one before; the same round or an earlier one is ignored", () => {
+    const st = resolveControl(H, [nx(1, 1000), nx(2, 1000), nx(3, 999), nx(4, 1001)]);
+    expect(st.nextRounds).toEqual([1002, 1003]);
+    expect(st.ignored.map((x) => x.why)).toEqual([NEXT_REFUSALS.order, NEXT_REFUSALS.order]);
+  });
+  test("replay, duplicates and gaps behave as for every other message (one message per seq, first valid wins, a gap stops the log)", async () => {
+    const a = nx(1, 1000), b = nx(2, 1010), c = nx(3, 1020);
+    expect((await acceptLog(H, ID, [c, b, a, a, c])).map((m) => m.seq)).toEqual([1, 2, 3]);
+    expect((await acceptLog(H, ID, [a, c])).map((m) => m.seq)).toEqual([1]);
+    const forged = { ...b, atBeaconRound: 1013 };
+    expect((await acceptLog(H, ID, [a, forged])).map((m) => m.seq)).toEqual([1]);
+  });
+  test("a press while paused is ignored; after the resume the presses go on, and a pause never moves a released number", () => {
+    const st = resolveControl(H, [nx(1, 1000), mk(2, "pause", 1030, 1010), nx(3, 1035), mk(4, "resume", 1050, 1045), nx(5, 1050)]);
+    expect(st.intervals).toEqual([{ start: 1030, end: 1050 }]);
+    expect(st.nextRounds).toEqual([1002, 1052]);
+    expect(st.ignored).toEqual([{ seq: 3, why: NEXT_REFUSALS.paused }]);
+  });
+  test("a break after N numbers: the next press is ignored until the break's seconds have passed; then it counts", () => {
+    const base = [nx(1, 1000), nx(2, 1010), nx(3, 1020)]; // numbers 1..3 released at 1002, 1012, 1022; the break (10 rounds) shows 1023..1032
+    const early = resolveControl(H, [...base, nx(4, 1028)]); // names 1030 < 1022 + 1 + 10
+    expect(early.ignored).toEqual([{ seq: 4, why: NEXT_REFUSALS.gap }]);
+    const ok = resolveControl(H, [...base, nx(4, 1031)]); // names 1033
+    expect(ok.ignored).toEqual([]); expect(ok.nextRounds).toEqual([1002, 1012, 1022, 1033]);
+  });
+  test("a second round: presses continue after the usual intermission; after the last round's last number no press counts", () => {
+    const presses: ControlMsg[] = []; let at = 2000, seq = 1;
+    for (let k = 0; k < 90; k++) { presses.push(nx(seq++, at)); at += k === 2 ? 12 : 3; } // leave the break after number 3
+    const r1 = resolveControl(H, presses);
+    expect(r1.ignored).toEqual([]); expect(r1.nextRounds.length).toBe(90);
+    const last = r1.nextRounds[89]!;
+    const tooSoon = resolveControl(H, [...presses, nx(seq, last + 20)]);
+    expect(tooSoon.ignored).toEqual([{ seq, why: NEXT_REFUSALS.gap }]);
+    const fine = resolveControl(H, [...presses, nx(seq, last + 29)]); // names last + 31 = last + 1 + 30 rounds of intermission
+    expect(fine.ignored).toEqual([]); expect(fine.nextRounds.length).toBe(91);
+    expect(callRoundR(fine, 1, 2, [], 2, 0)).toBe(last + 31); // round 2, number 1 is the 91st press
+    expect(callRoundR(fine, 1, 2, [], 2, 1)).toBe(Infinity); // not pressed yet
+    const one: ControlConfig = { ...H, hostGaps: [], maxNexts: 90 };
+    const full = resolveControl(one, [...presses, nx(seq, last + 29)]);
+    expect(full.ignored).toEqual([{ seq, why: NEXT_REFUSALS.done }]);
+  });
+  test("in auto mode a press is ignored: the software calls the numbers", () => {
+    const st = resolveControl(cfg, [nx(1, 1000)]);
+    expect(st.ignored).toEqual([{ seq: 1, why: NEXT_REFUSALS.auto }]); expect(st.host).toBe(false); expect(st.nextRounds).toEqual([]);
+  });
+  test("the schedule in host mode: call k is the k-th press, Infinity until it is pressed, null once the game is stopped", () => {
+    const st = resolveControl(H, [nx(1, 1000), nx(2, 1010), mk(3, "stop", 1100, 1080)]);
+    expect(scheduleWithControl(st, S, STRIDE, 4)).toEqual([1002, 1012, null, null]);
+    const live = resolveControl(H, [nx(1, 1000), nx(2, 1010)]);
+    expect(callRound(live, S, STRIDE, 1)).toBe(1012); expect(callRound(live, S, STRIDE, 2)).toBe(Infinity);
+    expect(callRoundR(live, S, STRIDE, [{ after: 3, seconds: 30, kind: "speech", title: "x" }], 1, 0)).toBe(1002);
+    const tr = new ControlTracker(H, ID, SAFETY_FAST, 990);
+    expect(tr.callRound(S, STRIDE, 0)).toBe(Infinity); // nothing pressed yet
+  });
+  test("a press cannot know the number: the number comes from the randomness of a round published after the press was signed", () => {
+    const m = nx(1, 1000);
+    expect(m.atBeaconRound - m.signedAtRound).toBe(NEXT_LEAD_ROUNDS); expect(m.atBeaconRound).toBeGreaterThan(m.signedAtRound);
+    // two different outcomes of that later round give different numbers: the number depends on randomness that did not exist at signing time
+    const a = pickNumber(ID, 0, "aa".repeat(32), []), b = pickNumber(ID, 0, "bb".repeat(32), []);
+    let differ = a !== b; for (let i = 0; i < 20 && !differ; i++) differ = pickNumber(ID, 0, i.toString(16).padStart(64, "0"), []) !== a;
+    expect(differ).toBe(true);
+    // and the store refuses a press that names a round the signer could already know (lead 0) or a round it chose further ahead (lead 3)
+    expect(resolveControl(H, [nx(1, 1000, 0)]).nextRounds).toEqual([]); expect(resolveControl(H, [nx(1, 1000, 3)]).nextRounds).toEqual([]);
+  });
+  test("publishing: the organizer's key and a registered Host key may press; a stranger may not; a refused press is refused in plain words", async () => {
+    const store = kv();
+    await registerKey(store, ID, pub, SAFETY_FAST);
+    const game = { callMode: "host" as const, breaks: [{ after: 3, seconds: 30 }], rounds: 1 };
+    const f = (await readPublished(store, ID))!;
+    const m1 = signControlWithSecret(secretHex, nextMessage(f, 3000, { action: "next" }));
+    expect(m1.atBeaconRound).toBe(3000 + NEXT_LEAD_ROUNDS);
+    expect(await publishControl(store, ID, m1, game)).toEqual({ ok: true, seq: 1 });
+    expect(await publishControl(store, ID, m1, game)).toEqual({ ok: true, seq: 1, duplicate: true });
+    const again = signControlWithSecret(secretHex, nextMessage((await readPublished(store, ID))!, 3000, { action: "next" }));
+    expect(await publishControl(store, ID, again, game)).toMatchObject({ ok: false, status: 422, error: NEXT_REFUSALS.order });
+    const HOST = "42".repeat(32), hostPub = publicKeyFromSecret(HOST);
+    const strangerMsg = signControlWithSecret(HOST, nextMessage((await readPublished(store, ID))!, 3010, { action: "next" }));
+    expect(await publishControl(store, ID, strangerMsg, game)).toMatchObject({ ok: false, status: 403 });
+    expect(await addHostKey(store, ID, hostPub)).toEqual({ ok: true, added: true });
+    expect(await addHostKey(store, ID, hostPub)).toEqual({ ok: true, added: false });
+    expect(await publishControl(store, ID, strangerMsg, game)).toEqual({ ok: true, seq: 2 }); // the same message, now from a registered Host
+    expect(await publishControl(store, ID, signControlWithSecret(HOST, nextMessage((await readPublished(store, ID))!, 3020, { action: "pause", pauseForRounds: 20 })), game)).toMatchObject({ ok: true, seq: 3 }); // a Host may pause too
+    expect(await publishControl(store, ID, signControlWithSecret(secretHex, nextMessage((await readPublished(store, ID))!, 3030, { action: "next" })), game)).toMatchObject({ ok: false, status: 422, error: NEXT_REFUSALS.paused });
+    expect(await publishControl(store, ID, signControlWithSecret(secretHex, nextMessage((await readPublished(store, ID))!, 3030, { action: "next" }))) /* no game: auto */).toMatchObject({ ok: false, status: 422, error: NEXT_REFUSALS.auto });
+    for (let i = 0; i < MAX_HOST_KEYS - 1; i++) expect((await addHostKey(store, ID, publicKeyFromSecret((50 + i).toString(16).repeat(32)))).ok).toBe(true);
+    expect(await addHostKey(store, ID, publicKeyFromSecret("77".repeat(32)))).toMatchObject({ ok: false });
+    const d = describeControl((await readPublished(store, ID))!, 3100, game);
+    expect(d).toMatchObject({ registered: true, nextRounds: [3002, 3012] });
+    const phones = new ControlTracker({ ...cfg, hostKeys: [hostPub], callMode: "host", hostGaps: [], maxNexts: 90 }, ID, SAFETY_FAST, 2990);
+    expect(await phones.ingest(3100, { engagementId: ID, messages: (await readPublished(store, ID))!.messages })).toBe(true); // a phone verifies the Host's press like the organizer's
+    expect(phones.state.nextRounds).toEqual([3002, 3012]);
   });
 });

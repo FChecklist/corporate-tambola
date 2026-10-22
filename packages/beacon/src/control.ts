@@ -10,7 +10,15 @@ import { ed25519 } from "@noble/curves/ed25519";
 
 export const PERIOD_SEC = 3; // drand quicknet period; the unit of every "round" below
 
-export type ControlAction = "pause" | "resume" | "extend" | "stop";
+/**
+ * "next" = the Host's button in host mode ("A Host presses a button for each number"). The ORDER of the numbers is still fixed by the public beacon:
+ * a press only decides WHEN the next number is released. It is signed `NEXT_LEAD_ROUNDS` rounds before the beacon round whose randomness makes the
+ * number, so the randomness is still unknown to everybody (the Host included) at the moment of the press. Nobody can choose a number.
+ */
+export type ControlAction = "pause" | "resume" | "extend" | "stop" | "next";
+export const NEXT_LEAD_ROUNDS = 2; // 6 s: the round a press names is not published yet when the press is signed
+/** At most this many Hosts' console keys may sign beside the organizer's own (the team has at most 5 Hosts). */
+export const MAX_HOST_KEYS = 5;
 
 export interface UnsignedControl {
   engagementId: string;
@@ -26,6 +34,8 @@ export interface UnsignedControl {
 }
 export interface ControlMsg extends UnsignedControl { sig: string }
 
+/** A gap the Host must leave before press number `at` (0-based call index over all rounds): a brand break, or the intermission before a later round. */
+export interface HostGap { at: number; rounds: number }
 export interface ControlConfig {
   /** Ed25519 public key (raw, 32 bytes, hex), fixed at engagement creation. */
   pubKey: string;
@@ -33,6 +43,19 @@ export interface ControlConfig {
   maxPauseRounds: number;
   /** Minimum distance, in rounds, between signing and a pause/stop/extend taking effect. See deriveSafety. */
   leadRounds: number;
+  /** The Hosts' own console keys (each registered once, from the Host's own browser): they may sign like the organizer's key. */
+  hostKeys?: string[];
+  /** Who calls the numbers: the software at the chosen speed (auto, the default) or a Host pressing a button for each number (host). */
+  callMode?: "auto" | "host";
+  /** Host mode: the breaks and intermissions a press has to wait for, and how many presses there can be at most (90 per round). From the game's public settings, see hostGapsFor. */
+  hostGaps?: HostGap[];
+  maxNexts?: number;
+}
+/** The gaps for host mode from the game's public settings: every brand break (after N numbers, for its seconds) and the intermission before each later round. Every phone and the store compute the same list. */
+export function hostGapsFor(breaks: readonly { after: number; seconds: number }[], rounds = 1, intermissionRounds = 30): HostGap[] {
+  const out: HostGap[] = breaks.map((b) => ({ at: b.after, rounds: b.seconds / PERIOD_SEC }));
+  for (let r = 2; r <= rounds; r++) out.push({ at: (r - 1) * 90, rounds: intermissionRounds });
+  return out.sort((a, b) => a.at - b.at);
 }
 
 export const MAX_TIMED_PAUSE_ROUNDS = 28_800; // 24 h
@@ -71,6 +94,11 @@ export function signControlWithSecret(secretHex: string, m: UnsignedControl): Co
 /** Public key for a raw 32-byte secret (tests and sims). */
 export const publicKeyFromSecret = (secretHex: string): string => hex(ed25519.getPublicKey(unhex(secretHex)));
 
+/** True when the message was signed by the organizer's key or by one of the registered Host keys. */
+export async function verifyAnySig(cfg: Pick<ControlConfig, "pubKey" | "hostKeys">, m: ControlMsg): Promise<boolean> {
+  for (const k of [cfg.pubKey, ...(cfg.hostKeys ?? [])]) if (await verifyControlSig(k, m)) return true;
+  return false;
+}
 export async function verifyControlSig(pubKeyHex: string, m: ControlMsg): Promise<boolean> {
   try {
     if (!/^[0-9a-f]{128}$/i.test(m.sig)) return false;
@@ -93,7 +121,7 @@ export async function verifyControlSig(pubKeyHex: string, m: ControlMsg): Promis
 const isInt = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 0;
 export function wellFormed(x: any): x is ControlMsg {
   return !!x && typeof x === "object" && typeof x.engagementId === "string" && isInt(x.seq) && x.seq >= 1
-    && ["pause", "resume", "extend", "stop"].includes(x.action) && isInt(x.atBeaconRound) && isInt(x.signedAtRound)
+    && ["pause", "resume", "extend", "stop", "next"].includes(x.action) && isInt(x.atBeaconRound) && isInt(x.signedAtRound)
     && (x.untilRound === undefined || isInt(x.untilRound)) && typeof x.sig === "string";
 }
 
@@ -116,7 +144,7 @@ export async function acceptLogDetailed(cfg: ControlConfig, engagementId: string
     if (!wellFormed(raw) || raw.engagementId !== engagementId) { forged++; continue; }
     const have = bySeq.get(raw.seq);
     if (have) { if (have.sig !== raw.sig) forged++; continue; } // a different message under a used seq is not believed
-    if (await verifyControlSig(cfg.pubKey, raw)) bySeq.set(raw.seq, raw); else forged++;
+    if (await verifyAnySig(cfg, raw)) bySeq.set(raw.seq, raw); else forged++;
   }
   const log: ControlMsg[] = [];
   for (let s = 1; bySeq.has(s); s++) log.push(bySeq.get(s)!);
@@ -137,18 +165,43 @@ export interface ControlState {
   /** Messages that were validly signed but break a rule (too little lead, wrong state ...). They take no effect but still use their seq. */
   ignored: { seq: number; why: string }[];
   applied: number;
+  /** Host mode: the beacon round of each number released so far, in order (call k over all rounds uses nextRounds[k]). Empty in auto mode. */
+  nextRounds: number[];
+  /** True when this game's numbers are released by a Host's presses (callMode "host"). */
+  host: boolean;
 }
 
 interface Cur { start: number; until: number | null; endedAt: number | null }
 const effEnd = (c: Cur, maxPause: number) => Math.min(c.endedAt ?? Infinity, c.until ?? c.start + maxPause);
 
+/** The plain reasons a press is refused (shown to the Host as they are; the guide explains them). */
+export const NEXT_REFUSALS = {
+  auto: "In this game the software calls the numbers, so there is no button to press.",
+  lead: "That press did not go through. Please press again.",
+  paused: "The game is paused. Press Resume first, then the next number.",
+  order: "One moment: the last number is still on its way to the phones.",
+  gap: "Please wait: the break is still on. The next number can come when it ends.",
+  done: "Every number has been called.",
+} as const;
+
 /** Why a message would take no effect, or null if it is valid in this state. Shared by the phone and the publisher. */
-function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: boolean): string | null {
+function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: boolean, nexts: readonly number[]): string | null {
   if (stopped) return "engagement already stopped";
   if (m.signedAtRound > m.atBeaconRound) return "takes effect before it was signed";
   const lead = m.atBeaconRound - m.signedAtRound;
   const paused = cur && cur.start <= m.atBeaconRound && m.atBeaconRound < effEnd(cur, cfg.maxPauseRounds);
   switch (m.action) {
+    case "next": {
+      if (cfg.callMode !== "host") return NEXT_REFUSALS.auto;
+      if (lead !== NEXT_LEAD_ROUNDS || m.untilRound !== undefined) return NEXT_REFUSALS.lead; // exactly the lead: the round is still unknown when signed, and the number comes as soon as it can
+      if (paused) return NEXT_REFUSALS.paused;
+      const k = nexts.length, prev = k ? nexts[k - 1]! : -1;
+      if (k >= (cfg.maxNexts ?? 450)) return NEXT_REFUSALS.done;
+      if (m.atBeaconRound <= prev) return NEXT_REFUSALS.order;
+      const gap = (cfg.hostGaps ?? []).find((g) => g.at === k);
+      if (gap && k > 0 && m.atBeaconRound < prev + 1 + gap.rounds) return NEXT_REFUSALS.gap; // the break (or intermission) shows after the previous number for its full length first
+      return null;
+    }
     case "pause":
       if (lead < cfg.leadRounds) return `pause needs at least ${cfg.leadRounds} rounds of lead`;
       if (cur && m.atBeaconRound < effEnd(cur, cfg.maxPauseRounds)) return "already paused";
@@ -172,28 +225,40 @@ function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: bool
 export function resolveControl(cfg: ControlConfig, log: readonly ControlMsg[]): ControlState {
   const ivs: Cur[] = [];
   let cur: Cur | null = null, stop: number | null = null, applied = 0;
-  const ignored: ControlState["ignored"] = [];
+  const ignored: ControlState["ignored"] = [], nextRounds: number[] = [];
   for (const m of [...log].sort((a, b) => a.seq - b.seq)) {
-    const why = check(m, cfg, cur, stop !== null);
+    const why = check(m, cfg, cur, stop !== null, nextRounds);
     if (why) { ignored.push({ seq: m.seq, why }); continue; }
     applied++;
     if (m.action === "pause") { cur = { start: m.atBeaconRound, until: m.untilRound ?? null, endedAt: null }; ivs.push(cur); }
     else if (m.action === "resume") cur!.endedAt = m.atBeaconRound;
     else if (m.action === "extend") cur!.until = m.untilRound!;
+    else if (m.action === "next") nextRounds.push(m.atBeaconRound);
     else stop = m.atBeaconRound;
   }
-  return { intervals: ivs.map((c) => ({ start: c.start, end: effEnd(c, cfg.maxPauseRounds) })), stopRound: stop, ignored, applied };
+  return { intervals: ivs.map((c) => ({ start: c.start, end: effEnd(c, cfg.maxPauseRounds) })), stopRound: stop, ignored, applied, nextRounds, host: cfg.callMode === "host" };
 }
 
 /** True while a pause is in force at the given beacon round. */
 export const pausedAt = (s: ControlState, round: number) => s.intervals.some((i) => round >= i.start && round < i.end);
 
 /**
+ * Host mode: the beacon round of call `k` (0-based, over all rounds) is the round of the k-th press. Infinity = not pressed yet (a round that never
+ * arrives, so every "is it due?" check simply waits), null = the game was stopped before it.
+ */
+export function hostCallRound(s: ControlState, k: number): number | null {
+  const r = s.nextRounds[k];
+  if (r !== undefined) return s.stopRound !== null && r >= s.stopRound ? null : r;
+  return s.stopRound !== null ? null : Infinity;
+}
+
+/**
  * The beacon round call k uses. Without control messages this is start + k*stride (the existing schedule). Every pause pushes all
  * later calls later by exactly its length, so the gap between calls is still `stride` rounds (a multiple of 3 s) afterwards.
- * Returns null when the engagement was stopped before that call.
+ * Returns null when the engagement was stopped before that call. In host mode the k-th press decides it (hostCallRound).
  */
 export function callRound(s: ControlState, startRound: number, strideRounds: number, k: number): number | null {
+  if (s.host) return hostCallRound(s, k);
   let a = startRound + k * strideRounds;
   for (const i of s.intervals) if (a >= i.start) a += i.end - i.start;
   return s.stopRound !== null && a >= s.stopRound ? null : a;
@@ -287,14 +352,35 @@ export class ControlTracker {
 /* ---------------- publishing (shared by the local server and a Cloudflare Worker) ---------------- */
 
 export interface KV { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
-export interface PublishedFile { v: 1; engagementId: string; pubKey: string; maxPauseRounds: number; leadRounds: number; messages: ControlMsg[] }
+export interface PublishedFile { v: 1; engagementId: string; pubKey: string; maxPauseRounds: number; leadRounds: number; messages: ControlMsg[]; /** The Hosts' console keys that may sign too (see addHostKey). */ hostKeys?: string[] }
 
 const fileKey = (id: string) => `control/${id}.json`;
 export async function readPublished(kv: KV, engagementId: string): Promise<PublishedFile | null> {
   const t = await kv.get(fileKey(engagementId));
   return t ? (JSON.parse(t) as PublishedFile) : null;
 }
-export const cfgOf = (f: PublishedFile): ControlConfig => ({ pubKey: f.pubKey, maxPauseRounds: f.maxPauseRounds, leadRounds: f.leadRounds });
+/** The game's public settings a control file needs beside the keys: who calls the numbers, and the breaks / rounds a press has to respect. */
+export interface GameOpts { callMode?: "auto" | "host"; breaks?: readonly { after: number; seconds: number }[]; rounds?: number }
+/** The host-mode part of a ControlConfig from the game's public settings (empty in auto mode). */
+export const hostControlOf = (game?: GameOpts): Pick<ControlConfig, "callMode" | "hostGaps" | "maxNexts"> =>
+  game?.callMode === "host" ? { callMode: "host", hostGaps: hostGapsFor(game.breaks ?? [], game.rounds ?? 1), maxNexts: 90 * (game.rounds ?? 1) } : { callMode: "auto", hostGaps: [], maxNexts: 0 };
+export const cfgOf = (f: PublishedFile, game?: GameOpts): ControlConfig => ({
+  pubKey: f.pubKey, maxPauseRounds: f.maxPauseRounds, leadRounds: f.leadRounds, ...(f.hostKeys?.length ? { hostKeys: f.hostKeys } : {}),
+  ...(game?.callMode === "host" ? hostControlOf(game) : {}),
+});
+
+/** Adds a Host's own console key (registered from the Host's browser) as a second signer. Only the store's own access check decides WHO may call this. */
+export async function addHostKey(kv: KV, engagementId: string, pubKeyHex: string): Promise<{ ok: true; added: boolean } | { ok: false; error: string }> {
+  if (!/^[0-9a-f]{64}$/i.test(pubKeyHex)) return { ok: false, error: "The public key must be 32 bytes in hex." };
+  const f = await readPublished(kv, engagementId);
+  if (!f) return { ok: false, error: "No key is registered for this engagement." };
+  const k = pubKeyHex.toLowerCase(), have = f.hostKeys ?? [];
+  if (k === f.pubKey || have.includes(k)) return { ok: true, added: false };
+  if (have.length >= MAX_HOST_KEYS) return { ok: false, error: `At most ${MAX_HOST_KEYS} Host keys can sign for one game.` };
+  f.hostKeys = [...have, k];
+  await kv.put(fileKey(engagementId), JSON.stringify(f));
+  return { ok: true, added: true };
+}
 
 /** Registers the engagement's public key, once. Nobody (including the server) can swap it afterwards. */
 export async function registerKey(kv: KV, engagementId: string, pubKeyHex: string, safety: Safety = SAFETY_STANDARD, maxPauseRounds = 600): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -311,38 +397,38 @@ export async function registerKey(kv: KV, engagementId: string, pubKeyHex: strin
  * completely open and still only ever accept the organizer's messages. Rejects (rather than silently ignoring) a message
  * that would take no effect, so the console tells the organizer immediately.
  */
-export async function publishControl(kv: KV, engagementId: string, msg: unknown): Promise<{ ok: true; seq: number; duplicate?: boolean } | { ok: false; status: number; error: string }> {
+export async function publishControl(kv: KV, engagementId: string, msg: unknown, game?: GameOpts): Promise<{ ok: true; seq: number; duplicate?: boolean } | { ok: false; status: number; error: string }> {
   const f = await readPublished(kv, engagementId);
   if (!f) return { ok: false, status: 404, error: "No key is registered for this engagement." };
   if (!wellFormed(msg) || msg.engagementId !== engagementId) return { ok: false, status: 400, error: "Malformed control message." };
-  const cfg = cfgOf(f);
-  if (!(await verifyControlSig(cfg.pubKey, msg))) return { ok: false, status: 403, error: "Signature does not match the organizer key." };
+  const cfg = cfgOf(f, game);
+  if (!(await verifyAnySig(cfg, msg))) return { ok: false, status: 403, error: "Signature does not match the organizer key." };
   const existing = f.messages.find((m) => m.seq === msg.seq);
   if (existing) return existing.sig === msg.sig ? { ok: true, seq: msg.seq, duplicate: true } : { ok: false, status: 409, error: "That sequence number is already used." };
   if (msg.seq !== f.messages.length + 1) return { ok: false, status: 409, error: `Next sequence number is ${f.messages.length + 1}.` };
   const after = resolveControl(cfg, [...f.messages, msg]);
   const bad = after.ignored.find((x) => x.seq === msg.seq);
-  if (bad) return { ok: false, status: 422, error: `Not accepted: ${bad.why}.` };
+  if (bad) return { ok: false, status: 422, error: msg.action === "next" ? bad.why : `Not accepted: ${bad.why}.` }; // a press is refused in the Host's own words
   f.messages.push(msg);
   await kv.put(fileKey(engagementId), JSON.stringify(f));
   return { ok: true, seq: msg.seq };
 }
 
 /** What the console shows / what the AI link reads (no key material beyond the public key). */
-export function describeControl(f: PublishedFile | null, nowRound?: number) {
+export function describeControl(f: PublishedFile | null, nowRound?: number, game?: GameOpts) {
   if (!f) return { registered: false as const };
-  const st = resolveControl(cfgOf(f), f.messages);
+  const st = resolveControl(cfgOf(f, game), f.messages);
   return {
     registered: true as const, pubKey: f.pubKey, leadRounds: f.leadRounds, leadSeconds: f.leadRounds * PERIOD_SEC, maxPauseRounds: f.maxPauseRounds,
     messages: f.messages.map((m) => ({ seq: m.seq, action: m.action, atBeaconRound: m.atBeaconRound, untilRound: m.untilRound })),
-    intervals: st.intervals, stopRound: st.stopRound, ignored: st.ignored,
+    intervals: st.intervals, stopRound: st.stopRound, ignored: st.ignored, nextRounds: st.nextRounds,
     pausedNow: nowRound === undefined ? undefined : pausedAt(st, nowRound), stopped: nowRound === undefined || st.stopRound === null ? undefined : nowRound >= st.stopRound,
   };
 }
 
 /** Builds the next message for the console. `nowRound` must come from the beacon (utcNow), never the device clock. */
 export function nextMessage(f: PublishedFile, nowRound: number, a: { action: ControlAction; inRounds?: number; pauseForRounds?: number; untilRound?: number; addRounds?: number }): UnsignedControl {
-  const lead = a.action === "resume" ? Math.max(1, a.inRounds ?? f.leadRounds) : Math.max(f.leadRounds, a.inRounds ?? 0);
+  const lead = a.action === "next" ? NEXT_LEAD_ROUNDS : a.action === "resume" ? Math.max(1, a.inRounds ?? f.leadRounds) : Math.max(f.leadRounds, a.inRounds ?? 0);
   const at = nowRound + lead;
   const m: UnsignedControl = { engagementId: f.engagementId, seq: f.messages.length + 1, action: a.action, atBeaconRound: at, signedAtRound: nowRound };
   if (a.action === "pause" && a.pauseForRounds) m.untilRound = at + a.pauseForRounds;

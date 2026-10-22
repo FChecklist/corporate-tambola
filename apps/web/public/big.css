@@ -11,6 +11,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,syste
 .now .lbl{font-size:clamp(14px,1.6vw,26px);color:var(--mute);text-transform:uppercase;letter-spacing:.14em}
 .now .num{font:700 clamp(120px,22vw,380px)/1 Inter,system-ui,sans-serif;color:var(--gold);margin:.02em 0;text-shadow:0 0 .2em rgba(232,184,74,.25)}
 .now .num.fresh{animation:pop .5s ease}
+.now .wait{font-size:clamp(16px,2vw,32px);color:var(--mute);margin:.2em 0 0}
 @keyframes pop{from{transform:scale(.7);opacity:.2}to{transform:scale(1);opacity:1}}
 .recent{display:flex;gap:1.2vw;justify-content:center;flex-wrap:wrap}
 .recent span{font:600 clamp(24px,3.4vw,56px) Inter,sans-serif;min-width:2.2em;text-align:center;padding:.1em .3em;border:2px solid var(--line);border-radius:.4em;color:var(--ink)}

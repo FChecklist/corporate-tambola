@@ -107,6 +107,9 @@ a.zc-chip::before,.zc-chips .zc-chip[data-mode]::before{display:none}
 .zc-levels{margin:8px 0 0;padding-left:18px;font-size:12px;color:var(--zc-mut)}
 .zc-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .zc-stat{font-weight:700;font-size:24px;color:var(--wine,#5A1426)}
+.zc-hostrow{display:flex;align-items:center;gap:16px;margin:4px 0 12px}
+.zc-hostnum{font:700 56px/1 Inter,system-ui,sans-serif;min-width:92px;height:92px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--wine,#5A1426);color:#fff}
+.zc-btn-big{width:100%;min-height:64px;font-size:22px}
 .zc .zlink{word-break:break-all;overflow-wrap:anywhere;font-family:var(--mono,monospace);font-size:12px;background:var(--sunk,#f1ede2);padding:8px 10px;border-radius:8px}
 .zc-tabs{display:none}
 .zc-sheet{display:none;padding:8px 10px;border-bottom:1px solid var(--zc-line);background:var(--zc-soft)}

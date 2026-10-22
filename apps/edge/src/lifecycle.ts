@@ -9,7 +9,7 @@ import { keepLegalParty } from "./legal";
 import { sweepVisits } from "./visits";
 import { closeAuditFor, isHeld, shredParticipantAudit } from "./audit";
 import { GRACE_ROUNDS, INVITE_CATEGORIES, PRIZE_HOUSES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
-import { callRoundR, luckyRound } from "../../../packages/beacon/src/game";
+import { callRoundR, hostGameOf, luckyRound } from "../../../packages/beacon/src/game";
 import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../../../packages/beacon/src/control";
 import { seatOfPid } from "../../../packages/beacon/src/unique-ticket";
 import { openPii, openText, sealText, type PiiEnv } from "./pii";
@@ -46,25 +46,34 @@ export const personalDeleteAt = (endMs: number) => endMs + PURGE_AFTER_MS;
 export const reportLinkUntil = (endMs: number) => endMs + REPORT_LINK_MS;
 
 export function cfgOfRow(e: { tickets?: number; config?: string | null }): EngagementCfg {
-  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* plain defaults */ }
+  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, callMode: j.callMode === "host" ? "host" : undefined }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* plain defaults */ }
   return (validateCfg({}) as { ok: true; cfg: EngagementCfg }).cfg;
 }
 
 /** The engagement's calls on the clock: the organizer's pauses and stop applied, the brand breaks and rounds included. */
 async function schedule(env: Env, e: any) {
-  const f = await readPublished(d1kv(env), e.id);
-  const st = f ? resolveControl(controlCfg(f), f.messages) : null;
-  return { cfg: cfgOfRow(e), st, start: e.start_round + GRACE_ROUNDS, stride: e.call_seconds / 3 };
+  const f = await readPublished(d1kv(env), e.id), cfg = cfgOfRow(e);
+  const st = f ? resolveControl(controlCfg(f, hostGameOf(cfg)), f.messages) : null;
+  return { cfg, st, start: e.start_round + GRACE_ROUNDS, stride: e.call_seconds / 3 };
 }
 async function callTimeMs(env: Env, e: any, round: number, idx: number, sch?: Awaited<ReturnType<typeof schedule>>): Promise<number | null> {
   const s = sch ?? (await schedule(env, e));
   const r = callRoundR(s.st, s.start, s.stride, s.cfg.breaks, round, idx);
-  return r === null ? null : roundMs(r);
+  return r === null || !Number.isFinite(r) ? null : roundMs(r);
 }
-/** When the game will have ended if nobody ends it sooner: the last call of the last round, or the organizer's stop. */
+/**
+ * When the game will have ended if nobody ends it sooner: the last call of the last round, or the organizer's stop. In host mode nobody knows when the Host
+ * will press for the last number, so the estimate is the software's own schedule at the chosen speed, or an hour after the Host's latest press if that is later
+ * (the phones' votes, not this estimate, decide when a game is really over).
+ */
 export async function endBoundMs(env: Env, e: any): Promise<number> {
   const s = await schedule(env, e);
   const last = callRoundR(s.st, s.start, s.stride, s.cfg.breaks, s.cfg.rounds, 89);
+  if (last === Infinity && s.st) {
+    const auto = callRoundR({ ...s.st, host: false }, s.start, s.stride, s.cfg.breaks, s.cfg.rounds, 89);
+    const pressed = s.st.nextRounds.length ? Math.max(...s.st.nextRounds) : s.start;
+    return Math.max(auto === null ? 0 : roundMs(auto) + 60_000, roundMs(pressed) + 3_600_000);
+  }
   if (last !== null) return roundMs(last) + 60_000;
   return roundMs(s.st?.stopRound ?? s.start) + 60_000;
 }

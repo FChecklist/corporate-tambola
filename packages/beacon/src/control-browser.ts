@@ -36,11 +36,14 @@ const TBControl = {
     const base = a.base ?? "";
     const pub = await (await fetch(`${P(a)}/${code}/control`)).json().catch(() => null);
     const mine = await get(code);
-    if (pub?.pubKey) return mine && mine.publicKeyHex === pub.pubKey ? { ok: true } : { ok: false, reason: "This engagement's signing key lives in another browser." };
-    const k = await generateOrganizerKey(false);
+    const signs = (k: { publicKeyHex: string } | undefined) => !!k && (k.publicKeyHex === pub?.pubKey || (Array.isArray(pub?.hostKeys) && pub.hostKeys.includes(k.publicKeyHex)));
+    if (pub?.pubKey && signs(mine)) return { ok: true };
+    // no key yet: this browser registers the organizer's key. A key already there: a Host's browser asks to add its own key beside it (the store checks who is asking;
+    // anyone else, the organizer's second browser included, is told the key lives elsewhere)
+    const k = mine ?? (await generateOrganizerKey(false));
     const r = await fetch(`${P(a)}/${code}/control/key`, { method: "PUT", headers: hdr(a), body: JSON.stringify({ publicKey: k.publicKeyHex, profile }) });
-    if (!r.ok) return { ok: false, reason: (await r.json().catch(() => ({}))).error ?? "Could not register the key." };
-    await put(code, k);
+    if (!r.ok) return { ok: false, reason: pub?.pubKey ? "This engagement's signing key lives in another browser." : (await r.json().catch(() => ({}))).error ?? "Could not register the key." };
+    if (!mine) await put(code, k);
     return { ok: true, created: true };
   },
   /** Build, sign and return the next control message (does not publish it). */
@@ -48,7 +51,7 @@ const TBControl = {
     const base = a.base ?? "";
     const f = (await (await fetch(`${P(a)}/${code}/control`, { cache: "no-store" })).json()) as PublishedFile;
     const k = await get(code);
-    if (!k || k.publicKeyHex !== f.pubKey) throw new Error("This browser does not hold the signing key for this engagement.");
+    if (!k || (k.publicKeyHex !== f.pubKey && !(f.hostKeys ?? []).includes(k.publicKeyHex))) throw new Error("This browser does not hold the signing key for this engagement.");
     return signControl(k.privateKey, nextMessage(f, await beaconRound(), { action, ...o }));
   },
   /** Sign and publish in one step (what the console's Pause / Resume buttons call). */

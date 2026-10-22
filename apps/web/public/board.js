@@ -21,8 +21,8 @@
       const cf0 = await fetch(`/api/z/${EID}/control`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => S.cf); S.cf = cf0 && cf0.pubKey ? cf0 : null; S.locked = !!(cf0 && cf0.locked); S.cancelled = !!(cf0 && cf0.cancelled); S.dns = !!(cf0 && cf0.didNotStart); S.ann = cf0 && cf0.ann && cf0.ann.text ? cf0.ann : null; // held for non-payment: nothing is shown
       const l = await ZG.fetchRound("latest"); if (l) { S.now = l.round; S.nowAt = Date.now(); }
       if (S.now === null) { S.err = "Waiting for the clock…"; return; }
-      S.st = S.cf ? ZG.resolveControl(ZG.cfgOf(S.cf), S.cf.messages) : null;
-      const cfg = { tickets: S.info.tickets, rewards: S.info.rewards, breaks: S.info.breaks, rounds: S.info.rounds || 1 };
+      const cfg = { tickets: S.info.tickets, rewards: S.info.rewards, breaks: S.info.breaks, rounds: S.info.rounds || 1, callMode: S.info.callMode === "host" ? "host" : "auto" };
+      S.st = S.cf ? ZG.resolveControl(ZG.cfgOf(S.cf, ZG.hostGameOf(cfg)), S.cf.messages) : null; // host mode: the numbers come when the Host presses
       S.cfg = cfg;
       const stride = S.info.callSeconds / 3;
       let budget = 60;
@@ -49,13 +49,14 @@
     if (S.cancelled) return ($app.innerHTML = `<div class="top"><div class="brand">Corporate Tambola</div></div><div class="big"><h1>This game was cancelled</h1><p>This game was cancelled by the organizer.</p></div><div class="foot">${esc(location.host)}/z?e=${esc(EID)}</div>`);
     if (S.locked) return ($app.innerHTML = `<div class="top"><div class="brand">Corporate Tambola</div></div><div class="big"><h1>Waiting for the Organizer or Host</h1><p>Waiting for the Organizer or Host to start the game.</p></div><div class="foot">${esc(location.host)}/z?e=${esc(EID)}</div>`);
     const paused = S.st && S.now !== null && S.st.intervals.some((i) => S.now >= i.start && S.now < i.end);
+    const hostWait = cfg.callMode === "host" && !paused && S.now !== null && (!S.st || !S.st.nextRounds.length || (S.st.nextRounds[S.st.nextRounds.length - 1] <= S.now && log.length >= S.st.nextRounds.length - 90 * (S.round - 1)));
     const annBar = S.ann ? `<div class="annbar" role="alert">${esc(S.ann.text)}</div>` : "";
     const bd = info.brand && typeof info.brand === "object" ? info.brand : null, bLogo = bd && typeof bd.logo === "string" && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(bd.logo) ? bd.logo : ""; // the organizer's own logo and name, or ours in writing
     const head = `${annBar}<div class="top"><div class="brand">${bLogo ? `<img class="blogo" alt="" src="${esc(bLogo)}">` : ""}${esc(bd && bd.name ? bd.name : "Corporate Tambola")}</div><div class="meta">${cfg.rounds > 1 ? "Round " + S.round + " of " + cfg.rounds + " · " : ""}${log.length} of 90 numbers called</div></div>`;
     const wins = (S.results || []).filter((r) => r.round === S.round || r.round === undefined).map((r) => `<span><b>${esc(ORD(r.ordinal || 1))} ${esc(NAMES[r.pattern] || r.pattern)}</b> · ${r.count} winner${r.count === 1 ? "" : "s"}</span>`).join("");
     if (!log.length) {
       const sec = secsToStart;
-      return ($app.innerHTML = `${head}<div class="big">${sec !== null && sec > 120 ? `<p>The engagement starts in</p><div class="cd">${hms(sec - 120)}</div><p>Open the link on your phone and get your ticket.</p>` : sec !== null && sec > 0 ? `<h1>Your game is setting up</h1><p>We are waiting 2 minutes more for everyone to join.</p><div class="cd">${mmss(sec)}</div><p>Open the link on your phone and get your ticket.</p>` : `<h1>Get ready</h1><p>The first number is about to be called…</p>`}</div><div class="foot">${esc(location.host)}</div>`);
+      return ($app.innerHTML = `${head}<div class="big">${sec !== null && sec > 120 ? `<p>The engagement starts in</p><div class="cd">${hms(sec - 120)}</div><p>Open the link on your phone and get your ticket.</p>` : sec !== null && sec > 0 ? `<h1>Your game is setting up</h1><p>We are waiting 2 minutes more for everyone to join.</p><div class="cd">${mmss(sec)}</div><p>Open the link on your phone and get your ticket.</p>` : hostWait ? `<h1>Waiting for the host</h1><p>The host presses for the first number.</p>` : `<h1>Get ready</h1><p>The first number is about to be called…</p>`}</div><div class="foot">${esc(location.host)}</div>`);
     }
     const last = log[log.length - 1];
     const fresh = S.lastNum !== null && S.lastNum !== last; S.lastNum = last;
@@ -65,7 +66,7 @@
     const ps = ZG.prizeStatus && S.cfg ? ZG.prizeStatus(S.cfg, S.results || [], S.round || 1) : [];
     const prizes = ps.length ? `<div class="ps" aria-label="Prizes"><h2>Prizes</h2><ul>${ps.map((p) => p.claimed ? `<li class="done"><s>${esc(p.name)}</s> <small>claimed</small></li>` : `<li>${esc(p.name)}${p.text ? ": <b>" + esc(p.text) + "</b>" : ""}</li>`).join("")}</ul></div>` : "";
     const banner = paused ? `<div class="big" style="margin-bottom:1vh"><h1>Paused</h1><p>The organizer has paused the engagement. It will resume shortly.</p></div>` : "";
-    $app.innerHTML = `${head}${banner}<div class="main"><div class="now"><div class="lbl">Number</div><div class="num ${fresh ? "fresh" : ""}">${last}</div><div class="recent" aria-label="Recent numbers">${recent}</div></div><div class="board" aria-label="Numbers called so far">${board}</div></div><div>${prizes}${wins ? `<div class="wins">${wins}</div>` : ""}<div class="foot">Join: ${esc(location.host)}/z?e=${esc(EID)}</div></div>`;
+    $app.innerHTML = `${head}${banner}<div class="main"><div class="now"><div class="lbl">Number</div><div class="num ${fresh ? "fresh" : ""}">${last}</div>${hostWait && log.length < 90 ? `<p class="wait" id="hostwait">Waiting for the host</p>` : ""}<div class="recent" aria-label="Recent numbers">${recent}</div></div><div class="board" aria-label="Numbers called so far">${board}</div></div><div>${prizes}${wins ? `<div class="wins">${wins}</div>` : ""}<div class="foot">Join: ${esc(location.host)}/z?e=${esc(EID)}</div></div>`;
   }
 
   if (!EID) { $app.innerHTML = `<p class="msg">No engagement was chosen.</p>`; return; }
