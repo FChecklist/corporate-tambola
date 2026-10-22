@@ -24,7 +24,7 @@
   const packNow = () => (isDemo() ? (S.pack || packFor(S.info.cap)) : packFor(S.info.cap));
 
   function view() {
-    if (!secret) return `${head}<div class="zcard"><h2>Please sign in first</h2><p class="zsmall" style="margin-top:0">Open your console from the home page, or sign in with your work email: we send you a 6-digit code.</p><a class="zbtn" href="/#login" id="goLogin" style="text-decoration:none;display:inline-block">Sign in with email</a></div>`;
+    if (!secret) return `${head}<div class="zcard"><h2>Please sign in first</h2><p class="zsmall" style="margin-top:0">Open your console from the home page, or sign in with your e-mail: we send you a 6-digit code.</p><a class="zbtn" href="/#login" id="goLogin" style="text-decoration:none;display:inline-block">Sign in with email</a></div>`;
     if (S.done) {
       const d = S.done;
       return `${head}<div class="zcard" style="border:2px solid #2e7d4f"><h2>${d.converted ? "Payment received. Your demo game is now a real game." : "Payment received. Your engagement will begin on time."}</h2>${TB.payReceipt ? TB.payReceipt(d, d.eid || eid) : ""}

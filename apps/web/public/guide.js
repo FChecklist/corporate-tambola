@@ -41,7 +41,7 @@
     { m: ["You already asked for several fresh links today"], k: "wait", t: "You already have a fresh link",
       w: "We limit new links in a day for your safety.", d: ["Open the latest e-mail we sent you and use that link.", "Or press Replace my AI link if that is what you need."], g: { none: true } },
     { m: ["Please sign in first", "Please sign in again", "Please sign in, or open your ticket link first"], k: "blocked", t: "Please sign in to continue",
-      w: "We need to know it is you before we go on. Your work on this screen is kept.", d: ["Press Sign in and use your work e-mail.", "We will bring you straight back to this place."], g: { href: "/#login", label: "Sign in" } },
+      w: "We need to know it is you before we go on. Your work on this screen is kept.", d: ["Press Sign in and use your e-mail.", "We will bring you straight back to this place."], g: { href: "/#login", label: "Sign in" } },
     { m: ["Say whether you are signing up, signing in or finishing a Host setup"], k: "unexpected", t: "That sign-in could not start", w: "Something unexpected stopped the sign-in from starting.", d: ["Please open the sign-in page again.", "If it happens again, message us and we will help."], g: { href: "/#login", label: "Open sign-in" } },
     // ---------- start time and dates ----------
     { m: ["Check the start time", "Pick a start time in the future", "That time has already passed", "The start time has passed or has not been chosen", "Please choose a start time in the future", "Pick the date and time of this game first"], k: "field", t: "Please choose a start time that is still ahead",

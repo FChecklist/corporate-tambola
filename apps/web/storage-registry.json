@@ -57,6 +57,7 @@
         "ctz-org",
         "ctz-board-*",
         "ctz-next",
+        "ctz-login-email",
         "ctz-aimsg",
         "ctz-email",
         "ctz-phone",

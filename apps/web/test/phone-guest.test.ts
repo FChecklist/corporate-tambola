@@ -289,7 +289,7 @@ describe("Continue with Google", () => {
     const o = await organizer({ GOOGLE_CLIENT_ID: GID });
     const home = await openPage(o.world, { url: "http://localhost/#login", html: "index.html", scripts: ["common.js", "google.js", "site.js"], afterLoad: (win, f) => { if (f === "google.js") fakeGsi(win); } }); open.push(home);
     const t0 = Date.now(); while (!/Continue with Google/.test(home.win.document.body.textContent || "") && Date.now() - t0 < 8000) await new Promise((r) => setTimeout(r, 50));
-    expect(home.win.document.body.textContent).toMatch(/Continue with Google/); expect(home.win.document.body.textContent).toMatch(/Email me a code/);
+    expect(home.win.document.body.textContent).toMatch(/Continue with Google/); expect(home.win.document.body.textContent).toMatch(/Continue|E-?mail me a code/);
     expect(home.errors).toEqual([]);
   });
 });

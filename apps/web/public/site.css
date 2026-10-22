@@ -163,7 +163,7 @@ body{overflow-x:hidden}
 #pricing{scroll-margin-top:76px}
 /* header with 8 links: wrap neatly on any width; Demo stays visible on phones, the other links are in the footer */
 .snav .links{flex-wrap:wrap;justify-content:flex-end;row-gap:6px}
-@media (max-width:560px){.snav .links a.how.demo{display:inline-flex}.snav{flex-wrap:wrap}.snav .links{flex:1 1 100%;justify-content:flex-start;min-width:0}.snav .links a{white-space:nowrap}}
+@media (max-width:560px){.snav .links a.how.demo,.snav .links a.how.demogame{display:inline-flex}.snav{flex-wrap:wrap}.snav .links{flex:1 1 100%;justify-content:flex-start;min-width:0}.snav .links a{white-space:nowrap}}
 /* phones: the home hero must never be wider than the screen (a grid column of 1fr grows to its widest child) */
 @media (max-width:960px){.smain{grid-template-columns:minmax(0,1fr)}.smain>*{min-width:0}}
 /* "Continue with Google" (only when the server has a client id) */
@@ -205,3 +205,6 @@ select#pack,.pwho select#pack{min-height:48px}
   .legaltop a.wa,.legaltop a.back{white-space:nowrap}
   .legaltop a.wa+a.back{margin-left:auto}
 }
+
+.snav .links a.how.demogame{background:#16a34a;color:#fff;border-color:#16a34a;font-weight:700}
+.heronote.demonote a{display:inline-flex;align-items:center;min-height:40px;padding:0 16px;margin:8px 8px 0 0;border-radius:999px;background:#fff;color:#0B3D91;font-weight:700;text-decoration:none}.heronote.demonote a:hover{background:#ffe9c7}
