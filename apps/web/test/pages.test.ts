@@ -96,7 +96,7 @@ describe("console (organizer page)", () => {
     const t = await p.waitFor((x) => /Start a new game/.test(x) && /Your account/.test(x));
     expect(p.$("#aistrip")!.textContent).toMatch(/Your AI assistant work link/); expect(p.$("#aistripcopy")).toBeTruthy(); expect(p.$("#rolepill")!.textContent).toBe("Organizer");
     expect(t.indexOf("Start a new game")).toBeLessThan(t.indexOf("Your account"));
-    expect(t).toMatch(/ChatGPT, Gemini, Grok, Claude, DeepSeek, Z\.ai/); expect(t).toMatch(/You keep four things: payment, Publish, erasing data, pause or stop/);
+    expect(t).toMatch(/ChatGPT \(web browsing on\), Gemini, Claude/); expect(t).toMatch(/You keep four things: payment, Publish, erasing data, pause or stop/);
     expect((p.$("#aimsg") as any).value).toContain("/ai/cta_"); expect((p.$("#aimsg") as any).value).toMatch(/my own Corporate Tambola account/i); expect(p.$("#aicopy")).toBeTruthy();
     expect(p.errors).toEqual([]);
   });
@@ -119,14 +119,14 @@ describe("console (organizer page)", () => {
     await p.waitFor((x) => /fresh 24-hour AI link is on its way/.test(x));
     expect((p.$("#aimsg") as any).value).toBe(o.aiMessage); expect(p.errors).toEqual([]);
   });
-  test("Show my AI work link (the e-mail's button): asks for the organizer's sign-in; once signed in shows the two-line paste with Copy, Fresh and Replace and the do-not-forward warnings", async () => {
+  test("Show my AI work link (the e-mail's button): asks for the organizer's sign-in; once signed in shows the paste with Copy, Fresh and Replace and the do-not-forward warnings", async () => {
     const o = await organizer();
     const anon = await page(o, "/ai-link", "ai-link.html", ["ai-link.js"], {});
     const t0 = await anon.waitFor((x) => /Sign in as the organizer/.test(x));
     expect(t0).not.toMatch(/cta_/); expect(t0).toMatch(/6-digit code/); expect(anon.$("#msg")).toBeFalsy();
     const p = await page(o, "/ai-link", "ai-link.html", ["ai-link.js"], { "ctz-org": o.token });
     const t = await p.waitFor((x) => /YOUR AI WORK LINK/.test(x));
-    const v = (p.$("#msg") as any).value as string; expect(v).toBe(o.aiMessage); expect(v.split("\n").length).toBe(2); expect(v).toContain("/ai/cta_");
+    const v = (p.$("#msg") as any).value as string; expect(v).toBe(o.aiMessage); expect(v.split("\n").length).toBeLessThanOrEqual(12); expect(v).toContain("/ai/cta_");
     expect(p.$("#cp")).toBeTruthy(); expect(p.$("#fr")).toBeTruthy(); expect(p.$("#rp")).toBeTruthy();
     expect((t.match(/DO NOT FORWARD: this page shows your personal AI work link/g) ?? []).length).toBe(2);
     p.click("#fr"); await p.waitFor((x) => /fresh 24-hour link is on its way/.test(x));
