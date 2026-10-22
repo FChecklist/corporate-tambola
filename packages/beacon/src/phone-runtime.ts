@@ -185,7 +185,8 @@ export class PhoneRuntime {
       // nothing can be paused here (no key was registered, and none can be after the start), so there is almost nothing to ask:
       // once the start has passed a hold can no longer begin, and before it we ask rarely, or every few seconds close to the start if it can be held
       const toStart = this.scheduledRound - now; // a hold can only begin around the time the organizer gave
-      if (toStart < -20) return;
+      if (toStart < -20) { if (m - this.lastControlPoll < 60_000 + (Math.floor(m) % 3000)) return; } // after the start: once a minute, so a key the organizer registers late (a game built through the AI link, console opened during the game) still reaches every phone and Pause / End the game work
+      else
       if (m - this.lastControlPoll < (this.gated && toStart < 40 ? 9_000 : 60_000) + (Math.floor(m) % 3000)) return;
     } else if (m - this.lastControlPoll < this.pollBaseMs + (Math.floor(m) % this.pollJitterMs)) return; // the profile's interval plus a little jitter so phones do not all poll together
     this.lastControlPoll = m;

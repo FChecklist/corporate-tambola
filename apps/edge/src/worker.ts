@@ -92,8 +92,6 @@ const tracks = (e: { cap: number }) => e.cap <= CLAIM_TRACKING_MAX_CAP;
 const brandOut = (c: EngagementCfg, withLogo: boolean) => (c.brand ? { brand: withLogo ? c.brand : { name: c.brand.name, color: c.brand.color, ...(c.brand.logo ? { hasLogo: true } : {}) } } : {});
 const pub = (e: any, withLogo = false) => { const c = cfgOf(e); return { tickets: c.tickets, ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, callMode: c.callMode ?? "auto", ...(c.name ? { name: c.name } : {}), ...(c.demo ? { demo: true } : {}), ...brandOut(c, withLogo) }; };
 const cfgJson = (c: EngagementCfg) => JSON.stringify({ ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.callMode === "host" ? { callMode: "host" } : {}), ...(c.name ? { name: c.name } : {}), ...(c.brand ? { brand: c.brand } : {}), ...(c.demo ? { demo: true } : {}) });
-/** Pause and End the game need a signing key that the phones have heard about before the start; the console registers it when the game is built or opened there before the start. */
-const LATE_KEY_MSG = "Pause and End the game were not set up before the start, so the phones cannot be stopped now. This game ends on its own when every prize is won, or at the 90th number. Next time, open the console once before the game begins.";
 /** Host mode (a Host presses a button for each number) makes every phone ask for the Host's presses every few seconds: the same size limit as the pause. */
 const HOST_MODE_MSG = `A Host can call the numbers in games of up to ${PAUSE_MAX_PARTICIPANTS.toLocaleString("en-IN")} people. For a larger game, let the software call the numbers at the chosen speed.`;
 
@@ -1106,8 +1104,6 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
         if (h.ok && h.added) await mirrorControl(env, cid!);
         return h.ok ? json({ ok: true, host: true }) : json({ error: h.error }, 409);
       }
-      // Phones watch for the organizer's pause/stop key only until 60 s after the start time; a key registered later would never reach them, so say so plainly instead of promising a stop that cannot happen
-      if (!(await readPublished(kv, cid!)) && now > roundMs(ce.start_round + 20)) return json({ error: LATE_KEY_MSG, code: "late-key" }, 409);
       const r = await registerKey(kv, cid!, b.publicKey, safety);
       if (r.ok) await mirrorControl(env, cid!);
       return r.ok ? json({ ok: true }) : json({ error: r.error }, 409);

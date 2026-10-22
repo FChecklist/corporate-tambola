@@ -286,6 +286,18 @@ describe("pause, resume and stop", () => {
     expect(a.rt.view().mode).toBe("none");
     expect(a.rt.view().log).toEqual(reference());
   });
+  test("a key registered AFTER the start still reaches a phone within about a minute (it keeps asking once a minute), so a late End the game works", async () => {
+    const a = mkPhone(151); await a.rt.boot(); await a.rt.join(a.phone);
+    for (let i = 0; i < 60; i++) await step([a]); // the game is running, nobody registered a key: the phone knows there is none
+    expect(a.rt.view().mode).toBe("none");
+    await registerKey(); // the organizer opens the console only now (a game built through the AI link)
+    for (let i = 0; i < 50 && a.rt.view().mode === "none"; i++) await step([a]);
+    expect(a.rt.view().mode).not.toBe("none");
+    expect((await publish({ action: "stop" })).status).toBe(200);
+    for (let i = 0; i < 200 && a.rt.view().phase !== "ended"; i++) await step([a]);
+    expect(a.rt.view().phase).toBe("ended");
+    expect(a.rt.view().log.length).toBeLessThan(90);
+  });
 });
 
 describe("an engagement that was not paid for by its start", () => {
@@ -305,11 +317,11 @@ describe("an engagement that was not paid for by its start", () => {
 
 describe("the free plan: how often phones ask about a pause", () => {
   const controlCalls = (log: string[]) => log.filter((p) => /\/control$/.test(p)).length;
-  test("an engagement nobody can pause is hardly asked about, and not at all once it has started", async () => {
+  test("an engagement nobody can pause is hardly asked about before the start, and only about once a minute once it has started (so a key registered late still reaches the phone)", async () => {
     const log: string[] = []; const a = mkPhone(11, { onApi: (p) => log.push(p) });
     await a.rt.boot(); await a.rt.join(a.phone, "A");
     for (let i = 0; i < 400; i++) await step([a]); // twenty minutes
-    expect(controlCalls(log)).toBeLessThanOrEqual(3);
+    expect(controlCalls(log)).toBeLessThanOrEqual(24); expect(controlCalls(log)).toBeGreaterThanOrEqual(8);
     expect(a.rt.view().log.length).toBeGreaterThan(20); // and it played normally
   });
   test("a mid-size engagement asks about every 30 seconds, a standard one every 9 to 12", async () => {

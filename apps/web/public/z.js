@@ -610,8 +610,8 @@
       ${roundCards(v)}
       ${v.brk ? breakCard(v.brk) : ""}
       ${callCard(v, last, sub)}
-      ${v.phase === "ended" ? "" : livePrizesCard(v)}
       <div class="zcard${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Demo ticket <span class="zdemotag">DEMO</span>' : (v.tickets.length > 1 ? "Your tickets" : "Your ticket") + demoTag()}</h2>${ribbon}${tix}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
+      ${v.phase === "ended" ? "" : livePrizesCard(v)}
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}
       <div class="zcard"><h2>Still to win</h2>${still}${chk}</div>

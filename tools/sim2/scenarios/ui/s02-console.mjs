@@ -22,10 +22,12 @@ async function setHouse(page, id, { n, pt = "voucher", pd } = {}) {
   if (!(await page.$(`#sec3 [data-ck="hs.${id}.pt"]`))) { const ch = await page.$(`#sec3 [data-ph="${id}"]`); if (ch) await ch.click(); }
   await page.waitForSelector(`#sec3 [data-ck="hs.${id}.pt"]`, { timeout: 4000 });
   const nChips = await page.$$(`#sec3 [data-ck="hs.${id}.n"]`);
-  if (nChips.length && n) await page.click(`#sec3 [data-ck="hs.${id}.n"][data-v="${Math.min(n, nChips.length)}"]`);
+  const box = await page.$(`#sec3 #f-hs-${id}-n`); // the organizer types any number of winners up to the ceiling; the chips are only the quick picks
+  if (box && n) { await page.fill(`#sec3 #f-hs-${id}-n`, String(Math.min(n, 100))); await page.dispatchEvent(`#sec3 #f-hs-${id}-n`, "input"); }
+  else if (nChips.length && n) { const vals = await page.$$eval(`#sec3 [data-ck="hs.${id}.n"]`, (els) => els.map((e) => Number(e.dataset.v))); await page.click(`#sec3 [data-ck="hs.${id}.n"][data-v="${Math.max(...vals.filter((v) => v <= n))}"]`); }
   await page.click(`#sec3 [data-ck="hs.${id}.pt"][data-v="${pt}"]`);
   if (pd !== undefined && (await page.$(`#sec3 #f-hs-${id}-pd`))) await page.fill(`#sec3 #f-hs-${id}-pd`, pd);
-  return nChips.length;
+  return box && n ? Math.min(n, 100) : nChips.length;
 }
 const ALL_HOUSES = ["early5", "early7", "early10", "top", "mid", "bot", "twolines", "corners", "star", "plus", "frame", "topbottom", "midcorners", "odd5", "even5", "low5", "high5", "full", "unlucky"];
 
