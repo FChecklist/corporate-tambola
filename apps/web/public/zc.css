@@ -16,6 +16,7 @@
 .zc-pill-role{background:var(--bg-tint-blue);color:var(--text-tint-blue)}
 .zc-pill-paid{background:var(--bg-tint-green);color:var(--text-tint-green)}
 .zc-pill-pend{background:var(--bg-tint-yellow);color:var(--text-tint-yellow)}
+.zc-pill-demo{background:#E4572E;color:#fff;font-weight:800;letter-spacing:.08em}
 .zc-where{flex:1;min-width:0;text-align:right;font-size:12px;color:var(--zc-mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .zc-paynote{padding:7px 12px;border-bottom:1px solid var(--zc-line);background:var(--bg-tint-yellow);color:var(--text-tint-yellow);font-size:12px;line-height:1.55}
 .zc-ai{padding:9px 12px;border-bottom:1px solid var(--zc-line);background:var(--zc-soft)}

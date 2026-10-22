@@ -20,7 +20,7 @@
   };
   // ---------- what the game's public settings say besides the plan: the brand strip, a cancelled game; and a personal invite link's token ----------
   const TOKEN = (q.get("t") || "").trim().slice(0, 80); // a personal link: sent as `token` when joining, so no mobile number is needed
-  const INFO = { brand: null, cancelled: null, dns: false }; // dns = "this game did not start": nobody paid, the time and 20 hours passed, the guest data was erased
+  const INFO = { brand: null, cancelled: null, dns: false, demo: false }; // demo = a DEMO GAME (free, up to 10 people): every screen says so, and the ticket carries a DEMO GAME watermark until the organizer makes it a real game // dns = "this game did not start": nobody paid, the time and 20 hours passed, the guest data was erased
   const cleanBrand = (b) => {
     if (!b || typeof b !== "object") return null;
     const name = String(b.name == null ? "" : b.name).replace(/\s+/g, " ").trim().slice(0, 60);
@@ -36,6 +36,7 @@
     if (!r || typeof r !== "object") return;
     if ("brand" in r && !(fromJoin && INFO.brand)) { INFO.brand = cleanBrand(r.brand); if (!DEMO && EID && INFO.brand && INFO.brand.logo !== undefined) { try { store.set("ctz:" + EID + ":brand", JSON.stringify(INFO.brand)); } catch { /* storage full or blocked: the strip just is not kept */ } } } // a join answer carries the brand without its logo: never let it replace the full one read from info
     if (r.didNotStart === true) INFO.dns = true; else if ("startRound" in r && !fromJoin) INFO.dns = false;
+    if ("tickets" in r) INFO.demo = r.demo === true; // the public settings say whether it is a demo game; after a paid conversion the next read clears it
     if ("cancelled" in r || "startRound" in r) INFO.cancelled = r.cancelled ? { message: String(r.message || "").slice(0, 200) } : null;
   };
   if (!DEMO && EID) { try { const kept = JSON.parse(store.get("ctz:" + EID + ":brand") || "null"); if (kept && typeof kept === "object") INFO.brand = cleanBrand(kept); } catch { /* nothing kept yet */ } } // the installed app shows the organizer's logo and name even before (or without) the network
@@ -154,7 +155,9 @@
     paint(); return false;
   }
 
-  const ticketHtml = (t, called, label, win) => `<div class="zticket" aria-label="${label}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div class="${called.has(v) ? "m" : ""}${called.has(v) && NEWCALL === v ? " pop" : ""}${win && win.has(v) && called.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;
+  const isDemoGame = () => !DEMO && INFO.demo === true;
+  const demoTag = () => (isDemoGame() ? ' <span class="zdemotag">DEMO GAME</span>' : "");
+  const ticketHtml = (t, called, label, win) => `<div class="zticket${isDemoGame() ? " zdemogame" : ""}" aria-label="${label}${isDemoGame() ? " (demo game)" : ""}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div class="${called.has(v) ? "m" : ""}${called.has(v) && NEWCALL === v ? " pop" : ""}${win && win.has(v) && called.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;
   const ordinalName = (k) => ["", "1st", "2nd", "3rd"][k] || k + "th";
   const KEYNAME = (key) => (key === "full2" ? "Full Two-Ticket House" : NAMES[key]);
 
@@ -299,6 +302,8 @@
   }
   let shareLink = location.origin + "/";
   try { localStorage.removeItem("ctz-phone"); } catch {} // older versions saved the participant's own number on the phone: it is not kept any more
+  /** A DEMO GAME (the organizer's free game for up to 10 people): one plain line, on every screen of the game. */
+  const demoGameCard = () => (isDemoGame() ? `<div class="zcard zdemo" id="demogame" role="note"><span class="zdemotag">DEMO GAME</span> <span class="zsmall">This is a demo game for up to 10 people. The organizer can make it a real game at any time.</span></div>` : "");
   function demoCard(v) {
     if (!DEMO || v.phase === "ended") return "";
     if (!DEMO.running) return `<div class="zcard zdemo" role="note"><h2>Demo video <span class="zdemotag">DEMO</span></h2><p class="zsmall" style="margin:0 0 10px">This is a real ticket and a real game, about a minute long: 3 numbers, a short break with your host's message, 3 more numbers, and you win <b>Four corners</b> (the first and last numbers of the top and bottom rows). Turn your sound on, then press the button.</p><button class="zbtn" id="drun" type="button">Run Demo</button> <button class="zbtn s alt" id="dcopy" type="button">Copy the demo link to send to a colleague</button></div>`;
@@ -312,7 +317,7 @@
   function finalCard(v) {
     if (DEMO) return `<div class="zcard zfinal"><h2>That was the demo <span class="zdemotag">DEMO</span></h2><div class="zfbig">${PRIZES.length ? "You won Four corners." : "You saw how a game runs."}</div><p class="zsmall" style="font-size:15px;margin:6px 0 10px">A real game has 90 numbers, many prizes, your own brand messages and videos, lucky draws and a report. You build it in about five minutes and nobody pays until you are ready.</p><a class="zbtn" style="display:inline-flex;align-items:center;text-decoration:none" href="/">Create my game</a> <button class="zbtn s alt" id="dagain2" type="button">Run demo again</button> <button class="zbtn s alt" id="dcopy2" type="button">Copy the demo link</button></div>`;
     const n = PRIZES.length;
-    return `<div class="zcard zfinal"><h2>Game complete</h2>
+    return `<div class="zcard zfinal"><h2>Game complete${demoTag()}</h2>
       <div class="zmedal" aria-hidden="true">${n ? "&#127942;" : "&#127922;"}</div>
       <div class="zfbig">${n ? "You won " + n + (n === 1 ? " prize!" : " prizes!") : "Well played!"}</div>
       <p class="zsmall zthanks">Thank you for joining our extended family of Corporate Tambola.</p>
@@ -597,7 +602,7 @@
     const tix = v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : DEMO ? "Demo ticket" : "Your ticket", winSet)).join("");
     const sndBtn = `<button class="zsnd zsndin" id="snd" aria-pressed="${sound}">${sound ? "&#128266; Sound on" : "&#128263; Sound off"}</button>`;
     return `${brandStrip(sndBtn)}
-      ${demoCard(v)}${annBanner(v)}${banners.join("")}
+      ${demoCard(v)}${demoGameCard()}${annBanner(v)}${banners.join("")}
       ${v.phase === "ended" ? finalCard(v) + closingCard(v) + confirmCard(v) + prizesCard() : ""}
       ${waitingRoom(v)}
       ${openingCard(v)}
@@ -606,7 +611,7 @@
       ${v.brk ? breakCard(v.brk) : ""}
       ${callCard(v, last, sub)}
       ${v.phase === "ended" ? "" : livePrizesCard(v)}
-      <div class="zcard${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Demo ticket <span class="zdemotag">DEMO</span>' : v.tickets.length > 1 ? "Your tickets" : "Your ticket"}</h2>${ribbon}${tix}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
+      <div class="zcard${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Demo ticket <span class="zdemotag">DEMO</span>' : (v.tickets.length > 1 ? "Your tickets" : "Your ticket") + demoTag()}</h2>${ribbon}${tix}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}
       <div class="zcard"><h2>Still to win</h2>${still}${chk}</div>
@@ -653,7 +658,9 @@
       await doJoin(); // shows the ticket screen at once on success: the first tick may take a few seconds on a slow network
     };
   }
-  async function loop() { try { await rt.tick(); } catch { /* the loop must never die */ } paint(); }
+  let infoTick = 0;
+  // Only a DEMO GAME re-reads the public settings (once a minute, at most 10 phones): the moment the organizer makes it a real game the mark goes, and the re-reading stops with it. A real game never spends these requests.
+  async function loop() { try { await rt.tick(); } catch { /* the loop must never die */ } if (isDemoGame() && ++infoTick % 60 === 0) { try { await api("GET", `/api/z/${EID}/info`); } catch { /* the next minute tries again */ } } paint(); }
   function start() { if (timer) return; loop(); timer = setInterval(loop, 1000); }
 
   if (!EID) { $app.innerHTML = `<p class="zmsg">This link is incomplete. Please ask your organizer for the engagement link.</p>`; return; }

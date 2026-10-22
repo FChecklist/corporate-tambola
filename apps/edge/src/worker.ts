@@ -12,7 +12,7 @@
 //   Winners: nobody posts them. Phones report what they worked out and a result is accepted when several different phones agree (winners.ts, quorumFor).
 //   nobody        - phones: join, send claims, read results counts, read the engagement info and the signed control file.
 
-import { GRACE_ROUNDS, HOUSE_ORDER, PRIZE_HOUSES, brandMomentsFor, defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
+import { DEMO_CAP, GRACE_ROUNDS, HOUSE_ORDER, PRIZE_HOUSES, brandMomentsFor, defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
 import { openPii, openText, sealPii, sealText } from "./pii";
 import { TERMS_VERSION } from "./brand";
 import { CONSENT_SCHEMA, consentMissing, recordConsent, hasConsent, CONSENT_VERSION } from "./consent";
@@ -89,8 +89,8 @@ const tracks = (e: { cap: number }) => e.cap <= CLAIM_TRACKING_MAX_CAP;
 /** The part of the settings every phone needs, public by design: how many tickets, what each house wins, and when the brand breaks are. */
 /** The brand strip as phones see it: the full brand (with the logo) from `info`; everywhere else only name and colour (a logo can be 40 KB and a 10,000-person list must not carry it). */
 const brandOut = (c: EngagementCfg, withLogo: boolean) => (c.brand ? { brand: withLogo ? c.brand : { name: c.brand.name, color: c.brand.color, ...(c.brand.logo ? { hasLogo: true } : {}) } } : {});
-const pub = (e: any, withLogo = false) => { const c = cfgOf(e); return { tickets: c.tickets, ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.name ? { name: c.name } : {}), ...brandOut(c, withLogo) }; };
-const cfgJson = (c: EngagementCfg) => JSON.stringify({ ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.name ? { name: c.name } : {}), ...(c.brand ? { brand: c.brand } : {}) });
+const pub = (e: any, withLogo = false) => { const c = cfgOf(e); return { tickets: c.tickets, ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.name ? { name: c.name } : {}), ...(c.demo ? { demo: true } : {}), ...brandOut(c, withLogo) }; };
+const cfgJson = (c: EngagementCfg) => JSON.stringify({ ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.name ? { name: c.name } : {}), ...(c.brand ? { brand: c.brand } : {}), ...(c.demo ? { demo: true } : {}) });
 
 /** Privacy and lifecycle: sealed personal data, the role / inviter / invite kind / source of a seat, when each game ended, the winners record that outlives the personal data, and the votes that tell us a game is over. */
 export const PRIVACY_SCHEMA: string[] = [
@@ -179,7 +179,7 @@ export const SCHEMA: string[] = [
 const PATTERNS = new Set<string>([...HOUSE_ORDER.filter((k) => k !== "unlucky"), "lucky"]); // houses a phone may claim (Unlucky is never claimed: it is decided by comparing tickets)
 /** What the organizer set for this engagement (tickets per participant, reward lines, brand breaks); plain defaults when nothing was set. */
 const cfgOf = (e: { tickets?: number; config?: string | null }): EngagementCfg => {
-  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, ties: j.ties, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, opening: j.opening, closing: j.closing, name: j.name, brand: j.brand }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* fall through */ }
+  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, ties: j.ties, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, opening: j.opening, closing: j.closing, name: j.name, brand: j.brand, demo: j.demo }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* fall through */ }
   return defaultCfg();
 };
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
@@ -205,6 +205,10 @@ const GENESIS = 1692803367; // drand quicknet; round r is published at GENESIS +
 const roundMs = (r: number) => (GENESIS + (r - 1) * 3) * 1000;
 /** An unpaid engagement is held from this long BEFORE its start, so every phone (they check every few seconds) knows before the first number would be shown. */
 const LOCK_LEAD_MS = 45_000;
+/** A DEMO GAME (config.demo): a real game, free, for up to DEMO_CAP people. It publishes without payment and is never held; the organizer may make it a real game (choose a pack and pay) at any time: pay.ts clears the mark. */
+const DEMO_CAP_MSG = "A demo game is for up to 10 people. Make it a real game to invite more.";
+const DEMO_PAY_MSG = "To make this a real game, choose the number of people and pay for it. Until then it stays a free demo game.";
+const isDemo = (e: { tickets?: number; config?: string | null }) => !!cfgOf(e).demo;
 const roundOfMs = (ms: number) => Math.floor((ms / 1000 - GENESIS) / 3) + 1;
 /** A published engagement is open to participants even before it is paid for; a draft is not. Paid engagements are always published. */
 async function isPublished(env: Env, e: { id: string; pack: number | null }): Promise<boolean> {
@@ -573,7 +577,7 @@ export const AI_MANIFEST = {
     { do: "Turn the organizer's chosen date and time into the startRound the engagement needs, and check it is in the future", call: "GET /api/z/schedule?at=2026-10-03T16:00:00+05:30 -> {startRound, startMs, startsInMinutes, startsAtIST}" },
     { do: "Read back everything saved for one engagement (start time in the organizer's time, speed, limit, tickets, every reward, every break, rounds, head-count, and whether it is a draft, published or paid). Use it to confirm the details with the organizer after every change", call: "GET /api/z/{id}/summary" },
     { do: "List engagements and head-counts", call: "GET /api/history" },
-    { do: "Create an engagement. It is saved as a free draft that participants cannot see yet; nothing is paid at this step", call: "POST /api/z {id, startRound, callSeconds (6|9|12|15), cap, closed?}  -> {ok, draft, openUrl}" },
+    { do: "Create an engagement. It is saved as a free draft that participants cannot see yet; nothing is paid at this step. `demo: true` makes a DEMO GAME: free, up to 10 people (cap at most 10), every screen says DEMO GAME, it starts without payment; the organizer can make it a real game at any time (choose the number of people and pay on the pay page)", call: "POST /api/z {id, startRound, callSeconds (6|9|12|15), cap, closed?, demo?}  -> {ok, draft, demo?, openUrl}" },
     { do: "When everything is set up, tell the organizer it is ready. Publishing is free but only the organizer can do it (they confirm their email and mobile number), and the game does not begin until it is paid for (pay at any time until the guest data is erased; a late payment starts the game 2 minutes after it is confirmed). This returns a link: give it to the organizer and help them through every step, but never try to publish or pay yourself", call: "POST /api/z/{id}/publish -> {published:false, needsOrganizer:true, consoleUrl} (the organizer opens consoleUrl, confirms their details and presses Publish; afterwards the same call returns payUrl, the payment page, and shareUrl, the link for guests)" },
     { do: "Change start time, speed, cap, invite-only, tickets per participant (1 or 2), reward lines and brand moments (5 per ticket: opening, during the game, closing; 1 ticket = 5, 2 tickets = 10) and rounds (1 to 5 games, each with new numbers and new tickets) before the first number", call: "PATCH /api/z/{id}/settings {startRound?, callSeconds?, cap?, closed?, tickets?, rounds?, rewards?: [{pattern: <a house id from choices.rewards, never full2>, scope?: ticket|two_ticket, ordinal?: 1 up to the house maximum, text}], breaks?: [{after?: 1-89 numbers called (leave it out: the software spreads them evenly), seconds?: 15-600 in steps of 3 (default 60), kind: file|youtube|slides|speech|lucky, title, mediaUrl?: https link (not for lucky), winners?: 1|3|5|10 (lucky only, default 3), style?: draw|scratch (lucky only; scratch shows a scratch card on phones, the winners are drawn the same fair way)}], opening?: [{kind: file|youtube|slides|speech, title, mediaUrl?, seconds?: 15-120}], closing?: [{kind: file|youtube|slides|speech, title, mediaUrl?}]}. IMPORTANT: rewards, breaks and every list you send REPLACE what was saved, they are not merged, so always send the complete list (to change one reward, read the summary, change it, send them all). A media link must be https; for kind youtube it must be a YouTube link; for file it must be a direct link the phones can open (a video, audio, image or PDF file), which we cannot check for you. A reward line is ONE winner of ONE house: for three winners of the full house send three lines with ordinal 1, 2 and 3. For the two-ticket full house use pattern full with scope two_ticket (ordinal 1-10). Houses, names and how each is won are in the manual. Asking for more winners than a house allows is refused with a plain message. A lucky draw is a break: {after: 60, seconds: 60, kind: lucky, title: Lucky draw, winners: 3}. Worked example: PATCH /api/z/{id}/settings {startRound: 33146812, callSeconds: 9, cap: 250, tickets: 2, rounds: 1, rewards: [{pattern: early5, ordinal: 1, text: Gift hamper}, {pattern: full, ordinal: 1, text: Voucher 5000}, {pattern: full, ordinal: 2, text: Voucher 3000}, {pattern: full, scope: two_ticket, ordinal: 1, text: iPad}], breaks: [{after: 30, seconds: 90, kind: youtube, title: Anniversary film, mediaUrl: https://www.youtube.com/watch?v=...}, {after: 60, seconds: 60, kind: lucky, title: Lucky draw, winners: 3}]}" },
     { do: "Participants: the OWNER loads the invite list in the Participants card of their console. Names and mobile numbers never pass through the AI (a roster call from an AI key answers 403). Set the limit with settings.", call: "(owner, in the console)" },
@@ -1182,12 +1186,13 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
     let createCap = now + MAX_AHEAD_MS; // with a pack already bought (an entitlement) the game is paid: up to 365 days from that payment
     if (!a.plat && a.org) { const en = await env.DB.prepare("SELECT id FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(a.org, b.cap).first<{ id: string }>(); const end = en ? await entitlementWindowEndMs(env.DB, en.id) : null; if (end) createCap = end - 1; }
     if (roundMs(b.startRound) > createCap) return json({ error: createCap > now + MAX_AHEAD_MS ? AFTER_PAID_WINDOW(createCap + 1) : TOO_FAR, code: createCap > now + MAX_AHEAD_MS ? "after-paid-window" : "too-far" }, 400);
-    const vc = validateCfg({ tickets: b.tickets, ties: b.ties, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, opening: b.opening, closing: b.closing, name: b.name, brand: b.brand });
+    const vc = validateCfg({ tickets: b.tickets, ties: b.ties, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, opening: b.opening, closing: b.closing, name: b.name, brand: b.brand, demo: b.demo });
     if (!vc.ok) return json({ error: vc.error }, 400);
+    if (vc.cfg.demo && b.cap > DEMO_CAP) return json({ error: DEMO_CAP_MSG, code: "demo-cap" }, 400); // a demo game is small; a bigger one is a real game
     const have = await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(b.id).first<{ org: string | null }>();
     if (have) return json({ ok: true, existed: true }); // creating twice never overwrites (and never reveals whose it is)
-    // an organizer needs a purchased engagement (entitlement) big enough for the limit they ask for; we (platform) do not
-    const ent = a.plat ? null : await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(a.org, b.cap).first<{ id: string; pack: number }>();
+    // an organizer needs a purchased engagement (entitlement) big enough for the limit they ask for; we (platform) do not. A demo game never uses up a bought pack.
+    const ent = a.plat || vc.cfg.demo ? null : await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(a.org, b.cap).first<{ id: string; pack: number }>();
     // no payment is needed to BUILD an engagement: without a purchased pack it is saved as a draft (pack 0) that participants cannot see or join;
     // payment is asked only when the organizer publishes it (POST /api/z/:id/publish)
     const draft = !a.plat && !ent;
@@ -1200,7 +1205,7 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
     await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.whoCanJoin === "list" || (b.whoCanJoin === undefined && b.closed) ? 1 : 0, draft ? 0 : ent?.pack ?? b.cap, vc.cfg.tickets, cfgJson(vc.cfg), isTestEng).run(); // the console sends whoCanJoin "list"; the API default stays "anyone"
     if (ent) await env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(b.id, ent.id).run();
     if (a.kind === "ai" && a.org) await noteHelperGame(env.DB, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), a.org, b.id, now); // a game made with a Help Desk helper's key is recorded as theirs
-    return json({ ok: true, draft, openUrl: `${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html?e=${b.id}` });
+    return json({ ok: true, draft, ...(vc.cfg.demo ? { demo: true } : {}), openUrl: `${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html?e=${b.id}` });
   }
   if (req.method === "GET" && p === "/api/history") {
     if (!a.plat && !a.org) return deny(a);
@@ -1341,10 +1346,10 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
     const kid = a.kind === "cohost" ? (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 7) : null;
     const c = cfgOf(e), origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
     const joined = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
-    const pk = unpaid ? PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null : e.pack;
+    const pk = unpaid ? PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null : PACKS.some((x) => x[0] === e.pack) ? e.pack : null; // a demo (or free-launch) game is "paid" with its own size, which is no pack: no price to show
     const lockedC = unpaid && !isDraft && !cancelled && !e.unplayed_ms && roundMs(e.start_round) - LOCK_LEAD_MS <= now;
     const roleAccepted = a.kind === "cohost" ? await hasConsent(env.DB, "c:" + (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 16), "K5") : undefined;
-    return json({ ...(roleAccepted === undefined ? {} : { roleAccepted }), name: c.name || e.id, startMs: roundMs(e.start_round), cap: e.cap, joined, brought: await broughtBy(env, e.org, kid), price: pk ? price(pk, "INR").total : null, payment, ...(cancelled ? { cancelled: true } : {}), waitingFor: lockedC ? "organizer" : null, didNotStart: !!e.unplayed_ms, erasureMs: await erasureOf(env, e), ...(await creditFields(env, a, e, unpaid && !cancelled && !e.unplayed_ms, now)), inviteLink: kid && !isDraft && !cancelled ? `${origin}/z.html?e=${e.id}&from=${COHOST_FROM + parseInt(kid, 16)}` : null });
+    return json({ ...(roleAccepted === undefined ? {} : { roleAccepted }), name: c.name || e.id, ...(c.demo ? { demo: true } : {}), startMs: roundMs(e.start_round), cap: e.cap, joined, brought: await broughtBy(env, e.org, kid), price: pk ? price(pk, "INR").total : null, payment, ...(cancelled ? { cancelled: true } : {}), waitingFor: lockedC ? "organizer" : null, didNotStart: !!e.unplayed_ms, erasureMs: await erasureOf(env, e), ...(await creditFields(env, a, e, unpaid && !cancelled && !e.unplayed_ms, now)), inviteLink: kid && !isDraft && !cancelled ? `${origin}/z.html?e=${e.id}&from=${COHOST_FROM + parseInt(kid, 16)}` : null });
   }
   const locked = unpaid && !isDraft && !cancelled && !didNotStart && roundMs(e.start_round) - LOCK_LEAD_MS <= now; // published but not paid by its start time: it does not begin
   if (isDraft && ((action === "join" && req.method === "POST") || (action === "info" && !can(a, e)))) return json({ error: "This engagement is not open yet." }, 403);
@@ -1552,11 +1557,13 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
     if (!can(a, e)) return deny(a);
     const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
     const c = cfgOf(e), origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
-    const links = { console: `${origin}/zc.html?e=${e.id}`, ...(isDraft ? { publishHandover: `${origin}/zc.html?e=${e.id}&do=publish` } : { guest: `${origin}/z.html?e=${e.id}`, bigScreen: `${origin}/big.html?e=${e.id}` }), ...(unpaid && !isDraft ? { pay: `${origin}/pay.html?e=${e.id}` } : {}), testBrandMoment: `${origin}/preview.html`, demo: `${origin}/demo.html` };
+    const demoGame = !!c.demo;
+    const links = { console: `${origin}/zc.html?e=${e.id}`, ...(isDraft ? { publishHandover: `${origin}/zc.html?e=${e.id}&do=publish` } : { guest: `${origin}/z.html?e=${e.id}`, bigScreen: `${origin}/big.html?e=${e.id}` }), ...((unpaid || demoGame) && !isDraft ? { pay: `${origin}/pay.html?e=${e.id}` } : {}), ...(demoGame && !isDraft ? { makeRealGame: `${origin}/pay.html?e=${e.id}` } : {}), testBrandMoment: `${origin}/preview.html`, demo: `${origin}/demo.html` };
     const nextSteps = [
       { step: "Name the prizes", who: "the organizer, or the AI if told what each prize is", done: c.rewards.some((r) => r.text.length > 0) },
-      { step: "Publish (free): the organizer confirms their e-mail and mobile and taps once", who: "the organizer", done: !isDraft, ...(isDraft ? { link: `${origin}/zc.html?e=${e.id}&do=publish` } : {}) },
-      { step: "Pay (the game does not begin until it is paid)", who: "the organizer, a Host or a Co-host", done: !isDraft && !unpaid, ...(unpaid && !isDraft ? { link: links.pay, startsAt: istTime(roundMs(e.start_round)), canPayUntil: istTime(await erasureOf(env, e)) } : {}) },
+      { step: demoGame ? "Publish (free): the organizer confirms their e-mail and mobile and taps once. A DEMO GAME starts without any payment" : "Publish (free): the organizer confirms their e-mail and mobile and taps once", who: "the organizer", done: !isDraft, ...(isDraft ? { link: `${origin}/zc.html?e=${e.id}&do=publish` } : {}) },
+      ...(demoGame ? [{ step: `Optional: make it a real game (this is a free DEMO GAME for up to ${DEMO_CAP} people). The organizer chooses the number of people and pays; the game then carries on as a real game, before, during or after the demo`, who: "the organizer, a Host or a Co-host", done: false, ...(!isDraft ? { link: links.pay } : {}) }]
+        : [{ step: "Pay (the game does not begin until it is paid)", who: "the organizer, a Host or a Co-host", done: !isDraft && !unpaid, ...(unpaid && !isDraft ? { link: links.pay, startsAt: istTime(roundMs(e.start_round)), canPayUntil: istTime(await erasureOf(env, e)) } : {}) }]),
       { step: "Share the guest link and load the guest list", who: "the organizer", done: n > 0 },
     ];
     const cpv = cancelled ? await cancelPreview(env as PayEnv, e, now) : null; // what a cancelled game left in the account (credit, never a refund)
@@ -1565,7 +1572,8 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
     return json({ id: e.id, ...(cancelled ? { cancelled: true, cancelledMs: e.cancelled_ms, cancelledBy: e.cancelled_by, cancelCredit: cpv?.credit ?? null, ...(cpv && e.pack !== 0 ? { rescheduleUntilMs: cpv.rescheduleUntilMs, canReschedule: cpv.canReschedule } : {}) } : {}),
       waitingFor: locked ? "organizer" : null, didNotStart, erasureMs: await erasureOf(env, e), ...(startPending ? { startPending: true } : {}),
       credit: creditNow ? creditNow.activeTotalInr : null, creditExpiresMs: creditNow ? creditNow.nextExpiryMs : null, creditApplied: creditNow ? await creditAppliedFor(env.DB, e.id) : null,
-      status: didNotStart ? "did not start (closed)" : cancelled ? "cancelled by the organizer" : isDraft ? "draft" : unpaid ? (locked ? "published, NOT PAID, held because the start time passed" : "published, payment due before the start") : "published and paid",
+      status: didNotStart ? "did not start (closed)" : cancelled ? "cancelled by the organizer" : isDraft ? (demoGame ? "draft (DEMO GAME, free, up to 10 people)" : "draft") : demoGame ? "published, DEMO GAME (free, up to 10 people; no payment needed)" : unpaid ? (locked ? "published, NOT PAID, held because the start time passed" : "published, payment due before the start") : "published and paid",
+      ...(demoGame ? { demo: true, demoCap: DEMO_CAP } : {}),
       startsAtIST: istTime(roundMs(e.start_round)), startMs: roundMs(e.start_round), startRound: e.start_round, callSeconds: e.call_seconds, limit: e.cap, closed: !!e.closed, whoCanJoin: e.closed ? "list" : "anyone", coHostLimit: e.cohost_limit ?? COHOST_LIMIT_DEFAULT, guestInvites: cfgOf(e).invites,
       tickets: c.tickets, ties: c.ties ?? "share", rounds: c.rounds, rewards: c.rewards, breaks: c.breaks, opening: c.opening, closing: c.closing, invites: c.invites, brandMomentsAllowed: brandMomentsFor(c.tickets), participants: n, ...(c.name ? { name: c.name } : {}), ...(c.brand ? { brand: c.brand } : {}),
       paid: !unpaid, payment, ...(unpaid ? { pack: PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null, priceInr: PACKS.find((x) => x[0] >= e.cap) ? price(PACKS.find((x) => x[0] >= e.cap)![0], "INR").total : null, startsAt: istTime(roundMs(e.start_round)), payUntil: istTime(await erasureOf(env, e)) } : { pack: e.pack }),
@@ -1575,11 +1583,12 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
   if (action === "publish" && req.method === "POST") { // free: the organizer confirms their details, shares the link, and pays before the start (or it will not begin)
     const origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
     const payUrl = `${origin}/pay.html?e=${eid}`, shareUrl = `${origin}/z.html?e=${eid}`;
-    if (a.kind === "ai" && can(a, e)) return json({ ok: true, published: !isDraft, needsOrganizer: isDraft, ...(isDraft ? { consoleUrl: `${origin}/zc.html?e=${eid}` } : { payUrl, shareUrl }), message: isDraft
-      ? "Everything is ready. Please give this link to the organizer: they open it, confirm their email and mobile number and press Publish. Publishing is free. After that the game does not begin until it is paid for (any time until the guest data is erased; a late payment starts the game 2 minutes after it is confirmed). The organizer does both themself: the AI never publishes or pays."
-      : unpaid ? "It is published. The game does not begin until it is paid for (any time until the guest data is erased; a late payment starts it 2 minutes after confirmation). Give the organizer this link to pay: they do it themself." : "Already published and paid." });
+    const demo = isDemo(e);
+    if (a.kind === "ai" && can(a, e)) return json({ ok: true, published: !isDraft, needsOrganizer: isDraft, ...(demo ? { demo: true } : {}), ...(isDraft ? { consoleUrl: `${origin}/zc.html?e=${eid}` } : { payUrl, shareUrl }), message: isDraft
+      ? (demo ? "Everything is ready. This is a DEMO GAME (free, up to 10 people). Please give this link to the organizer: they open it, confirm their email and mobile number and press Publish. Nothing is paid: a demo game starts without payment. The organizer can make it a real game at any time from the Pay step (choose the number of people and pay). The AI never publishes or pays." : "Everything is ready. Please give this link to the organizer: they open it, confirm their email and mobile number and press Publish. Publishing is free. After that the game does not begin until it is paid for (any time until the guest data is erased; a late payment starts the game 2 minutes after it is confirmed). The organizer does both themself: the AI never publishes or pays.")
+      : demo ? "It is published as a free DEMO GAME (up to 10 people). It starts without payment. To make it a real game for more people the organizer opens this link, chooses the number of people and pays." : unpaid ? "It is published. The game does not begin until it is paid for (any time until the guest data is erased; a late payment starts it 2 minutes after confirmation). Give the organizer this link to pay: they do it themself." : "Already published and paid." });
     if (!can(a, e, true)) return deny(a);
-    if (!isDraft) return json({ ok: true, published: true, already: true, paid: !unpaid, startMs: roundMs(e.start_round), payUrl, shareUrl });
+    if (!isDraft) return json({ ok: true, published: true, already: true, paid: !unpaid, ...(demo ? { demo: true } : {}), startMs: roundMs(e.start_round), payUrl, shareUrl });
     // the organizer confirms (and may correct) their email and mobile number
     const pb = await body(req);
     { const cm = consentMissing(pb, "K1"); if (cm) return cm; } // K1: the Terms box and the organizer's promise, checked here on the server
@@ -1587,8 +1596,9 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
     if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(cEmail)) return json({ error: "Please confirm a valid email address." }, 400);
     if (cPhone.length < 10 || cPhone.length > 15 || !cleanPhone(pb?.phone).ok) return json({ error: "Please confirm a valid mobile number. " + (cleanPhone(pb?.phone) as any).why }, 400);
     if (roundMs(e.start_round) <= now || (await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`startpending/${eid}`).first())) return json({ error: "The start time has passed or has not been chosen. Please choose a new start time first.", code: "start-pending" }, 400);
-    const ent = await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(e.org, e.cap).first<{ id: string; pack: number }>();
-    const free = !ent && freeLaunch(env as PayEnv) && e.cap <= FREE_CAP; // optional switch: small engagements free while the gateway is off
+    if (demo && e.cap > DEMO_CAP) return json({ error: DEMO_CAP_MSG, code: "demo-cap" }, 400); // cannot happen through create/settings; a plain refusal if it ever does
+    const ent = demo ? null : await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(e.org, e.cap).first<{ id: string; pack: number }>(); // a demo never uses up a bought pack
+    const free = demo || (!ent && freeLaunch(env as PayEnv) && e.cap <= FREE_CAP); // a DEMO GAME publishes free (pack = its own size, nothing bought, never held for payment); the optional FREE_LAUNCH switch does the same for small engagements while the gateway is off
     if (!(await spend(env, now, 4))) return BUSY();
     await env.DB.batch([
       env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`contact/${eid}`, JSON.stringify({ email: cEmail, phone: cPhone.slice(-10) })),
@@ -1599,9 +1609,11 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
     const paid = !!(ent || free), startMs = roundMs(e.start_round);
     await recordConsent(env.DB, { subject: e.org ?? "platform", kind: "K1", ref: eid!, now });
     await recordFunnelForOrg(env as VisitEnv, e.org, "published", now);
-    await sendMail(env as PayEnv, env.DB, cEmail, paid ? `Your engagement ${eid} is published and paid` : `Your engagement ${eid} is published: payment pending (it starts ${istTime(startMs)})`,
+    if (demo) await sendMail(env as PayEnv, env.DB, cEmail, `Your DEMO GAME ${eid} is published (free, it starts ${istTime(startMs)})`,
+      `Your DEMO GAME ${eid} is live. It is free, for up to ${e.cap} people, and it starts on time without any payment. Every screen says DEMO GAME.\n\nShare this link: ${shareUrl}\n\nWant more people, or a real game? Open Make this a real game in your console at any time, before, during or after the demo: choose the number of people and pay, and the game carries on as a real game: ${payUrl}\n\nBig screen for the room: ${origin}/big.html?e=${eid}`, now);
+    else await sendMail(env as PayEnv, env.DB, cEmail, paid ? `Your engagement ${eid} is published and paid` : `Your engagement ${eid} is published: payment pending (it starts ${istTime(startMs)})`,
       `Your engagement ${eid} is live.\n\nShare this link: ${shareUrl}\n\n${paid ? "" : `Payment pending: the game does not begin until it is paid for. You can pay at any time until the guest data is erased; if you pay late, the first number comes 2 minutes after the payment is confirmed (about 2 minutes to pay): ${payUrl}\n\n`}Big screen for the room: ${origin}/big.html?e=${eid}`, now);
-    return json({ ok: true, published: true, paid, startMs, payUrl, shareUrl, confirmed: { email: cEmail, phone: cPhone.slice(-10) } });
+    return json({ ok: true, published: true, paid, ...(demo ? { demo: true, free: true } : {}), startMs, payUrl, shareUrl, confirmed: { email: cEmail, phone: cPhone.slice(-10) } });
   }
   if (action === "claims" && req.method === "GET") {
     if (!can(a, e)) return deny(a);
@@ -1726,8 +1738,10 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
     if (!b) return json({ error: "Check the details." }, 400);
     if (b.whoCanJoin !== undefined && b.whoCanJoin !== "list" && b.whoCanJoin !== "anyone") return json({ error: "Who can join: choose \"list\" (only people on a list) or \"anyone\" (anyone with the link)." }, 400);
     if (b.coHostLimit !== undefined && (!Number.isInteger(b.coHostLimit) || b.coHostLimit < COHOST_LIMIT_MIN || b.coHostLimit > COHOST_LIMIT_MAX)) return json({ error: `A Co-host can list ${COHOST_LIMIT_MIN} to ${COHOST_LIMIT_MAX} people.` }, 400);
-    const vc = validateCfg({ tickets: b.tickets, ties: b.ties, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, invites: b.invites !== undefined ? b.invites : b.guestInvites, opening: b.opening, closing: b.closing, name: b.name, brand: b.brand }, cfgOf(e)); // guestInvites is the console's name for invites
+    const vc = validateCfg({ tickets: b.tickets, ties: b.ties, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, invites: b.invites !== undefined ? b.invites : b.guestInvites, opening: b.opening, closing: b.closing, name: b.name, brand: b.brand, demo: b.demo }, cfgOf(e)); // guestInvites is the console's name for invites
     if (!vc.ok) return json({ error: vc.error }, 400);
+    const wasDemo = isDemo(e);
+    if (wasDemo && !vc.cfg.demo && e.pack !== 0 && !a.plat) return json({ error: DEMO_PAY_MSG, code: "demo-pay" }, 402); // a published demo becomes a real game only through a paid conversion (pay.ts), never by flipping the mark
     const next = { start_round: b.startRound ?? e.start_round, call_seconds: b.callSeconds ?? e.call_seconds, cap: b.cap ?? e.cap, closed: b.whoCanJoin !== undefined ? (b.whoCanJoin === "list" ? 1 : 0) : b.closed === undefined ? e.closed : b.closed ? 1 : 0, cohost_limit: b.coHostLimit ?? e.cohost_limit ?? null }; // whoCanJoin "list" is the same switch as the older `closed`
     if (Number.isInteger(next.call_seconds) && !GAPS.includes(next.call_seconds)) return json({ error: GAP_MSG }, 400);
     if (!Number.isInteger(next.start_round) || !Number.isInteger(next.call_seconds) || next.call_seconds % 3 || next.call_seconds < 6 || !Number.isInteger(next.cap) || next.cap < 1 || next.cap > 100000) return json({ error: "Check the details." }, 400);
@@ -1737,10 +1751,12 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
       if (roundMs(next.start_round) > cap) return json({ error: end ? AFTER_PAID_WINDOW(cap + 1) : TOO_FAR, code: end ? "after-paid-window" : "too-far" }, 400);
     }
     const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
-    if (!a.plat && e.pack !== 0 && next.cap > (e.pack ?? e.cap)) return json({ error: `Your pack allows up to ${e.pack ?? e.cap} participants. Buy a bigger pack to raise the limit.` }, 402);
+    if (vc.cfg.demo && next.cap > DEMO_CAP) return json({ error: DEMO_CAP_MSG, code: "demo-cap" }, 400); // the one size rule of a demo game, before and after publishing
+    if (!a.plat && e.pack !== 0 && !vc.cfg.demo && next.cap > (e.pack ?? e.cap)) return json({ error: `Your pack allows up to ${e.pack ?? e.cap} participants. Buy a bigger pack to raise the limit.` }, 402);
     if (next.cap < (have?.c ?? 0)) return json({ error: "The limit cannot be lower than the people already on the list." }, 409);
     if (!(await spend(env, now))) return BUSY();
-    await env.DB.prepare("UPDATE engagement SET start_round=?, call_seconds=?, cap=?, closed=?, tickets=?, config=?, cohost_limit=? WHERE id=?").bind(next.start_round, next.call_seconds, next.cap, next.closed, vc.cfg.tickets, cfgJson(vc.cfg), next.cohost_limit, eid).run();
+    // a published demo game is "paid" with its own size (pack = cap, nothing bought): a new size within the demo limit moves the pack with it
+    await env.DB.prepare("UPDATE engagement SET start_round=?, call_seconds=?, cap=?, closed=?, tickets=?, config=?, cohost_limit=?, pack=CASE WHEN pack<>0 AND ? THEN ? ELSE pack END WHERE id=?").bind(next.start_round, next.call_seconds, next.cap, next.closed, vc.cfg.tickets, cfgJson(vc.cfg), next.cohost_limit, vc.cfg.demo ? 1 : 0, next.cap, eid).run();
     if (next.start_round !== e.start_round) { // a new time: for a game nobody paid for, the erasure clock follows it (the lifecycle tick re-reads the schedule), and the date has been chosen
       await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`startpending/${eid}`).run();
       if (unpaid) await env.DB.prepare("DELETE FROM life WHERE eid=? AND report_ms IS NULL").bind(eid).run();
@@ -1753,7 +1769,7 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
         try { await env.CONTROL_R2?.delete(controlKey(eid!)); } catch { /* the object expires with its engagement anyway */ }
       }
     }
-    return json({ ok: true, startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed, whoCanJoin: next.closed ? "list" : "anyone", coHostLimit: next.cohost_limit ?? COHOST_LIMIT_DEFAULT, guestInvites: vc.cfg.invites, tickets: vc.cfg.tickets, rewards: vc.cfg.rewards, breaks: vc.cfg.breaks, opening: vc.cfg.opening, closing: vc.cfg.closing, ...(vc.cfg.name ? { name: vc.cfg.name } : {}), ...(vc.cfg.brand ? { brand: vc.cfg.brand } : {}), rounds: vc.cfg.rounds, invites: vc.cfg.invites });
+    return json({ ok: true, startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed, whoCanJoin: next.closed ? "list" : "anyone", coHostLimit: next.cohost_limit ?? COHOST_LIMIT_DEFAULT, guestInvites: vc.cfg.invites, tickets: vc.cfg.tickets, rewards: vc.cfg.rewards, breaks: vc.cfg.breaks, opening: vc.cfg.opening, closing: vc.cfg.closing, ...(vc.cfg.name ? { name: vc.cfg.name } : {}), ...(vc.cfg.brand ? { brand: vc.cfg.brand } : {}), ...(vc.cfg.demo ? { demo: true } : {}), rounds: vc.cfg.rounds, invites: vc.cfg.invites });
   }
   return json({ error: "Not found" }, 404);
 }

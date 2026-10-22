@@ -78,6 +78,9 @@ a.zbtn#addcal{margin-left:6px}
 .spriv.accept{font-size:12px}
 .zdemotag{display:inline-block;background:#E4572E;color:#fff;font:800 12px/1 system-ui,sans-serif;letter-spacing:.12em;padding:4px 7px;border-radius:6px;vertical-align:middle}
 .zdemo{border:2px dashed #E4572E}
+/* a DEMO GAME (the organizer's free game): the words DEMO GAME run diagonally across the whole ticket, see-through, so the numbers stay readable */
+.zticket.zdemogame{position:relative;overflow:hidden}
+.zticket.zdemogame::after{content:"DEMO GAME";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-24deg);font:900 clamp(26px,9vw,44px)/1 system-ui,sans-serif;letter-spacing:.14em;color:rgba(228,87,46,.34);white-space:nowrap;pointer-events:none;text-shadow:0 0 2px #fff}
 
 /* the organizer's company strip at the top of the ticket page (colours are set from the script) and the small credit under it */
 .zbrand{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:#0B3D91;color:#fff;font:700 16px/1.25 var(--sans,inherit);min-width:0}

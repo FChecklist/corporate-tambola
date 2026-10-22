@@ -46,6 +46,8 @@ const brand = BRANDS.corporate_tambola;
 /** Payment attempts one network address may start through pay links in a day. */
 const PAYLINK_PER_IP_DAY = 30;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
+/** A DEMO GAME (worker.ts): config.demo is true. Free, up to 10 people; a paid order made for it (meta.convert) turns it into a real game of the paid size. */
+const isDemoCfg = (config: string | null | undefined): boolean => { try { return !!(config && JSON.parse(config).demo === true); } catch { return false; } };
 
 export const company = (env: PayEnv): Company => { try { return { ...DEFAULT_COMPANY, ...(env.COMPANY_JSON ? JSON.parse(env.COMPANY_JSON) : {}) }; } catch { return DEFAULT_COMPANY; } };
 /** Indian payers see UPI first (on a phone this opens their UPI app); cards and net banking stay one tap away. USD payers get Razorpay's normal international card screen. */
@@ -195,8 +197,22 @@ export async function fulfil(env: PayEnv, paymentId: string, now: number, spend:
   const closedGame = meta.eid ? await db.prepare("SELECT id, org, config, cancelled_ms, unplayed_ms FROM engagement WHERE id=? AND org=?").bind(meta.eid, org).first<any>() : null;
   const closed = !!(closedGame && (closedGame.cancelled_ms || closedGame.unplayed_ms));
   if (!closed) await db.prepare("INSERT OR IGNORE INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,?,NULL,?)").bind("ent_" + p.id, org, p.pack, p.id, now).run();
-  let published: string | null = null, restart: number | null = null;
-  if (meta.eid) { // publish the draft this payment was made for (only if it is still an unpublished draft of the same organizer)
+  let published: string | null = null, restart: number | null = null, converted = false;
+  if (meta.eid && meta.convert && !closed) { // "Make this a real game": the DEMO GAME keeps its id, its people and its numbers; the demo mark goes, the size becomes the paid pack. Guarded on the mark itself, so a second paid order for the same game changes nothing more.
+    const g = await db.prepare("SELECT config FROM engagement WHERE id=? AND org=?").bind(meta.eid, org).first<{ config: string | null }>();
+    if (g && isDemoCfg(g.config)) {
+      let c: any = {}; try { c = g.config ? JSON.parse(g.config) : {}; } catch { c = {}; }
+      delete c.demo;
+      const up = await db.prepare("UPDATE engagement SET pack=?, cap=?, config=? WHERE id=? AND org=? AND config=? AND cancelled_ms IS NULL AND unplayed_ms IS NULL").bind(p.pack, p.pack, JSON.stringify(c), meta.eid, org, g.config).run();
+      if ((up.meta?.changes ?? 0) > 0) {
+        converted = true; published = meta.eid;
+        await db.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(meta.eid, "ent_" + p.id).run();
+        await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`pub/${meta.eid}`, String(now)).run(); // a demo draft paid for before publishing is published by the payment, like any draft
+        if (meta.paidBy) await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`paidby/${meta.eid}`, JSON.stringify({ by: meta.paidBy, ms: now, converted: true })).run();
+        await db.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").bind(`converted/${meta.eid}`, JSON.stringify({ ms: now, pack: p.pack, payment: p.id })).run(); // the trail: when the demo became a real game
+      }
+    }
+  } else if (meta.eid) { // publish the draft this payment was made for (only if it is still an unpublished draft of the same organizer)
     const up = await db.prepare("UPDATE engagement SET pack=? WHERE id=? AND org=? AND pack=0 AND cancelled_ms IS NULL AND unplayed_ms IS NULL").bind(p.pack, meta.eid, org).run(); // a cancelled game is never published by a late payment
     if ((up.meta?.changes ?? 0) > 0) {
       await db.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(meta.eid, "ent_" + p.id).run(); published = meta.eid;
@@ -240,7 +256,7 @@ export async function fulfil(env: PayEnv, paymentId: string, now: number, spend:
   const keptCredit = closed ? await creditFromPayment(db, { ...p, paid_ms: now }, org, meta.eid, now, "late") : null; // a payment for a cancelled or closed game: credit, never a refund
   const lines = [
     closed ? `Thank you. Your payment was received after the game "${meta.eid}" had been cancelled or closed. We do not give refunds: it stays as credit for the organizer's next game${keptCredit ? ` until ${new Date(keptCredit.expires_ms - 1).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" })}` : ""}.` : `Thank you. Payment received for up to ${p.pack} participants.`,
-    closed ? "The organizer has been told." : published ? `Your engagement is live. Share the link from your console: ${origin}/zc.html?e=${published}` : organizerKey ? `Your organizer key (keep it private, it is shown only once): ${organizerKey}\nOpen ${origin}/zc.html and paste it to begin.` : `Use your existing organizer key at ${origin}/zc.html to create this engagement.`,
+    closed ? "The organizer has been told." : converted ? `Your demo game is now a real game for up to ${p.pack} people. It carries on exactly as it is: the same link, the same people, the same numbers; the DEMO GAME mark goes away and more people can join. Your console: ${origin}/zc.html?e=${published}` : published ? `Your engagement is live. Share the link from your console: ${origin}/zc.html?e=${published}` : organizerKey ? `Your organizer key (keep it private, it is shown only once): ${organizerKey}\nOpen ${origin}/zc.html and paste it to begin.` : `Use your existing organizer key at ${origin}/zc.html to create this engagement.`,
     `\nINVOICE\n${renderInvoiceText(data)}\nView or print it: ${origin}/api/invoice/${token}`,
   ];
   await sendMail(env, db, p.email, `${brand.name}: payment received, invoice ${number}`, lines.join("\n\n"), now);
@@ -248,7 +264,7 @@ export async function fulfil(env: PayEnv, paymentId: string, now: number, spend:
   const orgMail = typeof organizer.email === "string" ? organizer.email.trim().toLowerCase() : "";
   if (orgMail && EMAIL.test(orgMail) && orgMail !== p.email.trim().toLowerCase()) await sendMail(env, db, orgMail, `${brand.name}: invoice ${number} for your game`, `An invoice for your game${eidForInvoice ? ` ${eidForInvoice}` : ""} was issued by ${brand.name}.\n\nINVOICE\n${renderInvoiceText(data)}\n\nView or print it: ${origin}/api/invoice/${token}\nDownload the PDF: ${origin}/api/invoice/${token}.pdf`, now);
   await recordCommission(env, p, tax.taxable, now); // refer & earn: a commission row for a referred, PAID purchase only
-  const result = { ok: true, orderId: p.id, pack: p.pack, total: p.amount, tax: p.tax, currency: p.currency, invoiceUrl: `/api/invoice/${token}`, invoiceNumber: number, razorpayPaymentId: p.rzp_payment_id ?? null, organizerKey, newOrganizer: !!organizerKey, published: !!published, eid: published, restartedAtMs: restart ? (1692803367 + (restart - 1) * 3) * 1000 : null, ...(keptCredit ? { creditKept: true, creditId: keptCredit.id, creditExpiresMs: keptCredit.expires_ms } : {}) };
+  const result = { ok: true, orderId: p.id, pack: p.pack, total: p.amount, tax: p.tax, currency: p.currency, invoiceUrl: `/api/invoice/${token}`, invoiceNumber: number, razorpayPaymentId: p.rzp_payment_id ?? null, organizerKey, newOrganizer: !!organizerKey, published: !!published, eid: published, ...(converted ? { converted: true } : {}), restartedAtMs: restart ? (1692803367 + (restart - 1) * 3) * 1000 : null, ...(keptCredit ? { creditKept: true, creditId: keptCredit.id, creditExpiresMs: keptCredit.expires_ms } : {}) };
   await db.prepare("UPDATE payment SET status='paid', paid_ms=?, org=?, result=? WHERE id=?").bind(now, org, JSON.stringify(result), p.id).run();
   if (meta.eid) { try { await keepLegalParty(db, meta.eid, now); } catch { /* the deletion step copies it again */ } } // permanent record of who paid and the organizer's invoice details
   if (keptCredit && closedGame) await mailCreditCreated(env, keptCredit, closedGame, "late", now); // the Organizer and the Hosts are told once; the payer got the receipt above
@@ -289,7 +305,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     if (mode === "off") return json({ error: "Payments are not switched on yet. Please try again later." }, 503);
     const b = await body(req);
     // a signed-in organizer paying to publish their own draft: the pack is the smallest one that fits the draft, and the payment is bound to them and to it
-    let boundOrg: string | null = null, boundEid: string | null = null, boundPack: number | null = null, paidBy: string | null = null;
+    let boundOrg: string | null = null, boundEid: string | null = null, boundPack: number | null = null, paidBy: string | null = null, convert = false;
     const presented = (req.headers.get("x-organizer") ?? "").trim();
     if (plm) { // the pay link binds the payment to its game; the payer needs no account and no key (and a key sent along is ignored)
       const pv = await lookupPayLink(db, plm[1]!, now);
@@ -308,16 +324,17 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
       const k = await db.prepare("SELECT org, kind, eid FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(await sha("key|" + presented), now).first<{ org: string; kind: string; eid: string | null }>();
       if (!k || !(k.kind in PAYER)) return json({ error: "Please sign in again." }, 403); // the Organizer, a Host or a Co-host of this account may pay; one payment is enough for the game
       paidBy = PAYER[k.kind]!;
-      const eg = await db.prepare("SELECT org, cap, pack, cancelled_ms, unplayed_ms FROM engagement WHERE id=?").bind(b.eid).first<{ org: string | null; cap: number; pack: number | null; cancelled_ms: number | null; unplayed_ms: number | null }>();
+      const eg = await db.prepare("SELECT org, cap, pack, cancelled_ms, unplayed_ms, config FROM engagement WHERE id=?").bind(b.eid).first<{ org: string | null; cap: number; pack: number | null; cancelled_ms: number | null; unplayed_ms: number | null; config: string | null }>();
       if (!eg || eg.org !== k.org) return json({ error: "No such engagement." }, 404);
       if (k.kind === "cohost" && k.eid && k.eid !== b.eid) return json({ error: "Your Co-host link is for a different game." }, 403); // a Co-host belongs to one game
       if (eg.cancelled_ms) return json({ error: "This game was cancelled by the organizer. It cannot be paid for." }, 409);
       if (eg.unplayed_ms) return json({ error: "This game did not start and is closed. It cannot be paid for.", code: "did-not-start" }, 409);
-      if (eg.pack !== 0) return json({ error: "This engagement is already published." }, 409);
+      const demo = isDemoCfg(eg.config); // "Make this a real game": a DEMO GAME (free, up to 10 people) is paid for with a pack the payer CHOOSES; the payment clears the demo mark and raises the size (fulfil, meta.convert)
+      if (eg.pack !== 0 && !demo) return json({ error: "This engagement is already published." }, 409);
       if (await db.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`startpending/${b.eid}`).first()) return json({ error: "Pick the date and time of this game first.", code: "start-pending" }, 400);
-      boundPack = PACKS.find((x) => x[0] >= eg.cap)?.[0] ?? null;
-      if (!boundPack) return json({ error: "That many participants needs a custom arrangement. Please write to us." }, 400);
-      boundOrg = k.org; boundEid = b.eid;
+      boundPack = demo ? (PACKS.find((x) => x[0] === Number(b.pack) && x[0] >= eg.cap)?.[0] ?? null) : (PACKS.find((x) => x[0] >= eg.cap)?.[0] ?? null);
+      if (!boundPack) return demo ? json({ error: "Choose a pack." }, 400) : json({ error: "That many participants needs a custom arrangement. Please write to us." }, 400);
+      boundOrg = k.org; boundEid = b.eid; convert = demo;
     }
     const pack = boundPack ?? Number(b?.pack); const cur = b?.currency === "USD" ? "USD" : "INR";
     if (!b || !PACKS.some((x) => x[0] === pack)) return json({ error: "Choose a pack." }, 400);
@@ -340,7 +357,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     const pr = credited > 0 ? { total: cash, base: cur === "INR" ? Math.round((cash / 1.18) * 100) / 100 : cash, tax: cur === "INR" ? Math.round((cash - cash / 1.18) * 100) / 100 : 0 } : full;
     const id = "pay_" + randHex(8);
     await recordConsent(db, { subject: boundOrg ?? id, kind: "K3", ref: id, now });
-    const meta = { org: orgName.slice(0, 120), name: payerName.slice(0, 120), ...(contact ? { phone: contact } : {}), country: typeof b.country === "string" ? b.country.slice(0, 2) : "IN", taxId: typeof b.taxId === "string" ? b.taxId.trim().slice(0, 20) : "", origin: env.PUBLIC_ORIGIN ?? url.origin, ...(boundOrg ? { orgId: boundOrg, eid: boundEid, paidBy, ...(credited > 0 ? { creditInr: credited } : {}) } : {}) };
+    const meta = { org: orgName.slice(0, 120), name: payerName.slice(0, 120), ...(contact ? { phone: contact } : {}), country: typeof b.country === "string" ? b.country.slice(0, 2) : "IN", taxId: typeof b.taxId === "string" ? b.taxId.trim().slice(0, 20) : "", origin: env.PUBLIC_ORIGIN ?? url.origin, ...(boundOrg ? { orgId: boundOrg, eid: boundEid, paidBy, ...(credited > 0 ? { creditInr: credited } : {}), ...(convert ? { convert: true } : {}) } : {}) };
     let order: any = null;
     if (rzp) {
       try { order = await placeOrder(env, rzp, { amountMinor: toMinor(pr.total), currency: cur, receipt: id, plan: `pack_${pack}`, user: boundOrg ?? null, email: b.email.trim().toLowerCase(), notes: { brand: brand.name, site: env.PAY_SITE ?? "corporate-tambola.pages.dev", stream: "sales", product: "corporate_tambola", plan: `pack_${pack}`, variation: `pack_${pack}`, pack: String(pack), currency: cur, organization: (meta.org || meta.name).slice(0, 80), payment_ref: id } }); }
@@ -477,8 +494,9 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     }
     if (!eid) return json({ error: "Not found" }, 404);
     const g = await db.prepare("SELECT cap, pack, config, start_round FROM engagement WHERE id=?").bind(eid).first<{ cap: number; pack: number | null; config: string | null; start_round: number }>();
-    if (!g || g.pack !== 0) return json({ error: "This game is not waiting for payment." }, 409);
-    const pack = PACKS.find((x) => x[0] >= g.cap)?.[0]; if (!pack) return json({ error: "That many participants needs a custom arrangement. Please write to us." }, 400);
+    const demoPf = !!g && isDemoCfg(g.config); // a DEMO GAME being made real: the proforma is for the pack the payer chose (or the smallest)
+    if (!g || (g.pack !== 0 && !demoPf)) return json({ error: "This game is not waiting for payment." }, 409);
+    const pack = demoPf ? (PACKS.find((x) => x[0] === Number(b.pack) && x[0] >= g.cap)?.[0] ?? PACKS.find((x) => x[0] >= g.cap)?.[0]) : PACKS.find((x) => x[0] >= g.cap)?.[0]; if (!pack) return json({ error: "That many participants needs a custom arrangement. Please write to us." }, 400);
     const cur = b.currency === "USD" ? "USD" : "INR", co = company(env), fy = financialYear(new Date(now));
     const credited = Math.round((await creditAppliedFor(db, eid)) * 100) / 100, total = Math.max(0, Math.round((price(pack, cur).total - credited) * 100) / 100);
     const tax = splitGst(total, cur, co.stateCode, typeof b.taxId === "string" && b.taxId.trim() ? b.taxId.trim().toUpperCase() : undefined);
