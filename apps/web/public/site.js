@@ -78,7 +78,7 @@
       <div class="sum" id="ordSum"></div>
       <form id="coForm" novalidate>
         <label class="lb" for="oName">Organization name</label><input class="inp" id="oName" autocomplete="organization" placeholder="e.g. Acme Industries">
-        <label class="lb" for="oMail">Your e-mail (invoice and login)</label><input class="inp" id="oMail" type="email" autocomplete="email" placeholder="you@company.com">
+        <label class="lb" for="oMail">Your e-mail (invoice and login)</label><input class="inp" id="oMail" type="email" autocomplete="email" placeholder="your e-mail">
         <label class="lb" for="oPh">Your mobile number (optional)</label><input class="inp" id="oPh" type="tel" autocomplete="tel" placeholder="98765 43210">
         <label class="lb" for="oCty">Country of your organization</label><select class="inp" id="oCty">${TB.countryOpts(def)}</select>
         <div id="taxBox"></div><div id="k3wrap">${CBConsent.html("K3")}</div><div id="fErr"></div>
@@ -110,7 +110,7 @@
       <div class="sheethead"><span class="rolepill">For the organizer or host</span><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><img src="/logo-mark.svg" alt="" width="26" height="26"></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
       <div class="eyebrow ofeye">Build it and publish it free.</div><h2 id="ofTitle">Create your engagement</h2>
       <ul class="bgrid"><li><span class="bico">${ic("play")}</span><span>Play a video or audio message between numbers</span></li><li><span class="bico">${ic("trophy")}</span><span>Set several prizes, and add a lucky draw</span></li><li><span class="bico">${ic("users")}</span><span>A closed-group corporate tambola (housie)</span></li><li><span class="bico">${ic("ticket")}</span><span>Every ticket is unique: no two can ever match</span></li><li><span class="bico">${ic("phone")}</span><span>Each participant gets their own ticket</span></li><li><span class="bico">${ic("star")}</span><span>A free AI assistant sets it up for you</span></li><li><span class="bico">${ic("gift")}</span><span>Participants never pay. You provide the rewards</span></li><li><span class="bico">${ic("trash")}</span><span>All participant data is deleted within 24 hours of the game ending</span></li><li><span class="bico">${ic("shield")}</span><span>Built for DPDP Act, GDPR and US privacy laws</span></li></ul>
-      <div id="k2wrap">${CBConsent.html("K2")}</div>${gBox}<form id="frForm" novalidate><label class="lb" for="fMail">Your email</label><input class="inp big" id="fMail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@example.com" aria-describedby="fErr"><div id="fErr" role="alert"></div>
+      <div id="k2wrap">${CBConsent.html("K2")}</div>${gBox}<form id="frForm" novalidate><label class="lb" for="fMail">Your email</label><input class="inp big" id="fMail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="your e-mail" aria-describedby="fErr"><div id="fErr" role="alert"></div>
       <button class="btn block big" style="margin-top:14px" type="submit" id="frGo" disabled aria-disabled="true">Create my engagement ${ic("arrow")}</button></form>
       <p class="trust">${ic("shield")}Free to build and publish. No password.</p>
       <p class="proto">Your console opens at once. We use your email for your invoice and to sign you in later.</p><p class="proto"><a href="/demo.html">Want to see it first? Try the free 70-second demo.</a></p>
@@ -160,12 +160,31 @@
   }
 
   // ---------- login ----------
+  /** Where a signed-in organizer goes next: the page the visit began on (the console, a pay page, or the free demo link) or the console. */
+  function nextAfterSignIn() { let nx = "/zc.html"; try { const n = sessionStorage.getItem("ctz-next"); if (n && /^\/(zc|pay)(\.html)?(\?(e=[A-Za-z0-9_-]{4,40}|demo=1))?$/.test(n)) nx = n; sessionStorage.removeItem("ctz-next"); } catch {} return nx; }
   function openLogin(email) {
     TB.sheet(`${xbtn}<div class="eyebrow">Organizer sign-in</div><h2>Sign in or create your account</h2><p class="muted small">Enter your e-mail. New here? Your organizer account is created at once. Coming back? We send you a 6-digit code. No password needed. Participants never sign in here: they join with your link.</p>
-      ${gBox}<form id="lgForm" novalidate><label class="lb" for="lMail">Your e-mail</label><input class="inp big" id="lMail" data-need="1" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@company.com" value="${esc(email || "")}"><div id="fErr" role="alert"></div>
+      ${gBox}<form id="lgForm" novalidate><label class="lb" for="lMail">Your e-mail</label><input class="inp big" id="lMail" data-need="1" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="your e-mail" value="${esc(email || "")}"><div id="k2slot"></div><div id="fErr" role="alert"></div>
       <button class="btn block big" style="margin-top:14px" type="submit" id="lgGo">Continue ${ic("arrow")}</button></form>
       <p class="spriv accept">Our <a href="/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy &amp; Data Policy</a> are on our site.</p>`);
-    $("lgForm").addEventListener("submit", (e) => { e.preventDefault(); const m = $("lMail").value.trim().toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) return setErr("Please enter a valid e-mail address."); askCode(m, $("lgGo")); });
+    let termsShown = false;
+    $("lgForm").addEventListener("submit", async (e) => {
+      e.preventDefault(); const m = $("lMail").value.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) return setErr("Please enter a valid e-mail address.");
+      const k2 = $("k2slot"); if (termsShown && !CBConsent.all(k2, "K2")) return setErr("Please tick the box to continue.");
+      const b = $("lgGo"); b.disabled = true; setErr("");
+      try { // one door for everyone: an address that already has an account is sent a code; a new address gets an account (after the Terms box) and goes straight in
+        const r = await TB.api("POST", "/api/start", termsShown ? { email: m, consent: CBConsent.payload(k2, "K2") } : { email: m });
+        if (r.exists) return askCode(m, b);
+        try { sessionStorage.setItem("ctz-org", r.token); sessionStorage.setItem("ctz-aimsg", r.aiMessage); sessionStorage.setItem("ctz-email", m); } catch {}
+        location.href = nextAfterSignIn();
+      } catch (x) {
+        b.disabled = false;
+        if (termsShown && x.code === "consent-required") { setErr(x.message); return; }
+        if (!termsShown && x.status === 400 && x.code === "consent-required") { termsShown = true; const k = $("k2slot"); k.innerHTML = `<p class="small muted" style="margin:12px 0 4px"><b>New here?</b> Tick the box below and we create your organizer account at once. It is free to build and publish.</p>` + CBConsent.html("K2"); setErr(""); const refresh = CBConsent.gate(k, "K2", $("lgGo")); k.addEventListener("change", refresh); refresh(); const f = k.querySelector("input"); if (f) f.focus(); return; }
+        setErr(x.message);
+      }
+    });
     mountGoogle("signin"); focusFirst("lMail");
   }
   async function askCode(email, btn) {
@@ -204,7 +223,7 @@
       const b = $("cdGo"); b.disabled = true; setErr("");
       try {
         const r = await TB.api("POST", "/api/auth/verify", { email, code });
-        try { sessionStorage.setItem("ctz-org", r.token); } catch {} let nx = "/zc.html"; try { const n = sessionStorage.getItem("ctz-next"); if (n && /^\/(zc|pay)(\.html)?(\?(e=[A-Za-z0-9_-]{4,40}|demo=1))?$/.test(n)) nx = n; sessionStorage.removeItem("ctz-next"); } catch {} location.href = nx;
+        try { sessionStorage.setItem("ctz-org", r.token); } catch {} location.href = nextAfterSignIn();
       } catch (e) { b.disabled = false; setErr(e.message); boxes[0].focus(); }
     };
     $("cdForm").addEventListener("submit", (e) => { e.preventDefault(); verify(); });

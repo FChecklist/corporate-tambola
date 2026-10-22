@@ -49,7 +49,7 @@
   function signIn(msg) {
     view(card(`<div class="eyebrow">Organizer sign in</div><h1>Sign in to confirm</h1><p class="muted small">Your AI cannot do this without you. Sign in with the work email you used for your account. We email you a 6-digit code: no password.</p>
       ${msg ? `<div class="err" role="alert">${ic("alert")}<span>${esc(msg)}</span></div>` : ""}
-      <form id="lgForm" novalidate><label class="lb" for="lMail">Work email</label><input class="inp" id="lMail" type="email" autocomplete="email" placeholder="you@company.com" value="${esc(signedEmail)}"><div id="fErr"></div>
+      <form id="lgForm" novalidate><label class="lb" for="lMail">Work email</label><input class="inp" id="lMail" type="email" autocomplete="email" placeholder="your e-mail" value="${esc(signedEmail)}"><div id="fErr"></div>
       <button class="btn block" style="margin-top:14px" type="submit" id="lgGo">Email me a code ${ic("arrow")}</button></form>`));
     $("lgForm").addEventListener("submit", async (e) => {
       e.preventDefault();

@@ -29,7 +29,7 @@
     shell(`<div class="zcard zform"><h2>Sign in as the organizer</h2><p class="zsmall" style="margin-top:0">Sign in to see your AI work link. We e-mail you a 6-digit code.</p>
       ${msg ? `<div class="zbanner bad">${esc(msg)}</div>` : ""}
       ${codeStep ? `<label for="cd">6-digit passcode sent to ${esc(email)}</label><input id="cd" inputmode="numeric" autocomplete="one-time-code" maxlength="8"><button class="zbtn" id="go">Show my AI work link</button>`
-        : `<label for="em">Your e-mail</label><input id="em" type="email" autocomplete="email" value="${esc(email || "")}" placeholder="you@company.com"><button class="zbtn" id="go">E-mail me a code</button>`}</div>`);
+        : `<label for="em">Your e-mail</label><input id="em" type="email" autocomplete="email" value="${esc(email || "")}" placeholder="your e-mail"><button class="zbtn" id="go">E-mail me a code</button>`}</div>`);
     const go = document.getElementById("go");
     go.onclick = async () => {
       go.disabled = true;

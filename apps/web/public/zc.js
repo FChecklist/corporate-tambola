@@ -953,7 +953,7 @@
       <h2>${NEWDEMO ? "Start your free demo game" : "Sign in to your console"}</h2>
       <p class="zc-lead">${NEWDEMO ? "A demo game is free for up to 10 people. " : ""}Enter your e-mail. New here? Your organizer account is created at once. Coming back? We send you a 6-digit code. No password needed.</p>
       ${googleBlock()}${S.gcid ? `<div class="zc-or">or</div>` : ""}
-      <label class="zc-lbl" for="lem">Your e-mail</label><input id="lem" class="zc-in" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@company.com">
+      <label class="zc-lbl" for="lem">Your e-mail</label><input id="lem" class="zc-in" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="your e-mail">
       <div class="zc-foot"><button class="zc-btn" id="goLogin" type="button">Continue</button></div>
       <p class="zc-small zc-muted zc-lead2">Sign in with an e-mail code: nothing to remember. Participants never sign in; they join with your link.</p>
       <details class="zc-keybox"${msg ? " open" : ""}><summary>Have a sign-in key? Hosts and Co-hosts: your link already carries it.</summary>
@@ -1025,7 +1025,7 @@
     const T = S.setup || {}, m = S.setupMsg;
     const email = T.needEmail ? `<h4>1. Your e-mail</h4>${small(T.emailMasked ? "Use the e-mail your Organizer gave us: " + esc(T.emailMasked) + "." : "Type your e-mail.")}${S.setupSent ? "" : CBConsent.html("K5")}${googleBlock()}
         ${S.setupSent ? `${lbl("setupcode", "The 6-digit code we sent you")}<input id="setupcode" class="zc-in" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456"><div class="zc-foot"><button type="button" class="zc-btn zc-btn-s" id="setupverify">Check the code</button></div>`
-          : `${lbl("setupemail", "Your e-mail")}<input id="setupemail" class="zc-in" type="email" autocomplete="email" placeholder="you@company.com"><div class="zc-foot"><button type="button" class="zc-btn zc-btn-s" id="setupsend" data-needs="K5" disabled aria-disabled="true">Send me a code</button></div>`}`
+          : `${lbl("setupemail", "Your e-mail")}<input id="setupemail" class="zc-in" type="email" autocomplete="email" placeholder="your e-mail"><div class="zc-foot"><button type="button" class="zc-btn zc-btn-s" id="setupsend" data-needs="K5" disabled aria-disabled="true">Send me a code</button></div>`}`
       : `<p class="zc-small">Your e-mail is checked${T.emailMasked ? ": " + esc(T.emailMasked) : ""}.</p>`;
     const mobile = T.needMobile ? `<h4>${T.needEmail ? "2" : "1"}. Your mobile number</h4>${small("Typed once. We do not send a code to it.")}${lbl("setupmobile", "Your mobile number")}<input id="setupmobile" class="zc-in" inputmode="tel" autocomplete="tel" placeholder="98765 43210"><div class="zc-foot"><button type="button" class="zc-btn zc-btn-s" id="setupmobilego">Save my number</button></div>` : "";
     return `<div class="zc-frame zc-login"><header class="zc-bar"><span class="zc-brand"><img src="/icon-192.png" alt="" width="22" height="22"> <b>Corporate Tambola</b></span><span class="zc-pill zc-pill-role">Host</span></header><div class="zc-main"><div class="zc-block" id="finishsetup"><h3>Finish setup</h3>${small("Two quick things, then your game opens. This link works once.")}${m ? `<div class="zc-toast" role="status">${esc(m)}</div>` : ""}${email}${mobile}</div></div></div>`;

@@ -67,13 +67,60 @@ export default [
     },
   },
   {
-    id: "S01-05", name: "Log in with an unknown e-mail: same calm answer, nothing leaks about who has an account",
+    id: "S01-05", name: "Sign in with a NEW e-mail: the Terms box appears, ticking it creates the account and opens the console (no code is needed for a new address)",
     async run(t) {
+      const email = nextMail("fresh"); t.team.add(email);
       const x = await t.open({ device: "laptop" });
-      await askCodeUi(x.page, nextMail("nobody"));
-      await x.page.waitForSelector("#lCode", { timeout: 8000 });
-      t.check("the code box appears for an unknown e-mail too", true);
-      t.check("no devCode helper for an unknown e-mail (no account)", !(await x.page.$("#useCode")), "the helper appears only for known e-mails");
+      await x.page.goto(H.SIM + "/#login"); await x.page.fill("#lMail", email); await x.page.click("#lgGo");
+      await x.page.waitForSelector("#k2slot input[data-box]", { timeout: 8000 });
+      t.check("a new address is told it is new and shown the Terms box (unticked)", !(await x.page.isChecked("#k2slot input[data-box]")) && /New here/i.test(await t.text(x.page, "#k2slot")));
+      await tickTerms(t, x.page, { scope: "#k2slot", btn: "#lgGo", what: "Sign-in (new)" }); await x.page.click("#lgGo");
+      await x.page.waitForURL(/\/zc/, { timeout: 15000 });
+      t.check("the account exists: a master key is stored", /^ctk_/.test((await sessionKey(x.page)) ?? ""));
+    },
+  },
+  {
+    id: "S01-11", name: "The free demo link as a brand-new person on a phone: e-mail, Terms box, and the DEMO GAME is made at once",
+    async run(t) {
+      const email = nextMail("demonew"); t.team.add(email);
+      const x = await t.open({ device: "mobile" });
+      await x.page.goto(H.SIM + "/zc.html?demo=1");
+      await x.page.waitForSelector("#lem", { timeout: 10000 });
+      const txt0 = await t.text(x.page);
+      t.check("the sign-in screen is plain: heading, one e-mail box with a placeholder, one Continue button", /Start your free demo game/.test(txt0) && (await x.page.getAttribute("#lem", "placeholder")) === "your e-mail" && !/company\.com|work e-?mail/i.test(txt0), txt0.slice(0, 200));
+      t.check("the Hosts' sign-in key is tucked away (not shown to a new person)", !(await x.page.isVisible("#sec")));
+      await t.shot(x.page, "demo-signin-phone");
+      await x.page.fill("#lem", email); await x.page.click("#goLogin");
+      await x.page.waitForSelector("#lMail", { timeout: 10000 });
+      t.check("the e-mail typed on the console is carried to the next box", (await x.page.inputValue("#lMail")) === email);
+      await x.page.click("#lgGo"); await x.page.waitForSelector("#k2slot input[data-box]", { timeout: 8000 });
+      await tickTerms(t, x.page, { scope: "#k2slot", btn: "#lgGo", what: "Demo sign-in (new)" }); await x.page.click("#lgGo");
+      await x.page.waitForURL(/\/zc(\.html)?\?demo=1/, { timeout: 15000 });
+      await x.page.waitForFunction(() => /DEMO GAME/.test(document.body.innerText), null, { timeout: 20000 });
+      t.check("the demo game is made: every screen says DEMO GAME", true);
+      await t.shot(x.page, "demo-made-phone");
+    },
+  },
+  {
+    id: "S01-12", name: "The free demo link for someone who already has an account: e-mail, six boxes typed digit by digit, Submit, DEMO GAME",
+    async run(t) {
+      const org = await t.org("demoold");
+      const x = await t.open({ device: "mobile" });
+      await x.page.goto(H.SIM + "/zc.html?demo=1"); await x.page.waitForSelector("#lem", { timeout: 10000 });
+      await x.page.fill("#lem", org.email); await x.page.click("#goLogin");
+      await x.page.waitForSelector("#lMail"); await x.page.click("#lgGo");
+      await x.page.waitForSelector(".otpb", { timeout: 10000 });
+      const boxes = await x.page.$$(".otpb"); t.check("six code boxes", boxes.length === 6);
+      const txt = await t.text(x.page); t.check("the words are plain: 'We have sent a 6-digit code' and a Submit button", /We have sent a 6-digit code/.test(txt) && /Submit/.test(txt) && !/company\.com/.test(txt), txt.slice(0, 200));
+      const m = await H.mailbox.waitFor({ to: org.email, timeout: 8000 }); const code = H.mailbox.code(m);
+      await boxes[0].click(); await x.page.keyboard.type(code, { delay: 30 });
+      const typed = await Promise.all((await x.page.$$(".otpb")).map((b) => b.inputValue()));
+      t.check("each digit landed in its own box, in order", typed.join("") === code, typed.join(""));
+      await t.shot(x.page, "demo-code-phone");
+      await x.page.click("#cdGo");
+      await x.page.waitForURL(/\/zc(\.html)?\?demo=1/, { timeout: 15000 });
+      await x.page.waitForFunction(() => /DEMO GAME/.test(document.body.innerText), null, { timeout: 20000 });
+      t.check("signed in and the demo game is made", true);
     },
   },
   {

@@ -777,7 +777,7 @@ describe("Refer & Earn page", () => {
     expect(t).toContain("Free to build and publish. No password."); expect(t).toContain("Your console opens at once. We use your email for your invoice and to sign you in later.");
     expect(t).not.toMatch(/work email/i); expect(t.split(/s+/).length).toBeLessThan(150);
     const f = p.$("#fMail") as any; expect(p.win.document.querySelector('label[for="fMail"]').textContent).toBe("Your email");
-    expect(f.getAttribute("type")).toBe("email"); expect(f.getAttribute("inputmode")).toBe("email"); expect(f.getAttribute("autocomplete")).toBe("email"); expect(f.getAttribute("placeholder")).toBe("you@example.com");
+    expect(f.getAttribute("type")).toBe("email"); expect(f.getAttribute("inputmode")).toBe("email"); expect(f.getAttribute("autocomplete")).toBe("email"); expect(f.getAttribute("placeholder")).toBe("your e-mail");
     expect(p.win.document.querySelector(".sheet .sbrand")!.getAttribute("aria-label")).toBe("Corporate Tambola"); expect(p.win.document.querySelector(".sheethead .rolepill")).toBeTruthy();
     expect((p.$("#frGo") as any).textContent).toMatch(/^s*Create my engagement/);
     p.win.document.dispatchEvent(new p.win.KeyboardEvent("keydown", { key: "Escape" })); await new Promise((r) => setTimeout(r, 50));
