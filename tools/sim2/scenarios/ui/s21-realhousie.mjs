@@ -224,7 +224,8 @@ export default [
       if (settled) {
         const claims = await publicClaims(g.id), res = settled.results[0];
         t.check("the winner pressed Claim at the completion call", (res.winners || []).length > 0 && (res.winners || []).every((pid) => claims.some((cl) => !cl.bogey && cl.pid === pid && cl.pattern === res.pattern && cl.idx === res.idx)), JSON.stringify(res));
-        const views = await Promise.all(ps.map((p) => view(p.page)));
+        let views = await Promise.all(ps.map((p) => view(p.page)));
+        for (let i = 0; i < 12 && !views.every((x) => JSON.stringify(x.results) === JSON.stringify(views[0].results)); i++) { await stepAll(t, all); views = await Promise.all(ps.map((p) => view(p.page))); } // a phone reads the claims a poll later than another
         t.check("every phone agrees", views.every((x) => JSON.stringify(x.results) === JSON.stringify(views[0].results)), views.map((x) => x.results.length).join("/"));
         const winnerPhone = ps.find((_, i) => (res.winners || []).includes(views[i].pid));
         if (winnerPhone) { await winnerPhone.page.waitForTimeout(1200); t.check("the winning phone shows its prize", (await view(winnerPhone.page)).won.includes(res.pattern + "#" + res.ordinal) && !!(await winnerPhone.page.$(".zwin"))); await t.shot(winnerPhone.page, "phone-host-mode-won"); }

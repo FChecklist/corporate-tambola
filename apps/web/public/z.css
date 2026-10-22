@@ -15,7 +15,7 @@
 .zlast{display:flex;gap:6px;justify-content:center;margin-top:6px}
 .zlast span{width:34px;height:34px;border-radius:50%;background:var(--sunk);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
 .zticket{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:3px}
-.zticket div{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:6px;background:var(--sunk);font-weight:700;font-size:clamp(13px,4vw,18px)}
+.zticket div{min-height:44px;display:flex;align-items:center;justify-content:center;border-radius:6px;background:var(--sunk);font-weight:700;font-size:clamp(13px,4vw,18px)}
 .zticket div.e{background:transparent}
 .zticket div.m{background:var(--wine);color:#fff}
 .zboard{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:3px}

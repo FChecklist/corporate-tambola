@@ -32,7 +32,7 @@ export default [
       const t0 = Date.now(); const r = await H.playBrowserGame(ps, { track: t.shared.track });
       t.check("both phones reached the end within the time budget", r.ended.every(Boolean) && Date.now() - t0 < 240000, `${r.steps} steps, ${((Date.now() - t0) / 1000).toFixed(0)} s, ended ${r.ended}`);
       const id = inv.identicalWinners(winnersOf(r.views)); t.check(id.name, id.ok && r.views[0].results.length > 0, id.detail);
-      t.check("logs are the same length on both phones", r.views[0].log.length === r.views[1].log.length && r.views[0].log.length > 20, r.views.map((v) => v.log.length).join("/"));
+      { const a = r.views[0].log, b = r.views[1].log, m = Math.min(a.length, b.length); t.check("logs are the same numbers in the same order on both phones (within two calls: a phone stops once it hears the last prize was claimed)", Math.abs(a.length - b.length) <= 2 && m > 20 && JSON.stringify(a.slice(0, m)) === JSON.stringify(b.slice(0, m)), r.views.map((v) => v.log.length).join("/")); }
       const pub = (await H.call("GET", `/api/z/${g.id}/results`)).body.results ?? [];
       t.check("the server's published winners equal what the phones show", pub.length === r.views[0].results.length, `${pub.length} vs ${r.views[0].results.length}`);
       const pm = inv.perHouseMaxima(pub, ALL_RW); t.check(pm.name, pm.ok, pm.detail);
@@ -58,8 +58,8 @@ export default [
       const r = await H.playBrowserGame(all, { track, maxSteps: 400 });
       t.check("all four phones ended", r.ended.every(Boolean), `${r.steps} steps, ended ${r.ended}`);
       const lens = r.views.map((v) => v.log.length);
-      const full = r.views.slice(0, 3).every((v) => v.log.length === r.views[0].log.length);
-      t.check("the three early phones (incl. the one that was offline) have the identical log", full && lens[0] > 20, lens.join("/"));
+      const m3 = Math.min(...lens.slice(0, 3)), full = r.views.slice(0, 3).every((v) => Math.abs(v.log.length - lens[0]) <= 2 && JSON.stringify(v.log.slice(0, m3)) === JSON.stringify(r.views[0].log.slice(0, m3)));
+      t.check("the three early phones (incl. the one that was offline) have the identical log (same order, within two calls)", full && lens[0] > 20, lens.join("/"));
       const id = inv.identicalWinners(winnersOf(r.views.slice(0, 3))); t.check("winners identical on the three early phones", id.ok, id.detail);
       t.check("the late joiner sees the same winners for the lines completed after joining", r.views[3].results.length >= 0, `${r.views[3].results.length} lines vs ${r.views[0].results.length}`);
       const pub = (await H.call("GET", `/api/z/${g.id}/results`)).body.results ?? [];

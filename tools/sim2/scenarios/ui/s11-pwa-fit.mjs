@@ -170,6 +170,7 @@ export default [
       let sawBall = false, marks = 0, ended = false;
       for (let i = 0; i < 130 && !ended; i++) {
         await p.waitForTimeout(1000);
+        await p.evaluate(() => window.__rt && window.__rt.playAlong && window.__rt.playAlong({})).catch(() => {}); // a person taps each called number and presses Claim
         if (await p.$(".zbig:not(.none)")) sawBall = true;
         marks = Math.max(marks, await p.$$eval(".zticket .m, .zticket .free", (e) => e.length));
         ended = /that was the demo/i.test(await t.text(p, "body"));
