@@ -103,7 +103,7 @@ describe("2. how it plays: every question has numbered choices and a recommendat
 describe("3. prizes: the counts are links, the names are the one self-built write", () => {
   test("Rich with 3 Full House winners and 2 per line saves exactly those reward lines; the prizes page and the save page say how the names are given", async () => {
     const o = await organizer(); let t = await toPlay(o.base); t = await pick(t, /Looks good/);
-    expect(t).toContain(PRIZE_NAMES_NOTE); expect(PRIZE_NAMES_NOTE).toMatch(/the one write I may build myself, exactly as the manual shows/); expect(PRIZE_NAMES_NOTE).toMatch(/console, step 3/);
+    expect(t).toContain(PRIZE_NAMES_NOTE); expect(PRIZE_NAMES_NOTE).toMatch(/naming prizes is the one change I make for you without a ready link/); expect(PRIZE_NAMES_NOTE).toMatch(/console, step 3/);
     expect(choicesOf(t).map((c) => c.label)).toEqual(["Classic: Early 5, Top line, Middle line, Bottom line, Full house", "Simple: Early 5 and Full house", "Rich: Early 5, the three lines, Four corners, Star and Full house"]);
     t = await pick(t, /^Rich/); expect(choicesOf(t).map((c) => c.label)).toEqual(["1 Full House winner", "2 Full House winners", "3 Full House winners", "5 Full House winners"]); expect(choicesOf(t)[0]!.rec).toBe(true);
     t = await pick(t, /^3 Full House/); expect(choicesOf(t).map((c) => c.label)).toEqual(["1 winner for each line", "2 winners for each line"]);

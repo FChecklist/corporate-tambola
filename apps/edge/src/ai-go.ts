@@ -41,7 +41,7 @@ export const FULL_HOUSE_WINNERS = [1, 2, 3, 5];
 /** The one-line rule of real housie, said at the read-back and on the save page. */
 export const HOUSIE_RULE = "Your guests tap each number as it is called and press Claim before the next number; a wrong claim is a Bogey; two Bogeys on the same prize put that ticket out of it.";
 /** Where the prize names come from: free text, so the guided links cannot carry them. Said on the prizes page and the save page; the manual says the same. */
-export const PRIZE_NAMES_NOTE = "To name the prizes I use the settings address (the one write I may build myself, exactly as the manual shows) - or you name them in your console, step 3.";
+export const PRIZE_NAMES_NOTE = "Tell me the name of each prize and I will add them for you (naming prizes is the one change I make for you without a ready link). Or name them yourself in your console, step 3.";
 const BOARD_NOTE = "Your board: open it from your console, step 6, 'Open my board' (it carries your private key, so I cannot give it).";
 /** The brand-moment presets the extras step offers. One during-the-game moment lands after number 45 (about halfway): the software places it. */
 const MOMENTS: Record<string, { label: string; rec?: boolean }> = {
@@ -50,6 +50,7 @@ const MOMENTS: Record<string, { label: string; rec?: boolean }> = {
   o: { label: "An opening message while guests wait for the first number (I write the words with you next)" },
   b: { label: "Both: the opening message and the 1-minute speech break after number 45" },
   l: { label: "A lucky draw (1 winner, after number 45; you name the prize later)" },
+  w: { label: "A live welcome speech before the first number: you or a Host speak while the guests wait (nothing is uploaded)" },
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -104,7 +105,7 @@ const settingsOf = (q: URLSearchParams) => ({
   host: q.get("cm") === "h", share: q.get("ti") === "s", p: BUNDLES[q.get("p") || "c"] ?? BUNDLES.c!, f: FULL_HOUSE_WINNERS.includes(Number(q.get("f"))) ? Number(q.get("f")) : 1, l: q.get("l") === "2" ? 2 : 1, x: MOMENTS[q.get("x") || "n"] ? (q.get("x") || "n") : "n", c: Number(q.get("c")),
 });
 const prizeLines = (st: ReturnType<typeof settingsOf>): string => `${st.p.label}; ${st.f} Full House winner${st.f === 1 ? "" : "s"}${st.p.houses.some((h) => LINES.has(h)) ? `, ${st.l} winner${st.l === 1 ? "" : "s"} for each line` : ""}`;
-const momentLine = (x: string): string => x === "n" ? "No brand moment" : x === "s" ? "A 1-minute speech break after number 45 (you or a Host speak live)" : x === "o" ? "An opening message while guests wait" : x === "b" ? "An opening message while guests wait, and a 1-minute speech break after number 45" : "One lucky draw (1 winner, after number 45); you name the prize later";
+const momentLine = (x: string): string => x === "n" ? "No brand moment" : x === "s" ? "A 1-minute speech break after number 45 (you or a Host speak live)" : x === "o" ? "An opening message while guests wait" : x === "w" ? "A live welcome speech before the first number (you or a Host speak)" : x === "b" ? "An opening message while guests wait, and a 1-minute speech break after number 45" : "One lucky draw (1 winner, after number 45); you name the prize later";
 const summaryLines = (q: URLSearchParams): string[] => {
   const d = q.get("d")!, t = q.get("t")!, o = OCCASIONS[q.get("o") || "other"] ?? OCCASIONS.other!, st = settingsOf(q);
   const pk = packFor(st.c);
@@ -158,7 +159,8 @@ export async function goScreen(ctx: GoCtx, step: string, q: URLSearchParams): Pr
       const rewards: { pattern: string; ordinal: number; text: string }[] = [];
       for (const h of st.p.houses) { const n = h === "full" ? st.f : LINES.has(h) ? st.l : 1; for (let i = 1; i <= n; i++) rewards.push({ pattern: h, ordinal: i, text: "" }); }
       const speech = { kind: "speech", title: "A word from the organizer", seconds: 60 }, opening = { kind: "speech", title: "Welcome! The game starts soon. Please keep this page open.", seconds: 60 };
-      const moments = st.x === "s" ? { breaks: [speech] } : st.x === "o" ? { opening: [opening] } : st.x === "b" ? { opening: [opening], breaks: [speech] } : st.x === "l" ? { breaks: [{ kind: "lucky", title: "Lucky draw", winners: 1, seconds: 60 }] } : {};
+      const welcome = { kind: "speech", title: "A welcome from the organizer", seconds: 60 };
+      const moments = st.x === "s" ? { breaks: [speech] } : st.x === "o" ? { opening: [opening] } : st.x === "w" ? { opening: [welcome] } : st.x === "b" ? { opening: [opening], breaks: [speech] } : st.x === "l" ? { breaks: [{ kind: "lucky", title: "Lucky draw", winners: 1, seconds: 60 }] } : {};
       const base = `${o.code}-${pad(istParts(startMs).mo)}${pad(istParts(startMs).d)}`; let id = base, made: any = null;
       for (let i = 1; i <= 9; i++) {
         id = i === 1 ? base : `${base}-${i}`;
@@ -169,7 +171,7 @@ export async function goScreen(ctx: GoCtx, step: string, q: URLSearchParams): Pr
       }
       if (!made) return { say: "I could not find a free game code. Please open the console.", choices: choices([["Open the organizer's console", `${ctx.origin}/zc.html`]]) };
       if (st.v) await ctx.api("PATCH", `z/${id}/settings`, { invites: { on: true, per: st.v, cats: ["family", "colleagues"] } });
-      return { done: true, say: [`Your draft is saved. Its code is ${id}. Nobody else can see it yet.`, `How a prize is won: ${HOUSIE_RULE}`, "What is left, and who does it:", `1. Name the prizes. ${PRIZE_NAMES_NOTE}`, "2. Write the welcome message for your guests (link below), or add more brand moments, videos or a lucky draw (I can help; I can also build a test link so you see a video exactly as a guest will).", "3. Load the guest list in your console, or simply share the guest link (names never pass through me).", "4. You press Publish (free) on the page below: one tap.", `5. You pay on the pay link before the start time (${dayLabel(q.get("d")!, true)}, ${timeLabel(q.get("t")!)} India time). I never pay.`, "6. You share the guest link, which arrives by e-mail after publishing."].join("\n"),
+      return { done: true, say: [`Your draft is saved. Its code is ${id}. Nobody else can see it yet.`, `How a prize is won: ${HOUSIE_RULE}`, "What is left, and who does it:", `1. Name the prizes. ${PRIZE_NAMES_NOTE}`, "2. Write the welcome message for your guests (link below), or add more brand moments, videos or a lucky draw (I can help; I can also show you a test page so you see a video exactly as a guest will).", "3. Load the guest list in your console, or simply share the guest link (names never pass through me).", "4. You press Publish (free) on the page below: one tap.", `5. You pay on the pay link. Pay before the start time so the game begins on time; a later payment starts it 2 minutes after you pay (the last moment is shown on the pay page)"t")!)} India time). I never pay.`, "6. You share the guest link, which appears in your console and on my links page after you publish (we e-mail it too)."].join("\n"),
         choices: choices([["Open the draft in the console (watch it)", made.openUrl ?? consoleOf(ctx, id), true], ["Write the welcome message", `${ctx.base}/go/msg?id=${id}`], ["Load the guest list: in your console (names never pass through me)", consoleOf(ctx, id)], ["Publish: the organizer taps once", consoleOf(ctx, id, "publish")], ["Pay: the organizer pays (any time until the guest data is erased)", payOf(ctx, id)], ["Read the game back", `${ctx.base}/go/game?id=${id}`], ["See the links", `${ctx.base}/go/links?id=${id}`]]), ifWrong: WRONG };
     }
     case "games": {
