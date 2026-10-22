@@ -302,7 +302,7 @@ X2 ${nextPhone()}`); await P.click("#rosterGo"); await P.waitForTimeout(1200);
       await tickTerms(t, P, { scope: "[data-cbc='K3']", btn: "#paygo", what: "Pay" }).catch(() => {}); await P.click("#paygo");
       await wellFormed(t, P, "S16-11b", "bad e-mail on the pay page", { title: /e-mail/i, needsGo: false });
       await P.fill("#em", org.email); await P.click("#paygo");
-      await P.waitForFunction(() => /paid|thank|invoice|done/i.test(document.body.innerText), null, { timeout: 20000 }).catch(() => {});
+      await P.waitForFunction(() => /Payment received|Thank you\. Your engagement/i.test(document.body.innerText), null, { timeout: 20000 }).catch(() => {});
       const st = await org.summary(g.id); t.check("S16-11c: after the fix the payment goes through (test mode)", JSON.stringify(st.body.payment ?? st.body).includes("paid"), JSON.stringify(st.body.payment ?? st.body).slice(0, 100));
     },
   },
