@@ -33,14 +33,14 @@ const auditRows = () => raw.prepare("SELECT method, path, status, key_id FROM ai
 const linkGet = (key: string, rest = "", headers: Record<string, string> = {}) => call("GET", `/ai/${key}${rest}`, undefined, headers);
 
 describe("the paste text and the manual", () => {
-  test("the paste is two short lines plus the link, framed as the owner's own documentation, with the key only inside the link", async () => {
+  test("the paste is the owner's own documentation plus the five ways of working, with the key only inside the link", async () => {
     const o = await organizer();
-    expect(o.msg.split("\n").length).toBe(2); expect(o.msg.length).toBeLessThan(420);
+    expect(o.msg.split("\n").length).toBeLessThanOrEqual(12); expect(o.msg.length).toBeLessThan(1800); // the owner's own documentation plus the five ways of working
     expect(o.msg).toMatch(/API documentation and instructions for MY OWN Corporate Tambola account/); expect(o.msg).toMatch(/I am the owner/);
-    expect(o.msg.endsWith(`${ORIGIN}/ai/${o.ai}`)).toBe(true);
+    expect(o.msg.split("\n")[1]!.endsWith(`${ORIGIN}/ai/${o.ai}`)).toBe(true); // the link closes the second line; the ways of working follow
     expect(o.msg.split(o.ai).length).toBe(2); // the key appears once: in the link
     expect(o.msg).not.toMatch(/x-organizer/i); expect(o.msg).not.toMatch(/ai-manifest/);
-    expect(aiMessage(ORIGIN, "cta_x")).toContain("/ai/cta_x");
+    expect(aiMessage(ORIGIN, "cta_x")).toContain("/ai/cta_x"); const m = aiMessage(ORIGIN, "cta_x"); for (const w of ["ONE question at a time", "numbered choices", "wait for my clear yes", "guest link", "pay link", "never pay, publish", "Bogey", "Never show my link"]) expect(m).toContain(w); expect(m.split("cta_x").length).toBe(2); // the key appears once, inside the link
     const mail = raw.prepare("SELECT body FROM outbox ORDER BY id DESC LIMIT 1").get() as { body: string };
     expect(mail.body).not.toContain(o.msg); expect(mail.body).not.toContain(o.ai); expect(mail.body).toMatch(/\/ai\/cta_[0-9a-f]{48}/); // the mail has its own 24-hour key
   });

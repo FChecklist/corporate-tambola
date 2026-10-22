@@ -117,7 +117,7 @@ describe("Replace my AI link", () => {
     expect((await call("GET", `/ai/${o.ai}`)).status).toBe(200);
     const r = await call("POST", "/api/org/ai/replace", {}, o.h); const x = await j(r);
     expect(r.status).toBe(200); expect(x.aiKey).toMatch(/^cta_[0-9a-f]{48}$/); expect(x.aiKey).not.toBe(o.ai); expect(x.mailed).toBe(true);
-    expect(x.aiMessage).toContain(`/ai/${x.aiKey}`); expect(x.aiMessage.split("\n").length).toBe(2);
+    expect(x.aiMessage).toContain(`/ai/${x.aiKey}`); expect(x.aiMessage.split("\n").length).toBeLessThanOrEqual(12);
     expect((await call("GET", `/ai/${o.ai}`)).status).toBe(404); expect((await call("GET", `/ai/${o.ai}/whoami`)).status).toBe(404);
     expect((await call("GET", "/api/whoami", undefined, { "x-organizer": o.ai })).status).toBe(403);
     expect((await call("GET", `/ai/${x.aiKey}`)).status).toBe(200); expect(await j(await call("GET", `/ai/${x.aiKey}/whoami`))).toEqual({ kind: "ai" });
