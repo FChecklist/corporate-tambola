@@ -25,9 +25,23 @@ Plain words for the owner. Every change in this release, the test that proves it
 - Page tests (every page in a page harness): 442 pass, 0 fail
 - Real Chrome scenarios: 191 scenarios in the release run (187 green; the 4 red were fixed and re-run green: S02-06 test script, S11-03 ticket-first fix, S16-11 test script, S16-12 flake), plus 10 fix-check re-runs green. Live version after deploy: 12f09e2, checked with C:\ct\games-ops\live_check_tambola.ps1 (every change found live).
 
+## Release C (2026-10-22, live 22:05 IST, commit 3b1e168; protection build follows the same evening)
+
+| # | Change | Proof |
+|---|---|---|
+| 15 | Real housie: tap each called number, press Claim before the next number; software checks; Bogey; two Bogeys = out of that prize | unit `game.test.ts`/`prize-engine` claim tests, phone-runtime claim tests; Chrome S21 (8 scenarios), S07/S11/S19 re-done with tapping; live demo + 2 live 100-person games on corporatetambola.com (FINDINGS 8-12) |
+| 16 | Players see only the number just called; tap targets >= 44 px | S11, S18; live phone screenshot `live_shots/demo-phone-mid.png` |
+| 17 | AI prompt page `/ai-prompt.html` + guided path `/ai/<key>` (day paging, play sub-steps, moments presets incl. live welcome speech, prize names, one pay story) | web tests ai-go/ai-link/ai-mail, two dry runs by a Claude agent acting as ChatGPT (tools/sim2 server-dryrun) |
+| 18 | Live test tool `tools/livetest/live.mjs` (real site, real phones, real store) | FINDINGS 8-12 |
+| 19 | Protection: minified shipped JS with notice, `noai`/`noimageai`, AI-crawler robots rules, terms 2.4 | docs/PROTECTION.md; live_check_tambola.ps1 (protection lines) |
+| 20 | Console: "The game is over" hint once the game has ended | pages tests; live re-check after deploy |
+
+Totals on the committed tree before the live test: unit 2,105 pass / 0 fail; page tests 450 pass / 0 fail (two AI-text expectations updated); Chrome 198 scenarios green (the 8 first-run reds fixed and re-run 10/10). Live: demo 13/13 (one count-difference note), auto 100 people 13/13 (second run; first run's store lag explained in FINDINGS 9), host 100 people: see FINDINGS 12.
+
 ## Known items left open (not blocking the release)
 
-- The real-housie play mode (players tap their own numbers and press Claim; organizer's choice per game) is not built yet.
+- Cloudflare "Block AI bots" (dashboard click) and the trademark application are the owner's; see docs/PROTECTION.md.
+- The console's "numbers called" figure fills progressively for ~15 s after a reload (cosmetic).
 
 - A phone offline for more than about three minutes across an "End the game" carries on from the public numbers on its own until it reconnects (by design; see FINDINGS item 2).
 - A demo game cannot be converted with credit or through a pay link; the Organizer, a Host or a Co-host converts it on the pay page.

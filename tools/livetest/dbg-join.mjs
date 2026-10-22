@@ -1,0 +1,26 @@
+// Why does a real phone not join on the live site? Opens the guest page, ticks the boxes, fills the form, presses Go, and prints what the page says.
+import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+const require = createRequire("C:/ct/tambola/package.json");
+const { chromium } = require("playwright");
+const id = process.argv[2] || JSON.parse(readFileSync("C:/ct/games-ops/tmp/live_demo.json", "utf8")).id;
+const BASE = "https://corporatetambola.com";
+const browser = await chromium.launch({ headless: true, executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe" });
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+const page = await ctx.newPage();
+const errs = []; page.on("pageerror", (e) => errs.push(String(e).slice(0, 200))); page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") errs.push("console " + m.type() + ": " + m.text().slice(0, 200)); });
+page.on("response", (r) => { if (r.url().includes("/api/")) console.log("api", r.status(), r.url().replace(BASE, "").slice(0, 80)); });
+await page.goto(`${BASE}/z.html?e=${id}`, { waitUntil: "load" });
+await page.waitForTimeout(4000);
+console.log("--- before:", (await page.innerText("body")).replace(/\s+/g, " ").slice(0, 600));
+const boxes = page.locator("[data-cbc='K4'] input[data-box]"); const bn = await boxes.count(); console.log("boxes", bn);
+for (let b = 0; b < bn; b++) await boxes.nth(b).check({ force: true }).catch((e) => console.log("box", b, e.message.slice(0, 80)));
+console.log("has #ph", !!(await page.$("#ph")), "has #nm", !!(await page.$("#nm")), "has #go", !!(await page.$("#go")));
+if (await page.$("#ph")) await page.fill("#ph", "9211122233"); if (await page.$("#nm")) await page.fill("#nm", "Debug Phone");
+await page.click("#go").catch((e) => console.log("click", e.message.slice(0, 120)));
+await page.waitForTimeout(6000);
+console.log("--- after:", (await page.innerText("body")).replace(/\s+/g, " ").slice(0, 700));
+console.log("rt", await page.evaluate(() => ({ has: !!window.__rt, pid: window.__rt && window.__rt.pid, keys: window.__rt ? Object.keys(window.__rt).slice(0, 12) : null })));
+console.log("errors", errs.slice(0, 6));
+await page.screenshot({ path: "C:/ct/games-ops/tmp/live_shots/dbg-join.png" });
+await browser.close();

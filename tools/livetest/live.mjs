@@ -45,6 +45,12 @@ if (cmd === "signin-start") {
   const email = args[1]; const r = await call("POST", "/api/auth/email", { email });
   log("auth/email", r.status, JSON.stringify(r.body).slice(0, 200)); process.exit(r.ok ? 0 : 1);
 }
+if (cmd === "start") { // a NEW address: /api/start creates the Organizer account and answers with its token (no e-mail step)
+  const email = args[1]; const r = await call("POST", "/api/start", { email });
+  log("start", r.status, JSON.stringify(r.body).slice(0, 80));
+  if (r.ok && r.body.token) { writeFileSync(TOKEN_FILE, JSON.stringify({ email, token: r.body.token, at: Date.now() })); log("token saved"); }
+  process.exit(r.ok && r.body.token ? 0 : 1);
+}
 if (cmd === "signin-finish") {
   const email = args[1], code = args[2]; const r = await call("POST", "/api/auth/verify", { email, code });
   log("auth/verify", r.status, JSON.stringify(r.body).slice(0, 120));
@@ -53,7 +59,7 @@ if (cmd === "signin-finish") {
 }
 if (cmd === "cleanup") {
   for (const id of args.slice(1).filter((x) => !x.startsWith("--"))) { const r = await org("POST", `/api/z/${id}/erase`, {}); log("erase", id, r.status, JSON.stringify(r.body).slice(0, 160)); }
-  if (args.includes("--close")) { const r = await org("POST", "/api/org/close", {}); log("close organizer account (deletes its games)", r.status, JSON.stringify(r.body).slice(0, 160)); }
+  if (args.includes("--close")) { const r = await org("POST", "/api/org/close", { confirm: true }); log("close organizer account (deletes its games)", r.status, JSON.stringify(r.body).slice(0, 160)); }
   process.exit(0);
 }
 if (cmd !== "game") { console.log("usage: see the header"); process.exit(2); }
@@ -85,9 +91,8 @@ const pl = await org("GET", `/api/z/${id}/people`); const links = JSON.stringify
 check(`${n} people on the list with personal links`, pl.ok && (pl.body.people?.length ?? pl.body.count ?? 0) >= n, `${pl.status} people=${pl.body.people?.length ?? "?"} links=${links.length}`);
 report.personalLinks = links.length;
 let joined = 0; const joinedPids = [];
-for (const p of list) { const rr = await call("POST", `/api/z/${id}/join`, { phone: p.phone, name: p.name, device: sha("dev|" + p.phone).slice(0, 32) }); if (rr.ok && rr.body.pid) { joined++; joinedPids.push(rr.body.pid); } else report.notes.push("join " + p.phone + ": " + JSON.stringify(rr.body).slice(0, 120)); }
-check(`${n} fake participants joined through the API (one ticket each)`, joined === n, `${joined}/${n}`);
-if (!demo) { const extra = await call("POST", `/api/z/${id}/join`, { phone: "9000000001", name: "Over cap", device: sha("dev|over").slice(0, 32) }); check("the 101st person is refused (game full)", !extra.ok && /full/i.test(extra.body.error || ""), JSON.stringify(extra.body).slice(0, 120)); }
+for (const p of list.slice(0, n - phonesN)) { let rr = await call("POST", `/api/z/${id}/join`, { phone: p.phone, name: p.name, device: sha("dev|" + p.phone).slice(0, 32) }); if (!rr.ok && !rr.body?.error) { await sleep(2000); rr = await call("POST", `/api/z/${id}/join`, { phone: p.phone, name: p.name, device: sha("dev|" + p.phone).slice(0, 32) }); } /* a non-JSON answer (edge hiccup during ~1 join/s) is retried once, like a phone would */ if (rr.ok && rr.body.pid) { joined++; joinedPids.push(rr.body.pid); } else report.notes.push("join " + p.phone + ": " + rr.status + " " + JSON.stringify(rr.body).slice(0, 120)); }
+check(`${n - phonesN} fake participants joined through the API (one ticket each); ${phonesN} seats are left for the real phones`, joined === n - phonesN, `${joined}/${n - phonesN}`);
 save();
 
 // real Chrome phones (K of the 100 play for real: tap and claim)
@@ -110,6 +115,7 @@ try {
     log("phone", i + 1, ok ? "joined" : "NOT joined");
   }
   check(`${phonesN} real Chrome phones joined through the page (boxes ticked, number, name)`, phones.every((p) => p.joined));
+  { const extra = await call("POST", `/api/z/${id}/join`, { phone: "9000000001", name: "Over cap", device: sha("dev|over").slice(0, 32) }); check(`the ${n + 1}th person is refused (game full)`, !extra.ok && /full/i.test(extra.body.error || ""), JSON.stringify(extra.body).slice(0, 120)); }
   // the organizer's console, board and number screen
   const octx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   await octx.addInitScript((tok) => { try { sessionStorage.setItem("ctz-org", tok); } catch {} }, t.token);
@@ -123,10 +129,10 @@ try {
   log("waiting for the start at", new Date(report.startMs + 120_000).toISOString(), "(2 min after", new Date(report.startMs).toISOString(), ")");
   // play: every 3 s, every phone taps along and claims; in host mode the organizer presses Next number every ~8 s
   const deadline = Date.now() + 40 * 60_000; let lastPress = 0, presses = 0, shots = 0;
-  const pressNext = async () => { const b = await console_.$("#nextnum"); if (!b) return false; if (await b.isDisabled().catch(() => true)) return false; await b.click(); presses++; lastPress = Date.now(); return true; };
+  const pressNext = async () => { let b = await console_.$("#nextnum"); if (!b) { const s9 = await console_.$('[data-open="9"]'); if (s9) { await s9.click().catch(() => {}); await sleep(1500); b = await console_.$("#nextnum"); } } if (!b) return false; /* the Next number button lives in step 9 (game day): open it like an organizer would */ if (await b.isDisabled().catch(() => true)) return false; await b.click(); presses++; lastPress = Date.now(); return true; };
   while (Date.now() < deadline) {
     const vs = []; for (const p of phones) { const v = await view(p.page); vs.push(v); if (v && v.phase === "play") await p.page.evaluate(() => window.__rt.playAlong({})).catch(() => {}); }
-    if (mode === "host" && Date.now() - lastPress > 8000) { const first = vs.find((v) => v); if (first && (first.phase === "play")) await pressNext().catch(() => {}); }
+    if (mode === "host" && Date.now() - lastPress > 8000 && Date.now() > report.startMs + 120_000 && !vs.every((v) => v && v.phase === "ended")) { const ok = await pressNext().catch(() => false); if (!ok && presses === 0 && Date.now() > report.startMs + 180_000) log("Next number button missing or disabled"); }
     const ns = vs.map((v) => v?.n ?? -1);
     if (shots === 0 && Math.max(...ns) >= 10) { await phones[0].page.screenshot({ path: `${TMP}/live_shots/${mode}-phone-mid.png` }); await board.screenshot({ path: `${TMP}/live_shots/${mode}-board-mid.png` }); await big.screenshot({ path: `${TMP}/live_shots/${mode}-big-mid.png` }); await console_.screenshot({ path: `${TMP}/live_shots/${mode}-console-mid.png`, fullPage: false }); shots = 1; }
     if (Math.max(...ns) % 10 === 0 && Math.max(...ns) > 0) log("numbers", ns.join("/"), "results", vs[0]?.results?.length ?? 0, mode === "host" ? "presses " + presses : "");
@@ -136,17 +142,20 @@ try {
   const finals = []; for (const p of phones) finals.push(await view(p.page));
   report.finals = finals; report.presses = presses;
   check("every phone reached the end of the game", finals.every((v) => v && v.phase === "ended"), finals.map((v) => v?.phase).join("/"));
-  check("every phone has the same numbers in the same order", finals.every((v) => v && v.n === finals[0].n), finals.map((v) => v?.n).join("/"));
+  check("every phone saw the same count of numbers (within two calls: a phone stops once it hears the last prize was claimed)", finals.every((v) => v && Math.abs(v.n - finals[0].n) <= 2), finals.map((v) => v?.n).join("/"));
   check("every phone agrees on the winners", finals.every((v) => v && JSON.stringify(v.results) === JSON.stringify(finals[0].results)), JSON.stringify(finals[0]?.results));
   check("prizes were won (by claiming)", (finals[0]?.results?.length ?? 0) > 0, String(finals[0]?.results?.length));
   check("the phones that played hold the prizes (nobody who did not claim won)", finals.flatMap((v) => v?.won ?? []).length === (finals[0]?.results?.length ?? -1), JSON.stringify(finals.map((v) => v?.won)));
   if (mode === "host") check("numbers came only on presses (presses >= numbers called)", presses >= (finals[0]?.n ?? 999), `${presses} presses, ${finals[0]?.n} numbers`);
-  const pub = (await call("GET", `/api/z/${id}/results`)).body.results || [];
+  // the phones stay open after the end and keep reporting: only a fifth of the phones speak first, the rest join wave by wave (30 s each) if the store still lacks a result. With most seats held by API dummies that never open a page, the few real phones are the late waves.
+  let pub = []; const want = finals[0]?.results?.length ?? 0; const until = Date.now() + 150_000;
+  while (Date.now() < until) { pub = (await call("GET", `/api/z/${id}/results`)).body.results || []; if (pub.length >= want) break; for (const p of phones) await view(p.page); await sleep(5000); }
+  report.storeCatchUpSeconds = Math.round((150_000 - (until - Date.now())) / 1000);
   check("the store's winners equal the phones'", pub.length === (finals[0]?.results?.length ?? -1), `${pub.length} vs ${finals[0]?.results?.length}`);
   const claims = (await org("GET", `/api/z/${id}/claims`)).body; report.claims = JSON.stringify(claims).length;
   check("the organizer can read the claims (and Bogeys)", !!claims && Array.isArray(claims.claims), JSON.stringify(claims).slice(0, 120));
   check("no JavaScript error on any phone", phones.every((p) => p.errors.length === 0), JSON.stringify(phones.map((p) => p.errors).flat().slice(0, 3)));
-  await phones[0].page.screenshot({ path: `${TMP}/live_shots/${mode}-phone-end.png` }); await console_.goto(`${BASE}/zc.html?e=${id}`); await sleep(4000); await console_.screenshot({ path: `${TMP}/live_shots/${mode}-console-end.png` });
+  await phones[0].page.screenshot({ path: `${TMP}/live_shots/${mode}-phone-end.png` }); await console_.goto(`${BASE}/zc.html?e=${id}`); await console_.waitForSelector(".zc-sech", { timeout: 45000 }).catch(() => {}); await sleep(2000); await console_.screenshot({ path: `${TMP}/live_shots/${mode}-console-end.png` });
   const ct = await console_.innerText("body").catch(() => "");
   check("the console shows the game ended with winners", /winner|prize|ended|over/i.test(ct), ct.slice(0, 200));
   report.consoleText = ct.slice(0, 2000);

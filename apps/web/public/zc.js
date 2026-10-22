@@ -670,7 +670,7 @@
 
   /** A DEMO GAME: "Make this a real game". The usual packs; the payment itself happens on the pay page (the same page and checkout as any game). After the game has ended, a new real game like this one is made instead (the clone). */
   function makeRealBlock() {
-    const ended = !!(S.life && (S.life.purged || S.life.reportSent)) || (S.started && S.log.length >= 90 && !(S.cfg && S.cfg.rounds > 1));
+    const ended = gameEnded();
     const packs = (S.packs || []).length ? S.packs : [{ upTo: 100, inr: 2399 }, { upTo: 250, inr: 3499 }, { upTo: 500, inr: 4699 }, { upTo: 1000, inr: 7099 }];
     const pick = Number(S.realPack) || packs[0].upTo;
     const chips = packs.map((k) => `<button type="button" class="zc-chip${pick === k.upTo ? " on" : ""}" data-realpack="${k.upTo}" aria-pressed="${pick === k.upTo}">Up to ${k.upTo} people${k.inr ? " \u00b7 " + esc(money(k.inr)) : ""}</button>`).join("");
@@ -859,9 +859,12 @@
     return `<section class="zc-card${isOpen ? " open" : ""}" id="sec${n}" style="${isOpen ? `border-color:var(--text-tint-${c})` : ""}"><button type="button" class="zc-sech" data-open="${n}" aria-expanded="${isOpen}" aria-controls="secb${n}" style="background:var(--bg-tint-${c});color:var(--text-tint-${c})">${badge(s)}<span class="zc-syntx"><b>${esc(s[1])}</b><br><span class="zc-hint">${esc(isOpen || !sm ? s[3] : sm)}</span></span><span class="zc-st">${d ? "&#10003;<span class=\"zc-sr\"> Done</span>" : isOpen ? "&#9650;" : "&#9660;"}</span></button>`
       + (isOpen ? `<div class="zc-secb" id="secb${n}"><div class="zc-say" style="background:var(--bg-tint-${c});color:var(--text-tint-${c})">${d ? "Saved. You can change it any time." : esc(s[4])}</div>${aboutBox(n)}${S.toast ? `<div class="zc-toast" role="status">${esc(S.toast)}</div>` : ""}${stepBody(n)}</div>` : "") + `</section>`;
   }
+  /** The game is over (every number called, or the report already went out): the hint must not send the organizer back to step 1. */
+  const gameEnded = () => !!(S.life && (S.life.purged || S.life.reportSent)) || (!!S.started && (S.log || []).length >= 90 && !(S.cfg && S.cfg.rounds > 1));
   function nextHtml() {
     const n = nextStep();
     if (!n) return `<div class="zc-next zc-next-ok"><span><b>All done.</b> Nothing else to do.</span></div>`;
+    if (gameEnded() && !S.draft) return `<div class="zc-next"><span><b>The game is over.</b> Hand over the prizes from step 9 (the winners list); the report link comes by e-mail (step 10).</span><button type="button" class="zc-mini" data-open="9">Go</button></div>`;
     return `<div class="zc-next"><span><b>Next:</b> ${esc(n[1])}. ${esc(n[4])}</span><button type="button" class="zc-mini" data-open="${n[0]}">Go</button></div>`;
   }
   function helpHtml() {

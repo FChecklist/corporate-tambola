@@ -104,9 +104,11 @@ describe("robots, sitemap, social cards, offline page, 404, PWA", () => {
     for (const m of robots.matchAll(/Disallow: (\/\S+\.html)/g)) expect(existsSync(join(PUB, m[1]!)), m[1]).toBe(true);
   });
   const sm = read("sitemap.xml"); const locs = [...sm.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]!);
+  // only the rules for everyone (User-agent: *) count: the AI-crawler groups below them say "Disallow: /" on purpose (the home page is allowed back to them by "Allow: /$")
+  const everyoneRules = robots.replace(/\r/g, "").split(/\n\s*\n/).filter((g) => /^User-agent: \*$/m.test(g)).join("\n").split("\n").map((x) => x.trim());
   test("the sitemap lists only pages that exist, once each, on the real domain, and none that robots.txt hides", () => {
     expect(locs.length).toBeGreaterThan(8); expect(new Set(locs).size).toBe(locs.length);
-    for (const l of locs) { expect(l.startsWith(BRAND.defaultOrigin + "/")).toBe(true); const path = l.slice(BRAND.defaultOrigin.length); expect(existsSync(join(PUB, path === "/" ? "index.html" : path.slice(1))), l).toBe(true); expect(robots.split("\n").map((x) => x.trim()), l).not.toContain(`Disallow: ${path}`); }
+    for (const l of locs) { expect(l.startsWith(BRAND.defaultOrigin + "/")).toBe(true); const path = l.slice(BRAND.defaultOrigin.length); expect(existsSync(join(PUB, path === "/" ? "index.html" : path.slice(1))), l).toBe(true); expect(everyoneRules, l).not.toContain(`Disallow: ${path}`); }
   });
   test("the home page, pricing and legal pages are in the sitemap", () => { for (const p of ["/", "/pricing.html", "/terms.html", "/privacy.html", "/legal.html", "/contact.html"]) expect(locs, p).toContain(BRAND.defaultOrigin + p); });
   for (const f of ["index.html", "pricing.html", "about.html", "contact.html", "partner.html", "organizer-guide.html"]) {
