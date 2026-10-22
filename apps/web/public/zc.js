@@ -80,7 +80,9 @@
   const saveDone = () => ls.set(doneKey(), JSON.stringify(S.done));
   const markDone = (n) => { S.done[n] = 1; saveDone(); };
   /** A step is done when the owner said so, or when the game itself proves it. */
-  const isDone = (n) => !!S.done[n] || (role() !== "cohost" && n === 7 && !!S.info && !S.draft) || (role() !== "cohost" && n === 8 && !!S.info && !S.draft && payState().paid) || (role() === "cohost" && n === 3 && payState().paid);
+  const isDone = (n) => !!S.done[n] || (role() !== "cohost" && n === 7 && !!S.info && !S.draft) || (role() !== "cohost" && n === 8 && !!S.info && !S.draft && payState().paid) || (role() === "cohost" && n === 3 && payState().paid)
+    || (role() !== "cohost" && n <= 6 && !!S.started && !S.draft) // the game has started: steps 1-6 are locked, so they are done whether or not anyone pressed "Save and continue"
+    || (role() !== "cohost" && n === 9 && gameEnded()) || (role() !== "cohost" && n === 10 && !!(S.life && (S.life.purged || S.life.reportSent)));
   const nextStep = () => steps().find((s) => !isDone(s[0])) || null;
 
   // ---------- who paid ----------
@@ -832,7 +834,7 @@
     const c = S.cfg, inf = S.info; if (!c || !inf) return "";
     const t = c.tickets, used = (c.opening || []).length + (c.breaks || []).length + (c.closing || []).length, T = S.team;
     return [`${c.name || "Your game"}, ${when(inf.startMs)}`, `Up to ${inf.cap}, ${t} ticket${t === 1 ? "" : "s"}, ${hostMode() ? "a Host calls" : inf.callSeconds + " seconds"}`, `${(c.rewards || []).length} prizes`, `${used} of ${5 * t} moments`,
-      T ? `${pl((T.hosts || []).length, "Host", "Hosts")}, ${pl((T.cohosts || []).length, "Co-host", "Co-hosts")}` : "", S.draft ? "Guest link ready after publishing" : "Guest link ready", S.draft ? "Not published yet" : "Published", S.draft ? "Publish first" : isCancelled() ? "Cancelled" : isDemo() ? "Free demo game. Make it a real game here" : payState().paid ? "Paid. The game is on" : payState().confirming ? "Confirming your payment..." : "Payment pending", S.started ? "The game is on" : "Opens when the game starts", "Your report, then erasing data"][n - 1] || "";
+      T ? `${pl((T.hosts || []).length, "Host", "Hosts")}, ${pl((T.cohosts || []).length, "Co-host", "Co-hosts")}` : "", S.draft ? "Guest link ready after publishing" : "Guest link ready", S.draft ? "Not published yet" : "Published", S.draft ? "Publish first" : isCancelled() ? "Cancelled" : isDemo() ? "Free demo game. Make it a real game here" : payState().paid ? "Paid. The game is on" : payState().confirming ? "Confirming your payment..." : "Payment pending", S.started ? (gameEnded() ? "The game is over" : "The game is on") : "Opens when the game starts", S.life && S.life.purged ? "Report sent, data erased" : S.life && S.life.reportSent ? "Report sent. Data is erased 24 h after the end" : "Your report, then erasing data"][n - 1] || "";
   }
   // "About this step": a short, always-visible write-up under each talking line (docs/ROLES_AND_CONSOLE_SPEC_4.md, A). At most 5 short lines each.
   const ABOUT = {
@@ -856,7 +858,7 @@
   const stepBody = (n) => (role() === "cohost" ? cohStep(n) : [stepGame, stepPlay, stepPrizes, stepBrand, stepTeam, stepShare, stepPublish, stepPay, stepDay, stepAfter][n - 1]());
   function secHtml(s) {
     const n = s[0], isOpen = S.open === n, d = isDone(n), c = s[2], sm = sum(n);
-    return `<section class="zc-card${isOpen ? " open" : ""}" id="sec${n}" style="${isOpen ? `border-color:var(--text-tint-${c})` : ""}"><button type="button" class="zc-sech" data-open="${n}" aria-expanded="${isOpen}" aria-controls="secb${n}" style="background:var(--bg-tint-${c});color:var(--text-tint-${c})">${badge(s)}<span class="zc-syntx"><b>${esc(s[1])}</b><br><span class="zc-hint">${esc(isOpen || !sm ? s[3] : sm)}</span></span><span class="zc-st">${d ? "&#10003;<span class=\"zc-sr\"> Done</span>" : isOpen ? "&#9650;" : "&#9660;"}</span></button>`
+    return `<section class="zc-card${isOpen ? " open" : ""}" id="sec${n}" style="${isOpen ? `border-color:var(--text-tint-${c})` : ""}"><button type="button" class="zc-sech" data-open="${n}" aria-expanded="${isOpen}" aria-controls="secb${n}" style="background:var(--bg-tint-${c});color:var(--text-tint-${c})">${badge(s)}<span class="zc-syntx"><b>${esc(s[1])}</b><br><span class="zc-hint">${esc(isOpen || !sm ? s[3] : sm)}</span></span><span class="zc-st${d ? " ok" : " todo"}" aria-label="${d ? "Done" : "To do"}">${d ? "&#10003;<span class=\"zc-sr\"> Done</span>" : "&#9675;<span class=\"zc-sr\"> To do</span>"}</span><span class="zc-caret" aria-hidden="true">${isOpen ? "&#9650;" : "&#9660;"}</span></button>`
       + (isOpen ? `<div class="zc-secb" id="secb${n}"><div class="zc-say" style="background:var(--bg-tint-${c});color:var(--text-tint-${c})">${d ? "Saved. You can change it any time." : esc(s[4])}</div>${aboutBox(n)}${S.toast ? `<div class="zc-toast" role="status">${esc(S.toast)}</div>` : ""}${stepBody(n)}</div>` : "") + `</section>`;
   }
   /** The game is over (every number called, or the report already went out): the hint must not send the organizer back to step 1. */
