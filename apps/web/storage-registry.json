@@ -12,12 +12,13 @@
     {
       "id": "player-game",
       "store": "localStorage",
-      "say": "On a player's phone: the ticket, the prizes won and the last game opened, so the game works offline and comes back after a reload.",
+      "say": "On a player's phone: the ticket, the numbers they tapped, the prizes they claimed and won, their Bogeys and the last game opened, so the game works offline and comes back after a reload.",
       "keys": [
         "ct-last-eid",
         "ctz:*:pid",
         "ctz:*:jr",
         "ctz:*:claimed",
+        "ctz:*:marks",
         "ctz-prizes:*",
         "ctz-over:*",
         "ctz-wait-*"

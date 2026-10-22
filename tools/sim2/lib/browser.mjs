@@ -80,6 +80,19 @@ export async function measure(page, { minPx = 12 } = {}) {
  * Plays a whole game in real Chrome in seconds: every `stepMs` of simulated time the server clock, the beacon and every page clock move together (page.clock.runFor), until every page's
  * phone runtime (window.__rt) reports phase "ended" or `maxSteps` is used up. Returns { steps, ended: [bool], views: [{ log, results }] }.
  */
+/**
+ * Real housie: a phone never marks itself and never claims by itself, so a simulated player has to. After each step, every open phone (window.__rt) taps the numbers just called on its
+ * ticket and presses Claim for every prize its marks complete (the runtime's own playAlong). Per open: `o.quiet = true` = this phone does nothing (never taps, never claims);
+ * `o.along = { claim: false }` = taps but never claims; `{ claim: ["top"] }` = claims those houses only; `{ tap: false }` = claims only what it already marked. Pages that are not phones are skipped.
+ */
+export async function tapAlong(opens) {
+  const out = [];
+  for (const o of opens) {
+    if (!o || o.quiet || !o.page) { out.push(null); continue; }
+    out.push(await o.page.evaluate(async (along) => (window.__rt && window.__rt.playAlong ? window.__rt.playAlong(along || {}) : null), o.along || null).catch(() => null));
+  }
+  return out;
+}
 export async function playBrowserGame(opens, { track, stepMs = 3000, maxSteps = 420, settleMs = 70 } = {}) {
   const { clock } = await import("./clock.mjs");
   const phase = (p) => p.evaluate(() => (window.__rt ? window.__rt.phase : "none")).catch(() => "none");
@@ -87,9 +100,12 @@ export async function playBrowserGame(opens, { track, stepMs = 3000, maxSteps = 
   for (; n < maxSteps; n++) {
     await clock.advance(stepMs); track.bump(stepMs);
     for (const o of opens) await o.ctx.clock.runFor(stepMs);
+    await tapAlong(opens); // the simulated players tap and claim (real housie)
     await new Promise((r) => setTimeout(r, settleMs));
     if (n > 60 && (await Promise.all(opens.map((o) => phase(o.page)))).every((x) => x === "ended")) { n++; break; }
   }
+  // every phone has ended; real housie: the last claims still travel (a phone reads the others' claims with the seat list, up to 15 s apart), so give them a few more steps to agree
+  for (let i = 0; i < 8; i++) { await clock.advance(stepMs); track.bump(stepMs); for (const o of opens) await o.ctx.clock.runFor(stepMs); await tapAlong(opens); await new Promise((r) => setTimeout(r, settleMs)); }
   const views = [];
   for (const o of opens) views.push(await o.page.evaluate(() => { const v = window.__rt.view(); return { phase: v.phase, log: v.log, results: v.results.map((x) => ({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, count: x.count, round: x.round ?? 1 })) }; }).catch(() => ({ phase: "none", log: [], results: [] })));
   return { steps: n, ended: views.map((v) => v.phase === "ended"), views };

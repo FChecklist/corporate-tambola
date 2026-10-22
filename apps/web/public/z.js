@@ -84,7 +84,7 @@
     return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div>
     <div class="zcard zform zjoin"><h2>Join the engagement</h2>
     <ol class="zsteps" aria-label="How to join"><li><b>1</b><span>Tick the boxes</span></li><li><b>2</b><span>${personal ? "Press the button" : "Type your number"}</span></li><li><b>3</b><span>Get your ticket</span></li></ol>
-    <p class="zgoalline" style="margin:0 0 6px">A ticket fills up as numbers are called. Complete a row or the whole ticket to win a prize. The software checks every ticket: no need to shout.</p>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
+    <p class="zgoalline" style="margin:0 0 6px">Numbers are called one by one. Tap each one on your ticket as it is called. When a row or the whole ticket is complete, press Claim before the next number: the software checks it, no need to shout.</p>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
     ${J.mode === "needPhone" ? `<div class="zbanner info" role="status" style="margin:0 0 8px">${J.note ? esc(J.note) : "This link was already opened on another phone. Please type your mobile number to get your ticket."}</div>` : ""}
     ${DEMO ? "" : CBConsent.html("K4")}
     ${personal ? `<p class="zsmall" style="margin:0 0 6px">Your personal link is ready. Press the button to get your ticket.</p>` : `<label for="ph">Your mobile number</label><input id="ph" inputmode="tel" autocomplete="tel" placeholder="98765 43210" value="${esc(J.mode === "needPhone" ? J.phone : "")}">`}
@@ -157,7 +157,23 @@
 
   const isDemoGame = () => !DEMO && INFO.demo === true;
   const demoTag = () => (isDemoGame() ? ' <span class="zdemotag">DEMO GAME</span>' : "");
-  const ticketHtml = (t, called, label, win) => `<div class="zticket${isDemoGame() ? " zdemogame" : ""}" aria-label="${label}${isDemoGame() ? " (demo game)" : ""}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div class="${called.has(v) ? "m" : ""}${called.has(v) && NEWCALL === v ? " pop" : ""}${win && win.has(v) && called.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;
+  // Real housie: the ticket never marks itself. Each number is a button the player taps when it is called (`marks` = what they tapped); a tap on a number not called yet is refused in place.
+  const ticketHtml = (t, marks, label, win) => `<div class="zticket${isDemoGame() ? " zdemogame" : ""}" aria-label="${label}${isDemoGame() ? " (demo game)" : ""}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div role="button" tabindex="0" data-tap="${v}" aria-pressed="${marks.has(v)}" aria-label="${v}${marks.has(v) ? ", marked" : ""}" class="${marks.has(v) ? "m" : ""}${marks.has(v) && NEWMARK === v ? " pop" : ""}${win && win.has(v) && marks.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;
+  const TIP = ZG.PLAYER_TIP || "Tap each number as it is called. When a prize is complete, press Claim before the next number is called. A wrong claim is a Bogey: it does not count.";
+  const RULE = ZG.CLAIM_RULE_TEXT || "Press Claim before the next number is called.";
+  let NEWMARK = 0; // the number just tapped: its place on the ticket is stamped
+  // a refusal shown in place on the ticket card (a tap on a number not called yet, a Bogey): the guide's own words, kept for a few seconds across redraws
+  let TAP = null;
+  const tapNote = (message, status) => {
+    TAP = { msg: String(message || ""), status: status || 400, until: Date.now() + 7000, guide: null };
+    try { if (window.CTG) { const g = CTG.explain({ status: TAP.status, message: TAP.msg }); if (g.what.indexOf(TAP.msg) < 0) g.what = TAP.msg + " " + g.what; TAP.guide = g; } } catch {} // the phone's own words first (they name the number), then the guide's explanation and steps
+  };
+  function showTapNote() {
+    const host = document.getElementById("tapnote"); if (!host) return;
+    if (!TAP || Date.now() > TAP.until) { TAP = null; return; }
+    if (window.CTG && TAP.guide) { try { CTG.inline(host, TAP.guide, {}); return; } catch {} }
+    host.innerHTML = `<div class="zbanner bad" role="alert">${esc(TAP.msg)}</div>`;
+  }
   const ordinalName = (k) => ["", "1st", "2nd", "3rd"][k] || k + "th";
   const KEYNAME = (key) => (key === "full2" ? "Full Two-Ticket House" : NAMES[key]);
 
@@ -193,7 +209,7 @@
   /** Before the first number: what to expect, what can be won, a sound check and a calendar entry. Everything here is known at boot, so it costs no extra requests. */
   function waitingRoom(v) {
     if (v.phase !== "play" || v.locked || v.late || v.log.length || v.nextCallInSec === null || v.nextCallInSec <= 0 || v.round > 1) return "";
-    if (DEMO) return DEMO.running ? `<div class="zcard zwait"><h2>Starting in <span id="cd">${Math.max(0, v.nextCallInSec)}</span> seconds</h2><p class="zsmall" style="margin:0">Watch your ticket below: each number is marked for you.</p></div>` : "";
+    if (DEMO) return DEMO.running ? `<div class="zcard zwait"><h2>Starting in <span id="cd">${Math.max(0, v.nextCallInSec)}</span> seconds</h2><p class="zsmall" style="margin:0">Tap each number on your ticket as it is called. When the four corners are marked, press Claim.</p></div>` : "";
     const ms = (1692803367 + (v.scheduledRound - 1) * 3) * 1000;
     const when = new Date(ms).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
     const prizes = ZG.keysInPlay(v.cfg.rewards).map((key) => ZG.linesFor(v.cfg.rewards, key).map((line) => `<li>${esc((ZG.linesFor(v.cfg.rewards, key).length > 1 ? ordinalName(line.ordinal) + " " : "") + KEYNAME(key))}${line.text ? ": <b>" + esc(line.text) + "</b>" : ""}<br>${howLine(key)}</li>`).join("")).join("");
@@ -202,9 +218,9 @@
       ? `<h2>Your game is setting up</h2><div class="zsetup">We are waiting 2 minutes more for everyone to join.</div><div class="zcount" aria-live="off" id="cd">${clock(toFirst)}</div><p class="zsmall" style="margin-top:0">until the first number. Keep this page open: the numbers appear on their own.</p>`
       : `<h2>You are in. See you at ${esc(when)}</h2><div class="zsmall" style="margin:0">Starting in</div><div class="zcount" aria-live="off" id="cd">${clock(toFirst - GRACE_SECS)}</div><p class="zsmall" style="margin-top:0">hours : minutes : seconds. Keep this page open: the numbers appear on their own.</p>`;
     return `<div class="zcard zwait">${top}
-      <div class="zdo"><b>What to do:</b> nothing yet. Keep this page open. Your ticket marks every number for you.</div>
+      <div class="zdo"><b>What to do:</b> nothing yet. Keep this page open. When the numbers start, tap each one on your ticket as it is called.</div>
       ${prizes ? `<h3>What you can win</h3><ul class="zlist">${prizes}</ul>` : ""}
-      <h3>How it works</h3><ol class="zlist"><li>Your ticket is below. Numbers are called one by one and marked for you.</li><li>When a row or the whole ticket is complete you will see it. The software checks it, you do not need to shout.</li><li>The organizer hands over the rewards.</li></ol>
+      <h3>How it works</h3><ol class="zlist"><li>Your ticket is below. Numbers are called one by one. You see only the number just called, so stay alert.</li><li>Tap each number on your ticket as it is called. The ticket does not mark itself.</li><li>When a row or the whole ticket is complete, press <b>Claim</b> before the next number is called. The software checks it against the called numbers, you do not need to shout.</li><li>A wrong claim is a <b>Bogey</b>: it does not count. Two Bogeys on the same prize and your ticket is out of that prize.</li><li>The organizer hands over the rewards.</li></ol>
       <button class="zbtn s alt" id="soundtest">Check my sound</button><a class="zbtn s alt" id="addcal" download="engagement.ics" href="${icsFor(v)}">Add to my calendar</a></div>`;
   }
 
@@ -225,7 +241,7 @@
     return fresh;
   }
   function confetti(canvas) {
-    const ctx = canvas.getContext("2d"); if (!ctx) return;
+    const ctx = canvas.getContext("2d"); if (!ctx || typeof ctx.clearRect !== "function") return;
     const W = (canvas.width = innerWidth), H = (canvas.height = innerHeight), cols = ["#FFB703", "#1565D8", "#E4572E", "#0B7F4A", "#D6246B", "#7B3FE4"];
     const ps = Array.from({ length: 140 }, () => ({ x: Math.random() * W, y: -20 - Math.random() * H * 0.6, r: 4 + Math.random() * 6, c: cols[(Math.random() * cols.length) | 0], vy: 2 + Math.random() * 3.5, vx: -1.5 + Math.random() * 3, a: Math.random() * 6.28, va: -0.2 + Math.random() * 0.4 }));
     const t0 = performance.now();
@@ -306,7 +322,7 @@
   const demoGameCard = () => (isDemoGame() ? `<div class="zcard zdemo" id="demogame" role="note"><span class="zdemotag">DEMO GAME</span> <span class="zsmall">This is a demo game for up to 10 people. The organizer can make it a real game at any time.</span></div>` : "");
   function demoCard(v) {
     if (!DEMO || v.phase === "ended") return "";
-    if (!DEMO.running) return `<div class="zcard zdemo" role="note"><h2>Demo video <span class="zdemotag">DEMO</span></h2><p class="zsmall" style="margin:0 0 10px">This is a real ticket and a real game, about a minute long: 3 numbers, a short break with your host's message, 3 more numbers, and you win <b>Four corners</b> (the first and last numbers of the top and bottom rows). Turn your sound on, then press the button.</p><button class="zbtn" id="drun" type="button">Run Demo</button> <button class="zbtn s alt" id="dcopy" type="button">Copy the demo link to send to a colleague</button></div>`;
+    if (!DEMO.running) return `<div class="zcard zdemo" role="note"><h2>Demo video <span class="zdemotag">DEMO</span></h2><p class="zsmall" style="margin:0 0 10px">This is a real ticket and a real game, about a minute long: 3 numbers, a short break with your host's message, 3 more numbers. <b>Tap each number on your ticket as it is called</b>, and when the <b>Four corners</b> (the first and last numbers of the top and bottom rows) are marked, press <b>Claim</b> to win. Turn your sound on, then press the button.</p><button class="zbtn" id="drun" type="button">Run Demo</button> <button class="zbtn s alt" id="dcopy" type="button">Copy the demo link to send to a colleague</button></div>`;
     return `<div class="zcard zdemo" role="note"><span class="zdemotag">DEMO</span> <span class="zsmall">A sample game is running. Nothing is saved and nothing is charged.</span> <button class="zbtn s alt" id="dagain" type="button">Run demo again</button></div>`;
   }
   function bindDemo() {
@@ -315,7 +331,7 @@
     for (const id of ["dcopy", "dcopy2"]) { const b = document.getElementById(id); if (b) b.onclick = async () => { const link = location.origin + "/demo.html"; try { await navigator.clipboard.writeText(link); b.textContent = "Link copied: " + link; } catch { b.textContent = "Send this link: " + link; } }; } // the plain address: whoever opens it runs their own demo
   }
   function finalCard(v) {
-    if (DEMO) return `<div class="zcard zfinal"><h2>That was the demo <span class="zdemotag">DEMO</span></h2><div class="zfbig">${PRIZES.length ? "You won Four corners." : "You saw how a game runs."}</div><p class="zsmall" style="font-size:15px;margin:6px 0 10px">A real game has 90 numbers, many prizes, your own brand messages and videos, lucky draws and a report. You build it in about five minutes and nobody pays until you are ready.</p><a class="zbtn" style="display:inline-flex;align-items:center;text-decoration:none" href="/">Create my game</a> <button class="zbtn s alt" id="dagain2" type="button">Run demo again</button> <button class="zbtn s alt" id="dcopy2" type="button">Copy the demo link</button></div>`;
+    if (DEMO) return `<div class="zcard zfinal"><h2>That was the demo <span class="zdemotag">DEMO</span></h2><div class="zfbig">${PRIZES.length ? "You won Four corners." : "You saw how a game runs."}</div>${PRIZES.length ? "" : `<p class="zsmall" style="margin:0 0 6px">Next time tap each number as it is called and press Claim when the four corners are marked: that is how a prize is won.</p>`}<p class="zsmall" style="font-size:15px;margin:6px 0 10px">A real game has 90 numbers, many prizes, your own brand messages and videos, lucky draws and a report. You build it in about five minutes and nobody pays until you are ready.</p><a class="zbtn" style="display:inline-flex;align-items:center;text-decoration:none" href="/">Create my game</a> <button class="zbtn s alt" id="dagain2" type="button">Run demo again</button> <button class="zbtn s alt" id="dcopy2" type="button">Copy the demo link</button></div>`;
     const n = PRIZES.length;
     return `<div class="zcard zfinal"><h2>Game complete${demoTag()}</h2>
       <div class="zmedal" aria-hidden="true">${n ? "&#127942;" : "&#127922;"}</div>
@@ -530,16 +546,17 @@
     const keys = ZG.keysInPlay(v.cfg.rewards);
     return keys.map((key) => {
       const lines = ZG.linesFor(v.cfg.rewards, key);
-      const n = key === "unlucky" ? 0 : ZG.stillToWin(v.tickets, key, v.log);
-      const mine = v.myIdx[key];
+      const n = key === "unlucky" ? 0 : ZG.stillToWin(v.tickets, key, v.marks || []); // by what the player has marked: the screen never gives away a number they missed
+      const mine = v.myIdx[key], won = new Set((v.won || []).filter((w) => w.round === v.round).map((w) => w.pattern + "#" + w.ordinal)), pressed = (v.pressed || []).includes(key), out = (v.outOf || []).includes(key);
       return lines.map((line) => {
         const total = lines.length;
         const name = (total > 1 ? ordinalName(line.ordinal) + " " : "") + KEYNAME(key);
         const res = v.results.find((r) => r.pattern === key && r.ordinal === line.ordinal);
         let right;
         if (key === "unlucky") right = res ? ((res.winners || []).includes(v.pid) ? `<em>Yours</em>` : `<i>Awarded</i>`) : `<i>decided at the first Full House</i>`;
-        else if (res) right = mine === res.idx ? `<em>Yours${res.count > 1 ? " · shared by " + res.count : ""}</em>` : `<i>Awarded${res.count > 1 ? " to " + res.count : ""}</i>`;
-        else if (line.ordinal === 1) right = mine >= 0 ? `<em>Complete</em>` : n >= 99 ? `<i>not possible on your ticket</i>` : `<i>${n} to go</i>`;
+        else if (res) right = won.has(key + "#" + line.ordinal) ? `<em>Yours${res.count > 1 ? " · shared by " + res.count : ""}</em>` : `<i>Awarded${res.count > 1 ? " to " + res.count : ""}</i>`;
+        else if (out) right = `<i>out (two Bogeys)</i>`;
+        else if (line.ordinal === 1 || v.results.some((r) => r.pattern === key && r.ordinal === line.ordinal - 1)) right = pressed ? `<em>Claimed, being checked</em>` : mine >= 0 ? `<em>Complete: press Claim</em>` : n >= 99 ? `<i>not possible on your ticket</i>` : `<i>${n} to go</i>`; // the next open position of the house: what this ticket can still do about it
         else right = `<i>after the ${ordinalName(line.ordinal - 1)}</i>`;
         return `<div class="zrow"><span>${esc(name)}${line.text ? `<br><small class="zsmall" style="margin:0">${esc(line.text)}</small>` : ""}<br>${howLine(key)}</span>${right}</div>`;
       }).join("");
@@ -570,7 +587,23 @@
     const total = v.late ? "since you joined" : "of 90";
     return `<div class="zcard zcall"><div class="zchiprow"><span class="zchip2 ${tone}">${esc(chip)}</span><span class="zchip2 plain"><b data-count="${v.log.length}" data-ck="called">${v.log.length}</b>&nbsp;${total} called</span></div>
         <div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
-        <div class="zsub">${sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">Your ticket marks every number for you. Just watch.</p>`}</div>`;
+        <div class="zsub">${sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p>`}</div>`;
+  }
+  /** Under the ticket: a Claim button for every prize the player's marks complete, what was claimed and is being checked, this player's Bogeys, and the prizes the ticket is out of. */
+  function claimBar(v) {
+    if (!v.tickets.length || (v.phase !== "play" && v.phase !== "ended")) return "";
+    const won = new Set((v.won || []).map((w) => w.round + ":" + w.pattern));
+    const btns = (v.claimable || []).map((k) => `<button type="button" class="zbtn zclaim" data-claim="${esc(k)}">Claim ${esc(KEYNAME(k))}</button>`).join("");
+    const notWon = (v.pressed || []).filter((k) => !won.has(v.round + ":" + k));
+    const allOut = (k) => ZG.linesFor(v.cfg.rewards, k).every((l) => v.results.some((r) => r.pattern === k && r.ordinal === l.ordinal)); // every position of the house is awarded
+    const waiting = notWon.filter((k) => !allOut(k)); // claimed, a position is still open: being checked
+    const lost = notWon.filter((k) => allOut(k)); // claimed, every position went to others
+    const bog = (v.bogeys || []).map((b) => `${esc(KEYNAME(b.pattern))} ${b.n}`).join(", ");
+    const out = (v.outOf || []).map((k) => `<div class="zbanner warn zout" role="status">Two Bogeys on ${esc(KEYNAME(k))}: this ticket is out of the ${esc(KEYNAME(k))} prize. Other prizes are still open to you.</div>`).join("");
+    return `<div class="zclaims" id="claims">${btns ? `<div class="zclaimrow">${btns}</div><p class="zsmall zrule">${esc(RULE)}</p>` : ""}
+      ${waiting.length ? `<p class="zsmall zsent" role="status">Claim sent for ${waiting.map((k) => esc(KEYNAME(k))).join(", ")}. The software is checking it against the called numbers.</p>` : ""}
+      ${lost.length ? `<p class="zsmall zlost">${lost.map((k) => esc(KEYNAME(k))).join(", ")}: claimed, but another ticket was ahead or the claim came after the next number.</p>` : ""}
+      ${bog ? `<p class="zsmall zbogeys">Bogeys: ${bog}</p>` : ""}${out}<div id="tapnote"></div></div>`;
   }
   /** Every prize and whether it is still open: the open ones first, the claimed ones after, crossed out with a small "claimed". */
   function livePrizesCard(v) {
@@ -584,7 +617,7 @@
     return `<div class="zcard zps"><h2>Prizes${open ? " still to win · " + open : " · all claimed"}</h2><ul class="zpl">${rows}</ul></div>`;
   }
   function playView(v) {
-    const called = new Set(v.log);
+    const called = new Set(v.marks || []); // what the player has tapped (the ticket never marks itself)
     const last = v.log[v.log.length - 1];
     const banners = [];
     if (v.error) banners.push(`<div class="zbanner warn" role="alert">${esc(v.error)}</div>`);
@@ -610,7 +643,7 @@
       ${roundCards(v)}
       ${v.brk ? breakCard(v.brk) : ""}
       ${callCard(v, last, sub)}
-      <div class="zcard${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Demo ticket <span class="zdemotag">DEMO</span>' : (v.tickets.length > 1 ? "Your tickets" : "Your ticket") + demoTag()}</h2>${ribbon}${tix}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
+      <div class="zcard${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Demo ticket <span class="zdemotag">DEMO</span>' : (v.tickets.length > 1 ? "Your tickets" : "Your ticket") + demoTag()}</h2>${ribbon}${tix}${claimBar(v)}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
       ${v.phase === "ended" ? "" : livePrizesCard(v)}
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}
@@ -631,7 +664,7 @@
     { const af = document.activeElement; if (af && (af.id === "cfnm" || af.id === "cfph" || af.id === "mi-name" || af.id === "mi-phone")) return; } // never wipe a form someone is typing in
     NEWCALL = v.log.length > lastLen && !firstPaint && MOTION() ? v.log[v.log.length - 1] : 0;
     $app.innerHTML = playView(v);
-    countUps();
+    countUps(); showTapNote(); bindTicket(v);
     paintBrand(); syncMedia(v); bindShare(); bindDemo(); bindConfirm(v); loadInvites(v); bindInvite(v); loadMine(v); bindMine(v);
     if (fresh.length) showHurray(fresh);
     const s = document.getElementById("snd");
@@ -643,6 +676,27 @@
     if (v.announcement && v.announcement.id !== annSpoken) { annSpoken = v.announcement.id; if (sound && window.TBAudio) TBAudio.say(v.announcement.text); try { navigator.vibrate && navigator.vibrate(120); } catch {} }
     document.querySelectorAll("[data-scr]").forEach((b) => (b.onclick = () => { scratched.add(Number(b.dataset.scr)); paint(); }));
     const st = document.getElementById("soundtest"); if (st) st.onclick = async () => { if (window.TBAudio) { TBAudio.enabled = true; await TBAudio.unlock(); TBAudio.test(); } };
+  }
+  /** Real housie: a tap on a ticket number marks it (or unmarks it); a tap on a number not called yet is refused in place. Claim sends the claim, or shows the Bogey. */
+  let claimBusy = false;
+  function bindTicket(v) {
+    const tap = (el) => {
+      const n = Number(el.dataset.tap); if (!n) return;
+      const r = rt.mark(n);
+      if (!r.ok) { tapNote(r.error, 400); try { navigator.vibrate && navigator.vibrate([60, 40, 60]); } catch {} }
+      else { TAP = null; NEWMARK = r.marked && MOTION() ? n : 0; try { navigator.vibrate && navigator.vibrate(20); } catch {} }
+      paint(); NEWMARK = 0;
+    };
+    document.querySelectorAll("[data-tap]").forEach((el) => { el.onclick = () => tap(el); el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tap(el); } }; });
+    document.querySelectorAll("[data-claim]").forEach((b) => (b.onclick = async () => {
+      if (claimBusy) return; claimBusy = true; b.disabled = true;
+      try {
+        const r = await rt.claim(b.dataset.claim);
+        if (!r.ok) { tapNote(r.error, 400); try { navigator.vibrate && navigator.vibrate([80, 50, 80, 50, 80]); } catch {} if (sound && window.TBAudio && r.bogey) TBAudio.say("Bogey!"); }
+        else { TAP = null; if (sound && window.TBAudio) TBAudio.say("Claim sent for " + KEYNAME(b.dataset.claim)); }
+      } catch { tapNote("Could not send your claim. Please press Claim again.", 0); }
+      claimBusy = false; paint();
+    }));
   }
   function bindJoin() {
     const again = document.getElementById("again"); if (again) again.onclick = () => { J.mode = ""; J.wid = ""; clearWait(); paint(); };

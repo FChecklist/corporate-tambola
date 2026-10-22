@@ -215,15 +215,18 @@ describe("free-plan guard and scale", () => {
     expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(30002);
     expect(30001).toBeLessThan(100000 * 0.4); // one 10,000-person engagement uses ~30% of D1's free daily writes (3 per join: seat, participant, person list row)
   }, 120_000);
-  test("a large engagement stores no per-claim rows (winners come from the public numbers), so 10,000 phones claiming adds no writes", async () => {
+  test("a large engagement stores claims too (real housie: a prize is won only by a claim), once each however often a phone sends them, and says when each arrived", async () => {
     await create({ cap: 20000 });
     const pids: string[] = [];
     for (let i = 0; i < 10000; i++) pids.push(((await (await join(i)).json()) as any).pid);
     const pats = ["early5", "top", "mid", "bot", "corners", "star", "full"];
     for (let round = 0; round < 2; round++)
       await Promise.all(pids.slice(0, 2000).map((pid, i) => call("POST", "/api/z/ENG1/claims", { pid, claims: [{ pattern: pats[i % 7], idx: i % 90 }] })));
-    expect((raw.query("SELECT COUNT(*) c FROM claim").get() as any).c).toBe(0);
-    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(30002); // 1 create + 1 entitlement-free + 10,000 joins at 3 units (seat, participant, person)
+    expect((raw.query("SELECT COUNT(*) c FROM claim").get() as any).c).toBe(2000);
+    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(30002 + 4000); // 1 create + 1 entitlement-free + 10,000 joins at 3 units (seat, participant, person) + one unit per claim sent (2,000 phones, twice; the second round stores nothing but is still a write attempt)
+    const r = (await (await call("POST", "/api/z/ENG1/claims", { pid: pids[0], claims: [{ pattern: "mid", idx: 7 }] })).json()) as any;
+    expect(r.atMs).toBe(T); // the store's clock: the time that decides whether the claim came before the next number
+    expect(((await (await call("GET", "/api/z/BIG01/info").catch(() => new Response("{}"))).json()) as any).trackClaims ?? true).toBe(true);
   }, 300_000);
   test("a small engagement (up to 500) stores claims once each, even when sent twice", async () => {
     await create({ cap: 500 });
@@ -234,10 +237,10 @@ describe("free-plan guard and scale", () => {
       await Promise.all(pids.map((pid, i) => call("POST", "/api/z/ENG1/claims", { pid, claims: [{ pattern: pats[i % 7], idx: i % 90 }] })));
     expect((raw.query("SELECT COUNT(*) c FROM claim").get() as any).c).toBe(300);
   }, 120_000);
-  test("the engagement tells phones whether claims are tracked", async () => {
+  test("every engagement, whatever its size, tells phones their claims are kept (a prize is won only by a claim)", async () => {
     await create({ cap: 500 }); await create({ id: "BIG01", cap: 501 });
     expect(((await (await call("GET", "/api/z/ENG1/info")).json()) as any).trackClaims).toBe(true);
-    expect(((await (await call("GET", "/api/z/BIG01/info")).json()) as any).trackClaims).toBe(false);
+    expect(((await (await call("GET", "/api/z/BIG01/info")).json()) as any).trackClaims).toBe(true);
   });
 });
 
@@ -748,7 +751,7 @@ describe("rounds in the store", () => {
     const claim = (c: unknown) => call("POST", "/api/z/RND03/claims", { pid, claims: [c] });
     await claim({ pattern: "top", idx: 20 }); await claim({ pattern: "top", idx: 25, round: 2 }); await claim({ pattern: "top", idx: 25, round: 2 }); await claim({ pattern: "top", idx: 30, round: 3 }); await claim({ pattern: "top", idx: 30, round: 0 });
     const c = (await (await call("GET", "/api/z/RND03/claims", undefined, org)).json() as any).claims;
-    expect(c).toEqual([{ pid, pattern: "top", round: 1, idx: 20 }, { pid, pattern: "top", round: 2, idx: 25 }]);
+    expect(c).toEqual([{ pid, pattern: "top", round: 1, idx: 20, atMs: T }, { pid, pattern: "top", round: 2, idx: 25, atMs: T }]); // atMs: when each claim reached the store (the time that decides whether it came before the next number)
   });
   test("results are kept per round; a round that does not exist, or a lucky draw in round 2, is ignored", async () => {
     await call("POST", "/api/z", { id: "RND04", startRound: FUT, callSeconds: 9, cap: 50, rounds: 2, breaks: [{ after: 20, seconds: 30, kind: "lucky", title: "Draw", winners: 3 }] }, org);

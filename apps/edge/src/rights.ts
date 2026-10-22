@@ -74,7 +74,7 @@ async function ownSeat(c: RightsCtx): Promise<Seat | Response> {
 export function leaveStatements(c: Pick<RightsCtx, "db" | "eid" | "now" | "started" | "extraLeave">, s: Seat): D1Stmt[] {
   const { db, eid, now } = c;
   const st: D1Stmt[] = [
-    db.prepare("DELETE FROM claim WHERE eid=? AND pid=?").bind(eid, s.pid),
+    db.prepare("DELETE FROM claim WHERE eid=? AND pid=?").bind(eid, s.pid), db.prepare("DELETE FROM bogey WHERE eid=? AND pid=?").bind(eid, s.pid),
     db.prepare("DELETE FROM consent_log WHERE kind='K4' AND ref=? AND subject=?").bind(eid, s.pid),
     db.prepare("UPDATE prize SET pii=NULL, orig=NULL, trail=NULL WHERE eid=? AND seat=?").bind(eid, s.seq), // a prize record keeps no identity once the person leaves
   ];

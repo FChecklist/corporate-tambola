@@ -12,7 +12,7 @@ async function phones(t, g, names, { device = "mobile", moveTo = 2 * H.MIN } = {
   await Promise.all(out.map((p) => p.page.waitForFunction(() => window.__rt && window.__rt.phase === "play", null, { timeout: 25000 })));
   return out;
 }
-const stepAll = async (t, list, n) => { for (let i = 0; i < n; i++) { await H.clock.advance(3000); t.shared.track.bump(3000); for (const o of list) await o.ctx.clock.runFor(3000); await new Promise((r) => setTimeout(r, 60)); } };
+const stepAll = async (t, list, n) => { for (let i = 0; i < n; i++) { await H.clock.advance(3000); t.shared.track.bump(3000); for (const o of list) await o.ctx.clock.runFor(3000); await H.tapAlong(list); await new Promise((r) => setTimeout(r, 60)); } };
 const view = (p) => p.evaluate(() => { const v = window.__rt.view(); return { phase: v.phase, log: v.log, unsent: v.unsent, error: v.error, results: v.results.map((x) => ({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, count: x.count })) }; });
 const BUSY = { status: 503, contentType: "application/json", body: JSON.stringify({ error: "The service is busy right now. Please try again in a moment." }) };
 

@@ -636,8 +636,12 @@ describe("winners, the end, and break media on the phone", () => {
   const prizes = { rewards: [{ pattern: "early5", ordinal: 1, text: "Gift hamper" }, { pattern: "top", ordinal: 1, text: "Movie tickets" }, { pattern: "full", ordinal: 1, text: "Voucher 5000" }] };
   test("a winner sees Hurray with confetti, a congratulations ribbon with the winning numbers lit on the ticket, and a prize list that stays; when the last prize is awarded the phone itself ends the game with the thank-you and a share button", async () => {
     const o = await organizer(); const p = await joined(o, "UI-WINA", prizes); const rt = p.win.__rt; const doc = p.win.document;
-    at(o, p, 400); // about 44 numbers out: this phone is the only player, so it has won the first houses
-    await until(() => !!doc.getElementById("hurray")); // worked out on the phone itself: nobody published anything
+    // real housie: the person taps each number as it is called and presses Claim before the next number (the runtime's own play-along, as a person would on the ticket), so the clock moves one number at a time
+    const playTo = async (secs: number, stop?: () => boolean) => { for (let s = Math.max(6, Math.round((o.world.now - p.win.ZG.roundTimeMs(rt.startRound)) / 1000) + 6); s <= secs; s += 6) { at(o, p, s); rt.lastSeatPoll = -Infinity; rt.lastResultPoll = -Infinity; rt.lastVote = -Infinity; await rt.tick(); await rt.playAlong(); if (stop?.()) break; } };
+    await playTo(400); // about 44 numbers out: this phone is the only player, so it has won the first houses
+    const along = setInterval(() => { rt.playAlong(); }, 150);
+    try {
+    await until(() => !!doc.getElementById("hurray")); // worked out on the phone itself from its own claims: nobody published anything
     expect(doc.getElementById("hurray")?.textContent).toMatch(/Congratulations, you won/);
     expect(doc.querySelector("#hurray canvas")).toBeTruthy();
     expect(await p.waitFor((x) => /Congratulations! You won/.test(x))).toMatch(/Your prizes/);
@@ -646,7 +650,7 @@ describe("winners, the end, and break media on the phone", () => {
     expect(rt.view().localWinners).toBe(true);
     (doc.getElementById("hurok") as any)?.click();
     await p.waitFor((x) => /Your prizes/.test(x)); // it stays after the overlay is gone
-    at(o, p, 1000); // every number is out
+    await playTo(1000, () => rt.phase === "ended"); // on to the end, claiming as the numbers come
     const end = await p.waitFor((x) => /Game complete/.test(x), 30000);
     expect(end).toMatch(/Thank you for joining our extended family of Corporate Tambola/); expect(end).toMatch(/Share with friends and colleagues/); expect(end).toMatch(/Voucher 5000/);
     expect(doc.getElementById("shr")).toBeTruthy();
@@ -661,6 +665,7 @@ describe("winners, the end, and break media on the phone", () => {
     const list = (await o.json(await o.api("GET", "/api/z/UI-WINA/prizes", undefined, o.token))) as any;
     expect(list.prizes.length).toBeGreaterThan(0); expect(list.prizes[0]).toMatchObject({ name: "Asha Rao", phone: "9876543210", confirmed: true, changed: true });
     expect(JSON.stringify(o.world.raw.query("SELECT * FROM winner").all())).not.toMatch(/Voucher|9833|Gift/); // seat, prize, round, time: no names or numbers
+    } finally { clearInterval(along); }
   }, 90_000);
   test("a player who joined too late to win anything still gets the thank-you and the share button when the game ends, and no prizes are listed", async () => {
     const o = await organizer({ FREE_LAUNCH: "1" }); await make(o, "UI-WIN2"); await o.api("PATCH", "/api/z/UI-WIN2/settings", prizes, o.aiKey); await publish(o, "UI-WIN2");
@@ -712,7 +717,7 @@ describe("console: results go out on their own, and a person can move to a new p
     expect(j.status).toBe(200);
     o.world.now = START_MS + 1_000_000; // every one of the 90 numbers is out: every house is complete for the one player
     const p = await page(o, "/zc?e=UI-AUTO", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" }, { afterLoad: (win, f) => { if (f === "zgame.js") { const Orig = win.ZG.RoundStore; win.ZG.RoundStore = class extends Orig { constructor() { super({ fetcher: async (url: string) => { const last = url.split("/").pop()!; const r = last === "latest" ? roundAt(o.world.now) : Number(last); return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" }) }; }, mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 }, (x: any) => x.signature === "aa"); } }; } } });
-    await p.waitFor((x) => /Rewards, from the public number log/.test(x), 30000);
+    await p.waitFor((x) => /Rewards, from the public numbers and the claims/.test(x), 30000);
     await new Promise((r) => setTimeout(r, 1500));
     const r = (await o.json(await o.api("GET", "/api/z/UI-AUTO/results"))) as any;
     expect(r.results).toEqual([]); // the organizer's page cannot settle anything
@@ -922,8 +927,8 @@ describe("testing a brand moment without a game", () => {
 describe("the free demo game", () => {
   const REAL_NOW = Date.now.bind(Date), REAL_PERF = performance.now.bind(performance);
   /** Opens demo.html with its own clock running `k` times faster than real time, so the minute-long demo takes about 18 seconds. */
-  async function demo(o: O, hash = "", opts: { video?: string; k?: number } = {}) {
-    const k = opts.k ?? 4, T0 = REAL_NOW(), P0 = REAL_PERF(); const calls: string[] = [];
+  async function demo(o: O, hash = "", opts: { video?: string; k?: number; T0?: number } = {}) {
+    const k = opts.k ?? 4, T0 = opts.T0 ?? REAL_NOW(), P0 = REAL_PERF(); const calls: string[] = []; // T0: where this page's clock starts (a run started from another sped-up page continues that page's clock)
     const p = await page(o, "/demo.html" + hash, "demo.html", ["audio.js", "zgame.js", "demo-config.js", "demo.js", "z.js"], {}, { afterLoad: (win, f) => {
       if (f === "audio.js") { (win as any).__CT_DEMO_CLOCK = { now: () => T0 + (REAL_PERF() - P0) * k, mono: () => P0 + (REAL_PERF() - P0) * k }; const of = (win as any).fetch; (win as any).fetch = (...a: any[]) => { calls.push(String(a[0])); return of ? of(...a) : Promise.reject(new Error("no network")); }; }
       if (f === "demo-config.js" && opts.video !== undefined) (win as any).CT_DEMO_VIDEO = opts.video;
@@ -932,18 +937,23 @@ describe("the free demo game", () => {
   }
   const until = async (cond: () => boolean, ms = 60000) => { const t0 = Date.now(); while (!cond()) { if (Date.now() - t0 > ms) throw new Error("timed out"); await new Promise((r) => setTimeout(r, 100)); } };
   /** Plays a run to its end and checks everything the owner specified. */
-  async function playToEnd(o: O, hash: string) {
-    const { p, calls } = await demo(o, hash); const doc = p.win.document; const rt = p.win.__rt;
+  async function playToEnd(o: O, hash: string, T0?: number) {
+    const { p, calls } = await demo(o, hash, { T0 }); const doc = p.win.document; const rt = p.win.__rt;
     let sawBreak = false, sawBuiltInVideo = false, ticketDuringBreak = false, logDuringBreak = -1, breakGone = false;
+    let tapped = 0, claimedAt = -1;
     await until(() => {
       const view = rt.view(); const t = p.text();
       if (/How brand breaks work/.test(t)) { sawBreak = true; sawBuiltInVideo = sawBuiltInVideo || !!doc.querySelector("#ctmedia video"); logDuringBreak = view.log.length; ticketDuringBreak = !!doc.querySelector(".zticket"); }
       else if (sawBreak) breakGone = true;
+      // real housie: the person taps each number on the ticket as it is called (the ticket never marks itself) and presses Claim when the four corners are marked
+      for (const n of view.log) if (!view.marks.includes(n)) { const cell = doc.querySelector(`[data-tap="${n}"]`); if (cell) { cell.click(); tapped++; } }
+      const btn = doc.querySelector('[data-claim="corners"]'); if (btn && claimedAt < 0) { claimedAt = view.log.length; btn.click(); }
       return view.phase === "ended";
     }, 90000);
     expect(sawBreak).toBe(true); expect(sawBuiltInVideo).toBe(true); expect((doc.querySelector("#ctmedia video") as any)?.src ?? "").toBe(""); /* the player is gone after the break */ expect(logDuringBreak).toBe(3); expect(ticketDuringBreak).toBe(true); expect(breakGone).toBe(true);
     expect(rt.view().log).toEqual([1, 18, 80, 9, 49, 61]); // exactly the scripted numbers, in order, by the real number-drawing code
-    expect(rt.view().won.map((w: any) => w.pattern)).toEqual(["corners"]); expect(rt.view().won[0].idx).toBe(5); // Four corners, on the 6th number, by the real winner check
+    expect(tapped).toBe(6); expect(claimedAt).toBe(6); // every number was tapped by hand; the Claim button appeared with the 6th number and was pressed
+    expect(rt.view().won.map((w: any) => w.pattern)).toEqual(["corners"]); expect(rt.view().won[0].idx).toBe(5); // Four corners, on the 6th number, by the real winner check of the claim
     const end = await p.waitFor((x) => /That was the demo/.test(x), 20000);
     expect(end).toMatch(/You won Four corners/); expect(end).toMatch(/Create my game/); expect(end).toMatch(/Run demo again/);
     expect(end).not.toMatch(/Confirm your prize details|Confirm where your prize goes/); // a demo asks for no name or number
@@ -975,7 +985,7 @@ describe("the free demo game", () => {
     const first = await playToEnd(o, hash);
     expect(first.win.document.getElementById("dagain2")?.textContent).toBe("Run demo again");
     first.click("#dagain2"); const again = first.win.location.hash; expect(again).toMatch(/^#r=\d+$/); expect(again).not.toBe(hash);
-    await playToEnd(o, again); // the second run is the same game again
+    await playToEnd(o, again, (first.win as any).__CT_DEMO_CLOCK.now()); // the second run is the same game again (its clock carries on from the first page's sped-up clock, which set the start in the address)
   }, 240_000);
 
   test("the break is the owner's YouTube video when one is set: it plays inside the page for the break, the ticket stays, and the player is gone after it", async () => {

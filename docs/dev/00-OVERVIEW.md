@@ -94,7 +94,8 @@ Price is **per engagement, by size** (not per ticket, not a subscription). Sourc
 | **quorum** | How many different phones must report identical winners before a result is accepted: `<=6 people: ceil(n/2)`, else `min(25, max(3, ceil(5%)))` | `config.ts` `quorumFor` |
 | **voters** | Only a share of phones report results: everyone up to 12 people, else 4 x quorum; silent phones step in if no result appears | `config.ts` `votersFor` |
 | **settled** | An accepted (quorum) winners result, row in `settled` | `winners.ts:55` |
-| **claim** | Legacy per-phone win claim (stored only for engagements of <= 500; never decides winners) | `worker.ts:1081`, `CLAIM_TRACKING_MAX_CAP` |
+| **claim** | A player's press of Claim (pid, pattern, round, idx, at_ms): the ONLY way a prize is won (real housie, 2026-10-22); stored for every size, public to phones with the seat list | `worker.ts` "claims", `publicClaims` |
+| **bogey** | A wrong claim the phone refused (pid, pattern, round, at_ms); two on the same house put the ticket out of it, on every phone alike | `worker.ts` "bogey", `0026_bogey.sql` |
 | **vote / rvote / rcand** | A phone's reported winners (digest of pattern, ordinal, round, idx, sorted pids), candidate results, and votes | `winners.ts:15` |
 | **prize / prize given** | A record per winning seat holding the sealed name+number the winner confirmed, change trail, and "given" tick | `prize` table |
 | **overvote** | A phone saying "the game is over"; 3 (or half of a tiny game) end the game early | `lifecycle.ts:93` |

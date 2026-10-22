@@ -17,7 +17,7 @@ async function phones(t, g, names, { moveTo = 2 * H.MIN } = {}) {
   await Promise.all(out.map((p) => p.page.waitForFunction(() => window.__rt && window.__rt.phase === "play", null, { timeout: 25000 })));
   return out;
 }
-const stepAll = async (t, n, list) => { for (let i = 0; i < n; i++) { await H.clock.advance(3000); t.shared.track.bump(3000); for (const o of list) await o.ctx.clock.runFor(3000); await new Promise((r) => setTimeout(r, 60)); } };
+const stepAll = async (t, n, list) => { for (let i = 0; i < n; i++) { await H.clock.advance(3000); t.shared.track.bump(3000); for (const o of list) await o.ctx.clock.runFor(3000); await H.tapAlong(list); await new Promise((r) => setTimeout(r, 60)); } };
 const row = async (eid) => (await H.sql("SELECT cap, pack, config FROM engagement WHERE id=?", [eid]))[0];
 const isDemoRow = (r) => { try { return JSON.parse(r.config).demo === true; } catch { return false; } };
 const payRows = async (eid) => (await H.sql("SELECT COUNT(*) c FROM payment WHERE eid=?", [eid]))[0].c;

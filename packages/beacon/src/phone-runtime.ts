@@ -3,9 +3,9 @@
 import { generateTicket, type Ticket } from "../../shared/src/ticket";
 import { winningNumbers } from "./house-rules";
 import { ALL_SAFETIES, ControlTracker, SAFETY_FAST, SAFETY_STANDARD, hostControlOf, pausedAt, type ControlConfig } from "./control";
-import { GRACE_ROUNDS, LATE_LAG_ROUNDS, defaultCfg, keysInPlay, linesFor, roundEid, validateCfg, votersFor, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import { CLAIM_WINDOW_CALLS, GRACE_ROUNDS, LATE_LAG_ROUNDS, defaultCfg, houseLabel, keysInPlay, linesFor, roundEid, validateCfg, votersFor, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
 import { PrizeEngine, countFromOf } from "./prize-engine";
-import { RoundStore, activeBreak, activeIntermission, callRoundR, completionIndexKey, hostGameOf, luckyRound, luckyWinners, ticketsFor } from "./game";
+import { BOGEYS_OUT, RoundStore, activeBreak, activeIntermission, callRoundR, completionIndexKey, hostGameOf, luckyRound, luckyWinners, ticketsFor, type PublicClaim } from "./game";
 import { seatOfPid } from "./unique-ticket";
 import { NUMBERS, QUICKNET, fetchRound, pickNumber, roundAt, roundTimeMs, type BeaconOpts } from "./index";
 
@@ -60,6 +60,18 @@ export interface RuntimeView {
   callMode: "auto" | "host";
   /** Host mode, game running: the last number has reached this phone and the Host has not pressed for the next one yet. */
   waitingForHost: boolean;
+  /** The numbers of the round being played that THIS player has tapped on their ticket (kept on the phone). The ticket never marks itself. */
+  marks: number[];
+  /** The houses this player's own marks have completed and not yet claimed (and that still have an open position): a Claim button is shown for each. */
+  claimable: PatternKey[];
+  /** The houses this player pressed Claim for in the round being played (whether or not the result is out yet). */
+  pressed: PatternKey[];
+  /** Wrong claims (Bogeys) this player made in the round being played, per house. Two on the same house and the ticket is out of that house for the round (`outOf`). */
+  bogeys: { pattern: PatternKey; n: number }[];
+  /** The houses this ticket is out of for the round being played (two Bogeys on it): no Claim button, and no later claim of theirs counts anywhere. */
+  outOf: PatternKey[];
+  /** The public claims this phone knows of (every phone works the winners out from these and the numbers). */
+  claimsKnown: number;
 }
 
 export class PhoneRuntime {
@@ -131,6 +143,7 @@ export class PhoneRuntime {
     const pid = this.deps.store.get(this.key("pid"));
     this.myJr = Number(this.deps.store.get(this.key("jr")) ?? 0) || 0;
     try { for (const p of JSON.parse(this.deps.store.get(this.key("claimed")) ?? "[]")) this.claimedAll.add(String(p).includes(":") ? String(p) : `1:${p}`); } catch { /* fresh start */ }
+    this.loadMarks();
     if (pid) this.adopt(pid); else this.phase = "join";
     this.error = null;
   }
@@ -142,6 +155,104 @@ export class PhoneRuntime {
     if (this.tracker) Object.assign(this.tracker.cfg, hostControlOf(hostGameOf(this.cfg))); // the settings are locked once the game starts; before that a re-read keeps the control rules in step
   }
   private get hostMode() { return this.cfg.callMode === "host"; }
+
+  // ---- real housie: the ticket never marks itself. The player's own marks, presses and Bogeys are kept on this phone (ctz:<eid>:marks) ----
+  /** round -> the numbers this player tapped */
+  private marks = new Map<number, Set<number>>();
+  /** "round:house" for every Claim the player pressed and the phone accepted (the claim itself is sent by autoClaim, and retried until it is through) */
+  private pressed = new Set<string>();
+  /** "round:house" -> wrong claims (Bogeys) on it; at BOGEYS_OUT the ticket is out of that house for the round */
+  private bogeys = new Map<string, number>();
+  /** Bogey records the store has not taken yet (sent again on the next tick, like a claim) */
+  private bogeyUnsent: { pattern: PatternKey; round: number }[] = [];
+  private loadMarks() {
+    this.marks.clear(); this.pressed.clear(); this.bogeys.clear();
+    try {
+      const j = JSON.parse(this.deps.store.get(this.key("marks")) ?? "{}");
+      for (const [r, ns] of Object.entries(j?.marks ?? {})) if (Array.isArray(ns)) this.marks.set(Number(r), new Set(ns.map(Number).filter((n) => n >= 1 && n <= NUMBERS)));
+      for (const p of j?.pressed ?? []) if (typeof p === "string" && p.includes(":")) this.pressed.add(p);
+      for (const [id, n] of Object.entries(j?.bogeys ?? {})) if (id.includes(":") && Number(n) > 0) this.bogeys.set(id, Number(n));
+    } catch { /* fresh start */ }
+  }
+  private saveMarks() {
+    const marks: Record<string, number[]> = {}; for (const [r, s] of this.marks) marks[r] = [...s].sort((a, b) => a - b);
+    this.deps.store.set(this.key("marks"), JSON.stringify({ marks, pressed: [...this.pressed], bogeys: Object.fromEntries(this.bogeys) }));
+  }
+  private bogeysOn(key: PatternKey, round = this.cur) { return this.bogeys.get(`${round}:${key}`) ?? 0; }
+  /** Out of a house for the round: BOGEYS_OUT wrong claims on it. */
+  private outOf(key: PatternKey, round = this.cur) { return this.bogeysOn(key, round) >= BOGEYS_OUT; }
+  /** Tells the store about a Bogey (every phone must know it, so the winners agree). Kept and sent again if the store cannot be reached. */
+  private async sendBogeys() {
+    while (this.bogeyUnsent.length && this.pid) {
+      const b = this.bogeyUnsent[0]!;
+      try {
+        const ans = this.trackClaims ? await this.deps.api("POST", `/api/z/${this.eid}/bogey`, { pid: this.pid, pattern: b.pattern, ...(b.round > 1 ? { round: b.round } : {}) }) : null;
+        this.bogeyUnsent.shift();
+        if (ans && Number(ans.atMs) > 0) this.noteClaims([{ pid: this.pid, pattern: b.pattern, round: b.round, idx: -1, atMs: Number(ans.atMs), bogey: true }]);
+      } catch { break; /* the next tick tries again */ }
+    }
+  }
+  /** The numbers this player has marked in `round`, as a "log" to judge completeness on: what the player SAYS is complete. Whether it is true is checked only at Claim time, against the called numbers (a Bogey if not). */
+  private markedLog(round: number): number[] { return [...(this.marks.get(round) ?? [])]; }
+  /** The player taps a number on their ticket. A number that has not been called yet is refused (nothing is marked); a called number is marked, and tapping it again unmarks it. */
+  mark(n: number): { ok: true; marked: boolean } | { ok: false; error: string } {
+    if (this.phase !== "play" && this.phase !== "ended") return { ok: false, error: "The game has not started on this phone yet." }; // (after the last number a player may still mark it and claim)
+    if (!Number.isInteger(n) || n < 1 || n > NUMBERS) return { ok: false, error: `${n} is not a number of this game.` };
+    let s = this.marks.get(this.cur); if (!s) { s = new Set(); this.marks.set(this.cur, s); }
+    const marked = !s.has(n);
+    if (marked && !this.visibleLog().includes(n)) return { ok: false, error: `${n} has not been called yet. Keep listening.` }; // (a mark can always be taken off, called or not: that is how a Bogey is put right)
+    if (marked) s.add(n); else s.delete(n);
+    this.saveMarks();
+    return { ok: true, marked };
+  }
+  /** The houses in play that this player's own marks complete and that they have not claimed yet, and are not out of (Unlucky is never claimed: the software decides it). */
+  private claimableNow(): PatternKey[] {
+    if (!this.tickets.length || (this.phase !== "play" && this.phase !== "ended")) return [];
+    const ml = this.markedLog(this.cur);
+    return keysInPlay(this.cfg.rewards).filter((k) => k !== "unlucky" && !this.pressed.has(`${this.cur}:${k}`) && !this.outOf(k) && completionIndexKey(this.tickets, k, ml) >= 0);
+  }
+  /**
+   * The player presses Claim for a house. The phone checks the marks against the REAL called numbers: if the house is complete there, the claim goes to the store (and is retried until it is through)
+   * and this phone remembers "claimed by me"; if not, it is a BOGEY: nothing is sent, the Bogey is counted, and the player can fix the marks and claim again. Whether the claim WINS is decided by
+   * every phone from the public claims and numbers (it must be the real completion call, and in time: before the next number).
+   */
+  async claim(key: PatternKey): Promise<{ ok: true; sent: boolean; idx: number } | { ok: false; bogey: boolean; out?: boolean; error: string }> {
+    if (!this.pid || !this.tickets.length) return { ok: false, bogey: false, error: "The game has not started on this phone yet." };
+    if (!keysInPlay(this.cfg.rewards).includes(key) || key === "unlucky") return { ok: false, bogey: false, error: "That prize is not in this game." };
+    const id = `${this.cur}:${key}`, label = houseLabel(key);
+    if (this.outOf(key)) return { ok: false, bogey: false, out: true, error: `Two Bogeys on ${label}: this ticket is out of the ${label} prize. Other prizes are still open to you.` };
+    if (this.pressed.has(id)) return { ok: true, sent: this.claimedAll.has(id), idx: completionIndexKey(this.tickets, key, this.maskedLog(this.cur)) };
+    if (completionIndexKey(this.tickets, key, this.markedLog(this.cur)) < 0) return { ok: false, bogey: false, error: "Mark every number of this prize on your ticket first, then press Claim." };
+    const log = this.maskedLog(this.cur), called = new Set(log.filter((n) => n > 0)), wrong = [...(this.marks.get(this.cur) ?? [])].find((n) => !called.has(n));
+    const idx = completionIndexKey(this.tickets, key, log);
+    if (wrong !== undefined || idx < 0) { // a Bogey: the marks do not stand up against the called numbers. The store is told (every phone must know, so the winners agree).
+      const n = this.bogeysOn(key) + 1; this.bogeys.set(id, n); this.saveMarks();
+      this.bogeyUnsent.push({ pattern: key, round: this.cur }); await this.sendBogeys();
+      const why = wrong !== undefined ? `Bogey! ${wrong} has not been called. Unmark it and keep playing.` : "Bogey! This prize is not complete on the called numbers. Check your ticket and keep playing.";
+      return n >= BOGEYS_OUT ? { ok: false, bogey: true, out: true, error: `${why} Two Bogeys on ${label}: this ticket is out of the ${label} prize. Other prizes are still open to you.` } : { ok: false, bogey: true, error: why };
+    }
+    this.pressed.add(id); this.saveMarks();
+    this.claimLens = []; // make the next autoClaim look again
+    await this.autoClaim();
+    return { ok: true, sent: this.claimedAll.has(id), idx };
+  }
+  /**
+   * For tests, rehearsals and the Chrome simulations only (never called by the page): plays like an attentive person: taps every called number on the ticket that is not marked yet and presses Claim
+   * for every prize the marks complete. `claim`: false = never press Claim; a list of houses or a function = press only for those. `tap`: false = do not tap (only claim what is already marked). Returns what was pressed.
+   */
+  async playAlong(o: { claim?: boolean | readonly PatternKey[] | ((key: PatternKey) => boolean); tap?: boolean } = {}): Promise<PatternKey[]> {
+    if (!this.tickets.length || (this.phase !== "play" && this.phase !== "ended")) return [];
+    if (o.tap !== false) {
+      const mine = new Set(this.tickets.flatMap((t) => t.flat().filter((x): x is number => x !== null)));
+      const m = this.marks.get(this.cur);
+      for (const n of this.visibleLog()) if (mine.has(n) && !m?.has(n)) this.mark(n);
+    }
+    const out: PatternKey[] = [];
+    if (o.claim === false) return out;
+    const wants = (k: PatternKey) => (typeof o.claim === "function" ? o.claim(k) : Array.isArray(o.claim) ? (o.claim as readonly PatternKey[]).includes(k) : true);
+    for (const k of this.claimableNow()) { if (!wants(k)) continue; const r = await this.claim(k); if (r.ok) out.push(k); }
+    return out;
+  }
   private adopt(pid: string) {
     this.pid = pid; this.ticketMemo.clear(); this.setCurrent(1); this.phase = "play";
   }
@@ -234,7 +345,7 @@ export class PhoneRuntime {
 
   /** One pass of the loop. Call about once a second. Safe to call while offline (it simply makes no progress). */
   async tick(): Promise<RuntimeView> {
-    if (this.phase === "ended") { await this.autoClaim(); await this.pollResults(); await this.castVotes(); return this.view(); } // a claim that failed to send keeps being retried after the last call // the engagement is over, but the outcome is still worth fetching
+    if (this.phase === "ended") { await this.autoClaim(); await this.sendBogeys(); if (this.nowRound !== null) await this.pollSeats(this.nowRound); this.syncEngines(this.cur); await this.pollResults(); await this.castVotes(); return this.view(); } // after the last number the last claims (and the claims of others) still arrive: keep reading them, so the winners settle // a claim that failed to send keeps being retried after the last call // the engagement is over, but the outcome is still worth fetching
     if (this.phase !== "play") return this.view();
     if (!(await this.syncClock())) { this.error = "Waiting for the clock. Check your connection."; return this.view(); }
     this.error = null;
@@ -259,6 +370,7 @@ export class PhoneRuntime {
     if (live) for (let r = 1; r <= Math.max(1, started); r++) this.buildLog(now, r); // on hold we keep showing what we had, and reveal nothing new
     this.setCurrent(Math.max(1, started));
     if (m !== "blind") await this.autoClaim(); // never claim from a log that might be missing a pause we could not hear about
+    await this.sendBogeys();
     await this.pollSeats(now);
     this.syncEngines(Math.max(1, started));
     await this.pollResults();
@@ -336,12 +448,15 @@ export class PhoneRuntime {
       for (const p of keysInPlay(this.cfg.rewards)) {
         const id = `${r}:${p}`;
         if (this.claimedAll.has(id)) continue;
+        if (!this.pressed.has(id)) continue; // a claim goes only when the player pressed Claim (claim() above), never by itself
         const idx = completionIndexKey(tk, p, log);
         if (idx < 0) continue;
         try {
-          if (this.trackClaims) await this.deps.api("POST", `/api/z/${this.eid}/claims`, { pid: this.pid, claims: [{ pattern: p, idx, ...(r > 1 ? { round: r } : {}) }] });
+          const ans = this.trackClaims ? await this.deps.api("POST", `/api/z/${this.eid}/claims`, { pid: this.pid, claims: [{ pattern: p, idx, ...(r > 1 ? { round: r } : {}) }] }) : null;
           this.claimedAll.add(id);
           this.deps.store.set(this.key("claimed"), JSON.stringify([...this.claimedAll]));
+          // this phone knows its own claim at once (the others learn it with the seat list): the store's clock says when it arrived
+          if (ans && Number(ans.atMs) > 0) this.noteClaims([{ pid: this.pid, pattern: p, round: r, idx, atMs: Number(ans.atMs) }]);
         } catch { this.unsent++; /* kept: the next tick sends it again; a claim is never lost because nothing is marked sent until it was */ }
       }
     }
@@ -360,20 +475,65 @@ export class PhoneRuntime {
     if (this.cur > 1 || !this.cfg.breaks.length) return true;
     return this.cfg.breaks.every((b) => this.logCache.length >= b.after) && this.currentBreak(now) === null;
   }
-  /** This phone completed a house but its result is not out yet: ask often so the winner hears quickly. */
+  /** This phone claimed a house but its result is not out yet: ask often so the winner hears quickly. */
   private waitingForResult(): boolean {
     if (!this.tickets.length) return false;
-    return keysInPlay(this.cfg.rewards).some((k) => completionIndexKey(this.tickets, k, this.maskedLog(this.cur)) >= 0 && !this.allResults.some((x) => x.pattern === k && (x.round ?? 1) === this.cur));
+    return keysInPlay(this.cfg.rewards).some((k) => this.pressed.has(`${this.cur}:${k}`) && !this.allResults.some((x) => x.pattern === k && (x.round ?? 1) === this.cur));
   }
+  // ---- the public claims: every phone reads them with the seat list (one request, already made) and feeds them to its engines ----
+  private claimList: PublicClaim[] = [];
+  private claimIds = new Set<string>();
+  private claimUpto = 0; // the newest atMs received: the next ask starts there
+  private claimVer = 0; // changes when the list changes
+  private engineClaims = new Map<number, number>();
+  /** `fromStore`: a page the store answered (its newest time becomes the next ask's start). This phone's own claim, noted at once, must NOT move that cursor: others' earlier claims would be skipped. */
+  private noteClaims(list: readonly PublicClaim[], fromStore = false) {
+    let changed = false;
+    for (const c of list) {
+      if (!c || typeof c.pid !== "string" || typeof c.pattern !== "string" || !Number.isInteger(c.idx) || !(Number(c.atMs) > 0)) continue;
+      if (fromStore && c.atMs > this.claimUpto) this.claimUpto = c.atMs;
+      const id = `${c.round ?? 1}:${c.pattern}:${c.pid}${c.bogey ? ":b" + c.atMs : ""}`; // a ticket may have two Bogeys on a house: each is its own record
+      if (this.claimIds.has(id)) continue;
+      this.claimIds.add(id); this.claimList.push({ pid: c.pid, pattern: c.pattern, round: c.round ?? 1, idx: c.idx, atMs: Number(c.atMs), ...(c.bogey ? { bogey: true as const } : {}) }); changed = true;
+    }
+    if (changed) this.claimVer++;
+  }
+  /** The store's time (as this phone estimates it, a round of slack taken off) up to which it holds EVERY claim and Bogey: set by each seat-list answer. A position is settled only once this passed its claim deadline. */
+  private claimsFreshMs = -Infinity;
+  /**
+   * A winner position at call `idx` is final only when its claim window has closed (the next number was called, by the schedule every phone uses) AND this phone has read the store's claims up to
+   * that moment, so no claim in time can still be missing. Until then it is not shown, not voted and does not end the game (with a quorum of one, a premature vote would be the last word).
+   * The last call of a round (or a stopped game): no next number ever comes, so the window is taken as one call gap after it. Host mode before the next press: the window is still open.
+   */
+  private resultFinal(round: number, idx: number): boolean {
+    const nextK = idx + CLAIM_WINDOW_CALLS;
+    let deadline: number;
+    if (nextK < NUMBERS) {
+      const nb = this.roundFor(nextK, round);
+      if (nb === Infinity) return false; // host mode: the Host has not pressed for the next number yet
+      if (nb !== null) deadline = roundTimeMs(nb);
+      else { const here = this.roundFor(idx, round); if (here === null || here === Infinity) return false; deadline = roundTimeMs(here) + Math.max(9, this.callSeconds) * 1000; } // stopped: nothing more comes
+    } else { const here = this.roundFor(idx, round); if (here === null || here === Infinity) return false; deadline = roundTimeMs(here) + Math.max(9, this.callSeconds) * 1000; }
+    return this.claimsFreshMs >= deadline;
+  }
+  /** A claim this phone has pressed that the store has not shown back yet: ask for the seat list (and the claims that ride with it) sooner. */
+  private wantClaims(): boolean { return [...this.pressed].some((id) => { const [r, k] = id.split(":"); return !this.claimIds.has(`${r}:${k}:${this.pid}`); }); }
   /** Seat list polling: how often depends on the engagement's size so the free plan is never stretched, and always stays well inside the late-joiner lag. */
   private seatEveryMs(): number { const c = this.cap; return c <= 250 ? 15_000 : c <= 1000 ? 25_000 : c <= 2500 ? 40_000 : 50_000; }
   private async pollSeats(now: number) {
     const m = this.deps.mono();
-    if (now < this.startRound || (!this.wantSeats && m - this.lastSeatPoll < (this.seatsFetched ? this.seatEveryMs() : 5_000) + (Math.floor(m) % 2000))) return;
+    // a phone that pressed Claim and has no result yet asks sooner (a few polls by a few phones), so a winner hears quickly and the game can end once the last prize is settled
+    if (now < this.startRound || (!this.wantSeats && m - this.lastSeatPoll < (this.seatsFetched ? (this.wantClaims() || this.waitingForResult() ? Math.min(6_000, this.seatEveryMs()) : this.seatEveryMs()) : 5_000) + (Math.floor(m) % 2000))) return;
     this.lastSeatPoll = m; this.wantSeats = false;
     const askedAt = this.nowRound ?? 0;
     try {
-      const r = await this.deps.api("GET", `/api/z/${this.eid}/seats?after=${this.seatUpto}`);
+      const askedMs = this.offsetMs === null ? null : this.deps.mono() + this.offsetMs;
+      const r = await this.deps.api("GET", `/api/z/${this.eid}/seats?after=${this.seatUpto}&cafter=${this.claimUpto}`);
+      if (Array.isArray(r?.claims)) { // the public claims ride with the seat list; after this answer every claim up to (about) the time of the ask is here, unless the page was full
+        this.noteClaims(r.claims, true);
+        const full = r.claims.length >= 500, newest = r.claims.reduce((m: number, c: any) => Math.max(m, Number(c?.atMs) || 0), 0);
+        if (askedMs !== null) this.claimsFreshMs = Math.max(this.claimsFreshMs, full ? Math.min(newest, askedMs - 3000) : askedMs - 3000);
+      }
       if (!r || !r.ready || !Array.isArray(r.seats)) return;
       const known = new Set(this.seatList.map((x) => x.pid));
       const blk = new Set<string>(Array.isArray(r.blk) ? r.blk.filter((x: unknown): x is string => typeof x === "string") : []); // removed seats: still listed, never a winner of Unlucky
@@ -393,6 +553,7 @@ export class PhoneRuntime {
       const cur = this.engineCursor.get(r)!;
       if (cur < this.seatList.length) { e.addSeats(this.seatList.slice(cur)); this.engineCursor.set(r, this.seatList.length); }
       if (this.engineBlk.get(r) !== this.blkVer) { for (const s of this.seatList) e.setOut(s.pid, !!s.ex || !!s.blk); this.engineBlk.set(r, this.blkVer); }
+      if (this.engineClaims.get(r) !== this.claimVer) { e.setClaims(this.claimList); this.engineClaims.set(r, this.claimVer); } // a prize is won only by a claim in time: the engine needs them all
       e.work(25);
       const log = this.logs[r - 1] ?? [];
       for (let k = e.calls; k < log.length; k++) { const br = this.roundFor(k, r); if (br === null) break; e.feed(log[k]!, br, this.store.rounds.get(br)?.randomness ?? ""); }
@@ -407,7 +568,7 @@ export class PhoneRuntime {
     const local = this.localOk;
     if (local) {
       const mine: NonNullable<RuntimeView["results"]> = [];
-      for (const [r, e] of this.engines) for (const x of e.results()) mine.push({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, count: x.pids.length, round: r, ...(x.pattern === "unlucky" || this.cfg.ties === "next" ? { winners: x.pids } : {}) });
+      for (const [r, e] of this.engines) for (const x of e.results()) { if (x.pattern !== "unlucky" && !this.resultFinal(r, x.idx)) continue; mine.push({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, count: x.pids.length, round: r, ...(x.pattern === "unlucky" || this.cfg.ties === "next" ? { winners: x.pids } : {}) }); } // a position is shown, voted and counted only once its claim window has closed and the claims are in
       this.allResults = [...mine, ...this.luckyResults(), ...this.serverResults.filter((x) => x.pattern === "lucky" && !this.luckyLocal.some((l) => l.ordinal === x.ordinal))];
     }
     // the organizer's published results: the fallback while the seat list is not here yet, and the only source for lucky draws
@@ -456,7 +617,7 @@ export class PhoneRuntime {
     this.lastVote = m;
     const people = Math.max(1, this.seatList.length), p0 = votersFor(people) / people;
     const items: { key: string; body: object }[] = [];
-    for (const [r, e] of this.engines) for (const x of e.results()) items.push({ key: `${r}:${x.pattern}:${x.ordinal}`, body: { pattern: x.pattern, ordinal: x.ordinal, round: r, idx: x.idx, pids: [...x.pids].sort() } });
+    for (const [r, e] of this.engines) for (const x of e.results()) { if (x.pattern !== "unlucky" && !this.resultFinal(r, x.idx)) continue; items.push({ key: `${r}:${x.pattern}:${x.ordinal}`, body: { pattern: x.pattern, ordinal: x.ordinal, round: r, idx: x.idx, pids: [...x.pids].sort() } }); }
     for (const l of this.luckyLocal) items.push({ key: `1:lucky:${l.ordinal}`, body: { pattern: "lucky", ordinal: l.ordinal, round: 1, idx: l.idx, pids: [...l.winners].sort() } });
     const send: { key: string; body: object }[] = [];
     for (const it of items) {
@@ -488,18 +649,21 @@ export class PhoneRuntime {
     }
     return out;
   }
+  /** The player's own marks, not the called numbers, say what is complete on the screen (it must not give away a number the player missed). */
   private myIdx(): Partial<Record<PatternKey, number>> {
     const o: Partial<Record<PatternKey, number>> = {};
-    if (this.tickets.length) { const ml = this.maskedLog(this.cur); for (const k of keysInPlay(this.cfg.rewards)) o[k] = completionIndexKey(this.tickets, k, ml); }
+    if (this.tickets.length) { const ml = this.markedLog(this.cur); for (const k of keysInPlay(this.cfg.rewards)) o[k] = completionIndexKey(this.tickets, k, ml); }
     return o;
   }
+  /** A prize is this player's only when they pressed Claim for it (Unlucky is the software's own decision, nothing to press). The published winners already say so; this is the phone's own belt. */
+  private mineInRealMode(round: number, key: PatternKey): boolean { return key === "unlucky" || this.pressed.has(`${round}:${key}`); }
   private pastView(): RuntimeView["past"] {
     const out: RuntimeView["past"] = [];
     for (let r = 1; r < this.cur; r++) {
       const tk = this.ticketsOf(r), log = this.maskedLog(r);
       const got: { pattern: PatternKey; ordinal: number }[] = [];
       for (const x of this.allResults) {
-        if ((x.round ?? 1) !== r || x.pattern === "lucky") continue;
+        if ((x.round ?? 1) !== r || x.pattern === "lucky" || !this.mineInRealMode(r, x.pattern as PatternKey)) continue;
         if (x.pattern === "unlucky" || this.cfg.ties === "next" ? !!this.pid && (x.winners ?? []).includes(this.pid) : completionIndexKey(tk, x.pattern as PatternKey, log) === x.idx) got.push({ pattern: x.pattern as PatternKey, ordinal: x.ordinal });
       }
       out.push({ round: r, got });
@@ -513,7 +677,7 @@ export class PhoneRuntime {
     for (const x of this.allResults) {
       if (x.pattern === "lucky") continue;
       const r = x.round ?? 1, key = x.pattern as PatternKey, tk = this.ticketsOf(r), log = this.maskedLog(r);
-      if (!tk.length) continue;
+      if (!tk.length || !this.mineInRealMode(r, key)) continue; // real housie: the engine may name this phone a winner in the published results, but the phone shows only what the player claimed
       const un = key === "unlucky"; // Unlucky is not completed on a ticket: this phone won it when its seat is the named winner
       if (un || this.cfg.ties === "next" ? !(x.winners ?? []).includes(this.pid) || (!un && completionIndexKey(tk, key, log) !== x.idx) : completionIndexKey(tk, key, log) !== x.idx) continue; // taking turns: only the named winner of this position won it
       const line = linesFor(this.cfg.rewards, key).find((l) => l.ordinal === x.ordinal);
@@ -555,6 +719,9 @@ export class PhoneRuntime {
       round: this.cur, rounds: this.cfg.rounds, intermission: inter ? { round: this.cur + 1, secondsLeft: secsTo(inter.endsAtRound) ?? 0 } : null, past: this.pastView(),
       won: this.wonView(), allAwarded: this.prizesAwarded(this.cur), endedByPrizes: this.prizesEnded, late: this.lateView(now), localWinners: this.localOk,
       callMode: this.hostMode ? "host" : "auto", waitingForHost,
+      marks: [...(this.marks.get(this.cur) ?? [])].sort((a, b) => a - b), claimable: this.claimableNow(),
+      pressed: keysInPlay(this.cfg.rewards).filter((k) => this.pressed.has(`${this.cur}:${k}`)), claimsKnown: this.claimList.length,
+      bogeys: keysInPlay(this.cfg.rewards).filter((k) => this.bogeysOn(k) > 0).map((k) => ({ pattern: k, n: this.bogeysOn(k) })), outOf: keysInPlay(this.cfg.rewards).filter((k) => this.outOf(k)),
     };
   }
 }

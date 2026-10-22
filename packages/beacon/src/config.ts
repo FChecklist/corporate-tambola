@@ -116,6 +116,14 @@ export const MAX_INVITES_PER_PERSON = 10;
 export const defaultInvites = (): InviteCfg => ({ on: false, per: 4, cats: ["family", "colleagues"] });
 /** Who calls the numbers: `auto` = the software, one number every callSeconds (the default); `host` = a Host presses a button for each number. The order of the numbers comes from the public beacon either way (see control.ts, "next"). */
 export type CallMode = "auto" | "host";
+/**
+ * How every game is played (real housie, the owner's rule, 2026-10-22): the ticket never marks itself. The player taps each number as it is called and, when their marks complete a prize,
+ * presses Claim. A prize is won ONLY by a claim that stands up against the public numbers (the phone checks it, never a person) and arrives before the next number is called.
+ * A wrong claim is a Bogey: it does not count, the player fixes the marks and may claim again. Every phone works out the winners from the public numbers and the public claims alike.
+ */
+export const CLAIM_WINDOW_CALLS = 1; // a claim counts when it arrives before this many more numbers are called (one: before the next number)
+export const CLAIM_RULE_TEXT = "Press Claim before the next number is called.";
+export const PLAYER_TIP = "Tap each number as it is called. When a prize is complete, press Claim before the next number is called. A wrong claim is a Bogey: it does not count.";
 /** A DEMO GAME: a real game on the real server, free, for at most this many people; every screen says DEMO GAME. The organizer can make it a real game (choose a pack and pay) at any time. */
 export const DEMO_CAP = 10;
 export interface EngagementCfg { /** A friendly name the organizer gives the game (optional, up to 60 characters). */ name?: string; /** Absent = auto. */ callMode?: CallMode; /** A free demo game (up to DEMO_CAP people). Cleared by a paid conversion. */ demo?: true; tickets: 1 | 2; /** What happens when people complete a house on the same number (absent in an older game = they share). */ ties?: TieMode; rewards: RewardLine[]; breaks: BreakCfg[]; rounds: number; invites?: InviteCfg; /** Before the first number (at most one per ticket). Always present after validateCfg. */ opening?: BrandSlot[]; /** On the final screen (at most one per ticket). Always present after validateCfg. */ closing?: BrandSlot[]; /** The company's mark on the ticket (name, colour, optional logo). Absent = the plain ticket. */ brand?: BrandCfg }

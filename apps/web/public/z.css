@@ -47,6 +47,9 @@ a.zbtn#addcal{margin-left:6px}
 /* winners, hurray, final thank-you, in-page media */
 .zticket div.w{background:#C9A24A;color:#1b1b1b;box-shadow:0 0 0 2px #fff,0 0 10px 2px #C9A24A;font-weight:800}
 .zwin{background:linear-gradient(90deg,#fff6d6,#ffe9a8);border:1px solid #C9A24A;color:#5a4300;border-radius:10px;padding:10px 12px;margin:0 0 10px;font:700 15px/1.35 var(--sans,inherit)}
+.zticket div[data-tap]{cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}.zticket div[data-tap]:focus-visible{outline:3px solid #1565D8;outline-offset:1px}
+.zclaims{margin-top:10px}.zclaimrow{display:flex;flex-wrap:wrap;gap:8px}.zclaim{background:#0B7F4A;color:#fff;font-weight:800;animation:claimin .35s ease-out}.zclaim:hover{background:#096b3e}@keyframes claimin{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
+.zrule{margin:6px 0 0;color:#5a4300;font-weight:700}.zsent{margin:8px 0 0;color:#0B7F4A;font-weight:700}.zlost{margin:8px 0 0;color:#7a8794}.zbogeys{margin:8px 0 0;color:#B3261E;font-weight:700}.zout{margin-top:8px}
 .zcard.zwon{border-color:#C9A24A;box-shadow:0 0 0 2px #f1dca0}
 .zprizes{border-color:#C9A24A}
 .zfinal{background:linear-gradient(180deg,#fffaf0,#fff);border-color:#C9A24A;text-align:center}

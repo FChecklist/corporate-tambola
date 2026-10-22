@@ -22,7 +22,7 @@ async function goToStart(t, g, pages, beforeStart = 30_000) {
 }
 /** one 3 s step of simulated time for the server and every open page (their timers run too) */
 async function stepAll(t, pages, n = 1) {
-  for (let i = 0; i < n; i++) { await H.clock.advance(3000); t.shared.track.bump(3000); for (const o of pages) await o.ctx.clock.runFor(3000); await H.sleep(60); }
+  for (let i = 0; i < n; i++) { await H.clock.advance(3000); t.shared.track.bump(3000); for (const o of pages) await o.ctx.clock.runFor(3000); await H.tapAlong(pages); await H.sleep(60); }
 }
 const logsOf = (phonePages) => Promise.all(phonePages.map((p) => p.page.evaluate(() => (window.__rt ? window.__rt.view().log : []))));
 const chipOf = (p) => p.page.evaluate(() => { const c = document.querySelector(".zchip2"); return c ? c.textContent.trim() : ""; });

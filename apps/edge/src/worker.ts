@@ -84,9 +84,15 @@ export const DRAFT_DAYS = 30;
 const STARTS_PER_DAY = 10;
 /** Largest page of participants one request returns, so a 10,000-person list never costs a free Worker its ~10 ms of CPU in one go. */
 export const PAGE = 2000;
-/** Claims are only a live cross-check (settlement never uses them), and 7 rows per phone would eat the free write allowance, so they are stored only for engagements this size or smaller. */
-export const CLAIM_TRACKING_MAX_CAP = 500;
-const tracks = (e: { cap: number }) => e.cap <= CLAIM_TRACKING_MAX_CAP;
+/**
+ * Claims DECIDE the winners (the owner's rule, 2026-10-22: the player taps the numbers and presses Claim, or there is no engagement), so they are stored for every game, whatever its size.
+ * Every phone reads them (opaque ticket ids only) with the seat list and works the winners out from the claims and the public numbers. A wrong claim (a Bogey) is recorded too: two on the same house put that ticket out of it.
+ * (CLAIM_TRACKING_MAX_CAP is kept for older docs: nothing is gated by it any more.)
+ */
+export const CLAIM_TRACKING_MAX_CAP = 100000;
+const tracks = (_e: { cap: number }) => true;
+/** How many claims and Bogeys one seat-list answer carries (phones ask again from the newest time they have). */
+const CLAIMS_PAGE = 500;
 /** The part of the settings every phone needs, public by design: how many tickets, what each house wins, and when the brand breaks are. */
 /** The brand strip as phones see it: the full brand (with the logo) from `info`; everywhere else only name and colour (a logo can be 40 KB and a 10,000-person list must not carry it). */
 const brandOut = (c: EngagementCfg, withLogo: boolean) => (c.brand ? { brand: withLogo ? c.brand : { name: c.brand.name, color: c.brand.color, ...(c.brand.logo ? { hasLogo: true } : {}) } } : {});
@@ -177,6 +183,10 @@ export const SCHEMA: string[] = [
   ...ADMIN_SCHEMA,
   // Help Desk: a Refer-and-earn partner prepares games for an Organizer, who publishes with one tap (helpdesk.ts, 0025_helpdesk.sql)
   ...HELPDESK_SCHEMA,
+  // real housie: a wrong claim (a Bogey) is recorded like a claim; two on the same house put that ticket out of it, on every phone alike (0026_bogey.sql)
+  `CREATE TABLE IF NOT EXISTS bogey (id INTEGER PRIMARY KEY AUTOINCREMENT, eid TEXT NOT NULL, pid TEXT NOT NULL, pattern TEXT NOT NULL, round INTEGER NOT NULL DEFAULT 1, at_ms INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS bogey_eid ON bogey (eid, at_ms)`,
+  `CREATE INDEX IF NOT EXISTS claim_eid_at ON claim (eid, at_ms)`,
 ];
 
 const PATTERNS = new Set<string>([...HOUSE_ORDER.filter((k) => k !== "unlucky"), "lucky"]); // houses a phone may claim (Unlucky is never claimed: it is decided by comparing tickets)
@@ -186,6 +196,12 @@ const cfgOf = (e: { tickets?: number; config?: string | null }): EngagementCfg =
   return defaultCfg();
 };
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+/** The claims and Bogeys of an engagement from time `after` on (inclusive: a phone asks again from the newest time it has and drops what it already knows), oldest first, one page. Opaque ticket ids only. */
+export async function publicClaims(db: D1, eid: string, after: number): Promise<{ pid: string; pattern: string; round: number; idx: number; atMs: number; bogey?: true }[]> {
+  const c = (await db.prepare("SELECT pid, pattern, round, idx, at_ms FROM claim WHERE eid=? AND at_ms>=? ORDER BY at_ms, pid LIMIT ?").bind(eid, after, CLAIMS_PAGE).all<{ pid: string; pattern: string; round: number; idx: number; at_ms: number }>()).results ?? [];
+  const b = (await db.prepare("SELECT pid, pattern, round, at_ms FROM bogey WHERE eid=? AND at_ms>=? ORDER BY at_ms, id LIMIT ?").bind(eid, after, CLAIMS_PAGE).all<{ pid: string; pattern: string; round: number; at_ms: number }>()).results ?? [];
+  return [...c.map((x) => ({ pid: x.pid, pattern: x.pattern, round: x.round, idx: x.idx, atMs: x.at_ms })), ...b.map((x) => ({ pid: x.pid, pattern: x.pattern, round: x.round, idx: -1, atMs: x.at_ms, bogey: true as const }))].sort((x, y) => x.atMs - y.atMs);
+}
 const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))), (b) => b.toString(16).padStart(2, "0")).join("");
 const randHex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -1290,7 +1306,7 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
       });
     }
   }
-  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget|cohost|cancel-preview|cancel|reopen|clone|leave|datareq)$/);
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|bogey|settle|results|info|participants|erase|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget|cohost|cancel-preview|cancel|reopen|clone|leave|datareq)$/);
   if (!m) return json({ error: "Not found", hint: "Read the list of what you can do at /api/z/ai-manifest. Engagement routes look like /api/z/{id}/summary, /settings, /roster, /participants, /results, /publish." }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
@@ -1481,9 +1497,26 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
       if (await spend(env, now)) await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(key, base).run();
     }
     const blk = (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`seats-blk/${eid}`).first<{ v: string }>())?.v ?? "[]"; // removed seats: still listed, never a winner of Unlucky
-    if (after < n) return new Response(base.slice(0, -1) + `,"blk":${blk}}`, { headers: { "content-type": "application/json", "cache-control": "public, max-age=20" } }); // the saved text as it is: nothing to parse
+    // the public claims and Bogeys ride along (opaque ticket ids only, never a name or number): every phone works the winners out from them. `cafter` = the newest time the phone already has.
+    const cafter = Math.max(0, Math.floor(Number(url.searchParams.get("cafter")) || 0));
+    const claims = await publicClaims(env.DB, eid!, cafter);
+    if (after < n) return new Response(base.slice(0, -1) + `,"blk":${blk},"claims":${JSON.stringify(claims)}}`, { headers: { "content-type": "application/json", "cache-control": "public, max-age=20" } }); // the saved text as it is: nothing to parse
     const rows = (await env.DB.prepare("SELECT seq, pid, COALESCE(jr,0) AS jr, CASE WHEN role IS NULL THEN 0 ELSE 1 END AS ex FROM seat WHERE eid=? AND seq>? ORDER BY seq LIMIT 2000").bind(eid, after).all<{ seq: number; pid: string; jr: number; ex: number }>()).results ?? [];
-    return json({ ready: true, seats: rows.map((r) => [r.seq, r.pid, r.jr, r.ex]), upto: rows.length ? rows[rows.length - 1]!.seq : after, blk: JSON.parse(blk) });
+    return json({ ready: true, seats: rows.map((r) => [r.seq, r.pid, r.jr, r.ex]), upto: rows.length ? rows[rows.length - 1]!.seq : after, blk: JSON.parse(blk), claims });
+  }
+  if (action === "bogey" && req.method === "POST") { // a phone refused a claim (the marks did not stand up against the called numbers): recorded for every phone, so the two-Bogey rule is the same everywhere
+    const b = await body(req);
+    if (!b || typeof b.pid !== "string" || !PATTERNS.has(b?.pattern) || b.pattern === "lucky") return json({ error: "Bad claim." }, 400);
+    const round = b.round === undefined ? 1 : b.round;
+    if (!Number.isInteger(round) || round < 1 || round > cfgOf(e).rounds) return json({ error: "Bad claim." }, 400);
+    const who = await env.DB.prepare("SELECT p.pid AS pid, s.blocked AS blocked FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.pid=?").bind(eid, b.pid).first<{ pid: string; blocked: number | null }>();
+    if (!who) return json({ error: "Not a participant of this engagement." }, 403);
+    if (who.blocked) return json({ error: "You were removed from this game by the organizer.", code: "removed", removed: true }, 403);
+    const have = (await env.DB.prepare("SELECT COUNT(*) AS c FROM bogey WHERE eid=? AND pid=? AND pattern=? AND round=?").bind(eid, b.pid, b.pattern, round).first<{ c: number }>())?.c ?? 0;
+    if (have >= 2) return json({ ok: true, atMs: now, stored: 0 }); // two are enough to put the ticket out: nothing more is written
+    if (!(await spend(env, now))) return json({ error: "Busy day. Your claim is kept on your phone and will be sent again.", stored: 0 }, 503);
+    await env.DB.prepare("INSERT INTO bogey(eid,pid,pattern,round,at_ms) VALUES(?,?,?,?,?)").bind(eid, b.pid, b.pattern, round, now).run();
+    return json({ ok: true, atMs: now, stored: 1 });
   }
   if ((action === "person" || action === "forget") && req.method === "POST") { // a participant asks the organizer to see, or to delete, their own data: the organizer does it in the console (never an AI)
     if (!can(a, e, true)) return deny(a);
@@ -1502,7 +1535,7 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
     if (!(await spend(env, now, 4))) return BUSY();
     await env.DB.batch([
       env.DB.prepare("DELETE FROM participant WHERE eid=? AND pid=?").bind(eid, seat.pid), env.DB.prepare("DELETE FROM seat WHERE eid=? AND seq=?").bind(eid, seat.seq), env.DB.prepare("DELETE FROM consent_log WHERE kind='K4' AND ref=? AND subject=?").bind(eid, seat.pid),
-      env.DB.prepare("DELETE FROM claim WHERE eid=? AND pid=?").bind(eid, seat.pid),
+      env.DB.prepare("DELETE FROM claim WHERE eid=? AND pid=?").bind(eid, seat.pid), env.DB.prepare("DELETE FROM bogey WHERE eid=? AND pid=?").bind(eid, seat.pid),
       env.DB.prepare("UPDATE prize SET pii=NULL, orig=NULL, trail=NULL WHERE eid=? AND seat=?").bind(eid, seat.seq), // the prize record keeps no identity once the person asks
     ]);
     return json({ ok: true, deleted: true });
@@ -1525,7 +1558,6 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
     const who = await env.DB.prepare("SELECT p.pid AS pid, s.blocked AS blocked FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.pid=?").bind(eid, b.pid).first<{ pid: string; blocked: number | null }>();
     if (!who) return json({ error: "Not a participant of this engagement." }, 403);
     if (who.blocked) return json({ error: "You were removed from this game by the organizer.", code: "removed", removed: true }, 403); // the seat stays in the public list, the phone stops
-    if (!tracks(e)) return json({ ok: true, stored: 0, tracked: false }); // large engagement: winners are worked out from the public numbers, nothing is stored per claim
     let stored = 0;
     const maxRound = cfgOf(e).rounds;
     for (const c of list) {
@@ -1535,7 +1567,7 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
       const r = await env.DB.prepare("INSERT OR IGNORE INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES(?,?,?,?,?,?)").bind(eid, b.pid, c.pattern, round, c.idx, now).run();
       stored += r.meta?.changes ?? 0; // a claim sent twice is stored once
     }
-    return json({ ok: true, stored });
+    return json({ ok: true, stored, atMs: now }); // atMs: the store's clock, the time that decides whether the claim came before the next number
   }
   if (action === "results" && req.method === "GET") {
     const r = await env.DB.prepare("SELECT pattern,ordinal,round,idx,pids FROM settled WHERE eid=? ORDER BY round, pattern, ordinal").bind(eid).all<any>();
@@ -1627,8 +1659,9 @@ If you did not ask for this, ignore this e-mail.`, now, { secret: true });
   }
   if (action === "claims" && req.method === "GET") {
     if (!can(a, e)) return deny(a);
-    const r = await env.DB.prepare("SELECT pid,pattern,round,idx FROM claim WHERE eid=? ORDER BY round,idx,pid").bind(eid).all();
-    return json({ claims: r.results ?? [] });
+    const r = await env.DB.prepare("SELECT pid,pattern,round,idx,at_ms AS atMs FROM claim WHERE eid=? ORDER BY round,idx,pid").bind(eid).all<any>();
+    const b = await env.DB.prepare("SELECT pid,pattern,round,at_ms AS atMs FROM bogey WHERE eid=? ORDER BY at_ms").bind(eid).all<any>();
+    return json({ claims: [...(r.results ?? []), ...(b.results ?? []).map((x: any) => ({ ...x, idx: -1, bogey: true }))] }); // the Bogeys ride along, flagged: the console settles exactly as the phones do
   }
   if (action === "participants" && req.method === "GET") {
     if (!can(a, e)) return deny(a);

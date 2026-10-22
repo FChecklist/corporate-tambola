@@ -12,7 +12,7 @@ async function phones(t, g, names, { device = "mobile", moveTo = 2 * H.MIN } = {
   await Promise.all(out.map((p) => p.page.waitForFunction(() => window.__rt && window.__rt.phase === "play", null, { timeout: 25000 })));
   return out;
 }
-const stepAll = async (t, list, n) => { for (let i = 0; i < n; i++) { await H.clock.advance(3000); t.shared.track.bump(3000); for (const o of list) await o.ctx.clock.runFor(3000); await new Promise((r) => setTimeout(r, 60)); } };
+const stepAll = async (t, list, n) => { for (let i = 0; i < n; i++) { await H.clock.advance(3000); t.shared.track.bump(3000); for (const o of list) await o.ctx.clock.runFor(3000); await H.tapAlong(list); await new Promise((r) => setTimeout(r, 60)); } };
 const view = (p) => p.evaluate(() => { const v = window.__rt.view(); return { phase: v.phase, log: v.log, results: v.results.map((x) => ({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, count: x.count })), won: (v.won || []).map((w) => w.pattern + "#" + w.ordinal) }; });
 const same = (views) => inv.identicalWinners(views.map((v, i) => ({ who: "phone" + i, results: v.results })));
 
@@ -30,7 +30,8 @@ export default [
       const r = await H.playBrowserGame(ps, { track: t.shared.track, maxSteps: 420 });
       t.check("all five phones ended", r.ended.every(Boolean), `${r.steps} steps, ended ${r.ended}`);
       const id = same(r.views); t.check(id.name, id.ok, id.detail);
-      t.check("every phone has the same numbers in the same order", r.views.every((v) => JSON.stringify(v.log) === JSON.stringify(r.views[0].log)), r.views.map((v) => v.log.length).join("/"));
+      { const longest = r.views.reduce((a, v) => (v.log.length > a.length ? v.log : a), []); // real housie: each phone stops when the last prize is settled on it (a claim read or two after the call), so the logs may differ by a call or two at the end, never in their order
+        t.check("every phone has the same numbers in the same order (each stopped within a few calls of the others)", r.views.every((v) => JSON.stringify(v.log) === JSON.stringify(longest.slice(0, v.log.length)) && longest.length - v.log.length <= 4), r.views.map((v) => v.log.length).join("/")); }
       const pub = (await H.call("GET", `/api/z/${g.id}/results`)).body.results ?? [];
       t.check("the store's winners equal what the phones show", pub.length === r.views[0].results.length && pub.length > 0, `${pub.length} vs ${r.views[0].results.length}`);
       const won = []; for (const o of ps) won.push((await view(o.page)).won);

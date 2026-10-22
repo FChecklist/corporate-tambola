@@ -26,9 +26,9 @@ const fetcher: Fetcher = async (url) => { const last = url.split("/").pop()!; co
 const mkPhone = (n: number, earlyEnd = false) => {
   const mem = new Map<string, string>();
   const rt = new PhoneRuntime(EID, { noEarlyEnd: !earlyEnd, api, mono: () => t, store: { get: (k) => mem.get(k) ?? null, set: (k, v) => void mem.set(k, v) }, beacon: { fetcher, mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 }, verify: (x) => x.signature === "aa" && x.randomness === rnd(x.round) });
-  return { rt, phone: "9" + String(300000000 + n) };
+  return { rt, phone: "9" + String(300000000 + n) , quiet: false, along: undefined as Parameters<PhoneRuntime["playAlong"]>[0] };
 };
-const step = async (ps: ReturnType<typeof mkPhone>[], ms = 3000) => { t += ms; for (const p of ps) await p.rt.tick(); };
+const step = async (ps: ReturnType<typeof mkPhone>[], ms = 3000) => { t += ms; for (const p of ps) await p.rt.tick(); for (const p of ps) if (!p.quiet) await p.rt.playAlong(p.along); }; // real housie: every test phone taps along and presses Claim (p.quiet: never; p.along: {claim:false|fn})
 const FIRST = START; // effective first beacon round
 const callRound = (k: number) => FIRST + k * (CALL_SECONDS / 3);
 const ref = () => deriveCalls(EID, Array.from({ length: 90 }, (_, k) => rnd(callRound(k))));

@@ -50,7 +50,7 @@ export default [
       const late = await t.open({ device: "mobile" });
       // run a while, one phone offline, then the late joiner arrives after about 25 numbers
       const track = t.shared.track;
-      const stepAll = async (n, list) => { for (let i = 0; i < n; i++) { await H.clock.advance(3000); track.bump(3000); for (const o of list) await o.ctx.clock.runFor(3000); await new Promise((r) => setTimeout(r, 60)); } };
+      const stepAll = async (n, list) => { for (let i = 0; i < n; i++) { await H.clock.advance(3000); track.bump(3000); for (const o of list) await o.ctx.clock.runFor(3000); await H.tapAlong(list); await new Promise((r) => setTimeout(r, 60)); } };
       await stepAll(60, ps);
       await ps[1].ctx.setOffline(true); await stepAll(20, ps); await ps[1].ctx.setOffline(false); await stepAll(5, ps);
       await guestJoinUi(late.page, g.id, nextPhone(), "Late Lata"); await late.page.waitForFunction(() => window.__rt && window.__rt.phase, null, { timeout: 20000 });

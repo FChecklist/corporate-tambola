@@ -5,9 +5,9 @@
 // Late joiners: a participant who joined after the game began counts only the numbers whose beacon round is at or after `countFrom`
 // (their join round plus LATE_LAG_ROUNDS), so every phone has heard of them before their first number counts and nobody's result changes later.
 import { ticketNumbers } from "../../shared/src/ticket";
-import { LATE_LAG_ROUNDS, keysInPlay, linesFor, roundEid, type EngagementCfg, type PatternKey } from "./config";
+import { CLAIM_WINDOW_CALLS, LATE_LAG_ROUNDS, keysInPlay, linesFor, roundEid, type EngagementCfg, type PatternKey } from "./config";
 import { ruleOf } from "./house-rules";
-import { ticketsFor, unluckyAt, unluckyPick, winnersOfHouse, type Settled } from "./game";
+import { claimCounts, claimsByHouse, ticketsFor, unluckyAt, unluckyPick, winnersOfHouse, type HouseClaims, type PublicClaim, type Settled } from "./game";
 import { NUMBERS } from "./index";
 
 /** The first beacon round whose number counts for a seat that joined in round `jr` (0 or missing: joined in time, everything counts). */
@@ -46,6 +46,8 @@ export class PrizeEngine {
   private outVer = 0;
   private over = false;
   private uCache: { key: string; r: Settled | null } | null = null;
+  /** The public claims of this round (pattern -> pid -> claim); null = decide from completions alone (older callers, the equivalence tests). See `settleAll`'s `cl`. */
+  private claims: HouseClaims | null = null;
 
   constructor(engagementId: string, readonly cfg: EngagementCfg, readonly round = 1) {
     this.eid = roundEid(engagementId, round);
@@ -72,6 +74,21 @@ export class PrizeEngine {
   setOut(pid: string, out: boolean) { if (out === this.out.has(pid)) return; if (out) this.out.add(pid); else this.out.delete(pid); this.outVer++; }
   /** The game is over for good (the last number was called, or it was stopped and every call before the stop is in): Unlucky may be decided at the end if nobody completed a Full House. */
   setOver(over: boolean) { this.over = over; }
+  /** The public claims known so far (any round; this engine keeps its own round's). A prize is won only by a completion that was claimed in time: see `settleAll`. */
+  setClaims(claims: readonly PublicClaim[]) { this.claims = claimsByHouse(claims, this.round); }
+  /** The completions of house `b` that were claimed in time, grouped by call: what the winner positions are dealt from. */
+  private claimedGroups(k: PatternKey, b: number): [number, string[]][] {
+    const all = [...this.byKey[b]!.entries()].sort((a, c) => a[0] - c[0]);
+    if (!this.claims) return all;
+    const h = this.claims;
+    const out: [number, string[]][] = [];
+    for (const [j, pids] of all) {
+      const nextBr = this.callBr[j + CLAIM_WINDOW_CALLS]; // undefined while that call has not happened yet: the window is still open
+      const kept = pids.filter((pid) => claimCounts(h, k, pid, j, nextBr));
+      if (kept.length) out.push([j, kept]);
+    }
+    return out;
+  }
 
   /** Makes tickets for queued seats until `budgetMs` has passed. Returns true when nothing is left to do. */
   work(budgetMs: number, now: () => number = () => performance.now()): boolean {
@@ -157,7 +174,7 @@ export class PrizeEngine {
   results(): Settled[] {
     const out: Settled[] = [];
     this.keys.forEach((k, b) => {
-      const groups = winnersOfHouse(this.eid, k, [...this.byKey[b]!.entries()].sort((a, c) => a[0] - c[0]), this.cfg.ties ?? "share", (i) => this.callRand[i] ?? "");
+      const groups = winnersOfHouse(this.eid, k, this.claimedGroups(k, b), this.cfg.ties ?? "share", (i) => this.callRand[i] ?? "");
       for (const line of linesFor(this.cfg.rewards, k)) { const g = groups[line.ordinal - 1]; if (g) out.push({ pattern: k, ordinal: line.ordinal, idx: g.idx, pids: g.pids, round: this.round }); }
     });
     const u = this.unluckyResult(out);

@@ -143,7 +143,7 @@ describe("the website's way in: Start a free demo game", () => {
     const hist = await o.json(await o.api("GET", "/api/history", undefined, o.aiKey));
     const g = hist.engagements[0]; const r = row(o, g.id);
     expect(r.cap).toBe(10); expect(JSON.parse(r.config || "{}").demo).toBe(true);
-    expect(p.text()).toMatch(/DEMO GAME/);
+    await p.waitFor((x) => /DEMO GAME/.test(x), 15000); // the pill comes with the game screen, a moment after the "draft is saved" note
     const p2 = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" });
     await p2.waitFor((x) => /Start a new game/.test(x), 15000);
     expect(p2.$("#mkdemo")).toBeTruthy(); expect(p2.text()).toMatch(/A demo game is free, for up to 10 people/);

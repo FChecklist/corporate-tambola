@@ -171,7 +171,7 @@ sequenceDiagram
 - Phones fetch randomness from drand mirrors directly (about 160 requests per phone per game) - not our requests.
 - The only polled Worker route is the pause file `GET /api/z/{id}/control`; the poll interval scales with size (`SAFETY_*`), and above 2,000 participants no pause is registered so phones stop asking. Optional R2 static copy via `CONTROL_R2` + `CONTROL_BASE` (`mirrorControl`, `worker.ts:58`).
 - The seat list is saved once as one text row in `kv` (`seats-base/<eid>`) so 10,000 phones read one row (`worker.ts:1029-1047`).
-- Claims are stored only for engagements of <= 500 (`CLAIM_TRACKING_MAX_CAP`).
+- Claims are stored for every engagement, whatever its size (real housie, 2026-10-22: a prize is won only by a claim pressed before the next number; the phones read the public claims and Bogeys with the seat list and settle from them). `CLAIM_TRACKING_MAX_CAP` gates nothing any more.
 
 ## 5. Local run vs production
 

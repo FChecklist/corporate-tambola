@@ -1,7 +1,7 @@
 // The phone-side game: everything a phone (or the organizer's console) needs to play and to check an engagement
 // from the public beacon alone. Pure and deterministic: no server, no phone clock.
 import { generateTicket, ticketNumbers, type PatternId, type Ticket } from "../../shared/src/ticket";
-import { INTERMISSION_ROUNDS, PATTERN_ORDER, breakShift, keyOfLine, defaultCfg, keysInPlay, linesFor, roundEid, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import { CLAIM_WINDOW_CALLS, INTERMISSION_ROUNDS, PATTERN_ORDER, breakShift, keyOfLine, defaultCfg, keysInPlay, linesFor, roundEid, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
 import { hostCallRound, type ControlState, type GameOpts } from "./control";
 
 /** What the control file needs from the game's public settings (who calls the numbers, the breaks and rounds a press must respect): pass it to cfgOf / publishControl. */
@@ -10,7 +10,7 @@ import { ticketCompletion, ticketStillNeeds } from "./house-rules";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
 import { positionOf, seatOfPid, ticketAt } from "./unique-ticket";
-import { NUMBERS, fetchRound, pickNumber, seededRand, verifyRound, type BeaconOpts, type Round } from "./index";
+import { NUMBERS, fetchRound, pickNumber, roundTimeMs, seededRand, verifyRound, type BeaconOpts, type Round } from "./index";
 
 export const ALL_PATTERNS: readonly PatternId[] = PATTERN_ORDER;
 
@@ -68,18 +68,55 @@ export function winnersOfHouse(engagementId: string, key: string, groups: readon
 export interface Settled { pattern: PatternKey; ordinal: number; idx: number; pids: string[]; round: number }
 
 /**
- * The organizer console's settlement: from the public log, the participant list and the engagement's own settings alone, who completed each house first.
- * Claims are not needed to decide this (a phone with no network still gets its reward), they only cross-check it.
- * Ties share the reward. The 1st reward of a house goes to whoever completes it at the earliest call; the 2nd to whoever completes it at the next
- * distinct call; and so on.
+ * A claim as the store publishes it to every phone (opaque ticket id only, never a name or number): who pressed Claim for which house in which round, at which call they
+ * say it was complete, and when the press reached the store (`atMs`, the store's clock).
  */
-export function settleAll(engagementId: string, pids: readonly string[], log: readonly number[], cfg: EngagementCfg = defaultCfg(), round = 1, late?: { countFrom: ReadonlyMap<string, number>; callRounds: readonly number[] }, un?: UnluckyOpts): Settled[] {
+export interface PublicClaim { pid: string; pattern: string; round: number; idx: number; atMs: number; /** a BOGEY record (a wrong claim the phone refused), not a claim: `idx` is -1 */ bogey?: true }
+/**
+ * The claims a settlement looks at. A prize is won ONLY by a claim (the owner's rule: the player taps and claims, or there is no engagement): a claim counts when its call index is exactly
+ * the call at which that ticket really completed the house on the public numbers, AND it reached the store before the next number was called (`callRounds[idx + 1]`'s beacon round, the same
+ * schedule every phone uses, pauses and Host presses included); while that next call has not happened yet the claim is still in time. A player who never claims never wins.
+ * BOGEYS: a wrong claim is a Bogey; the phone records it. A ticket with two Bogeys on the same house (before its claim, by the store's clock) is out of that house for the round: its claim does not count.
+ */
+export interface ClaimsIn { claims: readonly PublicClaim[]; /** the beacon round of each call of this round so far (the deadline of a claim at `idx` is the start of call idx + CLAIM_WINDOW_CALLS); absent = no deadline can be told yet */ callRounds?: readonly number[] }
+/** Bogeys on one house before a ticket is out of it for the round. */
+export const BOGEYS_OUT = 2;
+/** Is a claim at call `idx`, received at `atMs`, in time? `nextCallRound` = the beacon round of the call that closes the window (undefined / null / Infinity: it has not been called yet, so still in time). */
+export const claimInTime = (atMs: number, nextCallRound: number | null | undefined): boolean => nextCallRound === undefined || nextCallRound === null || !Number.isFinite(nextCallRound) || atMs < roundTimeMs(nextCallRound);
+/** The claims and Bogeys of one round, per house: pattern -> pid -> { the claim (the earliest, if a list ever holds two), the Bogeys' times }. */
+export type HouseClaims = Map<string, Map<string, { claim: PublicClaim | null; bogeys: number[] }>>;
+export function claimsByHouse(cl: readonly PublicClaim[], round: number): HouseClaims {
+  const out: HouseClaims = new Map();
+  for (const c of cl) {
+    if ((c.round ?? 1) !== round) continue;
+    let m = out.get(c.pattern); if (!m) { m = new Map(); out.set(c.pattern, m); }
+    let e = m.get(c.pid); if (!e) { e = { claim: null, bogeys: [] }; m.set(c.pid, e); }
+    if (c.bogey) e.bogeys.push(c.atMs); else if (!e.claim || c.atMs < e.claim.atMs) e.claim = c;
+  }
+  return out;
+}
+/** Does this ticket's claim of house `k` at call `i` count? The real completion call, in time, and not out of the house by Bogeys. */
+export function claimCounts(h: HouseClaims, k: string, pid: string, i: number, nextCallRound: number | null | undefined): boolean {
+  const e = h.get(k)?.get(pid);
+  if (!e || !e.claim || e.claim.idx !== i || !claimInTime(e.claim.atMs, nextCallRound)) return false;
+  return e.bogeys.filter((t) => t < e.claim!.atMs).length < BOGEYS_OUT;
+}
+
+/**
+ * The organizer console's settlement: from the public log, the participant list, the public claims and the engagement's own settings alone, who won each house.
+ * Who COMPLETED a house is read off the tickets and the numbers; who WON it is whoever completed it AND claimed it in time (`cl`); without `cl` (older callers and the
+ * engine-equivalence tests) every completion counts as claimed. The 1st reward of a house goes to whoever claims at the earliest completion; the 2nd at the next distinct call
+ * (or, with the `next` tie rule, the next person in the public tie-break order); and so on. Unlucky is not claimed: it is decided from the tickets as before.
+ */
+export function settleAll(engagementId: string, pids: readonly string[], log: readonly number[], cfg: EngagementCfg = defaultCfg(), round = 1, late?: { countFrom: ReadonlyMap<string, number>; callRounds: readonly number[] }, un?: UnluckyOpts, cl?: ClaimsIn): Settled[] {
   const eid = roundEid(engagementId, round);
   const inPlay = keysInPlay(cfg.rewards);
   const wantUnlucky = inPlay.includes("unlucky");
   const keys = inPlay.filter((k) => k !== "unlucky");
   const loop: PatternKey[] = wantUnlucky && !keys.includes("full") ? [...keys, "full"] : keys; // Unlucky needs the first Full House even when Full House is not a prize
   const best = new Map<PatternKey, Map<number, string[]>>(loop.map((k) => [k, new Map()]));
+  const fullAll = new Map<number, string[]>(); // every Full House completion, claimed or not: Unlucky is decided at the first one
+  const byHouse = cl ? claimsByHouse(cl.claims, round) : null;
   const marked = new Map<string, Ticket[]>(), cfOf = new Map<string, number>(), minePid = new Map<string, readonly number[]>();
   for (const pid of pids) {
     const tk = ticketsFor(eid, pid, cfg.tickets);
@@ -90,6 +127,8 @@ export function settleAll(engagementId: string, pids: readonly string[], log: re
     for (const k of loop) {
       const i = completionIndexKey(tk, k, mine);
       if (i < 0) continue;
+      if (k === "full") { const a = fullAll.get(i); if (a) a.push(pid); else fullAll.set(i, [pid]); }
+      if (byHouse && !claimCounts(byHouse, k, pid, i, cl!.callRounds?.[i + CLAIM_WINDOW_CALLS])) continue; // no claim, a wrong one, a late one, or out by Bogeys: not a winner
       const g = best.get(k)!; const arr = g.get(i); if (arr) arr.push(pid); else g.set(i, [pid]);
     }
   }
@@ -99,7 +138,7 @@ export function settleAll(engagementId: string, pids: readonly string[], log: re
     for (const line of linesFor(cfg.rewards, k)) { const g = groups[line.ordinal - 1]; if (g) out.push({ pattern: k, ordinal: line.ordinal, idx: g.idx, pids: g.pids, round }); }
   }
   if (wantUnlucky && log.length) {
-    const fk = [...best.get("full")!.keys()];
+    const fk = [...fullAll.keys()];
     const lines = cfg.rewards.filter((l) => l.pattern !== "unlucky");
     const allDone = lines.length > 0 && lines.every((l) => out.some((x) => x.pattern === keyOfLine(l) && x.ordinal === l.ordinal));
     const at = unluckyAt(fk.length ? Math.min(...fk) : -1, allDone ? Math.max(...out.map((x) => x.idx)) : -1, log.length, !!un?.over || log.length >= NUMBERS);
