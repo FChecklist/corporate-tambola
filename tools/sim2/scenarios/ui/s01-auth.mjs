@@ -95,8 +95,8 @@ export default [
       t.check("the e-mail typed on the console is carried to the next box", (await x.page.inputValue("#lMail")) === email);
       await x.page.click("#lgGo"); await x.page.waitForSelector("#k2slot input[data-box]", { timeout: 8000 });
       await tickTerms(t, x.page, { scope: "#k2slot", btn: "#lgGo", what: "Demo sign-in (new)" }); await x.page.click("#lgGo");
-      await x.page.waitForURL(/\/zc(\.html)?\?demo=1/, { timeout: 15000 });
-      await x.page.waitForFunction(() => /DEMO GAME/.test(document.body.innerText), null, { timeout: 20000 });
+      await x.page.waitForURL(/\/zc(\.html)?\?(demo=1|e=)/, { timeout: 15000 });
+      await x.page.waitForFunction(() => /[?&]e=[A-Za-z0-9_-]{4,}/.test(location.search) && !!document.querySelector(".zc-prog") && /DEMO GAME/.test((document.querySelector(".zc-bar") || document.body).innerText), null, { timeout: 30000 });
       t.check("the demo game is made: every screen says DEMO GAME", true);
       await t.shot(x.page, "demo-made-phone");
     },
@@ -118,8 +118,8 @@ export default [
       t.check("each digit landed in its own box, in order", typed.join("") === code, typed.join(""));
       await t.shot(x.page, "demo-code-phone");
       await x.page.click("#cdGo");
-      await x.page.waitForURL(/\/zc(\.html)?\?demo=1/, { timeout: 15000 });
-      await x.page.waitForFunction(() => /DEMO GAME/.test(document.body.innerText), null, { timeout: 20000 });
+      await x.page.waitForURL(/\/zc(\.html)?\?(demo=1|e=)/, { timeout: 15000 });
+      await x.page.waitForFunction(() => /[?&]e=[A-Za-z0-9_-]{4,}/.test(location.search) && !!document.querySelector(".zc-prog") && /DEMO GAME/.test((document.querySelector(".zc-bar") || document.body).innerText), null, { timeout: 30000 });
       t.check("signed in and the demo game is made", true);
     },
   },

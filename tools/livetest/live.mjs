@@ -139,7 +139,7 @@ try {
     if (vs.every((v) => v && v.phase === "ended")) break;
     await sleep(3000);
   }
-  const finals = []; for (const p of phones) finals.push(await view(p.page));
+  let finals = []; for (let k = 0; k < 14; k++) { finals = []; for (const p of phones) finals.push(await view(p.page)); if (finals.every((v) => v && JSON.stringify(v.results) === JSON.stringify(finals[0].results))) break; await sleep(5000); } // the last prize may be claimed seconds before the end: phones read it a poll later than each other, so wait (up to 70 s) for them to agree before judging
   report.finals = finals; report.presses = presses;
   check("every phone reached the end of the game", finals.every((v) => v && v.phase === "ended"), finals.map((v) => v?.phase).join("/"));
   check("every phone saw the same count of numbers (within two calls: a phone stops once it hears the last prize was claimed)", finals.every((v) => v && Math.abs(v.n - finals[0].n) <= 2), finals.map((v) => v?.n).join("/"));
