@@ -726,6 +726,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(email)) return json({ error: "Please enter a valid work email." }, 400);
     const eh = await sha("email|" + email);
     if (await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first()) return json({ ok: true, exists: true });
+    if (await hostForEmail(env.DB, eh)) return json({ ok: true, exists: true }); // a Host who confirmed this address signs in with a code, like an Organizer: the sign-in door must not offer them a new Organizer account
     { const cm = consentMissing(b, "K2"); if (cm) return cm; } // K2: a new account needs the Terms box ticked (checked on the server, not only on the page)
     const made = await createOrganizer(env, req, email, now, "start", true);
     if ("error" in made) return made.status === 503 ? BUSY() : json({ error: made.error }, made.status);

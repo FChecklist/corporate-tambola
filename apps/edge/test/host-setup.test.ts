@@ -186,6 +186,13 @@ describe("the link is one-time and lasts 7 days", () => {
 });
 
 describe("later devices: e-mail code or Google, same Host, same label", () => {
+  test("the one sign-in door (POST /api/start) answers 'exists' for a confirmed Host's e-mail: no new Organizer account is offered, the Host is sent a code", async () => {
+    const { master } = await organizer(); const h = await addHost(master, { email: "p@acme.com", mobile: "9876500002" });
+    await confirmByCode(h.hostKey, "p@acme.com");
+    const r = await call("POST", "/api/start", { email: "P@acme.com" }); // the test client adds the Terms tick itself; an existing person is answered 'exists' before the tick is even looked at
+    expect(r.status).toBe(200); expect(await j(r)).toMatchObject({ ok: true, exists: true });
+    expect(one("SELECT COUNT(*) AS c FROM organizer_email").c).toBe(1); // still only the first Organizer
+  });
   test("after the setup the Host signs in on another device with the e-mail code and gets a fresh key of the same Host; both keys work", async () => {
     const { master } = await organizer(); const h = await addHost(master, { email: "p@acme.com", mobile: "9876500002" });
     const d1 = await confirmByCode(h.hostKey, "p@acme.com");
