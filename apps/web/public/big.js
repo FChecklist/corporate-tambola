@@ -59,10 +59,10 @@
     const last = log[log.length - 1];
     const fresh = S.lastNum !== null && S.lastNum !== last; S.lastNum = last;
     const called = new Set(log);
-    const board = Array.from({ length: 90 }, (_, i) => i + 1).map((n) => `<div class="${n === last ? "l" : called.has(n) ? "c" : ""}">${n}</div>`).join("");
-    const recent = log.slice(-6, -1).reverse().map((n) => `<span>${n}</span>`).join("");
+    const ps = ZG.prizeStatus && S.cfg ? ZG.prizeStatus(S.cfg, S.results || [], S.round || 1) : [];
+    const prizes = ps.length ? `<div class="ps" aria-label="Prizes"><h2>Prizes</h2><ul>${ps.map((p) => p.claimed ? `<li class="done"><s>${esc(p.name)}</s> <small>claimed</small></li>` : `<li>${esc(p.name)}${p.text ? ": <b>" + esc(p.text) + "</b>" : ""}</li>`).join("")}</ul></div>` : "";
     const banner = paused ? `<div class="big" style="margin-bottom:1vh"><h1>Paused</h1><p>The organizer has paused the engagement. It will resume shortly.</p></div>` : "";
-    $app.innerHTML = `${head}${banner}<div class="main"><div class="now"><div class="lbl">Number</div><div class="num ${fresh ? "fresh" : ""}">${last}</div><div class="recent" aria-label="Recent numbers">${recent}</div></div><div class="board" aria-label="Numbers called so far">${board}</div></div><div>${wins ? `<div class="wins">${wins}</div>` : ""}<div class="foot">Join: ${esc(location.host)}/z?e=${esc(EID)}</div></div>`;
+    $app.innerHTML = `${head}${banner}<div class="main"><div class="now"><div class="lbl">Number</div><div class="num ${fresh ? "fresh" : ""}">${last}</div></div>${prizes}</div><div>${wins ? `<div class="wins">${wins}</div>` : ""}<div class="foot">Join: ${esc(location.host)}/z?e=${esc(EID)}</div></div>`;
   }
 
   if (!EID) { $app.innerHTML = `<p class="msg">No engagement was chosen.</p>`; return; }

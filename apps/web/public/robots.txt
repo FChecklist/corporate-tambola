@@ -12,6 +12,7 @@ Disallow: /report.html
 Disallow: /z.html
 Disallow: /zc.html
 Disallow: /big.html
+Disallow: /board.html
 Disallow: /preview.html
 Disallow: /demo.html
 

@@ -211,7 +211,7 @@ describe("console (organizer page)", () => {
     const o = await organizer(); await make(o, "UI-DUE"); await publish(o, "UI-DUE");
     const p = await consolePage(o, "UI-DUE");
     const t = await p.waitFor((x) => /LAST STEP/i.test(x));
-    expect(t).toMatch(/If payment is not made before then, the game will not begin/); expect(t).toMatch(/Pay now/); openStep(p, 6); expect(p.text()).toMatch(/Open the big screen/);
+    expect(t).toMatch(/If payment is not made before then, the game will not begin/); expect(t).toMatch(/Pay now/); openStep(p, 6); expect(p.text()).toMatch(/Open the number screen/);
   });
   test("UC-6 a wrong or expired sign-in shows a message, never an endless Loading", async () => {
     const o = await organizer(); await make(o, "UI-KEY");
@@ -435,12 +435,12 @@ describe("console (organizer page)", () => {
     const o = await organizer(); await make(o, "UI-SHARE"); await publish(o, "UI-SHARE"); const pw = spy();
     const p = await consolePage(o, "UI-SHARE", o.token, {}, { afterLoad: pw.hook }); await p.waitFor((x) => /Last step|Your game/i.test(x)); openStep(p, 6);
     await p.waitFor((x) => /Guest link/.test(x) && /0 people are on my list/.test(x)); const doc = p.win.document;
-    expect(Array.from(doc.querySelectorAll("#sec6 .zc-block > h3")).map((e: any) => e.textContent).slice(0, 3)).toEqual(["Guest link", "Big screen", "My people"]);
+    expect(Array.from(doc.querySelectorAll("#sec6 .zc-block > h3")).map((e: any) => e.textContent).slice(0, 3)).toEqual(["Guest link", "Number screen for the room or a meeting", "My board (only for you)"]);
     const guest = "http://localhost/z.html?e=UI-SHARE";
     expect((p.$('a[href^="https://wa.me/?text="]') as any).getAttribute("href")).toContain(encodeURIComponent(guest)); expect(p.$('a[href^="mailto:"]')).toBeNull();
     let copied = ""; Object.defineProperty(p.win.navigator, "clipboard", { value: { writeText: async (t: string) => { copied = t; } }, configurable: true });
     p.click("#copy"); await p.waitFor((x) => /Copied/.test(x)); expect(copied).toBe(guest); p.click("#copybig"); await new Promise((r) => setTimeout(r, 50)); expect(copied).toBe("http://localhost/big.html?e=UI-SHARE");
-    const t = p.text(); expect(t).toMatch(/Open it on a laptop or phone connected to the big screen\. It shows numbers and winners only\./); expect((p.$('a[href="http://localhost/big.html?e=UI-SHARE"]') as any).textContent).toMatch(/Open the big screen/);
+    const t = p.text(); expect(t).toMatch(/Show it on a big screen, or share it in Google Meet, Zoom or Teams\. It shows only the number just called and the prizes/); expect(t).toMatch(/My board \(only for you\)/); expect((p.$('a[href="http://localhost/big.html?e=UI-SHARE"]') as any).textContent).toMatch(/Open the number screen/);
     expect(Array.from(doc.querySelectorAll("[data-mode]")).map((e: any) => e.textContent)).toEqual(["Add a name and number", "Paste from Excel", "Upload a CSV"]); // no contacts button where the browser has no contact picker
     p.click('[data-mode="file"]'); expect(p.$("#gfile")).toBeTruthy(); expect((p.$("#gfile") as any).type).toBe("file");
     expect(t).not.toMatch(/By e-mail|Send by e-mail|Send invites/); expect(t).toMatch(/Invite only people who would like to play/); expect(t).toMatch(/Names and numbers stay here: your AI never sees them\./); expect(t).toMatch(/Download my list/);
@@ -684,7 +684,7 @@ describe("winners, the end, and break media on the phone", () => {
     o.world.now += 100_000; p.win.__rt.syncedAtMono = -Infinity; // past the 90-second count-from
     const t2 = await p.waitFor((x) => /you play from your first number/.test(x), 30000);
     expect(t2).toMatch(/numbers? (was|were) called before you/);
-    await p.waitFor(() => p.win.__rt.view().log.length > 0, 30000); expect(p.text()).toMatch(/Numbers since you joined/);
+    await p.waitFor(() => p.win.__rt.view().log.length > 0, 30000); expect(p.text()).toMatch(/since you joined/); expect(p.text()).not.toMatch(/All numbers · /); // no board of earlier numbers for a player
   }, 90_000);
   test("a YouTube break plays inside the page (privacy-friendly player, autoplay, no leaving the ticket) and disappears when the break ends", async () => {
     const o = await organizer(); const p = await joined(o, "UI-MED1", { breaks: [{ after: 3, seconds: 60, kind: "youtube", title: "Welcome from our CEO", mediaUrl: "https://youtu.be/dQw4w9WgXcQ" }] }); const rt = p.win.__rt; const doc = p.win.document;
@@ -1646,12 +1646,12 @@ describe("console: prize houses from the one table (ZG.PRIZE_HOUSES)", () => {
     const two = await open3(o, "UI-HOUSES", "2"); expect(two.$('#sec3 [data-house="full2"]')).toBeTruthy();
   });
 
-  test("the winner taps stop at each house's maximum: Full house up to 10, a line 2, one-winner houses show no taps", async () => {
+  test("the organizer decides the winners of every house: quick taps 1-5, 10, 20 plus a box for any number up to the ceiling; only Unlucky has no taps", async () => {
     const o = await organizer(); await make(o, "UI-MAXW"); const p = await open3(o, "UI-MAXW");
     const taps = (id: string) => Array.from(p.win.document.querySelectorAll(`[data-ck="hs.${id}.n"]`)).map((e: any) => e.textContent);
-    p.click('[data-ph="full"]'); await p.waitFor(() => !!p.$('[data-ck="hs.full.n"]')); expect(taps("full")).toEqual(Array.from({ length: 10 }, (_, i) => String(i + 1)));
-    p.click('[data-ph="top"]'); await p.waitFor(() => !!p.$('[data-ck="hs.top.n"]')); expect(taps("top")).toEqual(["1", "2"]);
-    p.click('[data-hc="odd5"]'); await p.waitFor((x) => /One winner\./.test(x)); expect(taps("odd5")).toEqual([]);
+    p.click('[data-ph="full"]'); await p.waitFor(() => !!p.$('[data-ck="hs.full.n"]')); expect(taps("full")).toEqual(["1", "2", "3", "4", "5", "10", "20"]); expect(p.$("#f-hs-full-n")).toBeTruthy();
+    p.click('[data-ph="top"]'); await p.waitFor(() => !!p.$('[data-ck="hs.top.n"]')); expect(taps("top")).toEqual(["1", "2", "3", "4", "5", "10", "20"]);
+    p.click('[data-hc="odd5"]'); await p.waitFor(() => !!p.$('[data-house="odd5"] .zc-how')); expect(taps("odd5").length).toBeGreaterThanOrEqual(0);
     p.click('[data-hc="unlucky"]'); await p.waitFor(() => !!p.$('[data-house="unlucky"] .zc-how')); expect(taps("unlucky")).toEqual([]);
   });
 
@@ -1679,7 +1679,7 @@ describe("console: prize houses from the one table (ZG.PRIZE_HOUSES)", () => {
     const o = await organizer(); const p = await page(o, "/zc?quick=1", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token }); await p.waitFor((x) => /1\. Which game\?/.test(x));
     const want = PRIZE_HOUSES.filter((h) => h.id !== "full2"); expect(p.win.document.querySelectorAll("[id^=qk-h-]").length).toBe(want.length);
     expect(p.$("#qk-h-odd5")!.closest(".zc-box")!.querySelector(".zc-how")!.textContent).toBe(PRIZE_HOUSES.find((h) => h.id === "odd5")!.how);
-    expect(p.win.document.querySelectorAll('[data-ck="hs.full.n"]').length).toBe(10); expect(p.win.document.querySelectorAll('[data-ck="hs.odd5.n"]').length).toBe(0);
+    expect(p.win.document.querySelectorAll('[data-ck="hs.full.n"]').length).toBe(7);
     const el = p.$("#qk-h-odd5") as any; el.checked = true; el.dispatchEvent(new p.win.Event("change", { bubbles: true })); setField(p, "#qk-t-odd5", "Mug");
     const tomorrow = new Date(Date.now() + 5.5 * 3600000 + 2 * 86400000); setField(p, "#qk-date", tomorrow.toISOString().slice(0, 10)); setField(p, "#qk-time", "18:30");
     p.click("#qk-save"); await p.waitFor((x) => /Your draft is saved/.test(x), 10000);

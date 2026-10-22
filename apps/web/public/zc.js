@@ -98,7 +98,8 @@
   const OCC = ["Diwali party", "Dealer meet", "Annual day", "Team party", "Customer event", "Family day", "Weekend Fun", "Christmas Party", "Eid Party", "Holi Party", "Other"];
   const TIMES = [["10:00", "10 am"], ["12:00", "12 pm"], ["16:00", "4 pm"], ["18:00", "6 pm"], ["19:00", "7 pm"], ["20:00", "8 pm"], ["other", "Other time"]];
   const HS = HOUSES.map((h) => [h.id, h.label, h.how, h.max]); // [id, label, how to win, most winners]
-  const maxOf = (k) => (HS.find((h) => h[0] === k) || [0, 0, 0, 5])[3];
+  const maxOf = (k) => (HS.find((h) => h[0] === k) || [0, 0, 0, 100])[3];
+  const winnersOf = (h, k) => Math.min(maxOf(k), Math.max(1, Math.floor(Number(h.n) || 1))); // what the organizer typed or tapped, kept between 1 and the safety ceiling
   const BUNDLES = { Classic: { early5: 1, top: 1, mid: 1, bot: 1, full: 1 }, Simple: { early5: 1, full: 1 }, Rich: { early5: 1, top: 1, mid: 1, bot: 1, corners: 1, star: 1, full: 3 } };
   // [key, label, currency prefix, what to ask]. "Decide later" saves an empty prize; "No prize" saves the words No prize, so the ticket shows them.
   const PT = [["voucher", "Gift voucher", "Rs", "Amount, for example 1000"], ["hamper", "Gift hamper", "", "What is in it? (optional)"], ["phone", "Smartphone", "", "Which one? (optional)"], ["watch", "Smart watch", "", "Which one? (optional)"], ["earbuds", "Earbuds or headphones", "", "Which one? (optional)"], ["tablet", "Tablet or laptop", "", "Which one? (optional)"], ["holiday", "Holiday or weekend stay", "", "Where?"], ["dinner", "Dinner or restaurant voucher", "Rs", "Amount, for example 2000"], ["movie", "Movie tickets", "", "How many tickets?"], ["dayoff", "Extra day off", "", ""], ["other", "Something else", "", "Type the prize"], ["later", "I will decide later", "", ""], ["none", "No prize", "", ""]];
@@ -158,7 +159,7 @@
     const nm = (c.name || "").trim();
     const f = { occ: nm ? (OCC.includes(nm) && nm !== "Other" ? nm : "Other") : "Diwali party", oname: nm && !OCC.includes(nm) ? nm : "", day: blank ? "" : dayOpts().some((d) => d[0] === date) ? date : "other", dayo: blank ? "" : date, time: blank ? "" : TIMES.some((x) => x[0] === time) ? time : "other", timeo: blank ? "" : time,
       cap: String(inf.cap || 250), tix: String(t), spd: String(inf.callSeconds || 9), rnd: String(c.rounds || 1), who: whoNow(),
-      inv: !!(c.invites && c.invites.on), per: String((c.invites && c.invites.per) || 4), cats: ((c.invites && c.invites.cats) || ["family", "colleagues"]).slice(), bundle: "", hs: {}, ph: "" };
+      inv: !!(c.invites && c.invites.on), per: String((c.invites && c.invites.per) || 4), cats: ((c.invites && c.invites.cats) || ["family", "colleagues"]).slice(), bundle: "", hs: {}, ph: "", ties: c.ties === "share" ? "share" : "next" };
     for (const [k] of HS) f.hs[k] = { on: false, n: 1, pt: "later", pd: "", orig: [] };
     for (const l of c.rewards || []) { const k = l.scope === "two_ticket" ? "full2" : l.pattern, h = f.hs[k]; if (!h) continue; h.on = true; h.n = Math.max(h.n, l.ordinal); h.orig[l.ordinal - 1] = l.text || ""; }
     for (const [k] of HS) { const h = f.hs[k]; if (h.on) { const a = prizeFrom(h.orig[0]); h.pt = a.pt; h.pd = a.pd; h.same = h.orig.every((x) => (x || "") === (h.orig[0] || "")); h.diff = !h.same; if (h.diff) h.per = Array.from({ length: h.n }, (_, i) => prizeFrom(h.orig[i])); } }
@@ -255,7 +256,8 @@
     const sumry = `${h.n} winner${Number(h.n) === 1 ? "" : "s"} · ${esc(h.diff ? "a prize for each" : ptext(h.pt, h.pd))}`;
     let body = "";
     if (act) {
-      body += max > 1 ? grp(`hs.${k}.n`, "How many winners?", Array.from({ length: max }, (_, i) => [String(i + 1), String(i + 1)])) : small("One winner.");
+      body += max > 1 ? grp(`hs.${k}.n`, "How many winners?", [1, 2, 3, 4, 5, 10, 20].filter((x) => x <= max).map((x) => [String(x), String(x)]))
+        + `<div class="zc-gap">${lbl(fid(`hs.${k}.n`), `Or type how many winners (1 to ${max})`)}${inp(`hs.${k}.n`, { type: "number", attrs: `inputmode="numeric" min="1" max="${max}" step="1"` })}</div>${small("If one person wins, the next person who finishes wins the next prize, until all your winners are found.")}` : small("One winner.");
       if (Number(h.n) > 1) body += `<div class="zc-chips zc-gap">${bchip(`hs.${k}.diff`, "A different prize for each winner")}</div>`;
       if (h.diff && Number(h.n) > 1) { const per = perFill(h); body += per.slice(0, Number(h.n)).map((_, i) => `<span class="zc-lbl">Prize for winner ${i + 1}</span>${prizePick(`hs.${k}.per.${i}.pt`, `hs.${k}.per.${i}.pd`)}`).join(""); }
       else body += `<span class="zc-lbl">What is the prize?</span>${prizePick(`hs.${k}.pt`, `hs.${k}.pd`)}`;
@@ -268,6 +270,7 @@
     const two = Number(S.f.tix) === 2;
     return grp("bundle", "Start from", ["Classic", "Simple", "Rich", "Choose myself"].map((b) => [b, b]))
       + `<span class="zc-lbl">Tick the prizes. Each one says how to win.</span>` + HS.filter(([k]) => k !== "full2" || two).map(houseBox).join("")
+      + `<div class="zc-block">${grp("ties", "If two or more people finish on the same number", [["next", "They take the next prizes, one after the other"], ["share", "They share that prize"]])}${small(S.f.ties === "share" ? "Everyone who finishes on the same number wins that same prize." : "A fixed, public order decides who gets the earlier prize, so nobody can steer it. Each person wins one prize of that house.")}</div>`
       + small("You give the prizes. We provide the software.") + save(3);
   }
 
@@ -538,8 +541,9 @@
     const link = guestLink();
     return `<div class="zc-block"><h3>Guest link</h3><div class="zc-linkrow"><span class="zlink">${esc(link)}</span><button type="button" class="zc-mini" id="copy">Copy link</button></div>
         <div class="zc-chips zc-gap"><a class="zc-chip" href="${esc(waUrl(""))}" target="_blank" rel="noopener noreferrer">Share on WhatsApp</a></div>${S.draft ? small("Guests can join once you publish.") : ""}</div>
-      <div class="zc-block"><h3>Big screen</h3><div class="zc-linkrow"><span class="zlink" id="biglink">${esc(bigLink())}</span><button type="button" class="zc-mini" id="copybig">Copy the link</button></div>
-        <a class="zc-chip zc-gap" href="${esc(bigLink())}" target="_blank" rel="noopener">Open the big screen</a>${small("Open it on a laptop or phone connected to the big screen. It shows numbers and winners only.")}</div>
+      <div class="zc-block"><h3>Number screen for the room or a meeting</h3><div class="zc-linkrow"><span class="zlink" id="biglink">${esc(bigLink())}</span><button type="button" class="zc-mini" id="copybig">Copy the link</button></div>
+        <a class="zc-chip zc-gap" href="${esc(bigLink())}" target="_blank" rel="noopener">Open the number screen</a>${small("Show it on a big screen, or share it in Google Meet, Zoom or Teams. It shows only the number just called and the prizes: players never see the earlier numbers.")}</div>
+      <div class="zc-block"><h3>My board (only for you)</h3>${small("The housie board with every number already called, like the real game. Only you, a Host or a Co-host can open it. Do not share this window.")}<a class="zc-chip zc-gap" id="myboard" href="${esc(location.origin + "/board.html?e=" + encodeURIComponent(eid) + "#k=" + encodeURIComponent(secret || ""))}" target="_blank" rel="noopener">Open my board</a></div>
       ${peopleBlock()}${playBlock()}
       ${cont(6)}`;
   }
@@ -921,7 +925,7 @@
   function quickView() {
     const f = S.f;
     const caps = capOptions().map((p) => `<button type="button" class="zc-chip${String(f.cap) === String(p.n) ? " on" : ""}" data-ck="cap" data-v="${p.n}" aria-pressed="${String(f.cap) === String(p.n)}"><span>Up to ${p.n} people</span></button>`).join("");
-    const houses = HS.filter(([k]) => k !== "full2").map(([k, n, how, mx]) => `<div class="zc-box"><label class="zc-check" for="qk-h-${k}"><input type="checkbox" id="qk-h-${k}" data-hc="${k}" ${f.hs[k].on ? "checked" : ""}> ${n}</label><p class="zc-small zc-how">${esc(how || "")}</p>${mx > 1 ? grp(`hs.${k}.n`, "Winners", Array.from({ length: mx }, (_, i) => [String(i + 1), String(i + 1)])) : ""}${lbl("qk-t-" + k, "What is the prize? (up to 80 characters; you can fill this in later)")}<input id="qk-t-${k}" class="zc-in" data-qkprize="${k}" maxlength="80" value="${esc(f.hs[k].pt === "later" ? "" : prizeText(f.hs[k].pt, f.hs[k].pd))}"></div>`).join("");
+    const houses = HS.filter(([k]) => k !== "full2").map(([k, n, how, mx]) => `<div class="zc-box"><label class="zc-check" for="qk-h-${k}"><input type="checkbox" id="qk-h-${k}" data-hc="${k}" ${f.hs[k].on ? "checked" : ""}> ${n}</label><p class="zc-small zc-how">${esc(how || "")}</p>${mx > 1 ? grp(`hs.${k}.n`, "Winners", [1, 2, 3, 4, 5, 10, 20].filter((x) => x <= mx).map((x) => [String(x), String(x)])) : ""}${lbl("qk-t-" + k, "What is the prize? (up to 80 characters; you can fill this in later)")}<input id="qk-t-${k}" class="zc-in" data-qkprize="${k}" maxlength="80" value="${esc(f.hs[k].pt === "later" ? "" : prizeText(f.hs[k].pt, f.hs[k].pd))}"></div>`).join("");
     const main = `<div class="zc-block"><h3>1. Which game?</h3>${lbl("qk-name", "Name of the game (optional)")}<input id="qk-name" class="zc-in" data-fi="oname" maxlength="60" placeholder="Diwali party" value="${esc(f.oname)}">
         ${grp("occ", "Occasion", OCC.map((o) => [o, o]))}${lbl("qk-date", "Day (India time)")}<input id="qk-date" class="zc-in" type="date" data-fi="dayo" value="${esc(f.dayo)}" min="${istDateStr(istNow())}">${lbl("qk-time", "Start time (India time)")}<input id="qk-time" class="zc-in" type="time" data-fi="timeo" step="300" value="${esc(f.timeo)}">
         ${small("Guests can join before. The first number is called 2 minutes after the start time. Choose a time at least 2 hours ahead.")}</div>
@@ -933,7 +937,7 @@
   function quickRead() {
     const f = S.f, [y, mo, d] = (f.dayo || "").split("-").map(Number), [h, mi] = (f.timeo || "16:00").split(":").map(Number);
     const startMs = Date.UTC(y, mo - 1, d, h, mi) - 5.5 * 3600000, rewards = [];
-    for (const [k] of HS) { const hh = f.hs[k]; if (k === "full2" || !hh.on) continue; const t = prizeText(hh.pt, hh.pd).slice(0, 80); for (let o = 1; o <= (Number(hh.n) || 1); o++) rewards.push({ pattern: k, ordinal: o, text: t }); }
+    for (const [k] of HS) { const hh = f.hs[k]; if (k === "full2" || !hh.on) continue; const t = prizeText(hh.pt, hh.pd).slice(0, 80); for (let o = 1; o <= winnersOf(hh, k); o++) rewards.push({ pattern: k, ordinal: o, text: t }); }
     const name = (f.oname || "").trim() || (f.occ !== "Other" ? f.occ : "");
     return { name, occ: f.occ === "Other" ? "EVENT" : f.occ.toUpperCase().replace(/[^A-Z0-9]+/g, "-"), startMs, cap: Number(f.cap), tickets: Number(f.tix) || 1, speed: Number(f.spd), rounds: Number(f.rnd), who: f.join === "anyone" ? "anyone" : "list", invite: !!f.inv, rewards };
   }
@@ -1137,7 +1141,7 @@
     const rewards = [];
     for (const [k] of HS) {
       const h = f.hs[k]; if (!h.on || (k === "full2" && Number(f.tix) !== 2)) continue;
-      for (let o = 1; o <= (Number(h.n) || 1); o++) rewards.push({ pattern: k === "full2" ? "full" : k, scope: k === "full2" ? "two_ticket" : "ticket", ordinal: o, text: h.diff && Number(h.n) > 1 ? prizeText(perFill(h)[o - 1].pt, perFill(h)[o - 1].pd) : !h.dirty && h.orig[o - 1] !== undefined ? h.orig[o - 1] : prizeText(h.pt, h.pd) });
+      for (let o = 1; o <= winnersOf(h, k); o++) rewards.push({ pattern: k === "full2" ? "full" : k, scope: k === "full2" ? "two_ticket" : "ticket", ordinal: o, text: h.diff && Number(h.n) > 1 ? prizeText(perFill(h)[o - 1].pt, perFill(h)[o - 1].pd) : !h.dirty && h.orig[o - 1] !== undefined ? h.orig[o - 1] : prizeText(h.pt, h.pd) });
     }
     return rewards;
   }
@@ -1154,7 +1158,7 @@
       if (role() === "cohost") { markDone(n); return advance(n); }
       if (n === 1) { const name = f.occ === "Other" ? (f.oname || "").trim() : f.occ, ms = startOf(f); if (!(ms > Date.now())) throw new Error(MSG_PAST); const lastMs = S.info && S.info.moveUntilMs ? S.info.moveUntilMs - 1 : Date.now() + 30 * 86400000; if (ms > lastMs) throw new Error(S.info && S.info.moveUntilMs ? "Your credit and your game last 365 days from the payment, so a paid game can be moved to any day within 365 days of it. Please pick an earlier date." : "A game that is not paid for yet can start at most 30 days from today. Once it is paid, the Organizer can move it to any day within 365 days of the payment."); await call("PATCH", `/api/z/${eid}/settings`, { name, startRound: ZG.roundAt(ms) }); }
       else if (n === 2) { { const c = Number(f.cap); if (!Number.isInteger(c) || c < 1) throw new Error("Please give the number of players, for example 180."); if (c > 10000) throw new Error("For more than 10,000 players, please write to us and we will arrange it."); } if (f.inv && !f.cats.length) throw new Error("Pick at least one kind of guest."); await call("PATCH", `/api/z/${eid}/settings`, { cap: Number(f.cap), callSeconds: Number(f.spd), tickets: Number(f.tix), rounds: Number(f.rnd), whoCanJoin: f.who === "anyone" ? "anyone" : "list", invites: { on: !!f.inv, per: Number(f.per) || 4, cats: f.cats } }); }
-      else if (n === 3) { const rewards = rewardsOut(f); if (!rewards.length) throw new Error("Tick at least one prize."); await call("PATCH", `/api/z/${eid}/settings`, { tickets: Number(f.tix), rewards }); }
+      else if (n === 3) { const rewards = rewardsOut(f); if (!rewards.length) throw new Error("Tick at least one prize."); await call("PATCH", `/api/z/${eid}/settings`, { tickets: Number(f.tix), ties: f.ties === "share" ? "share" : "next", rewards }); }
       else if (n === 4) {
         const bn = (f.brand.name || "").trim(), bc = f.brand.color || "", bl = f.brand.logo || "", brandChanged = JSON.stringify(f.brand) !== JSON.stringify((S.fBase || {}).brand);
         if (brandChanged && (bn || bc || bl) && !bn) throw new Error("Add your company name for the top of the ticket, or clear the colour and logo.");

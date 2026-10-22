@@ -133,7 +133,7 @@ export class PhoneRuntime {
 
   /** Tickets, rewards and brand breaks come from the engagement's public settings; anything malformed falls back to the plain engagement. */
   private readCfg(info: any) {
-    const v = validateCfg({ tickets: info?.tickets, rewards: info?.rewards, breaks: info?.breaks, rounds: info?.rounds, invites: info?.invites, opening: info?.opening, closing: info?.closing }, undefined, { stored: true });
+    const v = validateCfg({ tickets: info?.tickets, ties: info?.ties, rewards: info?.rewards, breaks: info?.breaks, rounds: info?.rounds, invites: info?.invites, opening: info?.opening, closing: info?.closing }, undefined, { stored: true });
     this.cfg = v.ok ? v.cfg : defaultCfg();
   }
   private adopt(pid: string) {
@@ -397,7 +397,7 @@ export class PhoneRuntime {
     const local = this.localOk;
     if (local) {
       const mine: NonNullable<RuntimeView["results"]> = [];
-      for (const [r, e] of this.engines) for (const x of e.results()) mine.push({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, count: x.pids.length, round: r, ...(x.pattern === "unlucky" ? { winners: x.pids } : {}) });
+      for (const [r, e] of this.engines) for (const x of e.results()) mine.push({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, count: x.pids.length, round: r, ...(x.pattern === "unlucky" || this.cfg.ties === "next" ? { winners: x.pids } : {}) });
       this.allResults = [...mine, ...this.luckyResults(), ...this.serverResults.filter((x) => x.pattern === "lucky" && !this.luckyLocal.some((l) => l.ordinal === x.ordinal))];
     }
     // the organizer's published results: the fallback while the seat list is not here yet, and the only source for lucky draws
@@ -490,7 +490,7 @@ export class PhoneRuntime {
       const got: { pattern: PatternKey; ordinal: number }[] = [];
       for (const x of this.allResults) {
         if ((x.round ?? 1) !== r || x.pattern === "lucky") continue;
-        if (x.pattern === "unlucky" ? !!this.pid && (x.winners ?? []).includes(this.pid) : completionIndexKey(tk, x.pattern as PatternKey, log) === x.idx) got.push({ pattern: x.pattern as PatternKey, ordinal: x.ordinal });
+        if (x.pattern === "unlucky" || this.cfg.ties === "next" ? !!this.pid && (x.winners ?? []).includes(this.pid) : completionIndexKey(tk, x.pattern as PatternKey, log) === x.idx) got.push({ pattern: x.pattern as PatternKey, ordinal: x.ordinal });
       }
       out.push({ round: r, got });
     }
@@ -505,7 +505,7 @@ export class PhoneRuntime {
       const r = x.round ?? 1, key = x.pattern as PatternKey, tk = this.ticketsOf(r), log = this.maskedLog(r);
       if (!tk.length) continue;
       const un = key === "unlucky"; // Unlucky is not completed on a ticket: this phone won it when its seat is the named winner
-      if (un ? !(x.winners ?? []).includes(this.pid) : completionIndexKey(tk, key, log) !== x.idx) continue;
+      if (un || this.cfg.ties === "next" ? !(x.winners ?? []).includes(this.pid) || (!un && completionIndexKey(tk, key, log) !== x.idx) : completionIndexKey(tk, key, log) !== x.idx) continue; // taking turns: only the named winner of this position won it
       const line = linesFor(this.cfg.rewards, key).find((l) => l.ordinal === x.ordinal);
       out.push({ round: r, pattern: key, ordinal: x.ordinal, text: line?.text ?? "", cells: un ? [] : winCells(tk, key, log, x.idx), idx: x.idx });
     }

@@ -7,7 +7,7 @@
 import { ticketNumbers } from "../../shared/src/ticket";
 import { LATE_LAG_ROUNDS, keysInPlay, linesFor, roundEid, type EngagementCfg, type PatternKey } from "./config";
 import { ruleOf } from "./house-rules";
-import { ticketsFor, unluckyAt, unluckyPick, type Settled } from "./game";
+import { ticketsFor, unluckyAt, unluckyPick, winnersOfHouse, type Settled } from "./game";
 import { NUMBERS } from "./index";
 
 /** The first beacon round whose number counts for a seat that joined in round `jr` (0 or missing: joined in time, everything counts). */
@@ -157,8 +157,8 @@ export class PrizeEngine {
   results(): Settled[] {
     const out: Settled[] = [];
     this.keys.forEach((k, b) => {
-      const groups = [...this.byKey[b]!.entries()].sort((a, c) => a[0] - c[0]);
-      for (const line of linesFor(this.cfg.rewards, k)) { const g = groups[line.ordinal - 1]; if (g) out.push({ pattern: k, ordinal: line.ordinal, idx: g[0], pids: g[1].slice(), round: this.round }); }
+      const groups = winnersOfHouse(this.eid, k, [...this.byKey[b]!.entries()].sort((a, c) => a[0] - c[0]), this.cfg.ties ?? "share", (i) => this.callRand[i] ?? "");
+      for (const line of linesFor(this.cfg.rewards, k)) { const g = groups[line.ordinal - 1]; if (g) out.push({ pattern: k, ordinal: line.ordinal, idx: g.idx, pids: g.pids, round: this.round }); }
     });
     const u = this.unluckyResult(out);
     if (u) out.push(u);

@@ -252,3 +252,7 @@ body:has(#go) #ct-notify{display:none}
 /* Help Desk pages (helpdesk.html, helpdesk-accept.html, helpdesk-approve.html): a text link is a 40 px tap target, and the small brand line at the top is the page's one main heading. */
 .hdl{display:inline-flex;align-items:center;min-height:40px;padding:0 6px;margin-left:-6px}
 .hdh{margin:0;font:inherit}
+
+/* the live prizes list: open prizes first, claimed ones crossed out with a small "claimed" */
+.zps h2{background:#FFEFC2;color:#7A3A00}.zpl{list-style:none;margin:0;padding:0}.zpl li{padding:8px 4px;border-bottom:1px solid #eee;font-size:15px}.zpl li:last-child{border:0}
+.zpl li.done{color:#7a8794}.zpl li.done s{text-decoration:line-through}.zpl li.done small{font-size:11px;color:#4c6b57;font-weight:700;letter-spacing:.03em;margin-left:4px}.zme{background:#F5820A;color:#fff;border-radius:99px;padding:1px 8px;font-size:11px;margin-left:6px}

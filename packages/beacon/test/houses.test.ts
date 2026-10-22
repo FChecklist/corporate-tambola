@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
 import { ticketNumbers, type Ticket } from "../../shared/src/ticket";
-import { HOUSE_ORDER, HOUSES_LINE, LEGACY_MAX_ORDINAL, MAX_REWARD_LINES, PATTERN_ORDER, PRIZE_HOUSES, defaultCfg, houseLabel, keysInPlay, maxWinnersFor, validateCfg, type EngagementCfg, type RewardLine, type HouseId } from "../src/config";
+import { HOUSE_ORDER, HOUSES_LINE, LEGACY_MAX_ORDINAL, MAX_REWARD_LINES, MAX_WINNERS_PER_HOUSE, PATTERN_ORDER, PRIZE_HOUSES, defaultCfg, houseLabel, keysInPlay, maxWinnersFor, validateCfg, type EngagementCfg, type RewardLine, type HouseId } from "../src/config";
 import { ruleOf, ticketCompletion, ticketStillNeeds, winningNumbers } from "../src/house-rules";
 import { completionIndexKey, settleAll, stillToWin, ticketsFor, unluckyAt, unluckyPick } from "../src/game";
 import { PrizeEngine, countFromOf } from "../src/prize-engine";
@@ -31,19 +31,19 @@ const rands = (seed: string) => Array.from({ length: 90 }, (_, k) => bytesToHex(
 describe("the house table", () => {
   test("ids are unique, labels are the owner's, and the maximum winners per house are exactly the agreed ones", () => {
     expect(new Set(PRIZE_HOUSES.map((h) => h.id)).size).toBe(PRIZE_HOUSES.length);
-    const max: Record<string, number> = { unlucky: 1, early5: 1, early7: 1, early10: 1, top: 2, mid: 2, bot: 2, corners: 1, star: 1, full: 10, full2: 10, twolines: 1, plus: 1, frame: 1, topbottom: 1, midcorners: 1, odd5: 1, even5: 1, low5: 1, high5: 1 };
+    const max: Record<string, number> = Object.fromEntries(PRIZE_HOUSES.map((h) => [h.id, h.id === "unlucky" ? 1 : MAX_WINNERS_PER_HOUSE])); // the organizer decides how many winners each house has; only Unlucky is always one
     expect(Object.fromEntries(PRIZE_HOUSES.map((h) => [h.id, h.max]))).toEqual(max);
     expect(houseLabel("early7")).toBe("Early Seven"); expect(houseLabel("early10")).toBe("Early Ten"); expect(houseLabel("twolines")).toBe("Two Lines"); expect(houseLabel("plus")).toBe("Plus");
     expect(houseLabel("frame")).toBe("Frame"); expect(houseLabel("topbottom")).toBe("Top and Bottom"); expect(houseLabel("midcorners")).toBe("Middle and Corners"); expect(houseLabel("odd5")).toBe("Odd Five");
     expect(houseLabel("even5")).toBe("Even Five"); expect(houseLabel("low5")).toBe("Low Five"); expect(houseLabel("high5")).toBe("High Five"); expect(houseLabel("unlucky")).toBe("Unlucky");
     for (const h of PRIZE_HOUSES) { expect(h.how.length).toBeGreaterThan(10); expect(maxWinnersFor(h.id)).toBe(h.max); }
-    expect(HOUSES_LINE).toContain("unlucky = Unlucky (1 winner)"); expect(HOUSES_LINE).toContain("full = Full House (up to 10 winners)");
+    expect(HOUSES_LINE).toContain("unlucky = Unlucky (1 winner)"); expect(HOUSES_LINE).toContain(`full = Full House (up to ${MAX_WINNERS_PER_HOUSE} winners)`);
   });
   test("the game still starts with the original seven houses only, and the new ones follow the same display order", () => {
     expect(PATTERN_ORDER).toEqual(["early5", "top", "mid", "bot", "corners", "star", "full"]);
     expect(keysInPlay(defaultCfg().rewards)).toEqual([...PATTERN_ORDER]);
     expect(HOUSE_ORDER.filter((k) => (PATTERN_ORDER as readonly string[]).includes(k))).toEqual([...PATTERN_ORDER]);
-    expect(MAX_REWARD_LINES).toBeGreaterThanOrEqual(PRIZE_HOUSES.reduce((n, h) => n + h.max, 0));
+    expect(MAX_REWARD_LINES).toBeGreaterThanOrEqual(MAX_WINNERS_PER_HOUSE * 3);
   });
   test("Five Corners would have been Star: four corners plus the centre of the middle line, so Plus replaces it", () => {
     const star = ruleOf(T, "star") as { pool: number[] };
@@ -292,31 +292,41 @@ describe("the most winners per house", () => {
       if (!over.ok) { expect(over.error).toContain(h.label); expect(over.error).toMatch(h.max === 1 ? /only 1 winner/ : new RegExp(`at most ${h.max} winners`)); expect(over.error).not.toMatch(/undefined|NaN|\[object/); }
     }
   });
-  test("the agreed numbers: Unlucky 1, Early Five 1, Early Seven 1, Top/Middle/Bottom 2, Four Corners 1, Star 1, Full House 10, and 1 for each of the ten others", () => {
+  test("the organizer decides the winners of each house: any house up to the safety ceiling, Unlucky always one, the Bumper (two-ticket house) too", () => {
     const m = (id: string) => maxWinnersFor(id);
-    expect([m("unlucky"), m("early5"), m("early7"), m("top"), m("mid"), m("bot"), m("corners"), m("star"), m("full")]).toEqual([1, 1, 1, 2, 2, 2, 1, 1, 10]);
-    for (const id of ["early10", "twolines", "plus", "frame", "topbottom", "midcorners", "odd5", "even5", "low5", "high5"]) expect(m(id)).toBe(1);
-    expect(validateCfg({ rewards: rw("full", 10) }).ok).toBe(true); expect(validateCfg({ rewards: rw("full", 11) }).ok).toBe(false);
-    expect(validateCfg({ rewards: rw("top", 3) }).ok).toBe(false); expect(validateCfg({ rewards: rw("unlucky", 2) }).ok).toBe(false);
+    for (const id of ["early5", "early7", "early10", "top", "mid", "bot", "corners", "star", "full", "full2", "twolines", "plus", "frame", "topbottom", "midcorners", "odd5", "even5", "low5", "high5"]) expect(m(id)).toBe(MAX_WINNERS_PER_HOUSE);
+    expect(m("unlucky")).toBe(1);
+    for (const id of ["early5", "top", "corners", "star", "plus"]) { expect(validateCfg({ rewards: rw(id, 7) }).ok).toBe(true); expect(validateCfg({ rewards: rw(id, MAX_WINNERS_PER_HOUSE) }).ok).toBe(true); expect(validateCfg({ rewards: rw(id, MAX_WINNERS_PER_HOUSE + 1) }).ok).toBe(false); }
+    expect(validateCfg({ tickets: 2, rewards: rw("full", 25, "two_ticket") }).ok).toBe(true); // Bumper with 25 winners
+    expect(validateCfg({ rewards: rw("unlucky", 2) }).ok).toBe(false);
   });
-  test("every house together at its maximum fits in the reward limit; unknown houses and a repeated line are still refused", () => {
-    const all = PRIZE_HOUSES.flatMap((h) => h.id === "full2" ? rw("full", h.max, "two_ticket") : rw(h.id, h.max));
+  test("many winners over many houses fit the reward limit; unknown houses and a repeated line are still refused", () => {
+    const all = ["early5", "top", "mid", "bot", "corners", "star", "full"].flatMap((id) => rw(id, 20));
     expect(all.length).toBeLessThanOrEqual(MAX_REWARD_LINES);
-    expect(validateCfg({ tickets: 2, rewards: all }).ok).toBe(true);
+    expect(validateCfg({ rewards: all }).ok).toBe(true);
+    expect(validateCfg({ rewards: PRIZE_HOUSES.flatMap((h) => h.id === "full2" ? [] : rw(h.id, h.id === "unlucky" ? 1 : 20)) }).ok).toBe(false); // over 300 winner positions together
     expect(validateCfg({ rewards: [{ pattern: "fivecorners", ordinal: 1 }] }).ok).toBe(false);
     expect(validateCfg({ rewards: [{ pattern: "full2", ordinal: 1 }] }).ok).toBe(false);
     expect(validateCfg({ rewards: [{ pattern: "plus", ordinal: 1 }, { pattern: "plus", ordinal: 1 }] }).ok).toBe(false);
     expect(validateCfg({ rewards: [{ pattern: "plus", ordinal: 2 }] }).ok).toBe(false);
   });
+  test("the tie setting: new games take the next positions, an older game without the setting keeps sharing, only the two words are accepted", () => {
+    expect(defaultCfg().ties).toBe("next");
+    const v = validateCfg({ rewards: rw("top", 2) }); expect(v.ok && v.cfg.ties).toBe("next");
+    const old = validateCfg({ rewards: rw("top", 2) }, undefined, { stored: true }); expect(old.ok && old.cfg.ties).toBe("share");
+    const sh = validateCfg({ ties: "share" }); expect(sh.ok && sh.cfg.ties).toBe("share");
+    const nx = validateCfg({ ties: "next" }, sh.ok ? sh.cfg : undefined); expect(nx.ok && nx.cfg.ties).toBe("next");
+    expect(validateCfg({ ties: "both" }).ok).toBe(false); expect(validateCfg({ ties: 1 }).ok).toBe(false);
+  });
   test("games saved before the limits keep working: up to 5 winners of any house load from storage, and an unchanged saved line is accepted when it is sent again", () => {
     const old = [...rw("top", 4), ...rw("corners", 3), ...rw("full", 5)];
-    expect(validateCfg({ rewards: old }).ok).toBe(false); // new input follows today's limits
+    expect(validateCfg({ rewards: old }).ok).toBe(true); // the limit is the organizer's own now
     const stored = validateCfg({ rewards: old }, undefined, { stored: true });
     expect(stored.ok).toBe(true);
-    expect(validateCfg({ rewards: rw("top", 6) }, undefined, { stored: true }).ok).toBe(false); // but not beyond what any game ever had
+    expect(validateCfg({ rewards: rw("top", 6) }, undefined, { stored: true }).ok).toBe(true);
     if (stored.ok) {
       expect(validateCfg({ rewards: old }, stored.cfg).ok).toBe(true); // the console sends the saved list back: still fine
-      expect(validateCfg({ rewards: [...old, { pattern: "top", ordinal: 5, text: "" }] }, stored.cfg).ok).toBe(false); // adding a new over-limit line is not
+      expect(validateCfg({ rewards: [...old, { pattern: "top", ordinal: 5, text: "" }] }, stored.cfg).ok).toBe(true);
     }
     expect(LEGACY_MAX_ORDINAL).toBe(5);
   });

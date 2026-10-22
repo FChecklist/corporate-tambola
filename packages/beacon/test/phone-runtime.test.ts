@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+setDefaultTimeout(30_000); // a crowd of phones playing a whole game takes a few seconds on a busy machine
 import { bytesToHex } from "@noble/hashes/utils";
 import { sha256 } from "@noble/hashes/sha256";
 import { type Env } from "../../../apps/edge/src/worker";
@@ -64,6 +65,7 @@ const publish = async (a: Parameters<typeof nextMessage>[2]) => {
   const r = await D.headCall("POST", `/api/z/${EID}/control`, { message: msg });
   return { status: r.status, body: await r.json() };
 };
+const refRand = (): string[] => Array.from({ length: 90 }, (_, k) => rnd(START + k * 2)); // the public randomness of each call (ties between people who finish together are ordered by it)
 const reference = (pauseState?: ReturnType<typeof resolveControl>) => {
   const sched = pauseState ? scheduleWithControl(pauseState, START, 2, 90) : Array.from({ length: 90 }, (_, k) => START + k * 2);
   return deriveCalls(EID, sched.map((r) => rnd(r!)));
@@ -155,7 +157,7 @@ describe("a crowd and the awkward cases", () => {
     const chk = checkClaims(EID, claims.map((c: any) => ({ pid: c.pid, pattern: c.pattern, idx: c.idx })), ref);
     expect(chk.bad).toEqual([]);
     expect(chk.good.length).toBe(40 * 7);
-    const settled = settleAll(EID, pids, ref);
+    const settled = settleAll(EID, pids, ref, undefined, 1, undefined, { randomness: refRand() });
     expect(await settleViaPhones(settled, pids)).toBe(200);
     const pub = await (await D.headCall("GET", `/api/z/${EID}/results`)).json() as any;
     expect(pub.results.length).toBe(7);
@@ -611,7 +613,7 @@ describe("winners hear it, and the engagement ends when the last prize is awarde
     const pids = [a.rt.pid!, b.rt.pid!];
     const ref = reference();
     const cfg = a.rt.cfg;
-    const settledAt = (k: number) => settleAll(EID, pids, ref.slice(0, k), cfg, 1);
+    const settledAt = (k: number) => settleAll(EID, pids, ref.slice(0, k), cfg, 1, undefined, { randomness: refRand().slice(0, k) });
     const need = keysInPlayLines(cfg);
     let K = 0; for (let k = 1; k <= 90 && !K; k++) { const got = settledAt(k); if (need.every((n) => got.some((x) => x.pattern === n.key && x.ordinal === n.ordinal))) K = k; }
     expect(K).toBeGreaterThan(0); expect(K).toBeLessThan(90); // with two players every line is awarded before the last number

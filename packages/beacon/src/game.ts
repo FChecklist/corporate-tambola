@@ -44,6 +44,24 @@ export function completionIndexKey(tickets: readonly Ticket[], key: PatternKey, 
   return best;
 }
 
+/**
+ * Who gets which winner position of ONE house. `groups`: the people who completed the house, grouped by the call at which they did, earliest call first.
+ * `share`: the 1st position goes to everybody in the earliest group, the 2nd to the next group, and so on (people finishing on the same number share one position).
+ * `next`: people finishing on the same number take the next positions one after the other, in the order of a public tie-break (the hash of the game, that call's public randomness, the house and the seat),
+ * so every phone computes the same order and nobody can steer it. Position n is the n-th person in that order.
+ */
+export function winnersOfHouse(engagementId: string, key: string, groups: readonly (readonly [number, string[]])[], mode: "share" | "next", randomnessAt: (idx: number) => string): { idx: number; pids: string[] }[] {
+  if (mode !== "next") return groups.map(([idx, pids]) => ({ idx, pids: pids.slice() }));
+  const out: { idx: number; pids: string[] }[] = [];
+  for (const [idx, pids] of groups) {
+    if (pids.length === 1) { out.push({ idx, pids: [pids[0]!] }); continue; } // nobody to tell apart: no hashing
+    const rand = randomnessAt(idx);
+    const rank = (pid: string) => bytesToHex(sha256(utf8ToBytes(`CT1-TIE|${engagementId}|${rand}|${key}|${pid}`)));
+    for (const pid of [...new Set(pids)].map((x) => [rank(x), x] as const).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)).map((x) => x[1])) out.push({ idx, pids: [pid] });
+  }
+  return out;
+}
+
 export interface Settled { pattern: PatternKey; ordinal: number; idx: number; pids: string[]; round: number }
 
 /**
@@ -74,8 +92,8 @@ export function settleAll(engagementId: string, pids: readonly string[], log: re
   }
   const out: Settled[] = [];
   for (const k of keys) {
-    const groups = [...best.get(k)!.entries()].sort((a, b) => a[0] - b[0]);
-    for (const line of linesFor(cfg.rewards, k)) { const g = groups[line.ordinal - 1]; if (g) out.push({ pattern: k, ordinal: line.ordinal, idx: g[0], pids: g[1], round }); }
+    const groups = winnersOfHouse(eid, k, [...best.get(k)!.entries()].sort((a, b) => a[0] - b[0]), cfg.ties ?? "share", (i) => un?.randomness?.[i] ?? "");
+    for (const line of linesFor(cfg.rewards, k)) { const g = groups[line.ordinal - 1]; if (g) out.push({ pattern: k, ordinal: line.ordinal, idx: g.idx, pids: g.pids, round }); }
   }
   if (wantUnlucky && log.length) {
     const fk = [...best.get("full")!.keys()];

@@ -98,11 +98,11 @@ describe("phones playing the new houses", () => {
 });
 
 describe("the store enforces the maximum winners per house", () => {
-  test("settings refuse a second Early Seven winner with a calm message and keep what was saved", async () => {
+  test("settings accept as many winners as the organizer wants, refuse more than the safety ceiling with a calm message and keep what was saved", async () => {
     expect((await call("POST", "/api/z", { id: "FUT-1", startRound: START + 10_000, callSeconds: CALL_SECONDS, cap: 50, rewards: REWARDS }, { "x-organizer": SECRET })).status).toBe(200);
-    const bad = await call("PATCH", `/api/z/FUT-1/settings`, { rewards: [{ pattern: "early7", ordinal: 1, text: "" }, { pattern: "early7", ordinal: 2, text: "" }] }, { "x-organizer": SECRET });
+    const bad = await call("PATCH", `/api/z/FUT-1/settings`, { rewards: Array.from({ length: 101 }, (_, i) => ({ pattern: "early7", ordinal: i + 1, text: "" })) }, { "x-organizer": SECRET });
     expect(bad.status).toBe(400);
-    const j = (await bad.json()) as any; expect(j.error).toContain("Early Seven"); expect(j.error).toMatch(/only 1 winner/);
+    const j = (await bad.json()) as any; expect(j.error).toContain("Early Seven"); expect(j.error).toMatch(/at most 100 winners/);
     const info = (await (await call("GET", `/api/z/FUT-1/info`)).json()) as any;
     expect(info.rewards.length).toBe(REWARDS.length); // unchanged
     const ok = await call("PATCH", `/api/z/FUT-1/settings`, { rewards: [{ pattern: "full", ordinal: 1, text: "" }, { pattern: "full", ordinal: 2, text: "" }, { pattern: "full", ordinal: 3, text: "" }, { pattern: "unlucky", ordinal: 1, text: "Torch" }] }, { "x-organizer": SECRET });

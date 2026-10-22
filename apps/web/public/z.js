@@ -301,7 +301,7 @@
   try { localStorage.removeItem("ctz-phone"); } catch {} // older versions saved the participant's own number on the phone: it is not kept any more
   function demoCard(v) {
     if (!DEMO || v.phase === "ended") return "";
-    if (!DEMO.running) return `<div class="zcard zdemo" role="note"><h2>Free demo <span class="zdemotag">DEMO</span></h2><p class="zsmall" style="margin:0 0 10px">This is a real ticket and a real game, about a minute long: 3 numbers, a short break with your host's message, 3 more numbers, and you win <b>Four corners</b> (the first and last numbers of the top and bottom rows). Turn your sound on, then press the button.</p><button class="zbtn" id="drun" type="button">Run Demo</button> <button class="zbtn s alt" id="dcopy" type="button">Copy the demo link to send to a colleague</button></div>`;
+    if (!DEMO.running) return `<div class="zcard zdemo" role="note"><h2>Demo video <span class="zdemotag">DEMO</span></h2><p class="zsmall" style="margin:0 0 10px">This is a real ticket and a real game, about a minute long: 3 numbers, a short break with your host's message, 3 more numbers, and you win <b>Four corners</b> (the first and last numbers of the top and bottom rows). Turn your sound on, then press the button.</p><button class="zbtn" id="drun" type="button">Run Demo</button> <button class="zbtn s alt" id="dcopy" type="button">Copy the demo link to send to a colleague</button></div>`;
     return `<div class="zcard zdemo" role="note"><span class="zdemotag">DEMO</span> <span class="zsmall">A sample game is running. Nothing is saved and nothing is charged.</span> <button class="zbtn s alt" id="dagain" type="button">Run demo again</button></div>`;
   }
   function bindDemo() {
@@ -563,11 +563,20 @@
     const tone = v.phase === "ended" ? "end" : v.paused || v.locked ? "pause" : running ? (secs !== null && secs <= 3 ? "go" : "soon") : "wait";
     const chip = v.phase === "ended" ? "Game over" : v.paused ? "Paused" : v.locked ? "Waiting to start" : !v.log.length ? "Get ready" : running && secs !== null ? "Next number in " + secs + "s" : "Numbers coming";
     const total = v.late ? "since you joined" : "of 90";
-    const recent = v.log.slice(-4, -1).reverse();
     return `<div class="zcard zcall"><div class="zchiprow"><span class="zchip2 ${tone}">${esc(chip)}</span><span class="zchip2 plain"><b data-count="${v.log.length}" data-ck="called">${v.log.length}</b>&nbsp;${total} called</span></div>
         <div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
-        <div class="zsub">${sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">Your ticket marks every number for you. Just watch.</p>`}
-        <div class="zlast" aria-label="Recent numbers">${recent.map((n, i) => `<span class="r${rangeOf(n)}${NEWCALL && i === 0 ? " pop" : ""}">${n}</span>`).join("")}</div></div>`;
+        <div class="zsub">${sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">Your ticket marks every number for you. Just watch.</p>`}</div>`;
+  }
+  /** Every prize and whether it is still open: the open ones first, the claimed ones after, crossed out with a small "claimed". */
+  function livePrizesCard(v) {
+    if (!ZG.prizeStatus || !v.cfg || !v.cfg.rewards) return "";
+    const list = ZG.prizeStatus(v.cfg, v.results || [], v.round || 1);
+    if (!list.length) return "";
+    const mine = new Set((v.won || []).filter((w) => w.round === v.round).map((w) => w.pattern + "#" + w.ordinal));
+    const open = list.filter((p) => !p.claimed).length;
+    const rows = list.map((p) => { const me = mine.has((p.key === "full2" ? "full2" : p.key) + "#" + p.ordinal);
+      return p.claimed ? `<li class="done"><s>${esc(p.name)}${p.text ? ": " + esc(p.text) : ""}</s> <small>claimed</small>${me ? ' <b class="zme">You</b>' : ""}</li>` : `<li><b>${esc(p.name)}</b>${p.text ? ": " + esc(p.text) : ""}</li>`; }).join("");
+    return `<div class="zcard zps"><h2>Prizes${open ? " still to win · " + open : " · all claimed"}</h2><ul class="zpl">${rows}</ul></div>`;
   }
   function playView(v) {
     const called = new Set(v.log);
@@ -596,12 +605,12 @@
       ${roundCards(v)}
       ${v.brk ? breakCard(v.brk) : ""}
       ${callCard(v, last, sub)}
+      ${v.phase === "ended" ? "" : livePrizesCard(v)}
       <div class="zcard${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Demo ticket <span class="zdemotag">DEMO</span>' : v.tickets.length > 1 ? "Your tickets" : "Your ticket"}</h2>${ribbon}${tix}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}
       <div class="zcard"><h2>Still to win</h2>${still}${chk}</div>
-      ${luckyCard(v)}
-      <div class="zcard"><h2>${v.rounds > 1 ? "Round " + v.round + " of " + v.rounds + " · " : ""}${v.late ? "Numbers since you joined · " + v.log.length : "All numbers · " + v.log.length + " of 90"} called</h2><div class="zboard">${Array.from({ length: 90 }, (_, i) => `<div class="${called.has(i + 1) ? "c" : ""}">${i + 1}</div>`).join("")}</div></div>`;
+      ${luckyCard(v)}`;
   }
 
   function paint() {

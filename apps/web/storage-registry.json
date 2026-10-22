@@ -54,6 +54,7 @@
       "say": "In an organizer's browser tab, until the tab is closed: the sign-in, the e-mail and mobile number typed, and the page to open next.",
       "keys": [
         "ctz-org",
+        "ctz-board-*",
         "ctz-next",
         "ctz-aimsg",
         "ctz-email",
