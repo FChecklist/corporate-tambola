@@ -38,4 +38,4 @@ Tests per game before deploy (page tests / edge tests / real-Chrome sign-in S01)
 - Tic Tac Toe, Snakes & Ladders, Luck by Chance are in TEST payment mode and shown "Coming soon": going LIVE needs a Rs 1 real payment by the owner on each.
 - DPDP app behind sign-in: not tested by Claude tonight (no throw-away account); Startup Coach real paid purchase: owner.
 - Test accounts raajat.agarwal+demonew1..4 / +livetest2 are empty shells (close with `node tools/livetest/live.mjs cleanup --close` after their games' 1-hour window).
-- Owner-only: trademark application; hello@ forwarding check; uptime alarm; lawyer/CA sign-off; Razorpay webhook secret; Cloudflare "Agent" bot policy left on Allow by the owner.
+- Owner-only: trademark application; Cloudflare "Agent" bot policy left on Allow by the owner.

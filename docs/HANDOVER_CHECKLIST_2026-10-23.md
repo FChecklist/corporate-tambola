@@ -11,9 +11,9 @@ Built from the previous session's report, docs/AUDIT_ALL_PRODUCTS_2026-10-23.md 
 - [x] "AI prompt for ChatGPT/Gemini" (listed as NOT built): already shipped - aiPaste in apps/edge/src/ai-link.ts, docs/AI_PROMPT.md, live at /ai-prompt (HTTP 200).
 
 ## Needs the owner
+(Closed 2026-10-23 on the owner's word: hello@ is one address per product family; Razorpay webhook secret is in place and payments run; publishing is not gated on any review. Uptime alarm: .github/workflows/uptime-alarm.yml in compliance-tracker.)
 - [ ] Rs 1 real payment on Tic Tac Toe, Snakes & Ladders, Luck by Chance (then switch from TEST to LIVE and remove "Coming soon").
 - [ ] Trademark application.
-- [ ] hello@ forwarding check; uptime alarm; lawyer/CA sign-off; Razorpay webhook secret.
 - [ ] Startup Coach: one real paid purchase.
 - [ ] DPDP app screens behind sign-in: needs a throw-away account to test.
 - [ ] Test shells raajat.agarwal+demonew1..4 and +livetest2: close with `node tools/livetest/live.mjs cleanup --close` (needs a live sign-in token; closing deletes the account, so the owner should confirm which account the saved token belongs to).
