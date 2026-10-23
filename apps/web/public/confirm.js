@@ -64,7 +64,7 @@
   function codeView(email, devCode) {
     view(card(`<div class="sheethead"><div class="eyebrow">Check your inbox</div><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><img src="/logo-mark.svg" alt="" width="26" height="26"></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
       <h1 id="cdTitle">Check your email</h1>
-      <p class="sheetbody">We emailed <b class="sendto">${esc(email)}</b>. Tap a button in the email, or type the 6-digit passcode here. It works for 10 minutes. Check spam too.</p>
+      <p class="sheetbody">We emailed <b class="sendto">${esc(email)}</b>. Option 1: type the 6-digit number from the e-mail here. Option 2: tap <b>Sign me in</b> in the e-mail (then come back to this page). It works for 10 minutes. Check spam too.</p>
       ${devCode ? `<div class="note info devcode" role="note"><span>Local test mode: your passcode is <b>${esc(devCode)}</b></span><button type="button" class="btn sm" id="useCode">Use this passcode</button></div>` : ""}
       <form id="cdForm" novalidate><label class="lb" for="lCode">6-digit passcode</label><input class="inp mono codein" id="lCode" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="6" placeholder="••••••" aria-describedby="fErr cdHelp" autocapitalize="off" spellcheck="false"><div id="fErr" role="alert"></div>
       <button class="btn block big" style="margin-top:14px" type="submit" id="cdGo">Sign in</button></form>

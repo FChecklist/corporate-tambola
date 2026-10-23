@@ -36,6 +36,8 @@
     if (!r || typeof r !== "object") return;
     if ("brand" in r && !(fromJoin && INFO.brand)) { INFO.brand = cleanBrand(r.brand); if (!DEMO && EID && INFO.brand && INFO.brand.logo !== undefined) { try { store.set("ctz:" + EID + ":brand", JSON.stringify(INFO.brand)); } catch { /* storage full or blocked: the strip just is not kept */ } } } // a join answer carries the brand without its logo: never let it replace the full one read from info
     if (r.didNotStart === true) INFO.dns = true; else if ("startRound" in r && !fromJoin) INFO.dns = false;
+    if ("verify" in r) { INFO.verify = r.verify === "id" || r.verify === "both" ? r.verify : "mobile"; INFO.empOnly = r.employeesOnly === true; }
+    if ("checkin" in r) INFO.checkin = r.checkin === true; // a game made after the check-in rule: the ticket opens only after the person marks themselves present
     if ("tickets" in r) INFO.demo = r.demo === true; // the public settings say whether it is a demo game; after a paid conversion the next read clears it
     if ("cancelled" in r || "startRound" in r) INFO.cancelled = r.cancelled ? { message: String(r.message || "").slice(0, 200) } : null;
   };
@@ -73,8 +75,17 @@
   const paintBrand = () => document.querySelectorAll(".zbrand").forEach((el) => { if (!el.classList.contains("zdef")) el.style.background = el.dataset.bg; el.style.color = el.dataset.fg; }); // set from the script, so a strict style policy never blocks the colour
 
   // ---------- joining: a personal link needs no number; a number may be asked for; a request may have to wait to be let in; a person may have been removed ----------
-  const J = { k4: {}, consent: null, mode: "", phone: "", name: "", wid: "", who: "", timer: null, polling: false, note: "" };
+  const J = { k4: {}, consent: null, mode: "", phone: "", emp: "", name: "", wid: "", who: "", timer: null, polling: false, note: "" };
   const inviteOf = () => (INVITE_FROM ? { from: INVITE_FROM, cat: INVITE_CAT } : undefined);
+  // What the organizer asked people to give to get in: a mobile number (default), an employee ID, or both. Employees only: no way in without the ID.
+  const joinWho = () => {
+    const vm = INFO.verify || "mobile", eo = !!INFO.empOnly, pv = esc(J.mode === "needPhone" ? J.phone : J.phone || ""), ev = esc(J.emp || "");
+    const phone = (label, hint) => `<label for="ph">${label}</label><input id="ph" inputmode="tel" autocomplete="tel" placeholder="98765 43210" value="${pv}">${hint ? `<p class="zsmall" style="margin:2px 0 6px">${hint}</p>` : ""}`;
+    const emp = (label, hint) => `<label for="emp">${label}</label><input id="emp" autocomplete="off" autocapitalize="characters" maxlength="30" value="${ev}">${hint ? `<p class="zsmall" style="margin:2px 0 6px">${hint}</p>` : ""}`;
+    if (vm === "id") return emp("Your employee ID", eo ? "This game is for employees only." : "") + (eo ? "" : phone("No employee ID? Type your mobile number instead", "Vendors, customers and families use their mobile number."));
+    if (vm === "both") return phone("Your mobile number", "") + emp(eo ? "Your employee ID" : "Your employee ID (employees only)", eo ? "This game is for employees only." : "Not an employee? Leave this empty.");
+    return phone("Your mobile number", "");
+  };
   const joinView = (msg) => {
     if (J.mode === "removed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>You are not on this game's list</h2><p class="zsmall" style="margin:0">You were removed from this game, so there is no ticket for you here. If you think this is a mistake, please ask the person who invited you.</p></div>`;
     if (J.mode === "gone") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This link is not active any more</h2><p class="zsmall" style="margin:0">Please ask the person who invited you for a new link.</p></div>`;
@@ -87,7 +98,7 @@
     <p class="zgoalline" style="margin:0 0 6px">Numbers are called one by one. Tap each one on your ticket as it is called. When a row or the whole ticket is complete, press Claim before the next number: the software checks it, no need to shout.</p>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
     ${J.mode === "needPhone" ? `<div class="zbanner info" role="status" style="margin:0 0 8px">${J.note ? esc(J.note) : "This link was already opened on another phone. Please type your mobile number to get your ticket."}</div>` : ""}
     ${DEMO ? "" : CBConsent.html("K4")}
-    ${personal ? `<p class="zsmall" style="margin:0 0 6px">Your personal link is ready. Press the button to get your ticket.</p>` : `<label for="ph">Your mobile number</label><input id="ph" inputmode="tel" autocomplete="tel" placeholder="98765 43210" value="${esc(J.mode === "needPhone" ? J.phone : "")}">`}
+    ${personal ? `<p class="zsmall" style="margin:0 0 6px">Your personal link is ready. Press the button to get your ticket.</p>` : joinWho()}
     ${personal ? "" : `<label for="nm">Your name (shown only to the organizer)</label><input id="nm" autocomplete="name" maxlength="60" value="${esc(J.name)}">`}
     ${msg ? `<div class="zbanner bad" role="alert">${esc(msg)}</div>` : ""}
     <button class="zbtn" id="go" ${DEMO ? "" : 'data-needs="K4" disabled aria-disabled="true"'}>Get my ticket</button>
@@ -114,7 +125,7 @@
   }
   // The waiting screen survives a reload: what the person typed and the waiting number are kept on this phone only until they are let in, declined, removed or start again.
   const WAITKEY = "ctz-wait-" + EID;
-  const saveWait = () => { try { store.set(WAITKEY, JSON.stringify({ wid: J.wid, who: J.who, note: J.note, phone: J.phone, name: J.name, at: Date.now() })); } catch {} };
+  const saveWait = () => { try { store.set(WAITKEY, JSON.stringify({ wid: J.wid, who: J.who, note: J.note, phone: J.phone, emp: J.emp, name: J.name, at: Date.now() })); } catch {} };
   const clearWait = () => { try { localStorage.removeItem(WAITKEY); } catch {} try { store.set(WAITKEY, ""); } catch {} };
   function restoreWait() {
     if (DEMO || J.mode) return;
@@ -138,7 +149,7 @@
   }
   /** Joins with what is typed (or just the token). Shows a ticket, or the calm screen that fits the answer. */
   async function doJoin() {
-    const ok = await rt.join(J.phone, J.name, inviteOf());
+    const ok = await rt.join(J.phone, J.name, inviteOf(), J.emp);
     if (ok) {
       J.mode = ""; clearInterval(J.timer); clearWait();
       if (TOKEN) { try { const u = new URLSearchParams(location.search); u.delete("t"); history.replaceState(null, "", location.pathname + (u.toString() ? "?" + u : "")); } catch {} } // the personal token leaves the address bar once it has done its job
@@ -155,7 +166,7 @@
     paint(); return false;
   }
 
-  const isDemoGame = () => !DEMO && INFO.demo === true;
+  const isDemoGame = () => false; // the Rs 0 game for up to 10 people is a real game: no mark on any screen
   const demoTag = () => (isDemoGame() ? ' <span class="zdemotag">DEMO GAME</span>' : "");
   // Real housie: the ticket never marks itself. Each number is a button the player taps when it is called (`marks` = what they tapped); a tap on a number not called yet is refused in place.
   const ticketHtml = (t, marks, label, win) => `<div class="zticket${isDemoGame() ? " zdemogame" : ""}" aria-label="${label}${isDemoGame() ? " (demo game)" : ""}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div role="button" tabindex="0" data-tap="${v}" aria-pressed="${marks.has(v)}" aria-label="${v}${marks.has(v) ? ", marked" : ""}" class="${marks.has(v) ? "m" : ""}${marks.has(v) && NEWMARK === v ? " pop" : ""}${win && win.has(v) && marks.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;
@@ -322,8 +333,8 @@
   const demoGameCard = () => (isDemoGame() ? `<div class="zcard zdemo" id="demogame" role="note"><span class="zdemotag">DEMO GAME</span> <span class="zsmall">This is a demo game for up to 10 people. The organizer can make it a real game at any time.</span></div>` : "");
   function demoCard(v) {
     if (!DEMO || v.phase === "ended") return "";
-    if (!DEMO.running) return `<div class="zcard zdemo" role="note"><h2>Demo video <span class="zdemotag">DEMO</span></h2><p class="zsmall" style="margin:0 0 10px">This is a real ticket and a real game, about a minute long: 3 numbers, a short break with your host's message, 3 more numbers. <b>Tap each number on your ticket as it is called</b>, and when the <b>Four corners</b> (the first and last numbers of the top and bottom rows) are marked, press <b>Claim</b> to win. Turn your sound on, then press the button.</p><button class="zbtn" id="drun" type="button">Run Demo</button> <button class="zbtn s alt" id="dcopy" type="button">Copy the demo link to send to a colleague</button></div>`;
-    return `<div class="zcard zdemo" role="note"><span class="zdemotag">DEMO</span> <span class="zsmall">A sample game is running. Nothing is saved and nothing is charged.</span> <button class="zbtn s alt" id="dagain" type="button">Run demo again</button></div>`;
+    if (!DEMO.running) return `<div class="zcard zdemo" role="note"><h2>Video <span class="zdemotag">VIDEO</span></h2><p class="zsmall" style="margin:0 0 10px">This is a real ticket and a real game, about a minute long: 3 numbers, a short break with your host's message, 3 more numbers. <b>Tap each number on your ticket as it is called</b>, and when the <b>Four corners</b> (the first and last numbers of the top and bottom rows) are marked, press <b>Claim</b> to win. Turn your sound on, then press the button.</p><button class="zbtn" id="drun" type="button">Run Demo</button> <button class="zbtn s alt" id="dcopy" type="button">Copy the demo link to send to a colleague</button></div>`;
+    return `<div class="zcard zdemo" role="note"><span class="zdemotag">VIDEO</span> <span class="zsmall">A sample game is running. Nothing is saved and nothing is charged.</span> <button class="zbtn s alt" id="dagain" type="button">Run the video again</button></div>`;
   }
   function bindDemo() {
     if (!DEMO) return;
@@ -331,7 +342,7 @@
     for (const id of ["dcopy", "dcopy2"]) { const b = document.getElementById(id); if (b) b.onclick = async () => { const link = location.origin + "/demo.html"; try { await navigator.clipboard.writeText(link); b.textContent = "Link copied: " + link; } catch { b.textContent = "Send this link: " + link; } }; } // the plain address: whoever opens it runs their own demo
   }
   function finalCard(v) {
-    if (DEMO) return `<div class="zcard zfinal"><h2>That was the demo <span class="zdemotag">DEMO</span></h2><div class="zfbig">${PRIZES.length ? "You won Four corners." : "You saw how a game runs."}</div>${PRIZES.length ? "" : `<p class="zsmall" style="margin:0 0 6px">Next time tap each number as it is called and press Claim when the four corners are marked: that is how a prize is won.</p>`}<p class="zsmall" style="font-size:15px;margin:6px 0 10px">A real game has 90 numbers, many prizes, your own brand messages and videos, lucky draws and a report. You build it in about five minutes and nobody pays until you are ready.</p><a class="zbtn" style="display:inline-flex;align-items:center;text-decoration:none" href="/">Create my game</a> <button class="zbtn s alt" id="dagain2" type="button">Run demo again</button> <button class="zbtn s alt" id="dcopy2" type="button">Copy the demo link</button></div>`;
+    if (DEMO) return `<div class="zcard zfinal"><h2>That was the video <span class="zdemotag">VIDEO</span></h2><div class="zfbig">${PRIZES.length ? "You won Four corners." : "You saw how a game runs."}</div>${PRIZES.length ? "" : `<p class="zsmall" style="margin:0 0 6px">Next time tap each number as it is called and press Claim when the four corners are marked: that is how a prize is won.</p>`}<p class="zsmall" style="font-size:15px;margin:6px 0 10px">A real game has 90 numbers, many prizes, your own brand messages and videos, lucky draws and a report. You build it in about five minutes and nobody pays until you are ready.</p><a class="zbtn" style="display:inline-flex;align-items:center;text-decoration:none" href="/">Create my game</a> <button class="zbtn s alt" id="dagain2" type="button">Run the video again</button> <button class="zbtn s alt" id="dcopy2" type="button">Copy the demo link</button></div>`;
     const n = PRIZES.length;
     return `<div class="zcard zfinal"><h2>Game complete${demoTag()}</h2>
       <div class="zmedal" aria-hidden="true">${n ? "&#127942;" : "&#127922;"}</div>
@@ -585,9 +596,11 @@
     const tone = v.phase === "ended" ? "end" : v.paused || v.locked ? "pause" : running ? (secs !== null && secs <= 3 ? "go" : "soon") : "wait";
     const chip = v.phase === "ended" ? "Game over" : v.paused ? "Paused" : v.locked ? "Waiting to start" : v.waitingForHost ? "Waiting for the host" : !v.log.length ? "Get ready" : running && secs !== null ? "Next number in " + secs + "s" : "Numbers coming";
     const total = v.late ? "since you joined" : "of 90";
+    // Between two numbers (software calls): a big countdown 9, 8, 7 ... 1, then the number. Silent on purpose: the voice speaks only the number itself.
+    const cdown = running && secs !== null && !v.waitingForHost && v.mode !== "hold" ? `<div class="zcount" role="timer" aria-label="Next number in ${secs} seconds"><div class="zring" style="--p:${Math.max(0, Math.min(100, Math.round(secs / Math.max(3, v.callSeconds || 9) * 100)))}"><b>${secs}</b></div><span>seconds to the next number</span></div>` : "";
     return `<div class="zcard zcall"><div class="zchiprow"><span class="zchip2 ${tone}">${esc(chip)}</span><span class="zchip2 plain"><b data-count="${v.log.length}" data-ck="called">${v.log.length}</b>&nbsp;${total} called</span></div>
         <div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
-        <div class="zsub">${sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p>`}</div>`;
+        ${cdown}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p>`}</div>`;
   }
   /** Under the ticket: a Claim button for every prize the player's marks complete, what was claimed and is being checked, this player's Bogeys, and the prizes the ticket is out of. */
   function claimBar(v) {
@@ -626,13 +639,14 @@
     else if (v.paused) banners.push(`<div class="zbanner info">Paused by the organizer. It will carry on shortly.</div>`);
     else if (v.mode === "hold" && v.nowRound !== null) banners.push(`<div class="zbanner warn">Checking with the organizer… numbers will continue in a moment.</div>`);
     else if (v.mode === "blind") banners.push(`<div class="zbanner warn">Cannot reach the organizer's controls right now. Play continues; a pause may appear late.</div>`);
+    if (v.phase === "ended" && !v.stopped && v.endedByPrizes) banners.push(`<div class="zbanner ok">Every prize has been won, so the game ends here after ${v.log.length} numbers. No more numbers will be called. Thank you for taking part.</div>`);
     if (v.phase === "ended" && !v.stopped && !v.endedByPrizes) banners.push(`<div class="zbanner ok">${v.rounds > 1 ? "All " + v.rounds + " rounds are finished." : "All 90 numbers have been called."} Thank you for taking part.</div>`);
     const sub = v.phase === "ended" || v.locked || v.brk || v.intermission || (DEMO && !DEMO.running) ? "" : v.late && v.late.secondsUntil > 0 ? "Your numbers start in " + clock(v.late.secondsUntil) : v.waitingForHost ? "The host presses for the next number" : v.log.length === 0 ? (v.nextCallInSec !== null ? (v.nextCallInSec > GRACE_SECS ? "Starting in " + clock(v.nextCallInSec - GRACE_SECS) : "First number in " + clock(v.nextCallInSec)) : "Getting ready…") : v.paused || v.mode === "hold" ? "" : v.waitingForHost ? "The host presses for the next number" : v.nextCallInSec !== null ? "Next number in " + v.nextCallInSec + "s" : "";
     const still = v.tickets.length ? stillToWinRows(v) : "";
     const chk = v.pendingChecks > 0 ? `<p class="zsmall">Double-checking ${v.pendingChecks} earlier number${v.pendingChecks === 1 ? "" : "s"} in the background.</p>` : "";
     const curWins = v.won.filter((w) => w.round === v.round), winSet = new Set(curWins.flatMap((w) => w.cells));
     const ribbon = curWins.length ? `<div class="zwin" role="status">&#127881; Congratulations! You won ${curWins.map((w) => esc(lineName(v.cfg, w.pattern, w.ordinal))).join(", ")}${curWins.some((w) => w.text) ? " &middot; " + curWins.filter((w) => w.text).map((w) => esc(w.text)).join(", ") : ""}</div>` : "";
-    const tix = v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : DEMO ? "Demo ticket" : "Your ticket", winSet)).join("");
+    const tix = v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : DEMO ? "Video ticket" : "Your ticket", winSet)).join("");
     const sndBtn = `<button class="zsnd zsndin" id="snd" aria-pressed="${sound}">${sound ? "&#128266; Sound on" : "&#128263; Sound off"}</button>`;
     return `${brandStrip(sndBtn)}
       ${demoCard(v)}${demoGameCard()}${annBanner(v)}${banners.join("")}
@@ -643,7 +657,7 @@
       ${roundCards(v)}
       ${v.brk ? breakCard(v.brk) : ""}
       ${callCard(v, last, sub)}
-      <div class="zcard${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Demo ticket <span class="zdemotag">DEMO</span>' : (v.tickets.length > 1 ? "Your tickets" : "Your ticket") + demoTag()}</h2>${ribbon}${tix}${claimBar(v)}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
+      <div class="zcard${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Video ticket <span class="zdemotag">VIDEO</span>' : (v.tickets.length > 1 ? "Your tickets" : "Your ticket") + demoTag()}</h2>${ribbon}${tix}${claimBar(v)}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
       ${v.phase === "ended" ? "" : livePrizesCard(v)}
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}
@@ -651,6 +665,61 @@
       ${luckyCard(v)}`;
   }
 
+  // ---------- present check-in: the ticket opens only after this ----------
+  // Name and mobile are confirmed (or edited), the invite chain is shown (never editable), the 4-digit code on THIS ticket page is typed, Submit appears only when all of that is done.
+  const CK = { loaded: false, loading: false, at: -1e9, present: false, open: false, opensMs: 0, ids: null, code: "", invitedBy: null, err: "", busy: false, html: "", v: { name: null, mobile: null, okN: false, okM: false, code: "", editN: false, editM: false } };
+  async function loadCk(v) {
+    if (!INFO.checkin || !v.pid || CK.present || CK.loading || performance.now() - CK.at < (CK.open ? 60000 : 5000)) return;
+    CK.loading = true; CK.at = performance.now();
+    try {
+      const r = await api("GET", `/api/z/${EID}/checkin?pid=${encodeURIComponent(v.pid)}`);
+      if (r && r.required === false) INFO.checkin = false;
+      else if (r) { CK.loaded = true; CK.present = !!r.present; CK.open = !!r.open; CK.opensMs = r.opensMs; CK.ids = { game: r.gameId, participant: r.participantId, ticket: r.ticketId }; if (r.code) CK.code = r.code; CK.invitedBy = r.invitedBy || null; if (CK.v.name === null) { try { const k = JSON.parse(store.get("ctz:" + EID + ":ck") || "null"); if (k && typeof k === "object") Object.assign(CK.v, { name: k.name, mobile: k.mobile, okN: !!k.okN, okM: !!k.okM, code: String(k.code || "").slice(0, 4), editN: !!k.editN, editM: !!k.editM }); } catch { /* start fresh */ } } // the same link again: the half-filled check-in is where they left it
+      if (CK.v.name === null) CK.v.name = r.name || ""; if (CK.v.mobile === null) CK.v.mobile = r.mobile || ""; }
+    } catch (e) { /* asked again in a few seconds */ }
+    CK.loading = false;
+  }
+  const ckTime = (ms) => new Date(ms).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
+  function checkinView() {
+    const ids = CK.ids ? `<div class="zckids"><div><span>Game ID</span><b>${esc(CK.ids.game)}</b></div><div><span>Participant ID</span><b>${esc(CK.ids.participant)}</b></div><div><span>Ticket ID</span><b>${esc(CK.ids.ticket)}</b></div></div>` : "";
+    if (!CK.loaded) return `${brandStrip()}${demoGameCard()}<div class="zcard"><p class="zmsg">Loading your check-in…</p></div>`;
+    if (!CK.open) {
+      const left = Math.max(0, Math.round((CK.opensMs - Date.now()) / 1000));
+      return `${brandStrip()}${demoGameCard()}<div class="zcard zck"><div class="zeyebrow">Before the game</div><h2>Check-in opens at ${esc(ckTime(CK.opensMs))} (India time)</h2>${ids}<p class="zsmall">Check-in opens 5 minutes before the game starts. Keep this page open: the check-in appears here by itself, and your ticket opens once you are marked present.</p><div class="zckwait"><span>Opens in</span> <b>${esc(clock(left))}</b></div></div>`;
+    }
+    const x = CK.v, ready = x.okN && x.okM && String(x.code).length === 4;
+    return `${brandStrip()}${demoGameCard()}<div class="zcard zck"><div class="zeyebrow">Before the game</div><h2>Mark yourself present</h2>${ids}
+      <p class="zsmall">Check your name and mobile number, type the code shown below, and press Submit. Your ticket opens when you are marked present.</p>
+      <p class="zsmall zckkeep">We keep the time you check in (and a corrected name or number) with your other game data, and delete it within 24 hours after the game ends. If you win, the time of your check-in is kept for 365 days with the winners record.</p>
+      <div class="zckrow"><label for="ckname">Your name</label><input id="ckname" class="zin" autocomplete="off" maxlength="60" value="${esc(x.name)}"${x.editN ? "" : " disabled"}><button type="button" class="zmini" id="ckeditn">${x.editN ? "Done" : "Edit"}</button></div>
+      <label class="zchk"><input type="checkbox" id="ckokn"${x.okN ? " checked" : ""}> This name is correct</label>
+      <div class="zckrow"><label for="ckmob">Your mobile number</label><input id="ckmob" class="zin" inputmode="tel" autocomplete="off" maxlength="14" value="${esc(x.mobile)}"${x.editM ? "" : " disabled"}><button type="button" class="zmini" id="ckeditm">${x.editM ? "Done" : "Edit"}</button></div>
+      <label class="zchk"><input type="checkbox" id="ckokm"${x.okM ? " checked" : ""}> This mobile number is correct</label>
+      ${CK.invitedBy ? `<div class="zckinv">You came in through <b>${esc(CK.invitedBy)}</b>. You cannot edit this line.</div>` : ""}
+      <div class="zckcode"><span>Your code</span><b id="ckshow" aria-label="Your code">${esc(CK.code)}</b></div>
+      <label for="ckcode">Type your code here</label><input id="ckcode" class="zin zckin" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="4" placeholder="4 digits" value="${esc(x.code)}">
+      <div id="ckerr" class="zckerr" role="alert">${CK.err ? esc(CK.err) : ""}</div>
+      <button type="button" class="zbtn" id="cksubmit"${ready ? "" : " hidden"}${CK.busy ? " disabled" : ""}>Submit</button></div>`;
+  }
+  function bindCheckin() {
+    const $ = (id) => document.getElementById(id), x = CK.v, keep = () => { try { store.set("ctz:" + EID + ":ck", JSON.stringify(x)); } catch { /* not kept */ } }, sync = () => { keep(); const b = $("cksubmit"); if (b) b.hidden = !(x.okN && x.okM && String(x.code).length === 4); };
+    const hook = (id, fn) => { const el = $(id); if (el) el.oninput = () => { fn(el); CK.err = ""; const e = $("ckerr"); if (e) e.textContent = ""; sync(); }; };
+    hook("ckname", (el) => { x.name = el.value; }); hook("ckmob", (el) => { x.mobile = el.value; });
+    hook("ckcode", (el) => { el.value = el.value.replace(/\D/g, "").slice(0, 4); x.code = el.value; });
+    const chk = (id, key) => { const el = $(id); if (el) el.onchange = () => { x[key] = el.checked; sync(); }; }; chk("ckokn", "okN"); chk("ckokm", "okM");
+    const ed = (id, key, field) => { const el = $(id); if (el) el.onclick = () => { x[key] = !x[key]; CK.html = ""; paint(); const f = $(field); if (f && x[key]) f.focus(); }; }; ed("ckeditn", "editN", "ckname"); ed("ckeditm", "editM", "ckmob");
+    const go = $("cksubmit"); if (go) go.onclick = async () => {
+      if (CK.busy) return; CK.busy = true; CK.err = ""; go.disabled = true;
+      try {
+        const body = { pid: rt.view().pid, code: x.code, confirmName: !!x.okN, confirmMobile: !!x.okM };
+        if (x.editN && x.name) body.name = x.name; if (x.editM && x.mobile) body.mobile = x.mobile;
+        const r = await api("POST", `/api/z/${EID}/checkin`, body);
+        if (r && r.present) { CK.present = true; CK.err = ""; try { store.set("ctz:" + EID + ":ck", ""); } catch { /* ignore */ } }
+      } catch (e) { CK.err = e && e.message ? e.message : "That did not work. Please try again."; }
+      CK.busy = false; CK.html = ""; paint();
+    };
+    sync();
+  }
   function paint() {
     const v = rt.view();
     if (window.ctzView) window.ctzView(v); // the flight recorder (blackbox.js) learns which stage the game is in
@@ -658,8 +727,14 @@
     if (INFO.dns) { if (timer) { clearInterval(timer); timer = null; } clearInterval(J.timer); mediaHost.style.display = "none"; $app.innerHTML = dnsView(); window.__ctzOff = v.phase === "boot"; paintBrand(); return; } // a game that did not start: one calm screen, nobody can join or pay
     if (v.phase === "missing" || v.phase === "boot") { $app.innerHTML = (INFO.brand || v.phase === "boot" ? brandStrip() : "") + `<p class="zmsg">${esc(v.phase === "boot" && !navigator.onLine ? "No connection right now. Your ticket is safe on this phone. This page opens the game by itself when you are back online." : v.error || "Loading…")}</p>`; paintBrand(); return; }
     if (INFO.cancelled) { if (timer) { clearInterval(timer); timer = null; } clearInterval(J.timer); mediaHost.style.display = "none"; $app.innerHTML = cancelledView(); paintBrand(); return; } // a cancelled game: one calm screen, nothing else
-    if (v.phase === "join") { const f = document.getElementById("ph") || document.getElementById("nm"); if (f && document.activeElement === f) return; $app.innerHTML = joinView(J.mode ? null : v.error); paintBrand(); bindJoin(); return; }
+    if (v.phase === "join") { const f = document.getElementById("ph") || document.getElementById("nm") || document.getElementById("emp"); if (f && document.activeElement === f) return; $app.innerHTML = joinView(J.mode ? null : v.error); paintBrand(); bindJoin(); return; }
     if (ME.removed) { if (timer) { clearInterval(timer); timer = null; } mediaHost.style.display = "none"; $app.innerHTML = removedView(); paintBrand(); return; } // taken off the list: the phone stops
+    if (INFO.checkin && v.pid && !CK.present) { // the ticket is hidden until the person marks themselves present
+      loadCk(v); const af = document.activeElement; if (af && /^ck/.test(af.id || "")) return; // never wipe a box someone is typing in
+      const h = checkinView(); if (h !== CK.html || !$app.firstChild) { CK.html = h; $app.innerHTML = h; paintBrand(); bindCheckin(); }
+      return;
+    }
+    CK.html = "";
     const fresh = syncPrizes(v); reportToStore(v); loadCf(v); pollMe(v);
     { const af = document.activeElement; if (af && (af.id === "cfnm" || af.id === "cfph" || af.id === "mi-name" || af.id === "mi-phone")) return; } // never wipe a form someone is typing in
     NEWCALL = v.log.length > lastLen && !firstPaint && MOTION() ? v.log[v.log.length - 1] : 0;
@@ -707,7 +782,8 @@
       J.consent = DEMO ? null : CBConsent.payload(document, "K4");
       go.disabled = true;
       if (window.TBAudio) TBAudio.unlock();
-      const ph = document.getElementById("ph"), nm = document.getElementById("nm");
+      const ph = document.getElementById("ph"), nm = document.getElementById("nm"), em = document.getElementById("emp");
+      J.emp = em ? em.value.trim() : J.emp;
       J.phone = ph ? ph.value : J.phone; J.name = nm ? nm.value.trim() : J.name;
       await doJoin(); // shows the ticket screen at once on success: the first tick may take a few seconds on a slow network
     };

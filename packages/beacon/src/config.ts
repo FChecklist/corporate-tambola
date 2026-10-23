@@ -126,7 +126,9 @@ export const CLAIM_RULE_TEXT = "Press Claim before the next number is called.";
 export const PLAYER_TIP = "Tap each number as it is called. When a prize is complete, press Claim before the next number is called. A wrong claim is a Bogey: it does not count.";
 /** A DEMO GAME: a real game on the real server, free, for at most this many people; every screen says DEMO GAME. The organizer can make it a real game (choose a pack and pay) at any time. */
 export const DEMO_CAP = 10;
-export interface EngagementCfg { /** A friendly name the organizer gives the game (optional, up to 60 characters). */ name?: string; /** Absent = auto. */ callMode?: CallMode; /** A free demo game (up to DEMO_CAP people). Cleared by a paid conversion. */ demo?: true; tickets: 1 | 2; /** What happens when people complete a house on the same number (absent in an older game = they share). */ ties?: TieMode; rewards: RewardLine[]; breaks: BreakCfg[]; rounds: number; invites?: InviteCfg; /** Before the first number (at most one per ticket). Always present after validateCfg. */ opening?: BrandSlot[]; /** On the final screen (at most one per ticket). Always present after validateCfg. */ closing?: BrandSlot[]; /** The company's mark on the ticket (name, colour, optional logo). Absent = the plain ticket. */ brand?: BrandCfg }
+export type VerifyMode = "mobile" | "id" | "both";
+export const VERIFY_MODES: VerifyMode[] = ["mobile", "id", "both"];
+export interface EngagementCfg { /** What a person must give to get in: their mobile number (default), their employee ID, or both. */ verify?: VerifyMode; /** Only the people on my list may play, and nobody may invite anyone. */ employeesOnly?: true; /** A friendly name the organizer gives the game (optional, up to 60 characters). */ name?: string; /** Absent = auto. */ callMode?: CallMode; /** A free demo game (up to DEMO_CAP people). Cleared by a paid conversion. */ demo?: true; tickets: 1 | 2; /** What happens when people complete a house on the same number (absent in an older game = they share). */ ties?: TieMode; rewards: RewardLine[]; breaks: BreakCfg[]; rounds: number; invites?: InviteCfg; /** Before the first number (at most one per ticket). Always present after validateCfg. */ opening?: BrandSlot[]; /** On the final screen (at most one per ticket). Always present after validateCfg. */ closing?: BrandSlot[]; /** The company's mark on the ticket (name, colour, optional logo). Absent = the plain ticket. */ brand?: BrandCfg }
 /**
  * Who decides the winners: the software, never a person. Every phone works out the winners from the public numbers and reports them; our store accepts a result
  * only when this many DIFFERENT phones (one ticket per phone) reported exactly the same winners. Tiny games need half their people; larger ones 5% (3 to 25).
@@ -186,7 +188,7 @@ const YT = /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i;
 export const SITE_MEDIA = /^\/[A-Za-z0-9._-]{1,80}\.(mp4|webm|m4a|mp3)$/i;
 
 /** Validates what the organizer sent. `opts.stored`: this is a game read back from storage, not new input, so a house may keep up to LEGACY_MAX_ORDINAL winners even where today's limit is lower (old games stay valid). Returns the cleaned config, or a plain-English reason. Missing parts keep their defaults. */
-export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?: unknown; breaks?: unknown; rounds?: unknown; invites?: unknown; opening?: unknown; closing?: unknown; name?: unknown; brand?: unknown; callMode?: unknown; demo?: unknown }, base: EngagementCfg = defaultCfg(), opts: { stored?: boolean } = {}): { ok: true; cfg: EngagementCfg } | { ok: false; error: string } {
+export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?: unknown; breaks?: unknown; rounds?: unknown; invites?: unknown; opening?: unknown; closing?: unknown; name?: unknown; brand?: unknown; callMode?: unknown; demo?: unknown; verify?: unknown; employeesOnly?: unknown }, base: EngagementCfg = defaultCfg(), opts: { stored?: boolean } = {}): { ok: true; cfg: EngagementCfg } | { ok: false; error: string } {
   const cfg: EngagementCfg & { opening: BrandSlot[]; closing: BrandSlot[] } = { tickets: base.tickets, ...(base.ties ? { ties: base.ties } : {}), rewards: base.rewards, breaks: base.breaks, rounds: base.rounds ?? 1, invites: base.invites ?? defaultInvites(), opening: base.opening ?? [], closing: base.closing ?? [], ...(base.name ? { name: base.name } : {}), ...(base.brand ? { brand: base.brand } : {}), ...(base.callMode === "host" ? { callMode: "host" as const } : {}), ...(base.demo ? { demo: true as const } : {}) };
   if (input.callMode !== undefined) {
     if (input.callMode !== "auto" && input.callMode !== "host") return { ok: false, error: "Who calls the numbers: choose the software (auto) or a Host pressing a button for each number (host)." };
@@ -308,6 +310,14 @@ export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?
     if (cfg.breaks.length > maxMidFor(t) || cfg.opening.length > maxEdgeFor(t) || cfg.closing.length > maxEdgeFor(t))
       return { ok: false, error: `With ${t} ticket${t === 1 ? "" : "s"} per person you can use ${brandMomentsFor(t)} brand moments: ${maxEdgeFor(t)} before the game, ${maxMidFor(t)} during it and ${maxEdgeFor(t)} at the end. Please switch some off.` };
   }
+  if (input.verify !== undefined) {
+    if (!VERIFY_MODES.includes(input.verify as VerifyMode)) return { ok: false, error: "What a person must give: choose mobile number, employee ID, or both." };
+    if (input.verify === "mobile") delete cfg.verify; else cfg.verify = input.verify as VerifyMode;
+  }
+  if (input.employeesOnly !== undefined) {
+    if (typeof input.employeesOnly !== "boolean") return { ok: false, error: "Employees only: say yes or no." };
+    if (input.employeesOnly) cfg.employeesOnly = true; else delete cfg.employeesOnly;
+  }
   if (input.invites !== undefined) {
     const v = input.invites as any;
     if (!v || typeof v !== "object" || typeof v.on !== "boolean") return { ok: false, error: "Invites: say whether they are on or off." };
@@ -319,5 +329,6 @@ export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?
     if (v.on && uniq.length < 1) return { ok: false, error: "Pick at least one kind of guest people may invite." };
     cfg.invites = { on: v.on, per, cats: uniq };
   }
+  if (cfg.employeesOnly) cfg.invites = { on: false, per: cfg.invites!.per, cats: cfg.invites!.cats }; // employees only: nobody invites anyone
   return { ok: true, cfg };
 }

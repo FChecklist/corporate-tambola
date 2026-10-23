@@ -228,3 +228,39 @@ describe("what a partner can see", () => {
     expect(l.partners[0].accrued).toBeGreaterThan(100);
   });
 });
+
+describe("signing in again by e-mail (no key to keep)", () => {
+  const asha = "asha@partner.example";
+  const ask = async (email = asha, now = T) => (await (await call("POST", "/api/partner/signin", { email }, {}, now)).json()) as any;
+  const me = (key: string) => call("GET", "/api/partner/me", undefined, { "x-partner": key });
+  test("Option 1: the 6-digit code gives a new key for this device; the first device keeps working; a wrong code fails; the code is single use", async () => {
+    const first = await enroll(); const s = await ask();
+    expect(s.devCode).toMatch(/^\d{6}$/);
+    expect((await call("POST", "/api/partner/signin/verify", { email: asha, code: "000000" })).status).toBe(400);
+    const v: any = await (await call("POST", "/api/partner/signin/verify", { email: asha, code: s.devCode })).json();
+    expect(v.partnerKey).toMatch(/^ctp_[0-9a-f]{40}$/); expect(v.partnerKey).not.toBe(first.partnerKey);
+    expect((await me(v.partnerKey)).status).toBe(200); expect((await me(first.partnerKey)).status).toBe(200); // both phones are signed in
+    expect(((await (await me(v.partnerKey)).json()) as any).code).toBe(first.code);
+    expect((await call("POST", "/api/partner/signin/verify", { email: asha, code: s.devCode })).status).toBe(400);
+  });
+  test("Option 2: the one-tap link signs in once; the mail has both ways; a code or link the person did not ask for fails; an unknown address looks the same and gets no mail", async () => {
+    await enroll(); const s = await ask();
+    const mail = (raw.query("SELECT subject, body FROM outbox WHERE to_addr=? ORDER BY id DESC LIMIT 1").get(asha) as any).body as string;
+    expect(mail).toContain("OPTION 1"); expect(mail).toContain(s.devCode); expect(mail).toContain("OPTION 2"); expect(mail).toContain(`/partner.html?t=${s.devToken}`); expect(mail).not.toContain("OPTION 3");
+    const l: any = await (await call("POST", "/api/partner/signin/link", { token: s.devToken })).json();
+    expect(l.partnerKey).toMatch(/^ctp_/); expect((await me(l.partnerKey)).status).toBe(200);
+    expect((await call("POST", "/api/partner/signin/link", { token: s.devToken })).status).toBe(400); // single use
+    expect((await call("POST", "/api/partner/signin/link", { token: "0".repeat(48) })).status).toBe(400);
+    const before = (raw.query("SELECT COUNT(*) c FROM outbox").get() as any).c;
+    const u = await ask("stranger@nowhere.example"); expect(u.ok).toBe(true); expect(u.devCode).toBeUndefined(); expect((raw.query("SELECT COUNT(*) c FROM outbox").get() as any).c).toBe(before);
+  });
+  test("a newer request replaces the older link; both end after 10 minutes; closing the account ends every device's key", async () => {
+    const first = await enroll(); const a = await ask(asha, T), b = await ask(asha, T + 1000);
+    expect((await call("POST", "/api/partner/signin/link", { token: a.devToken }, {}, T + 2000)).status).toBe(400);
+    expect((await call("POST", "/api/partner/signin/link", { token: b.devToken }, {}, T + 11 * 60_000)).status).toBe(400);
+    const c = await ask(asha, T + 20 * 60_000); const v: any = await (await call("POST", "/api/partner/signin/verify", { email: asha, code: c.devCode }, {}, T + 20 * 60_000 + 5)).json();
+    expect((await call("POST", "/api/partner/close", {}, { "x-partner": v.partnerKey })).status).toBe(200);
+    expect((await me(v.partnerKey)).status).toBe(403); expect((await me(first.partnerKey)).status).toBe(403);
+    expect(raw.query("SELECT COUNT(*) c FROM partner_key").get()).toEqual({ c: 0 });
+  });
+});

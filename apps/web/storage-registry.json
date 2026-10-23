@@ -12,7 +12,7 @@
     {
       "id": "player-game",
       "store": "localStorage",
-      "say": "On a player's phone: the ticket, the numbers they tapped, the prizes they claimed and won, their Bogeys and the last game opened, so the game works offline and comes back after a reload.",
+      "say": "On a player's phone: the ticket, the numbers they tapped, the prizes they claimed and won, their Bogeys, the last game opened, and a check-in they have started but not finished, so the game works offline and comes back after a reload.",
       "keys": [
         "ct-last-eid",
         "ctz:*:pid",
@@ -21,7 +21,8 @@
         "ctz:*:marks",
         "ctz-prizes:*",
         "ctz-over:*",
-        "ctz-wait-*"
+        "ctz-wait-*",
+        "ctz:*:ck"
       ]
     },
     {
@@ -52,9 +53,10 @@
     {
       "id": "organizer-tab",
       "store": "sessionStorage",
-      "say": "In an organizer's browser tab, until the tab is closed: the sign-in, the e-mail and mobile number typed, and the page to open next.",
+      "say": "In an organizer's browser tab, until the tab is closed: the sign-in, the e-mail and mobile number typed, the page to open next, and a note that the page already updated itself to the newest version.",
       "keys": [
         "ctz-org",
+        "ctz-alt",
         "ctz-board-*",
         "ctz-next",
         "ctz-login-email",
@@ -63,7 +65,19 @@
         "ctz-phone",
         "ctz-name",
         "ctz-pl",
-        "ctz-shield"
+        "ctz-shield",
+        "ct-auto-done"
+      ]
+    },
+    {
+      "id": "signed-in",
+      "store": "localStorage",
+      "say": "On a phone or laptop that has signed in (Organizer, Host, Co-host): the sign-in, so the person stays signed in until they tap Sign out; the e-mail used to sign in; the game and step they had open last, so the same link or home address takes them back there; and, for a person who is both an Organizer and a Host, the other role's sign-in. Signing in again is by e-mail only.",
+      "keys": [
+        "ctz-org",
+        "ctz-alt",
+        "ctz-email",
+        "ctz-last"
       ]
     },
     {

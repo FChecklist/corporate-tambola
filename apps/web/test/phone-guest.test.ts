@@ -250,46 +250,22 @@ describe("the pay link page (no sign-in)", () => {
   });
 });
 
-describe("Continue with Google", () => {
-  const GID = "1234567890-abcdef.apps.googleusercontent.com";
-  const kp = generateKeyPairSync("rsa", { modulusLength: 2048 });
-  const jwk = { ...(kp.publicKey.export({ format: "jwk" }) as any), kid: "k1", alg: "RS256", use: "sig" };
-  const b64u = (b: Buffer | string) => Buffer.from(b).toString("base64url");
-  const credential = (email: string, over: Record<string, unknown> = {}, key = kp.privateKey) => { const h = b64u(JSON.stringify({ alg: "RS256", kid: "k1", typ: "JWT" })), c = b64u(JSON.stringify({ iss: "https://accounts.google.com", aud: GID, email, email_verified: true, iat: Math.floor(T / 1000) - 10, exp: Math.floor(T / 1000) + 3600, ...over })); const s = createSign("RSA-SHA256").update(h + "." + c).sign(key).toString("base64url"); return h + "." + c + "." + s; };
-  const fakeGsi = (win: any) => { win.google = { accounts: { id: { initialize: (c: any) => { win.__gcb = c.callback; }, renderButton: (el: any, opt: any) => { win.__gopt = opt; el.innerHTML = `<button type="button" id="gbtn">Continue with Google</button>`; } } } }; };
-  const signin = async (o: O, o2: { gsi?: boolean; ua?: string } = {}) => { const p = await openPage(o.world, { url: "http://localhost/signin.html?t=abc", html: "signin.html", scripts: ["google.js", "signin.js"], afterLoad: (win, f) => { if (f === "google.js") { if (o2.gsi !== false) fakeGsi(win); if (o2.ua) Object.defineProperty(win.navigator, "userAgent", { value: o2.ua, configurable: true }); } } }); open.push(p); return p; };
-
-  test("no client id: no button, nothing is loaded from Google, the e-mail way is all there is", async () => {
-    const o = await organizer(); const p = await signin(o); await p.waitFor((x) => /Continue to Corporate Tambola/.test(x)); await new Promise((r) => setTimeout(r, 300));
-    expect(p.text()).not.toMatch(/Continue with Google/); expect((p.$("#gWrap") as any).hidden).toBe(true);
-    expect(Array.from(p.win.document.querySelectorAll("script")).some((s: any) => /google/.test(s.src || ""))).toBe(false);
+describe("sign-in has one way: the e-mail (no Google button, even when the server has a Google client id)", () => {
+  const GID = "test-id.apps.googleusercontent.com";
+  const signin = async (o: O) => openPage(o.world, { url: "http://localhost/signin.html?t=abc", html: "signin.html", scripts: ["google.js", "signin.js"] });
+  test("the one-tap page shows only its own button; no Google button, nothing is loaded from Google, with or without a client id", async () => {
+    for (const env of [{}, { GOOGLE_CLIENT_ID: GID }]) {
+      const o = await organizer(env); const p = await signin(o); await p.waitFor((x) => /Sign me in/.test(x)); await new Promise((r) => setTimeout(r, 300));
+      expect(p.text()).not.toMatch(/Continue with Google/); expect((p.$("#gWrap") as any).hidden).toBe(true);
+      expect(Array.from(p.win.document.querySelectorAll("script")).some((s: any) => /google/.test(s.src || ""))).toBe(false);
+    }
   });
-  test("with a client id: the button shows above the e-mail way; a real Google credential signs the person in like the e-mail code does", async () => {
-    const o = await organizer({ GOOGLE_CLIENT_ID: GID }); setGoogleKeyProvider(async () => [jwk]);
-    const p = await signin(o); await p.waitFor((x) => /Continue with Google/.test(x)); expect(p.text()).toMatch(/to get an e-mail code/); expect((p.$("#gWrap") as any).hidden).toBe(false);
-    p.win.__gcb({ credential: credential("boss@acme.com") });
-    const t0 = Date.now(); while (!p.win.sessionStorage.getItem("ctz-org") && Date.now() - t0 < 8000) await new Promise((r) => setTimeout(r, 50));
-    const key = p.win.sessionStorage.getItem("ctz-org"); expect(key).toMatch(/^ctk_/);
-    const who = await o.json(await o.api("GET", "/api/whoami", undefined, key)); expect(who.kind ?? who.role ?? "master").toBeTruthy();
-  });
-  test("a credential that does not check out shows a calm message and signs nobody in", async () => {
-    const o = await organizer({ GOOGLE_CLIENT_ID: GID }); setGoogleKeyProvider(async () => [jwk]);
-    const other = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
-    const p = await signin(o); await p.waitFor((x) => /Continue with Google/.test(x));
-    p.win.__gcb({ credential: credential("boss@acme.com", {}, other) });
-    await p.waitFor((x) => /could not be checked/.test(x), 8000); expect(p.win.sessionStorage.getItem("ctz-org")).toBeNull();
-  });
-  test("inside another app's browser, or when Google will not load, a calm line points to the browser and the e-mail code", async () => {
+  test("the home page Log in sheet has the e-mail box and no Google button, with a client id", async () => {
     const o = await organizer({ GOOGLE_CLIENT_ID: GID });
-    const a = await signin(o, { ua: "Mozilla/5.0 (Linux; Android 13; wv) FBAN/FB4A" }); await a.waitFor((x) => /Open this page in your browser, or use an e-mail code\./.test(x));
-    expect(a.text()).not.toMatch(/Continue with Google/);
-    const b = await signin(o, { gsi: false }); await b.waitFor((x) => /Open this page in your browser, or use an e-mail code\./.test(x), 12_000);
-  });
-  test("the home page 'Log in' sheet and the free sign-up sheet carry the button too", async () => {
-    const o = await organizer({ GOOGLE_CLIENT_ID: GID });
-    const home = await openPage(o.world, { url: "http://localhost/#login", html: "index.html", scripts: ["common.js", "google.js", "site.js"], afterLoad: (win, f) => { if (f === "google.js") fakeGsi(win); } }); open.push(home);
-    const t0 = Date.now(); while (!/Continue with Google/.test(home.win.document.body.textContent || "") && Date.now() - t0 < 8000) await new Promise((r) => setTimeout(r, 50));
-    expect(home.win.document.body.textContent).toMatch(/Continue with Google/); expect(home.win.document.body.textContent).toMatch(/Continue|E-?mail me a code/);
-    expect(home.errors).toEqual([]);
+    const home = await openPage(o.world, { url: "http://localhost/#login", html: "index.html", scripts: ["keep.js", "common.js", "google.js", "site.js"] }); open.push(home);
+    await new Promise((r) => setTimeout(r, 600));
+    const t = home.win.document.body.textContent || "";
+    expect(t).not.toMatch(/Continue with Google/); expect(t).toMatch(/Type your e-mail and press Continue/); expect(home.errors).toEqual([]);
   });
 });
+

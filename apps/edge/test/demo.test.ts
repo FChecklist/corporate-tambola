@@ -68,7 +68,7 @@ describe("publishing a demo game is free", () => {
     expect(one("SELECT pack, cap FROM engagement WHERE id='DEMO-1'")).toEqual({ pack: 10, cap: 10 });
     expect(count("SELECT COUNT(*) AS c FROM payment")).toBe(0); expect(count("SELECT COUNT(*) AS c FROM invoice")).toBe(0); expect(count("SELECT COUNT(*) AS c FROM entitlement")).toBe(0);
     const mails = raw.prepare("SELECT subject, body FROM outbox").all() as any[];
-    expect(mails.some((m) => /DEMO GAME/.test(m.subject) && /free/.test(m.subject))).toBe(true);
+    expect(mails.some((m) => /Your game/.test(m.subject) && /Rs 0/.test(m.subject))).toBe(true);
     expect(mails.some((m) => /payment pending/i.test(m.subject + m.body))).toBe(false);
     const info = await j(await call("GET", "/api/z/DEMO-1/info", undefined, master));
     expect(info.demo).toBe(true); expect(info.draft).toBeUndefined(); expect(info.unpaid).toBeUndefined(); expect(info.locked).toBeUndefined(); expect(info.waitingFor).toBeNull();
@@ -101,7 +101,7 @@ describe("publishing a demo game is free", () => {
   test("the AI's publish answer explains a demo game, and the AI manual mentions it", async () => {
     const master = await start("boss@acme.com"); const ai = lastAi;
     await mk(master, "DEMO-1");
-    const a = await j(await call("POST", "/api/z/DEMO-1/publish", {}, ai)); expect(a.demo).toBe(true); expect(a.message).toMatch(/DEMO GAME \(free, up to 10 people\)/);
+    const a = await j(await call("POST", "/api/z/DEMO-1/publish", {}, ai)); expect(a.demo).toBe(true); expect(a.message).toMatch(/game for up to 10 people at Rs 0/);
     const manual = await (await call("GET", `/ai/${ai}`)).text(); expect(manual).toMatch(/A DEMO GAME exists/);
   });
 });

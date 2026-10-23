@@ -285,7 +285,7 @@ describe("sign in by e-mailed code", () => {
     expect(t.token).not.toBe(first);
     expect((await call("GET", "/api/history", undefined, { "x-organizer": t.token })).status).toBe(200);
     expect((await call("GET", "/api/history", undefined, { "x-organizer": first })).status).toBe(200);
-    expect((raw.query("SELECT COUNT(*) c FROM outbox WHERE subject LIKE '%Sign in to Corporate Tambola%'").get() as any).c).toBe(1);
+    expect((raw.query("SELECT COUNT(*) c FROM outbox WHERE subject LIKE '%Corporate Tambola sign-in%'").get() as any).c).toBe(1);
   });
   test("an unknown address gets exactly the same answer and no mail, so nobody can learn who has an account", async () => {
     const r = await (await ask("nobody@nowhere.com")).json() as any;
@@ -297,7 +297,7 @@ describe("sign in by e-mailed code", () => {
     await account(); env.TEST_MODE = undefined; env.RAZORPAY_KEY_ID = "k"; env.RAZORPAY_KEY_SECRET = "s";
     const r = await (await ask("owner@corp.com")).json() as any;
     expect(r.devCode).toBeUndefined();
-    expect((raw.query("SELECT COUNT(*) c FROM outbox WHERE subject LIKE '%Sign in to Corporate Tambola%'").get() as any).c).toBe(1);
+    expect((raw.query("SELECT COUNT(*) c FROM outbox WHERE subject LIKE '%Corporate Tambola sign-in%'").get() as any).c).toBe(1);
   });
   test("a wrong code is refused, five wrong guesses lock that code, and the right one then no longer works", async () => {
     await account();

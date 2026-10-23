@@ -104,7 +104,7 @@
     };
     const sample = [[4, 0, 23, 0, 41, 0, 0, 72, 85], [0, 12, 0, 34, 0, 56, 0, 78, 0], [7, 0, 29, 0, 0, 58, 63, 0, 90]];
     const eid = (q.get("e") || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
-    let key = ""; try { key = sessionStorage.getItem("ctz-org") || ""; } catch {}
+    let key = ""; try { key = CTK.get("ctz-org") || ""; } catch {}
     const fromHash = () => ({
       brand: q.get("n") ? { name: q.get("n"), color: q.get("c") || "" } : null,
       rewards: (q.get("p") || "").split("|").map((t) => t.trim()).filter(Boolean).slice(0, 8).map((t, i) => ({ pattern: "", ordinal: 1, text: t })),

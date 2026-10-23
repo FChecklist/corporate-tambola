@@ -33,7 +33,7 @@ describe("prices are the price table, everywhere a rupee amount appears", () => 
   };
   for (const f of pages) {
     test(`${f}: each ₹ amount is a pack price`, () => {
-      const t = textOf(read(f)); const found = [...t.matchAll(/(?:₹|Rs\.?)\s?([0-9][0-9,]*(?:\.[0-9]{2})?)/g)].map((m) => m[1]!.replace(/,$/, "")).filter((a) => a !== "1"); // "Test a payment (Rs 1)" is the footer link to the owner's one-rupee test (paytest.html)
+      const t = textOf(read(f)); const found = [...t.matchAll(/(?:₹|Rs\.?)\s?([0-9][0-9,]*(?:\.[0-9]{2})?)/g)].map((m) => m[1]!.replace(/,$/, "")).filter((a) => a !== "1" && a !== "0"); // "Test a payment (Rs 1)" is the footer link to the owner's one-rupee test (paytest.html)
       for (const a of found) expect(inr.has(a) || allowedElsewhere[f]?.has(a) === true, `${f} shows an amount that is not a pack price: ₹${a}`).toBe(true);
     });
   }

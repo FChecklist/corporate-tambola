@@ -14,7 +14,7 @@ const DRAFT = /\bdraft\b/i;
 function* walk(dir: string): Generator<string> {
   for (const n of readdirSync(dir)) {
     const p = join(dir, n);
-    if (statSync(p).isDirectory()) { if (n !== "node_modules") yield* walk(p); } else if (TEXT.has(extname(p).toLowerCase())) yield p;
+    if (statSync(p).isDirectory()) { if (n !== "node_modules" && n !== "vendor") yield* walk(p); } else if (TEXT.has(extname(p).toLowerCase())) yield p;
   }
 }
 

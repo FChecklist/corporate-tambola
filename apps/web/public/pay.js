@@ -3,7 +3,7 @@
 (function () {
   const TB = window.TB, esc = TB.esc, $app = document.getElementById("app");
   const eid = TB.qs("e") || "";
-  let secret = ""; try { secret = sessionStorage.getItem("ctz-org") || ""; } catch {}
+  let secret = ""; try { secret = CTK.get("ctz-org") || ""; } catch {}
   const ss = (k) => { try { return sessionStorage.getItem(k) || ""; } catch { return ""; } };
   const nf = (n) => Number(n).toLocaleString("en-IN");
   // A DEMO GAME (free, up to 10 people) is made a real game here: the payer CHOOSES the pack (`pack` in the address, from the console's step 8, or the chips below); the server clears the demo mark and raises the size on a confirmed payment.
@@ -114,7 +114,7 @@
         let r = await call("POST", "/api/checkout", { consent, eid, name: nm, org, email, country: S.country, taxId: tax, currency: S.cur, phone: S.phone, phoneCode: S.pcode, ref, ...(isDemo() ? { pack: packNow() } : {}) });
         if (r.mode === "razorpay") r = await TB.pay(r.razorpay, r.paymentId, r.hop); // opens Razorpay Checkout; the server verifies the payment
         else if (r.result) r = r.result; // local test mode answers with the finished order
-        try { sessionStorage.setItem("ctz-email", email); sessionStorage.setItem("ctz-name", nm); } catch {}
+        try { CTK.set("ctz-email", email); sessionStorage.setItem("ctz-name", nm); } catch {}
         if (r && r.confirming) r = await waitForConfirm(r); // Razorpay has not confirmed yet: keep asking, never mark it paid early
         S.done = r;
         goAuto(r.eid || eid); // once the payment is confirmed the organizer lands on the engagement page by themselves (the receipt is also e-mailed)

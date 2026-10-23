@@ -38,41 +38,38 @@ const rtFake = (win: any, nowMs: () => number) => { // the phone's runtime with 
 const phone = (o: O, eid: string) => page(o, `/z?e=${eid}`, "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, () => o.world.now); } });
 const joinOn = async (p: Page, ph = "9822222222") => { await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = ph; (p.$("#nm") as any).value = "Asha"; p.click("#go"); };
 
-describe("the console of a demo game", () => {
-  test("a published demo: the DEMO GAME badge in the header, no payment pending, step 2 says it is a demo (no switch back), step 7 and 8 say free, step 8 offers Make this a real game with the packs", async () => {
+describe("the Rs 0 game for up to 10 people is a real game: nothing marks it as a demo", () => {
+  test("published: no DEMO badge, the pay pill says Rs 0, step 2 lists 'Demo game, 10 people, Rs 0' first, step 8 offers a bigger size", async () => {
     const o = await organizer(); await make(o, "UI-DEMO"); await publish(o, "UI-DEMO");
     const p = await consolePage(o, "UI-DEMO");
-    const t = await p.waitFor((x) => /DEMO GAME/.test(x) && /Your game at a glance/.test(x));
-    expect(p.$("#demopill")!.textContent).toBe("DEMO GAME"); expect(p.$("#paypill")!.textContent).toMatch(/DEMO GAME/); expect(p.$("#paypill")!.className).toMatch(/zc-pill-demo/);
-    expect(t).not.toMatch(/Payment pending|payment is pending|Pay now/); expect(p.$("#paynote")).toBeNull();
-    openStep(p, 2); await p.waitFor((x) => /This is a DEMO GAME/.test(x));
-    expect(p.$("#demonote")).toBeTruthy(); expect(p.$('[data-ck="demo"]')).toBeNull(); // a published demo is made real by paying, not by a chip
-    expect(p.$('[data-ck="cap"][data-v="10"]')).toBeTruthy(); expect(p.$('[data-ck="cap"][data-v="250"]')).toBeNull(); // at most 10 people
-    openStep(p, 7); expect(await p.waitFor((x) => /Published · DEMO GAME/.test(x))).toMatch(/Nothing to pay/);
-    openStep(p, 8); const t8 = await p.waitFor((x) => /Make this a real game/.test(x));
-    expect(t8).toMatch(/DEMO GAME · free/); expect(t8).toMatch(/Up to 100 people · Rs 2,399\.00/); expect(t8).toMatch(/Up to 250 people/);
+    const t = await p.waitFor((x) => /Your game at a glance/.test(x));
+    expect(p.$("#demopill")).toBeNull(); expect(p.$("#paypill")!.textContent).toMatch(/Rs 0/); expect(p.$("#paypill")!.className).toMatch(/zc-pill-paid/);
+    expect(t).not.toMatch(/DEMO GAME|Payment pending|payment is pending|Pay now/); expect(p.$("#paynote")).toBeNull();
+    openStep(p, 2); await p.waitFor((x) => /Demo game · 10 people · Rs 0/.test(x));
+    expect(p.$('[data-ck="demo"]')).toBeNull(); expect(p.$('[data-ck="cap"]')!.getAttribute("data-v")).toBe("10"); expect(p.$('[data-ck="cap"][data-v="250"]')).toBeTruthy();
+    openStep(p, 7); expect(await p.waitFor((x) => /Published/.test(x))).toMatch(/Nothing to pay/);
+    openStep(p, 8); const t8 = await p.waitFor((x) => /Need more than 10 people/.test(x));
+    expect(t8).toMatch(/Rs 0 · up to 10 people/); expect(t8).not.toMatch(/DEMO GAME/); expect(t8).toMatch(/Up to 100 people · Rs 2,399\.00/); expect(t8).toMatch(/Up to 250 people/);
     expect((p.$("#makerealgo") as any).getAttribute("href")).toBe("/pay.html?e=UI-DEMO&pack=100"); expect(p.$("#pricerow")).toBeNull(); expect(p.$("#copypaylink")).toBeNull();
     p.click('[data-realpack="250"]'); await p.waitFor((x) => /Choose 250 people and pay/.test(x));
     expect((p.$("#makerealgo") as any).getAttribute("href")).toBe("/pay.html?e=UI-DEMO&pack=250");
     expect(p.errors).toEqual([]);
   });
-  test("a demo draft: step 2 has the demo chip on and only demo sizes; step 7 says publishing a demo needs no payment; saving 12 people is refused in place with the guide's words", async () => {
+  test("a draft for 6 people: step 7 says it costs Rs 0; typing 12 turns it into an ordinary game that is paid for later", async () => {
     const o = await organizer(); await make(o, "UI-DEMOD", { cap: 6 });
     const p = await consolePage(o, "UI-DEMOD");
     await p.waitFor((x) => /Your game at a glance/.test(x));
-    openStep(p, 2); await p.waitFor((x) => /Is this a free demo game/.test(x));
-    expect(p.$('[data-ck="demo"][data-v="1"]')!.className).toMatch(/\bon\b/); expect(p.$('[data-ck="cap"][data-v="10"]')).toBeTruthy(); expect(p.$('[data-ck="cap"][data-v="100"]')).toBeNull();
+    openStep(p, 2); await p.waitFor((x) => /Demo game · 10 people · Rs 0/.test(x));
+    expect(p.text()).toMatch(/A game for 10 people or fewer is Rs 0/); expect(p.$('[data-ck="cap"][data-v="100"]')).toBeTruthy();
+    openStep(p, 7); expect(await p.waitFor((x) => /Publish \(free\)/.test(x))).toMatch(/costs Rs 0/);
+    openStep(p, 2); await p.waitFor((x) => /Demo game · 10 people · Rs 0/.test(x));
     const cap = p.$("#f-cap") as any; cap.value = "12"; cap.dispatchEvent(new p.win.Event("input", { bubbles: true }));
-    p.click('#sec2 [data-save="2"]'); await p.waitFor((x) => /A demo game is for up to 10 people/.test(x));
-    expect(row(o, "UI-DEMOD").cap).toBe(6);
-    openStep(p, 7); expect(await p.waitFor((x) => /Publish \(free\)/.test(x))).toMatch(/DEMO GAME.*nothing to pay/);
-    openStep(p, 2); await p.waitFor((x) => /Is this a free demo game/.test(x));
-    p.click('[data-ck="demo"][data-v="0"]'); // a draft may become a real game before publishing
-    await p.waitFor((x) => !/A demo game costs nothing/.test(x));
-    expect(p.$('[data-ck="demo"][data-v="0"]')!.className).toMatch(/\bon\b/); expect(p.$('[data-ck="cap"][data-v="250"]')).toBeTruthy();
+    await p.waitFor(() => !/A game for 10 people or fewer is Rs 0/.test(p.text()));
+    p.click('#sec2 [data-save="2"]'); await p.waitFor((x) => /Saved/.test(x));
+    expect(row(o, "UI-DEMOD").cap).toBe(12);
     expect(p.errors).toEqual([]);
   });
-  test("a real game shows no demo badge or demo block", async () => {
+  test("a bigger game shows no free block", async () => {
     const o = await organizer(); await make(o, "UI-REAL", { demo: false, cap: 100 }); await publish(o, "UI-REAL");
     const p = await consolePage(o, "UI-REAL"); await p.waitFor((x) => /Your game at a glance/.test(x));
     expect(p.$("#demopill")).toBeNull(); expect(p.$("#paypill")!.textContent).toBe("Payment pending for this game");
@@ -80,34 +77,21 @@ describe("the console of a demo game", () => {
   });
 });
 
-describe("the phone, the number screen and the board", () => {
-  test("the ticket carries a DEMO GAME watermark and tag; the page says it is a demo game; the aria label says so", async () => {
+describe("the phone, the number screen and the board of a 10-person Rs 0 game", () => {
+  test("the ticket is an ordinary ticket: no watermark, no tag, no demo sentence", async () => {
     const o = await organizer(); await make(o, "UI-DEMOT"); await publish(o, "UI-DEMOT");
     const p = await phone(o, "UI-DEMOT"); await joinOn(p);
-    const t = await p.waitFor((x) => /Your ticket/.test(x) && /DEMO GAME/.test(x));
-    expect(p.$(".zticket.zdemogame")).toBeTruthy(); expect(p.$(".zticket")!.getAttribute("aria-label")).toBe("Your ticket (demo game)");
-    expect(p.$("#demogame")!.textContent).toMatch(/This is a demo game for up to 10 people/); expect(p.$(".zcard h2 .zdemotag")!.textContent).toBe("DEMO GAME");
-    expect(t).not.toMatch(/pay|unpaid|invoice/i);
+    const t = await p.waitFor((x) => /Your ticket/.test(x));
+    expect(p.$(".zticket.zdemogame")).toBeNull(); expect(p.$("#demogame")).toBeNull(); expect(p.$(".zdemotag")).toBeNull();
+    expect(t).not.toMatch(/DEMO GAME|pay|unpaid|invoice/i);
     expect(p.errors).toEqual([]);
   });
-  test("a real game's ticket has no watermark", async () => {
-    const o = await organizer(); await make(o, "UI-REALT", { demo: false, cap: 100 }); await publish(o, "UI-REALT");
-    const p = await phone(o, "UI-REALT"); await joinOn(p); await p.waitFor((x) => /Your ticket/.test(x));
-    expect(p.$(".zticket.zdemogame")).toBeNull(); expect(p.$("#demogame")).toBeNull(); expect(p.text()).not.toMatch(/DEMO GAME/);
-  });
-  test("the number screen and the organizer's board show the DEMO GAME badge beside the brand", async () => {
+  test("the number screen and the organizer's board carry no demo badge", async () => {
     const o = await organizer(); await make(o, "UI-DEMOB"); await publish(o, "UI-DEMOB");
     const big = await page(o, "/big?e=UI-DEMOB", "big.html", ["zgame.js", "big.js"]);
-    await big.waitFor((x) => /The engagement starts in/.test(x) && /DEMO GAME/.test(x)); expect(big.$("#demogame")!.textContent).toBe("DEMO GAME");
+    await big.waitFor((x) => /The engagement starts in/.test(x)); expect(big.$("#demogame")).toBeNull(); expect(big.text()).not.toMatch(/DEMO GAME/);
     const board = await page(o, "/board?e=UI-DEMOB", "board.html", ["zgame.js", "board.js"], { "ctz-board-UI-DEMOB": o.token });
-    await board.waitFor((x) => /The engagement starts in/.test(x) && /DEMO GAME/.test(x)); expect(board.$("#demogame")!.textContent).toBe("DEMO GAME");
-  });
-  test("the watermark goes on the next read once the demo is a real game", async () => {
-    const o = await organizer({ TEST_MODE: "1" }); await make(o, "UI-DEMOW"); await publish(o, "UI-DEMOW");
-    const p = await phone(o, "UI-DEMOW"); await joinOn(p); await p.waitFor((x) => /DEMO GAME/.test(x));
-    const r = await o.json(await o.api("POST", "/api/checkout", { eid: "UI-DEMOW", pack: 100, name: "Boss", email: "boss@acme.com", country: "IN", currency: "INR" }, o.token)); expect(r.result.converted).toBe(true);
-    const q = await phone(o, "UI-DEMOW"); await joinOn(q, "9822222223"); const t = await q.waitFor((x) => /Your ticket/.test(x)); // the next phone to open the game sees no mark
-    expect(t).not.toMatch(/DEMO GAME/); expect(q.$(".zticket.zdemogame")).toBeNull();
+    await board.waitFor((x) => /The engagement starts in/.test(x)); expect(board.$("#demogame")).toBeNull(); expect(board.text()).not.toMatch(/DEMO GAME/);
   });
 });
 
@@ -143,9 +127,9 @@ describe("the website's way in: Start a free demo game", () => {
     const hist = await o.json(await o.api("GET", "/api/history", undefined, o.aiKey));
     const g = hist.engagements[0]; const r = row(o, g.id);
     expect(r.cap).toBe(10); expect(JSON.parse(r.config || "{}").demo).toBe(true);
-    await p.waitFor((x) => /DEMO GAME/.test(x), 15000); // the pill comes with the game screen, a moment after the "draft is saved" note
+    await p.waitFor((x) => /Up to 10, 1 ticket/.test(x), 15000); // the summary comes with the game screen, a moment after the "draft is saved" note
     const p2 = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" });
     await p2.waitFor((x) => /Start a new game/.test(x), 15000);
-    expect(p2.$("#mkdemo")).toBeTruthy(); expect(p2.text()).toMatch(/A demo game is free, for up to 10 people/);
+    expect(p2.$("#mkdemo")).toBeTruthy(); expect(p2.text()).toMatch(/A demo game is a real game for 10 people at Rs 0/);
   });
 });

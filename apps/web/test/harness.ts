@@ -46,7 +46,8 @@ export async function openPage(world: { env: Env; now: number }, o: { url: strin
   try { Object.defineProperty(win, "indexedDB", { value: undefined, configurable: true }); } catch { /* the signing-key store needs a real browser; the page treats it as unavailable */ }
   win.addEventListener("error", (e: any) => errors.push(String(e?.message ?? e)));
   win.addEventListener("unhandledrejection", (e: any) => errors.push(String(e?.reason?.message ?? e?.reason ?? e)));
-  for (const f of o.scripts.includes("consent.js") ? o.scripts : ["consent.js", ...o.scripts]) {
+  const base = o.scripts.includes("consent.js") ? o.scripts : ["consent.js", ...o.scripts];
+  for (const f of base.includes("keep.js") ? base : ["keep.js", ...base]) { // keep.js (staying signed in) is the first script of every real page that has a sign-in
     const code = readFileSync(join(PUB, f), "utf8");
     try { new Function("window", `with (window) { ${code}\n}`).call(win, win); } catch (e: any) { errors.push(f + ": " + e.message); }
     if (f === "consent.js" && win.CBConsent && o.tick !== false) { // the person in these tests ticks every Terms box on the page (pass tick:false to see the unticked page)
