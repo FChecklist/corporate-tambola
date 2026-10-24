@@ -32,6 +32,7 @@ const PAGES = [ // [clean path, csp, noindex]
 let rules = "";
 for (const [path, csp, noindex] of PAGES) { const h = hdr(csp, noindex ? NOINDEX : ""); rules += `${path}.html${h}${path}${h}`; }
 rules += "/" + hdr(GOOGLECSP);
+rules += "/*\n  Strict-Transport-Security: max-age=31536000\n"; // HTTPS only: a browser that has seen the site over HTTPS never tries plain HTTP again
 rules += "/version.json\n  Cache-Control: no-store\n";
 rules += "/*.js\n  Cache-Control: no-cache\n  X-Robots-Tag: noindex, noai, noimageai\n/img/*\n  Cache-Control: public, max-age=604800\n/*.css\n  Cache-Control: no-cache\n/fonts/*\n  Cache-Control: public, max-age=31536000, immutable\n";
 writeFileSync(join(OUT, "_headers"), rules);

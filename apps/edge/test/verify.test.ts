@@ -88,6 +88,36 @@ describe("an employee known by ID stays known by it", () => {
   });
 });
 
+describe("mobile number OR employee ID", () => {
+  test("a listed person gets in with either one and is the same ticket both ways; unlisted people wait; an outsider in an open game gives a mobile number", async () => {
+    const t = await setup({ verify: "either", employeesOnly: true });
+    const r = await j(await add(t.master, [{ name: "Both", phone: mob(1), empId: "E101" }, { name: "IdOnly", empId: "E102" }, { name: "PhoneOnly", phone: mob(3) }, { name: "Nobody" }]));
+    expect(r.added).toBe(3); expect(r.invalid.length).toBe(1); expect(r.invalid[0].why).toMatch(/mobile number or an employee ID/);
+    const byId = await j(await joinAs("PPL-1", 21, { phone: undefined, empId: "e101", device: dev(50) })); expect(byId.pid).toBeTruthy();
+    const byPhone = await j(await joinAs("PPL-1", 1, { device: dev(50) })); expect(byPhone.pid).toBe(byId.pid); // the same person, the same ticket, whichever they give
+    expect((await joinAs("PPL-1", 22, { phone: undefined, empId: "E102" })).status).toBe(200); // known by ID alone
+    expect((await joinAs("PPL-1", 3, {})).status).toBe(200); // known by mobile alone
+    const wrong = await joinAs("PPL-1", 40, { phone: undefined, empId: "E999" }); expect(wrong.status).toBe(403); expect((await j(wrong)).code).toBe("waiting");
+    const stranger = await joinAs("PPL-1", 41, {}); expect(stranger.status).toBe(403); expect((await j(stranger)).code).toBe("waiting"); // employees only: an unlisted number waits
+    const none = await joinAs("PPL-1", 42, { phone: undefined }); expect(none.status).toBe(400); expect((await j(none)).code).toBe("need-id");
+    const csv = await (await call("GET", "/api/z/PPL-1/people/export", undefined, t.master)).text(); expect(csv).toContain("E101"); expect(csv).toContain("E102");
+  });
+  test("everyone including employees: an outsider joins with a mobile number alone; settings accept the mode", async () => {
+    const t = await setup({ verify: "either" }); await add(t.master, [{ name: "Both", phone: mob(1), empId: "E101" }]);
+    expect((await joinAs("PPL-1", 5, {})).status).toBe(200);
+    expect((await joinAs("PPL-1", 6, { phone: undefined, empId: "E101" })).status).toBe(200);
+    const s = await j(await call("GET", "/api/z/PPL-1/summary", undefined, t.master)); expect(s.verify).toBe("either");
+  });
+});
+
+describe("junk in a list is cleaned by the server too", () => {
+  test("a name that starts like a spreadsheet formula, or holds markup or control characters, is kept tidy; the list export is safe to open", async () => {
+    const t = await setup({}); const r = await j(await add(t.master, [{ name: "=HYPERLINK(\"http://x\")", phone: mob(1) }, { name: "<script>alert(1)</script>Bob", phone: mob(2) }, { name: "Ann ​Lee", phone: mob(3) }]));
+    expect(r.added).toBe(3); const names = r.people.map((p: any) => p.name); expect(names.join("|")).not.toMatch(/[=<> ​]/);
+    const csv = await (await call("GET", "/api/z/PPL-1/people/export", undefined, t.master)).text(); expect(csv.split(/\r?\n/).some((l) => /^"?[=@]/.test(l))).toBe(false);
+  });
+});
+
 describe("guessing employee IDs", () => {
   test("wrong IDs wait for the organizer, who sees the ID that was typed; after 10 wrong IDs from one network in a game the door closes for ten minutes; a right ID is not counted", async () => {
     const t = await setup({ verify: "id", employeesOnly: true }); await add(t.master, [{ name: "Asha", empId: "E101" }]);

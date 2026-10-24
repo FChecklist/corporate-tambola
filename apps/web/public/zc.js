@@ -170,7 +170,7 @@
     const date = istDateStr(start), time = pad2(start.getUTCHours()) + ":" + pad2(start.getUTCMinutes());
     const nm = (c.name || "").trim();
     const f = { occ: nm ? (OCC.includes(nm) && nm !== "Other" ? nm : "Other") : "Diwali party", oname: nm && !OCC.includes(nm) ? nm : "", day: blank ? "" : dayOpts().some((d) => d[0] === date) ? date : "other", dayo: blank ? "" : date, time: blank ? "" : TIMES.some((x) => x[0] === time) ? time : "other", timeo: blank ? "" : time,
-      cap: String(inf.cap || 250), tix: String(t), spd: String(inf.callSeconds || 9), rnd: String(c.rounds || 1), who: whoNow(), ver: c.verify === "id" || c.verify === "both" ? c.verify : "mobile", emp: !!c.employeesOnly, mode: (c.callMode || inf.callMode) === "host" ? "host" : "auto",
+      cap: String(inf.cap || 250), tix: String(t), spd: String(inf.callSeconds || 9), rnd: String(c.rounds || 1), who: whoNow(), ver: c.verify === "id" || c.verify === "either" || c.verify === "both" ? c.verify : "mobile", emp: !!c.employeesOnly, mode: (c.callMode || inf.callMode) === "host" ? "host" : "auto",
       inv: !!(c.invites && c.invites.on), per: String((c.invites && c.invites.per) || 4), cats: ((c.invites && c.invites.cats) || ["family", "colleagues"]).slice(), bundle: "", hs: {}, ph: "", ties: c.ties === "share" ? "share" : "next", demo: c.demo ? "1" : "0" };
     for (const [k] of HS) f.hs[k] = { on: false, n: 1, pt: "later", pd: "", orig: [] };
     for (const l of c.rewards || []) { const k = l.scope === "two_ticket" ? "full2" : l.pattern, h = f.hs[k]; if (!h) continue; h.on = true; h.n = Math.max(h.n, l.ordinal); h.orig[l.ordinal - 1] = l.text || ""; }
@@ -202,9 +202,126 @@
     ver: "What a person must type to get in.", per: "The most people one guest can invite.",
     cats: "The kinds of guests they may invite.", ties: "What happens when two people complete the same line on the same number.", emp: "Tick this for a staff-only game: only people on your list can play and nobody can invite anyone.",
   };
+
+  // ---------- (i) pop-ups: what each option does, and what it does not do ----------
+  const INFOTXT = {
+    step1: { t: "Date and time of the game", does: ["Gives the game its name (the occasion), the day and the start time in India time.", "Guests can join from the moment you publish. The first number comes 2 minutes after the start time.", "Check-in opens 5 minutes before the start time.", "You choose who calls the numbers: the software, or a Host who presses a button."], not: ["It does not start the game by itself unless the game is paid for.", "It does not send any invitation: you share the link in a later step.", "After the game has started you cannot change the day or time."] },
+    step2: { t: "Number of participants", does: ["Sets how many people can play, how many tickets each person gets, how fast the numbers come, how many rounds there are, who can join, and what people must give to get in.", "A game for 10 people or fewer is free. Bigger games are paid for before the start, by size."], not: ["It does not invite anyone: the people are added in the Invite step.", "Nobody can join after the game is full: they wait in the waiting room until you make space."] },
+    step3: { t: "Set prizes", does: ["Choose which prizes the game has (for example Early Five, Top Line, Full House) and what each one is, such as a mug or a voucher.", "Each prize can have more than one winner position (1st, 2nd, ...).", "Winners are found by the software from the public numbers and the players' claims, so everyone sees the same winners."], not: ["It does not give out the real prizes: you hand them over. The report lists who won.", "It does not choose winners by hand. A player must press Claim for a prize in time."] },
+    step4: { t: "Set brand moments", does: ["Add your company name, colour and logo, an opening message, breaks during the game, a closing message and lucky draws.", "Breaks have an exact length. The numbers stop during a break and every phone shows the break at the same moment."], not: ["It does not play sound or video unless you give a video link.", "It does not change the rules of the game or the prizes."] },
+    step5: { t: "Make hosts and co-hosts", does: ["A Host runs the game with you (can press Next number in Host mode, pause and resume) and can add people up to a limit.", "A Co-host helps with a group of people (for example one department) and can add and invite only their own group."], not: ["A Host or Co-host cannot pay for the game, erase data or change your account.", "They cannot see another person's list unless you are the Organizer."] },
+    step6: { t: "Invite and share links", does: ["Shows the guest link to share by WhatsApp or e-mail, the number screen link for a meeting, and your own link to play the game yourself.", "You can add people by name and mobile number (or employee ID), paste a list, upload a CSV, or upload a PDF."], not: ["It does not send e-mails to guests by itself.", "Guests are not able to join before you publish."] },
+    step7: { t: "Check and publish", does: ["Shows a summary of your game. Publishing makes the guest link work and the game appears for the people you invited.", "Publishing is free. You pay before the game starts."], not: ["It does not take payment.", "An unpaid game does not begin at its start time: it waits until it is paid."] },
+    step8: { t: "Pay", does: ["Pay for the size of game you chose. Anyone can pay with the payment link, so your finance team can pay without logging in.", "When the payment is done the game unlocks by itself and the invoice is e-mailed to the payer and to you."], not: ["There are no refunds. If you cancel a paid game before it starts, the amount stays as credit for your next game.", "A Host or Co-host does not see the invoice details."] },
+    step9: { t: "Game day", does: ["From here you can pause, resume or end the game, send a message to every phone, see how many people are present, and hand over prizes.", "In Host mode the Next number button lives here."], not: ["Pausing does not lose anything: the game carries on from the same number.", "Ending the game cannot be undone."] },
+    step10: { t: "After the game", does: ["Shows your report: numbers called, winners, who was present.", "You can erase all guest data now. Otherwise it is erased automatically within 24 hours after the game ends."], not: ["The winners' record (who won what, and when they checked in) is kept for 365 days, because it is needed to settle prize claims.", "Erasing does not remove the invoice."] },
+    occ: { t: "Occasion", does: ["The name of the occasion becomes the name of your game, shown to guests and in the report."], not: ["It does not change the rules or the look of the game."] },
+    day: { t: "Which day", does: ["The day guests should be ready, in India time."], not: ["It does not start anything by itself. The game still needs to be published and paid for."] },
+    time: { t: "Start time", does: ["The time guests should be ready, in India time. The first number comes 2 minutes later.", "Check-in opens 5 minutes before this time."], not: ["It does not delay the numbers: they start 2 minutes after this time, not at this time."] },
+    mode: { t: "Who calls the numbers?", does: ["Auto: the software calls a new number every few seconds by itself. Nobody has to press anything.", "Host: a person presses Next number for each number, so they can speak between numbers. Phones show the number about 6 seconds after the press."], not: ["In Host mode, if nobody presses, no number comes.", "You cannot switch between Auto and Host after the game has started."] },
+    tix: { t: "Tickets for each person", does: ["How many tickets every person plays with: 1 or 2.", "With 2 tickets a person has two chances for every prize; either ticket can win."], not: ["People cannot choose their own number of tickets.", "A second ticket does not mean a second prize for the same position."] },
+    spd: { t: "Gap between two numbers", does: ["9 seconds is lively. 12 seconds is relaxed.", "Before every number a countdown 9 to 1 shows (silent) so people know it is coming."], not: ["Breaks and pauses do not change the speed afterwards.", "It is locked once the game has started."] },
+    rnd: { t: "Rounds", does: ["One round is one full game of up to 90 numbers. Two rounds means a second full game with new tickets and new numbers, straight after the first.", "The prizes are available again in every round."], not: ["Two rounds take about twice as long.", "Breaks and lucky draws belong to the first round."] },
+    who: { t: "Who can join", does: ["Anyone with the link: whoever opens the link and types their details gets in straight away.", "Only people on a list: people you added get in; anyone else waits in a waiting room until you or a Host admits them."], not: ["It does not stop a person sharing the link, but a ticket only plays on one phone.", "The game stops accepting people when it is full."] },
+    emp: { t: "Only my employees", does: ["Only people on your list can play, and nobody can invite anyone else. People who are not on the list wait for you; you decide.", "Use it for staff-only games."], not: ["It does not check anyone against your HR system: it checks against the list you give.", "If you want families or vendors to play too, leave it unticked."] },
+    ver: { t: "What must a person give to get in?", does: ["Mobile number: the person types their mobile number. The simplest choice.", "Employee ID: the person types their employee ID. A mobile number is optional.", "Mobile number or employee ID: either one is enough. Employees can use their ID; vendors and customers use their mobile number. Someone on your list is recognised by whichever they give.", "Mobile number and employee ID: employees must give both. Others give their mobile number only (unless you chose Only my employees)."], not: ["Employee ID alone is the lightest check: anyone who knows or guesses an ID can use it. Choose both for a stronger check.", "Employee IDs are shown only to the Organizer and the Hosts, never to other players or on the big screen.", "A wrong or unknown ID is not refused: that person waits and you decide whether to let them in."] },
+    per: { t: "How many people can each guest invite", does: ["The most people one guest can bring in, for example family members."], not: ["Guests invited by a guest cannot invite more people."] },
+    cats: { t: "Who can they invite", does: ["The kinds of people a guest may bring: family, colleagues, friends and so on. It is recorded so you can see how each person came in."], not: ["It does not check who the invited person really is."] },
+    ties: { t: "If two or more people finish on the same number", does: ["Share: all of them win that prize together.", "Next: the first gets the prize, the next one gets the next position of that prize if there is one."], not: ["It does not decide anything by luck: the order is fixed from the public numbers so every phone agrees."] },
+    bundle: { t: "Start from", does: ["Starts the game from a ready set of prizes, so you do not have to type them."], not: ["You can change every prize afterwards."] },
+    play: { t: "Play the game yourself", does: ["The Organizer, Hosts and Co-hosts can play too. Press Play now to open your own ticket, or send the play link to your own WhatsApp.", "You keep your console open to run the game, and your ticket on your phone or in another tab.", "You tap numbers and press Claim like every other player."], not: ["Your seat is marked as the team's, so you cannot win the Unlucky prize or lucky draws: the people running the game are never picked.", "A ticket plays on one phone only: do not open your play link on two phones."] },
+  };
+
+  // ---------- the questions an organizer has about each option: why, how, what if ----------
+  const INFOQA = {
+    who: [
+      ["Which one should I choose?", "Choose \"Anyone with the link\" when you want the easiest game: whoever receives the link can play at once. Choose \"Only people on a list\" when you want to decide who plays: only the people you add get a ticket."],
+      ["What happens if I choose \"Anyone with the link\" (open for all)?", "Everyone who opens your link types their mobile number (or the detail you asked for) and gets a ticket straight away. You do not have to approve anyone. People you added to your list are recognised by their number. The game stops taking people when it is full."],
+      ["What happens if I choose \"Only people on a list\"?", "Only the people you added can get in. A person types their mobile number on the link. If the number is on your list, they get a ticket at once. If it is not on your list, they see \"Please wait\" and the request appears in \"Waiting to come in\", where you or a Host presses Admit or Decline."],
+      ["What if I share the common link and the game is \"Only people on a list\"?", "Nothing goes wrong. The common link is safe to send to a whole group, for example a WhatsApp group. People on your list get in by themselves. Everyone else waits and cannot play until you admit them. So you can send one link to everybody and still stay in control."],
+      ["What if someone who is not on my list gets the link and I do nothing?", "They keep seeing \"Please wait\" and they do not get a ticket. If nobody answers in time, the request runs out and the person can ask again. You never have to do anything for the game to run."],
+      ["Can I change this later?", "Yes, until the game starts. After the game has started it is locked."],
+      ["Why would I choose a list?", "For staff-only games, for a closed group, or when you must be sure that only invited people play and you want to see who asks to come in."],
+      ["Why would I choose open for all?", "For the widest reach with the least work: customers, vendors, families and employees, all with one link."],
+    ],
+    common: [
+      ["What is the common link?", "One link for a whole group. You can send it in a WhatsApp group, by e-mail, on your intranet or on a screen. It is made so that nobody has to be invited one by one."],
+      ["What does a person do with it?", "They open it, type their own mobile number (or employee ID, if you asked for that), tick the two boxes and press Join. Their ticket opens."],
+      ["What happens depends on \"Who can join\".", "If the game is open for all, everybody gets a ticket. If the game is for people on a list, only listed people get a ticket and everybody else waits for you to admit them."],
+      ["Is the common link the same for every person?", "Yes. That is the point: one link for everyone. A personal link is different: it is made for one person only (see the personal link)."],
+      ["What if the common link is forwarded to the wrong person?", "In an open game that person can play. In a list game they must wait for you. If you do not want them, press Decline, or remove them later."],
+      ["What if two people share one phone?", "A ticket plays on one phone only, and each person needs their own mobile number. The second person must use their own phone or ask you to move the ticket."],
+      ["What if I do not want the common link to work any more?", "Change \"Who can join\" to \"Only people on a list\" in step 2 (until the game starts). People who are not listed will then wait for you."],
+    ],
+    personal: [
+      ["What is a personal link?", "A link made for one listed person. They do not type anything: the link knows who they are. You can send it by WhatsApp from the list."],
+      ["What if a personal link is forwarded to someone else?", "A ticket plays on one phone only. The first phone that opens it keeps the ticket. Anyone else who opens it is asked to use their own number and may have to wait for you."],
+      ["Which is better, the personal link or the common link?", "The personal link is the easiest for the person (no typing) and the safest for you. The common link is the easiest for you (one link for everybody)."],
+    ],
+    waiting: [
+      ["What is \"Waiting to come in\"?", "The list of people who opened your link but are not on your list. You decide for each one: Admit lets them in, Decline refuses them."],
+      ["What if I admit someone by mistake?", "Open \"My people\" and remove them. They lose their ticket."],
+      ["Who can admit people?", "The Organizer and the Hosts. A Co-host sees and decides only for the people who came through their own link."],
+    ],
+    emp: [
+      ["What does \"Only my employees\" do exactly?", "It makes the game staff-only: only people on your list can play, and nobody can invite anybody else. Everyone else waits for you to decide."],
+      ["What if an employee is not on my list?", "They wait. Add them to your list and they get in at once, or press Admit."],
+      ["What if I want families or vendors to play too?", "Leave the box unticked. Then everyone can play, and you can still add your employees to the list."],
+      ["Is this checked against my company's HR records?", "No. It is checked against the list you give us. Make sure the list is correct."],
+    ],
+    ver: [
+      ["Which one should I choose?", "Use \"Mobile number\" for most games. Use \"Employee ID\" when your people know their ID but not each other's numbers. Use \"Mobile number or employee ID\" to let each person give whichever they remember. Use \"Mobile number and employee ID\" when you want the strongest check for employees."],
+      ["What if an employee types a wrong ID?", "They are not refused. They wait, and you see the ID that was typed in \"Waiting to come in\". You decide."],
+      ["What if an outsider has no employee ID?", "In a game that is not \"Only my employees\", outsiders simply type their mobile number and play."],
+      ["Who can see the Employee IDs?", "Only the Organizer and the Hosts. Other players never see them, and they are not shown on the big screen."],
+      ["Is the employee ID alone safe enough?", "It is the lightest check. Anyone who knows or guesses an ID can use it. For a stronger check choose \"Mobile number and employee ID\"."],
+    ],
+    mode: [
+      ["What if I choose Host and the Host forgets to press?", "No number comes until a Host presses Next number. Phones show the number about 6 seconds after the press."],
+      ["What if I choose Auto?", "Nobody has to do anything. The numbers come by themselves at the speed you choose and the game ends by itself."],
+      ["Can I change this after the game has started?", "No."],
+    ],
+    tix: [["What if someone wants only one ticket?", "Everybody plays with the same number of tickets, so the game is fair. Choose 1 if you prefer a simpler game."]],
+    spd: [["Which speed is better?", "9 seconds is lively and suits short games. 12 seconds gives people more time and suits older players or new players."], ["What if a phone is slow?", "Each phone catches up by itself. Numbers are never skipped or repeated."]],
+    rnd: [["What if I choose 2 rounds?", "After the first round there is a short break and then a second full game with new tickets. The prizes can be won again."], ["What if the first round ends early because all the prizes were won?", "The game moves straight on to the next round."]],
+    ties: [["What if two people complete a line on the same number?", "With Share both win. With Next the first gets it and the other gets the next winner position of that prize, if there is one."]],
+    per: [["What if I set it to zero?", "Guests cannot invite anyone."]],
+    cats: [["Can I let guests invite anyone?", "Choose all the kinds. Each person who comes in through a guest is shown under the guest's name."]],
+    occ: [["What if my occasion is not in the list?", "Choose Other and type your own name for the game."]],
+    day: [["What if I pick the wrong day?", "Change it before the game starts. After the start it is locked."]],
+    time: [["What time should I choose?", "The time you want guests to be ready. The first number comes 2 minutes later, and check-in opens 5 minutes before this time."]],
+    play: [["What if I forget to press Play now?", "You can still play any time during the game: open your play link on your phone."], ["Can I win?", "Yes, you can win every prize except the Unlucky prize and lucky draws."]],
+    bundle: [["What if I do not like the prizes it gives?", "Change, add or remove any prize afterwards."]],
+    step1: [["What if I want to change the time later?", "You can, until the game starts. Guests who already have the link see the new time."]],
+    step2: [["What if more people want to join than the limit?", "The game stops taking people when it is full. Raise the limit before the game starts if you need more places."]],
+    step3: [["What if nobody claims a prize?", "Then nobody wins it. The game carries on until all the prizes are won or all 90 numbers have been called."]],
+    step4: [["What if I add nothing here?", "Nothing is wrong: the game runs without a company name, breaks or messages."]],
+    step5: [["What if I do not add anyone?", "That is fine. You can run the game on your own."]],
+    step6: [["What if I use the common link and the personal links together?", "That is fine. Use personal links for people you know and the common link for groups."]],
+    step7: [["What if I publish and then change my mind?", "You can still change most things until the game starts. You can also cancel it."]],
+    step8: [["What if the payment fails?", "Nothing is taken and the game stays unpaid. Try again, or send the payment link to someone else."], ["What if someone else pays?", "Send them the payment link. They need no account. The game unlocks by itself once the payment is received."]],
+    step9: [["What if I press Pause by mistake?", "Press Resume. The game carries on from the same number."], ["What if my internet goes down?", "The numbers keep coming on every phone by themselves. Only pause, resume and messages need your connection."]],
+    step10: [["What if I need the report later?", "Open the report from the e-mail we send you. Erase the guest data only when you no longer need the names."]],
+  };
+
+  INFOTXT.common = { t: "The common link", does: ["One link for a whole group. Send it in a WhatsApp group, by e-mail or on your intranet.", "Each person types their own mobile number (or employee ID) and plays."], not: ["It is not made for one person: that is the personal link.", "It does not let people in by itself when the game is for people on a list: unlisted people wait for you."] };
+  INFOTXT.personal = { t: "The personal link", does: ["A link made for one listed person. They do not type anything.", "You can send it from My people by WhatsApp."], not: ["It is not for forwarding: a ticket plays on one phone only."] };
+  INFOTXT.waiting = { t: "Waiting to come in", does: ["Shows the people who opened your link but are not on your list. You press Admit or Decline for each."], not: ["Nobody in this list can play until you admit them."] };
+  const iBtn = (key) => (INFOTXT[key] ? `<button type="button" class="zc-i" data-info="${key}" aria-label="More about: ${esc(INFOTXT[key].t)}">i</button>` : "");
+  function openInfo(key) {
+    const x = INFOTXT[key]; if (!x) return; closeInfo();
+    const li = (a) => a.map((t) => `<li>${esc(t)}</li>`).join("");
+    const m = document.createElement("div"); m.className = "zc-modal"; m.id = "zcmodal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); m.setAttribute("aria-labelledby", "zcmt");
+    m.innerHTML = `<div class="zc-mbox"><button type="button" class="zc-mx" data-info-close aria-label="Close">&times;</button><h3 id="zcmt">${esc(x.t)}</h3><div class="zc-mcols"><div><h4>What it does</h4><ul>${li(x.does)}</ul></div><div><h4>What it does not do</h4><ul>${li(x.not)}</ul></div></div>${(INFOQA[key] || []).length ? `<h4 class="zc-qah">Questions and answers</h4><dl class="zc-qa">${INFOQA[key].map(([q, a]) => `<dt>${esc(q)}</dt><dd>${esc(a)}</dd>`).join("")}</dl>` : ""}<div class="zc-foot"><button type="button" class="zc-btn" data-info-close>Got it</button></div></div>`;
+    m.addEventListener("click", (e) => { if (e.target === m || e.target.closest("[data-info-close]")) closeInfo(); });
+    document.body.appendChild(m); const b = m.querySelector(".zc-btn"); if (b) b.focus();
+  }
+  function closeInfo() { const m = document.getElementById("zcmodal"); if (m) m.remove(); }
+  document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("[data-info]"); if (b) { e.preventDefault(); e.stopPropagation(); openInfo(b.getAttribute("data-info")); } }, true);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeInfo(); });
   const hintOf = (path) => (HINTS[path] ? `<span class="zc-hint2">${HINTS[path]}</span>` : "");
-  const grp = (path, label, opts, multi) => `<span class="zc-lbl" id="${gid(path)}">${label}</span><div class="zc-chips" role="group" aria-labelledby="${gid(path)}">${opts.map(([v, l]) => chip(path, v, l, multi)).join("")}</div>${hintOf(path)}`;
-  const bchip = (path, label) => { const on = !!getP(path); return `<button type="button" class="zc-chip${on ? " on" : ""}" data-bool="${path}" aria-pressed="${on}">${esc(label)}</button>${hintOf(path)}`; };
+  const grp = (path, label, opts, multi) => `<span class="zc-lblrow"><span class="zc-lbl" id="${gid(path)}">${label}</span>${iBtn(path)}</span><div class="zc-chips" role="group" aria-labelledby="${gid(path)}">${opts.map(([v, l]) => chip(path, v, l, multi)).join("")}</div>${hintOf(path)}`;
+  const bchip = (path, label) => { const on = !!getP(path); return `<button type="button" class="zc-chip${on ? " on" : ""}" data-bool="${path}" aria-pressed="${on}">${esc(label)}</button>${iBtn(path)}${hintOf(path)}`; };
   const cont = (n, label) => `<div class="zc-foot"><button class="zc-btn" type="button" data-save="${n}">${label || "Continue"}</button></div>`;
   const save = (n, label) => `<div class="zc-foot"><button class="zc-btn" type="button" data-save="${n}">${label || "Save and continue"}</button></div>`;
   const small = (t, extra) => `<p class="zc-small"${extra ? " " + extra : ""}>${t}</p>`;
@@ -267,8 +384,8 @@
       + small(f.who === "list" ? "Only people you have added can join straight away. Anyone else who clicks your link has to wait until you or a Host says yes." : "Anyone who clicks your link joins straight away. You can change this until the game starts."))
       + `<span class="zc-lbl zc-sec zc-sub">Who is this game for?</span>` + `<div class="zc-chips">${bchip("emp", "Only my employees (nobody can invite anyone)")}</div>`
       + small(f.emp ? "Only the employees on your list can play. Guests cannot invite anyone. Anyone else who opens your link waits for you to say yes." : "Employees, vendors, customers, families: everyone can play. Put the people you know on your list; others can still come in with the link.")
-      + grp("ver", "What must a person give to get in?", [["mobile", "Mobile number"], ["id", "Employee ID"], ["both", "Mobile number and employee ID"]])
-      + small(f.ver === "mobile" ? "Each person types their mobile number. This is the simplest." : (f.ver === "id" ? "Employee ID alone is the lightest check: anyone who knows or guesses an ID can use it. For a stronger check choose both. " : "") + (f.emp ? "Each employee types " + (f.ver === "id" ? "their employee ID" : "their mobile number and their employee ID") + ". Add the employees to your list with their " + (f.ver === "id" ? "employee ID (a mobile number is optional)." : "mobile number and employee ID.") : "Your employees type " + (f.ver === "id" ? "their employee ID" : "their mobile number and employee ID") + ". Vendors, customers and families have no employee ID, so they type their mobile number only."))
+      + grp("ver", "What must a person give to get in?", [["mobile", "Mobile number"], ["id", "Employee ID"], ["either", "Mobile number or employee ID"], ["both", "Mobile number and employee ID"]])
+      + small(f.ver === "mobile" ? "Each person types their mobile number. This is the simplest." : f.ver === "either" ? "Each person types their mobile number or their employee ID: either one is enough. Employees can use their ID, vendors and customers use their mobile number. A person on your list is recognised by whichever they give." : (f.ver === "id" ? "Employee ID alone is the lightest check: anyone who knows or guesses an ID can use it. For a stronger check choose both. " : "") + (f.emp ? "Each employee types " + (f.ver === "id" ? "their employee ID" : "their mobile number and their employee ID") + ". Add the employees to your list with their " + (f.ver === "id" ? "employee ID (a mobile number is optional)." : "mobile number and employee ID.") : "Your employees type " + (f.ver === "id" ? "their employee ID" : "their mobile number and employee ID") + ". Vendors, customers and families have no employee ID, so they type their mobile number only."))
       + (f.emp ? "" : `<span class="zc-lbl zc-sec zc-sub">Guests bringing their own people</span><span class="zc-lbl">Can guests bring their own people?</span><div class="zc-chips">${bchip("inv", "Yes, each guest can invite a few of their own family or colleagues")}</div>`
       + small("Each guest sends the invites on WhatsApp. The people they invite can play, but cannot invite anyone else.")
       + (f.inv ? `<div class="zc-box">${grp("per", "How many people can each guest invite?", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => [String(n), String(n)]))}${grp("cats", "Who can they invite?", cats.map((k) => [k.id, k.label]), true)}
@@ -470,7 +587,7 @@
     const seen = new Set(), good = [], wrong = []; let dups = 0;
     for (const r of rows) {
       const name = String(r.name || "").trim(), emp = String(r.empId || "").replace(/\s+/g, "").toUpperCase();
-      if (vmode() === "id" && emp) { // known by employee ID: a mobile number is welcome but not needed
+      if ((vmode() === "id" && emp) || (vmode() === "either" && emp && !String(r.phone || "").trim())) { // known by employee ID: a mobile number is welcome but not needed
         const d0 = String(r.phone || "").trim() ? cleanPhone(r.phone) : "";
         if (String(r.phone || "").trim() && !d0) { wrong.push({ name, raw: String(r.phone || ""), why: "The mobile number looks wrong." }); continue; }
         if (seen.has("E" + emp)) { dups++; continue; }
@@ -510,6 +627,46 @@
     const r = await call("POST", `/api/z/${eid}/people/me`, typed ? { phone: typed } : {}); P.me = r.person || null; P.meNeed = false; return P.me;
   }
   const needPeople = () => S.open === 6 && canRun() && !S.shield;
+  // ---------- what you know about each person, and safe reading of files ----------
+  const COLS = [["mobile", "Name and mobile number"], ["id", "Name and employee ID"], ["both", "Name, employee ID and mobile number"]];
+  const colsNow = () => { if (S.cols) return S.cols; const v = vmode(); return v === "id" ? "id" : v === "either" || v === "both" ? "both" : "mobile"; };
+  const MAX_CSV_BYTES = 1048576, MAX_LIST_ROWS = 5000;
+  const stripCtl = (t) => Array.from(t).filter((ch) => { const c = ch.charCodeAt(0); return !(c < 32 || c === 127 || (c >= 0x200b && c <= 0x200f) || c === 0x2028 || c === 0x2029 || c === 0xfeff); }).join("");
+  const NAME_OK = /^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N}\s.'\p{Pf}\-]{0,59}$/u, EMP_OK = /^[A-Za-z0-9][A-Za-z0-9._\-\/]{0,29}$/;
+  /** Reads a chosen file as plain text only after it passes the checks; throws an Error with a plain sentence otherwise. */
+  async function readListFile(f, kind) {
+    const nm = String(f.name || "").toLowerCase();
+    if (/\.(xlsx|xls|xlsm|xlsb|ods|numbers)$/.test(nm)) throw new Error("Excel files are not accepted. In Excel choose File, Save as, " + (kind === "pdf" ? "PDF" : "CSV") + ", then upload that.");
+    if (kind === "csv" && !/\.(csv|txt|tsv)$/.test(nm)) throw new Error("Please choose a CSV file (it ends with .csv).");
+    if (kind === "pdf" && !/\.pdf$/.test(nm)) throw new Error("Please choose a PDF file (it ends with .pdf).");
+    if (f.size > (kind === "pdf" ? 8 * 1048576 : MAX_CSV_BYTES)) throw new Error("This file is too big (more than " + (kind === "pdf" ? "8" : "1") + " MB). A list of names and numbers is much smaller. Please check you chose the right file.");
+    if (!f.size) throw new Error("This file is empty.");
+    const buf = new Uint8Array(await f.arrayBuffer());
+    const head = String.fromCharCode.apply(null, Array.from(buf.slice(0, 8)));
+    if (kind === "pdf") { if (head.indexOf("%PDF-") !== 0) throw new Error("This is not a real PDF file."); return buf; }
+    if (head.slice(0, 2) === "MZ" || head.slice(0, 4) === "PK" + String.fromCharCode(3, 4) || head.slice(0, 4) === "%PDF" || head.slice(0, 4) === String.fromCharCode(0x7f) + "ELF" || head.slice(0, 2) === "#!") throw new Error("This is not a plain CSV file. Please save your list as CSV and try again.");
+    if (buf.indexOf(0) >= 0) throw new Error("This is not a plain CSV file. Please save your list as CSV and try again.");
+    let text; try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch { throw new Error("This file is not plain text. Please save your list as CSV (UTF-8) and try again."); }
+    if (/<\s*(script|html|iframe|object|embed)/i.test(text)) throw new Error("This file contains web code, not a list. It was not used.");
+    if (text.split(/\r?\n/).length > MAX_LIST_ROWS + 1) throw new Error("This list has more than " + MAX_LIST_ROWS + " rows. Please split it into smaller files.");
+    return text;
+  }
+  /** Keeps only rows that look like real people: a tidy name, a real number, a tidy ID. Anything else is junk and is returned separately with the reason. */
+  function vetRows(rows) {
+    const ok = [], junk = [];
+    for (const r of rows) {
+      const cells = [r.name, r.phone, r.empId].map((c) => stripCtl(String(c == null ? "" : c)).trim());
+      const [name, phone, empId] = cells, shown = { name, raw: phone || empId };
+      if (cells.some((c) => /^[=@]/.test(c) || /^[+\-]\s*[^\d\s()]/.test(c))) { junk.push({ ...shown, why: "This row starts with a symbol that spreadsheets use for formulas. It was left out." }); continue; }
+      if (cells.some((c) => /[<>`{}\\]|https?:\/\/|www\./i.test(c))) { junk.push({ ...shown, why: "This row has web or code characters. It was left out." }); continue; }
+      if (name && /^[\d\s+()\-]{6,}$/.test(name)) { junk.push({ ...shown, why: "The name looks like a number. It was left out." }); continue; }
+      if (name && !NAME_OK.test(name)) { junk.push({ ...shown, why: "The name has unusual characters or is too long. It was left out." }); continue; }
+      if (empId && !EMP_OK.test(empId.replace(/\s+/g, ""))) { junk.push({ ...shown, why: "The employee ID has unusual characters. It was left out." }); continue; }
+      if (!phone && !empId) { junk.push({ ...shown, why: "There is no mobile number and no employee ID." }); continue; }
+      ok.push({ name, phone, empId });
+    }
+    return { ok, junk };
+  }
   async function addPeople(raw, keep) {
     const P = S.pp;
     if (!raw.length) { P.sum = "Add a name and a number first."; return redraw(); }
@@ -553,17 +710,20 @@
     return `<div class="zc-box" id="waitpanel"><b class="zc-bt">Waiting to come in${W.length ? ": " + W.length : ""}</b>${bulk}${rows || small("Nobody is waiting right now.")}${P.still ? `<p class="zc-small zc-warnt" id="stillwaiting">${esc(P.still)}</p>` : ""}${done ? `<div class="zc-gap">${done}</div>` : ""}</div>`;
   }
   function addBox() {
-    const modes = (canContacts() ? [["contacts", "From my contacts"]] : []).concat([["pdf", "Upload a PDF"], ["type", "Add a name and number"], ["paste", "Paste from Excel"], ["file", "Upload a CSV"]]);
-    const m = modes.some((x) => x[0] === S.mode) ? S.mode : "type";
-    const vm = vmode(), idPh = vm === "id" ? "Employee ID" : vm === "both" ? "Employee ID" : "";
+    const modes = (canContacts() ? [["contacts", "From my contacts"]] : []).concat([["pdf", "Upload a PDF"], ["file", "Upload a CSV"], ["type", "Add one person"]]);
+    const m = modes.some((x) => x[0] === S.mode) || S.mode === "paste" ? S.mode : "type";
+    const cols = colsNow(), withPh = cols !== "id", withId = cols !== "mobile";
     const chips = modes.map(([k, l]) => `<button type="button" class="zc-chip${m === k ? " on" : ""}" data-mode="${k}" aria-pressed="${m === k}">${l}</button>`).join("");
-    const tplCols = vm === "mobile" ? "Name, Mobile" : vm === "id" ? "Name, Mobile (optional), Employee ID" : "Name, Mobile, Employee ID";
-    const pdfForm = `<ol class="zc-small zc-steps"><li>Download the Excel sheet.</li><li>Fill it in (${tplCols}).</li><li>In Excel choose <b>File, Save as, PDF</b>.</li><li>Upload the PDF here. You will see the list before anyone is added.</li></ol><div class="zc-inline"><button type="button" class="zc-btn zc-btn-s" id="gtemplate">Download the Excel sheet</button></div>${lbl("gpdf", "Choose your PDF")}<input id="gpdf" class="zc-in" type="file" accept=".pdf,application/pdf" data-needs="K6" disabled aria-disabled="true"><p class="zc-small" id="pdfnote" role="status">${esc(S.pdfNote || "")}</p>${S.pdfRows ? `<div class="zc-box" id="pdfprev"><b class="zc-bt">${S.pdfRows.length} ${S.pdfRows.length === 1 ? "person" : "people"} found in your PDF</b>${S.pdfRows.slice(0, 5).map((r) => `<div class="zc-small zc-nomargin">${esc(r.name || "No name")} &middot; ${esc(r.phone ? "******" + String(r.phone).replace(/\D/g, "").slice(-4) : "")} ${esc(r.empId || "")}</div>`).join("")}${S.pdfRows.length > 5 ? `<div class="zc-small zc-nomargin">and ${S.pdfRows.length - 5} more</div>` : ""}<div class="zc-chips zc-gap"><button type="button" class="zc-btn zc-btn-s" id="pdfgo">Add them</button><button type="button" class="zc-mini" id="pdfno">Not these</button></div></div>` : ""}`;
-    const form = m === "pdf" ? pdfForm : m === "contacts" ? `<div class="zc-inline"><button type="button" class="zc-btn zc-btn-s" id="gcontacts" data-needs="K6" disabled aria-disabled="true">Pick from my contacts</button></div>`
-      : m === "type" ? `<div class="zc-inline"><label class="zc-sr" for="gname">Name</label><input id="gname" class="zc-in" placeholder="Name" autocomplete="off"><label class="zc-sr" for="gphone">Mobile number</label><input id="gphone" class="zc-in" inputmode="tel" placeholder="${vm === "id" ? "Mobile (optional)" : "98765 43210"}" autocomplete="off">${idPh ? `<label class="zc-sr" for="gemp">Employee ID</label><input id="gemp" class="zc-in" placeholder="${idPh}" autocomplete="off">` : ""}<button type="button" class="zc-btn zc-btn-s" id="gadd" data-needs="K6" disabled aria-disabled="true">Add</button></div>`
-      : m === "paste" ? `${lbl("rosterTxt", vm === "mobile" ? "Paste one person per line: name, mobile number" : vm === "id" ? "Paste one person per line: name, employee ID (and a mobile number if you have it)" : "Paste one person per line: name, mobile number, employee ID")}<textarea id="rosterTxt" class="zc-in zc-ta" rows="5" placeholder="Asha, 98765 43210" autocomplete="off"></textarea><div class="zc-foot"><button type="button" class="zc-btn zc-btn-s" id="rosterGo" data-needs="K6" disabled aria-disabled="true">Add them</button></div>`
-      : `${lbl("gfile", vm === "mobile" ? "Choose a CSV file: name, then mobile number" : "Choose a CSV file: name, mobile number, employee ID")}<input id="gfile" class="zc-in" type="file" accept=".csv,.txt,.tsv,text/csv,text/plain" data-needs="K6" disabled aria-disabled="true">${small("In Excel, choose Save as CSV first.")}`;
-    return `<div class="zc-chips" role="group" aria-label="How to add people">${chips}</div>${CBConsent.html("K6")}${form}${small("Invite only people who would like to play.")}`;
+    const colChips = COLS.map(([k, l]) => `<button type="button" class="zc-chip${cols === k ? " on" : ""}" data-cols="${k}" aria-pressed="${cols === k}">${l}</button>`).join("");
+    const colsHdr = cols === "mobile" ? "Name, Mobile" : cols === "id" ? "Name, Employee ID" : "Name, Employee ID, Mobile";
+    const SAFE = `<p class="zc-small zc-safe">Your file is read on your own device. It is never stored and never opened as a program. Only the names, mobile numbers and employee IDs inside it are added, and anything that does not look like a name, a number or an ID is left out and shown to you.</p>`;
+    const tpl = `<div class="zc-inline"><button type="button" class="zc-btn zc-btn-s" id="gtemplate">Download the blank list</button></div>`;
+    const pdfForm = `<ol class="zc-small zc-steps"><li>Download the blank list. It has the columns: ${colsHdr}.</li><li>Fill it in. You can use Excel or any program.</li><li>Save it as a <b>PDF</b> (in Excel: File, Save as, PDF).</li><li>Upload the PDF here. You will see the list before anyone is added.</li></ol>${tpl}${lbl("gpdf", "Choose your PDF")}<input id="gpdf" class="zc-in" type="file" accept=".pdf,application/pdf" data-needs="K6" disabled aria-disabled="true">${SAFE}<p class="zc-small" id="pdfnote" role="status">${esc(S.pdfNote || "")}</p>${S.pdfRows ? `<div class="zc-box" id="pdfprev"><b class="zc-bt">${S.pdfRows.length} ${S.pdfRows.length === 1 ? "person" : "people"} found in your PDF${S.pdfJunk ? `, ${S.pdfJunk} left out` : ""}</b>${S.pdfRows.slice(0, 5).map((r) => `<div class="zc-small zc-nomargin">${esc(r.name || "No name")} &middot; ${esc(r.phone ? "******" + String(r.phone).replace(/\D/g, "").slice(-4) : "")} ${esc(r.empId || "")}</div>`).join("")}${S.pdfRows.length > 5 ? `<div class="zc-small zc-nomargin">and ${S.pdfRows.length - 5} more</div>` : ""}<div class="zc-chips zc-gap"><button type="button" class="zc-btn zc-btn-s" id="pdfgo">Add them</button><button type="button" class="zc-mini" id="pdfno">Not these</button></div></div>` : ""}`;
+    const csvForm = `<ol class="zc-small zc-steps"><li>Download the blank list. It has the columns: ${colsHdr}.</li><li>Fill it in. You can use Excel or any program.</li><li>Save it as a <b>CSV</b> (in Excel: File, Save as, CSV).</li><li>Upload the CSV here. Excel files themselves (.xlsx) are not accepted.</li></ol>${tpl}${lbl("gfile", "Choose your CSV file")}<input id="gfile" class="zc-in" type="file" accept=".csv,.txt,.tsv,text/csv,text/plain" data-needs="K6" disabled aria-disabled="true">${SAFE}<p class="zc-small" id="csvnote" role="status">${esc(S.csvNote || "")}</p>`;
+    const typeForm = `<div class="zc-inline"><label class="zc-sr" for="gname">Name</label><input id="gname" class="zc-in" placeholder="Name" autocomplete="off" maxlength="60">${withPh ? `<label class="zc-sr" for="gphone">Mobile number</label><input id="gphone" class="zc-in" inputmode="tel" placeholder="98765 43210" autocomplete="off" maxlength="20">` : ""}${withId ? `<label class="zc-sr" for="gemp">Employee ID</label><input id="gemp" class="zc-in" placeholder="Employee ID" autocomplete="off" maxlength="30">` : ""}<button type="button" class="zc-btn zc-btn-s" id="gadd" data-needs="K6" disabled aria-disabled="true">Add</button></div>`;
+    const pasteForm = `${lbl("rosterTxt", "Paste one person per line")}<textarea id="rosterTxt" class="zc-in zc-ta" rows="5" autocomplete="off"></textarea><div class="zc-foot"><button type="button" class="zc-btn zc-btn-s" id="rosterGo" data-needs="K6" disabled aria-disabled="true">Add them</button></div>`;
+    const form = m === "paste" ? pasteForm : m === "pdf" ? pdfForm : m === "contacts" ? `<div class="zc-inline"><button type="button" class="zc-btn zc-btn-s" id="gcontacts" data-needs="K6" disabled aria-disabled="true">Pick from my contacts</button></div>` : m === "file" ? csvForm : typeForm;
+    return `<span class="zc-lblrow"><span class="zc-lbl">What do you know about each person?</span></span><div class="zc-chips" role="group" aria-label="What you know about each person">${colChips}</div>${small("This decides the columns of the list and the boxes below.")}<span class="zc-lbl">How do you want to add them?</span><div class="zc-chips" role="group" aria-label="How to add people">${chips}</div>${CBConsent.html("K6")}${form}${small("Invite only people who would like to play.")}`;
   }
   const guestTools = () => (!canRun() ? "" : `<h4>A guest's own data</h4>${small("A player asks to see or delete their data? Enter their mobile number. Only you can do this.")}<div class="zc-inline"><label class="zc-sr" for="pdph">Their mobile number</label><input id="pdph" class="zc-in" inputmode="tel" autocomplete="off" placeholder="98765 43210"><button type="button" class="zc-mini" id="pdsee">Show what we hold</button><button type="button" class="zc-mini zc-danger" id="pddel">Delete their data</button></div>
       <h4>Change of phone</h4>${small("A ticket plays on one phone only. If someone lost or changed their phone, enter their mobile number: the next phone they join with keeps their ticket.")}<div class="zc-inline"><label class="zc-sr" for="ubph">Their mobile number</label><input id="ubph" class="zc-in" inputmode="tel" autocomplete="off" placeholder="98765 43210"><button type="button" class="zc-mini" id="unbind">Let them move to a new phone</button></div>`);
@@ -591,15 +751,23 @@
   function playBlock() {
     if (S.shield || !canRun()) return "";
     const ph = S.myPhone !== undefined ? S.myPhone : isOrg() ? S.contact.phone || "" : "";
-    return `<div class="zc-block" id="playalong"><h3>Play along</h3>${small("You can play too. Your seat is flagged as the team's, and you stay out of lucky draws. Nobody has an advantage: you tap and claim like everyone else.")}
+    return `<div class="zc-block" id="playalong"><h3>Play the game yourself ${iBtn("play")}</h3>${small("The Organizer, Hosts and Co-hosts can play too. Press Play now to open your own ticket, or send your play link to your phone. You keep this console open to run the game. Your seat is marked as the team's, so you stay out of the Unlucky prize and lucky draws. Nobody has an advantage: you tap and claim like everyone else.")}
       <div class="zc-chips zc-gap"><button type="button" class="zc-chip" id="playnow">Play now</button></div>
       ${S.pp.meNeed ? `${lbl("myph", "Your own mobile number")}<input id="myph" class="zc-in" inputmode="tel" placeholder="98765 43210" autocomplete="off" value="${esc(ph)}">` : ""}
       <div class="zc-foot"><button type="button" class="zc-btn zc-btn-s" id="sendmine">Send my play link to my WhatsApp</button></div>${S.pp.mineNote ? `<p class="zc-small" id="minenote" role="status">${esc(S.pp.mineNote)}</p>` : ""}</div>`;
   }
+  /** What will happen when this link is shared, said in plain words for the game as it is set now. */
+  const commonNote = () => {
+    const anyone = whoNow() === "anyone", emp = !!(S.sum && S.sum.employeesOnly);
+    return `<div class="zc-note2" id="commonnote"><b>What happens when you share this link</b>` + (anyone
+      ? `<span>This game is open for all. Everyone who has the link can play: they type their mobile number${vmode() === "mobile" ? "" : " or the detail you asked for"} and get a ticket straight away. You do not need to approve anyone.</span>`
+      : `<span>This game is for people on your list. You can safely send this one link to a whole group: people on your list get in by themselves. Anyone else sees "Please wait" and cannot play until you or a Host press Admit in "Waiting to come in".</span>`)
+      + (emp ? `<span>Only your employees can play and nobody can invite anyone else.</span>` : "") + `<span>You can change this in step 2 until the game starts.</span></div>`;
+  };
   function stepShare() {
     const link = guestLink();
-    return `<div class="zc-block"><h3>Guest link</h3><div class="zc-linkrow"><span class="zlink">${esc(link)}</span><button type="button" class="zc-mini" id="copy">Copy link</button></div>
-        <div class="zc-chips zc-gap"><a class="zc-chip" href="${esc(waUrl(""))}" target="_blank" rel="noopener noreferrer">Share on WhatsApp</a></div>${S.draft ? small("Guests can join once you publish.") : ""}</div>
+    return playBlock() + `<div class="zc-block"><h3>Guest link (the common link) ${iBtn("common")}</h3><div class="zc-linkrow"><span class="zlink">${esc(link)}</span><button type="button" class="zc-mini" id="copy">Copy link</button></div>
+        <div class="zc-chips zc-gap"><a class="zc-chip" href="${esc(waUrl(""))}" target="_blank" rel="noopener noreferrer">Share on WhatsApp</a></div>${S.draft ? small("Guests can join once you publish.") : ""}${commonNote()}</div>
       <div class="zc-block"><h3>Number screen for the room or a meeting</h3><div class="zc-linkrow"><span class="zlink" id="biglink">${esc(bigLink())}</span><button type="button" class="zc-mini" id="copybig">Copy the link</button></div>
         <a class="zc-chip zc-gap" href="${esc(bigLink())}" target="_blank" rel="noopener">Open the number screen</a>${small("Show it on a big screen, or share it in Google Meet, Zoom or Teams. It shows only the number just called and the prizes: players never see the earlier numbers.")}<details class="zc-small" id="meetinghow"><summary>Optional: how to play it over Google Meet, Zoom or Teams</summary><ol style="margin:6px 0 0 18px;padding:0"><li>Start your Google Meet, Zoom or Teams call as usual. Everyone talks there, as always.</li><li>Paste the guest link in the meeting chat (or send it on WhatsApp). Each person opens it on their own phone and gets their ticket. The phone shows only the number just called.</li><li>Share your screen in the meeting and show the <b>number screen</b> (console, step 6: &ldquo;Open the number screen&rdquo;). It shows the number just called and the prizes, never names or numbers.</li><li>Choose who calls the numbers before the start (step 1): the software at a steady speed, or you press <b>Next number</b> yourself while you talk. You cannot change this once the game has started.</li><li>Brand breaks and your speech play on every phone. The software finds the winners and shows them on the number screen, so you can announce them in the call.</li></ol><p>Nothing is installed in the meeting app; the game runs alongside the call.</p></details></div>
       <div class="zc-block"><h3>My board (only for you)</h3>${small("The housie board with every number already called, like the real game. Only you, a Host or a Co-host can open it. Do not share this window.")}<a class="zc-chip zc-gap" id="myboard" href="${esc(location.origin + "/board.html?e=" + encodeURIComponent(eid) + "#k=" + encodeURIComponent(secret || ""))}" target="_blank" rel="noopener">Open my board</a></div>
@@ -903,7 +1071,7 @@
     10: ["A few minutes after the game, a report link is e-mailed to the Organizer.", "Guest names and numbers are erased within 24 hours.", "We keep the winners and the Organizer's and Hosts' details for 365 days.", "You can erase guest data earlier."],
   };
   const ABOUT_COH = { 1: ["You can see the game and what you may do."], 2: ["Add your people. Each gets their own WhatsApp link. You can bring up to your limit."], 3: ["One payment is enough. If someone has paid, you will see Paid.", "\"Copy payment link\" makes a link anyone can open to pay for this game."] };
-  const aboutBox = (n) => { const L = (role() === "cohost" ? ABOUT_COH : ABOUT)[n]; return L ? `<div class="zc-about" id="about${n}"><b>About this step</b>${L.map((x) => `<span>${esc(x)}</span>`).join("")}</div>` : ""; };
+  const aboutBox = (n) => { const L = (role() === "cohost" ? ABOUT_COH : ABOUT)[n]; return L ? `<div class="zc-about" id="about${n}"><b>About this step</b>${role() === "cohost" ? "" : iBtn("step" + n)}${L.map((x) => `<span>${esc(x)}</span>`).join("")}</div>` : ""; };
   const badge = (s) => `<span class="zc-num" style="background:var(--text-tint-${s[2]})">${s[0]}</span>`;
   function synHtml() {
     return steps().map((s) => { const d = isDone(s[0]); return `<button type="button" class="zc-syn${S.open === s[0] ? " act" : ""}" data-open="${s[0]}">${badge(s)}<span class="zc-syntx"><b>${esc(s[1])}</b><br><span class="zc-muted">${esc(sum(s[0]) || (d ? "Done" : "To do"))}</span></span><span class="zc-st${d ? " ok" : ""}" aria-label="${d ? "Done" : "To do"}">${d ? "&#10003;" : "&#9675;"}</span></button>`; }).join("");
@@ -1511,13 +1679,14 @@
     all("[data-mode]", (b) => (b.onclick = () => { S.mode = b.dataset.mode; redraw(); }));
     if ($("copy")) $("copy").onclick = async () => { const ok = await copyText(role() === "cohost" ? cohInvite() : guestLink()); $("copy").textContent = ok ? "Copied" : "Select and copy it"; };
     if ($("copybig")) $("copybig").onclick = async () => { const ok = await copyText(bigLink()); $("copybig").textContent = ok ? "Copied" : "Select and copy it"; };
-    if ($("gadd")) $("gadd").onclick = () => { const n = $("gname").value.trim(), p = $("gphone").value.trim(), e = ($("gemp") || {}).value || ""; addPeople(p || n || e.trim() ? [{ name: n, phone: p, empId: e }] : []); };
-    if ($("gtemplate")) $("gtemplate").onclick = () => { const vm = vmode(), head = vm === "mobile" ? "Name,Mobile" : vm === "id" ? "Name,Mobile (optional),Employee ID" : "Name,Mobile,Employee ID", ex = vm === "mobile" ? ["Asha Rao,98765 43210", "Ravi Shah,98765 43211"] : vm === "id" ? ["Asha Rao,,E101", "Ravi Shah,98765 43211,E102"] : ["Asha Rao,98765 43210,E101", "Ravi Shah,98765 43211,E102"]; const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\uFEFF" + [head].concat(ex).join("\r\n") + "\r\n"], { type: "text/csv" })); a.download = "people-sheet.csv"; document.body.appendChild(a); a.click(); a.remove(); };
-    if ($("gpdf")) $("gpdf").onchange = async () => { const f = $("gpdf").files && $("gpdf").files[0]; if (!f) return; S.pdfRows = null; S.pdfNote = "Reading your PDF…"; redraw(); try { const rows = parseList(await pdfText(f)); S.pdfRows = rows.filter((r) => r.phone || r.empId); S.pdfNote = S.pdfRows.length ? "" : "We could not find any names and numbers in this PDF. Please save it from Excel (File, Save as, PDF), not as a photo or a scan."; } catch (e) { S.pdfNote = (e && e.message) || "We could not read this PDF. Please save it again from Excel, or paste the list instead."; } redraw(); };
+    if ($("gadd")) $("gadd").onclick = () => { const n = $("gname").value.trim(), p = (($("gphone") || {}).value || "").trim(), e = (($("gemp") || {}).value || "").trim(), v = vetRows(n || p || e ? [{ name: n, phone: p, empId: e }] : []); if (v.junk.length) { S.pp.sum = v.junk[0].why; return redraw(); } addPeople(v.ok); };
+    all("[data-cols]", (b) => (b.onclick = () => { S.cols = b.dataset.cols; redraw(); }));
+    if ($("rosterGo")) $("rosterGo").onclick = () => { const v = vetRows(parseList($("rosterTxt").value)); if (!v.ok.length) { S.pp.sum = v.junk.length ? v.junk[0].why : "Add a name and a number first."; return redraw(); } addPeople(v.ok); };
+    if ($("gtemplate")) $("gtemplate").onclick = () => { const c = colsNow(), head = c === "mobile" ? "Name,Mobile" : c === "id" ? "Name,Employee ID" : "Name,Employee ID,Mobile", ex = c === "mobile" ? ["Asha Rao,98765 43210", "Ravi Shah,98765 43211"] : c === "id" ? ["Asha Rao,E101", "Ravi Shah,E102"] : ["Asha Rao,E101,98765 43210", "Ravi Shah,E102,98765 43211"]; const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + [head].concat(ex).join("\r\n") + "\r\n"], { type: "text/csv" })); a.download = "my-people.csv"; a.click(); };
+    if ($("gpdf")) $("gpdf").onchange = async () => { const f = $("gpdf").files && $("gpdf").files[0]; if (!f) return; S.pdfRows = null; S.pdfJunk = 0; S.pdfNote = "Reading your PDF..."; redraw(); try { await readListFile(f, "pdf"); const v = vetRows(parseList(await pdfText(f)).filter((r) => r.phone || r.empId || r.name)); S.pdfRows = v.ok; S.pdfJunk = v.junk.length; S.pdfNote = !v.ok.length ? "We could not find any names and numbers in this PDF. Please save your list as a PDF from Excel (File, Save as, PDF), not as a photo or a scan." : v.junk.length > v.ok.length ? "Most of this file does not look like a list of names and numbers, so it was not used." : ""; if (v.junk.length > v.ok.length) S.pdfRows = null; } catch (e) { S.pdfNote = (e && e.message) || "We could not read this PDF."; } redraw(); };
     if ($("pdfno")) $("pdfno").onclick = () => { S.pdfRows = null; S.pdfNote = ""; redraw(); };
     if ($("pdfgo")) $("pdfgo").onclick = () => { const r = S.pdfRows || []; S.pdfRows = null; S.pdfNote = ""; addPeople(r); };
-    if ($("rosterGo")) $("rosterGo").onclick = () => addPeople(parseList($("rosterTxt").value));
-    if ($("gfile")) $("gfile").onchange = async () => { const f = $("gfile").files && $("gfile").files[0]; if (!f) return; let t = ""; try { t = await f.text(); } catch { S.pp.sum = "Could not read that file. Try pasting the list instead."; return redraw(); } addPeople(parseList(t)); };
+    if ($("gfile")) $("gfile").onchange = async () => { const f = $("gfile").files && $("gfile").files[0]; if (!f) return; S.csvNote = ""; let t = ""; try { t = await readListFile(f, "csv"); } catch (e) { S.csvNote = (e && e.message) || "We could not read this file."; return redraw(); } const v = vetRows(parseList(t)); if (!v.ok.length || v.junk.length > v.ok.length) { S.csvNote = !v.ok.length ? "We could not find any names and numbers in this file." : "Most of this file does not look like a list of names and numbers, so it was not used."; return redraw(); } S.csvNote = v.junk.length ? v.junk.length + " rows were left out: " + v.junk.slice(0, 3).map((x) => (x.name || x.raw || "a row")).join(", ") + (v.junk.length > 3 ? " and more" : "") + "." : ""; addPeople(v.ok); };
     if ($("gcontacts")) $("gcontacts").onclick = async () => { try { const got = await navigator.contacts.select(["name", "tel"], { multiple: true }); addPeople((got || []).map((c) => ({ name: (c.name || [])[0] || "", phone: (c.tel || [])[0] || "" }))); } catch { S.pp.sum = "Could not open your contacts. Please type or paste instead."; redraw(); } };
     all("[data-fix]", (b) => (b.onclick = () => { const i = Number(b.dataset.fix), w = S.pp.wrong[i], v = ($("fixin" + i) || {}).value; if (!w) return; if (!cleanPhone(v)) { w.raw = v; S.pp.sum = "That number still looks wrong. Check the digits."; return redraw(); } S.pp.wrong.splice(i, 1); addPeople([{ name: w.name, phone: v }], true); }));
     all("[data-wa]", (a) => (a.onclick = () => { markSent(a.dataset.wa); setTimeout(redraw, 0); }));
@@ -1729,5 +1898,5 @@
   };
   (async () => { if (!secret && bc) { bc.postMessage({ ask: true }); await new Promise((r) => setTimeout(r, 350)); } if (!inited) bootstrap(); })();
   setInterval(() => { const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; /* never wipe what the organizer is typing */ if (!secret || document.hidden) return; if (role() === "host" && S.setup && S.setup.ready === false) return; if (eid) refreshEng(); else if (QUICK || S.screen === "quick") return; else if (isOrg()) refreshHome(); }, 5000);
-  window.__zc = S;
+  window.__zc = S; window.__zcMode = (m) => { S.mode = m; redraw(); }; // the page tests reach the plain-text list path through this
 })();

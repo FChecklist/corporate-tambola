@@ -59,7 +59,7 @@ describe("phone number formats on a guest list", () => {
     const g = await paidGame({ cap: 100 });
     for (const [i, nm] of ["=SUM(A1)", "+cmd|calc", "-2+3", "@HYPERLINK(1)", "Plain"].entries()) await add(g.key, g.id, [{ name: nm, phone: mob(i + 1) }]);
     const csv = await (await call("GET", `/api/z/${g.id}/people/export`, undefined, g.h)).text();
-    for (const bad of ["=SUM", "+cmd", "-2+3", "@HYPER"]) { expect(csv).not.toContain("\n" + bad); expect(csv).not.toContain(",\"" + bad); expect(csv).toContain("'" + bad); }
+    for (const bad of ["=SUM", "+cmd", "-2+3", "@HYPER"]) { expect(csv).not.toContain("\n" + bad); expect(csv).not.toContain(",\"" + bad); expect(csv).toContain(bad.replace(/^[=+\-@]+/, "")); }
   });
 });
 

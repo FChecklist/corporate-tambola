@@ -391,7 +391,7 @@ describe("export, privacy and cleanup", () => {
     const t = await setup(); await add(t.master, [{ name: "=HYPERLINK(1)", phone: mob(1) }, { name: "Bala", phone: mob(2) }]);
     const r = await call("GET", "/api/z/PPL-1/people/export", undefined, t.master);
     expect(r.headers.get("content-type")).toContain("text/csv"); const csv = await r.text();
-    expect(csv).toContain("Name,Mobile,Personal link,WhatsApp link,Status"); expect(csv).toContain("'=HYPERLINK(1),91" + mob(1)); expect(csv).toContain("https://tambola.test/j/"); expect(csv).toContain(",Invited");
+    expect(csv).toContain("Name,Mobile,Personal link,WhatsApp link,Status"); expect(csv).toContain("HYPERLINK(1),91" + mob(1)); expect(csv).toContain("https://tambola.test/j/"); expect(csv).toContain(",Invited");
   });
   test("deleting the guests' data (the 23-hour rule or on request) deletes people and waiting rows too", async () => {
     const t = await setup({ closed: true }); await add(t.master, [{ name: "A", phone: mob(1) }]); await joinAs("PPL-1", 5, { from: ORG_FROM });

@@ -1415,16 +1415,23 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       tokPii = await openPii(env, tok.pii);
     }
     const typedGiven = typeof b?.phone === "string" ? b.phone.trim() !== "" : b?.phone != null;
-    const typedDigits = digitsOf(b?.phone), typedPh = await phoneHash(b?.phone);
+    let typedDigits = digitsOf(b?.phone), typedPh = await phoneHash(b?.phone);
     if (typedGiven && !typedPh) return json({ error: "Enter a valid mobile number." }, 400);
     // What the organizer asked people to give: a mobile number (default), an employee ID, or both. An outsider (a vendor, a customer, a family member) has no ID and gives a mobile number.
     const vf = verifyOf(e), empNorm = normEmp(b?.empId);
     if (empNorm === null) return json({ error: "An employee ID has letters and numbers only.", code: "bad-id" }, 400);
-    if (vf.employeesOnly && vf.mode !== "mobile" && !empNorm && !tok) return json({ error: vf.mode === "id" ? "Enter your employee ID." : "Enter your employee ID and your mobile number.", code: "need-id" }, 400);
-    const idOnly = vf.mode === "id" && !!empNorm && !tok; // known by employee ID alone
+    if (vf.employeesOnly && vf.mode !== "mobile" && vf.mode !== "either" && !empNorm && !tok) return json({ error: vf.mode === "id" ? "Enter your employee ID." : "Enter your employee ID and your mobile number.", code: "need-id" }, 400);
+    if (vf.employeesOnly && vf.mode === "either" && !empNorm && !typedGiven && !tok) return json({ error: "Enter your mobile number or your employee ID.", code: "need-id" }, 400);
+    if (vf.mode === "either" && empNorm && !tok) { // "mobile number or employee ID": an ID on the list is as good as the listed mobile number (the person is then known by their listed number)
+      const eh = await empHashOf(env, empNorm);
+      let hit = await personByPhone(env, eid!, eh);
+      if (!hit) { const al = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`idx/${eid}/${eh}`).first<{ v: string }>(); if (al) hit = await personByPhone(env, eid!, al.v); }
+      if (hit) { tok = hit; tokPii = await openPii(env, hit.pii); typedPh = null; typedDigits = null; }
+    }
+    const idOnly = (vf.mode === "id" || vf.mode === "either") && !!empNorm && !typedGiven && !tok; // known by employee ID alone
     let digits = typedDigits ?? tokPii?.phone ?? (idOnly ? "" : null);
     const ph = idOnly ? await empHashOf(env, empNorm) : typedPh ?? tok?.ph ?? null;
-    if (!ph || (!digits && !idOnly && !(vf.mode === "id" && tokPii))) return json({ error: vf.mode === "id" ? "Enter your employee ID, or your mobile number if you have no employee ID." : "Enter a valid mobile number." }, 400);
+    if (!ph || (!digits && !idOnly && !((vf.mode === "id" || vf.mode === "either") && tokPii))) return json({ error: vf.mode === "id" ? "Enter your employee ID, or your mobile number if you have no employee ID." : vf.mode === "either" ? "Enter your mobile number or your employee ID." : "Enter a valid mobile number." }, 400);
     const ck = consentMissing(b, "K4"); // K4: both boxes, checked on the server before any name or number is kept
     const k4 = (subject: string) => recordConsent(env.DB, { subject, kind: "K4", ref: eid!, now });
     const otherNumber = !!(tok && typedPh && typedPh !== tok.ph); // somebody else opened this person's link
