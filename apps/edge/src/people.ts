@@ -299,6 +299,11 @@ async function addPeople(c: Ctx, who: Caller, b: any): Promise<Response> {
     const ph = await phoneHashOf(c.env, cl.digits);
     if (seen.has(ph)) { duplicates++; continue; }
     const idHash = vf.mode === "either" && emp ? await empHashOf(c.env, emp) : undefined; // "mobile number or employee ID": a listed person with both can come in with either, so the ID points to the mobile-number identity
+    if (idHash) { // the same employee ID on two people of one list would let the second take over the first's ID: the second is a duplicate
+      const al = await c.env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`idx/${c.eid}/${idHash}`).first<{ v: string }>();
+      if ((al && al.v !== ph && (await c.env.DB.prepare("SELECT 1 AS x FROM person WHERE eid=? AND ph=? AND status<>'removed'").bind(c.eid, al.v).first())) || seen.has("I" + idHash)) { duplicates++; continue; }
+      seen.add("I" + idHash);
+    }
     seen.add(ph); todo.push({ name: cleanName(x?.name), digits: cl.digits, ph, ...(emp && vf.mode !== "mobile" ? { empId: emp } : {}), ...(idHash ? { idHash } : {}) });
   }
   const db = c.env.DB, hashes = todo.map((t) => t.ph);
@@ -442,6 +447,7 @@ async function resendPerson(c: Ctx, who: Caller, id: string, b: any): Promise<Re
     db.prepare("UPDATE seat SET dev=NULL WHERE eid=? AND ph=?").bind(c.eid, row.ph), // the first phone to open the new link keeps the ticket
   ]);
   if ((res[0]?.meta?.changes ?? 0) === 0) return c.json({ error: "That number is already invited.", code: "duplicate" }, 409);
+  if (newPii && pii?.empId && verifyOf(c.e).mode === "either") await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`idx/${c.eid}/${await empHashOf(c.env, pii.empId)}`, ph).run(); // the employee ID keeps pointing at this person's current number
   const link = `${c.origin}/j/${token}`;
   return c.json({ ok: true, link, waLink: pii?.phone ? waLinkOf(pii.phone, waMessage(pii.name || null, c.gameName, link)) : null, unlocked: hasSeat });
 }

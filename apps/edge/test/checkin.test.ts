@@ -22,7 +22,7 @@ const deviceOf = new Map<string, string>();
 const join = async (id: string, i: number, extra: Record<string, unknown> = {}, now: number = T) => { const r = await joinRaw(id, i, extra, now); const b = await r.clone().json().catch(() => null); if (b?.pid) deviceOf.set(b.pid, String((extra as any)?.device ?? dev(i))); return r; };
 const ck = (id: string, pid: string, now: number, device: string | null = deviceOf.get(pid) ?? null) => call("GET", `/api/z/${id}/checkin?pid=${encodeURIComponent(pid)}${device ? `&device=${device}` : ""}`, undefined, {}, now);
 const submit = (id: string, pid: string, body: Record<string, unknown>, now: number) => call("POST", `/api/z/${id}/checkin`, { pid, device: deviceOf.get(pid), confirmName: true, confirmMobile: true, ...body }, {}, now);
-const claim = (id: string, pid: string, now: number) => call("POST", `/api/z/${id}/claims`, { pid, claims: [{ pattern: "early5", idx: 10 }] }, {}, now);
+const claim = (id: string, pid: string, now: number, device: string | null | undefined = deviceOf.get(pid)) => call("POST", `/api/z/${id}/claims`, { pid, ...(device ? { device } : {}), claims: [{ pattern: "early5", idx: 10 }] }, {}, now);
 
 describe("the code: every participant of a game has a different 4-digit code", () => {
   test("the keyed permutation never repeats: all 10,000 inputs give 10,000 different 4-digit outputs", () => {
@@ -101,6 +101,13 @@ describe("the check-in flow", () => {
     for (const g of [b, c2]) { const jn = await j(await join(g.id, 1, {}, T2)); const code = (await j(await ck(g.id, jn.pid, now))).code; expect((await submit(g.id, jn.pid, { code }, now)).status).toBe(200); mine.push([g.id, jn.pid]); }
     await erasePersonal(W.env as any, a.id, now + 1000, "organizer");
     for (const [id, pid] of mine) expect((await j(await ck(id, pid!, now + 2000))).present).toBe(true);
+  });
+  test("claims and wrong-claim reports are accepted only from the ticket's own phone: somebody else's phone cannot knock a rival out or claim in their name", async () => {
+    const g = await game(); const a = await j(await join(g.id, 1, {}, T2)); await join(g.id, 2, {}, T2); const now = g.startMs - 1 * MIN;
+    const code = (await j(await ck(g.id, a.pid, now))).code; expect((await submit(g.id, a.pid, { code }, now)).status).toBe(200); // a is present
+    for (const device of [null, dev(2), "e".repeat(32)]) { const r = await claim(g.id, a.pid, now, device); expect(r.status).toBe(403); expect((await j(r)).code).toBe("other-phone"); const bg = await call("POST", `/api/z/${g.id}/bogey`, { pid: a.pid, ...(device ? { device } : {}), pattern: "early5" }, {}, now); expect(bg.status).toBe(403); }
+    expect(W.raw.prepare("SELECT COUNT(*) c FROM bogey WHERE eid=?").get(g.id).c).toBe(0);
+    expect((await claim(g.id, a.pid, now)).status).not.toBe(403); // the real phone is not refused
   });
   test("the organizer sees how many are present", async () => {
     const g = await game(); const a = await j(await join(g.id, 1, {}, T2)); await j(await join(g.id, 2, {}, T2)); const now = g.startMs - 1 * MIN;

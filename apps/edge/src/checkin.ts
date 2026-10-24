@@ -17,6 +17,12 @@ export const CHECKIN_LOCK_MS = 10 * 60_000;
 /** The end of a key range for a prefix that ends in "/": every key that starts with the prefix is >= prefix and < prefixEnd(prefix). Used instead of LIKE, where "_" is a wildcard and capitals match small letters (a game id may hold "_"). */
 export const prefixEnd = (prefix: string): string => prefix.slice(0, -1) + String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1);
 export const checkinRequired = (e: { created_ms?: number | null }): boolean => Number(e?.created_ms ?? 0) >= CHECKIN_FROM_MS;
+/** Is this the phone of the ticket? The participant id is public (the seat list shows it), so every action done for a ticket also carries the phone's own random device id, whose hash is kept with the seat. */
+export async function deviceMatches(env: Env, eid: string, pid: string, device: unknown): Promise<boolean> {
+  if (typeof device !== "string" || !/^[0-9a-f]{16,64}$/.test(device)) return false;
+  const row = await env.DB.prepare("SELECT dev FROM seat WHERE eid=? AND pid=?").bind(eid, pid).first<{ dev: string | null }>();
+  return !!row?.dev && row.dev === (await sha(`dev|${eid}|${device}`)).slice(0, 32);
+}
 export const checkinOpensMs = (startMs: number): number => startMs - CHECKIN_OPENS_BEFORE_MS;
 export const seatOfPidText = (pid: string): number | null => { const m = /^(\d{1,6})x/.exec(String(pid)); return m ? Number(m[1]) : null; };
 export const ticketId = (eid: string, seat: number): string => `${eid}-T${String(seat).padStart(4, "0")}`;
@@ -92,7 +98,7 @@ export async function checkinRoute(c: Ctx): Promise<Response> {
   }
   // optional edits: the name and the mobile number kept for the prize hand-over (the identity of the ticket itself never changes)
   let name = pii?.name ?? who.name ?? null, phone = pii?.phone ?? null, editedName = false, editedMobile = false;
-  const nn = typeof b?.name === "string" ? b.name.replace(/[<>`]/g, "").trim().slice(0, 60) : "";
+  const nn = typeof b?.name === "string" ? Array.from(b.name).filter((ch: string) => { const c = ch.charCodeAt(0); return !(c < 32 || c === 127 || (c >= 0x200b && c <= 0x200f) || c === 0x2028 || c === 0x2029 || c === 0xfeff || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069)); }).join("").replace(/[<>`]/g, "").replace(/^[=+\-@\s]+/, "").trim().slice(0, 60) : "";
   if (nn && nn !== name) { name = nn; editedName = true; }
   const digits = typeof b?.mobile === "string" ? b.mobile.replace(/\D/g, "").replace(/^(91|0)(?=\d{10}$)/, "") : "";
   if (digits && digits !== phone) { if (!/^[6-9]\d{9}$/.test(digits)) return json({ error: "The mobile number needs 10 digits.", code: "bad-mobile" }, 400); phone = digits; editedMobile = true; }

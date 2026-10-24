@@ -15,7 +15,7 @@
 import { DEMO_CAP, GRACE_ROUNDS, HOUSE_ORDER, PRIZE_HOUSES, brandMomentsFor, defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
 import { openPii, openText, sealPii, sealText } from "./pii";
 import { TEST_LOGINS, TEST_LOGIN_CODE, TEST_LOGINS_PER_IP_DAY } from "./testlogins";
-import { checkinRequired, checkinRoute, presenceRoute, presentMsOf, seatOfPidText } from "./checkin";
+import { deviceMatches, checkinRequired, checkinRoute, presenceRoute, presentMsOf, seatOfPidText } from "./checkin";
 import { TERMS_VERSION } from "./brand";
 import { CONSENT_SCHEMA, consentMissing, recordConsent, hasConsent, CONSENT_VERSION } from "./consent";
 import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, hostLinkMail, newUseAlertMail, signInMail } from "./mails";
@@ -267,7 +267,7 @@ async function spend(env: Env, now: number, n = 1): Promise<boolean> {
 /** An AI key (or a Host) never receives or sends names and mobile numbers: the organizer loads the list in the console. */
 const CONSOLE_ONLY = () => json({ error: "Names and mobile numbers are handled by the owner in the console, not by the AI. Ask the owner to paste the list in the Participants card. You can set the limit with settings and refer to people by ticket number." }, 403);
 /** One network address may open only so many NEW seats a day (an office behind one address is far below this): protects the shared daily write budget from a script. */
-const JOIN_PER_IP_DAY = 1500, JOIN_PER_IP_MINUTE = 200, ID_MISS_PER_10MIN = 10;
+const JOIN_PER_IP_DAY = 1500, JOIN_PER_IP_MINUTE = 200, ID_MISS_PER_10MIN = 30;
 async function joinOverLimit(env: Env, req: Request, now: number): Promise<boolean> {
   try {
     const ip = (await sha("jip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16), perDay = Number((env as any).JOIN_PER_IP_DAY ?? JOIN_PER_IP_DAY), perMin = Number((env as any).JOIN_PER_IP_MINUTE ?? JOIN_PER_IP_MINUTE);
@@ -851,7 +851,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const eh = await sha("email|" + email);
     if (TEST_LOGINS.has(email) && code === TEST_LOGIN_CODE) {
       { // a per-network daily limit and the write budget apply, like every other public write
-        const tk = `tlg/${day(now)}/${(await sha("ip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16)}`;
+        const tk = `tlg/${day(now)}/${(await sha("ip|" + (req.headers.get("cf-connecting-ip") ?? "local") + "|" + email)).slice(0, 16)}`; // per network and per account: one account cannot lock out another
         const tu = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(tk).first<{ v: string }>())?.v ?? 0);
         if (tu >= TEST_LOGINS_PER_IP_DAY) return json({ error: "Too many sign-ins from this network today. Please try again tomorrow." }, 429);
         if (!(await spend(env, now, 3))) return BUSY();
@@ -859,7 +859,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       }
       let ta = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
       if (!ta) { const made = await createOrganizer(env, req, email, now, "start", false); /* no Terms-box consent is recorded for an account nobody ticked for */ if ("error" in made) return json({ error: made.error }, (made as any).status ?? 400); ta = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>(); }
-      if (ta) { const res = await signInResult(env, req, ta, null, now, email); await env.DB.prepare("DELETE FROM organizer_key WHERE org=? AND kind='master' AND hash NOT IN (SELECT hash FROM organizer_key WHERE org=? AND kind='master' ORDER BY created_ms DESC LIMIT 3)").bind(ta.org, ta.org).run(); return json(res); } // the keys made by earlier sign-ins are trimmed: these accounts are shared and public
+      if (ta) { const res = await signInResult(env, req, ta, null, now, email); await env.DB.prepare("DELETE FROM organizer_key WHERE org=? AND kind='master' AND hash NOT IN (SELECT hash FROM organizer_key WHERE org=? AND kind='master' ORDER BY created_ms DESC LIMIT 6)").bind(ta.org, ta.org).run(); return json(res); } // the keys made by earlier sign-ins are trimmed: these accounts are shared and public
     }
     const row = await env.DB.prepare("SELECT code_hash, expires_ms, attempts FROM login_code WHERE email_hash=?").bind(eh).first<{ code_hash: string; expires_ms: number; attempts: number }>();
     const bad = () => json({ error: "That code is not right or has expired. Please ask for a new one." }, 400);
@@ -1563,7 +1563,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const who = await env.DB.prepare("SELECT p.pid AS pid, s.blocked AS blocked FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.pid=?").bind(eid, b.pid).first<{ pid: string; blocked: number | null }>();
     if (!who) return json({ error: "Not a participant of this engagement." }, 403);
     if (who.blocked) return json({ error: "You were removed from this game by the organizer.", code: "removed", removed: true }, 403);
-    if (checkinRequired(e)) { const st = seatOfPidText(b.pid); if (!st || (await presentMsOf(env.DB, eid!, st)) === null) return json({ error: "Mark yourself present first: the check-in is on your ticket page.", code: "not-present" }, 403); }
+    if (checkinRequired(e)) { const st = seatOfPidText(b.pid); if (!st || (await presentMsOf(env.DB, eid!, st)) === null) return json({ error: "Mark yourself present first: the check-in is on your ticket page.", code: "not-present" }, 403); } if (checkinRequired(e) && !(await deviceMatches(env, eid!, b.pid, b.device))) return json({ error: "This ticket belongs to another phone.", code: "other-phone" }, 403); // the participant id is public: only the ticket's own phone may act for it
     const have = (await env.DB.prepare("SELECT COUNT(*) AS c FROM bogey WHERE eid=? AND pid=? AND pattern=? AND round=?").bind(eid, b.pid, b.pattern, round).first<{ c: number }>())?.c ?? 0;
     if (have >= 2) return json({ ok: true, atMs: now, stored: 0 }); // two are enough to put the ticket out: nothing more is written
     if (!(await spend(env, now))) return json({ error: "Busy day. Your claim is kept on your phone and will be sent again.", stored: 0 }, 503);
@@ -1610,7 +1610,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const who = await env.DB.prepare("SELECT p.pid AS pid, s.blocked AS blocked FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.pid=?").bind(eid, b.pid).first<{ pid: string; blocked: number | null }>();
     if (!who) return json({ error: "Not a participant of this engagement." }, 403);
     if (who.blocked) return json({ error: "You were removed from this game by the organizer.", code: "removed", removed: true }, 403); // the seat stays in the public list, the phone stops
-    if (checkinRequired(e)) { const st = seatOfPidText(b.pid); if (!st || (await presentMsOf(env.DB, eid!, st)) === null) return json({ error: "Mark yourself present first: the check-in is on your ticket page.", code: "not-present" }, 403); } // only a person who checked in can win
+    if (checkinRequired(e)) { const st = seatOfPidText(b.pid); if (!st || (await presentMsOf(env.DB, eid!, st)) === null) return json({ error: "Mark yourself present first: the check-in is on your ticket page.", code: "not-present" }, 403); } if (checkinRequired(e) && !(await deviceMatches(env, eid!, b.pid, b.device))) return json({ error: "This ticket belongs to another phone.", code: "other-phone" }, 403); // the participant id is public: only the ticket's own phone may act for it
+    // only a person who checked in can win
     let stored = 0;
     const maxRound = cfgOf(e).rounds;
     for (const c of list) {

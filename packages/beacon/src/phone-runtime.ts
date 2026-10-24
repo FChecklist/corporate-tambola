@@ -192,7 +192,7 @@ export class PhoneRuntime {
     while (this.bogeyUnsent.length && this.pid) {
       const b = this.bogeyUnsent[0]!;
       try {
-        const ans = this.trackClaims ? await this.deps.api("POST", `/api/z/${this.eid}/bogey`, { pid: this.pid, pattern: b.pattern, ...(b.round > 1 ? { round: b.round } : {}) }) : null;
+        const ans = this.trackClaims ? await this.deps.api("POST", `/api/z/${this.eid}/bogey`, { pid: this.pid, device: this.device(), pattern: b.pattern, ...(b.round > 1 ? { round: b.round } : {}) }) : null;
         this.bogeyUnsent.shift();
         if (ans && Number(ans.atMs) > 0) this.noteClaims([{ pid: this.pid, pattern: b.pattern, round: b.round, idx: -1, atMs: Number(ans.atMs), bogey: true }]);
       } catch { break; /* the next tick tries again */ }
@@ -464,7 +464,7 @@ export class PhoneRuntime {
         const idx = completionIndexKey(tk, p, log);
         if (idx < 0) continue;
         try {
-          const ans = this.trackClaims ? await this.deps.api("POST", `/api/z/${this.eid}/claims`, { pid: this.pid, claims: [{ pattern: p, idx, ...(r > 1 ? { round: r } : {}) }] }) : null;
+          const ans = this.trackClaims ? await this.deps.api("POST", `/api/z/${this.eid}/claims`, { pid: this.pid, device: this.device(), claims: [{ pattern: p, idx, ...(r > 1 ? { round: r } : {}) }] }) : null;
           this.claimedAll.add(id);
           this.deps.store.set(this.key("claimed"), JSON.stringify([...this.claimedAll]));
           // this phone knows its own claim at once (the others learn it with the seat list): the store's clock says when it arrived

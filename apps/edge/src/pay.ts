@@ -180,7 +180,7 @@ export async function fulfil(env: PayEnv, paymentId: string, now: number, spend:
   const db = env.DB;
   const cur = await db.prepare("SELECT status FROM payment WHERE id=?").bind(paymentId).first<{ status: string }>();
   if (!cur || cur.status === "paid") return fulfilInner(env, paymentId, now, spend);
-  const got = await db.prepare("UPDATE payment SET status='paying' WHERE id=? AND status NOT IN ('paid','paying')").bind(paymentId).run();
+  const got = await db.prepare("UPDATE payment SET status='paying', paid_ms=? WHERE id=? AND (status NOT IN ('paid','paying') OR (status='paying' AND (paid_ms IS NULL OR paid_ms < ?)))").bind(now, paymentId, now - 120_000).run(); // a 'paying' claim is a lease of two minutes: if the call that took it died, the next one takes over
   if (((got as any).meta?.changes ?? 0) === 0) {
     for (let i = 0; i < 25; i++) { // the other call is finishing it: wait for its answer (up to about 5 seconds) and give the same one
       const q = await db.prepare("SELECT status, result FROM payment WHERE id=?").bind(paymentId).first<{ status: string; result: string | null }>();
@@ -192,9 +192,9 @@ export async function fulfil(env: PayEnv, paymentId: string, now: number, spend:
   }
   try {
     const r: any = await fulfilInner(env, paymentId, now, spend);
-    if (r && "error" in r) await db.prepare("UPDATE payment SET status=? WHERE id=? AND status='paying'").bind(cur.status, paymentId).run(); // not completed: back to what it was, so a retry can finish it
+    if (r && "error" in r) await db.prepare("UPDATE payment SET status=?, paid_ms=NULL WHERE id=? AND status='paying'").bind(cur.status, paymentId).run(); // not completed: back to what it was, so a retry can finish it
     return r;
-  } catch (e) { await db.prepare("UPDATE payment SET status=? WHERE id=? AND status='paying'").bind(cur.status, paymentId).run(); throw e; }
+  } catch (e) { await db.prepare("UPDATE payment SET status=?, paid_ms=NULL WHERE id=? AND status='paying'").bind(cur.status, paymentId).run(); throw e; }
 }
 async function fulfilInner(env: PayEnv, paymentId: string, now: number, spend: (n: number) => Promise<boolean>) {
   const db = env.DB;
