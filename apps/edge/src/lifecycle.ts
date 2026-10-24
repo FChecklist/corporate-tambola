@@ -367,7 +367,12 @@ export async function unplayedPass(env: LifeEnv, now: number): Promise<number> {
 export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checked: number; reportSteps: number; reportsDone: number; purged: number }> {
   const out = { checked: 0, reportSteps: 0, reportsDone: 0, purged: 0 };
   // paid (or cancelled) games that still hold personal data: guests, people on a list, waiting requests. A game nobody paid for is the "did not start" pass below.
-  const rows = (await env.DB.prepare("SELECT e.*, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS npart FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE l.purged_ms IS NULL AND (e.pack IS NOT 0 OR e.cancelled_ms IS NOT NULL) AND (EXISTS (SELECT 1 FROM participant p WHERE p.eid=e.id) OR EXISTS (SELECT 1 FROM person q WHERE q.eid=e.id) OR EXISTS (SELECT 1 FROM waiting w WHERE w.eid=e.id)) ORDER BY e.start_round LIMIT 25").all<any>()).results ?? [];
+  // 25 games per call, taken round and round by start time (a cursor in kv): when more than 25 games hold personal data at once, no game waits behind the same 25 for ever
+  const SEL = "SELECT e.*, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS npart FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE l.purged_ms IS NULL AND (e.pack IS NOT 0 OR e.cancelled_ms IS NOT NULL) AND (EXISTS (SELECT 1 FROM participant p WHERE p.eid=e.id) OR EXISTS (SELECT 1 FROM person q WHERE q.eid=e.id) OR EXISTS (SELECT 1 FROM waiting w WHERE w.eid=e.id))";
+  const cursor = Number((await env.DB.prepare("SELECT v FROM kv WHERE k='life_cursor'").first<{ v: string }>())?.v ?? 0) || 0;
+  let rows: any[] = (await env.DB.prepare(SEL + " AND e.start_round > ? ORDER BY e.start_round LIMIT 25").bind(cursor).all<any>()).results ?? [];
+  if (rows.length < 25) rows = rows.concat((await env.DB.prepare(SEL + " AND e.start_round <= ? ORDER BY e.start_round LIMIT ?").bind(cursor, 25 - rows.length).all<any>()).results ?? []);
+  if (rows.length) await env.DB.prepare("INSERT INTO kv(k,v) VALUES('life_cursor',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(String(rows.length >= 25 ? rows[rows.length - 1].start_round : 0)).run();
   for (const e of rows) {
     out.checked++;
     try {

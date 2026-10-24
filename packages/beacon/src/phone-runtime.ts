@@ -560,7 +560,7 @@ export class PhoneRuntime {
     if (!this.seatsFetched) return;
     for (let r = 1; r <= started; r++) {
       let e = this.engines.get(r);
-      if (!e) { e = new PrizeEngine(this.eid, this.cfg, r); this.engines.set(r, e); this.engineCursor.set(r, 0); this.engineReset.set(r, this.logResets); }
+      if (!e) { e = new PrizeEngine(this.eid, this.cfg, r); e.setCallRound((k) => (k < NUMBERS ? this.roundFor(k, r) : null)); this.engines.set(r, e); this.engineCursor.set(r, 0); this.engineReset.set(r, this.logResets); }
       if (this.engineReset.get(r) !== this.logResets) { e.resetCalls(); this.engineReset.set(r, this.logResets); }
       const cur = this.engineCursor.get(r)!;
       if (cur < this.seatList.length) { e.addSeats(this.seatList.slice(cur)); this.engineCursor.set(r, this.seatList.length); }

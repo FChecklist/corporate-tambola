@@ -48,6 +48,9 @@ export class PrizeEngine {
   private uCache: { key: string; r: Settled | null } | null = null;
   /** The public claims of this round (pattern -> pid -> claim); null = decide from completions alone (older callers, the equivalence tests). See `settleAll`'s `cl`. */
   private claims: HouseClaims | null = null;
+  /** The beacon round of call `k` from the clock schedule (null: not known; Infinity: a Host has not pressed for it yet). Used when this phone's log has not reached that call yet, so every phone judges a claim by the same deadline. */
+  private roundOfCall: ((k: number) => number | null) | null = null;
+  setCallRound(f: ((k: number) => number | null) | null) { this.roundOfCall = f; }
 
   constructor(engagementId: string, readonly cfg: EngagementCfg, readonly round = 1) {
     this.eid = roundEid(engagementId, round);
@@ -83,7 +86,7 @@ export class PrizeEngine {
     const h = this.claims;
     const out: [number, string[]][] = [];
     for (const [j, pids] of all) {
-      const nextBr = this.callBr[j + CLAIM_WINDOW_CALLS]; // undefined while that call has not happened yet: the window is still open
+      const nextBr = this.callBr[j + CLAIM_WINDOW_CALLS] ?? this.roundOfCall?.(j + CLAIM_WINDOW_CALLS) ?? undefined; // the call's own round; from the clock schedule when this phone's log has not got that call yet; undefined only when it cannot be told yet: the window is still open
       const kept = pids.filter((pid) => claimCounts(h, k, pid, j, nextBr));
       if (kept.length) out.push([j, kept]);
     }

@@ -168,7 +168,7 @@ describe("the lazy tick: any /api request runs the housekeeping when the last ti
   });
   test("single flight: ten simultaneous requests start one tick, not ten", async () => {
     const real = W.env.DB.prepare.bind(W.env.DB); let runs = 0;
-    (W.env.DB as any).prepare = (sql: string) => { if (/SELECT e\.\*, \(SELECT COUNT\(\*\) FROM participant p WHERE p\.eid=e\.id\) AS npart/.test(sql)) runs++; return real(sql); };
+    (W.env.DB as any).prepare = (sql: string) => { if (/SELECT e\.\*, \(SELECT COUNT\(\*\) FROM participant p WHERE p\.eid=e\.id\) AS npart.*e\.start_round > \?/.test(sql)) runs++; return real(sql); };
     await Promise.all(Array.from({ length: 10 }, () => callRaw("GET", "/api/mode", undefined, {}, T, (p) => { pending.push(p); }))); await Promise.all(pending.splice(0));
     expect(runs).toBe(1);
   });
