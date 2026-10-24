@@ -1685,7 +1685,13 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       ? (demo ? "Everything is ready. This is a game for up to 10 people at Rs 0. Please give this link to the organizer: they open it, confirm their email and mobile number and press Publish. Nothing is paid: a demo game starts without payment. The organizer can make it a real game at any time from the Pay step (choose the number of people and pay). The AI never publishes or pays." : "Everything is ready. Please give this link to the organizer: they open it, confirm their email and mobile number and press Publish. Publishing is free. After that the game does not begin until it is paid for (any time until the guest data is erased; a late payment starts the game 2 minutes after it is confirmed). The organizer does both themself: the AI never publishes or pays.")
       : demo ? "It is published as a game for up to 10 people at Rs 0. It starts without payment. To make it bigger the organizer opens this link, chooses the number of people and pays." : unpaid ? "It is published. The game does not begin until it is paid for (any time until the guest data is erased; a late payment starts it 2 minutes after confirmation). Give the organizer this link to pay: they do it themself." : "Already published and paid." });
     if (!can(a, e, true)) return deny(a);
-    if (!isDraft) return json({ ok: true, published: true, already: true, paid: !unpaid, ...(demo ? { demo: true } : {}), startMs: roundMs(e.start_round), payUrl, shareUrl });
+    if (!isDraft) { // already published (for example the game was paid for first): the organizer's confirmed e-mail and mobile number are still kept if they have none on file, because the end-of-game report is sent to that e-mail
+      const pb0 = await body(req); const ce = typeof pb0?.email === "string" ? pb0.email.trim() : "", cp = String(pb0?.phone ?? "").replace(/\D/g, "");
+      if (pb0 && !consentMissing(pb0, "K1") && /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(ce) && cp.length >= 10 && cp.length <= 15 && cleanPhone(pb0.phone).ok && !(await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`contact/${eid}`).first())) {
+        await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO NOTHING").bind(`contact/${eid}`, JSON.stringify({ email: ce, phone: cp.slice(-10) })).run();
+      }
+      return json({ ok: true, published: true, already: true, paid: !unpaid, ...(demo ? { demo: true } : {}), startMs: roundMs(e.start_round), payUrl, shareUrl });
+    }
     // the organizer confirms (and may correct) their email and mobile number
     const pb = await body(req);
     { const cm = consentMissing(pb, "K1"); if (cm) return cm; } // K1: the Terms box and the organizer's promise, checked here on the server
