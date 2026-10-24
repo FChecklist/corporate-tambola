@@ -14,9 +14,11 @@ export const CHECKIN_OPENS_BEFORE_MS = 5 * 60_000;
 export const CHECKIN_MAX_TRIES = 5;
 export const CHECKIN_LOCK_MS = 10 * 60_000;
 
+/** The end of a key range for a prefix that ends in "/": every key that starts with the prefix is >= prefix and < prefixEnd(prefix). Used instead of LIKE, where "_" is a wildcard and capitals match small letters (a game id may hold "_"). */
+export const prefixEnd = (prefix: string): string => prefix.slice(0, -1) + String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1);
 export const checkinRequired = (e: { created_ms?: number | null }): boolean => Number(e?.created_ms ?? 0) >= CHECKIN_FROM_MS;
 export const checkinOpensMs = (startMs: number): number => startMs - CHECKIN_OPENS_BEFORE_MS;
-export const seatOfPidText = (pid: string): number | null => { const m = /^(\d{1,5})x/.exec(String(pid)); return m ? Number(m[1]) : null; };
+export const seatOfPidText = (pid: string): number | null => { const m = /^(\d{1,6})x/.exec(String(pid)); return m ? Number(m[1]) : null; };
 export const ticketId = (eid: string, seat: number): string => `${eid}-T${String(seat).padStart(4, "0")}`;
 
 const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -44,7 +46,7 @@ export async function presentMsOf(db: D1, eid: string, seat: number): Promise<nu
   try { return Number(JSON.parse(r.v).t) || null; } catch { return null; }
 }
 export async function presentCount(db: D1, eid: string): Promise<number> {
-  return (await db.prepare("SELECT COUNT(*) AS c FROM kv WHERE k LIKE ?").bind(`present/${eid}/%`).first<{ c: number }>())?.c ?? 0;
+  return (await db.prepare("SELECT COUNT(*) AS c FROM kv WHERE k >= ? AND k < ?").bind(`present/${eid}/`, prefixEnd(`present/${eid}/`)).first<{ c: number }>())?.c ?? 0;
 }
 
 interface Ctx { env: Env; e: any; eid: string; now: number; startMs: number; json: (o: unknown, s?: number) => Response; spend: (n?: number) => Promise<boolean>; busy: () => Response; body: (req: Request) => Promise<any>; req: Request; url: URL }
@@ -60,6 +62,10 @@ export async function checkinRoute(c: Ctx): Promise<Response> {
   const who = seat ? await db.prepare("SELECT p.pii AS pii, p.name AS name, s.seq AS seq, s.inv AS inv, s.dev AS dev, s.blocked AS blocked FROM participant p JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.pid=?").bind(eid, pid).first<{ pii: string | null; name: string | null; seq: number; inv: number | null; dev: string | null; blocked: number | null }>() : null;
   if (!who) return json({ error: "Not a participant of this engagement." }, 403);
   if (who.blocked) return json({ error: "You were removed from this game by the organizer.", code: "removed", removed: true }, 403);
+  // The participant id is not a secret (the seat list is public once the game starts), so the phone proves it is THE phone of this ticket: its own random device id, whose hash is kept with the seat (the same rule as joining).
+  const devIn = c.req.method === "GET" ? c.url.searchParams.get("device") ?? "" : typeof b?.device === "string" ? b.device : "";
+  const devHash = /^[0-9a-f]{16,64}$/.test(devIn) ? (await sha(`dev|${eid}|${devIn}`)).slice(0, 32) : null;
+  if (!devHash || !who.dev || who.dev !== devHash) return json({ error: "This ticket belongs to another phone. Open your own link on your own phone to check in.", code: "other-phone" }, 403);
   const opensMs = checkinOpensMs(c.startMs), open = now >= opensMs, presentMs = await presentMsOf(db, eid, who.seq);
   const pii = await openPii(env as any, who.pii);
   if (c.req.method === "GET") {
@@ -67,7 +73,7 @@ export async function checkinRoute(c: Ctx): Promise<Response> {
     if (who.inv) { const up = await db.prepare("SELECT p.pii AS pii, p.name AS name FROM seat s JOIN participant p ON p.eid=s.eid AND p.pid=s.pid WHERE s.eid=? AND s.seq=?").bind(eid, who.inv).first<{ pii: string | null; name: string | null }>(); const upii = up ? await openPii(env as any, up.pii) : null; invitedBy = (upii?.name || up?.name || `Ticket ${who.inv}`).toString().slice(0, 60); }
     return json({
       required: true, gameId: eid, participantId: pid, ticketId: ticketId(eid, who.seq), seat: who.seq, opensMs, open, present: presentMs !== null, presentMs,
-      name: pii?.name ?? who.name ?? "", mobile: pii?.phone ?? "", invitedBy, ...(open && presentMs === null ? { code: await codeFor(env, eid, who.seq) } : {}),
+      name: pii?.name ?? who.name ?? "", mobile: pii?.phone ? "******" + String(pii.phone).slice(-4) : "", invitedBy, ...(open && presentMs === null ? { code: await codeFor(env, eid, who.seq) } : {}),
     });
   }
   // ---- POST: the participant presses Submit ----
@@ -92,14 +98,14 @@ export async function checkinRoute(c: Ctx): Promise<Response> {
   if (digits && digits !== phone) { if (!/^[6-9]\d{9}$/.test(digits)) return json({ error: "The mobile number needs 10 digits.", code: "bad-mobile" }, 400); phone = digits; editedMobile = true; }
   if (!(await c.spend(2))) return c.busy();
   const stmts = [db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`present/${eid}/${who.seq}`, JSON.stringify({ t: now, pid, dev: who.dev, en: editedName, em: editedMobile })), db.prepare("DELETE FROM kv WHERE k=?").bind(failKey)];
-  if ((editedName || editedMobile) && pii) stmts.push(db.prepare("UPDATE participant SET pii=?, name=? WHERE eid=? AND pid=?").bind(await sealPii(env as any, { phone: phone ?? pii.phone, name }), name, eid, pid));
+  if ((editedName || editedMobile) && pii) stmts.push(db.prepare("UPDATE participant SET pii=?, name=? WHERE eid=? AND pid=?").bind(await sealPii(env as any, { phone: phone ?? pii.phone, name, ...(pii.empId ? { empId: pii.empId } : {}) }), name, eid, pid));
   await db.batch(stmts);
   return json({ ok: true, present: true, presentMs: now, editedName, editedMobile });
 }
 
 /** The organizer's view: how many are present now, and which ticket numbers. */
 export async function presenceRoute(env: Env, eid: string, json: Ctx["json"]): Promise<Response> {
-  const rows = (await env.DB.prepare("SELECT k FROM kv WHERE k LIKE ? ORDER BY k LIMIT 10000").bind(`present/${eid}/%`).all<{ k: string }>()).results ?? [];
+  const rows = (await env.DB.prepare("SELECT k FROM kv WHERE k >= ? AND k < ? ORDER BY k LIMIT 100000").bind(`present/${eid}/`, prefixEnd(`present/${eid}/`)).all<{ k: string }>()).results ?? [];
   const total = (await env.DB.prepare("SELECT COUNT(*) AS c FROM seat WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
   return json({ present: rows.length, total, seats: rows.map((r) => Number(r.k.split("/")[2])) });
 }
@@ -108,6 +114,6 @@ export async function presenceRoute(env: Env, eid: string, json: Ctx["json"]): P
 export async function keepWinnerEvidence(env: Env, eid: string, seats: number[]): Promise<void> {
   for (const seat of seats) {
     const r = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`present/${eid}/${seat}`).first<{ v: string }>();
-    if (r) await env.DB.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").bind(`wev/${eid}/${seat}`, r.v).run();
+    if (r) { let t: unknown = null; try { t = JSON.parse(r.v).t; } catch { /* none */ } if (typeof t === "number") await env.DB.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").bind(`wev/${eid}/${seat}`, JSON.stringify({ t })).run(); } // only the time of the check-in is kept for 365 days (not the device or the ids)
   }
 }

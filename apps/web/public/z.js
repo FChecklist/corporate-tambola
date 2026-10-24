@@ -672,7 +672,7 @@
     if (!INFO.checkin || !v.pid || CK.present || CK.loading || performance.now() - CK.at < (CK.open ? 60000 : 5000)) return;
     CK.loading = true; CK.at = performance.now();
     try {
-      const r = await api("GET", `/api/z/${EID}/checkin?pid=${encodeURIComponent(v.pid)}`);
+      const r = await api("GET", `/api/z/${EID}/checkin?pid=${encodeURIComponent(v.pid)}&device=${encodeURIComponent(myDevice())}`);
       if (r && r.required === false) INFO.checkin = false;
       else if (r) { CK.loaded = true; CK.present = !!r.present; CK.open = !!r.open; CK.opensMs = r.opensMs; CK.ids = { game: r.gameId, participant: r.participantId, ticket: r.ticketId }; if (r.code) CK.code = r.code; CK.invitedBy = r.invitedBy || null; if (CK.v.name === null) { try { const k = JSON.parse(store.get("ctz:" + EID + ":ck") || "null"); if (k && typeof k === "object") Object.assign(CK.v, { name: k.name, mobile: k.mobile, okN: !!k.okN, okM: !!k.okM, code: String(k.code || "").slice(0, 4), editN: !!k.editN, editM: !!k.editM }); } catch { /* start fresh */ } } // the same link again: the half-filled check-in is where they left it
       if (CK.v.name === null) CK.v.name = r.name || ""; if (CK.v.mobile === null) CK.v.mobile = r.mobile || ""; }
@@ -707,11 +707,11 @@
     hook("ckname", (el) => { x.name = el.value; }); hook("ckmob", (el) => { x.mobile = el.value; });
     hook("ckcode", (el) => { el.value = el.value.replace(/\D/g, "").slice(0, 4); x.code = el.value; });
     const chk = (id, key) => { const el = $(id); if (el) el.onchange = () => { x[key] = el.checked; sync(); }; }; chk("ckokn", "okN"); chk("ckokm", "okM");
-    const ed = (id, key, field) => { const el = $(id); if (el) el.onclick = () => { x[key] = !x[key]; CK.html = ""; paint(); const f = $(field); if (f && x[key]) f.focus(); }; }; ed("ckeditn", "editN", "ckname"); ed("ckeditm", "editM", "ckmob");
+    const ed = (id, key, field) => { const el = $(id); if (el) el.onclick = () => { x[key] = !x[key]; if (key === "editM" && x.editM && String(x.mobile).includes("*")) x.mobile = ""; CK.html = ""; paint(); const f = $(field); if (f && x[key]) f.focus(); }; }; ed("ckeditn", "editN", "ckname"); ed("ckeditm", "editM", "ckmob");
     const go = $("cksubmit"); if (go) go.onclick = async () => {
       if (CK.busy) return; CK.busy = true; CK.err = ""; go.disabled = true;
       try {
-        const body = { pid: rt.view().pid, code: x.code, confirmName: !!x.okN, confirmMobile: !!x.okM };
+        const body = { pid: rt.view().pid, device: myDevice(), code: x.code, confirmName: !!x.okN, confirmMobile: !!x.okM };
         if (x.editN && x.name) body.name = x.name; if (x.editM && x.mobile) body.mobile = x.mobile;
         const r = await api("POST", `/api/z/${EID}/checkin`, body);
         if (r && r.present) { CK.present = true; CK.err = ""; try { store.set("ctz:" + EID + ":ck", ""); } catch { /* ignore */ } }

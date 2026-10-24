@@ -4,7 +4,7 @@
 //      and the participants' personal part of the audit log is crypto-shredded (audit.ts `shredParticipantAudit`: its per-engagement key is destroyed, the hash chain still verifies);
 //   3. only the organizer / host / co-host details and the winners record (seat, prize, round, time) remain, until 00:00 IST at the end of the 365th day, then everything goes.
 // Called by the scheduled job (and, as a fallback, by any outside timer with the platform key). Every call does a bounded amount of work and can be repeated safely.
-import { keepWinnerEvidence } from "./checkin";
+import { keepWinnerEvidence, prefixEnd } from "./checkin";
 import { restoreCreditUses } from "./credit";
 import { keepLegalParty } from "./legal";
 import { sweepVisits } from "./visits";
@@ -105,6 +105,10 @@ export async function recordWinners(env: Env, e: any, eid: string, results: { pa
       const keep = seats.length ? seats.map(() => "?").join(",") : "-1";
       await env.DB.prepare(`DELETE FROM winner WHERE eid=? AND round=? AND pattern=? AND ordinal=? AND src=? AND seat NOT IN (${keep})`).bind(eid, round, x.pattern, ordinal, src, ...seats).run();
     }
+    // a person who no longer wins any prize keeps no check-in evidence: it goes with everyone else's within 24 hours
+    const still = new Set(((await env.DB.prepare("SELECT DISTINCT seat FROM winner WHERE eid=?").bind(eid).all<{ seat: number }>()).results ?? []).map((r) => Number(r.seat)));
+    const evid = (await env.DB.prepare("SELECT k FROM kv WHERE k >= ? AND k < ?").bind(`wev/${eid}/`, prefixEnd(`wev/${eid}/`)).all<{ k: string }>()).results ?? [];
+    for (const r of evid) if (!still.has(Number(r.k.split("/")[2]))) await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(r.k).run();
   } catch { /* the winners record is best effort here: phones report their own wins too */ }
 }
 
@@ -139,8 +143,8 @@ export async function erasePersonal(env: Env, eid: string, now: number, by: stri
   await env.DB.batch([
     env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM bogey WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rvote WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rcand WHERE eid=?").bind(eid),
     env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM consent_log WHERE kind='K4' AND ref=?").bind(eid), env.DB.prepare("DELETE FROM seat WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM person WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM waiting WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM overvote WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM data_request WHERE eid=?").bind(eid), // players' data requests (rights.ts) go with the people they are about
-    env.DB.prepare("DELETE FROM kv WHERE k=? OR k=? OR k=? OR k=? OR k LIKE ? OR k=?").bind(`seats-base/${eid}`, `rpt/${eid}`, `rptopen/${eid}`, `rptremind/${eid}`, `rptc/${eid}/%`, `seats-blk/${eid}`),
-    env.DB.prepare("DELETE FROM kv WHERE k LIKE ? OR k LIKE ?").bind(`present/${eid}/%`, `ckfail/${eid}/%`), // the check-in records of every participant go with their data (the winners' evidence, wev/, stays with the winners record for 365 days)
+    env.DB.prepare("DELETE FROM kv WHERE k=? OR k=? OR k=? OR k=? OR (k >= ? AND k < ?) OR k=?").bind(`seats-base/${eid}`, `rpt/${eid}`, `rptopen/${eid}`, `rptremind/${eid}`, `rptc/${eid}/`, prefixEnd(`rptc/${eid}/`), `seats-blk/${eid}`),
+    env.DB.prepare("DELETE FROM kv WHERE (k >= ? AND k < ?) OR (k >= ? AND k < ?)").bind(`present/${eid}/`, prefixEnd(`present/${eid}/`), `ckfail/${eid}/`, prefixEnd(`ckfail/${eid}/`)), // the check-in records of every participant go with their data (the winners' evidence, wev/, stays with the winners record for 365 days)
     env.DB.prepare(eraseCohostsSql).bind(eid), // the game's Co-hosts: name, mobile number and key go with the participants' data
     env.DB.prepare("INSERT INTO life(eid,end_ms,end_src,purged_ms,report_state) VALUES(?,?, 'organizer', ?, ?) ON CONFLICT(eid) DO UPDATE SET purged_ms=?, report_state=COALESCE(life.report_state, ?)").bind(eid, now, now, by, now, by),
   ]);
@@ -161,7 +165,7 @@ export async function purgeTestEngagement(env: Env, id: string, now = Date.now()
 async function deleteEngagementRows(env: Env, id: string): Promise<void> {
   await keepLegalParty(env.DB, id, Date.now()); // the law keeps payments, invoices, the organizer's invoice details and who paid, for ever: copy them out before the game's own rows go
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM kv WHERE k LIKE ?").bind(`wev/${id}/%`), env.DB.prepare("DELETE FROM prize WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM data_request WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
+    env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM kv WHERE k >= ? AND k < ?").bind(`wev/${id}/`, prefixEnd(`wev/${id}/`)), env.DB.prepare("DELETE FROM prize WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM data_request WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
     env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`rptsalt/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`, `paidby/${id}`),
     env.DB.prepare("DELETE FROM organizer_key WHERE eid=? AND kind='cohost'").bind(id), env.DB.prepare("DELETE FROM shred WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM eng_key WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM audit_pii WHERE eid=?").bind(id), // erasePersonal above wrote a fresh shred marker
     env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
@@ -369,10 +373,10 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
   // paid (or cancelled) games that still hold personal data: guests, people on a list, waiting requests. A game nobody paid for is the "did not start" pass below.
   // 25 games per call, taken round and round by start time (a cursor in kv): when more than 25 games hold personal data at once, no game waits behind the same 25 for ever
   const SEL = "SELECT e.*, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS npart FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE l.purged_ms IS NULL AND (e.pack IS NOT 0 OR e.cancelled_ms IS NOT NULL) AND (EXISTS (SELECT 1 FROM participant p WHERE p.eid=e.id) OR EXISTS (SELECT 1 FROM person q WHERE q.eid=e.id) OR EXISTS (SELECT 1 FROM waiting w WHERE w.eid=e.id))";
-  const cursor = Number((await env.DB.prepare("SELECT v FROM kv WHERE k='life_cursor'").first<{ v: string }>())?.v ?? 0) || 0;
-  let rows: any[] = (await env.DB.prepare(SEL + " AND e.start_round > ? ORDER BY e.start_round LIMIT 25").bind(cursor).all<any>()).results ?? [];
-  if (rows.length < 25) rows = rows.concat((await env.DB.prepare(SEL + " AND e.start_round <= ? ORDER BY e.start_round LIMIT ?").bind(cursor, 25 - rows.length).all<any>()).results ?? []);
-  if (rows.length) await env.DB.prepare("INSERT INTO kv(k,v) VALUES('life_cursor',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(String(rows.length >= 25 ? rows[rows.length - 1].start_round : 0)).run();
+  const cv = String((await env.DB.prepare("SELECT v FROM kv WHERE k='life_cursor'").first<{ v: string }>())?.v ?? ""), cut = cv.indexOf("|"), cursorRound = cut > 0 ? Number(cv.slice(0, cut)) || 0 : Number(cv) || 0, cursorId = cut > 0 ? cv.slice(cut + 1) : ""; // where the last call stopped: (start round, game id), so games that start in the same round are all reached
+  let rows: any[] = (await env.DB.prepare(SEL + " AND (e.start_round > ? OR (e.start_round = ? AND e.id > ?)) ORDER BY e.start_round, e.id LIMIT 25").bind(cursorRound, cursorRound, cursorId).all<any>()).results ?? [];
+  if (rows.length < 25) rows = rows.concat((await env.DB.prepare(SEL + " AND (e.start_round < ? OR (e.start_round = ? AND e.id <= ?)) ORDER BY e.start_round, e.id LIMIT ?").bind(cursorRound, cursorRound, cursorId, 25 - rows.length).all<any>()).results ?? []);
+  if (rows.length) await env.DB.prepare("INSERT INTO kv(k,v) VALUES('life_cursor',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(rows.length >= 25 ? `${rows[rows.length - 1].start_round}|${rows[rows.length - 1].id}` : "0").run();
   for (const e of rows) {
     out.checked++;
     try {

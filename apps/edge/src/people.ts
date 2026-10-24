@@ -422,11 +422,13 @@ async function resendPerson(c: Ctx, who: Caller, id: string, b: any): Promise<Re
   if (b?.phone !== undefined && b.phone !== null && String(b.phone).trim() !== "") { // a new number: only for someone who has not joined yet
     const cl = cleanPhone(b.phone);
     if (!cl.ok) return c.json({ error: cl.why }, 400);
-    ph = await phoneHashOf(c.env, cl.digits);
-    if (ph !== row.ph) {
+    const idKeyed = !!pii?.empId && (await empHashOf(c.env, pii.empId)) === row.ph; // a person known by employee ID stays known by it: a new number is only a new contact number
+    ph = idKeyed ? row.ph : await phoneHashOf(c.env, cl.digits);
+    if (idKeyed) { newPii = await sealPii(c.env, { phone: cl.digits, name: pii?.name ?? null, empId: pii!.empId }); pii = { phone: cl.digits, name: pii?.name ?? null, empId: pii!.empId }; }
+    else if (ph !== row.ph) {
       if (hasSeat) return c.json({ error: "They have already joined with their first number. Their ticket can move to a new phone, but not to a new number." }, 409);
       if ((await db.prepare("SELECT 1 AS x FROM person WHERE eid=? AND ph=?").bind(c.eid, ph).first()) || (await db.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND ph=?").bind(c.eid, ph).first())) return c.json({ error: "That number is already invited.", code: "duplicate" }, 409);
-      newPii = await sealPii(c.env, { phone: cl.digits, name: pii?.name ?? null }); pii = { phone: cl.digits, name: pii?.name ?? null };
+      newPii = await sealPii(c.env, { phone: cl.digits, name: pii?.name ?? null, ...(pii?.empId ? { empId: pii.empId } : {}) }); pii = { phone: cl.digits, name: pii?.name ?? null, ...(pii?.empId ? { empId: pii.empId } : {}) };
     }
   }
   if (!(await c.spend(2))) return c.busy();
@@ -488,7 +490,7 @@ async function listWaiting(c: Ctx, who: Caller): Promise<Response> {
   const label = await labelsOf(c), out = [];
   for (const r of await waitingRows(c, who, 200)) {
     const p = await openPii(c.env, r.pii), first = (p?.name ?? "").trim().split(/\s+/)[0] ?? "";
-    out.push({ id: r.id, firstName: first, last4: (p?.phone ?? "").slice(-4), via: r.via, at: r.at_ms, ...(who.all ? { inviter: label(r.inviter), overLimit: !!r.overlimit } : {}) });
+    out.push({ id: r.id, firstName: first, last4: (p?.phone ?? "").slice(-4), via: r.via, at: r.at_ms, ...(who.all ? { inviter: label(r.inviter), overLimit: !!r.overlimit, ...(p?.empId ? { empId: p.empId } : {}) } : {}) }); // the Employee ID is shown to the Organizer and the Hosts only (they decide whether this person is an employee)
   }
   return c.json({ waiting: out });
 }

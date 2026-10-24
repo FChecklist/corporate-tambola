@@ -2,14 +2,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { CHECKIN_FROM_MS, checkinOpensMs, codeFor, perm10k, ticketId } from "../src/checkin";
 import { erasePersonal } from "../src/lifecycle";
-import { HOUR, MIN, T, W, call, capture, checkout, create, dev, j, join, keyH, mob, one, organizer, publish, reset, restore, roundAt, roundMs, uid, verify } from "./param-harness";
+import { HOUR, MIN, T, W, call, capture, checkout, create, dev, j, join as joinRaw, keyH, mob, one, organizer, publish, reset, restore, roundAt, roundMs, uid, verify } from "./param-harness";
 
 const T2 = Date.UTC(2026, 9, 24, 10, 0, 0); // after CHECKIN_FROM_MS: games created now require the check-in
 beforeEach(() => reset()); afterEach(restore);
 
 /** A paid game made at T2, starting 2 hours later. */
-async function game(over: Record<string, unknown> = {}, createdAt = T2) {
-  const o = await organizer(); const id = uid("CK");
+async function game(over: Record<string, unknown> = {}, createdAt = T2, forcedId?: string, org?: Awaited<ReturnType<typeof organizer>>) {
+  const o = org ?? await organizer(); const id = forcedId ?? uid("CK");
   const startRound = roundAt(createdAt + 2 * HOUR);
   expect((await create(o.key, id, { startRound, cap: 100, ...over }, createdAt)).status).toBe(200);
   expect((await publish(o.key, id, undefined, createdAt)).status).toBe(200);
@@ -17,8 +17,11 @@ async function game(over: Record<string, unknown> = {}, createdAt = T2) {
   capture(c.body, "pay_" + id); expect((await verify(c.body, "pay_" + id, {}, createdAt)).status).toBe(200);
   return { ...o, id, startMs: roundMs(startRound) };
 }
-const ck = (id: string, pid: string, now: number) => call("GET", `/api/z/${id}/checkin?pid=${encodeURIComponent(pid)}`, undefined, {}, now);
-const submit = (id: string, pid: string, body: Record<string, unknown>, now: number) => call("POST", `/api/z/${id}/checkin`, { pid, confirmName: true, confirmMobile: true, ...body }, {}, now);
+// every phone proves it is the phone of its ticket: the device id it joined with (the test remembers it per participant id)
+const deviceOf = new Map<string, string>();
+const join = async (id: string, i: number, extra: Record<string, unknown> = {}, now: number = T) => { const r = await joinRaw(id, i, extra, now); const b = await r.clone().json().catch(() => null); if (b?.pid) deviceOf.set(b.pid, String((extra as any)?.device ?? dev(i))); return r; };
+const ck = (id: string, pid: string, now: number, device: string | null = deviceOf.get(pid) ?? null) => call("GET", `/api/z/${id}/checkin?pid=${encodeURIComponent(pid)}${device ? `&device=${device}` : ""}`, undefined, {}, now);
+const submit = (id: string, pid: string, body: Record<string, unknown>, now: number) => call("POST", `/api/z/${id}/checkin`, { pid, device: deviceOf.get(pid), confirmName: true, confirmMobile: true, ...body }, {}, now);
 const claim = (id: string, pid: string, now: number) => call("POST", `/api/z/${id}/claims`, { pid, claims: [{ pattern: "early5", idx: 10 }] }, {}, now);
 
 describe("the code: every participant of a game has a different 4-digit code", () => {
@@ -51,7 +54,7 @@ describe("the check-in flow", () => {
     expect(early).toMatchObject({ required: true, gameId: g.id, participantId: jn.pid, ticketId: ticketId(g.id, 1), open: false, present: false }); expect(early.code).toBeUndefined();
     expect(early.opensMs).toBe(checkinOpensMs(g.startMs));
     const open = await j(await ck(g.id, jn.pid, g.startMs - 4 * MIN)); expect(open.open).toBe(true); expect(open.code).toMatch(/^\d{4}$/);
-    expect(open.name).toBe("Guest 1"); expect(open.mobile).toBe(mob(1));
+    expect(open.name).toBe("Guest 1"); expect(open.mobile).toBe("******" + mob(1).slice(-4)); expect(JSON.stringify(open)).not.toContain(mob(1));
   });
   test("submit before it opens is refused; a wrong code is refused (5 tries, then a pause); the right code marks present and the ticket opens", async () => {
     const g = await game(); const jn = await j(await join(g.id, 1, {}, T2)); const now = g.startMs - 3 * MIN;
@@ -76,13 +79,28 @@ describe("the check-in flow", () => {
     const code = (await j(await ck(g.id, jn.pid, now))).code;
     expect((await submit(g.id, jn.pid, { code, mobile: "12345" }, now)).status).toBe(400);
     const ok = await j(await submit(g.id, jn.pid, { code, name: "Meera Iyer", mobile: "98111 00777" }, now)); expect(ok).toMatchObject({ ok: true, editedName: true, editedMobile: true });
-    const me = await j(await ck(g.id, jn.pid, now + 1000)); expect(me.name).toBe("Meera Iyer"); expect(me.mobile).toBe("9811100777"); expect(me.participantId).toBe(jn.pid); expect(me.ticketId).toBe(ticketId(g.id, 1));
+    const me = await j(await ck(g.id, jn.pid, now + 1000)); expect(me.name).toBe("Meera Iyer"); expect(me.mobile).toBe("******0777"); expect(me.participantId).toBe(jn.pid); expect(me.ticketId).toBe(ticketId(g.id, 1));
   });
   test("each participant has their own code and their own ticket id; one person's code does not open another's check-in", async () => {
     const g = await game(); const a = await j(await join(g.id, 1, {}, T2)), b = await j(await join(g.id, 2, {}, T2)); const now = g.startMs - 1 * MIN;
     const ca = (await j(await ck(g.id, a.pid, now))).code, cb = (await j(await ck(g.id, b.pid, now))).code; expect(ca).not.toBe(cb);
     expect((await submit(g.id, b.pid, { code: ca }, now)).status).toBe(400); expect((await submit(g.id, b.pid, { code: cb }, now)).status).toBe(200);
     expect((await ck(g.id, "99x0000", now)).status).toBe(403); // not a participant
+  });
+  test("the participant id is not a secret: another person's phone, no device, or a wrong device sees nothing and changes nothing", async () => {
+    const g = await game(); const a = await j(await join(g.id, 1, {}, T2)); await join(g.id, 2, {}, T2); const now = g.startMs - 1 * MIN;
+    const mine = await j(await ck(g.id, a.pid, now)); expect(mine.code).toMatch(/^\d{4}$/);
+    for (const device of [null, dev(2), "f".repeat(32)]) { const r = await ck(g.id, a.pid, now, device); expect(r.status).toBe(403); const body = await j(r); expect(body.code).toBe("other-phone"); expect(JSON.stringify(body)).not.toContain(mine.code); expect(JSON.stringify(body)).not.toContain("Guest 1"); }
+    const forged = await call("POST", `/api/z/${g.id}/checkin`, { pid: a.pid, device: dev(2), code: mine.code, confirmName: true, confirmMobile: true, name: "Attacker", mobile: "9999999999" }, {}, now); expect(forged.status).toBe(403);
+    const again = await j(await ck(g.id, a.pid, now)); expect(again.present).toBe(false); expect(again.name).toBe("Guest 1"); // still not present, name unchanged
+  });
+  test("erasing one game never touches another game's check-ins, even when the ids differ only by a letter that LIKE treats as a wildcard or as the same", async () => {
+    const o = await organizer();
+    const a = await game({}, T2, "WILD_1AB", o), b = await game({}, T2, "WILDX1AB", o), c2 = await game({}, T2, "wild_1ab", o);
+    const now = a.startMs - 1 * MIN; const mine = [];
+    for (const g of [b, c2]) { const jn = await j(await join(g.id, 1, {}, T2)); const code = (await j(await ck(g.id, jn.pid, now))).code; expect((await submit(g.id, jn.pid, { code }, now)).status).toBe(200); mine.push([g.id, jn.pid]); }
+    await erasePersonal(W.env as any, a.id, now + 1000, "organizer");
+    for (const [id, pid] of mine) expect((await j(await ck(id, pid!, now + 2000))).present).toBe(true);
   });
   test("the organizer sees how many are present", async () => {
     const g = await game(); const a = await j(await join(g.id, 1, {}, T2)); await j(await join(g.id, 2, {}, T2)); const now = g.startMs - 1 * MIN;

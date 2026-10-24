@@ -14,6 +14,7 @@
 
 import { DEMO_CAP, GRACE_ROUNDS, HOUSE_ORDER, PRIZE_HOUSES, brandMomentsFor, defaultCfg, validateCfg, type EngagementCfg } from "../../../packages/beacon/src/config";
 import { openPii, openText, sealPii, sealText } from "./pii";
+import { TEST_LOGINS, TEST_LOGIN_CODE, TEST_LOGINS_PER_IP_DAY } from "./testlogins";
 import { checkinRequired, checkinRoute, presenceRoute, presentMsOf, seatOfPidText } from "./checkin";
 import { TERMS_VERSION } from "./brand";
 import { CONSENT_SCHEMA, consentMissing, recordConsent, hasConsent, CONSENT_VERSION } from "./consent";
@@ -266,7 +267,7 @@ async function spend(env: Env, now: number, n = 1): Promise<boolean> {
 /** An AI key (or a Host) never receives or sends names and mobile numbers: the organizer loads the list in the console. */
 const CONSOLE_ONLY = () => json({ error: "Names and mobile numbers are handled by the owner in the console, not by the AI. Ask the owner to paste the list in the Participants card. You can set the limit with settings and refer to people by ticket number." }, 403);
 /** One network address may open only so many NEW seats a day (an office behind one address is far below this): protects the shared daily write budget from a script. */
-const JOIN_PER_IP_DAY = 1500, JOIN_PER_IP_MINUTE = 200;
+const JOIN_PER_IP_DAY = 1500, JOIN_PER_IP_MINUTE = 200, ID_MISS_PER_10MIN = 10;
 async function joinOverLimit(env: Env, req: Request, now: number): Promise<boolean> {
   try {
     const ip = (await sha("jip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16), perDay = Number((env as any).JOIN_PER_IP_DAY ?? JOIN_PER_IP_DAY), perMin = Number((env as any).JOIN_PER_IP_MINUTE ?? JOIN_PER_IP_MINUTE);
@@ -516,9 +517,6 @@ const newHostKey = (): string => "cth_" + randHex(24);
 /** The WhatsApp button for a Host who has only a mobile number: opens WhatsApp to that number with the one-time link ready to send (the Organizer presses send). */
 const waLinkFor = (digits: string, name: string, link: string): string => `https://wa.me/${digits}?text=${encodeURIComponent(`${name ? "Hello " + name + ", you" : "You"} are a Host of a Corporate Tambola game. Open your link to finish your setup (it works once, for 7 days): ${link}`)}`;
 /** A brand-new organizer account for a work e-mail (used by the first-time start and by Google sign-up): the console key, the lasting AI key (shown only in the console), and the 24-hour AI-link mail. */
-/** Three sign-in addresses made for the owner's own testing: the 6-digit code is always 123456 and no e-mail is sent to them. Nothing else about them is special (they are ordinary organizer accounts). To switch this off, empty this list. */
-const TEST_LOGINS = new Set(["demo1@xyz.in", "demo2@xyz.in", "demo3@xyz.in"]);
-const TEST_LOGIN_CODE = "123456";
 async function createOrganizer(env: Env, req: Request, email: string, now: number, via: "start" | "signin-google" | "host-to-organizer", ticked = false): Promise<{ ok: true; token: string; aiKey: string; aiMessage: string } | { error: string; status: number }> {
   const eh = await sha("email|" + email);
     const ipk = `start/${day(now)}/${(await sha("ip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16)}`;
@@ -852,9 +850,16 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!email || code.length !== 6) return json({ error: "Enter the 6-digit code." }, 400);
     const eh = await sha("email|" + email);
     if (TEST_LOGINS.has(email) && code === TEST_LOGIN_CODE) {
+      { // a per-network daily limit and the write budget apply, like every other public write
+        const tk = `tlg/${day(now)}/${(await sha("ip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16)}`;
+        const tu = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(tk).first<{ v: string }>())?.v ?? 0);
+        if (tu >= TEST_LOGINS_PER_IP_DAY) return json({ error: "Too many sign-ins from this network today. Please try again tomorrow." }, 429);
+        if (!(await spend(env, now, 3))) return BUSY();
+        await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(tk, String(tu + 1)).run();
+      }
       let ta = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
-      if (!ta) { const made = await createOrganizer(env, req, email, now, "start", true); if ("error" in made) return json({ error: made.error }, (made as any).status ?? 400); ta = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>(); }
-      if (ta) return json(await signInResult(env, req, ta, null, now, email));
+      if (!ta) { const made = await createOrganizer(env, req, email, now, "start", false); /* no Terms-box consent is recorded for an account nobody ticked for */ if ("error" in made) return json({ error: made.error }, (made as any).status ?? 400); ta = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>(); }
+      if (ta) { const res = await signInResult(env, req, ta, null, now, email); await env.DB.prepare("DELETE FROM organizer_key WHERE org=? AND kind='master' AND hash NOT IN (SELECT hash FROM organizer_key WHERE org=? AND kind='master' ORDER BY created_ms DESC LIMIT 3)").bind(ta.org, ta.org).run(); return json(res); } // the keys made by earlier sign-ins are trimmed: these accounts are shared and public
     }
     const row = await env.DB.prepare("SELECT code_hash, expires_ms, attempts FROM login_code WHERE email_hash=?").bind(eh).first<{ code_hash: string; expires_ms: number; attempts: number }>();
     const bad = () => json({ error: "That code is not right or has expired. Please ask for a new one." }, 400);
@@ -1441,20 +1446,29 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
         if (!(await spend(env, now, 2))) return BUSY();
         await env.DB.batch([env.DB.prepare("UPDATE seat SET dev=? WHERE eid=? AND pid=? AND dev IS NULL").bind(dev, eid, have.pid), env.DB.prepare("UPDATE participant SET joined_ms=? WHERE eid=? AND pid=? AND joined_ms<?").bind(now, eid, have.pid, now), env.DB.prepare("UPDATE person SET status='joined', joined_ms=? WHERE eid=? AND ph=? AND status='invited'").bind(now, eid, ph)]);
         const nm = cleanName(b?.name);
-        if (nm) { const old = await env.DB.prepare("SELECT pii FROM participant WHERE eid=? AND pid=?").bind(eid, have.pid).first<{ pii: string | null }>(); const o = await openPii(env, old?.pii); if (o && !o.name) await env.DB.prepare("UPDATE participant SET pii=? WHERE eid=? AND pid=?").bind(await sealPii(env, { phone: o.phone, name: nm }), eid, have.pid).run(); }
+        if (nm) { const old = await env.DB.prepare("SELECT pii FROM participant WHERE eid=? AND pid=?").bind(eid, have.pid).first<{ pii: string | null }>(); const o = await openPii(env, old?.pii); if (o && !o.name) await env.DB.prepare("UPDATE participant SET pii=? WHERE eid=? AND pid=?").bind(await sealPii(env, { phone: o.phone, name: nm, ...(o.empId ? { empId: o.empId } : {}) }), eid, have.pid).run(); }
       }
       if (!hadK4) await k4(have.pid);
       return reply(have.pid, { again: true, jr: have.jr ?? 0, ...(have.role ? { role: have.role } : {}) }); // same number twice = same participant
     }
     let pr = await personByPhone(env, eid!, ph); // is this number (or employee ID) on any list of the game?
-    let idMiss = false; // an employee ID that does not match the list: the organizer decides
+    let idMiss = false, needIdAfterConsent = false; // an employee ID that does not match the list: the organizer decides
     if (vf.mode !== "mobile" && empNorm && !tok) {
       if (vf.mode === "both") { const pp0 = pr ? await openPii(env, pr.pii) : null; if (!pr || (pp0?.empId && pp0.empId !== empNorm)) { pr = null; idMiss = true; } }
       else if (!pr) idMiss = true; // ID alone, not on the list
-    } else if (vf.mode === "both" && pr && !tok) { const pp0 = await openPii(env, pr.pii); if (pp0?.empId) return json({ error: "Enter your employee ID.", code: "need-id" }, 400); }
+      if (idMiss) { // guessing IDs: only so many wrong IDs per network per game per 10 minutes
+        try {
+          const ipk = (await sha("jip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16), k = `idmiss/${eid}/${new Date(now).toISOString().slice(0, 15)}/${ipk}`;
+          const n = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0);
+          if (n >= ID_MISS_PER_10MIN) return json({ error: "Too many tries with an employee ID that is not on the list. Please ask your organizer for help.", code: "too-many-tries" }, 429);
+          await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, String(n + 1)).run();
+        } catch { /* a counter never blocks a join */ }
+      }
+    } else if (vf.mode === "both" && pr && !tok) { const pp0 = await openPii(env, pr.pii); if (pp0?.empId) needIdAfterConsent = true; } // asked only after the consent box is ticked: an untick-and-ask cannot be used to find out who is on the list
     if (pr?.status === "removed") return removedReply();
     const tickedBefore = !!(await env.DB.prepare("SELECT 1 AS x FROM consent_log WHERE kind='K4' AND ref=? AND subject=?").bind(eid, await pidOf(ph)).first()); // ticked when they asked to come in; the page does not keep it across a reload
     if (ck && !tickedBefore) return ck;
+    if (needIdAfterConsent) return json({ error: "Enter your employee ID.", code: "need-id" }, 400);
     if (!dev) return json({ error: "Please refresh this page and try again." }, 400);
     if (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) return json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket. Others can join from their own phones, using your invitation link if the organizer allowed it.", code: "device-used" }, 409);
     const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
@@ -1489,7 +1503,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
         : json({ error: `This engagement is by invitation. ${msg}`, code: "waiting", waiting: true, wid: w.id, with: who }, 403);
     };
     let inviter: string | null = null, role: string | null = null, guardId: string | null = null, guardLimit: number | null = null, pii: string;
-    if (pr) { inviter = pr.inviter; role = pr.role; const pp = await openPii(env, pr.pii); digits = pp?.phone || digits; pii = lateName && pp && !pp.name ? await sealPii(env, { phone: pp.phone, name: lateName }) : pr.pii; }
+    if (pr) { inviter = pr.inviter; role = pr.role; const pp = await openPii(env, pr.pii); digits = pp?.phone || digits; pii = lateName && pp && !pp.name ? await sealPii(env, { phone: pp.phone, name: lateName, ...(pp.empId ? { empId: pp.empId } : {}) }) : pr.pii; }
     else {
       if (e.closed || idMiss) return wait(false, null); // "Only people on a list" (or an employee ID not on the list): the person waits for an answer
       const limit = await limitOfInviter({ env, eid: eid!, e, invites: inviteCfg ?? { on: false, per: 4 } }, target);

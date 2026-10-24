@@ -22,6 +22,7 @@ import { partnerCode, phoneHashFor, recordCommission, refCode } from "./partners
 import { helperRefFor } from "./helpdesk";
 import { attemptStatusOf, centralOf, derivedEventKey, eventSeen, markEventSeen, recordAttempt, recordRefund, storePaymentDetails, txnIdOf } from "./ledgerc";
 import { getMode, mailGate, testFlag, type ModeEnv } from "./mode";
+import { isTestLogin } from "./testlogins";
 import { lookupPayLink, packFor, payLinkPublic } from "./paylink";
 import { consentMissing, recordConsent } from "./consent";
 import { creditAppliedFor, creditFromPayment, creditUsesFor, mailCreditCreated, restoreCreditUses, rs, teamEmails } from "./credit";
@@ -96,6 +97,7 @@ const KEYRE = /ct[kah]_[0-9a-f]{48}/g;
 export async function sendMail(env: PayEnv, db: D1, to: string, subject: string, text: string, now: number, opts: { html?: string; secret?: boolean; owner?: boolean } = {}): Promise<boolean> {
   // `secret` = the mail carries a personal AI work link: if it cannot be sent, no body is kept at all (nothing to retry later; the organizer can replace the link and get a fresh mail).
   // TEST mode (mode.ts): only the owner's allow-list is ever e-mailed; everyone else is dropped and logged. Not sent = false, and no body is kept.
+  if (isTestLogin(to)) return false; // the owner's three test addresses belong to a real outside domain: nothing is ever sent to them
   subject = tagSubject(subject); // the game tag starts every subject
   if ((await getMode(env)) === "TEST") { if (!opts.owner && !(await mailGate(env, to, subject, now))) return false; subject = "[TEST] " + subject; } // `owner` = a note to the owner of the platform (owner-mail.ts): always allowed
   const html = opts.html ?? plainToHtml(subject, text, env.PUBLIC_ORIGIN); // every mail carries the brand header and footer, whoever built it
@@ -173,7 +175,28 @@ View or print it: ${origin}/api/invoice/${token}`, now);
   return { result };
 }
 
+/** Completes a payment exactly once: the browser's verify call and the payment provider's webhook can arrive together, so the first to arrive takes the payment ('paying') and the other waits for its answer instead of making a second set of mails and invoice numbers. */
 export async function fulfil(env: PayEnv, paymentId: string, now: number, spend: (n: number) => Promise<boolean>) {
+  const db = env.DB;
+  const cur = await db.prepare("SELECT status FROM payment WHERE id=?").bind(paymentId).first<{ status: string }>();
+  if (!cur || cur.status === "paid") return fulfilInner(env, paymentId, now, spend);
+  const got = await db.prepare("UPDATE payment SET status='paying' WHERE id=? AND status NOT IN ('paid','paying')").bind(paymentId).run();
+  if (((got as any).meta?.changes ?? 0) === 0) {
+    for (let i = 0; i < 25; i++) { // the other call is finishing it: wait for its answer (up to about 5 seconds) and give the same one
+      const q = await db.prepare("SELECT status, result FROM payment WHERE id=?").bind(paymentId).first<{ status: string; result: string | null }>();
+      if (q?.status === "paid") return { result: JSON.parse(q.result ?? "{}") };
+      if (q?.status !== "paying") break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return { error: "Your payment is being finished. Please wait a moment and refresh.", status: 409 };
+  }
+  try {
+    const r: any = await fulfilInner(env, paymentId, now, spend);
+    if (r && "error" in r) await db.prepare("UPDATE payment SET status=? WHERE id=? AND status='paying'").bind(cur.status, paymentId).run(); // not completed: back to what it was, so a retry can finish it
+    return r;
+  } catch (e) { await db.prepare("UPDATE payment SET status=? WHERE id=? AND status='paying'").bind(cur.status, paymentId).run(); throw e; }
+}
+async function fulfilInner(env: PayEnv, paymentId: string, now: number, spend: (n: number) => Promise<boolean>) {
   const db = env.DB;
   const p = await db.prepare("SELECT * FROM payment WHERE id=?").bind(paymentId).first<any>();
   if (!p) return { error: "Unknown payment.", status: 404 };
@@ -264,7 +287,16 @@ export async function fulfil(env: PayEnv, paymentId: string, now: number, spend:
   const orgMail = typeof organizer.email === "string" ? organizer.email.trim().toLowerCase() : "";
   const teamTo = await teamEmails(env, org, eidForInvoice || meta.eid || null).catch(() => null), invSeen = new Set<string>([p.email.trim().toLowerCase()]), invTo: string[] = []; // the organizer and every Host get the invoice once; the payer already has the receipt
   for (const t0 of [orgMail, teamTo?.organizer ?? "", ...(teamTo?.hosts ?? [])]) { const t = (t0 ?? "").trim().toLowerCase(); if (t && EMAIL.test(t) && !invSeen.has(t)) { invSeen.add(t); invTo.push(t); } }
-  for (const to of invTo) await sendMail(env, db, to, `${brand.name}: invoice ${number} for your game`, `An invoice for your game${eidForInvoice ? ` ${eidForInvoice}` : ""} was issued by ${brand.name}.\n\nINVOICE\n${renderInvoiceText(data)}\n\nView or print it: ${origin}/api/invoice/${token}\nDownload the PDF: ${origin}/api/invoice/${token}.pdf`, now);
+  const ownerSet = new Set([orgMail, (teamTo?.organizer ?? "").trim().toLowerCase()]); // the organizer gets the whole invoice; a Host only hears that the game is paid (a Host may be outside the paying company, so no buyer details and no invoice link)
+  for (const to of invTo) await sendMail(env, db, to, `${brand.name}: ${ownerSet.has(to) ? `invoice ${number} for your game` : `your game ${eidForInvoice ?? ""} is paid`}`, ownerSet.has(to)
+    ? `An invoice for your game${eidForInvoice ? ` ${eidForInvoice}` : ""} was issued by ${brand.name}.
+
+INVOICE
+${renderInvoiceText(data)}
+
+View or print it: ${origin}/api/invoice/${token}
+Download the PDF: ${origin}/api/invoice/${token}.pdf`
+    : `Good news: the game${eidForInvoice ? ` ${eidForInvoice}` : ""} you are a Host of is paid for and ready. The organizer has the invoice. Open your Host link to see the game.`, now);
   await recordCommission(env, p, tax.taxable, now); // refer & earn: a commission row for a referred, PAID purchase only
   const result = { ok: true, orderId: p.id, pack: p.pack, total: p.amount, tax: p.tax, currency: p.currency, invoiceUrl: `/api/invoice/${token}`, invoiceNumber: number, razorpayPaymentId: p.rzp_payment_id ?? null, organizerKey, newOrganizer: !!organizerKey, published: !!published, eid: published, ...(converted ? { converted: true } : {}), restartedAtMs: restart ? (1692803367 + (restart - 1) * 3) * 1000 : null, ...(keptCredit ? { creditKept: true, creditId: keptCredit.id, creditExpiresMs: keptCredit.expires_ms } : {}) };
   await db.prepare("UPDATE payment SET status='paid', paid_ms=?, org=?, result=? WHERE id=?").bind(now, org, JSON.stringify(result), p.id).run();

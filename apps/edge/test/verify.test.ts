@@ -78,6 +78,26 @@ describe("employees only, mobile and ID", () => {
   });
 });
 
+describe("an employee known by ID stays known by it", () => {
+  test("sending the link again with a new contact number keeps the ID (the ID still gets in; the export still shows it)", async () => {
+    const t = await setup({ verify: "id", employeesOnly: true });
+    const r = await j(await add(t.master, [{ name: "Asha", empId: "E101", phone: mob(2) }])); const id = r.people[0].id;
+    const re = await call("POST", `/api/z/PPL-1/people/${id}/resend`, { phone: mob(7) }, t.master); expect(re.status).toBe(200);
+    expect((await joinAs("PPL-1", 5, { phone: undefined, empId: "e101" })).status).toBe(200);
+    const csv = await (await call("GET", "/api/z/PPL-1/people/export", undefined, t.master)).text(); expect(csv).toContain("E101"); expect(csv).toContain(mob(7));
+  });
+});
+
+describe("guessing employee IDs", () => {
+  test("wrong IDs wait for the organizer, who sees the ID that was typed; after 10 wrong IDs from one network in a game the door closes for ten minutes; a right ID is not counted", async () => {
+    const t = await setup({ verify: "id", employeesOnly: true }); await add(t.master, [{ name: "Asha", empId: "E101" }]);
+    for (let i = 0; i < 10; i++) expect((await joinAs("PPL-1", 10 + i, { phone: undefined, empId: "X" + (900 + i) })).status).toBe(403);
+    const eleventh = await joinAs("PPL-1", 30, { phone: undefined, empId: "X999" }); expect(eleventh.status).toBe(429); expect((await j(eleventh)).code).toBe("too-many-tries");
+    const w = (await j(await call("GET", "/api/z/PPL-1/waiting", undefined, t.master))).waiting; expect(w.length).toBe(10); expect(w.map((x: any) => x.empId)).toContain("X900");
+    expect((await joinAs("PPL-1", 31, { phone: undefined, empId: "E101" })).status).toBe(200); // the real employee still gets in
+  });
+});
+
 describe("everyone, including employees", () => {
   test("ID: employees give their ID; an outsider gives a mobile number only and comes in at once; an unknown ID waits; guests can still invite", async () => {
     const t = await setup({ verify: "id", invites: { on: true, per: 2, cats: ["family"] } });
@@ -124,5 +144,15 @@ describe("the owner's three test sign-ins", () => {
     expect(rowsOf("SELECT COUNT(*) c FROM outbox WHERE to_addr LIKE '%xyz.in'")[0].c).toBe(0);
     expect(rowsOf("SELECT COUNT(*) c FROM organizer_email")[0].c).toBe(3);
     expect((await call("POST", "/api/auth/verify", { email: "demo4@xyz.in", code: "123456" })).status).toBe(400);
+  });
+  test("the test sign-ins are limited per network per day, record no Terms consent, never send mail, and keep only their latest three keys", async () => {
+    const em = "demo2@xyz.in"; const fire = () => call("POST", "/api/auth/verify", { email: em, code: "123456" });
+    for (let i = 0; i < 30; i++) expect((await fire()).status).toBe(200);
+    const blocked = await fire(); expect(blocked.status).toBe(429);
+    expect(rowsOf("SELECT COUNT(*) c FROM consent_log WHERE kind='K2'")[0].c).toBe(0);
+    const org = rowsOf("SELECT org FROM organizer_email")[0].org;
+    expect(rowsOf("SELECT COUNT(*) c FROM organizer_key WHERE org=? AND kind='master'", org)[0].c).toBeLessThanOrEqual(3);
+    const { sendMail } = await import("../src/pay"); expect(await sendMail(env as any, (env as any).DB, em, "Your report", "text", T)).toBe(false);
+    expect(rowsOf("SELECT COUNT(*) c FROM outbox WHERE to_addr LIKE '%xyz.in'")[0].c).toBe(0);
   });
 });
