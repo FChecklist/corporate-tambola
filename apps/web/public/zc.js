@@ -742,7 +742,7 @@
     h += list.map(personRow).join("") + (list.length ? "" : small("Nobody yet. Add your first person above."));
     h += `<div class="zc-chips zc-gap"><button type="button" class="zc-mini" id="copycommon">Copy common link</button>${P.canExport ? `<button type="button" class="zc-mini" id="dlpeople">Download my list</button>` : ""}</div>`;
     h += small("The common link is for groups. The person types their own mobile number. A personal link is made for one person only.");
-    h += `${small("Names and numbers stay here: your AI never sees them.")}<p class="zc-small" id="emailrule2">${EMAIL_RULE}</p>`;
+    h += `${small("Names and numbers stay here, in your own console.")}<p class="zc-small" id="emailrule2">${EMAIL_RULE}</p>`;
     h += guestTools();
     return h + `</div>`;
   }
@@ -969,7 +969,7 @@
     const rpt = !S.shield && S.life && S.life.reportSent && !S.life.purged ? `<div class="zc-chips zc-gap"><button type="button" class="zc-btn zc-btn-s" id="rptopen">Open the report now</button><button type="button" class="zc-btn zc-btn-s zc-btn-alt" id="rptnew">New report link</button></div>` : "";
     return small("Within 24 hours of the game ending we send you the report, then delete every participant's name and number. Your details as Organizer and Host, and the winners record, are kept for 365 days. Co-host details are erased with the guests.") + when2 + rpt
       + `<div class="zc-chips zc-gap"><button type="button" class="zc-btn zc-btn-s zc-btn-bad" id="erase">Delete all participant data now</button></div>`
-      + small("You tap once to confirm. You can also e-mail us from your registered address, or ask your AI assistant to request the deletion and then confirm it here. The report is e-mailed first when the game has already ended.")
+      + small("You tap once to confirm. You can also e-mail us from your registered address. The report is e-mailed first when the game has already ended.")
       + afterClone() + cont(10, "All done");
   }
 
@@ -991,7 +991,6 @@
   // ---------- the page: top bar, strips, progress, steps, help ----------
   const HELP = [
     ["How do I start?", "Open step 1 and tap your choices. Your game saves as you go."],
-    ["Can the AI do this for me?", "Yes. Copy your AI link at the top and paste it in any AI chat."],
     ["Who pays?", "Any one of the Organizer, a Host or a Co-host. Only one payment is needed. Guests pay nothing."],
     ["What if nobody pays?", "The game does not begin. Nothing is charged. Once one payment is made, the game is on."],
     ["Can I change things later?", "Yes, until the game starts. Open the step and change it."],
