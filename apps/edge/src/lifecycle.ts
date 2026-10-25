@@ -7,7 +7,7 @@
 import { keepWinnerEvidence, prefixEnd } from "./checkin";
 import { restoreCreditUses } from "./credit";
 import { keepLegalParty } from "./legal";
-import { keepGameRecord } from "./gamerecord";
+import { ensureGameRecordTable, keepGameRecord } from "./gamerecord";
 import { sweepVisits } from "./visits";
 import { closeAuditFor, isHeld, shredParticipantAudit } from "./audit";
 import { GRACE_ROUNDS, INVITE_CATEGORIES, PRIZE_HOUSES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
@@ -162,6 +162,7 @@ export async function eraseEverything(env: Env, id: string, now = Date.now()): P
 export async function purgeTestEngagement(env: Env, id: string, now = Date.now()): Promise<void> {
   await erasePersonal(env, id, now, "test-purge");
   await deleteEngagementRows(env, id);
+  try { await env.DB.prepare("DELETE FROM game_record WHERE eid=?").bind(id).run(); } catch { /* no record table yet */ } // a purged TEST game leaves no settings record (real games keep theirs for ever)
 }
 async function deleteEngagementRows(env: Env, id: string): Promise<void> {
   { const eg = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(id).first<any>(); if (eg) await keepGameRecord(env.DB, eg, Date.now()); } // the settings of the game are kept for ever (no personal data in them): written one last time before the game's own rows go
@@ -410,6 +411,7 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
   }
   // the permanent settings record (gamerecord.ts) also for the games the pass above does not look at (free and demo games), and for any game that has no record yet or whose ending is not in its record yet
   try {
+    await ensureGameRecordTable(env.DB);
     const more = (await env.DB.prepare("SELECT e.*, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS npart FROM engagement e LEFT JOIN game_record g ON g.eid=e.id LEFT JOIN life l ON l.eid=e.id WHERE e.pack IS NOT NULL AND (g.eid IS NULL OR (g.outcome IS NULL AND l.eid IS NOT NULL)) ORDER BY e.start_round DESC LIMIT 25").all<any>()).results ?? [];
     for (const e of more) await keepGameRecord(env.DB, e, now);
   } catch { /* tried again at the next tick */ }

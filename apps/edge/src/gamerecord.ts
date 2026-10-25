@@ -10,6 +10,9 @@ export const GAME_RECORD_SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS game_record (eid TEXT PRIMARY KEY, org TEXT, created_ms INTEGER, start_round INTEGER, settings TEXT NOT NULL, outcome TEXT, first_kept_ms INTEGER NOT NULL, kept_ms INTEGER NOT NULL)`,
 ];
 
+/** Makes the table when the live database does not have it yet (the code is deployed before the owner's database update is applied; the statement is harmless to repeat). */
+export async function ensureGameRecordTable(db: D1): Promise<void> { for (const s of GAME_RECORD_SCHEMA) await db.prepare(s).run(); }
+
 const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : null);
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/[<>`]/g, "").slice(0, max) : null);
 
@@ -31,7 +34,10 @@ export function settingsOf(e: { closed?: number | null; id: string; start_round:
 
 /** Writes (or refreshes) the permanent settings record of one game. `e` is the engagement row. Safe to repeat; never throws into the caller's work. */
 export async function keepGameRecord(db: D1, e: any, now: number): Promise<void> {
-  try {
+  try { await keepGameRecordOnce(db, e, now); } catch { try { await ensureGameRecordTable(db); await keepGameRecordOnce(db, e, now); } catch { /* best effort: the next pass writes it again, and the last write happens before deletion */ } }
+}
+async function keepGameRecordOnce(db: D1, e: any, now: number): Promise<void> {
+  {
     const settings = JSON.stringify(settingsOf(e));
     let outcome: Record<string, unknown> | null = null;
     const life = await db.prepare("SELECT end_ms, end_src, report_state FROM life WHERE eid=?").bind(e.id).first<{ end_ms: number; end_src: string; report_state: string | null }>();
@@ -45,7 +51,7 @@ export async function keepGameRecord(db: D1, e: any, now: number): Promise<void>
     }
     await db.prepare("INSERT INTO game_record(eid,org,created_ms,start_round,settings,outcome,first_kept_ms,kept_ms) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(eid) DO UPDATE SET settings=excluded.settings, outcome=COALESCE(excluded.outcome, game_record.outcome), kept_ms=excluded.kept_ms")
       .bind(e.id, e.org ?? null, e.created_ms ?? null, e.start_round, settings, outcome ? JSON.stringify(outcome) : null, now, now).run();
-  } catch { /* best effort: the next pass writes it again, and the last write happens before deletion */ }
+  }
 }
 
 /** The owner's read of the permanent records (platform key only). `eid` for one game; otherwise the newest `limit`. */
