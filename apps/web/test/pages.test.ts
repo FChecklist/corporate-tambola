@@ -409,7 +409,7 @@ describe("console (organizer page)", () => {
     const t = p.text(); expect(t).toMatch(/Show it on a big screen, or share it in Google Meet, Zoom or Teams\. It shows only the number just called and the prizes/); expect(t).toMatch(/My board \(only for you\)/); expect((p.$('a[href="http://localhost/big.html?e=UI-SHARE"]') as any).textContent).toMatch(/Open the number screen/);
     expect(Array.from(doc.querySelectorAll("[data-mode]")).map((e: any) => e.textContent)).toEqual(["Upload a PDF", "Upload a CSV", "Add one person"]); // no contacts button where the browser has no contact picker
     p.click('[data-mode="file"]'); expect(p.$("#gfile")).toBeTruthy(); expect((p.$("#gfile") as any).type).toBe("file");
-    expect(t).not.toMatch(/By e-mail|Send by e-mail|Send invites/); expect(t).toMatch(/Invite only people who would like to play/); expect(t).toMatch(/Names and numbers stay here: your AI never sees them\./); expect(t).toMatch(/Download my list/);
+    expect(t).not.toMatch(/By e-mail|Send by e-mail|Send invites/); expect(t).toMatch(/Invite only people who would like to play/); expect(t).toMatch(/Names and numbers stay here, in your own console\./); expect(t).toMatch(/Download my list/);
     expect(p.errors).toEqual([]);
   });
   test("Help: pre-answered questions (including Who can do what? and the big-screen link), Back to your steps, Back to top; and the progress bar moves as steps are saved", async () => {
@@ -1013,6 +1013,17 @@ describe("the console for an AI that works in the browser", () => {
     expect(doc.querySelector('[data-fi="mid.0.t"]')!.getAttribute("id")).toBe("f-mid-0-t"); // the brand-moment rows have stable names
     const btn = p.$('[data-save="4"]') as any; await new Promise((r) => setTimeout(r, 6000)); expect(btn.isConnected).toBe(true); expect(p.$('[data-save="4"]')).toBe(btn); // the 5-second refresh did not replace the page's elements
   }, 90_000);
+
+  test("Quick setup: choosing \"Up to 10 people\" makes the free DEMO game (found by the live test of 25 Oct 2026: it was made as a paid game and locked at the start time)", async () => {
+    const o = await organizer(); const p = await quickPage(o); await p.waitFor((x) => /1\. Which game\?/.test(x) && /Up to 10 people/.test(x));
+    const tomorrow = new Date(Date.now() + 5.5 * 3600000 + 2 * 86400000); const d = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
+    set(p, "#qk-name", "Ten person test"); set(p, "#qk-date", d); set(p, "#qk-time", "18:30");
+    p.click('[data-ck="cap"][data-v="10"]');
+    p.click("#qk-save"); await p.waitFor((x) => /Your draft is saved/.test(x), 8000).catch(() => { throw new Error("save failed; error box: " + (p.$("#qk-err") as any)?.textContent + " | errors: " + p.errors.join("; ")); });
+    const hist = await o.json(await o.api("GET", "/api/history", undefined, o.aiKey)); const id = hist.engagements[0].id;
+    const sm = await o.json(await o.api("GET", `/api/z/${id}/summary`, undefined, o.aiKey));
+    expect(sm).toMatchObject({ limit: 10, demo: true }); // a demo game: free, no payment asked at the start
+  }, 60_000);
 
   test("Quick setup: real date and time pickers, the first steps as one form of tap choices; saving makes the draft with the right start, size, tickets, prizes and name, then opens it", async () => {
     const o = await organizer(); const p = await quickPage(o); await p.waitFor((x) => /1\. Which game\?/.test(x) && /Up to 250 people/.test(x)); const doc = p.win.document;
