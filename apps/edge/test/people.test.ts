@@ -268,6 +268,14 @@ describe("the waiting room", () => {
     expect((await call("POST", `/api/z/PPL-1/waiting/${orgOnly.id}`, { decision: "admit" }, t.cohost)).status).toBe(404); // not theirs
     expect((await call("POST", `/api/z/PPL-1/waiting/${mine[0].id}`, { decision: "maybe" }, t.cohost)).status).toBe(400);
   });
+  test("the waiting room holds 500 requests: the 501st person is told it is full (429, waiting-full); someone already waiting is still told they are waiting; nobody takes a place", async () => {
+    const t = await setup({ closed: true }); for (let i = 0; i < 500; i++) await joinAs("PPL-1", 40 + i, { from: ORG_FROM }, T + Math.floor(i / 150) * 61_000); // the same network may ask 200 times a minute: spread the requests over minutes
+    expect(rowsOf("SELECT COUNT(*) c FROM waiting WHERE status='waiting'")[0].c).toBe(500);
+    const extra = await joinAs("PPL-1", 900, { from: ORG_FROM }, T + 5 * 61_000); expect(extra.status).toBe(429); expect((await j(extra)).code).toBe("waiting-full");
+    expect(rowsOf("SELECT COUNT(*) c FROM waiting")[0].c).toBe(500); // the 501st left no row
+    expect((await joinAs("PPL-1", 40, { from: ORG_FROM }, T + 6 * 61_000)).status).toBe(403); // a request already in the room is answered as before
+    expect(rowsOf("SELECT COUNT(*) c FROM seat")[0].c + rowsOf("SELECT COUNT(*) c FROM person")[0].c).toBe(0);
+  }, 120_000);
   test("admit records who approved and when; the person is then recognised and joins; decline keeps them out", async () => {
     const t = await setup({ closed: true }); await joinAs("PPL-1", 1, { from: ORG_FROM }); await joinAs("PPL-1", 2, { from: ORG_FROM });
     const ws = (await j(await call("GET", "/api/z/PPL-1/waiting", undefined, t.host))).waiting;
