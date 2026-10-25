@@ -21,6 +21,7 @@ import { CONSENT_SCHEMA, consentMissing, recordConsent, hasConsent, CONSENT_VERS
 import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, hostLinkMail, newUseAlertMail, signInMail } from "./mails";
 import { cancelGame, cancelPreview, entitlementWindowEndMs, paidWindowEndMs, reopenGame, teamEmails } from "./cancel";
 import { LEGAL_SCHEMA } from "./legal";
+import { GAME_RECORD_SCHEMA, readGameRecords } from "./gamerecord";
 import { RIGHTS_SCHEMA, leaveRoute, requestRoute } from "./rights";
 import { ADMIN_SCHEMA, adminRoute, adminTick, countError, maintenanceGate } from "./admin";
 import { recordServerError } from "./errorbox";
@@ -174,6 +175,7 @@ export const SCHEMA: string[] = [
   // credit instead of refunds, games that did not start, create a game like this one (0018_credit_retention_clone.sql)
   ...CREDIT_SCHEMA,
   ...LEGAL_SCHEMA,
+  ...GAME_RECORD_SCHEMA,
   // one clear payment ledger for every product and website, plus the webhook log (0020_payment_ledger.sql)
   ...LEDGER_SCHEMA,
   // every Terms tick: who, which point, which game or payment, the Terms version, the boxes, a hash of the wording shown, the time (0021_consent.sql)
@@ -689,6 +691,12 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   { const mr = await modeRoute(req, env as any, now, a.plat && req.headers.get("x-ct-link") !== "1", (n) => purgeTestData(env, n)); if (mr) return mr; } // TEST/LIVE switch, allow-list, purge (mode.ts): owner only, except the public read of the word TEST or LIVE
   { const ar = await adminRoute(req, env as any, now, a.plat && req.headers.get("x-cb-link") !== "1", (n) => spend(env, now, n)); if (ar) return ar; } // the owner's desk (admin.ts): site switch, organizer lookup, data requests, mail events, error counts; the health read; the mail webhook
   if (p === "/api/v/b") return beaconRoute(req, env as VisitEnv, now, (n) => spend(env, now, n)); // public-page visit tracking (visits.ts); never the live game
+  if (p === "/api/owner/game-records") { // OWNER ONLY (platform key, never through an AI work link): the permanent settings record of every game (no personal data of any player in it). Anybody else gets the same 404 as an unknown address.
+    if (!(a.plat && req.headers.get("x-cb-link") !== "1") || req.method !== "GET") { await logAccess(env.DB, now, "denied:game-records", null, null, 0, false, a.kind ?? "anonymous"); return json({ error: "Not found" }, 404); }
+    const recs = await readGameRecords(env.DB, url.searchParams.get("eid"), Number(url.searchParams.get("limit") ?? 200));
+    await logAccess(env.DB, now, "game-records", url.searchParams.get("eid"), "json", recs.length);
+    return json({ records: recs });
+  }
   if (p === "/api/owner/ledger") { // OWNER ONLY (platform key, never through an AI work link): this website's own payment ledger (C). Anybody else gets the same 404 as an unknown address.
     if (!(a.plat && req.headers.get("x-cb-link") !== "1") || req.method !== "GET") { await logAccess(env.DB, now, "denied:ledger-c", null, null, 0, false, a.kind ?? "anonymous"); return json({ error: "Not found" }, 404); }
     const out = await ownerLedger(env as PayEnv, url, now);

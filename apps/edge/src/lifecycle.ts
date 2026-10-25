@@ -7,6 +7,7 @@
 import { keepWinnerEvidence, prefixEnd } from "./checkin";
 import { restoreCreditUses } from "./credit";
 import { keepLegalParty } from "./legal";
+import { keepGameRecord } from "./gamerecord";
 import { sweepVisits } from "./visits";
 import { closeAuditFor, isHeld, shredParticipantAudit } from "./audit";
 import { GRACE_ROUNDS, INVITE_CATEGORIES, PRIZE_HOUSES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
@@ -163,6 +164,7 @@ export async function purgeTestEngagement(env: Env, id: string, now = Date.now()
   await deleteEngagementRows(env, id);
 }
 async function deleteEngagementRows(env: Env, id: string): Promise<void> {
+  { const eg = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(id).first<any>(); if (eg) await keepGameRecord(env.DB, eg, Date.now()); } // the settings of the game are kept for ever (no personal data in them): written one last time before the game's own rows go
   await keepLegalParty(env.DB, id, Date.now()); // the law keeps payments, invoices, the organizer's invoice details and who paid, for ever: copy them out before the game's own rows go
   await env.DB.batch([
     env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM kv WHERE k >= ? AND k < ?").bind(`wev/${id}/`, prefixEnd(`wev/${id}/`)), env.DB.prepare("DELETE FROM prize WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM data_request WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
@@ -379,6 +381,7 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
   if (rows.length) await env.DB.prepare("INSERT INTO kv(k,v) VALUES('life_cursor',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(rows.length >= 25 ? `${rows[rows.length - 1].start_round}|${rows[rows.length - 1].id}` : "0").run();
   for (const e of rows) {
     out.checked++;
+    await keepGameRecord(env.DB, e, now); // the game's settings, kept for ever without any personal data; refreshed at each pass so a later change of a rule is kept too
     try {
       if (e.cancelled_ms) { // a cancelled game: no report; the 20-hour clock runs from the cancel time
         await env.DB.prepare("INSERT INTO life(eid,end_ms,end_src) VALUES(?,?,'cancel') ON CONFLICT(eid) DO UPDATE SET end_ms=excluded.end_ms, end_src='cancel' WHERE life.purged_ms IS NULL").bind(e.id, e.cancelled_ms).run();
@@ -405,6 +408,11 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
       if (now >= personalDeleteAt(life.end_ms) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "auto"); out.purged++; await mailDataDeleted(env as any, e, now); } // an owner-set legal hold suspends this too
     } catch { /* this engagement is tried again at the next tick; the others still run */ }
   }
+  // the permanent settings record (gamerecord.ts) also for the games the pass above does not look at (free and demo games), and for any game that has no record yet or whose ending is not in its record yet
+  try {
+    const more = (await env.DB.prepare("SELECT e.*, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS npart FROM engagement e LEFT JOIN game_record g ON g.eid=e.id LEFT JOIN life l ON l.eid=e.id WHERE e.pack IS NOT NULL AND (g.eid IS NULL OR (g.outcome IS NULL AND l.eid IS NOT NULL)) ORDER BY e.start_round DESC LIMIT 25").all<any>()).results ?? [];
+    for (const e of more) await keepGameRecord(env.DB, e, now);
+  } catch { /* tried again at the next tick */ }
   // games that did not start (nobody paid, or still a draft): guest data goes 20 hours after the game was MEANT to end; a published one is then closed ("This game did not start")
   try { out.purged += await unplayedPass(env, now); } catch { /* tried again at the next tick */ }
   try { const c = await creditTick(env as any, now); (out as any).creditLapsed = c.lapsed; (out as any).creditMails = c.mailed; } catch { /* tried again at the next tick */ }

@@ -796,5 +796,6 @@
 
   if (!EID) { $app.innerHTML = `<p class="zmsg">This link is incomplete. Please ask your organizer for the engagement link.</p>`; return; }
   rt.boot().then(() => { if (rt.phase === "play") clearWait(); else restoreWait(); paint(); if (rt.phase === "play") start(); });
+  rt.onProgress = () => { if (timer) paint(); };
   window.__rt = rt;
 })();

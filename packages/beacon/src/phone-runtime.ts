@@ -375,6 +375,7 @@ export class PhoneRuntime {
     this.store.verifySome(2);
     if (live) for (let r = 1; r <= Math.max(1, started); r++) this.buildLog(now, r); // on hold we keep showing what we had, and reveal nothing new
     this.setCurrent(Math.max(1, started));
+    try { this.onProgress?.(); } catch { /* the page drawing must never stop the game loop */ } // show the new number NOW: the claim, seat-list and Bogey calls below can take seconds when the store is busy, and must not hold the number back
     if (m !== "blind") await this.autoClaim(); // never claim from a log that might be missing a pause we could not hear about
     await this.sendBogeys();
     await this.pollSeats(now);
@@ -511,6 +512,8 @@ export class PhoneRuntime {
     if (changed) this.claimVer++;
   }
   /** The store's time (as this phone estimates it, a round of slack taken off) up to which it holds EVERY claim and Bogey: set by each seat-list answer. A position is settled only once this passed its claim deadline. */
+  /** Set by the page: called as soon as the numbers of this pass are known, before the slower calls of the same pass (claims, seat list, Bogeys). */
+  onProgress: (() => void) | null = null;
   private claimsFreshMs = -Infinity;
   /**
    * A winner position at call `idx` is final only when its claim window has closed (the next number was called, by the schedule every phone uses) AND this phone has read the store's claims up to
