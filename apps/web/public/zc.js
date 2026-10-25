@@ -1886,7 +1886,7 @@
   let inited = false;
   async function bootstrap() {
     inited = true;
-    if (secret) { try { const wh = await call("GET", "/api/whoami"); S.kind = wh.kind || ""; S.email = wh.email || "";  } catch { /* an old or wrong key is handled by the screens below */ } if (!isOrg()) S.shield = false; } // only the Organizer has the AI helper switch
+    if (secret) { try { const wh = await call("GET", "/api/whoami"); S.kind = wh.kind || ""; S.email = wh.email || ss.get("ctz-login-email") || ss.get("ctz-email") || "";  } catch { /* an old or wrong key is handled by the screens below */ } if (!isOrg()) S.shield = false; } // only the Organizer has the AI helper switch
     loadPacks(); loadAuthConfig();
     if (!secret) return redraw();
     const r = role();

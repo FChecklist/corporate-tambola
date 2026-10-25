@@ -426,6 +426,7 @@ async function signInResult(env: Env, req: Request, acct: { org: string } | null
   const hostKey = async () => { const hs = await hostStateRow(env.DB, hostAcct!.host_id); ready = !!hs?.verified_ms && !!hs?.mobile_ok; return mintDeviceKey(env, hostAcct!.host_id, newHostKey(), now); };
   if (acct) {
     await linkVisitor(env as VisitEnv, req, acct.org, "signin", now, email ?? undefined);
+    if (email) { try { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`orgmail/${acct.org}`, await sealText(env as any, email)).run(); } catch { /* the address is shown at the top right only when known */ } } // keep the address sealed: shown to the organizer at the top right
     const t = "ctk_" + randHex(24); // a fresh organizer key; the old ones keep working until the organizer retires them
     await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test) VALUES(?,?,?,0,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0))").bind(await sha("key|" + t), acct.org, "master", now, acct.org).run();
     token = t; roles.push("organizer");
@@ -951,7 +952,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   }
   if (req.method === "GET" && p === "/api/whoami") { // the console uses this to show the right screen; the Organizer also gets their own e-mail address, shown at the top right
     if (!a.kind) return deny(a);
-    let who: string | undefined; if (a.kind === "master" && a.org) { try { const sealed = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`orgmail/${a.org}`).first<{ v: string }>(); who = (await openText(env as any, sealed?.v)) || undefined; } catch { who = undefined; } }
+    let who: string | undefined; if (a.kind === "master" && a.org) { who = (await orgEmail(env, a.org)) || undefined; }
     return json({ kind: a.kind, ...(who ? { email: who } : {}), ...(a.kind === "host" && !a.viaLink ? { ready: a.hostReady === true } : {}) });
   } // the console uses this to show the right screen
   if (req.method === "POST" && p === "/api/host/become-organizer") { // a Host who also wants to run their own games: the same e-mail gets an Organizer account (Terms box K2), and the person then holds both roles
