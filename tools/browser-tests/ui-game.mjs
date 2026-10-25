@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { launch, signIn, ctrls, sleep } from "./ui-lib.mjs";
 const args = process.argv.slice(2); const opt = (k, d) => { const i = args.indexOf("--" + k); return i >= 0 ? args[i + 1] : d; };
 const B = process.env.BROWSER || "chrome", SITE = process.env.SITE || "http://localhost:8801";
-const TAG = opt("tag", "U" + Date.now().toString(36).slice(-3)), LOGIN = opt("login", "demo1@xyz.in"), CAP = Number(opt("cap", 10)), PLAYERS = Number(opt("players", 10)), MODE = opt("mode", "auto"), LEAD = Number(opt("lead", 9)), AUD = opt("aud", "5"), SPEED = Number(opt("speed", 9));
+const TAG = opt("tag", "U" + Date.now().toString(36).slice(-3)), LOGIN = opt("login", "demo1@xyz.in"), CAP = Number(opt("cap", 10)), PLAYERS = Number(opt("players", 10)), MODE = opt("mode", "auto"), LEAD = Number(opt("lead", 9)), AUD = opt("aud", "5"), SPEED = Number(opt("speed", 9)), STOP = opt("stop", ""), EMP = ["1", "2", "6"].includes(AUD);
 const R = { tag: TAG, browser: B, site: SITE, mode: MODE, cap: CAP, checks: [], errors: [], failedReq: [], notes: [] };
 const check = (n, ok, d = "") => { R.checks.push({ n, ok: !!ok, d: String(d).slice(0, 300) }); console.log(ok ? "PASS" : "FAIL", n, ok ? "" : "| " + String(d).slice(0, 300)); };
 const save = () => { mkdirSync("C:/ct/test-sites/data/ui", { recursive: true }); writeFileSync(`C:/ct/test-sites/data/ui/ui-${B}-${TAG}.json`, JSON.stringify(R, null, 1)); };
@@ -20,7 +20,7 @@ const clickSave = async (p, n) => { await p.click(`[data-save="${n}"]`); await s
 const openStep = async (p, n) => { const b = p.locator(`.zc-dot[data-open="${n}"], [data-open="${n}"]`).first(); await b.click(); await sleep(900); };
 try {
   // ---------------- the Organizer, only through the screens
-  const octx = await org(); const p = await octx.newPage(); watch(p, "organizer"); p.on("dialog", (d) => d.accept().catch(() => {}));
+  const octx = await org(); const p = await octx.newPage(); watch(p, "organizer"); p.on("request", (q) => { if (q.method() !== "GET" && /\/api\/z\//.test(q.url())) (R.reqs = R.reqs || []).push(q.method() + " " + q.url().replace(/^.*\/api\//, "/api/") + " " + String(q.postData() || "").slice(0, 160)); }); p.on("dialog", (d) => d.accept().catch(() => {}));
   await signIn(p, SITE, LOGIN); check("signed in as Organizer", /Signed in as Organizer/.test(await body(p)));
   if (await p.$("#mk")) await p.click("#mk"); await p.waitForSelector('[data-ck="occ"]', { timeout: 40000 }); await sleep(800);
   check("the organizer's e-mail is shown at the top right", (await body(p)).includes(LOGIN));
@@ -36,16 +36,35 @@ try {
   if (MODE === "auto") await p.click(`[data-ck="spd"][data-v="${SPEED}"]`);
   check("manual hides the gap (duration) and auto shows it", MODE === "host" ? !(await p.$('[data-ck="spd"]')) : !!(await p.$('[data-ck="spd"]')));
   await p.click('[data-ck="tix"][data-v="1"]'); await p.click('[data-ck="rnd"][data-v="1"]'); await p.click(`[data-ck="aud"][data-v="${AUD}"]`); await sleep(400);
-  R.step2 = await ctrls(p); await clickSave(p, 2);
+  R.step2 = await ctrls(p); await clickSave(p, 2); R.sum2 = await p.evaluate(async (e) => { const t = localStorage.getItem('ctz-org'); const r = await fetch('/api/z/' + e + '/summary', { headers: { 'x-organizer': t } }); const j = await r.json().catch(() => ({})); return { verify: j.verify, emp: j.employeesOnly, who: j.whoCanJoin, status: r.status }; }, eid);
   // steps 3..6: look at each, accept the defaults the way a person pressing Continue would
-  for (const n of [3, 4, 5, 6]) { await openStep(p, n); R["step" + n] = (await body(p)).slice(0, 80); if (await p.$(`[data-save="${n}"]`)) await clickSave(p, n); }
+  for (const n of [3, 4, 5, 6]) {
+    await openStep(p, n); R["step" + n] = (await body(p)).slice(0, 80); (R.verTrail = R.verTrail || []).push(n + ":" + JSON.stringify(await p.evaluate(async (e) => { const t = localStorage.getItem('ctz-org'); const j = await (await fetch('/api/z/' + e + '/summary', { headers: { 'x-organizer': t } })).json(); return [j.verify, j.employeesOnly]; }, eid)));
+    if (n === 6 && EMP) {
+      const csv = "Name,Employee ID\n" + Array.from({ length: PLAYERS }, (_, i) => `UI Player ${i + 1},E${String(i + 1).padStart(3, "0")}`).join("\n") + "\n";
+      const f = `C:/ct/test-sites/data/ui/staff-${TAG}.csv`; writeFileSync(f, csv);
+      await p.click('[data-cols="id"]').catch(() => {}); await sleep(500); await p.click('[data-mode="file"]'); await sleep(600);
+      R.step6before = await ctrls(p);
+      await p.click("#cbc-K6-A").catch(() => {}); await sleep(600);
+      await p.setInputFiles("#gfile", f); await sleep(4000);
+      R.step6after = await ctrls(p); R.step6text = (await p.locator('#sec6').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(-600); R.toasts = await p.$$eval('.zc-toast,[role=status],[role=alert],.zc-warnt', (e) => e.map((x) => x.textContent.trim().slice(0, 200))); R.pageErr = [...R.errors]; R.wrong = (await p.locator('#wronglist').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 500);
+      for (const bx of await p.$$("#sec6 input[type=checkbox]")) await bx.check({ force: true }).catch(() => {});
+      await sleep(500);
+      for (const sel of ["#gadd", "#gfileGo", "#fileGo", "button:has-text('Add them')", "button:has-text('Add these')", "button:has-text('Add all')"]) { const b = p.locator(sel).first(); if (await b.count() && await b.isVisible() && await b.isEnabled().catch(() => false)) { await b.click(); R.addSel = sel; break; } }
+      await sleep(3000);
+      const cnt = await p.locator("#gcount").first().innerText().catch(() => "?"); check(`the staff list was uploaded by clicking: ${PLAYERS} employees on the list`, Number(cnt) === PLAYERS, `count shows ${cnt}; ${R.addSel}`);
+    }
+    if (await p.$(`[data-save="${n}"]`)) await clickSave(p, n);
+  }
   // step 7: check and publish
-  await openStep(p, 7); await p.click("#publishopen").catch(() => {}); await sleep(800);
+  await openStep(p, 7); R.step7 = await ctrls(p);
+  if (await p.$("#publishopen")) { await p.click("#publishopen").catch(() => {}); await sleep(800);
   await p.fill("#pubEmail", "raajat.agarwal@gmail.com").catch(() => {}); await p.fill("#pubPhone", "9650397480").catch(() => {});
   for (const bx of await p.$$("#sec7 input[type=checkbox]")) await bx.check({ force: true }).catch(() => {});
-  R.step7 = await ctrls(p); await sleep(500); await p.click("#pubgo"); await sleep(6000);
+  await sleep(500); await p.click("#pubgo"); await sleep(6000); } else R.notes.push("no publish button: the game was already published (test pack)");
   const info = await (await fetch(`${SITE}/api/z/${eid}/info`)).json().catch(() => ({})); R.info = { cap: info.cap, locked: info.locked, demo: info.demo, startMs: info.startMs };
   check("the game is published and open to people", info.startMs && info.locked !== true, JSON.stringify(R.info)); startMs = info.startMs || startMs; save();
+  if (STOP === "publish") { check("stopped after publishing, as asked", true); save(); await browser.close().catch(() => {}); process.exit(0); }
   console.log("GAME", eid, "starts", new Date(startMs).toISOString(), "link", `${SITE}/z.html?e=${eid}`);
 
   // ---------------- the players: real phone-sized pages, arriving over the minutes before the start
@@ -56,7 +75,7 @@ try {
     const pg = await ctx.newPage(); watch(pg, name); await pg.goto(`${SITE}/z.html?e=${eid}`, { waitUntil: "load" });
     await pg.waitForSelector("[data-cbc='K4'] input[data-box]", { timeout: 40000 }); await sleep(800 + Math.random() * 2500);
     const bx = pg.locator("[data-cbc='K4'] input[data-box]"); for (let k = 0; k < await bx.count(); k++) await bx.nth(k).check({ force: true }).catch(() => {});
-    if (await pg.$("#ph")) await pg.type("#ph", phone, { delay: 60 }); if (await pg.$("#nm")) await pg.type("#nm", name, { delay: 50 });
+    if (await pg.$("#emp")) await pg.type("#emp", `E${String(i + 1).padStart(3, "0")}`, { delay: 60 }); if (await pg.$("#ph")) await pg.type("#ph", phone, { delay: 60 }); if (await pg.$("#nm")) await pg.type("#nm", name, { delay: 50 });
     await sleep(500); await pg.click("#go"); await pg.waitForFunction(() => window.__rt && window.__rt.pid, null, { timeout: 60000 });
     return { ctx, p: pg, name, phone, tapped: new Set(), claims: [], errors: [], present: false };
   };

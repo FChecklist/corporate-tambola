@@ -18,6 +18,10 @@ Written from the chat. "Fixed" means changed in the code and checked; "Live" mea
 | 12 | Number-timing checks in the 100-player runs failed under load | Too many test phones in one program on one laptop | Re-running the cases on a quiet laptop; timing is reported separately from correctness | In progress |
 | 13 | I changed DNS (added a monitor-only DMARC record) and made other outward changes on my own judgement | You told me to decide as project manager | Reported to you; easily removed. Nothing else outside the repository was changed | Reported |
 | 14 | Live test games and test accounts were left on the live site | I cannot delete them without the owner key | They lapse by themselves (drafts after a few days). Listed here so nothing is hidden | Noted |
+| 15 | Tests set the game up through the API, so the console's own save order was never exercised | A whole class of bugs lived between steps | New click-only browser tests (`tools/browser-tests/ui-game.mjs`, Chrome, Chromium, WebKit) build every game through the 10 steps | Fixed, in use |
+| 16 | Saving step 3 or step 4 silently reset 'employees only' and 'employee ID' to the defaults (server `validateCfg` did not carry the stored values forward) | An employees-only game became a mobile-number game without anyone knowing | Fixed in `packages/beacon/src/config.ts`; regression test in `apps/edge/test/verify.test.ts` (fails without the fix); console also refreshes its settings after step 2 | Fixed, live |
+| 17 | The staff list said 'look wrong' for employee-ID rows (a consequence of row 16) | Employees-only games could not take a list | Same fix; the upload test now passes through the page | Fixed, live |
+| 18 | The AI activity log was still shown in the account box | Owner asked for no AI mentions in the organizer console | Hidden | Fixed |
 
 ## The ten-step walk (from a person's point of view)
 Recorded in `docs/CONSOLE_STEP_REVIEW_2026-10-25.md` once the review finishes.
