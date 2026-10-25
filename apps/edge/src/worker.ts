@@ -259,6 +259,28 @@ async function body(req: Request, max = MAX_BODY): Promise<any | null> {
 }
 
 /** Free-plan guard: refuse politely before the daily write cap is hit, so a busy day never turns into a surprise failure or a bill. */
+/**
+ * The owner's own testing accounts (owner order 2026-10-25): a game made by one of these accounts, up to the size shown, is treated as already paid for (Rs 0), so the real site can be tested end to end
+ * at 100 or 250 people without anyone paying. Nothing about it is shown to the public: the size list is the same for everybody. An account is named by its e-mail address; `until` ends the permission.
+ * At most 3 unused free packs exist for an account at a time. No payment, invoice or mail is made. Remove an entry (or let `until` pass) to stop it.
+ */
+export const OWNER_TEST_FREE: { email: string; maxCap: number; until: number }[] = [
+  { email: "raajat.agarwal@gmail.com", maxCap: 1000, until: Date.UTC(2027, 0, 1) },
+  { email: "rajat_agarwal_imt@yahoo.com", maxCap: 1000, until: Date.UTC(2027, 0, 1) },
+  { email: "demo1@xyz.in", maxCap: 250, until: Date.UTC(2026, 10, 8) }, // the test sign-in (code always 123456, no mail): the only one the test program can use; ends on 8 Nov 2026
+];
+async function ownerTestGrant(env: Env, org: string, cap: number, now: number): Promise<boolean> {
+  for (const t of OWNER_TEST_FREE) {
+    if (now > t.until || cap > t.maxCap) continue;
+    const eh = await sha("email|" + t.email.trim().toLowerCase());
+    if (!(await env.DB.prepare("SELECT 1 AS x FROM organizer_email WHERE email_hash=? AND org=?").bind(eh, org).first())) continue;
+    const open = (await env.DB.prepare("SELECT COUNT(*) AS c FROM entitlement WHERE org=? AND payment_id='owner-test' AND eid IS NULL").bind(org).first<{ c: number }>())?.c ?? 0;
+    if (open >= 3) return true; // enough unused free packs already
+    await env.DB.prepare("INSERT INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,'owner-test',NULL,?)").bind("ot_" + randHex(6), org, t.maxCap, now).run();
+    return true;
+  }
+  return false;
+}
 async function spend(env: Env, now: number, n = 1): Promise<boolean> {
   const budget = Number(env.DAILY_WRITE_BUDGET ?? 80_000); // D1 free cap is 100,000 rows written per day; keep a 20% margin
   const d = day(now);
@@ -1252,6 +1274,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const have = await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(b.id).first<{ org: string | null }>();
     if (have) return json({ ok: true, existed: true }); // creating twice never overwrites (and never reveals whose it is)
     // an organizer needs a purchased engagement (entitlement) big enough for the limit they ask for; we (platform) do not. A demo game never uses up a bought pack.
+    if (!a.plat && !vc.cfg.demo && a.org) { try { await ownerTestGrant(env, a.org, b.cap, now); } catch { /* no grant: the game is a draft as for everybody */ } }
     const ent = a.plat || vc.cfg.demo ? null : await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(a.org, b.cap).first<{ id: string; pack: number }>();
     // no payment is needed to BUILD an engagement: without a purchased pack it is saved as a draft (pack 0) that participants cannot see or join;
     // payment is asked only when the organizer publishes it (POST /api/z/:id/publish)
