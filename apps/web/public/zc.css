@@ -210,3 +210,6 @@ a.zc-chip::before,.zc-chips .zc-chip[data-mode]::before{display:none}
 
 .zc-who{font-size:13px;color:var(--zc-ink2,#555);margin-right:10px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
 @media (max-width:520px){.zc-who{max-width:130px;font-size:12px}}
+
+/* the assistant strip is not shown in the console */
+#aistrip,.zc-ai{display:none !important}

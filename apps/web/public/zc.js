@@ -199,7 +199,7 @@
   const HINTS = {
     occ: "The kind of party. It becomes the name of your game.", day: "The day guests should be ready.", time: "The time guests should be ready (India time). The first number comes 2 minutes later.",
     mode: "Auto: the numbers come by themselves. Host: a person presses a button for each number.", tix: "How many tickets each person plays with.",
-    spd: "The gap between two numbers. 9 seconds is lively, 12 seconds is relaxed.", rnd: "How many full games in a row. Each round has new tickets and new numbers.",
+    spd: "The gap between two numbers. 9 seconds is lively, 12 seconds is relaxed.", rnd: "Rounds are games played one after the other.",
     ver: "What a person must type to get in.", per: "The most people one guest can invite.",
     cats: "The kinds of guests they may invite.", ties: "What happens when two people complete the same line on the same number.", emp: "Tick this for a staff-only game: only people on your list can play and nobody can invite anyone.",
   };
@@ -377,7 +377,7 @@
     const own = `<div class="zc-gap">${lbl("f-cap", "Or type your own number of players")}${inp("cap", { type: "number", ph: "For example 180", attrs: `inputmode="numeric" min="1" max="10000" step="1"` })}</div>`;
     return `<span class="zc-lbl zc-sec zc-sub">How many players</span>` + `<span class="zc-lbl" id="gl-cap">How many people at most?</span><div class="zc-chips" role="group" aria-labelledby="gl-cap">${caps}</div>` + own + small(demoNow ? "Invited guests count too. A game for 10 people or fewer is Rs 0: nothing to pay." : "Invited guests count too. The price is shown when you pay.")
       + `<span class="zc-lbl zc-sec zc-sub">How the game runs</span>` + grp("mode", "Who calls the numbers?", [["auto", "The software, at the chosen speed"], ["host", "A Host presses a button for each number"]])
-      + small(f.mode === "host" ? "You or a Host press <b>Next number</b> on Game day, when you are ready. The order of the numbers still comes from the public random numbers, so nobody can choose a number. For games of up to 2,000 people." : "A new number every few seconds, by itself. You pick the gap in the next step.")
+      + small(f.mode === "host" ? "You or a Host press <b>Next number</b> on Game day, when you are ready. The order of the numbers still comes from the public random numbers, so nobody can choose a number. For games of up to 2,000 people." : "A new number every few seconds, by itself. You pick the gap just below.")
       + (f.mode === "host" ? small("A Host presses a button for each number, so there is no fixed gap: you decide the pace on game day.", 'id="nospeed"') : grp("spd", "Duration (gap) between two numbers", spdOpts(f.spd)))
       + grp("tix", "Tickets for each person (participant)", [["1", "1 ticket"], ["2", "2 tickets (more chances)"]])
       + grp("rnd", "How many games in a row? (rounds)", [1, 2, 3, 4, 5].map((n) => [String(n), String(n)]))
@@ -515,8 +515,8 @@
   function roleCards(only) {
     const li = (ok, t) => `<li class="${ok ? "zc-yes" : "zc-no"}"><span aria-hidden="true">${ok ? "&#10003;" : "&#10007;"}</span> <span class="zc-sr">${ok ? "Can: " : "Cannot: "}</span>${t}</li>`;
     const card = (c, name, items) => `<div class="zc-role" style="background:var(--bg-tint-${c});color:var(--text-tint-${c})"><b>${name}</b><ul>${items.join("")}</ul></div>`;
-    const all = { organizer: card("blue", "Organizer", [li(1, "Everything in the game"), li(1, "Sign-in keys, e-mail, AI link, close account"), li(1, "Add Hosts and Co-hosts"), li(1, "Pay")]),
-      host: card("aqua", "Host", [li(1, "Change the game, prizes and brand moments"), li(1, "Publish and run the game day"), li(1, "See the guest list"), li(1, "Add Co-hosts"), li(1, "Pay"), li(0, "The account: keys, e-mail, AI link, close account"), li(0, "Add Hosts")]),
+    const all = { organizer: card("blue", "Organizer", [li(1, "Everything in the game"), li(1, "Sign-in keys, e-mail, close account"), li(1, "Add Hosts and Co-hosts"), li(1, "Pay")]),
+      host: card("aqua", "Host", [li(1, "Change the game, prizes and brand moments"), li(1, "Publish and run the game day"), li(1, "See the guest list"), li(1, "Add Co-hosts"), li(1, "Pay"), li(0, "The account: keys, e-mail, close account"), li(0, "Add Hosts")]),
       cohost: card("green", "Co-host", [li(1, "Invite people with their own link"), li(1, "See how many they brought"), li(1, "Pay"), li(0, "Change the game"), li(0, "See the guest list or any names"), li(0, "Add anyone")])};
     return `<div class="zc-roles">${only ? all[only] : all.organizer + all.host + all.cohost}</div>`;
   }
@@ -829,7 +829,7 @@
     if (!S.f) return small("Loading…");
     let h = `<span class="zc-lbl">Check your game</span>` + readBack();
     if (S.draft) {
-      h += `<div class="zc-block"><h3>Publish (free)</h3>${small(isFree10() ? "A game for 10 people or fewer costs <b>Rs 0</b>. Participants cannot see or join a draft. Publishing is free, and there is nothing to pay: the game starts on time by itself." : "Set it up first (by hand or with your AI). Participants cannot see or join a draft. Publishing is free: you confirm your details, get your link and send it to everyone. You pay before the start time, and it begins the moment you have.")}`
+      h += `<div class="zc-block"><h3>Publish (free)</h3>${small(isFree10() ? "A game for 10 people or fewer costs <b>Rs 0</b>. Participants cannot see or join a draft. Publishing is free, and there is nothing to pay: the game starts on time by itself." : "Set it up first. Participants cannot see or join a draft. Publishing is free: you confirm your details, get your link and send it to everyone. You pay before the start time, and it begins the moment you have.")}`
         + (S.pubOpen ? `${lbl("pubEmail", "Your e-mail (for the invoice)")}<input id="pubEmail" data-need="1" class="zc-in" type="email" value="${S.shield ? "" : esc(S.contact.email)}" autocomplete="email">${lbl("pubPhone", "Your mobile number")}<input id="pubPhone" data-need="1" class="zc-in" type="tel" value="${S.shield ? "" : esc(S.contact.phone)}" autocomplete="tel" placeholder="98765 43210">${CBConsent.html("K1")}<div class="zc-foot"><button class="zc-btn" type="button" id="pubgo" data-needs="K1" disabled aria-disabled="true">Confirm and publish</button> <button class="zc-btn zc-btn-alt" type="button" id="pubcancel">Back</button></div>`
           : `<div class="zc-foot"><button class="zc-btn" type="button" id="publishopen">Publish my game, free</button></div>`)
         + (S.pubNote ? `<p class="zc-small"><b>${esc(S.pubNote)}</b></p>` : "") + `</div>`;
@@ -1001,7 +1001,7 @@
     ["Is my guests' data safe?", "It is encrypted. Names and numbers are erased within 24 hours after the game."],
     ["What is a lucky draw?", "A draw during the game. The software picks the winners from everyone playing."],
     ["How do I stop the game?", "Open Game day and tap Pause or End. Organizer and Hosts can do this."],
-    ["Who can do what?", "The Organizer can do everything, including the account (keys, e-mail, AI link). A Host can do everything in the game except the account and adding Hosts. A Co-host invites people and can pay. Open step 5 to see it."],
+    ["Who can do what?", "The Organizer can do everything, including the account (keys, e-mail). A Host can do everything in the game except the account and adding Hosts. A Co-host invites people and can pay. Open step 5 to see it."],
     ["What is the big screen link?", "A page for a projector or TV. It shows numbers and winners only, never a guest's name or number. Copy it in step 6 and open it on the laptop connected to the screen."],
     ["What is the demo game?", "It is a real game for up to 10 people at Rs 0, with every feature of the console. Choose \"Demo game, 10 people, Rs 0\" in step 2. If you need more people later, choose a bigger size in step 8 and pay: the game carries on."],
     ["Can I get a refund?", "We do not give refunds. If you cancel a paid game before it starts, your payment stays in the Organizer's account as credit for the next game, for 365 days. Unused credit lapses at the end of day 365."],
