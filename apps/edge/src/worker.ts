@@ -175,7 +175,6 @@ export const SCHEMA: string[] = [
   // credit instead of refunds, games that did not start, create a game like this one (0018_credit_retention_clone.sql)
   ...CREDIT_SCHEMA,
   ...LEGAL_SCHEMA,
-  ...GAME_RECORD_SCHEMA,
   // one clear payment ledger for every product and website, plus the webhook log (0020_payment_ledger.sql)
   ...LEDGER_SCHEMA,
   // every Terms tick: who, which point, which game or payment, the Terms version, the boxes, a hash of the wording shown, the time (0021_consent.sql)
@@ -192,6 +191,8 @@ export const SCHEMA: string[] = [
   `CREATE INDEX IF NOT EXISTS bogey_eid ON bogey (eid, at_ms)`,
   `CREATE INDEX IF NOT EXISTS claim_eid_at ON claim (eid, at_ms)`,
   `CREATE TABLE IF NOT EXISTS partner_key (key_hash TEXT PRIMARY KEY, code TEXT NOT NULL, created_ms INTEGER NOT NULL)`, // Refer & earn: one key per phone or laptop that signed in by e-mail
+  // the permanent settings record of every game, no personal data in it (0028_game_record.sql)
+  ...GAME_RECORD_SCHEMA,
 ];
 
 const PATTERNS = new Set<string>([...HOUSE_ORDER.filter((k) => k !== "unlucky"), "lucky"]); // houses a phone may claim (Unlucky is never claimed: it is decided by comparing tickets)
