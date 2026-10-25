@@ -55,7 +55,7 @@ describe("the one-click sign-in link", () => {
     const row = raw.prepare("SELECT link_hash FROM login_code").get() as any; expect(row.link_hash).toBeTruthy();
     const ok = await link(r.devToken); const x = await j(ok);
     expect(ok.status).toBe(200); expect(x.token).toMatch(/^ctk_[0-9a-f]{48}$/);
-    expect((await call("GET", "/api/whoami", undefined, { "x-organizer": x.token })).status).toBe(200); expect(await j(await call("GET", "/api/whoami", undefined, { "x-organizer": x.token }))).toEqual({ kind: "master" });
+    expect((await call("GET", "/api/whoami", undefined, { "x-organizer": x.token })).status).toBe(200); expect(await j(await call("GET", "/api/whoami", undefined, { "x-organizer": x.token }))).toEqual({ kind: "master", email: "boss@acme.com" });
     expect((await call("GET", "/api/history", undefined, { "x-organizer": x.token })).status).toBe(200);
     const again = await link(r.devToken); expect(again.status).toBe(400);
     expect((await call("POST", "/api/auth/verify", { email: "boss@acme.com", code: r.devCode })).status).toBe(400); // the code died with the link

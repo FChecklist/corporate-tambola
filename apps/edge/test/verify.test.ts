@@ -49,6 +49,16 @@ describe("the settings", () => {
     s = await j(await call("GET", "/api/z/PPL-1/summary", undefined, t.master)); expect(s.employeesOnly).toBe(true); expect(s.invites.on).toBe(false); expect(s.whoCanJoin).toBe("list");
     expect((await call("PATCH", "/api/z/PPL-1/settings", { verify: "passport" }, t.master)).status).toBe(400);
   });
+  test("a later save that does not mention them (prizes, brand moments, tickets) keeps what a person must give and employees only", async () => {
+    const t = await setup({ verify: "id", employeesOnly: true });
+    const keep = async (what: string) => { const s = await j(await call("GET", "/api/z/PPL-1/summary", undefined, t.master)); expect([what, s.verify, s.employeesOnly, s.whoCanJoin]).toEqual([what, "id", true, "list"]); };
+    await keep("after setup");
+    expect((await call("PATCH", "/api/z/PPL-1/settings", { tickets: 1, ties: "next", rewards: [{ pattern: "early5", scope: "ticket", ordinal: 1, text: "" }] }, t.master)).status).toBe(200); await keep("after the prizes");
+    expect((await call("PATCH", "/api/z/PPL-1/settings", { tickets: 1, opening: [], breaks: [], closing: [] }, t.master)).status).toBe(200); await keep("after the brand moments");
+    expect((await call("PATCH", "/api/z/PPL-1/settings", { rounds: 2 }, t.master)).status).toBe(200); await keep("after the rounds");
+    expect((await call("PATCH", "/api/z/PPL-1/settings", { verify: "mobile", employeesOnly: false }, t.master)).status).toBe(200); // choosing differently still works
+    const s = await j(await call("GET", "/api/z/PPL-1/summary", undefined, t.master)); expect([s.verify, s.employeesOnly]).toEqual(["mobile", false]);
+  });
 });
 
 describe("employees only, ID alone", () => {
