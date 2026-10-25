@@ -65,36 +65,35 @@ const openStep = (p: Page, n: number) => p.click(`.zc-dot[data-open="${n}"]`);
 const file = (x: X, eid: string) => readPublished(x.kv, eid);
 
 describe("the console: who calls the numbers", () => {
-  test("step 1 offers the two plain choices; choosing the Host and saving stores callMode; step 2 then shows no speed chips; the read-back says so", async () => {
+  test("step 2 offers the two plain choices, before the gap; choosing the Host and saving stores callMode and hides the gap; the read-back says so", async () => {
     const x = await setup("HC-SET", false);
     const c = await consolePage(x, "HC-SET");
-    await c.waitFor((t) => /Who calls the numbers\?/.test(t));
+    await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /Who calls the numbers\?/.test(t) && /Duration \(gap\) between two numbers/.test(t));
     const chips = Array.from(c.win.document.querySelectorAll('[data-ck="mode"]')).map((e: any) => e.textContent.trim());
     expect(chips).toEqual(["The software, at the chosen speed", "A Host presses a button for each number"]);
     expect((c.$('[data-ck="mode"][data-v="auto"]') as any).className).toMatch(/\bon\b/);
-    openStep(c, 2); await c.waitFor((t) => /Duration \(gap\) between two numbers/.test(t)); // auto: the speed chips are there
-    expect(c.$('[data-ck="spd"]')).toBeTruthy();
-    openStep(c, 1); c.click('[data-ck="mode"][data-v="host"]'); await wait(50);
+    const html = c.win.document.getElementById("sec2")!.innerHTML; expect(html.indexOf('data-ck="mode"')).toBeLessThan(html.indexOf('data-ck="spd"')); // who calls the numbers comes first, then the gap
+    expect(c.$('[data-ck="spd"]')).toBeTruthy(); // auto: the speed chips are there
+    c.click('[data-ck="mode"][data-v="host"]'); await wait(50);
     expect(c.text()).toMatch(/press Next number on Game day/);
-    c.click('#sec1 [data-save="1"]');
+    expect(c.$('[data-ck="spd"]')).toBeNull(); expect(c.$("#nospeed")).toBeTruthy(); // host mode: no gap to choose
+    c.click('#sec2 [data-save="2"]');
     await c.waitFor((t) => /Saved\./.test(t));
     const sum = await x.w.json(await x.w.api("GET", "/api/z/HC-SET/summary", undefined, x.token));
     expect(sum.callMode).toBe("host");
     expect((await x.w.json(await x.w.api("GET", "/api/z/HC-SET/info"))).callMode).toBe("host");
-    openStep(c, 2); await c.waitFor((t) => /How many players/.test(t));
-    expect(c.$('[data-ck="spd"]')).toBeNull(); expect(c.$("#nospeed")).toBeTruthy(); // host mode: no gap to choose
     openStep(c, 7); await c.waitFor((t) => /a Host presses for each number/.test(t)); // the read-back
-    openStep(c, 1); await c.waitFor((t) => /Who calls the numbers\?/.test(t));
-    c.click('[data-ck="mode"][data-v="auto"]'); await wait(50); c.click('#sec1 [data-save="1"]'); // and back: the speed chips return once saved
+    openStep(c, 2); await c.waitFor((t) => /Who calls the numbers\?/.test(t));
+    c.click('[data-ck="mode"][data-v="auto"]'); await wait(50); c.click('#sec2 [data-save="2"]'); // and back: the speed chips return
     const until = async (f: () => Promise<boolean>) => { const t0 = Date.now(); while (!(await f())) { if (Date.now() - t0 > 8000) throw new Error("timed out"); await wait(100); } };
     await until(async () => (await x.w.json(await x.w.api("GET", "/api/z/HC-SET/info"))).callMode === "auto");
     openStep(c, 2); await c.waitFor((t) => /Duration \(gap\)/.test(t), 12_000);
   });
-  test("step 1 refuses host mode for a game above the size limit, with a guide to the fix", async () => {
+  test("step 2 refuses host mode for a game above the size limit, with a guide to the fix", async () => {
     const x = await setup("HC-BIG", false, { cap: 2500 });
     const c = await consolePage(x, "HC-BIG");
-    await c.waitFor((t) => /Who calls the numbers\?/.test(t));
-    c.click('[data-ck="mode"][data-v="host"]'); c.click('#sec1 [data-save="1"]');
+    await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /Who calls the numbers\?/.test(t));
+    c.click('[data-ck="mode"][data-v="host"]'); c.click('#sec2 [data-save="2"]');
     await c.waitFor((t) => /up to 2,000 people/.test(t));
     expect((await x.w.json(await x.w.api("GET", "/api/z/HC-BIG/info"))).callMode).toBe("auto");
   });

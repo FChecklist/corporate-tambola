@@ -304,7 +304,7 @@ describe("console (organizer page)", () => {
     const p = await consolePage(o, "UI-NOSEL"); await p.waitFor((x) => /Hello/.test(x));
     openStep(p, 4); p.click('[data-ck="opN"][data-v="1"]'); p.click('[data-ck="midN"][data-v="1"]'); p.click('[data-luckyadd]');
     for (let n = 1; n <= 10; n++) { openStep(p, n); expect([n, p.win.document.querySelectorAll("select").length]).toEqual([n, 0]); }
-    const qk = await page(o, "/zc?quick=1", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token }); await qk.waitFor((x) => /1\. Which game\?/.test(x)); expect(qk.win.document.querySelectorAll("select").length).toBe(0);
+    const qk = await page(o, "/zc?quickform=1", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token }); await qk.waitFor((x) => /1\. Which game\?/.test(x)); expect(qk.win.document.querySelectorAll("select").length).toBe(0);
     expect(readFileSync(new URL("../public/zc.js", import.meta.url), "utf8")).not.toMatch(/<select|createElement\(["']select/);
   });
   test("Prizes: ten popular prizes as chips plus 'I will decide later' and 'No prize'; the choice is saved as the words on the ticket and read back", async () => {
@@ -368,7 +368,7 @@ describe("console (organizer page)", () => {
     const p = await consolePage(o, "UI-PLAY", o.token, {}, { afterLoad: pw.hook }); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 2);
     expect(p.win.document.querySelectorAll('[data-ck="cap"]').length).toBe(9); expect(p.text()).toMatch(/Up to 100 people/); expect(p.text()).not.toMatch(/Rs [\d,]+(\.\d\d)? (with|including) GST/); /* no price while choosing the size */ expect(p.$("#f-cap")).toBeTruthy(); expect((p.$("#f-cap") as any).type).toBe("number"); expect(p.text()).toMatch(/Or type your own number of players/);
     p.click('[data-ck="tix"][data-v="2"]'); p.click('[data-ck="spd"][data-v="12"]'); p.click('[data-ck="rnd"][data-v="3"]'); p.click('[data-ck="who"][data-v="anyone"]');
-    expect(p.text()).not.toMatch(/How many people can each guest invite/); expect(p.text()).toMatch(/Tickets for each person \(participant\)/); expect(p.text()).toMatch(/Duration \(gap\) between two numbers/); expect(p.$('[data-ck="spd"][data-v="6"]')).toBeNull(); expect(p.$('[data-ck="spd"][data-v="15"]')).toBeNull(); expect(p.$('[data-ck="spd"][data-v="9"]')).toBeTruthy(); expect(p.text()).toMatch(/How many rounds \(games in a row\)\?/); expect(p.text()).toMatch(/One round is one full game of 90 numbers/); expect(p.text()).toMatch(/Anyone who clicks your link joins straight away/);
+    expect(p.text()).not.toMatch(/How many people can each guest invite/); expect(p.text()).toMatch(/Tickets for each person \(participant\)/); expect(p.text()).toMatch(/Duration \(gap\) between two numbers/); expect(p.$('[data-ck="spd"][data-v="6"]')).toBeNull(); expect(p.$('[data-ck="spd"][data-v="15"]')).toBeNull(); expect(p.$('[data-ck="spd"][data-v="9"]')).toBeTruthy(); expect(p.text()).toMatch(/How many games in a row\? \(rounds\)/); expect(p.text()).toMatch(/One round is one full game of 90 numbers/); expect(p.text()).toMatch(/Anyone who clicks your link joins straight away/);
     p.click('[data-bool="inv"]'); const t = p.text();
     expect(t).toMatch(/Can guests bring their own people\?/); expect(t).toMatch(/The people they invite can play, but cannot invite anyone else\./); expect(t).toMatch(/You, Hosts and Co-hosts: invite as many as you like\./); expect(t).toMatch(/A guest: up to 4 people\./); expect(t).toMatch(/A person a guest invited: can play, cannot invite\./);
     p.click('[data-ck="per"][data-v="2"]'); p.click('[data-ck="cats"][data-v="friends"]'); p.click('[data-ck="cats"][data-v="family"]');
@@ -970,7 +970,7 @@ describe("the free demo game", () => {
 });
 
 describe("the console for an AI that works in the browser", () => {
-  const quickPage = (o: O, session: Record<string, string> = {}) => page(o, `/zc?quick=1`, "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com", ...session });
+  const quickPage = (o: O, session: Record<string, string> = {}) => page(o, `/zc?quickform=1`, "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com", ...session });
   const until = async (cond: () => boolean, ms = 20000) => { const t0 = Date.now(); while (!cond()) { if (Date.now() - t0 > ms) throw new Error("timed out"); await new Promise((r) => setTimeout(r, 100)); } };
   const set = (p: any, sel: string, v: string) => { const el = p.$(sel) as any; el.value = v; el.dispatchEvent(new p.win.Event("input", { bubbles: true })); el.dispatchEvent(new p.win.Event("change", { bubbles: true })); };
 
@@ -1013,6 +1013,14 @@ describe("the console for an AI that works in the browser", () => {
     expect(doc.querySelector('[data-fi="mid.0.t"]')!.getAttribute("id")).toBe("f-mid-0-t"); // the brand-moment rows have stable names
     const btn = p.$('[data-save="4"]') as any; await new Promise((r) => setTimeout(r, 6000)); expect(btn.isConnected).toBe(true); expect(p.$('[data-save="4"]')).toBe(btn); // the 5-second refresh did not replace the page's elements
   }, 90_000);
+
+  test("the old Quick setup link (?quick=1) now makes a game in the colourful console, and the Organizer's e-mail address is shown at the top right", async () => {
+    const o = await organizer();
+    const p = await page(o, "/zc?quick=1", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage });
+    await p.waitFor((x) => /Your game at a glance/.test(x) && /Your draft is saved/.test(x), 15000);
+    expect(p.$("#whoemail")!.textContent).toContain("@"); // the address the account was made with /* the address the account was made with */
+    expect(p.$('[data-open="1"]')).toBeTruthy(); expect(p.text()).not.toMatch(/1\. Which game\?/);
+  }, 60_000);
 
   test("a new organizer with no game gets the first game made for them with the size chosen on the website (250), and the colourful ten-step console opens (one way to make a game: Create a new game)", async () => {
     const o = await organizer();
@@ -1655,7 +1663,7 @@ describe("console: prize houses from the one table (ZG.PRIZE_HOUSES)", () => {
   });
 
   test("Quick setup lists the same houses with their how-to line, limits the winners and saves a new house", async () => {
-    const o = await organizer(); const p = await page(o, "/zc?quick=1", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token }); await p.waitFor((x) => /1\. Which game\?/.test(x));
+    const o = await organizer(); const p = await page(o, "/zc?quickform=1", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token }); await p.waitFor((x) => /1\. Which game\?/.test(x));
     const want = PRIZE_HOUSES.filter((h) => h.id !== "full2"); expect(p.win.document.querySelectorAll("[id^=qk-h-]").length).toBe(want.length);
     expect(p.$("#qk-h-odd5")!.closest(".zc-box")!.querySelector(".zc-how")!.textContent).toBe(PRIZE_HOUSES.find((h) => h.id === "odd5")!.how);
     expect(p.win.document.querySelectorAll('[data-ck="hs.full.n"]').length).toBe(7);

@@ -207,3 +207,6 @@ a.zc-chip::before,.zc-chips .zc-chip[data-mode]::before{display:none}
 .zc-qa{margin:0}.zc-qa dt{font-weight:700;margin-top:10px}.zc-qa dd{margin:2px 0 0;color:#374151;line-height:1.5}
 .zc-note2{margin-top:10px;background:#F5F4FF;border:1px solid #D9D6FF;border-radius:10px;padding:10px 14px}
 .zc-note2 span{display:block;margin-top:4px}
+
+.zc-who{font-size:13px;color:var(--zc-ink2,#555);margin-right:10px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
+@media (max-width:520px){.zc-who{max-width:130px;font-size:12px}}

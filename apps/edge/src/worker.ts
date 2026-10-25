@@ -265,9 +265,7 @@ async function body(req: Request, max = MAX_BODY): Promise<any | null> {
  * At most 3 unused free packs exist for an account at a time. No payment, invoice or mail is made. Remove an entry (or let `until` pass) to stop it.
  */
 export const OWNER_TEST_FREE: { email: string; maxCap: number; until: number }[] = [
-  { email: "raajat.agarwal@gmail.com", maxCap: 1000, until: Date.UTC(2027, 0, 1) },
-  { email: "rajat_agarwal_imt@yahoo.com", maxCap: 1000, until: Date.UTC(2027, 0, 1) },
-  { email: "demo1@xyz.in", maxCap: 250, until: Date.UTC(2026, 10, 8) }, // the test sign-in (code always 123456, no mail): the only one the test program can use; ends on 8 Nov 2026
+  { email: "demo1@xyz.in", maxCap: 250, until: Date.UTC(2026, 10, 8) }, // the test sign-in (code always 123456, no mail): used only by the test programs; ends on 8 Nov 2026. The owner's real addresses are NOT on this list: they see the real, unpaid first-time flow.
 ];
 async function ownerTestGrant(env: Env, org: string, cap: number, now: number): Promise<boolean> {
   for (const t of OWNER_TEST_FREE) {
@@ -951,7 +949,11 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const r = await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE org=? AND substr(hash,1,10)=? AND revoked=0").bind(a.org, id).run();
     return json({ ok: true, revoked: r.meta?.changes ?? 0 });
   }
-  if (req.method === "GET" && p === "/api/whoami") return a.kind ? json({ kind: a.kind, ...(a.kind === "host" && !a.viaLink ? { ready: a.hostReady === true } : {}) }) : deny(a); // the console uses this to show the right screen
+  if (req.method === "GET" && p === "/api/whoami") { // the console uses this to show the right screen; the Organizer also gets their own e-mail address, shown at the top right
+    if (!a.kind) return deny(a);
+    let who: string | undefined; if (a.kind === "master" && a.org) { try { const sealed = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`orgmail/${a.org}`).first<{ v: string }>(); who = (await openText(env as any, sealed?.v)) || undefined; } catch { who = undefined; } }
+    return json({ kind: a.kind, ...(who ? { email: who } : {}), ...(a.kind === "host" && !a.viaLink ? { ready: a.hostReady === true } : {}) });
+  } // the console uses this to show the right screen
   if (req.method === "POST" && p === "/api/host/become-organizer") { // a Host who also wants to run their own games: the same e-mail gets an Organizer account (Terms box K2), and the person then holds both roles
     if (a.kind !== "host" || a.viaLink || !a.hid || a.hostReady === false) return deny(a);
     const row = await identityRow(env.DB, a.hid), mail = row?.email_sealed ? await openText(env as any, row.email_sealed) : null;
