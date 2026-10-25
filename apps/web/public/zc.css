@@ -29,6 +29,8 @@
 .zc-body{display:grid;grid-template-columns:230px minmax(0,1fr)}
 .zc-side{border-right:1px solid var(--zc-line);padding:12px;background:var(--zc-soft)}
 .zc-main{padding:12px;min-width:0}
+.zc-body:not(:has(.zc-side)){grid-template-columns:minmax(0,1fr)} /* no side menu (dashboard, Quick setup): the page is not squeezed into the menu column */
+.zc-body:not(:has(.zc-side)) .zc-main{max-width:980px;width:100%;margin:0 auto;padding:16px 18px}
 .zc-me{display:flex;gap:8px;align-items:center;margin-bottom:10px;font-size:12px}
 .zc-syn{display:flex;gap:8px;align-items:flex-start;width:100%;text-align:left;padding:7px 6px;border-radius:8px;cursor:pointer;font-size:12px;border:0;background:transparent;color:var(--zc-ink)}
 .zc-syn.act{background:#fff;outline:1px solid var(--zc-line)}

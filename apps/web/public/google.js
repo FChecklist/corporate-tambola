@@ -64,7 +64,7 @@
   /** What the e-mail-code sign-in does after a good code: keep the key for this tab and go on to the console (or the page that sent the person here). */
   function finish(r) {
     try { CTK.set("ctz-org", r.token); } catch {}
-    let nx = "/zc.html"; try { const n = sessionStorage.getItem("ctz-next"); if (n && /^\/(zc|pay)(\.html)?(\?e=[A-Za-z0-9_-]{4,40})?$/.test(n)) nx = n; sessionStorage.removeItem("ctz-next"); } catch {}
+    let nx = "/zc.html"; try { const n = sessionStorage.getItem("ctz-next"); if (n && /^\/(zc|pay)(\.html)?(\?(e=[A-Za-z0-9_-]{4,40}|demo=1|quick=1(&cap=\d{1,5})?))?$/.test(n)) nx = n; sessionStorage.removeItem("ctz-next"); } catch {}
     location.href = nx;
   }
   TB.google = { config, mount, finish, LINE };

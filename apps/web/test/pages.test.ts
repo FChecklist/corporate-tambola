@@ -1025,6 +1025,19 @@ describe("the console for an AI that works in the browser", () => {
     expect(sm).toMatchObject({ limit: 10, demo: true }); // a demo game: free, no payment asked at the start
   }, 60_000);
 
+  test("Quick setup has every main choice: who calls the numbers (auto or manual with a Host), what a person must give to get in, and employees only (found when the owner looked at the live page, 25 Oct 2026)", async () => {
+    const o = await organizer(); const p = await quickPage(o); await p.waitFor((x) => /1\. Which game\?/.test(x) && /Who calls the numbers\?/.test(x) && /What must a person give to get in\?/.test(x) && /Only my employees/.test(x));
+    expect(p.text()).toMatch(/A Host presses a button for each number \(manual\)/); expect(p.text()).toMatch(/The software, at the chosen speed \(auto\)/);
+    const tomorrow = new Date(Date.now() + 5.5 * 3600000 + 2 * 86400000); const d = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
+    set(p, "#qk-name", "Manual game"); set(p, "#qk-date", d); set(p, "#qk-time", "18:30");
+    p.click('[data-ck="cap"][data-v="100"]'); p.click('[data-ck="mode"][data-v="host"]'); p.click('[data-ck="ver"][data-v="both"]'); p.click('[data-bool="emp"]');
+    await until(() => /a Host presses each number; employees only; people give their mobile number and employee ID/.test(p.text()), 8000).catch(() => { throw new Error("summary was: " + (p.$("#qk-summary") as any)?.textContent); });
+    p.click("#qk-save"); await p.waitFor((x) => /Your draft is saved/.test(x), 8000).catch(() => { throw new Error("save failed; error box: " + (p.$("#qk-err") as any)?.textContent + " | errors: " + p.errors.join("; ")); });
+    const hist = await o.json(await o.api("GET", "/api/history", undefined, o.aiKey)); const id = hist.engagements[0].id;
+    const sm = await o.json(await o.api("GET", `/api/z/${id}/summary`, undefined, o.aiKey));
+    expect(sm).toMatchObject({ limit: 100, callMode: "host", verify: "both", employeesOnly: true });
+  }, 60_000);
+
   test("Quick setup: real date and time pickers, the first steps as one form of tap choices; saving makes the draft with the right start, size, tickets, prizes and name, then opens it", async () => {
     const o = await organizer(); const p = await quickPage(o); await p.waitFor((x) => /1\. Which game\?/.test(x) && /Up to 250 people/.test(x)); const doc = p.win.document;
     expect((p.$("#qk-date") as any).type).toBe("date"); expect((p.$("#qk-time") as any).type).toBe("time"); // real pickers

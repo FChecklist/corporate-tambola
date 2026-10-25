@@ -59,6 +59,8 @@
         "ctz-alt",
         "ctz-board-*",
         "ctz-next",
+        "ctz-cap",
+        "ctz-qauto",
         "ctz-login-email",
         "ctz-aimsg",
         "ctz-email",
