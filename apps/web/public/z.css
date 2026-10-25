@@ -79,7 +79,7 @@ a.zbtn#addcal{margin-left:6px}
 .spriv{margin:8px 0 0;text-align:center;font-size:12px;line-height:1.3;font-weight:400}.spriv a{color:var(--muted,#6b7385);font-weight:400;text-decoration:underline}
 
 .spriv.accept{font-size:12px}
-.zdemotag{display:inline-block;background:#E4572E;color:#fff;font:800 12px/1 system-ui,sans-serif;letter-spacing:.12em;padding:4px 7px;border-radius:6px;vertical-align:middle}
+.zdemotag{display:inline-block;background:#C2410C;color:#fff;font:800 12px/1 system-ui,sans-serif;letter-spacing:.12em;padding:4px 7px;border-radius:6px;vertical-align:middle}
 .zdemo{border:2px dashed #E4572E}
 /* a DEMO GAME (the organizer's free game): the words DEMO GAME run diagonally across the whole ticket, see-through, so the numbers stay readable */
 .zticket.zdemogame{position:relative;overflow:hidden}
