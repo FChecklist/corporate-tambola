@@ -1407,7 +1407,7 @@ describe("console: About this step write-ups (spec 4, A)", () => {
     const want = ["You can see the game and what you may do.", "Add your people. Each gets their own WhatsApp link. You can bring up to your limit.", "One payment is enough. If someone has paid, you will see Paid."];
     for (let n = 1; n <= 3; n++) { openStep(c, n); expect(c.$(`#sec${n} .zc-about span`)!.textContent).toBe(want[n - 1]); expect(c.$(`#sec${n} .zc-about b`)!.textContent).toBe("About this step"); }
     const p = await consolePage(o, "UI-ABC"); await p.waitFor((x) => /Last step|Your game|Hello/i.test(x));
-    expect(p.$("#acct .zc-hint")!.textContent).toBe("These are for the Organizer only: your AI link, sign-in keys and records. Closing your account deletes your games.");
+    expect(p.$("#acct .zc-hint")!.textContent).toBe("These are for the Organizer only: your sign-in keys and records. Closing your account deletes your games.");
   });
   test("zc.css: the box is 12px grey-brown text, and nothing in zc.css sets text below 11px", () => {
     const css = readFileSync(join(import.meta.dir, "../public/zc.css"), "utf8");
