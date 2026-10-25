@@ -9,7 +9,7 @@ import type { PayEnv } from "./pay";
 
 export function sqliteD1(file: string): { db: D1; raw: Database } {
   const raw = new Database(file, { create: true });
-  raw.run("PRAGMA journal_mode=WAL");
+  raw.run("PRAGMA journal_mode=WAL"); raw.run("PRAGMA busy_timeout=5000"); // a test tool reading the file at the same moment must not make a write fail
   for (const s of SCHEMA) { try { raw.run(s); } catch (e: any) { if (!/duplicate column name/i.test(String(e?.message))) throw e; } } // an ALTER for a column the CREATE already has (older databases need the ALTER) is not an error
   const stmt = (sql: string, vals: unknown[] = []): D1Stmt => ({
     bind: (...v) => stmt(sql, v),

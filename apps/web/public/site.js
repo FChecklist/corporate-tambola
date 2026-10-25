@@ -119,7 +119,7 @@
   TB.api("GET", "/api/payments/status").then((s) => { PAYMODE = s.mode; }).catch(() => {});
   // ---------- free launch: create an organizer account with a work email; the key arrives only through the e-mailed code ----------
   function openFree() {
-    try { if (Number.isInteger(S.pack) && S.pack > 10) { sessionStorage.setItem("ctz-next", "/zc.html?quick=1&cap=" + S.pack); sessionStorage.setItem("ctz-cap", String(S.pack)); } } catch {} // the size chosen on the website carries through the sign-in: Quick setup opens with it
+    try { if (Number.isInteger(S.pack) && S.pack > 10) { sessionStorage.setItem("ctz-cap", String(S.pack)); } } catch {} // the size chosen on the website carries through the sign-in: Quick setup opens with it
     TB.sheet(`${xbtn}<div class="openfree" role="group" aria-labelledby="ofTitle">
       <div class="sheethead"><span class="rolepill">For the organizer or host</span><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><img src="/logo-mark.svg" alt="" width="26" height="26"></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
       <div class="eyebrow ofeye">Build it and publish it free.</div><h2 id="ofTitle">Create your engagement</h2>

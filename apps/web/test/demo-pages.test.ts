@@ -129,7 +129,7 @@ describe("the website's way in: Start a free demo game", () => {
     expect(r.cap).toBe(10); expect(JSON.parse(r.config || "{}").demo).toBe(true);
     await p.waitFor((x) => /Up to 10, 1 ticket/.test(x), 15000); // the summary comes with the game screen, a moment after the "draft is saved" note
     const p2 = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" });
-    await p2.waitFor((x) => /Start a new game/.test(x), 15000);
-    expect(p2.$("#mkdemo")).toBeTruthy(); expect(p2.text()).toMatch(/A demo game is a real game for 10 people at Rs 0/);
+    await p2.waitFor((x) => /Create a new game/.test(x), 15000);
+    expect(p2.$("#mk")).toBeTruthy(); expect(p2.$("#mkdemo")).toBeNull(); expect(p2.text()).toMatch(/Up to 10 people is a free demo game/);
   });
 });

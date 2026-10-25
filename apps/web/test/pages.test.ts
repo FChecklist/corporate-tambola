@@ -300,7 +300,7 @@ describe("console (organizer page)", () => {
   });
   test("no drop-down list anywhere in the console: not on the home page, not in any of the ten steps, not in Quick setup, and none in the script", async () => {
     const o = await organizer(); await make(o, "UI-NOSEL");
-    const home = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage }); await home.waitFor((x) => /Start a new game/.test(x)); expect(home.win.document.querySelectorAll("select").length).toBe(0);
+    const home = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage }); await home.waitFor((x) => /Create a new game/.test(x)); expect(home.win.document.querySelectorAll("select").length).toBe(0);
     const p = await consolePage(o, "UI-NOSEL"); await p.waitFor((x) => /Hello/.test(x));
     openStep(p, 4); p.click('[data-ck="opN"][data-v="1"]'); p.click('[data-ck="midN"][data-v="1"]'); p.click('[data-luckyadd]');
     for (let n = 1; n <= 10; n++) { openStep(p, n); expect([n, p.win.document.querySelectorAll("select").length]).toEqual([n, 0]); }
@@ -1014,6 +1014,16 @@ describe("the console for an AI that works in the browser", () => {
     const btn = p.$('[data-save="4"]') as any; await new Promise((r) => setTimeout(r, 6000)); expect(btn.isConnected).toBe(true); expect(p.$('[data-save="4"]')).toBe(btn); // the 5-second refresh did not replace the page's elements
   }, 90_000);
 
+  test("a new organizer with no game gets the first game made for them with the size chosen on the website (250), and the colourful ten-step console opens (one way to make a game: Create a new game)", async () => {
+    const o = await organizer();
+    const p = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-cap": "250" });
+    await p.waitFor((x) => /Your game at a glance/.test(x) && /Your draft is saved/.test(x), 15000);
+    const hist = await o.json(await o.api("GET", "/api/history", undefined, o.aiKey)); expect(hist.engagements.length).toBe(1);
+    const sm = await o.json(await o.api("GET", `/api/z/${hist.engagements[0].id}/summary`, undefined, o.aiKey));
+    expect(sm).toMatchObject({ limit: 250, status: "draft" });
+    expect(p.$('[data-open="1"]')).toBeTruthy(); expect(p.$("#mkdemo")).toBeNull();
+  }, 60_000);
+
   test("Quick setup: choosing \"Up to 10 people\" makes the free DEMO game (found by the live test of 25 Oct 2026: it was made as a paid game and locked at the start time)", async () => {
     const o = await organizer(); const p = await quickPage(o); await p.waitFor((x) => /1\. Which game\?/.test(x) && /Up to 10 people/.test(x));
     const tomorrow = new Date(Date.now() + 5.5 * 3600000 + 2 * 86400000); const d = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
@@ -1252,7 +1262,7 @@ describe("console phase 2: wording fixes, My people, waiting room, remove, play 
     expect((await o.json(await o.api("GET", "/api/z/UI-WHO/summary", undefined, o.token))).whoCanJoin).toBe("list");
     openStep(p, 2); p.click('[data-ck="who"][data-v="anyone"]'); expect(p.text()).toMatch(/joins straight away/); p.click('[data-save="2"]'); await p.waitFor((x) => /Saved\./.test(x));
     expect((await o.json(await o.api("GET", "/api/z/UI-WHO/summary", undefined, o.token))).whoCanJoin).toBe("anyone");
-    const home = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage }, { afterLoad: w.hook }); await home.waitFor((x) => /Start a new game/.test(x));
+    const home = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage }, { afterLoad: w.hook }); await home.waitFor((x) => /Create a new game/.test(x));
     home.click("#mk"); await home.waitFor(() => w.st.posts.length > 0); expect(w.st.posts[0].whoCanJoin).toBe("list");
     const made = new URLSearchParams(await (async () => { for (let i = 0; i < 100 && !/e=/.test(home.win.location.search); i++) await new Promise((r) => setTimeout(r, 40)); return home.win.location.search; })()).get("e")!;
     expect((await o.json(await o.api("GET", `/api/z/${made}/summary`, undefined, o.token))).whoCanJoin).toBe("list");
@@ -1709,7 +1719,7 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
       { id: "c1", amountInr: 2399, remainingInr: 1000, createdMs: Date.parse("2026-06-14T12:00:00+05:30"), expiresMs: Date.parse("2027-06-14T12:00:00+05:30"), status: "active", sourceGame: "OLD-1", uses: [] },
       { id: "c2", amountInr: 2399, remainingInr: 0, createdMs: Date.parse("2026-01-10T12:00:00+05:30"), expiresMs: Date.parse("2027-01-10T12:00:00+05:30"), status: "used", sourceGame: "OLD-2", uses: [{ game: "NEW-1", amountInr: 2399, atMs: Date.parse("2026-03-01T12:00:00+05:30") }] },
       { id: "c3", amountInr: 500, remainingInr: 500, createdMs: Date.parse("2025-01-10T12:00:00+05:30"), expiresMs: Date.parse("2026-01-10T12:00:00+05:30"), status: "expired", sourceGame: "OLD-3", uses: [] }] }) });
-    const p = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage }, { afterLoad: w.hook }); await p.waitFor((x) => /Your credit/.test(x));
+    const p = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-qauto": "1" }, { afterLoad: w.hook }); await p.waitFor((x) => /Your credit/.test(x)); // the dashboard, not the first game that a new organizer gets made for them
     const t = p.$("#creditsblock")!.textContent as string; expect(t).toMatch(/Rs 1,000\.00 of Rs 2,399\.00/); expect(t).toMatch(/valid until 14 Jun 2027/); expect(t).toMatch(/Active/); expect(t).toMatch(/used 1 Mar 2026 for NEW-1/); expect(t).toMatch(/Used/); expect(t).toMatch(/lapsed on 10 Jan 2026/); expect(t).toMatch(/Lapsed/);
     expect(t).toMatch(/We do not give refunds\. If you cancel a paid game before it starts, your payment stays in the Organizer's account as credit for the next game, for 365 days\. Unused credit lapses at the end of day 365\./);
   });
@@ -1740,7 +1750,7 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     p.click('[data-save="1"]'); await p.waitFor((x) => /Pick the day and the time/.test(x)); // the date is never copied, it must be picked
     p.click('[data-ck="day"][data-v="other"]'); const d = new Date(Date.now() + 5.5 * 3600000 + 3 * 86400000); setField(p, "#f-dayo", d.toISOString().slice(0, 10)); p.click('[data-ck="time"][data-v="18:00"]'); p.click('[data-save="1"]'); await p.waitFor((x) => /Saved\./.test(x));
     expect(p.$("#newgameread")).toBeNull();
-    const home = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage }, { afterLoad: w.hook }); await home.waitFor((x) => /Start a new game/.test(x)); home.click('[data-hist="1"]'); await home.waitFor(() => !!home.$('[data-clonebtn][data-from="UI-OLD1"]'));
+    const home = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage }, { afterLoad: w.hook }); await home.waitFor((x) => /Create a new game/.test(x)); home.click('[data-hist="1"]'); await home.waitFor(() => !!home.$('[data-clonebtn][data-from="UI-OLD1"]'));
     home.click('[data-clonebtn][data-from="UI-OLD1"]'); await home.waitFor(() => !!home.$("#clonepanel")); expect(home.$("#clonepeople")).toBeTruthy();
     const h = await consolePage(o, "UI-OLD1", await hostKey(o)); await h.waitFor(() => !!h.$('.zc-dot[data-open="7"]')); openStep(h, 7); expect(h.$("[data-clonebtn]")).toBeTruthy(); // a Host has it too
     const c = await consolePage(o, "UI-OLD1", await cohostKey(o, "UI-OLD1")); await c.waitFor((x) => /Hi\. Here is the game/.test(x)); for (let n = 1; n <= 3; n++) openStep(c, n); expect(c.$("[data-clonebtn]")).toBeNull();
