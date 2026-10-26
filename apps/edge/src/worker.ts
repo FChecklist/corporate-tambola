@@ -2087,6 +2087,10 @@ export async function retentionSweep(env: Env, now: number): Promise<void> {
     const r = await db.prepare("SELECT k, v FROM kv WHERE k LIKE 'penr/%' OR k LIKE 'delreq/%' LIMIT 2000").all<{ k: string; v: string }>();
     for (const x of r.results ?? []) { let t = 0; try { t = JSON.parse(x.v).t ?? 0; } catch { /* unreadable: drop it */ } if (now - t > DAY) await db.prepare("DELETE FROM kv WHERE k=?").bind(x.k).run(); }
   });
+  await safe(async () => { // a demo-pass secret held for a sign-in that never finished (see holdPassForSignIn): usable for 2 hours, so nothing older may stay
+    const r = await db.prepare("SELECT k, v FROM kv WHERE k LIKE 'loginpass/%' LIMIT 2000").all<{ k: string; v: string }>();
+    for (const x of r.results ?? []) { let at = 0; try { at = Number(JSON.parse(x.v).at) || 0; } catch { /* unreadable: drop it */ } if (now - at > 2 * 3_600_000) await db.prepare("DELETE FROM kv WHERE k=?").bind(x.k).run(); }
+  });
   await safe(() => db.prepare("DELETE FROM kv WHERE (k LIKE 'seen/%' OR k LIKE 'alert/%') AND substr(k, instr(k, '/') + 1) NOT IN (SELECT substr(hash, 1, 10) FROM organizer_key WHERE revoked=0 AND (expires_ms IS NULL OR expires_ms > ?))").bind(now).run());
   await safe(() => db.prepare("DELETE FROM organizer_key WHERE expires_ms IS NOT NULL AND expires_ms < ?").bind(now - 7 * DAY).run());
   await safe(() => db.prepare("DELETE FROM organizer_key WHERE revoked=1 AND created_ms < ?").bind(now - 90 * DAY).run());
