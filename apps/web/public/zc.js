@@ -637,7 +637,7 @@
     const P = S.pp; if (P.sentFor !== eid) { P.sentFor = eid; P.me = null; P.meNeed = false; try { P.sent = JSON.parse(ls.get(sentKey()) || "{}") || {}; } catch { P.sent = {}; } }
     try {
       const r = await call("GET", `/api/z/${eid}/people`), all = (r.people || []).slice();
-      while (all.length < (Number(r.total) || 0)) { const more = await call("GET", `/api/z/${eid}/people?offset=${all.length}`); if (!(more.people || []).length) break; all.push(...more.people); } // a long list arrives in pages
+      let last = (r.people || []).length; while (last >= 200) { const more = await call("GET", `/api/z/${eid}/people?offset=${all.length}`), rows = more.people || []; last = rows.length; all.push(...rows); } // a long list arrives in pages of 200, removed rows included: stop on a short page
       P.list = all; P.limit = role() === "cohost" ? Number(r.limit) || 100 : 0; P.used = typeof r.used === "number" ? r.used : null; P.common = r.commonLink || ""; P.canExport = !!r.canExport; P.err = "";
     } catch (e) { P.list = null; P.err = e.status === 404 || e.status === 405 ? "My people list is not switched on yet. Please try again a little later." : friendly(e); }
     try { const w = await call("GET", `/api/z/${eid}/waiting`); P.waiting = w.waiting || []; P.approved = w.approved || []; } catch { P.waiting = null; }
@@ -791,7 +791,7 @@
       <div class="zc-block"><h3>Number screen for the room or a meeting</h3><div class="zc-linkrow"><span class="zlink" id="biglink">${esc(bigLink())}</span><button type="button" class="zc-mini" id="copybig">Copy the link</button></div>
         <a class="zc-chip zc-gap" href="${esc(bigLink())}" target="_blank" rel="noopener">Open the number screen</a>${small("Show it on a big screen, or share it in Google Meet, Zoom or Teams. It shows only the number just called and the prizes: players never see the earlier numbers.")}<details class="zc-small" id="meetinghow"><summary>Optional: how to play it over Google Meet, Zoom or Teams</summary><ol style="margin:6px 0 0 18px;padding:0"><li>Start your Google Meet, Zoom or Teams call as usual. Everyone talks there, as always.</li><li>Paste the guest link in the meeting chat (or send it on WhatsApp). Each person opens it on their own phone and gets their ticket. The phone shows only the number just called.</li><li>Share your screen in the meeting and show the <b>number screen</b> (console, step 6: &ldquo;Open the number screen&rdquo;). It shows the number just called and the prizes, never names or numbers.</li><li>Choose who calls the numbers before the start (step 1): the software at a steady speed, or you press <b>Next number</b> yourself while you talk. You cannot change this once the game has started.</li><li>Brand breaks and your speech play on every phone. The software finds the winners and shows them on the number screen, so you can announce them in the call.</li></ol><p>Nothing is installed in the meeting app; the game runs alongside the call.</p></details></div>
       <div class="zc-block"><h3>My board (only for you)</h3>${small("The housie board with every number already called, like the real game. Only you, a Host or a Co-host can open it. Do not share this window.")}<a class="zc-chip zc-gap" id="myboard" href="${esc(location.origin + "/board.html?e=" + encodeURIComponent(eid) + "#k=" + encodeURIComponent(secret || ""))}" target="_blank" rel="noopener">Open my board</a></div>
-      ${peopleBlock()}${playBlock()}
+      ${peopleBlock()}
       ${cont(6)}`;
   }
 
@@ -1560,10 +1560,11 @@
     });
   };
   function applyBundle(b) { applyBundleTo(S.f, b); }
+  const markHsDirty = (path) => { if (/^hs\.[a-z0-9]+\.(pd|per\.\d+\.pd)$/.test(path)) S.f.hs[path.split(".")[1]].dirty = true; }; // a changed prize text (typed, or the cash amount or currency) is sent on Save, not the saved one
   function onField(el) {
     const path = el.dataset.fi;
     setP(path, el.value);
-    if (/^hs\.[a-z0-9]+\.(pd|per\.\d+\.pd)$/.test(path)) S.f.hs[path.split(".")[1]].dirty = true;
+    markHsDirty(path);
     const lk = document.querySelector(`[data-lk="${path.replace(/\.(v|t|s)$/, "")}"]`);
     if (lk && /\.v$/.test(path)) lk.innerHTML = noteHtml(path.replace(/\.v$/, ""));
     const bm = document.getElementById("bmcount"); if (bm && S.f) bm.textContent = `${usedMoments()} of ${5 * (Number(S.f.tix) || 1)}`;
@@ -1616,8 +1617,8 @@
     all("[data-ck]", (b) => (b.onclick = () => chipClick(b)));
     all("[data-bool]", (b) => (b.onclick = () => { setP(b.dataset.bool, !getP(b.dataset.bool)); if (/^hs\.[a-z0-9]+\.diff$/.test(b.dataset.bool)) { const h = S.f.hs[b.dataset.bool.split(".")[1]]; h.dirty = true; if (h.diff) perFill(h); } redraw(); if ($("qk-summary")) quickSummary(); }));
     all("[data-fi]", (el) => (el.oninput = () => onField(el)));
-    all("[data-cashamt]", (el) => (el.oninput = () => { const path = el.dataset.cashamt, cur = cashParse(getP(path)).cur; setP(path, cashJoin(cur, el.value)); }));
-    all("[data-cashcur]", (el) => (el.onclick = () => { const path = el.dataset.cashcur, amt = cashParse(getP(path)).amt; setP(path, cashJoin(el.dataset.v, amt)); redraw(); }));
+    all("[data-cashamt]", (el) => (el.oninput = () => { const path = el.dataset.cashamt, cur = cashParse(getP(path)).cur; setP(path, cashJoin(cur, el.value)); markHsDirty(path); }));
+    all("[data-cashcur]", (el) => (el.onclick = () => { const path = el.dataset.cashcur, amt = cashParse(getP(path)).amt; setP(path, cashJoin(el.dataset.v, amt)); markHsDirty(path); redraw(); }));
     all("[data-qkprize]", (el) => (el.oninput = () => { const h = S.f.hs[el.dataset.qkprize]; h.pt = el.value.trim() ? "other" : "later"; h.pd = el.value; quickSummary(); }));
     all("[data-hc]", (c) => (c.onchange = () => { const h = S.f.hs[c.dataset.hc]; h.on = c.checked; if (c.checked) S.f.ph = c.dataset.hc; h.dirty = true; redraw(); if ($("qk-summary")) quickSummary(); }));
     all("[data-ph]", (b) => (b.onclick = () => { S.f.ph = b.dataset.ph; redraw(); }));

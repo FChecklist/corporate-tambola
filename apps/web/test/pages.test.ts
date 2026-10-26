@@ -1809,6 +1809,18 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     openStep(p, 3); expect((p.$('[data-ck="ties"][data-v="share"]') as any)?.getAttribute("aria-pressed") ?? "true").toBe("true");
   });
 
+  test("editing a saved cash prize after a reload is saved (amount and currency); step 6 has one 'Play the game yourself' block", async () => {
+    const o = await organizer(); await make(o, "UI-CASHED");
+    await o.api("PATCH", "/api/z/UI-CASHED/settings", { rewards: [{ pattern: "early5", ordinal: 1, text: "Cash prize: ₹5,000" }, { pattern: "full", ordinal: 1, text: "Voucher 1000" }] }, o.aiKey);
+    const p = await consolePage(o, "UI-CASHED"); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 3);
+    setField(p, "#f-hs-early5-pd-amt", "7000"); p.click('[data-save="3"]'); await p.waitFor((x) => /Saved|saved/.test(x));
+    const rw = async () => ((await o.json(await o.api("GET", "/api/z/UI-CASHED/summary", undefined, o.aiKey))).rewards || []).filter((r: any) => r.pattern === "early5").map((r: any) => r.text);
+    expect(await rw()).toEqual(["Cash prize: ₹7,000"]);
+    p.click('[data-cashcur="hs.early5.pd"][data-v="USD"]'); p.click('[data-save="3"]'); await p.waitFor((x) => /Saved|saved/.test(x));
+    expect(await rw()).toEqual(["Cash prize: $7,000"]);
+    openStep(p, 6); for (const id of ["playnow", "sendmine", "playalong"]) expect(p.win.document.querySelectorAll("#" + id).length).toBeLessThanOrEqual(1);
+  });
+
   test("Game day: the step says the Organizer / Host logs into the game and controls it (draft and published)", async () => {
     const o = await organizer(); await make(o, "UI-RUNLINE");
     const p = await consolePage(o, "UI-RUNLINE"); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 9);

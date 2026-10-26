@@ -581,7 +581,7 @@ function d1kv(env: Env): KV { return {
   put: async (k, v) => { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, v).run(); },
 }; }
 
-interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null; viaLink?: boolean; eid?: string | null; /** A Host: the identity the key belongs to and whether the first-open setup (confirmed e-mail + mobile) is finished. */ hid?: string; hostReady?: boolean }
+interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null; viaLink?: boolean; eid?: string | null; /** A Host: the identity the key belongs to and whether the first-open setup (confirmed e-mail + mobile) is finished. */ hid?: string; hostReady?: boolean ; temp?: boolean }
 async function authOf(req: Request, env: Env, now: number): Promise<Auth> {
   return authOfKey(env, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), now);
 }
@@ -589,12 +589,14 @@ async function authOfKey(env: Env, presented: string, now: number): Promise<Auth
   if (!presented) return { plat: false, org: null, kind: null };
   if (env.ORGANIZER_SECRET && presented === env.ORGANIZER_SECRET) return { plat: true, org: null, kind: "platform" };
   const kh = await sha("key|" + presented);
-  const row = await env.DB.prepare("SELECT org, kind, eid, host_id FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(kh, now).first<{ org: string; kind: "master" | "ai" | "host" | "cohost"; eid: string | null; host_id: string | null }>();
+  const row = await env.DB.prepare("SELECT org, kind, eid, host_id, expires_ms FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(kh, now).first<{ org: string; kind: "master" | "ai" | "host" | "cohost"; eid: string | null; host_id: string | null; expires_ms: number | null }>();
   if (!row) return { plat: false, org: null, kind: null };
   if (row.kind === "host") { // a Host's first-open link works once and for 7 days; the console works only after setup (hostsetup.ts)
     const hs = await hostKeyStatus(env.DB, kh, row.host_id, now);
     if (!hs.usable) return { plat: false, org: null, kind: null };
-    return { plat: false, org: row.org, kind: "host", eid: row.eid ?? null, hid: hs.hid, hostReady: hs.ready };
+    // the 24-hour Host AI-link key (cth_, mailed to the Organizer for an outside AI chat) has an expiry and no first-open record: it must never be able to finish a Host setup and turn itself into a lasting key
+    const temp = row.expires_ms != null && !row.host_id && !(await hostStateRow(env.DB, kh));
+    return { plat: false, org: row.org, kind: "host", eid: row.eid ?? null, hid: hs.hid, hostReady: hs.ready, ...(temp ? { temp: true } : {}) };
   }
   return { plat: false, org: row.org, kind: row.kind, eid: row.eid ?? null };
 }
@@ -974,7 +976,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     return json({ ok: true, token: made.token, kind: "organizer", aiMessage: made.aiMessage });
   }
   if (p.startsWith("/api/host/setup")) { // a Host finishing the first open: confirm an e-mail (code; Google is /api/auth/google) and add a mobile number (hostsetup.ts)
-    if (a.kind !== "host" || a.viaLink || !a.org || !a.hid) return deny(a);
+    if (a.kind !== "host" || a.viaLink || a.temp || !a.org || !a.hid) return deny(a);
     const hr = await hostSetupRoute({
       req, env, now, p, hid: a.hid, org: a.org, presented: req.headers.get("x-organizer") || "", origin: (env as PayEnv).PUBLIC_ORIGIN ?? url.origin,
       json, body, spend: (n = 1) => spend(env, now, n), busy: BUSY, cleanPhone, newKey: newHostKey, test: (env as PayEnv).TEST_MODE === "1",

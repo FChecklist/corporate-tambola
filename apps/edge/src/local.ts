@@ -7,15 +7,17 @@ import { execFileSync } from "node:child_process";
 import { SCHEMA, handle, purgeOld, type D1, type D1Stmt } from "./worker";
 import type { PayEnv } from "./pay";
 
+/** Test tool only: how many database reads and writes the request in progress made (SQL_COUNT_LOG=<file> writes one line per request; exact when requests come one at a time). */
+const SQLN = { r: 0, w: 0 };
 export function sqliteD1(file: string): { db: D1; raw: Database } {
   const raw = new Database(file, { create: true });
   raw.run("PRAGMA journal_mode=WAL"); raw.run("PRAGMA busy_timeout=5000"); // a test tool reading the file at the same moment must not make a write fail
   for (const s of SCHEMA) { try { raw.run(s); } catch (e: any) { if (!/duplicate column name/i.test(String(e?.message))) throw e; } } // an ALTER for a column the CREATE already has (older databases need the ALTER) is not an error
   const stmt = (sql: string, vals: unknown[] = []): D1Stmt => ({
     bind: (...v) => stmt(sql, v),
-    run: async () => { const r = raw.query(sql).run(...(vals as any[])); return { meta: { changes: r.changes } }; },
-    all: async () => ({ results: raw.query(sql).all(...(vals as any[])) as any[] }),
-    first: async () => (raw.query(sql).get(...(vals as any[])) as any) ?? null,
+    run: async () => { SQLN.w++; const r = raw.query(sql).run(...(vals as any[])); return { meta: { changes: r.changes } }; },
+    all: async () => { SQLN.r++; return { results: raw.query(sql).all(...(vals as any[])) as any[] }; },
+    first: async () => { SQLN.r++; return (raw.query(sql).get(...(vals as any[])) as any) ?? null; },
   });
   return { db: { prepare: (s) => stmt(s), batch: async (xs) => Promise.all(xs.map((x) => x.run())) }, raw };
 }
@@ -39,7 +41,11 @@ export function startLocal(o: { port?: number; secret?: string; dbFile?: string;
     port: o.port ?? Number(process.env.PORT ?? 8788),
     async fetch(req) {
       const u = new URL(req.url);
-      if (u.pathname.startsWith("/api/") || u.pathname.startsWith("/ai/")) return handle(req, env);
+      if (u.pathname.startsWith("/api/") || u.pathname.startsWith("/ai/")) {
+        const log = process.env.SQL_COUNT_LOG; if (!log) return handle(req, env);
+        const r0 = SQLN.r, w0 = SQLN.w, res = await handle(req, env); (await import("node:fs")).appendFileSync(log, `${req.method} ${u.pathname.replace(/[A-Z0-9_-]{6,}/g, ":id")} reads=${SQLN.r - r0} writes=${SQLN.w - w0} status=${res.status}
+`); return res;
+      }
       if (u.pathname === "/version.json") return new Response(versionBody(), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
       const rel = u.pathname === "/" ? "/index.html" : u.pathname;
       if (rel.includes("..")) return new Response("Not found", { status: 404 });
