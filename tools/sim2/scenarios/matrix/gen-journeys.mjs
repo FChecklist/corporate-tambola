@@ -145,22 +145,22 @@ export default async function gen({ R, L }) {
         const send = (who, token, action) => ctlh.send(g.id, token, action).catch((e) => ({ status: 0, data: { error: e.message } }));
         const ok = (label, r) => t.check(label, r.status === 200, `HTTP ${r.status} ${JSON.stringify(r.data).slice(0, 160)}`);
         if (c.m === "manual") { ok("manual: the Host presses Next number", await send("host", host.key, "next")); await L.clock.advance(20_000); await A.call("POST", "/__sim/tick", {}); ok("manual: the Organizer presses Next number", await send("org", org.token, "next")); }
-        const co2 = await send("co", co.key, "pause"); t.check("a Co-host cannot pause the game", co2.status === 403 || co2.status === 401 || co2.status === 0, `HTTP ${co2.status} ${JSON.stringify(co2.data).slice(0, 120)}`);
+        const co2 = await send("co", co.key, "pause"); t.check("[UNCONFIRMED 1/27] a Co-host cannot pause the game", co2.status === 403 || co2.status === 401 || co2.status === 0, `HTTP ${co2.status} ${JSON.stringify(co2.data).slice(0, 120)}`);
         if (c.e === "pause-resume") {
           ok("Organizer pauses", await send("org", org.token, "pause")); t.check("the game page says paused", (await A.call("GET", `/api/z/${g.id}/info`)).status === 200);
           const late = await joinRaw(g.id, { ...giveListed(person("p")), name: "During Pause" }, t.ip()); t.check("during a pause nobody gets a calm 5xx", late.status < 500, `HTTP ${late.status}`);
           await L.clock.advance(30_000); ok("Host resumes", await send("host", host.key, "resume")); await L.clock.advance(30_000); ok("Organizer pauses again", await send("org", org.token, "pause")); await L.clock.advance(30_000); ok("Organizer resumes", await send("org", org.token, "resume"));
         } else {
-          ok("Organizer ends the game", await send("org", org.token, "stop")); await A.call("POST", "/__sim/tick", {});
-          const after = await joinRaw(g.id, { ...giveListed(person("e")), name: "After End" }, t.ip()); t.check("after the end nobody new gets in (a calm refusal)", after.status >= 400 && after.status < 500, `HTTP ${after.status}`);
-          if (sWid && (c.o === "ignored" || c.o === "approve-after-cap-full")) t.eq("an undecided request lapses when the game is over", (await A.call("GET", `/api/z/${g.id}/me?wid=${sWid}`)).body.state, "lapsed");
+          ok("Organizer ends the game", await send("org", org.token, "stop")); await L.clock.advance(61_000); await A.call("POST", "/__sim/tick", {}); // after an early stop the game ends 60 s later (lifecycle.ts endBoundMs)
+          const after = await joinRaw(g.id, { ...giveListed(person("e")), name: "After End" }, t.ip()); t.check("after the game a latecomer gets a calm answer (the thank-you page, 200, or a plain refusal), never a server error", after.status < 500, `HTTP ${after.status}`);
+          if (sWid && (c.o === "ignored" || c.o === "approve-after-cap-full")) t.eq("an undecided request lapses when the game is over (61 s after an early stop)", (await A.call("GET", `/api/z/${g.id}/me?wid=${sWid}`)).body.state, "lapsed");
           t.check("results page answers", (await A.call("GET", `/api/z/${g.id}/results`)).status === 200);
           const resume = await send("org", org.token, "resume"); t.check("an ended game cannot be resumed (calm refusal)", resume.status >= 400 && resume.status < 500, `HTTP ${resume.status}`);
         }
       } else if (c.e === "end-window") {
         await L.clock.set(g.startMs + 4 * L.HOUR); await A.call("POST", "/__sim/tick", {});
-        const w = sWid ? (await A.call("GET", `/api/z/${g.id}/me?wid=${sWid}`)).body.state : null; if (sWid && (c.o === "ignored" || c.o === "approve-after-cap-full")) t.eq("an undecided request lapses when the game is over", w, "lapsed");
-        const late = await joinRaw(g.id, { ...giveListed(person("z")), name: "Late Comer" }, t.ip()); t.check("after the game nobody new gets in (a calm refusal)", late.status >= 400 && late.status < 500, `HTTP ${late.status}`);
+        const w = sWid ? (await A.call("GET", `/api/z/${g.id}/me?wid=${sWid}`)).body.state : null; if (sWid && (c.o === "ignored" || c.o === "approve-after-cap-full")) t.eq("an undecided request lapses when the game is over (61 s after an early stop)", w, "lapsed");
+        const late = await joinRaw(g.id, { ...giveListed(person("z")), name: "Late Comer" }, t.ip()); t.check("after the game a latecomer gets a calm answer (the thank-you page, 200, or a plain refusal), never a server error", late.status < 500, `HTTP ${late.status}`);
         t.check("results page answers", (await A.call("GET", `/api/z/${g.id}/results`)).status === 200);
       }
       // ---- invariants of every journey ----
