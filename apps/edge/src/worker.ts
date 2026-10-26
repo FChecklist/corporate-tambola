@@ -375,12 +375,12 @@ async function spend(env: Env, now: number, n = 1): Promise<boolean> {
 /** An AI key (or a Host) never receives or sends names and mobile numbers: the organizer loads the list in the console. */
 const CONSOLE_ONLY = () => json({ error: "Names and mobile numbers are handled by the owner in the console, not by the AI. Ask the owner to paste the list in the Participants card. You can set the limit with settings and refer to people by ticket number." }, 403);
 /** One network address may open only so many NEW seats a day: protects the shared daily write budget from a script.
- *  A whole office or hall sits behind ONE address, so the default allowance grows with the PAID size of the game being joined: one address may seat up to the pack's size in a minute (and three times that in a day),
- *  never less than the base figures. An unpaid game and the waiting room keep the base figures. A limit set explicitly in the environment (JOIN_PER_IP_MINUTE / JOIN_PER_IP_DAY) is used exactly as set. */
+ *  A whole office or hall sits behind ONE address, so the allowance of a PAID game never falls below its pack: one address may seat up to the pack's size in a minute (and three times that in a day).
+ *  The base figures (the environment's JOIN_PER_IP_MINUTE / JOIN_PER_IP_DAY, else the defaults below) still apply to an unpaid game and to the waiting room, so a script cannot use a big free game to burn the write budget. */
 const JOIN_PER_IP_DAY = 1500, JOIN_PER_IP_MINUTE = 200, ID_MISS_PER_10MIN = 30;
 async function joinOverLimit(env: Env, req: Request, now: number, paidSeats = 0): Promise<boolean> {
   try {
-    const ip = (await sha("jip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16), perDay = Number((env as any).JOIN_PER_IP_DAY ?? Math.max(JOIN_PER_IP_DAY, paidSeats * 3)), perMin = Number((env as any).JOIN_PER_IP_MINUTE ?? Math.max(JOIN_PER_IP_MINUTE, paidSeats));
+    const ip = (await sha("jip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16), perDay = Math.max(Number((env as any).JOIN_PER_IP_DAY ?? JOIN_PER_IP_DAY), paidSeats * 3), perMin = Math.max(Number((env as any).JOIN_PER_IP_MINUTE ?? JOIN_PER_IP_MINUTE), paidSeats);
     const bump = async (k: string, max: number) => { const n = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0); if (n >= max) return true; await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(k, String(n + 1), String(n + 1)).run(); return false; };
     const iso = new Date(now).toISOString();
     return (await bump(`jbm/${iso.slice(0, 16)}/${ip}`, perMin)) || (await bump(`jlim/${iso.slice(0, 10)}/${ip}`, perDay));
