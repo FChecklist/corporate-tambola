@@ -639,7 +639,7 @@ describe("winners, the end, and break media on the phone", () => {
     p.click("#cfgo");
     await p.waitFor((x) => /Details confirmed/.test(x), 20000);
     const list = (await o.json(await o.api("GET", "/api/z/UI-WINA/prizes", undefined, o.token))) as any;
-    expect(list.prizes.length).toBeGreaterThan(0); expect(list.prizes[0]).toMatchObject({ name: "Asha Rao", phone: "9876543210", confirmed: true, changed: true });
+    expect(list.prizes.length).toBeGreaterThan(0); expect(list.prizes[0]).toMatchObject({ name: "Asha Rao", phone: "919876543210", confirmed: true, changed: true });
     expect(JSON.stringify(o.world.raw.query("SELECT * FROM winner").all())).not.toMatch(/Voucher|9833|Gift/); // seat, prize, round, time: no names or numbers
     } finally { clearInterval(along); }
   }, 90_000);
