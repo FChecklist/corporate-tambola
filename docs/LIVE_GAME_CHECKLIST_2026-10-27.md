@@ -47,3 +47,8 @@ Note on counts: `--players` includes the two strangers where a stranger gets a t
 
 ## Order and rules
 L1 -> L9; the 500-person games need ~1 GB for protocol phones: run L7-L9 only when free RAM is >= 1.5 GB, else use `--real 6` with fewer protocol phones and record how many phones played (never claim 500 if fewer). Only the boss deploys; every defect found goes to the boss with the game id, the assertion that failed and the console/game-page evidence.
+
+## Reading the results after each game (no CPU)
+`python tools/browser-tests/live-summary.py --expect-joined <N> <TAG> [<TAG> ...]` prints one line per game from `data/ui/ui-chrome-<TAG>.json`: PASS/FAIL, game id, mode, cap, joined X/Y, numbers N equal, winners agree, own 5xx / beacon-relay 502 / third-party errors / busy (429/503), page errors, the names of failed checks, and notes. Exit code 0 only if every game passed. PASS rule: every harness check ok, own 5xx = 0, busy = 0, page errors = 0, joined == expected. Beacon-relay 502 and third-party (drand) errors are reported as NOTES (public beacon outage; the phones fall back to other mirrors), not failures, but a relay 502 should be reported to the boss for a decision (answer 503/empty instead of 502?). Number delay / timer gaps are NOT in the result file: measure from `/big.html?e=<eid>` (assertions 4 and 5).
+
+Harness check names printed on failure map to the assertions: "all N people joined" = 1; "same N numbers in the same order" and "same winners" = 2; prizes (3), event (6), roles (7), report e-mail (8) are checked by hand from the console (Prizes list with claimants, Waiting panel, People list) and recorded in the game's notes.
