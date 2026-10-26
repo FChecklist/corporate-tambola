@@ -43,7 +43,7 @@ export default async function gen({ R, L }) {
     if (other !== undefined) { t.expect("the Host (equal rights) gives it to another claimant", await host.api("POST", `/api/z/${g.id}/override`, { ...base, seat: other }), "ok"); t.eq("the prize list shows the new winner", ((await org.api("GET", `/api/z/${g.id}/prizes`)).body.prizes.find((r) => r.round === row.round && r.pattern === row.pattern && r.ordinal === row.ordinal) ?? {}).seat, other); }
     t.expect("the Organizer can decide that nobody gets it", await org.api("POST", `/api/z/${g.id}/override`, { ...base, seat: null }), "ok");
     t.check("then the prize has no winner row", !((await org.api("GET", `/api/z/${g.id}/prizes`)).body.prizes ?? []).some((r) => r.round === row.round && r.pattern === row.pattern && r.ordinal === row.ordinal && r.seat !== null), "still has a winner");
-    t.expect("a prize that was never awarded cannot be overridden", await org.api("POST", `/api/z/${g.id}/override`, { round: 1, pattern: "star", ordinal: 77, seat: 1 }), "bad");
+    t.expect("a prize that was never awarded cannot be overridden", await org.api("POST", `/api/z/${g.id}/override`, { round: 1, pattern: "star", ordinal: 77, seat: 1 }), [404]);
   } });
 
   out.push({ name: "rules|device: vote and over need the phone's own device proof", time: true, run: async (t) => {
