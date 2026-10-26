@@ -255,6 +255,17 @@ describe("the common link and who can join", () => {
   });
 });
 
+describe("places promised to invited people", () => {
+  test("in an open game the open link cannot take the places promised to people on a list; the invited people still get theirs and the game never passes its size", async () => {
+    const t = await setup({ cap: 5 });
+    expect((await j(await add(t.master, [{ name: "A", phone: mob(1) }, { name: "B", phone: mob(2) }]))).added).toBe(2); // 2 places promised
+    for (const i of [10, 11, 12]) expect((await joinAs("PPL-1", i)).status).toBe(200); // 3 strangers fill the 3 free places
+    expect((await joinAs("PPL-1", 13)).status).toBe(409); // a 4th stranger is told the game is full: the last 2 places belong to A and B
+    expect((await joinAs("PPL-1", 1)).status).toBe(200); expect((await joinAs("PPL-1", 2)).status).toBe(200); // the promised places are kept
+    expect(rowsOf("SELECT COUNT(*) c FROM seat")[0].c).toBe(5);
+    expect((await joinAs("PPL-1", 14)).status).toBe(409);
+  });
+});
 describe("the waiting room", () => {
   const wait = async (t: Awaited<ReturnType<typeof setup>>, n: number, from: number | undefined = ORG_FROM) => { for (let i = 0; i < n; i++) await joinAs("PPL-1", 40 + i, { from }); };
   test("approvers: Organizer and Host see all; a Co-host sees only requests that came through their link", async () => {
@@ -323,6 +334,29 @@ describe("the waiting room", () => {
     expect(r).toMatchObject({ admitted: 3, declined: 0, stillWaiting: 2 }); expect(r.message).toMatch(/full/);
     expect(rowsOf("SELECT COUNT(*) c FROM waiting WHERE status='waiting'")[0].c).toBe(2);
     expect(rowsOf("SELECT ph FROM waiting WHERE status='admitted' ORDER BY at_ms, id").length).toBe(3);
+  });
+  test("a decline that lands between the admit's check and its write leaves nobody inside (one by one and approve all)", async () => {
+    const t = await setup({ closed: true }); await wait(t, 4, ORG_FROM);
+    const ws = (await j(await call("GET", "/api/z/PPL-1/waiting", undefined, t.master))).waiting;
+    const realBatch = env.DB.batch.bind(env.DB);
+    let lose = true; // the Host's decline wins just before the Organizer's admit is written: the decline is applied inside the admit's own moment
+    (env.DB as any).batch = async (stmts: any[]) => { if (lose) { lose = false; raw.prepare("UPDATE waiting SET status='declined', decided_by='h:x', decided_ms=? WHERE status='waiting' AND id=?").run(T, ws[0].id); } return realBatch(stmts); };
+    const one = await j(await call("POST", `/api/z/PPL-1/waiting/${ws[0].id}`, { decision: "admit" }, t.master));
+    expect(one).toMatchObject({ ok: true, already: "declined" });
+    expect(rowsOf("SELECT COUNT(*) c FROM waiting w JOIN person p ON p.eid=w.eid AND p.ph=w.ph WHERE w.id=?", ws[0].id)[0].c).toBe(0);
+    lose = true; const all = ws.slice(1).map((w: any) => w.id); // approve all: the first of the rest is declined at the same moment
+    (env.DB as any).batch = async (stmts: any[]) => { if (lose) { lose = false; raw.prepare("UPDATE waiting SET status='declined', decided_by='h:x', decided_ms=? WHERE status='waiting' AND id=?").run(T, all[0]); } return realBatch(stmts); };
+    await call("POST", "/api/z/PPL-1/waiting/all", { decision: "admit" }, t.master);
+    expect(rowsOf("SELECT COUNT(*) c FROM waiting w JOIN person p ON p.eid=w.eid AND p.ph=w.ph WHERE w.status='declined'")[0].c).toBe(0); // declined means out
+    expect(rowsOf("SELECT COUNT(*) c FROM waiting w LEFT JOIN person p ON p.eid=w.eid AND p.ph=w.ph WHERE w.status='admitted' AND p.id IS NULL")[0].c).toBe(0); // admitted means in
+    expect(rowsOf("SELECT COUNT(*) c FROM person")[0].c).toBe(2);
+  });
+  test("a request that was declined first cannot be admitted afterwards: nobody is added and the answer says it was already declined", async () => {
+    const t = await setup({ closed: true }); await wait(t, 1, ORG_FROM);
+    const w = (await j(await call("GET", "/api/z/PPL-1/waiting", undefined, t.master))).waiting[0];
+    await call("POST", `/api/z/PPL-1/waiting/${w.id}`, { decision: "decline" }, t.host);
+    expect(await j(await call("POST", `/api/z/PPL-1/waiting/${w.id}`, { decision: "admit" }, t.master))).toMatchObject({ ok: true, already: "declined" });
+    expect(rowsOf("SELECT COUNT(*) c FROM person")[0].c).toBe(0);
   });
   test("decline all answers every request the caller may decide, and only those", async () => {
     const t = await setup({ closed: true });

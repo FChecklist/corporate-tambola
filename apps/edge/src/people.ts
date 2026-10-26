@@ -504,6 +504,13 @@ async function listWaiting(c: Ctx, who: Caller): Promise<Response> {
   }
   return c.json({ waiting: out });
 }
+/** Puts an admitted person on a list, but only while the waiting request is still "waiting" (so a decline that won the race leaves nobody inside). */
+const admitInsert = (db: D1, eid: string, wid: string, id: string, ph: string, pii: string, inviter: string, tokHash: string, tokSealed: string, by: string, now: number) =>
+  db.prepare("INSERT OR IGNORE INTO person(eid,id,ph,pii,inviter,role,status,tok_hash,tok_sealed,approved_by,approved_ms,added_ms) SELECT ?,?,?,?,?,NULL,'invited',?,?,?,?,? WHERE EXISTS (SELECT 1 FROM waiting WHERE eid=? AND id=? AND status='waiting')")
+    .bind(eid, id, ph, pii, inviter, tokHash, tokSealed, by, now, now, eid, wid);
+const admitRevive = (db: D1, eid: string, wid: string, pid: string, inviter: string, tokHash: string, tokSealed: string, by: string, now: number) =>
+  db.prepare("UPDATE person SET status='invited', inviter=?, tok_hash=?, tok_sealed=?, approved_by=?, approved_ms=?, removed_ms=NULL, removed_by=NULL WHERE eid=? AND id=? AND EXISTS (SELECT 1 FROM waiting WHERE eid=? AND id=? AND status='waiting')")
+    .bind(inviter, tokHash, tokSealed, by, now, eid, pid, eid, wid);
 async function decideWaiting(c: Ctx, who: Caller, wid: string, b: any): Promise<Response> {
   if (!/^[0-9a-f]{12}$/.test(wid)) return c.json({ error: "No such request." }, 404);
   const decision = b?.decision;
@@ -522,10 +529,13 @@ async function decideWaiting(c: Ctx, who: Caller, wid: string, b: any): Promise<
   if ((await totalCount(db, c.eid)) >= c.e.cap && !(await db.prepare("SELECT 1 AS x FROM person WHERE eid=? AND ph=? AND status<>'removed'").bind(c.eid, w.ph).first())) return c.json({ error: `This game is for ${c.e.cap} people and all places are taken.`, code: "over-cap" }, 409);
   const token = newToken();
   const existing = await db.prepare("SELECT id, status FROM person WHERE eid=? AND ph=?").bind(c.eid, w.ph).first<{ id: string; status: string }>();
-  const stmts = [db.prepare("UPDATE waiting SET status='admitted', decided_by=?, decided_ms=? WHERE eid=? AND id=? AND status='waiting'").bind(who.id, c.now, c.eid, wid)];
-  if (!existing) stmts.push(db.prepare("INSERT OR IGNORE INTO person(eid,id,ph,pii,inviter,role,status,tok_hash,tok_sealed,approved_by,approved_ms,added_ms) VALUES(?,?,?,?,?,NULL,'invited',?,?,?,?,?)").bind(c.eid, randHex(6), w.ph, w.pii, inviter, await tokenHash(token), await sealText(c.env, token), who.id, c.now, c.now));
-  else if (existing.status === "removed") stmts.push(db.prepare("UPDATE person SET status='invited', inviter=?, tok_hash=?, tok_sealed=?, approved_by=?, approved_ms=?, removed_ms=NULL, removed_by=NULL WHERE eid=? AND id=?").bind(inviter, await tokenHash(token), await sealText(c.env, token), who.id, c.now, c.eid, existing.id), db.prepare("UPDATE seat SET blocked=NULL WHERE eid=? AND ph=?").bind(c.eid, w.ph));
-  await batched(db, stmts);
+  // The person goes in only while this request is still "waiting" (checked inside the same batch, before the request is marked admitted), so a decline that lands at the same instant can never leave a declined request with the person inside.
+  const stmts: ReturnType<D1["prepare"]>[] = [];
+  if (!existing) stmts.push(admitInsert(db, c.eid, wid, randHex(6), w.ph, w.pii, inviter, await tokenHash(token), await sealText(c.env, token), who.id, c.now));
+  else if (existing.status === "removed") stmts.push(admitRevive(db, c.eid, wid, existing.id, inviter, await tokenHash(token), await sealText(c.env, token), who.id, c.now), db.prepare("UPDATE seat SET blocked=NULL WHERE eid=? AND ph=? AND EXISTS (SELECT 1 FROM waiting WHERE eid=? AND id=? AND status='waiting')").bind(c.eid, w.ph, c.eid, wid));
+  stmts.push(db.prepare("UPDATE waiting SET status='admitted', decided_by=?, decided_ms=? WHERE eid=? AND id=? AND status='waiting'").bind(who.id, c.now, c.eid, wid));
+  const res = await batched(db, stmts);
+  if ((res[res.length - 1]?.meta?.changes ?? 0) === 0) return c.json({ ok: true, already: (await db.prepare("SELECT status FROM waiting WHERE eid=? AND id=?").bind(c.eid, wid).first<{ status: string }>())?.status ?? "decided" }); // someone decided this request an instant earlier: nothing was added
   const label = await labelsOf(c);
   return c.json({ ok: true, admitted: true, placedUnder: label(inviter) });
 }
@@ -561,8 +571,8 @@ async function decideAll(c: Ctx, who: Caller, b: any): Promise<Response> {
       if (lim !== null && counts.get(inviter)! >= lim) { if (!who.all) { notAdmitted++; continue; } inviter = who.id; if (!counts.has(inviter)) { limits.set(inviter, null); counts.set(inviter, 0); } }
       counts.set(inviter, (counts.get(inviter) ?? 0) + 1); total++;
       const token = newToken();
-      if (!existing) stmts.push(db.prepare("INSERT OR IGNORE INTO person(eid,id,ph,pii,inviter,role,status,tok_hash,tok_sealed,approved_by,approved_ms,added_ms) VALUES(?,?,?,?,?,NULL,'invited',?,?,?,?,?)").bind(c.eid, randHex(6), w.ph, w.pii, inviter, await tokenHash(token), await sealText(c.env, token), who.id, c.now, c.now));
-      else stmts.push(db.prepare("UPDATE person SET status='invited', inviter=?, tok_hash=?, tok_sealed=?, approved_by=?, approved_ms=?, removed_ms=NULL, removed_by=NULL WHERE eid=? AND id=?").bind(inviter, await tokenHash(token), await sealText(c.env, token), who.id, c.now, c.eid, existing.id), db.prepare("UPDATE seat SET blocked=NULL WHERE eid=? AND ph=?").bind(c.eid, w.ph));
+      if (!existing) stmts.push(admitInsert(db, c.eid, w.id, randHex(6), w.ph, w.pii, inviter, await tokenHash(token), await sealText(c.env, token), who.id, c.now));
+      else stmts.push(admitRevive(db, c.eid, w.id, existing.id, inviter, await tokenHash(token), await sealText(c.env, token), who.id, c.now), db.prepare("UPDATE seat SET blocked=NULL WHERE eid=? AND ph=? AND EXISTS (SELECT 1 FROM waiting WHERE eid=? AND id=? AND status='waiting')").bind(c.eid, w.ph, c.eid, w.id));
     }
     stmts.push(db.prepare("UPDATE waiting SET status='admitted', decided_by=?, decided_ms=? WHERE eid=? AND id=? AND status='waiting'").bind(who.id, c.now, c.eid, w.id));
     admitted++;
