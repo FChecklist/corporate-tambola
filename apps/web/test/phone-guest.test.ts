@@ -107,7 +107,7 @@ describe("joining: personal link, waiting, removed, cancelled", () => {
     await p.waitFor((x) => /already opened on another phone/.test(x)); expect(!!p.$("#ph")).toBe(true);
     (p.$("#ph") as any).value = "9822211111"; p.click("#go");
     await p.waitFor(() => calls.filter((c) => c.m === "POST" && /\/join$/.test(c.u)).length >= 2);
-    const again = calls.filter((c) => c.m === "POST" && /\/join$/.test(c.u))[1]!; expect(again.b.token).toBe(tk); expect(again.b.phone).toBe("9822211111");
+    const again = calls.filter((c) => c.m === "POST" && /\/join$/.test(c.u))[1]!; expect(again.b.token).toBe(tk); expect(again.b.phone).toBe("+919822211111"); /* the page sends +<country code><number> since the country list */
   });
   test("an unlisted number waits calmly, the page asks 'me' until it is let in, then the ticket opens", async () => {
     const o = await organizer(); await listOnly(o, "PG-WT1");
@@ -128,7 +128,7 @@ describe("joining: personal link, waiting, removed, cancelled", () => {
     const w = await o.json(await o.api("GET", "/api/z/PG-WT3/waiting", undefined, o.token)); expect(w.waiting.length).toBe(1);
     await o.api("POST", `/api/z/PG-WT3/waiting/${w.waiting[0].id}`, { decision: "admit" }, o.token);
     await p.waitFor((x) => SEEN.test(x), 20_000);
-    expect(calls.some((c) => c.m === "POST" && /\/join$/.test(c.u) && c.b.phone === "9822266666")).toBe(true); // it joined with what was typed before the reload
+    expect(calls.some((c) => c.m === "POST" && /\/join$/.test(c.u) && c.b.phone === "+919822266666")).toBe(true); // it joined with what was typed before the reload
     expect(p.win.localStorage.getItem("ctz-wait-PG-WT3") || "").toBe(""); // and forgot the waiting note
     expect(p.errors).toEqual([]);
   });

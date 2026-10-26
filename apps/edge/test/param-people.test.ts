@@ -152,24 +152,24 @@ describe("invitation policies: anyone, invite-only, two-level chain", () => {
     const g = await paidGame({ cap: 20 });
     await call("PATCH", `/api/z/${g.id}/settings`, { invites: { on: true, per: 2, cats: ["family", "colleagues"] } }, g.h);
     const a = await j(await join(g.id, 1));
-    const mine = (people: unknown[]) => call("POST", `/api/z/${g.id}/people?me=${a.pid}`, { people }, {});
+    const mine = (people: unknown[]) => call("POST", `/api/z/${g.id}/people?me=${a.pid}&device=${dev(1)}`, { people }, {});
     expect((await j(await mine([{ name: "B", phone: mob(2) }, { name: "C", phone: mob(3) }]))).added).toBe(2);
     const over = await mine([{ name: "D", phone: mob(4) }]); expect(over.status).toBeGreaterThanOrEqual(400);
     // B joins from the link they were given; B has the right to play but not to invite
     const b = await j(await join(g.id, 2));
     expect(b.pid).toBeTruthy();
-    const bTry = await call("POST", `/api/z/${g.id}/people?me=${b.pid}`, { people: [{ name: "E", phone: mob(5) }] }, {});
+    const bTry = await call("POST", `/api/z/${g.id}/people?me=${b.pid}&device=${dev(2)}`, { people: [{ name: "E", phone: mob(5) }] }, {});
     expect(bTry.status).toBe(403);
   });
   test("a guest cannot invite when the organizer left invitations off", async () => {
     const g = await paidGame({ cap: 20 });
     const a = await j(await join(g.id, 1));
-    expect((await call("POST", `/api/z/${g.id}/people?me=${a.pid}`, { people: [{ name: "B", phone: mob(2) }] }, {})).status).toBe(403);
+    expect((await call("POST", `/api/z/${g.id}/people?me=${a.pid}&device=${dev(1)}`, { people: [{ name: "B", phone: mob(2) }] }, {})).status).toBe(403);
   });
   test("a made-up ticket id cannot invite", async () => {
     const g = await paidGame({ cap: 20 });
     await call("PATCH", `/api/z/${g.id}/settings`, { invites: { on: true, per: 2, cats: ["family"] } }, g.h);
-    expect((await call("POST", `/api/z/${g.id}/people?me=1zzzzzzzzzzzzz`, { people: [{ name: "B", phone: mob(2) }] }, {})).status).toBe(403);
+    expect((await call("POST", `/api/z/${g.id}/people?me=1zzzzzzzzzzzzz&device=${dev(1)}`, { people: [{ name: "B", phone: mob(2) }] }, {})).status).toBe(403);
   });
   test("an AI key is refused the people lists (names and numbers are for people)", async () => {
     const g = await paidGame({ cap: 20 });

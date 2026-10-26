@@ -451,6 +451,13 @@ describe("export, privacy and cleanup", () => {
     expect(r.headers.get("content-type")).toContain("text/csv"); const csv = await r.text();
     expect(csv).toContain("Name,Mobile,Personal link,WhatsApp link,Status"); expect(csv).toContain("HYPERLINK(1),91" + mob(1)); expect(csv).toContain("https://tambola.test/j/"); expect(csv).toContain(",Invited");
   });
+  test("a Co-host adding a foreign number the Organizer removed is told with ONE plus sign", async () => {
+    const t = await setup();
+    const theirs = (await j(await add(t.master, [{ name: "U", phone: "+44 7911 123456" }]))).people[0];
+    expect((await call("POST", `/api/z/PPL-1/people/${theirs.id}/remove`, {}, t.master)).status).toBe(200);
+    const refused = await j(await add(t.cohost, [{ name: "U", phone: "+44 7911 123456" }]));
+    expect(refused.added).toBe(0); expect(refused.invalid[0].raw).toContain("+447911123456"); expect(refused.invalid[0].raw).not.toContain("++");
+  });
   test("deleting the guests' data (the 23-hour rule or on request) deletes people and waiting rows too", async () => {
     const t = await setup({ closed: true }); await add(t.master, [{ name: "A", phone: mob(1) }]); await joinAs("PPL-1", 5, { from: ORG_FROM });
     expect(rowsOf("SELECT COUNT(*) c FROM person")[0].c + rowsOf("SELECT COUNT(*) c FROM waiting")[0].c).toBe(2);
