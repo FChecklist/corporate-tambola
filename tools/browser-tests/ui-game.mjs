@@ -37,7 +37,7 @@ try {
   await p.click(`[data-ck="cap"][data-v="${CAP}"]`); await p.click(`[data-ck="mode"][data-v="${MODE}"]`);
   if (MODE === "auto") await p.click(`[data-ck="spd"][data-v="${SPEED}"]`);
   check("manual hides the gap (duration) and auto shows it", MODE === "host" ? !(await p.$('[data-ck="spd"]')) : !!(await p.$('[data-ck="spd"]')));
-  await p.click('[data-ck="tix"][data-v="1"]'); await p.click('[data-ck="rnd"][data-v="1"]'); await p.click(`[data-ck="aud"][data-v="${AUD}"]`); await sleep(400);
+  await p.click('[data-ck="tix"][data-v="1"]'); if (await p.locator('[data-ck="rnd"][data-v="1"]').first().isVisible().catch(() => false)) await p.click('[data-ck="rnd"][data-v="1"]'); /* since 1.3.0 the rounds choice is hidden: one round is the only option */ await p.click(`[data-ck="aud"][data-v="${AUD}"]`); await sleep(400);
   R.step2 = await ctrls(p); await clickSave(p, 2); R.sum2 = await p.evaluate(async (e) => { const t = localStorage.getItem('ctz-org'); const r = await fetch('/api/z/' + e + '/summary', { headers: { 'x-organizer': t } }); const j = await r.json().catch(() => ({})); return { verify: j.verify, emp: j.employeesOnly, who: j.whoCanJoin, status: r.status }; }, eid);
   // steps 3..6: look at each, accept the defaults the way a person pressing Continue would
   for (const n of [3, 4, 5, 6]) {
