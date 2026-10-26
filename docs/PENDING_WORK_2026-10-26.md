@@ -2,6 +2,8 @@
 
 Written 2026-10-26 about 23:30 IST by the session "Cloud 1M session handover" (call it **C**). Sources I read: the Tambola handover `docs/HANDOVER_2026-10-26_JOIN_REDESIGN.md` (sections 0-9c), the cloud load-test session's files on `origin/cloud/load-results-2026-10-26`, the project memory notes, and my own test runs. Nothing below is a claim that something passed unless it says so.
 
+**STATUS: PROPOSAL. The owner put this session (C) under the supervision of A ("Corporate Tambola handover"). A decides what C and B do; nothing in section 3 for C starts until A accepts it. Already done by C before this rule: items P7 and the join-review findings 4, 5, 6 (commit below).**
+
 Sessions (the three that are alive):
 - **A = "Corporate Tambola handover"** (`local_ce1ad2fd`): owns the Tambola tree `C:\ct\test-sites\tambola`, the join redesign, release 1.2.0/1.2.1 and every deploy.
 - **B = "Cloud: 1M join test + 250/500/1000 mix"** (cloud box, 4 cores / 15 GB, Linux): measurement only, local servers, cannot reach the live site, cannot deploy.
