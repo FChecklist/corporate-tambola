@@ -275,12 +275,11 @@ describe("rate limits and the daily spend limit", () => {
       expect((await call("GET", "/api/mode")).status).toBe(200);
     });
   }
-  test("one network address may open only so many new seats a minute (JOIN_PER_IP_MINUTE), then 429", async () => {
-    const g = await paidGame({ cap: 1000 }); reset({ JOIN_PER_IP_MINUTE: "3" } as any);
-    const o = await organizer(); const id = uid(); await create(o.key, id, { cap: 100 });
-    const { PLAT: P } = await import("./param-harness"); await call("POST", "/api/z", { id: "JOINL-1", startRound: startIn(2 * HOUR), callSeconds: 6, cap: 100 }, P);
-    const codes: number[] = []; for (let i = 1; i <= 6; i++) codes.push((await join("JOINL-1", i)).status);
-    expect(codes.slice(0, 3).every((s) => s === 200)).toBe(true); expect(codes.slice(3).some((s) => s === 429)).toBe(true); expect(g.id).toBeTruthy();
+  test("one network address may open only so many new seats a minute (JOIN_PER_IP_MINUTE), then 429 (an unpaid game: a paid game never falls below its pack, see below)", async () => {
+    reset({ JOIN_PER_IP_MINUTE: "3" } as any);
+    const o = await organizer(); const id = uid(); expect((await create(o.key, id, { cap: 100 })).status).toBe(200); expect((await publish(o.key, id)).status).toBe(200);
+    const codes: number[] = []; for (let i = 1; i <= 6; i++) codes.push((await join(id, i)).status);
+    expect(codes.slice(0, 3).every((s) => s === 200)).toBe(true); expect(codes.slice(3).some((s) => s === 429)).toBe(true);
   });
   test("an office behind ONE address can seat a whole PAID game: the default per-address allowance grows with the pack (300 people, one address, one minute: all in)", async () => {
     const g = await paidGame({ cap: 500 }); const hdr = { "cf-connecting-ip": "9.9.9.9" }; const codes: number[] = [];
@@ -293,10 +292,13 @@ describe("rate limits and the daily spend limit", () => {
     for (let i = 1; i <= 230; i++) codes.push((await call("POST", `/api/z/${id}/join`, { phone: mob(i), name: "Guest " + i, device: dev(i) }, hdr)).status);
     expect(codes.slice(0, 200).every((s) => s === 200)).toBe(true); expect(codes.slice(200).every((s) => s === 429)).toBe(true);
   });
-  test("a limit set explicitly (JOIN_PER_IP_MINUTE) is still used exactly as set, even for a big paid game", async () => {
-    reset({ JOIN_PER_IP_MINUTE: "5" } as any); const g = await paidGame({ cap: 500 }); const hdr = { "cf-connecting-ip": "9.9.9.7" }; const codes: number[] = [];
-    for (let i = 1; i <= 8; i++) codes.push((await call("POST", `/api/z/${g.id}/join`, { phone: mob(i), name: "Guest " + i, device: dev(i) }, hdr)).status);
-    expect(codes.slice(0, 5).every((s) => s === 200)).toBe(true); expect(codes.slice(5).every((s) => s === 429)).toBe(true);
+  test("a limit set in the environment is the BASE: it is exact for an unpaid game, and a paid game still gets at least its pack (the deployed site sets 600 a minute; 700 people behind one address all get into a paid 1000)", async () => {
+    reset({ JOIN_PER_IP_MINUTE: "600", JOIN_PER_IP_DAY: "20000" } as any); const g = await paidGame({ cap: 1000 }); const hdr = { "cf-connecting-ip": "9.9.9.7" }; const codes: number[] = [];
+    for (let i = 1; i <= 700; i++) codes.push((await call("POST", `/api/z/${g.id}/join`, { phone: mob(i), name: "Guest " + i, device: dev(i) }, hdr)).status);
+    expect(codes.filter((s) => s === 200).length).toBe(700);
+    reset({ JOIN_PER_IP_MINUTE: "5" } as any); const o = await organizer(); const id = uid(); expect((await create(o.key, id, { cap: 500 })).status).toBe(200); expect((await publish(o.key, id)).status).toBe(200);
+    const c2: number[] = []; for (let i = 1; i <= 8; i++) c2.push((await call("POST", `/api/z/${id}/join`, { phone: mob(i), name: "Guest " + i, device: dev(i) }, { "cf-connecting-ip": "9.9.9.6" })).status);
+    expect(c2.slice(0, 5).every((s) => s === 200)).toBe(true); expect(c2.slice(5).every((s) => s === 429)).toBe(true); // unpaid: the environment's figure is exact
   });
   test("a body bigger than the limit is refused, never a 500", async () => {
     const r = await call("POST", "/api/start", { email: "a@b.co", pad: "x".repeat(200_000) }); expect(r.status).toBeLessThan(500);
