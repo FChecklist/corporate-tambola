@@ -1,5 +1,25 @@
 {
- "tag": "m250",
+ "summary": {
+  "tag": "m250",
+  "cases": 18,
+  "casesPassed": 17,
+  "checks": 579,
+  "checksFailed": 1,
+  "calls": 477917,
+  "serverErrors": 0,
+  "failKinds": {},
+  "latencyMs": {
+   "p50": 1,
+   "p95": 23,
+   "p99": 182,
+   "max": 3420
+  },
+  "beacon": {
+   "fetched": 2470,
+   "hits": 1103107,
+   "failed": 0
+  }
+ },
  "results": [
   {
    "ticks": 550,
@@ -151,6 +171,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp3.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp3.m250@sample-co.in"
     }
    ],
    "notes": [],
@@ -322,7 +357,8 @@
    "players": 250,
    "endedAtMs": 1793025540450,
    "runMin": 9.4,
-   "pass": false
+   "pass": false,
+   "reportMail": true
   },
   {
    "ticks": 538,
@@ -484,6 +520,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp1.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp1.m250@sample-co.in"
     }
    ],
    "notes": [],
@@ -705,7 +756,8 @@
    "players": 250,
    "endedAtMs": 1793025542500,
    "runMin": 9.4,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 556,
@@ -872,6 +924,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance2.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp2.m250@sample-co.in"
     }
    ],
    "notes": [],
@@ -1007,7 +1074,8 @@
    "players": 250,
    "endedAtMs": 1793025543051,
    "runMin": 9.4,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 990,
@@ -1159,6 +1227,11 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
     }
    ],
    "notes": [],
@@ -1568,7 +1641,8 @@
    "players": 10,
    "endedAtMs": 1793026587878,
    "runMin": 16.8,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 910,
@@ -1735,6 +1809,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance6.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp6.m250@sample-co.in"
     }
    ],
    "notes": [],
@@ -2030,7 +2119,8 @@
    "players": 213,
    "endedAtMs": 1793026610645,
    "runMin": 15.3,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 1122,
@@ -2197,6 +2287,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp5.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp5.m250@sample-co.in"
     }
    ],
    "notes": [],
@@ -2520,7 +2625,8 @@
    "players": 213,
    "endedAtMs": 1793026828329,
    "runMin": 18.9,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 866,
@@ -2687,6 +2793,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp7.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp7.m250@sample-co.in"
     }
    ],
    "notes": [
@@ -3081,7 +3202,8 @@
    "players": 213,
    "endedAtMs": 1793027613907,
    "runMin": 14.6,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 926,
@@ -3238,6 +3360,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp9.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp9.m250@sample-co.in"
     }
    ],
    "notes": [],
@@ -3541,7 +3678,8 @@
    "players": 213,
    "endedAtMs": 1793027945489,
    "runMin": 16.1,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 1286,
@@ -3718,6 +3856,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance8.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp8.m250@sample-co.in"
     }
    ],
    "notes": [],
@@ -4209,7 +4362,8 @@
    "players": 213,
    "endedAtMs": 1793028054333,
    "runMin": 21.6,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 834,
@@ -4391,6 +4545,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance10.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp10.m250@sample-co.in"
     }
    ],
    "notes": [],
@@ -4777,7 +4946,8 @@
    "players": 213,
    "endedAtMs": 1793028608547,
    "runMin": 14.1,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 910,
@@ -4944,6 +5114,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance12.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp12.m250@sample-co.in"
     }
    ],
    "notes": [],
@@ -5243,7 +5428,8 @@
    "players": 213,
    "endedAtMs": 1793029131993,
    "runMin": 15.5,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 1040,
@@ -5405,6 +5591,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp11.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp11.m250@sample-co.in"
     }
    ],
    "notes": [],
@@ -5700,7 +5901,8 @@
    "players": 213,
    "endedAtMs": 1793029161869,
    "runMin": 17.8,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 440,
@@ -5867,6 +6069,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp13.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp13.m250@sample-co.in"
     }
    ],
    "notes": [],
@@ -6033,7 +6250,8 @@
    "players": 231,
    "endedAtMs": 1793029217689,
    "runMin": 7.7,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 580,
@@ -6195,6 +6413,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp15.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp15.m250@sample-co.in"
     }
    ],
    "notes": [],
@@ -6366,7 +6599,8 @@
    "players": 231,
    "endedAtMs": 1793029903034,
    "runMin": 9.9,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 648,
@@ -6538,6 +6772,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance14.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp14.m250@sample-co.in"
     }
    ],
    "notes": [
@@ -6707,7 +6956,8 @@
    "players": 231,
    "endedAtMs": 1793029947114,
    "runMin": 11.1,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 776,
@@ -6884,6 +7134,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance16.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp16.m250@sample-co.in"
     }
    ],
    "notes": [],
@@ -7235,7 +7500,8 @@
    "players": 231,
    "endedAtMs": 1793030166217,
    "runMin": 13.3,
-   "pass": true
+   "pass": true,
+   "reportMail": true
   },
   {
    "ticks": 842,
@@ -7402,6 +7668,21 @@
      "n": "no phone had an unhandled error",
      "ok": true,
      "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance18.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp18.m250@sample-co.in"
     }
    ],
    "notes": [],
@@ -7677,17 +7958,643 @@
    "players": 231,
    "endedAtMs": 1793030946520,
    "runMin": 14.1,
-   "pass": true
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 2128,
+   "n": 17,
+   "id": "CMP-M250-017",
+   "mode": "auto12",
+   "aud": "everyone-both",
+   "speed": 12,
+   "tickets": 1,
+   "prizes": "early5#1,top#1,mid#1,bot#1,corners#1,full#1",
+   "ties": "next",
+   "brand": true,
+   "rounds": 2,
+   "events": "-",
+   "claim": "mixed",
+   "people": 250,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_06c64518dba9ea6989b3952fbd2fa507387d5742f3d9fc4a\",\"aiKey\":\"cta_48c19d6f8f2c2"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8831/zc.html?e=CMP-M250-017\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33408929,\"callSeconds\":12,\"cap\":265,\"closed\":false,\"whoCanJoin\":\"anyone\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":1,\"rewar"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793030151000,\"payUrl\":\"http://localhost:8831/pay.html?e=CMP-M250-017\",\"shareUrl\":\"http://localhost:8831/z.html?e=CMP-M250-017\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "the organizer's payment was accepted",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_1c343370b8f94298\",\"result\":{\"ok\":true,\"orderId\":\"pay_1c343370b8f94298\",\"pack\":500,\"total\":4699,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_8be796a99ecf66620"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":265}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":142,\"invalid\":0,\"want\":142,\"s\":200}"
+    },
+    {
+     "n": "all 231 allowed people got a ticket",
+     "ok": true,
+     "d": "231 of 231"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 231"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "21,39,79,32,1,12,26,9,78,6,16,77,33,84,70,29,72,19,58,66,27,37,67,90,28,71,59,15"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones (round 2 shown on the phone is inside the store list)",
+     "ok": true,
+     "d": "store [\"bot#1@23\",\"bot#1@37\",\"corners#1@17\",\"corners#1@23\",\"early5#1@10\",\"early5#1@7\",\"full#1@60\",\"full#1@ phones [\"bot#1@23\",\"corners#1@23\",\"early5#1@10\",\"full#1@60\",\"mid#1@31\",\"top#1@36\"]"
+    },
+    {
+     "n": "the game ended because every prize was won (6 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 6 numbers 62"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 62"
+    },
+    {
+     "n": "auto: the median gap between numbers is 12 s (+-1): 11.9",
+     "ok": true,
+     "d": "[10.759,10.782,11.008,11.034,11.08]"
+    },
+    {
+     "n": "auto: no burst of numbers: no two numbers came less than half the set gap apart",
+     "ok": true,
+     "d": "0 bursts, fastest 10.759, 5th percentile 11.216, 95th 12.962"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 150s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp17.m250@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp17.m250@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "org",
+   "payerMail": "cmp17.m250@sample-co.in",
+   "joined": 231,
+   "waiting": 19,
+   "needId": 0,
+   "joinMedianMs": 13,
+   "catchUpSec": 7,
+   "winnersAgreeSec": 0,
+   "numbers": 62,
+   "winners": 6,
+   "medianGap": 11.9,
+   "timelineRef": [
+    [
+     30271.900000095367,
+     1
+    ],
+    [
+     30283,
+     2
+    ],
+    [
+     30296.099999904633,
+     3
+    ],
+    [
+     30308,
+     4
+    ],
+    [
+     30319.799999952316,
+     5
+    ],
+    [
+     30331.5,
+     6
+    ],
+    [
+     30364,
+     7
+    ],
+    [
+     30377,
+     8
+    ],
+    [
+     30388.700000047684,
+     9
+    ],
+    [
+     30400.5,
+     10
+    ],
+    [
+     30412.299999952316,
+     11
+    ],
+    [
+     30424.099999904633,
+     12
+    ],
+    [
+     30436,
+     13
+    ],
+    [
+     30448.799999952316,
+     14
+    ],
+    [
+     30460.5,
+     15
+    ],
+    [
+     30472.400000095367,
+     16
+    ],
+    [
+     30484.099999904633,
+     17
+    ],
+    [
+     30496.900000095367,
+     18
+    ],
+    [
+     30508.799999952316,
+     19
+    ],
+    [
+     30520.5,
+     20
+    ],
+    [
+     30532.400000095367,
+     21
+    ],
+    [
+     30544.299999952316,
+     22
+    ],
+    [
+     30556.900000095367,
+     23
+    ],
+    [
+     30568.799999952316,
+     24
+    ],
+    [
+     30580.599999904633,
+     25
+    ],
+    [
+     30592.5,
+     26
+    ],
+    [
+     30604.299999952316,
+     27
+    ],
+    [
+     30616.099999904633,
+     28
+    ],
+    [
+     30629.099999904633,
+     29
+    ],
+    [
+     30640.900000095367,
+     30
+    ],
+    [
+     30652.700000047684,
+     31
+    ],
+    [
+     30664.700000047684,
+     32
+    ],
+    [
+     30676.5,
+     33
+    ],
+    [
+     30688.299999952316,
+     34
+    ],
+    [
+     30700.400000095367,
+     35
+    ],
+    [
+     30712.099999904633,
+     36
+    ],
+    [
+     30724.099999904633,
+     37
+    ],
+    [
+     30737,
+     38
+    ],
+    [
+     30748.700000047684,
+     39
+    ],
+    [
+     30760.5,
+     40
+    ],
+    [
+     30772.400000095367,
+     41
+    ],
+    [
+     30784.299999952316,
+     42
+    ],
+    [
+     30796.200000047684,
+     43
+    ],
+    [
+     30808.200000047684,
+     44
+    ],
+    [
+     30821.099999904633,
+     45
+    ],
+    [
+     30833.099999904633,
+     46
+    ],
+    [
+     30845,
+     47
+    ],
+    [
+     30856.900000095367,
+     48
+    ],
+    [
+     30868.400000095367,
+     49
+    ],
+    [
+     30880.200000047684,
+     50
+    ],
+    [
+     30892.099999904633,
+     51
+    ],
+    [
+     30904.200000047684,
+     52
+    ],
+    [
+     30916.099999904633,
+     53
+    ],
+    [
+     30929.099999904633,
+     54
+    ],
+    [
+     30940.099999904633,
+     55
+    ],
+    [
+     30953,
+     56
+    ],
+    [
+     30965.099999904633,
+     57
+    ],
+    [
+     30976.799999952316,
+     58
+    ],
+    [
+     30988.700000047684,
+     59
+    ],
+    [
+     31000.5,
+     60
+    ],
+    [
+     31012.400000095367,
+     61
+    ],
+    [
+     31024.299999952316,
+     62
+    ],
+    [
+     31036.099999904633,
+     63
+    ],
+    [
+     31049,
+     64
+    ],
+    [
+     31060.099999904633,
+     65
+    ],
+    [
+     31073.099999904633,
+     66
+    ],
+    [
+     31084.900000095367,
+     67
+    ],
+    [
+     31096.599999904633,
+     68
+    ],
+    [
+     31108.5,
+     69
+    ],
+    [
+     31120.400000095367,
+     70
+    ],
+    [
+     31132.099999904633,
+     71
+    ],
+    [
+     31145,
+     72
+    ],
+    [
+     31156.700000047684,
+     73
+    ],
+    [
+     31168.400000095367,
+     74
+    ],
+    [
+     31180.099999904633,
+     75
+    ],
+    [
+     31192.200000047684,
+     76
+    ],
+    [
+     31204.299999952316,
+     77
+    ],
+    [
+     31216.200000047684,
+     78
+    ],
+    [
+     31229,
+     79
+    ],
+    [
+     31240.099999904633,
+     80
+    ],
+    [
+     31252.200000047684,
+     81
+    ],
+    [
+     31264.099999904633,
+     82
+    ],
+    [
+     31277,
+     83
+    ],
+    [
+     31289,
+     84
+    ],
+    [
+     31300.799999952316,
+     85
+    ],
+    [
+     31312.799999952316,
+     86
+    ],
+    [
+     31324.900000095367,
+     87
+    ],
+    [
+     31337.099999904633,
+     88
+    ],
+    [
+     31349,
+     89
+    ],
+    [
+     31360.099999904633,
+     90
+    ],
+    [
+     31463.200000047684,
+     1
+    ],
+    [
+     31476.099999904633,
+     2
+    ],
+    [
+     31486.900000095367,
+     3
+    ],
+    [
+     31498.599999904633,
+     4
+    ],
+    [
+     31511.099999904633,
+     5
+    ],
+    [
+     31522.400000095367,
+     6
+    ],
+    [
+     31535,
+     7
+    ],
+    [
+     31546.400000095367,
+     8
+    ],
+    [
+     31558.700000047684,
+     9
+    ],
+    [
+     31570.5,
+     10
+    ],
+    [
+     31582.700000047684,
+     11
+    ],
+    [
+     31594.700000047684,
+     12
+    ],
+    [
+     31606.599999904633,
+     13
+    ],
+    [
+     31618.700000047684,
+     14
+    ],
+    [
+     31630.400000095367,
+     15
+    ],
+    [
+     31643.099999904633,
+     16
+    ],
+    [
+     31654.700000047684,
+     17
+    ],
+    [
+     31666.700000047684,
+     18
+    ],
+    [
+     31678.099999904633,
+     19
+    ],
+    [
+     31690.5,
+     20
+    ],
+    [
+     31702.900000095367,
+     21
+    ],
+    [
+     31714.900000095367,
+     22
+    ],
+    [
+     31726.099999904633,
+     23
+    ],
+    [
+     31738.599999904633,
+     24
+    ],
+    [
+     31750.799999952316,
+     25
+    ],
+    [
+     31762.200000047684,
+     26
+    ],
+    [
+     31774.599999904633,
+     27
+    ],
+    [
+     31787.099999904633,
+     28
+    ],
+    [
+     31799.099999904633,
+     29
+    ],
+    [
+     31810.799999952316,
+     30
+    ]
+   ],
+   "fastestGap": 10.759,
+   "p5Gap": 11.216,
+   "p95Gap": 12.962,
+   "players": 231,
+   "endedAtMs": 1793032250887,
+   "runMin": 36.6,
+   "pass": true,
+   "reportMail": true
   }
- ],
- "h": {
-  "calls": 445212,
-  "fails": 0,
-  "failKinds": {}
- },
- "beacon": {
-  "fetched": 2037,
-  "hits": 993034,
-  "failed": 0
- }
+ ]
 }

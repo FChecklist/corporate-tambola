@@ -3,3 +3,58 @@ campaign chaosA: cases 901..901, 1 at a time, 80 people each, lead 150s, http://
   #901 auto9/open t+60s numbers 0 winners 0 phase play lag 1/250ms queue max 0ms (0 over 0.5 s) calls 849 failed 0
   #901 auto9/open t+90s numbers 0 winners 0 phase play lag 1/250ms queue max 0ms (0 over 0.5 s) calls 893 failed 0
   #901 auto9/open t+120s numbers 0 winners 0 phase play lag 0/250ms queue max 0ms (0 over 0.5 s) calls 927 failed 0
+  [chaos] t+0s first number due
+  #901 auto9/open t+150s numbers 1 winners 0 phase play lag 0/250ms queue max 0ms (0 over 0.5 s) calls 1173 failed 0
+  #901 auto9/open t+180s numbers 5 winners 0 phase play lag 1/250ms queue max 0ms (0 over 0.5 s) calls 1362 failed 0
+  #901 auto9/open t+210s numbers 6 winners 0 phase play lag 0/250ms queue max 0ms (0 over 0.5 s) calls 1509 failed 0
+  #901 auto9/open t+240s numbers 9 winners 0 phase play lag 0/250ms queue max 0ms (0 over 0.5 s) calls 1708 failed 0
+  #901 auto9/open t+270s numbers 12 winners 0 phase play lag 2/250ms queue max 0ms (0 over 0.5 s) calls 1900 failed 0
+  #901 auto9/open t+300s numbers 15 winners 1 phase play lag 1/250ms queue max 0ms (0 over 0.5 s) calls 2116 failed 0
+  #901 auto9/open t+330s numbers 19 winners 1 phase play lag 1/250ms queue max 0ms (0 over 0.5 s) calls 2346 failed 0
+  #901 auto9/open t+360s numbers 22 winners 1 phase play lag 0/250ms queue max 0ms (0 over 0.5 s) calls 2585 failed 0
+  #901 auto9/open t+390s numbers 25 winners 1 phase play lag 0/250ms queue max 0ms (0 over 0.5 s) calls 2718 failed 0
+  #901 auto9/open t+420s numbers 29 winners 1 phase play lag 0/250ms queue max 0ms (0 over 0.5 s) calls 2929 failed 0
+  #901 auto9/open t+450s numbers 32 winners 2 phase play lag 0/250ms queue max 0ms (0 over 0.5 s) calls 3131 failed 0
+  [chaos] t+330s SERVER KILLED (pid 10063)
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 7ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 2ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 3ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 2ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 2ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 3ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 3ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 4ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/seats?after=80&cafter=1793031901722 TypeError fetch failed cause=ECONNREFUSED after 2ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  [call failed] GET /api/z/CMP-CHAOSA-901/control TypeError fetch failed cause=ECONNREFUSED after 1ms
+  #901 auto9/open t+480s numbers 36 winners 2 phase play lag 0/250ms queue max 0ms (0 over 0.5 s) calls 3300 failed 43
+  #901 auto9/open t+510s numbers 39 winners 2 phase play lag 0/250ms queue max 0ms (0 over 0.5 s) calls 3766 failed 509
+  [chaos] t+391s SERVER RESTARTED on the same database
+  #901 auto9/open t+540s numbers 42 winners 2 phase play lag 0/356ms queue max 0ms (0 over 0.5 s) calls 4458 failed 1096
+  #901 auto9/open t+570s numbers 46 winners 3 phase play lag 0/356ms queue max 0ms (0 over 0.5 s) calls 4706 failed 1096
+  #901 auto9/open t+600s numbers 49 winners 5 phase play lag 4/356ms queue max 0ms (0 over 0.5 s) calls 4937 failed 1096
+  #901 auto9/open t+630s numbers 52 winners 5 phase play lag 1/356ms queue max 0ms (0 over 0.5 s) calls 5203 failed 1096
+  #901 auto9/open t+660s numbers 56 winners 5 phase play lag 1/356ms queue max 0ms (0 over 0.5 s) calls 5439 failed 1096
+  #901 auto9/open t+690s numbers 59 winners 5 phase play lag 1/356ms queue max 0ms (0 over 0.5 s) calls 5671 failed 1096
+  #901 auto9/open t+720s numbers 62 winners 5 phase play lag 1/356ms queue max 0ms (0 over 0.5 s) calls 5843 failed 1096
+  #901 auto9/open t+750s numbers 66 winners 5 phase play lag 1/356ms queue max 0ms (0 over 0.5 s) calls 6057 failed 1096
+FAIL #901 audit: no earlier valid in-time claim was passed over (prize distribution follows the claims) | 4 passed over: corners#1 claim call 37 at 27738 ms vs the deadline (negative = before it) winner call 45 | mid#1 claim call 40 at 930 ms vs the deadline (negative = before it) winner call 45 | top#1 c
+FAIL #901 auto: no burst of numbers: no two numbers came less than half the set gap apart | 2 bursts, fastest 3.293, 5th percentile 8.375, 95th 9.77
+  [chaos] stalls [{"number":7,"atSecAfterFirst":76,"gapSec":30},{"number":18,"atSecAfterFirst":181,"gapSec":33},{"number":28,"atSecAfterFirst":271,"gapSec":33}] bursts [{"number":19,"atSecAfterFirst":184,"gapSec":3.3},{"number":29,"atSecAfterFirst":274,"gapSec":3.3}] calls {"beforeFirstNumber":1022,"afterFirstNumber":4203,"perPhonePerMinuteAfter":4.93,"afterByKind":{"GET /api/z/:id/seats 200":2837,"GET /api/z/:id/control 404":716,"POST /api/z/:id/vote 200":376,"POST /api/z/:id/claims 200":166,"GET /api/z/:id/results 200":63,"POST /api/z/:id/over 200":45}}
+FAIL #901 auto9 open t1 - | numbers 67 winners 6 players 80 gap 8.7 | 2 failed of 28 | 15 min
+SUMMARY {"tag":"chaosA","cases":1,"casesPassed":0,"checks":31,"checksFailed":3,"calls":6321,"serverErrors":1096,"failKinds":{"network GET /api/z/:id/control ECONNREFUSED":79,"network GET /api/z/:id/seats ECONNREFUSED":323,"network POST /api/z/:id/claims ECONNREFUSED":313,"network POST /api/z/:id/vote ECONNREFUSED":381},"latencyMs":{"p50":2,"p95":13,"p99":35,"max":749},"beacon":{"fetched":210,"hits":26534,"failed":0}}
+FAILED CASE 901 auto9 open - ["audit: no earlier valid in-time claim was passed over (prize distribution follows the claims) | 4 passed over: corners#1 claim call 37 at 27738 ms vs the deadline (negative = before it) winner call 45 | mid#1 claim call 40 at 930 ms vs the deadline (negative = before it) winner call 45 | top#1 claim call 40 at 611 ms vs the deadline (","auto: no burst of numbers: no two numbers came less than half the set gap apart | 2 bursts, fastest 3.293, 5th percentile 8.375, 95th 9.77","the invoice reached the organizer | cmp901.chaosA@sample-co.in"]

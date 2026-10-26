@@ -38,3 +38,24 @@ ok   [approval] Host presses "approve all" (16 still waiting) | want all admitte
 ok   [approval] nobody is left waiting afterwards | want 0 | got 0
 ok   [game] three reference phones joined with their employee ID | want 3 | got 3
 ok   [game] Host registers the game-day key | want ok | got {"ok":true,"created":true}
+ok   [game] Host presses Next | want 200 | got 200
+ok   [late] 80 listed employees join AFTER the first number | want 80 | got 80
+ok   [late] a late joiner is told so and sees only the numbers called after joining | want late flag, fewer numbers than a phone that was there from the start | got late=true 0 vs 8 numbers
+ok   [late] 40 strangers (ID not on the list) ask to come in during the game | want 40 x 403 waiting | got 40 x 403 waiting
+ok   [late] the Organizer sees them in the waiting list during the game | want 40 | got 40
+ok   [late] during the game: 20 admits by the Organizer and 10 declines by the Host are all answered 200 | want 30 x 200 | got admits 20/20, declines 10/10 | [[200,{"ok":true,"declined":true}],[200,{"ok":true,"declined":true}]]
+ok   [late] …and each declined stranger's page now says 'declined' | want 10 x declined | got 10 x declined (declined)
+ok   [late] an admitted stranger joins during the game as a late joiner | want 200 | got 200
+ok   [late] a declined stranger is refused during the game | want 403 declined | got 403 (declined)
+ok   [track] the Organizer's list shows who joined, who was invited, who was let in by whom | want statuses joined/invited, with 'let in by' for approved | got 938 rows; joined 791; keys id,name,maskedPhone,status,empId,link,waLink,inviter
+ok   [remove] Organizer removes a seated person during the game | want 200 | got 200
+ok   [remove] the Co-host may NOT remove someone who is not on their own list | want 403 or 404 | got 404 (No such person on your list.)
+ok   [remove] the Host removes a seated person during the game | want 200 | got 200
+ok   [game] Organizer ends the game | want 200 | got 200
+ok   [game] the reference phones reach the end | want 3 | got 3 | 156 s
+ok   [game] the three phones show the same numbers | want 1 distinct | got 1
+ok   [limits] the waiting room holds at most 500 requests; the next ones are told it is full (600 strangers, each from their own address) | want 500 waiting + 100 waiting-full | got 500 waiting + 100 waiting-full (other: 0)
+FAIL [limits] 40 wrong employee IDs typed from ONE office address within minutes (an office of 1000 makes typos): nobody is locked out | want none locked out | got locked from try 31: too-many-tries "Too many tries with an employee ID that is not on the list. Please ask your orga" | KNOWN RISK ID_MISS_PER_10MIN = 30
+ok   [limits] …a listed employee with a CORRECT ID, from the same office address, is still let in | want 200 | got 200
+ok   [limits] …a listed employee from another address is let in | want 200 | got 200
+DONE 58 of 60 as expected; not as expected: ID typed with a space inside (EMP 10001): the person is told what is wrong, not sent to the organizer ; 40 wrong employee IDs typed from ONE office address within minutes (an office of 1000 makes typos): nobody is locked out

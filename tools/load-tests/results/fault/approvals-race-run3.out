@@ -5,3 +5,5 @@ during the game sequential {"admitByOrg":{"ok":7,"bad":0},"declineByHost":{"ok":
 during the game admit+decline {"requests":80,"states":{"declined/out":80},"disagreements":0,"examples":[]}
 during the game admit+admit {"requests":80,"states":{"admitted/in":80},"disagreements":0,"examples":[]}
 during the game decline+decline {"requests":80,"states":{"declined/out":80},"disagreements":0,"examples":[]}
+C end propagation {"small":{"cap":100,"stopStatus":200,"secondsUntilPhoneShowsEnd":{"0":43.2,"1":43.2}},"big":{"cap":1015,"stopStatus":200,"secondsUntilPhoneShowsEnd":{"0":158.6,"1":159.1}}}
+DONE

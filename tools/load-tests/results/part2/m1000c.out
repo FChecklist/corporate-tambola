@@ -28,3 +28,54 @@ campaign m1000c: cases 43..45, 1 at a time, 1000 people each, lead 400s, http://
   #43 auto9/emp-id t+752s numbers 43 winners 1 phase play lag 35/802ms queue max 1865ms (399 over 0.5 s) calls 53674 failed 0
   #43 auto9/emp-id t+783s numbers 47 winners 1 phase play lag 8/802ms queue max 2009ms (1052 over 0.5 s) calls 56240 failed 0
 PASS #43 auto9 emp-id t1 - | numbers 37 winners 2 players 850 gap 8.8 | 0 failed of 30 | 16 min
+  #44 auto12/emp-id t+30s numbers 0 winners 0 phase play lag 1/807ms queue max 2209ms (1451 over 0.5 s) calls 71793 failed 0
+  #44 auto12/emp-id t+60s numbers 0 winners 0 phase play lag 1/807ms queue max 2209ms (1451 over 0.5 s) calls 72285 failed 0
+  #44 auto12/emp-id t+90s numbers 0 winners 0 phase play lag 0/807ms queue max 2209ms (1451 over 0.5 s) calls 72646 failed 0
+  #44 auto12/emp-id t+120s numbers 0 winners 0 phase play lag 1/807ms queue max 2209ms (1451 over 0.5 s) calls 73086 failed 0
+  #44 auto12/emp-id t+150s numbers 0 winners 0 phase play lag 1/807ms queue max 2209ms (1451 over 0.5 s) calls 73455 failed 0
+  #44 auto12/emp-id t+180s numbers 0 winners 0 phase play lag 0/807ms queue max 2209ms (1451 over 0.5 s) calls 73886 failed 0
+  #44 auto12/emp-id t+210s numbers 0 winners 0 phase play lag 0/807ms queue max 2209ms (1451 over 0.5 s) calls 74271 failed 0
+  #44 auto12/emp-id t+240s numbers 0 winners 0 phase play lag 1/807ms queue max 2209ms (1451 over 0.5 s) calls 74689 failed 0
+  #44 auto12/emp-id t+270s numbers 0 winners 0 phase play lag 0/807ms queue max 2209ms (1451 over 0.5 s) calls 75084 failed 0
+  #44 auto12/emp-id t+300s numbers 0 winners 0 phase play lag 0/807ms queue max 2209ms (1451 over 0.5 s) calls 75488 failed 0
+  #44 auto12/emp-id t+330s numbers 0 winners 0 phase play lag 0/807ms queue max 2209ms (1451 over 0.5 s) calls 75901 failed 0
+  #44 auto12/emp-id t+360s numbers 0 winners 0 phase play lag 1/807ms queue max 2209ms (1451 over 0.5 s) calls 76289 failed 0
+  #44 auto12/emp-id t+393s numbers 3 winners 0 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 79943 failed 0
+  #44 auto12/emp-id t+423s numbers 5 winners 0 phase play lag 2/948ms queue max 2900ms (1790 over 0.5 s) calls 82751 failed 0
+  #44 auto12/emp-id t+453s numbers 8 winners 0 phase play lag 11/948ms queue max 2900ms (1790 over 0.5 s) calls 84911 failed 0
+  #44 auto12/emp-id t+483s numbers 10 winners 0 phase play lag 3/948ms queue max 2900ms (1790 over 0.5 s) calls 87699 failed 0
+  #44 auto12/emp-id t+513s numbers 13 winners 0 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 90866 failed 0
+  #44 auto12/emp-id t+543s numbers 15 winners 1 phase play lag 1/948ms queue max 2900ms (1790 over 0.5 s) calls 93861 failed 0
+  #44 auto12/emp-id t+573s numbers 18 winners 1 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 96082 failed 0
+  #44 auto12/emp-id t+603s numbers 20 winners 1 phase play lag 3/948ms queue max 2900ms (1790 over 0.5 s) calls 98960 failed 0
+  #44 auto12/emp-id t+633s numbers 23 winners 1 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 101840 failed 0
+  #44 auto12/emp-id t+663s numbers 25 winners 1 phase play lag 1/948ms queue max 2900ms (1790 over 0.5 s) calls 103977 failed 0
+  #44 auto12/emp-id t+693s numbers 28 winners 1 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 106667 failed 0
+  #44 auto12/emp-id t+723s numbers 30 winners 1 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 109343 failed 0
+  #44 auto12/emp-id t+753s numbers 33 winners 1 phase play lag 2/948ms queue max 2900ms (1790 over 0.5 s) calls 112166 failed 0
+  #44 auto12/emp-id t+783s numbers 35 winners 1 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 114212 failed 0
+  #44 auto12/emp-id t+813s numbers 38 winners 1 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 117025 failed 0
+PASS #44 auto12 emp-id t2 bogey | numbers 31 winners 2 players 850 gap 11.9 | 0 failed of 32 | 16 min
+  #45 host/emp-id t+30s numbers 0 winners 0 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 132768 failed 0
+  #45 host/emp-id t+60s numbers 0 winners 0 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 135469 failed 0
+  #45 host/emp-id t+90s numbers 0 winners 0 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 139193 failed 0
+  #45 host/emp-id t+120s numbers 0 winners 0 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 142935 failed 0
+  #45 host/emp-id t+150s numbers 0 winners 0 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 146666 failed 0
+  #45 host/emp-id t+180s numbers 0 winners 0 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 150402 failed 0
+  #45 host/emp-id t+210s numbers 0 winners 0 phase play lag 2/948ms queue max 2900ms (1790 over 0.5 s) calls 154151 failed 0
+  #45 host/emp-id t+240s numbers 0 winners 0 phase play lag 1/948ms queue max 2900ms (1790 over 0.5 s) calls 157892 failed 0
+  #45 host/emp-id t+270s numbers 0 winners 0 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 161629 failed 0
+  #45 host/emp-id t+300s numbers 0 winners 0 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 165353 failed 0
+  #45 host/emp-id t+330s numbers 0 winners 0 phase play lag 1/948ms queue max 2900ms (1790 over 0.5 s) calls 169087 failed 0
+  #45 host/emp-id t+360s numbers 2 winners 0 phase play lag 1/948ms queue max 2900ms (1790 over 0.5 s) calls 174349 failed 0
+  #45 host/emp-id t+390s numbers 5 winners 0 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 180849 failed 0
+  #45 host/emp-id t+420s numbers 6 winners 0 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 186518 failed 0
+  #45 host/emp-id t+465s numbers 11 winners 0 phase play lag 0/948ms queue max 2900ms (1790 over 0.5 s) calls 195942 failed 0
+  #45 host/emp-id t+496s numbers 14 winners 0 phase play lag 39/948ms queue max 2900ms (1790 over 0.5 s) calls 202033 failed 0
+  #45 host/emp-id t+526s numbers 16 winners 1 phase play lag 2/948ms queue max 2900ms (1790 over 0.5 s) calls 208430 failed 0
+  #45 host/emp-id t+556s numbers 19 winners 1 phase play lag 3/948ms queue max 2900ms (1790 over 0.5 s) calls 214868 failed 0
+  #45 host/emp-id t+586s numbers 22 winners 1 phase play lag 1/948ms queue max 2900ms (1790 over 0.5 s) calls 220851 failed 0
+FAIL #45 manual: the numbers came only because the Host pressed Next (numbers <= presses stored on the server + 1) | numbers 18 presses stored 23 (seen by the test 23)
+FAIL #45 host emp-id t1 late | numbers 18 winners 2 players 850 gap 11.8 | 1 failed of 29 | 12 min
+SUMMARY {"tag":"m1000c","cases":3,"casesPassed":2,"checks":100,"checksFailed":1,"calls":222277,"serverErrors":0,"failKinds":{},"latencyMs":{"p50":1,"p95":67,"p99":528,"max":2881},"beacon":{"fetched":889,"hits":446373,"failed":0}}
+FAILED CASE 45 host emp-id late ["manual: the numbers came only because the Host pressed Next (numbers <= presses stored on the server + 1) | numbers 18 presses stored 23 (seen by the test 23)"]

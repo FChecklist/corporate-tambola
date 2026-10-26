@@ -520,3 +520,26 @@ PASS #18 host everyone-both t2 reload | numbers 60 winners 6 players 231 gap 11.
   #17 auto12/everyone-both t+1452s numbers 4 winners 0 phase play lag 34/1451ms queue max 1314ms (223 over 0.5 s) calls 459525 failed 0
   #17 auto12/everyone-both t+1483s numbers 7 winners 0 phase play lag 117/1451ms queue max 1314ms (223 over 0.5 s) calls 460288 failed 0
   #17 auto12/everyone-both t+1515s numbers 9 winners 0 phase play lag 350/1451ms queue max 1314ms (223 over 0.5 s) calls 461039 failed 0
+  #17 auto12/everyone-both t+1549s numbers 12 winners 0 phase play lag 312/1451ms queue max 1314ms (223 over 0.5 s) calls 461798 failed 0
+  #17 auto12/everyone-both t+1582s numbers 15 winners 1 phase play lag 104/1451ms queue max 1314ms (223 over 0.5 s) calls 462599 failed 0
+  #17 auto12/everyone-both t+1613s numbers 17 winners 1 phase play lag 60/1451ms queue max 1314ms (223 over 0.5 s) calls 463398 failed 0
+  #17 auto12/everyone-both t+1644s numbers 20 winners 1 phase play lag 62/1451ms queue max 1314ms (223 over 0.5 s) calls 464216 failed 0
+  #17 auto12/everyone-both t+1675s numbers 23 winners 1 phase play lag 150/1451ms queue max 1314ms (223 over 0.5 s) calls 464925 failed 0
+  #17 auto12/everyone-both t+1706s numbers 25 winners 1 phase play lag 47/1451ms queue max 1314ms (223 over 0.5 s) calls 465680 failed 0
+  #17 auto12/everyone-both t+1737s numbers 28 winners 2 phase play lag 50/1451ms queue max 1314ms (223 over 0.5 s) calls 466434 failed 0
+  #17 auto12/everyone-both t+1768s numbers 30 winners 3 phase play lag 0/1451ms queue max 1314ms (223 over 0.5 s) calls 467289 failed 0
+  #17 auto12/everyone-both t+1800s numbers 33 winners 3 phase play lag 51/1451ms queue max 1314ms (223 over 0.5 s) calls 468097 failed 0
+  #17 auto12/everyone-both t+1830s numbers 36 winners 4 phase play lag 1/1451ms queue max 1314ms (223 over 0.5 s) calls 468899 failed 0
+  #17 auto12/everyone-both t+1862s numbers 38 winners 4 phase play lag 9/1451ms queue max 1314ms (223 over 0.5 s) calls 469618 failed 0
+  #17 auto12/everyone-both t+1893s numbers 41 winners 4 phase play lag 91/1451ms queue max 1314ms (223 over 0.5 s) calls 470383 failed 0
+  #17 auto12/everyone-both t+1925s numbers 43 winners 5 phase play lag 58/1451ms queue max 1314ms (223 over 0.5 s) calls 471171 failed 0
+  #17 auto12/everyone-both t+1957s numbers 46 winners 5 phase play lag 65/1451ms queue max 1314ms (223 over 0.5 s) calls 472021 failed 0
+  #17 auto12/everyone-both t+1990s numbers 49 winners 5 phase play lag 199/1451ms queue max 1314ms (223 over 0.5 s) calls 472782 failed 0
+  #17 auto12/everyone-both t+2023s numbers 52 winners 5 phase play lag 10/1451ms queue max 1314ms (223 over 0.5 s) calls 473541 failed 0
+  #17 auto12/everyone-both t+2056s numbers 54 winners 5 phase play lag 340/1451ms queue max 1314ms (223 over 0.5 s) calls 474318 failed 0
+  #17 auto12/everyone-both t+2089s numbers 57 winners 5 phase play lag 116/1451ms queue max 1314ms (223 over 0.5 s) calls 475149 failed 0
+  #17 auto12/everyone-both t+2121s numbers 60 winners 5 phase play lag 120/1451ms queue max 1314ms (223 over 0.5 s) calls 475907 failed 0
+  #17 auto12/everyone-both t+2156s numbers 63 winners 5 phase play lag 313/1451ms queue max 1314ms (223 over 0.5 s) calls 476742 failed 0
+PASS #17 auto12 everyone-both t1 - | numbers 62 winners 6 players 231 gap 11.9 | 0 failed of 20 | 39 min
+SUMMARY {"tag":"m250","cases":18,"casesPassed":17,"checks":579,"checksFailed":1,"calls":477917,"serverErrors":0,"failKinds":{},"latencyMs":{"p50":1,"p95":23,"p99":182,"max":3420},"beacon":{"fetched":2470,"hits":1103107,"failed":0}}
+FAILED CASE 3 host open - ["manual: the numbers came only because the Host pressed Next (numbers <= presses stored on the server + 1) | numbers 33 presses stored 37 (seen by the test 37)"]
