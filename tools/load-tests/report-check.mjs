@@ -1,7 +1,7 @@
 // Waits for the end-of-game report e-mail of a game on the LOCAL test copy (it goes out a few minutes after the game ends; the server's lazy tick sends it when the site is hit),
 // opens the report link in a real page, and checks the report against what the phones saw. Returns { ok, notes, data }.
 import { DatabaseSync } from "node:sqlite";
-const DB = "C:/ct/test-sites/data/tambola-test.sqlite";
+import { fileURLToPath as __f2p } from "node:url"; const ROOT = __f2p(new URL("../../", import.meta.url)), DATA = process.env.DATA_DIR || ROOT + "data"; const DB = process.env.DB_FILE || DATA + "/tambola-test.sqlite"; // CLOUD PORT: paths relative to the checkout; DB_FILE chooses the server database
 const q = (sql, ...a) => { const db = new DatabaseSync(DB, { readOnly: true }); try { return db.prepare(sql).all(...a); } finally { db.close(); } };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function waitForReport(BASE, id, maxMin = 12) {

@@ -1,10 +1,16 @@
-// The REAL phone game code (zgame.js: PhoneRuntime) run in Node with no screen, over the real network to the local test server and the real public beacon (drand).
-// One shared beacon cache keeps 1,000+ phones from hammering drand; every phone still checks the BLS signature of every round it uses (the real check, no shortcut).
+// The REAL phone game code (zgame.js: PhoneRuntime) run in Node with no screen, over the real network to the local test server.
+// CLOUD PORT (Linux): this copy never contacts the public beacon (drand) or any other live service. The beacon is replaced by a LOCAL STAND-IN CHAIN: same scheme as drand quicknet
+// (bls12-381, signatures on G1, round r published at GENESIS+(r-1)*3 s, randomness = sha256(signature)) but signed with a TEST key made here. Every phone still runs the real
+// signature check (the product's own verifyRound) on every round it uses, against the test chain's public key. What this cannot test: drand's own availability / latency.
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
-const PUB = "C:/ct/test-sites/tambola/apps/web/public/";
+const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const PUB = ROOT + "apps/web/public/";
+const requireBeacon = createRequire(ROOT + "packages/beacon/package.json");
 const store0 = new Map();
 globalThis.window = globalThis; globalThis.self = globalThis;
 globalThis.localStorage = { getItem: (k) => store0.get(k) ?? null, setItem: (k, v) => store0.set(k, String(v)), removeItem: (k) => store0.delete(k) };
@@ -19,32 +25,28 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const sha = (s) => createHash("sha256").update(s).digest("hex");
 export const GENESIS = 1692803367, roundAt = (ms) => Math.floor((ms / 1000 - GENESIS) / 3) + 1, roundMs = (r) => (GENESIS + (r - 1) * 3) * 1000;
 
-// ---- the shared beacon cache: each round is fetched from drand once per process; a "latest" answer is kept for 2 s ----
-// the public beacon (drand) is reached through a resolver that remembers the last good address of every mirror, so a moment when this laptop's own DNS does not answer cannot silence a whole crowd of test phones
-import { Agent, fetch as ufetch } from "file:///C:/ct/ct/node_modules/undici/index.js";
-import dns from "node:dns";
-const goodAddr = new Map();
-const MIRRORS = ["api.drand.sh", "api2.drand.sh", "api3.drand.sh", "drand.cloudflare.com"];
-const refreshDns = async (h) => { try { const a = await dns.promises.resolve4(h); if (a.length) goodAddr.set(h, a); } catch { /* keep the last good answer */ } };
-await Promise.all(MIRRORS.map(refreshDns)); setInterval(() => MIRRORS.forEach(refreshDns), 120000).unref();
-const beaconAgent = new Agent({ keepAliveTimeout: 30000, connections: 512, connect: { lookup: (host, opts, cb) => { const a = goodAddr.get(host); if (a && a.length) { const addr = a[Math.floor(Math.random() * a.length)]; return opts && opts.all ? cb(null, [{ address: addr, family: 4 }]) : cb(null, addr, 4); } return dns.lookup(host, opts, cb); } } });
-const cache = new Map();
+// ---- the LOCAL STAND-IN beacon chain (no network): each round is signed once per process with a test key; a round is only served once its scheduled publish time (UTC) has come, like the real beacon ----
+const { bls12_381 } = requireBeacon("@noble/curves/bls12-381");
+const SS = bls12_381.shortSignatures, DST = "BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_";
+const skBytes = createHash("sha256").update("corporate-tambola cloud load test: local stand-in beacon key (NOT the drand key)").digest(); skBytes[0] &= 0x3f;
+export const TEST_PUBKEY = Buffer.from(SS.getPublicKey(skBytes).toRawBytes(true)).toString("hex");
+export const TESTNET = { ...ZG.QUICKNET, publicKey: TEST_PUBKEY }; // same chain rules as quicknet (genesis, 3 s period, scheme); only the public key is the test chain's
+const signed = new Map();
+const signRound = (r) => { let x = signed.get(r); if (!x) { const rb = new Uint8Array(8); new DataView(rb.buffer).setBigUint64(0, BigInt(r)); const sig = SS.sign(SS.hash(createHash("sha256").update(rb).digest(), DST), skBytes).toRawBytes(true); x = { round: r, signature: Buffer.from(sig).toString("hex"), randomness: createHash("sha256").update(sig).digest("hex") }; signed.set(r, x); if (signed.size > 4000) signed.delete(signed.keys().next().value); } return x; };
 // the real signature check of the real phone code, run once per round for everybody in this process (every phone gets the identical true/false answer; a phone alone would do the same arithmetic)
-const refStore = new ZG.RoundStore({}); const sigMemo = new Map(); export const sigStats = { checks: 0, shared: 0 };
+const refStore = new ZG.RoundStore({ net: TESTNET }); const sigMemo = new Map(); export const sigStats = { checks: 0, shared: 0 };
 const verify = (x) => { const k = x.round + ":" + x.signature + ":" + x.randomness; let v = sigMemo.get(k); if (v === undefined) { sigStats.checks++; v = !!refStore.verify(x); sigMemo.set(k, v); } else sigStats.shared++; return v; };
 export const beaconStats = { fetched: 0, hits: 0, failed: 0 };
-export const beaconAvail = new Map(); // round -> the moment (ms) the first good answer for that round reached this program: how late the public beacon itself was
+export const beaconAvail = new Map(); // round -> the moment (ms) the first good answer for that round was served by the stand-in (always at or after its scheduled time)
 
-const fetcher = async (url, init) => { // one real request per round per mirror for the whole crowd; each phone can still give up on its own (its own abort signal) without cancelling the others' request
-  const latest = /\/latest$/.test(url) || /\/public$/.test(url); let hit = cache.get(url);
-  const own = new Promise((_, rej) => { const sg = init?.signal; if (sg) { if (sg.aborted) rej(Object.assign(new Error("aborted"), { name: "AbortError" })); else sg.addEventListener("abort", () => rej(Object.assign(new Error("aborted"), { name: "AbortError" })), { once: true }); } });
-  own.catch(() => {});
-  if (!hit || (latest && Date.now() - hit.t >= 2000)) {
-    const p = (async () => { const r = await ufetch(url, { signal: AbortSignal.timeout(8000), dispatcher: beaconAgent }); const body = r.ok ? await r.json() : null; return { ok: r.ok, status: r.status, json: async () => body }; })();
-    hit = { t: Date.now(), p }; cache.set(url, hit); beaconStats.fetched++;
-    p.then((x) => { if (x.ok) { const m = /\/public\/(\d+)/.exec(url); if (m && !beaconAvail.has(Number(m[1]))) beaconAvail.set(Number(m[1]), Date.now()); } if (!x.ok && cache.get(url) === hit) cache.delete(url); }).catch(() => { beaconStats.failed++; if (cache.get(url) === hit) cache.delete(url); }); // only a good answer is kept: a round that is not published yet must be asked for again
-  } else beaconStats.hits++;
-  return Promise.race([hit.p, own]);
+const fetcher = async (url, init) => { // answers any "<mirror>/<chain>/public/<round|latest>" locally; a round that is not yet due is a 404 ("not published yet"), as with the real beacon
+  const m = /\/public\/(latest|\d+)$/.exec(url); if (!m) return { ok: false, status: 404, json: async () => ({}) };
+  if (init?.signal?.aborted) throw Object.assign(new Error("aborted"), { name: "AbortError" });
+  const r = m[1] === "latest" ? roundAt(Date.now()) : Number(m[1]);
+  if (Date.now() < roundMs(r)) { beaconStats.hits++; return { ok: false, status: 404, json: async () => ({}) }; }
+  const fresh = !signed.has(r); const x = signRound(r); if (fresh) beaconStats.fetched++; else beaconStats.hits++;
+  if (!beaconAvail.has(r)) beaconAvail.set(r, Date.now());
+  return { ok: true, status: 200, json: async () => ({ ...x }) };
 };
 
 
@@ -54,7 +56,7 @@ export const queueStats = { waits: 0, maxMs: 0, over500: 0 };
 const slot = async () => { if (inflight < 160) { inflight++; return; } const t = performance.now(); await new Promise((r) => waitQ.push(r)); const w = performance.now() - t; queueStats.waits++; if (w > queueStats.maxMs) queueStats.maxMs = w; if (w > 500) queueStats.over500++; };
 const release = () => { const n = waitQ.shift(); if (n) n(); else inflight--; };
 export class Harness {
-  constructor(BASE, { ipPool = 60 } = {}) { this.BASE = BASE; if (/^https:\/\//.test(BASE)) globalThis.location = new URL(BASE); /* the real phone code then adds our own site as its last beacon route, as in a browser */ this.lat = []; this.calls = 0; this.fails = 0; this.failKinds = {}; this.ips = Array.from({ length: ipPool }, () => `10.${rnd(250)}.${rnd(250)}.${1 + rnd(250)}`); this.C = JSON.parse(readFileSync("C:/ct/test-sites/tambola/apps/edge/src/consent-text.json", "utf8")); }
+  constructor(BASE, { ipPool = 60 } = {}) { this.BASE = BASE; if (/^https:\/\//.test(BASE)) globalThis.location = new URL(BASE); /* the real phone code then adds our own site as its last beacon route, as in a browser */ this.lat = []; this.calls = 0; this.fails = 0; this.failKinds = {}; this.ips = Array.from({ length: ipPool }, () => `10.${rnd(250)}.${rnd(250)}.${1 + rnd(250)}`); this.C = JSON.parse(readFileSync(ROOT + "apps/edge/src/consent-text.json", "utf8")); }
   consent(k) { return { consent: { v: this.C.version, boxes: Object.keys(this.C[k]) } }; }
   /** one plain API call as the organizer's console does */
   async call(m, p, b, key, ip = "10.1.1.1") {
