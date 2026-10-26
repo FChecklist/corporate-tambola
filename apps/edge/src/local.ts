@@ -9,15 +9,17 @@ import type { PayEnv } from "./pay";
 
 /** Test tool only: how many database reads and writes the request in progress made (SQL_COUNT_LOG=<file> writes one line per request; exact when requests come one at a time). */
 const SQLN = { r: 0, w: 0 };
+/** Test tool only: D1_READ_MS / D1_WRITE_MS make every database read / write wait that long (like a real D1 call), so a local load run is not unrealistically fast. Default 0. */
+const LAT_R = Number(process.env.D1_READ_MS ?? 0) || 0, LAT_W = Number(process.env.D1_WRITE_MS ?? 0) || 0;
 export function sqliteD1(file: string): { db: D1; raw: Database } {
   const raw = new Database(file, { create: true });
   raw.run("PRAGMA journal_mode=WAL"); raw.run("PRAGMA busy_timeout=5000"); // a test tool reading the file at the same moment must not make a write fail
   for (const s of SCHEMA) { try { raw.run(s); } catch (e: any) { if (!/duplicate column name/i.test(String(e?.message))) throw e; } } // an ALTER for a column the CREATE already has (older databases need the ALTER) is not an error
   const stmt = (sql: string, vals: unknown[] = []): D1Stmt => ({
     bind: (...v) => stmt(sql, v),
-    run: async () => { SQLN.w++; const r = raw.query(sql).run(...(vals as any[])); return { meta: { changes: r.changes } }; },
-    all: async () => { SQLN.r++; return { results: raw.query(sql).all(...(vals as any[])) as any[] }; },
-    first: async () => { SQLN.r++; return (raw.query(sql).get(...(vals as any[])) as any) ?? null; },
+    run: async () => { SQLN.w++; if (LAT_W) await new Promise((r) => setTimeout(r, LAT_W)); const r = raw.query(sql).run(...(vals as any[])); return { meta: { changes: r.changes } }; },
+    all: async () => { SQLN.r++; if (LAT_R) await new Promise((r) => setTimeout(r, LAT_R)); return { results: raw.query(sql).all(...(vals as any[])) as any[] }; },
+    first: async () => { SQLN.r++; if (LAT_R) await new Promise((r) => setTimeout(r, LAT_R)); return (raw.query(sql).get(...(vals as any[])) as any) ?? null; },
   });
   return { db: { prepare: (s) => stmt(s), batch: async (xs) => Promise.all(xs.map((x) => x.run())) }, raw };
 }

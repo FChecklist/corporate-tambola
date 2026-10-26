@@ -13,3 +13,9 @@ What each does:
 - `campaign.mjs --from N --to M --conc K --people P --heavy H --lead SECONDS --tag TAG`: whole games with P fake people per case on the real phone code (zgame.js) over the real network to the local server; the case list is in the file. `run-certify5.sh` shows the 250/500/1000 mix (cases 1-18 at 250, 19-36 at 500, 37-45 at 1000). Always use a FRESH --tag (accounts persist in the database).
 - `ui-permute.mjs --view phone|desk [--steps 1,2,...]`: drives the organizer console in a real browser through many choices and mistakes and decides what a person would see after each press (moved on / refused with a visible reason / nothing happened / reason out of sight).
 - `certify_report.py`, `coverage_matrix.py`: turn the run files into the six-sigma statements.
+
+## Mimic production (owner order 26 Oct)
+Local runs must look like the live site: same variables, a realistic database delay, and realistic phone addresses.
+- Variables (see pages/wrangler.toml and tools/load-tests/start-tambola.ps1): `DAILY_WRITE_BUDGET=2000000 JOIN_PER_IP_MINUTE=600 JOIN_PER_IP_DAY=20000 AI_LINK_MAIL_AT_SIGNUP=0` (for a pure logic run such as the one-million-attempt join test only, `DAILY_WRITE_BUDGET=1000000000`, because the daily write guard would otherwise stop the run; the guard has its own unit tests).
+- Database delay: `D1_READ_MS=3 D1_WRITE_MS=10` (new in apps/edge/src/local.ts: every read / write waits that long, like a real D1 call).
+- Phone addresses: `IP_POOL=N` (nodephone.mjs): N different addresses spread over the phones. Run the mix both with `IP_POOL=300` (people on different networks) and `IP_POOL=1` (a whole office behind ONE address, the worst case for the per-address join limit of 600 a minute).
