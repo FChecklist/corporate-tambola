@@ -134,6 +134,9 @@ export class Guest {
   /** guest level 1 = may invite (has an invite budget), level 2 = joined through someone's link. `from` = the inviter's seat. */
   me() { return call("GET", `/api/z/${this.eid}/me?pid=${this.pid}`); }
   invites() { return call("GET", `/api/z/${this.eid}/invites?pid=${this.pid}`); }
+  /** this guest adds people to their own list: the ticket id is public, so the phone's own device proof goes with it (403 code device otherwise) */
+  addPeople(people, { device = this.device } = {}) { return call("POST", `/api/z/${this.eid}/people?me=${this.pid}&device=${device}`, { people }); }
+  listPeople({ device = this.device } = {}) { return call("GET", `/api/z/${this.eid}/people?me=${this.pid}&device=${device}`); }
   results() { return call("GET", `/api/z/${this.eid}/results`); }
 }
 /** the token inside a personal link https://host/j/<token> */
