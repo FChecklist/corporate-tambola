@@ -47,6 +47,7 @@ import { mapJson, mapText } from "./ai-functions";
 import { goScreen, screenJson, screenText } from "./ai-go";
 import { AUDIT_SCHEMA, auditRequest, analyzeChain, loadRows, logAccess, setHold, toCsv, verifyChain, closeAuditFor, sweepAudit, type AuditEnv } from "./audit";
 import { VISIT_SCHEMA, beaconRoute, linkVisitor, parseRange, recordFunnelForOrg, visitsJourney, visitsSummary, type VisitEnv } from "./visits";
+import { knownDial } from "./phonekit";
 import { WINNERS_SCHEMA, acceptVotes, auditAi, confirmPrize, listAiAudit, listPrizes, markGiven, myPrizes, overridePrize } from "./winners";
 import { PAUSE_MAX_PARTICIPANTS, addHostKey, safetyForCap, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 import { hostGameOf } from "../../../packages/beacon/src/game";
@@ -1498,6 +1499,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   const digitsOf = (raw: unknown): string | null => { // a number typed with its country code (+65 ..., 0044 ...) may be as short as 8 digits in all: some countries have 5-digit numbers; a number typed without a code is 10 to 15 digits as before
     const s = String(raw ?? ""), d = s.replace(/\D/g, ""), withCode = /^\s*(\+|00)/.test(s), n = withCode && !/^(00)?91/.test(d) ? d.replace(/^00/, "") : d;
     if (n.length < (withCode ? 8 : 10) || n.length > 15) return null;
+    if (withCode && !/^91/.test(n) && !knownDial(n)) return null; // a +code the country list does not have
     const ind = n.length === 12 && n.startsWith("91") ? n.slice(2) : !withCode && n.length === 10 ? n : !withCode && n.length === 11 && n[0] === "0" ? n.slice(1) : null; // an Indian mobile number (typed with +91, 91, 0 or nothing in front) starts with 6, 7, 8 or 9, the same rule as a list
     return ind !== null && !/^[6-9]/.test(ind) ? null : n;
   };

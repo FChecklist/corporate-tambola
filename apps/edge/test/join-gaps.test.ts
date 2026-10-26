@@ -39,7 +39,7 @@ describe("join gaps", () => {
   });
   test("GAP-J1: an Indian number that cannot be a mobile (first digit 5) is refused on join like it is in a list; real Indian and foreign numbers still join", async () => {
     const g = await paidGame({ cap: 30 });
-    for (const bad of ["5876543210", "+91 5876543210", "915876543210", "05876543210"]) {
+    for (const bad of ["5876543210", "+91 5876543210", "915876543210", "05876543210", "+999 123 456 789", "+0 1234567890"]) {
       const r = await join(g.id, 1, { phone: bad, device: dev(1) }); expect([bad, r.status]).toEqual([bad, 400]);
     }
     let i = 10;
