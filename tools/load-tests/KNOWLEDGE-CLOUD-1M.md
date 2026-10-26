@@ -29,7 +29,7 @@ Box: 4 cores, 15 GB, Linux, node 22.22, bun 1.4.4, Playwright + Chromium preinst
 - `pkill -f <pattern>` matched my own shell command line and killed my shell, twice. Use pid files.
 - The local servers ran the CODE defaults (200 joins/min/address, write budget 1e9), not the deployed settings (600/min, 20,000/day, 2,000,000), and the harness used random private IPs (about 3 phones per address). The campaigns could therefore never hit a per-address limit. I first told the other session "production allows 200/min": wrong, corrected by message.
 - First version of the join-limit fix ignored an explicit environment value, so it would have changed nothing on the deployed site. Corrected (87ae7ac, later merged by the boss).
-- Ran extra tests next to the campaigns on 4 cores: the test program's lag counter rose (up to 1625 ms in m500, 2306 ms in m1000b) and about 36 late-number deliveries cluster on single numbers (see 5). Quiet rerun of case 35 started to settle it.
+- Ran extra tests next to the campaigns on 4 cores: the test program's lag counter rose (up to 1625 ms in m500, 2306 ms in m1000b) and about 36 late-number deliveries cluster on single numbers (see 5). Quiet rerun of case 35 settled it: it passed.
 - Test-script flaws I made and fixed: `ensureKey` answered ok from the program's own key store (so the Co-host test never reached the server); tag reuse made two race groups invalid; the small game's cap (100) filled and made "admit+admit" look like a race; the waiting-room cap test polluted the wrong-ID test; count expectations that forgot the typo'd-ID request.
 - The Host-mode check `numbers <= presses stored + 1` in campaign.mjs is a bad threshold for big games (see 4).
 - The audit document the owner asked for ("step by step, like the 79 gaps") was NOT written. Findings exist (HANDOVER and below) but no single audit file. Boss to assign.
@@ -40,7 +40,7 @@ Box: 4 cores, 15 GB, Linux, node 22.22, bun 1.4.4, Playwright + Chromium preinst
 | 250 | 18 (1-18) | 17 | #3 |
 | 500 | 18 (19-36) | 14 | #21, #24, #35, #36 |
 | 1000 | 9 (37-45) | 6 | #39, #42, #45 |
-| Total | 45 | 37 | 8 |
+| Total | 45 | 37 (38 counting the quiet rerun of #35) | 8 (7 after the rerun) |
 Server errors (5xx): 0 in all five campaigns. Failed check detail:
 | Case | Mode | Exact failing check | Numbers vs presses | Verdict | Evidence |
 |---|---|---|---|---|---|
@@ -51,7 +51,7 @@ Server errors (5xx): 0 in all five campaigns. Failed check detail:
 | m1000a #39 | Host, open | same | 62 vs 70 | same | below |
 | m1000b #42 | Host, list-mobile | same | 57 vs 61 | same | below |
 | m1000c #45 | Host, emp-id | same | 18 vs 23 | same | below |
-| m500 #35 | auto12, everyone-both, late+offline | "auto: every number reached the phone within 4 s of its time (p50 0.9, p95 2.9, max 4.2 s)" | n/a | PENDING quiet rerun (m500r35); likely environment (ran while extra tests loaded the box) | one number, 0.2 s over a 4 s limit |
+| m500 #35 | auto12, everyone-both, late+offline | "auto: every number reached the phone within 4 s of its time (p50 0.9, p95 2.9, max 4.2 s)" | n/a | ENVIRONMENT ARTIFACT: the identical case rerun alone on a quiet box (tag m500r35) PASSED, 0 of 31 checks failed, test-program lag at most 406 ms | first run: one number 0.2 s over the 4 s limit while my extra tests loaded the box |
 Why the 7 Host-mode failures are a harness artifact: in each case that was the ONLY failed check (26-30 other checks passed, including "every phone shows the same numbers", "the winners in the store equal the winners on the phones", the per-ticket audit, "the game ended because every prize was won"). The test's Host loop keeps pressing Next until its reference phone reports "game over". The game had already ended by prizes, the product ignored the extra presses (no number was added; all phones agree on the count). The number of extra presses grows with the crowd (extra presses per Host case: 2-4 at 250, 0-6 at 500, 4-8 at 1000) because phones check results every 15 s (cap <= 250), 25 s (<= 1000), 40 s (<= 2500), 50 s above (`seatEveryMs`, phone-runtime.ts:537): "game over" and winners appear later in bigger games. That delay is a design trade-off for the owner to know, not a wrong result. 8 of the 15 Host-mode cases passed the check (<= 3 extra presses).
 Delivery timing (check P19 in the report, all phones): 507,218 number deliveries, 36 later than 6 s (71 per million; the report calls this "BELOW six sigma"). All 36 are in four 1000/500-person cases and cluster on single numbers: m1000b #40: 28 phones on number 63 (+2 on 67) with a 2.3 s stall of the test program recorded at the same time; m1000a #37: 7 on number 77; m500 #20: 1. The stand-in beacon was never later than 0.3 s. Conclusion: with 1000 phones in ONE node process, harness stalls (and my concurrent tests) are the likely cause; NOT proven product. A paired run on a quiet box is needed (boss gap B7).
 The six-sigma report (docs/SIX_SIGMA_mix_250_500_1000.md): 700,395 opportunities, 36 defects (all P19). Every other step 0 defects; none is "proven" (samples far below 880,000; Part 1's 1,000,000 join decisions with 0 wrong gives a 95% bound of 3 per million).
