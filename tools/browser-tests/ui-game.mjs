@@ -94,7 +94,7 @@ try {
   while (Date.now() < startMs - 7 * 60000) await sleep(5000);
   await Promise.all(Array.from({ length: PLAYERS }, (_, i) => (async () => { await sleep(Math.random() * Math.min(120000, 20000 + PLAYERS * 800));
     if (i < REAL) { try { const ph = await newReal(i); reals.push(ph); checkIn(ph); } catch (e) { R.errors.push("real " + i + " " + String(e).slice(0, 150)); } }
-    else { try { const ph = new NodePhone(H, eid, { phone: `98122${String(i + 1).padStart(5, "0")}`, name: `Phone ${i + 1}`, ...(EMP ? { empId: `E${String(i + 1).padStart(3, "0")}` } : {}) }, { react: [900, 4500], claim: "always", light: i >= 60 }); await ph.open(); ph.ok = await ph.join(); if (ph.ok) ph.go(); nodes.push(ph); } catch (e) { R.errors.push("node " + i + " " + String(e).slice(0, 150)); } }
+    else { try { const ph = new NodePhone(H, eid, { phone: EMP ? "" : `98122${String(i + 1).padStart(5, "0")}`, name: `Phone ${i + 1}`, ...(EMP ? { empId: `E${String(i + 1).padStart(3, "0")}` } : {}) }, { react: [900, 4500], claim: "always", light: i >= 60 }); await ph.open(); ph.ok = await ph.join(); if (ph.ok) ph.go(); nodes.push(ph); } catch (e) { R.errors.push("node " + i + " " + String(e).slice(0, 150)); } }
   })()));
   check(`all ${PLAYERS} people joined (${REAL} on real browser pages, ${PLAYERS - REAL} on protocol phones)`, reals.length === REAL && nodes.length === PLAYERS - REAL && nodes.every((x) => x.ok), `${reals.length} pages, ${nodes.filter((x) => x.ok).length}/${nodes.length} phones`);
   // the organizer presses each number for a manual game, through the Game day step

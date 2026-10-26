@@ -1180,7 +1180,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (!(await spend(env, now))) return BUSY();
       const safety = safetyForCap(ce.cap, b.profile === "fast");
       if (!safety) return json({ error: `Pause is available for engagements of up to ${PAUSE_MAX_PARTICIPANTS.toLocaleString("en-IN")} participants. Larger ones run without it, which keeps every phone's traffic off the free plan's daily allowance.` }, 409);
-      if (a.kind === "host" && (await readPublished(kv, cid!))) { // the organizer's key is already there: a Host's own browser adds its key beside it, so the Host can pause, end and press "Next number" too
+      if ((a.kind === "host" || a.kind === "master") && (await readPublished(kv, cid!))) { // the organizer's key is already there: a Host's own browser, or the organizer's own second browser or phone (signed in with the same e-mail code), adds its key beside it, so they can pause, end and press "Next number" too
         const h = await addHostKey(kv, cid!, b.publicKey);
         if (h.ok && h.added) await mirrorControl(env, cid!);
         return h.ok ? json({ ok: true, host: true }) : json({ error: h.error }, 409);

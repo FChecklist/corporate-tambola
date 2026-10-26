@@ -92,6 +92,15 @@ describe("the control address: a press is accepted from the organizer and a Host
     const f = (await readPublished(kv(), "HM-C"))!;
     expect(f.messages.map((x) => x.action)).toEqual(["next", "next"]);
   });
+  test("the organizer signed in on a second browser (or after clearing site data) adds that browser's key beside the first, then presses; the AI link and a guest still may not", async () => {
+    const o = await live();
+    const second = await call("PUT", "/api/z/HM-C/control/key", { publicKey: publicKeyFromSecret(HOST) }, o.h);
+    expect(second.status).toBe(200); expect((await j(second)).host).toBe(true);
+    const f = (await readPublished(kv(), "HM-C"))!;
+    expect(f.pubKey).toBe(publicKeyFromSecret(ORG)); expect(f.hostKeys).toEqual([publicKeyFromSecret(HOST)]); // the first key stays the organizer's main key
+    expect((await call("PUT", "/api/z/HM-C/control/key", { publicKey: publicKeyFromSecret(GUEST) }, { "x-organizer": o.ai })).status).toBe(403);
+    expect((await call("PUT", "/api/z/HM-C/control/key", { publicKey: publicKeyFromSecret(GUEST) })).status).toBe(403);
+  });
   test("a Host registers their own console key beside the organizer's (the organizer's stays), then presses; a guest's key is refused at registration and at the press", async () => {
     const o = await live();
     const h = await host(o);

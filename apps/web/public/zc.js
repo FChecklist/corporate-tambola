@@ -1420,6 +1420,12 @@
   }
   const redraw = () => draw(view());
   /** Redraws only when something really changed: an AI (or a person) working on the page keeps the same elements instead of having them replaced every few seconds. */
+  // What a person has typed or ticked and not yet saved survives any redraw (the page refreshes itself every few seconds): remembered per box, forgotten when the open step or the game changes.
+  const dirty = {}; let dirtyFor = "";
+  const noteDirty = (t) => { if (!t || !t.id || !t.tagName || !$app.contains(t)) return; const k = eid + ":" + S.open; if (k !== dirtyFor) { for (const x in dirty) delete dirty[x]; dirtyFor = k; } if (t.tagName === "INPUT" && (t.type === "checkbox" || t.type === "radio")) dirty[t.id] = { c: t.checked }; else if ((t.tagName === "INPUT" && t.type !== "file" && t.type !== "button" && t.type !== "submit") || t.tagName === "TEXTAREA") dirty[t.id] = { v: t.value }; };
+  document.addEventListener("input", (e) => noteDirty(e.target)); document.addEventListener("change", (e) => noteDirty(e.target));
+  document.addEventListener("click", (e) => { const t = e.target; if (t && t.closest && t.closest("button") && $app.contains(t)) for (const x in dirty) delete dirty[x]; }, true); // pressing a button starts from the page as it is drawn from the saved state (a sent message stays cleared); only the self-refresh keeps unsaved boxes
+  const restoreDirty = () => { if (dirtyFor !== eid + ":" + S.open) return; for (const id in dirty) { const el = document.getElementById(id); if (!el || !$app.contains(el)) continue; const d = dirty[id]; if ("c" in d) { if (el.checked !== d.c) el.checked = d.c; } else if (el.value !== d.v && el !== document.activeElement) el.value = d.v; } };
   function draw(v) {
     if (v === lastHtml && $app.firstChild) return;
     // A redraw (for any reason) must never interrupt a person who is typing: the box in use keeps its text, its focus and its cursor.
@@ -1427,7 +1433,7 @@
     lastHtml = v; $app.innerHTML = v;
     if (keep && keep.type !== "checkbox" && keep.type !== "radio") { const el = document.getElementById(keep.id); if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) { if (el.value !== keep.v) el.value = keep.v; try { el.focus({ preventScroll: true }); if (keep.s !== null) el.setSelectionRange(keep.s, keep.e); } catch { /* a box that has no cursor */ } } }
     if (secret && eid && S.cfg && !S.deadLink && (role() === "organizer" || role() === "host")) saveLast({ eid, open: S.open, role: role() });
-    bind(); cbWire(); a11y(); markAct();
+    restoreDirty(); bind(); cbWire(); a11y(); markAct();
   }
   /** Every field gets a label that is really linked to it, every note is announced, every button has a name: an AI (or a screen reader) reads the page by these. */
   function a11y() {

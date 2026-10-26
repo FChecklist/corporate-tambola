@@ -1805,6 +1805,16 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     expect(q.$("#runline")!.textContent).toMatch(/^The Organizer \/ Host has to log into the game when the game is played\./);
   });
 
+  test("what a person has typed and not saved survives the console redrawing itself; pressing a button forgets it", async () => {
+    const o = await organizer(); await make(o, "UI-KEEP"); await publish(o, "UI-KEEP");
+    const p = await consolePage(o, "UI-KEEP"); await p.waitFor((x) => /Hello|Last step|Your game/i.test(x)); openStep(p, 9);
+    setField(p, "#annText", "Dinner at 8");
+    (p.win as any).__zc.annNote = "Sent once"; (p.win as any).__zcMode((p.win as any).__zc.mode); // the page changes under the person's hands (as its self-refresh does)
+    expect((p.$("#annText") as any).value).toBe("Dinner at 8"); expect(p.text()).toMatch(/Sent once/);
+    p.click('[data-chip="Dinner is served"]'); (p.win as any).__zc.annNote = "Again"; (p.win as any).__zcMode((p.win as any).__zc.mode);
+    expect((p.$("#annText") as any).value).not.toBe("Dinner at 8"); // pressing a button forgets the earlier unsaved text: the box is drawn from the page's own state again
+  });
+
   test("words: no 'refund' or 'money back' anywhere in the console; the About lines and Help say credit for 365 days", async () => {
     const js = readFileSync(join(import.meta.dir, "../public/zc.js"), "utf8"); expect(js.match(/money back|money comes back|get back|payment charge kept|Payment charge/g)).toBeNull(); // the words of the old refund screens are gone
     const o = await organizer(); await make(o, "UI-WORDS2"); await publish(o, "UI-WORDS2"); const p = await consolePage(o, "UI-WORDS2"); await p.waitFor((x) => /Last step|Your game|Hello/i.test(x));
