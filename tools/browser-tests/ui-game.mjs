@@ -8,6 +8,7 @@ import { Harness, NodePhone } from "./nodephone.mjs";
 const args = process.argv.slice(2); const opt = (k, d) => { const i = args.indexOf("--" + k); return i >= 0 ? args[i + 1] : d; };
 const B = process.env.BROWSER || "chrome", SITE = process.env.SITE || "http://localhost:8801";
 const TAG = opt("tag", "U" + Date.now().toString(36).slice(-3)), LOGIN = opt("login", "demo1@xyz.in"), CAP = Number(opt("cap", 10)), PLAYERS = Number(opt("players", 10)), MODE = opt("mode", "auto"), LEAD = Number(opt("lead", 9)), AUD = opt("aud", "5"), SPEED = Number(opt("speed", 9)), STOP = opt("stop", ""), REAL = Number(opt("real", PLAYERS)), EMP = ["1", "2", "6"].includes(AUD);
+const H = new Harness(SITE, { ipPool: 1 }); // protocol phones (people beyond --real); the live site sees this laptop's real address
 const R = { tag: TAG, browser: B, site: SITE, mode: MODE, cap: CAP, checks: [], errors: [], failedReq: [], notes: [] };
 const check = (n, ok, d = "") => { R.checks.push({ n, ok: !!ok, d: String(d).slice(0, 300) }); console.log(ok ? "PASS" : "FAIL", n, ok ? "" : "| " + String(d).slice(0, 300)); };
 const save = () => { mkdirSync("C:/ct/test-sites/data/ui", { recursive: true }); writeFileSync(`C:/ct/test-sites/data/ui/ui-${B}-${TAG}.json`, JSON.stringify(R, null, 1)); };

@@ -1797,6 +1797,14 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     expect(t).toMatch(/Game report and custody/); expect(t).toMatch(/in the Organizer's custody/); expect(t).toMatch(/for 365 days\. After 365 days we delete all remaining data, except the invoice and tax records/);
   });
 
+  test("Game day: the step says the Organizer / Host logs into the game and controls it (draft and published)", async () => {
+    const o = await organizer(); await make(o, "UI-RUNLINE");
+    const p = await consolePage(o, "UI-RUNLINE"); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 9);
+    expect(p.$("#runline")!.textContent).toBe("The Organizer / Host has to log into the game when the game is played. The game is controlled by the Organizer / Host.");
+    await publish(o, "UI-RUNLINE"); const q = await consolePage(o, "UI-RUNLINE"); await q.waitFor((x) => /Hello|Last step|Your game/i.test(x)); openStep(q, 9);
+    expect(q.$("#runline")!.textContent).toMatch(/^The Organizer \/ Host has to log into the game when the game is played\./);
+  });
+
   test("words: no 'refund' or 'money back' anywhere in the console; the About lines and Help say credit for 365 days", async () => {
     const js = readFileSync(join(import.meta.dir, "../public/zc.js"), "utf8"); expect(js.match(/money back|money comes back|get back|payment charge kept|Payment charge/g)).toBeNull(); // the words of the old refund screens are gone
     const o = await organizer(); await make(o, "UI-WORDS2"); await publish(o, "UI-WORDS2"); const p = await consolePage(o, "UI-WORDS2"); await p.waitFor((x) => /Last step|Your game|Hello/i.test(x));
