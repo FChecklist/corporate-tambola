@@ -6,7 +6,7 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const launch = async (B) => B === "webkit" ? pw.webkit.launch({ headless: true }) : pw.chromium.launch({ headless: true, ...(B === "chrome" ? { executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe" } : {}), args: ["--no-sandbox", "--disable-gpu", "--disable-extensions", "--no-first-run"] });
 // sign in the way a person does: type the e-mail, press Continue, tick the box if asked, then use the code the local test screen offers (or type it)
 export async function signIn(p, SITE, email, code) {
-  await p.goto(`${SITE}/zc.html`, { waitUntil: "load" }); await p.waitForSelector("#lem", { timeout: 30000 }); await p.fill("#lem", email); await p.click("#goLogin");
+  await p.goto(`${SITE}/zc.html${process.env.PASS ? "?pass=" + process.env.PASS : ""}`, { waitUntil: "load" }); await p.waitForSelector("#lem", { timeout: 30000 }); await p.fill("#lem", email); await p.click("#goLogin");
   await p.waitForSelector("#lMail", { timeout: 20000 }); await sleep(600); await p.fill("#lMail", email); await p.click("#lgGo"); await sleep(2500);
   for (let i = 0; i < 40; i++) { if (await p.locator("#cdGo").isVisible() || await p.locator("#signout").isVisible()) break; if (await p.getByRole("checkbox").count()) { const cb = p.getByRole("checkbox").first(); if (!(await cb.isChecked())) { await cb.check({ timeout: 8000 }); await sleep(500); await p.click("#lgGo"); await sleep(2000); } } await sleep(500); }
   await p.waitForSelector("#signout, #cdGo", { timeout: 90000 });

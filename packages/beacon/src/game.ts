@@ -10,7 +10,7 @@ import { ticketCompletion, ticketStillNeeds } from "./house-rules";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
 import { positionOf, seatOfPid, ticketAt } from "./unique-ticket";
-import { NUMBERS, fetchRound, pickNumber, roundTimeMs, seededRand, verifyRound, type BeaconOpts, type Round } from "./index";
+import { NUMBERS, fetchRound, pickNumber, roundTimeMs, seededRand, verifyRound, type BeaconOpts, type Round, defaultMirrors } from "./index";
 
 export const ALL_PATTERNS: readonly PatternId[] = PATTERN_ORDER;
 
@@ -290,7 +290,7 @@ export class RoundStore {
   /** Past round: needs two mirrors to agree (their raw answers are compared), signature check deferred. */
   async fetchBackfill(r: number, salt = 0): Promise<boolean> {
     if (this.rounds.has(r)) return true;
-    const mirrors = this.opts.mirrors ?? ["https://api.drand.sh", "https://api2.drand.sh", "https://api3.drand.sh", "https://drand.cloudflare.com"];
+    const mirrors = this.opts.mirrors ?? defaultMirrors();
     const answers: Round[] = [];
     for (let i = 0; i < mirrors.length && answers.length < 2; i++) {
       // no per-round signature check here (verify: always true); the deferred check below is what makes it safe

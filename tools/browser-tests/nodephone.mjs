@@ -54,7 +54,7 @@ export const queueStats = { waits: 0, maxMs: 0, over500: 0 };
 const slot = async () => { if (inflight < 160) { inflight++; return; } const t = performance.now(); await new Promise((r) => waitQ.push(r)); const w = performance.now() - t; queueStats.waits++; if (w > queueStats.maxMs) queueStats.maxMs = w; if (w > 500) queueStats.over500++; };
 const release = () => { const n = waitQ.shift(); if (n) n(); else inflight--; };
 export class Harness {
-  constructor(BASE, { ipPool = 60 } = {}) { this.BASE = BASE; this.lat = []; this.calls = 0; this.fails = 0; this.failKinds = {}; this.ips = Array.from({ length: ipPool }, () => `10.${rnd(250)}.${rnd(250)}.${1 + rnd(250)}`); this.C = JSON.parse(readFileSync("C:/ct/test-sites/tambola/apps/edge/src/consent-text.json", "utf8")); }
+  constructor(BASE, { ipPool = 60 } = {}) { this.BASE = BASE; if (/^https:\/\//.test(BASE)) globalThis.location = new URL(BASE); /* the real phone code then adds our own site as its last beacon route, as in a browser */ this.lat = []; this.calls = 0; this.fails = 0; this.failKinds = {}; this.ips = Array.from({ length: ipPool }, () => `10.${rnd(250)}.${rnd(250)}.${1 + rnd(250)}`); this.C = JSON.parse(readFileSync("C:/ct/test-sites/tambola/apps/edge/src/consent-text.json", "utf8")); }
   consent(k) { return { consent: { v: this.C.version, boxes: Object.keys(this.C[k]) } }; }
   /** one plain API call as the organizer's console does */
   async call(m, p, b, key, ip = "10.1.1.1") {

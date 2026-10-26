@@ -47,3 +47,32 @@ describe("demo pass", () => {
     expect(w).toMatch(/dpass\|/);
   });
 });
+
+describe("demo pass kept with the e-mail address while the person signs in", () => {
+  const MAIL = "prospect@acme.com";
+  const grants = () => one("SELECT COUNT(*) AS c FROM entitlement WHERE payment_id='demo-pass'").c;
+  test("a NEW person who comes through the link gets the free game at once, in the sign-up itself (whatever browser she uses later)", async () => {
+    reset({ TEST_MODE: "1" } as any); await arm();
+    const r = await call("POST", "/api/start", { email: MAIL, pass: TOK }); expect(r.status).toBe(200); expect((await j(r)).token).toMatch(/^ctk_/);
+    expect(grants()).toBe(1); expect(one("SELECT pack FROM entitlement WHERE payment_id='demo-pass'").pack).toBe(100);
+  });
+  test("an EXISTING person: the link is held with her e-mail, and the code she types (or the one-click link) gives her the free game, in any browser", async () => {
+    reset({ TEST_MODE: "1" } as any); await arm(); const o = await organizer();
+    const mail = o.email; const ask = await j(await call("POST", "/api/auth/email", { email: mail, pass: TOK })); expect(ask.ok).toBe(true);
+    expect(grants()).toBe(0); // nothing is given before the person has proved the address
+    const v = await call("POST", "/api/auth/verify", { email: mail, code: ask.devCode }); expect(v.status).toBe(200);
+    expect(grants()).toBe(1); expect(one("SELECT pack FROM entitlement WHERE payment_id='demo-pass'").pack).toBe(100);
+    expect(q("SELECT k FROM kv WHERE k LIKE 'loginpass/%'").length).toBe(0); // used and forgotten
+  });
+  test("the one-click link in the e-mail does the same", async () => {
+    reset({ TEST_MODE: "1" } as any); await arm(); const o = await organizer();
+    const ask = await j(await call("POST", "/api/auth/email", { email: o.email, pass: TOK2 })); expect(ask.devToken).toBeTruthy();
+    const l = await call("POST", "/api/auth/link", { token: ask.devToken }); expect(l.status).toBe(200); expect(grants()).toBe(1); expect(one("SELECT pack FROM entitlement WHERE payment_id='demo-pass'").pack).toBe(250);
+  });
+  test("a made-up secret is not kept, and a used link is not given twice", async () => {
+    reset({ TEST_MODE: "1" } as any); await arm(); const a = await organizer(), b = await organizer();
+    await call("POST", "/api/auth/email", { email: a.email, pass: "ffffffffffffffffffffffffffffffff" }); expect(q("SELECT k FROM kv WHERE k LIKE 'loginpass/%'").length).toBe(0);
+    const x = await j(await call("POST", "/api/auth/email", { email: a.email, pass: TOK })); await call("POST", "/api/auth/verify", { email: a.email, code: x.devCode }); expect(grants()).toBe(1);
+    const y = await j(await call("POST", "/api/auth/email", { email: b.email, pass: TOK })); await call("POST", "/api/auth/verify", { email: b.email, code: y.devCode }); expect(grants()).toBe(1); // taken: the second person gets nothing
+  });
+});

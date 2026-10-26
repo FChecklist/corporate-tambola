@@ -138,7 +138,7 @@
       if (!CBConsent.all(k2, "K2")) return setErr("Please tick the box to continue.");
       const b = $("frGo"); b.disabled = true; setErr("");
       try {
-        const r = await TB.api("POST", "/api/start", { email: m, consent: CBConsent.payload(k2, "K2") });
+        const r = await TB.api("POST", "/api/start", { email: m, consent: CBConsent.payload(k2, "K2"), ...(passTok() ? { pass: passTok() } : {}) });
         if (r.exists) { TB.toast("You already have an account, so we are emailing you a code to confirm it is you"); return askCode(m, b); }
         try { CTK.set("ctz-org", r.token); sessionStorage.setItem("ctz-aimsg", r.aiMessage); CTK.set("ctz-email", m); } catch {}
         location.href = "/zc.html";
@@ -201,10 +201,12 @@
     });
     mountGoogle("signin"); focusFirst("lMail");
   }
+  /** A demo link opened in this browser (kept by the console): sent with the e-mail so the server uses it whichever browser finishes the sign-in. */
+  const passTok = () => { try { const v = JSON.parse(localStorage.getItem("ctz-pass") || "null"); return v && /^[0-9a-f]{32}$/.test(v.t || "") && Date.now() - (Number(v.at) || 0) < 14 * 86400000 ? v.t : undefined; } catch { return undefined; } };
   async function askCode(email, btn) {
     if (btn) { btn.disabled = true; }
     try {
-      const r = await TB.api("POST", "/api/auth/email", { email });
+      const r = await TB.api("POST", "/api/auth/email", { email, ...(passTok() ? { pass: passTok() } : {}) });
       codeView(email, r.devCode);
     } catch (e) { if (btn) btn.disabled = false; const f = $("fErr"); if (f) f.innerHTML = err(e.message); else TB.toast(esc(e.message)); }
   }

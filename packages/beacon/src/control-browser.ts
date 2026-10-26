@@ -22,11 +22,12 @@ const get = async (k: string): Promise<StoredKey | undefined> => { const d = awa
 const put = async (k: string, v: unknown) => { const d = await idb(); return new Promise<void>((res, rej) => { const q = d.transaction("keys", "readwrite").objectStore("keys").put(v, k); q.onsuccess = () => res(); q.onerror = () => rej(q.error); }); };
 
 const MIRRORS = ["https://api.drand.sh", "https://api2.drand.sh", "https://api3.drand.sh", "https://drand.cloudflare.com"];
+const relay = () => { try { return location.origin && /^https?:$/.test(location.protocol) ? [location.origin + "/api/beacon"] : []; } catch { return []; } }; // our own server relays the beacon for a network that blocks the beacon's servers
 const CHAIN = "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971";
 const GENESIS = 1692803367;
 /** Current beacon round. Only used to stamp a message; a wrong value can hurt only this organizer's own game, never forge anything. */
 async function beaconRound(): Promise<number> {
-  for (const m of MIRRORS) {
+  for (const m of [...MIRRORS, ...relay()]) {
     try { const r = await fetch(`${m}/${CHAIN}/public/latest`); if (r.ok) { const j = await r.json(); if (Number.isInteger(j.round)) return j.round; } } catch { /* next mirror */ }
   }
   return Math.floor((Date.now() / 1000 - GENESIS) / 3) + 1;

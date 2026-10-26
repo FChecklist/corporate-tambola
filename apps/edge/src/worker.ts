@@ -50,6 +50,7 @@ import { VISIT_SCHEMA, beaconRoute, linkVisitor, parseRange, recordFunnelForOrg,
 import { WINNERS_SCHEMA, acceptVotes, auditAi, confirmPrize, listAiAudit, listPrizes, markGiven, myPrizes } from "./winners";
 import { PAUSE_MAX_PARTICIPANTS, addHostKey, safetyForCap, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 import { hostGameOf } from "../../../packages/beacon/src/game";
+import { QUICKNET } from "../../../packages/beacon/src/index";
 
 export interface D1Result<T = any> { results?: T[]; meta?: { changes?: number } }
 export interface D1Stmt { bind(...v: unknown[]): D1Stmt; run(): Promise<D1Result>; all<T = any>(): Promise<D1Result<T>>; first<T = any>(): Promise<T | null> }
@@ -211,6 +212,24 @@ export async function publicClaims(db: D1, eid: string, after: number): Promise<
   let upto = Infinity; if (c.length >= CLAIMS_PAGE) upto = Math.min(upto, c[c.length - 1]!.at_ms); if (b.length >= CLAIMS_PAGE) upto = Math.min(upto, b[b.length - 1]!.at_ms);
   return [...c.map((x) => ({ pid: x.pid, pattern: x.pattern, round: x.round, idx: x.idx, atMs: x.at_ms })), ...b.map((x) => ({ pid: x.pid, pattern: x.pattern, round: x.round, idx: -1, atMs: x.at_ms, bogey: true as const }))].filter((x) => x.atMs <= upto).sort((x, y) => x.atMs - y.atMs);
 }
+/** The public beacon, relayed (GET /api/beacon/<chain>/public/<round|latest>): a company network that blocks the beacon's own servers can still reach this site, so the numbers still come. Only the beacon's one chain and plain round numbers are passed on (never an open proxy); the phone checks every answer against the beacon's public key, so this is only a postman. A finished round never changes, so it is cached for good. */
+async function beaconRelay(req: Request, chain: string, round: string): Promise<Response> {
+  if (chain !== QUICKNET.chainHash) return json({ error: "Not found" }, 404);
+  const key = new Request(new URL(`/api/beacon/${chain}/public/${round}`, req.url).toString());
+  const cache = (globalThis as any).caches?.default as { match(r: Request): Promise<Response | undefined>; put(r: Request, x: Response): Promise<void> } | undefined;
+  if (cache) { try { const hit = await cache.match(key); if (hit) return hit; } catch { /* no cache here */ } }
+  for (const m of QUICKNET.mirrors) {
+    try {
+      const r = await fetch(`${m}/${chain}/public/${round}`, { signal: AbortSignal.timeout(3500) });
+      if (r.status === 404) return json({ error: "That round is not published yet." }, 404);
+      if (!r.ok) continue;
+      const res = new Response(await r.text(), { headers: { "content-type": "application/json", "cache-control": round === "latest" ? "public, max-age=1" : "public, max-age=31536000, immutable", "access-control-allow-origin": "*" } });
+      if (cache) { try { await cache.put(key, res.clone()); } catch { /* not cached */ } }
+      return res;
+    } catch { /* the next mirror */ }
+  }
+  return json({ error: "The number service cannot be reached right now. Please try again in a moment." }, 502);
+}
 const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))), (b) => b.toString(16).padStart(2, "0")).join("");
 const randHex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -300,6 +319,39 @@ export const DEMO_PASSES: { hash: string; cap: number; label: string }[] = [
   { hash: "109161f9e77651559a2973ae4e5624209a98065419c5e41defca9481d30cfacc", cap: 250, label: "spare-250-16" },
 ];
 export const DEMO_PASS_UNTIL = Date.UTC(2026, 11, 31);
+const passShape = (x: unknown): string => (typeof x === "string" && /^[0-9a-f]{32}$/i.test(x.trim()) ? x.trim().toLowerCase() : "");
+/** Uses a demo pass for an account: ONE free pack of the pass's size, once (the first account to use a pass keeps it; the same account may open it again). */
+async function redeemDemoPass(env: Env, org: string, rawToken: string, now: number): Promise<{ status: number; body: any; busy?: boolean }> {
+  const bad = { status: 404, body: { error: "This demo link is not valid or has ended. Please ask us for a new one.", code: "pass-invalid" } };
+  const tok = passShape(rawToken);
+  if (!tok || now > DEMO_PASS_UNTIL) return bad;
+  const ph = await sha("dpass|" + tok), def = DEMO_PASSES.find((x) => x.hash === ph);
+  if (!def) return bad;
+  if (!(await spend(env, now, 4))) return { status: 503, body: {}, busy: true };
+  const first = await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO NOTHING").bind(`dpass/${ph}`, JSON.stringify({ org, at: now, label: def.label })).run();
+  if (!(first as any)?.meta?.changes) { // used before: the same account may open it again (nothing more is given); anybody else is told it is taken
+    const row = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`dpass/${ph}`).first<{ v: string }>();
+    let who = ""; try { who = JSON.parse(row?.v ?? "{}").org ?? ""; } catch { /* unreadable */ }
+    if (who === org) return { status: 200, body: { ok: true, again: true, cap: def.cap } };
+    return { status: 409, body: { error: "This demo link has already been used. Please ask us for a new one.", code: "pass-used" } };
+  }
+  await env.DB.prepare("INSERT INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,'demo-pass',NULL,?)").bind("dp_" + randHex(6), org, def.cap, now).run();
+  return { status: 200, body: { ok: true, cap: def.cap } };
+}
+/** The link's secret is kept with the e-mail address while the person signs in, so it is used whichever browser finishes the sign-in (for example the one-click link in the e-mail opening in a mail app). Only a secret that belongs to a real pass is kept. */
+async function holdPassForSignIn(env: Env, eh: string, rawToken: unknown, now: number): Promise<void> {
+  const tok = passShape(rawToken); if (!tok) return;
+  const ph = await sha("dpass|" + tok); if (!DEMO_PASSES.some((x) => x.hash === ph)) return;
+  await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`loginpass/${eh}`, JSON.stringify({ t: tok, at: now })).run();
+}
+async function useHeldPass(env: Env, org: string, eh: string, now: number): Promise<void> {
+  try {
+    const row = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`loginpass/${eh}`).first<{ v: string }>();
+    if (!row) return;
+    await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`loginpass/${eh}`).run();
+    const x = JSON.parse(row.v); if (now - Number(x.at) <= 2 * 3_600_000) await redeemDemoPass(env, org, String(x.t), now);
+  } catch { /* the pass is only a gift: sign-in never fails because of it */ }
+}
 async function ownerTestGrant(env: Env, org: string, cap: number, now: number): Promise<boolean> {
   for (const t of OWNER_TEST_FREE) {
     if (now > t.until || cap > t.maxCap) continue;
@@ -746,6 +798,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     return json({ error: "Please finish your setup first: confirm your e-mail address and add your mobile number.", code: "host-setup" }, 403);
 
   if (req.method === "GET" && p === "/api/z/ai-manifest") return json(AI_MANIFEST);
+  { const bm = req.method === "GET" ? p.match(/^\/api\/beacon\/([0-9a-f]{64})\/public\/(latest|\d{1,10})$/) : null; if (bm) return beaconRelay(req, bm[1]!, bm[2]!); }
   { const mr = await modeRoute(req, env as any, now, a.plat && req.headers.get("x-ct-link") !== "1", (n) => purgeTestData(env, n)); if (mr) return mr; } // TEST/LIVE switch, allow-list, purge (mode.ts): owner only, except the public read of the word TEST or LIVE
   { const ar = await adminRoute(req, env as any, now, a.plat && req.headers.get("x-cb-link") !== "1", (n) => spend(env, now, n)); if (ar) return ar; } // the owner's desk (admin.ts): site switch, organizer lookup, data requests, mail events, error counts; the health read; the mail webhook
   if (p === "/api/v/b") return beaconRoute(req, env as VisitEnv, now, (n) => spend(env, now, n)); // public-page visit tracking (visits.ts); never the live game
@@ -757,21 +810,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   }
   if (p === "/api/pass" && req.method === "POST") { // a prospect opened a demo pass link: ONE free game of up to its size for this account. The account must be signed in; the link is used once.
     if (!(a.kind === "master" && a.org)) return deny(a);
-    const pb = await body(req, 512); const tok = typeof pb?.token === "string" ? pb.token.trim().toLowerCase() : "";
-    const bad = () => json({ error: "This demo link is not valid or has ended. Please ask us for a new one.", code: "pass-invalid" }, 404);
-    if (!/^[0-9a-f]{32}$/.test(tok) || now > DEMO_PASS_UNTIL) return bad();
-    const ph = await sha("dpass|" + tok), def = DEMO_PASSES.find((x) => x.hash === ph);
-    if (!def) return bad();
-    if (!(await spend(env, now, 4))) return BUSY();
-    const first = await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO NOTHING").bind(`dpass/${ph}`, JSON.stringify({ org: a.org, at: now, label: def.label })).run();
-    if (!(first as any)?.meta?.changes) { // used before: the same account may open it again (nothing more is given); anybody else is told it is taken
-      const row = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`dpass/${ph}`).first<{ v: string }>();
-      let who = ""; try { who = JSON.parse(row?.v ?? "{}").org ?? ""; } catch { /* unreadable */ }
-      if (who === a.org) return json({ ok: true, again: true, cap: def.cap });
-      return json({ error: "This demo link has already been used. Please ask us for a new one.", code: "pass-used" }, 409);
-    }
-    await env.DB.prepare("INSERT INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,'demo-pass',NULL,?)").bind("dp_" + randHex(6), a.org, def.cap, now).run();
-    return json({ ok: true, cap: def.cap });
+    const pb = await body(req, 512); const r = await redeemDemoPass(env, a.org, typeof pb?.token === "string" ? pb.token : "", now);
+    return r.busy ? BUSY() : json(r.body, r.status);
   }
   if (p === "/api/owner/releases") { // OWNER ONLY (platform key, never through an AI work link): the version number of this release and the release history. Anybody else gets the same 404 as an unknown address.
     if (!(a.plat && req.headers.get("x-cb-link") !== "1") || req.method !== "GET") return json({ error: "Not found" }, 404);
@@ -833,11 +873,12 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const email = typeof b?.email === "string" ? b.email.trim().toLowerCase() : "";
     if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(email)) return json({ error: "Please enter a valid work email." }, 400);
     const eh = await sha("email|" + email);
-    if (await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first()) return json({ ok: true, exists: true });
-    if (await hostForEmail(env.DB, eh)) return json({ ok: true, exists: true }); // a Host who confirmed this address signs in with a code, like an Organizer: the sign-in door must not offer them a new Organizer account
+    if (await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first()) { await holdPassForSignIn(env, eh, b?.pass, now); return json({ ok: true, exists: true }); }
+    if (await hostForEmail(env.DB, eh)) { await holdPassForSignIn(env, eh, b?.pass, now); return json({ ok: true, exists: true }); } // a Host who confirmed this address signs in with a code, like an Organizer: the sign-in door must not offer them a new Organizer account
     { const cm = consentMissing(b, "K2"); if (cm) return cm; } // K2: a new account needs the Terms box ticked (checked on the server, not only on the page)
     const made = await createOrganizer(env, req, email, now, "start", true);
     if ("error" in made) return made.status === 503 ? BUSY() : json({ error: made.error }, made.status);
+    { const pt = passShape(b?.pass); if (pt) { const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>(); if (acct) { try { await redeemDemoPass(env, acct.org, pt, now); } catch { /* only a gift */ } } } } // a new person who came through a demo link has it at once
     return json({ ok: true, token: made.token, aiKey: made.aiKey, aiMessage: made.aiMessage });
   }
   if (req.method === "POST" && p === "/api/auth/email") {
@@ -849,6 +890,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const hostAcct = await hostForEmail(env.DB, eh); // a Host who confirmed this address signs in the same way; a person who is both gets both roles
     const test = (env as PayEnv).TEST_MODE === "1";
     let devCode: string | undefined, devToken: string | undefined;
+    if (acct || hostAcct) await holdPassForSignIn(env, eh, b?.pass, now);
     if (TEST_LOGINS.has(email)) return json({ ok: true }); // the owner's test addresses: nothing is sent, the code is always the same
     if (acct || hostAcct) { // an unknown address gets the same answer, so nobody can find out who has an account
       const row = await env.DB.prepare("SELECT win_start, sent FROM login_code WHERE email_hash=?").bind(eh).first<{ win_start: number; sent: number }>();
@@ -929,7 +971,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!(await spend(env, now, 2))) return BUSY();
     const used = await env.DB.prepare("DELETE FROM login_code WHERE link_hash=? AND expires_ms>=?").bind(lh, now).run(); // single use: the first POST wins, the code dies with it
     if ((used.meta?.changes ?? 0) !== 1) return bad();
-    return json(await signInResult(env, req, acct, hostAcct, now, null));
+    const done = await signInResult(env, req, acct, hostAcct, now, null); if (acct) await useHeldPass(env, acct.org, row.email_hash, now); // a demo link held for this address is used now
+    return json(done);
   }
   if (req.method === "POST" && p === "/api/auth/verify") {
     const b = await body(req);
@@ -947,7 +990,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       }
       let ta = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
       if (!ta) { const made = await createOrganizer(env, req, email, now, "start", false); /* no Terms-box consent is recorded for an account nobody ticked for */ if ("error" in made) return json({ error: made.error }, (made as any).status ?? 400); ta = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>(); }
-      if (ta) { const res = await signInResult(env, req, ta, null, now, email); await env.DB.prepare("DELETE FROM organizer_key WHERE org=? AND kind='master' AND hash NOT IN (SELECT hash FROM organizer_key WHERE org=? AND kind='master' ORDER BY created_ms DESC LIMIT 6)").bind(ta.org, ta.org).run(); return json(res); } // the keys made by earlier sign-ins are trimmed: these accounts are shared and public
+      if (ta) { const res = await signInResult(env, req, ta, null, now, email); await useHeldPass(env, ta.org, eh, now); await env.DB.prepare("DELETE FROM organizer_key WHERE org=? AND kind='master' AND hash NOT IN (SELECT hash FROM organizer_key WHERE org=? AND kind='master' ORDER BY created_ms DESC LIMIT 6)").bind(ta.org, ta.org).run(); return json(res); } // the keys made by earlier sign-ins are trimmed: these accounts are shared and public
     }
     const row = await env.DB.prepare("SELECT code_hash, expires_ms, attempts FROM login_code WHERE email_hash=?").bind(eh).first<{ code_hash: string; expires_ms: number; attempts: number }>();
     const bad = () => json({ error: "That code is not right or has expired. Please ask for a new one." }, 400);
@@ -961,7 +1004,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!acct && !hostAcct) return bad();
     if (!(await spend(env, now, 2))) return BUSY();
     await env.DB.prepare("DELETE FROM login_code WHERE email_hash=?").bind(eh).run();
-    return json(await signInResult(env, req, acct, hostAcct, now, email));
+    const done = await signInResult(env, req, acct, hostAcct, now, email); if (acct) await useHeldPass(env, acct.org, eh, now);
+    return json(done);
   }
 
   /* ---- organizers and their keys ---- */
