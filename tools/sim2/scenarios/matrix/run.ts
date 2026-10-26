@@ -15,7 +15,7 @@ const ROOT = join(import.meta.dir, "../../../..");
 const { startSim } = await import("../../server");
 const L: any = await import("./lib.mjs");
 const { A, clock } = L;
-const families = ["config", "houses", "roles", "lifecycle", "people", "brand", "money", "time", "play", "journeys"];
+const families = ["config", "houses", "roles", "lifecycle", "people", "brand", "money", "time", "play", "journeys", "rules"];
 let scenarios: any[] = [];
 for (const f of families) { const m: any = await import(`./gen-${f}.mjs`).catch((e) => { if (/Cannot find module|not found/i.test(String(e?.message))) return null; throw e; }); if (!m) continue; scenarios.push(...(await m.default({ seed, R: L.rng(seed * 7919 + f.length), L })).map((s: any) => ({ ...s, family: f }))); }
 const dup = scenarios.map((s) => s.name).filter((n, i, a) => a.indexOf(n) !== i);

@@ -151,7 +151,7 @@ export default async function gen({ R, L }) {
           const late = await joinRaw(g.id, { ...giveListed(person("p")), name: "During Pause" }, t.ip()); t.check("during a pause nobody gets a calm 5xx", late.status < 500, `HTTP ${late.status}`);
           await L.clock.advance(30_000); ok("Host resumes", await send("host", host.key, "resume")); await L.clock.advance(30_000); ok("Organizer pauses again", await send("org", org.token, "pause")); await L.clock.advance(30_000); ok("Organizer resumes", await send("org", org.token, "resume"));
         } else {
-          ok("Organizer ends the game", await send("org", org.token, "stop")); await L.clock.advance(61_000); await A.call("POST", "/__sim/tick", {}); // after an early stop the game ends 60 s later (lifecycle.ts endBoundMs)
+          ok("Organizer ends the game", await send("org", org.token, "stop")); await L.clock.advance(Number(process.env.STOPWAIT ?? 150_000)); await A.call("POST", "/__sim/tick", {}); // after an early stop the game ends 60 s later (lifecycle.ts endBoundMs)
           const after = await joinRaw(g.id, { ...giveListed(person("e")), name: "After End" }, t.ip()); t.check("after the game a latecomer gets a calm answer (the thank-you page, 200, or a plain refusal), never a server error", after.status < 500, `HTTP ${after.status}`);
           if (sWid && (c.o === "ignored" || c.o === "approve-after-cap-full")) t.eq("an undecided request lapses when the game is over (61 s after an early stop)", (await A.call("GET", `/api/z/${g.id}/me?wid=${sWid}`)).body.state, "lapsed");
           t.check("results page answers", (await A.call("GET", `/api/z/${g.id}/results`)).status === 200);
