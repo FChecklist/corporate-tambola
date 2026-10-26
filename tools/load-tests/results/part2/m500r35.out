@@ -1,0 +1,41 @@
+campaign m500r35: cases 35..35, 1 at a time, 500 people each, lead 300s, http://localhost:8836
+(node:14605) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+  #35 auto12/everyone-both t+30s numbers 0 winners 0 phase play lag 0/312ms queue max 0ms (0 over 0.5 s) calls 4391 failed 0
+  #35 auto12/everyone-both t+60s numbers 0 winners 0 phase play lag 0/312ms queue max 0ms (0 over 0.5 s) calls 4628 failed 0
+  #35 auto12/everyone-both t+90s numbers 0 winners 0 phase play lag 0/312ms queue max 0ms (0 over 0.5 s) calls 4805 failed 0
+  #35 auto12/everyone-both t+120s numbers 0 winners 0 phase play lag 0/312ms queue max 0ms (0 over 0.5 s) calls 5021 failed 0
+  #35 auto12/everyone-both t+150s numbers 0 winners 0 phase play lag 0/312ms queue max 0ms (0 over 0.5 s) calls 5209 failed 0
+  #35 auto12/everyone-both t+180s numbers 0 winners 0 phase play lag 1/312ms queue max 0ms (0 over 0.5 s) calls 5423 failed 0
+  #35 auto12/everyone-both t+210s numbers 0 winners 0 phase play lag 0/312ms queue max 0ms (0 over 0.5 s) calls 5609 failed 0
+  #35 auto12/everyone-both t+240s numbers 0 winners 0 phase play lag 0/312ms queue max 0ms (0 over 0.5 s) calls 5817 failed 0
+  #35 auto12/everyone-both t+270s numbers 1 winners 0 phase play lag 5/312ms queue max 0ms (0 over 0.5 s) calls 6851 failed 0
+  #35 auto12/everyone-both t+300s numbers 3 winners 0 phase play lag 0/406ms queue max 0ms (0 over 0.5 s) calls 8358 failed 0
+  #35 auto12/everyone-both t+330s numbers 6 winners 0 phase play lag 3/406ms queue max 0ms (0 over 0.5 s) calls 9636 failed 0
+  #35 auto12/everyone-both t+367s numbers 9 winners 0 phase play lag 0/406ms queue max 0ms (0 over 0.5 s) calls 11611 failed 0
+  #35 auto12/everyone-both t+397s numbers 11 winners 0 phase play lag 0/406ms queue max 0ms (0 over 0.5 s) calls 13260 failed 0
+  #35 auto12/everyone-both t+427s numbers 14 winners 2 phase play lag 1/406ms queue max 0ms (0 over 0.5 s) calls 14830 failed 0
+  #35 auto12/everyone-both t+457s numbers 16 winners 2 phase play lag 0/406ms queue max 0ms (0 over 0.5 s) calls 16539 failed 0
+  #35 auto12/everyone-both t+487s numbers 19 winners 2 phase play lag 0/406ms queue max 0ms (0 over 0.5 s) calls 18164 failed 0
+  #35 auto12/everyone-both t+517s numbers 21 winners 2 phase play lag 0/406ms queue max 0ms (0 over 0.5 s) calls 19611 failed 0
+  #35 auto12/everyone-both t+547s numbers 24 winners 2 phase play lag 7/406ms queue max 0ms (0 over 0.5 s) calls 21031 failed 0
+  #35 auto12/everyone-both t+577s numbers 26 winners 2 phase play lag 0/406ms queue max 0ms (0 over 0.5 s) calls 22476 failed 0
+  #35 auto12/everyone-both t+608s numbers 29 winners 3 phase play lag 0/406ms queue max 0ms (0 over 0.5 s) calls 23887 failed 0
+  #35 auto12/everyone-both t+638s numbers 31 winners 3 phase play lag 50/406ms queue max 0ms (0 over 0.5 s) calls 25475 failed 0
+  #35 auto12/everyone-both t+668s numbers 34 winners 4 phase play lag 40/406ms queue max 0ms (0 over 0.5 s) calls 27099 failed 0
+  #35 auto12/everyone-both t+698s numbers 36 winners 4 phase play lag 3/406ms queue max 0ms (0 over 0.5 s) calls 28731 failed 0
+  #35 auto12/everyone-both t+728s numbers 39 winners 4 phase play lag 28/406ms queue max 0ms (0 over 0.5 s) calls 30154 failed 0
+  #35 auto12/everyone-both t+758s numbers 41 winners 4 phase play lag 29/406ms queue max 0ms (0 over 0.5 s) calls 31642 failed 0
+  #35 auto12/everyone-both t+788s numbers 44 winners 4 phase play lag 0/406ms queue max 0ms (0 over 0.5 s) calls 33019 failed 0
+  #35 auto12/everyone-both t+818s numbers 46 winners 4 phase play lag 8/406ms queue max 0ms (0 over 0.5 s) calls 34526 failed 0
+  #35 auto12/everyone-both t+848s numbers 49 winners 4 phase play lag 7/406ms queue max 0ms (0 over 0.5 s) calls 36058 failed 0
+  #35 auto12/everyone-both t+878s numbers 51 winners 4 phase play lag 1/406ms queue max 0ms (0 over 0.5 s) calls 37696 failed 0
+  #35 auto12/everyone-both t+908s numbers 54 winners 4 phase play lag 1/406ms queue max 0ms (0 over 0.5 s) calls 39164 failed 0
+  #35 auto12/everyone-both t+938s numbers 56 winners 4 phase play lag 2/406ms queue max 0ms (0 over 0.5 s) calls 40665 failed 0
+  #35 auto12/everyone-both t+969s numbers 59 winners 4 phase play lag 3/406ms queue max 0ms (0 over 0.5 s) calls 42075 failed 0
+  #35 auto12/everyone-both t+999s numbers 61 winners 4 phase play lag 3/406ms queue max 0ms (0 over 0.5 s) calls 43560 failed 0
+  #35 auto12/everyone-both t+1029s numbers 64 winners 5 phase play lag 5/406ms queue max 0ms (0 over 0.5 s) calls 45055 failed 0
+  #35 auto12/everyone-both t+1059s numbers 66 winners 5 phase play lag 1/406ms queue max 0ms (0 over 0.5 s) calls 46728 failed 0
+  #35 auto12/everyone-both t+1089s numbers 69 winners 5 phase play lag 17/406ms queue max 0ms (0 over 0.5 s) calls 48366 failed 0
+PASS #35 auto12 everyone-both t2 late+offline | numbers 67 winners 6 players 462 gap 11.9 | 0 failed of 31 | 21 min
+SUMMARY {"tag":"m500r35","cases":1,"casesPassed":1,"checks":34,"checksFailed":0,"calls":50157,"serverErrors":0,"failKinds":{},"latencyMs":{"p50":2,"p95":17,"p99":52,"max":905},"beacon":{"fetched":423,"hits":166770,"failed":0}}

@@ -2,6 +2,8 @@
 // run: node tools/sigma-http.mjs [attempts] [conc]   (writes data/sigma-http.json)  server must be on http://localhost:8801
 import { writeFileSync } from "node:fs";
 import { Harness, sleep, roundAt } from "./nodephone.mjs";
+import { fileURLToPath as __f2p } from "node:url"; const ROOT = __f2p(new URL("../../", import.meta.url)), DATA = process.env.DATA_DIR || ROOT + "data"; // CLOUD PORT: paths relative to the checkout; DB_FILE chooses the server database
+import { mkdirSync } from "node:fs"; mkdirSync(DATA, { recursive: true });
 const ATT = Number(process.argv[2] || 100000), CONC = Number(process.argv[3] || 24);
 const BASE = process.env.BASE || "http://localhost:8801", H = new Harness(BASE, { ipPool: 2000 });
 const rr = (n) => Math.floor(Math.random() * n);
@@ -60,5 +62,5 @@ const worker = async () => {
 };
 await Promise.all(Array.from({ length: CONC }, worker));
 const out = { step: "S10 who is let in (6 kinds of game)", trials, defects, dpmo: Math.round(defects / trials * 1e6 * 100) / 100, upper95PerMillion: Math.round((defects === 0 ? 3 : defects + 3) / trials * 1e6 * 100) / 100, byKind, wrongKinds: bad, seconds: Math.round((Date.now() - t0) / 1000) };
-writeFileSync(`C:/ct/test-sites/data/sigma-http${process.env.OUT ? "-" + process.env.OUT : ""}.json`, JSON.stringify(out, null, 1)); console.log("DONE", JSON.stringify(out));
+writeFileSync(`${DATA}/sigma-http${process.env.OUT ? "-" + process.env.OUT : ""}.json`, JSON.stringify(out, null, 1)); console.log("DONE", JSON.stringify(out));
 process.exit(0);

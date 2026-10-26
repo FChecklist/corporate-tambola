@@ -2,7 +2,8 @@
 """Option coverage matrix: for every value of every option (and every play-mode x audience pair), how many games ran, how many were clean, per size class.
 usage: python coverage_matrix.py <label> <tag> [<tag> ...]   -> docs/COVERAGE_<label>.md"""
 import json, sys, os, re, collections
-label = sys.argv[1]; tags = sys.argv[2:]; base = r"C:\ct\test-sites\data"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))  # CLOUD PORT
+label = sys.argv[1]; tags = sys.argv[2:]; base = os.environ.get("DATA_DIR") or os.path.join(ROOT, "data")
 rows = []
 for t in tags:
     f = os.path.join(base, f"campaign-{t}.json")
@@ -32,5 +33,5 @@ for r in rows: sz[size(r)].append(r)
 out += ["## By game size", "", "| size | games | clean | timing only | other failure |", "|---|---:|---:|---:|---:|"]
 for s, rs in sz.items():
     c = sum(1 for r in rs if clean(r)); t = sum(1 for r in rs if not clean(r) and only_timing(r)); out.append(f"| {s} | {len(rs)} | {c} | {t} | {len(rs)-c-t} |")
-dst = rf"C:\ct\test-sites\tambola\docs\COVERAGE_{re.sub(r'[^A-Za-z0-9]+','_',label)}.md"
+dst = os.path.join(ROOT, "docs", f"COVERAGE_{re.sub(r'[^A-Za-z0-9]+','_',label)}.md")
 open(dst, "w", encoding="utf8").write("\n".join(out) + "\n"); print("\n".join(out[:70])); print("written", dst)

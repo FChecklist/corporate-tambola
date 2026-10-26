@@ -4,8 +4,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
 import { ZG, roundMs } from "./nodephone.mjs";
+import { fileURLToPath as __f2p } from "node:url"; const ROOT = __f2p(new URL("../../", import.meta.url)), DATA = process.env.DATA_DIR || ROOT + "data"; const DB = process.env.DB_FILE || DATA + "/tambola-test.sqlite"; // CLOUD PORT: paths relative to the checkout; DB_FILE chooses the server database
 
-const DB = "C:/ct/test-sites/data/tambola-test.sqlite";
 const q = (sql, ...a) => { const db = new DatabaseSync(DB, { readOnly: true }); try { return db.prepare(sql).all(...a); } finally { db.close(); } };
 const flat = (t) => t.flat().filter((x) => x !== null && x !== undefined);
 
@@ -89,6 +89,6 @@ export function auditGame({ tag, game, players, refLog, results, speed, startRou
     lateNumbers: mode === "host" ? [] : r.ph.timeline.filter((q) => q.n > 0).map((q) => [q.n, Math.round((q.t - callMs(q.n - 1)) / 100) / 10]).filter((x) => x[1] > 4),
     ticketNumbersMarked: r.v.marks ? r.v.marks.length : null,
   }));
-  try { mkdirSync(`C:/ct/test-sites/data/player-logs/${tag}`, { recursive: true }); writeFileSync(`C:/ct/test-sites/data/player-logs/${tag}/${game}.numbers.json`, JSON.stringify(refLog)); writeFileSync(`C:/ct/test-sites/data/player-logs/${tag}/${game}.jsonl`, recsOut.map((x) => JSON.stringify(x)).join("\n") + "\n"); } catch { /* the report is best effort */ }
+  try { mkdirSync(`${DATA}/player-logs/${tag}`, { recursive: true }); writeFileSync(`${DATA}/player-logs/${tag}/${game}.numbers.json`, JSON.stringify(refLog)); writeFileSync(`${DATA}/player-logs/${tag}/${game}.jsonl`, recsOut.map((x) => JSON.stringify(x)).join("\n") + "\n"); } catch { /* the report is best effort */ }
   return { checks, players: recs.length, tickets: recs.reduce((a, r) => a + r.tickets.length, 0), claims: checkedClaims };
 }
