@@ -1,0 +1,2282 @@
+{
+ "meta": {
+  "title": "Corporate Tambola use-case oracle: join, verify, approval, people permissions",
+  "version": "1.0.0",
+  "date": "2026-10-26",
+  "boundTo": {
+   "branch": "wip/join-redesign",
+   "head": "3ad8f85",
+   "files": "e9e21453b2 worker.ts; ad43144df2 people.ts",
+   "note": "The working tree was being edited while this was written (the 'ended' and 'locked' gates and the 'admitted' override appeared during the work). Re-run docs/flow/04-count-cases.mjs --check against a live worker before relying on a row; every row of the main join table was checked against the real Worker (see validation)."
+  },
+  "howToUse": "Pure function. For one case (an object with the dimension values) first derive the audience flags and the route owner (derive), then walk the ordered rules of the family (join.rules, approval.rules, input.defects, perm.rules); the first rule whose 'when' matches gives the answer. 'when' keys are ANDed; an array value means 'any of'; {not: v} means 'not v'. Keys are dimension names or derived names (closed, employeesOnly, invites, owner, limited, inChain, role, caller, op).",
+  "answerShape": "{status, code ('ticket' for a 200 with a pid), waiting, with, sees, final, msg (key into messages; {with},{limit},{cap} are filled in)}",
+  "validation": {
+   "pending": true
+  }
+ },
+ "messages": {
+  "cancelled": "This game was cancelled by the organizer.",
+  "didNotStart": "This game did not start. Your details have been erased.",
+  "ended": "This game has ended, so no one can join it now.",
+  "locked": "This game could not begin because the organizer's payment is not complete. Please ask your organizer.",
+  "linkGone": "This link is not valid any more. Please ask the person who invited you to send it again.",
+  "needIdId": "Enter your employee ID.",
+  "needIdBoth": "Enter your employee ID and your mobile number.",
+  "needIdEither": "Enter your mobile number or your employee ID.",
+  "badMobile": "Enter a valid mobile number.",
+  "badId": "An employee ID has letters and numbers only.",
+  "idOrMobile": "Enter your employee ID, or your mobile number if you have no employee ID.",
+  "mobileOrId": "Enter your mobile number or your employee ID.",
+  "consent": "Please tick the box to continue.",
+  "refresh": "Please refresh this page and try again.",
+  "removed": "You were removed from this game by the organizer.",
+  "idUsed": "This employee ID already has a ticket on another phone. A ticket plays on one phone only. If it is you on a new phone, ask your organizer to move your ticket to this phone.",
+  "linkUsed": "This link was already opened on another phone. If you are someone else, type your own mobile number to ask to join. If it is you on a new phone, ask whoever invited you to send the link again.",
+  "otherPhone": "This ticket was opened in a different browser or app (or on another phone). A ticket plays on one device only. Open your link in the same browser or app you used first. If you cannot, ask your organizer to move your ticket to this phone.",
+  "deviceUsedNew": "This phone already holds a ticket in this engagement. One phone, one ticket. Others can join from their own phones, using your invitation link if the organizer allowed it.",
+  "deviceUsedUnbound": "This phone already holds a ticket in this engagement. One phone, one ticket. Ask the person to open the link on their own phone.",
+  "full": "This engagement is full.",
+  "waiting": "This engagement is by invitation. Your request is with {with}. You can come in as soon as they say yes.",
+  "inviteFull": "This invitation has already been used by {limit} people, which is the most one person can invite. Your request is with the organizer. You can come in as soon as they say yes.",
+  "declined": "This game could not add you. Please talk to whoever invited you.",
+  "tooManyTries": "Too many tries with an employee ID that is not on the list. Please ask your organizer for help.",
+  "waitingFull": "Many people are waiting for an answer right now. Please try again a little later.",
+  "busy429": "It is busy right now. Please try again in a few minutes.",
+  "busy503": "It is very busy right now. Please try again in a few minutes.",
+  "notYours": "No such request.",
+  "aiRefusal": "Names and mobile numbers are handled by people in the console, never by an AI assistant. Ask the owner to do this in the console.",
+  "noSign": "Please sign in, or open your ticket link first.",
+  "notAllowed": "Not allowed.",
+  "l2": "Guests invited by a guest can play but cannot invite more people.",
+  "invitesOff": "The organizer has not switched on guest invitations for this game.",
+  "lapsedOne": "The game has ended, so this request has lapsed.",
+  "lapsedAll": "The game has ended, so these requests have lapsed.",
+  "overLimit": "Your list is full ({limit} people). Remove someone first.",
+  "overCap": "This game is for {cap} people and all places are taken.",
+  "allSomeFull": "Some lists are full, so those requests are still waiting.",
+  "meWaiting": "Your request is with {with}. You can come in as soon as they say yes.",
+  "meAdmitted": "You are in. Open your ticket again to join.",
+  "meDeclined": "This game could not add you. Please talk to whoever invited you.",
+  "meLapsed": "This game has ended.",
+  "exportOnly": "Only the Organizer and Hosts can download a list.",
+  "ownSeat": "Your ticket link is the one you were sent.",
+  "noSuchPerson": "No such person on your list.",
+  "removeStarted": "Once the game has started only the Organizer or a Host can remove people.",
+  "resendStarted": "Once the game has started only the Organizer or a Host can send a link again.",
+  "addEnded": "The game has ended, so no one can be added."
+ },
+ "dimensions": {
+  "playMode": {
+   "values": [
+    "manual",
+    "auto"
+   ],
+   "note": "manual = a Host presses a button for each number (config callMode:'host', needs cap <= 2000); auto = the software calls at the chosen speed. The Worker never reads callMode in the join, people or waiting routes (worker.ts join route, people.ts), so this dimension is a REPLICATE axis: every case must give the same answer in both modes."
+  },
+  "verify": {
+   "values": [
+    "mobile",
+    "id",
+    "either",
+    "both"
+   ],
+   "note": "config.verify. 'mobile' is stored as no value (default)."
+  },
+  "audience": {
+   "EMP_ONLY": {
+    "label": "Employees only",
+    "closed": true,
+    "employeesOnly": true,
+    "invites": false,
+    "verifyAllowed": [
+     "mobile",
+     "id",
+     "either",
+     "both"
+    ],
+    "consoleVerifyOffered": [
+     "id",
+     "mobile",
+     "either",
+     "both"
+    ],
+    "core": true,
+    "settings": "whoCanJoin list (forced), employeesOnly true, guestInvites off (forced by config.ts:332)"
+   },
+   "LIST": {
+    "label": "A list of people I choose (closed list, no guest invites)",
+    "closed": true,
+    "employeesOnly": false,
+    "invites": false,
+    "verifyAllowed": [
+     "mobile",
+     "id",
+     "either",
+     "both"
+    ],
+    "consoleVerifyOffered": [
+     "mobile"
+    ],
+    "core": true,
+    "settings": "whoCanJoin list, employeesOnly false, guestInvites off"
+   },
+   "LIST_INV": {
+    "label": "A list plus the people they invite (closed list, guest invites on)",
+    "closed": true,
+    "employeesOnly": false,
+    "invites": true,
+    "verifyAllowed": [
+     "mobile",
+     "id",
+     "either",
+     "both"
+    ],
+    "consoleVerifyOffered": [
+     "mobile",
+     "id",
+     "either",
+     "both"
+    ],
+    "core": true,
+    "settings": "whoCanJoin list, employeesOnly false, guestInvites on (per 1..10, default 4). With verify id/either/both this is the nearest server setting to console choice 2 'My employees, plus their friends and family' (see doubtful row DR-18)"
+   },
+   "ANYONE": {
+    "label": "Anyone with the link",
+    "closed": false,
+    "employeesOnly": false,
+    "invites": false,
+    "verifyAllowed": [
+     "mobile"
+    ],
+    "consoleVerifyOffered": [
+     "mobile"
+    ],
+    "core": true,
+    "settings": "whoCanJoin anyone, employeesOnly false, guestInvites off"
+   },
+   "EMP_ID_OTHERS": {
+    "label": "Anyone with the link; employees confirm with their employee ID, others use a mobile number",
+    "closed": false,
+    "employeesOnly": false,
+    "invites": false,
+    "verifyAllowed": [
+     "id",
+     "either",
+     "both"
+    ],
+    "consoleVerifyOffered": [
+     "id",
+     "both"
+    ],
+    "core": true,
+    "settings": "whoCanJoin anyone, employeesOnly false, verify id|either|both"
+   },
+   "ANYONE_INV": {
+    "label": "EXTENSION: Anyone with the link, guest invites on",
+    "closed": false,
+    "employeesOnly": false,
+    "invites": true,
+    "verifyAllowed": [
+     "mobile"
+    ],
+    "consoleVerifyOffered": [],
+    "core": false,
+    "settings": "whoCanJoin anyone, guestInvites on. Not offered as a console choice but the server allows it, and it is the only audience where a level-1 guest's quota is hit in an OPEN game (the 'over by invite' capacity)."
+   }
+  },
+  "route": {
+   "ORG": "Organizer common link: z.html?e=ID&from=1900000000",
+   "HOST": "Host common link: from = 1500000000 + hex(first 7 of the Host key hash)",
+   "COHOST": "Co-host common link: from = 1000000000 + hex(first 7 of the Co-host key hash)",
+   "PERSONAL": "Personal link /j/<token>: a secret made for one listed person (fixture convention: the person is on a Co-host's list). The page sends {token}.",
+   "GUEST_L1": "Guest invite link of a level-1 participant (a participant who is not themself a guest): from = that participant's seat number",
+   "GUEST_L2": "Guest invite link of a level-2 guest (somebody who joined through a level-1 guest's link or list): same shape, but the game ignores it for ownership",
+   "DIRECT": "No link code: the bare game page (z.html?e=ID) or a typed address"
+  },
+  "state": {
+   "S01": "On a list with a mobile number only",
+   "S02": "On a list with an employee ID only (no mobile)",
+   "S03": "On a list with both a mobile number and an employee ID",
+   "S04": "Not on any list (an outsider): types only a mobile number; on a PERSONAL route types their own number on somebody else's link",
+   "S05": "Removed by the organizer side before the game (before start): was listed, now status removed",
+   "S06": "Already joined on another phone: the identity holds a ticket bound to device A, the request comes from device B (another phone, another browser, cleared site data)",
+   "S07": "Same phone, second ticket: the request's device already holds a ticket for a DIFFERENT identity",
+   "S08": "Wrong ID: an employee ID that matches nobody (in 'both' mode: a listed mobile with an ID different from the listed one)",
+   "S09": "ID of someone else who already joined (in 'both' mode: the person's own unlisted mobile with that other person's ID)",
+   "S10": "ID of someone else who is listed but has NOT joined yet (impersonation window)",
+   "S11": "Returning: same identity, same device, second visit (reload, reopen the link)"
+  },
+  "capacity": {
+   "ROOM": "Room left for this person (a free place, no promise problem, inviter quota not reached)",
+   "PROMISED_ONLY": "The only free places are promised to listed people who have not yet joined: participants + unseated listed people == cap, participants < cap",
+   "FULL": "Exactly full: participants == cap (the next new ticket would exceed the size bought)",
+   "OVER_QUOTA": "The game has room, but the person's inviter (a Co-host with 100 default, or a level-1 guest with 'per') has no list places left"
+  },
+  "lifecycle": {
+   "none": "Normal, before the first number",
+   "pause_resume": "The organizer pauses and later resumes the numbers; the step under test happens while paused (signed control file only: nothing in join, people or waiting reads it) - REPLICATE of 'none'",
+   "late_join": "The step happens after the first number and after the 2-minute grace (40 rounds): seats get jr = the current round",
+   "organizer_ends": "The step happens after the game ended (last call + 60 s, or the organizer's stop): endBoundMs",
+   "cancelled_before_start": "The step happens after the Organizer or a Host cancelled the game (3 confirmations). Co-host keys are revoked at the cancel.",
+   "reopen": "A cancelled PAID game moved to a new date: cancelled flag cleared, Co-host keys stay revoked, guest data is gone (erased 20 h after the cancel), old personal links are dead. Lists are loaded again by the Organizer."
+  },
+  "approval": {
+   "AUTO": "No waiting room: the join itself gives the ticket (auto-admit)",
+   "APPROVE": "waiting-room approve (single request) by a right approver",
+   "APPROVE_ALL": "'Approve all' by a right approver (only their own link's requests for a Co-host or guest)",
+   "DECLINE": "decline by a right approver",
+   "NEVER": "never decided",
+   "APPROVE_AFTER_FULL": "approve after all places on the lists are taken (persons == cap)",
+   "APPROVE_AFTER_REMOVAL": "approve after the same identity was listed and then removed",
+   "WRONG_ROLE": "approve by a role that may not decide this request",
+   "NONE": "the join ended in an error, so there is nothing to approve"
+  },
+  "approverRole": {
+   "ORG": "Organizer's own key",
+   "HOST": "a Host's key",
+   "COHOST_OWNER": "the Co-host whose common link the request came through",
+   "COHOST_OTHER": "a Co-host who does not own the request",
+   "L1_OWNER": "the level-1 guest whose invite link the request came through (known by ticket id + device)",
+   "L1_OTHER": "another level-1 guest",
+   "L2_GUEST": "a level-2 guest",
+   "AI_KEY": "an AI key or any call through an AI work link",
+   "ANON": "no key and no ticket",
+   "OTHER_ORG": "the key of another organizer"
+  }
+ },
+ "derive": {
+  "fromAudience": "closed, employeesOnly and invites come from dimensions.audience[audience]. 'employeesOnly' is also called eo.",
+  "ownerRules": [
+   {
+    "when": {
+     "route": "COHOST",
+     "lifecycle": "reopen"
+    },
+    "owner": "o",
+    "note": "Co-host keys are revoked at the cancel and not restored by the reopen: the link silently credits the organizer"
+   },
+   {
+    "when": {
+     "route": "GUEST_L1",
+     "invites": false
+    },
+    "owner": "o",
+    "note": "guest invitations are off: the link is ignored"
+   },
+   {
+    "when": {
+     "route": "ORG"
+    },
+    "owner": "o"
+   },
+   {
+    "when": {
+     "route": "HOST"
+    },
+    "owner": "h"
+   },
+   {
+    "when": {
+     "route": "COHOST"
+    },
+    "owner": "c"
+   },
+   {
+    "when": {
+     "route": "GUEST_L1"
+    },
+    "owner": "s"
+   },
+   {
+    "when": {
+     "route": [
+      "GUEST_L2",
+      "DIRECT"
+     ]
+    },
+    "owner": "o",
+    "note": "a level-2 guest's link records no inviter; no link at all = the organizer"
+   },
+   {
+    "when": {
+     "route": "PERSONAL"
+    },
+    "owner": "c",
+    "note": "fixture convention: the link belongs to a person on a Co-host's list; a different number typed on it asks that list's owner"
+   }
+  ],
+  "limited": "owner is 'c' (Co-host: coHostLimit, default 100, 10..1000) or 's' (level-1 guest: invites.per, default 4, 1..10)",
+  "limitOf": {
+   "c": 100,
+   "s": 4
+  },
+  "viaOf": [
+   {
+    "when": {
+     "route": "PERSONAL"
+    },
+    "via": "personal-link"
+   },
+   {
+    "when": {
+     "route": "DIRECT"
+    },
+    "via": "direct"
+   },
+   {
+    "when": {},
+    "via": "common-link"
+   }
+  ],
+  "labelOfOwner": {
+   "o": "the organizer",
+   "h": "<the label the Organizer gave the Host, else 'the host'>",
+   "c": "<the label the Organizer gave the Co-host, else 'the co-host'>",
+   "s": "the person who invited you",
+   "overlimit": "the organizer"
+  },
+  "placedUnderLabel": {
+   "o": "Organizer",
+   "h": "Host <label>",
+   "c": "Co-host <label>",
+   "s": "Guest (ticket <n>)"
+  },
+  "viewers": {
+   "o": [
+    "ORG",
+    "HOST"
+   ],
+   "h": [
+    "ORG",
+    "HOST"
+   ],
+   "c": [
+    "ORG",
+    "HOST",
+    "COHOST_OWNER"
+   ],
+   "s": [
+    "ORG",
+    "HOST",
+    "L1_OWNER"
+   ],
+   "overlimit": [
+    "ORG",
+    "HOST"
+   ]
+  },
+  "listedOwner": "The list owner of a listed person: 'c' on route PERSONAL (fixture), otherwise 'o' (the Organizer loaded the list). First list wins: a listed person stays under their real inviter whatever link they use.",
+  "seatSrc": {
+   "o": "link",
+   "h": "ho:<hex>",
+   "c": "co:<hex>",
+   "s": "link"
+  },
+  "seatInv": "the level-1 seat number when the inviter is 's', otherwise null"
+ },
+ "stateInvalidWhen": {
+  "S01": [
+   {
+    "verify": "id",
+    "employeesOnly": true
+   },
+   {
+    "verify": "both",
+    "employeesOnly": true
+   }
+  ],
+  "S02": [
+   {
+    "verify": [
+     "mobile",
+     "both"
+    ]
+   }
+  ],
+  "S03": [
+   {
+    "verify": "mobile"
+   }
+  ],
+  "S08": [
+   {
+    "verify": "mobile"
+   }
+  ],
+  "S09": [
+   {
+    "verify": "mobile"
+   }
+  ],
+  "S10": [
+   {
+    "verify": [
+     "mobile",
+     "both"
+    ]
+   }
+  ]
+ },
+ "lifecycleStateInvalid": {
+  "reopen": [
+   "S05",
+   "S06",
+   "S11"
+  ]
+ },
+ "recipes": {
+  "common": "Every request carries consent {v: current Terms version, boxes: [A,B]} and a device id (16..64 hex). Unless a case says otherwise the person is on its own phone with a fresh device id.",
+  "identities": "S = the subject: mobile M_s, employee ID E_s, device D_s. O = another listed person: M_o, E_o, device D_o. Wrong ID = an ID that is on no list.",
+  "listEntry": {
+   "mobileOnly": "{name, phone: M_s}",
+   "idOnly": "{name, empId: E_s}",
+   "both": "{name, phone: M_s, empId: E_s}"
+  },
+  "listedBy": "the Organizer for every route except PERSONAL; the Co-host for PERSONAL (the token is the personal link of that list entry)",
+  "byState": {
+   "S01": {
+    "list": "mobileOnly",
+    "request": "{phone: M_s}"
+   },
+   "S02": {
+    "list": "idOnly",
+    "request": "{empId: E_s}"
+   },
+   "S03": {
+    "list": "both",
+    "request": "{phone: M_s, empId: E_s}"
+   },
+   "S04": {
+    "list": null,
+    "request": "{phone: M_s}   (PERSONAL: {token: of a listed person X, phone: M_s})"
+   },
+   "S05": {
+    "list": "same kind as the verify mode needs (mobile: mobileOnly, id|either: idOnly, both: both), then the Organizer removes the person before the start",
+    "request": "as S01/S02/S03 for that kind"
+   },
+   "S06": {
+    "list": "as S05 without the removal; the person first joins with device A",
+    "request": "the same request with device B"
+   },
+   "S07": {
+    "list": "as S05 without the removal; a different listed person 'holder' first joins with device D_s",
+    "request": "the subject's own request with device D_s"
+   },
+   "S08": {
+    "list": "mode both: the subject's mobile is listed with ID E_s; modes id|either: somebody else is listed",
+    "request": "mode both: {phone: M_s, empId: <wrong>}; id|either: {empId: <wrong>}; PERSONAL: {token, empId: <wrong>}"
+   },
+   "S09": {
+    "list": "O is listed and has joined on D_o",
+    "request": "id|either: {empId: E_o}; both: {phone: M_s (unlisted), empId: E_o}; PERSONAL: {token, empId: E_o}"
+   },
+   "S10": {
+    "list": "O is listed and has NOT joined",
+    "request": "id|either: {empId: E_o}; PERSONAL: {token, empId: E_o}"
+   },
+   "S11": {
+    "list": "as S05 without the removal; the person joined with device D_s",
+    "request": "the same request again with D_s"
+   }
+  },
+  "verifyKindForListing": {
+   "mobile": "mobileOnly",
+   "either": "mobileOnly (for the PERSONAL token holder) / idOnly (for S05..S10 ID cases)",
+   "id": "idOnly",
+   "both": "both"
+  },
+  "routeParams": {
+   "ORG": "from = 1900000000",
+   "HOST": "from = 1500000000 + parseInt(first 7 hex of sha256('key|'+hostKey), 16)",
+   "COHOST": "from = 1000000000 + parseInt(first 7 hex of sha256('key|'+cohostKey), 16)",
+   "PERSONAL": "token = last path part of the person's /j/<token> link",
+   "GUEST_L1": "from = seat number of a level-1 participant",
+   "GUEST_L2": "from = seat number of a level-2 guest",
+   "DIRECT": "no from, no token"
+  },
+  "anchors": "Worlds are built with three anchors while guest invitations are on, then switched to the audience's final settings: A1 = level-1 participant (listed by the Organizer, joined), A2 = level-2 guest (came through A1's link, admitted, joined), A3 = a second level-1 participant. Also: one Host, two Co-hosts (the second is the 'other' Co-host), another organizer's key, an AI key.",
+  "capacityFixtures": {
+   "ROOM": "cap 200, plenty free",
+   "FULL": "after the fillers have joined, PATCH cap to the number of participants (a list may be longer than cap: see DR-10)",
+   "PROMISED_ONLY": "list K extra people who do not join, then PATCH cap = participants + unseated listed people",
+   "OVER_QUOTA": "Co-host: coHostLimit 10 with 10 people on the Co-host's list; level-1 guest: invites.per 1 with the anchor level-2 guest already on A1's list"
+  },
+  "lifecycleFixtures": {
+   "pause_resume": "no fixture needed (pause is a signed file nobody reads in join/people)",
+   "late_join": "now = start + 4 minutes (after the 2-minute grace, before the end); the game is paid (pack > 0) so it is not 'locked'",
+   "organizer_ends": "now = start + 12 hours",
+   "cancelled_before_start": "POST /cancel {confirmations:3} by the Organizer",
+   "reopen": "cancel, delete the guest rows (person, waiting, seat, participant), clear the cancel mark, load the lists again by the Organizer (new tokens). Emulated in the probe: a real reopen needs a paid game."
+  }
+ },
+ "pruning": [
+  {
+   "id": "PR-01",
+   "rule": "audience x verify: only the 'verifyAllowed' values of each audience are crossed (ANYONE and ANYONE_INV: mobile only; EMP_ID_OTHERS: id, either, both - with 'mobile' it would be the ANYONE audience).",
+   "why": "An open game with verify 'mobile' and an employee-ID rule is a contradiction in terms; the same server setting is already covered by ANYONE."
+  },
+  {
+   "id": "PR-02",
+   "rule": "state validity by verify mode (table stateInvalidWhen).",
+   "why": "A person cannot be listed in a shape the people route refuses (people.ts addPeople): ID-only needs id|either; mobile-only needs not(eo && id|both); an ID is never stored in 'mobile' mode; S10 cannot exist in 'both' (identity is the mobile, so an unclaimed ID is the same as S09)."
+  },
+  {
+   "id": "PR-03",
+   "rule": "lifecycle reopen: states S05, S06, S11 do not exist.",
+   "why": "Guest data was erased 20 h after the cancel; nobody is removed or joined any more."
+  },
+  {
+   "id": "PR-04",
+   "rule": "capacity values are kept for a case only if the rule that answers the case lists that capacity (rule.capacities, default ROOM only).",
+   "why": "A case whose answer is decided by a gate before the capacity check (need-id, link-gone, returning phone, device-used, ended, cancelled) cannot depend on capacity, so FULL/PROMISED_ONLY/OVER_QUOTA there are the same use case as ROOM. OVER_QUOTA additionally needs an inviter that has a quota (limited) and an unlisted person."
+  },
+  {
+   "id": "PR-05",
+   "rule": "rules marked 'ignores' keep one case per combination of the OTHER dimensions (the first value in enumeration order stands for the ignored ones).",
+   "why": "The cancelled gate answers 403 before verify, state and capacity are read; a dead personal link after a reopen answers 404 before them; and so on. Keeping every verify x state there would only repeat one use case."
+  },
+  {
+   "id": "PR-06",
+   "rule": "Approval outcomes other than AUTO and NONE exist only for requests that the join oracle answers with waiting:true.",
+   "why": "Nothing waits otherwise."
+  },
+  {
+   "id": "PR-07",
+   "rule": "Approver roles: APPROVE, APPROVE_ALL, DECLINE, APPROVE_AFTER_FULL, APPROVE_AFTER_REMOVAL cross only the RIGHT roles of the request; WRONG_ROLE crosses the six wrong roles; NEVER crosses no role.",
+   "why": "A right role approving is one use case; a wrong role is the refusal use case."
+  },
+  {
+   "id": "PR-08",
+   "rule": "Family F-INPUT crosses defects with (audience x verify) only; family F-PERM crosses caller x op x invites x lifecycle with the 'ignores' of its rules.",
+   "why": "A malformed field is refused before route, state, capacity and lifecycle matter."
+  },
+  {
+   "id": "PR-10",
+   "rule": "F-APPROVAL requests are one per (audience, route, request class, identity kind): request class is 'unlisted' (S04) or 'idmiss' (S08, S09, S10); identity kind is 'id' when the waiting request is keyed by a typed employee ID (verify id|either) and 'phone' otherwise. The approver's answer does not depend on verify or on which of S08/S09/S10 produced the request.",
+   "why": "approval.rules read only the request's owner, whether it is overlimit, and the audience's invite switch. Crossing every verify and state again would repeat identical answers."
+  },
+  {
+   "id": "PR-11",
+   "rule": "F-APPROVAL is a base plus a sweep. Base (decision lifecycle none): every approval outcome x its roles x its capacity. Sweep (decision lifecycle pause_resume, late_join, organizer_ends, cancelled_before_start; reopen only for Co-host-link requests): APPROVE by every right role, NEVER, and for organizer_ends and cancelled_before_start also the two non-chain wrong roles.",
+   "why": "The game-state gates (cancelled, ended) and the dead Co-host keys change the approver's answer; pause and late join only change the re-join leg. Crossing all five lifecycles with every outcome would repeat the base answers."
+  },
+  {
+   "id": "PR-09",
+   "rule": "playMode is crossed with every family and never pruned.",
+   "why": "It is a replicate axis: the oracle is identical, so each manual case must equal its auto twin (a cheap invariance check)."
+  }
+ ],
+ "join": {
+  "note": "F-JOIN: one join request (and for waiting results the first leg of the waiting room). 'capacities' lists the capacity values for which the rule is a distinct, meaningful case (default ROOM only). 'ignores' lists dimensions that do not influence the answer of the rule (see PR-05).",
+  "rules": [
+   {
+    "id": "J-GATE-CANCELLED",
+    "when": {
+     "lifecycle": "cancelled_before_start"
+    },
+    "ignores": [
+     "state",
+     "capacity",
+     "verify"
+    ],
+    "then": {
+     "status": 403,
+     "code": "cancelled",
+     "msg": "cancelled",
+     "waiting": false,
+     "final": "nothing"
+    },
+    "src": "worker.ts: cancelled && POST join"
+   },
+   {
+    "id": "J-LINK-GONE-REOPEN",
+    "when": {
+     "route": "PERSONAL",
+     "lifecycle": "reopen"
+    },
+    "ignores": [
+     "state",
+     "capacity",
+     "verify"
+    ],
+    "then": {
+     "status": 404,
+     "code": "link-gone",
+     "msg": "linkGone",
+     "waiting": false,
+     "final": "nothing"
+    },
+    "src": "personByToken: guest data was erased, the old token no longer exists"
+   },
+   {
+    "id": "J-LINK-GONE",
+    "when": {
+     "route": "PERSONAL",
+     "state": "S05"
+    },
+    "then": {
+     "status": 404,
+     "code": "link-gone",
+     "msg": "linkGone",
+     "waiting": false,
+     "final": "nothing"
+    },
+    "src": "worker.ts join: token unknown or person removed (a removal also clears tok_hash)"
+   },
+   {
+    "id": "J-NEED-ID-ID",
+    "when": {
+     "employeesOnly": true,
+     "verify": "id",
+     "state": "S04",
+     "route": {
+      "not": "PERSONAL"
+     }
+    },
+    "then": {
+     "status": 400,
+     "code": "need-id",
+     "msg": "needIdId",
+     "waiting": false,
+     "final": "nothing"
+    },
+    "src": "worker.ts join: employeesOnly && id && no ID && no token"
+   },
+   {
+    "id": "J-NEED-ID-BOTH",
+    "when": {
+     "employeesOnly": true,
+     "verify": "both",
+     "state": "S04",
+     "route": {
+      "not": "PERSONAL"
+     }
+    },
+    "then": {
+     "status": 400,
+     "code": "need-id",
+     "msg": "needIdBoth",
+     "waiting": false,
+     "final": "nothing"
+    },
+    "src": "worker.ts join: employeesOnly && both && no ID && no token"
+   },
+   {
+    "id": "J-RETURNING",
+    "when": {
+     "state": "S11"
+    },
+    "then": {
+     "status": 200,
+     "code": "ticket",
+     "msg": null,
+     "waiting": false,
+     "again": true,
+     "jr": "unchanged",
+     "final": "same-ticket"
+    },
+    "src": "worker.ts join: have participant, same device (again:true)"
+   },
+   {
+    "id": "J-LINK-USED",
+    "when": {
+     "state": "S06",
+     "route": "PERSONAL"
+    },
+    "then": {
+     "status": 423,
+     "code": "link-used",
+     "msg": "linkUsed",
+     "waiting": false,
+     "needPhone": true,
+     "final": "nothing"
+    },
+    "src": "worker.ts join: token && !typedPh"
+   },
+   {
+    "id": "J-ID-USED-S06",
+    "when": {
+     "state": "S06",
+     "verify": [
+      "id",
+      "either"
+     ]
+    },
+    "then": {
+     "status": 423,
+     "code": "id-used",
+     "msg": "idUsed",
+     "waiting": false,
+     "final": "nothing"
+    },
+    "src": "worker.ts join: idHit"
+   },
+   {
+    "id": "J-OTHER-PHONE",
+    "when": {
+     "state": "S06"
+    },
+    "then": {
+     "status": 423,
+     "code": "other-phone",
+     "msg": "otherPhone",
+     "waiting": false,
+     "final": "nothing"
+    },
+    "src": "worker.ts join: device mismatch"
+   },
+   {
+    "id": "J-ID-USED-S09",
+    "when": {
+     "state": "S09",
+     "verify": [
+      "id",
+      "either"
+     ],
+     "route": {
+      "not": "PERSONAL"
+     }
+    },
+    "then": {
+     "status": 423,
+     "code": "id-used",
+     "msg": "idUsed",
+     "waiting": false,
+     "final": "nothing"
+    },
+    "src": "the typed ID resolves to a listed person who already holds a ticket on another device"
+   },
+   {
+    "id": "J-ENDED",
+    "when": {
+     "lifecycle": "organizer_ends"
+    },
+    "then": {
+     "status": 403,
+     "code": "ended",
+     "msg": "ended",
+     "waiting": false,
+     "final": "nothing"
+    },
+    "src": "worker.ts join: now >= endBoundMs (new people only; a returning phone is handled above)"
+   },
+   {
+    "id": "J-REMOVED",
+    "when": {
+     "state": "S05"
+    },
+    "then": {
+     "status": 403,
+     "code": "removed",
+     "msg": "removed",
+     "waiting": false,
+     "removed": true,
+     "final": "nothing"
+    },
+    "src": "worker.ts join: person status removed"
+   },
+   {
+    "id": "J-DEVICE-USED",
+    "when": {
+     "state": "S07"
+    },
+    "then": {
+     "status": 409,
+     "code": "device-used",
+     "msg": "deviceUsedNew",
+     "waiting": false,
+     "final": "nothing"
+    },
+    "src": "worker.ts join: a seat already holds this device"
+   },
+   {
+    "id": "J-FULL",
+    "when": {
+     "capacity": "FULL"
+    },
+    "capacities": [
+     "FULL"
+    ],
+    "ignores": [
+     "verify"
+    ],
+    "then": {
+     "status": 409,
+     "code": null,
+     "msg": "full",
+     "waiting": false,
+     "final": "nothing"
+    },
+    "src": "worker.ts join: participants >= cap (no code; checked BEFORE the waiting room, so 'full' beats 'waiting')"
+   },
+   {
+    "id": "J-LISTED",
+    "when": {
+     "state": [
+      "S01",
+      "S02",
+      "S03"
+     ]
+    },
+    "capacities": [
+     "ROOM",
+     "PROMISED_ONLY"
+    ],
+    "then": {
+     "status": 200,
+     "code": "ticket",
+     "msg": null,
+     "waiting": false,
+     "jr": "round-if-late",
+     "placement": "listedOwner",
+     "final": "new-ticket"
+    },
+    "src": "worker.ts join: person found on a list; the promised place is kept (addSeat)"
+   },
+   {
+    "id": "J-TOKEN-WINS",
+    "when": {
+     "route": "PERSONAL",
+     "state": [
+      "S08",
+      "S09",
+      "S10"
+     ]
+    },
+    "capacities": [
+     "ROOM",
+     "PROMISED_ONLY"
+    ],
+    "then": {
+     "status": 200,
+     "code": "ticket",
+     "msg": null,
+     "waiting": false,
+     "jr": "round-if-late",
+     "placement": "listedOwner",
+     "final": "new-ticket",
+     "note": "the token is the strong proof: a typed ID is ignored"
+    },
+    "src": "worker.ts join: ID checks are skipped when a token is present"
+   },
+   {
+    "id": "J-IMPERSONATE",
+    "when": {
+     "state": "S10",
+     "verify": [
+      "id",
+      "either"
+     ]
+    },
+    "capacities": [
+     "ROOM",
+     "PROMISED_ONLY"
+    ],
+    "then": {
+     "status": 200,
+     "code": "ticket",
+     "msg": null,
+     "waiting": false,
+     "jr": "round-if-late",
+     "placement": "listedOwner",
+     "final": "new-ticket",
+     "doubtful": "DR-01"
+    },
+    "src": "worker.ts join: a listed ID is accepted from any phone that has not joined yet"
+   },
+   {
+    "id": "J-ID-MISS-WAIT",
+    "when": {
+     "state": [
+      "S08",
+      "S09",
+      "S10"
+     ]
+    },
+    "then": {
+     "status": 403,
+     "code": "waiting",
+     "msg": "waiting",
+     "waiting": true,
+     "with": "owner",
+     "overlimit": false,
+     "sees": "chain",
+     "final": "waiting-row",
+     "note": "ID mismatch: the organizer decides, in open and closed games alike (doubtful DR-02)"
+    },
+    "src": "worker.ts join: idMiss -> wait(false)"
+   },
+   {
+    "id": "J-UNLISTED-CLOSED",
+    "when": {
+     "state": "S04",
+     "closed": true
+    },
+    "then": {
+     "status": 403,
+     "code": "waiting",
+     "msg": "waiting",
+     "waiting": true,
+     "with": "owner",
+     "overlimit": false,
+     "sees": "chain",
+     "final": "waiting-row"
+    },
+    "src": "worker.ts join: e.closed -> wait(false)"
+   },
+   {
+    "id": "J-OVER-QUOTA-OPEN",
+    "when": {
+     "state": "S04",
+     "closed": false,
+     "capacity": "OVER_QUOTA",
+     "limited": true
+    },
+    "capacities": [
+     "OVER_QUOTA"
+    ],
+    "then": {
+     "status": 409,
+     "code": "invite-full",
+     "msg": "inviteFull",
+     "waiting": true,
+     "with": "organizer",
+     "overlimit": true,
+     "sees": "organizerHost",
+     "final": "waiting-row",
+     "doubtful": "DR-08"
+    },
+    "src": "worker.ts join: listCount(owner) >= limit -> wait(true, limit)"
+   },
+   {
+    "id": "J-PROMISED-OPEN-LIMITED",
+    "when": {
+     "state": "S04",
+     "closed": false,
+     "capacity": "PROMISED_ONLY",
+     "limited": true
+    },
+    "capacities": [
+     "PROMISED_ONLY"
+    ],
+    "then": {
+     "status": 409,
+     "code": "invite-full",
+     "msg": "inviteFull",
+     "waiting": true,
+     "with": "organizer",
+     "overlimit": true,
+     "sees": "organizerHost",
+     "final": "waiting-row",
+     "doubtful": "DR-09"
+    },
+    "src": "worker.ts join: the insert guard fails -> row null -> guardId !== null -> wait(true, guardLimit)"
+   },
+   {
+    "id": "J-PROMISED-OPEN",
+    "when": {
+     "state": "S04",
+     "closed": false,
+     "capacity": "PROMISED_ONLY"
+    },
+    "capacities": [
+     "PROMISED_ONLY"
+    ],
+    "then": {
+     "status": 409,
+     "code": null,
+     "msg": "full",
+     "waiting": false,
+     "final": "nothing",
+     "doubtful": "DR-09"
+    },
+    "src": "worker.ts join: the insert guard fails -> row null -> 409 full"
+   },
+   {
+    "id": "J-OPEN-NEW",
+    "when": {
+     "state": "S04",
+     "closed": false
+    },
+    "then": {
+     "status": 200,
+     "code": "ticket",
+     "msg": null,
+     "waiting": false,
+     "jr": "round-if-late",
+     "placement": "owner",
+     "final": "new-ticket"
+    },
+    "src": "worker.ts join: open game, inviter below its limit"
+   }
+  ],
+  "finals": {
+   "nothing": "no row is created; the phone has no ticket and no waiting request",
+   "new-ticket": "participant + seat created. person row: status joined; inviter = placement (listedOwner: the list the person was on; owner: the route owner); seat.inv = level-1 seat number when the inviter is 's' else null; seat.src = co:<hex> | ho:<hex> | link; jr = 0 normally, the current round when lifecycle late_join",
+   "same-ticket": "no new row; the reply carries again:true and the original jr",
+   "waiting-row": "waiting row created (status waiting, one per identity, idempotent): inviter = owner (or 'o' when overlimit), overlimit flag, via = personal-link | common-link | direct, chain = the owner and, for 's', the guest's own inviter; NO seat, NO person row; the request is visible to 'sees'"
+  },
+  "waitingAnswer": {
+   "status": 403,
+   "code": "waiting",
+   "fields": "{error, code, waiting:true, wid (12 hex), with}",
+   "viewers": "see derive.viewers"
+  }
+ },
+ "approval": {
+  "note": "F-APPROVAL: a request already exists (the waiting answer of a join case); the step under test is a decision by 'role' under 'lifecycle' with 'capacity'. Rules are evaluated top to bottom; inChain is derived (see derivation).",
+  "derivation": {
+   "rightRoles": "ORG and HOST always. COHOST_OWNER when the request's owner is 'c' and the request is not overlimit and the Co-host key is alive (not lifecycle cancelled_before_start, not reopen). L1_OWNER when the owner is 's', not overlimit, and guest invites are on. An overlimit request (open game, inviter list full) is on chain ',o,': only ORG and HOST.",
+   "wrongRoles": [
+    "COHOST_OTHER",
+    "L1_OTHER",
+    "L2_GUEST",
+    "AI_KEY",
+    "ANON",
+    "OTHER_ORG"
+   ],
+   "inChain": "role in {ORG, HOST} or (role COHOST_OWNER and owner c and not overlimit) or (role L1_OWNER and owner s and not overlimit). COHOST_OTHER and L1_OTHER are never in the chain. (If the level-1 guest was themself put on a Co-host's list, that Co-host is also in the chain of the guest's requests: the fixture lists the anchor guest under the Organizer to avoid it.)",
+   "requestKinds": "Every JOIN case whose oracle result has waiting:true is a request: (audience, verify, route, state, capacity ROOM) = ordinary waiting request; (…, capacity OVER_QUOTA) in an open game = overlimit request (chain ',o,').",
+   "placedUnder": "request.overlimit -> the approver's own label (Organizer / Host <label>); else if capacity OVER_QUOTA and the approver is ORG or HOST -> the approver's own label; else the request owner's label (Organizer / Host <label> / Co-host <label> / Guest (ticket n)).",
+   "decisionCapacity": "APPROVE, APPROVE_ALL, DECLINE: ROOM or OVER_QUOTA (the target list is full; only when the owner is c or s and the request is not overlimit). APPROVE_AFTER_FULL: FULL. Others: ROOM.",
+   "decisionLifecycle": "The request is created at baseline (lifecycle none, or reopen for the reopen cases). The decision happens in the stated lifecycle.",
+   "afterApprove": "me?wid -> admitted; the phone re-sends the same join -> 200 ticket; person.inviter = placedUnder id, status joined; seat.inv = the level-1 seat when placed under 's'."
+  },
+  "rules": [
+   {
+    "id": "A-NEVER",
+    "when": {
+     "approval": "NEVER"
+    },
+    "then": {
+     "approver": null,
+     "me": "waiting",
+     "rejoin": "joinOracle",
+     "note": "no call is made; the phone keeps polling; at the end me says lapsed"
+    }
+   },
+   {
+    "id": "A-AUTH-AI",
+    "when": {
+     "role": "AI_KEY"
+    },
+    "ignores": [
+     "lifecycle",
+     "capacity",
+     "route",
+     "state",
+     "reqLife"
+    ],
+    "then": {
+     "approver": {
+      "status": 403,
+      "msg": "aiRefusal"
+     },
+     "me": "waiting",
+     "rejoin": "joinOracle"
+    }
+   },
+   {
+    "id": "A-AUTH-ANON",
+    "when": {
+     "role": "ANON"
+    },
+    "ignores": [
+     "lifecycle",
+     "capacity",
+     "route",
+     "state",
+     "reqLife"
+    ],
+    "then": {
+     "approver": {
+      "status": 403,
+      "msg": "noSign"
+     },
+     "me": "waiting",
+     "rejoin": "joinOracle"
+    }
+   },
+   {
+    "id": "A-AUTH-OTHER-ORG",
+    "when": {
+     "role": "OTHER_ORG"
+    },
+    "ignores": [
+     "lifecycle",
+     "capacity",
+     "route",
+     "state",
+     "reqLife"
+    ],
+    "then": {
+     "approver": {
+      "status": 403,
+      "msg": "notAllowed"
+     },
+     "me": "waiting",
+     "rejoin": "joinOracle"
+    }
+   },
+   {
+    "id": "A-AUTH-L2",
+    "when": {
+     "role": "L2_GUEST"
+    },
+    "ignores": [
+     "lifecycle",
+     "capacity",
+     "route",
+     "state",
+     "reqLife"
+    ],
+    "then": {
+     "approver": {
+      "status": 403,
+      "msg": "l2"
+     },
+     "me": "waiting",
+     "rejoin": "joinOracle"
+    }
+   },
+   {
+    "id": "A-AUTH-L1-INVITES-OFF",
+    "when": {
+     "role": [
+      "L1_OWNER",
+      "L1_OTHER"
+     ],
+     "invites": false
+    },
+    "ignores": [
+     "lifecycle",
+     "capacity",
+     "route",
+     "state",
+     "reqLife"
+    ],
+    "then": {
+     "approver": {
+      "status": 403,
+      "msg": "invitesOff"
+     },
+     "me": "waiting",
+     "rejoin": "joinOracle"
+    }
+   },
+   {
+    "id": "A-AUTH-COHOST-REVOKED",
+    "when": {
+     "role": [
+      "COHOST_OWNER",
+      "COHOST_OTHER"
+     ],
+     "lifecycle": [
+      "cancelled_before_start",
+      "reopen"
+     ]
+    },
+    "ignores": [
+     "capacity",
+     "route",
+     "state"
+    ],
+    "then": {
+     "approver": {
+      "status": 403,
+      "msg": "noSign"
+     },
+     "me": "waiting",
+     "rejoin": "joinOracle"
+    },
+    "note": "the cancel revoked every Co-host key of the game, and the reopen did not give them back (DR-14)"
+   },
+   {
+    "id": "A-CANCELLED",
+    "when": {
+     "lifecycle": "cancelled_before_start"
+    },
+    "ignores": [
+     "capacity"
+    ],
+    "then": {
+     "approver": {
+      "status": 409,
+      "code": "cancelled",
+      "msg": "cancelled"
+     },
+     "me": "waiting",
+     "rejoin": "joinOracle"
+    }
+   },
+   {
+    "id": "A-NOT-IN-CHAIN",
+    "when": {
+     "inChain": false
+    },
+    "ignores": [
+     "capacity"
+    ],
+    "then": {
+     "approver": {
+      "status": 404,
+      "msg": "notYours"
+     },
+     "me": "waiting",
+     "rejoin": "joinOracle"
+    },
+    "note": "a Co-host or level-1 guest outside the request's chain is told the request does not exist (APPROVE_ALL answers 200 with zeros instead, see doubtful DR-15)"
+   },
+   {
+    "id": "A-AFTER-REMOVAL",
+    "when": {
+     "approval": "APPROVE_AFTER_REMOVAL"
+    },
+    "then": {
+     "approver": {
+      "status": 200,
+      "body": {
+       "ok": true,
+       "already": "admitted"
+      }
+     },
+     "me": "admitted",
+     "rejoin": {
+      "status": 403,
+      "code": "removed",
+      "msg": "removed"
+     },
+     "final": "person-removed"
+    },
+    "note": "listing the waiting person admits the request at once; the later removal wins and Admit changes nothing. The 'already' answer comes BEFORE the game-ended check."
+   },
+   {
+    "id": "A-ENDED",
+    "when": {
+     "lifecycle": "organizer_ends"
+    },
+    "ignores": [
+     "capacity"
+    ],
+    "then": {
+     "approver": {
+      "status": 409,
+      "msg": "lapsedOne",
+      "msgAll": "lapsedAll"
+     },
+     "me": "lapsed",
+     "rejoin": "joinOracle"
+    }
+   },
+   {
+    "id": "A-DECLINE",
+    "when": {
+     "approval": "DECLINE"
+    },
+    "then": {
+     "approver": {
+      "status": 200,
+      "body": {
+       "ok": true,
+       "declined": true
+      }
+     },
+     "me": "declined",
+     "rejoin": {
+      "status": 403,
+      "code": "declined",
+      "msg": "declined"
+     },
+     "final": "waiting-declined",
+     "doubtful": "DR-12"
+    }
+   },
+   {
+    "id": "A-AFTER-FULL",
+    "when": {
+     "approval": "APPROVE_AFTER_FULL"
+    },
+    "capacities": [
+     "FULL"
+    ],
+    "then": {
+     "approver": {
+      "status": 409,
+      "code": "over-cap",
+      "msg": "overCap"
+     },
+     "me": "waiting",
+     "rejoin": "joinOracle",
+     "final": "waiting-still",
+     "doubtful": "DR-11"
+    }
+   },
+   {
+    "id": "A-OVER-LIMIT",
+    "when": {
+     "approval": "APPROVE",
+     "capacity": "OVER_QUOTA",
+     "role": [
+      "COHOST_OWNER",
+      "L1_OWNER"
+     ]
+    },
+    "capacities": [
+     "OVER_QUOTA"
+    ],
+    "then": {
+     "approver": {
+      "status": 409,
+      "code": "over-limit",
+      "msg": "overLimit"
+     },
+     "me": "waiting",
+     "rejoin": "joinOracle",
+     "final": "waiting-still",
+     "doubtful": "DR-16"
+    }
+   },
+   {
+    "id": "A-OVER-LIMIT-ALL",
+    "when": {
+     "approval": "APPROVE_ALL",
+     "capacity": "OVER_QUOTA",
+     "role": [
+      "COHOST_OWNER",
+      "L1_OWNER"
+     ]
+    },
+    "capacities": [
+     "OVER_QUOTA"
+    ],
+    "then": {
+     "approver": {
+      "status": 200,
+      "body": {
+       "admitted": 0,
+       "declined": 0,
+       "stillWaiting": 1,
+       "message": "allSomeFull"
+      }
+     },
+     "me": "waiting",
+     "rejoin": "joinOracle",
+     "final": "waiting-still"
+    }
+   },
+   {
+    "id": "A-APPROVE-ALL",
+    "when": {
+     "approval": "APPROVE_ALL"
+    },
+    "capacities": [
+     "ROOM",
+     "OVER_QUOTA"
+    ],
+    "then": {
+     "approver": {
+      "status": 200,
+      "body": {
+       "admitted": 1,
+       "declined": 0,
+       "stillWaiting": 0
+      }
+     },
+     "me": "admitted",
+     "rejoin": {
+      "status": 200,
+      "code": "ticket"
+     },
+     "placedUnder": "by-rule",
+     "final": "person-invited"
+    }
+   },
+   {
+    "id": "A-APPROVE",
+    "when": {
+     "approval": "APPROVE"
+    },
+    "capacities": [
+     "ROOM",
+     "OVER_QUOTA"
+    ],
+    "then": {
+     "approver": {
+      "status": 200,
+      "body": {
+       "ok": true,
+       "admitted": true,
+       "placedUnder": "by-rule"
+      }
+     },
+     "me": "admitted",
+     "rejoin": {
+      "status": 200,
+      "code": "ticket"
+     },
+     "placedUnder": "by-rule",
+     "final": "person-invited"
+    }
+   }
+  ],
+  "approveAllNote": "APPROVE_ALL by a Co-host or level-1 guest outside the chain returns 200 {admitted:0, declined:0, stillWaiting:0} (not 404): the list is filtered by chain, so nothing matches."
+ },
+ "input": {
+  "note": "F-INPUT: one malformed or incomplete join request. Profiles name the verify mode and employees-only. 'continue' means the request is a normal S04 (outsider) request and the join rules answer it. Error answers have no 'code' when the code column is null.",
+  "profiles": {
+   "mobile": "verify mobile (any audience)",
+   "id.eo": "verify id, employees only",
+   "id": "verify id, not employees only",
+   "either.eo": "verify either, employees only",
+   "either": "verify either, not employees only",
+   "both.eo": "verify both, employees only",
+   "both": "verify both, not employees only"
+  },
+  "defects": [
+   {
+    "id": "D01",
+    "what": "nothing typed (no phone, no ID)",
+    "request": {},
+    "expect": {
+     "mobile": [
+      400,
+      null,
+      "badMobile"
+     ],
+     "id.eo": [
+      400,
+      "need-id",
+      "needIdId"
+     ],
+     "id": [
+      400,
+      null,
+      "idOrMobile"
+     ],
+     "either.eo": [
+      400,
+      "need-id",
+      "needIdEither"
+     ],
+     "either": [
+      400,
+      null,
+      "mobileOrId"
+     ],
+     "both.eo": [
+      400,
+      "need-id",
+      "needIdBoth"
+     ],
+     "both": [
+      400,
+      null,
+      "badMobile"
+     ]
+    }
+   },
+   {
+    "id": "D02",
+    "what": "phone is only spaces",
+    "request": {
+     "phone": "   "
+    },
+    "same": "D01"
+   },
+   {
+    "id": "D03",
+    "what": "phone with letters",
+    "request": {
+     "phone": "abcdefghij"
+    },
+    "expectAll": [
+     400,
+     null,
+     "badMobile"
+    ]
+   },
+   {
+    "id": "D04",
+    "what": "phone with 5 digits",
+    "request": {
+     "phone": "12345"
+    },
+    "expectAll": [
+     400,
+     null,
+     "badMobile"
+    ]
+   },
+   {
+    "id": "D05",
+    "what": "phone with 9 digits",
+    "request": {
+     "phone": "987654321"
+    },
+    "expectAll": [
+     400,
+     null,
+     "badMobile"
+    ]
+   },
+   {
+    "id": "D06",
+    "what": "phone with 10 digits that no Indian list would accept (starts with 5)",
+    "request": {
+     "phone": "5123456789"
+    },
+    "expectAll": "continue",
+    "doubtful": "DR-04"
+   },
+   {
+    "id": "D07",
+    "what": "phone with 16 digits",
+    "request": {
+     "phone": "1234567890123456"
+    },
+    "expectAll": [
+     400,
+     null,
+     "badMobile"
+    ]
+   },
+   {
+    "id": "D08",
+    "what": "+65 9123 4567 (8-digit Singapore number)",
+    "request": {
+     "phone": "+65 9123 4567"
+    },
+    "expectAll": "continue"
+   },
+   {
+    "id": "D09",
+    "what": "+65 912 3456 (country code + 7 digits)",
+    "request": {
+     "phone": "+65 912 3456"
+    },
+    "expectAll": "continue",
+    "note": "the server only checks 8..15 digits in all; per-country length is the page's soft stop"
+   },
+   {
+    "id": "D10",
+    "what": "+91 98765 (too short after +91)",
+    "request": {
+     "phone": "+91 98765"
+    },
+    "expectAll": [
+     400,
+     null,
+     "badMobile"
+    ]
+   },
+   {
+    "id": "D11",
+    "what": "employee ID with markup characters",
+    "request": {
+     "empId": "a<b>"
+    },
+    "expectAll": [
+     400,
+     "bad-id",
+     "badId"
+    ],
+    "note": "checked in EVERY mode, also 'mobile' where the ID is never used"
+   },
+   {
+    "id": "D12",
+    "what": "employee ID of 31 characters",
+    "request": {
+     "empId": "E111111111111111111111111111111"
+    },
+    "expectAll": [
+     400,
+     "bad-id",
+     "badId"
+    ]
+   },
+   {
+    "id": "D13",
+    "what": "a well-formed employee ID that is on no list, no phone",
+    "request": {
+     "empId": "ZZ1"
+    },
+    "expect": {
+     "mobile": [
+      400,
+      null,
+      "badMobile"
+     ],
+     "id.eo": [
+      403,
+      "waiting",
+      "waiting"
+     ],
+     "id": [
+      403,
+      "waiting",
+      "waiting"
+     ],
+     "either.eo": [
+      403,
+      "waiting",
+      "waiting"
+     ],
+     "either": [
+      403,
+      "waiting",
+      "waiting"
+     ],
+     "both.eo": [
+      400,
+      null,
+      "badMobile"
+     ],
+     "both": [
+      400,
+      null,
+      "badMobile"
+     ]
+    }
+   },
+   {
+    "id": "D14",
+    "what": "a well-formed mobile number that is on no list, no ID",
+    "request": {
+     "phone": "9100007001"
+    },
+    "expectAll": "continue"
+   },
+   {
+    "id": "D15",
+    "what": "mobile on no list plus an ID on no list",
+    "request": {
+     "phone": "9100007001",
+     "empId": "ZZ1"
+    },
+    "expect": {
+     "mobile": "continue",
+     "id.eo": [
+      403,
+      "waiting",
+      "waiting"
+     ],
+     "id": [
+      403,
+      "waiting",
+      "waiting"
+     ],
+     "either.eo": [
+      403,
+      "waiting",
+      "waiting"
+     ],
+     "either": [
+      403,
+      "waiting",
+      "waiting"
+     ],
+     "both.eo": [
+      403,
+      "waiting",
+      "waiting"
+     ],
+     "both": [
+      403,
+      "waiting",
+      "waiting"
+     ]
+    }
+   },
+   {
+    "id": "D16",
+    "what": "consent boxes not ticked (otherwise a normal S04 request)",
+    "request": {
+     "phone": "9100007001",
+     "consent": "missing"
+    },
+    "expect": {
+     "mobile": [
+      400,
+      "consent-required",
+      "consent"
+     ],
+     "id.eo": [
+      400,
+      "need-id",
+      "needIdId"
+     ],
+     "id": [
+      400,
+      "consent-required",
+      "consent"
+     ],
+     "either.eo": [
+      400,
+      "consent-required",
+      "consent"
+     ],
+     "either": [
+      400,
+      "consent-required",
+      "consent"
+     ],
+     "both.eo": [
+      400,
+      "need-id",
+      "needIdBoth"
+     ],
+     "both": [
+      400,
+      "consent-required",
+      "consent"
+     ]
+    }
+   },
+   {
+    "id": "D17",
+    "what": "no device id (otherwise a normal S04 request)",
+    "request": {
+     "phone": "9100007001",
+     "device": "missing"
+    },
+    "expect": {
+     "mobile": [
+      400,
+      null,
+      "refresh"
+     ],
+     "id.eo": [
+      400,
+      "need-id",
+      "needIdId"
+     ],
+     "id": [
+      400,
+      null,
+      "refresh"
+     ],
+     "either.eo": [
+      400,
+      null,
+      "refresh"
+     ],
+     "either": [
+      400,
+      null,
+      "refresh"
+     ],
+     "both.eo": [
+      400,
+      "need-id",
+      "needIdBoth"
+     ],
+     "both": [
+      400,
+      null,
+      "refresh"
+     ]
+    }
+   },
+   {
+    "id": "D18",
+    "what": "phone sent as a JSON number (9876543210)",
+    "request": {
+     "phone": 9876543210
+    },
+    "expectAll": "continue"
+   },
+   {
+    "id": "D19",
+    "what": "ID typed with spaces and lower case (' zz 1 ')",
+    "request": {
+     "empId": " zz 1 "
+    },
+    "same": "D13",
+    "note": "spaces are dropped and the ID is upper-cased before it is matched"
+   }
+  ]
+ },
+ "perm": {
+  "callers": [
+   "ORG",
+   "HOST",
+   "COHOST",
+   "L1",
+   "L2_GUEST",
+   "AI_KEY",
+   "ANON",
+   "OTHER_ORG"
+  ],
+  "ops": {
+   "LIST": "GET /api/z/{id}/people",
+   "ADD": "POST /api/z/{id}/people with one valid new person",
+   "EXPORT": "GET /api/z/{id}/people/export",
+   "REMOVE_OWN": "POST /people/{id}/remove for a person on the caller's own list",
+   "REMOVE_OTHERS": "POST /people/{id}/remove for a person on another inviter's list",
+   "RESEND_OWN": "POST /people/{id}/resend for a person on the caller's own list",
+   "MYSEAT": "POST /people/me (the caller's own play seat)",
+   "WAITING_LIST": "GET /api/z/{id}/waiting"
+  },
+  "lifecycle": [
+   "none",
+   "late_join",
+   "organizer_ends",
+   "cancelled_before_start"
+  ],
+  "invites": [
+   true,
+   false
+  ],
+  "okNotes": {
+   "ADD": "200 {added:1}",
+   "MYSEAT": "200 {role: organizer|host|co-host}",
+   "EXPORT": "200 text/csv (ORG, HOST only)",
+   "LIST": "200 {people:[...]}",
+   "REMOVE_OWN": "200 {ok:true, removed:1}",
+   "REMOVE_OTHERS": "200 {ok:true, removed:1} for ORG and HOST",
+   "RESEND_OWN": "200 {ok:true, link}",
+   "WAITING_LIST": "200 {waiting:[...]}"
+  },
+  "note": "Lifecycle 'none' = before the start, 'late_join' = started, 'organizer_ends' = ended. GET routes (LIST, EXPORT, WAITING_LIST) are never blocked by a cancel; every write is.",
+  "rules": [
+   {
+    "id": "P-AI",
+    "when": {
+     "caller": "AI_KEY"
+    },
+    "ignores": [
+     "lifecycle",
+     "invites"
+    ],
+    "then": [
+     403,
+     null,
+     "aiRefusal"
+    ]
+   },
+   {
+    "id": "P-ANON",
+    "when": {
+     "caller": "ANON"
+    },
+    "ignores": [
+     "lifecycle",
+     "invites"
+    ],
+    "then": [
+     403,
+     null,
+     "noSign"
+    ]
+   },
+   {
+    "id": "P-OTHER-ORG",
+    "when": {
+     "caller": "OTHER_ORG"
+    },
+    "ignores": [
+     "lifecycle",
+     "invites"
+    ],
+    "then": [
+     403,
+     null,
+     "notAllowed"
+    ]
+   },
+   {
+    "id": "P-L2",
+    "when": {
+     "caller": "L2_GUEST"
+    },
+    "ignores": [
+     "lifecycle",
+     "invites"
+    ],
+    "then": [
+     403,
+     null,
+     "l2"
+    ]
+   },
+   {
+    "id": "P-L1-OFF",
+    "when": {
+     "caller": "L1",
+     "invites": false
+    },
+    "ignores": [
+     "lifecycle"
+    ],
+    "then": [
+     403,
+     null,
+     "invitesOff"
+    ]
+   },
+   {
+    "id": "P-COHOST-CANCELLED",
+    "when": {
+     "caller": "COHOST",
+     "lifecycle": "cancelled_before_start"
+    },
+    "ignores": [
+     "invites"
+    ],
+    "then": [
+     403,
+     null,
+     "noSign"
+    ],
+    "note": "the cancel revoked the Co-host key"
+   },
+   {
+    "id": "P-ADD-ENDED",
+    "when": {
+     "caller": [
+      "ORG",
+      "HOST",
+      "COHOST",
+      "L1"
+     ],
+     "op": "ADD",
+     "lifecycle": "organizer_ends"
+    },
+    "ignores": [
+     "invites"
+    ],
+    "then": [
+     409,
+     null,
+     "addEnded"
+    ]
+   },
+   {
+    "id": "P-L1-EXPORT",
+    "when": {
+     "caller": "L1",
+     "op": "EXPORT"
+    },
+    "then": [
+     403,
+     null,
+     "exportOnly"
+    ]
+   },
+   {
+    "id": "P-CANCELLED-WRITE",
+    "when": {
+     "caller": [
+      "ORG",
+      "HOST",
+      "L1"
+     ],
+     "lifecycle": "cancelled_before_start",
+     "op": [
+      "ADD",
+      "REMOVE_OWN",
+      "REMOVE_OTHERS",
+      "RESEND_OWN",
+      "MYSEAT"
+     ]
+    },
+    "ignores": [
+     "invites"
+    ],
+    "then": [
+     409,
+     "cancelled",
+     "cancelled"
+    ]
+   },
+   {
+    "id": "P-COHOST-EXPORT",
+    "when": {
+     "caller": "COHOST",
+     "op": "EXPORT"
+    },
+    "ignores": [
+     "invites"
+    ],
+    "then": [
+     403,
+     null,
+     "exportOnly"
+    ]
+   },
+   {
+    "id": "P-L1-MYSEAT",
+    "when": {
+     "caller": "L1",
+     "op": "MYSEAT"
+    },
+    "then": [
+     403,
+     null,
+     "ownSeat"
+    ]
+   },
+   {
+    "id": "P-REMOVE-OTHERS-SCOPED",
+    "when": {
+     "caller": [
+      "COHOST",
+      "L1"
+     ],
+     "op": "REMOVE_OTHERS"
+    },
+    "ignores": [
+     "invites"
+    ],
+    "then": [
+     404,
+     null,
+     "noSuchPerson"
+    ]
+   },
+   {
+    "id": "P-REMOVE-STARTED",
+    "when": {
+     "caller": [
+      "COHOST",
+      "L1"
+     ],
+     "op": "REMOVE_OWN",
+     "lifecycle": [
+      "late_join",
+      "organizer_ends"
+     ]
+    },
+    "ignores": [
+     "invites"
+    ],
+    "then": [
+     403,
+     null,
+     "removeStarted"
+    ]
+   },
+   {
+    "id": "P-RESEND-STARTED",
+    "when": {
+     "caller": [
+      "COHOST",
+      "L1"
+     ],
+     "op": "RESEND_OWN",
+     "lifecycle": [
+      "late_join",
+      "organizer_ends"
+     ]
+    },
+    "ignores": [
+     "invites"
+    ],
+    "then": [
+     403,
+     null,
+     "resendStarted"
+    ]
+   },
+   {
+    "id": "P-OK",
+    "when": {},
+    "ignores": [
+     "invites"
+    ],
+    "then": [
+     200,
+     null,
+     null
+    ]
+   }
+  ]
+ },
+ "doubtful": [
+  {
+   "id": "DR-01",
+   "severity": "high",
+   "title": "Any phone can take a listed colleague's place by typing their employee ID",
+   "rows": "J-IMPERSONATE (state S10; verify id|either; every audience)",
+   "where": "apps/edge/src/worker.ts:1603-1607 (the ID is looked up first and the listed person is adopted); 1650-1656 (only MISSES are throttled)",
+   "why": "A listed ID that has not been used yet is treated as proof of identity: the first phone that types it gets the ticket, in an employees-only game too, and the real employee later gets 423 id-used (rule J-ID-USED-S09). An employee ID is not a secret, and a correct guess is never counted or limited. The people spec says a typed number is only 'matched, not proven'; for IDs nobody asked the organizer."
+  },
+  {
+   "id": "DR-02",
+   "severity": "medium",
+   "title": "An outsider (or a typo) in an OPEN game is parked in the waiting room with a message that is wrong for open games",
+   "rows": "J-ID-MISS-WAIT (S08, S09 in 'both'; audience EMP_ID_OTHERS, and every closed audience)",
+   "where": "apps/edge/src/worker.ts:1649 (idMiss = true), 1699 (if (e.closed || idMiss) return wait(false, null))",
+   "why": "In an open 'employees by ID, others by mobile' game anybody who types an ID that is on no list waits for approval and is told 'This engagement is by invitation', although the game is open and the console tells the organizer 'you do not need to approve anyone'. Every mistyped ID is a new waiting row (500 rows block everybody: waiting-full). Same as docs G9."
+  },
+  {
+   "id": "DR-03",
+   "severity": "low",
+   "title": "Admitting a request that carried someone else's ID creates a second person with the same employee ID",
+   "rows": "A-APPROVE after J-ID-MISS-WAIT (S09, verify both)",
+   "where": "apps/edge/src/people.ts:493 (admitInsert copies the waiting row's sealed details, empId included), worker.ts:1699",
+   "why": "In 'both' mode the identity is the mobile number, so joining still works, but the organizer's list then shows two people with the same employee ID, and a later switch of the game to 'id' or 'either' makes that ID ambiguous."
+  },
+  {
+   "id": "DR-04",
+   "severity": "medium",
+   "title": "The join accepts mobile numbers that the people lists refuse",
+   "rows": "I-D06 (and any S04 request with a 10-digit number starting 0 to 5)",
+   "where": "apps/edge/src/worker.ts:1493-1496 (digitsOf: any 10 to 15 digits) against apps/edge/src/phonekit.ts:16 (India must start 6-9)",
+   "why": "5123456789 joins and gets a ticket, but the same number can never be put on a list, so the organizer cannot pre-list or move this person, and the hash (last 10 digits) can collide with a real listed number. Docs G15."
+  },
+  {
+   "id": "DR-05",
+   "severity": "high",
+   "title": "A stranger using someone else's personal link in an OPEN game gets a ticket at once",
+   "rows": "J-OPEN-NEW with route PERSONAL, state S04 (ANYONE, ANYONE_INV, EMP_ID_OTHERS)",
+   "where": "apps/edge/src/worker.ts:1615 (otherNumber), 1671 (owner = tok.inviter), 1699 (waiting only if closed or idMiss)",
+   "why": "docs/ROLES_AND_CONSOLE_SPEC_3.md line 10 and join_design.json row 10 say a different number on a personal link goes to the waiting room. In an open game it does not: the stranger is seated under the link owner's list and uses up that Co-host's quota. In a closed game the code does wait (rule J-UNLISTED-CLOSED)."
+  },
+  {
+   "id": "DR-06",
+   "severity": "medium",
+   "title": "Stale, forged, revoked or level-2 links silently credit the organizer",
+   "rows": "J-UNLISTED-CLOSED / J-OPEN-NEW with route GUEST_L1 while invitations are off, GUEST_L2, COHOST under lifecycle reopen",
+   "where": "apps/edge/src/worker.ts:1672-1680 (owner stays null -> target 'o'; via is still 'common-link')",
+   "why": "The person is not told and the owner is not told. The waiting row and the People list say 'common-link' and 'Organizer', so the Co-host or guest who shared the link loses the attribution and the 'brought by' count."
+  },
+  {
+   "id": "DR-07",
+   "severity": "high",
+   "title": "A guest who comes in through a LEVEL-2 guest's link becomes a person who CAN invite",
+   "rows": "J-OPEN-NEW / A-APPROVE with route GUEST_L2 (audience ANYONE_INV, LIST_INV)",
+   "where": "apps/edge/src/worker.ts:1675-1679 (an L2 inviter gives owner = null) with 1703-1708 (inviter 'o', seat.inv stays null); apps/edge/src/people.ts:136 (only seat.inv !== null is refused)",
+   "why": "Confirmed with the real Worker: the newcomer's seat has inv = null and GET /people for that ticket answers 200 with limit 4. The code comment at worker.ts:1677 says such a link 'records no inviter', but the newcomer becomes a level-1 guest. A level-2 guest can therefore mint unlimited level-1 guests, each with a fresh quota: the two-level rule can be extended one hop for ever."
+  },
+  {
+   "id": "DR-08",
+   "severity": "medium",
+   "title": "Open game, inviter at the limit: the person is parked instead of falling back to the organizer",
+   "rows": "J-OVER-QUOTA-OPEN (capacity OVER_QUOTA; routes COHOST, PERSONAL, GUEST_L1 with invites)",
+   "where": "apps/edge/src/worker.ts:1701 (return wait(true, limit)); apps/edge/src/people.ts:604 (chain ',o,')",
+   "why": "The 101st person on a Co-host's open link, or the 5th on a guest's, waits for the Organizer or a Host with 'This invitation has already been used by N people'. docs/handover-2026-10-26/join_design.json (matrix row 7, gap G17) says an open game should simply seat them under the organizer; ROLES_AND_CONSOLE_SPEC_3.md line 11 says they go to the waiting room. The two documents disagree; the code follows the spec."
+  },
+  {
+   "id": "DR-09",
+   "severity": "medium",
+   "title": "'Places reserved for listed people' is reported as 'used by N people' or as a plain 'full'",
+   "rows": "J-PROMISED-OPEN-LIMITED and J-PROMISED-OPEN (capacity PROMISED_ONLY, open game, state S04)",
+   "where": "apps/edge/src/worker.ts:1508 (addSeat guard counts unseated listed people), 1710 (row null -> guardId !== null ? wait(true, guardLimit) : 'This engagement is full.')",
+   "why": "A stranger who arrives while the last places belong to listed people who have not come yet gets either 409 invite-full 'already used by 100 people' (through a Co-host or guest link) or 409 'This engagement is full.' with no code, although participants < cap. Neither message says the places are reserved. Docs G18."
+  },
+  {
+   "id": "DR-10",
+   "severity": "medium",
+   "title": "Full beats waiting, and a listed person can be locked out by a lowered size",
+   "rows": "J-FULL (capacity FULL), every state that reaches the capacity check",
+   "where": "apps/edge/src/worker.ts:1665-1666 (participants >= cap -> 409, no code, before the waiting room); apps/edge/src/worker.ts:2055 (settings only refuse a cap below the number of PARTICIPANTS, not below the number of listed people)",
+   "why": "(a) An unlisted person in a closed game gets 'full' instead of a waiting request while the game is full; (b) the organizer can lower the size below the list length, after which people who are listed but have not joined get 409 'This engagement is full.' with no warning to the organizer; (c) the answer has no code (join_design.json wants code 'full')."
+  },
+  {
+   "id": "DR-11",
+   "severity": "medium",
+   "title": "Approve when all list places are taken: the approver is refused, the person is not told",
+   "rows": "A-AFTER-FULL (capacity FULL; every right role)",
+   "where": "apps/edge/src/people.ts:513 (counts PERSON rows against cap) versus apps/edge/src/worker.ts:1665 (counts PARTICIPANT rows)",
+   "why": "Admit answers 409 over-cap and the request stays 'waiting'; GET /me?wid= keeps saying 'Your request is with ...' and the phone's re-join keeps answering 403 waiting until the participants reach cap, then flips to 409 full. Capacity is counted three ways (persons, participants, unseated listed people), so the same moment can look full to one screen and open to another."
+  },
+  {
+   "id": "DR-12",
+   "severity": "medium",
+   "title": "A decline is permanent for that identity",
+   "rows": "A-DECLINE then any re-join (J-UNLISTED-CLOSED)",
+   "where": "apps/edge/src/people.ts:601 (addWaiting returns the existing row, declined included), 505 (admit on a declined row answers already:declined), 328-329 (only listing the person overrides)",
+   "why": "After a decline every later request from that mobile number or ID answers 403 declined for ever; a Co-host who declined by mistake cannot reverse it from the waiting list and the Organizer's Admit does nothing. Docs G19."
+  },
+  {
+   "id": "DR-13",
+   "severity": "low",
+   "title": "Latent: an approver in the chain can put back a person the Organizer removed",
+   "rows": "A-AFTER-REMOVAL (reachable order) versus a stale 'waiting' row",
+   "where": "apps/edge/src/people.ts:519 and 559 (admitRevive un-removes the person and un-blocks the seat)",
+   "why": "Listing a waiting person flips the request to admitted, so with the normal order of events the revive path cannot run (rule A-AFTER-REMOVAL answers already:admitted). It can run when a waiting row and a removed person row exist together (a race, or rows made by the legacy roster/reuse calls); then a Co-host in the chain overrides the Organizer's removal, which the people route itself refuses (people.ts:300)."
+  },
+  {
+   "id": "DR-14",
+   "severity": "medium",
+   "title": "After cancel and reopen every Co-host is gone, silently",
+   "rows": "lifecycle reopen: route COHOST, approver COHOST_OWNER",
+   "where": "apps/edge/src/cancel.ts:151 (eraseCohostsSql revokes the keys), reopenGame (cancel.ts:94-130) never restores them",
+   "why": "Co-host links keep working as 'common links' but credit the organizer (DR-06) and Co-host consoles answer 403 'Please sign in'. The reopen e-mail talks about guests who must join again but says nothing about Co-hosts."
+  },
+  {
+   "id": "DR-15",
+   "severity": "low",
+   "title": "'Approve all' by a Co-host or guest outside the chain answers 200 with zeros, single approve answers 404",
+   "rows": "A-NOT-IN-CHAIN versus APPROVE_ALL",
+   "where": "apps/edge/src/people.ts:504 versus 534-538",
+   "why": "Two different answers for the same non-right role. Harmless but inconsistent, and the 200 hides that the caller had no right at all."
+  },
+  {
+   "id": "DR-16",
+   "severity": "low",
+   "title": "Admit when the target list is full silently re-attributes the person to the approver; the Co-host or guest only sees a refusal",
+   "rows": "A-OVER-LIMIT and A-APPROVE with capacity OVER_QUOTA",
+   "where": "apps/edge/src/people.ts:510-512",
+   "why": "A Co-host or guest who tries to admit into a full list gets 409 'Your list is full'; the Organizer or a Host admitting the same request places the person on their OWN list, so the Co-host's 'people brought' count under-reports and the person's inviter changes."
+  },
+  {
+   "id": "DR-17",
+   "severity": "low",
+   "title": "A returning phone is never re-verified",
+   "rows": "J-RETURNING (S11)",
+   "where": "apps/edge/src/worker.ts:1621-1639",
+   "why": "In 'both' mode a returning participant gets 200 again with a wrong or missing ID, and returning calls skip the per-network join limit. Docs G30 / doc 01 GAP-21."
+  },
+  {
+   "id": "DR-18",
+   "severity": "medium",
+   "title": "Console choice 2 'My employees, plus their friends and family' cannot be stored as designed",
+   "rows": "audience LIST_INV with verify id|either|both (the nearest shape)",
+   "where": "packages/beacon/src/config.ts:332 (employeesOnly forces guest invites off); docs/ORGANIZER_FLOW_DESIGN_2026-10-25.md table row 2 ('list + employees + guests may invite')",
+   "why": "The server cannot hold 'employees only' and 'guests may invite' together. The matrix therefore uses employeesOnly=false with verify id|either|both; the consequence is that an unlisted ID waits for the organizer instead of being refused as 'not an employee' (rule J-ID-MISS-WAIT), and 'employees only' is not enforced."
+  },
+  {
+   "id": "DR-19",
+   "severity": "medium",
+   "title": "'Employees only' is enforced differently per verify mode, and a personal link skips it",
+   "rows": "J-NEED-ID-ID, J-NEED-ID-BOTH versus J-UNLISTED-CLOSED (EMP_ONLY, verify mobile|either) and route PERSONAL",
+   "where": "apps/edge/src/worker.ts:1600-1601 (need-id only for id and both, only when there is no token)",
+   "why": "In an employees-only game with verify 'id' or 'both' a stranger with only a mobile number is refused (400 need-id); with verify 'either' or 'mobile' the same stranger is parked in the waiting room; and anyone holding ANY personal link plus their own mobile number also reaches the waiting room of an ID game without typing an ID."
+  },
+  {
+   "id": "DR-20",
+   "severity": "low",
+   "title": "Removed / link-gone / need-id are disclosed before the consent check",
+   "rows": "J-LINK-GONE, J-REMOVED, J-NEED-ID-*",
+   "where": "apps/edge/src/worker.ts:1590, 1600-1601, 1622, 1654-1656 (consent checked later)",
+   "why": "The comment at worker.ts:1658 says the point of asking for the ID after consent is that 'an untick-and-ask cannot be used to find out who is on the list', but a request with no ticks still learns whether a number belongs to a removed person. Doc 01 GAP-09."
+  },
+  {
+   "id": "DR-21",
+   "severity": "low",
+   "title": "Manual (Host-pressed) games take a join round from the wall clock",
+   "rows": "lifecycle late_join with playMode manual",
+   "where": "apps/edge/src/worker.ts:1503 (lateNow uses roundOfMs(now))",
+   "why": "Not verified in the phones' game code: in manual mode the numbers are not clock-driven, so the join round stored on a late ticket may not match the numbers actually called. A question for the product owner rather than a confirmed defect."
+  },
+  {
+   "id": "DR-23",
+   "severity": "medium",
+   "title": "The brief's three-level chain (participant, guest level 1 who may invite, guest level 2 who cannot) is not what the code has: it has two levels",
+   "rows": "route GUEST_L1 versus GUEST_L2; approver L1_OWNER versus L2_GUEST; perm caller L1 versus L2_GUEST",
+   "where": "apps/edge/src/people.ts:136 (seat.inv !== null cannot invite), apps/edge/src/worker.ts:1675-1679 (only a seat with inv === null or a team role can own a link); docs/ROLES_AND_CONSOLE_SPEC_3.md line 7",
+   "why": "In the code the participant who invites is 'level 1' and everybody they bring is 'level 2 (plays, no list, no invites)'. If the product wants a guest who was invited by a participant to be able to invite in turn, that capability does not exist; the matrix follows the code (GUEST_L1 = a participant who may invite, GUEST_L2 = a guest who may not). Ask the owner which model is intended before writing tests for 'guest level 1 invites'."
+  },
+  {
+   "id": "DR-22",
+   "severity": "low",
+   "title": "Wrong-input answers have no 'code' in several places",
+   "rows": "I-D01, I-D02, I-D13, I-D17 (profiles id, either, both, mobile)",
+   "where": "apps/edge/src/worker.ts:1596, 1612, 1658",
+   "why": "'Enter a valid mobile number.', the two 'give an ID or a mobile' messages and 'Please refresh this page' carry no code while the employees-only variants carry need-id, so a page can only tell them apart by their text. Doc 01 GAP-08."
+  }
+ ]
+}

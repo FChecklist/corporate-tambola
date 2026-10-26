@@ -1278,10 +1278,10 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!sub && req.method === "POST") {
       const b = await body(req);
       if (!b) return json({ error: "Bad message." }, 400);
-      if (!(await spend(env, now))) return BUSY();
       const ge = await env.DB.prepare("SELECT tickets, config FROM engagement WHERE id=?").bind(cid).first<{ tickets: number; config: string | null }>();
       const r = await publishControl(kv, cid!, b.message, ge ? hostGameOf(cfgOf(ge)) : undefined); // a Host's "next" press is checked against this game's breaks and rounds
-      if (r.ok && !(r as any).duplicate) await mirrorControl(env, cid!);
+      // The write guard is charged only for a message that was ACCEPTED (its signature held): anyone can post garbage here, and charging first let a script use up the day's budget and make every join answer "very busy". A pause or stop also still works on a day the budget is spent.
+      if (r.ok && !(r as any).duplicate) { await spend(env, now); await mirrorControl(env, cid!); }
       return r.ok ? json(r) : json({ error: r.error }, r.status);
     }
     const ce = await env.DB.prepare("SELECT id, org, cap, start_round FROM engagement WHERE id=?").bind(cid).first<{ id: string; org: string | null; cap: number; start_round: number }>();
@@ -1384,8 +1384,12 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (a.kind === "host") return deny(a);
     const b = await body(req, BRAND_BODY_MAX); // room for a brand logo (30 KB picture = about 40 KB of text)
     if (b && Number.isInteger(b.callSeconds) && !GAPS.includes(b.callSeconds)) return json({ error: GAP_MSG }, 400);
-    if (!b || !ID.test(b.id ?? "") || !Number.isInteger(b.startRound) || !Number.isInteger(b.callSeconds) || b.callSeconds % 3 || b.callSeconds < 6 || !Number.isInteger(b.cap) || b.cap < 1 || b.cap > 100000)
-      return json({ error: "Check the engagement details." }, 400);
+    if (!b) return json({ error: "Check the details and try again." }, 400);
+    if (!ID.test(b.id ?? "")) return json({ error: "The game code can use letters, numbers, - and _ only (3 to 40 characters)." }, 400);
+    if (!Number.isInteger(b.startRound)) return json({ error: "Pick the day and time the game starts." }, 400);
+    if (!Number.isInteger(b.callSeconds) || b.callSeconds % 3 || b.callSeconds < 6) return json({ error: GAP_MSG }, 400);
+    if (!Number.isInteger(b.cap) || b.cap < 1 || b.cap > 100000) return json({ error: "The number of people must be a whole number from 1 up. Please check it." }, 400);
+    if (b.whoCanJoin !== undefined && b.whoCanJoin !== "list" && b.whoCanJoin !== "anyone") return json({ error: "Who can join: choose \"list\" (only people on a list) or \"anyone\" (anyone with the link)." }, 400);
     let createCap = now + MAX_AHEAD_MS; // with a pack already bought (an entitlement) the game is paid: up to 365 days from that payment
     if (!a.plat && a.org) { const en = await env.DB.prepare("SELECT id FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(a.org, b.cap).first<{ id: string }>(); const end = en ? await entitlementWindowEndMs(env.DB, en.id) : null; if (end) createCap = end - 1; }
     if (roundMs(b.startRound) > createCap) return json({ error: createCap > now + MAX_AHEAD_MS ? AFTER_PAID_WINDOW(createCap + 1) : TOO_FAR, code: createCap > now + MAX_AHEAD_MS ? "after-paid-window" : "too-far" }, 400);
@@ -1492,7 +1496,9 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (!e) return json({ error: "No such engagement." }, 404);
   const digitsOf = (raw: unknown): string | null => { // a number typed with its country code (+65 ..., 0044 ...) may be as short as 8 digits in all: some countries have 5-digit numbers; a number typed without a code is 10 to 15 digits as before
     const s = String(raw ?? ""), d = s.replace(/\D/g, ""), withCode = /^\s*(\+|00)/.test(s), n = withCode && !/^(00)?91/.test(d) ? d.replace(/^00/, "") : d;
-    return n.length < (withCode ? 8 : 10) || n.length > 15 ? null : n;
+    if (n.length < (withCode ? 8 : 10) || n.length > 15) return null;
+    const ind = n.length === 12 && n.startsWith("91") ? n.slice(2) : !withCode && n.length === 10 ? n : !withCode && n.length === 11 && n[0] === "0" ? n.slice(1) : null; // an Indian mobile number (typed with +91, 91, 0 or nothing in front) starts with 6, 7, 8 or 9, the same rule as a list
+    return ind !== null && !/^[6-9]/.test(ind) ? null : n;
   };
   const phoneHash = async (raw: unknown): Promise<string | null> => {
     const d = digitsOf(raw);
@@ -1628,6 +1634,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
         return json({ error: "This ticket was opened in a different browser or app (or on another phone). A ticket plays on one device only. Open your link in the same browser or app you used first. If you cannot, ask your organizer to move your ticket to this phone.", code: "other-phone" }, 423);
       }
       if (have.seat && !have.dev && dev && (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first())) return json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket. Ask the person to open the link on their own phone.", code: "device-used" }, 409);
+      if (have.seat && !have.dev && !dev) return json({ error: "Please refresh this page and try again." }, 400); // an unbound ticket is handed over only to a phone that proves its device, like a new person
       if (have.seat && !have.dev && dev) { // first device to open the link of someone who was on the list (or whom the organizer let move) keeps the ticket
         if (!(await spend(env, now, 2))) return BUSY();
         await env.DB.batch([env.DB.prepare("UPDATE seat SET dev=? WHERE eid=? AND pid=? AND dev IS NULL").bind(dev, eid, have.pid), env.DB.prepare("UPDATE participant SET joined_ms=? WHERE eid=? AND pid=? AND joined_ms<?").bind(now, eid, have.pid, now), env.DB.prepare("UPDATE person SET status='joined', joined_ms=? WHERE eid=? AND ph=? AND status='invited'").bind(now, eid, ph)]);
@@ -1637,9 +1644,13 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (!hadK4) await k4(have.pid);
       return reply(have.pid, { again: true, jr: have.jr ?? 0, ...(have.role ? { role: have.role } : {}) }); // same number twice = same participant
     }
+    // A NEW person cannot take a place when the game could not begin because payment is due (a person who already holds a ticket is handled above and keeps it).
+    // (A person who opens the link AFTER the game is over still gets a ticket: the page then shows "Game complete", the thank-you and the share button. That is designed, so there is no "ended" refusal here.)
+    if (locked) return json({ error: "This game could not begin because the organizer's payment is not complete. Please ask your organizer.", code: "locked" }, 403);
     let pr = await personByPhone(env, eid!, ph); // is this number (or employee ID) on any list of the game?
+    const admitted = vf.mode !== "mobile" && !!pr && !!(await env.DB.prepare("SELECT 1 AS x FROM waiting WHERE eid=? AND ph=? AND status='admitted'").bind(eid, ph).first()); // the organizer already said yes to this person: the ID typed is not checked again, or they would wait for ever
     let idMiss = false, needIdAfterConsent = false; // an employee ID that does not match the list: the organizer decides
-    if (vf.mode !== "mobile" && empNorm && !tok) {
+    if (vf.mode !== "mobile" && empNorm && !tok && !admitted) {
       if (vf.mode === "both") { const pp0 = pr ? await openPii(env, pr.pii) : null; if (!pr || (pp0?.empId && pp0.empId !== empNorm)) { pr = null; idMiss = true; } }
       else if (!pr) idMiss = true; // ID alone, not on the list
       if (idMiss) { // guessing IDs: only so many wrong IDs per network per game per 10 minutes
@@ -1650,7 +1661,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
           await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, String(n + 1)).run();
         } catch { /* a counter never blocks a join */ }
       }
-    } else if (vf.mode === "both" && pr && !tok) { const pp0 = await openPii(env, pr.pii); if (pp0?.empId) needIdAfterConsent = true; } // asked only after the consent box is ticked: an untick-and-ask cannot be used to find out who is on the list
+    } else if (vf.mode === "both" && pr && !tok && !admitted) { const pp0 = await openPii(env, pr.pii); if (pp0?.empId) needIdAfterConsent = true; } // asked only after the consent box is ticked: an untick-and-ask cannot be used to find out who is on the list
     if (pr?.status === "removed") return removedReply();
     const tickedBefore = !!(await env.DB.prepare("SELECT 1 AS x FROM consent_log WHERE kind='K4' AND ref=? AND subject=?").bind(eid, await pidOf(ph)).first()); // ticked when they asked to come in; the page does not keep it across a reload
     if (ck && !tickedBefore) return ck;
@@ -2038,7 +2049,9 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const next = { start_round: b.startRound ?? e.start_round, call_seconds: b.callSeconds ?? e.call_seconds, cap: b.cap ?? e.cap, closed: vc.cfg.employeesOnly ? 1 : b.whoCanJoin !== undefined ? (b.whoCanJoin === "list" ? 1 : 0) : b.closed === undefined ? e.closed : b.closed ? 1 : 0, cohost_limit: b.coHostLimit ?? e.cohost_limit ?? null }; // whoCanJoin "list" is the same switch as the older `closed`
     if (Number.isInteger(next.call_seconds) && !GAPS.includes(next.call_seconds)) return json({ error: GAP_MSG }, 400);
     if (vc.cfg.callMode === "host" && Number.isInteger(next.cap) && next.cap > PAUSE_MAX_PARTICIPANTS) return json({ error: HOST_MODE_MSG }, 409);
-    if (!Number.isInteger(next.start_round) || !Number.isInteger(next.call_seconds) || next.call_seconds % 3 || next.call_seconds < 6 || !Number.isInteger(next.cap) || next.cap < 1 || next.cap > 100000) return json({ error: "Check the details." }, 400);
+    if (!Number.isInteger(next.start_round)) return json({ error: "Pick the day and time the game starts." }, 400);
+    if (!Number.isInteger(next.call_seconds) || next.call_seconds % 3 || next.call_seconds < 6) return json({ error: GAP_MSG }, 400);
+    if (!Number.isInteger(next.cap) || next.cap < 1 || next.cap > 100000) return json({ error: "The number of people must be a whole number from 1 up. Please check it." }, 400);
     if (roundMs(next.start_round) <= now) return json({ error: "Pick a start time in the future." }, 400);
     if (next.start_round !== e.start_round) { // an unpaid game: at most 30 days ahead. A paid game (not yet started): any day while its credit lasts, up to 365 days from the payment
       const end = e.pack !== 0 ? await paidWindowEndMs(env.DB, eid!) : null, cap = end ? end - 1 : now + MAX_AHEAD_MS;
@@ -2047,7 +2060,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
     if (vc.cfg.demo && next.cap > DEMO_CAP) return json({ error: DEMO_CAP_MSG, code: "demo-cap" }, 400); // the one size rule of a demo game, before and after publishing
     if (!a.plat && e.pack !== 0 && !vc.cfg.demo && next.cap > (e.pack ?? e.cap)) return json({ error: `Your pack allows up to ${e.pack ?? e.cap} people. For more people, make a new game like this one.` }, 402);
-    if (next.cap < (have?.c ?? 0)) return json({ error: "The limit cannot be lower than the people already on the list." }, 409);
+    const listed = await env.DB.prepare("SELECT COUNT(*) AS c FROM person WHERE eid=? AND status<>'removed'").bind(eid).first<{ c: number }>().catch(() => null); // people on the lists who have not come in yet count too
+    if (next.cap < Math.max(have?.c ?? 0, listed?.c ?? 0)) return json({ error: "The limit cannot be lower than the people already on the list." }, 409);
     if (!(await spend(env, now))) return BUSY();
     // a published demo game is "paid" with its own size (pack = cap, nothing bought): a new size within the demo limit moves the pack with it
     await env.DB.prepare("UPDATE engagement SET start_round=?, call_seconds=?, cap=?, closed=?, tickets=?, config=?, cohost_limit=?, pack=CASE WHEN pack<>0 AND ? THEN ? ELSE pack END WHERE id=?").bind(next.start_round, next.call_seconds, next.cap, next.closed, vc.cfg.tickets, cfgJson(vc.cfg), next.cohost_limit, vc.cfg.demo ? 1 : 0, next.cap, eid).run();

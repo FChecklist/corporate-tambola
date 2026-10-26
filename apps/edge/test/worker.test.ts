@@ -13,7 +13,7 @@ const FAR_START = Math.floor(((T + 2 * 86_400_000) / 1000 - 1692803367) / 3) + 1
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}, now = T) =>
   handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: withDevice(method, path, body) }), env, now);
 const org = { "x-organizer": SECRET };
-const create = (over: Record<string, unknown> = {}) => call("POST", "/api/z", { id: "ENG1", startRound: 1000, callSeconds: 6, cap: 400, ...over }, org);
+const create = (over: Record<string, unknown> = {}) => call("POST", "/api/z", { id: "ENG1", startRound: FAR_START, callSeconds: 6, cap: 400, ...over }, org); // two days ahead: a game that is already over takes no new joiners
 const phone = (i: number) => "9" + String(100000000 + i);
 const join = (i: number, eid = "ENG1", now = T) => call("POST", `/api/z/${eid}/join`, { phone: phone(i), name: "P" + i }, {}, now);
 
@@ -50,7 +50,7 @@ describe("joining", () => {
   beforeEach(async () => { await create(); });
   test("a join returns what the phone needs to play and nothing about others", async () => {
     const r = await (await join(1)).json() as any;
-    expect(r.startRound).toBe(1000);
+    expect(r.startRound).toBe(FAR_START);
     expect(r.callSeconds).toBe(6);
     expect(r.pid).toMatch(/^1x[0-9a-f]{12}$/); // seat number + hash: the seat makes the ticket collision-free
     expect(Object.keys(r).sort()).toEqual(["breaks", "callMode", "callSeconds", "checkin", "closing", "employeesOnly", "invites", "jr", "opening", "pid", "rewards", "rounds", "startRound", "tickets", "ties", "trackClaims", "verify"]);
@@ -254,7 +254,7 @@ describe("roster, history, erase and 365-day retention", () => {
       expect((await call(m, p, m === "POST" ? {} : undefined)).status).toBe(403);
   });
   test("info is public and holds only what a phone needs", async () => {
-    expect(await (await call("GET", "/api/z/ENG1/info")).json()).toMatchObject({ startRound: 1000, callSeconds: 6, trackClaims: true, controlUrl: null, tickets: 1, breaks: [] });
+    expect(await (await call("GET", "/api/z/ENG1/info")).json()).toMatchObject({ startRound: FAR_START, callSeconds: 6, trackClaims: true, controlUrl: null, tickets: 1, breaks: [] });
   });
   test("the organizer sees ids and names, never phone numbers or hashes", async () => {
     await join(1);
@@ -909,7 +909,7 @@ describe("late joiners and the public seat list", () => {
     const again = await (await call("GET", "/api/z/SEAT-C/seats", undefined, {}, at + 7000)).json() as any; expect(again.seats.length).toBe(3); // the saved list never changes: later seats come only as the tail
   });
   test("the organizer's participant list carries each join round, so the console counts what the phones count", async () => {
-    await create({ id: "SEAT-D", startRound: nowround(-400), cap: 50 }); // already started
+    await create({ id: "SEAT-D", startRound: nowround(-100), cap: 50 }); // already started, and still being played (a game that is over takes no new joiner)
     await joinAt("9800000301", "SEAT-D");
     const p = await (await call("GET", "/api/z/SEAT-D/participants", undefined, org)).json() as any;
     expect(p.participants[0].jr).toBe(nowRound);
