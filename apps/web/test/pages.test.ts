@@ -1797,6 +1797,18 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     expect(t).toMatch(/Game report and custody/); expect(t).toMatch(/in the Organizer's custody/); expect(t).toMatch(/for 365 days\. After 365 days we delete all remaining data, except the invoice and tax records/);
   });
 
+  test("a reload keeps employees-only, the employee-ID check and the tie rule: the form shows them and saving step 2 does not wipe them", async () => {
+    const o = await organizer(); await make(o, "UI-KEEPV");
+    expect((await o.api("PATCH", "/api/z/UI-KEEPV/settings", { whoCanJoin: "list", employeesOnly: true, verify: "id", ties: "share" }, o.aiKey)).status ?? 200).toBeLessThan(300);
+    const p = await consolePage(o, "UI-KEEPV"); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 2);
+    expect((p.$('[data-ck="aud"][data-v="1"]') as any).getAttribute("aria-pressed")).toBe("true"); // "Only my employees", not "A list of people I choose"
+    expect((p.$('[data-ck="ver"][data-v="id"]') as any).getAttribute("aria-pressed")).toBe("true");
+    p.click('[data-ck="tix"][data-v="2"]'); p.click('[data-save="2"]'); await p.waitFor((x) => /Saved|saved/.test(x));
+    const sm: any = await o.json(await o.api("GET", "/api/z/UI-KEEPV/summary", undefined, o.aiKey));
+    expect(sm.employeesOnly).toBe(true); expect(sm.verify).toBe("id"); expect(sm.tickets).toBe(2);
+    openStep(p, 3); expect((p.$('[data-ck="ties"][data-v="share"]') as any)?.getAttribute("aria-pressed") ?? "true").toBe("true");
+  });
+
   test("Game day: the step says the Organizer / Host logs into the game and controls it (draft and published)", async () => {
     const o = await organizer(); await make(o, "UI-RUNLINE");
     const p = await consolePage(o, "UI-RUNLINE"); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 9);
