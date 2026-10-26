@@ -1,6 +1,6 @@
 # Real-site games: final per-game checklist (9 games)
 
-For the boss, who runs the games. Supersedes the table in `LIVE_TEST_MATRIX_2026-10-27.md` where they differ (open audiences cannot produce a "waiting" stranger, so the approval column was corrected). Tool: `tools/browser-tests/ui-game.mjs` (flags: `--tag --login --cap --players --real --mode auto|host --speed 9|12 --aud N --lead --stop`). `--aud` values are the choices of console step 2 "Who is this game for?": 1 = employees only (ID); 2 and 6 = ID for employees + others by mobile (the EMP set in ui-game); 5 = anyone with the link; 3/4 = list-based by mobile (confirm the exact numbers in zc.js step 2 before the run; if a list+invitations choice is not selectable in ui-game, set it through the Organizer console steps by clicks).
+For the boss, who runs the games. Supersedes the table in `LIVE_TEST_MATRIX_2026-10-27.md` where they differ (open audiences cannot produce a "waiting" stranger, so the approval column was corrected). Tool: `tools/browser-tests/ui-game.mjs` (flags: `--tag --login --cap --players --real --mode auto|host --speed 9|12 --aud N --lead --stop`). `--aud` values are the choices of console step 2 "Who is this game for?" (CONFIRMED by the boss from zc.js): 1 = only employees; 2 = employees + friends/family; 3 = a list I choose; 4 = a list + their invites; 5 = anyone with the link; 6 = anyone, employees confirm by employee ID.
 
 Common to every game: account demo1@xyz.in code 123456 (Rs 0 pack up to 1000); `--real 6` real phone-size pages + protocol phones for the rest; fresh `--tag` each run; one game at a time, 5 minutes between games; nothing else running on the laptop; stop and report at once if more than 1% of requests answer 5xx or joins are refused as busy.
 S = strangers (two per game, called S1 and S2): a person who is on no list.
@@ -8,14 +8,14 @@ S = strangers (two per game, called S1 and S2): a person who is on no list.
 | Game | Size | Mode | Audience (aud) | Strangers | Event | Command (ui-game) |
 |---|---|---|---|---|---|---|
 | L1 | 100 | auto 9 s | employees only, ID (1) | S1 unknown ID waits, Organizer approves; S2 waits, never decided | none | `--tag L1 --cap 100 --players 100 --real 6 --mode auto --speed 9 --aud 1 --lead 12` |
-| L2 | 100 | manual | ID for employees + others by mobile (2) | S1 unknown ID: waits, declined; S2 unknown ID waits, never decided | pause then resume | `--tag L2 --cap 100 --players 100 --real 6 --mode host --aud 2 --lead 12` |
-| L3 | 100 | auto 12 s | list + invitations (list/mobile with guest invitations on) | none (listed people in at once; one level-1 guest invites 2, one invitee tries to invite and is refused) | end by Organizer | `--tag L3 --cap 100 --players 100 --real 6 --mode auto --speed 12 --aud 3 --lead 12 --stop organizer` |
+| L2 | 100 | manual | anyone, employees confirm by ID (6) | S1 unknown ID: waits, declined; S2 unknown ID waits, never decided | pause then resume | `--tag L2 --cap 100 --players 100 --real 6 --mode host --aud 6 --lead 12` |
+| L3 | 100 | auto 12 s | a list + their invites (4) | none (listed people in at once; one level-1 guest invites 2, one invitee tries to invite and is refused) | end by Organizer | `--tag L3 --cap 100 --players 100 --real 6 --mode auto --speed 12 --aud 4 --lead 12 --stop organizer` |
 | L4 | 250 | manual | employees only, ID (1) | none | late join after the first number | `--tag L4 --cap 250 --players 245 --real 6 --mode host --aud 1 --lead 15` (5 listed people join late) |
-| L5 | 250 | auto 12 s | list only, mobile (4) | S1 waits, the Host approves; S2 waits, never decided | pause then resume | `--tag L5 --cap 250 --players 250 --real 6 --mode auto --speed 12 --aud 4 --lead 15` |
-| L6 | 250 | auto 9 s | ID for employees + others by mobile (6) | S1 unknown ID waits, declined; S2 waits, never decided | none | `--tag L6 --cap 250 --players 250 --real 6 --mode auto --speed 9 --aud 6 --lead 15` |
+| L5 | 250 | auto 12 s | a list I choose, mobile (3) | S1 waits, the Host approves; S2 waits, never decided | pause then resume | `--tag L5 --cap 250 --players 250 --real 6 --mode auto --speed 12 --aud 3 --lead 15` |
+| L6 | 250 | auto 9 s | anyone, employees confirm by ID (6) | S1 unknown ID waits, declined; S2 waits, never decided | none | `--tag L6 --cap 250 --players 250 --real 6 --mode auto --speed 9 --aud 6 --lead 15` |
 | L7 | 500 | auto 12 s | anyone (5) | S1, S2 get a ticket at once (open game) | late join after the first number | `--tag L7 --cap 500 --players 495 --real 6 --mode auto --speed 12 --aud 5 --lead 20` |
-| L8 | 500 | auto 9 s | list + invitations (3) | S1 waits via a Co-host link, the Co-host approves; S2 waits via a Co-host link, declined | end by Organizer | `--tag L8 --cap 500 --players 500 --real 6 --mode auto --speed 9 --aud 3 --lead 20 --stop organizer` |
-| L9 | 500 | manual | list only, mobile (4) | none | none | `--tag L9 --cap 500 --players 500 --real 6 --mode host --aud 4 --lead 20` |
+| L8 | 500 | auto 9 s | a list + their invites (4) | S1 waits via a Co-host link, the Co-host approves; S2 waits via a Co-host link, declined | end by Organizer | `--tag L8 --cap 500 --players 500 --real 6 --mode auto --speed 9 --aud 4 --lead 20 --stop organizer` |
+| L9 | 500 | manual | a list I choose, mobile (3) | none | none | `--tag L9 --cap 500 --players 500 --real 6 --mode host --aud 3 --lead 20` |
 
 Note on counts: `--players` includes the two strangers where a stranger gets a ticket (open or approved). Where a stranger waits or is declined it uses no place.
 
