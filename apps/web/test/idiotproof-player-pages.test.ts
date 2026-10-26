@@ -60,7 +60,7 @@ describe("joining: a refusal is shown next to the button, and a wrong entry can 
     const o = await organizer(); await listOnly(o, "IP-WT"); await addPerson(o, "IP-WT", "Ravi", "9822233333");
     const p = await phoneAt(o, "/z?e=IP-WT"); await typeJoin(p, "9822233330"); // one digit wrong: not on the list, so the request goes to the organizer
     await p.waitFor((x) => /Please wait a moment/.test(x));
-    expect(p.text()).toMatch(/You asked with 9822233330/); expect(p.text()).toMatch(/Wrong number or ID\? Type it again/);
+    expect(p.text()).toMatch(/You asked with \+91 98222 33330/); expect(p.text()).toMatch(/Wrong number or ID\? Type it again/);
     p.click("#again");
     await p.waitFor((x) => /Join the engagement/.test(x));
     expect((p.$("#ph") as any).value).toBe("9822233330"); // what she typed is still there, so the slip can be seen
