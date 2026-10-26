@@ -1490,11 +1490,12 @@ describe("console phase 3: brand on the ticket, See what guests see, payment lin
     expect(p.errors).toEqual([]);
   });
 
-  test("Brand: a name without a colour (or a colour without a name) is refused politely before anything is sent; a picture that cannot be shrunk under 30 KB is refused", async () => {
+  test("Brand: the company strip never stops a person (a name alone gets the first colour; a colour or logo without a name is not used yet, with a calm note); a picture that cannot be shrunk under 30 KB is refused", async () => {
     const o = await organizer(); await make(o, "UI-BRAND2"); const w = spy({}, pictureTools("data:image/png;base64," + "A".repeat(60000), "data:image/jpeg;base64," + "A".repeat(60000)));
     const p = await open4(o, "UI-BRAND2", w);
-    setField(p, "#f-brand-name", "Acme"); p.click('[data-save="4"]'); await p.waitFor((x) => /Pick an accent colour/.test(x)); expect(w.st.patches.length).toBe(0);
-    setField(p, "#f-brand-name", ""); p.click('[data-ck="brand.color"][data-v="#AD1457"]'); p.click('[data-save="4"]'); await p.waitFor((x) => /Add your company name/.test(x)); expect(w.st.patches.length).toBe(0);
+    setField(p, "#f-brand-name", "Acme"); p.click('[data-save="4"]'); await p.waitFor((x) => /Saved/.test(x)); expect(w.st.patches.length).toBe(1); expect(w.st.patches[0].brand).toEqual({ name: "Acme", color: "#0B3D91" }); // a name alone is saved with the first colour: nothing refuses
+    openStep(p, 4); setField(p, "#f-brand-name", ""); p.click('[data-ck="brand.color"][data-v="#AD1457"]'); p.click('[data-save="4"]'); await p.waitFor((x) => /is not on the tickets yet, because there is no company name/.test(x)); expect(w.st.patches.length).toBe(2); expect(w.st.patches[1].brand).toEqual({}); // saved and moved on; the game is never held up by it
+    openStep(p, 4);
     chooseFile(p, "#brandlogo", aFile(p, "logo.png", "image/png")); await p.waitFor((x) => /could not use that picture/.test(x)); expect(p.$(".zc-logo")).toBeNull();
     chooseFile(p, "#brandlogo", aFile(p, "x.gif", "image/gif")); await p.waitFor((x) => /PNG, JPEG or WebP picture/.test(x));
     chooseFile(p, "#brandlogo", aFile(p, "huge.png", "image/png", 5 * 1024 * 1024 + 1)); await p.waitFor((x) => /bigger than 5 MB/.test(x));

@@ -343,8 +343,10 @@
   };
   const verOptions = (a) => (a === "6" ? [["id", "Employee ID"], ["both", "Employee ID and mobile number"]] : [["id", "Employee ID"], ["mobile", "Mobile number"], ["either", "Employee ID or mobile number"], ["both", "Employee ID and mobile number"]]);
   const bchip = (path, label) => { const on = !!getP(path); return `<button type="button" class="zc-chip${on ? " on" : ""}" data-bool="${path}" aria-pressed="${on}">${esc(label)}</button>${iBtn(path)}${hintOf(path)}`; };
-  const cont = (n, label) => `<div class="zc-foot"><button class="zc-btn" type="button" data-save="${n}">${label || "Continue"}</button></div>`;
-  const save = (n, label) => `<div class="zc-foot"><button class="zc-btn" type="button" data-save="${n}">${label || "Save and continue"}</button></div>`;
+  // the reason a Save was refused is also shown right above the button the person just pressed (the top of a long step is out of sight on a phone)
+  const footMsg = (n) => (S.toast && Number(S.open) === Number(n) ? `<div class="zc-toast zc-toast-foot" role="alert">${esc(S.toast)}</div>` : "");
+  const cont = (n, label) => `${footMsg(n)}<div class="zc-foot"><button class="zc-btn" type="button" data-save="${n}">${label || "Continue"}</button></div>`;
+  const save = (n, label) => `${footMsg(n)}<div class="zc-foot"><button class="zc-btn" type="button" data-save="${n}">${label || "Save and continue"}</button></div>`;
   const small = (t, extra) => `<p class="zc-small"${extra ? " " + extra : ""}>${t}</p>`;
   const rowl = (left, right) => `<div class="zc-rowl"><span>${left}</span>${right || ""}</div>`;
   const lockedGame = () => !!S.started && !S.draft && !S.unpaid;
@@ -1487,13 +1489,15 @@
       else if (n === 2) { { const c = Number(f.cap); if (!Number.isInteger(c) || c < 1) throw new Error("Please give the number of players, for example 180."); if (c > 10000) throw new Error("For more than 10,000 players, please write to us and we will arrange it."); if (f.demo === "1" && c > DEMO_CAP) throw new Error("A game at Rs 0 is for up to 10 people. Choose a bigger size to invite more."); } if (!f.emp && f.inv && !f.cats.length) throw new Error("Pick at least one kind of guest."); await call("PATCH", `/api/z/${eid}/settings`, { callMode: f.mode === "host" ? "host" : "auto", cap: Number(f.cap), callSeconds: Number(f.spd), tickets: Number(f.tix), rounds: Number(f.rnd), whoCanJoin: f.emp || f.who !== "anyone" ? "list" : "anyone", verify: f.ver, employeesOnly: !!f.emp, invites: { on: !f.emp && !!f.inv, per: Number(f.per) || 4, cats: f.cats }, ...(S.demo && !S.draft ? {} : { demo: f.demo === "1" }) }); try { S.sum = await call("GET", `/api/z/${eid}/summary`); } catch { /* shown at the next load */ } /* the page must know the new audience and what people give (employee ID or mobile) before step 6 reads the list */ }
       else if (n === 3) { const rewards = rewardsOut(f); if (!rewards.length) throw new Error("Tick at least one prize."); await call("PATCH", `/api/z/${eid}/settings`, { tickets: Number(f.tix), ties: f.ties === "share" ? "share" : "next", rewards }); }
       else if (n === 4) {
-        const bn = (f.brand.name || "").trim(), bc = f.brand.color || "", bl = f.brand.logo || "", brandChanged = JSON.stringify(f.brand) !== JSON.stringify((S.fBase || {}).brand);
-        if (brandChanged && (bn || bc || bl) && !bn) throw new Error("Add your company name for the top of the ticket, or clear the colour and logo.");
-        if (brandChanged && (bn || bl) && !bc) throw new Error("Pick an accent colour for your company strip.");
+        // The company strip is optional and never stops a person: a name without a colour gets the first colour; a logo or colour without a name is simply not used yet (the game is saved and the person is told, calmly).
+        const bn = (f.brand.name || "").trim(), bl = f.brand.logo || "", brandChanged = JSON.stringify(f.brand) !== JSON.stringify((S.fBase || {}).brand);
+        let bc = f.brand.color || ""; if (brandChanged && bn && !bc) { bc = "#0B3D91"; f.brand.color = bc; }
+        const stripUnused = brandChanged && !bn && !!(bl || bc);
         await call("PATCH", `/api/z/${eid}/settings`, { ...momentsOut(f), ...(brandChanged ? { brand: bn ? { name: bn, color: bc, ...(bl ? { logo: bl } : {}) } : {} } : {}) });
+        if (stripUnused) S.brandNote = "Saved. Your " + (bl ? "logo" : "colour") + " is not on the tickets yet, because there is no company name. You can add the name in step 4 any time.";
       }
       if (n === 1 && S.cloneNew === eid) S.cloneDated = eid;
-      if (n <= 4) { markDone(n); S.note = "Saved."; await refreshEng(); return advance(n); }
+      if (n <= 4) { markDone(n); S.note = (n === 4 && S.brandNote) || "Saved."; S.brandNote = ""; await refreshEng(); return advance(n); }
       markDone(n); advance(n);
     } catch (e) { S.toast = friendly(e); redraw(); go("sec" + n); }
   }
