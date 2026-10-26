@@ -397,6 +397,8 @@ async function joinOverLimit(env: Env, req: Request, now: number, paidSeats = 0)
   } catch { return false; }
 }
 const BUSY = () => json({ error: "It is very busy right now. Please try again in a few minutes." }, 503);
+/** What one successful join writes to the database (participant, seat, person/consent/audit rows ...: counted ~9 on the 1.1.x logs). The daily write guard charges this, so "2,000,000 writes a day" means writes, not joins x 3. */
+const JOIN_WRITES = 9;
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-organizer, x-partner, authorization, x-ct-vid, x-ct-vs", "access-control-allow-methods": "GET, POST, PUT, PATCH, OPTIONS", "access-control-max-age": "86400" };
 /** Phones load the app from Pages and call this Worker from another origin, so every answer carries open CORS (no cookies are used anywhere). */
@@ -1696,7 +1698,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       pii = await sealPii(env, { phone: digits ?? "", name: lateName || tokPii?.name || null, empId: vf.mode !== "mobile" && empNorm ? empNorm : null });
     }
     if (await joinOverLimit(env, req, now, e.pack ?? 0)) return json({ error: "It is busy right now. Please try again in a few minutes.", code: "busy" }, 429);
-    if (!(await spend(env, now, 3))) return json({ error: "It is very busy right now. Please try again in a few minutes.", code: "busy" }, 503);
+    if (!(await spend(env, now, JOIN_WRITES))) return json({ error: "It is very busy right now. Please try again in a few minutes.", code: "busy" }, 503);
     const inv = inviter.startsWith("s:") ? Number(inviter.slice(2)) : null;
     await addSeat(ph, pii, dev, lateRound, { inv, cat: inv !== null ? cat : null, src: srcOf(inviter), ownerId: inviter, guardId, guardLimit, role });
     const row = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.jr AS jr, s.role AS role FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; jr: number | null; role: string | null }>();
