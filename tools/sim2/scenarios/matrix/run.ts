@@ -15,7 +15,7 @@ const ROOT = join(import.meta.dir, "../../../..");
 const { startSim } = await import("../../server");
 const L: any = await import("./lib.mjs");
 const { A, clock } = L;
-const families = ["config", "houses", "roles", "lifecycle", "people", "brand", "money", "time", "play"];
+const families = ["config", "houses", "roles", "lifecycle", "people", "brand", "money", "time", "play", "journeys"];
 let scenarios: any[] = [];
 for (const f of families) { const m: any = await import(`./gen-${f}.mjs`).catch((e) => { if (/Cannot find module|not found/i.test(String(e?.message))) return null; throw e; }); if (!m) continue; scenarios.push(...(await m.default({ seed, R: L.rng(seed * 7919 + f.length), L })).map((s: any) => ({ ...s, family: f }))); }
 const dup = scenarios.map((s) => s.name).filter((n, i, a) => a.indexOf(n) !== i);
@@ -38,7 +38,7 @@ const inner = globalThis.fetch.bind(globalThis);
       if (/^\/(api|ai|j)\//.test(u.pathname)) {
         CUR.calls++;
         if (r.status >= 500) CUR.fivexx.push(`${m} ${u.pathname} -> ${r.status}`);
-        else if (r.status >= 400 && !/\.(csv|pdf)$/.test(u.pathname) && !u.pathname.startsWith("/j/")) {
+        else if (r.status >= 400 && !/\.(csv|pdf)$/.test(u.pathname) && !u.pathname.startsWith("/j/") && !(m === "GET" && r.status === 404 && /^\/api\/z\/[^/]+\/control$/.test(u.pathname))) { // (the console's first look for a game's control file answers a bare 404 before the first key exists: expected, never shown to a person)
           const txt = await r.clone().text(); let j: any = null; try { j = JSON.parse(txt); } catch { /* not json */ }
           const why = L.friendly(j); if (why) CUR.unfriendly.push(`${m} ${u.pathname} -> ${r.status}: ${why}${j ? "" : " [" + txt.slice(0, 60).replace(/\s+/g, " ") + "]"}`);
         }

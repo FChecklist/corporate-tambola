@@ -114,6 +114,9 @@ export class T {
     h.email = email; h.id = inv.id; h.inv = inv; h.setupBody = fo.setup; return h;
   }
   /** A Co-host bound to one game. */
-  async cohost(org, eid, label = personName(this.R)) { const c = await org.inviteCohost({ label, phone: mobile(this.R), e: eid }); return { key: c.cohostKey, h: { "x-organizer": c.cohostKey }, id: c.id, eid, raw: c, api: (m, p, b) => A.call(m, p, b, { "x-organizer": c.cohostKey }) }; }
+  async cohost(org, eid, label = personName(this.R), { accept = true } = {}) { const c = await org.inviteCohost({ label, phone: mobile(this.R), e: eid }); const h = { "x-organizer": c.cohostKey };
+    // the Co-host ticks the role consent (K5) first, as the real page does; without it every call answers 400 consent-required (pass { accept: false } to test that)
+    if (accept) { const a = await A.call("POST", "/api/org/role/accept", {}, h); if (!a.ok) throw new Error("co-host accept: HTTP " + a.status + " " + JSON.stringify(a.body).slice(0, 200)); }
+    return { key: c.cohostKey, h, id: c.id, eid, raw: c, api: (m, p, b) => A.call(m, p, b, h) }; }
   guest(eid, name, phone) { return new A.Guest("", eid, phone ?? mobile(this.R), name ?? personName(this.R)); }
 }
