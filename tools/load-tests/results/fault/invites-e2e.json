@@ -1,0 +1,242 @@
+{
+ "test": "invitations at about 1000 people",
+ "at": "2026-10-26T16:05:39.860Z",
+ "base": "http://localhost:8887",
+ "total": 29,
+ "ok": 27,
+ "notOk": 2,
+ "rows": [
+  {
+   "area": "setup",
+   "what": "game O: open, guests may invite (4 each, family or colleagues), Co-host list limit 40",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": "coHostLimit 40"
+  },
+  {
+   "area": "setup",
+   "what": "the Organizer has a common link with a code",
+   "want": "from=<number>",
+   "got": "1900000000",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "10 Co-hosts added; each has an own common link",
+   "want": "10 different codes",
+   "got": "10 different",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "10 Co-hosts x 30 people through their own common link all get a ticket",
+   "want": "300",
+   "got": "300",
+   "ok": true,
+   "note": "2.3 s"
+  },
+  {
+   "area": "cohost",
+   "what": "10 Co-hosts x 8 people added to their own list (\"call others\"), each joins with the personal link",
+   "want": "80",
+   "got": "80",
+   "ok": true,
+   "note": "lists 38,38,38,38,38,38,38,38,38,38"
+  },
+  {
+   "area": "cohost",
+   "what": "each Co-host's 'brought' count equals what they really brought (30 by link + 8 by list)",
+   "want": "10 of 10 = 38",
+   "got": "10 of 10",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "a Co-host over their list limit (40): the extra people are refused with a clear message",
+   "want": "refused, message names the limit",
+   "got": "409 (over-limit) {\"error\":\"You can add 2 more people (your limit is 40). Nothing was added; please send few",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "a stranger on a full Co-host link (40 used): put in the waiting room, not refused outright",
+   "want": "403/409 waiting or invite-full",
+   "got": "409 (invite-full)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "that over-the-limit request goes to the ORGANIZER (the Co-host whose list is full does not see it, by design)",
+   "want": "Co-host 0, Organizer 1",
+   "got": "Co-host 0, Organizer 1",
+   "ok": true,
+   "note": "what the person is told: This invitation has already been used by 40 people, which is the most one person can invite. Your request is w"
+  },
+  {
+   "area": "cohost",
+   "what": "the Organizer admits it (placed on the Organizer's own list)",
+   "want": "200 admitted",
+   "got": "200 {\"ok\":true,\"admitted\":true,\"placedUnder\":\"Organizer\"}",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "organizer",
+   "what": "250 people through the Organizer's common link",
+   "want": "250",
+   "got": "250",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "guests",
+   "what": "a person who joined directly may invite (guest invites are on)",
+   "want": "60 of 60 canInvite",
+   "got": "60 of 60",
+   "ok": true,
+   "note": "per 4"
+  },
+  {
+   "area": "guests",
+   "what": "40 guests x 2 people through their share link (family / colleagues) all get a ticket",
+   "want": "80",
+   "got": "80",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "guests",
+   "what": "20 guests add 2 people each to their own list; those people join with their personal link",
+   "want": "40 added, 40 joined",
+   "got": "40 added, 40 joined",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "guests",
+   "what": "a guest may invite 4 people in all (2 by link + 2 by list here is 4): the next one is refused with a message",
+   "want": "refused after the 4th",
+   "got": "200 | 200 | 409(Your list is full: 4 people. Remove some) | 409(Your list is full: 4 people. Remove some)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "guests",
+   "what": "a person who was invited by a guest cannot invite anyone (two levels only)",
+   "want": "canInvite false",
+   "got": "false",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "guests",
+   "what": "…their share link still lets people in but records no inviter (falls back to the Organizer, silently)",
+   "want": "200 (info)",
+   "got": "200",
+   "ok": true,
+   "note": "INFORMATION: the person who shared it is not told it did not count"
+  },
+  {
+   "area": "cap",
+   "what": "the game is full at 1000: the next person is told so",
+   "want": "409 full",
+   "got": "409 (This engagement is full.)",
+   "ok": true,
+   "note": "seats before filling 756"
+  },
+  {
+   "area": "cap",
+   "what": "a person who was invited (personal link) but opened it after the game filled up from the open link (5 such people)",
+   "want": "still gets the place that was promised",
+   "got": "409 (This engagement is full.)",
+   "ok": false,
+   "note": "if 409: the invitation promised a place the game did not keep"
+  },
+  {
+   "area": "track",
+   "what": "the Organizer's total equals the cap and nothing is over it",
+   "want": "1000",
+   "got": "1005",
+   "ok": false,
+   "note": "cap 1000"
+  },
+  {
+   "area": "closed",
+   "what": "a listed person joins",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "closed",
+   "what": "strangers on a Co-host link (3) and on a guest's share link (3) are held (403 waiting)",
+   "want": "6 x 403 waiting",
+   "got": "403,403,403,403,403,403",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "closed",
+   "what": "the Co-host sees only the 3 who came through them; the guest sees only their 3; the Organizer sees all 6",
+   "want": "3 / 3 / 6",
+   "got": "3 / 3 / 6",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "conflict",
+   "what": "the Co-host declines, then the Organizer tries to admit the same person",
+   "want": "answer: already declined (the first decision stands)",
+   "got": "200 {\"ok\":true,\"already\":\"declined\"}",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "conflict",
+   "what": "the Organizer adds the declined person to the list by hand (the way to overrule a decline)",
+   "want": "added 1",
+   "got": "200 added 1",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "conflict",
+   "what": "…and that person now gets in",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "closed",
+   "what": "a guest admits a person who came through their own link",
+   "want": "200 admitted",
+   "got": "200 {\"ok\":true,\"admitted\":true,\"placedUnder\":\"Guest (ticket 1)\"}",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "closed",
+   "what": "a guest may NOT decide a request that came through a Co-host's link",
+   "want": "404 (not theirs)",
+   "got": "404 (No such request.)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "closed",
+   "what": "the Co-host may NOT decide a request that came through a guest's link",
+   "want": "404 (not theirs)",
+   "got": "404 (No such request.)",
+   "ok": true,
+   "note": ""
+  }
+ ]
+}
