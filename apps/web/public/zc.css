@@ -51,7 +51,7 @@
 .zc-lbl{display:block;font-size:13px;color:var(--zc-mut);margin:12px 0 5px}
 .zc-sec{font-weight:700;color:var(--zc-ink);margin-top:16px}
 .zc-chips{display:flex;gap:6px;flex-wrap:wrap}
-.zc-chip{display:inline-flex;gap:6px;align-items:center;padding:7px 12px;min-height:38px;border-radius:9px;font-size:13px;cursor:pointer;border:1px solid #b9b2a2;background:#fff;color:var(--zc-ink);text-decoration:none;text-align:left}
+.zc-chip{display:inline-flex;gap:6px;align-items:center;padding:7px 12px;min-height:42px;border-radius:9px;font-size:13px;cursor:pointer;border:1px solid #b9b2a2;background:#fff;color:var(--zc-ink);text-decoration:none;text-align:left}
 .zc-chip::before{content:"";width:13px;height:13px;border-radius:3px;border:1.5px solid #8a8372;flex:none}
 a.zc-chip::before,.zc-chips .zc-chip[data-mode]::before{display:none}
 .zc-chip.on{background:#E4EEFC;border-color:var(--zc-accent);color:#08306e;font-weight:600}
@@ -188,9 +188,9 @@ a.zc-chip::before,.zc-chips .zc-chip[data-mode]::before{display:none}
 @media (prefers-reduced-motion:reduce){.zc-secb .zc-box,.zc-secb .zc-hint2{animation:none}}
 
 /* (i) pop-ups */
-.zc-lblrow{display:flex;align-items:center;gap:8px;margin-top:10px}
+.zc-lblrow{display:flex;align-items:center;gap:8px;margin:10px 0 6px}
 .zc-lblrow .zc-lbl{margin:0}
-.zc-i{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid #2B3358;background:#fff;color:#2B3358;font:700 13px/1 Georgia,serif;cursor:pointer;padding:0;display:inline-grid;place-items:center}
+.zc-i{flex:none;width:30px;height:30px;border-radius:50%;border:1.5px solid #2B3358;background:#fff;color:#2B3358;font:700 13px/1 Georgia,serif;cursor:pointer;padding:0;display:inline-grid;place-items:center}
 .zc-i:hover,.zc-i:focus-visible{background:#2B3358;color:#fff}
 .zc-modal{position:fixed;inset:0;background:rgba(11,16,38,.55);display:grid;place-items:center;z-index:200;padding:16px}
 .zc-mbox{position:relative;background:#fff;color:#111;border-radius:16px;max-width:760px;width:100%;max-height:88vh;overflow:auto;padding:22px 24px;box-shadow:0 30px 80px rgba(0,0,0,.35)}
@@ -213,4 +213,4 @@ a.zc-chip::before,.zc-chips .zc-chip[data-mode]::before{display:none}
 @media (max-width:520px){.zc-who{max-width:130px;font-size:12px}}
 
 /* the assistant strip is not shown in the console */
-#aistrip,.zc-ai{display:none !important}
+#aistrip,.zc-ai{display:none !important}@media (max-width:640px){.zc-i{width:32px;height:32px}.zc-dot{width:36px;height:36px}.zc-mini{min-height:40px}.zc-tab.on{background:#fff;font-weight:700;box-shadow:inset 0 3px 0 var(--zc-accent)}}

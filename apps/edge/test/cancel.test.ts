@@ -215,6 +215,14 @@ describe("Confirming your payment", () => {
     expect((await j(await call("GET", "/api/z/CAN-1/summary", undefined, t.master))).payment.status).toBe("confirming");
     expect(raw.prepare("SELECT COUNT(*) AS c FROM payment WHERE status='paid'").get()).toEqual({ c: 0 });
   });
+  test("a second checkout for the same game is refused while the first payment is being confirmed, and allowed again when that has worn off", async () => {
+    const t = await team();
+    const c = await j(await pay(t.master)); await complete(c, "pay_1", T, "created");
+    const again = await pay(t.master, "CAN-1", T + 60_000);
+    expect(again.status).toBe(409); const body = await j(again); expect(body.code).toBe("confirming"); expect(body.error).toMatch(/being confirmed/);
+    expect(raw.prepare("SELECT COUNT(*) AS c FROM payment").get()).toEqual({ c: 1 }); // no second order was made
+    expect((await pay(t.master, "CAN-1", T + 31 * 60_000)).status).toBe(200);
+  });
   test("the 'confirming' state wears off after 30 minutes", async () => {
     const t = await team();
     const c = await j(await pay(t.master)); await complete(c, "pay_1", T, "created");

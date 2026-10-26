@@ -9,7 +9,7 @@
   const NAMES = { early5: "Early Five", top: "Top line", mid: "Middle line", bot: "Bottom line", corners: "Four corners", star: "Star", full: "Full house", full2: "Full Two-Ticket House", lucky: "Lucky draw" };
   (ZG.PRIZE_HOUSES || []).forEach((h) => { if (!NAMES[h.id]) NAMES[h.id] = h.label; }); // the newer houses come from the shared table
   const ORD = (k) => ["", "1st", "2nd", "3rd"][k] || k + "th";
-  const S = { info: null, infoAge: 0, cf: null, store: new ZG.RoundStore({}), logs: {}, round: 1, now: null, st: null, results: [], err: "", lastNum: null };
+  const S = { info: null, infoAge: 0, cf: null, store: new ZG.RoundStore({}), logs: {}, round: 1, now: null, st: null, results: [], err: "", lastNum: null, t0: Date.now() };
   const j = async (url) => { const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw Object.assign(new Error("http " + r.status), { status: r.status }); return r.json(); };
   const hms = (s) => { s = Math.max(0, Math.round(s)); return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map((n) => String(n).padStart(2, "0")).join(":"); };
   const mmss = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
@@ -56,20 +56,22 @@
     const paused = S.st && S.now !== null && S.st.intervals.some((i) => S.now >= i.start && S.now < i.end);
     // host mode: the Host has not pressed for the next number yet (or the last press has reached the screen): nothing counts down
     const hostWait = cfg.callMode === "host" && !paused && S.now !== null && (!S.st || !S.st.nextRounds.length || (S.st.nextRounds[S.st.nextRounds.length - 1] <= S.now && log.length >= S.st.nextRounds.length - 90 * (S.round - 1)));
+    const lost = (S.now === null ? Date.now() - S.t0 : Date.now() - (S.nowAt || Date.now())) > 15000; // no answer from the public clock for 15 seconds: the numbers on this screen may be late
+    const lostBar = lost ? `<div class="lostbar" role="alert">Connection lost. The numbers on this screen may be late. Reconnecting…</div>` : "";
     const annBar = S.ann ? `<div class="annbar" role="alert">${esc(S.ann.text)}</div>` : "";
     const bd = info.brand && typeof info.brand === "object" ? info.brand : null, bLogo = bd && typeof bd.logo === "string" && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(bd.logo) ? bd.logo : ""; // the organizer's own logo and name, or ours in writing
-    const head = `${annBar}<div class="top"><div class="brand">${bLogo ? `<img class="blogo" alt="" src="${esc(bLogo)}">` : ""}${esc(bd && bd.name ? bd.name : "Corporate Tambola")}</div><div class="meta">${cfg.rounds > 1 ? "Round " + S.round + " of " + cfg.rounds + " · " : ""}${log.length} of 90 numbers called</div></div>`;
+    const head = `${lostBar}${annBar}<div class="top"><div class="brand">${bLogo ? `<img class="blogo" alt="" src="${esc(bLogo)}">` : ""}${esc(bd && bd.name ? bd.name : "Corporate Tambola")}</div><div class="meta">${cfg.rounds > 1 ? "Round " + S.round + " of " + cfg.rounds + " · " : ""}${log.length} of 90 numbers called</div></div>`;
     const wins = (S.results || []).filter((r) => r.round === S.round || r.round === undefined).map((r) => `<span><b>${esc(ORD(r.ordinal || 1))} ${esc(NAMES[r.pattern] || r.pattern)}</b> · ${r.count} winner${r.count === 1 ? "" : "s"}</span>`).join("");
     if (!log.length) {
-      const sec = secsToStart;
-      return ($app.innerHTML = `${head}<div class="big">${sec !== null && sec > 120 ? `<p>The engagement starts in</p><div class="cd">${hms(sec - 120)}</div><p>Open the link on your phone and get your ticket.</p>` : sec !== null && sec > 0 ? `<h1>Your game is setting up</h1><p>We are waiting 2 minutes more for everyone to join.</p><div class="cd">${mmss(sec)}</div><p>Open the link on your phone and get your ticket.</p>` : hostWait ? `<h1>Waiting for the host</h1><p>The host presses for the first number.</p>` : `<h1>Get ready</h1><p>The first number is about to be called…</p>`}</div><div class="foot">${esc(location.host)}</div>`);
+      const sec = secsToStart, joinLine = `<p>Open the link on your phone and get your ticket: <b>${esc(location.host)}/z?e=${esc(EID)}</b></p>`;
+      return ($app.innerHTML = `${head}<div class="big">${sec !== null && sec > 120 ? `<p>The game starts in</p><div class="cd">${hms(sec - 120)}</div>${joinLine}` : sec !== null && sec > 0 ? `<h1>Your game is setting up</h1><p>We are waiting 2 minutes more for everyone to join.</p><div class="cd">${mmss(sec)}</div>${joinLine}` : hostWait ? `<h1>Waiting for the host</h1><p>The host presses for the first number.</p>` : `<h1>Get ready</h1><p>The first number is about to be called…</p>`}</div><div class="foot">Join: ${esc(location.host)}/z?e=${esc(EID)}</div>`);
     }
     const last = log[log.length - 1];
     const fresh = S.lastNum !== null && S.lastNum !== last; S.lastNum = last;
     const called = new Set(log);
     const ps = ZG.prizeStatus && S.cfg ? ZG.prizeStatus(S.cfg, S.results || [], S.round || 1) : [];
     const prizes = ps.length ? `<div class="ps" aria-label="Prizes"><h2>Prizes</h2><ul>${ps.map((p) => p.claimed ? `<li class="done"><s>${esc(p.name)}</s> <small>claimed</small></li>` : `<li>${esc(p.name)}${p.text ? ": <b>" + esc(p.text) + "</b>" : ""}</li>`).join("")}</ul></div>` : "";
-    const banner = allDone ? `<div class="big" style="margin-bottom:1vh"><h1>Game over</h1><p>Every prize has been won. Thank you for playing.</p></div>` : paused ? `<div class="big" style="margin-bottom:1vh"><h1>Paused</h1><p>The organizer has paused the engagement. It will resume shortly.</p></div>` : "";
+    const banner = allDone ? `<div class="big" style="margin-bottom:1vh"><h1>Game over</h1><p>Every prize has been won. Thank you for playing.</p></div>` : paused ? `<div class="big" style="margin-bottom:1vh"><h1>Paused</h1><p>The organizer has paused the game. It will resume shortly.</p></div>` : "";
     // between two numbers (software-called games): a big countdown 9, 8, 7 ... 1; silent
     const nr = S["next" + S.round], left = !paused && !hostWait && cfg.callMode !== "host" && S.off !== undefined && nr !== null && nr !== undefined && Number.isFinite(nr) && log.length < 90 ? Math.max(0, Math.ceil((ZG.roundTimeMs(nr) - (performance.now() + S.off)) / 1000)) : null;
     const cdown = left !== null && left <= Math.max(3, info.callSeconds) ? `<div class="cdown" role="timer" aria-label="Next number in ${left} seconds"><div class="cdnum">${left}</div><div class="cdlbl">seconds to the next number</div></div>` : "";
@@ -78,6 +80,10 @@
 
   if (!EID) { $app.innerHTML = `<p class="msg">No engagement was chosen.</p>`; return; }
   window.__big = S; // read by the tests (nothing personal is in it)
+  // keep the projector's screen on while this page is in front (where the browser can): a blank screen in front of a room is a visible failure
+  let wl = null;
+  const keepAwake = async () => { try { if (wl || !navigator.wakeLock || document.visibilityState === "hidden") return; wl = await navigator.wakeLock.request("screen"); wl.addEventListener("release", () => { wl = null; }); } catch { wl = null; } };
+  keepAwake(); document.addEventListener("visibilitychange", keepAwake); setInterval(keepAwake, 30000);
   const loop = async () => { await tick(); draw(); };
   loop(); setInterval(loop, 3000);
   setInterval(() => { if (S.info) draw(); }, 1000); // the countdowns tick every second (before the first number, and between two numbers)

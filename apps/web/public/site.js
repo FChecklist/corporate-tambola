@@ -207,8 +207,8 @@
     if (btn) { btn.disabled = true; }
     try {
       const r = await TB.api("POST", "/api/auth/email", { email, ...(passTok() ? { pass: passTok() } : {}) });
-      codeView(email, r.devCode);
-    } catch (e) { if (btn) btn.disabled = false; const f = $("fErr"); if (f) f.innerHTML = err(e.message); else TB.toast(esc(e.message)); }
+      codeView(email, r.devCode); return true;
+    } catch (e) { if (btn) btn.disabled = false; const f = $("fErr"); if (f) f.innerHTML = err(e.message); else TB.toast(esc(e.message)); return false; }
   }
   function codeView(email, devCode) {
     const boxes6 = [0, 1, 2, 3, 4, 5].map((i) => `<input class="otpb" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="${i === 0 ? "one-time-code" : "off"}" aria-label="Digit ${i + 1} of 6" autocapitalize="off" spellcheck="false">`).join("");
@@ -245,7 +245,7 @@
       } catch (e) { b.disabled = false; setErr(e.message); boxes[0].focus(); }
     };
     $("cdForm").addEventListener("submit", (e) => { e.preventDefault(); verify(); });
-    $("resend").addEventListener("click", async () => { await askCode(email, $("resend")); TB.toast("A new code was sent"); });
+    $("resend").addEventListener("click", async () => { if (await askCode(email, $("resend"))) TB.toast("A new code was sent"); });
     const u = $("useCode"); if (u) u.addEventListener("click", () => { spread(devCode); verify(); });
     boxes[0].focus();
   }

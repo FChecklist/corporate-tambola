@@ -148,12 +148,12 @@ body{background:linear-gradient(180deg,#FFF1D6 0,#FFE3EA 34%,#E6ECFF 70%,#FFF6DC
 .zbrand{border-radius:16px;box-shadow:0 4px 0 rgba(0,0,0,.18)}
 .zbrand.zdef{background:linear-gradient(100deg,#1565D8 0%,#7B3FE4 52%,#D6246B 100%);font-size:15px;letter-spacing:.06em;justify-content:center;text-align:center}
 .zbtn{min-height:52px;border-radius:14px;background:linear-gradient(180deg,#B02A5A,#7A1C33);box-shadow:0 3px 0 #4A0F20;font-size:17px}
-.zbtn:disabled,.zbtn[aria-disabled=true]{box-shadow:none}
+.zbtn:disabled,.zbtn[aria-disabled=true]{box-shadow:none}.zbtn:disabled{opacity:.6}
 .zbtn.alt{background:#fff;color:var(--zgrape);border:2px solid var(--zgrape);box-shadow:none}
 .zbtn.s{min-height:44px;font-size:15px}
 .zsmall{color:#4B4560}
 .zbanner{border-radius:14px}
-.zlink{background:#FBEAEE}
+.zlink{background:#FBEAEE;overflow-wrap:anywhere;word-break:break-all;user-select:all;-webkit-user-select:all}
 /* the join screen */
 .zsteps{display:flex;gap:8px;list-style:none;margin:0 0 10px;padding:0}
 .zsteps li{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;font:700 13px/1.25 var(--sans,inherit);color:#2E0812;background:#FDF0F3;border-radius:12px;padding:8px 4px}
@@ -286,3 +286,11 @@ body:has(#go) #ct-notify{display:none}
 .zckin{font-size:24px;letter-spacing:.3em;text-align:center}.zckerr{min-height:20px;color:#b71c1c;font-weight:700;font-size:14px;margin:6px 0}
 .zckwait{margin-top:8px;font-size:15px}.zckwait b{font:800 26px/1 Inter,system-ui,sans-serif;color:#7A1C33}
 #cksubmit{margin-top:6px;width:100%}
+.zmini{min-height:44px;padding:0 16px;border:2px solid #D9A5B6;border-radius:999px;background:#fff;color:#2E0812;font:700 15px var(--sans,inherit)}
+.zckrow input{font-size:16px;min-height:46px}
+.zckhint{margin:6px 0 0}
+.zsending{color:#8a5a00}
+.zagain{margin:10px 0 0}.zagain .zbtn{margin-top:0}
+.zretry{margin:16px 0 0}
+.zlinkin{width:100%;box-sizing:border-box;min-height:44px;margin:0 0 8px;padding:8px 10px;font-size:16px;border:2px solid #D9A5B6;border-radius:10px;background:#FBEAEE}
+.zinvsheet{position:fixed;left:8px;right:8px;bottom:8px;z-index:40;max-width:504px;margin:0 auto;padding:12px;background:#fff;border:2px solid #C9A24A;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.3)}

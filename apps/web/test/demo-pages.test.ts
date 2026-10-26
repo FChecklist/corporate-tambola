@@ -89,9 +89,9 @@ describe("the phone, the number screen and the board of a 10-person Rs 0 game", 
   test("the number screen and the organizer's board carry no demo badge", async () => {
     const o = await organizer(); await make(o, "UI-DEMOB"); await publish(o, "UI-DEMOB");
     const big = await page(o, "/big?e=UI-DEMOB", "big.html", ["zgame.js", "big.js"]);
-    await big.waitFor((x) => /The engagement starts in/.test(x)); expect(big.$("#demogame")).toBeNull(); expect(big.text()).not.toMatch(/DEMO GAME/);
+    await big.waitFor((x) => /The game starts in/.test(x)); expect(big.$("#demogame")).toBeNull(); expect(big.text()).not.toMatch(/DEMO GAME/);
     const board = await page(o, "/board?e=UI-DEMOB", "board.html", ["zgame.js", "board.js"], { "ctz-board-UI-DEMOB": o.token });
-    await board.waitFor((x) => /The engagement starts in/.test(x)); expect(board.$("#demogame")).toBeNull(); expect(board.text()).not.toMatch(/DEMO GAME/);
+    await board.waitFor((x) => /The game starts in/.test(x)); expect(board.$("#demogame")).toBeNull(); expect(board.text()).not.toMatch(/DEMO GAME/);
   });
 });
 

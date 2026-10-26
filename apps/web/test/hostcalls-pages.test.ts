@@ -84,7 +84,7 @@ describe("the console: who calls the numbers", () => {
     expect((await x.w.json(await x.w.api("GET", "/api/z/HC-SET/info"))).callMode).toBe("host");
     openStep(c, 7); await c.waitFor((t) => /a Host presses for each number/.test(t)); // the read-back
     openStep(c, 2); await c.waitFor((t) => /Who calls the numbers\?/.test(t));
-    c.click('[data-ck="mode"][data-v="auto"]'); await wait(50); c.click('#sec2 [data-save="2"]'); // and back: the speed chips return
+    await c.waitFor(() => !(c.win as any).__zc.saving); c.click('[data-ck="mode"][data-v="auto"]'); await wait(50); c.click('#sec2 [data-save="2"]'); // and back: the speed chips return
     const until = async (f: () => Promise<boolean>) => { const t0 = Date.now(); while (!(await f())) { if (Date.now() - t0 > 8000) throw new Error("timed out"); await wait(100); } };
     await until(async () => (await x.w.json(await x.w.api("GET", "/api/z/HC-SET/info"))).callMode === "auto");
     openStep(c, 2); await c.waitFor((t) => /Duration \(gap\)/.test(t), 12_000);

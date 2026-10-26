@@ -307,13 +307,13 @@ async function addPeople(c: Ctx, who: Caller, b: any): Promise<Response> {
     seen.add(ph); todo.push({ name: cleanName(x?.name), digits: cl.digits, ph, ...(emp && vf.mode !== "mobile" ? { empId: emp } : {}), ...(idHash ? { idHash } : {}) });
   }
   const db = c.env.DB, hashes = todo.map((t) => t.ph);
-  const persons = await existingBy(db, "person", c.eid, hashes, "ph, status, id");
+  const persons = await existingBy(db, "person", c.eid, hashes, "ph, status, id, inviter, removed_by");
   const seats = await existingBy(db, "seat", c.eid, hashes, "ph, blocked");
   const waits = await existingBy(db, "waiting", c.eid, hashes, "ph, id, status");
   const fresh: typeof todo = [], revive: typeof todo = [];
   for (const t of todo) {
     const p = persons.get(t.ph);
-    if (p) { if (p.status === "removed" && who.all) revive.push(t); else duplicates++; continue; }
+    if (p) { if (p.status === "removed" && (who.all || (p.inviter === who.id && p.removed_by === who.id))) revive.push(t); /* an Organizer or Host puts anyone back; a Co-host or guest only takes back a person they removed themselves */ else if (p.status === "removed") invalid.push({ raw: `${t.name} ${t.digits ? "+" + t.digits : ""}`.trim(), why: "This person was removed. Ask the Organizer or a Host to put them back." }); else duplicates++; continue; }
     if (seats.has(t.ph)) { duplicates++; continue; } // a seat from an older flow (a loaded list): already in the game
     fresh.push(t);
   }

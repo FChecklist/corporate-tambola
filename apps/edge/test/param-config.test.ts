@@ -220,6 +220,7 @@ describe("brand moments: kinds, limits, bad links", () => {
   for (const [kind, extra, ok] of [
     ["speech", {}, true], ["slides", {}, true], ["file", { mediaUrl: "https://cdn.example.com/a.mp4" }, true], ["file", {}, false],
     ["youtube", { mediaUrl: "https://youtu.be/abc" }, true], ["youtube", { mediaUrl: "https://www.youtube.com/watch?v=abc" }, true], ["youtube", { mediaUrl: "https://vimeo.com/1" }, false], ["youtube", {}, false],
+    ["youtube", { mediaUrl: "https://m.youtube.com/watch?v=abcdefghijk" }, true], ["youtube", { mediaUrl: "https://music.youtube.com/watch?v=abcdefghijk" }, true], ["youtube", { mediaUrl: "https://youtube.com.evil.example/watch?v=abcdefghijk" }, false],
     ["lucky", {}, true], ["lucky", { mediaUrl: "https://x.example/a" }, false], ["movie", {}, false],
   ] as [string, Record<string, unknown>, boolean][]) {
     test(`a ${kind} moment ${Object.keys(extra).length ? "with a link " : ""}during the game is ${ok ? "accepted" : "refused"}`, async () => { expect((await mk({ breaks: [brk({ kind, ...extra })] })).r.status).toBe(ok ? 200 : 400); });

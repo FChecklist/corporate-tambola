@@ -128,6 +128,27 @@ describe("a phone from first open to full house", () => {
     await x.boot();
     expect(x.phase).toBe("missing");
   });
+  test("a refused join shows the server's own plain words (not a mobile-number line for an employee ID); only 'nothing heard' gets the connection line", async () => {
+    const a = mkPhone(90); await a.rt.boot();
+    expect(await a.rt.join(a.phone, "Asha", undefined, "E#12")).toBe(false); // an employee ID with a hash sign
+    expect(a.rt.error).toMatch(/letters and numbers only/); expect(a.rt.error).not.toMatch(/mobile number/); expect(a.rt.phase).toBe("join");
+    const off = mkPhone(91, { down: () => true });
+    expect(await off.rt.join(off.phone)).toBe(false);
+    expect(off.rt.error).toBe("Could not join. Check your connection and try again.");
+  });
+  test("a phone that cannot get the public clock says so, and after 15 seconds says what to try; it clears when the clock answers", async () => {
+    let blocked = true; const a = mkPhone(93, { blocked: () => blocked }); await a.rt.boot(); await a.rt.join(a.phone);
+    await a.rt.tick(); expect(a.rt.view().error).toBe("Waiting for the clock. Check your connection.");
+    t += 20_000; await a.rt.tick(); expect(a.rt.view().error).toMatch(/switch to mobile data/);
+    blocked = false; t += 3000; await a.rt.tick(); expect(a.rt.view().error).toBeNull();
+  });
+  test("two sends of a Bogey that overlap reach the store once, not twice", async () => {
+    const posts: string[] = []; const a = mkPhone(94, { onApi: (p) => { if (/\/bogey$/.test(p)) posts.push(p); } });
+    await a.rt.boot(); await a.rt.join(a.phone);
+    const rt = a.rt as any; rt.bogeyUnsent.push({ pattern: "early5", round: 1 });
+    await Promise.all([rt.sendBogeys(), rt.sendBogeys()]);
+    expect(posts.length).toBe(1); expect(rt.bogeyUnsent.length).toBe(0);
+  });
   test("a mobile number that is too short is refused with a human message, and the phone can retry", async () => {
     const a = mkPhone(5); await a.rt.boot();
     expect(await a.rt.join("123")).toBe(false);

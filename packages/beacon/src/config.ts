@@ -183,7 +183,7 @@ export const linesFor = (rewards: readonly RewardLine[], key: PatternKey) => rew
 export const breakShift = (breaks: readonly BreakCfg[], k: number): number => breaks.reduce((s, b) => s + (b.after <= k ? b.seconds / 3 : 0), 0);
 
 const cleanText = (s: unknown, max: number) => (typeof s === "string" ? s.replace(/[<>`]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "");
-const YT = /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i;
+const YT = /^https:\/\/((www|m|music)\.)?(youtube\.com|youtu\.be)\//i; // a phone copies m.youtube.com or music.youtube.com links; any other address (youtube.com.evil.example) is still refused
 /** A media file kept on our own site (for example the demo's built-in video): a path with no folders, and only a media file type. */
 export const SITE_MEDIA = /^\/[A-Za-z0-9._-]{1,80}\.(mp4|webm|m4a|mp3)$/i;
 
@@ -230,14 +230,14 @@ export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?
   if (cfg.tickets === 1 && cfg.rewards.some((l) => l.scope === "two_ticket")) cfg.rewards = cfg.rewards.filter((l) => l.scope !== "two_ticket");
   if (cfg.rewards.length === 0) cfg.rewards = defaultRewards();
   if (input.breaks !== undefined) {
-    if (!Array.isArray(input.breaks) || input.breaks.length > maxMidFor(cfg.tickets)) return { ok: false, error: `At most ${maxMidFor(cfg.tickets)} brand moments during the game with ${cfg.tickets} ticket${cfg.tickets === 1 ? "" : "s"} per person.` };
+    if (!Array.isArray(input.breaks) || input.breaks.length > maxMidFor(cfg.tickets)) return { ok: false, error: `At most ${maxMidFor(cfg.tickets)} brand moments during the game with ${cfg.tickets} ticket${cfg.tickets === 1 ? "" : "s"} per person (lucky draws count too).` };
     const out: BreakCfg[] = [];
     for (const b of input.breaks as any[]) {
       // No number typed (or `auto: true` from an earlier save): the software places it, evenly spread among the automatic ones, and it lasts 60 s unless told otherwise.
       const auto = b?.auto === true || b?.after === undefined || b?.after === null || b?.after === "";
       const after = auto ? 0 : b?.after, seconds = auto && (b?.seconds === undefined || b?.seconds === null || b?.seconds === "") ? 60 : b?.seconds, kind = b?.kind;
       if (!auto && (!Number.isInteger(after) || after < 1 || after > 89)) return { ok: false, error: "A break starts after 1 to 89 numbers have been called." };
-      if (!Number.isInteger(seconds) || seconds < 15 || seconds > 600 || seconds % 3) return { ok: false, error: "A break lasts 15 to 600 seconds, in steps of 3." };
+      if (!Number.isInteger(seconds) || seconds < 15 || seconds > 600 || seconds % 3) return { ok: false, error: "A moment during the game lasts 15 to 600 seconds, in steps of 3 (for example 30, 45, 60 or 90)." };
       if (!KINDS.has(kind)) return { ok: false, error: "A break is a file, a YouTube link, slides, a speech or a lucky draw." };
       const winners = kind === "lucky" ? (b?.winners === undefined ? 3 : b.winners) : undefined;
       if (kind === "lucky" && !(LUCKY_WINNERS as readonly number[]).includes(winners)) return { ok: false, error: "A lucky draw picks 1, 3, 5 or 10 people." };
@@ -249,7 +249,7 @@ export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?
       let mediaUrl: string | undefined;
       if (b?.mediaUrl !== undefined && b.mediaUrl !== "") {
         if (typeof b.mediaUrl !== "string" || b.mediaUrl.length > 300 || !(/^https:\/\/[^\s<>"'`]+$/i.test(b.mediaUrl) || SITE_MEDIA.test(b.mediaUrl))) return { ok: false, error: "The link must start with https:// and have no spaces." };
-        if (kind === "youtube" && !YT.test(b.mediaUrl)) return { ok: false, error: "A YouTube break needs a YouTube link." };
+        if (kind === "youtube" && !YT.test(b.mediaUrl)) return { ok: false, error: "That is not a YouTube video link (a youtube.com or youtu.be address). Copy it again from the YouTube Share button, or use a video file link instead." };
         mediaUrl = b.mediaUrl;
       }
       if ((kind === "file" || kind === "youtube") && !mediaUrl) return { ok: false, error: "This kind of break needs a link." };
@@ -291,18 +291,18 @@ export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?
       let mediaUrl: string | undefined;
       if (b?.mediaUrl !== undefined && b.mediaUrl !== "") {
         if (typeof b.mediaUrl !== "string" || b.mediaUrl.length > 300 || !(/^https:\/\/[^\s<>"'`]+$/i.test(b.mediaUrl) || SITE_MEDIA.test(b.mediaUrl))) return { ok: false, error: "The link must start with https:// and have no spaces." };
-        if (kind === "youtube" && !YT.test(b.mediaUrl)) return { ok: false, error: "A YouTube moment needs a YouTube link." };
+        if (kind === "youtube" && !YT.test(b.mediaUrl)) return { ok: false, error: "That is not a YouTube video link (a youtube.com or youtu.be address). Copy it again from the YouTube Share button, or use a video file link instead." };
         mediaUrl = b.mediaUrl;
       }
       if ((kind === "file" || kind === "youtube") && !mediaUrl) return { ok: false, error: "This kind of brand moment needs a link." };
       let seconds: number | undefined;
       if (isOpening) {
         seconds = b?.seconds === undefined || b?.seconds === null || b?.seconds === "" ? 60 : b.seconds;
-        if (!Number.isInteger(seconds) || (seconds as number) < 15 || (seconds as number) > OPENING_WINDOW_SECONDS || (seconds as number) % 3) return { ok: false, error: `An opening lasts 15 to ${OPENING_WINDOW_SECONDS} seconds, in steps of 3.` };
+        if (!Number.isInteger(seconds) || (seconds as number) < 15 || (seconds as number) > OPENING_WINDOW_SECONDS || (seconds as number) % 3) return { ok: false, error: `An opening lasts 15 to ${OPENING_WINDOW_SECONDS} seconds, in steps of 3 (for example 30, 60 or 90). A time left empty counts as 60.` };
       }
       slots.push({ kind, title, ...(mediaUrl ? { mediaUrl } : {}), ...(seconds !== undefined ? { seconds } : {}) });
     }
-    if (isOpening && slots.reduce((t, x) => t + (x.seconds ?? 0), 0) > OPENING_WINDOW_SECONDS) return { ok: false, error: `Openings must fit together in the ${OPENING_WINDOW_SECONDS / 60} minutes before the first number.` };
+    if (isOpening && slots.reduce((t, x) => t + (x.seconds ?? 0), 0) > OPENING_WINDOW_SECONDS) return { ok: false, error: `Openings must fit together in the ${OPENING_WINDOW_SECONDS / 60} minutes before the first number. An opening with no time counts as 60 seconds.` };
     if (isOpening) cfg.opening = slots; else cfg.closing = slots;
   }
   { // the allowance follows the tickets: changing from 2 tickets to 1 must not leave more than one ticket's worth switched on

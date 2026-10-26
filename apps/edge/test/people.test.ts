@@ -369,6 +369,19 @@ describe("removing people", () => {
     expect(rowsOf("SELECT subject FROM outbox WHERE subject LIKE '%A Host removed%'")).toHaveLength(1);
     expect(rowsOf("SELECT removed_by FROM person WHERE id=?", theirs.id)[0].removed_by).toMatch(/^h:/);
   });
+  test("a Co-host can put back a person they removed themselves, but not one the Organizer removed: the refusal says who can", async () => {
+    const t = await setup();
+    const mine = (await j(await add(t.cohost, [{ name: "C", phone: mob(1) }]))).people[0], theirs = (await j(await add(t.cohost, [{ name: "D", phone: mob(2) }]))).people[0];
+    expect((await call("POST", `/api/z/PPL-1/people/${mine.id}/remove`, {}, t.cohost)).status).toBe(200);
+    expect((await call("POST", `/api/z/PPL-1/people/${theirs.id}/remove`, {}, t.master)).status).toBe(200);
+    const back = await j(await add(t.cohost, [{ name: "C", phone: mob(1) }]));
+    expect(back).toMatchObject({ added: 1, duplicates: 0 }); expect(back.invalid).toEqual([]);
+    expect(rowsOf("SELECT status FROM person WHERE id=?", mine.id)[0].status).toBe("invited");
+    const refused = await j(await add(t.cohost, [{ name: "D", phone: mob(2) }]));
+    expect(refused).toMatchObject({ added: 0, duplicates: 0 }); expect(refused.invalid[0].why).toMatch(/Ask the Organizer or a Host to put them back/);
+    expect(rowsOf("SELECT status FROM person WHERE id=?", theirs.id)[0].status).toBe("removed");
+    expect((await j(await add(t.master, [{ name: "D", phone: mob(2) }]))).added).toBe(1); // the Organizer can
+  });
   test("during the game only the Organizer and Host can remove; the seat STAYS in the public seat list, the phone stops, the prize is marked not given", async () => {
     const t = await setup({ invites: { on: true, per: 4 } });
     const p = (await j(await add(t.master, [{ name: "Asha", phone: mob(1) }]))).people[0];

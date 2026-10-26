@@ -181,8 +181,8 @@ describe("console (organizer page)", () => {
   test("UC-6 a wrong or expired sign-in shows a message, never an endless Loading", async () => {
     const o = await organizer(); await make(o, "UI-KEY");
     const p = await consolePage(o, "UI-KEY", "ctk_" + "0".repeat(48));
-    const t = await p.waitFor((x) => /sign-in has expired|sign in again/i.test(x), 4000);
-    expect(t).toMatch(/sign-in has expired|sign in again/i);
+    const t = await p.waitFor((x) => /sign-in has expired|sign in again|does not open with this sign-in/i.test(x), 4000);
+    expect(t).toMatch(/sign-in has expired|sign in again|does not open with this sign-in/i); expect(t).toMatch(/Sign out and sign in/); // it says what to do
   });
   test("UC-80 the organizer sends a message to everyone from the console; empty is refused; clear works", async () => {
     const o = await organizer(); await make(o, "UI-ANN"); await regKey(o, "UI-ANN"); await publish(o, "UI-ANN");
@@ -245,7 +245,7 @@ describe("console (organizer page)", () => {
     expect(p.$("#rolepill")!.textContent).toBe("Signed in as Co-host"); expect(p.$("#paypill")!.textContent).toBe("Payment pending for this game"); expect(p.$("#paynote")).toBeTruthy(); expect(p.$("#aistrip")).toBeNull();
     expect(p.text()).toMatch(/1 person joined of 100/); expect(p.text()).toMatch(/You cannot change the game/); expect(p.text()).toMatch(/What you can do/); expect(p.text()).toMatch(/Invite people with their own link/); expect(p.text()).not.toMatch(/Add Hosts and Co-hosts/);
     openStep(p, 2); const t2 = await p.waitFor((x) => /Your own invite link/.test(x));
-    expect(t2).toMatch(/localhost\/z\.html\?e=UI-COH&from=\d+/); expect(t2).toMatch(/People you brought\s*1(?!\d)/); expect(t2).toMatch(/You can invite as many people as you like/);
+    expect(t2).toMatch(/localhost\/z\.html\?e=UI-COH&from=\d+/); expect(t2).toMatch(/People you brought\s*1(?!\d)/); expect(t2).toMatch(/You can invite people up to your limit/);
     expect(t2).toContain("Want your guests to invite their own friends? Ask the Organizer or a Host to switch it on. You cannot switch it on yourself.");
     openStep(p, 3); const t3 = await p.waitFor((x) => /Status: Payment pending for this game/.test(x)); expect((p.$('a[href^="/pay.html"]') as any).getAttribute("href")).toBe("/pay.html?e=UI-COH"); expect(t3).toMatch(/Rs 2,399\.00\. Pay once, from any one of you/);
     for (const banned of [/Publish/, /Erase/, /Controls/, /guest list/i, /Your team/, /AI assistant/, /Message to everyone/, /Close my account/]) expect(p.text()).not.toMatch(banned);
@@ -463,7 +463,7 @@ describe("payment page", () => {
     (p.$("#nm") as any).value = "Asha Rao"; // no organization, no mobile: still pays
     p.click("#paygo");
     const t = await p.waitFor((x) => /Payment received/i.test(x));
-    expect(t).toMatch(/will begin on time/); expect(t).toMatch(/Open my engagement/);
+    expect(t).toMatch(/will begin on time/); expect(t).toMatch(/Open my game/);
     expect(p.$("#invbody")).toBeTruthy(); expect((p.$("#invpdf") as any).getAttribute("href")).toMatch(/\/api\/invoice\/inv_[0-9a-f]{32}\.pdf$/); expect(p.$("#invwa")).toBeTruthy(); expect(p.$("#invsend")).toBeTruthy(); // the invoice itself, PDF, WhatsApp and e-mail on the done screen
     expect((o.world.raw.prepare("SELECT pack FROM engagement WHERE id='UI-PAY2'").get() as any).pack).toBe(100);
   });
@@ -486,7 +486,7 @@ describe("big screen", () => {
   test("UC-56 before the start it counts down; a held engagement says it is waiting; an announcement is shown big", async () => {
     const o = await organizer(); await make(o, "UI-BIG"); await regKey(o, "UI-BIG"); await publish(o, "UI-BIG");
     let p = await big(o, "UI-BIG");
-    expect(await p.waitFor((x) => /The engagement starts in/.test(x))).toMatch(/0 of 90 numbers called/);
+    expect(await p.waitFor((x) => /The game starts in/.test(x))).toMatch(/0 of 90 numbers called/);
     await o.api("POST", "/api/z/UI-BIG/announce", { text: "Dinner is served" }, o.token);
     await p.close(); p = await big(o, "UI-BIG");
     await p.waitFor((x) => /Dinner is served/.test(x));
@@ -1298,9 +1298,9 @@ describe("console phase 2: wording fixes, My people, waiting room, remove, play 
     const server = (await listOf(o, "UI-PPL")).people[0]; expect(server).toMatchObject({ name: "Asha Verma", status: "invited" });
     const row = p.$(".zc-prow")!; expect(row.textContent).toMatch(/Asha Verma/); expect(row.textContent).toMatch(/\*{6}3210/); expect(row.textContent).toMatch(/Invited/); expect(p.text()).not.toMatch(/9876543210/);
     const a = p.$("a[data-wa]") as any; expect(a.getAttribute("href")).toBe(server.waLink); expect(a.getAttribute("href").startsWith("https://wa.me/919876543210?text=")).toBe(true);
-    a.click(); await p.waitFor((x) => /Sent on WhatsApp/.test(x) && /Send again/.test(x)); expect(p.$("a[data-wa]")).toBeNull(); expect(JSON.parse(p.win.localStorage.getItem("ctz-sent-UI-PPL")!)).toEqual({ [server.id]: 1 });
+    a.click(); await p.waitFor((x) => /Sent on WhatsApp/.test(x) && /Send a new link/.test(x)); expect(p.$("a[data-wa]")).toBeNull(); expect(JSON.parse(p.win.localStorage.getItem("ctz-sent-UI-PPL")!)).toEqual({ [server.id]: 1 });
     let opened = ""; p.win.open = (u: string) => { opened = u; return null; };
-    p.click("[data-resend]"); await p.waitFor(() => !!opened); expect(opened).toMatch(/^https:\/\/wa\.me\/919876543210\?text=/); expect(opened).not.toBe(server.waLink); // a new personal link
+    p.click("[data-resend]"); await p.waitFor(() => !!p.$("a[data-wa]")); const fresh = p.$("a[data-wa]") as any; expect(fresh.getAttribute("href")).toMatch(/^https:\/\/wa\.me\/919876543210\?text=/); expect(fresh.getAttribute("href")).not.toBe(server.waLink); expect(opened).toBe(""); expect(p.text()).toMatch(/A new link is ready\. The old one has stopped/); // a new personal link
     expect(w.st.calls.some((c: any) => c[1].endsWith("/resend"))).toBe(true); expect(p.errors).toEqual([]);
   });
 
@@ -1639,7 +1639,7 @@ describe("console: ten steps, Pay is its own step, and the price is shown only t
   });
   test("step 2 reads clearly: four small sub-headings", async () => {
     const o = await organizer(); await make(o, "UI-SUB"); const p = await consolePage(o, "UI-SUB"); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 2);
-    expect(Array.from(p.win.document.querySelectorAll("#sec2 .zc-sub")).map((e: any) => e.textContent)).toEqual(["How many players", "How the game runs", "Who is this game for?"]);
+    expect(Array.from(p.win.document.querySelectorAll("#sec2 .zc-sub")).map((e: any) => e.textContent)).toEqual(["How many players", "How the game runs", "Who can play"]);
   });
 });
 

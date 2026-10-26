@@ -31,7 +31,7 @@ describe("P12: the version stamp", () => {
     const head = Bun.spawnSync(["git", "rev-parse", "--short=12", "HEAD"], { cwd: ROOT, stdout: "pipe" });
     if (head.exitCode === 0) expect(v.commit).toBe(new TextDecoder().decode(head.stdout).trim());
     expect(readFileSync(join(ROOT, "pages/public/_headers"), "utf8")).toMatch(/\/version\.json\n\s+Cache-Control: no-store/);
-    expect(JSON.stringify(v)).not.toMatch(/key|secret|token|password/i);
+    expect(JSON.stringify(v)).not.toMatch(/key|secret|token|password/i); const au = readFileSync(join(ROOT, "pages/public/autoupdate.js"), "utf8"); expect(au).toContain(JSON.stringify(v.commit + "|" + v.builtAt + "|")); expect(au).not.toContain("__BUILT__"); // the shipped autoupdate.js knows the version it was built with
   });
   test("docs/DEPLOYS.md exists and names the deploys by commit; the README no longer says nothing is deployed", () => {
     expect(existsSync(join(ROOT, "docs/DEPLOYS.md"))).toBe(true);

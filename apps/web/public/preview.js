@@ -9,7 +9,7 @@
   if (q.get("w") === "ticket") { ticketPreview(); return; }
   const when = ["break", "opening", "closing"].includes(q.get("w")) ? q.get("w") : "break";
   const b = { kind: q.get("k") || "speech", title: (q.get("t") || "Your message").slice(0, 80), mediaUrl: q.get("u") || "", seconds: Math.max(15, Math.min(600, Number(q.get("s")) || 60)) };
-  if (b.mediaUrl && !/^https:\/\/[^\s<>"'`]+$/i.test(b.mediaUrl)) b.mediaUrl = "";
+  let badLink = false; if (b.mediaUrl && !/^https:\/\/[^\s<>"'`]+$/i.test(b.mediaUrl)) { b.mediaUrl = ""; badLink = true; }
 
   const mediaHost = document.createElement("div");
   mediaHost.id = "ctmedia"; mediaHost.style.cssText = "position:absolute;z-index:30;display:none;background:#000;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.3)";
@@ -61,7 +61,7 @@
   const ticket = `<div class="zcard"><h2>Your ticket (sample)</h2><table style="border-collapse:collapse;margin:0 auto"><tbody>${sample.map((r) => `<tr>${r.map((n) => `<td style="width:30px;height:30px;text-align:center;border:1px solid #cdd5e0;font:700 14px system-ui,sans-serif;${n ? "background:#fff" : "background:#eef2f8"}">${n || ""}</td>`).join("")}</tr>`).join("")}</tbody></table><p class="zsmall" style="margin:8px 0 0">In the real game your ticket stays on the screen under the break, and the numbers carry on from where they stopped.</p></div>`;
   const what = b.kind === "speech" ? "Please listen to the host." : b.kind === "slides" ? "Please look at the screen." : "";
   const heading = when === "break" ? "A short break" : when === "opening" ? "A message from your organizer" : "Thank you from your organizer";
-  const verdict = !b.mediaUrl ? "No link: guests see your message only." : kind ? "This link plays inside the game." : "<b>This link will NOT play inside the game.</b> It opens in a new tab and takes the guest out of the game. Use a YouTube link, or a direct link to a video (.mp4) or audio (.mp3) file.";
+  const verdict = badLink ? "<b>The link you pasted was not used.</b> It must start with https:// and have no spaces. Go back, correct it and press Test it again." : !b.mediaUrl ? "No link: guests see your message only." : kind ? "This link plays inside the game." : "<b>This link will NOT play inside the game.</b> It opens in a new tab and takes the guest out of the game. Use a YouTube link, or a direct link to a video (.mp4) or audio (.mp3) file.";
   let timer = 0, endsAt = 0;
 
   function paint(secondsLeft) {
@@ -121,7 +121,7 @@
       const luckyN = lucky && lucky.winners ? lucky.winners : 3;
       $app.innerHTML = `<div class="zhead"><b>Corporate Tambola</b></div>
         <div class="zbanner info" role="note"><b>PREVIEW.</b> This is a sample ticket, not a real one. Nothing is saved, nobody is told, and no game is running.${note ? " " + esc(note) : ""}</div>
-        ${brand ? `<div class="zbrand" id="pvbrand">${brand.logo ? `<img class="zblogo" alt="" src="${esc(brand.logo)}">` : ""}${brand.name ? `<b>${esc(brand.name)}</b>` : ""}</div><div class="zpow">Powered by Corporate Tambola</div>` : `<div class="zbrand" id="pvbrand0">CORPORATE TAMBOLA</div><div class="zsmall" style="margin:4px 0 0">No company name or logo is set yet, so guests see our name. Set yours in the Brand step to see it here.</div>`}
+        ${brand ? `<div class="zbrand" id="pvbrand">${brand.logo ? `<img class="zblogo" alt="" src="${esc(brand.logo)}">` : ""}${brand.name ? `<b>${esc(brand.name)}</b>` : ""}</div><div class="zpow">Powered by Corporate Tambola</div>` : `<div class="zbrand" id="pvbrand0">CORPORATE TAMBOLA</div><div class="zsmall" style="margin:4px 0 0">No company name or logo is set yet, so guests see our name. If you just typed a name or picked a logo, go back, press Save and continue, then open this again.</div>`}
         <div class="zcard"><h2>Your ticket <span class="zdemotag">PREVIEW</span></h2><div class="zticket" aria-label="Sample ticket">${sample.flat().map((n) => n ? `<div>${n}</div>` : `<div class="e"></div>`).join("")}</div></div>
         <div class="zcard"><h2>What you can win</h2><ul class="zlist">${prizeLi}</ul></div>
         <div class="zcard zbreak"><h2>A short break</h2><div style="font:700 20px var(--sans,inherit);margin:2px 0 4px">${esc(brk ? brk.title : "A message from your organizer")}</div><div class="zsmall" style="margin:0">Please listen to the host. The numbers continue in ${esc(String(brk && brk.seconds ? brk.seconds : 60))}s.</div></div>

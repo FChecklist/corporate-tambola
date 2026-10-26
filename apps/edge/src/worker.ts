@@ -230,6 +230,16 @@ async function beaconRelay(req: Request, chain: string, round: string): Promise<
   }
   return json({ error: "The number service cannot be reached right now. Please try again in a moment." }, 502);
 }
+/** One shared answer per place per `ttlSec` seconds for a public read that is the same for everybody (the data centre's Cache API; absent in tests and local runs: then every call answers itself). Calls with a sign-in are never shared. Only a 200 is kept. */
+async function sharedRead(req: Request, ttlSec: number, make: () => Promise<Response>): Promise<Response> {
+  const cache = (globalThis as any).caches?.default as { match(r: Request): Promise<Response | undefined>; put(r: Request, x: Response): Promise<void> } | undefined;
+  if (!cache || req.method !== "GET" || req.headers.get("x-organizer") || req.headers.get("authorization")) return make();
+  const key = new Request(req.url, { method: "GET" });
+  try { const hit = await cache.match(key); if (hit) return hit; } catch { /* no cache here */ }
+  const res = await make();
+  if (res.status === 200) { try { const keep = new Response(await res.clone().text(), { status: 200, headers: { "content-type": res.headers.get("content-type") ?? "application/json", "cache-control": `public, max-age=${ttlSec}` } }); await cache.put(key, keep); } catch { /* not kept */ } }
+  return res;
+}
 const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))), (b) => b.toString(16).padStart(2, "0")).join("");
 const randHex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -283,11 +293,11 @@ async function body(req: Request, max = MAX_BODY): Promise<any | null> {
 /** Free-plan guard: refuse politely before the daily write cap is hit, so a busy day never turns into a surprise failure or a bill. */
 /**
  * The owner's own testing accounts (owner order 2026-10-25): a game made by one of these accounts, up to the size shown, is treated as already paid for (Rs 0), so the real site can be tested end to end
- * at 100 or 250 people without anyone paying. Nothing about it is shown to the public: the size list is the same for everybody. An account is named by its e-mail address; `until` ends the permission.
+ * at 100, 250 or 1,000 people without anyone paying. Nothing about it is shown to the public: the size list is the same for everybody. An account is named by its e-mail address; `until` ends the permission.
  * At most 3 unused free packs exist for an account at a time. No payment, invoice or mail is made. Remove an entry (or let `until` pass) to stop it.
  */
 export const OWNER_TEST_FREE: { email: string; maxCap: number; until: number }[] = [
-  { email: "demo1@xyz.in", maxCap: 250, until: Date.UTC(2026, 10, 8) }, // the test sign-in (code always 123456, no mail): used only by the test programs; ends on 8 Nov 2026. The owner's real addresses are NOT on this list: they see the real, unpaid first-time flow.
+  { email: "demo1@xyz.in", maxCap: 1000, until: Date.UTC(2026, 10, 8) }, // the test sign-in (code always 123456, no mail): used only by the test programs; ends on 8 Nov 2026. The owner's real addresses are NOT on this list: they see the real, unpaid first-time flow.
 ];
 /**
  * Demo passes (owner order 2026-10-26): a long secret link that gives the account that opens it ONE free game (Rs 0) of up to `cap` people, for a prospect the owner chose, one to one.
@@ -1248,7 +1258,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (cm) {
     const [, cid, sub] = cm;
     const kv = d1kv(env);
-    if (!sub && req.method === "GET") {
+    if (!sub && req.method === "GET") return sharedRead(req, 1, async () => { // the pause file every phone asks for every few seconds: one answer per place per second is shared by all of them (far fewer database reads); a pause reaches phones at most a second later
       const f = await readPublished(kv, cid!);
       const ge = await env.DB.prepare("SELECT id, pack, start_round, cancelled_ms, unplayed_ms FROM engagement WHERE id=?").bind(cid).first<{ id: string; pack: number | null; start_round: number; cancelled_ms: number | null; unplayed_ms: number | null }>();
       if (ge?.cancelled_ms) return new Response(JSON.stringify({ ...(f ?? {}), cancelled: true }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } }); // phones and the big screen: "This game was cancelled by the organizer"
@@ -1260,7 +1270,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
         if (an) { const x = JSON.parse(an.v); return new Response(JSON.stringify({ ...f, ann: { id: x.id, text: x.text } }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } }); }
       }
       return f ? new Response(JSON.stringify(f), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } }) : json({ registered: false }, 404);
-    }
+    });
     if (!sub && req.method === "POST") {
       const b = await body(req);
       if (!b) return json({ error: "Bad message." }, 400);
@@ -1401,8 +1411,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (req.method === "GET" && p === "/api/history") {
     if (!a.plat && !a.org) return deny(a);
     const q = a.plat
-      ? env.DB.prepare("SELECT e.id, e.created_ms, e.start_round, e.call_seconds, e.closed, (e.pack=0) AS draft, (e.pack=0 AND e.cancelled_ms IS NULL AND e.unplayed_ms IS NULL AND NOT EXISTS (SELECT 1 FROM kv WHERE k='pub/'||e.id)) AS deletable, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e WHERE e.is_test=? ORDER BY e.created_ms DESC LIMIT 50").bind(url.searchParams.get("mode") === "test" ? 1 : 0) // the owner's list shows real engagements unless the test ones are asked for
-      : env.DB.prepare("SELECT e.id, e.created_ms, e.start_round, e.call_seconds, e.closed, (e.pack=0) AS draft, (e.pack=0 AND e.cancelled_ms IS NULL AND e.unplayed_ms IS NULL AND NOT EXISTS (SELECT 1 FROM kv WHERE k='pub/'||e.id)) AS deletable, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants FROM engagement e WHERE e.org=? ORDER BY e.created_ms DESC LIMIT 50").bind(a.org);
+      ? env.DB.prepare("SELECT e.id, e.created_ms, e.start_round, e.call_seconds, e.closed, (e.pack=0) AS draft, (e.pack=0 AND e.cancelled_ms IS NULL AND e.unplayed_ms IS NULL AND NOT EXISTS (SELECT 1 FROM kv WHERE k='pub/'||e.id)) AS deletable, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants, CASE WHEN json_valid(e.config) THEN json_extract(e.config,'$.name') END AS name FROM engagement e WHERE e.is_test=? ORDER BY e.created_ms DESC LIMIT 50").bind(url.searchParams.get("mode") === "test" ? 1 : 0) // the owner's list shows real engagements unless the test ones are asked for
+      : env.DB.prepare("SELECT e.id, e.created_ms, e.start_round, e.call_seconds, e.closed, (e.pack=0) AS draft, (e.pack=0 AND e.cancelled_ms IS NULL AND e.unplayed_ms IS NULL AND NOT EXISTS (SELECT 1 FROM kv WHERE k='pub/'||e.id)) AS deletable, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants, CASE WHEN json_valid(e.config) THEN json_extract(e.config,'$.name') END AS name FROM engagement e WHERE e.org=? ORDER BY e.created_ms DESC LIMIT 50").bind(a.org);
     const r = await q.all<any>();
     return json({ engagements: (r.results ?? []).map((x: any) => ({ ...x, startsAtIST: istTime(roundMs(x.start_round)) })), retentionDays: RETENTION_DAYS });
   }
@@ -1586,7 +1596,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (!hadK4 && ck) return ck;
       if (have.seat && have.dev && have.dev !== dev) {
         if (tok && !typedPh) return json({ error: "This link was already opened on another phone. If you are someone else, type your own mobile number to ask to join. If it is you on a new phone, ask whoever invited you to send the link again.", code: "link-used", needPhone: true }, 423);
-        return json({ error: "This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it.", code: "other-phone" }, 423);
+        return json({ error: "This ticket was opened in a different browser or app (or on another phone). A ticket plays on one device only. Open your link in the same browser or app you used first. If you cannot, ask your organizer to move your ticket to this phone.", code: "other-phone" }, 423);
       }
       if (have.seat && !have.dev && dev && (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first())) return json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket. Ask the person to open the link on their own phone.", code: "device-used" }, 409);
       if (have.seat && !have.dev && dev) { // first device to open the link of someone who was on the list (or whom the organizer let move) keeps the ticket
@@ -1664,7 +1674,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     await addSeat(ph, pii, dev, lateRound, { inv, cat: inv !== null ? cat : null, src: srcOf(inviter), ownerId: inviter, guardId, guardLimit, role });
     const row = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.jr AS jr, s.role AS role FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; jr: number | null; role: string | null }>();
     if (!row) return (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) ? json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket.", code: "device-used" }, 409) : guardId !== null ? wait(true, guardLimit) : json({ error: "This engagement is full." }, 409); // lost a race for the last place
-    if (row.dev && row.dev !== dev) return json({ error: "This ticket is already on another phone. A ticket plays on one device only. Ask your organizer if you need to move it.", code: "other-phone" }, 423);
+    if (row.dev && row.dev !== dev) return json({ error: "This ticket was opened in a different browser or app (or on another phone). A ticket plays on one device only. Open your link in the same browser or app you used first. If you cannot, ask your organizer to move your ticket to this phone.", code: "other-phone" }, 423);
     if (!ck) await k4(row.pid);
     return reply(row.pid, { jr: row.jr ?? 0, ...(row.role ? { role: row.role } : {}) });
   }
@@ -2007,7 +2017,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     }
     const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
     if (vc.cfg.demo && next.cap > DEMO_CAP) return json({ error: DEMO_CAP_MSG, code: "demo-cap" }, 400); // the one size rule of a demo game, before and after publishing
-    if (!a.plat && e.pack !== 0 && !vc.cfg.demo && next.cap > (e.pack ?? e.cap)) return json({ error: `Your pack allows up to ${e.pack ?? e.cap} participants. Buy a bigger pack to raise the limit.` }, 402);
+    if (!a.plat && e.pack !== 0 && !vc.cfg.demo && next.cap > (e.pack ?? e.cap)) return json({ error: `Your pack allows up to ${e.pack ?? e.cap} people. For more people, make a new game like this one.` }, 402);
     if (next.cap < (have?.c ?? 0)) return json({ error: "The limit cannot be lower than the people already on the list." }, 409);
     if (!(await spend(env, now))) return BUSY();
     // a published demo game is "paid" with its own size (pack = cap, nothing bought): a new size within the demo limit moves the pack with it

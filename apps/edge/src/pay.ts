@@ -344,7 +344,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     if (plm) { // the pay link binds the payment to its game; the payer needs no account and no key (and a key sent along is ignored)
       const pv = await lookupPayLink(db, plm[1]!, now);
       if (!pv) return json({ error: "Not found" }, 404);
-      if (pv.status !== "open") return json({ error: pv.status === "paid" ? "This game has already been paid for." : pv.status === "cancelled" ? "This game was cancelled by the organizer. It cannot be paid for." : pv.status === "closed" ? "This game did not start and is closed. It cannot be paid for." : pv.status === "confirming" ? "A payment for this game is being confirmed. Please wait a few minutes." : "This pay link has expired. Ask for a new one.", status: pv.status }, 409);
+      if (pv.status !== "open") return json({ error: pv.status === "paid" ? "This game has already been paid for." : pv.status === "cancelled" ? "This game was cancelled by the organizer. It cannot be paid for." : pv.status === "closed" ? "This game did not start and is closed. It cannot be paid for." : pv.status === "confirming" ? "A payment for this game is being confirmed. Please wait a few minutes." : "This pay link has run out or was replaced. Ask for the newest link.", status: pv.status }, 409);
       boundPack = packFor(pv.e.cap);
       if (!boundPack) return json({ error: "That many participants needs a custom arrangement. Please write to us." }, 400);
       boundOrg = pv.link.org; boundEid = pv.link.eid; paidBy = "link";
@@ -365,6 +365,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
       if (eg.unplayed_ms) return json({ error: "This game did not start and is closed. It cannot be paid for.", code: "did-not-start" }, 409);
       const demo = isDemoCfg(eg.config); // "Make this a real game": a DEMO GAME (free, up to 10 people) is paid for with a pack the payer CHOOSES; the payment clears the demo mark and raises the size (fulfil, meta.convert)
       if (eg.pack !== 0 && !demo) return json({ error: "This engagement is already published." }, 409);
+      if (await db.prepare("SELECT 1 AS x FROM payment WHERE eid=? AND status<>'paid' AND confirming_ms IS NOT NULL AND confirming_ms>?").bind(b.eid, now - 30 * 60_000).first()) return json({ error: "A payment for this game is being confirmed. Please wait a few minutes.", code: "confirming" }, 409); // a second order while one is being confirmed could charge twice (the pay link and the credit path refuse the same way)
       if (await db.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`startpending/${b.eid}`).first()) return json({ error: "Pick the date and time of this game first.", code: "start-pending" }, 400);
       boundPack = demo ? (PACKS.find((x) => x[0] === Number(b.pack) && x[0] >= eg.cap)?.[0] ?? null) : (PACKS.find((x) => x[0] >= eg.cap)?.[0] ?? null);
       if (!boundPack) return demo ? json({ error: "Choose a pack." }, 400) : json({ error: "That many participants needs a custom arrangement. Please write to us." }, 400);
