@@ -54,29 +54,28 @@ export default async function gen({ R, L }) {
       const arrive = c.o.endsWith("cap-full") ? "org" : ["org", "host", "co"][t.R.int(3)]; // the link the stranger comes through = the person who decides
       const via = { org: orgLink, host: hostLink, co: coLink }[arrive]; const decider = { org: org, host: { decide: (e, w, d) => host.api("POST", `/api/z/${e}/waiting/${w}`, { decision: d }) }, co: { decide: (e, w, d) => co.api("POST", `/api/z/${e}/waiting/${w}`, { decision: d }) } }[arrive];
       const stranger = { name: personName(t.R), phone: mobile(t.R), empId: `X${t.R.int(1e6)}` };
-      if (c.o === "approve-after-cap-full") { // fill the game: 3 listed already, 7 more listed people arrive
-        t.eq("Organizer adds the rest of the list", (await org.api("POST", `/api/z/${g.id}/people`, { people: filler })).body.added, filler.length);
-        for (const p of filler) { const r = await joinRaw(g.id, { ...giveListed(p), name: p.name }, t.ip()); if (!r.ok) { t.expect("a filler person gets a ticket", r, "ok"); break; } }
-        t.eq("the game is full", (await org.api("GET", `/api/z/${g.id}/participants`)).body.total, cap);
-      }
       const giveStranger = aud.eo ? (c.v === "mobile" ? { phone: stranger.phone } : c.v === "both" ? { phone: stranger.phone, empId: stranger.empId } : { empId: stranger.empId }) : { phone: stranger.phone };
       const expectWait = aud.closed || aud.eo; // join_design.json rows 1, 3, 5, 7
       const full = c.o === "approve-after-cap-full";
       const sr = await joinRaw(g.id, { ...giveStranger, name: stranger.name, from: fromOf(via) }, t.ip());
       let sWid = null, sPid = null;
-      if (full && !expectWait) { t.expect("a stranger at a full open game is told it is full, calmly", sr, [409]); t.check("with a plain sentence", !!sr.body.error && sr.body.error.length < 200, sr.body.error); }
-      else if (expectWait) { t.eq("a stranger waits (403 waiting)", [sr.status, sr.body.code], [403, "waiting"]); sWid = wid(sr); t.check("the request has an id and a calm sentence", !!sWid && /request|invit|organizer|yes|wait/i.test(sr.body.error ?? ""), JSON.stringify(sr.body).slice(0, 160)); }
+      if (expectWait) { t.eq("a stranger waits (403 waiting)", [sr.status, sr.body.code], [403, "waiting"]); sWid = wid(sr); t.check("the request has an id and a calm sentence", !!sWid && /request|invit|organizer|yes|wait/i.test(sr.body.error ?? ""), JSON.stringify(sr.body).slice(0, 160)); }
       else { t.expect("a stranger in an open game gets a ticket at once", sr, "ok"); sPid = sr.body.pid; }
       const total = async () => (await org.api("GET", `/api/z/${g.id}/participants`)).body.total;
-      const seatsNow = (full ? cap : 3) + (sPid ? 1 : 0);
-      t.eq("a waiting stranger uses no place", await total(), seatsNow);
+      t.eq("a waiting stranger uses no place", await total(), 3 + (sPid ? 1 : 0));
+      if (full) { // the request was made while there was room; now the rest of the list arrives and the game fills up
+        const room = cap - 3 - (sPid ? 1 : 0); t.eq("Organizer adds the rest of the list", (await org.api("POST", `/api/z/${g.id}/people`, { people: filler.slice(0, room) })).body.added, room);
+        for (const p of filler.slice(0, room)) { const r = await joinRaw(g.id, { ...giveListed(p), name: p.name }, t.ip()); if (!r.ok) { t.expect("a filler person gets a ticket", r, "ok"); break; } }
+        t.eq("the game is full", await total(), cap);
+        if (!expectWait) { const s2 = await joinRaw(g.id, { phone: mobile(t.R), name: personName(t.R) }, t.ip()); t.expect("another stranger at a full open game is told it is full, calmly", s2, [409]); t.check("with a plain sentence", !!s2.body.error && s2.body.error.length < 200, s2.body.error); }
+      }
       if (sWid) {
         t.check("the Organizer sees the request", ((await org.waiting(g.id)).body.waiting ?? []).some((x) => x.id === sWid));
         t.check("the Host sees the request", ((await host.api("GET", `/api/z/${g.id}/waiting`)).body.waiting ?? []).some((x) => x.id === sWid));
         const coSees = ((await co.api("GET", `/api/z/${g.id}/waiting`)).body.waiting ?? []).some((x) => x.id === sWid); t.eq("the Co-host sees it only if it came through their own link", coSees, arrive === "co");
         if (arrive !== "co") t.expect("a Co-host cannot decide a request that is not theirs", await co.api("POST", `/api/z/${g.id}/waiting/${sWid}`, { decision: "admit" }), [404]);
         t.eq("the stranger is told they are waiting", (await A.call("GET", `/api/z/${g.id}/me?wid=${sWid}`)).body.state, "waiting");
-        const again = await joinRaw(g.id, { ...giveStranger, name: stranger.name, from: fromOf(via) }, t.ip()); t.eq("asking again is still one request", [again.status, (await org.waiting(g.id)).body.waiting.filter((x) => x.id === sWid).length], [403, 1]);
+        const again = await joinRaw(g.id, { ...giveStranger, name: stranger.name, from: fromOf(via) }, t.ip()); t.eq("asking again is still one request (a game that has filled meanwhile answers full, the request stays)", [again.status, (await org.waiting(g.id)).body.waiting.filter((x) => x.id === sWid).length], [full ? 409 : 403, 1]);
       } else t.expect("deciding a request that does not exist is a calm 404", await org.decide(g.id, "000000000000", "admit"), [404]);
       if (sWid) {
         if (c.o === "approve" || c.o === "approve-after-removal") {
@@ -102,9 +101,18 @@ export default async function gen({ R, L }) {
           t.eq("an undecided request stays waiting and uses no place", [(await A.call("GET", `/api/z/${g.id}/me?wid=${sWid}`)).body.state, await total()], ["waiting", 3]);
         }
       }
+      // ---- wrong input (join_design.json "WRONG INPUT" table: a plain 400, nothing stored; the server gives the same words as the page) ----
+      let seatsBefore = await total(); const bad = async (label, body, want = [400]) => { const r = await joinRaw(g.id, { name: "Bad Input", ...body }, t.ip()); t.expect(label, r, want); if (r.status >= 400 && r.status < 500) t.check(label + ": a short plain sentence", !!r.body.error && r.body.error.length < 220, JSON.stringify(r.body).slice(0, 120)); return r; };
+      await bad("nothing typed at all is refused", {});
+      if (c.v === "mobile" || c.v === "both") await bad("a mobile number with letters is refused", { phone: "98abc43210", ...(c.v === "both" ? { empId: "E1" } : {}) });
+      if (c.v === "mobile" || c.v === "both") await bad("a mobile number that is too short is refused", { phone: "12345", ...(c.v === "both" ? { empId: "E1" } : {}) });
+      if (c.v === "id" || c.v === "either" || c.v === "both") await bad("an employee ID with markup is refused", { empId: "<b>x</b>", ...(c.v === "both" ? { phone: mobile(t.R) } : {}) });
+      if (c.v === "id" || c.v === "either" || c.v === "both") await bad("an employee ID longer than 30 characters is refused", { empId: "E".repeat(31), ...(c.v === "both" ? { phone: mobile(t.R) } : {}) });
+      if (c.v === "both" && !full) { const u = person("u"), v = person("v"); await org.api("POST", `/api/z/${g.id}/people`, { people: [u, v] }); const w = await joinRaw(g.id, { phone: u.phone, empId: v.empId, name: "Mixed Up" }, t.ip()); t.eq("a listed number with ANOTHER person's ID is held, not let in", [w.status, w.body.code], [403, "waiting"]); const ok = await joinRaw(g.id, { phone: u.phone, empId: u.empId, name: u.name }, t.ip()); t.expect("and with their own ID the same person gets in", ok, "ok"); if (ok.ok) { t.eq("now one more ticket", await total(), seatsBefore + 1); seatsBefore++; } }
+      t.eq("wrong input stored nothing and used no place", await total(), seatsBefore);
       // ---- invitations: level-1 guest, their invitee, and that invitee's own invitee (cannot invite) ----
       if (aud.invites) {
-        const g1 = { name: personName(t.R), phone: mobile(t.R), empId: `G${t.R.int(1e6)}` }; t.eq("Organizer lists the level-1 guest", (await org.api("POST", `/api/z/${g.id}/people`, { people: [g1] })).body.added ?? 0, full ? 0 : 1);
+        const g1 = { name: personName(t.R), phone: mobile(t.R), empId: `G${t.R.int(1e6)}` }; const addedG1 = (await org.api("POST", `/api/z/${g.id}/people`, { people: [g1] })).body.added ?? 0; t.eq("Organizer lists the level-1 guest (a full game takes no more names)", addedG1, full ? 0 : 1);
         if (!full) {
           const r1 = await joinRaw(g.id, { ...giveListed(g1), name: g1.name }, t.ip()); t.expect("level-1 guest gets a ticket", r1, "ok"); const G1 = new A.Guest("", g.id, g1.phone, g1.name, dev(g1.phone ?? g1.empId)); G1.pid = r1.body.pid; G1.device = dev(g1.phone ?? g1.empId);
           if (r1.ok) { const device = r1.body.device ?? dev(g1.phone ?? g1.empId); G1.device = dev(c.v === "mobile" || c.v === "both" ? g1.phone : g1.empId);
