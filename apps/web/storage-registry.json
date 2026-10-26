@@ -34,6 +34,14 @@
       ]
     },
     {
+      "id": "player-country",
+      "store": "localStorage",
+      "say": "On a player's phone: the country chosen for the mobile number (not the number itself), so it is ready next time.",
+      "keys": [
+        "ctz-cc"
+      ]
+    },
+    {
       "id": "player-sound",
       "store": "localStorage",
       "say": "On a player's phone: whether the sound is on.",
