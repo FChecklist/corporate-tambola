@@ -83,6 +83,14 @@
       ]
     },
     {
+      "id": "link-code",
+      "store": "localStorage",
+      "say": "In an organizer's browser: a short code from a link they were sent, kept only until they have signed in and it has been used once.",
+      "keys": [
+        "ctz-pass"
+      ]
+    },
+    {
       "id": "organizer-device",
       "store": "localStorage",
       "say": "In an organizer's browser: a sign-in token and a random device id for the console.",

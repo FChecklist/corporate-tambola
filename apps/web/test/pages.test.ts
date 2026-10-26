@@ -1842,6 +1842,14 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     expect(dels()).toEqual(["UI-DRAFT2"]); expect(p.text()).not.toMatch(/UI-DRAFT1/);
   });
 
+  test("a demo pass link: once signed in the person is told their free game is ready, the secret leaves the address bar and is not tried again", async () => {
+    const { DEMO_PASSES } = await import("../../edge/src/worker"); const TOKX = "a1b2c3d4e5f60718293a4b5c6d7e8f90";
+    const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode("dpass|" + TOKX))), (b) => b.toString(16).padStart(2, "0")).join(""); DEMO_PASSES.push({ hash, cap: 100, label: "t-ui" });
+    const o = await organizer(); const p = await page(o, `/zc?pass=${TOKX}`, "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" });
+    await p.waitFor((x) => /Your free demo is ready: one game of up to 100 people at Rs 0/.test(x));
+    expect(p.win.location.search).not.toContain(TOKX); expect(p.win.localStorage.getItem("ctz-pass")).toBeFalsy();
+  });
+
   test("Game day: the step says the Organizer / Host logs into the game and controls it (draft and published)", async () => {
     const o = await organizer(); await make(o, "UI-RUNLINE");
     const p = await consolePage(o, "UI-RUNLINE"); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 9);

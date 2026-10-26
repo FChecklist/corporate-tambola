@@ -20,6 +20,8 @@
   const CREATE = q.get("quick") === "1"; // the old "Quick setup" link: it now makes a game in the colourful console, like the Create a new game button
   const NEWGAME = q.get("new") === "1"; // the link on a participant's ticket: "Create a new game as an organizer"
   const NEWDEMO = q.get("demo") === "1"; // from the website: start a free demo game (up to 10 people) right away
+  // A demo pass link (zc.html?pass=...): the long secret in it is kept in this browser until the person is signed in, then used once, then forgotten. Nothing about it is shown to anybody else.
+  { const pt = (q.get("pass") || "").toLowerCase(); if (/^[0-9a-f]{32}$/.test(pt)) { ls.set("ctz-pass", JSON.stringify({ t: pt, at: Date.now() })); q.delete("pass"); try { const rest = q.toString(); history.replaceState(null, "", location.pathname + (rest ? "?" + rest : "")); } catch { /* the address stays */ } } }
   // A browser AI may open this page in a new tab, and a tab holds the key only for itself: another open tab of the same browser can hand it over (same site, same browser, never stored).
   const bc = typeof BroadcastChannel === "function" ? new BroadcastChannel("ctz-org-key") : null;
   const OLD_HOUSES = [{ id: "early5", label: "Early Five", how: "Be the first to mark any 5 of your numbers.", max: 5 }, { id: "top", label: "Top Line", how: "Mark all 5 numbers of the top line.", max: 5 }, { id: "mid", label: "Middle Line", how: "Mark all 5 numbers of the middle line.", max: 5 }, { id: "bot", label: "Bottom Line", how: "Mark all 5 numbers of the bottom line.", max: 5 }, { id: "corners", label: "Four Corners", how: "Mark the first and last number of the top and bottom lines.", max: 5 }, { id: "star", label: "Star", how: "Mark the four corners and the centre number of the middle line.", max: 5 }, { id: "full", label: "Full House", how: "Mark all 15 numbers of your ticket.", max: 5 }, { id: "full2", label: "Full Two-Ticket House", how: "Mark all 30 numbers across your two tickets.", max: 5 }];
@@ -1162,6 +1164,7 @@
     if (didNotStart() && inGame() && canRun()) h += didNotStartBlock();
     if (isCancelled() && inGame()) h += `<div class="zc-toast" role="status" id="cancelnote">This game was cancelled. Guests can see this. Nothing more is needed.</div>`;
     if (S.note) h += `<div class="zc-toast" role="status" id="zcnote">${esc(S.note)}</div>`;
+    if (S.passMsg) h += `<div class="zc-toast" role="status" id="passmsg">${esc(S.passMsg)}</div>`; // from a demo pass link: shown until the size is chosen in step 2
     if (canRun()) {
       if (S.locked && !S.draft) h += payDueCard();
       if ((S.reqs || []).length) h += `<div class="zc-alert"><h3>Your AI assistant is asking</h3>${S.reqs.map((r) => rowl(esc(r.action) + (r.note ? " · " + esc(r.note) : ""))).join("")}<div class="zc-chips"><button type="button" class="zc-btn zc-btn-s${S.reqs[0].action === "erase" ? " zc-btn-bad" : ""}" id="reqok">${S.reqs[0].action === "erase" ? "Confirm: delete all participant data" : "Approve (" + esc(S.reqs[0].action) + ")"}</button><button type="button" class="zc-btn zc-btn-s zc-btn-alt" id="reqno">Dismiss</button></div></div>`;
@@ -1220,7 +1223,7 @@
     const bar = last ? `<div class="zc-lastbar"><span>Your last game was on <b>${fmtDay(last.created_ms)}</b> · ${last.participants} participants</span><span><button type="button" class="zc-mini" data-reuse="${esc(last.id)}">Reuse the data</button> <button type="button" class="zc-mini" data-hist="1">History</button></span></div>` : "";
     const main0 = clonePanel();
     const hist = S.showHist && h ? `<div class="zc-block"><h3>History · kept ${h.retentionDays} days</h3>${h.engagements.map((e) => `<div class="zc-rowl"><span>${esc(e.id)} · ${fmtDay(e.created_ms)} · ${e.participants} people${e.draft ? " · draft" : ""}</span><span><button type="button" class="zc-mini" data-open-game="${esc(e.id)}">Open</button> <button type="button" class="zc-mini" data-reuse="${esc(e.id)}">Reuse</button> <button type="button" class="zc-mini" data-clonebtn="1" data-from="${esc(e.id)}" data-people="${e.participants > 0 && !e.erased ? 1 : 0}">Create a new game like this one</button></span></div>`).join("")}</div>` : "";
-    const main = `${S.note ? `<div class="zc-toast" role="status">${esc(S.note)}</div>` : ""}${main0}<div class="zc-small zc-rolenote">${esc(ROLE_NOTE.organizer)}</div>
+    const main = `${S.note ? `<div class="zc-toast" role="status">${esc(S.note)}</div>` : ""}${S.passMsg ? `<div class="zc-toast" role="status" id="passmsg">${esc(S.passMsg)}</div>` : ""}${main0}<div class="zc-small zc-rolenote">${esc(ROLE_NOTE.organizer)}</div>
       ${gamesBlock(h, "organizer")}<div class="zc-block"><h3>Create a new game</h3>${small("You build it first, at no cost. You pay only when you publish. The first number is called two minutes after the start time.")}<div class="zc-chips"><button type="button" class="zc-btn zc-btn-s" id="mk">Create a new game</button></div>${small("In step 2 choose how many people. Up to 10 people is a free demo game: a real game at Rs 0, nothing to pay.")}</div>${bar}${hist}${acctHtml()}`;
     return frame(`<div class="zc-body"><div class="zc-main">${main}</div></div>`, false);
   }
@@ -1320,12 +1323,21 @@
   }
   async function loadPacks() { try { S.packs = (await fetch(BASE + "/api/z/ai-manifest").then((r) => r.json())).packs || []; } catch { S.packs = []; } }
 
+  async function redeemPass() { // a demo pass link was opened in this browser and the person is now signed in as an organizer: it gives ONE free game, once
+    let v = null; try { v = JSON.parse(ls.get("ctz-pass") || "null"); } catch { v = null; }
+    if (!v || !v.t) return; if (Date.now() - (Number(v.at) || 0) > 14 * 86400000) { ls.set("ctz-pass", ""); return; }
+    if (!isOrg() || !secret) return;
+    ls.set("ctz-pass", ""); // used or refused, it is not tried again
+    try { const r = await call("POST", "/api/pass", { token: v.t }); S.passMsg = r.again ? "This demo link is already yours: press Create a new game." : `Your free demo is ready: one game of up to ${r.cap} people at Rs 0. In step 2 choose "Up to ${r.cap} people".`; }
+    catch (e) { S.passMsg = e && e.message ? e.message : "This demo link could not be used. Please ask us for a new one."; }
+  }
   async function refreshHome() {
     S.screen = "home";
     try { S.keys = (await call("GET", "/api/org/keys")).keys; } catch { S.keys = []; }
     try { S.sugs = (await call("GET", "/api/z/suggestions")).suggestions.slice(0, 6); } catch { S.sugs = []; }
     await loadCredits();
     try { S.history = await call("GET", "/api/history"); } catch (e) { if (e.status === 403) { secret = ""; S.loginMsg = "That sign-in key or link was not accepted. A link you were sent may have expired, been replaced, or the game may have been cancelled: please ask the Organizer."; } }
+    if (isOrg()) await redeemPass(); // a demo pass link opened in this browser is used now (before a first game is made for a new person)
     if (isOrg() && !QUICK && !NEWDEMO && !NEWGAME && !eid && S.history && S.history.engagements && S.history.engagements.length === 0) { let done = false; try { done = sessionStorage.getItem("ctz-qauto") === "1"; sessionStorage.setItem("ctz-qauto", "1"); } catch { done = true; } if (!done) { try { await startNew(); return; } catch (e) { S.note = friendly(e); } } } // no game yet: the first game is made by itself (once) and the console opens
     redraw();
   }
@@ -1505,7 +1517,7 @@
         if (stripUnused) S.brandNote = "Saved. Your " + (bl ? "logo" : "colour") + " is not on the tickets yet, because there is no company name. You can add the name in step 4 any time.";
       }
       if (n === 1 && S.cloneNew === eid) S.cloneDated = eid;
-      if (n <= 4) { markDone(n); S.note = (n === 4 && S.brandNote) || "Saved."; S.brandNote = ""; refreshEng().catch(() => {}); return advance(n); } // move on at once; the fresh numbers arrive a moment later and redraw (a slow connection no longer leaves the person looking at a frozen screen)
+      if (n === 2) S.passMsg = ""; if (n <= 4) { markDone(n); S.note = (n === 4 && S.brandNote) || "Saved."; S.brandNote = ""; refreshEng().catch(() => {}); return advance(n); } // move on at once; the fresh numbers arrive a moment later and redraw (a slow connection no longer leaves the person looking at a frozen screen)
       markDone(n); advance(n);
     } catch (e) { S.toast = friendly(e); redraw(); go("sec" + n); }
   }

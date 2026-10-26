@@ -270,6 +270,36 @@ async function body(req: Request, max = MAX_BODY): Promise<any | null> {
 export const OWNER_TEST_FREE: { email: string; maxCap: number; until: number }[] = [
   { email: "demo1@xyz.in", maxCap: 250, until: Date.UTC(2026, 10, 8) }, // the test sign-in (code always 123456, no mail): used only by the test programs; ends on 8 Nov 2026. The owner's real addresses are NOT on this list: they see the real, unpaid first-time flow.
 ];
+/**
+ * Demo passes (owner order 2026-10-26): a long secret link that gives the account that opens it ONE free game (Rs 0) of up to `cap` people, for a prospect the owner chose, one to one.
+ * Nothing is shown to the public and the size list and prices stay the same for everybody. Only the hashes of the links are here; the links themselves are given by hand and are not in this repository.
+ * A link works once (the first account to use it keeps it), until `until`. Remove an entry (or let `until` pass) to switch it off. The free pack is the same kind of pack the Rs 0 test account gets.
+ */
+export const DEMO_PASSES: { hash: string; cap: number; label: string }[] = [
+  { hash: "b51937647daa88f4f2d10a3f8e947868a5b6b762c7db8fa9e181f1acd36a50ea", cap: 100, label: "owner-100-1" },
+  { hash: "df728b8681563a086b80c10438396ecec2c97c2be55f4f3c39546d593fb7b6d7", cap: 250, label: "owner-250-2" },
+  { hash: "89f5ec33bac14e43315cf267e0cd396cf1ba6cf4a0b85464b99c9a42d14bd729", cap: 100, label: "test-100-1" },
+  { hash: "b562320633e7237d5a6aad7f880795cc58cdf030396c233ec6ff79b724cb5292", cap: 100, label: "test-100-2" },
+  { hash: "09d993f7f4cee709843b24a104ed82050091cd36da847ab29022ff23abe70ff0", cap: 250, label: "test-250-3" },
+  { hash: "b26af752fc2d5712d46f60a74f703726d98cd62b61a1ab28d09c3cf7851caa79", cap: 250, label: "test-250-4" },
+  { hash: "34c2bac240bb48c644b4f7bfd854ed32bbf493d79b74250de9bf1a7b49e5f22f", cap: 100, label: "spare-100-1" },
+  { hash: "fd232678e0d5d7f03e794a4b5ce31e77e05a8647378534fadaae334fe8dbda97", cap: 100, label: "spare-100-2" },
+  { hash: "cfb61c8d8d564264e0ec2f7b2df482be7af09e09b142778ea6c0e38300279288", cap: 100, label: "spare-100-3" },
+  { hash: "2acf6f39b4e0b38e9b1620b8743814a3ba92d6159b30148627fe2ffa7a5ec16c", cap: 100, label: "spare-100-4" },
+  { hash: "d9dfc782c2b8e4e9682b21939f6bde7aadcd628eae8b594d9a53c7ef53df9175", cap: 100, label: "spare-100-5" },
+  { hash: "e23c3a030e2fa2c08f6cccc62af21db0e21268af6729b1f4f8dafa760413e238", cap: 100, label: "spare-100-6" },
+  { hash: "d40694ab34af152b2a61249c443dc4fee3460228b772ad460125331a957fe827", cap: 100, label: "spare-100-7" },
+  { hash: "f21b157b6fbceb52fb8d8ce03dd6d6535b6fcc6d8026d5a3eb0ea27983962c6d", cap: 100, label: "spare-100-8" },
+  { hash: "b702016aa9e39355139965b2ae903ad856c3e698af0a0c57104c7238bba51656", cap: 250, label: "spare-250-9" },
+  { hash: "abbbbd09ea567011ca650a7339bdf0be3f396b47b8ad26accebeb0b06c24a06b", cap: 250, label: "spare-250-10" },
+  { hash: "a652e6281bbb69ac7e541330616f4fb4b126589fb091ba7c972db2d7762ed090", cap: 250, label: "spare-250-11" },
+  { hash: "739aea11a618891b108a9fb0d2b0ad1f14648b10c97be1b061af1a5f9118a7ff", cap: 250, label: "spare-250-12" },
+  { hash: "63fb7955192f025b1369a8582df9a2f960bfbd2b235c6ce3a30723df39a2e843", cap: 250, label: "spare-250-13" },
+  { hash: "fe6714b409e9cdd7e0f6923cde66eb4760c96970516cf74b137012eef301a2e4", cap: 250, label: "spare-250-14" },
+  { hash: "1e4070340de09cfdede946eaeab7cc1e9d0bc172d8b25e64a5c11da11c6573c9", cap: 250, label: "spare-250-15" },
+  { hash: "109161f9e77651559a2973ae4e5624209a98065419c5e41defca9481d30cfacc", cap: 250, label: "spare-250-16" },
+];
+export const DEMO_PASS_UNTIL = Date.UTC(2026, 11, 31);
 async function ownerTestGrant(env: Env, org: string, cap: number, now: number): Promise<boolean> {
   for (const t of OWNER_TEST_FREE) {
     if (now > t.until || cap > t.maxCap) continue;
@@ -724,6 +754,24 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const recs = await readGameRecords(env.DB, url.searchParams.get("eid"), Number(url.searchParams.get("limit") ?? 200));
     await logAccess(env.DB, now, "game-records", url.searchParams.get("eid"), "json", recs.length);
     return json({ records: recs });
+  }
+  if (p === "/api/pass" && req.method === "POST") { // a prospect opened a demo pass link: ONE free game of up to its size for this account. The account must be signed in; the link is used once.
+    if (!(a.kind === "master" && a.org)) return deny(a);
+    const pb = await body(req, 512); const tok = typeof pb?.token === "string" ? pb.token.trim().toLowerCase() : "";
+    const bad = () => json({ error: "This demo link is not valid or has ended. Please ask us for a new one.", code: "pass-invalid" }, 404);
+    if (!/^[0-9a-f]{32}$/.test(tok) || now > DEMO_PASS_UNTIL) return bad();
+    const ph = await sha("dpass|" + tok), def = DEMO_PASSES.find((x) => x.hash === ph);
+    if (!def) return bad();
+    if (!(await spend(env, now, 4))) return BUSY();
+    const first = await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO NOTHING").bind(`dpass/${ph}`, JSON.stringify({ org: a.org, at: now, label: def.label })).run();
+    if (!(first as any)?.meta?.changes) { // used before: the same account may open it again (nothing more is given); anybody else is told it is taken
+      const row = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`dpass/${ph}`).first<{ v: string }>();
+      let who = ""; try { who = JSON.parse(row?.v ?? "{}").org ?? ""; } catch { /* unreadable */ }
+      if (who === a.org) return json({ ok: true, again: true, cap: def.cap });
+      return json({ error: "This demo link has already been used. Please ask us for a new one.", code: "pass-used" }, 409);
+    }
+    await env.DB.prepare("INSERT INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,'demo-pass',NULL,?)").bind("dp_" + randHex(6), a.org, def.cap, now).run();
+    return json({ ok: true, cap: def.cap });
   }
   if (p === "/api/owner/releases") { // OWNER ONLY (platform key, never through an AI work link): the version number of this release and the release history. Anybody else gets the same 404 as an unknown address.
     if (!(a.plat && req.headers.get("x-cb-link") !== "1") || req.method !== "GET") return json({ error: "Not found" }, 404);
