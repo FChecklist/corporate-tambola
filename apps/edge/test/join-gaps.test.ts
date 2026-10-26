@@ -43,7 +43,7 @@ describe("join gaps", () => {
       const r = await join(g.id, 1, { phone: bad, device: dev(1) }); expect([bad, r.status]).toEqual([bad, 400]);
     }
     let i = 10;
-    for (const good of ["9876543210", "+91 98765 43211", "919876543212", "09876543213", "+6591234567", "+44 7911 123456", "+2547123456789"]) {
+    for (const good of ["9876543210", "+91 98765 43211", "919876543212", "09876543213", "+6591234567", "+44 7911 123456", "+2547123456789", "0091 98765 43214", "0065 9123 4568"]) {
       const r = await join(g.id, ++i, { phone: good, device: dev(i) }); expect([good, r.status]).toEqual([good, 200]);
     }
   });
