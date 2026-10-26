@@ -183,7 +183,7 @@ export async function chainOf(db: D1, eid: string, inviter: string): Promise<str
   return "," + ids.join(",") + ",";
 }
 
-const csvCell = (v: unknown) => { let s = String(v ?? ""); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+const csvCell = (v: unknown) => { let s = String(v ?? ""); if (/^[=+\-@\t\r]/.test(s) && !/^\+\d{6,15}$/.test(s)) s = "'" + s; /* a plain international number (+447911123456) is not a formula: keep it exactly, so a re-upload reads the same number */ return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 
 /** Removed seats stay in the public seat list (winners must be identical on every phone) but cannot win Unlucky: their ids are kept in one small public list that phones read with the seats. */
 async function refreshBlocked(db: D1, eid: string): Promise<void> {
