@@ -3,7 +3,7 @@
 // GAP-03 a person the organizer ADMITTED in mode "both" was asked for the (wrong) ID again for ever and stayed in "waiting";
 // GAP-01 an unbound ticket (organizer pressed "send link again") was handed to a request that sent no device at all.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { HOUR, T, W, call, create, dev, j, join, keyH, mob, organizer, paidGame, publish, reset, restore, roundMs, startIn, uid } from "./param-harness";
+import { HOUR, T, W, call, capture, checkout, create, dev, j, join, keyH, mob, organizer, paidGame, publish, reset, restore, roundMs, startIn, uid, verify } from "./param-harness";
 
 beforeEach(() => reset());
 afterEach(restore);
@@ -102,6 +102,26 @@ describe("join gaps", () => {
     expect((await ov({ round: 1, pattern: "early5", ordinal: 1, seat: null })).status).toBe(200);
     expect((W.raw.prepare("SELECT COUNT(*) AS n FROM prize WHERE eid=?").get(g.id) as any).n).toBe(0);
     expect((await ov({ round: 1, pattern: "early5", ordinal: 1, seat: null })).status).toBe(404); // nothing left to change
+  });
+  test("erasing all participants' data is refused while the game is being played (409 game-running) and allowed before and after", async () => {
+    const g = await paidGame({ cap: 20 });
+    expect((await join(g.id, 1)).status).toBe(200);
+    const mid = roundMs(startIn(2 * HOUR)) + 60_000; // one minute after the first round of the game
+    const r = await call("POST", `/api/z/${g.id}/erase`, {}, keyH(g.key), mid);
+    expect(r.status).toBe(409); expect((await j(r)).code).toBe("game-running");
+    expect((W.raw.prepare("SELECT COUNT(*) AS n FROM participant WHERE eid=?").get(g.id) as any).n).toBe(1); // nothing was deleted
+    expect((await call("POST", `/api/z/${g.id}/erase`, {}, keyH(g.key), mid + 30 * 24 * HOUR)).status).toBe(200);
+    expect((W.raw.prepare("SELECT COUNT(*) AS n FROM participant WHERE eid=?").get(g.id) as any).n).toBe(0);
+  });
+  test("O-04: a size raised while the payment window was open never ends above the pack that was paid for", async () => {
+    const o = await organizer(), id = uid();
+    expect((await create(o.key, id, { cap: 100 })).status).toBe(200);
+    expect((await publish(o.key, id)).status).toBe(200);
+    const c = await checkout(o.key, { eid: id, email: o.email }); expect(c.status).toBe(200); // pack 100 is being paid
+    expect((await call("PATCH", `/api/z/${id}/settings`, { cap: 600 }, keyH(o.key))).status).toBe(200); // the organizer raises the size in another tab
+    capture(c.body, "pay_" + id); expect((await verify(c.body, "pay_" + id)).status).toBe(200);
+    const row = W.raw.prepare("SELECT pack, cap FROM engagement WHERE id=?").get(id) as any;
+    expect(row.pack).toBe(100); expect(row.cap).toBeLessThanOrEqual(100);
   });
   test("GAP-01: an unbound ticket is handed back only to a phone that sends its device proof (400 without it, 200 with it)", async () => {
     const g = await paidGame({ cap: 20 });

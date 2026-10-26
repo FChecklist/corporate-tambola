@@ -236,7 +236,7 @@ async function fulfilInner(env: PayEnv, paymentId: string, now: number, spend: (
       }
     }
   } else if (meta.eid) { // publish the draft this payment was made for (only if it is still an unpublished draft of the same organizer)
-    const up = await db.prepare("UPDATE engagement SET pack=? WHERE id=? AND org=? AND pack=0 AND cancelled_ms IS NULL AND unplayed_ms IS NULL").bind(p.pack, meta.eid, org).run(); // a cancelled game is never published by a late payment
+    const up = await db.prepare("UPDATE engagement SET pack=?, cap=MIN(cap, ?) WHERE id=? AND org=? AND pack=0 AND cancelled_ms IS NULL AND unplayed_ms IS NULL").bind(p.pack, p.pack, meta.eid, org).run(); /* the size can never end above what was paid for: a size raised in a second tab while the payment window was open is brought back to the pack */ // a cancelled game is never published by a late payment
     if ((up.meta?.changes ?? 0) > 0) {
       await db.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(meta.eid, "ent_" + p.id).run(); published = meta.eid;
       await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`pub/${meta.eid}`, String(now)).run(); // paying also publishes
