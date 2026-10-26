@@ -10,11 +10,10 @@ afterEach(restore);
 const DAY30 = 30 * 24 * HOUR;
 
 describe("join gaps", () => {
-  test("GAP-06: after the game is over a new person is refused (403 ended), and a person who already holds a ticket still gets it back", async () => {
+  test("GAP-06 (decided: designed behaviour): a person who opens the link after the game is over still gets a ticket, so the page can show the thank-you and share button; a person who already holds one gets it back", async () => {
     const g = await paidGame({ cap: 20 });
     expect((await join(g.id, 1)).status).toBe(200);
-    const late = await join(g.id, 2, {}, T + DAY30);
-    expect(late.status).toBe(403); expect((await j(late)).code).toBe("ended");
+    expect((await join(g.id, 2, {}, T + DAY30)).status).toBe(200);
     const again = await join(g.id, 1, {}, T + DAY30);
     expect(again.status).toBe(200); expect((await j(again)).again).toBe(true);
   });

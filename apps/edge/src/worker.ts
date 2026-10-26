@@ -1644,8 +1644,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (!hadK4) await k4(have.pid);
       return reply(have.pid, { again: true, jr: have.jr ?? 0, ...(have.role ? { role: have.role } : {}) }); // same number twice = same participant
     }
-    // A NEW person cannot take a place once the game is over, or when it could not begin because payment is due (a person who already holds a ticket is handled above and keeps it).
-    if (now >= await endBoundMs(env as any, e)) return json({ error: "This game has ended, so no one can join it now.", code: "ended" }, 403);
+    // A NEW person cannot take a place when the game could not begin because payment is due (a person who already holds a ticket is handled above and keeps it).
+    // (A person who opens the link AFTER the game is over still gets a ticket: the page then shows "Game complete", the thank-you and the share button. That is designed, so there is no "ended" refusal here.)
     if (locked) return json({ error: "This game could not begin because the organizer's payment is not complete. Please ask your organizer.", code: "locked" }, 403);
     let pr = await personByPhone(env, eid!, ph); // is this number (or employee ID) on any list of the game?
     const admitted = vf.mode !== "mobile" && !!pr && !!(await env.DB.prepare("SELECT 1 AS x FROM waiting WHERE eid=? AND ph=? AND status='admitted'").bind(eid, ph).first()); // the organizer already said yes to this person: the ID typed is not checked again, or they would wait for ever
