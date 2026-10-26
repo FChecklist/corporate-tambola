@@ -38,6 +38,16 @@ describe("join gaps", () => {
     const again = await join(g.id, 1, { empId: "E2" }); // the phone sends the same request again after the yes
     expect(again.status).toBe(200); expect((await j(again)).pid).toBeTruthy();
   });
+  test("GAP-J1: an Indian number that cannot be a mobile (first digit 5) is refused on join like it is in a list; real Indian and foreign numbers still join", async () => {
+    const g = await paidGame({ cap: 30 });
+    for (const bad of ["5876543210", "+91 5876543210", "915876543210", "05876543210"]) {
+      const r = await join(g.id, 1, { phone: bad, device: dev(1) }); expect([bad, r.status]).toEqual([bad, 400]);
+    }
+    let i = 10;
+    for (const good of ["9876543210", "+91 98765 43211", "919876543212", "09876543213", "+6591234567", "+44 7911 123456", "+2547123456789"]) {
+      const r = await join(g.id, ++i, { phone: good, device: dev(i) }); expect([good, r.status]).toEqual([good, 200]);
+    }
+  });
   test("GAP-01: an unbound ticket is handed back only to a phone that sends its device proof (400 without it, 200 with it)", async () => {
     const g = await paidGame({ cap: 20 });
     expect((await join(g.id, 1)).status).toBe(200);
