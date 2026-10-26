@@ -35,7 +35,11 @@ export const istDate = (ms: number) => { const d = new Date(ms + IST); return `$
 const utcFull = (ms: number) => { const d = new Date(ms); return `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())} UTC`; };
 const hm = (ms: number) => { const d = new Date(ms + IST); return `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())}`; };
 const dur = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 3600)} h ${p2(Math.floor((s % 3600) / 60))} min`; };
-const mob = (p: string | null) => (p ? p.replace(/^(\d{5})(\d{5})$/, "$1 $2") : "-");
+const mob = (p: string | null) => { // a kept number: India as 91 + 10 digits (shown as 98765 43210, as before), any other country as +<code><number>
+  if (!p) return "-";
+  const d = p.replace(/\D/g, "");
+  return p[0] !== "+" && (d.length === 10 || (d.length === 12 && d.startsWith("91"))) ? d.slice(-10).replace(/^(\d{5})(\d{5})$/, "$1 $2") : p;
+};
 const who = (w: { name: string | null; phone: string | null }) => `${w.name || "(no name)"}, ${mob(w.phone)}`;
 
 export function layoutReport(d: ReportData): Uint8Array {

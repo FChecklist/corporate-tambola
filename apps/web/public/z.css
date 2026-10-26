@@ -162,6 +162,8 @@ body{background:linear-gradient(180deg,#FFF1D6 0,#FFE3EA 34%,#E6ECFF 70%,#FFF6DC
 .zgoalline{font-size:15px;line-height:1.4;margin-bottom:6px;color:#2A2140}
 .zform input[type=text],.zform input:not([type]),.zform input[type=tel]{border:2px solid #D9A5B6;border-radius:12px;min-height:50px}
 .zform input:focus{outline:3px solid #FFB703;outline-offset:1px}
+.zphone{display:flex;gap:6px;align-items:stretch}.zphone select{flex:0 0 46%;min-width:0;box-sizing:border-box;min-height:50px;font-size:16px;padding:8px 6px;border:2px solid #D9A5B6;border-radius:12px;background:#fff;color:inherit}.zphone select:focus{outline:3px solid #FFB703;outline-offset:1px}.zphone input{flex:1 1 0;width:auto;min-width:0}
+.zreq{font-size:11px;font-weight:600;color:#B3261E;margin-left:4px;white-space:nowrap}.zreq b{font-size:14px;line-height:1}.zopt{font-size:11px;font-weight:400;color:var(--muted);margin-left:4px}
 .cbc-tick{width:26px;height:26px;margin-top:0}
 .cbc .cbc-box{padding:6px 0}
 /* waiting room */

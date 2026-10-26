@@ -9,6 +9,7 @@
 // The Worker (worker.ts) owns routing, `join` and `settings`; this file owns the schema, the cleaning of numbers and the people / waiting / me routes.
 import { openPii, openText, sealPii, sealText } from "./pii";
 import { consentMissing, recordConsent } from "./consent";
+import { deviceMatches } from "./checkin";
 import type { D1, Env } from "./worker";
 
 /** 0016_people.sql: who invited whom, the personal links, the waiting room, and the flag that stops a removed person's phone without touching the public seat list. */
@@ -54,30 +55,11 @@ export const empHashOf = (env: { PHONE_SALT?: string; ORGANIZER_SECRET?: string 
 /** What the organizer asked people to give to get in, read from the game's stored settings. */
 export const verifyOf = (e: { config?: string | null }): { mode: "mobile" | "id" | "either" | "both"; employeesOnly: boolean } => { try { const j = e.config ? JSON.parse(e.config) : {}; return { mode: j.verify === "id" || j.verify === "either" || j.verify === "both" ? j.verify : "mobile", employeesOnly: j.employeesOnly === true }; } catch { return { mode: "mobile", employeesOnly: false }; } };
 
-export type Cleaned = { ok: true; digits: string; last10: string } | { ok: false; why: string };
-/**
- * Cleans one typed or pasted mobile number: spaces, dashes, brackets, +91, a leading 0 or 00 go away. A 10-digit Indian mobile must start with 6 to 9; a number with another
- * country code is accepted as it is (11 to 15 digits). The result always carries the country code (91 for India), which is what a wa.me link needs.
- */
-export function cleanPhone(raw: unknown): Cleaned {
-  const typed = String(raw ?? "").trim();
-  if (/[^\d\s+\-()./]/.test(typed)) return { ok: false, why: "A number has only digits (and + - spaces or brackets). Please check it." }; // letters, symbols or emoji are a typing mistake, not a number
-  let d = typed.replace(/\D/g, "");
-  if (!d) return { ok: false, why: "There is no number." };
-  const international = (typed.startsWith("+") || typed.startsWith("00")) && !d.replace(/^00/, "").startsWith("91"); // +65, +44 ...: kept as typed, never given an Indian 91
-  if (international) { const n = d.replace(/^00/, ""); return n.length >= 8 && n.length <= 15 ? { ok: true, digits: n, last10: n.slice(-10) } : { ok: false, why: n.length < 8 ? "That is too short for a mobile number." : "That is too long for a mobile number." }; }
-  if (d.startsWith("00")) d = d.slice(2);
-  else if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
-  const indian = (ten: string): Cleaned => (/^[6-9]\d{9}$/.test(ten) ? { ok: true, digits: "91" + ten, last10: ten } : { ok: false, why: "An Indian mobile number starts with 6, 7, 8 or 9." });
-  if (d.length === 10) return indian(d);
-  if (d.length === 12 && d.startsWith("91")) return indian(d.slice(2));
-  if (d.startsWith("91")) return { ok: false, why: "After +91 there must be 10 digits." };
-  if (d.length >= 11 && d.length <= 15) return { ok: true, digits: d, last10: d.slice(-10) };
-  return { ok: false, why: d.length < 10 ? "That is too short for a mobile number." : "That is too long for a mobile number." };
-}
-export const maskedPhone = (digits: string) => "******" + digits.slice(-4);
+export { cleanPhone, maskedPhone, keptPhone, phoneDigits, keptFromClean } from "./phonekit";
+export type { Cleaned } from "./phonekit";
+import { cleanPhone, maskedPhone, keptFromClean, phoneDigits } from "./phonekit";
 /** A name as kept: no control or invisible characters, no markup characters, and nothing at the front that a spreadsheet would run as a formula (= + - @). Also the server's answer to a hand-made request: the page already sends only tidy names. */
-const cleanName = (n: unknown) => (typeof n === "string" ? Array.from(n).filter((ch) => { const c = ch.charCodeAt(0); return !(c < 32 || c === 127 || (c >= 0x200b && c <= 0x200f) || c === 0x2028 || c === 0x2029 || c === 0xfeff); }).join("").replace(/[<>`]/g, "").replace(/\s+/g, " ").replace(/^[=+\-@\s]+/, "").trim().slice(0, 60) : "");
+export const cleanName = (n: unknown) => (typeof n === "string" ? Array.from(n).filter((ch) => { const c = ch.charCodeAt(0); return !(c < 32 || c === 127 || (c >= 0x200b && c <= 0x200f) || c === 0x2028 || c === 0x2029 || c === 0xfeff); }).join("").replace(/[<>`]/g, "").replace(/\s+/g, " ").replace(/^[=+\-@\s]+/, "").trim().slice(0, 60) : "");
 
 /** What a `from=` code on a common link means. */
 export type FromOwner = { kind: "org" } | { kind: "host"; hex: string } | { kind: "cohost"; hex: string } | { kind: "guest"; seq: number };
@@ -105,7 +87,7 @@ export const inviterOf = (o: FromOwner): string => (o.kind === "org" ? "o" : o.k
 export const srcOf = (inviter: string): string => (inviter.startsWith("c:") ? "co:" + inviter.slice(2) : inviter.startsWith("h:") ? "ho:" + inviter.slice(2) : "link");
 
 export const waMessage = (name: string | null, game: string, link: string) => `${name ? name + ", you" : "You"} are invited to ${game}. Open your ticket here: ${link}`;
-export const waLinkOf = (digits: string, text: string) => `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+export const waLinkOf = (digits: string, text: string) => `https://wa.me/${phoneDigits(digits)}?text=${encodeURIComponent(text)}`; // a kept number may start with +: wa.me wants the digits only
 
 /** Callers of the people routes. `all` = sees every list of the game (Organizer, Host). */
 export interface Caller { id: string; kind: "organizer" | "host" | "cohost" | "guest"; all: boolean; limit: number | null; label: string; seat?: number; platform?: boolean }
@@ -130,7 +112,7 @@ const PERSON_COLS = "eid, id, ph, pii, inviter, role, status, tok_hash, tok_seal
 interface PersonRow { eid: string; id: string; ph: string; pii: string; inviter: string; role: string | null; status: "invited" | "joined" | "removed"; tok_hash: string | null; tok_sealed: string | null; approved_by: string | null; approved_ms: number | null; added_ms: number; joined_ms: number | null; removed_ms: number | null; removed_by: string | null }
 
 /** Who may use the people routes, and as which list. Returns a response when they may not. A guest (level 1) is known by their ticket id (`me`), the same trust as the /invites route. */
-async function callerOf(c: Ctx, bodyMe?: unknown): Promise<{ who: Caller } | { res: Response }> {
+async function callerOf(c: Ctx, bodyMe?: unknown, bodyDevice?: unknown): Promise<{ who: Caller } | { res: Response }> {
   const { a, e } = c;
   if (a.kind === "ai" || c.viaLink || c.req.headers.get("x-ct-link") === "1") return { res: c.json({ error: AI_REFUSAL }, 403) };
   if (a.kind) {
@@ -147,6 +129,8 @@ async function callerOf(c: Ctx, bodyMe?: unknown): Promise<{ who: Caller } | { r
   if (!pid) return { res: c.json({ error: "Please sign in, or open your ticket link first." }, 403) };
   const seat = await c.env.DB.prepare("SELECT seq, role, inv, blocked FROM seat WHERE eid=? AND pid=?").bind(c.eid, pid).first<{ seq: number; role: string | null; inv: number | null; blocked: number | null }>();
   if (!seat) return { res: c.json({ error: "Not a participant of this game." }, 403) };
+  // the ticket id is public (the seat list shows it): acting for a ticket also needs the phone's own device id, like check-in, prizes and leaving do
+  if (!(await deviceMatches(c.env, c.eid, pid, c.req.headers.get("x-ct-dev") || c.url.searchParams.get("device") || (typeof bodyDevice === "string" ? bodyDevice : "")))) return { res: c.json({ error: "Open this ticket on the phone you joined with to invite people.", code: "device" }, 403) };
   if (seat.blocked) return { res: c.json({ error: "You were removed from this game.", code: "removed" }, 403) };
   if (seat.role) return { res: c.json({ error: "Your team seat invites through the console, not through the ticket." }, 403) };
   if (seat.inv !== null) return { res: c.json({ error: "Guests invited by a guest can play but cannot invite more people." }, 403) };
@@ -232,7 +216,7 @@ export async function peopleRoute(c: Ctx): Promise<Response> {
 
   let bodyObj: any = null;
   if (method === "POST" || method === "PATCH") { const ct = c.req.clone(); bodyObj = await c.body(ct, 65_536); }
-  const got = await callerOf(c, bodyObj?.me);
+  const got = await callerOf(c, bodyObj?.me, bodyObj?.device);
   if ("res" in got) return got.res;
   const who = got.who;
   if (c.e.unplayed_ms && method !== "GET") return c.json({ error: "This game did not start. Your details have been erased.", code: "did-not-start", didNotStart: true }, 409);
@@ -289,7 +273,7 @@ async function addPeople(c: Ctx, who: Caller, b: any): Promise<Response> {
     if (vf.employeesOnly && vf.mode !== "mobile" && vf.mode !== "either" && !emp) { invalid.push({ raw, why: "This game is for employees: the employee ID is missing." }); continue; }
     if ((vf.mode === "id" || (vf.mode === "either" && !phoneTyped)) && emp) { // known by ID alone: a mobile number is welcome but not needed
       let digits = "";
-      if (phoneTyped) { const cl = cleanPhone(x?.phone); if (!cl.ok) { invalid.push({ raw, why: cl.why }); continue; } digits = cl.digits; }
+      if (phoneTyped) { const cl = cleanPhone(x?.phone); if (!cl.ok) { invalid.push({ raw, why: cl.why }); continue; } digits = keptFromClean(cl.digits); }
       const ph = await empHashOf(c.env, emp);
       if (seen.has(ph)) { duplicates++; continue; }
       seen.add(ph); todo.push({ name: cleanName(x?.name), digits, ph, empId: emp }); continue;
@@ -304,7 +288,7 @@ async function addPeople(c: Ctx, who: Caller, b: any): Promise<Response> {
       if ((al && al.v !== ph && (await c.env.DB.prepare("SELECT 1 AS x FROM person WHERE eid=? AND ph=? AND status<>'removed'").bind(c.eid, al.v).first())) || seen.has("I" + idHash)) { duplicates++; continue; }
       seen.add("I" + idHash);
     }
-    seen.add(ph); todo.push({ name: cleanName(x?.name), digits: cl.digits, ph, ...(emp && vf.mode !== "mobile" ? { empId: emp } : {}), ...(idHash ? { idHash } : {}) });
+    seen.add(ph); todo.push({ name: cleanName(x?.name), digits: keptFromClean(cl.digits), ph, ...(emp && vf.mode !== "mobile" ? { empId: emp } : {}), ...(idHash ? { idHash } : {}) });
   }
   const db = c.env.DB, hashes = todo.map((t) => t.ph);
   const persons = await existingBy(db, "person", c.eid, hashes, "ph, status, id, inviter, removed_by");
@@ -433,11 +417,11 @@ async function resendPerson(c: Ctx, who: Caller, id: string, b: any): Promise<Re
     if (!cl.ok) return c.json({ error: cl.why }, 400);
     const idKeyed = !!pii?.empId && (await empHashOf(c.env, pii.empId)) === row.ph; // a person known by employee ID stays known by it: a new number is only a new contact number
     ph = idKeyed ? row.ph : await phoneHashOf(c.env, cl.digits);
-    if (idKeyed) { newPii = await sealPii(c.env, { phone: cl.digits, name: pii?.name ?? null, empId: pii!.empId }); pii = { phone: cl.digits, name: pii?.name ?? null, empId: pii!.empId }; }
+    if (idKeyed) { newPii = await sealPii(c.env, { phone: keptFromClean(cl.digits), name: pii?.name ?? null, empId: pii!.empId }); pii = { phone: keptFromClean(cl.digits), name: pii?.name ?? null, empId: pii!.empId }; }
     else if (ph !== row.ph) {
       if (hasSeat) return c.json({ error: "They have already joined with their first number. Their ticket can move to a new phone, but not to a new number." }, 409);
       if ((await db.prepare("SELECT 1 AS x FROM person WHERE eid=? AND ph=?").bind(c.eid, ph).first()) || (await db.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND ph=?").bind(c.eid, ph).first())) return c.json({ error: "That number is already invited.", code: "duplicate" }, 409);
-      newPii = await sealPii(c.env, { phone: cl.digits, name: pii?.name ?? null, ...(pii?.empId ? { empId: pii.empId } : {}) }); pii = { phone: cl.digits, name: pii?.name ?? null, ...(pii?.empId ? { empId: pii.empId } : {}) };
+      newPii = await sealPii(c.env, { phone: keptFromClean(cl.digits), name: pii?.name ?? null, ...(pii?.empId ? { empId: pii.empId } : {}) }); pii = { phone: keptFromClean(cl.digits), name: pii?.name ?? null, ...(pii?.empId ? { empId: pii.empId } : {}) };
     }
   }
   if (!(await c.spend(2))) return c.busy();

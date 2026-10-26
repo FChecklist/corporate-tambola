@@ -173,11 +173,11 @@ describe("winners are decided by the software", () => {
     await settleByPhones(call, "ENG1", [{ pattern: "full", idx: 70, pids: [pids[1]!] }], pids.slice(0, 3));
     const dev = deviceOf(phone(2));
     const mine = await (await call("GET", `/api/z/ENG1/myprizes?pid=${pids[1]!}&device=${dev}`)).json() as any;
-    expect(mine.prizes).toHaveLength(1); expect(mine.phone).toBe(phone(2)); expect(mine.confirmed).toBe(false);
+    expect(mine.prizes).toHaveLength(1); expect(mine.phone).toBe("91" + phone(2)); // kept with its country code: 91 + 10 digits for India; expect(mine.confirmed).toBe(false);
     expect((await call("POST", "/api/z/ENG1/confirm", { pid: pids[1]!, device: deviceOf(phone(3)), name: "Thief", phone: phone(3) })).status).toBe(403); // another phone cannot take the prize
     expect((await call("POST", "/api/z/ENG1/confirm", { pid: pids[1]!, device: dev, name: "Asha Rao", phone: "98765 43210" })).status).toBe(200);
     const list = await (await call("GET", "/api/z/ENG1/prizes", undefined, org)).json() as any;
-    expect(list.prizes[0]).toMatchObject({ name: "Asha Rao", phone: "9876543210", confirmed: true, changed: true, joinedWithName: "P2", joinedWithPhone: phone(2), given: false });
+    expect(list.prizes[0]).toMatchObject({ name: "Asha Rao", phone: "919876543210", confirmed: true, changed: true, joinedWithName: "P2", joinedWithPhone: "91" + phone(2), given: false });
     expect(list.prizes[0].trail).toHaveLength(1);
     expect((await call("GET", "/api/z/ENG1/prizes")).status).toBe(403);
     expect((await call("POST", "/api/z/ENG1/prizegiven", { round: 1, pattern: "full", ordinal: 1, seat: 2, given: true }, org)).status).toBe(200);

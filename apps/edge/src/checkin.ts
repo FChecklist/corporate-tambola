@@ -6,6 +6,7 @@
 //   - Evidence: the time of the check-in is kept with the winners record for 365 days (it shows the winner was present and passed the check); every other check-in record is deleted
 //     with the participants' data within 24 hours of the end (lifecycle.ts erasePersonal).
 import type { D1, Env } from "./worker";
+import { cleanPhone, keptFromClean, keptPhone } from "./phonekit";
 import { openPii, sealPii } from "./pii";
 
 /** Games created at or after this moment require the check-in. */
@@ -79,13 +80,14 @@ export async function checkinRoute(c: Ctx): Promise<Response> {
     if (who.inv) { const up = await db.prepare("SELECT p.pii AS pii, p.name AS name FROM seat s JOIN participant p ON p.eid=s.eid AND p.pid=s.pid WHERE s.eid=? AND s.seq=?").bind(eid, who.inv).first<{ pii: string | null; name: string | null }>(); const upii = up ? await openPii(env as any, up.pii) : null; invitedBy = (upii?.name || up?.name || `Ticket ${who.inv}`).toString().slice(0, 60); }
     return json({
       required: true, gameId: eid, participantId: pid, ticketId: ticketId(eid, who.seq), seat: who.seq, opensMs, open, present: presentMs !== null, presentMs,
-      name: pii?.name ?? who.name ?? "", mobile: pii?.phone ? "******" + String(pii.phone).slice(-4) : "", invitedBy, ...(open && presentMs === null ? { code: await codeFor(env, eid, who.seq) } : {}),
+      name: pii?.name ?? who.name ?? "", mobile: pii?.phone ? "******" + String(pii.phone).slice(-4) : "", hasName: !!(pii?.name ?? who.name), hasMobile: !!pii?.phone, invitedBy, ...(open && presentMs === null ? { code: await codeFor(env, eid, who.seq) } : {}),
     });
   }
   // ---- POST: the participant presses Submit ----
   if (presentMs !== null) return json({ ok: true, present: true, presentMs });
   if (!open) return json({ error: `Check-in opens at ${new Date(opensMs + 5.5 * 3600_000).toISOString().slice(11, 16)} India time, 5 minutes before the game.`, code: "not-open", opensMs }, 403);
-  if (b?.confirmName !== true || b?.confirmMobile !== true) return json({ error: "Please confirm your name and your mobile number.", code: "confirm" }, 400);
+  const hadName = !!(pii?.name ?? who.name), hadMobile = !!pii?.phone; // a person who came in by employee ID may have neither on file: there is nothing to confirm then
+  if ((hadName && b?.confirmName !== true) || (hadMobile && b?.confirmMobile !== true)) return json({ error: hadName && hadMobile ? "Please confirm your name and your mobile number." : hadName ? "Please confirm your name." : "Please confirm your mobile number.", code: "confirm" }, 400);
   const failKey = `ckfail/${eid}/${who.seq}`;
   const fr = await db.prepare("SELECT v FROM kv WHERE k=?").bind(failKey).first<{ v: string }>(); const f = fr ? JSON.parse(fr.v) as { n: number; t: number } : null;
   if (f && f.n >= CHECKIN_MAX_TRIES && now - f.t < CHECKIN_LOCK_MS) return json({ error: "Too many wrong codes. Please wait a few minutes and try again.", code: "locked" }, 429);
@@ -100,8 +102,8 @@ export async function checkinRoute(c: Ctx): Promise<Response> {
   let name = pii?.name ?? who.name ?? null, phone = pii?.phone ?? null, editedName = false, editedMobile = false;
   const nn = typeof b?.name === "string" ? Array.from(b.name).filter((ch: string) => { const c = ch.charCodeAt(0); return !(c < 32 || c === 127 || (c >= 0x200b && c <= 0x200f) || c === 0x2028 || c === 0x2029 || c === 0xfeff || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069)); }).join("").replace(/[<>`]/g, "").replace(/^[=+\-@\s]+/, "").trim().slice(0, 60) : "";
   if (nn && nn !== name) { name = nn; editedName = true; }
-  const digits = typeof b?.mobile === "string" ? b.mobile.replace(/\D/g, "").replace(/^(91|0)(?=\d{10}$)/, "") : "";
-  if (digits && digits !== phone) { if (!/^[6-9]\d{9}$/.test(digits)) return json({ error: "The mobile number needs 10 digits.", code: "bad-mobile" }, 400); phone = digits; editedMobile = true; }
+  const rawMob = typeof b?.mobile === "string" ? b.mobile.trim() : ""; // from any country: the page sends +<country code><number>
+  if (rawMob) { const cl = cleanPhone(rawMob); if (!cl.ok) return json({ error: cl.why, code: "bad-mobile" }, 400); const kept = keptFromClean(cl.digits); if (kept !== keptPhone(phone ?? "")) { phone = kept; editedMobile = true; } }
   if (!(await c.spend(2))) return c.busy();
   const stmts = [db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`present/${eid}/${who.seq}`, JSON.stringify({ t: now, pid, dev: who.dev, en: editedName, em: editedMobile })), db.prepare("DELETE FROM kv WHERE k=?").bind(failKey)];
   if ((editedName || editedMobile) && pii) stmts.push(db.prepare("UPDATE participant SET pii=?, name=? WHERE eid=? AND pid=?").bind(await sealPii(env as any, { phone: phone ?? pii.phone, name, ...(pii.empId ? { empId: pii.empId } : {}) }), name, eid, pid));

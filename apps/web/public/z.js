@@ -80,24 +80,80 @@
   };
   const paintBrand = () => document.querySelectorAll(".zbrand").forEach((el) => { if (!el.classList.contains("zdef")) el.style.background = el.dataset.bg; el.style.color = el.dataset.fg; }); // set from the script, so a strict style policy never blocks the colour
 
+  // ---------- mobile numbers from anywhere: the person picks the country (India is the start) and types the number as they know it. Nothing here is a check of the number itself: we only turn what was typed into +<country code><number> so the same person is the same person in every game. ----------
+  const CT_ROWS = "AF|Afghanistan|93;AL|Albania|355;DZ|Algeria|213;AS|American Samoa|1;AD|Andorra|376;AO|Angola|244;AI|Anguilla|1;AG|Antigua and Barbuda|1;AR|Argentina|54;AM|Armenia|374;AW|Aruba|297;AU|Australia|61;AT|Austria|43;AZ|Azerbaijan|994;BS|Bahamas|1;BH|Bahrain|973;BD|Bangladesh|880;BB|Barbados|1;BY|Belarus|375;BE|Belgium|32;BZ|Belize|501;BJ|Benin|229;BM|Bermuda|1;BT|Bhutan|975;BO|Bolivia|591;BA|Bosnia and Herzegovina|387;BW|Botswana|267;BR|Brazil|55;VG|British Virgin Islands|1;BN|Brunei|673;BG|Bulgaria|359;BF|Burkina Faso|226;BI|Burundi|257;KH|Cambodia|855;CM|Cameroon|237;CA|Canada|1;CV|Cape Verde|238;KY|Cayman Islands|1;CF|Central African Republic|236;TD|Chad|235;CL|Chile|56;CN|China|86;CO|Colombia|57;KM|Comoros|269;CG|Congo|242;CD|Congo (Democratic Republic)|243;CK|Cook Islands|682;CR|Costa Rica|506;CI|Cote d'Ivoire|225;HR|Croatia|385;CU|Cuba|53;CW|Curacao|599;CY|Cyprus|357;CZ|Czechia|420;DK|Denmark|45;DJ|Djibouti|253;DM|Dominica|1;DO|Dominican Republic|1;EC|Ecuador|593;EG|Egypt|20;SV|El Salvador|503;GQ|Equatorial Guinea|240;ER|Eritrea|291;EE|Estonia|372;SZ|Eswatini|268;ET|Ethiopia|251;FK|Falkland Islands|500;FO|Faroe Islands|298;FJ|Fiji|679;FI|Finland|358;FR|France|33;GF|French Guiana|594;PF|French Polynesia|689;GA|Gabon|241;GM|Gambia|220;GE|Georgia|995;DE|Germany|49;GH|Ghana|233;GI|Gibraltar|350;GR|Greece|30;GL|Greenland|299;GD|Grenada|1;GP|Guadeloupe|590;GU|Guam|1;GT|Guatemala|502;GG|Guernsey|44;GN|Guinea|224;GW|Guinea-Bissau|245;GY|Guyana|592;HT|Haiti|509;HN|Honduras|504;HK|Hong Kong|852;HU|Hungary|36;IS|Iceland|354;IN|India|91;ID|Indonesia|62;IR|Iran|98;IQ|Iraq|964;IE|Ireland|353;IM|Isle of Man|44;IL|Israel|972;IT|Italy|39;JM|Jamaica|1;JP|Japan|81;JE|Jersey|44;JO|Jordan|962;KZ|Kazakhstan|7;KE|Kenya|254;KI|Kiribati|686;XK|Kosovo|383;KW|Kuwait|965;KG|Kyrgyzstan|996;LA|Laos|856;LV|Latvia|371;LB|Lebanon|961;LS|Lesotho|266;LR|Liberia|231;LY|Libya|218;LI|Liechtenstein|423;LT|Lithuania|370;LU|Luxembourg|352;MO|Macau|853;MG|Madagascar|261;MW|Malawi|265;MY|Malaysia|60;MV|Maldives|960;ML|Mali|223;MT|Malta|356;MH|Marshall Islands|692;MQ|Martinique|596;MR|Mauritania|222;MU|Mauritius|230;YT|Mayotte|262;MX|Mexico|52;FM|Micronesia|691;MD|Moldova|373;MC|Monaco|377;MN|Mongolia|976;ME|Montenegro|382;MS|Montserrat|1;MA|Morocco|212;MZ|Mozambique|258;MM|Myanmar|95;NA|Namibia|264;NR|Nauru|674;NP|Nepal|977;NL|Netherlands|31;NC|New Caledonia|687;NZ|New Zealand|64;NI|Nicaragua|505;NE|Niger|227;NG|Nigeria|234;KP|North Korea|850;MK|North Macedonia|389;MP|Northern Mariana Islands|1;NO|Norway|47;OM|Oman|968;PK|Pakistan|92;PW|Palau|680;PS|Palestine|970;PA|Panama|507;PG|Papua New Guinea|675;PY|Paraguay|595;PE|Peru|51;PH|Philippines|63;PL|Poland|48;PT|Portugal|351;PR|Puerto Rico|1;QA|Qatar|974;RE|Reunion|262;RO|Romania|40;RU|Russia|7;RW|Rwanda|250;KN|Saint Kitts and Nevis|1;LC|Saint Lucia|1;VC|Saint Vincent and the Grenadines|1;WS|Samoa|685;SM|San Marino|378;ST|Sao Tome and Principe|239;SA|Saudi Arabia|966;SN|Senegal|221;RS|Serbia|381;SC|Seychelles|248;SL|Sierra Leone|232;SG|Singapore|65;SX|Sint Maarten|1;SK|Slovakia|421;SI|Slovenia|386;SB|Solomon Islands|677;SO|Somalia|252;ZA|South Africa|27;KR|South Korea|82;SS|South Sudan|211;ES|Spain|34;LK|Sri Lanka|94;SD|Sudan|249;SR|Suriname|597;SE|Sweden|46;CH|Switzerland|41;SY|Syria|963;TW|Taiwan|886;TJ|Tajikistan|992;TZ|Tanzania|255;TH|Thailand|66;TL|Timor-Leste|670;TG|Togo|228;TO|Tonga|676;TT|Trinidad and Tobago|1;TN|Tunisia|216;TR|Turkey|90;TM|Turkmenistan|993;TC|Turks and Caicos Islands|1;TV|Tuvalu|688;UG|Uganda|256;UA|Ukraine|380;AE|United Arab Emirates|971;GB|United Kingdom|44;US|United States|1;UY|Uruguay|598;VI|US Virgin Islands|1;UZ|Uzbekistan|998;VU|Vanuatu|678;VA|Vatican City|39;VE|Venezuela|58;VN|Vietnam|84;YE|Yemen|967;ZM|Zambia|260;ZW|Zimbabwe|263";
+  const CT_COUNTRIES = CT_ROWS.split(";").map((r) => { const p = r.split("|"); return { iso: p[0], name: p[1], dial: p[2] }; });
+  const CT_INDIA = CT_COUNTRIES.find((c) => c.iso === "IN");
+  const CT_BY_ISO = (iso) => CT_COUNTRIES.find((c) => c.iso === iso) || CT_INDIA;
+  const CT_MAIN = { 1: "US", 7: "RU", 44: "GB", 39: "IT", 262: "RE" }; // a code that several places share: the biggest one is chosen when only the code is known
+  const CT_BY_DIAL = (dial) => CT_COUNTRIES.find((x) => x.iso === CT_MAIN[dial]) || CT_COUNTRIES.find((x) => x.dial === dial);
+  const CT_ZERO_STAYS = { CI: 1 }; // a country whose numbers really begin with 0 (the others drop the 0 people dial inside their own country)
+  /** What the number box and the country list say, as one number. Country codes never start with 0 and none is the start of another, so a pasted +<code> is read exactly. India is held to the shape of an Indian mobile number; every other country is only held to the length the phone networks allow (8 to 15 digits in all), because the numbers of different countries are 8, 9, 10, 11 or 12 digits long and a real number must never be turned away for its length. */
+  const CTPhone = {
+    countries: CT_COUNTRIES,
+    byIso: CT_BY_ISO,
+    parse(iso, typed) {
+      const t = String(typed == null ? "" : typed).trim();
+      if (!t) return { ok: false, empty: true, why: "" };
+      if (/[^\d\s+\-()./]/.test(t)) return { ok: false, why: "A mobile number has digits only. Spaces, + and - are fine." };
+      let c = CT_BY_ISO(iso), d = t.replace(/\D/g, "");
+      if (t[0] === "+" || t.slice(0, 2) === "00") { // a whole number with its country code: it says which country it is
+        const n = d.replace(/^00/, ""), len = [1, 2, 3].find((k) => CT_COUNTRIES.some((x) => x.dial === n.slice(0, k)));
+        if (!len) return { ok: false, why: "We do not know that country code. Choose the country from the list and type the rest of the number." };
+        const dial = n.slice(0, len);
+        if (c.dial !== dial) c = CT_BY_DIAL(dial);
+        d = n.slice(len);
+      } else if (c.dial === "91") {
+        if (d.length === 12 && d.slice(0, 2) === "91") d = d.slice(2); // 91 98765 43210 typed without the plus
+        else if (d.length === 11 && d[0] === "0") d = d.slice(1);
+      } else if (d[0] === "0" && !CT_ZERO_STAYS[c.iso]) d = d.slice(1); // the 0 people dial inside their country is not part of the international number
+      if (c.dial === "91") {
+        if (d.length !== 10) return { ok: false, why: d.length < 10 ? "An Indian mobile number has 10 digits. Please check it." : "An Indian mobile number has 10 digits. Please remove the extra digits." };
+        if (!/^[6-9]/.test(d)) return { ok: false, why: "An Indian mobile number starts with 6, 7, 8 or 9." };
+      } else {
+        const all = c.dial.length + d.length;
+        if (all < 8) return { ok: false, why: "That looks too short for a mobile number in " + c.name + ". Please check it." };
+        if (all > 15) return { ok: false, why: "That looks too long for a mobile number in " + c.name + ". Please check it." };
+      }
+      return { ok: true, iso: c.iso, cc: c.dial, national: d, e164: "+" + c.dial + d };
+    },
+    /** "+91 98765 43210" as shown back to the person */
+    show(p) { return p && p.ok ? "+" + p.cc + " " + (p.cc === "91" ? p.national.slice(0, 5) + " " + p.national.slice(5) : p.national) : ""; },
+  };
+  window.CTPhone = CTPhone;
+  const ccOptions = (sel) => [CT_INDIA].concat(CT_COUNTRIES.filter((c) => c.iso !== "IN").sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))).map((c) => `<option value="${c.iso}"${c.iso === sel ? " selected" : ""}>${esc(c.name)} (+${c.dial})</option>`).join("");
+  const CC_KEY = "ctz-cc";
+
   // ---------- joining: a personal link needs no number; a number may be asked for; a request may have to wait to be let in; a person may have been removed ----------
-  const J = { k4: {}, consent: null, mode: "", phone: "", emp: "", name: "", wid: "", who: "", timer: null, polling: false, note: "" };
+  const J = { k4: {}, consent: null, mode: "", phone: "", cc: (() => { try { return CT_BY_ISO(store.get(CC_KEY)).iso; } catch { return "IN"; } })(), e164: "", emp: "", name: "", wid: "", who: "", timer: null, retry: 0, busyTries: 0, polling: false, note: "" };
+  const shownPhone = () => { const p = CTPhone.parse(J.cc, J.phone); return p.ok ? CTPhone.show(p) : String(J.phone || "").trim(); };
   const inviteOf = () => (INVITE_FROM ? { from: INVITE_FROM, cat: INVITE_CAT } : undefined);
   // What the organizer asked people to give to get in: a mobile number (default), an employee ID, or both. Employees only: no way in without the ID.
+  // Every box says whether it must be filled: a small red * and "mandatory", or "(optional)" in brackets. "alt": one of the two is needed.
+  const joinNeeds = () => {
+    const vm = INFO.verify || "mobile", eo = !!INFO.empOnly;
+    if (vm === "id") return eo ? { phone: "opt", emp: "req" } : { phone: "alt", emp: "alt" };
+    if (vm === "either") return { phone: "alt", emp: "alt" };
+    if (vm === "both") return eo ? { phone: "req", emp: "req" } : { phone: "req", emp: "opt" };
+    return { phone: "req", emp: "none" };
+  };
+  const markOf = (need, other) => (need === "req" ? `<span class="zreq"><b aria-hidden="true">*</b> mandatory</span>` : need === "alt" ? `<span class="zreq"><b aria-hidden="true">*</b> mandatory without ${other}</span>` : `<span class="zopt">(optional)</span>`);
   const joinWho = () => {
-    const vm = INFO.verify || "mobile", eo = !!INFO.empOnly, pv = esc(J.mode === "needPhone" ? J.phone : J.phone || ""), ev = esc(J.emp || "");
-    const phone = (label, hint) => `<label for="ph">${label}</label><input id="ph" inputmode="tel" enterkeyhint="go" autocomplete="tel" placeholder="98765 43210" value="${pv}">${hint ? `<p class="zsmall" style="margin:2px 0 6px">${hint}</p>` : ""}`;
-    const emp = (label, hint) => `<label for="emp">${label}</label><input id="emp" enterkeyhint="go" autocomplete="off" autocapitalize="characters" maxlength="30" value="${ev}">${hint ? `<p class="zsmall" style="margin:2px 0 6px">${hint}</p>` : ""}`;
-    if (vm === "id") return emp("Your employee ID", eo ? "This game is for employees only." : "") + (eo ? "" : phone("No employee ID? Type your mobile number instead", "Vendors, customers and families use their mobile number."));
+    const vm = INFO.verify || "mobile", eo = !!INFO.empOnly, nd = joinNeeds(), pv = esc(J.phone || ""), ev = esc(J.emp || "");
+    const phone = (label, hint) => `<label for="ph">${label} ${markOf(nd.phone, "an employee ID")}</label><div class="zphone"><select id="cc" aria-label="Country of your mobile number" autocomplete="off">${ccOptions(J.cc)}</select><input id="ph" type="tel" inputmode="tel" enterkeyhint="go" autocomplete="tel-national" placeholder="${J.cc === "IN" ? "98765 43210" : "Mobile number"}" ${nd.phone === "req" ? 'aria-required="true" ' : ""}value="${pv}"></div>${hint ? `<p class="zsmall" style="margin:2px 0 6px">${hint}</p>` : ""}`;
+    const emp = (label, hint) => `<label for="emp">${label} ${markOf(nd.emp, "a mobile number")}</label><input id="emp" enterkeyhint="go" autocomplete="off" autocapitalize="characters" maxlength="30" ${nd.emp === "req" ? 'aria-required="true" ' : ""}value="${ev}">${hint ? `<p class="zsmall" style="margin:2px 0 6px">${hint}</p>` : ""}`;
+    if (vm === "id") return emp("Your employee ID", eo ? "This game is for employees only." : "") + phone(eo ? "Your mobile number" : "No employee ID? Type your mobile number instead", eo ? "" : "Vendors, customers and families use their mobile number.");
     if (vm === "either") return phone("Your mobile number", "") + `<p class="zsmall" style="margin:0 0 6px;text-align:center"><b>or</b></p>` + emp("Your employee ID", "Give either one. Employees can use their ID; everyone else uses a mobile number.");
     if (vm === "both") return phone("Your mobile number", "") + emp(eo ? "Your employee ID" : "Your employee ID (employees only)", eo ? "This game is for employees only." : "Not an employee? Leave this empty.");
     return phone("Your mobile number", "");
   };
+  const BUSY_TRIES = 15;
   const INAPP = /Instagram|FBAN|FBAV|LinkedInApp|Teams|Outlook|MicroMessenger|; wv\)/i.test(String(navigator.userAgent || "")); // a link opened inside another app's own browser: opening it later in Chrome or Safari looks like a second phone
   const joinView = (msg) => {
     if (J.mode === "removed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>You are not on this game's list</h2><p class="zsmall" style="margin:0">You were removed from this game, so there is no ticket for you here. If you think this is a mistake, please ask the person who invited you.</p></div>`;
     if (J.mode === "gone") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This link is not active any more</h2><p class="zsmall" style="margin:0">Please ask the person who invited you for a new link.</p></div>`;
-    if (J.mode === "waiting") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard zwait" role="status"><h2>Please wait a moment</h2><p style="margin:0 0 6px">${J.note ? esc(J.note) : `Your request to join has gone to ${J.who ? esc(J.who) : "the organizer"}.`}</p><p class="zsmall" style="margin:0">Keep this page open. As soon as you are let in, your ticket appears here.</p></div><div class="zagain">${J.emp || J.phone ? `<p class="zsmall" style="margin:0 0 6px">You asked with <b>${esc([J.emp, J.phone].filter(Boolean).join(" / "))}</b>. Is that wrong?</p>` : ""}<button class="zbtn s alt" id="again" type="button">Wrong number or ID? Type it again</button></div>`;
+    if (J.mode === "busy") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard zwait" role="status"><h2>Many people are joining right now</h2><p style="margin:0 0 6px">Your request is safe. We are trying again for you every few seconds. Keep this page open.</p><p class="zsmall" style="margin:0">Try ${J.busyTries} of ${BUSY_TRIES}.</p></div><div class="zagain"><button class="zbtn s alt" id="again" type="button">Stop and try myself</button></div>`; // a whole office joins from one address: the server asks for a short wait and the page asks again by itself
+    if (J.mode === "waiting") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard zwait" role="status"><h2>Please wait a moment</h2><p style="margin:0 0 6px">${J.note ? esc(J.note) : `Your request to join has gone to ${J.who ? esc(J.who) : "the organizer"}.`}</p><p class="zsmall" style="margin:0">Keep this page open. As soon as you are let in, your ticket appears here.</p></div><div class="zagain">${J.emp || J.phone ? `<p class="zsmall" style="margin:0 0 6px">You asked with <b>${esc([J.emp, shownPhone()].filter(Boolean).join(" / "))}</b>. Is that wrong?</p>` : ""}<button class="zbtn s alt" id="again" type="button">Wrong number or ID? Type it again</button></div>`;
     if (J.mode === "declined" || J.mode === "lapsed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>${J.mode === "declined" ? "Your request was not accepted" : "This request has run out"}</h2><p class="zsmall" style="margin:0 0 8px">${J.mode === "declined" ? "You are not on the list for this game. Please ask the person who invited you." : "Nobody answered in time. You can ask again."}</p></div><div class="zagain"><button class="zbtn s alt" id="again" type="button">${J.mode === "declined" ? "Typed it wrong? Type it again" : "Ask again"}</button></div>`;
     const personal = !!TOKEN && J.mode !== "needPhone"; // a personal link is made for one person: no number to type unless the server asks
     return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div>
@@ -107,7 +163,7 @@
     ${INAPP ? `<p class="zsmall" style="margin:0 0 8px">Tip: if this link opened inside another app, open it in Chrome or Safari and always use that same one for this game.</p>` : ""}${J.mode === "needPhone" && !msg ? `<div class="zbanner info" role="status" style="margin:0 0 8px">${J.note ? esc(J.note) : "This link was already opened on another phone. Please type your mobile number to get your ticket."}</div>` : ""}
     ${DEMO ? "" : CBConsent.html("K4")}
     ${personal ? `<p class="zsmall" style="margin:0 0 6px">Your personal link is ready. Press the button to get your ticket.</p>` : joinWho()}
-    ${personal ? "" : `<label for="nm">Your name (shown only to the organizer)</label><input id="nm" enterkeyhint="go" autocomplete="name" maxlength="60" value="${esc(J.name)}">`}
+    ${personal ? "" : `<label for="nm">Your name <span class="zopt">(optional)</span></label><input id="nm" enterkeyhint="go" autocomplete="name" maxlength="60" value="${esc(J.name)}"><p class="zsmall" style="margin:2px 0 6px">Shown only to the organizer.</p>`}
     ${msg ? `<div class="zbanner bad" role="alert">${esc(msg)}</div>` : ""}
     <button class="zbtn" id="go" ${DEMO ? "" : 'data-needs="K4" disabled aria-disabled="true"'}>Get my ticket</button>
     <p class="zsmall">We use your number for your ticket and, if you win, your prize. Your organizer sees it. Other players do not.</p>
@@ -133,13 +189,13 @@
   }
   // The waiting screen survives a reload: what the person typed and the waiting number are kept on this phone only until they are let in, declined, removed or start again.
   const WAITKEY = "ctz-wait-" + EID;
-  const saveWait = () => { try { store.set(WAITKEY, JSON.stringify({ wid: J.wid, who: J.who, note: J.note, phone: J.phone, emp: J.emp, name: J.name, at: Date.now() })); } catch {} };
+  const saveWait = () => { try { store.set(WAITKEY, JSON.stringify({ wid: J.wid, who: J.who, note: J.note, phone: J.phone, cc: J.cc, e164: J.e164, emp: J.emp, name: J.name, at: Date.now() })); } catch {} };
   const clearWait = () => { try { localStorage.removeItem(WAITKEY); } catch {} try { store.set(WAITKEY, ""); } catch {} };
   function restoreWait() {
     if (DEMO || J.mode) return;
     let w = null; try { w = JSON.parse(store.get(WAITKEY) || "null"); } catch { w = null; }
     if (!w || !w.wid || Date.now() - Number(w.at || 0) > 7 * 86400000) { clearWait(); return; }
-    J.mode = "waiting"; J.wid = String(w.wid); J.who = String(w.who || ""); J.note = String(w.note || ""); J.phone = String(w.phone || ""); J.emp = String(w.emp || ""); J.name = String(w.name || "");
+    J.mode = "waiting"; J.wid = String(w.wid); J.who = String(w.who || ""); J.note = String(w.note || ""); J.phone = String(w.phone || ""); J.cc = CT_BY_ISO(w.cc).iso; J.e164 = String(w.e164 || ""); J.emp = String(w.emp || ""); J.name = String(w.name || "");
     waitPoll();
   }
   function waitPoll() {
@@ -157,7 +213,7 @@
   }
   /** Joins with what is typed (or just the token). Shows a ticket, or the calm screen that fits the answer. */
   async function doJoin() {
-    const ok = await rt.join(J.phone, J.name, inviteOf(), J.emp);
+    const ok = await rt.join(J.e164 || J.phone, J.name, inviteOf(), J.emp);
     if (ok) {
       J.mode = ""; clearInterval(J.timer); clearWait();
       if (TOKEN) { try { const u = new URLSearchParams(location.search); u.delete("t"); history.replaceState(null, "", location.pathname + (u.toString() ? "?" + u : "")); } catch {} } // the personal token leaves the address bar once it has done its job
@@ -170,7 +226,8 @@
     else if (code === "declined" || b.declined) { J.mode = "declined"; rt.error = null; clearInterval(J.timer); }
     else if (code === "link-used" || b.needPhone) { J.mode = "needPhone"; J.note = String(b.error || l.message || "").slice(0, 300); rt.error = null; }
     else if (code === "link-gone" || /link-gone/.test(l.message || "")) { J.mode = "gone"; rt.error = null; }
-    else if (J.mode === "waiting") J.mode = ""; // let in, but the join failed another way: show the usual message
+    else if (code === "busy" && J.busyTries < BUSY_TRIES) { J.busyTries++; J.mode = "busy"; rt.error = null; clearTimeout(J.retry); J.retry = setTimeout(() => { if (J.mode === "busy") doJoin(); }, Math.round((4 + Math.min(26, J.busyTries * 2)) * 1000 * (0.7 + Math.random() * 0.6))); } // "busy" is a short wait, not a refusal: ask again by itself, each phone at its own random moment, a little longer each time
+    else if (J.mode === "waiting" || J.mode === "busy") J.mode = ""; // let in, but the join failed another way: show the usual message
     paint(); return false;
   }
 
@@ -482,7 +539,7 @@
   }
   // ---------- My invites: for a guest who may invite (level 1) only. Their own small list: add, send on WhatsApp, resend, remove. A guest invited by a guest sees nothing. ----------
   const MI = { k6: {}, people: [], limit: 0, used: 0, loaded: false, at: -Infinity, busy: false, note: "", bad: false, ask: "", name: "", phone: "" };
-  const miQ = (v) => `?me=${encodeURIComponent(v.pid)}`;
+  const miQ = (v) => `?me=${encodeURIComponent(v.pid)}&device=${encodeURIComponent(myDevice())}`; // the ticket id is public: the phone's own device id goes with every invite call
   async function loadMine(v, force) {
     if (DEMO || !ME.canInvite || !v.pid || MI.busy) return;
     if (!force && performance.now() - MI.at < 60000) return;
@@ -708,14 +765,14 @@
     }
     CK.loading = false;
   }
-  const ckTime = (ms) => new Date(ms).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
+  const ckTime = (ms) => new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZoneName: "short" }); // the time on THIS phone, with its own time zone named: people play from all over the world
   function checkinView() {
     const ids = CK.ids ? `<div class="zckids"><div><span>Game ID</span><b>${esc(CK.ids.game)}</b></div><div><span>Participant ID</span><b>${esc(CK.ids.participant)}</b></div><div><span>Ticket ID</span><b>${esc(CK.ids.ticket)}</b></div></div>` : "";
     if (CK.fatal) return `${brandStrip()}${demoGameCard()}<div class="zcard" role="status"><h2>We could not open your check-in</h2><p class="zsmall" style="margin:0">${esc(CK.fatal)}</p></div>`;
     if (!CK.loaded) return `${brandStrip()}${demoGameCard()}<div class="zcard"><p class="zmsg">Loading your check-in…</p></div>`;
     if (!CK.open) {
       const left = Math.max(0, Math.round((CK.opensMs - Date.now()) / 1000));
-      return `${brandStrip()}${demoGameCard()}<div class="zcard zck"><div class="zeyebrow">Before the game</div><h2>Check-in opens at ${esc(ckTime(CK.opensMs))} (India time)</h2>${ids}<p class="zsmall">Check-in opens 5 minutes before the game starts. Keep this page open: the check-in appears here by itself, and your ticket opens once you are marked present.</p><div class="zckwait"><span>Opens in</span> <b>${esc(clock(left))}</b></div></div>`;
+      return `${brandStrip()}${demoGameCard()}<div class="zcard zck"><div class="zeyebrow">Before the game</div><h2>Check-in opens at ${esc(ckTime(CK.opensMs))}</h2>${ids}<p class="zsmall">Check-in opens 5 minutes before the game starts. Keep this page open: the check-in appears here by itself, and your ticket opens once you are marked present.</p><div class="zckwait"><span>Opens in</span> <b>${esc(clock(left))}</b></div></div>`;
     }
     const x = CK.v, ready = x.okN && x.okM && String(x.code).length === 4;
     return `${brandStrip()}${demoGameCard()}<div class="zcard zck"><div class="zeyebrow">Before the game</div><h2>Mark yourself present</h2>${ids}
@@ -820,19 +877,33 @@
     }));
   }
   function bindJoin() {
-    const again = document.getElementById("again"); if (again) again.onclick = () => { clearInterval(J.timer); J.mode = ""; J.wid = ""; clearWait(); paint(); };
+    const again = document.getElementById("again"); if (again) again.onclick = () => { clearInterval(J.timer); clearTimeout(J.retry); J.busyTries = 0; J.mode = ""; J.wid = ""; clearWait(); paint(); };
     const go = document.getElementById("go"); if (!go) return;
     if (!DEMO) CBConsent.wire(document, "K4", J.k4); // never ticked in advance; the button stays off until both boxes are ticked
+    const phEl = document.getElementById("ph"), ccEl = document.getElementById("cc");
+    if (phEl && ccEl) phEl.addEventListener("change", () => { const p = CTPhone.parse(ccEl.value, phEl.value); if (p.ok && /^\s*(\+|00)/.test(phEl.value)) { ccEl.value = p.iso; phEl.value = p.national; } }); // +44 7911 123456 pasted: the list shows the United Kingdom and the box keeps the rest
     ["ph", "nm", "emp"].forEach((id) => { const i = document.getElementById(id); if (i) i.addEventListener("keydown", (e) => { if (e.key === "Enter" && !go.disabled) { e.preventDefault(); go.click(); } }); }); // the keyboard's Go / Enter key does what the button does
     go.onclick = async () => {
       if (!DEMO && !CBConsent.all(document, "K4")) return;
       J.consent = DEMO ? null : CBConsent.payload(document, "K4");
-      go.disabled = true;
+      go.disabled = true; J.busyTries = 0; clearTimeout(J.retry);
       if (window.TBAudio) TBAudio.unlock();
-      const ph = document.getElementById("ph"), nm = document.getElementById("nm"), em = document.getElementById("emp");
+      const ph = document.getElementById("ph"), nm = document.getElementById("nm"), em = document.getElementById("emp"), cc = document.getElementById("cc");
       J.emp = em ? em.value.trim() : J.emp;
       J.phone = ph ? ph.value : J.phone; J.name = nm ? nm.value.trim() : J.name;
-      if (J.mode === "needPhone" && !J.phone.trim() && !J.emp) { rt.error = "Type your own mobile number, then press the button again."; try { document.activeElement && document.activeElement.blur(); } catch {} paint(); return; } // the link was used on another phone: the game needs the number it was made for
+      if (cc) { J.cc = CT_BY_ISO(cc.value).iso; try { store.set(CC_KEY, J.cc); } catch {} }
+      const stop = (m) => { rt.error = m; try { document.activeElement && document.activeElement.blur(); } catch {} paint(); }; // said in place, at once: nothing is sent to the server for a mistake the phone can see
+      if (J.mode === "needPhone" && !J.phone.trim() && !J.emp) return stop("Type your own mobile number, then press the button again."); // the link was used on another phone: the game needs the number it was made for
+      const pp = CTPhone.parse(J.cc, J.phone), nd = joinNeeds(), idText = J.emp.replace(/\s+/g, "");
+      if (!pp.ok && !pp.empty) return stop(pp.why); // typed, even if the box is optional: a mistyped number is never dropped silently
+      if (idText && !/^[A-Za-z0-9][A-Za-z0-9._\-\/]{0,29}$/.test(idText)) return stop("An employee ID has letters and numbers only.");
+      if (!(TOKEN && J.mode !== "needPhone")) {
+        if (nd.emp === "req" && !idText && nd.phone === "req" && pp.empty) return stop("Enter your employee ID and your mobile number.");
+        if (nd.emp === "req" && !idText) return stop("Enter your employee ID.");
+        if (nd.phone === "req" && pp.empty) return stop("Enter your mobile number.");
+        if (nd.phone === "alt" && nd.emp === "alt" && !idText && pp.empty) return stop("Enter your employee ID or your mobile number.");
+      }
+      if (pp.ok) { J.cc = pp.iso; J.e164 = pp.e164; } else J.e164 = "";
       go.textContent = "Getting your ticket…"; // a press shows at once that it is working (the redraw after a refusal builds the button again)
       try { document.activeElement && document.activeElement.blur(); } catch {} // the redraw after a refusal is skipped while a box still has the keyboard
       await doJoin(); // shows the ticket screen at once on success: the first tick may take a few seconds on a slow network

@@ -7,7 +7,9 @@ if ($conn) { foreach ($c in $conn) { & taskkill /PID $c.OwningProcess /T /F | Ou
 Start-Sleep 2
 New-Item -ItemType Directory -Force "$root\data" | Out-Null
 $env:PORT = $Port; $env:CT_MODE = "TEST"; $env:TEST_MODE = "1"; $env:PUBLIC_ORIGIN = "http://localhost:$Port"
-$env:DAILY_WRITE_BUDGET = "1000000000"   # a load test must never meet the daily write guard (the guard has its own unit tests)
+# the same settings as the live site (pages/wrangler.toml); set $env:SIM_NO_BUDGET = "1" for a logic run that must not meet the daily write guard (the guard has its own unit tests)
+$env:DAILY_WRITE_BUDGET = $(if ($env:SIM_NO_BUDGET) { "1000000000" } else { "2000000" }); $env:JOIN_PER_IP_MINUTE = "600"; $env:JOIN_PER_IP_DAY = "20000"; $env:AI_LINK_MAIL_AT_SIGNUP = "0"
+if (-not $env:D1_READ_MS) { $env:D1_READ_MS = "3" }; if (-not $env:D1_WRITE_MS) { $env:D1_WRITE_MS = "10" } # a real D1 call takes a few milliseconds
 $env:DB_FILE = Join-Path "$root\data" $Db
 Start-Process -WindowStyle Hidden -WorkingDirectory "$root\tambola" -FilePath $bun -ArgumentList "run","apps/edge/src/local.ts" -RedirectStandardOutput "$root\data\tambola-$Port.log" -RedirectStandardError "$root\data\tambola-$Port.err"
 Start-Sleep 5

@@ -10,6 +10,7 @@ import { seatOfPid } from "../../../packages/beacon/src/unique-ticket";
 import { openPii, openText, sealPii, sealText, type PiiEnv } from "./pii";
 import { cfgOfRow, recordWinners } from "./lifecycle";
 import type { D1, Env } from "./worker";
+import { cleanPhone, keptFromClean, keptPhone } from "./phonekit";
 
 export const WINNERS_SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS rvote (eid TEXT NOT NULL, round INTEGER NOT NULL, pattern TEXT NOT NULL, ordinal INTEGER NOT NULL, seat INTEGER NOT NULL, digest TEXT NOT NULL, PRIMARY KEY (eid, round, pattern, ordinal, seat))`,
@@ -25,7 +26,6 @@ type Json = (o: unknown, s?: number) => Response;
 const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))), (b) => b.toString(16).padStart(2, "0")).join("");
 const PID = /^[0-9]{1,6}x[0-9a-f]{12}$/;
 const cleanName = (n: unknown) => (typeof n === "string" ? n.replace(/[<>`]/g, "").replace(/\s+/g, " ").trim().slice(0, 60) : "");
-const digitsOf = (raw: unknown): string | null => { const d = String(raw ?? "").replace(/\D/g, ""); return d.length < 10 || d.length > 15 ? null : d.slice(-10); };
 
 /** A phone reports the winners it worked out. Several different phones must report exactly the same before the result is accepted. */
 export async function acceptVotes(env: Env & PiiEnv, e: any, eid: string, b: any, now: number, json: Json, spend: Spend): Promise<Response> {
@@ -82,13 +82,14 @@ export async function confirmPrize(env: Env & PiiEnv, eid: string, b: any, now: 
   if (!mine) return json({ error: "This is not the phone that holds this ticket." }, 403);
   const rows = (await env.DB.prepare("SELECT round, pattern, ordinal, pii, orig, trail FROM prize WHERE eid=? AND seat=?").bind(eid, seat).all<any>()).results ?? [];
   if (!rows.length) return json({ error: "No reward recorded for this ticket." }, 404);
-  const name = cleanName(b.name), phone = digitsOf(b.phone);
+  const name = cleanName(b.name), cur = await openPii(env, rows[0].pii), typed = String(b.phone ?? "").trim() ? cleanPhone(b.phone) : null;
   if (!name) return json({ error: "Please write your name." }, 400);
-  if (!phone) return json({ error: "Please enter a valid mobile number." }, 400);
+  if (typed && !typed.ok) return json({ error: typed.why }, 400); // from any country: the page sends +<country code><number>
+  if (!typed && !cur?.empId) return json({ error: "Please enter your mobile number." }, 400); // a winner who came in by employee ID may be found by the ID: the number is then welcome, not needed
   if (!(await spend(env, now, rows.length + 1))) return json({ error: "Busy day. Please try again after midnight UTC." }, 503);
-  const cur = await openPii(env, rows[0].pii);
-  const changed = !cur || cur.phone.slice(-10) !== phone || (cur.name ?? "") !== name;
-  const sealed = await sealPii(env, { phone, name });
+  const phone = typed && typed.ok ? keptFromClean(typed.digits) : cur?.phone ?? "";
+  const changed = !cur || keptPhone(cur.phone ?? "") !== phone || (cur.name ?? "") !== name;
+  const sealed = await sealPii(env, { phone, name, ...(cur?.empId ? { empId: cur.empId } : {}) }); // the employee ID stays with the record
   for (const r of rows) {
     let trail: any[] = []; try { trail = JSON.parse((await openText(env, r.trail)) ?? "[]"); } catch { /* none yet */ }
     if (changed) trail.push({ at: now, name, phone });
@@ -119,7 +120,7 @@ export async function listPrizes(env: Env & PiiEnv, eid: string, json: Json, out
     let trail: any[] = []; try { trail = JSON.parse((await openText(env, r.trail)) ?? "[]"); } catch { /* none */ }
     const hide = (ph: string | undefined) => (outside ? (ph ? "XXXXXXXX" + ph.slice(-2) : "") : ph ?? "");
     if (outside) out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, confirmed: !!r.confirmed_ms, changed: trail.length > 0, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null, ...(r.removed ? { notGiven: "removed" } : {}) });
-    else out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, name: cur?.name ?? "", phone: cur?.phone ?? "", confirmed: !!r.confirmed_ms, confirmedMs: r.confirmed_ms ?? null,
+    else out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, name: cur?.name ?? "", phone: cur?.phone ?? "", ...(cur?.empId ? { empId: cur.empId } : {}), confirmed: !!r.confirmed_ms, confirmedMs: r.confirmed_ms ?? null,
       changed: trail.length > 0, joinedWithName: orig?.name ?? "", joinedWithPhone: orig?.phone ?? "", trail, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null, ...(r.removed ? { notGiven: "removed" } : {}) }); // a person removed during the game keeps the win, but the prize is not given
   }
   return json({ prizes: out });

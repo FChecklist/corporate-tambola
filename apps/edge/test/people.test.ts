@@ -130,13 +130,16 @@ describe("who may call", () => {
   test("a level-1 guest has a list within their limit, known by ticket id; a guest invited by a guest has none; with invitations off nobody does", async () => {
     const t = await setup({ invites: { on: true, per: 2 } });
     const a = await j(await joinAs("PPL-1", 1)); const b = await j(await joinAs("PPL-1", 2, { from: 1 })); // seat 1 is level 1, seat 2 was invited by it
-    const q = (pid: string) => `?me=${pid}`;
+    const q = (pid: string, d = 1) => `?me=${pid}&device=${dev(d)}`; // the ticket id is public: the phone's own device id goes with it
     expect(await j(await call("GET", `/api/z/PPL-1/people${q(a.pid)}`))).toMatchObject({ limit: 2, used: 1 }); // the guest who joined through their link is on their list
     const r = await call("POST", `/api/z/PPL-1/people${q(a.pid)}`, { people: [{ name: "F1", phone: mob(11) }] });
     expect((await j(r)).added).toBe(1);
     const full = await call("POST", `/api/z/PPL-1/people${q(a.pid)}`, { people: [{ name: "F2", phone: mob(12) }] });
     expect(full.status).toBe(409);
-    expect((await call("GET", `/api/z/PPL-1/people${q(b.pid)}`)).status).toBe(403);
+    expect((await call("GET", `/api/z/PPL-1/people${q(b.pid, 2)}`)).status).toBe(403);
+    expect((await call("GET", `/api/z/PPL-1/people?me=${a.pid}`)).status).toBe(403); // the ticket id is public (the seat list shows it): alone it is not enough
+    const wrongPhone = await call("GET", `/api/z/PPL-1/people${q(a.pid, 9)}`); expect(wrongPhone.status).toBe(403); expect((await j(wrongPhone)).code).toBe("device");
+    expect((await call("GET", `/api/z/PPL-1/waiting?me=${a.pid}`)).status).toBe(403);
     expect((await call("GET", `/api/z/PPL-1/people${q("nope")}`)).status).toBe(403);
     expect((await call("GET", `/api/z/PPL-1/people/export${q(a.pid)}`)).status).toBe(403);
     await call("PATCH", "/api/z/PPL-1/settings", { guestInvites: { on: false } }, t.master);
@@ -339,7 +342,7 @@ describe("removing people", () => {
     const t = await setup({ invites: { on: true, per: 4 } });
     const p = (await j(await add(t.master, [{ name: "Asha", phone: mob(1) }]))).people[0];
     const asha = await j(await join("PPL-1", { token: tokenOf(p.link), device: dev(1) }));
-    await call("POST", `/api/z/PPL-1/people?me=${asha.pid}`, { people: [{ name: "Kid", phone: mob(2) }] });
+    await call("POST", `/api/z/PPL-1/people?me=${asha.pid}&device=${dev(1)}`, { people: [{ name: "Kid", phone: mob(2) }] });
     await joinAs("PPL-1", 2);
     expect(rowsOf("SELECT COUNT(*) c FROM seat")[0].c).toBe(2);
     const only = await j(await call("POST", `/api/z/PPL-1/people/${p.id}/remove`, {}, t.master));
@@ -356,7 +359,7 @@ describe("removing people", () => {
     const t = await setup({ invites: { on: true, per: 4 } });
     const p = (await j(await add(t.master, [{ name: "Asha", phone: mob(1) }]))).people[0];
     const asha = await j(await join("PPL-1", { token: tokenOf(p.link), device: dev(1) }));
-    await call("POST", `/api/z/PPL-1/people?me=${asha.pid}`, { people: [{ name: "Kid", phone: mob(2) }] });
+    await call("POST", `/api/z/PPL-1/people?me=${asha.pid}&device=${dev(1)}`, { people: [{ name: "Kid", phone: mob(2) }] });
     const r = await j(await call("POST", `/api/z/PPL-1/people/${p.id}/remove`, { withTheirPeople: true }, t.master));
     expect(r.removed).toBe(2); expect(rowsOf("SELECT COUNT(*) c FROM person WHERE status<>'removed'")[0].c).toBe(0);
   });

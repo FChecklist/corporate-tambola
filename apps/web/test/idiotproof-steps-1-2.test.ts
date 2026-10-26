@@ -133,13 +133,33 @@ describe('console steps 1 and 2: told what is wrong, and how to put it right', (
     expect(d.text()).toContain('This game is free for up to 10 people. To invite more, choose a bigger size in step 8 and pay');
   });
 
-  test('saving step 1 does not carry the unsaved who-calls-the-numbers choice of step 2', async () => {
+  test('saving step 1 does not carry the unsaved who-calls-the-numbers choice of step 2, and does not lose it either', async () => {
     const o = await organizer(); await make(o, 'IP-LEAK'); const pw = spy();
     const p = await consolePage(o, 'IP-LEAK', { hook: pw.hook }); await p.waitFor((x) => /Hello/.test(x));
+    const modeOnServer = async () => (await o.json(await o.api('GET', '/api/z/IP-LEAK/info', undefined, o.aiKey))).callMode;
     openStep(p, 2); p.click(ck('mode', 'host'));
+    const base0 = (p.win as any).__zc.fBase;
     openStep(p, 1); p.click(`[data-save='1']`); await idle(p);
+    await p.waitFor(() => (p.win as any).__zc.fBase !== base0, 10_000); // the refresh that follows the save has put the form in line with the server
     expect(pw.patches.length).toBe(1); expect('callMode' in pw.patches[0]).toBe(false);
-    expect((await o.json(await o.api('GET', '/api/z/IP-LEAK/info', undefined, o.aiKey))).callMode).toBe('auto');
+    expect(await modeOnServer()).toBe('auto');
+    openStep(p, 2);
+    expect(p.$(ck('mode', 'host'))!.getAttribute('aria-pressed')).toBe('true'); // the tap is still there ...
+    expect(p.$('#sec2 .zc-say')!.textContent).toBe('Not saved yet. Press Save and continue below.'); // ... and it still says it is not saved
+    p.click(`[data-save='2']`); await idle(p);
+    expect(await modeOnServer()).toBe('host'); // pressing Save keeps what was tapped
+  });
+
+  test('a tap that changes nothing is not "not saved yet" (the chosen chip again, "My crowd is a different size"), and a real change still is', async () => {
+    const o = await organizer(); await make(o, 'IP-NOOP');
+    const p = await consolePage(o, 'IP-NOOP'); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 2);
+    const dirty = () => (p.win as any).__ctDirty();
+    p.click(ck('tix', '1')); // 1 ticket is the chosen size already
+    expect(p.$('#unsavednote')).toBeNull(); expect(dirty()).toBe(false);
+    p.click(`[data-bool='capOther']`); // only shows the box for an own number
+    expect(p.$('#unsavednote')).toBeNull(); expect(dirty()).toBe(false); expect(p.$('#f-cap')!.closest('[hidden]')).toBeNull();
+    p.click(ck('tix', '2')); // a real change
+    expect(p.$('#unsavednote')!.textContent).toMatch(/Not saved yet/); expect(dirty()).toBe(true);
   });
 
   test('ticking no kind of guest is explained before and after Save, and the red message goes as soon as a kind is ticked', async () => {

@@ -625,12 +625,12 @@
       const name = String(r.name || "").trim(), emp = String(r.empId || "").replace(/\s+/g, "").toUpperCase();
       if ((vmode() === "id" && emp) || (vmode() === "either" && emp && !String(r.phone || "").trim())) { // known by employee ID: a mobile number is welcome but not needed
         const d0 = String(r.phone || "").trim() ? cleanPhone(r.phone) : "";
-        if (String(r.phone || "").trim() && !d0) { wrong.push({ name, raw: String(r.phone || ""), why: "The mobile number looks wrong." }); continue; }
+        if (String(r.phone || "").trim() && !d0) { wrong.push({ name, raw: String(r.phone || ""), empId: emp, why: "The mobile number looks wrong." }); continue; }
         if (seen.has("E" + emp)) { dups++; continue; }
         seen.add("E" + emp); good.push({ name, phone: d0, empId: emp }); continue;
       }
       const d = cleanPhone(r.phone);
-      if (!d) { wrong.push({ name, raw: String(r.phone || ""), why: String(r.phone || "").trim() ? "The mobile number looks wrong." : vmode() === "mobile" ? (emp ? "This game asks for a mobile number, not an employee ID. Type the number here, or choose Only my employees in step 2." : "A mobile number is needed.") : emp ? "A mobile number is needed as well." : "A mobile number or an employee ID is needed." }); continue; }
+      if (!d) { wrong.push({ name, raw: String(r.phone || ""), empId: emp, why: String(r.phone || "").trim() ? "The mobile number looks wrong." : vmode() === "mobile" ? (emp ? "This game asks for a mobile number, not an employee ID. Type the number here, or choose Only my employees in step 2." : "A mobile number is needed.") : emp ? "A mobile number is needed as well." : "A mobile number or an employee ID is needed." }); continue; }
       if (seen.has(d)) { dups++; continue; }
       seen.add(d); good.push({ name, phone: d, ...(emp && vmode() !== "mobile" ? { empId: emp } : {}) });
     }
@@ -705,14 +705,15 @@
   }
   async function addPeople(raw, keep, fromForm) {
     const P = S.pp;
-    if (P.adding) return; if (!raw.length) { P.sum = "Add a name and a number first."; return redraw(); }
+    if (P.adding) { P.sum = "Still adding the last list. Please wait a moment, then try again."; return redraw(); } if (!raw.length) { P.sum = "Add a name and a number first."; return redraw(); }
     const consent = { v: CBConsent.version, boxes: ["A"] }; // the right to use these names and numbers is part of the Terms the Organizer accepted (clause 11.4A); no separate box is shown
     const { good, dups, wrong } = cleanBatch(raw); let added = good.length, serverDup = 0, got = 0, counted = false; const bad = wrong.slice();
     try {
       P.adding = true; P.sum = "Adding " + raw.length + (raw.length === 1 ? " person" : " people") + "..."; redraw(); for (let i = 0; i < good.length; i += 200) {
         const r = await call("POST", `/api/z/${eid}/people`, { consent, people: good.slice(i, i + 200).map((p) => ({ name: p.name, ...(p.phone ? { phone: "+" + p.phone } : {}), ...(p.empId ? { empId: p.empId } : {}) })) });
         serverDup += Number(r.duplicates) || 0; if (typeof r.added === "number") { got += r.added; counted = true; }
-        for (const x of r.invalid || []) { const q = parseList(String(typeof x === "string" ? x : x.raw || ""))[0] || { name: "", phone: "" }; bad.push({ name: q.name, raw: q.phone, why: typeof x === "string" ? "" : x.why || "" }); }
+        const idOf = new Map(good.slice(i, i + 200).filter((g) => g.phone && g.empId).map((g) => [g.phone, g.empId])); /* the server names a refused row by name and number only: its employee ID is looked up from what was just sent */
+        for (const x of r.invalid || []) { const q = parseList(String(typeof x === "string" ? x : x.raw || ""))[0] || { name: "", phone: "" }, ei = idOf.get(cleanPhone(q.phone)); bad.push({ name: q.name, raw: q.phone, ...(ei ? { empId: ei } : {}), why: typeof x === "string" ? "" : x.why || "" }); }
       }
       if (counted) added = got;
       const d = dups + serverDup;
@@ -773,7 +774,7 @@
     h += waitingPanel();
     h += full ? small(`You have reached your limit of ${P.limit} people. Remove someone to add another.`) : addBox();
     if (P.sum) h += `<p class="zc-small" id="cleansum" role="status"><b>${esc(P.sum)}</b></p>`;
-    if (P.wrong.length) h += `<div class="zc-box" id="wronglist"><b class="zc-bt">${P.wrong.every((w) => !String(w.raw || "").trim()) ? "These need a mobile number. Type it and press Fix and add." : "These look wrong. Fix the number and add them."}</b>${P.wrong.map((w, i) => `<div class="zc-inline"><span>${esc(w.name || "No name")}${w.why ? ` <span class="zc-small zc-nomargin">${esc(w.why)}</span>` : ""}${/step 2/.test(w.why || "") ? ` <button type="button" class="zc-mini" data-open="2">Open step 2</button>` : ""}</span><label class="zc-sr" for="fixin${i}">Mobile number for ${esc(w.name || "this person")}</label><input id="fixin${i}" class="zc-in" inputmode="tel" value="${esc(w.raw)}"><button type="button" class="zc-mini" data-fix="${i}">Fix and add</button></div>`).join("")}</div>`;
+    if (P.wrong.length) h += `<div class="zc-box" id="wronglist"><b class="zc-bt">${P.wrong.every((w) => !String(w.raw || "").trim()) ? "These need a mobile number. Type it and press Fix and add." : "These look wrong. Fix the number and add them."}</b>${P.wrong.map((w, i) => `<div class="zc-inline"><span>${esc(w.name || "No name")}${w.empId ? ` <span class="zc-small zc-nomargin">(employee ID ${esc(w.empId)})</span>` : ""}${w.why ? ` <span class="zc-small zc-nomargin">${esc(w.why)}</span>` : ""}${/step 2/.test(w.why || "") ? ` <button type="button" class="zc-mini" data-open="2">Open step 2</button>` : ""}</span><label class="zc-sr" for="fixin${i}">Mobile number for ${esc(w.name || "this person")}</label><input id="fixin${i}" class="zc-in" inputmode="tel" value="${esc(w.raw)}"><button type="button" class="zc-mini" data-fix="${i}">Fix and add</button></div>`).join("")}</div>`;
     h += list.map(personRow).join("") + (list.length ? "" : small("Nobody yet. Add your first person above."));
     h += `<div class="zc-chips zc-gap"><button type="button" class="zc-mini" id="copycommon">Copy common link</button>${P.canExport ? `<button type="button" class="zc-mini" id="dlpeople">Download my list</button>` : ""}</div>`;
     h += small("The common link is for groups. The person types their own mobile number. A personal link is made for one person only.");
@@ -977,8 +978,8 @@
     const log = S.logs && S.logs[S.round] ? S.logs[S.round] : [], last = log.length ? log[log.length - 1] : null;
     const onWay = count > 0 && (S.now === null || nexts[count - 1] > S.now || log.length + 90 * (S.round - 1) < count); // signed, but its round is not published or not read yet
     const paused = S.control && S.control.pausedNow, done = count >= total, inRound = count - 90 * (S.round - 1);
-    const over = allPrizesWon(); const off = !S.started || onWay || done || S.pressing || over;
-    const state = !S.started ? "The game has not started yet." : over ? "Every prize has been won. The game is over." : done ? "Every number has been called." : paused ? "Paused. Press Resume, then the next number." : onWay ? "On its way to every phone…" : count ? "Press when you are ready for the next number." : "Press for the first number when everyone is ready.";
+    const over = allPrizesWon(), ended = !!(S.control && S.control.stopped); const off = !S.started || onWay || done || S.pressing || over || ended;
+    const state = !S.started ? "The game has not started yet." : ended ? (S.control.stopNow ? "The game is over." : "The game is being ended. No more numbers will be called.") : over ? "Every prize has been won. The game is over." : done ? "Every number has been called." : paused ? "Paused. Press Resume, then the next number." : onWay ? "On its way to every phone…" : count ? "Press when you are ready for the next number." : "Press for the first number when everyone is ready.";
     return `<div class="zc-block zc-hostcall" id="hostcall"><h3>Next number</h3>
       <div class="zc-hostrow"><div class="zc-hostnum" id="hostlast" aria-live="polite" aria-label="${last ? "Number " + last : "No number yet"}">${last ? last : "–"}</div><div><b id="hostcount">${Math.max(0, Math.min(90, inRound))} of 90</b> called${rounds > 1 ? ` · round ${S.round} of ${rounds}` : ""}<br><span class="zc-small zc-nomargin" id="hoststate">${esc(state)}</span></div></div>
       <button type="button" class="zc-btn zc-btn-big" id="nextnum"${off ? " disabled" : ""}>${onWay ? "On its way…" : "Next number"}</button>
@@ -1176,8 +1177,8 @@
     if (!isOrg()) return "";
     const open = S.acctOpen === null ? !eid : S.acctOpen;
     const credits = creditsBlock();
-    const keys = (S.keys || []).length ? `<div class="zc-block"><h3>Your sign-in keys</h3>${S.keys.map((k) => `<div class="zc-rowl"><span>${k.kind === "ai" ? "AI assistant link" : k.kind === "host" ? "Host key" : k.kind === "cohost" ? "Co-host key" : "Organizer key"} · made ${new Date(k.created_ms).toLocaleDateString()}${k.thisOne ? " · in use now" : ""}</span>${k.revoked ? `<i>retired</i>` : k.thisOne ? `<i>active</i>` : `<button type="button" class="zc-mini" data-retirekey="${esc(k.id)}">Retire</button>`}</div>`).join("")}${small("If you ever lose a key or think someone has it, sign in with another one and retire it here.")}</div>` : "";
-    const sugs = (S.sugs || []).length ? `<div class="zc-block"><h3>Ideas to improve Corporate Tambola</h3>${small("Suggested by organizers' AI assistants. We review them all.")}${S.sugs.map((x) => rowl(esc(x.title) + (x.yours ? " · yours" : ""), `<i>${x.votes} · ${esc(x.status.replace("_", " "))}</i>`)).join("")}</div>` : "";
+    const keys = (S.keys || []).length ? `<div class="zc-block"><h3>Your sign-in keys</h3>${S.keys.map((k) => `<div class="zc-rowl"><span>${k.kind === "ai" ? "Link for your helper tool" : k.kind === "host" ? "Host key" : k.kind === "cohost" ? "Co-host key" : "Organizer key"} · made ${new Date(k.created_ms).toLocaleDateString()}${k.thisOne ? " · in use now" : ""}</span>${k.revoked ? `<i>retired</i>` : k.thisOne ? `<i>active</i>` : `<button type="button" class="zc-mini" data-retirekey="${esc(k.id)}">Retire</button>`}</div>`).join("")}${small("If you ever lose a key or think someone has it, sign in with another one and retire it here.")}</div>` : "";
+    const sugs = (S.sugs || []).length ? `<div class="zc-block"><h3>Ideas to improve Corporate Tambola</h3>${small("Suggested by other organizers. We review them all.")}${S.sugs.map((x) => rowl(esc(x.title) + (x.yours ? " · yours" : ""), `<i>${x.votes} · ${esc(x.status.replace("_", " "))}</i>`)).join("")}</div>` : "";
     const T = S.aiTrail;
     const audit = ""; /* the AI activity log is not shown in the organizer console */ const _auditUnused = `<div class="zc-block"><h3>What your AI assistant did</h3>${T ? (T.length ? T.slice(0, 40).map((t) => `<div class="zc-rowl"><span>${esc(dmy(t.at_ms))}<br><small class="zc-small zc-nomargin">${esc(t.method)} ${esc(t.path)} → ${esc(String(t.status))} · from ${esc(t.ip || "?")} ${esc(t.country || "")} · ${esc((t.ua || "").slice(0, 60))} · key ${esc(t.key_id || "")}</small></span></div>`).join("") : small("Your AI assistant has not made any call yet.")) : `<button type="button" class="zc-mini" id="aiaudit">Show the AI activity log</button>`}${small("Every call your AI assistant makes is recorded with the time, the key used and where it came from. It is kept for 365 days.")}</div>`;
     const close = `<div class="zc-block"><h3>Close my account</h3>${small("This deletes your account and all your games. Payment records stay, as the law requires. It cannot be undone.")}<button type="button" class="zc-mini zc-danger" id="closeacct">Close my account</button></div>`;
@@ -1185,7 +1186,7 @@
   }
   // ---------- notes above the steps ----------
   const ACTTEXT = { publish: "Publishing is free. Check your e-mail and mobile number, then press \"Confirm and publish\" yourself.", erase: "Press \"Delete all participant data now\" only if you want every guest's name and number erased. It cannot be undone.", pause: "Press \"Pause\" to pause the running game for everyone.", stop: "Press \"End the game\" only if the game should end for everyone. It cannot be undone." };
-  const actBanner = () => (ACT && ACTTEXT[ACT] && eid && canRun() ? `<div class="zc-toast" role="status" id="actbanner"><b>Your AI assistant brought you here.</b> ${ACTTEXT[ACT]} Nobody but you can press it.</div>` : "");
+  const actBanner = () => (ACT && ACTTEXT[ACT] && eid && canRun() ? `<div class="zc-toast" role="status" id="actbanner"><b>Your helper tool brought you here.</b> ${ACTTEXT[ACT]} Nobody but you can press it.</div>` : "");
   const ACTSTEP = { publish: 7, erase: 10, pause: 9, stop: 9 };
   /** The AI helper switch: one small line inside the AI Assistant box (Organizer only). Off by default. The shield behaviour itself is unchanged. */
   const shieldSwitch = () => `<div class="zc-shield"><label class="zc-check" for="shield"><input type="checkbox" id="shield" ${S.shield ? "checked" : ""}> My AI works in my web browser: hide guest names and numbers</label>${S.shield ? `<div class="zc-small zc-nomargin">On. This page shows no guest name or mobile number. Switch it off to load your guest list or look up a guest.</div>` : ""}</div>`;
@@ -1198,7 +1199,7 @@
     if (S.passMsg) h += `<div class="zc-toast" role="status" id="passmsg">${esc(S.passMsg)}</div>`; // from a demo pass link: shown until the size is chosen in step 2
     if (canRun()) {
       if (S.locked && !S.draft) h += payDueCard();
-      if ((S.reqs || []).length) h += `<div class="zc-alert"><h3>Your AI assistant is asking</h3>${S.reqs.map((r) => rowl(esc(r.action) + (r.note ? " · " + esc(r.note) : ""))).join("")}<div class="zc-chips"><button type="button" class="zc-btn zc-btn-s${S.reqs[0].action === "erase" ? " zc-btn-bad" : ""}" id="reqok">${S.reqs[0].action === "erase" ? "Confirm: delete all participant data" : "Approve (" + esc(S.reqs[0].action) + ")"}</button><button type="button" class="zc-btn zc-btn-s zc-btn-alt" id="reqno">Dismiss</button></div></div>`;
+      if ((S.reqs || []).length) h += `<div class="zc-alert"><h3>Your helper tool is asking</h3>${S.reqs.map((r) => rowl(esc(r.action) + (r.note ? " · " + esc(r.note) : ""))).join("")}<div class="zc-chips"><button type="button" class="zc-btn zc-btn-s${S.reqs[0].action === "erase" ? " zc-btn-bad" : ""}" id="reqok">${S.reqs[0].action === "erase" ? "Confirm: delete all participant data" : "Approve (" + esc(S.reqs[0].action) + ")"}</button><button type="button" class="zc-btn zc-btn-s zc-btn-alt" id="reqno">Dismiss</button></div></div>`;
       if (S.waitN > 0 && S.open !== 6) h += `<div class="zc-alert" id="waitbanner"><h3>${S.waitN === 1 ? "1 person is waiting to come in" : S.waitN + " people are waiting to come in"}</h3>${small("They opened your link but are not on your list. They wait until you let them in.")}<div class="zc-chips"><button type="button" class="zc-btn zc-btn-s" data-open="6">Open the waiting list</button></div></div>`;
       if (!S.draft && S.cfg) h += `<div class="zc-live" id="zclive"><b>${S.people.length}</b> ${S.people.length === 1 ? "person" : "people"} · numbers called <b>${S.log.length} / 90</b>${S.cfg.rounds > 1 ? ` · round ${S.round} of ${S.cfg.rounds}` : ""}</div>`;
     }
@@ -1229,7 +1230,7 @@
   const loadingView = () => frame(`<div class="zc-body"><div class="zc-main"><div class="zc-toast" role="status">${esc(S.note || "Loading…")}</div>${eid && isOrg() ? "" : ""}</div></div>`, false);
 
   /** "Your games": every game of this person (Organizer: the games they made; Host: the games they help with), always on the screen, newest first. */
-  const gameRow = (e) => `<div class="zc-rowl"><span><b>${esc(e.name || "Your game")}</b> · ${esc(e.startsAtIST || fmtDay(e.created_ms))} · ${e.participants} ${e.participants === 1 ? "person" : "people"} · ${e.draft ? "draft" : "published"} <span class="zc-muted">(code ${esc(e.id)})</span></span><span><button type="button" class="zc-mini" data-open-game="${esc(e.id)}">Open</button> <button type="button" class="zc-mini" data-clonebtn="1" data-from="${esc(e.id)}" data-people="${e.participants > 0 && !e.erased ? 1 : 0}">Create a new game like this one</button>${e.deletable ? ` <button type="button" class="zc-mini zc-btn-bad" data-del-draft="${esc(e.id)}">${S.delArm === e.id ? "Tap again to delete" : "Delete"}</button>` : ""}</span></div>`;
+  const gameRow = (e) => `<div class="zc-rowl"><span><b>${esc(e.name || "Your game")}</b> · ${esc(e.startsAtIST || fmtDay(e.created_ms))} · ${e.participants} ${e.participants === 1 ? "person" : "people"} · ${e.deletable ? "draft" : e.draft ? "published, payment pending" : "published"} <span class="zc-muted">(code ${esc(e.id)})</span></span><span><button type="button" class="zc-mini" data-open-game="${esc(e.id)}">Open</button> <button type="button" class="zc-mini" data-clonebtn="1" data-from="${esc(e.id)}" data-people="${e.participants > 0 && !e.erased ? 1 : 0}">Create a new game like this one</button>${e.deletable ? ` <button type="button" class="zc-mini zc-btn-bad" data-del-draft="${esc(e.id)}">${S.delArm === e.id ? "Tap again to delete" : "Delete"}</button>` : ""}</span></div>`;
   const gamesBlock = (h, who) => { const gs = (h && h.engagements) || []; return `<div class="zc-block" id="yourgames"><h3>Your games${gs.length ? ` (${gs.length})` : ""}</h3>${gs.length ? small(who === "host" ? "The games you help to run as a Host. Pick one to open it." : "Every game you made. Open any of them, or start a new one.") + gs.map(gameRow).join("") : !h ? small(S.histErr ? "We could not load your games just now. We will try again in a few seconds." : "Loading your games...") : small(who === "host" ? "No game is open to you yet." : "You have no game yet. Start your first one below.")}</div>`; };
   /** A Host who also wants to run their own games: same e-mail, Organizer account, the Terms box, and then they hold both roles. */
   const hostNewBlock = () => { const a = altRole(); return `<div class="zc-block" id="hostnew"><h3>Start a new game as an Organizer</h3>${small("You help to run games as a Host. You can also make your own games as an Organizer, with the same e-mail. Your own games are separate from the games you host.")}${a && a.kind === "organizer" ? `<div class="zc-foot"><button type="button" class="zc-btn zc-btn-s" id="hostswitchorg">Open my Organizer view</button></div>` : `${CBConsent.html("K2")}${S.becomeErr ? `<p class="zc-small zc-warnt" role="alert">${esc(S.becomeErr)}</p>` : ""}<div class="zc-foot"><button type="button" class="zc-btn zc-btn-s" id="hostbecome">Create my Organizer account and start a new game</button></div>`}</div>`; };
@@ -1253,7 +1254,7 @@
     const h = S.history, last = h && h.engagements[0];
     const bar = last ? `<div class="zc-lastbar"><span>${last.deletable ? "Your newest draft was started on" : "Your last game was on"} <b>${fmtDay(last.created_ms)}</b> · ${last.participants} participants</span><span>${last.participants > 0 && !last.deletable ? `<button type="button" class="zc-mini" data-clonebtn="1" data-from="${esc(last.id)}" data-people="1">Reuse the data</button> ` : ""}<button type="button" class="zc-mini" data-hist="1">History</button></span></div>` : "";
     const main0 = clonePanel();
-    const hist = S.showHist && h ? `<div class="zc-block"><h3>History · kept ${h.retentionDays} days</h3>${h.engagements.map((e) => `<div class="zc-rowl"><span>${esc(e.name || "Your game")} (code ${esc(e.id)}) · ${fmtDay(e.created_ms)} · ${e.participants} people${e.draft ? " · draft" : ""}</span><span><button type="button" class="zc-mini" data-open-game="${esc(e.id)}">Open</button> <button type="button" class="zc-mini" data-clonebtn="1" data-from="${esc(e.id)}" data-people="${e.participants > 0 && !e.erased ? 1 : 0}">Create a new game like this one</button></span></div>`).join("")}</div>` : "";
+    const hist = S.showHist && h ? `<div class="zc-block"><h3>History · kept ${h.retentionDays} days</h3>${h.engagements.map((e) => `<div class="zc-rowl"><span>${esc(e.name || "Your game")} (code ${esc(e.id)}) · ${fmtDay(e.created_ms)} · ${e.participants} people${e.deletable ? " · draft" : e.draft ? " · published, payment pending" : ""}</span><span><button type="button" class="zc-mini" data-open-game="${esc(e.id)}">Open</button> <button type="button" class="zc-mini" data-clonebtn="1" data-from="${esc(e.id)}" data-people="${e.participants > 0 && !e.erased ? 1 : 0}">Create a new game like this one</button></span></div>`).join("")}</div>` : "";
     const main = `${S.note ? `<div class="zc-toast" role="status">${esc(S.note)}</div>` : ""}${S.passMsg ? `<div class="zc-toast" role="status" id="passmsg">${esc(S.passMsg)}</div>` : ""}${main0}<div class="zc-small zc-rolenote">${esc(ROLE_NOTE.organizer)}</div>
       ${gamesBlock(h, "organizer")}<div class="zc-block"><h3>Create a new game</h3>${small("You build it first, at no cost. Publishing is free. You pay before the game starts, unless it is a free game of 10 people or fewer. The first number is called two minutes after the start time.")}<div class="zc-chips"><button type="button" class="zc-btn zc-btn-s" id="mk"${S.creating ? ' disabled aria-disabled="true"' : ""}>${S.creating ? "Creating..." : "Create a new game"}</button></div>${small("In step 2 choose how many people. Up to 10 people is a free demo game: a real game at Rs 0, nothing to pay.")}</div>${bar}${hist}${acctHtml()}`;
     return frame(`<div class="zc-body"><div class="zc-main">${main}</div></div>`, false);
@@ -1344,7 +1345,7 @@
   }
   S.pp = { list: null, err: "", limit: 0, common: "", me: null, waiting: null, approved: [], decided: [], confirm: "", sent: {}, sentFor: "", sum: "", wrong: [] };
   S.shield = ss.get("ctz-shield") === "1"; S.acctOpen = null; S.mkrole = "organizer"; S.screen = "";
-  const GROUPS = { 1: ["occ", "oname", "day", "dayo", "time", "timeo", "mode"], 2: ["cap", "tix", "spd", "rnd", "who", "inv", "per", "cats", "demo"], 3: ["hs", "ph", "bundle"], 4: ["opN", "op", "midN", "mid", "clN", "cl", "lucky", "brand"] };
+  const GROUPS = { 1: ["occ", "oname", "day", "dayo", "time", "timeo"], 2: ["cap", "tix", "spd", "rnd", "who", "inv", "per", "cats", "demo", "mode"], 3: ["hs", "ph", "bundle"], 4: ["opN", "op", "midN", "mid", "clN", "cl", "lucky", "brand"] };
   /** Brings the form in line with what the server holds, step by step, but never over a step the person has started changing (an AI may be changing the draft at the same time). */
   const snapGroup = (n) => { S.fSnap = S.fSnap || {}; for (const k of GROUPS[n]) S.fSnap[k] = JSON.stringify(S.f[k]); }; const unsavedSteps = () => { try { if (!S.f || !S.fSnap || S.fFor !== eid) return []; return [1, 2, 3, 4].filter((n) => GROUPS[n].filter((k) => k !== "demo").some((k) => S.fSnap[k] !== undefined && JSON.stringify(S.f[k]) !== S.fSnap[k])); } catch { return []; } }; function syncForm() {
     const fresh = formFromServer();
@@ -1367,7 +1368,7 @@
     try { S.keys = (await call("GET", "/api/org/keys")).keys; } catch { S.keys = []; }
     try { S.sugs = (await call("GET", "/api/z/suggestions")).suggestions.slice(0, 6); } catch { S.sugs = []; }
     await loadCredits();
-    try { S.history = await call("GET", "/api/history"); S.histErr = false; } catch (e) { S.histErr = true; if (e.status === 403) { secret = ""; S.loginMsg = "That sign-in key or link was not accepted. A link you were sent may have expired, been replaced, or the game may have been cancelled: please ask the Organizer."; } }
+    try { S.history = await call("GET", "/api/history"); S.histErr = false; if (S.history && S.history.engagements && S.history.engagements.length) { try { sessionStorage.setItem("ctz-qauto", "1"); } catch { /* none */ } } /* this tab has seen games: "no games" later means they were deleted, not a new organizer */ } catch (e) { S.histErr = true; if (e.status === 403) { secret = ""; S.loginMsg = "That sign-in key or link was not accepted. A link you were sent may have expired, been replaced, or the game may have been cancelled: please ask the Organizer."; } }
     if (isOrg()) await redeemPass(); // a demo pass link opened in this browser is used now (before a first game is made for a new person)
     if (isOrg() && !QUICK && !NEWDEMO && !NEWGAME && !eid && S.history && S.history.engagements && S.history.engagements.length === 0) { let done = false; try { done = sessionStorage.getItem("ctz-qauto") === "1"; sessionStorage.setItem("ctz-qauto", "1"); } catch { done = true; } if (!done) { try { await startNew(); return; } catch (e) { S.note = friendly(e); } } } // no game yet: the first game is made by itself (once) and the console opens
     redraw();
@@ -1398,7 +1399,7 @@
     if (role() === "host" && S.setup && S.setup.ready === false) return; // a Host who has not finished the first-open setup (e-mail, mobile) cannot open the game yet: never ask for it, never show "this link no longer opens the game" in the middle of the setup
     S.screen = "eng";
     try {
-      S.info = await call("GET", `/api/z/${eid}/info`); if (S.info.checkin && !S.draft && canRun()) { try { S.presence = await call("GET", `/api/z/${eid}/presence`); } catch { /* shown next time */ } } S.draft = !!S.info.draft; S.unpaid = !!S.info.unpaid; S.locked = !!S.info.locked; S.demo = !!S.info.demo;
+      S.info = await call("GET", `/api/z/${eid}/info`); S.deadLink = false; /* this link opens the game: a 403 met earlier no longer holds */ if (S.info.checkin && !S.draft && canRun()) { try { S.presence = await call("GET", `/api/z/${eid}/presence`); } catch { /* shown next time */ } } S.draft = !!S.info.draft; S.unpaid = !!S.info.unpaid; S.locked = !!S.info.locked; S.demo = !!S.info.demo;
       if (ACT === "publish" && S.draft && !S.actOpened) { S.pubOpen = true; S.actOpened = true; } // the AI's hand-over link: the publish card is open and waiting for the organizer's own tap
       let pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed; S.whoCanJoin = pr.whoCanJoin || S.whoCanJoin;
       while (S.people.length < pr.total) { const more = await call("GET", `/api/z/${eid}/participants?offset=${S.people.length}`); if (!more.participants.length) break; S.people.push(...more.participants); } // a long list arrives in pages
@@ -1477,10 +1478,11 @@
   document.addEventListener("input", (e) => noteDirty(e.target)); document.addEventListener("change", (e) => noteDirty(e.target));
   // Work on steps 1 to 4 that is not saved yet: the first edit of a step sets a flag and shows "Not saved yet" beside the Save button; saving that step clears it. While a flag is set the page's own update (autoupdate.js) does not reload the page under the person.
   function unsavedNote(n) { return S.unsaved[n] && S.saving !== n ? `<p class="zc-small zc-warnt" id="unsavednote" role="status">Not saved yet. Press the button below to keep your changes.</p>` : ""; }
-  window.__ctDirty = () => [1, 2, 3, 4].some((n) => S.unsaved[n]);
+  window.__ctDirty = () => !!S.f && !lockedGame() && role() !== "cohost" && [1, 2, 3, 4].some((n) => S.unsaved[n]); // not on the home page, not once the steps are locked (Save can never clear the flag then)
   const markUnsaved = (e) => {
     const n = S.open, t = e.target; if (!(n >= 1 && n <= 4) || role() === "cohost" || S.unsaved[n] || !t || !t.closest || !t.closest("#secb" + n)) return;
-    if (e.type === "click" && !t.closest("[data-ck],[data-bool],[data-cashcur],[data-luckyadd],[data-luckydel],#logorm")) return;
+    if (e.type === "click") { if (!t.closest("[data-ck],[data-bool],[data-cashcur],[data-luckyadd],[data-luckydel],#logorm")) return; const c = t.closest("[data-ck]"); if (t.closest('[data-bool="capOther"]') || (c && c === S.chipNoop)) { S.chipNoop = null; return; } } // nothing changed: the button only shows a box, or the chosen chip was tapped again
+    if (e.type === "change" && t.type === "file") return; // a picture sets the flag itself, once it is accepted
     S.unsaved[n] = true; const ft = document.querySelector("#secb" + n + " .zc-foot"); if (ft && !document.getElementById("unsavednote")) ft.insertAdjacentHTML("beforebegin", unsavedNote(n));
   };
   ["input", "change", "click"].forEach((ev) => document.addEventListener(ev, markUnsaved));
@@ -1565,16 +1567,17 @@
   }
   async function saveStep(n) { // one Save at a time: a second press while the first is working would save twice and jump the page under the person's finger
     if (S.saving) return; S.saving = n; S.toast = ""; redraw();
-    try { await saveStepWork(n); if (!S.toast && n <= 4 && S.f) snapGroup(n); } finally { S.saving = 0; redraw(); }
+    try { await saveStepWork(n); if (!S.toast && n <= 4 && S.f && !S.midEdit) snapGroup(n); } finally { S.saving = 0; redraw(); }
   }
   async function saveStepWork(n) {
-    S.toast = "";
+    S.toast = ""; S.midEdit = false;
+    let sent = null; const mark = () => { sent = {}; for (const k of GROUPS[n] || []) sent[k] = JSON.stringify(S.f[k] === undefined ? null : S.f[k]); }; /* what is sent now, as the form holds it: a tap or a letter typed while the answer is awaited is not in it */
     try {
       const f = S.f;
       if (role() === "cohost") { markDone(n); return advance(n); }
-      if (n === 1) { const name = f.occ === "Other" ? (f.oname || "").trim() : f.occ, ms = startOf(f); if (!(ms > Date.now())) throw new Error((f.day === "other" ? f.dayo : f.day) === istDateStr(istNow()) ? "That time has already passed today. Tap a later time, or tap Tomorrow." : MSG_PAST); const lastMs = S.info && S.info.moveUntilMs ? S.info.moveUntilMs - 1 : Date.now() + 30 * 86400000; if (ms > lastMs) throw new Error(S.info && S.info.moveUntilMs ? "Your credit and your game last 365 days from the payment, so a paid game can be moved to any day within 365 days of it. Please pick an earlier date." : "A game that is not paid for yet can start at most 30 days from today. Once it is paid, the Organizer can move it to any day within 365 days of the payment."); await call("PATCH", `/api/z/${eid}/settings`, { name, startRound: ZG.roundAt(ms) } /* who calls the numbers is saved by step 2 only */); }
-      else if (n === 2) { { const c = Number(f.cap); if (!Number.isInteger(c) || c < 1) throw new Error("Please give the number of players, for example 180."); if (c > 10000) throw new Error("For more than 10,000 players, please write to hello@corporatetambola.com and we will arrange it."); f.demo = c <= DEMO_CAP ? "1" : "0"; /* the number just typed decides, not the last time the page was drawn */ { const bought = paidPack(); if (bought && c > bought) throw new Error("Your payment covers up to " + bought + " people. Choose " + bought + " or fewer, or make a new game like this one in step 7 for a bigger crowd."); } } if (!f.emp && f.inv && !f.cats.length) throw new Error("Pick at least one kind of guest."); await call("PATCH", `/api/z/${eid}/settings`, { callMode: f.mode === "host" ? "host" : "auto", cap: Number(f.cap), callSeconds: Number(f.spd), tickets: Number(f.tix), rounds: Number(f.rnd), whoCanJoin: f.emp || f.who !== "anyone" ? "list" : "anyone", verify: f.ver, employeesOnly: !!f.emp, invites: { on: !f.emp && !!f.inv, per: Number(f.per) || 4, cats: f.cats }, ...(paidPack() || (S.demo && !S.draft) ? {} : { demo: f.demo === "1" }) }); try { S.sum = await call("GET", `/api/z/${eid}/summary`); } catch { /* shown at the next load */ } /* the page must know the new audience and what people give (employee ID or mobile) before step 6 reads the list */ }
-      else if (n === 3) { const rewards = rewardsOut(f); if (!rewards.length) throw new Error("Tick at least one prize."); await call("PATCH", `/api/z/${eid}/settings`, { tickets: Number(f.tix), ties: f.ties === "share" ? "share" : "next", rewards }); }
+      if (n === 1) { const name = f.occ === "Other" ? (f.oname || "").trim() : f.occ, ms = startOf(f); if (!(ms > Date.now())) throw new Error((f.day === "other" ? f.dayo : f.day) === istDateStr(istNow()) ? "That time has already passed today. Tap a later time, or tap Tomorrow." : MSG_PAST); const lastMs = S.info && S.info.moveUntilMs ? S.info.moveUntilMs - 1 : Date.now() + 30 * 86400000; if (ms > lastMs) throw new Error(S.info && S.info.moveUntilMs ? "Your credit and your game last 365 days from the payment, so a paid game can be moved to any day within 365 days of it. Please pick an earlier date." : "A game that is not paid for yet can start at most 30 days from today. Once it is paid, the Organizer can move it to any day within 365 days of the payment."); mark(); await call("PATCH", `/api/z/${eid}/settings`, { name, startRound: ZG.roundAt(ms) } /* who calls the numbers is saved by step 2 only */); }
+      else if (n === 2) { { const c = Number(f.cap); if (!Number.isInteger(c) || c < 1) throw new Error("Please give the number of players, for example 180."); if (c > 10000) throw new Error("For more than 10,000 players, please write to hello@corporatetambola.com and we will arrange it."); f.demo = c <= DEMO_CAP ? "1" : "0"; /* the number just typed decides, not the last time the page was drawn */ { const bought = paidPack(); if (bought && c > bought) throw new Error("Your payment covers up to " + bought + " people. Choose " + bought + " or fewer, or make a new game like this one in step 7 for a bigger crowd."); } } if (!f.emp && f.inv && !f.cats.length) throw new Error("Pick at least one kind of guest."); mark(); await call("PATCH", `/api/z/${eid}/settings`, { callMode: f.mode === "host" ? "host" : "auto", cap: Number(f.cap), callSeconds: Number(f.spd), tickets: Number(f.tix), rounds: Number(f.rnd), whoCanJoin: f.emp || f.who !== "anyone" ? "list" : "anyone", verify: f.ver, employeesOnly: !!f.emp, invites: { on: !f.emp && !!f.inv, per: Number(f.per) || 4, cats: f.cats }, ...(paidPack() || (S.demo && !S.draft) ? {} : { demo: f.demo === "1" }) }); try { S.sum = await call("GET", `/api/z/${eid}/summary`); } catch { /* shown at the next load */ } /* the page must know the new audience and what people give (employee ID or mobile) before step 6 reads the list */ }
+      else if (n === 3) { const rewards = rewardsOut(f); if (!rewards.length) throw new Error("Tick at least one prize."); mark(); await call("PATCH", `/api/z/${eid}/settings`, { tickets: Number(f.tix), ties: f.ties === "share" ? "share" : "next", rewards }); }
       else if (n === 4) {
         // The company strip is optional and never stops a person: a name without a colour gets the first colour; a logo or colour without a name is simply not used yet (the game is saved and the person is told, calmly).
         const calmNotes = brandCheck(f); // every refusal names the moment and says what to do, before anything is sent
@@ -1583,12 +1586,12 @@
         const bn = cleanNm, bl = f.brand.logo || "", brandChanged = JSON.stringify(f.brand) !== JSON.stringify((S.fBase || {}).brand);
         let bc = f.brand.color || ""; if (brandChanged && bn && !bc) { bc = "#0B3D91"; f.brand.color = bc; }
         const stripUnused = brandChanged && !bn && !!(bl || bc);
-        await call("PATCH", `/api/z/${eid}/settings`, { ...momentsOut(f), ...(brandChanged ? { brand: bn ? { name: bn, color: bc, ...(bl ? { logo: bl } : {}) } : {} } : {}) });
+        mark(); await call("PATCH", `/api/z/${eid}/settings`, { ...momentsOut(f), ...(brandChanged ? { brand: bn ? { name: bn, color: bc, ...(bl ? { logo: bl } : {}) } : {} } : {}) });
         if (nameNote) S.brandNote = nameNote; else if (stripUnused) S.brandNote = "Saved. Your " + (bl ? "logo" : "colour") + " is not on the tickets yet, because there is no company name. You can add the name in step 4 any time.";
         if (calmNotes.length) S.brandNote = (S.brandNote || "Saved.") + " " + calmNotes.join(" ");
       }
       if (n === 1 && S.cloneNew === eid) S.cloneDated = eid; if (S.touched) S.touched[n] = 0; const savedNote = n === 1 && f.occ === "Other" && !(f.oname || "").trim() ? "Saved. Your game has no name yet: you can type one under Other in step 1 any time." : n === 2 && Number(f.tix) === 1 && ((S.cfg && S.cfg.rewards) || []).some((r) => r.scope === "two_ticket") ? "Saved. The Full Two-Ticket House prize was removed, because it needs 2 tickets." : "Saved.";
-      if (n === 2) S.passMsg = ""; if (n <= 4 && S.f && S.fBase) { for (const k of GROUPS[n] || []) S.fBase[k] = JSON.parse(JSON.stringify(S.f[k] === undefined ? null : S.f[k])); if (n === 2) S.fBase.mode = S.f.mode; } /* what was just saved is the new baseline: a refresh that finishes a moment later must not take a later change of the person for 'unchanged' and overwrite it */ if (n <= 4) { markDone(n); S.unsaved[n] = false; if (n === 4 && S.brandNote) setTimeout(() => scrollToId("zcnote"), 0); S.note = (n === 4 && S.brandNote) || savedNote; S.brandNote = ""; if (n === 4 && S.note !== "Saved.") setTimeout(() => go("zcnote"), 0); refreshEng().catch(() => {}); return advance(n); } // move on at once; the fresh numbers arrive a moment later and redraw (a slow connection no longer leaves the person looking at a frozen screen)
+      if (n === 2) S.passMsg = ""; if (n <= 4 && S.f && S.fBase) { for (const k of GROUPS[n] || []) S.fBase[k] = JSON.parse(sent ? sent[k] : JSON.stringify(S.f[k] === undefined ? null : S.f[k])); S.midEdit = !!sent && (GROUPS[n] || []).some((k) => JSON.stringify(S.f[k] === undefined ? null : S.f[k]) !== sent[k]); } /* what was just saved is the new baseline: a refresh that finishes a moment later must not take a later change of the person for 'unchanged' and overwrite it */ if (n <= 4) { markDone(n); S.unsaved[n] = S.midEdit; if (S.midEdit && n <= 2) (S.touched = S.touched || {})[n] = 1; /* a change made while the Save was on its way is still not saved: it stays on the screen, flagged */ if (n === 4 && S.brandNote) setTimeout(() => scrollToId("zcnote"), 0); S.note = (n === 4 && S.brandNote) || savedNote; S.brandNote = ""; if (n === 4 && S.note !== "Saved.") setTimeout(() => go("zcnote"), 0); refreshEng().catch(() => {}); return advance(n); } // move on at once; the fresh numbers arrive a moment later and redraw (a slow connection no longer leaves the person looking at a frozen screen)
       if (n >= 7 && !steps().some((s) => s[0] > n && !isDone(s[0]))) { S.note = gameEnded() ? "Nothing more to do here." : "Nothing more to do here until the game is played."; redraw(); return go("zc-top"); } if (n <= 6) markDone(n); advance(n);
     } catch (e) { S.toast = friendly(e); S.redo = { err: e, fn: () => saveStep(n) }; redraw(); const ft = document.querySelector("#sec" + n + " .zc-toast-foot"); if (ft && ft.scrollIntoView) { try { ft.scrollIntoView({ block: "center", behavior: "auto" }); } catch { /* not every browser */ } } else go("sec" + n); }
   }
@@ -1603,7 +1606,7 @@
     if (r && (r.verify !== "mobile" || r.employeesOnly)) await call("PATCH", `/api/z/${id}/settings`, { ...(r.verify !== "mobile" ? { verify: r.verify } : {}), ...(r.employeesOnly ? { employeesOnly: true } : {}) });
     if (r && r.invite) await call("PATCH", `/api/z/${id}/settings`, { invites: { on: true, per: 4, cats: ["family", "colleagues"] } });
     let k = { ok: false, reason: "" }; try { k = await TBControl.ensureKey(id, { token: secret, base: BASE, prefix: "/api/z" }); } catch { /* the pause key is optional: the game does not depend on it */ }
-    eid = id; history.replaceState(null, "", "?e=" + id + (BASE ? "&api=" + encodeURIComponent(BASE) : "")); S.store = null; S.f = null; S.fFor = ""; S.openInit = ""; S.cfg = null; S.info = null; S.sum = null; S.screen = "eng";
+    eid = id; history.replaceState(null, "", "?e=" + id + (BASE ? "&api=" + encodeURIComponent(BASE) : "")); S.store = null; S.f = null; S.fFor = ""; S.unsaved = {}; S.touched = {}; S.openInit = ""; S.cfg = null; S.info = null; S.sum = null; S.screen = "eng";
     return k;
   }
   function quickSummary() {
@@ -1668,12 +1671,13 @@
     if (document.getElementById("qk-summary")) quickSummary();
   }
   function chipClick(b) {
-    const path = b.dataset.ck, v = b.dataset.v; if (b.dataset.multi || String(getP(path)) !== String(v)) edited();
+    const path = b.dataset.ck, v = b.dataset.v, before = JSON.stringify(S.f); if (b.dataset.multi || String(getP(path)) !== String(v)) edited();
     if (b.dataset.multi) { const a = (getP(path) || []).slice(), i = a.indexOf(v); if (i >= 0) a.splice(i, 1); else a.push(v); setP(path, a); }
     else { setP(path, path === "brand.color" && getP(path) === v ? "" : v); if (path === "bundle") applyBundle(v); if (path === "aud") applyAud(S.f, v); }
     if (/^hs\.[a-z0-9]+\.(n|pt|pd|per\.\d+\.(pt|pd))$/.test(path)) S.f.hs[path.split(".")[1]].dirty = true;
     if (path === "tix" && v === "1" && S.f.hs.full2) S.f.hs.full2.on = false;
     if (path === "demo" && v === "1" && Number(S.f.cap) > DEMO_CAP) S.f.cap = String(DEMO_CAP); // a demo game: at most 10 people
+    S.chipNoop = JSON.stringify(S.f) === before ? b : null; /* a tap that changed nothing (the chosen chip again) is not "not saved yet" */
     redraw(); if (document.getElementById("qk-summary")) quickSummary();
   }
   function bind() {
@@ -1684,7 +1688,7 @@
     if ($("goLogin")) $("goLogin").onclick = () => { const em = ($("lem") && $("lem").value || "").trim(), bad = $("lerr"); if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) { if (bad) { bad.textContent = em ? "That does not look like an e-mail address. Check it for a typing slip, for example name@company.com, then press Continue." : "Type your e-mail address in the box above, for example name@company.com, then press Continue."; bad.style.display = ""; } if ($("lem")) $("lem").focus(); return; } try { sessionStorage.setItem("ctz-next", location.pathname + location.search); if (em) sessionStorage.setItem("ctz-login-email", em); } catch {} location.href = "/#login"; }; // the website's login box does the rest (new account or 6-digit code) and brings the person back here
     if ($("lem")) $("lem").oninput = () => { const x = $("lerr"); if (x) x.style.display = "none"; }; if ($("lem")) $("lem").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("goLogin").click(); } };
     if ($("in")) $("in").onclick = () => { secret = $("sec").value.trim(); ss.set("ctz-org", secret); S.loginMsg = ""; bootstrap(); };
-    const leaveGame = () => { saveLast(null); eid = ""; S.cfg = null; S.info = null; S.f = null; S.fFor = ""; S.openInit = ""; S.note = ""; S.sum = null; S.store = null; S.history = null; S.team = null; S.hostN = 0; S.becomeErr = ""; history.replaceState(null, "", location.pathname + (BASE ? "?api=" + encodeURIComponent(BASE) : "")); };
+    const leaveGame = () => { saveLast(null); S.clone = null; S.deadLink = false; eid = ""; S.cfg = null; S.info = null; S.f = null; S.fFor = ""; S.unsaved = {}; S.touched = {}; S.openInit = ""; S.note = ""; S.sum = null; S.store = null; S.history = null; S.team = null; S.hostN = 0; S.becomeErr = ""; history.replaceState(null, "", location.pathname + (BASE ? "?api=" + encodeURIComponent(BASE) : "")); };
     const takeKey = (key, mark) => { const me = { kind: isOrg() ? "organizer" : "host", token: secret }; ss.set("ctz-alt", JSON.stringify(me)); secret = key; ss.set("ctz-org", secret); S.kind = ""; leaveGame(); if (mark) S.note = mark; bootstrap(); };
     if ($("signout")) $("signout").onclick = () => { if (window.CTK) window.CTK.signOut(); else { ss.set("ctz-org", ""); ss.set("ctz-alt", ""); } location.href = "/zc.html" + (BASE ? "?api=" + encodeURIComponent(BASE) : ""); }; // signing in again is the same two e-mail ways: nothing to remember
     if ($("switchrole")) $("switchrole").onclick = () => { const a = altRole(); if (a) takeKey(a.token, a.kind === "host" ? "You are now in your Host view." : "You are now in your Organizer view."); };
@@ -1695,7 +1699,7 @@
       try { const r = await call("POST", "/api/host/become-organizer", { consent: CBConsent.payload($app, "K2") }); S.becomeErr = ""; takeKey(r.token, "Your Organizer account is ready. Start your new game below."); }
       catch (e) { S.becomeErr = friendly(e); redraw(); }
     };
-    if ($("back")) $("back").onclick = () => { saveLast(null); eid = ""; S.cfg = null; S.info = null; S.f = null; S.fFor = ""; S.openInit = ""; S.note = ""; S.sum = null; history.replaceState(null, "", location.pathname + (BASE ? "?api=" + encodeURIComponent(BASE) : "")); refreshHome(); };
+    if ($("back")) $("back").onclick = () => { saveLast(null); S.clone = null; S.deadLink = false; eid = ""; S.cfg = null; S.info = null; S.f = null; S.fFor = ""; S.unsaved = {}; S.touched = {}; S.openInit = ""; S.note = ""; S.sum = null; history.replaceState(null, "", location.pathname + (BASE ? "?api=" + encodeURIComponent(BASE) : "")); refreshHome(); };
     if ($("mk")) $("mk").onclick = async () => { if (S.creating) return; S.creating = true; redraw(); try { await startNew(); } catch (e) { S.note = friendly(e); } finally { S.creating = false; redraw(); } };
     if (NEWDEMO && !eid && secret && !S.autoDemo && $("mk")) { S.autoDemo = true; $("mk").disabled = true; startNew(true).catch((e) => noteAndDraw(friendly(e))); } // the website's "Start a demo game" link lands here signed in
     // moving around
@@ -1714,13 +1718,13 @@
     all("[data-ck]", (b) => (b.onclick = () => chipClick(b)));
     all("[data-bool]", (b) => (b.onclick = () => { if (b.dataset.bool !== "capOther") edited(); setP(b.dataset.bool, !getP(b.dataset.bool)); if (/^hs\.[a-z0-9]+\.diff$/.test(b.dataset.bool)) { const h = S.f.hs[b.dataset.bool.split(".")[1]]; h.dirty = true; if (h.diff) perFill(h); } redraw(); if ($("qk-summary")) quickSummary(); }));
     all("[data-fi]", (el) => (el.oninput = () => onField(el)));
-    all("[data-cashamt]", (el) => (el.oninput = () => { const path = el.dataset.cashamt, cur = cashParse(getP(path)).cur; setP(path, cashJoin(cur, el.value)); markHsDirty(path); const clean = cashParse(getP(path)).amt; if (el.value !== clean) el.value = clean; /* digits only: the k of 50k never stays in the box looking like 50,000 while 50 is saved */ }));
-    all("[data-cashcur]", (el) => (el.onclick = () => { const path = el.dataset.cashcur, amt = cashParse(getP(path)).amt; setP(path, cashJoin(el.dataset.v, amt)); markHsDirty(path); redraw(); }));
+    all("[data-cashamt]", (el) => (el.oninput = () => { edited(); const path = el.dataset.cashamt, cur = cashParse(getP(path)).cur; setP(path, cashJoin(cur, el.value)); markHsDirty(path); const clean = cashParse(getP(path)).amt; if (el.value !== clean) el.value = clean; /* digits only: the k of 50k never stays in the box looking like 50,000 while 50 is saved */ }));
+    all("[data-cashcur]", (el) => (el.onclick = () => { edited(); const path = el.dataset.cashcur, amt = cashParse(getP(path)).amt; setP(path, cashJoin(el.dataset.v, amt)); markHsDirty(path); redraw(); }));
     all("[data-qkprize]", (el) => (el.oninput = () => { const h = S.f.hs[el.dataset.qkprize]; h.pt = el.value.trim() ? "other" : "later"; h.pd = el.value; quickSummary(); }));
-    all("[data-hc]", (c) => (c.onchange = () => { const h = S.f.hs[c.dataset.hc]; h.on = c.checked; if (c.checked) S.f.ph = c.dataset.hc; h.dirty = true; redraw(); if ($("qk-summary")) quickSummary(); }));
+    all("[data-hc]", (c) => (c.onchange = () => { edited(); const h = S.f.hs[c.dataset.hc]; h.on = c.checked; if (c.checked) S.f.ph = c.dataset.hc; h.dirty = true; redraw(); if ($("qk-summary")) quickSummary(); }));
     all("[data-ph]", (b) => (b.onclick = () => { S.f.ph = b.dataset.ph; redraw(); }));
-    all("[data-luckyadd]", (b) => (b.onclick = () => { if (momentsOut(S.f).breaks.length >= maxFor(Number(S.f.tix) || 1).mid) return; S.f.lucky.push({ win: "3", style: "draw", pt: "phone", pd: "" }); redraw(); }));
-    all("[data-luckydel]", (b) => (b.onclick = () => { S.f.lucky.splice(Number(b.dataset.luckydel), 1); redraw(); }));
+    all("[data-luckyadd]", (b) => (b.onclick = () => { if (momentsOut(S.f).breaks.length >= maxFor(Number(S.f.tix) || 1).mid) { redraw(); return; } /* the places were filled by typing since the button was drawn: show "All places are used" now */ edited(); S.f.lucky.push({ win: "3", style: "draw", pt: "phone", pd: "" }); redraw(); }));
+    all("[data-luckydel]", (b) => (b.onclick = () => { edited(); S.f.lucky.splice(Number(b.dataset.luckydel), 1); redraw(); }));
     if ($("seeguests")) $("seeguests").onclick = () => { const n = $("previewnote"), un = !!(S.unsaved[3] || S.unsaved[4]); if (n) { n.textContent = un ? "You have changes that are not saved yet, so the new tab shows the saved game. Press Save and continue, then look again." : ""; if (un) n.removeAttribute("hidden"); else n.setAttribute("hidden", ""); } }; // the preview shows the SAVED game: say so beside the button, at the click, when something is not saved yet (the tab still opens)
     all("[data-test]", (btn) => (btn.onclick = () => {
       const [g, i] = btn.dataset.test.split("."), m = S.f[g][Number(i)], w = { op: "opening", mid: "break", cl: "closing" }[g], u = fixUrl((m.v || "").trim());
@@ -1794,7 +1798,7 @@
     if ($("cohostadd")) $("cohostadd").onclick = () => person("cohost");
     all("[data-cohl]", (b) => (b.onclick = async () => { try { await call("PATCH", `/api/z/${eid}/settings`, { coHostLimit: Number(b.dataset.cohl) }); S.teamNote = "Saved."; S.sum = Object.assign({}, S.sum, { coHostLimit: Number(b.dataset.cohl) }); } catch (e) { S.teamNote = friendly(e); } redraw(); }));
     all("[data-retire]", (b) => (b.onclick = async () => {
-      if (!confirm("Remove this " + (b.dataset.kind === "host" ? "Host" : "Co-host") + "? Their link stops working at once." + (b.dataset.kind === "host" ? " A Host works in all your games, so this stops them in every game." : ""))) return;
+      if (!(await askSure("Remove this " + (b.dataset.kind === "host" ? "Host" : "Co-host") + "?", "Their link stops working at once." + (b.dataset.kind === "host" ? "\n\nA Host works in all your games, so this stops them in every game." : ""), "Yes, remove them", "No, keep them"))) return;
       try { await call("POST", "/api/org/team/retire", { id: b.dataset.retire }); delete S.teamLinks[b.dataset.retire]; S.teamFoot = null; S.teamNote = "Removed. Their link has stopped."; await refreshTeam(); } catch (e) { S.teamNote = friendly(e); redraw(); }
     }));
     all("[data-newlink]", (b) => (b.onclick = async () => {
@@ -1818,14 +1822,14 @@
     if ($("gpdf")) $("gpdf").onchange = async () => { const f = $("gpdf").files && $("gpdf").files[0]; if (!f) return; S.pdfRows = null; S.pdfJunk = 0; S.pdfJunkText = ""; S.pdfNote = "Reading your PDF..."; redraw(); try { await readListFile(f, "pdf"); const v = vetRows(parseList(await pdfText(f)).filter((r) => r.phone || r.empId || r.name)); S.pdfRows = v.ok; S.pdfJunk = v.junk.length; S.pdfJunkText = v.junk.length ? junkText(v.junk) : ""; S.pdfNote = !v.ok.length ? "We could not find any names and numbers in this PDF. Please save your list as a PDF from Excel (File, Save as, PDF), not as a photo or a scan." : v.junk.length > v.ok.length ? "Most of this file does not look like a list of names and numbers, so it was not used." : ""; if (v.junk.length > v.ok.length) S.pdfRows = null; } catch (e) { S.pdfNote = (e && e.message) || "We could not read this PDF."; } redraw(); };
     if ($("pdfno")) $("pdfno").onclick = () => { S.pdfRows = null; S.pdfNote = ""; redraw(); };
     if ($("pdfgo")) $("pdfgo").onclick = () => { const r = S.pdfRows || []; S.pdfRows = null; S.pdfNote = ""; addPeople(r); };
-    if ($("gfile")) $("gfile").onchange = async () => { const f = $("gfile").files && $("gfile").files[0]; if (!f) return; S.csvNote = ""; let t = ""; try { t = await readListFile(f, "csv"); } catch (e) { S.csvNote = (e && e.message) || "We could not read this file."; return redraw(); } const v = vetRows(parseList(t)); if (!v.ok.length || v.junk.length > v.ok.length) { S.csvNote = !v.ok.length ? "We could not find any names and numbers in this file. Fill in the blank list, one person per row, save it as CSV and upload it again." + (v.junk.length ? " Left out: " + junkText(v.junk) : "") : "Most of this file does not look like a list of names and numbers, so it was not used. Left out: " + junkText(v.junk); return redraw(); } S.csvNote = v.junk.length ? v.junk.length + (v.junk.length === 1 ? " row was" : " rows were") + " left out: " + junkText(v.junk) + " Fix them in your file and upload it again, or add them one by one." : ""; addPeople(v.ok); };
-    if ($("gcontacts")) $("gcontacts").onclick = async () => { try { const got = await navigator.contacts.select(["name", "tel"], { multiple: true }); addPeople((got || []).map((c) => ({ name: (c.name || [])[0] || "", phone: (c.tel || [])[0] || "" }))); } catch { S.pp.sum = "Could not open your contacts. Please upload a file or add one person instead."; redraw(); } };
-    all("[data-fix]", (b) => (b.onclick = () => { const i = Number(b.dataset.fix), w = S.pp.wrong[i], v = ($("fixin" + i) || {}).value; if (!w) return; if (!cleanPhone(v)) { w.raw = v; S.pp.sum = String(v || "").trim() ? "That number still looks wrong. Check the digits." : "Type the mobile number in the box first."; return redraw(); } S.pp.wrong.splice(i, 1); addPeople([{ name: w.name, phone: v }], true); }));
+    if ($("gfile")) $("gfile").onchange = async () => { const f = $("gfile").files && $("gfile").files[0]; if (!f) return; if (S.pp.adding) { S.csvNote = "Still adding the last list. Please wait a moment, then choose your file again."; return redraw(); } S.csvNote = ""; let t = ""; try { t = await readListFile(f, "csv"); } catch (e) { S.csvNote = (e && e.message) || "We could not read this file."; return redraw(); } const v = vetRows(parseList(t)); if (!v.ok.length || v.junk.length > v.ok.length) { S.csvNote = !v.ok.length ? "We could not find any names and numbers in this file. Fill in the blank list, one person per row, save it as CSV and upload it again." + (v.junk.length ? " Left out: " + junkText(v.junk) : "") : "Most of this file does not look like a list of names and numbers, so it was not used. Left out: " + junkText(v.junk); return redraw(); } S.csvNote = v.junk.length ? v.junk.length + (v.junk.length === 1 ? " row was" : " rows were") + " left out: " + junkText(v.junk) + " Fix them in your file and upload it again, or add them one by one." : ""; addPeople(v.ok); };
+    if ($("gcontacts")) $("gcontacts").onclick = async () => { if (S.pp.adding) { S.pp.sum = "Still adding the last list. Please wait a moment, then pick your contacts again."; return redraw(); } try { const got = await navigator.contacts.select(["name", "tel"], { multiple: true }); addPeople((got || []).map((c) => ({ name: (c.name || [])[0] || "", phone: (c.tel || [])[0] || "" }))); } catch { S.pp.sum = "Could not open your contacts. Please upload a file or add one person instead."; redraw(); } };
+    all("[data-fix]", (b) => (b.onclick = () => { const i = Number(b.dataset.fix), w = S.pp.wrong[i], v = ($("fixin" + i) || {}).value; if (!w) return; if (S.pp.adding) { S.pp.sum = "Still adding the last list. Please wait a moment, then press Fix and add again."; return redraw(); } if (!cleanPhone(v)) { w.raw = v; S.pp.sum = String(v || "").trim() ? "That number still looks wrong. Check the digits." : "Type the mobile number in the box first."; return redraw(); } S.pp.wrong.splice(i, 1); addPeople([{ name: w.name, phone: v, empId: w.empId }], true); }));
     all("[data-wa]", (a) => (a.onclick = () => { markSent(a.dataset.wa); setTimeout(redraw, 0); }));
     all("[data-resend]", (b) => (b.onclick = async () => {
       if (b.disabled) return; b.disabled = true; /* one press: a second would make another new link and stop the first */ const id = b.dataset.resend;
       try { const r = await call("POST", `/api/z/${eid}/people/${encodeURIComponent(id)}/resend`, {}); delete S.pp.sent[id]; ls.set(sentKey(), JSON.stringify(S.pp.sent)); (S.pp.fresh || (S.pp.fresh = {}))[id] = 1; S.pp.sum = "A new link is ready. The old one has stopped. Press Send on WhatsApp next to their name."; } catch (e) { S.pp.sum = friendly(e); }
-      await loadPeople(); redraw();
+      await loadPeople(); lastHtml = ""; redraw(); // the same words twice draw the same page: build the button again
     }));
     all("[data-rmask]", (b) => (b.onclick = () => { S.pp.confirm = b.dataset.rmask; redraw(); }));
     all("[data-rmno]", (b) => (b.onclick = () => { S.pp.confirm = ""; redraw(); }));
@@ -1842,10 +1846,10 @@
       const f = $("brandlogo").files && $("brandlogo").files[0]; if (!f) return;
       if (!/^image\/(png|jpeg|webp)$/.test(f.type || "")) { S.logoNote = "Please choose a PNG, JPEG or WebP picture."; return redraw(); }
       if (f.size > 5 * 1024 * 1024) { S.logoNote = "That picture is bigger than 5 MB. Please choose a smaller one."; return redraw(); }
-      try { S.f.brand.logo = await fitLogo(f); S.logoNote = ""; } catch (e) { S.logoNote = e && e.message === "small" ? "That picture is too small. It must be at least 64 x 64 pixels." : e && e.message === "thin" ? "That picture is too long and thin. It may be at most 4 times wider than tall." : "We could not use that picture. Try a smaller or simpler one."; }
+      try { S.f.brand.logo = await fitLogo(f); S.logoNote = ""; clearToast(); S.unsaved[4] = true; /* only a picture that was really taken is a change */ } catch (e) { S.logoNote = e && e.message === "small" ? "That picture is too small. It must be at least 64 x 64 pixels." : e && e.message === "thin" ? "That picture is too long and thin. It may be at most 4 times wider than tall." : "We could not use that picture. Try a smaller or simpler one."; }
       redraw();
     };
-    if ($("logorm")) $("logorm").onclick = () => { S.f.brand.logo = ""; S.logoNote = ""; redraw(); };
+    if ($("logorm")) $("logorm").onclick = () => { edited(); S.f.brand.logo = ""; S.logoNote = ""; redraw(); };
     if ($("copypaylink")) $("copypaylink").onclick = async () => { if (S.payBusy) return; if (S.payUrl) { S.payCopied = await copyText(S.payUrl); S.payLinkNote = PAYNOTE(S.payCopied); return redraw(); } S.payBusy = true; redraw(); /* same link again: a new one stops the one already sent */
       try { const r = await call("POST", `/api/z/${eid}/paylink`, {}); S.payUrl = r.url || ""; S.payCopied = S.payUrl ? await copyText(S.payUrl) : false; S.payLinkNote = S.payUrl ? PAYNOTE(S.payCopied) : "We could not make the link. Please try again."; }
       catch (e) { S.payUrl = ""; S.payLinkNote = friendly(e); } S.payBusy = false;
@@ -1885,7 +1889,7 @@
       redraw();
     };
     const guestTool = async (k, path, box, doing, done, reload) => { if (S.gtBusy) return; const ph = (($(box) || {}).value || ""); if (k === "pd") S.gtPh = ph; else S.gtUb = ph; S.gtBusy = true; try { S.gtNote = { k, t: doing }; redraw(); const r = await call("POST", `/api/z/${eid}/${path}`, { phone: ph }); S.gtNote = { k, t: done(r) }; if (reload) await loadPeople(); } catch (e) { S.gtNote = { k, t: e.message }; } S.gtBusy = false; redraw(); }; /* a note under the buttons at once ("Looking..."), one press at a time, and the number box keeps what was typed */ if ($("pdsee")) $("pdsee").onclick = () => guestTool("pd", "person", "pdph", "Looking...", (r) => `Ticket ${r.seat}${r.name ? ", " + r.name : ""}${r.role ? ", " + r.role : ""}. We hold only their name and number.`);
-    if ($("pddel")) $("pddel").onclick = () => { if (!confirm("Delete this player's name and number now? This cannot be undone.")) return; guestTool("pd", "forget", "pdph", "Deleting...", () => "Done. Their data is deleted.", true); };
+    if ($("pddel")) $("pddel").onclick = async () => { if (!(await askSure("Delete this player's data?", "Their name and number are deleted now. This cannot be undone.", "Yes, delete it", "No, keep it"))) return; guestTool("pd", "forget", "pdph", "Deleting...", () => "Done. Their data is deleted.", true); };
     if ($("unbind")) $("unbind").onclick = () => guestTool("ub", "unbind", "ubph", "Working...", () => "Done. The next phone they join with keeps their ticket.");
     // game day
     all("[data-chip]", (b) => (b.onclick = () => { const t = $("annText"); if (t) { t.value = b.dataset.chip; t.dispatchEvent(new Event("input", { bubbles: true })); } })); /* the chip text counts as typed; no keyboard hides Send */
@@ -1897,11 +1901,12 @@
     if ($("annClear")) $("annClear").onclick = async () => { if (S.annBusy) return; S.annBusy = true; redraw(); try { await call("POST", `/api/z/${eid}/announce`, { text: "" }); S.annNote = "Message cleared."; } catch (e) { S.annNote = e.message; } S.annBusy = false; redraw(); refreshEng(); };
     if ($("nextnum")) $("nextnum").onclick = async () => { // host mode: one press = one number, released 6 seconds later from the public random beacon
       if (S.pressing) return;
+      if (S.control && S.control.stopped) { S.nextNote = ctlWords({ message: "already stopped" }); return redraw(); }
       const nexts = (S.st && S.st.nextRounds) || [];
       if (S.control && S.control.pausedNow) { S.nextNote = ZG.NEXT_REFUSALS.paused; return redraw(); }
       if (nexts.length && (S.now === null || nexts[nexts.length - 1] > S.now)) { S.nextNote = ZG.NEXT_REFUSALS.order; return redraw(); }
       S.pressing = true; S.nextNote = ""; redraw();
-      try { const r = await TBControl.publish(eid, { token: secret, base: BASE, prefix: "/api/z" }, "next"); S.nextNote = r.status === 200 ? "" : (r.data && r.data.error) || ZG.NEXT_REFUSALS.lead; } catch (e) { S.nextNote = ctlWords(e); }
+      try { const r = await TBControl.publish(eid, { token: secret, base: BASE, prefix: "/api/z" }, "next"); S.nextNote = r.status === 200 ? "" : ctlWords({ message: (r.data && r.data.error) || ZG.NEXT_REFUSALS.lead }); } catch (e) { S.nextNote = ctlWords(e); }
       S.pressing = false;
       refreshEng();
     };
@@ -1955,7 +1960,7 @@
       try {
         const r = await call("POST", `/api/z/${K.from}/clone`, { ...(K.hasPeople && K.withPeople ? { withPeople: true } : {}) });
         eid = r.id; history.replaceState(null, "", "?e=" + encodeURIComponent(r.id) + (BASE ? "&api=" + encodeURIComponent(BASE) : ""));
-        S.store = null; S.f = null; S.fFor = ""; S.openInit = ""; S.cfg = null; S.info = null; S.sum = null; S.life = null; S.people = []; S.pp.list = null; S.pp.sentFor = ""; S.cancel = null; S.cancelDone = false; S.creditMsg = ""; S.screen = "eng";
+        S.store = null; S.f = null; S.fFor = ""; S.unsaved = {}; S.touched = {}; S.openInit = ""; S.cfg = null; S.info = null; S.sum = null; S.life = null; S.people = []; S.pp.list = null; S.pp.sentFor = ""; S.cancel = null; S.cancelDone = false; S.creditMsg = ""; S.screen = "eng";
         S.clone = null; S.cloneNew = r.id; S.cloneDated = ""; S.note = "Your new game is ready to check. Pick the date and time, then publish.";
         refreshTeam(); refreshEng();
       } catch (e) { K.busy = false; K.err = e.status === 404 ? "This is not switched on yet. Please try again a little later." : friendly(e); redraw(); }
@@ -1970,7 +1975,7 @@
       const id = b.dataset.delDraft; if (S.delArm !== id) { S.delArm = id; return redraw(); }
       S.delArm = ""; try { await call("POST", `/api/z/${id}/discard`, {}); S.note = "Draft deleted."; } catch (e) { S.note = friendly(e); } await refreshHome(); redraw();
     }));
-    all("[data-open-game]", (b) => (b.onclick = () => { S.note = ""; S.toast = ""; eid = b.dataset.openGame; S.store = null; S.f = null; S.fFor = ""; S.openInit = ""; S.cfg = null; S.info = null; refreshTeam(); refreshEng(); }));
+    all("[data-open-game]", (b) => (b.onclick = () => { S.note = ""; S.toast = ""; S.deadLink = false; if (S.clone && S.clone.from !== b.dataset.openGame) S.clone = null; /* a panel made for another game must not follow the person into this one */ eid = b.dataset.openGame; S.store = null; S.f = null; S.fFor = ""; S.unsaved = {}; S.touched = {}; S.openInit = ""; S.cfg = null; S.info = null; refreshTeam(); refreshEng(); }));
     all("[data-reuse]", (b) => (b.onclick = async () => {
       try { // a new game that starts with the earlier roster already on it
         const now = await latestRound(); const id = randId();
@@ -1978,18 +1983,18 @@
         await call("POST", "/api/z", { id, startRound: now + 20 * 20, callSeconds: old.call_seconds, cap: Math.max(old.participants + 50, 500) });
         const r = await call("POST", `/api/z/${id}/reuse`, { from: b.dataset.reuse });
         await TBControl.ensureKey(id, { token: secret, base: BASE, prefix: "/api/z" });
-        eid = id; history.replaceState(null, "", "?e=" + id); S.store = null; S.f = null; S.fFor = ""; S.openInit = ""; S.cfg = null; S.info = null; S.screen = "eng";
+        eid = id; history.replaceState(null, "", "?e=" + id); S.store = null; S.f = null; S.fFor = ""; S.unsaved = {}; S.touched = {}; S.openInit = ""; S.cfg = null; S.info = null; S.screen = "eng";
         S.note = `Created with ${r.copied} participants from the earlier game. It starts in 20 minutes; participants use the new link.`; refreshEng();
       } catch (e) { noteAndDraw(e.message); }
     }));
-    all("[data-retirekey]", (b) => (b.onclick = async () => { if (!confirm("Retire this key? It will stop working at once.")) return; try { await call("POST", "/api/org/keys/revoke", { id: b.dataset.retirekey }); S.note = "Key retired."; } catch (e) { S.note = e.message; } eid ? loadAccount() : refreshHome(); }));
+    all("[data-retirekey]", (b) => (b.onclick = async () => { if (!(await askSure("Retire this key?", "It will stop working at once.", "Yes, retire it", "No, keep it"))) return; try { await call("POST", "/api/org/keys/revoke", { id: b.dataset.retirekey }); S.note = "Key retired."; } catch (e) { S.note = e.message; } eid ? loadAccount() : refreshHome(); }));
     if ($("aiaudit")) $("aiaudit").onclick = async () => { try { S.aiTrail = (await call("GET", "/api/org/ai/audit")).trail || []; } catch (e) { S.note = e.message; } redraw(); };
     if ($("closeacct")) $("closeacct").onclick = async () => {
-      if (!confirm("Close your account? Your account and all your games are deleted now. This cannot be undone.")) return;
+      if (!(await askSure("Close your account?", "Your account and all your games are deleted now. This cannot be undone.", "Yes, close my account", "No, keep it"))) return;
       try { await call("POST", "/api/org/close", { confirm: true }); try { sessionStorage.clear(); } catch {} location.href = "/"; } catch (e) { noteAndDraw(e.message); }
     };
     const newLink = async (path, ask) => {
-      if (ask && !confirm(ask)) return;
+      if (ask && !(await askSure("Are you sure?", ask, "Yes", "No"))) return;
       try { const r = await call("POST", path, {}); S.aiMsg = r.aiMessage; ss.set("ctz-aimsg", r.aiMessage); S.note = r.mailed ? "Your new AI work link is ready. The old links have stopped. A fresh 24-hour link is on its way to your e-mail." : "Your new AI work link is ready and the old one has stopped. Copy it from the box in your account (we have no e-mail address on file to send it to)."; } catch (e) { S.note = e.message; }
       S.acctOpen = true; redraw();
     };
