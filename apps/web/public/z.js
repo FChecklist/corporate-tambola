@@ -87,13 +87,27 @@
   const CT_BY_ISO = (iso) => CT_COUNTRIES.find((c) => c.iso === iso) || CT_INDIA;
   const CT_MAIN = { 1: "US", 7: "RU", 44: "GB", 39: "IT", 262: "RE" }; // a code that several places share: the biggest one is chosen when only the code is known
   const CT_BY_DIAL = (dial) => CT_COUNTRIES.find((x) => x.iso === CT_MAIN[dial]) || CT_COUNTRIES.find((x) => x.dial === dial);
+  /** What a person pastes is cleaned first: direction marks and other invisible characters go, typographic dashes become "-", digits typed in other scripts (Arabic-Indic, Devanagari, full-width) become 0-9, "(+44) 7911..." loses its opening bracket and "+44 (0)7911..." loses its "(0)" (that 0 is the dial-inside-the-country zero, not part of the international number). */
+  const CT_CLEAN = (typed) => {
+    const digit = (base) => (x) => String.fromCharCode(x.charCodeAt(0) - base + 48);
+    let t = String(typed == null ? "" : typed)
+      .replace(/[​-‏‪-‮⁦-⁩﻿]/g, "")
+      .replace(/[   ]/g, " ")
+      .replace(/[‐-―−]/g, "-")
+      .replace(/＋/g, "+")
+      .replace(/[０-９]/g, digit(0xFF10)).replace(/[٠-٩]/g, digit(0x0660)).replace(/[۰-۹]/g, digit(0x06F0)).replace(/[०-९]/g, digit(0x0966))
+      .trim();
+    t = t.replace(/^\(\s*(\+|00)/, "$1");
+    if (/^(\+|00)/.test(t)) t = t.replace(/\(\s*0\s*\)/g, "");
+    return t;
+  };
   const CT_ZERO_STAYS = { CI: 1 }; // a country whose numbers really begin with 0 (the others drop the 0 people dial inside their own country)
   /** What the number box and the country list say, as one number. Country codes never start with 0 and none is the start of another, so a pasted +<code> is read exactly. India is held to the shape of an Indian mobile number; every other country is only held to the length the phone networks allow (8 to 15 digits in all), because the numbers of different countries are 8, 9, 10, 11 or 12 digits long and a real number must never be turned away for its length. */
   const CTPhone = {
     countries: CT_COUNTRIES,
     byIso: CT_BY_ISO,
     parse(iso, typed) {
-      const t = String(typed == null ? "" : typed).trim();
+      const t = CT_CLEAN(typed);
       if (!t) return { ok: false, empty: true, why: "" };
       if (/[^\d\s+\-()./]/.test(t)) return { ok: false, why: "A mobile number has digits only. Spaces, + and - are fine." };
       let c = CT_BY_ISO(iso), d = t.replace(/\D/g, "");
@@ -106,7 +120,8 @@
       } else if (c.dial === "91") {
         if (d.length === 12 && d.slice(0, 2) === "91") d = d.slice(2); // 91 98765 43210 typed without the plus
         else if (d.length === 11 && d[0] === "0") d = d.slice(1);
-      } else if (d[0] === "0" && !CT_ZERO_STAYS[c.iso]) d = d.slice(1); // the 0 people dial inside their country is not part of the international number
+      } else if (c.dial === "1" && d.length === 11 && d[0] === "1") d = d.slice(1); // 1 555 123 4567 typed the way people dial inside the United States and Canada
+      else if (d[0] === "0" && !CT_ZERO_STAYS[c.iso]) d = d.slice(1); // the 0 people dial inside their country is not part of the international number
       if (c.dial === "91") {
         if (d.length !== 10) return { ok: false, why: d.length < 10 ? "An Indian mobile number has 10 digits. Please check it." : "An Indian mobile number has 10 digits. Please remove the extra digits." };
         if (!/^[6-9]/.test(d)) return { ok: false, why: "An Indian mobile number starts with 6, 7, 8 or 9." };
