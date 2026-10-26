@@ -140,6 +140,27 @@ describe("the console on Game day: the Next number button", () => {
     for (const p of x.phones) expect(p.rt.view().paused).toBe(true);
     expect(c.errors).toEqual([]);
   });
+  test("after End the game the Host's Next number button is off and says why; a press that still reaches a stopped game is refused in plain words, not 'engagement already stopped'", async () => {
+    const x = await setup("HC-END");
+    const c = await consolePage(x, "HC-END");
+    await c.waitFor((t) => /Game day|Your game|Last step/i.test(t));
+    openStep(c, 9); await c.waitFor((t) => /Next number/.test(t));
+    for (const p of x.phones) { await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true); }
+    x.goLive(); for (let i = 0; i < 4; i++) await x.step();
+    await c.waitFor((t) => /Press for the first number when everyone is ready/.test(t), 15_000);
+    expect((c.$("#nextnum") as any).disabled).toBe(false);
+    // a press that reaches the server after the game was ended (from another device): the server answers 422 engagement already stopped
+    const real = c.win.fetch; let refuse = true;
+    c.win.fetch = async (input: any, init?: any) => { const u = new URL(String(input), "http://localhost"); if (refuse && (init?.method || "GET").toUpperCase() === "POST" && u.pathname === "/api/z/HC-END/control") return new Response(JSON.stringify({ error: "engagement already stopped" }), { status: 422, headers: { "content-type": "application/json" } }); return real(input, init); };
+    c.click("#nextnum"); await c.waitFor((t) => /This game has already been ended\./.test(t), 10_000);
+    expect(c.text()).not.toMatch(/engagement already stopped/i);
+    refuse = false;
+    // and when the game really is ended from this console, the button is off at once and the line under the number says so
+    c.click('[data-ctl="stop"]'); c.click("#zcsure [data-y]");
+    await c.waitFor((t) => /The game is (being ended|over)/.test(t), 15_000);
+    expect((c.$("#nextnum") as any).disabled).toBe(true); expect(c.$("#hoststate")!.textContent).toMatch(/The game is (being ended|over)/); expect(c.$("#hoststate")!.textContent).not.toMatch(/Press when you are ready/);
+    expect((await file(x, "HC-END"))!.messages.filter((m) => m.action === "next").length).toBe(0); // no number was released by the refused press
+  });
   test("in an auto-mode game there is no Next number button", async () => {
     const x = await setup("HC-AUTO", false);
     const c = await consolePage(x, "HC-AUTO");

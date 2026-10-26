@@ -30,6 +30,16 @@ const spy = () => {
   };
   return { patches, hook };
 };
+/** Holds every settings save for as long as the test wants (a slow phone connection), and records what was sent. */
+const gate = () => {
+  const patches: any[] = []; let hits = 0, release!: () => void; const opened = new Promise<void>((r) => (release = r));
+  const hook = (win: any, f: string) => {
+    if (f !== "control.js") return;
+    const real = win.fetch;
+    win.fetch = async (input: any, init?: any) => { const u = new URL(String(input), "http://localhost"); if ((init?.method || "GET").toUpperCase() === "PATCH" && /\/settings$/.test(u.pathname)) { hits++; patches.push(JSON.parse(init.body)); await opened; } return real(input, init); };
+  };
+  return { patches, hook, hits: () => hits, release: () => release() };
+};
 async function consoleOf(o: O, eid: string, hook?: (win: any, f: string) => void) {
   const p = await openPage(o.world, { url: `http://localhost/zc?e=${eid}`, html: "zc.html", scripts: ["zgame.js", "control.js", "zc.js"], session: { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" }, afterLoad: (win: any, f: string) => { if (f === "zgame.js" && win.ZG && !win.ZG.PRIZE_HOUSES) win.ZG.PRIZE_HOUSES = PRIZE_HOUSES; hook?.(win, f); } });
   open.push(p); await p.waitFor((x) => /Hello|Last step|Your game/i.test(x)); return p;
@@ -37,6 +47,8 @@ async function consoleOf(o: O, eid: string, hook?: (win: any, f: string) => void
 const openStep = (p: Page, n: number) => p.click(`.zc-dot[data-open="${n}"]`);
 const setField = (p: Page, sel: string, v: string) => { const el = p.$(sel) as any; el.value = v; el.dispatchEvent(new p.win.Event("input", { bubbles: true })); };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** waits until the page is not in the middle of a Save */
+const idle = (p: Page) => p.waitFor(() => !(p.win as any).__zc.saving);
 /** Records which element the page scrolls to (the test DOM has no layout, so nothing really scrolls). */
 const scrolls = (p: Page) => { const seen: string[] = []; for (const c of [p.win.Element, p.win.HTMLElement]) c.prototype.scrollIntoView = function (this: any) { seen.push(this.id); }; return seen; };
 /** Presses a link without letting the test DOM follow it. */
@@ -134,5 +146,61 @@ describe("steps 3 and 4: every refusal names the thing to fix, and nothing is ch
     const h = new URLSearchParams(opened[0]!.split("#")[1]); expect([h.get("u"), h.get("k")]).toEqual(["https://www.youtube.com/watch?v=dQw4w9WgXcQ", "youtube"]);
     const v = await openPage(o.world, { url: "http://localhost/preview.html#w=break&k=file&t=Hi&u=" + encodeURIComponent("http://acme.com/a.mp4"), html: "preview.html", scripts: ["preview.js"] }); open.push(v);
     await v.waitFor((x) => /A short break/.test(x)); expect(v.text()).toMatch(/The link you pasted was not used/); expect(v.text()).not.toMatch(/guests see your message only/);
+  });
+  test("the red refusal goes as soon as a prize is ticked or a lucky draw is removed, not only when a chip or a box is touched", async () => {
+    const o = await organizer(); await make(o, "IP-RED"); const p = await consoleOf(o, "IP-RED"); openStep(p, 3);
+    const ticked = () => (Array.from(p.win.document.querySelectorAll("[data-hc]")) as any[]).filter((b) => b.checked);
+    for (let i = 0; i < 12 && ticked().length; i++) { const b = ticked()[0]; b.checked = false; b.dispatchEvent(new p.win.Event("change", { bubbles: true })); }
+    expect(ticked().length).toBe(0);
+    p.click('[data-save="3"]'); await p.waitFor((x) => /Tick at least one prize\./.test(x)); await idle(p); expect(!!p.$("#footmsg")).toBe(true);
+    const one = p.$("[data-hc]") as any; one.checked = true; one.dispatchEvent(new p.win.Event("change", { bubbles: true })); // a prize is ticked
+    expect(!!p.$("#footmsg")).toBe(false); expect(p.text()).not.toMatch(/Tick at least one prize\./);
+    openStep(p, 4); p.click('[data-ck="midN"][data-v="3"]'); setField(p, "#f-mid-0-t", "First"); setField(p, "#f-mid-1-t", "Second"); p.click("[data-luckyadd]"); setField(p, "#f-mid-2-t", "Third");
+    p.click('[data-save="4"]'); await p.waitFor((x) => /You have 4\. Remove 1/.test(x)); await idle(p); expect(!!p.$("#footmsg")).toBe(true);
+    p.click("[data-luckydel]"); // the lucky draw is removed: three places are used again
+    expect(!!p.$("#footmsg")).toBe(false); expect(p.text()).not.toMatch(/You have 4\. Remove 1/);
+  });
+
+  test("a prize ticked while 'Saving...' is on its way is not marked as saved and is not wiped by the refresh; it stays, flagged, until the person saves it", async () => {
+    const o = await organizer(); await make(o, "IP-MID"); const g = gate(); const p = await consoleOf(o, "IP-MID", g.hook); openStep(p, 3);
+    const boxes = () => Array.from(p.win.document.querySelectorAll("[data-hc]")) as any[];
+    const spare = boxes().find((b) => !b.checked)?.dataset.hc as string; expect(spare).toBeTruthy(); // a prize that is not ticked
+    const base0 = (p.win as any).__zc.fBase;
+    p.click('[data-save="3"]'); await p.waitFor(() => g.hits() === 1);
+    const b = boxes().find((x) => x.dataset.hc === spare)!; b.checked = true; b.dispatchEvent(new p.win.Event("change", { bubbles: true })); // ticked while the answer is awaited
+    g.release(); await idle(p); await p.waitFor(() => (p.win as any).__zc.fBase !== base0, 10_000); // the refresh after the save has run
+    const rewardsOf = async () => (await o.json(await o.api("GET", "/api/z/IP-MID/participants", undefined, o.token))).rewards as any[];
+    expect((await rewardsOf()).some((r) => r.pattern === spare)).toBe(false); // it was not in what was sent
+    expect((p.win as any).__zc.f.hs[spare].on).toBe(true); expect((p.win as any).__ctDirty()).toBe(true); // and it was not thrown away or called saved
+    openStep(p, 3); expect((p.$(`[data-hc='${spare}']`) as any).checked).toBe(true); expect(p.$("#unsavednote")!.textContent).toMatch(/Not saved yet/);
+    p.click('[data-save="3"]'); await idle(p);
+    expect((await rewardsOf()).some((r) => r.pattern === spare)).toBe(true); expect((p.win as any).__ctDirty()).toBe(false);
+  });
+
+  test("'Add a lucky draw' tapped after typed moments have filled the places says so at once instead of doing nothing", async () => {
+    const o = await organizer(); await make(o, "IP-FULL"); const p = await consoleOf(o, "IP-FULL"); openStep(p, 4);
+    p.click('[data-ck="midN"][data-v="3"]'); setField(p, "#f-mid-0-t", "First"); setField(p, "#f-mid-1-t", "Second"); setField(p, "#f-mid-2-t", "Third");
+    expect(p.$("#midcount")!.textContent).toBe("3 used"); expect(!!p.$("[data-luckyadd]")).toBe(true); // typing does not redraw: the button is still on the screen
+    p.click("[data-luckyadd]");
+    expect(!!p.$("[data-luckyadd]")).toBe(false); expect(p.text()).toMatch(/All 3 places during the game are used/);
+    expect((p.$("#f-mid-1-t") as any).value).toBe("Second"); expect((p.win as any).__zc.f.lucky.length).toBe(0); // what was typed is still there, no lucky draw was added
+  });
+
+  test("a logo the page refuses is not a change; an accepted one is; tapping the chosen colour again is (it takes the colour off)", async () => {
+    const o = await organizer(); await make(o, "IP-LOGO"); await o.api("PATCH", "/api/z/IP-LOGO/settings", { brand: { name: "Acme", color: "#0B3D91" } }, o.aiKey);
+    const p = await consoleOf(o, "IP-LOGO"); openStep(p, 4); const dirty = () => (p.win as any).__ctDirty();
+    const choose = (file: any) => { const inp = p.$("#brandlogo") as any; Object.defineProperty(inp, "files", { value: [file], configurable: true }); inp.dispatchEvent(new p.win.Event("change", { bubbles: true })); };
+    choose({ name: "x.txt", type: "text/plain", size: 10 });
+    await p.waitFor((x) => /Please choose a PNG, JPEG or WebP picture/.test(x)); expect(!!p.$("#unsavednote")).toBe(false); expect(dirty()).toBe(false);
+    choose({ name: "big.png", type: "image/png", size: 6 * 1024 * 1024 });
+    await p.waitFor((x) => /bigger than 5 MB/.test(x)); expect(!!p.$("#unsavednote")).toBe(false); expect(dirty()).toBe(false);
+    const w = p.win as any; // the test DOM draws no pictures: a 100 x 100 picture and a canvas that answers are stood in
+    w.Image = class { onload: any; naturalWidth = 100; naturalHeight = 100; set src(_v: string) { setTimeout(() => this.onload?.(), 0); } };
+    w.HTMLCanvasElement.prototype.getContext = () => ({ fillRect() {}, drawImage() {} }); w.HTMLCanvasElement.prototype.toDataURL = () => "data:image/png;base64,AAAA";
+    choose(new w.File(["x"], "a.png", { type: "image/png" }));
+    await p.waitFor(() => !!p.$("#logorm")); expect(p.$("#unsavednote")!.textContent).toMatch(/Not saved yet/); expect(dirty()).toBe(true); // a picture that was taken
+    const q = await consoleOf(o, "IP-LOGO"); openStep(q, 4); expect((q.win as any).__ctDirty()).toBe(false);
+    q.click('[data-ck="brand.color"][data-v="#0B3D91"]'); // the chosen colour again: the colour is taken off
+    expect(q.$('[data-ck="brand.color"][data-v="#0B3D91"]')!.getAttribute("aria-pressed")).toBe("false"); expect(!!q.$("#unsavednote")).toBe(true); expect((q.win as any).__ctDirty()).toBe(true);
   });
 });

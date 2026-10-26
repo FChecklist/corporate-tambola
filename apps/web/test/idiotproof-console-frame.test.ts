@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { newWorld, openPage, roundAt, T, type Page } from "./harness";
+import { newWorld, openPage, roundAt, roundMs, T, type Page } from "./harness";
 import { PRIZE_HOUSES } from "../../../packages/beacon/src/config";
 
 setDefaultTimeout(30_000);
@@ -162,4 +162,98 @@ describe("console frame: nothing happens out of sight", () => {
     await publish(o, "FR-WORDS"); const q = await consolePage(o, "FR-WORDS"); await q.waitFor((x) => /Your progress/.test(x)); openStep(q, 7);
     expect(q.$('[data-save="7"]')).toBeTruthy(); // a published game still has its Continue
   });
+  test("home list: a draft says draft, a published game that waits for its payment says so, a paid game says published; the History list says the same", async () => {
+    const o = await organizer();
+    await make(o, "LB-DRAFT", { name: "Draft game" }); o.world.now += 60_000;
+    await make(o, "LB-PEND", { name: "Pending game" }); await publish(o, "LB-PEND"); o.world.now += 60_000;
+    await make(o, "LB-PAID", { name: "Paid game" }); await publish(o, "LB-PAID"); o.world.raw.prepare("UPDATE engagement SET pack=100 WHERE id='LB-PAID'").run();
+    const p = await consolePage(o, ""); await p.waitFor((x) => /Your games/.test(x) && /Paid game/.test(x) && /Draft game/.test(x));
+    const row = (name: string) => (Array.from(p.win.document.querySelectorAll("#yourgames .zc-rowl")) as any[]).find((r) => r.textContent.includes(name))!.textContent as string;
+    expect(row("Draft game")).toMatch(/ · draft \(code LB-DRAFT\)/);
+    expect(row("Pending game")).toMatch(/ · published, payment pending \(code LB-PEND\)/); expect(row("Pending game")).not.toMatch(/draft/);
+    expect(row("Paid game")).toMatch(/ · published \(code LB-PAID\)/); expect(row("Paid game")).not.toMatch(/payment pending|draft/);
+    p.click(".zc-lastbar [data-hist]"); await p.waitFor((x) => /History · kept/.test(x));
+    const hist = (Array.from(p.win.document.querySelectorAll(".zc-block")) as any[]).find((b) => /History · kept/.test(b.textContent)).textContent as string;
+    expect(hist).toMatch(/\(code LB-DRAFT\)[^(]* · draft/); expect(hist).toMatch(/\(code LB-PEND\)[^(]* · published, payment pending/); expect(hist).not.toMatch(/\(code LB-PAID\)[^(]*(draft|payment pending)/);
+  });
+
+  test("the account box on the home screen says nothing about AI: the key list and the ideas list use plain words", async () => {
+    const o = await organizer(); await make(o, "NA-ONE");
+    expect((await o.api("POST", "/api/z/suggestions", { kind: "feature", title: "Faster game setup", body: "Let the organizer copy a whole game in one tap." }, o.token)).status).toBe(200);
+    const p = await consolePage(o, ""); const t = await p.waitFor((x) => /Your sign-in keys/.test(x) && /Ideas to improve Corporate Tambola/.test(x));
+    expect(t).toMatch(/Link for your helper tool/); expect(t).toMatch(/Suggested by other organizers/); expect(t).toMatch(/Retire/); // the row stays, so a lost link can still be retired
+    expect(t).not.toMatch(/\bAI\b/);
+  });
+
+  test("the note that guest names are hidden in this tab names no AI switch (there is none on any screen)", async () => {
+    const o = await organizer(); await make(o, "NA-SHD");
+    const p = await openPage(o.world, { url: "http://localhost/zc?e=NA-SHD", html: "zc.html", scripts: ZC_SCRIPTS, session: { "ctz-org": o.token, "ctz-email": "boss@acme.com", "ctz-shield": "1" }, afterLoad: withHouses() }); open.push(p);
+    await p.waitFor((x) => /Hello/.test(x)); openStep(p, 6);
+    const t = await p.waitFor((x) => /This browser tab hides guest names and mobile numbers/.test(x)); expect(t).not.toMatch(/\bAI\b/); expect(t).toMatch(/Open the console in a new browser tab/);
+  });
+
+  test("a Retire-this-key tap and a Close-my-account tap ask in the page too (the browser's own box can be blocked)", async () => {
+    const o = await organizer(); await make(o, "KY-ONE");
+    const p = await consolePage(o, ""); (p.win as any).confirm = () => false; await p.waitFor((x) => /Your sign-in keys/.test(x));
+    p.click("[data-retirekey]"); expect(!!p.$("#zcsure")).toBe(true); p.click("#zcsure [data-y]"); await p.waitFor((x) => /Key retired\./.test(x));
+    p.click("#closeacct"); expect(!!p.$("#zcsure")).toBe(true); p.click("#zcsure [data-n]"); expect(!!p.$("#zcsure")).toBe(false);
+    expect((await o.api("GET", "/api/whoami", undefined, o.token)).status).toBe(200); // nothing was closed
+  });
+
+  test("deleting the only draft does not make a new game by itself, even in a tab that never made one", async () => {
+    const o = await organizer(); await make(o, "DEL-ONE", { name: "Only draft" });
+    let posts = 0;
+    const p = await consolePage(o, "", rules((m, u) => { if (m === "POST" && u.pathname === "/api/z") posts++; return undefined; }));
+    await p.waitFor((x) => /Only draft/.test(x));
+    p.click("[data-del-draft]"); expect(p.text()).toMatch(/Tap again to delete/); p.click("[data-del-draft]");
+    await p.waitFor((x) => /Draft deleted\./.test(x)); await new Promise((r) => setTimeout(r, 300));
+    expect(posts).toBe(0); expect(p.text()).toMatch(/You have no game yet/); expect((await o.json(await o.api("GET", "/api/history", undefined, o.token))).engagements.length).toBe(0);
+  });
+
+  test("the 'Create a new game like this one' panel stays with the game it was opened for and does not follow the person into another game", async () => {
+    const o = await organizer(); await make(o, "CL-A", { name: "Game A" }); o.world.now += 60_000; await make(o, "CL-B", { name: "Game B" });
+    const p = await consolePage(o, ""); await p.waitFor((x) => /Game A/.test(x) && /Game B/.test(x));
+    p.click('[data-clonebtn][data-from="CL-A"]'); await until(() => !!p.$("#clonepanel"));
+    p.click('[data-open-game="CL-B"]'); await p.waitFor((x) => /Hello\. Let us start/.test(x));
+    expect(!!p.$("#clonepanel")).toBe(false); expect((p.win as any).__zc.clone).toBeNull();
+  });
+
+  test("a Host who met one 403 is not stuck on the dead-link page: All my games shows the list of games again", async () => {
+    const o = await organizer(); await make(o, "HD-A", { name: "Game A" }); o.world.now += 60_000; await make(o, "HD-B", { name: "Game B" });
+    const hk = (await o.json(await o.api("POST", "/api/org/host", { label: "Anita", mobile: "9822200011", email: "host@acme.com" }, o.token))).hostKey as string;
+    o.world.raw.prepare("UPDATE host_state SET verified_ms=?, mobile_ok=1").run(Date.now()); // as if the Host had finished the first-open setup
+    const st = { refuse: true };
+    const p = await openPage(o.world, { url: "http://localhost/zc?e=HD-A", html: "zc.html", scripts: ZC_SCRIPTS, session: { "ctz-org": hk, "ctz-email": "host@acme.com" }, afterLoad: withHouses(rules((m, u) => (st.refuse && m === "GET" && u.pathname === "/api/z/HD-A/info" ? reply(403, { error: "Forbidden" }) : undefined))) }); open.push(p);
+    await p.waitFor((x) => /This link no longer opens the game/.test(x)); expect(!!p.$("#hostall")).toBe(true);
+    st.refuse = false; p.click("#hostall");
+    const t = await p.waitFor((x) => /Your games/.test(x)); expect(t).toMatch(/Game A/); expect(t).toMatch(/Game B/);
+    expect(!!p.$("#deadlink")).toBe(false); expect(t).not.toMatch(/This link no longer opens the game/);
+  });
+
+  test("a refusal (403) that goes away does not keep the dead-link page: the next refresh opens the game again", async () => {
+    const o = await organizer(); await make(o, "HD-C", { name: "Game C" });
+    const hk = (await o.json(await o.api("POST", "/api/org/host", { label: "Anita", mobile: "9822200011", email: "host@acme.com" }, o.token))).hostKey as string;
+    o.world.raw.prepare("UPDATE host_state SET verified_ms=?, mobile_ok=1").run(Date.now());
+    const st = { refuse: true };
+    const p = await openPage(o.world, { url: "http://localhost/zc?e=HD-C", html: "zc.html", scripts: ZC_SCRIPTS, session: { "ctz-org": hk, "ctz-email": "host@acme.com" }, afterLoad: withHouses(rules((m, u) => (st.refuse && m === "GET" && u.pathname === "/api/z/HD-C/info" ? reply(403, { error: "Forbidden" }) : undefined))) }); open.push(p);
+    await p.waitFor((x) => /This link no longer opens the game/.test(x));
+    st.refuse = false; // the page looks again every 5 seconds
+    await p.waitFor((x) => /Date and time of the game/.test(x), 14_000); expect(!!p.$("#deadlink")).toBe(false);
+  }, 40_000);
+
+  test("unsaved work no longer holds back the page update once it is out of sight: after All games nothing on the screen can be saved", async () => {
+    const o = await organizer(); await make(o, "DI-ONE");
+    const p = await consolePage(o, "DI-ONE"); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 2); const dirty = () => (p.win as any).__ctDirty();
+    p.click('[data-ck="tix"][data-v="2"]'); expect(dirty()).toBe(true);
+    p.click("#back"); await p.waitFor((x) => /Create a new game/.test(x)); expect(dirty()).toBe(false);
+  });
+
+  test("unsaved work no longer holds back the page update once the game has started: steps 1 to 4 are locked then and Save can never clear it", async () => {
+    const o = await organizer(); await make(o, "DI-LOCK"); await publish(o, "DI-LOCK"); o.world.raw.prepare("UPDATE engagement SET pack=100 WHERE id='DI-LOCK'").run();
+    const q = await consolePage(o, "DI-LOCK"); await q.waitFor((x) => /Your game|Hello|Last step/i.test(x)); openStep(q, 2);
+    q.click('[data-ck="tix"][data-v="2"]'); expect((q.win as any).__ctDirty()).toBe(true); // before the start it is real work
+    o.world.now = roundMs(START) + 300_000; // the game has started
+    await until(() => (q.win as any).__zc.started === true, 12_000);
+    expect((q.win as any).__ctDirty()).toBe(false);
+  }, 40_000);
 });

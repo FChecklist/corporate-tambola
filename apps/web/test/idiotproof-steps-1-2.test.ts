@@ -155,9 +155,9 @@ describe('console steps 1 and 2: told what is wrong, and how to put it right', (
     const p = await consolePage(o, 'IP-NOOP'); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 2);
     const dirty = () => (p.win as any).__ctDirty();
     p.click(ck('tix', '1')); // 1 ticket is the chosen size already
-    expect(p.$('#unsavednote')).toBeNull(); expect(dirty()).toBe(false);
+    expect(!!p.$('#unsavednote')).toBe(false); expect(dirty()).toBe(false);
     p.click(`[data-bool='capOther']`); // only shows the box for an own number
-    expect(p.$('#unsavednote')).toBeNull(); expect(dirty()).toBe(false); expect(p.$('#f-cap')!.closest('[hidden]')).toBeNull();
+    expect(!!p.$('#unsavednote')).toBe(false); expect(dirty()).toBe(false); expect(!!p.$('#f-cap')!.closest('[hidden]')).toBe(false);
     p.click(ck('tix', '2')); // a real change
     expect(p.$('#unsavednote')!.textContent).toMatch(/Not saved yet/); expect(dirty()).toBe(true);
   });

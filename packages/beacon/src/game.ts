@@ -267,13 +267,13 @@ export function activeBreak(st: ControlState | null, start: number, stride: numb
   return null;
 }
 
+/** A mirror that gave nothing for a past round (blocked, offline, hanging) is left out of the next 100 catch-up rounds, about one whole catch-up: a blocked network is waited on once, not once per mirror per round. Counted in rounds asked for, never in time: this code never reads the device clock. */
+const BACKFILL_SKIP = 100;
 /**
  * Rounds a phone holds for an engagement. Past rounds (a late joiner) are accepted provisionally when two different mirrors
  * give byte-identical answers, then checked against the BLS signature in the background so the join never blocks for seconds.
  * Current rounds are always signature-checked straight away. Anything that fails the check is thrown away and re-fetched.
  */
-/** A mirror that gave nothing for a past round (blocked, offline, hanging) is left out of the next 100 catch-up rounds, about one whole catch-up: a blocked network is waited on once, not once per mirror per round. Counted in rounds asked for, never in time: this code never reads the device clock. */
-const BACKFILL_SKIP = 100;
 export class RoundStore {
   readonly rounds = new Map<number, Round>();
   readonly verified = new Set<number>();

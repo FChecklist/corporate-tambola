@@ -294,8 +294,8 @@ describe("console (organizer page)", () => {
     for (let i = 1; i <= 3; i++) { setField(p, "#cohostlabel", "Ravi " + i); setField(p, "#cohostphone", "98111000" + (10 + i)); p.click("#cohostadd"); await p.waitFor((x) => new RegExp(`Your Co-hosts: ${i} \\(no limit\\)`).test(x)); }
     expect(Array.from(doc.querySelectorAll(".zc-person .zlink")).map((e: any) => e.textContent).filter((x: string) => /#cohost=ctc_[0-9a-f]{48}$/.test(x)).length).toBe(3);
     expect(p.text()).toMatch(/brought 0/); expect((await teamOf(o)).cohosts.length).toBe(3);
-    p.win.confirm = () => true; p.click('[data-retire][data-kind="host"]'); await p.waitFor((x) => /Your Hosts: 4 of 5/.test(x)); expect((p.$("#hostadd") as any).disabled).toBe(false); expect((await teamOf(o)).hosts.length).toBe(4);
-    p.click('[data-retire][data-kind="cohost"]'); await p.waitFor((x) => /Your Co-hosts: 2 \(no limit\)/.test(x)); expect((await teamOf(o)).cohosts.length).toBe(2);
+    p.click('[data-retire][data-kind="host"]'); p.click("#zcsure [data-y]"); await p.waitFor((x) => /Your Hosts: 4 of 5/.test(x)); expect((p.$("#hostadd") as any).disabled).toBe(false); expect((await teamOf(o)).hosts.length).toBe(4);
+    p.click('[data-retire][data-kind="cohost"]'); p.click("#zcsure [data-y]"); await p.waitFor((x) => /Your Co-hosts: 2 \(no limit\)/.test(x)); expect((await teamOf(o)).cohosts.length).toBe(2);
     expect(p.errors).toEqual([]);
   });
   test("no drop-down list anywhere in the console: not on the home page, not in any of the ten steps, not in Quick setup, and none in the script", async () => {
@@ -989,13 +989,13 @@ describe("the console for an AI that works in the browser", () => {
     const pub = await consolePage(o, "UI-ACT1"); // the normal page first, for comparison
     await pub.waitFor((x) => /Hello/.test(x)); openStep(pub, 7); await pub.waitFor((x) => /Publish my game, free/.test(x)); expect(pub.text()).not.toMatch(/brought you here/);
     const a = await page(o, `/zc?e=UI-ACT1&do=publish`, "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-email": "boss@acme.com" });
-    await a.waitFor((x) => /Your AI assistant brought you here/.test(x));
+    await a.waitFor((x) => /Your helper tool brought you here/.test(x)); expect(a.text()).not.toMatch(/\bAI\b/);
     expect(a.text()).toMatch(/Confirm and publish/); expect(a.$("#pubEmail")).toBeTruthy(); // the card is already open
     expect((a.$("#pubgo") as any).style.outline).toMatch(/solid/); // the button to press is outlined
     const sm = await o.json(await o.api("GET", "/api/z/UI-ACT1/summary", undefined, o.aiKey)); expect(sm.status).toBe("draft"); // and it was NOT pressed
     await publish(o, "UI-ACT1");
     const e = await page(o, `/zc?e=UI-ACT1&do=erase`, "zc.html", ZC_SCRIPTS, { "ctz-org": o.token });
-    await e.waitFor((x) => /Delete all participant data now/.test(x)); await until(() => /solid/.test((e.$("#erase") as any).style.outline)); expect(e.text()).toMatch(/Your AI assistant brought you here/);
+    await e.waitFor((x) => /Delete all participant data now/.test(x)); await until(() => /solid/.test((e.$("#erase") as any).style.outline)); expect(e.text()).toMatch(/Your helper tool brought you here/);
     const c = await page(o, `/zc?e=UI-ACT1&do=pause`, "zc.html", ZC_SCRIPTS, { "ctz-org": o.token });
     await c.waitFor((x) => /Controls/.test(x)); await until(() => /solid/.test((c.$('[data-ctl="pause"]') as any).style.outline));
     const n = await page(o, `/zc?e=UI-ACT1`, "zc.html", ZC_SCRIPTS, { "ctz-org": o.token }); await n.waitFor((x) => /Last step: pay before the start/i.test(x)); expect(n.text()).not.toMatch(/brought you here/); // an ordinary visit shows no such banner

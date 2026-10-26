@@ -18,10 +18,10 @@ type O = Awaited<ReturnType<typeof organizer>>;
 const make = (o: O, id: string, over: Record<string, unknown> = {}) => o.api("POST", "/api/z", { id, startRound: START, callSeconds: 9, cap: 100, ...over }, o.aiKey);
 const publish = (o: O, id: string) => o.api("POST", `/api/z/${id}/publish`, { email: "boss@acme.com", phone: "98765 43210" }, o.token);
 const ZC_SCRIPTS = "zgame.js control.js zc.js".split(" ");
-async function consolePage(o: O, eid: string) {
+async function consolePage(o: O, eid: string, hook?: (win: any, f: string) => void) {
   const p = await openPage(o.world, {
     url: "http://localhost/zc?e=" + eid, html: "zc.html", scripts: ZC_SCRIPTS, session: { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" },
-    afterLoad: (win: any, f: string) => { if (f === "zgame.js" && win.ZG && !win.ZG.PRIZE_HOUSES) win.ZG.PRIZE_HOUSES = PRIZE_HOUSES; },
+    afterLoad: (win: any, f: string) => { if (f === "zgame.js" && win.ZG && !win.ZG.PRIZE_HOUSES) win.ZG.PRIZE_HOUSES = PRIZE_HOUSES; hook?.(win, f); },
   });
   open.push(p); await p.waitFor((x) => /Hello|Last step|Your game|Hi\./i.test(x)); return p;
 }
@@ -34,6 +34,7 @@ const chooseFile = (p: Page, sel: string, name: string, text: string) => {
   Object.defineProperty(inp, "files", { value: [{ name, size: text.length, arrayBuffer: async () => new TextEncoder().encode(text).buffer }], configurable: true });
   inp.dispatchEvent(new p.win.Event("change", { bubbles: true }));
 };
+const until = async (pred: () => boolean, ms = 6000) => { const t0 = Date.now(); while (!pred()) { if (Date.now() - t0 > ms) throw new Error("timed out"); await new Promise((r) => setTimeout(r, 30)); } };
 const peopleReady = (p: Page) => p.waitFor((x) => /My people/.test(x) && /people are on my list|person is on my list/.test(x));
 
 describe("console steps 5 and 6: idiot-proof", () => {
@@ -133,4 +134,89 @@ describe("console steps 5 and 6: idiot-proof", () => {
     p.click('#waitbanner [data-open="6"]'); await p.waitFor((x) => /Waiting to come in: 1/.test(x));
     expect(p.$("#waitbanner")).toBeNull(); // the list itself is on screen now
   });
+  test("a row with an employee ID but no mobile number: Fix and add keeps the ID, so an employees-only game takes the person instead of refusing them again", async () => {
+    const o = await organizer(); await make(o, "IP-EMPID"); await publish(o, "IP-EMPID");
+    await o.api("PATCH", "/api/z/IP-EMPID/settings", { whoCanJoin: "list", employeesOnly: true, verify: "both" }, o.aiKey);
+    const p = await consolePage(o, "IP-EMPID"); openStep(p, 6); await peopleReady(p);
+    p.click('[data-mode="file"]');
+    chooseFile(p, "#gfile", "people.csv", "Name,Employee ID\nAsha Rao,E101\n");
+    await p.waitFor((x) => /These need a mobile number\. Type it and press Fix and add\./.test(x));
+    expect(p.$("#wronglist")!.textContent).toMatch(/employee ID E101/); // the ID from the file is shown, so the person can see it is kept
+    setField(p, "#fixin0", "98765 43210"); p.click("[data-fix='0']");
+    await p.waitFor((x) => /1 good, 0 duplicates removed, 0 look wrong/.test(x));
+    expect(!!p.$("#wronglist")).toBe(false);
+    const list = (await listOf(o, "IP-EMPID")).people; expect(list.map((x: any) => [x.name, x.empId])).toEqual([["Asha Rao", "E101"]]); // saved with the ID
+    expect(p.errors).toEqual([]);
+  });
+
+  test("a row the server itself refuses keeps its employee ID in the Fix and add list", async () => {
+    const o = await organizer(); await make(o, "IP-SRV"); await publish(o, "IP-SRV");
+    await o.api("PATCH", "/api/z/IP-SRV/settings", { verify: "both" }, o.aiKey);
+    const hook = (win: any, f: string) => {
+      if (f !== "control.js") return;
+      const real = win.fetch;
+      win.fetch = async (input: any, init?: any) => { const u = new URL(String(input), "http://localhost"); if ((init?.method || "GET").toUpperCase() === "POST" && /\/people$/.test(u.pathname)) return new Response(JSON.stringify({ added: 0, duplicates: 0, invalid: [{ raw: "Asha Rao +919876543210", why: "That number cannot be used." }], people: [] }), { status: 200, headers: { "content-type": "application/json" } }); return real(input, init); };
+    };
+    const p = await consolePage(o, "IP-SRV", hook); openStep(p, 6); await peopleReady(p);
+    p.click('[data-mode="file"]'); chooseFile(p, "#gfile", "people.csv", "Name,Mobile,Employee ID\nAsha Rao,9876543210,E101\n");
+    await p.waitFor((x) => /1 looks wrong/.test(x));
+    expect(p.$("#wronglist")!.textContent).toMatch(/Asha Rao[\s\S]*employee ID E101[\s\S]*That number cannot be used\./);
+  });
+
+  test("a second add while one is running says so: the typed number stays in the Fix box and the second file is not taken for added", async () => {
+    const o = await organizer(); await make(o, "IP-BUSY"); await publish(o, "IP-BUSY");
+    let hold: Promise<void> | null = null, release!: () => void, posts = 0;
+    const hook = (win: any, f: string) => {
+      if (f !== "control.js") return;
+      const real = win.fetch;
+      win.fetch = async (input: any, init?: any) => { const u = new URL(String(input), "http://localhost"); if ((init?.method || "GET").toUpperCase() === "POST" && /\/people$/.test(u.pathname)) { posts++; if (hold) await hold; } return real(input, init); };
+    };
+    const p = await consolePage(o, "IP-BUSY", hook); openStep(p, 6); await peopleReady(p);
+    p.click('[data-mode="file"]'); chooseFile(p, "#gfile", "a.csv", "Name,Mobile\nAsha,9876543210\nBala,12345\n");
+    await p.waitFor((x) => /1 good, 0 duplicates removed, 1 looks wrong/.test(x)); // Bala's number is wrong: he is in the Fix and add list
+    hold = new Promise<void>((r) => (release = r));
+    p.click('[data-mode="type"]'); setField(p, "#gname", "Chitra"); setField(p, "#gphone", "98765 43211"); p.click("#gadd");
+    await p.waitFor(() => posts === 2); // this add is on its way and waits
+    setField(p, "#fixin0", "98765 43212"); p.click("[data-fix='0']"); // Fix and add pressed meanwhile
+    expect(p.text()).toMatch(/Still adding the last list/); expect((p.$("#fixin0") as any).value).toBe("98765 43212"); expect(posts).toBe(2);
+    p.click('[data-mode="file"]'); chooseFile(p, "#gfile", "b.csv", "Name,Mobile\nDev,9876543219\n"); // a second file meanwhile
+    expect(p.$("#csvnote")!.textContent).toMatch(/Still adding the last list/); expect(posts).toBe(2);
+    release(); await p.waitFor(() => !(p.win as any).__zc.pp.adding, 10_000);
+    expect((await listOf(o, "IP-BUSY")).people.map((x: any) => x.name).sort()).toEqual(["Asha", "Chitra"]); // only what was really added is on the list
+  });
+
+  test("Send a new link: after the same failure twice the button is usable again (it stayed grey)", async () => {
+    const o = await organizer(); await make(o, "IP-RSF"); await publish(o, "IP-RSF");
+    await o.api("POST", "/api/z/IP-RSF/people", { people: [{ name: "Asha Verma", phone: "9876543210" }] }, o.token);
+    let hits = 0;
+    const hook = (win: any, f: string) => {
+      if (f !== "control.js") return;
+      const real = win.fetch;
+      win.fetch = async (input: any, init?: any) => { const u = new URL(String(input), "http://localhost"); if ((init?.method || "GET").toUpperCase() === "POST" && /\/resend$/.test(u.pathname)) { hits++; return new Response(JSON.stringify({ error: "The service is busy. Please try again." }), { status: 503, headers: { "content-type": "application/json" } }); } return real(input, init); };
+    };
+    const p = await consolePage(o, "IP-RSF", hook); openStep(p, 6); await peopleReady(p);
+    (p.$("a[data-wa]") as any).click(); await p.waitFor((x) => /Send a new link/.test(x));
+    p.click("[data-resend]"); await p.waitFor(() => hits === 1); await p.waitFor((x) => /The service is busy/.test(x));
+    await until(() => !!p.$("[data-resend]") && !(p.$("[data-resend]") as any).disabled); // the first failure: the page changed, the button is new
+    p.click("[data-resend]"); await p.waitFor(() => hits === 2); // the same words again: the page looks the same
+    await until(() => !!p.$("[data-resend]") && !(p.$("[data-resend]") as any).disabled, 3000);
+  });
+
+  test("Remove (Host or Co-host) and Delete their data ask in the page, not in the browser's own box, which can be blocked and then leaves the red button dead", async () => {
+    const o = await organizer(); await make(o, "IP-ASK"); await publish(o, "IP-ASK");
+    await o.api("POST", "/api/org/cohost", { label: "Ravi", phone: "9811100099", eid: "IP-ASK" }, o.token);
+    expect((await o.api("POST", "/api/z/IP-ASK/join", { phone: "9855555555", name: "Guest Kumar", device: "1".repeat(32) })).status).toBe(200);
+    const p = await consolePage(o, "IP-ASK"); (p.win as any).confirm = () => false; // a browser that has stopped the page's question boxes
+    openStep(p, 5); await p.waitFor((x) => /Your Co-hosts: 1/.test(x));
+    p.click('[data-retire][data-kind="cohost"]'); expect(!!p.$("#zcsure")).toBe(true); // the question is in the page
+    p.click("#zcsure [data-n]"); expect(!!p.$("#zcsure")).toBe(false); expect((await o.json(await o.api("GET", "/api/org/team", undefined, o.token))).cohosts.length).toBe(1); // No keeps them
+    p.click('[data-retire][data-kind="cohost"]'); p.click("#zcsure [data-y]");
+    await p.waitFor((x) => /Removed\. Their link has stopped\./.test(x)); expect((await o.json(await o.api("GET", "/api/org/team", undefined, o.token))).cohosts.length).toBe(0);
+    openStep(p, 6); await p.waitFor((x) => /Change of phone/.test(x));
+    setField(p, "#pdph", "98555 55555"); p.click("#pddel"); expect(!!p.$("#zcsure")).toBe(true);
+    p.click("#zcsure [data-n]"); expect(p.text()).not.toMatch(/Their data is deleted/);
+    expect((await o.api("POST", "/api/z/IP-ASK/join", { phone: "9855555555", name: "Guest Kumar", device: "2".repeat(32) })).status).toBe(423); // still bound to the first phone: nothing was deleted
+    setField(p, "#pdph", "98555 55555"); p.click("#pddel"); p.click("#zcsure [data-y]"); await p.waitFor((x) => /Done\. Their data is deleted\./.test(x));
+    expect((await o.api("POST", "/api/z/IP-ASK/join", { phone: "9855555555", name: "Guest Kumar", device: "2".repeat(32) })).status).toBe(200); // the seat is gone: another phone can join
+  }, 60_000);
 });
