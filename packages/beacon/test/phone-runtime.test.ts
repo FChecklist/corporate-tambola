@@ -709,6 +709,12 @@ describe("host mode: a Host presses a button for each number", () => {
   const untilCount = async (ps: ReturnType<typeof mkPhone>[], n: number, max = 12) => { for (let i = 1; i <= max; i++) { await step(ps); if (ps.every((p) => p.rt.view().log.length >= n)) return i * 3; } return -1; };
   const phonesOf = async (ids: number[], o: Parameters<typeof mkPhone>[1] = {}) => { const ps = ids.map((n) => mkPhone(n, { ...o, eid: HID })); for (const p of ps) { await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true); } return ps; };
 
+  test("a manual game whose Host never registered the signing key shows \"waiting for the host\" and never runs on its own schedule, even after minutes", async () => {
+    expect((await D.headCall("POST", "/api/z", { id: HID, startRound: START - GRACE_ROUNDS, callSeconds: 6, cap: 200, callMode: "host" }, { "x-organizer": SECRET })).status).toBe(200); // no PUT control/key: nobody has opened the game-day page
+    const ps = await phonesOf([211, 212]);
+    for (let i = 0; i < 90; i++) await step(ps); // 270 s: past the point where a phone gives up asking the control file
+    for (const p of ps) { const v = p.rt.view(); expect(v.log).toEqual([]); expect(v.waitingForHost).toBe(true); }
+  });
   test("two phones get numbers only on presses, identical, within about 15 s of each press; the beacon round of each press decides the number", async () => {
     await mkHost();
     const ps = await phonesOf([201, 202]);

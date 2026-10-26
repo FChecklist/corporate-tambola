@@ -349,6 +349,7 @@ export class PhoneRuntime {
     return this.tracker!.mode(now);
   }
   private roundFor(k: number, round = this.cur): number | null {
+    if (this.hostMode && !this.tracker) return Infinity; // a game whose numbers the Host presses, with no signing key registered yet: nothing is called on a schedule of its own, the phone shows "waiting for the host" until the first press
     return callRoundR(this.tracker ? this.tracker.state : null, this.startRound, this.stride, this.cfg.breaks, round, k);
   }
   /** The latest round whose first number is due. Rounds before it are played out (or being caught up). */
@@ -653,7 +654,7 @@ export class PhoneRuntime {
     }
     for (let i = 0; i < send.length; i += 3) {
       const part = send.slice(i, i + 3);
-      try { await this.deps.api("POST", `/api/z/${this.eid}/vote`, { pid: this.pid, results: part.map((x) => x.body) }); for (const x of part) this.voted.add(x.key); }
+      try { await this.deps.api("POST", `/api/z/${this.eid}/vote`, { pid: this.pid, device: this.device(), results: part.map((x) => x.body) }); for (const x of part) this.voted.add(x.key); }
       catch { break; /* kept: the next pass reports it again */ }
     }
   }
