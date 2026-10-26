@@ -123,6 +123,15 @@ describe("join gaps", () => {
     const row = W.raw.prepare("SELECT pack, cap FROM engagement WHERE id=?").get(id) as any;
     expect(row.pack).toBe(100); expect(row.cap).toBeLessThanOrEqual(100);
   });
+  test("a Host's narrow AI work link cannot register keys or file pause / stop / erase requests (permissions family)", async () => {
+    const g = await paidGame({ cap: 20 });
+    const hostKey = (await j(await call("POST", "/api/org/host", { label: "Priya", email: "priya@acme.com", mobile: "9876500001" }, keyH(g.key)))).hostKey as string;
+    const link = { "x-organizer": hostKey, "x-ct-link": "1" };
+    for (const [m, p, b] of [["POST", `/api/z/${g.id}/control/request`, { action: "stop" }], ["GET", `/api/z/${g.id}/control/request`, undefined], ["PUT", `/api/z/${g.id}/control/key`, { publicKey: "00".repeat(32) }]] as const) {
+      const r = await call(m, p, b, link); expect([m, p.slice(-16), r.status]).toEqual([m, p.slice(-16), 403]);
+    }
+    expect((await call("GET", `/api/z/${g.id}/control`, undefined, link)).status).not.toBe(403); // reading the public pause file stays allowed
+  });
   test("GAP-01: an unbound ticket is handed back only to a phone that sends its device proof (400 without it, 200 with it)", async () => {
     const g = await paidGame({ cap: 20 });
     expect((await join(g.id, 1)).status).toBe(200);

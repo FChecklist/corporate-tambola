@@ -238,7 +238,7 @@ describe("a Co-host who has not accepted the role cannot pay or use credit (foun
   test("checkout, proforma and credit are refused with consent-required until the K5 box is ticked", async () => {
     const key = await organizer("pay-co@acme.com"); const id = await draft(key, "CON-PAY");
     const co = (await j(await call("POST", "/api/org/cohost", { label: "Ravi", phone: "9876500001", e: id }, key))).cohostKey as string;
-    for (const [p, b] of [["/api/checkout", { eid: id, email: "x@acme.com", consent: ticks("K3") }], ["/api/proforma", { eid: id }], ["/api/org/credit", {}]] as const) {
+    for (const [p, b] of [["/api/checkout", { eid: id, email: "x@acme.com", consent: ticks("K3") }], ["/api/proforma", { eid: id }], ["/api/org/credit", {}], [`/api/z/${id}/pay-with-credit`, {}]] as const) {
       const r = await call("POST", p, b, co); const x = await j(r);
       expect([p, r.status, x.code]).toEqual([p, 400, "consent-required"]);
       expect(x.kind).toBe("K5");
