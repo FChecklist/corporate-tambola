@@ -1,0 +1,7 @@
+before the start admit+decline {"requests":80,"states":{"declined/out":77,"declined/in":3},"disagreements":3,"examples":[{"empId":"EMP-9PXB015","state":"declined","joinStatus":200,"org":"200{\"ok\":true,\"admitted\":true,\"placedUnder\"","host":"200{\"ok\":true,\"declined\":true}"},{"empId":"EMP-9PXB000","state":"declined","joinStatus":200,"org":"200{\"ok\":true,\"admitted\":true,\"placedUnder\"","host":"200{\"ok\":true,\"decli
+before the start admit+admit {"requests":80,"states":{"admitted/in":80},"disagreements":0,"examples":[]}
+before the start decline+decline {"requests":80,"states":{"declined/out":80},"disagreements":0,"examples":[]}
+during the game sequential {"admitByOrg":{"ok":7,"bad":0},"declineByHost":{"ok":7,"bad":0},"declineByOrg":{"ok":6,"bad":0}} []
+during the game admit+decline {"requests":80,"states":{"declined/out":80},"disagreements":0,"examples":[]}
+during the game admit+admit {"requests":80,"states":{"admitted/in":80},"disagreements":0,"examples":[]}
+during the game decline+decline {"requests":80,"states":{"declined/out":80},"disagreements":0,"examples":[]}

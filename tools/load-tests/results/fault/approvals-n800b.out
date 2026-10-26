@@ -1,0 +1,40 @@
+ok   [setup] create a manual game | want 200 | got 200
+ok   [setup] employees only, employee ID needed | want 200 | got 200
+ok   [setup] publish | want 200 | got 200
+ok   [setup] pay | want 200 | got 200
+ok   [setup] Host added and set up | want token | got token
+ok   [setup] Co-host added and accepted the role | want key | got key
+ok   [list] Organizer adds the employee list | want 800 | got 800
+ok   [list] Co-host adds 50 people to their own list | want 50 | got 200 added 50
+ok   [list] Host adds 30 people | want 30 | got 200 added 30
+ok   [list] adding an employee who is already on the list is not added twice | want added 0 | got 200 added 0
+ok   [list] 201 people in one request are refused (200 at most) | want 413 | got 413 (too-many)
+ok   [early] 700 listed employees join with their ID (a third in lowercase), all at once | want 700 | got 700 | 4.4 s
+ok   [early] a person on the Co-host's own list joins with the ID | want 200 | got 200
+ok   [early] a person on the Host's list joins with the ID | want 200 | got 200
+ok   [mistake] the same employee ID on a second phone | want refused with a reason | got 423 (other-phone) | must not give a second ticket
+ok   [mistake] no employee ID typed | want 400 need-id | got 400 (need-id)
+FAIL [mistake] ID typed with a space inside (EMP 10001): the person is told what is wrong, not sent to the organizer | want 400 with a reason | got 403 (waiting) | INFORMATION: a typo goes to the organizer's waiting list instead of telling the person to check the ID
+ok   [mistake] an ID already seated, typed again from the same phone (reload) | want 200 (same person) or 409 | got 423 (other-phone) | device differs here, so a refusal is expected
+ok   [mistake] the same phone opens the link again (reload): same ticket back | want 200 again | got 200 | pid same
+ok   [approval] 60 people whose ID is not on the list are held in the waiting room | want 60 x 403 waiting | got 60 x 403 waiting
+ok   [approval] Organizer sees all of them waiting (name, last 4, ID), plus the one whose ID had a space typed in it | want 61 | got 61 | {"id":"39847a8bd6a5","firstName":"Spaced","last4":"","via":"direct","at":1793031251014,"inviter":"Organizer","overLimit"
+ok   [approval] Host sees the same waiting list | want 61 | got 61
+ok   [approval] the Co-host sees only requests that came through their own link (none here) | want 0 | got 0
+ok   [approval] a waiting person is told who has their request | want state waiting + a name | got waiting: Your request is with the organizer. You can come in as soon 
+ok   [approval] Organizer admits one request | want 200 admitted | got 200 {"ok":true,"admitted":true,"placedUnder":"Organizer"}
+ok   [approval] Host declines one request | want 200 declined | got 200 {"ok":true,"declined":true}
+ok   [approval] an admitted person's page is told 'admitted' | want admitted | got admitted
+ok   [approval] a declined person's page is told 'declined' | want declined | got declined
+ok   [approval] after admit the person joins again (their page does this by itself) and gets a ticket | want 200 | got 200
+ok   [approval] a declined person who tries again is refused (403 declined) | want 403 declined | got 403 (declined)
+ok   [approval] a declined person on another phone is refused too | want 403 declined | got 403 (declined)
+ok   [conflict] Organizer admits, THEN the Host declines the same request | want answer says it was already admitted; stays admitted | got 200 {"ok":true,"already":"admitted"}
+ok   [conflict] …the person still gets in (first decision stands) | want 200 | got 200
+ok   [conflict] Host declines, THEN the Organizer admits the same request | want answer says it was already declined; stays declined | got 200 {"ok":true,"already":"declined"}
+ok   [conflict] …the person stays out (first decision stands) | want 403 declined | got 403 (declined)
+ok   [conflict] 10 requests admitted by the Organizer and declined by the Host at the SAME instant: the final answer and the person's entry agree | want 0 disagreements | got 0 disagreements of 10 | [{"i":41,"state":"declined","join":403,"a":"{\"ok\":true,\"already\":\"declined\"}","b":"{\"ok\":true,\"declined\":true}"},{"i":40,"state":"admitted","join":200,"a":"{\"ok\":true,\"admitted\":true,\"placedUnder\":\"Organize","b":"{\"ok\":true,\"already\":\"admitted\"}"},{"i":45,"state":"admitted","join":200,"a":"{\"ok\":true,\"admitted\":true,\"placedUnder\":\"Organize","b":"{\"ok\":true,\"already\":\"admitted\"}"}]
+ok   [approval] Host presses "approve all" (16 still waiting) | want all admitted | got {"admitted":16,"declined":0,"stillWaiting":0}
+ok   [approval] nobody is left waiting afterwards | want 0 | got 0
+ok   [game] three reference phones joined with their employee ID | want 3 | got 3
+ok   [game] Host registers the game-day key | want ok | got {"ok":true,"created":true}

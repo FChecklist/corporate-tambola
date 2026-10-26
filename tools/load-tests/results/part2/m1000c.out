@@ -1,0 +1,30 @@
+campaign m1000c: cases 43..45, 1 at a time, 1000 people each, lead 400s, http://localhost:8835
+(node:8762) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+  #43 auto9/emp-id t+30s numbers 0 winners 0 phase play lag 0/154ms queue max 0ms (0 over 0.5 s) calls 13215 failed 0
+  #43 auto9/emp-id t+60s numbers 0 winners 0 phase play lag 0/154ms queue max 0ms (0 over 0.5 s) calls 13720 failed 0
+  #43 auto9/emp-id t+90s numbers 0 winners 0 phase play lag 0/154ms queue max 0ms (0 over 0.5 s) calls 14072 failed 0
+  #43 auto9/emp-id t+120s numbers 0 winners 0 phase play lag 0/154ms queue max 0ms (0 over 0.5 s) calls 14518 failed 0
+  #43 auto9/emp-id t+150s numbers 0 winners 0 phase play lag 1/154ms queue max 0ms (0 over 0.5 s) calls 14892 failed 0
+  #43 auto9/emp-id t+180s numbers 0 winners 0 phase play lag 1/154ms queue max 0ms (0 over 0.5 s) calls 15319 failed 0
+  #43 auto9/emp-id t+210s numbers 0 winners 0 phase play lag 0/154ms queue max 0ms (0 over 0.5 s) calls 15705 failed 0
+  #43 auto9/emp-id t+240s numbers 0 winners 0 phase play lag 0/154ms queue max 0ms (0 over 0.5 s) calls 16124 failed 0
+  #43 auto9/emp-id t+270s numbers 0 winners 0 phase play lag 0/154ms queue max 0ms (0 over 0.5 s) calls 16526 failed 0
+  #43 auto9/emp-id t+300s numbers 0 winners 0 phase play lag 0/154ms queue max 0ms (0 over 0.5 s) calls 16922 failed 0
+  #43 auto9/emp-id t+330s numbers 0 winners 0 phase play lag 6/154ms queue max 0ms (0 over 0.5 s) calls 17348 failed 0
+  #43 auto9/emp-id t+360s numbers 0 winners 0 phase play lag 0/154ms queue max 0ms (0 over 0.5 s) calls 17722 failed 0
+  #43 auto9/emp-id t+391s numbers 3 winners 0 phase play lag 1/698ms queue max 1865ms (224 over 0.5 s) calls 21373 failed 0
+  #43 auto9/emp-id t+421s numbers 7 winners 0 phase play lag 0/698ms queue max 1865ms (224 over 0.5 s) calls 24161 failed 0
+  #43 auto9/emp-id t+451s numbers 10 winners 0 phase play lag 0/698ms queue max 1865ms (224 over 0.5 s) calls 26321 failed 0
+  #43 auto9/emp-id t+481s numbers 13 winners 0 phase play lag 4/698ms queue max 1865ms (224 over 0.5 s) calls 29191 failed 0
+  #43 auto9/emp-id t+511s numbers 16 winners 0 phase play lag 1/698ms queue max 1865ms (224 over 0.5 s) calls 32545 failed 0
+  #43 auto9/emp-id t+541s numbers 20 winners 1 phase play lag 101/698ms queue max 1865ms (224 over 0.5 s) calls 35342 failed 0
+  #43 auto9/emp-id t+571s numbers 23 winners 1 phase play lag 2/698ms queue max 1865ms (224 over 0.5 s) calls 37982 failed 0
+  #43 auto9/emp-id t+601s numbers 26 winners 1 phase play lag 2/698ms queue max 1865ms (224 over 0.5 s) calls 40711 failed 0
+  #43 auto9/emp-id t+631s numbers 30 winners 1 phase play lag 0/698ms queue max 1865ms (224 over 0.5 s) calls 43655 failed 0
+  #43 auto9/emp-id t+661s numbers 33 winners 1 phase play lag 1/698ms queue max 1865ms (224 over 0.5 s) calls 45834 failed 0
+  #43 auto9/emp-id t+692s numbers 37 winners 1 phase play lag 15/698ms queue max 1865ms (224 over 0.5 s) calls 48605 failed 0
+  #43 auto9/emp-id t+722s numbers 40 winners 1 phase play lag 9/698ms queue max 1865ms (224 over 0.5 s) calls 51321 failed 0
+  #43 auto9/emp-id t+752s numbers 43 winners 1 phase play lag 35/802ms queue max 1865ms (399 over 0.5 s) calls 53674 failed 0
+  #43 auto9/emp-id t+783s numbers 47 winners 1 phase play lag 8/802ms queue max 2009ms (1052 over 0.5 s) calls 56240 failed 0
+PASS #43 auto9 emp-id t1 - | numbers 37 winners 2 players 850 gap 8.8 | 0 failed of 30 | 16 min

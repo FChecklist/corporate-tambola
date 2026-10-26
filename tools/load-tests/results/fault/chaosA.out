@@ -1,0 +1,5 @@
+campaign chaosA: cases 901..901, 1 at a time, 80 people each, lead 150s, http://localhost:8891
+  #901 auto9/open t+30s numbers 0 winners 0 phase play lag 1/250ms queue max 0ms (0 over 0.5 s) calls 811 failed 0
+  #901 auto9/open t+60s numbers 0 winners 0 phase play lag 1/250ms queue max 0ms (0 over 0.5 s) calls 849 failed 0
+  #901 auto9/open t+90s numbers 0 winners 0 phase play lag 1/250ms queue max 0ms (0 over 0.5 s) calls 893 failed 0
+  #901 auto9/open t+120s numbers 0 winners 0 phase play lag 0/250ms queue max 0ms (0 over 0.5 s) calls 927 failed 0

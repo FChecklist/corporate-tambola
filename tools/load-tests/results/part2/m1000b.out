@@ -1,0 +1,31 @@
+campaign m1000b: cases 40..42, 1 at a time, 1000 people each, lead 400s, http://localhost:8834
+(node:8761) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+  #40 auto9/list-mobile t+30s numbers 0 winners 0 phase play lag 0/352ms queue max 0ms (0 over 0.5 s) calls 11823 failed 0
+  #40 auto9/list-mobile t+60s numbers 0 winners 0 phase play lag 1/352ms queue max 0ms (0 over 0.5 s) calls 12290 failed 0
+  #40 auto9/list-mobile t+90s numbers 0 winners 0 phase play lag 0/352ms queue max 0ms (0 over 0.5 s) calls 12601 failed 0
+  #40 auto9/list-mobile t+120s numbers 0 winners 0 phase play lag 0/352ms queue max 0ms (0 over 0.5 s) calls 12997 failed 0
+  #40 auto9/list-mobile t+150s numbers 0 winners 0 phase play lag 0/352ms queue max 0ms (0 over 0.5 s) calls 13329 failed 0
+  #40 auto9/list-mobile t+180s numbers 0 winners 0 phase play lag 0/352ms queue max 0ms (0 over 0.5 s) calls 13717 failed 0
+  #40 auto9/list-mobile t+210s numbers 0 winners 0 phase play lag 0/352ms queue max 0ms (0 over 0.5 s) calls 14054 failed 0
+  #40 auto9/list-mobile t+240s numbers 0 winners 0 phase play lag 0/352ms queue max 0ms (0 over 0.5 s) calls 14438 failed 0
+  #40 auto9/list-mobile t+270s numbers 0 winners 0 phase play lag 0/352ms queue max 0ms (0 over 0.5 s) calls 14789 failed 0
+  #40 auto9/list-mobile t+300s numbers 0 winners 0 phase play lag 0/352ms queue max 0ms (0 over 0.5 s) calls 15163 failed 0
+  #40 auto9/list-mobile t+330s numbers 0 winners 0 phase play lag 0/352ms queue max 0ms (0 over 0.5 s) calls 15526 failed 0
+  #40 auto9/list-mobile t+360s numbers 0 winners 0 phase play lag 0/352ms queue max 0ms (0 over 0.5 s) calls 15878 failed 0
+  #40 auto9/list-mobile t+391s numbers 3 winners 0 phase play lag 1/927ms queue max 1303ms (135 over 0.5 s) calls 19161 failed 0
+  #40 auto9/list-mobile t+421s numbers 7 winners 0 phase play lag 0/927ms queue max 1303ms (135 over 0.5 s) calls 21685 failed 0
+  #40 auto9/list-mobile t+468s numbers 12 winners 0 phase play lag 0/927ms queue max 1303ms (135 over 0.5 s) calls 26022 failed 0
+  #40 auto9/list-mobile t+498s numbers 15 winners 0 phase play lag 0/927ms queue max 1303ms (135 over 0.5 s) calls 28165 failed 0
+  #40 auto9/list-mobile t+528s numbers 18 winners 0 phase play lag 1/927ms queue max 1303ms (135 over 0.5 s) calls 30721 failed 0
+  #40 auto9/list-mobile t+558s numbers 22 winners 0 phase play lag 0/927ms queue max 1303ms (135 over 0.5 s) calls 33366 failed 0
+  #40 auto9/list-mobile t+588s numbers 25 winners 2 phase play lag 0/927ms queue max 1303ms (135 over 0.5 s) calls 36131 failed 0
+  #40 auto9/list-mobile t+618s numbers 28 winners 3 phase play lag 1/927ms queue max 1303ms (135 over 0.5 s) calls 38128 failed 0
+  #40 auto9/list-mobile t+648s numbers 32 winners 3 phase play lag 0/927ms queue max 1303ms (135 over 0.5 s) calls 40834 failed 0
+  #40 auto9/list-mobile t+678s numbers 35 winners 3 phase play lag 0/927ms queue max 1303ms (135 over 0.5 s) calls 43514 failed 0
+  #40 auto9/list-mobile t+708s numbers 38 winners 3 phase play lag 0/927ms queue max 1303ms (135 over 0.5 s) calls 45554 failed 0
+  #40 auto9/list-mobile t+738s numbers 42 winners 3 phase play lag 2/927ms queue max 1303ms (135 over 0.5 s) calls 48011 failed 0
+  #40 auto9/list-mobile t+769s numbers 45 winners 3 phase play lag 7/927ms queue max 1303ms (162 over 0.5 s) calls 50582 failed 0
+  #40 auto9/list-mobile t+800s numbers 49 winners 3 phase play lag 120/967ms queue max 1303ms (162 over 0.5 s) calls 53327 failed 0
+  #40 auto9/list-mobile t+830s numbers 52 winners 3 phase play lag 3/967ms queue max 1303ms (162 over 0.5 s) calls 55520 failed 0
+  #40 auto9/list-mobile t+861s numbers 55 winners 3 phase play lag 4/1093ms queue max 1303ms (162 over 0.5 s) calls 58198 failed 0
