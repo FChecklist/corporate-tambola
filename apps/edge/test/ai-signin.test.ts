@@ -65,6 +65,14 @@ describe("the one-click sign-in link", () => {
     const v = await call("POST", "/api/auth/verify", { email: "boss@acme.com", code: r.devCode }); expect(v.status).toBe(200); expect((await j(v)).token).toMatch(/^ctk_/);
     expect((await link(r.devToken)).status).toBe(400);
   });
+  test("wrong codes sent all at once still count one by one: after 5 tries even the right code is refused", async () => {
+    await account(); const r = await ask();
+    const wrong = String((Number(r.devCode) + 1) % 1000000).padStart(6, "0");
+    const rs = await Promise.all(Array.from({ length: 12 }, () => call("POST", "/api/auth/verify", { email: "boss@acme.com", code: wrong })));
+    expect(rs.every((x) => x.status === 400)).toBe(true);
+    expect((raw.prepare("SELECT attempts FROM login_code").get() as any).attempts).toBe(5); // not 12 and not fewer: the cap holds under parallel guesses
+    expect((await call("POST", "/api/auth/verify", { email: "boss@acme.com", code: r.devCode })).status).toBe(400); // locked until a new code is asked for
+  });
   test("expiry: valid at 9 min 59 s, refused at 10 min 1 s; the code shares it", async () => {
     await account(); const r = await ask();
     expect((await link(r.devToken, "6.6.6.6", T + 10 * MIN + 1000)).status).toBe(400);

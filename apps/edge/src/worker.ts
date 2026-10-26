@@ -207,7 +207,9 @@ const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { sta
 export async function publicClaims(db: D1, eid: string, after: number): Promise<{ pid: string; pattern: string; round: number; idx: number; atMs: number; bogey?: true }[]> {
   const c = (await db.prepare("SELECT pid, pattern, round, idx, at_ms FROM claim WHERE eid=? AND at_ms>=? ORDER BY at_ms, pid LIMIT ?").bind(eid, after, CLAIMS_PAGE).all<{ pid: string; pattern: string; round: number; idx: number; at_ms: number }>()).results ?? [];
   const b = (await db.prepare("SELECT pid, pattern, round, at_ms FROM bogey WHERE eid=? AND at_ms>=? ORDER BY at_ms, id LIMIT ?").bind(eid, after, CLAIMS_PAGE).all<{ pid: string; pattern: string; round: number; at_ms: number }>()).results ?? [];
-  return [...c.map((x) => ({ pid: x.pid, pattern: x.pattern, round: x.round, idx: x.idx, atMs: x.at_ms })), ...b.map((x) => ({ pid: x.pid, pattern: x.pattern, round: x.round, idx: -1, atMs: x.at_ms, bogey: true as const }))].sort((x, y) => x.atMs - y.atMs);
+  // each list is a time-ordered prefix of its own: the merged page is complete only up to the earlier "last row" of a list that hit the page limit. Anything later is left for the next page, or a phone's cursor would jump over claims it never received.
+  let upto = Infinity; if (c.length >= CLAIMS_PAGE) upto = Math.min(upto, c[c.length - 1]!.at_ms); if (b.length >= CLAIMS_PAGE) upto = Math.min(upto, b[b.length - 1]!.at_ms);
+  return [...c.map((x) => ({ pid: x.pid, pattern: x.pattern, round: x.round, idx: x.idx, atMs: x.at_ms })), ...b.map((x) => ({ pid: x.pid, pattern: x.pattern, round: x.round, idx: -1, atMs: x.at_ms, bogey: true as const }))].filter((x) => x.atMs <= upto).sort((x, y) => x.atMs - y.atMs);
 }
 const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -902,7 +904,10 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const row = await env.DB.prepare("SELECT code_hash, expires_ms, attempts FROM login_code WHERE email_hash=?").bind(eh).first<{ code_hash: string; expires_ms: number; attempts: number }>();
     const bad = () => json({ error: "That code is not right or has expired. Please ask for a new one." }, 400);
     if (!row || row.expires_ms < now || row.attempts >= 5) return bad();
-    if (row.code_hash !== (await sha("code|" + eh + "|" + code))) { await env.DB.prepare("UPDATE login_code SET attempts=attempts+1 WHERE email_hash=?").bind(eh).run(); return bad(); }
+    // the try is counted BEFORE the code is compared, in one statement that only succeeds while fewer than 5 are used: guesses sent in parallel cannot all slip under the cap
+    const tried = await env.DB.prepare("UPDATE login_code SET attempts=attempts+1 WHERE email_hash=? AND attempts<5").bind(eh).run();
+    if (!(tried as any)?.meta?.changes) return bad();
+    if (row.code_hash !== (await sha("code|" + eh + "|" + code))) return bad();
     const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
     const hostAcct = await hostForEmail(env.DB, eh);
     if (!acct && !hostAcct) return bad();

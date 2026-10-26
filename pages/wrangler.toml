@@ -16,6 +16,8 @@ database_id = "4a6a1d3f-f1c7-44ac-b0ce-4cebd749a8de"
 
 [vars]
 DAILY_WRITE_BUDGET = "2000000"   # a runaway guard only: the paid Workers plan has no daily limit on D1 writes
+JOIN_PER_IP_MINUTE = "600"   # new places one network address may open a minute: a whole office shares one address, so a crowd joining together must not be turned away
+JOIN_PER_IP_DAY = "20000"    # and in a day (the game size is the real limit)
 AI_LINK_MAIL_AT_SIGNUP = "0"   # the AI work link is hidden in the console, so its welcome e-mail is not sent
 PAY_HOP_URL = "https://itservices-rajat-agarwal.pages.dev/payframe/"   # Option 1: the Razorpay window runs on the website registered with Razorpay
 # PUBLIC_ORIGIN, MAIL_FROM and OWNER_NOTIFY_EMAIL are Pages variables set in Cloudflare (a name cannot be in both places); the code defaults carry the same values.

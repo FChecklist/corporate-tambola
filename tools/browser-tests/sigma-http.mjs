@@ -60,5 +60,5 @@ const worker = async () => {
 };
 await Promise.all(Array.from({ length: CONC }, worker));
 const out = { step: "S10 who is let in (6 kinds of game)", trials, defects, dpmo: Math.round(defects / trials * 1e6 * 100) / 100, upper95PerMillion: Math.round((defects === 0 ? 3 : defects + 3) / trials * 1e6 * 100) / 100, byKind, wrongKinds: bad, seconds: Math.round((Date.now() - t0) / 1000) };
-writeFileSync("C:/ct/test-sites/data/sigma-http.json", JSON.stringify(out, null, 1)); console.log("DONE", JSON.stringify(out));
+writeFileSync(`C:/ct/test-sites/data/sigma-http${process.env.OUT ? "-" + process.env.OUT : ""}.json`, JSON.stringify(out, null, 1)); console.log("DONE", JSON.stringify(out));
 process.exit(0);
