@@ -27,7 +27,7 @@
   const NAMES = Object.fromEntries(HOUSES.map((h) => [h.id, h.label]));
   const call = async (method, path, body) => {
     let r;
-    try { r = await fetch(BASE + path, { method, headers: { "content-type": "application/json", "x-organizer": secret }, body: body === undefined ? undefined : JSON.stringify(body) }); }
+    try { let tm; r = await Promise.race([fetch(BASE + path, { method, headers: { "content-type": "application/json", "x-organizer": secret }, body: body === undefined ? undefined : JSON.stringify(body) }), new Promise((_, no) => { tm = setTimeout(() => no(new Error("no answer")), 40000); })]); clearTimeout(tm); } // a request that never answers must not hold the page for ever
     catch (e) { const err = Object.assign(new Error("We could not reach the service. Please check your internet and try again."), { status: 0 }); guided(err, method, path, body); throw err; }
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { const err = Object.assign(new Error(j.error || "http " + r.status), { code: j.code, status: r.status, needPack: j.needPack, payments: j.payments }); guided(err, method, path, body); throw err; }
@@ -345,8 +345,10 @@
   const bchip = (path, label) => { const on = !!getP(path); return `<button type="button" class="zc-chip${on ? " on" : ""}" data-bool="${path}" aria-pressed="${on}">${esc(label)}</button>${iBtn(path)}${hintOf(path)}`; };
   // the reason a Save was refused is also shown right above the button the person just pressed (the top of a long step is out of sight on a phone)
   const footMsg = (n) => (S.toast && Number(S.open) === Number(n) ? `<div class="zc-toast zc-toast-foot" role="alert">${esc(S.toast)}</div>` : "");
-  const cont = (n, label) => `${footMsg(n)}<div class="zc-foot"><button class="zc-btn" type="button" data-save="${n}">${label || "Continue"}</button></div>`;
-  const save = (n, label) => `${footMsg(n)}<div class="zc-foot"><button class="zc-btn" type="button" data-save="${n}">${label || "Save and continue"}</button></div>`;
+  const saveBtn = (n, label) => `<div class="zc-foot"><button class="zc-btn" type="button" data-save="${n}"${S.saving ? ' disabled aria-disabled="true"' : ""}>${S.saving === n ? "Saving…" : label}</button></div>`; // pressed once it says Saving and cannot be pressed again
+  const cont = (n, label) => `${footMsg(n)}${saveBtn(n, label || "Continue")}`;
+  const save = (n, label) => `${footMsg(n)}${saveBtn(n, label || "Save and continue")}`;
+  const draftStop = () => (S.draft ? `<div class="zc-alert" id="draftstop" role="status"><b>Do not send links yet.</b> Your game is not published, so anyone who taps a link sees "not open yet". <button type="button" class="zc-mini" data-open="7">Publish in step 7 first</button></div>` : "");
   const small = (t, extra) => `<p class="zc-small"${extra ? " " + extra : ""}>${t}</p>`;
   const rowl = (left, right) => `<div class="zc-rowl"><span>${left}</span>${right || ""}</div>`;
   const lockedGame = () => !!S.started && !S.draft && !S.unpaid;
@@ -717,7 +719,7 @@
     const extra = [p.role ? "This is your own seat (" + (WHO[p.role] || p.role) + ")" : "", p.inviter && canRun() && !p.role ? "Invited through " + p.inviter : "", p.approvedBy ? "Let in by " + p.approvedBy : "", sent && !gone ? "Sent on WhatsApp" : ""].filter(Boolean).map(esc).join(" &middot; ");
     let btns = "";
     if (!gone) {
-      btns += sent ? `<button type="button" class="zc-mini" data-resend="${id}">Send again</button>` : href ? `<a class="zc-mini" data-wa="${id}" href="${esc(href)}" target="_blank" rel="noopener noreferrer">Send on WhatsApp</a>` : "";
+      btns += S.draft ? `<button type="button" class="zc-mini" data-open="7">Publish first</button>` : sent ? `<button type="button" class="zc-mini" data-resend="${id}">Send again</button>` : href ? `<a class="zc-mini" data-wa="${id}" href="${esc(href)}" target="_blank" rel="noopener noreferrer">Send on WhatsApp</a>` : "";
       if (canRemove() && !p.role) btns += `<button type="button" class="zc-mini zc-danger" data-rmask="${id}" aria-label="Remove ${esc(p.name || "this person")}">Remove</button>`;
     }
     return `<div class="zc-prow" data-pid="${id}"><div class="zc-split"><span><b>${esc(p.name || "No name")}</b> <span class="zc-small zc-nomargin">${esc(p.maskedPhone || "")}</span></span><span class="zc-stt zc-stt-${st.toLowerCase()}">${st}</span></div>${extra ? `<div class="zc-small zc-nomargin">${extra}</div>` : ""}${btns ? `<div class="zc-chips zc-gap">${btns}</div>` : ""}${S.pp.confirm === p.id && !gone ? removeBox(p) : ""}</div>`;
@@ -773,10 +775,10 @@
   function playBlock() {
     if (S.shield || !canRun()) return "";
     const ph = S.myPhone !== undefined ? S.myPhone : isOrg() ? S.contact.phone || "" : "";
-    return `<div class="zc-block" id="playalong"><h3>Play the game yourself ${iBtn("play")}</h3>${small("The Organizer, Hosts and Co-hosts can play too. Press Play now to open your own ticket, or send your play link to your phone. You keep this console open to run the game. Your seat is marked as the team's, so you stay out of the Unlucky prize and lucky draws. Nobody has an advantage: you tap and claim like everyone else.")}
-      <div class="zc-chips zc-gap"><button type="button" class="zc-chip" id="playnow">Play now</button></div>
+    return `<div class="zc-block" id="playalong"><h3>Play the game yourself ${iBtn("play")}</h3>${draftStop()}${small("The Organizer, Hosts and Co-hosts can play too. Press Play now to open your own ticket, or send your play link to your phone. You keep this console open to run the game. Your seat is marked as the team's, so you stay out of the Unlucky prize and lucky draws. Nobody has an advantage: you tap and claim like everyone else.")}
+      <div class="zc-chips zc-gap"><button type="button" class="zc-chip" id="playnow"${S.draft ? " disabled aria-disabled=\"true\"" : ""}>Play now</button></div>
       ${S.pp.meNeed ? `${lbl("myph", "Your own mobile number")}<input id="myph" class="zc-in" inputmode="tel" placeholder="98765 43210" autocomplete="off" value="${esc(ph)}">` : ""}
-      <div class="zc-foot"><button type="button" class="zc-btn zc-btn-s" id="sendmine">Send my play link to my WhatsApp</button></div>${S.pp.mineNote ? `<p class="zc-small" id="minenote" role="status">${esc(S.pp.mineNote)}</p>` : ""}</div>`;
+      <div class="zc-foot"><button type="button" class="zc-btn zc-btn-s" id="sendmine"${S.draft ? " disabled aria-disabled=\"true\"" : ""}>Send my play link to my WhatsApp</button></div>${S.pp.mineNote ? `<p class="zc-small" id="minenote" role="status">${esc(S.pp.mineNote)}</p>` : ""}</div>`;
   }
   /** What will happen when this link is shared, said in plain words for the game as it is set now. */
   const commonNote = () => {
@@ -1163,6 +1165,7 @@
     if (canRun()) {
       if (S.locked && !S.draft) h += payDueCard();
       if ((S.reqs || []).length) h += `<div class="zc-alert"><h3>Your AI assistant is asking</h3>${S.reqs.map((r) => rowl(esc(r.action) + (r.note ? " · " + esc(r.note) : ""))).join("")}<div class="zc-chips"><button type="button" class="zc-btn zc-btn-s${S.reqs[0].action === "erase" ? " zc-btn-bad" : ""}" id="reqok">${S.reqs[0].action === "erase" ? "Confirm: delete all participant data" : "Approve (" + esc(S.reqs[0].action) + ")"}</button><button type="button" class="zc-btn zc-btn-s zc-btn-alt" id="reqno">Dismiss</button></div></div>`;
+      if (S.waitN > 0 && S.open !== 6) h += `<div class="zc-alert" id="waitbanner"><h3>${S.waitN === 1 ? "1 person is waiting to come in" : S.waitN + " people are waiting to come in"}</h3>${small("They opened your link but are not on your list. They wait until you let them in.")}<div class="zc-chips"><button type="button" class="zc-btn zc-btn-s" data-open="6">Open the waiting list</button></div></div>`;
       if (!S.draft && S.cfg) h += `<div class="zc-live" id="zclive"><b>${S.people.length}</b> ${S.people.length === 1 ? "person" : "people"} · numbers called <b>${S.log.length} / 90</b>${S.cfg.rounds > 1 ? ` · round ${S.round} of ${S.cfg.rounds}` : ""}</div>`;
     }
     return h;
@@ -1346,6 +1349,7 @@
     initOpen(); if (S.open === 2 && !S.shield) await loadPeople(); redraw();
   }
   async function refreshEng() {
+    if (S.stateFor !== eid) { S.stateFor = eid; S.cancelDone = false; S.cancel = null; S.move = null; S.creditMsg = ""; S.creditErr = ""; S.payUrl = ""; S.payCopied = false; S.payLinkNote = ""; S.ctlNote = ""; S.annNote = ""; S.nextNote = ""; S.pubOpen = false; S.pubNote = ""; S.waitN = 0; } // what belongs to the game that was open before (a cancelled note, a payment link, a message) is cleared once, when another game opens
     if (role() === "cohost") return refreshCohost();
     if (role() === "host" && S.setup && S.setup.ready === false) return; // a Host who has not finished the first-open setup (e-mail, mobile) cannot open the game yet: never ask for it, never show "this link no longer opens the game" in the middle of the setup
     S.screen = "eng";
@@ -1398,7 +1402,7 @@
       S.lucky = await computeLucky(now);
       try { S.life = await call("GET", `/api/z/${eid}/life`); } catch { S.life = null; }
       if (S.started && !S.draft) { try { S.prizes = (await call("GET", `/api/z/${eid}/prizes`)).prizes || []; } catch { S.prizes = S.prizes || []; } try { S.published = (await fetch(BASE + `/api/z/${eid}/results`).then((r) => r.json())).results || []; } catch { /* shown next time */ } } // the software decides the winners; this page only watches
-      syncForm(); initOpen(); if (needPeople()) await loadPeople();
+      syncForm(); initOpen(); if (needPeople()) { await loadPeople(); S.waitN = ((S.pp && S.pp.waiting) || []).length; } else if (canRun() && !S.draft && !S.shield && whoNow() === "list") { try { S.waitN = Number((await call("GET", `/api/z/${eid}/people?limit=1`)).waiting) || 0; } catch { /* shown next time */ } } else S.waitN = 0;
     } catch (e) { if (S.restored && (e.status === 404 || e.status === 403)) { S.restored = false; saveLast(null); eid = ""; history.replaceState(null, "", location.pathname + (BASE ? "?api=" + encodeURIComponent(BASE) : "")); S.cfg = null; S.info = null; return refreshHome(); } S.note = e.status === 404 ? "That game was not found." : e.status === 403 ? (S.deadLink = true, "Your sign-in has expired or does not belong to this engagement. Open the home page and sign in again.") : "Could not refresh. Retrying…"; }
     redraw();
   }
@@ -1480,7 +1484,11 @@
     const lucky = f.lucky.map((l) => ({ kind: "lucky", title: prizeText(l.pt, l.pd) || "Lucky draw", winners: Number(l.win) || 3, ...(l.style === "scratch" ? { style: "scratch" } : {}), ...(l.after ? { after: l.after, seconds: l.sec || 60 } : {}) }));
     return { tickets: t, opening: rows("op", f.opN, lim.op, false), breaks: [...rows("mid", f.midN, lim.mid, true), ...lucky], closing: rows("cl", f.clN, lim.cl, false) };
   }
-  async function saveStep(n) {
+  async function saveStep(n) { // one Save at a time: a second press while the first is working would save twice and jump the page under the person's finger
+    if (S.saving) return; S.saving = n; S.toast = ""; redraw();
+    try { await saveStepWork(n); } finally { S.saving = 0; redraw(); }
+  }
+  async function saveStepWork(n) {
     S.toast = "";
     try {
       const f = S.f;
@@ -1497,7 +1505,7 @@
         if (stripUnused) S.brandNote = "Saved. Your " + (bl ? "logo" : "colour") + " is not on the tickets yet, because there is no company name. You can add the name in step 4 any time.";
       }
       if (n === 1 && S.cloneNew === eid) S.cloneDated = eid;
-      if (n <= 4) { markDone(n); S.note = (n === 4 && S.brandNote) || "Saved."; S.brandNote = ""; await refreshEng(); return advance(n); }
+      if (n <= 4) { markDone(n); S.note = (n === 4 && S.brandNote) || "Saved."; S.brandNote = ""; refreshEng().catch(() => {}); return advance(n); } // move on at once; the fresh numbers arrive a moment later and redraw (a slow connection no longer leaves the person looking at a frozen screen)
       markDone(n); advance(n);
     } catch (e) { S.toast = friendly(e); redraw(); go("sec" + n); }
   }
@@ -1674,7 +1682,8 @@
       refreshEng();
     };
     // the team
-    const person = async (kind) => {
+    const person = async (kind) => { if (S.personBusy) return; S.personBusy = true; const bt = $(kind + "add"); if (bt) bt.disabled = true; try { await personWork(kind); } finally { S.personBusy = false; if (bt) bt.disabled = false; } }; // one at a time: a second press made a second person and a second e-mail
+    const personWork = async (kind) => {
       const val = (id) => (($(id) || {}).value || "").trim(), name = val(kind + "label");
       S.tv = { [kind + "label"]: name, [kind + "phone"]: val(kind + "phone"), ...(kind === "host" ? { hostemail: val("hostemail") } : {}) }; // what was typed stays on the screen if something needs a correction
       let body;

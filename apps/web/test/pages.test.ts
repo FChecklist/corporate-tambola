@@ -1277,12 +1277,13 @@ describe("console phase 2: wording fixes, My people, waiting room, remove, play 
     const server = (await o.json(await o.api("GET", "/api/z/UI-WHO/summary", undefined, o.token))).whoCanJoin; // an API-made game keeps the API default
     const shown = ["3", "4", "5"].filter((k) => (p.$(`[data-ck="aud"][data-v="${k}"]`) as any).getAttribute("aria-pressed") === "true"); expect(shown.length).toBe(1);
     expect(server === "anyone" ? shown[0] === "5" : shown[0] === "3").toBe(true);
-    p.click('[data-ck="aud"][data-v="3"]'); expect(p.text()).toMatch(/Anyone else who opens your link waits for you to say yes/); p.click('[data-save="2"]'); await p.waitFor((x) => /Saved\./.test(x));
+    p.click('[data-ck="aud"][data-v="3"]'); expect(p.text()).toMatch(/Anyone else who opens your link waits for you to say yes/); p.click('[data-save="2"]'); await p.waitFor((x) => /Saved\./.test(x)); await p.waitFor(() => !(p.win as any).__zc.saving); // a person waits for Saving to finish; so does the test
     expect((await o.json(await o.api("GET", "/api/z/UI-WHO/summary", undefined, o.token))).whoCanJoin).toBe("list");
-    openStep(p, 2); p.click('[data-ck="aud"][data-v="5"]'); expect(p.text()).toMatch(/joins straight away/); p.click('[data-save="2"]'); await p.waitFor((x) => /Saved\./.test(x));
+    openStep(p, 2); p.click('[data-ck="aud"][data-v="5"]'); expect(p.text()).toMatch(/joins straight away/); p.click('[data-save="2"]'); await p.waitFor((x) => /Saved\./.test(x)); await p.waitFor(() => !(p.win as any).__zc.saving); // a person waits for Saving to finish; so does the test
     expect((await o.json(await o.api("GET", "/api/z/UI-WHO/summary", undefined, o.token))).whoCanJoin).toBe("anyone");
-    openStep(p, 2); p.click('[data-ck="aud"][data-v="1"]'); expect(p.text()).toMatch(/What must an employee give to get in\?/); expect(p.$('[data-ck="ver"][data-v="id"]')).toBeTruthy(); p.click('[data-save="2"]'); await p.waitFor((x) => /Saved\./.test(x));
-    const sm = await o.json(await o.api("GET", "/api/z/UI-WHO/summary", undefined, o.token)); expect(sm).toMatchObject({ whoCanJoin: "list", employeesOnly: true, verify: "id" }); // employees only: the employee ID is asked
+    openStep(p, 2); p.click('[data-ck="aud"][data-v="1"]'); expect(p.text()).toMatch(/What must an employee give to get in\?/); expect(p.$('[data-ck="ver"][data-v="id"]')).toBeTruthy(); p.click('[data-save="2"]'); await p.waitFor((x) => /Saved\./.test(x)); await p.waitFor(() => !(p.win as any).__zc.saving); // a person waits for Saving to finish; so does the test
+    let sm: any = null; for (let i = 0; i < 60; i++) { sm = await o.json(await o.api("GET", "/api/z/UI-WHO/summary", undefined, o.token)); if (sm.employeesOnly === true) break; await new Promise((r) => setTimeout(r, 60)); } // the Save is asynchronous: read the server when it has answered
+    expect(sm).toMatchObject({ whoCanJoin: "list", employeesOnly: true, verify: "id" }); // employees only: the employee ID is asked
     const home = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage }, { afterLoad: w.hook }); await home.waitFor((x) => /Create a new game/.test(x));
     home.click("#mk"); await home.waitFor(() => w.st.posts.length > 0); expect(w.st.posts[0].whoCanJoin).toBe("list");
   });
@@ -1823,10 +1824,10 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     const o = await organizer(); await make(o, "UI-CASHED");
     await o.api("PATCH", "/api/z/UI-CASHED/settings", { rewards: [{ pattern: "early5", ordinal: 1, text: "Cash prize: ₹5,000" }, { pattern: "full", ordinal: 1, text: "Voucher 1000" }] }, o.aiKey);
     const p = await consolePage(o, "UI-CASHED"); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 3);
-    setField(p, "#f-hs-early5-pd-amt", "7000"); p.click('[data-save="3"]'); await p.waitFor((x) => /Saved|saved/.test(x));
     const rw = async () => ((await o.json(await o.api("GET", "/api/z/UI-CASHED/summary", undefined, o.aiKey))).rewards || []).filter((r: any) => r.pattern === "early5").map((r: any) => r.text);
+    setField(p, "#f-hs-early5-pd-amt", "7000"); p.click('[data-save="3"]'); for (let i = 0; i < 60 && (await rw())[0] !== "Cash prize: ₹7,000"; i++) await new Promise((r) => setTimeout(r, 60));
     expect(await rw()).toEqual(["Cash prize: ₹7,000"]);
-    p.click('[data-cashcur="hs.early5.pd"][data-v="USD"]'); p.click('[data-save="3"]'); await p.waitFor((x) => /Saved|saved/.test(x));
+    await p.waitFor(() => !(p.win as any).__zc.saving); openStep(p, 3); p.click('[data-cashcur="hs.early5.pd"][data-v="USD"]'); p.click('[data-save="3"]'); for (let i = 0; i < 60 && (await rw())[0] !== "Cash prize: $7,000"; i++) await new Promise((r) => setTimeout(r, 60));
     expect(await rw()).toEqual(["Cash prize: $7,000"]);
     openStep(p, 6); for (const id of ["playnow", "sendmine", "playalong"]) expect(p.win.document.querySelectorAll("#" + id).length).toBeLessThanOrEqual(1);
   });
