@@ -307,22 +307,28 @@ describe("console (organizer page)", () => {
     const qk = await page(o, "/zc?quickform=1", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token }); await qk.waitFor((x) => /1\. Which game\?/.test(x)); expect(qk.win.document.querySelectorAll("select").length).toBe(0);
     expect(readFileSync(new URL("../public/zc.js", import.meta.url), "utf8")).not.toMatch(/<select|createElement\(["']select/);
   });
-  test("Prizes: ten popular prizes as chips plus 'I will decide later' and 'No prize'; the choice is saved as the words on the ticket and read back", async () => {
+  test("Prizes: eleven popular prizes (cash included) as chips plus 'I will decide later' and 'No prize'; the choice is saved as the words on the ticket and read back", async () => {
     const o = await organizer(); await make(o, "UI-PRZ");
     const p = await consolePage(o, "UI-PRZ"); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 3);
     const chipsOf = (pp: Page, h: string) => Array.from(pp.win.document.querySelectorAll(`[data-ck="hs.${h}.pt"]`)).map((b: any) => b.textContent);
-    expect(chipsOf(p, "early5")).toEqual(["Gift voucher", "Gift hamper", "Smartphone", "Smart watch", "Earbuds or headphones", "Tablet or laptop", "Holiday or weekend stay", "Dinner or restaurant voucher", "Movie tickets", "Extra day off", "Something else", "I will decide later", "No prize"]);
+    expect(chipsOf(p, "early5")).toEqual(["Gift voucher", "Cash prize", "Gift hamper", "Smartphone", "Smart watch", "Earbuds or headphones", "Tablet or laptop", "Holiday or weekend stay", "Dinner or restaurant voucher", "Movie tickets", "Extra day off", "Something else", "I will decide later", "No prize"]);
     expect(p.text()).toMatch(/Fine\. We will remind you before you publish\./); // the default is "decide later"
     p.click('[data-ck="hs.early5.pt"][data-v="voucher"]'); expect(p.$("#f-hs-early5-pd")).toBeTruthy(); setField(p, "#f-hs-early5-pd", "1000");
     p.click('[data-ph="top"]'); p.click('[data-ck="hs.top.pt"][data-v="none"]'); expect(p.text()).toMatch(/The ticket shows "No prize"\. The winner is still announced\./);
     p.click('[data-ck="hs.top.n"][data-v="2"]');
     p.click('[data-ph="full"]'); p.click('[data-ck="hs.full.pt"][data-v="phone"]'); setField(p, "#f-hs-full-pd", "Galaxy");
+    p.click('[data-ph="mid"]'); p.click('[data-ck="hs.mid.pt"][data-v="cash"]'); // a cash prize asks for a currency (rupees by default, with the rupee sign) and an amount
+    expect(p.$('[data-cashcur="hs.mid.pd"][data-v="INR"]')!.className).toMatch(/\bon\b/); expect(p.text()).toMatch(/Indian rupee/); expect(p.win.document.querySelector("select")).toBeNull(); setField(p, "#f-hs-mid-pd-amt", "5000");
+    p.click('[data-ph="bot"]'); p.click('[data-ck="hs.bot.pt"][data-v="cash"]'); p.click('[data-cashcur="hs.bot.pd"][data-v="USD"]'); setField(p, "#f-hs-bot-pd-amt", "500");
     p.click('[data-save="3"]'); await p.waitFor((x) => /Saved\./.test(x));
     const sm = await o.json(await o.api("GET", "/api/z/UI-PRZ/summary", undefined, o.aiKey)); const txt = (pat: string, ord: number) => sm.rewards.find((r: any) => r.pattern === pat && r.ordinal === ord)?.text;
-    expect(txt("early5", 1)).toBe("Gift voucher: Rs 1000"); expect(txt("top", 1)).toBe("No prize"); expect(txt("top", 2)).toBe("No prize"); expect(txt("full", 1)).toBe("Smartphone: Galaxy"); expect(txt("mid", 1)).toBe(""); // "decide later" stays empty
+    expect(txt("mid", 1)).toBe("Cash prize: ₹5,000"); expect(txt("bot", 1)).toBe("Cash prize: $500");
+    expect(txt("early5", 1)).toBe("Gift voucher: Rs 1000"); expect(txt("top", 1)).toBe("No prize"); expect(txt("top", 2)).toBe("No prize"); expect(txt("full", 1)).toBe("Smartphone: Galaxy"); expect(txt("corners", 1)).toBe(""); // "decide later" stays empty
     const q = await consolePage(o, "UI-PRZ"); await q.waitFor((x) => /Hello/.test(x)); openStep(q, 3);
     expect(q.$('[data-ck="hs.early5.pt"][data-v="voucher"]')!.className).toMatch(/\bon\b/); expect((q.$("#f-hs-early5-pd") as any).value).toBe("1000");
     q.click('[data-ph="top"]'); expect(q.$('[data-ck="hs.top.pt"][data-v="none"]')!.className).toMatch(/\bon\b/); expect(q.$('[data-ck="hs.top.n"][data-v="2"]')!.className).toMatch(/\bon\b/);
+    q.click('[data-ph="mid"]'); expect(q.$('[data-ck="hs.mid.pt"][data-v="cash"]')!.className).toMatch(/\bon\b/); expect((q.$("#f-hs-mid-pd-amt") as any).value).toBe("5000"); expect(q.$('[data-cashcur="hs.mid.pd"][data-v="INR"]')!.className).toMatch(/\bon\b/); // read back as saved
+    q.click('[data-ph="bot"]'); expect(q.$('[data-cashcur="hs.bot.pd"][data-v="USD"]')!.className).toMatch(/\bon\b/); expect((q.$("#f-hs-bot-pd-amt") as any).value).toBe("500");
     expect(q.text()).toMatch(/decide later/); expect(p.errors).toEqual([]);
   });
   test("Brand moments: four kinds (message, YouTube, video file, audio file) with Test it and a link hint; each is saved as the right kind and read back", async () => {
@@ -332,6 +338,7 @@ describe("console (organizer page)", () => {
     expect(Array.from(p.win.document.querySelectorAll('[data-ck="op.0.k"]')).map((b: any) => b.textContent)).toEqual(["Type a message", "YouTube link", "Paste video file link", "Paste audio file link"]);
     setField(p, "#f-op-0-t", "Welcome to Diwali");
     p.click('[data-ck="mid.0.k"][data-v="yt"]'); setField(p, "#f-mid-0-v", "https://youtu.be/dQw4w9WgXcQ"); expect(p.$('[data-lk="mid.0"]')!.textContent).toMatch(/YouTube link: plays inside the game/);
+    expect(p.text()).toMatch(/We do not save your video or audio\. We play it straight from the link you paste, so the link must stay online while the game runs\. Please press Test it to check that it plays before you publish\./);
     p.click('[data-ck="mid.1.k"][data-v="vid"]'); setField(p, "#f-mid-1-v", "https://example.com/page"); expect(p.$('[data-lk="mid.1"]')!.textContent).toMatch(/opens a new tab/);
     setField(p, "#f-mid-1-v", "https://cdn.example.com/a.mp4"); expect(p.$('[data-lk="mid.1"]')!.textContent).toMatch(/Video file: plays inside the game/);
     p.click('[data-ck="cl.0.k"][data-v="aud"]'); setField(p, "#f-cl-0-v", "https://cdn.example.com/a.mp3"); expect(p.$('[data-lk="cl.0"]')!.textContent).toMatch(/Audio file/);
@@ -1283,6 +1290,7 @@ describe("console phase 2: wording fixes, My people, waiting room, remove, play 
   test("My people: typing a number cleans it; the row is masked; Send on WhatsApp is the server's wa.me link and is marked sent; Send again gets a new link from the server", async () => {
     const o = await organizer(); await make(o, "UI-PPL"); await publish(o, "UI-PPL"); const w = spy();
     const p = await ready(o, "UI-PPL", w); await myPeople(p);
+    expect(p.text()).not.toMatch(/I am allowed to use these names/); expect(p.$('[data-cbc="K6"]')).toBeNull(); expect((p.$("#gadd") as any).disabled).toBe(false); // no consent box is shown for a list; the clause is in the Terms and the consent is sent with the list (checked below)
     setField(p, "#gname", "Asha Verma"); setField(p, "#gphone", "+91 98765-43210"); p.click("#gadd");
     await p.waitFor((x) => /1 good, 0 duplicates removed, 0 look wrong/.test(x));
     expect(w.st.calls.find((c: any) => c[0] === "POST" && c[1].endsWith("/people"))[2]).toEqual({ consent: { v: "2026-10-15", boxes: ["A"] }, people: [{ name: "Asha Verma", phone: "+919876543210" }] });
@@ -1422,7 +1430,7 @@ describe("console phase 2: wording fixes, My people, waiting room, remove, play 
 
 });
 describe("console: About this step write-ups (spec 4, A)", () => {
-  const FIRST = ["This is the basics.", "Pick the biggest crowd you expect.", "Tick the prizes you will give.", "Show your message, video or audio in the game.", "A Host runs the game with you.", "Add your people here, one by one", "Look through your game and change what you need.", "Pay once, before the start time. You see the price here.", "Run the game from here.", "A few minutes after the game, a report link is e-mailed to the Organizer."];
+  const FIRST = ["This is the basics.", "Pick the biggest crowd you expect.", "Tick the prizes you will give.", "Show your message, video or audio in the game.", "A Host runs the game with you.", "Add your people here, one by one", "Look through your game and change what you need.", "Pay once, before the start time. You see the price here.", "Run the game from here.", "Corporate Tambola is designed to follow the US privacy laws, the EU GDPR and India's Digital Personal Data Protection (DPDP) Act."];
   test("each of the ten steps shows its box under the talking line: a title, at most 5 short lines, the agreed first line, and no drop-down", async () => {
     const o = await organizer(); await make(o, "UI-ABT"); await publish(o, "UI-ABT");
     const p = await consolePage(o, "UI-ABT", o.token, {}, { afterLoad: spy().hook }); await p.waitFor((x) => /Last step|Your game|Hello/i.test(x));
@@ -1781,6 +1789,12 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     p.click('[data-ck="day"][data-v="other"]'); const far = new Date(T + 5.5 * 3600000 + 45 * 86400000); setField(p, "#f-dayo", far.toISOString().slice(0, 10)); p.click('[data-ck="time"][data-v="18:00"]'); p.click('[data-save="1"]');
     await p.waitFor((x) => /at most 30 days from today/.test(x)); expect(w.st.patches.length).toBe(0); expect(p.$("#f-dayo")!.getAttribute("max")).toMatch(/^\d{4}-\d\d-\d\d$/);
     const near = new Date(T + 5.5 * 3600000 + 5 * 86400000); setField(p, "#f-dayo", near.toISOString().slice(0, 10)); p.click('[data-save="1"]'); await p.waitFor((x) => /This game has started, so its time cannot be changed\./.test(x));
+  });
+
+  test("Terms: the guest-list clause replaces the removed tick-box, and the report, custody and retention lines are there", () => {
+    const t = readFileSync(join(import.meta.dir, "../public/terms.html"), "utf8");
+    expect(t).toContain("11.4A"); expect(t).toMatch(/entitled to use those details for the Game and the people concerned have been told/); expect(t).toMatch(/not shown as a box: it is sent with each list/);
+    expect(t).toMatch(/Game report and custody/); expect(t).toMatch(/in the Organizer's custody/); expect(t).toMatch(/for 365 days\. After 365 days we delete all remaining data, except the invoice and tax records/);
   });
 
   test("words: no 'refund' or 'money back' anywhere in the console; the About lines and Help say credit for 365 days", async () => {

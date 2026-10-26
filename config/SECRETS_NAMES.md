@@ -42,6 +42,7 @@ Where things are set:
 | `FREE_LAUNCH` | "1" lets small games be made without payment | Optional Pages variable | setting |
 | `PARTNER_COMMISSION_RATE` | Partner commission rate | Optional Pages variable | setting |
 | `DAILY_WRITE_BUDGET` | Most database writes the Worker allows itself per day | wrangler var | setting |
+| `AI_LINK_MAIL_AT_SIGNUP` | Switch for the AI work-link welcome e-mail sent when an account is made; the live site turns it off because the AI link is hidden in the console | wrangler var | setting |
 | `STRICT_KEYS` | "1" on the live site: the Worker refuses every request unless the required secrets are set | Pages variable | setting |
 | `JOIN_PER_IP_DAY` | Joins one network address may make per day (default in code) | Optional Pages variable | setting |
 | `JOIN_PER_IP_MINUTE` | Joins one network address may make per minute (default in code) | Optional Pages variable | setting |

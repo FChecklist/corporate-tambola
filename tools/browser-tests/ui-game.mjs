@@ -12,7 +12,7 @@ const R = { tag: TAG, browser: B, site: SITE, mode: MODE, cap: CAP, checks: [], 
 const check = (n, ok, d = "") => { R.checks.push({ n, ok: !!ok, d: String(d).slice(0, 300) }); console.log(ok ? "PASS" : "FAIL", n, ok ? "" : "| " + String(d).slice(0, 300)); };
 const save = () => { mkdirSync("C:/ct/test-sites/data/ui", { recursive: true }); writeFileSync(`C:/ct/test-sites/data/ui/ui-${B}-${TAG}.json`, JSON.stringify(R, null, 1)); };
 const pad = (n) => String(n).padStart(2, "0");
-const watch = (page, tag) => { page.on("pageerror", (e) => R.errors.push(tag + ": " + String(e).slice(0, 200))); page.on("response", (x) => { if (x.status() >= 500) R.failedReq.push(`${tag} ${x.status()} ${x.url().slice(0, 100)}`); }); };
+const watch = (page, tag) => { page.on("pageerror", (e) => R.errors.push(tag + ": " + String(e).slice(0, 200) + " | " + String(e && e.stack || "").replace(/\s+/g, " ").slice(0, 260))); page.on("response", (x) => { if (x.status() >= 500) R.failedReq.push(`${tag} ${x.status()} ${x.url().slice(0, 100)}`); }); };
 const browser = await launch(B);
 let eid = null, startMs = 0; const reals = [], nodes = [];
 const org = async () => (await browser.newContext({ viewport: { width: 1280, height: 900 } }));
