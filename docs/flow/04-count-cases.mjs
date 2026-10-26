@@ -27,6 +27,7 @@ export function joinCtx(c) {
   const ctx = { ...c, closed: a.closed, employeesOnly: a.employeesOnly, invites: a.invites };
   ctx.owner = first(O.derive.ownerRules.map((r) => ({ ...r })), ctx)?.owner ?? "o";
   ctx.limited = ctx.owner === "c" || ctx.owner === "s";
+  ctx.holdsListPlace = ["S01", "S02", "S03", "S10"].includes(c.state) || (c.state === "S08" && c.verify === "both") || c.route === "PERSONAL";
   return ctx;
 }
 export const ownerLabel = (owner, overlimit) => (overlimit ? "the organizer" : owner === "o" ? "the organizer" : owner === "h" ? LABEL.host : owner === "c" ? LABEL.cohost : "the person who invited you");
@@ -50,7 +51,7 @@ export function evalJoin(c) {
     const inviterKind = t.placement === "listedOwner" ? (ctx.route === "PERSONAL" ? "c" : "o") : ctx.owner;
     out.person = { status: "joined", inviter: inviterKind };
     out.seat = { inv: inviterKind === "s" ? 1 : null, src: inviterKind === "c" ? "co:<hex>" : inviterKind === "h" ? "ho:<hex>" : "link" };
-    out.jr = ctx.lifecycle === "late_join" ? "current round (>0)" : 0;
+    out.jr = ctx.lifecycle === "late_join" || ctx.lifecycle === "organizer_ends" ? "current round (>0)" : 0;
   }
   if (t.final === "same-ticket") out.jr = "unchanged";
   if (t.again) out.again = true;
@@ -160,6 +161,7 @@ export function approvalCases() {
   const out = [], seen = new Set();
   const push = (rq, approval, role, lifecycle, capacity) => {
     const c = { audience: rq.audience, verify: rq.verify, route: rq.route, state: rq.state, reqLife: rq.reqLife, request: rq.request, approval, role, lifecycle, capacity };
+    if (rq.state === "S08" && rq.verify === "both" && (approval === "APPROVE_AFTER_FULL" || approval === "APPROVE_AFTER_REMOVAL" || (approval === "APPROVE_ALL" && capacity === "OVER_QUOTA"))) return; // PR-12: the identity already has a person row
     const r = evalApproval(c);
     const rule = O.approval.rules.find((x) => x.id === r.rule);
     const caps = rule?.capacities ?? ["ROOM"];

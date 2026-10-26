@@ -375,7 +375,7 @@ describe("console (organizer page)", () => {
     const p = await consolePage(o, "UI-PLAY", o.token, {}, { afterLoad: pw.hook }); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 2);
     expect(p.win.document.querySelectorAll('[data-ck="cap"]').length).toBe(9); expect(p.text()).toMatch(/Up to 100 people/); expect(p.text()).not.toMatch(/Rs [\d,]+(\.\d\d)? (with|including) GST/); /* no price while choosing the size */
     expect(p.$("#f-cap")).toBeTruthy(); expect((p.$("#f-cap") as any).type).toBe("number"); expect(p.$("#f-cap")!.closest("[hidden]")).toBeTruthy(); expect(p.text()).toMatch(/My crowd is a different size/); // the sizes are the choice; a typed number is only behind a small button
-    p.click('[data-ck="tix"][data-v="2"]'); p.click('[data-ck="spd"][data-v="12"]'); p.click('[data-ck="rnd"][data-v="3"]');
+    p.click('[data-ck="tix"][data-v="2"]'); p.click('[data-ck="spd"][data-v="12"]'); p.click('[data-ck="rnd"][data-v="1"]');
     expect(Array.from(p.win.document.querySelectorAll('[data-ck="aud"]')).map((e: any) => e.textContent.trim())).toEqual(["Only my employees (the list I upload)", "My employees, plus their friends and family", "A list of people I choose (customers, vendors, members)", "A list of people I choose, plus the people they invite", "Anyone with the link", "Anyone with the link, my employees confirm with their employee ID"]);
     p.click('[data-ck="aud"][data-v="5"]');
     expect(p.text()).not.toMatch(/How many people can each person invite/); expect(p.text()).toMatch(/Tickets for each person \(participant\)/); expect(p.text()).toMatch(/Duration \(gap\) between two numbers/); expect(p.$('[data-ck="spd"][data-v="6"]')).toBeNull(); expect(p.$('[data-ck="spd"][data-v="15"]')).toBeNull(); expect(p.$('[data-ck="spd"][data-v="9"]')).toBeTruthy(); expect(p.text()).toMatch(/How many full games in this event\? \(rounds\)/); expect(p.text()).toMatch(/An employee ID does not apply to this choice/);
@@ -384,7 +384,7 @@ describe("console (organizer page)", () => {
     p.click('[data-ck="per"][data-v="2"]'); p.click('[data-ck="cats"][data-v="friends"]'); p.click('[data-ck="cats"][data-v="family"]');
     p.click('[data-save="2"]'); await p.waitFor((x) => /Saved\./.test(x));
     const sm = await o.json(await o.api("GET", "/api/z/UI-PLAY/summary", undefined, o.aiKey));
-    expect(sm).toMatchObject({ tickets: 2, callSeconds: 12, rounds: 3, invites: { on: true, per: 2, cats: ["colleagues", "friends"] } });
+    expect(sm).toMatchObject({ tickets: 2, callSeconds: 12, rounds: 1, invites: { on: true, per: 2, cats: ["colleagues", "friends"] } });
     expect(sm.whoCanJoin).toBe("list"); expect(pw.st.patches.some((b: any) => b.whoCanJoin === "list" && b.invites && b.invites.on === true)).toBe(true); // the console sends the settings behind the choice
     expect(p.errors).toEqual([]);
   });
@@ -1659,8 +1659,8 @@ describe("console: prize houses from the one table (ZG.PRIZE_HOUSES)", () => {
   test("the organizer decides the winners of every house: quick taps 1-5, 10, 20 plus a box for any number up to the ceiling; only Unlucky has no taps", async () => {
     const o = await organizer(); await make(o, "UI-MAXW"); const p = await open3(o, "UI-MAXW");
     const taps = (id: string) => Array.from(p.win.document.querySelectorAll(`[data-ck="hs.${id}.n"]`)).map((e: any) => e.textContent);
-    p.click('[data-ph="full"]'); await p.waitFor(() => !!p.$('[data-ck="hs.full.n"]')); expect(taps("full")).toEqual(["1", "2", "3", "4", "5", "10", "20"]); expect(p.$("#f-hs-full-n")).toBeTruthy();
-    p.click('[data-ph="top"]'); await p.waitFor(() => !!p.$('[data-ck="hs.top.n"]')); expect(taps("top")).toEqual(["1", "2", "3", "4", "5", "10", "20"]);
+    p.click('[data-ph="full"]'); await p.waitFor(() => !!p.$('[data-ck="hs.full.n"]')); expect(taps("full")).toEqual(["1", "2", "3", "4", "5", "10"]); expect(p.$("#f-hs-full-n")).toBeTruthy();
+    p.click('[data-ph="top"]'); await p.waitFor(() => !!p.$('[data-ck="hs.top.n"]')); expect(taps("top")).toEqual(["1", "2", "3", "4", "5"]);
     p.click('[data-hc="odd5"]'); await p.waitFor(() => !!p.$('[data-house="odd5"] .zc-how')); expect(taps("odd5").length).toBeGreaterThanOrEqual(0);
     p.click('[data-hc="unlucky"]'); await p.waitFor(() => !!p.$('[data-house="unlucky"] .zc-how')); expect(taps("unlucky")).toEqual([]);
   });

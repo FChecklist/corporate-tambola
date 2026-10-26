@@ -4,7 +4,7 @@
 //      and the participants' personal part of the audit log is crypto-shredded (audit.ts `shredParticipantAudit`: its per-engagement key is destroyed, the hash chain still verifies);
 //   3. only the organizer / host / co-host details and the winners record (seat, prize, round, time) remain, until 00:00 IST at the end of the 365th day, then everything goes.
 // Called by the scheduled job (and, as a fallback, by any outside timer with the platform key). Every call does a bounded amount of work and can be repeated safely.
-import { keepWinnerEvidence, prefixEnd } from "./checkin";
+import { checkinRequired, deviceMatches, keepWinnerEvidence, prefixEnd } from "./checkin";
 import { restoreCreditUses } from "./credit";
 import { keepLegalParty } from "./legal";
 import { ensureGameRecordTable, keepGameRecord } from "./gamerecord";
@@ -124,6 +124,7 @@ export async function acceptOver(env: Env, e: any, eid: string, b: any, now: num
   if (!b || seat === null) return jsonFn({ error: "Bad report." }, 400);
   const who = await env.DB.prepare("SELECT 1 AS x FROM participant WHERE eid=? AND pid=?").bind(eid, b.pid).first();
   if (!who) return jsonFn({ error: "Not a participant of this engagement." }, 403);
+  if (checkinRequired(e) && !(await deviceMatches(env, eid, b.pid, b.device))) return jsonFn({ error: "This ticket belongs to another phone.", code: "other-phone" }, 403); // the participant id is public: only the phone that holds the ticket can say the game is over
   const earliest = roundMs(e.start_round + GRACE_ROUNDS) + 20 * e.call_seconds * 1000; // no game ends before 20 numbers
   if (now < earliest) return jsonFn({ ok: true, counted: false });
   if (!(await spend(env, now, 1))) return jsonFn({ error: "Busy day. Please try again after midnight UTC." }, 503);

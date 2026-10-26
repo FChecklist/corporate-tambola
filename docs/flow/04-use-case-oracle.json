@@ -5,8 +5,8 @@
   "date": "2026-10-26",
   "boundTo": {
    "branch": "wip/join-redesign",
-   "head": "3ad8f85",
-   "files": "e9e21453b2 worker.ts; ad43144df2 people.ts",
+   "head": "09d6696",
+   "files": "3981833492 worker.ts; ad43144df2 people.ts",
    "note": "The working tree was being edited while this was written (the 'ended' and 'locked' gates and the 'admitted' override appeared during the work). Re-run docs/flow/04-count-cases.mjs --check against a live worker before relying on a row; every row of the main join table was checked against the real Worker (see validation)."
   },
   "howToUse": "Pure function. For one case (an object with the dimension values) first derive the audience flags and the route owner (derive), then walk the ordered rules of the family (join.rules, approval.rules, input.defects, perm.rules); the first rule whose 'when' matches gives the answer. 'when' keys are ANDed; an array value means 'any of'; {not: v} means 'not v'. Keys are dimension names or derived names (closed, employeesOnly, invites, owner, limited, inChain, role, caller, op).",
@@ -18,7 +18,6 @@
  "messages": {
   "cancelled": "This game was cancelled by the organizer.",
   "didNotStart": "This game did not start. Your details have been erased.",
-  "ended": "This game has ended, so no one can join it now.",
   "locked": "This game could not begin because the organizer's payment is not complete. Please ask your organizer.",
   "linkGone": "This link is not valid any more. Please ask the person who invited you to send it again.",
   "needIdId": "Enter your employee ID.",
@@ -216,10 +215,10 @@
   "lifecycle": {
    "none": "Normal, before the first number",
    "pause_resume": "The organizer pauses and later resumes the numbers; the step under test happens while paused (signed control file only: nothing in join, people or waiting reads it) - REPLICATE of 'none'",
-   "late_join": "The step happens after the first number and after the 2-minute grace (40 rounds): seats get jr = the current round",
-   "organizer_ends": "The step happens after the game ended (last call + 60 s, or the organizer's stop): endBoundMs",
+   "late_join": "The step happens after the first number and after the 2-minute grace (40 rounds): new seats get jr = the current round",
+   "organizer_ends": "The step happens after the game ended (last call + 60 s, or the organizer's stop): endBoundMs. Since commit 5d51d94 a join is NOT refused after the end (the page shows the thank-you and share page by design); the waiting room, list adds and decisions ARE refused as lapsed.",
    "cancelled_before_start": "The step happens after the Organizer or a Host cancelled the game (3 confirmations). Co-host keys are revoked at the cancel.",
-   "reopen": "A cancelled PAID game moved to a new date: cancelled flag cleared, Co-host keys stay revoked, guest data is gone (erased 20 h after the cancel), old personal links are dead. Lists are loaded again by the Organizer."
+   "reopen": "A cancelled PAID game moved to a new date: cancelled flag cleared, Co-host keys stay revoked, guest data is gone (erased 20 h after the cancel): nobody has joined, old personal links are dead, old guest links point at no seat. The Organizer has loaded the lists again (new personal links)."
   },
   "approval": {
    "AUTO": "No waiting room: the join itself gives the ticket (auto-admit)",
@@ -255,6 +254,17 @@
     },
     "owner": "o",
     "note": "Co-host keys are revoked at the cancel and not restored by the reopen: the link silently credits the organizer"
+   },
+   {
+    "when": {
+     "route": [
+      "GUEST_L1",
+      "GUEST_L2"
+     ],
+     "lifecycle": "reopen"
+    },
+    "owner": "o",
+    "note": "seat numbers start again from 1 after the erase and nobody has joined yet, so the old guest link points at no seat (DR-24: later it may point at a different person)"
    },
    {
     "when": {
@@ -307,6 +317,7 @@
    }
   ],
   "limited": "owner is 'c' (Co-host: coHostLimit, default 100, 10..1000) or 's' (level-1 guest: invites.per, default 4, 1..10)",
+  "holdsListPlace": "true when the subject (or, on route PERSONAL, the link holder) already has a place on a list: states S01, S02, S03, S10 (the adopted listed person), S08 in verify both (the subject's mobile is listed), and every PERSONAL case. Such a person cannot meet a full game: lists may not exceed the size and the size cannot be set below the listed people.",
   "limitOf": {
    "c": 100,
    "s": 4
@@ -422,6 +433,8 @@
   "reopen": [
    "S05",
    "S06",
+   "S07",
+   "S09",
    "S11"
   ]
  },
@@ -498,7 +511,7 @@
   "anchors": "Worlds are built with three anchors while guest invitations are on, then switched to the audience's final settings: A1 = level-1 participant (listed by the Organizer, joined), A2 = level-2 guest (came through A1's link, admitted, joined), A3 = a second level-1 participant. Also: one Host, two Co-hosts (the second is the 'other' Co-host), another organizer's key, an AI key.",
   "capacityFixtures": {
    "ROOM": "cap 200, plenty free",
-   "FULL": "after the fillers have joined, PATCH cap to the number of participants (a list may be longer than cap: see DR-10)",
+   "FULL": "fillers are listed and join until participants == persons; then PATCH cap to that number. A subject who holds a list place cannot be present (the lists may not exceed the size, and since commit 1b45d5e the size cannot be set below the listed people), so FULL is crossed only with subjects who hold no list place",
    "PROMISED_ONLY": "list K extra people who do not join, then PATCH cap = participants + unseated listed people",
    "OVER_QUOTA": "Co-host: coHostLimit 10 with 10 people on the Co-host's list; level-1 guest: invites.per 1 with the anchor level-2 guest already on A1's list"
   },
@@ -507,7 +520,7 @@
    "late_join": "now = start + 4 minutes (after the 2-minute grace, before the end); the game is paid (pack > 0) so it is not 'locked'",
    "organizer_ends": "now = start + 12 hours",
    "cancelled_before_start": "POST /cancel {confirmations:3} by the Organizer",
-   "reopen": "cancel, delete the guest rows (person, waiting, seat, participant), clear the cancel mark, load the lists again by the Organizer (new tokens). Emulated in the probe: a real reopen needs a paid game."
+   "reopen": "cancel, delete the guest rows (person, waiting, seat, participant), clear the cancel mark, load the subject's list entry (and for S10 the other person's) again by the Organizer (new tokens). Emulated in the probe: a real reopen needs a paid game and a payment."
   }
  },
  "pruning": [
@@ -523,13 +536,13 @@
   },
   {
    "id": "PR-03",
-   "rule": "lifecycle reopen: states S05, S06, S11 do not exist.",
-   "why": "Guest data was erased 20 h after the cancel; nobody is removed or joined any more."
+   "rule": "lifecycle reopen: states S05, S06, S07, S09, S11 do not exist, and capacity is ROOM only.",
+   "why": "A reopened game starts empty: guest data was erased 20 h after the cancel, so nobody has been removed and nobody holds a ticket or a device yet. Capacity checks are the same code as in a game that was never cancelled, so FULL, PROMISED_ONLY and OVER_QUOTA add nothing there."
   },
   {
    "id": "PR-04",
-   "rule": "capacity values are kept for a case only if the rule that answers the case lists that capacity (rule.capacities, default ROOM only).",
-   "why": "A case whose answer is decided by a gate before the capacity check (need-id, link-gone, returning phone, device-used, ended, cancelled) cannot depend on capacity, so FULL/PROMISED_ONLY/OVER_QUOTA there are the same use case as ROOM. OVER_QUOTA additionally needs an inviter that has a quota (limited) and an unlisted person."
+   "rule": "capacity values are kept for a case only if the rule that answers the case lists that capacity (rule.capacities, default ROOM only). FULL additionally needs holdsListPlace = false.",
+   "why": "A case whose answer is decided by a gate before the capacity check (need-id, link-gone, returning phone, device-used, ended, cancelled) cannot depend on capacity, so FULL/PROMISED_ONLY/OVER_QUOTA there are the same use case as ROOM. OVER_QUOTA needs an inviter that has a quota (limited) and an unlisted person. FULL cannot meet a person who holds a list place: the lists never exceed the size, and since commit 1b45d5e the size cannot be set below the people on the lists, so a game is full only when everyone on the lists has come in."
   },
   {
    "id": "PR-05",
@@ -560,6 +573,11 @@
    "id": "PR-11",
    "rule": "F-APPROVAL is a base plus a sweep. Base (decision lifecycle none): every approval outcome x its roles x its capacity. Sweep (decision lifecycle pause_resume, late_join, organizer_ends, cancelled_before_start; reopen only for Co-host-link requests): APPROVE by every right role, NEVER, and for organizer_ends and cancelled_before_start also the two non-chain wrong roles.",
    "why": "The game-state gates (cancelled, ended) and the dead Co-host keys change the approver's answer; pause and late join only change the re-join leg. Crossing all five lifecycles with every outcome would repeat the base answers."
+  },
+  {
+   "id": "PR-12",
+   "rule": "F-APPROVAL: a request whose identity already has a person row (state S08 in verify both: the subject's mobile is listed, only the typed ID was wrong) is not crossed with APPROVE_AFTER_FULL, APPROVE_AFTER_REMOVAL, or APPROVE_ALL at OVER_QUOTA.",
+   "why": "Admitting changes nothing for a person who is already on a list, so the cap check, the removal order and the all-approve quota path do not apply (single APPROVE still refuses over-limit: DR-25)."
   },
   {
    "id": "PR-09",
@@ -748,20 +766,6 @@
     "src": "the typed ID resolves to a listed person who already holds a ticket on another device"
    },
    {
-    "id": "J-ENDED",
-    "when": {
-     "lifecycle": "organizer_ends"
-    },
-    "then": {
-     "status": 403,
-     "code": "ended",
-     "msg": "ended",
-     "waiting": false,
-     "final": "nothing"
-    },
-    "src": "worker.ts join: now >= endBoundMs (new people only; a returning phone is handled above)"
-   },
-   {
     "id": "J-REMOVED",
     "when": {
      "state": "S05"
@@ -793,7 +797,11 @@
    {
     "id": "J-FULL",
     "when": {
-     "capacity": "FULL"
+     "capacity": "FULL",
+     "holdsListPlace": false,
+     "lifecycle": {
+      "not": "reopen"
+     }
     },
     "capacities": [
      "FULL"
@@ -931,7 +939,10 @@
      "state": "S04",
      "closed": false,
      "capacity": "OVER_QUOTA",
-     "limited": true
+     "limited": true,
+     "lifecycle": {
+      "not": "reopen"
+     }
     },
     "capacities": [
      "OVER_QUOTA"
@@ -955,7 +966,10 @@
      "state": "S04",
      "closed": false,
      "capacity": "PROMISED_ONLY",
-     "limited": true
+     "limited": true,
+     "lifecycle": {
+      "not": "reopen"
+     }
     },
     "capacities": [
      "PROMISED_ONLY"
@@ -978,7 +992,10 @@
     "when": {
      "state": "S04",
      "closed": false,
-     "capacity": "PROMISED_ONLY"
+     "capacity": "PROMISED_ONLY",
+     "lifecycle": {
+      "not": "reopen"
+     }
     },
     "capacities": [
      "PROMISED_ONLY"
@@ -1526,8 +1543,12 @@
     "request": {
      "phone": "5123456789"
     },
-    "expectAll": "continue",
-    "doubtful": "DR-04"
+    "expectAll": [
+     400,
+     null,
+     "badMobile"
+    ],
+    "note": "refused since commit e0e262a (GAP-J1); before it the join accepted this number and the lists refused it"
    },
    {
     "id": "D07",
@@ -2119,14 +2140,6 @@
    "why": "In 'both' mode the identity is the mobile number, so joining still works, but the organizer's list then shows two people with the same employee ID, and a later switch of the game to 'id' or 'either' makes that ID ambiguous."
   },
   {
-   "id": "DR-04",
-   "severity": "medium",
-   "title": "The join accepts mobile numbers that the people lists refuse",
-   "rows": "I-D06 (and any S04 request with a 10-digit number starting 0 to 5)",
-   "where": "apps/edge/src/worker.ts:1493-1496 (digitsOf: any 10 to 15 digits) against apps/edge/src/phonekit.ts:16 (India must start 6-9)",
-   "why": "5123456789 joins and gets a ticket, but the same number can never be put on a list, so the organizer cannot pre-list or move this person, and the hash (last 10 digits) can collide with a real listed number. Docs G15."
-  },
-  {
    "id": "DR-05",
    "severity": "high",
    "title": "A stranger using someone else's personal link in an OPEN game gets a ticket at once",
@@ -2169,10 +2182,10 @@
   {
    "id": "DR-10",
    "severity": "medium",
-   "title": "Full beats waiting, and a listed person can be locked out by a lowered size",
-   "rows": "J-FULL (capacity FULL), every state that reaches the capacity check",
-   "where": "apps/edge/src/worker.ts:1665-1666 (participants >= cap -> 409, no code, before the waiting room); apps/edge/src/worker.ts:2055 (settings only refuse a cap below the number of PARTICIPANTS, not below the number of listed people)",
-   "why": "(a) An unlisted person in a closed game gets 'full' instead of a waiting request while the game is full; (b) the organizer can lower the size below the list length, after which people who are listed but have not joined get 409 'This engagement is full.' with no warning to the organizer; (c) the answer has no code (join_design.json wants code 'full')."
+   "title": "Full beats waiting, and the answer has no code",
+   "rows": "J-FULL (capacity FULL), subjects who hold no list place",
+   "where": "apps/edge/src/worker.ts:1665-1666 (participants >= cap -> 409, no code, before the waiting room)",
+   "why": "(a) An unlisted person in a closed game gets 'This engagement is full.' instead of a waiting request while the game is full; the page cannot tell it from an error and the organizer is never shown the request. (b) The answer carries no code (join_design.json wants code 'full'). (c) Resolved while this was written: lowering the size below the people on the lists used to lock listed people out with the same 'full' answer; commit 1b45d5e now refuses that (worker.ts settings: next.cap < max(participants, listed))."
   },
   {
    "id": "DR-11",
@@ -2269,6 +2282,30 @@
    "rows": "route GUEST_L1 versus GUEST_L2; approver L1_OWNER versus L2_GUEST; perm caller L1 versus L2_GUEST",
    "where": "apps/edge/src/people.ts:136 (seat.inv !== null cannot invite), apps/edge/src/worker.ts:1675-1679 (only a seat with inv === null or a team role can own a link); docs/ROLES_AND_CONSOLE_SPEC_3.md line 7",
    "why": "In the code the participant who invites is 'level 1' and everybody they bring is 'level 2 (plays, no list, no invites)'. If the product wants a guest who was invited by a participant to be able to invite in turn, that capability does not exist; the matrix follows the code (GUEST_L1 = a participant who may invite, GUEST_L2 = a guest who may not). Ask the owner which model is intended before writing tests for 'guest level 1 invites'."
+  },
+  {
+   "id": "DR-24",
+   "severity": "low",
+   "title": "After an erase and a reopen, an old guest link may point at a different person",
+   "rows": "lifecycle reopen with route GUEST_L1 / GUEST_L2 (inferred from the code, not exercised)",
+   "where": "apps/edge/src/worker.ts:1675-1679 (the guest link looks the inviter up by seat number) with the seat numbering in addSeat (worker.ts:1508: MAX(seq)+1 over an empty table starts again at 1)",
+   "why": "Seat numbers restart after the guest data is erased, so a stale from=<seat> link silently credits whoever now holds that seat number and spends that person's quota. The oracle assumes nobody holds the seat yet (the link falls back to the organizer). Worth a test before relying on the guest feature across a cancel."
+  },
+  {
+   "id": "DR-25",
+   "severity": "low",
+   "title": "Over-limit refusal differs between single approve and approve all for an already listed person",
+   "rows": "A-OVER-LIMIT versus A-APPROVE-ALL, request S08 in verify both, capacity OVER_QUOTA",
+   "where": "apps/edge/src/people.ts:510-512 (single approve checks the list limit before looking for an existing person) versus 548-560 (approve all skips the limit for an existing person)",
+   "why": "A Co-host whose list is full gets 409 over-limit when approving one listed person with a wrong ID, but approve all admits the same person. Same request, two answers."
+  },
+  {
+   "id": "DR-26",
+   "severity": "medium",
+   "title": "After the game has ended a new person can still ask to wait, but nobody can answer",
+   "rows": "J-UNLISTED-CLOSED / J-ID-MISS-WAIT with lifecycle organizer_ends, then A-ENDED",
+   "where": "apps/edge/src/worker.ts join route (no end check since commit 5d51d94) versus apps/edge/src/people.ts:506 and 532 (decisions refused: 'has lapsed')",
+   "why": "A stranger who opens a closed game's link after the end is parked in the waiting room (403 waiting), while every approver gets 409 'This game has ended, so this request has lapsed' and me?wid says lapsed only on the next poll. In an open game the same person gets a ticket (jr > 0) for a game that is over. The thank-you page is by design, but the waiting card promises an answer that can never come."
   },
   {
    "id": "DR-22",

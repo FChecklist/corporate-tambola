@@ -214,3 +214,4 @@ a.zc-chip::before,.zc-chips .zc-chip[data-mode]::before{display:none}
 
 /* the assistant strip is not shown in the console */
 #aistrip,.zc-ai{display:none !important}@media (max-width:640px){.zc-i{width:32px;height:32px}.zc-dot{width:36px;height:36px}.zc-mini{min-height:40px}.zc-tab.on{background:#fff;font-weight:700;box-shadow:inset 0 3px 0 var(--zc-accent)}}
+.zc-hide{display:none !important}

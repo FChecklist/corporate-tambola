@@ -27,6 +27,15 @@
   const OLD_HOUSES = [{ id: "early5", label: "Early Five", how: "Be the first to mark any 5 of your numbers.", max: 5 }, { id: "top", label: "Top Line", how: "Mark all 5 numbers of the top line.", max: 5 }, { id: "mid", label: "Middle Line", how: "Mark all 5 numbers of the middle line.", max: 5 }, { id: "bot", label: "Bottom Line", how: "Mark all 5 numbers of the bottom line.", max: 5 }, { id: "corners", label: "Four Corners", how: "Mark the first and last number of the top and bottom lines.", max: 5 }, { id: "star", label: "Star", how: "Mark the four corners and the centre number of the middle line.", max: 5 }, { id: "full", label: "Full House", how: "Mark all 15 numbers of your ticket.", max: 5 }, { id: "full2", label: "Full Two-Ticket House", how: "Mark all 30 numbers across your two tickets.", max: 5 }];
   const HOUSES = ZG && Array.isArray(ZG.PRIZE_HOUSES) && ZG.PRIZE_HOUSES.length ? ZG.PRIZE_HOUSES : OLD_HOUSES;
   const NAMES = Object.fromEntries(HOUSES.map((h) => [h.id, h.label]));
+  // ---- Simpler console: things are only HIDDEN here, never removed; change a constant to bring them back. The server keeps its own (higher) limits.
+  const HIDE_ADVANCED = true; // true: the rarely used controls (rounds, the tie question, the typed winners box) are hidden by one CSS class (zc-hide + data-hidden)
+  const PRIZE_MAX = { line: 5, other: 5, house: 10, bumper: 10 }; // the most winners the console OFFERS per prize class
+  const ROUNDS_VISIBLE = [1]; // round 1 is the default and the only round offered
+  const LINE_HOUSES = ["top", "mid", "bot", "twolines", "topbottom", "midcorners"];
+  /** Which limit a prize follows: line (the line prizes), house (Full House), bumper (Full House on both tickets), other (everything else). */
+  const prizeClassOf = (pattern) => (pattern === "full2" ? "bumper" : pattern === "full" ? "house" : LINE_HOUSES.includes(pattern) ? "line" : "other");
+  const capOf = (pattern, serverMax) => Math.min(Number(serverMax) || 1, PRIZE_MAX[prizeClassOf(pattern)]);
+  const hideWrap = (html) => (HIDE_ADVANCED ? `<div class="zc-hide" data-hidden="1">${html}</div>` : html);
   const call = async (method, path, body) => {
     let r;
     try { let tm; r = await Promise.race([fetch(BASE + path, { method, headers: { "content-type": "application/json", "x-organizer": secret }, body: body === undefined ? undefined : JSON.stringify(body) }), new Promise((_, no) => { tm = setTimeout(() => no(new Error("no answer")), 40000); })]); clearTimeout(tm); } // a request that never answers must not hold the page for ever
@@ -414,8 +423,8 @@
       + small(f.mode === "host" ? "You or a Host press <b>Next number</b> on Game day, when you are ready. The order of the numbers still comes from the public random numbers, so nobody can choose a number. For games of up to 2,000 people." : "A new number every few seconds, by itself. You pick the gap just below.")
       + (f.mode === "host" ? small("A Host presses a button for each number, so there is no fixed gap: you decide the pace on game day.", 'id="nospeed"') : grp("spd", "Duration (gap) between two numbers", spdOpts(f.spd)))
       + grp("tix", "Tickets for each person (participant)", [["1", "1 ticket"], ["2", "2 tickets (more chances)"]])
-      + grp("rnd", "How many full games in this event? (rounds)", [1, 2, 3, 4, 5].map((n) => [String(n), String(n) + (n === 1 ? " game" : " games")]))
-      + small("One round is one full game of 90 numbers. With 2 rounds, guests play two games one after the other, each with new tickets and new numbers. Brand moments and lucky draws run in round 1 only.")
+      + hideWrap(grp("rnd", "How many full games in this event? (rounds)", [1, 2, 3, 4, 5].filter((n) => ROUNDS_VISIBLE.includes(n)).map((n) => [String(n), String(n) + (n === 1 ? " game" : " games")]))
+      + small("One round is one full game of 90 numbers. With 2 rounds, guests play two games one after the other, each with new tickets and new numbers. Brand moments and lucky draws run in round 1 only."))
       + `<span class="zc-lbl zc-sec zc-sub">Who can play</span>` + (f.aud = f.aud || audOf(f), "") + grp("aud", "Who is this game for?", AUD)
       + small(({ 1: "Only the employees on your list can play, and nobody can invite anyone. Anyone else who opens your link waits for you to say yes.", 2: "Your employees play, and each employee can invite family and friends. People who are not on your list wait for you to say yes.", 3: "Only the people you add can play. Anyone else who opens your link waits for you to say yes.", 4: "The people you add can play, and each of them can invite a few more. Anyone else who opens your link waits for you to say yes.", 5: "Anyone who opens your link joins straight away. You do not need a list.", 6: "Anyone who opens your link can join. Your employees are recognised by their employee ID; add them to your list in step 6." })[f.aud])
       + (["1", "2", "6"].includes(f.aud) ? grp("ver", f.aud === "6" ? "What must an employee give?" : "What must an employee give to get in?", verOptions(f.aud))
@@ -430,12 +439,12 @@
   /** Make sure the per-winner prizes list has one entry for each winner (new ones start as a copy of the first). */
   function perFill(h) { h.per = h.per || []; const n = Number(h.n) || 1; while (h.per.length < n) h.per.push({ pt: h.pt, pd: h.pd }); return h.per; }
   function houseBox([k, name, how, max0]) {
-    const f = S.f, h = f.hs[k], act = f.ph === k && h.on, max = Math.max(Number(max0) || 1, Number(h.n) || 1);
+    const f = S.f, h = f.hs[k], act = f.ph === k && h.on, max = Math.max(Number(max0) || 1, Number(h.n) || 1), cap = capOf(k, max0);
     const sumry = `${h.n} winner${Number(h.n) === 1 ? "" : "s"} · ${esc(h.diff ? "a prize for each" : ptext(h.pt, h.pd))}`;
     let body = "";
     if (act) {
-      body += max > 1 ? grp(`hs.${k}.n`, "How many winners?", [1, 2, 3, 4, 5, 10, 20].filter((x) => x <= max).map((x) => [String(x), String(x)]))
-        + `<div class="zc-gap">${lbl(fid(`hs.${k}.n`), `Or type how many winners (1 to ${max})`)}${inp(`hs.${k}.n`, { type: "number", attrs: `inputmode="numeric" min="1" max="${max}" step="1"` })}</div>${small("If one person wins, the next person who finishes wins the next prize, until all your winners are found.")}` : small("One winner.");
+      body += max > 1 ? grp(`hs.${k}.n`, "How many winners?", [1, 2, 3, 4, 5, 10, 20].filter((x) => x <= cap).map((x) => [String(x), String(x)]))
+        + hideWrap(`<div class="zc-gap">${lbl(fid(`hs.${k}.n`), `Or type how many winners (1 to ${max})`)}${inp(`hs.${k}.n`, { type: "number", attrs: `inputmode="numeric" min="1" max="${max}" step="1"` })}</div>`) + `${small("If one person wins, the next person who finishes wins the next prize, until all your winners are found.")}` : small("One winner.");
       if (Number(h.n) > 1) body += `<div class="zc-chips zc-gap">${bchip(`hs.${k}.diff`, "A different prize for each winner")}</div>`;
       if (h.diff && Number(h.n) > 1) { const per = perFill(h); body += per.slice(0, Number(h.n)).map((_, i) => `<span class="zc-lbl">Prize for winner ${i + 1}</span>${prizePick(`hs.${k}.per.${i}.pt`, `hs.${k}.per.${i}.pd`)}`).join(""); }
       else body += `<span class="zc-lbl">What is the prize?</span>${prizePick(`hs.${k}.pt`, `hs.${k}.pd`)}`;
@@ -447,8 +456,8 @@
     if (lockedGame()) return lockedNote() + readBack();
     const two = Number(S.f.tix) === 2;
     return grp("bundle", "Start from", ["Classic", "Simple", "Rich", "Choose myself"].map((b) => [b, b]))
-      + `<span class="zc-lbl">Tick the prizes. Each one says how to win.</span>` + HS.filter(([k]) => k !== "full2" || two).map(houseBox).join("")
-      + `<div class="zc-block">${grp("ties", "If two or more people finish on the same number", [["next", "They take the next prizes, one after the other"], ["share", "They share that prize"]])}${small(S.f.ties === "share" ? "Everyone who finishes on the same number wins that same prize." : "A fixed, public order decides who gets the earlier prize, so nobody can steer it. Each person wins one prize of that house.")}</div>`
+      + `<span class="zc-lbl">Tick the prizes. Each one says how to win.</span>` + small("Just like a real housie: numbers are called one by one, each player marks their own ticket and calls Claim, early prizes come first, then the lines, and the Full House last.") + HS.filter(([k]) => k !== "full2" || two).map(houseBox).join("")
+      + hideWrap(`<div class="zc-block">${grp("ties", "If two or more people finish on the same number", [["next", "They take the next prizes, one after the other"], ["share", "They share that prize"]])}${small(S.f.ties === "share" ? "Everyone who finishes on the same number wins that same prize." : "A fixed, public order decides who gets the earlier prize, so nobody can steer it. Each person wins one prize of that house.")}</div>`)
       + small("You give the prizes. We provide the software.") + save(3);
   }
 
@@ -943,8 +952,8 @@
     const P = S.prizes || [];
     if (!S.started || S.draft) return "";
     const rows = P.map((p, i) => `<div class="zc-rowl zc-top"><span><b>${S.shield ? "Ticket " + esc(String(p.seat)) : esc(p.name || "Participant")}</b>${S.shield ? "" : " &middot; " + esc(p.phone || "")}<br><small class="zc-small zc-nomargin">${esc(prizeName(p))}${p.round > 1 ? " · round " + p.round : ""}${p.confirmed ? " · confirmed by the winner " + esc(dmy(p.confirmedMs)) : " · not confirmed by the winner yet"}</small>${p.changed && !S.shield ? `<br><small class="zc-badt"><b>Changed after the game.</b> Joined as ${esc(p.joinedWithName || "?")} · ${esc(p.joinedWithPhone || "?")}${(p.trail || []).map((t) => "; on " + esc(dmy(t.at)) + " changed to " + esc(t.name) + " · " + esc(t.phone)).join("")}</small>` : ""}</span>
-      <label class="zc-check"><input type="checkbox" data-given="${i}" ${p.given ? "checked" : ""}> Prize given${p.given ? " " + esc(dmy(p.givenMs)) + (p.givenBy ? " by " + esc(p.givenBy) : "") : ""}</label></div>`).join("");
-    return `<div class="zc-block"><h3>Prizes handed over</h3>${rows || small("No winner is confirmed yet.")}${small("After the game each winner confirms their name and mobile number on their own phone. Anything they change is shown here together with what they joined with. Tick \"Prize given\" when you hand the prize over: the date is kept. The winners record and your details as Organizer and Host are kept for 365 days. Co-host details are erased with the guests.")}</div>`;
+      <label class="zc-check"><input type="checkbox" data-given="${i}" ${p.given ? "checked" : ""}> Prize given${p.given ? " " + esc(dmy(p.givenMs)) + (p.givenBy ? " by " + esc(p.givenBy) : "") : ""}</label>${p.canOverride === true ? ` <button type="button" class="zc-mini" data-ovopen="${i}">Change winner</button>` : ""}${p.canOverride === true && S.ovOpen === i ? `<div class="zc-chips zc-gap" role="group" aria-label="Choose the winner" data-ovlist="${i}">${(Array.isArray(p.claimants) ? p.claimants : []).map((c, j) => `<button type="button" class="zc-chip" data-ov="${i}" data-ovj="${j}">${esc(c.label || ("Ticket " + c.seat))}</button>`).join("")}<button type="button" class="zc-chip" data-ov="${i}" data-ovj="-1">Nobody</button></div>` : ""}</div>`).join("");
+    return `<div class="zc-block"><h3>Prizes handed over</h3>${rows || small("No winner is confirmed yet.")}${rows ? small("This is the result the software worked out. You have the final say: you can change who gets a prize.", 'id="prizefinal"') : ""}${small("After the game each winner confirms their name and mobile number on their own phone. Anything they change is shown here together with what they joined with. Tick \"Prize given\" when you hand the prize over: the date is kept. The winners record and your details as Organizer and Host are kept for 365 days. Co-host details are erased with the guests.")}</div>`;
   }
   function statsBlock() {
     if (!S.started || S.draft) return "";
@@ -1914,6 +1923,12 @@
       const action = b.dataset.ctl;
       if (S.ctlBusy) return; if (action === "stop" && !(await askSure("End the game for everyone?", "Every guest's phone stops at the same number. This cannot be undone.", "Yes, end the game for everyone", "No, keep playing"))) return; S.ctlBusy = true; S.ctlNote = ""; redraw();
       try { const r = await Promise.race([TBControl.publish(eid, { token: secret, base: BASE, prefix: "/api/z" }, action, action === "pause" ? { pauseForRounds: 600 } : action === "extend" ? { addRounds: 600 } : {}), new Promise((_, no) => setTimeout(() => no(new Error("Failed to fetch")), 30000))]); S.ctlNote = r.status === 200 ? CTL_SENT[action](leadSec()) : ctlWords({ message: (r.data && r.data.error) || "Not accepted" }); } catch (e) { S.ctlNote = ctlWords(e); } S.ctlBusy = false; /* frees the buttons after 30 s */
+      refreshEng();
+    }));
+    all("[data-ovopen]", (b) => (b.onclick = () => { const i = Number(b.dataset.ovopen); S.ovOpen = S.ovOpen === i ? null : i; redraw(); }));
+    all("[data-ov]", (b) => (b.onclick = async () => {
+      const p = (S.prizes || [])[Number(b.dataset.ov)]; if (!p) return; const j = Number(b.dataset.ovj), c = j >= 0 && Array.isArray(p.claimants) ? p.claimants[j] : null;
+      try { await call("POST", `/api/z/${eid}/override`, { round: p.round, pattern: p.pattern, ordinal: p.ordinal, seat: c ? c.seat : null }); S.note = c ? "Winner changed." : "Nobody wins this prize now."; S.ovOpen = null; } catch (e) { S.note = e.message; }
       refreshEng();
     }));
     all("[data-given]", (c) => (c.onchange = async () => {

@@ -9,6 +9,7 @@ import { keysInPlay, linesFor, quorumFor } from "../../../packages/beacon/src/co
 import { seatOfPid } from "../../../packages/beacon/src/unique-ticket";
 import { openPii, openText, sealPii, sealText, type PiiEnv } from "./pii";
 import { cfgOfRow, recordWinners } from "./lifecycle";
+import { checkinRequired, deviceMatches } from "./checkin";
 import type { D1, Env } from "./worker";
 import { cleanPhone, keptFromClean, keptPhone } from "./phonekit";
 
@@ -33,6 +34,7 @@ export async function acceptVotes(env: Env & PiiEnv, e: any, eid: string, b: any
   if (!b || seat === null || !Array.isArray(b.results) || b.results.length < 1 || b.results.length > 3) return json({ error: "Bad report." }, 400);
   const who = await env.DB.prepare("SELECT 1 AS x FROM participant WHERE eid=? AND pid=?").bind(eid, b.pid).first();
   if (!who) return json({ error: "Not a participant of this engagement." }, 403);
+  if (checkinRequired(e) && !(await deviceMatches(env, eid, b.pid, b.device))) return json({ error: "This ticket belongs to another phone.", code: "other-phone" }, 403); // the participant id is public: a report counts only from the phone that holds the ticket, so strangers cannot invent a result
   const cfg = cfgOfRow(e), valid = new Set<string>(keysInPlay(cfg.rewards)), luckyCount = cfg.breaks.filter((x) => x.kind === "lucky").length;
   const people = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 1;
   const need = quorumFor(people);
@@ -112,7 +114,7 @@ export async function myPrizes(env: Env & PiiEnv, eid: string, url: URL, json: J
 
 /** The organizer's / co-host's list of winners with the details they confirmed, whether anything was changed after the game, and whether the prize has been given. */
 /** `outside` = an outside AI is asking: mobile numbers are cut to their last two digits and the change history is left out, so a full number never travels through a chat. */
-export async function listPrizes(env: Env & PiiEnv, eid: string, json: Json, outside = false): Promise<Response> {
+export async function listPrizes(env: Env & PiiEnv, eid: string, json: Json, outside = false, canOverride = false): Promise<Response> {
   const rows = (await env.DB.prepare("SELECT prize.round AS round, prize.pattern AS pattern, prize.ordinal AS ordinal, prize.seat AS seat, prize.pii AS pii, prize.orig AS orig, prize.trail AS trail, prize.confirmed_ms AS confirmed_ms, prize.given_ms AS given_ms, prize.given_by AS given_by, COALESCE(s.blocked,0) AS removed FROM prize LEFT JOIN seat s ON s.eid=prize.eid AND s.seq=prize.seat WHERE prize.eid=? ORDER BY prize.round, prize.pattern, prize.ordinal, prize.seat LIMIT 400").bind(eid).all<any>()).results ?? [];
   const out = [];
   for (const r of rows) {
@@ -122,6 +124,10 @@ export async function listPrizes(env: Env & PiiEnv, eid: string, json: Json, out
     if (outside) out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, confirmed: !!r.confirmed_ms, changed: trail.length > 0, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null, ...(r.removed ? { notGiven: "removed" } : {}) });
     else out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, name: cur?.name ?? "", phone: cur?.phone ?? "", ...(cur?.empId ? { empId: cur.empId } : {}), confirmed: !!r.confirmed_ms, confirmedMs: r.confirmed_ms ?? null,
       changed: trail.length > 0, joinedWithName: orig?.name ?? "", joinedWithPhone: orig?.phone ?? "", trail, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null, ...(r.removed ? { notGiven: "removed" } : {}) }); // a person removed during the game keeps the win, but the prize is not given
+  }
+  if (canOverride && !outside) { // the organizer has the final say: each row tells which tickets claimed this prize, so the console can offer them as choices
+    const cl = (await env.DB.prepare("SELECT DISTINCT round, pattern, pid FROM claim WHERE eid=? LIMIT 3000").bind(eid).all<{ round: number; pattern: string; pid: string }>()).results ?? [];
+    for (const o of out as any[]) { o.canOverride = true; o.claimants = cl.filter((c) => c.round === o.round && c.pattern === o.pattern).slice(0, 60).map((c) => { const s = seatOfPid(c.pid); return { seat: s, label: s === null ? c.pid : "Ticket " + String(s).padStart(4, "0") }; }).filter((c) => c.seat !== null); }
   }
   return json({ prizes: out });
 }
@@ -149,4 +155,23 @@ export async function listAiAudit(db: D1, org: string | null, json: Json): Promi
     ? await db.prepare("SELECT at_ms, eid, key_id, method, path, status, ip, ua, country FROM ai_audit WHERE org=? ORDER BY id DESC LIMIT 300").bind(org).all<any>()
     : await db.prepare("SELECT org, at_ms, eid, key_id, method, path, status, ip, ua, country FROM ai_audit ORDER BY id DESC LIMIT 300").all<any>();
   return json({ trail: r.results ?? [] });
+}
+
+/** The organizer (or a Host) has the final say on who receives a prize: the software's result stands unless they change it here. Choose one of the tickets that claimed this prize, or nobody. Every change is kept with who made it and when. */
+export async function overridePrize(env: Env & PiiEnv, eid: string, b: any, kind: string | null, now: number, json: Json, spend: Spend): Promise<Response> {
+  if (!b || !Number.isInteger(b.round) || b.round < 1 || !Number.isInteger(b.ordinal) || b.ordinal < 1 || typeof b.pattern !== "string" || !/^[a-z0-9]{2,12}$/.test(b.pattern) || !(b.seat === null || (Number.isInteger(b.seat) && b.seat >= 1))) return json({ error: "Choose the prize and who gets it.", code: "bad-override" }, 400);
+  const had = (await env.DB.prepare("SELECT seat FROM prize WHERE eid=? AND round=? AND pattern=? AND ordinal=?").bind(eid, b.round, b.pattern, b.ordinal).all<{ seat: number }>()).results ?? [];
+  if (!had.length) return json({ error: "That prize has no winner recorded yet, so there is nothing to change.", code: "no-prize" }, 404);
+  let pid: string | null = null;
+  if (b.seat !== null) {
+    const claims = (await env.DB.prepare("SELECT pid FROM claim WHERE eid=? AND round=? AND pattern=? LIMIT 3000").bind(eid, b.round, b.pattern).all<{ pid: string }>()).results ?? [];
+    pid = claims.map((c) => c.pid).find((p) => seatOfPid(p) === b.seat) ?? null;
+    if (!pid) return json({ error: "Only a ticket that claimed this prize can be given it.", code: "not-a-claimant" }, 409);
+    if (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND seq=? AND blocked=1").bind(eid, b.seat).first()) return json({ error: "That person was removed from the game.", code: "removed" }, 409);
+  }
+  if (!(await spend(env, now, 4))) return json({ error: "Busy day. Please try again after midnight UTC." }, 503);
+  await env.DB.prepare("DELETE FROM prize WHERE eid=? AND round=? AND pattern=? AND ordinal=?").bind(eid, b.round, b.pattern, b.ordinal).run();
+  if (pid) await makePrizeRows(env, eid, b.round, b.pattern, b.ordinal, [pid]);
+  try { await env.DB.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").bind(`override/${eid}/${b.round}/${b.pattern}/${b.ordinal}/${now}`, JSON.stringify({ by: kind, at: now, from: had.map((h) => h.seat), to: b.seat })).run(); } catch { /* the change itself stands */ }
+  return json({ ok: true, seat: b.seat, message: b.seat === null ? "Nobody gets this prize now." : "The prize now goes to the ticket you chose." });
 }

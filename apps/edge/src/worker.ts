@@ -47,7 +47,7 @@ import { mapJson, mapText } from "./ai-functions";
 import { goScreen, screenJson, screenText } from "./ai-go";
 import { AUDIT_SCHEMA, auditRequest, analyzeChain, loadRows, logAccess, setHold, toCsv, verifyChain, closeAuditFor, sweepAudit, type AuditEnv } from "./audit";
 import { VISIT_SCHEMA, beaconRoute, linkVisitor, parseRange, recordFunnelForOrg, visitsJourney, visitsSummary, type VisitEnv } from "./visits";
-import { WINNERS_SCHEMA, acceptVotes, auditAi, confirmPrize, listAiAudit, listPrizes, markGiven, myPrizes } from "./winners";
+import { WINNERS_SCHEMA, acceptVotes, auditAi, confirmPrize, listAiAudit, listPrizes, markGiven, myPrizes, overridePrize } from "./winners";
 import { PAUSE_MAX_PARTICIPANTS, addHostKey, safetyForCap, publishControl, readPublished, registerKey, type KV } from "../../../packages/beacon/src/control";
 import { hostGameOf } from "../../../packages/beacon/src/game";
 import { QUICKNET } from "../../../packages/beacon/src/index";
@@ -712,7 +712,7 @@ async function creditFields(env: Env, a: Auth, e: { id: string; org: string | nu
 }
 const deny = (a: Auth) => json({ error: a.kind === "ai" ? "Your AI assistant may not do this. It is for the organizer to do themselves in their console: tell them plainly what needs doing and where (your instructions say how)." : a.kind === "host" ? "Only the Organizer can do this. A Host looks after the game, not the account." : a.kind === "cohost" ? "A Co-host can invite people and pay. Ask the Organizer or a Host for anything else." : "Not allowed." }, 403);
 /** What a Host may touch through an AI work link (x-ct-link): watching, and messages to everyone. Through the console a Host may do everything inside a game. */
-const HOST_ACTIONS = new Set(["participants", "summary", "results", "info", "announce", "prizes", "prizegiven", "reportlink", "life"]);
+const HOST_ACTIONS = new Set(["participants", "summary", "results", "info", "announce", "prizes", "prizegiven", "override", "reportlink", "life"]);
 const MAX_HOSTS = 5;
 /** A payment the gateway has not confirmed yet shows as "Confirming your payment..." for this long; after that it is simply pending again. */
 const CONFIRMING_WINDOW_MS = 30 * 60_000;
@@ -1489,7 +1489,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       });
     }
   }
-  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|bogey|settle|results|info|participants|erase|discard|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget|cohost|cancel-preview|cancel|reopen|clone|leave|datareq|checkin|presence|who)$/);
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|claims|bogey|settle|results|info|participants|erase|discard|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget|cohost|cancel-preview|cancel|reopen|clone|leave|datareq|checkin|presence|who|override)$/);
   if (!m) return json({ error: "Not found", hint: "Read the list of what you can do at /api/z/ai-manifest. Engagement routes look like /api/z/{id}/summary, /settings, /roster, /participants, /results, /publish." }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
@@ -1978,7 +1978,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (action === "vote" && req.method === "POST") return acceptVotes(env as any, e, eid!, await body(req, 65_536), now, json, spend);
   if (action === "confirm" && req.method === "POST") return confirmPrize(env as any, eid!, await body(req), now, json, spend);
   if (action === "myprizes" && req.method === "GET") return myPrizes(env as any, eid!, url, json);
-  if (action === "prizes" && req.method === "GET") { if (!can(a, e)) return deny(a); return listPrizes(env as any, eid!, json, a.kind === "ai" || (a.kind === "host" && req.headers.get("x-ct-link") === "1")); } // an AI (or a co-host's AI link) sees ticket numbers only
+  if (action === "prizes" && req.method === "GET") { if (!can(a, e)) return deny(a); const outside = a.kind === "ai" || (a.kind === "host" && req.headers.get("x-ct-link") === "1"); return listPrizes(env as any, eid!, json, outside, !outside && (a.plat || a.kind === "master" || a.kind === "host")); } // an AI (or a co-host's AI link) sees ticket numbers only
+  if (action === "override" && req.method === "POST") { if (!can(a, e) || !(a.plat || a.kind === "master" || a.kind === "host")) return deny(a); return overridePrize(env as any, eid!, await body(req), a.kind, now, json, spend); } // the organizer (or a Host) has the final say on who receives a prize
   if (action === "prizegiven" && req.method === "POST") { if (!can(a, e)) return deny(a); return markGiven(env, eid!, await body(req), a.kind, now, json, spend); }
   if (action === "erase" && req.method === "POST") { // right to erasure: every name, number, seat and invite of this engagement's people. The winners record and the organizer's own details stay, as the report says.
     if (!can(a, e, true)) return deny(a);

@@ -72,6 +72,37 @@ describe("join gaps", () => {
     expect((await call("POST", `/api/z/${g.id}/control`, "not a message")).status).toBeGreaterThanOrEqual(400);
     expect(used()).toBe(before); // nothing was charged for what was refused
   });
+  test("forged votes and a forged 'game over' (public ticket ids, no device proof) are refused with 403; the phone that holds the ticket is accepted", async () => {
+    const T2 = Date.UTC(2026, 9, 25, 10, 0, 0), start = Math.floor(((T2 + 2 * HOUR) / 1000 - 1692803367) / 3) + 1; // a game made after the check-in cutoff
+    const o = await organizer(), id = uid();
+    expect((await create(o.key, id, { cap: 20, startRound: start }, T2)).status).toBe(200);
+    expect((await publish(o.key, id, undefined as any, T2)).status).toBe(200);
+    const pid = (await j(await join(id, 1, {}, T2))).pid as string; expect(pid).toBeTruthy();
+    const vote = (extra: Record<string, unknown>) => call("POST", `/api/z/${id}/vote`, { pid, results: [{ pattern: "early5", ordinal: 1, round: 1, idx: 7, pids: [pid] }], ...extra }, {}, T2);
+    const over = (extra: Record<string, unknown>) => call("POST", `/api/z/${id}/over`, { pid, ...extra }, {}, T2);
+    for (const r of [await vote({}), await vote({ device: dev(99) }), await over({}), await over({ device: dev(99) })]) { expect(r.status).toBe(403); expect((await j(r)).code).toBe("other-phone"); }
+    expect((await vote({ device: dev(1) })).status).toBe(200);
+    expect((await over({ device: dev(1) })).status).toBe(200);
+  });
+  test("the organizer has the final say: /prizes offers the claimants, /override gives the prize to one of them or to nobody, with a record; strangers, Co-hosts and non-claimants cannot", async () => {
+    const g = await paidGame({ cap: 20 });
+    const a = (await j(await join(g.id, 1))).pid as string, b = (await j(await join(g.id, 2))).pid as string, c = (await j(await join(g.id, 3))).pid as string;
+    const seatOf = (p: string) => Number(p.split("x")[0]);
+    for (const p of [a, b]) W.raw.prepare("INSERT INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES(?,?,?,?,?,?)").run(g.id, p, "early5", 1, 7, T);
+    const pii = (W.raw.prepare("SELECT pii FROM participant WHERE eid=? AND pid=?").get(g.id, a) as any).pii;
+    W.raw.prepare("INSERT INTO prize(eid,round,pattern,ordinal,seat,pii,orig) VALUES(?,?,?,?,?,?,?)").run(g.id, 1, "early5", 1, seatOf(a), pii, pii);
+    const list = await j(await call("GET", `/api/z/${g.id}/prizes`, undefined, keyH(g.key)));
+    expect(list.prizes[0]).toMatchObject({ canOverride: true }); expect(list.prizes[0].claimants.map((x: any) => x.seat).sort()).toEqual([seatOf(a), seatOf(b)].sort());
+    const ov = (body: Record<string, unknown>, key = g.key) => call("POST", `/api/z/${g.id}/override`, body, keyH(key));
+    expect((await call("POST", `/api/z/${g.id}/override`, { round: 1, pattern: "early5", ordinal: 1, seat: seatOf(b) })).status).toBe(403); // a stranger
+    expect((await ov({ round: 1, pattern: "early5", ordinal: 1, seat: seatOf(c) })).status).toBe(409); // c never claimed it
+    expect((await ov({ round: 1, pattern: "early5", ordinal: 1, seat: seatOf(b) })).status).toBe(200);
+    expect((W.raw.prepare("SELECT seat FROM prize WHERE eid=? AND pattern='early5'").all(g.id) as any[]).map((r) => r.seat)).toEqual([seatOf(b)]);
+    expect((W.raw.prepare("SELECT COUNT(*) AS n FROM kv WHERE k LIKE ?").get(`override/${g.id}/%`) as any).n).toBe(1); // the change is recorded
+    expect((await ov({ round: 1, pattern: "early5", ordinal: 1, seat: null })).status).toBe(200);
+    expect((W.raw.prepare("SELECT COUNT(*) AS n FROM prize WHERE eid=?").get(g.id) as any).n).toBe(0);
+    expect((await ov({ round: 1, pattern: "early5", ordinal: 1, seat: null })).status).toBe(404); // nothing left to change
+  });
   test("GAP-01: an unbound ticket is handed back only to a phone that sends its device proof (400 without it, 200 with it)", async () => {
     const g = await paidGame({ cap: 20 });
     expect((await join(g.id, 1)).status).toBe(200);

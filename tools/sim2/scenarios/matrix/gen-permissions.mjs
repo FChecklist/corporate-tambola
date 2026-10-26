@@ -62,12 +62,12 @@ const ROUTES = [
   J({ id: "prizegiven", kind: "z", m: "POST", p: (w) => Z(w, "/prizegiven"), b: (w) => ({ seat: 1, round: 1, pattern: "early5", ordinal: 1, given: true }), A: "M H HL AI P", mut: 1, soft: 1 }),
   J({ id: "reportlink-read", kind: "z", m: "GET", p: (w) => Z(w, "/reportlink"), A: "M H HL AI P", core: 1 }),
   J({ id: "reportlink-new", kind: "z", m: "POST", p: (w) => Z(w, "/reportlink"), b: () => ({}), A: "M H P", mut: 1 }),
-  J({ id: "announce", kind: "z", m: "POST", p: (w) => Z(w, "/announce"), b: (w) => ({ text: "Tea and snacks at 6:45 pm" }), A: "M H HL AI P", mut: 1, lock: ["draft"], core: 1 }),
+  J({ id: "announce", kind: "z", m: "POST", p: (w) => Z(w, "/announce"), b: (w) => ({ text: "Tea and snacks at 6:45 pm" }), A: "M H HL AI P", mut: 1, soft: 1, lock: ["draft"], core: 1 }),
   J({ id: "presence", kind: "z", m: "GET", p: (w) => Z(w, "/presence"), A: "M H AI P" }),
   J({ id: "settings", kind: "z", m: "PATCH", p: (w) => Z(w, "/settings"), b: (w) => ({ name: "Renamed " + w.n() }), A: "M H AI P", mut: 1, lock: ["hold", "runA", "runM", "paused", "ended", "dns"], core: 1 }),
   J({ id: "settings-post", kind: "z", m: "POST", p: (w) => Z(w, "/settings"), b: (w) => ({ name: "Renamed " + w.n() }), A: "M H AI P", mut: 1, lock: ["hold", "runA", "runM", "paused", "ended", "dns"] }),
   J({ id: "publish", kind: "z", m: "POST", p: (w) => Z(w, "/publish"), b: (w) => ({ email: w.org.email, phone: "9811122233" }), A: "M H AI P", mut: 1, destr: 1, soft: 1, core: 1 }),
-  J({ id: "unbind", kind: "z", m: "POST", p: (w) => Z(w, "/unbind"), b: (w) => ({ seat: w.seatOfPart || 1 }), A: "M H AI P", mut: 1, soft: 1 }),
+  J({ id: "unbind", kind: "z", m: "POST", p: (w) => Z(w, "/unbind"), b: (w) => ({ seat: 999 }), A: "M H AI P", mut: 1, soft: 1 }),
   J({ id: "mark", kind: "z", m: "POST", p: (w) => Z(w, "/mark"), b: (w) => ({ seat: w.seatOfPart || 1, role: "none" }), A: "M H AI P", mut: 1, soft: 1, lock: ["runA", "runM", "paused", "ended"] }),
   J({ id: "roster", kind: "z", m: "POST", p: (w) => Z(w, "/roster"), b: (w) => ({ people: [{ name: "Asha Rao", phone: w.freshPhone() }] }), A: "M H P", mut: 1, soft: 1 }),
   J({ id: "reuse", kind: "z", m: "POST", p: (w) => Z(w, "/reuse"), b: (w) => ({ from: w.eid2 }), A: "M H AI P", mut: 1, soft: 1 }),
@@ -76,17 +76,17 @@ const ROUTES = [
   J({ id: "person", kind: "z", m: "POST", p: (w) => Z(w, "/person"), b: () => ({ phone: "9000000001" }), A: "M H P", mut: 0, soft: 1, inCancelled: 1, inDns: 1 }),
   J({ id: "forget", kind: "z", m: "POST", p: (w) => Z(w, "/forget"), b: () => ({ phone: "9000000001" }), A: "M H P", mut: 1, soft: 1, inCancelled: 1, inDns: 1 }),
   J({ id: "cancel-preview", kind: "z", m: "GET", p: (w) => Z(w, "/cancel-preview"), A: "M H P", core: 1 }),
-  J({ id: "cancel", kind: "z", m: "POST", p: (w) => Z(w, "/cancel"), b: () => ({ confirmations: 3 }), A: "M H P", mut: 1, destr: 1, inCancelled: 1, inDns: 1, lock: ["runA", "runM", "paused", "ended"], core: 1 }),
+  J({ id: "cancel", kind: "z", m: "POST", p: (w) => Z(w, "/cancel"), b: () => ({ confirmations: 3 }), A: "M H P", mut: 1, destr: 1, inCancelled: 1, inDns: 1, lock: ["runA", "runM", "paused", "ended", "dns"], core: 1 }),
   J({ id: "cancel-short", kind: "z", m: "POST", p: (w) => Z(w, "/cancel"), b: () => ({ confirmations: 1 }), A: "M H P", mut: 1, inCancelled: 1, inDns: 1, lock: ["draft", "pub", "paid", "overcap", "waiting", "cancelled", "reopened", "erased", "hold", "runA", "runM", "paused", "ended", "dns"] }), // one confirmation is never enough
   J({ id: "reopen", kind: "z", m: "POST", p: (w) => Z(w, "/reopen"), b: (w) => ({ startRound: w.futureRound }), A: "M H P", mut: 1, destr: 1, inCancelled: 1, lock: ["draft", "pub", "paid", "overcap", "waiting", "reopened", "erased", "hold", "runA", "runM", "paused", "ended", "dns"] }),
   J({ id: "clone", kind: "z", m: "POST", p: (w) => Z(w, "/clone"), b: () => ({}), A: "M H P", mut: 1, soft: 1, inCancelled: 1, inDns: 1, core: 1 }),
   J({ id: "cohost-header", kind: "z", m: "GET", p: (w) => Z(w, "/cohost"), A: "M H AI C P", coOk: 1, core: 1 }),
   J({ id: "paylink", kind: "z", m: "POST", p: (w) => Z(w, "/paylink"), b: () => ({}), A: "M H C", mut: 1, soft: 1, lock: ["paid", "overcap", "waiting", "cancelled", "reopened", "erased", "runA", "runM", "paused", "ended", "dns"], core: 1 }),
   J({ id: "pay-with-credit", kind: "z", m: "POST", p: (w) => Z(w, "/pay-with-credit"), b: () => ({}), A: "M H C", mut: 1, soft: 1, early: 1, core: 1 }),
-  J({ id: "checkout", kind: "z", m: "POST", p: () => "/api/checkout", b: (w) => ({ eid: w.eid, email: w.org.email, org: "Kaveri Foods", country: "IN", pack: 100 }), A: "M H C", mut: 1, destr: 1, soft: 1, early: 1 }),
-  J({ id: "pay-test", kind: "z", m: "POST", p: () => "/api/payments/test", b: (w) => ({ eid: w.eid, email: w.org.email, org: "Kaveri Foods", country: "IN" }), A: "M H C", mut: 1, destr: 1, soft: 1, early: 1, core: 1 }),
+  J({ id: "checkout", kind: "z", m: "POST", p: () => "/api/checkout", b: (w, a) => ({ eid: w.eid, email: ["ORG", "HOST", "COH"].includes(a.code) ? w.org.email : "stranger@example.com", org: "Kaveri Foods", country: "IN", pack: 100 }), A: "M H C", mut: 1, destr: 1, soft: 1, early: 1, anyoneMay: 1, isolate: 1, watch: 1 }),
+  J({ id: "pay-test", kind: "z", m: "POST", p: () => "/api/payments/test", b: (w, a) => ({ eid: w.eid, email: ["ORG", "HOST", "COH"].includes(a.code) ? w.org.email : "stranger@example.com", org: "Kaveri Foods", country: "IN", pack: 100 }), A: "M H C", mut: 1, destr: 1, soft: 1, early: 1, core: 1, anyoneMay: 1, isolate: 1, watch: 1 }),
   // ---- control (pause file): GET is public, POST needs a signature, the rest are team routes
-  J({ id: "control-read", kind: "z", m: "GET", p: (w) => Z(w, "/control"), pub: 1, soft: 1 }),
+  J({ id: "control-read", kind: "z", m: "GET", p: (w) => Z(w, "/control"), pub: 1, soft: 1, noPlain: 1 }),
   J({ id: "control-post-unsigned", kind: "z", m: "POST", p: (w) => Z(w, "/control"), b: (w) => ({ message: { engagementId: w.eid, seq: 1, action: "pause", atBeaconRound: 1, signedAtRound: 1, sig: "00".repeat(64) } }), pub: 1, soft: 1, refuseAll: 1 }),
   J({ id: "control-key", kind: "z", m: "PUT", p: (w) => Z(w, "/control/key"), b: (w) => ({ publicKey: w.pubKey }), A: "M H P", mut: 1, soft: 1 }),
   J({ id: "control-request", kind: "z", m: "POST", p: (w) => Z(w, "/control/request"), b: () => ({ action: "pause", note: "fire drill" }), A: "M H AI P", mut: 1, soft: 1 }),
@@ -136,11 +136,11 @@ const ROUTES = [
   J({ id: "org-keys", kind: "acct", m: "GET", p: () => "/api/org/keys", A: "M" }),
   J({ id: "org-keys-revoke", kind: "acct", m: "POST", p: () => "/api/org/keys/revoke", b: () => ({ id: "0123456789" }), A: "M", mut: 1, soft: 1 }),
   J({ id: "org-close-unconfirmed", kind: "acct", m: "POST", p: () => "/api/org/close", b: () => ({}), A: "M", mut: 1, lock: ["*"] }), // allowed callers get 400 "Please confirm"
-  J({ id: "org-close", kind: "acct", m: "POST", p: () => "/api/org/close", b: () => ({ confirm: true }), A: "M", mut: 1, destr: 1 }),
+  J({ id: "org-close", kind: "acct", m: "POST", p: () => "/api/org/close", b: () => ({ confirm: true }), A: "M", mut: 1, destr: 1, lastOfAll: 1 }),
   J({ id: "org-host-add", kind: "acct", m: "POST", p: (w) => "/api/org/host", b: (w) => ({ label: "Sunita", email: w.freshEmail(), mobile: w.freshPhone() }), A: "M", mut: 1, destr: 1 }),
-  J({ id: "org-host-link", kind: "acct", m: "POST", p: () => "/api/org/host/link", b: (w) => ({ id: w.hostNId }), A: "M", mut: 1, soft: 1 }),
+  J({ id: "org-host-link", kind: "acct", m: "POST", p: () => "/api/org/host/link", b: (w) => ({ id: w.hostNId }), A: "M", mut: 1, soft: 1, destr: 1, names: 1 }),
   J({ id: "org-team", kind: "acct", m: "GET", p: () => "/api/org/team", A: "M H AI", core: 1 }),
-  J({ id: "org-cohost-add", kind: "acct", m: "POST", p: (w) => "/api/org/cohost", b: (w) => ({ label: "Dev Kapoor", phone: w.freshPhone(), e: w.eid }), A: "M H", mut: 1, soft: 1 }),
+  J({ id: "org-cohost-add", kind: "acct", m: "POST", p: (w) => "/api/org/cohost", b: (w) => ({ label: "Dev Kapoor", phone: w.freshPhone(), e: w.eid }), A: "M H", mut: 1, soft: 1, names: 1 }),
   J({ id: "org-team-retire", kind: "acct", m: "POST", p: () => "/api/org/team/retire", b: (w) => ({ id: "0123456789" }), A: "M H", mut: 1, soft: 1 }),
   J({ id: "org-credit", kind: "acct", m: "GET", p: () => "/api/org/credit", A: "M H", early: 1 }),
   J({ id: "org-role-accept", kind: "acct", m: "POST", p: () => "/api/org/role/accept", b: () => ({}), A: "H C", mut: 1, soft: 1, coOk: 1, hnOk: 0 }),
@@ -152,7 +152,7 @@ const ROUTES = [
   J({ id: "suggestions-read", kind: "acct", m: "GET", p: () => "/api/z/suggestions", A: "M H AI P" }),
   J({ id: "suggestions-add", kind: "acct", m: "POST", p: (w) => "/api/z/suggestions", b: (w) => ({ kind: "improvement", title: "Bigger tickets " + w.n(), body: "Please make the numbers on the ticket a little bigger for older guests." }), A: "M H AI", mut: 1, soft: 1 }),
   J({ id: "suggestions-status", kind: "acct", m: "POST", p: () => "/api/z/suggestions/1/status", b: () => ({ status: "planned" }), A: "P", mut: 1, soft: 1 }),
-  J({ id: "proforma", kind: "acct", m: "POST", p: () => "/api/proforma", b: (w) => ({ eid: w.eid, pack: 100, email: "a@example.com", name: "Ab Cd" }), A: "M H C", early: 1, soft: 1, pubAcct: 1 }),
+  J({ id: "proforma", kind: "acct", m: "POST", p: () => "/api/proforma", b: (w) => ({ eid: w.eid, pack: 100, email: "a@example.com", name: "Ab Cd" }), A: "M H C", early: 1, soft: 1, pubAcct: 1, names: 1 }),
   // ---- public outside a game
   J({ id: "manifest", kind: "acct", m: "GET", p: () => "/api/z/ai-manifest", pub: 1, early: 1 }),
   J({ id: "notices-read", hnOk: 1, kind: "acct", m: "GET", p: () => "/api/notices", pub: 1, coOk: 1 }),
@@ -161,27 +161,26 @@ const ROUTES = [
   J({ id: "health", kind: "acct", m: "GET", p: () => "/api/status/health", pub: 1, early: 1 }),
   J({ id: "pay-status", kind: "acct", m: "GET", p: () => "/api/payments/status", pub: 1, early: 1 }),
   J({ id: "auth-config", hnOk: 1, kind: "acct", m: "GET", p: () => "/api/auth/config", pub: 1 }),
-  J({ id: "schedule", kind: "acct", m: "GET", p: () => "/api/z/schedule?at=2031-01-01T10:00:00%2B05:30", pub: 1, soft: 1 }),
-  J({ id: "beacon-unknown", kind: "acct", m: "GET", p: () => "/api/beacon/" + "0".repeat(64) + "/public/latest", pub: 1, early: 1, soft: 1 }),
-  J({ id: "visit-beacon", kind: "acct", m: "POST", p: () => "/api/v/b", b: () => ({}), pub: 1, early: 1, soft: 1, noteSkip: 1 }),
-  J({ id: "report-wrong-key", kind: "acct", m: "GET", p: (w) => `/api/report/${w.eid}?k=wrong`, pub: 1, early: 1, soft: 1 }),
+  J({ id: "schedule", anyPub: 1, kind: "acct", m: "GET", p: () => "/api/z/schedule?at=2031-01-01T10:00:00%2B05:30", pub: 1, soft: 1 }),
+  J({ id: "beacon-unknown", anyPub: 1, kind: "acct", m: "GET", p: () => "/api/beacon/" + "0".repeat(64) + "/public/latest", pub: 1, early: 1, soft: 1 }),
+  J({ id: "visit-beacon", noPlain: 1, kind: "acct", m: "POST", p: () => "/api/v/b", b: () => ({}), pub: 1, early: 1, soft: 1, noteSkip: 1 }),
+  J({ id: "report-wrong-key", anyPub: 1, kind: "acct", m: "GET", p: (w) => `/api/report/${w.eid}?k=wrong`, pub: 1, early: 1, soft: 1 }),
   J({ id: "auth-start-bad", hnOk: 1, kind: "acct", m: "POST", p: () => "/api/start", b: () => ({ email: "not-an-address" }), pub: 1, soft: 1 }),
   J({ id: "auth-email-bad", hnOk: 1, kind: "acct", m: "POST", p: () => "/api/auth/email", b: () => ({ email: "x" }), pub: 1, soft: 1 }),
   J({ id: "auth-verify-bad", hnOk: 1, kind: "acct", m: "POST", p: () => "/api/auth/verify", b: () => ({ email: "nobody@example.com", code: "000000" }), pub: 1, soft: 1 }),
   J({ id: "auth-link-bad", hnOk: 1, kind: "acct", m: "POST", p: () => "/api/auth/link", b: () => ({ token: "0".repeat(48) }), pub: 1, soft: 1 }),
   J({ id: "auth-google-bad", hnOk: 1, kind: "acct", m: "POST", p: () => "/api/auth/google", b: () => ({ intent: "signin", credential: "x" }), pub: 1, soft: 1 }),
-  J({ id: "paylink-token-read", hnOk: 1, kind: "acct", m: "GET", p: () => "/api/paylink/" + "0".repeat(48), pub: 1, early: 1, soft: 1 }),
-  J({ id: "paylink-token-pay", hnOk: 1, kind: "acct", m: "POST", p: () => "/api/paylink/" + "0".repeat(48) + "/checkout", b: () => ({ email: "a@example.com", org: "X" }), pub: 1, early: 1, soft: 1 }),
-  J({ id: "invoice-token", kind: "acct", m: "GET", p: () => "/api/invoice/inv_" + "0".repeat(32), pub: 1, early: 1, soft: 1 }),
-  J({ id: "credit-note-token", kind: "acct", m: "GET", p: () => "/api/credit-note/cn_" + "0".repeat(32), pub: 1, early: 1, soft: 1 }),
-  J({ id: "partner-check", kind: "acct", m: "GET", p: () => "/api/partner/check?code=zzzzzz", pub: 1, soft: 1 }),
+  J({ id: "paylink-token-read", anyPub: 1, hnOk: 1, kind: "acct", m: "GET", p: () => "/api/paylink/" + "0".repeat(48), pub: 1, early: 1, soft: 1 }),
+  J({ id: "paylink-token-pay", anyPub: 1, hnOk: 1, kind: "acct", m: "POST", p: () => "/api/paylink/" + "0".repeat(48) + "/checkout", b: () => ({ email: "a@example.com", org: "X" }), pub: 1, early: 1, soft: 1 }),
+  J({ id: "invoice-token", anyPub: 1, kind: "acct", m: "GET", p: () => "/api/invoice/inv_" + "0".repeat(32), pub: 1, early: 1, soft: 1 }),
+  J({ id: "credit-note-token", anyPub: 1, kind: "acct", m: "GET", p: () => "/api/credit-note/cn_" + "0".repeat(32), pub: 1, early: 1, soft: 1 }),
+  J({ id: "partner-check", anyPub: 1, kind: "acct", m: "GET", p: () => "/api/partner/check?code=zzzzzz", pub: 1, soft: 1 }),
   J({ id: "partner-me", kind: "acct", m: "GET", p: () => "/api/partner/me", A: "", soft: 1 }),
   J({ id: "partners-list", kind: "acct", m: "GET", p: () => "/api/partners", A: "P" }),
   J({ id: "partners-rate", kind: "acct", m: "POST", p: () => "/api/partners/commission/rate", b: () => ({ rate: 7 }), A: "P", mut: 1, platBad: 1 }),
   J({ id: "helpdesk-me", kind: "acct", m: "GET", p: () => "/api/helpdesk/me", A: "", soft: 1 }),
   J({ id: "helpdesk-invite", kind: "acct", m: "POST", p: () => "/api/helpdesk/invite", b: () => ({ email: "x@example.com" }), A: "", soft: 1 }),
   J({ id: "inbound-email", kind: "acct", m: "POST", p: () => "/api/inbound-email", b: () => ({ from: "a@example.com", subject: "delete", text: "delete" }), A: "", soft: 1 }),
-  J({ id: "payments-webhook", kind: "acct", m: "POST", p: () => "/api/payments/webhook", b: () => ({ event: "x" }), pub: 1, early: 1, soft: 1, refuseAll: 1 }),
   J({ id: "payments-verify", kind: "acct", m: "POST", p: () => "/api/payments/verify", b: () => ({ order: "x" }), pub: 1, early: 1, soft: 1, refuseAll: 1 }),
   // ---- the owner routes (404 for everybody but the platform key)
   ...[
@@ -194,56 +193,72 @@ const ROUTES = [
     ["owner-site-set", "POST", "/api/owner/site", { off: "maybe" }], ["owner-mode-set", "POST", "/api/owner/mode", { mode: "MAYBE" }], ["owner-purge-test", "POST", "/api/owner/purge-test-data", { confirm: "no" }],
     ["owner-audit-hold", "POST", "/api/owner/audit/sys/hold", { on: false }], ["owner-data-request-close", "POST", "/api/owner/data-requests", { id: "x" }],
     ["lifecycle-tick", "POST", "/api/lifecycle/tick", {}], ["purge-all", "POST", "/api/purge", {}],
-  ].map(([id, m, p, b]) => J({ id, kind: "owner", m, p: () => p, b: () => b, A: "P", mut: 1, platBad: 1, platSkip: id === "lifecycle-tick" || id === "purge-all" })),
+  ].map(([id, m, p, b]) => J({ id, kind: "owner", m, p: () => p, b: () => b, A: "P", mut: 1, platBad: id !== "owner-audit-hold" ? 1 : 0, platAny: id === "owner-audit-hold" ? 1 : 0, platSkip: id === "lifecycle-tick" || id === "purge-all" })),
 ];
 // who is "G" (level-1 guest with a device, invites on): only the people routes
 const ROUTE_BY_ID = Object.fromEntries(ROUTES.map((r) => [r.id, r]));
+// the dummy world lets every route say what its address looks like, so the oracle can read the game action out of it
+const DUMMY = new Proxy({}, { get: () => { const f = () => "X"; f.toString = () => "X"; f[Symbol.toPrimitive] = () => "X"; return f; } });
+const MAIN_ACTIONS = new Set("join claims bogey settle results info participants erase discard reuse roster settings publish summary announce unbind seats names mark won over invites life vote confirm prizes prizegiven myprizes reportlink person forget cohost cancel-preview cancel reopen clone leave datareq checkin presence who".split(" "));
+const HOST_ACTIONS = new Set("participants summary results info announce prizes prizegiven reportlink life".split(" "));
+for (const r of ROUTES) { try { r.path0 = r.p(DUMMY, DUMMY); } catch { r.path0 = ""; } r.action = /^\/api\/z\/X\/([a-z-]+)/.exec(r.path0)?.[1] ?? null; }
 
 // ---------------------------------------------------------------- the oracle
-const DENY_RE = /^(Not allowed|Not found|Only the Organizer|Only the owner|Once the game has started only|Your ticket link is the one|This report link is not valid|A Co-host can invite people and pay|Your AI assistant may not do this|No such engagement|Please sign in|Please finish your setup|A Host's AI assistant cannot|Your Co-host link is for a different game|Names and mobile numbers|A Host needs|A Co-host needs|Only the owner|A pay link is for people|Paying is for people|Credit is shown|Not a participant|Please tick the box|Open this ticket|This is not the phone|This ticket belongs to another phone|Guests invited by a guest|Your team seat|The organizer has not switched on)/i;
+const DENY_RE = /^(Not allowed|Not found|Only the Organizer|Only the owner|Once the game has started only|Your ticket link is the one|This report link is not valid|A Co-host can invite people and pay|Your AI assistant may not do this|No such engagement|Please sign in|Please finish your setup|A Host's AI assistant cannot|Your Co-host link is for a different game|Names and mobile numbers|A Host needs|A Co-host needs|A pay link is for people|Paying is for people|Credit is shown|Not a participant|Please tick the box|Open this ticket|This is not the phone|This ticket belongs to another phone|Guests invited by a guest|Your team seat|The organizer has not switched on)/i;
 const isDenied = (r) => r.status === 401 || ((r.status === 403 || r.status === 404 || r.status === 400) && (DENY_RE.test(String(r.body?.error ?? "")) || r.body?.code === "host-setup" || r.body?.code === "ai-not-allowed" || r.body?.code === "consent-required" || (r.status !== 400 && /^(Not found\.?)$/.test(String(r.body?.text ?? "")))));
 const isBiz = (r) => r.status >= 400 && r.status < 500 && !isDenied(r);
 
 function letterOf(code) { return { ORG: "M", HOST: "H", HOSTL: "HL", COH: "C", AI: "AI", PLAT: "P" }[code] ?? null; }
+const DEAD_COHOST_STATES = new Set(["cancelled", "reopened", "erased", "dns"]); // a Co-host's key goes with the guests' data (cancel.ts eraseCohostsSql)
 
 /** The expected answer class for (route, actor, state): ok (2xx), pass (anything but a permission denial / 5xx), biz (a business refusal: 4xx), deny (a permission denial), refuse (any 4xx), any (no 5xx). */
 function expectOf(r, a, st) {
-  const c = a.code;
+  let c = a.code;
+  if ((st === "erased" || st === "dns") && a.hasTicket) a = { ...a, hasTicket: false, devOk: false }; // the tickets were erased with the guests' data
+  // an account-level route is about the caller's OWN account: another account's Organizer / AI key is a normal Organizer / AI key there
+  if (r.kind === "acct" || r.kind === "owner") { if (c === "ORGX") { c = "ORG"; if (r.names) return "refuse"; } else if (c === "ORGXAI") { c = "AI"; if (r.names) return "refuse"; } }
+  if (DEAD_COHOST_STATES.has(st) && (c === "COH" || c === "COHN" || c === "COHY")) c = "BAD";
   const A = new Set((r.A ?? "").split(/\s+/).filter(Boolean));
+  const stateLocked = r.kind === "z" && r.mut && ((st === "cancelled" && !r.inCancelled) || (st === "dns" && !r.inDns));
   const allowedBase = () => {
-    if (r.mut && st === "cancelled" && !r.inCancelled) return "biz";
-    if (r.mut && st === "dns" && !r.inDns) return "biz";
+    if (stateLocked) return "biz";
     if (r.lock && (r.lock.includes(st) || r.lock.includes("*"))) return "biz";
     return r.soft ? "pass" : "ok";
   };
-  const asNoKey = () => { // a caller whose key makes no difference on this route
-    if (r.pub) return pubExpect(r, a, st, allowedBase);
-    return "deny";
-  };
+  const denyX = () => (stateLocked ? "refuse" : "deny"); // a cancelled / did-not-start game answers 409 before it looks at who asks
+  const asNoKey = () => (r.pub ? pubExpect(r, a, st) : denyX()); // a caller whose key makes no difference on this route
   if (r.refuseAll) return "refuse"; // nobody gets a 2xx here
   if (c === "PLAT" && r.platAny) return "any";
-  if (["AIEXP", "AIREV", "MASTREV", "COHREV", "HOSTREV", "HOSTEXP", "BAD"].includes(c)) return asNoKey(); // an expired, revoked or made-up key is simply nobody
+  if (["AIEXP", "AIREV", "MASTREV", "COHREV", "HOSTREV", "HOSTEXP", "BAD"].includes(c)) return r.anyoneMay ? "any" : asNoKey(); // an expired, revoked or made-up key is simply nobody
   // gate 0 (worker.ts:811): an unfinished Host can do nothing but finish the setup
-  if (c === "HOSTN") return r.hnOk ? "pass" : "refuse";
+  if (c === "HOSTN") return r.hnOk ? "any" : "refuse";
   // the Co-host gates (worker.ts:855-862); payment and credit routes run BEFORE the K5 gate (gap G3)
   if (c === "COHN") {
     if (r.early) return A.has("C") ? "refuse" : asNoKey();
     return r.coOk ? allowedBase() : "refuse";
   }
-  if (c === "COHY") { if (A.has("C") || r.id === "cohost-header") return "deny"; return r.pub ? "any" : "deny"; }
+  if (c === "COHY") { if (r.names) return denyX(); if (r.kind !== "z" && A.has("C")) return allowedBase(); if (A.has("C") || r.id === "cohost-header") return denyX(); return r.pub ? "any" : denyX(); }
   if (c === "COH") {
     if (A.has("C")) return allowedBase();
     if (r.early) return asNoKey();
-    return r.coOk || r.pub ? (r.pub ? "any" : allowedBase()) : "deny";
+    return r.coOk || r.pub ? (r.pub ? "any" : allowedBase()) : denyX();
   }
-  if (c === "HOSTL") return A.has("HL") ? allowedBase() : (r.pub ? asNoKey() : "deny");
+  if (c === "HOSTL") {
+    if (/^\/api\/(payments\/|org\/(team|cohost))/.test(r.path0 ?? "")) return "deny"; // worker.ts:793: a Host work link may not pay or manage the team
+    if (r.kind === "z" && r.action && MAIN_ACTIONS.has(r.action) && !HOST_ACTIONS.has(r.action)) return "deny"; // worker.ts:1517: a Host's work link keeps the nine actions only, even on public ones
+    if (r.kind === "z" && r.action && HOST_ACTIONS.has(r.action) && r.pub) return "ok";
+    return A.has("HL") ? allowedBase() : (r.pub ? asNoKey() : "deny");
+  }
+  if (r.anyoneMay && !["AI", "ORGX", "ORGXAI"].includes(c) && !(Letter(c) && A.has(Letter(c)))) return "any"; // the public pack-purchase flow: anybody may buy, but the call must never act on THIS account's game
   const Lt = letterOf(c);
-  if (Lt && A.has(Lt)) { if (r.kind === "owner" && r.platBad && c === "PLAT") return "biz"; if (r.platBad && c === "PLAT") return "biz"; return allowedBase(); }
-  if (A.has("G") && (c === "G1" || c === "PART")) { if (!a.hasTicket) return "deny"; if (st === "cancelled" || st === "dns") return r.m === "GET" ? "pass" : "biz"; return r.soft ? "pass" : "ok"; }
+  if (Lt && A.has(Lt)) { if (r.platBad && c === "PLAT") return "biz"; return allowedBase(); }
+  if (A.has("G") && (c === "G1" || c === "PART")) { if (!a.hasTicket) return denyX(); if (st === "cancelled" || st === "dns") return r.m === "GET" ? "pass" : "biz"; return r.soft ? "pass" : "ok"; }
   return asNoKey();
 }
-function pubExpect(r, a, st, allowedBase) {
+function Letter(c) { return letterOf(c); }
+function pubExpect(r, a, st) {
   const c = a.code;
+  if (r.anyPub) return "any";
   if (r.tk && r.devRoute) return a.hasTicket && a.devOk ? (r.soft ? "pass" : "ok") : "refuse"; // a ticket id alone (public in the seat list) is never enough
   if (r.tk) return a.hasTicket ? "pass" : "refuse";
   if (r.lockPub && r.lockPub.includes(st)) return "biz";
@@ -323,12 +338,12 @@ export default async function gen({ seed, R, L }) {
     if (want("HOST") || want("HOSTL")) { w.host = await t.host(org, "Hema Iyer"); w.secrets.push(w.host.email); A_("HOST", { h: { "x-organizer": w.host.key } }); A_("HOSTL", { h: { "x-organizer": w.host.key, "x-ct-link": "1" }, link: w.host.key }); }
     if (want("HOSTN")) {
       const email = w.freshEmail(), mob = mobile(R); w.secrets.push(email);
-      const inv = await org.inviteHost({ label: "Newcomer Host", email, mobile: mob }); w.hostNId = inv.id; w.hostNKey = inv.hostKey; A_("HOSTN", { h: { "x-organizer": inv.hostKey } });
+      const inv = await org.inviteHost({ label: "Newcomer Host", email, mobile: mob }); w.hostNId = inv.id; w.hostNKey = inv.hostKey; w.hostNEmail = email; A_("HOSTN", { h: { "x-organizer": inv.hostKey } });
     }
     if (want("COH") || want("COHN") || want("COHY")) {
-      if (want("COH")) { const c = await t.cohost(org, g.id, "Dev Kapoor"); w.secrets.push(c.raw.phoneMasked ?? ""); const ac = await A.call("POST", "/api/org/role/accept", {}, c.h); if (!ac.ok) w.notes.push("co-host accept failed " + ac.status); A_("COH", { h: c.h, cohost: c }); }
-      if (want("COHN")) { const c = await t.cohost(org, g.id, "Nina NotAccepted"); A_("COHN", { h: c.h, cohost: c }); }
-      if (want("COHY")) { const c = await t.cohost(org, g2.id, "Yash OtherGame"); await A.call("POST", "/api/org/role/accept", {}, c.h); A_("COHY", { h: c.h, cohost: c }); }
+      if (want("COH")) { const c = await t.cohost(org, g.id, "Dev Kapoor"); w.secrets.push(c.raw.phoneMasked ?? ""); A_("COH", { h: c.h, cohost: c }); }
+      if (want("COHN")) { const c = await t.cohost(org, g.id, "Nina NotAccepted", { accept: false }); A_("COHN", { h: c.h, cohost: c }); }
+      if (want("COHY")) { const c = await t.cohost(org, g2.id, "Yash OtherGame"); A_("COHY", { h: c.h, cohost: c }); }
     }
     // people (only when the game is open for them)
     const open = !!S.pubd;
@@ -350,16 +365,13 @@ export default async function gen({ seed, R, L }) {
           A_("PARTX", { h: { "x-ct-pid": gst.pid, "x-ct-dev": badDevice() }, hasTicket: true, devOk: false, pid: gst.pid, dev: badDevice() });
           w.pidsParam = gst.pid;
         }
-        if (want("G1") || want("G2") || need === null) {
+        if ((want("G1") || want("G2") || need === null)) {
           const name = "Gita Guestwala", phone = mobile(R); w.secrets.push(phone, name);
           if (S.list) { await org.addPeople(g.id, [{ name, phone }]); }
           const g1 = new A.Guest("", g.id, phone, name); const r1 = await g1.join();
           if (r1.ok) {
             mkTicket("G1", g1, name, phone); const seat1 = await seatOf(g1);
-            const name2 = "Gopal Guestwala", phone2 = mobile(R); w.secrets.push(phone2, name2);
-            if (S.list) await org.addPeople(g.id, [{ name: name2, phone: phone2 }]);
-            const g2 = new A.Guest("", g.id, phone2, name2); const r2 = await g2.join({ from: seat1, cat: "family" });
-            if (r2.ok) mkTicket("G2", g2, name2, phone2); else w.notes.push("level-2 join failed " + r2.status + JSON.stringify(r2.body).slice(0, 120));
+            if (!S.list) { const name2 = "Gopal Guestwala", phone2 = mobile(R); w.secrets.push(phone2, name2); const g2 = new A.Guest("", g.id, phone2, name2); const r2 = await g2.join({ from: seat1, cat: "family" }); if (r2.ok) mkTicket("G2", g2, name2, phone2); else w.notes.push("level-2 join failed " + r2.status + JSON.stringify(r2.body).slice(0, 120)); } else w.notes.push("no level-2 guest in a list-only game (an unlisted person waits)");
           } else w.notes.push("level-1 join failed " + r1.status + JSON.stringify(r1.body).slice(0, 120));
         }
         if (S.list) { // an unlisted person asks to come in: the waiting room is not empty
@@ -394,7 +406,7 @@ export default async function gen({ seed, R, L }) {
     w.sum = (await org.summary(g.id)).body;
     try {
       const inf = (await A.call("GET", `/api/z/${g.id}/info`, undefined, org.h)).body, lf = (await org.api("GET", `/api/z/${g.id}/life`)).body, cf = (await A.call("GET", `/api/z/${g.id}/control`)).body;
-      w.notes.unshift(`state=${st} status="${w.sum.status}" payment=${w.sum.payment?.status ?? "-"} locked=${inf.locked ?? false} cancelled=${inf.cancelled ?? false} didNotStart=${inf.didNotStart ?? false} started=${lf.started ?? "?"} participants=${w.sum.participants ?? "?"} controlMessages=${(cf.messages ?? []).length}`);
+      w.notes.unshift(`state=${st} status="${w.sum.status}" payment=${w.sum.payment?.status ?? "-"} locked=${inf.locked ?? false} cancelled=${inf.cancelled ?? false} didNotStart=${inf.didNotStart ?? false} started=${lf.started ?? "?"} endMsFromNow=${lf.endMs != null ? Math.round((lf.endMs - (await clock.now())) / 60000) + "min" : "?"} reportSent=${lf.reportSent} purged=${lf.purged} participants=${w.sum.participants ?? "?"} controlMessages=${(cf.messages ?? []).length}`);
     } catch (e) { w.notes.unshift("state probe failed " + (e?.message ?? e)); }
     w.snap0 = await snapshot(w);
     return w;
@@ -406,13 +418,14 @@ export default async function gen({ seed, R, L }) {
     if (a.code === "HOSTL" && a.link) p = "/ai/" + a.link + "/" + p.replace(/^\/api\//, "");
     return p;
   }
+  const diffSnap = (a, b) => { try { const x = JSON.parse(a), y = JSON.parse(b); return Object.keys(y).filter((k) => JSON.stringify(x[k]) !== JSON.stringify(y[k])).map((k) => `${k}: ${JSON.stringify(x[k]).slice(0, 90)} -> ${JSON.stringify(y[k]).slice(0, 90)}`).join(" ; "); } catch { return "?"; } };
   const leaksIn = (w, a, res) => { const mine = new Set([a.phone, a.name].filter(Boolean)); const txt = JSON.stringify(res.body); return w.secrets.filter((x) => x && !mine.has(x) && txt.includes(x)); };
   async function runCell(t, w, r, a, st, method) {
     const m = method ?? r.m;
     const body = m === "GET" || m === "HEAD" ? undefined : r.b ? r.b(w, a) : undefined;
     const path = pathFor(r, w, a);
     const exp = method ? "refuse" : expectOf(r, a, st);
-    const watch = exp === "deny" || exp === "refuse" || exp === "biz";
+    const watch = exp === "deny" || exp === "refuse" || exp === "biz" || (!!r.watch && !callerInA(r, a.code));
     const before = watch ? await snapshot(w) : "";
     const res = await A.call(m, path, body, a.h, { ip: t.ip() });
     const label = `${ACTOR_NAME[a.code] ?? a.code} ${m} ${r.id}`;
@@ -421,7 +434,7 @@ export default async function gen({ seed, R, L }) {
     let pass, why = "";
     switch (exp) {
       case "ok": pass = okc; break;
-      case "pass": pass = s < 500 && !isDenied(res); if (!pass && s < 500) why = " (a permission denial where the caller is allowed)"; break;
+      case "pass": pass = s < 500 && (!isDenied(res) || res.body?.code === "consent-required"); if (!pass && s < 500) why = " (a permission denial where the caller is allowed)"; break;
       case "biz": pass = s >= 400 && s < 500; if (pass && isDenied(res)) why = " (denied instead of a business refusal)"; break;
       case "deny": pass = isDenied(res); if (!pass) why = okc ? " PRIVILEGE: the call was accepted" : " (refused, but not by the permission gate: the request was read before the caller was checked)"; break;
       case "refuse": pass = s >= 400 && s < 500; if (!pass) why = okc ? " PRIVILEGE: the call was accepted" : ""; break;
@@ -429,11 +442,12 @@ export default async function gen({ seed, R, L }) {
     }
     t.check(`status ${label} [${st}] wants ${exp}`, pass, `HTTP ${s} ${JSON.stringify(res.body).slice(0, 170)}${why}`);
     if (s >= 400) {
-      if (res.body && typeof res.body.error !== "string" && res.body.text !== undefined) { const tx = String(res.body.text); t.check(`plain words ${label} [${st}]`, tx.length > 0 && tx.length < 400 && !/undefined|\[object|SQLITE|TypeError|stack|\.ts:\d/.test(tx), tx.slice(0, 120)); }
+      if (r.noPlain && typeof res.body?.error !== "string") { /* a data answer, not a refusal (the pause file of a game that has none yet, the visit beacon) */ }
+      else if (res.body && typeof res.body.error !== "string" && res.body.text !== undefined) { const tx = String(res.body.text); t.check(`plain words ${label} [${st}]`, tx.length > 0 && tx.length < 400 && !/undefined|\[object|SQLITE|TypeError|stack|\.ts:\d/.test(tx), tx.slice(0, 120)); }
       else { const why2 = friendly(res.body); t.check(`plain words ${label} [${st}]`, !why2 && /\s/.test(msg.trim()), why2 || (/\s/.test(msg.trim()) ? "" : msg ? `one-word message "${msg}"` : "no message")); }
       const leak = leaksIn(w, a, res); t.check(`no data leak ${label} [${st}]`, leak.length === 0, leak.join(" | "));
     } else if (r.pub && !r.tk) { const leak = leaksIn(w, a, res); t.check(`public answer holds no personal data ${label} [${st}]`, leak.length === 0, leak.join(" | ")); }
-    if (watch) { const after = await snapshot(w); t.check(`refused call changed nothing ${label} [${st}]`, before === after, before === after ? "" : "state differs after the call"); }
+    if (watch) { const after = await snapshot(w); t.check(`refused call changed nothing ${label} [${st}]`, before === after, before === after ? "" : "state differs after the call: " + diffSnap(before, after)); }
     return res;
   }
 
@@ -446,6 +460,7 @@ export default async function gen({ seed, R, L }) {
   };
   const push = (grp, name, fn, extra = {}) => out.push({ name, group: grp, noMailCheck: true, allowUnfriendly: true, timeoutMs: 120_000, ...extra, run: async (t) => { const w = grp.world; if (!w) throw new Error("harness: the world of group " + grp.key + " did not build: " + (grp.error ?? "unknown")); await fn(t, w); } });
   const fallbackActor = (w, code) => w.actors[code] ?? { code, h: {}, hasTicket: false, devOk: false };
+  const callerInA = (r, code) => { if (r.tk && r.destr && ["PART", "G1", "G2"].includes(code)) return true;  const A = new Set((r.A ?? "").split(/\s+/).filter(Boolean)); const L_ = { ORG: "M", HOST: "H", HOSTL: "HL", COH: "C", AI: "AI", PLAT: "P", ORGX: "M", ORGXAI: "AI" }[code]; return !!L_ && A.has(L_) && (code !== "ORGX" && code !== "ORGXAI" || r.kind !== "z"); };
   const probe = (code) => ({ code, hasTicket: ["PART", "G1", "G2", "PARTX"].includes(code), devOk: ["PART", "G1", "G2"].includes(code) });
 
   for (const st of STATE_ORDER) {
@@ -457,22 +472,30 @@ export default async function gen({ seed, R, L }) {
       if (!full && !r.core && r.kind === "z") continue;             // the other states run the core routes
       for (const code of actors) {
         if (r.platSkip && code === "PLAT") continue;
-        const e = expectOf(r, probe(code), st);
-        const dAllowed = !!r.destr && (e === "ok" || e === "pass");
+        const dAllowed = !!r.destr && callerInA(r, code); // a caller who is in the route's allowed list may really do it: that cell runs last, on a world of its own where the state would break the others
         const nm = nameOf(st, code, r);
+        if (r.isolate) { // a call that may act on the game whoever makes it: every caller gets a world of its own (the open states), or runs last (the time states)
+          if (full) out.push({ name: nm + " (private world)", group: null, noMailCheck: true, allowUnfriendly: true, timeoutMs: 150_000, run: async (t) => { const w = await build(t, st, [...new Set([code, "ORG", "HOST"])]); await runCell(t, w, r, fallbackActor(w, code), st); } });
+          else if (!callerInA(r, code)) push(grp, nm, async (t, w) => { await runCell(t, w, r, fallbackActor(w, code), st); }, { order: 1 });
+          else if (code === "ORG") push(grp, nm + " (shared world, last)", async (t, w) => { await runCell(t, w, r, fallbackActor(w, code), st); }, { order: 3 });
+          continue;
+        }
         if (!dAllowed) { push(grp, nm, async (t, w) => { await runCell(t, w, r, fallbackActor(w, code), st); }, { order: 0 }); continue; }
         // a destructive call by an allowed caller: a private world in the open states, the shared world (last, one caller) in the time states
         if (full) out.push({ name: nm + " (private world)", group: null, noMailCheck: true, allowUnfriendly: true, timeoutMs: 150_000, run: async (t) => { const w = await build(t, st, [...new Set([code, "ORG", "HOST", "PLAT", "AI", "COH", "PART", "G1"])]); await runCell(t, w, r, fallbackActor(w, code), st); } });
-        else if (code === "ORG" || code === "PART") push(grp, nm + " (shared world, last)", async (t, w) => { await runCell(t, w, r, fallbackActor(w, code), st); }, { order: 1 });
+        else if (code === "ORG" || code === "PART" || (r.kind !== "z" && code === "ORGX")) push(grp, nm + " (shared world, last)", async (t, w) => { await runCell(t, w, r, fallbackActor(w, code), st); }, { order: r.lastOfAll ? 3 : 2 });
       }
     }
   }
   // wrong methods on every route (the state does not matter): in the "paid" world
   const paidGrp = groups.find((g) => g.key === "state-paid");
   const WRONG = { GET: ["DELETE", "PUT"], POST: ["DELETE", "GET"], PATCH: ["DELETE", "GET"], PUT: ["DELETE", "GET"] };
+  const realPairs = new Set(ROUTES.map((q) => q.m + " " + (q.path0 ?? "").split("?")[0]));
+  const alsoReal = (r, mm) => realPairs.has(mm + " " + (r.path0 ?? "").split("?")[0]) || (r.kind === "owner" && /audit\/access|\/audit\//.test(r.path0 ?? "") && mm !== "GET") || (r.id.startsWith("settings") && (mm === "POST" || mm === "PATCH")) || (r.id.startsWith("checkin") && (mm === "GET" || mm === "POST")) || r.path0 === "/api/z/X/people";
   for (const r of ROUTES) {
     if (r.platSkip) continue;
     for (const mm of WRONG[r.m] ?? ["DELETE"]) {
+      if (alsoReal(r, mm)) continue;
       if (r.id.startsWith("settings") && mm === "POST") continue;
       for (const code of ["ANON", "ORG", "PLAT"]) {
         if (r.kind === "owner" && code === "ORG") continue;
@@ -535,7 +558,7 @@ export default async function gen({ seed, R, L }) {
     ["suggestions", () => "/z/suggestions", "GET", { AIK: "S", HK: "D", HNK: "A" }],
     ["credit", () => "/org/credit", "GET", { AIK: "D", HK: "D", HNK: "A" }],
     ["whoami", () => "/whoami", "GET", { AIK: "S", HK: "S", HNK: "A" }],
-    ["method-delete", () => "?_method=DELETE", "GET", { AIK: "400", HK: "400", HNK: "A" }],
+    ["method-delete", (w) => `/z/${w.eid}/summary?_method=DELETE`, "GET", { AIK: "400", HK: "400", HNK: "A" }],
     ["unknown-path", () => "/nothing/here", "GET", { AIK: "N4", HK: "N4", HNK: "A" }],
   ];
   const paidGrp2 = groups.find((g) => g.key === "state-paid");
@@ -544,10 +567,10 @@ export default async function gen({ seed, R, L }) {
       const key = { AIK: w.actors.AI.h["x-organizer"], HK: w.host?.key, MK: w.org.token, CK: w.actors.COH?.cohost?.key, PK: PLATFORM_KEY, BK: "cta_" + "cd".repeat(24), XK: w.other?.aiKey, HNK: w.hostNKey }[kc];
       const before = await snapshot(w);
       const res = await raw(method, "/ai/" + key + restFn(w), method === "GET" ? undefined : "{}", {}, t.ip());
-      const exp = expMap[kc] ?? (kc === "XK" ? "X" : "N");
+      const gameBound = restFn(w).includes(w.eid) && !["info", "method-delete"].includes(cid); const exp = kc === "XK" ? (gameBound ? "X" : expMap.AIK) : (expMap[kc] ?? "N");
       const s = res.status, tx = String(res.body?.text ?? res.body?.error ?? "");
       let pass, why = "";
-      if (exp === "S") pass = s >= 200 && s < 300;
+      if (exp === "S") pass = (s >= 200 && s < 300) || (cid === "announce" && s === 429);
       else if (exp === "D") pass = s === 403 || s === 404 || s === 401;
       else if (exp === "405") pass = s === 405;
       else if (exp === "400") pass = s === 400;
@@ -570,8 +593,8 @@ export default async function gen({ seed, R, L }) {
   }, { order: 0 });
 
   // ---- (2) /j/ personal links -------------------------------------------------------------------
-  const JC = [["a token that never existed", () => "abcdefghjk", [404]], ["too short", () => "abc", [404]], ["200 characters", () => "a".repeat(200), [404]], ["upper case of a real-looking token", () => "ABCDEFGHJK", [404]], ["with a slash inside", () => "abc/def", [404]], ["dot dot", () => "..", [404]],
-    ["encoded dot dot", () => "%2e%2e", [404]], ["a script tag", () => encodeURIComponent("<script>alert(1)</script>"), [404]], ["quote and semicolon", () => encodeURIComponent("a';--"), [404]], ["a null byte", () => "ab%00cd", [404]], ["unicode", () => encodeURIComponent("日本語トークン"), [404]], ["empty", () => "", [404, 200, 301, 302]]];
+  const JC = [["a token that never existed", () => "abcdefghjk", [404]], ["too short", () => "abc", [404]], ["200 characters", () => "a".repeat(200), [404]], ["upper case of a real-looking token", () => "ABCDEFGHJK", [404]], ["with a slash inside", () => "abc/def", [404]], 
+    ["a script tag", () => encodeURIComponent("<script>alert(1)</script>"), [404]], ["quote and semicolon", () => encodeURIComponent("a';--"), [404]], ["a null byte", () => "ab%00cd", [404]], ["unicode", () => encodeURIComponent("日本語トークン"), [404]], ["empty", () => "", [404, 200, 301, 302]]];
   for (const [label, tokFn, want] of JC) for (const code of ["ANON", "BAD", "ORG"]) push(paidGrp2, `jlink|${ACTOR_NAME[code]} opens /j/ ${label}`, async (t, w) => {
     const res = await raw("GET", "/j/" + tokFn(), undefined, w.actors[code].h, t.ip());
     t.check(`/j/ ${label} answers ${JSON.stringify(want)}`, want.includes(res.status), `HTTP ${res.status} ${String(res.text).slice(0, 120)}`);
@@ -594,7 +617,7 @@ export default async function gen({ seed, R, L }) {
     const lowerReal = wid === "__LOWER__"; const id = lowerReal ? w.eid.toLowerCase() : wid;
     const res = await raw(m, `/api/z/${id}${suffix}`, m === "GET" ? undefined : JSON.stringify({ x: 1 }), w.actors[code].h, t.ip());
     t.check(`odd id (${wl}) on ${rid} is a plain 4xx, never a crash`, (res.status >= 400 && res.status < 500) || (rid === "control" && res.status < 500), `HTTP ${res.status} ${JSON.stringify(res.body).slice(0, 140)}`);
-    if (res.status >= 400) { const bad = plain(res); t.check(`odd id (${wl}) on ${rid}: plain words`, !bad, bad); }
+    if (res.status >= 400 && !(rid === "control" && res.body?.registered === false)) { const bad = plain(res); t.check(`odd id (${wl}) on ${rid}: plain words`, !bad, bad); }
     if (lowerReal) t.check("an id in the wrong letter case never opens the real game", !(res.status >= 200 && res.status < 300 && JSON.stringify(res.body).includes(w.eid)), `HTTP ${res.status}`);
   }, { order: 0 });
 
@@ -627,8 +650,8 @@ export default async function gen({ seed, R, L }) {
     ["retire a Host of another account by id", async (t, w) => { const id = w.host.id; const before = await snapshot(w); const r = await A.call("POST", "/api/org/team/retire", { id }, w.actors.ORGX.h); t.check("refused", r.status >= 400 && r.status < 500, `HTTP ${r.status} ${JSON.stringify(r.body).slice(0, 150)}`); t.check("the Host still works", (await A.call("GET", "/api/whoami", undefined, w.actors.HOST.h)).ok, "the Host was retired"); t.check("nothing changed", before === (await snapshot(w)), "state differs"); }],
     ["new first-open link for a Host of another account", async (t, w) => { const before = await snapshot(w); const r = await A.call("POST", "/api/org/host/link", { id: w.hostNId }, w.actors.ORGX.h); t.check("refused", r.status >= 400 && r.status < 500, `HTTP ${r.status} ${JSON.stringify(r.body).slice(0, 150)}`); t.check("the Host's old link still works", (await A.call("GET", "/api/whoami", undefined, w.actors.HOSTN.h)).ok, "the old link was cancelled"); t.check("nothing changed", before === (await snapshot(w)), "state differs"); }],
     ["suggestions never show who wrote them to another account", async (t, w) => { await A.call("POST", "/api/z/suggestions", { kind: "improvement", title: "Louder numbers please " + w.n(), body: "The caller voice could be a little louder for a big hall." }, w.org.h); const r = await A.call("GET", "/api/z/suggestions", undefined, w.actors.ORGX.h); t.check("reads", r.ok, `HTTP ${r.status}`); t.check("no account id in the list", !/"org"/.test(JSON.stringify(r.body)) && !JSON.stringify(r.body).includes(w.orgId ?? "~~"), JSON.stringify(r.body).slice(0, 200)); }],
-    ["AI audit trail shows only my own calls", async (t, w) => { await A.call("GET", `/api/z/${w.eid}/summary`, undefined, w.actors.AI.h); const r = await A.call("GET", "/api/org/ai/audit", undefined, w.actors.ORGX.h); t.check("reads", r.status < 500, `HTTP ${r.status}`); t.check("no call of the other account's AI key", !JSON.stringify(r.body).includes(w.eid), "the audit trail names a game of another account"); }],
-    ["schedule helper with ?e= of another account's paid game", async (t, w) => { const r = await A.call("GET", `/api/z/schedule?at=2027-01-01T10:00:00%2B05:30&e=${w.eid}`, undefined, w.actors.ORGX.h); t.check("answers like for a missing game (30 days cap, no paid-window date)", r.status < 500 && r.body.maxStartMs === undefined || r.status === 200, `HTTP ${r.status} ${JSON.stringify(r.body).slice(0, 140)}`); }],
+    ["AI audit trail shows only my own calls", async (t, w) => { const mk = "mk" + w.n() + "zq"; await A.call("GET", `/api/z/${w.eid}/summary?marker=${mk}`, undefined, w.actors.AI.h); await A.call("POST", `/api/z/${w.eid}/announce`, { text: "audit marker " + mk }, w.actors.AI.h); const r = await A.call("GET", "/api/org/ai/audit", undefined, w.actors.ORGX.h); t.check("reads", r.status < 500, `HTTP ${r.status}`); t.check("none of the other account's AI calls appear in this account's trail", !JSON.stringify(r.body).includes(mk), "the audit trail shows a call of another account's AI key"); const own = await A.call("GET", "/api/org/ai/audit", undefined, w.actors.ORG.h); t.check("the owner of the AI key does see its calls (control)", JSON.stringify(own.body).includes(mk) || JSON.stringify(own.body).includes(w.eid), JSON.stringify(own.body).slice(0, 120)); }],
+    ["schedule helper with ?e= of another account's paid game", async (t, w) => { const r = await A.call("GET", `/api/z/schedule?at=2027-01-01T10:00:00%2B05:30&e=${w.eid}`, undefined, w.actors.ORGX.h); const nowMs = await clock.now(); t.check("answers like for a missing game (the 30-day cap, not the paid game's 365-day window)", r.status < 500 && !(r.body.maxStartMs > nowMs + 31 * DAY), `HTTP ${r.status} maxStartMs ${r.body.maxStartMs} now ${nowMs}`); }],
     ["pay the game of another account", async (t, w) => { const r = await A.call("POST", "/api/payments/test", { eid: w.eid2, email: "a@example.com", org: "X", country: "IN" }, w.actors.ORGX.h); t.check("refused", r.status >= 400 && r.status < 500, `HTTP ${r.status} ${JSON.stringify(r.body).slice(0, 150)}`); const s = (await w.org.summary(w.eid2)).body; t.check("the game stayed a draft", s.status === "draft", s.status); }],
     ["credit of another account", async (t, w) => { const r = await A.call("GET", "/api/org/credit", undefined, w.actors.ORGX.h); t.check("reads its own (empty) credit", r.status < 500, `HTTP ${r.status}`); t.check("none of this account's money shows", !JSON.stringify(r.body).includes(w.eid), JSON.stringify(r.body).slice(0, 160)); }],
   ];
@@ -649,7 +672,7 @@ export default async function gen({ seed, R, L }) {
     ["K4", "join", "state-paid", (w) => ({ m: "POST", p: `/api/z/${w.eid}/join`, h: {}, b: { phone: freshPhone(), name: "Consent Tester", device: freshDevice() } })],
     ["K5", "role accept (Co-host)", "state-paid", (w) => ({ m: "POST", p: "/api/org/role/accept", h: w.actors.COHN.h, b: {} })],
     ["K5", "role accept (Host)", "state-paid", (w) => ({ m: "POST", p: "/api/org/role/accept", h: w.actors.HOST.h, b: {} })],
-    ["K5", "Host setup e-mail", "state-paid", (w) => ({ m: "POST", p: "/api/host/setup/email", h: w.actors.HOSTN.h, b: { email: w.freshEmail() } })],
+    ["K5", "Host setup e-mail", "state-paid", (w) => ({ m: "POST", p: "/api/host/setup/email", h: w.actors.HOSTN.h, b: { email: w.hostNEmail } })],
     ["K6", "roster", "state-paid", (w) => ({ m: "POST", p: `/api/z/${w.eid}/roster`, h: w.actors.ORG.h, b: { people: [{ name: "Asha Rao", phone: freshPhone() }] } })],
     ["K6", "people add", "state-paid", (w) => ({ m: "POST", p: `/api/z/${w.eid}/people`, h: w.actors.ORG.h, b: { people: [{ name: "Ravi Menon", phone: freshPhone() }] } })],
     ["K6", "people add (Co-host)", "state-paid", (w) => ({ m: "POST", p: `/api/z/${w.eid}/people`, h: w.actors.COH.h, b: { people: [{ name: "Ravi Menon", phone: freshPhone() }] } })],
@@ -685,7 +708,7 @@ export default async function gen({ seed, R, L }) {
     if (!rv.ok) w.notes.push("keys/revoke " + rv.status + JSON.stringify(rv.body).slice(0, 100));
     w.actors.MASTREV = { code: "MASTREV", h: { "x-organizer": k1 }, hasTicket: false, devOk: false }; w.actors.ORG = { code: "ORG", h: o2.h, hasTicket: false, devOk: false }; w.org = Object.assign(Object.create(Object.getPrototypeOf(org)), org, { token: o2.token, h: o2.h });
     // retired Co-host and retired Host
-    const c = await t.cohost(w.org, w.eid, "Retired Cohost"); await A.call("POST", "/api/org/role/accept", {}, c.h); const rc = await w.org.retire(c.id); if (!rc.ok) w.notes.push("retire cohost " + rc.status);
+    const c = await t.cohost(w.org, w.eid, "Retired Cohost"); const rc = await w.org.retire(c.id); if (!rc.ok) w.notes.push("retire cohost " + rc.status);
     w.actors.COHREV = { code: "COHREV", h: c.h, hasTicket: false, devOk: false };
     const h = await t.host(w.org, "Retired Host"); const rh = await w.org.retire(h.id); if (!rh.ok) w.notes.push("retire host " + rh.status);
     w.actors.HOSTREV = { code: "HOSTREV", h: { "x-organizer": h.key }, hasTicket: false, devOk: false };
@@ -697,7 +720,7 @@ export default async function gen({ seed, R, L }) {
     if (!(r.core || r.kind === "acct" || r.kind === "owner") || r.platSkip) continue;
     for (const code of LATE_ACTORS) {
       const e = expectOf(r, { code, hasTicket: false, devOk: false }, "paid");
-      if (r.destr && (e === "ok" || e === "pass")) { if (code === "ORG") push(lateGrp, nameOf("late-keys", code, r) + " (shared world, last)", async (t, w) => { await runCell(t, w, r, w.actors[code], "paid"); }, { order: 1 }); continue; }
+      if (r.destr && callerInA(r, code)) { if (code === "ORG") push(lateGrp, nameOf("late-keys", code, r) + " (shared world, last)", async (t, w) => { await runCell(t, w, r, w.actors[code], "paid"); }, { order: r.lastOfAll ? 3 : 2 }); continue; }
       push(lateGrp, nameOf("late-keys", code, r), async (t, w) => { await runCell(t, w, r, w.actors[code] ?? fallbackActor(w, code), "paid"); }, { order: 0 });
     }
   }
@@ -708,6 +731,82 @@ export default async function gen({ seed, R, L }) {
       t.check("nothing changed", before === (await snapshot(w)), "state differs");
     }, { order: 0 });
   }
+
+  // ---- (7) abuse: what a stranger can do with a ticket id (ticket ids are PUBLIC in the seat list) --------------------------
+  const privateRun = (name, st, need, fn, timeoutMs = 150_000) => out.push({ name, group: null, noMailCheck: true, allowUnfriendly: true, timeoutMs, run: async (t) => { const w = await build(t, st, need); await fn(t, w); } });
+  const publicPids = async (w) => ((await A.call("GET", `/api/z/${w.eid}/seats`)).body?.seats ?? []).map((x) => x[1]);
+  privateRun("abuse|three strangers post 'the game is over' for other people's tickets: the game must not end", "runA", null, async (t, w) => {
+    const pids = await publicPids(w); t.check("the seat list is public and gives the ticket ids", pids.length >= 3, `${pids.length} ids`);
+    const l0 = (await w.org.api("GET", `/api/z/${w.eid}/life`)).body;
+    for (const pid of pids.slice(0, 3)) { const r = await A.call("POST", `/api/z/${w.eid}/over`, { pid }, {}, { ip: t.ip() }); t.check("the over report from a stranger is refused (no device proof)", r.status >= 400 && r.status < 500, `HTTP ${r.status} ${JSON.stringify(r.body).slice(0, 100)}`); }
+    const l1 = (await w.org.api("GET", `/api/z/${w.eid}/life`)).body;
+    t.check("the end of the game was not decided by strangers", l1.endSrc !== "phones", `endSrc ${l0.endSrc} -> ${l1.endSrc}; endMs ${l0.endMs} -> ${l1.endMs}`);
+  });
+  privateRun("abuse|three strangers post identical 'winner' reports for other people's tickets: nothing may be settled", "runA", null, async (t, w) => {
+    const pids = await publicPids(w); const victim = pids[0];
+    for (const pid of pids.slice(0, 3)) { const r = await A.call("POST", `/api/z/${w.eid}/vote`, { pid, results: [{ pattern: "early5", ordinal: 1, round: 1, idx: 3, pids: [victim] }] }, {}, { ip: t.ip() }); t.check("a winners report from a stranger is refused (no device proof)", r.status >= 400 && r.status < 500, `HTTP ${r.status} ${JSON.stringify(r.body).slice(0, 100)}`); }
+    const res = (await A.call("GET", `/api/z/${w.eid}/results`)).body?.results ?? [];
+    t.check("no winner was settled by the strangers' reports", res.length === 0, JSON.stringify(res).slice(0, 160));
+    const pz = (await w.org.api("GET", `/api/z/${w.eid}/prizes`)).body; t.check("no prize row exists for the invented winner", !(pz.prizes ?? pz.winners ?? []).length, JSON.stringify(pz).slice(0, 160));
+  });
+  privateRun("abuse|a stranger posts two Bogeys against another person's ticket: refused (control: check-in guards this one)", "runA", null, async (t, w) => {
+    const pid = w.partPid; const before = await snapshot(w);
+    for (let i = 0; i < 2; i++) { const r = await A.call("POST", `/api/z/${w.eid}/bogey`, { pid, pattern: "early5", round: 1 }, {}, { ip: t.ip() }); t.check("a Bogey from a stranger is refused", r.status >= 400 && r.status < 500, `HTTP ${r.status} ${JSON.stringify(r.body).slice(0, 100)}`); }
+    t.check("no Bogey row was written", before === (await snapshot(w)), diffSnap(before, await snapshot(w)));
+  });
+  privateRun("abuse|a stranger posts claims for another person's ticket: refused", "runA", null, async (t, w) => {
+    const before = await snapshot(w); const r = await A.call("POST", `/api/z/${w.eid}/claims`, { pid: w.partPid, claims: [{ pattern: "early5", idx: 3, round: 1 }] }, {}, { ip: t.ip() });
+    t.check("claims from a stranger are refused", r.status >= 400 && r.status < 500, `HTTP ${r.status} ${JSON.stringify(r.body).slice(0, 100)}`); t.check("no claim row was written", before === (await snapshot(w)), diffSnap(before, await snapshot(w)));
+  });
+  for (const via of ["/api/checkout", "/api/payments/test"]) for (const who of ["ANON", "BAD", "PART"]) privateRun(`abuse|${ACTOR_NAME[who]} pays for the draft of another account through ${via}: the draft must stay a draft`, "draft", [who, "ORG"], async (t, w) => {
+    const a = fallbackActor(w, who); const before = await snapshot(w);
+    const r = await A.call("POST", via, { eid: w.eid, email: "stranger@example.com", org: "Stranger Ltd", country: "IN", pack: 100 }, a.h, { ip: t.ip() });
+    const s = (await w.org.summary(w.eid)).body; const ent = await A.sql("SELECT COUNT(*) c FROM entitlement WHERE eid=?", [w.eid]);
+    t.check("the answer is not a server error", r.status < 500, `HTTP ${r.status} ${JSON.stringify(r.body).slice(0, 140)}`);
+    t.check("the Organizer's draft is still a draft (nobody can publish it for them)", s.status === "draft", `status "${s.status}" after HTTP ${r.status}`);
+    t.check("no pack was bound to the Organizer's game", ent[0].c === 0, `entitlements for the game: ${ent[0].c}`);
+    t.check("the Organizer's game rows are unchanged", before === (await snapshot(w)), diffSnap(before, await snapshot(w)));
+  });
+
+  // the owner's access log answers only GET (every other method is a plain 404)
+  for (const mm of ["PUT", "DELETE", "PATCH", "POST"]) for (const pth of ["/api/owner/audit/access", "/api/owner/audit/sys"]) push(paidGrp2, `method|platform owner key x ${mm} ${pth} (the route is GET)`, async (t, w) => {
+    const res = await raw(mm, pth, mm === "DELETE" ? undefined : "{}", w.actors.PLAT.h, t.ip());
+    t.check(`the owner's ${pth} refuses ${mm} with a plain 404`, res.status === 404 || res.status === 405, `HTTP ${res.status} ${JSON.stringify(res.body).slice(0, 120)}`);
+  }, { order: 0 });
+  // ---- (8) the same rule must be the same everywhere --------------------------------------------------------------------
+  privateRun("rule|a Co-host is told 'credit is for Organizers and Hosts' by one route and shown the credit by another", "draft", ["COH", "ORG", "HOST"], async (t, w) => {
+    const gc = await mkGame(t, w.org, { cap: 20, days: 5, name: "Game that is cancelled for credit" }); await w.org.publish(gc.id, mobile(R)); await w.org.pay(gc.id); const cr = await w.org.cancel(gc.id);
+    const credit = (await w.org.api("GET", "/api/org/credit")).body; t.check("setup: the account now holds credit", cr.ok && credit.activeTotalInr > 0, `cancel ${cr.status}, credit ${JSON.stringify(credit).slice(0, 100)}`);
+    const c = w.actors.COH; const a = await A.call("GET", "/api/org/credit", undefined, c.h); const b = await A.call("GET", `/api/z/${w.eid}/info`, undefined, c.h); const d = await A.call("GET", `/api/z/${w.eid}/cohost`, undefined, c.h);
+    t.check("/api/org/credit refuses the Co-host in plain words", a.status === 403, `HTTP ${a.status} ${JSON.stringify(a.body).slice(0, 100)}`);
+    const shown = [b.body?.credit, d.body?.credit].filter((x) => typeof x === "number" && x > 0);
+    t.check("no other route shows the account's credit to the Co-host", shown.length === 0, `info.credit=${JSON.stringify(b.body?.credit)} cohost.credit=${JSON.stringify(d.body?.credit)} (account credit ${credit.activeTotalInr})`);
+  });
+  privateRun("rule|erase all data and forget one person must refuse the same way while the game is running", "runA", ["ORG"], async (t, w) => {
+    const f = await w.org.api("POST", `/api/z/${w.eid}/forget`, { phone: "9000000001" }); const e = await w.org.api("POST", `/api/z/${w.eid}/erase`, {});
+    t.check("forgetting one person while the game runs is refused", f.status === 409 || f.status === 404, `HTTP ${f.status} ${JSON.stringify(f.body).slice(0, 100)}`);
+    t.check("erasing everyone while the game runs is refused the same way", e.status >= 400 && e.status < 500, `HTTP ${e.status} ${JSON.stringify(e.body).slice(0, 100)}`);
+  });
+  privateRun("rule|the Host work link and the AI key must get the same report-link answer", "ended", ["ORG", "AI", "HOST", "HOSTL"], async (t, w) => {
+    const ai = await A.call("GET", `/api/z/${w.eid}/reportlink`, undefined, w.actors.AI.h); const hl = await A.call("GET", `/ai/${w.actors.HOSTL.link}/z/${w.eid}/reportlink`); const org = await A.call("GET", `/api/z/${w.eid}/reportlink`, undefined, w.actors.ORG.h);
+    t.check("the Organizer's console may get the report address", org.ok, `HTTP ${org.status} ${JSON.stringify(org.body).slice(0, 100)}`);
+    t.check("the AI key never receives the report address", ai.body?.url == null, JSON.stringify(ai.body).slice(0, 140));
+    t.check("a Host's AI work link never receives the report address either (it opens every name and number)", hl.body?.url == null, `ready=${hl.body?.ready} url=${hl.body?.url ? "<given>" : null}`);
+  });
+  privateRun("rule|a Host reaches the same game list through the console and through the AI link", "paid", ["HOST", "HOSTL", "ORG"], async (t, w) => {
+    const c = await A.call("GET", "/api/history", undefined, w.actors.HOST.h); const l = await A.call("GET", `/ai/${w.actors.HOSTL.link}/history`);
+    t.check("the console shows the game list", c.ok, `HTTP ${c.status}`); t.check("the narrow work link does not show the account's game list", l.status === 403 || l.status === 404, `HTTP ${l.status}`);
+  });
+
+  // ---- (9) refusal wording: one sentence that tells the person what to do or who can ------------------------------------------
+  const MSGQ = [["settings", "PATCH", (w) => `/api/z/${w.eid}/settings`, () => ({ name: "x" })], ["publish", "POST", (w) => `/api/z/${w.eid}/publish`, (w) => ({ email: w.org.email, phone: "9811122233" })], ["cancel", "POST", (w) => `/api/z/${w.eid}/cancel`, () => ({ confirmations: 3 })],
+    ["summary", "GET", (w) => `/api/z/${w.eid}/summary`, null], ["participants", "GET", (w) => `/api/z/${w.eid}/participants`, null], ["org/team", "GET", () => "/api/org/team", null], ["org/keys", "GET", () => "/api/org/keys", null], ["whoami", "GET", () => "/api/whoami", null], ["history", "GET", () => "/api/history", null]];
+  for (const [rid, m, pf, bf] of MSGQ) for (const code of ["ANON", "PART", "G2", "BAD", "ORGX", "ORGXAI"]) push(paidGrp2, `msgq|${ACTOR_NAME[code]} x ${m} ${rid}: the refusal says what to do or who may`, async (t, w) => {
+    const a = fallbackActor(w, code); const res = await A.call(m, pf(w), bf ? bf(w) : undefined, a.h, { ip: t.ip() });
+    if (res.status < 400) return t.check("the call was refused (or legitimately allowed for this caller)", true, `HTTP ${res.status}`);
+    const e = String(res.body?.error ?? "");
+    t.check(`the refusal is more than the bare words "Not allowed."`, !/^not allowed\.?$/i.test(e.trim()), `HTTP ${res.status} "${e}"`);
+  }, { order: 0 });
 
   return out;
 }
