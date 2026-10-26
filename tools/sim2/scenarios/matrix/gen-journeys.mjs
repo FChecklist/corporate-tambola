@@ -169,5 +169,28 @@ export default async function gen({ R, L }) {
       const leak = await A.sql("SELECT COUNT(*) c FROM person WHERE eid=? AND status='joined' AND NOT EXISTS (SELECT 1 FROM seat s WHERE s.eid=person.eid AND s.ph=person.ph)", [g.id]); t.eq("everybody marked joined has a seat", leak[0].c, 0);
     } });
   }
+
+  // ---- whole games with 10 real phones (the code the phone page runs, in virtual time via tools/sim2/crowd.ts): every phone must see the same numbers in the same order and agree on the winners ----
+  const PLAY_VARIANTS = { "on time": { lateFrac: 0, offlineFrac: 0 }, "30% join late": { lateFrac: 0.3, offlineFrac: 0 }, "10% go offline for a while": { lateFrac: 0.1, offlineFrac: 0.1 }, "all late": { lateFrac: 1, offlineFrac: 0 } };
+  for (const a of Object.keys(AUD)) for (const [vname, vv] of Object.entries(PLAY_VARIANTS)) for (const mode of ["auto"]) out.push({ name: `journey-play|${a}|mobile|${mode}|10 phones ${vname}`, time: true, timeoutMs: 240_000, run: async (t) => {
+    const aud = AUD[a]; const org = await t.newOrg(); const classic = ["early5", "top", "mid", "bot", "corners", "star", "full"].map((pattern) => ({ pattern, scope: "ticket", ordinal: 1, text: pattern === "full" ? "Smartphone" : "Gift voucher: Rs 500" })); const g = await t.game(org, { cap: Number(process.env.JP ?? 10), who: aud.closed ? "list" : "anyone", days: 1, rewards: classic, breaks: [] });
+    if (!t.expect("Organizer creates the game", g.r, "ok")) return;
+    const patch = { ...(aud.eo ? { employeesOnly: true } : {}), ...(aud.invites ? { guestInvites: { on: true, per: 2, cats: ["family", "colleagues"] } } : {}) };
+    if (Object.keys(patch).length) t.expect("rules", await org.settings(g.id, patch), "ok");
+    await t.publishPay(org, g.id);
+    const NP = Number(process.env.JP ?? 10); const PHONE0 = 200000 + (t.R.int(700000)); const phones = Array.from({ length: NP }, (_, i) => "9" + String(PHONE0 + i).padStart(9, "0").slice(-9));
+    if (aud.closed) t.eq("the list holds the ten phones", (await org.api("POST", `/api/z/${g.id}/people`, { people: phones.map((ph, i) => ({ name: personName(t.R), phone: ph, empId: "P" + i })) })).body.added, 10);
+    { const inf = (await org.info(g.id)).body; t.check("the prizes are set (seven classic houses)", (inf.rewards ?? []).length === 7, JSON.stringify(inf.rewards ?? inf).slice(0, 200)); }
+    const seed = `${a}-${vname}-${t.seed}`; const base = L.SIM;
+    const cp = Bun.spawn(["bun", "tools/sim2/crowd.ts", JSON.stringify({ eid: g.id, startRound: g.startRound, phones: NP, phoneBase: PHONE0, seed, base, lateFrac: vv.lateFrac, offlineFrac: vv.offlineFrac, maxSteps: 420 })], { stdout: "pipe", stderr: "pipe", cwd: new URL("../../../../", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1") });
+    const txt = await new Response(cp.stdout).text(); await cp.exited; let res = null; try { res = JSON.parse(txt.trim().split("\n").filter((l) => l.startsWith("{")).pop()); } catch { /* reported below */ }
+    if (!t.check("the phones finished and reported", !!res, txt.slice(-300))) return;
+    t.check("all ten phones joined", res.joined === 10, `joined ${res.joined}; ${JSON.stringify(res.phoneErrors).slice(0, 200)}; ${JSON.stringify((res.sample ?? [])[0]).slice(0, 300)}`); t.eq("all ten phones reached the end", res.ended, res.joined);
+    t.eq("every phone saw the same numbers in the same order", res.logsEqual, `${res.ended}/${res.ended}`); t.eq("every phone agrees on the winners (one set of results)", (res.groups ?? []).length, 1);
+    t.check("the published results are what the phones saw", JSON.stringify((res.published ?? []).map((r) => `${r.pattern}|${r.ordinal}|${r.idx}`).sort()) === JSON.stringify((res.results ?? []).map((r) => `${r.pattern}|${r.ordinal}|${r.idx}`).sort()), JSON.stringify(res.published).slice(0, 200) + " vs " + JSON.stringify(res.results).slice(0, 200));
+    t.check("no phone-level failure", (res.failures ?? []).length === 0, JSON.stringify(res.failures).slice(0, 300));
+    t.check("at least one prize was awarded", (res.results ?? []).length > 0, `no results: refused ${JSON.stringify(res.apiRefusals)}, pressed ${res.pressedClaims}, known ${JSON.stringify(res.claimsKnown)}, marks ${JSON.stringify(res.marks)}, ended ${res.ended}, steps ${res.steps}, phases ${JSON.stringify(res.phases)}, published ${JSON.stringify(res.published).slice(0, 100)}, log ${(res.reference ?? []).length}, sample ${JSON.stringify((res.sample ?? []).slice(0, 2)).slice(0, 700)}`);
+    const tot = (await org.api("GET", `/api/z/${g.id}/participants`)).body.total; t.eq("ten tickets, no more", tot, 10);
+  } });
   return out;
 }
