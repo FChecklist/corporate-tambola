@@ -74,3 +74,6 @@ WebKit: the Playwright download hosts (cdn.playwright.dev, playwright.download.p
 
 ## 9. B11 part 2: axe on the organizer console (all 10 steps opened) and the player join page (replica of wip b73f83d, phone size)
 Result `results/fault/axe-scan-console-and-player.json`. Every screen: missing level-one heading and content outside landmarks (moderate). One SERIOUS: console step 5 ("Make hosts and co-hosts") color-contrast, 5 elements. Not covered: the ticket and number screens during a live game, the check-in card, the winners screen; Lighthouse was not run.
+
+## 10. B11 part 3: Lighthouse (12.8.2, mobile emulation, local replica, 4 pages) `results/lighthouse/lighthouse-summary.json`
+index: performance 81, accessibility 98, best practices 100, SEO 100 (LCP 4.7 s). pricing: 84 / 100 / 100 / 100, layout shift 0.221 (poor, over 0.1). z.html: 83 / 100 / 96 / SEO 54. signin: 95 / 100 / 100 / SEO 54. The two SEO 54 are app pages (probably intentionally not indexed: check, not verified). Local server and simulated network: speed numbers are only relative. Not done: other pages, the live site, ZAP.
