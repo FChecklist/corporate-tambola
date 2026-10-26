@@ -3,7 +3,8 @@
 // Every phone is the REAL phone game code (zgame.js) talking to the REAL local server over the real network, on the REAL clock and the real public beacon (drand). No screen (see docs).
 //   node tools/campaign.mjs [--from 1] [--to 100] [--conc 8] [--people 100] [--lead 150] [--tag run1]
 import { writeFileSync } from "node:fs";
-import { Harness, NodePhone, ZG, TBControl, sleep, roundAt, roundMs, beaconStats, beaconAvail, queueStats } from "./nodephone.mjs";
+import { Harness, NodePhone, ZG, TBControl, sleep, roundAt, roundMs, beaconStats, beaconAvail, queueStats, faultState } from "./nodephone.mjs";
+import { execSync } from "node:child_process";
 import { waitForReport, checkReport } from "./report-check.mjs";
 import { DatabaseSync } from "node:sqlite";
 import { auditGame } from "./audit.mjs";
@@ -16,7 +17,7 @@ const BASE = process.env.BASE || "http://localhost:8801";
 const args = process.argv.slice(2); const opt = (k, d) => { const i = args.indexOf("--" + k); return i >= 0 ? args[i + 1] : d; };
 const FROM = Number(opt("from", 1)), TO = Number(opt("to", 100)), CONC = Number(opt("conc", 8)), PEOPLE = Number(opt("people", 100)), HEAVY = Number(opt("heavy", 1e9)), LEAD = Number(opt("lead", 150)), TAG = opt("tag", "run" + Date.now().toString(36).slice(-4));
 const PLAIN = args.includes("--plain"); // only plain automatic games (no breaks, pauses, late joiners, reloads, offline phones): the games whose number timing can be counted for every phone
-const H = new Harness(BASE, { ipPool: 300 });
+const H = new Harness(BASE, { ipPool: Number(process.env.IP_POOL || 300) }); // IP_POOL=1: everybody behind ONE address (an office or a hall)
 let lag = 0, lagMax = 0; { let t = Date.now(); setInterval(() => { const d = Date.now() - t - 250; t = Date.now(); lag = Math.max(0, d); lagMax = Math.max(lagMax, lag); }, 250); } // how late this program runs its own timers: if it is above ~300 ms the test machine, not the game, is the bottleneck
 const FIRST = ["Asha", "Ravi", "Meera", "Imran", "Sunita", "Karan", "Priya", "Vikram", "Fatima", "Arjun", "Neha", "Rohit", "Anjali", "Sanjay", "Deepa", "Manoj", "Kavita", "Suresh", "Pooja", "Amit", "Lakshmi", "Harish", "Nisha", "Farhan", "Divya", "Gaurav", "Swati", "Rahul", "Shalini", "Tarun", "Rekha", "Mohan", "Isha", "Nitin", "Jaya", "Aman", "Bhavna", "Yash", "Seema", "Dev"];
 const LAST = ["Sharma", "Verma", "Iyer", "Khan", "Patel", "Singh", "Reddy", "Nair", "Gupta", "Das", "Joshi", "Mehta", "Rao", "Kapoor", "Bose", "Menon", "Shah", "Pillai", "Chopra", "Malhotra"];
@@ -33,7 +34,19 @@ const PRIZES = [
   [["early5", 1], ["early5", 2], ["top", 1], ["top", 2], ["full", 1], ["full", 2]],
   [["star", 1], ["corners", 1], ["top", 1], ["full", 1]],
 ];
-function caseOf(n) { // n = 1..100: every (mode x audience) pair (18) appears 5 or 6 times; the other choices rotate so every combination of option is met
+
+// ---- CHAOS (fault test): case 901+ = an automatic 9 s game with brand moments (opening speech, a break, a closing), 6 prizes, with faults injected on a schedule counted from the first number.
+// env: CHAOS_BEACON=0 switches the beacon faults off; CHAOS_SERVER_KILL_AT (s after the first number, default 330; -1 = never) and CHAOS_SERVER_DOWN_SEC (default 60) kill and restart the local server (needs CHAOS_PORT, CHAOS_DB, CHAOS_TREE).
+const chaosCase = (n) => ({ n, id: `CMP-${TAG.toUpperCase()}-${n}`, mode: "auto9", aud: "open", speed: 9, tickets: 1, prizes: PRIZES[1], ties: "next", brand: true, rounds: 1, events: [], claim: "mixed", people: PEOPLE });
+function installChaos(firstMs, R) {
+  const at = (sec) => firstMs + sec * 1000; R.chaos = { firstMs, events: [] }; const ev = (what) => { R.chaos.events.push({ atSecAfterFirst: Math.round((Date.now() - firstMs) / 1000), what }); console.log(`  [chaos] t+${Math.round((Date.now() - firstMs) / 1000)}s ${what}`); };
+  if (process.env.CHAOS_BEACON !== "0") { faultState.beacon.push({ from: at(45), to: at(105), mode: "502", mirror: "api.drand.sh" }, { from: at(150), to: at(180), mode: "502" }, { from: at(240), to: at(270), mode: "hang" }); R.chaos.beacon = "first mirror 502 at +45..105 s; ALL mirrors 502 at +150..180 s; ALL mirrors hang at +240..270 s"; }
+  const killAt = Number(process.env.CHAOS_SERVER_KILL_AT ?? 330), down = Number(process.env.CHAOS_SERVER_DOWN_SEC ?? 60);
+  if (killAt >= 0 && process.env.CHAOS_PORT) { R.chaos.server = `killed at +${killAt} s for ${down} s`; setTimeout(() => { try { const pid = Number(execSync(`cat data/server-${process.env.CHAOS_PORT}.pid`, { cwd: ROOT }).toString().trim()); process.kill(pid, "SIGKILL"); ev(`SERVER KILLED (pid ${pid})`); } catch (e) { ev("kill failed " + e.message); } setTimeout(() => { try { execSync(`tools/load-tests/cloud-restart-prod-server.sh ${process.env.CHAOS_PORT} ${process.env.CHAOS_DB} ${process.env.CHAOS_TREE || ROOT}`, { cwd: ROOT, stdio: "pipe" }); ev("SERVER RESTARTED on the same database"); } catch (e) { ev("restart failed " + e.message); } }, down * 1000); }, Math.max(0, at(killAt) - Date.now())); }
+  setTimeout(() => ev("first number due"), Math.max(0, firstMs - Date.now()));
+}
+function caseOf(n) {
+  if (n >= 900) return chaosCase(n); // n = 1..100: every (mode x audience) pair (18) appears 5 or 6 times; the other choices rotate so every combination of option is met
   const k = n - 1, pair = k % 18, rep = Math.floor(k / 18);
   const mode = MODES[pair % 3], aud = AUDS[Math.floor(pair / 3)];
   const c = { n, id: `CMP-${TAG.toUpperCase()}-${pad(n, 3)}`, mode, aud, speed: mode === "auto12" ? 12 : 9, tickets: (rep + pair) % 2 === 0 ? 1 : 2, prizes: PRIZES[(rep + Math.floor(pair / 3)) % 4], ties: (rep + pair) % 3 === 0 ? "share" : "next", brand: (rep + pair) % 3 === 1, rounds: 1, events: [], claim: "mixed", people: PEOPLE };
@@ -63,6 +76,7 @@ async function runCase(c) {
   await allow(email); if (c.people > 10 && c.n % 2 === 0) await allow(`finance${c.n}.${TAG}@sample-co.in`);
   const st = await H.call("POST", "/api/start", { email, ...H.consent("K2") }, undefined, ip); const tok = st.j.token; check("organizer account made", !!tok, JSON.stringify(st.j).slice(0, 100));
   const startRound = roundAt(Date.now() + LEAD * 1000), startMs = roundMs(startRound), firstMs = startMs + 120000;
+  if (c.n >= 900) installChaos(firstMs, R);
   let r = await H.call("POST", "/api/z", { id: c.id, startRound, callSeconds: c.speed, cap: c.people <= 10 ? 10 : c.people + 15, ...(c.people <= 10 ? { demo: true } : {}), name: `${COMPANIES[c.n % COMPANIES.length]} game ${c.n}`, ...(c.mode === "host" ? { callMode: "host" } : {}), tickets: c.tickets, ...(c.rounds > 1 ? { rounds: c.rounds } : {}) }, tok, ip);
   check("game created", r.ok, JSON.stringify(r.j).slice(0, 160));
   const verify = c.aud === "emp-id" || c.aud === "everyone-id" ? "id" : c.aud === "emp-both" || c.aud === "everyone-both" ? "both" : "mobile";
@@ -102,7 +116,7 @@ async function runCase(c) {
   // ---- everyone opens the link and joins at human pace over about a minute ----
   const players = []; const late = []; const waiters = []; const joinMs = [];
   const eidPath = `/api/z/${c.id}`;
-  const stag = Math.min(150000, 40000 + c.people * 1100); // people arrive over a couple of minutes, as they do in a real game (the local test server is one disk-bound process)
+  const stag = process.env.STAG_MS !== undefined ? Number(process.env.STAG_MS) : Math.min(150000, 40000 + c.people * 1100); // STAG_MS=3000: everybody joins within 3 s (a flash crowd) // people arrive over a couple of minutes, as they do in a real game (the local test server is one disk-bound process)
   const isLate = (i) => c.events.includes("late") && i % 10 === 9;
   await Promise.all(plan.map(async (p, i) => {
     await sleep(Math.random() * stag);
@@ -207,6 +221,14 @@ async function runCase(c) {
   }
   if (c.events.includes("pause")) check("during the 30 s after Pause no number came on the reference phone", R.nAt30 === undefined || R.nAt30 - (R.pausedAtN || 0) <= 5, `at pause ${R.pausedAtN}, at +30 s ${R.nAt30}`);
   check("no phone had an unhandled error", live.every((x) => x.errors.filter((e) => !/offline/.test(e)).length === 0), JSON.stringify(live.flatMap((x) => x.errors).filter((e) => !/offline/.test(e)).slice(0, 3)));
+  if (c.n >= 900) { // what a person would have seen: stalls and catch-up bursts on a reference phone, and how much each phone leaned on the server before / after the 2-minute window
+    const tlr = (full.find(({ x }) => !x.reloaded)?.x.timeline || []).filter((q) => q.n > 0), stalls = [], bursts = []; for (let i = 1; i < tlr.length; i++) { const g = (tlr[i].t - tlr[i - 1].t) / 1000; if (g > c.speed * 1.6) stalls.push({ number: tlr[i].n, atSecAfterFirst: Math.round((tlr[i].t - R.chaos.firstMs) / 1000), gapSec: Math.round(g) }); if (g < c.speed * 0.4) bursts.push({ number: tlr[i].n, atSecAfterFirst: Math.round((tlr[i].t - R.chaos.firstMs) / 1000), gapSec: Math.round(g * 10) / 10 }); }
+    R.chaos.stalls = stalls; R.chaos.bursts = bursts; R.chaos.beaconFaultAnswers = faultState.hits;
+    const lg = H.callLog || [], pre = lg.filter((q) => q[0] < R.chaos.firstMs), post = lg.filter((q) => q[0] >= R.chaos.firstMs), kinds = (arr) => { const o = {}; for (const q of arr) o[q[1] + " " + q[2]] = (o[q[1] + " " + q[2]] || 0) + 1; return o; };
+    R.chaos.serverCalls = { beforeFirstNumber: pre.length, afterFirstNumber: post.length, perPhonePerMinuteAfter: Math.round(post.length / Math.max(1, (Date.now() - R.chaos.firstMs) / 60000) / Math.max(1, live.length) * 100) / 100, afterByKind: Object.fromEntries(Object.entries(kinds(post)).sort((a, b) => b[1] - a[1]).slice(0, 12)) };
+    const brk = brandOf(c).breaks || []; R.chaos.brandBreaks = `${brk.length} break(s) configured; ref phone saw phase changes: ${JSON.stringify((full[0]?.x.rt.view().brk) || null)}`;
+    console.log("  [chaos] stalls", JSON.stringify(stalls), "bursts", JSON.stringify(bursts), "calls", JSON.stringify(R.chaos.serverCalls));
+  }
   R.players = live.length; R.endedAtMs = Date.now(); R.runMin = Math.round((Date.now() - t00) / 6000) / 10;
   R.id = c.id; R.pass = R.checks.every((q) => q.ok); for (const x of players) x.stop();
   return R;
