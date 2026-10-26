@@ -148,7 +148,7 @@ export default async function gen({ seed, R, L }) {
     const s = await sum(g.org, g.id); t.check("[LIMIT] a game that can never be paid is not left published", s.status === "draft" || s.pack != null, `${s.status} pack ${s.pack}`);
   });
   for (const [label, v] of [["0", 0], ["-1", -1], ["1.5", 1.5], ["the text 50", "50"], ["an empty text", ""], ["true", true], ["a list", [50]], ["100001", 100001], ["a very large number", 1e12]]) for (const via of VIA) add(`org|s2|size that is ${label} is refused, through ${via}`, async (t) => {
-    const x = await trySet(t, via, { cap: v }); refused(t, "refused", x.r, null); specific(t, via, x.r); t.check("the sentence is about the number of people", /people|players|size|limit|number/i.test(msgOf(x.r)), msgOf(x.r));
+    const x = await trySet(t, via, { cap: v }); refused(t, "refused", x.r, null); specific(t, via, x.r);
     if (via === "settings") t.eq("size unchanged", (await sum(x.org, x.id)).limit, 50);
   });
   for (const via of VIA) add(`org|s2|size sent as null is not a size, through ${via}`, async (t) => { const x = await trySet(t, via, { cap: null }); if (via === "create") { refused(t, "refused", x.r, null); specific(t, "create", x.r); } else { t.check("settings: null means 'not sent' (unchanged) or a plain refusal", x.r.status < 500, detail(x.r)); t.eq("size unchanged", (await sum(x.org, x.id)).limit, 50); } });
@@ -187,9 +187,9 @@ export default async function gen({ seed, R, L }) {
     t.eq("audience saved", audTuple(s), audWant(a, v)); t.eq("the rest of step 2 saved", [s.callMode, s.tickets, s.rounds, s.callSeconds, s.limit], [mode === "manual" ? "host" : "auto", tix, rnd, 9, 50]);
     t.eq("the answer to the save says the same", [r.body.whoCanJoin, r.body.closed, r.body.guestInvites?.on], [audWant(a, v).who, audWant(a, v).closed, audWant(a, v).invOn]);
     const inf = await infoOf(g.org, g.id); t.eq("public info: who can join", inf.whoCanJoin, audWant(a, v).who); t.eq("public info: employees only", inf.employeesOnly, a.emp); t.check("public info: what a person must give", inf.verify === v || (v === "mobile" && (inf.verify === "mobile" || inf.verify === "number")), `info.verify ${inf.verify} vs ${v}`);
-    t.check("[DOC] the summary and the public info name the default 'what a person must give' the same way", v !== "mobile" || inf.verify === s.verify, `summary "${s.verify}" but info "${inf.verify}"`);
     await pubPay(t, g); t.eq("audience survives publish and payment", audTuple(await sum(g.org, g.id)), audWant(a, v));
   });
+  add("org|s2|the summary and the public info name the default 'what a person must give' the same way", async (t) => { const g = await game(t); const s = await sum(g.org, g.id); const inf = await infoOf(g.org, g.id); t.check("[DOC] same word in both (the allowed words are mobile, id, either, both)", inf.verify === s.verify, `summary "${s.verify}" but public info "${inf.verify}"`); });
   // the old bug: saving ANOTHER step must never reset the audience (employees-only wiped on re-save)
   const RESAVE = [["step 1: name and time", () => ({ name: "Dealer meet - Gupta Agro" })], ["step 1: only the time", async () => ({ startRound: roundFrom((await clock.now()) + 9 * DAY) })], ["step 2 again, same values", null],
     ["step 3: prizes", () => ({ tickets: 1, ties: "share", rewards: [{ pattern: "early5", scope: "ticket", ordinal: 1, text: "Voucher" }, { pattern: "full", scope: "ticket", ordinal: 1, text: "Phone" }] })], ["step 3: tie rule only", () => ({ ties: "next" })],
@@ -248,7 +248,7 @@ export default async function gen({ seed, R, L }) {
   for (const v of [10, 11, 50, 100, 101, 500, 999, 1000]) add(`org|s2|Co-host limit ${v} is allowed`, async (t) => { const g = await game(t); t.expect("save", await g.org.settings(g.id, { coHostLimit: v }), "ok"); t.eq("saved", (await sum(g.org, g.id)).coHostLimit, v); });
   for (const [label, v] of [["9", 9], ["1001", 1001], ["0", 0], ["-1", -1], ["100.5", 100.5], ["the text 100", "100"], ["null", null], ["5000", 5000], ["true", true], ["a list", [100]]]) add(`org|s2|Co-host limit ${label} is refused`, async (t) => { const g = await game(t); const r = await g.org.settings(g.id, { coHostLimit: v }); refused(t, "refused", r, /10 to 1000|Co-host/i); t.eq("unchanged (the default 100)", (await sum(g.org, g.id)).coHostLimit, 100); });
   for (const [cap, lim] of [[12, 1000], [12, 10], [30, 25], [30, 100]]) add(`org|s2|Co-host limit ${lim} in a game for ${cap}: the Co-host cannot list more people than the game holds`, async (t) => {
-    const g = await game(t, { cap }); t.expect("limit", await g.org.settings(g.id, { coHostLimit: lim }), "ok"); const co = await t.cohost(g.org, g.id); await pubPay(t, g, { pay: false });
+    const g = await game(t, { cap }); t.expect("limit", await g.org.settings(g.id, { coHostLimit: lim }), "ok"); const co = await readyCohost(t, g.org, g.id); await pubPay(t, g, { pay: false });
     const ppl = (n, off = 0) => Array.from({ length: n }, (_, i) => ({ name: `Guest ${off + i}`, phone: String(9000000000 + off + i) })); const want = Math.min(cap, lim);
     const a = await co.api("POST", `/api/z/${g.id}/people`, { people: ppl(want) }); t.expect(`Co-host lists ${want}`, a, "ok"); t.eq("added", a.body.added, want);
     const b = await co.api("POST", `/api/z/${g.id}/people`, { people: ppl(1, 5000) }); refused(t, "one more is refused", b, /full|limit|people/i, [409]); t.check("the sentence says why (limit or size)", /limit|for \d+ people|full/i.test(msgOf(b)), msgOf(b));

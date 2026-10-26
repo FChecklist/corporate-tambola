@@ -1384,8 +1384,12 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (a.kind === "host") return deny(a);
     const b = await body(req, BRAND_BODY_MAX); // room for a brand logo (30 KB picture = about 40 KB of text)
     if (b && Number.isInteger(b.callSeconds) && !GAPS.includes(b.callSeconds)) return json({ error: GAP_MSG }, 400);
-    if (!b || !ID.test(b.id ?? "") || !Number.isInteger(b.startRound) || !Number.isInteger(b.callSeconds) || b.callSeconds % 3 || b.callSeconds < 6 || !Number.isInteger(b.cap) || b.cap < 1 || b.cap > 100000)
-      return json({ error: "Check the engagement details." }, 400);
+    if (!b) return json({ error: "Check the details and try again." }, 400);
+    if (!ID.test(b.id ?? "")) return json({ error: "The game code can use letters, numbers, - and _ only (3 to 40 characters)." }, 400);
+    if (!Number.isInteger(b.startRound)) return json({ error: "Pick the day and time the game starts." }, 400);
+    if (!Number.isInteger(b.callSeconds) || b.callSeconds % 3 || b.callSeconds < 6) return json({ error: GAP_MSG }, 400);
+    if (!Number.isInteger(b.cap) || b.cap < 1 || b.cap > 100000) return json({ error: "The number of people must be a whole number from 1 up. Please check it." }, 400);
+    if (b.whoCanJoin !== undefined && b.whoCanJoin !== "list" && b.whoCanJoin !== "anyone") return json({ error: "Who can join: choose \"list\" (only people on a list) or \"anyone\" (anyone with the link)." }, 400);
     let createCap = now + MAX_AHEAD_MS; // with a pack already bought (an entitlement) the game is paid: up to 365 days from that payment
     if (!a.plat && a.org) { const en = await env.DB.prepare("SELECT id FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(a.org, b.cap).first<{ id: string }>(); const end = en ? await entitlementWindowEndMs(env.DB, en.id) : null; if (end) createCap = end - 1; }
     if (roundMs(b.startRound) > createCap) return json({ error: createCap > now + MAX_AHEAD_MS ? AFTER_PAID_WINDOW(createCap + 1) : TOO_FAR, code: createCap > now + MAX_AHEAD_MS ? "after-paid-window" : "too-far" }, 400);
@@ -2045,7 +2049,9 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const next = { start_round: b.startRound ?? e.start_round, call_seconds: b.callSeconds ?? e.call_seconds, cap: b.cap ?? e.cap, closed: vc.cfg.employeesOnly ? 1 : b.whoCanJoin !== undefined ? (b.whoCanJoin === "list" ? 1 : 0) : b.closed === undefined ? e.closed : b.closed ? 1 : 0, cohost_limit: b.coHostLimit ?? e.cohost_limit ?? null }; // whoCanJoin "list" is the same switch as the older `closed`
     if (Number.isInteger(next.call_seconds) && !GAPS.includes(next.call_seconds)) return json({ error: GAP_MSG }, 400);
     if (vc.cfg.callMode === "host" && Number.isInteger(next.cap) && next.cap > PAUSE_MAX_PARTICIPANTS) return json({ error: HOST_MODE_MSG }, 409);
-    if (!Number.isInteger(next.start_round) || !Number.isInteger(next.call_seconds) || next.call_seconds % 3 || next.call_seconds < 6 || !Number.isInteger(next.cap) || next.cap < 1 || next.cap > 100000) return json({ error: "Check the details." }, 400);
+    if (!Number.isInteger(next.start_round)) return json({ error: "Pick the day and time the game starts." }, 400);
+    if (!Number.isInteger(next.call_seconds) || next.call_seconds % 3 || next.call_seconds < 6) return json({ error: GAP_MSG }, 400);
+    if (!Number.isInteger(next.cap) || next.cap < 1 || next.cap > 100000) return json({ error: "The number of people must be a whole number from 1 up. Please check it." }, 400);
     if (roundMs(next.start_round) <= now) return json({ error: "Pick a start time in the future." }, 400);
     if (next.start_round !== e.start_round) { // an unpaid game: at most 30 days ahead. A paid game (not yet started): any day while its credit lasts, up to 365 days from the payment
       const end = e.pack !== 0 ? await paidWindowEndMs(env.DB, eid!) : null, cap = end ? end - 1 : now + MAX_AHEAD_MS;
@@ -2054,7 +2060,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
     if (vc.cfg.demo && next.cap > DEMO_CAP) return json({ error: DEMO_CAP_MSG, code: "demo-cap" }, 400); // the one size rule of a demo game, before and after publishing
     if (!a.plat && e.pack !== 0 && !vc.cfg.demo && next.cap > (e.pack ?? e.cap)) return json({ error: `Your pack allows up to ${e.pack ?? e.cap} people. For more people, make a new game like this one.` }, 402);
-    if (next.cap < (have?.c ?? 0)) return json({ error: "The limit cannot be lower than the people already on the list." }, 409);
+    const listed = await env.DB.prepare("SELECT COUNT(*) AS c FROM person WHERE eid=? AND status<>'removed'").bind(eid).first<{ c: number }>().catch(() => null); // people on the lists who have not come in yet count too
+    if (next.cap < Math.max(have?.c ?? 0, listed?.c ?? 0)) return json({ error: "The limit cannot be lower than the people already on the list." }, 409);
     if (!(await spend(env, now))) return BUSY();
     // a published demo game is "paid" with its own size (pack = cap, nothing bought): a new size within the demo limit moves the pack with it
     await env.DB.prepare("UPDATE engagement SET start_round=?, call_seconds=?, cap=?, closed=?, tickets=?, config=?, cohost_limit=?, pack=CASE WHEN pack<>0 AND ? THEN ? ELSE pack END WHERE id=?").bind(next.start_round, next.call_seconds, next.cap, next.closed, vc.cfg.tickets, cfgJson(vc.cfg), next.cohost_limit, vc.cfg.demo ? 1 : 0, next.cap, eid).run();

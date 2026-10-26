@@ -48,6 +48,20 @@ describe("join gaps", () => {
       const r = await join(g.id, ++i, { phone: good, device: dev(i) }); expect([good, r.status]).toEqual([good, 200]);
     }
   });
+  test("organizer settings: plain sentences instead of 'check the details', an invalid 'who can join' is refused at creation, a size under the listed people is refused", async () => {
+    const o = await organizer();
+    const bad = async (over: Record<string, unknown>, re: RegExp) => { const r = await create(o.key, uid(), over); expect(r.status).toBe(400); expect((await j(r)).error).toMatch(re); };
+    await bad({ cap: 0 }, /number of people/i);
+    await bad({ cap: 2.5 }, /number of people/i);
+    await bad({ callSeconds: 4 }, /gap|seconds/i);
+    await bad({ whoCanJoin: "LIST" }, /who can join/i);
+    await bad({ whoCanJoin: "everybody" }, /who can join/i);
+    const g = await paidGame({ cap: 20, over: { whoCanJoin: "list" } });
+    expect((await call("POST", `/api/z/${g.id}/people`, { people: Array.from({ length: 15 }, (_, i) => ({ name: "P" + i, phone: mob(i + 50) })) }, keyH(g.key))).status).toBe(200);
+    const r = await call("PATCH", `/api/z/${g.id}/settings`, { cap: 10 }, keyH(g.key));
+    expect(r.status).toBe(409); expect((await j(r)).error).toMatch(/lower than the people/i);
+    expect((await call("PATCH", `/api/z/${g.id}/settings`, { cap: 15 }, keyH(g.key))).status).toBe(200);
+  });
   test("G8: unsigned or forged posts to /control do not use up the day's write budget (it was charged before the signature was checked)", async () => {
     const g = await paidGame({ cap: 20 });
     const used = () => (W.raw.prepare("SELECT COALESCE(SUM(writes),0) AS w FROM usage").get() as any).w as number;

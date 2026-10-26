@@ -5,8 +5,8 @@
   "date": "2026-10-26",
   "boundTo": {
    "branch": "wip/join-redesign",
-   "head": "e0e262a",
-   "files": "66207e797c worker.ts; ad43144df2 people.ts",
+   "head": "3ad8f85",
+   "files": "e9e21453b2 worker.ts; ad43144df2 people.ts",
    "note": "The working tree was being edited while this was written (the 'ended' and 'locked' gates and the 'admitted' override appeared during the work). Re-run docs/flow/04-count-cases.mjs --check against a live worker before relying on a row; every row of the main join table was checked against the real Worker (see validation)."
   },
   "howToUse": "Pure function. For one case (an object with the dimension values) first derive the audience flags and the route owner (derive), then walk the ordered rules of the family (join.rules, approval.rules, input.defects, perm.rules); the first rule whose 'when' matches gives the answer. 'when' keys are ANDed; an array value means 'any of'; {not: v} means 'not v'. Keys are dimension names or derived names (closed, employeesOnly, invites, owner, limited, inChain, role, caller, op).",
@@ -2261,6 +2261,14 @@
    "rows": "lifecycle late_join with playMode manual",
    "where": "apps/edge/src/worker.ts:1503 (lateNow uses roundOfMs(now))",
    "why": "Not verified in the phones' game code: in manual mode the numbers are not clock-driven, so the join round stored on a late ticket may not match the numbers actually called. A question for the product owner rather than a confirmed defect."
+  },
+  {
+   "id": "DR-23",
+   "severity": "medium",
+   "title": "The brief's three-level chain (participant, guest level 1 who may invite, guest level 2 who cannot) is not what the code has: it has two levels",
+   "rows": "route GUEST_L1 versus GUEST_L2; approver L1_OWNER versus L2_GUEST; perm caller L1 versus L2_GUEST",
+   "where": "apps/edge/src/people.ts:136 (seat.inv !== null cannot invite), apps/edge/src/worker.ts:1675-1679 (only a seat with inv === null or a team role can own a link); docs/ROLES_AND_CONSOLE_SPEC_3.md line 7",
+   "why": "In the code the participant who invites is 'level 1' and everybody they bring is 'level 2 (plays, no list, no invites)'. If the product wants a guest who was invited by a participant to be able to invite in turn, that capability does not exist; the matrix follows the code (GUEST_L1 = a participant who may invite, GUEST_L2 = a guest who may not). Ask the owner which model is intended before writing tests for 'guest level 1 invites'."
   },
   {
    "id": "DR-22",

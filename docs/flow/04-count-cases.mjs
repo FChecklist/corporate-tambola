@@ -116,7 +116,7 @@ export function evalApproval(c) {
   const t = rule.then, req = c.request;
   const out = { rule: rule.id };
   const msgKey = t.approver?.msg;
-  const vars = { limit: req.owner === "c" ? 100 : 4, cap: "<cap>" };
+  const vars = { limit: req.owner === "c" ? 100 : 4, cap: 14 }; // 14 = the size used by the APPROVE_AFTER_FULL fixture
   if (t.approver) {
     out.approver = { status: t.approver.status, code: t.approver.code ?? null };
     if (msgKey) out.approver.msg = fill(c.approval === "APPROVE_ALL" && t.approver.msgAll ? t.approver.msgAll : msgKey, vars);
@@ -207,9 +207,9 @@ export function evalInput(defectId, audience, verify) {
   const raw = d.expectAll ?? d.expect?.[prof];
   if (raw === "continue") {
     const j = evalJoin({ audience, verify, route: "DIRECT", state: "S04", capacity: "ROOM", lifecycle: "none" });
-    return { kind: "continue", status: j.status, code: j.code, waiting: j.waiting, msg: j.msg, rule: j.rule };
+    return { kind: "continue", status: j.status, code: j.code, waiting: j.waiting, with: j.with, msg: j.msg, rule: j.rule };
   }
-  return { kind: "fixed", status: raw[0], code: raw[1], waiting: raw[0] === 403 && raw[1] === "waiting", msg: fill(raw[2], { with: "the organizer" }) };
+  return { kind: "fixed", status: raw[0], code: raw[1], waiting: raw[0] === 403 && raw[1] === "waiting", with: raw[0] === 403 && raw[1] === "waiting" ? "the organizer" : null, msg: fill(raw[2], { with: "the organizer" }) };
 }
 export function inputCases() {
   const out = [], seen = new Set();
@@ -265,32 +265,28 @@ const sayVerify = { mobile: "mobile", id: "ID", either: "ID or mobile", both: "I
 const short = (e) => (e == null ? "" : e.approver === undefined ? `${e.status}${e.code && e.code !== "ticket" ? " " + e.code : e.code === "ticket" ? " ticket" : ""}${e.waiting ? " (waiting, with " + e.with + ")" : ""}${e.rule ? " [" + e.rule + "]" : ""}` : `${e.approver ? e.approver.status + (e.approver.code ? " " + e.approver.code : "") : "no call"}; phone sees ${e.me}${e.rejoin?.status ? "; re-join " + e.rejoin.status + (e.rejoin.code ? " " + e.rejoin.code : "") : ""} [${e.rule}]`);
 export function examples(n = 60) {
   const { rows } = allCases();
-  const pick = [], seenKey = new Set();
-  const add = (row) => { if (pick.length < n && !pick.includes(row)) { pick.push(row); } };
-  // one JOIN case per join rule (auto), preferring a different route each time
+  const pick = [];
+  const add = (row) => { if (row && !pick.includes(row)) pick.push(row); };
   const routeCycle = ["DIRECT", "ORG", "HOST", "COHOST", "PERSONAL", "GUEST_L1", "GUEST_L2"];
   let k = 0;
-  for (const rule of O.join.rules) {
+  for (const rule of O.join.rules) { // one JOIN case per join rule (auto), cycling through the routes
     const cand = rows.filter((r) => r.family === "J" && r.play === "auto" && r.expected.rule === rule.id);
     const want = routeCycle[k++ % routeCycle.length];
     add(cand.find((r) => r.route === want && r.audience !== "ANYONE_INV") ?? cand.find((r) => r.audience !== "ANYONE_INV") ?? cand[0]);
   }
-  // approvals: one per approval rule, then a few role contrasts
   for (const rule of O.approval.rules) { const cand = rows.filter((r) => r.family === "A" && r.play === "auto" && r.expected.rule === rule.id); if (cand.length) add(cand[Math.floor(cand.length / 3)]); }
-  // input defects: eight different
-  for (const id of ["D01", "D03", "D06", "D11", "D13", "D15", "D16", "D17"]) { const cand = rows.filter((r) => r.family === "I" && r.play === "auto" && r.defect === id); if (cand.length) add(cand[Math.floor(cand.length / 2)]); }
-  // permissions: one per permission rule
-  for (const rule of O.perm.rules) { const cand = rows.filter((r) => r.family === "P" && r.play === "auto" && r.expected.rule === rule.id); if (cand.length) add(cand[0]); }
-  // manual-mode twins of the first three
-  for (const r of pick.slice(0, 3)) { const twin = rows.find((x) => x.play === "manual" && x.id.replace(".manual.", ".auto.") === r.id); if (twin) add(twin); }
-  void seenKey;
-  return pick.slice(0, n).map((r, i) => {
+  for (const id of ["D01", "D03", "D06", "D11", "D13", "D15", "D16"]) { const cand = rows.filter((r) => r.family === "I" && r.play === "auto" && r.defect === id); if (cand.length) add(cand[Math.floor(cand.length / 2)]); }
+  for (const rule of O.perm.rules.filter((x) => !["P-OK", "P-L1-EXPORT", "P-COHOST-EXPORT"].includes(x.id))) { const cand = rows.filter((r) => r.family === "P" && r.play === "auto" && r.expected.rule === rule.id); if (cand.length) add(cand[0]); }
+  const base = pick.slice(0, n - 4);
+  // four manual-mode twins: the answer must be identical to the auto case
+  for (const id of ["J-LISTED", "J-ID-MISS-WAIT", "J-OVER-QUOTA-OPEN", "J-GATE-CANCELLED"]) { const r = base.find((x) => x.expected.rule === id); const twin = r && rows.find((x) => x.play === "manual" && x.id === r.id.replace(".auto.", ".manual.")); if (twin) base.push(twin); }
+  return base.slice(0, n).map((r, i) => {
     let given = "";
     if (r.family === "J") given = `${sayAud[r.audience]}, give ${sayVerify[r.verify]}; arrives by ${sayRoute[r.route]}; ${sayState[r.state]}; capacity ${r.capacity}; ${r.lifecycle}`;
     if (r.family === "A") given = `${sayAud[r.audience]}, give ${sayVerify[r.verify]}; request came by ${sayRoute[r.route]} (${sayState[r.state]}); approval ${r.approval}${r.role ? " by " + r.role : ""}; list/capacity ${r.capacity}; ${r.lifecycle}`;
     if (r.family === "I") given = `${sayAud[r.audience]}, give ${sayVerify[r.verify]}; defect ${r.defect}: ${O.input.defects.find((d) => d.id === r.defect).what}`;
     if (r.family === "P") given = `${r.caller} does ${r.op}; guest invites ${r.invites ? "on" : "off"}; ${r.lifecycle}`;
-    return { n: i + 1, id: r.id, given, expect: short(r.expected) + (r.expected.msg ? ` "${r.expected.msg}"` : r.expected.approver?.msg ? ` "${r.expected.approver.msg}"` : "") };
+    return { n: i + 1, id: r.id, given: (r.play === "manual" ? "MANUAL-MODE twin: " : "") + given, expect: short(r.expected) + (r.expected.msg ? ` "${r.expected.msg}"` : r.expected.approver?.msg ? ` "${r.expected.approver.msg}"` : "") };
   });
 }
 
