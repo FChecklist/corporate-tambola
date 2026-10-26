@@ -9,3 +9,5 @@ Machine: 4 cores, 15 GB RAM, Linux 6.18.44-fc-v153, node v22.22.0, bun 1.4.4. Lo
 
 ## Log
 - 14:07Z set up: bun install ok, 3 local servers (8821, 8822 for Part 1; 8823 smoke), tools ported. Part 1 started: 2 x 500000 attempts (sigma-http, 24 concurrent each), about 280-340/s per server. Part 2 smoke case (40 people, case 1) running on 8823.
+- 14:27Z PART 1 DONE: 2 servers x 500000 attempts = 1,000,000 attempts, 0 wrong (results/part1/). Negative control (deliberately wrong expectations, 3000 attempts) flagged 320 defects, so the checker can fail. Smoke case (40 people) PASS 0 of 32 checks failed. Part 2 launched: chain A (m250 then m1000a) and chain B (m500 then m1000b), each campaign on its own fresh server+DB.
+- 14:27Z PART 1 DONE: 2 servers x 500000 attempts = 1,000,000 attempts, 0 wrong (results/part1/). Negative control (deliberately wrong expectations, 3000 attempts) flagged 320 defects, so the checker can fail. Smoke case (40 people) PASS, 0 of 32 checks failed. Part 2 launched: chain A (m250 then m1000a) and chain B (m500 then m1000b), each campaign on its own fresh server+DB.

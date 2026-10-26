@@ -4,9 +4,10 @@ usage: python certify_report.py <label> <tag> [<tag> ...]      e.g. certify_repo
 Writes C:\\ct\\test-sites\\tambola\\docs\\SIX_SIGMA_<label>.md. Rule-level steps come from data/sigma-steps.json (millions of trials each); journey steps are counted from the campaign / human game / live JSON files.
 A defect is any failed check, counted per person/ticket/claim/prize position where the check names how many. An opportunity is each person, ticket, claim, prize position or game the check looked at."""
 import json, sys, os, re, math, collections
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))  # CLOUD PORT: the checkout; data in ROOT/data (override with DATA_DIR)
 from statistics import NormalDist
 label = sys.argv[1]; tags = sys.argv[2:]
-base = r"C:\ct\test-sites\data"
+base = os.environ.get("DATA_DIR") or os.path.join(ROOT, "data")
 
 def sigma(defects, opps):
     if opps <= 0: return None
@@ -102,5 +103,5 @@ if os.path.exists(sp):
     for k, v in S.items():
         lines.append(f"| {k} | {v['trials']:,} | {v['defects']} | {v['dpmo']} | {v['upper95PerMillion']} | {verdict(v['defects'], v['trials'])} |")
     lines += [""]
-dst = rf"C:\ct\test-sites\tambola\docs\SIX_SIGMA_{re.sub(r'[^A-Za-z0-9]+', '_', label)}.md"
+dst = os.path.join(ROOT, "docs", f"SIX_SIGMA_{re.sub(r'[^A-Za-z0-9]+', '_', label)}.md")
 open(dst, "w", encoding="utf8").write("\n".join(lines) + "\n"); print("\n".join(lines[:60])); print("written", dst)

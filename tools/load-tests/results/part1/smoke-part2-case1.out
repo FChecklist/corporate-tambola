@@ -1,0 +1,23 @@
+campaign smoke1: cases 1..1, 1 at a time, 40 people each, lead 100s, http://localhost:8823
+(node:796) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+  #1 auto9/open t+30s numbers 0 winners 0 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 391 failed 0
+  #1 auto9/open t+60s numbers 0 winners 0 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 421 failed 0
+  #1 auto9/open t+90s numbers 0 winners 0 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 436 failed 0
+  #1 auto9/open t+120s numbers 0 winners 0 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 458 failed 0
+  #1 auto9/open t+150s numbers 2 winners 0 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 573 failed 0
+  #1 auto9/open t+180s numbers 6 winners 0 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 669 failed 0
+  #1 auto9/open t+210s numbers 9 winners 0 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 767 failed 0
+  #1 auto9/open t+240s numbers 12 winners 1 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 885 failed 0
+  #1 auto9/open t+270s numbers 16 winners 1 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 994 failed 0
+  #1 auto9/open t+300s numbers 19 winners 1 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 1088 failed 0
+  #1 auto9/open t+330s numbers 22 winners 1 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 1186 failed 0
+  #1 auto9/open t+360s numbers 26 winners 1 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 1280 failed 0
+  #1 auto9/open t+390s numbers 29 winners 1 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 1383 failed 0
+  #1 auto9/open t+420s numbers 32 winners 1 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 1483 failed 0
+  #1 auto9/open t+450s numbers 36 winners 1 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 1593 failed 0
+  #1 auto9/open t+480s numbers 39 winners 1 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 1692 failed 0
+  #1 auto9/open t+510s numbers 42 winners 1 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 1790 failed 0
+  #1 auto9/open t+540s numbers 46 winners 1 phase play lag 0/338ms queue max 0ms (0 over 0.5 s) calls 1870 failed 0
+PASS #1 auto9 open t1 - | numbers 46 winners 2 players 40 gap 8.7 | 0 failed of 29 | 11 min
+SUMMARY {"tag":"smoke1","cases":1,"casesPassed":1,"checks":32,"checksFailed":0,"calls":1986,"serverErrors":0,"failKinds":{},"latencyMs":{"p50":2,"p95":7,"p99":13,"max":451},"beacon":{"fetched":188,"hits":8930,"failed":0}}
