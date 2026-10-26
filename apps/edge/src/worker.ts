@@ -1278,10 +1278,10 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!sub && req.method === "POST") {
       const b = await body(req);
       if (!b) return json({ error: "Bad message." }, 400);
-      if (!(await spend(env, now))) return BUSY();
       const ge = await env.DB.prepare("SELECT tickets, config FROM engagement WHERE id=?").bind(cid).first<{ tickets: number; config: string | null }>();
       const r = await publishControl(kv, cid!, b.message, ge ? hostGameOf(cfgOf(ge)) : undefined); // a Host's "next" press is checked against this game's breaks and rounds
-      if (r.ok && !(r as any).duplicate) await mirrorControl(env, cid!);
+      // The write guard is charged only for a message that was ACCEPTED (its signature held): anyone can post garbage here, and charging first let a script use up the day's budget and make every join answer "very busy". A pause or stop also still works on a day the budget is spent.
+      if (r.ok && !(r as any).duplicate) { await spend(env, now); await mirrorControl(env, cid!); }
       return r.ok ? json(r) : json({ error: r.error }, r.status);
     }
     const ce = await env.DB.prepare("SELECT id, org, cap, start_round FROM engagement WHERE id=?").bind(cid).first<{ id: string; org: string | null; cap: number; start_round: number }>();

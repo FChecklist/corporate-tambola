@@ -48,6 +48,17 @@ describe("join gaps", () => {
       const r = await join(g.id, ++i, { phone: good, device: dev(i) }); expect([good, r.status]).toEqual([good, 200]);
     }
   });
+  test("G8: unsigned or forged posts to /control do not use up the day's write budget (it was charged before the signature was checked)", async () => {
+    const g = await paidGame({ cap: 20 });
+    const used = () => (W.raw.prepare("SELECT COALESCE(SUM(writes),0) AS w FROM usage").get() as any).w as number;
+    const before = used();
+    for (let i = 0; i < 6; i++) {
+      const r = await call("POST", `/api/z/${g.id}/control`, { message: { forged: i, sig: "00".repeat(32) } });
+      expect(r.status).toBeLessThan(500); expect(r.status).toBeGreaterThanOrEqual(400);
+    }
+    expect((await call("POST", `/api/z/${g.id}/control`, "not a message")).status).toBeGreaterThanOrEqual(400);
+    expect(used()).toBe(before); // nothing was charged for what was refused
+  });
   test("GAP-01: an unbound ticket is handed back only to a phone that sends its device proof (400 without it, 200 with it)", async () => {
     const g = await paidGame({ cap: 20 });
     expect((await join(g.id, 1)).status).toBe(200);

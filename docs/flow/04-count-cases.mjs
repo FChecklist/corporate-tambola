@@ -140,7 +140,8 @@ function placedBy(c, req) {
   return placedLabel(req.owner);
 }
 export function approvalCases() {
-  const reqs = [];
+  const stateClass = { S04: "unlisted", S08: "idmiss", S09: "idmiss", S10: "idmiss" };
+  const reqs = [], seenReq = new Set();
   for (const [audience, verify] of audVerify()) for (const route of ROUTES) for (const state of STATES) for (const reqLife of ["none", "reopen"]) for (const capacity of ["ROOM", "OVER_QUOTA"]) {
     if (reqLife === "reopen" && route !== "COHOST") continue;
     if (!stateValid(audience, verify, state, reqLife)) continue;
@@ -150,7 +151,11 @@ export function approvalCases() {
     const caps = O.join.rules.find((x) => x.id === j.rule).capacities ?? ["ROOM"];
     if (!caps.includes(capacity)) continue;
     const ctx = joinCtx(jc);
-    reqs.push({ audience, verify, route, state, reqLife, request: { case: jc, owner: ctx.owner, overlimit: capacity === "OVER_QUOTA" && j.rule === "J-OVER-QUOTA-OPEN", rule: j.rule } });
+    const idKind = (state === "S08" || state === "S09" || state === "S10") && (verify === "id" || verify === "either") ? "id" : "phone";
+    const overlimit = capacity === "OVER_QUOTA" && j.rule === "J-OVER-QUOTA-OPEN";
+    const key = [audience, route, stateClass[state], idKind, reqLife, overlimit].join("|"); // PR-10
+    if (seenReq.has(key)) continue; seenReq.add(key);
+    reqs.push({ audience, verify, route, state, reqLife, request: { case: jc, owner: ctx.owner, overlimit, rule: j.rule } });
   }
   const out = [], seen = new Set();
   const push = (rq, approval, role, lifecycle, capacity) => {
@@ -161,21 +166,33 @@ export function approvalCases() {
     if (!caps.includes(capacity)) return;
     const ign = new Set(rule?.ignores ?? []);
     if (ign.size) {
-      const key = r.rule + "|" + ["audience", "verify", "route", "state", "reqLife", "approval", "role", "lifecycle", "capacity"].filter((k) => !ign.has(k)).map((k) => c[k]).join("|");
+      const key = r.rule + "|" + ["audience", "verify", "route", "state", "reqLife", "approval", "role", "lifecycle", "capacity"].filter((k) => !ign.has(k)).map((k) => c[k]).join("|") + (ign.has("route") ? "" : "|" + rq.request.owner);
       if (seen.has(key)) return; seen.add(key);
     }
     out.push({ c, r });
   };
   for (const rq of reqs) {
-    const lifes = rq.reqLife === "reopen" ? ["reopen"] : ["none", "pause_resume", "late_join", "organizer_ends", "cancelled_before_start"];
-    for (const lifecycle of lifes) {
-      const right = rightRoles(rq.request, lifecycle);
-      const quota = !rq.request.overlimit && (rq.request.owner === "c" || rq.request.owner === "s") ? ["ROOM", "OVER_QUOTA"] : ["ROOM"];
-      for (const approval of ["APPROVE", "APPROVE_ALL", "DECLINE"]) for (const role of right) for (const capacity of quota) push(rq, approval, role, lifecycle, capacity);
-      for (const role of right) push(rq, "APPROVE_AFTER_FULL", role, lifecycle, "FULL");
-      for (const role of right) push(rq, "APPROVE_AFTER_REMOVAL", role, lifecycle, "ROOM");
-      for (const role of ROLES_WRONG) push(rq, "WRONG_ROLE", role, lifecycle, "ROOM");
+    const quotaCaps = (lc) => (!rq.request.overlimit && (rq.request.owner === "c" || rq.request.owner === "s") ? ["ROOM", "OVER_QUOTA"] : ["ROOM"]);
+    if (rq.reqLife === "reopen") { // PR-11: after a reopen only the Co-host link request differs
+      const right = rightRoles(rq.request, "reopen");
+      for (const role of right) push(rq, "APPROVE", role, "reopen", "ROOM");
+      push(rq, "NEVER", null, "reopen", "ROOM");
+      push(rq, "WRONG_ROLE", "COHOST_OTHER", "reopen", "ROOM");
+      continue;
+    }
+    // base: lifecycle none
+    const right = rightRoles(rq.request, "none");
+    for (const approval of ["APPROVE", "APPROVE_ALL"]) for (const role of right) for (const capacity of quotaCaps()) push(rq, approval, role, "none", capacity);
+    for (const role of right) push(rq, "DECLINE", role, "none", "ROOM");
+    for (const role of right) push(rq, "APPROVE_AFTER_FULL", role, "none", "FULL");
+    for (const role of right) push(rq, "APPROVE_AFTER_REMOVAL", role, "none", "ROOM");
+    for (const role of ROLES_WRONG) push(rq, "WRONG_ROLE", role, "none", "ROOM");
+    push(rq, "NEVER", null, "none", "ROOM");
+    // sweep
+    for (const lifecycle of ["pause_resume", "late_join", "organizer_ends", "cancelled_before_start"]) {
+      for (const role of rightRoles(rq.request, lifecycle)) push(rq, "APPROVE", role, lifecycle, "ROOM");
       push(rq, "NEVER", null, lifecycle, "ROOM");
+      if (lifecycle === "organizer_ends" || lifecycle === "cancelled_before_start") for (const role of ["COHOST_OTHER", "L1_OTHER"]) push(rq, "WRONG_ROLE", role, lifecycle, "ROOM");
     }
   }
   return { requests: reqs.length, cases: out };
@@ -202,7 +219,7 @@ export function inputCases() {
     if (seen.has(key)) continue; seen.add(key);
     out.push({ c: { audience, verify, defect: d.id }, r });
   }
-  return out;
+  return { cases: out };
 }
 
 // ------------------------------------------------------------------------------------------------ F-PERM
