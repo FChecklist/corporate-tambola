@@ -4,16 +4,17 @@
 //   BROWSER=chrome|chromium|webkit SITE=https://corporatetambola.com node tools/ui-game.mjs --tag U1 --login demo1@xyz.in --cap 10 --players 10 --mode auto --lead 9
 import { writeFileSync, mkdirSync } from "node:fs";
 import { launch, signIn, ctrls, sleep } from "./ui-lib.mjs";
+import { Harness, NodePhone } from "./nodephone.mjs";
 const args = process.argv.slice(2); const opt = (k, d) => { const i = args.indexOf("--" + k); return i >= 0 ? args[i + 1] : d; };
 const B = process.env.BROWSER || "chrome", SITE = process.env.SITE || "http://localhost:8801";
-const TAG = opt("tag", "U" + Date.now().toString(36).slice(-3)), LOGIN = opt("login", "demo1@xyz.in"), CAP = Number(opt("cap", 10)), PLAYERS = Number(opt("players", 10)), MODE = opt("mode", "auto"), LEAD = Number(opt("lead", 9)), AUD = opt("aud", "5"), SPEED = Number(opt("speed", 9)), STOP = opt("stop", ""), EMP = ["1", "2", "6"].includes(AUD);
+const TAG = opt("tag", "U" + Date.now().toString(36).slice(-3)), LOGIN = opt("login", "demo1@xyz.in"), CAP = Number(opt("cap", 10)), PLAYERS = Number(opt("players", 10)), MODE = opt("mode", "auto"), LEAD = Number(opt("lead", 9)), AUD = opt("aud", "5"), SPEED = Number(opt("speed", 9)), STOP = opt("stop", ""), REAL = Number(opt("real", PLAYERS)), EMP = ["1", "2", "6"].includes(AUD);
 const R = { tag: TAG, browser: B, site: SITE, mode: MODE, cap: CAP, checks: [], errors: [], failedReq: [], notes: [] };
 const check = (n, ok, d = "") => { R.checks.push({ n, ok: !!ok, d: String(d).slice(0, 300) }); console.log(ok ? "PASS" : "FAIL", n, ok ? "" : "| " + String(d).slice(0, 300)); };
 const save = () => { mkdirSync("C:/ct/test-sites/data/ui", { recursive: true }); writeFileSync(`C:/ct/test-sites/data/ui/ui-${B}-${TAG}.json`, JSON.stringify(R, null, 1)); };
 const pad = (n) => String(n).padStart(2, "0");
 const watch = (page, tag) => { page.on("pageerror", (e) => R.errors.push(tag + ": " + String(e).slice(0, 200))); page.on("response", (x) => { if (x.status() >= 500) R.failedReq.push(`${tag} ${x.status()} ${x.url().slice(0, 100)}`); }); };
 const browser = await launch(B);
-let eid = null, startMs = 0; const reals = [];
+let eid = null, startMs = 0; const reals = [], nodes = [];
 const org = async () => (await browser.newContext({ viewport: { width: 1280, height: 900 } }));
 const body = async (p) => (await p.innerText("body")).replace(/\s+/g, " ");
 const clickSave = async (p, n) => { await p.click(`[data-save="${n}"]`); await sleep(1500); };
@@ -90,8 +91,11 @@ try {
   };
   console.log("waiting until 7 minutes before the start", new Date(startMs - 7 * 60000).toISOString());
   while (Date.now() < startMs - 7 * 60000) await sleep(5000);
-  await Promise.all(Array.from({ length: PLAYERS }, (_, i) => (async () => { await sleep(Math.random() * 60000); try { const ph = await newReal(i); reals.push(ph); checkIn(ph); } catch (e) { R.errors.push("real " + i + " " + String(e).slice(0, 150)); } })()));
-  check(`all ${PLAYERS} people opened the link and joined`, reals.length === PLAYERS, `${reals.length}`);
+  await Promise.all(Array.from({ length: PLAYERS }, (_, i) => (async () => { await sleep(Math.random() * Math.min(120000, 20000 + PLAYERS * 800));
+    if (i < REAL) { try { const ph = await newReal(i); reals.push(ph); checkIn(ph); } catch (e) { R.errors.push("real " + i + " " + String(e).slice(0, 150)); } }
+    else { try { const ph = new NodePhone(H, eid, { phone: `98122${String(i + 1).padStart(5, "0")}`, name: `Phone ${i + 1}`, ...(EMP ? { empId: `E${String(i + 1).padStart(3, "0")}` } : {}) }, { react: [900, 4500], claim: "always", light: i >= 60 }); await ph.open(); ph.ok = await ph.join(); if (ph.ok) ph.go(); nodes.push(ph); } catch (e) { R.errors.push("node " + i + " " + String(e).slice(0, 150)); } }
+  })()));
+  check(`all ${PLAYERS} people joined (${REAL} on real browser pages, ${PLAYERS - REAL} on protocol phones)`, reals.length === REAL && nodes.length === PLAYERS - REAL && nodes.every((x) => x.ok), `${reals.length} pages, ${nodes.filter((x) => x.ok).length}/${nodes.length} phones`);
   // the organizer presses each number for a manual game, through the Game day step
   const pressNext = async () => { for (const sel of ['[data-act="next"]', "#nextnum", '[data-host="next"]', "#hnext", "button:has-text('Call the next number')", "button:has-text('Next number')"]) { const b = orgPage.locator(sel).first(); if (await b.count() && await b.isVisible() && await b.isEnabled().catch(() => false)) { await b.click().catch(() => {}); return sel; } } return null; };
   while (Date.now() < startMs + 120000 - 5000) await sleep(500);
@@ -100,13 +104,15 @@ try {
   while (Date.now() < MAX) {
     if (MODE === "host" && Date.now() - lastPress > 7000) { lastPress = Date.now(); const s = await pressNext(); if (s) { pressed++; nextSel = s; } }
     const vs = []; for (const ph of reals) vs.push(await human(ph, [800 + Math.random() * 600, 3500 + Math.random() * 2500]));
-    if (vs.length && vs.every((v) => v && v.phase === "ended")) { if (!allEndedAt) allEndedAt = Date.now(); if (Date.now() - allEndedAt > 20000) { endedAll = true; break; } }
+    const nodeEnded = nodes.filter((x) => x.ok).every((x) => x.rt.phase === "ended");
+    if (vs.length && vs.every((v) => v && v.phase === "ended") && nodeEnded) { if (!allEndedAt) allEndedAt = Date.now(); if (Date.now() - allEndedAt > 20000) { endedAll = true; break; } }
     await sleep(400);
   }
   if (MODE === "host") check("the organizer pressed the numbers through the page buttons", pressed > 0, `${pressed} presses via ${nextSel}`);
   check("every page reached the end of the game", endedAll, JSON.stringify((await Promise.all(reals.map((r) => view(r.p)))).map((v) => v?.phase)));
   const flat = (t) => t.flat().filter((x) => x !== null && x !== undefined);
   const snaps = []; for (const ph of reals) { const v = await ph.p.evaluate(() => JSON.parse(JSON.stringify(window.__rt.view()))).catch(() => null); if (v) snaps.push({ ph, v }); }
+  for (const ph of nodes.filter((x) => x.ok)) { const v = JSON.parse(JSON.stringify(ph.rt.view())); snaps.push({ ph: { name: ph.name || ph.opts?.name || "phone", present: true, claims: [], errors: [], p: null }, v }); }
   const ref = snaps[0]?.v.log.filter((n) => n > 0) ?? [];
   const same = snaps.filter(({ v }) => { const m = v.log.filter((n) => n > 0), k = Math.min(m.length, ref.length); return m.slice(0, k).join() === ref.slice(0, k).join() && Math.abs(m.length - ref.length) <= 1; }).length;
   check(`all ${snaps.length} pages show the same ${ref.length} numbers in the same order`, same === snaps.length && snaps.length === PLAYERS, `${same}/${snaps.length}`);
@@ -115,7 +121,7 @@ try {
   const resKey = (v) => JSON.stringify(v.results.map((x) => `${x.pattern}#${x.ordinal}@${x.idx}`).sort());
   check("all pages show the same winners", snaps.every(({ v }) => resKey(v) === resKey(snaps[0].v)), snaps.map(({ v }) => v.results.length).join(","));
   check("no page error and no 5xx from our own site", R.errors.length === 0 && R.failedReq.filter((x) => !/drand/.test(x)).length === 0, JSON.stringify([...R.errors, ...R.failedReq.filter((x) => !/drand/.test(x))].slice(0, 3)));
-  const shots = `C:/ct/test-sites/data/ui/shots-${B}-${TAG}`; mkdirSync(shots, { recursive: true }); for (const ph of reals.slice(0, 3)) await ph.p.screenshot({ path: `${shots}/${ph.name.replace(/ /g, "_")}.png` }).catch(() => {}); await orgPage.screenshot({ path: `${shots}/organizer.png`, fullPage: true }).catch(() => {});
+  const shots = `C:/ct/test-sites/data/ui/shots-${B}-${TAG}`; mkdirSync(shots, { recursive: true }); for (const ph of reals.slice(0, 3).filter((x) => x.p)) await ph.p.screenshot({ path: `${shots}/${ph.name.replace(/ /g, "_")}.png` }).catch(() => {}); await orgPage.screenshot({ path: `${shots}/organizer.png`, fullPage: true }).catch(() => {});
   mkdirSync(`C:/ct/test-sites/data/player-logs/ui-${B}-${TAG}`, { recursive: true });
   writeFileSync(`C:/ct/test-sites/data/player-logs/ui-${B}-${TAG}/${eid}.jsonl`, snaps.map(({ ph, v }) => JSON.stringify({ game: eid, name: ph.name, pid: v.pid, checkedIn: ph.present, numbersReceived: v.log.filter((n) => n > 0).length, claims: ph.claims, wins: v.results.filter((r) => (r.pids || []).includes(v.pid)).map((r) => `${r.pattern}#${r.ordinal}@${r.idx}`), errors: ph.errors })).join("\n") + "\n");
 } catch (e) { check("the organizer built and published the game by clicking", false, String(e).slice(0, 400)); }

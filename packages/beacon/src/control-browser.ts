@@ -1,7 +1,7 @@
 // Organizer-side browser helper (bundled to apps/web/public/control.js, exposes window.TBControl).
 // Holds the engagement's signing key in IndexedDB as a NON-EXTRACTABLE CryptoKey: the page can sign, nothing can read the key out.
 // Built with: bun run build:control   (not covered by unit tests: needs a browser; the signing and publishing logic it calls is).
-import { generateOrganizerKey, nextMessage, signControl, type ControlAction, type PublishedFile } from "./control";
+import { generateOrganizerKey, nextMessage, publicKeyFromSecret, signControl, signControlWithSecret, type ControlAction, type PublishedFile } from "./control";
 
 const DB = "tambola-control";
 function idb(): Promise<IDBDatabase> {
@@ -12,7 +12,13 @@ function idb(): Promise<IDBDatabase> {
     r.onerror = () => rej(r.error);
   });
 }
-const get = async (k: string): Promise<{ privateKey: CryptoKey; publicKeyHex: string } | undefined> => { const d = await idb(); return new Promise((res, rej) => { const q = d.transaction("keys").objectStore("keys").get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); };
+/** A browser with WebCrypto Ed25519 holds a non-extractable CryptoKey; one without it (older Safari or Firefox) holds a raw secret made by the pure-JS fallback, so a Host-mode game can still be run from it. */
+type StoredKey = { publicKeyHex: string; privateKey?: CryptoKey; secretHex?: string };
+const newKey = async (): Promise<StoredKey> => {
+  try { return await generateOrganizerKey(false); }
+  catch { const raw = crypto.getRandomValues(new Uint8Array(32)); const secretHex = Array.from(raw, (x) => x.toString(16).padStart(2, "0")).join(""); return { secretHex, publicKeyHex: publicKeyFromSecret(secretHex) }; }
+};
+const get = async (k: string): Promise<StoredKey | undefined> => { const d = await idb(); return new Promise((res, rej) => { const q = d.transaction("keys").objectStore("keys").get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); };
 const put = async (k: string, v: unknown) => { const d = await idb(); return new Promise<void>((res, rej) => { const q = d.transaction("keys", "readwrite").objectStore("keys").put(v, k); q.onsuccess = () => res(); q.onerror = () => rej(q.error); }); };
 
 const MIRRORS = ["https://api.drand.sh", "https://api2.drand.sh", "https://api3.drand.sh", "https://drand.cloudflare.com"];
@@ -40,7 +46,7 @@ const TBControl = {
     if (pub?.pubKey && signs(mine)) return { ok: true };
     // no key yet: this browser registers the organizer's key. A key already there: a Host's browser asks to add its own key beside it (the store checks who is asking;
     // anyone else, the organizer's second browser included, is told the key lives elsewhere)
-    const k = mine ?? (await generateOrganizerKey(false));
+    const k = mine ?? (await newKey());
     const r = await fetch(`${P(a)}/${code}/control/key`, { method: "PUT", headers: hdr(a), body: JSON.stringify({ publicKey: k.publicKeyHex, profile }) });
     if (!r.ok) return { ok: false, reason: pub?.pubKey ? "This engagement's signing key lives in another browser." : (await r.json().catch(() => ({}))).error ?? "Could not register the key." };
     if (!mine) await put(code, k);
@@ -52,7 +58,8 @@ const TBControl = {
     const f = (await (await fetch(`${P(a)}/${code}/control`, { cache: "no-store" })).json()) as PublishedFile;
     const k = await get(code);
     if (!k || (k.publicKeyHex !== f.pubKey && !(f.hostKeys ?? []).includes(k.publicKeyHex))) throw new Error("This browser does not hold the signing key for this engagement.");
-    return signControl(k.privateKey, nextMessage(f, await beaconRound(), { action, ...o }));
+    const msg = nextMessage(f, await beaconRound(), { action, ...o });
+    return k.secretHex ? signControlWithSecret(k.secretHex, msg) : signControl(k.privateKey!, msg);
   },
   /** Sign and publish in one step (what the console's Pause / Resume buttons call). */
   async publish(code: string, a: Auth, action: ControlAction, o: { pauseForRounds?: number; untilRound?: number; addRounds?: number } = {}) {
