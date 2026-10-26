@@ -4,6 +4,7 @@
 // ORACLE (nothing here is copied from what the code did): docs/handover-2026-10-26/join_design.json (matrix rows 1-9, 14, 17, 18, wrong-input table) and docs/ROLES_AND_CONSOLE_SPEC_3.md (who may see / decide / remove).
 // Expected result for a stranger (a person who is on no list): waiting room when the game is list-only or employees-only, a ticket at once when it is open (join_design.json rows 1, 3, 5, 7).
 // Expected result for a listed person: a ticket at once, in every verify mode, when they give what the mode asks (rows 1-6).
+import { controlFor } from "./ctl.mjs";
 export default async function gen({ R, L }) {
   const { A, mobile, personName, startAt } = L; const dev = A.deviceOf;
   const AUD = {
@@ -15,7 +16,7 @@ export default async function gen({ R, L }) {
   };
   const VERIFY = ["mobile", "id", "either", "both"], MODE = ["manual", "auto"];
   const OUTCOME = ["auto-admit", "approve", "decline", "ignored", "approve-after-cap-full", "approve-after-removal"];
-  const EVENT = ["none", "late-join", "cancel", "cancel-reopen", "end-window"];
+  const EVENT = ["none", "late-join", "cancel", "cancel-reopen", "end-window", "pause-resume", "end-by-organizer"];
   const fromOf = (link) => Number(/[?&]from=(\d+)/.exec(link ?? "")?.[1]);
   const joinRaw = (eid, body, ip) => A.call("POST", `/api/z/${eid}/join`, { device: dev(body.phone ?? body.empId ?? body.token ?? "x"), ...body }, {}, { ip });
   const wid = (r) => r.body.wid;
@@ -24,7 +25,7 @@ export default async function gen({ R, L }) {
   for (const a of Object.keys(AUD)) for (const v of VERIFY) for (const m of MODE) for (const o of OUTCOME) for (const e of EVENT) combos.push({ a, v, m, o, e });
 
   for (const c of combos) {
-    const aud = AUD[c.a]; const timeMoving = c.e === "late-join" || c.e === "end-window";
+    const aud = AUD[c.a]; const timeMoving = ["late-join", "end-window", "pause-resume", "end-by-organizer"].includes(c.e); const controls = c.e === "pause-resume" || c.e === "end-by-organizer";
     out.push({ name: `journey|${c.a}|${c.v}|${c.m}|${c.o}|${c.e}`, time: timeMoving, timeoutMs: 120_000, run: async (t) => {
       const cap = 10;
       // ---- Organizer builds, publishes, pays ----
@@ -33,9 +34,11 @@ export default async function gen({ R, L }) {
       const patch = { ...(c.v !== "mobile" ? { verify: c.v } : {}), ...(aud.eo ? { employeesOnly: true } : {}), ...(c.m === "manual" ? { callMode: "host" } : {}), ...(aud.invites ? { guestInvites: { on: true, per: aud.invites, cats: ["family", "colleagues"] } } : {}) };
       if (Object.keys(patch).length) t.expect("Organizer sets the rules", await org.settings(g.id, patch), "ok");
       await t.publishPay(org, g.id);
+      let ctlh = null; if (controls) { ctlh = await controlFor(L.SIM); const k = await ctlh.key(g.id, org.token).catch((e) => ({ ok: false, reason: e.message })); t.check("Organizer's browser registers the signing key", !!k.ok, JSON.stringify(k)); }
       const info = (await org.info(g.id)).body; t.eq("play mode as chosen", info.callMode ?? (c.m === "manual" ? "host" : "auto"), c.m === "manual" ? "host" : "auto");
       // ---- Host and Co-host ----
       const host = await t.host(org), co = await t.cohost(org, g.id);
+      if (controls) { const hk = await ctlh.key(g.id, host.key).catch((e) => ({ ok: false, reason: e.message })); t.check("the Host's browser adds its own signing key beside the Organizer's", !!hk.ok, JSON.stringify(hk)); }
       t.expect("Host reads the summary", await host.api("GET", `/api/z/${g.id}/summary`), "ok"); t.expect("Co-host may not read the summary", await co.api("GET", `/api/z/${g.id}/summary`), "deny");
       t.expect("Co-host may not publish or cancel", await co.api("POST", `/api/z/${g.id}/cancel`, { confirmations: 3 }), "deny");
       const orgLink = (await org.people(g.id)).body.commonLink, hostLink = (await host.api("GET", `/api/z/${g.id}/people`)).body.commonLink, coLink = (await co.api("GET", `/api/z/${g.id}/people`)).body.commonLink;
@@ -132,6 +135,23 @@ export default async function gen({ R, L }) {
         t.expect("a cancelled game's personal link page is a calm 404", { status: (await fetch(`${L.SIM}/j/nosuchlink99`)).status, body: {} }, [404]);
         if (c.e === "cancel-reopen") { const rr = await org.api("POST", `/api/z/${g.id}/reopen`, { startRound: await A.startRoundIn(3 * L.DAY) }); t.expect("Organizer moves the game to a new date", rr, "ok");
           if (rr.ok) { const j = await joinRaw(g.id, { ...giveListed(mine.org), name: mine.org.name }, t.ip()); t.expect("after the move a listed person gets in again", j, "ok"); } }
+      } else if (controls) {
+        await L.clock.set(g.startMs + 2 * 60_000); await A.call("POST", "/__sim/tick", {});
+        const send = (who, token, action) => ctlh.send(g.id, token, action).catch((e) => ({ status: 0, data: { error: e.message } }));
+        const ok = (label, r) => t.check(label, r.status === 200, `HTTP ${r.status} ${JSON.stringify(r.data).slice(0, 160)}`);
+        if (c.m === "manual") { ok("manual: the Host presses Next number", await send("host", host.key, "next")); await L.clock.advance(20_000); await A.call("POST", "/__sim/tick", {}); ok("manual: the Organizer presses Next number", await send("org", org.token, "next")); }
+        const co2 = await send("co", co.key, "pause"); t.check("a Co-host cannot pause the game", co2.status === 403 || co2.status === 401 || co2.status === 0, `HTTP ${co2.status} ${JSON.stringify(co2.data).slice(0, 120)}`);
+        if (c.e === "pause-resume") {
+          ok("Organizer pauses", await send("org", org.token, "pause")); t.check("the game page says paused", (await A.call("GET", `/api/z/${g.id}/info`)).status === 200);
+          const late = await joinRaw(g.id, { ...giveListed(person("p")), name: "During Pause" }, t.ip()); t.check("during a pause nobody gets a calm 5xx", late.status < 500, `HTTP ${late.status}`);
+          await L.clock.advance(30_000); ok("Host resumes", await send("host", host.key, "resume")); await L.clock.advance(30_000); ok("Organizer pauses again", await send("org", org.token, "pause")); await L.clock.advance(30_000); ok("Organizer resumes", await send("org", org.token, "resume"));
+        } else {
+          ok("Organizer ends the game", await send("org", org.token, "stop")); await A.call("POST", "/__sim/tick", {});
+          const after = await joinRaw(g.id, { ...giveListed(person("e")), name: "After End" }, t.ip()); t.check("after the end nobody new gets in (a calm refusal)", after.status >= 400 && after.status < 500, `HTTP ${after.status}`);
+          if (sWid && (c.o === "ignored" || c.o === "approve-after-cap-full")) t.eq("an undecided request lapses when the game is over", (await A.call("GET", `/api/z/${g.id}/me?wid=${sWid}`)).body.state, "lapsed");
+          t.check("results page answers", (await A.call("GET", `/api/z/${g.id}/results`)).status === 200);
+          const resume = await send("org", org.token, "resume"); t.check("an ended game cannot be resumed (calm refusal)", resume.status >= 400 && resume.status < 500, `HTTP ${resume.status}`);
+        }
       } else if (c.e === "end-window") {
         await L.clock.set(g.startMs + 4 * L.HOUR); await A.call("POST", "/__sim/tick", {});
         const w = sWid ? (await A.call("GET", `/api/z/${g.id}/me?wid=${sWid}`)).body.state : null; if (sWid && (c.o === "ignored" || c.o === "approve-after-cap-full")) t.eq("an undecided request lapses when the game is over", w, "lapsed");
