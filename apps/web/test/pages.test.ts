@@ -1504,6 +1504,15 @@ describe("console phase 3: brand on the ticket, See what guests see, payment lin
     expect(p.text()).toMatch(/PNG, JPEG or WebP, up to 5 MB, at least 64 x 64 pixels/); // the rules are on the screen
   });
 
+  test("choosing a logo with the real file box never stops the redraw (the page may not put a file name back into a file box: browsers refuse with an error and no button of the step is connected afterwards)", async () => {
+    const js = readFileSync(join(import.meta.dir, "../public/zc.js"), "utf8");
+    expect(js).toMatch(/keep\.type !== "radio" && keep\.type !== "file"/); // the redraw's box-restoring code skips file boxes
+    const o = await organizer(); await make(o, "UI-LOGOFILE"); const w = spy({}, pictureTools("data:image/png;base64," + "A".repeat(60000), JPG1));
+    const p = await open4(o, "UI-LOGOFILE", w);
+    (p.$("#brandlogo") as any).focus(); chooseFile(p, "#brandlogo", aFile(p, "logo.png", "image/png")); await p.waitFor(() => !!p.$(".zc-logo img"));
+    expect(p.errors).toEqual([]); setField(p, "#f-brand-name", "Acme"); p.click('[data-save="4"]'); await p.waitFor((x) => /Saved/.test(x)); expect(w.st.patches.length).toBe(1); // the Save button still works after the logo was chosen
+  });
+
   test("See what guests see: a button for the Organizer and Host (steps 4 and 7) that opens the preview page in a new tab; a Co-host has none", async () => {
     const o = await organizer(); await make(o, "UI-SEE"); await publish(o, "UI-SEE");
     const p = await open4(o, "UI-SEE"); const a = p.$("#seeguests") as any; expect(a.textContent).toBe("See what guests see"); expect(a.getAttribute("href")).toBe("/preview.html#w=ticket&e=UI-SEE"); expect(a.getAttribute("target")).toBe("_blank");
@@ -1820,6 +1829,16 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     p.click('[data-cashcur="hs.early5.pd"][data-v="USD"]'); p.click('[data-save="3"]'); await p.waitFor((x) => /Saved|saved/.test(x));
     expect(await rw()).toEqual(["Cash prize: $7,000"]);
     openStep(p, 6); for (const id of ["playnow", "sendmine", "playalong"]) expect(p.win.document.querySelectorAll("#" + id).length).toBeLessThanOrEqual(1);
+  });
+
+  test("Your games: an unpublished draft has a Delete (two taps) that frees its place; a published game has none", async () => {
+    const o = await organizer(); await make(o, "UI-DRAFT1"); await make(o, "UI-DRAFT2"); await make(o, "UI-PUB1"); await publish(o, "UI-PUB1");
+    const p = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" }); await p.waitFor((x) => /Your games/.test(x));
+    const dels = () => Array.from(p.win.document.querySelectorAll("[data-del-draft]")).map((e: any) => e.dataset.delDraft).sort();
+    expect(dels()).toEqual(["UI-DRAFT1", "UI-DRAFT2"]); // only drafts, never the published game
+    p.click('[data-del-draft="UI-DRAFT1"]'); expect(p.text()).toMatch(/Tap again to delete/); expect(dels()).toEqual(["UI-DRAFT1", "UI-DRAFT2"]); // the first tap only asks
+    p.click('[data-del-draft="UI-DRAFT1"]'); await p.waitFor((x) => /Draft deleted/.test(x));
+    expect(dels()).toEqual(["UI-DRAFT2"]); expect(p.text()).not.toMatch(/UI-DRAFT1/);
   });
 
   test("Game day: the step says the Organizer / Host logs into the game and controls it (draft and published)", async () => {

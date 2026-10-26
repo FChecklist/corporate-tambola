@@ -163,7 +163,18 @@ describe("speeds, rounds, tickets per person, names", () => {
   test("an organizer may keep at most 10 unpublished drafts", async () => {
     const o = await organizer();
     for (let i = 0; i < 10; i++) expect((await create(o.key, uid())).status).toBe(200);
+    const full = await create(o.key, uid()); expect(full.status).toBe(409); expect((await j(full)).error).toMatch(/delete one you do not need/); // the message says how to free a place
+  });
+  test("a draft can be deleted at once, so the 10-draft limit never traps anyone; only the organizer may, and a published game is never deleted this way", async () => {
+    const o = await organizer(); const ids = Array.from({ length: 10 }, () => uid());
+    for (const id of ids) expect((await create(o.key, id)).status).toBe(200);
     expect((await create(o.key, uid())).status).toBe(409);
+    expect((await call("POST", `/api/z/${ids[0]}/discard`, {}, keyH(o.key))).status).toBe(200);
+    expect(one("SELECT COUNT(*) AS c FROM engagement WHERE id=?", ids[0]).c).toBe(0);
+    expect((await create(o.key, uid())).status).toBe(200); // a place is free again
+    expect((await call("POST", `/api/z/${ids[1]}/discard`, {})).status).toBe(403); // nobody signed in
+    expect((await call("POST", `/api/z/${ids[1]}/discard`, {}, o.aiH)).status).toBe(403); // the AI link may not
+    expect(one("SELECT COUNT(*) AS c FROM engagement WHERE id=?", ids[1]).c).toBe(1);
   });
 });
 

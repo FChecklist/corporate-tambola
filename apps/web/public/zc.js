@@ -1192,7 +1192,7 @@
   const loadingView = () => frame(`<div class="zc-body"><div class="zc-main"><div class="zc-toast" role="status">${esc(S.note || "Loading…")}</div>${eid && isOrg() ? "" : ""}</div></div>`, false);
 
   /** "Your games": every game of this person (Organizer: the games they made; Host: the games they help with), always on the screen, newest first. */
-  const gameRow = (e) => `<div class="zc-rowl"><span><b>${esc(e.id)}</b> · ${esc(e.startsAtIST || fmtDay(e.created_ms))} · ${e.participants} ${e.participants === 1 ? "person" : "people"} · ${e.draft ? "draft" : "published"}</span><span><button type="button" class="zc-mini" data-open-game="${esc(e.id)}">Open</button> <button type="button" class="zc-mini" data-clonebtn="1" data-from="${esc(e.id)}" data-people="${e.participants > 0 && !e.erased ? 1 : 0}">Create a new game like this one</button></span></div>`;
+  const gameRow = (e) => `<div class="zc-rowl"><span><b>${esc(e.id)}</b> · ${esc(e.startsAtIST || fmtDay(e.created_ms))} · ${e.participants} ${e.participants === 1 ? "person" : "people"} · ${e.draft ? "draft" : "published"}</span><span><button type="button" class="zc-mini" data-open-game="${esc(e.id)}">Open</button> <button type="button" class="zc-mini" data-clonebtn="1" data-from="${esc(e.id)}" data-people="${e.participants > 0 && !e.erased ? 1 : 0}">Create a new game like this one</button>${e.deletable ? ` <button type="button" class="zc-mini zc-btn-bad" data-del-draft="${esc(e.id)}">${S.delArm === e.id ? "Tap again to delete" : "Delete"}</button>` : ""}</span></div>`;
   const gamesBlock = (h, who) => { const gs = (h && h.engagements) || []; return `<div class="zc-block" id="yourgames"><h3>Your games${gs.length ? ` (${gs.length})` : ""}</h3>${gs.length ? small(who === "host" ? "The games you help to run as a Host. Pick one to open it." : "Every game you made. Open any of them, or start a new one.") + gs.map(gameRow).join("") : small(who === "host" ? "No game is open to you yet." : "You have no game yet. Start your first one below.")}</div>`; };
   /** A Host who also wants to run their own games: same e-mail, Organizer account, the Terms box, and then they hold both roles. */
   const hostNewBlock = () => { const a = altRole(); return `<div class="zc-block" id="hostnew"><h3>Start a new game as an Organizer</h3>${small("You help to run games as a Host. You can also make your own games as an Organizer, with the same e-mail. Your own games are separate from the games you host.")}${a && a.kind === "organizer" ? `<div class="zc-foot"><button type="button" class="zc-btn zc-btn-s" id="hostswitchorg">Open my Organizer view</button></div>` : `${CBConsent.html("K2")}${S.becomeErr ? `<p class="zc-small zc-warnt" role="alert">${esc(S.becomeErr)}</p>` : ""}<div class="zc-foot"><button type="button" class="zc-btn zc-btn-s" id="hostbecome">Create my Organizer account and start a new game</button></div>`}</div>`; };
@@ -1433,7 +1433,7 @@
     // A redraw (for any reason) must never interrupt a person who is typing: the box in use keeps its text, its focus and its cursor.
     const ae = document.activeElement, keep = ae && ae.id && $app.contains(ae) && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA") ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd, v: ae.value, type: ae.type } : null;
     lastHtml = v; $app.innerHTML = v;
-    if (keep && keep.type !== "checkbox" && keep.type !== "radio") { const el = document.getElementById(keep.id); if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) { if (el.value !== keep.v) el.value = keep.v; try { el.focus({ preventScroll: true }); if (keep.s !== null) el.setSelectionRange(keep.s, keep.e); } catch { /* a box that has no cursor */ } } }
+    if (keep && keep.type !== "checkbox" && keep.type !== "radio" && keep.type !== "file") { const el = document.getElementById(keep.id); if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) { try { if (el.value !== keep.v) el.value = keep.v; el.focus({ preventScroll: true }); if (keep.s !== null) el.setSelectionRange(keep.s, keep.e); } catch { /* a box that has no cursor */ } } } // a file box can never be given a file name by the page (the browser refuses with an error): after choosing a logo this line used to stop the redraw, so no button of the step was connected any more
     if (secret && eid && S.cfg && !S.deadLink && (role() === "organizer" || role() === "host")) saveLast({ eid, open: S.open, role: role() });
     restoreDirty(); bind(); cbWire(); a11y(); markAct();
   }
@@ -1508,6 +1508,7 @@
     return res;
   }
   async function afterCreate(id, r) {
+    S.note = ""; S.toast = ""; // a note about the last thing (for example 'Draft deleted.') must not follow the person into a new game
     if (r && (r.verify !== "mobile" || r.employeesOnly)) await call("PATCH", `/api/z/${id}/settings`, { ...(r.verify !== "mobile" ? { verify: r.verify } : {}), ...(r.employeesOnly ? { employeesOnly: true } : {}) });
     if (r && r.invite) await call("PATCH", `/api/z/${id}/settings`, { invites: { on: true, per: 4, cats: ["family", "colleagues"] } });
     let k = { ok: false, reason: "" }; try { k = await TBControl.ensureKey(id, { token: secret, base: BASE, prefix: "/api/z" }); } catch { /* the pause key is optional: the game does not depend on it */ }
@@ -1870,7 +1871,11 @@
       catch (e) { S.creditErr = friendly(e); }
       refreshEng();
     };
-    all("[data-open-game]", (b) => (b.onclick = () => { eid = b.dataset.openGame; S.store = null; S.f = null; S.fFor = ""; S.openInit = ""; S.cfg = null; S.info = null; refreshTeam(); refreshEng(); }));
+    all("[data-del-draft]", (b) => (b.onclick = async () => { // a draft nobody published: two taps, then it is gone and its place is free again
+      const id = b.dataset.delDraft; if (S.delArm !== id) { S.delArm = id; return redraw(); }
+      S.delArm = ""; try { await call("POST", `/api/z/${id}/discard`, {}); S.note = "Draft deleted."; } catch (e) { S.note = friendly(e); } await refreshHome(); redraw();
+    }));
+    all("[data-open-game]", (b) => (b.onclick = () => { S.note = ""; S.toast = ""; eid = b.dataset.openGame; S.store = null; S.f = null; S.fFor = ""; S.openInit = ""; S.cfg = null; S.info = null; refreshTeam(); refreshEng(); }));
     all("[data-reuse]", (b) => (b.onclick = async () => {
       try { // a new game that starts with the earlier roster already on it
         const now = await latestRound(); const id = randId();
