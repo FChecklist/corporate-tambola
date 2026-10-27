@@ -296,7 +296,7 @@ body:has(#go) #ct-notify{display:none}
 .zretry{margin:16px 0 0}
 .zlinkin{width:100%;box-sizing:border-box;min-height:44px;margin:0 0 8px;padding:8px 10px;font-size:16px;border:2px solid #D9A5B6;border-radius:10px;background:#FBEAEE}
 .zinvsheet{position:fixed;left:8px;right:8px;bottom:8px;z-index:40;max-width:504px;margin:0 auto;padding:12px;background:#fff;border:2px solid #C9A24A;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.3)}
-/* Traditional housie ticket (owner order 2026-10-27): a coloured card, white number squares with a bold number, coloured empty squares like a printed ticket,
+/* Traditional housie ticket (2026-10-27): a coloured card, white number squares with a bold number, coloured empty squares like a printed ticket,
    and a RED CROSS drawn over a number the player has crossed. The number stays readable under the cross. Tapping a crossed number again takes the cross off (the phone runtime toggles it). */
 .zticket{padding:8px;gap:4px;background:#FFE08A;border:3px solid #1C2B3A;border-radius:12px;box-shadow:0 3px 0 rgba(28,43,58,.25)}
 .zticket div{position:relative;border-radius:4px;background:#fff;border:1.5px solid #1C2B3A;color:#1C2B3A;font-weight:800;box-shadow:none;text-shadow:none}

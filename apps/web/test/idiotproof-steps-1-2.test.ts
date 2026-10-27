@@ -144,7 +144,7 @@ describe('console steps 1 and 2: told what is wrong, and how to put it right', (
     expect(pw.patches.length).toBe(1); expect('callMode' in pw.patches[0]).toBe(false);
     expect(await modeOnServer()).toBe('auto');
     openStep(p, 2);
-    expect(p.$(ck('mode', 'host'))!.getAttribute('aria-pressed')).toBe('true'); // the tap is still there ...
+    expect((p.$(ck('mode', 'host')) as any).checked).toBe(true); // the tap is still there ...
     expect(p.$('#sec2 .zc-say')!.textContent).toBe('Not saved yet. Press Save and continue below.'); // ... and it still says it is not saved
     p.click(`[data-save='2']`); await idle(p);
     expect(await modeOnServer()).toBe('host'); // pressing Save keeps what was tapped
