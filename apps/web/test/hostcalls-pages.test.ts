@@ -70,7 +70,7 @@ describe("the console: who calls the numbers", () => {
     const c = await consolePage(x, "HC-SET");
     await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /Who calls the numbers\?/.test(t) && /Duration \(gap\) between two numbers/.test(t));
     const chips = Array.from(c.win.document.querySelectorAll('[data-ck="mode"]')).map((e: any) => e.textContent.trim());
-    expect(chips).toEqual(["The software, at the chosen speed", "A Host presses a button for each number"]);
+    expect(chips).toEqual(["The game does", "I do (a Host presses a button for each number)"]);
     expect((c.$('[data-ck="mode"][data-v="auto"]') as any).className).toMatch(/\bon\b/);
     const html = c.win.document.getElementById("sec2")!.innerHTML; expect(html.indexOf('data-ck="mode"')).toBeLessThan(html.indexOf('data-ck="spd"')); // who calls the numbers comes first, then the gap
     expect(c.$('[data-ck="spd"]')).toBeTruthy(); // auto: the speed chips are there

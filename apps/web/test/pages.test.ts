@@ -1055,7 +1055,7 @@ describe("the console for an AI that works in the browser", () => {
 
   test("Quick setup has every main choice: who calls the numbers (auto or manual with a Host), what a person must give to get in, and employees only (found when the owner looked at the live page, 25 Oct 2026)", async () => {
     const o = await organizer(); const p = await quickPage(o); await p.waitFor((x) => /1\. Which game\?/.test(x) && /Who calls the numbers\?/.test(x) && /What must a person give to get in\?/.test(x) && /Only my employees/.test(x));
-    expect(p.text()).toMatch(/A Host presses a button for each number \(manual\)/); expect(p.text()).toMatch(/The software, at the chosen speed \(auto\)/);
+    expect(p.text()).toMatch(/I do \(a Host presses a button for each number\)/); expect(p.text()).toMatch(/The game does/); expect(p.text()).toMatch(/How does it start\?/);
     const tomorrow = new Date(Date.now() + 5.5 * 3600000 + 2 * 86400000); const d = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
     set(p, "#qk-name", "Manual game"); set(p, "#qk-date", d); set(p, "#qk-time", "18:30");
     p.click('[data-ck="cap"][data-v="100"]'); p.click('[data-ck="mode"][data-v="host"]'); p.click('[data-ck="ver"][data-v="both"]'); p.click('[data-bool="emp"]');

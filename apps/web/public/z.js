@@ -299,6 +299,14 @@
   }
   /** Before the first number: what to expect, what can be won, a sound check and a calendar entry. Everything here is known at boot, so it costs no extra requests. */
   function waitingRoom(v) {
+    if (v.phase === "play" && !v.locked && !v.late && !v.log.length && v.round <= 1 && v.startMode === "manual" && !DEMO) { // a game that begins when the Host or Organizer presses Start: what is happening, in plain words
+      const ms0 = (1692803367 + (v.scheduledRound - 1) * 3) * 1000, when0 = new Date(ms0).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+      const sec0 = v.nowRound === null ? null : Math.max(0, (v.scheduledRound - v.nowRound) * 3);
+      const top0 = v.waitingForStart ? `<h2>Waiting for the host to begin the game</h2><div class="zsetup">The host will press Start soon. Keep this page open: the game begins by itself on your phone the moment they do.</div>`
+        : v.startingInSec !== null ? `<h2>The game is starting</h2><div class="zcount" aria-live="off" id="cd2">${clock(v.startingInSec)}</div><p class="zsmall" style="margin-top:0">until the first number. Keep this page open and your screen on: the numbers appear on their own.</p>`
+        : `<h2>You are in. The game starts at ${esc(when0)}</h2>${sec0 !== null ? `<div class="zsmall" style="margin:0">Starting in</div><div class="zcount" aria-live="off" id="cd2">${clock(sec0)}</div>` : ""}<p class="zsmall" style="margin-top:0">At that time the host presses Start. Keep this page open and your screen on.</p>`;
+      return `<div class="zcard zwait">${top0}<div class="zdo"><b>What to do:</b> nothing yet. Keep this page open. When the numbers start, tap each one on your ticket as it is called.</div></div>`;
+    }
     if (v.phase !== "play" || v.locked || v.late || v.log.length || v.nextCallInSec === null || v.nextCallInSec <= 0 || v.round > 1) return "";
     if (DEMO) return DEMO.running ? `<div class="zcard zwait"><h2>Starting in <span id="cd">${Math.max(0, v.nextCallInSec)}</span> seconds</h2><p class="zsmall" style="margin:0">Tap each number on your ticket as it is called. When the four corners are marked, press Claim.</p></div>` : "";
     const ms = (1692803367 + (v.scheduledRound - 1) * 3) * 1000;
@@ -687,7 +695,7 @@
   function callCard(v, last, sub) {
     const secs = v.nextCallInSec, running = v.phase === "play" && !v.locked && !v.paused && !v.brk && !v.intermission && v.log.length > 0;
     const tone = v.phase === "ended" ? "end" : v.paused || v.locked ? "pause" : running ? (secs !== null && secs <= 3 ? "go" : "soon") : "wait";
-    const chip = v.phase === "ended" ? "Game over" : v.paused ? "Paused" : v.locked ? "Waiting to start" : v.waitingForHost ? "Waiting for the host" : !v.log.length ? "Get ready" : running && secs !== null ? "Next number in " + secs + "s" : "Numbers coming";
+    const chip = v.phase === "ended" ? "Game over" : v.paused ? "Paused" : v.locked ? "Waiting to start" : v.waitingForStart ? "Waiting for the host" : v.startingInSec !== null ? "Starting in " + v.startingInSec + "s" : v.waitingForHost ? "Waiting for the host" : !v.log.length ? "Get ready" : running && secs !== null ? "Next number in " + secs + "s" : "Numbers coming";
     const total = v.late ? "since you joined" : "of 90";
     // Between two numbers (software calls): a big countdown 9, 8, 7 ... 1, then the number. Silent on purpose: the voice speaks only the number itself.
     const cdown = running && secs !== null && !v.waitingForHost && v.mode !== "hold" ? `<div class="zcount" role="timer" aria-label="Next number in ${secs} seconds"><div class="zring" style="--p:${Math.max(0, Math.min(100, Math.round(secs / Math.max(3, v.callSeconds || 9) * 100)))}"><b>${secs}</b></div><span>seconds to the next number</span></div>` : "";
@@ -736,7 +744,7 @@
     else if (v.mode === "blind") banners.push(`<div class="zbanner warn">Cannot reach the organizer's controls right now. Play continues; a pause may appear late.</div>`);
     if (v.phase === "ended" && !v.stopped && v.endedByPrizes) banners.push(`<div class="zbanner ok">Every prize has been won, so the game ends here after ${v.log.length} numbers. No more numbers will be called. Thank you for taking part.</div>`);
     if (v.phase === "ended" && !v.stopped && !v.endedByPrizes) banners.push(`<div class="zbanner ok">${v.rounds > 1 ? "All " + v.rounds + " rounds are finished." : "All 90 numbers have been called."} Thank you for taking part.</div>`);
-    const sub = v.phase === "ended" || v.locked || v.brk || v.intermission || (DEMO && !DEMO.running) ? "" : v.late && v.late.secondsUntil > 0 ? "Your numbers start in " + clock(v.late.secondsUntil) : v.waitingForHost ? "The host presses for the next number" : v.log.length === 0 ? (v.nextCallInSec !== null ? (v.nextCallInSec > GRACE_SECS ? "Starting in " + clock(v.nextCallInSec - GRACE_SECS) : "First number in " + clock(v.nextCallInSec)) : "Getting ready…") : v.paused || v.mode === "hold" ? "" : v.waitingForHost ? "The host presses for the next number" : v.nextCallInSec !== null ? "Next number in " + v.nextCallInSec + "s" : "";
+    const sub = v.phase === "ended" || v.locked || v.brk || v.intermission || (DEMO && !DEMO.running) ? "" : v.waitingForStart ? "Waiting for the host to begin the game" : v.startingInSec !== null ? "The game starts in " + v.startingInSec + " seconds" : v.late && v.late.secondsUntil > 0 ? "Your numbers start in " + clock(v.late.secondsUntil) : v.waitingForHost ? "The host presses for the next number" : v.log.length === 0 ? (v.nextCallInSec !== null ? (v.nextCallInSec > GRACE_SECS ? "Starting in " + clock(v.nextCallInSec - GRACE_SECS) : "First number in " + clock(v.nextCallInSec)) : "Getting ready…") : v.paused || v.mode === "hold" ? "" : v.waitingForHost ? "The host presses for the next number" : v.nextCallInSec !== null ? "Next number in " + v.nextCallInSec + "s" : "";
     const still = v.tickets.length ? stillToWinRows(v) : "";
     const chk = v.pendingChecks > 0 ? `<p class="zsmall">Double-checking ${v.pendingChecks} earlier number${v.pendingChecks === 1 ? "" : "s"} in the background.</p>` : "";
     const curWins = v.won.filter((w) => w.round === v.round), winSet = new Set(curWins.flatMap((w) => w.cells));
