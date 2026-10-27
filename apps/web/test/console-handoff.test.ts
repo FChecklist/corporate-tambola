@@ -28,7 +28,7 @@ test("hand-off: the page redeems the one-time link, keeps a key for that game in
   await new Promise((r) => setTimeout(r, 600));
   expect(p.win.location.search).toBe("?e=HAND-1");
   expect(p.win.location.pathname).toContain("zc");
-  const key = p.win.sessionStorage.getItem("cbz-org") as string;
+  const key = p.win.sessionStorage.getItem("ctz-org") as string;
   expect(key).toMatch(/^ctk_[0-9a-f]{48}$/);
   expect((await w.api("GET", "/api/z/HAND-1/summary", undefined, key)).status).toBe(200);
   expect((await w.api("GET", "/api/z/HAND-2/summary", undefined, key)).status).toBe(403); // the key is for the one game
@@ -42,21 +42,21 @@ test("hand-off: opening the link twice, or after a minute, opens nothing and say
   const t = link("HAND-1");
   const first = await visit(w, `/signin?t=${t}&go=console&e=HAND-1`);
   await new Promise((r) => setTimeout(r, 500));
-  expect(first.win.sessionStorage.getItem("cbz-org")).toBeTruthy();
+  expect(first.win.sessionStorage.getItem("ctz-org")).toBeTruthy();
   const again = await visit(w, `/signin?t=${t}&go=console&e=HAND-1`);
   await again.waitFor((x: string) => /has run out/.test(x));
-  expect(again.win.sessionStorage.getItem("cbz-org")).toBeFalsy();
+  expect(again.win.sessionStorage.getItem("ctz-org")).toBeFalsy();
   const old = link("HAND-2", "master", -1000);
   const late = await visit(w, `/signin?t=${old}&go=console&e=HAND-2`);
   await late.waitFor((x: string) => /has run out/.test(x));
-  expect(late.win.sessionStorage.getItem("cbz-org")).toBeFalsy();
+  expect(late.win.sessionStorage.getItem("ctz-org")).toBeFalsy();
 });
 
 test("the ordinary sign-in page is unchanged: without go=console it still shows the 'Sign me in' button and redeems nothing by itself", async () => {
   const { w } = await setup();
   const p = await visit(w, "/signin?t=" + "0".repeat(48));
   await p.waitFor((x: string) => /Press the button to sign in/.test(x));
-  expect(p.win.sessionStorage.getItem("cbz-org")).toBeFalsy();
+  expect(p.win.sessionStorage.getItem("ctz-org")).toBeFalsy();
   const q = await visit(w, "/signin?t=" + "0".repeat(48) + "&go=console&e=not a game!");
   await q.waitFor((x: string) => /Press the button to sign in/.test(x)); // an invalid game name is not a hand-off
 });
