@@ -92,7 +92,7 @@ describe("the console: who calls the numbers", () => {
   test("step 2 hides the manual choices for a game above 1,000 people, with a short note why (nothing breaks)", async () => {
     const x = await setup("HC-BIG", false, { cap: 1500 });
     const c = await consolePage(x, "HC-BIG");
-    await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /Games above 1,000 people run by themselves/.test(t));
+    await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /Games above 1,000 people are called by the game itself/.test(t));
     expect(c.$('[data-ck="mode"]')).toBeNull(); expect(c.$('[data-ck="start"]')).toBeNull(); expect(c.$("#manualhidden")).toBeTruthy();
     expect((await x.w.json(await x.w.api("GET", "/api/z/HC-BIG/info"))).callMode).toBe("auto");
   });

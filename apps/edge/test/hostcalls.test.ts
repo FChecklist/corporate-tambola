@@ -54,10 +54,10 @@ describe("the setting: who calls the numbers", () => {
   test("host mode is allowed up to 1,000 people and refused above it, at creation and when the size is raised later", async () => {
     const o = await organizer();
     const big = await make(o, "HM-BIG", { cap: 5000, callMode: "host" });
-    expect(big.status).toBe(409); expect((await j(big)).error).toMatch(/Games above 1,000 people run by themselves/);
+    expect(big.status).toBe(409); expect((await j(big)).error).toMatch(/Games above 1,000 people are called by the game itself/);
     expect((await make(o, "HM-OK", { cap: 1000, callMode: "host" })).status).toBe(200);
     const raise = await call("PATCH", "/api/z/HM-OK/settings", { cap: 1001 }, { "x-organizer": "plat" }); // (the platform key skips the pack check: only the host-mode rule can refuse)
-    expect(raise.status).toBe(409); expect((await j(raise)).error).toMatch(/Games above 1,000 people run by themselves/);
+    expect(raise.status).toBe(409); expect((await j(raise)).error).toMatch(/Games above 1,000 people are called by the game itself/);
     expect((await call("PATCH", "/api/z/HM-OK/settings", { cap: 1001, callMode: "auto" }, { "x-organizer": "plat" })).status).toBe(200);
     const flip = await call("PATCH", "/api/z/HM-OK/settings", { callMode: "host" }, { "x-organizer": "plat" });
     expect(flip.status).toBe(409);

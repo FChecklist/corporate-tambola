@@ -232,9 +232,14 @@
     let when = "the start time"; try { const ms = startOf(f); if (Number.isFinite(ms)) when = new Date(ms).toLocaleString("en-US", { timeZone: "Asia/Kolkata", weekday: "short", hour: "numeric", minute: "2-digit", hour12: true }).replace(",", "").replace(/ (AM|PM)$/, (m) => m.toLowerCase()); } catch { /* the day or time is not picked yet */ }
     return `<p class="zc-small zc-modesum" id="modesummary"><b>Your game:</b> ${f.start === "manual" ? "you press Start at " + esc(when) : "starts by itself at " + esc(when)}, and ${f.mode === "host" ? "you or a Host call every number" : "the game calls the numbers"}.</p>`;
   };
+  const START_MAX = 2000; // pressing Start rides the pause/control file, which exists for games of up to 2,000 people
   const modeQuestions = (f) => {
-    if (Number(f.cap) > MANUAL_MAX) { f.start = "auto"; f.mode = "auto"; return small("Games above 1,000 people run by themselves: they start by itself at the time and the game calls the numbers.", 'id="manualhidden"'); }
-    return radios("start", "How does it start?", START_OPTS) + radios("mode", "Who calls the numbers?", CALL_OPTS) + modeSummary(f);
+    const cap = Number(f.cap);
+    if (cap > MANUAL_MAX) f.mode = "auto"; // above 1,000 people the game calls the numbers itself
+    if (cap > START_MAX) f.start = "auto";
+    const q1 = cap > START_MAX ? small("Games above 2,000 people start by themselves at the time.", 'id="manualhidden"') : radios("start", "How does it start?", START_OPTS);
+    const q2 = cap > MANUAL_MAX ? small("Games above 1,000 people are called by the game itself. " + (cap > START_MAX ? "" : "You can still press Start yourself."), 'id="callhidden"') : radios("mode", "Who calls the numbers?", CALL_OPTS);
+    return q1 + q2 + modeSummary(f);
   };
   // one small line under every group of tick boxes: what the boxes are for
   const HINTS = {

@@ -96,16 +96,21 @@ describe("the console: how does it start", () => {
   });
 });
 
-describe("the manual choices are hidden above 1,000 people", () => {
-  test("a game of 1,001 people shows a short note instead of the two questions; at 1,000 the questions are there", async () => {
+describe("above 1,000 people the manual-play choice is hidden", () => {
+  test("a game of 1,001 people keeps 'How does it start?' but 'Who calls the numbers?' is replaced by a short note; at 1,000 both questions are there; above 2,000 Start by hand is hidden too", async () => {
     const big = await setup("MP-1001", false, { cap: 1001 });
     const c1 = await consolePage(big, "MP-1001");
-    await c1.waitFor(() => !!c1.$('.zc-dot[data-open="2"]')); openStep(c1, 2); await c1.waitFor((t) => /Games above 1,000 people run by themselves/.test(t));
-    expect(c1.$('input[type=radio][name="start"]')).toBeNull(); expect(c1.$('input[type=radio][name="mode"]')).toBeNull();
+    await c1.waitFor(() => !!c1.$('.zc-dot[data-open="2"]')); openStep(c1, 2); await c1.waitFor((t) => /Games above 1,000 people are called by the game itself/.test(t));
+    expect(c1.$('input[type=radio][name="mode"]')).toBeNull(); expect(c1.$('input[type=radio][name="start"]')).toBeTruthy();
+    expect(c1.$("#modesummary")!.textContent).toMatch(/and the game calls the numbers/);
     const ok = await setup("MP-1000", false, { cap: 1000 });
     const c2 = await consolePage(ok, "MP-1000");
     await c2.waitFor(() => !!c2.$('.zc-dot[data-open="2"]')); openStep(c2, 2); await c2.waitFor((t) => /How does it start\?/.test(t));
-    expect(c2.$('input[type=radio][name="start"]')).toBeTruthy(); expect(c2.$("#manualhidden")).toBeNull();
+    expect(c2.$('input[type=radio][name="start"]')).toBeTruthy(); expect(c2.$('input[type=radio][name="mode"]')).toBeTruthy(); expect(c2.$("#callhidden")).toBeNull();
+    const huge = await setup("MP-2001", false, { cap: 2001 });
+    const c3 = await consolePage(huge, "MP-2001");
+    await c3.waitFor(() => !!c3.$('.zc-dot[data-open="2"]')); openStep(c3, 2); await c3.waitFor((t) => /Games above 2,000 people start by themselves/.test(t));
+    expect(c3.$('input[type=radio][name="start"]')).toBeNull();
   });
 });
 

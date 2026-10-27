@@ -68,22 +68,22 @@ describe("the four modes are two plain settings", () => {
       const i = await info(`M-4${n}`, o.h); expect([i.startMode, i.callMode]).toEqual([s, c]);
     }
   });
-  test("manual start (and a Host calling) is allowed up to 1,000 people: refused above it at creation, when the size is raised and when a big game switches to it; shrinking back re-allows it", async () => {
-    const o = await organizer();
-    const big = await make(o, "M-BIG", { cap: 5000, startMode: "manual" });
-    expect(big.status).toBe(409); expect((await j(big)).error).toMatch(/Games above 1,000 people run by themselves/);
-    expect((await make(o, "M-OK", { cap: 1000, startMode: "manual" })).status).toBe(200);
-    const raise = await call("PATCH", "/api/z/M-OK/settings", { cap: 1001 }, { "x-organizer": "plat" });
-    expect(raise.status).toBe(409);
-    expect((await call("PATCH", "/api/z/M-OK/settings", { cap: 1001, startMode: "auto" }, { "x-organizer": "plat" })).status).toBe(200);
-    // a big game cannot switch either manual option on; shrinking it back to 1,000 re-allows them
-    const sw1 = await call("PATCH", "/api/z/M-OK/settings", { startMode: "manual" }, { "x-organizer": "plat" });
-    const sw2 = await call("PATCH", "/api/z/M-OK/settings", { callMode: "host" }, { "x-organizer": "plat" });
-    expect([sw1.status, sw2.status]).toEqual([409, 409]); expect((await j(sw1)).error).toMatch(/choose "By itself at the time" and "The game does"/);
-    expect((await call("PATCH", "/api/z/M-OK/settings", { cap: 1000, startMode: "manual", callMode: "host" }, { "x-organizer": "plat" })).status).toBe(200);
-    expect((await make(o, "M-H1000", { cap: 1000, callMode: "host" })).status).toBe(200);
-    const h = await make(o, "M-H1001", { cap: 1001, callMode: "host" }); expect(h.status).toBe(409);
-    expect((await make(o, "M-A1001", { cap: 1001 })).status).toBe(200); // auto start + auto play has no limit of this kind
+  test("above 1,000 people only manual PLAY is refused (Start by hand stays); 1,000 allows all four; shrinking back re-allows it", async () => {
+    const o = await organizer(); const P = { "x-organizer": "plat" };
+    const host = await make(o, "M-BIG", { cap: 5000, callMode: "host" });
+    expect(host.status).toBe(409); expect((await j(host)).error).toMatch(/Games above 1,000 people are called by the game itself: choose "The game does"\. You can still press Start yourself/);
+    for (const [id, sm, cm, cap, ok] of [["M-A1000", "auto", "auto", 1000, 1], ["M-B1000", "auto", "host", 1000, 1], ["M-C1000", "manual", "auto", 1000, 1], ["M-D1000", "manual", "host", 1000, 1], ["M-A1001", "auto", "auto", 1001, 1], ["M-B1001", "auto", "host", 1001, 0], ["M-C1001", "manual", "auto", 1001, 1], ["M-D1001", "manual", "host", 1001, 0]] as const) {
+      const r = await make(o, id, { cap, startMode: sm, callMode: cm }); expect([id, r.status]).toEqual([id, ok ? 200 : 409]);
+    }
+    // a game that uses manual play cannot grow past 1,000, but one that only presses Start can; switching manual play on above 1,000 is refused; shrinking re-allows
+    expect((await call("PATCH", "/api/z/M-D1000/settings", { cap: 1001 }, P)).status).toBe(409);
+    expect((await call("PATCH", "/api/z/M-C1000/settings", { cap: 1500 }, P)).status).toBe(200);
+    const sw = await call("PATCH", "/api/z/M-C1000/settings", { callMode: "host" }, P); expect(sw.status).toBe(409); expect((await j(sw)).error).toMatch(/choose "The game does"/);
+    expect((await call("PATCH", "/api/z/M-C1000/settings", { cap: 1000, callMode: "host" }, P)).status).toBe(200);
+    expect((await call("PATCH", "/api/z/M-D1000/settings", { cap: 1001, callMode: "auto" }, P)).status).toBe(200);
+    // pressing Start has the control-file limit (2,000)
+    expect((await make(o, "M-C2000", { cap: 2000, startMode: "manual" })).status).toBe(200);
+    const s2 = await make(o, "M-C2001", { cap: 2001, startMode: "manual" }); expect(s2.status).toBe(409); expect((await j(s2)).error).toMatch(/up to 2,000 people/);
   });
 });
 

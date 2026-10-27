@@ -97,7 +97,7 @@ describe("2. how it plays: every question has numbered choices and a recommendat
     expect(sm).toMatchObject({ callSeconds: 12, callMode: "host", rounds: 3, ties: "share", tickets: 1 });
   });
   test("a game larger than 1,000 people is told plainly that the software calls the numbers, and the Host choice is not offered", async () => {
-    const o = await organizer(); const t = await toPlay(o.base, /Up to 5000/); const s = await pick(t, /Who calls the numbers/); const st = await pick(t, /How does it start/); expect(st).toMatch(/Your game is larger, so it starts by itself/); expect(choicesOf(st).map((c) => c.label)).toEqual(["It starts by itself at the start time"]);
+    const o = await organizer(); const t = await toPlay(o.base, /Up to 5000/); const s = await pick(t, /Who calls the numbers/); const st = await pick(t, /How does it start/); expect(choicesOf(st).map((c) => c.label)).toEqual(["It starts by itself at the start time", "I press Start"]);
     expect(s).toMatch(/Your game is larger, so the software calls them/); expect(choicesOf(s).map((c) => c.label)).toEqual(["The software calls the numbers"]);
   });
 });

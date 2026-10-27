@@ -197,12 +197,12 @@ export default async function ({ seed, R, L }) {
     await clock.reset();
     const org = await t.newOrg("md"); const start = (await clock.now()) + 30 * MIN;
     const g = await t.game(org, { cap, startRound: roundAt(start), startMode: mode.startMode, callMode: mode.callMode });
-    const manual = mode.startMode === "manual" || mode.callMode === "host";
-    if (!manual || cap <= 1000) t.expect("allowed", g.r, "ok"); else { t.expect("refused", g.r, "refuse"); t.check("plain words that say what to choose", /run by themselves.*By itself at the time.*The game does/.test(g.r.body?.error ?? ""), g.r.body?.error); }
-    if (manual && cap > 1000) { // and an auto game of that size cannot be switched to manual, but can after it shrinks to 1000
-      const a = await t.game(org, { cap, startRound: roundAt(start) + 5 }); t.expect("auto game of that size is fine", a.r, "ok");
-      t.expect("cannot switch to manual", await org.api("PATCH", `/api/z/${a.id}/settings`, { startMode: mode.startMode, callMode: mode.callMode }), "refuse");
-      t.expect("shrunk to 1000 and switched in one save", await org.api("PATCH", `/api/z/${a.id}/settings`, { cap: 1000, startMode: mode.startMode, callMode: mode.callMode }), "ok");
+    const manualPlay = mode.callMode === "host"; // only manual PLAY is limited to 1,000; pressing Start works for bigger games
+    if (!manualPlay || cap <= 1000) t.expect("allowed", g.r, "ok"); else { t.expect("refused", g.r, "refuse"); t.check("plain words that say what to choose", /called by the game itself.*The game does.*press Start yourself/.test(g.r.body?.error ?? ""), g.r.body?.error); }
+    if (manualPlay && cap > 1000) { // an auto game of that size cannot be switched to manual play, but can after it shrinks to 1000
+      const a = await t.game(org, { cap, startRound: roundAt(start) + 5, startMode: mode.startMode }); t.expect("same size with the game calling is fine", a.r, "ok");
+      t.expect("cannot switch manual play on", await org.api("PATCH", `/api/z/${a.id}/settings`, { callMode: "host" }), "refuse");
+      t.expect("shrunk to 1000 and switched in one save", await org.api("PATCH", `/api/z/${a.id}/settings`, { cap: 1000, callMode: "host" }), "ok");
     }
   } });
   return out;
