@@ -66,6 +66,8 @@ export interface RuntimeView {
   claimNow: PatternKey[];
   /** The prizes that can still be claimed (the completing number is the latest one), even while the game is paused: the Claim buttons. */
   claimOpen: PatternKey[];
+  /** The claims everybody can see (ticket numbers only), newest last: the phone shows "Ticket 214 has claimed Top Line. Checking now..." from them. */
+  claimFeed: { id: string; ticket: number; pattern: PatternKey; bogey: boolean; atMs: number }[];
   /** The friendly message for a claim that came after the next number was announced (kept until the next number), or null. */
   lateClaim: string | null;
   /** How the game begins: by itself at the scheduled time (auto) or when the Host / Organizer presses Start (manual). */
@@ -802,7 +804,7 @@ export class PhoneRuntime {
       round: this.cur, rounds: this.cfg.rounds, intermission: inter ? { round: this.cur + 1, secondsLeft: secsTo(inter.endsAtRound) ?? 0 } : null, past: this.pastView(),
       won: this.wonView(), allAwarded: this.prizesAwarded(this.cur), endedByPrizes: this.prizesEnded, late: this.lateView(now), localWinners: this.localOk,
       callMode: this.hostMode ? "host" : "auto", waitingForHost,
-      pausedInfo, claimNow, claimOpen, lateClaim: this.lateNote && this.lateNote.atLen === this.maskedLog(this.cur).length ? this.lateNote.text : null, startMode: this.manualStart ? "manual" : "auto", waitingForStart, goRound: st?.goRound ?? null, startingInSec: startingIn,
+      pausedInfo, claimNow, claimOpen, claimFeed: this.claimList.filter((c) => (c.round ?? 1) === this.cur).slice(-30).map((c) => ({ id: `${c.pid}|${c.pattern}|${c.round ?? 1}|${c.bogey ? "b" : c.idx}|${c.atMs}`, ticket: seatOfPid(c.pid) ?? 0, pattern: c.pattern as PatternKey, bogey: !!c.bogey, atMs: c.atMs })), lateClaim: this.lateNote && this.lateNote.atLen === this.maskedLog(this.cur).length ? this.lateNote.text : null, startMode: this.manualStart ? "manual" : "auto", waitingForStart, goRound: st?.goRound ?? null, startingInSec: startingIn,
       marks: [...(this.marks.get(this.cur) ?? [])].sort((a, b) => a - b), claimable: this.claimableNow(),
       pressed: keysInPlay(this.cfg.rewards).filter((k) => this.pressed.has(`${this.cur}:${k}`)), claimsKnown: this.claimList.length,
       bogeys: keysInPlay(this.cfg.rewards).filter((k) => this.bogeysOn(k) > 0).map((k) => ({ pattern: k, n: this.bogeysOn(k) })), outOf: keysInPlay(this.cfg.rewards).filter((k) => this.outOf(k)),

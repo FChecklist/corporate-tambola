@@ -372,3 +372,7 @@ body:has(#go) #ct-notify{display:none}
 .zhelp{font-size:12.5px;color:#7a6f73;margin:6px 0 0}
 .zbig.none{background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.55) 0 8%,rgba(255,255,255,0) 28%),radial-gradient(circle at 50% 45%,#e8e0cf 0 62%,#cbbfa6 100%);color:#8a7f6e}
 .ztight .zbig:not(.none){box-shadow:0 5px 12px -5px rgba(138,98,40,.7),0 0 0 4px rgba(224,184,114,.25)}
+
+/* the pop-ups about other tickets' claims: calm, short, at the top, never covering the ticket for long */
+.ztoasts{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:30;display:grid;gap:6px;width:min(92vw,420px);pointer-events:none}
+.ztoast{background:#14233f;color:#fff;border-radius:12px;padding:10px 14px;font-size:.95rem;line-height:1.35;box-shadow:0 8px 20px -10px rgba(0,0,0,.6)}

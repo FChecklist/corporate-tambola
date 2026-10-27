@@ -100,8 +100,8 @@ describe("the organizer's board screen: live panels", () => {
     expect(b.$("#storyline")!.textContent).toMatch(/The game is on\./); expect(b.$("#storyline")!.textContent).toContain("Watch the board. Pause only if you really must.");
     await until(() => !!b.$("#bp-quiet"), 20_000); expect(b.$("#bp-quiet")!.textContent).toMatch(/^Next number in \d+s$|^Next number any moment$/);
     const evs = Array.from(b.win.document.querySelectorAll("#bp-logbox .bpev")).map((e: any) => e.textContent as string);
-    expect(evs.length).toBeGreaterThan(10); expect(evs.some((e) => /was called/.test(e))).toBe(true); expect(evs.some((e) => /Early Five.*won by Ticket 2/.test(e))).toBe(true);
-    const times = evs.map((e) => e.slice(0, 8)); expect([...times].sort().reverse()).toEqual(times); // newest first
+    expect(evs.length).toBeGreaterThan(10); expect(evs.some((e) => /^Number \d+ announced \d\d?:\d\d:\d\d(?: [ap]m)? · \d+ of 90 called · \d+ left$/i.test(e))).toBe(true); expect(evs.some((e) => /Early Five won by Ticket 2/.test(e))).toBe(true);
+    const times = Array.from(b.win.document.querySelectorAll("#bp-logbox .bpev .bptime")).map((e: any) => e.textContent as string); expect(times.length).toBe(evs.length); expect([...times].sort().reverse()).toEqual(times); // newest first
     expect(b.$("#bp-claims")!.textContent).toMatch(/accepted/); expect(b.$("#bp-people")!.textContent).toMatch(/2 joined/);
     expect(b.$("#bp-pause")).toBeTruthy(); expect(b.$("#bp-resume")).toBeTruthy();
     expect(b.html()).not.toMatch(/\b9\d{9}\b|@/); // no mobile number or e-mail anywhere on the board
@@ -126,7 +126,7 @@ describe("the organizer's board screen: live panels", () => {
     expect((await file(x, "BD-3"))!.messages.map((m) => m.action)).toEqual(["pause"]);
     expect((b.$("#bp-pause") as any).disabled).toBe(true); // busy: no double press
     for (let i = 0; i < 25; i++) await x.step();
-    await until(() => /paused the game|was paused/.test(b.$("#bp-logbox")?.textContent ?? "")); expect(b.$("#bp-logbox")!.textContent).toMatch(/the Organizer (paused the game)|The Organizer: The game was paused/);
+    await until(() => /Paused \S+.* by the Organizer/.test(b.$("#bp-logbox")?.textContent ?? "")); expect(b.$("#bp-logbox")!.textContent).toMatch(/Paused \S+.* by the Organizer/);
     await until(() => /The game is paused by/.test(b.$("#storyline")?.textContent ?? ""), 30_000);
     expect(b.$("#storyline")!.textContent).toContain("The game is paused by the Organizer."); expect(b.$("#storyline")!.textContent).toContain("Press Resume when you are ready.");
     await until(() => !!b.$("#bp-resume") && !(b.$("#bp-resume") as any).disabled, 20_000); b.click("#bp-resume");

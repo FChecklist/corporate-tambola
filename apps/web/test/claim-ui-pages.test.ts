@@ -223,3 +223,22 @@ describe("coming back to the game after another app's call or message", () => {
     expect(ph.$("#dndtip")!.textContent).toBe("Tip: turn on Do Not Disturb so other apps do not interrupt your game.");
   });
 });
+
+describe("pop-ups about other tickets' claims (no pause): calm, plain, ticket numbers only", () => {
+  test("claimed -> checking; correct -> congratulations and 'it is no longer available'; wrong -> 'was not correct'; each closes by itself; the prizes panel strikes the prize out with the ticket", async () => {
+    const { ph, set } = await steered("CU-12");
+    (ph.win as any).__toastMs = 700; // (so the test does not wait six seconds)
+    const base = { phase: "play", paused: false, locked: false, log: LOG, claimNow: [], claimOpen: [], claimable: [], pressed: [], claimed: [], results: [], claimFeed: [] };
+    set(base); await wait(1500); // the page has seen the starting state: nothing before this moment is announced
+    set({ ...base, claimFeed: [{ id: "c1", ticket: 214, pattern: "top", bogey: false, atMs: 1 }] });
+    await ph.waitFor(() => /Ticket 214 has claimed Top Line\. Checking now…/i.test(ph.$("#claimtoasts")?.textContent ?? ""), 15_000);
+    set({ ...base, claimFeed: [{ id: "c1", ticket: 214, pattern: "top", bogey: false, atMs: 1 }], results: [{ pattern: "top", ordinal: 1, idx: 5, count: 1, round: 1, tickets: [214] }] });
+    await ph.waitFor(() => /Ticket 214's claim is correct\. Congratulations Ticket 214 on winning Top Line! 🎉 The game continues\./i.test(ph.$("#claimtoasts")?.textContent ?? ""), 15_000);
+    expect(ph.$("#claimtoasts")!.textContent).toMatch(/Top Line has been won\. It is no longer available\./i);
+    await ph.waitFor(() => /Won by Ticket 214/.test(ph.$("#prizepanel")?.textContent ?? ""), 15_000); expect(ph.$("#prizepanel li.done s")).toBeTruthy();
+    set({ ...base, claimFeed: [{ id: "c1", ticket: 214, pattern: "top", bogey: false, atMs: 1 }, { id: "c2", ticket: 7, pattern: "mid", bogey: true, atMs: 2 }], results: [{ pattern: "top", ordinal: 1, idx: 5, count: 1, round: 1, tickets: [214] }] });
+    await ph.waitFor(() => /Ticket 7's claim was not correct\. The game continues\./.test(ph.$("#claimtoasts")?.textContent ?? ""), 15_000);
+    await ph.waitFor(() => !ph.$("#claimtoasts"), 15_000); // each closes by itself
+    expect(ph.text()).not.toMatch(/Zainab|98\d{8}/);
+  });
+});

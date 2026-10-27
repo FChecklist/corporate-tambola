@@ -709,6 +709,18 @@
         ${few.length ? `<div class="zlastrow" id="lastfew"><span class="zlab">Last 5 numbers called</span><div class="zballs">${few.map((n) => `<i class="zlastn">${n}</i>`).join("")}</div></div>` : ""}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p>`}</div>`;
   }
   let LAST_CLAIM_NOW = "";
+  // ---- everybody is told, calmly and in plain words, when a ticket claims a prize and what came of it (ticket numbers only, never names); each pop-up closes by itself
+  const TOASTS = { seen: null, seenWon: null, list: [] };
+  const toast = (text) => { const t = { text, gone: false }; TOASTS.list.push(t); if (TOASTS.list.length > 3) TOASTS.list.shift(); setTimeout(() => { t.gone = true; try { paint(); } catch { /* the next beat draws it */ } }, window.__toastMs || 6000); }; // (closed by its own timer, not by comparing clocks)
+  function toastsFrom(v) {
+    const feed = v.claimFeed || [], won = (v.results || []).filter((x) => x.pattern !== "lucky" && x.pattern !== "unlucky");
+    if (TOASTS.seen === null) { TOASTS.seen = new Set(feed.map((c) => c.id)); TOASTS.seenWon = new Set(won.map((x) => x.pattern + "#" + x.ordinal + "#" + (x.round || 1))); return; } // what happened before the page opened is not announced again
+    for (const c of feed) { if (TOASTS.seen.has(c.id)) continue; TOASTS.seen.add(c.id); toast(c.bogey ? `Ticket ${c.ticket}'s claim was not correct. The game continues.` : `Ticket ${c.ticket} has claimed ${KEYNAME(c.pattern)}. Checking now\u2026`); }
+    for (const x of won) { const k = x.pattern + "#" + x.ordinal + "#" + (x.round || 1); if (TOASTS.seenWon.has(k)) continue; TOASTS.seenWon.add(k); const t = (x.tickets || [])[0], name = KEYNAME(x.pattern);
+      toast(t ? `Ticket ${t}'s claim is correct. Congratulations Ticket ${t} on winning ${name}! \u{1F389} The game continues.` : `A claim for ${name} is correct. The game continues.`); toast(`${name} has been won. It is no longer available.`); }
+    TOASTS.list = TOASTS.list.filter((x) => !x.gone);
+  }
+  const toastHtml = () => (TOASTS.list.some((x) => !x.gone) ? `<div class="ztoasts" id="claimtoasts" role="status" aria-live="polite">${TOASTS.list.filter((x) => !x.gone).map((x) => `<div class="ztoast">${esc(x.text)}</div>`).join("")}</div>` : "");
   // ---- another app's call or message took the player away: on return the page asks for the server's schedule at once and says so, calmly
   let hiddenAt = 0, AWAY = null;
   const awayLine = () => (AWAY && Date.now() < AWAY.until ? `<div class="zbanner info" id="awayline" role="status">You were away for ${AWAY.secs} seconds. The numbers called meanwhile are in the Last 5 numbers called. Tap them on your ticket.</div>` : "");
@@ -784,6 +796,7 @@
   function playView(v) {
     const called = new Set(v.marks || []); // what the player has tapped (the ticket never marks itself)
     const last = v.log[v.log.length - 1];
+    toastsFrom(v);
     const banners = [storyBarFor(v), claimAlert(v), awayLine()];
     { const now = (v.claimNow || []).join(","); if (now && now !== LAST_CLAIM_NOW) { try { navigator.vibrate && navigator.vibrate(220); } catch {} } LAST_CLAIM_NOW = now; } // a short buzz the moment a prize becomes claimable, where the phone allows it
     if (v.error) banners.push(`<div class="zbanner warn" role="alert">${esc(v.error)}</div>`);
@@ -815,7 +828,7 @@
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}
       <div class="zcard"><h2>Still to win</h2>${still}${chk}</div>
-      ${luckyCard(v)}</div>${claimStick(v)}`;
+      ${luckyCard(v)}</div>${claimStick(v)}${toastHtml()}`;
   }
 
   // ---------- present check-in: the ticket opens only after this ----------

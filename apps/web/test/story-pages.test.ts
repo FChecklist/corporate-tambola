@@ -162,7 +162,7 @@ describe("the vital details on the console and the game log page", () => {
     expect(t).toMatch(/Full House.*Ticket number 1/); expect(t).toMatch(/Start time/); expect(t).toMatch(/How it ended/); expect(t).toMatch(/The game was never paused\./); expect(t).toMatch(/Report e-mail/);
     expect(g.win.document.querySelectorAll("#numlist div").length).toBe(90);
     for (const s of [t, txt]) { expect(s).not.toMatch(/Zainab|Secret|98\d{8}|@/); expect(s).not.toMatch(/\bidx\b/i); }
-    expect(txt).toMatch(/Game log: /); expect(txt).toMatch(/Ticket number 1/); expect(txt.split("\n").filter((l) => /^\s*\d+\.\s+\d+\s+\d\d:\d\d:\d\d$/.test(l)).length).toBe(90);
+    expect(txt).toMatch(/Game log: /); expect(txt).toMatch(/Ticket number 1/); expect(txt.split("\n").filter((l) => /^Number \d+ announced \d\d:\d\d:\d\d · \d+ of 90 called · \d+ left$/.test(l)).length).toBe(90);
     expect(g.errors).toEqual([]);
   });
   test("a stranger's key gets a polite refusal, not the log", async () => {

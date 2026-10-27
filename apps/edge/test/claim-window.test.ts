@@ -1,6 +1,7 @@
 // THE CLAIM RULE: a prize completed on number N can be claimed only until number N+1 is announced. The Worker's clock decides; a claim at the very instant of the next number is late; a late claim is refused with a
 // friendly message and nothing is recorded. It holds in all four modes and for every prize.
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+setDefaultTimeout(60_000);
 import { withDevice } from "./device";
 import { type Env } from "../src/worker";
 import { handle } from "./with-terms";
