@@ -89,6 +89,10 @@ async function mirrorControl(env: Env, id: string) {
   if (!env.CONTROL_R2) return;
   try { const f = await readPublished(d1kv(env), id); if (f) await env.CONTROL_R2.put(controlKey(id), JSON.stringify({ ...f, ...(await liveField(env, id)) }), { httpMetadata: { contentType: "application/json", cacheControl: "public, max-age=3" } }); } catch { /* the Worker route still serves it */ }
 }
+/** A claim that came too late is not recorded as a win; it is only remembered here, as a ticket number, a prize and a time, so the Organizer's board can show "too late". */
+async function noteLateClaim(db: D1, eid: string, pid: string, pattern: string, now: number): Promise<void> {
+  try { const r = await db.prepare("SELECT v FROM kv WHERE k=?").bind(`claimlate/${eid}`).first<{ v: string }>(); const a: any[] = r ? JSON.parse(r.v) : []; a.push({ t: seatOfPidText(pid), p: pattern, at: now }); await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`claimlate/${eid}`, JSON.stringify(a.slice(-200))).run(); } catch { /* best effort */ }
+}
 /** The game's schedule and modes as they are NOW, riding in the control file every phone, the big screen and the Host's screen already poll: a change made after publishing (a new time, another mode) reaches them all with no new link and no extra requests. */
 async function liveField(env: Env, id: string): Promise<{ live?: ReturnType<typeof liveOf>; by?: string[] }> {
   try { const ge = await env.DB.prepare("SELECT tickets, config, start_round, call_seconds FROM engagement WHERE id=?").bind(id).first<any>(); return ge ? { live: liveOf(ge, cfgOf(ge)), by: await readBy(env.DB, id) } : {}; } catch { return {}; }
@@ -1849,7 +1853,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (!PATTERNS.has(c?.pattern) || !Number.isInteger(c?.idx) || c.idx < 0 || c.idx > 89 || !Number.isInteger(round) || round < 1 || round > maxRound) continue;
       { // THE RULE: a prize completed on number N can be claimed only until number N+1 is announced. The Worker's clock decides (a claim at the very instant of the next number is late), the same moment the winners are worked out with.
         const nextAt = c.idx < 89 ? await callTimeMs(env as any, e, round, c.idx + 1) : null; // null: no next number (the last one, a Host who has not pressed yet, a game that was ended)
-        if (nextAt !== null && now >= nextAt) { late++; continue; }
+        if (nextAt !== null && now >= nextAt) { late++; await noteLateClaim(env.DB, eid!, b.pid, String(c.pattern), now); continue; }
       }
       if (!(await spend(env, now))) return json({ error: "Busy day. Your claim is kept on your phone and will be sent again.", stored }, 503);
       const r = await env.DB.prepare("INSERT OR IGNORE INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES(?,?,?,?,?,?)").bind(eid, b.pid, c.pattern, round, c.idx, now).run();
@@ -1969,7 +1973,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!can(a, e)) return deny(a);
     const r = await env.DB.prepare("SELECT pid,pattern,round,idx,at_ms AS atMs FROM claim WHERE eid=? ORDER BY round,idx,pid").bind(eid).all<any>();
     const b = await env.DB.prepare("SELECT pid,pattern,round,at_ms AS atMs FROM bogey WHERE eid=? ORDER BY at_ms").bind(eid).all<any>();
-    return json({ claims: [...(r.results ?? []), ...(b.results ?? []).map((x: any) => ({ ...x, idx: -1, bogey: true }))] }); // the Bogeys ride along, flagged: the console settles exactly as the phones do
+    const lateRow = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`claimlate/${eid}`).first<{ v: string }>(); let tooLate: any[] = []; try { tooLate = lateRow ? JSON.parse(lateRow.v) : []; } catch { tooLate = []; }
+    return json({ tooLate: tooLate.map((x) => ({ ticket: x.t, pattern: x.p, atMs: x.at })), claims: [...(r.results ?? []), ...(b.results ?? []).map((x: any) => ({ ...x, idx: -1, bogey: true }))] }); // the Bogeys ride along, flagged: the console settles exactly as the phones do
   }
   if (action === "participants" && req.method === "GET") {
     if (!can(a, e)) return deny(a);

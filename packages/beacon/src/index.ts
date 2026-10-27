@@ -196,3 +196,4 @@ export function seededRand(seed: string): (n: number) => number {
 }
 export * from "./control";
 export * from "./story";
+export * from "./gaps";

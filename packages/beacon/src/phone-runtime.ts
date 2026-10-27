@@ -651,7 +651,7 @@ export class PhoneRuntime {
       this.allResults = this.localOk ? [...this.allResults.filter((x) => x.pattern !== "lucky"), ...this.luckyResults(), ...this.serverResults.filter((x) => x.pattern === "lucky" && !this.luckyLocal.some((l) => l.ordinal === x.ordinal))] : this.serverResults;
     } catch { /* shown next time */ }
   }
-  private luckyResults(): NonNullable<RuntimeView["results"]> { return this.luckyLocal.map((l) => ({ pattern: "lucky" as const, ordinal: l.ordinal, idx: l.idx, count: l.winners.length, round: 1, winners: l.winners })); }
+  private luckyResults(): NonNullable<RuntimeView["results"]> { return this.luckyLocal.map((l) => ({ pattern: "lucky" as const, ordinal: l.ordinal, idx: l.idx, count: l.winners.length, round: 1, winners: l.winners, tickets: l.winners.map((p) => seatOfPid(p)).filter((n): n is number => n !== null).slice(0, 5) })); }
   /** A lucky draw is worked out here, from the public randomness of the round that ends its break and the public seat list: the same on every phone, and nobody can steer it. */
   private async computeLucky(now: number) {
     if (this.luckyBusy || !this.seatsFetched) return;

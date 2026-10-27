@@ -21,6 +21,8 @@ export interface GameLog {
   startsAtMs: number; firstNumberMs: number | null; endedAtMs: number | null; endReason: string | null; numbersCalled: number | null;
   people: { joined: number; late: number; waiting: number; present: number | null; most: number };
   prizes: { prize: string; text: string; ticket: number; callNo: number; atMs: number | null }[];
+  /** every lucky draw the organizer chose, drawn or not */
+  lucky: { title: string; winners: number; drawn: boolean; tickets: number[] }[];
   pauses: { by: string; fromMs: number; toMs: number | null }[];
   changes: { atMs: number; when: string; who: string; what: string }[];
   report: { state: string | null; sentMs: number | null };
@@ -50,6 +52,7 @@ export async function buildGameLog(env: { DB: D1 }, kvOf: KV, e: any, cfg: Engag
     const name = w.pattern === "lucky" ? (lucky[w.ordinal - 1]?.title ?? "Lucky draw") : prizeName(cfg, w.pattern as PatternKey, w.ordinal);
     return { prize: (cfg.rounds > 1 ? `Game ${w.round}: ` : "") + name, text, ticket: Number(w.seat), callNo: Number(w.idx ?? -1) + 1, atMs: w.at_ms ?? null };
   });
+  const luckyList = lucky.map((b, i) => { const rows = wrows.filter((w: any) => w.pattern === "lucky" && w.ordinal === i + 1); return { title: b.title || "Lucky draw", winners: Number((b as any).winners ?? rows.length) || rows.length, drawn: rows.length > 0, tickets: rows.map((w: any) => Number(w.seat)).slice(0, 100) }; });
   const pauses: GameLog["pauses"] = [];
   if (st && f) for (const iv of st.intervals) {
     const m = f.messages.find((x) => x.action === "pause" && x.atBeaconRound === iv.start);
@@ -67,7 +70,7 @@ export async function buildGameLog(env: { DB: D1 }, kvOf: KV, e: any, cfg: Engag
     mode: { start: cfg.startMode === "manual" ? "manual" : "auto", call: cfg.callMode === "host" ? "host" : "auto", afterPrizes: cfg.keepCalling ? "keep" : "end" },
     startsAtMs: roundMs(e.start_round), firstNumberMs: end?.firstNumberMs ?? null, endedAtMs: end?.endMs ?? (life?.end_ms ?? null), endReason: end?.endReason ?? null, numbersCalled: end?.numbersCalled ?? null,
     people: { joined, late, waiting, present, most: joined },
-    prizes, pauses, changes: changesView(chg).map((c) => ({ atMs: c.at, when: c.when, who: c.who, what: c.what })).reverse(),
+    prizes, lucky: luckyList, pauses, changes: changesView(chg).map((c) => ({ atMs: c.at, when: c.when, who: c.who, what: c.what })).reverse(),
     report: { state: life?.report_state ?? null, sentMs: life?.report_ms ?? null }, warnings,
     schedule: { startRound: e.start_round, callSeconds: e.call_seconds, rounds: cfg.rounds, breaks: cfg.breaks, manualStart: cfg.startMode === "manual", goRound: st?.goRound ?? null, messages: f?.messages ?? [], pubKey: f?.pubKey ?? "", hostKeys: f?.hostKeys ?? [], leadRounds: f?.leadRounds ?? 0, maxPauseRounds: f?.maxPauseRounds ?? 600, callMode: cfg.callMode === "host" ? "host" : "auto", startOnly: !!f?.startOnly },
   };

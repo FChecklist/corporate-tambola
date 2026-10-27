@@ -54,6 +54,7 @@
     L.push(["h", "Prizes"]);
     if (!log.prizes.length) L.push(["note", "No prize was won."]);
     for (const p of log.prizes) L.push(["row", p.prize + (p.text ? " (" + p.text + ")" : ""), `Ticket number ${p.ticket}, after number call ${p.callNo}, at ${HMS(p.atMs)}`]);
+    for (const l of (log.lucky || [])) L.push(["row", "Lucky draw: " + l.title, l.drawn ? `Drawn. Ticket number${l.tickets.length === 1 ? "" : "s"} ${l.tickets.join(", ")}` : `Not drawn yet (${l.winners} ticket${l.winners === 1 ? "" : "s"} picked at random)`]);
     L.push(["h", "Pauses"]);
     if (!log.pauses.length) L.push(["note", "The game was never paused."]);
     for (const z of log.pauses) L.push(["row", `Paused by ${z.by.replace(/^The /, "the ").replace(/^A /, "a ")}`, `${HMS(z.fromMs)} to ${z.toMs ? HMS(z.toMs) : "until resumed"}` + (z.toMs ? ` (${dur(z.toMs - z.fromMs)})` : "")]);

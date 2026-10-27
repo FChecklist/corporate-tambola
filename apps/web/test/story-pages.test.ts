@@ -109,7 +109,7 @@ describe("one plain story: the same sentence on every screen", () => {
     expect(storyOf(ph).state).toBe("running"); expect(storyOf(ph).text).toContain("Tap each number on your ticket. Press Claim when a prize is complete.");
     expect(storyOf(big).state).toBe("running"); expect(storyOf(big).text).toContain("Watch the numbers. Players tap them on their tickets.");
     expect(c.$("#latestnum")!.textContent!.trim()).toMatch(/^\d+$/); expect(c.$("#numcount")!.textContent).toMatch(/\d+ of 90 called · \d+ remaining/);
-    expect(big.$("#calledbig")!.textContent).toMatch(/\d+ of 90 called · \d+ remaining/); expect(big.$("#lastfew")!.textContent).toMatch(/Before it: \d/);
+    expect(big.$("#calledbig")!.textContent).toMatch(/\d+ of 90 called · \d+ remaining/); expect(big.$("#lastfew")!.textContent).toMatch(/Last 5 numbers called: \d/);
     expect(ph.$("#calledcount")!.textContent).toMatch(/\d+ of 90 called/);
     for (const p of [c, ph, big]) expect(p.text()).not.toMatch(/\bidx\b|\bround\b/i);
   });

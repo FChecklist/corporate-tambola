@@ -268,7 +268,7 @@
     host.innerHTML = `<div class="zbanner bad" role="alert">${esc(TAP.msg)}</div>`;
   }
   const ordinalName = (k) => ["", "1st", "2nd", "3rd"][k] || k + "th";
-  const KEYNAME = (key) => (key === "full2" ? "Full Two-Ticket House" : NAMES[key]);
+  const KEYNAME = (key) => (key === "full2" ? "Super Bumper House" : NAMES[key]);
 
   function roundCards(v) {
     let out = "";
@@ -700,7 +700,7 @@
     const chip = v.phase === "ended" ? "Game over" : v.paused ? "Paused" : v.locked ? "Waiting to start" : v.waitingForStart ? "Waiting for the host" : v.startingInSec !== null ? "Starting in " + (v.startingInSec >= 120 ? clock(v.startingInSec) : v.startingInSec + "s") : v.waitingForHost ? "Waiting for the host" : !v.log.length ? "Get ready" : running && secs !== null ? "Next number in " + secs + "s" : "Numbers coming";
     const total = v.late ? "since you joined" : "of 90";
     // Between two numbers (software calls): a big countdown 9, 8, 7 ... 1, then the number. Silent on purpose: the voice speaks only the number itself.
-    const cdown = running && secs !== null && !v.waitingForHost && v.mode !== "hold" ? `<div class="zcount" role="timer" aria-label="Next number in ${secs} seconds"><div class="zring" style="--p:${Math.max(0, Math.min(100, Math.round(secs / Math.max(3, v.callSeconds || 9) * 100)))}"><b>${secs}</b></div><span>seconds to the next number</span></div>` : "";
+    const cdown = running && secs !== null && !v.waitingForHost && v.mode !== "hold" ? `<div class="zquiet" id="quietcount" role="timer" aria-label="Next number in ${secs} seconds"><span>Next number in ${secs}s</span><i><b style="width:${Math.max(0, Math.min(100, Math.round((1 - secs / Math.max(3, v.callSeconds || 12)) * 100)))}%"></b></i></div>` : ""; // small and quiet on purpose: no digits to stare at, no colour, no sound (only the number itself is spoken)
     const calledTotal = v.log.length + (v.late ? v.late.hidden || 0 : 0), few = v.log.slice(-6, -1).reverse();
     return `<div class="zcard zcall ztight"><div class="zchiprow"><span class="zchip2 ${tone}">${esc(chip)}</span></div>
         <div class="zrow1"><div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number just called " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
@@ -757,17 +757,18 @@
   /** Every prize and whether it is still open: the open ones first, the claimed ones after, crossed out with a small "claimed". */
   function livePrizesCard(v) {
     if (!ZG.prizeStatus || !v.cfg || !v.cfg.rewards) return "";
-    const list = ZG.prizeStatus(v.cfg, v.results || [], v.round || 1);
-    if (!list.length) return "";
+    const list = ZG.prizeStatus(v.cfg, v.results || [], v.round || 1), lucky = v.lucky || [];
+    if (!list.length && !lucky.length) return "";
     const mine = new Set((v.won || []).filter((w) => w.round === v.round).map((w) => w.pattern + "#" + w.ordinal));
-    const open = list.filter((p) => !p.claimed).length;
+    const open = list.filter((p) => !p.claimed).length + lucky.filter((l) => !l.published).length; // a lucky draw is a prize like the others
     const rows = list.map((p) => {
       const me = mine.has((p.key === "full2" ? "full2" : p.key) + "#" + p.ordinal);
       if (p.claimed) { const res = (v.results || []).find((x) => x.pattern === p.key && x.ordinal === p.ordinal && (x.round || 1) === (v.round || 1)), tk = res && res.tickets && res.tickets.length ? res.tickets : null;
         return `<li class="done"><span class="zic">&#10003;</span><span class="znm"><s>${esc(p.name)}${p.text ? ": " + esc(p.text) : ""}</s> <small class="zwonby">${tk ? "Won by Ticket " + tk.join(", ") : "Already won"}</small></span>${me ? ' <b class="zme">You</b>' : ""}</li>`; }
       const need = p.key === "unlucky" || p.key === "lucky" ? null : ZG.stillToWin(v.tickets, p.key, v.marks || []);
       return `<li class="open"><span class="zic">&#9733;</span><span class="znm"><b>${esc(p.name)}</b>${p.text ? ": " + esc(p.text) : ""}${need !== null && need !== undefined && v.tickets.length ? `<small class="zneed">You need ${need} more ${need === 1 ? "number" : "numbers"}</small>` : ""}</span><span class="ztag">To win</span></li>`;
-    }).join("");
+    }).join("") + lucky.map((l) => { const res = (v.results || []).find((x) => x.pattern === "lucky" && x.ordinal === l.ordinal), tk = res && res.tickets && res.tickets.length ? res.tickets : null;
+      return l.published ? `<li class="done lucky"><span class="zic">&#10003;</span><span class="znm"><s>Lucky draw: ${esc(l.title)}</s> <small class="zwonby">${l.won ? "You won!" : tk ? "Won by Ticket " + tk.join(", ") : "Already drawn"}</small></span></li>` : `<li class="open lucky"><span class="zic">&#9733;</span><span class="znm"><b>Lucky draw: ${esc(l.title)}</b><small class="zneed">${l.winners} ${l.winners === 1 ? "ticket is" : "tickets are"} picked at random, whoever is playing</small></span><span class="ztag">To win</span></li>`; }).join("");
     return `<div class="zcard zps" id="prizepanel"><h2>Prizes${open ? " still to win · " + open : " · all won"}</h2><div class="zlegend"><span><i class="g"></i>Still to win</span><span><i class="s"></i>Already won</span></div><ul class="zpl">${rows}</ul></div>`;
   }
   function playView(v) {

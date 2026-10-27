@@ -36,7 +36,7 @@ const LINES = new Set(["top", "mid", "bot"]);
 /** How many days ahead a game may be set: 30 while it is not paid for; a paid game may move to any day within 365 days of the payment (the server enforces both). */
 export const DAYS_AHEAD = { unpaid: 30, paid: 365 };
 const DAYS_PER_PAGE = 7;
-export const SPEEDS = [6, 9, 12, 15];
+export const SPEEDS = [12]; // one speed for new games (older games keep theirs; the Worker still accepts every gap)
 export const FULL_HOUSE_WINNERS = [1, 2, 3, 5];
 /** The one-line rule of real housie, said at the read-back and on the save page. */
 export const HOUSIE_RULE = "Your guests tap each number as it is called and press Claim before the next number; a wrong claim is a Bogey; two Bogeys on the same prize put that ticket out of it.";
@@ -101,7 +101,7 @@ const timeRows = (ctx: GoCtx, q: URLSearchParams, next: string): [string, string
 };
 /** The settings read from the link, with the recommended value wherever the organizer has not chosen. */
 const settingsOf = (q: URLSearchParams) => ({
-  k: q.get("k") === "2" ? 2 : 1, s: SPEEDS.includes(Number(q.get("s"))) ? Number(q.get("s")) : 9, r: Math.min(5, Math.max(1, Number(q.get("r")) || 1)), j: q.get("j") === "c", v: Number(q.get("v")) || 0,
+  k: q.get("k") === "2" ? 2 : 1, s: SPEEDS.includes(Number(q.get("s"))) ? Number(q.get("s")) : 12, r: Math.min(5, Math.max(1, Number(q.get("r")) || 1)), j: q.get("j") === "c", v: Number(q.get("v")) || 0,
   host: q.get("cm") === "h" && Number(q.get("c")) <= MANUAL_MAX_PARTICIPANTS, manual: q.get("sm") === "m", share: q.get("ti") === "s", p: BUNDLES[q.get("p") || "c"] ?? BUNDLES.c!, f: FULL_HOUSE_WINNERS.includes(Number(q.get("f"))) ? Number(q.get("f")) : 1, l: q.get("l") === "2" ? 2 : 1, x: MOMENTS[q.get("x") || "n"] ? (q.get("x") || "n") : "n", c: Number(q.get("c")),
 });
 const prizeLines = (st: ReturnType<typeof settingsOf>): string => `${st.p.label}; ${st.f} Full House winner${st.f === 1 ? "" : "s"}${st.p.houses.some((h) => LINES.has(h)) ? `, ${st.l} winner${st.l === 1 ? "" : "s"} for each line` : ""}`;
@@ -135,7 +135,7 @@ export async function goScreen(ctx: GoCtx, step: string, q: URLSearchParams): Pr
         [`Change the speed (now a number every ${st.s} seconds)`, L("speed")], [`How does it start (now: ${st.manual ? "I press Start" : "by itself at the time"})`, L("starter")], [`Who calls the numbers (now: ${st.host ? "a Host presses a button" : "the software"})`, L("caller")], [`Rounds (now ${st.r})`, L("rounds")], [`What happens on a tie (now: ${st.share ? "share the prize" : "the next prizes"})`, L("tie")],
         [st.j ? "Open to anyone with the link" : "Invite-only (only people on my list)", L("play", { j: st.j ? "o" : "c" })], [st.v ? "Guests may not invite others" : "Let each guest invite up to 4 more (family, colleagues)", L("play", { v: st.v ? "0" : "4" })]]), ifWrong: WRONG };
     }
-    case "speed": return { say: "How fast should the numbers come? A full game of 90 numbers takes about 9, 14, 18 or 22 minutes.", choices: choices(SPEEDS.map((s) => [`Every ${s} seconds (${s === 6 ? "fast" : s === 9 ? "normal" : s === 12 ? "relaxed" : "slow"})`, L("play", { s: String(s) }), s === 9] as [string, string, boolean?])), ifWrong: WRONG };
+    case "speed": return { say: "Every game has one speed: a new number every 12 seconds. A full game of 90 numbers takes about 18 minutes, or about 36 minutes with two tickets each. With claims, a game takes 30 to 60 minutes.", choices: choices([["Every 12 seconds", L("play", { s: "12" }), true]]), ifWrong: WRONG };
     case "starter": return { say: `How does the game start? By itself at the start time, or you (or a Host) press a big Start button. Start can be pressed only from the start time on; until then players see "waiting for the host". Pressing Start works for games of any size.`,
       choices: choices([["It starts by itself at the start time", L("play", { sm: "a" }), true], ["I press Start", L("play", { sm: "m" })]]), ifWrong: WRONG };
     case "caller": {
