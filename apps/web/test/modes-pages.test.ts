@@ -77,13 +77,35 @@ describe("the console: how does it start", () => {
     const x = await setup("MP-SET");
     const c = await consolePage(x, "MP-SET");
     await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /How does it start\?/.test(t) && /Who calls the numbers\?/.test(t));
-    expect(Array.from(c.win.document.querySelectorAll('[data-ck="start"]')).map((e: any) => e.textContent.trim())).toEqual(["By itself at the time", "I press Start"]);
-    expect((c.$('[data-ck="start"][data-v="auto"]') as any).className).toMatch(/ on$|^on | on /);
+    const radio = (name: string) => Array.from(c.win.document.querySelectorAll(`input[type=radio][name="${name}"]`)) as any[];
+    expect(radio("start").map((e) => e.value)).toEqual(["auto", "manual"]); expect(radio("mode").map((e) => e.value)).toEqual(["auto", "host"]);
+    expect(Array.from(c.win.document.querySelectorAll("#rg-start .zc-radio b")).map((e: any) => e.textContent.trim())).toEqual(["By itself at the time", "I press Start"]);
+    expect(Array.from(c.win.document.querySelectorAll("#rg-mode .zc-radio b")).map((e: any) => e.textContent.trim())).toEqual(["The game does", "I do"]);
+    for (const n of ["start", "mode"]) { expect(radio(n).filter((e) => e.checked).length).toBe(1); expect(radio(n)[0].checked).toBe(true); expect(radio(n).every((e) => !!e.closest("label"))).toBe(true); } // exactly one chosen; the label wraps the input, so a tap anywhere on it chooses it
+    expect(c.win.document.querySelector("#rg-start [role=radiogroup]")).toBeTruthy(); expect(c.win.document.querySelectorAll(".zc-rdesc").length).toBe(4); // one plain sentence under each option
+    expect(c.$("#modesummary")!.textContent).toMatch(/Your game: starts by itself at .*, and the game calls the numbers\./);
     c.click('[data-ck="start"][data-v="manual"]'); await wait(50);
-    expect(c.text()).toMatch(/press Start on Game day/); expect(c.text()).toMatch(/to start earlier, change the start time first/);
+    expect(radio("start").filter((e) => e.checked).map((e) => e.value)).toEqual(["manual"]); expect(radio("start").length).toBe(2);
+    expect(c.$("#modesummary")!.textContent).toMatch(/Your game: you press Start at .*, and the game calls the numbers\./);
+    c.click('[data-ck="mode"][data-v="host"]'); await wait(50);
+    expect(c.$("#modesummary")!.textContent).toMatch(/you press Start at .*, and you or a Host call every number\./);
+    expect(c.text()).toMatch(/Start can be pressed only from the start time on/);
     c.click('#sec2 [data-save="2"]'); await c.waitFor((t) => /Saved\./.test(t));
     expect((await x.w.json(await x.w.api("GET", "/api/z/MP-SET/info"))).startMode).toBe("manual");
     expect((await x.w.json(await x.w.api("GET", "/api/z/MP-SET/changes", undefined, x.token))).changes.map((r: any) => r.what).join("|")).toMatch(/now you press Start/);
+  });
+});
+
+describe("the manual choices are hidden above 1,000 people", () => {
+  test("a game of 1,001 people shows a short note instead of the two questions; at 1,000 the questions are there", async () => {
+    const big = await setup("MP-1001", false, { cap: 1001 });
+    const c1 = await consolePage(big, "MP-1001");
+    await c1.waitFor(() => !!c1.$('.zc-dot[data-open="2"]')); openStep(c1, 2); await c1.waitFor((t) => /Games above 1,000 people run by themselves/.test(t));
+    expect(c1.$('input[type=radio][name="start"]')).toBeNull(); expect(c1.$('input[type=radio][name="mode"]')).toBeNull();
+    const ok = await setup("MP-1000", false, { cap: 1000 });
+    const c2 = await consolePage(ok, "MP-1000");
+    await c2.waitFor(() => !!c2.$('.zc-dot[data-open="2"]')); openStep(c2, 2); await c2.waitFor((t) => /How does it start\?/.test(t));
+    expect(c2.$('input[type=radio][name="start"]')).toBeTruthy(); expect(c2.$("#manualhidden")).toBeNull();
   });
 });
 

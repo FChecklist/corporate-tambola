@@ -332,6 +332,8 @@ export const SAFETY_LEAN30 = deriveSafety({ pollMaxSec: 36, cacheTtlSec: 3, late
 export const SAFETY_LEAN60 = deriveSafety({ pollMaxSec: 72, cacheTtlSec: 3, latencySec: 3, missedPollsTolerated: 1 }); // about every 54 to 72 s
 export const ALL_SAFETIES: Safety[] = [SAFETY_FAST, SAFETY_STANDARD, SAFETY_LEAN30, SAFETY_LEAN60];
 export const PAUSE_MAX_PARTICIPANTS = 2000;
+/** A Host calling the numbers and/or a Start button need signed control messages for every phone; above this size only Auto Start + Auto Play is allowed (phones work the numbers out from the public beacon with almost no server work). Pause keeps PAUSE_MAX_PARTICIPANTS. */
+export const MANUAL_MAX_PARTICIPANTS = 1000;
 /** The pause profile for an engagement of this size, or null when it is too large for a pause to be affordable on the free plan. */
 export function safetyForCap(cap: number, fast = false): Safety | null {
   if (cap <= 250) return fast ? SAFETY_FAST : SAFETY_STANDARD;

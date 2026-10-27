@@ -69,13 +69,13 @@ describe("the console: who calls the numbers", () => {
     const x = await setup("HC-SET", false);
     const c = await consolePage(x, "HC-SET");
     await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /Who calls the numbers\?/.test(t) && /Duration \(gap\) between two numbers/.test(t));
-    const chips = Array.from(c.win.document.querySelectorAll('[data-ck="mode"]')).map((e: any) => e.textContent.trim());
-    expect(chips).toEqual(["The game does", "I do (a Host presses a button for each number)"]);
-    expect((c.$('[data-ck="mode"][data-v="auto"]') as any).className).toMatch(/\bon\b/);
+    const chips = Array.from(c.win.document.querySelectorAll('#rg-mode .zc-radio b')).map((e: any) => e.textContent.trim());
+    expect(chips).toEqual(["The game does", "I do"]);
+    expect((c.$('[data-ck="mode"][data-v="auto"]') as any).checked).toBe(true);
     const html = c.win.document.getElementById("sec2")!.innerHTML; expect(html.indexOf('data-ck="mode"')).toBeLessThan(html.indexOf('data-ck="spd"')); // who calls the numbers comes first, then the gap
     expect(c.$('[data-ck="spd"]')).toBeTruthy(); // auto: the speed chips are there
     c.click('[data-ck="mode"][data-v="host"]'); await wait(50);
-    expect(c.text()).toMatch(/press Next number on Game day/);
+    expect(c.text()).toMatch(/press Next number for each number/);
     expect(c.$('[data-ck="spd"]')).toBeNull(); expect(c.$("#nospeed")).toBeTruthy(); // host mode: no gap to choose
     c.click('#sec2 [data-save="2"]');
     await c.waitFor((t) => /Saved\./.test(t));
@@ -89,12 +89,11 @@ describe("the console: who calls the numbers", () => {
     await until(async () => (await x.w.json(await x.w.api("GET", "/api/z/HC-SET/info"))).callMode === "auto");
     openStep(c, 2); await c.waitFor((t) => /Duration \(gap\)/.test(t), 12_000);
   });
-  test("step 2 refuses host mode for a game above the size limit, with a guide to the fix", async () => {
-    const x = await setup("HC-BIG", false, { cap: 2500 });
+  test("step 2 hides the manual choices for a game above 1,000 people, with a short note why (nothing breaks)", async () => {
+    const x = await setup("HC-BIG", false, { cap: 1500 });
     const c = await consolePage(x, "HC-BIG");
-    await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /Who calls the numbers\?/.test(t));
-    c.click('[data-ck="mode"][data-v="host"]'); c.click('#sec2 [data-save="2"]');
-    await c.waitFor((t) => /up to 2,000 people/.test(t));
+    await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /Games above 1,000 people run by themselves/.test(t));
+    expect(c.$('[data-ck="mode"]')).toBeNull(); expect(c.$('[data-ck="start"]')).toBeNull(); expect(c.$("#manualhidden")).toBeTruthy();
     expect((await x.w.json(await x.w.api("GET", "/api/z/HC-BIG/info"))).callMode).toBe("auto");
   });
 });

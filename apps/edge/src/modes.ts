@@ -4,6 +4,7 @@
 // Nothing here ever holds a player's name, number, ticket or seat: only the rule that changed and the role of whoever changed it.
 import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../../../packages/beacon/src/control";
 import { hostGameOf } from "../../../packages/beacon/src/game";
+import { MANUAL_MAX_PARTICIPANTS } from "../../../packages/beacon/src/control";
 import type { EngagementCfg } from "../../../packages/beacon/src/config";
 import type { D1 } from "./worker";
 
@@ -21,7 +22,9 @@ export async function goRoundOf(kv: KV, e: { id: string; start_round: number }, 
 /** Whether this game needs a signed control file (a key registered) to run: a Host's presses and a Start are both signed messages. */
 export const needsControl = (c: Pick<EngagementCfg, "callMode" | "startMode">) => c.callMode === "host" || c.startMode === "manual";
 
-export const START_MODE_MSG = (max: number) => `Pressing Start needs the Start and pause controls, which are available for games of up to ${max.toLocaleString("en-IN")} people. For a larger game, let it start by itself at the time.`;
+export const MANUAL_LIMIT_MSG = `Games above ${MANUAL_MAX_PARTICIPANTS.toLocaleString("en-IN")} people run by themselves: choose "By itself at the time" and "The game does".`;
+/** True when this mode needs a Host's or a Start press (manual) and the game is too big for it. */
+export const manualTooBig = (c: Pick<EngagementCfg, "callMode" | "startMode">, cap: number) => (c.callMode === "host" || c.startMode === "manual") && cap > MANUAL_MAX_PARTICIPANTS;
 export const NEEDS_CONSOLE_MSG = "Open your console once first: it prepares the Start and Next buttons for this game. Then change this setting again.";
 export const STARTED_MSG = "The game has already started, so it can no longer be changed.";
 export const NOT_BEFORE_MSG = "The game cannot be started before its start time. To start earlier, change the start time first.";

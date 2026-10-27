@@ -215,3 +215,14 @@ a.zc-chip::before,.zc-chips .zc-chip[data-mode]::before{display:none}
 /* the assistant strip is not shown in the console */
 #aistrip,.zc-ai{display:none !important}@media (max-width:640px){.zc-i{width:32px;height:32px}.zc-dot{width:36px;height:36px}.zc-mini{min-height:40px}.zc-tab.on{background:#fff;font-weight:700;box-shadow:inset 0 3px 0 var(--zc-accent)}}
 .zc-hide{display:none !important}
+
+/* the two mode questions: radio buttons with one plain sentence each */
+.zc-radiogroup{border:0;padding:0;margin:10px 0 4px;min-width:0}
+.zc-radiogroup legend{padding:0;margin-bottom:6px}
+.zc-radio{display:flex;gap:12px;align-items:flex-start;min-height:56px;padding:12px 14px;margin:0 0 8px;border:1.5px solid #8a8372;border-radius:12px;background:#fff;cursor:pointer}
+.zc-radio.on{background:#E4EEFC;border-color:var(--zc-accent)}
+.zc-radio input{flex:none;width:26px;height:26px;margin:2px 0 0;accent-color:var(--zc-accent)}
+.zc-radio input:focus-visible{outline:3px solid var(--zc-accent);outline-offset:2px}
+.zc-rtxt{display:flex;flex-direction:column;gap:2px;font-size:1.05rem}
+.zc-rdesc{font-size:.95rem;color:#3d3a33}
+.zc-modesum{margin:6px 0 12px}

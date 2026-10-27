@@ -192,12 +192,18 @@ export default async function ({ seed, R, L }) {
     await clock.reset();
   } });
 
-  // ---- 7. size limit stays: manual start above 2,000 people is refused in plain words
-  for (const cap of [2000, 2001]) out.push({ name: `modes/size-limit/${cap}`, run: async (t) => {
+  // ---- 7. size limit: manual start / a Host calling above 1,000 people is refused (boundary 1000 / 1001) in plain words
+  for (const cap of [1000, 1001]) for (const mode of MODES) out.push({ name: `modes/size-limit/${cap}/${mode.key}`, run: async (t) => {
     await clock.reset();
     const org = await t.newOrg("md"); const start = (await clock.now()) + 30 * MIN;
-    const g = await t.game(org, { cap, startRound: roundAt(start), startMode: "manual" });
-    if (cap <= 2000) t.expect("manual start up to 2,000 is allowed", g.r, "ok"); else { t.expect("above 2,000 refused", g.r, "refuse"); t.check("plain words", /2,000/.test(g.r.body?.error ?? ""), g.r.body?.error); }
+    const g = await t.game(org, { cap, startRound: roundAt(start), startMode: mode.startMode, callMode: mode.callMode });
+    const manual = mode.startMode === "manual" || mode.callMode === "host";
+    if (!manual || cap <= 1000) t.expect("allowed", g.r, "ok"); else { t.expect("refused", g.r, "refuse"); t.check("plain words that say what to choose", /run by themselves.*By itself at the time.*The game does/.test(g.r.body?.error ?? ""), g.r.body?.error); }
+    if (manual && cap > 1000) { // and an auto game of that size cannot be switched to manual, but can after it shrinks to 1000
+      const a = await t.game(org, { cap, startRound: roundAt(start) + 5 }); t.expect("auto game of that size is fine", a.r, "ok");
+      t.expect("cannot switch to manual", await org.api("PATCH", `/api/z/${a.id}/settings`, { startMode: mode.startMode, callMode: mode.callMode }), "refuse");
+      t.expect("shrunk to 1000 and switched in one save", await org.api("PATCH", `/api/z/${a.id}/settings`, { cap: 1000, startMode: mode.startMode, callMode: mode.callMode }), "ok");
+    }
   } });
   return out;
 }

@@ -68,14 +68,22 @@ describe("the four modes are two plain settings", () => {
       const i = await info(`M-4${n}`, o.h); expect([i.startMode, i.callMode]).toEqual([s, c]);
     }
   });
-  test("manual start keeps the pause/Host size limit (2,000): refused above it at creation and when the size is raised", async () => {
+  test("manual start (and a Host calling) is allowed up to 1,000 people: refused above it at creation, when the size is raised and when a big game switches to it; shrinking back re-allows it", async () => {
     const o = await organizer();
     const big = await make(o, "M-BIG", { cap: 5000, startMode: "manual" });
-    expect(big.status).toBe(409); expect((await j(big)).error).toMatch(/up to 2,000 people/);
-    expect((await make(o, "M-OK", { cap: 2000, startMode: "manual" })).status).toBe(200);
-    const raise = await call("PATCH", "/api/z/M-OK/settings", { cap: 2001 }, { "x-organizer": "plat" });
+    expect(big.status).toBe(409); expect((await j(big)).error).toMatch(/Games above 1,000 people run by themselves/);
+    expect((await make(o, "M-OK", { cap: 1000, startMode: "manual" })).status).toBe(200);
+    const raise = await call("PATCH", "/api/z/M-OK/settings", { cap: 1001 }, { "x-organizer": "plat" });
     expect(raise.status).toBe(409);
-    expect((await call("PATCH", "/api/z/M-OK/settings", { cap: 2001, startMode: "auto" }, { "x-organizer": "plat" })).status).toBe(200);
+    expect((await call("PATCH", "/api/z/M-OK/settings", { cap: 1001, startMode: "auto" }, { "x-organizer": "plat" })).status).toBe(200);
+    // a big game cannot switch either manual option on; shrinking it back to 1,000 re-allows them
+    const sw1 = await call("PATCH", "/api/z/M-OK/settings", { startMode: "manual" }, { "x-organizer": "plat" });
+    const sw2 = await call("PATCH", "/api/z/M-OK/settings", { callMode: "host" }, { "x-organizer": "plat" });
+    expect([sw1.status, sw2.status]).toEqual([409, 409]); expect((await j(sw1)).error).toMatch(/choose "By itself at the time" and "The game does"/);
+    expect((await call("PATCH", "/api/z/M-OK/settings", { cap: 1000, startMode: "manual", callMode: "host" }, { "x-organizer": "plat" })).status).toBe(200);
+    expect((await make(o, "M-H1000", { cap: 1000, callMode: "host" })).status).toBe(200);
+    const h = await make(o, "M-H1001", { cap: 1001, callMode: "host" }); expect(h.status).toBe(409);
+    expect((await make(o, "M-A1001", { cap: 1001 })).status).toBe(200); // auto start + auto play has no limit of this kind
   });
 });
 
