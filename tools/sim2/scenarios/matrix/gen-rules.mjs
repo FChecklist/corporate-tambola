@@ -46,6 +46,38 @@ export default async function gen({ R, L }) {
     t.expect("a prize that was never awarded cannot be overridden", await org.api("POST", `/api/z/${g.id}/override`, { round: 1, pattern: "star", ordinal: 77, seat: 1 }), [404]);
   } });
 
+  // Prize sharing (owner rule 27 Oct): when several people complete the same prize category on the same number, the prizes of that category are divided
+  // equally among them, one each ("tie rule next": 3 prizes and 2 claimants = 1 each, the third stays open for the next claimant). Nobody gets two prizes of one category.
+  for (const [label, phones, seedTag] of [["80 phones, A", 80, "pa"], ["80 phones, B", 80, "pb"], ["120 phones", 120, "pc"]]) out.push({ name: `rules|split: ${label}, 3 prizes in every category, ties follow the equal-split rule`, time: true, timeoutMs: 280_000, run: async (t) => {
+    const lines = ["early5", "top", "mid", "bot", "corners", "star", "full"].flatMap((pattern) => [1, 2, 3].map((ordinal) => ({ pattern, scope: "ticket", ordinal, text: "Prize " + ordinal })));
+    const org = await t.newOrg(); const g = await t.game(org, { cap: phones, who: "anyone", days: 1, rewards: lines, breaks: [] }); if (!t.expect("create", g.r, "ok")) return;
+    t.eq("the tie rule is 'next' (equal split, the leftover stays open)", ((await org.info(g.id)).body.ties ?? "next"), "next");
+    await t.publishPay(org, g.id);
+    const res = await crowd({ eid: g.id, startRound: g.startRound, phones, phoneBase: 500000 + t.R.int(400000), seed: seedTag + t.seed, lateFrac: 0, offlineFrac: 0, maxSteps: 480 });
+    if (!t.check("the phones played", !!res && res.ended === res.joined && res.joined >= phones * 0.95, JSON.stringify(res?.failures ?? res).slice(0, 200))) return;
+    t.eq("all phones agree on the winners", (res.groups ?? []).length, 1);
+    const rows = (await A.call("GET", `/api/z/${g.id}/results`)).body.results ?? []; const byHouse = {}; for (const r of rows) (byHouse[r.pattern] ??= []).push(r);
+    let ties = 0; const dump = [];
+    for (const [house, rs] of Object.entries(byHouse)) {
+      const ords = rs.map((r) => r.ordinal).sort((a, b) => a - b); const winners = rs.flatMap((r) => r.winners ?? (r.pid ? [r.pid] : []));
+      t.check(`${house}: at most 3 prizes awarded`, rs.reduce((n, r) => n + (r.count ?? 1), 0) <= 3 || rs.length <= 3, JSON.stringify(rs).slice(0, 200));
+      t.check(`${house}: ordinals run 1,2,3 without a gap`, ords.every((o, i) => o === i + 1), "ordinals " + ords.join(","));
+      t.check(`${house}: nobody wins two prizes of one category`, new Set(winners).size === winners.length, "winners " + winners.join(","));
+      const byIdx = {}; for (const r of rs) (byIdx[r.idx] ??= []).push(r); for (const grp of Object.values(byIdx)) if (grp.length > 1 || (grp[0].count ?? 1) > 1) ties++;
+      dump.push({ house, rows: rs });
+    }
+    try { (await import("node:fs")).writeFileSync("sim/prize-split-" + seedTag + ".json", JSON.stringify({ ties, dump }, null, 1)); } catch { /* the dump is for the reader only */ }
+    t.check("(information) ties seen in this game: " + ties, true, "");
+    // the organizer's final call on a SHARED category: may the same ticket be given a second prize of one category? (no rule written by the owner: recorded, not judged)
+    const h2 = Object.values(byHouse).find((rs) => rs.length >= 2 && rs[0].winners?.length && rs[1].winners?.length);
+    if (h2) { const [r1, r2] = h2.sort((a, b) => a.ordinal - b.ordinal); const pr = (await org.api("GET", `/api/z/${g.id}/prizes`)).body.prizes ?? []; const row1 = pr.find((r) => r.pattern === r1.pattern && r.ordinal === r1.ordinal), row2 = pr.find((r) => r.pattern === r2.pattern && r.ordinal === r2.ordinal);
+      if (row1 && row2 && (row2.claimants ?? []).some((c) => c.seat === row1.seat)) { const o = await org.api("POST", `/api/z/${g.id}/override`, { round: row2.round, pattern: row2.pattern, ordinal: row2.ordinal, seat: row1.seat });
+        t.check(`(information) override: giving ${row2.pattern} prize ${row2.ordinal} to the ticket that already won prize ${row1.ordinal} of the same category answered HTTP ${o.status} ${o.body?.code ?? ""}`, true, JSON.stringify(o.body).slice(0, 160));
+        try { (await import("node:fs")).appendFileSync("sim/prize-split-" + seedTag + ".txt", `override second prize same category: HTTP ${o.status} ${JSON.stringify(o.body)}\n`); } catch { /* reader only */ }
+        if (o.ok) await org.api("POST", `/api/z/${g.id}/override`, { round: row2.round, pattern: row2.pattern, ordinal: row2.ordinal, seat: row2.seat }); }
+      else t.check("(information) no claimant of prize 2 also won prize 1 in a shared category in this game", true, ""); }
+  } });
+
   out.push({ name: "rules|device: vote and over need the phone's own device proof", time: true, run: async (t) => {
     const x = await game(t); if (!x) return; const { org, g } = x; const phone = mobile(t.R); const device = dev(phone);
     const j = await A.call("POST", `/api/z/${g.id}/join`, { phone, name: personName(t.R), device }, {}, { ip: t.ip() }); if (!t.expect("a player joins", j, "ok")) return; const pid = j.body.pid;
