@@ -18,7 +18,13 @@ Built locally in `C:\ct\tambola-modes` (clone of `wip/join-redesign` at c1f8c88)
 
 ## Tests
 
-RESULTS_PLACEHOLDER
+Full suite (every test file, one at a time, own copy of run-all-tests in the clone, 142 files): **2,850 pass, 3 fail** at the last run (12:25 IST), and one of the three (ai-go, an expectation I had written for a 5,000-person game) was fixed right after and passes (11/11). The two that remain fail the same way on the base commit c1f8c88 because of what the base contains, not this work:
+* `apps/edge/test/secrets-list.test.ts`: `OWNER_STATS_KEY` (owner-stats.ts) and `OWNER_LINK_KEY` (prospect-links.ts), added in 1.3.x, are not in `config/SECRETS_NAMES.md` (that file is untouched by this branch). Needs one line each in the list.
+* `apps/edge/test/ai-enablement.test.ts` (Trust page equals the facts): this clone has git `autocrlf=true`, so `trust.html` is checked out with CRLF; the files are identical to c1f8c88. Expected to pass in the real folder.
+
+New and changed tests (all pass, each falsified, see below): `packages/beacon/test/modes.test.ts` (15), `modes-phone.test.ts` (7), `apps/edge/test/modes.test.ts` (16, incl. the 1000/1001 boundary for all four modes and the 2000/2001 Start limit), `apps/web/test/modes-pages.test.ts` (5: radio buttons exist with the right names/values, exactly one checked, label wraps input, summary follows the choice, hidden above 1,000 / 2,000, Start button states, phone page, big screen), `modes-guide.test.ts` (1), existing tests updated for the new wording (`hostcalls*`, `pages`, `idiotproof-steps-1-2`, `ai-go`, `worker` join keys), plus sim2 `modes` family: 110 scenarios, seeds 1 and 2, all pass (role x mode x window, Start by Organizer/Host/stranger, double Start, never pressed, time change then Start, switch after publish with players in, late joiner, size boundary 1000 / 1001 for each of the four modes).
+
+Also merged as asked: ticket look 70ba88f + 6aa41ba (Retro/Modern picker) from `wip/ticket-look`, and the draft-limit change (cherry-picked as 17c5f07, from 6f92c7d on `wip/join-redesign`); both have release lines in 1.4.0. The only edit to their files: one comment in `z.css` reworded ("owner order" is a banned word in shipped files).
 
 ## Falsification (disable the fix, see the test fail, restore)
 
@@ -34,12 +40,12 @@ RESULTS_PLACEHOLDER
 2. **No 2-minute set-up grace** after Start (the lead is the grace). Automatic-start games keep their grace.
 3. **A game nobody starts** is never started; it stays "waiting" and counts as live for 24 h after its time, then follows the normal end/erasure clock. Same 24 h is also the unplayed-window for the deploy guard.
 4. **Settings stay editable past the time for a manual-start game until Start**; the console form then needs a future time only if the time itself is changed.
-5. Manual start keeps `PAUSE_MAX_PARTICIPANTS` (2,000), the same as Host calling.
-6. The old labels "The software, at the chosen speed" / "A Host presses a button for each number" became "The game does" / "I do (a Host presses a button for each number)" (two existing page tests updated).
+5. **Limits (owner ruling)**: manual PLAY (a Host or the Organizer calls every number) is for games of up to **1,000** people (`MANUAL_MAX_PARTICIPANTS`; the pause limit `PAUSE_MAX_PARTICIPANTS` 2,000 is unchanged). Above 1,000 the allowed modes are Auto Start + Auto Play and Manual Start + Auto Play; "I do" is hidden in the console and refused by the server (create, settings, mode switch, size increase) with: "Games above 1,000 people are called by the game itself: choose "The game does". You can still press Start yourself." Pressing Start itself needs the signed control file, which exists only up to 2,000 people, so "I press Start" is hidden/refused above **2,000** (plain sentence: "Pressing Start works for games of up to 2,000 people. For a larger game, choose "By itself at the time"."). Owner to confirm that 2,000 is acceptable for Start by hand, or whether Start by hand should work at any size (it cannot without a different design: the key registration is refused above 2,000).
+6. 6. The two questions are radio buttons with one plain sentence under each option and a live "Your game: ..." summary line; labels are "By itself at the time" / "I press Start" and "The game does" / "I do".
 
 ## Open questions / not done
 
-* The owner's AI link instructions (`ai-link.ts`, `ai-go.ts`) do not yet mention `startMode`; the AI can send it through settings, but it is not in the guided questions.
+* The AI guided flow (`ai-go.ts`) now asks "How does it start?" (new `sm` choice, summary line, saved as `startMode`) beside "Who calls the numbers?"; the long AI-link instructions text (`ai-link.ts`) was not changed.
 * A Host working through the narrow AI link cannot register a signing key, so cannot press Start (same as pressing Next number today).
 * Phones that joined before a switch to Host/manual and where no control key exists yet only learn of it when a key is registered; the Worker refuses that switch until the console has been opened once (message in the guide).
 * Whether 24 h is the right waiting window for a game nobody starts.
