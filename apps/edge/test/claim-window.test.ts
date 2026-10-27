@@ -74,7 +74,10 @@ describe("no next number to wait for", () => {
   test("a claim for the last number of a game is never late; a Host who has not pressed yet does not make a claim late", async () => {
     const id = "CW-LAST";
     const { pid } = await running(id, "auto", "auto");
-    expect((await claim(id, pid, "full", 89, AT + 10 * 3_600_000)).status).toBe(200);
+    const e = raw.query("SELECT * FROM engagement WHERE id=?").get(id) as any; const last = (await callTimeMs(env as any, e, 1, 89))!; expect(last).toBeGreaterThan(0);
+    expect((await claim(id, pid, "full", 89, last + Number(e.call_seconds) * 1000 - 100)).status).toBe(200); // the last number: one gap minus 0.1 s after it is announced, in time
+    const pid3 = ((await j(await call("POST", `/api/z/${id}/join`, { phone: "9810000003", name: "Cy" }))).pid) as string;
+    expect((await claim(id, pid3, "full", 89, last + Number(e.call_seconds) * 1000)).status).toBe(409); // exactly one gap after: refused (a claim is never open for ever)
     const id2 = "CW-HOST";
     const r = await running(id2, "auto", "host"); // four numbers were pressed; the fifth has not been
     expect((await claim(id2, r.pid, "full", 3, r.at[3]! + 600_000)).status).toBe(200);

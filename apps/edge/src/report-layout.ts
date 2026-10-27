@@ -1,6 +1,7 @@
 // The engagement report the organizer receives by e-mail: one PDF with everything we hold about the game and its people, and a plain statement of what
 // is deleted and when. This file only lays data out; it knows nothing about the database (see lifecycle.ts for where the data comes from).
 import { BRAND } from "./brand";
+import { calledLine } from "../../../packages/beacon/src/gaps";
 import { GOLD, NAVY, PdfDoc, WHITE, type Column } from "./pdf";
 
 export interface ReportPerson { seat: number | null; name: string | null; phone: string | null; joinedMs: number | null; late: boolean; role: string | null; invitedBy: number | null; onRoster: boolean; joined: boolean; /** the list this person is on: Organizer, Host <name>, Co-host <name> (a guest's own invitees show under that guest) */ via?: string | null; /** who let them in from the waiting room or put them back */ admittedBy?: string | null; removed?: boolean }
@@ -77,7 +78,7 @@ export function layoutReport(d: ReportData): Uint8Array {
     ["How it ended", d.endReason],
     ["Playing time", d.wasHeld ? "-" : dur(d.endMs - d.firstNumberMs)],
     ["Rounds", String(d.rounds)],
-    ["Numbers called in the last round", String(d.numbersCalled)],
+    ["Numbers called in the last round", calledLine(d.numbersCalled)],
     ["Call speed", `one number every ${d.callSeconds} seconds`],
     ["Tickets per person", String(d.ticketsPerPerson)],
     ["Participant limit", `${d.cap}${d.inviteOnly ? "  (invitation only)" : ""}`],

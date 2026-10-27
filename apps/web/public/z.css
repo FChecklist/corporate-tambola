@@ -98,15 +98,17 @@ a.zbtn#addcal{margin-left:6px}
 .gor{margin:6px 0;text-align:center;font-size:13px;color:var(--muted,#6b7385)}.ggnote{margin:0;text-align:center}
 .zmia .zbtn{width:auto;flex:1 1 auto;min-height:40px;margin-top:0;padding:8px 12px;font-size:14px}
 #mine .zform .zbtn{margin-top:10px}
-/* a phone held sideways: the number on the left, the ticket and the rest on the right, so the ticket is visible without scrolling */
+/* a phone held sideways: the number on the left, the ticket and the rest on the right, so the ticket is visible without scrolling (the player page only; the consoles have their own layout) */
 @media (orientation:landscape) and (max-height:520px){
-.zapp{max-width:none;display:grid;grid-template-columns:minmax(220px,300px) minmax(0,1fr);column-gap:12px;align-content:start;padding:8px max(12px,env(safe-area-inset-right)) 24px max(12px,env(safe-area-inset-left));min-height:0}
-.zapp>*{grid-column:2;margin-top:0}
-.zapp>.zbrand,.zapp>.zbar,.zapp>.zhead{grid-column:1/-1}
-.zapp>.zbrand{padding:6px 12px;margin-bottom:6px}
-.zapp>.zhead{margin-bottom:6px}
-.zapp>.zcard:has(.zball){grid-column:1;grid-row:2/span 8;position:sticky;top:8px;align-self:start}
+.zapp:not(.zc){max-width:none;padding:8px max(12px,env(safe-area-inset-right)) 24px max(12px,env(safe-area-inset-left));min-height:0}
+.zapp:not(.zc) .zplay{display:grid;grid-template-columns:minmax(190px,250px) minmax(0,1fr);column-gap:12px;align-content:start;grid-auto-flow:row dense;max-width:none;padding:0;margin:0}
+.zapp:not(.zc) .zplay>*{grid-column:2;margin-top:0}
+.zapp:not(.zc) .zplay>.zstory,.zapp:not(.zc) .zplay>.zalert,.zapp:not(.zc) .zplay>.zbanner,.zapp:not(.zc) .zplay>.zann,.zapp:not(.zc) .zplay>.zwait{grid-column:1/-1}
+.zapp:not(.zc) .zplay>.zcall{grid-column:1;grid-row:span 8;position:sticky;top:8px;align-self:start;margin-top:0}
+.zapp:not(.zc) .zplay>.ztk{margin:0}
+.zapp:not(.zc)>.zbrand,.zapp:not(.zc)>.zbar .zbrand{padding:6px 12px;margin-bottom:6px}
 .zapp .zbig{zoom:.8}
+}
 }
 
 .pbrand{margin:0 0 12px;padding:18px 16px;border-radius:16px;text-align:center;color:#fff;background:linear-gradient(135deg,#8a0f3c 0%,#e8590c 62%,#f59f00 100%);box-shadow:0 6px 18px rgba(138,15,60,.28)}
@@ -334,7 +336,7 @@ body:has(#go) #ct-notify{display:none}
 .ztight .zbig{width:84px;height:84px;min-width:84px;font-size:40px;margin:0}
 .ztxt{min-width:0}.zlab{font-size:12px;color:#6f6166;text-transform:uppercase;letter-spacing:.7px;font-weight:700}
 .ztally{font-size:13.5px;line-height:1.4;color:#6f6166;margin-top:2px}.ztally b{font-size:14.5px;color:#2e0812}
-.zbar{height:6px;background:#e9dfcb;border-radius:3px;overflow:hidden;margin:10px 0}.zbar i{display:block;height:100%;background:linear-gradient(90deg,#7a1c33,#e0b872);transition:width .3s}
+.zprog{height:6px;background:#e9dfcb;border-radius:3px;overflow:hidden;margin:10px 0}.zprog i{display:block;height:100%;background:linear-gradient(90deg,#7a1c33,#e0b872);transition:width .3s}
 .zlastrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.zballs{display:flex;gap:6px}.zlastrow .zlastn{width:34px;height:34px;min-width:34px;font-size:14px}
 .ztk{margin:10px 8px;padding:12px 10px 14px;border-radius:20px}
 .ztk .zticket div,.ztk .zt div{font-size:clamp(19px,6.2vw,27px)}
@@ -356,7 +358,8 @@ body:has(#go) #ct-notify{display:none}
 .zlegend{display:flex;gap:14px;font-size:12px;color:#6f6166;margin:2px 0 8px}.zlegend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px}.zlegend .g{background:#e0b872}.zlegend .s{background:#cfc7b8}
 .zlate{font-size:1rem}
 /* ===== LAPTOP, from 861 px: no phone frame; the ticket on the left, the counter, the claim and the prizes on the right ===== */
-@media(min-width:861px){
+@media(min-width:861px) and (min-height:521px){
+ .zapp:has(.zplay){max-width:1228px}
  .zplay{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,1fr);column-gap:22px;max-width:1180px;margin:0 auto;padding:0 24px 24px;align-content:start;grid-auto-flow:row dense}
  .zplay>*{grid-column:2}
  .zplay>.zstory,.zplay>.zalert,.zplay>.zbanner,.zplay>.zann,.zplay>.zwait{grid-column:1 / -1}
@@ -376,3 +379,14 @@ body:has(#go) #ct-notify{display:none}
 /* the pop-ups about other tickets' claims: calm, short, at the top, never covering the ticket for long */
 .ztoasts{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:30;display:grid;gap:6px;width:min(92vw,420px);pointer-events:none}
 .ztoast{background:#14233f;color:#fff;border-radius:12px;padding:10px 14px;font-size:.95rem;line-height:1.35;box-shadow:0 8px 20px -10px rgba(0,0,0,.6)}
+
+/* numbers sized from the TICKET's own width, so two digits always fit their cell at every screen size */
+.ztk .zticket,.ztk .zt{container-type:inline-size}
+.ztk .zticket div,.ztk .zt div{font-size:clamp(11px,5.6cqw,26px)}
+@media(max-width:380px){.zticket{padding:5px;gap:3px;border-width:2px}.ztk{margin:8px 2px;padding:10px 6px 12px}}
+
+/* several prizes ready at once: one big button, the rest compact; the small duplicates under the ticket hide while the bar is on; the guide's "Back" chip never sits on the bar; sheets scroll on short screens */
+.zbigclaim.zmore{min-height:44px;font-size:1rem;animation:none}.zbigclaim.zmore small{display:none}
+#app:has(#claimbar .zbigclaim) .zclaim.ready{display:none}
+body:has(#claimbar) .ctg-back{display:none}
+.zhcard,.zinvsheet{max-height:calc(100dvh - 32px);overflow:auto}

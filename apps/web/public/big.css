@@ -69,3 +69,6 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,syste
 .bptick{display:flex;gap:10px;margin:12px 0;font-weight:600}.bptick input{width:24px;height:24px;flex:none}
 .bpcheck{margin:0 0 8px;padding:6px 10px;border-radius:8px;background:rgba(80,200,120,.14)}.bpcheck[data-ok="false"]{background:rgba(224,120,60,.25)}.bpev .bptime{display:inline;min-width:0;opacity:.85;font-variant-numeric:tabular-nums;margin:0 2px}
 .bpev span.bptime{font-weight:600}
+
+.bpmbox{max-height:calc(100dvh - 32px);overflow:auto}
+.bpscroll{overflow-x:auto}

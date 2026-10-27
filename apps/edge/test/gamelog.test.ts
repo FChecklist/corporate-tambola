@@ -51,13 +51,28 @@ describe("the live game log (the console's vital details)", () => {
     expect(JSON.stringify(log)).not.toMatch(SECRET_WORDS);
     expect(log.schedule).toMatchObject({ callSeconds: 12, rounds: 1, manualStart: false });
   });
-  test("the Organizer, the Organizer's AI and the platform read it; a Co-host, a player and a stranger do not", async () => {
+  test("the Organizer, the Organizer's AI and the platform read it; a Co-host reads it too (ticket numbers only); a player and a stranger do not", async () => {
     const o = await game();
     expect((await call("GET", "/api/z/GL-1/gamelog", undefined, { "x-organizer": o.ai })).status).toBe(200);
     expect((await call("GET", "/api/z/GL-1/gamelog", undefined, { "x-organizer": "plat" })).status).toBe(200);
     const co = (await j(await call("POST", "/api/org/cohost", { label: "Ravi", phone: "9876500001", e: "GL-1" }, o.h))).cohostKey as string;
-    expect([200, 0].includes((await call("GET", "/api/z/GL-1/gamelog", undefined, { "x-organizer": co })).status)).toBe(false);
+    { const cr = await call("GET", "/api/z/GL-1/gamelog", undefined, { "x-organizer": co }); expect(cr.status).toBe(200); expect(JSON.stringify(await cr.json())).not.toMatch(/9876500|Ravi|Asha/); } // a Co-host reads the live panels, never presses anything
+    expect((await call("POST", "/api/z/GL-1/control", { message: {} }, { "x-organizer": co })).status).toBe(403);
     expect((await call("GET", "/api/z/GL-1/gamelog")).status).toBe(403);
+  });
+});
+
+describe("claims are part of the saved log", () => {
+  test("accepted, wrong and too-late claims are in the log by ticket number, and stay after the claim tables are emptied (the saved copy)", async () => {
+    const o = await game("GL-CL");
+    const pids = (raw.query("SELECT pid, seq FROM seat WHERE eid='GL-CL' ORDER BY seq").all() as any[]);
+    const t0 = Date.UTC(2026, 9, 1, 12, 0, 0);
+    raw.prepare("INSERT INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES('GL-CL',?,?,1,4,?)").run(pids[0].pid, "early5", t0);
+    raw.prepare("INSERT INTO bogey(eid,pid,pattern,round,at_ms) VALUES('GL-CL',?,?,1,?)").run(pids[1].pid, "top", t0 + 1000);
+    raw.prepare("INSERT INTO kv(k,v) VALUES('claimlate/GL-CL',?)").run(JSON.stringify([{ t: pids[2].seq, p: "mid", at: t0 + 2000 }]));
+    const gl = await j(await call("GET", "/api/z/GL-CL/gamelog", undefined, o.h));
+    expect(gl.claims.map((c: any) => [c.ticket, c.outcome])).toEqual([[pids[0].seq, "accepted"], [pids[1].seq, "wrong"], [pids[2].seq, "too late"]]);
+    expect(gl.claims[0].afterNumber).toBe(5); expect(JSON.stringify(gl.claims)).not.toMatch(/Zainab|98100/);
   });
 });
 

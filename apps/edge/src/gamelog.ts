@@ -22,6 +22,8 @@ export interface GameLog {
   people: { joined: number; late: number; waiting: number; present: number | null; most: number };
   /** when each ticket joined (ticket numbers only; the first 2,000) */
   joins: { ticket: number; atMs: number }[];
+  /** every claim: who (ticket number), which prize, what came of it (accepted, wrong, too late) and when; saved with the log because the claim tables are erased after the game */
+  claims: { ticket: number; prize: string; outcome: "accepted" | "wrong" | "too late"; atMs: number; afterNumber: number | null }[];
   prizes: { prize: string; text: string; ticket: number; callNo: number; atMs: number | null }[];
   /** every lucky draw the organizer chose, drawn or not */
   lucky: { title: string; winners: number; drawn: boolean; tickets: number[] }[];
@@ -48,6 +50,16 @@ export async function buildGameLog(env: { DB: D1 }, kvOf: KV, e: any, cfg: Engag
   const waiting = await cnt("SELECT COUNT(*) AS c FROM waiting WHERE eid=? AND status='waiting'", eid).catch(() => 0);
   const present = checkinRequired(e) ? await presentCount(db, eid).catch(() => 0) : null;
   const joins = ((await db.prepare("SELECT s.seq AS t, p.joined_ms AS at FROM participant p JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? ORDER BY p.joined_ms, s.seq LIMIT 2000").bind(eid).all<any>().catch(() => ({ results: [] }))).results ?? []).map((x: any) => ({ ticket: Number(x.t), atMs: Number(x.at) })).filter((x: { ticket: number; atMs: number }) => Number.isFinite(x.ticket) && Number.isFinite(x.atMs));
+  const seatOfPid = (pid: string) => { const m = /^(\d+)x/.exec(String(pid)); return m ? Number(m[1]) : 0; };
+  const cl = (await db.prepare("SELECT pid, pattern, round, idx, at_ms AS at FROM claim WHERE eid=? ORDER BY at_ms").bind(eid).all<any>().catch(() => ({ results: [] }))).results ?? [];
+  const bg = (await db.prepare("SELECT pid, pattern, round, at_ms AS at FROM bogey WHERE eid=? ORDER BY at_ms").bind(eid).all<any>().catch(() => ({ results: [] }))).results ?? [];
+  const lt = await db.prepare("SELECT v FROM kv WHERE k=?").bind(`claimlate/${eid}`).first<{ v: string }>().catch(() => null); let lateArr: any[] = []; try { lateArr = lt ? JSON.parse(lt.v) : []; } catch { lateArr = []; }
+  const pn = (k: string) => NAMES[k] ?? k;
+  const claims: GameLog["claims"] = [
+    ...cl.map((x: any) => ({ ticket: seatOfPid(x.pid), prize: pn(x.pattern), outcome: "accepted" as const, atMs: Number(x.at), afterNumber: Number(x.idx) + 1 })),
+    ...bg.map((x: any) => ({ ticket: seatOfPid(x.pid), prize: pn(x.pattern), outcome: "wrong" as const, atMs: Number(x.at), afterNumber: null })),
+    ...lateArr.map((x: any) => ({ ticket: Number(x.t), prize: pn(x.p), outcome: "too late" as const, atMs: Number(x.at), afterNumber: null })),
+  ].filter((x) => Number.isFinite(x.atMs)).sort((a, b) => a.atMs - b.atMs);
   const wrows = (await db.prepare("SELECT round, pattern, ordinal, seat, idx, at_ms FROM winner WHERE eid=? ORDER BY round, at_ms, pattern, ordinal, seat").bind(eid).all<any>().catch(() => ({ results: [] }))).results ?? [];
   const lucky = cfg.breaks.filter((b) => b.kind === "lucky");
   const prizes = wrows.map((w: any) => {
@@ -72,7 +84,7 @@ export async function buildGameLog(env: { DB: D1 }, kvOf: KV, e: any, cfg: Engag
     v: 1, id: eid, name: cfg.name || eid, saved: false, savedMs: null,
     mode: { start: cfg.startMode === "manual" ? "manual" : "auto", call: cfg.callMode === "host" ? "host" : "auto", afterPrizes: cfg.keepCalling ? "keep" : "end" },
     startsAtMs: roundMs(e.start_round), firstNumberMs: end?.firstNumberMs ?? null, endedAtMs: end?.endMs ?? (life?.end_ms ?? null), endReason: end?.endReason ?? null, numbersCalled: end?.numbersCalled ?? null,
-    people: { joined, late, waiting, present, most: joined }, joins,
+    people: { joined, late, waiting, present, most: joined }, joins, claims,
     prizes, lucky: luckyList, pauses, changes: changesView(chg).map((c) => ({ atMs: c.at, when: c.when, who: c.who, what: c.what })).reverse(),
     report: { state: life?.report_state ?? null, sentMs: life?.report_ms ?? null }, warnings,
     schedule: { startRound: e.start_round, callSeconds: e.call_seconds, rounds: cfg.rounds, breaks: cfg.breaks, manualStart: cfg.startMode === "manual", goRound: st?.goRound ?? null, messages: f?.messages ?? [], pubKey: f?.pubKey ?? "", hostKeys: f?.hostKeys ?? [], leadRounds: f?.leadRounds ?? 0, maxPauseRounds: f?.maxPauseRounds ?? 600, callMode: cfg.callMode === "host" ? "host" : "auto", startOnly: !!f?.startOnly },

@@ -123,7 +123,7 @@
     if (S.cf) (S.cf.messages || []).forEach((m, i) => { const txt = { go: "Start pressed", pause: "Paused", resume: "Resumed", extend: "Pause made longer", stop: "Game ended", next: "Next number pressed" }[m.action]; if (txt) ev.push({ ms: ZG.roundTimeMs(m.atBeaconRound), t: `${txt}`, tail: ` by ${who(i)}`, ctl: true }); });
     // the control lines are also in the plain list of changes: show each once
     const seenCtl = new Set(); const out = ev.filter((e) => { if (!e.ctl) return !/^(The Organizer|A Host): (Start was pressed|The game was (paused|resumed|ended)|The pause was made longer)$/.test(e.t.replace(/<[^>]*>/g, "")); const k = e.t + Math.round(e.ms / 1000); if (seenCtl.has(k)) return false; seenCtl.add(k); return true; });
-    return out.sort((a, b) => b.ms - a.ms).slice(0, 400);
+    return out.sort((a, b) => b.ms - a.ms); // every line, newest first (nothing is cut)
   }
   /** one line at the top of the log: how many numbers were announced, and whether any was missed (worked out from the log against the schedule) */
   function checkLine() {
@@ -134,12 +134,12 @@
   function controlsHtml() {
     if (P.who !== "master" && P.who !== "host" && P.who !== "platform") return `<div class="bpbox" id="bp-controls"><h2>Controls</h2><p class="bpsmall">Pause, Resume and Next number are pressed by the Organizer or a Host.</p></div>`;
     const paused = pausedNowB(), manual = (S.cfg || {}).startMode === "manual", go = S.st ? S.st.goRound : null, host = (S.cfg || {}).callMode === "host", running = (S.logs[S.round] || []).length > 0 && (S.logs[S.round] || []).length < 90;
-    const off = P.busy ? " disabled" : "";
-    return `<div class="bpbox" id="bp-controls"><h2>Controls</h2><div class="bpbtns">
+    const off = P.busy ? " disabled" : "", startOnly = !!(S.cf && S.cf.startOnly);
+    return `<div class="bpbox" id="bp-controls"><h2>Controls</h2>${startOnly ? `<p class="bpsmall" id="bp-nopause">No pause on games above 2,000 people: the numbers keep coming at their own pace.</p>` : ""}<div class="bpbtns">
       ${manual && go === null ? `<button type="button" id="bp-go"${S.now !== null && S.now >= S.info.startRound ? off : " disabled"}>Start the game</button>` : ""}
-      <button type="button" id="bp-pause"${paused || !running || P.busy ? " disabled" : ""}>Pause the game…</button>
+      ${startOnly ? "" : `<button type="button" id="bp-pause"${paused || !running || P.busy ? " disabled" : ""}>Pause the game…</button>
       <button type="button" id="bp-resume"${paused ? off : " disabled"}>Resume</button>
-      ${paused ? `<button type="button" id="bp-extend"${off}>Add 30 more minutes</button>` : ""}
+      ${paused ? `<button type="button" id="bp-extend"${off}>Add 30 more minutes</button>` : ""}`}
       ${host ? `<button type="button" id="bp-next"${!paused && running ? off : " disabled"}>Next number</button>` : ""}</div>${P.note ? `<p class="bpnote" id="bp-note" role="status">${esc(P.note)}</p>` : ""}</div>`;
   }
   function panelsHtml() {
@@ -147,7 +147,7 @@
     const st = boardStory(), g = P.gl, c = ZG.gapsByMode(calls().map((x) => ({ ms: x.ms, manual: x.manual }))), fmt = (v, n) => (v === null ? "not yet (needs at least 3 numbers)" : v + " seconds (from " + n + " numbers)");
     const q = quietNext(), people = `${g.people.joined} joined · ${g.people.waiting} waiting for the Organizer's OK` + (g.people.present != null ? ` · ${g.people.present} present` : "");
     const cl = [...P.claims.filter((x) => !x.bogey).map((x) => ({ ms: x.atMs, t: x.pid, p: x.pattern, r: "accepted" })), ...P.claims.filter((x) => x.bogey).map((x) => ({ ms: x.atMs, t: x.pid, p: x.pattern, r: "wrong (Bogey)" })), ...P.tooLate.map((x) => ({ ms: x.atMs, t: x.ticket + "x", p: x.pattern, r: "too late, refused" }))].sort((a, b) => b.ms - a.ms);
-    const claimsRows = cl.length ? cl.slice(0, 100).map((x) => `<tr><td>${esc(hm(x.ms))}</td><td>Ticket ${seatOf(x.t)}</td><td>${esc(NAMES[x.p] || x.p)}</td><td>${esc(x.r)}</td></tr>`).join("") : `<tr><td colspan="4">No claim yet.</td></tr>`;
+    const claimsRows = cl.length ? cl.map((x) => `<tr><td>${esc(hm(x.ms))}</td><td>Ticket ${seatOf(x.t)}</td><td>${esc(NAMES[x.p] || x.p)}</td><td>${esc(x.r)}</td></tr>`).join("") : `<tr><td colspan="4">No claim yet.</td></tr>`;
     return `<div class="bp"><div class="storybar" id="storyline" data-state="${st.state}"><b>${esc(st.say)}</b> <span>${esc(st.todo)}</span>${q ? ` <small class="bpquiet" id="bp-quiet" role="timer">${esc(q)}</small>` : ""}</div>
       ${controlsHtml()}
       <div class="bpgrid">
@@ -178,7 +178,11 @@
     const box = document.getElementById("bp-logbox"), top = box ? box.scrollTop : 0;
     P.sig = html; el.innerHTML = html; const nb = document.getElementById("bp-logbox"); if (nb) nb.scrollTop = top;
     const on = (id, f) => { const b = document.getElementById(id); if (b) b.onclick = f; };
-    on("bp-go", () => press("go")); on("bp-resume", () => press("resume")); on("bp-extend", () => press("extend", { addRounds: 600 })); on("bp-next", () => press("next"));
+    const sure = async (title, text, yes) => askBoard(title, text, yes, "No, not now", ""); // every control asks once; the 2.5 s double-press lock stays
+    on("bp-go", async () => { if (await sure("Start the game now?", "The countdown begins on every phone and on the big screen. It cannot be taken back.", "Yes, start the game")) press("go"); });
+    on("bp-resume", async () => { if (await sure("Resume the game?", "The numbers start again for everybody.", "Yes, resume")) press("resume"); });
+    on("bp-extend", async () => { if (await sure("Add 30 more minutes to the pause?", "The game stays paused for 30 more minutes.", "Yes, add 30 minutes")) press("extend", { addRounds: 600 }); });
+    on("bp-next", async () => { if (await sure("Announce the next number now?", "Every player sees it at once. It cannot be taken back.", "Yes, announce it")) press("next"); });
     on("bp-pause", async () => { if (await askBoard("Are you sure? Numbers stop for everybody.", "The game pauses on every phone and on the big screen until you press Resume. It ends by itself after 30 minutes.", "Yes, pause the game", "No, keep playing", "I understand: the numbers stop for every player until I press Resume.")) press("pause", { pauseForRounds: 600 }); });
   }
 

@@ -11,6 +11,8 @@ import * as H from "./sim2/lib/index.mjs";
 const out = (() => { const i = process.argv.indexOf("--out"); return i >= 0 ? process.argv[i + 1] : "C:/ct/test-sites/data/ui/sizes"; })();
 mkdirSync(out, { recursive: true });
 const SIZES = [[320, 640, "phone"], [360, 740, "phone"], [390, 844, "phone"], [430, 932, "phone"], [768, 1024, "tablet"], [1024, 768, "tablet"], [1280, 800, "laptop"], [1440, 900, "laptop"], [1920, 1080, "laptop"], [667, 375, "phone-landscape"]];
+const only = (() => { const i = process.argv.indexOf("--sizes"); return i >= 0 ? process.argv[i + 1].split(",") : null; })();
+const SIZES_USED = only ? SIZES.filter((z) => only.includes(`${z[0]}x${z[1]}`)) : SIZES;
 const results = []; let stack, browser;
 const note = (page, size, name, ok, detail = "") => { results.push({ page, size, name, ok: !!ok, detail }); if (!ok) console.log(`FAIL ${page} ${size} ${name} ${detail}`); };
 
@@ -20,13 +22,28 @@ const inPage = (kind) => {
   const inside = (el) => { if (!el) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.left >= -0.5 && r.right <= iw + 0.5; };
   const res = { sideways: de.scrollWidth <= iw + 1 && document.body.scrollWidth <= iw + 1, scrollWidth: de.scrollWidth, innerWidth: iw };
   if (kind === "player") {
+    window.scrollTo(0, 0);
     const cells = Array.from(document.querySelectorAll(".zticket > div"));
     res.cells = cells.length; res.cellsInside = cells.length > 0 && cells.every(inside);
+    // R8: the ticket is READABLE, not just inside the screen: the ticket card is wide enough, every cell is big enough and its number fits inside it, nothing is crushed
+    const tk = document.querySelector(".ztk") || document.querySelector(".zticket"); const tr = tk ? tk.getBoundingClientRect() : null;
+    res.ticketW = tr ? Math.round(tr.width) : 0; res.ticketWideEnough = !!tr && tr.width >= (iw >= 861 && ih > 520 ? 280 : Math.min(280, iw * 0.8));
+    const txt = cells.filter((c) => (c.textContent || "").trim()); res.numCells = txt.length;
+    const small = cells.filter((c) => c.getBoundingClientRect().width < 20); res.tinyCells = small.length;
+    res.cellText = txt.length > 0 && txt.every((c) => { const rg = document.createRange(); rg.selectNodeContents(c); const t = rg.getBoundingClientRect(), b = c.getBoundingClientRect(); return t.width <= b.width - 2 && t.left >= b.left - 0.5 && t.right <= b.right + 0.5 && c.scrollWidth <= c.clientWidth + 1; });
+    res.cellsOver = txt.filter((c) => { const rg = document.createRange(); rg.selectNodeContents(c); const t = rg.getBoundingClientRect(), b = c.getBoundingClientRect(); return !(t.width <= b.width - 2); }).map((c) => c.textContent.trim()).slice(0, 8).join(",");
+    const br = document.querySelector("#app .zbar .zbrand, #app > .zbrand"); res.brandH = br ? Math.round(br.getBoundingClientRect().height) : null; res.brand = !br || br.getBoundingClientRect().height >= 44;
+    const snd = document.querySelector(".zsndin"); res.sound = !snd || inside(snd);
+    const call = document.querySelector(".zcall, .zplay > .zcard"); const cr = call ? call.getBoundingClientRect() : null;
+    res.noEmptyLeft = !(iw < 861 || ih <= 520) || !tr || !cr || true;
+    if (ih <= 520 && tr && cr) { res.ticketVisible = tr.top < ih - 40 && tr.bottom > 40; res.noEmptyLeft = cr.left < tr.left && cr.left < 40 && tr.left < iw * 0.6; } else res.ticketVisible = true;
+    if (iw >= 861 && ih > 520 && tr && cr) res.noEmptyLeft = tr.left < cr.left && tr.width >= cr.width;
     const cc = document.getElementById("calledcount"), q = document.getElementById("quietcount"), big = document.getElementById("big");
     res.counter = inside(cc) && inside(big); res.timer = !q || inside(q);
     const btn = document.querySelector("#claimbar .zbigclaim");
     if (btn) { const r = btn.getBoundingClientRect(); const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); res.claim = inside(btn) && r.top >= 0 && r.bottom <= ih + 1 && (top === btn || btn.contains(top)); res.claimTall = r.height >= 60; } else res.claim = null;
   } else if (kind === "console") {
+    const fr = document.querySelector(".zc-frame"), mn = document.querySelector(".zc-main"); res.mainW = mn ? Math.round(mn.getBoundingClientRect().width) : 0; res.mainOk = !mn || mn.getBoundingClientRect().width >= Math.min(280, iw * 0.85); res.frameLeft = fr ? Math.round(fr.getBoundingClientRect().left) : 0; res.frameOk = !fr || (iw >= 861 && ih > 520) || (fr.getBoundingClientRect().left < Math.max(40, iw * 0.06) && fr.getBoundingClientRect().width >= iw * 0.85);
     res.live = inside(document.getElementById("livebar")); res.counter = !document.getElementById("numcount") || inside(document.getElementById("numcount"));
   } else if (kind === "board") {
     const panels = document.getElementById("panels"); res.panels = !!panels && inside(panels);
@@ -35,7 +52,7 @@ const inPage = (kind) => {
   }
   return res;
 };
-const verdict = (kind, r) => ({ "no sideways scroll": r.sideways, ...(kind === "player" ? { "ticket: all 27 cells on the screen": r.cells === 27 && r.cellsInside, "counter and number on the screen": r.counter, "quiet timer on the screen": r.timer, ...(r.claim === null ? {} : { "claim button on the screen, not covered": r.claim, "claim button at least 60 px high": r.claimTall }) } : {}), ...(kind === "console" ? { "live bar on the screen": r.live, "counter on the screen": r.counter } : {}), ...(kind === "board" ? { "panels on the screen": r.panels, "control buttons reachable": r.buttons, "log reachable": r.log, "story line on the screen": r.counter } : {}) });
+const verdict = (kind, r) => ({ "no sideways scroll": r.sideways, ...(kind === "player" ? { "ticket: all 27 cells on the screen": r.cells === 27 && r.cellsInside, "counter and number on the screen": r.counter, "quiet timer on the screen": r.timer, "ticket card wide enough (laptop 280 px or more)": r.ticketWideEnough, "no crushed cell (every cell 20 px or wider)": r.tinyCells === 0, "every number fits inside its cell": r.cellText, "brand strip at least 44 px high": r.brand, "Sound button on the screen": r.sound, "ticket visible without scrolling in landscape": r.ticketVisible, "call card and ticket side by side, no empty column": r.noEmptyLeft, ...(r.claim === null ? {} : { "claim button on the screen, not covered": r.claim, "claim button at least 60 px high": r.claimTall }) } : {}), ...(kind === "console" ? { "live bar on the screen": r.live, "counter on the screen": r.counter, "main column at least 280 px (or most of a small screen)": r.mainOk, "console frame starts at the left edge and fills the screen": r.frameOk } : {}), ...(kind === "board" ? { "panels on the screen": r.panels, "control buttons reachable": r.buttons, "log reachable": r.log, "story line on the screen": r.counter } : {}) });
 
 try {
   stack = await H.startStack({ build: true }); await stack.reset();
@@ -46,7 +63,7 @@ try {
   await H.clock.set(g.startMs + 6 * 60_000); await track.refresh(); // the game is running: a few numbers are out
   const base = H.SIM;
   const run = async (falsify) => {
-    for (const [w, h, label] of SIZES) {
+    for (const [w, h, label] of SIZES_USED) {
       const size = `${w}x${h}`;
       const device = w < 700 || (w === 667) ? "mobile" : "laptop";
       // ---- the participant page
@@ -85,7 +102,7 @@ try {
   const fals = results.slice(before);
   const falsOk = fals.length > 0 && fals.every((x) => x.ok);
   const real = results.slice(0, before), failed = real.filter((x) => !x.ok);
-  const summary = { sizes: SIZES.map((s) => `${s[0]}x${s[1]}`), checks: real.length, failed: failed.length, falsification: falsOk ? "every too-wide element was caught" : "NOT CAUGHT: the check is blind", failures: failed.slice(0, 40) };
+  const summary = { sizes: SIZES_USED.map((s) => `${s[0]}x${s[1]}`), checks: real.length, failed: failed.length, falsification: falsOk ? "every too-wide element was caught" : "NOT CAUGHT: the check is blind", failures: failed.slice(0, 40) };
   writeFileSync(join(out, "sizes-result.json"), JSON.stringify({ summary, results }, null, 1));
   console.log(JSON.stringify(summary, null, 1));
   process.exitCode = failed.length === 0 && falsOk ? 0 : 1;

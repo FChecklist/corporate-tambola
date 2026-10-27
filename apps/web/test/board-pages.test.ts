@@ -130,6 +130,8 @@ describe("the organizer's board screen: live panels", () => {
     await until(() => /The game is paused by/.test(b.$("#storyline")?.textContent ?? ""), 30_000);
     expect(b.$("#storyline")!.textContent).toContain("The game is paused by the Organizer."); expect(b.$("#storyline")!.textContent).toContain("Press Resume when you are ready.");
     await until(() => !!b.$("#bp-resume") && !(b.$("#bp-resume") as any).disabled, 20_000); b.click("#bp-resume");
+    for (let i = 0; i < 50 && !b.win.document.getElementById("bp-sure"); i++) await wait(100); expect(b.$("#bp-sure")!.textContent).toContain("Resume the game?"); expect((await file(x, "BD-3"))!.messages.length).toBe(1); // asks first: nothing is sent yet
+    b.click("#bp-sure #bp-yes");
     for (let i = 0; i < 50 && (await file(x, "BD-3"))!.messages.length < 2; i++) await wait(100);
     expect((await file(x, "BD-3"))!.messages.map((m) => m.action)).toEqual(["pause", "resume"]);
   });

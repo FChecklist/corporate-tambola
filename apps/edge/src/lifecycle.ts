@@ -4,6 +4,7 @@
 //      and the participants' personal part of the audit log is crypto-shredded (audit.ts `shredParticipantAudit`: its per-engagement key is destroyed, the hash chain still verifies);
 //   3. only the organizer / host / co-host details and the winners record (seat, prize, round, time) remain, until 00:00 IST at the end of the 365th day, then everything goes.
 // Called by the scheduled job (and, as a fallback, by any outside timer with the platform key). Every call does a bounded amount of work and can be repeated safely.
+import { calledLine } from "../../../packages/beacon/src/gaps";
 import { checkinRequired, deviceMatches, keepWinnerEvidence, prefixEnd } from "./checkin";
 import { restoreCreditUses } from "./credit";
 import { keepLegalParty } from "./legal";
@@ -245,6 +246,7 @@ async function reportStep(env: LifeEnv, e: any, life: { end_ms: number }, now: n
 const bodyFor = (eid: string, d: ReportData, link: string) => [
   `Hello,`, ``,
   `Your engagement ${eid} has ended. Your complete report is ready: when the game started, how many people took part at each stage, every prize and who won it, the invite tree, all statistics, and the name and mobile number of every participant.`, ``,
+  `${calledLine(d.numbersCalled)}.`, ``,
   `Open it here (the PDF is built on your own computer or phone, so this link is all we send):`,
   link, ``,
   `The link works until ${istFull(reportLinkUntil(d.endMs))}; the participants' details are permanently deleted at ${istFull(d.personalDeleteAtMs)}, as promised. Please open it and save the PDF before then: it is the only copy of this data once ours is deleted. You can share the link with your co-host; anyone who has it can read the report, so share it carefully. Winners confirm the name and mobile number their prize goes to on their own phone; the report shows what they confirmed, whether they changed anything, and whether you have handed the prize over, so open it again after you have ticked "Prize given" in your console.`, ``,
