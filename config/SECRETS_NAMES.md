@@ -73,3 +73,5 @@ Where things are set:
 | `ANALYTICS` | The one central visitor database `site-analytics`: this game's own visit tracker also copies each visit into it (the copy does nothing without this binding and `ANALYTICS_KEY`) | Binding in `pages/wrangler.toml` | binding |
 | `ANALYTICS_KEY` | Key that hashes network addresses for the central visitor database; the same value on every site, so one visitor can be followed across sites | Pages secret | secret |
 | `ANALYTICS_DAILY_WRITES` | Most central visitor-database writes per day (a cap; the default in the code is 400,000) | Optional Pages variable | setting |
+| `CONSOLE_PUBKEYS` | The master console's PUBLIC signing keys, written `k1:<key>,k2:<key>` (not a secret). Empty or missing means the console bridge is dark and every `/api/console/` address answers the ordinary 404 | wrangler var | setting |
+| `CONSOLE_ORIGIN` | The console's web address, used in the invitation mail for a Host or Co-host (default `https://console.corporatetambola.com`) | wrangler var | setting |
