@@ -5,7 +5,7 @@ import { CLAIM_WINDOW_CALLS, INTERMISSION_ROUNDS, PATTERN_ORDER, breakShift, key
 import { hostCallRound, type ControlState, type GameOpts } from "./control";
 
 /** What the control file needs from the game's public settings (who calls the numbers, the breaks and rounds a press must respect): pass it to cfgOf / publishControl. */
-export const hostGameOf = (cfg: Pick<EngagementCfg, "callMode" | "breaks" | "rounds">): GameOpts => ({ callMode: cfg.callMode === "host" ? "host" : "auto", breaks: cfg.breaks, rounds: cfg.rounds });
+export const hostGameOf = (cfg: Pick<EngagementCfg, "callMode" | "startMode" | "breaks" | "rounds">, scheduledRound?: number): GameOpts => ({ callMode: cfg.callMode === "host" ? "host" : "auto", startMode: cfg.startMode === "manual" ? "manual" : "auto", ...(scheduledRound !== undefined ? { startNotBefore: scheduledRound } : {}), breaks: cfg.breaks, rounds: cfg.rounds });
 import { ticketCompletion, ticketStillNeeds } from "./house-rules";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
@@ -232,6 +232,7 @@ export function unshiftedRound(start: number, stride: number, breaks: readonly B
 /** The beacon round call k of round `round` uses, with the organizer's signed pauses applied. Null when the engagement was stopped before it. */
 export function callRoundR(st: ControlState | null, start: number, stride: number, breaks: readonly BreakCfg[], round: number, k: number): number | null {
   if (st?.host) return hostCallRound(st, (round - 1) * NUMBERS + k); // host mode: the k-th press of the whole game (Infinity until it is pressed)
+  if (st?.manualStart) { if (st.goRound === null) return st.stopRound !== null ? null : Infinity; start = st.goRound; } // a manual start: nothing is called until Start; number 1 comes in the round Start named
   let a = unshiftedRound(start, stride, breaks, round, k);
   if (st) { for (const i of st.intervals) if (a >= i.start) a += i.end - i.start; if (st.stopRound !== null && a >= st.stopRound) return null; }
   return a;
