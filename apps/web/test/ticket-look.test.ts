@@ -25,4 +25,11 @@ describe("ticket look", () => {
     expect(js).toContain("rt.mark(n)");
     expect(js).toMatch(/class="\$\{marks\.has\(v\) \? "m" : ""\}/);
   });
+  test("the Modern look is a plain white card with thin black lines and bold black numbers; the red cross still applies to it; Retro stays the default", () => {
+    expect(rule(".zticket.modern")).toMatch(/background:#fff/); expect(rule(".zticket.modern")).toMatch(/border:1px solid #1C2B3A/);
+    expect(rule(".zticket.modern div")).toMatch(/border:1px solid #1C2B3A/); expect(rule(".zticket.modern div")).toMatch(/color:#000/); expect(rule(".zticket.modern div")).toMatch(/font-weight:800/);
+    expect(rule(".zticket.modern div.e")).not.toMatch(/repeating-linear-gradient/); // no teal stripes in the modern look
+    expect(css).not.toMatch(/\.zticket\.modern div\.m::(before|after)\{[^}]*background:#(?!D62828)/i); // the cross is not re-coloured: the one red cross rule serves both looks
+    expect(js).toContain('store.get("ctz-look") === "modern" ? "modern" : "retro"'); // default Retro
+  });
 });

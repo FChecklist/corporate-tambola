@@ -249,10 +249,12 @@
   const isDemoGame = () => false; // the Rs 0 game for up to 10 people is a real game: no mark on any screen
   const demoTag = () => (isDemoGame() ? ' <span class="zdemotag">DEMO GAME</span>' : "");
   // Real housie: the ticket never marks itself. Each number is a button the player taps when it is called (`marks` = what they tapped); a tap on a number not called yet is refused in place.
-  const ticketHtml = (t, marks, label, win) => `<div class="zticket${isDemoGame() ? " zdemogame" : ""}" aria-label="${label}${isDemoGame() ? " (demo game)" : ""}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div role="button" tabindex="0" data-tap="${v}" aria-pressed="${marks.has(v)}" aria-label="${v}${marks.has(v) ? ", marked" : ""}" class="${marks.has(v) ? "m" : ""}${marks.has(v) && NEWMARK === v ? " pop" : ""}${win && win.has(v) && marks.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;
+  const ticketHtml = (t, marks, label, win) => `<div class="zticket${LOOK === "modern" ? " modern" : ""}${isDemoGame() ? " zdemogame" : ""}" aria-label="${label}${isDemoGame() ? " (demo game)" : ""}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div role="button" tabindex="0" data-tap="${v}" aria-pressed="${marks.has(v)}" aria-label="${v}${marks.has(v) ? ", marked" : ""}" class="${marks.has(v) ? "m" : ""}${marks.has(v) && NEWMARK === v ? " pop" : ""}${win && win.has(v) && marks.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;
   const TIP = ZG.PLAYER_TIP || "Tap each number as it is called. When a prize is complete, press Claim before the next number is called. A wrong claim is a Bogey: it does not count.";
   const RULE = ZG.CLAIM_RULE_TEXT || "Press Claim before the next number is called.";
   let NEWMARK = 0; // the number just tapped: its place on the ticket is stamped
+  let LOOK = store.get("ctz-look") === "modern" ? "modern" : "retro"; // the player's choice of ticket look; the Retro look is the default
+  const lookPicker = () => `<div class="zlook" role="radiogroup" aria-label="Ticket look"><span class="zlooklbl">Ticket look</span><label class="zlookopt"><input type="radio" name="zlook" value="retro"${LOOK === "retro" ? " checked" : ""}> Retro look</label><label class="zlookopt"><input type="radio" name="zlook" value="modern"${LOOK === "modern" ? " checked" : ""}> Modern look</label></div>`;
   // a refusal shown in place on the ticket card (a tap on a number not called yet, a Bogey): the guide's own words, kept for a few seconds across redraws
   let TAP = null;
   const tapNote = (message, status) => {
@@ -749,7 +751,7 @@
     const chk = v.pendingChecks > 0 ? `<p class="zsmall">Double-checking ${v.pendingChecks} earlier number${v.pendingChecks === 1 ? "" : "s"} in the background.</p>` : "";
     const curWins = v.won.filter((w) => w.round === v.round), winSet = new Set(curWins.flatMap((w) => w.cells));
     const ribbon = curWins.length ? `<div class="zwin" role="status">&#127881; Congratulations! You won ${curWins.map((w) => esc(lineName(v.cfg, w.pattern, w.ordinal))).join(", ")}${curWins.some((w) => w.text) ? " &middot; " + curWins.filter((w) => w.text).map((w) => esc(w.text)).join(", ") : ""}</div>` : "";
-    const tix = v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : DEMO ? "Video ticket" : "Your ticket", winSet)).join("");
+    const tix = (v.tickets.length ? lookPicker() : "") + v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : DEMO ? "Video ticket" : "Your ticket", winSet)).join("");
     const sndBtn = `<button class="zsnd zsndin" id="snd" aria-pressed="${sound}">${!sound ? "&#128263; Sound off" : !window.TBAudio || TBAudio.unlocked ? "&#128266; Sound on" : "&#128266; Tap for sound"}</button>`;
     return `${brandStrip(sndBtn)}
       ${demoCard(v)}${demoGameCard()}${annBanner(v)}${banners.join("")}
@@ -888,6 +890,7 @@
       else { TAP = null; NEWMARK = r.marked && MOTION() ? n : 0; try { navigator.vibrate && navigator.vibrate(20); } catch {} }
       paint(); NEWMARK = 0;
     };
+    document.querySelectorAll("input[name=zlook]").forEach((r) => (r.onchange = () => { LOOK = r.value === "modern" ? "modern" : "retro"; store.set("ctz-look", LOOK); paint(); }));
     document.querySelectorAll("[data-tap]").forEach((el) => { el.onclick = () => tap(el); el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tap(el); } }; });
     document.querySelectorAll("[data-claim]").forEach((b) => (b.onclick = async () => {
       const k = b.dataset.claim; if (claimBusy.has(k)) return; claimBusy.add(k); b.disabled = true;

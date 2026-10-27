@@ -306,3 +306,13 @@ body:has(#go) #ct-notify{display:none}
 .zticket div.m::before{transform:rotate(45deg)}
 .zticket div.m::after{transform:rotate(-45deg)}
 .zticket div.w{background:linear-gradient(135deg,#FFE08A,#FFB703);color:#2A1B00;box-shadow:inset 0 0 0 2px #fff,0 0 0 2px #E8A200}
+/* The player's choice of look. Retro (the default) is the coloured ticket above. Modern: a plain white card, thin black lines, bold black numbers, a red cross. */
+.zlook{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:0 0 8px;font-size:14px}
+.zlooklbl{font-weight:700}
+.zlookopt{display:inline-flex;align-items:center;gap:6px;min-height:36px;cursor:pointer}
+.zlookopt input{width:20px;height:20px;accent-color:#1C2B3A}
+.zticket.modern{background:#fff;border:1px solid #1C2B3A;border-radius:6px;box-shadow:none;padding:0;gap:0}
+.zticket.modern div{border:1px solid #1C2B3A;border-radius:0;background:#fff;color:#000;font-weight:800;margin:-0.5px}
+.zticket.modern div.e{background:#fff;border-color:#1C2B3A}
+.zticket.modern div.m{background:#fff;color:#000}
+.zticket.modern div.w{background:#fff;color:#000;box-shadow:inset 0 0 0 3px #E8A200}
