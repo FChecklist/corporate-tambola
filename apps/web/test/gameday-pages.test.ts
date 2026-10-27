@@ -85,7 +85,7 @@ describe("game-day clarity on the console", () => {
     expect(c.$("#boardbtn")).toBeTruthy(); expect((c.$("#boardbtn") as any).getAttribute("href")).toMatch(/\/board\.html\?e=GD-TOP#k=/);
     expect(c.html().indexOf('id="livebar"')).toBeGreaterThan(-1); expect(c.html().indexOf('id="livebar"')).toBeLessThan(c.html().indexOf('id="sec1"')); // above every step
     x.goLive(); for (let i = 0; i < 40; i++) await x.step();
-    await c.waitFor((t) => /Numbers called: [1-9][0-9]* of 90/.test(t), 20_000);
+    await c.waitFor((t) => /[1-9][0-9]* of 90 called/.test(t), 20_000);
     const balls = Array.from(c.win.document.querySelectorAll("#numstrip .zc-ball")) as any[];
     expect(balls.length).toBeGreaterThan(3); expect(balls.filter((b) => b.classList.contains("last")).length).toBe(1); expect(balls[balls.length - 1].classList.contains("last")).toBe(true);
     expect(c.$("#numcount")!.textContent).toContain(`${balls.length} of 90`);

@@ -5,7 +5,7 @@
 import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../../../packages/beacon/src/control";
 import { hostGameOf } from "../../../packages/beacon/src/game";
 import { MANUAL_MAX_PARTICIPANTS } from "../../../packages/beacon/src/control";
-import type { EngagementCfg } from "../../../packages/beacon/src/config";
+import { CLAIM_LATE_TEXT, type EngagementCfg } from "../../../packages/beacon/src/config";
 import type { D1 } from "./worker";
 
 export const GENESIS_S = 1692803367;
@@ -97,5 +97,5 @@ export function liveOf(e: { start_round: number; call_seconds: number }, cfg: En
   return { startRound: e.start_round, callSeconds: e.call_seconds, callMode: cfg.callMode === "host" ? "host" : "auto", startMode: cfg.startMode === "manual" ? "manual" : "auto", afterPrizes: cfg.keepCalling ? "keep" : "end" };
 }
 
-/** A prize completed on number N can be claimed only until number N+1 is announced. This is what a player is told when the claim came too late (the Worker's clock decides). */
-export const CLAIM_LATE_MSG = "Ohooo! 😊 Sorry, you pressed Claim after the next number was announced. This claim cannot be made.";
+/** A prize completed on number N can be claimed only until number N+1 is announced: what a player is told when the claim came too late (the Worker's clock decides). */
+export const CLAIM_LATE_MSG = CLAIM_LATE_TEXT;

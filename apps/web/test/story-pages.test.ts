@@ -93,7 +93,7 @@ describe("one plain story: the same sentence on every screen", () => {
     const say = (p: Page) => storyOf(p).text.match(/^The game starts at [^.]*\./)![0];
     expect(say(ph)).toBe(say(c)); expect(say(big)).toBe(say(c)); // the SAME words
   });
-  test("while it runs: 'The game is on. Numbers called: N of 90.' with the counter, the latest number big and the last few beside it, on the console, the phone page and the big screen", async () => {
+  test("while it runs: 'The game is on. N of 90 numbers called.' with the counter ('N of 90 called · M remaining'), the latest number big and the last 5 numbers, on the console, the phone page and the big screen", async () => {
     const x = await setup("ST-RUN");
     x.goLive(); for (let i = 0; i < 40; i++) await x.step();
     const c = await consolePage(x, "ST-RUN");
@@ -102,15 +102,15 @@ describe("one plain story: the same sentence on every screen", () => {
     (ph.$("#ph") as any).value = "9822222222"; (ph.$("#nm") as any).value = "Ravi"; ph.click("#go");
     const big = await openPage(x.w.world, { url: "http://localhost/big.html?e=ST-RUN", html: "big.html", scripts: ["zgame.js", "big.js"], afterLoad: (win, f) => { if (f === "zgame.js") fakeBeacon(win, x.now); } });
     open.push(big);
-    await c.waitFor((t) => /The game is on\. Numbers called: [1-9]\d* of 90\./.test(t), 30_000);
-    await ph.waitFor((t) => /Numbers called: [1-9]\d* of 90|since you joined/.test(t), 30_000);
-    await big.waitFor((t) => /Numbers called: [1-9]\d* of 90/.test(t), 30_000);
+    await c.waitFor((t) => /The game is on\. [1-9]\d* of 90 numbers called\./.test(t), 30_000);
+    await ph.waitFor((t) => /[1-9]\d* of 90 called|called since you joined/.test(t), 30_000);
+    await big.waitFor((t) => /[1-9]\d* of 90 called/.test(t), 30_000);
     expect(storyOf(c).state).toBe("running"); expect(storyOf(c).text).toContain("Watch the board. Pause only if you really must.");
     expect(storyOf(ph).state).toBe("running"); expect(storyOf(ph).text).toContain("Tap each number on your ticket. Press Claim when a prize is complete.");
     expect(storyOf(big).state).toBe("running"); expect(storyOf(big).text).toContain("Watch the numbers. Players tap them on their tickets.");
-    expect(c.$("#latestnum")!.textContent!.trim()).toMatch(/^\d+$/); expect(c.$("#numcount")!.textContent).toMatch(/Numbers called: \d+ of 90/);
-    expect(big.$("#calledbig")!.textContent).toMatch(/Numbers called: \d+ of 90/); expect(big.$("#lastfew")!.textContent).toMatch(/Before it: \d/);
-    expect(ph.$("#calledcount")!.textContent).toMatch(/Numbers called: \d+/);
+    expect(c.$("#latestnum")!.textContent!.trim()).toMatch(/^\d+$/); expect(c.$("#numcount")!.textContent).toMatch(/\d+ of 90 called · \d+ remaining/);
+    expect(big.$("#calledbig")!.textContent).toMatch(/\d+ of 90 called · \d+ remaining/); expect(big.$("#lastfew")!.textContent).toMatch(/Before it: \d/);
+    expect(ph.$("#calledcount")!.textContent).toMatch(/\d+ of 90 called/);
     for (const p of [c, ph, big]) expect(p.text()).not.toMatch(/\bidx\b|\bround\b/i);
   });
   test("finished: the same sentence on the console, the phone and the big screen", async () => {

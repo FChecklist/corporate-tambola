@@ -701,10 +701,14 @@
     const total = v.late ? "since you joined" : "of 90";
     // Between two numbers (software calls): a big countdown 9, 8, 7 ... 1, then the number. Silent on purpose: the voice speaks only the number itself.
     const cdown = running && secs !== null && !v.waitingForHost && v.mode !== "hold" ? `<div class="zcount" role="timer" aria-label="Next number in ${secs} seconds"><div class="zring" style="--p:${Math.max(0, Math.min(100, Math.round(secs / Math.max(3, v.callSeconds || 9) * 100)))}"><b>${secs}</b></div><span>seconds to the next number</span></div>` : "";
-    return `<div class="zcard zcall"><div class="zchiprow"><span class="zchip2 ${tone}">${esc(chip)}</span><span class="zchip2 plain" id="calledcount">Numbers called: <b data-count="${v.log.length}" data-ck="called">${v.log.length}</b>&nbsp;${v.late ? "since you joined" : "of 90"}</span></div>
-        <div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
-        ${v.log.length > 1 ? `<div class="zlast" id="lastfew" aria-label="The last numbers called"><span>Before it:</span>${v.log.slice(-6, -1).reverse().map((n) => `<i class="zlastn">${n}</i>`).join("")}</div>` : ""}${cdown}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p>`}</div>`;
+    const calledTotal = v.log.length + (v.late ? v.late.hidden || 0 : 0), few = v.log.slice(-6, -1).reverse();
+    return `<div class="zcard zcall ztight"><div class="zchiprow"><span class="zchip2 ${tone}">${esc(chip)}</span></div>
+        <div class="zrow1"><div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number just called " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
+          <div class="ztxt"><div class="zlab">Number just called</div><div class="ztally" id="calledcount">${v.late ? `<b data-count="${v.log.length}" data-ck="called">${v.log.length}</b> called since you joined` : `<b><span data-count="${v.log.length}" data-ck="called">${v.log.length}</span> of 90</b> called<br><b>${Math.max(0, 90 - calledTotal)} remaining</b>`}</div></div></div>
+        <div class="zbar" role="progressbar" aria-valuemin="0" aria-valuemax="90" aria-valuenow="${calledTotal}"><i style="width:${Math.min(100, Math.round(calledTotal / 90 * 100))}%"></i></div>
+        ${few.length ? `<div class="zlastrow" id="lastfew"><span class="zlab">Last 5 numbers called</span><div class="zballs">${few.map((n) => `<i class="zlastn">${n}</i>`).join("")}</div></div>` : ""}${cdown}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p>`}</div>`;
   }
+  let LAST_CLAIM_NOW = "";
   /** One plain sentence: what is happening now and what to do, in the same words on every screen (ZG.story). */
   function storyBarFor(v) {
     const role = ME.role === "organizer" ? "organizer" : ME.role === "host" ? "host" : "player", called = v.late ? v.log.length + (v.late.hidden || 0) : v.log.length, manual = v.startMode === "manual";
@@ -715,10 +719,28 @@
     return `<div class="zstory" id="storyline" data-state="${state}"><b>${esc(st.say)}</b><span>${esc(st.todo)}</span></div>`;
   }
   /** Under the ticket: a Claim button for every prize the player's marks complete, what was claimed and is being checked, this player's Bogeys, and the prizes the ticket is out of. */
+  const namesOf = (keys) => keys.map((k) => KEYNAME(k)).join(" and ");
+  /** Gold, near the top: the player has just completed a prize and must press Claim before the next number is called. */
+  function claimAlert(v) {
+    if (!(v.claimNow || []).length) return "";
+    return `<div class="zalert on" id="claimalert" role="alert"><b>You have completed ${esc(namesOf(v.claimNow))}!</b><small>Press Claim now, before the next number is called.</small></div>`;
+  }
+  /** A big button fixed at the bottom of the screen, one per prize that is ready; after the press it says that the claim was sent. */
+  function claimStick(v) {
+    const ready = v.claimNow || [];
+    const resolved = (k) => ZG.linesFor(v.cfg.rewards, k).every((l) => (v.results || []).some((x) => x.pattern === k && x.ordinal === l.ordinal));
+    const waiting = (v.pressed || []).filter((k) => !resolved(k) && !(v.won || []).some((w) => w.round === v.round && w.pattern === k)); // claimed, and the answer is not out yet
+    if (!ready.length && !(waiting.length && v.phase === "play" && !v.paused)) return "";
+    const btns = ready.map((k) => `<button type="button" class="zbigclaim" data-claim="${esc(k)}">Press to claim your prize<small>${esc(KEYNAME(k))}</small></button>`).join("");
+    const done = !ready.length ? `<div class="zsentline" role="status">Claim sent. Checking…<small>${esc(waiting.map((k) => KEYNAME(k)).join(", "))}</small></div>` : "";
+    return `<div class="zclaimbar on" id="claimbar">${btns}${done}</div>`;
+  }
   function claimBar(v) {
     if (!v.tickets.length || (v.phase !== "play" && v.phase !== "ended")) return "";
     const won = new Set((v.won || []).map((w) => w.round + ":" + w.pattern));
-    const btns = (v.claimable || []).map((k) => `<button type="button" class="zbtn zclaim" data-claim="${esc(k)}">Claim ${esc(KEYNAME(k))}</button>`).join("");
+    const open = v.claimOpen || [], btns = open.map((k) => `<button type="button" class="zbtn zclaim ready" data-claim="${esc(k)}">Claim ${esc(KEYNAME(k))}</button>`).join("");
+    const stale = (v.claimable || []).filter((k) => !open.includes(k));
+    const staleNote = stale.length && !v.paused ? `<p class="zsmall zstale" id="stalenote">The time to claim ${esc(namesOf(stale))} has passed: a claim must be pressed before the next number is called.</p>` : "";
     const notWon = (v.pressed || []).filter((k) => !won.has(v.round + ":" + k));
     const allOut = (k) => ZG.linesFor(v.cfg.rewards, k).every((l) => v.results.some((r) => r.pattern === k && r.ordinal === l.ordinal)); // every position of the house is awarded
     const waiting = notWon.filter((k) => !allOut(k)); // claimed, a position is still open: being checked
@@ -726,7 +748,7 @@
     const lost = notWon.filter((k) => allOut(k)); // claimed, every position went to others
     const bog = (v.bogeys || []).map((b) => `${esc(KEYNAME(b.pattern))} ${b.n}`).join(", ");
     const out = (v.outOf || []).map((k) => `<div class="zbanner warn zout" role="status">Two Bogeys on ${esc(KEYNAME(k))}: this ticket is out of the ${esc(KEYNAME(k))} prize. Other prizes are still open to you.</div>`).join("");
-    return `<div class="zclaims" id="claims">${btns ? `<div class="zclaimrow">${btns}</div><p class="zsmall zrule">${esc(RULE)}</p>` : ""}
+    return `<div class="zclaims" id="claims">${btns ? `<div class="zclaimrow">${btns}</div>` : ""}${staleNote}${v.lateClaim ? `<div class="zbanner warn zlate" id="latenote" role="alert">${esc(v.lateClaim)}</div>` : ""}<p class="zsmall zrule" id="claimhint">The Claim button turns gold when you complete a prize. Press it before the next number is called.</p>
       ${sending.length ? `<p class="zsmall zsent zsending" role="status">Sending your claim for ${sending.map((k) => esc(KEYNAME(k))).join(", ")}. Keep this page open and your screen on until it says sent.</p>` : ""}
       ${checking.length ? `<p class="zsmall zsent" role="status">Claim sent for ${checking.map((k) => esc(KEYNAME(k))).join(", ")}. The software is checking it against the called numbers.</p>` : ""}
       ${lost.length ? `<p class="zsmall zlost">${lost.map((k) => esc(KEYNAME(k))).join(", ")}: claimed, but another ticket was ahead or the claim came after the next number.</p>` : ""}
@@ -739,14 +761,20 @@
     if (!list.length) return "";
     const mine = new Set((v.won || []).filter((w) => w.round === v.round).map((w) => w.pattern + "#" + w.ordinal));
     const open = list.filter((p) => !p.claimed).length;
-    const rows = list.map((p) => { const me = mine.has((p.key === "full2" ? "full2" : p.key) + "#" + p.ordinal);
-      return p.claimed ? `<li class="done"><s>${esc(p.name)}${p.text ? ": " + esc(p.text) : ""}</s> <small>claimed</small>${me ? ' <b class="zme">You</b>' : ""}</li>` : `<li><b>${esc(p.name)}</b>${p.text ? ": " + esc(p.text) : ""}</li>`; }).join("");
-    return `<div class="zcard zps"><h2>Prizes${open ? " still to win · " + open : " · all claimed"}</h2><ul class="zpl">${rows}</ul></div>`;
+    const rows = list.map((p) => {
+      const me = mine.has((p.key === "full2" ? "full2" : p.key) + "#" + p.ordinal);
+      if (p.claimed) { const res = (v.results || []).find((x) => x.pattern === p.key && x.ordinal === p.ordinal && (x.round || 1) === (v.round || 1)), tk = res && res.tickets && res.tickets.length ? res.tickets : null;
+        return `<li class="done"><span class="zic">&#10003;</span><span class="znm"><s>${esc(p.name)}${p.text ? ": " + esc(p.text) : ""}</s> <small class="zwonby">${tk ? "Won by Ticket " + tk.join(", ") : "Already won"}</small></span>${me ? ' <b class="zme">You</b>' : ""}</li>`; }
+      const need = p.key === "unlucky" || p.key === "lucky" ? null : ZG.stillToWin(v.tickets, p.key, v.marks || []);
+      return `<li class="open"><span class="zic">&#9733;</span><span class="znm"><b>${esc(p.name)}</b>${p.text ? ": " + esc(p.text) : ""}${need !== null && need !== undefined && v.tickets.length ? `<small class="zneed">You need ${need} more ${need === 1 ? "number" : "numbers"}</small>` : ""}</span><span class="ztag">To win</span></li>`;
+    }).join("");
+    return `<div class="zcard zps" id="prizepanel"><h2>Prizes${open ? " still to win · " + open : " · all won"}</h2><div class="zlegend"><span><i class="g"></i>Still to win</span><span><i class="s"></i>Already won</span></div><ul class="zpl">${rows}</ul></div>`;
   }
   function playView(v) {
     const called = new Set(v.marks || []); // what the player has tapped (the ticket never marks itself)
     const last = v.log[v.log.length - 1];
-    const banners = [storyBarFor(v)];
+    const banners = [storyBarFor(v), claimAlert(v)];
+    { const now = (v.claimNow || []).join(","); if (now && now !== LAST_CLAIM_NOW) { try { navigator.vibrate && navigator.vibrate(220); } catch {} } LAST_CLAIM_NOW = now; } // a short buzz the moment a prize becomes claimable, where the phone allows it
     if (v.error) banners.push(`<div class="zbanner warn" role="alert">${esc(v.error)}</div>`);
     if (v.locked) banners.push(ME.role === "organizer" || ME.role === "host" ? `<div class="zbanner warn" role="status"><b>Payment pending for this game.</b> The game starts 2 minutes after the payment is confirmed. Open your console to pay. Your ticket is safe. Keep this page open.</div>` : `<div class="zbanner warn" role="status"><b>Waiting for the Organizer or Host to start the game.</b> Your ticket is safe. Keep this page open: it begins as soon as they are done.</div>`);
     else if (v.stopped) banners.push(`<div class="zbanner info">The organizer has ended this game.</div>`);
@@ -762,7 +790,7 @@
     const ribbon = curWins.length ? `<div class="zwin" role="status">&#127881; Congratulations! You won ${curWins.map((w) => esc(lineName(v.cfg, w.pattern, w.ordinal))).join(", ")}${curWins.some((w) => w.text) ? " &middot; " + curWins.filter((w) => w.text).map((w) => esc(w.text)).join(", ") : ""}</div>` : "";
     const tix = (v.tickets.length ? lookPicker() : "") + v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : DEMO ? "Video ticket" : "Your ticket", winSet)).join("");
     const sndBtn = `<button class="zsnd zsndin" id="snd" aria-pressed="${sound}">${!sound ? "&#128263; Sound off" : !window.TBAudio || TBAudio.unlocked ? "&#128266; Sound on" : "&#128266; Tap for sound"}</button>`;
-    return `${brandStrip(sndBtn)}
+    return `${brandStrip(sndBtn)}<div class="zplay">
       ${demoCard(v)}${demoGameCard()}${annBanner(v)}${banners.join("")}
       ${v.phase === "ended" ? finalCard(v) + closingCard(v) + confirmCard(v) + prizesCard() : ""}
       ${waitingRoom(v)}
@@ -771,12 +799,12 @@
       ${roundCards(v)}
       ${v.brk ? breakCard(v.brk) : ""}
       ${callCard(v, last, sub)}
-      <div class="zcard${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Video ticket <span class="zdemotag">VIDEO</span>' : (v.tickets.length > 1 ? "Your tickets" : "Your ticket") + demoTag()}</h2>${ribbon}${tix}${claimBar(v)}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
+      <div class="zcard ztk${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Video ticket <span class="zdemotag">VIDEO</span>' : (v.tickets.length > 1 ? "Your tickets" : "Your ticket") + demoTag()}</h2>${ribbon}${tix}<ol class="zrules" id="zrules"><li>This game works like the real one.</li><li>When a number is called, tap it on your ticket to cross it out.</li><li>If you complete a prize, press Claim before the next number is called.</li></ol>${claimBar(v)}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
       ${v.phase === "ended" ? "" : livePrizesCard(v)}
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}
       <div class="zcard"><h2>Still to win</h2>${still}${chk}</div>
-      ${luckyCard(v)}`;
+      ${luckyCard(v)}</div>${claimStick(v)}`;
   }
 
   // ---------- present check-in: the ticket opens only after this ----------

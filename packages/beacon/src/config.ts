@@ -342,3 +342,6 @@ export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?
   if (cfg.employeesOnly) cfg.invites = { on: false, per: cfg.invites!.per, cats: cfg.invites!.cats }; // employees only: nobody invites anyone
   return { ok: true, cfg };
 }
+
+/** What a player is told when a claim came after the next number was announced (the phone and the Worker use these very words). */
+export const CLAIM_LATE_TEXT = "Ohooo! \u{1F60A} Sorry, you pressed Claim after the next number was announced. This claim cannot be made.";

@@ -144,8 +144,8 @@ describe("Game day: the Start button", () => {
     await ph.waitFor((t) => /The game is starting|Starting in/.test(t), 25_000);
     await big.waitFor((t) => /The game is starting/.test(t), 25_000);
     for (let i = 0; i < 20; i++) await x.step(); // past the Start round (about 40 s)
-    await ph.waitFor((t) => /Numbers called: [0-9]+ of 90/.test(t) && !/Waiting for the host/.test(t), 25_000);
-    await big.waitFor((t) => /Numbers called: [1-9][0-9]* of 90/.test(t), 25_000);
+    await ph.waitFor((t) => /[0-9]+ of 90 called/.test(t) && !/Waiting for the host/.test(t), 25_000);
+    await big.waitFor((t) => /[1-9][0-9]* of 90 called/.test(t), 25_000);
     expect(ph.errors).toEqual([]); expect(big.errors).toEqual([]); expect(c.errors).toEqual([]);
   });
   test("an automatic-start game has no Start button", async () => {

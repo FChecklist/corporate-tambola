@@ -486,7 +486,7 @@ describe("big screen", () => {
   test("UC-56 before the start it counts down; a held engagement says it is waiting; an announcement is shown big", async () => {
     const o = await organizer(); await make(o, "UI-BIG"); await regKey(o, "UI-BIG"); await publish(o, "UI-BIG");
     let p = await big(o, "UI-BIG");
-    expect(await p.waitFor((x) => /The game starts in/.test(x))).toMatch(/Numbers called: 0 of 90/);
+    expect(await p.waitFor((x) => /The game starts in/.test(x))).toMatch(/0 of 90 called/);
     await o.api("POST", "/api/z/UI-BIG/announce", { text: "Dinner is served" }, o.token);
     await p.close(); p = await big(o, "UI-BIG");
     await p.waitFor((x) => /Dinner is served/.test(x));
