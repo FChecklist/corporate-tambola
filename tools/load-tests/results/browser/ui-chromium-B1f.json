@@ -1,0 +1,223 @@
+{
+ "tag": "B1f",
+ "browser": "chromium",
+ "site": "http://localhost:8893",
+ "mode": "host",
+ "cap": 10,
+ "checks": [
+  {
+   "n": "signed in as Organizer",
+   "ok": true,
+   "d": ""
+  },
+  {
+   "n": "the organizer's e-mail is shown at the top right",
+   "ok": true,
+   "d": ""
+  },
+  {
+   "n": "a draft game exists after pressing Create a new game",
+   "ok": true,
+   "d": "http://localhost:8893/zc.html?e=Ej8k5tt"
+  },
+  {
+   "n": "the size choices are shown as chips",
+   "ok": true,
+   "d": "10,100,250,500,750,1000,2500,5000,10000"
+  },
+  {
+   "n": "manual hides the gap (duration) and auto shows it",
+   "ok": true,
+   "d": ""
+  },
+  {
+   "n": "the staff list was uploaded by clicking: 10 employees on the list",
+   "ok": true,
+   "d": "count shows 10; undefined"
+  },
+  {
+   "n": "the game is published and open to people",
+   "ok": true,
+   "d": "{\"cap\":10,\"startMs\":1793042400000}"
+  },
+  {
+   "n": "all 10 people joined (4 on real browser pages, 6 on protocol phones)",
+   "ok": true,
+   "d": "4 pages, 6/6 phones"
+  },
+  {
+   "n": "the organizer pressed the numbers through the page buttons",
+   "ok": true,
+   "d": "85 presses via #nextnum"
+  },
+  {
+   "n": "every page reached the end of the game",
+   "ok": true,
+   "d": "[\"ended\",\"ended\",\"ended\",\"ended\"]"
+  },
+  {
+   "n": "all 10 pages show the same 84 numbers in the same order",
+   "ok": true,
+   "d": "10/10"
+  },
+  {
+   "n": "every person holds a different, well-formed ticket",
+   "ok": true,
+   "d": "10 different"
+  },
+  {
+   "n": "all pages show the same winners",
+   "ok": true,
+   "d": "5,5,5,5,5,5,5,5,5,5"
+  },
+  {
+   "n": "no page error and no 5xx from our own site",
+   "ok": true,
+   "d": "[]"
+  }
+ ],
+ "errors": [],
+ "failedReq": [],
+ "notes": [
+  "no publish button: the game was already published (test pack)"
+ ],
+ "reqs": [
+  "PUT /api/z/Ej8k5tt/control/key {\"publicKey\":\"50309ceabb123d28ef0384ebeffa73dcd87e01c3c3005b7a156fea499168fbfa\",\"profile\":\"standard\"}",
+  "PATCH /api/z/Ej8k5tt/settings {\"name\":\"Diwali party\",\"startRound\":33413012}",
+  "PATCH /api/z/Ej8k5tt/settings {\"callMode\":\"host\",\"cap\":10,\"callSeconds\":9,\"tickets\":1,\"rounds\":1,\"whoCanJoin\":\"list\",\"verify\":\"id\",\"employeesOnly\":true,\"invites\":{\"on\":false,\"per\":4,\"cats\":[",
+  "PATCH /api/z/Ej8k5tt/settings {\"tickets\":1,\"ties\":\"next\",\"rewards\":[{\"pattern\":\"early5\",\"scope\":\"ticket\",\"ordinal\":1,\"text\":\"\"},{\"pattern\":\"top\",\"scope\":\"ticket\",\"ordinal\":1,\"text\":\"\"},{\"pat",
+  "PATCH /api/z/Ej8k5tt/settings {\"tickets\":1,\"opening\":[],\"breaks\":[],\"closing\":[]}",
+  "POST /api/z/Ej8k5tt/people {\"consent\":{\"v\":\"2026-10-15\",\"boxes\":[\"A\"]},\"people\":[{\"name\":\"UI Player 1\",\"empId\":\"E001\"},{\"name\":\"UI Player 2\",\"empId\":\"E002\"},{\"name\":\"UI Player 3\",\"empId\":",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":1,\"action\":\"next\",\"atBeaconRound\":33413057,\"signedAtRound\":33413055,\"sig\":\"13800ccc609da1d1dbbb3a351c9953d42f240902e5",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":2,\"action\":\"next\",\"atBeaconRound\":33413062,\"signedAtRound\":33413060,\"sig\":\"05143d16d0798597757580efeafad3f91eb707ddf4",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":3,\"action\":\"next\",\"atBeaconRound\":33413067,\"signedAtRound\":33413065,\"sig\":\"280fed2a3211b7def729eec1487e73c8f80f2ce58b",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":4,\"action\":\"next\",\"atBeaconRound\":33413071,\"signedAtRound\":33413069,\"sig\":\"1fcb494ce3201922be7a76ff80639db733f7aaa928",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":5,\"action\":\"next\",\"atBeaconRound\":33413074,\"signedAtRound\":33413072,\"sig\":\"d8b27674d323c2b2f49d21558141b85632da2b6d4a",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":6,\"action\":\"next\",\"atBeaconRound\":33413079,\"signedAtRound\":33413077,\"sig\":\"562c5a428d14f354183feb9aa7e594644a45ec7886",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":7,\"action\":\"next\",\"atBeaconRound\":33413084,\"signedAtRound\":33413082,\"sig\":\"c72bca44e7e2518c7fc7f83c10381b8a6b61e15dfa",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":8,\"action\":\"next\",\"atBeaconRound\":33413088,\"signedAtRound\":33413086,\"sig\":\"08f7b52f173823d13628378e10c0103b6ec06cdd3f",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":9,\"action\":\"next\",\"atBeaconRound\":33413091,\"signedAtRound\":33413089,\"sig\":\"c28a9a856d7e2d0cd64cc4a9c7d4b702e474b7ea6d",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":10,\"action\":\"next\",\"atBeaconRound\":33413096,\"signedAtRound\":33413094,\"sig\":\"abcc836dfa7467373a78e6ccda0f036f2e2ce81cf",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":11,\"action\":\"next\",\"atBeaconRound\":33413100,\"signedAtRound\":33413098,\"sig\":\"d739bd2eb0fd65a79a93862ee8aed3c04e9209d25",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":12,\"action\":\"next\",\"atBeaconRound\":33413103,\"signedAtRound\":33413101,\"sig\":\"e4b545eaee321b7c648d9af5182e76c537fe9994f",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":13,\"action\":\"next\",\"atBeaconRound\":33413105,\"signedAtRound\":33413103,\"sig\":\"a098822dd048500e21aa2b0f7b90aa3c74371a5c5",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":14,\"action\":\"next\",\"atBeaconRound\":33413108,\"signedAtRound\":33413106,\"sig\":\"530ecad7e26760675913fb4facdd95169a063c512",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":15,\"action\":\"next\",\"atBeaconRound\":33413110,\"signedAtRound\":33413108,\"sig\":\"7d277c33d78a2d27a2a1ad30c474baad69a9eb8ee",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":16,\"action\":\"next\",\"atBeaconRound\":33413112,\"signedAtRound\":33413110,\"sig\":\"e55ba988d1c5987e40f7980203dffa86c1c88e1d1",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":17,\"action\":\"next\",\"atBeaconRound\":33413115,\"signedAtRound\":33413113,\"sig\":\"db54f943d0f1a48c261dc862527561afb7818eb92",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":18,\"action\":\"next\",\"atBeaconRound\":33413117,\"signedAtRound\":33413115,\"sig\":\"91ec5438d5b236381b7db5f60c53ce745ebba4c6c",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":19,\"action\":\"next\",\"atBeaconRound\":33413122,\"signedAtRound\":33413120,\"sig\":\"5030f3e577c3f42db7ceff9dab1e33f54c3ddc41a",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":20,\"action\":\"next\",\"atBeaconRound\":33413127,\"signedAtRound\":33413125,\"sig\":\"f632bb4c9f8d4a4f331a7567d5e043096c7bdaf06",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":21,\"action\":\"next\",\"atBeaconRound\":33413132,\"signedAtRound\":33413130,\"sig\":\"915f3ad08b8d1072aa274d57e42783184f383509b",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":22,\"action\":\"next\",\"atBeaconRound\":33413137,\"signedAtRound\":33413135,\"sig\":\"097752c26b0dc3719bc3e1fb08a34e32b0759ddd9",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":23,\"action\":\"next\",\"atBeaconRound\":33413141,\"signedAtRound\":33413139,\"sig\":\"4bbe0eeedc4fa3f9d2c0521f2a153b9c6def1711e",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":24,\"action\":\"next\",\"atBeaconRound\":33413144,\"signedAtRound\":33413142,\"sig\":\"f89ceb94e89b21de24ae820c94abd02027d1fabd6",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":25,\"action\":\"next\",\"atBeaconRound\":33413149,\"signedAtRound\":33413147,\"sig\":\"d4e335509ba4c8ea6800a8c936102b6c78f26a6b7",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":26,\"action\":\"next\",\"atBeaconRound\":33413153,\"signedAtRound\":33413151,\"sig\":\"0855da637c4eac6dba7c863ef93ae64a2c0913b77",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":27,\"action\":\"next\",\"atBeaconRound\":33413156,\"signedAtRound\":33413154,\"sig\":\"e13f6bae77d253cf7227bea9105550689a9148821",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":28,\"action\":\"next\",\"atBeaconRound\":33413161,\"signedAtRound\":33413159,\"sig\":\"79a80cc2b862e2252bc0026a359f818bd3de72a1c",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":29,\"action\":\"next\",\"atBeaconRound\":33413165,\"signedAtRound\":33413163,\"sig\":\"c489c6874a2aecf2a459767e1244b45d8445f5886",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":30,\"action\":\"next\",\"atBeaconRound\":33413168,\"signedAtRound\":33413166,\"sig\":\"4c2d84905cbc8e4f0f8d3dd4a9cae48a341e02444",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":31,\"action\":\"next\",\"atBeaconRound\":33413170,\"signedAtRound\":33413168,\"sig\":\"3f6a1f34c016d462320543351e10af16a489eb199",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":32,\"action\":\"next\",\"atBeaconRound\":33413173,\"signedAtRound\":33413171,\"sig\":\"b56c1d5a8d0a8efae65c86503b1f1668bf97e9940",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":33,\"action\":\"next\",\"atBeaconRound\":33413175,\"signedAtRound\":33413173,\"sig\":\"f4c1092a5c0dc5cd54caf857cdd15150ad93b1191",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":34,\"action\":\"next\",\"atBeaconRound\":33413177,\"signedAtRound\":33413175,\"sig\":\"dd0ad5e19d8e0387591d6fb0c099305758983145c",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":35,\"action\":\"next\",\"atBeaconRound\":33413182,\"signedAtRound\":33413180,\"sig\":\"d65dd0e45f820529898545fe58c6bc9cc18893628",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":36,\"action\":\"next\",\"atBeaconRound\":33413187,\"signedAtRound\":33413185,\"sig\":\"b32e8f2da63b3b15c33abd440731ab57e8cef9395",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":37,\"action\":\"next\",\"atBeaconRound\":33413192,\"signedAtRound\":33413190,\"sig\":\"e1000ed3c8972f8f322aed5426beed02d879634f2",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":38,\"action\":\"next\",\"atBeaconRound\":33413196,\"signedAtRound\":33413194,\"sig\":\"7e6e4b044377f79b63134dc3de3cb0f28db767468",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":39,\"action\":\"next\",\"atBeaconRound\":33413199,\"signedAtRound\":33413197,\"sig\":\"1e259c4f2bf4b45d002874544b9afd18a3b68a52b",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":40,\"action\":\"next\",\"atBeaconRound\":33413204,\"signedAtRound\":33413202,\"sig\":\"6f9d945d246da4e8730cf88b939cd762080377520",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":41,\"action\":\"next\",\"atBeaconRound\":33413208,\"signedAtRound\":33413206,\"sig\":\"26f6271a4702bfe5c39f881349430ca55f6ed7d25",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":42,\"action\":\"next\",\"atBeaconRound\":33413211,\"signedAtRound\":33413209,\"sig\":\"4319e4918b56a0a2a30f96573968808ea7697ac70",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":43,\"action\":\"next\",\"atBeaconRound\":33413216,\"signedAtRound\":33413214,\"sig\":\"0cb65a35b4b0243480b0dbfa6bf9d21c7a422970c",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":44,\"action\":\"next\",\"atBeaconRound\":33413220,\"signedAtRound\":33413218,\"sig\":\"5f18f81f0e0a9cc931104fdd42ef2d3c53a656031",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":45,\"action\":\"next\",\"atBeaconRound\":33413223,\"signedAtRound\":33413221,\"sig\":\"cc23456e90dc733576170f3db25f9c19ad7f824fe",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":46,\"action\":\"next\",\"atBeaconRound\":33413225,\"signedAtRound\":33413223,\"sig\":\"14cdc8e20f228bf47ff7cb2a973b574c4a62bbd94",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":47,\"action\":\"next\",\"atBeaconRound\":33413228,\"signedAtRound\":33413226,\"sig\":\"f58bbec68c2323dfc0b6dd38f040a09291a0719ed",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":48,\"action\":\"next\",\"atBeaconRound\":33413230,\"signedAtRound\":33413228,\"sig\":\"d3ce5c3b88aea760f951d096dc172054235baf035",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":49,\"action\":\"next\",\"atBeaconRound\":33413232,\"signedAtRound\":33413230,\"sig\":\"de512ab18cb8f47495ac164d8a99623795507d604",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":50,\"action\":\"next\",\"atBeaconRound\":33413237,\"signedAtRound\":33413235,\"sig\":\"a931d1ca29daf78a56083bc8390d784d26ee4b13c",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":51,\"action\":\"next\",\"atBeaconRound\":33413242,\"signedAtRound\":33413240,\"sig\":\"47fe78db40d23f902024015c0a3337d6438970756",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":52,\"action\":\"next\",\"atBeaconRound\":33413247,\"signedAtRound\":33413245,\"sig\":\"4cabdbc3cdeb09d387b115fad5fc446d381d3a655",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":53,\"action\":\"next\",\"atBeaconRound\":33413252,\"signedAtRound\":33413250,\"sig\":\"1b22634c05aff0274061afc5f5c1f87975f15d8be",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":54,\"action\":\"next\",\"atBeaconRound\":33413256,\"signedAtRound\":33413254,\"sig\":\"a41f8b63c7842ae144048b250f9dd38aea31b3abd",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":55,\"action\":\"next\",\"atBeaconRound\":33413259,\"signedAtRound\":33413257,\"sig\":\"645dff3595270a6650349788a5c5788504651ab17",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":56,\"action\":\"next\",\"atBeaconRound\":33413264,\"signedAtRound\":33413262,\"sig\":\"c046d4e7a8dd222cae16dc7b19abec2d2c3b39b1d",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":57,\"action\":\"next\",\"atBeaconRound\":33413268,\"signedAtRound\":33413266,\"sig\":\"607799358d3b86d162dd864fcb29ff1ea90385a2d",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":58,\"action\":\"next\",\"atBeaconRound\":33413271,\"signedAtRound\":33413269,\"sig\":\"80e389206cc228bebadf4ad07dad2f465aac8fb6a",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":59,\"action\":\"next\",\"atBeaconRound\":33413276,\"signedAtRound\":33413274,\"sig\":\"e515a7a0382cab6587387eb33a1fefcdae0bdc288",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":60,\"action\":\"next\",\"atBeaconRound\":33413280,\"signedAtRound\":33413278,\"sig\":\"67117eb5a49272e19b962cf4e297b3ac4996a76f6",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":61,\"action\":\"next\",\"atBeaconRound\":33413283,\"signedAtRound\":33413281,\"sig\":\"e230f0e3deaf2ea2fcf81e3c7e570f4918ab4ca00",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":62,\"action\":\"next\",\"atBeaconRound\":33413285,\"signedAtRound\":33413283,\"sig\":\"9ef860496149dbabdfcaac1defd8424c7ab86706b",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":63,\"action\":\"next\",\"atBeaconRound\":33413288,\"signedAtRound\":33413286,\"sig\":\"b6bb095472a07183326d9b39e344440d40e0c4832",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":64,\"action\":\"next\",\"atBeaconRound\":33413290,\"signedAtRound\":33413288,\"sig\":\"bd4b47d96fab3ba05555afe733eac974444593932",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":65,\"action\":\"next\",\"atBeaconRound\":33413292,\"signedAtRound\":33413290,\"sig\":\"37944e0970f762c830086d952c0cb33e9843316fe",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":66,\"action\":\"next\",\"atBeaconRound\":33413297,\"signedAtRound\":33413295,\"sig\":\"9f5cf1841fb093f836be46fae8b07ac85e7ab073b",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":67,\"action\":\"next\",\"atBeaconRound\":33413302,\"signedAtRound\":33413300,\"sig\":\"e6a7814d742ff1afc62fb78142bc0fce7e71d8d33",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":68,\"action\":\"next\",\"atBeaconRound\":33413307,\"signedAtRound\":33413305,\"sig\":\"2c86b0da5223ef10e0085a518402795f1197f0120",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":69,\"action\":\"next\",\"atBeaconRound\":33413311,\"signedAtRound\":33413309,\"sig\":\"1a1aca3103ee18d35a3c801768167aa7565022410",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":70,\"action\":\"next\",\"atBeaconRound\":33413314,\"signedAtRound\":33413312,\"sig\":\"dd2f525350a4018ae0d6ef8b4241363918ed13a8f",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":71,\"action\":\"next\",\"atBeaconRound\":33413319,\"signedAtRound\":33413317,\"sig\":\"2b5b770b370f25c6ae7dc239a424d2d5e84288464",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":72,\"action\":\"next\",\"atBeaconRound\":33413323,\"signedAtRound\":33413321,\"sig\":\"be6552f40d53b30097039c5e078ef173d8e0f64fb",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":73,\"action\":\"next\",\"atBeaconRound\":33413326,\"signedAtRound\":33413324,\"sig\":\"fce87d9e1155e998b8d85a01d24507d9643fa8673",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":74,\"action\":\"next\",\"atBeaconRound\":33413329,\"signedAtRound\":33413327,\"sig\":\"7573f96ba08303b8feedbfc6620fad09bba21c39b",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":75,\"action\":\"next\",\"atBeaconRound\":33413332,\"signedAtRound\":33413330,\"sig\":\"6ea3cef3dc1abfb39d07f827d2f7f6d05471652a4",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":76,\"action\":\"next\",\"atBeaconRound\":33413337,\"signedAtRound\":33413335,\"sig\":\"ff33a5b5c47af7048c4fd88428271c8ac644e121b",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":77,\"action\":\"next\",\"atBeaconRound\":33413342,\"signedAtRound\":33413340,\"sig\":\"c128002f5b64f5ad07060ffc15678c0733fad7f6e",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":78,\"action\":\"next\",\"atBeaconRound\":33413347,\"signedAtRound\":33413345,\"sig\":\"7d8360cbd578119a3cdd34af25a4a304a88223c61",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":79,\"action\":\"next\",\"atBeaconRound\":33413352,\"signedAtRound\":33413350,\"sig\":\"e2be4d92ce3554b1447834dae11802702c04479c6",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":80,\"action\":\"next\",\"atBeaconRound\":33413357,\"signedAtRound\":33413355,\"sig\":\"1678159739afe16c72b6f9d33c0648454b662c4f6",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":81,\"action\":\"next\",\"atBeaconRound\":33413361,\"signedAtRound\":33413359,\"sig\":\"dca801c4f1d9db0f3b5fa4f601644b726e87d7d7b",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":82,\"action\":\"next\",\"atBeaconRound\":33413364,\"signedAtRound\":33413362,\"sig\":\"6aa209884ee3c5a30e6e01350bfeb3e285c4f5c09",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":83,\"action\":\"next\",\"atBeaconRound\":33413367,\"signedAtRound\":33413365,\"sig\":\"abea7fa2a5fdbb3f4e5b81e3a34ee42a1b1c3b23f",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":84,\"action\":\"next\",\"atBeaconRound\":33413372,\"signedAtRound\":33413370,\"sig\":\"f3061abf085d927820dde56c0dc52c08fd9b1f9ec",
+  "POST /api/z/Ej8k5tt/control {\"message\":{\"engagementId\":\"Ej8k5tt\",\"seq\":85,\"action\":\"next\",\"atBeaconRound\":33413377,\"signedAtRound\":33413375,\"sig\":\"ff60c1842755e7ad3d92801aace7e13e743d9fff9"
+ ],
+ "eid": "Ej8k5tt",
+ "capOptions": [
+  "10",
+  "100",
+  "250",
+  "500",
+  "750",
+  "1000",
+  "2500",
+  "5000",
+  "10000"
+ ],
+ "step2": "#back||All games  ;  #signout||Sign out  ;  |open=1|1  ;  |open=2|2  ;  |open=3|3  ;  |open=4|4  ;  |open=5|5  ;  |open=6|6  ;  |open=7|7  ;  |open=8|8  ;  |open=9|9  ;  |open=10|10  ;  ||Help  ;  |open=1|1Date and time of the   ;  |open=2|2Number of participant  ;  |open=3|3Set Prizes5 prizes○  ;  |open=4|4Set Brand Moments0 of  ;  |open=5|5Make hosts and co-hos  ;  |open=6|6Invite and Share link  ;  |open=7|7Check and publishPubl  ;  |open=8|8PayPaid. The game is   ;  |open=9|9Game dayOpens when th  ;  |open=10|10After the gameYour r  ;  |open=2|Go  ;  |open=1|1Date and time of the   ;  |open=2|2Number of participant  ;  ||i  ;  |ck=cap:10|Demo game · 10 people   ;  |ck=cap:100|Up to 100 people  ;  |ck=cap:250|Up to 250 people  ;  |ck=cap:500|Up to 500 people  ;  |ck=cap:750|Up to 750 people  ;  |ck=cap:1000|Up to 1000 people  ;  |ck=cap:2500|Up to 2500 people  ;  |ck=cap:5000|Up to 5000 people  ;  |ck=cap:10000|Up to 10000 people  ;  |bool=capOther|My crowd is a differen  ;  ||i  ;  |ck=mode:auto|The software, at the c  ;  |ck=mode:host|A Host presses a butto  ;  ||i  ;  |ck=tix:1|1 ticket  ;  |ck=tix:2|2 tickets (more chance  ;  ||i  ;  |ck=rnd:1|1 game  ;  |ck=rnd:2|2 games  ;  |ck=rnd:3|3 games  ;  |ck=rnd:4|4 games  ;  |ck=rnd:5|5 games  ;  ||i  ;  |ck=aud:1|Only my employees (the  ;  |ck=aud:2|My employees, plus the  ;  |ck=aud:3|A list of people I cho  ;  |ck=aud:4|A list of people I cho  ;  |ck=aud:5|Anyone with the link  ;  |ck=aud:6|Anyone with the link,   ;  ||i  ;  |ck=ver:id|Employee ID  ;  |ck=ver:mobile|Mobile number  ;  |ck=ver:either|Employee ID or mobile   ;  |ck=ver:both|Employee ID and mobile  ;  |save=2|Save and continue  ;  |open=3|3Set Prizes5 prizes○ T  ;  |open=4|4Set Brand Moments0 of  ;  |open=5|5Make hosts and co-hos  ;  |open=6|6Invite and Share link  ;  |open=7|7Check and publishPubl  ;  |open=8|8PayPaid. The game is   ;  |open=9|9Game dayOpens when th  ;  |open=10|10After the gameYour r  ;  ||How do I start?▼  ;  ||Who pays?▼  ;  ||What if nobody pays?▼  ;  ||Can I change things la  ;  ||How do I add a video?▼  ;  ||What do guests see?▼  ;  ||Is my guests' data saf  ;  ||What is a lucky draw?▼  ;  ||How do I stop the game  ;  ||Who can do what?▼  ;  ||What is the big screen  ;  ||What is the demo game?  ;  ||Can I get a refund?▼  ;  ||Who do I contact?▼  ;  ||Back to your steps  ;  ||Back to top  ;  ||AYour accountThese are",
+ "sum2": {
+  "verify": "id",
+  "emp": true,
+  "who": "list",
+  "status": 200
+ },
+ "step3": "TEST MODE: nothing here is real. No one outside the owner’s test list is e-maile",
+ "verTrail": [
+  "3:[\"id\",true]",
+  "4:[\"id\",true]",
+  "5:[\"id\",true]",
+  "6:[\"id\",true]"
+ ],
+ "step4": "TEST MODE: nothing here is real. No one outside the owner’s test list is e-maile",
+ "step5": "TEST MODE: nothing here is real. No one outside the owner’s test list is e-maile",
+ "step6": "TEST MODE: nothing here is real. No one outside the owner’s test list is e-maile",
+ "step6before": "#back||All games  ;  #signout||Sign out  ;  |open=1|1  ;  |open=2|2  ;  |open=3|3  ;  |open=4|4  ;  |open=5|5  ;  |open=6|6  ;  |open=7|7  ;  |open=8|8  ;  |open=9|9  ;  |open=10|10  ;  ||Help  ;  |open=1|1Date and time of the   ;  |open=2|2Number of participant  ;  |open=3|3Set Prizes5 prizes✓  ;  |open=4|4Set Brand Moments0 of  ;  |open=5|5Make hosts and co-hos  ;  |open=6|6Invite and Share link  ;  |open=7|7Check and publishPubl  ;  |open=8|8PayPaid. The game is   ;  |open=9|9Game dayOpens when th  ;  |open=10|10After the gameYour r  ;  |open=6|Go  ;  |open=1|1Date and time of the   ;  |open=2|2Number of participant  ;  |open=3|3Set Prizes5 prizes✓ D  ;  |open=4|4Set Brand Moments0 of  ;  |open=5|5Make hosts and co-hos  ;  |open=6|6Invite and Share link  ;  ||i  ;  ||i  ;  #playnow||Play now  ;  #sendmine||Send my play link to m  ;  ||i  ;  #copy||Copy link  ;  #copybig||Copy the link  ;  ||Name and mobile number  ;  ||Name and employee ID  ;  ||Name, employee ID and   ;  ||Upload a PDF  ;  ||Upload a CSV  ;  ||Add one person  ;  #gtemplate||Download the blank lis  ;  #gfile||  ;  #copycommon||Copy common link  ;  #dlpeople||Download my list  ;  #pdph||  ;  #pdsee||Show what we hold  ;  #pddel||Delete their data  ;  #ubph||  ;  #unbind||Let them move to a new  ;  |save=6|Continue  ;  |open=7|7Check and publishPubl  ;  |open=8|8PayPaid. The game is   ;  |open=9|9Game dayOpens when th  ;  |open=10|10After the gameYour r  ;  ||How do I start?▼  ;  ||Who pays?▼  ;  ||What if nobody pays?▼  ;  ||Can I change things la  ;  ||How do I add a video?▼  ;  ||What do guests see?▼  ;  ||Is my guests' data saf  ;  ||What is a lucky draw?▼  ;  ||How do I stop the game  ;  ||Who can do what?▼  ;  ||What is the big screen  ;  ||What is the demo game?  ;  ||Can I get a refund?▼  ;  ||Who do I contact?▼  ;  ||Back to your steps  ;  ||Back to top  ;  ||AYour accountThese are",
+ "step6after": "#back||All games  ;  #signout||Sign out  ;  |open=1|1  ;  |open=2|2  ;  |open=3|3  ;  |open=4|4  ;  |open=5|5  ;  |open=6|6  ;  |open=7|7  ;  |open=8|8  ;  |open=9|9  ;  |open=10|10  ;  ||Help  ;  |open=1|1Date and time of the   ;  |open=2|2Number of participant  ;  |open=3|3Set Prizes5 prizes✓  ;  |open=4|4Set Brand Moments0 of  ;  |open=5|5Make hosts and co-hos  ;  |open=6|6Invite and Share link  ;  |open=7|7Check and publishPubl  ;  |open=8|8PayPaid. The game is   ;  |open=9|9Game dayOpens when th  ;  |open=10|10After the gameYour r  ;  |open=6|Go  ;  |open=1|1Date and time of the   ;  |open=2|2Number of participant  ;  |open=3|3Set Prizes5 prizes✓ D  ;  |open=4|4Set Brand Moments0 of  ;  |open=5|5Make hosts and co-hos  ;  |open=6|6Invite and Share link  ;  ||i  ;  ||i  ;  #playnow||Play now  ;  #sendmine||Send my play link to m  ;  ||i  ;  #copy||Copy link  ;  #copybig||Copy the link  ;  ||Name and mobile number  ;  ||Name and employee ID  ;  ||Name, employee ID and   ;  ||Upload a PDF  ;  ||Upload a CSV  ;  ||Add one person  ;  #gtemplate||Download the blank lis  ;  #gfile||  ;  ||Remove  ;  ||Remove  ;  ||Remove  ;  ||Remove  ;  ||Remove  ;  ||Remove  ;  ||Remove  ;  ||Remove  ;  ||Remove  ;  ||Remove  ;  #copycommon||Copy common link  ;  #dlpeople||Download my list  ;  #pdph||  ;  #pdsee||Show what we hold  ;  #pddel||Delete their data  ;  #ubph||  ;  #unbind||Let them move to a new  ;  |save=6|Continue  ;  |open=7|7Check and publishPubl  ;  |open=8|8PayPaid. The game is   ;  |open=9|9Game dayOpens when th  ;  |open=10|10After the gameYour r  ;  ||How do I start?▼  ;  ||Who pays?▼  ;  ||What if nobody pays?▼  ;  ||Can I change things la  ;  ||How do I add a video?▼  ;  ||What do guests see?▼  ;  ||Is my guests' data saf  ;  ||What is a lucky draw?▼  ;  ||How do I stop the game  ;  ||Who can do what?▼  ;  ||What is the big screen  ;  ||What is the demo game?  ;  ||Can I get a refund?▼  ;  ||Who do I contact?▼  ;  ||Back to your steps  ;  ||Back to top  ;  ||AYour accountThese are",
+ "step6text": " link is made for one person only. Names and numbers stay here, in your own console. Guests and Co-hosts need only a name and a mobile number. No e-mail is needed. Only the Organizer and Hosts have an e-mail. A guest's own data A player asks to see or delete their data? Enter their mobile number. Only you can do this. Their mobile number Show what we hold Delete their data Change of phone A ticket plays on one phone only. If someone lost or changed their phone, enter their mobile number: the next phone they join with keeps their ticket. Their mobile number Let them move to a new phone Continue",
+ "toasts": [
+  "TEST MODE: nothing here is real. No one outside the owner’s test list is e-mailed, and nothing is charged.",
+  "",
+  "10 good, 0 duplicates removed, 0 look wrong"
+ ],
+ "pageErr": [],
+ "wrong": "",
+ "step7": "#back||All games  ;  #signout||Sign out  ;  |open=1|1  ;  |open=2|2  ;  |open=3|3  ;  |open=4|4  ;  |open=5|5  ;  |open=6|6  ;  |open=7|7  ;  |open=8|8  ;  |open=9|9  ;  |open=10|10  ;  ||Help  ;  |open=1|1Date and time of the   ;  |open=2|2Number of participant  ;  |open=3|3Set Prizes5 prizes✓  ;  |open=4|4Set Brand Moments0 of  ;  |open=5|5Make hosts and co-hos  ;  |open=6|6Invite and Share link  ;  |open=7|7Check and publishPubl  ;  |open=8|8PayPaid. The game is   ;  |open=9|9Game dayOpens when th  ;  |open=10|10After the gameYour r  ;  |open=9|Go  ;  |open=1|1Date and time of the   ;  |open=2|2Number of participant  ;  |open=3|3Set Prizes5 prizes✓ D  ;  |open=4|4Set Brand Moments0 of  ;  |open=5|5Make hosts and co-hos  ;  |open=6|6Invite and Share link  ;  |open=7|7Check and publishChec  ;  ||i  ;  |open=1|Change  ;  |open=2|Change  ;  |open=3|Change  ;  |open=4|Change  ;  #cancelopen||Cancel this game  ;  ||Create a new game like  ;  |save=7|Continue  ;  |open=8|8PayPaid. The game is   ;  |open=9|9Game dayOpens when th  ;  |open=10|10After the gameYour r  ;  ||How do I start?▼  ;  ||Who pays?▼  ;  ||What if nobody pays?▼  ;  ||Can I change things la  ;  ||How do I add a video?▼  ;  ||What do guests see?▼  ;  ||Is my guests' data saf  ;  ||What is a lucky draw?▼  ;  ||How do I stop the game  ;  ||Who can do what?▼  ;  ||What is the big screen  ;  ||What is the demo game?  ;  ||Can I get a refund?▼  ;  ||Who do I contact?▼  ;  ||Back to your steps  ;  ||Back to top  ;  ||AYour accountThese are",
+ "info": {
+  "cap": 10,
+  "startMs": 1793042400000
+ },
+ "step9": "#back||All games  ;  #signout||Sign out  ;  |open=1|1  ;  |open=2|2  ;  |open=3|3  ;  |open=4|4  ;  |open=5|5  ;  |open=6|6  ;  |open=7|7  ;  |open=8|8  ;  |open=9|9  ;  |open=10|10  ;  ||Help  ;  |open=1|1Date and time of the   ;  |open=2|2Number of participant  ;  |open=3|3Set Prizes5 prizes✓  ;  |open=4|4Set Brand Moments0 of  ;  |open=5|5Make hosts and co-hos  ;  |open=6|6Invite and Share link  ;  |open=7|7Check and publishPubl  ;  |open=8|8PayPaid. The game is   ;  |open=9|9Game dayOpens when th  ;  |open=10|10After the gameYour r  ;  |open=9|Go  ;  |open=1|1Date and time of the   ;  |open=2|2Number of participant  ;  |open=3|3Set Prizes5 prizes✓ D  ;  |open=4|4Set Brand Moments0 of  ;  |open=5|5Make hosts and co-hos  ;  |open=6|6Invite and Share link  ;  |open=7|7Check and publishPubl  ;  |open=8|8PayPaid. The game is   ;  |open=9|9Game dayRun the game.  ;  ||i  ;  #nextnum||Next number  ;  ||Pause  ;  ||Resume  ;  ||End the game  ;  ||Welcome! The game star  ;  ||Please take your seats  ;  ||Dinner is served  ;  ||Rewards at the stage i  ;  ||We start in 5 minutes  ;  ||Thank you for joining  ;  #annText||  ;  #annSend||Send to everyone  ;  #annClear||Clear message  ;  #csv||Download report  ;  ||i  ;  #playnow||Play now  ;  #sendmine||Send my play link to m  ;  |save=9|Continue  ;  |open=10|10After the gameYour r  ;  ||How do I start?▼  ;  ||Who pays?▼  ;  ||What if nobody pays?▼  ;  ||Can I change things la  ;  ||How do I add a video?▼  ;  ||What do guests see?▼  ;  ||Is my guests' data saf  ;  ||What is a lucky draw?▼  ;  ||How do I stop the game  ;  ||Who can do what?▼  ;  ||What is the big screen  ;  ||What is the demo game?  ;  ||Can I get a refund?▼  ;  ||Who do I contact?▼  ;  ||Back to your steps  ;  ||Back to top  ;  ||AYour accountThese are",
+ "noBtn": 53
+}

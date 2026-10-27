@@ -7,7 +7,9 @@ import { Harness, NodePhone, ZG, TBControl, sleep, roundAt, roundMs, beaconStats
 import { waitForReport, checkReport } from "./report-check.mjs";
 import { DatabaseSync } from "node:sqlite";
 import { auditGame } from "./audit.mjs";
-const q2 = (sql, ...a) => { const db = new DatabaseSync("C:/ct/test-sites/data/tambola-test.sqlite", { readOnly: true }); try { return db.prepare(sql).all(...a); } finally { db.close(); } };
+import { fileURLToPath as __f2p } from "node:url"; const ROOT = __f2p(new URL("../../", import.meta.url)), DATA = process.env.DATA_DIR || ROOT + "data"; const DB = process.env.DB_FILE || DATA + "/tambola-test.sqlite"; // CLOUD PORT: paths relative to the checkout; DB_FILE chooses the server database
+import { mkdirSync } from "node:fs"; mkdirSync(DATA, { recursive: true });
+const q2 = (sql, ...a) => { const db = new DatabaseSync(DB, { readOnly: true }); try { return db.prepare(sql).all(...a); } finally { db.close(); } };
 
 const pub = (...a) => Promise.race([TBControl.publish(...a), new Promise((_, rej) => setTimeout(() => rej(new Error("control call timed out")), 30000))]);
 const BASE = process.env.BASE || "http://localhost:8801";
@@ -215,7 +217,7 @@ setInterval(() => { H.call("POST", "/api/lifecycle/tick", undefined, "local-orga
 const todo = []; for (let n = FROM; n <= TO; n++) todo.push(caseOf(n));
 console.log(`campaign ${TAG}: cases ${FROM}..${TO}, ${CONC} at a time, ${PEOPLE} people each, lead ${LEAD}s, ${BASE}`);
 const results = []; let next = 0;
-const worker = async () => { while (next < todo.length) { const c = todo[next++]; const t0 = Date.now(); try { const R = await Promise.race([runCase(c), new Promise((_, rej) => setTimeout(() => rej(new Error("case did not finish in time")), 75 * 60000))]); results.push(R); console.log(`${R.pass ? "PASS" : "FAIL"} #${c.n} ${c.mode} ${c.aud} t${c.tickets} ${c.events.join("+") || "-"} | numbers ${R.numbers} winners ${R.winners} players ${R.players} gap ${R.medianGap} | ${R.checks.filter((q) => !q.ok).length} failed of ${R.checks.length} | ${Math.round((Date.now() - t0) / 60000)} min`); } catch (e) { results.push({ n: c.n, id: c.id, pass: false, checks: [{ n: "case crashed", ok: false, d: String(e.stack || e).slice(0, 300) }] }); console.log(`CRASH #${c.n} ${e.message}`); } writeFileSync(`C:/ct/test-sites/data/campaign-${TAG}.json`, JSON.stringify({ tag: TAG, results, h: { calls: H.calls, fails: H.fails, failKinds: H.failKinds }, beacon: beaconStats }, null, 1)); } };
+const worker = async () => { while (next < todo.length) { const c = todo[next++]; const t0 = Date.now(); try { const R = await Promise.race([runCase(c), new Promise((_, rej) => setTimeout(() => rej(new Error("case did not finish in time")), 75 * 60000))]); results.push(R); console.log(`${R.pass ? "PASS" : "FAIL"} #${c.n} ${c.mode} ${c.aud} t${c.tickets} ${c.events.join("+") || "-"} | numbers ${R.numbers} winners ${R.winners} players ${R.players} gap ${R.medianGap} | ${R.checks.filter((q) => !q.ok).length} failed of ${R.checks.length} | ${Math.round((Date.now() - t0) / 60000)} min`); } catch (e) { results.push({ n: c.n, id: c.id, pass: false, checks: [{ n: "case crashed", ok: false, d: String(e.stack || e).slice(0, 300) }] }); console.log(`CRASH #${c.n} ${e.message}`); } writeFileSync(`${DATA}/campaign-${TAG}.json`, JSON.stringify({ tag: TAG, results, h: { calls: H.calls, fails: H.fails, failKinds: H.failKinds }, beacon: beaconStats }, null, 1)); } };
 await Promise.all(Array.from({ length: CONC }, () => worker()));
 // ---- the end-of-game report e-mails (they go out a few minutes after each game ends) ----
 for (const R of results.filter((x) => x.id && x.numbers !== undefined)) {
@@ -229,7 +231,7 @@ for (const R of results.filter((x) => x.id && x.numbers !== undefined)) {
 const lat = H.lat.slice().sort((a, b) => a - b); const pct = (q) => Math.round(lat[Math.min(lat.length - 1, Math.floor(q * lat.length))] ?? 0);
 const total = results.length, pass = results.filter((x) => x.pass).length, checksAll = results.flatMap((x) => x.checks || []);
 const summary = { tag: TAG, cases: total, casesPassed: pass, checks: checksAll.length, checksFailed: checksAll.filter((q) => !q.ok).length, calls: H.calls, serverErrors: H.fails, failKinds: H.failKinds, latencyMs: { p50: pct(0.5), p95: pct(0.95), p99: pct(0.99), max: Math.round(lat[lat.length - 1] ?? 0) }, beacon: beaconStats };
-writeFileSync(`C:/ct/test-sites/data/campaign-${TAG}.json`, JSON.stringify({ summary, results }, null, 1));
+writeFileSync(`${DATA}/campaign-${TAG}.json`, JSON.stringify({ summary, results }, null, 1));
 console.log("SUMMARY", JSON.stringify(summary));
 for (const R of results.filter((x) => !x.pass)) console.log("FAILED CASE", R.n, R.mode, R.aud, R.events, JSON.stringify((R.checks || []).filter((q) => !q.ok).map((q) => q.n + " | " + q.d)).slice(0, 700));
 process.exit(0);
