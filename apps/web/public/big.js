@@ -20,8 +20,8 @@
       const cf0 = await fetch(`/api/z/${EID}/control`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => S.cf); S.cf = cf0 && cf0.pubKey ? cf0 : null; S.locked = !!(cf0 && cf0.locked); S.cancelled = !!(cf0 && cf0.cancelled); S.dns = !!(cf0 && cf0.didNotStart); S.ann = cf0 && cf0.ann && cf0.ann.text ? cf0.ann : null; // held for non-payment: nothing is shown
       const l = await ZG.fetchRound("latest"); if (l) { S.now = l.round; S.nowAt = Date.now(); const smp = ZG.roundTimeMs(l.round) + 1500 - performance.now(); S.offs = S.offs || []; if (S.offs.length && Math.max(...S.offs) - smp > 15000) S.offs = []; S.offs.push(smp); if (S.offs.length > 5) S.offs.shift(); S.off = Math.max(...S.offs); } // the clock is the newest of the last 5 answers (a stale answer is never too new): one stale answer never makes the countdown jump
       if (S.now === null) { S.err = "Waiting for the clock…"; return; }
-      const lv = S.cf && S.cf.live; if (lv && S.info) S.info = { ...S.info, startRound: lv.startRound, callSeconds: lv.callSeconds, callMode: lv.callMode, startMode: lv.startMode }; // a time or mode changed after publishing: this screen follows through the file it already reads
-      const cfg = { tickets: S.info.tickets, rewards: S.info.rewards, breaks: S.info.breaks, rounds: S.info.rounds || 1, callMode: S.info.callMode === "host" ? "host" : "auto", startMode: S.info.startMode === "manual" ? "manual" : "auto" };
+      const lv = S.cf && S.cf.live; if (lv && S.info) S.info = { ...S.info, startRound: lv.startRound, callSeconds: lv.callSeconds, callMode: lv.callMode, startMode: lv.startMode, afterPrizes: lv.afterPrizes }; // a time or mode changed after publishing: this screen follows through the file it already reads
+      const cfg = { tickets: S.info.tickets, rewards: S.info.rewards, breaks: S.info.breaks, rounds: S.info.rounds || 1, callMode: S.info.callMode === "host" ? "host" : "auto", startMode: S.info.startMode === "manual" ? "manual" : "auto", keepCalling: S.info.afterPrizes === "keep" };
       S.st = S.cf ? ZG.resolveControl(ZG.cfgOf(S.cf, ZG.hostGameOf(cfg, S.info.startRound)), S.cf.messages) : null; // host mode: the numbers come when the Host presses
       S.cfg = cfg;
       const stride = S.info.callSeconds / 3;
@@ -48,7 +48,7 @@
     let log = S.locked ? [] : S.logs[S.round] || [];
     // every prize line has a confirmed winner: the game is over, the numbers stop where the last prize was completed (they are NOT called on to 90)
     const psAll = ZG.prizeStatus && S.cfg ? ZG.prizeStatus(S.cfg, S.results || [], S.round || 1) : [];
-    const allDone = psAll.length > 0 && psAll.every((p) => p.claimed) && (S.round || 1) >= ((S.cfg && S.cfg.rounds) || 1) && log.length > 0;
+    const allDone = !(S.cfg && S.cfg.keepCalling) && psAll.length > 0 && psAll.every((p) => p.claimed) && (S.round || 1) >= ((S.cfg && S.cfg.rounds) || 1) && log.length > 0;
     // the numbers stop at the last completion plus the one call whose claim window closes it (the phones stop at the same count)
     if (allDone) { const lastIdx = Math.max(0, ...(S.results || []).filter((r) => (r.round || 1) === (S.round || 1) && Number.isInteger(r.idx)).map((r) => r.idx + 2)); if (lastIdx > 0 && lastIdx < log.length) log = log.slice(0, lastIdx); }
     if (S.dns) return ($app.innerHTML = `<div class="top"><div class="brand">Corporate Tambola</div></div><div class="big"><h1>This game did not start</h1><p>This game did not start. Your details have been erased.</p></div><div class="foot">${esc(location.host)}/z?e=${esc(EID)}</div>`); // nobody paid; the time and 20 hours went by
@@ -78,7 +78,10 @@
     const called = new Set(log);
     const ps = ZG.prizeStatus && S.cfg ? ZG.prizeStatus(S.cfg, S.results || [], S.round || 1) : [];
     const prizes = ps.length ? `<div class="ps" aria-label="Prizes"><h2>Prizes</h2><ul>${ps.map((p) => p.claimed ? `<li class="done"><s>${esc(p.name)}</s> <small>claimed</small></li>` : `<li>${esc(p.name)}${p.text ? ": <b>" + esc(p.text) + "</b>" : ""}</li>`).join("")}</ul></div>` : "";
-    const banner = allDone ? `<div class="big" style="margin-bottom:1vh"><h1>Game over</h1><p>Every prize has been won. Thank you for playing.</p></div>` : paused ? `<div class="big" style="margin-bottom:1vh"><h1>Paused</h1><p>The organizer has paused the game. It will resume shortly.</p></div>` : "";
+    const hm = (ms) => new Date(ms).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    const pz = S.st && S.now !== null ? S.st.intervals.find((x) => S.now >= x.start && S.now < x.end) : null, pm = pz && S.cf ? (S.cf.messages || []).find((m) => m.action === "pause" && m.atBeaconRound === pz.start) : null, pby = pm && S.cf.by && S.cf.by[pm.seq - 1] === "Host" ? "a Host" : "the Organizer";
+    const over90 = log.length >= 90 && (S.round || 1) >= ((S.cfg && S.cfg.rounds) || 1);
+    const banner = allDone ? `<div class="big" style="margin-bottom:1vh"><h1>Game over</h1><p>All prizes were awarded after ${log.length} numbers. Thank you for playing.</p></div>` : over90 ? `<div class="big" style="margin-bottom:1vh"><h1>Game over</h1><p>All 90 numbers were called. Thank you for playing.</p></div>` : paused ? `<div class="big" id="pausebanner" style="margin-bottom:1vh"><h1>PAUSED</h1><p>${pz ? "Paused by " + esc(pby) + " at " + esc(hm(ZG.roundTimeMs(pz.start))) + ". The numbers start again at about " + esc(hm(ZG.roundTimeMs(pz.end))) + ", or sooner when they press Resume." : "The organizer has paused the game. It will resume shortly."}</p></div>` : "";
     // between two numbers (software-called games): a big countdown 9, 8, 7 ... 1; silent
     const nr = S["next" + S.round], left = !paused && !hostWait && cfg.callMode !== "host" && S.off !== undefined && nr !== null && nr !== undefined && Number.isFinite(nr) && log.length < 90 ? Math.max(0, Math.ceil((ZG.roundTimeMs(nr) - (performance.now() + S.off)) / 1000)) : null;
     const cdown = left !== null && left <= Math.max(3, info.callSeconds) ? `<div class="cdown" role="timer" aria-label="Next number in ${left} seconds"><div class="cdnum">${left}</div><div class="cdlbl">seconds to the next number</div></div>` : "";

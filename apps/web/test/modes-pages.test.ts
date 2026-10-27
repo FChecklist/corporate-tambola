@@ -82,7 +82,7 @@ describe("the console: how does it start", () => {
     expect(Array.from(c.win.document.querySelectorAll("#rg-start .zc-radio b")).map((e: any) => e.textContent.trim())).toEqual(["By itself at the time", "I press Start"]);
     expect(Array.from(c.win.document.querySelectorAll("#rg-mode .zc-radio b")).map((e: any) => e.textContent.trim())).toEqual(["The game does", "I do"]);
     for (const n of ["start", "mode"]) { expect(radio(n).filter((e) => e.checked).length).toBe(1); expect(radio(n)[0].checked).toBe(true); expect(radio(n).every((e) => !!e.closest("label"))).toBe(true); } // exactly one chosen; the label wraps the input, so a tap anywhere on it chooses it
-    expect(c.win.document.querySelector("#rg-start [role=radiogroup]")).toBeTruthy(); expect(c.win.document.querySelectorAll(".zc-rdesc").length).toBe(4); // one plain sentence under each option
+    expect(c.win.document.querySelector("#rg-start [role=radiogroup]")).toBeTruthy(); expect(c.win.document.querySelectorAll(".zc-rdesc").length).toBe(6); // one plain sentence under each option (start, calls, when every prize is won)
     expect(c.$("#modesummary")!.textContent).toMatch(/Your game: starts by itself at .*, and the game calls the numbers\./);
     c.click('[data-ck="start"][data-v="manual"]'); await wait(50);
     expect(radio("start").filter((e) => e.checked).map((e) => e.value)).toEqual(["manual"]); expect(radio("start").length).toBe(2);

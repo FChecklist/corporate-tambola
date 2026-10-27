@@ -107,7 +107,7 @@ describe("step 9: the buttons that run the game", () => {
     const o = await organizer(); await make(o, "IP-CTL", { cap: 600 }); await regKey(o, "IP-CTL"); await publish(o, "IP-CTL"); // 251 to 1000 people: a press takes 85 seconds to reach the phones (the old fixed sentence said 40)
     const asked: string[] = []; const c = await controlPage(o, "IP-CTL", asked); const kv = kvOf(o);
     await c.waitFor((x) => /Last step|Your game|Hello/i.test(x)); openStep(c, 9); await c.waitFor((x) => /Controls/.test(x));
-    c.click('[data-ctl="pause"]'); await c.waitFor((x) => /It ends by itself after 30 minutes/.test(x));
+    c.click('[data-ctl="pause"]'); await c.waitFor(() => !!c.$("#zcsure")); expect(c.$("#zcsure")!.textContent).toMatch(/Are you sure\? Numbers stop for everybody/); c.click("#zcsure [data-y]"); await c.waitFor((x) => /It ends by itself after 30 minutes/.test(x)); // Pause asks first
     expect(c.$("#ctlstate")!.textContent).toMatch(/Pause on its way/); expect((c.$('[data-ctl="pause"]') as any).disabled).toBe(true); // no second Pause while the first is on its way
     expect(c.$("#ctlnote")!.textContent).toMatch(/reaches the phones in about 85 seconds/); expect(c.text()).not.toMatch(/about 40 seconds/);
     c.click('[data-ctl="stop"]'); await c.waitFor(() => !!c.$("#zcsure")); expect(c.$("#zcsure")!.textContent).toMatch(/This cannot be undone/);

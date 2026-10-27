@@ -198,7 +198,7 @@
     const date = istDateStr(start), time = pad2(start.getUTCHours()) + ":" + pad2(start.getUTCMinutes());
     const nm = (c.name || "").trim();
     const f = { occ: nm ? (OCC.includes(nm) && nm !== "Other" ? nm : "Other") : "Diwali party", oname: nm && !OCC.includes(nm) ? nm : "", day: blank ? "" : dayOpts().some((d) => d[0] === date) ? date : "other", dayo: blank ? "" : date, time: blank ? "" : TIMES.some((x) => x[0] === time) ? time : "other", timeo: blank ? "" : time,
-      cap: String(inf.cap || 250), tix: String(t), spd: String(inf.callSeconds || 9), rnd: String(c.rounds || 1), who: whoNow(), ver: c.verify === "id" || c.verify === "either" || c.verify === "both" ? c.verify : "mobile", emp: !!c.employeesOnly, mode: (c.callMode || inf.callMode) === "host" ? "host" : "auto", start: (c.startMode || inf.startMode) === "manual" ? "manual" : "auto",
+      cap: String(inf.cap || 250), tix: String(t), spd: String(inf.callSeconds || 9), rnd: String(c.rounds || 1), who: whoNow(), ver: c.verify === "id" || c.verify === "either" || c.verify === "both" ? c.verify : "mobile", emp: !!c.employeesOnly, mode: (c.callMode || inf.callMode) === "host" ? "host" : "auto", start: (c.startMode || inf.startMode) === "manual" ? "manual" : "auto", after: (c.keepCalling || inf.afterPrizes === "keep") ? "keep" : "end",
       inv: !!(c.invites && c.invites.on), per: String((c.invites && c.invites.per) || 4), cats: ((c.invites && c.invites.cats) || ["family", "colleagues"]).slice(), bundle: "", hs: {}, ph: "", ties: c.ties === "share" ? "share" : "next", demo: c.demo ? "1" : "0" };
     for (const [k] of HS) f.hs[k] = { on: false, n: 1, pt: "later", pd: "", orig: [] };
     for (const l of c.rewards || []) { const k = l.scope === "two_ticket" ? "full2" : l.pattern, h = f.hs[k]; if (!h) continue; h.on = true; h.n = Math.max(h.n, l.ordinal); h.orig[l.ordinal - 1] = l.text || ""; }
@@ -226,6 +226,7 @@
   const MANUAL_MAX = 1000; // above this size only "by itself" + "the game does" exist (the manual options are hidden)
   const radios = (path, label, opts) => `<fieldset class="zc-radiogroup" id="rg-${path}"><legend class="zc-lbl" id="${gid(path)}">${label}</legend><div role="radiogroup" aria-labelledby="${gid(path)}">${opts.map(([v, l, d]) => { const on = String(getP(path)) === String(v); return `<label class="zc-radio${on ? " on" : ""}"><input type="radio" name="${path}" value="${esc(v)}" data-ck="${path}" data-v="${esc(v)}"${on ? " checked" : ""}><span class="zc-rtxt"><b>${esc(l)}</b><span class="zc-rdesc">${esc(d)}</span></span></label>`; }).join("")}</div></fieldset>`;
   const START_OPTS = [["auto", "By itself at the time", "The game starts at the time you chose. Nobody needs to press anything."], ["manual", "I press Start", "At the time you chose you press the big Start button. Until then players see Waiting for the host."]];
+  const AFTER_OPTS = [["keep", "Keep calling until all 90 numbers", "Every number is still called, even after the last prize has been won, so nobody feels the game stopped early."], ["end", "End the game", "The game ends as soon as every prize has been won. No more numbers are called."]];
   const CALL_OPTS = [["auto", "The game does", "The game calls a new number every few seconds, by itself."], ["host", "I do", "You or a Host press Next number for each number, so you set the pace."]];
   /** one line in plain words that follows the two choices */
   const modeSummary = (f) => {
@@ -239,7 +240,7 @@
     if (cap > START_MAX) f.start = "auto";
     const q1 = cap > START_MAX ? small("Games above 2,000 people start by themselves at the time.", 'id="manualhidden"') : radios("start", "How does it start?", START_OPTS);
     const q2 = cap > MANUAL_MAX ? small("Games above 1,000 people are called by the game itself. " + (cap > START_MAX ? "" : "You can still press Start yourself."), 'id="callhidden"') : radios("mode", "Who calls the numbers?", CALL_OPTS);
-    return q1 + q2 + modeSummary(f);
+    return q1 + q2 + modeSummary(f) + radios("after", "When every prize is won:", AFTER_OPTS);
   };
   // one small line under every group of tick boxes: what the boxes are for
   const HINTS = {
@@ -1197,7 +1198,7 @@
   }
   /** The game is over (every number called, or the report already went out): the hint must not send the organizer back to step 1. */
   /** Every prize line has a confirmed winner (the rule the phones use to end the game): the game is over, the numbers are not called on to 90. */
-  const allPrizesWon = () => { try { const ps = ZG.prizeStatus && S.cfg ? ZG.prizeStatus(S.cfg, S.published || [], S.round || 1) : []; return ps.length > 0 && ps.every((p) => p.claimed) && (S.round || 1) >= ((S.cfg && S.cfg.rounds) || 1) && !!S.started; } catch { return false; } };
+  const allPrizesWon = () => { try { const ps = ZG.prizeStatus && S.cfg ? ZG.prizeStatus(S.cfg, S.published || [], S.round || 1) : []; return ps.length > 0 && ps.every((p) => p.claimed) && (S.round || 1) >= ((S.cfg && S.cfg.rounds) || 1) && !!S.started && !(S.cfg && S.cfg.keepCalling); } catch { return false; } };
   const gameEnded = () => !!(S.life && (S.life.purged || S.life.reportSent)) || (!!S.started && (S.log || []).length >= 90 && !(S.cfg && S.cfg.rounds > 1)) || allPrizesWon() || !!(S.control && S.control.stopNow);
   function nextHtml() {
     const n = nextStep();
@@ -1260,9 +1261,37 @@
     }
     return h;
   }
+  const hmIst = (ms) => new Date(ms).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit", hour12: true }).toLowerCase();
+  /** the numbers called so far in the round being played, cut where the game ended when the game ends with the last prize */
+  function calledSoFar() {
+    let log = (S.logs && S.logs[S.round]) || [];
+    if (allPrizesWon()) { const last = Math.max(0, ...(S.published || []).filter((x) => (x.round || 1) === (S.round || 1) && Number.isInteger(x.idx)).map((x) => x.idx + 2)); if (last > 0 && last < log.length) log = log.slice(0, last); }
+    return log;
+  }
+  /** At the TOP of the game screen, always: the Number board button, the numbers called so far, a big PAUSED banner (who, since when, until when, with Resume), and how the game ended. */
+  function liveBar() {
+    if (S.draft || !S.info || !eid) return "";
+    const board = `<a class="zc-btn zc-btn-big zc-boardbtn" id="boardbtn" href="${esc(location.origin + "/board.html?e=" + encodeURIComponent(eid) + "#k=" + encodeURIComponent(secret))}" target="_blank" rel="noopener">Number board</a>`;
+    if (!S.started) return `<div class="zc-block zc-livebar" id="livebar"><div class="zc-boardrow">${board}<span class="zc-small zc-nomargin">The board with every number called, like the real game. Only you and the Hosts can open it.</span></div></div>`;
+    const log = calledSoFar(), last = log.length ? log[log.length - 1] : null, total = 90;
+    const strip = log.length ? log.map((n, i) => `<span class="zc-ball${i === log.length - 1 ? " last" : ""}">${n}</span>`).join("") : `<span class="zc-small zc-nomargin">No number has been called yet.</span>`;
+    let pause = "";
+    const pz = S.st && S.now !== null ? S.st.intervals.find((i) => S.now >= i.start && S.now < i.end) : null;
+    if (pz && !(S.control && S.control.stopped)) {
+      const pm = S.cf ? (S.cf.messages || []).find((m) => m.action === "pause" && m.atBeaconRound === pz.start) : null, who = pm && S.cf.by && S.cf.by[pm.seq - 1] === "Host" ? "a Host" : "the Organizer";
+      const mins = Math.max(1, Math.round((pz.end - S.now) * 3 / 60));
+      pause = `<div class="zc-pausebanner" id="pausebanner" role="status"><b>PAUSED</b><span>Paused by ${who} at ${esc(hmIst(ZG.roundTimeMs(pz.start)))} India time. The numbers start again at about ${esc(hmIst(ZG.roundTimeMs(pz.end)))} (in about ${mins} ${mins === 1 ? "minute" : "minutes"}), or sooner when you press Resume.</span><button type="button" class="zc-btn zc-btn-big" data-ctl="resume"${S.ctlBusy ? " disabled" : ""}>Resume the game</button></div>`;
+    }
+    let end = "";
+    if (S.control && S.control.stopNow) end = `The organizer ended the game after ${log.length} numbers.`;
+    else if (allPrizesWon()) end = `All prizes were awarded after ${log.length} numbers.`;
+    else if (S.started && log.length >= total && (S.round || 1) >= ((S.cfg && S.cfg.rounds) || 1)) end = "All 90 numbers were called.";
+    const endBanner = end ? `<div class="zc-endbanner" id="endbanner" role="status"><b>The game is over.</b> ${esc(end)}</div>` : "";
+    return `<div class="zc-block zc-livebar" id="livebar">${endBanner}${pause}<div class="zc-boardrow">${board}<b id="numcount">${log.length} of ${total} numbers called${last ? ", the latest is " + last : ""}</b></div><div class="zc-numstrip" id="numstrip" aria-label="Numbers called so far">${strip}</div></div>`;
+  }
   function mainHtml() {
     const r = role();
-    return `<div id="zc-top"></div>${alertZone()}<div class="zc-small zc-rolenote">${esc(ROLE_NOTE[r])}</div>${nextHtml()}${steps().map(secHtml).join("")}${helpHtml()}${acctHtml()}`;
+    return `<div id="zc-top"></div>${liveBar()}${alertZone()}<div class="zc-small zc-rolenote">${esc(ROLE_NOTE[r])}</div>${nextHtml()}${steps().map(secHtml).join("")}${helpHtml()}${acctHtml()}`;
   }
   function tabsHtml() {
     const n = nextStep();
@@ -1280,7 +1309,7 @@
   function cohostView() {
     if (S.coh && S.coh.roleAccepted === false) return roleAcceptView();
     const side = `<aside class="zc-side"><div class="zc-me"><span class="zc-num zc-num-dark">C</span><span><span class="zc-muted">You are</span><br><b>Co-host</b></span></div><div class="zc-small zc-nomargin">Your game at a glance</div>${synHtml()}</aside>`;
-    return frame(`<div class="zc-body">${side}<div class="zc-main"><div id="zc-top"></div>${S.note ? `<div class="zc-toast" role="status">${esc(S.note)}</div>` : ""}${S.cohErr && !S.coh ? `<div class="zc-toast" role="status">${esc(S.cohErr)}</div>` : ""}<div class="zc-small zc-rolenote">${esc(ROLE_NOTE.cohost)}</div>${S.coh && S.coh.waitingFor && !didNotStart() ? `<div class="zc-toast" role="status" id="cohwaiting">Waiting for the Organizer or Host to start the game.</div>` : ""}${S.coh && didNotStart() ? `<div class="zc-alert" id="didnotstart" role="status"><h3>This game did not start.</h3><p>Guest details have been erased.</p></div>` : ""}${nextHtml()}${steps().map(secHtml).join("")}${helpHtml()}</div></div>`, true);
+    return frame(`<div class="zc-body">${side}<div class="zc-main"><div id="zc-top"></div>${eid ? `<div class="zc-block zc-livebar" id="livebar"><div class="zc-boardrow"><a class="zc-btn zc-btn-big zc-boardbtn" id="boardbtn" href="${esc(location.origin + "/board.html?e=" + encodeURIComponent(eid) + "#k=" + encodeURIComponent(secret))}" target="_blank" rel="noopener">Number board</a><span class="zc-small zc-nomargin">The board with every number called, like the real game.</span></div></div>` : ""}${S.note ? `<div class="zc-toast" role="status">${esc(S.note)}</div>` : ""}${S.cohErr && !S.coh ? `<div class="zc-toast" role="status">${esc(S.cohErr)}</div>` : ""}<div class="zc-small zc-rolenote">${esc(ROLE_NOTE.cohost)}</div>${S.coh && S.coh.waitingFor && !didNotStart() ? `<div class="zc-toast" role="status" id="cohwaiting">Waiting for the Organizer or Host to start the game.</div>` : ""}${S.coh && didNotStart() ? `<div class="zc-alert" id="didnotstart" role="status"><h3>This game did not start.</h3><p>Guest details have been erased.</p></div>` : ""}${nextHtml()}${steps().map(secHtml).join("")}${helpHtml()}</div></div>`, true);
   }
   const loadingView = () => frame(`<div class="zc-body"><div class="zc-main"><div class="zc-toast" role="status">${esc(S.note || "Loading…")}</div>${eid && isOrg() ? "" : ""}</div></div>`, false);
 
@@ -1317,7 +1346,7 @@
   // ---------- Quick setup: the first three steps as one form, with a real date and time picker (the AI route and the browser-AI route use it) ----------
   function quickDefault() {
     const t = new Date(istNow().getTime() + 86400000);
-    const f = { occ: "Other", oname: "", day: "other", dayo: istDateStr(t), time: "other", timeo: "16:00", cap: "250", tix: "1", spd: "9", rnd: "1", join: "list", mode: "auto", start: "auto", ver: "mobile", emp: false, inv: false, per: "4", cats: ["family", "colleagues"], bundle: "Classic", hs: {}, ph: "" };
+    const f = { occ: "Other", oname: "", day: "other", dayo: istDateStr(t), time: "other", timeo: "16:00", cap: "250", tix: "1", spd: "9", rnd: "1", join: "list", mode: "auto", start: "auto", after: "keep", ver: "mobile", emp: false, inv: false, per: "4", cats: ["family", "colleagues"], bundle: "Classic", hs: {}, ph: "" };
     for (const [k] of HS) f.hs[k] = { on: false, n: 1, pt: "later", pd: "", orig: [] };
     applyBundleTo(f, "Classic");
     return f;
@@ -1340,7 +1369,7 @@
     const startMs = Date.UTC(y, mo - 1, d, h, mi) - 5.5 * 3600000, rewards = [];
     for (const [k] of HS) { const hh = f.hs[k]; if (k === "full2" || !hh.on) continue; const t = prizeText(hh.pt, hh.pd).slice(0, 80); for (let o = 1; o <= winnersOf(hh, k); o++) rewards.push({ pattern: k, ordinal: o, text: t }); }
     const name = (f.oname || "").trim() || (f.occ !== "Other" ? f.occ : "");
-    return { name, occ: f.occ === "Other" ? "EVENT" : f.occ.toUpperCase().replace(/[^A-Z0-9]+/g, "-"), startMs, cap: Number(f.cap), ...(Number(f.cap) > 0 && Number(f.cap) <= DEMO_CAP ? { demo: true } : {}), /* "Up to 10 people" is the free demo game: it must be made as one, or it would ask for payment at the start time */ tickets: Number(f.tix) || 1, speed: Number(f.spd), rounds: Number(f.rnd), who: f.emp ? "list" : f.join === "anyone" ? "anyone" : "list", invite: !f.emp && !!f.inv, callMode: f.mode === "host" ? "host" : "auto", startMode: f.start === "manual" ? "manual" : "auto", verify: ["id", "either", "both"].includes(f.ver) ? f.ver : "mobile", employeesOnly: !!f.emp, rewards };
+    return { name, occ: f.occ === "Other" ? "EVENT" : f.occ.toUpperCase().replace(/[^A-Z0-9]+/g, "-"), startMs, cap: Number(f.cap), ...(Number(f.cap) > 0 && Number(f.cap) <= DEMO_CAP ? { demo: true } : {}), /* "Up to 10 people" is the free demo game: it must be made as one, or it would ask for payment at the start time */ tickets: Number(f.tix) || 1, speed: Number(f.spd), rounds: Number(f.rnd), who: f.emp ? "list" : f.join === "anyone" ? "anyone" : "list", invite: !f.emp && !!f.inv, callMode: f.mode === "host" ? "host" : "auto", startMode: f.start === "manual" ? "manual" : "auto", afterPrizes: f.after === "end" ? "end" : "keep", verify: ["id", "either", "both"].includes(f.ver) ? f.ver : "mobile", employeesOnly: !!f.emp, rewards };
   }
 
   // ---------- Phase 4: "Continue with Google" and the Host's Finish setup (docs/ROLES_AND_CONSOLE_SPEC_4.md, C) ----------
@@ -1400,7 +1429,7 @@
   }
   S.pp = { list: null, err: "", limit: 0, common: "", me: null, waiting: null, approved: [], decided: [], confirm: "", sent: {}, sentFor: "", sum: "", wrong: [] };
   S.shield = ss.get("ctz-shield") === "1"; S.acctOpen = null; S.mkrole = "organizer"; S.screen = "";
-  const GROUPS = { 1: ["occ", "oname", "day", "dayo", "time", "timeo"], 2: ["cap", "tix", "spd", "rnd", "who", "inv", "per", "cats", "demo", "mode", "start"], 3: ["hs", "ph", "bundle"], 4: ["opN", "op", "midN", "mid", "clN", "cl", "lucky", "brand"] };
+  const GROUPS = { 1: ["occ", "oname", "day", "dayo", "time", "timeo"], 2: ["cap", "tix", "spd", "rnd", "who", "inv", "per", "cats", "demo", "mode", "start", "after"], 3: ["hs", "ph", "bundle"], 4: ["opN", "op", "midN", "mid", "clN", "cl", "lucky", "brand"] };
   /** Brings the form in line with what the server holds, step by step, but never over a step the person has started changing (an AI may be changing the draft at the same time). */
   const snapGroup = (n) => { S.fSnap = S.fSnap || {}; for (const k of GROUPS[n]) S.fSnap[k] = JSON.stringify(S.f[k]); }; const unsavedSteps = () => { try { if (!S.f || !S.fSnap || S.fFor !== eid) return []; return [1, 2, 3, 4].filter((n) => GROUPS[n].filter((k) => k !== "demo").some((k) => S.fSnap[k] !== undefined && JSON.stringify(S.f[k]) !== S.fSnap[k])); } catch { return []; } }; function syncForm() {
     const fresh = formFromServer();
@@ -1458,7 +1487,7 @@
       if (ACT === "publish" && S.draft && !S.actOpened) { S.pubOpen = true; S.actOpened = true; } // the AI's hand-over link: the publish card is open and waiting for the organizer's own tap
       let pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed; S.whoCanJoin = pr.whoCanJoin || S.whoCanJoin;
       while (S.people.length < pr.total) { const more = await call("GET", `/api/z/${eid}/participants?offset=${S.people.length}`); if (!more.participants.length) break; S.people.push(...more.participants); } // a long list arrives in pages
-      S.cfg = { name: pr.name, tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, opening: pr.opening || [], closing: pr.closing || [], rounds: pr.rounds || 1, invites: pr.invites, callMode: S.info.callMode === "host" ? "host" : "auto", startMode: S.info.startMode === "manual" ? "manual" : "auto", demo: pr.demo === true, verify: pr.verify, employeesOnly: pr.employeesOnly === true, ties: pr.ties }; // verify, employeesOnly and ties must come back into the form, or the next Save would send the defaults and wipe them
+      S.cfg = { name: pr.name, tickets: pr.tickets, rewards: pr.rewards, breaks: pr.breaks, opening: pr.opening || [], closing: pr.closing || [], rounds: pr.rounds || 1, invites: pr.invites, callMode: S.info.callMode === "host" ? "host" : "auto", startMode: S.info.startMode === "manual" ? "manual" : "auto", keepCalling: S.info.afterPrizes === "keep", demo: pr.demo === true, verify: pr.verify, employeesOnly: pr.employeesOnly === true, ties: pr.ties }; // verify, employeesOnly and ties must come back into the form, or the next Save would send the defaults and wipe them
       try { S.sum = await call("GET", `/api/z/${eid}/summary`); } catch { S.sum = S.sum || null; }
       if (canRun() && Number(S.sum && S.sum.credit) > 0) { try { S.creditInfo = await call("GET", "/api/org/credit"); } catch { S.creditInfo = null; } } else S.creditInfo = null;
       try { S.claims = (await call("GET", `/api/z/${eid}/claims`)).claims; } catch (e) { if (isOrg()) throw e; S.claims = []; }
@@ -1632,7 +1661,7 @@
       const f = S.f;
       if (role() === "cohost") { markDone(n); return advance(n); }
       if (n === 1) { const name = f.occ === "Other" ? (f.oname || "").trim() : f.occ, ms = startOf(f); if (!(ms > Date.now())) throw new Error((f.day === "other" ? f.dayo : f.day) === istDateStr(istNow()) ? "That time has already passed today. Tap a later time, or tap Tomorrow." : MSG_PAST); const lastMs = S.info && S.info.moveUntilMs ? S.info.moveUntilMs - 1 : Date.now() + 30 * 86400000; if (ms > lastMs) throw new Error(S.info && S.info.moveUntilMs ? "Your credit and your game last 365 days from the payment, so a paid game can be moved to any day within 365 days of it. Please pick an earlier date." : "A game that is not paid for yet can start at most 30 days from today. Once it is paid, the Organizer can move it to any day within 365 days of the payment."); mark(); await call("PATCH", `/api/z/${eid}/settings`, { name, startRound: ZG.roundAt(ms) } /* who calls the numbers is saved by step 2 only */); }
-      else if (n === 2) { { const c = Number(f.cap); if (!Number.isInteger(c) || c < 1) throw new Error("Please give the number of players, for example 180."); if (c > 10000) throw new Error("For more than 10,000 players, please write to hello@corporatetambola.com and we will arrange it."); f.demo = c <= DEMO_CAP ? "1" : "0"; /* the number just typed decides, not the last time the page was drawn */ { const bought = paidPack(); if (bought && c > bought) throw new Error("Your payment covers up to " + bought + " people. Choose " + bought + " or fewer, or make a new game like this one in step 7 for a bigger crowd."); } } if (!f.emp && f.inv && !f.cats.length) throw new Error("Pick at least one kind of guest."); mark(); await call("PATCH", `/api/z/${eid}/settings`, { callMode: f.mode === "host" ? "host" : "auto", startMode: f.start === "manual" ? "manual" : "auto", cap: Number(f.cap), callSeconds: Number(f.spd), tickets: Number(f.tix), rounds: Number(f.rnd), whoCanJoin: f.emp || f.who !== "anyone" ? "list" : "anyone", verify: f.ver, employeesOnly: !!f.emp, invites: { on: !f.emp && !!f.inv, per: Number(f.per) || 4, cats: f.cats }, ...(paidPack() || (S.demo && !S.draft) ? {} : { demo: f.demo === "1" }) }); try { S.sum = await call("GET", `/api/z/${eid}/summary`); } catch { /* shown at the next load */ } /* the page must know the new audience and what people give (employee ID or mobile) before step 6 reads the list */ }
+      else if (n === 2) { { const c = Number(f.cap); if (!Number.isInteger(c) || c < 1) throw new Error("Please give the number of players, for example 180."); if (c > 10000) throw new Error("For more than 10,000 players, please write to hello@corporatetambola.com and we will arrange it."); f.demo = c <= DEMO_CAP ? "1" : "0"; /* the number just typed decides, not the last time the page was drawn */ { const bought = paidPack(); if (bought && c > bought) throw new Error("Your payment covers up to " + bought + " people. Choose " + bought + " or fewer, or make a new game like this one in step 7 for a bigger crowd."); } } if (!f.emp && f.inv && !f.cats.length) throw new Error("Pick at least one kind of guest."); mark(); await call("PATCH", `/api/z/${eid}/settings`, { callMode: f.mode === "host" ? "host" : "auto", startMode: f.start === "manual" ? "manual" : "auto", afterPrizes: f.after === "end" ? "end" : "keep", cap: Number(f.cap), callSeconds: Number(f.spd), tickets: Number(f.tix), rounds: Number(f.rnd), whoCanJoin: f.emp || f.who !== "anyone" ? "list" : "anyone", verify: f.ver, employeesOnly: !!f.emp, invites: { on: !f.emp && !!f.inv, per: Number(f.per) || 4, cats: f.cats }, ...(paidPack() || (S.demo && !S.draft) ? {} : { demo: f.demo === "1" }) }); try { S.sum = await call("GET", `/api/z/${eid}/summary`); } catch { /* shown at the next load */ } /* the page must know the new audience and what people give (employee ID or mobile) before step 6 reads the list */ }
       else if (n === 3) { const rewards = rewardsOut(f); if (!rewards.length) throw new Error("Tick at least one prize."); mark(); await call("PATCH", `/api/z/${eid}/settings`, { tickets: Number(f.tix), ties: f.ties === "share" ? "share" : "next", rewards }); }
       else if (n === 4) {
         // The company strip is optional and never stops a person: a name without a colour gets the first colour; a logo or colour without a name is simply not used yet (the game is saved and the person is told, calmly).
@@ -1654,7 +1683,7 @@
 
   // ---------- quick setup: make the draft ----------
   async function makeDraft(r, id, hasName) {
-    const res = await call("POST", "/api/z", { id, ...(r.name ? { name: r.name } : {}), startRound: ZG.roundAt(r.startMs), callSeconds: r.speed, cap: r.cap, tickets: r.tickets, rounds: r.rounds, rewards: r.rewards, whoCanJoin: r.who, ...(r.callMode === "host" ? { callMode: "host" } : {}), ...(r.startMode === "manual" ? { startMode: "manual" } : {}), ...(r.demo ? { demo: true } : {}) });
+    const res = await call("POST", "/api/z", { id, ...(r.name ? { name: r.name } : {}), startRound: ZG.roundAt(r.startMs), callSeconds: r.speed, cap: r.cap, tickets: r.tickets, rounds: r.rounds, rewards: r.rewards, whoCanJoin: r.who, ...(r.callMode === "host" ? { callMode: "host" } : {}), ...(r.startMode === "manual" ? { startMode: "manual" } : {}), ...(r.afterPrizes ? { afterPrizes: r.afterPrizes } : {}), ...(r.demo ? { demo: true } : {}) });
     return res;
   }
   async function afterCreate(id, r) {
@@ -1976,7 +2005,7 @@
     };
     all("[data-ctl]", (b) => (b.onclick = async () => {
       const action = b.dataset.ctl;
-      if (S.ctlBusy) return; if (action === "stop" && !(await askSure("End the game for everyone?", "Every guest's phone stops at the same number. This cannot be undone.", "Yes, end the game for everyone", "No, keep playing"))) return; S.ctlBusy = true; S.ctlNote = ""; redraw();
+      if (S.ctlBusy) return; if (action === "pause" && !(await askSure("Are you sure? Numbers stop for everybody.", "The game pauses on every phone and on the big screen until you press Resume. It ends by itself after 30 minutes.", "Yes, pause the game", "No, keep playing"))) return; if (action === "stop" && !(await askSure("End the game for everyone?", "Every guest's phone stops at the same number. This cannot be undone.", "Yes, end the game for everyone", "No, keep playing"))) return; S.ctlBusy = true; S.ctlNote = ""; redraw();
       try { const r = await Promise.race([TBControl.publish(eid, { token: secret, base: BASE, prefix: "/api/z" }, action, action === "pause" ? { pauseForRounds: 600 } : action === "extend" ? { addRounds: 600 } : {}), new Promise((_, no) => setTimeout(() => no(new Error("Failed to fetch")), 30000))]); S.ctlNote = r.status === 200 ? CTL_SENT[action](leadSec()) : ctlWords({ message: (r.data && r.data.error) || "Not accepted" }); } catch (e) { S.ctlNote = ctlWords(e); } S.ctlBusy = false; /* frees the buttons after 30 s */
       refreshEng();
     }));

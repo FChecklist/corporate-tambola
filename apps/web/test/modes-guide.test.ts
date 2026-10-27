@@ -16,6 +16,7 @@ test("each message the Start button and the two start/play settings can show is 
     [422, GO_REFUSALS.early], [422, GO_REFUSALS.again], [422, GO_REFUSALS.auto], [422, GO_REFUSALS.lead], [422, NEXT_REFUSALS.start], [422, NEXT_REFUSALS.early],
     [422, NOT_BEFORE_MSG], [409, STARTED_MSG], [409, NEEDS_CONSOLE_MSG], [409, MANUAL_LIMIT_MSG], [409, START_LIMIT_MSG],
     [400, "How does the game start: by itself at the time (auto) or when you press Start (manual)."],
+    [400, "When every prize is won: keep calling until all 90 numbers (keep), or end the game (end)."],
     [400, "The start time has passed. Press Start, or pick a new start time in the future."],
   ];
   for (const [status, message] of msgs) {

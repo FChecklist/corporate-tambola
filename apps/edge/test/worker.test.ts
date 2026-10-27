@@ -53,7 +53,7 @@ describe("joining", () => {
     expect(r.startRound).toBe(FAR_START);
     expect(r.callSeconds).toBe(6);
     expect(r.pid).toMatch(/^1x[0-9a-f]{12}$/); // seat number + hash: the seat makes the ticket collision-free
-    expect(Object.keys(r).sort()).toEqual(["breaks", "callMode", "callSeconds", "checkin", "closing", "employeesOnly", "invites", "jr", "opening", "pid", "rewards", "rounds", "startMode", "startRound", "tickets", "ties", "trackClaims", "verify"]);
+    expect(Object.keys(r).sort()).toEqual(["afterPrizes", "breaks", "callMode", "callSeconds", "checkin", "closing", "employeesOnly", "invites", "jr", "opening", "pid", "rewards", "rounds", "startMode", "startRound", "tickets", "ties", "trackClaims", "verify"]);
   });
   test("the same number joining twice, even typed differently, is one participant and one write", async () => {
     const a = await (await call("POST", "/api/z/ENG1/join", { phone: "+91 98765-43210" })).json() as any;

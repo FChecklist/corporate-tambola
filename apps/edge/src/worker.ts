@@ -87,8 +87,16 @@ async function mirrorControl(env: Env, id: string) {
   try { const f = await readPublished(d1kv(env), id); if (f) await env.CONTROL_R2.put(controlKey(id), JSON.stringify({ ...f, ...(await liveField(env, id)) }), { httpMetadata: { contentType: "application/json", cacheControl: "public, max-age=3" } }); } catch { /* the Worker route still serves it */ }
 }
 /** The game's schedule and modes as they are NOW, riding in the control file every phone, the big screen and the Host's screen already poll: a change made after publishing (a new time, another mode) reaches them all with no new link and no extra requests. */
-async function liveField(env: Env, id: string): Promise<{ live?: ReturnType<typeof liveOf> }> {
-  try { const ge = await env.DB.prepare("SELECT tickets, config, start_round, call_seconds FROM engagement WHERE id=?").bind(id).first<any>(); return ge ? { live: liveOf(ge, cfgOf(ge)) } : {}; } catch { return {}; }
+async function liveField(env: Env, id: string): Promise<{ live?: ReturnType<typeof liveOf>; by?: string[] }> {
+  try { const ge = await env.DB.prepare("SELECT tickets, config, start_round, call_seconds FROM engagement WHERE id=?").bind(id).first<any>(); return ge ? { live: liveOf(ge, cfgOf(ge)), by: await readBy(env.DB, id) } : {}; } catch { return {}; }
+}
+/** Who sent each control message, by sequence number: only the words "Organizer" or "Host", never a name or a key. Rides in the control file so a phone or the big screen can say "paused by the Organizer". */
+async function readBy(db: D1, id: string): Promise<string[]> {
+  try { const r = await db.prepare("SELECT v FROM kv WHERE k=?").bind(`ctlby/${id}`).first<{ v: string }>(); const a = r ? JSON.parse(r.v) : []; return Array.isArray(a) ? a.map((x: unknown) => (x === "Host" ? "Host" : "Organizer")) : []; } catch { return []; }
+}
+async function recordBy(db: D1, id: string, seq: number, who: "Organizer" | "Host"): Promise<void> {
+  if (!Number.isInteger(seq) || seq < 1 || seq > 500) return;
+  try { const a = await readBy(db, id); while (a.length < seq - 1) a.push("Organizer"); a[seq - 1] = who; await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`ctlby/${id}`, JSON.stringify(a)).run(); } catch { /* best effort: the banner then says "the Organizer" */ }
 }
 export const RETENTION_DAYS = 365;
 /** An engagement that was never published is forgotten after this many days. */
@@ -109,8 +117,8 @@ const CLAIMS_PAGE = 500;
 /** The part of the settings every phone needs, public by design: how many tickets, what each house wins, and when the brand breaks are. */
 /** The brand strip as phones see it: the full brand (with the logo) from `info`; everywhere else only name and colour (a logo can be 40 KB and a 10,000-person list must not carry it). */
 const brandOut = (c: EngagementCfg, withLogo: boolean) => (c.brand ? { brand: withLogo ? c.brand : { name: c.brand.name, color: c.brand.color, ...(c.brand.logo ? { hasLogo: true } : {}) } } : {});
-const pub = (e: any, withLogo = false) => { const c = cfgOf(e); return { checkin: checkinRequired(e), tickets: c.tickets, ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, callMode: c.callMode ?? "auto", startMode: c.startMode ?? "auto", ...(c.name ? { name: c.name } : {}), ...(c.demo ? { demo: true } : {}), verify: c.verify ?? "number", employeesOnly: !!c.employeesOnly, ...brandOut(c, withLogo) }; };
-const cfgJson = (c: EngagementCfg) => JSON.stringify({ ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.callMode === "host" ? { callMode: "host" } : {}), ...(c.startMode === "manual" ? { startMode: "manual" } : {}), ...(c.name ? { name: c.name } : {}), ...(c.brand ? { brand: c.brand } : {}), ...(c.demo ? { demo: true } : {}), ...(c.verify ? { verify: c.verify } : {}), ...(c.employeesOnly ? { employeesOnly: true } : {}) });
+const pub = (e: any, withLogo = false) => { const c = cfgOf(e); return { checkin: checkinRequired(e), tickets: c.tickets, ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, callMode: c.callMode ?? "auto", startMode: c.startMode ?? "auto", afterPrizes: c.keepCalling ? "keep" : "end", ...(c.name ? { name: c.name } : {}), ...(c.demo ? { demo: true } : {}), verify: c.verify ?? "number", employeesOnly: !!c.employeesOnly, ...brandOut(c, withLogo) }; };
+const cfgJson = (c: EngagementCfg) => JSON.stringify({ ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.callMode === "host" ? { callMode: "host" } : {}), ...(c.startMode === "manual" ? { startMode: "manual" } : {}), ...(c.keepCalling ? { keepCalling: true } : {}), ...(c.name ? { name: c.name } : {}), ...(c.brand ? { brand: c.brand } : {}), ...(c.demo ? { demo: true } : {}), ...(c.verify ? { verify: c.verify } : {}), ...(c.employeesOnly ? { employeesOnly: true } : {}) });
 /** Host mode (a Host presses a button for each number) makes every phone ask for the Host's presses every few seconds: the same size limit as the pause. */
 
 /** Privacy and lifecycle: sealed personal data, the role / inviter / invite kind / source of a seat, when each game ended, the winners record that outlives the personal data, and the votes that tell us a game is over. */
@@ -207,7 +215,7 @@ export const SCHEMA: string[] = [
 const PATTERNS = new Set<string>([...HOUSE_ORDER.filter((k) => k !== "unlucky"), "lucky"]); // houses a phone may claim (Unlucky is never claimed: it is decided by comparing tickets)
 /** What the organizer set for this engagement (tickets per participant, reward lines, brand breaks); plain defaults when nothing was set. */
 const cfgOf = (e: { tickets?: number; config?: string | null }): EngagementCfg => {
-  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, ties: j.ties, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, opening: j.opening, closing: j.closing, name: j.name, brand: j.brand, demo: j.demo, verify: j.verify, employeesOnly: j.employeesOnly, callMode: j.callMode === "host" ? "host" : undefined, startMode: j.startMode === "manual" ? "manual" : undefined }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* fall through */ }
+  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, ties: j.ties, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, opening: j.opening, closing: j.closing, name: j.name, brand: j.brand, demo: j.demo, verify: j.verify, employeesOnly: j.employeesOnly, callMode: j.callMode === "host" ? "host" : undefined, startMode: j.startMode === "manual" ? "manual" : undefined, afterPrizes: j.keepCalling ? "keep" : undefined }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* fall through */ }
   return defaultCfg();
 };
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
@@ -1283,7 +1291,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!sub && req.method === "GET") return sharedRead(req, 1, async () => { // the pause file every phone asks for every few seconds: one answer per place per second is shared by all of them (far fewer database reads); a pause reaches phones at most a second later
       const f0 = await readPublished(kv, cid!);
       const ge = await env.DB.prepare("SELECT id, pack, start_round, call_seconds, tickets, config, cancelled_ms, unplayed_ms FROM engagement WHERE id=?").bind(cid).first<{ id: string; pack: number | null; start_round: number; call_seconds: number; tickets: number; config: string | null; cancelled_ms: number | null; unplayed_ms: number | null }>();
-      const f = f0 && ge ? { ...f0, live: liveOf(ge, cfgOf(ge)) } : f0;
+      const f = f0 && ge ? { ...f0, live: liveOf(ge, cfgOf(ge)), by: await readBy(env.DB, cid!) } : f0;
       if (ge?.cancelled_ms) return new Response(JSON.stringify({ ...(f ?? {}), cancelled: true }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } }); // phones and the big screen: "This game was cancelled by the organizer"
       if (ge?.unplayed_ms) return new Response(JSON.stringify({ ...(f ?? {}), didNotStart: true }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } }); // "This game did not start. Your details have been erased."
       if (ge && ge.pack === 0 && roundMs(ge.start_round) - LOCK_LEAD_MS <= now && (await isPublished(env, ge))) // published, unpaid, start time reached: phones hold, nothing is shown
@@ -1300,9 +1308,11 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       const ge = await env.DB.prepare("SELECT tickets, config, start_round FROM engagement WHERE id=?").bind(cid).first<{ tickets: number; config: string | null; start_round: number }>();
       if (b.message?.action === "go" && ge && now < roundMs(ge.start_round) - 3000) return json({ error: NOT_BEFORE_MSG }, 422); // Start is never possible before the scheduled time, whatever the sender's own clock says
       const r = await publishControl(kv, cid!, b.message, ge ? hostGameOf(cfgOf(ge), ge.start_round) : undefined); // a Host's "next" press is checked against this game's breaks and rounds; a Start against the scheduled time
-      if (r.ok && !(r as any).duplicate && b.message?.action === "go") { // who pressed Start, and when, in the plain list the Organizer and the Host can read (the signature says which key it was)
+      if (r.ok && !(r as any).duplicate && ["go", "pause", "resume", "extend", "stop"].includes(b.message?.action)) { // who pressed Start / Pause / Resume / End, and when: the plain list the Organizer and the Host read, and the "paused by" line everybody sees (the signature says which key it was)
         const pf = await readPublished(kv, cid!);
-        await logChanges(env.DB, cid!, now, pf && b.message.sig && (await verifyControlSig(pf.pubKey, b.message)) ? "The Organizer" : "A Host", ["Start was pressed"]);
+        const org = !!(pf && b.message.sig && (await verifyControlSig(pf.pubKey, b.message)));
+        await recordBy(env.DB, cid!, Number(b.message.seq), org ? "Organizer" : "Host");
+        await logChanges(env.DB, cid!, now, org ? "The Organizer" : "A Host", [({ go: "Start was pressed", pause: "The game was paused", resume: "The game was resumed", extend: "The pause was made longer", stop: "The game was ended" } as Record<string, string>)[b.message.action]!]);
       }
       // The write guard is charged only for a message that was ACCEPTED (its signature held): anyone can post garbage here, and charging first let a script use up the day's budget and make every join answer "very busy". A pause or stop also still works on a day the budget is spent.
       if (r.ok && !(r as any).duplicate) { await spend(env, now); await mirrorControl(env, cid!); }
@@ -1417,7 +1427,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     let createCap = now + MAX_AHEAD_MS; // with a pack already bought (an entitlement) the engagement is paid for by the organizer: up to 365 days from that payment
     if (!a.plat && a.org) { const en = await env.DB.prepare("SELECT id FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(a.org, b.cap).first<{ id: string }>(); const end = en ? await entitlementWindowEndMs(env.DB, en.id) : null; if (end) createCap = end - 1; }
     if (roundMs(b.startRound) > createCap) return json({ error: createCap > now + MAX_AHEAD_MS ? AFTER_PAID_WINDOW(createCap + 1) : TOO_FAR, code: createCap > now + MAX_AHEAD_MS ? "after-paid-window" : "too-far" }, 400);
-    const vc = validateCfg({ tickets: b.tickets, ties: b.ties, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, opening: b.opening, closing: b.closing, name: b.name, brand: b.brand, demo: b.demo, verify: b.verify, employeesOnly: b.employeesOnly, callMode: b.callMode, startMode: b.startMode });
+    const vc = validateCfg({ tickets: b.tickets, ties: b.ties, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, opening: b.opening, closing: b.closing, name: b.name, brand: b.brand, demo: b.demo, verify: b.verify, employeesOnly: b.employeesOnly, callMode: b.callMode, startMode: b.startMode, afterPrizes: b.afterPrizes });
     if (!vc.ok) return json({ error: vc.error }, 400);
     if (vc.cfg.demo && b.cap > DEMO_CAP) return json({ error: DEMO_CAP_MSG, code: "demo-cap" }, 400); // a demo game is small; a bigger one is a real game
     { const big = modeTooBig(vc.cfg, b.cap); if (big) return json({ error: big, code: "manual-limit" }, 409); }
@@ -1887,7 +1897,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       status: didNotStart ? "did not start (closed)" : cancelled ? "cancelled by the organizer" : isDraft ? (demoGame ? "draft (DEMO GAME, free, up to 10 people)" : "draft") : demoGame ? "published, DEMO GAME (free, up to 10 people; no payment needed)" : unpaid ? (locked ? "published, NOT PAID, held because the start time passed" : "published, payment due before the start") : "published and paid",
       ...(demoGame ? { demo: true, demoCap: DEMO_CAP } : {}),
       startsAtIST: istTime(roundMs(e.start_round)), startMs: roundMs(e.start_round), startRound: e.start_round, callSeconds: e.call_seconds, limit: e.cap, closed: !!e.closed, whoCanJoin: e.closed ? "list" : "anyone", coHostLimit: e.cohost_limit ?? COHOST_LIMIT_DEFAULT, guestInvites: cfgOf(e).invites,
-      tickets: c.tickets, ties: c.ties ?? "share", rounds: c.rounds, rewards: c.rewards, breaks: c.breaks, opening: c.opening, closing: c.closing, invites: c.invites, verify: c.verify ?? "mobile", employeesOnly: !!c.employeesOnly, callMode: c.callMode ?? "auto", startMode: c.startMode ?? "auto", brandMomentsAllowed: brandMomentsFor(c.tickets), participants: n, ...(c.name ? { name: c.name } : {}), ...(c.brand ? { brand: c.brand } : {}),
+      tickets: c.tickets, ties: c.ties ?? "share", rounds: c.rounds, rewards: c.rewards, breaks: c.breaks, opening: c.opening, closing: c.closing, invites: c.invites, verify: c.verify ?? "mobile", employeesOnly: !!c.employeesOnly, callMode: c.callMode ?? "auto", startMode: c.startMode ?? "auto", afterPrizes: c.keepCalling ? "keep" : "end", brandMomentsAllowed: brandMomentsFor(c.tickets), participants: n, ...(c.name ? { name: c.name } : {}), ...(c.brand ? { brand: c.brand } : {}),
       paid: !unpaid, payment, ...(unpaid ? { pack: PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null, priceInr: PACKS.find((x) => x[0] >= e.cap) ? price(PACKS.find((x) => x[0] >= e.cap)![0], "INR").total : null, startsAt: istTime(roundMs(e.start_round)), payUntil: istTime(await erasureOf(env, e)) } : { pack: e.pack }),
       gameMinutes: Math.round((90 * e.call_seconds * c.rounds + c.breaks.reduce((t: number, b: any) => t + b.seconds, 0) + (c.rounds - 1) * 90) / 60),
       links, nextSteps, consoleUrl: `${origin}/zc.html?e=${e.id}`, ...(isDraft ? {} : { shareUrl: `${origin}/z.html?e=${e.id}` }), ...(unpaid && !isDraft ? { payUrl: `${origin}/pay.html?e=${e.id}` } : {}) });
@@ -2089,14 +2099,14 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!b) return json({ error: "Check the details." }, 400);
     if (b.whoCanJoin !== undefined && b.whoCanJoin !== "list" && b.whoCanJoin !== "anyone") return json({ error: "Who can join: choose \"list\" (only people on a list) or \"anyone\" (anyone with the link)." }, 400);
     if (b.coHostLimit !== undefined && (!Number.isInteger(b.coHostLimit) || b.coHostLimit < COHOST_LIMIT_MIN || b.coHostLimit > COHOST_LIMIT_MAX)) return json({ error: `A Co-host can list ${COHOST_LIMIT_MIN} to ${COHOST_LIMIT_MAX} people.` }, 400);
-    const vc = validateCfg({ tickets: b.tickets, ties: b.ties, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, invites: b.invites !== undefined ? b.invites : b.guestInvites, opening: b.opening, closing: b.closing, name: b.name, brand: b.brand, demo: b.demo, verify: b.verify, employeesOnly: b.employeesOnly, callMode: b.callMode, startMode: b.startMode }, cfgOf(e)); // guestInvites is the console's name for invites
+    const vc = validateCfg({ tickets: b.tickets, ties: b.ties, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, invites: b.invites !== undefined ? b.invites : b.guestInvites, opening: b.opening, closing: b.closing, name: b.name, brand: b.brand, demo: b.demo, verify: b.verify, employeesOnly: b.employeesOnly, callMode: b.callMode, startMode: b.startMode, afterPrizes: b.afterPrizes }, cfgOf(e)); // guestInvites is the console's name for invites
     if (!vc.ok) return json({ error: vc.error }, 400);
     const wasDemo = isDemo(e);
     if (wasDemo && !vc.cfg.demo && e.pack !== 0 && !a.plat) return json({ error: DEMO_PAY_MSG, code: "demo-pay" }, 402); // a published demo becomes a real game only through a paid conversion (pay.ts), never by flipping the mark
     const next = { start_round: b.startRound ?? e.start_round, call_seconds: b.callSeconds ?? e.call_seconds, cap: b.cap ?? e.cap, closed: vc.cfg.employeesOnly ? 1 : b.whoCanJoin !== undefined ? (b.whoCanJoin === "list" ? 1 : 0) : b.closed === undefined ? e.closed : b.closed ? 1 : 0, cohost_limit: b.coHostLimit ?? e.cohost_limit ?? null }; // whoCanJoin "list" is the same switch as the older `closed`
     if (Number.isInteger(next.call_seconds) && !GAPS.includes(next.call_seconds)) return json({ error: GAP_MSG }, 400);
     { const big = Number.isInteger(next.cap) ? modeTooBig(vc.cfg, next.cap) : null; if (big) return json({ error: big, code: "manual-limit" }, 409); }
-    if (needsControl(vc.cfg) && !needsControl(cfgNow) && !(await readPublished(d1kv(env), eid!)) && ((await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0) > 0) return json({ error: NEEDS_CONSOLE_MSG, code: "console-first" }, 409); // phones that already joined can only learn of a Start / Next button through the signed control file
+    if (((needsControl(vc.cfg) && !needsControl(cfgNow)) || !!vc.cfg.keepCalling !== !!cfgNow.keepCalling) && !(await readPublished(d1kv(env), eid!)) && ((await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0) > 0) return json({ error: NEEDS_CONSOLE_MSG, code: "console-first" }, 409); // phones that already joined can only learn of a Start / Next button through the signed control file
     if (!Number.isInteger(next.start_round)) return json({ error: "Pick the day and time the game starts." }, 400);
     if (!Number.isInteger(next.call_seconds) || next.call_seconds % 3 || next.call_seconds < 6) return json({ error: GAP_MSG }, 400);
     if (!Number.isInteger(next.cap) || next.cap < 1 || next.cap > 100000) return json({ error: "The number of people must be a whole number from 1 up. Please check it." }, 400);
@@ -2131,7 +2141,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       await logChanges(env.DB, eid!, now, whoLabel(a, a.kind === "host" && req.headers.get("x-ct-link") === "1"), changed);
       if (changed.length) await mirrorControl(env, eid!);
     }
-    return json({ ok: true, startMode: vc.cfg.startMode ?? "auto", startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed, whoCanJoin: next.closed ? "list" : "anyone", coHostLimit: next.cohost_limit ?? COHOST_LIMIT_DEFAULT, guestInvites: vc.cfg.invites, tickets: vc.cfg.tickets, rewards: vc.cfg.rewards, breaks: vc.cfg.breaks, opening: vc.cfg.opening, closing: vc.cfg.closing, ...(vc.cfg.name ? { name: vc.cfg.name } : {}), ...(vc.cfg.brand ? { brand: vc.cfg.brand } : {}), ...(vc.cfg.demo ? { demo: true } : {}), rounds: vc.cfg.rounds, invites: vc.cfg.invites, callMode: vc.cfg.callMode ?? "auto" });
+    return json({ ok: true, afterPrizes: vc.cfg.keepCalling ? "keep" : "end", startMode: vc.cfg.startMode ?? "auto", startRound: next.start_round, callSeconds: next.call_seconds, cap: next.cap, closed: !!next.closed, whoCanJoin: next.closed ? "list" : "anyone", coHostLimit: next.cohost_limit ?? COHOST_LIMIT_DEFAULT, guestInvites: vc.cfg.invites, tickets: vc.cfg.tickets, rewards: vc.cfg.rewards, breaks: vc.cfg.breaks, opening: vc.cfg.opening, closing: vc.cfg.closing, ...(vc.cfg.name ? { name: vc.cfg.name } : {}), ...(vc.cfg.brand ? { brand: vc.cfg.brand } : {}), ...(vc.cfg.demo ? { demo: true } : {}), rounds: vc.cfg.rounds, invites: vc.cfg.invites, callMode: vc.cfg.callMode ?? "auto" });
   }
   return json({ error: "Not found" }, 404);
 }

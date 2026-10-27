@@ -50,7 +50,7 @@ export const personalDeleteAt = (endMs: number) => endMs + PURGE_AFTER_MS;
 export const reportLinkUntil = (endMs: number) => endMs + REPORT_LINK_MS;
 
 export function cfgOfRow(e: { tickets?: number; config?: string | null }): EngagementCfg {
-  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, verify: j.verify, employeesOnly: j.employeesOnly, callMode: j.callMode === "host" ? "host" : undefined, startMode: j.startMode === "manual" ? "manual" : undefined }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* plain defaults */ }
+  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, verify: j.verify, employeesOnly: j.employeesOnly, callMode: j.callMode === "host" ? "host" : undefined, startMode: j.startMode === "manual" ? "manual" : undefined, afterPrizes: j.keepCalling ? "keep" : undefined }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* plain defaults */ }
   return (validateCfg({}) as { ok: true; cfg: EngagementCfg }).cfg;
 }
 
@@ -317,7 +317,7 @@ async function baseData(env: LifeEnv, e: any, cfg: EngagementCfg, sch: Awaited<R
   const won = Math.max(0, ...wrows.filter((w: any) => (w.round ?? 1) === cfg.rounds).map((w: any) => (w.idx ?? -1) + 1));
   const numbersCalled = held ? 0 : Math.min(90, Math.max(called, won));
   const stoppedByOrganizer = !!sch.st && sch.st.stopRound !== null && roundMs(sch.st.stopRound) <= endMs + 60_000;
-  const endReason = held ? "The game did not start." : numbersCalled >= 90 && !stoppedByOrganizer ? "All 90 numbers were called." : stoppedByOrganizer ? `The organizer ended the game after ${numbersCalled} numbers.` : early ? `Every prize was awarded, so the game ended early, after ${numbersCalled} numbers.` : `The game ended after ${numbersCalled} numbers.`;
+  const endReason = held ? "The game did not start." : numbersCalled >= 90 && !stoppedByOrganizer ? "All 90 numbers were called." : stoppedByOrganizer ? `The organizer ended the game after ${numbersCalled} numbers.` : early ? `All prizes were awarded after ${numbersCalled} numbers.` : `The game ended after ${numbersCalled} numbers.`;
   return {
     engagementId: eid, organizerEmail: email, sentAtMs: sentAt, scheduledMs: roundMs(e.start_round), firstNumberMs: first, endMs, wasHeld: held,
     endReason,

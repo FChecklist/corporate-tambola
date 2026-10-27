@@ -157,3 +157,22 @@ describe("changes after the phones joined: same link, no republish", () => {
     expect(await until(ps, () => ps[0]!.rt.view().waitingForHost, 120)).toBeGreaterThan(0);
   });
 });
+
+describe("the pause on a phone: who paused, since when, until when", () => {
+  test("a pause by the Organizer shows 'the Organizer', the time it began and when it ends by itself; after it ends the info is gone", async () => {
+    await mkGame(5);
+    const ps = await phonesOf([371, 372]);
+    for (let i = 0; i < 70; i++) await step(ps); // the game is running
+    expect(ps[0]!.rt.view().pausedInfo).toBeNull();
+    expect((await send({ action: "pause", pauseForRounds: 40 })).status).toBe(200);
+    const f = (await readPublished(kvOf(), EID))!; const iv = resolveControl(cfgOf(f), f.messages).intervals[0]!;
+    while (roundAt(D.utc()) < iv.start + 2) await step(ps);
+    for (const p of ps) {
+      const v = p.rt.view(); expect(v.paused).toBe(true);
+      expect(v.pausedInfo).not.toBeNull(); expect(v.pausedInfo!.by).toBe("the Organizer");
+      expect(v.pausedInfo!.sinceMs).toBe(roundTimeMs(iv.start)); expect(v.pausedInfo!.endMs).toBe(roundTimeMs(iv.end)); expect(v.pausedInfo!.secondsLeft).toBeGreaterThan(0);
+    }
+    while (roundAt(D.utc()) < iv.end + 2) await step(ps);
+    for (const p of ps) { expect(p.rt.view().paused).toBe(false); expect(p.rt.view().pausedInfo).toBeNull(); }
+  });
+});

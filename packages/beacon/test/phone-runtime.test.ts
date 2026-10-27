@@ -666,6 +666,19 @@ describe("winners hear it, and the engagement ends when the last prize is awarde
     }
     expect(a.rt.view().won.length + b.rt.view().won.length).toBeGreaterThanOrEqual(need.length); // every line has a winner
   }, 60_000);
+  test("'keep calling until all 90 numbers': every prize is awarded and the winners hear it, but the numbers go on to the 90th and only then does the game end (not 'by prizes')", async () => {
+    { const keep = t; t = -600_000; expect((await D.headCall("PATCH", `/api/z/${EID}/settings`, { afterPrizes: "keep" }, { "x-organizer": SECRET })).status).toBe(200); t = keep; } // changed before the start, like a real Organizer
+    const a = mkPhone(21, { earlyEnd: true }), b = mkPhone(22, { earlyEnd: true });
+    for (const p of [a, b]) { await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true); }
+    expect(a.rt.cfg.keepCalling).toBe(true);
+    const pids = [a.rt.pid!, b.rt.pid!], ref = reference(), cfg = a.rt.cfg, need = keysInPlayLines(cfg);
+    let K = 0; for (let k = 1; k <= 90 && !K; k++) { const got = settleAll(EID, pids, ref.slice(0, k), cfg, 1, undefined, { randomness: refRand().slice(0, k) }); if (need.every((n) => got.some((x) => x.pattern === n.key && x.ordinal === n.ordinal))) K = k; }
+    expect(K).toBeGreaterThan(0); expect(K).toBeLessThanOrEqual(86);
+    for (let i = 0; i < 400 && a.rt.view().log.length < K + 4; i++) await step([a, b]);
+    for (const p of [a, b]) { const v = p.rt.view(); expect(v.allAwarded).toBe(true); expect(v.phase).toBe("play"); expect(v.endedByPrizes).toBe(false); expect(v.log.length).toBeGreaterThan(K + 2); } // past the point where the older rule stopped
+    for (let i = 0; i < 400 && a.rt.view().phase !== "ended"; i++) await step([a, b]);
+    for (const p of [a, b]) { const v = p.rt.view(); expect(v.phase).toBe("ended"); expect(v.log.length).toBe(90); expect(v.endedByPrizes).toBe(false); }
+  }, 120_000);
   test("a phone that cannot reach the seat list falls back to the results the other phones agreed on", async () => {
     const a = mkPhone(14, { earlyEnd: true }), b = mkPhone(15, { earlyEnd: true });
     { const real = a.rt.deps.api; (a.rt.deps as any).api = async (m: string, path: string, x?: unknown) => { if (/\/seats/.test(path)) throw new Error("outage"); return real(m, path, x); }; }

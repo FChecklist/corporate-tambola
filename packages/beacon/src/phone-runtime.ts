@@ -60,6 +60,8 @@ export interface RuntimeView {
   callMode: "auto" | "host";
   /** Host mode, game running: the last number has reached this phone and the Host has not pressed for the next one yet. */
   waitingForHost: boolean;
+  /** The pause in force right now: who paused, since when (ms), when it should end by itself (ms), seconds left. Null when the game is not paused. */
+  pausedInfo: { by: "the Organizer" | "a Host"; sinceMs: number; endMs: number; secondsLeft: number } | null;
   /** How the game begins: by itself at the scheduled time (auto) or when the Host / Organizer presses Start (manual). */
   startMode: "auto" | "manual";
   /** Manual start: the scheduled time has come and nobody has pressed Start yet. */
@@ -166,12 +168,14 @@ export class PhoneRuntime {
 
   /** Tickets, rewards and brand breaks come from the engagement's public settings; anything malformed falls back to the plain engagement. */
   private readCfg(info: any) {
-    const v = validateCfg({ tickets: info?.tickets, ties: info?.ties, rewards: info?.rewards, breaks: info?.breaks, rounds: info?.rounds, invites: info?.invites, opening: info?.opening, closing: info?.closing, callMode: info?.callMode === "host" ? "host" : undefined, startMode: info?.startMode === "manual" ? "manual" : undefined }, undefined, { stored: true });
+    const v = validateCfg({ tickets: info?.tickets, ties: info?.ties, rewards: info?.rewards, breaks: info?.breaks, rounds: info?.rounds, invites: info?.invites, opening: info?.opening, closing: info?.closing, callMode: info?.callMode === "host" ? "host" : undefined, startMode: info?.startMode === "manual" ? "manual" : undefined, afterPrizes: info?.afterPrizes === "keep" ? "keep" : undefined }, undefined, { stored: true });
     this.cfg = v.ok ? v.cfg : defaultCfg();
     if (this.tracker) this.tracker.reconfigure(hostControlOf(hostGameOf(this.cfg, this.scheduledRound))); // before the start a re-read keeps the control rules in step
   }
   private get hostMode() { return this.cfg.callMode === "host"; }
   /** A manual start: nothing is called until a Host or the Organizer presses Start (a signed "go" in the control file). */
+  /** Who sent each control message (role words from the control file): "paused by the Organizer". */
+  private ctlBy: string[] = [];
   private get manualStart() { return this.cfg.startMode === "manual"; }
 
   // ---- real housie: the ticket never marks itself. The player's own marks, presses and Bogeys are kept on this phone (ctz:<eid>:marks) ----
@@ -302,7 +306,7 @@ export class PhoneRuntime {
     try {
       const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name, ...(empId ? { empId } : {}), device: this.device(), ...(invite && Number.isInteger(invite.from) ? { from: invite.from, cat: invite.cat } : {}) });
       this.scheduledRound = r.startRound; this.startRound = r.startRound + GRACE_ROUNDS; this.callSeconds = r.callSeconds; this.trackClaims = r.trackClaims !== false;
-      if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined || r.opening !== undefined || r.closing !== undefined || r.callMode !== undefined || r.startMode !== undefined) this.readCfg(r);
+      if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined || r.opening !== undefined || r.closing !== undefined || r.callMode !== undefined || r.startMode !== undefined || r.afterPrizes !== undefined) this.readCfg(r);
       this.deps.store.set(this.key("pid"), r.pid);
       this.myJr = Number(r.jr) > 0 ? Number(r.jr) : 0; this.deps.store.set(this.key("jr"), String(this.myJr));
       this.adopt(r.pid); this.error = null;
@@ -335,6 +339,7 @@ export class PhoneRuntime {
     const wasLocked = this.locked; this.locked = !!body?.locked;
     if (wasLocked && !this.locked) await this.reloadSchedule(); // paid at last: the start time has moved, read it again
     if (!body?.pubKey) { this.tracker?.failed(now); return; }
+    this.ctlBy = Array.isArray(body.by) ? body.by.slice(0, 500).map((x: unknown) => (x === "Host" ? "Host" : "Organizer")) : this.ctlBy;
     this.applyLive(body.live); // a time or mode changed after publishing reaches this phone through the file it already polls, before anything in the file is used
     // the Hosts' console keys ride in the same file as the organizer's key (trusted the same way, on first use); the list only grows, and never beyond the team's size
     const hostKeys: string[] = Array.isArray(body.hostKeys) ? body.hostKeys.filter((k: unknown): k is string => typeof k === "string" && /^[0-9a-f]{64}$/i.test(k)).slice(0, 5) : [];
@@ -358,10 +363,10 @@ export class PhoneRuntime {
     if (!live || typeof live !== "object") return;
     const sr = Number(live.startRound), cs = Number(live.callSeconds);
     if (!Number.isInteger(sr) || sr < 1 || !Number.isInteger(cs) || cs < 6) return;
-    const host = live.callMode === "host", manual = live.startMode === "manual";
-    if (sr === this.scheduledRound && cs === this.callSeconds && host === this.hostMode && manual === this.manualStart) return;
+    const host = live.callMode === "host", manual = live.startMode === "manual", keep = live.afterPrizes === "keep";
+    if (sr === this.scheduledRound && cs === this.callSeconds && host === this.hostMode && manual === this.manualStart && keep === !!this.cfg.keepCalling) return;
     this.scheduledRound = sr; this.startRound = sr + GRACE_ROUNDS; this.callSeconds = cs;
-    const c: EngagementCfg = { ...this.cfg }; if (host) c.callMode = "host"; else delete c.callMode; if (manual) c.startMode = "manual"; else delete c.startMode;
+    const c: EngagementCfg = { ...this.cfg }; if (host) c.callMode = "host"; else delete c.callMode; if (manual) c.startMode = "manual"; else delete c.startMode; if (keep) c.keepCalling = true; else delete c.keepCalling;
     this.cfg = c;
     if (this.tracker) this.tracker.reconfigure(hostControlOf(hostGameOf(this.cfg, this.scheduledRound)));
   }
@@ -420,7 +425,7 @@ export class PhoneRuntime {
     await this.pollResults();
     await this.castVotes();
     const stopped = this.tracker?.state.stopRound != null && now >= this.tracker.state.stopRound;
-    const byPrizes = !this.deps.noEarlyEnd && this.cur >= this.cfg.rounds && this.prizesAwarded(this.cur) && this.breaksPlayed(now);
+    const byPrizes = !this.deps.noEarlyEnd && !this.cfg.keepCalling && this.cur >= this.cfg.rounds && this.prizesAwarded(this.cur) && this.breaksPlayed(now);
     if (byPrizes) {
       this.prizesEnded = true;
       // The game stops where the last prize was completed (plus the one call whose claim window had to close): a phone that was reloaded, or that joined late, must not show the numbers that the clock would
@@ -763,6 +768,9 @@ export class PhoneRuntime {
     const isPaused = !!st && now !== null && pausedAt(st, now);
     const gr0 = st?.goRound ?? null;
     const waitingForHost = this.hostMode && (!this.manualStart || (gr0 !== null && now !== null && now >= gr0)) && this.phase === "play" && !this.locked && !isPaused && now !== null && now >= (this.manualStart ? (gr0 ?? this.startRound) : this.startRound) && nextRound0 === Infinity && !inter && this.currentBreak(now) === null;
+    const pz = st && now !== null ? st.intervals.find((i) => now >= i.start && now < i.end) : undefined;
+    const pzMsg = pz && this.tracker ? this.tracker.log.find((m) => m.action === "pause" && m.atBeaconRound === pz.start) : undefined;
+    const pausedInfo = pz ? { by: (pzMsg && this.ctlBy[pzMsg.seq - 1] === "Host" ? "a Host" : "the Organizer") as "the Organizer" | "a Host", sinceMs: roundTimeMs(pz.start), endMs: roundTimeMs(pz.end), secondsLeft: Math.max(0, (pz.end - now!) * 3) } : null;
     const goRound = st?.goRound ?? null;
     // manual start: the scheduled time has come and nobody has pressed Start ("waiting for the host to begin the game"), or Start was pressed and the first number is a few seconds away
     const waitingForStart = this.manualStart && this.phase === "play" && !this.locked && goRound === null && now !== null && now >= this.scheduledRound && !(st && st.stopRound !== null && now >= st.stopRound);
@@ -777,7 +785,7 @@ export class PhoneRuntime {
       round: this.cur, rounds: this.cfg.rounds, intermission: inter ? { round: this.cur + 1, secondsLeft: secsTo(inter.endsAtRound) ?? 0 } : null, past: this.pastView(),
       won: this.wonView(), allAwarded: this.prizesAwarded(this.cur), endedByPrizes: this.prizesEnded, late: this.lateView(now), localWinners: this.localOk,
       callMode: this.hostMode ? "host" : "auto", waitingForHost,
-      startMode: this.manualStart ? "manual" : "auto", waitingForStart, goRound: st?.goRound ?? null, startingInSec: startingIn,
+      pausedInfo, startMode: this.manualStart ? "manual" : "auto", waitingForStart, goRound: st?.goRound ?? null, startingInSec: startingIn,
       marks: [...(this.marks.get(this.cur) ?? [])].sort((a, b) => a - b), claimable: this.claimableNow(),
       pressed: keysInPlay(this.cfg.rewards).filter((k) => this.pressed.has(`${this.cur}:${k}`)), claimsKnown: this.claimList.length,
       bogeys: keysInPlay(this.cfg.rewards).filter((k) => this.bogeysOn(k) > 0).map((k) => ({ pattern: k, n: this.bogeysOn(k) })), outOf: keysInPlay(this.cfg.rewards).filter((k) => this.outOf(k)),

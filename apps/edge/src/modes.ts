@@ -53,6 +53,7 @@ export function describeChanges(before: SettingsView, after: SettingsView): stri
   if (before.start_round !== after.start_round) out.push(`Start time changed from ${istTime(roundMs(before.start_round))} to ${istTime(roundMs(after.start_round))}`);
   if ((b.startMode ?? "auto") !== (a.startMode ?? "auto")) out.push(a.startMode === "manual" ? "How it starts: now you press Start at the time (was: by itself)" : "How it starts: now by itself at the time (was: you press Start)");
   if ((b.callMode ?? "auto") !== (a.callMode ?? "auto")) out.push(a.callMode === "host" ? "Who calls the numbers: now a Host (was: the game)" : "Who calls the numbers: now the game (was: a Host)");
+  if (!!b.keepCalling !== !!a.keepCalling) out.push(a.keepCalling ? "When every prize is won: now keep calling until all 90 numbers (was: end the game)" : "When every prize is won: now end the game (was: keep calling until all 90 numbers)");
   if (before.call_seconds !== after.call_seconds) out.push(`Speed changed: ${speed(after.call_seconds)} (was ${before.call_seconds})`);
   if (before.cap !== after.cap) out.push(`Number of people changed from ${before.cap} to ${after.cap}`);
   if ((before.closed ? 1 : 0) !== (after.closed ? 1 : 0)) out.push(after.closed ? "Who can join: now only people on the list" : "Who can join: now anyone with the link");
@@ -94,5 +95,5 @@ export const changesView = (rows: ChangeRow[]) => rows.slice().reverse().map((r)
 
 /** What phones, the big screen and the Host screen need to follow a change made after publishing. It rides in the control file they already poll (no extra requests). */
 export function liveOf(e: { start_round: number; call_seconds: number }, cfg: EngagementCfg) {
-  return { startRound: e.start_round, callSeconds: e.call_seconds, callMode: cfg.callMode === "host" ? "host" : "auto", startMode: cfg.startMode === "manual" ? "manual" : "auto" };
+  return { startRound: e.start_round, callSeconds: e.call_seconds, callMode: cfg.callMode === "host" ? "host" : "auto", startMode: cfg.startMode === "manual" ? "manual" : "auto", afterPrizes: cfg.keepCalling ? "keep" : "end" };
 }
