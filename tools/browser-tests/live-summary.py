@@ -56,7 +56,7 @@ def one(tag):
     for lp in (os.path.join(D, f"live-{BROWSER}-{tag}.log"), os.path.join(D, f"live-{tag}.log")):
         if os.path.exists(lp):
             for ln in open(lp, encoding="utf8", errors="replace"):
-                m = re.search(r"\[call failed\] (\w+) (\S+).*cause=(\w+)", ln)
+                m = re.search(r"\[call failed\] (\w+) (\S+).*cause=(\S+)", ln)
                 if m: k = f"{m.group(1)} {re.sub(r'/z/[A-Za-z0-9_-]+/', '/z/<id>/', m.group(2))} {m.group(3)}"; cf[k] = cf.get(k, 0) + 1
             break
     exp = int(EXPECT) if EXPECT else None

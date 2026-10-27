@@ -12,12 +12,12 @@ Site: corporatetambola.com (live). Games run one at a time by the boss from its 
 | L3b | Ewwems2 | 100 | auto 12 s | 4 list + invites | 100/100 | 65, yes | yes | 0 | 0 | 0 | 43 drand errors |
 | L4 | Eydfdhr | 250 | manual | 1 only employees | 250/250 | 62, yes | yes | 0 | 0 | 0 | 66 presses for 62 numbers; 28 drand errors |
 | L5 | Eea3ddp | 250 | auto 12 s | 3 list I choose | 250/250 | 71, yes | yes | 0 | 0 | 0 | 25 client-side ECONNRESET on GET /control (one burst, never grew), 65 drand errors |
-| L6 | Eemchac | 250 | auto 9 s | 6 anyone + employee ID | running | | | 0 so far | 0 | 0 | |
+| L6 | Eemchac | 250 | auto 9 s | 6 anyone + employee ID | 249 played of 250 (server: 250 joined, 0 waiting, verified by D1) | 64, yes (249/249) | yes | 0 | 0 | 0 | PASS WITH LATENCY NOTE: 1 phone's POST /join timed out client-side after 30 s under the 250-person burst (server had registered it), so the harness counted 249 pages; 1 beacon-relay 502, 56 drand errors, 1 UND_ERR on /control |
 | L7 | | 500 | auto 12 s | 5 anyone | not run | | | | | | |
 | L8 | | 500 | auto 9 s | 4 list + invites | not run | | | | | | |
 | L9 | | 500 | manual | 3 list I choose | not run | | | | | | |
 
-Result: 5 of 5 completed games (L1b, L2, L3b, L4, L5) PASS; 0 failures that are product faults; 1 game (L3) invalid because of the test script.
+Result: 6 of 6 completed games (L1b, L2, L3b, L4, L5, L6) PASS (L6 with a join tail-latency note); 0 failures that are product faults; 1 game (L3) invalid because of the test script.
 
 ## What these results prove, and what they do NOT
 
@@ -26,6 +26,7 @@ PROVEN on the real site (each completed game): everyone who should get a ticket 
 NOT CHECKED by the tool (needs hand checks or other tests): strangers waiting / approve / decline / lapse on the real site (covered in the simulation: journeys 960 scenarios + people 99 + rules 5 on 1.3.1/1.3.2, all pass); prize caps (5/5/10/10), equal split and the organizer's final-call override; pause and resume; late join; the "end by Organizer" event; level-1 / level-2 guest invitations; number delay and timer gaps (not in the result file); the end-of-game report e-mail; 500-person capacity.
 
 ## Observations to keep
+0. JOIN TAIL LATENCY (L6, 250 people in one burst): one POST /join took more than 30 s and the phone gave up although the server had registered the person. A real person would see a failed join; pressing again returns the same ticket ("again"). Open question for the boss: should the phone page retry a timed-out join by itself (it already retries on "busy")? Zero server errors were counted.
 1. The public beacon (drand) answers 500/5xx to browsers in every game (18 to 65 per game); phones fall back to other mirrors and the games are unaffected. Our own relay answered 502 only in an earlier smoke game (decision: leave as 502).
 2. Manual games: the organizer's presses after the last number grow with size (2 extra at 100, 4 at 250): phones check for the end every 15 s at this size; the server ignores the extra presses. Not a product fault; the test's stop rule can be tightened.
 3. 25 ECONNRESET on GET /control in L5, one burst; cause unknown (laptop network or edge). Cloudflare analytics are not readable with the current token.
@@ -33,4 +34,4 @@ NOT CHECKED by the tool (needs hand checks or other tests): strangers waiting / 
 5. A game that shows "0 joined" must be diagnosed from the waiting-room count first (L3).
 
 ## Still to do (owner order: test 100 / 250 / 500)
-L6 (running), L7, L8, L9 (500 people: needs about 1 GB of free memory for the protocol phones; record how many phones really played), then hand checks of strangers/approvals, prize split and override, pause, late join and End on at least one 100-person game; then this file is updated and the boss decides on any fix and deploy (only the boss deploys).
+L7 (running), L8, L9 (500 people: needs about 1 GB of free memory for the protocol phones; record how many phones really played), then hand checks of strangers/approvals, prize split and override, pause, late join and End on at least one 100-person game; then this file is updated and the boss decides on any fix and deploy (only the boss deploys).
