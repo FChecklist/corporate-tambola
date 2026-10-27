@@ -54,6 +54,8 @@ import { WINNERS_SCHEMA, acceptVotes, auditAi, confirmPrize, listAiAudit, listPr
 import { PAUSE_MAX_PARTICIPANTS, addHostKey, safetyForCap, startSafetyForCap, publishControl, readPublished, registerKey, verifyControlSig, type KV } from "../../../packages/beacon/src/control";
 import { hostGameOf } from "../../../packages/beacon/src/game";
 import { buildGameLog, readSavedGameLog } from "./gamelog";
+import { CLAIM_LATE_MSG } from "./modes";
+import { callTimeMs } from "./lifecycle";
 import { NEEDS_CONSOLE_MSG, NOT_BEFORE_MSG, STARTED_MSG, modeTooBig, changesView, describeChanges, goRoundOf, liveOf, logChanges, needsControl, readChanges, whoLabel } from "./modes";
 import { QUICKNET } from "../../../packages/beacon/src/index";
 
@@ -1840,16 +1842,21 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (who.blocked) return json({ error: "You were removed from this game by the organizer.", code: "removed", removed: true }, 403); // the seat stays in the public list, the phone stops
     if (checkinRequired(e)) { const st = seatOfPidText(b.pid); if (!st || (await presentMsOf(env.DB, eid!, st)) === null) return json({ error: "Mark yourself present first: the check-in is on your ticket page.", code: "not-present" }, 403); } if (checkinRequired(e) && !(await deviceMatches(env, eid!, b.pid, b.device))) return json({ error: "This ticket belongs to another phone.", code: "other-phone" }, 403); // the participant id is public: only the ticket's own phone may act for it
     // only a person who checked in can win
-    let stored = 0;
+    let stored = 0, late = 0;
     const maxRound = cfgOf(e).rounds;
     for (const c of list) {
       const round = c?.round === undefined ? 1 : c.round;
       if (!PATTERNS.has(c?.pattern) || !Number.isInteger(c?.idx) || c.idx < 0 || c.idx > 89 || !Number.isInteger(round) || round < 1 || round > maxRound) continue;
+      { // THE RULE: a prize completed on number N can be claimed only until number N+1 is announced. The Worker's clock decides (a claim at the very instant of the next number is late), the same moment the winners are worked out with.
+        const nextAt = c.idx < 89 ? await callTimeMs(env as any, e, round, c.idx + 1) : null; // null: no next number (the last one, a Host who has not pressed yet, a game that was ended)
+        if (nextAt !== null && now >= nextAt) { late++; continue; }
+      }
       if (!(await spend(env, now))) return json({ error: "Busy day. Your claim is kept on your phone and will be sent again.", stored }, 503);
       const r = await env.DB.prepare("INSERT OR IGNORE INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES(?,?,?,?,?,?)").bind(eid, b.pid, c.pattern, round, c.idx, now).run();
       stored += r.meta?.changes ?? 0; // a claim sent twice is stored once
     }
-    return json({ ok: true, stored, atMs: now }); // atMs: the store's clock, the time that decides whether the claim came before the next number
+    if (late && !stored) return json({ error: CLAIM_LATE_MSG, code: "claim-late", stored: 0, atMs: now }, 409); // nothing was recorded: the phone says it kindly and stops sending it
+    return json({ ok: true, stored, ...(late ? { late } : {}), atMs: now }); // atMs: the store's clock, the time that decides whether the claim came before the next number
   }
   if (action === "results" && req.method === "GET") {
     const r = await env.DB.prepare("SELECT pattern,ordinal,round,idx,pids FROM settled WHERE eid=? ORDER BY round, pattern, ordinal").bind(eid).all<any>();

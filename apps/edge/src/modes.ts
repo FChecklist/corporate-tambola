@@ -96,3 +96,6 @@ export const changesView = (rows: ChangeRow[]) => rows.slice().reverse().map((r)
 export function liveOf(e: { start_round: number; call_seconds: number }, cfg: EngagementCfg) {
   return { startRound: e.start_round, callSeconds: e.call_seconds, callMode: cfg.callMode === "host" ? "host" : "auto", startMode: cfg.startMode === "manual" ? "manual" : "auto", afterPrizes: cfg.keepCalling ? "keep" : "end" };
 }
+
+/** A prize completed on number N can be claimed only until number N+1 is announced. This is what a player is told when the claim came too late (the Worker's clock decides). */
+export const CLAIM_LATE_MSG = "Ohooo! 😊 Sorry, you pressed Claim after the next number was announced. This claim cannot be made.";

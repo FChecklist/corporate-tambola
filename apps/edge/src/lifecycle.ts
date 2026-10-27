@@ -61,7 +61,7 @@ async function schedule(env: Env, e: any) {
   const st = f ? resolveControl(controlCfg(f, hostGameOf(cfg, e.start_round)), f.messages) : null;
   return { cfg, st, start: e.start_round + GRACE_ROUNDS, stride: e.call_seconds / 3 };
 }
-async function callTimeMs(env: Env, e: any, round: number, idx: number, sch?: Awaited<ReturnType<typeof schedule>>): Promise<number | null> {
+export async function callTimeMs(env: Env, e: any, round: number, idx: number, sch?: Awaited<ReturnType<typeof schedule>>): Promise<number | null> {
   const s = sch ?? (await schedule(env, e));
   const r = callRoundR(s.st, s.start, s.stride, s.cfg.breaks, round, idx);
   return r === null || !Number.isFinite(r) ? null : roundMs(r);
