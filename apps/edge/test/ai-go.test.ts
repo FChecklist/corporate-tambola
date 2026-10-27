@@ -74,10 +74,10 @@ describe("1. the day picker reaches every allowed day", () => {
 describe("2. how it plays: every question has numbered choices and a recommendation", () => {
   test("speed, who calls, rounds and the tie rule are each one screen; the choice shows on the play screen and is saved", async () => {
     const o = await organizer();
-    let t = await toPlay(o.base); expect(t).toMatch(/a number every 9 seconds, 1 round\. The software calls the numbers. It starts by itself at the start time. On a tie, people take the next prizes one after the other/);
+    let t = await toPlay(o.base); expect(t).toMatch(/a number every 12 seconds, 1 round\. The software calls the numbers. It starts by itself at the start time. On a tie, people take the next prizes one after the other/);
     const labels = choicesOf(t).map((c) => c.label); expect(labels[0]).toBe("Looks good, continue"); expect(choicesOf(t)[0]!.rec).toBe(true);
-    expect(labels).toEqual(expect.arrayContaining([expect.stringMatching(/^Change the speed \(now a number every 9 seconds\)/), expect.stringMatching(/^Who calls the numbers \(now: the software\)/), expect.stringMatching(/^Rounds \(now 1\)/), expect.stringMatching(/^What happens on a tie \(now: the next prizes\)/)]));
-    let s = await pick(t, /Change the speed/); expect(choicesOf(s).map((c) => c.label)).toEqual(["Every 6 seconds (fast)", "Every 9 seconds (normal)", "Every 12 seconds (relaxed)", "Every 15 seconds (slow)"]); expect(choicesOf(s).find((c) => c.rec)!.label).toMatch(/9 seconds/);
+    expect(labels).toEqual(expect.arrayContaining([expect.stringMatching(/^Change the speed \(now a number every 12 seconds\)/), expect.stringMatching(/^Who calls the numbers \(now: the software\)/), expect.stringMatching(/^Rounds \(now 1\)/), expect.stringMatching(/^What happens on a tie \(now: the next prizes\)/)]));
+    let s = await pick(t, /Change the speed/); expect(choicesOf(s).map((c) => c.label)).toEqual(["Every 12 seconds"]); expect(choicesOf(s).find((c) => c.rec)!.label).toMatch(/12 seconds/); expect(s).toMatch(/one speed/); expect(s).not.toMatch(/9 seconds/);
     t = await pick(s, /Every 12 seconds/); expect(t).toMatch(/a number every 12 seconds/);
     s = await pick(t, /Who calls the numbers/); expect(s).toMatch(/presses a button for each number/); expect(s).toMatch(/up to 1,000 people/); expect(s).toMatch(/public random numbers, so nobody can choose one/);
     expect(choicesOf(s).map((c) => [c.label, c.rec])).toEqual([["The software calls the numbers", true], ["A Host presses a button for each number", false]]);
@@ -97,7 +97,7 @@ describe("2. how it plays: every question has numbered choices and a recommendat
     expect(sm).toMatchObject({ callSeconds: 12, callMode: "host", rounds: 3, ties: "share", tickets: 1 });
   });
   test("a game larger than 1,000 people is told plainly that the software calls the numbers, and the Host choice is not offered", async () => {
-    const o = await organizer(); const t = await toPlay(o.base, /Up to 5000/); const s = await pick(t, /Who calls the numbers/); const st = await pick(t, /How does it start/); expect(choicesOf(st).map((c) => c.label)).toEqual(["It starts by itself at the start time"]);
+    const o = await organizer(); const t = await toPlay(o.base, /Up to 5000/); const s = await pick(t, /Who calls the numbers/); const st = await pick(t, /How does it start/); expect(choicesOf(st).map((c) => c.label)).toEqual(["It starts by itself at the start time", "I press Start"]); // pressing Start works at every size
     expect(s).toMatch(/Your game is larger, so the software calls them/); expect(choicesOf(s).map((c) => c.label)).toEqual(["The software calls the numbers"]);
   });
 });

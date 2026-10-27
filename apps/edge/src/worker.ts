@@ -51,8 +51,11 @@ import { AUDIT_SCHEMA, auditRequest, analyzeChain, loadRows, logAccess, setHold,
 import { VISIT_SCHEMA, beaconRoute, linkVisitor, parseRange, recordFunnelForOrg, visitsJourney, visitsSummary, type VisitEnv } from "./visits";
 import { knownDial } from "./phonekit";
 import { WINNERS_SCHEMA, acceptVotes, auditAi, confirmPrize, listAiAudit, listPrizes, markGiven, myPrizes, overridePrize } from "./winners";
-import { PAUSE_MAX_PARTICIPANTS, addHostKey, safetyForCap, publishControl, readPublished, registerKey, verifyControlSig, type KV } from "../../../packages/beacon/src/control";
+import { PAUSE_MAX_PARTICIPANTS, addHostKey, safetyForCap, startSafetyForCap, publishControl, readPublished, registerKey, verifyControlSig, type KV } from "../../../packages/beacon/src/control";
 import { hostGameOf } from "../../../packages/beacon/src/game";
+import { buildGameLog, readSavedGameLog } from "./gamelog";
+import { CLAIM_LATE_MSG } from "./modes";
+import { callTimeMs } from "./lifecycle";
 import { NEEDS_CONSOLE_MSG, NOT_BEFORE_MSG, STARTED_MSG, modeTooBig, changesView, describeChanges, goRoundOf, liveOf, logChanges, needsControl, readChanges, whoLabel } from "./modes";
 import { QUICKNET } from "../../../packages/beacon/src/index";
 
@@ -85,6 +88,10 @@ const controlUrl = (env: Env, id: string) => (env.CONTROL_BASE && env.CONTROL_R2
 async function mirrorControl(env: Env, id: string) {
   if (!env.CONTROL_R2) return;
   try { const f = await readPublished(d1kv(env), id); if (f) await env.CONTROL_R2.put(controlKey(id), JSON.stringify({ ...f, ...(await liveField(env, id)) }), { httpMetadata: { contentType: "application/json", cacheControl: "public, max-age=3" } }); } catch { /* the Worker route still serves it */ }
+}
+/** A claim that came too late is not recorded as a win; it is only remembered here, as a ticket number, a prize and a time, so the Organizer's board can show "too late". */
+async function noteLateClaim(db: D1, eid: string, pid: string, pattern: string, now: number): Promise<void> {
+  try { const r = await db.prepare("SELECT v FROM kv WHERE k=?").bind(`claimlate/${eid}`).first<{ v: string }>(); const a: any[] = r ? JSON.parse(r.v) : []; a.push({ t: seatOfPidText(pid), p: pattern, at: now }); await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`claimlate/${eid}`, JSON.stringify(a.slice(-200))).run(); } catch { /* best effort */ }
 }
 /** The game's schedule and modes as they are NOW, riding in the control file every phone, the big screen and the Host's screen already poll: a change made after publishing (a new time, another mode) reaches them all with no new link and no extra requests. */
 async function liveField(env: Env, id: string): Promise<{ live?: ReturnType<typeof liveOf>; by?: string[] }> {
@@ -1318,21 +1325,22 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (r.ok && !(r as any).duplicate) { await spend(env, now); await mirrorControl(env, cid!); }
       return r.ok ? json(r) : json({ error: r.error }, r.status);
     }
-    const ce = await env.DB.prepare("SELECT id, org, cap, start_round FROM engagement WHERE id=?").bind(cid).first<{ id: string; org: string | null; cap: number; start_round: number }>();
+    const ce = await env.DB.prepare("SELECT id, org, cap, start_round, tickets, config FROM engagement WHERE id=?").bind(cid).first<{ id: string; org: string | null; cap: number; start_round: number; tickets: number; config: string | null }>();
     if (!ce) return json({ error: "No such engagement." }, 404);
     if (sub === "/key" && req.method === "PUT") { // only the organizer's own console registers the key that signs pauses
       if (!can(a, ce, true)) return deny(a);
       const b = await body(req);
       if (!b || typeof b.publicKey !== "string") return json({ error: "Bad key." }, 400);
       if (!(await spend(env, now))) return BUSY();
-      const safety = safetyForCap(ce.cap, b.profile === "fast");
+      const big = safetyForCap(ce.cap) === null && cfgOf(ce).startMode === "manual" ? startSafetyForCap(ce.cap) : null; // a big game that presses Start: its own, slower profile with a longer Start lead and no pause
+      const safety = big ? big.safety : safetyForCap(ce.cap, b.profile === "fast");
       if (!safety) return json({ error: `Pause is available for engagements of up to ${PAUSE_MAX_PARTICIPANTS.toLocaleString("en-IN")} participants. Larger ones run without it, which keeps every phone's traffic off the free plan's daily allowance.` }, 409);
       if ((a.kind === "host" || a.kind === "master") && (await readPublished(kv, cid!))) { // the organizer's key is already there: a Host's own browser, or the organizer's own second browser or phone (signed in with the same e-mail code), adds its key beside it, so they can pause, end and press "Next number" too
         const h = await addHostKey(kv, cid!, b.publicKey);
         if (h.ok && h.added) await mirrorControl(env, cid!);
         return h.ok ? json({ ok: true, host: true }) : json({ error: h.error }, 409);
       }
-      const r = await registerKey(kv, cid!, b.publicKey, safety);
+      const r = await registerKey(kv, cid!, b.publicKey, safety, 600, { startOnly: !!big });
       if (r.ok) await mirrorControl(env, cid!);
       return r.ok ? json({ ok: true }) : json({ error: r.error }, 409);
     }
@@ -1523,7 +1531,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       });
     }
   }
-  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|changes|claims|bogey|settle|results|info|participants|erase|discard|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget|cohost|cancel-preview|cancel|reopen|clone|leave|datareq|checkin|presence|who|override)$/);
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|gamelog|changes|claims|bogey|settle|results|info|participants|erase|discard|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget|cohost|cancel-preview|cancel|reopen|clone|leave|datareq|checkin|presence|who|override)$/);
   if (!m) return json({ error: "Not found", hint: "Read the list of what you can do at /api/z/ai-manifest. Engagement routes look like /api/z/{id}/summary, /settings, /roster, /participants, /results, /publish." }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
@@ -1595,10 +1603,11 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const kid = a.kind === "cohost" ? (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 7) : null;
     const c = cfgOf(e), origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
     const joined = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
+    const savedLog = await readSavedGameLog(env, eid!); // a Co-host sees their own part only: how the game ended, in one line, and (below) how many people they brought
     const pk = unpaid ? PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null : PACKS.some((x) => x[0] === e.pack) ? e.pack : null; // a demo (or free-launch) game is "paid" with its own size, which is no pack: no price to show
     const lockedC = unpaid && !isDraft && !cancelled && !e.unplayed_ms && roundMs(e.start_round) - LOCK_LEAD_MS <= now;
     const roleAccepted = a.kind === "cohost" ? await hasConsent(env.DB, "c:" + (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 16), "K5") : undefined;
-    return json({ ...(roleAccepted === undefined ? {} : { roleAccepted }), name: c.name || e.id, ...(c.demo ? { demo: true } : {}), startMs: roundMs(e.start_round), cap: e.cap, joined, brought: await broughtBy(env, e.org, kid), price: pk ? price(pk, "INR").total : null, payment, ...(cancelled ? { cancelled: true } : {}), waitingFor: lockedC ? "organizer" : null, didNotStart: !!e.unplayed_ms, erasureMs: await erasureOf(env, e), ...(await creditFields(env, a, e, unpaid && !cancelled && !e.unplayed_ms, now)), inviteLink: kid && !isDraft && !cancelled ? `${origin}/z.html?e=${e.id}&from=${COHOST_FROM + parseInt(kid, 16)}` : null });
+    return json({ ...(roleAccepted === undefined ? {} : { roleAccepted }), ...(savedLog ? { ended: { atMs: savedLog.endedAtMs, reason: savedLog.endReason, numbers: savedLog.numbersCalled } } : {}), name: c.name || e.id, ...(c.demo ? { demo: true } : {}), startMs: roundMs(e.start_round), cap: e.cap, joined, brought: await broughtBy(env, e.org, kid), price: pk ? price(pk, "INR").total : null, payment, ...(cancelled ? { cancelled: true } : {}), waitingFor: lockedC ? "organizer" : null, didNotStart: !!e.unplayed_ms, erasureMs: await erasureOf(env, e), ...(await creditFields(env, a, e, unpaid && !cancelled && !e.unplayed_ms, now)), inviteLink: kid && !isDraft && !cancelled ? `${origin}/z.html?e=${e.id}&from=${COHOST_FROM + parseInt(kid, 16)}` : null });
   }
   const locked = unpaid && !isDraft && !cancelled && !didNotStart && roundMs(e.start_round) - LOCK_LEAD_MS <= now; // published but not paid by its start time: it does not begin
   if (isDraft && (((action === "join" || action === "who") && req.method === "POST") || (action === "info" && !can(a, e)))) return json({ error: "This engagement is not open yet." }, 403);
@@ -1837,23 +1846,28 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (who.blocked) return json({ error: "You were removed from this game by the organizer.", code: "removed", removed: true }, 403); // the seat stays in the public list, the phone stops
     if (checkinRequired(e)) { const st = seatOfPidText(b.pid); if (!st || (await presentMsOf(env.DB, eid!, st)) === null) return json({ error: "Mark yourself present first: the check-in is on your ticket page.", code: "not-present" }, 403); } if (checkinRequired(e) && !(await deviceMatches(env, eid!, b.pid, b.device))) return json({ error: "This ticket belongs to another phone.", code: "other-phone" }, 403); // the participant id is public: only the ticket's own phone may act for it
     // only a person who checked in can win
-    let stored = 0;
+    let stored = 0, late = 0;
     const maxRound = cfgOf(e).rounds;
     for (const c of list) {
       const round = c?.round === undefined ? 1 : c.round;
       if (!PATTERNS.has(c?.pattern) || !Number.isInteger(c?.idx) || c.idx < 0 || c.idx > 89 || !Number.isInteger(round) || round < 1 || round > maxRound) continue;
+      { // THE RULE: a prize completed on number N can be claimed only until number N+1 is announced. The Worker's clock decides (a claim at the very instant of the next number is late), the same moment the winners are worked out with.
+        const nextAt = c.idx < 89 ? await callTimeMs(env as any, e, round, c.idx + 1) : null; // null: no next number (the last one, a Host who has not pressed yet, a game that was ended)
+        if (nextAt !== null && now >= nextAt) { late++; await noteLateClaim(env.DB, eid!, b.pid, String(c.pattern), now); continue; }
+      }
       if (!(await spend(env, now))) return json({ error: "Busy day. Your claim is kept on your phone and will be sent again.", stored }, 503);
       const r = await env.DB.prepare("INSERT OR IGNORE INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES(?,?,?,?,?,?)").bind(eid, b.pid, c.pattern, round, c.idx, now).run();
       stored += r.meta?.changes ?? 0; // a claim sent twice is stored once
     }
-    return json({ ok: true, stored, atMs: now }); // atMs: the store's clock, the time that decides whether the claim came before the next number
+    if (late && !stored) return json({ error: CLAIM_LATE_MSG, code: "claim-late", stored: 0, atMs: now }, 409); // nothing was recorded: the phone says it kindly and stops sending it
+    return json({ ok: true, stored, ...(late ? { late } : {}), atMs: now }); // atMs: the store's clock, the time that decides whether the claim came before the next number
   }
   if (action === "results" && req.method === "GET") {
     const r = await env.DB.prepare("SELECT pattern,ordinal,round,idx,pids FROM settled WHERE eid=? ORDER BY round, pattern, ordinal").bind(eid).all<any>();
     // public: counts only, no ids. The exceptions are a lucky draw and Unlucky, whose winners are shown by their opaque ticket ids so each phone can tell whether it won,
     // and every house in a game where people who finish on the same number take the next positions (a phone must be told which of them won which position; the ids are the same opaque ticket ids as in the public seat list, never names or numbers)
     const turns = cfgOf(e).ties === "next";
-    return json({ results: (r.results ?? []).map((x: any) => ({ pattern: x.pattern, ordinal: x.ordinal, round: x.round, idx: x.idx, count: JSON.parse(x.pids).length, ...(x.pattern === "lucky" || x.pattern === "unlucky" || turns ? { winners: JSON.parse(x.pids) } : {}) })) });
+    return json({ results: (r.results ?? []).map((x: any) => ({ pattern: x.pattern, ordinal: x.ordinal, round: x.round, idx: x.idx, count: JSON.parse(x.pids).length, tickets: (JSON.parse(x.pids) as string[]).slice(0, 5).map((p) => Number(seatOfPidText(p))).filter((n) => Number.isInteger(n) && n > 0), ...(x.pattern === "lucky" || x.pattern === "unlucky" || turns ? { winners: JSON.parse(x.pids) } : {}) })) });
   }
   if (action === "info" && req.method === "GET") return json({ ...(cancelled ? { cancelled: true, message: "This game was cancelled by the organizer.", cancelledMs: e.cancelled_ms } : {}), ...(didNotStart ? { message: DNS_MSG } : {}), ...(isDraft ? { draft: true } : {}), ...(unpaid && !isDraft ? { ...(can(a, e) ? { unpaid: true } : {}), locked } : {}),
     waitingFor: locked ? "organizer" : null, didNotStart, erasureMs: await erasureOf(env, e), ...(await creditFields(env, a, e, unpaid && !cancelled && !didNotStart, now)), ...(!unpaid && !cancelled && can(a, e) ? { moveUntilMs: await paidWindowEndMs(env.DB, e.id) } : {}), startMs: roundMs(e.start_round), cap: e.cap, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), whoCanJoin: e.closed ? "list" : "anyone", ...pub(e, true) });
@@ -1959,7 +1973,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!can(a, e)) return deny(a);
     const r = await env.DB.prepare("SELECT pid,pattern,round,idx,at_ms AS atMs FROM claim WHERE eid=? ORDER BY round,idx,pid").bind(eid).all<any>();
     const b = await env.DB.prepare("SELECT pid,pattern,round,at_ms AS atMs FROM bogey WHERE eid=? ORDER BY at_ms").bind(eid).all<any>();
-    return json({ claims: [...(r.results ?? []), ...(b.results ?? []).map((x: any) => ({ ...x, idx: -1, bogey: true }))] }); // the Bogeys ride along, flagged: the console settles exactly as the phones do
+    const lateRow = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`claimlate/${eid}`).first<{ v: string }>(); let tooLate: any[] = []; try { tooLate = lateRow ? JSON.parse(lateRow.v) : []; } catch { tooLate = []; }
+    return json({ tooLate: tooLate.map((x) => ({ ticket: x.t, pattern: x.p, atMs: x.at })), claims: [...(r.results ?? []), ...(b.results ?? []).map((x: any) => ({ ...x, idx: -1, bogey: true }))] }); // the Bogeys ride along, flagged: the console settles exactly as the phones do
   }
   if (action === "participants" && req.method === "GET") {
     if (!can(a, e)) return deny(a);
@@ -2084,6 +2099,10 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     }
     return json({ ok: true, added, skipped, invalid });
   }
+  if (action === "gamelog" && req.method === "GET") { // the vital details of the game in plain words: live while it runs, saved when it ends. Tickets by number only; never a name or a mobile number
+    if (!can(a, e)) return deny(a);
+    return json((await readSavedGameLog(env, eid!)) ?? (await buildGameLog(env, d1kv(env), e, cfgOf(e), now)));
+  }
   if (action === "changes" && req.method === "GET") { // "what changed, who, when": plain words, never a player's name, number or ticket
     if (!can(a, e)) return deny(a);
     const cfgC = cfgOf(e), go = await goRoundOf(d1kv(env), e, cfgC);
@@ -2130,8 +2149,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     }
     { // the pause profile depends on the size: if no pause has been sent yet and the size moved to another profile, forget the unused key so the console registers the right one
       const f = await readPublished(d1kv(env), eid!);
-      const sf = safetyForCap(next.cap);
-      if (f && f.messages.length === 0 && (!sf || sf.leadRounds !== f.leadRounds)) {
+      const sf = vc.cfg.startMode === "manual" ? startSafetyForCap(next.cap) : { safety: safetyForCap(next.cap), startOnly: false }; // a game that presses Start has a profile at every size
+      if (f && f.messages.length === 0 && (!sf.safety || sf.safety.leadRounds !== f.leadRounds || !!f.startOnly !== sf.startOnly)) {
         await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${eid}.json`).run();
         try { await env.CONTROL_R2?.delete(controlKey(eid!)); } catch { /* the object expires with its engagement anyway */ }
       }

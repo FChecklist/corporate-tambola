@@ -193,7 +193,7 @@ export default async function ({ seed, R, L }) {
   } });
 
   // ---- 7. size limit: manual start / a Host calling above 1,000 people is refused (boundary 1000 / 1001) in plain words
-  for (const cap of [1000, 1001]) for (const mode of MODES) out.push({ name: `modes/size-limit/${cap}/${mode.key}`, run: async (t) => {
+  for (const cap of [1000, 1001, 2001, 100000]) for (const mode of MODES) out.push({ name: `modes/size-limit/${cap}/${mode.key}`, run: async (t) => {
     await clock.reset();
     const org = await t.newOrg("md"); const start = (await clock.now()) + 30 * MIN;
     const g = await t.game(org, { cap, startRound: roundAt(start), startMode: mode.startMode, callMode: mode.callMode });
@@ -204,6 +204,29 @@ export default async function ({ seed, R, L }) {
       t.expect("cannot switch manual play on", await org.api("PATCH", `/api/z/${a.id}/settings`, { callMode: "host" }), "refuse");
       t.expect("shrunk to 1000 and switched in one save", await org.api("PATCH", `/api/z/${a.id}/settings`, { cap: 1000, callMode: "host" }), "ok");
     }
+  } });
+
+  // ---- 8. Start at EVERY size: the profile, the long lead, no pause above 2,000, all four sizes of the boundary (2000 / 2001 / 5000 / 10000; 10001 and 100000 are in the edge tests, no pack that big can be bought)
+  for (const cap of [1000, 1001, 2000, 2001, 5000, 10000]) out.push({ name: `modes/start-any-size/${cap}`, timeoutMs: 120_000, run: async (t) => {
+    await clock.reset();
+    const w = await world(t, MODES[2], { cap });
+    const f0 = await fileOf(w.id);
+    const big = cap > 2000;
+    t.eq("the file is start-only exactly above 2,000", !!f0.startOnly, big);
+    const wantLead = cap > 10000 ? 85 : cap > 2000 ? 65 : f0.leadRounds; // the BIG profiles, from the same maths as the pause profiles
+    if (big) t.eq("the lead of a big game", f0.leadRounds, wantLead);
+    t.check("the lead (seconds) is longer than the slowest asking cadence of that size", f0.leadRounds * 3 > (cap > 10000 ? 120 : cap > 2000 ? 90 : cap > 1000 ? 72 : 36), `lead ${f0.leadRounds * 3} s`);
+    await at(w, -5 * MIN); t.expect("Start before the time is refused", await press(w, w.secret, "go"), "refuse");
+    if (big) { const p = await press(w, w.secret, "pause"); t.expect("pause is refused in a big game", p, "refuse"); t.check("in plain words", /up to 2,000 people.*runs without them/.test(p.body?.error ?? ""), p.body?.error); }
+    await at(w, 20_000);
+    const r = await press(w, w.secret, "go"); t.expect("Start works", r, "ok");
+    const f1 = await fileOf(w.id); const m = f1.messages.find((x) => x.action === "go");
+    t.check("Start names a round a full lead ahead", !!m && m.atBeaconRound - m.signedAtRound === f0.leadRounds, JSON.stringify(m));
+    t.expect("a second Start is refused", await press(w, w.secret, "go"), "refuse");
+    // a Host calling is still limited to 1,000
+    const org2 = await t.newOrg("md"); const g = await t.game(org2, { cap, startRound: roundAt((await clock.now()) + 30 * MIN), startMode: "manual", callMode: "host" });
+    if (cap <= 1000) t.expect("manual play up to 1,000 is allowed", g.r, "ok"); else t.expect("manual play above 1,000 is refused", g.r, "refuse");
+    await clock.reset();
   } });
   return out;
 }

@@ -4,8 +4,8 @@
 // Nothing here ever holds a player's name, number, ticket or seat: only the rule that changed and the role of whoever changed it.
 import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../../../packages/beacon/src/control";
 import { hostGameOf } from "../../../packages/beacon/src/game";
-import { MANUAL_MAX_PARTICIPANTS, PAUSE_MAX_PARTICIPANTS } from "../../../packages/beacon/src/control";
-import type { EngagementCfg } from "../../../packages/beacon/src/config";
+import { MANUAL_MAX_PARTICIPANTS } from "../../../packages/beacon/src/control";
+import { CLAIM_LATE_TEXT, type EngagementCfg } from "../../../packages/beacon/src/config";
 import type { D1 } from "./worker";
 
 export const GENESIS_S = 1692803367;
@@ -23,10 +23,9 @@ export async function goRoundOf(kv: KV, e: { id: string; start_round: number }, 
 export const needsControl = (c: Pick<EngagementCfg, "callMode" | "startMode">) => c.callMode === "host" || c.startMode === "manual";
 
 export const MANUAL_LIMIT_MSG = `Games above ${MANUAL_MAX_PARTICIPANTS.toLocaleString("en-IN")} people are called by the game itself: choose "The game does". You can still press Start yourself.`;
-export const START_LIMIT_MSG = `Pressing Start works for games of up to ${PAUSE_MAX_PARTICIPANTS.toLocaleString("en-IN")} people. For a larger game, choose "By itself at the time".`;
-/** Manual PLAY (a Host or the Organizer calls every number) is for games of up to 1,000 people; pressing Start has the pause limit (2,000: the Start rides the same signed control file). Returns the plain refusal, or null. */
+/** Manual PLAY (a Host or the Organizer calls every number) is for games of up to 1,000 people. Pressing Start has no size limit: above 2,000 people it uses its own slower control-file profile with a longer lead (see startSafetyForCap). Returns the plain refusal, or null. */
 export const modeTooBig = (c: Pick<EngagementCfg, "callMode" | "startMode">, cap: number): string | null =>
-  c.callMode === "host" && cap > MANUAL_MAX_PARTICIPANTS ? MANUAL_LIMIT_MSG : c.startMode === "manual" && cap > PAUSE_MAX_PARTICIPANTS ? START_LIMIT_MSG : null;
+  c.callMode === "host" && cap > MANUAL_MAX_PARTICIPANTS ? MANUAL_LIMIT_MSG : null;
 export const NEEDS_CONSOLE_MSG = "Open your console once first: it prepares the Start and Next buttons for this game. Then change this setting again.";
 export const STARTED_MSG = "The game has already started, so it can no longer be changed.";
 export const NOT_BEFORE_MSG = "The game cannot be started before its start time. To start earlier, change the start time first.";
@@ -97,3 +96,6 @@ export const changesView = (rows: ChangeRow[]) => rows.slice().reverse().map((r)
 export function liveOf(e: { start_round: number; call_seconds: number }, cfg: EngagementCfg) {
   return { startRound: e.start_round, callSeconds: e.call_seconds, callMode: cfg.callMode === "host" ? "host" : "auto", startMode: cfg.startMode === "manual" ? "manual" : "auto", afterPrizes: cfg.keepCalling ? "keep" : "end" };
 }
+
+/** A prize completed on number N can be claimed only until number N+1 is announced: what a player is told when the claim came too late (the Worker's clock decides). */
+export const CLAIM_LATE_MSG = CLAIM_LATE_TEXT;

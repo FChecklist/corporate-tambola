@@ -7,7 +7,7 @@ import type { PatternId, Scope } from "../../shared/src/ticket";
 export type NewHouseId = "early7" | "early10" | "twolines" | "plus" | "frame" | "topbottom" | "midcorners" | "odd5" | "even5" | "low5" | "high5" | "unlucky";
 /** Every house an organizer can reward (the seven original ones, the newer ones, and Unlucky). */
 export type HouseId = PatternId | NewHouseId;
-export type PatternKey = HouseId | "full2"; // "full2" = Full Two-Ticket House (all 30 numbers across both tickets)
+export type PatternKey = HouseId | "full2"; // "full2" = Super Bumper House (all 30 numbers across both tickets)
 export interface RewardLine { pattern: HouseId; scope: Scope; ordinal: number; text: string }
 /**
  * THE one table of houses: id, label, a short plain "how to win", and the most winners (reward lines: 1st, 2nd, ...) the organizer may give it. The server validates with it, the phone page and the
@@ -15,7 +15,7 @@ export interface RewardLine { pattern: HouseId; scope: Scope; ordinal: number; t
  * over the whole game, not on one ticket (Unlucky). `legacy` houses are the seven every game had before; they are the default for a new game.
  */
 export interface PrizeHouse { id: PatternKey; label: string; how: string; max: number; kind: "set" | "any" | "lines" | "global"; legacy?: true; scope?: Scope }
-/** The organizer decides how many winners each house has; this is only the safety ceiling for one house (and for the Bumper, the Full Two-Ticket House). */
+/** The organizer decides how many winners each house has; this is only the safety ceiling for one house (and for the Bumper, the Super Bumper House). */
 export const MAX_WINNERS_PER_HOUSE = 100;
 /** What happens when two or more people complete a house on the same number: `share` = they share that winner position (the older rule); `next` = they take the next open positions one after the other, the order decided by a public, fixed tie-break everybody can recompute. The organizer picks one for each game. */
 export type TieMode = "share" | "next";
@@ -38,7 +38,7 @@ export const PRIZE_HOUSES: readonly PrizeHouse[] = [
   { id: "low5", label: "Low Five", how: "Be the first to mark 5 numbers from 1 to 30.", max: MAX_WINNERS_PER_HOUSE, kind: "any" },
   { id: "high5", label: "High Five", how: "Be the first to mark 5 numbers from 61 to 90.", max: MAX_WINNERS_PER_HOUSE, kind: "any" },
   { id: "full", label: "Full House", how: "Mark all 15 numbers of your ticket.", max: MAX_WINNERS_PER_HOUSE, kind: "set", legacy: true },
-  { id: "full2", label: "Full Two-Ticket House", how: "Mark all 30 numbers across your two tickets.", max: MAX_WINNERS_PER_HOUSE, kind: "set", scope: "two_ticket" },
+  { id: "full2", label: "Super Bumper House", how: "Mark all 30 numbers of your two tickets together.", max: MAX_WINNERS_PER_HOUSE, kind: "set", scope: "two_ticket" },
   { id: "unlucky", label: "Unlucky", how: "Goes to the ticket with the fewest numbers marked when the first Full House is completed (or when the game ends). A tie is settled fairly by the game's public random number.", max: 1, kind: "global" },
 ];
 /** One plain line naming every house and its maximum winners, for the AI manual and the choices list. The two-ticket house is the Full House with scope two_ticket. */
@@ -234,7 +234,7 @@ export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?
       out.push({ pattern, scope, ordinal, text: cleanText(r?.text, 80) });
     }
     for (const l of out) if (l.ordinal > 1 && !out.some((x) => x.pattern === l.pattern && x.scope === l.scope && x.ordinal === l.ordinal - 1)) return { ok: false, error: "A 2nd, 3rd... reward needs the one before it. Note that sending rewards REPLACES the whole list, so send every reward line each time, with ordinals starting at 1 for each house." };
-    if (out.some((l) => l.scope === "two_ticket") && (input.tickets ?? cfg.tickets) !== 2) return { ok: false, error: "A Full Two-Ticket House needs two tickets per participant." };
+    if (out.some((l) => l.scope === "two_ticket") && (input.tickets ?? cfg.tickets) !== 2) return { ok: false, error: "A Super Bumper House needs two tickets per participant." };
     cfg.rewards = out;
   }
   if (cfg.tickets === 1 && cfg.rewards.some((l) => l.scope === "two_ticket")) cfg.rewards = cfg.rewards.filter((l) => l.scope !== "two_ticket");
@@ -342,3 +342,6 @@ export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?
   if (cfg.employeesOnly) cfg.invites = { on: false, per: cfg.invites!.per, cats: cfg.invites!.cats }; // employees only: nobody invites anyone
   return { ok: true, cfg };
 }
+
+/** What a player is told when a claim came after the next number was announced (the phone and the Worker use these very words). */
+export const CLAIM_LATE_TEXT = "Ohooo! \u{1F60A} Sorry, you pressed Claim after the next number was announced. This claim cannot be made.";

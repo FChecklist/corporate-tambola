@@ -73,6 +73,9 @@ const file = (x: X, eid: string) => readPublished(x.kv, eid);
 };
 
 
+/** the Pause question asks for a tick before "Yes" works */
+const tickAndYes = async (c: Page) => { const yes = c.$("#zcsure [data-y]") as any, tick = c.$("#zcsuretick") as any; expect(yes.disabled).toBe(true); tick.checked = true; tick.dispatchEvent(new (c.win as any).Event("change")); expect(yes.disabled).toBe(false); c.click("#zcsure [data-y]"); };
+
 describe("game-day clarity on the console", () => {
   test("the Number board button and the numbers called so far sit at the very top; the latest is highlighted; N of 90 follows the game", async () => {
     const x = await setup("GD-TOP");
@@ -82,7 +85,7 @@ describe("game-day clarity on the console", () => {
     expect(c.$("#boardbtn")).toBeTruthy(); expect((c.$("#boardbtn") as any).getAttribute("href")).toMatch(/\/board\.html\?e=GD-TOP#k=/);
     expect(c.html().indexOf('id="livebar"')).toBeGreaterThan(-1); expect(c.html().indexOf('id="livebar"')).toBeLessThan(c.html().indexOf('id="sec1"')); // above every step
     x.goLive(); for (let i = 0; i < 40; i++) await x.step();
-    await c.waitFor((t) => /[1-9][0-9]* of 90 numbers called, the latest is \d+/.test(t), 20_000);
+    await c.waitFor((t) => /[1-9][0-9]* of 90 called/.test(t), 20_000);
     const balls = Array.from(c.win.document.querySelectorAll("#numstrip .zc-ball")) as any[];
     expect(balls.length).toBeGreaterThan(3); expect(balls.filter((b) => b.classList.contains("last")).length).toBe(1); expect(balls[balls.length - 1].classList.contains("last")).toBe(true);
     expect(c.$("#numcount")!.textContent).toContain(`${balls.length} of 90`);
@@ -100,7 +103,7 @@ describe("game-day clarity on the console", () => {
     expect(c.win.document.getElementById("zcsure")!.textContent).toMatch(/Are you sure\? Numbers stop for everybody\./);
     c.click("#zcsure [data-n]"); await wait(100);
     expect((await file(x, "GD-PZ"))!.messages.length).toBe(0); // "No, keep playing": nothing was sent
-    c.click('[data-ctl="pause"]'); for (let i = 0; i < 50 && !c.win.document.getElementById("zcsure"); i++) await wait(100); c.click("#zcsure [data-y]");
+    c.click('[data-ctl="pause"]'); for (let i = 0; i < 50 && !c.win.document.getElementById("zcsure"); i++) await wait(100); await tickAndYes(c);
     for (let i = 0; i < 20; i++) { await wait(200); if ((await file(x, "GD-PZ"))!.messages.length === 1) break; }
     for (let i = 0; i < 20; i++) await x.step();
     await c.waitFor((t) => /PAUSED/.test(t) && /Paused by the Organizer at/.test(t), 25_000);

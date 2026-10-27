@@ -24,7 +24,7 @@
   { const pt = (q.get("pass") || "").toLowerCase(); if (/^[0-9a-f]{32}$/.test(pt)) { ls.set("ctz-pass", JSON.stringify({ t: pt, at: Date.now() })); q.delete("pass"); try { const rest = q.toString(); history.replaceState(null, "", location.pathname + (rest ? "?" + rest : "")); } catch { /* the address stays */ } } }
   // A browser AI may open this page in a new tab, and a tab holds the key only for itself: another open tab of the same browser can hand it over (same site, same browser, never stored).
   const bc = typeof BroadcastChannel === "function" ? new BroadcastChannel("ctz-org-key") : null;
-  const OLD_HOUSES = [{ id: "early5", label: "Early Five", how: "Be the first to mark any 5 of your numbers.", max: 5 }, { id: "top", label: "Top Line", how: "Mark all 5 numbers of the top line.", max: 5 }, { id: "mid", label: "Middle Line", how: "Mark all 5 numbers of the middle line.", max: 5 }, { id: "bot", label: "Bottom Line", how: "Mark all 5 numbers of the bottom line.", max: 5 }, { id: "corners", label: "Four Corners", how: "Mark the first and last number of the top and bottom lines.", max: 5 }, { id: "star", label: "Star", how: "Mark the four corners and the centre number of the middle line.", max: 5 }, { id: "full", label: "Full House", how: "Mark all 15 numbers of your ticket.", max: 5 }, { id: "full2", label: "Full Two-Ticket House", how: "Mark all 30 numbers across your two tickets.", max: 5 }];
+  const OLD_HOUSES = [{ id: "early5", label: "Early Five", how: "Be the first to mark any 5 of your numbers.", max: 5 }, { id: "top", label: "Top Line", how: "Mark all 5 numbers of the top line.", max: 5 }, { id: "mid", label: "Middle Line", how: "Mark all 5 numbers of the middle line.", max: 5 }, { id: "bot", label: "Bottom Line", how: "Mark all 5 numbers of the bottom line.", max: 5 }, { id: "corners", label: "Four Corners", how: "Mark the first and last number of the top and bottom lines.", max: 5 }, { id: "star", label: "Star", how: "Mark the four corners and the centre number of the middle line.", max: 5 }, { id: "full", label: "Full House", how: "Mark all 15 numbers of your ticket.", max: 5 }, { id: "full2", label: "Super Bumper House", how: "Mark all 30 numbers across your two tickets.", max: 5 }];
   const HOUSES = ZG && Array.isArray(ZG.PRIZE_HOUSES) && ZG.PRIZE_HOUSES.length ? ZG.PRIZE_HOUSES : OLD_HOUSES;
   const NAMES = Object.fromEntries(HOUSES.map((h) => [h.id, h.label]));
   // ---- Simpler console: things are only HIDDEN here, never removed; change a constant to bring them back. The server keeps its own (higher) limits.
@@ -198,7 +198,7 @@
     const date = istDateStr(start), time = pad2(start.getUTCHours()) + ":" + pad2(start.getUTCMinutes());
     const nm = (c.name || "").trim();
     const f = { occ: nm ? (OCC.includes(nm) && nm !== "Other" ? nm : "Other") : "Diwali party", oname: nm && !OCC.includes(nm) ? nm : "", day: blank ? "" : dayOpts().some((d) => d[0] === date) ? date : "other", dayo: blank ? "" : date, time: blank ? "" : TIMES.some((x) => x[0] === time) ? time : "other", timeo: blank ? "" : time,
-      cap: String(inf.cap || 250), tix: String(t), spd: String(inf.callSeconds || 9), rnd: String(c.rounds || 1), who: whoNow(), ver: c.verify === "id" || c.verify === "either" || c.verify === "both" ? c.verify : "mobile", emp: !!c.employeesOnly, mode: (c.callMode || inf.callMode) === "host" ? "host" : "auto", start: (c.startMode || inf.startMode) === "manual" ? "manual" : "auto", after: (c.keepCalling || inf.afterPrizes === "keep") ? "keep" : "end",
+      cap: String(inf.cap || 250), tix: String(t), spd: String(inf.callSeconds || 12), rnd: String(c.rounds || 1), who: whoNow(), ver: c.verify === "id" || c.verify === "either" || c.verify === "both" ? c.verify : "mobile", emp: !!c.employeesOnly, mode: (c.callMode || inf.callMode) === "host" ? "host" : "auto", start: (c.startMode || inf.startMode) === "manual" ? "manual" : "auto", after: (c.keepCalling || inf.afterPrizes === "keep") ? "keep" : "end",
       inv: !!(c.invites && c.invites.on), per: String((c.invites && c.invites.per) || 4), cats: ((c.invites && c.invites.cats) || ["family", "colleagues"]).slice(), bundle: "", hs: {}, ph: "", ties: c.ties === "share" ? "share" : "next", demo: c.demo ? "1" : "0" };
     for (const [k] of HS) f.hs[k] = { on: false, n: 1, pt: "later", pd: "", orig: [] };
     for (const l of c.rewards || []) { const k = l.scope === "two_ticket" ? "full2" : l.pattern, h = f.hs[k]; if (!h) continue; h.on = true; h.n = Math.max(h.n, l.ordinal); h.orig[l.ordinal - 1] = l.text || ""; }
@@ -233,20 +233,17 @@
     let when = "the start time"; try { const ms = startOf(f); if (Number.isFinite(ms)) when = new Date(ms).toLocaleString("en-US", { timeZone: "Asia/Kolkata", weekday: "short", hour: "numeric", minute: "2-digit", hour12: true }).replace(",", "").replace(/ (AM|PM)$/, (m) => m.toLowerCase()); } catch { /* the day or time is not picked yet */ }
     return `<p class="zc-small zc-modesum" id="modesummary"><b>Your game:</b> ${f.start === "manual" ? "you press Start at " + esc(when) : "starts by itself at " + esc(when)}, and ${f.mode === "host" ? "you or a Host call every number" : "the game calls the numbers"}.</p>`;
   };
-  const START_MAX = 2000; // pressing Start rides the pause/control file, which exists for games of up to 2,000 people
-  const modeQuestions = (f) => {
+  const modeQuestions = (f) => { // "I press Start" exists at every size; "I do" (a Host calls every number) only up to 1,000 people
     const cap = Number(f.cap);
-    if (cap > MANUAL_MAX) f.mode = "auto"; // above 1,000 people the game calls the numbers itself
-    if (cap > START_MAX) f.start = "auto";
-    const q1 = cap > START_MAX ? small("Games above 2,000 people start by themselves at the time.", 'id="manualhidden"') : radios("start", "How does it start?", START_OPTS);
-    const q2 = cap > MANUAL_MAX ? small("Games above 1,000 people are called by the game itself. " + (cap > START_MAX ? "" : "You can still press Start yourself."), 'id="callhidden"') : radios("mode", "Who calls the numbers?", CALL_OPTS);
-    return q1 + q2 + modeSummary(f) + radios("after", "When every prize is won:", AFTER_OPTS);
+    if (cap > MANUAL_MAX) f.mode = "auto";
+    const q2 = cap > MANUAL_MAX ? small("Games above 1,000 people are called by the game itself. You can still press Start yourself.", 'id="callhidden"') : radios("mode", "Who calls the numbers?", CALL_OPTS);
+    return radios("start", "How does it start?", START_OPTS) + q2 + modeSummary(f) + radios("after", "When every prize is won:", AFTER_OPTS);
   };
   // one small line under every group of tick boxes: what the boxes are for
   const HINTS = {
     occ: "The kind of party. It becomes the name of your game.", day: "The day guests should be ready.", time: "The time guests should be ready (India time). The first number comes 2 minutes later.",
     mode: "Auto: the numbers come by themselves. Host: a person presses a button for each number.", tix: "How many tickets each person plays with.",
-    spd: "The gap between two numbers. 9 seconds is lively, 12 seconds is relaxed.", rnd: "Most events play 1 game. More games are played one after the other.",
+    spd: "A new number comes every 12 seconds. 90 numbers take about 18 minutes.", rnd: "Most events play 1 game. More games are played one after the other.",
     ver: "What a person must type to get in.", per: "The most people one guest can invite.",
     cats: "The kinds of guests they may invite.", ties: "What happens when two people complete the same line on the same number.", emp: "Tick this for a staff-only game: only people on your list can play and nobody can invite anyone.",
   };
@@ -266,10 +263,10 @@
     occ: { t: "Occasion", does: ["The name of the occasion becomes the name of your game, shown to guests and in the report."], not: ["It does not change the rules or the look of the game."] },
     day: { t: "Which day", does: ["The day guests should be ready, in India time."], not: ["It does not start anything by itself. The game still needs to be published and paid for."] },
     time: { t: "Start time", does: ["The time guests should be ready, in India time. The first number comes 2 minutes later.", "Check-in opens 5 minutes before this time."], not: ["It does not delay the numbers: they start 2 minutes after this time, not at this time."] },
-    start: { t: "How does it start?", does: ["By itself: the game begins at the start time you chose, with no one pressing anything.", "I press Start: at the start time the game waits. You or a Host press the big Start button on Game day. The numbers then begin about 40 seconds later, together on every phone."], not: ["Start cannot be pressed before the start time. To start earlier, first change the start time.", "If nobody presses Start, the game does not begin by itself. Press Start, or change the start time.", "You can change this, and the start time, until the game starts. The links stay the same."] },
+    start: { t: "How does it start?", does: ["By itself: the game begins at the start time you chose, with no one pressing anything.", "I press Start: at the start time the game waits. You or a Host press the big Start button on Game day. The numbers then begin together on every phone a short while later: about 40 seconds for a small game, a few minutes for a very large one, so that every phone has heard."], not: ["Start cannot be pressed before the start time. To start earlier, first change the start time.", "If nobody presses Start, the game does not begin by itself. Press Start, or change the start time.", "You can change this, and the start time, until the game starts. The links stay the same."] },
     mode: { t: "Who calls the numbers?", does: ["Auto: the software calls a new number every few seconds by itself. Nobody has to press anything.", "Host: a person presses Next number for each number, so they can speak between numbers. Phones show the number about 6 seconds after the press."], not: ["In Host mode, if nobody presses, no number comes.", "You cannot switch between Auto and Host after the game has started."] },
     tix: { t: "Tickets for each person", does: ["How many tickets every person plays with: 1 or 2.", "With 2 tickets a person has two chances for every prize; either ticket can win."], not: ["People cannot choose their own number of tickets.", "A second ticket does not mean a second prize for the same position."] },
-    spd: { t: "Gap between two numbers", does: ["9 seconds is lively. 12 seconds is relaxed.", "Before every number a countdown 9 to 1 shows (silent) so people know it is coming."], not: ["Breaks and pauses do not change the speed afterwards.", "It is locked once the game has started."] },
+    spd: { t: "Gap between two numbers", does: ["A new number comes every 12 seconds: calm enough to find it on your ticket, and a full game of 90 numbers takes about 18 minutes (about 36 minutes with two tickets). With claims, a game takes 30 to 60 minutes."], not: ["Breaks and pauses do not change the speed afterwards.", "It is locked once the game has started."] },
     rnd: { t: "Rounds", does: ["One round is one full game of up to 90 numbers. Two rounds means a second full game with new tickets and new numbers, straight after the first.", "The prizes are available again in every round."], not: ["Two rounds take about twice as long.", "Breaks and lucky draws belong to the first round."] },
     who: { t: "Who can join", does: ["Anyone with the link: whoever opens the link and types their details gets in straight away.", "Only people on a list: people you added get in; anyone else waits in a waiting room until you or a Host admits them."], not: ["It does not stop a person sharing the link, but a ticket only plays on one phone.", "The game stops accepting people when it is full."] },
     aud: { t: "Who is this game for?", does: ["Only my employees: only the people on the list you upload can play. Nobody can invite anyone. Each employee gives their employee ID, their mobile number, either, or both, as you choose.", "My employees, plus their friends and family: your employees play and each can invite a few guests by WhatsApp. People who are not on your list wait for you to say yes.", "A list of people I choose: customers, vendors, dealers or members you add. Only they play. Everyone else who opens the link waits for you.", "A list of people I choose, plus the people they invite: the same, and each person can invite a few more.", "Anyone with the link: whoever opens the link joins straight away with their mobile number. No list is needed.", "Anyone with the link, my employees confirm with their employee ID: anyone can join, and your employees prove who they are with their employee ID."], not: ["It does not check anyone against your company system: it checks against the list you give.", "A ticket plays on one phone only, whatever you choose.", "Until the game starts you can change this choice."] },
@@ -332,7 +329,7 @@
       ["Can I change this after the game has started?", "No."],
     ],
     tix: [["What if someone wants only one ticket?", "Everybody plays with the same number of tickets, so the game is fair. Choose 1 if you prefer a simpler game."]],
-    spd: [["Which speed is better?", "9 seconds is lively and suits short games. 12 seconds gives people more time and suits older players or new players."], ["What if a phone is slow?", "Each phone catches up by itself. Numbers are never skipped or repeated."]],
+    spd: [["Can I make it faster?", "No. Every game has one speed, a new number every 12 seconds, so everybody can follow. Games made earlier keep the speed they were published with."]],
     rnd: [["What if I choose 2 rounds?", "After the first round there is a short break and then a second full game with new tickets. The prizes can be won again."], ["What if the first round ends early because all the prizes were won?", "The game moves straight on to the next round."]],
     ties: [["What if two people complete a line on the same number?", "With Share both win. With Next the first gets it and the other gets the next winner position of that prize, if there is one."]],
     per: [["What if I set it to zero?", "Guests cannot invite anyone."]],
@@ -368,7 +365,7 @@
   }
   function closeInfo() { const m = document.getElementById("zcmodal"); if (m) m.remove(); }
   /** A question that always shows (the browser's own confirm box can be blocked, and then the red button looks dead): true on Yes, false on No/Escape/outside tap; onYes runs inside the Yes tap (the only moment a new tab may open on a phone). */
-  function askSure(title, text, yes, no, onYes) { return new Promise((res) => { const old = document.getElementById("zcsure"); if (old) old.remove(); const m = document.createElement("div"); m.className = "zc-modal"; m.id = "zcsure"; m.setAttribute("role", "alertdialog"); m.setAttribute("aria-modal", "true"); m.setAttribute("aria-labelledby", "zcsuret"); m.innerHTML = `<div class="zc-mbox"><h3 id="zcsuret">${esc(title)}</h3>${String(text).split("\n\n").map((p) => `<p>${esc(p)}</p>`).join("")}<div class="zc-foot"><button type="button" class="zc-btn zc-btn-bad" data-y>${esc(yes)}</button> <button type="button" class="zc-btn zc-btn-alt" data-n>${esc(no)}</button></div></div>`; const key = (e) => { if (e.key === "Escape") done(false); }; const done = (v) => { document.removeEventListener("keydown", key); m.remove(); res(v); }; m.addEventListener("click", (e) => { if (e.target.closest("[data-y]")) { try { if (onYes) onYes(); } catch { /* the answer still counts */ } done(true); } else if (e.target === m || e.target.closest("[data-n]")) done(false); }); document.addEventListener("keydown", key); document.body.appendChild(m); const nb = m.querySelector("[data-n]"); if (nb) nb.focus(); }); }
+  function askSure(title, text, yes, no, onYes, tick) { return new Promise((res) => { const old = document.getElementById("zcsure"); if (old) old.remove(); const m = document.createElement("div"); m.className = "zc-modal"; m.id = "zcsure"; m.setAttribute("role", "alertdialog"); m.setAttribute("aria-modal", "true"); m.setAttribute("aria-labelledby", "zcsuret"); m.innerHTML = `<div class="zc-mbox"><h3 id="zcsuret">${esc(title)}</h3>${String(text).split("\n\n").map((p) => `<p>${esc(p)}</p>`).join("")}${tick ? `<label class="zc-tick"><input type="checkbox" id="zcsuretick"> ${esc(tick)}</label>` : ""}<div class="zc-foot"><button type="button" class="zc-btn zc-btn-bad" data-y${tick ? " disabled" : ""}>${esc(yes)}</button> <button type="button" class="zc-btn zc-btn-alt" data-n>${esc(no)}</button></div></div>`; const key = (e) => { if (e.key === "Escape") done(false); }; const done = (v) => { document.removeEventListener("keydown", key); m.remove(); res(v); }; m.addEventListener("click", (e) => { if (e.target.closest("[data-y]")) { try { if (onYes) onYes(); } catch { /* the answer still counts */ } done(true); } else if (e.target === m || e.target.closest("[data-n]")) done(false); }); document.addEventListener("keydown", key); document.body.appendChild(m); if (tick) { const cb = m.querySelector("#zcsuretick"), yb = m.querySelector("[data-y]"); cb.onchange = () => { yb.disabled = !cb.checked; }; } const nb = m.querySelector("[data-n]"); if (nb) nb.focus(); }); }
   document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("[data-info]"); if (b) { e.preventDefault(); e.stopPropagation(); openInfo(b.getAttribute("data-info")); } }, true);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeInfo(); });
   const hintOf = (path) => (HINTS[path] ? `<span class="zc-hint2">${HINTS[path]}</span>` : "");
@@ -427,7 +424,7 @@
 
   // ---------- step 2: how it plays ----------
   // the gap between two numbers: 9 or 12 seconds (an older game that uses 6 or 15 keeps its own value so it never disappears)
-  const spdOpts = (cur) => { const o = [["9", "9 seconds"], ["12", "12 seconds"]]; const c = String(cur || ""); if (c && c !== "9" && c !== "12") { o.push([c, c + " seconds"]); o.sort((a, b) => Number(a[0]) - Number(b[0])); } return o; };
+  const spdOpts = (cur) => { const o = [["12", "12 seconds"]]; const c = String(cur || ""); if (c && c !== "12") { /* an older game keeps the speed it was published with; new games have one speed */ o.push([c, c + " seconds"]); o.sort((a, b) => Number(a[0]) - Number(b[0])); } return o; };
   const capOptions = () => {
     const packs = (S.packs || []).map((k) => ({ n: k.upTo, price: k.inr })), cur = Number(S.f.cap);
     const list = packs.length ? packs : [100, 250, 500, 1000].map((n) => ({ n, price: 0 }));
@@ -1013,12 +1010,12 @@
     const note = S.startNote ? `<p class="zc-small" id="startnote" role="status"><b>${esc(S.startNote)}</b></p>` : "";
     if (go !== null) {
       const left = S.now === null ? null : Math.max(0, (go - S.now) * 3);
-      return `<div class="zc-block" id="startgame"><h3>Start the game</h3><p class="zc-small"><b id="startstate">${left !== null && left > 0 ? "Start was pressed. The game begins in about " + left + " seconds." : "The game has started."}</b></p>${note}</div>`;
+      return `<div class="zc-block" id="startgame"><h3>Start the game</h3><p class="zc-small"><b id="startstate">${left !== null && left > 0 ? "Start was pressed. The game begins in about " + (left >= 120 ? Math.floor(left / 60) + " minutes " + (left % 60) + " seconds" : left + " seconds") + "." : "The game has started."}</b></p>${note}</div>`;
     }
     return `<div class="zc-block zc-hostcall" id="startgame"><h3>Start the game</h3>
       ${timeUp ? `<p class="zc-small"><b id="startstate">Press Start, or change the start time.</b> Nobody has pressed Start yet, so your players are waiting for you.</p>` : `<p class="zc-small"><b id="startstate">Start can be pressed from ${esc(whenIst(S.info.startMs))}.</b> To start earlier, first change the start time in step 1.</p>`}
       <button type="button" class="zc-btn zc-btn-big" id="startnow"${timeUp && !S.starting ? "" : " disabled"}>${S.starting ? "Starting…" : "Start the game"}</button>
-      ${small(timeUp ? "Pressing Start tells every phone, the big screen and the Hosts' screens to begin together in about 40 seconds. It can be pressed only once." : "Start stays off until the start time. The change of a start time is written down in the list below, so there is always a record.")}${note}</div>`;
+      ${small(timeUp ? "Pressing Start tells every phone, the big screen and the Hosts' screens to begin together in " + leadWords() + ". It can be pressed only once." : "Start stays off until the start time. The change of a start time is written down in the list below, so there is always a record.")}${note}</div>`;
   }
   /** What changed, who, when: plain words, no player data. */
   function changesBlock() {
@@ -1029,7 +1026,7 @@
   /** Host mode: the big "Next number" button. A press only decides WHEN the next number is released; the number itself comes from the public random beacon 6 seconds later, so nobody can choose it. */
   function hostBlock() {
     if (!hostMode() || !S.cfg) return "";
-    if (!S.cf) return `<div class="zc-block" id="hostcall"><h3>Next number</h3>${small(S.info && S.info.cap > 2000 ? "A Host can call the numbers in games of up to 2,000 people. This game is larger, so the software calls them." : "The Next number button becomes available once this game is set up.")}</div>`;
+    if (!S.cf) return `<div class="zc-block" id="hostcall"><h3>Next number</h3>${small(S.info && S.info.cap > 1000 ? "A Host can call the numbers in games of up to 1,000 people. This game is larger, so the software calls them." : "The Next number button becomes available once this game is set up.")}</div>`;
     const st = S.st, nexts = (st && st.nextRounds) || [], count = nexts.length, rounds = (S.cfg && S.cfg.rounds) || 1, total = 90 * rounds;
     const log = S.logs && S.logs[S.round] ? S.logs[S.round] : [], last = log.length ? log[log.length - 1] : null;
     const onWay = count > 0 && (S.now === null || nexts[count - 1] > S.now || log.length + 90 * (S.round - 1) < count); // signed, but its round is not published or not read yet
@@ -1042,6 +1039,7 @@
       ${small("The number reaches every phone within about 15 seconds. The order of the numbers comes from the public random numbers: your press only says when the next one is released.")}
       ${S.nextNote ? `<p class="zc-small" id="nextnote" role="status"><b>${esc(S.nextNote)}</b></p>` : ""}</div>`;
   }
+  const leadWords = () => { const sec = leadSec(); return sec >= 90 ? "about " + Math.round(sec / 60) + " minutes" : "about " + sec + " seconds"; }; // how long after the press the game begins, from this game's own control profile
   const leadSec = () => (S.cf ? Math.max(10, Math.round(S.cf.leadRounds * 3 / 5) * 5) : 40); // seconds a Pause, Resume or End takes to reach the phones: one figure for the whole page
   const ctlStateOf = (st, now) => { const cur = now === null ? null : st.intervals.find((i) => now >= i.start && now < i.end), nxt = now === null ? null : st.intervals.find((i) => now < i.start); return { pausedNow: !!cur, pauseEnd: cur ? cur.end : 0, pausePending: !cur && !!nxt, stopped: st.stopRound !== null, stopNow: now !== null && st.stopRound !== null && now >= st.stopRound }; }; // what step 9 shows: paused, on its way, or ended
   const CTL_SENT = { pause: (s) => `Pause sent. It reaches the phones in about ${s} seconds. It ends by itself after 30 minutes. Press Resume sooner if the break is over.`, resume: (s) => `Resume sent. The numbers restart on the phones in about ${s} seconds.`, stop: (s) => `Ending the game. Phones stop in about ${s} seconds.`, extend: () => "Added 30 more minutes to the pause." };
@@ -1069,9 +1067,10 @@
     if (S.draft) return RUN_LINE + small("This opens when your game is published. Then you run the game from here: pause, resume, end, message your guests and hand over prizes.");
     const CS = S.control || {}, paused = !!CS.pausedNow, stopped = !!CS.stopped, onWay = !!CS.pausePending && !stopped, off = stopped || !!S.ctlBusy;
     const present = S.info && S.info.checkin && S.presence ? `<div class="zc-block" id="presentbox"><h3>Present: ${S.presence.present} of ${S.presence.total}</h3>${small("Check-in opens 5 minutes before the start. Every participant must mark themselves present (name, mobile, and the 4-digit code on their own ticket page) before their ticket opens. Only people who are present can win a prize.")}</div>` : "";
-    const ctl = `${present}<div class="zc-block"><h3>Controls</h3><div class="zc-chips"><button type="button" class="zc-btn zc-btn-s" data-ctl="pause"${paused || onWay || off ? " disabled" : ""}>Pause</button><button type="button" class="zc-btn zc-btn-s zc-btn-alt" data-ctl="resume"${paused && !off ? "" : " disabled"}>Resume</button>${paused && !off ? `<button type="button" class="zc-btn zc-btn-s zc-btn-alt" data-ctl="extend">Add 30 more minutes</button>` : ""}<button type="button" class="zc-btn zc-btn-s zc-btn-bad" data-ctl="stop"${off ? " disabled" : ""}>End the game</button></div>${stopped ? `<p id="ctlstate" role="status" style="margin:8px 0 0"><b>${CS.stopNow ? "The game is over." : "The game is being ended. Phones stop in about " + leadSec() + " seconds."}</b></p>` : paused ? `<p id="ctlstate" role="status" style="margin:8px 0 0"><b>Paused.</b> The numbers restart by themselves at ${esc(CS.pauseEnd ? ist(ZG.roundTimeMs(CS.pauseEnd)) : "the end of the pause")}. Press Resume sooner if the break is over.</p>` : onWay ? `<p id="ctlstate" role="status" style="margin:8px 0 0"><b>Pause on its way to the phones...</b></p>` : ""}
+    const ctl = `${present}<div class="zc-block"><h3>Controls</h3><div class="zc-chips"><button type="button" class="zc-btn zc-btn-s" data-ctl="pause"${paused || onWay || off ? " disabled" : ""}>Pause the game…</button><button type="button" class="zc-btn zc-btn-s zc-btn-alt" data-ctl="resume"${paused && !off ? "" : " disabled"}>Resume</button>${paused && !off ? `<button type="button" class="zc-btn zc-btn-s zc-btn-alt" data-ctl="extend">Add 30 more minutes</button>` : ""}<button type="button" class="zc-btn zc-btn-s zc-btn-bad" data-ctl="stop"${off ? " disabled" : ""}>End the game</button></div>${stopped ? `<p id="ctlstate" role="status" style="margin:8px 0 0"><b>${CS.stopNow ? "The game is over." : "The game is being ended. Phones stop in about " + leadSec() + " seconds."}</b></p>` : paused ? `<p id="ctlstate" role="status" style="margin:8px 0 0"><b>Paused.</b> The numbers restart by themselves at ${esc(CS.pauseEnd ? ist(ZG.roundTimeMs(CS.pauseEnd)) : "the end of the pause")}. Press Resume sooner if the break is over.</p>` : onWay ? `<p id="ctlstate" role="status" style="margin:8px 0 0"><b>Pause on its way to the phones...</b></p>` : ""}
       ${small((S.cf ? `A pause reaches every phone about ${leadSec()} seconds after you press it: phones check in on a timer, and larger games check less often so they stay within the free plan.` : (S.info && S.info.cap > 2000 ? "Pause is available for games of up to 2,000 people. This one is larger, so it runs without it." : "Pause becomes available once this game is set up.")) + (S.ctlNote ? ' <b id="ctlnote" role="status">' + esc(S.ctlNote) + "</b>" : ""))}</div>`;
-    return RUN_LINE + startBlock() + hostBlock() + ctl + changesBlock() + announceBlock() + statsBlock() + prizeBlock() + rewardsBlock() + luckyBlock() + playBlock() + cont(9);
+    const bigCtl = `${present}<div class="zc-block"><h3>Controls</h3>${small("Pause and End are available for games of up to 2,000 people. This game runs without them. Start is the one control: once the game has started it plays itself.")}</div>`;
+    return RUN_LINE + startBlock() + hostBlock() + (S.cf && S.cf.startOnly ? bigCtl : ctl) + changesBlock() + announceBlock() + statsBlock() + prizeBlock() + rewardsBlock() + luckyBlock() + playBlock() + cont(9);
   }
 
   // ---------- step 10: after the game ----------
@@ -1268,12 +1267,78 @@
     if (allPrizesWon()) { const last = Math.max(0, ...(S.published || []).filter((x) => (x.round || 1) === (S.round || 1) && Number.isInteger(x.idx)).map((x) => x.idx + 2)); if (last > 0 && last < log.length) log = log.slice(0, last); }
     return log;
   }
-  /** At the TOP of the game screen, always: the Number board button, the numbers called so far, a big PAUSED banner (who, since when, until when, with Resume), and how the game ended. */
-  function liveBar() {
+  const dayTimeIst = (ms) => ZG.dayTimeIst(ms); // the same words on every screen
+  const mmssOf = (sec) => ZG.mmss(sec);
+  /** What is happening now, as one of the story states (the same words every screen uses: ZG.story). */
+  function consoleStory() {
+    const log = calledSoFar(), r = role(), who = r === "host" ? "host" : r === "cohost" ? "cohost" : "organizer";
+    const base = { role: who, called: log.length, manual: manualMode() };
+    if (S.draft) return ZG.story({ ...base, state: "draft" });
+    if (isCancelled()) return ZG.story({ ...base, state: "cancelled" });
+    if (didNotStart()) return ZG.story({ ...base, state: "neverStarted" });
+    const pz = S.st && S.now !== null ? S.st.intervals.find((i) => S.now >= i.start && S.now < i.end) : null;
+    if (S.control && S.control.stopNow) return ZG.story({ ...base, state: "endedByOrganizer" });
+    if (allPrizesWon()) return ZG.story({ ...base, state: "endedPrizes" });
+    if (S.started && log.length >= 90 && (S.round || 1) >= ((S.cfg && S.cfg.rounds) || 1)) return ZG.story({ ...base, state: "endedAll" });
+    if (S.unpaid) return ZG.story({ ...base, state: "unpaid" });
+    if (pz) { const pm = S.cf ? (S.cf.messages || []).find((m) => m.action === "pause" && m.atBeaconRound === pz.start) : null; return ZG.story({ ...base, state: "paused", by: pm && S.cf.by && S.cf.by[pm.seq - 1] === "Host" ? "a Host" : "the Organizer" }); }
+    if (!S.info) return ZG.story({ ...base, state: "waiting" });
+    const sr = S.info.startRound, go = goRound();
+    if (manualMode() && go === null) {
+      if (S.now !== null && S.now > sr + 28800) return ZG.story({ ...base, state: "neverStarted" }); // a day after its time, nobody pressed Start
+      return ZG.story({ ...base, state: S.now !== null && S.now >= sr ? "waitStart" : "waiting", time: dayTimeIst(S.info.startMs) });
+    }
+    if (log.length === 0) {
+      const first = manualMode() ? go : sr + ZG.GRACE_ROUNDS, left = S.now === null || first === null ? null : (first - S.now) * 3;
+      if (left !== null && left > 0 && left <= 300) return ZG.story({ ...base, state: "countdown", countdown: mmssOf(left) });
+      if (left !== null && left > 300) return ZG.story({ ...base, state: "waiting", time: dayTimeIst(S.info.startMs) });
+    }
+    return ZG.story({ ...base, state: "running" });
+  }
+  const storyHtml = (st) => `<div class="zc-story" id="storyline" data-state="${st.state}"><b>${esc(st.say)}</b> <span>${esc(st.todo)}</span></div>`;
+  /** The vital details during the game and after it: from the game log the Worker keeps (tickets by number only). */
+  function vitalsHtml() {
+    const g = S.glog; if (!g || S.draft) return "";
+    const log = calledSoFar(), when = (ms) => (ms ? hmIst(ms) : "-");
+    const people = `${g.people.joined} joined` + (g.people.waiting ? `, ${g.people.waiting} waiting for your OK` : ", none waiting") + (g.people.present != null ? `, ${g.people.present} checked in as present` : "");
+    const luckyRows = (g.lucky || []).map((l) => `<div class="zc-rowl"><span><b>Lucky draw: ${esc(l.title)}</b></span><span>${l.drawn ? "Drawn · Ticket number" + (l.tickets.length === 1 ? " " : "s ") + l.tickets.join(", ") : "Not drawn yet · " + l.winners + " picked at random"}</span></div>`).join("");
+    const prizes = g.prizes.length || luckyRows ? g.prizes.map((p) => `<div class="zc-rowl"><span><b>${esc(p.prize)}</b>${p.text ? " · " + esc(p.text) : ""}</span><span>Ticket number ${p.ticket} · ${esc(when(p.atMs))}</span></div>`).join("") + luckyRows : '<span class="zc-small zc-nomargin">None yet.</span>';
+    const pauses = g.pauses.length ? g.pauses.map((p) => `Paused by ${p.by.replace(/^The /, "the ").replace(/^A /, "a ")} at ${esc(when(p.fromMs))}${p.toMs ? " until " + esc(when(p.toMs)) : ""}`).join("; ") : "Not paused so far.";
+    const warn = g.warnings.length ? g.warnings.map((w) => `<div class="zc-warnline">${esc(w)}</div>`).join("") : '<span class="zc-small zc-nomargin">Nothing to worry about.</span>';
+    return `<details class="zc-block zc-vitals" id="vitals" open><summary><b>Game details</b></summary>
+      <div class="zc-rowl"><span>Status</span><span id="v-status">${esc(consoleStory().say)}</span></div>
+      <div class="zc-rowl"><span>People</span><span id="v-people">${esc(people)}</span></div>
+      <div class="zc-rowl"><span>Pauses</span><span id="v-pauses">${pauses}</span></div>
+      <h4 class="zc-h4">Prizes won so far</h4><div id="v-prizes">${prizes}</div>
+      <h4 class="zc-h4">Warnings</h4><div id="v-warn">${warn}</div></details>`;
+  }
+  function gameLogBlock() {
     if (S.draft || !S.info || !eid) return "";
+    const done = gameEnded() || (S.glog && S.glog.saved);
+    if (!done) return "";
+    const href = location.origin + "/gamelog.html?e=" + encodeURIComponent(eid), key = "#k=" + encodeURIComponent(secret);
+    return `<div class="zc-block" id="gamelogbox"><h3>Game log</h3>${small("The vital details of this game in plain words: start and end time, how it ended, how many people joined, every prize with its ticket number and time, the pauses, the changes to the settings, the report e-mail and every number called with its time. It has ticket numbers only: no names and no mobile numbers. It is kept for 365 days.")}
+      <div class="zc-chips"><a class="zc-btn zc-btn-big" id="gamelogopen" href="${esc(href + key)}" target="_blank" rel="noopener">Open the game log (print or save as PDF)</a><a class="zc-btn zc-btn-big zc-btn-alt" id="gamelogtxt" href="${esc(href + "&txt=1" + key)}" target="_blank" rel="noopener">Download as a text file</a></div></div>`;
+  }
+  /** Seconds to the next number from the game's own schedule (never a local guess); null when nothing is due (paused, not running, a Host who has not pressed, finished). */
+  function nextSecs() {
+    if (!S.info || !S.cfg || !S.st && S.cf || S.now === null || S.control && (S.control.pausedNow || S.control.stopped) || manualMode() && goRound() === null) return null;
+    const log = calledSoFar(); if (!S.started || log.length >= 90 || allPrizesWon()) return null;
+    const r = ZG.callRoundR(S.st || null, S.info.startRound + ZG.GRACE_ROUNDS, S.info.callSeconds / 3, S.cfg.breaks, S.round || 1, log.length);
+    if (r === null || !Number.isFinite(r)) return null;
+    return (r - S.now) * 3 - (Date.now() - (S.nowAt || Date.now())) / 1000;
+  }
+  const quietText = () => { const sec = nextSecs(); return sec === null ? "" : sec > 0 ? "Next number in " + Math.ceil(sec) + "s" : "Next number any moment"; };
+  setInterval(() => { const el = document.getElementById("quietc"); if (!el) return; const t = quietText(); if (t) el.firstChild.textContent = t; }, 1000);
+  /** At the TOP of the game screen, always: the one-sentence story, the Number board button, the counter (the latest number big, the last few beside it), a big PAUSED banner (who, since when, until when, with Resume), and how the game ended. */
+  function liveBar() {
+    if (!S.info || !eid) return "";
+    const st = consoleStory();
+    if (S.draft) return `<div class="zc-block zc-livebar" id="livebar">${storyHtml(st)}</div>`;
     const board = `<a class="zc-btn zc-btn-big zc-boardbtn" id="boardbtn" href="${esc(location.origin + "/board.html?e=" + encodeURIComponent(eid) + "#k=" + encodeURIComponent(secret))}" target="_blank" rel="noopener">Number board</a>`;
-    if (!S.started) return `<div class="zc-block zc-livebar" id="livebar"><div class="zc-boardrow">${board}<span class="zc-small zc-nomargin">The board with every number called, like the real game. Only you and the Hosts can open it.</span></div></div>`;
+    if (!S.started) return `<div class="zc-block zc-livebar" id="livebar">${storyHtml(st)}<div class="zc-boardrow">${board}<span class="zc-small zc-nomargin">The board with every number called, like the real game. Only you and the Hosts can open it.</span></div></div>`;
     const log = calledSoFar(), last = log.length ? log[log.length - 1] : null, total = 90;
+    const few = log.slice(-6, -1).reverse().map((n) => `<span class="zc-ball">${n}</span>`).join("");
     const strip = log.length ? log.map((n, i) => `<span class="zc-ball${i === log.length - 1 ? " last" : ""}">${n}</span>`).join("") : `<span class="zc-small zc-nomargin">No number has been called yet.</span>`;
     let pause = "";
     const pz = S.st && S.now !== null ? S.st.intervals.find((i) => S.now >= i.start && S.now < i.end) : null;
@@ -1282,12 +1347,7 @@
       const mins = Math.max(1, Math.round((pz.end - S.now) * 3 / 60));
       pause = `<div class="zc-pausebanner" id="pausebanner" role="status"><b>PAUSED</b><span>Paused by ${who} at ${esc(hmIst(ZG.roundTimeMs(pz.start)))} India time. The numbers start again at about ${esc(hmIst(ZG.roundTimeMs(pz.end)))} (in about ${mins} ${mins === 1 ? "minute" : "minutes"}), or sooner when you press Resume.</span><button type="button" class="zc-btn zc-btn-big" data-ctl="resume"${S.ctlBusy ? " disabled" : ""}>Resume the game</button></div>`;
     }
-    let end = "";
-    if (S.control && S.control.stopNow) end = `The organizer ended the game after ${log.length} numbers.`;
-    else if (allPrizesWon()) end = `All prizes were awarded after ${log.length} numbers.`;
-    else if (S.started && log.length >= total && (S.round || 1) >= ((S.cfg && S.cfg.rounds) || 1)) end = "All 90 numbers were called.";
-    const endBanner = end ? `<div class="zc-endbanner" id="endbanner" role="status"><b>The game is over.</b> ${esc(end)}</div>` : "";
-    return `<div class="zc-block zc-livebar" id="livebar">${endBanner}${pause}<div class="zc-boardrow">${board}<b id="numcount">${log.length} of ${total} numbers called${last ? ", the latest is " + last : ""}</b></div><div class="zc-numstrip" id="numstrip" aria-label="Numbers called so far">${strip}</div></div>`;
+    return `<div class="zc-block zc-livebar" id="livebar">${storyHtml(st)}${pause}<div class="zc-boardrow">${board}<div class="zc-counter" id="numcount"><span class="zc-small zc-nomargin">${esc(ZG.calledLine(log.length, total))}</span><span class="zc-latest" id="latestnum" aria-label="${last ? "Latest number " + last : "No number yet"}">${last ?? "–"}</span>${few ? `<span class="zc-fewlbl">Last 5 numbers called</span>${few}` : ""}${quietText() ? `<span class="zc-quiet" id="quietc" role="timer"><span>${quietText()}</span></span>` : ""}</div></div><div class="zc-numstrip" id="numstrip" aria-label="Numbers called so far">${strip}</div>${vitalsHtml()}${gameLogBlock()}</div>`;
   }
   function mainHtml() {
     const r = role();
@@ -1306,10 +1366,20 @@
     return frame(`<div class="zc-body">${side}<div class="zc-main">${mainHtml()}</div></div>`, true);
   }
   const roleAcceptView = () => frame(`<div class="zc-body"><div class="zc-main"><div class="zc-block" id="roleaccept"><h3>Before you start</h3>${small("Tick the box to take the Co-host role. You can then invite people and pay.")}${CBConsent.html("K5")}${S.roleErr ? `<p class="zc-small zc-warnt" role="alert">${esc(S.roleErr)}</p>` : ""}<div class="zc-foot"><button class="zc-btn" type="button" id="roleacceptgo" data-needs="K5" disabled aria-disabled="true">Accept the Co-host role</button></div></div></div></div>`, false);
+  /** The Co-host knows less: when the game starts, whether it is paid, and how it ended. The words are the same ones everybody reads. */
+  function cohostStory() {
+    const c = S.coh || {}, base = { role: "cohost" };
+    if (c.cancelled) return ZG.story({ ...base, state: "cancelled" });
+    if (c.didNotStart) return ZG.story({ ...base, state: "neverStarted" });
+    if (c.ended) { const why = String(c.ended.reason || ""); return ZG.story({ ...base, state: /^All prizes/.test(why) ? "endedPrizes" : /ended by the organizer/.test(why) ? "endedByOrganizer" : "endedAll", called: c.ended.numbers ?? undefined }); }
+    if (c.price != null) return ZG.story({ ...base, state: "unpaid" });
+    if (c.startMs && c.startMs > Date.now()) return ZG.story({ ...base, state: "waiting", time: ZG.dayTimeIst(c.startMs) });
+    return ZG.story({ ...base, state: "running" });
+  }
   function cohostView() {
     if (S.coh && S.coh.roleAccepted === false) return roleAcceptView();
     const side = `<aside class="zc-side"><div class="zc-me"><span class="zc-num zc-num-dark">C</span><span><span class="zc-muted">You are</span><br><b>Co-host</b></span></div><div class="zc-small zc-nomargin">Your game at a glance</div>${synHtml()}</aside>`;
-    return frame(`<div class="zc-body">${side}<div class="zc-main"><div id="zc-top"></div>${eid ? `<div class="zc-block zc-livebar" id="livebar"><div class="zc-boardrow"><a class="zc-btn zc-btn-big zc-boardbtn" id="boardbtn" href="${esc(location.origin + "/board.html?e=" + encodeURIComponent(eid) + "#k=" + encodeURIComponent(secret))}" target="_blank" rel="noopener">Number board</a><span class="zc-small zc-nomargin">The board with every number called, like the real game.</span></div></div>` : ""}${S.note ? `<div class="zc-toast" role="status">${esc(S.note)}</div>` : ""}${S.cohErr && !S.coh ? `<div class="zc-toast" role="status">${esc(S.cohErr)}</div>` : ""}<div class="zc-small zc-rolenote">${esc(ROLE_NOTE.cohost)}</div>${S.coh && S.coh.waitingFor && !didNotStart() ? `<div class="zc-toast" role="status" id="cohwaiting">Waiting for the Organizer or Host to start the game.</div>` : ""}${S.coh && didNotStart() ? `<div class="zc-alert" id="didnotstart" role="status"><h3>This game did not start.</h3><p>Guest details have been erased.</p></div>` : ""}${nextHtml()}${steps().map(secHtml).join("")}${helpHtml()}</div></div>`, true);
+    return frame(`<div class="zc-body">${side}<div class="zc-main"><div id="zc-top"></div>${eid ? `<div class="zc-block zc-livebar" id="livebar">${storyHtml(cohostStory())}<div class="zc-boardrow"><a class="zc-btn zc-btn-big zc-boardbtn" id="boardbtn" href="${esc(location.origin + "/board.html?e=" + encodeURIComponent(eid) + "#k=" + encodeURIComponent(secret))}" target="_blank" rel="noopener">Number board</a><span class="zc-small zc-nomargin">The board with every number called, like the real game.</span></div></div>` : ""}${S.note ? `<div class="zc-toast" role="status">${esc(S.note)}</div>` : ""}${S.cohErr && !S.coh ? `<div class="zc-toast" role="status">${esc(S.cohErr)}</div>` : ""}<div class="zc-small zc-rolenote">${esc(ROLE_NOTE.cohost)}</div>${S.coh && S.coh.waitingFor && !didNotStart() ? `<div class="zc-toast" role="status" id="cohwaiting">Waiting for the Organizer or Host to start the game.</div>` : ""}${S.coh && didNotStart() ? `<div class="zc-alert" id="didnotstart" role="status"><h3>This game did not start.</h3><p>Guest details have been erased.</p></div>` : ""}${nextHtml()}${steps().map(secHtml).join("")}${helpHtml()}</div></div>`, true);
   }
   const loadingView = () => frame(`<div class="zc-body"><div class="zc-main"><div class="zc-toast" role="status">${esc(S.note || "Loading…")}</div>${eid && isOrg() ? "" : ""}</div></div>`, false);
 
@@ -1346,7 +1416,7 @@
   // ---------- Quick setup: the first three steps as one form, with a real date and time picker (the AI route and the browser-AI route use it) ----------
   function quickDefault() {
     const t = new Date(istNow().getTime() + 86400000);
-    const f = { occ: "Other", oname: "", day: "other", dayo: istDateStr(t), time: "other", timeo: "16:00", cap: "250", tix: "1", spd: "9", rnd: "1", join: "list", mode: "auto", start: "auto", after: "keep", ver: "mobile", emp: false, inv: false, per: "4", cats: ["family", "colleagues"], bundle: "Classic", hs: {}, ph: "" };
+    const f = { occ: "Other", oname: "", day: "other", dayo: istDateStr(t), time: "other", timeo: "16:00", cap: "250", tix: "1", spd: "12", rnd: "1", join: "list", mode: "auto", start: "auto", after: "keep", ver: "mobile", emp: false, inv: false, per: "4", cats: ["family", "colleagues"], bundle: "Classic", hs: {}, ph: "" };
     for (const [k] of HS) f.hs[k] = { on: false, n: 1, pt: "later", pd: "", orig: [] };
     applyBundleTo(f, "Classic");
     return f;
@@ -1497,7 +1567,7 @@
       if (!S.draft && (!S.started || role() === "host" || hostMode() || manualMode()) && (S.keyChecked !== eid || !S.cf)) { S.keyChecked = eid; try { const k = await TBControl.ensureKey(eid, { token: secret, base: BASE, prefix: "/api/z" }); if (!k.ok && !S.ctlNote) S.ctlNote = k.reason ? ctlWords({ message: k.reason }) : ""; } catch { /* the pause is optional; the engagement does not depend on it */ } }
       const cf0 = await fetch(BASE + `/api/z/${eid}/control`).then((r) => (r.ok ? r.json() : null)); const cf = cf0 && cf0.pubKey ? cf0 : null; // a held (unpaid) engagement answers {locked:true} with no signing key: that is not a pause file
       S.control = null; S.cf = cf;
-      const now = await latestRound(); S.now = now;
+      const now = await latestRound(); S.now = now; S.nowAt = Date.now();
       let st = null;
       if (cf) { st = ZG.resolveControl(ZG.cfgOf(cf, ZG.hostGameOf(S.cfg, S.info.startRound)), cf.messages); S.st = st; S.control = ctlStateOf(st, now); } else S.st = null;
       { const cs = S.control ? (S.control.pausedNow ? "p" : S.control.pausePending ? "w" : "") : ""; if (S.ctlState && S.ctlState !== cs) S.ctlNote = ""; S.ctlState = cs; } // "Pause sent" ends once the pause reaches the phones or ends
@@ -1505,6 +1575,7 @@
       const schedOf = (r) => Array.from({ length: 90 }, (_, k) => ZG.callRoundR(st, S.info.startRound + ZG.GRACE_ROUNDS, stride, S.cfg.breaks, r, k));
       S.started = S.cfg.startMode === "manual" ? !!(st && st.goRound != null) : now !== null && now >= S.info.startRound + ZG.GRACE_ROUNDS; // a manual start has started when Start was pressed, however late
       try { S.changes = S.draft ? null : await call("GET", `/api/z/${eid}/changes`); } catch { S.changes = null; } // "what changed, who, when"
+      try { S.glog = S.draft ? null : await call("GET", `/api/z/${eid}/gamelog`); } catch { S.glog = null; } // the vital details (tickets by number only)
       try { S.published = (await fetch(BASE + `/api/z/${eid}/results`).then((r) => r.json())).results || []; } catch { S.published = S.published || []; }
       if (!S.store) S.store = new ZG.RoundStore({});
       S.logs = {}; let budget = 60; // catch up quickly when the console is opened late
@@ -1675,7 +1746,7 @@
         if (nameNote) S.brandNote = nameNote; else if (stripUnused) S.brandNote = "Saved. Your " + (bl ? "logo" : "colour") + " is not on the tickets yet, because there is no company name. You can add the name in step 4 any time.";
         if (calmNotes.length) S.brandNote = (S.brandNote || "Saved.") + " " + calmNotes.join(" ");
       }
-      if (n === 1 && S.cloneNew === eid) S.cloneDated = eid; if (S.touched) S.touched[n] = 0; const savedNote = n === 1 && f.occ === "Other" && !(f.oname || "").trim() ? "Saved. Your game has no name yet: you can type one under Other in step 1 any time." : n === 2 && Number(f.tix) === 1 && ((S.cfg && S.cfg.rewards) || []).some((r) => r.scope === "two_ticket") ? "Saved. The Full Two-Ticket House prize was removed, because it needs 2 tickets." : "Saved.";
+      if (n === 1 && S.cloneNew === eid) S.cloneDated = eid; if (S.touched) S.touched[n] = 0; const savedNote = n === 1 && f.occ === "Other" && !(f.oname || "").trim() ? "Saved. Your game has no name yet: you can type one under Other in step 1 any time." : n === 2 && Number(f.tix) === 1 && ((S.cfg && S.cfg.rewards) || []).some((r) => r.scope === "two_ticket") ? "Saved. The Super Bumper House prize was removed, because it needs 2 tickets." : "Saved.";
       if (n === 2) S.passMsg = ""; if (n <= 4 && S.f && S.fBase) { for (const k of GROUPS[n] || []) S.fBase[k] = JSON.parse(sent ? sent[k] : JSON.stringify(S.f[k] === undefined ? null : S.f[k])); S.midEdit = !!sent && (GROUPS[n] || []).some((k) => JSON.stringify(S.f[k] === undefined ? null : S.f[k]) !== sent[k]); } /* what was just saved is the new baseline: a refresh that finishes a moment later must not take a later change of the person for 'unchanged' and overwrite it */ if (n <= 4) { markDone(n); S.unsaved[n] = S.midEdit; if (S.midEdit && n <= 2) (S.touched = S.touched || {})[n] = 1; /* a change made while the Save was on its way is still not saved: it stays on the screen, flagged */ if (n === 4 && S.brandNote) setTimeout(() => scrollToId("zcnote"), 0); S.note = (n === 4 && S.brandNote) || savedNote; S.brandNote = ""; if (n === 4 && S.note !== "Saved.") setTimeout(() => go("zcnote"), 0); refreshEng().catch(() => {}); return advance(n); } // move on at once; the fresh numbers arrive a moment later and redraw (a slow connection no longer leaves the person looking at a frozen screen)
       if (n >= 7 && !steps().some((s) => s[0] > n && !isDone(s[0]))) { S.note = gameEnded() ? "Nothing more to do here." : "Nothing more to do here until the game is played."; redraw(); return go("zc-top"); } if (n <= 6) markDone(n); advance(n);
     } catch (e) { S.toast = friendly(e); S.redo = { err: e, fn: () => saveStep(n) }; redraw(); const ft = document.querySelector("#sec" + n + " .zc-toast-foot"); if (ft && ft.scrollIntoView) { try { ft.scrollIntoView({ block: "center", behavior: "auto" }); } catch { /* not every browser */ } } else go("sec" + n); }
@@ -2005,7 +2076,7 @@
     };
     all("[data-ctl]", (b) => (b.onclick = async () => {
       const action = b.dataset.ctl;
-      if (S.ctlBusy) return; if (action === "pause" && !(await askSure("Are you sure? Numbers stop for everybody.", "The game pauses on every phone and on the big screen until you press Resume. It ends by itself after 30 minutes.", "Yes, pause the game", "No, keep playing"))) return; if (action === "stop" && !(await askSure("End the game for everyone?", "Every guest's phone stops at the same number. This cannot be undone.", "Yes, end the game for everyone", "No, keep playing"))) return; S.ctlBusy = true; S.ctlNote = ""; redraw();
+      if (S.ctlBusy) return; if (action === "pause" && !(await askSure("Are you sure? Numbers stop for everybody.", "The game pauses on every phone and on the big screen until you press Resume. It ends by itself after 30 minutes.", "Yes, pause the game", "No, keep playing", null, "I understand: the numbers stop for every player until I press Resume."))) return; if (action === "stop" && !(await askSure("End the game for everyone?", "Every guest's phone stops at the same number. This cannot be undone.", "Yes, end the game for everyone", "No, keep playing"))) return; S.ctlBusy = true; S.ctlNote = ""; redraw();
       try { const r = await Promise.race([TBControl.publish(eid, { token: secret, base: BASE, prefix: "/api/z" }, action, action === "pause" ? { pauseForRounds: 600 } : action === "extend" ? { addRounds: 600 } : {}), new Promise((_, no) => setTimeout(() => no(new Error("Failed to fetch")), 30000))]); S.ctlNote = r.status === 200 ? CTL_SENT[action](leadSec()) : ctlWords({ message: (r.data && r.data.error) || "Not accepted" }); } catch (e) { S.ctlNote = ctlWords(e); } S.ctlBusy = false; /* frees the buttons after 30 s */
       refreshEng();
     }));

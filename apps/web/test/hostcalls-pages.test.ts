@@ -198,7 +198,7 @@ describe("the phone page and the number screen", () => {
     await p.waitFor((t) => /1 of 90 called/.test(t) && /Waiting for the host/.test(t), 25_000);
     const n = p.win.__rt.view().log[0]; expect(n).toBeGreaterThan(0); // the page's own runtime
     expect((p.$("#big") as any).textContent.trim()).toBe(String(n));
-    await big.waitFor((t) => /1 of 90 numbers called/.test(t) && /Waiting for the host/.test(t), 25_000);
+    await big.waitFor((t) => /1 of 90 called/.test(t) && /Waiting for the host/.test(t), 25_000);
     expect(p.errors).toEqual([]); expect(big.errors).toEqual([]);
   });
 });

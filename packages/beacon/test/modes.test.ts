@@ -126,3 +126,41 @@ describe("publishing a Start", () => {
     expect(r).toMatchObject({ ok: false, error: GO_REFUSALS.auto });
   });
 });
+
+describe("Start at any size: the profile maths and the start-only file", () => {
+  test("each size has a profile; the Start lead is longer than the slowest asking cadence plus the cache and the latency (so every online phone hears Start before its round); profiles are told apart by their lead", async () => {
+    const { startSafetyForCap, ALL_SAFETIES, SAFETY_BIG, SAFETY_BIG10K, SAFETY_LEAN60, SAFETY_LEAN30, safetyForCap } = await import("../src/control");
+    expect(startSafetyForCap(250).safety).toBe(safetyForCap(250)!); expect(startSafetyForCap(1000).safety).toBe(SAFETY_LEAN30); expect(startSafetyForCap(2000)).toEqual({ safety: SAFETY_LEAN60, startOnly: false });
+    for (const cap of [2001, 5000, 10000]) expect(startSafetyForCap(cap)).toEqual({ safety: SAFETY_BIG10K, startOnly: true });
+    for (const cap of [10001, 50000, 100000]) expect(startSafetyForCap(cap)).toEqual({ safety: SAFETY_BIG, startOnly: true });
+    for (const s of [SAFETY_LEAN60, SAFETY_BIG10K, SAFETY_BIG]) { expect(s.leadRounds * 3).toBeGreaterThan(s.pollMaxSec + 3 + 3); expect(s.holdAfterRounds * 3).toBeGreaterThanOrEqual(s.pollMaxSec * 2); } // a phone is "live" for at least two asking periods
+    expect(new Set(ALL_SAFETIES.map((s) => s.leadRounds)).size).toBe(ALL_SAFETIES.length); // a phone finds the profile of its game from the lead in the control file
+    expect(SAFETY_BIG10K.leadRounds * 3).toBeGreaterThanOrEqual(150); expect(SAFETY_BIG10K.leadRounds * 3).toBeLessThanOrEqual(240); expect(SAFETY_BIG.leadRounds * 3).toBeLessThanOrEqual(300);
+  });
+  test("before the Start message is in a phone's log, number 1 does not exist for it, whatever the profile; after it, it is the named round", async () => {
+    const { SAFETY_BIG } = await import("../src/control");
+    const big: ControlConfig = { ...manualAuto, leadRounds: SAFETY_BIG.leadRounds, startOnly: true };
+    expect(callRound(resolveControl(big, []), 0, 3, 0)).toBe(Infinity);
+    const st = resolveControl(big, [go(1, SCHED + 10, SAFETY_BIG.leadRounds)]);
+    expect(st.ignored).toEqual([]); expect(callRound(st, 0, 3, 0)).toBe(SCHED + 10 + SAFETY_BIG.leadRounds);
+    expect(resolveControl(big, [go(1, SCHED + 10, SAFETY_BIG.leadRounds - 1)]).ignored[0]?.why).toBe(GO_REFUSALS.lead); // a phone applies the same lead rule as the Worker
+  });
+  test("a start-only file refuses pause, resume, extend and end in plain words and never lets them take effect; Start still works", async () => {
+    const { BIG_GAME_REFUSAL, SAFETY_BIG10K } = await import("../src/control");
+    const big: ControlConfig = { ...manualAuto, leadRounds: SAFETY_BIG10K.leadRounds, startOnly: true };
+    const L2 = SAFETY_BIG10K.leadRounds;
+    const st = resolveControl(big, [go(1, SCHED + 10, L2), mk(2, "pause", SCHED + 400, SCHED + 10, SCHED + 500), mk(3, "stop", SCHED + 400, SCHED + 10), mk(4, "resume", SCHED + 400, SCHED + 10)]);
+    expect(st.ignored.map((x) => x.why)).toEqual([BIG_GAME_REFUSAL, BIG_GAME_REFUSAL, BIG_GAME_REFUSAL]); expect(st.intervals).toEqual([]); expect(st.stopRound).toBeNull();
+    expect(callRound(st, 0, 3, 5)).toBe(SCHED + 10 + L2 + 15);
+  });
+  test("a pause by the Worker's store is refused the same way (publish)", async () => {
+    const { BIG_GAME_REFUSAL, SAFETY_BIG } = await import("../src/control");
+    const store = kv(); expect((await registerKey(store, ID, pub, SAFETY_BIG, 600, { startOnly: true })).ok).toBe(true);
+    const f = (await readPublished(store, ID))!; expect(f.startOnly).toBe(true); expect(f.leadRounds).toBe(SAFETY_BIG.leadRounds);
+    const game = { callMode: "auto" as const, startMode: "manual" as const, startNotBefore: SCHED };
+    const r = await publishControl(store, ID, signControlWithSecret(secretHex, nextMessage(f, SCHED + 5, { action: "pause", pauseForRounds: 50 })), game);
+    expect(r).toMatchObject({ ok: false, error: BIG_GAME_REFUSAL });
+    const ok = await publishControl(store, ID, signControlWithSecret(secretHex, nextMessage(f, SCHED + 5, { action: "go" })), game);
+    expect(ok.ok).toBe(true);
+  });
+});

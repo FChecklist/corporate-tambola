@@ -97,7 +97,7 @@ describe("the console: how does it start", () => {
 });
 
 describe("above 1,000 people the manual-play choice is hidden", () => {
-  test("a game of 1,001 people keeps 'How does it start?' but 'Who calls the numbers?' is replaced by a short note; at 1,000 both questions are there; above 2,000 Start by hand is hidden too", async () => {
+  test("a game of 1,001 people (and of 2,001) keeps 'How does it start?' but 'Who calls the numbers?' is replaced by a short note; at 1,000 both questions are there", async () => {
     const big = await setup("MP-1001", false, { cap: 1001 });
     const c1 = await consolePage(big, "MP-1001");
     await c1.waitFor(() => !!c1.$('.zc-dot[data-open="2"]')); openStep(c1, 2); await c1.waitFor((t) => /Games above 1,000 people are called by the game itself/.test(t));
@@ -109,8 +109,8 @@ describe("above 1,000 people the manual-play choice is hidden", () => {
     expect(c2.$('input[type=radio][name="start"]')).toBeTruthy(); expect(c2.$('input[type=radio][name="mode"]')).toBeTruthy(); expect(c2.$("#callhidden")).toBeNull();
     const huge = await setup("MP-2001", false, { cap: 2001 });
     const c3 = await consolePage(huge, "MP-2001");
-    await c3.waitFor(() => !!c3.$('.zc-dot[data-open="2"]')); openStep(c3, 2); await c3.waitFor((t) => /Games above 2,000 people start by themselves/.test(t));
-    expect(c3.$('input[type=radio][name="start"]')).toBeNull();
+    await c3.waitFor(() => !!c3.$('.zc-dot[data-open="2"]')); openStep(c3, 2); await c3.waitFor((t) => /Games above 1,000 people are called by the game itself/.test(t));
+    expect(c3.$('input[type=radio][name="start"]')).toBeTruthy(); expect(c3.$('input[type=radio][name="mode"]')).toBeNull(); // "I press Start" exists at every size
   });
 });
 
@@ -144,8 +144,8 @@ describe("Game day: the Start button", () => {
     await ph.waitFor((t) => /The game is starting|Starting in/.test(t), 25_000);
     await big.waitFor((t) => /The game is starting/.test(t), 25_000);
     for (let i = 0; i < 20; i++) await x.step(); // past the Start round (about 40 s)
-    await ph.waitFor((t) => /1 of 90 called|2 of 90 called|3 of 90 called|[0-9]+ of 90 called/.test(t) && !/Waiting for the host/.test(t), 25_000);
-    await big.waitFor((t) => /[1-9][0-9]* of 90 numbers called/.test(t), 25_000);
+    await ph.waitFor((t) => /[0-9]+ of 90 called/.test(t) && !/Waiting for the host/.test(t), 25_000);
+    await big.waitFor((t) => /[1-9][0-9]* of 90 called/.test(t), 25_000);
     expect(ph.errors).toEqual([]); expect(big.errors).toEqual([]); expect(c.errors).toEqual([]);
   });
   test("an automatic-start game has no Start button", async () => {
@@ -162,5 +162,20 @@ describe("Game day: the Start button", () => {
     await ph.waitFor((t) => /Join the engagement/.test(t));
     (ph.$("#ph") as any).value = "9822222228"; (ph.$("#nm") as any).value = "Ravi"; ph.click("#go");
     await ph.waitFor((t) => /The game starts at/.test(t) && /host presses Start/.test(t), 20_000);
+  });
+});
+
+describe("one speed: 12 seconds", () => {
+  test("a new game offers only '12 seconds'; a game published earlier with 9 seconds keeps working and shows its own speed; the help says 12 seconds", async () => {
+    const x = await setup("SP-NEW", false, { callSeconds: 12 });
+    const c = await consolePage(x, "SP-NEW");
+    await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /Duration \(gap\) between two numbers/.test(t));
+    expect(Array.from(c.win.document.querySelectorAll('[data-ck="spd"]')).map((e: any) => e.textContent.trim())).toEqual(["12 seconds"]);
+    expect(c.text()).not.toMatch(/9 seconds/);
+    const old = await setup("SP-OLD", false, { callSeconds: 9 });
+    const c2 = await consolePage(old, "SP-OLD");
+    await c2.waitFor(() => !!c2.$('.zc-dot[data-open="2"]')); openStep(c2, 2); await c2.waitFor((t) => /Duration \(gap\) between two numbers/.test(t));
+    expect(Array.from(c2.win.document.querySelectorAll('[data-ck="spd"]')).map((e: any) => e.textContent.trim())).toEqual(["9 seconds", "12 seconds"]); // its own speed stays, nothing breaks
+    expect((await old.w.json(await old.w.api("GET", "/api/z/SP-OLD/info"))).callSeconds).toBe(9);
   });
 });
