@@ -1420,7 +1420,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     // payment is asked only when the organizer publishes it (POST /api/z/:id/publish)
     const draft = !a.plat && !ent;
     if (draft) {
-      const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM engagement WHERE org=? AND pack=0").bind(a.org).first<{ c: number }>())?.c ?? 0;
+      const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM engagement e WHERE e.org=? AND e.pack=0 AND NOT EXISTS (SELECT 1 FROM kv WHERE k='pub/' || e.id)").bind(a.org).first<{ c: number }>())?.c ?? 0;
       if (n >= MAX_DRAFTS) return json({ error: `You have ${MAX_DRAFTS} unpublished drafts. Publish one, or delete one you do not need (open Your games, then press Delete next to it). An unpublished draft is also forgotten after ${DRAFT_DAYS} days.` }, 409);
     }
     if (!(await spend(env, now, 2))) return BUSY();
