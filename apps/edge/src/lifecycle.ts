@@ -22,6 +22,8 @@ import { creditTick } from "./credit";
 import type { D1, Env } from "./worker";
 
 export const GENESIS = 1692803367;
+/** A manual-start game that nobody pressed Start for stays "waiting" for this long after its scheduled time; then it is treated as ended (never started by the system). */
+export const NEVER_STARTED_MS = 24 * 3_600_000;
 export const roundMs = (r: number) => (GENESIS + (r - 1) * 3) * 1000;
 export const PURGE_AFTER_MS = 20 * 3_600_000;      // participants' personal data (and the personal part of their audit rows) goes this long after the game ended. The promise is 24 hours and the job may run up to 3 hours late (GitHub's scheduler; the lazy tick in worker.ts usually keeps it within minutes), so 20 + 3 = 20 hours stays inside it (docs/RETENTION.md)
 export const REPORT_LINK_MS = 19 * 3_600_000;      // the organizer's report link stops working this long after the game ended, an hour before the deletion
@@ -48,14 +50,14 @@ export const personalDeleteAt = (endMs: number) => endMs + PURGE_AFTER_MS;
 export const reportLinkUntil = (endMs: number) => endMs + REPORT_LINK_MS;
 
 export function cfgOfRow(e: { tickets?: number; config?: string | null }): EngagementCfg {
-  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, verify: j.verify, employeesOnly: j.employeesOnly, callMode: j.callMode === "host" ? "host" : undefined }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* plain defaults */ }
+  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, verify: j.verify, employeesOnly: j.employeesOnly, callMode: j.callMode === "host" ? "host" : undefined, startMode: j.startMode === "manual" ? "manual" : undefined }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* plain defaults */ }
   return (validateCfg({}) as { ok: true; cfg: EngagementCfg }).cfg;
 }
 
 /** The engagement's calls on the clock: the organizer's pauses and stop applied, the brand breaks and rounds included. */
 async function schedule(env: Env, e: any) {
   const f = await readPublished(d1kv(env), e.id), cfg = cfgOfRow(e);
-  const st = f ? resolveControl(controlCfg(f, hostGameOf(cfg)), f.messages) : null;
+  const st = f ? resolveControl(controlCfg(f, hostGameOf(cfg, e.start_round)), f.messages) : null;
   return { cfg, st, start: e.start_round + GRACE_ROUNDS, stride: e.call_seconds / 3 };
 }
 async function callTimeMs(env: Env, e: any, round: number, idx: number, sch?: Awaited<ReturnType<typeof schedule>>): Promise<number | null> {
@@ -70,10 +72,11 @@ async function callTimeMs(env: Env, e: any, round: number, idx: number, sch?: Aw
  */
 export async function endBoundMs(env: Env, e: any): Promise<number> {
   const s = await schedule(env, e);
+  if (s.cfg.startMode === "manual" && (s.st?.goRound ?? null) === null) return s.st?.stopRound != null ? roundMs(s.st.stopRound) + 60_000 : roundMs(e.start_round) + NEVER_STARTED_MS; // a game nobody pressed Start for is never started by the system: it closes (and its guest data is erased on the usual clock) a day after its scheduled time
   const last = callRoundR(s.st, s.start, s.stride, s.cfg.breaks, s.cfg.rounds, 89);
   if (last === Infinity && s.st) {
     const auto = callRoundR({ ...s.st, host: false }, s.start, s.stride, s.cfg.breaks, s.cfg.rounds, 89);
-    const pressed = s.st.nextRounds.length ? Math.max(...s.st.nextRounds) : s.start;
+    const pressed = s.st.nextRounds.length ? Math.max(...s.st.nextRounds) : (s.st.goRound ?? s.start);
     return Math.max(auto === null ? 0 : roundMs(auto) + 60_000, roundMs(pressed) + 3_600_000);
   }
   if (last !== null) return roundMs(last) + 60_000;

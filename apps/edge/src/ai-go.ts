@@ -5,7 +5,7 @@
 // exactly as the manual's examples show. Everything else: only the links it was given.
 //
 //   d day (YYYY-MM-DD, India)  t time (HHMM)  o occasion  c people limit  k tickets (1|2)  s speed (6|9|12|15)  r rounds (1-5)  j join (o open | c invite-only)
-//   v invitations per guest (0 = off)  cm who calls (a software | h a Host presses a button)  ti tie rule (n next | s share)  p prize bundle (c classic | s simple | r rich)
+//   v invitations per guest (0 = off)  cm who calls (a software | h a Host presses a button)  sm how it starts (a by itself | m I press Start)  ti tie rule (n next | s share)  p prize bundle (c classic | s simple | r rich)
 //   f Full House winners (1|2|3|5)  l winners per line prize (1|2)  x brand moments (n none | s speech break | o opening message | b both | l lucky draw)
 //   id game code  m message number  w day page (1 = the next 7 days, 2 = the 7 after, ...; never carried forward)
 //
@@ -13,7 +13,7 @@
 
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { roundAt, roundTimeMs } from "../../../packages/beacon/src/index";
-import { PAUSE_MAX_PARTICIPANTS } from "../../../packages/beacon/src/control";
+import { MANUAL_MAX_PARTICIPANTS, PAUSE_MAX_PARTICIPANTS } from "../../../packages/beacon/src/control";
 
 export interface Choice { n: number; label: string; url: string; recommended?: boolean }
 export interface Screen { say: string; choices: Choice[]; ifWrong?: string; done?: boolean }
@@ -67,7 +67,7 @@ const packFor = (cap: number) => PACKS.find((p) => p[0] >= cap)?.[0] ?? null;
 const isoOf = (ms: number) => { const p = istParts(ms); return `${p.y}-${pad(p.mo)}-${pad(p.d)}`; };
 
 /** The params a step carries forward, in a stable short order (`w`, the day page, is never carried: it belongs to the day picker alone). */
-const KEYS = ["id", "d", "t", "o", "c", "k", "s", "r", "j", "v", "cm", "ti", "p", "f", "l", "x", "m"];
+const KEYS = ["id", "d", "t", "o", "c", "k", "s", "r", "j", "v", "cm", "sm", "ti", "p", "f", "l", "x", "m"];
 export function link(ctx: GoCtx, step: string, q: URLSearchParams, set: Record<string, string> = {}): string {
   const out = new URLSearchParams();
   for (const k of KEYS) { const v = k in set ? set[k] : q.get(k); if (v !== null && v !== undefined && v !== "") out.set(k, v); }
@@ -102,7 +102,7 @@ const timeRows = (ctx: GoCtx, q: URLSearchParams, next: string): [string, string
 /** The settings read from the link, with the recommended value wherever the organizer has not chosen. */
 const settingsOf = (q: URLSearchParams) => ({
   k: q.get("k") === "2" ? 2 : 1, s: SPEEDS.includes(Number(q.get("s"))) ? Number(q.get("s")) : 9, r: Math.min(5, Math.max(1, Number(q.get("r")) || 1)), j: q.get("j") === "c", v: Number(q.get("v")) || 0,
-  host: q.get("cm") === "h", share: q.get("ti") === "s", p: BUNDLES[q.get("p") || "c"] ?? BUNDLES.c!, f: FULL_HOUSE_WINNERS.includes(Number(q.get("f"))) ? Number(q.get("f")) : 1, l: q.get("l") === "2" ? 2 : 1, x: MOMENTS[q.get("x") || "n"] ? (q.get("x") || "n") : "n", c: Number(q.get("c")),
+  host: q.get("cm") === "h" && Number(q.get("c")) <= MANUAL_MAX_PARTICIPANTS, manual: q.get("sm") === "m" && Number(q.get("c")) <= PAUSE_MAX_PARTICIPANTS, share: q.get("ti") === "s", p: BUNDLES[q.get("p") || "c"] ?? BUNDLES.c!, f: FULL_HOUSE_WINNERS.includes(Number(q.get("f"))) ? Number(q.get("f")) : 1, l: q.get("l") === "2" ? 2 : 1, x: MOMENTS[q.get("x") || "n"] ? (q.get("x") || "n") : "n", c: Number(q.get("c")),
 });
 const prizeLines = (st: ReturnType<typeof settingsOf>): string => `${st.p.label}; ${st.f} Full House winner${st.f === 1 ? "" : "s"}${st.p.houses.some((h) => LINES.has(h)) ? `, ${st.l} winner${st.l === 1 ? "" : "s"} for each line` : ""}`;
 const momentLine = (x: string): string => x === "n" ? "No brand moment" : x === "s" ? "A 1-minute speech break after number 45 (you or a Host speak live)" : x === "o" ? "An opening message while guests wait" : x === "w" ? "A live welcome speech before the first number (you or a Host speak)" : x === "b" ? "An opening message while guests wait, and a 1-minute speech break after number 45" : "One lucky draw (1 winner, after number 45); you name the prize later";
@@ -110,7 +110,7 @@ const summaryLines = (q: URLSearchParams): string[] => {
   const d = q.get("d")!, t = q.get("t")!, o = OCCASIONS[q.get("o") || "other"] ?? OCCASIONS.other!, st = settingsOf(q);
   const pk = packFor(st.c);
   return [`Game: ${o!.label}`, `Day and time: ${dayLabel(d, true)}, ${timeLabel(t)} India time (the first number is called 2 minutes after)`, `People: up to ${st.c}${pk ? ` (${money(pk)})` : ""}`,
-    `${st.k} ticket${st.k === 1 ? "" : "s"} per person, a number every ${st.s} seconds, ${st.r} round${st.r === 1 ? "" : "s"}`, st.host ? "A Host presses a button for each number" : "The software calls the numbers at that speed",
+    `${st.k} ticket${st.k === 1 ? "" : "s"} per person, a number every ${st.s} seconds, ${st.r} round${st.r === 1 ? "" : "s"}`, st.manual ? "You press Start at the start time" : "The game starts by itself at the start time", st.host ? "A Host presses a button for each number" : "The software calls the numbers at that speed",
     st.share ? "Tie rule: people finishing on the same number share that prize" : "Tie rule: people finishing on the same number take the next prizes one after the other",
     st.j ? "Invite-only: only people on your list can join" : "Anyone with the link can join", st.v ? `Each guest may invite up to ${st.v} more people` : "Guests may not invite others",
     `Prizes: ${prizeLines(st)} (you name each prize afterwards)`, momentLine(st.x), `How a prize is won: ${HOUSIE_RULE}`, "Nothing is charged until you pay, before the start time."];
@@ -130,15 +130,20 @@ export async function goScreen(ctx: GoCtx, step: string, q: URLSearchParams): Pr
       return { say: "What is the occasion?", choices: choices(Object.entries(OCCASIONS).map(([k, v]) => [v.label, L("size", { o: k })] as [string, string])), ifWrong: WRONG };
     case "size": return { say: "How many people at most? Choose a little above your headcount (people invited by your guests count too). The price follows the size and is paid only when you are ready, before the start.", choices: choices(PACKS.map(([n]) => [`Up to ${n} people: ${money(n)}`, L("play", { c: String(n) }), n === 250] as [string, string, boolean?])), ifWrong: WRONG };
     case "play": {
-      const lines = `Here is how it will play: ${st.k} ticket${st.k === 1 ? "" : "s"} per person, a number every ${st.s} seconds, ${st.r} round${st.r === 1 ? "" : "s"}. ${st.host ? "A Host presses a button for each number." : "The software calls the numbers."} ${st.share ? "On a tie, people share the prize." : "On a tie, people take the next prizes one after the other."} ${st.j ? "Invite-only." : "Open to anyone with the link."} ${st.v ? `Guests may invite up to ${st.v} more people each.` : "Guests may not invite others."}`;
+      const lines = `Here is how it will play: ${st.k} ticket${st.k === 1 ? "" : "s"} per person, a number every ${st.s} seconds, ${st.r} round${st.r === 1 ? "" : "s"}. ${st.host ? "A Host presses a button for each number." : "The software calls the numbers."} ${st.manual ? "You press Start at the start time." : "It starts by itself at the start time."} ${st.share ? "On a tie, people share the prize." : "On a tie, people take the next prizes one after the other."} ${st.j ? "Invite-only." : "Open to anyone with the link."} ${st.v ? `Guests may invite up to ${st.v} more people each.` : "Guests may not invite others."}`;
       return { say: `${lines} These are the recommended choices. Change anything, or continue.`, choices: choices([["Looks good, continue", L("prizes"), true], [st.k === 1 ? "Give each person 2 tickets (more chances)" : "Give each person 1 ticket", L("play", { k: st.k === 1 ? "2" : "1" })],
-        [`Change the speed (now a number every ${st.s} seconds)`, L("speed")], [`Who calls the numbers (now: ${st.host ? "a Host presses a button" : "the software"})`, L("caller")], [`Rounds (now ${st.r})`, L("rounds")], [`What happens on a tie (now: ${st.share ? "share the prize" : "the next prizes"})`, L("tie")],
+        [`Change the speed (now a number every ${st.s} seconds)`, L("speed")], [`How does it start (now: ${st.manual ? "I press Start" : "by itself at the time"})`, L("starter")], [`Who calls the numbers (now: ${st.host ? "a Host presses a button" : "the software"})`, L("caller")], [`Rounds (now ${st.r})`, L("rounds")], [`What happens on a tie (now: ${st.share ? "share the prize" : "the next prizes"})`, L("tie")],
         [st.j ? "Open to anyone with the link" : "Invite-only (only people on my list)", L("play", { j: st.j ? "o" : "c" })], [st.v ? "Guests may not invite others" : "Let each guest invite up to 4 more (family, colleagues)", L("play", { v: st.v ? "0" : "4" })]]), ifWrong: WRONG };
     }
     case "speed": return { say: "How fast should the numbers come? A full game of 90 numbers takes about 9, 14, 18 or 22 minutes.", choices: choices(SPEEDS.map((s) => [`Every ${s} seconds (${s === 6 ? "fast" : s === 9 ? "normal" : s === 12 ? "relaxed" : "slow"})`, L("play", { s: String(s) }), s === 9] as [string, string, boolean?])), ifWrong: WRONG };
-    case "caller": {
+    case "starter": {
       const big = st.c > PAUSE_MAX_PARTICIPANTS;
-      return { say: `Who calls the numbers? The software calls them at the chosen speed, or a Host presses a button for each number (the order still comes from public random numbers, so nobody can choose one). A Host can call the numbers in games of up to ${PAUSE_MAX_PARTICIPANTS.toLocaleString("en-IN")} people.${big ? ` Your game is larger, so the software calls them.` : ""}`,
+      return { say: `How does the game start? By itself at the start time, or you (or a Host) press a big Start button. Start can be pressed only from the start time on; until then players see "waiting for the host". Pressing Start works for games of up to ${PAUSE_MAX_PARTICIPANTS.toLocaleString("en-IN")} people.${big ? ` Your game is larger, so it starts by itself.` : ""}`,
+        choices: choices([["It starts by itself at the start time", L("play", { sm: "a" }), true], ...(big ? [] : [["I press Start", L("play", { sm: "m" })] as [string, string, boolean?]])]), ifWrong: WRONG };
+    }
+    case "caller": {
+      const big = st.c > MANUAL_MAX_PARTICIPANTS;
+      return { say: `Who calls the numbers? The software calls them at the chosen speed, or a Host presses a button for each number (the order still comes from public random numbers, so nobody can choose one). A Host can call the numbers in games of up to ${MANUAL_MAX_PARTICIPANTS.toLocaleString("en-IN")} people.${big ? ` Your game is larger, so the software calls them.` : ""}`,
         choices: choices([["The software calls the numbers", L("play", { cm: "a" }), true], ...(big ? [] : [["A Host presses a button for each number", L("play", { cm: "h" })] as [string, string, boolean?]])]), ifWrong: WRONG };
     }
     case "rounds": return { say: "How many rounds? Each round has new numbers and new tickets, with the same prizes.", choices: choices([1, 2, 3, 4, 5].map((r) => [`${r} round${r === 1 ? "" : "s"}`, L("play", { r: String(r) }), r === 1] as [string, string, boolean?])), ifWrong: WRONG };
@@ -164,7 +169,7 @@ export async function goScreen(ctx: GoCtx, step: string, q: URLSearchParams): Pr
       const base = `${o.code}-${pad(istParts(startMs).mo)}${pad(istParts(startMs).d)}`; let id = base, made: any = null;
       for (let i = 1; i <= 9; i++) {
         id = i === 1 ? base : `${base}-${i}`;
-        const body: any = { id, name: `${o.label}, ${dayLabel(q.get("d")!)}`, startRound: startRoundOf(startMs), callSeconds: st.s, cap: st.c, tickets: st.k, rounds: st.r, rewards, closed: st.j, ties: st.share ? "share" : "next", ...(st.host ? { callMode: "host" } : {}), ...moments };
+        const body: any = { id, name: `${o.label}, ${dayLabel(q.get("d")!)}`, startRound: startRoundOf(startMs), callSeconds: st.s, cap: st.c, tickets: st.k, rounds: st.r, rewards, closed: st.j, ties: st.share ? "share" : "next", ...(st.host ? { callMode: "host" } : {}), ...(st.manual ? { startMode: "manual" } : {}), ...moments };
         const r = await ctx.api("POST", "z", body);
         if (r.status !== 200) return { say: `I could not save it: ${r.json?.error ?? "something went wrong"}. ${r.json?.next ?? ""}`.trim(), choices: choices([["Open the organizer's console", `${ctx.origin}/zc.html`]]), ifWrong: WRONG };
         if (!r.json.existed) { made = r.json; break; }

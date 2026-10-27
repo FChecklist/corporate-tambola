@@ -102,7 +102,7 @@ export class T {
   async game(org, o = {}) {
     const st = await startAt(o.days ?? 7, o.time ?? "19:00");
     const id = o.id ?? this.gid();
-    const body = { id, startRound: o.startRound ?? st.round, callSeconds: o.gap ?? 9, cap: o.cap ?? 50, ...(o.tickets ? { tickets: o.tickets } : {}), ...(o.rounds ? { rounds: o.rounds } : {}), ...(o.name ? { name: o.name } : {}), ...(o.who ? { whoCanJoin: o.who } : {}), ...(o.rewards ? { rewards: o.rewards } : {}), ...(o.breaks ? { breaks: o.breaks } : {}), ...(o.opening ? { opening: o.opening } : {}), ...(o.closing ? { closing: o.closing } : {}), ...(o.brand ? { brand: o.brand } : {}) };
+    const body = { id, startRound: o.startRound ?? st.round, callSeconds: o.gap ?? 9, cap: o.cap ?? 50, ...(o.tickets ? { tickets: o.tickets } : {}), ...(o.rounds ? { rounds: o.rounds } : {}), ...(o.name ? { name: o.name } : {}), ...(o.who ? { whoCanJoin: o.who } : {}), ...(o.rewards ? { rewards: o.rewards } : {}), ...(o.breaks ? { breaks: o.breaks } : {}), ...(o.opening ? { opening: o.opening } : {}), ...(o.closing ? { closing: o.closing } : {}), ...(o.brand ? { brand: o.brand } : {}), ...(o.startMode ? { startMode: o.startMode } : {}), ...(o.callMode ? { callMode: o.callMode } : {}) };
     const r = await org.api("POST", "/api/z", body); this.eids.push(id);
     return { id, r, startRound: body.startRound, startMs: roundTimeMs(body.startRound), body };
   }

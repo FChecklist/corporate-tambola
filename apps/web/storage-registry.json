@@ -42,6 +42,14 @@
       ]
     },
     {
+      "id": "player-ticket-look",
+      "store": "localStorage",
+      "say": "On a player's phone: whether the ticket is shown in the Retro look or the Modern look.",
+      "keys": [
+        "ctz-look"
+      ]
+    },
+    {
       "id": "player-sound",
       "store": "localStorage",
       "say": "On a player's phone: whether the sound is on.",

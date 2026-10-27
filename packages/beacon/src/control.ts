@@ -15,7 +15,13 @@ export const PERIOD_SEC = 3; // drand quicknet period; the unit of every "round"
  * a press only decides WHEN the next number is released. It is signed `NEXT_LEAD_ROUNDS` rounds before the beacon round whose randomness makes the
  * number, so the randomness is still unknown to everybody (the Host included) at the moment of the press. Nobody can choose a number.
  */
-export type ControlAction = "pause" | "resume" | "extend" | "stop" | "next";
+export type ControlAction = "pause" | "resume" | "extend" | "stop" | "next" | "go";
+/**
+ * "go" = the Start button of a game whose start is manual (startMode "manual"). It is signed like every other message, `leadRounds` (or more) before the round it names, so every
+ * phone has it before that round arrives. The named round is the moment the game begins: with the software calling, number 1 is called in exactly that round and the rest follow at the
+ * chosen speed; with a Host calling, the Host's first press may come from that round on. Before the Start nothing at all is called, and the randomness of every later round is still
+ * unknown to everybody when Start is pressed, so no number can be chosen or predicted. It can only be pressed once, and not before the scheduled time.
+ */
 export const NEXT_LEAD_ROUNDS = 2; // 6 s: the round a press names is not published yet when the press is signed
 /** At most this many Hosts' console keys may sign beside the organizer's own (the team has at most 5 Hosts). */
 export const MAX_HOST_KEYS = 5;
@@ -47,6 +53,10 @@ export interface ControlConfig {
   hostKeys?: string[];
   /** Who calls the numbers: the software at the chosen speed (auto, the default) or a Host pressing a button for each number (host). */
   callMode?: "auto" | "host";
+  /** How the game begins: by itself at the scheduled time (auto, the default) or when a Host / the organizer presses Start (manual: nothing is called before a "go" message). */
+  startMode?: "auto" | "manual";
+  /** Manual start: the scheduled start round; a Start signed before it is refused (to start earlier, change the start time first). */
+  startNotBefore?: number;
   /** Host mode: the breaks and intermissions a press has to wait for, and how many presses there can be at most (90 per round). From the game's public settings, see hostGapsFor. */
   hostGaps?: HostGap[];
   maxNexts?: number;
@@ -121,7 +131,7 @@ export async function verifyControlSig(pubKeyHex: string, m: ControlMsg): Promis
 const isInt = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 0;
 export function wellFormed(x: any): x is ControlMsg {
   return !!x && typeof x === "object" && typeof x.engagementId === "string" && isInt(x.seq) && x.seq >= 1
-    && ["pause", "resume", "extend", "stop", "next"].includes(x.action) && isInt(x.atBeaconRound) && isInt(x.signedAtRound)
+    && ["pause", "resume", "extend", "stop", "next", "go"].includes(x.action) && isInt(x.atBeaconRound) && isInt(x.signedAtRound)
     && (x.untilRound === undefined || isInt(x.untilRound)) && typeof x.sig === "string";
 }
 
@@ -169,6 +179,10 @@ export interface ControlState {
   nextRounds: number[];
   /** True when this game's numbers are released by a Host's presses (callMode "host"). */
   host: boolean;
+  /** True when this game begins only when somebody presses Start (startMode "manual"). */
+  manualStart: boolean;
+  /** Manual start: the beacon round the Start named (the game begins in that round), or null while nobody has pressed Start. Always null in an automatic-start game. */
+  goRound: number | null;
 }
 
 interface Cur { start: number; until: number | null; endedAt: number | null }
@@ -182,10 +196,19 @@ export const NEXT_REFUSALS = {
   order: "One moment: the last number is still on its way to the phones.",
   gap: "Please wait: the break is still on. The next number can come when it ends.",
   done: "Every number has been called.",
+  start: "Press Start first. The numbers begin after Start.",
+  early: "Please wait a moment: the game is just starting.",
+} as const;
+/** The plain reasons a Start is refused. */
+export const GO_REFUSALS = {
+  auto: "This game starts by itself at the scheduled time, so there is no Start button. To start by pressing Start, change \"How does it start?\" first.",
+  early: "The game cannot be started before its start time. To start earlier, change the start time first.",
+  lead: "That press did not go through. Please press Start again.",
+  again: "The game has already been started.",
 } as const;
 
 /** Why a message would take no effect, or null if it is valid in this state. Shared by the phone and the publisher. */
-function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: boolean, nexts: readonly number[]): string | null {
+function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: boolean, nexts: readonly number[], go: number | null): string | null {
   if (stopped) return "engagement already stopped";
   if (m.signedAtRound > m.atBeaconRound) return "takes effect before it was signed";
   const lead = m.atBeaconRound - m.signedAtRound;
@@ -195,6 +218,7 @@ function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: bool
       if (cfg.callMode !== "host") return NEXT_REFUSALS.auto;
       if (lead !== NEXT_LEAD_ROUNDS || m.untilRound !== undefined) return NEXT_REFUSALS.lead; // exactly the lead: the round is still unknown when signed, and the number comes as soon as it can
       if (paused) return NEXT_REFUSALS.paused;
+      if (cfg.startMode === "manual") { if (go === null) return NEXT_REFUSALS.start; if (m.atBeaconRound < go) return NEXT_REFUSALS.early; } // a manual start: the Host's first press comes after Start, from the round Start named
       const k = nexts.length, prev = k ? nexts[k - 1]! : -1;
       if (k >= (cfg.maxNexts ?? 450)) return NEXT_REFUSALS.done;
       if (m.atBeaconRound <= prev) return NEXT_REFUSALS.order;
@@ -202,6 +226,12 @@ function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: bool
       if (gap && k > 0 && m.atBeaconRound < prev + 1 + gap.rounds) return NEXT_REFUSALS.gap; // the break (or intermission) shows after the previous number for its full length first
       return null;
     }
+    case "go":
+      if (cfg.startMode !== "manual") return GO_REFUSALS.auto;
+      if (go !== null) return GO_REFUSALS.again;
+      if (cfg.startNotBefore !== undefined && m.signedAtRound < cfg.startNotBefore) return GO_REFUSALS.early;
+      if (lead < cfg.leadRounds || m.untilRound !== undefined) return GO_REFUSALS.lead;
+      return null;
     case "pause":
       if (lead < cfg.leadRounds) return `pause needs at least ${cfg.leadRounds} rounds of lead`;
       if (cur && m.atBeaconRound < effEnd(cur, cfg.maxPauseRounds)) return "already paused";
@@ -224,19 +254,20 @@ function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: bool
 
 export function resolveControl(cfg: ControlConfig, log: readonly ControlMsg[]): ControlState {
   const ivs: Cur[] = [];
-  let cur: Cur | null = null, stop: number | null = null, applied = 0;
+  let cur: Cur | null = null, stop: number | null = null, applied = 0, goAt: number | null = null;
   const ignored: ControlState["ignored"] = [], nextRounds: number[] = [];
   for (const m of [...log].sort((a, b) => a.seq - b.seq)) {
-    const why = check(m, cfg, cur, stop !== null, nextRounds);
+    const why = check(m, cfg, cur, stop !== null, nextRounds, goAt);
     if (why) { ignored.push({ seq: m.seq, why }); continue; }
     applied++;
     if (m.action === "pause") { cur = { start: m.atBeaconRound, until: m.untilRound ?? null, endedAt: null }; ivs.push(cur); }
     else if (m.action === "resume") cur!.endedAt = m.atBeaconRound;
     else if (m.action === "extend") cur!.until = m.untilRound!;
     else if (m.action === "next") nextRounds.push(m.atBeaconRound);
+    else if (m.action === "go") goAt = m.atBeaconRound;
     else stop = m.atBeaconRound;
   }
-  return { intervals: ivs.map((c) => ({ start: c.start, end: effEnd(c, cfg.maxPauseRounds) })), stopRound: stop, ignored, applied, nextRounds, host: cfg.callMode === "host" };
+  return { intervals: ivs.map((c) => ({ start: c.start, end: effEnd(c, cfg.maxPauseRounds) })), stopRound: stop, ignored, applied, nextRounds, host: cfg.callMode === "host", manualStart: cfg.startMode === "manual", goRound: goAt };
 }
 
 /** True while a pause is in force at the given beacon round. */
@@ -259,6 +290,7 @@ export function hostCallRound(s: ControlState, k: number): number | null {
  */
 export function callRound(s: ControlState, startRound: number, strideRounds: number, k: number): number | null {
   if (s.host) return hostCallRound(s, k);
+  if (s.manualStart) { if (s.goRound === null) return s.stopRound !== null ? null : Infinity; startRound = s.goRound; } // nothing is called until somebody presses Start; then number 1 comes in the round Start named
   let a = startRound + k * strideRounds;
   for (const i of s.intervals) if (a >= i.start) a += i.end - i.start;
   return s.stopRound !== null && a >= s.stopRound ? null : a;
@@ -300,6 +332,8 @@ export const SAFETY_LEAN30 = deriveSafety({ pollMaxSec: 36, cacheTtlSec: 3, late
 export const SAFETY_LEAN60 = deriveSafety({ pollMaxSec: 72, cacheTtlSec: 3, latencySec: 3, missedPollsTolerated: 1 }); // about every 54 to 72 s
 export const ALL_SAFETIES: Safety[] = [SAFETY_FAST, SAFETY_STANDARD, SAFETY_LEAN30, SAFETY_LEAN60];
 export const PAUSE_MAX_PARTICIPANTS = 2000;
+/** A Host calling the numbers and/or a Start button need signed control messages for every phone; above this size only Auto Start + Auto Play is allowed (phones work the numbers out from the public beacon with almost no server work). Pause keeps PAUSE_MAX_PARTICIPANTS. */
+export const MANUAL_MAX_PARTICIPANTS = 1000;
 /** The pause profile for an engagement of this size, or null when it is too large for a pause to be affordable on the free plan. */
 export function safetyForCap(cap: number, fast = false): Safety | null {
   if (cap <= 250) return fast ? SAFETY_FAST : SAFETY_STANDARD;
@@ -328,6 +362,8 @@ export class ControlTracker {
     this.resolved = resolveControl(cfg, []);
   }
   get state(): ControlState { return this.resolved; }
+  /** The game's rules changed before the start (another mode or time): take them and work the log out again. */
+  reconfigure(patch: Partial<ControlConfig>) { Object.assign(this.cfg, patch); this.resolved = resolveControl(this.cfg, this.log); }
   /** `body` is the parsed JSON of the control endpoint (or anything at all if it lied). Returns true if it was a good, verifiable answer. */
   async ingest(nowRound: number, body: unknown): Promise<boolean> {
     const b = body as { engagementId?: unknown; messages?: unknown } | null;
@@ -360,13 +396,16 @@ export async function readPublished(kv: KV, engagementId: string): Promise<Publi
   return t ? (JSON.parse(t) as PublishedFile) : null;
 }
 /** The game's public settings a control file needs beside the keys: who calls the numbers, and the breaks / rounds a press has to respect. */
-export interface GameOpts { callMode?: "auto" | "host"; breaks?: readonly { after: number; seconds: number }[]; rounds?: number }
+export interface GameOpts { callMode?: "auto" | "host"; startMode?: "auto" | "manual"; /** the scheduled start round (a Start before it is refused) */ startNotBefore?: number; breaks?: readonly { after: number; seconds: number }[]; rounds?: number }
 /** The host-mode part of a ControlConfig from the game's public settings (empty in auto mode). */
-export const hostControlOf = (game?: GameOpts): Pick<ControlConfig, "callMode" | "hostGaps" | "maxNexts"> =>
-  game?.callMode === "host" ? { callMode: "host", hostGaps: hostGapsFor(game.breaks ?? [], game.rounds ?? 1), maxNexts: 90 * (game.rounds ?? 1) } : { callMode: "auto", hostGaps: [], maxNexts: 0 };
+export const hostControlOf = (game?: GameOpts): Pick<ControlConfig, "callMode" | "hostGaps" | "maxNexts" | "startMode" | "startNotBefore"> => ({
+  ...(game?.callMode === "host" ? { callMode: "host" as const, hostGaps: hostGapsFor(game.breaks ?? [], game.rounds ?? 1), maxNexts: 90 * (game.rounds ?? 1) } : { callMode: "auto" as const, hostGaps: [], maxNexts: 0 }),
+  startMode: game?.startMode === "manual" ? "manual" as const : "auto" as const,
+  startNotBefore: game?.startMode === "manual" ? game.startNotBefore : undefined,
+});
 export const cfgOf = (f: PublishedFile, game?: GameOpts): ControlConfig => ({
   pubKey: f.pubKey, maxPauseRounds: f.maxPauseRounds, leadRounds: f.leadRounds, ...(f.hostKeys?.length ? { hostKeys: f.hostKeys } : {}),
-  ...(game?.callMode === "host" ? hostControlOf(game) : {}),
+  ...(game?.callMode === "host" || game?.startMode === "manual" ? hostControlOf(game) : {}),
 });
 
 /** Adds a Host's own console key (registered from the Host's browser) as a second signer. Only the store's own access check decides WHO may call this. */
@@ -408,7 +447,7 @@ export async function publishControl(kv: KV, engagementId: string, msg: unknown,
   if (msg.seq !== f.messages.length + 1) return { ok: false, status: 409, error: `Next sequence number is ${f.messages.length + 1}.` };
   const after = resolveControl(cfg, [...f.messages, msg]);
   const bad = after.ignored.find((x) => x.seq === msg.seq);
-  if (bad) return { ok: false, status: 422, error: msg.action === "next" ? bad.why : `Not accepted: ${bad.why}.` }; // a press is refused in the Host's own words
+  if (bad) return { ok: false, status: 422, error: msg.action === "next" || msg.action === "go" ? bad.why : `Not accepted: ${bad.why}.` }; // a press is refused in the Host's own words
   f.messages.push(msg);
   await kv.put(fileKey(engagementId), JSON.stringify(f));
   return { ok: true, seq: msg.seq };
@@ -421,14 +460,14 @@ export function describeControl(f: PublishedFile | null, nowRound?: number, game
   return {
     registered: true as const, pubKey: f.pubKey, leadRounds: f.leadRounds, leadSeconds: f.leadRounds * PERIOD_SEC, maxPauseRounds: f.maxPauseRounds,
     messages: f.messages.map((m) => ({ seq: m.seq, action: m.action, atBeaconRound: m.atBeaconRound, untilRound: m.untilRound })),
-    intervals: st.intervals, stopRound: st.stopRound, ignored: st.ignored, nextRounds: st.nextRounds,
+    intervals: st.intervals, stopRound: st.stopRound, ignored: st.ignored, nextRounds: st.nextRounds, goRound: st.goRound,
     pausedNow: nowRound === undefined ? undefined : pausedAt(st, nowRound), stopped: nowRound === undefined || st.stopRound === null ? undefined : nowRound >= st.stopRound,
   };
 }
 
 /** Builds the next message for the console. `nowRound` must come from the beacon (utcNow), never the device clock. */
 export function nextMessage(f: PublishedFile, nowRound: number, a: { action: ControlAction; inRounds?: number; pauseForRounds?: number; untilRound?: number; addRounds?: number }): UnsignedControl {
-  const lead = a.action === "next" ? NEXT_LEAD_ROUNDS : a.action === "resume" ? Math.max(1, a.inRounds ?? f.leadRounds) : Math.max(f.leadRounds, a.inRounds ?? 0);
+  const lead = a.action === "next" ? NEXT_LEAD_ROUNDS : a.action === "go" ? Math.max(f.leadRounds, a.inRounds ?? 0) : a.action === "resume" ? Math.max(1, a.inRounds ?? f.leadRounds) : Math.max(f.leadRounds, a.inRounds ?? 0);
   const at = nowRound + lead;
   const m: UnsignedControl = { engagementId: f.engagementId, seq: f.messages.length + 1, action: a.action, atBeaconRound: at, signedAtRound: nowRound };
   if (a.action === "pause" && a.pauseForRounds) m.untilRound = at + a.pauseForRounds;
