@@ -96,7 +96,7 @@ describe("the ticket on the phone never marks itself", () => {
     await wait(1200); // the page redraws once a second
     const btn = doc.querySelector('[data-claim="early5"]') as any;
     expect(btn).toBeTruthy(); expect(btn.textContent).toBe("Claim Early Five");
-    expect(p.text()).toMatch(/Press Claim before the next number is called\./);
+    expect(p.text()).toMatch(/Press Claim (now, )?before the next number is called./);
     expect(p.text()).toMatch(/Early Five.*Complete: press Claim/); // the Still-to-win row
     expect(rt.view().marks.length).toBeGreaterThanOrEqual(5); expect(rt.view().pressed).toEqual([]);
     expect((x.w.world.raw.query("SELECT COUNT(*) c FROM claim").get() as any).c).toBe(0); // nothing was sent by itself

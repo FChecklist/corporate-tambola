@@ -11,7 +11,7 @@ Examples use: time `Sat 6:30 pm`, countdown `2:05`, 30 numbers called, paused by
 | State | Sentence |
 |---|---|
 | Before publishing (`draft`) | This game is not published yet. |
-| Published, waiting for payment (`unpaid`) | The game is waiting for payment. |
+| Published, waiting for payment (`unpaid`) | The game is waiting for payment. (Players and the big screen read "The game has not started yet.": they never see money words.) |
 | Published and paid, waiting for the start time (`waiting`) | The game starts at Sat 6:30 pm. |
 | Countdown to the first number (`countdown`) | The game is starting in 2:05. |
 | Start time reached, nobody has pressed Start (`waitStart`) | Waiting for the host to begin the game. |

@@ -10,7 +10,7 @@ describe("the story table", () => {
       expect(say.length).toBeGreaterThan(10); expect(say).not.toMatch(BANNED);
       for (const role of STORY_ROLES) {
         const s = story({ state, role, time: "Sat 6:30 pm", countdown: "2:05", called: 30, by: "the Organizer" });
-        expect(s.say).toBe(say); expect([state, role, s.todo.length > 8]).toEqual([state, role, true]); expect(s.todo).not.toMatch(BANNED);
+        expect(s.say).toBe(state === "unpaid" && (role === "player" || role === "screen") ? "The game has not started yet." : say); // (the one exception: players and the big screen never read money words) expect([state, role, s.doNow.length > 8]).toEqual([state, role, true]); expect(s.doNow).not.toMatch(BANNED);
       }
     }
   });

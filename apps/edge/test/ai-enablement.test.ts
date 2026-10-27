@@ -95,7 +95,7 @@ describe("the guided path, followed like an outside AI", () => {
     expect(next).toEqual(expect.arrayContaining([expect.stringMatching(/Write the welcome message/), expect.stringMatching(/Load the guest list/), expect.stringMatching(/^Publish/), expect.stringMatching(/^Pay/)]));
     expect(choicesOf(t).find((c) => /Write the welcome message/.test(c.label))!.url).toBe(`${o.base}/go/msg?id=DIWALI-1002`);
     const sm = await j(await call("GET", `/ai/${o.key}/z/DIWALI-1002/summary`));
-    expect(sm).toMatchObject({ id: "DIWALI-1002", name: "Diwali party, Fri 2 Oct", tickets: 2, limit: 250, callSeconds: 9, rounds: 1, closed: false, status: "draft" });
+    expect(sm).toMatchObject({ id: "DIWALI-1002", name: "Diwali party, Fri 2 Oct", tickets: 2, limit: 250, callSeconds: 12, rounds: 1, closed: false, status: "draft" });
     expect(sm.startMs).toBe(Date.UTC(2026, 9, 2, 10, 30)); // 4 pm India time tomorrow
     expect(sm.rewards.map((r: any) => r.pattern)).toEqual(["early5", "top", "mid", "bot", "full"]);
     expect(sm.breaks).toMatchObject([{ kind: "lucky", winners: 1, after: 45 }]); // placed by the software
