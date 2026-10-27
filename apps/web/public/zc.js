@@ -2047,6 +2047,7 @@
     if (r === "cohost") { if (eid) return refreshCohost(); return redraw(); }
     if (!eid && !QUICK && !NEWDEMO && !NEWGAME && (r === "organizer" || r === "host") && LAST && LAST.eid && LAST.role === r) { eid = LAST.eid; S.restored = true; history.replaceState(null, "", "?e=" + encodeURIComponent(eid) + (BASE ? "&api=" + encodeURIComponent(BASE) : "")); } // back to the game they were in
     if (r === "host" && !eid) { try { S.history = await call("GET", "/api/history"); } catch { S.history = null; } const gs = (S.history && S.history.engagements) || []; if (gs.length === 1) { eid = gs[0].id; refreshTeam(); return refreshEng(); } return redraw(); } // a Host with one game goes straight in; with several they pick
+    if (isOrg()) { await redeemPass(); if (eid && S.passMsg && /ready/.test(S.passMsg)) S.passMsg += " Your game is already made: open its last step and press Publish, no payment is needed."; } // a demo link opened while she is taken straight back into her game must still be used (found with a real prospect: the link was only used on the home screen)
     refreshTeam();
     if (eid) refreshEng();
     else if (CREATE && isOrg() && !S.createdOnce) { S.createdOnce = true; try { await startNew(); } catch (e) { S.note = friendly(e); refreshHome(); } }

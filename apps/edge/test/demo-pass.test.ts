@@ -20,6 +20,14 @@ describe("demo pass", () => {
     expect((await publish(o.key, id)).status).toBe(200);
     const again = await create(o.key, uid(), { cap: 100 }); expect(again.status).toBe(200); expect(one("SELECT COUNT(*) AS c FROM engagement WHERE pack=0").c).toBe(1); // only the first was free: the second is an ordinary draft
   });
+  test("a draft made BEFORE the link was opened is published free by the link (found with a real prospect: she made a 250 game first, then opened the 250 link)", async () => {
+    await arm(); const o = await organizer();
+    const id = uid(); expect((await create(o.key, id, { cap: 250 })).status).toBe(200); expect(one("SELECT pack FROM engagement WHERE id=?", id).pack).toBe(0); // a draft: nothing bought yet
+    expect(await j(await call("POST", "/api/pass", { token: TOK2 }, keyH(o.key)))).toEqual({ ok: true, cap: 250 });
+    expect((await publish(o.key, id)).status).toBe(200);
+    expect(one("SELECT pack FROM engagement WHERE id=?", id).pack).toBe(250); // published as a paid game without any payment
+    expect(one("SELECT eid FROM entitlement WHERE org IS NOT NULL AND payment_id='demo-pass'").eid).toBe(id);
+  });
   test("the 250 link gives up to 250 people", async () => {
     await arm(); const o = await organizer();
     expect(await j(await call("POST", "/api/pass", { token: TOK2 }, keyH(o.key)))).toEqual({ ok: true, cap: 250 });

@@ -43,7 +43,7 @@ describe("every message the server can send has a guide", () => {
     const p = await page(); const CTG = p.win.CTG;
     const hidden = serverMessages().filter((m) => CTG.apiOnly(m.msg));
     expect(hidden.length).toBeGreaterThan(20);
-    for (const m of hidden) expect(["admin.ts", "partners.ts", "mode.ts", "ledgerc.ts", "pay.ts", "worker.ts", "lifecycle.ts", "people.ts", "credit.ts", "helpdesk.ts", "winners.ts", "hostsetup.ts", "rights.ts", "clone.ts", "consent.ts"]).toContain(m.file);
+    for (const m of hidden) expect(["admin.ts", "partners.ts", "mode.ts", "ledgerc.ts", "pay.ts", "worker.ts", "lifecycle.ts", "people.ts", "credit.ts", "helpdesk.ts", "winners.ts", "hostsetup.ts", "rights.ts", "clone.ts", "consent.ts", "owner-stats.ts"]).toContain(m.file);
   });
 });
 
