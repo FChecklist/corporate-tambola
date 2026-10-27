@@ -72,3 +72,20 @@ describe("a prospect link", () => {
     expect(o.key).toBeTruthy();
   });
 });
+
+describe("the owner puts a person's free pack on their unpaid game", () => {
+  test("applies the unused pack to the held game once, refuses when there is no pack, and the platform key alone cannot do it", async () => {
+    const m = await make(); const o = await organizer(), p = await organizer();
+    const id = uid(); expect((await create(o.key, id, { cap: 100 })).status).toBe(200); await publish(o.key, id);
+    expect(one("SELECT pack FROM engagement WHERE id=?", id).pack).toBe(0);
+    const none = await call("POST", "/api/owner/prospect-links", { action: "apply", eid: id }, K); expect(none.status).toBe(409); // no pack yet
+    expect((await use(o.key, m.link)).status).toBe(200);
+    expect((await call("POST", "/api/owner/prospect-links", { action: "apply", eid: id }, { "x-organizer": "plat" })).status).toBe(404);
+    const ok = await call("POST", "/api/owner/prospect-links", { action: "apply", eid: id }, K); expect(ok.status).toBe(200); expect((await j(ok)).pack).toBe(100);
+    expect(one("SELECT pack FROM engagement WHERE id=?", id).pack).toBe(100);
+    expect(one("SELECT eid FROM entitlement WHERE payment_id='demo-pass'").eid).toBe(id);
+    expect((await j(await call("POST", "/api/owner/prospect-links", { action: "apply", eid: id }, K))).again).toBe(true);
+    expect((await call("POST", "/api/owner/prospect-links", { action: "apply", eid: "NOSUCHGAME" }, K)).status).toBe(404);
+    void p;
+  });
+});

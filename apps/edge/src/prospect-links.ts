@@ -68,5 +68,19 @@ export async function prospectLinksRoute(req: Request, env: LinkEnv, now: number
     await logAccess(env.DB, now, "prospect-link-" + action, null, null, 1, true, id);
     return json({ ok: true, id, on: l.on });
   }
-  return json({ error: 'Send {"action": "create" | "enable" | "disable"}.' }, 400);
+  if (action === "apply") { // the owner puts a person's own unused free or bought pack on their unpaid game (the same rule as pressing Publish again), for when the person cannot do it in time
+    const eid = clean(b?.eid, 40);
+    const e = await env.DB.prepare("SELECT id, org, cap, pack FROM engagement WHERE id=?").bind(eid).first<{ id: string; org: string | null; cap: number; pack: number | null }>();
+    if (!e || !e.org) return json({ error: "Not found" }, 404);
+    if ((e.pack ?? 0) > 0) return json({ ok: true, again: true, pack: e.pack });
+    const ent = await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(e.org, e.cap).first<{ id: string; pack: number }>();
+    if (!ent) return json({ error: "This organizer has no unused pack big enough for this game." }, 409);
+    await env.DB.batch([
+      env.DB.prepare("UPDATE engagement SET pack=? WHERE id=? AND pack=0").bind(ent.pack, e.id),
+      env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(e.id, ent.id),
+    ]);
+    await logAccess(env.DB, now, "prospect-link-apply", e.id, null, 1, true, ent.id);
+    return json({ ok: true, pack: ent.pack });
+  }
+  return json({ error: 'Send {"action": "create" | "enable" | "disable" | "apply"}.' }, 400);
 }
