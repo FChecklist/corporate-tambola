@@ -26,6 +26,7 @@ import { GAME_RECORD_SCHEMA, readGameRecords } from "./gamerecord";
 import { RIGHTS_SCHEMA, leaveRoute, requestRoute } from "./rights";
 import { ADMIN_SCHEMA, adminRoute, adminTick, countError, maintenanceGate } from "./admin";
 import { ownerStatsRoute } from "./owner-stats";
+import { getProspectLink, prospectLinksRoute } from "./prospect-links";
 import { recordServerError } from "./errorbox";
 import { LEDGER_SCHEMA } from "./ledger";
 import { LEDGERC_SCHEMA, ledgerCTick, ownerLedger } from "./ledgerc";
@@ -337,7 +338,14 @@ async function redeemDemoPass(env: Env, org: string, rawToken: string, now: numb
   const bad = { status: 404, body: { error: "This demo link is not valid or has ended. Please ask us for a new one.", code: "pass-invalid" } };
   const tok = passShape(rawToken);
   if (!tok || now > DEMO_PASS_UNTIL) return bad;
-  const ph = await sha("dpass|" + tok), def = DEMO_PASSES.find((x) => x.hash === ph);
+  const ph = await sha("dpass|" + tok);
+  let def: { cap: number; label: string } | undefined = DEMO_PASSES.find((x) => x.hash === ph);
+  if (!def) { // a one-time prospect link made from the owner's console (prospect-links.ts): switched off or past its date, it is refused even before use
+    const pl = await getProspectLink(env.DB, ph);
+    if (pl && !pl.on) return { status: 404, body: { error: "This demo link is not valid or has ended. It has been switched off. Please ask us for a new one.", code: "pass-off" } };
+    if (pl && now > pl.exp) return { status: 404, body: { error: "This demo link is not valid or has ended. It was open for a limited time. Please ask us for a new one.", code: "pass-expired" } };
+    if (pl) def = { cap: pl.cap, label: pl.label };
+  }
   if (!def) return bad;
   if (!(await spend(env, now, 4))) return { status: 503, body: {}, busy: true };
   const first = await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO NOTHING").bind(`dpass/${ph}`, JSON.stringify({ org, at: now, label: def.label })).run();
@@ -353,7 +361,7 @@ async function redeemDemoPass(env: Env, org: string, rawToken: string, now: numb
 /** The link's secret is kept with the e-mail address while the person signs in, so it is used whichever browser finishes the sign-in (for example the one-click link in the e-mail opening in a mail app). Only a secret that belongs to a real pass is kept. */
 async function holdPassForSignIn(env: Env, eh: string, rawToken: unknown, now: number): Promise<void> {
   const tok = passShape(rawToken); if (!tok) return;
-  const ph = await sha("dpass|" + tok); if (!DEMO_PASSES.some((x) => x.hash === ph)) return;
+  const ph = await sha("dpass|" + tok); if (!DEMO_PASSES.some((x) => x.hash === ph) && !(await getProspectLink(env.DB, ph))) return;
   await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`loginpass/${eh}`, JSON.stringify({ t: tok, at: now })).run();
 }
 async function useHeldPass(env: Env, org: string, eh: string, now: number): Promise<void> {
@@ -816,6 +824,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (req.method === "GET" && p === "/api/z/ai-manifest") return json(AI_MANIFEST);
   { const bm = req.method === "GET" ? p.match(/^\/api\/beacon\/([0-9a-f]{64})\/public\/(latest|\d{1,10})$/) : null; if (bm) return beaconRelay(req, bm[1]!, bm[2]!); }
   { const mr = await modeRoute(req, env as any, now, a.plat && req.headers.get("x-ct-link") !== "1", (n) => purgeTestData(env, n)); if (mr) return mr; } // TEST/LIVE switch, allow-list, purge (mode.ts): owner only, except the public read of the word TEST or LIVE
+  { const pr = await prospectLinksRoute(req, env as any, now); if (pr) return pr; } // one-time prospect links (prospect-links.ts): its own key
   { const sr = await ownerStatsRoute(req, env as any, now); if (sr) return sr; } // the console's read-only numbers (owner-stats.ts): its own key, counts and payer e-mails only
   { const ar = await adminRoute(req, env as any, now, a.plat && req.headers.get("x-cb-link") !== "1", (n) => spend(env, now, n)); if (ar) return ar; } // the owner's desk (admin.ts): site switch, organizer lookup, data requests, mail events, error counts; the health read; the mail webhook
   if (p === "/api/v/b") return beaconRoute(req, env as VisitEnv, now, (n) => spend(env, now, n)); // public-page visit tracking (visits.ts); never the live game
