@@ -167,7 +167,7 @@ describe("winners are decided by the software", () => {
     await settleByPhones(call, "ENG1", [{ pattern: "full", idx: 70, pids: [pids[1]!, pids[2]!] }], pids.slice(0, 3));
     const txt = await (await call("GET", "/api/z/ENG1/results")).text();
     expect(/\b[6-9]\d{9}\b/.test(txt)).toBe(false); // no mobile number, no name
-    expect(JSON.parse(txt).results[0]).toEqual({ pattern: "full", ordinal: 1, round: 1, idx: 70, count: 2, winners: [pids[1]!, pids[2]!].sort() });
+    expect(JSON.parse(txt).results[0]).toEqual({ pattern: "full", ordinal: 1, round: 1, idx: 70, count: 2, tickets: [pids[1]!, pids[2]!].sort().map((p) => Number(p.split("x")[0])), winners: [pids[1]!, pids[2]!].sort() }); // 1.4.3: a result also names the winning tickets by seat number (never a name or a mobile)
   });
   test("a winner confirms the details on their own phone; a change is kept with the original; the organizer ticks 'prize given'", async () => {
     await settleByPhones(call, "ENG1", [{ pattern: "full", idx: 70, pids: [pids[1]!] }], pids.slice(0, 3));
@@ -653,7 +653,7 @@ describe("tickets, reward lines and brand breaks", () => {
     await settleByPhones(call, "CFG01", [{ pattern: "full", ordinal: 1, idx: 50, pids: [p1] }, { pattern: "full", ordinal: 2, idx: 53, pids: [p1, p2] }], [p1]);
     await settleByPhones(call, "CFG01", [{ pattern: "full", ordinal: 1, idx: 51, pids: [p2] }], [p2]); // a later, different report does not replace it
     const r = await (await call("GET", "/api/z/CFG01/results")).json() as any;
-    expect(r.results).toEqual([{ pattern: "full", ordinal: 1, round: 1, idx: 50, count: 1, winners: [p1] }, { pattern: "full", ordinal: 2, round: 1, idx: 53, count: 2, winners: [p1, p2].sort() }]);
+    expect(r.results).toEqual([{ pattern: "full", ordinal: 1, round: 1, idx: 50, count: 1, tickets: [Number(p1.split("x")[0])], winners: [p1] }, { pattern: "full", ordinal: 2, round: 1, idx: 53, count: 2, tickets: [p1, p2].sort().map((p: string) => Number(p.split("x")[0])), winners: [p1, p2].sort() }]);
     await settleByPhones(call, "CFG01", [{ pattern: "full", ordinal: 6, idx: 1, pids: [p1] }, { pattern: "full2", ordinal: 1, idx: 1, pids: [p1] }], [p1]); // a line this engagement does not have is ignored
     expect(((await (await call("GET", "/api/z/CFG01/results")).json()) as any).results).toHaveLength(2);
   });
@@ -670,7 +670,7 @@ describe("lucky draw results", () => {
   test("the winners are accepted when several phones agree, and are shown by opaque ids so each phone can tell if it won", async () => {
     expect((await call("POST", "/api/z/LUCK1/settle", { results: [{ pattern: "lucky", ordinal: 1, idx: 20, pids: [pids[0]!] }] }, org)).status).toBe(403);
     await settleByPhones(call, "LUCK1", [{ pattern: "lucky", idx: 20, pids: [pids[0]!, pids[1]!, pids[2]!] }], pids.slice(0, 3));
-    expect((await pub()).results[0]).toEqual({ pattern: "lucky", ordinal: 1, round: 1, idx: 20, count: 3, winners: [pids[0]!, pids[1]!, pids[2]!].sort() });
+    expect((await pub()).results[0]).toEqual({ pattern: "lucky", ordinal: 1, round: 1, idx: 20, count: 3, tickets: [pids[0]!, pids[1]!, pids[2]!].sort().map((p) => Number(p.split("x")[0])), winners: [pids[0]!, pids[1]!, pids[2]!].sort() });
   });
   test("house results carry only opaque ticket ids, never a name or a number", async () => {
     await settleByPhones(call, "LUCK1", [{ pattern: "full", idx: 70, pids: [pids[0]!] }], pids);
