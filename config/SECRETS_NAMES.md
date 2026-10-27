@@ -44,6 +44,7 @@ Where things are set:
 | `FREE_LAUNCH` | "1" lets small games be made without payment | Optional Pages variable | setting |
 | `PARTNER_COMMISSION_RATE` | Partner commission rate | Optional Pages variable | setting |
 | `DAILY_WRITE_BUDGET` | Most database writes the Worker allows itself per day | wrangler var | setting |
+| `ONLY_12S` | When set to 1, new games use one speed, a new number every 12 seconds (older games keep theirs) | wrangler var | setting |
 | `JOIN_PER_IP_MINUTE` | Most new places one network address may open in a minute (an office shares one address); the Worker uses 200 if this is not set | wrangler var | setting |
 | `JOIN_PER_IP_DAY` | Most new places one network address may open in a day; the Worker uses 1,500 if this is not set | wrangler var | setting |
 | `AI_LINK_MAIL_AT_SIGNUP` | Switch for the AI work-link welcome e-mail sent when an account is made; the live site turns it off because the AI link is hidden in the console | wrangler var | setting |
