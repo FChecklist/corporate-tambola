@@ -91,7 +91,7 @@ export class NodePhone {
   }
   /** the phone opens the link and joins (what the Join button does) */
   async open() { await this.rt.boot(); return this.rt.phase; }
-  async join() { const w = this.who; return this.rt.join(w.phone || "", w.name, undefined, w.empId); }
+  async join() { /* like the real page since 1.3.3: a join that got NO answer (timeout) is asked again, up to 3 more times, each at its own random moment; the first-attempt failures are counted in this.joinTimeouts */ const w = this.who; this.joinTimeouts = 0; for (let k = 0; k < 4; k++) { const ok = await this.rt.join(w.phone || "", w.name, undefined, w.empId); if (ok) return true; const err = String(this.rt.error || ""); if (!/Could not join|timed? ?out|fetch failed|abort/i.test(err) && k === 0 && err) return false; this.joinTimeouts++; await new Promise((r) => setTimeout(r, 2000 + Math.random() * 6000)); } return false; }
   /** closing the page and opening the same link again on the same phone: same device, same ticket */
   async reload() { this.mk(); await this.rt.boot(); this.lastLen = 0; }
   go() { this.stopped = false; this.loop(); }
