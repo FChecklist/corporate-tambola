@@ -383,7 +383,7 @@ body:has(#go) #ct-notify{display:none}
 /* numbers sized from the TICKET's own width, so two digits always fit their cell at every screen size */
 .ztk .zticket,.ztk .zt{container-type:inline-size}
 .ztk .zticket div,.ztk .zt div{font-size:clamp(11px,5.6cqw,26px)}
-@media(max-width:380px){.zticket{padding:5px;gap:3px;border-width:2px}.ztk{margin:8px 2px;padding:10px 6px 12px}}
+@media(max-width:380px){.zticket:not(.zx){padding:5px;gap:3px;border-width:2px}.ztk{margin:8px 2px;padding:10px 6px 12px}}
 
 /* several prizes ready at once: one big button, the rest compact; the small duplicates under the ticket hide while the bar is on; the guide's "Back" chip never sits on the bar; sheets scroll on short screens */
 .zbigclaim.zmore{min-height:44px;font-size:1rem;animation:none}.zbigclaim.zmore small{display:none}
