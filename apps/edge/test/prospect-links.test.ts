@@ -1,6 +1,6 @@
 // One-time prospect links (src/prospect-links.ts): made from the owner's console with their own key, usable once by one account, ended by a date or by the owner's switch.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { DAY, T, call, create, j, keyH, one, organizer, publish, reset, restore, uid } from "./param-harness";
+import { DAY, HOUR, T, call, create, j, keyH, one, organizer, publish, q, reset, restore, roundAt, startIn, uid } from "./param-harness";
 
 beforeEach(() => reset({ OWNER_LINK_KEY: "lk-test-0123456789" } as any));
 afterEach(restore);
@@ -104,4 +104,107 @@ describe("the owner makes one game free", () => {
     expect(one("SELECT COUNT(*) AS c FROM audit_access WHERE action='owner-free-game'").c).toBe(1);
     expect((await call("POST", "/api/owner/prospect-links", { action: "free", eid: "NOSUCHGAME" }, K)).status).toBe(404);
   });
+});
+
+describe("the owner makes the next game for a prospect whose game went badly", () => {
+  const PEOPLE = ["Asha", "Ben", "Chitra", "Dev", "Esha", "Farid"].map((name, i) => ({ name, phone: `98765432${10 + i}` }));
+  const PRIZES = [{ pattern: "early5", text: "Gift hamper" }, { pattern: "plus", text: "Movie tickets: 2" }, { pattern: "full", text: "Holiday or weekend stay: Andaman" }];
+  /** her old game: 100 people, a 9 s gap, list only, named, prize texts, six people on the list */
+  const oldGame = async (over: Record<string, unknown> = {}) => {
+    const o = await organizer(); const id = uid();
+    expect((await create(o.key, id, { cap: 100, callSeconds: 9, name: "KPI Anniversary celebrations!", rewards: PRIZES, whoCanJoin: "list", ...over })).status).toBe(200);
+    expect((await publish(o.key, id)).status).toBe(200);
+    expect((await call("POST", `/api/z/${id}/people`, { people: PEOPLE }, o.h)).status).toBe(200);
+    return { o, id };
+  };
+  const clone = (body: Record<string, unknown>, now = T) => call("POST", "/api/owner/prospect-links", { action: "clone", ...body }, K, now);
+  const START = startIn(20 * HOUR);
+
+  test("only the link key may do it: the platform key, no key and a wrong key get the plain 404 and nothing is made", async () => {
+    const { id } = await oldGame();
+    for (const h of [{}, { "x-organizer": "plat" }, { "x-owner-link-key": "wrong" }, { "x-owner-stats-key": "lk-test-0123456789" }]) {
+      expect((await call("POST", "/api/owner/prospect-links", { action: "clone", from: id, startRound: START }, h as any)).status).toBe(404);
+    }
+    expect(one("SELECT COUNT(*) AS c FROM engagement").c).toBe(1);
+    expect(one("SELECT COUNT(*) AS c FROM entitlement WHERE payment_id='owner-free'").c).toBe(0);
+  }, 30_000);
+
+  test("a new draft with the same settings, prizes and people, a 12 s gap, her start time, a free pack waiting; her Publish press then uses the pack; nothing is published for her", async () => {
+    const { o, id } = await oldGame(); const before = one("SELECT * FROM engagement WHERE id=?", id);
+    const r = await clone({ from: id, startRound: START, reason: "first game went wrong" }); expect(r.status).toBe(200);
+    const b = await j(r); expect(b).toMatchObject({ ok: true, from: id, peopleCopied: 6, startRound: START, callSeconds: 12, cap: 100, freePack: 100, published: false, openUrl: `https://tambola.test/zc.html?e=${b.id}` });
+    expect(b.id.startsWith(`${id}-`)).toBe(true);
+    expect(b.startMs).toBe(T + 20 * HOUR); expect(b.startsAtIST).toBe("Fri, 2 Oct, 11:30 am IST"); // T is 15:30 IST on 1 Oct: +20 h = 11:30 IST on 2 Oct
+    const n = one("SELECT * FROM engagement WHERE id=?", b.id);
+    expect(n).toMatchObject({ org: before.org, cap: 100, call_seconds: 12, tickets: before.tickets, closed: 1, pack: 0, start_round: START, cancelled_ms: null, unplayed_ms: null });
+    expect(JSON.parse(n.config)).toEqual(JSON.parse(before.config));
+    expect(JSON.parse(n.config).name).toBe("KPI Anniversary celebrations!");
+    expect(JSON.parse(n.config).rewards.map((x: any) => x.text)).toEqual(expect.arrayContaining(["Gift hamper", "Movie tickets: 2", "Holiday or weekend stay: Andaman"]));
+    expect(one("SELECT * FROM engagement WHERE id=?", id)).toEqual(before); // the old game is untouched (still 9 s)
+    expect(before.call_seconds).toBe(9);
+    // her people: six invitations with new personal links, still sealed
+    const rows = q("SELECT status, tok_hash, pii FROM person WHERE eid=?", b.id); const old = q("SELECT tok_hash FROM person WHERE eid=?", id).map((x) => x.tok_hash);
+    expect(rows).toHaveLength(6); expect(rows.every((x) => x.status === "invited" && !old.includes(x.tok_hash))).toBe(true);
+    expect(rows.every((x) => x.pii.startsWith("v1.") && !x.pii.includes("98765432"))).toBe(true); // names and numbers stay sealed (random cipher text can contain a short name by chance, so no name pattern here)
+    const list = await j(await call("GET", `/api/z/${b.id}/people`, undefined, o.h));
+    expect(list.people.map((x: any) => x.name).sort()).toEqual(PEOPLE.map((x) => x.name).sort());
+    expect(list.people.every((x: any) => x.link.startsWith("https://tambola.test/j/") && x.status === "invited")).toBe(true);
+    // free pack waiting, game not published, no start pending, no contact, nothing logged as sent
+    expect(q("SELECT org, pack, eid FROM entitlement WHERE payment_id='owner-free'")).toEqual([{ org: before.org, pack: 100, eid: null }]);
+    expect(one("SELECT COUNT(*) AS c FROM kv WHERE k IN (?,?,?)", `pub/${b.id}`, `contact/${b.id}`, `startpending/${b.id}`).c).toBe(0);
+    const s = await j(await call("GET", `/api/z/${b.id}/summary`, undefined, o.h)); expect(s.status).toBe("draft"); expect(s.callSeconds).toBe(12); expect(s.limit).toBe(100);
+    expect(one("SELECT note, eid FROM audit_access WHERE action='owner-clone-game'")).toEqual({ eid: id, note: `${b.id}: first game went wrong` });
+    // she presses Publish herself: her own e-mail, mobile and Terms box; the waiting free pack goes on the game
+    const p = await publish(o.key, b.id); expect(p.status).toBe(200); expect(await j(p)).toMatchObject({ published: true, paid: true });
+    expect(one("SELECT pack FROM engagement WHERE id=?", b.id).pack).toBe(100);
+    expect(one("SELECT eid FROM entitlement WHERE payment_id='owner-free'").eid).toBe(b.id);
+    expect(one("SELECT COUNT(*) AS c FROM kv WHERE k=?", `pub/${b.id}`).c).toBe(1);
+    expect(one("SELECT COUNT(*) AS c FROM consent_log WHERE ref=? AND kind='K1'", b.id).c).toBe(1); // the tick is hers, recorded when she pressed Publish
+  }, 30_000);
+
+  test("pressing it twice gives the same new game and no second free pack; another source game is its own", async () => {
+    const a = await oldGame(), c = await oldGame();
+    const first = await j(await clone({ from: a.id, startRound: START })); const two = await j(await clone({ from: a.id, startRound: START }));
+    expect(two).toMatchObject({ ok: true, again: true, id: first.id }); expect(two.openUrl).toBe(first.openUrl);
+    expect(one("SELECT COUNT(*) AS c FROM engagement WHERE id LIKE ?", `${a.id}-%`).c).toBe(1);
+    expect(one("SELECT COUNT(*) AS c FROM entitlement WHERE payment_id='owner-free'").c).toBe(1);
+    expect(one("SELECT COUNT(*) AS c FROM person WHERE eid=?", first.id).c).toBe(6);
+    const other = await j(await clone({ from: c.id, startRound: START })); expect(other.ok).toBe(true); expect(other.id).not.toBe(first.id);
+    expect(one("SELECT COUNT(*) AS c FROM entitlement WHERE payment_id='owner-free'").c).toBe(2);
+  }, 30_000);
+
+  test("a refused request leaves nothing behind and does not block the right one: no start, a start in the past, more than 30 days away, a gap the product does not have, an unknown game, a game with no account", async () => {
+    const { id } = await oldGame();
+    const left = () => [one("SELECT COUNT(*) AS c FROM engagement").c, one("SELECT COUNT(*) AS c FROM entitlement WHERE payment_id='owner-free'").c, one("SELECT COUNT(*) AS c FROM kv WHERE k LIKE 'ownerclone/%'").c];
+    expect((await clone({ from: id })).status).toBe(400);
+    expect((await clone({ from: id, startRound: "tomorrow" })).status).toBe(400);
+    expect((await clone({ from: id, startRound: roundAt(T - HOUR) })).status).toBe(400);
+    expect((await clone({ from: id, startRound: roundAt(T + 31 * DAY) })).status).toBe(400);
+    expect((await clone({ from: id, startRound: START, callSeconds: 7 })).status).toBe(400);
+    expect((await clone({ from: id, startRound: START, callSeconds: "12" })).status).toBe(400);
+    expect((await clone({ from: "NOSUCHGAME", startRound: START })).status).toBe(404);
+    const plat = uid(); expect((await create(undefined, plat, { cap: 100 })).status).toBe(200); // made with the platform key: no account behind it
+    expect((await clone({ from: plat, startRound: START })).status).toBe(404);
+    expect(left()).toEqual([2, 0, 0]); // the old game and the platform game only
+    const ok = await clone({ from: id, startRound: START }); expect(ok.status).toBe(200);
+    expect(left()).toEqual([3, 1, 1]);
+  }, 30_000);
+
+  test("the start can be given as a time (what the console sends): 10:30 IST tomorrow lands on the same round, and a time in the past or not a number is refused", async () => {
+    const { id } = await oldGame();
+    const at = Date.UTC(2026, 9, 2, 5, 0, 0); // 10:30 IST on 2 Oct 2026 (05:00 UTC)
+    expect((await clone({ from: id, startMs: T - HOUR })).status).toBe(400);
+    expect((await clone({ from: id, startMs: "soon" })).status).toBe(400);
+    const b = await j(await clone({ from: id, startMs: at }));
+    expect(b.ok).toBe(true); expect(b.startRound).toBe(roundAt(at)); expect(b.startMs).toBe(at); expect(b.startsAtIST).toBe("Fri, 2 Oct, 10:30 am IST");
+    expect(one("SELECT start_round FROM engagement WHERE id=?", b.id).start_round).toBe(roundAt(at));
+  }, 30_000);
+
+  test("the gap can be named: 9 s is kept when asked for; the copy carries no guests and no payment", async () => {
+    const { id } = await oldGame();
+    const b = await j(await clone({ from: id, startRound: START, callSeconds: 9 }));
+    expect(one("SELECT call_seconds, pack FROM engagement WHERE id=?", b.id)).toEqual({ call_seconds: 9, pack: 0 });
+    expect(one("SELECT COUNT(*) AS c FROM participant WHERE eid=?", b.id).c).toBe(0);
+    expect(one("SELECT COUNT(*) AS c FROM payment WHERE eid=?", b.id).c).toBe(0);
+  }, 30_000);
 });

@@ -836,7 +836,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (req.method === "GET" && p === "/api/z/ai-manifest") return json(AI_MANIFEST);
   { const bm = req.method === "GET" ? p.match(/^\/api\/beacon\/([0-9a-f]{64})\/public\/(latest|\d{1,10})$/) : null; if (bm) return beaconRelay(req, bm[1]!, bm[2]!); }
   { const mr = await modeRoute(req, env as any, now, a.plat && req.headers.get("x-ct-link") !== "1", (n) => purgeTestData(env, n)); if (mr) return mr; } // TEST/LIVE switch, allow-list, purge (mode.ts): owner only, except the public read of the word TEST or LIVE
-  { const pr = await prospectLinksRoute(req, env as any, now); if (pr) return pr; } // one-time prospect links (prospect-links.ts): its own key
+  { const pr = await prospectLinksRoute(req, env as any, now, (n) => spend(env, now, n)); if (pr) return pr; } // one-time prospect links (prospect-links.ts): its own key
   { const sr = await ownerStatsRoute(req, env as any, now); if (sr) return sr; } // the console's read-only numbers (owner-stats.ts): its own key, counts and payer e-mails only
   { const ar = await adminRoute(req, env as any, now, a.plat && req.headers.get("x-cb-link") !== "1", (n) => spend(env, now, n)); if (ar) return ar; } // the owner's desk (admin.ts): site switch, organizer lookup, data requests, mail events, error counts; the health read; the mail webhook
   if (p === "/api/v/b") return beaconRoute(req, env as VisitEnv, now, (n) => spend(env, now, n)); // public-page visit tracking (visits.ts); never the live game

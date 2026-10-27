@@ -4,8 +4,10 @@
 //   GET  /api/owner/prospect-links                          -> the links (newest first) with their state: active | used | expired | off
 //   POST /api/owner/prospect-links {action:"create", label?, cap?, days?}   -> {id, link}
 //   POST /api/owner/prospect-links {action:"enable"|"disable", id}
+//   POST /api/owner/prospect-links {action:"clone", from, startMs | startRound, callSeconds?, reason?}  -> the owner makes the next game for a prospect whose game did not go well: see below
 // Own key (OWNER_LINK_KEY): it can make and switch links and do nothing else. Anybody else gets the same 404 as an unknown address; every call is written to the owner's access log.
 import { logAccess } from "./audit";
+import { cloneGame } from "./clone";
 import type { D1, Env } from "./worker";
 
 export interface LinkEnv extends Env { OWNER_LINK_KEY?: string }
@@ -24,7 +26,9 @@ export async function getProspectLink(db: D1, ph: string): Promise<ProspectLink 
 }
 const clean = (s: unknown, max: number) => String(s ?? "").replace(/[\u0000-\u001f<>]/g, " ").trim().slice(0, max);
 
-export async function prospectLinksRoute(req: Request, env: LinkEnv, now: number): Promise<Response | null> {
+const CLONE_GAPS = [6, 9, 12, 15]; // the gaps between numbers the product allows (worker.ts GAPS); a new game made by the owner uses 12 s unless told otherwise
+
+export async function prospectLinksRoute(req: Request, env: LinkEnv, now: number, spend: (n: number) => Promise<boolean> = async () => true): Promise<Response | null> {
   const url = new URL(req.url);
   if (url.pathname !== "/api/owner/prospect-links") return null;
   const ok = (req.method === "GET" || req.method === "POST") && !!env.OWNER_LINK_KEY && same(req.headers.get("x-owner-link-key") ?? "", env.OWNER_LINK_KEY);
@@ -95,5 +99,34 @@ export async function prospectLinksRoute(req: Request, env: LinkEnv, now: number
     await logAccess(env.DB, now, "prospect-link-apply", e.id, null, 1, true, ent.id);
     return json({ ok: true, pack: ent.pack });
   }
-  return json({ error: 'Send {"action": "create" | "enable" | "disable" | "apply" | "free"}.' }, 400);
+  if (action === "clone") { // the owner makes the NEXT game for a prospect whose game went badly, so they redo nothing: the same draft the organizer would get from "Create a new game like this one" with her people,
+    // at the start the owner names, with a free pack of the game's size waiting on her account. It is NOT published: publishing is the organizer's own act (her e-mail, her mobile and the Terms box she ticks herself),
+    // and the free pack is put on the game by that same Publish press. Once per source game: pressing it twice gives the same new game.
+    const from = clean(b?.from, 40), reason = clean(b?.reason, 80);
+    const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(from).first<any>();
+    if (!e || !e.org) return json({ error: "Not found" }, 404);
+    const startRound = Number.isInteger(b?.startRound) ? (b.startRound as number) : Number.isInteger(b?.startMs) ? Math.floor(((b.startMs as number) / 1000 - 1692803367) / 3) + 1 : null; // a round number, or the time in ms (the console sends the time)
+    if (startRound === null) return json({ error: 'Say when the new game starts: {"startMs": <time in ms>} or {"startRound": <whole number>}.' }, 400);
+    const callSeconds = b?.callSeconds === undefined ? 12 : b.callSeconds;
+    if (!Number.isInteger(callSeconds) || !CLONE_GAPS.includes(callSeconds)) return json({ error: `callSeconds must be one of ${CLONE_GAPS.join(", ")}.` }, 400);
+    const mark = `ownerclone/${e.id}`;
+    const claimed = await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(mark, "pending").run();
+    if ((claimed.meta?.changes ?? 0) === 0) {
+      const v = (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(mark).first<{ v: string }>())?.v ?? "pending";
+      return v === "pending" ? json({ error: "A copy of this game is being made right now. Try again in a minute." }, 409) : json({ ok: true, again: true, id: v, openUrl: `${origin}/zc.html?e=${v}` });
+    }
+    const made = await cloneGame(env, { ...e, call_seconds: callSeconds }, { startRound, withPeople: true }, now, origin, spend, json);
+    const out: any = await made.clone().json().catch(() => ({}));
+    if (made.status !== 200 || !out.ok) { await env.DB.prepare("DELETE FROM kv WHERE k=? AND v='pending'").bind(mark).run(); return json(out?.error ? out : { error: "The copy could not be made." }, made.status === 200 ? 500 : made.status); }
+    const eidn = "of_" + Array.from(crypto.getRandomValues(new Uint8Array(6)), (x) => x.toString(16).padStart(2, "0")).join("");
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,'owner-free',NULL,?)").bind(eidn, e.org, e.cap, now), // an unused free pack of the game's own size: the organizer's Publish uses it
+      env.DB.prepare("UPDATE kv SET v=? WHERE k=?").bind(out.id, mark),
+    ]);
+    await logAccess(env.DB, now, "owner-clone-game", e.id, null, 1 + (out.peopleCopied ?? 0), true, `${out.id}: ${reason || "no reason given"}`);
+    const startMs = (1692803367 + (out.startRound - 1) * 3) * 1000; // round 1 is 2023-08-23 15:09:27 UTC; the same clock as clone.ts and worker.ts
+    const startsAtIST = new Date(startMs).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }) + " IST";
+    return json({ ok: true, id: out.id, from: e.id, openUrl: out.openUrl, peopleCopied: out.peopleCopied, startRound: out.startRound, startMs, startsAtIST, callSeconds, cap: e.cap, freePack: e.cap, copied: out.copied, published: false });
+  }
+  return json({ error: 'Send {"action": "create" | "enable" | "disable" | "apply" | "free" | "clone"}.' }, 400);
 }
