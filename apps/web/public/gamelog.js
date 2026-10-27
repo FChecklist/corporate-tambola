@@ -44,15 +44,16 @@
     L.push(["row", "End time", log.endedAtMs ? IST(log.endedAtMs) : "The game has not ended yet"]);
     if (log.firstNumberMs && log.endedAtMs) L.push(["row", "Length", dur(log.endedAtMs - log.firstNumberMs)]);
     L.push(["row", "How it ended", log.endReason || "Not ended yet"]);
-    L.push(["row", "Numbers called", log.numbersCalled == null ? "-" : `${log.numbersCalled} of 90`]);
+    L.push(["row", "Numbers called", log.numbersCalled == null ? "-" : ZG.calledLine(log.numbersCalled)]);
     L.push(["row", "How it ran", mode]);
     L.push(["h", "People"]);
     L.push(["row", "People who joined", String(log.people.joined)]);
-    for (const jn of (log.joins || []).slice(0, 200)) L.push(["row", `Ticket ${jn.ticket} joined`, HMS(jn.atMs)]);
+    for (const jn of (log.joins || [])) L.push(["row", `Ticket ${jn.ticket} joined`, HMS(jn.atMs)]);
     L.push(["row", "Most people in the game at once", String(log.people.most) + " (nobody leaves the list)"]);
     L.push(["row", "Joined after the first number", String(log.people.late)]);
     if (log.people.present != null) L.push(["row", "Checked in as present", String(log.people.present)]);
     L.push(["h", "Prizes"]);
+    for (const c of (log.claims || [])) L.push(["row", `Ticket ${c.ticket} claimed ${c.prize}${c.afterNumber ? " after number " + c.afterNumber : ""}`, `${c.outcome === "accepted" ? "accepted" : c.outcome === "wrong" ? "wrong (a Bogey)" : "too late, refused"} · ${HMS(c.atMs)}`]);
     if (!log.prizes.length) L.push(["note", "No prize was won."]);
     for (const p of log.prizes) L.push(["row", p.prize + (p.text ? " (" + p.text + ")" : ""), `Ticket number ${p.ticket}, after number call ${p.callNo}, at ${HMS(p.atMs)}`]);
     for (const l of (log.lucky || [])) L.push(["row", "Lucky draw: " + l.title, l.drawn ? `Drawn. Ticket number${l.tickets.length === 1 ? "" : "s"} ${l.tickets.join(", ")}` : `Not drawn yet (${l.winners} ticket${l.winners === 1 ? "" : "s"} picked at random)`]);

@@ -2150,7 +2150,7 @@
       try { // a new game that starts with the earlier roster already on it
         const now = await latestRound(); const id = randId();
         const old = S.history.engagements.find((e) => e.id === b.dataset.reuse);
-        await call("POST", "/api/z", { id, startRound: now + 20 * 20, callSeconds: old.call_seconds, cap: Math.max(old.participants + 50, 500) });
+        await call("POST", "/api/z", { id, startRound: now + 20 * 20, callSeconds: 12, cap: Math.max(old.participants + 50, 500) });
         const r = await call("POST", `/api/z/${id}/reuse`, { from: b.dataset.reuse });
         await TBControl.ensureKey(id, { token: secret, base: BASE, prefix: "/api/z" });
         eid = id; history.replaceState(null, "", "?e=" + id); S.store = null; S.f = null; S.fFor = ""; S.unsaved = {}; S.touched = {}; S.openInit = ""; S.cfg = null; S.info = null; S.screen = "eng";

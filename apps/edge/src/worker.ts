@@ -64,7 +64,7 @@ export interface D1Stmt { bind(...v: unknown[]): D1Stmt; run(): Promise<D1Result
 export interface D1 { prepare(sql: string): D1Stmt; batch(s: D1Stmt[]): Promise<D1Result[]> }
 export interface R2Like { put(key: string, value: string, opts?: unknown): Promise<unknown>; delete(key: string): Promise<unknown> }
 export interface Env {
-  DB: D1; ORGANIZER_SECRET?: string; DAILY_WRITE_BUDGET?: string; PHONE_SALT?: string;
+  DB: D1; ORGANIZER_SECRET?: string; DAILY_WRITE_BUDGET?: string; ONLY_12S?: string; PHONE_SALT?: string;
   /** The secret that seals names and mobile numbers at rest (AES-256-GCM). Never stored in the database. */
   DATA_KEY?: string;
   /** Optional: the key that hashes network addresses for the public-page visit tracking (visits.ts); when absent it is derived from DATA_KEY. VISIT_DAILY_WRITES caps that tracking's share of the daily write allowance (default 20,000). */
@@ -269,6 +269,9 @@ const MAX_BODY = 4096;
 /** The gap between two numbers: 6, 9, 12 or 15 seconds (the console offers these; the server holds every caller, an AI included, to them). */
 const GAPS = [6, 9, 12, 15];
 const GAP_MSG = "The gap between numbers can be 6, 9, 12 or 15 seconds.";
+/** NEW games use one speed, a new number every 12 seconds (the live site sets ONLY_12S="1"). Older games keep the speed they have; copying a game gives the copy 12. */
+export const ONLY_12S_MSG = "New games use one speed: a new number every 12 seconds.";
+export const only12 = (env: any): boolean => String(env?.ONLY_12S ?? "") === "1";
 /** A game that is not paid for yet can be set at most 30 days ahead; once it is paid, up to 365 days from the payment (the life of its credit; the server enforces both for the console, the API and an AI alike). */
 const TOO_FAR = "A game that is not paid for yet can be set at most 30 days ahead. Please pick a day within the next 30 days. Once it is paid you can move it to any day within 365 days of the payment.";
 const AFTER_PAID_WINDOW = (endMs: number) => `Pick a date on or before ${creditLastDay(endMs)}: a paid game can be moved to any day within 365 days of the payment.`;
@@ -766,7 +769,7 @@ export const AI_MANIFEST = {
   your_role: "You are the organizer's event planner. Talk with them in plain, friendly words, never in API terms. Work through the steps in `conversation` IN ORDER, ONE question at a time, offering 2 to 4 clear options with a recommended default, and wait for their answer before moving on. Never invent details for them. They can watch everything you create appear live in their console (the openUrl returned when you create the engagement).",
   conversation: CONVERSATION.map((t) => t.replace(/\{api\}/g, "/api")),
   packs: PACKS.map(([n]) => ({ upTo: n, inr: price(n, "INR").total, usd: price(n, "USD").total })),
-  choices: { call_seconds: [6, 9, 12, 15], tickets: [1, 2], rewards: PRIZE_HOUSES.map((h) => h.id === "full2" ? "full2 (two tickets: pattern full, scope two_ticket)" : h.id), winners_per_reward: "1 up to the house maximum: Full House and full2 10, Top/Middle/Bottom Line 2, every other house 1", break_kinds: ["file", "youtube", "slides", "speech", "lucky (1, 3, 5 or 10 winners)"], rounds: "1 to 5" },
+  choices: { call_seconds: [12], tickets: [1, 2], rewards: PRIZE_HOUSES.map((h) => h.id === "full2" ? "full2 (two tickets: pattern full, scope two_ticket)" : h.id), winners_per_reward: "1 up to the house maximum: Full House and full2 10, Top/Middle/Bottom Line 2, every other house 1", break_kinds: ["file", "youtube", "slides", "speech", "lucky (1, 3, 5 or 10 winners)"], rounds: "1 to 5" },
   you_can: [
     { do: "Turn the organizer's chosen date and time into the startRound the engagement needs, and check it is in the future", call: "GET /api/z/schedule?at=2026-10-03T16:00:00+05:30 -> {startRound, startMs, startsInMinutes, startsAtIST}" },
     { do: "Read back everything saved for one engagement (start time in the organizer's time, speed, limit, tickets, every reward, every break, rounds, head-count, and whether it is a draft, published or paid). Use it to confirm the details with the organizer after every change", call: "GET /api/z/{id}/summary" },
@@ -891,7 +894,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     return json({ ok: true, version: CONSENT_VERSION });
   }
   if (a.kind === "cohost" && !(req.method === "GET" && (p === "/api/whoami" || p === "/api/notices" || /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/cohost$/.test(p))) && !(await hasConsent(env.DB, "c:" + (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 16), "K5"))) return json({ error: "Please tick the box to continue.", code: "consent-required", kind: "K5", version: CONSENT_VERSION }, 400); // K5: the Co-host has not accepted the role under the current Terms yet
-  if (a.kind === "cohost" && !(req.method === "GET" && (p === "/api/whoami" || p === "/api/notices" || /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/cohost$/.test(p))) && !/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(people|waiting)(\/|$)/.test(p) && !(req.method === "POST" && /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/paylink$/.test(p))) return deny(a); // a Co-host: the header, the invite link, payment (above) and nothing else
+  if (a.kind === "cohost" && !(req.method === "GET" && (p === "/api/whoami" || p === "/api/notices" || /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/cohost$/.test(p))) && !/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(people|waiting)(\/|$)/.test(p) && !(req.method === "GET" && /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(gamelog|claims)$/.test(p)) && !(req.method === "POST" && /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/paylink$/.test(p))) return deny(a); // a Co-host: the header, the invite link, payment (above) and nothing else
   const partnered = await partnerRoute(req, env as PayEnv, now, (n) => spend(env, now, n), a.plat);
   if (partnered) return partnered;
   { // Help Desk (helpdesk.ts): a partner prepares games for an Organizer, who publishes with one tap. `summary` reads a game exactly as the AI's summary route does (no phone numbers).
@@ -1426,6 +1429,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (a.kind === "host") return deny(a);
     const b = await body(req, BRAND_BODY_MAX); // room for a brand logo (30 KB picture = about 40 KB of text)
     if (b && Number.isInteger(b.callSeconds) && !GAPS.includes(b.callSeconds)) return json({ error: GAP_MSG }, 400);
+    if (b && only12(env)) { if (b.callSeconds === undefined || b.callSeconds === null) b.callSeconds = 12; if (b.callSeconds !== 12) return json({ error: ONLY_12S_MSG }, 400); }
     if (!b) return json({ error: "Check the details and try again." }, 400);
     if (!ID.test(b.id ?? "")) return json({ error: "The game code can use letters, numbers, - and _ only (3 to 40 characters)." }, 400);
     if (!Number.isInteger(b.startRound)) return json({ error: "Pick the day and time the game starts." }, 400);
@@ -1852,7 +1856,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       const round = c?.round === undefined ? 1 : c.round;
       if (!PATTERNS.has(c?.pattern) || !Number.isInteger(c?.idx) || c.idx < 0 || c.idx > 89 || !Number.isInteger(round) || round < 1 || round > maxRound) continue;
       { // THE RULE: a prize completed on number N can be claimed only until number N+1 is announced. The Worker's clock decides (a claim at the very instant of the next number is late), the same moment the winners are worked out with.
-        const nextAt = c.idx < 89 ? await callTimeMs(env as any, e, round, c.idx + 1) : null; // null: no next number (the last one, a Host who has not pressed yet, a game that was ended)
+        const nextAt = c.idx < 89 ? await callTimeMs(env as any, e, round, c.idx + 1) : await (async () => { const last = await callTimeMs(env as any, e, round, 89); return last === null ? null : last + Number(e.call_seconds) * 1000; })(); // the last number of a round closes one gap (12.000 s) after it is announced; null: a Host who has not pressed yet, a game that was ended
         if (nextAt !== null && now >= nextAt) { late++; await noteLateClaim(env.DB, eid!, b.pid, String(c.pattern), now); continue; }
       }
       if (!(await spend(env, now))) return json({ error: "Busy day. Your claim is kept on your phone and will be sent again.", stored }, 503);
@@ -1969,8 +1973,9 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       `Your engagement ${eid} is live.\n\nShare this link: ${shareUrl}\n\n${paid ? "" : `Payment pending: the game does not begin until it is paid for. You can pay at any time until the guest data is erased; if you pay late, the first number comes 2 minutes after the payment is confirmed (about 2 minutes to pay): ${payUrl}\n\n`}Big screen for the room: ${origin}/big.html?e=${eid}`, now);
     return json({ ok: true, published: true, paid, ...(demo ? { demo: true, free: true } : {}), startMs, payUrl, shareUrl, confirmed: { email: cEmail, phone: cPhone.slice(-10) } });
   }
+  const canRead = can(a, e) || (a.kind === "cohost" && !!a.org && e.org === a.org && (!a.eid || a.eid === e.id)); // a Co-host may READ the live panels (ticket numbers only); controls stay with the Organizer and Hosts
   if (action === "claims" && req.method === "GET") {
-    if (!can(a, e)) return deny(a);
+    if (!canRead) return deny(a);
     const r = await env.DB.prepare("SELECT pid,pattern,round,idx,at_ms AS atMs FROM claim WHERE eid=? ORDER BY round,idx,pid").bind(eid).all<any>();
     const b = await env.DB.prepare("SELECT pid,pattern,round,at_ms AS atMs FROM bogey WHERE eid=? ORDER BY at_ms").bind(eid).all<any>();
     const lateRow = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`claimlate/${eid}`).first<{ v: string }>(); let tooLate: any[] = []; try { tooLate = lateRow ? JSON.parse(lateRow.v) : []; } catch { tooLate = []; }
@@ -2100,7 +2105,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     return json({ ok: true, added, skipped, invalid });
   }
   if (action === "gamelog" && req.method === "GET") { // the vital details of the game in plain words: live while it runs, saved when it ends. Tickets by number only; never a name or a mobile number
-    if (!can(a, e)) return deny(a);
+    if (!canRead) return deny(a);
     return json((await readSavedGameLog(env, eid!)) ?? (await buildGameLog(env, d1kv(env), e, cfgOf(e), now)));
   }
   if (action === "changes" && req.method === "GET") { // "what changed, who, when": plain words, never a player's name, number or ticket
@@ -2124,6 +2129,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (wasDemo && !vc.cfg.demo && e.pack !== 0 && !a.plat) return json({ error: DEMO_PAY_MSG, code: "demo-pay" }, 402); // a published demo becomes a real game only through a paid conversion (pay.ts), never by flipping the mark
     const next = { start_round: b.startRound ?? e.start_round, call_seconds: b.callSeconds ?? e.call_seconds, cap: b.cap ?? e.cap, closed: vc.cfg.employeesOnly ? 1 : b.whoCanJoin !== undefined ? (b.whoCanJoin === "list" ? 1 : 0) : b.closed === undefined ? e.closed : b.closed ? 1 : 0, cohost_limit: b.coHostLimit ?? e.cohost_limit ?? null }; // whoCanJoin "list" is the same switch as the older `closed`
     if (Number.isInteger(next.call_seconds) && !GAPS.includes(next.call_seconds)) return json({ error: GAP_MSG }, 400);
+    if (only12(env) && next.call_seconds !== 12 && next.call_seconds !== e.call_seconds) return json({ error: ONLY_12S_MSG }, 400); // an older game keeps its own speed; nothing new may pick another
     { const big = Number.isInteger(next.cap) ? modeTooBig(vc.cfg, next.cap) : null; if (big) return json({ error: big, code: "manual-limit" }, 409); }
     if (((needsControl(vc.cfg) && !needsControl(cfgNow)) || !!vc.cfg.keepCalling !== !!cfgNow.keepCalling) && !(await readPublished(d1kv(env), eid!)) && ((await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0) > 0) return json({ error: NEEDS_CONSOLE_MSG, code: "console-first" }, 409); // phones that already joined can only learn of a Start / Next button through the signed control file
     if (!Number.isInteger(next.start_round)) return json({ error: "Pick the day and time the game starts." }, 400);

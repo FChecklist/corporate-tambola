@@ -272,6 +272,7 @@ export class PhoneRuntime {
     this.pressed.add(id); this.saveMarks();
     this.claimLens = []; // make the next autoClaim look again
     await this.autoClaim();
+    if (!this.pressed.has(id) && this.lateNote) return { ok: false, bogey: false, late: true, error: CLAIM_LATE_TEXT }; // the Worker said too late (its clock decides): nothing was sent, and the page says so kindly instead of "Claim saved"
     return { ok: true, sent: this.claimedAll.has(id), idx };
   }
   /**

@@ -137,7 +137,7 @@ describe("the player's page: the compact counter, the last 5, the ticket as the 
     expect(ph.text()).toContain("Number just called"); expect(ph.$("#big")!.textContent!.trim()).toBe("30");
     expect(ph.$("#lastfew")!.textContent).toContain("Last 5 numbers called"); const balls = Array.from(ph.win.document.querySelectorAll("#lastfew .zlastn")).map((e: any) => e.textContent.trim());
     expect(balls).toEqual(["29", "28", "27", "26", "25"]); expect(ph.win.document.querySelectorAll(".zlastn").length).toBeLessThanOrEqual(5);
-    expect((ph.$(".zbar i") as any).style.width).toBe("33%");
+    expect((ph.$(".zprog i") as any).style.width).toBe("33%");
     expect(ph.html()).not.toMatch(/id="board"|class="zboard|all the numbers/i); // players never get the history or a board of all 90
   });
   test("the order on the phone: story, counter, ticket (with Sneha's three rules), claim, prizes; and the laptop layout has two columns", async () => {
@@ -148,7 +148,7 @@ describe("the player's page: the compact counter, the last 5, the ticket as the 
     expect(at('id="storyline"')).toBeLessThan(at('id="calledcount"')); expect(at('id="calledcount"')).toBeLessThan(at('id="zrules"')); expect(at('id="zrules"')).toBeLessThan(at('id="claimhint"')); expect(at('id="claimhint"')).toBeLessThan(at('id="prizepanel"'));
     expect(Array.from(ph.win.document.querySelectorAll("#zrules li")).map((e: any) => e.textContent)).toEqual(["This game works like the real one.", "When a number is called, tap it on your ticket to cross it out.", "If you complete a prize, press Claim before the next number is called."]);
     const css = (await import("node:fs")).readFileSync(new URL("../public/z.css", import.meta.url), "utf8");
-    expect(css).toMatch(/@media\(min-width:861px\)\{[^}]*\.zplay\{display:grid;grid-template-columns:minmax\(0,1\.55fr\) minmax\(320px,1fr\)/); expect(css).toMatch(/\.zplay>\.ztk\{grid-column:1/);
+    expect(css).toMatch(/@media\(min-width:861px\) and \(min-height:521px\)\{[^@]*\.zplay\{display:grid;grid-template-columns:minmax\(0,1\.55fr\) minmax\(320px,1fr\)/); expect(css).toMatch(/\.zplay>\.ztk\{grid-column:1/);
   });
   test("prizes: still to win in gold with how many numbers are still needed; already won, grey and struck through, with the winning ticket number", async () => {
     const { ph, set, base } = await steered("CU-6");
@@ -240,5 +240,19 @@ describe("pop-ups about other tickets' claims (no pause): calm, plain, ticket nu
     await ph.waitFor(() => /Ticket 7's claim was not correct\. The game continues\./.test(ph.$("#claimtoasts")?.textContent ?? ""), 15_000);
     await ph.waitFor(() => !ph.$("#claimtoasts"), 15_000); // each closes by itself
     expect(ph.text()).not.toMatch(/Zainab|98\d{8}/);
+  });
+});
+
+describe("the sticky claim bar tells the truth about sending, and stays small with several prizes", () => {
+  test("pressed but not yet taken by the store: 'Sending your claim…'; taken: 'Claim sent. Checking…'; two prizes ready: one big button and one compact", async () => {
+    const { ph, set } = await steered("CU-13");
+    const base = { phase: "play", paused: false, locked: false, log: LOG, claimable: [], results: [], claimFeed: [] };
+    set({ ...base, claimNow: [], claimOpen: [], pressed: ["early5"], claimed: [] });
+    await ph.waitFor(() => /Sending your claim…/.test(ph.$("#claimbar")?.textContent ?? ""), 15_000); expect(ph.$("#claimbar")!.textContent).not.toMatch(/Claim sent/);
+    set({ ...base, claimNow: [], claimOpen: [], pressed: ["early5"], claimed: ["early5"] });
+    await ph.waitFor(() => /Claim sent\. Checking…/.test(ph.$("#claimbar")?.textContent ?? ""), 15_000);
+    set({ ...base, claimNow: ["early5", "top"], claimOpen: ["early5", "top"], pressed: [], claimed: [] });
+    await ph.waitFor(() => ph.win.document.querySelectorAll("#claimbar .zbigclaim").length === 2, 15_000);
+    const bs = Array.from(ph.win.document.querySelectorAll("#claimbar .zbigclaim")) as any[]; expect(bs[0].classList.contains("zmore")).toBe(false); expect(bs[1].classList.contains("zmore")).toBe(true);
   });
 });

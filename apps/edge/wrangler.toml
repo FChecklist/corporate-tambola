@@ -16,6 +16,7 @@ crons = ["17 3 * * *"]   # daily 03:17 UTC: deletes engagements older than 365 d
 
 [vars]
 DAILY_WRITE_BUDGET = "80000"
+ONLY_12S = "1"   # new games use one speed, 12 seconds; older games keep theirs
 MAIL_FROM = "Corporate Tambola <hello@corporatetambola.com>"   # shared, already-verified Resend domain
 # MAIL_REPLY_TO = "the address organizers should reply to"
 # PUBLIC_ORIGIN = "https://corporatetambola.com"

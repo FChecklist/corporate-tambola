@@ -705,7 +705,7 @@
     return `<div class="zcard zcall ztight"><div class="zchiprow"><span class="zchip2 ${tone}">${esc(chip)}</span></div>
         <div class="zrow1"><div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number just called " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
           <div class="ztxt"><div class="zlab">Number just called</div><div class="zmeta" id="calledcount">${esc(ZG.calledLine(calledTotal))}</div>${cdown}<p class="zhelp" id="ballhelp">${last ? "Find it on your ticket and tap it." : "The first number will appear here."}</p></div></div>
-        <div class="zbar" role="progressbar" aria-valuemin="0" aria-valuemax="90" aria-valuenow="${calledTotal}"><i style="width:${Math.min(100, Math.round(calledTotal / 90 * 100))}%"></i></div>
+        <div class="zprog" role="progressbar" aria-valuemin="0" aria-valuemax="90" aria-valuenow="${calledTotal}"><i style="width:${Math.min(100, Math.round(calledTotal / 90 * 100))}%"></i></div>
         ${few.length ? `<div class="zlastrow" id="lastfew"><span class="zlab">Last 5 numbers called</span><div class="zballs">${few.map((n) => `<i class="zlastn">${n}</i>`).join("")}</div></div>` : ""}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p>`}</div>`;
   }
   let LAST_CLAIM_NOW = "";
@@ -753,8 +753,9 @@
     const resolved = (k) => ZG.linesFor(v.cfg.rewards, k).every((l) => (v.results || []).some((x) => x.pattern === k && x.ordinal === l.ordinal));
     const waiting = (v.pressed || []).filter((k) => !resolved(k) && !(v.won || []).some((w) => w.round === v.round && w.pattern === k)); // claimed, and the answer is not out yet
     if (!ready.length && !(waiting.length && v.phase === "play" && !v.paused)) return "";
-    const btns = ready.map((k) => `<button type="button" class="zbigclaim" data-claim="${esc(k)}">Press to claim your prize<small>${esc(KEYNAME(k))}</small></button>`).join("");
-    const done = !ready.length ? `<div class="zsentline" role="status">Claim sent. Checking…<small>${esc(waiting.map((k) => KEYNAME(k)).join(", "))}</small></div>` : "";
+    const btns = ready.map((k, i) => `<button type="button" class="zbigclaim${i ? " zmore" : ""}" data-claim="${esc(k)}">Press to claim your prize<small>${esc(KEYNAME(k))}</small></button>`).join(""); // the first is big; others ready at the same time are compact so the bar never covers the screen
+    const sendingK = waiting.filter((k) => !(v.claimed || []).includes(k)), checkingK = waiting.filter((k) => (v.claimed || []).includes(k));
+    const done = !ready.length ? `<div class="zsentline" role="status">${sendingK.length ? `Sending your claim…<small>${esc(sendingK.map((k) => KEYNAME(k)).join(", "))}. Keep this page open.</small>` : `Claim sent. Checking…<small>${esc(checkingK.map((k) => KEYNAME(k)).join(", "))}</small>`}</div>` : "";
     return `<div class="zclaimbar on" id="claimbar">${btns}${done}</div>`;
   }
   function claimBar(v) {
