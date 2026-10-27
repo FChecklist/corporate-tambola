@@ -738,7 +738,7 @@
     if (INFO.cancelled) state = "cancelled"; else if (INFO.dns) state = "neverStarted"; else if (v.stopped) state = "endedByOrganizer"; else if (v.phase === "ended") state = v.endedByPrizes ? "endedPrizes" : "endedAll"; else if (v.locked) state = "unpaid"; else if (v.paused) state = "paused"; else if (v.waitingForStart) state = "waitStart"; else if (v.log.length || v.late) state = "running";
     else { const left = manual ? v.startingInSec : v.nextCallInSec; state = left !== null && left !== undefined && left <= 300 ? "countdown" : "waiting"; }
     const st = ZG.story({ state, role, called, manual, time: ZG.dayTimeIst((1692803367 + (v.scheduledRound - 1) * 3) * 1000), countdown: ZG.mmss(manual ? v.startingInSec : v.nextCallInSec), by: v.pausedInfo ? v.pausedInfo.by : undefined });
-    return `<div class="zstory" id="storyline" data-state="${state}"><b>${esc(st.say)}</b><span>${esc(st.todo)}</span></div>`;
+    return `<div class="zstory" id="storyline" data-state="${state}"><b>${esc(st.say)}</b><span>${esc(st.doNow)}</span></div>`;
   }
   /** Under the ticket: a Claim button for every prize the player's marks complete, what was claimed and is being checked, this player's Bogeys, and the prizes the ticket is out of. */
   const namesOf = (keys) => keys.map((k) => KEYNAME(k)).join(" and ");
@@ -791,7 +791,7 @@
       const need = p.key === "unlucky" || p.key === "lucky" ? null : ZG.stillToWin(v.tickets, p.key, v.marks || []);
       return `<li class="open"><span class="zic">&#9733;</span><span class="znm"><b>${esc(p.name)}</b>${p.text ? ": " + esc(p.text) : ""}${need !== null && need !== undefined && v.tickets.length ? `<small class="zneed">You need ${need} more ${need === 1 ? "number" : "numbers"}</small>` : ""}</span><span class="ztag">To win</span></li>`;
     }).join("") + lucky.map((l) => { const res = (v.results || []).find((x) => x.pattern === "lucky" && x.ordinal === l.ordinal), tk = res && res.tickets && res.tickets.length ? res.tickets : null;
-      return l.published ? `<li class="done lucky"><span class="zic">&#10003;</span><span class="znm"><s>Lucky draw: ${esc(l.title)}</s> <small class="zwonby">${l.won ? "You won!" : tk ? "Won by Ticket " + tk.join(", ") : "Already drawn"}</small></span></li>` : `<li class="open lucky"><span class="zic">&#9733;</span><span class="znm"><b>Lucky draw: ${esc(l.title)}</b><small class="zneed">${l.winners} ${l.winners === 1 ? "ticket is" : "tickets are"} picked at random, whoever is playing</small></span><span class="ztag">To win</span></li>`; }).join("");
+      return l.published ? `<li class="done lucky"><span class="zic">&#10003;</span><span class="znm"><s>Lucky draw: ${esc(l.title)}</s> <small class="zwonby">${l.style === "scratch" && !(scratched.has(l.ordinal) || (seenAt[l.ordinal] && Date.now() - seenAt[l.ordinal] > 45000)) ? "Scratch the card to see" : l.won ? "You won!" : tk ? "Won by Ticket " + tk.join(", ") : "Already drawn"}</small></span></li>` : `<li class="open lucky"><span class="zic">&#9733;</span><span class="znm"><b>Lucky draw: ${esc(l.title)}</b><small class="zneed">${l.winners} ${l.winners === 1 ? "ticket is" : "tickets are"} picked at random, whoever is playing</small></span><span class="ztag">To win</span></li>`; }).join("");
     return `<div class="zcard zps" id="prizepanel"><h2>Prizes${open ? " still to win · " + open : " · all won"}</h2><div class="zlegend"><span><i class="g"></i>Still to win</span><span><i class="s"></i>Already won</span></div><ul class="zpl">${rows}</ul></div>`;
   }
   function playView(v) {

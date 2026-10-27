@@ -378,7 +378,7 @@ describe("console (organizer page)", () => {
     p.click('[data-ck="tix"][data-v="2"]'); p.click('[data-ck="spd"][data-v="12"]'); p.click('[data-ck="rnd"][data-v="1"]');
     expect(Array.from(p.win.document.querySelectorAll('[data-ck="aud"]')).map((e: any) => e.textContent.trim())).toEqual(["Only my employees (the list I upload)", "My employees, plus their friends and family", "A list of people I choose (customers, vendors, members)", "A list of people I choose, plus the people they invite", "Anyone with the link", "Anyone with the link, my employees confirm with their employee ID"]);
     p.click('[data-ck="aud"][data-v="5"]');
-    expect(p.text()).not.toMatch(/How many people can each person invite/); expect(p.text()).toMatch(/Tickets for each person \(participant\)/); expect(p.text()).toMatch(/Duration \(gap\) between two numbers/); expect(p.$('[data-ck="spd"][data-v="6"]')).toBeNull(); expect(p.$('[data-ck="spd"][data-v="15"]')).toBeNull(); expect(p.$('[data-ck="spd"][data-v="9"]')).toBeTruthy(); expect(p.text()).toMatch(/How many full games in this event\? \(rounds\)/); expect(p.text()).toMatch(/An employee ID does not apply to this choice/);
+    expect(p.text()).not.toMatch(/How many people can each person invite/); expect(p.text()).toMatch(/Tickets for each person \(participant\)/); expect(p.text()).toMatch(/Duration \(gap\) between two numbers/); expect(p.$('[data-ck="spd"][data-v="6"]')).toBeNull(); expect(p.$('[data-ck="spd"][data-v="15"]')).toBeNull(); expect(p.$('[data-ck="spd"][data-v="9"]')).toBeNull(); expect(p.$('[data-ck="spd"][data-v="12"]')).toBeTruthy(); /* one speed for new games */ expect(p.text()).toMatch(/How many full games in this event\? \(rounds\)/); expect(p.text()).toMatch(/An employee ID does not apply to this choice/);
     p.click('[data-ck="aud"][data-v="4"]'); const t = p.text(); // a list plus the people they invite
     expect(t).toMatch(/How many people can each person invite\?/); expect(t).toMatch(/You, Hosts and Co-hosts: invite as many as you like\./); expect(t).toMatch(/Each person you add: up to 4 people, by WhatsApp\./); expect(t).toMatch(/A person who was invited: can play, cannot invite\./);
     p.click('[data-ck="per"][data-v="2"]'); p.click('[data-ck="cats"][data-v="friends"]'); p.click('[data-ck="cats"][data-v="family"]');
@@ -403,7 +403,7 @@ describe("console (organizer page)", () => {
     p.click('[data-ck="occ"][data-v="Dealer meet"]'); p.click('[data-ck="day"][data-v="other"]'); setField(p, "#f-dayo", "2026-10-05"); p.click('[data-ck="time"][data-v="other"]'); setField(p, "#f-timeo", "18:30");
     p.click('[data-save="1"]'); await p.waitFor((x) => /Saved\./.test(x));
     const sm = await o.json(await o.api("GET", "/api/z/UI-WHEN/summary", undefined, o.aiKey)); expect(sm.name).toBe("Dealer meet"); expect(sm.startMs).toBe(Date.parse("2026-10-05T18:30:00+05:30"));
-    openStep(p, 1); setField(p, "#f-dayo", "2020-01-01"); p.click('[data-save="1"]'); await p.waitFor((x) => /start time in the future/.test(x));
+    openStep(p, 1); p.click('[data-ck="day"][data-v="other"]'); setField(p, "#f-dayo", "2020-01-01"); // (re-choose "Pick another date": the form is rebuilt from the saved game a moment after Save, so the date box may or may not be there yet) p.click('[data-save="1"]'); await p.waitFor((x) => /start time in the future/.test(x));
     expect((await o.json(await o.api("GET", "/api/z/UI-WHEN/summary", undefined, o.aiKey))).startMs).toBe(Date.parse("2026-10-05T18:30:00+05:30")); // nothing changed
   });
   test("Invite and share: three boxed blocks (Guest link, Big screen, My people) with copy, WhatsApp only (no e-mail), the big-screen link, the ways to add people and the privacy line", async () => {
@@ -665,7 +665,7 @@ describe("winners, the end, and break media on the phone", () => {
     o.world.now += 100_000; p.win.__rt.syncedAtMono = -Infinity; // past the 90-second count-from
     const t2 = await p.waitFor((x) => /you play from your first number/.test(x), 30000);
     expect(t2).toMatch(/numbers? (was|were) called before you/);
-    await p.waitFor(() => p.win.__rt.view().log.length > 0, 30000); expect(p.text()).toMatch(/since you joined/); expect(p.text()).not.toMatch(/All numbers · /); // no board of earlier numbers for a player
+    await p.waitFor(() => p.win.__rt.view().log.length > 0, 30000); expect(p.text()).toMatch(/\d+ of 90 called · \d+ left/); expect(p.text()).not.toMatch(/All numbers · /); // no board of earlier numbers for a player
   }, 90_000);
   test("a YouTube break plays inside the page (privacy-friendly player, autoplay, no leaving the ticket) and disappears when the break ends", async () => {
     const o = await organizer(); const p = await joined(o, "UI-MED1", { breaks: [{ after: 3, seconds: 60, kind: "youtube", title: "Welcome from our CEO", mediaUrl: "https://youtu.be/dQw4w9WgXcQ" }] }); const rt = p.win.__rt; const doc = p.win.document;

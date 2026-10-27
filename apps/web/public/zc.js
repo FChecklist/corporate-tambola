@@ -24,7 +24,7 @@
   { const pt = (q.get("pass") || "").toLowerCase(); if (/^[0-9a-f]{32}$/.test(pt)) { ls.set("ctz-pass", JSON.stringify({ t: pt, at: Date.now() })); q.delete("pass"); try { const rest = q.toString(); history.replaceState(null, "", location.pathname + (rest ? "?" + rest : "")); } catch { /* the address stays */ } } }
   // A browser AI may open this page in a new tab, and a tab holds the key only for itself: another open tab of the same browser can hand it over (same site, same browser, never stored).
   const bc = typeof BroadcastChannel === "function" ? new BroadcastChannel("ctz-org-key") : null;
-  const OLD_HOUSES = [{ id: "early5", label: "Early Five", how: "Be the first to mark any 5 of your numbers.", max: 5 }, { id: "top", label: "Top Line", how: "Mark all 5 numbers of the top line.", max: 5 }, { id: "mid", label: "Middle Line", how: "Mark all 5 numbers of the middle line.", max: 5 }, { id: "bot", label: "Bottom Line", how: "Mark all 5 numbers of the bottom line.", max: 5 }, { id: "corners", label: "Four Corners", how: "Mark the first and last number of the top and bottom lines.", max: 5 }, { id: "star", label: "Star", how: "Mark the four corners and the centre number of the middle line.", max: 5 }, { id: "full", label: "Full House", how: "Mark all 15 numbers of your ticket.", max: 5 }, { id: "full2", label: "Super Bumper House", how: "Mark all 30 numbers across your two tickets.", max: 5 }];
+  const OLD_HOUSES = [{ id: "early5", label: "Early Five", how: "Be the first to mark any 5 of your numbers.", max: 5 }, { id: "top", label: "Top Line", how: "Mark all 5 numbers of the top line.", max: 5 }, { id: "mid", label: "Middle Line", how: "Mark all 5 numbers of the middle line.", max: 5 }, { id: "bot", label: "Bottom Line", how: "Mark all 5 numbers of the bottom line.", max: 5 }, { id: "corners", label: "Four Corners", how: "Mark the first and last number of the top and bottom lines.", max: 5 }, { id: "star", label: "Star", how: "Mark the four corners and the centre number of the middle line.", max: 5 }, { id: "full", label: "Full House", how: "Mark all 15 numbers of your ticket.", max: 5 }, { id: "full2", label: "Super Bumper House", how: "Mark all 30 numbers of your two tickets together.", max: 5 }];
   const HOUSES = ZG && Array.isArray(ZG.PRIZE_HOUSES) && ZG.PRIZE_HOUSES.length ? ZG.PRIZE_HOUSES : OLD_HOUSES;
   const NAMES = Object.fromEntries(HOUSES.map((h) => [h.id, h.label]));
   // ---- Simpler console: things are only HIDDEN here, never removed; change a constant to bring them back. The server keeps its own (higher) limits.
@@ -1295,7 +1295,7 @@
     }
     return ZG.story({ ...base, state: "running" });
   }
-  const storyHtml = (st) => `<div class="zc-story" id="storyline" data-state="${st.state}"><b>${esc(st.say)}</b> <span>${esc(st.todo)}</span></div>`;
+  const storyHtml = (st) => `<div class="zc-story" id="storyline" data-state="${st.state}"><b>${esc(st.say)}</b> <span>${esc(st.doNow)}</span></div>`;
   /** The vital details during the game and after it: from the game log the Worker keeps (tickets by number only). */
   function vitalsHtml() {
     const g = S.glog; if (!g || S.draft) return "";

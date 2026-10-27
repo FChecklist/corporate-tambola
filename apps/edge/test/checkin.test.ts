@@ -1,7 +1,7 @@
 // Present check-in (owner decision 2026-10-23): the ticket opens only after the participant marks themselves present with the 4-digit code shown on their own ticket page.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { CHECKIN_FROM_MS, checkinOpensMs, codeFor, perm10k, ticketId } from "../src/checkin";
-import { erasePersonal } from "../src/lifecycle";
+import { callTimeMs, erasePersonal } from "../src/lifecycle";
 import { HOUR, MIN, T, W, call, capture, checkout, create, dev, j, join as joinRaw, keyH, mob, one, organizer, publish, reset, restore, roundAt, roundMs, uid, verify } from "./param-harness";
 
 const T2 = Date.UTC(2026, 9, 24, 10, 0, 0); // after CHECKIN_FROM_MS: games created now require the check-in
@@ -22,6 +22,8 @@ const deviceOf = new Map<string, string>();
 const join = async (id: string, i: number, extra: Record<string, unknown> = {}, now: number = T) => { const r = await joinRaw(id, i, extra, now); const b = await r.clone().json().catch(() => null); if (b?.pid) deviceOf.set(b.pid, String((extra as any)?.device ?? dev(i))); return r; };
 const ck = (id: string, pid: string, now: number, device: string | null = deviceOf.get(pid) ?? null) => call("GET", `/api/z/${id}/checkin?pid=${encodeURIComponent(pid)}${device ? `&device=${device}` : ""}`, undefined, {}, now);
 const submit = (id: string, pid: string, body: Record<string, unknown>, now: number) => call("POST", `/api/z/${id}/checkin`, { pid, device: deviceOf.get(pid), confirmName: true, confirmMobile: true, ...body }, {}, now);
+/** a moment inside the claim window of number idx 10: one second before number idx 11 is announced (the claim rule: a prize completed on number N can be claimed until N+1 is announced) */
+const inWindow = async (id: string) => (await callTimeMs(W.env as any, W.raw.prepare("SELECT * FROM engagement WHERE id=?").get(id) as any, 1, 11))! - 1000;
 const claim = (id: string, pid: string, now: number, device: string | null | undefined = deviceOf.get(pid)) => call("POST", `/api/z/${id}/claims`, { pid, ...(device ? { device } : {}), claims: [{ pattern: "early5", idx: 10 }] }, {}, now);
 
 describe("the code: every participant of a game has a different 4-digit code", () => {
@@ -46,7 +48,7 @@ describe("the check-in flow", () => {
     expect(T).toBeLessThan(CHECKIN_FROM_MS);
     const jn = await j(await join(g.id, 1, {}, T)); expect(jn.checkin).toBe(false);
     expect((await ck(g.id, jn.pid, T)).status).toBe(200); expect((await j(await ck(g.id, jn.pid, T))).required).toBe(false);
-    expect((await claim(g.id, jn.pid, g.startMs + 5 * MIN)).status).toBe(200);
+    expect((await claim(g.id, jn.pid, await inWindow(g.id))).status).toBe(200);
   });
   test("before it opens: the ids are shown but no code; 5 minutes before the start: the code appears", async () => {
     const g = await game(); const jn = await j(await join(g.id, 1, {}, T2)); expect(jn.checkin).toBe(true);
@@ -68,11 +70,11 @@ describe("the check-in flow", () => {
     const after = await j(await ck(g.id, jn.pid, now + 12 * MIN)); expect(after.present).toBe(true); expect(after.code).toBeUndefined(); // the code is not shown again
   });
   test("claims are refused until the person is present (403 not-present) and accepted after; wrong claims too", async () => {
-    const g = await game(); const jn = await j(await join(g.id, 1, {}, T2)); const now = g.startMs + 5 * MIN;
+    const g = await game(); const jn = await j(await join(g.id, 1, {}, T2)); const now = await inWindow(g.id);
     const r1 = await claim(g.id, jn.pid, now); expect(r1.status).toBe(403); expect((await j(r1)).code).toBe("not-present");
     expect((await call("POST", `/api/z/${g.id}/bogey`, { pid: jn.pid, pattern: "early5" }, {}, now)).status).toBe(403);
     const code = (await j(await ck(g.id, jn.pid, now))).code; expect((await submit(g.id, jn.pid, { code }, now)).status).toBe(200);
-    expect((await claim(g.id, jn.pid, now + 1000)).status).toBe(200);
+    expect((await claim(g.id, jn.pid, now + 500)).status).toBe(200);
   });
   test("name and mobile can be corrected at check-in (kept for the prize hand-over); a bad number is refused; the ticket identity does not change", async () => {
     const g = await game(); const jn = await j(await join(g.id, 1, {}, T2)); const now = g.startMs - 2 * MIN;

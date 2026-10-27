@@ -148,7 +148,7 @@
     const q = quietNext(), people = `${g.people.joined} joined · ${g.people.waiting} waiting for the Organizer's OK` + (g.people.present != null ? ` · ${g.people.present} present` : "");
     const cl = [...P.claims.filter((x) => !x.bogey).map((x) => ({ ms: x.atMs, t: x.pid, p: x.pattern, r: "accepted" })), ...P.claims.filter((x) => x.bogey).map((x) => ({ ms: x.atMs, t: x.pid, p: x.pattern, r: "wrong (Bogey)" })), ...P.tooLate.map((x) => ({ ms: x.atMs, t: x.ticket + "x", p: x.pattern, r: "too late, refused" }))].sort((a, b) => b.ms - a.ms);
     const claimsRows = cl.length ? cl.map((x) => `<tr><td>${esc(hm(x.ms))}</td><td>Ticket ${seatOf(x.t)}</td><td>${esc(NAMES[x.p] || x.p)}</td><td>${esc(x.r)}</td></tr>`).join("") : `<tr><td colspan="4">No claim yet.</td></tr>`;
-    return `<div class="bp"><div class="storybar" id="storyline" data-state="${st.state}"><b>${esc(st.say)}</b> <span>${esc(st.todo)}</span>${q ? ` <small class="bpquiet" id="bp-quiet" role="timer">${esc(q)}</small>` : ""}</div>
+    return `<div class="bp"><div class="storybar" id="storyline" data-state="${st.state}"><b>${esc(st.say)}</b> <span>${esc(st.doNow)}</span>${q ? ` <small class="bpquiet" id="bp-quiet" role="timer">${esc(q)}</small>` : ""}</div>
       ${controlsHtml()}
       <div class="bpgrid">
       <div class="bpbox" id="bp-people"><h2>People</h2><p>${esc(people)}</p></div>

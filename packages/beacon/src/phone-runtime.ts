@@ -789,8 +789,8 @@ export class PhoneRuntime {
     const pzMsg = pz && this.tracker ? this.tracker.log.find((m) => m.action === "pause" && m.atBeaconRound === pz.start) : undefined;
     const pausedInfo = pz ? { by: (pzMsg && this.ctlBy[pzMsg.seq - 1] === "Host" ? "a Host" : "the Organizer") as "the Organizer" | "a Host", sinceMs: roundTimeMs(pz.start), endMs: roundTimeMs(pz.end), secondsLeft: Math.max(0, (pz.end - now!) * 3) } : null;
     const mlog = this.maskedLog(this.cur);
-    const claimOpen = !this.locked && (this.phase === "play" || (this.phase === "ended" && !(st && st.stopRound !== null && now !== null && now >= st.stopRound))) ? this.claimableNow().filter((k) => { const i = completionIndexKey(this.tickets, k, mlog); return i >= 0 && i === mlog.length - 1; }) : []; // the completing number is still the latest: the claim is still valid (even while paused)
-    const claimNow = !isPaused && this.phase === "play" ? claimOpen : []; // the alert and the big button: only while the game is running
+    const claimOpen = !this.locked && (this.phase === "play" || (this.phase === "ended" && !(st && st.stopRound !== null && now !== null && now >= st.stopRound))) ? this.claimableNow().filter((k) => { const i = completionIndexKey(this.tickets, k, mlog); return i === mlog.length - 1 || i < 0; }) : []; // the completing number is still the latest: the claim is still valid (even while paused); a prize the marks complete but the called numbers do not (a stale mark) stays pressable: it is answered with a Bogey, as in the real game
+    const claimNow = !isPaused && this.phase === "play" ? claimOpen.filter((k) => completionIndexKey(this.tickets, k, mlog) >= 0) : []; // the alert and the big button: only while the game is running
     const goRound = st?.goRound ?? null;
     // manual start: the scheduled time has come and nobody has pressed Start ("waiting for the host to begin the game"), or Start was pressed and the first number is a few seconds away
     const waitingForStart = this.manualStart && this.phase === "play" && !this.locked && goRound === null && now !== null && now >= this.scheduledRound && !(st && st.stopRound !== null && now >= st.stopRound);
