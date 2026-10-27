@@ -176,3 +176,26 @@ describe("the pause on a phone: who paused, since when, until when", () => {
     for (const p of ps) { expect(p.rt.view().paused).toBe(false); expect(p.rt.view().pausedInfo).toBeNull(); }
   });
 });
+
+describe("Start in a big game (5,000 people): slow asking, a long lead, a countdown, nobody sees number 1 early", () => {
+  test("phones learn of Start within their asking cadence, count down the long lead, show nothing before the named round, then all show the same numbers; pause is refused", async () => {
+    const { SAFETY_BIG10K } = await import("../src/control");
+    await mkGame(5, { cap: 5000, startMode: "manual" });
+    const ps = await phonesOf([381, 382]);
+    expect(await until(ps, () => ps.every((p) => p.rt.view().waitingForStart), 60)).toBeGreaterThanOrEqual(0);
+    const f0 = (await readPublished(kvOf(), EID))!; expect(f0.leadRounds).toBe(SAFETY_BIG10K.leadRounds); expect(f0.startOnly).toBe(true);
+    expect((await send({ action: "pause", pauseForRounds: 50 })).status).toBe(422);
+    const sent = roundAt(D.utc());
+    expect((await send({ action: "go" })).status).toBe(200);
+    const goRound = sent + SAFETY_BIG10K.leadRounds;
+    // every phone hears of it within its asking period (at most 90 s) and counts down the rest of the lead
+    expect(await until(ps, () => ps.every((p) => p.rt.view().goRound !== null), 45)).toBeGreaterThanOrEqual(0);
+    for (const p of ps) { const v = p.rt.view(); expect(v.goRound).toBe(goRound); expect(v.waitingForStart).toBe(false); expect(v.startingInSec).toBeGreaterThan(90); expect(v.log).toEqual([]); }
+    while (roundAt(D.utc()) < goRound - 1) { await step(ps); for (const p of ps) expect(p.rt.view().log).toEqual([]); } // nothing before the named round, on any phone
+    expect(await until(ps, () => ps.every((p) => p.rt.view().log.length >= 3), 40)).toBeGreaterThan(0);
+    const f = (await readPublished(kvOf(), EID))!; const st = resolveControl(cfgOf(f, hostGameOf(ps[0]!.rt.cfg, SCHED)), f.messages);
+    const rounds = Array.from({ length: 3 }, (_, k) => callRoundR(st, 0, CALL_SECONDS / 3, [], 1, k)!);
+    expect(rounds[0]).toBe(goRound);
+    for (const p of ps) expect(p.rt.view().log.slice(0, 3)).toEqual(deriveCalls(EID, rounds.map((r) => rnd(r))));
+  });
+});

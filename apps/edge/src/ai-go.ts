@@ -13,7 +13,7 @@
 
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { roundAt, roundTimeMs } from "../../../packages/beacon/src/index";
-import { MANUAL_MAX_PARTICIPANTS, PAUSE_MAX_PARTICIPANTS } from "../../../packages/beacon/src/control";
+import { MANUAL_MAX_PARTICIPANTS } from "../../../packages/beacon/src/control";
 
 export interface Choice { n: number; label: string; url: string; recommended?: boolean }
 export interface Screen { say: string; choices: Choice[]; ifWrong?: string; done?: boolean }
@@ -102,7 +102,7 @@ const timeRows = (ctx: GoCtx, q: URLSearchParams, next: string): [string, string
 /** The settings read from the link, with the recommended value wherever the organizer has not chosen. */
 const settingsOf = (q: URLSearchParams) => ({
   k: q.get("k") === "2" ? 2 : 1, s: SPEEDS.includes(Number(q.get("s"))) ? Number(q.get("s")) : 9, r: Math.min(5, Math.max(1, Number(q.get("r")) || 1)), j: q.get("j") === "c", v: Number(q.get("v")) || 0,
-  host: q.get("cm") === "h" && Number(q.get("c")) <= MANUAL_MAX_PARTICIPANTS, manual: q.get("sm") === "m" && Number(q.get("c")) <= PAUSE_MAX_PARTICIPANTS, share: q.get("ti") === "s", p: BUNDLES[q.get("p") || "c"] ?? BUNDLES.c!, f: FULL_HOUSE_WINNERS.includes(Number(q.get("f"))) ? Number(q.get("f")) : 1, l: q.get("l") === "2" ? 2 : 1, x: MOMENTS[q.get("x") || "n"] ? (q.get("x") || "n") : "n", c: Number(q.get("c")),
+  host: q.get("cm") === "h" && Number(q.get("c")) <= MANUAL_MAX_PARTICIPANTS, manual: q.get("sm") === "m", share: q.get("ti") === "s", p: BUNDLES[q.get("p") || "c"] ?? BUNDLES.c!, f: FULL_HOUSE_WINNERS.includes(Number(q.get("f"))) ? Number(q.get("f")) : 1, l: q.get("l") === "2" ? 2 : 1, x: MOMENTS[q.get("x") || "n"] ? (q.get("x") || "n") : "n", c: Number(q.get("c")),
 });
 const prizeLines = (st: ReturnType<typeof settingsOf>): string => `${st.p.label}; ${st.f} Full House winner${st.f === 1 ? "" : "s"}${st.p.houses.some((h) => LINES.has(h)) ? `, ${st.l} winner${st.l === 1 ? "" : "s"} for each line` : ""}`;
 const momentLine = (x: string): string => x === "n" ? "No brand moment" : x === "s" ? "A 1-minute speech break after number 45 (you or a Host speak live)" : x === "o" ? "An opening message while guests wait" : x === "w" ? "A live welcome speech before the first number (you or a Host speak)" : x === "b" ? "An opening message while guests wait, and a 1-minute speech break after number 45" : "One lucky draw (1 winner, after number 45); you name the prize later";
@@ -136,11 +136,8 @@ export async function goScreen(ctx: GoCtx, step: string, q: URLSearchParams): Pr
         [st.j ? "Open to anyone with the link" : "Invite-only (only people on my list)", L("play", { j: st.j ? "o" : "c" })], [st.v ? "Guests may not invite others" : "Let each guest invite up to 4 more (family, colleagues)", L("play", { v: st.v ? "0" : "4" })]]), ifWrong: WRONG };
     }
     case "speed": return { say: "How fast should the numbers come? A full game of 90 numbers takes about 9, 14, 18 or 22 minutes.", choices: choices(SPEEDS.map((s) => [`Every ${s} seconds (${s === 6 ? "fast" : s === 9 ? "normal" : s === 12 ? "relaxed" : "slow"})`, L("play", { s: String(s) }), s === 9] as [string, string, boolean?])), ifWrong: WRONG };
-    case "starter": {
-      const big = st.c > PAUSE_MAX_PARTICIPANTS;
-      return { say: `How does the game start? By itself at the start time, or you (or a Host) press a big Start button. Start can be pressed only from the start time on; until then players see "waiting for the host". Pressing Start works for games of up to ${PAUSE_MAX_PARTICIPANTS.toLocaleString("en-IN")} people.${big ? ` Your game is larger, so it starts by itself.` : ""}`,
-        choices: choices([["It starts by itself at the start time", L("play", { sm: "a" }), true], ...(big ? [] : [["I press Start", L("play", { sm: "m" })] as [string, string, boolean?]])]), ifWrong: WRONG };
-    }
+    case "starter": return { say: `How does the game start? By itself at the start time, or you (or a Host) press a big Start button. Start can be pressed only from the start time on; until then players see "waiting for the host". Pressing Start works for games of any size.`,
+      choices: choices([["It starts by itself at the start time", L("play", { sm: "a" }), true], ["I press Start", L("play", { sm: "m" })]]), ifWrong: WRONG };
     case "caller": {
       const big = st.c > MANUAL_MAX_PARTICIPANTS;
       return { say: `Who calls the numbers? The software calls them at the chosen speed, or a Host presses a button for each number (the order still comes from public random numbers, so nobody can choose one). A Host can call the numbers in games of up to ${MANUAL_MAX_PARTICIPANTS.toLocaleString("en-IN")} people.${big ? ` Your game is larger, so the software calls them.` : ""}`,

@@ -57,6 +57,8 @@ export interface ControlConfig {
   startMode?: "auto" | "manual";
   /** Manual start: the scheduled start round; a Start signed before it is refused (to start earlier, change the start time first). */
   startNotBefore?: number;
+  /** A big game (above PAUSE_MAX_PARTICIPANTS): only Start exists. Pause, resume, extend and end are refused: phones ask too rarely for them to be safe. */
+  startOnly?: boolean;
   /** Host mode: the breaks and intermissions a press has to wait for, and how many presses there can be at most (90 per round). From the game's public settings, see hostGapsFor. */
   hostGaps?: HostGap[];
   maxNexts?: number;
@@ -199,6 +201,8 @@ export const NEXT_REFUSALS = {
   start: "Press Start first. The numbers begin after Start.",
   early: "Please wait a moment: the game is just starting.",
 } as const;
+/** The plain reason a pause, resume, extension or end is refused in a big game. */
+export const BIG_GAME_REFUSAL = "Pause and End are available for games of up to 2,000 people. This game runs without them.";
 /** The plain reasons a Start is refused. */
 export const GO_REFUSALS = {
   auto: "This game starts by itself at the scheduled time, so there is no Start button. To start by pressing Start, change \"How does it start?\" first.",
@@ -211,6 +215,7 @@ export const GO_REFUSALS = {
 function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: boolean, nexts: readonly number[], go: number | null): string | null {
   if (stopped) return "engagement already stopped";
   if (m.signedAtRound > m.atBeaconRound) return "takes effect before it was signed";
+  if (cfg.startOnly && (m.action === "pause" || m.action === "resume" || m.action === "extend" || m.action === "stop")) return BIG_GAME_REFUSAL;
   const lead = m.atBeaconRound - m.signedAtRound;
   const paused = cur && cur.start <= m.atBeaconRound && m.atBeaconRound < effEnd(cur, cfg.maxPauseRounds);
   switch (m.action) {
@@ -330,7 +335,18 @@ export const SAFETY_FAST = deriveSafety({ pollMaxSec: 7, cacheTtlSec: 3, latency
  */
 export const SAFETY_LEAN30 = deriveSafety({ pollMaxSec: 36, cacheTtlSec: 3, latencySec: 3, missedPollsTolerated: 1 }); // phones ask about every 27 to 36 s
 export const SAFETY_LEAN60 = deriveSafety({ pollMaxSec: 72, cacheTtlSec: 3, latencySec: 3, missedPollsTolerated: 1 }); // about every 54 to 72 s
-export const ALL_SAFETIES: Safety[] = [SAFETY_FAST, SAFETY_STANDARD, SAFETY_LEAN30, SAFETY_LEAN60];
+/**
+ * BIG GAMES (above PAUSE_MAX_PARTICIPANTS): only a Start button exists (no pause, no end), so the control file is asked for rarely and the Start LEAD is long. The same maths as every profile above:
+ *   a phone asks about every 0.75..1.0 x pollMaxSec, the shared copy is at most cacheTtlSec old, the answer takes latencySec, and one asked-for answer may be missed;
+ *   holdAfterRounds = that whole worst age (a phone reveals numbers only while its last good answer is that fresh) and leadRounds = holdAfterRounds + cache + 2.
+ * PROOF that no phone can show number 1 before it knows about Start: a manual-start game has NO call rounds at all until a verified "go" message is in the phone's log (callRound is Infinity), so a phone that has
+ * not heard shows nothing. PROOF that they all begin together: Start names a round at least leadRounds after the round it was signed in, and leadRounds exceeds the slowest phone's asking cadence plus the cache and
+ * the latency, so every phone that is online has the message before that round arrives; a phone that was offline or slow keeps "hold" (it reveals nothing without a fresh answer) and then catches up on the same
+ * numbers like a late joiner. Nobody, the Host included, can know the randomness of the named round when signing: it is at least leadRounds in the future.
+ */
+export const SAFETY_BIG10K = deriveSafety({ pollMaxSec: 90, cacheTtlSec: 3, latencySec: 3, missedPollsTolerated: 1 }); // 2,001 to 10,000 people: about every 67 to 90 s, Start lead about 3.3 minutes
+export const SAFETY_BIG = deriveSafety({ pollMaxSec: 120, cacheTtlSec: 3, latencySec: 3, missedPollsTolerated: 1 }); // above 10,000 people: about every 90 to 120 s, Start lead about 4.3 minutes
+export const ALL_SAFETIES: Safety[] = [SAFETY_FAST, SAFETY_STANDARD, SAFETY_LEAN30, SAFETY_LEAN60, SAFETY_BIG10K, SAFETY_BIG];
 export const PAUSE_MAX_PARTICIPANTS = 2000;
 /** A Host calling the numbers and/or a Start button need signed control messages for every phone; above this size only Auto Start + Auto Play is allowed (phones work the numbers out from the public beacon with almost no server work). Pause keeps PAUSE_MAX_PARTICIPANTS. */
 export const MANUAL_MAX_PARTICIPANTS = 1000;
@@ -340,6 +356,15 @@ export function safetyForCap(cap: number, fast = false): Safety | null {
   if (cap <= 1000) return SAFETY_LEAN30;
   if (cap <= PAUSE_MAX_PARTICIPANTS) return SAFETY_LEAN60;
   return null;
+}
+
+/**
+ * The profile of the control file for a game that can press Start: up to PAUSE_MAX_PARTICIPANTS the same as the pause profile; above it the BIG profiles (Start only: `startOnly` in the file, no pause, resume, extend or end).
+ */
+export function startSafetyForCap(cap: number): { safety: Safety; startOnly: boolean } {
+  const s = safetyForCap(cap);
+  if (s) return { safety: s, startOnly: false };
+  return { safety: cap <= 10_000 ? SAFETY_BIG10K : SAFETY_BIG, startOnly: true };
 }
 
 export type Mode = "live" | "hold" | "blind";
@@ -388,7 +413,7 @@ export class ControlTracker {
 /* ---------------- publishing (shared by the local server and a Cloudflare Worker) ---------------- */
 
 export interface KV { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
-export interface PublishedFile { v: 1; engagementId: string; pubKey: string; maxPauseRounds: number; leadRounds: number; messages: ControlMsg[]; /** The Hosts' console keys that may sign too (see addHostKey). */ hostKeys?: string[] }
+export interface PublishedFile { v: 1; engagementId: string; pubKey: string; maxPauseRounds: number; leadRounds: number; messages: ControlMsg[]; /** The Hosts' console keys that may sign too (see addHostKey). */ hostKeys?: string[]; /** A big game: only Start exists (no pause or end). */ startOnly?: boolean }
 
 const fileKey = (id: string) => `control/${id}.json`;
 export async function readPublished(kv: KV, engagementId: string): Promise<PublishedFile | null> {
@@ -404,7 +429,7 @@ export const hostControlOf = (game?: GameOpts): Pick<ControlConfig, "callMode" |
   startNotBefore: game?.startMode === "manual" ? game.startNotBefore : undefined,
 });
 export const cfgOf = (f: PublishedFile, game?: GameOpts): ControlConfig => ({
-  pubKey: f.pubKey, maxPauseRounds: f.maxPauseRounds, leadRounds: f.leadRounds, ...(f.hostKeys?.length ? { hostKeys: f.hostKeys } : {}),
+  pubKey: f.pubKey, maxPauseRounds: f.maxPauseRounds, leadRounds: f.leadRounds, ...(f.hostKeys?.length ? { hostKeys: f.hostKeys } : {}), ...(f.startOnly ? { startOnly: true } : {}),
   ...(game?.callMode === "host" || game?.startMode === "manual" ? hostControlOf(game) : {}),
 });
 
@@ -422,11 +447,11 @@ export async function addHostKey(kv: KV, engagementId: string, pubKeyHex: string
 }
 
 /** Registers the engagement's public key, once. Nobody (including the server) can swap it afterwards. */
-export async function registerKey(kv: KV, engagementId: string, pubKeyHex: string, safety: Safety = SAFETY_STANDARD, maxPauseRounds = 600): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function registerKey(kv: KV, engagementId: string, pubKeyHex: string, safety: Safety = SAFETY_STANDARD, maxPauseRounds = 600, opts: { startOnly?: boolean } = {}): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!/^[0-9a-f]{64}$/i.test(pubKeyHex)) return { ok: false, error: "The public key must be 32 bytes in hex." };
   if (!/^[A-Za-z0-9_-]{3,40}$/.test(engagementId)) return { ok: false, error: "Bad engagement id." };
   if (await readPublished(kv, engagementId)) return { ok: false, error: "A key is already registered for this engagement and cannot be changed." };
-  const f: PublishedFile = { v: 1, engagementId, pubKey: pubKeyHex.toLowerCase(), maxPauseRounds, leadRounds: safety.leadRounds, messages: [] };
+  const f: PublishedFile = { v: 1, engagementId, pubKey: pubKeyHex.toLowerCase(), maxPauseRounds, leadRounds: safety.leadRounds, messages: [], ...(opts.startOnly ? { startOnly: true } : {}) };
   await kv.put(fileKey(engagementId), JSON.stringify(f));
   return { ok: true };
 }
@@ -447,7 +472,7 @@ export async function publishControl(kv: KV, engagementId: string, msg: unknown,
   if (msg.seq !== f.messages.length + 1) return { ok: false, status: 409, error: `Next sequence number is ${f.messages.length + 1}.` };
   const after = resolveControl(cfg, [...f.messages, msg]);
   const bad = after.ignored.find((x) => x.seq === msg.seq);
-  if (bad) return { ok: false, status: 422, error: msg.action === "next" || msg.action === "go" ? bad.why : `Not accepted: ${bad.why}.` }; // a press is refused in the Host's own words
+  if (bad) return { ok: false, status: 422, error: msg.action === "next" || msg.action === "go" || bad.why === BIG_GAME_REFUSAL ? bad.why : `Not accepted: ${bad.why}.` }; // a press is refused in the Host's own words
   f.messages.push(msg);
   await kv.put(fileKey(engagementId), JSON.stringify(f));
   return { ok: true, seq: msg.seq };

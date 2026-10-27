@@ -5,7 +5,7 @@ import { withDevice } from "./device";
 import { type Env } from "../src/worker";
 import { handle } from "./with-terms";
 import { makeD1 } from "./d1-sqlite";
-import { GO_REFUSALS, NEXT_REFUSALS, nextMessage, publicKeyFromSecret, readPublished, signControlWithSecret, type KV } from "../../../packages/beacon/src/control";
+import { BIG_GAME_REFUSAL, GO_REFUSALS, NEXT_REFUSALS, SAFETY_BIG, SAFETY_BIG10K, SAFETY_LEAN60, nextMessage, publicKeyFromSecret, readPublished, signControlWithSecret, type KV } from "../../../packages/beacon/src/control";
 import { endBoundMs, NEVER_STARTED_MS } from "../src/lifecycle";
 import { NEEDS_CONSOLE_MSG, NOT_BEFORE_MSG, STARTED_MSG } from "../src/modes";
 
@@ -81,9 +81,8 @@ describe("the four modes are two plain settings", () => {
     const sw = await call("PATCH", "/api/z/M-C1000/settings", { callMode: "host" }, P); expect(sw.status).toBe(409); expect((await j(sw)).error).toMatch(/choose "The game does"/);
     expect((await call("PATCH", "/api/z/M-C1000/settings", { cap: 1000, callMode: "host" }, P)).status).toBe(200);
     expect((await call("PATCH", "/api/z/M-D1000/settings", { cap: 1001, callMode: "auto" }, P)).status).toBe(200);
-    // pressing Start has the control-file limit (2,000)
-    expect((await make(o, "M-C2000", { cap: 2000, startMode: "manual" })).status).toBe(200);
-    const s2 = await make(o, "M-C2001", { cap: 2001, startMode: "manual" }); expect(s2.status).toBe(409); expect((await j(s2)).error).toMatch(/up to 2,000 people/);
+    // pressing Start has no size limit
+    for (const cap of [2000, 2001, 10000, 10001, 100000]) expect([cap, (await make(o, `M-C${cap}`, { cap, startMode: "manual" })).status]).toEqual([cap, 200]);
   });
 });
 
@@ -228,5 +227,50 @@ describe("what changed, who, when", () => {
     expect(r.status === 400 || r.status === 403).toBe(true);
     expect((await call("GET", "/api/z/M-CO/changes", undefined, { "x-organizer": co })).status).not.toBe(200);
     expect((await info("M-CO", o.h)).startMode).toBe("auto");
+  });
+});
+
+describe("pressing Start at any size: its own control-file profile, a longer lead, no pause", () => {
+  const bigGame = async (id: string, cap: number) => {
+    const o = await organizer(); expect((await make(o, id, { cap, startMode: "manual" })).status).toBe(200);
+    await call("POST", `/api/z/${id}/publish`, { email: "boss@acme.com", phone: "98765 43210" }, o.h); raw.prepare("UPDATE engagement SET pack=? WHERE id=?").run(cap, id);
+    return o;
+  };
+  test("the signing key registers at 2,000 / 2,001 / 10,000 / 10,001 / 100,000 with the profile of that size; only above 2,000 is the file start-only; the lead grows with the size", async () => {
+    const expected: [number, number, boolean][] = [[2000, SAFETY_LEAN60.leadRounds, false], [2001, SAFETY_BIG10K.leadRounds, true], [10000, SAFETY_BIG10K.leadRounds, true], [10001, SAFETY_BIG.leadRounds, true], [100000, SAFETY_BIG.leadRounds, true]];
+    for (const [cap, lead, only] of expected) {
+      const id = `M-K${cap}`; const o = await bigGame(id, cap);
+      const k = await call("PUT", `/api/z/${id}/control/key`, { publicKey: publicKeyFromSecret(ORG) }, o.h); expect([cap, k.status]).toEqual([cap, 200]);
+      const f = await control(id); expect([cap, f.leadRounds, !!f.startOnly]).toEqual([cap, lead, only]);
+    }
+    expect(SAFETY_BIG10K.leadRounds).toBeGreaterThan(SAFETY_LEAN60.leadRounds); expect(SAFETY_BIG.leadRounds).toBeGreaterThan(SAFETY_BIG10K.leadRounds);
+    expect(SAFETY_BIG10K.leadRounds * 3).toBeGreaterThanOrEqual(150); expect(SAFETY_BIG10K.leadRounds * 3).toBeLessThanOrEqual(240); // about 2.5 to 4 minutes
+    expect(SAFETY_BIG.leadRounds * 3).toBeLessThanOrEqual(300);
+  });
+  test("a big game that does NOT press Start still has no key (as before): the message says pause is for up to 2,000 people", async () => {
+    const o = await organizer(); await make(o, "M-AUTO5K", { cap: 5000 }); await call("POST", "/api/z/M-AUTO5K/publish", { email: "boss@acme.com", phone: "98765 43210" }, o.h); raw.prepare("UPDATE engagement SET pack=5000 WHERE id='M-AUTO5K'").run();
+    const k = await call("PUT", "/api/z/M-AUTO5K/control/key", { publicKey: publicKeyFromSecret(ORG) }, o.h); expect(k.status).toBe(409); expect((await j(k)).error).toMatch(/up to 2,000 participants/);
+  });
+  test("Start in a 5,000-person game: refused before the time, accepted at it, named a full profile lead ahead; a Start with the small-game lead is refused; pause, resume, extend and end are refused in plain words", async () => {
+    const o = await bigGame("M-S5K", 5000); expect((await call("PUT", "/api/z/M-S5K/control/key", { publicKey: publicKeyFromSecret(ORG) }, o.h)).status).toBe(200);
+    const early = await post("M-S5K", await signed("M-S5K", ORG, AT - 60_000, { action: "go" }), AT - 60_000);
+    expect(early.status).toBe(422); expect(early.body.error).toBe(NOT_BEFORE_MSG);
+    const t = AT + 10_000, f0 = (await readPublished(kv(), "M-S5K"))!;
+    const short = signControlWithSecret(ORG, { engagementId: "M-S5K", seq: 1, action: "go", atBeaconRound: roundAt(t) + 13, signedAtRound: roundAt(t) }); // the lead of a small game is not enough for 5,000 phones
+    const refusedShort = await post("M-S5K", short, t); expect(refusedShort.status).toBe(422); expect(refusedShort.body.error).toBe(GO_REFUSALS.lead);
+    for (const action of ["pause", "extend", "stop"] as const) { const r = await post("M-S5K", await signed("M-S5K", ORG, t + 1000, { action, ...(action === "pause" ? { pauseForRounds: 100 } : {}) }), t + 1000); expect([action, r.status, r.body.error]).toEqual([action, 422, BIG_GAME_REFUSAL]); }
+    const ok = await post("M-S5K", await signed("M-S5K", ORG, t, { action: "go" }), t); expect(ok).toEqual({ status: 200, body: { ok: true, seq: 1 } });
+    const go = (await control("M-S5K", t)).messages[0]; expect(go.atBeaconRound - go.signedAtRound).toBe(f0.leadRounds); expect(f0.leadRounds).toBe(SAFETY_BIG10K.leadRounds);
+    const again = await post("M-S5K", await signed("M-S5K", ORG, t + 20_000, { action: "go" }), t + 20_000); expect(again.body.error).toBe(GO_REFUSALS.again);
+    const resume = await post("M-S5K", await signed("M-S5K", ORG, t + 30_000, { action: "resume" }), t + 30_000); expect(resume.body.error).toBe(BIG_GAME_REFUSAL);
+  });
+  test("moving the size across 2,000 before anything was sent gives the key the right profile (the unused key is forgotten so the console registers it again)", async () => {
+    const o = await bigGame("M-X", 1500); expect((await call("PUT", "/api/z/M-X/control/key", { publicKey: publicKeyFromSecret(ORG) }, o.h)).status).toBe(200);
+    expect((await control("M-X")).leadRounds).toBe(SAFETY_LEAN60.leadRounds);
+    raw.prepare("UPDATE engagement SET pack=6000 WHERE id='M-X'").run();
+    expect((await call("PATCH", "/api/z/M-X/settings", { cap: 6000 }, { "x-organizer": "plat" })).status).toBe(200);
+    expect(raw.query("SELECT COUNT(*) AS c FROM kv WHERE k='control/M-X.json'").get()).toEqual({ c: 0 });
+    expect((await call("PUT", "/api/z/M-X/control/key", { publicKey: publicKeyFromSecret(ORG) }, o.h)).status).toBe(200);
+    const f = await control("M-X"); expect([f.leadRounds, !!f.startOnly]).toEqual([SAFETY_BIG10K.leadRounds, true]);
   });
 });

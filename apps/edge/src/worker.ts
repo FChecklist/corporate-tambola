@@ -51,7 +51,7 @@ import { AUDIT_SCHEMA, auditRequest, analyzeChain, loadRows, logAccess, setHold,
 import { VISIT_SCHEMA, beaconRoute, linkVisitor, parseRange, recordFunnelForOrg, visitsJourney, visitsSummary, type VisitEnv } from "./visits";
 import { knownDial } from "./phonekit";
 import { WINNERS_SCHEMA, acceptVotes, auditAi, confirmPrize, listAiAudit, listPrizes, markGiven, myPrizes, overridePrize } from "./winners";
-import { PAUSE_MAX_PARTICIPANTS, addHostKey, safetyForCap, publishControl, readPublished, registerKey, verifyControlSig, type KV } from "../../../packages/beacon/src/control";
+import { PAUSE_MAX_PARTICIPANTS, addHostKey, safetyForCap, startSafetyForCap, publishControl, readPublished, registerKey, verifyControlSig, type KV } from "../../../packages/beacon/src/control";
 import { hostGameOf } from "../../../packages/beacon/src/game";
 import { NEEDS_CONSOLE_MSG, NOT_BEFORE_MSG, STARTED_MSG, modeTooBig, changesView, describeChanges, goRoundOf, liveOf, logChanges, needsControl, readChanges, whoLabel } from "./modes";
 import { QUICKNET } from "../../../packages/beacon/src/index";
@@ -1318,21 +1318,22 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (r.ok && !(r as any).duplicate) { await spend(env, now); await mirrorControl(env, cid!); }
       return r.ok ? json(r) : json({ error: r.error }, r.status);
     }
-    const ce = await env.DB.prepare("SELECT id, org, cap, start_round FROM engagement WHERE id=?").bind(cid).first<{ id: string; org: string | null; cap: number; start_round: number }>();
+    const ce = await env.DB.prepare("SELECT id, org, cap, start_round, tickets, config FROM engagement WHERE id=?").bind(cid).first<{ id: string; org: string | null; cap: number; start_round: number; tickets: number; config: string | null }>();
     if (!ce) return json({ error: "No such engagement." }, 404);
     if (sub === "/key" && req.method === "PUT") { // only the organizer's own console registers the key that signs pauses
       if (!can(a, ce, true)) return deny(a);
       const b = await body(req);
       if (!b || typeof b.publicKey !== "string") return json({ error: "Bad key." }, 400);
       if (!(await spend(env, now))) return BUSY();
-      const safety = safetyForCap(ce.cap, b.profile === "fast");
+      const big = safetyForCap(ce.cap) === null && cfgOf(ce).startMode === "manual" ? startSafetyForCap(ce.cap) : null; // a big game that presses Start: its own, slower profile with a longer Start lead and no pause
+      const safety = big ? big.safety : safetyForCap(ce.cap, b.profile === "fast");
       if (!safety) return json({ error: `Pause is available for engagements of up to ${PAUSE_MAX_PARTICIPANTS.toLocaleString("en-IN")} participants. Larger ones run without it, which keeps every phone's traffic off the free plan's daily allowance.` }, 409);
       if ((a.kind === "host" || a.kind === "master") && (await readPublished(kv, cid!))) { // the organizer's key is already there: a Host's own browser, or the organizer's own second browser or phone (signed in with the same e-mail code), adds its key beside it, so they can pause, end and press "Next number" too
         const h = await addHostKey(kv, cid!, b.publicKey);
         if (h.ok && h.added) await mirrorControl(env, cid!);
         return h.ok ? json({ ok: true, host: true }) : json({ error: h.error }, 409);
       }
-      const r = await registerKey(kv, cid!, b.publicKey, safety);
+      const r = await registerKey(kv, cid!, b.publicKey, safety, 600, { startOnly: !!big });
       if (r.ok) await mirrorControl(env, cid!);
       return r.ok ? json({ ok: true }) : json({ error: r.error }, 409);
     }
@@ -2130,8 +2131,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     }
     { // the pause profile depends on the size: if no pause has been sent yet and the size moved to another profile, forget the unused key so the console registers the right one
       const f = await readPublished(d1kv(env), eid!);
-      const sf = safetyForCap(next.cap);
-      if (f && f.messages.length === 0 && (!sf || sf.leadRounds !== f.leadRounds)) {
+      const sf = vc.cfg.startMode === "manual" ? startSafetyForCap(next.cap) : { safety: safetyForCap(next.cap), startOnly: false }; // a game that presses Start has a profile at every size
+      if (f && f.messages.length === 0 && (!sf.safety || sf.safety.leadRounds !== f.leadRounds || !!f.startOnly !== sf.startOnly)) {
         await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${eid}.json`).run();
         try { await env.CONTROL_R2?.delete(controlKey(eid!)); } catch { /* the object expires with its engagement anyway */ }
       }

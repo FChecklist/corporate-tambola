@@ -344,12 +344,12 @@ export class PhoneRuntime {
     // the Hosts' console keys ride in the same file as the organizer's key (trusted the same way, on first use); the list only grows, and never beyond the team's size
     const hostKeys: string[] = Array.isArray(body.hostKeys) ? body.hostKeys.filter((k: unknown): k is string => typeof k === "string" && /^[0-9a-f]{64}$/i.test(k)).slice(0, 5) : [];
     if (!this.tracker) {
-      const cfg: ControlConfig = { pubKey: body.pubKey, maxPauseRounds: body.maxPauseRounds, leadRounds: body.leadRounds, hostKeys, ...hostControlOf(hostGameOf(this.cfg, this.scheduledRound)) };
+      const cfg: ControlConfig = { pubKey: body.pubKey, maxPauseRounds: body.maxPauseRounds, leadRounds: body.leadRounds, hostKeys, ...(body.startOnly === true ? { startOnly: true } : {}), ...hostControlOf(hostGameOf(this.cfg, this.scheduledRound)) };
       this.controlFast = body.leadRounds === SAFETY_FAST.leadRounds;
       const safety = ALL_SAFETIES.find((s) => s.leadRounds === body.leadRounds) ?? SAFETY_STANDARD;
       if (safety !== SAFETY_FAST && safety !== SAFETY_STANDARD) { this.pollBaseMs = Math.round(safety.pollMaxSec * 750); this.pollJitterMs = Math.round(safety.pollMaxSec * 250); }
       else { this.pollBaseMs = this.controlFast ? 6_000 : 9_000; this.pollJitterMs = 3_000; }
-      if (this.hostMode || this.manualStart) { this.pollBaseMs = 5_000; this.pollJitterMs = 2_000; } // a Host's press must reach every phone within seconds: the fast safety's timer (5 to 7 s), whatever the game's size
+      if (this.hostMode) { this.pollBaseMs = 5_000; this.pollJitterMs = 2_000; } // (a Start needs no fast timer: its lead is longer than the slowest asking cadence of the game's own profile) // a Host's press must reach every phone within seconds: the fast safety's timer (5 to 7 s), whatever the game's size
       this.tracker = new ControlTracker(cfg, this.eid, safety, now);
     } else if (hostKeys.length > (this.tracker.cfg.hostKeys?.length ?? 0)) this.tracker.cfg.hostKeys = [...new Set([...(this.tracker.cfg.hostKeys ?? []), ...hostKeys])].slice(0, 5);
     if (await this.tracker.ingest(now, body)) this.controlState = "known";
