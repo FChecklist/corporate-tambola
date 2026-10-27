@@ -14,10 +14,10 @@ Site: corporatetambola.com (live). Games run one at a time by the boss from its 
 | L5 | Eea3ddp | 250 | auto 12 s | 3 list I choose | 250/250 | 71, yes | yes | 0 | 0 | 0 | 25 client-side ECONNRESET on GET /control (one burst, never grew), 65 drand errors |
 | L6 | Eemchac | 250 | auto 9 s | 6 anyone + employee ID | 249 played of 250 (server: 250 joined, 0 waiting, verified by D1) | 64, yes (249/249) | yes | 0 | 0 | 0 | PASS WITH LATENCY NOTE: 1 phone's POST /join timed out client-side after 30 s under the 250-person burst (server had registered it), so the harness counted 249 pages; 1 beacon-relay 502, 56 drand errors, 1 UND_ERR on /control |
 | L7 | Emjrteu | 500 (495 players) | auto 12 s | 5 anyone | 479 played of 495 (473/489 phones + 6 pages) | 61, yes (479/479) | yes | 0 | 0 | 0 | JOIN SHORTFALL: 16 protocol phones never got in (14 x POST /join, 9 check-in calls, 1 info, 1 control: all 30 s client timeouts, no HTTP status, no 429/503); 53 drand errors. D1 (boss): the server holds 481 joined of 495: 479 played + 2 whose request reached the DB but whose client timed out, and 14 first-attempt joins that NEVER reached the DB (edge or link, not client-only) |
-| L8 | | 500 | auto 9 s | 4 list + invites | next (with protocol-phone join retry) | | | | | | |
+| L8 | Edvwsya | 500 | auto 9 s | 4 list + invites | 500/500 (6 pages + 494 phones; list of 500 uploaded by clicks) | 69, yes (500/500) | yes | 0 | 0 | 0 | PASS. 143 drand errors; client-side only: 22 GET /control + 3 GET /results connect timeouts (~10 s); no join/check-in timeout; 'end by Organizer' event not exercised by the tool |
 | L9 | | 500 | manual | 3 list I choose | not run | | | | | | |
 
-Result: L1b, L2, L3b, L4, L5 PASS; L6 PASS with a join tail-latency note (1 of 250 phones); L7 correctness PASS (numbers, winners, tickets) but JOIN SHORTFALL 16 of 495 (3.2%) under the 500-person burst; 0 failures that are product faults; 1 game (L3) invalid because of the test script.
+Result: L1b, L2, L3b, L4, L5, L8 PASS; L6 PASS with a join tail-latency note (1 of 250 phones); L7 correctness PASS (numbers, winners, tickets) but JOIN SHORTFALL 16 of 495 (3.2%) under the 500-person burst; 0 failures that are product faults; 1 game (L3) invalid because of the test script.
 
 ## What these results prove, and what they do NOT
 
