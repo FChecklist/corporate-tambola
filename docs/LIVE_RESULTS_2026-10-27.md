@@ -1,0 +1,36 @@
+# Real-site games, release 1.3.2: results so far (27 Oct 2026, written by P1 from `data/ui/ui-chrome-<tag>.json` with `tools/browser-tests/live-summary.py`)
+
+Site: corporatetambola.com (live). Games run one at a time by the boss from its laptop with `tools/browser-tests/ui-game.mjs` (6 real Chrome phone-size pages + protocol phones running the real phone code). Account demo1@xyz.in.
+
+## Verdicts (as printed by the analyser)
+
+| Game | Eid | Size | Mode | Audience | Joined | Numbers (all pages equal) | Winners agree | Own 5xx | Busy | Page errors | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| L1b | Ev6gxwc | 100 | auto 9 s | 1 only employees | 100/100 | 61, yes | yes | 0 | 0 | 0 | 28 public-beacon (drand) 500s to browsers, phones fell back |
+| L2 | E53f85e | 100 | manual | 6 anyone + employee ID | 100/100 | 63, yes | yes | 0 | 0 | 0 | 65 presses for 63 numbers (extra presses ignored); 18 drand errors |
+| L3 | Ejt2grj | 100 | auto 12 s | 4 list + invites | 0/100 | - | - | 0 | 0 | 0 | HARNESS: script uploaded no list, all 100 correctly waited (closed game); not a product fault |
+| L3b | Ewwems2 | 100 | auto 12 s | 4 list + invites | 100/100 | 65, yes | yes | 0 | 0 | 0 | 43 drand errors |
+| L4 | Eydfdhr | 250 | manual | 1 only employees | 250/250 | 62, yes | yes | 0 | 0 | 0 | 66 presses for 62 numbers; 28 drand errors |
+| L5 | Eea3ddp | 250 | auto 12 s | 3 list I choose | 250/250 | 71, yes | yes | 0 | 0 | 0 | 25 client-side ECONNRESET on GET /control (one burst, never grew), 65 drand errors |
+| L6 | Eemchac | 250 | auto 9 s | 6 anyone + employee ID | running | | | 0 so far | 0 | 0 | |
+| L7 | | 500 | auto 12 s | 5 anyone | not run | | | | | | |
+| L8 | | 500 | auto 9 s | 4 list + invites | not run | | | | | | |
+| L9 | | 500 | manual | 3 list I choose | not run | | | | | | |
+
+Result: 5 of 5 completed games (L1b, L2, L3b, L4, L5) PASS; 0 failures that are product faults; 1 game (L3) invalid because of the test script.
+
+## What these results prove, and what they do NOT
+
+PROVEN on the real site (each completed game): everyone who should get a ticket got one, one ticket each, all well formed and different; every page shows the same called numbers in the same order and agrees on the winners; no server error and no "busy" refusal from our own site; the game ends correctly on 100 and 250 people in both auto (9 s and 12 s) and manual (organizer presses through the page buttons); the staff list upload by clicks works for 100 and 250; a closed game correctly keeps 100 unlisted people in the waiting room (L3).
+
+NOT CHECKED by the tool (needs hand checks or other tests): strangers waiting / approve / decline / lapse on the real site (covered in the simulation: journeys 960 scenarios + people 99 + rules 5 on 1.3.1/1.3.2, all pass); prize caps (5/5/10/10), equal split and the organizer's final-call override; pause and resume; late join; the "end by Organizer" event; level-1 / level-2 guest invitations; number delay and timer gaps (not in the result file); the end-of-game report e-mail; 500-person capacity.
+
+## Observations to keep
+1. The public beacon (drand) answers 500/5xx to browsers in every game (18 to 65 per game); phones fall back to other mirrors and the games are unaffected. Our own relay answered 502 only in an earlier smoke game (decision: leave as 502).
+2. Manual games: the organizer's presses after the last number grow with size (2 extra at 100, 4 at 250): phones check for the end every 15 s at this size; the server ignores the extra presses. Not a product fault; the test's stop rule can be tightened.
+3. 25 ECONNRESET on GET /control in L5, one burst; cause unknown (laptop network or edge). Cloudflare analytics are not readable with the current token.
+4. Result files do not hold number delay or timer gaps; only the console log and hand checks do.
+5. A game that shows "0 joined" must be diagnosed from the waiting-room count first (L3).
+
+## Still to do (owner order: test 100 / 250 / 500)
+L6 (running), L7, L8, L9 (500 people: needs about 1 GB of free memory for the protocol phones; record how many phones really played), then hand checks of strangers/approvals, prize split and override, pause, late join and End on at least one 100-person game; then this file is updated and the boss decides on any fix and deploy (only the boss deploys).
