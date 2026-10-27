@@ -32,8 +32,13 @@ def one(tag):
     joined = next((c for c in checks if re.search(r"\ball \d+ (people|pages)\b|\bjoined\b", c["n"])), None)
     jm = re.search(r"all (\d+) people joined", joined["n"]) if joined else None
     got = int(jm.group(1)) if jm and joined.get("ok") else None
+    if got is None and joined:  # a failed join check still says how many got in: '<pages> pages, <phones joined>/<phones asked> phones'
+        dm = re.match(r"^(\d+) pages, (\d+)/(\d+) phones", str(joined.get('d', '')))
+        if dm: got = int(dm.group(1)) + int(dm.group(2))
     nums = next((c for c in checks if re.search(r"same \d+ numbers", c["n"])), None)
     nm = re.search(r"same (\d+) numbers", nums["n"]) if nums else None
+    pm = re.match(r"^(\d+)/(\d+)$", str(nums.get('d', '')).strip()) if nums else None  # the harness check is 'same numbers' AND 'pages == players': read the numbers part from the detail 'x/y'
+    nums_equal = (pm is not None and pm.group(1) == pm.group(2)) if nums else None
     win = next((c for c in checks if "same winners" in c["n"]), None)
     own5 = relay5 = third = busy = 0
     for r in d.get("failedReq", []):
@@ -48,6 +53,7 @@ def one(tag):
     perr = len(d.get("errors", [])) + len(d.get("pageErr", []) if isinstance(d.get("pageErr"), list) else [])
     # the harness's own '5xx' check counts relay 502 too: re-judge it with the split above
     judged_bad = [c for c in bad if not (c["n"].startswith("no page error and no 5xx") and own5 == 0 and perr == 0 and relay5 + third > 0)]
+    judged_bad = [c for c in judged_bad if not (nums is not None and c is nums and nums_equal)]  # numbers identical on every page that played: the miss is the join shortfall, already reported by the 'joined' check
     ok = not judged_bad and own5 == 0 and busy == 0 and perr == 0
     incomplete = got is None or nums is None or win is None  # the game has not reached its final checks yet (or they failed to run)
     if incomplete and ok: ok = False
@@ -62,7 +68,7 @@ def one(tag):
     exp = int(EXPECT) if EXPECT else None
     jtxt = f"joined {got if got is not None else '?'}/{exp if exp else d.get('cap')}"
     if exp is not None and got is not None and got != exp: ok = False
-    line = (f"{tag}  {'INCOMPLETE' if incomplete and not judged_bad else 'PASS' if ok else 'FAIL'}  eid={d.get('eid')} {d.get('mode')} cap={d.get('cap')} | {jtxt} | numbers {nm.group(1) if nm else '?'} equal={'yes' if nums and nums.get('ok') else 'NO' if nums else '?'}"
+    line = (f"{tag}  {'INCOMPLETE' if incomplete and not judged_bad else 'PASS' if ok else 'FAIL'}  eid={d.get('eid')} {d.get('mode')} cap={d.get('cap')} | {jtxt} | numbers {nm.group(1) if nm else '?'} equal={'yes' if nums_equal else 'NO' if nums else '?'}{f' (pages {pm.group(2)})' if pm else ''}"
             f" | winners agree={'yes' if win and win.get('ok') else 'NO' if win else '?'} | own 5xx={own5} relay-502={relay5} 3rd-party={third} busy={busy} | page errors={perr}")
     if judged_bad: line += " | FAILED: " + "; ".join(c["n"] for c in judged_bad)
     if relay5 or third: line += f" | NOTE: {relay5} beacon-relay 5xx and {third} third-party errors (public beacon outage; phones fell back to other mirrors)"
