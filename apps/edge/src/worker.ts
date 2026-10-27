@@ -1895,7 +1895,19 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (pb0 && !consentMissing(pb0, "K1") && /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(ce) && cp.length >= 10 && cp.length <= 15 && cleanPhone(pb0.phone).ok && !(await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`contact/${eid}`).first())) {
         await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO NOTHING").bind(`contact/${eid}`, JSON.stringify({ email: ce, phone: cp.slice(-10) })).run();
       }
-      return json({ ok: true, published: true, already: true, paid: !unpaid, ...(demo ? { demo: true } : {}), startMs: roundMs(e.start_round), payUrl, shareUrl });
+      // held for payment before, and the organizer has a free or bought pack now (for example a demo link opened after the first Publish): the pack is used now, exactly as on the first Publish (found with a real prospect)
+      let nowPaid = !unpaid;
+      if (unpaid && !demo && e.org) {
+        const ent2 = await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(e.org, e.cap).first<{ id: string; pack: number }>();
+        if (ent2 && (await spend(env, now, 4))) {
+          await env.DB.batch([
+            env.DB.prepare("UPDATE engagement SET pack=? WHERE id=? AND pack=0").bind(ent2.pack, eid),
+            env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(eid, ent2.id),
+          ]);
+          nowPaid = true;
+        }
+      }
+      return json({ ok: true, published: true, already: true, paid: nowPaid, ...(demo ? { demo: true } : {}), startMs: roundMs(e.start_round), payUrl, shareUrl });
     }
     // the organizer confirms (and may correct) their email and mobile number
     const pb = await body(req);

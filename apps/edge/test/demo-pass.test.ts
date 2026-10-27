@@ -28,6 +28,18 @@ describe("demo pass", () => {
     expect(one("SELECT pack FROM engagement WHERE id=?", id).pack).toBe(250); // published as a paid game without any payment
     expect(one("SELECT eid FROM entitlement WHERE org IS NOT NULL AND payment_id='demo-pass'").eid).toBe(id);
   });
+  test("a game already held for payment (Publish pressed BEFORE the link) takes the free pack when Publish is pressed AGAIN (found live with a real prospect)", async () => {
+    await arm(); const o = await organizer();
+    const id = uid(); expect((await create(o.key, id, { cap: 100 })).status).toBe(200);
+    const first = await j(await publish(o.key, id)); expect(first.paid).toBe(false); // held for payment: nothing owned yet
+    expect(one("SELECT pack FROM engagement WHERE id=?", id).pack).toBe(0);
+    expect(await j(await call("POST", "/api/pass", { token: TOK2 }, keyH(o.key)))).toEqual({ ok: true, cap: 250 });
+    const second = await j(await publish(o.key, id)); expect(second.paid).toBe(true);
+    expect(one("SELECT pack FROM engagement WHERE id=?", id).pack).toBe(250);
+    expect(one("SELECT eid FROM entitlement WHERE org IS NOT NULL AND payment_id='demo-pass'").eid).toBe(id);
+    const third = await j(await publish(o.key, id)); expect(third.paid).toBe(true); // pressing it again changes nothing
+    expect(one("SELECT COUNT(*) AS c FROM entitlement WHERE eid=?", id).c).toBe(1);
+  });
   test("the 250 link gives up to 250 people", async () => {
     await arm(); const o = await organizer();
     expect(await j(await call("POST", "/api/pass", { token: TOK2 }, keyH(o.key)))).toEqual({ ok: true, cap: 250 });
