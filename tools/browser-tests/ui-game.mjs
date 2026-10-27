@@ -42,10 +42,10 @@ try {
   // steps 3..6: look at each, accept the defaults the way a person pressing Continue would
   for (const n of [3, 4, 5, 6]) {
     await openStep(p, n); R["step" + n] = (await body(p)).slice(0, 80); (R.verTrail = R.verTrail || []).push(n + ":" + JSON.stringify(await p.evaluate(async (e) => { const t = localStorage.getItem('ctz-org'); const j = await (await fetch('/api/z/' + e + '/summary', { headers: { 'x-organizer': t } })).json(); return [j.verify, j.employeesOnly]; }, eid)));
-    if (n === 6 && EMP) {
-      const csv = "Name,Employee ID\n" + Array.from({ length: PLAYERS }, (_, i) => `UI Player ${i + 1},E${String(i + 1).padStart(3, "0")}`).join("\n") + "\n";
+    if (n === 6 && (EMP || AUD === "3" || AUD === "4")) {
+      const csv = !EMP ? ("Name,Mobile" + String.fromCharCode(10) + Array.from({ length: PLAYERS }, (_, i) => `UI Player ${i + 1},98122${String(i + 1).padStart(5, "0")}`).join(String.fromCharCode(10)) + String.fromCharCode(10)) : "Name,Employee ID\n" + Array.from({ length: PLAYERS }, (_, i) => `UI Player ${i + 1},E${String(i + 1).padStart(3, "0")}`).join("\n") + "\n";
       const f = `C:/ct/test-sites/data/ui/staff-${TAG}.csv`; writeFileSync(f, csv);
-      await p.click('[data-cols="id"]').catch(() => {}); await sleep(500); await p.click('[data-mode="file"]'); await sleep(600);
+      await p.click(EMP ? '[data-cols="id"]' : '[data-cols="mobile"]').catch(() => {}); await sleep(500); await p.click('[data-mode="file"]'); await sleep(600);
       R.step6before = await ctrls(p);
       await p.click("#cbc-K6-A").catch(() => {}); await sleep(600);
       await p.setInputFiles("#gfile", f); await sleep(4000);

@@ -241,7 +241,7 @@
     else if (code === "declined" || b.declined) { J.mode = "declined"; rt.error = null; clearInterval(J.timer); }
     else if (code === "link-used" || b.needPhone) { J.mode = "needPhone"; J.note = String(b.error || l.message || "").slice(0, 300); rt.error = null; }
     else if (code === "link-gone" || /link-gone/.test(l.message || "")) { J.mode = "gone"; rt.error = null; }
-    else if (code === "busy" && J.busyTries < BUSY_TRIES) { J.busyTries++; J.mode = "busy"; rt.error = null; clearTimeout(J.retry); J.retry = setTimeout(() => { if (J.mode === "busy") doJoin(); }, Math.round((4 + Math.min(26, J.busyTries * 2)) * 1000 * (0.7 + Math.random() * 0.6))); } // "busy" is a short wait, not a refusal: ask again by itself, each phone at its own random moment, a little longer each time
+    else if ((code === "busy" || (!l.status && !code && !b.error && !b.waiting)) && J.busyTries < BUSY_TRIES) { /* a join that timed out or lost its connection (no answer at all) is asked again by itself like a busy answer: joining is safe to repeat, the same phone gets the same ticket */ J.busyTries++; J.mode = "busy"; rt.error = null; clearTimeout(J.retry); J.retry = setTimeout(() => { if (J.mode === "busy") doJoin(); }, Math.round((4 + Math.min(26, J.busyTries * 2)) * 1000 * (0.7 + Math.random() * 0.6))); } // "busy" is a short wait, not a refusal: ask again by itself, each phone at its own random moment, a little longer each time
     else if (J.mode === "waiting" || J.mode === "busy") J.mode = ""; // let in, but the join failed another way: show the usual message
     paint(); return false;
   }
