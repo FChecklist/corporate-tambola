@@ -68,6 +68,19 @@ export async function prospectLinksRoute(req: Request, env: LinkEnv, now: number
     await logAccess(env.DB, now, "prospect-link-" + action, null, null, 1, true, id);
     return json({ ok: true, id, on: l.on });
   }
+  if (action === "free") { // the owner makes ONE game free (Rs 0): a pack of the game's own size is given to its organizer and put on the game, with the owner's reason on the access log (a discount voucher for one specific game)
+    const eid = clean(b?.eid, 40), reason = clean(b?.reason, 80);
+    const e = await env.DB.prepare("SELECT id, org, cap, pack FROM engagement WHERE id=?").bind(eid).first<{ id: string; org: string | null; cap: number; pack: number | null }>();
+    if (!e || !e.org) return json({ error: "Not found" }, 404);
+    if ((e.pack ?? 0) > 0) return json({ ok: true, again: true, pack: e.pack });
+    const eidn = "of_" + Array.from(crypto.getRandomValues(new Uint8Array(6)), (x) => x.toString(16).padStart(2, "0")).join("");
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,'owner-free',?,?)").bind(eidn, e.org, e.cap, e.id, now),
+      env.DB.prepare("UPDATE engagement SET pack=? WHERE id=? AND pack=0").bind(e.cap, e.id),
+    ]);
+    await logAccess(env.DB, now, "owner-free-game", e.id, null, 1, true, reason || "no reason given");
+    return json({ ok: true, pack: e.cap });
+  }
   if (action === "apply") { // the owner puts a person's own unused free or bought pack on their unpaid game (the same rule as pressing Publish again), for when the person cannot do it in time
     const eid = clean(b?.eid, 40);
     const e = await env.DB.prepare("SELECT id, org, cap, pack FROM engagement WHERE id=?").bind(eid).first<{ id: string; org: string | null; cap: number; pack: number | null }>();
@@ -82,5 +95,5 @@ export async function prospectLinksRoute(req: Request, env: LinkEnv, now: number
     await logAccess(env.DB, now, "prospect-link-apply", e.id, null, 1, true, ent.id);
     return json({ ok: true, pack: ent.pack });
   }
-  return json({ error: 'Send {"action": "create" | "enable" | "disable" | "apply"}.' }, 400);
+  return json({ error: 'Send {"action": "create" | "enable" | "disable" | "apply" | "free"}.' }, 400);
 }

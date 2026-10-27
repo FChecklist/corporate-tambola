@@ -89,3 +89,19 @@ describe("the owner puts a person's free pack on their unpaid game", () => {
     void p;
   });
 });
+
+describe("the owner makes one game free", () => {
+  test("a game with no pack at all becomes a paid-up game of its own size, once, with the reason logged; nobody else can do it", async () => {
+    const o = await organizer(); const id = uid(); expect((await create(o.key, id, { cap: 250 })).status).toBe(200);
+    expect(one("SELECT pack FROM engagement WHERE id=?", id).pack).toBe(0);
+    expect((await call("POST", "/api/owner/prospect-links", { action: "free", eid: id }, { "x-organizer": "plat" })).status).toBe(404);
+    expect(one("SELECT pack FROM engagement WHERE id=?", id).pack).toBe(0);
+    const r = await call("POST", "/api/owner/prospect-links", { action: "free", eid: id, reason: "prospect asked for a demo" }, K); expect(r.status).toBe(200); expect((await j(r)).pack).toBe(250);
+    expect(one("SELECT pack FROM engagement WHERE id=?", id).pack).toBe(250);
+    expect(one("SELECT eid, pack FROM entitlement WHERE payment_id='owner-free'")).toEqual({ eid: id, pack: 250 });
+    expect((await j(await call("POST", "/api/owner/prospect-links", { action: "free", eid: id }, K))).again).toBe(true); // pressing it twice gives nothing twice
+    expect(one("SELECT COUNT(*) AS c FROM entitlement WHERE payment_id='owner-free'").c).toBe(1);
+    expect(one("SELECT COUNT(*) AS c FROM audit_access WHERE action='owner-free-game'").c).toBe(1);
+    expect((await call("POST", "/api/owner/prospect-links", { action: "free", eid: "NOSUCHGAME" }, K)).status).toBe(404);
+  });
+});
