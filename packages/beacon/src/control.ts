@@ -360,6 +360,8 @@ export class ControlTracker {
     this.resolved = resolveControl(cfg, []);
   }
   get state(): ControlState { return this.resolved; }
+  /** The game's rules changed before the start (another mode or time): take them and work the log out again. */
+  reconfigure(patch: Partial<ControlConfig>) { Object.assign(this.cfg, patch); this.resolved = resolveControl(this.cfg, this.log); }
   /** `body` is the parsed JSON of the control endpoint (or anything at all if it lied). Returns true if it was a good, verifiable answer. */
   async ingest(nowRound: number, body: unknown): Promise<boolean> {
     const b = body as { engagementId?: unknown; messages?: unknown } | null;
