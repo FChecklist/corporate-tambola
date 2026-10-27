@@ -164,3 +164,18 @@ describe("Game day: the Start button", () => {
     await ph.waitFor((t) => /The game starts at/.test(t) && /host presses Start/.test(t), 20_000);
   });
 });
+
+describe("one speed: 12 seconds", () => {
+  test("a new game offers only '12 seconds'; a game published earlier with 9 seconds keeps working and shows its own speed; the help says 12 seconds", async () => {
+    const x = await setup("SP-NEW", false, { callSeconds: 12 });
+    const c = await consolePage(x, "SP-NEW");
+    await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /Duration \(gap\) between two numbers/.test(t));
+    expect(Array.from(c.win.document.querySelectorAll('[data-ck="spd"]')).map((e: any) => e.textContent.trim())).toEqual(["12 seconds"]);
+    expect(c.text()).not.toMatch(/9 seconds/);
+    const old = await setup("SP-OLD", false, { callSeconds: 9 });
+    const c2 = await consolePage(old, "SP-OLD");
+    await c2.waitFor(() => !!c2.$('.zc-dot[data-open="2"]')); openStep(c2, 2); await c2.waitFor((t) => /Duration \(gap\) between two numbers/.test(t));
+    expect(Array.from(c2.win.document.querySelectorAll('[data-ck="spd"]')).map((e: any) => e.textContent.trim())).toEqual(["9 seconds", "12 seconds"]); // its own speed stays, nothing breaks
+    expect((await old.w.json(await old.w.api("GET", "/api/z/SP-OLD/info"))).callSeconds).toBe(9);
+  });
+});

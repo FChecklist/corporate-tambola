@@ -11,3 +11,13 @@ export function gapsByMode(calls: readonly CallTime[]): { auto: number | null; m
   const a = calls.filter((c) => !c.manual).map((c) => c.ms), m = calls.filter((c) => c.manual).map((c) => c.ms);
   return { auto: averageGapSeconds(a), manual: averageGapSeconds(m), nAuto: a.length, nManual: m.length };
 }
+
+/** The one counter line, the same words on the player's page, the board screen, the log, the game log and the e-mail: "31 of 90 called \u00b7 59 left". */
+export const calledLine = (called: number, total = 90): string => `${called} of ${total} called \u00b7 ${Math.max(0, total - called)} left`;
+/** The one-line check at the top of the log: how many numbers were announced and whether any was missed. `due` = how many were due by the schedule; `announced` = how many the log holds. */
+export function sequenceCheck(announced: number, due: number): { ok: boolean; missing: number[]; text: string } {
+  const missing: number[] = []; for (let k = announced + 1; k <= due; k++) missing.push(k);
+  const n = announced === 1 ? "1 number" : `${announced} numbers`;
+  if (announced === 0 && due === 0) return { ok: true, missing, text: "No number has been announced yet." };
+  return missing.length ? { ok: false, missing, text: `${n} announced. Missed: ${missing.length > 6 ? missing.slice(0, 6).join(", ") + " and more" : missing.join(", ")}.` } : { ok: true, missing, text: `${n} announced, none missed.` };
+}

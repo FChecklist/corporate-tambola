@@ -1307,7 +1307,6 @@
     const warn = g.warnings.length ? g.warnings.map((w) => `<div class="zc-warnline">${esc(w)}</div>`).join("") : '<span class="zc-small zc-nomargin">Nothing to worry about.</span>';
     return `<details class="zc-block zc-vitals" id="vitals" open><summary><b>Game details</b></summary>
       <div class="zc-rowl"><span>Status</span><span id="v-status">${esc(consoleStory().say)}</span></div>
-      <div class="zc-rowl"><span>Numbers called</span><span id="v-called">${log.length} of 90</span></div>
       <div class="zc-rowl"><span>People</span><span id="v-people">${esc(people)}</span></div>
       <div class="zc-rowl"><span>Pauses</span><span id="v-pauses">${pauses}</span></div>
       <h4 class="zc-h4">Prizes won so far</h4><div id="v-prizes">${prizes}</div>
@@ -1348,7 +1347,7 @@
       const mins = Math.max(1, Math.round((pz.end - S.now) * 3 / 60));
       pause = `<div class="zc-pausebanner" id="pausebanner" role="status"><b>PAUSED</b><span>Paused by ${who} at ${esc(hmIst(ZG.roundTimeMs(pz.start)))} India time. The numbers start again at about ${esc(hmIst(ZG.roundTimeMs(pz.end)))} (in about ${mins} ${mins === 1 ? "minute" : "minutes"}), or sooner when you press Resume.</span><button type="button" class="zc-btn zc-btn-big" data-ctl="resume"${S.ctlBusy ? " disabled" : ""}>Resume the game</button></div>`;
     }
-    return `<div class="zc-block zc-livebar" id="livebar">${storyHtml(st)}${pause}<div class="zc-boardrow">${board}<div class="zc-counter" id="numcount"><span class="zc-small zc-nomargin"><b>${log.length} of ${total}</b> called · <b>${total - log.length} remaining</b></span><span class="zc-latest" id="latestnum" aria-label="${last ? "Latest number " + last : "No number yet"}">${last ?? "–"}</span>${few ? `<span class="zc-fewlbl">Last 5 numbers called</span>${few}` : ""}${quietText() ? `<span class="zc-quiet" id="quietc" role="timer"><span>${quietText()}</span></span>` : ""}</div></div><div class="zc-numstrip" id="numstrip" aria-label="Numbers called so far">${strip}</div>${vitalsHtml()}${gameLogBlock()}</div>`;
+    return `<div class="zc-block zc-livebar" id="livebar">${storyHtml(st)}${pause}<div class="zc-boardrow">${board}<div class="zc-counter" id="numcount"><span class="zc-small zc-nomargin">${esc(ZG.calledLine(log.length, total))}</span><span class="zc-latest" id="latestnum" aria-label="${last ? "Latest number " + last : "No number yet"}">${last ?? "–"}</span>${few ? `<span class="zc-fewlbl">Last 5 numbers called</span>${few}` : ""}${quietText() ? `<span class="zc-quiet" id="quietc" role="timer"><span>${quietText()}</span></span>` : ""}</div></div><div class="zc-numstrip" id="numstrip" aria-label="Numbers called so far">${strip}</div>${vitalsHtml()}${gameLogBlock()}</div>`;
   }
   function mainHtml() {
     const r = role();

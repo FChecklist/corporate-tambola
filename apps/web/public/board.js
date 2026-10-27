@@ -54,7 +54,7 @@
     const hostWait = cfg.callMode === "host" && !paused && S.now !== null && (!S.st || !S.st.nextRounds.length || (S.st.nextRounds[S.st.nextRounds.length - 1] <= S.now && log.length >= S.st.nextRounds.length - 90 * (S.round - 1)));
     const annBar = S.ann ? `<div class="annbar" role="alert">${esc(S.ann.text)}</div>` : "";
     const bd = info.brand && typeof info.brand === "object" ? info.brand : null, bLogo = bd && typeof bd.logo === "string" && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(bd.logo) ? bd.logo : ""; // the organizer's own logo and name, or ours in writing
-    const head = `${annBar}<div class="top"><div class="brand">${bLogo ? `<img class="blogo" alt="" src="${esc(bLogo)}">` : ""}${esc(bd && bd.name ? bd.name : "Corporate Tambola")}</div><div class="meta">${cfg.rounds > 1 ? "Round " + S.round + " of " + cfg.rounds + " · " : ""}${log.length} of 90 called</div></div>`;
+    const head = `${annBar}<div class="top"><div class="brand">${bLogo ? `<img class="blogo" alt="" src="${esc(bLogo)}">` : ""}${esc(bd && bd.name ? bd.name : "Corporate Tambola")}</div><div class="meta">${cfg.rounds > 1 ? "Round " + S.round + " of " + cfg.rounds + " · " : ""}${ZG.calledLine(log.length)}</div></div>`;
     const wins = (S.results || []).filter((r) => r.round === S.round || r.round === undefined).map((r) => `<span><b>${esc(ORD(r.ordinal || 1))} ${esc(NAMES[r.pattern] || r.pattern)}</b> · ${r.count} winner${r.count === 1 ? "" : "s"}</span>`).join("");
     if (!log.length && cfg.startMode === "manual" && S.now !== null) { // a game that begins when the Host or Organizer presses Start
       const goR = S.st ? S.st.goRound : null, el = (Date.now() - (S.nowAt || Date.now())) / 1000, toR = (r) => (r - S.now) * 3 - el, joinL = `<p>Open the link on your phone and get your ticket: <b>${esc(location.host)}/z?e=${esc(EID)}</b></p>`;
@@ -109,14 +109,26 @@
     return sec > 0 ? "Next number in " + Math.ceil(sec) + "s" : "Next number any moment";
   }
   const calls = () => { const log = S.logs[S.round] || [], sc = (S.sched && S.sched[S.round]) || [], manual = (S.cfg || {}).callMode === "host"; return log.map((n, k) => ({ n, k: k + 1, ms: sc[k] != null && Number.isFinite(sc[k]) ? ZG.roundTimeMs(sc[k]) : null, manual })).filter((c) => c.ms !== null); };
-  function events() {
+  function events() { // plain proof lines: what happened, then the exact time (India time, with seconds). Newest first.
     const ev = [], who = (i) => (S.cf && S.cf.by && S.cf.by[i] === "Host" ? "a Host" : "the Organizer");
-    for (const c of calls()) ev.push({ ms: c.ms, t: `Number ${c.k} of 90: <b>${c.n}</b> was called` });
-    for (const c of P.claims) { if (c.bogey) ev.push({ ms: c.atMs, t: `Ticket ${seatOf(c.pid)} pressed Claim for ${esc(NAMES[c.pattern] || c.pattern)}: <i>wrong, a Bogey</i>` }); else ev.push({ ms: c.atMs, t: `Ticket ${seatOf(c.pid)} pressed Claim for ${esc(NAMES[c.pattern] || c.pattern)} after number ${c.idx + 1}: <i>accepted, in time</i>` }); }
-    for (const x of P.tooLate) ev.push({ ms: x.atMs, t: `Ticket ${esc(x.ticket)} pressed Claim for ${esc(NAMES[x.pattern] || x.pattern)}: <i>too late, refused</i>` });
-    if (P.gl) { for (const p of P.gl.prizes) if (p.atMs) ev.push({ ms: p.atMs, t: `<b>${esc(p.prize)}</b> was won by Ticket ${p.ticket}` }); for (const c of P.gl.changes) ev.push({ ms: c.atMs, t: `${esc(c.who)}: ${esc(c.what)}` }); }
-    if (S.cf) (S.cf.messages || []).forEach((m, i) => { const w = who(i); const txt = { go: "pressed Start", pause: "paused the game", resume: "resumed the game", extend: "made the pause longer", stop: "ended the game", next: "pressed Next number" }[m.action]; if (txt && !(P.gl && P.gl.changes.some((c) => /Start was pressed|was paused|was resumed|made longer|was ended/.test(c.what) && Math.abs(c.atMs - ZG.roundTimeMs(m.atBeaconRound)) < 120000))) ev.push({ ms: ZG.roundTimeMs(m.atBeaconRound), t: `${w} ${txt}` }); });
-    return ev.sort((a, b) => b.ms - a.ms).slice(0, 300);
+    const cs = calls();
+    for (const c of cs) ev.push({ ms: c.ms, t: `Number <b>${c.n}</b> announced`, tail: ` \u00b7 ${ZG.calledLine(c.k)}` });
+    for (const c of P.claims) ev.push({ ms: c.atMs, t: `Ticket ${seatOf(c.pid)} claimed ${esc(NAMES[c.pattern] || c.pattern)}${c.bogey ? "" : " after number " + (c.idx + 1)},`, tail: c.bogey ? " wrong (a Bogey)" : " accepted" });
+    for (const x of P.tooLate) ev.push({ ms: x.atMs, t: `Ticket ${esc(x.ticket)} claimed ${esc(NAMES[x.pattern] || x.pattern)},`, tail: " too late, refused" });
+    if (P.gl) {
+      for (const p of P.gl.prizes) if (p.atMs) ev.push({ ms: p.atMs, t: `<b>${esc(p.prize)}</b> won by Ticket ${p.ticket}`, tail: "" });
+      for (const jn of (P.gl.joins || [])) ev.push({ ms: jn.atMs, t: `Ticket ${jn.ticket} joined`, tail: "" });
+      for (const c of P.gl.changes) ev.push({ ms: c.atMs, t: `${esc(c.who)}: ${esc(c.what)}`, tail: "" });
+    }
+    if (S.cf) (S.cf.messages || []).forEach((m, i) => { const txt = { go: "Start pressed", pause: "Paused", resume: "Resumed", extend: "Pause made longer", stop: "Game ended", next: "Next number pressed" }[m.action]; if (txt) ev.push({ ms: ZG.roundTimeMs(m.atBeaconRound), t: `${txt}`, tail: ` by ${who(i)}`, ctl: true }); });
+    // the control lines are also in the plain list of changes: show each once
+    const seenCtl = new Set(); const out = ev.filter((e) => { if (!e.ctl) return !/^(The Organizer|A Host): (Start was pressed|The game was (paused|resumed|ended)|The pause was made longer)$/.test(e.t.replace(/<[^>]*>/g, "")); const k = e.t + Math.round(e.ms / 1000); if (seenCtl.has(k)) return false; seenCtl.add(k); return true; });
+    return out.sort((a, b) => b.ms - a.ms).slice(0, 400);
+  }
+  /** one line at the top of the log: how many numbers were announced, and whether any was missed (worked out from the log against the schedule) */
+  function checkLine() {
+    const sc = (S.sched && S.sched[S.round]) || [], log = S.logs[S.round] || [], due = S.now === null ? log.length : sc.filter((r) => r !== null && Number.isFinite(r) && r <= S.now).length;
+    return ZG.sequenceCheck(log.length, Math.max(due, log.length));
   }
   const seatOf = (pid) => { const m = /^(\d+)x/.exec(String(pid)); return m ? m[1] : "?"; };
   function controlsHtml() {
@@ -142,7 +154,7 @@
       <div class="bpbox" id="bp-people"><h2>People</h2><p>${esc(people)}</p></div>
       <div class="bpbox" id="bp-avg"><h2>Average gap between two numbers</h2><p>Called by the game: <b>${fmt(c.auto, c.nAuto)}</b></p><p>Called by hand: <b>${fmt(c.manual, c.nManual)}</b></p><p class="bpsmall">Worked out from the real times of this game's numbers; pauses and breaks are part of the time.</p></div>
       <div class="bpbox bpwide" id="bp-claims"><h2>Claims as they come</h2><div class="bpscroll"><table><thead><tr><th>Time</th><th>Who</th><th>Prize</th><th>Result</th></tr></thead><tbody>${claimsRows}</tbody></table></div></div>
-      <div class="bpbox bpwide" id="bp-log"><h2>The whole game, newest first</h2><div class="bpscroll" id="bp-logbox">${events().map((e) => `<div class="bpev"><span>${esc(hm(e.ms))}</span> ${e.t}</div>`).join("") || "Nothing yet."}</div></div></div></div>`;
+      <div class="bpbox bpwide" id="bp-log"><h2>The whole game, newest first</h2><p class="bpcheck" id="bp-check" data-ok="${checkLine().ok}"><b>${esc(checkLine().text)}</b></p><div class="bpscroll" id="bp-logbox">${events().map((e) => `<div class="bpev">${e.t} <span class="bptime">${esc(hm(e.ms))}</span>${e.tail || ""}</div>`).join("") || "Nothing yet."}</div></div></div></div>`;
   }
   function askBoard(title, text, yes, no, tick) {
     return new Promise((res) => {

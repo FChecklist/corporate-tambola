@@ -102,15 +102,15 @@ describe("one plain story: the same sentence on every screen", () => {
     (ph.$("#ph") as any).value = "9822222222"; (ph.$("#nm") as any).value = "Ravi"; ph.click("#go");
     const big = await openPage(x.w.world, { url: "http://localhost/big.html?e=ST-RUN", html: "big.html", scripts: ["zgame.js", "big.js"], afterLoad: (win, f) => { if (f === "zgame.js") fakeBeacon(win, x.now); } });
     open.push(big);
-    await c.waitFor((t) => /The game is on\. [1-9]\d* of 90 numbers called\./.test(t), 30_000);
+    await c.waitFor((t) => /The game is on\./.test(t), 30_000);
     await ph.waitFor((t) => /[1-9]\d* of 90 called|called since you joined/.test(t), 30_000);
     await big.waitFor((t) => /[1-9]\d* of 90 called/.test(t), 30_000);
     expect(storyOf(c).state).toBe("running"); expect(storyOf(c).text).toContain("Watch the board. Pause only if you really must.");
     expect(storyOf(ph).state).toBe("running"); expect(storyOf(ph).text).toContain("Tap each number on your ticket. Press Claim when a prize is complete.");
     expect(storyOf(big).state).toBe("running"); expect(storyOf(big).text).toContain("Watch the numbers. Players tap them on their tickets.");
-    expect(c.$("#latestnum")!.textContent!.trim()).toMatch(/^\d+$/); expect(c.$("#numcount")!.textContent).toMatch(/\d+ of 90 called · \d+ remaining/);
-    expect(big.$("#calledbig")!.textContent).toMatch(/\d+ of 90 called · \d+ remaining/); expect(big.$("#lastfew")!.textContent).toMatch(/Last 5 numbers called: \d/);
-    expect(ph.$("#calledcount")!.textContent).toMatch(/\d+ of 90 called/);
+    expect(c.$("#latestnum")!.textContent!.trim()).toMatch(/^\d+$/); expect(c.$("#numcount")!.textContent).toMatch(/\d+ of 90 called · \d+ left/);
+    expect(big.$("#calledbig")!.textContent).toMatch(/\d+ of 90 called · \d+ left/); expect(big.$("#lastfew")!.textContent).toMatch(/Last 5 numbers called: \d/);
+    expect(ph.$("#calledcount")!.textContent).toMatch(/^\d+ of 90 called · \d+ left$/);
     for (const p of [c, ph, big]) expect(p.text()).not.toMatch(/\bidx\b|\bround\b/i);
   });
   test("finished: the same sentence on the console, the phone and the big screen", async () => {
@@ -141,7 +141,7 @@ describe("the vital details on the console and the game log page", () => {
     for (let i = 0; i < 20; i++) await x.step();
     const c = await consolePage(x, "ST-VIT");
     await c.waitFor((t) => /Game details/.test(t) && /Ticket number 2/.test(t), 30_000);
-    expect(c.$("#v-called")!.textContent).toMatch(/^\d+ of 90$/); expect(c.$("#v-people")!.textContent).toMatch(/^2 joined, none waiting/);
+    expect(c.$("#v-called")).toBeNull(); /* the counter is shown once, at the top */ expect(c.$("#v-people")!.textContent).toMatch(/^2 joined, none waiting/);
     expect(c.$("#v-status")!.textContent).toContain("The game is paused by the Organizer."); expect(c.$("#v-pauses")!.textContent).toMatch(/Paused by the Organizer at/);
     expect(c.$("#v-prizes")!.textContent).toMatch(/Early Five.*Ticket number 2/); expect(c.$("#v-warn")!.textContent).toMatch(/The game is paused/);
     expect(c.$("#gamelogbox")).toBeNull();

@@ -48,6 +48,7 @@
     L.push(["row", "How it ran", mode]);
     L.push(["h", "People"]);
     L.push(["row", "People who joined", String(log.people.joined)]);
+    for (const jn of (log.joins || []).slice(0, 200)) L.push(["row", `Ticket ${jn.ticket} joined`, HMS(jn.atMs)]);
     L.push(["row", "Most people in the game at once", String(log.people.most) + " (nobody leaves the list)"]);
     L.push(["row", "Joined after the first number", String(log.people.late)]);
     if (log.people.present != null) L.push(["row", "Checked in as present", String(log.people.present)]);
@@ -65,12 +66,13 @@
     L.push(["row", "Status", log.report.state === "sent" ? "Sent to the organizer at " + IST(log.report.sentMs) : log.report.state ? "Being prepared" : "Not sent yet (it is sent a few minutes after the game ends)"]);
     L.push(["h", "Every number called, with its time"]);
     if (NUMBERS_NOTE) L.push(["note", NUMBERS_NOTE]);
+    { const due = NUMS.length; const chk = ZG.sequenceCheck(log.numbersCalled == null ? NUMS.length : Math.min(NUMS.length, log.numbersCalled), log.numbersCalled == null ? NUMS.length : log.numbersCalled); L.push(["row", "Check", chk.text]); }
     L.push(["nums", NUMS]);
     return L;
   }
   const html = (log) => `<h1>${esc("Game log: " + log.name)}</h1><div class="bar"><button type="button" id="printbtn">Print or save as PDF</button><button type="button" id="txtbtn" class="alt">Download as a text file</button></div>` +
-    lines(log).slice(1).map(([t, a, b]) => t === "note" ? `<p class="note">${esc(a)}</p>` : t === "h" ? `<h2>${esc(a)}</h2>` : t === "row" ? `<table><tr><th style="width:36%">${esc(a)}</th><td>${esc(b)}</td></tr></table>` : t === "nums" ? `<div class="nums" id="numlist">${a.map((x) => `<div>${log.schedule && log.schedule.rounds > 1 ? "Game " + x.round + ", " : ""}${String(x.k).padStart(2, " ")}. <b>${x.n}</b> &nbsp; ${esc(HMS(x.atMs))}</div>`).join("")}</div>` : "").join("");
-  const text = (log) => lines(log).map(([t, a, b]) => t === "title" ? a + "\n" + "=".repeat(a.length) : t === "note" ? a : t === "h" ? "\n" + a.toUpperCase() : t === "row" ? `${a}: ${b}` : t === "nums" ? a.map((x) => `${log.schedule && log.schedule.rounds > 1 ? "Game " + x.round + ", " : ""}${String(x.k).padStart(2, " ")}. ${String(x.n).padStart(2, " ")}   ${HMS(x.atMs)}`).join("\n") : "").join("\n") + "\n";
+    lines(log).slice(1).map(([t, a, b]) => t === "note" ? `<p class="note">${esc(a)}</p>` : t === "h" ? `<h2>${esc(a)}</h2>` : t === "row" ? `<table><tr><th style="width:36%">${esc(a)}</th><td>${esc(b)}</td></tr></table>` : t === "nums" ? `<div class="nums" id="numlist">${a.map((x) => `<div>${log.schedule && log.schedule.rounds > 1 ? "Game " + x.round + ", " : ""}Number <b>${x.n}</b> announced ${esc(HMS(x.atMs))} \u00b7 ${esc(ZG.calledLine(x.k))}</div>`).join("")}</div>` : "").join("");
+  const text = (log) => lines(log).map(([t, a, b]) => t === "title" ? a + "\n" + "=".repeat(a.length) : t === "note" ? a : t === "h" ? "\n" + a.toUpperCase() : t === "row" ? `${a}: ${b}` : t === "nums" ? a.map((x) => `${log.schedule && log.schedule.rounds > 1 ? "Game " + x.round + ", " : ""}Number ${x.n} announced ${HMS(x.atMs)} \u00b7 ${ZG.calledLine(x.k)}`).join("\n") : "").join("\n") + "\n";
 
   function bind() {
     const p = document.getElementById("printbtn"), t = document.getElementById("txtbtn");

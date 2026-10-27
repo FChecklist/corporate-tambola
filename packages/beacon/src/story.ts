@@ -32,7 +32,7 @@ export function storySay(i: Pick<StoryIn, "state" | "time" | "countdown" | "call
     case "waiting": return i.time ? `The game starts at ${i.time}.` : "The game has not started yet.";
     case "countdown": return i.countdown ? `The game is starting in ${i.countdown}.` : "The game is starting.";
     case "waitStart": return "Waiting for the host to begin the game.";
-    case "running": return i.called === undefined ? "The game is on." : `The game is on. ${i.called} of 90 numbers called.`;
+    case "running": return "The game is on.";
     case "paused": return `The game is paused by ${i.by || "the Organizer"}.`;
     case "endedPrizes": return `The game is over. All prizes were awarded after ${i.called ?? 0} numbers.`;
     case "endedAll": return "The game is over. All 90 numbers were called.";

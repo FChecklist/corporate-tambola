@@ -1,6 +1,6 @@
 // The average gap between two numbers, from the real call times, separately for the numbers the game called and the ones a person called.
 import { describe, expect, test } from "bun:test";
-import { MIN_FOR_AVERAGE, averageGapSeconds, gapsByMode } from "../src/gaps";
+import { MIN_FOR_AVERAGE, averageGapSeconds, calledLine, gapsByMode, sequenceCheck } from "../src/gaps";
 
 describe("average gap", () => {
   test("'not yet' until there are at least 3 numbers in that mode; then the real average, one decimal", () => {
@@ -21,5 +21,17 @@ describe("average gap", () => {
     expect(gapsByMode(calls)).toEqual({ auto: 12, manual: 10, nAuto: 4, nManual: 3 });
     expect(gapsByMode(calls.slice(0, 5))).toEqual({ auto: 12, manual: null, nAuto: 4, nManual: 1 });
     expect(gapsByMode([])).toEqual({ auto: null, manual: null, nAuto: 0, nManual: 0 });
+  });
+});
+
+describe("the one counter wording and the gap check", () => {
+  test("'31 of 90 called · 59 left' everywhere", () => {
+    expect(calledLine(31)).toBe("31 of 90 called · 59 left"); expect(calledLine(0)).toBe("0 of 90 called · 90 left"); expect(calledLine(90)).toBe("90 of 90 called · 0 left"); expect(calledLine(95)).toBe("95 of 90 called · 0 left");
+  });
+  test("the check line at the top of the log: none missed, or the numbers that were missed", () => {
+    expect(sequenceCheck(90, 90)).toEqual({ ok: true, missing: [], text: "90 numbers announced, none missed." });
+    expect(sequenceCheck(1, 1).text).toBe("1 number announced, none missed."); expect(sequenceCheck(0, 0)).toMatchObject({ ok: true, text: "No number has been announced yet." });
+    expect(sequenceCheck(36, 38)).toEqual({ ok: false, missing: [37, 38], text: "36 numbers announced. Missed: 37, 38." });
+    expect(sequenceCheck(10, 20).text).toBe("10 numbers announced. Missed: 11, 12, 13, 14, 15, 16 and more.");
   });
 });

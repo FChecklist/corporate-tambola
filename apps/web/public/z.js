@@ -173,7 +173,7 @@
     const personal = !!TOKEN && J.mode !== "needPhone"; // a personal link is made for one person: no number to type unless the server asks
     return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div>
     <div class="zcard zform zjoin"><h2>Join the engagement</h2>
-    <ol class="zsteps" aria-label="How to join"><li><b>1</b><span>Tick the boxes</span></li><li><b>2</b><span>${personal ? "Press the button" : "Type your number"}</span></li><li><b>3</b><span>Get your ticket</span></li></ol>
+    <ol class="zsteps" aria-label="How to join"><li><b>1</b><span>Tick the boxes</span></li><li><b>2</b><span>${personal ? "Press the button" : "Type your number"}</span></li><li><b>3</b><span>Get your ticket</span></li></ol><p class="zsmall zdnd" id="dndtip">Tip: turn on Do Not Disturb so other apps do not interrupt your game.</p>
     <p class="zgoalline" style="margin:0 0 6px">Numbers are called one by one. Tap each one on your ticket as it is called. When a row or the whole ticket is complete, press Claim before the next number: the software checks it, no need to shout.</p>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
     ${INAPP ? `<p class="zsmall" style="margin:0 0 8px">Tip: if this link opened inside another app, open it in Chrome or Safari and always use that same one for this game.</p>` : ""}${J.mode === "needPhone" && !msg ? `<div class="zbanner info" role="status" style="margin:0 0 8px">${J.note ? esc(J.note) : "This link was already opened on another phone. Please type your mobile number to get your ticket."}</div>` : ""}
     ${DEMO ? "" : CBConsent.html("K4")}
@@ -704,11 +704,21 @@
     const calledTotal = v.log.length + (v.late ? v.late.hidden || 0 : 0), few = v.log.slice(-6, -1).reverse();
     return `<div class="zcard zcall ztight"><div class="zchiprow"><span class="zchip2 ${tone}">${esc(chip)}</span></div>
         <div class="zrow1"><div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number just called " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
-          <div class="ztxt"><div class="zlab">Number just called</div><div class="ztally" id="calledcount">${v.late ? `<b data-count="${v.log.length}" data-ck="called">${v.log.length}</b> called since you joined` : `<b><span data-count="${v.log.length}" data-ck="called">${v.log.length}</span> of 90</b> called<br><b>${Math.max(0, 90 - calledTotal)} remaining</b>`}</div></div></div>
+          <div class="ztxt"><div class="zlab">Number just called</div><div class="zmeta" id="calledcount">${esc(ZG.calledLine(calledTotal))}</div>${cdown}<p class="zhelp" id="ballhelp">${last ? "Find it on your ticket and tap it." : "The first number will appear here."}</p></div></div>
         <div class="zbar" role="progressbar" aria-valuemin="0" aria-valuemax="90" aria-valuenow="${calledTotal}"><i style="width:${Math.min(100, Math.round(calledTotal / 90 * 100))}%"></i></div>
-        ${few.length ? `<div class="zlastrow" id="lastfew"><span class="zlab">Last 5 numbers called</span><div class="zballs">${few.map((n) => `<i class="zlastn">${n}</i>`).join("")}</div></div>` : ""}${cdown}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p>`}</div>`;
+        ${few.length ? `<div class="zlastrow" id="lastfew"><span class="zlab">Last 5 numbers called</span><div class="zballs">${few.map((n) => `<i class="zlastn">${n}</i>`).join("")}</div></div>` : ""}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p>`}</div>`;
   }
   let LAST_CLAIM_NOW = "";
+  // ---- another app's call or message took the player away: on return the page asks for the server's schedule at once and says so, calmly
+  let hiddenAt = 0, AWAY = null;
+  const awayLine = () => (AWAY && Date.now() < AWAY.until ? `<div class="zbanner info" id="awayline" role="status">You were away for ${AWAY.secs} seconds. The numbers called meanwhile are in the Last 5 numbers called. Tap them on your ticket.</div>` : "");
+  function wake() { // the page is in front again
+    const secs = hiddenAt ? Math.round((Date.now() - hiddenAt) / 1000) : 0; hiddenAt = 0;
+    if (secs >= 5) AWAY = { secs, until: Date.now() + 15000 };
+    try { rt.resync && rt.resync(); } catch { /* the loop asks again in a moment */ }
+    Promise.resolve(rt.tick && rt.tick()).catch(() => {}).then(() => { try { paint(); } catch { /* drawn on the next beat */ } });
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") hiddenAt = hiddenAt || Date.now(); else wake(); });
   /** One plain sentence: what is happening now and what to do, in the same words on every screen (ZG.story). */
   function storyBarFor(v) {
     const role = ME.role === "organizer" ? "organizer" : ME.role === "host" ? "host" : "player", called = v.late ? v.log.length + (v.late.hidden || 0) : v.log.length, manual = v.startMode === "manual";
@@ -774,7 +784,7 @@
   function playView(v) {
     const called = new Set(v.marks || []); // what the player has tapped (the ticket never marks itself)
     const last = v.log[v.log.length - 1];
-    const banners = [storyBarFor(v), claimAlert(v)];
+    const banners = [storyBarFor(v), claimAlert(v), awayLine()];
     { const now = (v.claimNow || []).join(","); if (now && now !== LAST_CLAIM_NOW) { try { navigator.vibrate && navigator.vibrate(220); } catch {} } LAST_CLAIM_NOW = now; } // a short buzz the moment a prize becomes claimable, where the phone allows it
     if (v.error) banners.push(`<div class="zbanner warn" role="alert">${esc(v.error)}</div>`);
     if (v.locked) banners.push(ME.role === "organizer" || ME.role === "host" ? `<div class="zbanner warn" role="status"><b>Payment pending for this game.</b> The game starts 2 minutes after the payment is confirmed. Open your console to pay. Your ticket is safe. Keep this page open.</div>` : `<div class="zbanner warn" role="status"><b>Waiting for the Organizer or Host to start the game.</b> Your ticket is safe. Keep this page open: it begins as soon as they are done.</div>`);

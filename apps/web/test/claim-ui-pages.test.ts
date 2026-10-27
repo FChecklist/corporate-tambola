@@ -87,7 +87,7 @@ async function steered(eid: string) {
   let patch: Record<string, unknown> = {};
   rt.view = () => ({ ...real(), ...patch });
   const set = (p: Record<string, unknown>) => { patch = { late: null, ...p }; }; // (a phone that joined mid-game counts differently: steer as an on-time player)
-  return { x, ph, set, base: real() };
+  return { x, ph, set, base: real(), real };
 }
 const LOG = [12, 45, 7, 88, 31, 60];
 
@@ -128,12 +128,12 @@ describe("the claim alert, the big claim button, the friendly late message", () 
 });
 
 describe("the player's page: the compact counter, the last 5, the ticket as the star, the rules, the prizes", () => {
-  test("'Number just called', '30 of 90 called' and '60 remaining' in a compact card with a thin bar; 'Last 5 numbers called' with five small balls and never more; no board of all the numbers", async () => {
+  test("'Number just called' with ONE short line '30 of 90 called · 60 left' (next to the small timer, never under the ball) in a compact card with a thin bar; 'Last 5 numbers called' with five small balls and never more; no board of all the numbers", async () => {
     const { ph, set } = await steered("CU-4");
     const log = Array.from({ length: 30 }, (_, i) => i + 1);
     set({ phase: "play", paused: false, locked: false, log, claimNow: [], claimOpen: [], claimable: [], pressed: [], claimed: [], results: [] });
     await ph.waitFor(() => /30 of 90 called/.test(ph.$("#calledcount")?.textContent ?? ""), 15_000);
-    expect(ph.$("#calledcount")!.textContent!.replace(/\s+/g, " ").trim()).toBe("30 of 90 called60 remaining");
+    expect(ph.$("#calledcount")!.textContent!.replace(/\s+/g, " ").trim()).toBe("30 of 90 called · 60 left"); expect(ph.$("#ballhelp")!.textContent).toBe("Find it on your ticket and tap it.");
     expect(ph.text()).toContain("Number just called"); expect(ph.$("#big")!.textContent!.trim()).toBe("30");
     expect(ph.$("#lastfew")!.textContent).toContain("Last 5 numbers called"); const balls = Array.from(ph.win.document.querySelectorAll("#lastfew .zlastn")).map((e: any) => e.textContent.trim());
     expect(balls).toEqual(["29", "28", "27", "26", "25"]); expect(ph.win.document.querySelectorAll(".zlastn").length).toBeLessThanOrEqual(5);
@@ -158,5 +158,68 @@ describe("the player's page: the compact counter, the last 5, the ticket as the 
     const open = Array.from(ph.win.document.querySelectorAll("#prizepanel li.open")) as any[]; expect(open.length).toBeGreaterThan(0);
     expect(open.every((li) => /You need \d+ more numbers?/.test(li.textContent) || /Unlucky|Lucky/.test(li.textContent))).toBe(true); expect(open[0].textContent).toContain("To win");
     void base;
+  });
+});
+
+describe("the quiet countdown on the player's page", () => {
+  test("small and calm: 'Next number in 7s' with a thin line, following the schedule's seconds; restarts at each number; gone while paused; nothing is spoken or sounded for it", async () => {
+    const { ph, set } = await steered("CU-7");
+    const spoken: string[] = []; const T = (ph.win as any).TBAudio; if (T) { T.say = (t: string) => void spoken.push(String(t)); } if (ph.$("#snd") && /Sound off/.test(ph.$("#snd")!.textContent ?? "")) ph.click("#snd"); // sound on, so a spoken countdown could not hide
+    const run = { phase: "play", paused: false, locked: false, brk: null, intermission: null, waitingForHost: false, mode: "live", log: LOG, callSeconds: 12, claimNow: [], claimOpen: [], claimable: [], pressed: [], claimed: [], results: [] };
+    for (const secs of [12, 7, 3, 1]) {
+      set({ ...run, nextCallInSec: secs }); await ph.waitFor(() => (ph.$("#quietcount")?.textContent ?? "").includes(`Next number in ${secs}s`), 15_000);
+    }
+    expect(ph.$("#quietcount")!.getAttribute("role")).toBe("timer"); expect(ph.$("#quietcount i b")).toBeTruthy(); expect(ph.$(".zring")).toBeNull(); expect(ph.$(".zcount")).toBeNull(); // no big ring, no big digits
+    set({ ...run, log: [...LOG, 5], nextCallInSec: 12 }); await ph.waitFor(() => (ph.$("#quietcount")?.textContent ?? "").includes("Next number in 12s"), 15_000); // a number came: it starts again from 12
+    set({ ...run, paused: true, nextCallInSec: 6 }); await ph.waitFor(() => !ph.$("#quietcount"), 15_000); // paused: hidden
+    set({ ...run, phase: "ended", nextCallInSec: null }); await ph.waitFor(() => !ph.$("#quietcount"), 15_000);
+    expect(spoken.filter((t) => /next number|\d+\s*s\b|seconds/i.test(t))).toEqual([]); // the voice calls only the number itself
+    const css = (await import("node:fs")).readFileSync(new URL("../public/z.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.zquiet\{[^}]*font-size:12px[^}]*color:#7a6f73/); expect(css).not.toMatch(/\.zquiet[^{]*\{[^}]*animation/); // small, muted, nothing that draws the eye
+  });
+  test("the seconds are the game's own schedule: the countdown shows what the runtime works out from the schedule, not a local guess", async () => {
+    const { ph, set, real } = await steered("CU-8");
+    set({ phase: "play", paused: false, locked: false, brk: null, intermission: null, waitingForHost: false, log: LOG, claimNow: [], claimOpen: [], claimable: [], pressed: [], claimed: [], results: [] }); // (the runtime's own nextCallInSec flows through)
+    await ph.waitFor(() => !!ph.$("#quietcount"), 30_000);
+    const shown = Number((ph.$("#quietcount")!.textContent ?? "").match(/Next number in (\d+)s/)![1]), now = real().nextCallInSec;
+    expect(now).not.toBeNull(); expect(Math.abs(shown - now)).toBeLessThanOrEqual(2); // (the page redraws once a second)
+    expect(shown).toBeLessThanOrEqual(12);
+  });
+});
+
+describe("the Lucky Draw is a prize like the others", () => {
+  test("listed in the prizes panel: to win while it is not drawn, then struck through with the winning tickets", async () => {
+    const { ph, set } = await steered("CU-9");
+    const base = { phase: "play", paused: false, locked: false, log: LOG, claimNow: [], claimOpen: [], claimable: [], pressed: [], claimed: [] };
+    set({ ...base, results: [], lucky: [{ ordinal: 1, title: "Gift hamper", winners: 3, published: false, won: false, style: "draw" }] });
+    await ph.waitFor(() => !!ph.$("#prizepanel li.lucky.open"), 15_000);
+    expect(ph.$("#prizepanel li.lucky.open")!.textContent).toContain("Lucky draw: Gift hamper"); expect(ph.$("#prizepanel li.lucky.open")!.textContent).toMatch(/3 tickets are picked at random/);
+    set({ ...base, results: [{ pattern: "lucky", ordinal: 1, idx: 20, count: 3, round: 1, tickets: [4, 9, 31] }], lucky: [{ ordinal: 1, title: "Gift hamper", winners: 3, published: true, won: false, style: "draw" }] });
+    await ph.waitFor(() => !!ph.$("#prizepanel li.lucky.done"), 15_000);
+    expect(ph.$("#prizepanel li.lucky.done")!.textContent).toContain("Won by Ticket 4, 9, 31"); expect(ph.$("#prizepanel li.lucky.done s")).toBeTruthy();
+  });
+});
+
+describe("coming back to the game after another app's call or message", () => {
+  test("on return the page asks for the game's schedule at once and says how long the player was away; a short look away says nothing", async () => {
+    const { ph, set } = await steered("CU-10");
+    set({ phase: "play", paused: false, locked: false, log: LOG, claimNow: [], claimOpen: [], claimable: [], pressed: [], claimed: [], results: [] });
+    await ph.waitFor(() => !!ph.$("#calledcount"), 15_000);
+    const rt = (ph.win as any).__rt; let resync = 0, ticks = 0; const rs = rt.resync.bind(rt), tk = rt.tick.bind(rt);
+    rt.resync = () => { resync++; return rs(); }; rt.tick = async () => { ticks++; return tk(); };
+    const doc = ph.win.document as any; let state = "hidden"; Object.defineProperty(doc, "visibilityState", { configurable: true, get: () => state });
+    const flip = (to: string) => { state = to; doc.dispatchEvent(new (ph.win as any).Event("visibilitychange")); };
+    flip("hidden"); flip("visible"); // a quick look away
+    await wait(300); expect(resync).toBe(1); expect(ph.$("#awayline")).toBeNull();
+    const realNow = (ph.win as any).Date.now.bind((ph.win as any).Date); flip("hidden"); (ph.win as any).Date.now = () => realNow() + 40_000; flip("visible");
+    await ph.waitFor(() => !!ph.$("#awayline"), 15_000);
+    expect(ph.$("#awayline")!.textContent).toContain("You were away for 40 seconds."); expect(ph.$("#awayline")!.textContent).toContain("Last 5 numbers called");
+    expect(resync).toBe(2); expect(ticks).toBeGreaterThanOrEqual(2); // the schedule was asked for each time the page came back
+  });
+  test("the join page carries the Do Not Disturb tip", async () => {
+    const x = await setup("CU-11");
+    const ph = await openPage(x.w.world, { url: "http://localhost/z?e=CU-11", html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, x.now); } });
+    open.push(ph); await ph.waitFor((t) => /Join the engagement/.test(t));
+    expect(ph.$("#dndtip")!.textContent).toBe("Tip: turn on Do Not Disturb so other apps do not interrupt your game.");
   });
 });

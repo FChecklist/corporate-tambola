@@ -97,7 +97,7 @@ describe("the organizer's board screen: live panels", () => {
     x.w.world.raw.prepare("INSERT INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES('BD-1',?,'early5',1,10,?)").run((x.w.world.raw.query("SELECT pid FROM participant LIMIT 1").get() as any).pid, x.now() - 120_000);
     const b = await boardPage(x, "BD-1", x.token);
     await until(() => /The whole game, newest first/.test(ptext(b)));
-    expect(b.$("#storyline")!.textContent).toMatch(/The game is on\. \d+ of 90 numbers called\./); expect(b.$("#storyline")!.textContent).toContain("Watch the board. Pause only if you really must.");
+    expect(b.$("#storyline")!.textContent).toMatch(/The game is on\./); expect(b.$("#storyline")!.textContent).toContain("Watch the board. Pause only if you really must.");
     await until(() => !!b.$("#bp-quiet"), 20_000); expect(b.$("#bp-quiet")!.textContent).toMatch(/^Next number in \d+s$|^Next number any moment$/);
     const evs = Array.from(b.win.document.querySelectorAll("#bp-logbox .bpev")).map((e: any) => e.textContent as string);
     expect(evs.length).toBeGreaterThan(10); expect(evs.some((e) => /was called/.test(e))).toBe(true); expect(evs.some((e) => /Early Five.*won by Ticket 2/.test(e))).toBe(true);
@@ -142,7 +142,7 @@ describe("the organizer's board screen: live panels", () => {
     open.push(ph); await ph.waitFor((t) => /Join the engagement/.test(t));
     (ph.$("#ph") as any).value = "9822222220"; (ph.$("#nm") as any).value = "Asha"; ph.click("#go");
     await ph.waitFor(() => !!ph.$("#calledcount"), 30_000);
-    for (const id of ["bp-controls", "bp-log", "bp-claims", "bp-avg", "bp-people", "bp-pause", "bp-logbox"]) expect([id, ph.$("#" + id)]).toEqual([id, null]);
+    for (const id of ["bp-controls", "bp-log", "bp-claims", "bp-avg", "bp-people", "bp-pause", "bp-logbox"]) expect([id, !!ph.$("#" + id)]).toEqual([id, false]);
     expect(ph.text()).not.toMatch(/Average gap|Claims as they come|The whole game, newest first/);
   });
 });

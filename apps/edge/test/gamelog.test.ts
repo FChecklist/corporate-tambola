@@ -102,3 +102,16 @@ describe("the lifecycle saves it when the game ends", () => {
     expect(raw.query("SELECT COUNT(*) AS c FROM kv WHERE k='glog/GL-LC'").get()).toEqual({ c: 1 }); // ... the log stays
   });
 });
+
+describe("the Lucky Draw is in the game log", () => {
+  test("every lucky draw the organizer chose is listed, drawn or not, with the winning ticket numbers once drawn", async () => {
+    const s = await j(await call("POST", "/api/start", { email: "boss@acme.com" })); const o = { "x-organizer": s.token as string };
+    expect((await call("POST", "/api/z", { id: "GL-LK", startRound: START, callSeconds: 12, cap: 100, breaks: [{ after: 30, seconds: 60, kind: "lucky", title: "Gift hamper", winners: 3 }] }, o)).status).toBe(200);
+    let log = await j(await call("GET", "/api/z/GL-LK/gamelog", undefined, o));
+    expect(log.lucky).toEqual([{ title: "Gift hamper", winners: 3, drawn: false, tickets: [] }]);
+    for (const seat of [4, 9, 31]) raw.prepare("INSERT INTO winner(eid,round,pattern,ordinal,seat,idx,at_ms,src) VALUES('GL-LK',1,'lucky',1,?,29,?, 'phones')").run(seat, AT + 400_000);
+    log = await j(await call("GET", "/api/z/GL-LK/gamelog", undefined, o));
+    expect(log.lucky).toEqual([{ title: "Gift hamper", winners: 3, drawn: true, tickets: [4, 9, 31] }]);
+    expect(log.prizes.filter((p: any) => /Gift hamper/.test(p.prize)).map((p: any) => p.ticket).sort((a: number, b: number) => a - b)).toEqual([4, 9, 31]);
+  });
+});

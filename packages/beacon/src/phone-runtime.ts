@@ -138,6 +138,8 @@ export class PhoneRuntime {
   private get stride() { return this.callSeconds / QUICKNET.periodSec; }
 
   /** UTC now from the beacon's own schedule: one verified "latest" answer, then our monotonic clock carries it. Re-synced every minute. */
+  /** The page came back to the front (another app, a call): ask for the clock again at once, so the number, the counter and the timer are right within a second. */
+  resync(): void { this.syncedAtMono = -Infinity; this.offsetSamples = []; }
   async syncClock(): Promise<boolean> {
     const m = this.deps.mono();
     if (this.offsetMs !== null && m - this.syncedAtMono < 60_000) return true;

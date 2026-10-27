@@ -17,7 +17,7 @@ describe("the story table", () => {
   test("the sentences carry the facts: the time, the countdown, the count of numbers, who paused", () => {
     expect(storySay({ state: "waiting", time: "Sat 6:30 pm" })).toBe("The game starts at Sat 6:30 pm.");
     expect(storySay({ state: "countdown", countdown: "2:05" })).toBe("The game is starting in 2:05.");
-    expect(storySay({ state: "running", called: 30 })).toBe("The game is on. 30 of 90 numbers called.");
+    expect(storySay({ state: "running", called: 30 })).toBe("The game is on."); // the count is shown once, by the counter
     expect(storySay({ state: "running" })).toBe("The game is on.");
     expect(storySay({ state: "paused", by: "a Host" })).toBe("The game is paused by a Host.");
     expect(storySay({ state: "endedPrizes", called: 41 })).toBe("The game is over. All prizes were awarded after 41 numbers.");

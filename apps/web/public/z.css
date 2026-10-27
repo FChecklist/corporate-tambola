@@ -367,3 +367,8 @@ body:has(#go) #ct-notify{display:none}
 
 /* the quiet countdown: small, muted, a thin line; nothing moves except the line growing */
 .zquiet{display:flex;align-items:center;gap:8px;margin:6px 0 0;font-size:12px;color:#7a6f73}.zquiet i{flex:1;max-width:120px;height:2px;background:#e9dfcb;border-radius:1px;overflow:hidden}.zquiet b{display:block;height:100%;background:#b9a99a}
+
+.zmeta{font-size:12px;color:#7a6f73;margin-top:3px}.ztxt .zquiet{margin-top:2px}
+.zhelp{font-size:12.5px;color:#7a6f73;margin:6px 0 0}
+.zbig.none{background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.55) 0 8%,rgba(255,255,255,0) 28%),radial-gradient(circle at 50% 45%,#e8e0cf 0 62%,#cbbfa6 100%);color:#8a7f6e}
+.ztight .zbig:not(.none){box-shadow:0 5px 12px -5px rgba(138,98,40,.7),0 0 0 4px rgba(224,184,114,.25)}

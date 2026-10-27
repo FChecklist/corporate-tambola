@@ -79,3 +79,23 @@ describe("no next number to wait for", () => {
     expect((await claim(id2, r.pid, "full", 3, r.at[3]! + 600_000)).status).toBe(200);
   });
 });
+
+describe("the 12 second rhythm, exactly", () => {
+  const TWELVE = 12_000;
+  test("all 90 gaps are exactly 12.000 s from the start time (number k at start + k x 12 s, no drift); a claim at 11.9 s is accepted; at 12.0 s and after, refused (the Worker's clock only)", async () => {
+    const id = "CW-12S";
+    expect((await call("POST", "/api/z", { id, startRound: START, callSeconds: 12, cap: 100 }, P)).status).toBe(200);
+    raw.prepare("UPDATE engagement SET pack=100 WHERE id=?").run(id);
+    const a = await j(await call("POST", `/api/z/${id}/join`, { phone: "9810000001", name: "Asha" })), b = await j(await call("POST", `/api/z/${id}/join`, { phone: "9810000002", name: "Ravi" })), c = await j(await call("POST", `/api/z/${id}/join`, { phone: "9810000003", name: "Meera" }));
+    const e = raw.query("SELECT * FROM engagement WHERE id=?").get(id) as any;
+    const first = (1692803367 + (e.start_round + 40 - 1) * 3) * 1000; // the start time plus the 2-minute set-up
+    const at: number[] = []; for (let k = 0; k < 90; k++) at.push((await callTimeMs(env as any, e, 1, k))!);
+    expect(at[0]).toBe(first);
+    for (let k = 1; k < 90; k++) expect([k, at[k]! - at[k - 1]!]).toEqual([k, TWELVE]); // every gap exactly 12.000 s
+    expect(at[89]! - at[0]!).toBe(89 * TWELVE); // no drift over 90 numbers
+    const claim = (pid: string, pattern: string, idx: number, now: number) => call("POST", `/api/z/${id}/claims`, { pid, device: "0".repeat(32), claims: [{ pattern, idx }] }, {}, now);
+    expect((await claim(a.pid, "top", 10, at[11]! - 100)).status).toBe(200); // 11.9 s after number 11 was announced: in time
+    expect((await claim(b.pid, "top", 10, at[11]!)).status).toBe(409); // 12.0 s: the next number is announced at this very instant: too late
+    expect((await claim(c.pid, "top", 10, at[11]! + 3_000)).status).toBe(409);
+  });
+});
