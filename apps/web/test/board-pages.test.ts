@@ -114,6 +114,17 @@ describe("the organizer's board screen: live panels", () => {
     expect(b.$("#bp-avg")!.textContent).toMatch(/Called by the game: [\d.]+ seconds \(from \d+ numbers\)/); expect(b.$("#bp-avg")!.textContent).toMatch(/Called by hand: not yet \(needs at least 3 numbers\)/);
     const m = b.$("#bp-avg")!.textContent!.match(/Called by the game: ([\d.]+) seconds/)!; expect(Number(m[1])).toBeGreaterThan(5); expect(Number(m[1])).toBeLessThan(7); // this test game calls a number every 6 seconds
   });
+  test("manual play: the board shows no 'Next number in' timer and no 'called by the game' average, only 'The host calls the numbers'", async () => {
+    const x = await setup("BD-HOST", true);
+    for (const p of x.phones) { await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true); }
+    x.goLive(); for (let i = 0; i < 4; i++) await x.step();
+    for (let k = 0; k < 2; k++) { expect((await x.w.api("POST", "/api/z/BD-HOST/control", { message: signControlWithSecret(KEY, nextMessage((await file(x, "BD-HOST"))!, roundAt(x.now()), { action: "next" })) })).status).toBe(200); for (let i = 0; i < 4; i++) await x.step(); }
+    const b = await boardPage(x, "BD-HOST", x.token);
+    await until(() => !!b.$("#bp-quiet"), 20_000);
+    expect(b.$("#bp-quiet")!.textContent).toBe("The host calls the numbers");
+    await until(() => !!b.$("#bp-avg")); expect(b.$("#bp-avg")!.textContent).not.toMatch(/Called by the game/); expect(b.$("#bp-avg")!.textContent).toMatch(/Called by the host/);
+    expect(b.text()).not.toMatch(/Next number in/);
+  });
   test("each control works from the board and is written in the live log with the time and who; a second press is not possible straight away", async () => {
     const x = await setup("BD-3");
     x.goLive(); for (let i = 0; i < 30; i++) await x.step();

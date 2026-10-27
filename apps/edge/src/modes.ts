@@ -53,7 +53,7 @@ export function describeChanges(before: SettingsView, after: SettingsView): stri
   if ((b.startMode ?? "auto") !== (a.startMode ?? "auto")) out.push(a.startMode === "manual" ? "How it starts: now you press Start at the time (was: by itself)" : "How it starts: now by itself at the time (was: you press Start)");
   if ((b.callMode ?? "auto") !== (a.callMode ?? "auto")) out.push(a.callMode === "host" ? "Who calls the numbers: now a Host (was: the game)" : "Who calls the numbers: now the game (was: a Host)");
   if (!!b.keepCalling !== !!a.keepCalling) out.push(a.keepCalling ? "When every prize is won: now keep calling until all 90 numbers (was: end the game)" : "When every prize is won: now end the game (was: keep calling until all 90 numbers)");
-  if (before.call_seconds !== after.call_seconds) out.push(`Speed changed: ${speed(after.call_seconds)} (was ${before.call_seconds})`);
+  if (before.call_seconds !== after.call_seconds && a.callMode !== "host" && b.callMode !== "host") out.push(`Speed changed: ${speed(after.call_seconds)} (was ${before.call_seconds})`);
   if (before.cap !== after.cap) out.push(`Number of people changed from ${before.cap} to ${after.cap}`);
   if ((before.closed ? 1 : 0) !== (after.closed ? 1 : 0)) out.push(after.closed ? "Who can join: now only people on the list" : "Who can join: now anyone with the link");
   if (b.tickets !== a.tickets) out.push(`Tickets per person changed from ${b.tickets} to ${a.tickets}`);

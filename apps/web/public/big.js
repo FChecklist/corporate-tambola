@@ -3,6 +3,14 @@
 (function () {
   const ZG = window.ZG;
   const $app = document.getElementById("app");
+  // A tap is never lost to a redraw: while a finger or mouse button is down the screen is not redrawn (it is redrawn right after the release), nor while text is selected.
+  const HOLD = (() => { let down = 0, pend = []; const set = () => { down = Date.now(); }, clr = () => { if (!down) return; down = 0; if (pend.length) { const fs = pend; pend = []; setTimeout(() => fs.forEach((f) => f()), 40); } };
+    ["pointerdown", "touchstart", "mousedown"].forEach((e) => document.addEventListener(e, set, true)); ["pointerup", "pointercancel", "touchend", "touchcancel", "mouseup"].forEach((e) => document.addEventListener(e, clr, true));
+    return { held: (f) => { if (down && Date.now() - down < 2500) { if (!pend.includes(f)) pend.push(f); return true; } try { const s = window.getSelection && window.getSelection(); if (s && !s.isCollapsed && s.anchorNode && document.contains(s.anchorNode)) return true; } catch {} return false; } }; })();
+  /** keeps the scroll position of inner scrolling boxes, and the focused field with its caret, across a redraw of `root` */
+  const KEEP = (root, redraw) => { const sc = Array.from(root.querySelectorAll("[id],.zhcard,.zinvsheet,.bpscroll")).filter((e) => e.scrollTop > 0).map((e) => [e.id, e.className, e.scrollTop]); const af = document.activeElement, fid = af && af.id && root.contains(af) ? af.id : "", ss = fid && af.selectionStart != null ? [af.selectionStart, af.selectionEnd] : null;
+    redraw(); for (const [id, cn, top] of sc) { const e = id ? document.getElementById(id) : root.getElementsByClassName(cn)[0]; if (e) e.scrollTop = top; }
+    if (fid) { const e = document.getElementById(fid); if (e && e !== document.activeElement) { try { e.focus({ preventScroll: true }); if (ss && e.setSelectionRange) e.setSelectionRange(ss[0], ss[1]); } catch {} } } };
   const q = new URLSearchParams(location.search);
   const EID = (q.get("e") || "").trim();
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -42,6 +50,7 @@
   }
 
   function draw() {
+    if (HOLD.held(draw)) return;
     if (!S.info) return ($app.innerHTML = `<p class="msg">${esc(S.err || "Loading…")}</p>`);
     const info = S.info, cfg = S.cfg || { rounds: 1 };
     const secsToStart = S.now === null ? null : (info.startRound + ZG.GRACE_ROUNDS - S.now) * 3 - (Date.now() - (S.nowAt || Date.now())) / 1000;
@@ -89,7 +98,7 @@
     // between two numbers (software-called games): a big countdown 9, 8, 7 ... 1; silent
     const nr = S["next" + S.round], left = !paused && !hostWait && cfg.callMode !== "host" && S.off !== undefined && nr !== null && nr !== undefined && Number.isFinite(nr) && log.length < 90 ? Math.max(0, Math.ceil((ZG.roundTimeMs(nr) - (performance.now() + S.off)) / 1000)) : null;
     const cdown = left !== null && left <= Math.max(3, info.callSeconds) ? `<div class="cdown" role="timer" aria-label="Next number in ${left} seconds"><div class="cdnum">${left}</div><div class="cdlbl">seconds to the next number</div></div>` : "";
-    $app.innerHTML = `${head}${storyBar}${banner}<div class="main"><div class="now"><div class="lbl">Number</div><div class="num ${fresh ? "fresh" : ""}">${last}</div><div class="calledbig" id="calledbig">${esc(ZG.calledLine(log.length))}</div>${log.length > 1 ? `<div class="lastfew" id="lastfew">Last 5 numbers called: ${log.slice(-6, -1).reverse().map((n) => `<i>${n}</i>`).join("")}</div>` : ""}${cdown}${hostWait && log.length < 90 ? `<p class="wait" id="hostwait">Waiting for the host</p>` : ""}</div>${prizes}</div><div>${wins ? `<div class="wins">${wins}</div>` : ""}<div class="foot">Join: ${esc(location.host)}/z?e=${esc(EID)}</div></div>`;
+    $app.innerHTML = `${head}${storyBar}${banner}<div class="main"><div class="now"><div class="lbl">Number</div><div class="num ${fresh ? "fresh" : ""}">${last}</div><div class="calledbig" id="calledbig">${esc(ZG.calledLine(log.length))}</div>${log.length > 1 ? `<div class="lastfew" id="lastfew">Last 5 numbers called: ${log.slice(-6, -1).reverse().map((n) => `<i>${n}</i>`).join("")}</div>` : ""}${cdown}${cfg.callMode === "host" && !paused && !hostWait && log.length > 0 && log.length < 90 ? `<p class="wait" id="hostcalls">The host calls the numbers</p>` : ""}${hostWait && log.length < 90 ? `<p class="wait" id="hostwait">Waiting for the host</p>` : ""}</div>${prizes}</div><div>${wins ? `<div class="wins">${wins}</div>` : ""}<div class="foot">Join: ${esc(location.host)}/z?e=${esc(EID)}</div></div>`;
   }
 
   if (!EID) { $app.innerHTML = `<p class="msg">No engagement was chosen.</p>`; return; }

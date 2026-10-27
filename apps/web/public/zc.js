@@ -243,7 +243,7 @@
   const HINTS = {
     occ: "The kind of party. It becomes the name of your game.", day: "The day guests should be ready.", time: "The time guests should be ready (India time). The first number comes 2 minutes later.",
     mode: "Auto: the numbers come by themselves. Host: a person presses a button for each number.", tix: "How many tickets each person plays with.",
-    spd: "A new number comes every 12 seconds. 90 numbers take about 18 minutes.", rnd: "Most events play 1 game. More games are played one after the other.",
+    spd: "When the game calls the numbers itself, a new number comes every 12 seconds. 90 numbers take about 18 minutes. When a Host presses for each number, the Host sets the pace.", rnd: "Most events play 1 game. More games are played one after the other.",
     ver: "What a person must type to get in.", per: "The most people one guest can invite.",
     cats: "The kinds of guests they may invite.", ties: "What happens when two people complete the same line on the same number.", emp: "Tick this for a staff-only game: only people on your list can play and nobody can invite anyone.",
   };
@@ -266,7 +266,7 @@
     start: { t: "How does it start?", does: ["By itself: the game begins at the start time you chose, with no one pressing anything.", "I press Start: at the start time the game waits. You or a Host press the big Start button on Game day. The numbers then begin together on every phone a short while later: about 40 seconds for a small game, a few minutes for a very large one, so that every phone has heard."], not: ["Start cannot be pressed before the start time. To start earlier, first change the start time.", "If nobody presses Start, the game does not begin by itself. Press Start, or change the start time.", "You can change this, and the start time, until the game starts. The links stay the same."] },
     mode: { t: "Who calls the numbers?", does: ["Auto: the software calls a new number every few seconds by itself. Nobody has to press anything.", "Host: a person presses Next number for each number, so they can speak between numbers. Phones show the number about 6 seconds after the press."], not: ["In Host mode, if nobody presses, no number comes.", "You cannot switch between Auto and Host after the game has started."] },
     tix: { t: "Tickets for each person", does: ["How many tickets every person plays with: 1 or 2.", "With 2 tickets a person has two chances for every prize; either ticket can win."], not: ["People cannot choose their own number of tickets.", "A second ticket does not mean a second prize for the same position."] },
-    spd: { t: "Gap between two numbers", does: ["A new number comes every 12 seconds: calm enough to find it on your ticket, and a full game of 90 numbers takes about 18 minutes (about 36 minutes with two tickets). With claims, a game takes 30 to 60 minutes."], not: ["Breaks and pauses do not change the speed afterwards.", "It is locked once the game has started."] },
+    spd: { t: "Gap between two numbers", does: ["When the game calls the numbers itself, a new number comes every 12 seconds: calm enough to find it on your ticket, and a full game of 90 numbers takes about 18 minutes (about 36 minutes with two tickets). With claims, a game takes 30 to 60 minutes."], not: ["Breaks and pauses do not change the speed afterwards.", "It is locked once the game has started."] },
     rnd: { t: "Rounds", does: ["One round is one full game of up to 90 numbers. Two rounds means a second full game with new tickets and new numbers, straight after the first.", "The prizes are available again in every round."], not: ["Two rounds take about twice as long.", "Breaks and lucky draws belong to the first round."] },
     who: { t: "Who can join", does: ["Anyone with the link: whoever opens the link and types their details gets in straight away.", "Only people on a list: people you added get in; anyone else waits in a waiting room until you or a Host admits them."], not: ["It does not stop a person sharing the link, but a ticket only plays on one phone.", "The game stops accepting people when it is full."] },
     aud: { t: "Who is this game for?", does: ["Only my employees: only the people on the list you upload can play. Nobody can invite anyone. Each employee gives their employee ID, their mobile number, either, or both, as you choose.", "My employees, plus their friends and family: your employees play and each can invite a few guests by WhatsApp. People who are not on your list wait for you to say yes.", "A list of people I choose: customers, vendors, dealers or members you add. Only they play. Everyone else who opens the link waits for you.", "A list of people I choose, plus the people they invite: the same, and each person can invite a few more.", "Anyone with the link: whoever opens the link joins straight away with their mobile number. No list is needed.", "Anyone with the link, my employees confirm with their employee ID: anyone can join, and your employees prove who they are with their employee ID."], not: ["It does not check anyone against your company system: it checks against the list you give.", "A ticket plays on one phone only, whatever you choose.", "Until the game starts you can change this choice."] },
@@ -329,7 +329,7 @@
       ["Can I change this after the game has started?", "No."],
     ],
     tix: [["What if someone wants only one ticket?", "Everybody plays with the same number of tickets, so the game is fair. Choose 1 if you prefer a simpler game."]],
-    spd: [["Can I make it faster?", "No. Every game has one speed, a new number every 12 seconds, so everybody can follow. Games made earlier keep the speed they were published with."]],
+    spd: [["Can I make it faster?", "No. When the game calls the numbers itself, every game has one speed, a new number every 12 seconds, so everybody can follow. When a Host presses for each number, there is no fixed gap. Games made earlier keep the speed they were published with."]],
     rnd: [["What if I choose 2 rounds?", "After the first round there is a short break and then a second full game with new tickets. The prizes can be won again."], ["What if the first round ends early because all the prizes were won?", "The game moves straight on to the next round."]],
     ties: [["What if two people complete a line on the same number?", "With Share both win. With Next the first gets it and the other gets the next winner position of that prize, if there is one."]],
     per: [["What if I set it to zero?", "Guests cannot invite anyone."]],
@@ -1321,14 +1321,15 @@
       <div class="zc-chips"><a class="zc-btn zc-btn-big" id="gamelogopen" href="${esc(href + key)}" target="_blank" rel="noopener">Open the game log (print or save as PDF)</a><a class="zc-btn zc-btn-big zc-btn-alt" id="gamelogtxt" href="${esc(href + "&txt=1" + key)}" target="_blank" rel="noopener">Download as a text file</a></div></div>`;
   }
   /** Seconds to the next number from the game's own schedule (never a local guess); null when nothing is due (paused, not running, a Host who has not pressed, finished). */
-  function nextSecs() {
+  function nextSecs(hostLine) {
     if (!S.info || !S.cfg || !S.st && S.cf || S.now === null || S.control && (S.control.pausedNow || S.control.stopped) || manualMode() && goRound() === null) return null;
     const log = calledSoFar(); if (!S.started || log.length >= 90 || allPrizesWon()) return null;
+    if (hostLine) return 0; // a Host presses for each number: there is no time to count down to
     const r = ZG.callRoundR(S.st || null, S.info.startRound + ZG.GRACE_ROUNDS, S.info.callSeconds / 3, S.cfg.breaks, S.round || 1, log.length);
     if (r === null || !Number.isFinite(r)) return null;
     return (r - S.now) * 3 - (Date.now() - (S.nowAt || Date.now())) / 1000;
   }
-  const quietText = () => { const sec = nextSecs(); return sec === null ? "" : sec > 0 ? "Next number in " + Math.ceil(sec) + "s" : "Next number any moment"; };
+  const quietText = () => { const host = (S.cfg || {}).callMode === "host", sec = nextSecs(host); return sec === null ? "" : host ? "The host calls the numbers" : sec > 0 ? "Next number in " + Math.ceil(sec) + "s" : "Next number any moment"; };
   setInterval(() => { const el = document.getElementById("quietc"); if (!el) return; const t = quietText(); if (t) el.firstChild.textContent = t; }, 1000);
   /** At the TOP of the game screen, always: the one-sentence story, the Number board button, the counter (the latest number big, the last few beside it), a big PAUSED banner (who, since when, until when, with Resume), and how the game ended. */
   function liveBar() {

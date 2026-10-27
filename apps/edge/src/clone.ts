@@ -70,7 +70,7 @@ export async function cloneGame(env: Env, e: any, b: any, now: number, origin: s
   for (let i = 0; i < 6 && !made; i++) {
     id = `${base}-${suffix()}`;
     const r = await db.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config,is_test,cohost_limit) VALUES(?,?,?,?,?,?,?,0,?,?,?,?)")
-      .bind(id, sr, String((env as any)?.ONLY_12S ?? "") === "1" ? 12 : e.call_seconds, capOut, now, org, e.closed ? 1 : 0, e.tickets, configOut, test, e.cohost_limit ?? null).run();
+      .bind(id, sr, String((env as any)?.ONLY_12S ?? "") === "1" && cfg0.callMode !== "host" ? 12 : e.call_seconds, capOut, now, org, e.closed ? 1 : 0, e.tickets, configOut, test, e.cohost_limit ?? null).run();
     made = (r.meta?.changes ?? 0) > 0;
   }
   if (!made) return json({ error: "Could not make a new game code. Please try again." }, 503);

@@ -4,6 +4,14 @@
 (function () {
   const ZG = window.ZG;
   const $app = document.getElementById("app");
+  // A tap is never lost to a redraw: while a finger or mouse button is down the screen is not redrawn (it is redrawn right after the release), nor while text is selected.
+  const HOLD = (() => { let down = 0, pend = []; const set = () => { down = Date.now(); }, clr = () => { if (!down) return; down = 0; if (pend.length) { const fs = pend; pend = []; setTimeout(() => fs.forEach((f) => f()), 40); } };
+    ["pointerdown", "touchstart", "mousedown"].forEach((e) => document.addEventListener(e, set, true)); ["pointerup", "pointercancel", "touchend", "touchcancel", "mouseup"].forEach((e) => document.addEventListener(e, clr, true));
+    return { held: (f) => { if (down && Date.now() - down < 2500) { if (!pend.includes(f)) pend.push(f); return true; } try { const s = window.getSelection && window.getSelection(); if (s && !s.isCollapsed && s.anchorNode && document.contains(s.anchorNode)) return true; } catch {} return false; } }; })();
+  /** keeps the scroll position of inner scrolling boxes, and the focused field with its caret, across a redraw of `root` */
+  const KEEP = (root, redraw) => { const sc = Array.from(root.querySelectorAll("[id],.zhcard,.zinvsheet,.bpscroll")).filter((e) => e.scrollTop > 0).map((e) => [e.id, e.className, e.scrollTop]); const af = document.activeElement, fid = af && af.id && root.contains(af) ? af.id : "", ss = fid && af.selectionStart != null ? [af.selectionStart, af.selectionEnd] : null;
+    redraw(); for (const [id, cn, top] of sc) { const e = id ? document.getElementById(id) : root.getElementsByClassName(cn)[0]; if (e) e.scrollTop = top; }
+    if (fid) { const e = document.getElementById(fid); if (e && e !== document.activeElement) { try { e.focus({ preventScroll: true }); if (ss && e.setSelectionRange) e.setSelectionRange(ss[0], ss[1]); } catch {} } } };
   const q = new URLSearchParams(location.search);
   const EID = (q.get("e") || "").trim();
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -43,6 +51,7 @@
   }
 
   function draw() {
+    if (HOLD.held(draw)) return;
     if (!S.info) return ($app.innerHTML = `<p class="msg">${esc(S.err || "Loading…")}</p>`);
     const info = S.info, cfg = S.cfg || { rounds: 1 };
     const secsToStart = S.now === null ? null : (info.startRound + ZG.GRACE_ROUNDS - S.now) * 3 - (Date.now() - (S.nowAt || Date.now())) / 1000;
@@ -103,6 +112,7 @@
     return { state, ...ZG.story({ state, role: P.who === "host" ? "host" : P.who === "cohost" ? "cohost" : "organizer", called: prizesDone ? Math.max(0, ...(S.results || []).filter((x) => Number.isInteger(x.idx)).map((x) => x.idx + 2)) : log.length, manual, time: ZG.dayTimeIst((1692803367 + (sr - 1) * 3) * 1000), countdown: ZG.mmss(left0), by: pm && S.cf.by && S.cf.by[pm.seq - 1] === "Host" ? "a Host" : "the Organizer" }) };
   }
   function quietNext() {
+    if ((S.cfg || {}).callMode === "host") return (S.logs[S.round] || []).length >= 90 || pausedNowB() ? "" : "The host calls the numbers"; // no gap to count: the host sets the pace
     const nr = ((S.sched && S.sched[S.round]) || [])[(S.logs[S.round] || []).length];
     if (S.now === null || nr === null || nr === undefined || !Number.isFinite(nr) || pausedNowB() || (S.logs[S.round] || []).length >= 90) return "";
     const sec = (nr - S.now) * 3 - (Date.now() - (S.nowAt || Date.now())) / 1000;
@@ -152,7 +162,7 @@
       ${controlsHtml()}
       <div class="bpgrid">
       <div class="bpbox" id="bp-people"><h2>People</h2><p>${esc(people)}</p></div>
-      <div class="bpbox" id="bp-avg"><h2>Average gap between two numbers</h2><p>Called by the game: <b>${fmt(c.auto, c.nAuto)}</b></p><p>Called by hand: <b>${fmt(c.manual, c.nManual)}</b></p><p class="bpsmall">Worked out from the real times of this game's numbers; pauses and breaks are part of the time.</p></div>
+      <div class="bpbox" id="bp-avg"><h2>Average gap between two numbers</h2>${(S.cfg || {}).callMode === "host" ? `<p>Called by the host: <b>${fmt(c.manual, c.nManual)}</b> (the host sets the pace)</p>` : `<p>Called by the game: <b>${fmt(c.auto, c.nAuto)}</b></p><p>Called by hand: <b>${fmt(c.manual, c.nManual)}</b></p>`}<p class="bpsmall">Worked out from the real times of this game's numbers; pauses and breaks are part of the time.</p></div>
       <div class="bpbox bpwide" id="bp-claims"><h2>Claims as they come</h2><div class="bpscroll"><table><thead><tr><th>Time</th><th>Who</th><th>Prize</th><th>Result</th></tr></thead><tbody>${claimsRows}</tbody></table></div></div>
       <div class="bpbox bpwide" id="bp-log"><h2>The whole game, newest first</h2><p class="bpcheck" id="bp-check" data-ok="${checkLine().ok}"><b>${esc(checkLine().text)}</b></p><div class="bpscroll" id="bp-logbox">${events().map((e) => `<div class="bpev">${e.t} <span class="bptime">${esc(hm(e.ms))}</span>${e.tail || ""}</div>`).join("") || "Nothing yet."}</div></div></div></div>`;
   }
@@ -174,9 +184,10 @@
   }
   function drawPanels(force) {
     const el = document.getElementById("panels"); if (!el) return;
+    if (HOLD.held(() => drawPanels(force))) return;
     const html = panelsHtml(); if (!force && html === P.sig) return;
     const box = document.getElementById("bp-logbox"), top = box ? box.scrollTop : 0;
-    P.sig = html; el.innerHTML = html; const nb = document.getElementById("bp-logbox"); if (nb) nb.scrollTop = top;
+    P.sig = html; KEEP(el, () => { el.innerHTML = html; }); const nb = document.getElementById("bp-logbox"); if (nb) nb.scrollTop = top;
     const on = (id, f) => { const b = document.getElementById(id); if (b) b.onclick = f; };
     const sure = async (title, text, yes) => askBoard(title, text, yes, "No, not now", ""); // every control asks once; the 2.5 s double-press lock stays
     on("bp-go", async () => { if (await sure("Start the game now?", "The countdown begins on every phone and on the big screen. It cannot be taken back.", "Yes, start the game")) press("go"); });

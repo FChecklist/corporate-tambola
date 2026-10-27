@@ -2,6 +2,14 @@
 (function () {
   const ZG = window.ZG;
   const $app = document.getElementById("app");
+  // A tap is never lost to a redraw: while a finger or mouse button is down the screen is not redrawn (it is redrawn right after the release), nor while text is selected.
+  const HOLD = (() => { let down = 0, pend = []; const set = () => { down = Date.now(); }, clr = () => { if (!down) return; down = 0; if (pend.length) { const fs = pend; pend = []; setTimeout(() => fs.forEach((f) => f()), 40); } };
+    ["pointerdown", "touchstart", "mousedown"].forEach((e) => document.addEventListener(e, set, true)); ["pointerup", "pointercancel", "touchend", "touchcancel", "mouseup"].forEach((e) => document.addEventListener(e, clr, true));
+    return { held: (f) => { if (down && Date.now() - down < 2500) { if (!pend.includes(f)) pend.push(f); return true; } try { const s = window.getSelection && window.getSelection(); if (s && !s.isCollapsed && s.anchorNode && document.contains(s.anchorNode)) return true; } catch {} return false; } }; })();
+  /** keeps the scroll position of inner scrolling boxes, and the focused field with its caret, across a redraw of `root` */
+  const KEEP = (root, redraw) => { const sc = Array.from(root.querySelectorAll("[id],.zhcard,.zinvsheet,.bpscroll")).filter((e) => e.scrollTop > 0).map((e) => [e.id, e.className, e.scrollTop]); const af = document.activeElement, fid = af && af.id && root.contains(af) ? af.id : "", ss = fid && af.selectionStart != null ? [af.selectionStart, af.selectionEnd] : null;
+    redraw(); for (const [id, cn, top] of sc) { const e = id ? document.getElementById(id) : root.getElementsByClassName(cn)[0]; if (e) e.scrollTop = top; }
+    if (fid) { const e = document.getElementById(fid); if (e && e !== document.activeElement) { try { e.focus({ preventScroll: true }); if (ss && e.setSelectionRange) e.setSelectionRange(ss[0], ss[1]); } catch {} } } };
   const q = new URLSearchParams(location.search);
   const LAST = "ct-last-eid";
   const DEMO = window.__CT_DEMO || null; // the free demo (demo.html) runs this same page with a preloaded script and nothing stored on our side
@@ -697,14 +705,14 @@
   function callCard(v, last, sub) {
     const secs = v.nextCallInSec, running = v.phase === "play" && !v.locked && !v.paused && !v.brk && !v.intermission && v.log.length > 0;
     const tone = v.phase === "ended" ? "end" : v.paused || v.locked ? "pause" : running ? (secs !== null && secs <= 3 ? "go" : "soon") : "wait";
-    const chip = v.phase === "ended" ? "Game over" : v.paused ? "Paused" : v.locked ? "Waiting to start" : v.waitingForStart ? "Waiting for the host" : v.startingInSec !== null ? "Starting in " + (v.startingInSec >= 120 ? clock(v.startingInSec) : v.startingInSec + "s") : v.waitingForHost ? "Waiting for the host" : !v.log.length ? "Get ready" : running && secs !== null ? "Next number in " + secs + "s" : "Numbers coming";
+    const chip = v.phase === "ended" ? "Game over" : v.paused ? "Paused" : v.locked ? "Waiting to start" : v.waitingForStart ? "Waiting for the host" : v.startingInSec !== null ? "Starting in " + (v.startingInSec >= 120 ? clock(v.startingInSec) : v.startingInSec + "s") : v.waitingForHost ? "Waiting for the host" : !v.log.length ? "Get ready" : running && secs !== null && v.callMode !== "host" ? "Next number in " + secs + "s" : running && v.callMode === "host" ? "The host calls the numbers" : "Numbers coming";
     const total = v.late ? "since you joined" : "of 90";
     // Between two numbers (software calls): a big countdown 9, 8, 7 ... 1, then the number. Silent on purpose: the voice speaks only the number itself.
-    const cdown = running && secs !== null && !v.waitingForHost && v.mode !== "hold" ? `<div class="zquiet" id="quietcount" role="timer" aria-label="Next number in ${secs} seconds"><span>Next number in ${secs}s</span><i><b style="width:${Math.max(0, Math.min(100, Math.round((1 - secs / Math.max(3, v.callSeconds || 12)) * 100)))}%"></b></i></div>` : ""; // small and quiet on purpose: no digits to stare at, no colour, no sound (only the number itself is spoken)
+    const hostCalls = v.callMode === "host", cdown = hostCalls ? (running && !v.waitingForHost ? `<div class="zquiet" id="hostline" role="status"><span>The host calls the numbers</span></div>` : "") : running && secs !== null && !v.waitingForHost && v.mode !== "hold" ? `<div class="zquiet" id="quietcount" role="timer" aria-label="Next number in ${secs} seconds"><span>Next number in ${secs}s</span><i><b style="width:${Math.max(0, Math.min(100, Math.round((1 - secs / Math.max(3, v.callSeconds || 12)) * 100)))}%"></b></i></div>` : ""; // small and quiet on purpose: no digits to stare at, no colour, no sound (only the number itself is spoken)
     const calledTotal = v.log.length + (v.late ? v.late.hidden || 0 : 0), few = v.log.slice(-6, -1).reverse();
     return `<div class="zcard zcall ztight"><div class="zchiprow"><span class="zchip2 ${tone}">${esc(chip)}</span></div>
         <div class="zrow1"><div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number just called " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
-          <div class="ztxt"><div class="zlab">Number just called</div><div class="zmeta" id="calledcount">${esc(ZG.calledLine(calledTotal))}</div>${cdown}<p class="zhelp" id="ballhelp">${last ? "Find it on your ticket and tap it." : "The first number will appear here."}</p></div></div>
+          <div class="ztxt"><div class="zlab">Number just called</div><div class="zmeta" id="calledcount">${esc(ZG.calledLine(calledTotal))}</div>${cdown}<p class="zhelp" id="ballhelp">${v.phase === "ended" ? "The game is over." : last ? "Find it on your ticket and tap it." : "The first number will appear here."}</p></div></div>
         <div class="zprog" role="progressbar" aria-valuemin="0" aria-valuemax="90" aria-valuenow="${calledTotal}"><i style="width:${Math.min(100, Math.round(calledTotal / 90 * 100))}%"></i></div>
         ${few.length ? `<div class="zlastrow" id="lastfew"><span class="zlab">Last 5 numbers called</span><div class="zballs">${few.map((n) => `<i class="zlastn">${n}</i>`).join("")}</div></div>` : ""}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p>`}</div>`;
   }
@@ -804,11 +812,10 @@
     if (v.locked) banners.push(ME.role === "organizer" || ME.role === "host" ? `<div class="zbanner warn" role="status"><b>Payment pending for this game.</b> The game starts 2 minutes after the payment is confirmed. Open your console to pay. Your ticket is safe. Keep this page open.</div>` : `<div class="zbanner warn" role="status"><b>Waiting for the Organizer or Host to start the game.</b> Your ticket is safe. Keep this page open: it begins as soon as they are done.</div>`);
     else if (v.stopped) banners.push(`<div class="zbanner info">The organizer has ended this game.</div>`);
     else if (v.paused) { const p = v.pausedInfo, hm = (ms) => new Date(ms).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }), left = p ? Math.max(1, Math.round(p.secondsLeft / 60)) : 0; banners.push(`<div class="zbanner pause" role="status" id="pausebanner"><b>PAUSED</b><span>${p ? "Paused by " + esc(p.by) + " at " + esc(hm(p.sinceMs)) + ". The numbers start again at about " + esc(hm(p.endMs)) + " (in about " + left + (left === 1 ? " minute" : " minutes") + "), or sooner when they press Resume. Keep this page open." : "The game is paused. It will carry on shortly. Keep this page open."}</span></div>`); }
-    else if (v.mode === "hold" && v.nowRound !== null) banners.push(`<div class="zbanner warn">Checking with the organizer… numbers will continue in a moment.</div>`);
-    else if (v.mode === "blind") banners.push(`<div class="zbanner warn">Cannot reach the organizer's controls right now. Play continues; a pause may appear late.</div>`);
-    if (v.phase === "ended" && !v.stopped && v.endedByPrizes) banners.push(`<div class="zbanner ok">All prizes were awarded after ${v.log.length} numbers. No more numbers will be called. Thank you for taking part.</div>`);
-    if (v.phase === "ended" && !v.stopped && !v.endedByPrizes) banners.push(`<div class="zbanner ok">${v.rounds > 1 ? "All " + v.rounds + " rounds are finished." : "All 90 numbers were called."} Thank you for taking part.</div>`);
-    const sub = v.phase === "ended" || v.locked || v.brk || v.intermission || (DEMO && !DEMO.running) ? "" : v.waitingForStart ? "Waiting for the host to begin the game" : v.startingInSec !== null ? "The game starts in " + (v.startingInSec >= 120 ? clock(v.startingInSec) : v.startingInSec + " seconds") : v.late && v.late.secondsUntil > 0 ? "Your numbers start in " + clock(v.late.secondsUntil) : v.waitingForHost ? "The host presses for the next number" : v.log.length === 0 ? (v.nextCallInSec !== null ? (v.nextCallInSec > GRACE_SECS ? "Starting in " + clock(v.nextCallInSec - GRACE_SECS) : "First number in " + clock(v.nextCallInSec)) : "Getting ready…") : v.paused || v.mode === "hold" ? "" : v.waitingForHost ? "The host presses for the next number" : v.nextCallInSec !== null ? "Next number in " + v.nextCallInSec + "s" : "";
+    else if (v.mode === "hold" && v.nowRound !== null && v.phase !== "ended") banners.push(`<div class="zbanner warn">Checking with the organizer… numbers will continue in a moment.</div>`);
+    else if (v.mode === "blind" && v.phase !== "ended") banners.push(`<div class="zbanner warn">Cannot reach the organizer's controls right now. Play continues; a pause may appear late.</div>`);
+    // (one end message only: the story line at the top says how the game ended)
+    const sub = v.phase === "ended" || v.locked || v.brk || v.intermission || (DEMO && !DEMO.running) ? "" : v.waitingForStart ? "Waiting for the host to begin the game" : v.startingInSec !== null ? "The game starts in " + (v.startingInSec >= 120 ? clock(v.startingInSec) : v.startingInSec + " seconds") : v.late && v.late.secondsUntil > 0 ? "Your numbers start in " + clock(v.late.secondsUntil) : v.waitingForHost ? "The host presses for the next number" : v.log.length === 0 ? (v.nextCallInSec !== null ? (v.nextCallInSec > GRACE_SECS ? "Starting in " + clock(v.nextCallInSec - GRACE_SECS) : "First number in " + clock(v.nextCallInSec)) : "Getting ready…") : v.paused || v.mode === "hold" ? "" : v.waitingForHost ? "The host presses for the next number" : v.nextCallInSec !== null && v.callMode !== "host" ? "Next number in " + v.nextCallInSec + "s" : "";
     const still = v.tickets.length ? stillToWinRows(v) : "";
     const chk = v.pendingChecks > 0 ? `<p class="zsmall">Double-checking ${v.pendingChecks} earlier number${v.pendingChecks === 1 ? "" : "s"} in the background.</p>` : "";
     const curWins = v.won.filter((w) => w.round === v.round), winSet = new Set(curWins.flatMap((w) => w.cells));
@@ -910,6 +917,7 @@
   }
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { wlAt = 0; keepAwake(awake); } });
   function paint() {
+    if (HOLD.held(paint)) return;
     const v = rt.view();
     if (window.ctzView) window.ctzView(v); // the flight recorder (blackbox.js) learns which stage the game is in
     awake = v.phase === "play" && !INFO.dns && !INFO.cancelled && !ME.removed && !v.locked && !v.paused && !v.stopped && (v.log.length > 0 || (v.nextCallInSec !== null && v.nextCallInSec <= GRACE_SECS + 60)); keepAwake(awake); // held from about a minute before the first number to the end of the game
@@ -928,7 +936,7 @@
     const fresh = syncPrizes(v); reportToStore(v); loadCf(v); pollMe(v);
     { const af = document.activeElement; if (af && (af.id === "cfnm" || af.id === "cfph" || af.id === "mi-name" || af.id === "mi-phone")) return; } // never wipe a form someone is typing in
     NEWCALL = v.log.length > lastLen && !firstPaint && MOTION() ? v.log[v.log.length - 1] : 0;
-    $app.innerHTML = playView(v);
+    KEEP($app, () => { $app.innerHTML = playView(v); });
     countUps(); showTapNote(); bindTicket(v);
     paintBrand(); syncMedia(v); bindShare(); bindDemo(); bindConfirm(v); loadInvites(v); bindInvite(v); loadMine(v); bindMine(v);
     if (fresh.length) showHurray(fresh);

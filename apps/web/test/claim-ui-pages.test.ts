@@ -256,3 +256,52 @@ describe("the sticky claim bar tells the truth about sending, and stays small wi
     const bs = Array.from(ph.win.document.querySelectorAll("#claimbar .zbigclaim")) as any[]; expect(bs[0].classList.contains("zmore")).toBe(false); expect(bs[1].classList.contains("zmore")).toBe(true);
   });
 });
+
+describe("manual play: no quiet 'Next number in' countdown, one plain line instead", () => {
+  test("the game calls the numbers: 'Next number in 7s'. A Host calls them: 'The host calls the numbers' (or 'Waiting for the host'), never a count", async () => {
+    const { ph, set } = await steered("CU-HOST");
+    const play = { phase: "play", paused: false, locked: false, log: LOG, claimNow: [], claimOpen: [], claimable: [], pressed: [], claimed: [], results: [], brk: null, intermission: null, nextCallInSec: 7, waitingForHost: false };
+    set({ ...play, callMode: "auto" });
+    await ph.waitFor((t) => /Next number in 7s/.test(t), 15_000);
+    set({ ...play, callMode: "host" });
+    await ph.waitFor((t) => /The host calls the numbers/.test(t), 15_000);
+    expect(ph.text()).not.toMatch(/Next number in/); expect(ph.$("#quietcount")).toBeNull();
+    set({ ...play, callMode: "host", waitingForHost: true, nextCallInSec: null });
+    await ph.waitFor((t) => /Waiting for the host/.test(t), 15_000);
+    expect(ph.text()).not.toMatch(/Next number in/);
+  });
+});
+
+describe("after the game ended: one end message, nothing contradicting it", () => {
+  test("no 'Checking with the organizer' banner, no 'Find it on your ticket', and the end is said once", async () => {
+    const { ph, set } = await steered("CU-END");
+    const ended = { phase: "ended", paused: false, locked: false, stopped: false, endedByPrizes: false, log: LOG, claimNow: [], claimOpen: [], claimable: [], pressed: [], claimed: [], results: [], mode: "hold", nowRound: 5, brk: null, intermission: null };
+    set(ended);
+    await ph.waitFor((t) => /The game is over/.test(t), 15_000);
+    const t = ph.text();
+    expect(t).not.toMatch(/Checking with the organizer/); expect(t).not.toMatch(/Find it on your ticket and tap it/); expect(t).toContain("The game is over.");
+    expect((t.match(/All 90 numbers were called/g) || []).length).toBe(1);
+    set({ ...ended, endedByPrizes: true });
+    await ph.waitFor((t2) => /All prizes were awarded/.test(t2), 15_000);
+    expect((ph.text().match(/All prizes were awarded/g) || []).length).toBe(1);
+    set({ ...ended, phase: "play", mode: "hold" }); // while playing, the hold banner still shows
+    await ph.waitFor((t3) => /Checking with the organizer/.test(t3), 15_000);
+  });
+});
+
+describe("a tap is never lost to a redraw", () => {
+  test("while a finger is down on the Claim button the screen is not redrawn (the same button stays); after the release it is redrawn once, with the new state", async () => {
+    const { ph, set } = await steered("CU-HOLD");
+    const base = { phase: "play", paused: false, locked: false, log: LOG, claimNow: ["early5"], claimOpen: ["early5"], claimable: ["early5"], pressed: [], claimed: [], results: [] };
+    set(base);
+    await ph.waitFor(() => !!ph.$("#claimbar .zbigclaim"), 15_000);
+    const btn = ph.$("#claimbar .zbigclaim") as any; const W = ph.win as any;
+    btn.dispatchEvent(new W.Event("pointerdown", { bubbles: true }));
+    set({ ...base, log: [...LOG, 77] }); // the game moves on while the finger is down
+    await wait(2200); // two redraw beats
+    expect(btn.isConnected).toBe(true); expect(ph.text()).toContain("6 of 90 called"); // nothing was redrawn yet
+    btn.dispatchEvent(new W.Event("pointerup", { bubbles: true }));
+    await ph.waitFor((t) => /7 of 90 called/.test(t), 15_000);
+    expect(btn.isConnected).toBe(false); // redrawn right after the release
+  });
+});

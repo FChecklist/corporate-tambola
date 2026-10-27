@@ -12,7 +12,7 @@ export const emptyAgg = (): Agg => ({ joined: 0, onRoster: 0, notJoined: 0, late
 export interface ReportData {
   engagementId: string; organizerEmail: string; sentAtMs: number;
   scheduledMs: number; firstNumberMs: number; endMs: number; endReason: string; wasHeld: boolean;
-  rounds: number; callSeconds: number; ticketsPerPerson: number; cap: number; inviteOnly: boolean; numbersCalled: number;
+  rounds: number; callSeconds: number; hostCalled?: boolean; ticketsPerPerson: number; cap: number; inviteOnly: boolean; numbersCalled: number;
   people: ReportPerson[];
   prizes: ReportPrize[];
   lucky: { title: string; winners: ReportWinner[] }[];
@@ -79,7 +79,7 @@ export function layoutReport(d: ReportData): Uint8Array {
     ["Playing time", d.wasHeld ? "-" : dur(d.endMs - d.firstNumberMs)],
     ["Rounds", String(d.rounds)],
     ["Numbers called in the last round", calledLine(d.numbersCalled)],
-    ["Call speed", `one number every ${d.callSeconds} seconds`],
+    ["Call speed", d.hostCalled ? "The host called the numbers (no fixed gap)" : `one number every ${d.callSeconds} seconds`],
     ["Tickets per person", String(d.ticketsPerPerson)],
     ["Participant limit", `${d.cap}${d.inviteOnly ? "  (invitation only)" : ""}`],
   ]);
