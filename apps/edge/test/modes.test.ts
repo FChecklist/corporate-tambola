@@ -33,6 +33,8 @@ const make = (o: { token: string }, id: string, over: Record<string, unknown> = 
 const publish = (o: { token: string }, id: string) => call("POST", `/api/z/${id}/publish`, { email: "boss@acme.com", phone: "98765 43210" }, { "x-organizer": o.token });
 const signed = async (id: string, secret: string, now: number, a: Parameters<typeof nextMessage>[2]) => signControlWithSecret(secret, nextMessage((await readPublished(kv(), id))!, roundAt(now), a));
 const post = async (id: string, msg: unknown, now = AT) => { const r = await call("POST", `/api/z/${id}/control`, { message: msg }, {}, now); return { status: r.status, body: await j(r) }; };
+const P = { "x-organizer": "plat" }; // big games are made with the platform key (an organizer needs a bought pack, and none that large exists)
+const mkP = (id: string, over: Record<string, unknown> = {}) => call("POST", "/api/z", { id, startRound: START, callSeconds: 9, cap: 100, ...over }, P);
 const info = async (id: string, h: Record<string, string> = {}, now = T) => j(await call("GET", `/api/z/${id}/info`, undefined, h, now));
 const control = async (id: string, now = T) => j(await call("GET", `/api/z/${id}/control`, undefined, {}, now));
 const changes = async (id: string, h: Record<string, string>, now = T) => j(await call("GET", `/api/z/${id}/changes`, undefined, h, now));
@@ -70,10 +72,10 @@ describe("the four modes are two plain settings", () => {
   });
   test("above 1,000 people only manual PLAY is refused (Start by hand stays); 1,000 allows all four; shrinking back re-allows it", async () => {
     const o = await organizer(); const P = { "x-organizer": "plat" };
-    const host = await make(o, "M-BIG", { cap: 5000, callMode: "host" });
+    const host = await mkP("M-BIG", { cap: 5000, callMode: "host" });
     expect(host.status).toBe(409); expect((await j(host)).error).toMatch(/Games above 1,000 people are called by the game itself: choose "The game does"\. You can still press Start yourself/);
     for (const [id, sm, cm, cap, ok] of [["M-A1000", "auto", "auto", 1000, 1], ["M-B1000", "auto", "host", 1000, 1], ["M-C1000", "manual", "auto", 1000, 1], ["M-D1000", "manual", "host", 1000, 1], ["M-A1001", "auto", "auto", 1001, 1], ["M-B1001", "auto", "host", 1001, 0], ["M-C1001", "manual", "auto", 1001, 1], ["M-D1001", "manual", "host", 1001, 0]] as const) {
-      const r = await make(o, id, { cap, startMode: sm, callMode: cm }); expect([id, r.status]).toEqual([id, ok ? 200 : 409]);
+      const r = await mkP(id, { cap, startMode: sm, callMode: cm }); expect([id, r.status]).toEqual([id, ok ? 200 : 409]);
     }
     // a game that uses manual play cannot grow past 1,000, but one that only presses Start can; switching manual play on above 1,000 is refused; shrinking re-allows
     expect((await call("PATCH", "/api/z/M-D1000/settings", { cap: 1001 }, P)).status).toBe(409);
@@ -82,7 +84,7 @@ describe("the four modes are two plain settings", () => {
     expect((await call("PATCH", "/api/z/M-C1000/settings", { cap: 1000, callMode: "host" }, P)).status).toBe(200);
     expect((await call("PATCH", "/api/z/M-D1000/settings", { cap: 1001, callMode: "auto" }, P)).status).toBe(200);
     // pressing Start has no size limit
-    for (const cap of [2000, 2001, 10000, 10001, 100000]) expect([cap, (await make(o, `M-C${cap}`, { cap, startMode: "manual" })).status]).toEqual([cap, 200]);
+    for (const cap of [2000, 2001, 10000, 10001, 100000]) expect([cap, (await mkP(`M-C${cap}`, { cap, startMode: "manual" })).status]).toEqual([cap, 200]);
   });
 });
 
@@ -232,9 +234,9 @@ describe("what changed, who, when", () => {
 
 describe("pressing Start at any size: its own control-file profile, a longer lead, no pause", () => {
   const bigGame = async (id: string, cap: number) => {
-    const o = await organizer(); expect((await make(o, id, { cap, startMode: "manual" })).status).toBe(200);
-    await call("POST", `/api/z/${id}/publish`, { email: "boss@acme.com", phone: "98765 43210" }, o.h); raw.prepare("UPDATE engagement SET pack=? WHERE id=?").run(cap, id);
-    return o;
+    expect((await mkP(id, { cap, startMode: "manual" })).status).toBe(200);
+    raw.prepare("UPDATE engagement SET pack=? WHERE id=?").run(cap, id);
+    return { h: P };
   };
   test("the signing key registers at 2,000 / 2,001 / 10,000 / 10,001 / 100,000 with the profile of that size; only above 2,000 is the file start-only; the lead grows with the size", async () => {
     const expected: [number, number, boolean][] = [[2000, SAFETY_LEAN60.leadRounds, false], [2001, SAFETY_BIG10K.leadRounds, true], [10000, SAFETY_BIG10K.leadRounds, true], [10001, SAFETY_BIG.leadRounds, true], [100000, SAFETY_BIG.leadRounds, true]];
@@ -248,7 +250,7 @@ describe("pressing Start at any size: its own control-file profile, a longer lea
     expect(SAFETY_BIG.leadRounds * 3).toBeLessThanOrEqual(300);
   });
   test("a big game that does NOT press Start still has no key (as before): the message says pause is for up to 2,000 people", async () => {
-    const o = await organizer(); await make(o, "M-AUTO5K", { cap: 5000 }); await call("POST", "/api/z/M-AUTO5K/publish", { email: "boss@acme.com", phone: "98765 43210" }, o.h); raw.prepare("UPDATE engagement SET pack=5000 WHERE id='M-AUTO5K'").run();
+    const o = { h: P }; await mkP("M-AUTO5K", { cap: 5000 }); raw.prepare("UPDATE engagement SET pack=5000 WHERE id='M-AUTO5K'").run();
     const k = await call("PUT", "/api/z/M-AUTO5K/control/key", { publicKey: publicKeyFromSecret(ORG) }, o.h); expect(k.status).toBe(409); expect((await j(k)).error).toMatch(/up to 2,000 participants/);
   });
   test("Start in a 5,000-person game: refused before the time, accepted at it, named a full profile lead ahead; a Start with the small-game lead is refused; pause, resume, extend and end are refused in plain words", async () => {
@@ -265,12 +267,12 @@ describe("pressing Start at any size: its own control-file profile, a longer lea
     const resume = await post("M-S5K", await signed("M-S5K", ORG, t + 30_000, { action: "resume" }), t + 30_000); expect(resume.body.error).toBe(BIG_GAME_REFUSAL);
   });
   test("moving the size across 2,000 before anything was sent gives the key the right profile (the unused key is forgotten so the console registers it again)", async () => {
-    const o = await bigGame("M-X", 1500); expect((await call("PUT", "/api/z/M-X/control/key", { publicKey: publicKeyFromSecret(ORG) }, o.h)).status).toBe(200);
-    expect((await control("M-X")).leadRounds).toBe(SAFETY_LEAN60.leadRounds);
-    raw.prepare("UPDATE engagement SET pack=6000 WHERE id='M-X'").run();
-    expect((await call("PATCH", "/api/z/M-X/settings", { cap: 6000 }, { "x-organizer": "plat" })).status).toBe(200);
-    expect(raw.query("SELECT COUNT(*) AS c FROM kv WHERE k='control/M-X.json'").get()).toEqual({ c: 0 });
-    expect((await call("PUT", "/api/z/M-X/control/key", { publicKey: publicKeyFromSecret(ORG) }, o.h)).status).toBe(200);
-    const f = await control("M-X"); expect([f.leadRounds, !!f.startOnly]).toEqual([SAFETY_BIG10K.leadRounds, true]);
+    const o = await bigGame("M-XSZ", 1500); expect((await call("PUT", "/api/z/M-XSZ/control/key", { publicKey: publicKeyFromSecret(ORG) }, o.h)).status).toBe(200);
+    expect((await control("M-XSZ")).leadRounds).toBe(SAFETY_LEAN60.leadRounds);
+    raw.prepare("UPDATE engagement SET pack=6000 WHERE id='M-XSZ'").run();
+    expect((await call("PATCH", "/api/z/M-XSZ/settings", { cap: 6000 }, { "x-organizer": "plat" })).status).toBe(200);
+    expect(raw.query("SELECT COUNT(*) AS c FROM kv WHERE k='control/M-XSZ.json'").get()).toEqual({ c: 0 });
+    expect((await call("PUT", "/api/z/M-XSZ/control/key", { publicKey: publicKeyFromSecret(ORG) }, o.h)).status).toBe(200);
+    const f = await control("M-XSZ"); expect([f.leadRounds, !!f.startOnly]).toEqual([SAFETY_BIG10K.leadRounds, true]);
   });
 });
