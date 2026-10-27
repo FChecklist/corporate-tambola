@@ -51,6 +51,14 @@ def one(tag):
     ok = not judged_bad and own5 == 0 and busy == 0 and perr == 0
     incomplete = got is None or nums is None or win is None  # the game has not reached its final checks yet (or they failed to run)
     if incomplete and ok: ok = False
+    # client-side connection failures the harness logged ("[call failed] GET /api/z/<id>/control TypeError fetch failed cause=ECONNRESET after N ms"): not HTTP statuses, so not in failedReq
+    cf = {}
+    for lp in (os.path.join(D, f"live-{BROWSER}-{tag}.log"), os.path.join(D, f"live-{tag}.log")):
+        if os.path.exists(lp):
+            for ln in open(lp, encoding="utf8", errors="replace"):
+                m = re.search(r"\[call failed\] (\w+) (\S+).*cause=(\w+)", ln)
+                if m: k = f"{m.group(1)} {re.sub(r'/z/[A-Za-z0-9_-]+/', '/z/<id>/', m.group(2))} {m.group(3)}"; cf[k] = cf.get(k, 0) + 1
+            break
     exp = int(EXPECT) if EXPECT else None
     jtxt = f"joined {got if got is not None else '?'}/{exp if exp else d.get('cap')}"
     if exp is not None and got is not None and got != exp: ok = False
@@ -59,6 +67,7 @@ def one(tag):
     if judged_bad: line += " | FAILED: " + "; ".join(c["n"] for c in judged_bad)
     if relay5 or third: line += f" | NOTE: {relay5} beacon-relay 5xx and {third} third-party errors (public beacon outage; phones fell back to other mirrors)"
     for n in d.get("notes", []): line += f" | note: {n}"
+    if cf: line += " | NOTE client-side connection failures (laptop network or edge reset; not HTTP statuses): " + ", ".join(f"{n} x {k}" for k, n in cf.items())
     return line, ok
 
 allok = True
