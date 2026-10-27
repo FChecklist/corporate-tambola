@@ -32,7 +32,7 @@ export function storySay(i: Pick<StoryIn, "state" | "time" | "countdown" | "call
     case "waiting": return i.time ? `The game starts at ${i.time}.` : "The game has not started yet.";
     case "countdown": return i.countdown ? `The game is starting in ${i.countdown}.` : "The game is starting.";
     case "waitStart": return "Waiting for the host to begin the game.";
-    case "running": return `The game is on. Numbers called: ${i.called ?? 0} of 90.`;
+    case "running": return i.called === undefined ? "The game is on." : `The game is on. Numbers called: ${i.called} of 90.`;
     case "paused": return `The game is paused by ${i.by || "the Organizer"}.`;
     case "endedPrizes": return `The game is over. All prizes were awarded after ${i.called ?? 0} numbers.`;
     case "endedAll": return "The game is over. All 90 numbers were called.";
@@ -61,3 +61,8 @@ export function storyTodo(i: Pick<StoryIn, "state" | "role" | "manual">): string
 }
 
 export const story = (i: StoryIn): { state: StoryState; say: string; todo: string } => ({ state: i.state, say: storySay(i), todo: storyTodo(i) });
+
+/** "Sat 6:30 pm" in India time: the same on every screen. */
+export const dayTimeIst = (ms: number): string => new Date(ms).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", hour: "numeric", minute: "2-digit", hour12: true }).replace(",", "").replace(/ (am|pm)$/i, (m) => m.toLowerCase());
+/** "3:05": minutes and seconds. */
+export const mmss = (sec: number): string => { sec = Math.max(0, Math.round(sec)); return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"); };

@@ -195,10 +195,10 @@ describe("the phone page and the number screen", () => {
     const r = await x.w.api("POST", "/api/z/HC-PH/control", { message: signControlWithSecret(KEY, nextMessage((await readPublished(x.kv, "HC-PH"))!, roundAt(x.now()), { action: "next" })) });
     expect(r.status).toBe(200);
     for (let i = 0; i < 5; i++) await x.step(); // 15 s of beacon time: the round named by the press is published
-    await p.waitFor((t) => /1 of 90 called/.test(t) && /Waiting for the host/.test(t), 25_000);
+    await p.waitFor((t) => /Numbers called: 1 of 90/.test(t) && /Waiting for the host/.test(t), 25_000);
     const n = p.win.__rt.view().log[0]; expect(n).toBeGreaterThan(0); // the page's own runtime
     expect((p.$("#big") as any).textContent.trim()).toBe(String(n));
-    await big.waitFor((t) => /1 of 90 numbers called/.test(t) && /Waiting for the host/.test(t), 25_000);
+    await big.waitFor((t) => /Numbers called: 1 of 90/.test(t) && /Waiting for the host/.test(t), 25_000);
     expect(p.errors).toEqual([]); expect(big.errors).toEqual([]);
   });
 });

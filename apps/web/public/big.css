@@ -48,3 +48,9 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,syste
 .cdown{display:flex;flex-direction:column;align-items:center;margin-top:2.5vh}
 .cdnum{font:800 min(9vh,12vw)/1 Inter,system-ui,sans-serif;color:#7A1C33;font-variant-numeric:tabular-nums;background:#fff;border:.6vh solid #E0B872;border-radius:50%;width:min(14vh,18vw);height:min(14vh,18vw);display:grid;place-items:center}
 .cdlbl{margin-top:1vh;font-size:min(2.6vh,3.4vw);opacity:.85}
+
+/* one plain story, the counter and the last few numbers */
+.storybar{margin:1vh 3vw;padding:1.2vh 2vw;border-left:.7vw solid var(--gold);background:rgba(255,255,255,.08);border-radius:.8vw;font-size:clamp(16px,2.1vw,34px);line-height:1.35}
+.storybar b{display:block}.storybar span{display:block;opacity:.85;font-size:.85em}
+.calledbig{font-size:clamp(18px,2.4vw,40px);margin:.3em 0;color:var(--mute)}.calledbig b{color:#fff}
+.lastfew{font-size:clamp(14px,1.8vw,30px);color:var(--mute);display:flex;gap:.5em;justify-content:center;align-items:center;flex-wrap:wrap}.lastfew i{font-style:normal;font-weight:700;color:#fff;border:2px solid var(--mute);border-radius:50%;min-width:1.9em;text-align:center}

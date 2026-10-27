@@ -701,9 +701,18 @@
     const total = v.late ? "since you joined" : "of 90";
     // Between two numbers (software calls): a big countdown 9, 8, 7 ... 1, then the number. Silent on purpose: the voice speaks only the number itself.
     const cdown = running && secs !== null && !v.waitingForHost && v.mode !== "hold" ? `<div class="zcount" role="timer" aria-label="Next number in ${secs} seconds"><div class="zring" style="--p:${Math.max(0, Math.min(100, Math.round(secs / Math.max(3, v.callSeconds || 9) * 100)))}"><b>${secs}</b></div><span>seconds to the next number</span></div>` : "";
-    return `<div class="zcard zcall"><div class="zchiprow"><span class="zchip2 ${tone}">${esc(chip)}</span><span class="zchip2 plain"><b data-count="${v.log.length}" data-ck="called">${v.log.length}</b>&nbsp;${total} called</span></div>
+    return `<div class="zcard zcall"><div class="zchiprow"><span class="zchip2 ${tone}">${esc(chip)}</span><span class="zchip2 plain" id="calledcount">Numbers called: <b data-count="${v.log.length}" data-ck="called">${v.log.length}</b>&nbsp;${v.late ? "since you joined" : "of 90"}</span></div>
         <div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
-        ${cdown}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p>`}</div>`;
+        ${v.log.length > 1 ? `<div class="zlast" id="lastfew" aria-label="The last numbers called"><span>Before it:</span>${v.log.slice(-6, -1).reverse().map((n) => `<i class="zlastn">${n}</i>`).join("")}</div>` : ""}${cdown}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p>`}</div>`;
+  }
+  /** One plain sentence: what is happening now and what to do, in the same words on every screen (ZG.story). */
+  function storyBarFor(v) {
+    const role = ME.role === "organizer" ? "organizer" : ME.role === "host" ? "host" : "player", called = v.late ? v.log.length + (v.late.hidden || 0) : v.log.length, manual = v.startMode === "manual";
+    let state;
+    if (INFO.cancelled) state = "cancelled"; else if (INFO.dns) state = "neverStarted"; else if (v.stopped) state = "endedByOrganizer"; else if (v.phase === "ended") state = v.endedByPrizes ? "endedPrizes" : "endedAll"; else if (v.locked) state = "unpaid"; else if (v.paused) state = "paused"; else if (v.waitingForStart) state = "waitStart"; else if (v.log.length || v.late) state = "running";
+    else { const left = manual ? v.startingInSec : v.nextCallInSec; state = left !== null && left !== undefined && left <= 300 ? "countdown" : "waiting"; }
+    const st = ZG.story({ state, role, called, manual, time: ZG.dayTimeIst((1692803367 + (v.scheduledRound - 1) * 3) * 1000), countdown: ZG.mmss(manual ? v.startingInSec : v.nextCallInSec), by: v.pausedInfo ? v.pausedInfo.by : undefined });
+    return `<div class="zstory" id="storyline" data-state="${state}"><b>${esc(st.say)}</b><span>${esc(st.todo)}</span></div>`;
   }
   /** Under the ticket: a Claim button for every prize the player's marks complete, what was claimed and is being checked, this player's Bogeys, and the prizes the ticket is out of. */
   function claimBar(v) {
@@ -737,7 +746,7 @@
   function playView(v) {
     const called = new Set(v.marks || []); // what the player has tapped (the ticket never marks itself)
     const last = v.log[v.log.length - 1];
-    const banners = [];
+    const banners = [storyBarFor(v)];
     if (v.error) banners.push(`<div class="zbanner warn" role="alert">${esc(v.error)}</div>`);
     if (v.locked) banners.push(ME.role === "organizer" || ME.role === "host" ? `<div class="zbanner warn" role="status"><b>Payment pending for this game.</b> The game starts 2 minutes after the payment is confirmed. Open your console to pay. Your ticket is safe. Keep this page open.</div>` : `<div class="zbanner warn" role="status"><b>Waiting for the Organizer or Host to start the game.</b> Your ticket is safe. Keep this page open: it begins as soon as they are done.</div>`);
     else if (v.stopped) banners.push(`<div class="zbanner info">The organizer has ended this game.</div>`);

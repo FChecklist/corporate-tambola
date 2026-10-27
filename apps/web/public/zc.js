@@ -365,7 +365,7 @@
   }
   function closeInfo() { const m = document.getElementById("zcmodal"); if (m) m.remove(); }
   /** A question that always shows (the browser's own confirm box can be blocked, and then the red button looks dead): true on Yes, false on No/Escape/outside tap; onYes runs inside the Yes tap (the only moment a new tab may open on a phone). */
-  function askSure(title, text, yes, no, onYes) { return new Promise((res) => { const old = document.getElementById("zcsure"); if (old) old.remove(); const m = document.createElement("div"); m.className = "zc-modal"; m.id = "zcsure"; m.setAttribute("role", "alertdialog"); m.setAttribute("aria-modal", "true"); m.setAttribute("aria-labelledby", "zcsuret"); m.innerHTML = `<div class="zc-mbox"><h3 id="zcsuret">${esc(title)}</h3>${String(text).split("\n\n").map((p) => `<p>${esc(p)}</p>`).join("")}<div class="zc-foot"><button type="button" class="zc-btn zc-btn-bad" data-y>${esc(yes)}</button> <button type="button" class="zc-btn zc-btn-alt" data-n>${esc(no)}</button></div></div>`; const key = (e) => { if (e.key === "Escape") done(false); }; const done = (v) => { document.removeEventListener("keydown", key); m.remove(); res(v); }; m.addEventListener("click", (e) => { if (e.target.closest("[data-y]")) { try { if (onYes) onYes(); } catch { /* the answer still counts */ } done(true); } else if (e.target === m || e.target.closest("[data-n]")) done(false); }); document.addEventListener("keydown", key); document.body.appendChild(m); const nb = m.querySelector("[data-n]"); if (nb) nb.focus(); }); }
+  function askSure(title, text, yes, no, onYes, tick) { return new Promise((res) => { const old = document.getElementById("zcsure"); if (old) old.remove(); const m = document.createElement("div"); m.className = "zc-modal"; m.id = "zcsure"; m.setAttribute("role", "alertdialog"); m.setAttribute("aria-modal", "true"); m.setAttribute("aria-labelledby", "zcsuret"); m.innerHTML = `<div class="zc-mbox"><h3 id="zcsuret">${esc(title)}</h3>${String(text).split("\n\n").map((p) => `<p>${esc(p)}</p>`).join("")}${tick ? `<label class="zc-tick"><input type="checkbox" id="zcsuretick"> ${esc(tick)}</label>` : ""}<div class="zc-foot"><button type="button" class="zc-btn zc-btn-bad" data-y${tick ? " disabled" : ""}>${esc(yes)}</button> <button type="button" class="zc-btn zc-btn-alt" data-n>${esc(no)}</button></div></div>`; const key = (e) => { if (e.key === "Escape") done(false); }; const done = (v) => { document.removeEventListener("keydown", key); m.remove(); res(v); }; m.addEventListener("click", (e) => { if (e.target.closest("[data-y]")) { try { if (onYes) onYes(); } catch { /* the answer still counts */ } done(true); } else if (e.target === m || e.target.closest("[data-n]")) done(false); }); document.addEventListener("keydown", key); document.body.appendChild(m); if (tick) { const cb = m.querySelector("#zcsuretick"), yb = m.querySelector("[data-y]"); cb.onchange = () => { yb.disabled = !cb.checked; }; } const nb = m.querySelector("[data-n]"); if (nb) nb.focus(); }); }
   document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("[data-info]"); if (b) { e.preventDefault(); e.stopPropagation(); openInfo(b.getAttribute("data-info")); } }, true);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeInfo(); });
   const hintOf = (path) => (HINTS[path] ? `<span class="zc-hint2">${HINTS[path]}</span>` : "");
@@ -1067,7 +1067,7 @@
     if (S.draft) return RUN_LINE + small("This opens when your game is published. Then you run the game from here: pause, resume, end, message your guests and hand over prizes.");
     const CS = S.control || {}, paused = !!CS.pausedNow, stopped = !!CS.stopped, onWay = !!CS.pausePending && !stopped, off = stopped || !!S.ctlBusy;
     const present = S.info && S.info.checkin && S.presence ? `<div class="zc-block" id="presentbox"><h3>Present: ${S.presence.present} of ${S.presence.total}</h3>${small("Check-in opens 5 minutes before the start. Every participant must mark themselves present (name, mobile, and the 4-digit code on their own ticket page) before their ticket opens. Only people who are present can win a prize.")}</div>` : "";
-    const ctl = `${present}<div class="zc-block"><h3>Controls</h3><div class="zc-chips"><button type="button" class="zc-btn zc-btn-s" data-ctl="pause"${paused || onWay || off ? " disabled" : ""}>Pause</button><button type="button" class="zc-btn zc-btn-s zc-btn-alt" data-ctl="resume"${paused && !off ? "" : " disabled"}>Resume</button>${paused && !off ? `<button type="button" class="zc-btn zc-btn-s zc-btn-alt" data-ctl="extend">Add 30 more minutes</button>` : ""}<button type="button" class="zc-btn zc-btn-s zc-btn-bad" data-ctl="stop"${off ? " disabled" : ""}>End the game</button></div>${stopped ? `<p id="ctlstate" role="status" style="margin:8px 0 0"><b>${CS.stopNow ? "The game is over." : "The game is being ended. Phones stop in about " + leadSec() + " seconds."}</b></p>` : paused ? `<p id="ctlstate" role="status" style="margin:8px 0 0"><b>Paused.</b> The numbers restart by themselves at ${esc(CS.pauseEnd ? ist(ZG.roundTimeMs(CS.pauseEnd)) : "the end of the pause")}. Press Resume sooner if the break is over.</p>` : onWay ? `<p id="ctlstate" role="status" style="margin:8px 0 0"><b>Pause on its way to the phones...</b></p>` : ""}
+    const ctl = `${present}<div class="zc-block"><h3>Controls</h3><div class="zc-chips"><button type="button" class="zc-btn zc-btn-s" data-ctl="pause"${paused || onWay || off ? " disabled" : ""}>Pause the game…</button><button type="button" class="zc-btn zc-btn-s zc-btn-alt" data-ctl="resume"${paused && !off ? "" : " disabled"}>Resume</button>${paused && !off ? `<button type="button" class="zc-btn zc-btn-s zc-btn-alt" data-ctl="extend">Add 30 more minutes</button>` : ""}<button type="button" class="zc-btn zc-btn-s zc-btn-bad" data-ctl="stop"${off ? " disabled" : ""}>End the game</button></div>${stopped ? `<p id="ctlstate" role="status" style="margin:8px 0 0"><b>${CS.stopNow ? "The game is over." : "The game is being ended. Phones stop in about " + leadSec() + " seconds."}</b></p>` : paused ? `<p id="ctlstate" role="status" style="margin:8px 0 0"><b>Paused.</b> The numbers restart by themselves at ${esc(CS.pauseEnd ? ist(ZG.roundTimeMs(CS.pauseEnd)) : "the end of the pause")}. Press Resume sooner if the break is over.</p>` : onWay ? `<p id="ctlstate" role="status" style="margin:8px 0 0"><b>Pause on its way to the phones...</b></p>` : ""}
       ${small((S.cf ? `A pause reaches every phone about ${leadSec()} seconds after you press it: phones check in on a timer, and larger games check less often so they stay within the free plan.` : (S.info && S.info.cap > 2000 ? "Pause is available for games of up to 2,000 people. This one is larger, so it runs without it." : "Pause becomes available once this game is set up.")) + (S.ctlNote ? ' <b id="ctlnote" role="status">' + esc(S.ctlNote) + "</b>" : ""))}</div>`;
     const bigCtl = `${present}<div class="zc-block"><h3>Controls</h3>${small("Pause and End are available for games of up to 2,000 people. This game runs without them. Start is the one control: once the game has started it plays itself.")}</div>`;
     return RUN_LINE + startBlock() + hostBlock() + (S.cf && S.cf.startOnly ? bigCtl : ctl) + changesBlock() + announceBlock() + statsBlock() + prizeBlock() + rewardsBlock() + luckyBlock() + playBlock() + cont(9);
@@ -1267,12 +1267,68 @@
     if (allPrizesWon()) { const last = Math.max(0, ...(S.published || []).filter((x) => (x.round || 1) === (S.round || 1) && Number.isInteger(x.idx)).map((x) => x.idx + 2)); if (last > 0 && last < log.length) log = log.slice(0, last); }
     return log;
   }
-  /** At the TOP of the game screen, always: the Number board button, the numbers called so far, a big PAUSED banner (who, since when, until when, with Resume), and how the game ended. */
-  function liveBar() {
+  const dayTimeIst = (ms) => ZG.dayTimeIst(ms); // the same words on every screen
+  const mmssOf = (sec) => ZG.mmss(sec);
+  /** What is happening now, as one of the story states (the same words every screen uses: ZG.story). */
+  function consoleStory() {
+    const log = calledSoFar(), r = role(), who = r === "host" ? "host" : r === "cohost" ? "cohost" : "organizer";
+    const base = { role: who, called: log.length, manual: manualMode() };
+    if (S.draft) return ZG.story({ ...base, state: "draft" });
+    if (isCancelled()) return ZG.story({ ...base, state: "cancelled" });
+    if (didNotStart()) return ZG.story({ ...base, state: "neverStarted" });
+    const pz = S.st && S.now !== null ? S.st.intervals.find((i) => S.now >= i.start && S.now < i.end) : null;
+    if (S.control && S.control.stopNow) return ZG.story({ ...base, state: "endedByOrganizer" });
+    if (allPrizesWon()) return ZG.story({ ...base, state: "endedPrizes" });
+    if (S.started && log.length >= 90 && (S.round || 1) >= ((S.cfg && S.cfg.rounds) || 1)) return ZG.story({ ...base, state: "endedAll" });
+    if (S.unpaid) return ZG.story({ ...base, state: "unpaid" });
+    if (pz) { const pm = S.cf ? (S.cf.messages || []).find((m) => m.action === "pause" && m.atBeaconRound === pz.start) : null; return ZG.story({ ...base, state: "paused", by: pm && S.cf.by && S.cf.by[pm.seq - 1] === "Host" ? "a Host" : "the Organizer" }); }
+    if (!S.info) return ZG.story({ ...base, state: "waiting" });
+    const sr = S.info.startRound, go = goRound();
+    if (manualMode() && go === null) {
+      if (S.now !== null && S.now > sr + 28800) return ZG.story({ ...base, state: "neverStarted" }); // a day after its time, nobody pressed Start
+      return ZG.story({ ...base, state: S.now !== null && S.now >= sr ? "waitStart" : "waiting", time: dayTimeIst(S.info.startMs) });
+    }
+    if (log.length === 0) {
+      const first = manualMode() ? go : sr + ZG.GRACE_ROUNDS, left = S.now === null || first === null ? null : (first - S.now) * 3;
+      if (left !== null && left > 0 && left <= 300) return ZG.story({ ...base, state: "countdown", countdown: mmssOf(left) });
+      if (left !== null && left > 300) return ZG.story({ ...base, state: "waiting", time: dayTimeIst(S.info.startMs) });
+    }
+    return ZG.story({ ...base, state: "running" });
+  }
+  const storyHtml = (st) => `<div class="zc-story" id="storyline" data-state="${st.state}"><b>${esc(st.say)}</b> <span>${esc(st.todo)}</span></div>`;
+  /** The vital details during the game and after it: from the game log the Worker keeps (tickets by number only). */
+  function vitalsHtml() {
+    const g = S.glog; if (!g || S.draft) return "";
+    const log = calledSoFar(), when = (ms) => (ms ? hmIst(ms) : "-");
+    const people = `${g.people.joined} joined` + (g.people.waiting ? `, ${g.people.waiting} waiting for your OK` : ", none waiting") + (g.people.present != null ? `, ${g.people.present} checked in as present` : "");
+    const prizes = g.prizes.length ? g.prizes.map((p) => `<div class="zc-rowl"><span><b>${esc(p.prize)}</b>${p.text ? " · " + esc(p.text) : ""}</span><span>Ticket number ${p.ticket} · ${esc(when(p.atMs))}</span></div>`).join("") : '<span class="zc-small zc-nomargin">None yet.</span>';
+    const pauses = g.pauses.length ? g.pauses.map((p) => `Paused by ${p.by.replace(/^The /, "the ").replace(/^A /, "a ")} at ${esc(when(p.fromMs))}${p.toMs ? " until " + esc(when(p.toMs)) : ""}`).join("; ") : "Not paused so far.";
+    const warn = g.warnings.length ? g.warnings.map((w) => `<div class="zc-warnline">${esc(w)}</div>`).join("") : '<span class="zc-small zc-nomargin">Nothing to worry about.</span>';
+    return `<details class="zc-block zc-vitals" id="vitals" open><summary><b>Game details</b></summary>
+      <div class="zc-rowl"><span>Status</span><span id="v-status">${esc(consoleStory().say)}</span></div>
+      <div class="zc-rowl"><span>Numbers called</span><span id="v-called">${log.length} of 90</span></div>
+      <div class="zc-rowl"><span>People</span><span id="v-people">${esc(people)}</span></div>
+      <div class="zc-rowl"><span>Pauses</span><span id="v-pauses">${pauses}</span></div>
+      <h4 class="zc-h4">Prizes won so far</h4><div id="v-prizes">${prizes}</div>
+      <h4 class="zc-h4">Warnings</h4><div id="v-warn">${warn}</div></details>`;
+  }
+  function gameLogBlock() {
     if (S.draft || !S.info || !eid) return "";
+    const done = gameEnded() || (S.glog && S.glog.saved);
+    if (!done) return "";
+    const href = location.origin + "/gamelog.html?e=" + encodeURIComponent(eid), key = "#k=" + encodeURIComponent(secret);
+    return `<div class="zc-block" id="gamelogbox"><h3>Game log</h3>${small("The vital details of this game in plain words: start and end time, how it ended, how many people joined, every prize with its ticket number and time, the pauses, the changes to the settings, the report e-mail and every number called with its time. It has ticket numbers only: no names and no mobile numbers. It is kept for 365 days.")}
+      <div class="zc-chips"><a class="zc-btn zc-btn-big" id="gamelogopen" href="${esc(href + key)}" target="_blank" rel="noopener">Open the game log (print or save as PDF)</a><a class="zc-btn zc-btn-big zc-btn-alt" id="gamelogtxt" href="${esc(href + "&txt=1" + key)}" target="_blank" rel="noopener">Download as a text file</a></div></div>`;
+  }
+  /** At the TOP of the game screen, always: the one-sentence story, the Number board button, the counter (the latest number big, the last few beside it), a big PAUSED banner (who, since when, until when, with Resume), and how the game ended. */
+  function liveBar() {
+    if (!S.info || !eid) return "";
+    const st = consoleStory();
+    if (S.draft) return `<div class="zc-block zc-livebar" id="livebar">${storyHtml(st)}</div>`;
     const board = `<a class="zc-btn zc-btn-big zc-boardbtn" id="boardbtn" href="${esc(location.origin + "/board.html?e=" + encodeURIComponent(eid) + "#k=" + encodeURIComponent(secret))}" target="_blank" rel="noopener">Number board</a>`;
-    if (!S.started) return `<div class="zc-block zc-livebar" id="livebar"><div class="zc-boardrow">${board}<span class="zc-small zc-nomargin">The board with every number called, like the real game. Only you and the Hosts can open it.</span></div></div>`;
+    if (!S.started) return `<div class="zc-block zc-livebar" id="livebar">${storyHtml(st)}<div class="zc-boardrow">${board}<span class="zc-small zc-nomargin">The board with every number called, like the real game. Only you and the Hosts can open it.</span></div></div>`;
     const log = calledSoFar(), last = log.length ? log[log.length - 1] : null, total = 90;
+    const few = log.slice(-6, -1).reverse().map((n) => `<span class="zc-ball">${n}</span>`).join("");
     const strip = log.length ? log.map((n, i) => `<span class="zc-ball${i === log.length - 1 ? " last" : ""}">${n}</span>`).join("") : `<span class="zc-small zc-nomargin">No number has been called yet.</span>`;
     let pause = "";
     const pz = S.st && S.now !== null ? S.st.intervals.find((i) => S.now >= i.start && S.now < i.end) : null;
@@ -1281,12 +1337,7 @@
       const mins = Math.max(1, Math.round((pz.end - S.now) * 3 / 60));
       pause = `<div class="zc-pausebanner" id="pausebanner" role="status"><b>PAUSED</b><span>Paused by ${who} at ${esc(hmIst(ZG.roundTimeMs(pz.start)))} India time. The numbers start again at about ${esc(hmIst(ZG.roundTimeMs(pz.end)))} (in about ${mins} ${mins === 1 ? "minute" : "minutes"}), or sooner when you press Resume.</span><button type="button" class="zc-btn zc-btn-big" data-ctl="resume"${S.ctlBusy ? " disabled" : ""}>Resume the game</button></div>`;
     }
-    let end = "";
-    if (S.control && S.control.stopNow) end = `The organizer ended the game after ${log.length} numbers.`;
-    else if (allPrizesWon()) end = `All prizes were awarded after ${log.length} numbers.`;
-    else if (S.started && log.length >= total && (S.round || 1) >= ((S.cfg && S.cfg.rounds) || 1)) end = "All 90 numbers were called.";
-    const endBanner = end ? `<div class="zc-endbanner" id="endbanner" role="status"><b>The game is over.</b> ${esc(end)}</div>` : "";
-    return `<div class="zc-block zc-livebar" id="livebar">${endBanner}${pause}<div class="zc-boardrow">${board}<b id="numcount">${log.length} of ${total} numbers called${last ? ", the latest is " + last : ""}</b></div><div class="zc-numstrip" id="numstrip" aria-label="Numbers called so far">${strip}</div></div>`;
+    return `<div class="zc-block zc-livebar" id="livebar">${storyHtml(st)}${pause}<div class="zc-boardrow">${board}<div class="zc-counter" id="numcount"><span class="zc-small zc-nomargin">Numbers called: <b>${log.length}</b> of ${total}</span><span class="zc-latest" id="latestnum" aria-label="${last ? "Latest number " + last : "No number yet"}">${last ?? "–"}</span>${few ? `<span class="zc-fewlbl">Before it:</span>${few}` : ""}</div></div><div class="zc-numstrip" id="numstrip" aria-label="Numbers called so far">${strip}</div>${vitalsHtml()}${gameLogBlock()}</div>`;
   }
   function mainHtml() {
     const r = role();
@@ -1305,10 +1356,20 @@
     return frame(`<div class="zc-body">${side}<div class="zc-main">${mainHtml()}</div></div>`, true);
   }
   const roleAcceptView = () => frame(`<div class="zc-body"><div class="zc-main"><div class="zc-block" id="roleaccept"><h3>Before you start</h3>${small("Tick the box to take the Co-host role. You can then invite people and pay.")}${CBConsent.html("K5")}${S.roleErr ? `<p class="zc-small zc-warnt" role="alert">${esc(S.roleErr)}</p>` : ""}<div class="zc-foot"><button class="zc-btn" type="button" id="roleacceptgo" data-needs="K5" disabled aria-disabled="true">Accept the Co-host role</button></div></div></div></div>`, false);
+  /** The Co-host knows less: when the game starts, whether it is paid, and how it ended. The words are the same ones everybody reads. */
+  function cohostStory() {
+    const c = S.coh || {}, base = { role: "cohost" };
+    if (c.cancelled) return ZG.story({ ...base, state: "cancelled" });
+    if (c.didNotStart) return ZG.story({ ...base, state: "neverStarted" });
+    if (c.ended) { const why = String(c.ended.reason || ""); return ZG.story({ ...base, state: /^All prizes/.test(why) ? "endedPrizes" : /ended by the organizer/.test(why) ? "endedByOrganizer" : "endedAll", called: c.ended.numbers ?? undefined }); }
+    if (c.price != null) return ZG.story({ ...base, state: "unpaid" });
+    if (c.startMs && c.startMs > Date.now()) return ZG.story({ ...base, state: "waiting", time: ZG.dayTimeIst(c.startMs) });
+    return ZG.story({ ...base, state: "running" });
+  }
   function cohostView() {
     if (S.coh && S.coh.roleAccepted === false) return roleAcceptView();
     const side = `<aside class="zc-side"><div class="zc-me"><span class="zc-num zc-num-dark">C</span><span><span class="zc-muted">You are</span><br><b>Co-host</b></span></div><div class="zc-small zc-nomargin">Your game at a glance</div>${synHtml()}</aside>`;
-    return frame(`<div class="zc-body">${side}<div class="zc-main"><div id="zc-top"></div>${eid ? `<div class="zc-block zc-livebar" id="livebar"><div class="zc-boardrow"><a class="zc-btn zc-btn-big zc-boardbtn" id="boardbtn" href="${esc(location.origin + "/board.html?e=" + encodeURIComponent(eid) + "#k=" + encodeURIComponent(secret))}" target="_blank" rel="noopener">Number board</a><span class="zc-small zc-nomargin">The board with every number called, like the real game.</span></div></div>` : ""}${S.note ? `<div class="zc-toast" role="status">${esc(S.note)}</div>` : ""}${S.cohErr && !S.coh ? `<div class="zc-toast" role="status">${esc(S.cohErr)}</div>` : ""}<div class="zc-small zc-rolenote">${esc(ROLE_NOTE.cohost)}</div>${S.coh && S.coh.waitingFor && !didNotStart() ? `<div class="zc-toast" role="status" id="cohwaiting">Waiting for the Organizer or Host to start the game.</div>` : ""}${S.coh && didNotStart() ? `<div class="zc-alert" id="didnotstart" role="status"><h3>This game did not start.</h3><p>Guest details have been erased.</p></div>` : ""}${nextHtml()}${steps().map(secHtml).join("")}${helpHtml()}</div></div>`, true);
+    return frame(`<div class="zc-body">${side}<div class="zc-main"><div id="zc-top"></div>${eid ? `<div class="zc-block zc-livebar" id="livebar">${storyHtml(cohostStory())}<div class="zc-boardrow"><a class="zc-btn zc-btn-big zc-boardbtn" id="boardbtn" href="${esc(location.origin + "/board.html?e=" + encodeURIComponent(eid) + "#k=" + encodeURIComponent(secret))}" target="_blank" rel="noopener">Number board</a><span class="zc-small zc-nomargin">The board with every number called, like the real game.</span></div></div>` : ""}${S.note ? `<div class="zc-toast" role="status">${esc(S.note)}</div>` : ""}${S.cohErr && !S.coh ? `<div class="zc-toast" role="status">${esc(S.cohErr)}</div>` : ""}<div class="zc-small zc-rolenote">${esc(ROLE_NOTE.cohost)}</div>${S.coh && S.coh.waitingFor && !didNotStart() ? `<div class="zc-toast" role="status" id="cohwaiting">Waiting for the Organizer or Host to start the game.</div>` : ""}${S.coh && didNotStart() ? `<div class="zc-alert" id="didnotstart" role="status"><h3>This game did not start.</h3><p>Guest details have been erased.</p></div>` : ""}${nextHtml()}${steps().map(secHtml).join("")}${helpHtml()}</div></div>`, true);
   }
   const loadingView = () => frame(`<div class="zc-body"><div class="zc-main"><div class="zc-toast" role="status">${esc(S.note || "Loading…")}</div>${eid && isOrg() ? "" : ""}</div></div>`, false);
 
@@ -1504,6 +1565,7 @@
       const schedOf = (r) => Array.from({ length: 90 }, (_, k) => ZG.callRoundR(st, S.info.startRound + ZG.GRACE_ROUNDS, stride, S.cfg.breaks, r, k));
       S.started = S.cfg.startMode === "manual" ? !!(st && st.goRound != null) : now !== null && now >= S.info.startRound + ZG.GRACE_ROUNDS; // a manual start has started when Start was pressed, however late
       try { S.changes = S.draft ? null : await call("GET", `/api/z/${eid}/changes`); } catch { S.changes = null; } // "what changed, who, when"
+      try { S.glog = S.draft ? null : await call("GET", `/api/z/${eid}/gamelog`); } catch { S.glog = null; } // the vital details (tickets by number only)
       try { S.published = (await fetch(BASE + `/api/z/${eid}/results`).then((r) => r.json())).results || []; } catch { S.published = S.published || []; }
       if (!S.store) S.store = new ZG.RoundStore({});
       S.logs = {}; let budget = 60; // catch up quickly when the console is opened late
@@ -2004,7 +2066,7 @@
     };
     all("[data-ctl]", (b) => (b.onclick = async () => {
       const action = b.dataset.ctl;
-      if (S.ctlBusy) return; if (action === "pause" && !(await askSure("Are you sure? Numbers stop for everybody.", "The game pauses on every phone and on the big screen until you press Resume. It ends by itself after 30 minutes.", "Yes, pause the game", "No, keep playing"))) return; if (action === "stop" && !(await askSure("End the game for everyone?", "Every guest's phone stops at the same number. This cannot be undone.", "Yes, end the game for everyone", "No, keep playing"))) return; S.ctlBusy = true; S.ctlNote = ""; redraw();
+      if (S.ctlBusy) return; if (action === "pause" && !(await askSure("Are you sure? Numbers stop for everybody.", "The game pauses on every phone and on the big screen until you press Resume. It ends by itself after 30 minutes.", "Yes, pause the game", "No, keep playing", null, "I understand: the numbers stop for every player until I press Resume."))) return; if (action === "stop" && !(await askSure("End the game for everyone?", "Every guest's phone stops at the same number. This cannot be undone.", "Yes, end the game for everyone", "No, keep playing"))) return; S.ctlBusy = true; S.ctlNote = ""; redraw();
       try { const r = await Promise.race([TBControl.publish(eid, { token: secret, base: BASE, prefix: "/api/z" }, action, action === "pause" ? { pauseForRounds: 600 } : action === "extend" ? { addRounds: 600 } : {}), new Promise((_, no) => setTimeout(() => no(new Error("Failed to fetch")), 30000))]); S.ctlNote = r.status === 200 ? CTL_SENT[action](leadSec()) : ctlWords({ message: (r.data && r.data.error) || "Not accepted" }); } catch (e) { S.ctlNote = ctlWords(e); } S.ctlBusy = false; /* frees the buttons after 30 s */
       refreshEng();
     }));

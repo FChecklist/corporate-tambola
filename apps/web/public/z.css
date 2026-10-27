@@ -320,3 +320,9 @@ body:has(#go) #ct-notify{display:none}
 /* the game is paused: a big banner, never missed */
 .zbanner.pause{display:flex;flex-direction:column;gap:4px;padding:16px 18px;border:3px solid #b45309;background:#fff4d6;color:#4a2a00;font-size:1.05rem;border-radius:12px}
 .zbanner.pause b{font-size:1.6rem;letter-spacing:.06em}
+
+/* one plain story at the top of the player's page, and the last few numbers beside the big one */
+.zstory{display:flex;flex-direction:column;gap:2px;padding:12px 14px;margin:0 0 10px;border-left:6px solid #0b3d91;background:#eef3fb;color:#14233f;border-radius:8px;font-size:1.05rem}
+.zstory[data-state="paused"]{border-color:#b45309;background:#fff4d6}.zstory[data-state^="ended"]{border-color:#1b6b3a;background:#e8f6ec}
+.zlast{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;margin:6px 0}.zlast span{font-size:.9rem;color:#555}
+.zlastn{font-style:normal;font-weight:600;min-width:34px;height:34px;border-radius:17px;display:inline-flex;align-items:center;justify-content:center;background:#e9eef7;border:1px solid #9aa7bd}
