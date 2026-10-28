@@ -1,5 +1,6 @@
 // The whole phone-side engagement loop, with no UI, so it can be tested without a browser and then wrapped by a thin page.
 // It talks to exactly two things: the public beacon (through BeaconOpts) and our one small store (through deps.api).
+import { beatOffsetMs, beatPeriodMs, followUpSpreadMs, msToNextBeat, reconnectAfterMs, ticketOf } from "./beat";
 import { generateTicket, type Ticket } from "../../shared/src/ticket";
 import { winningNumbers } from "./house-rules";
 import { ALL_SAFETIES, ControlTracker, SAFETY_FAST, SAFETY_STANDARD, hostControlOf, pausedAt, type ControlConfig } from "./control";
@@ -33,6 +34,8 @@ export interface RuntimeView {
   nextCallInSec: number | null;
   /** Seconds left to claim, minus one (11 down to 0): a nudge only, the game's clock decides. null when there is no gap to count (a Host calls the numbers) or no time left. */
   claimLeft: number | null;
+  /** The claim signal has not answered for a while although the page is in front: the page says Reconnecting. */
+  reconnecting: boolean;
   tickets: Ticket[]; cfg: EngagementCfg;
   /** The brand break showing right now, with seconds left; null when none. */
   brk: { title: string; kind: BreakCfg["kind"]; mediaUrl?: string; secondsLeft: number; seconds: number; winners?: number } | null;
@@ -485,7 +488,7 @@ export class PhoneRuntime {
   private prizesEnded = false;
   /** The beacon round this phone joined in when that was after the game began (0: in time). */
   private myJr = 0;
-  private cap = 0;
+  cap = 0;
   // every phone works out the winners itself from the public seat list
   private seatList: { pid: string; countFrom: number; ex?: boolean; blk?: boolean }[] = [];
   private blkVer = 0; // changes when the list of removed seats changes
@@ -494,13 +497,31 @@ export class PhoneRuntime {
   private seatsFetched = false;
   private lastSeatPoll = -Infinity;
   /** The claim signal (a few digits, every ~2 s while this page is in front): when it moved, the claim list is read at once so everybody hears of a claim within a few seconds. The page sets beatOn=false while hidden. */
-  beatOn = true; private cvKnown = -1; private lastBeat = -Infinity; private beating = false;
+  beatOn = true; private cvKnown = -1; private lastBeatCycle = -1; private beating = false; private lastBeatOk = -Infinity; private beatFails = 0; private seatsNotBefore = 0;
+  /** The page asks at the exact slot moment itself (setTimeout); without it (tests, a page that has not started its timer) the once-a-second tick asks when the slot's cycle changes. */
+  externalBeat = false;
+  private get wallNow(): number { return this.deps.mono() + (this.offsetMs ?? 0); }
+  /** Milliseconds until this phone's next ask, on the beacon-synced clock. */
+  msToNextBeat(): number { return msToNextBeat(this.wallNow, ticketOf(this.pid), this.cap); }
   private async beat(now: number) {
-    if (!this.beatOn || this.beating || this.phase !== "play" || now < this.startRound) return;
-    const m = this.deps.mono(); if (m - this.lastBeat < 1900) return; // the page ticks once a second, so this is every 2 s; phones started at different moments so their asks are spread out
-    this.lastBeat = m; this.beating = true;
-    try { const n = Number(await this.deps.api("GET", `/api/z/${this.eid}/cv`)); if (Number.isFinite(n)) { if (this.cvKnown >= 0 && n > this.cvKnown) this.wantSeats = true; this.cvKnown = n; } } catch { /* the slow poll still brings the news */ } finally { this.beating = false; }
+    if (this.externalBeat) return;
+    const period = beatPeriodMs(this.cap), cycle = Math.floor((this.wallNow - beatOffsetMs(ticketOf(this.pid), this.cap)) / period);
+    if (cycle === this.lastBeatCycle) return; // (the page ticks once a second: asks when this ticket's slot comes round)
+    await this.beatNow(now, cycle);
   }
+  /** One ask of the claim signal. Called at the slot moment by the page, or by the tick. */
+  async beatNow(now: number = this.nowRound ?? 0, cycle = -2) {
+    if (!this.beatOn || this.beating || this.phase !== "play" || now < this.startRound) return;
+    if (cycle !== -2) this.lastBeatCycle = cycle;
+    const m = this.deps.mono(); this.beating = true;
+    try {
+      const n = Number(await this.deps.api("GET", `/api/z/${this.eid}/cv`));
+      if (Number.isFinite(n)) { if (this.cvKnown >= 0 && n > this.cvKnown) { this.wantSeats = true; this.seatsNotBefore = this.deps.mono() + followUpSpreadMs(ticketOf(this.pid), this.cap); } this.cvKnown = n; this.lastBeatOk = this.deps.mono(); this.beatFails = 0; }
+    } catch { this.beatFails++; /* the slow poll still brings the news */ } finally { this.beating = false; }
+    void m;
+  }
+  /** True when the claim signal has not answered for a while although the page is in front: the page shows a calm "Reconnecting". */
+  get reconnecting(): boolean { return this.beatOn && this.phase === "play" && this.beatFails >= 2 && this.deps.mono() - this.lastBeatOk > reconnectAfterMs(this.cap); }
   /** The beacon round the newest seat list was asked for in: a lucky draw is only worked out from a list at least that fresh. */
   private seatsFreshRound = 0;
   private wantSeats = false;
@@ -608,6 +629,7 @@ export class PhoneRuntime {
   private async pollSeats(now: number) {
     const m = this.deps.mono();
     // a phone that pressed Claim and has no result yet asks sooner (a few polls by a few phones), so a winner hears quickly and the game can end once the last prize is settled
+    if (this.wantSeats && m < this.seatsNotBefore) return; // (spread over 0..1 s by slot after a changed claim signal)
     if (now < this.startRound || (!this.wantSeats && m - this.lastSeatPoll < (this.seatsFetched ? (this.wantClaims() || this.waitingForResult() ? Math.min(6_000, this.seatEveryMs()) : this.seatEveryMs()) : 5_000) + (Math.floor(m) % 2000))) return;
     this.lastSeatPoll = m; this.wantSeats = false;
     const askedAt = this.nowRound ?? 0;
@@ -812,6 +834,7 @@ export class PhoneRuntime {
       mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: isPaused, stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
       claimed: claimedNow, unsent: this.unsent, results: this.allResults.filter((x) => (x.round ?? 1) === this.cur), pendingChecks: this.store.pending(), discarded: this.store.discarded,
       nextCallInSec: nextRound !== null && now !== null ? secsTo(nextRound) : null,
+      reconnecting: this.reconnecting,
       claimLeft: (() => { if (this.hostMode || now === null) return null; const lastR = done ? this.roundFor(NUMBERS - 1) : null; const end = nextRound !== null ? nextRound : lastR !== null && Number.isFinite(lastR) ? lastR + this.stride : null; if (end === null) return null; const n = secsTo(end); return n !== null && n >= 1 ? n - 1 : null; })(),
       tickets: this.tickets, cfg: this.cfg, brk: this.currentBreak(now), myIdx: this.myIdx(), lucky: this.luckyView(),
       round: this.cur, rounds: this.cfg.rounds, intermission: inter ? { round: this.cur + 1, secondsLeft: secsTo(inter.endsAtRound) ?? 0 } : null, past: this.pastView(),

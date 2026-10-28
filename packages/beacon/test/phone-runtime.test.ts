@@ -108,10 +108,18 @@ describe("a phone from first open to full house", () => {
     for (let i = 0; i < 12 && !paths.slice(-2).some((p) => /\/seats\?/.test(p)); i++) await step([b]); // wait until a slow poll has just run: the next one is 15 s or more away
     paths.length = 0;
     await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(`cv/${EID}`, "5", "5").run(); // a claim event somewhere
-    await step([b]);
-    expect(paths.some((p) => /\/seats\?/.test(p))).toBe(true); // heard in the very next beat
+    await step([b]); await step([b]); // the beat sees the change; the claim list is read after this ticket's own spread (0 to 1 s), so by the next step
+    expect(paths.some((p) => /\/seats\?/.test(p))).toBe(true); // heard within one beat plus the spread
     b.rt.beatOn = false; paths.length = 0; for (let i = 0; i < 4; i++) await step([b]);
     expect(paths.some((p) => /\/cv$/.test(p))).toBe(false); // a hidden page sends nothing
+  });
+  test("Reconnecting: no answer from the claim signal for about one and a half periods shows the calm state, a hidden page never does, and it clears by itself when the answers come back", async () => {
+    let offline = false; const a = mkPhone(12, { down: () => offline }); await a.rt.boot(); await a.rt.join(a.phone); a.quiet = true;
+    for (let i = 0; i < 6; i++) await step([a]); expect(a.rt.view().reconnecting).toBe(false);
+    offline = true; for (let i = 0; i < 5; i++) { await step([a]); try { await a.rt.beatNow(); } catch { /* counted */ } }
+    expect(a.rt.view().reconnecting).toBe(true);
+    a.rt.beatOn = false; expect(a.rt.view().reconnecting).toBe(false); a.rt.beatOn = true; // a hidden page says nothing
+    offline = false; for (let i = 0; i < 3; i++) await step([a]); expect(a.rt.view().reconnecting).toBe(false);
   });
   test("calls are revealed one at a time as their rounds are published, never early", async () => {
     const a = mkPhone(2); await a.rt.boot(); await a.rt.join(a.phone);

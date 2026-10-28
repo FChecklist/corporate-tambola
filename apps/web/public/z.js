@@ -77,6 +77,8 @@
   const getPublic = DEMO ? DEMO.getPublic : async (url) => { let r; try { r = await fetch(url, { cache: "no-store" }); } catch { throw new Error("offline"); } if (!r.ok) throw Object.assign(new Error("http " + r.status), { status: r.status }); return r.json(); };
   const rt = new ZG.PhoneRuntime(EID, DEMO ? { api, getPublic, beacon: DEMO.beacon, verify: DEMO.verify, mono: DEMO.mono, store } : { api, getPublic, beacon: {}, mono: () => performance.now(), store });
   if (DEMO) rt.beatOn = false; // the free demo has no server to ask
+  // The claim signal is asked at this phone's own slot (ticket number, see beat.ts): ~120 ms before the moment the clock is checked again, then the ask goes out exactly on time. A hidden page asks nothing (beatOn).
+  if (!DEMO) { rt.externalBeat = true; const arm = () => { const ms = rt.msToNextBeat(), early = Math.max(0, ms - 120); setTimeout(() => { const left = rt.msToNextBeat(); setTimeout(() => { try { rt.beatNow(); } catch { /* next slot */ } arm(); }, left > ZG.BEAT.beatPeriodMs(rt.cap) - 250 ? 0 : left); }, ms < 120 ? 0 : early); }; arm(); }
   let lastLen = 0, firstPaint = true, sound = store.get("ctz-sound") !== "off", timer = null;
   if (window.TBAudio) TBAudio.enabled = sound;
   const clock = (s) => { s = Math.max(0, Math.round(s)); return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map((n) => String(n).padStart(2, "0")).join(":"); }; // 00:12:34
@@ -725,9 +727,9 @@
   function toastsFrom(v) {
     const feed = v.claimFeed || [], won = (v.results || []).filter((x) => x.pattern !== "lucky" && x.pattern !== "unlucky");
     if (TOASTS.seen === null) { TOASTS.seen = new Set(feed.map((c) => c.id)); TOASTS.seenWon = new Set(won.map((x) => x.pattern + "#" + x.ordinal + "#" + (x.round || 1))); return; } // what happened before the page opened is not announced again
-    for (const c of feed) { if (TOASTS.seen.has(c.id)) continue; TOASTS.seen.add(c.id); toast(c.bogey ? `Ticket ${c.ticket}'s claim was not correct. The game continues.` : `Ticket ${c.ticket} has claimed ${KEYNAME(c.pattern)}. Checking now\u2026`); }
+    for (const c of feed) { if (TOASTS.seen.has(c.id)) continue; TOASTS.seen.add(c.id); toast(ZG.say(c.bogey ? "claim.w" : "claim.k", { t: c.ticket, p: KEYNAME(c.pattern) })); }
     for (const x of won) { const k = x.pattern + "#" + x.ordinal + "#" + (x.round || 1); if (TOASTS.seenWon.has(k)) continue; TOASTS.seenWon.add(k); const t = (x.tickets || [])[0], name = KEYNAME(x.pattern);
-      toast(t ? `Ticket ${t}'s claim is correct. Congratulations Ticket ${t} on winning ${name}! \u{1F389} The game continues.` : `A claim for ${name} is correct. The game continues.`); toast(`${name} has been won. It is no longer available.`); }
+      toast(ZG.say(t ? "claim.a" : "claim.a2", { t: t || "", p: name })); toast(ZG.say("claim.g", { p: name })); }
     TOASTS.list = TOASTS.list.filter((x) => !x.gone);
   }
   const toastHtml = () => (TOASTS.list.some((x) => !x.gone) ? `<div class="ztoasts" id="claimtoasts" role="status" aria-live="polite">${TOASTS.list.filter((x) => !x.gone).map((x) => `<div class="ztoast">${esc(x.text)}</div>`).join("")}</div>` : "");
@@ -833,6 +835,7 @@
     toastsFrom(v);
     const banners = [storyBarFor(v), claimAlert(v), awayLine()];
     { const now = (v.claimNow || []).join(","); if (now && now !== LAST_CLAIM_NOW) { try { navigator.vibrate && navigator.vibrate(220); } catch {} } LAST_CLAIM_NOW = now; } // a short buzz the moment a prize becomes claimable, where the phone allows it
+    if (v.reconnecting) banners.push(`<div class="zbanner info" id="reconnecting" role="status">${esc(ZG.say("net.reconnecting"))}</div>`);
     if (v.error) banners.push(`<div class="zbanner warn" role="alert">${esc(v.error)}</div>`);
     if (v.locked) banners.push(ME.role === "organizer" || ME.role === "host" ? `<div class="zbanner warn" role="status"><b>Payment pending for this game.</b> The game starts 2 minutes after the payment is confirmed. Open your console to pay. Your ticket is safe. Keep this page open.</div>` : `<div class="zbanner warn" role="status"><b>Waiting for the Organizer or Host to start the game.</b> Your ticket is safe. Keep this page open: it begins as soon as they are done.</div>`);
     else if (v.stopped) banners.push(`<div class="zbanner info">The organizer has ended this game.</div>`);
