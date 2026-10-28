@@ -148,7 +148,7 @@ describe("5 to 8. the rule, the links, the next steps, the 308", () => {
     let sm = await j(await call("GET", `/ai/${o.key}/z/LINKS-1/summary`)); expect(sm.links).toMatchObject({ console: `${ORIGIN}/zc.html?e=LINKS-1`, publishHandover: `${ORIGIN}/zc.html?e=LINKS-1&do=publish`, pay: `${ORIGIN}/pay.html?e=LINKS-1` }); expect(sm.links.guest).toBeUndefined();
     let t = (await open(`${o.base}/go/links?id=LINKS-1`)).text;
     expect(t).toMatch(/- Console \(your own page\): https:\/\/tambola.test\/zc.html\?e=LINKS-1\n/); expect(t).toMatch(/- After you publish, two more links appear here: the guest link \(to send to guests\) and the number screen/);
-    expect(t).toMatch(/- Your board: open it from your console, step 6, 'Open my board' \(it carries your private key, so I cannot give it\)\./); expect(t).not.toMatch(/board\.html/);
+    expect(t).toMatch(/- Your board: open it from your console, step 6, 'Open my board' \(it carries your personal key, so I cannot give it\)\./); expect(t).not.toMatch(/board\.html/);
     expect(t).toMatch(/- Publish \(free, one tap by you\): https:\/\/tambola.test\/zc.html\?e=LINKS-1&do=publish/); expect(t).toMatch(/- Pay \(you pay; I never do\): https:\/\/tambola.test\/pay.html\?e=LINKS-1/);
     expect(t).not.toMatch(/z\.html\?e=LINKS-1|big\.html\?e=LINKS-1/);
     await call("POST", `/api/z/LINKS-1/publish`, contact, { "x-organizer": o.token });

@@ -38,4 +38,11 @@ describe("the game's own address", () => {
     expect(read("terms.html")).toContain("2.4 Protection of the product"); expect(read("terms.html")).toContain("20 hours after its scheduled end");
     expect(read("organizer-guide.html")).toContain("How players win (real housie)"); expect(read("organizer-guide.html")).toContain("Someone to set it up for you");
   });
+  test("the word 'private' is not used for our product anywhere a visitor reads (pages, legal pages, the games bar); owner rule, 1.6.7", () => {
+    const hits: string[] = [];
+    for (const f of readdirSync(PUB)) if (/\.(html|txt|xml)$/.test(f) || /^(gamesbar|site|zc|play|console|common|more-games)\.js$/.test(f)) {
+      const t = read(f).replace(/<script[\s\S]*?<\/script>/g, " "); for (const m of t.matchAll(/private/gi)) hits.push(f + ": " + t.slice(Math.max(0, m.index! - 30), m.index! + 30).replace(/\s+/g, " "));
+    }
+    expect(hits.filter((h) => !/private mode: fine/.test(h))).toEqual([]); // (the one comment about a browser's private mode in common.js is code, not text)
+  });
 });

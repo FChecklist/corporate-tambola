@@ -588,7 +588,7 @@
       <div class="row" style="margin-top:10px"><button class="btn sm" data-a="copyLink" data-v="${esc(e.link)}">${ic("copy")} Copy link</button><a class="btn sm line" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(curMsg())}">Share on WhatsApp</a><button class="btn sm line" data-a="copyMsg">${ic("mail")} Copy email message</button></div>
       <label class="lb" for="gmsg">Message that goes with the link</label><textarea class="inp" id="gmsg" style="min-height:100px;font-family:var(--sans)" ${isOrg() ? "" : "readonly"} data-i="msg">${esc(curMsg())}</textarea></div>
       <div><label class="lb" style="margin-top:0">Show on a screen or print for the office</label><div class="qrbox" id="qr"></div></div></div></div>
-      <div class="panel"><div class="phead"><div class="step">${ic("link")}</div><div><h2>Host and Team Lead links</h2><p>Each link belongs to one person and works on one phone only. Send each link privately.</p></div></div>${rl}</div>`]];
+      <div class="panel"><div class="phead"><div class="step">${ic("link")}</div><div><h2>Host and Team Lead links</h2><p>Each link belongs to one person and works on one phone only. Send each link to one person only.</p></div></div>${rl}</div>`]];
   }
   async function drawQR(id, link) {
     const el = $(id); if (!el || !link) return;
