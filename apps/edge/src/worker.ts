@@ -18,7 +18,7 @@ import { TEST_LOGINS, TEST_LOGIN_CODE, TEST_LOGINS_PER_IP_DAY } from "./testlogi
 import { deviceMatches, checkinRequired, checkinRoute, presenceRoute, presentMsOf, seatOfPidText } from "./checkin";
 import { TERMS_VERSION } from "./brand";
 import RELEASES from "./releases.json";
-import { CONSENT_SCHEMA, consentMissing, recordConsent, hasConsent, CONSENT_VERSION } from "./consent";
+import { CONSENT_SCHEMA, consentMissing, recordConsent, consentFromSeat, hasConsent, CONSENT_VERSION } from "./consent";
 import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, hostLinkMail, newUseAlertMail, signInMail } from "./mails";
 import { cancelGame, cancelPreview, entitlementWindowEndMs, paidWindowEndMs, reopenGame, teamEmails } from "./cancel";
 import { LEGAL_SCHEMA } from "./legal";
@@ -424,10 +424,10 @@ const CONSOLE_ONLY = () => json({ error: "Names and mobile numbers are handled b
  *  A whole office or hall sits behind ONE address, so the allowance of a PAID game never falls below its pack: one address may seat up to the pack's size in a minute (and three times that in a day).
  *  The base figures (the environment's JOIN_PER_IP_MINUTE / JOIN_PER_IP_DAY, else the defaults below) still apply to an unpaid game and to the waiting room, so a script cannot use a big free game to burn the write budget. */
 const JOIN_PER_IP_DAY = 1500, JOIN_PER_IP_MINUTE = 200, ID_MISS_PER_10MIN = 30;
-async function joinOverLimit(env: Env, req: Request, now: number, paidSeats = 0): Promise<boolean> {
+async function joinOverLimit(env: Env, req: Request, now: number, paidSeats = 0, collect?: D1Stmt[]): Promise<boolean> { // `collect`: the two counter writes are handed back to go into the join's one batch instead of being written one by one
   try {
     const ip = (await sha("jip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16), perDay = Math.max(Number((env as any).JOIN_PER_IP_DAY ?? JOIN_PER_IP_DAY), paidSeats * 3), perMin = Math.max(Number((env as any).JOIN_PER_IP_MINUTE ?? JOIN_PER_IP_MINUTE), paidSeats);
-    const bump = async (k: string, max: number) => { const n = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0); if (n >= max) return true; await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(k, String(n + 1), String(n + 1)).run(); return false; };
+    const bump = async (k: string, max: number) => { const n = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0); if (n >= max) return true; const up = env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(k, String(n + 1), String(n + 1)); if (collect) collect.push(up); else await up.run(); return false; };
     const iso = new Date(now).toISOString();
     return (await bump(`jbm/${iso.slice(0, 16)}/${ip}`, perMin)) || (await bump(`jlim/${iso.slice(0, 10)}/${ip}`, perDay));
   } catch { return false; }
@@ -1575,7 +1575,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   const pidOf = async (ph: string) => (await sha(`${eid}|${ph}`)).slice(0, 16);
   const lateNow = async () => { const nr = roundOfMs(now); if (cfgOf(e).startMode === "manual") { const g = await goRoundOf(d1kv(env), e, cfgOf(e)); return g !== null && nr > g ? nr : 0; } return nr > e.start_round + GRACE_ROUNDS ? nr : 0; }; // joined after the first number: that round, else 0
   /** Gives a person a seat (and so a collision-free ticket) and a sealed record of their name and number. The rows go in together, with the head-count and (for a person who joins under a limited inviter: a Co-host or a level-1 guest) that inviter's list limit checked inside the insert, so a crowd arriving at the same instant can never pass a limit or share a seat. `ownerId` also puts the person on the inviter's list (people.ts); roster / reuse give none. */
-  const addSeat = async (ph: string, pii: string, dev: string | null, jr: number, o: { inv?: number | null; cat?: string | null; src: string; guardId?: string | null; guardLimit?: number | null; ownerId?: string | null; role?: string | null; joinedMs?: number }) => {
+  const addSeat = async (ph: string, pii: string, dev: string | null, jr: number, o: { extra?: D1Stmt[]; inv?: number | null; cat?: string | null; src: string; guardId?: string | null; guardLimit?: number | null; ownerId?: string | null; role?: string | null; joinedMs?: number }) => {
     const tail = (await pidOf(ph)).slice(0, 12);
     await env.DB.batch([
       env.DB.prepare("INSERT OR IGNORE INTO seat(eid,seq,pid,ph,dev,jr,inv,cat,src,role) SELECT ?, s, s || 'x' || ?, ?, ?, ?, ?, ?, ?, ? FROM (SELECT COALESCE(MAX(seq),0)+1 AS s FROM seat WHERE eid=?) WHERE (SELECT COUNT(*) FROM participant WHERE eid=?) < ? AND (EXISTS (SELECT 1 FROM person WHERE eid=? AND ph=? AND status='invited') OR (SELECT COUNT(*) FROM participant WHERE eid=?) + (SELECT COUNT(*) FROM person p WHERE p.eid=? AND p.status='invited' AND NOT EXISTS (SELECT 1 FROM seat s2 WHERE s2.eid=p.eid AND s2.ph=p.ph)) < ?) AND (? IS NULL OR (SELECT COUNT(*) FROM person WHERE eid=? AND inviter=? AND status<>'removed' AND role IS NULL) < ?) AND (? IS NULL OR NOT EXISTS (SELECT 1 FROM seat WHERE eid=? AND dev=?))")
@@ -1583,6 +1583,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,pii,joined_ms) SELECT eid, pid, ph, NULL, ?, ? FROM seat WHERE eid=? AND ph=?").bind(pii, o.joinedMs ?? now, eid, ph),
       env.DB.prepare("UPDATE person SET status='joined', joined_ms=? WHERE eid=? AND ph=? AND status='invited' AND EXISTS (SELECT 1 FROM seat WHERE eid=? AND ph=?)").bind(now, eid, ph, eid, ph),
       env.DB.prepare("INSERT OR IGNORE INTO person(eid,id,ph,pii,inviter,role,status,added_ms,joined_ms) SELECT ?, ?, ph, ?, ?, ?, 'joined', ?, ? FROM seat WHERE eid=? AND ph=? AND ? IS NOT NULL").bind(eid, randHex(6), pii, o.ownerId ?? null, o.role ?? null, now, now, eid, ph, o.ownerId ?? null),
+      ...(o.extra ?? []),
     ]);
   };
   const cleanName = (n: unknown) => cleanPersonName(n) || null; // the same cleaner the lists use: no control or hidden characters, nothing at the front that a spreadsheet would run as a formula
@@ -1776,15 +1777,16 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       inviter = target; if (limit !== null) { guardId = target; guardLimit = limit; }
       pii = await sealPii(env, { phone: digits ?? "", name: lateName || tokPii?.name || null, empId: vf.mode !== "mobile" && empNorm ? empNorm : null });
     }
-    if (await joinOverLimit(env, req, now, e.pack ?? 0)) return json({ error: "It is busy right now. Please try again in a few minutes.", code: "busy" }, 429);
+    const joinExtra: D1Stmt[] = []; // everything a join writes goes into ONE database batch (one transaction): the seat, the person rows, the two per-address counters and the consent record
+    if (await joinOverLimit(env, req, now, e.pack ?? 0, joinExtra)) return json({ error: "It is busy right now. Please try again in a few minutes.", code: "busy" }, 429);
     if (!(await spend(env, now, JOIN_WRITES))) return json({ error: "It is very busy right now. Please try again in a few minutes.", code: "busy" }, 503);
     const inv = inviter.startsWith("s:") ? Number(inviter.slice(2)) : null;
-    await addSeat(ph, pii, dev, lateRound, { inv, cat: inv !== null ? cat : null, src: srcOf(inviter), ownerId: inviter, guardId, guardLimit, role });
+    if (!ck) joinExtra.push(await consentFromSeat(env.DB, { kind: "K4", ref: eid!, now, eid: eid!, ph }));
+    await addSeat(ph, pii, dev, lateRound, { inv, cat: inv !== null ? cat : null, src: srcOf(inviter), ownerId: inviter, guardId, guardLimit, role, extra: joinExtra });
     const row = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.jr AS jr, s.role AS role FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; jr: number | null; role: string | null }>();
     if (!row) return (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) ? json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket.", code: "device-used" }, 409) : guardId !== null ? wait(true, guardLimit) : json({ error: "This engagement is full." }, 409); // lost a race for the last place
     if (row.dev && row.dev !== dev) return json({ error: "This ticket was opened in a different browser or app (or on another phone). A ticket plays on one device only. Open your link in the same browser or app you used first. If you cannot, ask your organizer to move your ticket to this phone.", code: "other-phone" }, 423);
-    if (!ck) await k4(row.pid);
-    return reply(row.pid, { jr: row.jr ?? 0, ...(row.role ? { role: row.role } : {}) });
+    return reply(row.pid, { jr: row.jr ?? 0, ...(row.role ? { role: row.role } : {}) }); // (the K4 consent record went in with the seat, in the same batch)
   }
   if ((action === "leave" || action === "datareq") && req.method === "POST") { // a player's own rights (rights.ts): leave at any time, and "what do you hold about me / correct / delete me"; the player's card id AND their phone's own device id are the proof
     const rc = { env: env as PayEnv, db: env.DB, e, eid: eid!, now, started: now >= roundMs(e.start_round), b: await body(req, 2_048), json, gameName: cfgOf(e).name || e.id, orgEmail: async () => (await teamEmails(env as PayEnv, e.org, e.id)).organizer, erasureMs: () => erasureOf(env, e), spend: (n: number) => spend(env, now, n) };

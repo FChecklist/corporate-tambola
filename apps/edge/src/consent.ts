@@ -7,7 +7,7 @@
 //   - the rows of a participant (K4) are erased with the game's other participant data (lifecycle.ts); an organizer's rows are kept as the record of what they accepted.
 import { TERMS_VERSION } from "./brand";
 import TEXT from "./consent-text.json";
-import type { D1 } from "./worker";
+import type { D1, D1Stmt } from "./worker";
 
 export type ConsentKind = "K1" | "K2" | "K3" | "K4" | "K5" | "K6" | "K9";
 /** The current Terms version (one constant: brand.ts). */
@@ -44,6 +44,12 @@ const newId = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), (x) =
 export async function recordConsent(db: D1, o: { subject: string; kind: ConsentKind; ref: string | null; now: number }): Promise<void> {
   await db.prepare("INSERT INTO consent_log(id,subject,kind,ref,version,boxes,text_hash,at_ms) VALUES(?,?,?,?,?,?,?,?)")
     .bind(newId(), o.subject, o.kind, o.ref, CONSENT_VERSION, boxesOf(o.kind).join(","), await wordingHash(o.kind), o.now).run();
+}
+
+/** The same record as recordConsent, as a statement that takes its subject (the participant id) from the seat just made, so a join can write it in the same batch as the seat. */
+export async function consentFromSeat(db: D1, o: { kind: ConsentKind; ref: string; now: number; eid: string; ph: string }): Promise<D1Stmt> {
+  return db.prepare("INSERT INTO consent_log(id,subject,kind,ref,version,boxes,text_hash,at_ms) SELECT ?, pid, ?, ?, ?, ?, ?, ? FROM seat WHERE eid=? AND ph=?")
+    .bind(newId(), o.kind, o.ref, CONSENT_VERSION, boxesOf(o.kind).join(","), await wordingHash(o.kind), o.now, o.eid, o.ph);
 }
 
 /** Has this subject ticked this point under the CURRENT Terms version? (Pass `anyVersion` to ask only whether they ever did.) */
