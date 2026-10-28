@@ -75,6 +75,7 @@
   const howLine = (key) => (HOW[key] ? `<small class="zsmall zhow" style="margin:0">${esc(HOW[key])}</small>` : "");
   const getPublic = DEMO ? DEMO.getPublic : async (url) => { let r; try { r = await fetch(url, { cache: "no-store" }); } catch { throw new Error("offline"); } if (!r.ok) throw Object.assign(new Error("http " + r.status), { status: r.status }); return r.json(); };
   const rt = new ZG.PhoneRuntime(EID, DEMO ? { api, getPublic, beacon: DEMO.beacon, verify: DEMO.verify, mono: DEMO.mono, store } : { api, getPublic, beacon: {}, mono: () => performance.now(), store });
+  if (DEMO) rt.beatOn = false; // the free demo has no server to ask
   let lastLen = 0, firstPaint = true, sound = store.get("ctz-sound") !== "off", timer = null;
   if (window.TBAudio) TBAudio.enabled = sound;
   const clock = (s) => { s = Math.max(0, Math.round(s)); return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map((n) => String(n).padStart(2, "0")).join(":"); }; // 00:12:34
@@ -705,10 +706,10 @@
   function callCard(v, last, sub) {
     const secs = v.nextCallInSec, running = v.phase === "play" && !v.locked && !v.paused && !v.brk && !v.intermission && v.log.length > 0;
     const tone = v.phase === "ended" ? "end" : v.paused || v.locked ? "pause" : running ? (secs !== null && secs <= 3 ? "go" : "soon") : "wait";
-    const chip = v.phase === "ended" ? "Game over" : v.paused ? "Paused" : v.locked ? "Waiting to start" : v.waitingForStart ? "Waiting for the host" : v.startingInSec !== null ? "Starting in " + (v.startingInSec >= 120 ? clock(v.startingInSec) : v.startingInSec + "s") : v.waitingForHost ? "Waiting for the host" : !v.log.length ? "Get ready" : running && secs !== null && v.callMode !== "host" ? "Next number in " + secs + "s" : running && v.callMode === "host" ? "The host calls the numbers" : "Numbers coming";
+    const chip = v.phase === "ended" ? "Game over" : v.paused ? "Paused" : v.locked ? "Waiting to start" : v.waitingForStart ? "Waiting for the host" : v.startingInSec !== null ? "Starting in " + (v.startingInSec >= 120 ? clock(v.startingInSec) : v.startingInSec + "s") : v.waitingForHost ? "Waiting for the host" : !v.log.length ? "Get ready" : running && claimingNow(v) && v.callMode !== "host" ? "Claim now" : running && secs !== null && v.callMode !== "host" ? "Next number in " + secs + "s" : running && v.callMode === "host" ? "The host calls the numbers" : "Numbers coming";
     const total = v.late ? "since you joined" : "of 90";
     // Between two numbers (software calls): a big countdown 9, 8, 7 ... 1, then the number. Silent on purpose: the voice speaks only the number itself.
-    const hostCalls = v.callMode === "host", cdown = hostCalls ? (running && !v.waitingForHost ? `<div class="zquiet" id="hostline" role="status"><span>The host calls the numbers</span></div>` : "") : running && secs !== null && !v.waitingForHost && v.mode !== "hold" ? `<div class="zquiet" id="quietcount" role="timer" aria-label="Next number in ${secs} seconds"><span>Next number in ${secs}s</span><i><b style="width:${Math.max(0, Math.min(100, Math.round((1 - secs / Math.max(3, v.callSeconds || 12)) * 100)))}%"></b></i></div>` : ""; // small and quiet on purpose: no digits to stare at, no colour, no sound (only the number itself is spoken)
+    const hostCalls = v.callMode === "host", ownTimer = claimingNow(v) && v.claimLeft !== null && v.claimLeft !== undefined, cdown = ownTimer ? "" : hostCalls ? (running && !v.waitingForHost ? `<div class="zquiet" id="hostline" role="status"><span>The host calls the numbers</span></div>` : "") : running && secs !== null && !v.waitingForHost && v.mode !== "hold" ? `<div class="zquiet" id="quietcount" role="timer" aria-label="Next number in ${secs} seconds"><span>Next number in ${secs}s</span><i><b style="width:${Math.max(0, Math.min(100, Math.round((1 - secs / Math.max(3, v.callSeconds || 12)) * 100)))}%"></b></i></div>` : ""; // small and quiet on purpose: no digits to stare at, no colour, no sound (only the number itself is spoken)
     const calledTotal = v.log.length + (v.late ? v.late.hidden || 0 : 0), few = v.log.slice(-6, -1).reverse();
     return `<div class="zcard zcall ztight"><div class="zchiprow"><span class="zchip2 ${tone}">${esc(chip)}</span></div>
         <div class="zrow1"><div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number just called " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
@@ -738,7 +739,7 @@
     try { rt.resync && rt.resync(); } catch { /* the loop asks again in a moment */ }
     Promise.resolve(rt.tick && rt.tick()).catch(() => {}).then(() => { try { paint(); } catch { /* drawn on the next beat */ } });
   }
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") hiddenAt = hiddenAt || Date.now(); else wake(); });
+  document.addEventListener("visibilitychange", () => { rt.beatOn = document.visibilityState !== "hidden"; if (document.visibilityState === "hidden") hiddenAt = hiddenAt || Date.now(); else wake(); }); // a hidden page sends no claim signal calls
   /** One plain sentence: what is happening now and what to do, in the same words on every screen (ZG.story). */
   function storyBarFor(v) {
     const role = ME.role === "organizer" ? "organizer" : ME.role === "host" ? "host" : "player", called = v.late ? v.log.length + (v.late.hidden || 0) : v.log.length, manual = v.startMode === "manual";
@@ -751,9 +752,14 @@
   /** Under the ticket: a Claim button for every prize the player's marks complete, what was claimed and is being checked, this player's Bogeys, and the prizes the ticket is out of. */
   const namesOf = (keys) => keys.map((k) => KEYNAME(k)).join(" and ");
   /** Gold, near the top: the player has just completed a prize and must press Claim before the next number is called. */
+  /** "Claim in the next 11 s" on the gold buttons: a nudge only (the game's clock decides). None when a Host calls the numbers. */
+  const claimTimer = (v) => (v.callMode !== "host" && v.claimLeft !== null && v.claimLeft !== undefined ? `<small class="zclaimt">Claim in the next ${v.claimLeft} s</small>` : "");
+  const claimingNow = (v) => (v.claimNow || []).length > 0;
+  let BOGEYASK = null; // the prize a grey Claim button was pressed for: the in-page "Are you sure" box is open
+  const bogeyAskHtml = () => (BOGEYASK ? `<div class="zmodal" id="bogeyask" role="dialog" aria-modal="true"><div class="zmbox"><p>You have no claim right now. If you submit, it counts as a wrong claim (Bogey).</p><div class="zmrow"><button type="button" id="bgcancel" class="zbtn">Cancel</button><button type="button" id="bgsubmit" class="zbtn zdanger">Submit</button></div></div></div>` : "");
   function claimAlert(v) {
     if (!(v.claimNow || []).length) return "";
-    return `<div class="zalert on" id="claimalert" role="alert"><b>You have completed ${esc(namesOf(v.claimNow))}!</b><small>Press Claim now, before the next number is called.</small></div>`;
+    return `<div class="zalert on" id="claimalert" role="alert"><b>You have won the ${esc(namesOf(v.claimNow))}. Click CLAIM to claim.</b><button type="button" class="zgold" id="claimtop" data-claim="${esc(v.claimNow[0])}"><b>CLAIM</b>${claimTimer(v)}</button></div>`;
   }
   /** A big button fixed at the bottom of the screen, one per prize that is ready; after the press it says that the claim was sent. */
   function claimStick(v) {
@@ -761,7 +767,7 @@
     const resolved = (k) => ZG.linesFor(v.cfg.rewards, k).every((l) => (v.results || []).some((x) => x.pattern === k && x.ordinal === l.ordinal));
     const waiting = (v.pressed || []).filter((k) => !resolved(k) && !(v.won || []).some((w) => w.round === v.round && w.pattern === k)); // claimed, and the answer is not out yet
     if (!ready.length && !(waiting.length && v.phase === "play" && !v.paused)) return "";
-    const btns = ready.map((k, i) => `<button type="button" class="zbigclaim${i ? " zmore" : ""}" data-claim="${esc(k)}">Press to claim your prize<small>${esc(KEYNAME(k))}</small></button>`).join(""); // the first is big; others ready at the same time are compact so the bar never covers the screen
+    const btns = ready.map((k, i) => `<button type="button" class="zbigclaim${i ? " zmore" : ""}" data-claim="${esc(k)}"><b>CLAIM</b><small>${esc(KEYNAME(k))}</small>${i ? "" : claimTimer(v)}</button>`).join(""); // the first is big; others ready at the same time are compact so the bar never covers the screen
     const sendingK = waiting.filter((k) => !(v.claimed || []).includes(k)), checkingK = waiting.filter((k) => (v.claimed || []).includes(k));
     const done = !ready.length ? `<div class="zsentline" role="status">${sendingK.length ? `Sending your claim…<small>${esc(sendingK.map((k) => KEYNAME(k)).join(", "))}. Keep this page open.</small>` : `Claim sent. Checking…<small>${esc(checkingK.map((k) => KEYNAME(k)).join(", "))}</small>`}</div>` : "";
     return `<div class="zclaimbar on" id="claimbar">${btns}${done}</div>`;
@@ -769,7 +775,7 @@
   function claimBar(v) {
     if (!v.tickets.length || (v.phase !== "play" && v.phase !== "ended")) return "";
     const won = new Set((v.won || []).map((w) => w.round + ":" + w.pattern));
-    const open = v.claimOpen || [], btns = open.map((k) => `<button type="button" class="zbtn zclaim ready" data-claim="${esc(k)}">Claim ${esc(KEYNAME(k))}</button>`).join("");
+    const open = v.claimOpen || [], btns = "";
     const stale = (v.claimable || []).filter((k) => !open.includes(k));
     const staleNote = stale.length && !v.paused ? `<p class="zsmall zstale" id="stalenote">The time to claim ${esc(namesOf(stale))} has passed: a claim must be pressed before the next number is called.</p>` : "";
     const notWon = (v.pressed || []).filter((k) => !won.has(v.round + ":" + k));
@@ -785,9 +791,19 @@
       ${lost.length ? `<p class="zsmall zlost">${lost.map((k) => esc(KEYNAME(k))).join(", ")}: claimed, but another ticket was ahead or the claim came after the next number.</p>` : ""}
       ${bog ? `<p class="zsmall zbogeys">Bogeys: ${bog}</p>` : ""}${out}<div id="tapnote"></div></div>`;
   }
+  /** SIDE claim button, once per prize (its first open line): gold when the player has this prize to claim, otherwise grey (while the game is in play) and a press asks first, because it would count as a wrong claim (a Bogey). */
+  const SIDE_SEEN = new Set();
+  function sideClaim(v, key) {
+    if (key === "unlucky" || key === "lucky" || v.phase !== "play" || v.locked || !v.tickets.length || SIDE_SEEN.has(key)) return "";
+    SIDE_SEEN.add(key);
+    const gold = (v.claimNow || []).includes(key) || (v.paused && (v.claimOpen || []).includes(key)); // (paused: the claim is still valid, the game's clock does not run)
+    if ((v.outOf || []).includes(key) || (v.pressed || []).includes(key)) return "";
+    return gold ? `<button type="button" class="zside zgold" data-claim="${esc(key)}"><b>CLAIM</b>${claimTimer(v)}</button>` : `<button type="button" class="zside zgrey" data-claim="${esc(key)}" data-grey="1" aria-label="Claim ${esc(KEYNAME(key))}: you have no claim right now"><b>CLAIM</b></button>`;
+  }
   /** Every prize and whether it is still open: the open ones first, the claimed ones after, crossed out with a small "claimed". */
   function livePrizesCard(v) {
     if (!ZG.prizeStatus || !v.cfg || !v.cfg.rewards) return "";
+    SIDE_SEEN.clear();
     const list = ZG.prizeStatus(v.cfg, v.results || [], v.round || 1), lucky = v.lucky || [];
     if (!list.length && !lucky.length) return "";
     const mine = new Set((v.won || []).filter((w) => w.round === v.round).map((w) => w.pattern + "#" + w.ordinal));
@@ -797,7 +813,7 @@
       if (p.claimed) { const res = (v.results || []).find((x) => x.pattern === p.key && x.ordinal === p.ordinal && (x.round || 1) === (v.round || 1)), tk = res && res.tickets && res.tickets.length ? res.tickets : null;
         return `<li class="done"><span class="zic">&#10003;</span><span class="znm"><s>${esc(p.name)}${p.text ? ": " + esc(p.text) : ""}</s> <small class="zwonby">${tk ? "Won by Ticket " + tk.join(", ") : "Already won"}</small></span>${me ? ' <b class="zme">You</b>' : ""}</li>`; }
       const need = p.key === "unlucky" || p.key === "lucky" ? null : ZG.stillToWin(v.tickets, p.key, v.marks || []);
-      return `<li class="open"><span class="zic">&#9733;</span><span class="znm"><b>${esc(p.name)}</b>${p.text ? ": " + esc(p.text) : ""}${need !== null && need !== undefined && v.tickets.length ? `<small class="zneed">You need ${need} more ${need === 1 ? "number" : "numbers"}</small>` : ""}</span><span class="ztag">To win</span></li>`;
+      return `<li class="open"><span class="zic">&#9733;</span><span class="znm"><b>${esc(p.name)}</b>${p.text ? ": " + esc(p.text) : ""}${need !== null && need !== undefined && v.tickets.length ? `<small class="zneed">You need ${need} more ${need === 1 ? "number" : "numbers"}</small>` : ""}</span><span class="ztag">To win</span>${sideClaim(v, p.key)}</li>`;
     }).join("") + lucky.map((l) => { const res = (v.results || []).find((x) => x.pattern === "lucky" && x.ordinal === l.ordinal), tk = res && res.tickets && res.tickets.length ? res.tickets : null;
       return l.published ? `<li class="done lucky"><span class="zic">&#10003;</span><span class="znm"><s>Lucky draw: ${esc(l.title)}</s> <small class="zwonby">${l.style === "scratch" && !(scratched.has(l.ordinal) || (seenAt[l.ordinal] && Date.now() - seenAt[l.ordinal] > 45000)) ? "Scratch the card to see" : l.won ? "You won!" : tk ? "Won by Ticket " + tk.join(", ") : "Already drawn"}</small></span></li>` : `<li class="open lucky"><span class="zic">&#9733;</span><span class="znm"><b>Lucky draw: ${esc(l.title)}</b><small class="zneed">${l.winners} ${l.winners === 1 ? "ticket is" : "tickets are"} picked at random, whoever is playing</small></span><span class="ztag">To win</span></li>`; }).join("");
     return `<div class="zcard zps" id="prizepanel"><h2>Prizes${open ? " still to win · " + open : " · all won"}</h2><div class="zlegend"><span><i class="g"></i>Still to win</span><span><i class="s"></i>Already won</span></div><ul class="zpl">${rows}</ul></div>`;
@@ -815,7 +831,7 @@
     else if (v.mode === "hold" && v.nowRound !== null && v.phase !== "ended") banners.push(`<div class="zbanner warn">Checking with the organizer… numbers will continue in a moment.</div>`);
     else if (v.mode === "blind" && v.phase !== "ended") banners.push(`<div class="zbanner warn">Cannot reach the organizer's controls right now. Play continues; a pause may appear late.</div>`);
     // (one end message only: the story line at the top says how the game ended)
-    const sub = v.phase === "ended" || v.locked || v.brk || v.intermission || (DEMO && !DEMO.running) ? "" : v.waitingForStart ? "Waiting for the host to begin the game" : v.startingInSec !== null ? "The game starts in " + (v.startingInSec >= 120 ? clock(v.startingInSec) : v.startingInSec + " seconds") : v.late && v.late.secondsUntil > 0 ? "Your numbers start in " + clock(v.late.secondsUntil) : v.waitingForHost ? "The host presses for the next number" : v.log.length === 0 ? (v.nextCallInSec !== null ? (v.nextCallInSec > GRACE_SECS ? "Starting in " + clock(v.nextCallInSec - GRACE_SECS) : "First number in " + clock(v.nextCallInSec)) : "Getting ready…") : v.paused || v.mode === "hold" ? "" : v.waitingForHost ? "The host presses for the next number" : v.nextCallInSec !== null && v.callMode !== "host" ? "Next number in " + v.nextCallInSec + "s" : "";
+    const sub = v.phase === "ended" || v.locked || v.brk || v.intermission || (DEMO && !DEMO.running) ? "" : v.waitingForStart ? "Waiting for the host to begin the game" : v.startingInSec !== null ? "The game starts in " + (v.startingInSec >= 120 ? clock(v.startingInSec) : v.startingInSec + " seconds") : v.late && v.late.secondsUntil > 0 ? "Your numbers start in " + clock(v.late.secondsUntil) : v.waitingForHost ? "The host presses for the next number" : v.log.length === 0 ? (v.nextCallInSec !== null ? (v.nextCallInSec > GRACE_SECS ? "Starting in " + clock(v.nextCallInSec - GRACE_SECS) : "First number in " + clock(v.nextCallInSec)) : "Getting ready…") : v.paused || v.mode === "hold" ? "" : v.waitingForHost ? "The host presses for the next number" : v.nextCallInSec !== null && v.callMode !== "host" && !(claimingNow(v) && v.claimLeft !== null) ? "Next number in " + v.nextCallInSec + "s" : "";
     const still = v.tickets.length ? stillToWinRows(v) : "";
     const chk = v.pendingChecks > 0 ? `<p class="zsmall">Double-checking ${v.pendingChecks} earlier number${v.pendingChecks === 1 ? "" : "s"} in the background.</p>` : "";
     const curWins = v.won.filter((w) => w.round === v.round), winSet = new Set(curWins.flatMap((w) => w.cells));
@@ -836,7 +852,7 @@
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}
       <div class="zcard"><h2>Still to win</h2>${still}${chk}</div>
-      ${luckyCard(v)}</div>${claimStick(v)}${toastHtml()}`;
+      ${luckyCard(v)}</div>${claimStick(v)}${toastHtml()}${bogeyAskHtml()}`;
   }
 
   // ---------- present check-in: the ticket opens only after this ----------
@@ -962,15 +978,24 @@
     };
     document.querySelectorAll("input[name=zlook]").forEach((r) => (r.onchange = () => { LOOK = r.value === "modern" ? "modern" : "retro"; store.set("ctz-look", LOOK); paint(); }));
     document.querySelectorAll("[data-tap]").forEach((el) => { el.onclick = () => tap(el); el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tap(el); } }; });
+    { const c = document.getElementById("bgcancel"), s = document.getElementById("bgsubmit"); if (c) c.onclick = () => { BOGEYASK = null; paint(); }; if (s) s.onclick = async () => { const k = BOGEYASK; BOGEYASK = null; await pressClaim(k, null); }; }
     document.querySelectorAll("[data-claim]").forEach((b) => (b.onclick = async () => {
-      const k = b.dataset.claim; if (claimBusy.has(k)) return; claimBusy.add(k); b.disabled = true;
-      try {
-        const r = await rt.claim(b.dataset.claim);
+      if (b.dataset.grey) { BOGEYASK = b.dataset.claim; paint(); return; } // no claim right now: ask first
+      await pressClaim(b.dataset.claim, b);
+    }));
+  }
+  /** One press of any gold button (top, bottom or side) sends ONE claim for everything the player has to claim; a second press while it is going does nothing. */
+  async function pressClaim(key, btn) {
+    const gold = (rt.view().claimNow || []).slice(); const keys = gold.includes(key) || !gold.length ? (gold.length ? gold : [key]) : [key];
+    if (keys.some((k) => claimBusy.has(k))) return; keys.forEach((k) => claimBusy.add(k)); if (btn) btn.disabled = true;
+    try {
+      for (const k of keys) {
+        const r = await rt.claim(k);
         if (!r.ok) { tapNote(r.error, 400); try { navigator.vibrate && navigator.vibrate([80, 50, 80, 50, 80]); } catch {} if (sound && window.TBAudio && r.bogey) TBAudio.say("Bogey!"); }
         else { TAP = null; if (sound && window.TBAudio) TBAudio.say(r.sent ? "Claim sent for " + KEYNAME(k) : "Claim saved. Sending it now. Keep this page open."); }
-      } catch { tapNote("Could not send your claim. Please press Claim again.", 0); }
-      claimBusy.delete(k); paint();
-    }));
+      }
+    } catch { tapNote("Could not send your claim. Please press Claim again.", 0); }
+    keys.forEach((k) => claimBusy.delete(k)); paint();
   }
   function bindJoin() {
     const again = document.getElementById("again"); if (again) again.onclick = () => { clearInterval(J.timer); clearTimeout(J.retry); J.busyTries = 0; J.mode = ""; J.wid = ""; clearWait(); paint(); };

@@ -225,19 +225,19 @@
   /** The two mode questions are RADIO BUTTONS: one option is always chosen, each has one plain sentence under it, and a tap anywhere on the option chooses it (the label wraps the input). */
   const MANUAL_MAX = 1000; // above this size only "by itself" + "the game does" exist (the manual options are hidden)
   const radios = (path, label, opts) => `<fieldset class="zc-radiogroup" id="rg-${path}"><legend class="zc-lbl" id="${gid(path)}">${label}</legend><div role="radiogroup" aria-labelledby="${gid(path)}">${opts.map(([v, l, d]) => { const on = String(getP(path)) === String(v); return `<label class="zc-radio${on ? " on" : ""}"><input type="radio" name="${path}" value="${esc(v)}" data-ck="${path}" data-v="${esc(v)}"${on ? " checked" : ""}><span class="zc-rtxt"><b>${esc(l)}</b><span class="zc-rdesc">${esc(d)}</span></span></label>`; }).join("")}</div></fieldset>`;
-  const START_OPTS = [["auto", "By itself at the time", "The game starts at the time you chose. Nobody needs to press anything."], ["manual", "I press Start", "At the time you chose you press the big Start button. Until then players see Waiting for the host."]];
+  const START_OPTS = [["auto", "Auto start", "The game starts by itself at the time I set."], ["manual", "Manual start", "The game starts when I press the Start button."]];
   const AFTER_OPTS = [["keep", "Keep calling until all 90 numbers", "Every number is still called, even after the last prize has been won, so nobody feels the game stopped early."], ["end", "End the game", "The game ends as soon as every prize has been won. No more numbers are called."]];
-  const CALL_OPTS = [["auto", "The game does", "The game calls a new number every few seconds, by itself."], ["host", "I do", "You or a Host press Next number for each number, so you set the pace."]];
+  const CALL_OPTS = [["auto", "The game calls the numbers", "A new number comes every 12 seconds, by itself."], ["host", "I call the numbers", "I press the Next button for every number."]];
   /** one line in plain words that follows the two choices */
   const modeSummary = (f) => {
     let when = "the start time"; try { const ms = startOf(f); if (Number.isFinite(ms)) when = new Date(ms).toLocaleString("en-US", { timeZone: "Asia/Kolkata", weekday: "short", hour: "numeric", minute: "2-digit", hour12: true }).replace(",", "").replace(/ (AM|PM)$/, (m) => m.toLowerCase()); } catch { /* the day or time is not picked yet */ }
-    return `<p class="zc-small zc-modesum" id="modesummary"><b>Your game:</b> ${f.start === "manual" ? "you press Start at " + esc(when) : "starts by itself at " + esc(when)}, and ${f.mode === "host" ? "you or a Host call every number" : "the game calls the numbers"}.</p>`;
+    return `<p class="zc-small zc-modesum" id="modesummary"><b>Your game:</b> ${f.start === "manual" ? "starts at " + esc(when) + " when you press Start" : "starts by itself at " + esc(when)}. ${f.mode === "host" ? "You call the numbers." : "The game calls the numbers."}</p>`;
   };
   const modeQuestions = (f) => { // "I press Start" exists at every size; "I do" (a Host calls every number) only up to 1,000 people
     const cap = Number(f.cap);
     if (cap > MANUAL_MAX) f.mode = "auto";
     const q2 = cap > MANUAL_MAX ? small("Games above 1,000 people are called by the game itself. You can still press Start yourself.", 'id="callhidden"') : radios("mode", "Who calls the numbers?", CALL_OPTS);
-    return radios("start", "How does it start?", START_OPTS) + q2 + modeSummary(f) + radios("after", "When every prize is won:", AFTER_OPTS);
+    return radios("start", "How should the game start?", START_OPTS) + q2 + modeSummary(f) + radios("after", "When every prize is won:", AFTER_OPTS);
   };
   // one small line under every group of tick boxes: what the boxes are for
   const HINTS = {
@@ -889,9 +889,17 @@
     }
     return `<div class="zc-block" id="cancelblock"><h3>Cancel this game</h3>${b}</div>`;
   }
+  /** Prizes that have no text (the organizer chose "decide later" or left it empty): listed before publishing, because the winners would get nothing. Unlucky and the lucky draws name themselves. */
+  function unnamedPrizes() {
+    const rw = ((S.cfg && S.cfg.rewards) || []).filter((r) => r && r.pattern !== "unlucky" && r.pattern !== "lucky" && !String(r.text || "").trim());
+    const label = (p) => { const h = (ZG.PRIZE_HOUSES || []).find((x) => x.id === p); return h ? h.label : p === "full2" ? "Full house, two tickets" : String(p); };
+    const ord = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th"];
+    return rw.map((r) => { const many = ((S.cfg && S.cfg.rewards) || []).filter((x) => x.pattern === r.pattern && (x.scope || "ticket") === (r.scope || "ticket")).length > 1; return (many ? (ord[(r.ordinal || 1) - 1] || r.ordinal) + " " : "") + label(r.scope === "two_ticket" ? "full2" : r.pattern); });
+  }
+  const prizeWarn = () => { const n = unnamedPrizes(); return n.length ? `<div class="zc-alert" id="prizewarn" role="alert"><b>${n.length === 1 ? "1 prize has" : n.length + " prizes have"} no name: ${esc(n.join(", "))}.</b> Winners will get nothing. Go back and name them, or press Publish anyway.</div>` : ""; };
   function stepPublish() {
     if (!S.f) return small("Loading…");
-    let h = `<span class="zc-lbl">Check your game</span>` + unsavedWarn() + readBack();
+    let h = `<span class="zc-lbl">Check your game</span>` + unsavedWarn() + readBack() + (S.f ? modeSummary(S.f).replace('id="modesummary"', 'id="modesummary2"') : "") + (S.draft ? prizeWarn() : "");
     if (S.draft) {
       h += `<div class="zc-block"><h3>Publish (free)</h3>${small(isFree10() ? "A game for 10 people or fewer costs <b>Rs 0</b>. Participants cannot see or join a draft. Publishing is free, and there is nothing to pay: the game starts on time by itself." : "Set it up first. Participants cannot see or join a draft. Publishing is free: you confirm your details, get your link and send it to everyone. You pay before the start time, and it begins the moment you have.")}`
         + (S.pubOpen ? `${lbl("pubEmail", "Your e-mail (for the invoice)")}<input id="pubEmail" data-need="1" class="zc-in" type="email" value="${S.shield ? "" : esc(S.contact.email)}" autocomplete="email">${lbl("pubPhone", "Your mobile number")}<input id="pubPhone" data-need="1" class="zc-in" type="tel" value="${S.shield ? "" : esc(S.contact.phone)}" autocomplete="tel" placeholder="98765 43210">${CBConsent.html("K1")}<div class="zc-foot"><button class="zc-btn" type="button" id="pubgo" data-needs="K1" disabled aria-disabled="true">Confirm and publish</button> <button class="zc-btn zc-btn-alt" type="button" id="pubcancel">Back</button></div>`

@@ -53,7 +53,8 @@
     L.push(["row", "Joined after the first number", String(log.people.late)]);
     if (log.people.present != null) L.push(["row", "Checked in as present", String(log.people.present)]);
     L.push(["h", "Prizes"]);
-    for (const c of (log.claims || [])) L.push(["row", `Ticket ${c.ticket} claimed ${c.prize}${c.afterNumber ? " after number " + c.afterNumber : ""}`, `${c.outcome === "accepted" ? "accepted" : c.outcome === "wrong" ? "wrong (a Bogey)" : "too late, refused"} · ${HMS(c.atMs)}`]);
+    L.push(["note", "Rule: everyone who claims before the next number is called wins that prize together. If there are more winners than prizes, the organizer or host decides how to share. Unlucky is awarded automatically."]);
+    for (const c of (log.claims || [])) L.push(["row", `Ticket ${c.ticket} claimed ${c.prize}${c.afterNumber ? " after number " + c.afterNumber : ""}`, `${c.outcome === "accepted" ? "accepted" : c.outcome === "prize taken" ? "Prize already taken: this claim came at number " + c.afterNumber + ", after the prize was already awarded at number " + c.takenAtNumber + "." : c.outcome === "wrong" ? "wrong (a Bogey)" : "too late, refused"} · ${HMS(c.atMs)}`]);
     if (!log.prizes.length) L.push(["note", "No prize was won."]);
     for (const p of log.prizes) L.push(["row", p.prize + (p.text ? " (" + p.text + ")" : ""), `Ticket number ${p.ticket}, after number call ${p.callNo}, at ${HMS(p.atMs)}`]);
     for (const l of (log.lucky || [])) L.push(["row", "Lucky draw: " + l.title, l.drawn ? `Drawn. Ticket number${l.tickets.length === 1 ? "" : "s"} ${l.tickets.join(", ")}` : `Not drawn yet (${l.winners} ticket${l.winners === 1 ? "" : "s"} picked at random)`]);

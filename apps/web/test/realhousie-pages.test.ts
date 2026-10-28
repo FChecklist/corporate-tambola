@@ -90,13 +90,13 @@ describe("the ticket on the phone never marks itself", () => {
     const x = await setup("RH-CLM", { rewards: [{ pattern: "early5", ordinal: 1 }, { pattern: "full", ordinal: 1 }] });
     const p = await phonePage(x, "RH-CLM", "9822222223"); const rt = p.win.__rt; const doc = p.win.document;
     x.goLive(); await untilCalled(x, p, 3);
-    expect(doc.querySelector("[data-claim]")).toBeNull();
+    expect(doc.querySelector("[data-claim]:not([data-grey])")).toBeNull(); // (grey buttons beside the prizes are there, gold ones only when a prize is complete)
     // the person taps along until Early Five is complete on their marks
     for (let i = 0; i < 85 && !rt.view().claimable.includes("early5"); i++) { x.step(6000); await tick(p); await rt.playAlong({ claim: false }); } // one number per step, the person taps along
     await wait(1200); // the page redraws once a second
-    const btn = doc.querySelector('[data-claim="early5"]') as any;
-    expect(btn).toBeTruthy(); expect(btn.textContent).toBe("Claim Early Five");
-    expect(p.text()).toMatch(/Press Claim (now, )?before the next number is called./);
+    const btn = doc.querySelector('[data-claim="early5"]:not([data-grey])') as any;
+    expect(btn).toBeTruthy(); expect(btn.textContent).toContain("CLAIM");
+    expect(p.text()).toMatch(/You have won the Early Five\. Click CLAIM to claim\./);
     expect(p.text()).toMatch(/Early Five.*Complete: press Claim/); // the Still-to-win row
     expect(rt.view().marks.length).toBeGreaterThanOrEqual(5); expect(rt.view().pressed).toEqual([]);
     expect((x.w.world.raw.query("SELECT COUNT(*) c FROM claim").get() as any).c).toBe(0); // nothing was sent by itself
@@ -123,12 +123,12 @@ describe("the ticket on the phone never marks itself", () => {
     for (const n of top) if (called.has(n)) cell(p, n).click();
     await wait(1200);
     const btn = doc.querySelector('[data-claim="top"]') as any; expect(btn).toBeTruthy();
-    btn.click(); await wait(100);
+    btn.click(); await wait(100); expect(doc.querySelector("#bogeyask")).toBeTruthy(); (doc.querySelector("#bgsubmit") as any).click(); await wait(100); // a grey button asks first; Submit sends the wrong claim
     expect(doc.querySelector("#tapnote .ctg-inline")?.textContent).toMatch(new RegExp(`Bogey! ${stales[0]} has not been called\\. Unmark it and keep playing\\.`));
     expect(p.text()).toMatch(/Bogeys: Top line 1/);
     expect(rt.view().pressed).toEqual([]); expect((x.w.world.raw.query("SELECT COUNT(*) c FROM claim").get() as any).c).toBe(0);
     expect((x.w.world.raw.query("SELECT COUNT(*) c FROM bogey").get() as any).c).toBe(1); // recorded for every phone
-    (doc.querySelector('[data-claim="top"]') as any).click(); await wait(100);
+    (doc.querySelector('[data-claim="top"]') as any).click(); await wait(100); (doc.querySelector("#bgsubmit") as any).click(); await wait(100);
     expect(p.text()).toMatch(/Two Bogeys on Top line: this ticket is out of the Top line prize\. Other prizes are still open to you\./);
     expect(p.text()).toMatch(/Bogeys: Top line 2/);
     expect(doc.querySelector('[data-claim="top"]')).toBeNull(); // the button is gone
@@ -139,7 +139,7 @@ describe("the ticket on the phone never marks itself", () => {
     for (const n of stales) cell(p, n).click();
     await wait(50); expect(rt.view().marks.every((n: number) => called.has(n))).toBe(true);
     for (let i = 0; i < 90 && !rt.view().claimable.includes("full"); i++) { x.step(6000); await tick(p); await rt.playAlong({ claim: false }); } await wait(1200);
-    expect(doc.querySelector('[data-claim="full"]')).toBeTruthy(); expect(doc.querySelector('[data-claim="top"]')).toBeNull();
+    expect(doc.querySelector('[data-claim="full"]:not([data-grey])')).toBeTruthy(); expect(doc.querySelector('[data-claim="top"]')).toBeNull();
     expect(p.errors).toEqual([]);
   });
 });

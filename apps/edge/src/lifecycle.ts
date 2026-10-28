@@ -9,7 +9,7 @@ import { checkinRequired, deviceMatches, keepWinnerEvidence, prefixEnd } from ".
 import { restoreCreditUses } from "./credit";
 import { keepLegalParty } from "./legal";
 import { ensureGameRecordTable, keepGameRecord } from "./gamerecord";
-import { noteReportSent, saveGameLog } from "./gamelog";
+import { buildGameLog, noteReportSent, saveGameLog } from "./gamelog";
 import { sweepVisits } from "./visits";
 import { closeAuditFor, isHeld, shredParticipantAudit } from "./audit";
 import { GRACE_ROUNDS, INVITE_CATEGORIES, PRIZE_HOUSES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
@@ -314,6 +314,8 @@ async function baseData(env: LifeEnv, e: any, cfg: EngagementCfg, sch: Awaited<R
   const prizes: ReportPrize[] = [];
   for (let round = 1; round <= cfg.rounds; round++) for (const key of keysInPlay(cfg.rewards)) for (const line of linesFor(cfg.rewards, key)) prizes.push({ round, label: lineLabel(cfg, key, line.ordinal), text: line.text, winners: wrows.filter((w: any) => w.round === round && w.pattern === key && w.ordinal === line.ordinal).map(winnerOf) });
   const lucky = cfg.breaks.filter((b) => b.kind === "lucky").map((b, i) => ({ title: b.title, winners: wrows.filter((w: any) => w.pattern === "lucky" && w.ordinal === i + 1).map(winnerOf) }));
+  let takenClaims: string[] = []; // claims that came in time but after the prize was already awarded: said in the owner's words in the report
+  try { const gl = await buildGameLog(env, d1kv(env), e, cfg, endMs); takenClaims = gl.claims.filter((c) => c.outcome === "prize taken").map((c) => `Ticket ${c.ticket} claimed ${c.prize}. Prize already taken: this claim came at number ${c.afterNumber}, after the prize was already awarded at number ${c.takenAtNumber}.`).slice(0, 60); } catch { /* the report is still sent */ }
   const held = e.pack === 0;
   const early = !held && endMs < (await endBoundMs(env, e)) - 5 * 60_000;
   // How many numbers were really called in the last round: counted on the clock the phones used (pauses, breaks and the organizer's presses applied), never assumed to be 90.
@@ -326,7 +328,7 @@ async function baseData(env: LifeEnv, e: any, cfg: EngagementCfg, sch: Awaited<R
   return {
     engagementId: eid, organizerEmail: email, sentAtMs: sentAt, scheduledMs: roundMs(e.start_round), firstNumberMs: first, endMs, wasHeld: held,
     endReason,
-    rounds: cfg.rounds, callSeconds: e.call_seconds, hostCalled: cfg.callMode === "host", ticketsPerPerson: cfg.tickets, cap: e.cap, inviteOnly: !!e.closed, numbersCalled,
+    rounds: cfg.rounds, takenClaims, callSeconds: e.call_seconds, hostCalled: cfg.callMode === "host", ticketsPerPerson: cfg.tickets, cap: e.cap, inviteOnly: !!e.closed, numbersCalled,
     agg: st.agg, people: [], prizes, lucky, timeline: st.tl, breaks: cfg.breaks.map((b) => ({ after: b.after, kind: b.kind, title: b.title })),
     personalDeleteAtMs: personalDeleteAt(endMs), fullDeleteAtMs: fullDeleteAt(endMs),
     ...(cfg.brand ? { brand: { name: cfg.brand.name, ...(cfg.brand.logo ? { logo: cfg.brand.logo } : {}) } } : {}),

@@ -31,6 +31,8 @@ export interface RuntimeView {
   startRound: number; scheduledRound: number; callSeconds: number; mode: "live" | "hold" | "blind" | "none"; paused: boolean; stopped: boolean;
   claimed: PatternKey[]; unsent: number; results: { pattern: PatternKey | "lucky"; ordinal: number; idx: number; count: number; winners?: string[]; tickets?: number[]; round?: number }[]; pendingChecks: number; discarded: number;
   nextCallInSec: number | null;
+  /** Seconds left to claim, minus one (11 down to 0): a nudge only, the game's clock decides. null when there is no gap to count (a Host calls the numbers) or no time left. */
+  claimLeft: number | null;
   tickets: Ticket[]; cfg: EngagementCfg;
   /** The brand break showing right now, with seconds left; null when none. */
   brk: { title: string; kind: BreakCfg["kind"]; mediaUrl?: string; secondsLeft: number; seconds: number; winners?: number } | null;
@@ -432,6 +434,7 @@ export class PhoneRuntime {
     try { this.onProgress?.(); } catch { /* the page drawing must never stop the game loop */ } // show the new number NOW: the claim, seat-list and Bogey calls below can take seconds when the store is busy, and must not hold the number back
     if (m !== "blind") await this.autoClaim(); // never claim from a log that might be missing a pause we could not hear about
     await this.sendBogeys();
+    await this.beat(now);
     await this.pollSeats(now);
     this.syncEngines(Math.max(1, started));
     await this.pollResults();
@@ -490,6 +493,14 @@ export class PhoneRuntime {
   private seatUpto = 0;
   private seatsFetched = false;
   private lastSeatPoll = -Infinity;
+  /** The claim signal (a few digits, every ~2 s while this page is in front): when it moved, the claim list is read at once so everybody hears of a claim within a few seconds. The page sets beatOn=false while hidden. */
+  beatOn = true; private cvKnown = -1; private lastBeat = -Infinity; private beating = false;
+  private async beat(now: number) {
+    if (!this.beatOn || this.beating || this.phase !== "play" || now < this.startRound) return;
+    const m = this.deps.mono(); if (m - this.lastBeat < 1900) return; // the page ticks once a second, so this is every 2 s; phones started at different moments so their asks are spread out
+    this.lastBeat = m; this.beating = true;
+    try { const n = Number(await this.deps.api("GET", `/api/z/${this.eid}/cv`)); if (Number.isFinite(n)) { if (this.cvKnown >= 0 && n > this.cvKnown) this.wantSeats = true; this.cvKnown = n; } } catch { /* the slow poll still brings the news */ } finally { this.beating = false; }
+  }
   /** The beacon round the newest seat list was asked for in: a lucky draw is only worked out from a list at least that fresh. */
   private seatsFreshRound = 0;
   private wantSeats = false;
@@ -801,6 +812,7 @@ export class PhoneRuntime {
       mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: isPaused, stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
       claimed: claimedNow, unsent: this.unsent, results: this.allResults.filter((x) => (x.round ?? 1) === this.cur), pendingChecks: this.store.pending(), discarded: this.store.discarded,
       nextCallInSec: nextRound !== null && now !== null ? secsTo(nextRound) : null,
+      claimLeft: (() => { if (this.hostMode || now === null) return null; const lastR = done ? this.roundFor(NUMBERS - 1) : null; const end = nextRound !== null ? nextRound : lastR !== null && Number.isFinite(lastR) ? lastR + this.stride : null; if (end === null) return null; const n = secsTo(end); return n !== null && n >= 1 ? n - 1 : null; })(),
       tickets: this.tickets, cfg: this.cfg, brk: this.currentBreak(now), myIdx: this.myIdx(), lucky: this.luckyView(),
       round: this.cur, rounds: this.cfg.rounds, intermission: inter ? { round: this.cur + 1, secondsLeft: secsTo(inter.endsAtRound) ?? 0 } : null, past: this.pastView(),
       won: this.wonView(), allAwarded: this.prizesAwarded(this.cur), endedByPrizes: this.prizesEnded, late: this.lateView(now), localWinners: this.localOk,

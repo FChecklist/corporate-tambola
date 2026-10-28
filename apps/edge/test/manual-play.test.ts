@@ -138,3 +138,13 @@ describe("what the owner reads never promises a gap for a Host game", () => {
     expect(text(base)).toContain("one number every 9 seconds");
   });
 });
+
+describe("the report explains 'Prize already taken'", () => {
+  test("the rule text is always in the prizes section and every taken claim has its line", () => {
+    const base = { engagementId: "X", organizerEmail: "a@b.c", sentAtMs: T, scheduledMs: T, firstNumberMs: T, endMs: T + 60_000, endReason: "x", wasHeld: false, rounds: 1, callSeconds: 12, ticketsPerPerson: 1, cap: 50, inviteOnly: false, numbersCalled: 5, agg: { joined: 0, onRoster: 0, notJoined: 0, late: 0, viaInvite: 0, inviters: 0, topInviter: null, roles: 0, joinedInTime: 0, firstJoinMs: null }, people: [], prizes: [], lucky: [], timeline: [], breaks: [], personalDeleteAtMs: T, fullDeleteAtMs: T } as any;
+    const text = (d: any) => [...new TextDecoder("latin1").decode(layoutReport(d)).matchAll(/\((.*?)\) Tj/g)].map((m) => m[1]).join(" ").replace(/\\(?=[()])/g, "").replace(/\s+/g, " ");
+    const t = text({ ...base, takenClaims: ["Ticket 3 claimed Top line. Prize already taken: this claim came at number 15, after the prize was already awarded at number 10."] });
+    expect(t).toContain("everyone who claims before the next number is called wins that prize together"); expect(t).toContain("Prize already taken: this claim came at number 15, after the prize was already awarded at number 10.");
+    expect(text(base)).not.toContain("Prize already taken");
+  });
+});

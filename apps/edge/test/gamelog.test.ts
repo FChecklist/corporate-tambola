@@ -76,6 +76,22 @@ describe("claims are part of the saved log", () => {
   });
 });
 
+describe("a claim that came after the prize was already awarded", () => {
+  test("the log says 'Prize already taken' with both numbers; a winner's own claim and a claim before the award stay 'accepted'", async () => {
+    const o = await game("GL-TK");
+    const pids = (raw.query("SELECT pid, seq FROM seat WHERE eid='GL-TK' ORDER BY seq").all() as any[]);
+    const t0 = Date.UTC(2026, 9, 1, 12, 0, 0);
+    raw.prepare("INSERT INTO winner(eid,round,pattern,ordinal,seat,idx,at_ms,src) VALUES('GL-TK',1,'top',1,?,9,?, 'phones')").run(pids[0].seq, t0);
+    raw.prepare("INSERT INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES('GL-TK',?,?,1,9,?)").run(pids[0].pid, "top", t0);       // the winner's own claim
+    raw.prepare("INSERT INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES('GL-TK',?,?,1,9,?)").run(pids[1].pid, "top", t0 + 500);  // the same number: shares, not late
+    raw.prepare("INSERT INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES('GL-TK',?,?,1,14,?)").run(pids[2].pid, "top", t0 + 60_000); // 5 numbers later, the prize is gone
+    const gl = await j(await call("GET", "/api/z/GL-TK/gamelog", undefined, o.h));
+    const by = (t: number) => gl.claims.find((c: any) => c.ticket === t);
+    expect(by(pids[0].seq).outcome).toBe("accepted"); expect(by(pids[1].seq).outcome).toBe("accepted");
+    expect(by(pids[2].seq).outcome).toBe("prize taken"); expect(by(pids[2].seq).afterNumber).toBe(15); expect(by(pids[2].seq).takenAtNumber).toBe(10);
+  });
+});
+
 describe("saved when the game ends; survives the 20-hour deletion; gone with the game", () => {
   test("after the players' details are erased the log still has the people count, the prizes with ticket numbers and the pauses; the report line follows the e-mail; the Co-host sees how it ended", async () => {
     const o = await game();

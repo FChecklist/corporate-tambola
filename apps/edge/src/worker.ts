@@ -90,6 +90,10 @@ async function mirrorControl(env: Env, id: string) {
   try { const f = await readPublished(d1kv(env), id); if (f) await env.CONTROL_R2.put(controlKey(id), JSON.stringify({ ...f, ...(await liveField(env, id)) }), { httpMetadata: { contentType: "application/json", cacheControl: "public, max-age=3" } }); } catch { /* the Worker route still serves it */ }
 }
 /** A claim that came too late is not recorded as a win; it is only remembered here, as a ticket number, a prize and a time, so the Organizer's board can show "too late". */
+/** The tiny claim signal: ONE number per game that goes up by one on every claim event (claimed, wrong, too late). Phones ask for it every 2 s (a few bytes, answered from the edge cache) and read the claim list only when it moved. Display only: it never decides a claim. */
+async function bumpCv(db: D1, eid: string): Promise<void> {
+  try { await db.prepare("INSERT INTO kv(k,v) VALUES(?,'1') ON CONFLICT(k) DO UPDATE SET v=CAST(CAST(v AS INTEGER)+1 AS TEXT)").bind(`cv/${eid}`).run(); } catch { /* the signal is a convenience; the slow claim poll still brings the news */ }
+}
 async function noteLateClaim(db: D1, eid: string, pid: string, pattern: string, now: number): Promise<void> {
   try { const r = await db.prepare("SELECT v FROM kv WHERE k=?").bind(`claimlate/${eid}`).first<{ v: string }>(); const a: any[] = r ? JSON.parse(r.v) : []; a.push({ t: seatOfPidText(pid), p: pattern, at: now }); await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`claimlate/${eid}`, JSON.stringify(a.slice(-200))).run(); } catch { /* best effort */ }
 }
@@ -566,7 +570,17 @@ async function signInResult(env: Env, req: Request, acct: { org: string } | null
   return { ok: true, token, kind, roles, ...(alt ? { alt } : {}), ...(kind === "host" ? { ready } : {}) };
 }
 
+/** The claim signal (see bumpCv): answered BEFORE anything else (no maintenance check, no engagement lookup), from the edge cache for a second, so a crowd of phones costs the database about one read a second. */
+async function cvFast(env: Env, eid: string): Promise<Response> {
+  const cache = typeof caches !== "undefined" ? (caches as any).default : null, ck = new Request(`https://cv.invalid/${eid}`);
+  const hit = cache ? await cache.match(ck).catch(() => null) : null; if (hit) return hit;
+  const row = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`cv/${eid}`).first<{ v: string }>();
+  const res = new Response(String(Number(row?.v ?? 0) || 0), { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=0, s-maxage=1" } });
+  if (cache) await cache.put(ck, res.clone()).catch(() => {});
+  return res;
+}
 export async function handle(req: Request, env: Env, now = Date.now(), waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
+  if (req.method === "GET") { const cm = /^\/api\/z\/([A-Za-z0-9_-]{4,40})\/cv$/.exec(new URL(req.url).pathname); if (cm) return cvFast(env, cm[1]!); }
   const off = await maintenanceGate(req, env, now).catch(() => null);
   if (off) return off;
   let res: Response;
@@ -1807,6 +1821,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (have >= 2) return json({ ok: true, atMs: now, stored: 0 }); // two are enough to put the ticket out: nothing more is written
     if (!(await spend(env, now))) return json({ error: "Busy day. Your claim is kept on your phone and will be sent again.", stored: 0 }, 503);
     await env.DB.prepare("INSERT INTO bogey(eid,pid,pattern,round,at_ms) VALUES(?,?,?,?,?)").bind(eid, b.pid, b.pattern, round, now).run();
+    await bumpCv(env.DB, eid!);
     return json({ ok: true, atMs: now, stored: 1 });
   }
   if ((action === "person" || action === "forget") && req.method === "POST") { // a participant asks the organizer to see, or to delete, their own data: the organizer does it in the console (never an AI)
@@ -1864,6 +1879,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       const r = await env.DB.prepare("INSERT OR IGNORE INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES(?,?,?,?,?,?)").bind(eid, b.pid, c.pattern, round, c.idx, now).run();
       stored += r.meta?.changes ?? 0; // a claim sent twice is stored once
     }
+    if (stored || late) await bumpCv(env.DB, eid!);
     if (late && !stored) return json({ error: CLAIM_LATE_MSG, code: "claim-late", stored: 0, atMs: now }, 409); // nothing was recorded: the phone says it kindly and stops sending it
     return json({ ok: true, stored, ...(late ? { late } : {}), atMs: now }); // atMs: the store's clock, the time that decides whether the claim came before the next number
   }

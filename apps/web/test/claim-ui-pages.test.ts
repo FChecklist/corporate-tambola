@@ -96,12 +96,12 @@ describe("the claim alert, the big claim button, the friendly late message", () 
     const { ph, set } = await steered("CU-1");
     set({ phase: "play", paused: false, locked: false, log: LOG, claimNow: ["early5"], claimOpen: ["early5"], claimable: ["early5"], pressed: [], claimed: [], results: [] });
     await ph.waitFor(() => !!ph.$("#claimalert"), 15_000);
-    expect(ph.$("#claimalert")!.textContent).toContain("You have completed Early Five!"); expect(ph.$("#claimalert")!.textContent).toContain("Press Claim now, before the next number is called.");
+    expect(ph.$("#claimalert")!.textContent).toContain("You have won the Early Five. Click CLAIM to claim."); expect(ph.$("#claimtop")).toBeTruthy();
     expect(ph.html().indexOf('id="claimalert"')).toBeLessThan(ph.html().indexOf('id="big"')); // near the top: above the counter
-    const bar = ph.$("#claimbar") as any; expect(bar).toBeTruthy(); expect(bar.textContent).toContain("Press to claim your prize"); expect(bar.textContent).toContain("Early Five"); expect(ph.win.document.querySelectorAll("#claimbar .zbigclaim").length).toBe(1);
-    expect(ph.win.document.querySelectorAll("#claims .zclaim.ready").length).toBe(1); expect(ph.$("#claimhint")!.textContent).toBe("The Claim button turns gold when you complete a prize. Press it before the next number is called.");
+    const bar = ph.$("#claimbar") as any; expect(bar).toBeTruthy(); expect(bar.textContent).toContain("CLAIM"); expect(bar.textContent).toContain("Early Five"); expect(ph.win.document.querySelectorAll("#claimbar .zbigclaim").length).toBe(1);
+    expect(ph.win.document.querySelectorAll("#prizepanel .zside.zgold").length).toBe(1); expect(ph.$("#claimhint")!.textContent).toBe("The Claim button turns gold when you complete a prize. Press it before the next number is called.");
     set({ phase: "play", paused: false, locked: false, log: LOG, claimNow: ["early5", "top"], claimOpen: ["early5", "top"], claimable: ["early5", "top"], pressed: [], claimed: [], results: [] });
-    await ph.waitFor((t) => /You have completed Early Five and Top Line!/i.test(t), 15_000);
+    await ph.waitFor((t) => /You have won the Early Five and Top Line\. Click CLAIM to claim\./i.test(t), 15_000);
     expect(ph.win.document.querySelectorAll("#claimbar .zbigclaim").length).toBe(2); // one button per ready prize
   });
   test("after the press the bar says 'Claim sent. Checking…'; with the next number (or a pause, or the end) the alert and the big button are gone; a prize whose time passed has no gold button, only a kind note", async () => {
@@ -112,9 +112,9 @@ describe("the claim alert, the big claim button, the friendly late message", () 
     expect(ph.$("#claimalert")).toBeNull(); expect(ph.$("#claimbar .zbigclaim")).toBeNull();
     set({ ...play, log: [...LOG, 3], claimNow: [], claimOpen: [], claimable: ["early5"], pressed: [], claimed: [] }); // the next number was announced
     await ph.waitFor(() => !!ph.$("#stalenote"), 15_000);
-    expect(ph.$("#claimalert")).toBeNull(); expect(ph.$("#claimbar")).toBeNull(); expect(ph.win.document.querySelectorAll("#claims .zclaim").length).toBe(0); expect(ph.$("#stalenote")!.textContent).toMatch(/The time to claim Early Five has passed/);
+    expect(ph.$("#claimalert")).toBeNull(); expect(ph.$("#claimbar")).toBeNull(); expect(ph.win.document.querySelectorAll("#prizepanel .zside.zgold").length).toBe(0); expect(ph.$("#stalenote")!.textContent).toMatch(/The time to claim Early Five has passed/);
     set({ ...play, paused: true, claimNow: [], claimOpen: ["early5"], claimable: ["early5"], pressed: [], claimed: [] }); // paused: no alert, no big button, but the claim is still possible with the card's button
-    await ph.waitFor(() => !ph.$("#claimalert") && !ph.$("#claimbar") && ph.win.document.querySelectorAll("#claims .zclaim.ready").length === 1, 15_000);
+    await ph.waitFor(() => !ph.$("#claimalert") && !ph.$("#claimbar") && ph.win.document.querySelectorAll("#prizepanel .zside.zgold").length === 1, 15_000);
     set({ ...play, phase: "ended", claimNow: [], claimOpen: [], claimable: [], pressed: [], claimed: [] }); // finished
     await ph.waitFor(() => !ph.$("#claimalert") && !ph.$("#claimbar"), 15_000);
   });
@@ -303,5 +303,59 @@ describe("a tap is never lost to a redraw", () => {
     btn.dispatchEvent(new W.Event("pointerup", { bubbles: true }));
     await ph.waitFor((t) => /7 of 90 called/.test(t), 15_000);
     expect(btn.isConnected).toBe(false); // redrawn right after the release
+  });
+});
+
+describe("1.5.0 claim buttons: gold top, bottom and side; grey side otherwise; the claim timer", () => {
+  const play = { phase: "play", paused: false, locked: false, log: LOG, claimable: [], pressed: [], claimed: [], results: [], brk: null, intermission: null, callMode: "auto", waitingForHost: false };
+  test("a prize to claim: gold CLAIM in the alert, in the bottom bar and by the prize; any other prize has a grey side button; all gold ones carry the same timer", async () => {
+    const { ph, set } = await steered("CU-G1");
+    set({ ...play, claimNow: ["early5"], claimOpen: ["early5"], claimable: ["early5"], claimLeft: 11, nextCallInSec: 12 });
+    await ph.waitFor(() => !!ph.$("#claimtop") && !!ph.$("#claimbar .zbigclaim"), 15_000);
+    const d = ph.win.document;
+    expect(d.querySelectorAll("#prizepanel .zside.zgold").length).toBe(1); expect(d.querySelectorAll("#prizepanel .zside.zgrey").length).toBeGreaterThan(0);
+    expect(d.querySelector("#claimtop")!.textContent).toContain("Claim in the next 11 s"); expect(d.querySelector("#claimbar")!.textContent).toContain("Claim in the next 11 s"); expect(d.querySelector("#prizepanel .zside.zgold")!.textContent).toContain("Claim in the next 11 s");
+    expect(ph.text()).not.toMatch(/Next number in/); // the normal countdown is hidden for this player while the claim timer shows
+    set({ ...play, claimNow: ["early5"], claimOpen: ["early5"], claimable: ["early5"], claimLeft: 0, nextCallInSec: 1 });
+    await ph.waitFor((t) => /Claim in the next 0 s/.test(t), 15_000);
+    set({ ...play, claimNow: [], claimOpen: [], claimable: [], claimLeft: null, nextCallInSec: 12 }); // the next number: gold and timer go, the normal countdown returns at once
+    await ph.waitFor((t) => /Next number in 12s/.test(t), 15_000);
+    expect(ph.$("#claimtop")).toBeNull(); expect(ph.$("#claimbar")).toBeNull(); expect(d.querySelectorAll("#prizepanel .zside.zgold").length).toBe(0); expect(d.querySelectorAll("#prizepanel .zside.zgrey").length).toBeGreaterThan(0); expect(ph.text()).not.toMatch(/Claim in the next/);
+  });
+  test("manual play (a Host calls the numbers): gold buttons but NO timer", async () => {
+    const { ph, set } = await steered("CU-G2");
+    set({ ...play, callMode: "host", claimNow: ["early5"], claimOpen: ["early5"], claimable: ["early5"], claimLeft: 8, nextCallInSec: null });
+    await ph.waitFor(() => !!ph.$("#claimtop"), 15_000);
+    expect(ph.text()).not.toMatch(/Claim in the next/);
+  });
+  test("one press = one claim from any gold button (and two prizes at once are claimed together); a double press sends it once", async () => {
+    const { ph, set } = await steered("CU-G3");
+    const calls: string[] = []; const rt = (ph.win as any).__rt; rt.claim = async (k: string) => { calls.push(k); await wait(300); return { ok: true, sent: false, idx: 5 }; };
+    set({ ...play, claimNow: ["early5", "top"], claimOpen: ["early5", "top"], claimable: ["early5", "top"], claimLeft: 8, nextCallInSec: 9 });
+    await ph.waitFor(() => !!ph.$("#claimtop"), 15_000);
+    (ph.$("#claimtop") as any).click(); (ph.$("#claimtop") as any).click(); await wait(900);
+    expect(calls).toEqual(["early5", "top"]); // both prizes, once each, though pressed twice
+    calls.length = 0;
+    set({ ...play, claimNow: ["early5"], claimOpen: ["early5"], claimable: ["early5"], claimLeft: 8, nextCallInSec: 9, pressed: [] });
+    await ph.waitFor(() => !!ph.$("#prizepanel .zside.zgold"), 15_000);
+    (ph.$("#prizepanel .zside.zgold") as any).click(); await wait(600);
+    expect(calls).toEqual(["early5"]); // the side button claims too
+  });
+  test("a grey button asks first: Cancel does nothing, Submit sends the wrong claim as before", async () => {
+    const { ph, set } = await steered("CU-G4");
+    const calls: string[] = []; const rt = (ph.win as any).__rt; rt.claim = async (k: string) => { calls.push(k); return { ok: false, bogey: true, error: "Bogey!" }; };
+    set({ ...play, claimNow: [], claimOpen: [], claimable: [], claimLeft: null, nextCallInSec: 12 });
+    await ph.waitFor(() => !!ph.$("#prizepanel .zside.zgrey"), 15_000);
+    const grey = ph.$("#prizepanel .zside.zgrey") as any; const key = grey.dataset.claim;
+    grey.click(); await ph.waitFor(() => !!ph.$("#bogeyask"), 15_000);
+    expect(ph.$("#bogeyask")!.textContent).toContain("You have no claim right now. If you submit, it counts as a wrong claim (Bogey).");
+    (ph.$("#bgcancel") as any).click(); await ph.waitFor(() => !ph.$("#bogeyask"), 15_000); expect(calls).toEqual([]);
+    (ph.$("#prizepanel .zside.zgrey") as any).click(); await ph.waitFor(() => !!ph.$("#bogeyask"), 15_000);
+    (ph.$("#bgsubmit") as any).click(); await wait(500); expect(calls).toEqual([key]); expect(ph.$("#bogeyask")).toBeNull();
+  });
+  test("no side buttons when the game is not in play (before the start, ended)", async () => {
+    const { ph, set } = await steered("CU-G5");
+    set({ ...play, phase: "ended", claimNow: [], claimOpen: [], claimable: [], claimLeft: null }); await wait(2200);
+    expect(ph.win.document.querySelectorAll(".zside").length).toBe(0);
   });
 });

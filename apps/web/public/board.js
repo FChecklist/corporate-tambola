@@ -94,10 +94,16 @@
     const g = async (path) => { const r = await fetch(path, { headers: { "x-organizer": KEY }, cache: "no-store" }); return r.ok ? r.json() : null; };
     try {
       P.gl = await g(`/api/z/${EID}/gamelog`);
-      const c = await g(`/api/z/${EID}/claims`); if (c) { P.claims = c.claims || []; P.tooLate = c.tooLate || []; }
+      const c = await g(`/api/z/${EID}/claims`); if (c) { P.claims = c.claims || []; P.tooLate = c.tooLate || []; boardToasts(); }
       const w = await g("/api/whoami"); P.who = (w && w.kind) || P.who;
     } catch { /* the next poll tries again */ }
   }
+  // ---- the claim signal: a few digits asked every ~2 s while this screen is in front; when it moves, the new claims are shown as calm pop-ups ("Ticket 7 has claimed Top line. Checking now...")
+  const CN = { early5: "Early Five", top: "Top line", mid: "Middle line", bot: "Bottom line", corners: "Four corners", star: "Star", full: "Full house" };
+  const toastNote = (text) => { let box = document.getElementById("claimtoasts"); if (!box) { box = document.createElement("div"); box.id = "claimtoasts"; box.setAttribute("role", "status"); box.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:50;display:grid;gap:6px;width:min(92vw,520px);pointer-events:none"; document.body.appendChild(box); } const d = document.createElement("div"); d.style.cssText = "background:#14233f;color:#fff;border-radius:12px;padding:10px 14px;font-size:1rem;box-shadow:0 8px 20px -10px rgba(0,0,0,.6)"; d.textContent = text; box.appendChild(d); while (box.children.length > 3) box.firstChild.remove(); setTimeout(() => d.remove(), 6000); };
+  const claimLine = (c) => { const t = String(c.pid || "").match(/^(\d+)x/); const tk = t ? t[1] : c.ticket; const nm = CN[c.pattern] || c.pattern; return c.bogey ? `Ticket ${tk}'s claim was not correct. The game continues.` : `Ticket ${tk} has claimed ${nm}. Checking now…`; };
+  const SEEN = { init: false, ids: new Set(), cv: -1 };
+  function boardToasts() { for (const c of P.claims || []) { const id = c.pid + "|" + c.pattern + "|" + (c.bogey ? "b" : c.idx) + "|" + c.atMs; if (SEEN.ids.has(id)) continue; SEEN.ids.add(id); if (SEEN.init) toastNote(claimLine(c)); } SEEN.init = true; }
   const pausedNowB = () => !!(S.st && S.now !== null && S.st.intervals.some((i) => S.now >= i.start && S.now < i.end));
   function boardStory() {
     const log = S.logs[S.round] || [], cfg = S.cfg || {}, manual = cfg.startMode === "manual", go = S.st ? S.st.goRound : null, sr = S.info ? S.info.startRound : 0;
@@ -207,6 +213,8 @@
     loop(); setInterval(loop, 3000);
     pollPanels().then(() => drawPanels()); setInterval(async () => { await pollPanels(); drawPanels(); }, 5000);
     setInterval(() => { if (S.info && !(S.logs[S.round] || []).length) draw(); drawPanels(); }, 1000);
+    const beat = async () => { if (document.hidden) return; try { const r = await fetch(`/api/z/${EID}/cv`, { cache: "no-store" }); const n = Number((await r.text()).trim()); if (Number.isFinite(n)) { if (SEEN.cv >= 0 && n > SEEN.cv) { await pollPanels(); drawPanels(); } SEEN.cv = n; } } catch { /* the 5 s poll still brings the news */ } };
+    setInterval(beat, 2000 + Math.floor(Math.random() * 500));
   });
   return;
   const loop = async () => { await tick(); draw(); };

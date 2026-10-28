@@ -923,7 +923,7 @@ describe("the free demo game", () => {
       else if (sawBreak) breakGone = true;
       // real housie: the person taps each number on the ticket as it is called (the ticket never marks itself) and presses Claim when the four corners are marked
       for (const n of view.log) if (!view.marks.includes(n)) { const cell = doc.querySelector(`[data-tap="${n}"]`); if (cell) { cell.click(); tapped++; } }
-      const btn = doc.querySelector('[data-claim="corners"]'); if (btn && claimedAt < 0) { claimedAt = view.log.length; btn.click(); }
+      const btn = doc.querySelector('[data-claim="corners"]:not([data-grey])'); if (btn && claimedAt < 0) { claimedAt = view.log.length; btn.click(); }
       return view.phase === "ended";
     }, 90000);
     expect(sawBreak).toBe(true); expect(sawBuiltInVideo).toBe(true); expect((doc.querySelector("#ctmedia video") as any)?.src ?? "").toBe(""); /* the player is gone after the break */ expect(logDuringBreak).toBe(3); expect(ticketDuringBreak).toBe(true); expect(breakGone).toBe(true);
@@ -1055,7 +1055,7 @@ describe("the console for an AI that works in the browser", () => {
 
   test("Quick setup has every main choice: who calls the numbers (auto or manual with a Host), what a person must give to get in, and employees only (found when the owner looked at the live page, 25 Oct 2026)", async () => {
     const o = await organizer(); const p = await quickPage(o); await p.waitFor((x) => /1\. Which game\?/.test(x) && /Who calls the numbers\?/.test(x) && /What must a person give to get in\?/.test(x) && /Only my employees/.test(x));
-    expect(p.text()).toMatch(/I do/); expect(p.text()).toMatch(/You or a Host press Next number for each number/); expect(p.text()).toMatch(/The game does/); expect(p.text()).toMatch(/How does it start\?/);
+    expect(p.text()).toMatch(/I call the numbers/); expect(p.text()).toMatch(/I press the Next button for every number\./); expect(p.text()).toMatch(/The game calls the numbers/); expect(p.text()).toMatch(/How should the game start\?/);
     const tomorrow = new Date(Date.now() + 5.5 * 3600000 + 2 * 86400000); const d = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
     set(p, "#qk-name", "Manual game"); set(p, "#qk-date", d); set(p, "#qk-time", "18:30");
     p.click('[data-ck="cap"][data-v="100"]'); p.click('[data-ck="mode"][data-v="host"]'); p.click('[data-ck="ver"][data-v="both"]'); p.click('[data-bool="emp"]');

@@ -95,6 +95,24 @@ describe("a phone from first open to full house", () => {
     expect(new Set(v.claimed)).toEqual(new Set(ALL_PATTERNS));
     expect(v.unsent).toBe(0);
   });
+  test("claimLeft is the real seconds left in the gap minus one (never negative), gone at zero", async () => {
+    const a = mkPhone(7); await a.rt.boot(); await a.rt.join(a.phone);
+    let seen = 0;
+    for (let i = 0; i < 40; i++) { await step([a]); const v = a.rt.view(); if (v.nextCallInSec === null) continue; seen++; if (v.nextCallInSec >= 1) expect(v.claimLeft).toBe(v.nextCallInSec - 1); else expect(v.claimLeft).toBeNull(); }
+    expect(seen).toBeGreaterThan(10);
+  });
+  test("the claim signal: asked every few seconds while the page is in front, nothing while hidden; when it moves the claim list is read in the very next beat (not after the slow poll)", async () => {
+    const paths: string[] = []; const b = mkPhone(9, { onApi: (p) => paths.push(p) }); b.quiet = true; await b.rt.boot(); await b.rt.join(b.phone);
+    for (let i = 0; i < 10; i++) await step([b]);
+    expect(paths.filter((p) => /\/cv$/.test(p)).length).toBeGreaterThanOrEqual(2);
+    for (let i = 0; i < 12 && !paths.slice(-2).some((p) => /\/seats\?/.test(p)); i++) await step([b]); // wait until a slow poll has just run: the next one is 15 s or more away
+    paths.length = 0;
+    await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(`cv/${EID}`, "5", "5").run(); // a claim event somewhere
+    await step([b]);
+    expect(paths.some((p) => /\/seats\?/.test(p))).toBe(true); // heard in the very next beat
+    b.rt.beatOn = false; paths.length = 0; for (let i = 0; i < 4; i++) await step([b]);
+    expect(paths.some((p) => /\/cv$/.test(p))).toBe(false); // a hidden page sends nothing
+  });
   test("calls are revealed one at a time as their rounds are published, never early", async () => {
     const a = mkPhone(2); await a.rt.boot(); await a.rt.join(a.phone);
     let last = 0;

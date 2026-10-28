@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.5.0",
+    "date": "2026-10-28",
+    "commit": "this release",
+    "title": "Claim buttons, claim timer, fast claim notice",
+    "changes": [
+      "Claiming is clearer: when a player has a prize to claim, three gold CLAIM buttons appear together, at the top inside the alert (You have won the Top line. Click CLAIM to claim.), at the bottom and beside the prize. They are one claim: pressing any of them, or pressing twice, sends one claim. The rest of the time the buttons beside the prizes are grey, and pressing one first asks (it would count as a wrong claim, a Bogey) with Cancel and Submit",
+      "A small claim timer on the gold buttons (Claim in the next 11 s, down to 0) where the game calls the numbers itself. For that player only, the usual Next number countdown is hidden while the timer shows and returns at the next number. No timer when a Host calls the numbers. The timer is a nudge: the claim rule is unchanged and the game's clock decides",
+      "Everyone hears of a claim within a few seconds: a tiny signal (a few digits, asked every 2 seconds only while the page is in front) moves whenever someone claims, and then the phones, the Organizer's board and the big screen show a calm pop-up with the ticket number. No names or numbers are shown",
+      "Plain words for the start and the calling in step 2: Auto start / Manual start, The game calls the numbers / I call the numbers, and one summary line (Your game: starts at 10:30 when you press Start. You call the numbers.) repeated at the Publish step",
+      "At Publish, every prize with no name is listed (4 prizes have no name: ... Winners will get nothing. Go back and name them, or press Publish anyway.)",
+      "The game log and the report now explain a late-but-in-time claim: Prize already taken: this claim came at number N, after the prize was already awarded at number M. The rule is written there too: everyone who claims before the next number is called wins that prize together; if there are more winners than prizes the organizer or host decides how to share; Unlucky is awarded automatically"
+    ]
+  },
+  {
     "version": "1.4.4",
     "date": "2026-10-27",
     "commit": "this release",

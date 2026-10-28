@@ -390,3 +390,17 @@ body:has(#go) #ct-notify{display:none}
 #app:has(#claimbar .zbigclaim) .zclaim.ready{display:none}
 body:has(#claimbar) .ctg-back{display:none}
 .zhcard,.zinvsheet{max-height:calc(100dvh - 32px);overflow:auto}
+
+/* 1.5.0 claim buttons: GOLD (top inside the alert, bottom bar, side by the prize) when the player has a prize to claim; GREY side buttons otherwise */
+.zgold,.zbigclaim{background:linear-gradient(#ffd44d,#f2a900);color:#2b1a00;border:2px solid #b87d00;border-radius:12px;font-weight:800;cursor:pointer}
+.zgold b,.zbigclaim b{font-size:1.15rem;letter-spacing:.08em;font-weight:900}
+.zgold small,.zbigclaim small,.zclaimt{display:block;font-size:.8rem;font-weight:700}
+#claimtop{margin:8px 0 2px;padding:10px 22px;min-height:44px}
+.zside{margin-left:auto;padding:6px 12px;min-height:40px;min-width:76px;border-radius:10px;font-weight:800;flex:none}
+.zside.zgrey{background:#d9d9d9;color:#5b5b5b;border:2px solid #b5b5b5;cursor:pointer}
+.zpl li{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.zmodal{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:16px}
+.zmbox{background:#fff;color:#1a1a1a;border-radius:14px;padding:18px;max-width:340px;width:100%;box-shadow:0 12px 30px rgba(0,0,0,.4)}
+.zmrow{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+.zmrow .zbtn{min-height:44px;padding:8px 16px}
+.zmrow .zdanger{background:#b3261e;color:#fff}

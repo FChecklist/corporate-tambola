@@ -23,7 +23,7 @@ export interface GameLog {
   /** when each ticket joined (ticket numbers only; the first 2,000) */
   joins: { ticket: number; atMs: number }[];
   /** every claim: who (ticket number), which prize, what came of it (accepted, wrong, too late) and when; saved with the log because the claim tables are erased after the game */
-  claims: { ticket: number; prize: string; outcome: "accepted" | "wrong" | "too late"; atMs: number; afterNumber: number | null }[];
+  claims: { ticket: number; prize: string; outcome: "accepted" | "wrong" | "too late" | "prize taken"; atMs: number; afterNumber: number | null; takenAtNumber?: number }[];
   prizes: { prize: string; text: string; ticket: number; callNo: number; atMs: number | null }[];
   /** every lucky draw the organizer chose, drawn or not */
   lucky: { title: string; winners: number; drawn: boolean; tickets: number[] }[];
@@ -54,13 +54,15 @@ export async function buildGameLog(env: { DB: D1 }, kvOf: KV, e: any, cfg: Engag
   const cl = (await db.prepare("SELECT pid, pattern, round, idx, at_ms AS at FROM claim WHERE eid=? ORDER BY at_ms").bind(eid).all<any>().catch(() => ({ results: [] }))).results ?? [];
   const bg = (await db.prepare("SELECT pid, pattern, round, at_ms AS at FROM bogey WHERE eid=? ORDER BY at_ms").bind(eid).all<any>().catch(() => ({ results: [] }))).results ?? [];
   const lt = await db.prepare("SELECT v FROM kv WHERE k=?").bind(`claimlate/${eid}`).first<{ v: string }>().catch(() => null); let lateArr: any[] = []; try { lateArr = lt ? JSON.parse(lt.v) : []; } catch { lateArr = []; }
+  const wrows = (await db.prepare("SELECT round, pattern, ordinal, seat, idx, at_ms FROM winner WHERE eid=? ORDER BY round, at_ms, pattern, ordinal, seat").bind(eid).all<any>().catch(() => ({ results: [] }))).results ?? [];
   const pn = (k: string) => NAMES[k] ?? k;
+  /** A claim that came in time but after every position of the prize was already awarded on an earlier number (and this ticket is not among the winners): the log says so in the owner's words. */
+  const takenAt = (x: any): number | null => { const mine = seatOfPid(x.pid); const wins = wrows.filter((w: any) => w.pattern === x.pattern && Number(w.round) === Number(x.round ?? 1)); if (!wins.length || wins.some((w: any) => Number(w.seat) === mine)) return null; const earlier = wins.filter((w: any) => Number(w.idx) < Number(x.idx)); return earlier.length ? Math.min(...earlier.map((w: any) => Number(w.idx))) + 1 : null; };
   const claims: GameLog["claims"] = [
-    ...cl.map((x: any) => ({ ticket: seatOfPid(x.pid), prize: pn(x.pattern), outcome: "accepted" as const, atMs: Number(x.at), afterNumber: Number(x.idx) + 1 })),
+    ...cl.map((x: any) => { const m = takenAt(x); return { ticket: seatOfPid(x.pid), prize: pn(x.pattern), outcome: (m !== null ? "prize taken" : "accepted") as "accepted" | "prize taken", atMs: Number(x.at), afterNumber: Number(x.idx) + 1, ...(m !== null ? { takenAtNumber: m } : {}) }; }),
     ...bg.map((x: any) => ({ ticket: seatOfPid(x.pid), prize: pn(x.pattern), outcome: "wrong" as const, atMs: Number(x.at), afterNumber: null })),
     ...lateArr.map((x: any) => ({ ticket: Number(x.t), prize: pn(x.p), outcome: "too late" as const, atMs: Number(x.at), afterNumber: null })),
   ].filter((x) => Number.isFinite(x.atMs)).sort((a, b) => a.atMs - b.atMs);
-  const wrows = (await db.prepare("SELECT round, pattern, ordinal, seat, idx, at_ms FROM winner WHERE eid=? ORDER BY round, at_ms, pattern, ordinal, seat").bind(eid).all<any>().catch(() => ({ results: [] }))).results ?? [];
   const lucky = cfg.breaks.filter((b) => b.kind === "lucky");
   const prizes = wrows.map((w: any) => {
     const text = (linesFor(cfg.rewards, w.pattern as PatternKey).find((l) => l.ordinal === w.ordinal)?.text ?? "") as string;

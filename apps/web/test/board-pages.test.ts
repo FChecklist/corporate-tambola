@@ -125,6 +125,22 @@ describe("the organizer's board screen: live panels", () => {
     await until(() => !!b.$("#bp-avg")); expect(b.$("#bp-avg")!.textContent).not.toMatch(/Called by the game/); expect(b.$("#bp-avg")!.textContent).toMatch(/Called by the host/);
     expect(b.text()).not.toMatch(/Next number in/);
   });
+  test("the claim signal: when a claim happens the board and the big screen show a calm pop-up with the ticket number within a few seconds, without waiting for the slow poll", async () => {
+    const x = await setup("BD-SIG");
+    for (const p of x.phones) { await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true); }
+    x.goLive(); for (let i = 0; i < 12; i++) await x.step();
+    const b = await boardPage(x, "BD-SIG", x.token);
+    const big = await openPage(x.w.world, { url: "http://localhost/big.html?e=BD-SIG", html: "big.html", scripts: ["zgame.js", "big.js"], afterLoad: (win: any, f: string) => { if (f === "zgame.js" && win.ZG) fakeBeacon(win, x.now); } }); open.push(big);
+    await until(() => /The whole game, newest first/.test(ptext(b)), 30_000); await wait(2500); // both screens have read the claims that exist (none) and the signal
+    const urls: string[] = []; for (const pg of [b, big]) { const rf = (pg.win as any).fetch.bind(pg.win); (pg.win as any).fetch = (u: any, i?: any) => { urls.push(String(u)); return rf(u, i); }; }
+    const pid = (x.w.world.raw.query("SELECT pid FROM participant LIMIT 1").get() as any).pid as string;
+    x.w.world.raw.prepare("INSERT INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES('BD-SIG',?,'early5',1,10,?)").run(pid, x.now());
+    x.w.world.raw.prepare("INSERT INTO kv(k,v) VALUES('cv/BD-SIG','1') ON CONFLICT(k) DO UPDATE SET v='1'").run(); // what the claim handler does
+    await until(() => /has claimed Early Five/.test(b.$("#claimtoasts")?.textContent ?? ""), 4_300);
+    await until(() => /has claimed Early Five/.test(big.$("#claimtoasts")?.textContent ?? ""), 12_000);
+    expect(urls.filter((u) => /\/cv$/.test(u)).length).toBeGreaterThanOrEqual(1); // the signal was asked
+    expect(b.$("#claimtoasts")!.textContent).toMatch(/^Ticket \d+ has claimed Early Five\. Checking now/);
+  });
   test("each control works from the board and is written in the live log with the time and who; a second press is not possible straight away", async () => {
     const x = await setup("BD-3");
     x.goLive(); for (let i = 0; i < 30; i++) await x.step();

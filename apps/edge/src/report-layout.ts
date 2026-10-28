@@ -12,7 +12,7 @@ export const emptyAgg = (): Agg => ({ joined: 0, onRoster: 0, notJoined: 0, late
 export interface ReportData {
   engagementId: string; organizerEmail: string; sentAtMs: number;
   scheduledMs: number; firstNumberMs: number; endMs: number; endReason: string; wasHeld: boolean;
-  rounds: number; callSeconds: number; hostCalled?: boolean; ticketsPerPerson: number; cap: number; inviteOnly: boolean; numbersCalled: number;
+  rounds: number; takenClaims?: string[]; callSeconds: number; hostCalled?: boolean; ticketsPerPerson: number; cap: number; inviteOnly: boolean; numbersCalled: number;
   people: ReportPerson[];
   prizes: ReportPrize[];
   lucky: { title: string; winners: ReportWinner[] }[];
@@ -94,7 +94,9 @@ export function layoutReport(d: ReportData): Uint8Array {
   // ---- 3 prizes and winners
   pdf.h1("3. Prizes and winners");
   { const t0 = d.prizes.length, w0 = d.prizes.filter((p) => p.winners.length).length;
-  pdf.para(`${t0} prize lines were set up; ${w0} were won (${t0 - w0} not won).`, { size: 9.5, gap: 4 }); }
+  pdf.para(`${t0} prize lines were set up; ${w0} were won (${t0 - w0} not won).`, { size: 9.5, gap: 4 });
+  pdf.para("Rule: everyone who claims before the next number is called wins that prize together. If there are more winners than prizes, the organizer or host decides how to share. Unlucky is awarded automatically.", { size: 9, gap: 4 });
+  for (const line of d.takenClaims ?? []) pdf.para(line, { size: 9, gap: 2 }); }
   for (const pr of d.prizes) {
     pdf.h2(`${d.rounds > 1 ? `Round ${pr.round}  |  ` : ""}${pr.label}${pr.text ? `   -   ${pr.text}` : ""}`);
     if (!pr.winners.length) { pdf.para("Not won.", { size: 9, color: [0.4, 0.43, 0.48] }); continue; }
