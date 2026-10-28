@@ -1047,6 +1047,16 @@
   }
   let infoTick = 0;
   // Only a DEMO GAME re-reads the public settings (once a minute, at most 10 phones): the moment the organizer makes it a real game the mark goes, and the re-reading stops with it. A real game never spends these requests.
+  // LANGUAGE (1.6.2): a small dropdown at the top right of every screen. English is the only language for now; the choice is remembered in this browser and takes effect at once. It sits outside the page that redraws every second, so it never closes by itself, and it is never under the gold Claim buttons (those are at the bottom).
+  (function langBox() {
+    try { const saved = localStorage.getItem("ctz-lang"); if (saved) ZG.setLang(saved); } catch { /* the browser may block storage */ }
+    if (document.getElementById("langsel")) return;
+    const sel = document.createElement("select"); sel.id = "langsel"; sel.setAttribute("aria-label", "Language"); sel.style.cssText = "position:fixed;top:6px;right:6px;z-index:45;max-width:96px;font-size:.8rem;padding:2px 4px;border-radius:8px;border:1px solid #c9cdd6;background:#fff;color:#1a2233";
+    for (const [c, n] of Object.entries(ZG.LANGS)) { const o = document.createElement("option"); o.value = c; o.textContent = n; sel.appendChild(o); }
+    sel.value = ZG.getLang();
+    sel.onchange = () => { ZG.setLang(sel.value); try { localStorage.setItem("ctz-lang", ZG.getLang()); } catch { /* not remembered */ } };
+    document.body.appendChild(sel);
+  })();
   let rehTick = 0;
   async function loop() { try { await rt.tick(); } catch { /* the loop must never die */ } if (INFO.rehearsal && !INFO.rehearsal.over && ++rehTick % 15 === 0) { try { await api("GET", `/api/z/${EID}/info`); } catch { /* next time */ } } if (isDemoGame() && ++infoTick % 60 === 0) { try { await api("GET", `/api/z/${EID}/info`); } catch { /* the next minute tries again */ } } paint(); }
   function start() { if (timer) return; loop(); timer = setInterval(loop, 1000); }

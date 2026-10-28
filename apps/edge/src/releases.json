@@ -1,5 +1,27 @@
 [
   {
+    "version": "1.6.2",
+    "date": "2026-10-28",
+    "commit": "this release",
+    "title": "Language dropdown (English for now)",
+    "changes": [
+      "A small language dropdown at the top right of every screen. English is the only language for now. The choice is remembered in this browser and can be changed at any time, even in the middle of a game. All claim notices now come from one list of messages, so a second language is one more table later",
+      "The dropdown sits outside the part of the page that redraws every second, so it never closes by itself, and it is never near the gold Claim buttons"
+    ]
+  },
+  {
+    "version": "1.6.1",
+    "date": "2026-10-28",
+    "commit": "this release",
+    "title": "Branded reports and e-mails",
+    "changes": [
+      "The game report e-mail now carries our logo and the customer's logo and colour at the top, simple summary tiles (game started, completed, players, numbers called, prizes awarded, claims), the prizes table, every claim and what came of it (including Prize already taken), what happened during the game (pauses and changes with who and when), a button to open the complete report, and a More games from Corporate Tambola block. Its subject is Your game report is ready: <game name>, <date>, and it has a plain-text part with the same facts. Only ticket numbers are in the e-mail",
+      "The PDF report has the customer's colour in its top band and new sections: at a glance, prizes, every claim and the event log, and More games. The game log page and its text download carry the same header, summary and More games block",
+      "A rehearsal's report and game log say REHEARSAL GAME n at the top, like its other pages and e-mails",
+      "The customer's logo is served as a picture for e-mails (never anything that can run); all games are listed from one place so the web addresses are easy to change later"
+    ]
+  },
+  {
     "version": "1.6.0",
     "date": "2026-10-28",
     "commit": "this release",

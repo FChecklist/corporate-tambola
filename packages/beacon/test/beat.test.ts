@@ -38,3 +38,14 @@ describe("the pre-installed messages", () => {
     expect(say("claim.k", { t: 7, p: "Top line" })).toBe("Ticket 7 has claimed Top line. Checking now…");
   });
 });
+
+import { LANGS, TABLES, getLang, setLang } from "../src/messages";
+describe("languages", () => {
+  test("English is the only language now; an unknown language is ignored; a second language is just another table with the same codes, and a missing code falls back to English", () => {
+    expect(Object.keys(LANGS)).toEqual(["en"]); expect(setLang("xx")).toBe("en"); expect(getLang()).toBe("en");
+    TABLES["zz"] = { "claim.k": "[zz] Ticket {t} {p}" }; LANGS["zz"] = "Test"; try {
+      expect(setLang("zz")).toBe("zz"); expect(say("claim.k", { t: 4, p: "Top line" })).toBe("[zz] Ticket 4 Top line"); expect(say("net.reconnecting")).toBe(MSG["net.reconnecting"]); // missing in zz: English
+    } finally { setLang("en"); delete TABLES["zz"]; delete LANGS["zz"]; }
+    expect(say("claim.k", { t: 4, p: "Top line" })).toBe("Ticket 4 has claimed Top line. Checking now…");
+  });
+});

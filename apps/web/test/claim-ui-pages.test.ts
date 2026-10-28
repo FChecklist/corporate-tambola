@@ -371,3 +371,17 @@ describe("the Bogey question never covers a real claim", () => {
     await ph.waitFor(() => !!ph.$("#claimtop") && !ph.$("#bogeyask"), 15_000);
   });
 });
+
+describe("1.6.2 language dropdown", () => {
+  test("a small English-only dropdown sits at the top right outside the redrawn page, is remembered per browser, and is nowhere near the gold Claim buttons", async () => {
+    const { ph, set } = await steered("CU-LANG");
+    set({ phase: "play", paused: false, locked: false, log: LOG, claimNow: ["early5"], claimOpen: ["early5"], claimable: ["early5"], pressed: [], claimed: [], results: [], claimLeft: 9, nextCallInSec: 10 });
+    await ph.waitFor(() => !!ph.$("#claimbar .zbigclaim"), 15_000);
+    const sel = ph.win.document.getElementById("langsel") as any; expect(sel).toBeTruthy();
+    expect(Array.from(sel.options).map((o: any) => o.textContent)).toEqual(["English"]); expect(sel.value).toBe("en");
+    expect(sel.parentElement).toBe(ph.win.document.body); expect(ph.win.document.getElementById("app")!.contains(sel)).toBe(false); // outside the page that redraws every second: it never closes by itself
+    expect(sel.style.position).toBe("fixed"); expect(sel.style.top).toBe("6px"); expect(sel.style.right).toBe("6px");
+    sel.value = "en"; sel.dispatchEvent(new (ph.win as any).Event("change")); expect(ph.win.localStorage.getItem("ctz-lang")).toBe("en");
+    await wait(1500); expect(ph.win.document.getElementById("langsel")).toBe(sel); // still the same element after redraws
+  });
+});

@@ -1143,6 +1143,16 @@
     if (el.dataset.t !== R.block) { el.dataset.t = R.block; const ln = String(R.block).split(String.fromCharCode(10)); el.innerHTML = "<div>" + esc(ln[0] || "") + "</div><div style='font-size:1.25rem;font-weight:900'>" + esc(ln[1] || "") + "</div><div style='font-weight:700'>" + esc(ln.slice(2).join(" ")) + "</div>"; }
   }
   /** What a rehearsal puts in front of every share text (WhatsApp, e-mail, copy): the same block as on its pages. */
+  // LANGUAGE (1.6.2): a small dropdown at the top right of every screen. English is the only language for now; the choice is remembered in this browser and takes effect at once. It sits outside the page that redraws every second, so it never closes by itself, and it is never under the gold Claim buttons (those are at the bottom).
+  (function langBox() {
+    try { const saved = localStorage.getItem("ctz-lang"); if (saved) ZG.setLang(saved); } catch { /* the browser may block storage */ }
+    if (document.getElementById("langsel")) return;
+    const sel = document.createElement("select"); sel.id = "langsel"; sel.setAttribute("aria-label", "Language"); sel.style.cssText = "position:fixed;top:6px;right:6px;z-index:45;max-width:96px;font-size:.8rem;padding:2px 4px;border-radius:8px;border:1px solid #c9cdd6;background:#fff;color:#1a2233";
+    for (const [c, n] of Object.entries(ZG.LANGS)) { const o = document.createElement("option"); o.value = c; o.textContent = n; sel.appendChild(o); }
+    sel.value = ZG.getLang();
+    sel.onchange = () => { ZG.setLang(sel.value); try { localStorage.setItem("ctz-lang", ZG.getLang()); } catch { /* not remembered */ } };
+    document.body.appendChild(sel);
+  })();
   const rehShare = () => (S.info && S.info.rehearsal ? S.info.rehearsal.block + String.fromCharCode(10, 10) : "");
   const cohInvite = () => (S.coh && S.coh.inviteLink) || guestLink();
   function cohStep(n) {
