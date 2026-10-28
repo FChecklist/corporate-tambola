@@ -1,5 +1,17 @@
 [
   {
+    "version": "1.6.7",
+    "date": "2026-10-29",
+    "commit": "this release",
+    "title": "Game names, plain wording",
+    "changes": [
+      "Every game name on the front page now has the small CORPORATE line above it, with the game picture, and Lucky Draw joins the row of six games",
+      "The label above the headline reads: For HR teams and managers",
+      "Plainer words in the pages, e-mails and console: personal links instead of private links",
+      "The games bar says Close group online engagement and its first item opens home.corporatetambola.com"
+    ]
+  },
+  {
     "version": "1.6.6",
     "date": "2026-10-29",
     "commit": "this release",

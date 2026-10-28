@@ -42,7 +42,7 @@ export const FULL_HOUSE_WINNERS = [1, 2, 3, 5];
 export const HOUSIE_RULE = "Your guests tap each number as it is called and press Claim before the next number; a wrong claim is a Bogey; two Bogeys on the same prize put that ticket out of it.";
 /** Where the prize names come from: free text, so the guided links cannot carry them. Said on the prizes page and the save page; the manual says the same. */
 export const PRIZE_NAMES_NOTE = "Tell me the name of each prize and I will add them for you (naming prizes is the one change I make for you without a ready link). Or name them yourself in your console, step 3.";
-const BOARD_NOTE = "Your board: open it from your console, step 6, 'Open my board' (it carries your private key, so I cannot give it).";
+const BOARD_NOTE = "Your board: open it from your console, step 6, 'Open my board' (it carries your personal key, so I cannot give it).";
 /** The brand-moment presets the extras step offers. One during-the-game moment lands after number 45 (about halfway): the software places it. */
 const MOMENTS: Record<string, { label: string; rec?: boolean }> = {
   n: { label: "No brand moment", rec: true },
@@ -122,7 +122,7 @@ export async function goScreen(ctx: GoCtx, step: string, q: URLSearchParams): Pr
   const L = (s: string, set: Record<string, string> = {}) => link(ctx, s, q, set);
   const st = settingsOf(q);
   switch (step) {
-    case "": case "start": return { say: "Hello! I can set up or manage your Corporate Tambola game with you. What would you like to do?", choices: choices([["Start a new game", `${ctx.base}/go/new`, true], ["Change a game that has not started yet", `${ctx.base}/go/games`], ["Show the links of a game", `${ctx.base}/go/games?then=links`], ["Tell me about the software (is it safe, private, legal?)", `${ctx.base}/facts`], ["Try a free demo first", `${ctx.origin}/demo.html`]]), ifWrong: WRONG };
+    case "": case "start": return { say: "Hello! I can set up or manage your Corporate Tambola game with you. What would you like to do?", choices: choices([["Start a new game", `${ctx.base}/go/new`, true], ["Change a game that has not started yet", `${ctx.base}/go/games`], ["Show the links of a game", `${ctx.base}/go/games?then=links`], ["Tell me about the software (is it safe, confidential, legal?)", `${ctx.base}/facts`], ["Try a free demo first", `${ctx.origin}/demo.html`]]), ifWrong: WRONG };
     case "new": return { say: `Which day is the game? (India time; any day within the next ${DAYS_AHEAD.unpaid} days. Once it is paid you can move it to any day within ${DAYS_AHEAD.paid} days of the payment.)`, choices: choices(dayRows(ctx, q, "time", DAYS_AHEAD.unpaid)), ifWrong: WRONG };
     case "time": if (!validDay(q.get("d"))) return goScreen(ctx, "new", q);
       return { say: `${dayLabel(q.get("d")!, true)}. At what time should it start? (Guests can join before; the first number is called 2 minutes after the start time.)`, choices: choices(timeRows(ctx, q, "occ")), ifWrong: WRONG };

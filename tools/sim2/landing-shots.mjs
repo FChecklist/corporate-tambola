@@ -15,7 +15,7 @@ for (const [w, h] of [[320, 700], [360, 800], [1280, 900]]) {
   await p.screenshot({ path: `${OUT}/landing-${w}-fold.png` });
   const r = await p.evaluate(() => {
     const vis = (e) => !!e && !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length) && getComputedStyle(e).visibility !== "hidden";
-    const hrefs = (sel) => [...document.querySelectorAll(sel + " a")].filter(vis).map((a) => a.href);
+    const hrefs = (sel) => [...document.querySelectorAll(sel + " a, " + sel.replace(/ul$/, "") + " .lp-allgames")].filter(vis).map((a) => a.href);
     const txt = document.body.innerText;
     return { sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, h1: document.getElementById("h1").innerText.replace(/\s+/g, " "), sub: document.getElementById("herosub").innerText,
       main: [...document.querySelectorAll(".lp-main")].map((a) => [a.innerText, a.getAttribute("href"), vis(a)]),
@@ -28,7 +28,7 @@ for (const [w, h] of [[320, 700], [360, 800], [1280, 900]]) {
   check(`${w}px: sub line`, /close group online engagement of employees and associates/i.test(r.sub));
   check(`${w}px: primary button goes to the demo`, r.main.some(([t, href, v]) => v && /Try a free game with 10 people/.test(t) && href === "/zc?demo=1"), JSON.stringify(r.main));
   const row = w < 900 ? r.chips : r.six;
-  check(`${w}px: the row of games (${w < 900 ? "chips" : "panel"}) links to the five game sites and All games`, ["https://housie.corporatetambola.com/", "https://bingo.corporatetambola.com/", "https://tictactoe.corporatetambola.com/", "https://snakes.corporatetambola.com/", "https://luck.corporatetambola.com/", "https://home.corporatetambola.com/"].every((u) => row.includes(u)), JSON.stringify(row));
+  check(`${w}px: the row of games (${w < 900 ? "chips" : "panel"}) links to the five game sites and All games`, ["https://housie.corporatetambola.com/", "https://bingo.corporatetambola.com/", "https://tictactoe.corporatetambola.com/", "https://snakes.corporatetambola.com/", "https://luck.corporatetambola.com/", "https://home.corporatetambola.com/contact", "https://home.corporatetambola.com/"].every((u) => row.includes(u)), JSON.stringify(row));
   check(`${w}px: the other layout is hidden (phone chips vs laptop panel)`, w < 900 ? r.six.length === 0 : r.chips.length === 0);
   check(`${w}px: contact visible`, r.contactVis && /96503 97480/.test(r.contact) && /hello@corporatetambola\.com/.test(r.contact), r.contact);
   check(`${w}px: no "Live now", "Coming soon" or "private"`, !r.bad);

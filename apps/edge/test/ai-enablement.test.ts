@@ -120,7 +120,7 @@ describe("the guided path, followed like an outside AI", () => {
     expect(choicesOf(menu).find((c) => /Erase all guest data/.test(c.label))!.url).toBe(`${ORIGIN}/zc.html?e=DIWALI-1002&do=erase`);
     expect(choicesOf(menu).find((c) => /Pause or stop/.test(c.label))!.url).toBe(`${ORIGIN}/zc.html?e=DIWALI-1002&do=pause`);
     const links = await pick(menu, /Show the links/); expect(links).toContain(`${ORIGIN}/zc.html?e=DIWALI-1002`); expect(links).toMatch(/After you publish, two more links appear here: the guest link .* and the number screen/);
-    expect(links).toContain(`${ORIGIN}/pay.html?e=DIWALI-1002`); expect(links).toContain(`${ORIGIN}/zc.html?e=DIWALI-1002&do=publish`); expect(links).toMatch(/Your board: open it from your console, step 6, 'Open my board' \(it carries your private key, so I cannot give it\)/);
+    expect(links).toContain(`${ORIGIN}/pay.html?e=DIWALI-1002`); expect(links).toContain(`${ORIGIN}/zc.html?e=DIWALI-1002&do=publish`); expect(links).toMatch(/Your board: open it from your console, step 6, 'Open my board' \(it carries your personal key, so I cannot give it\)/);
     expect(links).not.toMatch(/z\.html\?e=|big\.html\?e=/); // nothing is invented before publishing
     expect(links).toMatch(/308 and moves to the same name without \.html/); // the AI is told the 308 to /zc or /pay is normal
     expect(await pick(menu, /How many have joined/)).toMatch(/0 people have joined DIWALI-1002/);

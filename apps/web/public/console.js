@@ -1089,7 +1089,7 @@
       <label class="lb" for="aiMsg">Message for your AI</label><textarea class="inp" id="aiMsg" readonly style="min-height:150px" aria-label="Message for your AI">${esc(AI_PROMPT)}</textarea>
       <button class="btn gold block dbtn" style="margin-top:10px" data-a="aiCopy">${ic("copy")} Copy message</button>
       <p class="hint"><b>Shown only once.</b> We also emailed it to ${esc(r.emailedTo || S.me.email)}.</p>
-      <ul class="facts" style="margin:8px 0 0"><li>Anyone with this message can act for you, so keep it private.</li><li>Mobile numbers are masked for your AI.</li><li>When your AI wants to start or end an engagement, it sends you a confirmation link. Open it and tap Confirm.</li></ul>
+      <ul class="facts" style="margin:8px 0 0"><li>Anyone with this message can act for you, so keep it to yourself.</li><li>Mobile numbers are masked for your AI.</li><li>When your AI wants to start or end an engagement, it sends you a confirmation link. Open it and tap Confirm.</li></ul>
       <button class="btn line block dbtn" style="margin-top:10px" data-a="closeSheet">Done</button>`);
     const t = $("aiMsg"); if (t) { t.focus(); t.select(); }
   };

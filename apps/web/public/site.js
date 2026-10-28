@@ -87,7 +87,7 @@
     ORDER = { pack };
     const def = TB.guessCountry();
     TB.sheet(`${xbtn}<div class="eyebrow">Your order</div><h2>Up to ${nf(pack)} participants</h2>
-      <ul class="facts"><li>${ic("ticket")}Every participant gets their own ticket on their phone</li><li>${ic("phone")}Mobile number only. No SMS, no app, no password for participants</li><li>${ic("users")}A private engagement for your closed group, in any country</li><li>${ic("gift")}Participants never pay. You give the rewards</li></ul>
+      <ul class="facts"><li>${ic("ticket")}Every participant gets their own ticket on their phone</li><li>${ic("phone")}Mobile number only. No SMS, no app, no password for participants</li><li>${ic("users")}A close group engagement for your people, in any country</li><li>${ic("gift")}Participants never pay. You give the rewards</li></ul>
       <div class="sum" id="ordSum"></div>
       <form id="coForm" novalidate>
         <label class="lb" for="oName">Organization name</label><input class="inp" id="oName" autocomplete="organization" placeholder="e.g. Acme Industries">

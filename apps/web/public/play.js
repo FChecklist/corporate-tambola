@@ -258,7 +258,7 @@
     if (G.status === "ended" || G.status === "purged") return endedScreen(G.status === "purged");
     show(`${ptop(true)}<div class="bp"><div class="bphd" id="hd"></div><div id="strip"></div><div id="still"></div><div id="boost"></div><div class="fields" id="fields"></div><div id="tabs"></div>
       <div class="tgrid" id="grid"></div><p class="pnote" id="pnote"></p><div id="notes"></div>
-      <div class="plegal">Private engagement for a closed group. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
+      <div class="plegal">Closed-group engagement. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
       <div class="plinks"><a href="/legal.html#rules" target="_blank" rel="noopener">Rules &amp; how to play</a><a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy</a><a href="/legal.html#disclaimer" target="_blank" rel="noopener">Disclaimer</a></div>
       <div class="stub" id="stub"></div></div>`);
     paintAll();
@@ -675,7 +675,7 @@
       <p class="lead">${deleted ? "This engagement has ended and its data has been deleted." : G.rounds > 1 ? "All rounds are finished." : "The engagement has ended."} The organizer gives the rewards directly. The software only called numbers and checked claims.</p>
       ${won.length ? `<div class="note ok" style="text-align:left">${ic("trophy")}<span>Your ticket won: <b>${won.map((r) => esc(r.name)).join(", ")}</b>. Your organizer will give the reward.</span></div>` : ""}
       ${deleted ? "" : `<p class="tiny muted">Your ticket and phone details are deleted within 24 hours. Your name and number are kept for up to 365 days so your organizer can invite you again.</p><button class="btn line block" data-act="forget">${ic("trash")} Do not keep my details</button>`}</div>
-      <div class="plegal">Private engagement for a closed group. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
+      <div class="plegal">Closed-group engagement. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
       <div class="plinks"><a href="/legal.html#rules" target="_blank" rel="noopener">Rules</a><a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy</a><a href="/legal.html#disclaimer" target="_blank" rel="noopener">Disclaimer</a></div>`);
   }
 

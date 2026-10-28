@@ -1,3 +1,7 @@
+// DISABLED (1.6.7): the fragments in tools/legal are older than the hand-kept pages. Running this in 1.6.4 dropped clause 2.4 of the Terms, wrote 23 hours instead of 20 and removed four sections of the organizer guide, live for a day.
+// Update the fragments from the current pages first, then remove this guard (and keep apps/edge/test/origin.test.ts green).
+console.error("make-legal-pages.mjs refuses to run: its fragments are out of date (see the comment at the top of this file).");
+process.exit(1);
 // Builds the short document pages (Terms, Data processing terms, Sub-processors, Partner terms, Organizer guide) in the same style as legal.html.
 // Run: node tools/make-legal-pages.mjs   (writes apps/web/public/*.html; commit the result). The pages are plain static files: no new user flow.
 // The Terms page and the Legal position page are the two files in tools/legal/ (their {{TERMS_VERSION}} is replaced by the one constant in apps/edge/src/brand.ts).

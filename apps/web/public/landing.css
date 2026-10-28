@@ -113,3 +113,13 @@ body{background:var(--lp-bg)}
 .lp-more{color:var(--lp-link);font-weight:650}
 @media (min-width:900px){.lp-moments{grid-template-columns:repeat(3,1fr)}}
 @media (max-width:899px){.lp-dayact .btn{flex:1 1 100%}}
+
+/* ---- game names carry the small CORPORATE line (owner branding rule), the same as the home site ---- */
+.gn{display:flex;flex-direction:column;align-items:inherit;line-height:1.15;text-align:inherit}
+.gn i{font-style:normal;font-size:.6em;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:var(--lp-muted)}
+.lp-six a{text-align:center;align-items:center}
+.lp-six .gn{align-items:center}
+.lp-allgames{display:inline-block;margin:14px 0 0;color:var(--lp-link);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.lp-six .lp-allgames{display:block;text-align:center;position:relative}
+.lp-choose .lp-allgames{margin:12px 0 0 4px}
+@media (min-width:900px){.lp-choose{display:none}}

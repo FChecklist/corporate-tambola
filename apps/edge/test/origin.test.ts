@@ -13,7 +13,7 @@ describe("the game's own address", () => {
   });
   test("the games bar: Tambola is housie., the home link is home., the other games keep their own addresses", () => {
     const g = read("gamesbar.js");
-    expect(g).toContain('"https://housie.corporatetambola.com/", true'); expect(g).toContain("https://home.corporatetambola.com/?from=tambola");
+    expect(g).toContain('"https://housie.corporatetambola.com/", true'); expect(g).toContain("https://home.corporatetambola.com/");
     for (const h of ["bingo", "tictactoe", "snakes", "luck"]) expect(g).toContain(`https://${h}.corporatetambola.com/`);
     expect(g).not.toContain('"https://corporatetambola.com/"');
   });
