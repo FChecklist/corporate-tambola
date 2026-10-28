@@ -1051,11 +1051,13 @@
   (function langBox() {
     try { const saved = localStorage.getItem("ctz-lang"); if (saved) ZG.setLang(saved); } catch { /* the browser may block storage */ }
     if (document.getElementById("langsel")) return;
-    const sel = document.createElement("select"); sel.id = "langsel"; sel.setAttribute("aria-label", "Language"); sel.style.cssText = "position:fixed;top:6px;right:6px;z-index:45;max-width:96px;font-size:.8rem;padding:2px 4px;border-radius:8px;border:1px solid #c9cdd6;background:#fff;color:#1a2233";
-    for (const [c, n] of Object.entries(ZG.LANGS)) { const o = document.createElement("option"); o.value = c; o.textContent = n; sel.appendChild(o); }
-    sel.value = ZG.getLang();
-    sel.onchange = () => { ZG.setLang(sel.value); try { localStorage.setItem("ctz-lang", ZG.getLang()); } catch { /* not remembered */ } };
-    document.body.appendChild(sel);
+    const btn = document.createElement("button"); btn.type = "button"; btn.id = "langsel"; btn.setAttribute("aria-label", "Language"); btn.setAttribute("aria-haspopup", "listbox"); btn.setAttribute("aria-expanded", "false");
+    btn.style.cssText = "position:fixed;top:6px;right:6px;z-index:45;font-size:.8rem;padding:2px 8px;border-radius:8px;border:1px solid #c9cdd6;background:#fff;color:#1a2233;cursor:pointer";
+    const menu = document.createElement("div"); menu.id = "langmenu"; menu.setAttribute("role", "listbox"); menu.hidden = true; menu.style.cssText = "position:fixed;top:32px;right:6px;z-index:46;background:#fff;color:#1a2233;border:1px solid #c9cdd6;border-radius:8px;padding:4px;box-shadow:0 6px 16px rgba(0,0,0,.2)";
+    const label = () => { btn.textContent = String(ZG.getLang()).toUpperCase() + " ▾"; };
+    for (const [c, n] of Object.entries(ZG.LANGS)) { const o = document.createElement("button"); o.type = "button"; o.setAttribute("role", "option"); o.dataset.lang = c; o.textContent = n; o.style.cssText = "display:block;width:100%;text-align:left;padding:6px 10px;border:0;background:none;font-size:.9rem;cursor:pointer"; o.onclick = () => { ZG.setLang(c); try { localStorage.setItem("ctz-lang", ZG.getLang()); } catch { /* not remembered */ } label(); menu.hidden = true; btn.setAttribute("aria-expanded", "false"); }; menu.appendChild(o); }
+    btn.onclick = () => { menu.hidden = !menu.hidden; btn.setAttribute("aria-expanded", String(!menu.hidden)); };
+    label(); document.body.appendChild(btn); document.body.appendChild(menu);
   })();
   let rehTick = 0;
   async function loop() { try { await rt.tick(); } catch { /* the loop must never die */ } if (INFO.rehearsal && !INFO.rehearsal.over && ++rehTick % 15 === 0) { try { await api("GET", `/api/z/${EID}/info`); } catch { /* next time */ } } if (isDemoGame() && ++infoTick % 60 === 0) { try { await api("GET", `/api/z/${EID}/info`); } catch { /* the next minute tries again */ } } paint(); }

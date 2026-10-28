@@ -238,7 +238,7 @@ async function reportStep(env: LifeEnv, e: any, life: { end_ms: number }, now: n
     await saveGameLog(env, d1kv(env), e, cfg, now, { endMs, endReason: base.endReason, numbersCalled: base.numbersCalled, firstNumberMs: base.firstNumberMs }); // the game log is kept when the game ends: it survives the 20-hour deletion of the players' details
     const link = await reportLink(env, eid);
     const log = await readSavedGameLog(env, eid) ?? await buildGameLog(env, d1kv(env), e, cfg, now, { endMs, endReason: base.endReason, numbersCalled: base.numbersCalled, firstNumberMs: base.firstNumberMs });
-    const bm = brandedReportMail({ log, gameName: cfg.name || eid, brand: cfg.brand ?? null, origin: (env as any).PUBLIC_ORIGIN ?? BRAND.defaultOrigin, link, keptUntilMs: reportLinkUntil(endMs), deleteAtMs: base.personalDeleteAtMs, organizerEmail: email, rehearsal: e.rehearsal_of ? e.run_no : null });
+    const bm = brandedReportMail({ log, gameName: cfg.name || eid, brand: cfg.brand ?? null, origin: (env as any).PUBLIC_ORIGIN ?? BRAND.defaultOrigin, link, keptUntilMs: reportLinkUntil(endMs), deleteAtMs: base.personalDeleteAtMs, organizerEmail: email, rehearsal: e.rehearsal_of ? e.run_no : null, dataNotes: dataNotesOf(bodyFor(eid, base, link)) });
     const ok = await sendReportMail(env, email, bm.subject, bm.text, [], bm.html);
     if (!ok) return false; // try again at the next call
     await noteReportSent(env, eid, now);
@@ -247,6 +247,8 @@ async function reportStep(env: LifeEnv, e: any, life: { end_ms: number }, now: n
   return st.stage === "done";
 }
 
+/** The "what happens to the data" and law paragraphs of the report e-mail (kept word for word from the plain e-mail: they are part of what we promise). */
+const dataNotesOf = (body: string): string[] => { const l = body.split(String.fromCharCode(10)); const a = l.findIndex((x) => x.startsWith("What happens to the data")); const z = l.findIndex((x) => x.startsWith("Sent on ")); return a >= 0 ? l.slice(a, z > a ? z : undefined) : []; };
 const bodyFor = (eid: string, d: ReportData, link: string) => [
   `Hello,`, ``,
   `Your engagement ${eid} has ended. Your complete report is ready: when the game started, how many people took part at each stage, every prize and who won it, the invite tree, all statistics, and the name and mobile number of every participant.`, ``,

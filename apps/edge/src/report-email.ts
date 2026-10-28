@@ -11,7 +11,7 @@ const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g,
 const NL = String.fromCharCode(10);
 export const REPORT_CLAIM_ROWS = 200; // the e-mail shows this many claim rows; the PDF and the game log hold every one
 
-export interface ReportMailIn { log: GameLog; gameName: string; brand?: { name?: string; color?: string; logo?: string } | null; origin: string; link: string; keptUntilMs: number; deleteAtMs: number; organizerEmail: string; rehearsal?: number | null }
+export interface ReportMailIn { log: GameLog; gameName: string; brand?: { name?: string; color?: string; logo?: string } | null; origin: string; link: string; keptUntilMs: number; deleteAtMs: number; organizerEmail: string; rehearsal?: number | null; dataNotes?: string[] }
 export const outcomeWords = (c: GameLog["claims"][number]) => c.outcome === "accepted" ? "accepted" : c.outcome === "wrong" ? "wrong (a Bogey)" : c.outcome === "too late" ? "too late, refused" : `Prize already taken: this claim came at number ${c.afterNumber}, after the prize was already awarded at number ${c.takenAtNumber}.`;
 
 export function claimCounts(log: GameLog) {
@@ -40,7 +40,7 @@ export function eventsOf(log: GameLog): { atMs: number; what: string }[] {
 export function brandedReportMail(i: ReportMailIn): { subject: string; text: string; html: string } {
   const { log } = i, color = /^#[0-9A-F]{6}$/i.test(i.brand?.color ?? "") ? (i.brand!.color as string) : BRAND.wine, cname = i.brand?.name || i.gameName;
   const tiles = tilesOf(log), claims = log.claims.slice(0, REPORT_CLAIM_ROWS), events = eventsOf(log);
-  const subject = `Your game report is ready: ${i.gameName}, ${day(log.firstNumberMs ?? log.startsAtMs)}`;
+  const subject = `Your game report is ready: ${i.gameName} (${log.id}), ${day(log.firstNumberMs ?? log.startsAtMs)}`;
   const text = [
     `${BRAND.name} | ${cname}`, ``,
     `Your game report`, ``,
@@ -50,7 +50,8 @@ export function brandedReportMail(i: ReportMailIn): { subject: string; text: str
     ...(log.claims.length > claims.length ? [`... and ${log.claims.length - claims.length} more in the full report`] : []), ``,
     `What happened during the game`, ...(events.length ? events.map((e) => `- ${hms(e.atMs)}  ${e.what}`) : ["- Nothing was paused or changed."]), ``,
     `Open your complete report (with every person, the invite tree and all statistics) here:`, i.link, ``,
-    `The link works until ${day(i.keptUntilMs)}. The people's names and mobile numbers are permanently deleted at ${day(i.deleteAtMs)}, as promised: please open the report and save the PDF before then. This e-mail itself has ticket numbers only.`, ``,
+    `The report PDF is built on your own computer or phone from this link, so names and mobile numbers never travel by e-mail: this e-mail has ticket numbers only. The link works until ${day(i.keptUntilMs)}. The people's names and mobile numbers are permanently deleted at ${day(i.deleteAtMs)}, as promised: please open the report and save the PDF before then.`, ``,
+    ...(i.dataNotes ?? []), ``,
     `Rule: everyone who claims before the next number is called wins that prize together. If there are more winners than prizes, the organizer or host decides how to share. Unlucky is awarded automatically.`, ``,
     `More games from ${BRAND.name}`, ...MORE_GAMES.map((g) => `- ${g.name}: ${g.line} ${g.url}`), ``,
     `${BRAND.name} | ${BRAND.support} | We keep your game records for 365 days. Sent to ${i.organizerEmail}.`,
@@ -74,7 +75,8 @@ ${i.rehearsal ? `<tr><td style="padding:10px 16px;background:#b3261e;color:#fff;
 <h2 style="font-size:16px;margin:18px 0 6px">What happened during the game</h2>
 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px">${events.length ? events.map((e) => `<tr><td style="${cell};width:90px">${esc(hms(e.atMs))}</td><td style="${cell}">${esc(e.what)}</td></tr>`).join("") : `<tr><td style="${cell}">Nothing was paused or changed.</td></tr>`}</table>
 <p style="margin:18px 0"><a href="${esc(i.link)}" style="background:${esc(color)};color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">Open your complete report</a></p>
-<p style="font-size:12px;color:#5b6577">The link works until ${esc(day(i.keptUntilMs))}. The people's names and mobile numbers are permanently deleted at ${esc(day(i.deleteAtMs))}: open the report and save the PDF before then. This e-mail has ticket numbers only.</p>
+<p style="font-size:12px;color:#5b6577">The report PDF is built on your own computer or phone from this link, so names and mobile numbers never travel by e-mail: this e-mail has ticket numbers only. The link works until ${esc(day(i.keptUntilMs))}. The people's names and mobile numbers are permanently deleted at ${esc(day(i.deleteAtMs))}: open the report and save the PDF before then.</p>
+${(i.dataNotes ?? []).length ? `<h2 style="font-size:16px;margin:18px 0 6px">What happens to the data</h2>${(i.dataNotes ?? []).filter((x) => x.trim()).map((x) => `<p style="font-size:12px;color:#5b6577;margin:4px 0">${esc(x)}</p>`).join("")}` : ""}
 <h2 style="font-size:16px;margin:18px 0 6px">More games from ${esc(BRAND.name)}</h2>
 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px">${MORE_GAMES.map((g) => `<tr><td style="${cell}"><a href="${esc(g.url)}" style="color:${esc(color)};font-weight:bold">${esc(g.name)}</a><br><span style="color:#5b6577">${esc(g.line)}</span></td></tr>`).join("")}</table>
 </td></tr>

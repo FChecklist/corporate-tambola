@@ -47,7 +47,7 @@ describe("the branded e-mail", () => {
     raw.prepare("INSERT INTO kv(k,v) VALUES('claimlate/RPT-1',?)").run(JSON.stringify([{ t: s[3]!.seq, p: "bot", at: t0 + 9000 }]));
     const log = await logOf("RPT-1");
     const m = brandedReportMail({ log, gameName: "Acme party", brand: { name: "Acme Ltd", color: "#0B3D91", logo: PNG }, origin: "https://tambola.test", link: "https://tambola.test/report?x=1", keptUntilMs: T + 30 * 86_400_000, deleteAtMs: T + 86_400_000, organizerEmail: "boss@acme.com" });
-    expect(m.subject).toMatch(/^Your game report is ready: Acme party, \d\d \w{3} 2026$/);
+    expect(m.subject).toMatch(/^Your game report is ready: Acme party \(RPT-1\), \d\d \w{3} 2026$/);
     expect(m.html).toContain("https://tambola.test/logo-512.png"); expect(m.html).toContain("https://tambola.test/api/z/RPT-1/logo"); expect(m.html).toContain("#0B3D91"); expect(m.html).toContain("Acme Ltd");
     // the tiles are the database
     const tiles = Object.fromEntries(tilesOf(log)); expect(tiles["Players"]).toBe(String((raw.query("SELECT COUNT(*) c FROM participant WHERE eid='RPT-1'").get() as any).c));

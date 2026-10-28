@@ -377,11 +377,12 @@ describe("1.6.2 language dropdown", () => {
     const { ph, set } = await steered("CU-LANG");
     set({ phase: "play", paused: false, locked: false, log: LOG, claimNow: ["early5"], claimOpen: ["early5"], claimable: ["early5"], pressed: [], claimed: [], results: [], claimLeft: 9, nextCallInSec: 10 });
     await ph.waitFor(() => !!ph.$("#claimbar .zbigclaim"), 15_000);
-    const sel = ph.win.document.getElementById("langsel") as any; expect(sel).toBeTruthy();
-    expect(Array.from(sel.options).map((o: any) => o.textContent)).toEqual(["English"]); expect(sel.value).toBe("en");
+    const sel = ph.win.document.getElementById("langsel") as any, menu = ph.win.document.getElementById("langmenu") as any; expect(sel).toBeTruthy(); expect(sel.tagName).toBe("BUTTON"); // (a button with a small menu, not a drop-down list: the console has a rule against those)
+    expect(Array.from(menu.querySelectorAll("[role=option]")).map((o: any) => o.textContent)).toEqual(["English"]); expect(sel.textContent).toContain("EN"); expect(menu.hidden).toBe(true);
     expect(sel.parentElement).toBe(ph.win.document.body); expect(ph.win.document.getElementById("app")!.contains(sel)).toBe(false); // outside the page that redraws every second: it never closes by itself
     expect(sel.style.position).toBe("fixed"); expect(sel.style.top).toBe("6px"); expect(sel.style.right).toBe("6px");
-    sel.value = "en"; sel.dispatchEvent(new (ph.win as any).Event("change")); expect(ph.win.localStorage.getItem("ctz-lang")).toBe("en");
-    await wait(1500); expect(ph.win.document.getElementById("langsel")).toBe(sel); // still the same element after redraws
+    sel.click(); expect(menu.hidden).toBe(false); await wait(1500); expect(menu.hidden).toBe(false); // stays open through redraws
+    (menu.querySelector("[data-lang=en]") as any).click(); expect(ph.win.localStorage.getItem("ctz-lang")).toBe("en"); expect(menu.hidden).toBe(true);
+    expect(ph.win.document.getElementById("langsel")).toBe(sel);
   });
 });
