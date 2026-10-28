@@ -192,3 +192,18 @@ describe("not a game of its own in the numbers", () => {
     if (typeof ownerStats === "function") { const st = await ownerStats(env as any, T) as any; expect(st.games.kept).toBe(1); }
   });
 });
+
+describe("a database without the new columns", () => {
+  test("the first rehearsal request adds them by itself (no manual migration step); the owner numbers and normal pages keep working before and after", async () => {
+    const { resetRehearsalColumnsFlag } = await import("../src/rehearsal"); const { ownerStats } = await import("../src/owner-stats") as any;
+    await realGame();
+    raw.run("DROP INDEX IF EXISTS engagement_rehearsal"); for (const c of ["rehearsal_of", "run_no", "rehearsal_closed_ms"]) raw.run(`ALTER TABLE engagement DROP COLUMN ${c}`);
+    resetRehearsalColumnsFlag();
+    expect((await call("GET", "/api/z/REAL-1/info")).status).toBe(200); // a real game's pages never need the columns
+    const st = await ownerStats(env as any, T) as any; expect(st.games.kept).toBe(1); // the numbers add the columns when they need them
+    resetRehearsalColumnsFlag(); raw.run("DROP INDEX IF EXISTS engagement_rehearsal"); for (const c of ["rehearsal_of", "run_no", "rehearsal_closed_ms"]) raw.run(`ALTER TABLE engagement DROP COLUMN ${c}`);
+    const c = await cards(); expect(c.cards[0].state).toBe("ready"); // the cards add them
+    const b = await j(await start()); expect(b.id).toBe("REAL-1-R1");
+    expect((raw.query("SELECT rehearsal_of FROM engagement WHERE id='REAL-1-R1'").get() as any).rehearsal_of).toBe("REAL-1");
+  });
+});

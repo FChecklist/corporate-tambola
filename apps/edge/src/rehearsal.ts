@@ -19,6 +19,15 @@ export const REHEARSAL_SCHEMA = [
   `ALTER TABLE engagement ADD COLUMN rehearsal_closed_ms INTEGER`,
   `CREATE INDEX IF NOT EXISTS engagement_rehearsal ON engagement(rehearsal_of)`,
 ];
+let colsOk = false;
+export const resetRehearsalColumnsFlag = () => { colsOk = false; };
+/** The three new columns are added by the first rehearsal request if the database does not have them yet (additive, safe to repeat), like the permanent record table: no manual migration step can be forgotten. */
+export async function ensureRehearsalColumns(db: D1): Promise<void> {
+  if (colsOk) return;
+  try { await db.prepare("SELECT rehearsal_of, run_no, rehearsal_closed_ms FROM engagement LIMIT 1").first(); colsOk = true; return; } catch { /* not there yet: add them */ }
+  for (const s of REHEARSAL_SCHEMA) { try { await db.prepare(s).run(); } catch { /* already there */ } }
+  colsOk = true;
+}
 const GENESIS = 1692803367;
 const roundMs = (r: number) => (GENESIS + (r - 1) * 3) * 1000;
 const roundAt = (ms: number) => Math.floor((ms / 1000 - GENESIS) / 3) + 1;
@@ -45,6 +54,7 @@ export async function rehearsalFinished(env: Env, r: Row, now: number): Promise<
 async function published(db: D1, eid: string): Promise<boolean> { return !!(await db.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`pub/${eid}`).first()); }
 
 export async function listRehearsals(env: Env, real: any, now: number) {
+  await ensureRehearsalColumns(env.DB);
   const rows = (await env.DB.prepare("SELECT * FROM engagement WHERE rehearsal_of=? ORDER BY run_no").bind(real.id).all<Row>()).results ?? [];
   const paid = real.pack > 0 && !isDemoRow(real) && (await published(env.DB, real.id));
   const beforeStart = now < roundMs(real.start_round);
@@ -67,7 +77,7 @@ export async function listRehearsals(env: Env, real: any, now: number) {
 
 /** Starts the next rehearsal of `real`. The caller has checked that the asker may act for this game. */
 export async function startRehearsal(env: Env, real: any, b: any, now: number, origin: string, spend: (n: number) => Promise<boolean>, json: (o: unknown, s?: number) => Response): Promise<Response> {
-  const db = env.DB;
+  const db = env.DB; await ensureRehearsalColumns(db);
   if (real.rehearsal_of) return json({ error: REAL_ONLY_MSG, code: "real-only" }, 409);
   const list = await listRehearsals(env, real, now);
   if (!list.paid) return json({ error: NOT_PAID_MSG, code: "not-paid" }, 402);
@@ -99,6 +109,7 @@ export async function startRehearsal(env: Env, real: any, b: any, now: number, o
 /** The organizer closes a running rehearsal early: it counts as finished and unlocks the next. */
 export async function closeRehearsal(env: Env, e: any, now: number, json: (o: unknown, s?: number) => Response): Promise<Response> {
   if (!e.rehearsal_of) return json({ error: REAL_ONLY_MSG, code: "real-only" }, 409);
+  await ensureRehearsalColumns(env.DB);
   await env.DB.prepare("UPDATE engagement SET rehearsal_closed_ms=COALESCE(rehearsal_closed_ms, ?) WHERE id=?").bind(now, e.id).run();
   return json({ ok: true, closed: true });
 }

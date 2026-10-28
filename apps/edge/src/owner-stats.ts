@@ -2,6 +2,7 @@
 //   GET /api/owner/stats    header x-owner-stats-key: <OWNER_STATS_KEY>   (its own key, NOT the platform key, so the console can read and can do nothing else)
 // Answers counts and the e-mail addresses of organizers who PAID (the invoice address). A mobile number is never shown: Corporate Tambola keeps phones only as one-way hashes.
 // Any other caller gets the same 404 as an unknown address, and every call is written to the owner's access log. No player data of any kind is returned.
+import { ensureRehearsalColumns } from "./rehearsal";
 import { logAccess } from "./audit";
 import type { D1, Env } from "./worker";
 import RELEASES from "./releases.json";
@@ -15,7 +16,7 @@ const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { sta
 
 /** Counts for the console. A game is MADE when it has a permanent record, STARTED when its start time has passed, COMPLETED when it reached its end (a life row), CANCELLED when the organizer cancelled it. */
 export async function ownerStats(env: StatsEnv, now: number): Promise<Record<string, unknown>> {
-  const db = env.DB;
+  const db = env.DB; await ensureRehearsalColumns(db);
   const GEN = 1692803367; // the same round clock the rest of the Worker uses (3-second rounds)
   const nowRound = Math.floor((now / 1000 - GEN) / 3) + 1;
   const made = (await one<{ n: number }>(db, "SELECT COUNT(*) AS n FROM game_record"))?.n ?? 0;
