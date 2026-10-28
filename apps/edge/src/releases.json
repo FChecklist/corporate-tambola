@@ -6,7 +6,8 @@
     "title": "A crowd joining at once is cheaper for the database",
     "changes": [
       "Joining writes everything in one database transaction instead of seven (the seat, the person rows, the two per-address counters and the consent record), so a crowd of people opening the link at the same moment costs the database much less. The records kept are exactly the same",
-      "The seat and claim list and the public control file are answered from the edge cache for a few seconds, so a very large game does not slow down when everybody asks at once"
+      "The seat and claim list and the public control file are answered from the edge cache for a few seconds, so a very large game does not slow down when everybody asks at once",
+      "The Are you sure question of a grey Claim button closes by itself when a prize becomes ready to claim, so it can never sit on top of the gold CLAIM buttons"
     ]
   },
   {
