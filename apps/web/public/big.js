@@ -49,8 +49,16 @@
     } catch (e) { S.err = e.status === 403 ? "This game is not published yet. Publish it first (step 7 in your console). This screen then starts by itself: you do not need to refresh." : e.status === 404 ? "That engagement was not found." : "Connecting…"; }
   }
 
+  // REHEARSAL: the same block at the top of every page of a rehearsal (Game ID, REHEARSAL GAME n, the sentence); the real game's pages never have it
+  function rehBanner(info) {
+    let el = document.getElementById("rehbanner"); const R = info && info.rehearsal;
+    if (!R) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement("div"); el.id = "rehbanner"; el.setAttribute("role", "status"); el.style.cssText = "background:#b3261e;color:#fff;padding:10px 14px;text-align:center;line-height:1.35;position:sticky;top:0;z-index:40"; document.body.insertBefore(el, document.body.firstChild); }
+    if (el.dataset.t !== R.block) { el.dataset.t = R.block; const ln = String(R.block).split("\n"); el.innerHTML = '<div>' + esc(ln[0] || '') + '</div><div style="font-size:1.25rem;font-weight:900">' + esc(ln[1] || '') + '</div><div style="font-weight:700">' + esc(ln.slice(2).join(' ')) + '</div>'; }
+  }
   function draw() {
     if (HOLD.held(draw)) return;
+    rehBanner(S.info);
     if (!S.info) return ($app.innerHTML = `<p class="msg">${esc(S.err || "Loading…")}</p>`);
     const info = S.info, cfg = S.cfg || { rounds: 1 };
     const secsToStart = S.now === null ? null : (info.startRound + ZG.GRACE_ROUNDS - S.now) * 3 - (Date.now() - (S.nowAt || Date.now())) / 1000;

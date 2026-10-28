@@ -91,6 +91,18 @@ describe("game-day clarity on the console", () => {
     expect(c.$("#numcount")!.textContent).toContain(`${balls.length} of 90`);
     expect(c.errors).toEqual([]);
   });
+  test("the claim signal in the Organizer's console: when a claim happens a calm pop-up with the ticket number shows within a few seconds", async () => {
+    const x = await setup("GD-SIG");
+    for (const p of x.phones) { await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true); }
+    const c = await consolePage(x, "GD-SIG");
+    await c.waitFor((t) => /Game day|Your game|Last step/i.test(t)); x.goLive(); for (let i = 0; i < 12; i++) await x.step();
+    await wait(2600); // the console has read the claims that exist (none) and the signal
+    const pid = (x.w.world.raw.query("SELECT pid FROM participant LIMIT 1").get() as any).pid as string;
+    x.w.world.raw.prepare("INSERT INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES('GD-SIG',?,'early5',1,10,?)").run(pid, x.now());
+    x.w.world.raw.prepare("INSERT INTO kv(k,v) VALUES('cv/GD-SIG','1') ON CONFLICT(k) DO UPDATE SET v='1'").run();
+    const t0 = Date.now(); while (!/has claimed Early Five/.test(c.win.document.getElementById("claimtoasts")?.textContent ?? "")) { if (Date.now() - t0 > 6000) throw new Error("no pop-up in the console"); await wait(100); }
+    expect(c.win.document.getElementById("claimtoasts")!.textContent).toMatch(/^Ticket \d+ has claimed Early Five\. Checking now/);
+  });
   test("Pause asks 'Are you sure? Numbers stop for everybody.'; after it a big PAUSED banner says who, since when and until when, with a Resume button that works", async () => {
     const x = await setup("GD-PZ");
     for (const p of x.phones) { await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true); }

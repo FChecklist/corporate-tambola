@@ -24,6 +24,7 @@ import { attemptStatusOf, centralOf, derivedEventKey, eventSeen, markEventSeen, 
 import { getMode, mailGate, testFlag, type ModeEnv } from "./mode";
 import { isTestLogin } from "./testlogins";
 import { lookupPayLink, packFor, payLinkPublic } from "./paylink";
+import { rehearsalMailWrap } from "./rehearsal-mail";
 import { consentMissing, recordConsent } from "./consent";
 import { creditAppliedFor, creditFromPayment, creditUsesFor, mailCreditCreated, restoreCreditUses, rs, teamEmails } from "./credit";
 
@@ -98,6 +99,7 @@ export async function sendMail(env: PayEnv, db: D1, to: string, subject: string,
   // `secret` = the mail carries a personal AI work link: if it cannot be sent, no body is kept at all (nothing to retry later; the organizer can replace the link and get a fresh mail).
   // TEST mode (mode.ts): only the owner's allow-list is ever e-mailed; everyone else is dropped and logged. Not sent = false, and no body is kept.
   if (isTestLogin(to)) return false; // the owner's three test addresses belong to a real outside domain: nothing is ever sent to them
+  { const rw = await rehearsalMailWrap(db, subject, text, opts.html); subject = rw.subject; text = rw.text; if (rw.html !== undefined) opts = { ...opts, html: rw.html }; } // a rehearsal's mail says so in its subject and first lines
   subject = tagSubject(subject); // the game tag starts every subject
   if ((await getMode(env)) === "TEST") { if (!opts.owner && !(await mailGate(env, to, subject, now))) return false; subject = "[TEST] " + subject; } // `owner` = a note to the owner of the platform (owner-mail.ts): always allowed
   const html = opts.html ?? plainToHtml(subject, text, env.PUBLIC_ORIGIN); // every mail carries the brand header and footer, whoever built it
@@ -112,6 +114,7 @@ export const sentReports: { to: string; subject: string; text: string; attachmen
 const toB64 = (u: Uint8Array) => { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); };
 /** E-mails the engagement report. The attachment is passed straight to the mail service and is never stored or logged here. Returns false when it could not be sent (the caller tries again). */
 export async function sendReportMail(env: PayEnv, to: string, subject: string, text: string, attachments: { filename: string; content: Uint8Array }[]): Promise<boolean> {
+  { const rw = await rehearsalMailWrap(env.DB, subject, text); subject = rw.subject; text = rw.text; }
   subject = tagSubject(subject);
   if ((await getMode(env)) === "TEST") { if (!(await mailGate(env, to, subject, Date.now()))) return true; subject = "[TEST] " + subject; } // dropped on purpose and logged: counts as handled so the report steps carry on
   const html = plainToHtml(subject, text, env.PUBLIC_ORIGIN); text = withFooter(text, env.PUBLIC_ORIGIN);

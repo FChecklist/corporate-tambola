@@ -19,18 +19,18 @@ export async function ownerStats(env: StatsEnv, now: number): Promise<Record<str
   const GEN = 1692803367; // the same round clock the rest of the Worker uses (3-second rounds)
   const nowRound = Math.floor((now / 1000 - GEN) / 3) + 1;
   const made = (await one<{ n: number }>(db, "SELECT COUNT(*) AS n FROM game_record"))?.n ?? 0;
-  const live = (await one<{ n: number }>(db, "SELECT COUNT(*) AS n FROM engagement"))?.n ?? 0;
+  const live = (await one<{ n: number }>(db, "SELECT COUNT(*) AS n FROM engagement WHERE rehearsal_of IS NULL"))?.n ?? 0; // (a rehearsal is not a game of its own in the numbers)
   const started = (await one<{ n: number }>(db, "SELECT COUNT(*) AS n FROM game_record WHERE start_round<=?", nowRound))?.n ?? 0;
   const completed = (await one<{ n: number }>(db, "SELECT COUNT(*) AS n FROM game_record WHERE outcome IS NOT NULL"))?.n ?? 0;
-  const cancelled = (await one<{ n: number }>(db, "SELECT COUNT(*) AS n FROM engagement WHERE cancelled_ms IS NOT NULL"))?.n ?? 0;
+  const cancelled = (await one<{ n: number }>(db, "SELECT COUNT(*) AS n FROM engagement WHERE cancelled_ms IS NOT NULL AND rehearsal_of IS NULL"))?.n ?? 0;
   const outcomes = await all<{ outcome: string }>(db, "SELECT outcome FROM game_record WHERE outcome IS NOT NULL");
   let players = 0, winners = 0, biggest = 0;
   for (const r of outcomes) { try { const o = JSON.parse(r.outcome); const j = Number(o.joined) || 0; players += j; winners += Number(o.winnerPositions) || 0; if (j > biggest) biggest = j; } catch { /* a damaged row counts for nothing */ } }
-  const playersNow = (await one<{ n: number }>(db, "SELECT COUNT(*) AS n FROM participant"))?.n ?? 0;
+  const playersNow = (await one<{ n: number }>(db, "SELECT COUNT(*) AS n FROM participant WHERE eid NOT IN (SELECT id FROM engagement WHERE rehearsal_of IS NOT NULL)"))?.n ?? 0;
   const organizers = (await one<{ n: number }>(db, "SELECT COUNT(DISTINCT org) AS n FROM game_record WHERE org IS NOT NULL"))?.n ?? 0;
   const pays = await all<{ email: string; n: number; paid: number; last: number }>(db,
     "SELECT email, COUNT(*) AS n, COALESCE(SUM(amount),0) AS paid, MAX(paid_ms) AS last FROM payment WHERE status='paid' GROUP BY email ORDER BY last DESC LIMIT 500");
-  const upcoming = await all<{ id: string; cap: number; pack: number | null; start_round: number }>(db, "SELECT id, cap, pack, start_round FROM engagement WHERE start_round>? AND cancelled_ms IS NULL ORDER BY start_round ASC LIMIT 20", nowRound);
+  const upcoming = await all<{ id: string; cap: number; pack: number | null; start_round: number }>(db, "SELECT id, cap, pack, start_round FROM engagement WHERE start_round>? AND cancelled_ms IS NULL AND rehearsal_of IS NULL ORDER BY start_round ASC LIMIT 20", nowRound);
   return {
     site: "corporate-tambola", asOf: new Date(now).toISOString(),
     release: { version: (RELEASES as any[])[0]?.version ?? null, date: (RELEASES as any[])[0]?.date ?? null, title: (RELEASES as any[])[0]?.title ?? null, releases: (RELEASES as any[]).length },

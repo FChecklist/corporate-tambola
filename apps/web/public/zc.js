@@ -612,7 +612,7 @@
   // ---------- step 6: invite and share ----------
   const guestLink = () => location.origin + "/z.html?e=" + encodeURIComponent(eid) + (BASE ? "&api=" + encodeURIComponent(BASE) : "");
   const bigLink = () => location.origin + "/big.html?e=" + encodeURIComponent(eid);
-  const inviteText = () => `You are invited to play Corporate Tambola${S.cfg && S.cfg.name ? ": " + S.cfg.name : ""}. Join here: ${guestLink()}`;
+  const inviteText = () => rehShare() + `You are invited to play Corporate Tambola${S.cfg && S.cfg.name ? ": " + S.cfg.name : ""}. Join here: ${guestLink()}`;
   const waUrl = (num) => "https://wa.me/" + (num || "") + "?text=" + encodeURIComponent(inviteText());
   const waNumber = (p) => { const d = String(p || "").replace(/\D/g, ""); return d.length === 10 ? "91" + d : d; };
   // ---------- My people (docs/ROLES_AND_CONSOLE_SPEC_3.md): one list per inviter ----------
@@ -897,6 +897,45 @@
     return rw.map((r) => { const many = ((S.cfg && S.cfg.rewards) || []).filter((x) => x.pattern === r.pattern && (x.scope || "ticket") === (r.scope || "ticket")).length > 1; return (many ? (ord[(r.ordinal || 1) - 1] || r.ordinal) + " " : "") + label(r.scope === "two_ticket" ? "full2" : r.pattern); });
   }
   const prizeWarn = () => { const n = unnamedPrizes(); return n.length ? `<div class="zc-alert" id="prizewarn" role="alert"><b>${n.length === 1 ? "1 prize has" : n.length + " prizes have"} no name: ${esc(n.join(", "))}.</b> Winners will get nothing. Go back and name them, or press Publish anyway.</div>` : ""; };
+  // ---------- REHEARSALS (1.6.0): three free practice runs of a paid game, in three cards under the Publish step. One action per card, no settings.
+  async function loadReh(force) {
+    if (S.rehBusy || !eid || (S.info && S.info.rehearsal)) return;
+    if (!force && S.rehAt && Date.now() - S.rehAt < 8000) return;
+    S.rehBusy = true;
+    try { S.reh = await call("GET", "/api/z/" + eid + "/rehearsals"); } catch { /* the cards stay as they were */ }
+    S.rehBusy = false; S.rehAt = Date.now(); redraw();
+  }
+  const rehDate = (ms) => { try { return new Date(ms + 5.5 * 3600000).toISOString().slice(0, 10); } catch { return ""; } };
+  function rehCards() {
+    if (!eid || (S.info && S.info.rehearsal)) return ""; // a rehearsal itself has no rehearsals
+    loadReh(false);
+    const R = S.reh, cards = R && R.cards ? R.cards : [1, 2, 3].map((n) => ({ n, state: "locked", reason: "First publish your game and pay. This unlocks your 3 rehearsals." }));
+    const card = (c) => {
+      const grey = c.state === "locked";
+      const body = c.state === "ready" ? `<p class="zc-small">A practice run of your game with your guests. Nothing here changes your real game.</p><button type="button" class="zc-btn" data-reh="start" data-n="${c.n}">Start this rehearsal</button><p class="zc-small">Free, included with your game</p>`
+        : c.state === "running" ? `<p class="zc-small"><b>Rehearsal ${c.n} is on.</b></p><a class="zc-btn" href="${esc(location.origin + "/zc.html?e=" + encodeURIComponent(c.id || ""))}">Open it</a> <button type="button" class="zc-mini" data-reh="close" data-id="${esc(c.id || "")}">Close this rehearsal</button>`
+        : c.state === "done" ? `<p class="zc-small"><b>Done</b> ${esc(rehDate(c.dateMs))}</p><a class="zc-mini" href="${esc(location.origin + "/zc.html?e=" + encodeURIComponent(c.id || ""))}">See what happened</a>`
+        : `<p class="zc-small">${esc(c.reason || "")}</p>`;
+      return `<div class="zc-rehcard${grey ? " zc-grey" : ""}" id="reh${c.n}" style="border:1px solid #c9cdd6;border-radius:12px;padding:12px;margin:8px 0;${grey ? "opacity:.55;" : ""}"><b>Rehearsal ${c.n}</b>${body}<p class="zc-small">Practice only, not your real game</p></div>`;
+    };
+    return `<div class="zc-block" id="rehearsals"><h3>Rehearsals</h3>${cards.map(card).join("")}</div>`;
+  }
+  document.addEventListener("click", async (e) => {
+    const b = e.target && e.target.closest && e.target.closest("[data-reh]"); if (!b) return;
+    if (b.dataset.reh === "start") {
+      const n = Number(b.dataset.n) || 1;
+      const yes = await askSure("Start rehearsal " + n + "?", "This is practice. It is not your real game.\n\nYour guests get a separate link for this rehearsal. Nothing here changes your real game.", "Yes, start the rehearsal", "No, not now");
+      if (!yes) return;
+      b.disabled = true;
+      try { const r = await call("POST", "/api/z/" + eid + "/rehearsal", { people: "published" }); if (r && r.openUrl) { location.href = r.openUrl; return; } } catch (err) { S.pubNote = err && err.message ? err.message : "The rehearsal could not be started. Please try again."; }
+      b.disabled = false; loadReh(true);
+    } else if (b.dataset.reh === "close") {
+      const yes = await askSure("Close this rehearsal?", "It ends now and the next rehearsal opens. Its results stay for you to read.", "Yes, close it", "No, keep it going");
+      if (!yes) return;
+      try { await call("POST", "/api/z/" + b.dataset.id + "/rehearsalclose", {}); } catch { /* shown on the next load */ }
+      loadReh(true);
+    }
+  });
   function stepPublish() {
     if (!S.f) return small("Loading…");
     let h = `<span class="zc-lbl">Check your game</span>` + unsavedWarn() + readBack() + (S.f ? modeSummary(S.f).replace('id="modesummary"', 'id="modesummary2"') : "") + (S.draft ? prizeWarn() : "");
@@ -909,7 +948,7 @@
       h += rowl(`<b>Published</b><br><span class="zc-small zc-nomargin">${isFree10() ? "Your game is live. Nothing to pay." : "Your link is live."}</span>`, `<span aria-hidden="true">&#10003;</span>`);
       h += isCancelled() ? "" : isFree10() ? small("Want more than 10 people? Choose a bigger size in step 8, at any time.") : small("Next: pay in step 8. One payment is enough.");
     }
-    return h + (S.cloneNew === eid && S.draft ? `<div class="zc-box" id="newgamenote2">This is a new game. Nothing is paid or published yet.</div>` : "") + previewButton() + cancelBlock() + (S.draft || isCancelled() ? "" : cloneButton()) + (S.draft ? "" : cont(7)); // a draft has one obvious button, Publish
+    return h + rehCards() + (S.cloneNew === eid && S.draft ? `<div class="zc-box" id="newgamenote2">This is a new game. Nothing is paid or published yet.</div>` : "") + previewButton() + cancelBlock() + (S.draft || isCancelled() ? "" : cloneButton()) + (S.draft ? "" : cont(7)); // a draft has one obvious button, Publish
   }
   // ---------- credit (no refunds): the account's active credit can pay for a game ----------
   const creditTotal = () => Number((S.sum && S.sum.credit) || 0) || 0;
@@ -1096,13 +1135,22 @@
   }
 
   // ---------- the co-host's three steps ----------
+  // REHEARSAL: the same block at the top of every page of a rehearsal (Game ID, REHEARSAL GAME n, the sentence)
+  function rehBanner(info) {
+    let el = document.getElementById("rehbanner"); const R = info && info.rehearsal;
+    if (!R) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement("div"); el.id = "rehbanner"; el.setAttribute("role", "status"); el.style.cssText = "background:#b3261e;color:#fff;padding:10px 14px;text-align:center;line-height:1.35;position:sticky;top:0;z-index:40"; document.body.insertBefore(el, document.body.firstChild); }
+    if (el.dataset.t !== R.block) { el.dataset.t = R.block; const ln = String(R.block).split(String.fromCharCode(10)); el.innerHTML = "<div>" + esc(ln[0] || "") + "</div><div style='font-size:1.25rem;font-weight:900'>" + esc(ln[1] || "") + "</div><div style='font-weight:700'>" + esc(ln.slice(2).join(" ")) + "</div>"; }
+  }
+  /** What a rehearsal puts in front of every share text (WhatsApp, e-mail, copy): the same block as on its pages. */
+  const rehShare = () => (S.info && S.info.rehearsal ? S.info.rehearsal.block + String.fromCharCode(10, 10) : "");
   const cohInvite = () => (S.coh && S.coh.inviteLink) || guestLink();
   function cohStep(n) {
     const c = S.coh;
     if (!c) return `<p class="zc-small zc-warnt" role="status">${esc(S.cohErr || "Loading your game…")}</p>`;
     if (n === 1) return rowl(`<b>${esc(c.name || "Your game")}</b>, ${esc(c.startMs ? when(c.startMs) : "")}`, `<span class="zc-small zc-nomargin">read only</span>`) + rowl(`${Number(c.joined) || 0} ${Number(c.joined) === 1 ? "person" : "people"} joined of ${Number(c.cap) || 0}`, "") + small("You cannot change the game.") + `<span class="zc-lbl">What you can do</span>` + roleCards("cohost") + `${cont(1)}`;
     if (n === 2) return `<span class="zc-lbl">Your own invite link</span>` + (c.inviteLink ? `<div class="zc-linkrow"><span class="zlink">${esc(cohInvite())}</span><button type="button" class="zc-mini" id="copy">Copy link</button></div>
-      <div class="zc-chips zc-gap"><a class="zc-chip" href="${esc("https://wa.me/?text=" + encodeURIComponent("You are invited to play Corporate Tambola. Join here: " + cohInvite()))}" target="_blank" rel="noopener noreferrer">Share on WhatsApp</a></div>` : small("Your link appears once the game is published."))
+      <div class="zc-chips zc-gap"><a class="zc-chip" href="${esc("https://wa.me/?text=" + encodeURIComponent(rehShare() + "You are invited to play Corporate Tambola. Join here: " + cohInvite()))}" target="_blank" rel="noopener noreferrer">Share on WhatsApp</a></div>` : small("Your link appears once the game is published."))
       + `
       ${rowl("People you brought", `<b>${Number(c.brought) || 0}</b>`)}${small("You can invite people up to your limit.")}
       ${peopleBlock()}${small("Want your guests to invite their own friends? Ask the Organizer or a Host to switch it on. You cannot switch it on yourself.")}${cont(2)}`;
@@ -1562,7 +1610,7 @@
     if (role() === "host" && S.setup && S.setup.ready === false) return; // a Host who has not finished the first-open setup (e-mail, mobile) cannot open the game yet: never ask for it, never show "this link no longer opens the game" in the middle of the setup
     S.screen = "eng";
     try {
-      S.info = await call("GET", `/api/z/${eid}/info`); S.deadLink = false; /* this link opens the game: a 403 met earlier no longer holds */ if (S.info.checkin && !S.draft && canRun()) { try { S.presence = await call("GET", `/api/z/${eid}/presence`); } catch { /* shown next time */ } } S.draft = !!S.info.draft; S.unpaid = !!S.info.unpaid; S.locked = !!S.info.locked; S.demo = !!S.info.demo;
+      S.info = await call("GET", `/api/z/${eid}/info`); if (S.info && S.info.rehearsal && S.info.rehearsal.shownCap) S.info.cap = S.info.rehearsal.shownCap; /* a rehearsal shows the real game's size, never its own limit */ S.deadLink = false; /* this link opens the game: a 403 met earlier no longer holds */ if (S.info.checkin && !S.draft && canRun()) { try { S.presence = await call("GET", `/api/z/${eid}/presence`); } catch { /* shown next time */ } } S.draft = !!S.info.draft; S.unpaid = !!S.info.unpaid; S.locked = !!S.info.locked; S.demo = !!S.info.demo;
       if (ACT === "publish" && S.draft && !S.actOpened) { S.pubOpen = true; S.actOpened = true; } // the AI's hand-over link: the publish card is open and waiting for the organizer's own tap
       let pr = await call("GET", `/api/z/${eid}/participants`); S.people = pr.participants; S.closed = pr.closed; S.whoCanJoin = pr.whoCanJoin || S.whoCanJoin;
       while (S.people.length < pr.total) { const more = await call("GET", `/api/z/${eid}/participants?offset=${S.people.length}`); if (!more.participants.length) break; S.people.push(...more.participants); } // a long list arrives in pages
@@ -1635,7 +1683,7 @@
     if (!S.cfg || !S.info || !S.f) return loadingView();
     return engView();
   }
-  const redraw = () => draw(view());
+  const redraw = () => { rehBanner(S.info); draw(view()); };
   /** Redraws only when something really changed: an AI (or a person) working on the page keeps the same elements instead of having them replaced every few seconds. */
   // What a person has typed or ticked and not yet saved survives any redraw (the page refreshes itself every few seconds): remembered per box, forgotten when the open step or the game changes.
   const dirty = {}; let dirtyFor = "";
@@ -2225,5 +2273,10 @@
   };
   (async () => { if (!secret && bc) { bc.postMessage({ ask: true }); await new Promise((r) => setTimeout(r, 350)); } if (!inited) bootstrap(); })();
   let tickBusy = false, tickAt = 0; setInterval(() => { if (tickBusy && Date.now() - tickAt < 60000) return; const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; /* never wipe what the organizer is typing */ if (!secret || document.hidden) return; if (role() === "host" && S.setup && S.setup.ready === false) return; let p = null; if (eid) p = refreshEng(); else if (QUICK || S.screen === "quick") return; else if (isOrg()) p = refreshHome(); if (p && typeof p.finally === "function") { tickBusy = true; tickAt = Date.now(); p.finally(() => { tickBusy = false; }); } }, 5000);
+  // ---- the claim signal in the Organizer's console (1.6.0): a few digits asked every 2 s while the Game day view is in front; when it moves, new claims show as calm pop-ups (ticket numbers only)
+  { const BEAT = { cv: -1, init: false, seen: new Set() };
+    const note = (text) => { let box = document.getElementById("claimtoasts"); if (!box) { box = document.createElement("div"); box.id = "claimtoasts"; box.setAttribute("role", "status"); box.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:50;display:grid;gap:6px;width:min(92vw,520px);pointer-events:none"; document.body.appendChild(box); } const d = document.createElement("div"); d.style.cssText = "background:#14233f;color:#fff;border-radius:12px;padding:10px 14px;box-shadow:0 8px 20px -10px rgba(0,0,0,.6)"; d.textContent = text; box.appendChild(d); while (box.children.length > 3) box.firstChild.remove(); setTimeout(() => d.remove(), 6000); };
+    const news = async () => { try { const c = await call("GET", "/api/z/" + eid + "/claims"); for (const x of (c && c.claims) || []) { const id = x.pid + "|" + x.pattern + "|" + (x.bogey ? "b" : x.idx) + "|" + x.atMs; if (BEAT.seen.has(id)) continue; BEAT.seen.add(id); if (BEAT.init) { const tk = parseInt(String(x.pid), 10); note(x.bogey ? "Ticket " + tk + "'s claim was not correct. The game continues." : "Ticket " + tk + " has claimed " + (NAMES[x.pattern] || x.pattern) + ". Checking now" + String.fromCharCode(8230)); } } BEAT.init = true; } catch { /* the 5 s refresh still brings the news */ } };
+    setInterval(async () => { if (document.hidden || !eid || !document.getElementById("livebar") || (S.info && S.info.rehearsal && S.info.rehearsal.over)) return; try { if (!BEAT.init) await news(); const r = await fetch((BASE || "") + "/api/z/" + eid + "/cv", { cache: "no-store" }); const n = Number((await r.text()).trim()); if (Number.isFinite(n)) { if (BEAT.cv >= 0 && n > BEAT.cv) await news(); BEAT.cv = n; } } catch { /* try again */ } }, 2200); }
   window.__zc = S; window.__zcMode = (m) => { S.mode = m; redraw(); }; // the page tests reach the plain-text list path through this
 })();

@@ -86,7 +86,7 @@ export const inviterOf = (o: FromOwner): string => (o.kind === "org" ? "o" : o.k
 /** What `seat.src` says for a person who came in under this inviter (a Co-host's count of people brought reads it). */
 export const srcOf = (inviter: string): string => (inviter.startsWith("c:") ? "co:" + inviter.slice(2) : inviter.startsWith("h:") ? "ho:" + inviter.slice(2) : "link");
 
-export const waMessage = (name: string | null, game: string, link: string) => `${name ? name + ", you" : "You"} are invited to ${game}. Open your ticket here: ${link}`;
+export const waMessage = (name: string | null, game: string, link: string, block?: string) => `${block ? block + "\n\n" : ""}${name ? name + ", you" : "You"} are invited to ${game}. Open your ticket here: ${link}`; // (block: a rehearsal says so first)
 export const waLinkOf = (digits: string, text: string) => `https://wa.me/${phoneDigits(digits)}?text=${encodeURIComponent(text)}`; // a kept number may start with +: wa.me wants the digits only
 
 /** Callers of the people routes. `all` = sees every list of the game (Organizer, Host). */
@@ -95,7 +95,7 @@ export interface Ctx {
   req: Request; env: Env; now: number; url: URL; e: any; eid: string; tail: string;
   /** From worker.ts `authOf`: who holds the key, and the first 7 hex of its hash (its id in the chains). */
   a: { plat: boolean; org: string | null; kind: string | null; eid?: string | null; viaLink?: boolean };
-  keyId7: string; viaLink: boolean; origin: string; gameName: string; invites: { on: boolean; per: number; cats: string[] };
+  keyId7: string; viaLink: boolean; origin: string; gameName: string; block?: string; invites: { on: boolean; per: number; cats: string[] };
   started: boolean; draft: boolean; cancelled: boolean;
   json: (o: unknown, status?: number) => Response;
   body: (req: Request, max?: number) => Promise<any | null>;
@@ -154,7 +154,7 @@ async function viewOf(c: Ctx, r: PersonRow, label: (id: string | null) => string
   const digits = pii?.phone ?? "";
   return {
     id: r.id, name: pii?.name ?? "", maskedPhone: digits ? maskedPhone(digits) : "", status: r.status, ...(pii?.empId ? { empId: pii.empId } : {}),
-    link, waLink: link && digits ? waLinkOf(digits, waMessage(pii?.name || null, c.gameName, link)) : null,
+    link, waLink: link && digits ? waLinkOf(digits, waMessage(pii?.name || null, c.gameName, link, c.block)) : null,
     ...(r.role ? { role: r.role } : {}), ...(showInviter ? { inviter: label(r.inviter) } : {}), ...(r.approved_by ? { approvedBy: label(r.approved_by) } : {}),
   };
 }
@@ -433,7 +433,7 @@ async function resendPerson(c: Ctx, who: Caller, id: string, b: any): Promise<Re
   if ((res[0]?.meta?.changes ?? 0) === 0) return c.json({ error: "That number is already invited.", code: "duplicate" }, 409);
   if (newPii && pii?.empId && verifyOf(c.e).mode === "either") await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`idx/${c.eid}/${await empHashOf(c.env, pii.empId)}`, ph).run(); // the employee ID keeps pointing at this person's current number
   const link = `${c.origin}/j/${token}`;
-  return c.json({ ok: true, link, waLink: pii?.phone ? waLinkOf(pii.phone, waMessage(pii.name || null, c.gameName, link)) : null, unlocked: hasSeat });
+  return c.json({ ok: true, link, waLink: pii?.phone ? waLinkOf(pii.phone, waMessage(pii.name || null, c.gameName, link, c.block)) : null, unlocked: hasSeat });
 }
 
 /** The caller's OWN play seat: Organizer, Host and Co-host also play, through a personal link, and their seat is flagged so they stay out of the lucky draws. */

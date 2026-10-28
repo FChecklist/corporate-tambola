@@ -34,6 +34,7 @@ export function settingsOf(e: { closed?: number | null; id: string; start_round:
 
 /** Writes (or refreshes) the permanent settings record of one game. `e` is the engagement row. Safe to repeat; never throws into the caller's work. */
 export async function keepGameRecord(db: D1, e: any, now: number): Promise<void> {
+  if (e && e.rehearsal_of) return; // a rehearsal is not a game of its own in the permanent record or the numbers (its log and report are kept 365 days like any game)
   try { await keepGameRecordOnce(db, e, now); } catch { try { await ensureGameRecordTable(db); await keepGameRecordOnce(db, e, now); } catch { /* best effort: the next pass writes it again, and the last write happens before deletion */ } }
 }
 async function keepGameRecordOnce(db: D1, e: any, now: number): Promise<void> {
