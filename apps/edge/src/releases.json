@@ -1,5 +1,17 @@
 [
   {
+    "version": "1.6.0",
+    "date": "2026-10-28",
+    "commit": "this release",
+    "title": "Three free rehearsals for every paid game",
+    "changes": [
+      "Every paid game now has three free rehearsals, one after the other, under the Publish step. Each rehearsal is a real run of the game with its own game code, its own links, tickets and check-in, so nothing from a rehearsal can touch the real game. The cards are grey with First publish your game and pay until the game is published and paid",
+      "Every page, share text and e-mail of a rehearsal starts with Game ID, REHEARSAL GAME n and This link and this game are for rehearsal only. The real game has a different link and a different game. E-mail subjects start REHEARSAL GAME n (practice only). A finished rehearsal shows a calm page that offers the real game",
+      "The same people can use all four runs (rehearsal 1, 2, 3 and the real game) with a separate link, ticket and check-in each time. Rehearsals are not counted as games and cost nothing",
+      "The Organizer's console now shows a calm pop-up when someone claims a prize (ticket number only)"
+    ]
+  },
+  {
     "version": "1.5.1",
     "date": "2026-10-28",
     "commit": "this release",
