@@ -359,3 +359,15 @@ describe("1.5.0 claim buttons: gold top, bottom and side; grey side otherwise; t
     expect(ph.win.document.querySelectorAll(".zside").length).toBe(0);
   });
 });
+
+describe("the Bogey question never covers a real claim", () => {
+  test("an open Are-you-sure box closes by itself when a prize becomes claimable, so the gold buttons are not hidden", async () => {
+    const { ph, set } = await steered("CU-G6");
+    const play = { phase: "play", paused: false, locked: false, log: LOG, claimable: [], pressed: [], claimed: [], results: [], brk: null, intermission: null, callMode: "auto", waitingForHost: false, claimLeft: null, nextCallInSec: 12 };
+    set({ ...play, claimNow: [], claimOpen: [] });
+    await ph.waitFor(() => !!ph.$("#prizepanel .zside.zgrey"), 15_000);
+    (ph.$("#prizepanel .zside.zgrey") as any).click(); await ph.waitFor(() => !!ph.$("#bogeyask"), 15_000);
+    set({ ...play, claimNow: ["early5"], claimOpen: ["early5"], claimable: ["early5"], claimLeft: 9 });
+    await ph.waitFor(() => !!ph.$("#claimtop") && !ph.$("#bogeyask"), 15_000);
+  });
+});

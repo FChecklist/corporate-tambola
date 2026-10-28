@@ -935,6 +935,7 @@
   function paint() {
     if (HOLD.held(paint)) return;
     const v = rt.view();
+    if (BOGEYASK && (v.claimNow || []).length) BOGEYASK = null; // a real prize to claim: the question must never sit on top of the gold buttons
     if (window.ctzView) window.ctzView(v); // the flight recorder (blackbox.js) learns which stage the game is in
     awake = v.phase === "play" && !INFO.dns && !INFO.cancelled && !ME.removed && !v.locked && !v.paused && !v.stopped && (v.log.length > 0 || (v.nextCallInSec !== null && v.nextCallInSec <= GRACE_SECS + 60)); keepAwake(awake); // held from about a minute before the first number to the end of the game
     if (!v.won) v.won = []; // an older saved copy of the game code during an update: never break the screen
