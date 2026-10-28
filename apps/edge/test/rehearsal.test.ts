@@ -132,6 +132,26 @@ describe("the same people through all four runs", () => {
   });
 });
 
+describe("rehearsal people and team (1.6.3)", () => {
+  test("pick from the real game's list copies only the chosen people", async () => {
+    await realGame();
+    for (const k of [1, 2, 3, 4]) raw.prepare("INSERT INTO person(eid,id,ph,pii,inviter,role,status,added_ms) VALUES(?,?,?,?,?,NULL,'invited',?)").run("REAL-1", "p" + k, "ph" + k, "pii" + k, "o", T);
+    const r = await j(await start("REAL-1", { pick: ["p2", "p4", "zzz"] }));
+    expect(r.people).toBe(2);
+    expect((raw.query("SELECT group_concat(ph) g FROM (SELECT ph FROM person WHERE eid=? ORDER BY ph)").get(r.id) as any).g).toBe("ph2,ph4");
+  });
+  test("each Co-host of the real game gets a new key for the rehearsal; the real game's keys are untouched", async () => {
+    await realGame();
+    raw.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test,label,eid,pii,created_by) VALUES('h1','plat-org','cohost',0,?,0,'Asha','REAL-1','sealed','o')").run(T);
+    raw.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test,label,eid,pii,created_by) VALUES('h2','plat-org','cohost',1,?,0,'Gone','REAL-1','sealed','o')").run(T);
+    raw.prepare("UPDATE engagement SET org='plat-org' WHERE id='REAL-1'").run();
+    const r = await j(await start());
+    expect(r.team.length).toBe(1); expect(r.team[0].label).toBe("Asha"); expect(r.team[0].link).toContain("/zc.html?e=REAL-1-R1#cohost=ctc_");
+    const rows = raw.query("SELECT hash, eid, revoked FROM organizer_key WHERE kind='cohost' ORDER BY eid, hash").all() as any[];
+    expect(rows.filter((x) => x.eid === "REAL-1").length).toBe(2); expect(rows.filter((x) => x.eid === "REAL-1-R1").length).toBe(1);
+  });
+});
+
 describe("an ended rehearsal", () => {
   test("its pages say it is over and offer the real game; nobody can join it any more; a rehearsal link never opens the real game", async () => {
     await realGame(); const b = await j(await start()); await close(b.id);

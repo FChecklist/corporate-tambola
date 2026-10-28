@@ -6,6 +6,8 @@
 //   POST /api/z/{real}/rehearsal {people?: "published" | "previous" | "none"}   -> starts the next rehearsal (a new game); {ok, id, n, openUrl, guestUrl}
 //   POST /api/z/{rehearsal}/rehearsal/close                                      -> the organizer closes it (counts as finished, unlocks the next)
 import { copyPeople } from "./clone";
+import { randHex } from "./people";
+const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))), (b) => b.toString(16).padStart(2, "0")).join("");
 import { endBoundMs } from "./lifecycle";
 import { rehearsalBlock } from "./rehearsal-mail";
 import type { D1, Env } from "./worker";
@@ -96,13 +98,16 @@ export async function startRehearsal(env: Env, real: any, b: any, now: number, o
   if ((r.meta?.changes ?? 0) < 1) return json({ error: ONE_AT_A_TIME_MSG, code: "one-at-a-time" }, 409);
   await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`pub/${id}`, String(now)).run(); // published at once: nothing to pay, nothing to wait for
   let people = 0;
-  const which = b?.people === "none" ? "none" : b?.people === "previous" ? "previous" : "published";
+  const pick = Array.isArray(b?.pick) ? b.pick.filter((x: unknown) => typeof x === "string").slice(0, REHEARSAL_PEOPLE) as string[] : null;
+  const which = b?.people === "none" ? "none" : b?.people === "previous" ? "previous" : pick ? "pick" : "published";
   if (which !== "none") {
     const from = which === "previous" && n > 1 ? `${String(real.id).slice(0, 34)}-R${n - 1}` : real.id;
-    const c = await copyPeople(env, from, id, REHEARSAL_PEOPLE, now, spend);
+    const c = await copyPeople(env, from, id, REHEARSAL_PEOPLE, now, spend, which === "pick" ? pick! : undefined);
     people = c.copied;
   }
-  return json({ ok: true, id, n, people, openUrl: `${origin}/zc.html?e=${id}`, guestUrl: `${origin}/z.html?e=${id}`, realId: real.id, message: `Rehearsal ${n} is ready. It is practice only: it does not change your real game.` });
+  // Co-hosts belong to ONE game (their key is hashed, so it cannot be moved): each gets a new key for this rehearsal. Hosts are keys of the whole organization and already work here.
+  const team = await copyCohosts(env, real, id, origin, now);
+  return json({ ok: true, id, n, people, team, openUrl: `${origin}/zc.html?e=${id}`, guestUrl: `${origin}/z.html?e=${id}`, realId: real.id, message: `Rehearsal ${n} is ready. It is practice only: it does not change your real game.` });
 }
 
 /** The organizer closes a running rehearsal early: it counts as finished and unlocks the next. */
@@ -120,4 +125,17 @@ export async function rehearsalFacts(env: Env, e: any, now: number): Promise<Rec
   // The size shown in the console is the real game's, never the rehearsal's own limit (which is only enforced here)
   const real = await env.DB.prepare("SELECT cap FROM engagement WHERE id=?").bind(e.rehearsal_of).first<{ cap: number }>();
   return { rehearsal: { n: e.run_no, realId: e.rehearsal_of, gameId: e.id, over, block: rehearsalBlock(e.id, e.run_no), shownCap: real?.cap ?? 100 } };
+}
+
+/** A new Co-host key (for the rehearsal only) for every active Co-host of the real game; the links come back to the console so they can be shared. */
+async function copyCohosts(env: Env, real: any, toEid: string, origin: string, now: number): Promise<{ label: string; link: string }[]> {
+  const out: { label: string; link: string }[] = [];
+  let rows: any[] = [];
+  try { rows = (await env.DB.prepare("SELECT label, pii, is_test, created_by FROM organizer_key WHERE org=? AND kind='cohost' AND eid=? AND revoked=0").bind(real.org, real.id).all<any>()).results ?? []; } catch { return out; } // no Co-host column yet = no Co-host was ever added
+  for (const r of rows.slice(0, 20)) {
+    const key = "ctc_" + randHex(24), kh = await sha("key|" + key);
+    await env.DB.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,is_test,label,eid,pii,created_by) VALUES(?,?,?,0,?,?,?,?,?,?)").bind(kh, real.org, "cohost", now, r.is_test ?? 0, r.label, toEid, r.pii, r.created_by ?? "o").run();
+    out.push({ label: String(r.label ?? ""), link: `${origin}/zc.html?e=${encodeURIComponent(toEid)}#cohost=${key}` });
+  }
+  return out;
 }

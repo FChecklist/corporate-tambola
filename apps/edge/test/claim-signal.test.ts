@@ -29,6 +29,24 @@ async function game(id: string) {
 const claim = (id: string, pid: string, pattern: string, idx: number, now: number) => call("POST", `/api/z/${id}/claims`, { pid, device: "0".repeat(32), claims: [{ pattern, idx }] }, {}, now);
 const bogey = (id: string, pid: string, pattern: string, now: number) => call("POST", `/api/z/${id}/bogey`, { pid, device: "0".repeat(32), pattern }, {}, now);
 
+const claimShort = (id: string, pid: string, pattern: string, idx: number, now: number, body?: string) =>
+  handle(new Request(`http://x/api/z/${id}/claims`, { method: "POST", headers: { "content-type": "text/plain" }, body: body ?? `k|${pid}|${"0".repeat(32)}|${pattern}|${idx}|1` }), env, now);
+describe("the short claim body (1.5.3)", () => {
+  test("a claim in the short form is stored exactly like the JSON one (same answer, same signal), and the JSON form still works", async () => {
+    const { pid, at } = await game("CV-S");
+    const a = await claimShort("CV-S", pid, "top", 1, at[2]! - 500); const aj = await j(a); expect(a.status).toBe(200);
+    expect((await cv("CV-S")).text).toBe("1");
+    expect((raw.query("SELECT COUNT(*) c FROM claim WHERE eid='CV-S'").get() as any).c).toBe(1);
+    const b = await claim("CV-S", pid, "top", 1, at[2]! - 400); expect(b.status).toBe(200); const bj = await j(b); expect(aj.stored).toBe(1); expect(bj.ok).toBe(true); expect(bj.stored).toBe(0); // the same claim in JSON: accepted, but already stored once
+    expect((raw.query("SELECT COUNT(*) c FROM claim WHERE eid='CV-S'").get() as any).c).toBe(1);
+  });
+  test("damaged short bodies are refused, nothing is stored", async () => {
+    const { pid, at } = await game("CV-T");
+    for (const bad of ["k|", `k|${pid}|x|top|1`, `k|${pid}||top|-1|1`, `k|${pid}||TOP|1|1`, `k|${pid}||top|1|0`, `k||||||`]) expect((await claimShort("CV-T", pid, "top", 1, at[2]! - 500, bad)).status).toBe(400);
+    expect((raw.query("SELECT COUNT(*) c FROM claim WHERE eid='CV-T'").get() as any).c).toBe(0);
+  });
+});
+
 describe("the claim signal", () => {
   test("starts at 0, is a few digits of plain text, and may be cached for a second at the edge", async () => {
     const { } = await game("CV-A");

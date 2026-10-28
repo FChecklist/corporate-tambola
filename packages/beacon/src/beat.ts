@@ -20,3 +20,8 @@ export const msToNextBeat = (wallMs: number, ticket: number, cap: number): numbe
 export const followUpSpreadMs = (ticket: number, cap: number): number => { const s = beatSlots(cap), span = cap <= 2000 ? 500 : 1000; return Math.floor(((ticket % s) * span) / s); }; // (half a second in small games so the notice stays near 3 s; a second in big ones)
 /** A phone that has had no answer for this long shows a calm "Reconnecting" line. */
 export const reconnectAfterMs = (cap: number): number => Math.round(beatPeriodMs(cap) * 1.5) + 1000;
+
+/** PRESENCE sampling: about this many "I am listening" reports a minute for a whole game, however big (so about 300 small writes an hour). */
+export const PRESENCE_PER_MIN = 5;
+/** One phone in K reports in a given minute (ticket mod K = minute mod K) and each report counts K phones. */
+export const presenceK = (cap: number) => Math.max(1, Math.ceil((Number(cap) || 0) / PRESENCE_PER_MIN));

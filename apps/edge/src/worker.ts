@@ -28,6 +28,8 @@ import { ADMIN_SCHEMA, adminRoute, adminTick, countError, maintenanceGate } from
 import { ownerStatsRoute } from "./owner-stats";
 import { getProspectLink, prospectLinksRoute } from "./prospect-links";
 import { recordServerError } from "./errorbox";
+import { readPresence, reportPresence } from "./presence";
+import { parseCompactClaim } from "../../../packages/beacon/src/opcodes";
 import { LEDGER_SCHEMA } from "./ledger";
 import { LEDGERC_SCHEMA, ledgerCTick, ownerLedger } from "./ledgerc";
 import { rehearsalBlock } from "./rehearsal-mail";
@@ -319,6 +321,7 @@ async function nudge(env: Env, id: string, flag: string, now: number, subject: s
 async function body(req: Request, max = MAX_BODY): Promise<any | null> {
   const t = await req.text();
   if (t.length > max) return null;
+  const short = parseCompactClaim(t); if (short) return short; // a claim sent in the short form (opcodes.ts); the JSON form works exactly as before
   try { const v = JSON.parse(t); return v && typeof v === "object" ? v : null; } catch { return null; }
 }
 
@@ -1627,6 +1630,18 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!m) return new Response("No logo.", { status: 404, headers: { "content-type": "text/plain", "cache-control": "no-store" } });
     const bin = atob(m[2]!), bytes = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
     return new Response(bytes, { headers: { "content-type": m[1]!, "cache-control": "public, max-age=3600", "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'" } });
+  }
+  if (action === "presence" && req.method === "POST") { // a phone in front says "I am listening" (sampled, see presence.ts); counts only
+    const b = await body(req);
+    if (!b || typeof b.pid !== "string") return json({ error: "Bad request." }, 400);
+    const who = await env.DB.prepare("SELECT 1 AS ok FROM participant WHERE eid=? AND pid=?").bind(eid, b.pid).first<{ ok: number }>();
+    if (!who) return json({ error: "Not a participant of this engagement." }, 403);
+    if (await spend(env, now, 1)) await reportPresence(env.DB, eid!, e.cap, b.k, now);
+    return json({ ok: true });
+  }
+  if (action === "presence" && req.method === "GET") { // the console's "listening now" (Organizer, Host, Co-host; never an AI key)
+    if (!can(a, e, true) && a.kind !== "cohost") return deny(a);
+    return json(await readPresence(env.DB, eid!, now));
   }
   if (action === "rehearsals" && req.method === "GET") { // the three rehearsal cards of a real game (Organizer, Host, platform; never an AI key or a Co-host)
     if (!can(a, e, true)) return deny(a);

@@ -53,4 +53,27 @@ export default [
       await t.shot(A.page, "real-after-rehearsals");
     },
   },
+  {
+    id: "S26-02", name: "Rehearsals and the offline app: a rehearsal page opened offline stays on its own run; the real game's page offline never shows a rehearsal's data; after the rehearsal is closed the same link says it is over",
+    async run(t) {
+      const org = await t.org("o"); const g = await t.game(org, { lead: 60 * H.MIN, cfg: { callSeconds: 12 }, settings: { whoCanJoin: "anyone" }, pay: true });
+      const api = (m, p, b) => H.call(m, p, b, org.h);
+      const r = await api("POST", `/api/z/${g.id}/rehearsal`, { people: "none" }); const rid = r.body.id;
+      const A = await t.open({ device: "mobile" }); const phone = nextPhone();
+      await guestJoinUi(A.page, rid, phone, "Asha"); await A.page.waitForSelector("#rehbanner", { timeout: 20000 });
+      await A.page.waitForFunction(() => navigator.serviceWorker && navigator.serviceWorker.controller ? true : navigator.serviceWorker.getRegistration().then((x) => !!(x && x.active)), null, { timeout: 15000 }).catch(() => {});
+      await A.page.waitForTimeout(3000);
+      await A.ctx.setOffline(true); await A.page.reload().catch(() => {}); await A.page.waitForTimeout(2500);
+      const off = await t.text(A.page);
+      t.check("offline, the rehearsal page still opens (saved on the device)", off.length > 40, off.slice(0, 160));
+      t.check("offline, the rehearsal page does not show an error page of the browser", !/no internet|ERR_|This site can.t be reached/i.test(off), off.slice(0, 120));
+      await A.page.goto(`${H.SIM}/z?e=${g.id}`).catch(() => {}); await A.page.waitForTimeout(2500);
+      const real = await t.text(A.page);
+      t.check("offline, the REAL game's page never carries the rehearsal block or its ticket", !/REHEARSAL GAME/i.test(real) && (await A.page.locator("#rehbanner").count()) === 0 && (await A.page.locator(".zticket").count()) === 0, real.slice(0, 160));
+      await A.ctx.setOffline(false);
+      const close = await api("POST", `/api/z/${rid}/rehearsalclose`, {}); t.check("the rehearsal closes", close.status === 200);
+      await A.page.goto(`${H.SIM}/z?e=${rid}`); await A.page.waitForFunction(() => /this rehearsal is over/i.test(document.body.innerText), null, { timeout: 20000 }).then(() => t.check("online again, the same link says the rehearsal is over", true), () => t.check("online again, the same link says the rehearsal is over", false));
+      await t.shot(A.page, "rehearsal-offline-over");
+    },
+  },
 ];

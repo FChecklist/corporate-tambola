@@ -22,7 +22,7 @@
   const LIMIT = (method, path) => (method === "POST" ? (/\/(claims|bogey)$/.test(path) ? 8000 : 20000) : /\/(info|checkin)(\?|$)/.test(path) ? 20000 : 0); // a call that hangs is given up (a claim after 8 s, the others after 20 s), so nothing waits for ever; the big public lists are left alone
   const callApi = async (method, path, body) => {
     let r;
-    try { r = await fetch(BASE + path, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }); }
+    try { const short = method === "POST" && /\/claims$/.test(path) && ZG.compactClaim ? ZG.compactClaim(body) : null; /* one claim travels as a short text; the server takes both forms */ r = await fetch(BASE + path, short ? { method, headers: { "content-type": "text/plain" }, body: short } : { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }); }
     catch { throw new Error("offline"); }
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { const err = Object.assign(new Error(j.error || "http " + r.status), { status: r.status, code: j.code, body: j }); if (window.CTG) CTG.wrap(err, { what: method + " " + path.split("?")[0].replace(/\/[A-Za-z0-9_-]{6,}(?=\/|$)/g, "/...") }); throw err; }

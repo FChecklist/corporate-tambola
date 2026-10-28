@@ -1,6 +1,6 @@
 // The whole phone-side engagement loop, with no UI, so it can be tested without a browser and then wrapped by a thin page.
 // It talks to exactly two things: the public beacon (through BeaconOpts) and our one small store (through deps.api).
-import { beatOffsetMs, beatPeriodMs, followUpSpreadMs, msToNextBeat, reconnectAfterMs, ticketOf } from "./beat";
+import { beatOffsetMs, beatPeriodMs, followUpSpreadMs, msToNextBeat, presenceK, reconnectAfterMs, ticketOf } from "./beat";
 import { generateTicket, type Ticket } from "../../shared/src/ticket";
 import { winningNumbers } from "./house-rules";
 import { ALL_SAFETIES, ControlTracker, SAFETY_FAST, SAFETY_STANDARD, hostControlOf, pausedAt, type ControlConfig } from "./control";
@@ -516,9 +516,17 @@ export class PhoneRuntime {
     const m = this.deps.mono(); this.beating = true;
     try {
       const n = Number(await this.deps.api("GET", `/api/z/${this.eid}/cv`));
-      if (Number.isFinite(n)) { if (this.cvKnown >= 0 && n > this.cvKnown) { this.wantSeats = true; this.seatsNotBefore = this.deps.mono() + followUpSpreadMs(ticketOf(this.pid), this.cap); } this.cvKnown = n; this.lastBeatOk = this.deps.mono(); this.beatFails = 0; }
+      if (Number.isFinite(n)) { if (this.cvKnown >= 0 && n > this.cvKnown) { this.wantSeats = true; this.seatsNotBefore = this.deps.mono() + followUpSpreadMs(ticketOf(this.pid), this.cap); } this.cvKnown = n; this.lastBeatOk = this.deps.mono(); this.beatFails = 0; this.reportPresence(); }
     } catch { this.beatFails++; /* the slow poll still brings the news */ } finally { this.beating = false; }
     void m;
+  }
+  /** PRESENCE: in the minutes where (ticket mod K) = (minute mod K) the page, if it is in front and the claim signal answered, tells the server once that it is listening (counts K phones; see apps/edge/src/presence.ts). */
+  private presenceMin = -1;
+  private reportPresence() {
+    const k = presenceK(this.cap), min = Math.floor(this.wallNow / 60_000);
+    if (min === this.presenceMin || ticketOf(this.pid) % k !== min % k) return;
+    this.presenceMin = min;
+    void Promise.resolve(this.deps.api("POST", `/api/z/${this.eid}/presence`, { pid: this.pid, k })).catch(() => {});
   }
   /** True when the claim signal has not answered for a while although the page is in front: the page shows a calm "Reconnecting". */
   get reconnecting(): boolean { return this.beatOn && this.phase === "play" && this.beatFails >= 2 && this.deps.mono() - this.lastBeatOk > reconnectAfterMs(this.cap); }

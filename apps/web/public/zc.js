@@ -905,6 +905,18 @@
     try { S.reh = await call("GET", "/api/z/" + eid + "/rehearsals"); } catch { /* the cards stay as they were */ }
     S.rehBusy = false; S.rehAt = Date.now(); redraw();
   }
+  /** Who is invited to this rehearsal: the game's own guests (default), the last rehearsal's guests, nobody (add people in the rehearsal), or a few picked from the game's list. */
+  function rehShapes(n) {
+    const sh = S.rehShape || "published";
+    const opts = [["published", "Same guests as my game"], ...(n > 1 ? [["previous", "Last rehearsal's guests"]] : []), ["none", "No guests yet (I will add them)"], ["pick", "Pick guests from my game"]];
+    const chips = opts.map(([v, l]) => `<button type="button" class="zc-chip${sh === v ? " on" : ""}" aria-pressed="${sh === v}" data-rehshape="${v}">${l}</button>`).join(" ");
+    let pick = "";
+    if (sh === "pick") {
+      const list = ((S.pp && S.pp.list) || []).filter((p) => p.status !== "removed" && !p.role).slice(0, 60);
+      pick = list.length ? `<div class="zc-small" id="rehpick">${list.map((p) => `<label style="display:block"><input type="checkbox" data-rehpick="${esc(p.id)}"${S.rehPick && S.rehPick[p.id] ? " checked" : ""}> ${esc(p.name || p.maskedPhone || "Guest")}</label>`).join("")}</div>` : `<p class="zc-small">Your guest list is empty or still loading.</p>`;
+    }
+    return `<p class="zc-small"><b>Who is invited?</b></p><div class="zc-chips" id="rehshape">${chips}</div>${pick}`;
+  }
   const rehDate = (ms) => { try { return new Date(ms + 5.5 * 3600000).toISOString().slice(0, 10); } catch { return ""; } };
   function rehCards() {
     if (!eid || (S.info && S.info.rehearsal)) return ""; // a rehearsal itself has no rehearsals
@@ -912,7 +924,7 @@
     const R = S.reh, cards = R && R.cards ? R.cards : [1, 2, 3].map((n) => ({ n, state: "locked", reason: "First publish your game and pay. This unlocks your 3 rehearsals." }));
     const card = (c) => {
       const grey = c.state === "locked";
-      const body = c.state === "ready" ? `<p class="zc-small">A practice run of your game with your guests. Nothing here changes your real game.</p><button type="button" class="zc-btn" data-reh="start" data-n="${c.n}">Start this rehearsal</button><p class="zc-small">Free, included with your game</p>`
+      const body = c.state === "ready" ? `<p class="zc-small">A practice run of your game with your guests. Nothing here changes your real game.</p>${rehShapes(c.n)}<button type="button" class="zc-btn" data-reh="start" data-n="${c.n}">Start this rehearsal</button><p class="zc-small">Free, included with your game</p>`
         : c.state === "running" ? `<p class="zc-small"><b>Rehearsal ${c.n} is on.</b></p><a class="zc-btn" href="${esc(location.origin + "/zc.html?e=" + encodeURIComponent(c.id || ""))}">Open it</a> <button type="button" class="zc-mini" data-reh="close" data-id="${esc(c.id || "")}">Close this rehearsal</button>`
         : c.state === "done" ? `<p class="zc-small"><b>Done</b> ${esc(rehDate(c.dateMs))}</p><a class="zc-mini" href="${esc(location.origin + "/zc.html?e=" + encodeURIComponent(c.id || ""))}">See what happened</a>`
         : `<p class="zc-small">${esc(c.reason || "")}</p>`;
@@ -921,13 +933,17 @@
     return `<div class="zc-block" id="rehearsals"><h3>Rehearsals</h3>${cards.map(card).join("")}</div>`;
   }
   document.addEventListener("click", async (e) => {
+    const sc = e.target && e.target.closest && e.target.closest("[data-rehshape]");
+    if (sc) { S.rehShape = sc.dataset.rehshape; if (S.rehShape === "pick") { try { await loadPeople(); } catch { /* the list stays empty */ } } redraw(); return; }
+    const pc = e.target && e.target.closest && e.target.closest("[data-rehpick]");
+    if (pc) { S.rehPick = S.rehPick || {}; S.rehPick[pc.dataset.rehpick] = !!pc.checked; return; }
     const b = e.target && e.target.closest && e.target.closest("[data-reh]"); if (!b) return;
     if (b.dataset.reh === "start") {
       const n = Number(b.dataset.n) || 1;
       const yes = await askSure("Start rehearsal " + n + "?", "This is practice. It is not your real game.\n\nYour guests get a separate link for this rehearsal. Nothing here changes your real game.", "Yes, start the rehearsal", "No, not now");
       if (!yes) return;
       b.disabled = true;
-      try { const r = await call("POST", "/api/z/" + eid + "/rehearsal", { people: "published" }); if (r && r.openUrl) { location.href = r.openUrl; return; } } catch (err) { S.pubNote = err && err.message ? err.message : "The rehearsal could not be started. Please try again."; }
+      try { const sh = S.rehShape || "published", pk = sh === "pick" ? Object.keys(S.rehPick || {}).filter((k) => S.rehPick[k]).slice(0, 20) : null; if (sh === "pick" && !pk.length) { S.pubNote = "Tick the guests you want in this rehearsal."; b.disabled = false; redraw(); return; } const r = await call("POST", "/api/z/" + eid + "/rehearsal", pk ? { pick: pk } : { people: sh }); if (r && r.openUrl) { if (r.team && r.team.length) { try { await askSure("Your Co-hosts have new links for this rehearsal", r.team.map((t) => t.label + ": " + t.link).join(String.fromCharCode(10, 10)) + String.fromCharCode(10, 10) + "Send each Co-host their link. Their old links keep working for your real game.", "OK, open the rehearsal", "Open it anyway"); } catch { /* the sheet is only a convenience */ } } location.href = r.openUrl; return; } } catch (err) { S.pubNote = err && err.message ? err.message : "The rehearsal could not be started. Please try again."; }
       b.disabled = false; loadReh(true);
     } else if (b.dataset.reh === "close") {
       const yes = await askSure("Close this rehearsal?", "It ends now and the next rehearsal opens. Its results stay for you to read.", "Yes, close it", "No, keep it going");
@@ -1376,6 +1392,7 @@
     return `<details class="zc-block zc-vitals" id="vitals" open><summary><b>Game details</b></summary>
       <div class="zc-rowl"><span>Status</span><span id="v-status">${esc(consoleStory().say)}</span></div>
       <div class="zc-rowl"><span>People</span><span id="v-people">${esc(people)}</span></div>
+      ${S.pres && S.pres.listening != null ? `<div class="zc-rowl"><span>Phones listening</span><span id="v-listen">About ${S.pres.listening} (pages in front, last minute)</span></div>` : ""}
       <div class="zc-rowl"><span>Pauses</span><span id="v-pauses">${pauses}</span></div>
       <h4 class="zc-h4">Prizes won so far</h4><div id="v-prizes">${prizes}</div>
       <h4 class="zc-h4">Warnings</h4><div id="v-warn">${warn}</div></details>`;
@@ -2289,6 +2306,7 @@
   { const BEAT = { cv: -1, init: false, seen: new Set() };
     const note = (text) => { let box = document.getElementById("claimtoasts"); if (!box) { box = document.createElement("div"); box.id = "claimtoasts"; box.setAttribute("role", "status"); box.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:50;display:grid;gap:6px;width:min(92vw,520px);pointer-events:none"; document.body.appendChild(box); } const d = document.createElement("div"); d.style.cssText = "background:#14233f;color:#fff;border-radius:12px;padding:10px 14px;box-shadow:0 8px 20px -10px rgba(0,0,0,.6)"; d.textContent = text; box.appendChild(d); while (box.children.length > 3) box.firstChild.remove(); setTimeout(() => d.remove(), 6000); };
     const news = async () => { try { const c = await call("GET", "/api/z/" + eid + "/claims"); for (const x of (c && c.claims) || []) { const id = x.pid + "|" + x.pattern + "|" + (x.bogey ? "b" : x.idx) + "|" + x.atMs; if (BEAT.seen.has(id)) continue; BEAT.seen.add(id); if (BEAT.init) { const tk = parseInt(String(x.pid), 10); note(ZG.say(x.bogey ? "claim.w" : "claim.k", { t: tk, p: NAMES[x.pattern] || x.pattern })); } } BEAT.init = true; } catch { /* the 5 s refresh still brings the news */ } };
+    setInterval(async () => { if (document.hidden || !eid || !S.started || !document.getElementById("livebar") || (S.info && S.info.rehearsal && S.info.rehearsal.over)) return; try { const r = await call("GET", "/api/z/" + eid + "/presence"); const was = S.pres && S.pres.listening; S.pres = r; if (r && r.listening !== was) redraw(); } catch { /* the line simply stays as it was */ } }, 30000);
     setInterval(async () => { if (document.hidden || !eid || !document.getElementById("livebar") || (S.info && S.info.rehearsal && S.info.rehearsal.over)) return; try { if (!BEAT.init) await news(); const r = await fetch((BASE || "") + "/api/z/" + eid + "/cv", { cache: "no-store" }); const n = Number((await r.text()).trim()); if (Number.isFinite(n)) { if (BEAT.cv >= 0 && n > BEAT.cv) await news(); BEAT.cv = n; } } catch { /* try again */ } }, 2200); }
   window.__zc = S; window.__zcMode = (m) => { S.mode = m; redraw(); }; // the page tests reach the plain-text list path through this
 })();

@@ -93,6 +93,22 @@ describe("the three cards under Publish", () => {
     const after = await rehearsals(x, "RH-CARD"); expect(after.cards[0]).toMatchObject({ state: "running", id: "RH-CARD-R1" });
     expect(x.w.world.raw.query("SELECT cap, rehearsal_of FROM engagement WHERE id='RH-CARD-R1'").get()).toMatchObject({ rehearsal_of: "RH-CARD" });
   });
+  test("guest-list shapes: four chips; 'No guests yet' starts an empty rehearsal; 'Pick guests' copies only the ticked ones; the number 20 is not shown", async () => {
+    const x = await setup("RH-SHAPE", false);
+    const ins = (id: string, k: number) => x.w.world.raw.prepare("INSERT INTO person(eid,id,ph,pii,inviter,role,status,added_ms) VALUES(?,?,?,?,?,NULL,'invited',?)").run("RH-SHAPE", id, "ph" + k, "pii" + k, "o", 1);
+    ins("pa", 1); ins("pb", 2); ins("pc", 3);
+    const c = await consolePage(x, "RH-SHAPE");
+    await c.waitFor(() => !!c.$('.zc-dot[data-open="7"]')); openStep(c, 7); await c.waitFor((t) => /Who is invited/.test(t), 20_000);
+    expect(c.$("#rehshape")!.querySelectorAll("[data-rehshape]").length).toBe(3); // rehearsal 1 has no "last rehearsal" chip
+    expect(c.$("#rehearsals")!.textContent).not.toMatch(/20/);
+    c.click('[data-rehshape="pick"]'); await c.waitFor(() => !!c.$("#rehpick"), 10_000);
+    expect(c.$("#rehpick")!.querySelectorAll("[data-rehpick]").length).toBe(3);
+    c.click('[data-rehpick="pb"]'); c.click('[data-rehpick="pc"]');
+    c.click('[data-reh="start"]'); await c.waitFor(() => !!c.$("#zcsure"), 5000); c.click("#zcsure [data-y]");
+    for (let i = 0; i < 60 && (await rehearsals(x, "RH-SHAPE")).cards[0].state !== "running"; i++) await wait(100);
+    await wait(500); // the guests are copied just after the rehearsal row appears
+    expect((x.w.world.raw.query("SELECT group_concat(ph) g FROM (SELECT ph FROM person WHERE eid='RH-SHAPE-R1' ORDER BY ph)").get() as any).g).toBe("ph2,ph3");
+  });
   test("before payment all three are grey with the plain sentence and no Start button", async () => {
     const x = await setup("RH-GREY", false);
     x.w.world.raw.prepare("UPDATE engagement SET pack=0 WHERE id='RH-GREY'").run(); x.w.world.raw.prepare("DELETE FROM kv WHERE k='pub/RH-GREY'").run();

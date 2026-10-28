@@ -121,6 +121,15 @@ describe("a phone from first open to full house", () => {
     a.rt.beatOn = false; expect(a.rt.view().reconnecting).toBe(false); a.rt.beatOn = true; // a hidden page says nothing
     offline = false; for (let i = 0; i < 3; i++) await step([a]); expect(a.rt.view().reconnecting).toBe(false);
   });
+  test("presence: a page in front tells the server it is listening once a minute when K=1 (a game of 5 or fewer), never twice in the same minute and, at the real size (K=20), only in the minutes that are its own; a hidden page says nothing", async () => {
+    const posts: number[] = []; const b = mkPhone(13, { onApi: (p, m) => { if (/\/presence$/.test(p)) posts.push(Date.now()); } }); b.quiet = true; await b.rt.boot(); await b.rt.join(b.phone);
+    const real = b.rt.cap; b.rt.cap = 5; // K = 1
+    for (let i = 0; i < 130; i++) await step([b]); // a step is 3 s: about 6.5 minutes
+    expect(posts.length).toBeGreaterThanOrEqual(5); expect(posts.length).toBeLessThanOrEqual(7);
+    b.rt.cap = real; b.rt.beatOn = true; const m = posts.length; for (let i = 0; i < 20; i++) await step([b]); expect(posts.length - m).toBeLessThanOrEqual(1); // one minute at K=20: at most one report, usually none
+    b.rt.cap = 5;
+    b.rt.beatOn = false; const n = posts.length; for (let i = 0; i < 70; i++) await step([b]); expect(posts.length).toBe(n);
+  });
   test("calls are revealed one at a time as their rounds are published, never early", async () => {
     const a = mkPhone(2); await a.rt.boot(); await a.rt.join(a.phone);
     let last = 0;

@@ -26,6 +26,13 @@ describe("report PDF carries the organizer's brand", () => {
     const t = text(layoutReport(base()));
     expect(t).not.toContain("/Subtype /Image"); expect(t).toContain("(Corporate Tambola)");
   });
+  test("our own logo and the organizer's logo are both embedded (two pictures), ours alone is one", () => {
+    const ours = { w: 1, h: 2, hex: "112233" + "445566" }, theirs = { w: 2, h: 1, hex: "aabbcc" + "ddeeff" };
+    const both = text(layoutReport(base({ ourLogoPix: ours, logoPix: theirs })));
+    expect(both).toContain("/Im1 Do"); expect(both).toContain("/Im2 Do"); expect(both).toContain("/XObject << /Im1"); expect(both).toContain("/Im2 "); expect(both).toContain("112233445566"); expect(both).toContain("aabbccddeeff");
+    const only = text(layoutReport(base({ ourLogoPix: ours })));
+    expect(only).toContain("/Im1 Do"); expect(only).not.toContain("/Im2 Do");
+  });
   test("a damaged logo (wrong number of pixels) is ignored, not embedded", () => {
     expect(text(layoutReport(base({ logoPix: { w: 4, h: 4, hex: "ff00ff" } })))).not.toContain("/Subtype /Image");
   });

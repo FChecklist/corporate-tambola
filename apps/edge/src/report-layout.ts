@@ -26,7 +26,7 @@ export interface ReportData {
   /** The complete claim and event log of the game (ticket numbers only), for the PDF sections "At a glance", "Every claim", "What happened" (1.6.1). */
   log?: { people: { joined: number }; firstNumberMs: number | null; endedAtMs: number | null; numbersCalled: number | null; claims: { ticket: number; prize: string; outcome: string; atMs: number; afterNumber: number | null; takenAtNumber?: number }[]; prizes: { prize: string; text: string; ticket: number; callNo: number; atMs: number | null }[]; pauses: { by: string; fromMs: number; toMs: number | null }[]; changes: { atMs: number; who: string; what: string }[] };
   /** The organizer's own company name and logo (a data URL). The report page turns the logo into raw pixels (`logoPix`) before laying the PDF out. */
-  brand?: { name?: string; color?: string; logo?: string }; logoPix?: { w: number; h: number; hex: string };
+  brand?: { name?: string; color?: string; logo?: string }; logoPix?: { w: number; h: number; hex: string }; ourLogoPix?: { w: number; h: number; hex: string };
 }
 
 const IST = 5.5 * 3_600_000;
@@ -53,7 +53,8 @@ export function layoutReport(d: ReportData): Uint8Array {
   // ---- title band
   const band: [number, number, number] = (() => { const m = /^#([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})$/.exec(d.brand?.color ?? ""); return m ? [parseInt(m[1]!, 16) / 255, parseInt(m[2]!, 16) / 255, parseInt(m[3]!, 16) / 255] : NAVY; })(); // the customer's colour, else ours
   pdf.rect(0, pdf.H, pdf.W, 92, band); pdf.rect(0, pdf.H - 92, pdf.W, 3, GOLD);
-  if (d.logoPix) pdf.logo(d.logoPix, pdf.W - pdf.M - 64, pdf.H - 14, 64, 64); // the organizer's logo, on a white tile at the right of the band
+  if (d.ourLogoPix) pdf.logo(d.ourLogoPix, pdf.W - pdf.M - 64, pdf.H - 14, 64, 64); // our own logo, always at the right end of the band
+  if (d.logoPix) pdf.logo(d.logoPix, pdf.W - pdf.M - 64 - (d.ourLogoPix ? 72 : 0), pdf.H - 14, 64, 64); // the organizer's logo, on a white tile at the right of the band
   pdf.y = pdf.H - 28;
   pdf.para(d.brand && d.brand.name ? `${d.brand.name} | Corporate Tambola` : "Corporate Tambola", { font: "F2", size: 11, color: GOLD, gap: 2 });
   pdf.para("Complete engagement report", { font: "F2", size: 22, color: WHITE, gap: 2 });

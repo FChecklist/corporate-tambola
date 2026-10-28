@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.6.3",
+    "date": "2026-10-28",
+    "commit": "this release",
+    "title": "Rehearsal guests, listening count, our logo in the PDF, shorter claims",
+    "changes": [
+      "When you start a rehearsal you now choose who is invited: the same guests as your game, the last rehearsal's guests, nobody yet, or a few guests you tick from your game's list",
+      "Your Co-hosts get a new link for each rehearsal (shown to you when you start it). Hosts need nothing new",
+      "Game details now shows about how many phones are listening right now (pages that are in front). It is a count only: no names or numbers are kept, and it adds only a few small writes an hour",
+      "Our logo now also appears in the PDF report, next to the customer's logo",
+      "A claim now travels as a short line of text instead of a longer message. Older open pages keep working"
+    ]
+  },
+  {
     "version": "1.6.2",
     "date": "2026-10-28",
     "commit": "this release",

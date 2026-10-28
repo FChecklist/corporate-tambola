@@ -21,11 +21,12 @@ const ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const suffix = () => Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => ALPHA[b % ALPHA.length]).join("");
 
 /** Copies the people list of `fromEid` into `toEid` as fresh, un-joined invitations with new personal links. Returns how many people were copied. */
-export async function copyPeople(env: Env, fromEid: string, toEid: string, cap: number, now: number, spend: (n: number) => Promise<boolean>): Promise<{ copied: number; busy?: boolean }> {
+export async function copyPeople(env: Env, fromEid: string, toEid: string, cap: number, now: number, spend: (n: number) => Promise<boolean>, only?: string[]): Promise<{ copied: number; busy?: boolean }> {
   const db = env.DB;
-  const listed = (await db.prepare("SELECT ph, pii, inviter FROM person WHERE eid=? AND status<>'removed' AND role IS NULL ORDER BY added_ms, id").bind(fromEid).all<{ ph: string; pii: string; inviter: string }>()).results ?? [];
+  const listed = (await db.prepare("SELECT id, ph, pii, inviter FROM person WHERE eid=? AND status<>'removed' AND role IS NULL ORDER BY added_ms, id").bind(fromEid).all<{ id: string; ph: string; pii: string; inviter: string }>()).results ?? [];
   const joined = (await db.prepare("SELECT p.phone_hash AS ph, p.pii AS pii FROM participant p WHERE p.eid=? AND p.pii IS NOT NULL AND p.phone_hash NOT IN (SELECT ph FROM person WHERE eid=? AND status<>'removed') AND NOT EXISTS (SELECT 1 FROM seat s WHERE s.eid=p.eid AND s.pid=p.pid AND (s.role IS NOT NULL OR s.blocked=1)) ORDER BY p.joined_ms, p.pid").bind(fromEid, fromEid).all<{ ph: string; pii: string }>()).results ?? [];
-  const all = [...listed.map((x) => ({ ph: x.ph, pii: x.pii, inviter: /^(o|h:[0-9a-f]+)$/.test(x.inviter) ? x.inviter : "o" })), ...joined.map((x) => ({ ph: x.ph, pii: x.pii, inviter: "o" }))].slice(0, cap);
+  const keep = only ? new Set(only) : null; // "pick from the real game's list": only these person ids
+  const all = [...(keep ? listed.filter((x: any) => keep.has(x.id)) : listed).map((x) => ({ ph: x.ph, pii: x.pii, inviter: /^(o|h:[0-9a-f]+)$/.test(x.inviter) ? x.inviter : "o" })), ...(keep ? [] : joined).map((x) => ({ ph: x.ph, pii: x.pii, inviter: "o" }))].slice(0, cap);
   if (!all.length) return { copied: 0 };
   if (!(await spend(all.length * 2))) return { copied: 0, busy: true };
   let copied = 0;
