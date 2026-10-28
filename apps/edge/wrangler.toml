@@ -19,7 +19,7 @@ DAILY_WRITE_BUDGET = "80000"
 ONLY_12S = "1"   # new games use one speed, 12 seconds; older games keep theirs
 MAIL_FROM = "Corporate Tambola <hello@corporatetambola.com>"   # shared, already-verified Resend domain
 # MAIL_REPLY_TO = "the address organizers should reply to"
-# PUBLIC_ORIGIN = "https://corporatetambola.com"
+# PUBLIC_ORIGIN = "https://housie.corporatetambola.com"
 COMPANY_JSON = '{"email":"hello@corporatetambola.com","phone":"(+91) 96503 97480","sacDescription":"Software solutions and products"}'
 
 # Route the API on the same domain as the Pages site so phones never make a cross-origin call (set when the domain is bought):

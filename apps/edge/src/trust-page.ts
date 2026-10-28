@@ -2,7 +2,7 @@
 // AI that searches the web all read the same words. tools/make-trust.ts writes the two files; a test regenerates them and fails if they differ, so they cannot drift.
 import { FACTS } from "./ai-facts";
 
-const ORIGIN = "https://corporatetambola.com";
+const ORIGIN = "https://housie.corporatetambola.com";
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 export const TRUST_UPDATED = "2026-10-07";
 const TITLE = "Safety, privacy and how it works: 10 facts | Corporate Tambola";

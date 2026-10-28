@@ -33,7 +33,7 @@ export async function prospectLinksRoute(req: Request, env: LinkEnv, now: number
   if (url.pathname !== "/api/owner/prospect-links") return null;
   const ok = (req.method === "GET" || req.method === "POST") && !!env.OWNER_LINK_KEY && same(req.headers.get("x-owner-link-key") ?? "", env.OWNER_LINK_KEY);
   if (!ok) { await logAccess(env.DB, now, "denied:prospect-links", null, null, 0, false, null); return json({ error: "Not found" }, 404); }
-  const origin = (env as any).PUBLIC_ORIGIN ?? "https://corporatetambola.com";
+  const origin = (env as any).PUBLIC_ORIGIN ?? "https://housie.corporatetambola.com";
   if (req.method === "GET") {
     const rows = (await env.DB.prepare("SELECT k, v FROM kv WHERE k LIKE 'plink/%' LIMIT 500").all<{ k: string; v: string }>()).results ?? [];
     const out: any[] = [];

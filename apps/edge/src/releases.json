@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.6.4",
+    "date": "2026-10-28",
+    "commit": "this release",
+    "title": "The game has its own address: housie.corporatetambola.com",
+    "changes": [
+      "Corporate Tambola now lives at housie.corporatetambola.com. Links in e-mails, share texts, reports and PDFs use the new address",
+      "The games bar at the top of every page points Tambola to the new address and Corporate Games to home.corporatetambola.com",
+      "The front page now opens with a question: which team will you engage this week"
+    ]
+  },
+  {
     "version": "1.6.3",
     "date": "2026-10-28",
     "commit": "this release",

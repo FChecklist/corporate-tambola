@@ -11,7 +11,7 @@ export const BRAND = {
   tag: "Tambola", // the product tag at the start of every subject sent to people
   support: "hello@corporatetambola.com", // the contact address the site's legal page publishes
   legalPath: "/legal.html",
-  defaultOrigin: "https://corporatetambola.com",
+  defaultOrigin: "https://housie.corporatetambola.com",
   wine: "#0B3D91", gold: "#E0B872", gold2: "#F3D9A4", ivory: "#F4F7FC", line: "#D9E1F0",
 } as const;
 

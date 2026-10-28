@@ -58,6 +58,14 @@
       ]
     },
     {
+      "id": "language",
+      "store": "localStorage",
+      "say": "On a phone or computer: the language you picked in the language menu (English for now).",
+      "keys": [
+        "ctz-lang"
+      ]
+    },
+    {
       "id": "player-old",
       "store": "localStorage",
       "cleanup": true,
