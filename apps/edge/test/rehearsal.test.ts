@@ -18,6 +18,7 @@ const call = (method: string, path: string, body?: unknown, headers: Record<stri
 const j = async (r: Response) => (await r.json()) as any;
 async function realGame(id = "REAL-1", paid = true) {
   expect((await call("POST", "/api/z", { id, startRound: START, callSeconds: 12, cap: 100 }, P)).status).toBe(200);
+  if (!paid) raw.prepare("UPDATE engagement SET pack=0 WHERE id=?").run(id); // (a game made by an organizer stays at pack 0 until the payment)
   if (paid) { raw.prepare("UPDATE engagement SET pack=100 WHERE id=?").run(id); raw.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").run(`pub/${id}`, String(T)); }
 }
 const join = async (id: string, n: number) => j(await call("POST", `/api/z/${id}/join`, { phone: "981000000" + n, name: "Guest" + n }));

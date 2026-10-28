@@ -51,12 +51,11 @@ export async function rehearsalFinished(env: Env, r: Row, now: number): Promise<
   if (!hasStarted) return false;
   return now >= (await endBoundMs(env, r));
 }
-async function published(db: D1, eid: string): Promise<boolean> { return !!(await db.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`pub/${eid}`).first()); }
 
 export async function listRehearsals(env: Env, real: any, now: number) {
   await ensureRehearsalColumns(env.DB);
   const rows = (await env.DB.prepare("SELECT * FROM engagement WHERE rehearsal_of=? ORDER BY run_no").bind(real.id).all<Row>()).results ?? [];
-  const paid = real.pack > 0 && !isDemoRow(real) && (await published(env.DB, real.id));
+  const paid = real.pack > 0 && !isDemoRow(real); // (a paid game is always published: pack stays 0 until the payment)
   const beforeStart = now < roundMs(real.start_round);
   const cards: { n: number; state: "locked" | "ready" | "running" | "done"; id?: string; dateMs?: number; reason?: string }[] = [];
   let prevDone = true;
