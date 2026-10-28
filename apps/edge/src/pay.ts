@@ -113,11 +113,12 @@ export async function sendMail(env: PayEnv, db: D1, to: string, subject: string,
 export const sentReports: { to: string; subject: string; text: string; attachments: { filename: string; content: Uint8Array }[] }[] = [];
 const toB64 = (u: Uint8Array) => { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); };
 /** E-mails the engagement report. The attachment is passed straight to the mail service and is never stored or logged here. Returns false when it could not be sent (the caller tries again). */
-export async function sendReportMail(env: PayEnv, to: string, subject: string, text: string, attachments: { filename: string; content: Uint8Array }[]): Promise<boolean> {
-  { const rw = await rehearsalMailWrap(env.DB, subject, text); subject = rw.subject; text = rw.text; }
+export async function sendReportMail(env: PayEnv, to: string, subject: string, text: string, attachments: { filename: string; content: Uint8Array }[], htmlIn?: string): Promise<boolean> {
+  let html0: string | undefined = htmlIn;
+  { const rw = await rehearsalMailWrap(env.DB, subject, text, htmlIn); subject = rw.subject; text = rw.text; html0 = rw.html; }
   subject = tagSubject(subject);
   if ((await getMode(env)) === "TEST") { if (!(await mailGate(env, to, subject, Date.now()))) return true; subject = "[TEST] " + subject; } // dropped on purpose and logged: counts as handled so the report steps carry on
-  const html = plainToHtml(subject, text, env.PUBLIC_ORIGIN); text = withFooter(text, env.PUBLIC_ORIGIN);
+  const html = html0 ?? plainToHtml(subject, text, env.PUBLIC_ORIGIN); text = withFooter(text, env.PUBLIC_ORIGIN);
   if (!env.RESEND_API_KEY) { sentReports.push({ to, subject, text, attachments }); return true; }
   try {
     const r = await fetch("https://api.resend.com/emails", {

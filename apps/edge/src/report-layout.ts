@@ -1,6 +1,7 @@
 // The engagement report the organizer receives by e-mail: one PDF with everything we hold about the game and its people, and a plain statement of what
 // is deleted and when. This file only lays data out; it knows nothing about the database (see lifecycle.ts for where the data comes from).
 import { BRAND } from "./brand";
+import { MORE_GAMES } from "../../../packages/beacon/src/more-games";
 import { calledLine } from "../../../packages/beacon/src/gaps";
 import { GOLD, NAVY, PdfDoc, WHITE, type Column } from "./pdf";
 
@@ -22,8 +23,10 @@ export interface ReportData {
   personalDeleteAtMs: number; fullDeleteAtMs: number;
   /** Totals about the people, when the list itself is spread over several PDFs. */
   agg?: Agg; omitPeople?: boolean; totalPeople?: number;
+  /** The complete claim and event log of the game (ticket numbers only), for the PDF sections "At a glance", "Every claim", "What happened" (1.6.1). */
+  log?: { people: { joined: number }; firstNumberMs: number | null; endedAtMs: number | null; numbersCalled: number | null; claims: { ticket: number; prize: string; outcome: string; atMs: number; afterNumber: number | null; takenAtNumber?: number }[]; prizes: { prize: string; text: string; ticket: number; callNo: number; atMs: number | null }[]; pauses: { by: string; fromMs: number; toMs: number | null }[]; changes: { atMs: number; who: string; what: string }[] };
   /** The organizer's own company name and logo (a data URL). The report page turns the logo into raw pixels (`logoPix`) before laying the PDF out. */
-  brand?: { name?: string; logo?: string }; logoPix?: { w: number; h: number; hex: string };
+  brand?: { name?: string; color?: string; logo?: string }; logoPix?: { w: number; h: number; hex: string };
 }
 
 const IST = 5.5 * 3_600_000;
@@ -48,7 +51,8 @@ export function layoutReport(d: ReportData): Uint8Array {
   pdf.footer = `Corporate Tambola  |  Engagement ${d.engagementId}  |  sent ${istFull(d.sentAtMs)}`;
 
   // ---- title band
-  pdf.rect(0, pdf.H, pdf.W, 92, NAVY); pdf.rect(0, pdf.H - 92, pdf.W, 3, GOLD);
+  const band: [number, number, number] = (() => { const m = /^#([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})$/.exec(d.brand?.color ?? ""); return m ? [parseInt(m[1]!, 16) / 255, parseInt(m[2]!, 16) / 255, parseInt(m[3]!, 16) / 255] : NAVY; })(); // the customer's colour, else ours
+  pdf.rect(0, pdf.H, pdf.W, 92, band); pdf.rect(0, pdf.H - 92, pdf.W, 3, GOLD);
   if (d.logoPix) pdf.logo(d.logoPix, pdf.W - pdf.M - 64, pdf.H - 14, 64, 64); // the organizer's logo, on a white tile at the right of the band
   pdf.y = pdf.H - 28;
   pdf.para(d.brand && d.brand.name ? `${d.brand.name} | Corporate Tambola` : "Corporate Tambola", { font: "F2", size: 11, color: GOLD, gap: 2 });
@@ -110,6 +114,23 @@ export function layoutReport(d: ReportData): Uint8Array {
   }
   pdf.para("Every winner here was worked out by the software from the public numbers, and was accepted only when several different phones reported exactly the same result ('Agreed by: phones'). Neither you nor anyone at Corporate Tambola can choose, change or remove a winner or a number. Names and mobile numbers are those the winner confirmed on their own phone after the game; if they changed them, that is shown under the table.", { size: 8.5 });
 
+  // ---- 3b the complete claim and event log (1.6.1)
+  if (d.log) {
+    const hmsI = (ms: number | null | undefined) => (ms ? istFull(ms).split(", ")[1]?.replace(" IST", "") ?? "-" : "-");
+    pdf.h1("3b. At a glance, every claim, and what happened");
+    pdf.table([{ head: "Item", width: 32 }, { head: "Detail", width: 78 }], [
+      ["Game started", d.log.firstNumberMs ? istFull(d.log.firstNumberMs) : "Did not start"], ["Completed", d.log.endedAtMs ? istFull(d.log.endedAtMs) : "Not ended"], ["Players", String(d.log.people.joined)],
+      ["Numbers called", String(d.log.numbersCalled ?? 0)], ["Prizes awarded", String(d.log.prizes.length)], ["Claims", `${d.log.claims.length} (${d.log.claims.filter((c) => c.outcome === "accepted" || c.outcome === "prize taken").length} in time, ${d.log.claims.filter((c) => c.outcome === "wrong").length} wrong, ${d.log.claims.filter((c) => c.outcome === "too late").length} too late)`],
+    ]);
+    pdf.h2("Prizes (ticket numbers only)");
+    pdf.table([{ head: "Prize", width: 34 }, { head: "Ticket", width: 8, align: "r" }, { head: "After number", width: 14, align: "r" }, { head: "Awarded", width: 20 }], d.log.prizes.length ? d.log.prizes.map((p) => [p.prize + (p.text ? ` (${p.text})` : ""), String(p.ticket), String(p.callNo), hmsI(p.atMs)]) : [["No prize was won.", "", "", ""]]);
+    pdf.h2(`Every claim (${d.log.claims.length})`);
+    pdf.table([{ head: "Time", width: 12 }, { head: "Ticket", width: 8, align: "r" }, { head: "Prize", width: 28 }, { head: "What came of it", width: 52 }], d.log.claims.length ? d.log.claims.map((c) => [hmsI(c.atMs), String(c.ticket), c.prize + (c.afterNumber ? ` after ${c.afterNumber}` : ""), c.outcome === "accepted" ? "accepted" : c.outcome === "wrong" ? "wrong (a Bogey)" : c.outcome === "too late" ? "too late, refused" : `Prize already taken: came at number ${c.afterNumber}, after the prize was awarded at number ${c.takenAtNumber}`]) : [["No claim.", "", "", ""]]);
+    const ev = [...d.log.pauses.map((p) => ({ atMs: p.fromMs, what: `Paused by ${p.by}${p.toMs ? ", resumed at " + hmsI(p.toMs) : ""}` })), ...d.log.changes.map((c) => ({ atMs: c.atMs, what: `${c.who}: ${c.what}` }))].sort((a, b) => a.atMs - b.atMs);
+    pdf.h2("What happened during the game");
+    pdf.table([{ head: "Time", width: 12 }, { head: "What", width: 88 }], ev.length ? ev.map((e) => [hmsI(e.atMs), e.what]) : [["", "Nothing was paused or changed."]]);
+  }
+
   // ---- 4 statistics
   const total = d.prizes.length, won = d.prizes.filter((p) => p.winners.length).length;
   const g: Agg = d.agg ?? aggOf(d.people);
@@ -153,6 +174,8 @@ export function layoutReport(d: ReportData): Uint8Array {
     "You are the organizer of your game and decide who takes part; we process the data on your behalf. To exercise any right, or to ask us anything, reply to the e-mail this report came with.",
   ], [0.93, 0.96, 1], NAVY);
   pdf.para(`Sent on ${istFull(d.sentAtMs)} to ${d.organizerEmail}.`, { size: 8.5, color: [0.4, 0.43, 0.48] });
+  pdf.h2(`More games from ${BRAND.name}`);
+  pdf.table([{ head: "Game", width: 26 }, { head: "What it is, and where to play", width: 74 }], MORE_GAMES.map((g) => [g.name, `${g.line} ${g.url}`]));
   pdf.para(`${BRAND.name}  |  Questions? Write to ${BRAND.support}  |  Rules, privacy and disclaimer: ${BRAND.defaultOrigin}${BRAND.legalPath}`, { size: 8.5, color: [0.4, 0.43, 0.48] });
   return pdf.build();
 }

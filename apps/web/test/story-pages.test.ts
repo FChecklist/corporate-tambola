@@ -161,7 +161,9 @@ describe("the vital details on the console and the game log page", () => {
     const t = g.text(); const txt = (g.win as any).__gamelog.text() as string;
     expect(t).toMatch(/Full House.*Ticket number 1/); expect(t).toMatch(/Start time/); expect(t).toMatch(/How it ended/); expect(t).toMatch(/The game was never paused\./); expect(t).toMatch(/Report e-mail/);
     expect(g.win.document.querySelectorAll("#numlist div").length).toBe(90);
-    for (const s of [t, txt]) { expect(s).not.toMatch(/Zainab|Secret|98\d{8}|@/); expect(s).not.toMatch(/\bidx\b/i); }
+    expect(t).toMatch(/At a glance/); expect(t).toMatch(/Claims/); expect(t).toMatch(/More games from Corporate Tambola/); for (const n of ["Housie / Tambola", "Bingo", "Tic-Tac-Toe", "Snakes & Ladders", "Luck by Chance", "Lucky Draw"]) { expect(t).toContain(n); expect(txt).toContain(n); }
+    expect(g.win.document.querySelector('img[src="/logo-512.png"]')).toBeTruthy(); expect(txt).toContain("365 days");
+    for (const s0 of [t, txt]) { const s = s0.replace(/hello@corporatetambola\.com/g, ""); expect(s).not.toMatch(/Zainab|Secret|98\d{8}|@/); expect(s).not.toMatch(/\bidx\b/i); }
     expect(txt).toMatch(/Game log: /); expect(txt).toMatch(/Ticket number 1/); expect(txt.split("\n").filter((l) => /^Number \d+ announced \d\d:\d\d:\d\d · \d+ of 90 called · \d+ left$/.test(l)).length).toBe(90);
     expect(g.errors).toEqual([]);
   });

@@ -16,3 +16,5 @@ import { averageGapSeconds, gapsByMode, calledLine, sequenceCheck } from "./gaps
 import { MSG, MSG_VERSION, say } from "./messages";
 import * as BEAT from "./beat";
 Object.assign((globalThis as any).ZG, { MSG, MSG_VERSION, say, BEAT });
+import { MORE_GAMES, moreGamesText } from "./more-games";
+Object.assign((globalThis as any).ZG, { MORE_GAMES, moreGamesText });

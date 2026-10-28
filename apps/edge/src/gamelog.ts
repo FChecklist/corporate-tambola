@@ -16,7 +16,7 @@ const ord = (n: number) => ["", "1st", "2nd", "3rd"][n] ?? `${n}th`;
 const prizeName = (cfg: EngagementCfg, key: PatternKey, ordinal: number) => (linesFor(cfg.rewards, key).length > 1 ? ord(ordinal) + " " : "") + (NAMES[key] ?? key);
 
 export interface GameLog {
-  v: 1; id: string; name: string; saved: boolean; savedMs: number | null;
+  v: 1; id: string; name: string; brand?: { name: string; color: string; hasLogo: boolean }; rehearsal?: number; saved: boolean; savedMs: number | null;
   mode: { start: "auto" | "manual"; call: "auto" | "host"; afterPrizes: "keep" | "end" };
   startsAtMs: number; firstNumberMs: number | null; endedAtMs: number | null; endReason: string | null; numbersCalled: number | null;
   people: { joined: number; late: number; waiting: number; present: number | null; most: number };
@@ -84,6 +84,7 @@ export async function buildGameLog(env: { DB: D1 }, kvOf: KV, e: any, cfg: Engag
   if (e.pack === 0 && roundMs(e.start_round) <= now) warnings.push("The game is waiting for payment.");
   return {
     v: 1, id: eid, name: cfg.name || eid, saved: false, savedMs: null,
+    ...(cfg.brand ? { brand: { name: cfg.brand.name, color: cfg.brand.color, hasLogo: !!cfg.brand.logo } } : {}), ...(e.rehearsal_of ? { rehearsal: Number(e.run_no) || 1 } : {}),
     mode: { start: cfg.startMode === "manual" ? "manual" : "auto", call: cfg.callMode === "host" ? "host" : "auto", afterPrizes: cfg.keepCalling ? "keep" : "end" },
     startsAtMs: roundMs(e.start_round), firstNumberMs: end?.firstNumberMs ?? null, endedAtMs: end?.endMs ?? (life?.end_ms ?? null), endReason: end?.endReason ?? null, numbersCalled: end?.numbersCalled ?? null,
     people: { joined, late, waiting, present, most: joined }, joins, claims,

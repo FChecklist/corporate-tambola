@@ -38,6 +38,10 @@
     const mode = (log.mode.start === "manual" ? "the host pressed Start" : "started by itself at the time") + "; " + (log.mode.call === "host" ? "a Host called every number" : "the game called the numbers") + "; " + (log.mode.afterPrizes === "keep" ? "kept calling until all 90 numbers" : "ended when every prize was won");
     L.push(["title", `Game log: ${log.name} (${log.id})`]);
     L.push(["note", log.saved ? "Saved when the game ended. It contains ticket numbers only: no names, mobile numbers or e-mail addresses." : "The game is still running: this log is as it stands now. It contains ticket numbers only: no names, mobile numbers or e-mail addresses."]);
+    { const k = { acc: 0, wrong: 0, late: 0 }; for (const c of log.claims || []) { if (c.outcome === "wrong") k.wrong++; else if (c.outcome === "too late") k.late++; else k.acc++; }
+      L.push(["h", "At a glance"]);
+      L.push(["row", "Game started", log.firstNumberMs ? HMS(log.firstNumberMs) : "Did not start"]); L.push(["row", "Completed", log.endedAtMs ? HMS(log.endedAtMs) : "Not ended"]); L.push(["row", "Players", String(log.people.joined)]);
+      L.push(["row", "Numbers called", String(log.numbersCalled == null ? 0 : log.numbersCalled)]); L.push(["row", "Prizes awarded", String(log.prizes.length)]); L.push(["row", "Claims", `${(log.claims || []).length} (${k.acc} in time, ${k.wrong} wrong, ${k.late} too late)`]); }
     L.push(["h", "The game"]);
     L.push(["row", "Start time", IST(log.startsAtMs)]);
     L.push(["row", "First number called", IST(log.firstNumberMs)]);
@@ -70,9 +74,14 @@
     if (NUMBERS_NOTE) L.push(["note", NUMBERS_NOTE]);
     { const due = NUMS.length; const chk = ZG.sequenceCheck(log.numbersCalled == null ? NUMS.length : Math.min(NUMS.length, log.numbersCalled), log.numbersCalled == null ? NUMS.length : log.numbersCalled); L.push(["row", "Check", chk.text]); }
     L.push(["nums", NUMS]);
+    L.push(["h", "More games from Corporate Tambola"]);
+    for (const g of (ZG.MORE_GAMES || [])) L.push(["row", g.name, `${g.line} ${g.url}`]);
+    L.push(["note", "Corporate Tambola | hello@corporatetambola.com | We keep your game records for 365 days."]);
     return L;
   }
-  const html = (log) => `<h1>${esc("Game log: " + log.name)}</h1><div class="bar"><button type="button" id="printbtn">Print or save as PDF</button><button type="button" id="txtbtn" class="alt">Download as a text file</button></div>` +
+  /** The top of the page: our logo and the customer's logo and colour (the same look as the report e-mail); a rehearsal says so in red. */
+  const brandBar = (log) => { const col = log.brand && /^#[0-9A-Fa-f]{6}$/.test(log.brand.color || "") ? log.brand.color : "#0B3D91"; return `<div style="background:${esc(col)};color:#fff;padding:10px 14px;border-radius:10px;display:flex;align-items:center;gap:12px;margin-bottom:10px"><img src="/logo-512.png" alt="Corporate Tambola" width="40" height="40" style="border-radius:8px"><b style="flex:1;font-size:1.1rem">${esc((log.brand && log.brand.name) || log.name)}</b>${log.brand && log.brand.hasLogo ? `<img src="/api/z/${encodeURIComponent(log.id)}/logo" alt="" height="40" style="background:#fff;border-radius:8px;padding:2px;max-width:140px">` : ""}</div>${log.rehearsal ? `<div style="background:#b3261e;color:#fff;padding:8px 12px;border-radius:8px;font-weight:700;margin-bottom:10px">REHEARSAL GAME ${log.rehearsal}: practice only. This game is for rehearsal only; the real game has a different link and a different game.</div>` : ""}`; };
+  const html = (log) => brandBar(log) + `<h1>${esc("Game log: " + log.name)}</h1><div class="bar"><button type="button" id="printbtn">Print or save as PDF</button><button type="button" id="txtbtn" class="alt">Download as a text file</button></div>` +
     lines(log).slice(1).map(([t, a, b]) => t === "note" ? `<p class="note">${esc(a)}</p>` : t === "h" ? `<h2>${esc(a)}</h2>` : t === "row" ? `<table><tr><th style="width:36%">${esc(a)}</th><td>${esc(b)}</td></tr></table>` : t === "nums" ? `<div class="nums" id="numlist">${a.map((x) => `<div>${log.schedule && log.schedule.rounds > 1 ? "Game " + x.round + ", " : ""}Number <b>${x.n}</b> announced ${esc(HMS(x.atMs))} \u00b7 ${esc(ZG.calledLine(x.k))}</div>`).join("")}</div>` : "").join("");
   const text = (log) => lines(log).map(([t, a, b]) => t === "title" ? a + "\n" + "=".repeat(a.length) : t === "note" ? a : t === "h" ? "\n" + a.toUpperCase() : t === "row" ? `${a}: ${b}` : t === "nums" ? a.map((x) => `${log.schedule && log.schedule.rounds > 1 ? "Game " + x.round + ", " : ""}Number ${x.n} announced ${HMS(x.atMs)} \u00b7 ${ZG.calledLine(x.k)}`).join("\n") : "").join("\n") + "\n";
 
