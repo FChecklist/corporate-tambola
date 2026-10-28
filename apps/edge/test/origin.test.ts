@@ -29,7 +29,7 @@ describe("the game's own address", () => {
   });
   test("the hero is the owner's question; its sub line says close group online engagement of employees and associates; the word 'private' is not in the hero", () => {
     const h = read("index.html"), hero = h.slice(h.indexOf('<h1 id="h1">'), h.indexOf('class="acts"'));
-    expect(hero.replace(/<[^>]+>/g, "")).toContain("This week, which team will you engage with a close group online Housie?");
+    expect(hero.replace(/<[^>]+>/g, "")).toContain("This week, which teams will you engage with a close group online Housie?");
     expect(hero.replace(/<[^>]+>/g, "")).toContain("Close group online engagement of employees and associates.");
     expect(/private/i.test(hero)).toBe(false);
     expect(h).not.toContain("Engage your company");

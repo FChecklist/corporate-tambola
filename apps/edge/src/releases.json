@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.6.5",
+    "date": "2026-10-28",
+    "commit": "this release",
+    "title": "Front page headline in plain English",
+    "changes": [
+      "The front page headline now reads: This week, which teams will you engage with a close group online Housie?"
+    ]
+  },
+  {
     "version": "1.6.4",
     "date": "2026-10-28",
     "commit": "this release",
