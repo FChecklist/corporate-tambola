@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.6.6",
+    "date": "2026-10-29",
+    "commit": "this release",
+    "title": "A fresher, friendlier front page",
+    "changes": [
+      "The front page has a warmer, more colourful look, a Choose your game row with all six games, and a short list of what you can count on",
+      "A big Try a free game with 10 people button, and our phone number and e-mail right at the top",
+      "Different layouts for phone and laptop. The game screens are unchanged"
+    ]
+  },
+  {
     "version": "1.6.5",
     "date": "2026-10-28",
     "commit": "this release",

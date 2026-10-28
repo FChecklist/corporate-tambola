@@ -55,14 +55,14 @@ describe("each indexable page", () => {
   });
   test("every image has alt text and a size, and the picture at the top loads early", () => {
     for (const f of [...INDEXABLE, ...NOINDEX]) { let h = ""; try { h = rd(f); } catch { continue; } for (const img of h.match(/<img\b[^>]*>/g) ?? []) { expect([f, /\balt="[^"]+"/.test(img)]).toEqual([f, true]); expect([f, /\bwidth="\d+"/.test(img) && /\bheight="\d+"/.test(img)]).toEqual([f, true]); } }
-    expect(rd("index.html")).toMatch(/<img src="\/img\/ticket\.webp"[^>]*fetchpriority="high"/);
+    expect(rd("index.html")).not.toContain("/img/ticket.webp"); // 1.6.6: the front page no longer carries the old product picture (it showed Live now and Private group inside the image); the logo has alt and size, checked above
   });
   test("quick loading: fonts are self-hosted and swap in, the two main fonts are preloaded, scripts do not block the page, nothing third-party is loaded on the home page", () => {
     const h = rd("index.html"), f = rd("fonts.css");
     expect(f.match(/font-display: swap/g)!.length).toBe(f.match(/@font-face/g)!.length);
     for (const w of ["Inter-normal-400.woff2", "Fraunces-normal-500-700.woff2"]) expect(h).toContain(`<link rel="preload" href="/fonts/${w}" as="font" type="font/woff2" crossorigin>`);
     for (const s of h.match(/<script\b[^>]*\bsrc="[^"]+"[^>]*>/g) ?? []) if (!/theme\.js|keep\.js|consent\.js|common\.js|google\.js|site\.js/.test(s)) expect(s).toMatch(/\bdefer\b/); // theme.js must run first (no flash of the wrong colours); common.js and site.js are the last thing in the body
-    expect(h).toMatch(/<script src="\/common\.js"><\/script><script src="\/google\.js"><\/script><script src="\/site\.js"><\/script>\s*<\/body>/); // the page scripts sit at the very end
+    expect(h).toMatch(/<script src="\/common\.js"><\/script><script src="\/google\.js"><\/script><script src="\/site\.js(?:\?v=\d+)?"><\/script>\s*<\/body>/); // the page scripts sit at the very end
     expect(h.replace(/<footer class="uf"[\s\S]*?<\/footer>/, "")).not.toMatch(/(src|href)="https?:\/\/(?!housie\.corporatetambola\.com|home\.corporatetambola\.com|bingo\.corporatetambola\.com|tictactoe\.corporatetambola\.com|snakes\.corporatetambola\.com|luck\.corporatetambola\.com|games\.corporatetambola\.com|corporatetambola\.com|shobhakamalsolutions\.pages\.dev|wa\.me\/919650397480\?text=Hi%2C%20Corporate%20Tambola%20team")/); // the one WhatsApp tap-to-chat link in the top bar; the uniform footer names the sister products on purpose
     expect(rd("../../../pages/build.mjs" as any).includes("max-age=31536000, immutable")).toBe(true);
   });

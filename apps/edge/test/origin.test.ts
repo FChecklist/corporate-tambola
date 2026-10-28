@@ -34,4 +34,8 @@ describe("the game's own address", () => {
     expect(/private/i.test(hero)).toBe(false);
     expect(h).not.toContain("Engage your company");
   });
+  test("the legal pages and the organizer guide keep their hand-kept text (a regenerated copy from stale fragments once dropped clause 2.4 and a guide section in 1.6.4)", () => {
+    expect(read("terms.html")).toContain("2.4 Protection of the product"); expect(read("terms.html")).toContain("20 hours after its scheduled end");
+    expect(read("organizer-guide.html")).toContain("How players win (real housie)"); expect(read("organizer-guide.html")).toContain("Someone to set it up for you");
+  });
 });
