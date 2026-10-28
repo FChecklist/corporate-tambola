@@ -613,7 +613,7 @@ export class PhoneRuntime {
     const askedAt = this.nowRound ?? 0;
     try {
       const askedMs = this.offsetMs === null ? null : this.deps.mono() + this.offsetMs;
-      const r = await this.deps.api("GET", `/api/z/${this.eid}/seats?after=${this.seatUpto}&cafter=${this.claimUpto}`);
+      const r = await this.deps.api("GET", `/api/z/${this.eid}/seats?after=${this.seatUpto}&cafter=${this.claimUpto}&v=${Math.max(0, this.cvKnown)}`);
       if (Array.isArray(r?.claims)) { // the public claims ride with the seat list; after this answer every claim up to (about) the time of the ask is here, unless the page was full
         this.noteClaims(r.claims, true);
         const full = r.claims.length >= 500, newest = r.claims.reduce((m: number, c: any) => Math.max(m, Number(c?.atMs) || 0), 0);

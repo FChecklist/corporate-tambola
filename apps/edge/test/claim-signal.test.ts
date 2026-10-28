@@ -47,3 +47,21 @@ describe("the claim signal", () => {
     expect((await cv("CV-C")).text).toBe("0"); expect((await cv("CV-D")).text).toBe("1");
   });
 });
+
+describe("the seat and claim list is cached by the claim signal's number", () => {
+  test("two phones that saw the same number get the same answer from the edge cache (no database read); a new number is a new address and fresh data; a request with a key is never cached", async () => {
+    const store = new Map<string, { res: Response; until: number }>();
+    (globalThis as any).caches = { default: { match: async (r: Request) => { const h = store.get(r.url); return h ? h.res.clone() : undefined; }, put: async (r: Request, res: Response) => { store.set(r.url, { res: res.clone(), until: 0 }); } } };
+    try {
+      const { pid, at } = await game("CV-S");
+      let reads = 0; const base = env.DB.prepare.bind(env.DB); (env.DB as any).prepare = (sql: string) => { const st: any = base(sql); const b = st.bind.bind(st); st.bind = (...a: any[]) => { reads++; return b(...a); }; return st; };
+      const get = (q: string, h: Record<string, string> = {}) => call("GET", `/api/z/CV-S/seats?${q}`, undefined, h, at[2]!);
+      const r1 = await get("after=0&cafter=0&v=0"); expect(r1.status).toBe(200); const first = reads; expect(first).toBeGreaterThan(0);
+      const r2 = await get("after=0&cafter=0&v=0"); expect(await r2.text()).toBe(await r1.text()); expect(reads).toBe(first); // served from the cache
+      expect(r2.headers.get("cache-control")).toMatch(/s-maxage=3/);
+      await claim("CV-S", pid, "top", 1, at[2]! - 300); // a claim: the number moves, so phones ask for v=1
+      const r3 = await get("after=0&cafter=0&v=1"); const body3 = await r3.json() as any; expect(reads).toBeGreaterThan(first); expect((body3.claims ?? []).length).toBe(1); // new address: fresh, and it holds the claim
+      const before = reads; await get("after=0&cafter=0&v=1", { "x-organizer": "plat" }); expect(reads).toBeGreaterThan(before); // a keyed request is never answered from the cache
+    } finally { delete (globalThis as any).caches; }
+  });
+});

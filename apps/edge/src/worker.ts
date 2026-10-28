@@ -583,8 +583,13 @@ export async function handle(req: Request, env: Env, now = Date.now(), waitUntil
   if (req.method === "GET") { const cm = /^\/api\/z\/([A-Za-z0-9_-]{4,40})\/cv$/.exec(new URL(req.url).pathname); if (cm) return cvFast(env, cm[1]!); }
   const off = await maintenanceGate(req, env, now).catch(() => null);
   if (off) return off;
+  // The seat and claim list carries the claim signal's number in its address (&v=N): every phone that has seen the same number asks for the SAME address, so the edge cache answers all of them
+  // and the database is read once per address per few seconds, however many phones ask. A new claim changes the number, so a new address, so fresh data. Public data only (no key sent).
+  const seatsKey = req.method === "GET" && !req.headers.get("x-organizer") && typeof caches !== "undefined" && (/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/seats$/.test(new URL(req.url).pathname) && new URL(req.url).searchParams.has("v") || /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/control$/.test(new URL(req.url).pathname) && !new URL(req.url).search) ? new Request(req.url) : null; // (the control file, read by every phone, is also public: a second of edge cache; a Host or the Organizer sends a key and always gets the fresh one)
+  if (seatsKey) { const hit = await (caches as any).default.match(seatsKey).catch(() => null); if (hit) return hit; }
   let res: Response;
   try { res = await handleCore(req, env, now, waitUntil); } catch (e) { await countError(env.DB, now); const p = recordServerError(env.DB, req, e, 500, now); if (waitUntil) waitUntil(p); else await p; return json({ error: "Something went wrong. Please try again.", code: "server-error" }, 500); }
+  if (seatsKey && res.status === 200) { const h = new Headers(res.headers); h.set("cache-control", "public, max-age=0, s-maxage=" + (/\/control$/.test(new URL(req.url).pathname) ? "1" : "3")); const out = new Response(await res.text(), { status: 200, headers: h }); await (caches as any).default.put(seatsKey, out.clone()).catch(() => {}); return out; }
   if (res.status >= 500) { await countError(env.DB, now); const p = recordServerError(env.DB, req, undefined, res.status, now); if (waitUntil) waitUntil(p); else await p; }
   return res;
 }
