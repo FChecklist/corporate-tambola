@@ -3,7 +3,7 @@
    Wired to the real engine where the engine has support (rehearsals 1.6.0, prizes, prize handed over, presence, game log, claims, erase).
    Owner rule D (29 Oct): UI layer only. Whatever the existing engine does not support is HIDDEN (no coming soon, no demo stub, no disabled look-alike). */
 (() => {
-  if (typeof window === "undefined" || !window.ZFLOW) return;
+  if (typeof window === "undefined" || !window.ZFLOW || !window.ZFLOW.state) return; // the current console also loads this file: it does nothing unless the new console (?flow=new) started
   const Z = window.ZFLOW, el = Z.el, st = Z.state, dash = Z.dash;
 
   /** The three claim messages, then what the board says when the claim is settled. */
