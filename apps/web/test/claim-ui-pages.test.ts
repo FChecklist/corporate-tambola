@@ -145,7 +145,7 @@ describe("the player's page: the compact counter, the last 5, the ticket as the 
     set({ phase: "play", paused: false, locked: false, log: LOG, claimNow: [], claimOpen: [], claimable: [], pressed: [], claimed: [], results: [] });
     await ph.waitFor(() => !!ph.$("#zrules") && !!ph.$("#prizepanel"), 15_000);
     const h = ph.html(), at = (id: string) => h.indexOf(id);
-    expect(at('id="storyline"')).toBeLessThan(at('id="calledcount"')); expect(at('id="calledcount"')).toBeLessThan(at('id="zrules"')); expect(at('id="zrules"')).toBeLessThan(at('id="claimhint"')); expect(at('id="claimhint"')).toBeLessThan(at('id="prizepanel"'));
+    expect(at('id="storyline"')).toBeLessThan(at('id="calledcount"')); expect(at('id="calledcount"')).toBeLessThan(at('id="claimhint"')); expect(at('id="claimhint"')).toBeLessThan(at('id="prizepanel"')); expect(at('id="prizepanel"')).toBeLessThan(at('id="zrules"')); // owner 29 Oct: the rules row sits at the bottom
     expect(Array.from(ph.win.document.querySelectorAll("#zrules li")).map((e: any) => e.textContent)).toEqual(["This game works like the real one.", "When a number is called, tap it on your ticket to cross it out.", "If you complete a prize, press Claim before the next number is called."]);
     const css = (await import("node:fs")).readFileSync(new URL("../public/z.css", import.meta.url), "utf8");
     expect(css).toMatch(/@media\(min-width:861px\) and \(min-height:521px\)\{[^@]*\.zplay\{display:grid;grid-template-columns:minmax\(0,1\.55fr\) minmax\(320px,1fr\)/); expect(css).toMatch(/\.zplay>\.ztk\{grid-column:1/);

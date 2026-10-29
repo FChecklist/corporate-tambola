@@ -863,12 +863,12 @@
       ${roundCards(v)}
       ${v.brk ? breakCard(v.brk) : ""}
       ${callCard(v, last, sub)}
-      <div class="zcard ztk${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Video ticket <span class="zdemotag">VIDEO</span>' : (v.tickets.length > 1 ? "Your tickets" : "Your ticket") + demoTag()}</h2>${ribbon}${tix}<ol class="zrules" id="zrules"><li>This game works like the real one.</li><li>When a number is called, tap it on your ticket to cross it out.</li><li>If you complete a prize, press Claim before the next number is called.</li></ol>${claimBar(v)}</div>
+      <div class="zcard ztk${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Video ticket <span class="zdemotag">VIDEO</span>' : (v.tickets.length > 1 ? "Your tickets" : "Your ticket") + demoTag()}</h2>${ribbon}${tix}${claimBar(v)}</div>
       ${v.phase === "ended" ? "" : livePrizesCard(v)}
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}
       <div class="zcard"><h2>Still to win</h2>${still}${chk}</div>
-      ${luckyCard(v)}</div>${claimStick(v)}${toastHtml()}${bogeyAskHtml()}`;
+      ${luckyCard(v)}${v.phase === "ended" ? "" : '<ol class="zrules" id="zrules"><li>This game works like the real one.</li><li>When a number is called, tap it on your ticket to cross it out.</li><li>If you complete a prize, press Claim before the next number is called.</li></ol>'}</div>${claimStick(v)}${toastHtml()}${bogeyAskHtml()}`;
   }
 
   // ---------- present check-in: the ticket opens only after this ----------
