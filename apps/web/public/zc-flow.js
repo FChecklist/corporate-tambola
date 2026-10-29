@@ -193,9 +193,22 @@
     lines.push(["Message breaks", String((s.breaks || []).length)]);
     return lines;
   }
+  /* ---- Game dashboard (pure) ---- */
+  const BANNER_UNPAID = "Published, payment is pending. Don’t worry. The game will not start until the payment is done, and you can cancel it at any time.";
+  /** One status banner: unpaid or paid, in the words of the style guide. `startText` is the start time as the organizer read it in step 1. */
+  const bannerOf = (info, startText) => (!info || !info.published ? null : info.paid
+    ? { kind: "paid", text: "Congratulations, your game is on! It will begin at " + startText + ". You can postpone or change it up to 5 minutes before the game begins." }
+    : { kind: "unpaid", text: BANNER_UNPAID });
+  const gameLink = (origin, eid) => origin + "/z.html?e=" + eid;
+  const payLink = (origin, eid) => origin + "/pay.html?e=" + eid;
+  const boardLink = (origin, eid) => origin + "/board.html?e=" + eid;
+  const shareMessage = (name, link) => "You are welcome to join our " + name + " game. Open this game link on your phone: " + link;
+  /** Tickets claimed: real claims only (practice rows are left out). */
+  const claimedCount = (claims) => (Array.isArray(claims) ? claims.filter((c) => !c.bogey).length : 0);
+  const REPORT_NOTE = "After the game, download your game report within 24 hours. All game and participant information is deleted within 24 hours of the game.";
   const registry = {}; // step number -> function(el, ctx) that draws the step body (each step adds its own)
 
-  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems, housesOf, tagsOf, GIFTS, prizeLine, defaultPrizes, defaultBumper, buildRewards, prizeProblems, breakMax, brandNameClean, linkKind, brandProblems, breakProblems, buildBrandPatch, contactProblems, readBack };
+  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems, housesOf, tagsOf, GIFTS, prizeLine, defaultPrizes, defaultBumper, buildRewards, prizeProblems, breakMax, brandNameClean, linkKind, brandProblems, breakProblems, buildBrandPatch, contactProblems, readBack, bannerOf, gameLink, payLink, boardLink, shareMessage, claimedCount, BANNER_UNPAID };
   if (typeof window !== "undefined") window.ZFLOW = api;
   if (typeof module !== "undefined") module.exports = api;
   if (typeof document === "undefined") return;
@@ -218,11 +231,12 @@
     const bar = el("ol", { class: "zf-bar", "aria-label": "Steps" });
     for (const s of STEPS) {
       const ok = canOpen(s.n, state.done), cur = state.open === s.n;
-      bar.append(el("li", {}, el("button", { type: "button", class: "zf-pill" + (cur ? " cur" : "") + (state.done[s.n] ? " done" : ""), "data-step": String(s.n), ...(ok ? {} : { disabled: "" }), ...(cur ? { "aria-current": "step" } : {}), onclick: () => { state.open = s.n; draw(); scrollTo("zf-sec" + s.n); } }, el("b", { text: String(s.n) }), " ", s.name, s.optional ? el("i", { text: " (optional)" }) : null)));
+      bar.append(el("li", {}, el("button", { type: "button", class: "zf-pill" + (cur ? " cur" : "") + (state.done[s.n] ? " done" : ""), "data-step": String(s.n), ...(ok ? {} : { disabled: "" }), ...(cur ? { "aria-current": "step" } : {}), onclick: () => { state.view = "steps"; state.open = s.n; draw(); scrollTo("zf-sec" + s.n); } }, el("b", { text: String(s.n) }), " ", s.name, s.optional ? el("i", { text: " (optional)" }) : null)));
     }
     const open = dashboardOpen(state.info);
-    bar.append(el("li", {}, el("button", { type: "button", class: "zf-pill zf-dash", id: "zf-dash", ...(open ? {} : { disabled: "", title: COPY.dashLocked }) }, COPY.dash, open ? null : el("i", { text: " · " + COPY.dashLocked }))));
+    bar.append(el("li", {}, el("button", { type: "button", class: "zf-pill zf-dash" + (state.view === "dash" ? " cur" : ""), id: "zf-dash", ...(open ? { onclick: () => { state.view = "dash"; draw(); refreshDash(); } } : { disabled: "", title: COPY.dashLocked }) }, COPY.dash, open ? null : el("i", { text: " · " + COPY.dashLocked }))));
     app.append(bar);
+    if (state.view === "dash" && dashboardOpen(state.info)) { app.append(dashboard()); return; }
     for (const s of STEPS) {
       const sec = el("section", { class: "zf-sec" + (state.open === s.n ? " open" : ""), id: "zf-sec" + s.n, "aria-labelledby": "zf-h" + s.n });
       sec.append(el("h2", { id: "zf-h" + s.n, text: s.n + ". " + s.name }));
@@ -237,6 +251,7 @@
   /** Called by a step when it has saved: mark it done and move on to the next step, scrolling to it. */
   function done(n) {
     state.done[n] = true;
+    if (n === 5 && dashboardOpen(state.info)) { state.view = "dash"; draw(); refreshDash(); return; }
     const nx = nextAfter(n, state.done);
     if (nx) state.open = nx;
     draw();
@@ -475,7 +490,53 @@
     if (window.CBConsent) window.CBConsent.wire(consent, "K1", {}, go); // Publish waits for the tick
   };
 
+  /* ---- Game dashboard ---- */
+  const dash = { waiting: [], claims: [], note: "", loaded: false };
+  api.dash = dash;
+  const originOf = () => (BASE || location.origin);
+  async function refreshDash() {
+    if (!state.eid) return;
+    try { const i = await call("GET", `/api/z/${state.eid}/info`); state.info = { ...(state.info || {}), published: !i.draft, paid: !i.unpaid, startsAt: i.startsAt }; } catch { /* the last answer stays */ }
+    try { dash.waiting = (await call("GET", `/api/z/${state.eid}/waiting`)).waiting || []; } catch { /* the last list stays */ }
+    try { dash.claims = (await call("GET", `/api/z/${state.eid}/claims`)).claims || []; } catch { /* the last count stays */ }
+    dash.loaded = true;
+    if (state.view === "dash") draw();
+  }
+  async function decide(id, decision) {
+    try { await call("POST", `/api/z/${state.eid}/waiting/${encodeURIComponent(id)}`, { decision }); dash.note = decision === "admit" ? "Let in." : "Not now. You can let them in later."; } catch (e) { dash.note = e.message; }
+    await refreshDash();
+  }
+  async function copy(text, what) {
+    try { await navigator.clipboard.writeText(text); dash.note = what + " copied."; } catch { dash.note = "Please copy it by hand: " + text; }
+    draw();
+  }
+  function dashboard() {
+    const o = originOf(), eid = state.eid, name = gameName(form.occ, form.oname);
+    const startText = state.when ? clockIn(state.when.ms, state.when.zone) : (state.info && state.info.startsAt) || "the start time";
+    const sec = el("section", { class: "zf-sec open zf-dashboard", id: "zf-dashboard", "aria-labelledby": "zf-hd" }, el("h2", { id: "zf-hd", text: COPY.dash }));
+    const bn = bannerOf(state.info, startText);
+    if (bn) sec.append(el("div", { class: "zf-banner " + bn.kind, id: "zf-banner", role: "status" }, bn.text));
+    if (bn && bn.kind === "unpaid") {
+      sec.append(el("h3", { text: "Payment" }), el("a", { class: "zf-go", id: "zf-paynow", href: payLink(o, eid), target: "_blank", rel: "noopener" }, "Pay now"), " ", el("button", { type: "button", class: "zf-add", id: "zf-copypay", onclick: () => copy(payLink(o, eid), "Payment link") }, "Copy payment link"));
+    }
+    const link = gameLink(o, eid);
+    sec.append(el("h3", { text: "Game link" }), el("p", { class: "zf-small", text: "Send this one link to your participants yourself, from your own mail or chat." }), el("input", { type: "text", readonly: "", id: "zf-link", value: link, "aria-label": "Game link" }), " ", el("button", { type: "button", class: "zf-add", id: "zf-copylink", onclick: () => copy(link, "Game link") }, "Copy link"),
+      el("p", { class: "zf-msgbox", id: "zf-sharemsg", text: shareMessage(name, link) }), el("button", { type: "button", class: "zf-add", id: "zf-copymsg", onclick: () => copy(shareMessage(name, link), "Message") }, "Copy message"));
+    sec.append(el("h3", { text: "Waiting for you" }));
+    if (!dash.waiting.length) sec.append(el("p", { id: "zf-nowait", text: "Nobody is waiting right now." }));
+    else {
+      const ul = el("ul", { class: "zf-wait", id: "zf-wait" });
+      for (const w of dash.waiting) ul.append(el("li", { "data-wid": String(w.id) }, el("span", { text: String(w.firstName || w.name || "A participant") + (w.last4 ? " · ends " + w.last4 : "") }), " ", el("button", { type: "button", class: "zf-add", "data-decide": "admit", onclick: () => decide(w.id, "admit") }, "Let in"), " ", el("button", { type: "button", class: "zf-link", "data-decide": "decline", onclick: () => decide(w.id, "decline") }, "Not now")));
+      sec.append(ul, el("button", { type: "button", class: "zf-add", id: "zf-letall", onclick: async () => { for (const w of dash.waiting.slice()) { try { await call("POST", `/api/z/${state.eid}/waiting/${encodeURIComponent(w.id)}`, { decision: "admit" }); } catch (e) { dash.note = e.message; break; } } await refreshDash(); } }, "Let everyone in"));
+    }
+    sec.append(el("h3", { text: "Tickets claimed" }), el("p", { id: "zf-claimed", text: String(claimedCount(dash.claims)) }));
+    sec.append(el("h3", { text: "Game board" }), el("a", { class: "zf-add", id: "zf-board", href: boardLink(o, eid), target: "_blank", rel: "noopener" }, "Open the game board"));
+    sec.append(el("p", { class: "zf-small", id: "zf-report", text: REPORT_NOTE }), el("p", { class: "zf-msg", role: "status", id: "zf-dashnote", text: dash.note }));
+    return sec;
+  }
+
   api.state = state; api.draw = draw; api.done = done; api.el = el;
   document.title = "Organizer console | Corporate Tambola";
   draw();
+  if (state.eid && secret()) { call("GET", `/api/z/${state.eid}/info`).then((i) => { if (i && i.draft === false) { state.info = { published: true, paid: !i.unpaid, startsAt: i.startsAt }; for (const s of STEPS) state.done[s.n] = true; state.view = "dash"; draw(); refreshDash(); } }).catch(() => {}); }
 })();

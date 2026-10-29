@@ -66,3 +66,12 @@
 .zf-read { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 8px 0; }
 .zf-read dt { font-weight: 700; } .zf-read dd { margin: 0; }
 @media (max-width: 480px) { .zf-read { grid-template-columns: 1fr; } .zf-read dd { margin-bottom: 6px; } }
+
+.zf-banner { padding: 12px 14px; border-radius: 10px; margin: 8px 0; font-weight: 600; }
+.zf-banner.unpaid { background: #fff4d6; color: #5a4300; }
+.zf-banner.paid { background: #e1f3e8; color: #0b3d27; }
+.zf-msgbox { margin: 8px 0; padding: 10px 12px; background: #f1f4fa; border-radius: 8px; overflow-wrap: anywhere; }
+.zf-wait { list-style: none; padding: 0; margin: 0 0 8px; } .zf-wait li { padding: 6px 0; }
+a.zf-go { display: inline-block; text-decoration: none; line-height: 32px; }
+#zf-link { width: min(100%, 420px); min-height: 44px; }
+@media (prefers-color-scheme: dark) { .zf-banner.unpaid { background: #3b3010; color: #ffe9a6; } .zf-banner.paid { background: #12301f; color: #cdeedb; } .zf-msgbox { background: #1a2745; } }
