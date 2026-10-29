@@ -26,9 +26,8 @@ describe("player look 1.7.1", () => {
     expect(css).toMatch(/\.ztkwrap\.zdim\{opacity:\.45/);
   });
   test("a crossed number keeps its number and gets a thin cross, in both looks; numbers are smaller", () => {
-    expect(css).toContain("html[data-pt] .zticket div.m::after");
-    expect(css).toContain("html[data-pt=modern] .zticket div.m{--cross:#FF6FAE}");
-    expect(css).toMatch(/html\[data-pt\] \.zticket div\{font-size:16px/);
+    expect(css).toContain("html[data-pt=modern] .zticket>div.m::after{background:#FF6FAE}");
+    expect(css).toMatch(/html\[data-pt\] \.zticket>div\{font-size:16px/);
   });
   test("end of game: the thank-you strip with the share and WhatsApp buttons comes first; rules are not shown there", () => {
     expect(z).toContain("Thank you for playing the game. You can recommend this game to others.");
