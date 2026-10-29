@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Window } from "happy-dom";
 import { PRIZE_HOUSES } from "../../../packages/beacon/src/config";
+import { waitingLapsed, familyCutoffPassed } from "../../edge/src/approvals";
 
 const pub = (f: string) => readFileSync(join(import.meta.dir, "../public", f), "utf8");
 const rolesWin: any = {}; new Function("window", pub("zc-flow-roles.js"))(rolesWin); const R = rolesWin.ZROLES;
@@ -14,7 +15,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
 
 const AXES = {
   start: ["auto", "manual"], caller: ["auto", "host"], tickets: [1, 2], family: [false, true], validation: ["system", "manual"], criterion: ["employee", "email"],
-  link: ["open", "listed", "family", "cohost", "host"], onList: [true, false], approval: [true, false], pay: ["pending", "paid", "free"], timing: ["early", "late"], cap: ["room", "full"], bumper: [0, 1, 2, 5, 10], lucky: [0, 1, 3],
+  link: ["open", "listed", "family", "cohost", "host"], onList: [true, false], approval: [true, false], pay: ["pending", "paid", "free"], timing: ["early", "late"], cap: ["room", "full"], bumper: [0, 1, 2, 5, 10], lucky: [0, 1, 3], waited: [10, 40],
 } as const;
 function* matrix() {
   const keys = Object.keys(AXES) as (keyof typeof AXES)[];
@@ -33,10 +34,12 @@ function oracle(sc: any, minutesToStart: number) {
     [sc.pay === "pending", "not_open", []],
     [sc.cap === "full", "full", []],
     [sc.link === "family" && !sc.family, "refused", []],
-    [sc.link === "family" && minutesToStart < 15, "refused", []],
+    [sc.link === "family" && minutesToStart <= 15, "refused", []],
+    [sc.link === "family" && sc.waited >= 30, "lapsed", []],
     [sc.link === "family", "waiting", ["family host"]],
     [sc.link === "open", "in", []],
     [sc.validation === "system" && sc.onList, "in", []],
+    [sc.waited >= 30, "lapsed", []],
     [sc.link === "cohost", "waiting", ["Co-host", "Host", "organizer"]],
     [true, "waiting", ["Host", "organizer"]],
   ];
@@ -53,19 +56,20 @@ function newPage(calls: any[] = [], answers: (u: string) => any = () => ({ ok: t
 
 const PRIZE_PAGE = (() => { const w: any = new Window({ url: "http://localhost/zc.html?flow=new&e=EABCDEF" }); w.document.body.innerHTML = '<main id="app"></main>'; w.ZG = { roundAt: (m: number) => m, PRIZE_HOUSES };
   new Function("window", "document", "location", "fetch", "MutationObserver", src)(w, w.document, w.location, async () => ({ ok: true, json: async () => ({ ok: true }) }), w.MutationObserver); return w.ZFLOW; })();
+const PRIZE_CACHE = new Map<string, any[]>();
 test("logic: every scenario of the matrix (10,000+) gives the owner's outcome and the right approvers", () => {
   let n = 0; const bad: string[] = [];
   for (const sc of matrix()) {
     n++;
     const minutes = sc.timing === "late" ? 10 : 120;
-    const got = R.decide({ link: sc.link, validation: sc.validation, onList: sc.onList, family: sc.family, pay: sc.pay, minutesToStart: minutes, capFull: sc.cap === "full" });
+    const got = R.decide({ link: sc.link, validation: sc.validation, onList: sc.onList, family: sc.family, pay: sc.pay, minutesToStart: minutes, capFull: sc.cap === "full", waitedMinutes: sc.waited });
     const want = oracle(sc, minutes);
     if (got.outcome !== want.outcome || JSON.stringify(got.approvers) !== JSON.stringify(want.approvers)) { if (bad.length < 5) bad.push(JSON.stringify(sc) + " got " + JSON.stringify(got) + " want " + JSON.stringify(want)); }
     if (want.outcome === "waiting" && !got.approvers.length) bad.push("no approver for " + JSON.stringify(sc));
     // prizes: Super Bumper only with 2 tickets and only the ticked Houses 1 to n, each once; never an A/B split; one Super Bumper prize line per House
-    const F = PRIZE_PAGE, houses = F.housesOf({ PRIZE_HOUSES }), sel = F.defaultPrizes(houses);
-    const bump = { on: sc.bumper > 0, n: Math.max(1, sc.bumper), gift: "Hamper", other: "", worth: "" };
-    const two = F.buildRewards(sel, bump, sc.tickets, "INR").filter((x: any) => x.scope === "two_ticket");
+    const pk = sc.tickets + "/" + sc.bumper; let two = PRIZE_CACHE.get(pk);
+    if (!two) { const F = PRIZE_PAGE, houses = F.housesOf({ PRIZE_HOUSES }), sel = F.defaultPrizes(houses); const bump = { on: sc.bumper > 0, n: Math.max(1, sc.bumper), gift: "Hamper", other: "", worth: "" }; two = F.buildRewards(sel, bump, sc.tickets, "INR").filter((x: any) => x.scope === "two_ticket"); PRIZE_CACHE.set(pk, two); }
+    if (waitingLapsed(0, sc.waited * 60_000) !== (sc.waited >= 30) || familyCutoffPassed(60 * 60_000, (60 - minutes) * 60_000) !== (minutes <= 15)) bad.push("engine limits disagree " + JSON.stringify(sc));
     const wantTwo = sc.tickets === 2 && sc.bumper > 0 ? sc.bumper : 0;
     if (two.length !== wantTwo || two.some((x: any, i: number) => x.ordinal !== undefined && x.ordinal !== i + 1)) { if (bad.length < 5) bad.push("bumper " + JSON.stringify(sc) + " got " + two.length + " want " + wantTwo); }
   }

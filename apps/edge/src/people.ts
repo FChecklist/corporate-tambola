@@ -11,6 +11,7 @@ import { openPii, openText, sealPii, sealText } from "./pii";
 import { consentMissing, recordConsent } from "./consent";
 import { deviceMatches } from "./checkin";
 import type { D1, Env } from "./worker";
+import { waitingLapsed, familyCutoffPassed, roundStartMs, LAPSED_MESSAGE, FAMILY_CLOSED_MESSAGE, DECLINED_MESSAGE, WAIT_LIMIT_MS } from "./approvals";
 
 /** 0016_people.sql: who invited whom, the personal links, the waiting room, and the flag that stops a removed person's phone without touching the public seat list. */
 export const PEOPLE_SCHEMA: string[] = [
@@ -476,8 +477,8 @@ async function myOwnSeat(c: Ctx, who: Caller, b: any): Promise<Response> {
 async function waitingRows(c: Ctx, who: Caller, limit: number): Promise<{ id: string; pii: string; via: string; inviter: string; overlimit: number; at_ms: number }[]> {
   const cols = "id, pii, via, inviter, overlimit, at_ms";
   const q = who.all
-    ? c.env.DB.prepare(`SELECT ${cols} FROM waiting WHERE eid=? AND status='waiting' ORDER BY at_ms LIMIT ?`).bind(c.eid, limit)
-    : c.env.DB.prepare(`SELECT ${cols} FROM waiting WHERE eid=? AND status='waiting' AND chain LIKE ? ORDER BY at_ms LIMIT ?`).bind(c.eid, `%,${who.id},%`, limit);
+    ? c.env.DB.prepare(`SELECT ${cols} FROM waiting WHERE eid=? AND status='waiting' AND at_ms>? ORDER BY at_ms LIMIT ?`).bind(c.eid, c.now - WAIT_LIMIT_MS, limit)
+    : c.env.DB.prepare(`SELECT ${cols} FROM waiting WHERE eid=? AND status='waiting' AND chain LIKE ? AND at_ms>? ORDER BY at_ms LIMIT ?`).bind(c.eid, `%,${who.id},%`, c.now - WAIT_LIMIT_MS, limit);
   return (await q.all<any>()).results ?? [];
 }
 async function listWaiting(c: Ctx, who: Caller): Promise<Response> {
@@ -500,9 +501,11 @@ async function decideWaiting(c: Ctx, who: Caller, wid: string, b: any): Promise<
   const decision = b?.decision;
   if (decision !== "admit" && decision !== "decline") return c.json({ error: "Say admit or decline." }, 400);
   const db = c.env.DB;
-  const w = await db.prepare("SELECT id, ph, pii, inviter, chain, overlimit, status FROM waiting WHERE eid=? AND id=?").bind(c.eid, wid).first<any>();
+  const w = await db.prepare("SELECT id, ph, pii, inviter, chain, overlimit, status, at_ms FROM waiting WHERE eid=? AND id=?").bind(c.eid, wid).first<any>();
   if (!w || (!who.all && !String(w.chain).includes(`,${who.id},`))) return c.json({ error: "No such request." }, 404);
   if (w.status !== "waiting") return c.json({ ok: true, already: w.status });
+  if (waitingLapsed(Number(w.at_ms), c.now)) { await db.prepare("UPDATE waiting SET status='lapsed', decided_ms=? WHERE eid=? AND id=? AND status='waiting'").bind(c.now, c.eid, wid).run(); return c.json({ error: "This request waited more than 30 minutes, so it has lapsed. The person can ask again.", code: "lapsed" }, 409); }
+  if (decision === "admit" && !who.all && String(w.inviter).startsWith("s:") && familyCutoffPassed(roundStartMs(c.e.start_round), c.now)) return c.json({ error: FAMILY_CLOSED_MESSAGE, code: "family-closed" }, 409);
   if (c.now >= await c.endBound()) return c.json({ error: "The game has ended, so this request has lapsed." }, 409);
   if (!(await c.spend(3))) return c.busy();
   if (decision === "decline") { await db.prepare("UPDATE waiting SET status='declined', decided_by=?, decided_ms=? WHERE eid=? AND id=? AND status='waiting'").bind(who.id, c.now, c.eid, wid).run(); return c.json({ ok: true, declined: true }); }
@@ -532,8 +535,8 @@ async function decideAll(c: Ctx, who: Caller, b: any): Promise<Response> {
   if (c.now >= await c.endBound()) return c.json({ error: "The game has ended, so these requests have lapsed." }, 409);
   const cols = "id, ph, pii, inviter, overlimit";
   const rows = await (who.all
-    ? db.prepare(`SELECT ${cols} FROM waiting WHERE eid=? AND status='waiting' ORDER BY at_ms, id LIMIT ?`).bind(c.eid, WAITING_MAX)
-    : db.prepare(`SELECT ${cols} FROM waiting WHERE eid=? AND status='waiting' AND chain LIKE ? ORDER BY at_ms, id LIMIT ?`).bind(c.eid, `%,${who.id},%`, WAITING_MAX)).all<any>();
+    ? db.prepare(`SELECT ${cols} FROM waiting WHERE eid=? AND status='waiting' AND at_ms>? ORDER BY at_ms, id LIMIT ?`).bind(c.eid, c.now - WAIT_LIMIT_MS, WAITING_MAX)
+    : db.prepare(`SELECT ${cols} FROM waiting WHERE eid=? AND status='waiting' AND chain LIKE ? AND at_ms>? ORDER BY at_ms, id LIMIT ?`).bind(c.eid, `%,${who.id},%`, c.now - WAIT_LIMIT_MS, WAITING_MAX)).all<any>();
   const list = rows.results ?? [];
   if (!list.length) return c.json({ admitted: 0, declined: 0, stillWaiting: 0 });
   if (!(await c.spend(list.length * 3))) return c.busy();
@@ -577,12 +580,12 @@ async function meRoute(c: Ctx): Promise<Response> {
     return c.json({ state: s.blocked ? "removed" : "playing", removed: !!s.blocked, role: s.role ?? null, seat: s.seq, canInvite: !s.blocked && ownList && c.invites.on, per: c.invites.per, used: ownList ? await listCount(db, c.eid, "s:" + s.seq) : 0, whoCanJoin: c.e.closed ? "list" : "anyone", ...(p ? { listed: true } : {}) });
   }
   if (wid && /^[0-9a-f]{12}$/.test(wid)) {
-    const w = await db.prepare("SELECT status, inviter, overlimit FROM waiting WHERE eid=? AND id=?").bind(c.eid, wid).first<{ status: string; inviter: string; overlimit: number }>();
+    const w = await db.prepare("SELECT status, inviter, overlimit, at_ms FROM waiting WHERE eid=? AND id=?").bind(c.eid, wid).first<{ status: string; inviter: string; overlimit: number; at_ms: number }>();
     if (!w) return c.json({ state: "gone", error: "That request is not here any more." }, 404);
     const ended = c.now >= await c.endBound();
-    const state = w.status === "waiting" && ended ? "lapsed" : w.status;
+    const state = w.status === "waiting" && (ended || waitingLapsed(Number(w.at_ms), c.now)) ? "lapsed" : w.status;
     const who = await waitingWho(c, w.overlimit ? "o" : w.inviter);
-    return c.json({ state, with: who, message: state === "waiting" ? `Your request is with ${who}. You can come in as soon as they say yes.` : state === "admitted" ? "You are in. Open your ticket again to join." : state === "declined" ? "This game could not add you. Please talk to whoever invited you." : "This game has ended." });
+    return c.json({ state, with: who, message: state === "waiting" ? `Your request is with ${who}. You can come in as soon as they say yes.` : state === "admitted" ? "You are in. Open your ticket again to join." : state === "declined" ? DECLINED_MESSAGE : state === "lapsed" && !ended ? LAPSED_MESSAGE : "This game has ended." });
   }
   return c.json({ error: "Say which: ?pid=<your ticket id> or ?wid=<your request id>." }, 400);
 }
