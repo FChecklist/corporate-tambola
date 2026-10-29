@@ -18,8 +18,7 @@ def cut(src, name, box_frac=(0, 0, 1, 1), width=420, q=80):
 for src, name in [("pdf/console-phone-step1.png", "doc-step1.jpg"), ("pdf/console-phone-step2.png", "doc-step2.jpg"), ("pdf/console-phone-step3.png", "doc-step3.jpg"),
                   ("pdf/console-phone-step4.png", "doc-step4.jpg"), ("pdf/console-phone-step6.png", "doc-step6.jpg"), ("pdf/console-phone-step7.png", "doc-step7.jpg"),
                   ("pdf/console-phone-rehearsals.png", "doc-rehearsals.jpg"), ("pdf/play-phone-checkin.png", "doc-checkin.jpg"), ("pdf/play-phone-live.png", "doc-live.jpg"),
-                  ("pdf/console-phone-gameday.png", "doc-gameday.jpg"), ("pdf/console-phone-after.png", "doc-after.jpg"), ("header-390-light-landing-menu-open.png", "doc-menu-phone.jpg")]:
+                  ("pdf/console-phone-gameday-controls.png", "doc-gameday.jpg"), ("pdf/console-phone-after.png", "doc-after.jpg"), ("header-390-light-landing-menu-open.png", "doc-menu-phone.jpg")]:
     cut(src, name, (0, 0, 1, 1), 390)
 # laptop: the landing page top (the six-item menu) and the organizer game day
-cut("pdf/landing-laptop.png", "doc-landing-laptop.jpg", (0, 0, 1, 0.62), 1100, 82)
-cut("pdf/console-laptop-gameday.png", "doc-gameday-laptop.jpg", (0, 0, 1, 1), 1100, 82)
+cut("pdf/landing-laptop.png", "doc-landing-laptop.jpg", (0, 0, 1, 0.5), 1100, 82)
