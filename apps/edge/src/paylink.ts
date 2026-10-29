@@ -2,11 +2,16 @@
 // The Organizer, a Host or a Co-host of a game makes ONE open link per game (a new one cancels the old). Whoever holds it - the company's finance person, say - opens
 // /paylink.html?t=<token>, sees the game's name, start time and price (nothing else about the game) and pays like anyone else. The payment is bound to that game exactly
 // like a payment from the console (pay.ts, checkout) and is recorded as paid by 'link'. The token is random (192 bits) and only its hash is stored.
-// A link ends at payment, after 7 days, when it is replaced, or when the game is cancelled. An AI key can never make one.
+// A link ends at payment, when it is replaced, when the game is cancelled, or when it runs out: 7 days after it was made, or at the game's start if that is later (gap plan 2026-10-29, TA15: a link must not
+// run out before the game it pays for). An AI key can never make one.
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import type { D1 } from "./worker";
 
-export const PAYLINK_TTL_MS = 7 * 86_400_000;
+/** The least a link lives. A link made for a game that starts sooner than this (or whose start has passed: a late payment) still lives this long. */
+export const PAYLINK_MIN_MS = 7 * 86_400_000;
+export const PAYLINK_TTL_MS = PAYLINK_MIN_MS;
+/** When a link made at `now` for a game starting at `startMs` runs out: 7 days from now, or the game's start if that is later. */
+export const payLinkExpiry = (now: number, startMs: number): number => Math.max(now + PAYLINK_MIN_MS, startMs);
 export const PAYLINK_SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS paylink (hash TEXT PRIMARY KEY, eid TEXT NOT NULL, org TEXT NOT NULL, created_ms INTEGER NOT NULL, exp_ms INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_by TEXT)`,
   `CREATE INDEX IF NOT EXISTS paylink_eid ON paylink (eid)`,
@@ -20,8 +25,8 @@ export const payLinkHash = (token: string) => sha("paylink|" + token);
 export const packFor = (cap: number): number | null => PACKS.find((x) => x[0] >= cap)?.[0] ?? null;
 
 /** Makes the game's one open link (any earlier one stops at once). The caller has already checked who may do this and that the game can still be paid for. */
-export async function createPayLink(db: D1, eid: string, org: string, by: string, now: number): Promise<{ token: string; expiresMs: number }> {
-  const token = randHex(24), expiresMs = now + PAYLINK_TTL_MS;
+export async function createPayLink(db: D1, eid: string, org: string, by: string, now: number, startMs: number = now): Promise<{ token: string; expiresMs: number }> {
+  const token = randHex(24), expiresMs = payLinkExpiry(now, startMs);
   await db.batch([
     db.prepare("UPDATE paylink SET revoked=1 WHERE eid=? AND revoked=0").bind(eid),
     db.prepare("INSERT INTO paylink(hash,eid,org,created_ms,exp_ms,revoked,created_by) VALUES(?,?,?,?,?,0,?)").bind(await payLinkHash(token), eid, org, now, expiresMs, by),

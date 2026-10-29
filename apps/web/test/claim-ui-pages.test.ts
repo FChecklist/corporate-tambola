@@ -80,7 +80,7 @@ async function steered(eid: string) {
   const x = await setup(eid);
   x.goLive(); for (let i = 0; i < 30; i++) await x.step();
   const ph = await openPage(x.w.world, { url: `http://localhost/z?e=${eid}`, html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, x.now); } });
-  open.push(ph); await ph.waitFor((t) => /Join the engagement/.test(t));
+  open.push(ph); await ph.waitFor((t) => /Join the game/.test(t));
   (ph.$("#ph") as any).value = "9822222220"; (ph.$("#nm") as any).value = "Asha"; ph.click("#go");
   await ph.waitFor(() => !!(ph.win as any).__rt && !!ph.$("#storyline") && !!ph.$("#big"), 30_000);
   const rt = (ph.win as any).__rt, real = rt.view.bind(rt);
@@ -213,13 +213,13 @@ describe("coming back to the game after another app's call or message", () => {
     await wait(300); expect(resync).toBe(1); expect(ph.$("#awayline")).toBeNull();
     const realNow = (ph.win as any).Date.now.bind((ph.win as any).Date); flip("hidden"); (ph.win as any).Date.now = () => realNow() + 40_000; flip("visible");
     await ph.waitFor(() => !!ph.$("#awayline"), 15_000);
-    expect(ph.$("#awayline")!.textContent).toContain("You were away for 40 seconds."); expect(ph.$("#awayline")!.textContent).toContain("Last 5 numbers called");
+    expect(ph.$("#awayline")!.textContent).toContain("You were away for 40 seconds."); expect(ph.$("#awayline")!.textContent).toContain("Welcome back."); expect(ph.$("#awayline")!.textContent).toContain("No number was called while you were away."); // (A18: the line names the numbers called meanwhile; here none was)
     expect(resync).toBe(2); expect(ticks).toBeGreaterThanOrEqual(2); // the schedule was asked for each time the page came back
   });
   test("the join page carries the Do Not Disturb tip", async () => {
     const x = await setup("CU-11");
     const ph = await openPage(x.w.world, { url: "http://localhost/z?e=CU-11", html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, x.now); } });
-    open.push(ph); await ph.waitFor((t) => /Join the engagement/.test(t));
+    open.push(ph); await ph.waitFor((t) => /Join the game/.test(t));
     expect(ph.$("#dndtip")!.textContent).toBe("Tip: turn on Do Not Disturb so other apps do not interrupt your game.");
   });
 });

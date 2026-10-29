@@ -46,7 +46,7 @@ async function phoneAt(o: O, url: string, calls: Call[] = [], pre?: (win: any) =
   const p = await openPage(o.world, { url: "http://localhost" + url, html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { hook(win, f); if (f === "zgame.js") rtFake(win, () => o.world.now); } });
   open.push(p); return p;
 }
-const typeJoin = async (p: Page, phone: string, name = "Asha") => { await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = phone; (p.$("#nm") as any).value = name; p.click("#go"); };
+const typeJoin = async (p: Page, phone: string, name = "Asha") => { await p.waitFor((x) => /Join the game/.test(x)); (p.$("#ph") as any).value = phone; (p.$("#nm") as any).value = name; p.click("#go"); };
 const setVal = (p: Page, sel: string, v: string) => { const el = p.$(sel) as any; el.value = v; el.dispatchEvent(new p.win.Event("input", { bubbles: true })); };
 const SEEN = /Your ticket|What you can win|Starting in|Getting ready/;
 
@@ -54,7 +54,7 @@ describe("brand strip on the ticket page", () => {
   test("the company strip shows the name on the accent colour with readable text, the small logo from the settings, and a quiet 'Powered by' line; nothing is fetched from outside", async () => {
     const o = await organizer(); await published(o, "PG-BR1", { brand: { name: "Acme Foods", color: "#B3261E", logo: PNG } });
     const calls: Call[] = []; const p = await phoneAt(o, "/z?e=PG-BR1", calls);
-    await p.waitFor((x) => /Join the engagement/.test(x));
+    await p.waitFor((x) => /Join the game/.test(x));
     const strip = () => p.win.document.querySelector(".zbrand") as any;
     expect(strip().textContent).toContain("Acme Foods"); expect(p.text()).toMatch(/Powered by Corporate Tambola/); // on the join screen too
     await typeJoin(p, "9822222222"); await p.waitFor((x) => SEEN.test(x));
@@ -79,7 +79,7 @@ describe("brand strip on the ticket page", () => {
     const o = await organizer(); await published(o, "PG-BR4");
     const bad = { name: "<img src=x onerror=alert(1)>", color: "red", logo: "https://evil.example/x.png" };
     const p = await phoneAt(o, "/z?e=PG-BR4", [], (win) => { const of = win.fetch; win.fetch = async (u: any, i?: any) => { const r = await of(u, i); if (!/\/info$/.test(String(u))) return r; const j = await r.json(); return new Response(JSON.stringify({ ...j, brand: bad }), { status: 200, headers: { "content-type": "application/json" } }); }; });
-    await p.waitFor((x) => /Join the engagement/.test(x));
+    await p.waitFor((x) => /Join the game/.test(x));
     const s = p.win.document.querySelector(".zbrand") as any; expect(s.textContent).toContain("<img src=x"); expect(!!s.querySelector("img")).toBe(false); expect(!!p.win.document.querySelector("img")).toBe(false);
     expect(s.style.background).toMatch(/#0b3d91|rgb\(11, ?61, ?145\)/i);
   });
@@ -124,7 +124,7 @@ describe("joining: personal link, waiting, removed, cancelled", () => {
     const first = await phoneAt(o, "/z?e=PG-WT3"); await typeJoin(first, "9822266666"); await first.waitFor((x) => /Please wait a moment/.test(x));
     const saved = first.win.localStorage.getItem("ctz-wait-PG-WT3"); expect(saved).toBeTruthy(); await first.close(); // the old page is gone, as in a real reload
     const calls: Call[] = []; const p = await phoneAt(o, "/z?e=PG-WT3", calls, (win) => win.localStorage.setItem("ctz-wait-PG-WT3", saved!)); // the same phone after a reload
-    await p.waitFor((x) => /Please wait a moment/.test(x)); expect(p.text()).not.toMatch(/Join the engagement/); expect(!!p.$("#go")).toBe(false);
+    await p.waitFor((x) => /Please wait a moment/.test(x)); expect(p.text()).not.toMatch(/Join the game/); expect(!!p.$("#go")).toBe(false);
     const w = await o.json(await o.api("GET", "/api/z/PG-WT3/waiting", undefined, o.token)); expect(w.waiting.length).toBe(1);
     await o.api("POST", `/api/z/PG-WT3/waiting/${w.waiting[0].id}`, { decision: "admit" }, o.token);
     await p.waitFor((x) => SEEN.test(x), 20_000);

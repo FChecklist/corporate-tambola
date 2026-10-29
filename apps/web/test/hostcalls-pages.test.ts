@@ -115,6 +115,7 @@ describe("the console on Game day: the Next number button", () => {
     c.click("#nextnum");
     await c.waitFor((t) => /On its way/.test(t), 15_000);
     expect((c.$("#nextnum") as any).disabled).toBe(true);
+    expect(c.$("#hoststate")!.textContent).toMatch(/Your press is sent\. The next number (arrives in about \d+ seconds|is arriving now)/); // TA26: the Host is told something is coming, not left with silence
     const f1 = (await file(x, "HC-DAY"))!; expect(f1.messages.map((m) => m.action)).toEqual(["next"]); // the signed press is stored by the Worker
     expect(f1.messages[0]!.atBeaconRound - f1.messages[0]!.signedAtRound).toBe(2);
     for (let i = 0; i < 5; i++) await x.step(); // 15 s: the round is published and every phone has it
@@ -183,7 +184,7 @@ describe("the phone page and the number screen", () => {
     x.goLive(); for (let i = 0; i < 3; i++) await x.step();
     const p = await openPage(x.w.world, { url: "http://localhost/z?e=HC-PH", html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, x.now); } });
     open.push(p);
-    await p.waitFor((t) => /Join the engagement/.test(t));
+    await p.waitFor((t) => /Join the game/.test(t));
     (p.$("#ph") as any).value = "9822222229"; (p.$("#nm") as any).value = "Asha"; p.click("#go");
     await p.waitFor((t) => /Waiting for the host/.test(t), 20_000);
     expect(p.text()).not.toMatch(/Next number in \d+s/);

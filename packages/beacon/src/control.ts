@@ -59,6 +59,8 @@ export interface ControlConfig {
   startNotBefore?: number;
   /** A big game (above PAUSE_MAX_PARTICIPANTS): only Start exists. Pause, resume, extend and end are refused: phones ask too rarely for them to be safe. */
   startOnly?: boolean;
+  /** The first number after a Resume comes a full gap later (owner ruling Q2, 2026-10-29). Set in the control file when the key is registered, so a game whose key was registered earlier keeps the schedule its players already saw and its log still reproduces. */
+  fullGap?: boolean;
   /** Host mode: the breaks and intermissions a press has to wait for, and how many presses there can be at most (90 per round). From the game's public settings, see hostGapsFor. */
   hostGaps?: HostGap[];
   maxNexts?: number;
@@ -185,6 +187,8 @@ export interface ControlState {
   manualStart: boolean;
   /** Manual start: the beacon round the Start named (the game begins in that round), or null while nobody has pressed Start. Always null in an automatic-start game. */
   goRound: number | null;
+  /** True when the first number after a Resume waits a full gap (see ControlConfig.fullGap). Absent = the older rule: a pause pushes the later calls by exactly its length. */
+  fullGap?: boolean;
 }
 
 interface Cur { start: number; until: number | null; endedAt: number | null }
@@ -272,7 +276,7 @@ export function resolveControl(cfg: ControlConfig, log: readonly ControlMsg[]): 
     else if (m.action === "go") goAt = m.atBeaconRound;
     else stop = m.atBeaconRound;
   }
-  return { intervals: ivs.map((c) => ({ start: c.start, end: effEnd(c, cfg.maxPauseRounds) })), stopRound: stop, ignored, applied, nextRounds, host: cfg.callMode === "host", manualStart: cfg.startMode === "manual", goRound: goAt };
+  return { intervals: ivs.map((c) => ({ start: c.start, end: effEnd(c, cfg.maxPauseRounds) })), stopRound: stop, ignored, applied, nextRounds, host: cfg.callMode === "host", manualStart: cfg.startMode === "manual", goRound: goAt, ...(cfg.fullGap ? { fullGap: true } : {}) };
 }
 
 /** True while a pause is in force at the given beacon round. */
@@ -288,16 +292,46 @@ export function hostCallRound(s: ControlState, k: number): number | null {
   return s.stopRound !== null ? null : Infinity;
 }
 
+/** The most calls a game can have (5 rounds of 90): how far the full-gap search below ever has to look. */
+const MAX_CALLS = 450;
+const shiftCache = new Map<string, number[]>();
 /**
- * The beacon round call k uses. Without control messages this is start + k*stride (the existing schedule). Every pause pushes all
- * later calls later by exactly its length, so the gap between calls is still `stride` rounds (a multiple of 3 s) afterwards.
+ * How far each pause pushes the calls after it (owner ruling Q2, 2026-10-29): the length of the pause PLUS whatever is needed so that the first number after the
+ * Resume comes a FULL gap (`stride` rounds, 12 s at the normal speed) after the Resume, not the part of a gap that was left when the pause began.
+ * `base(k)` is call k's round before any pause (increasing in k). The pauses are applied in order, each to the calls already pushed by the earlier ones.
+ * A pause that began long before the next call was due (a break, an intermission) needs no extra: that call was already more than a full gap away.
+ */
+export function pauseShifts(ivs: readonly PauseInterval[], stride: number, base: (k: number) => number, key: string, fullGap = true): number[] {
+  if (!fullGap) return ivs.map((i) => i.end - i.start); // a game from before the full-gap rule: a pause pushes the later calls by exactly its length
+  const ck = `${key}|${stride}|${ivs.map((i) => `${i.start}-${i.end}`).join(",")}`;
+  const hit = shiftCache.get(ck); if (hit) return hit;
+  const sh: number[] = [];
+  for (let j = 0; j < ivs.length; j++) {
+    const s = ivs[j]!.start, len = ivs[j]!.end - s;
+    let first = -1; // the first call this pause moves (the first one due at or after its start, after the earlier pauses)
+    for (let k = 0; k < MAX_CALLS; k++) { let a = base(k); for (let m = 0; m < j; m++) if (a >= ivs[m]!.start) a += sh[m]!; if (a >= s) { first = a; break; } }
+    sh.push(first < 0 ? len : len + Math.max(0, stride - (first - s)));
+  }
+  if (shiftCache.size > 200) shiftCache.clear();
+  shiftCache.set(ck, sh);
+  return sh;
+}
+/** Applies `pauseShifts` to one call: its base round, pushed by every pause that starts at or before it. */
+export function pushedByPauses(a: number, ivs: readonly PauseInterval[], shifts: readonly number[]): number {
+  for (let j = 0; j < ivs.length; j++) if (a >= ivs[j]!.start) a += shifts[j]!;
+  return a;
+}
+
+/**
+ * The beacon round call k uses. Without control messages this is start + k*stride (the existing schedule). Every pause pushes all later calls later by its length, and
+ * the first call after the Resume waits a full `stride` after it (see pauseShifts), so the gap between calls is still `stride` rounds (a multiple of 3 s) afterwards.
  * Returns null when the engagement was stopped before that call. In host mode the k-th press decides it (hostCallRound).
  */
 export function callRound(s: ControlState, startRound: number, strideRounds: number, k: number): number | null {
   if (s.host) return hostCallRound(s, k);
   if (s.manualStart) { if (s.goRound === null) return s.stopRound !== null ? null : Infinity; startRound = s.goRound; } // nothing is called until somebody presses Start; then number 1 comes in the round Start named
-  let a = startRound + k * strideRounds;
-  for (const i of s.intervals) if (a >= i.start) a += i.end - i.start;
+  const base = (j: number) => startRound + j * strideRounds;
+  const a = s.intervals.length ? pushedByPauses(base(k), s.intervals, pauseShifts(s.intervals, strideRounds, base, `L${startRound}`, s.fullGap === true)) : base(k);
   return s.stopRound !== null && a >= s.stopRound ? null : a;
 }
 
@@ -413,7 +447,7 @@ export class ControlTracker {
 /* ---------------- publishing (shared by the local server and a Cloudflare Worker) ---------------- */
 
 export interface KV { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
-export interface PublishedFile { v: 1; engagementId: string; pubKey: string; maxPauseRounds: number; leadRounds: number; messages: ControlMsg[]; /** The Hosts' console keys that may sign too (see addHostKey). */ hostKeys?: string[]; /** A big game: only Start exists (no pause or end). */ startOnly?: boolean }
+export interface PublishedFile { v: 1; engagementId: string; pubKey: string; maxPauseRounds: number; leadRounds: number; messages: ControlMsg[]; /** The Hosts' console keys that may sign too (see addHostKey). */ hostKeys?: string[]; /** A big game: only Start exists (no pause or end). */ startOnly?: boolean; /** Written when the key is registered: the first number after a Resume waits a full gap (see ControlConfig.fullGap). Absent in files registered before the rule. */ fullGap?: true }
 
 const fileKey = (id: string) => `control/${id}.json`;
 export async function readPublished(kv: KV, engagementId: string): Promise<PublishedFile | null> {
@@ -429,7 +463,7 @@ export const hostControlOf = (game?: GameOpts): Pick<ControlConfig, "callMode" |
   startNotBefore: game?.startMode === "manual" ? game.startNotBefore : undefined,
 });
 export const cfgOf = (f: PublishedFile, game?: GameOpts): ControlConfig => ({
-  pubKey: f.pubKey, maxPauseRounds: f.maxPauseRounds, leadRounds: f.leadRounds, ...(f.hostKeys?.length ? { hostKeys: f.hostKeys } : {}), ...(f.startOnly ? { startOnly: true } : {}),
+  pubKey: f.pubKey, maxPauseRounds: f.maxPauseRounds, leadRounds: f.leadRounds, ...(f.hostKeys?.length ? { hostKeys: f.hostKeys } : {}), ...(f.startOnly ? { startOnly: true } : {}), ...(f.fullGap ? { fullGap: true } : {}),
   ...(game?.callMode === "host" || game?.startMode === "manual" ? hostControlOf(game) : {}),
 });
 
@@ -451,7 +485,7 @@ export async function registerKey(kv: KV, engagementId: string, pubKeyHex: strin
   if (!/^[0-9a-f]{64}$/i.test(pubKeyHex)) return { ok: false, error: "The public key must be 32 bytes in hex." };
   if (!/^[A-Za-z0-9_-]{3,40}$/.test(engagementId)) return { ok: false, error: "Bad engagement id." };
   if (await readPublished(kv, engagementId)) return { ok: false, error: "A key is already registered for this engagement and cannot be changed." };
-  const f: PublishedFile = { v: 1, engagementId, pubKey: pubKeyHex.toLowerCase(), maxPauseRounds, leadRounds: safety.leadRounds, messages: [], ...(opts.startOnly ? { startOnly: true } : {}) };
+  const f: PublishedFile = { v: 1, engagementId, pubKey: pubKeyHex.toLowerCase(), maxPauseRounds, leadRounds: safety.leadRounds, messages: [], fullGap: true, ...(opts.startOnly ? { startOnly: true } : {}) };
   await kv.put(fileKey(engagementId), JSON.stringify(f));
   return { ok: true };
 }

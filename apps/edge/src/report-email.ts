@@ -2,6 +2,7 @@
 // and a footer with who we are and how long we keep things. Plain English, ticket numbers only (names and numbers are never put in an e-mail). A plain-text part is built from the same facts.
 import { BRAND } from "./brand";
 import { MORE_GAMES } from "../../../packages/beacon/src/more-games";
+import { claimRuleText } from "../../../packages/beacon/src/config";
 import type { GameLog } from "./gamelog";
 
 const IST = 5.5 * 3_600_000, MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], p2 = (n: number) => String(n).padStart(2, "0");
@@ -27,7 +28,7 @@ export function tilesOf(log: GameLog): [string, string][] {
     ["Players", String(log.people.joined)],
     ["Numbers called", String(log.numbersCalled ?? 0)],
     ["Prizes awarded", String(log.prizes.length)],
-    ["Claims", `${log.claims.length} (${k.accepted + k.taken} in time, ${k.wrong} wrong, ${k.late} too late)`],
+    ["Claims", `${log.claims.length + (log.claimsMore ?? 0)} (${k.accepted + k.taken} in time, ${k.wrong} wrong, ${k.late + (log.claimsMore ?? 0)} too late)`],
   ];
 }
 export function eventsOf(log: GameLog): { atMs: number; what: string }[] {
@@ -47,12 +48,13 @@ export function brandedReportMail(i: ReportMailIn): { subject: string; text: str
     ...tiles.map(([k, v]) => `${k}: ${v}`), ``,
     `Prizes`, ...(log.prizes.length ? log.prizes.map((p) => `- ${p.prize}${p.text ? " (" + p.text + ")" : ""}: Ticket ${p.ticket}, after number ${p.callNo}, awarded ${hms(p.atMs)}`) : ["- No prize was won."]), ``,
     `Every claim (${log.claims.length})`, ...(claims.length ? claims.map((c) => `- ${hms(c.atMs)}  Ticket ${c.ticket} claimed ${c.prize}${c.afterNumber ? " after number " + c.afterNumber : ""}: ${outcomeWords(c)}`) : ["- No claim."]),
-    ...(log.claims.length > claims.length ? [`... and ${log.claims.length - claims.length} more in the full report`] : []), ``,
+    ...(log.claims.length > claims.length ? [`... and ${log.claims.length - claims.length} more in the full report`] : []),
+    ...(log.claimsMore ? [`... and ${log.claimsMore} more too-late ${log.claimsMore === 1 ? "claim" : "claims"} (the log keeps the newest 200 of them)`] : []), ``,
     `What happened during the game`, ...(events.length ? events.map((e) => `- ${hms(e.atMs)}  ${e.what}`) : ["- Nothing was paused or changed."]), ``,
     `Open your complete report (with every person, the invite tree and all statistics) here:`, i.link, ``,
     `The report PDF is built on your own computer or phone from this link, so names and mobile numbers never travel by e-mail: this e-mail has ticket numbers only. The link works until ${day(i.keptUntilMs)}. The people's names and mobile numbers are permanently deleted at ${day(i.deleteAtMs)}, as promised: please open the report and save the PDF before then.`, ``,
     ...(i.dataNotes ?? []), ``,
-    `Rule: everyone who claims before the next number is called wins that prize together. If there are more winners than prizes, the organizer or host decides how to share. Unlucky is awarded automatically.`, ``,
+    claimRuleText(log.ties), ``,
     `More games from ${BRAND.name}`, ...MORE_GAMES.map((g) => `- ${g.name}: ${g.line} ${g.url}`), ``,
     `${BRAND.name} | ${BRAND.support} | We keep your game records for 365 days. Sent to ${i.organizerEmail}.`,
   ].join(NL);
@@ -70,8 +72,8 @@ ${i.rehearsal ? `<tr><td style="padding:10px 16px;background:#b3261e;color:#fff;
 <h2 style="font-size:16px;margin:18px 0 6px">Prizes</h2>
 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px"><tr><th style="${th}">Prize</th><th style="${th}">Ticket</th><th style="${th}">After number</th><th style="${th}">Awarded</th></tr>${log.prizes.length ? log.prizes.map((p) => `<tr><td style="${cell}">${esc(p.prize)}${p.text ? `<br><span style="color:#5b6577">${esc(p.text)}</span>` : ""}</td><td style="${cell}">${p.ticket}</td><td style="${cell}">${p.callNo}</td><td style="${cell}">${esc(hms(p.atMs))}</td></tr>`).join("") : `<tr><td style="${cell}" colspan="4">No prize was won.</td></tr>`}</table>
 <h2 style="font-size:16px;margin:18px 0 6px">Every claim (${log.claims.length})</h2>
-<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px"><tr><th style="${th}">Time</th><th style="${th}">Ticket</th><th style="${th}">Prize</th><th style="${th}">What came of it</th></tr>${claims.length ? claims.map((c) => `<tr><td style="${cell}">${esc(hms(c.atMs))}</td><td style="${cell}">${c.ticket}</td><td style="${cell}">${esc(c.prize)}${c.afterNumber ? ` after number ${c.afterNumber}` : ""}</td><td style="${cell}">${esc(outcomeWords(c))}</td></tr>`).join("") : `<tr><td style="${cell}" colspan="4">No claim.</td></tr>`}</table>${log.claims.length > claims.length ? `<p style="font-size:12px;color:#5b6577">... and ${log.claims.length - claims.length} more in the full report.</p>` : ""}
-<p style="font-size:12px;color:#5b6577">Rule: everyone who claims before the next number is called wins that prize together. If there are more winners than prizes, the organizer or host decides how to share. Unlucky is awarded automatically.</p>
+<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px"><tr><th style="${th}">Time</th><th style="${th}">Ticket</th><th style="${th}">Prize</th><th style="${th}">What came of it</th></tr>${claims.length ? claims.map((c) => `<tr><td style="${cell}">${esc(hms(c.atMs))}</td><td style="${cell}">${c.ticket}</td><td style="${cell}">${esc(c.prize)}${c.afterNumber ? ` after number ${c.afterNumber}` : ""}</td><td style="${cell}">${esc(outcomeWords(c))}</td></tr>`).join("") : `<tr><td style="${cell}" colspan="4">No claim.</td></tr>`}</table>${log.claims.length > claims.length ? `<p style="font-size:12px;color:#5b6577">... and ${log.claims.length - claims.length} more in the full report.</p>` : ""}${log.claimsMore ? `<p style="font-size:12px;color:#5b6577">... and ${log.claimsMore} more too-late ${log.claimsMore === 1 ? "claim" : "claims"} (the log keeps the newest 200 of them).</p>` : ""}
+<p style="font-size:12px;color:#5b6577">${esc(claimRuleText(log.ties))}</p>
 <h2 style="font-size:16px;margin:18px 0 6px">What happened during the game</h2>
 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px">${events.length ? events.map((e) => `<tr><td style="${cell};width:90px">${esc(hms(e.atMs))}</td><td style="${cell}">${esc(e.what)}</td></tr>`).join("") : `<tr><td style="${cell}">Nothing was paused or changed.</td></tr>`}</table>
 <p style="margin:18px 0"><a href="${esc(i.link)}" style="background:${esc(color)};color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">Open your complete report</a></p>

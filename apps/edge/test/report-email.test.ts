@@ -107,3 +107,17 @@ describe("the PDF", () => {
     const without = new TextDecoder("latin1").decode(layoutReport(base)); expect(without).not.toContain("Every claim");
   });
 });
+
+describe("TA19: the rule line follows the game's real tie setting (e-mail, game log, config text)", () => {
+  test("a game where ties take the next prizes says so; a game where ties share says that; an old log says only what is always true", async () => {
+    const { claimRuleText } = await import("../../../packages/beacon/src/config");
+    await game("RPT-N"); await game("RPT-S");
+    raw.prepare("UPDATE engagement SET config=? WHERE id=?").run(JSON.stringify({ ties: "next" }), "RPT-N");
+    raw.prepare("UPDATE engagement SET config=? WHERE id=?").run(JSON.stringify({ ties: "share" }), "RPT-S");
+    const mailOf = async (id: string, strip = false) => { const log: any = await logOf(id); if (strip) delete log.ties; return brandedReportMail({ log, gameName: "G", origin: "https://tambola.test", link: "https://tambola.test/r", keptUntilMs: T + 86_400_000, deleteAtMs: T + 86_400_000, organizerEmail: "boss@acme.com" }); };
+    const n = await mailOf("RPT-N"), s = await mailOf("RPT-S"), old = await mailOf("RPT-S", true);
+    expect(n.text).toContain(claimRuleText("next")); expect(n.html).toContain("they take the next prizes one after the other"); expect(n.text).not.toContain("wins that prize together");
+    expect(s.text).toContain(claimRuleText("share")); expect(s.html).toContain("wins that prize together");
+    expect(old.text).toContain(claimRuleText(undefined)); expect(old.text).not.toContain("wins that prize together"); expect(old.text).not.toContain("one after the other");
+  });
+});

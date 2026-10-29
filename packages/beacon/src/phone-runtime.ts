@@ -10,6 +10,8 @@ import { BOGEYS_OUT, RoundStore, activeBreak, activeIntermission, callRoundR, co
 import { seatOfPid } from "./unique-ticket";
 import { NUMBERS, QUICKNET, fetchRound, pickNumber, roundAt, roundTimeMs, type BeaconOpts } from "./index";
 
+/** The last seconds of a pause in which a phone counts "restarts in" (owner ruling Q2, 2026-10-29). */
+export const RESTART_COUNT_SECS = 5;
 export interface PhoneDeps {
   /** Calls our store. Must throw an Error with `.status` on HTTP errors, and a plain Error when offline. */
   api(method: string, path: string, body?: unknown): Promise<any>;
@@ -66,7 +68,7 @@ export interface RuntimeView {
   /** Host mode, game running: the last number has reached this phone and the Host has not pressed for the next one yet. */
   waitingForHost: boolean;
   /** The pause in force right now: who paused, since when (ms), when it should end by itself (ms), seconds left. Null when the game is not paused. */
-  pausedInfo: { by: "the Organizer" | "a Host"; sinceMs: number; endMs: number; secondsLeft: number } | null;
+  pausedInfo: { by: "the Organizer" | "a Host"; sinceMs: number; endMs: number; secondsLeft: number; /** the last seconds before the numbers start again (5 or fewer): a "restarts in" count; null before that. After it the first number comes a full gap later (owner ruling Q2). */ restartsInSec: number | null } | null;
   /** The prizes this player has just completed and can claim RIGHT NOW: the number that completed them is the latest one (the claim must reach the game before the next number is announced). Empty when paused, finished or too late. */
   claimNow: PatternKey[];
   /** The prizes that can still be claimed (the completing number is the latest one), even while the game is paused: the Claim buttons. */
@@ -170,7 +172,7 @@ export class PhoneRuntime {
     } catch (e: any) {
       const st = e?.status; // the real reason: a wrong link, a game that is not open, or the connection / the service
       this.phase = st === 404 || st === 403 || st === 410 ? "missing" : "boot";
-      this.error = st === 404 ? "This engagement link is not valid." : st === 403 || st === 410 ? String(e?.message || "This engagement is not open yet.") : st && st >= 500 ? "The game could not be opened just now. Please try again in a minute." : "Could not reach the engagement. Check your connection.";
+      this.error = st === 404 ? "This game link is not valid." : st === 403 || st === 410 ? String(e?.message || "This game is not open yet.") : st && st >= 500 ? "The game could not be opened just now. Please try again in a minute." : "Could not reach the game. Check your connection.";
       return;
     }
     const pid = this.deps.store.get(this.key("pid"));
@@ -201,7 +203,7 @@ export class PhoneRuntime {
   /** "round:house" -> wrong claims (Bogeys) on it; at BOGEYS_OUT the ticket is out of that house for the round */
   private bogeys = new Map<string, number>();
   /** Bogey records the store has not taken yet (sent again on the next tick, like a claim) */
-  private bogeyUnsent: { pattern: PatternKey; round: number }[] = [];
+  private bogeyUnsent: { pattern: PatternKey; round: number; n: number }[] = [];
   private loadMarks() {
     this.marks.clear(); this.pressed.clear(); this.bogeys.clear();
     try {
@@ -228,7 +230,7 @@ export class PhoneRuntime {
     while (this.bogeyUnsent.length && this.pid) {
       const b = this.bogeyUnsent[0]!;
       try {
-        const ans = this.trackClaims ? await this.deps.api("POST", `/api/z/${this.eid}/bogey`, { pid: this.pid, device: this.device(), pattern: b.pattern, ...(b.round > 1 ? { round: b.round } : {}) }) : null;
+        const ans = this.trackClaims ? await this.deps.api("POST", `/api/z/${this.eid}/bogey`, { pid: this.pid, device: this.device(), pattern: b.pattern, n: b.n, ...(b.round > 1 ? { round: b.round } : {}) }) : null; // n = the number of this Bogey on this house (1, 2): sent again after a lost answer, the store keeps it once
         this.bogeyUnsent.shift();
         if (ans && Number(ans.atMs) > 0) this.noteClaims([{ pid: this.pid, pattern: b.pattern, round: b.round, idx: -1, atMs: Number(ans.atMs), bogey: true }]);
       } catch { break; /* the next tick tries again */ }
@@ -270,7 +272,7 @@ export class PhoneRuntime {
     if (wrong === undefined && idx >= 0 && idx < log.length - 1) { this.lateNote = { text: CLAIM_LATE_TEXT, atLen: log.length }; return { ok: false, bogey: false, late: true, error: CLAIM_LATE_TEXT }; } // THE RULE: a prize completed on number N is claimed before number N+1 is announced. No penalty, nothing is sent.
     if (wrong !== undefined || idx < 0) { // a Bogey: the marks do not stand up against the called numbers. The store is told (every phone must know, so the winners agree).
       const n = this.bogeysOn(key) + 1; this.bogeys.set(id, n); this.saveMarks();
-      this.bogeyUnsent.push({ pattern: key, round: this.cur }); await this.sendBogeys();
+      this.bogeyUnsent.push({ pattern: key, round: this.cur, n }); await this.sendBogeys();
       const why = wrong !== undefined ? `Bogey! ${wrong} has not been called. Unmark it and keep playing.` : "Bogey! This prize is not complete on the called numbers. Check your ticket and keep playing.";
       return n >= BOGEYS_OUT ? { ok: false, bogey: true, out: true, error: `${why} Two Bogeys on ${label}: this ticket is out of the ${label} prize. Other prizes are still open to you.` } : { ok: false, bogey: true, error: why };
     }
@@ -361,7 +363,7 @@ export class PhoneRuntime {
     // the Hosts' console keys ride in the same file as the organizer's key (trusted the same way, on first use); the list only grows, and never beyond the team's size
     const hostKeys: string[] = Array.isArray(body.hostKeys) ? body.hostKeys.filter((k: unknown): k is string => typeof k === "string" && /^[0-9a-f]{64}$/i.test(k)).slice(0, 5) : [];
     if (!this.tracker) {
-      const cfg: ControlConfig = { pubKey: body.pubKey, maxPauseRounds: body.maxPauseRounds, leadRounds: body.leadRounds, hostKeys, ...(body.startOnly === true ? { startOnly: true } : {}), ...hostControlOf(hostGameOf(this.cfg, this.scheduledRound)) };
+      const cfg: ControlConfig = { pubKey: body.pubKey, maxPauseRounds: body.maxPauseRounds, leadRounds: body.leadRounds, hostKeys, ...(body.startOnly === true ? { startOnly: true } : {}), ...(body.fullGap === true ? { fullGap: true } : {}), ...hostControlOf(hostGameOf(this.cfg, this.scheduledRound)) };
       this.controlFast = body.leadRounds === SAFETY_FAST.leadRounds;
       const safety = ALL_SAFETIES.find((s) => s.leadRounds === body.leadRounds) ?? SAFETY_STANDARD;
       if (safety !== SAFETY_FAST && safety !== SAFETY_STANDARD) { this.pollBaseMs = Math.round(safety.pollMaxSec * 750); this.pollJitterMs = Math.round(safety.pollMaxSec * 250); }
@@ -828,7 +830,7 @@ export class PhoneRuntime {
     const waitingForHost = this.hostMode && (!this.manualStart || (gr0 !== null && now !== null && now >= gr0)) && this.phase === "play" && !this.locked && !isPaused && now !== null && now >= (this.manualStart ? (gr0 ?? this.startRound) : this.startRound) && nextRound0 === Infinity && !inter && this.currentBreak(now) === null;
     const pz = st && now !== null ? st.intervals.find((i) => now >= i.start && now < i.end) : undefined;
     const pzMsg = pz && this.tracker ? this.tracker.log.find((m) => m.action === "pause" && m.atBeaconRound === pz.start) : undefined;
-    const pausedInfo = pz ? { by: (pzMsg && this.ctlBy[pzMsg.seq - 1] === "Host" ? "a Host" : "the Organizer") as "the Organizer" | "a Host", sinceMs: roundTimeMs(pz.start), endMs: roundTimeMs(pz.end), secondsLeft: Math.max(0, (pz.end - now!) * 3) } : null;
+    const pausedInfo = pz ? { by: (pzMsg && this.ctlBy[pzMsg.seq - 1] === "Host" ? "a Host" : "the Organizer") as "the Organizer" | "a Host", sinceMs: roundTimeMs(pz.start), endMs: roundTimeMs(pz.end), secondsLeft: Math.max(0, (pz.end - now!) * 3), restartsInSec: (() => { const r = secsTo(pz.end); return r !== null && r >= 1 && r <= RESTART_COUNT_SECS ? r : null; })() } : null;
     const mlog = this.maskedLog(this.cur);
     const claimOpen = !this.locked && (this.phase === "play" || (this.phase === "ended" && !(st && st.stopRound !== null && now !== null && now >= st.stopRound))) ? this.claimableNow().filter((k) => { const i = completionIndexKey(this.tickets, k, mlog); return i === mlog.length - 1 || i < 0; }) : []; // the completing number is still the latest: the claim is still valid (even while paused); a prize the marks complete but the called numbers do not (a stale mark) stays pressable: it is answered with a Bogey, as in the real game
     const claimNow = !isPaused && this.phase === "play" ? claimOpen.filter((k) => completionIndexKey(this.tickets, k, mlog) >= 0) : []; // the alert and the big button: only while the game is running

@@ -36,7 +36,7 @@ describe("K4 the join page", () => {
   test("two boxes before any name field, unticked; the button is off until both are ticked; the join carries both ticks and is stored", async () => {
     const o = await organizer(); await make(o, "CP-JOIN"); await publish(o, "CP-JOIN");
     const p = await page(o, "/z?e=CP-JOIN", "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, () => o.world.now); } });
-    await p.waitFor((x) => /Join the engagement/.test(x));
+    await p.waitFor((x) => /Join the game/.test(x));
     const doc = p.win.document, boxes = Array.from(doc.querySelectorAll('[data-cbc="K4"] input[type=checkbox]')) as any[];
     expect(boxes.map((b) => b.checked)).toEqual([false, false]);
     expect(Array.from(doc.querySelectorAll('[data-cbc="K4"] label')).map((l: any) => l.textContent)).toEqual([
@@ -60,7 +60,7 @@ describe("K1 publish on the console", () => {
     const o = await organizer(); await make(o, "CP-PUB");
     const p = await page(o, "/zc?e=CP-PUB", "zc.html", ["zgame.js", "control.js", "zc.js"], { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" });
     await p.waitFor((x) => /Hello\. Let us start/.test(x)); p.click('.zc-dot[data-open="7"]');
-    await p.waitFor((x) => /Publish \(free\)/.test(x)); p.click("#publishopen");
+    await p.waitFor((x) => /Publish \(free\)/.test(x)); p.click("#publishopen"); if (p.$("#pubanyway")) p.click("#pubanyway"); /* WP-04 TA12: blank prizes ask once more */
     await p.waitFor((x) => /Confirm and publish/.test(x));
     const doc = p.win.document;
     expect((Array.from(doc.querySelectorAll('[data-cbc="K1"] input')) as any[]).map((b) => b.checked)).toEqual([false, false]);

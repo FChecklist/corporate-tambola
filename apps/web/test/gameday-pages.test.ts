@@ -133,7 +133,7 @@ describe("game-day clarity on the console", () => {
     for (let i = 0; i < 25; i++) await x.step(); // the pause is in force
     const ph = await openPage(x.w.world, { url: "http://localhost/z?e=GD-PH", html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, x.now); } });
     open.push(ph);
-    await ph.waitFor((t) => /Join the engagement/.test(t));
+    await ph.waitFor((t) => /Join the game/.test(t));
     (ph.$("#ph") as any).value = "9822222227"; (ph.$("#nm") as any).value = "Asha"; ph.click("#go");
     await ph.waitFor((t) => /PAUSED/.test(t) && /Paused by the Organizer at/.test(t), 30_000);
     const big = await openPage(x.w.world, { url: "http://localhost/big.html?e=GD-PH", html: "big.html", scripts: ["zgame.js", "big.js"], afterLoad: (win, f) => { if (f === "zgame.js") fakeBeacon(win, x.now); } });
@@ -148,7 +148,7 @@ describe("game-day clarity on the console", () => {
     await c.waitFor((t) => /The game is over\./.test(t) && /All 90 numbers were called\./.test(t), 60_000);
     const ph = await openPage(x.w.world, { url: "http://localhost/z?e=GD-END", html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, x.now); } });
     open.push(ph);
-    await ph.waitFor((t) => /Join the engagement/.test(t));
+    await ph.waitFor((t) => /Join the game/.test(t));
     (ph.$("#ph") as any).value = "9822222226"; (ph.$("#nm") as any).value = "Ravi"; ph.click("#go");
     await ph.waitFor((t) => /All 90 numbers were called\./.test(t), 60_000);
     const big = await openPage(x.w.world, { url: "http://localhost/big.html?e=GD-END", html: "big.html", scripts: ["zgame.js", "big.js"], afterLoad: (win, f) => { if (f === "zgame.js") fakeBeacon(win, x.now); } });
@@ -163,8 +163,8 @@ describe("the console question: when every prize is won", () => {
     const c = await consolePage(x, "GD-RAD");
     await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /When every prize is won:/.test(t));
     const radio = Array.from(c.win.document.querySelectorAll('input[type=radio][name="after"]')) as any[];
-    expect(radio.map((e) => e.value)).toEqual(["keep", "end"]); expect(radio.filter((e) => e.checked).map((e) => e.value)).toEqual(["end"]); // a game made before the question keeps the old rule until the organizer chooses
-    expect(Array.from(c.win.document.querySelectorAll("#rg-after .zc-radio b")).map((e: any) => e.textContent.trim())).toEqual(["Keep calling until all 90 numbers", "End the game"]);
+    expect(radio.map((e) => e.value)).toEqual(["end", "keep"]); expect(radio.filter((e) => e.checked).map((e) => e.value)).toEqual(["end"]); // a game made before the question keeps the old rule until the organizer chooses
+    expect(Array.from(c.win.document.querySelectorAll("#rg-after .zc-radio b")).map((e: any) => e.textContent.trim())).toEqual(["Stop when every prize is awarded", "Keep calling all numbers"]); // WP-02 / owner ruling Q1: stopping at the last prize comes first, keeping on calling is the organizer's option
     expect(c.win.document.querySelectorAll("#rg-after .zc-rdesc").length).toBe(2);
     c.click('[data-ck="after"][data-v="keep"]'); await wait(50);
     c.click('#sec2 [data-save="2"]'); await c.waitFor((t) => /Saved\./.test(t));

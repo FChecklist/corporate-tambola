@@ -26,7 +26,7 @@
     if (!S.info) return `${head}<p class="zmsg">${S.err ? esc(S.err) : "Loading…"}</p>`;
     if (S.hold) return holdCard(); const i = S.info, st = i.status;
     if (st === "paid") return calm("This game is already paid for", "Nothing more is needed. You can close this page.");
-    if (st === "expired") return calm("This payment link has run out", "A payment link works for 7 days, and a newer link stops the older one. Please ask the person who sent it for the newest link.");
+    if (st === "expired") return calm("This payment link has run out", "A payment link works until the game is paid. It lasts 7 days, or until the game starts if that is later, and a newer link stops the older one. Please ask the person who sent it for the newest link.");
     if (st === "cancelled") return calm("This game was cancelled", "There is nothing to pay. Please speak to the organizer.");
     if (st === "closed") return calm("This game did not start", "This game did not start and is closed. There is nothing to pay. Please speak to the organizer.");
     if (st === "confirming" && !S.busy) return calm("Confirming a payment", "A payment for this game is being confirmed. Please wait a few minutes. If it goes through, this page will say the game is paid.");

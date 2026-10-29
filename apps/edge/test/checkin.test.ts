@@ -114,8 +114,20 @@ describe("the check-in flow", () => {
   test("the organizer sees how many are present", async () => {
     const g = await game(); const a = await j(await join(g.id, 1, {}, T2)); await j(await join(g.id, 2, {}, T2)); const now = g.startMs - 1 * MIN;
     expect((await submit(g.id, a.pid, { code: (await j(await ck(g.id, a.pid, now))).code }, now)).status).toBe(200);
-    const pr = await j(await call("GET", `/api/z/${g.id}/presence`, undefined, keyH(g.key), now)); expect(pr).toMatchObject({ present: 1, total: 2 }); expect(pr.seats).toEqual([1]);
-    expect((await call("GET", `/api/z/${g.id}/presence`, undefined, {}, now)).status).toBe(403); // not for a participant
+    const pr = await j(await call("GET", `/api/z/${g.id}/checkins`, undefined, keyH(g.key), now)); expect(pr).toMatchObject({ present: 1, total: 2 }); expect(pr.seats).toEqual([1]);
+    expect((await call("GET", `/api/z/${g.id}/checkins`, undefined, {}, now)).status).toBe(403); // not for a participant
+  });
+  test("TA01: the game-day card printed 'Present: undefined of undefined' because the check-in count and the phones-listening count shared one path; now they have two", async () => {
+    const g = await game(); const a = await j(await join(g.id, 1, {}, T2)); const now = g.startMs - 1 * MIN;
+    expect((await submit(g.id, a.pid, { code: (await j(await ck(g.id, a.pid, now))).code }, now)).status).toBe(200);
+    const ci = await j(await call("GET", `/api/z/${g.id}/checkins`, undefined, keyH(g.key), now));
+    expect(typeof ci.present).toBe("number"); expect(typeof ci.total).toBe("number"); // exactly what the card prints
+    const pr = await j(await call("GET", `/api/z/${g.id}/presence`, undefined, keyH(g.key), now));
+    expect("listening" in pr).toBe(true); expect(pr.present).toBeUndefined(); // /presence stays the console's phones-listening count
+    const zc = await Bun.file(new URL("../../web/public/zc.js", import.meta.url)).text();
+    const url = zc.match(/S\.presence = await call\("GET", `([^`]+)`\)/);
+    expect(url && url[1]).toBe("/api/z/${eid}/checkins"); // the card reads the check-in route, never the listening route
+    expect(zc).not.toContain("Present: ${S.presence.present}");
   });
 });
 

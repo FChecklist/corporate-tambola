@@ -35,7 +35,7 @@ async function phoneAt(o: O, url: string, pre?: (win: any) => void) {
   const p = await openPage(o.world, { url: "http://localhost" + url, html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "audio.js") pre?.(win); if (f === "zgame.js") rtFake(win, () => o.world.now); } });
   open.push(p); return p;
 }
-const typeJoin = async (p: Page, phone: string, name = "Asha") => { await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = phone; (p.$("#nm") as any).value = name; p.click("#go"); };
+const typeJoin = async (p: Page, phone: string, name = "Asha") => { await p.waitFor((x) => /Join the game/.test(x)); (p.$("#ph") as any).value = phone; (p.$("#nm") as any).value = name; p.click("#go"); };
 const setVal = (p: Page, sel: string, v: string) => { const el = p.$(sel) as any; el.value = v; el.dispatchEvent(new p.win.Event("input", { bubbles: true })); };
 const SEEN = /Your ticket|What you can win|Starting in|Getting ready/;
 

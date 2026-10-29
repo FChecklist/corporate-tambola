@@ -52,6 +52,7 @@
     if (r.didNotStart === true) INFO.dns = true; else if ("startRound" in r && !fromJoin) INFO.dns = false;
     if ("verify" in r) { INFO.verify = r.verify === "id" || r.verify === "either" || r.verify === "both" ? r.verify : "mobile"; INFO.empOnly = r.employeesOnly === true; }
     if ("rehearsal" in r) INFO.rehearsal = r.rehearsal && typeof r.rehearsal === "object" ? r.rehearsal : null; // a rehearsal: its pages carry the REHEARSAL block and, once it is over, the calm "over" page
+    if ("startMs" in r && Number.isFinite(Number(r.startMs))) { INFO.startMs = Number(r.startMs); INFO.manualStart = r.startMode === "manual"; } // TA22: the join page says "already running" before the person joins
     if ("checkin" in r) INFO.checkin = r.checkin === true; // a game made after the check-in rule: the ticket opens only after the person marks themselves present
     if ("tickets" in r) INFO.demo = r.demo === true; // the public settings say whether it is a demo game; after a paid conversion the next read clears it
     if ("cancelled" in r || "startRound" in r) INFO.cancelled = r.cancelled ? { message: String(r.message || "").slice(0, 200) } : null;
@@ -79,7 +80,7 @@
   if (DEMO) rt.beatOn = false; // the free demo has no server to ask
   // The claim signal is asked at this phone's own slot (ticket number, see beat.ts): ~120 ms before the moment the clock is checked again, then the ask goes out exactly on time. A hidden page asks nothing (beatOn).
   if (!DEMO) { rt.externalBeat = true; const arm = () => { const ms = rt.msToNextBeat(), early = Math.max(0, ms - 120); setTimeout(() => { const left = rt.msToNextBeat(); setTimeout(() => { try { rt.beatNow(); } catch { /* next slot */ } arm(); }, left > ZG.BEAT.beatPeriodMs(rt.cap) - 250 ? 0 : left); }, ms < 120 ? 0 : early); }; arm(); }
-  let lastLen = 0, firstPaint = true, sound = store.get("ctz-sound") !== "off", timer = null;
+  let lastLen = 0, firstPaint = true, sound = store.get("ctz-sound") === "on", timer = null; /* TA21: the numbers are NOT read aloud until the player switches sound on (an open office must stay quiet) */
   if (window.TBAudio) TBAudio.enabled = sound;
   const clock = (s) => { s = Math.max(0, Math.round(s)); return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map((n) => String(n).padStart(2, "0")).join(":"); }; // 00:12:34
   const GRACE_SECS = ZG.GRACE_ROUNDS * 3;
@@ -184,9 +185,9 @@
     if (J.mode === "declined" || J.mode === "lapsed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>${J.mode === "declined" ? "Your request was not accepted" : "This request has run out"}</h2><p class="zsmall" style="margin:0 0 8px">${J.mode === "declined" ? "You are not on the list for this game. Please ask the person who invited you." : "Nobody answered in time. You can ask again."}</p></div><div class="zagain"><button class="zbtn s alt" id="again" type="button">${J.mode === "declined" ? "Typed it wrong? Type it again" : "Ask again"}</button></div>`;
     const personal = !!TOKEN && J.mode !== "needPhone"; // a personal link is made for one person: no number to type unless the server asks
     return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div>
-    <div class="zcard zform zjoin"><h2>Join the engagement</h2>
+    <div class="zcard zform zjoin"><h2>Join the game</h2>
     <ol class="zsteps" aria-label="How to join"><li><b>1</b><span>Tick the boxes</span></li><li><b>2</b><span>${personal ? "Press the button" : "Type your number"}</span></li><li><b>3</b><span>Get your ticket</span></li></ol><p class="zsmall zdnd" id="dndtip">Tip: turn on Do Not Disturb so other apps do not interrupt your game.</p>
-    <p class="zgoalline" style="margin:0 0 6px">Numbers are called one by one. Tap each one on your ticket as it is called. When a row or the whole ticket is complete, press Claim before the next number: the software checks it, no need to shout.</p>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
+    ${lateTip()}<p class="zsmall" id="soundtip" style="margin:0 0 6px">Sound is off, so your phone stays quiet in the office. To hear the numbers read out, press Sound on your ticket page.</p><p class="zgoalline" style="margin:0 0 6px">Numbers are called one by one. Tap each one on your ticket as it is called. When a row or the whole ticket is complete, press Claim before the next number: the software checks it, no need to shout.</p>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
     ${INAPP ? `<p class="zsmall" style="margin:0 0 8px">Tip: if this link opened inside another app, open it in Chrome or Safari and always use that same one for this game.</p>` : ""}${J.mode === "needPhone" && !msg ? `<div class="zbanner info" role="status" style="margin:0 0 8px">${J.note ? esc(J.note) : "This link was already opened on another phone. Please type your mobile number to get your ticket."}</div>` : ""}
     ${DEMO ? "" : CBConsent.html("K4")}
     ${personal ? `<p class="zsmall" style="margin:0 0 6px">Your personal link is ready. Press the button to get your ticket.</p>` : joinWho()}
@@ -197,6 +198,8 @@
     <p class="spriv">Players are 18 or older.</p>
     <p class="spriv"><a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a></p></div>`;
   };
+  /** TA22: a person who opens the link after the first number is told BEFORE joining: it is running, their numbers start later, what is gone and what is still open. */
+  const lateTip = () => INFO.startMs && !INFO.manualStart && !INFO.dns && !INFO.cancelled && Date.now() >= INFO.startMs + 30000 ? `<div class="zbanner info" id="latetip" role="status" style="margin:0 0 8px"><b>This game is already running.</b> If you join now, your numbers start about ${Math.round(ZG.LATE_LAG_ROUNDS * 3)} seconds later. Numbers called before are gone for you, and prizes already won stay won. The other prizes are still open to you.</div>` : "";
   const cancelledView = () => `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This game was cancelled</h2><p class="zsmall" style="margin:0">${esc((INFO.cancelled && INFO.cancelled.message) || "The organizer cancelled this game.")} There is nothing to do on this page. Thank you for your interest.</p></div>`;
   const dnsView = () => `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This game did not start</h2><p class="zsmall" style="margin:0">This game did not start. Your details have been erased. There is nothing to do on this page. Thank you for your interest.</p></div>`;
   const removedView = () => `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>You have been removed from this game</h2><p class="zsmall" style="margin:0">This phone no longer plays in this game. If you think this is a mistake, please ask the person who invited you.</p></div>`;
@@ -333,7 +336,7 @@
     return `<div class="zcard zwait">${top}
       <div class="zdo"><b>What to do:</b> nothing yet. Keep this page open. When the numbers start, tap each one on your ticket as it is called.</div>
       ${prizes ? `<h3>What you can win</h3><ul class="zlist">${prizes}</ul>` : ""}
-      <h3>How it works</h3><ol class="zlist"><li>Your ticket is below. Numbers are called one by one. You see only the number just called, so stay alert.</li><li>Tap each number on your ticket as it is called. The ticket does not mark itself.</li><li>When a row or the whole ticket is complete, press <b>Claim</b> before the next number is called. The software checks it against the called numbers, you do not need to shout.</li><li>A wrong claim is a <b>Bogey</b>: it does not count. Two Bogeys on the same prize and your ticket is out of that prize.</li><li>The organizer hands over the rewards.</li></ol>
+      <h3>How it works</h3><ol class="zlist"><li>Your ticket is below. Numbers are called one by one. You see only the number just called, so stay alert.</li><li>Tap each number on your ticket as it is called. The ticket does not mark itself.</li><li>When a row or the whole ticket is complete, press <b>Claim</b> before the next number is called. The software checks it against the called numbers, you do not need to shout.</li><li>A wrong claim is a <b>Bogey</b>: it does not count. Two Bogeys on the same prize and your ticket is out of that prize.</li><li>The organizer hands over the rewards.</li></ol><p class="zsmall zfairlink"><a href="/fair.html" target="_blank" rel="noopener">How we keep it fair</a></p>
       <button class="zbtn s alt" id="soundtest">Check my sound</button><a class="zbtn s alt" id="addcal" download="game.ics" href="${icsFor(v)}">Add to my calendar</a></div>`;
   }
 
@@ -452,8 +455,7 @@
       <p class="zsmall zthanks">Thank you for joining our extended family of Corporate Tambola.</p>
       <p class="zsmall" style="font-size:15px;margin:6px 0 10px">${n ? "Your prizes are listed below and stay on this phone. Show them to your organizer to collect." : "No prize this time. Every game is a good game, and the next one is another chance."}</p>
       <button class="zbtn" id="shr">Share with friends and colleagues</button>
-      <a class="zbtn s alt" style="display:inline-flex;align-items:center;text-decoration:none;margin-top:8px" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent("I just played Corporate Tambola with my team. Bring it to your company: " + shareLink)}">WhatsApp</a>
-      <p class="zsmall" style="margin:10px 0 0"><a href="/partner.html?from=ticket">Earn 50% by sharing: Refer &amp; earn</a></p></div>`;
+      <a class="zbtn s alt" style="display:inline-flex;align-items:center;text-decoration:none;margin-top:8px" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent("I just played Corporate Tambola with my team. Bring it to your company: " + shareLink)}">WhatsApp</a></div>`;
   }
   function bindShare() {
     const b = document.getElementById("shr"); if (!b) return;
@@ -718,7 +720,7 @@
         <div class="zrow1"><div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number just called " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
           <div class="ztxt"><div class="zlab">Number just called</div><div class="zmeta" id="calledcount">${esc(ZG.calledLine(calledTotal))}</div>${cdown}<p class="zhelp" id="ballhelp">${v.phase === "ended" ? "The game is over." : last ? "Find it on your ticket and tap it." : "The first number will appear here."}</p></div></div>
         <div class="zprog" role="progressbar" aria-valuemin="0" aria-valuemax="90" aria-valuenow="${calledTotal}"><i style="width:${Math.min(100, Math.round(calledTotal / 90 * 100))}%"></i></div>
-        ${few.length ? `<div class="zlastrow" id="lastfew"><span class="zlab">Last 5 numbers called</span><div class="zballs">${few.map((n) => `<i class="zlastn">${n}</i>`).join("")}</div></div>` : ""}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p>`}</div>`;
+        ${few.length ? `<div class="zlastrow" id="lastfew"><span class="zlab">Last 5 numbers called</span><div class="zballs">${few.map((n) => `<i class="zlastn">${n}</i>`).join("")}</div></div>` : ""}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p><p class="zsmall zkeepon" id="keepon">${esc(KEEPON)}</p>`}<p class="zsmall zfairline" id="fairline">Every number comes from a public random source and is the same on every phone. <a href="/fair.html" target="_blank" rel="noopener">How we keep it fair</a></p></div>`;
   }
   let LAST_CLAIM_NOW = "";
   // ---- everybody is told, calmly and in plain words, when a ticket claims a prize and what came of it (ticket numbers only, never names); each pop-up closes by itself
@@ -734,15 +736,17 @@
   }
   const toastHtml = () => (TOASTS.list.some((x) => !x.gone) ? `<div class="ztoasts" id="claimtoasts" role="status" aria-live="polite">${TOASTS.list.filter((x) => !x.gone).map((x) => `<div class="ztoast">${esc(x.text)}</div>`).join("")}</div>` : "");
   // ---- another app's call or message took the player away: on return the page asks for the server's schedule at once and says so, calmly
-  let hiddenAt = 0, AWAY = null;
-  const awayLine = () => (AWAY && Date.now() < AWAY.until ? `<div class="zbanner info" id="awayline" role="status">You were away for ${AWAY.secs} seconds. The numbers called meanwhile are in the Last 5 numbers called. Tap them on your ticket.</div>` : "");
+  let hiddenAt = 0, hiddenLen = 0, AWAY = null;
+  /** A18: the welcome-back line names the numbers that were called while the player was away (the Last 5 strip only keeps them for about a minute). */
+  const awayText = (secs, missed) => `Welcome back. You were away for ${secs} seconds. ` + (!missed.length ? "No number was called while you were away." : missed.length <= 6 ? `Called meanwhile: ${missed.join(", ")}. Tap them on your ticket. If a prize is complete, press Claim.` : `${missed.length} numbers were called meanwhile; the last 6 were ${missed.slice(-6).join(", ")}. Tap on your ticket any number you missed: it marks only if it was called.`);
+  const awayLine = (v) => (AWAY && Date.now() < AWAY.until ? `<div class="zbanner info" id="awayline" role="status">${esc(awayText(AWAY.secs, ((v && v.log) || []).slice(AWAY.from)))}</div>` : "");
   function wake() { // the page is in front again
     const secs = hiddenAt ? Math.round((Date.now() - hiddenAt) / 1000) : 0; hiddenAt = 0;
-    if (secs >= 5) AWAY = { secs, until: Date.now() + 15000 };
+    if (secs >= 5) AWAY = { secs, from: hiddenLen, until: Date.now() + 20000 };
     try { rt.resync && rt.resync(); } catch { /* the loop asks again in a moment */ }
     Promise.resolve(rt.tick && rt.tick()).catch(() => {}).then(() => { try { paint(); } catch { /* drawn on the next beat */ } });
   }
-  document.addEventListener("visibilitychange", () => { rt.beatOn = document.visibilityState !== "hidden"; if (document.visibilityState === "hidden") hiddenAt = hiddenAt || Date.now(); else wake(); }); // a hidden page sends no claim signal calls
+  document.addEventListener("visibilitychange", () => { rt.beatOn = document.visibilityState !== "hidden"; if (document.visibilityState === "hidden") { if (!hiddenAt) { hiddenAt = Date.now(); try { hiddenLen = rt.view().log.length; } catch { hiddenLen = 0; } } } else wake(); }); // a hidden page sends no claim signal calls
   /** One plain sentence: what is happening now and what to do, in the same words on every screen (ZG.story). */
   function storyBarFor(v) {
     const role = ME.role === "organizer" ? "organizer" : ME.role === "host" ? "host" : "player", called = v.late ? v.log.length + (v.late.hidden || 0) : v.log.length, manual = v.startMode === "manual";
@@ -799,7 +803,7 @@
     return `<div class="zclaims" id="claims">${btns ? `<div class="zclaimrow">${btns}</div>` : ""}${staleNote}${v.lateClaim ? `<div class="zbanner warn zlate" id="latenote" role="alert">${esc(v.lateClaim)}</div>` : ""}<p class="zsmall zrule" id="claimhint">The Claim button turns gold when you complete a prize. Press it before the next number is called.</p>
       ${sending.length ? `<p class="zsmall zsent zsending" role="status">Sending your claim for ${sending.map((k) => esc(KEYNAME(k))).join(", ")}. Keep this page open and your screen on until it says sent.</p>` : ""}
       ${checking.length ? `<p class="zsmall zsent" role="status">Claim sent for ${checking.map((k) => esc(KEYNAME(k))).join(", ")}. The software is checking it against the called numbers.</p>` : ""}
-      ${lost.length ? `<p class="zsmall zlost">${lost.map((k) => esc(KEYNAME(k))).join(", ")}: claimed, but another ticket was ahead or the claim came after the next number.</p>` : ""}
+      ${lost.map((k) => { let mine = -1; try { mine = ZG.completionIndexKey(v.tickets, k, v.log); } catch { /* unknown: the second line says so */ } const ls = ZG.lostClaimLines(KEYNAME(k), (v.results || []).filter((x) => x.pattern === k), mine); return `<p class="zsmall zlost"><b>${esc(KEYNAME(k))}: not this time.</b><br>${esc(ls[0])}<br>${esc(ls[1])}</p>`; }).join("")}
       ${bog ? `<p class="zsmall zbogeys">Bogeys: ${bog}</p>` : ""}${out}<div id="tapnote"></div></div>`;
   }
   /** SIDE claim button, once per prize (its first open line): gold when the player has this prize to claim, otherwise grey (while the game is in play) and a press asks first, because it would count as a wrong claim (a Bogey). */
@@ -833,13 +837,13 @@
     const called = new Set(v.marks || []); // what the player has tapped (the ticket never marks itself)
     const last = v.log[v.log.length - 1];
     toastsFrom(v);
-    const banners = [storyBarFor(v), claimAlert(v), awayLine()];
+    const banners = [storyBarFor(v), claimAlert(v), awayLine(v)];
     { const now = (v.claimNow || []).join(","); if (now && now !== LAST_CLAIM_NOW) { try { navigator.vibrate && navigator.vibrate(220); } catch {} } LAST_CLAIM_NOW = now; } // a short buzz the moment a prize becomes claimable, where the phone allows it
     if (v.reconnecting) banners.push(`<div class="zbanner info" id="reconnecting" role="status">${esc(ZG.say("net.reconnecting"))}</div>`);
     if (v.error) banners.push(`<div class="zbanner warn" role="alert">${esc(v.error)}</div>`);
     if (v.locked) banners.push(ME.role === "organizer" || ME.role === "host" ? `<div class="zbanner warn" role="status"><b>Payment pending for this game.</b> The game starts 2 minutes after the payment is confirmed. Open your console to pay. Your ticket is safe. Keep this page open.</div>` : `<div class="zbanner warn" role="status"><b>Waiting for the Organizer or Host to start the game.</b> Your ticket is safe. Keep this page open: it begins as soon as they are done.</div>`);
     else if (v.stopped) banners.push(`<div class="zbanner info">The organizer has ended this game.</div>`);
-    else if (v.paused) { const p = v.pausedInfo, hm = (ms) => new Date(ms).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }), left = p ? Math.max(1, Math.round(p.secondsLeft / 60)) : 0; banners.push(`<div class="zbanner pause" role="status" id="pausebanner"><b>PAUSED</b><span>${p ? "Paused by " + esc(p.by) + " at " + esc(hm(p.sinceMs)) + ". The numbers start again at about " + esc(hm(p.endMs)) + " (in about " + left + (left === 1 ? " minute" : " minutes") + "), or sooner when they press Resume. Keep this page open." : "The game is paused. It will carry on shortly. Keep this page open."}</span></div>`); }
+    else if (v.paused) { const p = v.pausedInfo, hm = (ms) => new Date(ms).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }), left = p ? Math.max(1, Math.round(p.secondsLeft / 60)) : 0; banners.push(`<div class="zbanner pause" role="status" id="pausebanner"><b>PAUSED</b><span>${p && p.restartsInSec ? "Restarts in " + p.restartsInSec + (p.restartsInSec === 1 ? " second" : " seconds") + "." + (v.callMode === "host" ? "" : " The first number comes " + (v.callSeconds || 12) + " seconds after that.") : p ? "Paused by " + esc(p.by) + " at " + esc(hm(p.sinceMs)) + ". The numbers start again at about " + esc(hm(p.endMs)) + " (in about " + left + (left === 1 ? " minute" : " minutes") + "), or sooner when they press Resume. Keep this page open." : "The game is paused. It will carry on shortly. Keep this page open."}</span></div>`); }
     else if (v.mode === "hold" && v.nowRound !== null && v.phase !== "ended") banners.push(`<div class="zbanner warn">Checking with the organizer… numbers will continue in a moment.</div>`);
     else if (v.mode === "blind" && v.phase !== "ended") banners.push(`<div class="zbanner warn">Cannot reach the organizer's controls right now. Play continues; a pause may appear late.</div>`);
     // (one end message only: the story line at the top says how the game ended)
@@ -859,7 +863,7 @@
       ${roundCards(v)}
       ${v.brk ? breakCard(v.brk) : ""}
       ${callCard(v, last, sub)}
-      <div class="zcard ztk${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Video ticket <span class="zdemotag">VIDEO</span>' : (v.tickets.length > 1 ? "Your tickets" : "Your ticket") + demoTag()}</h2>${ribbon}${tix}<ol class="zrules" id="zrules"><li>This game works like the real one.</li><li>When a number is called, tap it on your ticket to cross it out.</li><li>If you complete a prize, press Claim before the next number is called.</li></ol>${claimBar(v)}<a class="zref" href="/partner.html?from=ticket">Refer &amp; earn</a></div>
+      <div class="zcard ztk${curWins.length ? " zwon" : ""}"><h2>${DEMO ? 'Video ticket <span class="zdemotag">VIDEO</span>' : (v.tickets.length > 1 ? "Your tickets" : "Your ticket") + demoTag()}</h2>${ribbon}${tix}<ol class="zrules" id="zrules"><li>This game works like the real one.</li><li>When a number is called, tap it on your ticket to cross it out.</li><li>If you complete a prize, press Claim before the next number is called.</li></ol>${claimBar(v)}</div>
       ${v.phase === "ended" ? "" : livePrizesCard(v)}
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}
@@ -887,6 +891,7 @@
     }
     CK.loading = false;
   }
+  const KEEPON = "Tip: keep this screen on, and turn on Do Not Disturb, so a call or message does not make you miss a number."; // TA08 / A18: one plain line, the same on the check-in, the ticket and the pause
   const ckTime = (ms) => new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZoneName: "short" }); // the time on THIS phone, with its own time zone named: people play from all over the world
   function checkinView() {
     const ids = CK.ids ? `<div class="zckids"><div><span>Game ID</span><b>${esc(CK.ids.game)}</b></div><div><span>Participant ID</span><b>${esc(CK.ids.participant)}</b></div><div><span>Ticket ID</span><b>${esc(CK.ids.ticket)}</b></div></div>` : "";
@@ -894,11 +899,12 @@
     if (!CK.loaded) return `${brandStrip()}${demoGameCard()}<div class="zcard"><p class="zmsg">Loading your check-in…</p></div>`;
     if (!CK.open) {
       const left = Math.max(0, Math.round((CK.opensMs - Date.now()) / 1000));
-      return `${brandStrip()}${demoGameCard()}<div class="zcard zck"><div class="zeyebrow">Before the game</div><h2>Check-in opens at ${esc(ckTime(CK.opensMs))}</h2>${ids}<p class="zsmall">Check-in opens 5 minutes before the game starts. Keep this page open: the check-in appears here by itself, and your ticket opens once you are marked present.</p><div class="zckwait"><span>Opens in</span> <b>${esc(clock(left))}</b></div></div>`;
+      return `${brandStrip()}${demoGameCard()}<div class="zcard zck"><div class="zeyebrow">Before the game</div><h2>Check-in opens at ${esc(ckTime(CK.opensMs))}</h2>${ids}<p class="zsmall">Check-in opens 5 minutes before the game starts. Keep this page open: the check-in appears here by itself, and your ticket opens once you are marked present.</p><p class="zsmall zkeepon">${esc(KEEPON)}</p><div class="zckwait"><span>Opens in</span> <b>${esc(clock(left))}</b></div></div>`;
     }
     const x = CK.v, ready = x.okN && x.okM && String(x.code).length === 4;
     return `${brandStrip()}${demoGameCard()}<div class="zcard zck"><div class="zeyebrow">Before the game</div><h2>Mark yourself present</h2>${ids}
       <p class="zsmall">Check your name and mobile number, type the code shown below, and press Submit. Your ticket opens when you are marked present.</p>
+      <p class="zsmall zkeepon">${esc(KEEPON)}</p>
       <p class="zsmall zckkeep">We keep the time you check in (and a corrected name or number) with your other game data, and delete it within 24 hours after the game ends. If you win, the time of your check-in is kept for 365 days with the winners record.</p>
       <div class="zckrow"><label for="ckname">Your name</label><input id="ckname" class="zin" autocomplete="off" maxlength="60" value="${esc(x.name)}"${x.editN ? "" : " disabled"}><button type="button" class="zmini" id="ckeditn">${x.editN ? "Done" : "Edit"}</button></div>
       <label class="zchk"><input type="checkbox" id="ckokn"${x.okN ? " checked" : ""}> This name is correct</label>
@@ -913,10 +919,10 @@
   }
   function bindCheckin() {
     const $ = (id) => document.getElementById(id), x = CK.v, keep = () => { try { store.set("ctz:" + EID + ":ck", JSON.stringify(x)); } catch { /* not kept */ } }, sync = () => { keep(); const h = $("ckhint"); if (h) h.hidden = !!(x.okN && x.okM && String(x.code).length === 4); };
-    const hook = (id, fn) => { const el = $(id); if (el) el.oninput = () => { fn(el); CK.err = ""; const e = $("ckerr"); if (e) e.textContent = ""; sync(); }; };
+    const clearErr = () => { CK.err = ""; const e = $("ckerr"); if (e) e.textContent = ""; }, hook = (id, fn) => { const el = $(id); if (el) el.oninput = () => { fn(el); clearErr(); sync(); }; }; // A15: ticking a box clears the red line too (it said "tick the box" and kept saying it)
     hook("ckname", (el) => { x.name = el.value; }); hook("ckmob", (el) => { x.mobile = el.value; });
     hook("ckcode", (el) => { el.value = el.value.replace(/\D/g, "").slice(0, 4); x.code = el.value; });
-    const chk = (id, key) => { const el = $(id); if (el) el.onchange = () => { x[key] = el.checked; sync(); }; }; chk("ckokn", "okN"); chk("ckokm", "okM");
+    const chk = (id, key) => { const el = $(id); if (el) el.onchange = () => { x[key] = el.checked; clearErr(); sync(); }; }; chk("ckokn", "okN"); chk("ckokm", "okM");
     const ed = (id, key, field) => { const el = $(id); if (el) el.onclick = () => { x[key] = !x[key]; if (key === "editM" && x.editM && String(x.mobile).includes("*")) x.mobile = ""; CK.html = ""; CK.force = true; paint(); const f = $(field); if (f && x[key]) f.focus(); }; }; ed("ckeditn", "editN", "ckname"); ed("ckeditm", "editM", "ckmob");
     const go = $("cksubmit"); if (go) go.onclick = async () => {
       if (CK.busy) return;
@@ -934,6 +940,7 @@
     sync();
   }
   // Keep the screen on while numbers are being called (or are about to be): a phone that locks misses the number and the claim window. Where the phone cannot do it, nothing happens.
+  const wantAwake = (v, o) => !o.dns && !o.cancelled && !o.removed && !v.stopped && v.phase !== "ended" && (!!o.checkinWaiting || (v.phase === "play" && !v.locked && (v.log.length > 0 || (v.nextCallInSec !== null && v.nextCallInSec <= o.graceSecs + 60)))); // TA08: held from check-in to the end of the game, a pause included (the numbers come back after the break)
   let wl = null, wlAt = 0, awake = false;
   async function keepAwake(want) {
     try {
@@ -951,7 +958,7 @@
     if (INFO.rehearsal && INFO.rehearsal.over) { $app.innerHTML = rehearsalOverHtml(); return; } // an ended rehearsal: nothing else is shown, the real game's link is offered
     if (BOGEYASK && (v.claimNow || []).length) BOGEYASK = null; // a real prize to claim: the question must never sit on top of the gold buttons
     if (window.ctzView) window.ctzView(v); // the flight recorder (blackbox.js) learns which stage the game is in
-    awake = v.phase === "play" && !INFO.dns && !INFO.cancelled && !ME.removed && !v.locked && !v.paused && !v.stopped && (v.log.length > 0 || (v.nextCallInSec !== null && v.nextCallInSec <= GRACE_SECS + 60)); keepAwake(awake); // held from about a minute before the first number to the end of the game
+    awake = wantAwake(v, { dns: INFO.dns, cancelled: INFO.cancelled, removed: ME.removed, checkinWaiting: !!(INFO.checkin && v.pid && !CK.present), graceSecs: GRACE_SECS }); keepAwake(awake); // held from check-in (or about a minute before the first number) to the end of the game, a pause included
     if (!v.won) v.won = []; // an older saved copy of the game code during an update: never break the screen
     if (INFO.dns) { if (timer) { clearInterval(timer); timer = null; } clearInterval(J.timer); mediaHost.style.display = "none"; $app.innerHTML = dnsView(); window.__ctzOff = v.phase === "boot"; paintBrand(); return; } // a game that did not start: one calm screen, nobody can join or pay
     if (v.phase === "missing" || v.phase === "boot") { $app.innerHTML = (INFO.brand || v.phase === "boot" ? brandStrip() : "") + `<p class="zmsg">${esc(v.phase === "boot" && !navigator.onLine ? "No connection right now. Your ticket is safe on this phone. This page tries again by itself every few seconds and as soon as you are back online." : v.error || "Loading…")}</p><div class="zretry"><button class="zbtn" id="retry" type="button">Try again</button>${v.phase === "boot" ? `<p class="zsmall" style="text-align:center">This page also tries again by itself every few seconds.</p>` : ""}</div>`; paintBrand(); window.__ctgRetry = bootUp; const rb = document.getElementById("retry"); if (rb) rb.onclick = () => { rb.disabled = true; rb.textContent = "Trying…"; bootUp(); }; if (v.phase === "boot" && !bootTimer) bootTimer = setTimeout(bootUp, 8000); return; }
@@ -1012,8 +1019,10 @@
     } catch { tapNote("Could not send your claim. Please press Claim again.", 0); }
     keys.forEach((k) => claimBusy.delete(k)); paint();
   }
+  /** A15: "Type it again" on a personal link goes back to the typing screen (a link-holder with no mode would see a page with no number box: a dead end). */
+  const againState = (token) => (token ? { mode: "needPhone", note: "Type your mobile number again, then press the button." } : { mode: "" });
   function bindJoin() {
-    const again = document.getElementById("again"); if (again) again.onclick = () => { clearInterval(J.timer); clearTimeout(J.retry); J.busyTries = 0; J.mode = ""; J.wid = ""; clearWait(); paint(); };
+    const again = document.getElementById("again"); if (again) again.onclick = () => { clearInterval(J.timer); clearTimeout(J.retry); J.busyTries = 0; Object.assign(J, againState(!!TOKEN)); J.wid = ""; clearWait(); paint(); };
     const go = document.getElementById("go"); if (!go) return;
     if (!DEMO) CBConsent.wire(document, "K4", J.k4); // never ticked in advance; the button stays off until both boxes are ticked
     const phEl = document.getElementById("ph"), ccEl = document.getElementById("cc");

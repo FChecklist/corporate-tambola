@@ -46,7 +46,7 @@
       S.round = Math.max(1, ...Object.keys(S.logs).filter((r) => S.logs[r].length > 0).map(Number));
       try { S.results = (await j(`/api/z/${EID}/results`)).results || []; } catch {}
       S.err = "";
-    } catch (e) { S.err = e.status === 403 ? "This game is not published yet. Publish it first (step 7 in your console). This screen then starts by itself: you do not need to refresh." : e.status === 404 ? "That engagement was not found." : "Connecting…"; }
+    } catch (e) { S.err = e.status === 403 ? "This game is not published yet. Publish it first (step 7 in your console). This screen then starts by itself: you do not need to refresh." : e.status === 404 ? "That game was not found." : "Connecting…"; }
   }
 
   // REHEARSAL: the same block at the top of every page of a rehearsal (Game ID, REHEARSAL GAME n, the sentence); the real game's pages never have it
@@ -121,7 +121,7 @@
     $app.innerHTML = `${head}${storyBar}${banner}<div class="main"><div class="now"><div class="lbl">Number</div><div class="num ${fresh ? "fresh" : ""}">${last}</div><div class="calledbig" id="calledbig">${esc(ZG.calledLine(log.length))}</div>${log.length > 1 ? `<div class="lastfew" id="lastfew">Last 5 numbers called: ${log.slice(-6, -1).reverse().map((n) => `<i>${n}</i>`).join("")}</div>` : ""}${cdown}${cfg.callMode === "host" && !paused && !hostWait && log.length > 0 && log.length < 90 ? `<p class="wait" id="hostcalls">The host calls the numbers</p>` : ""}${hostWait && log.length < 90 ? `<p class="wait" id="hostwait">Waiting for the host</p>` : ""}</div>${prizes}</div><div>${wins ? `<div class="wins">${wins}</div>` : ""}<div class="foot">Join: ${esc(location.host)}/z?e=${esc(EID)}</div></div>`;
   }
 
-  if (!EID) { $app.innerHTML = `<p class="msg">No engagement was chosen.</p>`; return; }
+  if (!EID) { $app.innerHTML = `<p class="msg">No game was chosen.</p>`; return; }
   window.__big = S; // read by the tests (nothing personal is in it)
   // keep the projector's screen on while this page is in front (where the browser can): a blank screen in front of a room is a visible failure
   let wl = null;

@@ -67,7 +67,7 @@ export async function checkinRoute(c: Ctx): Promise<Response> {
   const pid = c.req.method === "GET" ? pidIn : typeof b?.pid === "string" ? b.pid : "";
   const seat = seatOfPidText(pid);
   const who = seat ? await db.prepare("SELECT p.pii AS pii, p.name AS name, s.seq AS seq, s.inv AS inv, s.dev AS dev, s.blocked AS blocked FROM participant p JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.pid=?").bind(eid, pid).first<{ pii: string | null; name: string | null; seq: number; inv: number | null; dev: string | null; blocked: number | null }>() : null;
-  if (!who) return json({ error: "Not a participant of this engagement." }, 403);
+  if (!who) return json({ error: "Not a participant of this game." }, 403);
   if (who.blocked) return json({ error: "You were removed from this game by the organizer.", code: "removed", removed: true }, 403);
   // The participant id is not a secret (the seat list is public once the game starts), so the phone proves it is THE phone of this ticket: its own random device id, whose hash is kept with the seat (the same rule as joining).
   const devIn = c.req.method === "GET" ? c.url.searchParams.get("device") ?? "" : typeof b?.device === "string" ? b.device : "";

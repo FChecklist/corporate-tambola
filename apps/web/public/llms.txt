@@ -9,6 +9,7 @@ Plain, checked answers about safety, privacy, law, cost and what the software do
 - [Rules and privacy](https://housie.corporatetambola.com/legal.html): the privacy and data policy and the game rules
 - [Terms](https://housie.corporatetambola.com/terms.html)
 - [Data processing](https://housie.corporatetambola.com/dpa.html) and [sub-processors](https://housie.corporatetambola.com/subprocessors.html)
+- [For IT: addresses to allow, hosting, how long data stays](https://housie.corporatetambola.com/trust.html#for-it)
 - [Organizer guide](https://housie.corporatetambola.com/organizer-guide.html): how to set up, share, run and close a game
 - [Free demo](https://housie.corporatetambola.com/demo.html): a real ticket and a real mini-game of about a minute; one button, nothing to type
 - [Home, prices and how to start](https://housie.corporatetambola.com/): price list by size; building and publishing are free, the organizer pays before the start

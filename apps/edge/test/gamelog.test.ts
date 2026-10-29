@@ -146,3 +146,61 @@ describe("the Lucky Draw is in the game log", () => {
     expect(log.prizes.filter((p: any) => /Gift hamper/.test(p.prize)).map((p: any) => p.ticket).sort((a: number, b: number) => a - b)).toEqual([4, 9, 31]);
   });
 });
+
+describe("A22 (WP-02): the log is saved when the game ends, whatever happens to the report e-mail", () => {
+  const roundOf = (ms: number) => Math.floor((ms / 1000 - 1692803367) / 3) + 1;
+  const ran = async (id: string, withEmail: boolean) => {
+    const { endBoundMs } = await import("../src/lifecycle");
+    expect((await call("POST", "/api/z", { id, startRound: roundOf(T - 2 * 3_600_000), callSeconds: 6, cap: 100 }, { "x-organizer": "plat" })).status).toBe(200);
+    for (let i = 1; i <= 3; i++) await call("POST", `/api/z/${id}/join`, { phone: "9876" + String(500000 + i), name: "Guest " + i, device: String(i).padStart(32, "0") }, {}, T - 3 * 3_600_000);
+    if (withEmail) raw.prepare("INSERT INTO kv(k,v) VALUES(?,?)").run(`contact/${id}`, JSON.stringify({ email: "boss@acme.com", phone: "9811122233" }));
+    return endBoundMs(env as any, raw.query("SELECT * FROM engagement WHERE id=?").get(id));
+  };
+  const glog = (id: string) => { const r = raw.query("SELECT v FROM kv WHERE k=?").get(`glog/${id}`) as any; return r ? JSON.parse(r.v) : null; };
+  test("an organizer with no e-mail address on file: the report is skipped, but the log is still saved before the players' details go (it used to be saved only by the report pass)", async () => {
+    const { lifecycleTick, PURGE_AFTER_MS } = await import("../src/lifecycle");
+    const end = await ran("GL-NE", false);
+    await lifecycleTick(env as any, end + 5 * 60_000);
+    expect((raw.query("SELECT report_state FROM life WHERE eid='GL-NE'").get() as any).report_state).toBe("no-email");
+    const g = glog("GL-NE"); expect(g).not.toBeNull(); expect(g).toMatchObject({ saved: true, people: { joined: 3 } }); expect(g.endReason).toMatch(/numbers|prize/i); expect(JSON.stringify(g)).not.toMatch(/Guest [123]|98765000/);
+    await lifecycleTick(env as any, end + PURGE_AFTER_MS + 3_600_000);
+    expect(raw.query("SELECT COUNT(*) AS c FROM participant WHERE eid='GL-NE'").get()).toEqual({ c: 0 });
+    expect(glog("GL-NE")).toMatchObject({ saved: true }); // the log outlives the 20-hour deletion
+  });
+  test("with an e-mail address: the log is already saved at the first pass after the end, before any report e-mail has gone (the report is still being prepared)", async () => {
+    const { lifecycleTick } = await import("../src/lifecycle");
+    const { sentReports } = await import("../src/pay");
+    sentReports.length = 0;
+    const end = await ran("GL-EM", true);
+    await lifecycleTick(env as any, end + 5 * 60_000); // pass 1: the report only reads the people
+    expect(sentReports.length).toBe(0);
+    expect(glog("GL-EM")).toMatchObject({ saved: true, people: { joined: 3 } });
+  });
+});
+
+describe("A23 (WP-02): the log never cuts a list silently: it says 'and N more'", () => {
+  test("more than 200 too-late claims: the newest 200 are listed and the log says how many more there were", async () => {
+    const { endBoundMs } = await import("../src/lifecycle");
+    const roundOf = (ms: number) => Math.floor((ms / 1000 - 1692803367) / 3) + 1;
+    expect((await call("POST", "/api/z", { id: "GL-LATE", startRound: roundOf(T - 2 * 3_600_000), callSeconds: 6, cap: 100 }, { "x-organizer": "plat" })).status).toBe(200);
+    const jn = await j(await call("POST", "/api/z/GL-LATE/join", { phone: "9876500001", name: "Guest 1", device: "1".padStart(32, "0") }, {}, T - 3 * 3_600_000));
+    for (let i = 0; i < 205; i++) expect((await call("POST", "/api/z/GL-LATE/claims", { pid: jn.pid, device: "1".padStart(32, "0"), claims: [{ pattern: "top", idx: 0 }] }, {}, T + i)).status).toBe(409); // every one is late: the game is long past number 2
+    void endBoundMs;
+    const log = await j(await call("GET", "/api/z/GL-LATE/gamelog", undefined, { "x-organizer": "plat" }));
+    expect(log.claims.filter((c: any) => c.outcome === "too late").length).toBe(200);
+    expect(log.claimsMore).toBe(5);
+  });
+  test("more than 2,000 joins: the first 2,000 tickets are listed and the log says how many more joined", async () => {
+    const o = await game("GL-JN");
+    const ins = raw.prepare("INSERT INTO participant(eid,pid,phone_hash,name,joined_ms) VALUES('GL-JN',?,?,NULL,?)"), seat = raw.prepare("INSERT INTO seat(eid,seq,pid,ph) VALUES('GL-JN',?,?,?)");
+    raw.exec("BEGIN"); for (let n = 100; n < 2105; n++) { ins.run(`${n}xaaaaaaaaaaaa`, "h" + n, T + n); seat.run(n, `${n}xaaaaaaaaaaaa`, "p" + n); } raw.exec("COMMIT");
+    const log = await j(await call("GET", "/api/z/GL-JN/gamelog", undefined, o.h));
+    expect(log.people.joined).toBe(2008); expect(log.joins.length).toBe(2000); expect(log.joinsMore).toBe(8);
+  });
+  test("a game within both limits has nothing 'more'", async () => {
+    const o = await game("GL-FEW");
+    const log = await j(await call("GET", "/api/z/GL-FEW/gamelog", undefined, o.h));
+    expect(log.joinsMore ?? 0).toBe(0); expect(log.claimsMore ?? 0).toBe(0);
+    expect(log.schedule.fullGap).toBe(true); // the log carries the full-gap rule of its game, so the page that shows it works out the same numbers the players saw
+  });
+});

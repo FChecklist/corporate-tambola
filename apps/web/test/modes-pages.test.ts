@@ -104,7 +104,7 @@ describe("above 1,000 people the manual-play choice is hidden", () => {
     await c.waitFor(() => !!c.$('.zc-dot[data-open="7"]')); openStep(c, 7); await c.waitFor((t) => /Check your game/.test(t));
     expect(c.$("#modesummary2")!.textContent).toMatch(/Your game: starts by itself at .*\. The game calls the numbers\./);
     const w = c.$("#prizewarn");
-    expect(w!.textContent).toBe("2 prizes have no name: Early Five, 1st Full House. Winners will get nothing. Go back and name them, or press Publish anyway.");
+    expect(w!.textContent).toBe("2 prizes have no name.Early Five1st Full HouseWinners will get nothing for these prizes. Name them before you publish.Name the prizes (step 3)");
   });
   test("a game of 1,001 people (and of 2,001) keeps 'How does it start?' but 'Who calls the numbers?' is replaced by a short note; at 1,000 both questions are there", async () => {
     const big = await setup("MP-1001", false, { cap: 1001 });
@@ -139,7 +139,7 @@ describe("Game day: the Start button", () => {
     expect((c.$("#startnow") as any).disabled).toBe(false);
     const ph = await openPage(x.w.world, { url: "http://localhost/z?e=MP-DAY", html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, x.now); } });
     open.push(ph);
-    await ph.waitFor((t) => /Join the engagement/.test(t));
+    await ph.waitFor((t) => /Join the game/.test(t));
     (ph.$("#ph") as any).value = "9822222229"; (ph.$("#nm") as any).value = "Asha"; ph.click("#go");
     await ph.waitFor((t) => /Waiting for the host to begin the game/.test(t), 20_000);
     const big = await openPage(x.w.world, { url: "http://localhost/big.html?e=MP-DAY", html: "big.html", scripts: ["zgame.js", "big.js"], afterLoad: (win, f) => { if (f === "zgame.js") fakeBeacon(win, x.now); } });
@@ -168,7 +168,7 @@ describe("Game day: the Start button", () => {
     const x = await setup("MP-PRE", false, { startMode: "manual" });
     const ph = await openPage(x.w.world, { url: "http://localhost/z?e=MP-PRE", html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, () => x.now() - 2 * 3_600_000); } });
     open.push(ph);
-    await ph.waitFor((t) => /Join the engagement/.test(t));
+    await ph.waitFor((t) => /Join the game/.test(t));
     (ph.$("#ph") as any).value = "9822222228"; (ph.$("#nm") as any).value = "Ravi"; ph.click("#go");
     await ph.waitFor((t) => /The game starts at/.test(t) && /host presses Start/.test(t), 20_000);
   });

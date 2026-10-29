@@ -36,7 +36,7 @@ const rtFake = (win: any, nowMs: () => number) => { // the phone's runtime with 
   };
 };
 const phone = (o: O, eid: string) => page(o, `/z?e=${eid}`, "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, () => o.world.now); } });
-const joinOn = async (p: Page, ph = "9822222222") => { await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = ph; (p.$("#nm") as any).value = "Asha"; p.click("#go"); };
+const joinOn = async (p: Page, ph = "9822222222") => { await p.waitFor((x) => /Join the game/.test(x)); (p.$("#ph") as any).value = ph; (p.$("#nm") as any).value = "Asha"; p.click("#go"); };
 
 describe("the Rs 0 game for up to 10 people is a real game: nothing marks it as a demo", () => {
   test("published: no DEMO badge, the pay pill says Rs 0, step 2 lists 'Demo game, 10 people, Rs 0' first, step 8 offers a bigger size", async () => {

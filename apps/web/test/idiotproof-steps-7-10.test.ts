@@ -52,7 +52,7 @@ describe("steps 7 and 8: publish, pay", () => {
   test("a Rs 0 game is told that nothing is due: the note, the side panel and step 8 agree", async () => {
     const o = await organizer(); await make(o, "IP-FREE", { cap: 10, demo: true });
     const p = await consolePage(o, "IP-FREE"); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 7);
-    p.click("#publishopen"); await p.waitFor((x) => /Confirm and publish/.test(x));
+    p.click("#publishopen"); if (p.$("#pubanyway")) p.click("#pubanyway"); /* WP-04 TA12: blank prizes ask once more */ await p.waitFor((x) => /Confirm and publish/.test(x));
     const ph = p.$("#pubPhone") as any; ph.value = "98765 43210"; ph.dispatchEvent(new p.win.Event("input", { bubbles: true }));
     p.click("#pubgo"); await p.waitFor(() => !!p.$("#zcnote"));
     expect(p.$("#zcnote")!.textContent).toMatch(/nothing is due/); expect(p.$("#zcnote")!.textContent).not.toMatch(/pay in step 8/);
