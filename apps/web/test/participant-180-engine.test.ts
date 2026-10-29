@@ -3,6 +3,8 @@
 // Real Worker code and real z.js in a DOM (apps/web/test/harness.ts). Never put a DOM element in expect().
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join as pjoin } from "node:path";
 import { newWorld, openPage, roundAt, roundMs, T, type Page } from "./harness";
 
 setDefaultTimeout(60_000);
@@ -63,10 +65,9 @@ describe("1.8.0 open join form", () => {
 
 describe("1.8.0 family passes", () => {
   test("the family host sees the Family Passes card; a family member waits with the family words; the host approves in the card; the member comes in; Not now gives the polite message", async () => {
-    const o = await organizer(); await game(o, "E180-3", {}, FAMILY);
+    const o = await organizer(); await game(o, "E180-3", { whoCanJoin: "list" }, FAMILY); await o.api("POST", "/api/z/E180-3/people", { people: [{ name: "Host One", phone: "9811100021" }] }, o.token);
     const host = await page(o, "/z?e=E180-3"); await join(host, "9811100021");
     const t = await host.waitFor((x) => /Family Passes/.test(x)); expect(t).toMatch(/You have 5 passes: 1 for you and 4 for your family and friends/); expect(t).toMatch(/up to 15 minutes before the game begins/);
-    await o.api("PATCH", "/api/z/E180-3/settings", { whoCanJoin: "list" }, o.aiKey); // a family member's request now waits for the family host
     const m1 = await page(o, "/z?e=E180-3&from=1&c=family"); await join(m1, "9811100022");
     const w = await m1.waitFor((x) => /Please wait/i.test(x)); expect(w).toMatch(/family host approves your entry/i);
     const m2 = await page(o, "/z?e=E180-3&from=1&c=family"); await join(m2, "9811100023"); await m2.waitFor((x) => /Please wait/i.test(x));
@@ -79,9 +80,8 @@ describe("1.8.0 family passes", () => {
     expect((o.world.raw.query("SELECT status FROM waiting WHERE eid='E180-3' ORDER BY at_ms, id").all() as any[]).map((r) => r.status).sort()).toEqual(["admitted", "declined"]);
   }, 240_000);
   test("10 minutes before the start the family host presses Approve and is told, politely, that family approvals have closed", async () => {
-    const o = await organizer(); await game(o, "E180-5", {}, FAMILY);
+    const o = await organizer(); await game(o, "E180-5", { whoCanJoin: "list" }, FAMILY); await o.api("POST", "/api/z/E180-5/people", { people: [{ name: "Host Five", phone: "9811100041" }] }, o.token);
     const host = await page(o, "/z?e=E180-5"); await join(host, "9811100041"); await host.waitFor((x) => /Family Passes/.test(x));
-    await o.api("PATCH", "/api/z/E180-5/settings", { whoCanJoin: "list" }, o.aiKey);
     o.world.now = START_MS - 25 * 60_000; // the request is made 25 minutes before the start
     const m = await page(o, "/z?e=E180-5&from=1&c=family"); await join(m, "9811100042"); await m.waitFor((x) => /Please wait/i.test(x));
     await host.waitFor((x) => /wants to join your family/.test(x), 70_000);
@@ -90,6 +90,29 @@ describe("1.8.0 family passes", () => {
     expect(await host.waitFor((x) => /Family approvals closed 15 minutes before the game began/.test(x), 30_000)).toBeTruthy();
     expect(o.world.raw.query("SELECT COUNT(*) c FROM person WHERE eid='E180-5' AND inviter='s:1'").get()).toEqual({ c: 0 });
   }, 240_000);
+  test("only a family host asks for waiting requests: a guest invited by a guest and a player in an open game make no /waiting call at all; the family host does", async () => {
+    const calls: string[] = [];
+    const spy = (name: string) => async (o: O, url: string) => { const p = await openPage(o.world, { url: "http://localhost" + url, html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], session: {}, afterLoad: (win: any, f: string) => { if (f === "audio.js") { const orig = win.fetch; win.fetch = (u: any, i: any) => { if (/\/waiting/.test(String(u))) calls.push(name + " " + String(u)); return orig.call(win, u, i); }; } if (f === "zgame.js") rtFake(win, () => o.world.now); } }); open.push(p); return p; };
+    // open game: the inviter may invite, but nothing waits, so nobody polls
+    const o1 = await organizer(); await game(o1, "E180-6", {}, FAMILY);
+    const a = await spy("open-host")(o1, "/z?e=E180-6"); await join(a, "9811100051"); await a.waitFor((x) => /Family Passes/.test(x));
+    const b = await spy("guest-of-guest")(o1, "/z?e=E180-6&from=1&c=family"); await join(b, "9811100052"); await b.waitFor((x) => /Your ticket|Starting in|What you can win|Before the game|Getting ready/.test(x));
+    await new Promise((r) => setTimeout(r, 2500));
+    expect(calls).toEqual([]);
+    // list game: the family host polls (and only the family host)
+    const o2 = await organizer(); await game(o2, "E180-7", { whoCanJoin: "list" }, FAMILY); await o2.api("POST", "/api/z/E180-7/people", { people: [{ name: "Host Seven", phone: "9811100061" }] }, o2.token);
+    const h = await spy("family-host")(o2, "/z?e=E180-7"); await join(h, "9811100061"); await h.waitFor((x) => /Family Passes/.test(x));
+    await new Promise((r) => setTimeout(r, 2500));
+    expect(calls.some((c) => c.startsWith("family-host"))).toBe(true); expect(calls.filter((c) => !c.startsWith("family-host"))).toEqual([]);
+  }, 120_000);
+  test("a Co-host, Host or organizer link (from= is a large code) never shows the family wording; a guest's family link does", async () => {
+    const z = readFileSync(pjoin(import.meta.dir, "../public/z.js"), "utf8").replace(/\r\n/g, "\n");
+    const line = /const FAMILY_LINK = [^;]+;/.exec(z)![0];
+    const fam = (from: number) => new Function("INVITE_FROM", `${line}; return FAMILY_LINK;`)(from) as boolean;
+    expect(fam(1)).toBe(true); expect(fam(999_999_999)).toBe(true);
+    for (const from of [0, 1_000_000_000, 1_000_000_005, 1_500_000_007, 1_900_000_000]) expect([from, fam(from)]).toEqual([from, false]); // none, Co-host, Host, organizer codes
+    expect(z).toContain("${FAMILY_LINK && (!J.note || /^This game is by invitation/.test(J.note)) ? \"You asked to join through a family pass."); // any other server note (for example "used all their invitations") is shown as it is
+  });
   test("a request that waited 30 minutes lapses and the person reads the polite words; 10 minutes before the start the family host cannot approve any more", async () => {
     const o = await organizer(); await game(o, "E180-4", { whoCanJoin: "list" });
     const p = await page(o, "/z?e=E180-4"); await join(p, "9811100031"); await p.waitFor((x) => /Please wait/i.test(x));
