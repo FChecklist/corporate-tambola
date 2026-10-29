@@ -8,12 +8,14 @@ import { join as pjoin } from "node:path";
 import { newWorld, openPage, roundAt, roundMs, T, type Page } from "./harness";
 
 setDefaultTimeout(60_000);
-const START = roundAt(T) + 1200, START_MS = roundMs(START); // one hour after T
+const T2 = Date.UTC(2026, 10, 5, 10, 0, 0); // after APPROVAL_RULES_FROM_MS (31 Oct 2026): games made now follow the 1.8.0 rules
+const START = roundAt(T2) + 1200, START_MS = roundMs(START); // one hour after T2
+const OLD_START = roundAt(T) + 1200, OLD_START_MS = roundMs(OLD_START); // a game made before the release date (T = 1 Oct 2026)
 const rnd = (r: number) => createHash("sha256").update("fake" + r).digest("hex");
 let open: Page[] = [];
 afterEach(async () => { for (const p of open) await p.close(); open = []; });
 
-async function organizer() { const w = newWorld({ FREE_LAUNCH: "1" }); const s = await w.json(await w.api("POST", "/api/start", { email: "boss@acme.com" })); return { ...w, token: s.token as string, aiKey: s.aiKey as string }; }
+async function organizer(oldWorld = false) { const w = newWorld({ FREE_LAUNCH: "1" }); w.world.now = oldWorld ? T : T2; const s = await w.json(await w.api("POST", "/api/start", { email: "boss@acme.com" })); return { ...w, token: s.token as string, aiKey: s.aiKey as string }; }
 type O = Awaited<ReturnType<typeof organizer>>;
 const rtFake = (win: any, nowMs: () => number) => { const Orig = win.ZG.PhoneRuntime; win.ZG.PhoneRuntime = class extends Orig { constructor(eid: string, deps: any) { super(eid, { ...deps, beacon: { fetcher: async (url: string) => { const last = url.split("/").pop()!; const r = last === "latest" ? roundAt(nowMs()) : Number(last); return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" }) }; }, mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 }, verify: (x: any) => x.signature === "aa" }); } }; };
 const page = async (o: O, url: string, email = false) => { const p = await openPage(o.world, { url: "http://localhost" + url, html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], session: {}, afterLoad: (win: any, f: string) => { if (f === "zgame.js") { rtFake(win, () => o.world.now); if (email) win.CT_EMAIL = true; } } }); open.push(p); return p; };
@@ -44,7 +46,7 @@ describe("1.8.0 open join form", () => {
     await p.waitFor((x) => /Your ticket|Starting in|What you can win|Before the game|Getting ready/.test(x));
     // the same email on a second phone: one email, one ticket
     const q = await page(o, "/z?e=E180-1", true); await join(q, "9811100002", { mail: "Asha@Acme.com" });
-    const t = await q.waitFor((x) => /already holds a ticket|Check your email/i.test(x)); expect(t).toMatch(/already holds a ticket|already has a ticket/i);
+    const t = await q.waitFor((x) => /could not use this email ID|Check your email/i.test(x)); expect(t).toMatch(/could not use this email ID/i);
     // a bad shape is refused
     const r = await page(o, "/z?e=E180-1", true); await join(r, "9811100003", { mail: "asha@" });
     expect(await r.waitFor((x) => /check your email ID|looks incomplete|Check your email ID/i.test(x))).toBeTruthy();
@@ -67,7 +69,7 @@ describe("1.8.0 family passes", () => {
   test("the family host sees the Family Passes card; a family member waits with the family words; the host approves in the card; the member comes in; Not now gives the polite message", async () => {
     const o = await organizer(); await game(o, "E180-3", { whoCanJoin: "list" }, FAMILY); await o.api("POST", "/api/z/E180-3/people", { people: [{ name: "Host One", phone: "9811100021" }] }, o.token);
     const host = await page(o, "/z?e=E180-3"); await join(host, "9811100021");
-    const t = await host.waitFor((x) => /Family Passes/.test(x)); expect(t).toMatch(/You have 5 passes: 1 for you and 4 for your family and friends/); expect(t).toMatch(/up to 15 minutes before the game begins/);
+    const t = await host.waitFor((x) => /Family Passes/.test(x) && /Check-in opens/.test(x)); /* the card is there BEFORE check-in opens: approvals close 15 minutes before the start, check-in opens only 5 minutes before */ expect(t).toMatch(/You have 5 passes: 1 for you and 4 for your family and friends/); expect(t).toMatch(/up to 15 minutes before the game begins/);
     const m1 = await page(o, "/z?e=E180-3&from=1&c=family"); await join(m1, "9811100022");
     const w = await m1.waitFor((x) => /Please wait/i.test(x)); expect(w).toMatch(/family host approves your entry/i);
     const m2 = await page(o, "/z?e=E180-3&from=1&c=family"); await join(m2, "9811100023"); await m2.waitFor((x) => /Please wait/i.test(x));
@@ -116,9 +118,36 @@ describe("1.8.0 family passes", () => {
   test("a request that waited 30 minutes lapses and the person reads the polite words; 10 minutes before the start the family host cannot approve any more", async () => {
     const o = await organizer(); await game(o, "E180-4", { whoCanJoin: "list" });
     const p = await page(o, "/z?e=E180-4"); await join(p, "9811100031"); await p.waitFor((x) => /Please wait/i.test(x));
-    o.world.now = T + 40 * 60_000; // nobody answered for 40 minutes
+    o.world.now = T2 + 40 * 60_000; // nobody answered for 40 minutes
     const t = await p.waitFor((x) => /waited 30 minutes and nobody answered/.test(x), 40_000);
     expect(t).toMatch(/open the game link and ask again/); expect(t).toMatch(/Ask again/);
     const w = o.world.raw.query("SELECT status FROM waiting WHERE eid='E180-4'").all() as any[]; expect(w.length).toBe(1);
+  }, 120_000);
+});
+
+describe("a game made BEFORE the approval rules date behaves exactly like 1.7.1", () => {
+  const dev = (i: number) => (String(i).padStart(2, "0") + "c".repeat(32)).slice(0, 32);
+  test("no 30-minute lapse, no 15-minute family cutoff and no email handling for a game created before 31 Oct 2026", async () => {
+    const o = await organizer(true); // the world clock is 1 Oct 2026: the game is created before APPROVAL_RULES_FROM_MS
+    await game(o, "E180-8", { whoCanJoin: "list", startRound: OLD_START }, FAMILY);
+    await o.api("POST", "/api/z/E180-8/people", { people: [{ name: "Host Eight", phone: "9811100071" }] }, o.token);
+    const hostJoin = await o.json(await o.api("POST", "/api/z/E180-8/join", { phone: "9811100071", name: "Host Eight", device: dev(1) })); expect(hostJoin.pid).toBeTruthy();
+    const ask = async (i: number) => o.json(await o.api("POST", "/api/z/E180-8/join", { phone: "98111000" + (71 + i), name: "M" + i, device: dev(10 + i), from: 1, cat: "family" }));
+    const m1 = await ask(1), m2 = await ask(2); expect(m1.waiting).toBe(true); expect(m2.waiting).toBe(true);
+    const decide = (wid: string) => o.api("POST", `/api/z/E180-8/waiting/${wid}`, { decision: "admit", me: hostJoin.pid, device: dev(1) });
+    o.world.now = T + 40 * 60_000; // 40 minutes later: under 1.8.0 rules it would have lapsed
+    const list = await o.json(await o.api("GET", `/api/z/E180-8/waiting?me=${hostJoin.pid}&device=${dev(1)}`)); expect((list.waiting as any[]).length).toBe(2);
+    const a = await decide(m1.wid); expect(a.status).toBe(200); expect((await o.json(a)).code).toBeUndefined();
+    const st = await o.json(await o.api("GET", `/api/z/E180-8/me?wid=${m2.wid}`)); expect(st.state).toBe("waiting"); // not "lapsed"
+    o.world.now = OLD_START_MS - 10 * 60_000; // 10 minutes before the start: under 1.8.0 rules the family cutoff would refuse
+    const b = await decide(m2.wid); expect(b.status).toBe(200); expect((await o.json(b)).code).toBeUndefined();
+    // an open game made before the date: an email in the join is not read at all (no 400, no stored email, no email key)
+    const o2 = await organizer(true); await game(o2, "E180-9", { startRound: OLD_START });
+    const j = await o2.api("POST", "/api/z/E180-9/join", { phone: "9811100081", name: "Old", device: dev(2), email: "asha@" }); expect(j.status).toBe(200);
+    expect((o2.world.raw.query("SELECT COUNT(*) c FROM kv WHERE k LIKE 'email/%'").get() as any).c).toBe(0);
+    const pii = (o2.world.raw.query("SELECT pii FROM participant WHERE eid='E180-9'").get() as any).pii as string; expect(typeof pii).toBe("string");
+    // and the same game made AFTER the date does read it (the new rules are really on for new games)
+    const o3 = await organizer(); await game(o3, "E180-10");
+    expect((await o3.api("POST", "/api/z/E180-10/join", { phone: "9811100082", name: "New", device: dev(3), email: "asha@" })).status).toBe(400);
   }, 120_000);
 });

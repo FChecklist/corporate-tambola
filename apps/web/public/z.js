@@ -1015,7 +1015,8 @@
     if (ME.removed) { if (timer) { clearInterval(timer); timer = null; } mediaHost.style.display = "none"; $app.innerHTML = removedView(); paintBrand(); return; } // taken off the list: the phone stops
     if (INFO.checkin && v.pid && !CK.present) { // the ticket is hidden until the person marks themselves present
       loadCk(v); const af = document.activeElement; if (!CK.force && af && /^ck/.test(af.id || "")) return; CK.force = false; // never wipe a box someone is typing in, but a redraw the Edit / Submit buttons ask for goes through
-      const h = checkinView(); if (h !== CK.html || !$app.firstChild) { CK.html = h; $app.innerHTML = h; paintBrand(); bindCheckin(); }
+      loadInvites(v); if (v.pid) loadFamily(v); const h = checkinView() + (v.pid ? inviteCard(v) : ""); // 1.8.0: a family host must be able to approve BEFORE check-in opens (5 minutes before the start), because approvals close 15 minutes before it
+      if (h !== CK.html || !$app.firstChild) { CK.html = h; $app.innerHTML = h; paintBrand(); bindCheckin(); bindInvite(v); }
       return;
     }
     CK.html = "";
