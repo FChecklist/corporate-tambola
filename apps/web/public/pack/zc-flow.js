@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   /** What this game says about itself (zc-flow-game.js). Nothing here is a game rule: the prize list comes from the game's own table (ZG.PRIZE_HOUSES). */
-  const G = Object.assign({ brand: "Corporate Games", tickets: [1, 2], bumper: false, boardMax: 90, boardCols: 10, boardTitle: "GAME", popular: [], recommended: [] }, (typeof window !== "undefined" && window.ZFLOW_GAME) || {});
+  const G = Object.assign({ brand: "Corporate Games", tickets: [1, 2], bumper: false, boardMax: 90, boardCols: 10, boardTitle: "GAME", sample: true, board: true, claims: true, popular: [], recommended: [] }, (typeof window !== "undefined" && window.ZFLOW_GAME) || {});
   const COPY = {
     top: "No personal details needed. All game and participant information is deleted within 24 hours of the game.",
     soon: "Coming soon",
@@ -437,10 +437,10 @@
     if (!prizes.sel) prizes.sel = defaultPrizes(houses); // the usual prizes are already ticked for you
     const msg = el("p", { class: "zf-msg", role: "status", id: "zf-msg3" });
     box.append(el("p", { class: "zf-lead", text: "Tick the prizes you want to give. Prizes are gifts." }));
-    box.append(el("h3", { text: "How many tickets does each participant get?" }));
+    if (G.tickets.length > 1) box.append(el("h3", { text: "How many tickets does each participant get?" }));
     const tx = el("div", { class: "zf-chips", role: "radiogroup", "aria-label": "Tickets per participant" });
     for (const n of G.tickets) tx.append(el("button", { type: "button", role: "radio", class: "zf-chip" + (prizes.tix === n ? " on" : ""), "aria-checked": String(prizes.tix === n), "data-tix": String(n), onclick: () => { prizes.tix = n; draw(); } }, n + (n === 1 ? " ticket" : " tickets")));
-    box.append(tx);
+    if (G.tickets.length > 1) box.append(tx);
     box.append(el("label", { for: "zf-cur", text: "Currency for “Worth up to” (it stays for every prize)" }));
     const cs = el("select", { id: "zf-cur", onchange: (e) => { prizes.cur = e.target.value; draw(); } });
     for (const c of CURRENCIES) cs.append(el("option", { value: c[0], ...(prizes.cur === c[0] ? { selected: "" } : {}) }, c[1].trim() + " " + c[0]));
@@ -558,7 +558,8 @@
     const b = brandForm.brand;
     frame.append(el("div", { class: "zf-pvhead" }, b.logo ? el("img", { src: b.logo, alt: "", height: "30" }) : null, el("b", { text: brandNameClean(b.name) || "Your company name" }), el("span", { text: "Game ID " + (state.eid || "") })));
     frame.append(el("p", { class: "zf-pvlast", text: "Last number: 47" }));
-    if (!tickets) frame.append(el("p", { class: "zf-small", text: "The sample tickets could not be made here." }));
+    if (!G.sample) frame.append(el("p", {}, el("span", { class: "zf-soon", text: COPY.soon }), " A preview of the participant page for this game."));
+    else if (!tickets) frame.append(el("p", { class: "zf-small", text: "The sample tickets could not be made here." }));
     else tickets.forEach((t, i) => {
       const label = tix === 2 ? (i === 0 ? "Ticket A" : "Ticket B") : "Your ticket";
       const marked = new Set(t.flat().filter((v) => v !== null).slice(0, 4));
@@ -572,7 +573,7 @@
     const ul = el("ul", { class: "zf-pvprizes", id: "zf-pvprizes" });
     for (const r of shown) { const k = r.pattern + "|" + r.scope; if (seen.has(k)) continue; seen.add(k); ul.append(el("li", {}, el("span", { text: (r.scope === "two_ticket" ? "Super Bumper House" : (houses.find((h) => h.id === r.pattern) || {}).label || r.pattern) + ": " + r.text }), " ", el("button", { type: "button", class: "zf-add", disabled: "" }, "Claim"))); }
     frame.append(ul);
-    if (laptop) frame.append(retroBoard([7, 14, 21, 28, 47])); // sample stamps
+    if (laptop && G.board) frame.append(retroBoard([7, 14, 21, 28, 47])); // sample stamps
     box.append(frame);
     return box;
   }
@@ -758,8 +759,8 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
     if (gone) { sec.append(el("p", { class: "zf-msg", role: "status", id: "zf-dashnote", text: st === "deleted" ? "" : dash.note })); return sec; }
     if (!co) sec.append(paymentBlock(st, o, eid)); // 3 payment
     sec.append(waitingBlock(co)); // 4 waiting for you
-    sec.append(el("h3", { text: "Tickets claimed" }), el("p", { id: "zf-claimed", text: String(claimedCount(dash.claims)) })); // 5 tickets claimed
-    sec.append(retroBoard(dash.called || [])); // 6 the retro board
+    if (G.claims) sec.append(el("h3", { text: "Tickets claimed" }), el("p", { id: "zf-claimed", text: String(claimedCount(dash.claims)) })); // 5 tickets claimed
+    if (G.board) sec.append(retroBoard(dash.called || [])); // 6 the retro board
     if (!co) sec.append(el("p", {}, el("a", { class: "zf-add", id: "zf-board", href: boardLink(o, eid), target: "_blank", rel: "noopener" }, "Open the game board")), el("p", { class: "zf-small", id: "zf-report", text: REPORT_NOTE }));
     sec.append(el("p", { class: "zf-msg", role: "status", id: "zf-dashnote", text: dash.note }));
     return sec;
