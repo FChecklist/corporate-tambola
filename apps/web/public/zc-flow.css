@@ -54,3 +54,11 @@
 .zf-fields { margin: 6px 0 0 26px; }
 .zf-money { display: inline-flex; gap: 6px; align-items: center; }
 @media (prefers-color-scheme: dark) { .zf-prize { border-color: #2c3a5c; } .zf-prize.on { border-color: #8fb3ff; } .zf-tag { color: #7fd6a2; } }
+
+.zf-small { margin: 4px 0; font-size: 14px; opacity: .85; }
+.zf-swatch { width: 44px; height: 44px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #8b97ad; cursor: pointer; }
+.zf-swatch.on { box-shadow: 0 0 0 3px #0b3d91; }
+.zf-break { margin: 10px 0; padding: 10px 12px; border: 1px solid #d3dbe9; border-radius: 10px; }
+.zf-link { background: none; border: 0; color: #0b3d91; text-decoration: underline; font: inherit; min-height: 44px; cursor: pointer; }
+.zf-add { min-height: 44px; padding: 6px 16px; border-radius: 22px; border: 1px dashed #0b3d91; background: none; color: #0b3d91; font: inherit; cursor: pointer; }
+@media (prefers-color-scheme: dark) { .zf-link, .zf-add { color: #8fb3ff; border-color: #8fb3ff; } .zf-break { border-color: #2c3a5c; } .zf-swatch.on { box-shadow: 0 0 0 3px #8fb3ff; } }

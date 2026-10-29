@@ -137,9 +137,40 @@
     if (bump && !prizeLine(bumper.gift, bumper.other, bumper.worth, "INR")) return ["Please write the prize for Super Bumper House."];
     return [];
   }
+  /* ---- Step 4: Brand & Breaks (pure) ---- */
+  const BREAK_MAX = { 1: 3, 2: 5 }; // message breaks: a 1-ticket game, a 2-ticket game
+  const breakMax = (tix) => BREAK_MAX[Number(tix) === 2 ? 2 : 1];
+  const BRAND_COLORS = ["#0B3D91", "#1A7A46", "#B3261E", "#7A3EB1", "#C75B00", "#0F6E7A"];
+  /** A ticket cannot show & or quote marks: the company name is made safe, and the organizer is told (same rule as the current console). */
+  const brandNameClean = (s) => String(s || "").replace(/\s*&\s*/g, " and ").replace(/'/g, "\u2019").replace(/[<>`"\\]/g, "").replace(/\s+/g, " ").trim().slice(0, 40).trim();
+  const fixUrl = (u) => (/^(www\.|youtu\.be\/|(m\.|music\.)?youtube\.com\/)/i.test(u) ? "https://" + u : u);
+  const YT = /^https:\/\/((www|m|music)\.)?(youtube\.com\/(watch\?|shorts\/|embed\/|live\/)|youtu\.be\/)/i;
+  const MEDIA = /^https:\/\/[^\s]+\.(mp4|webm|m4v|mov|ogv|mp3|m4a|aac|wav|ogg|oga)([?#]\S*)?$/i;
+  /** What a pasted link is: a YouTube link (best), a link straight to a video or audio file, or neither. */
+  function linkKind(raw) {
+    const u = fixUrl(String(raw || "").trim());
+    return YT.test(u) ? "youtube" : MEDIA.test(u) ? "file" : null;
+  }
+  function brandProblems(b) {
+    const out = [];
+    if (b.logo && !brandNameClean(b.name)) out.push("Your logo needs a company name. Please type the name, or remove the logo.");
+    return out;
+  }
+  function breakProblems(breaks, tix) {
+    if (breaks.length > breakMax(tix)) return ["You can add up to " + breakMax(tix) + " message breaks for a " + (Number(tix) === 2 ? "2-ticket" : "1-ticket") + " game."];
+    for (let i = 0; i < breaks.length; i++) if (!linkKind(breaks[i].link)) return ["Message break " + (i + 1) + ": please paste a public link. A YouTube link is best."];
+    return [];
+  }
+  /** What the game stores: the company strip and the message breaks (the opening and closing moments are left empty in this flow). */
+  function buildBrandPatch(form, tix) {
+    const name = brandNameClean(form.brand.name);
+    const brand = name ? { name, color: form.brand.color || BRAND_COLORS[0], ...(form.brand.logo ? { logo: form.brand.logo } : {}) } : {};
+    const breaks = form.breaks.map((b) => { const u = fixUrl(String(b.link).trim()); return { kind: linkKind(u), title: String(b.title || "").trim() || "A message from your organizer", mediaUrl: u }; });
+    return { tickets: Number(tix), opening: [], breaks, closing: [], brand };
+  }
   const registry = {}; // step number -> function(el, ctx) that draws the step body (each step adds its own)
 
-  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems, housesOf, tagsOf, GIFTS, prizeLine, defaultPrizes, defaultBumper, buildRewards, prizeProblems };
+  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems, housesOf, tagsOf, GIFTS, prizeLine, defaultPrizes, defaultBumper, buildRewards, prizeProblems, breakMax, brandNameClean, linkKind, brandProblems, breakProblems, buildBrandPatch };
   if (typeof window !== "undefined") window.ZFLOW = api;
   if (typeof module !== "undefined") module.exports = api;
   if (typeof document === "undefined") return;
@@ -318,6 +349,69 @@
       catch (e) { go.disabled = false; msg.textContent = e.message; }
     } }, "Save and continue");
     box.append(msg, go);
+  };
+
+  /* ---- Step 4 ---- */
+  const brandForm = { brand: { name: "", color: "", logo: "" }, breaks: [] };
+  api.brandForm = brandForm;
+  /** Shrinks the chosen picture in the browser to at most 30 KB (same numbers as the current console and the game's own limits). */
+  async function fitLogo(file) {
+    const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error("bad")); r.readAsDataURL(file); });
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("bad")); i.src = url; });
+    const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
+    if (!w0 || !h0) throw new Error("bad");
+    if (Math.min(w0, h0) < 64) throw new Error("small");
+    if (Math.max(w0, h0) > 4 * Math.min(w0, h0)) throw new Error("thin");
+    const bytes = (d) => Math.ceil((d.length - d.indexOf(",") - 1) * 3 / 4);
+    for (const side of [192, 144, 112, 80, 56]) {
+      const k = Math.min(1, side / Math.max(w0, h0)), W = Math.max(1, Math.round(w0 * k)), H = Math.max(1, Math.round(h0 * k));
+      for (const [type, qual, white] of [["image/png", undefined, false], ["image/jpeg", 0.85, true], ["image/jpeg", 0.6, true]]) {
+        const c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d"); if (white) { g.fillStyle = "#fff"; g.fillRect(0, 0, W, H); } g.drawImage(img, 0, 0, W, H);
+        const d = c.toDataURL(type, qual); if (d.startsWith("data:" + type) && bytes(d) <= 30720) return d;
+      }
+    }
+    throw new Error("big");
+  }
+  const LOGO_WORDS = { small: "That picture is too small. Please use one at least 64 x 64 pixels.", thin: "That picture is too wide or too tall. Please use a square or slightly wide one.", big: "We could not make that picture small enough. Please try another one.", bad: "We could not read that picture. Please use a PNG, JPEG or WebP." };
+  registry[4] = (box) => {
+    const tix = prizes.tix, max = breakMax(tix), b = brandForm.brand;
+    const msg = el("p", { class: "zf-msg", role: "status", id: "zf-msg4" });
+    box.append(el("p", { class: "zf-lead", text: "This step is optional. Add your company name and message breaks, or skip it." }));
+    box.append(el("h3", { text: "Your company" }));
+    box.append(el("label", { for: "zf-bname", text: "Company name (optional)" }), el("input", { type: "text", id: "zf-bname", maxlength: "40", value: b.name, oninput: (e) => { b.name = e.target.value; } }));
+    box.append(el("p", { class: "zf-small", text: "It appears on every ticket." }));
+    const sw = el("div", { class: "zf-chips", role: "radiogroup", "aria-label": "Colour" });
+    for (const c of BRAND_COLORS) sw.append(el("button", { type: "button", role: "radio", class: "zf-swatch" + (b.color === c ? " on" : ""), "aria-checked": String(b.color === c), "aria-label": "Colour " + c, style: "background:" + c, "data-color": c, onclick: () => { b.color = c; draw(); } }));
+    box.append(el("label", { text: "Colour" }), sw);
+    box.append(el("label", { for: "zf-blogo", text: "Small logo (optional)" }), el("input", { type: "file", id: "zf-blogo", accept: "image/png,image/jpeg,image/webp", onchange: async (e) => {
+      const file = e.target.files && e.target.files[0]; if (!file) return;
+      try { b.logo = await fitLogo(file); msg.textContent = "Logo added."; } catch (err) { b.logo = ""; msg.textContent = LOGO_WORDS[err.message] || LOGO_WORDS.bad; }
+    } }));
+    box.append(el("p", { class: "zf-small", text: "PNG, JPEG or WebP, at least 64 x 64 pixels. The system makes it small to fit." }));
+    box.append(el("h3", { text: "Message breaks" }));
+    box.append(el("p", { class: "zf-lead", text: "Show a message during the game. Paste one public link for each break. A YouTube link is best. You can add up to " + max + "." }));
+    brandForm.breaks.length = Math.min(brandForm.breaks.length, max);
+    brandForm.breaks.forEach((m, i) => {
+      box.append(el("div", { class: "zf-break", "data-break": String(i) },
+        el("label", { for: "zf-bt" + i, text: "Message break " + (i + 1) + " title (optional)" }), el("input", { type: "text", id: "zf-bt" + i, maxlength: "60", value: m.title, oninput: (e) => { m.title = e.target.value; } }),
+        el("label", { for: "zf-bl" + i, text: "Public link" }), el("input", { type: "text", id: "zf-bl" + i, inputmode: "url", value: m.link, oninput: (e) => { m.link = e.target.value; } }),
+        el("button", { type: "button", class: "zf-link", id: "zf-brm" + i, onclick: () => { brandForm.breaks.splice(i, 1); draw(); } }, "Remove")));
+    });
+    if (brandForm.breaks.length < max) box.append(el("button", { type: "button", class: "zf-add", id: "zf-badd", onclick: () => { brandForm.breaks.push({ title: "", link: "" }); draw(); } }, "Add a message break"));
+    else box.append(el("p", { class: "zf-small", text: "That is the most you can add for a " + (tix === 2 ? "2-ticket" : "1-ticket") + " game." }));
+    const save = async (skip) => {
+      const bad = skip ? [] : [...brandProblems(b), ...breakProblems(brandForm.breaks, tix)];
+      if (bad.length) { msg.textContent = bad[0]; return; }
+      if (!state.eid) { msg.textContent = "Please save step 1 first."; return; }
+      const cleaned = brandNameClean(b.name);
+      msg.textContent = "Saving…";
+      try {
+        if (!skip) await call("PATCH", `/api/z/${state.eid}/settings`, buildBrandPatch(brandForm, tix));
+        if (!skip && cleaned !== String(b.name).trim()) b.name = cleaned;
+        done(4);
+      } catch (e) { msg.textContent = e.message; }
+    };
+    box.append(msg, el("button", { type: "button", class: "zf-go", id: "zf-save4", onclick: () => save(false) }, "Save and continue"), " ", el("button", { type: "button", class: "zf-link", id: "zf-skip4", onclick: () => save(true) }, "Skip this step"));
   };
 
   api.state = state; api.draw = draw; api.done = done; api.el = el;
