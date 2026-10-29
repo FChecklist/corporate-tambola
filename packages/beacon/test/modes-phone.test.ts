@@ -177,6 +177,27 @@ describe("the pause on a phone: who paused, since when, until when", () => {
   });
 });
 
+describe("the last seconds of a pause: a 'restarts in' count, then a full gap before the first number (WP-02, owner ruling Q2)", () => {
+  test("no count while the pause is long; in its last 5 seconds each phone shows 'restarts in' with the seconds left; after it ends no count and no number before a full gap has passed", async () => {
+    await mkGame(5);
+    const ps = await phonesOf([381, 382]);
+    for (let i = 0; i < 70; i++) await step(ps); // the game is running
+    expect((await send({ action: "pause", pauseForRounds: 40 })).status).toBe(200);
+    const f = (await readPublished(kvOf(), EID))!; const iv = resolveControl(cfgOf(f), f.messages).intervals[0]!;
+    while (roundAt(D.utc()) < iv.start + 2) await step(ps);
+    for (const p of ps) { const v = p.rt.view(); expect(v.paused).toBe(true); expect(v.pausedInfo!.restartsInSec).toBeNull(); } // far from the end: no count
+    const lenBefore = ps[0]!.rt.view().log.length;
+    const counts: number[] = [];
+    while (roundAt(D.utc()) < iv.end) { await step(ps, 1000); const c = ps[0]!.rt.view().pausedInfo?.restartsInSec; if (c !== null && c !== undefined) counts.push(c); }
+    expect(counts.length).toBeGreaterThanOrEqual(3); // it counts down second by second ...
+    expect(counts.every((c) => c >= 1 && c <= 5)).toBe(true); // ... and only inside the last 5 seconds
+    expect(counts[0]).toBeGreaterThan(counts[counts.length - 1]!);
+    const stride = CALL_SECONDS / 3; let grew = -1;
+    for (let i = 0; i < 20 && grew < 0; i++) { await step(ps, 1000); const v = ps[0]!.rt.view(); if (roundAt(D.utc()) >= iv.end) expect(v.pausedInfo).toBeNull(); if (v.log.length > lenBefore) grew = roundAt(D.utc()); }
+    expect(grew).toBeGreaterThanOrEqual(iv.end + stride); // the first number after the Resume: a full gap later, never sooner
+  });
+});
+
 describe("Start in a big game (5,000 people): slow asking, a long lead, a countdown, nobody sees number 1 early", () => {
   test("phones learn of Start within their asking cadence, count down the long lead, show nothing before the named round, then all show the same numbers; pause is refused", async () => {
     const { SAFETY_BIG10K } = await import("../src/control");

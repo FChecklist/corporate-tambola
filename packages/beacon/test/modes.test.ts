@@ -53,7 +53,7 @@ describe("manual start, software calls (mode 3)", () => {
     const st = resolveControl(manualAuto, [go(1, SCHED + 10), mk(2, "pause", g + 30, g + 10, g + 40), ]);
     expect(st.ignored).toEqual([]);
     expect(callRound(st, 0, STRIDE, 0)).toBe(g);
-    expect(callRound(st, 0, STRIDE, 20)).toBe(g + 60 + 10); // call 20 = g+60 >= pause start g+30: pushed by 10
+    expect(callRound(st, 0, STRIDE, 20)).toBe(g + 60 + 10 + STRIDE); // call 20 = g+60 >= pause start g+30: pushed by 10, plus the full-gap restart after the Resume (WP-02)
   });
   test("a stop before Start ends the game: nothing is ever called (null, not 'never yet')", () => {
     const st = resolveControl(manualAuto, [mk(1, "stop", SCHED + 50, SCHED + 30)]);

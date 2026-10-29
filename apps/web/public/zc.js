@@ -347,7 +347,7 @@
     step6: [["What if I use the common link and the personal links together?", "That is fine. Use personal links for people you know and the common link for groups."]],
     step7: [["What if I publish and then change my mind?", "You can still change most things until the game starts. You can also cancel it."]],
     step8: [["What if the payment fails?", "Nothing is taken and the game stays unpaid. Try again, or send the payment link to someone else."], ["What if someone else pays?", "Send them the payment link. They need no account. The game unlocks by itself once the payment is received."]],
-    step9: [["What if I press Pause by mistake?", "Press Resume. The game carries on from the same number."], ["What if my internet goes down?", "The numbers keep coming on every phone by themselves. Only pause, resume and messages need your connection."]],
+    step9: [["What if I press Pause by mistake?", "Press Resume. The game carries on from the same number, and the first number comes a full gap (for example 12 seconds) after the restart."], ["What if my internet goes down?", "The numbers keep coming on every phone by themselves. Only pause, resume and messages need your connection."]],
     step10: [["What if I need the report later?", "Open the report from the e-mail we send you. Erase the guest data only when you no longer need the names."]],
   };
 
@@ -1107,7 +1107,7 @@
   const leadWords = () => { const sec = leadSec(); return sec >= 90 ? "about " + Math.round(sec / 60) + " minutes" : "about " + sec + " seconds"; }; // how long after the press the game begins, from this game's own control profile
   const leadSec = () => (S.cf ? Math.max(10, Math.round(S.cf.leadRounds * 3 / 5) * 5) : 40); // seconds a Pause, Resume or End takes to reach the phones: one figure for the whole page
   const ctlStateOf = (st, now) => { const cur = now === null ? null : st.intervals.find((i) => now >= i.start && now < i.end), nxt = now === null ? null : st.intervals.find((i) => now < i.start); return { pausedNow: !!cur, pauseEnd: cur ? cur.end : 0, pausePending: !cur && !!nxt, stopped: st.stopRound !== null, stopNow: now !== null && st.stopRound !== null && now >= st.stopRound }; }; // what step 9 shows: paused, on its way, or ended
-  const CTL_SENT = { pause: (s) => `Pause sent. It reaches the phones in about ${s} seconds. It ends by itself after 30 minutes. Press Resume sooner if the break is over.`, resume: (s) => `Resume sent. The numbers restart on the phones in about ${s} seconds.`, stop: (s) => `Ending the game. Phones stop in about ${s} seconds.`, extend: () => "Added 30 more minutes to the pause." };
+  const CTL_SENT = { pause: (s) => `Pause sent. It reaches the phones in about ${s} seconds. It ends by itself after 30 minutes. Press Resume sooner if the break is over.`, resume: (s) => `Resume sent. The numbers restart on the phones in about ${s} seconds. The first number comes a full gap after that.`, stop: (s) => `Ending the game. Phones stop in about ${s} seconds.`, extend: () => "Added 30 more minutes to the pause." };
   /** plain words, and what to do next, for a control press that failed or was refused */
   const ctlWords = (e) => {
     const m = String((e && e.message) || e || "");

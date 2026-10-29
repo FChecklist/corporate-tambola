@@ -288,16 +288,45 @@ export function hostCallRound(s: ControlState, k: number): number | null {
   return s.stopRound !== null ? null : Infinity;
 }
 
+/** The most calls a game can have (5 rounds of 90): how far the full-gap search below ever has to look. */
+const MAX_CALLS = 450;
+const shiftCache = new Map<string, number[]>();
 /**
- * The beacon round call k uses. Without control messages this is start + k*stride (the existing schedule). Every pause pushes all
- * later calls later by exactly its length, so the gap between calls is still `stride` rounds (a multiple of 3 s) afterwards.
+ * How far each pause pushes the calls after it (owner ruling Q2, 2026-10-29): the length of the pause PLUS whatever is needed so that the first number after the
+ * Resume comes a FULL gap (`stride` rounds, 12 s at the normal speed) after the Resume, not the part of a gap that was left when the pause began.
+ * `base(k)` is call k's round before any pause (increasing in k). The pauses are applied in order, each to the calls already pushed by the earlier ones.
+ * A pause that began long before the next call was due (a break, an intermission) needs no extra: that call was already more than a full gap away.
+ */
+export function pauseShifts(ivs: readonly PauseInterval[], stride: number, base: (k: number) => number, key: string): number[] {
+  const ck = `${key}|${stride}|${ivs.map((i) => `${i.start}-${i.end}`).join(",")}`;
+  const hit = shiftCache.get(ck); if (hit) return hit;
+  const sh: number[] = [];
+  for (let j = 0; j < ivs.length; j++) {
+    const s = ivs[j]!.start, len = ivs[j]!.end - s;
+    let first = -1; // the first call this pause moves (the first one due at or after its start, after the earlier pauses)
+    for (let k = 0; k < MAX_CALLS; k++) { let a = base(k); for (let m = 0; m < j; m++) if (a >= ivs[m]!.start) a += sh[m]!; if (a >= s) { first = a; break; } }
+    sh.push(first < 0 ? len : len + Math.max(0, stride - (first - s)));
+  }
+  if (shiftCache.size > 200) shiftCache.clear();
+  shiftCache.set(ck, sh);
+  return sh;
+}
+/** Applies `pauseShifts` to one call: its base round, pushed by every pause that starts at or before it. */
+export function pushedByPauses(a: number, ivs: readonly PauseInterval[], shifts: readonly number[]): number {
+  for (let j = 0; j < ivs.length; j++) if (a >= ivs[j]!.start) a += shifts[j]!;
+  return a;
+}
+
+/**
+ * The beacon round call k uses. Without control messages this is start + k*stride (the existing schedule). Every pause pushes all later calls later by its length, and
+ * the first call after the Resume waits a full `stride` after it (see pauseShifts), so the gap between calls is still `stride` rounds (a multiple of 3 s) afterwards.
  * Returns null when the engagement was stopped before that call. In host mode the k-th press decides it (hostCallRound).
  */
 export function callRound(s: ControlState, startRound: number, strideRounds: number, k: number): number | null {
   if (s.host) return hostCallRound(s, k);
   if (s.manualStart) { if (s.goRound === null) return s.stopRound !== null ? null : Infinity; startRound = s.goRound; } // nothing is called until somebody presses Start; then number 1 comes in the round Start named
-  let a = startRound + k * strideRounds;
-  for (const i of s.intervals) if (a >= i.start) a += i.end - i.start;
+  const base = (j: number) => startRound + j * strideRounds;
+  const a = s.intervals.length ? pushedByPauses(base(k), s.intervals, pauseShifts(s.intervals, strideRounds, base, `L${startRound}`)) : base(k);
   return s.stopRound !== null && a >= s.stopRound ? null : a;
 }
 

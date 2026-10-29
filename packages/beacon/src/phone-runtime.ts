@@ -10,6 +10,8 @@ import { BOGEYS_OUT, RoundStore, activeBreak, activeIntermission, callRoundR, co
 import { seatOfPid } from "./unique-ticket";
 import { NUMBERS, QUICKNET, fetchRound, pickNumber, roundAt, roundTimeMs, type BeaconOpts } from "./index";
 
+/** The last seconds of a pause in which a phone counts "restarts in" (owner ruling Q2, 2026-10-29). */
+export const RESTART_COUNT_SECS = 5;
 export interface PhoneDeps {
   /** Calls our store. Must throw an Error with `.status` on HTTP errors, and a plain Error when offline. */
   api(method: string, path: string, body?: unknown): Promise<any>;
@@ -66,7 +68,7 @@ export interface RuntimeView {
   /** Host mode, game running: the last number has reached this phone and the Host has not pressed for the next one yet. */
   waitingForHost: boolean;
   /** The pause in force right now: who paused, since when (ms), when it should end by itself (ms), seconds left. Null when the game is not paused. */
-  pausedInfo: { by: "the Organizer" | "a Host"; sinceMs: number; endMs: number; secondsLeft: number } | null;
+  pausedInfo: { by: "the Organizer" | "a Host"; sinceMs: number; endMs: number; secondsLeft: number; /** the last seconds before the numbers start again (5 or fewer): a "restarts in" count; null before that. After it the first number comes a full gap later (owner ruling Q2). */ restartsInSec: number | null } | null;
   /** The prizes this player has just completed and can claim RIGHT NOW: the number that completed them is the latest one (the claim must reach the game before the next number is announced). Empty when paused, finished or too late. */
   claimNow: PatternKey[];
   /** The prizes that can still be claimed (the completing number is the latest one), even while the game is paused: the Claim buttons. */
@@ -828,7 +830,7 @@ export class PhoneRuntime {
     const waitingForHost = this.hostMode && (!this.manualStart || (gr0 !== null && now !== null && now >= gr0)) && this.phase === "play" && !this.locked && !isPaused && now !== null && now >= (this.manualStart ? (gr0 ?? this.startRound) : this.startRound) && nextRound0 === Infinity && !inter && this.currentBreak(now) === null;
     const pz = st && now !== null ? st.intervals.find((i) => now >= i.start && now < i.end) : undefined;
     const pzMsg = pz && this.tracker ? this.tracker.log.find((m) => m.action === "pause" && m.atBeaconRound === pz.start) : undefined;
-    const pausedInfo = pz ? { by: (pzMsg && this.ctlBy[pzMsg.seq - 1] === "Host" ? "a Host" : "the Organizer") as "the Organizer" | "a Host", sinceMs: roundTimeMs(pz.start), endMs: roundTimeMs(pz.end), secondsLeft: Math.max(0, (pz.end - now!) * 3) } : null;
+    const pausedInfo = pz ? { by: (pzMsg && this.ctlBy[pzMsg.seq - 1] === "Host" ? "a Host" : "the Organizer") as "the Organizer" | "a Host", sinceMs: roundTimeMs(pz.start), endMs: roundTimeMs(pz.end), secondsLeft: Math.max(0, (pz.end - now!) * 3), restartsInSec: (() => { const r = secsTo(pz.end); return r !== null && r >= 1 && r <= RESTART_COUNT_SECS ? r : null; })() } : null;
     const mlog = this.maskedLog(this.cur);
     const claimOpen = !this.locked && (this.phase === "play" || (this.phase === "ended" && !(st && st.stopRound !== null && now !== null && now >= st.stopRound))) ? this.claimableNow().filter((k) => { const i = completionIndexKey(this.tickets, k, mlog); return i === mlog.length - 1 || i < 0; }) : []; // the completing number is still the latest: the claim is still valid (even while paused); a prize the marks complete but the called numbers do not (a stale mark) stays pressable: it is answered with a Bogey, as in the real game
     const claimNow = !isPaused && this.phase === "play" ? claimOpen.filter((k) => completionIndexKey(this.tickets, k, mlog) >= 0) : []; // the alert and the big button: only while the game is running
