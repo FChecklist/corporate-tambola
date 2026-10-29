@@ -79,7 +79,7 @@
   if (DEMO) rt.beatOn = false; // the free demo has no server to ask
   // The claim signal is asked at this phone's own slot (ticket number, see beat.ts): ~120 ms before the moment the clock is checked again, then the ask goes out exactly on time. A hidden page asks nothing (beatOn).
   if (!DEMO) { rt.externalBeat = true; const arm = () => { const ms = rt.msToNextBeat(), early = Math.max(0, ms - 120); setTimeout(() => { const left = rt.msToNextBeat(); setTimeout(() => { try { rt.beatNow(); } catch { /* next slot */ } arm(); }, left > ZG.BEAT.beatPeriodMs(rt.cap) - 250 ? 0 : left); }, ms < 120 ? 0 : early); }; arm(); }
-  let lastLen = 0, firstPaint = true, sound = store.get("ctz-sound") !== "off", timer = null;
+  let lastLen = 0, firstPaint = true, sound = store.get("ctz-sound") === "on", timer = null; /* TA21: the numbers are NOT read aloud until the player switches sound on (an open office must stay quiet) */
   if (window.TBAudio) TBAudio.enabled = sound;
   const clock = (s) => { s = Math.max(0, Math.round(s)); return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map((n) => String(n).padStart(2, "0")).join(":"); }; // 00:12:34
   const GRACE_SECS = ZG.GRACE_ROUNDS * 3;
@@ -186,7 +186,7 @@
     return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div>
     <div class="zcard zform zjoin"><h2>Join the engagement</h2>
     <ol class="zsteps" aria-label="How to join"><li><b>1</b><span>Tick the boxes</span></li><li><b>2</b><span>${personal ? "Press the button" : "Type your number"}</span></li><li><b>3</b><span>Get your ticket</span></li></ol><p class="zsmall zdnd" id="dndtip">Tip: turn on Do Not Disturb so other apps do not interrupt your game.</p>
-    <p class="zgoalline" style="margin:0 0 6px">Numbers are called one by one. Tap each one on your ticket as it is called. When a row or the whole ticket is complete, press Claim before the next number: the software checks it, no need to shout.</p>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
+    <p class="zsmall" id="soundtip" style="margin:0 0 6px">Sound is off, so your phone stays quiet in the office. To hear the numbers read out, press Sound on your ticket page.</p><p class="zgoalline" style="margin:0 0 6px">Numbers are called one by one. Tap each one on your ticket as it is called. When a row or the whole ticket is complete, press Claim before the next number: the software checks it, no need to shout.</p>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
     ${INAPP ? `<p class="zsmall" style="margin:0 0 8px">Tip: if this link opened inside another app, open it in Chrome or Safari and always use that same one for this game.</p>` : ""}${J.mode === "needPhone" && !msg ? `<div class="zbanner info" role="status" style="margin:0 0 8px">${J.note ? esc(J.note) : "This link was already opened on another phone. Please type your mobile number to get your ticket."}</div>` : ""}
     ${DEMO ? "" : CBConsent.html("K4")}
     ${personal ? `<p class="zsmall" style="margin:0 0 6px">Your personal link is ready. Press the button to get your ticket.</p>` : joinWho()}

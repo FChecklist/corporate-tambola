@@ -135,10 +135,18 @@ describe("the big screen", () => {
 });
 
 describe("the phone during the game", () => {
+  test("TA21: a new player's phone does not read the numbers aloud until they switch sound on (an open office stays quiet)", async () => {
+    const o = await organizer(); await published(o, "IP-QUIET");
+    const p = await phoneAt(o, "/z?e=IP-QUIET");
+    await p.waitFor((x) => /Sound is off, so your phone stays quiet/.test(x)); // said before joining
+    await typeJoin(p, "9822222288"); await p.waitFor((x) => /Starting in\s*\d\d:\d\d:\d\d/.test(x));
+    expect(p.win.TBAudio.enabled).toBe(false); expect(p.$("#snd")!.textContent).toMatch(/Sound off/); expect((p.$("#snd") as any).getAttribute("aria-pressed")).toBe("false");
+    p.click("#snd"); await p.waitFor((x) => /Sound on/.test(x)); expect(p.win.TBAudio.enabled).toBe(true); // one tap switches it on
+  });
   test("the screen is held awake only from about a minute before the first number, and the sound button tells the truth about a locked sound", async () => {
     const o = await organizer(); await published(o, "IP-AWAKE");
     let requests = 0;
-    const p = await phoneAt(o, "/z?e=IP-AWAKE", (win) => { Object.defineProperty(win.navigator, "wakeLock", { value: { request: async () => { requests++; return { release: async () => {}, addEventListener() {} }; } }, configurable: true }); });
+    const p = await phoneAt(o, "/z?e=IP-AWAKE", (win) => { try { win.localStorage.setItem("ctz-sound", "on"); } catch { /* a returning player who had switched sound on */ } Object.defineProperty(win.navigator, "wakeLock", { value: { request: async () => { requests++; return { release: async () => {}, addEventListener() {} }; } }, configurable: true }); });
     await typeJoin(p, "9822222299"); await p.waitFor((x) => /Starting in\s*\d\d:\d\d:\d\d/.test(x));
     expect(requests).toBe(0); // the first number is an hour away: the screen is not held for an hour
     p.win.TBAudio.unlocked = false; // a returning player: the page was opened again and nobody has tapped yet
