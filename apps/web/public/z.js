@@ -736,15 +736,17 @@
   }
   const toastHtml = () => (TOASTS.list.some((x) => !x.gone) ? `<div class="ztoasts" id="claimtoasts" role="status" aria-live="polite">${TOASTS.list.filter((x) => !x.gone).map((x) => `<div class="ztoast">${esc(x.text)}</div>`).join("")}</div>` : "");
   // ---- another app's call or message took the player away: on return the page asks for the server's schedule at once and says so, calmly
-  let hiddenAt = 0, AWAY = null;
-  const awayLine = () => (AWAY && Date.now() < AWAY.until ? `<div class="zbanner info" id="awayline" role="status">You were away for ${AWAY.secs} seconds. The numbers called meanwhile are in the Last 5 numbers called. Tap them on your ticket.</div>` : "");
+  let hiddenAt = 0, hiddenLen = 0, AWAY = null;
+  /** A18: the welcome-back line names the numbers that were called while the player was away (the Last 5 strip only keeps them for about a minute). */
+  const awayText = (secs, missed) => `Welcome back. You were away for ${secs} seconds. ` + (!missed.length ? "No number was called while you were away." : missed.length <= 6 ? `Called meanwhile: ${missed.join(", ")}. Tap them on your ticket. If a prize is complete, press Claim.` : `${missed.length} numbers were called meanwhile; the last 6 were ${missed.slice(-6).join(", ")}. Tap on your ticket any number you missed: it marks only if it was called.`);
+  const awayLine = (v) => (AWAY && Date.now() < AWAY.until ? `<div class="zbanner info" id="awayline" role="status">${esc(awayText(AWAY.secs, ((v && v.log) || []).slice(AWAY.from)))}</div>` : "");
   function wake() { // the page is in front again
     const secs = hiddenAt ? Math.round((Date.now() - hiddenAt) / 1000) : 0; hiddenAt = 0;
-    if (secs >= 5) AWAY = { secs, until: Date.now() + 15000 };
+    if (secs >= 5) AWAY = { secs, from: hiddenLen, until: Date.now() + 20000 };
     try { rt.resync && rt.resync(); } catch { /* the loop asks again in a moment */ }
     Promise.resolve(rt.tick && rt.tick()).catch(() => {}).then(() => { try { paint(); } catch { /* drawn on the next beat */ } });
   }
-  document.addEventListener("visibilitychange", () => { rt.beatOn = document.visibilityState !== "hidden"; if (document.visibilityState === "hidden") hiddenAt = hiddenAt || Date.now(); else wake(); }); // a hidden page sends no claim signal calls
+  document.addEventListener("visibilitychange", () => { rt.beatOn = document.visibilityState !== "hidden"; if (document.visibilityState === "hidden") { if (!hiddenAt) { hiddenAt = Date.now(); try { hiddenLen = rt.view().log.length; } catch { hiddenLen = 0; } } } else wake(); }); // a hidden page sends no claim signal calls
   /** One plain sentence: what is happening now and what to do, in the same words on every screen (ZG.story). */
   function storyBarFor(v) {
     const role = ME.role === "organizer" ? "organizer" : ME.role === "host" ? "host" : "player", called = v.late ? v.log.length + (v.late.hidden || 0) : v.log.length, manual = v.startMode === "manual";
@@ -835,7 +837,7 @@
     const called = new Set(v.marks || []); // what the player has tapped (the ticket never marks itself)
     const last = v.log[v.log.length - 1];
     toastsFrom(v);
-    const banners = [storyBarFor(v), claimAlert(v), awayLine()];
+    const banners = [storyBarFor(v), claimAlert(v), awayLine(v)];
     { const now = (v.claimNow || []).join(","); if (now && now !== LAST_CLAIM_NOW) { try { navigator.vibrate && navigator.vibrate(220); } catch {} } LAST_CLAIM_NOW = now; } // a short buzz the moment a prize becomes claimable, where the phone allows it
     if (v.reconnecting) banners.push(`<div class="zbanner info" id="reconnecting" role="status">${esc(ZG.say("net.reconnecting"))}</div>`);
     if (v.error) banners.push(`<div class="zbanner warn" role="alert">${esc(v.error)}</div>`);

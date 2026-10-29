@@ -51,3 +51,21 @@ describe("A15: 'Type it again' is never a dead end, and the check-in red line go
     doc.ckokn.onchange(); expect(doc.ckerr.textContent).toBe(""); expect(CK.err).toBe(""); expect(x.okN).toBe(true); expect(synced).toBe(1);
   });
 });
+
+describe("A18: the welcome-back line names the numbers called while the player was away", () => {
+  const src = grab(pub("z.js"), /const awayText = \(secs, missed\) => [^\n]*;/);
+  const say = new Function(`${src}; return awayText;`)() as (s: number, m: number[]) => string;
+  test("no number missed, a few missed, many missed", () => {
+    expect(say(40, [])).toBe("Welcome back. You were away for 40 seconds. No number was called while you were away.");
+    expect(say(40, [12, 45, 7])).toContain("Called meanwhile: 12, 45, 7.");
+    expect(say(40, [12, 45, 7])).toMatch(/press Claim\.$/);
+    const many = say(90, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(many).toContain("9 numbers were called meanwhile; the last 6 were 4, 5, 6, 7, 8, 9."); expect(many).not.toContain("Last 5 numbers called");
+  });
+  test("the page remembers how many numbers there were when the phone went away, and shows the new ones", () => {
+    const z = pub("z.js");
+    expect(z).toContain("hiddenLen = rt.view().log.length"); expect(z).toContain("from: hiddenLen"); expect(z).toContain("awayLine(v)");
+    expect(z).not.toContain("The numbers called meanwhile are in the Last 5 numbers called");
+  });
+});
+

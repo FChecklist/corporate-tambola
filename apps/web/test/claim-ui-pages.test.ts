@@ -213,7 +213,7 @@ describe("coming back to the game after another app's call or message", () => {
     await wait(300); expect(resync).toBe(1); expect(ph.$("#awayline")).toBeNull();
     const realNow = (ph.win as any).Date.now.bind((ph.win as any).Date); flip("hidden"); (ph.win as any).Date.now = () => realNow() + 40_000; flip("visible");
     await ph.waitFor(() => !!ph.$("#awayline"), 15_000);
-    expect(ph.$("#awayline")!.textContent).toContain("You were away for 40 seconds."); expect(ph.$("#awayline")!.textContent).toContain("Last 5 numbers called");
+    expect(ph.$("#awayline")!.textContent).toContain("You were away for 40 seconds."); expect(ph.$("#awayline")!.textContent).toContain("Welcome back."); expect(ph.$("#awayline")!.textContent).toContain("No number was called while you were away."); // (A18: the line names the numbers called meanwhile; here none was)
     expect(resync).toBe(2); expect(ticks).toBeGreaterThanOrEqual(2); // the schedule was asked for each time the page came back
   });
   test("the join page carries the Do Not Disturb tip", async () => {
