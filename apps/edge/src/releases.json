@@ -1,5 +1,17 @@
 [
   {
+    "version": "1.8.0",
+    "date": "2026-10-30",
+    "releasedAtIST": "30 Oct 2026, 05:06 IST",
+    "commit": "this release",
+    "title": "Family Passes, waiting limits and the player screens that go with them",
+    "changes": [
+      "A family host sees a Family Passes card (also before check-in opens) and can approve or decline the people who ask through the family link, until 15 minutes before the game begins",
+      "A request that nobody answers lapses after 30 minutes with a polite message, and the person can ask again",
+      "New games follow these rules from 2026-10-29 23:36:07 UTC (the value APPROVAL_RULES_FROM_MS = 1793316967027); every game made before that moment behaves exactly as in 1.7.1"
+    ]
+  },
+  {
     "version": "1.7.1",
     "date": "2026-10-30",
     "releasedAtIST": "30 Oct 2026, 02:42 IST",
