@@ -1,0 +1,21 @@
+/* New organizer flow (?flow=new). Own file: the current console styles are not changed. */
+.zf-top { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; background: #e8f3ec; color: #0b3d27; font-size: 15px; line-height: 1.4; }
+.zf-bar { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0 0 16px; padding: 0; }
+.zf-pill { min-height: 44px; padding: 8px 14px; border-radius: 22px; border: 1px solid #b9c4d8; background: #fff; color: #10223f; font: inherit; cursor: pointer; }
+.zf-pill b { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #0b3d91; color: #fff; font-size: 14px; }
+.zf-pill.cur { border-color: #0b3d91; box-shadow: 0 0 0 2px #0b3d91; }
+.zf-pill.done b { background: #1a7a46; }
+.zf-pill[disabled] { opacity: .6; cursor: not-allowed; }
+.zf-pill i { font-style: normal; font-size: 13px; opacity: .85; }
+.zf-sec { margin: 0 0 12px; padding: 12px 16px; border: 1px solid #d3dbe9; border-radius: 12px; background: #fff; scroll-margin-top: 12px; }
+.zf-sec:not(.open) h2 { font-size: 17px; margin: 0; opacity: .75; }
+.zf-sec h2 { font-size: 20px; margin: 0 0 8px; }
+.zf-soon { margin: 0; padding: 6px 10px; display: inline-block; border-radius: 8px; background: #f1f1f1; color: #4a4a4a; }
+@media (prefers-color-scheme: dark) {
+  .zf-top { background: #12301f; color: #cdeedb; }
+  .zf-pill { background: #14203a; color: #e6edf9; border-color: #3a4a6e; }
+  .zf-pill.cur { border-color: #8fb3ff; box-shadow: 0 0 0 2px #8fb3ff; }
+  .zf-sec { background: #101a30; border-color: #2c3a5c; color: #e6edf9; }
+  .zf-soon { background: #2a2f3a; color: #d7dbe5; }
+}
+@media (max-width: 480px) { .zf-pill { width: 100%; text-align: left; } }

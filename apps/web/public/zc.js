@@ -3,6 +3,7 @@
    The page holds the sign-in key only in this tab's session. Choices are tap chips, never drop-down lists. */
 (function () {
   const ZG = window.ZG;
+  if (new URLSearchParams(location.search).get("flow") === "new") return; // the NEW organizer flow (zc-flow.js) draws this page instead
   const $app = document.getElementById("app");
   const q = new URLSearchParams(location.search);
   const BASE = (q.get("api") || "").replace(/\/$/, "");
