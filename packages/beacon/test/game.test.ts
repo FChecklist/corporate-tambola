@@ -226,9 +226,9 @@ describe("rounds", () => {
   test("a pause in round 1 moves everything after it, including round 2, without moving round 2 twice", () => {
     const st = { intervals: [{ start: 1050, end: 1070 }], stopRound: null } as any;
     const before = unshiftedRound(1000, 2, [], 2, 0);
-    expect(callRoundR(st, 1000, 2, [], 2, 0)).toBe(before + 20 + 2); // the pause's 20 rounds plus the full-gap restart after the Resume (2 rounds), once
+    expect(callRoundR(st, 1000, 2, [], 2, 0)).toBe(before + 20);
     expect(callRoundR(st, 1000, 2, [], 1, 5)).toBe(1010); // before the pause
-    expect(callRoundR(st, 1000, 2, [], 1, 30)).toBe(1060 + 20 + 2); // after it
+    expect(callRoundR(st, 1000, 2, [], 1, 30)).toBe(1060 + 20); // after it
     const a = callRoundR(st, 1000, 2, [], 2, 3)!, b = callRoundR(st, 1000, 2, [], 2, 4)!;
     expect(b - a).toBe(2);
   });

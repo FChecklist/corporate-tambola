@@ -74,7 +74,7 @@ describe("applying a pause: every phone that holds the same log computes the sam
     expect(st.intervals).toEqual([{ start: 1011, end: 1041 }]);
     const r = scheduleWithControl(st, S, STRIDE, 30) as number[];
     expect(r.slice(0, 6)).toEqual([1000, 1002, 1004, 1006, 1008, 1010]); // before the pause
-    expect(r[6]).toBe(1012 + 30 + 1); // call 6 would have been 1012 (inside the pause) -> 1042, and a FULL gap (2 rounds) after the Resume at 1041 -> 1043 (WP-02, owner ruling Q2)
+    expect(r[6]).toBe(1012 + 30); // call 6 would have been 1012 (inside the pause) -> 1042
     for (let k = 1; k < 30; k++) if (k !== 6) expect(r[k]! - r[k - 1]!).toBe(2); // ...except across the pause itself
     expect(r.filter((x) => pausedAt(st, x))).toEqual([]); // no call ever lands inside a pause
     expect(r.every((x) => ((x - S) % STRIDE) === 0 || x >= 1041)).toBe(true);
@@ -82,14 +82,14 @@ describe("applying a pause: every phone that holds the same log computes the sam
   test("a call exactly on the first paused round moves; one just before does not", () => {
     const st = resolveControl(cfg, [mk(1, "pause", 1010, 990), mk(2, "resume", 1020, 1000)]);
     expect(callRound(st, S, STRIDE, 4)).toBe(1008);
-    expect(callRound(st, S, STRIDE, 5)).toBe(1022); // a full gap (2 rounds) after the Resume at 1020
+    expect(callRound(st, S, STRIDE, 5)).toBe(1020);
   });
   test("two separate pauses add up; a call pushed out of the first can land inside the second and is pushed again", () => {
     const st = resolveControl(cfg, [mk(1, "pause", 1010, 990), mk(2, "resume", 1020, 1000), mk(3, "pause", 1030, 1010), mk(4, "resume", 1050, 1030)]);
     expect(st.intervals.length).toBe(2);
     const r = scheduleWithControl(st, S, STRIDE, 20) as number[];
     expect(r.filter((x) => pausedAt(st, x))).toEqual([]);
-    expect(r[19]! - 1000 - 19 * 2).toBe(10 + 20 + 2 + 2); // each pause's length, plus one extra gap-restart for each Resume (WP-02, owner ruling Q2)
+    expect(r[19]! - 1000 - 19 * 2).toBe(10 + 20);
   });
   test("open-ended pause ends by itself after maxPauseRounds (a lost organizer cannot freeze the room)", () => {
     const st = resolveControl(cfg, [mk(1, "pause", 1100, 1080)]);

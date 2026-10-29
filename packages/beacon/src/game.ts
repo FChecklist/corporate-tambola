@@ -235,9 +235,9 @@ export function callRoundR(st: ControlState | null, start: number, stride: numbe
   if (st?.manualStart) { if (st.goRound === null) return st.stopRound !== null ? null : Infinity; start = st.goRound; } // a manual start: nothing is called until Start; number 1 comes in the round Start named
   let a = unshiftedRound(start, stride, breaks, round, k);
   if (st) {
-    if (st.intervals.length) { // every pause pushes the calls after it by its length, and the first call after a Resume waits a full gap (see pauseShifts)
+    if (st.intervals.length) { // every pause pushes the calls after it by its length, and (a game whose control file says fullGap) the first call after a Resume waits a full gap (see pauseShifts)
       const base = (g: number) => unshiftedRound(start, stride, breaks, Math.floor(g / NUMBERS) + 1, g % NUMBERS);
-      a = pushedByPauses(a, st.intervals, pauseShifts(st.intervals, stride, base, `R${start}|${JSON.stringify(breaks)}`));
+      a = pushedByPauses(a, st.intervals, pauseShifts(st.intervals, stride, base, `R${start}|${JSON.stringify(breaks)}`, st.fullGap === true));
     }
     if (st.stopRound !== null && a >= st.stopRound) return null;
   }

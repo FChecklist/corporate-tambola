@@ -3,12 +3,13 @@
 // Same rounds on every phone, the organizer's console and the Worker: they all call callRoundR / callRound.
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { callRound, publicKeyFromSecret, resolveControl, signControlWithSecret, type ControlConfig, type ControlMsg, type UnsignedControl } from "../src";
+import { callRound, cfgOf, publicKeyFromSecret, readPublished, registerKey, resolveControl, signControlWithSecret, type ControlConfig, type ControlMsg, type KV, type UnsignedControl } from "../src";
 import { callRoundR } from "../src/game";
 
 const ID = "FULLGAP1";
 const secretHex = Array.from(Uint8Array.from({ length: 32 }, (_, i) => i + 1), (b) => b.toString(16).padStart(2, "0")).join("");
-const cfg: ControlConfig = { pubKey: publicKeyFromSecret(secretHex), maxPauseRounds: 2000, leadRounds: 12 };
+const cfg: ControlConfig = { pubKey: publicKeyFromSecret(secretHex), maxPauseRounds: 2000, leadRounds: 12, fullGap: true };
+const legacy: ControlConfig = { ...cfg, fullGap: undefined }; // a game whose key was registered before the rule
 const mk = (seq: number, action: UnsignedControl["action"], at: number, signedAt: number, until?: number): ControlMsg =>
   signControlWithSecret(secretHex, { engagementId: ID, seq, action, atBeaconRound: at, signedAtRound: signedAt, untilRound: until });
 const START = 1000, STRIDE = 4; // 12 seconds a number (4 beacon rounds of 3 s)
@@ -72,5 +73,22 @@ describe("the phone page says it in plain words", () => {
     expect(z).toContain('v.callMode === "host" ? "" : " The first number comes " + (v.callSeconds || 12) + " seconds after that."');
     const rt = readFileSync(new URL("../src/phone-runtime.ts", import.meta.url), "utf8");
     expect(rt).toContain("export const RESTART_COUNT_SECS = 5;");
+  });
+});
+
+describe("only games that register their key after the rule get it (a game already played or running keeps the schedule its players saw)", () => {
+  const pr = (c: ControlConfig, pauseAt: number, resumeAt: number) => resolveControl(c, [mk(1, "pause", pauseAt, pauseAt - 14), mk(2, "resume", resumeAt, resumeAt - 2)]);
+  test("a control file without the flag keeps the older rule: a pause pushes the later calls by exactly its length, in callRoundR and callRound", () => {
+    const st = pr(legacy, START + 5 * STRIDE + 1, START + 5 * STRIDE + 61);
+    expect(st.fullGap).toBeUndefined();
+    expect(callRoundR(st, START, STRIDE, [], 1, 6)).toBe(START + 6 * STRIDE + 60); // the pause is 60 rounds long: nothing more
+    expect(callRound(st, START, STRIDE, 6)).toBe(START + 6 * STRIDE + 60);
+  });
+  test("registering a key writes the flag into the control file, and cfgOf / resolveControl carry it to the schedule", async () => {
+    const m = new Map<string, string>(); const store: KV = { get: async (k) => m.get(k) ?? null, put: async (k, v) => void m.set(k, v) };
+    expect((await registerKey(store, "NEWGAME1", publicKeyFromSecret(secretHex))).ok).toBe(true);
+    const f = (await readPublished(store, "NEWGAME1"))!; expect(f.fullGap).toBe(true);
+    expect(cfgOf(f).fullGap).toBe(true); expect(resolveControl(cfgOf(f), []).fullGap).toBe(true);
+    const old = { ...f, fullGap: undefined }; expect(cfgOf(old as any).fullGap).toBeUndefined();
   });
 });

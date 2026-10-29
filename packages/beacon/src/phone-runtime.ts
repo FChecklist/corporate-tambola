@@ -363,7 +363,7 @@ export class PhoneRuntime {
     // the Hosts' console keys ride in the same file as the organizer's key (trusted the same way, on first use); the list only grows, and never beyond the team's size
     const hostKeys: string[] = Array.isArray(body.hostKeys) ? body.hostKeys.filter((k: unknown): k is string => typeof k === "string" && /^[0-9a-f]{64}$/i.test(k)).slice(0, 5) : [];
     if (!this.tracker) {
-      const cfg: ControlConfig = { pubKey: body.pubKey, maxPauseRounds: body.maxPauseRounds, leadRounds: body.leadRounds, hostKeys, ...(body.startOnly === true ? { startOnly: true } : {}), ...hostControlOf(hostGameOf(this.cfg, this.scheduledRound)) };
+      const cfg: ControlConfig = { pubKey: body.pubKey, maxPauseRounds: body.maxPauseRounds, leadRounds: body.leadRounds, hostKeys, ...(body.startOnly === true ? { startOnly: true } : {}), ...(body.fullGap === true ? { fullGap: true } : {}), ...hostControlOf(hostGameOf(this.cfg, this.scheduledRound)) };
       this.controlFast = body.leadRounds === SAFETY_FAST.leadRounds;
       const safety = ALL_SAFETIES.find((s) => s.leadRounds === body.leadRounds) ?? SAFETY_STANDARD;
       if (safety !== SAFETY_FAST && safety !== SAFETY_STANDARD) { this.pollBaseMs = Math.round(safety.pollMaxSec * 750); this.pollJitterMs = Math.round(safety.pollMaxSec * 250); }
