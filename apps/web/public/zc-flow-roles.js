@@ -23,9 +23,8 @@
   }
   /** The plain sentence a role reads about who lets people in. */
   function approvalText(role) {
-    return role === "cohost" ? "People who join with your link wait for you. You, a Host or the organizer can let them in."
-      : role === "host" ? "People who join with the game link, a Host link or the organizer link wait for you or the organizer. People who join with a Co-host link can also be let in by that Co-host."
-      : "People who join with the game link wait for you or a Host. People who join with a Co-host link can also be let in by that Co-host. A family host approves their own family.";
+    // only what the engine does today: people who join with the game link wait for the organizer or a Host. Co-host and family approval are not in the engine, so no sentence promises them.
+    return role === "cohost" ? "" : role === "host" ? "People who join with the game link, a Host link or the organizer link wait for you or the organizer." : "People who join with the game link wait for you or a Host.";
   }
   window.ZROLES = { FAMILY_CUTOFF_MIN, approvers, decide, approvalText };
 })();

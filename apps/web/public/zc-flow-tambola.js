@@ -142,7 +142,7 @@
     if (fr) {
       const pl = fr.querySelector(".zf-pvlast");
       if (pl && !document.getElementById("zt-pvlast5")) pl.after(el("p", { id: "zt-pvlast5", class: "zf-small", text: "Last 5: 47, 12, 83, 5, 61" }));
-      if (Z.who && Z.who.card === "family" && !document.getElementById("zt-pass")) fr.append(el("div", { class: "zt-pass", id: "zt-pass" }, el("b", { text: "Family Passes" }), el("p", { class: "zf-small", text: "You have 5 passes: 1 for you and 4 for your family and friends. Share your family link with them. They play on the phone or laptop they click the link from." })));
+      if (Z.who && Z.who.card === "family" && !document.getElementById("zt-pass")) fr.append(el("div", { class: "zt-pass", id: "zt-pass" }, el("b", { text: "Family Passes" }), el("p", { class: "zf-small", text: "You have 5 passes: 1 for you and 4 for your family and friends. They play on the phone or laptop they click the link from." })));
     }
   }
   function setCheck(input, c) { const bad = linkProblem(input.value); c.textContent = !input.value.trim() ? "" : bad ? LINK_BAD : "Looks good"; c.className = "zf-small zt-check " + (!input.value.trim() ? "" : bad ? "bad" : "ok"); }

@@ -1,0 +1,1 @@
+(function(){var a=document.getElementById("trynew"),q=new URLSearchParams(location.search);if(!a)return;if(q.get("flow")==="new"){a.hidden=true;return}q.set("flow","new");a.href="/zc.html?"+q.toString()})();

@@ -77,7 +77,7 @@ test("logic: every scenario of the matrix (10,000+) gives the owner's outcome an
 test("logic: the Step 1 summary line is right for the four start and caller choices, and every role reads who approves", () => {
   const w = newPage();
   for (const st of AXES.start) for (const ca of AXES.caller) expect(w.ZTAMBOLA.runSummary({ start: st, call: ca }, "the time you set")).toBe(SUMMARY(st, ca));
-  expect(R.approvalText("cohost")).toContain("let them in"); expect(R.approvalText("host")).toContain("Co-host"); expect(R.approvalText("organizer")).toContain("family host");
+  expect(R.approvalText("cohost")).toBe(""); expect(R.approvalText("host")).toContain("wait for you or the organizer"); expect(R.approvalText("organizer")).toContain("wait for you or a Host"); // 1.7.0: only what the engine does (no Co-host or family approval sentences)
   for (const r of ["organizer", "host", "cohost"]) expect(/\bwe\b|invite|private|Rs /i.test(R.approvalText(r))).toBe(false);
 });
 
