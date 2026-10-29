@@ -451,3 +451,6 @@ html[data-pt] .zcount,html[data-pt] .zwait .zcount{color:var(--golddt);backgroun
 html[data-pt] .zcard h2{background:transparent;padding:0}
 html[data-pt] .zwait,html[data-pt] .zcard.zwait{background:transparent}
 html[data-pt] .zbig{background:radial-gradient(circle at 35% 30%,#FFE9A8,#E0B872 60%,#B8894D);color:#2E0812}
+
+html[data-pt] .zlink{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--line)}
+html[data-pt] .zfamrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}

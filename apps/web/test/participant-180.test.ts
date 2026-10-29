@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const rd = (f: string) => readFileSync(join(import.meta.dir, f), "utf8").replace(/\r\n/g, "\n");
-const z = rd("../public/z.js"), rt = rd("../../../packages/beacon/src/phone-runtime.ts"), guide = rd("../public/guide.js");
+const css = rd("../public/z.css"), z = rd("../public/z.js"), rt = rd("../../../packages/beacon/src/phone-runtime.ts"), guide = rd("../public/guide.js");
 
 describe("participant side 1.8.0", () => {
   test("the join carries an optional email (runtime and page), asked only in a game where people type their mobile number", () => {
@@ -27,6 +27,9 @@ describe("participant side 1.8.0", () => {
     expect(z).toContain("You asked to join through a family pass. Please wait while your family host approves your entry.");
     expect(z).toContain("Your request waited 30 minutes and nobody answered. Please open the game link and ask again, or talk to whoever shared it with you.");
     expect(z).toContain("Thank you for asking. This game could not add you this time. Please talk to whoever shared the link with you.");
+  });
+  test("the family card is readable in both looks: its link box follows the look", () => {
+    expect(css).toContain("html[data-pt] .zlink{background:rgba(255,255,255,.08);color:var(--ink)");
   });
   test("every new server message has a guide entry", () => {
     for (const m of ["Please check your email ID", "This email ID already holds a ticket", "waited more than 30 minutes", "Family approvals closed"]) expect([m, guide.includes(m)]).toEqual([m, true]);
