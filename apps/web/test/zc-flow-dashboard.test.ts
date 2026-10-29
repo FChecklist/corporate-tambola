@@ -1,5 +1,5 @@
 // New organizer flow, Game dashboard (2026-10-29): one status banner (unpaid / paid), payment, game link and message, Waiting for you, Tickets claimed, Game board, 24-hour report note.
-// FALSIFIED BY: flow-d-banner-role-status, flow-d-banner-unpaid-words, flow-d-banner-paid-words, flow-d-pay-when-paid, flow-d-decline-sent-as-admit, flow-d-bogey-counted, flow-d-letall-missing, flow-d-opens-when-published-game
+// FALSIFIED BY: flow-d2-order, flow-d2-share-id, flow-d2-pill, flow-d2-print-when-done, flow-d2-columns, flow-d2-notnow, flow-d2-letall, flow-d2-board-90, flow-d-banner-role-status, flow-d-banner-unpaid-words, flow-d-banner-paid-words, flow-d-pay-when-paid, flow-d-decline-sent-as-admit, flow-d-bogey-counted, flow-d-letall-missing, flow-d-opens-when-published-game
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -69,7 +69,7 @@ test("Waiting for you: Let in sends admit, Not now sends decline, Let everyone i
   info = { unpaid: false, startMs: START }; calls.length = 0;
   const win = page(); await wait();
   const d = win.document;
-  expect(d.querySelectorAll("#zf-wait li").length).toBe(2);
+  expect(d.querySelectorAll("#zf-wait tbody tr").length).toBe(2);
   d.querySelector('[data-wid="w1"] [data-decide="admit"]').click(); await wait();
   d.querySelector('[data-wid="w2"] [data-decide="decline"]').click(); await wait();
   const posts = calls.filter((c) => c.method === "POST");
@@ -77,7 +77,9 @@ test("Waiting for you: Let in sends admit, Not now sends decline, Let everyone i
   expect(posts[1].body).toEqual({ decision: "decline" });
   calls.length = 0;
   d.getElementById("zf-letall").click(); await wait(100);
-  expect(calls.filter((c) => c.method === "POST").map((c) => c.body.decision)).toEqual(["admit", "admit"]);
+  const all = calls.filter((c) => c.method === "POST");
+  expect(all.length).toBe(1);
+  expect(all[0]).toEqual({ url: "/api/z/EABCDEF/waiting/all", method: "POST", body: { decision: "admit" } });
 });
 
 test("nobody waiting says so in plain words", async () => {
@@ -92,4 +94,78 @@ test("a draft stays on the steps (the dashboard stays locked)", async () => {
   const win = page(); await wait();
   expect(win.document.getElementById("zf-dashboard")).toBe(null);
   expect(win.document.getElementById("zf-dash").hasAttribute("disabled")).toBe(true);
+});
+
+// ---- Game dashboard v2 (owner, 29 Oct night) ----
+test("v2 order: the share card is at the very top, then the banner, then Payment, Waiting, Tickets claimed, the retro board", async () => {
+  info = { unpaid: true, startMs: START };
+  const win = page(); await wait();
+  const ids = [...win.document.getElementById("zf-dashboard").children].map((n: any) => n.id || n.tagName);
+  const order = ["zf-sharecard", "zf-banner", "zf-pay", "zf-waitsec", "H3", "zf-claimed", "zf-retro"].map((x) => ids.indexOf(x));
+  expect(order.every((n: number) => n >= 0)).toBe(true);
+  expect([...order].sort((a, b) => a - b)).toEqual(order);
+  expect(ids.indexOf("zf-sharecard")).toBe(1);
+});
+
+test("the share card: Game ID, game link, Copy game link, Copy a message to share, Share on WhatsApp, and the message carries the Game ID", async () => {
+  info = { unpaid: false, startMs: START };
+  const win = page(); await wait();
+  const d = win.document;
+  expect(d.getElementById("zf-sh").textContent).toBe("Share this game link with your participants.");
+  expect(d.getElementById("zf-shareid").textContent).toBe("EABCDEF");
+  expect([...d.querySelectorAll("#zf-sharecard button, #zf-sharecard a")].map((n: any) => n.textContent)).toEqual(["Copy game link", "Copy a message to share", "Share on WhatsApp"]);
+  expect(d.getElementById("zf-sharemsg").textContent).toContain("Game ID: EABCDEF");
+  expect(decodeURIComponent(d.getElementById("zf-whatsapp").getAttribute("href").split("text=")[1])).toBe(d.getElementById("zf-sharemsg").textContent);
+  expect(d.getElementById("zf-sharecard").textContent).toContain("Hosts and Co-hosts use this same link.");
+});
+
+test("Payment has a pill (Pending amber, Done green, Free game) and the small print only while it is pending", async () => {
+  const pill = async (i: any) => { info = i; const w = page(); await wait(); return [w.document.getElementById("zf-paypill").textContent, w.document.getElementById("zf-paypill").className, !!w.document.getElementById("zf-payprint")]; };
+  expect(await pill({ unpaid: true, startMs: START })).toEqual(["Pending", "zf-pillstatus amber", true]);
+  expect(await pill({ unpaid: false, startMs: START })).toEqual(["Done", "zf-pillstatus green", false]);
+  expect(await pill({ unpaid: false, demo: true, startMs: START })).toEqual(["Free game", "zf-pillstatus green", false]);
+  info = { unpaid: true, startMs: START };
+  const w = page(); await wait();
+  expect(w.document.getElementById("zf-payprint").textContent).toContain("claim it back (recommended)");
+  expect(w.document.getElementById("zf-payprint").textContent).toContain("works for 7 days");
+});
+
+test("Copy payment link asks the game for its own payment link (the 7-day one) and copies that", async () => {
+  info = { unpaid: true, startMs: START }; calls.length = 0;
+  const win = page(); await wait();
+  win.document.getElementById("zf-copypay").click(); await wait();
+  expect(calls.find((c) => c.method === "POST").url).toBe("/api/z/EABCDEF/paylink");
+});
+
+test("the waiting table: Ticket number always, the other columns only when somebody gave them, amber; Not now moves a person to the grey list where Let in still works", async () => {
+  info = { unpaid: false, startMs: START };
+  waiting = [{ id: "w1", firstName: "Asha", last4: "4321", via: "boss@acme.com" }, { id: "w2" }]; calls.length = 0;
+  const win = page(); await wait();
+  const d = win.document;
+  expect([...d.querySelectorAll("#zf-wait thead th")].map((n: any) => n.textContent).filter(Boolean)).toEqual(["Ticket number", "Name", "Mobile", "Referred by"]);
+  expect(d.getElementById("zf-wait").className).toContain("amber");
+  expect(d.querySelector('[data-wid="w1"]').textContent).toContain("ends 4321");
+  d.querySelector('[data-wid="w1"] [data-decide="decline"]').click(); await wait();
+  expect(d.querySelector("#zf-notnow")).not.toBe(null);
+  expect(d.querySelector('#zf-notnow [data-decide="admit"]')).not.toBe(null);
+  expect(d.getElementById("zf-notnow").className).toContain("grey");
+  waiting = [];
+  d.querySelector('#zf-notnow [data-decide="admit"]').click(); await wait();
+  expect(d.getElementById("zf-ingame").className).toContain("green");
+  expect(d.getElementById("zf-notnow")).toBe(null);
+  waiting = [{ id: "w1", firstName: "Asha", last4: "4321" }, { id: "w2", firstName: "Ravi", last4: "9988" }];
+});
+
+test("the retro Housie board: HOUSIE title, a gold ball, 90 round discs in 10 columns, stamped ones red", async () => {
+  info = { unpaid: false, startMs: START };
+  const win = page(); await wait();
+  const d = win.document;
+  expect(d.querySelector(".zf-retro-title").textContent).toContain("HOUSIE");
+  expect(d.getElementById("zf-discs").children.length).toBe(90);
+  expect(d.getElementById("zf-discs").getAttribute("style")).toContain("repeat(10, 1fr)");
+  expect(d.getElementById("zf-ball")).not.toBe(null);
+  expect(d.querySelectorAll(".zf-disc.called").length).toBe(0);
+  win.ZFLOW.dash.called = [5, 17]; win.ZFLOW.draw();
+  expect([...d.querySelectorAll(".zf-disc.called")].map((n: any) => n.textContent)).toEqual(["5", "17"]);
+  expect(d.getElementById("zf-ball").textContent).toBe("17");
 });

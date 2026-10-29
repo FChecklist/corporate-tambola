@@ -3,7 +3,7 @@ window.ZFLOW_GAME = {
   brand: "Corporate Tambola",
   tickets: [1, 2],            // a participant can get one ticket or two
   bumper: true,               // Super Bumper House (all numbers of two tickets together)
-  boardMax: 90, boardCols: 15, // the 1 to 90 board shown on a laptop
+  boardMax: 90, boardCols: 10, boardTitle: "HOUSIE", // the retro 1 to 90 board: 10 across, 9 down
   popular: ["early5", "top", "full"],
   recommended: ["early5", "top", "mid", "bot", "full"],
 };

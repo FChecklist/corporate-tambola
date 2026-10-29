@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   /** What this game says about itself (zc-flow-game.js). Nothing here is a game rule: the prize list comes from the game's own table (ZG.PRIZE_HOUSES). */
-  const G = Object.assign({ brand: "Corporate Games", tickets: [1, 2], bumper: false, boardMax: 90, boardCols: 15, popular: [], recommended: [] }, (typeof window !== "undefined" && window.ZFLOW_GAME) || {});
+  const G = Object.assign({ brand: "Corporate Games", tickets: [1, 2], bumper: false, boardMax: 90, boardCols: 10, boardTitle: "GAME", popular: [], recommended: [] }, (typeof window !== "undefined" && window.ZFLOW_GAME) || {});
   const COPY = {
     top: "No personal details needed. All game and participant information is deleted within 24 hours of the game.",
     soon: "Coming soon",
@@ -204,7 +204,21 @@
   const gameLink = (origin, eid) => origin + "/z.html?e=" + eid;
   const payLink = (origin, eid) => origin + "/pay.html?e=" + eid;
   const boardLink = (origin, eid) => origin + "/board.html?e=" + eid;
-  const shareMessage = (name, link) => "You are welcome to join our " + name + " game. Open this game link on your phone: " + link;
+  const shareMessage = (name, link, eid) => "You are welcome to join our " + name + " game." + (eid ? " Game ID: " + eid + "." : "") + " Open this game link on your phone: " + link;
+  const PAY_PRINT = "The payment is small, so many organizers pay it themselves and claim it back (recommended). You can also copy the payment link and share it with the person who will pay. The payment link works for 7 days.";
+  /** The waiting table: Ticket number always; Name, Employee ID, Email ID, Mobile and Referred by only when somebody gave them. */
+  function waitColumns(rows) {
+    const all = [
+      { label: "Ticket number", get: (w) => (w.ticket != null ? String(w.ticket) : ""), always: true },
+      { label: "Name", get: (w) => String(w.name || w.firstName || "") },
+      { label: "Employee ID", get: (w) => String(w.empId || w.employeeId || "") },
+      { label: "Email ID", get: (w) => String(w.email || "") },
+      { label: "Mobile", get: (w) => (w.mobile ? String(w.mobile) : w.last4 ? "ends " + w.last4 : "") },
+      { label: "Referred by", get: (w) => String(w.via || w.referredBy || "") },
+    ];
+    return all.filter((c) => c.always || rows.some((w) => c.get(w)));
+  }
+  const waitLabel = (w) => [w.ticket != null ? "Ticket " + w.ticket : "", w.name || w.firstName || "", w.empId || w.employeeId || "", w.email || "", w.last4 ? "ends " + w.last4 : ""].filter(Boolean).join(" \u00b7 ") || "A participant";
   /** Tickets claimed: real claims only (practice rows are left out). */
   const claimedCount = (claims) => (Array.isArray(claims) ? claims.filter((c) => !c.bogey).length : 0);
   const REPORT_NOTE = "After the game, download your game report within 24 hours. All game and participant information is deleted within 24 hours of the game.";
@@ -275,7 +289,7 @@
   const NOT_ON_LIST = "This email ID is not on the list. Please ask the organizer to add you, or join the game as a participant.";
   const registry = {}; // step number -> function(el, ctx) that draws the step body (each step adds its own)
 
-  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems, housesOf, tagsOf, GIFTS, prizeLine, defaultPrizes, defaultBumper, buildRewards, prizeProblems, breakMax, brandNameClean, linkKind, brandProblems, breakProblems, buildBrandPatch, contactProblems, readBack, bannerOf, gameLink, payLink, boardLink, shareMessage, claimedCount, BANNER_UNPAID, STATUSES, statusOf, statusBanner, stubOn, roleOfEmail, passcodeCheck, TEAM_DEMO, PASS, ROLE_BAR, NOT_ON_LIST, sampleTickets };
+  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems, housesOf, tagsOf, GIFTS, prizeLine, defaultPrizes, defaultBumper, buildRewards, prizeProblems, breakMax, brandNameClean, linkKind, brandProblems, breakProblems, buildBrandPatch, contactProblems, readBack, bannerOf, gameLink, payLink, boardLink, shareMessage, claimedCount, BANNER_UNPAID, PAY_PRINT, waitColumns, waitLabel, STATUSES, statusOf, statusBanner, stubOn, roleOfEmail, passcodeCheck, TEAM_DEMO, PASS, ROLE_BAR, NOT_ON_LIST, sampleTickets };
   if (typeof window !== "undefined") window.ZFLOW = api;
   if (typeof module !== "undefined") module.exports = api;
   if (typeof document === "undefined") return;
@@ -558,7 +572,7 @@
     const ul = el("ul", { class: "zf-pvprizes", id: "zf-pvprizes" });
     for (const r of shown) { const k = r.pattern + "|" + r.scope; if (seen.has(k)) continue; seen.add(k); ul.append(el("li", {}, el("span", { text: (r.scope === "two_ticket" ? "Super Bumper House" : (houses.find((h) => h.id === r.pattern) || {}).label || r.pattern) + ": " + r.text }), " ", el("button", { type: "button", class: "zf-add", disabled: "" }, "Claim"))); }
     frame.append(ul);
-    if (laptop) { const board = el("div", { class: "zf-board90", id: "zf-board90", "aria-label": "Sample board, 1 to " + G.boardMax, style: "grid-template-columns: repeat(" + G.boardCols + ", 1fr)" }); for (let n = 1; n <= G.boardMax; n++) board.append(el("span", { class: n % 7 === 0 ? "m" : "", text: String(n) })); frame.append(board); }
+    if (laptop) frame.append(retroBoard([7, 14, 21, 28, 47])); // sample stamps
     box.append(frame);
     return box;
   }
@@ -600,7 +614,7 @@
   };
 
   /* ---- Game dashboard, Game ID bar, Host / Co-host pages ---- */
-  const dash = { waiting: [], claims: [], note: "", loaded: false, facts: {} };
+  const dash = { waiting: [], claims: [], note: "", loaded: false, facts: {}, notNow: [], inGame: [], called: [] };
   api.dash = dash;
   const originOf = () => (BASE || location.origin);
   const STUB = stubOn(location.search, location.hostname);
@@ -614,8 +628,13 @@
     dash.loaded = true;
     if (state.view === "dash" || state.view === "cohost") draw();
   }
-  async function decide(id, decision) {
-    try { await call("POST", `/api/z/${state.eid}/waiting/${encodeURIComponent(id)}`, { decision }); dash.note = decision === "admit" ? "Let in." : "Not now. You can let them in later."; } catch (e) { dash.note = e.message; }
+  async function decide(w, decision) {
+    try {
+      await call("POST", `/api/z/${state.eid}/waiting/${encodeURIComponent(w.id)}`, { decision });
+      dash.notNow = dash.notNow.filter((x) => x.id !== w.id); dash.inGame = dash.inGame.filter((x) => x.id !== w.id);
+      if (decision === "admit") dash.inGame.push(w); else dash.notNow.push(w);
+      dash.note = decision === "admit" ? "Let in." : "Not now. You can let them in later.";
+    } catch (e) { dash.note = e.message; }
     await refreshDash();
   }
   async function copy(text, what) {
@@ -626,7 +645,7 @@
   function idBar() {
     const st = statusNow(), S = STATUSES[st];
     const bar = el("div", { class: "zf-idbar", id: "zf-idbar" }, el("span", { class: "zf-idlabel", text: "Game ID" }), " ", el("b", { id: "zf-gameid", text: state.eid }), " ",
-      el("button", { type: "button", class: "zf-add", id: "zf-copyid", onclick: () => copy(state.eid, "Game ID") }, "Copy"), " ", el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": st, text: S.label }));
+el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": st, text: S.label }));
     if (STUB && state.eid) {
       const sel = el("select", { id: "zf-demostatus", "aria-label": "Demo: show status", onchange: (e) => { state.demoStatus = e.target.value || ""; draw(); } }, el("option", { value: "" }, "Demo: show status"));
       for (const [id, v] of Object.entries(STATUSES)) sel.append(el("option", { value: id, ...(state.demoStatus === id ? { selected: "" } : {}) }, v.label));
@@ -662,36 +681,86 @@
     } }, "Check passcode"), " ", el("button", { type: "button", class: "zf-link", id: "zf-newcode", onclick: () => { t.sent = Date.now(); t.att = { tries: 0, sentMs: t.sent }; msg.textContent = "A new passcode was sent."; } }, "Send a new passcode"), " ", el("button", { type: "button", class: "zf-link", id: "zf-diffemail", onclick: () => { t.sent = null; t.att = null; draw(); } }, "Use a different email ID"));
     return sec;
   }
-  /** The Game dashboard (organizer and Host); a Co-host sees the Co-host page: game link and message, Waiting for you, Tickets claimed. */
+  /** The share card: Game ID, game link and the ways to send it. Hosts and Co-hosts use this same link. */
+  function shareCard(o, eid, name) {
+    const link = gameLink(o, eid), msg = shareMessage(name, link, eid);
+    const wa = ["https:", "", "wa.me", ""].join("/") + "?text=" + encodeURIComponent(msg); // opened by the person's own tap
+    return el("section", { class: "zf-sharecard", id: "zf-sharecard", "aria-labelledby": "zf-sh" },
+      el("h2", { id: "zf-sh", text: "Share this game link with your participants." }),
+      el("p", {}, el("span", { class: "zf-idlabel", text: "Game ID " }), el("b", { id: "zf-shareid", text: eid })),
+      el("label", { for: "zf-link", text: "Game link for participants" }), el("input", { type: "text", readonly: "", id: "zf-link", value: link }),
+      el("p", { class: "zf-btnrow" }, el("button", { type: "button", class: "zf-go", id: "zf-copylink", onclick: () => copy(link, "Game link") }, "Copy game link"), " ",
+        el("button", { type: "button", class: "zf-add", id: "zf-copymsg", onclick: () => copy(msg, "Message") }, "Copy a message to share"), " ",
+        el("a", { class: "zf-add", id: "zf-whatsapp", href: wa, target: "_blank", rel: "noopener" }, "Share on WhatsApp")),
+      el("p", { class: "zf-msgbox", id: "zf-sharemsg", text: msg }),
+      el("p", { class: "zf-small", text: "Hosts and Co-hosts use this same link." }));
+  }
+  /** Payment: a pill (Pending amber, Done green, Free game green), the buttons while it is pending, and the small print. */
+  function paymentBlock(st, o, eid) {
+    const pill = st === "free" ? ["Free game", "green"] : st === "pending" || st === "overdue" ? ["Pending", "amber"] : ["Done", "green"];
+    const sec = el("section", { class: "zf-pay", id: "zf-pay" }, el("h3", {}, "Payment ", el("span", { class: "zf-pillstatus " + pill[1], id: "zf-paypill", text: pill[0] })));
+    if (st === "pending" || st === "overdue") {
+      sec.append(el("a", { class: "zf-go", id: "zf-paynow", href: payLink(o, eid), target: "_blank", rel: "noopener" }, "Pay now"), " ", el("button", { type: "button", class: "zf-add", id: "zf-copypay", onclick: async () => { let u = ""; try { u = (await call("POST", `/api/z/${eid}/paylink`, {})).url || ""; } catch (e) { dash.note = e.message; return draw(); } copy(u || payLink(o, eid), "Payment link"); } }, "Copy payment link"),
+        el("p", { class: "zf-small", id: "zf-payprint", text: PAY_PRINT }));
+      if (st === "overdue") sec.append(el("p", {}, el("a", { class: "zf-add", id: "zf-changedate", href: "/zc.html?e=" + encodeURIComponent(eid) }, "Change the date"), " ", el("a", { class: "zf-add", id: "zf-cancelgame", href: "/zc.html?e=" + encodeURIComponent(eid) }, "Cancel this game")));
+    }
+    return sec;
+  }
+  /** Waiting for you: one table, a column only when a participant gave that detail; Let in / Not now; then the grey Not now list and the green list. */
+  function waitingBlock(co) {
+    const sec = el("section", { class: "zf-waitsec", id: "zf-waitsec" }, el("h3", { text: "Waiting for you to let them in the game" }));
+    const rows = dash.waiting;
+    if (!rows.length) sec.append(el("p", { id: "zf-nowait", text: "Nobody is waiting right now." }));
+    else {
+      const cols = waitColumns(rows), wrap = el("div", { class: "zf-tablewrap" }), table = el("table", { class: "zf-table amber", id: "zf-wait" });
+      table.append(el("thead", {}, el("tr", {}, cols.map((c) => el("th", { scope: "col", text: c.label })), el("th", { scope: "col", text: "" }))));
+      const tb = el("tbody");
+      for (const w of rows) tb.append(el("tr", { "data-wid": String(w.id) }, cols.map((c) => el("td", { "data-label": c.label, text: c.get(w) || "—" })), el("td", {}, el("button", { type: "button", class: "zf-add", "data-decide": "admit", onclick: () => decide(w, "admit") }, "Let in"), " ", el("button", { type: "button", class: "zf-link", "data-decide": "decline", onclick: () => decide(w, "decline") }, "Not now"))));
+      table.append(tb); wrap.append(table); sec.append(wrap);
+      if (!co) sec.append(el("button", { type: "button", class: "zf-add", id: "zf-letall", onclick: async () => { try { await call("POST", `/api/z/${state.eid}/waiting/all`, { decision: "admit" }); for (const w of rows) dash.inGame.push(w); dash.note = "Everybody was let in."; } catch (e) { dash.note = e.message; } await refreshDash(); } }, "Let everyone in"));
+    }
+    if (dash.notNow.length) {
+      sec.append(el("h3", { text: "Not now" }));
+      const ul = el("ul", { class: "zf-list grey", id: "zf-notnow" });
+      for (const w of dash.notNow) ul.append(el("li", { "data-wid": String(w.id) }, el("span", { text: waitLabel(w) }), " ", el("button", { type: "button", class: "zf-add", "data-decide": "admit", onclick: () => decide(w, "admit") }, "Let in")));
+      sec.append(ul);
+    }
+    if (dash.inGame.length) {
+      sec.append(el("h3", { text: "In the game" }));
+      const ul = el("ul", { class: "zf-list green", id: "zf-ingame" });
+      for (const w of dash.inGame) ul.append(el("li", { "data-wid": String(w.id), text: waitLabel(w) }));
+      sec.append(ul);
+    }
+    return sec;
+  }
+  /** The retro game board: a cream card with a double red border, round numbered discs, called numbers stamped red, a gold ball for the last number. */
+  function retroBoard(called) {
+    const board = el("section", { class: "zf-retro", id: "zf-retro", "aria-label": "Game board" });
+    board.append(el("h3", { class: "zf-retro-title", text: "★ " + G.boardTitle + " ★" }), el("p", { class: "zf-small", text: "close group online corporate " + G.boardTitle.toLowerCase() }));
+    const got = new Set(called), last = called.length ? called[called.length - 1] : 0;
+    board.append(el("div", { class: "zf-ball", id: "zf-ball", text: last ? String(last) : "–" }));
+    const grid = el("div", { class: "zf-discs", id: "zf-discs", style: "grid-template-columns: repeat(" + G.boardCols + ", 1fr)" });
+    for (let n = 1; n <= G.boardMax; n++) grid.append(el("span", { class: "zf-disc" + (got.has(n) ? " called" : ""), "data-n": String(n), text: String(n) }));
+    board.append(grid, el("p", { class: "zf-small", id: "zf-calledcount", text: called.length ? called.length + " numbers called" : "No number called yet." }));
+    return board;
+  }
+  /** The Game dashboard (organizer and Host); a Co-host sees the Co-host page: the same share card, waiting table, tickets claimed and board, and cannot change anything. */
   function dashboard(opts) {
     const co = !!(opts && opts.cohost), o = originOf(), eid = state.eid, name = gameName(form.occ, form.oname), st = statusNow();
     const startText = state.when ? clockIn(state.when.ms, state.when.zone) : (state.info && state.info.startMs ? clockIn(state.info.startMs, "Asia/Kolkata") + " India time" : "the start time");
-    const title = co ? "Your Co-host page" : COPY.dash;
-    const sec = el("section", { class: "zf-sec open zf-dashboard", id: "zf-dashboard", "aria-labelledby": "zf-hd" }, el("h2", { id: "zf-hd", text: title }));
+    const sec = el("section", { class: "zf-sec open zf-dashboard", id: "zf-dashboard", "aria-labelledby": "zf-hd" }, el("h2", { id: "zf-hd", text: co ? "Your Co-host page" : COPY.dash }));
     const bn = statusBanner(st, startText);
-    if (!co) sec.append(el("div", { class: "zf-banner " + bn.kind, id: "zf-banner", "aria-live": "polite" }, bn.text));
     const gone = st === "cancelled" || st === "refund" || st === "deleted" || st === "draft";
-    if (!co && (st === "pending" || st === "overdue")) {
-      sec.append(el("h3", { text: "Payment" }), el("a", { class: "zf-go", id: "zf-paynow", href: payLink(o, eid), target: "_blank", rel: "noopener" }, "Pay now"), " ", el("button", { type: "button", class: "zf-add", id: "zf-copypay", onclick: () => copy(payLink(o, eid), "Payment link") }, "Copy payment link"));
-      if (st === "overdue") sec.append(el("p", {}, el("a", { class: "zf-add", id: "zf-changedate", href: "/zc.html?e=" + encodeURIComponent(eid) }, "Change the date"), " ", el("a", { class: "zf-add", id: "zf-cancelgame", href: "/zc.html?e=" + encodeURIComponent(eid) }, "Cancel this game")));
-    }
+    if (!gone) sec.append(shareCard(o, eid, name)); // 1 the share card, at the very top
+    if (!co) sec.append(el("div", { class: "zf-banner " + bn.kind, id: "zf-banner", "aria-live": "polite" }, bn.text)); // 2 the status banner
     if (st === "paused") sec.append(el("p", {}, el("button", { type: "button", class: "zf-add", id: "zf-resume", disabled: "" }, "Resume"), " ", el("span", { class: "zf-soon", text: COPY.soon })));
     if (st === "cancelled") sec.append(el("p", {}, el("button", { type: "button", class: "zf-add", id: "zf-copygame", disabled: "" }, "Make a copy"), " ", el("span", { class: "zf-soon", text: COPY.soon })));
-    if (st === "deleted") { sec.append(el("p", { class: "zf-msg", role: "status", id: "zf-dashnote", text: "" })); return sec; }
-    if (gone) { sec.append(el("p", { class: "zf-msg", role: "status", id: "zf-dashnote", text: dash.note })); return sec; }
-    const link = gameLink(o, eid);
-    sec.append(el("h3", { text: "Game link" }), el("p", { class: "zf-small", text: "Send this one link to your participants yourself, from your own mail or chat." }), el("input", { type: "text", readonly: "", id: "zf-link", value: link, "aria-label": "Game link" }), " ", el("button", { type: "button", class: "zf-add", id: "zf-copylink", onclick: () => copy(link, "Game link") }, "Copy link"),
-      el("p", { class: "zf-msgbox", id: "zf-sharemsg", text: shareMessage(name, link) }), el("button", { type: "button", class: "zf-add", id: "zf-copymsg", onclick: () => copy(shareMessage(name, link), "Message") }, "Copy message"));
-    sec.append(el("h3", { text: "Waiting for you" }));
-    if (!dash.waiting.length) sec.append(el("p", { id: "zf-nowait", text: "Nobody is waiting right now." }));
-    else {
-      const ul = el("ul", { class: "zf-wait", id: "zf-wait" });
-      for (const w of dash.waiting) ul.append(el("li", { "data-wid": String(w.id) }, el("span", { text: String(w.firstName || w.name || "A participant") + (w.last4 ? " · ends " + w.last4 : "") }), " ", el("button", { type: "button", class: "zf-add", "data-decide": "admit", onclick: () => decide(w.id, "admit") }, "Let in"), " ", el("button", { type: "button", class: "zf-link", "data-decide": "decline", onclick: () => decide(w.id, "decline") }, "Not now")));
-      sec.append(ul);
-      if (!co) sec.append(el("button", { type: "button", class: "zf-add", id: "zf-letall", onclick: async () => { for (const w of dash.waiting.slice()) { try { await call("POST", `/api/z/${state.eid}/waiting/${encodeURIComponent(w.id)}`, { decision: "admit" }); } catch (e) { dash.note = e.message; break; } } await refreshDash(); } }, "Let everyone in"));
-    }
-    sec.append(el("h3", { text: "Tickets claimed" }), el("p", { id: "zf-claimed", text: String(claimedCount(dash.claims)) }));
-    if (!co) sec.append(el("h3", { text: "Game board" }), el("a", { class: "zf-add", id: "zf-board", href: boardLink(o, eid), target: "_blank", rel: "noopener" }, "Open the game board"), el("p", { class: "zf-small", id: "zf-report", text: REPORT_NOTE }));
+    if (gone) { sec.append(el("p", { class: "zf-msg", role: "status", id: "zf-dashnote", text: st === "deleted" ? "" : dash.note })); return sec; }
+    if (!co) sec.append(paymentBlock(st, o, eid)); // 3 payment
+    sec.append(waitingBlock(co)); // 4 waiting for you
+    sec.append(el("h3", { text: "Tickets claimed" }), el("p", { id: "zf-claimed", text: String(claimedCount(dash.claims)) })); // 5 tickets claimed
+    sec.append(retroBoard(dash.called || [])); // 6 the retro board
+    if (!co) sec.append(el("p", {}, el("a", { class: "zf-add", id: "zf-board", href: boardLink(o, eid), target: "_blank", rel: "noopener" }, "Open the game board")), el("p", { class: "zf-small", id: "zf-report", text: REPORT_NOTE }));
     sec.append(el("p", { class: "zf-msg", role: "status", id: "zf-dashnote", text: dash.note }));
     return sec;
   }

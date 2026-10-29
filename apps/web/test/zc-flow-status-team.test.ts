@@ -54,7 +54,7 @@ test("the Game ID bar shows the id with Copy and the status pill on every screen
   const win = page(); await wait();
   const d = win.document;
   expect(d.getElementById("zf-gameid").textContent).toBe("EABCDEF");
-  expect(d.getElementById("zf-copyid").textContent).toBe("Copy");
+  expect(d.getElementById("zf-copyid")).toBe(null); // the bar only shows the Game ID; the thing to copy is in the share card
   expect(d.getElementById("zf-status").textContent).toBe("Published, payment pending");
   d.querySelector('[data-step="2"]').click();
   expect(d.getElementById("zf-idbar")).not.toBe(null); // also on the steps
@@ -112,9 +112,10 @@ test("step 5 preview: the game's own ticket maker, mobile and laptop, sample wor
   expect(shown).toEqual(real);
   expect(d.getElementById("zf-pvprizes").textContent).toContain("Full House: Gift voucher");
   expect(d.querySelector("#zf-pvprizes button").hasAttribute("disabled")).toBe(true);
-  expect(d.getElementById("zf-board90")).toBe(null);
+  expect(d.getElementById("zf-discs")).toBe(null);
   d.querySelector('[data-pv="laptop"]').click();
-  expect(d.getElementById("zf-board90").children.length).toBe(90);
+  expect(d.getElementById("zf-discs").children.length).toBe(90);
+  expect(d.querySelector(".zf-retro-title").textContent).toContain("HOUSIE");
   expect(d.getElementById("zf-frame").className).toContain("laptop");
 });
 
@@ -180,7 +181,9 @@ test("a Co-host sees only Your Co-host page: link and message, Waiting for you, 
   expect(d.querySelector(".zf-bar")).toBe(null);
   expect(d.getElementById("zf-link")).not.toBe(null);
   expect(d.getElementById("zf-claimed")).not.toBe(null);
-  for (const id of ["zf-paynow", "zf-copypay", "zf-letall", "zf-board", "zf-banner", "zf-cancelgame"]) expect(d.getElementById(id)).toBe(null);
+  for (const id of ["zf-pay", "zf-paynow", "zf-copypay", "zf-letall", "zf-board", "zf-banner", "zf-cancelgame"]) expect(d.getElementById(id)).toBe(null);
+  expect(d.getElementById("zf-sharecard")).not.toBe(null); // the same share card and board, read-only
+  expect(d.getElementById("zf-retro")).not.toBe(null);
 });
 
 test("step 3 shows the Ticket A and Ticket B prize rows, waiting (coming soon), with 2 tickets", () => {

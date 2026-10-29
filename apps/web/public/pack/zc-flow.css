@@ -107,3 +107,25 @@ a.zf-add { display: inline-flex; align-items: center; text-decoration: none; }
   .zf-pvticket div { border-color: #3a4a6e; } .zf-pvticket div.e { background: #1a2745; } .zf-pvticket div.m, .zf-board90 span.m { background: #8fb3ff; color: #0a1630; } .zf-board90 span { border-color: #3a4a6e; }
 }
 @media (max-width: 480px) { .zf-frame.mobile { width: 100%; } .zf-codes input { width: 40px; } }
+#zf-demostatus { min-height: 44px; max-width: 100%; }
+
+.zf-sharecard { margin: 0 0 14px; padding: 14px 16px; border: 2px solid #0b3d91; border-radius: 12px; background: #eef3fd; }
+.zf-sharecard h2 { font-size: 19px; margin: 0 0 8px; } .zf-btnrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.zf-pay { margin: 12px 0; } .zf-pay h3 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.zf-tablewrap { overflow-x: auto; max-width: 100%; } .zf-table { border-collapse: collapse; min-width: 100%; }
+.zf-table th, .zf-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #d3dbe9; white-space: nowrap; }
+.zf-table.amber { background: #fff8e1; } .zf-list { list-style: none; padding: 8px 12px; margin: 0 0 8px; border-radius: 8px; } .zf-list li { padding: 6px 0; }
+.zf-list.grey { background: #eceef2; } .zf-list.green { background: #e1f3e8; }
+.zf-retro { margin: 16px 0; padding: 14px; background: #fbf1d3; border: 3px double #b3261e; border-radius: 14px; color: #3b2a12; text-align: center; }
+.zf-retro-title { margin: 0; font-size: 22px; letter-spacing: .08em; color: #b3261e; }
+.zf-ball { width: 84px; height: 84px; margin: 8px auto; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ffe27a, #d19a00); color: #4a2f00; font-size: 34px; font-weight: 800; line-height: 84px; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+.zf-discs { display: grid; gap: 4px; margin: 8px 0; }
+.zf-disc { aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; background: #fff; border: 1px solid #c9b88a; font-size: 12px; font-weight: 700; color: #3b2a12; }
+.zf-disc.called { background: #b3261e; border-color: #7a1410; color: #fff; }
+.zf-link { }
+@media (prefers-color-scheme: dark) {
+  .zf-sharecard { background: #14203a; border-color: #8fb3ff; } .zf-table th, .zf-table td { border-color: #2c3a5c; } .zf-table.amber { background: #3b3010; color: #ffe9a6; }
+  .zf-list.grey { background: #2a2f3a; color: #e8eaf0; } .zf-list.green { background: #12301f; color: #cdeedb; }
+  .zf-retro { background: #fbf1d3; color: #3b2a12; }
+}
+@media (max-width: 480px) { .zf-ball { width: 64px; height: 64px; line-height: 64px; font-size: 26px; } .zf-disc { font-size: 10px; } }
