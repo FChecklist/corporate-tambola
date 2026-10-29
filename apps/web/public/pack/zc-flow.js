@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   /** What this game says about itself (zc-flow-game.js). Nothing here is a game rule: the prize list comes from the game's own table (ZG.PRIZE_HOUSES). */
-  const G = Object.assign({ brand: "Corporate Games", tickets: [1, 2], bumper: false, boardMax: 90, boardCols: 10, boardTitle: "GAME", sample: true, board: true, claims: true, popular: [], recommended: [] }, (typeof window !== "undefined" && window.ZFLOW_GAME) || {});
+  const G = Object.assign({ brand: "Corporate Games", tickets: [1, 2], bumper: false, boardMax: 90, boardCols: 10, boardTitle: "GAME", sample: true, board: true, claims: true, callSeconds: 12, popular: [], recommended: [] }, (typeof window !== "undefined" && window.ZFLOW_GAME) || {});
   const COPY = {
     top: "No personal details needed. All game and participant information is deleted within 24 hours of the game.",
     soon: "Coming soon",
@@ -389,7 +389,7 @@
         const z = form.zone === OTHER_ZONE ? form.zoneOther : form.zone, ms = wallToMs(form.date, form.time, z), name = gameName(form.occ, form.oname);
         const startRound = window.ZG.roundAt(ms);
         if (state.eid) await call("PATCH", `/api/z/${state.eid}/settings`, { name, startRound });
-        else { const id = randId(); await call("POST", "/api/z", { id, name, startRound, callSeconds: 12, cap: 10 }); state.eid = id; try { window.history.replaceState(null, "", location.pathname + "?flow=new&e=" + id); } catch {} }
+        else { const id = randId(); await call("POST", "/api/z", { id, name, startRound, callSeconds: G.callSeconds, cap: 10 }); state.eid = id; try { window.history.replaceState(null, "", location.pathname + "?flow=new&e=" + id); } catch {} }
         state.when = { ms, zone: z };
         done(1);
       } catch (e) { go.disabled = false; msg.textContent = e.message; }
@@ -580,6 +580,19 @@
   /* ---- Step 5 ---- */
   const pub = { email: "", phone: "" };
   try { pub.email = (window.CTK ? window.CTK.get("ctz-email") : sessionStorage.getItem("ctz-email")) || ""; } catch { /* the box starts empty */ }
+  /** The terms boxes: three games draw them three ways (CBConsent.wire, CBConsent.load/bind, or the TermsBox). One adapter: draws kind K1 into `box`, keeps `btn` disabled until every box is ticked, and says what to send. */
+  function mountConsent(box, btn) {
+    const C = window.CBConsent;
+    if (C && typeof C.load === "function") {
+      const st = {}; let info = null;
+      btn.disabled = true;
+      C.load("K1", (p) => fetch(BASE + p).then((r) => r.json())).then((i) => { info = i; box.innerHTML = C.html(i, st); C.bind(box, i, st, btn); }).catch(() => { box.textContent = "The terms could not be loaded. Please try again."; });
+      return { payload: () => (info ? C.payload(info, st) : null) };
+    }
+    if (C && typeof C.wire === "function") { box.innerHTML = C.html("K1"); C.wire(box, "K1", {}, btn); return { payload: () => C.payload(box, "K1") }; }
+    if (window.TermsBox) { let tb = null; btn.disabled = true; window.TermsBox.mount(box, "K1", { base: BASE, btn }).then((x) => { tb = x; }); return { payload: () => (tb ? tb.terms() : null) }; }
+    return { payload: () => null };
+  }
   registry[5] = (box) => {
     const houses = housesOf(window.ZG), msg = el("p", { class: "zf-msg", role: "status", id: "zf-msg5" });
     const rewards = buildRewards(prizes.sel || {}, prizes.bumper, prizes.tix, prizes.cur);
@@ -596,8 +609,7 @@
     box.append(el("label", { for: "zf-pemail", text: "Your email ID" }), el("input", { type: "email", id: "zf-pemail", autocomplete: "email", value: pub.email, oninput: (e) => { pub.email = e.target.value; } }));
     box.append(el("label", { for: "zf-pphone", text: "Your mobile number" }), el("input", { type: "tel", id: "zf-pphone", autocomplete: "tel", placeholder: "98765 43210", value: pub.phone, oninput: (e) => { pub.phone = e.target.value; } }));
     const consent = el("div", { id: "zf-consent" });
-    let terms = null; // the game's own terms box (TermsBox), when it has that kind instead of CBConsent
-    if (window.CBConsent) consent.innerHTML = window.CBConsent.html("K1");
+    let ctl = null; // the terms ticks, whichever way this game draws them (see mountConsent)
     box.append(consent);
     const go = el("button", { type: "button", class: "zf-go", id: "zf-publish", "data-needs": "K1", onclick: async () => {
       const bad = contactProblems(pub.email, pub.phone);
@@ -605,15 +617,14 @@
       if (!state.eid) { msg.textContent = "Please save step 1 first."; return; }
       go.disabled = true; msg.textContent = "Publishing…";
       try {
-        const pr = await call("POST", `/api/z/${state.eid}/publish`, { email: pub.email.trim(), phone: pub.phone, consent: window.CBConsent ? window.CBConsent.payload(consent, "K1") : terms ? terms.terms() : undefined });
+        const pr = await call("POST", `/api/z/${state.eid}/publish`, { email: pub.email.trim(), phone: pub.phone, consent: ctl ? ctl.payload() || undefined : undefined });
         try { if (window.CTK) window.CTK.set("ctz-email", pub.email.trim()); else sessionStorage.setItem("ctz-email", pub.email.trim()); } catch { /* optional */ }
         state.info = { published: true, paid: !!(pr && pr.paid), payUrl: pr && pr.payUrl, shareUrl: pr && pr.shareUrl };
         done(5);
       } catch (e) { go.disabled = false; msg.textContent = e.message; }
     } }, "Publish");
     box.append(msg, go);
-    if (window.CBConsent) window.CBConsent.wire(consent, "K1", {}, go); // Publish waits for the tick
-    else if (window.TermsBox) { go.disabled = true; window.TermsBox.mount(consent, "K1", { base: BASE, btn: go }).then((x) => { terms = x; }); } // same wait, with the wording the game's server gives
+    ctl = mountConsent(consent, go); // Publish waits for the ticks
   };
 
   /* ---- Game dashboard, Game ID bar, Host / Co-host pages ---- */
