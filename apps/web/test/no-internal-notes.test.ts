@@ -30,7 +30,8 @@ describe("no internal notes in anything that is shipped", () => {
       files++;
       const s = readFileSync(f, "utf8");
       const m = s.match(EVERYWHERE);
-      if (m) hits.push(`${relative(ROOT, f)}: ${m[0]}`);
+      // the vendored console pack (pinned by pack/MANIFEST.json, not edited here) uses "todo" as a CSS class name, not as a note
+      if (m && !(m[0] === "todo" && /[\\/]public[\\/]pack[\\/]/.test(f))) hits.push(`${relative(ROOT, f)}: ${m[0]}`);
     }
     expect(files).toBeGreaterThan(50);
     expect(hits).toEqual([]);
