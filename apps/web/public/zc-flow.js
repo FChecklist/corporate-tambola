@@ -97,9 +97,49 @@
     if (!choices.some((k) => k.upTo === Number(f.upTo))) return ["Please choose the size of your game."];
     return [];
   }
+  /* ---- Step 3: tickets and prizes (pure) ---- */
+  const FALLBACK_HOUSES = [{ id: "early5", label: "Early Five", how: "Be the first to mark any 5 of your numbers." }, { id: "top", label: "Top Line", how: "Mark all 5 numbers of the top line." }, { id: "mid", label: "Middle Line", how: "Mark all 5 numbers of the middle line." }, { id: "bot", label: "Bottom Line", how: "Mark all 5 numbers of the bottom line." }, { id: "full", label: "Full House", how: "Mark all 15 numbers of your ticket." }];
+  /** The houses the game itself offers (window.ZG.PRIZE_HOUSES). Super Bumper House has its own part of the screen. */
+  const housesOf = (zg) => (zg && Array.isArray(zg.PRIZE_HOUSES) && zg.PRIZE_HOUSES.length ? zg.PRIZE_HOUSES : FALLBACK_HOUSES).filter((h) => h.id !== "full2");
+  const POPULAR = ["early5", "top", "full"], RECOMMENDED = ["early5", "top", "mid", "bot", "full"]; // the boss's picks, not data
+  /** Tags always read (Popular) before (Recommended). */
+  const tagsOf = (id) => [POPULAR.includes(id) ? "(Popular)" : "", RECOMMENDED.includes(id) ? "(Recommended)" : ""].filter(Boolean);
+  const GIFTS = ["Gift voucher", "Gift hamper", "Smartphone", "Smart watch", "Earbuds or headphones", "Tablet or laptop", "Holiday or weekend stay", "Dinner or restaurant voucher", "Movie tickets", "Extra day off"]; // no cash, ever
+  const OTHER_GIFT = "Other";
+  const CURRENCIES = [["INR", "₹", "en-IN"], ["USD", "$", "en-US"], ["EUR", "€", "en-US"], ["GBP", "£", "en-GB"], ["AED", "AED ", "en-US"], ["SGD", "S$", "en-US"]];
+  const symbolOf = (cur) => (CURRENCIES.find((c) => c[0] === cur) || CURRENCIES[0])[1];
+  /** The words saved for one prize: the gift, and "worth up to" when the organizer gave an amount. */
+  function prizeLine(gift, other, worth, cur) {
+    const g = gift === OTHER_GIFT ? String(other || "").replace(/\s+/g, " ").trim() : gift;
+    const w = String(worth || "").replace(/[^0-9.]/g, "");
+    if (!g) return "";
+    if (!w || !(Number(w) > 0)) return g;
+    const c = CURRENCIES.find((x) => x[0] === cur) || CURRENCIES[0];
+    return g + " (worth up to " + c[1] + Number(w).toLocaleString(c[2]) + ")";
+  }
+  const defaultPrizes = (houses) => Object.fromEntries(houses.map((h) => [h.id, { on: RECOMMENDED.includes(h.id), n: 1, gift: GIFTS[0], other: "", worth: "" }]));
+  const defaultBumper = () => ({ on: false, n: 1, gift: GIFTS[0], other: "", worth: "" });
+  /** The prizes as the game stores them: a line per winner place (1st, 2nd, ...). Super Bumper House only with 2 tickets. */
+  function buildRewards(sel, bumper, tix, cur) {
+    const out = [];
+    for (const [id, h] of Object.entries(sel)) {
+      if (!h.on) continue;
+      for (let o = 1; o <= Number(h.n); o++) out.push({ pattern: id, scope: "ticket", ordinal: o, text: prizeLine(h.gift, h.other, h.worth, cur) });
+    }
+    if (Number(tix) === 2 && bumper && bumper.on) for (let o = 1; o <= Number(bumper.n); o++) out.push({ pattern: "full", scope: "two_ticket", ordinal: o, text: prizeLine(bumper.gift, bumper.other, bumper.worth, cur) });
+    return out;
+  }
+  function prizeProblems(sel, bumper, tix, houses) {
+    const rows = Object.entries(sel).filter(([, h]) => h.on);
+    const bump = Number(tix) === 2 && bumper && bumper.on;
+    if (!rows.length && !bump) return ["Tick at least one prize."];
+    for (const [id, h] of rows) { const name = (houses.find((x) => x.id === id) || {}).label || id; if (!prizeLine(h.gift, h.other, h.worth, "INR")) return ["Please write the prize for " + name + "."]; }
+    if (bump && !prizeLine(bumper.gift, bumper.other, bumper.worth, "INR")) return ["Please write the prize for Super Bumper House."];
+    return [];
+  }
   const registry = {}; // step number -> function(el, ctx) that draws the step body (each step adds its own)
 
-  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems };
+  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems, housesOf, tagsOf, GIFTS, prizeLine, defaultPrizes, defaultBumper, buildRewards, prizeProblems };
   if (typeof window !== "undefined") window.ZFLOW = api;
   if (typeof module !== "undefined") module.exports = api;
   if (typeof document === "undefined") return;
@@ -227,6 +267,54 @@
       if (!state.eid) { msg.textContent = "Please save step 1 first."; return; }
       go.disabled = true; msg.textContent = "Saving…";
       try { await call("PATCH", `/api/z/${state.eid}/settings`, audienceSettings(who.card, who.upTo)); done(2); }
+      catch (e) { go.disabled = false; msg.textContent = e.message; }
+    } }, "Save and continue");
+    box.append(msg, go);
+  };
+
+  /* ---- Step 3 ---- */
+  const prizes = { tix: 1, cur: "INR", sel: null, bumper: defaultBumper() };
+  api.prizes = prizes;
+  registry[3] = (box) => {
+    const houses = housesOf(window.ZG);
+    if (!prizes.sel) prizes.sel = defaultPrizes(houses); // the usual prizes are already ticked for you
+    const msg = el("p", { class: "zf-msg", role: "status", id: "zf-msg3" });
+    box.append(el("p", { class: "zf-lead", text: "Tick the prizes you want to give. Prizes are gifts." }));
+    box.append(el("h3", { text: "How many tickets does each participant get?" }));
+    const tx = el("div", { class: "zf-chips", role: "radiogroup", "aria-label": "Tickets per participant" });
+    for (const n of [1, 2]) tx.append(el("button", { type: "button", role: "radio", class: "zf-chip" + (prizes.tix === n ? " on" : ""), "aria-checked": String(prizes.tix === n), "data-tix": String(n), onclick: () => { prizes.tix = n; draw(); } }, n + (n === 1 ? " ticket" : " tickets")));
+    box.append(tx);
+    box.append(el("label", { for: "zf-cur", text: "Currency for “Worth up to” (it stays for every prize)" }));
+    const cs = el("select", { id: "zf-cur", onchange: (e) => { prizes.cur = e.target.value; draw(); } });
+    for (const c of CURRENCIES) cs.append(el("option", { value: c[0], ...(prizes.cur === c[0] ? { selected: "" } : {}) }, c[1].trim() + " " + c[0]));
+    box.append(cs);
+    const rowFor = (key, title, how, h, extra) => {
+      const row = el("div", { class: "zf-prize" + (h.on ? " on" : ""), "data-house": key });
+      const tags = extra ? [] : tagsOf(key);
+      row.append(el("label", { class: "zf-tick" }, el("input", { type: "checkbox", id: "zf-tick-" + key, ...(h.on ? { checked: "" } : {}), onchange: (e) => { h.on = e.target.checked; draw(); } }), " ", el("b", { text: title }), tags.length ? el("span", { class: "zf-tag", text: " " + tags.join(" ") }) : null, el("small", { text: how })));
+      if (h.on) {
+        const nsel = el("select", { id: "zf-n-" + key, "aria-label": "How many times " + title + " can be won", onchange: (e) => { h.n = Number(e.target.value); draw(); } });
+        for (let i = 1; i <= (extra ? 10 : 5); i++) nsel.append(el("option", { value: String(i), ...(h.n === i ? { selected: "" } : {}) }, String(i)));
+        const gsel = el("select", { id: "zf-g-" + key, "aria-label": "The prize for " + title, onchange: (e) => { h.gift = e.target.value; draw(); } });
+        for (const g of [...GIFTS, OTHER_GIFT]) gsel.append(el("option", { value: g, ...(h.gift === g ? { selected: "" } : {}) }, g));
+        row.append(el("div", { class: "zf-fields" }, el("label", { for: "zf-n-" + key, text: "This prize can be won (times)" }), nsel, el("label", { for: "zf-g-" + key, text: "The prize" }), gsel,
+          h.gift === OTHER_GIFT ? el("input", { type: "text", id: "zf-o-" + key, maxlength: "60", "aria-label": "Write the prize", value: h.other, oninput: (e) => { h.other = e.target.value; } }) : null,
+          el("label", { for: "zf-w-" + key, text: "Worth up to (optional)" }), el("span", { class: "zf-money" }, symbolOf(prizes.cur) + " ", el("input", { type: "text", inputmode: "numeric", id: "zf-w-" + key, value: h.worth, oninput: (e) => { h.worth = e.target.value; } }))));
+      }
+      return row;
+    };
+    for (const h of houses) box.append(rowFor(h.id, h.label, h.how, prizes.sel[h.id] || (prizes.sel[h.id] = { on: false, n: 1, gift: GIFTS[0], other: "", worth: "" })));
+    if (prizes.tix === 2) {
+      box.append(el("h3", { text: "Two-ticket prizes" }));
+      box.append(rowFor("bumper", "Super Bumper House", "Mark all 30 numbers of your two tickets together. Up to 10 winners.", prizes.bumper, true));
+      box.append(el("p", {}, el("span", { class: "zf-soon", text: COPY.soon }), " Different prizes for Ticket A and Ticket B."));
+    }
+    const go = el("button", { type: "button", class: "zf-go", id: "zf-save3", onclick: async () => {
+      const bad = prizeProblems(prizes.sel, prizes.bumper, prizes.tix, houses);
+      if (bad.length) { msg.textContent = bad[0]; return; }
+      if (!state.eid) { msg.textContent = "Please save step 1 first."; return; }
+      go.disabled = true; msg.textContent = "Saving…";
+      try { await call("PATCH", `/api/z/${state.eid}/settings`, { tickets: prizes.tix, rewards: buildRewards(prizes.sel, prizes.bumper, prizes.tix, prizes.cur) }); done(3); }
       catch (e) { go.disabled = false; msg.textContent = e.message; }
     } }, "Save and continue");
     box.append(msg, go);
