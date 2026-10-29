@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
-import { WAIT_LIMIT_MS, FAMILY_CUTOFF_MS, waitingLapsed, familyCutoffPassed, mayDecide, cleanEmail, LAPSED_MESSAGE, FAMILY_CLOSED_MESSAGE, DECLINED_MESSAGE } from "../src/approvals";
+import { APPROVAL_RULES_FROM_MS, approvalRulesOn, WAIT_LIMIT_MS, FAMILY_CUTOFF_MS, waitingLapsed, familyCutoffPassed, mayDecide, cleanEmail, LAPSED_MESSAGE, FAMILY_CLOSED_MESSAGE, DECLINED_MESSAGE } from "../src/approvals";
 import { erasePersonal } from "../src/lifecycle";
 
-const T = Date.UTC(2026, 9, 1, 10, 0, 0);
+const T = Math.max(Date.UTC(2026, 10, 5, 10, 0, 0), APPROVAL_RULES_FROM_MS + 86_400_000); // a game created after the release instant: the 1.8.0 rules apply
 const GEN = 1692803367;
 const roundAt = (ms: number) => Math.floor((ms / 1000 - GEN) / 3) + 1;
 const roundMs = (r: number) => (GEN + (r - 1) * 3) * 1000;
@@ -23,12 +23,13 @@ const dev = (i: number) => (String(i).padStart(2, "0") + "b".repeat(32)).slice(0
 const join = (body: Record<string, unknown>, now = T) => call("POST", "/api/z/APP-1/join", body, undefined, now);
 const joinAs = (i: number, extra: Record<string, unknown> = {}, now = T) => join({ phone: mob(i), name: "G" + i, device: dev(i), ...extra }, now);
 
-async function setup(opts: { closed?: boolean; invites?: unknown } = {}) {
-  const st = await j(await handle(new Request("http://x/api/start", { method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": `7.7.8.${++ipN}` }, body: JSON.stringify({ email: "boss@acme.com" }) }), env, T));
+async function setup(opts: { closed?: boolean; invites?: unknown; at?: number; start?: number } = {}) {
+  const at = opts.at ?? T;
+  const st = await j(await handle(new Request("http://x/api/start", { method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": `7.7.8.${++ipN}` }, body: JSON.stringify({ email: "boss@acme.com" }) }), env, at));
   const master = st.token as string;
-  await call("POST", "/api/z", { id: "APP-1", startRound: START, callSeconds: 6, cap: 100, ...(opts.closed ? { whoCanJoin: "list" } : {}) }, master);
-  await call("POST", "/api/z/APP-1/publish", { email: "boss@acme.com", phone: "98765 43210" }, master);
-  if (opts.invites) await call("PATCH", "/api/z/APP-1/settings", { guestInvites: opts.invites }, master);
+  await call("POST", "/api/z", { id: "APP-1", startRound: opts.start ?? START, callSeconds: 6, cap: 100, ...(opts.closed ? { whoCanJoin: "list" } : {}) }, master, at);
+  await call("POST", "/api/z/APP-1/publish", { email: "boss@acme.com", phone: "98765 43210" }, master, at);
+  if (opts.invites) await call("PATCH", "/api/z/APP-1/settings", { guestInvites: opts.invites }, master, at);
   return { master };
 }
 
@@ -83,7 +84,7 @@ describe("an open game may keep an Email ID", () => {
     await setup();
     const bad = await joinAs(1, { email: "asha@" }); expect(bad.status).toBe(400); expect((await j(bad)).code).toBe("bad-email");
     expect((await joinAs(1, { email: "Asha@Acme.com" })).status).toBe(200);
-    const again = await joinAs(2, { email: "asha@acme.com" }); expect(again.status).toBe(409); expect((await j(again)).code).toBe("email-used");
+    const again = await joinAs(2, { email: "asha@acme.com" }); expect(again.status).toBe(409); expect((await j(again)).code).toBe("email-unusable");
     expect((await joinAs(1, { email: "asha@acme.com" })).status).toBe(200); // the same phone again is the same ticket
     expect((await joinAs(3)).status).toBe(200); // no email: a game that does not ask for one still works as before
   });
@@ -110,5 +111,102 @@ describe("real engine runs of the other new paths: reject, cap, and deletion", (
     expect((await kv()).c).toBe(0);
     expect((await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid='APP-1'").first()).c).toBe(0);
     expect((await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM waiting WHERE eid='APP-1'").first()).c).toBe(0);
+  });
+});
+
+const OLD = APPROVAL_RULES_FROM_MS - 3 * 86_400_000; // a game created before the release instant (1.7.1 rules)
+const OLD_START = roundAt(OLD) + 1200; // one hour after it was made (an unpaid game may start up to 30 days ahead)
+const tokenOf = (link: string) => link.split("/j/")[1]!;
+const add = (key: string, people: unknown[]) => call("POST", "/api/z/APP-1/people", { people }, key);
+const cohostKey = async (master: string, phone: string, label: string) => (await j(await call("POST", "/api/org/cohost", { label, phone, e: "APP-1" }, master))).cohostKey as string;
+
+describe("1.8.0 audit fixes", () => {
+  test("1. asking again after a lapse works on the same request and a lapsed request does not use up the waiting cap", async () => {
+    const t = await setup({ closed: true });
+    const first = await j(await joinAs(1)); expect(first.waiting).toBe(true);
+    const later = T + 41 * 60_000;
+    expect((await j(await call("GET", "/api/z/APP-1/waiting", undefined, t.master, later))).waiting).toHaveLength(0);
+    const again = await j(await joinAs(1, {}, later)); expect(again.waiting).toBe(true); expect(again.wid).toBe(first.wid);
+    const seen = (await j(await call("GET", "/api/z/APP-1/waiting", undefined, t.master, later))).waiting; expect(seen).toHaveLength(1);
+    expect((await call("POST", `/api/z/APP-1/waiting/${first.wid}`, { decision: "admit" }, t.master, later + 60_000)).status).toBe(200);
+  });
+
+  test("2. 'approve all' by a family host also stops 15 minutes before the start; the organizer's approve all still works", async () => {
+    const t = await setup({ invites: { on: true, per: 4, cats: ["family"] } });
+    const host = await j(await joinAs(1)); const seat = (await j(await call("GET", `/api/z/APP-1/me?pid=${host.pid}`))).seat as number;
+    await call("PATCH", "/api/z/APP-1/settings", { whoCanJoin: "list" }, t.master);
+    const m = await j(await joinAs(2, { from: seat, cat: "family" }, START_MS - 25 * 60_000)); expect(m.waiting).toBe(true);
+    const all = await j(await call("POST", "/api/z/APP-1/waiting/all", { decision: "admit", me: host.pid, device: dev(1) }, undefined, START_MS - 10 * 60_000));
+    expect(all.admitted).toBe(0); expect(all.code).toBe("family-closed");
+    const org = await j(await call("POST", "/api/z/APP-1/waiting/all", { decision: "admit" }, t.master, START_MS - 10 * 60_000)); expect(org.admitted).toBe(1);
+  });
+
+  test("3. a game created before the release behaves exactly as in 1.7.1: no lapse, no family cutoff, the email is ignored", async () => {
+    const t = await setup({ closed: true, at: OLD, start: OLD_START });
+    const w = await j(await joinAs(1, {}, OLD)); const late = OLD + 40 * 60_000;
+    expect((await j(await call("GET", "/api/z/APP-1/waiting", undefined, t.master, late))).waiting).toHaveLength(1); // still listed after 40 minutes
+    expect((await call("POST", `/api/z/APP-1/waiting/${w.wid}`, { decision: "admit" }, t.master, late)).status).toBe(200);
+  });
+  test("3b. an old open game ignores an Email ID completely (no check, no record)", async () => {
+    await setup({ at: OLD, start: OLD_START });
+    expect((await joinAs(1, { email: "not-an-email" }, OLD)).status).toBe(200);
+    expect((await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM kv WHERE k LIKE 'email/APP-1/%'").first()).c).toBe(0);
+  });
+
+  test("4. the email-held answer is generic, and two phones asking at the same instant cannot both get the email", async () => {
+    await setup();
+    const both = await Promise.all([joinAs(1, { email: "race@acme.com" }), joinAs(2, { email: "race@acme.com" })]);
+    expect(both.map((r) => r.status).sort()).toEqual([200, 409]);
+    const lost = both.find((r) => r.status === 409)!; const body = await j(lost);
+    expect(body.code).toBe("email-unusable"); expect(body.error).not.toMatch(/already holds|holds a ticket/i);
+  });
+  test("4b. a closed (list-only) game ignores the email even in a new game", async () => {
+    await setup({ closed: true }); const r = await joinAs(1, { email: "x" }); expect(r.status).not.toBe(400);
+    expect((await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM kv WHERE k LIKE 'email/APP-1/%'").first()).c).toBe(0);
+  });
+
+  test("5. when a person leaves, their email is free again for another phone", async () => {
+    await setup(); const a = await j(await joinAs(1, { email: "leave@acme.com" })); expect(a.pid).toBeTruthy();
+    expect((await joinAs(2, { email: "leave@acme.com" })).status).toBe(409);
+    const left = await call("POST", "/api/z/APP-1/leave", { pid: a.pid, device: dev(1) }); expect(left.status).toBe(200);
+    expect((await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM kv WHERE k LIKE 'email/APP-1/%'").first()).c).toBe(0);
+    expect((await joinAs(2, { email: "leave@acme.com" })).status).toBe(200);
+  });
+});
+
+describe("1.8.0 audit: who may answer a request (negative tests)", () => {
+  test("a Co-host sees and answers only their own people; another Co-host gets 'No such request'", async () => {
+    const t = await setup({ closed: true });
+    const a = await cohostKey(t.master, "9876500002", "Ravi"), b = await cohostKey(t.master, "9876500003", "Mira");
+    const added = (await j(await add(a, [{ name: "Asha", phone: mob(1) }]))).people[0];
+    await join({ token: tokenOf(added.link), device: dev(1) });
+    const stranger = await j(await join({ token: tokenOf(added.link), phone: mob(9), name: "Zed", device: dev(9) })); expect(stranger.waiting).toBe(true);
+    expect((await j(await call("GET", "/api/z/APP-1/waiting", undefined, a))).waiting).toHaveLength(1);
+    expect((await j(await call("GET", "/api/z/APP-1/waiting", undefined, b))).waiting).toHaveLength(0);
+    expect((await call("POST", `/api/z/APP-1/waiting/${stranger.wid}`, { decision: "admit" }, b)).status).toBe(404);
+    expect((await call("POST", `/api/z/APP-1/waiting/${stranger.wid}`, { decision: "admit" }, a)).status).toBe(200);
+  });
+  test("a person waiting, a plain participant, and nobody at all cannot answer a request", async () => {
+    const t = await setup({ closed: true });
+    const w = await j(await joinAs(1)); expect(w.waiting).toBe(true);
+    const nobody = await call("POST", `/api/z/APP-1/waiting/${w.wid}`, { decision: "admit" }); expect(nobody.status).toBeGreaterThanOrEqual(400);
+    const wrong = await call("POST", `/api/z/APP-1/waiting/${w.wid}`, { decision: "admit", me: "abc", device: dev(1) }); expect(wrong.status).toBeGreaterThanOrEqual(400);
+    expect((await j(await call("GET", `/api/z/APP-1/me?wid=${w.wid}`))).state).toBe("waiting"); // still waiting: nothing got in
+    void t;
+  });
+  test("an organizer of another game cannot see or answer this game's requests", async () => {
+    const t = await setup({ closed: true }); const w = await j(await joinAs(1));
+    const other = (await j(await handle(new Request("http://x/api/start", { method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": "7.7.8.200" }, body: JSON.stringify({ email: "other@acme.com" }) }), env, T))).token as string;
+    expect((await call("GET", "/api/z/APP-1/waiting", undefined, other)).status).toBeGreaterThanOrEqual(400);
+    expect((await call("POST", `/api/z/APP-1/waiting/${w.wid}`, { decision: "admit" }, other)).status).toBeGreaterThanOrEqual(400);
+    expect((await j(await call("GET", `/api/z/APP-1/me?wid=${w.wid}`))).state).toBe("waiting"); void t;
+  });
+});
+
+describe("the release instant (set to the real deploy time right before deploy)", () => {
+  test("APPROVAL_RULES_FROM_MS is a real time in ms: a game created one ms before it keeps the old rules, one created at it gets the new rules", () => {
+    expect(Number.isInteger(APPROVAL_RULES_FROM_MS)).toBe(true); expect(APPROVAL_RULES_FROM_MS).toBeGreaterThan(Date.UTC(2026, 9, 29));
+    expect(approvalRulesOn({ created_ms: APPROVAL_RULES_FROM_MS - 1 })).toBe(false); expect(approvalRulesOn({ created_ms: APPROVAL_RULES_FROM_MS })).toBe(true);
+    expect(approvalRulesOn({ created_ms: null })).toBe(false); expect(approvalRulesOn(null)).toBe(false);
   });
 });

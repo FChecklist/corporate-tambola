@@ -23,3 +23,11 @@ export const DECLINED_MESSAGE = "Thank you for asking. This game could not add y
 const EMAIL = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
 /** An email ID in its plain form, or null when it is not one. */
 export const cleanEmail = (raw: unknown): string | null => { const s = String(raw ?? "").trim().toLowerCase(); return s.length <= 120 && EMAIL.test(s) ? s : null; };
+
+/** 1.8.0 audit: the 30-minute lapse, the family cutoff and the Email ID apply only to games CREATED from this date on. Every game made before the release behaves exactly as in 1.7.1. */
+export const APPROVAL_RULES_FROM_MS = Date.UTC(2026, 9, 31, 0, 0, 0);
+export const approvalRulesOn = (e: { created_ms?: number | null } | null | undefined): boolean => Number(e?.created_ms) >= APPROVAL_RULES_FROM_MS;
+/** The same sentence whether the email is held by someone else or not usable: nobody can find out who holds an email. */
+export const EMAIL_UNUSABLE_MESSAGE = "The system could not use this email ID for this game. Please check it, or open your ticket from the phone you first used.";
+/** The earliest request time that can still be answered: 30 minutes back for a game under the new rules, 0 (no limit) for an older game. */
+export const waitSince = (e: { created_ms?: number | null }, now: number): number => (approvalRulesOn(e) ? now - WAIT_LIMIT_MS : 0);
