@@ -35,10 +35,10 @@ test("Ready check: link shared (a tick), payment, prizes chosen; optional Hosts 
   reset({ unpaid: true });
   const win = page(); await wait();
   const d = win.document;
-  expect([...d.querySelectorAll("#zf-ready li")].map((n: any) => n.dataset.ready)).toEqual(["link", "pay", "prizes", "hosts", "reh"]);
+  expect([...d.querySelectorAll("#zf-ready li")].map((n: any) => n.dataset.ready)).toEqual(["link", "pay", "prizes", "reh"]);
   expect(d.querySelector('[data-ready="pay"]').className).toBe("");           // unpaid: not done
   expect(d.querySelector('[data-ready="prizes"]').className).toBe("done");    // every prize has words
-  expect(d.querySelector('[data-ready="hosts"]').textContent).toContain("Coming soon");
+  expect(d.querySelector('[data-ready="hosts"]')).toBe(null);               // no Hosts row (owner rule D)
   const box = d.getElementById("zf-shared"); box.checked = true; box.dispatchEvent(new win.Event("change"));
   expect(d.querySelector('[data-ready="link"]').className).toBe("done");
   expect(d.getElementById("zf-ready").className).toContain("todo");           // payment is still pending
@@ -77,15 +77,10 @@ test("Prizes: won and left, the winner's ticket number and only the details that
   expect(calls.find((c) => c.method === "POST")).toEqual({ url: "/api/z/EABCDEF/prizegiven", method: "POST", body: { round: 1, pattern: "full", ordinal: 1, seat: 42, given: true } });
 });
 
-test("a Co-host sees the winners' details but no handed-over tick", async () => {
+test("the pretend Host / Co-host sign-in is gone (owner rule D): ?team=1&demo=roles shows no sign-in and no Co-host page", async () => {
   reset({}, { "/prizes": { prizes: [{ round: 1, pattern: "full", ordinal: 1, seat: 42, name: "Asha" }] } });
   const win = page("?flow=new&e=EABCDEF&team=1&demo=roles"); await wait();
-  const d = win.document, set = (id: string, v: string) => { const n = d.getElementById(id); n.value = v; n.dispatchEvent(new win.Event("input")); };
-  set("zf-temail", "cohost@acme.com"); d.getElementById("zf-tgo").click(); await wait(20);
-  [..."123456"].forEach((c, i) => { d.getElementById("zf-pc" + i).value = c; }); d.getElementById("zf-pcgo").click(); await wait(100);
-  win.ZFLOW.dash.prizes = [{ round: 1, pattern: "full", ordinal: 1, seat: 42, name: "Asha" }]; win.ZFLOW.draw();
-  expect(d.getElementById("zf-prizes").textContent).toContain("Name: Asha");
-  expect(d.querySelector("#zf-prizes input")).toBe(null);
+  expect(win.document.getElementById("zf-signin")).toBe(null); expect(win.document.getElementById("zf-demo")).toBe(null);
 });
 
 test("What is happening: lines from the game's own log, and Online now from the presence count", async () => {
@@ -102,8 +97,8 @@ test("Next number in TWO places in Manual mode; one press calls once, locks both
   reset({ callMode: "host", startMs: Date.now() - 600000, gameMinutes: 60 });
   const win = page(); await wait();
   const d = win.document;
-  expect(d.getElementById("zf-next-top").textContent).toBe("Press to roll out the next number");
-  expect(d.getElementById("zf-next-bottom").textContent).toBe("Press to roll out the next number");
+  expect(d.getElementById("zf-next-top").textContent).toBe("Press to Roll Out the Next Number");
+  expect(d.getElementById("zf-next-bottom").textContent).toBe("Press to Roll Out the Next Number");
   expect(d.querySelector(".zf-lastline").textContent).toContain("Last number called");
   calls.length = 0;
   d.getElementById("zf-next-top").click(); await wait();
@@ -119,18 +114,6 @@ test("Next number in TWO places in Manual mode; one press calls once, locks both
   const auto = page(); await wait();
   expect(auto.document.getElementById("zf-next-top").tagName).toBe("SPAN");
   expect(auto.document.querySelector(".zf-nextnum")).toBe(null);
-});
-
-test("a Co-host sees the timer or 'Manual mode' but no next-number button", async () => {
-  reset({ callMode: "host", startMs: Date.now() - 600000, gameMinutes: 60 });
-  const win = page("?flow=new&e=EABCDEF&team=1&demo=roles"); await wait();
-  const d = win.document, set = (id: string, v: string) => { const n = d.getElementById(id); n.value = v; n.dispatchEvent(new win.Event("input")); };
-  set("zf-temail", "cohost@acme.com"); d.getElementById("zf-tgo").click(); await wait(20);
-  [..."123456"].forEach((c, i) => { d.getElementById("zf-pc" + i).value = c; }); d.getElementById("zf-pcgo").click(); await wait(100);
-  win.ZFLOW.state.raw = { callMode: "host", startMs: Date.now() - 600000, gameMinutes: 60 }; win.ZFLOW.draw();
-  expect(d.getElementById("zf-next-top").textContent).toBe("Manual mode");
-  expect(d.querySelector(".zf-nextnum")).toBe(null);
-  expect(d.getElementById("zf-bottomrow")).toBe(null);
 });
 
 test("Rehearsals: three cards from the game's own API, locked until paid, never the people limit; Start asks first, then tells the game", async () => {
@@ -167,11 +150,7 @@ test("Completed: Make a copy makes a new draft with this game's prizes and opens
   const d = win.document;
   expect(d.getElementById("zf-status").dataset.status).toBe("completed");
   expect(d.getElementById("zf-completed").textContent).toContain("within 24 hours");
-  calls.length = 0;
-  d.getElementById("zf-erase").click();
-  expect(calls.filter((c) => c.method === "POST").length).toBe(0);
-  d.getElementById("zf-erase-yes").click(); await wait();
-  expect(calls.find((c) => c.method === "POST")).toEqual({ url: "/api/z/EABCDEF/erase", method: "POST", body: {} });
+  expect(d.getElementById("zf-erase")).toBe(null);   // the pack has no delete button; Corporate Tambola's own part adds one
   calls.length = 0;
   d.getElementById("zf-copygame").click(); await wait();
   const post = calls.find((c) => c.method === "POST" && c.url === "/api/z");

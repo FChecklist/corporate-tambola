@@ -1,5 +1,5 @@
 // Corporate Tambola's own parts of the new console (2026-10-29): lucky draw order and timing, the 5 s roll button, claim messages, auto pause, who-label, delete lock, ready check.
-// FALSIFIED BY: tambola-claim-text, tambola-who-label, tambola-ready-optional, tambola-no-stubs, tambola-cohost-limit, tambola-step-texts, tambola-hide-ab
+// FALSIFIED BY: tambola-claim-text, tambola-who-label, tambola-ready-optional, tambola-no-stubs, tambola-cohost-limit, tambola-step-texts, tambola-hide-ab, tambola-run-questions, tambola-cohost-key-link
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -38,7 +38,7 @@ test("no coming soon, demo stub, lucky draw stub or roll button on the dashboard
   expect(html).toContain("Ready check"); expect(html).toContain("Play the game"); expect(html).toContain("REHEARSAL GAME 1");
   for (const bad of ["Coming soon", "coming soon", "Demo:", "DEMO", "zt-roll", "zt-lucky"]) expect(html).not.toContain(bad);
 });
-test("Your Co-hosts table shows 'N of limit' and the limit drop-down saves coHostLimit; the Co-host sees a read-only line", async () => {
+test("Your Co-hosts table shows 'N of limit' and the limit drop-down saves coHostLimit", async () => {
   const win: any = new Window({ url: "http://localhost/zc.html?flow=new&e=EABCDEF" });
   win.document.body.innerHTML = '<main id="app"></main>';
   win.ZG = { roundAt: (ms: number) => Math.floor(ms / 3000), PRIZE_HOUSES };
@@ -50,9 +50,6 @@ test("Your Co-hosts table shows 'N of limit' and the limit drop-down saves coHos
   expect(win.document.getElementById("zt-cotable").textContent).toContain("34 of 250");
   const sel = win.document.getElementById("zt-colimit"); sel.value = "500"; sel.dispatchEvent(new win.Event("change")); await new Promise((r) => setTimeout(r, 30));
   expect(calls.some((c) => c.method === "PATCH" && c.body && c.body.coHostLimit === 500)).toBe(true);
-  s.role = "cohost"; s.view = "cohost"; win.ZFLOW.draw(); await new Promise((r) => setTimeout(r, 120)); win.ZFLOW.draw(); await new Promise((r) => setTimeout(r, 50));
-  const cs = win.document.getElementById("zt-cohostscreen").textContent; for (const bad of ["Payment", "Pay now", "Prizes", "Tickets claimed", "Game board"]) expect(cs).not.toContain(bad); expect(cs).toContain("Your link to invite people to the game"); expect(cs).toContain("People you invited, waiting for you");
-  expect(win.document.getElementById("zt-colimitline").textContent).toContain("Invited so far: 34. 216 left.");
 });
 function stepPage(step: number, setup?: (s: any, w: any) => void) {
   const win: any = new Window({ url: "http://localhost/zc.html?flow=new&e=EABCDEF" });
@@ -85,4 +82,30 @@ test("step 4 checks a break link: Looks good, or the https message", async () =>
 test("step 5 preview shows Last 5 and, for the family card, the Family Passes card with 4 passes", async () => {
   const w = stepPage(5, (s: any, win: any) => { win.ZFLOW.who.card = "family"; }); await tick(); w.ZFLOW.draw(); await tick();
   const d = w.document; if (d.getElementById("zf-frame")) { expect(d.getElementById("zt-pvlast5").textContent).toContain("Last 5:"); expect(d.getElementById("zt-pass").textContent).toContain("4 family passes"); }
+});
+test("step 1 asks how the game starts and who calls the numbers; the choice saves startMode and callMode and shows the summary line", async () => {
+  const win: any = new Window({ url: "http://localhost/zc.html?flow=new&e=EABCDEF" });
+  win.document.body.innerHTML = '<main id="app"></main>'; win.ZG = { roundAt: (ms: number) => Math.floor(ms / 3000), PRIZE_HOUSES };
+  const calls: any[] = []; const fakeFetch = async (url: string, o: any = {}) => { calls.push({ url, method: o.method || "GET", body: o.body ? JSON.parse(o.body) : null }); return { ok: true, json: async () => ({ ok: true }) }; };
+  new Function("window", "document", "location", "fetch", "MutationObserver", src)(win, win.document, win.location, fakeFetch, win.MutationObserver);
+  win.ZFLOW.state.eid = "EABCDEF"; win.ZFLOW.state.open = 1; win.ZFLOW.draw(); await tick();
+  const d = win.document, txt = d.getElementById("zt-run").textContent;
+  expect(txt).toContain("How should the game start?"); expect(txt).toContain("Who calls the numbers?"); expect(txt).toContain("A new number comes every 12 seconds, by itself.");
+  expect(d.getElementById("zt-runsum").textContent).toBe("Your game: starts by itself at the time you set. The game calls the numbers.");
+  const r = d.querySelector('input[name="zt-call"][value="host"]'); r.checked = true; r.dispatchEvent(new win.Event("change")); await tick();
+  expect(calls.some((c: any) => c.method === "PATCH" && c.body && c.body.callMode === "host" && c.body.startMode === "auto")).toBe(true);
+  expect(d.getElementById("zt-runsum").textContent).toContain("You call the numbers.");
+  for (const bad of ["mode", "auto-play", "scheduled"]) expect(txt.toLowerCase()).not.toContain(bad);
+});
+test("a Co-host's own key link with ?flow=new opens the Co-host screen: only the invite link and their waiting people, nothing else", async () => {
+  const key = "cth_" + "a".repeat(48);
+  const win: any = new Window({ url: "http://localhost/zc.html?flow=new&e=EABCDEF#cohost=" + key });
+  win.document.body.innerHTML = '<main id="app"></main>'; win.ZG = { roundAt: (ms: number) => Math.floor(ms / 3000), PRIZE_HOUSES };
+  const fakeFetch = async (url: string) => { const j = url.includes("/api/whoami") ? { kind: "cohost", email: "c@a.com" } : url.includes("/people") ? { limit: 100, used: 7, commonLink: "https://x/z.html?e=EABCDEF&from=3" } : url.includes("/waiting") ? { waiting: [{ id: "w1", ticket: 12 }] } : url.includes("/summary") ? { coHostLimit: 100 } : { ok: true }; return { ok: true, json: async () => j }; };
+  new Function("window", "document", "location", "fetch", "MutationObserver", src)(win, win.document, win.location, fakeFetch, win.MutationObserver);
+  win.ZFLOW.state.eid = "EABCDEF"; win.ZFLOW.draw(); await tick(150); win.ZFLOW.draw(); await tick(100);
+  const d = win.document, t = d.getElementById("app").textContent;
+  expect(t).toContain("Co-host: c@a.com"); expect(t).toContain("Your link to invite people to the game"); expect(t).toContain("Invited so far: 7. 93 left."); expect(t).toContain("Ticket 12");
+  for (const bad of ["Payment", "Pay now", "Prizes", "Game board", "Tickets claimed", "Save and continue"]) expect(t).not.toContain(bad);
+  expect(d.querySelector(".zf-bar")).toBe(null);
 });

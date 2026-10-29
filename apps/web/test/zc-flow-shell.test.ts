@@ -20,7 +20,7 @@ function page(search: string) {
 test("flow=new draws five steps, the top strip and a locked Game dashboard", () => {
   const win = page("?flow=new");
   const d = win.document;
-  expect(d.querySelector(".zf-top").textContent).toBe("No personal details needed. All game and participant information is deleted within 24 hours of the game.");
+  expect(d.querySelector(".zf-top").textContent).toBe("No personal details needed. All participant information is deleted within 24 hours of the game.");
   expect([...d.querySelectorAll(".zf-bar [data-step]")].length).toBe(5);
   const dash = d.getElementById("zf-dash");
   expect(dash.hasAttribute("disabled")).toBe(true);

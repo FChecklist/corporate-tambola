@@ -70,12 +70,12 @@ test("a prize can be won 1 to 5 times: one line per winner place", () => {
   expect([...win.document.querySelectorAll("#zf-n-full option")].map((o: any) => o.value)).toEqual(["1", "2", "3", "4", "5"]);
 });
 
-test("Super Bumper House appears with 2 tickets only, up to 10 winners; Ticket A/B prizes wait (coming soon)", () => {
+test("Super Bumper House appears with 2 tickets only, up to 10 winners; Ticket A/B prizes are hidden", () => {
   const win = page();
   expect(win.document.querySelector('[data-house="bumper"]')).toBe(null);
   win.document.querySelector('[data-tix="2"]').click();
   expect(win.document.querySelector('[data-house="bumper"]')).not.toBe(null);
-  expect(win.document.getElementById("zf-sec3").textContent).toContain("Coming soon");
+  expect(win.document.getElementById("zf-sec3").textContent).not.toContain("Coming soon");
   win.document.getElementById("zf-tick-bumper").checked = true; win.document.getElementById("zf-tick-bumper").dispatchEvent(new win.Event("change"));
   expect([...win.document.querySelectorAll("#zf-n-bumper option")].length).toBe(10);
   change(win, "zf-n-bumper", "10");

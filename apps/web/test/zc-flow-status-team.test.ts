@@ -81,19 +81,10 @@ test("a cancelled game shows Make a copy, and no game link; a deleted one shows 
   info = { unpaid: true, startMs: Date.now() + 3 * 86400000 };
 });
 
-test("the Demo status box exists only in the demo on this computer", async () => {
+test("the Demo status box is gone (owner rule D): not even on this computer with demo=roles", async () => {
   info = { startMs: Date.now() + HOUR };
-  const plain = page(); await wait();
-  expect(plain.document.getElementById("zf-demostatus")).toBe(null);
-  const live = page("?flow=new&e=EABCDEF&demo=roles", "https://console.example.com/zc.html"); await wait();
-  expect(live.document.getElementById("zf-demostatus")).toBe(null);
   const demo = page("?flow=new&e=EABCDEF&demo=roles"); await wait();
-  const sel = demo.document.getElementById("zf-demostatus");
-  expect(sel.options.length).toBe(12);
-  sel.value = "paused"; sel.dispatchEvent(new demo.Event("change"));
-  expect(demo.document.getElementById("zf-status").textContent).toBe("Paused");
-  expect(demo.document.getElementById("zf-resume").hasAttribute("disabled")).toBe(true);
-  info = { unpaid: true, startMs: Date.now() + 3 * 86400000 };
+  expect(demo.document.getElementById("zf-demostatus")).toBe(null);
 });
 
 function toStep5(win: any) {
@@ -127,29 +118,9 @@ test("step 5 preview with 2 tickets shows Ticket A and Ticket B", () => {
   expect(win.document.querySelectorAll("#zf-preview .zf-pvticket").length).toBe(2);
 });
 
-test("Host / Co-host sign-in: only on this computer with demo=roles; an unknown email is told plainly", async () => {
-  const F = page().ZFLOW;
-  expect(F.stubOn("?demo=roles", "localhost")).toBe(true);
-  expect(F.stubOn("?demo=roles", "console.corporatetambola.com")).toBe(false);
-  expect(F.stubOn("", "localhost")).toBe(false);
-  const live = page("?flow=new&e=EABCDEF&team=1&demo=roles", "https://console.example.com/zc.html"); await wait();
-  expect(live.document.getElementById("zf-signin")).toBe(null);
+test("Host / Co-host sign-in is gone (owner rule D): no sign-in screen even with demo=roles on this computer", async () => {
   const win = page("?flow=new&e=EABCDEF&team=1&demo=roles"); await wait();
-  const d = win.document;
-  expect(d.getElementById("zf-demo").textContent).toContain("DEMO ONLY");
-  const em = d.getElementById("zf-temail"); em.value = "nobody@x.com"; em.dispatchEvent(new win.Event("input"));
-  d.getElementById("zf-tgo").click();
-  expect(d.getElementById("zf-tmsg").textContent).toBe("This email ID is not on the list. Please ask the organizer to add you, or join the game as a participant.");
-});
-
-test("the passcode works for 10 minutes and 5 wrong tries", () => {
-  const F = page().ZFLOW;
-  const att = { tries: 0, sentMs: NOW };
-  expect(F.passcodeCheck(att, "000000", NOW + 1000).msg).toContain("4 tries left");
-  for (let i = 0; i < 4; i++) F.passcodeCheck(att, "111111", NOW + 2000);
-  expect(F.passcodeCheck(att, "123456", NOW + 3000).reason).toBe("locked"); // the right one is refused after 5 wrong
-  expect(F.passcodeCheck({ tries: 0, sentMs: NOW }, "123456", NOW + 11 * 60000).reason).toBe("expired");
-  expect(F.passcodeCheck({ tries: 0, sentMs: NOW }, "123456", NOW + 9 * 60000).ok).toBe(true);
+  expect(win.document.getElementById("zf-signin")).toBe(null); expect(win.document.getElementById("zf-demo")).toBe(null);
 });
 
 function signIn(win: any, email: string) {
@@ -160,37 +131,9 @@ function signIn(win: any, email: string) {
   d.getElementById("zf-pcgo").click();
 }
 
-test("a Host lands on the Game dashboard with every step open and a role bar with Sign out", async () => {
-  const win = page("?flow=new&e=EABCDEF&team=1&demo=roles"); await wait();
-  signIn(win, "host@acme.com"); await wait();
-  const d = win.document;
-  expect(d.getElementById("zf-rolebar").textContent).toContain("You are a Host of this game");
-  expect(d.getElementById("zf-hd").textContent).toBe("Game dashboard");
-  expect(d.querySelectorAll(".zf-bar [data-step]:not([disabled])").length).toBe(5);
-  d.getElementById("zf-signout").click();
-  expect(d.getElementById("zf-signin")).not.toBe(null);
-});
-
-test("a Co-host sees only Your Co-host page: link and message, Waiting for you, Tickets claimed; no steps, no payment, no cancel", async () => {
-  info = { unpaid: true, startMs: Date.now() + 3 * 86400000 };
-  const win = page("?flow=new&e=EABCDEF&team=1&demo=roles"); await wait();
-  signIn(win, "cohost@acme.com"); await wait();
-  const d = win.document;
-  expect(d.getElementById("zf-rolebar").textContent).toContain("cannot change the game or pay");
-  expect(d.getElementById("zf-hd").textContent).toBe("Your Co-host page");
-  expect(d.querySelector(".zf-bar")).toBe(null);
-  expect(d.getElementById("zf-link")).not.toBe(null);
-  expect(d.getElementById("zf-claimed")).not.toBe(null);
-  for (const id of ["zf-pay", "zf-paynow", "zf-copypay", "zf-letall", "zf-board", "zf-banner", "zf-cancelgame"]) expect(d.getElementById(id)).toBe(null);
-  expect(d.getElementById("zf-sharecard")).not.toBe(null); // the same share card and board, read-only
-  expect(d.getElementById("zf-retro")).not.toBe(null);
-});
-
-test("step 3 shows the Ticket A and Ticket B prize rows, waiting (coming soon), with 2 tickets", () => {
+test("step 3 with 2 tickets shows no Ticket A / Ticket B prize rows (hidden: the engine cannot do them)", () => {
   const win = page("?flow=new"); const F = win.ZFLOW; F.state.open = 3; F.state.done[1] = F.state.done[2] = true; F.prizes.tix = 2; F.draw();
-  const rows = [...win.document.querySelectorAll(".zf-ab")];
-  expect(rows.length).toBe(2);
-  for (const r of rows) { expect(r.querySelector("input").hasAttribute("disabled")).toBe(true); expect(r.textContent).toContain("Coming soon"); }
+  expect(win.document.querySelectorAll(".zf-ab").length).toBe(0); expect(win.document.getElementById("zf-sec3").textContent).not.toContain("Coming soon");
 });
 
 test("the money sign is ₹ on every step: no 'Rs' anywhere on the screens", () => {

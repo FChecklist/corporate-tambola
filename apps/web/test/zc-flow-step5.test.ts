@@ -48,13 +48,10 @@ test("a prize won several times reads back as such; Super Bumper House is named"
   expect(text).toContain("Super Bumper House");
 });
 
-test("Host and Co-host roles are explained; adding them waits (coming soon)", () => {
+test("Hosts and Co-hosts block is hidden in step 5 (owner rule D): no coming soon, no email boxes beyond the organizer's own", () => {
   const win = page();
   const text = win.document.getElementById("zf-sec5").textContent;
-  expect(text).toContain("right hand");
-  expect(text).toContain("up to 5");
-  expect(text).toContain("cannot change the game");
-  expect(text).toContain("Coming soon");
+  expect(text).not.toContain("Coming soon");
   expect(win.document.querySelectorAll("#zf-sec5 input[type=email]").length).toBe(1); // only the organizer's own contact
 });
 

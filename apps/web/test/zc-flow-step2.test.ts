@@ -28,13 +28,13 @@ test("the size list is the game's real pack list, with ₹ prices, smallest alre
   expect(calls[0].url).toBe("/api/z/ai-manifest");
 });
 
-test("three cards; 'System validates for you' is shown but waits (coming soon), 'You validate yourself' is chosen", async () => {
+test("three cards; the list option is hidden (no coming soon), everybody waits for you", async () => {
   const win = page(); await wait();
   const d = win.document;
   expect([...d.querySelectorAll(".zf-card b")].map((b: any) => b.textContent)).toEqual(["Your people", "Your people and their families", "Extended family"]);
-  expect(d.getElementById("zf-how-system").hasAttribute("disabled")).toBe(true);
-  expect(d.getElementById("zf-how-self").hasAttribute("checked")).toBe(true);
-  expect(d.querySelector(".zf-opt .zf-soon").textContent).toBe("Coming soon");
+  expect(d.getElementById("zf-how-system")).toBe(null);
+  expect(d.getElementById("zf-how").textContent).toContain("Everybody waits for you");
+  expect(d.querySelector(".zf-opt .zf-soon")).toBe(null);
 });
 
 test("what each card saves; family cards let each person bring 4", () => {

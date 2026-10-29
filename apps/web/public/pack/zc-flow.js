@@ -7,8 +7,7 @@
   /** What this game says about itself (zc-flow-game.js). Nothing here is a game rule: the prize list comes from the game's own table (ZG.PRIZE_HOUSES). */
   const G = Object.assign({ brand: "Corporate Games", tickets: [1, 2], bumper: false, boardMax: 90, boardCols: 10, boardTitle: "GAME", sample: true, board: true, claims: true, handover: true, presence: false, feed: false, rehearsal: false, control: false, lucky: false, callSeconds: 12, popular: [], recommended: [] }, (typeof window !== "undefined" && window.ZFLOW_GAME) || {});
   const COPY = {
-    top: "No personal details needed. All game and participant information is deleted within 24 hours of the game.",
-    soon: "Coming soon",
+    top: "No personal details needed. All participant information is deleted within 24 hours of the game.",
     dash: "Game dashboard",
     dashLocked: "Opens after you publish",
     next: "Next",
@@ -221,7 +220,7 @@
   const waitLabel = (w) => [w.ticket != null ? "Ticket " + w.ticket : "", w.name || w.firstName || "", w.empId || w.employeeId || "", w.email || "", w.last4 ? "ends " + w.last4 : ""].filter(Boolean).join(" \u00b7 ") || "A participant";
   /** Tickets claimed: real claims only (practice rows are left out). */
   const claimedCount = (claims) => (Array.isArray(claims) ? claims.filter((c) => !c.bogey).length : 0);
-  const REPORT_NOTE = "After the game, download your game report within 24 hours. All game and participant information is deleted within 24 hours of the game.";
+  const REPORT_NOTE = "After the game, download your game report within 24 hours. All personal information of participants is deleted within 24 hours of the game. The game log (by ticket number only) and the records of the organizer, winners, Host and Co-host are kept 365 days.";
   /* ---- Game ID and the eleven statuses (pure) ---- */
   const STATUSES = {
     draft: { label: "Draft", tone: "grey" },
@@ -254,7 +253,7 @@
     overdue: "Payment is pending and the start time has passed, so the game has not started. Pay now, change the date, or cancel it.",
     live: "Your game is live now. Your participants are playing.",
     paused: "Your game is paused. It continues when it is resumed.",
-    completed: "Your game is complete. Download your game report within 24 hours. After that, all game and participant information is deleted.",
+    completed: "Thank you for playing! The report was also sent to your email. Download it within 24 hours.",
     cancelled: "This game was cancelled. Nothing is charged. You can make a copy of it any time.",
     refund: "This game was cancelled and a refund was requested. Please keep the Game ID for any question.",
     deleted: "The information of this game has been deleted. Only the Game ID and the payment record remain.",
@@ -269,24 +268,6 @@
     return { kind, text: STATUS_WORDS[status] || "" };
   }
 
-  /* ---- Host and Co-host sign-in (DEMO STUB: the real passcode by email and the role check are Phase B; the stub only runs on this computer) ---- */
-  const TEAM_DEMO = { host: "host@acme.com", cohost: "cohost@acme.com", code: "123456" };
-  const PASS = { tries: 5, minutes: 10 };
-  const stubOn = (search, hostname) => new URLSearchParams(search).get("demo") === "roles" && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(hostname);
-  const roleOfEmail = (email) => { const e = String(email || "").trim().toLowerCase(); return e === TEAM_DEMO.host ? "host" : e === TEAM_DEMO.cohost ? "cohost" : null; };
-  /** One try at the 6-digit passcode: it works for 10 minutes and for 5 wrong tries. */
-  function passcodeCheck(att, code, now) {
-    if (now - att.sentMs > PASS.minutes * 60000) return { ok: false, reason: "expired", msg: "This passcode has expired. Please ask for a new one." };
-    if (att.tries >= PASS.tries) return { ok: false, reason: "locked", msg: "Too many wrong tries. Please ask for a new passcode." };
-    if (String(code) === TEAM_DEMO.code) return { ok: true };
-    att.tries++;
-    return { ok: false, reason: "wrong", msg: "That passcode is not right. You have " + (PASS.tries - att.tries) + (PASS.tries - att.tries === 1 ? " try" : " tries") + " left." };
-  }
-  const ROLE_BAR = {
-    host: "You are a Host of this game. You can change the game, like the organizer.",
-    cohost: "You are a Co-host of this game. You can share the game link and let people in. You cannot change the game or pay.",
-  };
-  const NOT_ON_LIST = "This email ID is not on the list. Please ask the organizer to add you, or join the game as a participant.";
   /* ---- Ready check, publish warning, prizes handed over, what is happening (pure) ---- */
   const LIVE_OR_DONE = ["paid", "free", "live", "paused", "completed"];
   /** The Ready check: what must be true before the game starts (and two optional extras). `x` = { shared, status, prizesOk, rehearsals } */
@@ -295,7 +276,6 @@
       { id: "link", label: "Game link shared with your participants", done: !!x.shared },
       { id: "pay", label: "Payment", done: LIVE_OR_DONE.includes(x.status) },
       { id: "prizes", label: "Prizes chosen", done: !!x.prizesOk },
-      { id: "hosts", label: "Hosts added", optional: true, soon: true, done: false },
     ];
     if (Array.isArray(x.rehearsals)) items.push({ id: "reh", label: "Rehearsal done", optional: true, done: x.rehearsals.some((c) => c.state === "done") });
     return items;
@@ -333,12 +313,19 @@
     for (const w of g.warnings || []) out.push(String(w));
     return out;
   }
+  const CLAIM_OK_MS = 15000;
+  /** After a claim settles: first "Congratulations! The claim is correct.", then "<PRIZE> is gone. It has been won by Ticket N." (newest prize; `seenAt` is when this screen first saw it, 0 = already there when the page opened). */
+  function claimLine(prize, label, seenAt, now) {
+    if (!prize) return "";
+    if (seenAt && now - seenAt < CLAIM_OK_MS) return "Congratulations! The claim is correct.";
+    return label + " is gone. It has been won by Ticket " + prize.seat + ".";
+  }
   const NEXT_LOCK_MS = 5000; // a second press inside 5 seconds counts as one
   const NEXT_TOAST = "Already called. Please wait a few seconds before the next number.";
   /** What the next-number control says: the timer words in Auto mode, the button in Manual mode, the wait while locked. */
   function nextControlText(mode, lockLeftMs) {
     if (mode !== "manual") return "Numbers are called automatically";
-    return lockLeftMs > 0 ? "Wait " + Math.ceil(lockLeftMs / 1000) + " s" : "Press to roll out the next number";
+    return lockLeftMs > 0 ? "Wait " + Math.ceil(lockLeftMs / 1000) + " s" : "Press to Roll Out the Next Number";
   }
   /** Free practice runs: only a PAID game has them; a rehearsal never shows the people limit of the real game. */
   const REHEARSAL_LOCKED = "First publish your game and pay. This unlocks your 3 rehearsals.";
@@ -346,12 +333,12 @@
     const cards = api && Array.isArray(api.cards) ? api.cards : [1, 2, 3].map((n) => ({ n, state: "locked", reason: REHEARSAL_LOCKED }));
     return cards.map((c) => ({ n: c.n, state: c.state, id: c.id || "", reason: c.state === "locked" ? c.reason || REHEARSAL_LOCKED : "", dateMs: c.dateMs || 0 }));
   }
-  const COMPLETED_NOTE = "After the game, download your game report within 24 hours. All game and participant information is deleted within 24 hours of the game.";
+  const COMPLETED_NOTE = "All personal information of participants is deleted within 24 hours of the game. The game log (by ticket number only) and the records of the organizer, winners, Host and Co-host are kept 365 days.";
   /** The Lucky draw as the game stores it: one break of kind "lucky" (it takes a break place and never picks the organizer, Hosts or Co-hosts). */
   const luckyBreaks = () => (G.lucky && prizes.lucky.on ? [{ kind: "lucky", title: prizeLine(prizes.lucky.gift, prizes.lucky.other, prizes.lucky.worth, prizes.cur) || "Lucky draw", winners: Number(prizes.lucky.n) || 1 }] : []);
   const registry = {}; // step number -> function(el, ctx) that draws the step body (each step adds its own)
 
-  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems, housesOf, tagsOf, GIFTS, prizeLine, defaultPrizes, defaultBumper, buildRewards, prizeProblems, breakMax, brandNameClean, linkKind, brandProblems, breakProblems, buildBrandPatch, contactProblems, readBack, readyItems, readyAll, prizesNamed, startWarning, winnerDetails, prizeKey, prizeCounts, feedLines, nextControlText, rehearsalCards, NEXT_LOCK_MS, NEXT_TOAST, REHEARSAL_LOCKED, luckyBreaks, bannerOf, gameLink, payLink, boardLink, shareMessage, claimedCount, BANNER_UNPAID, PAY_PRINT, waitColumns, waitLabel, STATUSES, statusOf, statusBanner, stubOn, roleOfEmail, passcodeCheck, TEAM_DEMO, PASS, ROLE_BAR, NOT_ON_LIST, sampleTickets };
+  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems, housesOf, tagsOf, GIFTS, prizeLine, defaultPrizes, defaultBumper, buildRewards, prizeProblems, breakMax, brandNameClean, linkKind, brandProblems, breakProblems, buildBrandPatch, contactProblems, readBack, readyItems, readyAll, prizesNamed, startWarning, winnerDetails, prizeKey, prizeCounts, feedLines, nextControlText, rehearsalCards, NEXT_LOCK_MS, NEXT_TOAST, REHEARSAL_LOCKED, luckyBreaks, bannerOf, gameLink, payLink, boardLink, shareMessage, claimedCount, BANNER_UNPAID, PAY_PRINT, waitColumns, waitLabel, STATUSES, statusOf, statusBanner, claimLine, CLAIM_OK_MS, sampleTickets };
   if (typeof window !== "undefined") window.ZFLOW = api;
   if (typeof module !== "undefined") module.exports = api;
   if (typeof document === "undefined") return;
@@ -371,10 +358,7 @@
   function draw() {
     app.replaceChildren();
     app.append(el("p", { class: "zf-top", role: "note", text: COPY.top }));
-    { const rb = roleBar(); if (rb) app.append(rb); }
     if (state.eid) app.append(idBar());
-    if (state.mode === "signin") { app.append(teamSignin()); return; }
-    if (state.view === "cohost") { app.append(dashboard({ cohost: true })); return; }
     const bar = el("ol", { class: "zf-bar", "aria-label": "Steps" });
     for (const s of STEPS) {
       const ok = canOpen(s.n, state.done), cur = state.open === s.n;
@@ -471,11 +455,7 @@
     const cards = el("div", { class: "zf-cards", role: "radiogroup", "aria-label": "Who is this game for" });
     for (const c of CARDS) cards.append(el("button", { type: "button", role: "radio", class: "zf-card" + (who.card === c.id ? " on" : ""), "aria-checked": String(who.card === c.id), "data-card": c.id, onclick: () => { who.card = c.id; draw(); } }, el("b", { text: c.name }), el("span", { text: c.line })));
     box.append(cards);
-    box.append(el("h3", { text: "How are your participants let in?" }));
-    const how = el("div", { class: "zf-how" });
-    how.append(el("label", { class: "zf-opt" }, el("input", { type: "radio", name: "zf-how", value: "system", disabled: "", id: "zf-how-system" }), " System validates for you ", el("span", { class: "zf-soon", text: COPY.soon }), el("small", { text: " The system checks each person against your list of employee IDs or email IDs. You can add the list yourself, whenever it is ready." })));
-    how.append(el("label", { class: "zf-opt" }, el("input", { type: "radio", name: "zf-how", value: "self", checked: "", id: "zf-how-self" }), " You validate yourself ", el("small", { text: " Everyone waits for you. You or your Host lets each person in from the Game dashboard." })));
-    box.append(how);
+    box.append(el("p", { class: "zf-small", id: "zf-how", text: "Everybody waits for you. You let each person in from the Game dashboard." }));
     box.append(el("h3", { text: "How big is your game?" }));
     const sel = el("select", { id: "zf-size", "aria-label": "Size of your game", onchange: (e) => { who.upTo = Number(e.target.value); draw(); } });
     for (const k of choices) sel.append(el("option", { value: String(k.upTo), ...(who.upTo === k.upTo ? { selected: "" } : {}) }, k.label));
@@ -522,7 +502,7 @@
       }
       return row;
     };
-    if (!houses.length) box.append(el("p", { class: "zf-soon", text: "The prizes of this game are not available yet." }));
+    if (!houses.length) box.append(el("p", { class: "zf-small", text: "This game has no prizes to choose." }));
     const rowOfHouse = (h) => rowFor(h.id, h.label, h.how, prizes.sel[h.id] || (prizes.sel[h.id] = { on: false, n: 1, gift: GIFTS[0], other: "", worth: "" }), false, Math.min(5, Number(h.max) || 5));
     const moreHouses = houses.filter((h) => h.id === "unlucky");
     for (const h of houses.filter((x) => x.id !== "unlucky")) box.append(rowOfHouse(h));
@@ -531,10 +511,9 @@
       for (const h of moreHouses) box.append(rowOfHouse(h));
       if (G.lucky) box.append(rowFor("lucky", "Lucky draw", "One or more tickets are picked at random. The organizer, Hosts and Co-hosts are never picked.", prizes.lucky, false, 5));
     }
-    if (prizes.tix === 2) {
+    if (G.bumper && prizes.tix === 2) {
       box.append(el("h3", { text: "Two-ticket prizes" }));
-      if (G.bumper) box.append(rowFor("bumper", "Super Bumper House", "Mark all 30 numbers of your two tickets together. Up to 10 winners.", prizes.bumper, true));
-      for (const ab of ["Ticket A", "Ticket B"]) box.append(el("div", { class: "zf-prize zf-ab", "data-house": "ab-" + ab.slice(-1) }, el("label", { class: "zf-tick" }, el("input", { type: "checkbox", disabled: "" }), " ", el("b", { text: ab + " prizes" }), el("small", { text: "Different prizes for each of the two tickets." })), el("span", { class: "zf-soon", text: COPY.soon })));
+      box.append(rowFor("bumper", "Super Bumper House", "Mark all 30 numbers of your two tickets together. Up to 10 winners.", prizes.bumper, true));
     }
     const go = el("button", { type: "button", class: "zf-go", id: "zf-save3", onclick: async () => {
       const bad = prizeProblems(prizes.sel, prizes.bumper, prizes.tix, houses);
@@ -627,9 +606,8 @@
     const frame = el("div", { class: "zf-frame " + (laptop ? "laptop" : "mobile"), id: "zf-frame", "aria-label": "Preview of the participant page" });
     const b = brandForm.brand;
     frame.append(el("div", { class: "zf-pvhead" }, b.logo ? el("img", { src: b.logo, alt: "", height: "30" }) : null, el("b", { text: brandNameClean(b.name) || "Your company name" }), el("span", { text: "Game ID " + (state.eid || "") })));
-    frame.append(el("p", { class: "zf-pvlast", text: "Last number: 47" }));
-    if (!G.sample) frame.append(el("p", {}, el("span", { class: "zf-soon", text: COPY.soon }), " A preview of the participant page for this game."));
-    else if (!tickets) frame.append(el("p", { class: "zf-small", text: "The sample tickets could not be made here." }));
+    frame.append(el("p", { class: "zf-pvlast", text: "Last number: 47" }), el("p", { class: "zf-small", id: "zf-pvlast5", text: "Last 5 (newest first): 47, 21, 88, 5, 63" }));
+    if (!tickets) frame.append(el("p", { class: "zf-small", text: "The sample tickets could not be made here." }));
     else tickets.forEach((t, i) => {
       const label = tix === 2 ? (i === 0 ? "Ticket A" : "Ticket B") : "Your ticket";
       const marked = new Set(t.flat().filter((v) => v !== null).slice(0, 4));
@@ -671,14 +649,12 @@
     for (const [k, v] of readBack({ name: gameName(form.occ, form.oname), when: state.when, card: who.card, upTo: who.upTo, choices: packChoices(state.packs), tix: prizes.tix, rewards, houses, brand: brandForm.brand, breaks: brandForm.breaks })) list.append(el("dt", { text: k }), el("dd", { text: v }));
     box.append(list);
     { const w = startWarning(state.when ? state.when.ms : 0, Date.now()); if (w) box.append(el("div", { class: "zf-warn", id: "zf-startwarn" }, w)); }
-    box.append(el("h3", { text: "What your participants will see" }), previewNode());
-    box.append(el("h3", { text: "Hosts and Co-hosts" }));
-    box.append(el("p", { text: "A Host is your right hand: a Host can make any change you can, and you can have up to 5. A Co-host brings people to the game and cannot change the game. You can have as many as you like." }));
-    box.append(el("p", {}, el("span", { class: "zf-soon", text: COPY.soon }), " Adding Hosts and Co-hosts by email ID. For now the game is yours, and you can still hand over a Host or Co-host link from the current console."));
+    if (G.sample) box.append(el("h3", { text: "What your participants will see" }), previewNode());
     box.append(el("h3", { text: "Your contact" }));
     box.append(el("p", { class: "zf-small", text: "Only you see these. The invoice and your game report are sent here. They are never shown to participants." }));
     box.append(el("label", { for: "zf-pemail", text: "Your email ID" }), el("input", { type: "email", id: "zf-pemail", autocomplete: "email", value: pub.email, oninput: (e) => { pub.email = e.target.value; } }));
     box.append(el("label", { for: "zf-pphone", text: "Your mobile number" }), el("input", { type: "tel", id: "zf-pphone", autocomplete: "tel", placeholder: "98765 43210", value: pub.phone, oninput: (e) => { pub.phone = e.target.value; } }));
+    if (G.rehearsal) box.append(rehearsalPreview());
     const consent = el("div", { id: "zf-consent" });
     let ctl = null; // the terms ticks, whichever way this game draws them (see mountConsent)
     box.append(consent);
@@ -699,23 +675,22 @@
   };
 
   /* ---- Game dashboard, Game ID bar, Host / Co-host pages ---- */
-  const dash = { waiting: [], claims: [], note: "", loaded: false, facts: {}, notNow: [], inGame: [], called: [], prizes: [], pres: null, glog: null, reh: null, lockUntil: 0 };
+  const dash = { waiting: [], claims: [], note: "", loaded: false, facts: {}, notNow: [], inGame: [], called: [], prizes: [], seen: {}, pres: null, glog: null, reh: null, lockUntil: 0 };
   api.dash = dash;
   const originOf = () => (BASE || location.origin);
-  const STUB = stubOn(location.search, location.hostname);
-  const statusNow = () => state.demoStatus || statusOf(state.raw, dash.facts, Date.now());
+  const statusNow = () => statusOf(state.raw, dash.facts, Date.now());
   async function refreshDash() {
     if (!state.eid) return;
     try { const i = await call("GET", `/api/z/${state.eid}/info`); state.raw = i; state.info = { ...(state.info || {}), published: !i.draft, paid: !i.unpaid, startMs: i.startMs }; } catch { /* the last answer stays */ }
     try { dash.waiting = (await call("GET", `/api/z/${state.eid}/waiting`)).waiting || []; } catch { /* the last list stays */ }
     try { dash.claims = (await call("GET", `/api/z/${state.eid}/claims`)).claims || []; } catch { /* the last count stays */ }
     try { const l = await call("GET", `/api/z/${state.eid}/life`); dash.facts = { ...dash.facts, deleted: !!(l && l.purged), completed: !!(l && l.reportSent) }; } catch { /* no life answer: the time decides */ }
-    if (G.handover) { try { dash.prizes = (await call("GET", `/api/z/${state.eid}/prizes`)).prizes || []; } catch { /* the last list stays */ } }
+    if (G.handover) { try { dash.prizes = (await call("GET", `/api/z/${state.eid}/prizes`)).prizes || []; for (const p of dash.prizes) if (!(prizeKey(p) in dash.seen)) dash.seen[prizeKey(p)] = dash.loaded ? Date.now() : 0; } catch { /* the last list stays */ } }
     if (G.presence) { try { dash.pres = await call("GET", `/api/z/${state.eid}/presence`); } catch { /* the last count stays */ } }
     if (G.feed) { try { dash.glog = await call("GET", `/api/z/${state.eid}/gamelog`); } catch { /* the last log stays */ } }
     if (G.rehearsal) { try { dash.reh = await call("GET", `/api/z/${state.eid}/rehearsals`); } catch { /* the last cards stay */ } }
     dash.loaded = true;
-    if (state.view === "dash" || state.view === "cohost") draw();
+    if (state.view === "dash") draw();
   }
   async function decide(w, decision) {
     try {
@@ -735,40 +710,7 @@
     const st = statusNow(), S = STATUSES[st];
     const bar = el("div", { class: "zf-idbar", id: "zf-idbar" }, el("span", { class: "zf-idlabel", text: "Game ID" }), " ", el("b", { id: "zf-gameid", text: state.eid }), " ",
 el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": st, text: S.label }));
-    if (STUB && state.eid) {
-      const sel = el("select", { id: "zf-demostatus", "aria-label": "Demo: show status", onchange: (e) => { state.demoStatus = e.target.value || ""; draw(); } }, el("option", { value: "" }, "Demo: show status"));
-      for (const [id, v] of Object.entries(STATUSES)) sel.append(el("option", { value: id, ...(state.demoStatus === id ? { selected: "" } : {}) }, v.label));
-      bar.append(" ", sel);
-    }
     return bar;
-  }
-  const roleBar = () => (state.role ? el("div", { class: "zf-rolebar", id: "zf-rolebar" }, el("span", { text: ROLE_BAR[state.role] }), " ", el("button", { type: "button", class: "zf-add", id: "zf-signout", onclick: () => { state.role = ""; state.mode = "signin"; state.team = { email: "", sent: null, att: null }; draw(); } }, "Sign out")) : null);
-  /** Host / Co-host sign-in (demo stub): email ID, then the 6-digit passcode. */
-  function teamSignin() {
-    const t = state.team, sec = el("section", { class: "zf-sec open", id: "zf-signin" });
-    sec.append(el("p", { class: "zf-demo", id: "zf-demo", text: "DEMO ONLY: this sign-in is a pretend one for looking at the screens. Use host@acme.com or cohost@acme.com, passcode " + TEAM_DEMO.code + ". The real passcode by email needs Phase B." }));
-    if (!t.sent) {
-      sec.append(el("h2", { text: "Are you the Host or a Co-host?" }), el("label", { for: "zf-temail", text: "Type your email ID" }), el("input", { type: "email", id: "zf-temail", autocomplete: "email", value: t.email, oninput: (e) => { t.email = e.target.value; } }));
-      const msg = el("p", { class: "zf-msg", id: "zf-tmsg", role: "status" });
-      sec.append(msg, el("button", { type: "button", class: "zf-go", id: "zf-tgo", onclick: () => { if (!roleOfEmail(t.email)) { msg.textContent = NOT_ON_LIST; return; } t.sent = Date.now(); t.att = { tries: 0, sentMs: t.sent }; draw(); } }, "Continue"), " ", el("a", { class: "zf-link", id: "zf-asplayer", href: gameLink(originOf(), state.eid) }, "Join as a participant"));
-      return sec;
-    }
-    sec.append(el("h2", { text: "Type your 6-digit passcode" }), el("p", { text: "The system sent a passcode to " + t.email.trim() + ". It works for " + PASS.minutes + " minutes." }));
-    const row = el("div", { class: "zf-codes", id: "zf-codes" }), boxes = [];
-    for (let i = 0; i < 6; i++) boxes.push(el("input", { type: "text", inputmode: "numeric", maxlength: "1", id: "zf-pc" + i, "aria-label": "Digit " + (i + 1), autocomplete: "one-time-code",
-      oninput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(-1); if (e.target.value && boxes[i + 1]) boxes[i + 1].focus(); },
-      onpaste: (e) => { const d = String((e.clipboardData || window.clipboardData).getData("text")).replace(/\D/g, "").slice(0, 6); if (!d) return; e.preventDefault(); boxes.forEach((b, k) => { b.value = d[k] || ""; }); } }));
-    row.append(...boxes);
-    const msg = el("p", { class: "zf-msg", id: "zf-tmsg", role: "status" });
-    sec.append(row, msg, el("button", { type: "button", class: "zf-go", id: "zf-pcgo", onclick: () => {
-      const r = passcodeCheck(t.att, boxes.map((b) => b.value).join(""), Date.now());
-      if (!r.ok) { msg.textContent = r.msg; return; }
-      const role = roleOfEmail(t.email);
-      state.role = role; state.mode = ""; for (const s of STEPS) state.done[s.n] = true;
-      state.raw = { startMs: Date.now() + 3 * 3600000, gameMinutes: 60 }; state.info = { published: true, paid: true, startMs: state.raw.startMs };
-      state.view = role === "host" ? "dash" : "cohost"; draw();
-    } }, "Check passcode"), " ", el("button", { type: "button", class: "zf-link", id: "zf-newcode", onclick: () => { t.sent = Date.now(); t.att = { tries: 0, sentMs: t.sent }; msg.textContent = "A new passcode was sent."; } }, "Send a new passcode"), " ", el("button", { type: "button", class: "zf-link", id: "zf-diffemail", onclick: () => { t.sent = null; t.att = null; draw(); } }, "Use a different email ID"));
-    return sec;
   }
   /* ---- Ready check, prizes handed over, feed, next-number controls, rehearsals, completed buttons ---- */
   const sharedKey = () => "zf-shared-" + state.eid;
@@ -782,14 +724,14 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
     for (const i of items) {
       const li = el("li", { "data-ready": i.id, class: i.done ? "done" : "" });
       if (i.id === "link") li.append(el("label", {}, el("input", { type: "checkbox", id: "zf-shared", ...(i.done ? { checked: "" } : {}), onchange: (e) => setShared(e.target.checked) }), " ", i.label));
-      else li.append(el("span", { class: "zf-tickmark", text: i.done ? "✓ " : "○ " }), i.label, i.optional ? el("i", { text: " (optional)" }) : null, i.soon ? el("span", { class: "zf-soon", text: COPY.soon }) : null);
+      else li.append(el("span", { class: "zf-tickmark", text: i.done ? "✓ " : "○ " }), i.label, i.optional ? el("i", { text: " (optional)" }) : null);
       ul.append(li);
     }
     card.append(ul);
     return card;
   }
   /** Prizes won, who won them (the ticket number, and the details that are held), and the "Prize handed over" tick. Organizer, Host and Co-host only. */
-  function prizesBlock(co) {
+  function prizesBlock() {
     const rewards = (state.raw && state.raw.rewards) || [], c = prizeCounts(dash.prizes, rewards), houses = housesOf(window.ZG);
     const sec = el("section", { class: "zf-prizes", id: "zf-prizes" }, el("h3", { text: "Prizes" }), el("p", { id: "zf-prizecount", text: c.won + " won, " + c.left + " left" + (c.won ? " · " + c.given + " handed over" : "") }));
     if (!dash.prizes.length) { sec.append(el("p", { class: "zf-small", text: "No prize has been won yet." })); return sec; }
@@ -797,7 +739,7 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
     for (const p of dash.prizes) {
       const label = (houses.find((h) => h.id === p.pattern) || {}).label || String(p.pattern);
       const li = el("li", { "data-prize": prizeKey(p) }, el("b", { text: label + (p.ordinal > 1 ? " (" + p.ordinal + ")" : "") }), " · Ticket number " + p.seat, el("div", { class: "zf-small", text: winnerDetails(p) }));
-      if (!co) li.append(el("label", { class: "zf-given" }, el("input", { type: "checkbox", ...(p.given ? { checked: "" } : {}), onchange: (e) => handOver(p, e.target.checked) }), " Prize handed over"));
+      li.append(el("label", { class: "zf-given" }, el("input", { type: "checkbox", ...(p.given ? { checked: "" } : {}), onchange: (e) => handOver(p, e.target.checked) }), " Prize handed over"));
       ul.append(li);
     }
     sec.append(ul);
@@ -819,7 +761,7 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
   function nextControl(where) {
     const manual = !!(state.raw && state.raw.callMode === "host"), left = Math.max(0, (dash.lockUntil || 0) - Date.now()), txt = nextControlText(manual ? "manual" : "auto", left);
     if (!manual) return el("span", { class: "zf-timer", id: "zf-next-" + where, text: txt });
-    return el("button", { type: "button", class: "zf-go zf-nextnum", id: "zf-next-" + where, ...(left > 0 ? { disabled: "" } : {}), onclick: () => pressNext() }, txt);
+    return el("button", { type: "button", class: "zf-go zf-nextnum" + (left > 0 ? " wait" : " ready"), id: "zf-next-" + where, ...(left > 0 ? { disabled: "" } : {}), onclick: () => pressNext() }, txt);
   }
   async function pressNext() {
     if (Date.now() < (dash.lockUntil || 0)) { dash.note = NEXT_TOAST; return draw(); }
@@ -832,20 +774,29 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
     } catch (e) { dash.note = "The next number could not be called. Please try again."; }
     draw();
   }
+  const REH_PENDING = "Payment is pending. Your rehearsals open as soon as the payment is done.";
+  /** Step 5: the three rehearsal cards, shut until the game is published and paid. */
+  function rehearsalPreview() {
+    const sec = el("section", { class: "zf-reh", id: "zf-rehpreview", "aria-labelledby": "zf-rehph" }, el("h3", { id: "zf-rehph", text: "Practice before the real game" }));
+    for (const n of [1, 2, 3]) sec.append(el("div", { class: "zf-rehcard grey", "data-reh": String(n) }, el("b", { text: "REHEARSAL GAME " + n }), el("p", { class: "zf-small", text: "Opens after you publish and pay" })));
+    return sec;
+  }
   function rehearsalBlock(st) {
-    const cards = rehearsalCards(dash.reh), paid = LIVE_OR_DONE.includes(st);
+    const cards = rehearsalCards(dash.reh), paid = LIVE_OR_DONE.includes(st), o = originOf();
     const sec = el("section", { class: "zf-reh", id: "zf-reh", "aria-labelledby": "zf-rehh" }, el("h3", { id: "zf-rehh", text: "Practice before the real game" }));
     for (const c of cards) {
-      const card = el("div", { class: "zf-rehcard" + (c.state === "locked" || !paid ? " grey" : ""), "data-reh": String(c.n) }, el("b", { text: "Rehearsal " + c.n }));
-      if (!paid || c.state === "locked") card.append(el("p", { class: "zf-small", text: c.reason || REHEARSAL_LOCKED }));
+      const card = el("div", { class: "zf-rehcard" + (c.state === "locked" || !paid ? " grey" : ""), "data-reh": String(c.n) }, el("b", { text: "REHEARSAL GAME " + c.n }));
+      if (!paid) card.append(el("button", { type: "button", class: "zf-link", "data-reh-pending": String(c.n), onclick: () => { dash.rehPay = true; draw(); } }, "Opens after you publish and pay"));
+      else if (c.state === "locked") card.append(el("p", { class: "zf-small", text: c.reason || REHEARSAL_LOCKED }));
       else if (c.state === "ready") card.append(el("p", { class: "zf-small", text: "A practice run of your game. Nothing here changes your real game." }), dash.rehAsk === c.n
         ? el("span", {}, el("button", { type: "button", class: "zf-go", "data-reh-go": String(c.n), onclick: () => startReh(c.n) }, "Yes, start the rehearsal"), " ", el("button", { type: "button", class: "zf-link", onclick: () => { dash.rehAsk = 0; draw(); } }, "No, not now"))
         : el("button", { type: "button", class: "zf-add", "data-reh-start": String(c.n), onclick: () => { dash.rehAsk = c.n; draw(); } }, "Start this rehearsal"));
-      else if (c.state === "running") card.append(el("p", { class: "zf-small", text: "Rehearsal " + c.n + " is on." }), el("a", { class: "zf-add", href: "/zc.html?e=" + encodeURIComponent(c.id) }, "Open it"), " ", el("button", { type: "button", class: "zf-link", "data-reh-close": c.id, onclick: () => closeReh(c.id) }, "Close this rehearsal"));
+      else if (c.state === "running") card.append(el("p", { class: "zf-small", text: "Rehearsal " + c.n + " is on." }), el("a", { class: "zf-add", href: "/zc.html?e=" + encodeURIComponent(c.id) }, "Open it"), " ", el("button", { type: "button", class: "zf-link", "data-reh-close": c.id, onclick: () => closeReh(c.id) }, "Close rehearsal"));
       else card.append(el("p", { class: "zf-small", text: "Done" }), el("a", { class: "zf-link", href: "/zc.html?e=" + encodeURIComponent(c.id) }, "See what happened"));
       card.append(el("p", { class: "zf-small", text: "Practice only, not your real game" }));
       sec.append(card);
     }
+    if (!paid && dash.rehPay) sec.append(el("div", { class: "zf-warn", id: "zf-rehpay" }, REH_PENDING, " ", el("a", { class: "zf-go", id: "zf-rehpaynow", href: payLink(o, state.eid), target: "_blank", rel: "noopener" }, "Pay now")));
     return sec;
   }
   async function startReh(n) {
@@ -867,18 +818,11 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
     try { window.history.replaceState(null, "", location.pathname + "?flow=new&e=" + id); } catch { /* the address stays */ }
     draw();
   }
-  async function eraseAll() {
-    try { await call("POST", `/api/z/${state.eid}/erase`, {}); dash.facts = { ...dash.facts, deleted: true }; dash.note = "All participant data was deleted."; } catch (e) { dash.note = e.message; }
-    await refreshDash();
-  }
   function completedBlock() {
-    const sec = el("section", { class: "zf-completed", id: "zf-completed" }, el("h3", { text: "Your game is complete" }), el("p", { class: "zf-small", text: COMPLETED_NOTE }));
-    sec.append(el("p", {}, el("button", { type: "button", class: "zf-add", id: "zf-copygame", onclick: () => makeCopy() }, "Make a copy"), " ",
-      dash.eraseAsk ? el("span", {}, el("button", { type: "button", class: "zf-go", id: "zf-erase-yes", onclick: () => { dash.eraseAsk = false; eraseAll(); } }, "Yes, delete everything now"), " ", el("button", { type: "button", class: "zf-link", onclick: () => { dash.eraseAsk = false; draw(); } }, "No, keep it for now"))
-        : el("button", { type: "button", class: "zf-link", id: "zf-erase", onclick: () => { dash.eraseAsk = true; draw(); } }, "Delete all participant data now")));
+    const sec = el("section", { class: "zf-completed", id: "zf-completed" }, el("h3", { text: "Your game is complete" }), el("p", { class: "zf-small", id: "zf-keepnote", text: COMPLETED_NOTE }));
+    sec.append(el("p", {}, el("button", { type: "button", class: "zf-add", id: "zf-copygame", onclick: () => makeCopy() }, "Make a copy")));
     return sec;
   }
-
   /** The share card: Game ID, game link and the ways to send it. Hosts and Co-hosts use this same link. */
   function shareCard(o, eid, name) {
     const link = gameLink(o, eid), msg = shareMessage(name, link, eid);
@@ -905,7 +849,7 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
     return sec;
   }
   /** Waiting for you: one table, a column only when a participant gave that detail; Let in / Not now; then the grey Not now list and the green list. */
-  function waitingBlock(co) {
+  function waitingBlock() {
     const sec = el("section", { class: "zf-waitsec", id: "zf-waitsec" }, el("h3", { text: "Waiting for you to let them in the game" }));
     const rows = dash.waiting;
     if (!rows.length) sec.append(el("p", { id: "zf-nowait", text: "Nobody is waiting right now." }));
@@ -915,7 +859,7 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
       const tb = el("tbody");
       for (const w of rows) tb.append(el("tr", { "data-wid": String(w.id) }, cols.map((c) => el("td", { "data-label": c.label, text: c.get(w) || "—" })), el("td", {}, el("button", { type: "button", class: "zf-add", "data-decide": "admit", onclick: () => decide(w, "admit") }, "Let in"), " ", el("button", { type: "button", class: "zf-link", "data-decide": "decline", onclick: () => decide(w, "decline") }, "Not now"))));
       table.append(tb); wrap.append(table); sec.append(wrap);
-      if (!co) sec.append(el("button", { type: "button", class: "zf-add", id: "zf-letall", onclick: async () => { try { await call("POST", `/api/z/${state.eid}/waiting/all`, { decision: "admit" }); for (const w of rows) dash.inGame.push(w); dash.note = "Everybody was let in."; } catch (e) { dash.note = e.message; } await refreshDash(); } }, "Let everyone in"));
+      sec.append(el("button", { type: "button", class: "zf-add", id: "zf-letall", onclick: async () => { try { await call("POST", `/api/z/${state.eid}/waiting/all`, { decision: "admit" }); for (const w of rows) dash.inGame.push(w); dash.note = "Everybody was let in."; } catch (e) { dash.note = e.message; } await refreshDash(); } }, "Let everyone in"));
     }
     if (dash.notNow.length) {
       sec.append(el("h3", { text: "Not now" }));
@@ -936,7 +880,7 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
     const board = el("section", { class: "zf-retro", id: "zf-retro", "aria-label": "Game board" });
     board.append(el("h3", { class: "zf-retro-title", text: "★ " + G.boardTitle + " ★" }), el("p", { class: "zf-small", text: "close group online corporate " + G.boardTitle.toLowerCase() }));
     const got = new Set(called), last = called.length ? called[called.length - 1] : 0;
-    const ctl = opts && opts.control ? (opts.co ? el("span", { class: "zf-timer", id: "zf-next-top", text: state.raw && state.raw.callMode === "host" ? "Manual mode" : "Numbers are called automatically" }) : nextControl("top")) : null;
+    const ctl = opts && opts.control ? nextControl("top") : null;
     if (ctl) board.append(el("div", { class: "zf-lastline" }, el("span", { text: "Last number called" }), ctl));
     board.append(el("div", { class: "zf-ball", id: "zf-ball", text: last ? String(last) : "–" }));
     const grid = el("div", { class: "zf-discs", id: "zf-discs", style: "grid-template-columns: repeat(" + G.boardCols + ", 1fr)" });
@@ -945,29 +889,35 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
     return board;
   }
   /** The Game dashboard (organizer and Host); a Co-host sees the Co-host page: the same share card, waiting table, tickets claimed and board, and cannot change anything. */
-  function dashboard(opts) {
-    const co = !!(opts && opts.cohost), o = originOf(), eid = state.eid, name = gameName(form.occ, form.oname), st = statusNow();
+  function dashboard() {
+    const o = originOf(), eid = state.eid, name = gameName(form.occ, form.oname), st = statusNow();
     const startText = state.when ? clockIn(state.when.ms, state.when.zone) : (state.info && state.info.startMs ? clockIn(state.info.startMs, "Asia/Kolkata") + " India time" : "the start time");
-    const sec = el("section", { class: "zf-sec open zf-dashboard", id: "zf-dashboard", "aria-labelledby": "zf-hd" }, el("h2", { id: "zf-hd", text: co ? "Your Co-host page" : COPY.dash }));
+    const sec = el("section", { class: "zf-sec open zf-dashboard", id: "zf-dashboard", "aria-labelledby": "zf-hd" }, el("h2", { id: "zf-hd", text: COPY.dash }));
     const bn = statusBanner(st, startText);
     const gone = st === "cancelled" || st === "refund" || st === "deleted" || st === "draft";
     if (!gone) sec.append(shareCard(o, eid, name)); // 1 the share card, at the very top
-    if (!co) sec.append(el("div", { class: "zf-banner " + bn.kind, id: "zf-banner", "aria-live": "polite" }, bn.text)); // 2 the status banner
-    if (st === "paused") sec.append(el("p", {}, el("button", { type: "button", class: "zf-add", id: "zf-resume", disabled: "" }, "Resume"), " ", el("span", { class: "zf-soon", text: COPY.soon })));
+    sec.append(el("div", { class: "zf-banner " + bn.kind, id: "zf-banner", "aria-live": "polite" }, bn.text)); // 2 the status banner
     if (st === "cancelled") sec.append(el("p", {}, el("button", { type: "button", class: "zf-add", id: "zf-copygame", onclick: () => makeCopy() }, "Make a copy")));
     if (gone) { sec.append(el("p", { class: "zf-msg", role: "status", id: "zf-dashnote", text: st === "deleted" ? "" : dash.note })); return sec; }
-    if (!co) sec.append(readyCard(st)); // the Ready check
-    if (!co) sec.append(paymentBlock(st, o, eid)); // 3 payment
-    sec.append(waitingBlock(co)); // 4 waiting for you
-    if (G.claims) sec.append(el("h3", { text: "Tickets claimed" }), el("p", { id: "zf-claimed", text: String(claimedCount(dash.claims)) })); // 5 tickets claimed
+    sec.append(readyCard(st)); // 3 the Ready check
+    sec.append(paymentBlock(st, o, eid)); // 4 payment
+    if (G.rehearsal) sec.append(rehearsalBlock(st)); // 5 rehearsals
+    sec.append(waitingBlock()); // 6 waiting for you
+    if (G.claims) sec.append(el("h3", { text: "Tickets claimed" }), el("p", { id: "zf-claimed", text: String(claimedCount(dash.claims)) })); // 7 tickets claimed
+    if (G.presence && dash.pres && dash.pres.listening != null) sec.append(el("p", { id: "zf-online", text: "Online now: about " + dash.pres.listening }));
     const playing = st === "live" || st === "paused", withControl = G.control && playing;
-    if (G.board) sec.append(retroBoard(dash.called || [], { control: withControl, co })); // 6 the retro board
-    if (withControl && !co) sec.append(el("div", { class: "zf-bottomrow", id: "zf-bottomrow" }, nextControl("bottom"), " ", el("button", { type: "button", class: "zf-add", disabled: "", id: "zf-pause" }, "Pause game"), " ", el("a", { class: "zf-add", id: "zf-bigscreen", href: boardLink(o, eid), target: "_blank", rel: "noopener" }, "Big screen"), " ", el("span", { class: "zf-soon", text: COPY.soon })));
-    if (G.handover) sec.append(prizesBlock(co));
-    if (G.feed || G.presence) sec.append(feedBlock());
-    if (G.rehearsal && !co) sec.append(rehearsalBlock(st));
-    if (st === "completed" && !co) sec.append(completedBlock());
-    if (!co) sec.append(el("p", {}, el("a", { class: "zf-add", id: "zf-board", href: boardLink(o, eid), target: "_blank", rel: "noopener" }, "Open the game board")), el("p", { class: "zf-small", id: "zf-report", text: REPORT_NOTE }));
+    const last = dash.prizes.length ? dash.prizes[dash.prizes.length - 1] : null;
+    if (G.handover && last) { const houses = housesOf(window.ZG), label = (houses.find((h) => h.id === last.pattern) || {}).label || String(last.pattern); sec.append(el("div", { class: "zf-claimline", id: "zf-claim", "aria-live": "polite" }, claimLine(last, label, dash.seen[prizeKey(last)], Date.now()))); }
+    if (G.board) sec.append(retroBoard(dash.called || [], { control: withControl })); // 8 the retro board
+    const row = el("div", { class: "zf-bottomrow", id: "zf-bottomrow" });
+    if (withControl) row.append(nextControl("bottom"), " ");
+    row.append(el("a", { class: "zf-add", id: "zf-board", href: boardLink(o, eid), target: "_blank", rel: "noopener" }, "Big screen"));
+    if (st === "paid" || st === "free" || st === "live" || st === "paused") row.append(" ", el("a", { class: "zf-add", id: "zf-play", href: gameLink(o, eid), target: "_blank", rel: "noopener" }, "Play the game")); // the organizer and Hosts can play too
+    sec.append(row);
+    if (G.handover) sec.append(prizesBlock());
+    if (G.feed) sec.append(feedBlock()); // 9 what is happening
+    if (st === "completed") sec.append(completedBlock());
+    sec.append(el("p", { class: "zf-small", id: "zf-report", text: REPORT_NOTE })); // 10 report reminder
     sec.append(el("p", { class: "zf-msg", role: "status", id: "zf-dashnote", text: dash.note }));
     return sec;
   }
@@ -975,8 +925,6 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
   api.pressNext = pressNext;
   api.state = state; api.draw = draw; api.done = done; api.el = el;
   document.title = "Organizer console | " + G.brand;
-  state.team = { email: "", sent: null, att: null }; state.role = ""; state.mode = "";
-  if (STUB && q.get("team") === "1" && state.eid) state.mode = "signin";
   draw();
   if (state.eid && secret()) { call("GET", `/api/z/${state.eid}/info`).then((i) => { if (i && !i.draft && i.startMs) { state.raw = i; state.info = { published: true, paid: !i.unpaid, startMs: i.startMs }; for (const s of STEPS) state.done[s.n] = true; state.view = "dash"; draw(); refreshDash(); } }).catch(() => {}); }
 })();
