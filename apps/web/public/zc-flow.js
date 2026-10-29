@@ -168,9 +168,34 @@
     const breaks = form.breaks.map((b) => { const u = fixUrl(String(b.link).trim()); return { kind: linkKind(u), title: String(b.title || "").trim() || "A message from your organizer", mediaUrl: u }; });
     return { tickets: Number(tix), opening: [], breaks, closing: [], brand };
   }
+  /* ---- Step 5: check and publish (pure) ---- */
+  const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
+  /** The organizer's own contact, needed to publish (the invoice and the game report go there). */
+  function contactProblems(email, phone) {
+    if (!EMAIL.test(String(email || "").trim())) return ["Please type your email ID, for example name@company.com."];
+    const d = String(phone || "").replace(/\D/g, "");
+    if (d.length < 10 || d.length > 15) return ["Please type your mobile number, with 10 digits."];
+    return [];
+  }
+  /** Everything chosen in steps 1 to 4, in plain words, to read back before publishing. */
+  function readBack(s) {
+    const lines = [];
+    if (s.when) lines.push(["Game", s.name + " · " + clockIn(s.when.ms, s.when.zone) + " (" + ((ZONES.find((z) => z.id === s.when.zone) || {}).label || s.when.zone.replace(/_/g, " ")) + ")"]);
+    const card = CARDS.find((c) => c.id === s.card);
+    const size = (s.choices || []).find((k) => k.upTo === Number(s.upTo));
+    if (card) lines.push(["For", card.name + (size ? " · " + size.label : "")]);
+    lines.push(["Tickets", s.tix + (Number(s.tix) === 1 ? " ticket" : " tickets") + " for each participant"]);
+    const rw = s.rewards || [];
+    const names = {};
+    for (const r of rw) { const k = r.pattern + "|" + r.scope; (names[k] = names[k] || { r, n: 0 }).n++; }
+    for (const { r, n } of Object.values(names)) lines.push([r.scope === "two_ticket" ? "Super Bumper House" : (s.houses.find((h) => h.id === r.pattern) || {}).label || r.pattern, r.text + (n > 1 ? " · won " + n + " times" : "")]);
+    lines.push(["Company", s.brand && s.brand.name ? s.brand.name : "Not added"]);
+    lines.push(["Message breaks", String((s.breaks || []).length)]);
+    return lines;
+  }
   const registry = {}; // step number -> function(el, ctx) that draws the step body (each step adds its own)
 
-  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems, housesOf, tagsOf, GIFTS, prizeLine, defaultPrizes, defaultBumper, buildRewards, prizeProblems, breakMax, brandNameClean, linkKind, brandProblems, breakProblems, buildBrandPatch };
+  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems, housesOf, tagsOf, GIFTS, prizeLine, defaultPrizes, defaultBumper, buildRewards, prizeProblems, breakMax, brandNameClean, linkKind, brandProblems, breakProblems, buildBrandPatch, contactProblems, readBack };
   if (typeof window !== "undefined") window.ZFLOW = api;
   if (typeof module !== "undefined") module.exports = api;
   if (typeof document === "undefined") return;
@@ -412,6 +437,42 @@
       } catch (e) { msg.textContent = e.message; }
     };
     box.append(msg, el("button", { type: "button", class: "zf-go", id: "zf-save4", onclick: () => save(false) }, "Save and continue"), " ", el("button", { type: "button", class: "zf-link", id: "zf-skip4", onclick: () => save(true) }, "Skip this step"));
+  };
+
+  /* ---- Step 5 ---- */
+  const pub = { email: "", phone: "" };
+  try { pub.email = (window.CTK ? window.CTK.get("ctz-email") : sessionStorage.getItem("ctz-email")) || ""; } catch { /* the box starts empty */ }
+  registry[5] = (box) => {
+    const houses = housesOf(window.ZG), msg = el("p", { class: "zf-msg", role: "status", id: "zf-msg5" });
+    const rewards = buildRewards(prizes.sel || {}, prizes.bumper, prizes.tix, prizes.cur);
+    box.append(el("p", { class: "zf-lead", text: "Please check everything. You can go back to any step to change it." }));
+    const list = el("dl", { class: "zf-read", id: "zf-read" });
+    for (const [k, v] of readBack({ name: gameName(form.occ, form.oname), when: state.when, card: who.card, upTo: who.upTo, choices: packChoices(state.packs), tix: prizes.tix, rewards, houses, brand: brandForm.brand, breaks: brandForm.breaks })) list.append(el("dt", { text: k }), el("dd", { text: v }));
+    box.append(list);
+    box.append(el("h3", { text: "Hosts and Co-hosts" }));
+    box.append(el("p", { text: "A Host is your right hand: a Host can make any change you can, and you can have up to 5. A Co-host brings people to the game and cannot change the game. You can have as many as you like." }));
+    box.append(el("p", {}, el("span", { class: "zf-soon", text: COPY.soon }), " Adding Hosts and Co-hosts by email ID. For now the game is yours, and you can still hand over a Host or Co-host link from the current console."));
+    box.append(el("h3", { text: "Your contact" }));
+    box.append(el("p", { class: "zf-small", text: "Only you see these. The invoice and your game report are sent here. They are never shown to participants." }));
+    box.append(el("label", { for: "zf-pemail", text: "Your email ID" }), el("input", { type: "email", id: "zf-pemail", autocomplete: "email", value: pub.email, oninput: (e) => { pub.email = e.target.value; } }));
+    box.append(el("label", { for: "zf-pphone", text: "Your mobile number" }), el("input", { type: "tel", id: "zf-pphone", autocomplete: "tel", placeholder: "98765 43210", value: pub.phone, oninput: (e) => { pub.phone = e.target.value; } }));
+    const consent = el("div", { id: "zf-consent" });
+    if (window.CBConsent) consent.innerHTML = window.CBConsent.html("K1");
+    box.append(consent);
+    const go = el("button", { type: "button", class: "zf-go", id: "zf-publish", "data-needs": "K1", onclick: async () => {
+      const bad = contactProblems(pub.email, pub.phone);
+      if (bad.length) { msg.textContent = bad[0]; return; }
+      if (!state.eid) { msg.textContent = "Please save step 1 first."; return; }
+      go.disabled = true; msg.textContent = "Publishing…";
+      try {
+        const pr = await call("POST", `/api/z/${state.eid}/publish`, { email: pub.email.trim(), phone: pub.phone, consent: window.CBConsent ? window.CBConsent.payload(consent, "K1") : undefined });
+        try { if (window.CTK) window.CTK.set("ctz-email", pub.email.trim()); else sessionStorage.setItem("ctz-email", pub.email.trim()); } catch { /* optional */ }
+        state.info = { published: true, paid: !!(pr && pr.paid), payUrl: pr && pr.payUrl, shareUrl: pr && pr.shareUrl };
+        done(5);
+      } catch (e) { go.disabled = false; msg.textContent = e.message; }
+    } }, "Publish");
+    box.append(msg, go);
+    if (window.CBConsent) window.CBConsent.wire(consent, "K1", {}, go); // Publish waits for the tick
   };
 
   api.state = state; api.draw = draw; api.done = done; api.el = el;

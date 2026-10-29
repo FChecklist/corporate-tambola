@@ -62,3 +62,7 @@
 .zf-link { background: none; border: 0; color: #0b3d91; text-decoration: underline; font: inherit; min-height: 44px; cursor: pointer; }
 .zf-add { min-height: 44px; padding: 6px 16px; border-radius: 22px; border: 1px dashed #0b3d91; background: none; color: #0b3d91; font: inherit; cursor: pointer; }
 @media (prefers-color-scheme: dark) { .zf-link, .zf-add { color: #8fb3ff; border-color: #8fb3ff; } .zf-break { border-color: #2c3a5c; } .zf-swatch.on { box-shadow: 0 0 0 3px #8fb3ff; } }
+
+.zf-read { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 8px 0; }
+.zf-read dt { font-weight: 700; } .zf-read dd { margin: 0; }
+@media (max-width: 480px) { .zf-read { grid-template-columns: 1fr; } .zf-read dd { margin-bottom: 6px; } }
