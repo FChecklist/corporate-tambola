@@ -135,6 +135,14 @@ describe("the big screen", () => {
 });
 
 describe("the phone during the game", () => {
+  test("TA22: the join page tells a late person the game is already running, before they join; not before the start", async () => {
+    const o = await organizer(); await published(o, "IP-LATE");
+    const at = (ms: () => number) => (win: any) => { win.Date.now = ms; };
+    const early = await phoneAt(o, "/z?e=IP-LATE", at(() => o.world.now)); await early.waitFor((x) => /Join the engagement/.test(x));
+    expect(early.$("#latetip")).toBeNull(); // the first number is hours away: nothing to warn about
+    const late = await phoneAt(o, "/z?e=IP-LATE", at(() => roundMs(START) + 10 * 60_000)); await late.waitFor((x) => /This game is already running\./.test(x));
+    const t = late.$("#latetip")!.textContent ?? ""; expect(t).toMatch(/about 90 seconds later/); expect(t).toMatch(/prizes already won stay won/); expect(t).toMatch(/other prizes are still open/);
+  });
   test("TA21: a new player's phone does not read the numbers aloud until they switch sound on (an open office stays quiet)", async () => {
     const o = await organizer(); await published(o, "IP-QUIET");
     const p = await phoneAt(o, "/z?e=IP-QUIET");
