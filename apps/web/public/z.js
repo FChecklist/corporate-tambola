@@ -153,7 +153,7 @@
   const CC_KEY = "ctz-cc";
 
   // ---------- joining: a personal link needs no number; a number may be asked for; a request may have to wait to be let in; a person may have been removed ----------
-  const J = { k4: {}, consent: null, mode: "", phone: "", cc: (() => { try { return CT_BY_ISO(store.get(CC_KEY)).iso; } catch { return "IN"; } })(), e164: "", emp: "", name: "", wid: "", who: "", timer: null, retry: 0, busyTries: 0, polling: false, note: "" };
+  const J = { k4: {}, consent: null, mode: "", phone: "", cc: (() => { try { return CT_BY_ISO(store.get(CC_KEY)).iso; } catch { return "IN"; } })(), e164: "", emp: "", email: "", name: "", wid: "", who: "", timer: null, retry: 0, busyTries: 0, polling: false, note: "" };
   const shownPhone = () => { const p = CTPhone.parse(J.cc, J.phone); return p.ok ? CTPhone.show(p) : String(J.phone || "").trim(); };
   const inviteOf = () => (INVITE_FROM ? { from: INVITE_FROM, cat: INVITE_CAT } : undefined);
   // What the organizer asked people to give to get in: a mobile number (default), an employee ID, or both. Employees only: no way in without the ID.
@@ -184,12 +184,14 @@
     const vm = INFO.verify || "mobile", what = vm === "id" ? "your employee ID" : vm === "either" ? "your employee ID or your mobile number" : "your mobile number";
     return `<p class="zwelcome" id="zwelcome"><b>Welcome!</b> You are invited to join the Corporate Tambola (Housie) organized by ${esc(co)}${esc(when)}. ${personal ? "Press the button to get your ticket." : "To join, type " + what + "."}</p>`;
   };
+  // 1.8.0: an open game (people type their mobile number) also takes an optional Email ID. The server checks its shape and keeps one ticket per email.
+  const emailAsked = () => (INFO.verify || "mobile") === "mobile" && !INFO.empOnly;
   const joinView = (msg) => {
     if (J.mode === "removed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>You are not on this game's list</h2><p class="zsmall" style="margin:0">You were removed from this game, so there is no ticket for you here. If you think this is a mistake, please ask the person who invited you.</p></div>`;
     if (J.mode === "gone") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This link is not active any more</h2><p class="zsmall" style="margin:0">Please ask the person who invited you for a new link.</p></div>`;
     if (J.mode === "busy") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard zwait" role="status"><h2>Many people are joining right now</h2><p style="margin:0 0 6px">Your request is safe. We are trying again for you every few seconds. Keep this page open.</p><p class="zsmall" style="margin:0">Try ${J.busyTries} of ${BUSY_TRIES}.</p></div><div class="zagain"><button class="zbtn s alt" id="again" type="button">Stop and try myself</button></div>`; // a whole office joins from one address: the server asks for a short wait and the page asks again by itself
-    if (J.mode === "waiting") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard zwait" role="status"><h2>Please wait a moment</h2><p style="margin:0 0 6px">${J.note ? esc(J.note) : `Your request to join has gone to ${J.who ? esc(J.who) : "the organizer"}.`}</p><p class="zsmall" style="margin:0">Keep this page open. As soon as you are let in, your ticket appears here.</p></div><div class="zagain">${J.emp || J.phone ? `<p class="zsmall" style="margin:0 0 6px">You asked with <b>${esc([J.emp, shownPhone()].filter(Boolean).join(" / "))}</b>. Is that wrong?</p>` : ""}<button class="zbtn s alt" id="again" type="button">Wrong number or ID? Type it again</button></div>`;
-    if (J.mode === "declined" || J.mode === "lapsed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>${J.mode === "declined" ? "Your request was not accepted" : "This request has run out"}</h2><p class="zsmall" style="margin:0 0 8px">${J.mode === "declined" ? "You are not on the list for this game. Please ask the person who invited you." : "Nobody answered in time. You can ask again."}</p></div><div class="zagain"><button class="zbtn s alt" id="again" type="button">${J.mode === "declined" ? "Typed it wrong? Type it again" : "Ask again"}</button></div>`;
+    if (J.mode === "waiting") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard zwait" role="status"><h2>Please wait a moment</h2><p style="margin:0 0 6px">${J.note ? esc(J.note) : INVITE_FROM ? "You asked to join through a family pass. Please wait while your family host approves your entry." : `Your request to join has gone to ${J.who ? esc(J.who) : "the organizer"}.`}</p><p class="zsmall" style="margin:0">Keep this page open. As soon as you are let in, your ticket appears here.</p></div><div class="zagain">${J.emp || J.phone ? `<p class="zsmall" style="margin:0 0 6px">You asked with <b>${esc([J.emp, shownPhone()].filter(Boolean).join(" / "))}</b>. Is that wrong?</p>` : ""}<button class="zbtn s alt" id="again" type="button">Wrong number or ID? Type it again</button></div>`;
+    if (J.mode === "declined" || J.mode === "lapsed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>${J.mode === "declined" ? "Your request was not accepted" : "Your request has timed out"}</h2><p class="zsmall" style="margin:0 0 8px">${J.mode === "declined" ? "Thank you for asking. This game could not add you this time. Please talk to whoever shared the link with you." : "Your request waited 30 minutes and nobody answered. Please open the game link and ask again, or talk to whoever shared it with you."}</p></div><div class="zagain"><button class="zbtn s alt" id="again" type="button">${J.mode === "declined" ? "Typed it wrong? Type it again" : "Ask again"}</button></div>`;
     const personal = !!TOKEN && J.mode !== "needPhone"; // a personal link is made for one person: no number to type unless the server asks
     return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div>
     <div class="zcard zform zjoin"><h2>Join the game</h2>
@@ -199,7 +201,7 @@
     ${INAPP ? `<p class="zsmall" style="margin:0 0 8px">Tip: if this link opened inside another app, open it in Chrome or Safari and always use that same one for this game.</p>` : ""}${J.mode === "needPhone" && !msg ? `<div class="zbanner info" role="status" style="margin:0 0 8px">${J.note ? esc(J.note) : "This link was already opened on another phone. Please type your mobile number to get your ticket."}</div>` : ""}
     ${DEMO ? "" : CBConsent.html("K4")}
     ${personal ? `<p class="zsmall" style="margin:0 0 6px">Your personal link is ready. Press the button to get your ticket.</p>` : joinWho()}
-    ${personal ? "" : `<label for="nm">Your name <span class="zopt">(optional)</span></label><input id="nm" enterkeyhint="go" autocomplete="name" maxlength="60" value="${esc(J.name)}"><p class="zsmall" style="margin:2px 0 6px">Shown only to the organizer.</p>`}
+    ${personal ? "" : `<label for="nm">Your name <span class="zopt">(optional)</span></label><input id="nm" enterkeyhint="go" autocomplete="name" maxlength="60" value="${esc(J.name)}"><p class="zsmall" style="margin:2px 0 6px">Shown only to the organizer.</p>${emailAsked() ? `<label for="mail">Your email ID <span class="zopt">(optional)</span></label><input id="mail" type="email" inputmode="email" autocomplete="email" enterkeyhint="go" maxlength="120" value="${esc(J.email)}"><p class="zsmall" style="margin:2px 0 6px">Used only for this game and deleted within 24 hours of the game.</p>` : ""}`}
     ${msg ? `<div class="zbanner bad" role="alert">${esc(msg)}</div>` : ""}
     <button class="zbtn" id="go" ${DEMO ? "" : 'data-needs="K4" disabled aria-disabled="true"'}>Get my ticket</button>
     <p class="zsmall">We use your number for your ticket and, if you win, your prize. Your organizer sees it. Other players do not.</p>
@@ -251,7 +253,7 @@
   }
   /** Joins with what is typed (or just the token). Shows a ticket, or the calm screen that fits the answer. */
   async function doJoin() {
-    const ok = await rt.join(J.e164 || J.phone, J.name, inviteOf(), J.emp);
+    const ok = await rt.join(J.e164 || J.phone, J.name, inviteOf(), J.emp, J.email);
     if (ok) {
       J.mode = ""; clearInterval(J.timer); clearWait();
       if (TOKEN) { try { const u = new URLSearchParams(location.search); u.delete("t"); history.replaceState(null, "", location.pathname + (u.toString() ? "?" + u : "")); } catch {} } // the personal token leaves the address bar once it has done its job
@@ -571,6 +573,23 @@
     try { inviteInfo = await api("GET", `/api/z/${EID}/invites?pid=${encodeURIComponent(v.pid)}`); } catch { /* shown next time */ }
   }
   const inviteLink = (v) => `${location.origin}/z.html?e=${encodeURIComponent(EID)}&from=${seatOf(v.pid)}${inviteCat ? "&c=" + encodeURIComponent(inviteCat) : ""}`;
+  // ---------- 1.8.0 family host: people who ask through this participant's family link wait for them; they can approve until 15 minutes before the game begins ----------
+  const FAM = { list: [], at: -Infinity, note: "", until: 0 };
+  async function loadFamily(v) {
+    if (!v.pid || !(v.cfg.invites && v.cfg.invites.on) || performance.now() - FAM.at < 20000) return;
+    FAM.at = performance.now();
+    try { const r = await api("GET", `/api/z/${EID}/waiting?me=${encodeURIComponent(v.pid)}&device=${encodeURIComponent(myDevice())}`); FAM.list = Array.isArray(r.waiting) ? r.waiting : []; } catch (e) { /* a game without approvals shows nothing */ }
+  }
+  async function famDecide(v, wid, decision) {
+    try { await api("POST", `/api/z/${EID}/waiting/${encodeURIComponent(wid)}`, { decision, me: v.pid, device: myDevice() }); FAM.note = decision === "admit" ? "Approved. They can come in now." : "Done. They are told politely."; }
+    catch (e) { FAM.note = String((e && e.message) || "Please try again in a moment."); }
+    FAM.until = Date.now() + 8000; FAM.at = -Infinity; paint();
+  }
+  const famRows = (v) => {
+    const rows = FAM.list.map((w) => `<li class="zfamrow"><span>${w.firstName ? esc(w.firstName) : "Someone"} (mobile ending ${esc(w.last4)}) wants to join your family.</span> <button type="button" class="zbtn s" data-fam="admit" data-wid="${esc(w.id)}">Approve</button> <button type="button" class="zbtn s alt" data-fam="decline" data-wid="${esc(w.id)}">Not now</button></li>`).join("");
+    return (rows ? `<ul class="zfamlist" aria-label="Waiting for you">${rows}</ul>` : "") + (FAM.note && Date.now() < FAM.until ? `<p class="zsmall" role="status">${esc(FAM.note)}</p>` : "");
+  };
+  const famIntro = (iv) => `<p class="zsmall zfamintro" style="margin:0 0 8px">You have ${iv.per + 1} passes: 1 for you and ${iv.per} for your family and friends. Share this link with them. You get a notification here and can approve their entry up to 15 minutes before the game begins. They play on the phone or laptop they click the link from.</p>`;
   function inviteCard(v) {
     const iv = v.cfg.invites;
     if (!iv || !iv.on || !seatOf(v.pid)) return "";
@@ -583,8 +602,8 @@
     const chips = cats.map((c) => `<button type="button" class="zchip${c.id === inviteCat ? " on" : ""}" data-icat="${esc(c.id)}">${esc(c.label)}</button>`).join("");
     const link = inviteLink(v), kind = (cats.find((c) => c.id === inviteCat) || cats[0]).label.toLowerCase();
     const text = "Join me for Corporate Tambola! Open this link, enter your mobile number and you get your own ticket: " + link;
-    return `<div class="zcard zinvite"><h2>Invite your colleagues / family members</h2>
-      <p class="zsmall" style="margin:0 0 8px">${counter}</p>
+    return `<div class="zcard zinvite"><h2>Family Passes: invite your colleagues / family members</h2>
+      ${famIntro(iv)}${famRows(v)}<p class="zsmall" style="margin:0 0 8px">${counter}</p>
       ${!unl && !left ? "" : `<div class="zsmall" style="margin:0 0 4px">Who are you inviting?</div><div class="zchips">${chips}</div>
       <div class="zlink" id="invlink" style="margin-top:8px">${esc(link)}</div>
       <button class="zbtn s" id="invshare">Share invitation (${esc(kind)})</button>
@@ -594,6 +613,8 @@
       <p class="zsmall" style="margin:8px 0 0">Your guest joins with their own mobile number and gets their own ticket. ${unl ? "" : `Your link stops working after ${iv.per} people have joined through it.`}</p>`}</div>`;
   }
   function bindInvite(v) {
+    document.querySelectorAll("[data-fam]").forEach((b) => (b.onclick = () => famDecide(v, b.getAttribute("data-wid"), b.getAttribute("data-fam"))));
+    loadFamily(v);
     document.querySelectorAll("[data-icat]").forEach((b) => (b.onclick = () => { inviteCat = b.dataset.icat; paint(); }));
     const sh = document.getElementById("invshare"); if (sh) sh.onclick = async () => { const data = { title: "Corporate Tambola", text: "Join me for Corporate Tambola! Open this link, enter your mobile number and you get your own ticket:", url: inviteLink(v) }; try { if (navigator.share) { await navigator.share(data); return; } } catch (e) { if (e && e.name === "AbortError") return; } invCopy(data.text + " " + data.url, "Link copied. Paste it into a message to send it.", data.url); };
     const cp = document.getElementById("invcopy"); if (cp) cp.onclick = () => invCopy(inviteLink(v), "Link copied. Paste it into a message to send it.", inviteLink(v));
@@ -1059,6 +1080,7 @@
       if (window.TBAudio) TBAudio.unlock();
       const ph = document.getElementById("ph"), nm = document.getElementById("nm"), em = document.getElementById("emp"), cc = document.getElementById("cc");
       J.emp = em ? em.value.trim() : J.emp;
+      { const mail = document.getElementById("mail"); J.email = mail ? mail.value.trim() : J.email; }
       J.phone = ph ? ph.value : J.phone; J.name = nm ? nm.value.trim() : J.name;
       if (cc) { J.cc = CT_BY_ISO(cc.value).iso; try { store.set(CC_KEY, J.cc); } catch {} }
       const stop = (m) => { rt.error = m; try { document.activeElement && document.activeElement.blur(); } catch {} paint(); }; // said in place, at once: nothing is sent to the server for a mistake the phone can see

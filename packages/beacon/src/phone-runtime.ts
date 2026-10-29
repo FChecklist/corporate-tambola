@@ -321,9 +321,9 @@ export class PhoneRuntime {
   }
 
   /** Joins with a mobile number. The same number again returns the same participant (and the same ticket). */
-  async join(phone: string, name?: string, invite?: { from?: number; cat?: string }, empId?: string): Promise<boolean> {
+  async join(phone: string, name?: string, invite?: { from?: number; cat?: string }, empId?: string, email?: string): Promise<boolean> {
     try {
-      const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name, ...(empId ? { empId } : {}), device: this.device(), ...(invite && Number.isInteger(invite.from) ? { from: invite.from, cat: invite.cat } : {}) });
+      const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name, ...(empId ? { empId } : {}), ...(email ? { email } : {}), device: this.device(), ...(invite && Number.isInteger(invite.from) ? { from: invite.from, cat: invite.cat } : {}) });
       this.scheduledRound = r.startRound; this.startRound = r.startRound + GRACE_ROUNDS; this.callSeconds = r.callSeconds; this.trackClaims = r.trackClaims !== false;
       if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined || r.opening !== undefined || r.closing !== undefined || r.callMode !== undefined || r.startMode !== undefined || r.afterPrizes !== undefined) this.readCfg(r);
       this.deps.store.set(this.key("pid"), r.pid);
