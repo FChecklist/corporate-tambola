@@ -2,7 +2,7 @@
 .zmsg{text-align:center;color:var(--muted);margin:30vh 0 0}
 .zhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
 .zhead b{font:700 15px var(--sans,inherit);color:var(--wine);display:inline-flex;align-items:center;gap:8px}
-.zhead b::before{content:"";flex:0 0 24px;width:24px;height:24px;border-radius:6px;background:url(/icon-192.png) center/cover}
+.zhead b::before{content:"";flex:0 0 24px;width:24px;height:24px;border-radius:6px;background:url(/icon-192.png?v=4) center/cover}
 .zsnd{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;min-height:36px}
 .zcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
 .zcard h2{margin:0 0 8px;font:700 13px var(--sans,inherit);letter-spacing:.08em;text-transform:uppercase;color:var(--golddt)}
@@ -258,7 +258,7 @@ body:has(#go) #ct-notify{display:none}
 .zbar .zbrand.zdef b{font-size:14px;letter-spacing:.04em;line-height:1.2}
 
 /* Logo: a tiny mark before the name in the default brand strip; same line height, nothing moves. */
-.zbrand.zdef b::before{content:"";display:inline-block;width:18px;height:18px;margin-right:8px;vertical-align:-4px;border-radius:5px;background:url(/icon-192.png) center/cover}
+.zbrand.zdef b::before{content:"";display:inline-block;width:18px;height:18px;margin-right:8px;vertical-align:-4px;border-radius:5px;background:url(/icon-192.png?v=4) center/cover}
 .zbrand.zdef b{white-space:nowrap}
 /* Help Desk pages (helpdesk.html, helpdesk-accept.html, helpdesk-approve.html): a text link is a 40 px tap target, and the small brand line at the top is the page's one main heading. */
 .hdl{display:inline-flex;align-items:center;min-height:40px;padding:0 6px;margin-left:-6px}

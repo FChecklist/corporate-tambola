@@ -471,7 +471,7 @@ describe("Payment Testing page (Rs 1 / US$ 1, buys nothing)", () => {
     const frag = await call("GET", `${v.invoiceUrl}.fragment`); expect(frag.status).toBe(200);
     const fh = await frag.text(); expect(fh).toContain("<style>"); expect(fh).toContain("payment test"); expect(fh).not.toContain("<html"); expect(fh).not.toContain("<!doctype");
     const pdf = await call("GET", `${v.invoiceUrl}.pdf`); expect(pdf.status).toBe(200); expect(pdf.headers.get("content-type")).toBe("application/pdf"); expect(pdf.headers.get("content-disposition")).toContain(v.invoiceNumber);
-    const bytes = new Uint8Array(await pdf.arrayBuffer()); expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-"); expect(bytes.length).toBeGreaterThan(900);
+    const bytes = new Uint8Array(await pdf.arrayBuffer()); expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-"); expect(bytes.length).toBeGreaterThan(900); { const t = Buffer.from(bytes).toString("latin1"); expect(t).toContain("/Subtype /Image"); expect(t).toContain("e23e57"); } // 1.6.8: the invoice PDF carries the Corporate Tambola badge (red #E23E57), not text alone
     expect((await call("POST", `${v.invoiceUrl}/email`, { to: "nope" })).status).toBe(400);
     for (let i = 0; i < 5; i++) expect((await call("POST", `${v.invoiceUrl}/email`, { to: "friend@acme.in" })).status).toBe(200);
     expect((await call("POST", `${v.invoiceUrl}/email`, { to: "friend@acme.in" })).status).toBe(429);

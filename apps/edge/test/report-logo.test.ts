@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { layoutReport, type ReportData } from "../src/report-layout";
+import { readPng } from "../../web/test/png-pixels";
 
 // The organizer's logo and company name are printed on the report PDF (owner order 2026-10-09: "visible in the ticket and all the places, documents").
 const base = (extra: Partial<ReportData> = {}): ReportData => ({
@@ -35,5 +37,19 @@ describe("report PDF carries the organizer's brand", () => {
   });
   test("a damaged logo (wrong number of pixels) is ignored, not embedded", () => {
     expect(text(layoutReport(base({ logoPix: { w: 4, h: 4, hex: "ff00ff" } })))).not.toContain("/Subtype /Image");
+  });
+});
+
+// 1.6.8: the report page draws /logo-512.png on the PDF (small, on white). The PDF must carry the red Corporate Tambola badge, not any older picture.
+describe("report PDF carries the new Corporate Tambola badge as our own logo", () => {
+  const ours = () => { // what report.js does in the browser, here with the file itself: 32 x 32 samples of logo-512.png on white
+    const p = readPng(new Uint8Array(readFileSync(new URL("../../web/public/logo-512.png", import.meta.url)))); let hex = "";
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) { const [r, g, b, a] = p.px(x * 16 + 8, y * 16 + 8); const f = (c: number) => Math.round((c * a + 255 * (255 - a)) / 255).toString(16).padStart(2, "0"); hex += f(r) + f(g) + f(b); }
+    return { w: 32, h: 32, hex };
+  };
+  test("with our logo from the real file: one picture, and the badge red (e23e57) is in it; white corners from the rounded edge", () => {
+    const px = ours(); expect(px.hex.slice(0, 6)).toBe("ffffff"); expect(px.hex).toContain("e23e57");
+    const t = text(layoutReport(base({ ourLogoPix: px })));
+    expect(t).toContain("/Subtype /Image"); expect(t).toContain("e23e57"); expect(t).toContain("(Corporate Tambola)");
   });
 });

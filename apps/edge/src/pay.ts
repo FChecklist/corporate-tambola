@@ -17,6 +17,7 @@ import type { D1, Env } from "./worker";
 import { keepLegalParty } from "./legal";
 import { notifyOwnerOfPaidOrder, ownerAddress } from "./owner-mail";
 import { PdfDoc, NAVY } from "./pdf";
+import { BADGE_PX } from "./badge-px";
 import { ledgerFields, logWebhook, siteOf, type HookRecord } from "./ledger";
 import { partnerCode, phoneHashFor, recordCommission, refCode } from "./partners";
 import { helperRefFor } from "./helpdesk";
@@ -564,7 +565,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     }
     if (req.method === "GET" && ix[2] === ".pdf") {
       const pdf = new PdfDoc(); pdf.footer = `${data.brand.name} · ${r.number}`;
-      pdf.para(data.brand.name, { font: "F2", size: 18, color: NAVY }); pdf.gap(8);
+      pdf.logo(BADGE_PX, pdf.W - pdf.M - 52, pdf.H - 30, 52, 52); /* the Corporate Tambola badge, top right */ pdf.para(data.brand.name, { font: "F2", size: 18, color: NAVY }); pdf.gap(8);
       for (const line of renderInvoiceText(data).split("\n").slice(1)) { if (line.trim()) pdf.para(line, { size: 10 }); else pdf.gap(7); }
       return new Response(pdf.build() as unknown as BodyInit, { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="invoice-${r.number.replace(/[^A-Za-z0-9._-]/g, "_")}.pdf"`, "cache-control": "no-store", "x-robots-tag": "noindex" } });
     }

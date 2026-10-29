@@ -6,9 +6,10 @@ import { withDevice } from "./device";
 import { housekeeping, type Env } from "../src/worker";
 import { handle } from "./with-terms";
 import * as Mails from "../src/mails";
-import { BRAND, footerText, hasFooter, plainToHtml } from "../src/brand";
+import { BRAND, footerText, hasFooter, headerHtml, plainToHtml } from "../src/brand";
 import { sendMail, sendReportMail, sentReports, type PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
+import { readPng, isBadgeRed } from "../../web/test/png-pixels";
 
 const T = Date.UTC(2026, 9, 1, 10, 0, 0);
 const ORIGIN = "https://tambola.test";
@@ -167,3 +168,16 @@ describe("claims register: customer-facing text never says what the build does n
     expect(`${h}${site}`).not.toMatch(/Most popular|2nd most popular/); // the offer price is what is charged, and equals the structured-data price (lowPrice above)
   });
 });
+
+// RELEASE 1.6.8: the logo is the red Corporate Tambola badge in everything we send: the e-mail header, the branded report e-mail, the report page (which draws our logo on the PDF), the game log page, the share card.
+describe("the logo in e-mails, the report PDF and the share card is the red Corporate Tambola badge", () => {
+  const png = (f: string) => readPng(new Uint8Array(readFileSync(join(root, "apps/web/public", f))));
+  test("the e-mail header picture (icon-192.png) is the new badge, 192 x 192, red to the edge", () => { const p = png("icon-192.png"); expect([p.w, p.h]).toEqual([192, 192]); expect(isBadgeRed(p.px(96, 8), 30)).toBe(true); expect(p.px(0, 0)[3]).toBe(0); });
+  test("the report e-mail logo and the report page's own PDF logo (logo-512.png) are the new badge, 512 x 512", () => { const p = png("logo-512.png"); expect([p.w, p.h]).toEqual([512, 512]); expect(isBadgeRed(p.px(256, 20), 30)).toBe(true); });
+  test("the share card (og-tambola.png, 1200 x 630) and the picture in the web-page data (logo-1024.png, the badge) are the new logo; the trust page names the card", () => { const c = png("og-tambola.png"); expect([c.w, c.h]).toEqual([1200, 630]); const p = png("logo-1024.png"); expect([p.w, p.h]).toEqual([1024, 1024]); expect(isBadgeRed(p.px(512, 40), 30)).toBe(true); expect(read("apps/edge/src", "trust-page.ts")).toContain("/og-tambola.png"); });
+  test("the e-mail header, the report e-mail, the report page and the game log page all point at those files", () => {
+    expect(headerHtmlOf()).toContain("/icon-192.png"); expect(read("apps/edge/src/report-email.ts")).toContain("/logo-512.png"); expect(read("apps/web/public/report.js")).toContain("/logo-512.png"); expect(read("apps/web/public/gamelog.js")).toContain("/logo-512.png");
+  });
+  test("the old logo art is nowhere in the sources the server sends", () => { for (const f of ["brand.ts", "report-email.ts", "trust-page.ts", "report-layout.ts", "pdf.ts"]) expect([f, /E8284F|#E8EEFF/.test(read("apps/edge/src", f))]).toEqual([f, false]); });
+});
+function headerHtmlOf() { return headerHtml("https://tambola.test"); }
