@@ -41,7 +41,7 @@ import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { HELPDESK_SCHEMA, HELPER_MANUAL_NOTE, helpdeskCloseStatements, helpdeskRoute, helpdeskSweep, isDeskKeyId, isHelperKey, noteHelperGame } from "./helpdesk";
-import { cleanEmail, approvalRulesOn, EMAIL_UNUSABLE_MESSAGE } from "./approvals";
+import { cleanEmail, approvalRulesOn, EMAIL_ENABLED, EMAIL_UNUSABLE_MESSAGE } from "./approvals";
 import { normEmp, empHashOf, verifyOf, keptPhone, phoneDigits, cleanName as cleanPersonName, PEOPLE_SCHEMA, COHOST_FROM, HOST_FROM, ORG_FROM, COHOST_LIMIT_DEFAULT, COHOST_LIMIT_MIN, COHOST_LIMIT_MAX, WAITING_MAX, addWaiting, chainOf, cleanPhone, fromCodeOf, inviterOf, joinLinkPage, limitOfInviter, listCount, parseFrom, peopleRoute, personByPhone, personByToken, srcOf, waitingWho, type PersonRow } from "./people";
 import { PAYLINK_SCHEMA, PAYLINK_TOKEN, createPayLink, packFor } from "./paylink";
 import { HOST_LINK_TTL_MS, HOST_SCHEMA, confirmHostEmail, emailHashOf, hostForEmail, hostKeyStatus, hostSetupRoute, hostStateRow, identityRow, maskEmail, maskMobile, mintDeviceKey, retireHost } from "./hostsetup";
@@ -1800,7 +1800,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (needIdAfterConsent) return json({ error: "Enter your employee ID.", code: "need-id" }, 400);
     // An open game may also keep an Email ID (1.8.0). Optional here; when it is given it must look right, and one email holds one ticket.
     let joinEmail: string | null = null, emailKey = "";
-    if (!e.closed && approvalRulesOn(e) && b?.email !== undefined && b?.email !== null && String(b.email).trim() !== "") {
+    if (EMAIL_ENABLED && !e.closed && approvalRulesOn(e) && b?.email !== undefined && b?.email !== null && String(b.email).trim() !== "") {
       joinEmail = cleanEmail(b.email);
       if (!joinEmail) return json({ error: "Please check your email ID. It looks incomplete.", code: "bad-email" }, 400);
       emailKey = `email/${eid}/${(await sha("em|" + eid + "|" + joinEmail)).slice(0, 32)}`;

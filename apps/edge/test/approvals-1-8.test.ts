@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
-import { APPROVAL_RULES_FROM_MS, approvalRulesOn, WAIT_LIMIT_MS, FAMILY_CUTOFF_MS, waitingLapsed, familyCutoffPassed, mayDecide, cleanEmail, LAPSED_MESSAGE, FAMILY_CLOSED_MESSAGE, DECLINED_MESSAGE } from "../src/approvals";
+import { EMAIL_ENABLED, APPROVAL_RULES_FROM_MS, approvalRulesOn, WAIT_LIMIT_MS, FAMILY_CUTOFF_MS, waitingLapsed, familyCutoffPassed, mayDecide, cleanEmail, LAPSED_MESSAGE, FAMILY_CLOSED_MESSAGE, DECLINED_MESSAGE } from "../src/approvals";
 import { erasePersonal } from "../src/lifecycle";
+import { openPii } from "../src/pii";
 
 const T = Math.max(Date.UTC(2026, 10, 5, 10, 0, 0), APPROVAL_RULES_FROM_MS + 86_400_000); // a game created after the release instant: the 1.8.0 rules apply
 const GEN = 1692803367;
@@ -13,6 +14,7 @@ const roundAt = (ms: number) => Math.floor((ms / 1000 - GEN) / 3) + 1;
 const roundMs = (r: number) => (GEN + (r - 1) * 3) * 1000;
 const START = roundAt(T) + 1200; // one hour after T
 const START_MS = roundMs(START);
+const EMAIL_TEST = EMAIL_ENABLED ? test : test.skip; // the email tests run when the flag is on (1.8.1); with it off the test below proves the email is ignored
 let env: PayEnv; let ipN = 0;
 const realFetch = globalThis.fetch;
 const call = (method: string, path: string, body?: unknown, key?: string, now = T, extra: Record<string, string> = {}) =>
@@ -80,7 +82,7 @@ describe("a family host can approve up to 15 minutes before the start", () => {
 });
 
 describe("an open game may keep an Email ID", () => {
-  test("a wrong email is refused kindly, a good one is kept, and the same email on another phone is not a second ticket", async () => {
+  EMAIL_TEST("a wrong email is refused kindly, a good one is kept, and the same email on another phone is not a second ticket", async () => {
     await setup();
     const bad = await joinAs(1, { email: "asha@" }); expect(bad.status).toBe(400); expect((await j(bad)).code).toBe("bad-email");
     expect((await joinAs(1, { email: "Asha@Acme.com" })).status).toBe(200);
@@ -103,7 +105,7 @@ describe("real engine runs of the other new paths: reject, cap, and deletion", (
     expect((await joinAs(1, { email: "a@acme.com" })).status).toBe(200); expect((await joinAs(2, { email: "b@acme.com" })).status).toBe(200);
     const third = await joinAs(3, { email: "c@acme.com" }); expect(third.status).toBe(409);
   });
-  test("deletion: the email key, the people and the waiting requests are gone when the game's personal data is erased", async () => {
+  EMAIL_TEST("deletion: the email key, the people and the waiting requests are gone when the game's personal data is erased", async () => {
     const t = await setup(); await joinAs(1, { email: "gone@acme.com" });
     const kv = () => (env as any).DB.prepare("SELECT COUNT(*) AS c FROM kv WHERE k LIKE 'email/APP-1/%'").first();
     expect((await kv()).c).toBe(1);
@@ -153,7 +155,7 @@ describe("1.8.0 audit fixes", () => {
     expect((await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM kv WHERE k LIKE 'email/APP-1/%'").first()).c).toBe(0);
   });
 
-  test("4. the email-held answer is generic, and two phones asking at the same instant cannot both get the email", async () => {
+  EMAIL_TEST("4. the email-held answer is generic, and two phones asking at the same instant cannot both get the email", async () => {
     await setup();
     const both = await Promise.all([joinAs(1, { email: "race@acme.com" }), joinAs(2, { email: "race@acme.com" })]);
     expect(both.map((r) => r.status).sort()).toEqual([200, 409]);
@@ -165,7 +167,7 @@ describe("1.8.0 audit fixes", () => {
     expect((await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM kv WHERE k LIKE 'email/APP-1/%'").first()).c).toBe(0);
   });
 
-  test("5. when a person leaves, their email is free again for another phone", async () => {
+  EMAIL_TEST("5. when a person leaves, their email is free again for another phone", async () => {
     await setup(); const a = await j(await joinAs(1, { email: "leave@acme.com" })); expect(a.pid).toBeTruthy();
     expect((await joinAs(2, { email: "leave@acme.com" })).status).toBe(409);
     const left = await call("POST", "/api/z/APP-1/leave", { pid: a.pid, device: dev(1) }); expect(left.status).toBe(200);
@@ -208,5 +210,18 @@ describe("the release instant (set to the real deploy time right before deploy)"
     expect(Number.isInteger(APPROVAL_RULES_FROM_MS)).toBe(true); expect(APPROVAL_RULES_FROM_MS).toBeGreaterThan(Date.UTC(2026, 9, 29));
     expect(approvalRulesOn({ created_ms: APPROVAL_RULES_FROM_MS - 1 })).toBe(false); expect(approvalRulesOn({ created_ms: APPROVAL_RULES_FROM_MS })).toBe(true);
     expect(approvalRulesOn({ created_ms: null })).toBe(false); expect(approvalRulesOn(null)).toBe(false);
+  });
+});
+
+describe("1.8.0: the Email ID is OFF (EMAIL_ENABLED = false)", () => {
+  test("with the flag off a join that carries an email stores nothing and gets the same result as one without", async () => {
+    expect(EMAIL_ENABLED).toBe(false);
+    await setup();
+    const withMail = await joinAs(1, { email: "asha@acme.com" }); const bad = await joinAs(2, { email: "asha@" }); const twice = await joinAs(3, { email: "asha@acme.com" }); const plain = await joinAs(4);
+    expect([withMail.status, bad.status, twice.status, plain.status]).toEqual([200, 200, 200, 200]); // no refusal, no "bad email", no "email in use"
+    expect((await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM kv WHERE k LIKE 'email/APP-1/%'").first()).c).toBe(0); // no key
+    const rows = (await (env as any).DB.prepare("SELECT pii FROM participant WHERE eid='APP-1'").all()).results as any[];
+    expect(rows.length).toBe(4);
+    for (const r of rows) expect((await openPii(env as any, r.pii))?.email).toBeUndefined(); // the sealed details hold no email
   });
 });
