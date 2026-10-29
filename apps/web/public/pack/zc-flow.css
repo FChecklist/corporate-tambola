@@ -130,3 +130,4 @@ a.zf-add { display: inline-flex; align-items: center; text-decoration: none; }
 }
 @media (max-width: 480px) { .zf-ball { width: 64px; height: 64px; line-height: 64px; font-size: 26px; } .zf-disc { font-size: 10px; } }
 .zf-sec .cbc-box, .zf-sec .cbc-box span, .zf-sec .tb-row label { color: inherit; }
+@media (prefers-color-scheme: dark) { .zf-sec .tb-err { color: #ffb3b3; } }
