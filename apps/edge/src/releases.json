@@ -1,14 +1,16 @@
 [
   {
-    "version": "1.6.8",
+    "version": "1.7.0",
     "date": "2026-10-29",
     "commit": "this release",
-    "title": "One clean top menu and the new logo",
+    "title": "One clean top menu, the new logo and fixes from user feedback",
     "changes": [
       "The top menu has six items: How it works, Free demo game, Guide, Brochure, Refer & earn, Log in. The same menu is on the front page and on every information page. On a phone it opens from a Menu button",
       "The Corporate Tambola badge (red ticket badge, CORPORATE above Tambola) is now the logo everywhere: the website, the app icon on phones, the share picture, e-mails, game reports, the brochure and the organizer manual",
       "Pricing, the free assistant, the video and WhatsApp us are no longer in the top menu. They are still on the front page, in the footer and on the Contact page",
-      "Every page footer now shows the version and the release date and time, for example: Version 1.6.8, released 29 Oct 2026, 15:30 IST"
+      "Every page footer now shows the version and the release date and time, for example: Version 1.7.0, released 29 Oct 2026, 15:30 IST",
+      "Clearer fairness wording (no one knows the next number) and a shorter footer that names who owns the site and who collects payments",
+      "Fixes from user feedback: clearer messages when a Co-host link is for another game, and a reminder e-mail for a game still in draft"
     ]
   }, {
     "version": "1.6.7",

@@ -36,6 +36,7 @@ const SAMPLES: Record<string, () => Mails.BuiltMail> = {
   hostLinkMail: () => Mails.hostLinkMail(ORIGIN, "cth_" + "e".repeat(48), "Priya"),
   helpDeskPublishedMail: () => Mails.helpDeskPublishedMail(ORIGIN, { eid: "GAME-1", hostKey: "cth_" + "f".repeat(48), aiHostKey: "cth_" + "d".repeat(48), expiresMs: T + 86_400_000 }),
   newUseAlertMail: () => Mails.newUseAlertMail({ when: "now", country: "IN", program: "x", kind: "AI", origin: ORIGIN }),
+  draftReminderMail: () => Mails.draftReminderMail(ORIGIN, { eid: "GAME-1", hours: 24, startMs: T + 86_400_000 }),
   signInMail: () => Mails.signInMail(ORIGIN, "123456", "c".repeat(48)),
 };
 

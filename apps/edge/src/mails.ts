@@ -148,13 +148,15 @@ ${card("2", "Tap the button", `<p style="margin:0 0 12px;font-size:14px;line-hei
 }
 
 /** WP-04 TA13/S14: the reminder to the organizer of a game that is still a draft, about 24 hours or about 2 hours before the start. Plain words, no key in it: it only points to the console. */
-export function draftReminderMail(origin: string, o: { eid: string; hours: 24 | 2; startMs: number }): { subject: string; text: string } {
+export function draftReminderMail(origin: string, o: { eid: string; hours: 24 | 2; startMs: number }): BuiltMail {
   const when = o.hours === 24 ? "about 24 hours" : "about 2 hours";
   const text = [
     `Your game ${o.eid} starts in ${when}: ${istStamp(o.startMs)}.`, "",
     "It is not published yet: it is still a draft. Nobody can see it or join it until you publish it.", "",
     "What to do:", "1. Open your console: " + `${origin}/zc.html?e=${encodeURIComponent(o.eid)}`, "2. Go to step 7, Check and publish.", "3. Press Publish. Publishing is free.", "",
     o.hours === 24 ? "Then send the guest link to your people. If the game is not for this date, you can change the date in step 1." : "If you publish now, send the guest link at once. If you do not want this game, ignore this e-mail. We will not remind you again.", "",
-  ].join("\n");
-  return { subject: `Your game ${o.eid} is not published yet: it starts in ${when}`, text };
+  ].join("\n") + "\n\n" + footerText(origin) + "\n";
+  const html = pageHtml("Your game is not published yet", `<tr><td style="padding:20px 22px 4px;"><h1 style="margin:0;font-size:24px;line-height:1.25;color:#0B3D91;">Your game ${esc(o.eid)} is not published yet</h1><p style="margin:10px 0 0;font-size:15px;line-height:1.5;">It starts in ${when}: ${esc(istStamp(o.startMs))}. It is still a draft. Nobody can see it or join it until you publish it.</p></td></tr>
+<tr><td style="padding:12px 22px 20px;font-size:15px;line-height:1.5;"><p style="margin:0 0 8px;">Open your console, go to step 7, Check and publish, and press Publish. Publishing is free.</p><a href="${esc(origin + "/zc.html?e=" + encodeURIComponent(o.eid))}" style="display:inline-block;background:#E0B872;color:#0B3D91;font-weight:700;font-size:16px;text-decoration:none;padding:12px 22px;border-radius:8px;">Open my console</a></td></tr>`, origin);
+  return { subject: `Your game ${o.eid} is not published yet: it starts in ${when}`, text, html };
 }
