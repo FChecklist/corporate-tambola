@@ -1866,9 +1866,13 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (who.blocked) return json({ error: "You were removed from this game by the organizer.", code: "removed", removed: true }, 403);
     if (checkinRequired(e)) { const st = seatOfPidText(b.pid); if (!st || (await presentMsOf(env.DB, eid!, st)) === null) return json({ error: "Mark yourself present first: the check-in is on your ticket page.", code: "not-present" }, 403); } if (checkinRequired(e) && !(await deviceMatches(env, eid!, b.pid, b.device))) return json({ error: "This ticket belongs to another phone.", code: "other-phone" }, 403); // the participant id is public: only the ticket's own phone may act for it
     const have = (await env.DB.prepare("SELECT COUNT(*) AS c FROM bogey WHERE eid=? AND pid=? AND pattern=? AND round=?").bind(eid, b.pid, b.pattern, round).first<{ c: number }>())?.c ?? 0;
-    if (have >= 2) return json({ ok: true, atMs: now, stored: 0 }); // two are enough to put the ticket out: nothing more is written
+    // A15: the phone numbers its Bogeys on a house (1, then 2). A Bogey it sends AGAIN (the answer was lost) is the same Bogey: stored once, answered with the time it was stored. An older phone sends no number: two at most, as before.
+    const nth = Number.isInteger(b.n) && b.n >= 1 ? Math.min(b.n, 2) : 2, again = async () => { const o = await env.DB.prepare("SELECT at_ms FROM bogey WHERE eid=? AND pid=? AND pattern=? AND round=? ORDER BY id LIMIT 1 OFFSET ?").bind(eid, b.pid, b.pattern, round, nth - 1).first<{ at_ms: number }>(); return json({ ok: true, atMs: o?.at_ms ?? now, stored: 0 }); };
+    if (have >= 2 && !(Number.isInteger(b.n) && b.n >= 1)) return json({ ok: true, atMs: now, stored: 0 }); // two are enough to put the ticket out: nothing more is written
+    if (have >= nth) return again();
     if (!(await spend(env, now))) return json({ error: "Busy day. Your claim is kept on your phone and will be sent again.", stored: 0 }, 503);
-    await env.DB.prepare("INSERT INTO bogey(eid,pid,pattern,round,at_ms) VALUES(?,?,?,?,?)").bind(eid, b.pid, b.pattern, round, now).run();
+    const put = await env.DB.prepare("INSERT INTO bogey(eid,pid,pattern,round,at_ms) SELECT ?,?,?,?,? WHERE (SELECT COUNT(*) FROM bogey WHERE eid=? AND pid=? AND pattern=? AND round=?) < ?").bind(eid, b.pid, b.pattern, round, now, eid, b.pid, b.pattern, round, nth).run(); // one statement: two calls at the same moment cannot both pass the count
+    if (put.meta && put.meta.changes === 0) return again();
     await bumpCv(env.DB, eid!);
     return json({ ok: true, atMs: now, stored: 1 });
   }

@@ -203,7 +203,7 @@ export class PhoneRuntime {
   /** "round:house" -> wrong claims (Bogeys) on it; at BOGEYS_OUT the ticket is out of that house for the round */
   private bogeys = new Map<string, number>();
   /** Bogey records the store has not taken yet (sent again on the next tick, like a claim) */
-  private bogeyUnsent: { pattern: PatternKey; round: number }[] = [];
+  private bogeyUnsent: { pattern: PatternKey; round: number; n: number }[] = [];
   private loadMarks() {
     this.marks.clear(); this.pressed.clear(); this.bogeys.clear();
     try {
@@ -230,7 +230,7 @@ export class PhoneRuntime {
     while (this.bogeyUnsent.length && this.pid) {
       const b = this.bogeyUnsent[0]!;
       try {
-        const ans = this.trackClaims ? await this.deps.api("POST", `/api/z/${this.eid}/bogey`, { pid: this.pid, device: this.device(), pattern: b.pattern, ...(b.round > 1 ? { round: b.round } : {}) }) : null;
+        const ans = this.trackClaims ? await this.deps.api("POST", `/api/z/${this.eid}/bogey`, { pid: this.pid, device: this.device(), pattern: b.pattern, n: b.n, ...(b.round > 1 ? { round: b.round } : {}) }) : null; // n = the number of this Bogey on this house (1, 2): sent again after a lost answer, the store keeps it once
         this.bogeyUnsent.shift();
         if (ans && Number(ans.atMs) > 0) this.noteClaims([{ pid: this.pid, pattern: b.pattern, round: b.round, idx: -1, atMs: Number(ans.atMs), bogey: true }]);
       } catch { break; /* the next tick tries again */ }
@@ -272,7 +272,7 @@ export class PhoneRuntime {
     if (wrong === undefined && idx >= 0 && idx < log.length - 1) { this.lateNote = { text: CLAIM_LATE_TEXT, atLen: log.length }; return { ok: false, bogey: false, late: true, error: CLAIM_LATE_TEXT }; } // THE RULE: a prize completed on number N is claimed before number N+1 is announced. No penalty, nothing is sent.
     if (wrong !== undefined || idx < 0) { // a Bogey: the marks do not stand up against the called numbers. The store is told (every phone must know, so the winners agree).
       const n = this.bogeysOn(key) + 1; this.bogeys.set(id, n); this.saveMarks();
-      this.bogeyUnsent.push({ pattern: key, round: this.cur }); await this.sendBogeys();
+      this.bogeyUnsent.push({ pattern: key, round: this.cur, n }); await this.sendBogeys();
       const why = wrong !== undefined ? `Bogey! ${wrong} has not been called. Unmark it and keep playing.` : "Bogey! This prize is not complete on the called numbers. Check your ticket and keep playing.";
       return n >= BOGEYS_OUT ? { ok: false, bogey: true, out: true, error: `${why} Two Bogeys on ${label}: this ticket is out of the ${label} prize. Other prizes are still open to you.` } : { ok: false, bogey: true, error: why };
     }
