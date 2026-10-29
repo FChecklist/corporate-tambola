@@ -406,3 +406,48 @@ body:has(#claimbar) .ctg-back{display:none}
 .zmrow .zdanger{background:#b3261e;color:#fff}
 
 .zsuper{border:2px solid #C8102E;border-radius:14px;padding:8px;margin:8px 0}.zsuper .zsuperline{margin:4px 0;font-size:15px}
+
+/* 1.7.1 player look (owner 30 Oct, approved mock): two themes on the whole page, html[data-pt]. The ticket is the only rich element; everything else is flat and quiet. Display only. */
+html[data-pt=retro]{--ink:#FBF1DC;--ink2:#EBDDBE;--muted:#D9C7A0;--faint:#B9A57C;--surface:transparent;--line:rgba(224,184,114,.28);--golddt:#E0B872;--wine:#F3D9A4;--info:#CFE0FF;--infobg:rgba(255,255,255,.08);--warn:#FFE3A1;--warnbg:rgba(255,255,255,.08);--ok:#BFF0D6;--okbg:rgba(255,255,255,.08);--bad:#FFC9C4;--badbg:rgba(255,255,255,.08)}
+html[data-pt=modern]{--ink:#EAF0FF;--ink2:#C9D4F5;--muted:#AEB8E0;--faint:#8E98C4;--surface:transparent;--line:rgba(140,170,255,.28);--golddt:#7FE7F2;--wine:#E7D5FF;--info:#CFE0FF;--infobg:rgba(255,255,255,.08);--warn:#FFE3A1;--warnbg:rgba(255,255,255,.08);--ok:#BFF0D6;--okbg:rgba(255,255,255,.08);--bad:#FFC9C4;--badbg:rgba(255,255,255,.08)}
+html[data-pt=retro] body{background:radial-gradient(120% 80% at 50% 0,#6B1429 0,#3E0A1A 60%,#2A0711 100%) fixed}
+html[data-pt=modern] body{background:linear-gradient(180deg,#1B1747 0,#12113A 55%,#0C0B2A 100%) fixed}
+html[data-pt] .zcard{background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;box-shadow:none;padding:12px 2px}
+html[data-pt] .zcard h2{color:var(--golddt)}
+html[data-pt] .zhead b{color:var(--golddt)}
+html[data-pt] .zapp a{color:var(--golddt)}
+html[data-pt] input,html[data-pt] select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--line)}
+html[data-pt=retro] .zbtn{background:linear-gradient(180deg,#E8C27A,#B8894D);color:#2E0812;border:0;border-radius:999px}
+html[data-pt=modern] .zbtn{background:linear-gradient(90deg,#27C9E6,#7B5CFF,#E0489A);color:#fff;border:0;border-radius:999px}
+html[data-pt] .zticket:not(.zx){padding:6px;border-radius:12px}
+html[data-pt=retro] .zticket:not(.zx){background:#FBF1DC;border:3px double #B8894D}
+html[data-pt=modern] .zticket:not(.zx){background:rgba(255,255,255,.08);border:1px solid rgba(140,170,255,.4)}
+html[data-pt] .zticket>div{font-size:16px;min-height:46px;position:relative}
+html[data-pt=modern] .zticket>div{border-radius:50%;color:#EAF0FF;background:rgba(255,255,255,.06);border:0}
+html[data-pt=retro] .zticket>div{border-radius:2px;color:#2E0812}
+html[data-pt] .zticket>div.e{background:transparent}
+/* a called (crossed) number keeps its number and gets a thin cross, in both looks */
+html[data-pt] .zticket>div.m{background:inherit;box-shadow:none}
+html[data-pt=retro] .zticket>div.m{background:#F6EFE0;color:#2E0812}
+html[data-pt=modern] .zticket>div.m{background:rgba(255,255,255,.06);color:#EAF0FF}
+html[data-pt=modern] .zticket>div.m::before,html[data-pt=modern] .zticket>div.m::after{background:#FF6FAE}
+html[data-pt] .zticket>div.m.w{background:linear-gradient(135deg,#FFE08A,#FFB703);color:#2A1B00}
+html[data-pt] .zbtn.zdanger{background:#b3261e;color:#fff}
+html[data-pt] .zbtn.alt{background:transparent;border:2px solid var(--golddt);color:var(--ink)}
+html[data-pt] .zbig{width:64px;height:64px;font-size:30px}
+html[data-pt] .zball{padding:2px 0}
+/* Ticket A | Ticket B: the one not being played is greyed (tap it or its button to switch); both keep marking */
+.zplaying{margin:8px 0;font-size:14px;color:var(--muted)}
+.zpl{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:5px 12px;min-height:44px;font:inherit;cursor:pointer}
+.zpl[aria-pressed=true]{background:var(--golddt);color:#2E0812;border-color:transparent;font-weight:700}
+.ztkwrap.zdim{opacity:.6;filter:grayscale(.8)}
+.zwelcome{margin:0 0 10px;font-size:16px;line-height:1.5}
+.zshare{margin:6px 0;padding:8px 12px;border:1px solid var(--line);border-radius:999px;text-align:center;font-size:14px}
+html[data-pt] .zapp{color:var(--ink)}
+html[data-pt] .zsmall,html[data-pt] .zapp p{color:var(--muted)}
+html[data-pt] .zapp label{color:var(--ink2)}
+html[data-pt] .rt-bar a,html[data-pt] .rt-link,html[data-pt] .rfoot a{color:var(--golddt)}
+html[data-pt] .zcount,html[data-pt] .zwait .zcount{color:var(--golddt);background:transparent}
+html[data-pt] .zcard h2{background:transparent;padding:0}
+html[data-pt] .zwait,html[data-pt] .zcard.zwait{background:transparent}
+html[data-pt] .zbig{background:radial-gradient(circle at 35% 30%,#FFE9A8,#E0B872 60%,#B8894D);color:#2E0812}

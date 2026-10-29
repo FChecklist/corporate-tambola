@@ -177,6 +177,13 @@
   };
   const BUSY_TRIES = 15;
   const INAPP = /Instagram|FBAN|FBAV|LinkedInApp|Teams|Outlook|MicroMessenger|; wv\)/i.test(String(navigator.userAgent || "")); // a link opened inside another app's own browser: opening it later in Chrome or Safari looks like a second phone
+  // 1.7.1 landing: who invites you, when, and what to type (display only; the join itself is unchanged)
+  const welcomeLine = (personal) => {
+    const co = INFO.brand && INFO.brand.name ? INFO.brand.name : "your company";
+    let when = ""; if (INFO.startMs) { try { when = " on " + new Date(INFO.startMs).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short" }); } catch (e) {} }
+    const vm = INFO.verify || "mobile", what = vm === "id" ? "your employee ID" : vm === "either" ? "your employee ID or your mobile number" : "your mobile number";
+    return `<p class="zwelcome" id="zwelcome"><b>Welcome!</b> You are invited to join the Corporate Tambola (Housie) organized by ${esc(co)}${esc(when)}. ${personal ? "Press the button to get your ticket." : "To join, type " + what + "."}</p>`;
+  };
   const joinView = (msg) => {
     if (J.mode === "removed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>You are not on this game's list</h2><p class="zsmall" style="margin:0">You were removed from this game, so there is no ticket for you here. If you think this is a mistake, please ask the person who invited you.</p></div>`;
     if (J.mode === "gone") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This link is not active any more</h2><p class="zsmall" style="margin:0">Please ask the person who invited you for a new link.</p></div>`;
@@ -186,6 +193,7 @@
     const personal = !!TOKEN && J.mode !== "needPhone"; // a personal link is made for one person: no number to type unless the server asks
     return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div>
     <div class="zcard zform zjoin"><h2>Join the game</h2>
+    ${welcomeLine(personal)}
     <ol class="zsteps" aria-label="How to join"><li><b>1</b><span>Tick the boxes</span></li><li><b>2</b><span>${personal ? "Press the button" : "Type your number"}</span></li><li><b>3</b><span>Get your ticket</span></li></ol><p class="zsmall zdnd" id="dndtip">Tip: turn on Do Not Disturb so other apps do not interrupt your game.</p>
     ${lateTip()}<p class="zsmall" id="soundtip" style="margin:0 0 6px">Sound is off, so your phone stays quiet in the office. To hear the numbers read out, press Sound on your ticket page.</p><p class="zgoalline" style="margin:0 0 6px">Numbers are called one by one. Tap each one on your ticket as it is called. When a row or the whole ticket is complete, press Claim before the next number: the software checks it, no need to shout.</p>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
     ${INAPP ? `<p class="zsmall" style="margin:0 0 8px">Tip: if this link opened inside another app, open it in Chrome or Safari and always use that same one for this game.</p>` : ""}${J.mode === "needPhone" && !msg ? `<div class="zbanner info" role="status" style="margin:0 0 8px">${J.note ? esc(J.note) : "This link was already opened on another phone. Please type your mobile number to get your ticket."}</div>` : ""}
@@ -265,6 +273,8 @@
   const demoTag = () => (isDemoGame() ? ' <span class="zdemotag">DEMO GAME</span>' : "");
   // Real housie: the ticket never marks itself. Each number is a button the player taps when it is called (`marks` = what they tapped); a tap on a number not called yet is refused in place.
   const ticketHtml = (t, marks, label, win) => `<div class="zticket${LOOK === "modern" ? " modern" : ""}${isDemoGame() ? " zdemogame" : ""}" aria-label="${label}${isDemoGame() ? " (demo game)" : ""}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div role="button" tabindex="0" data-tap="${v}" aria-pressed="${marks.has(v)}" aria-label="${v}${marks.has(v) ? ", marked" : ""}" class="${marks.has(v) ? "m" : ""}${marks.has(v) && NEWMARK === v ? " pop" : ""}${win && win.has(v) && marks.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;
+  let TPLAY = "A"; // 1.7.1: which of the two tickets is being played; the other is greyed out (both keep marking)
+  const playingSwitch = () => `<div class="zplaying" role="group" aria-label="Playing">Playing: <button type="button" class="zpl" data-tpbtn="A" aria-pressed="${TPLAY === "A"}">Ticket A</button> <button type="button" class="zpl" data-tpbtn="B" aria-pressed="${TPLAY === "B"}">Ticket B</button></div>`;
   // ---------- Super Bumper: two tickets, ONE Super Ticket of 6 lines (A lines 1-3, B lines 1-3). Display only: the numbers called and the crossed numbers are the same as before ----------
   const superOn = (v) => {
     if (v.tickets.length !== 2 || !ZG.prizeStatus || !v.cfg || !v.cfg.rewards) return false;
@@ -280,6 +290,7 @@
   const RULE = ZG.CLAIM_RULE_TEXT || "Press Claim before the next number is called.";
   let NEWMARK = 0; // the number just tapped: its place on the ticket is stamped
   let LOOK = store.get("ctz-look") === "modern" ? "modern" : "retro"; // the player's choice of ticket look; the Retro look is the default
+  try { document.documentElement.setAttribute("data-pt", LOOK); } catch (e) {} // 1.7.1: the whole page follows the chosen look (Retro | Modern)
   const lookPicker = () => `<div class="zlook" role="radiogroup" aria-label="Ticket look"><span class="zlooklbl">Ticket look</span><label class="zlookopt"><input type="radio" name="zlook" value="retro"${LOOK === "retro" ? " checked" : ""}> Retro look</label><label class="zlookopt"><input type="radio" name="zlook" value="modern"${LOOK === "modern" ? " checked" : ""}> Modern look</label></div>`;
   // a refusal shown in place on the ticket card (a tap on a number not called yet, a Bogey): the guide's own words, kept for a few seconds across redraws
   let TAP = null;
@@ -460,7 +471,7 @@
   function finalCard(v) {
     if (DEMO) return `<div class="zcard zfinal"><h2>That was the video <span class="zdemotag">VIDEO</span></h2><div class="zfbig">${PRIZES.length ? "You won Four corners." : "You saw how a game runs."}</div>${PRIZES.length ? "" : `<p class="zsmall" style="margin:0 0 6px">Next time tap each number as it is called and press Claim when the four corners are marked: that is how a prize is won.</p>`}<p class="zsmall" style="font-size:15px;margin:6px 0 10px">A real game has 90 numbers, many prizes, your own brand messages and videos, lucky draws and a report. You build it in about five minutes and nobody pays until you are ready.</p><a class="zbtn" style="display:inline-flex;align-items:center;text-decoration:none" href="/">Create my game</a> <button class="zbtn s alt" id="dagain2" type="button">Run the video again</button> <button class="zbtn s alt" id="dcopy2" type="button">Copy the demo link</button></div>`;
     const n = PRIZES.length;
-    return `<div class="zcard zfinal"><h2>Game complete${demoTag()}</h2>
+    return `<p class="zshare" id="zshare">Thank you for playing the game. You can recommend this game to others.</p><div class="zcard zfinal"><h2>Game complete${demoTag()}</h2>
       <div class="zmedal" aria-hidden="true">${n ? "&#127942;" : "&#127922;"}</div>
       <div class="zfbig">${n ? "You won " + n + (n === 1 ? " prize!" : " prizes!") : "Well played!"}</div>
       <p class="zsmall zthanks">Thank you for joining our extended family of Corporate Tambola.</p>
@@ -863,7 +874,7 @@
     const chk = v.pendingChecks > 0 ? `<p class="zsmall">Double-checking ${v.pendingChecks} earlier number${v.pendingChecks === 1 ? "" : "s"} in the background.</p>` : "";
     const curWins = v.won.filter((w) => w.round === v.round), winSet = new Set(curWins.flatMap((w) => w.cells));
     const ribbon = curWins.length ? `<div class="zwin" role="status">&#127881; Congratulations! You won ${curWins.map((w) => esc(lineName(v.cfg, w.pattern, w.ordinal))).join(", ")}${curWins.some((w) => w.text) ? " &middot; " + curWins.filter((w) => w.text).map((w) => esc(w.text)).join(", ") : ""}</div>` : "";
-    const tix0 = (v.tickets.length ? lookPicker() : "") + v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : DEMO ? "Video ticket" : "Your ticket", winSet)).join("");
+    const tix0 = (v.tickets.length ? lookPicker() : "") + (v.tickets.length === 2 && !superOn(v) ? playingSwitch() : "") + v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : DEMO ? "Video ticket" : "Your ticket", winSet)).map((h, i) => (v.tickets.length === 2 && !superOn(v) ? `<div class="ztkwrap${"AB"[i] === TPLAY ? "" : " zdim"}" data-tpbtn="${"AB"[i]}">${h}</div>` : h)).join("");
     const tix = superOn(v) ? superWrap(called, tix0, v.tickets) : tix0; // Super Bumper: the two tickets are shown as ONE Super Ticket of 6 lines (owner 30 Oct); nothing else changes
     const sndBtn = `<button class="zsnd zsndin" id="snd" aria-pressed="${sound}">${!sound ? "&#128263; Sound off" : !window.TBAudio || TBAudio.unlocked ? "&#128266; Sound on" : "&#128266; Tap for sound"}</button>`;
     return `${brandStrip(sndBtn)}<div class="zplay">
@@ -1010,7 +1021,8 @@
       else { TAP = null; NEWMARK = r.marked && MOTION() ? n : 0; try { navigator.vibrate && navigator.vibrate(20); } catch {} }
       paint(); NEWMARK = 0;
     };
-    document.querySelectorAll("input[name=zlook]").forEach((r) => (r.onchange = () => { LOOK = r.value === "modern" ? "modern" : "retro"; store.set("ctz-look", LOOK); paint(); }));
+    document.querySelectorAll("[data-tpbtn]").forEach((b) => (b.onclick = (ev) => { if (ev.target && ev.target.closest && ev.target.closest("[data-tap]")) return; TPLAY = b.getAttribute("data-tpbtn") === "B" ? "B" : "A"; paint(); }));
+    document.querySelectorAll("input[name=zlook]").forEach((r) => (r.onchange = () => { LOOK = r.value === "modern" ? "modern" : "retro"; store.set("ctz-look", LOOK); document.documentElement.setAttribute("data-pt", LOOK); paint(); }));
     document.querySelectorAll("[data-tap]").forEach((el) => { el.onclick = () => tap(el); el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tap(el); } }; });
     { const c = document.getElementById("bgcancel"), s = document.getElementById("bgsubmit"); if (c) c.onclick = () => { BOGEYASK = null; paint(); }; if (s) s.onclick = async () => { const k = BOGEYASK; BOGEYASK = null; await pressClaim(k, null); }; }
     document.querySelectorAll("[data-claim]").forEach((b) => (b.onclick = async () => {
