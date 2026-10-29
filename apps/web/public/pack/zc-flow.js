@@ -596,6 +596,7 @@
     box.append(el("label", { for: "zf-pemail", text: "Your email ID" }), el("input", { type: "email", id: "zf-pemail", autocomplete: "email", value: pub.email, oninput: (e) => { pub.email = e.target.value; } }));
     box.append(el("label", { for: "zf-pphone", text: "Your mobile number" }), el("input", { type: "tel", id: "zf-pphone", autocomplete: "tel", placeholder: "98765 43210", value: pub.phone, oninput: (e) => { pub.phone = e.target.value; } }));
     const consent = el("div", { id: "zf-consent" });
+    let terms = null; // the game's own terms box (TermsBox), when it has that kind instead of CBConsent
     if (window.CBConsent) consent.innerHTML = window.CBConsent.html("K1");
     box.append(consent);
     const go = el("button", { type: "button", class: "zf-go", id: "zf-publish", "data-needs": "K1", onclick: async () => {
@@ -604,7 +605,7 @@
       if (!state.eid) { msg.textContent = "Please save step 1 first."; return; }
       go.disabled = true; msg.textContent = "Publishing…";
       try {
-        const pr = await call("POST", `/api/z/${state.eid}/publish`, { email: pub.email.trim(), phone: pub.phone, consent: window.CBConsent ? window.CBConsent.payload(consent, "K1") : undefined });
+        const pr = await call("POST", `/api/z/${state.eid}/publish`, { email: pub.email.trim(), phone: pub.phone, consent: window.CBConsent ? window.CBConsent.payload(consent, "K1") : terms ? terms.terms() : undefined });
         try { if (window.CTK) window.CTK.set("ctz-email", pub.email.trim()); else sessionStorage.setItem("ctz-email", pub.email.trim()); } catch { /* optional */ }
         state.info = { published: true, paid: !!(pr && pr.paid), payUrl: pr && pr.payUrl, shareUrl: pr && pr.shareUrl };
         done(5);
@@ -612,6 +613,7 @@
     } }, "Publish");
     box.append(msg, go);
     if (window.CBConsent) window.CBConsent.wire(consent, "K1", {}, go); // Publish waits for the tick
+    else if (window.TermsBox) { go.disabled = true; window.TermsBox.mount(consent, "K1", { base: BASE, btn: go }).then((x) => { terms = x; }); } // same wait, with the wording the game's server gives
   };
 
   /* ---- Game dashboard, Game ID bar, Host / Co-host pages ---- */
