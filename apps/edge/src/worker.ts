@@ -19,7 +19,7 @@ import { deviceMatches, checkinRequired, checkinRoute, presenceRoute, presentMsO
 import { TERMS_VERSION } from "./brand";
 import RELEASES from "./releases.json";
 import { CONSENT_SCHEMA, consentMissing, recordConsent, consentFromSeat, hasConsent, CONSENT_VERSION } from "./consent";
-import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, hostLinkMail, newUseAlertMail, signInMail } from "./mails";
+import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, draftReminderMail, hostLinkMail, newUseAlertMail, signInMail } from "./mails";
 import { cancelGame, cancelPreview, entitlementWindowEndMs, paidWindowEndMs, reopenGame, teamEmails } from "./cancel";
 import { LEGAL_SCHEMA } from "./legal";
 import { GAME_RECORD_SCHEMA, readGameRecords } from "./gamerecord";
@@ -519,6 +519,26 @@ export async function remindUnpaid(env: Env, now: number): Promise<void> {
     }
   } catch { /* tried again at the next tick */ }
 }
+/** WP-04 TA13/S14: games that are still DRAFTS (not published, not paid, not cancelled, not a rehearsal) and start in the future: the organizer is e-mailed once at about 24 hours and once at about 2 hours before the start.
+ *  A draft made less than 30 minutes ago is left alone (the organizer is still working on it). A draft made late (under 2 hours to go) gets the 2-hour mail only. Each mail is sent once (a kv flag per game).
+ *  Run by runTick (the scheduled job, and the lazy tick). Published unpaid games have their own reminder: remindUnpaid. */
+export async function remindDrafts(env: Env, now: number): Promise<void> {
+  try {
+    const rows = await env.DB.prepare("SELECT e.id, e.org, e.start_round, e.created_ms FROM engagement e WHERE e.pack=0 AND e.cancelled_ms IS NULL AND e.rehearsal_of IS NULL AND e.org IS NOT NULL AND NOT EXISTS (SELECT 1 FROM kv WHERE k='pub/'||e.id)").all<{ id: string; org: string; start_round: number; created_ms: number }>();
+    for (const x of rows.results ?? []) {
+      const at = roundMs(x.start_round), left = at - now;
+      if (left <= 0 || left > 24 * 3_600_000 || now - (Number(x.created_ms) || 0) < 30 * 60_000) continue;
+      const hours: 24 | 2 = left <= 2 * 3_600_000 ? 2 : 24;
+      const to = await orgEmail(env, x.org);
+      if (!to) continue;
+      const claimed = await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`draftrem${hours}/${x.id}`, String(now)).run(); // claim first, so two ticks never send it twice
+      if ((claimed.meta?.changes ?? 0) < 1) continue;
+      if (hours === 2) await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`draftrem24/${x.id}`, String(now)).run(); // the 24-hour mail would be late now
+      const m = draftReminderMail((env as PayEnv).PUBLIC_ORIGIN, { eid: x.id, hours, startMs: at });
+      await sendMail(env as PayEnv, env.DB, to, m.subject, m.text, now);
+    }
+  } catch { /* tried again at the next tick */ }
+}
 /** Runs the daily clean-up (365-day purge, one more try for unsent mail) the first time an organizer-side request arrives each UTC day. Never slows or fails the request. */
 export async function housekeeping(env: Env, now: number): Promise<void> {
   try {
@@ -536,6 +556,7 @@ export async function housekeeping(env: Env, now: number): Promise<void> {
 export async function runTick(env: Env, now: number) {
   await adminTick(env.DB, now); // old error counters and old mail events go (admin.ts)
   await remindUnpaid(env, now);
+  await remindDrafts(env, now);
   const ledgerC = await ledgerCTick(env as PayEnv, now); // ledger C -> B: a few commission rows and, every 30 minutes, the monthly figures (ledgerc.ts)
   const life = await lifecycleTick(env as any, now);
   const purged = await purgeOld(env, now);
@@ -1495,8 +1516,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (req.method === "GET" && p === "/api/history") {
     if (!a.plat && !a.org) return deny(a);
     const q = a.plat
-      ? env.DB.prepare("SELECT e.id, e.created_ms, e.start_round, e.call_seconds, e.closed, (e.pack=0) AS draft, (e.pack=0 AND e.cancelled_ms IS NULL AND e.unplayed_ms IS NULL AND NOT EXISTS (SELECT 1 FROM kv WHERE k='pub/'||e.id)) AS deletable, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants, CASE WHEN json_valid(e.config) THEN json_extract(e.config,'$.name') END AS name FROM engagement e WHERE e.is_test=? ORDER BY e.created_ms DESC LIMIT 50").bind(url.searchParams.get("mode") === "test" ? 1 : 0) // the owner's list shows real engagements unless the test ones are asked for
-      : env.DB.prepare("SELECT e.id, e.created_ms, e.start_round, e.call_seconds, e.closed, (e.pack=0) AS draft, (e.pack=0 AND e.cancelled_ms IS NULL AND e.unplayed_ms IS NULL AND NOT EXISTS (SELECT 1 FROM kv WHERE k='pub/'||e.id)) AS deletable, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants, CASE WHEN json_valid(e.config) THEN json_extract(e.config,'$.name') END AS name FROM engagement e WHERE e.org=? ORDER BY e.created_ms DESC LIMIT 50").bind(a.org);
+      ? env.DB.prepare("SELECT e.id, e.created_ms, e.start_round, e.call_seconds, e.closed, (e.pack=0) AS draft, (e.pack=0 AND e.unplayed_ms IS NULL AND NOT EXISTS (SELECT 1 FROM kv WHERE k='pub/'||e.id)) AS deletable, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants, CASE WHEN json_valid(e.config) THEN json_extract(e.config,'$.name') END AS name FROM engagement e WHERE e.is_test=? ORDER BY e.created_ms DESC LIMIT 50").bind(url.searchParams.get("mode") === "test" ? 1 : 0) // the owner's list shows real engagements unless the test ones are asked for
+      : env.DB.prepare("SELECT e.id, e.created_ms, e.start_round, e.call_seconds, e.closed, (e.pack=0) AS draft, (e.pack=0 AND e.unplayed_ms IS NULL AND NOT EXISTS (SELECT 1 FROM kv WHERE k='pub/'||e.id)) AS deletable, (SELECT COUNT(*) FROM participant p WHERE p.eid=e.id) AS participants, CASE WHEN json_valid(e.config) THEN json_extract(e.config,'$.name') END AS name FROM engagement e WHERE e.org=? ORDER BY e.created_ms DESC LIMIT 50").bind(a.org);
     const r = await q.all<any>();
     return json({ engagements: (r.results ?? []).map((x: any) => ({ ...x, startsAtIST: istTime(roundMs(x.start_round)) })), retentionDays: RETENTION_DAYS });
   }

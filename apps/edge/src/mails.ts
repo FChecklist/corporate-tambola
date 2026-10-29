@@ -146,3 +146,15 @@ ${card("2", "Tap the button", `<p style="margin:0 0 12px;font-size:14px;line-hei
 <tr><td style="padding:14px 22px 20px;"><div style="background:#fdecea;border:1px solid #c0392b;border-radius:8px;padding:10px 12px;color:#b71c1c;font-weight:700;font-size:13px;text-align:center;">${esc(foot)}</div></td></tr>`, origin);
   return { subject: SIGNIN_SUBJECT, text, html };
 }
+
+/** WP-04 TA13/S14: the reminder to the organizer of a game that is still a draft, about 24 hours or about 2 hours before the start. Plain words, no key in it: it only points to the console. */
+export function draftReminderMail(origin: string, o: { eid: string; hours: 24 | 2; startMs: number }): { subject: string; text: string } {
+  const when = o.hours === 24 ? "about 24 hours" : "about 2 hours";
+  const text = [
+    `Your game ${o.eid} starts in ${when}: ${istStamp(o.startMs)}.`, "",
+    "It is not published yet: it is still a draft. Nobody can see it or join it until you publish it.", "",
+    "What to do:", "1. Open your console: " + `${origin}/zc.html?e=${encodeURIComponent(o.eid)}`, "2. Go to step 7, Check and publish.", "3. Press Publish. Publishing is free.", "",
+    o.hours === 24 ? "Then send the guest link to your people. If the game is not for this date, you can change the date in step 1." : "If you publish now, send the guest link at once. If you do not want this game, ignore this e-mail. We will not remind you again.", "",
+  ].join("\n");
+  return { subject: `Your game ${o.eid} is not published yet: it starts in ${when}`, text };
+}
