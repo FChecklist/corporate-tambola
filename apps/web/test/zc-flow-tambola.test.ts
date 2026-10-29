@@ -66,11 +66,23 @@ test("step 2: 'Pick the closest' is shown and the list-matching option is hidden
   const d = w.document; expect(d.getElementById("zt-closest").textContent).toContain("Pick the closest");
   expect(d.getElementById("zf-how-system")).toBe(null); expect(d.getElementById("app").textContent).not.toContain("Coming soon");
 });
-test("step 3 with two tickets hides the A/B rows and keeps one Super Bumper House", async () => {
+test("step 3 with two tickets: no A/B rows; Super Bumper House 1 to 10 (5 shown, 6 to 10 folded, only 1 ticked, 1 and 2 Recommended), the two-ticket line and the unwon-prizes warning", async () => {
   const w = stepPage(3, (s: any, win: any) => { win.ZFLOW.prizes.tix = 2; }); await tick();
   const d = w.document; expect(d.querySelectorAll(".zf-ab").length).toBe(0); expect(d.querySelector('[data-house="bumper"]')).not.toBe(null);
+  expect(d.getElementById("zt-needs2").textContent).toBe("Super Bumper needs 2 tickets. Everyone gets Ticket A and Ticket B.");
   d.getElementById("zf-tick-bumper").checked = true; d.getElementById("zf-tick-bumper").dispatchEvent(new w.Event("change")); await tick();
-  expect([...d.querySelectorAll("#zf-n-bumper option")].length).toBe(1);
+  const boxes = [...d.querySelectorAll("[data-bumper-n]")];
+  expect(boxes.length).toBe(10); expect(boxes.filter((b: any) => b.hasAttribute("checked")).length).toBe(1);
+  expect(d.querySelectorAll("#zt-bumper > div [data-bumper-n]").length).toBe(5); expect(d.querySelectorAll("#zt-bumper details [data-bumper-n]").length).toBe(5);
+  expect(d.getElementById("zt-bumper").textContent).toContain("Super Bumper House 1 (Recommended)"); expect(d.getElementById("zt-bumper").textContent).toContain("Super Bumper House 2 (Recommended)"); expect(d.getElementById("zt-bumper").textContent).not.toContain("Super Bumper House 3 (Recommended)");
+  expect(d.getElementById("zt-bumper-warn").textContent).toContain("go unwon");
+  const three = d.querySelector('[data-bumper-n="3"]'); three.checked = true; three.dispatchEvent(new w.Event("change")); await tick();
+  expect(w.ZFLOW.prizes.bumper.n).toBe(3);
+});
+test("step 3 with one ticket has no Super Bumper and suggests the Lucky Draw", async () => {
+  const w = stepPage(3, (s: any, win: any) => { win.ZFLOW.prizes.tix = 1; }); await tick(); w.ZFLOW.draw(); await tick();
+  const d = w.document; expect(d.querySelector('[data-house="bumper"]')).toBe(null); expect(d.getElementById("zt-bumper")).toBe(null);
+  if (d.querySelector('[data-house="lucky"]')) expect(d.getElementById("zt-lucky1").textContent).toContain("LUCKY DRAW");
 });
 test("step 4 checks a break link: Looks good, or the https message", async () => {
   const w = stepPage(4, () => {}); w.ZFLOW.draw(); await tick();
@@ -81,7 +93,7 @@ test("step 4 checks a break link: Looks good, or the https message", async () =>
 });
 test("step 5 preview shows Last 5 and, for the family card, the Family Passes card with 4 passes", async () => {
   const w = stepPage(5, (s: any, win: any) => { win.ZFLOW.who.card = "family"; }); await tick(); w.ZFLOW.draw(); await tick();
-  const d = w.document; if (d.getElementById("zf-frame")) { expect(d.getElementById("zt-pvlast5").textContent).toContain("Last 5:"); expect(d.getElementById("zt-pass").textContent).toContain("4 family passes"); }
+  const d = w.document; if (d.getElementById("zf-frame")) { expect(d.getElementById("zt-pvlast5").textContent).toContain("Last 5:"); expect(d.getElementById("zt-pass").textContent).toContain("5 passes: 1 for you and 4 for your family and friends"); }
 });
 test("step 1 asks how the game starts and who calls the numbers; the choice saves startMode and callMode and shows the summary line", async () => {
   const win: any = new Window({ url: "http://localhost/zc.html?flow=new&e=EABCDEF" });

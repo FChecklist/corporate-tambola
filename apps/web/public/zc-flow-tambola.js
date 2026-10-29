@@ -117,7 +117,21 @@
     if (size && !document.getElementById("zt-closest")) size.after(el("p", { class: "zf-small", id: "zt-closest", text: "Pick the closest. The price is shown with each size." }));
     for (const n of document.querySelectorAll("#zf-how-system, .zf-ab")) { const t = n.closest(".zf-opt") || n; t.remove(); } // list matching and A/B per-ticket prizes: the engine cannot do them yet
     const bn = document.getElementById("zf-n-bumper");
-    if (bn) for (const o of [...bn.options]) if (Number(o.value) > 1) o.remove(); // the engine keeps one Super Bumper House
+    if (bn && !document.getElementById("zt-bumper")) {
+      const cur = Number(bn.value) || 1, box = el("div", { class: "zt-bumper", id: "zt-bumper" });
+      const setN = (k) => { bn.value = String(k); bn.dispatchEvent(new window.Event("change")); }; // the pack's own select keeps the count; ticking House k means Houses 1 to k
+      const row = (k) => el("label", { class: "zt-check" }, el("input", { type: "checkbox", "data-bumper-n": String(k), ...(k <= cur ? { checked: "" } : {}), onchange: (e) => setN(e.target.checked ? k : k - 1 || 1) }), " Super Bumper House " + k + (k <= 2 ? " (Recommended)" : ""));
+      const first = el("div", {}, ...[1, 2, 3, 4, 5].map(row)), more = el("details", { class: "zt-more" }, el("summary", { text: "Show Houses 6 to 10" }), ...[6, 7, 8, 9, 10].map(row));
+      if (cur > 5) more.setAttribute("open", "");
+      box.append(first, more, el("p", { class: "zf-small", id: "zt-bumper-warn", text: "If fewer players complete both tickets than there are Super Bumper prizes, the rest of the prizes go unwon when the 90 numbers end." }));
+      bn.closest("div") && bn.closest("div").append(box);
+    }
+    const tix2 = document.querySelector('[data-house="bumper"]');
+    if (tix2 && !document.getElementById("zt-needs2")) tix2.before(el("p", { class: "zf-small", id: "zt-needs2", text: "Super Bumper needs 2 tickets. Everyone gets Ticket A and Ticket B." }));
+    const s3 = document.getElementById("zf-sec3");
+    if (s3 && s3.classList.contains("open") && !document.querySelector('[data-house="bumper"]') && !document.getElementById("zt-lucky1") && document.querySelector('[data-house="lucky"]')) {
+      const lk = document.querySelector('[data-house="lucky"]'); lk.before(el("p", { class: "zf-small", id: "zt-lucky1", text: "Want every player to have a chance to win? Choose LUCKY DRAW. It is the prize everyone can win, even if nobody completes a house." }));
+    }
     for (const sel of document.querySelectorAll('select[id^="zf-g-"]')) if (![...sel.options].some((o) => o.value === "Decide later") && [...sel.options].some((o) => /^other/i.test(o.value))) { const ot = [...sel.options].find((o) => /^other/i.test(o.value)); ot.textContent = "Other (write it)"; }
     const bl = [...document.querySelectorAll('input[id^="zf-bl"]')];
     for (const i of bl) { if (!i.nextElementSibling || i.nextElementSibling.className.indexOf("zt-check") < 0) { const c = el("p", { class: "zf-small zt-check", role: "status" }); i.after(c); setCheck(i, c); } }
@@ -128,7 +142,7 @@
     if (fr) {
       const pl = fr.querySelector(".zf-pvlast");
       if (pl && !document.getElementById("zt-pvlast5")) pl.after(el("p", { id: "zt-pvlast5", class: "zf-small", text: "Last 5: 47, 12, 83, 5, 61" }));
-      if (Z.who && Z.who.card === "family" && !document.getElementById("zt-pass")) fr.append(el("div", { class: "zt-pass", id: "zt-pass" }, el("b", { text: "Family Passes" }), el("p", { class: "zf-small", text: "You have 4 family passes for the Corporate Tambola event " + (st.eid || "") + ". You can share it with your friends and family." })));
+      if (Z.who && Z.who.card === "family" && !document.getElementById("zt-pass")) fr.append(el("div", { class: "zt-pass", id: "zt-pass" }, el("b", { text: "Family Passes" }), el("p", { class: "zf-small", text: "You have 5 passes: 1 for you and 4 for your family and friends. Share your family link with them. They play on the phone or laptop they click the link from." })));
     }
   }
   function setCheck(input, c) { const bad = linkProblem(input.value); c.textContent = !input.value.trim() ? "" : bad ? LINK_BAD : "Looks good"; c.className = "zf-small zt-check " + (!input.value.trim() ? "" : bad ? "bad" : "ok"); }
