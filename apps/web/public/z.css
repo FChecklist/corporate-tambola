@@ -431,13 +431,16 @@ html[data-pt] .zticket>div.m{background:inherit;box-shadow:none}
 html[data-pt=retro] .zticket>div.m{background:#F6EFE0;color:#2E0812}
 html[data-pt=modern] .zticket>div.m{background:rgba(255,255,255,.06);color:#EAF0FF}
 html[data-pt=modern] .zticket>div.m::before,html[data-pt=modern] .zticket>div.m::after{background:#FF6FAE}
+html[data-pt] .zticket>div.m.w{background:linear-gradient(135deg,#FFE08A,#FFB703);color:#2A1B00}
+html[data-pt] .zbtn.zdanger{background:#b3261e;color:#fff}
+html[data-pt] .zbtn.alt{background:transparent;border:2px solid var(--golddt);color:var(--ink)}
 html[data-pt] .zbig{width:64px;height:64px;font-size:30px}
 html[data-pt] .zball{padding:2px 0}
 /* Ticket A | Ticket B: the one not being played is greyed (tap it or its button to switch); both keep marking */
 .zplaying{margin:8px 0;font-size:14px;color:var(--muted)}
-.zpl{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:5px 12px;min-height:34px;font:inherit;cursor:pointer}
+.zpl{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:5px 12px;min-height:44px;font:inherit;cursor:pointer}
 .zpl[aria-pressed=true]{background:var(--golddt);color:#2E0812;border-color:transparent;font-weight:700}
-.ztkwrap.zdim{opacity:.45;filter:grayscale(.8)}
+.ztkwrap.zdim{opacity:.6;filter:grayscale(.8)}
 .zwelcome{margin:0 0 10px;font-size:16px;line-height:1.5}
 .zshare{margin:6px 0;padding:8px 12px;border:1px solid var(--line);border-radius:999px;text-align:center;font-size:14px}
 html[data-pt] .zapp{color:var(--ink)}
