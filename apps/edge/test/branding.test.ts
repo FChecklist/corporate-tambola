@@ -163,7 +163,7 @@ describe("claims register: customer-facing text never says what the build does n
   test("structured data prices equal the real packs", () => {
     const h = read("apps/web/public/index.html"); const { PACKS } = require("../../../packages/shared/src/pricing") as typeof import("../../../packages/shared/src/pricing");
     expect(h).toContain(`"lowPrice":"${Math.min(...PACKS.map((p) => p[1]))}"`); expect(h).toContain(`"highPrice":"${Math.max(...PACKS.map((p) => p[1]))}"`); expect(h).toContain(`"offerCount":"${PACKS.length}"`);
-    const site = read("apps/web/public/site.js"); expect(site).toContain("Festive offer: 50% off"); expect(site).toContain("Regular price after the festive offer"); expect(h).toContain("Festive offer: 50% off"); // owner decision: keep the offer, worded as a festive offer
+    const site = read("apps/web/public/site.js"); expect(site).not.toMatch(/Festive offer|50% OFF|Regular price after/); expect(h).not.toMatch(/Festive offer|50% off/i); // boss ruling Q8 2026-10-29 (gap plan TA17): one honest price, no computed "was" price and no permanent 50% badge (apps/edge/test/wp06-price-footer.test.ts)
     expect(`${h}${site}`).not.toMatch(/Most popular|2nd most popular/); // the offer price is what is charged, and equals the structured-data price (lowPrice above)
   });
 });

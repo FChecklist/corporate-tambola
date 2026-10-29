@@ -100,9 +100,6 @@ body{overflow-x:hidden}
 .prow .gstn{font:500 12px var(--sans);font-style:normal;color:var(--muted);letter-spacing:.04em}
 .faq summary{cursor:default;pointer-events:none;list-style:none}.faq summary::-webkit-details-marker{display:none}
 
-.offer{display:inline-flex;align-items:center;gap:10px;margin:4px 0 16px;padding:8px 16px;border-radius:99px;background:#FFF1D6;border:1px solid var(--gold);color:var(--deep);font-size:14px}
-.offer b{background:#C8102E;color:#fff;border-radius:99px;padding:3px 10px;font:800 12px var(--sans);letter-spacing:.06em}
-.prow .was{font:600 15px var(--mono);color:#9A8F94;text-decoration:line-through;text-decoration-color:#C8102E;text-decoration-thickness:2px}
 .prow .off{font:800 12px var(--sans);font-style:normal;letter-spacing:.06em;background:#C8102E;color:#fff;border-radius:6px;padding:4px 8px;white-space:nowrap}
 .prow .badge.b2{background:#EBD9DE;color:var(--deep)}
 .prow.pop{background:linear-gradient(135deg,#FFF8E6,#fff);box-shadow:0 0 0 2px var(--gold) inset,0 10px 28px -14px rgba(0,0,0,.35);transform:scale(1.02)}
@@ -129,10 +126,7 @@ body{overflow-x:hidden}
 .pwho .selwrap{flex:1 1 240px;max-width:340px}
 .pwho select{background:#fff;color:var(--deep);border-color:var(--gold);font-size:16px;min-height:48px}
 .pmain{display:flex;flex-wrap:wrap;align-items:center;gap:16px 22px;padding:18px;border-radius:16px;background:rgba(255,255,255,.08);border:1px solid rgba(243,217,164,.35)}
-.pburst{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;width:104px;height:104px;border-radius:50%;background:#C8102E;border:3px solid var(--gold2);box-shadow:0 6px 18px rgba(0,0,0,.35);transform:rotate(-8deg);text-align:center}
-.pburst b{font:800 26px/1 var(--sans);letter-spacing:.02em}.pburst span{font:700 12px/1.2 var(--sans);letter-spacing:.08em;text-transform:uppercase;padding:0 10px;margin-top:4px}
 .pamt{flex:1 1 200px;display:flex;flex-direction:column;gap:2px}
-.pamt .was{font:600 18px var(--mono);color:var(--gold2);opacity:.85;text-decoration:line-through;text-decoration-color:#FF6B7F;text-decoration-thickness:2px}
 .pamt .tot{font:800 44px/1.05 var(--mono);color:#fff}.pamt .tot small{display:block;font:600 12px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--gold2);margin-bottom:2px}
 .pamt .gstn{font:600 12px var(--sans);font-style:normal;color:var(--gold2)}
 .pcta{flex:0 0 auto;background:var(--gold);color:var(--deep);border:0;font-weight:800;font-size:17px;min-height:54px;padding:0 26px;box-shadow:0 8px 20px rgba(0,0,0,.3);animation:pcta 2.6s ease-in-out infinite}
@@ -143,10 +137,9 @@ body{overflow-x:hidden}
 .pperks li{display:flex;align-items:flex-start;gap:10px;font:500 14.5px/1.35 var(--sans);color:#fff}
 .pperks .tick{flex:0 0 22px;height:22px;border-radius:50%;background:var(--gold);color:var(--deep);display:inline-flex;align-items:center;justify-content:center;font:800 12px var(--sans)}
 @media (max-width:560px){.pcard{padding:16px;border-radius:18px}.pmain{justify-content:center;text-align:center}.pamt{align-items:center}.pcta{width:100%;justify-content:center}.pamt .tot{font-size:38px}}
-.pburst .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .pcta{white-space:nowrap;display:inline-flex;align-items:center;gap:10px;justify-content:center}
 .pwho select{font-size:15px;padding-right:38px}
-@media (max-width:560px){.pburst{width:96px;height:96px}.pburst b{font-size:22px}.pwho .selwrap{max-width:none}.pmain{padding:14px}}
+@media (max-width:560px){.pwho .selwrap{max-width:none}.pmain{padding:14px}}
 @media (max-width:560px){.pwho select{font-size:14px;padding-left:10px;padding-right:32px}}
 
 /* sticky quick bar (appears after scrolling): brand = back to top, button = jump to the price card */

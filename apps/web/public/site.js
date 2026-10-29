@@ -29,14 +29,13 @@
       $("priceNote").textContent = "The free demo game is for up to 10 people and costs nothing. Sign in with your e-mail and build it the same way as a real game."; return;
     }
     if ($("heroBrk")) $("heroBrk").innerHTML = breakdown(S.pack, S.cur);
-    { // one price card: the organizer picks the size, then sees the festive price (never a list of every pack)
-      const n = S.pack, x = TB.price(n, S.cur), shown = S.cur === "INR" ? x.base : x.total, was = S.cur === "INR" ? shown * 2 + 1 : shown * 2; // "was" is the regular price that applies after the festive offer
+    { // one price card: the organizer picks the size, then sees the one real price (never a list of every pack, never a struck-out "was" price: gap plan 2026-10-29, TA17)
+      const n = S.pack, x = TB.price(n, S.cur), shown = S.cur === "INR" ? x.base : x.total;
       const opts = packOptions(n);
       const perks = ["All features included", "Free AI assistant to build your game", "Unlimited fun for your company&rsquo;s extended family", "Your brand and message breaks: play your video or audio", "Everyone engaged", "Create positive vibes", "Build it free, pay just before the game starts", "No fee to create or edit your game", "All participant data deleted within 24 hours", "A small amount, simple for HR / Admin to pay and claim back"];
       $("packs").innerHTML = `<div class="pcard"><div class="pwho"><label for="pack2">How many participants?</label><div class="selwrap"><select id="pack2" aria-label="Number of participants">${opts}</select><svg class="ic chev"><use href="#i-chev"/></svg></div></div>` +
-        `<div class="pmain"><div class="pburst" title="Festive offer: 50% off"><b>50% OFF</b><span>Festive offer</span><span class="sr">Festive offer: 50% off</span></div>` +
-        `<div class="pamt"><span class="was" title="Regular price after the festive offer"><span class="sr">Regular price after the festive offer </span>${TB.money(was, S.cur)}</span>` +
-        `<span class="tot"><small>Festive price</small> ${TB.money(shown, S.cur)}</span></div>` +
+        `<div class="pmain">` +
+        `<div class="pamt"><span class="tot"><small>Price</small> ${TB.money(shown, S.cur)}</span></div>` +
         `<button type="button" class="btn pcta" data-buy="${n}" aria-label="Create your game for up to ${nf(n)} participants">Create your game ${ic("arrow")}</button></div>` +
         `<ul class="pperks">${perks.map((t) => `<li><span class="tick" aria-hidden="true">&#10003;</span>${t}</li>`).join("")}</ul></div>`;
     }
