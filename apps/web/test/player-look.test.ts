@@ -41,8 +41,8 @@ describe("player look 1.7.1", () => {
     expect(z.indexOf('id="zshare"')).toBeLessThan(z.indexOf("Game complete${demoTag()}"));
     expect(z).toContain('${v.phase === "ended" ? "" : \'<ol class="zrules"');
   });
-  test("hidden because the engine cannot do it: no 'Game completed' page after 30 minutes (the view carries no end time), no family approval screen", () => {
+  test("hidden because the engine cannot do it: no 'Game completed' page after 30 minutes (the view carries no end time)", () => {
     expect(z).not.toMatch(/Game completed \(Game/);
-    expect(z).not.toMatch(/family host approves|Please wait while your family host/i);
+    // 1.8.0: the engine now has family approval (approvals.ts), so those screens exist; see participant-180.test.ts
   });
 });
