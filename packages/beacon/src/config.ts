@@ -8,7 +8,7 @@ export type NewHouseId = "early7" | "early10" | "twolines" | "plus" | "frame" | 
 /** Every house an organizer can reward (the seven original ones, the newer ones, and Unlucky). */
 export type HouseId = PatternId | NewHouseId;
 export type PatternKey = HouseId | "full2"; // "full2" = Super Bumper House (all 30 numbers across both tickets)
-export interface RewardLine { pattern: HouseId; scope: Scope; ordinal: number; text: string }
+export interface RewardLine { pattern: HouseId; scope: Scope; ordinal: number; text: string; /** 1.8.0, optional: the prize when Ticket B wins (a two-ticket game only); `text` is then the prize for Ticket A. Absent = one prize whichever ticket wins. */ textB?: string }
 /**
  * THE one table of houses: id, label, a short plain "how to win", and the most winners (reward lines: 1st, 2nd, ...) the organizer may give it. The server validates with it, the phone page and the
  * console read it (window.ZG.PRIZE_HOUSES), the AI manual lists it. `kind`: set = every number of a fixed shape, any = any N numbers of a kind, lines = any two of the three lines, global = decided
@@ -237,13 +237,15 @@ export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?
       const id = `${scope}:${pattern}#${ordinal}`;
       if (seen.has(id)) return { ok: false, error: "The same reward is listed twice." };
       seen.add(id);
-      out.push({ pattern, scope, ordinal, text: cleanText(r?.text, 80) });
+      const textB = scope === "ticket" ? cleanText(r?.textB, 80) : "";
+      out.push({ pattern, scope, ordinal, text: cleanText(r?.text, 80), ...(textB ? { textB } : {}) });
     }
     for (const l of out) if (l.ordinal > 1 && !out.some((x) => x.pattern === l.pattern && x.scope === l.scope && x.ordinal === l.ordinal - 1)) return { ok: false, error: "A 2nd, 3rd... reward needs the one before it. Note that sending rewards REPLACES the whole list, so send every reward line each time, with ordinals starting at 1 for each house." };
     if (out.some((l) => l.scope === "two_ticket") && (input.tickets ?? cfg.tickets) !== 2) return { ok: false, error: "A Super Bumper House needs two tickets per participant." };
     cfg.rewards = out;
   }
   if (cfg.tickets === 1 && cfg.rewards.some((l) => l.scope === "two_ticket")) cfg.rewards = cfg.rewards.filter((l) => l.scope !== "two_ticket");
+  if (cfg.tickets === 1 && cfg.rewards.some((l) => l.textB)) cfg.rewards = cfg.rewards.map((l) => { const { textB: _drop, ...rest } = l; return rest; }); // a Ticket B prize needs two tickets
   if (cfg.rewards.length === 0) cfg.rewards = defaultRewards();
   if (input.breaks !== undefined) {
     if (!Array.isArray(input.breaks) || input.breaks.length > maxMidFor(cfg.tickets)) return { ok: false, error: `At most ${maxMidFor(cfg.tickets)} brand moments during the game with ${cfg.tickets} ticket${cfg.tickets === 1 ? "" : "s"} per person (lucky draws count too).` };

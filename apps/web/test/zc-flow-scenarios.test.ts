@@ -6,6 +6,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Window } from "happy-dom";
 import { PRIZE_HOUSES } from "../../../packages/beacon/src/config";
+import { validateCfg } from "../../../packages/beacon/src/config";
+import { prizeTextFor } from "../../../packages/beacon/src/ticket-prize";
 import { waitingLapsed, familyCutoffPassed, cleanEmail } from "../../edge/src/approvals";
 
 const pub = (f: string) => readFileSync(join(import.meta.dir, "../public", f), "utf8");
@@ -15,7 +17,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
 
 const AXES = {
   start: ["auto", "manual"], caller: ["auto", "host"], tickets: [1, 2], family: [false, true], validation: ["system", "manual"], criterion: ["employee", "email"],
-  link: ["open", "listed", "family", "cohost", "host"], onList: [true, false], approval: [true, false], pay: ["pending", "paid", "free"], timing: ["early", "late"], cap: ["room", "full"], bumper: [0, 1, 2, 5, 10], lucky: [0, 1, 3], waited: [10, 40], decider: ["organizer", "host", "cohost", "familyhost"],
+  link: ["open", "listed", "family", "cohost", "host"], onList: [true, false], approval: [true, false], pay: ["pending", "paid", "free"], timing: ["early", "late"], cap: ["room", "full"], bumper: [0, 1, 2, 5, 10], lucky: [0, 1, 3], waited: [10, 40], decider: ["organizer", "host", "cohost", "familyhost"], perTicket: [0, 1],
 } as const;
 function* matrix() {
   const keys = Object.keys(AXES) as (keyof typeof AXES)[];
@@ -57,6 +59,7 @@ function newPage(calls: any[] = [], answers: (u: string) => any = () => ({ ok: t
 const PRIZE_PAGE = (() => { const w: any = new Window({ url: "http://localhost/zc.html?flow=new&e=EABCDEF" }); w.document.body.innerHTML = '<main id="app"></main>'; w.ZG = { roundAt: (m: number) => m, PRIZE_HOUSES };
   new Function("window", "document", "location", "fetch", "MutationObserver", src)(w, w.document, w.location, async () => ({ ok: true, json: async () => ({ ok: true }) }), w.MutationObserver); return w.ZFLOW; })();
 const PRIZE_CACHE = new Map<string, any[]>();
+const AB_CACHE = new Map<string, boolean | null>();
 const EMAILS: [string, boolean][] = [["asha@acme.com", true], ["Asha.Rao+tambola@Acme.co.in", true], ["asha@", false], ["", false], ["a b@acme.com", false]];
 const EMAIL_ORACLE = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 test("logic: every scenario of the matrix (10,000+) gives the owner's outcome and the right approvers", () => {
@@ -68,6 +71,12 @@ test("logic: every scenario of the matrix (10,000+) gives the owner's outcome an
     const want = oracle(sc, minutes);
     if (got.outcome !== want.outcome || JSON.stringify(got.approvers) !== JSON.stringify(want.approvers)) { if (bad.length < 5) bad.push(JSON.stringify(sc) + " got " + JSON.stringify(got) + " want " + JSON.stringify(want)); }
     if (want.outcome === "waiting" && !got.approvers.length) bad.push("no approver for " + JSON.stringify(sc));
+    // A/B prizes (optional, off by default): a Ticket B prize is kept only with two tickets; either way the winner rule is untouched
+    { const pk2 = "ab/" + sc.tickets + "/" + sc.perTicket; let kept = AB_CACHE.get(pk2);
+      if (kept === undefined) { const v: any = validateCfg({ tickets: sc.tickets, rewards: [{ pattern: "early5", scope: "ticket", ordinal: 1, text: "Hamper", ...(sc.perTicket ? { textB: "Watch" } : {}) }] }); kept = v.ok ? !!v.cfg.rewards[0].textB : null; AB_CACHE.set(pk2, kept); }
+      const wantKept = sc.tickets === 2 && sc.perTicket === 1;
+      if (kept !== wantKept) bad.push("A/B kept=" + kept + " " + pk2);
+      if (prizeTextFor({ text: "Hamper", ...(sc.perTicket ? { textB: "Watch" } : {}) }, "B") !== (sc.perTicket ? "Watch" : "Hamper")) bad.push("A/B text " + pk2); }
     // who may let the person in: exactly the roles the oracle names
     if (want.outcome === "waiting" && R.canLetIn(sc.decider, got.approvers) !== want.approvers.includes({ organizer: "organizer", host: "Host", cohost: "Co-host", familyhost: "family host" }[sc.decider as string] as string)) bad.push("role " + JSON.stringify(sc));
     if (want.outcome === "in" && sc.link === "open") { const [em, okEm] = EMAILS[n % EMAILS.length]; emailChecks++; if ((cleanEmail(em) !== null) !== okEm || (cleanEmail(em) !== null) !== (em !== "" && EMAIL_ORACLE(em))) bad.push("email " + em); }
