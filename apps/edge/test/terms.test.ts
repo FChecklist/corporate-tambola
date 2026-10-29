@@ -31,7 +31,7 @@ describe("the document pages", () => {
   };
   for (const [f, needles] of Object.entries(DOCS)) test(`${f}: brand header and footer, title pattern, the right statements, no tick box on the page itself`, () => {
     const h = rd(f);
-    expect(h).toMatch(/<title>[^<]+ \| Corporate Tambola<\/title>/); expect(h).toContain('class="legaltop"'); expect(h).toContain('<footer class="uf"'); expect(h).toContain('rel="icon"');
+    expect(h).toMatch(/<title>[^<]+ \| Corporate Tambola<\/title>/); expect(h).toContain('class="ct-nav"'); expect(h).toContain('<footer class="uf"'); expect(h).toContain('rel="icon"');
     for (const n of needles) expect(h).toContain(n);
     expect(h).not.toMatch(/type="checkbox"/i);
     expect(h).not.toMatch(/\bcompliant\b|certified by/i);

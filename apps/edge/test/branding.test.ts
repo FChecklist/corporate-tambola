@@ -138,7 +138,7 @@ describe("the legal page carries the owner's final text, and each line matches w
   test("the rules say only what the software does (no claims, no manual cutting, no blocking), and the privacy timings match lifecycle.ts", () => {
     const r = items("rules").join(" ");
     expect(r).not.toMatch(/Cut your own|Late claims|wrong claim|block your ticket|for fun/i);
-    expect(r).toContain("Numbers 1 to 90 come from a public random beacon."); expect(r).not.toMatch(/No one can choose or change|not even the organizer|twice|every claim is checked/); expect(r).toContain("The 2nd Full House can only follow the 1st."); expect(r).toContain("One ticket per phone.");
+    expect(r).toContain("No one knows the next number, including the organizer and us."); expect(r).not.toMatch(/No one can choose or change|not even the organizer|twice|every claim is checked/); expect(r).toContain("The 2nd Full House can only follow the 1st."); expect(r).toContain("One ticket per phone.");
     const lc = read("apps/edge/src/lifecycle.ts");
     expect(lc).toMatch(/PURGE_AFTER_MS = 20 \* 3_600_000/); // 20 h (plus a tick up to 3 h late) is inside "within 24 hours"
     expect(lc).toMatch(/endMs \+ 365 \* DAY/); expect(lc).toMatch(/DELETE FROM prize WHERE eid=\?/); // prize details go with the 365-day deletion
