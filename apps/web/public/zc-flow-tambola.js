@@ -129,9 +129,36 @@
     if (!done) return null;
     return el("p", {}, el("button", { type: "button", class: "zf-add zt-del green", id: "zt-delete", onclick: async () => { try { await call("POST", `/api/z/${eid()}/erase`, {}); dash.note = "Participant data deleted."; } catch (e) { dash.note = e.message; } Z.draw(); } }, "Delete all participant data"));
   }
+  /* ---- steps 2 to 5: Tambola-only wording and hiding, applied to what the shared pack drew (the pack file itself is not edited) ---- */
+  const linkProblem = (v) => { const t = String(v || "").trim(); if (!t) return ""; try { const u = new URL(t); return u.protocol === "https:" && u.hostname.includes(".") ? "" : "bad"; } catch { return "bad"; } };
+  const LINK_BAD = "The link must start with https:// and be public, so everyone can open it.";
+  function patchSteps() {
+    const size = document.getElementById("zf-size");
+    if (size && !document.getElementById("zt-closest")) size.after(el("p", { class: "zf-small", id: "zt-closest", text: "Pick the closest. The price is shown with each size." }));
+    for (const n of document.querySelectorAll("#zf-how-system, .zf-ab")) { const t = n.closest(".zf-opt") || n; t.remove(); } // list matching and A/B per-ticket prizes: the engine cannot do them yet
+    const bn = document.getElementById("zf-n-bumper");
+    if (bn) for (const o of [...bn.options]) if (Number(o.value) > 1) o.remove(); // the engine keeps one Super Bumper House
+    for (const sel of document.querySelectorAll('select[id^="zf-g-"]')) if (![...sel.options].some((o) => o.value === "Decide later") && [...sel.options].some((o) => /^other/i.test(o.value))) { const ot = [...sel.options].find((o) => /^other/i.test(o.value)); ot.textContent = "Other (write it)"; }
+    const bl = [...document.querySelectorAll('input[id^="zf-bl"]')];
+    for (const i of bl) { if (!i.nextElementSibling || i.nextElementSibling.className.indexOf("zt-check") < 0) { const c = el("p", { class: "zf-small zt-check", role: "status" }); i.after(c); setCheck(i, c); } }
+    if (!bl.length && document.querySelector(".zf-break") === null) { /* no break on the page */ }
+    const lead = [...document.querySelectorAll("#zf-sec4 .zf-lead")].pop();
+    if (lead && !document.getElementById("zt-missing")) lead.after(el("p", { class: "zf-small", id: "zt-missing", text: "If a link is missing or not available, that message will not play." }));
+    const fr = document.getElementById("zf-frame");
+    if (fr) {
+      const pl = fr.querySelector(".zf-pvlast");
+      if (pl && !document.getElementById("zt-pvlast5")) pl.after(el("p", { id: "zt-pvlast5", class: "zf-small", text: "Last 5: 47, 12, 83, 5, 61" }));
+      if (Z.who && Z.who.card === "family" && !document.getElementById("zt-pass")) fr.append(el("div", { class: "zt-pass", id: "zt-pass" }, el("b", { text: "Family Passes" }), el("p", { class: "zf-small", text: "You have 4 family passes for the Corporate Tambola event " + (st.eid || "") + ". You can share it with your friends and family." })));
+    }
+  }
+  function setCheck(input, c) { const bad = linkProblem(input.value); c.textContent = !input.value.trim() ? "" : bad ? LINK_BAD : "Looks good"; c.className = "zf-small zt-check " + (!input.value.trim() ? "" : bad ? "bad" : "ok"); }
+  document.addEventListener("input", (e) => { const i = e.target; if (i && i.id && /^zf-bl\d+$/.test(i.id) && i.nextElementSibling) setCheck(i, i.nextElementSibling); });
+  window.ZTAMBOLA.linkProblem = linkProblem;
+
   /* ---- injection: the pack redraws the whole page, so the sections are added after each draw ---- */
   function paint() {
     const app = document.getElementById("app"); if (!app) return;
+    patchSteps();
     if (st.role && !document.getElementById("zt-who")) app.prepend(whoLabel());
     if ((st.role === "cohost" || st.view === "cohost") && T.mine === undefined) { T.mine = null; load(); }
     const d = document.getElementById("zf-dashboard");
