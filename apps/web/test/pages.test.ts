@@ -147,7 +147,7 @@ describe("console (organizer page)", () => {
     await p.waitFor((x) => /Hello\. Let us start/.test(x)); openStep(p, 7);
     await p.waitFor((x) => /Publish \(free\)/.test(x));
     expect(p.text()).toMatch(/publishing is free/i);
-    p.click("#publishopen");
+    p.click("#publishopen"); if (p.$("#pubanyway")) p.click("#pubanyway"); /* WP-04 TA12: blank prizes ask once more */
     await p.waitFor((x) => /Confirm and publish/.test(x));
     expect((p.$("#pubEmail") as any).value).toBe("boss@acme.com"); // prefilled, editable
     (p.$("#pubPhone") as any).value = "98765 43210"; (p.$("#pubPhone") as any).dispatchEvent(new p.win.Event("input", { bubbles: true }));
@@ -161,7 +161,7 @@ describe("console (organizer page)", () => {
   test("UC-54 published but invalid details: the console shows the server's message and stays on the form", async () => {
     const o = await organizer(); await make(o, "UI-BADPUB");
     const p = await consolePage(o, "UI-BADPUB", o.token, { "ctz-email": "not-an-email" });
-    await p.waitFor((x) => /Hello/.test(x)); openStep(p, 7); p.click("#publishopen"); await p.waitFor((x) => /Confirm and publish/.test(x));
+    await p.waitFor((x) => /Hello/.test(x)); openStep(p, 7); p.click("#publishopen"); if (p.$("#pubanyway")) p.click("#pubanyway"); /* WP-04 TA12: blank prizes ask once more */ await p.waitFor((x) => /Confirm and publish/.test(x));
     p.click("#pubgo");
     await p.waitFor((x) => /valid (email|mobile)/i.test(x)); expect(p.text()).not.toMatch(/LAST STEP/i);
   });
@@ -1010,7 +1010,7 @@ describe("the console for an AI that works in the browser", () => {
   }, 60_000);
   test("every field on the console is reachable by name: each label is linked to its field, nothing unlabelled, and the page keeps the same elements when nothing has changed", async () => {
     const o = await organizer(); await make(o, "UI-A11Y1");
-    const p = await consolePage(o, "UI-A11Y1", o.token, {}, { afterLoad: spy().hook }); await p.waitFor((x) => /Hello/.test(x)); const doc = p.win.document; openStep(p, 4); p.click('[data-ck="opN"][data-v="1"]'); p.click('[data-ck="midN"][data-v="2"]'); p.click('[data-ck="clN"][data-v="1"]'); p.click("[data-luckyadd]"); p.click('[data-ck="mid.1.k"][data-v="yt"]'); openStep(p, 6); await p.waitFor((x) => /How do you want to add them/.test(x)); p.win.__zcMode("paste"); openStep(p, 7); p.click("#publishopen"); openStep(p, 4);
+    const p = await consolePage(o, "UI-A11Y1", o.token, {}, { afterLoad: spy().hook }); await p.waitFor((x) => /Hello/.test(x)); const doc = p.win.document; openStep(p, 4); p.click('[data-ck="opN"][data-v="1"]'); p.click('[data-ck="midN"][data-v="2"]'); p.click('[data-ck="clN"][data-v="1"]'); p.click("[data-luckyadd]"); p.click('[data-ck="mid.1.k"][data-v="yt"]'); openStep(p, 6); await p.waitFor((x) => /How do you want to add them/.test(x)); p.win.__zcMode("paste"); openStep(p, 7); p.click("#publishopen"); if (p.$("#pubanyway")) p.click("#pubanyway"); /* WP-04 TA12: blank prizes ask once more */ openStep(p, 4);
     const bad: string[] = [];
     for (const f of Array.from(doc.querySelectorAll("input, select, textarea")) as any[]) {
       if (f.type === "hidden") continue;

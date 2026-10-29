@@ -169,7 +169,7 @@ export const chipOn = async (page, ck, v) => (await page.getAttribute(`[data-ck=
 export async function saveStep(page, n) { await page.click(`#sec${n} [data-save="${n}"]`); await page.waitForTimeout(700); }
 export async function uiPublish(page, email, phone = "9811122233") {
   await openStep(page, 7);
-  await page.click("#publishopen"); await page.waitForSelector("#pubEmail");
+  await page.click("#publishopen"); if (await page.$("#pubanyway")) await page.click("#pubanyway"); /* WP-04 TA12: blank prizes ask once more */ await page.waitForSelector("#pubEmail");
   await page.fill("#pubEmail", email); await page.fill("#pubPhone", phone);
   await tickTerms(CUR, page, { scope: "[data-cbc='K1']", btn: "#pubgo", what: "Publish" }); // K1: both boxes
   await page.click("#pubgo");

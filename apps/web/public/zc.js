@@ -896,7 +896,10 @@
     const ord = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th"];
     return rw.map((r) => { const many = ((S.cfg && S.cfg.rewards) || []).filter((x) => x.pattern === r.pattern && (x.scope || "ticket") === (r.scope || "ticket")).length > 1; return (many ? (ord[(r.ordinal || 1) - 1] || r.ordinal) + " " : "") + label(r.scope === "two_ticket" ? "full2" : r.pattern); });
   }
-  const prizeWarn = () => { const n = unnamedPrizes(); return n.length ? `<div class="zc-alert" id="prizewarn" role="alert"><b>${n.length === 1 ? "1 prize has" : n.length + " prizes have"} no name: ${esc(n.join(", "))}.</b> Winners will get nothing. Go back and name them, or press Publish anyway.</div>` : ""; };
+  // TA12/S15: Publish never goes through silently while a prize has no name. The blank prizes are listed in a box; the first tap on Publish only asks (S.blankAsk); "Publish anyway" is the one more tap, and it covers only the list that was shown.
+  const blankKey = () => eid + ":" + unnamedPrizes().join("|");
+  const blankOk = () => !unnamedPrizes().length || S.blankOk === blankKey();
+  const prizeWarn = () => { const n = unnamedPrizes(); return n.length ? `<div class="zc-alert" id="prizewarn" role="alert"><b>${n.length === 1 ? "1 prize has" : n.length + " prizes have"} no name.</b><ul class="zc-small" id="prizelist">${n.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>Winners will get nothing for ${n.length === 1 ? "this prize" : "these prizes"}.${S.blankAsk ? " Do you want to publish anyway?" : " Name them before you publish."}<div class="zc-chips zc-gap"><button type="button" class="zc-mini" data-open="3">Name the prizes (step 3)</button>${S.blankAsk ? `<button type="button" class="zc-mini zc-btn-bad" id="pubanyway">Publish anyway</button>` : ""}</div></div>` : ""; };
   // ---------- REHEARSALS (1.6.0): three free practice runs of a paid game, in three cards under the Publish step. One action per card, no settings.
   async function loadReh(force) {
     if (S.rehBusy || !eid || (S.info && S.info.rehearsal)) return;
@@ -964,7 +967,7 @@
       h += rowl(`<b>Published</b><br><span class="zc-small zc-nomargin">${isFree10() ? "Your game is live. Nothing to pay." : "Your link is live."}</span>`, `<span aria-hidden="true">&#10003;</span>`);
       h += isCancelled() ? "" : isFree10() ? small("Want more than 10 people? Choose a bigger size in step 8, at any time.") : small("Next: pay in step 8. One payment is enough.");
     }
-    return h + rehCards() + (S.cloneNew === eid && S.draft ? `<div class="zc-box" id="newgamenote2">This is a new game. Nothing is paid or published yet.</div>` : "") + previewButton() + cancelBlock() + (S.draft || isCancelled() ? "" : cloneButton()) + (S.draft ? "" : cont(7)); // a draft has one obvious button, Publish
+    return h + rehCards() + (S.cloneNew === eid && S.draft ? `<div class="zc-box" id="newgamenote2">This is a new game. Nothing is paid or published yet.${unnamedPrizes().length ? " The prizes copied from the first game that have no name are listed above." : ""}</div>` : "") + previewButton() + cancelBlock() + (S.draft || isCancelled() ? "" : cloneButton()) + (S.draft ? "" : cont(7)); // a draft has one obvious button, Publish
   }
   // ---------- credit (no refunds): the account's active credit can pay for a game ----------
   const creditTotal = () => Number((S.sum && S.sum.credit) || 0) || 0;
@@ -1980,11 +1983,13 @@
       window.open("/preview.html#" + h.toString(), "_blank", "noopener");
     }));
     // publish and pay
-    if ($("publishopen")) $("publishopen").onclick = () => { S.pubOpen = true; S.pubNote = ""; redraw(); };
+    if ($("publishopen")) $("publishopen").onclick = () => { S.pubNote = ""; if (!blankOk()) { S.blankAsk = true; return redraw(); } S.pubOpen = true; redraw(); }; // blank prizes: this tap only asks
+    if ($("pubanyway")) $("pubanyway").onclick = () => { S.blankOk = blankKey(); S.blankAsk = false; S.pubOpen = true; S.pubNote = ""; redraw(); };
     if ($("pubcancel")) $("pubcancel").onclick = () => { S.pubOpen = false; redraw(); };
     if ($("pubEmail")) $("pubEmail").oninput = (e) => { S.contact.email = e.target.value; };
     if ($("pubPhone")) $("pubPhone").oninput = (e) => { S.contact.phone = e.target.value; };
     if ($("pubgo")) $("pubgo").onclick = async () => {
+      if (!blankOk()) { S.pubOpen = false; S.blankAsk = true; return redraw(); } // never publish silently with a blank prize
       if (!CBConsent.all($app, "K1")) { S.pubNote = "Please tick the box to continue."; return redraw(); }
       const consent = CBConsent.payload($app, "K1");
       $("pubgo").disabled = true;

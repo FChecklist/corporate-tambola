@@ -104,7 +104,7 @@ describe("above 1,000 people the manual-play choice is hidden", () => {
     await c.waitFor(() => !!c.$('.zc-dot[data-open="7"]')); openStep(c, 7); await c.waitFor((t) => /Check your game/.test(t));
     expect(c.$("#modesummary2")!.textContent).toMatch(/Your game: starts by itself at .*\. The game calls the numbers\./);
     const w = c.$("#prizewarn");
-    expect(w!.textContent).toBe("2 prizes have no name: Early Five, 1st Full House. Winners will get nothing. Go back and name them, or press Publish anyway.");
+    expect(w!.textContent).toBe("2 prizes have no name.Early Five1st Full HouseWinners will get nothing for these prizes. Name them before you publish.Name the prizes (step 3)");
   });
   test("a game of 1,001 people (and of 2,001) keeps 'How does it start?' but 'Who calls the numbers?' is replaced by a short note; at 1,000 both questions are there", async () => {
     const big = await setup("MP-1001", false, { cap: 1001 });
