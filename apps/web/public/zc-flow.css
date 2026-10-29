@@ -19,3 +19,22 @@
   .zf-soon { background: #2a2f3a; color: #d7dbe5; }
 }
 @media (max-width: 480px) { .zf-pill { width: 100%; text-align: left; } }
+.zf-lead { margin: 0 0 8px; }
+.zf-body h3 { font-size: 17px; margin: 14px 0 6px; }
+.zf-body label { display: block; margin: 8px 0 4px; font-weight: 600; }
+.zf-body input[type=text], .zf-body input[type=date], .zf-body select { min-height: 44px; padding: 6px 10px; font: inherit; max-width: 100%; }
+.zf-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.zf-chip { min-height: 44px; padding: 6px 14px; border-radius: 22px; border: 1px solid #b9c4d8; background: #fff; color: #10223f; font: inherit; cursor: pointer; }
+.zf-chip.on { background: #0b3d91; color: #fff; border-color: #0b3d91; }
+.zf-else { margin: 12px 0; padding: 10px 14px; border-radius: 10px; background: #eef2fb; }
+.zf-else ul { margin: 6px 0 0; padding-left: 18px; }
+.zf-msg { min-height: 1.4em; margin: 10px 0 4px; color: #8a1c1c; }
+.zf-go { min-height: 48px; padding: 8px 22px; border-radius: 24px; border: 0; background: #0b3d91; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.zf-go[disabled] { opacity: .6; }
+@media (prefers-color-scheme: dark) {
+  .zf-chip { background: #14203a; color: #e6edf9; border-color: #3a4a6e; }
+  .zf-chip.on { background: #8fb3ff; color: #0a1630; }
+  .zf-else { background: #1a2745; }
+  .zf-msg { color: #ffb3b3; }
+  .zf-go { background: #8fb3ff; color: #0a1630; }
+}

@@ -7,10 +7,13 @@ import { Window } from "happy-dom";
 
 const PUB = join(import.meta.dir, "../public");
 const src = (f: string) => readFileSync(join(PUB, f), "utf8");
+export const calls: any[] = [];
 function page(search: string) {
   const win: any = new Window({ url: "http://localhost/zc.html" + search });
   win.document.body.innerHTML = '<main id="app"></main>';
-  new Function("window", "document", "location", src("zc-flow.js"))(win, win.document, win.location);
+  win.ZG = { roundAt: (ms: number) => Math.floor(ms / 3000) };
+  const fakeFetch = async (url: string, o: any) => { calls.push({ url, method: o.method, body: o.body ? JSON.parse(o.body) : null }); return { ok: true, json: async () => ({ ok: true }) }; };
+  new Function("window", "document", "location", "fetch", src("zc-flow.js"))(win, win.document, win.location, fakeFetch);
   return win;
 }
 

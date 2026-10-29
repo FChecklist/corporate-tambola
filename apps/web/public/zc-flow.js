@@ -32,9 +32,54 @@
   /** Words banned by the language guide in anything the organizer reads. */
   const BANNED = [/\binvit/i, /\bprivate\b/i, /\bwe\b/i, /\bRs\.?\s?\d/, /\bseats?\b/i, /\bplaces\b/i, /in the office/i, /\bcash\b/i];
   const badWords = (text) => BANNED.filter((r) => r.test(text)).map(String);
+  /* ---- Step 1: date, time and zone (pure) ---- */
+  const OCC = ["Diwali party", "Dealer meet", "Annual day", "Team party", "Customer event", "Family day", "Weekend Fun", "Christmas Party", "Eid Party", "Holi Party", "Other"];
+  const ZONES = [
+    { id: "Asia/Kolkata", label: "India (IST)" }, { id: "Asia/Dubai", label: "Dubai" }, { id: "Asia/Singapore", label: "Singapore" },
+    { id: "Europe/London", label: "London" }, { id: "America/New_York", label: "New York" }, { id: "America/Los_Angeles", label: "Los Angeles" }, { id: "Australia/Sydney", label: "Sydney" },
+  ];
+  const OTHER_ZONE = "other";
+  const validZone = (z) => { try { new Intl.DateTimeFormat("en", { timeZone: z }); return true; } catch { return false; } };
+  /** What a clock in `zone` reads at `ms`, as numbers. */
+  function partsIn(ms, zone) {
+    const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: zone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+    return { y: +p.year, mo: +p.month, d: +p.day, h: +p.hour, mi: +p.minute };
+  }
+  /** The moment (ms) when the wall clock in `zone` reads dateStr (YYYY-MM-DD) and timeStr (HH:MM). */
+  function wallToMs(dateStr, timeStr, zone) {
+    const [y, mo, d] = dateStr.split("-").map(Number), [h, mi] = timeStr.split(":").map(Number);
+    const want = Date.UTC(y, mo - 1, d, h, mi);
+    let ms = want;
+    for (let i = 0; i < 3; i++) { const p = partsIn(ms, zone); ms += want - Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi); }
+    return ms;
+  }
+  const pad = (n) => String(n).padStart(2, "0");
+  const todayIn = (now, zone) => { const p = partsIn(now, zone); return p.y + "-" + pad(p.mo) + "-" + pad(p.d); };
+  /** Times offered every 15 minutes; one that has already passed in the chosen zone is disabled. */
+  function timeOptions(dateStr, zone, now) {
+    const out = [];
+    for (let m = 0; m < 24 * 60; m += 15) { const t = pad(Math.floor(m / 60)) + ":" + pad(m % 60); out.push({ t, passed: !(wallToMs(dateStr, t, zone) > now) }); }
+    return out;
+  }
+  const clockIn = (ms, zone) => new Intl.DateTimeFormat("en-GB", { timeZone: zone, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(ms));
+  /** "For people elsewhere": the same moment on the clocks of the other popular zones. */
+  const elsewhere = (ms, zone) => ZONES.filter((z) => z.id !== zone).slice(0, 4).map((z) => z.label + ": " + clockIn(ms, z.id));
+  const gameName = (occ, other) => (occ === "Other" ? String(other || "").replace(/\s+/g, " ").trim() : occ);
+  /** Everything wrong with step 1, in plain words (empty list = fine). */
+  function whenProblems(f, now) {
+    const bad = [];
+    if (!gameName(f.occ, f.oname)) bad.push("Please type a name for your game.");
+    if (!f.date || !f.time) { bad.push("Please choose a day and a time."); return bad; }
+    const zone = f.zone === OTHER_ZONE ? f.zoneOther : f.zone;
+    if (!zone || !validZone(zone)) { bad.push("Please choose a time zone from the list."); return bad; }
+    const ms = wallToMs(f.date, f.time, zone);
+    if (!(ms > now)) bad.push("That time has already passed. Please choose a later time.");
+    else if (ms > now + 30 * 86400000) bad.push("A game can start at most 30 days from today.");
+    return bad;
+  }
   const registry = {}; // step number -> function(el, ctx) that draws the step body (each step adds its own)
 
-  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry };
+  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn };
   if (typeof window !== "undefined") window.ZFLOW = api;
   if (typeof module !== "undefined") module.exports = api;
   if (typeof document === "undefined") return;
@@ -81,6 +126,60 @@
     draw();
     if (nx) scrollTo("zf-sec" + nx);
   }
+  /* ---- talking to the game service (same sign-in key as the current console) ---- */
+  const BASE = (q.get("api") || "").replace(/\/$/, "");
+  const secret = () => { try { return (window.CTK ? window.CTK.get("ctz-org") : sessionStorage.getItem("ctz-org")) || ""; } catch { return ""; } };
+  state.eid = q.get("e") || "";
+  async function call(method, path, body) {
+    const r = await fetch(BASE + path, { method, headers: { "content-type": "application/json", "x-organizer": secret() }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw Object.assign(new Error(j.error || "Could not do that. Please try again."), { status: r.status });
+    return j;
+  }
+  const randId = () => "E" + Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("");
+  api.call = call;
+
+  /* ---- Step 1 ---- */
+  const form = { occ: "Team party", oname: "", date: "", time: "", zone: "Asia/Kolkata", zoneOther: "" };
+  api.form = form;
+  registry[1] = (box) => {
+    const now = Date.now(), zone = form.zone === OTHER_ZONE ? form.zoneOther : form.zone, okZone = !!zone && validZone(zone);
+    const msg = el("p", { class: "zf-msg", role: "status", id: "zf-msg1" });
+    const redo = () => { const keep = document.activeElement && document.activeElement.id; draw(); if (keep) { const k = document.getElementById(keep); if (k) k.focus(); } };
+    box.append(el("p", { class: "zf-lead", text: "Choose when your game begins. People can join from any location." }));
+    const occ = el("div", { class: "zf-chips", role: "radiogroup", "aria-label": "Occasion" });
+    for (const o of OCC) occ.append(el("button", { type: "button", role: "radio", class: "zf-chip" + (form.occ === o ? " on" : ""), "aria-checked": String(form.occ === o), "data-occ": o, onclick: () => { form.occ = o; redo(); } }, o));
+    box.append(el("h3", { text: "What is the occasion?" }), occ);
+    if (form.occ === "Other") box.append(el("label", { for: "zf-oname", text: "Write the occasion (it becomes the name of your game)" }), el("input", { id: "zf-oname", type: "text", maxlength: "40", value: form.oname, oninput: (e) => { form.oname = e.target.value; } }));
+    if (!okZone) { box.append(el("p", { class: "zf-msg", text: "Choose a time zone to see the times." })); }
+    const zsel = el("select", { id: "zf-zone", "aria-label": "Time zone", onchange: (e) => { form.zone = e.target.value; form.time = ""; redo(); } });
+    for (const z of ZONES) zsel.append(el("option", { value: z.id, ...(form.zone === z.id ? { selected: "" } : {}) }, z.label));
+    zsel.append(el("option", { value: OTHER_ZONE, ...(form.zone === OTHER_ZONE ? { selected: "" } : {}) }, "Other"));
+    const day = el("input", { id: "zf-date", type: "date", value: form.date, ...(okZone ? { min: todayIn(now, zone) } : {}), onchange: (e) => { form.date = e.target.value; form.time = ""; redo(); } });
+    const tsel = el("select", { id: "zf-time", "aria-label": "Time", onchange: (e) => { form.time = e.target.value; redo(); } }, el("option", { value: "" }, "Choose a time"));
+    if (okZone && form.date) for (const t of timeOptions(form.date, zone, now)) tsel.append(el("option", { value: t.t, ...(t.passed ? { disabled: "" } : {}), ...(form.time === t.t ? { selected: "" } : {}) }, t.t));
+    box.append(el("h3", { text: "Which day and time?" }), el("label", { for: "zf-date", text: "Day" }), day, el("label", { for: "zf-time", text: "Time" }), tsel, el("label", { for: "zf-zone", text: "Time zone" }), zsel);
+    if (form.zone === OTHER_ZONE) box.append(el("label", { for: "zf-zone2", text: "Time zone name, for example Asia/Tokyo" }), el("input", { id: "zf-zone2", type: "text", value: form.zoneOther, onchange: (e) => { form.zoneOther = e.target.value.trim(); redo(); } }));
+    if (okZone && form.date && form.time) {
+      const ms = wallToMs(form.date, form.time, zone);
+      box.append(el("div", { class: "zf-else", id: "zf-else" }, el("b", { text: "What time it is for people elsewhere" }), el("ul", {}, elsewhere(ms, zone).map((x) => el("li", { text: x })))));
+    }
+    const go = el("button", { type: "button", class: "zf-go", id: "zf-save1", onclick: async () => {
+      const bad = whenProblems(form, Date.now());
+      if (bad.length) { msg.textContent = bad[0]; return; }
+      go.disabled = true; msg.textContent = "Saving…";
+      try {
+        const z = form.zone === OTHER_ZONE ? form.zoneOther : form.zone, ms = wallToMs(form.date, form.time, z), name = gameName(form.occ, form.oname);
+        const startRound = window.ZG.roundAt(ms);
+        if (state.eid) await call("PATCH", `/api/z/${state.eid}/settings`, { name, startRound });
+        else { const id = randId(); await call("POST", "/api/z", { id, name, startRound, callSeconds: 12, cap: 10 }); state.eid = id; try { window.history.replaceState(null, "", location.pathname + "?flow=new&e=" + id); } catch {} }
+        state.when = { ms, zone: z };
+        done(1);
+      } catch (e) { go.disabled = false; msg.textContent = e.message; }
+    } }, "Save and continue");
+    box.append(msg, go);
+  };
+
   api.state = state; api.draw = draw; api.done = done; api.el = el;
   document.title = "Organizer console | Corporate Tambola";
   draw();
