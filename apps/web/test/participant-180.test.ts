@@ -13,7 +13,7 @@ describe("participant side 1.8.0", () => {
     expect(rt).toContain("...(email ? { email } : {})");
     expect(z).toContain("rt.join(J.e164 || J.phone, J.name, inviteOf(), J.emp, J.email)");
     expect(z).toContain('Your email ID <span class="zopt">(optional)</span>');
-    expect(z).toContain('(INFO.verify || "mobile") === "mobile" && !INFO.empOnly');
+    expect(z).toContain('INFO.open === true && (INFO.verify || "mobile") === "mobile" && !INFO.empOnly');
     expect(readFileSync(join(import.meta.dir, "../public/zgame.js"), "utf8")).toContain("email:"); // the built runtime has it
   });
   test("family host card: passes, notification, approval until 15 minutes before the game; approve and Not now use the engine's waiting API", () => {

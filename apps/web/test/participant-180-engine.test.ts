@@ -18,7 +18,7 @@ afterEach(async () => { for (const p of open) await p.close(); open = []; });
 async function organizer(oldWorld = false) { const w = newWorld({ FREE_LAUNCH: "1" }); w.world.now = oldWorld ? T : T2; const s = await w.json(await w.api("POST", "/api/start", { email: "boss@acme.com" })); return { ...w, token: s.token as string, aiKey: s.aiKey as string }; }
 type O = Awaited<ReturnType<typeof organizer>>;
 const rtFake = (win: any, nowMs: () => number) => { const Orig = win.ZG.PhoneRuntime; win.ZG.PhoneRuntime = class extends Orig { constructor(eid: string, deps: any) { super(eid, { ...deps, beacon: { fetcher: async (url: string) => { const last = url.split("/").pop()!; const r = last === "latest" ? roundAt(nowMs()) : Number(last); return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" }) }; }, mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 }, verify: (x: any) => x.signature === "aa" }); } }; };
-const page = async (o: O, url: string, email = false) => { const p = await openPage(o.world, { url: "http://localhost" + url, html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], session: {}, afterLoad: (win: any, f: string) => { if (f === "zgame.js") { rtFake(win, () => o.world.now); if (email) win.CT_EMAIL = true; } } }); open.push(p); return p; };
+const page = async (o: O, url: string, email = false) => { const p = await openPage(o.world, { url: "http://localhost" + url, html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], session: {}, afterLoad: (win: any, f: string) => { if (f === "zgame.js") { rtFake(win, () => o.world.now); } } }); open.push(p); return p; };
 const game = async (o: O, id: string, over: Record<string, unknown> = {}, invites?: unknown) => {
   expect((await o.api("POST", "/api/z", { id, startRound: START, callSeconds: 9, cap: 100, ...over }, o.aiKey)).status).toBe(200);
   if (invites) await o.api("PATCH", `/api/z/${id}/settings`, { invites }, o.aiKey);
@@ -32,9 +32,11 @@ const join = async (p: Page, phone: string, extra: Record<string, string> = {}) 
 };
 
 describe("1.8.0 open join form", () => {
-  test("by default the join form shows no email box (the join notice does not name it yet)", async () => {
-    const o = await organizer(); await game(o, "E180-0"); const p = await page(o, "/z?e=E180-0"); await p.waitFor((x) => /Join the game/.test(x));
+  test("a list game shows no email box (the public settings say open: false); an open game shows it", async () => {
+    const o = await organizer(); await game(o, "E180-0", { whoCanJoin: "list" }); const p = await page(o, "/z?e=E180-0"); await p.waitFor((x) => /Join the game/.test(x));
     expect(p.$("#mail")).toBeNull(); expect(p.text()).not.toContain("Your email ID");
+    const o2 = await organizer(); await game(o2, "E180-00"); const q = await page(o2, "/z?e=E180-00"); await q.waitFor((x) => /Join the game/.test(x));
+    expect(q.$("#mail")).not.toBeNull(); expect(q.text()).toContain("Your email ID");
   });
   test("with the email box switched on the page sends the email, and 1.8.0 (EMAIL_ENABLED = false) ignores it: the join works, nothing is stored or checked", async () => {
     const o = await organizer(); await game(o, "E180-1");

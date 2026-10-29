@@ -50,6 +50,7 @@
     if (!r || typeof r !== "object") return;
     if ("brand" in r && !(fromJoin && INFO.brand)) { INFO.brand = cleanBrand(r.brand); if (!DEMO && EID && INFO.brand && INFO.brand.logo !== undefined) { try { store.set("ctz:" + EID + ":brand", JSON.stringify(INFO.brand)); } catch { /* storage full or blocked: the strip just is not kept */ } } } // a join answer carries the brand without its logo: never let it replace the full one read from info
     if (r.didNotStart === true) INFO.dns = true; else if ("startRound" in r && !fromJoin) INFO.dns = false;
+    if ("open" in r) INFO.open = r.open === true; // 1.8.1: anyone can join with a mobile number (not a list or ID game)
     if ("verify" in r) { INFO.verify = r.verify === "id" || r.verify === "either" || r.verify === "both" ? r.verify : "mobile"; INFO.empOnly = r.employeesOnly === true; }
     if ("rehearsal" in r) INFO.rehearsal = r.rehearsal && typeof r.rehearsal === "object" ? r.rehearsal : null; // a rehearsal: its pages carry the REHEARSAL block and, once it is over, the calm "over" page
     if ("startMs" in r && Number.isFinite(Number(r.startMs))) { INFO.startMs = Number(r.startMs); INFO.manualStart = r.startMode === "manual"; } // TA22: the join page says "already running" before the person joins
@@ -186,8 +187,8 @@
     return `<p class="zwelcome" id="zwelcome"><b>Welcome!</b> You are invited to join the Corporate Tambola (Housie) organized by ${esc(co)}${esc(when)}. ${personal ? "Press the button to get your ticket." : "To join, type " + what + "."}</p>`;
   };
   // 1.8.0: an open game (people type their mobile number) also takes an optional Email ID. The server checks its shape and keeps one ticket per email.
-  // OFF until the join notice (K4) and the data map name the Email ID (rule D2, apps/edge/test/data-map.test.ts); switched on by window.CT_EMAIL === true
-  const emailAsked = () => typeof window !== "undefined" && window.CT_EMAIL === true && (INFO.verify || "mobile") === "mobile" && !INFO.empOnly;
+  // 1.8.1: only an open game (the public settings say open: true) asks for the optional Email ID; the join notice K4 names it (data map, rule D2)
+  const emailAsked = () => INFO.open === true && (INFO.verify || "mobile") === "mobile" && !INFO.empOnly;
   const joinView = (msg) => {
     if (J.mode === "removed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>You are not on this game's list</h2><p class="zsmall" style="margin:0">You were removed from this game, so there is no ticket for you here. If you think this is a mistake, please ask the person who invited you.</p></div>`;
     if (J.mode === "gone") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This link is not active any more</h2><p class="zsmall" style="margin:0">Please ask the person who invited you for a new link.</p></div>`;

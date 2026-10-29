@@ -21,7 +21,7 @@ let n = 0;
 for (const w of [360, 768, 1280]) for (const scheme of ["light", "dark"]) for (const look of ["retro", "modern"]) {
   n++; const tag = `${w}-${scheme}-${look}`;
   const ctx = await browser.newContext({ viewport: { width: w, height: 900 }, colorScheme: scheme, isMobile: w < 600, hasTouch: w < 600 });
-  await ctx.addInitScript((l) => { try { localStorage.setItem("ctz-look", l); window.CT_EMAIL = true; } catch {} }, look);
+  await ctx.addInitScript((l) => { try { localStorage.setItem("ctz-look", l); } catch {} }, look);
   const p = await ctx.newPage(), errs = []; p.on("pageerror", (e) => errs.push(String(e).slice(0, 120)));
   try {
     await p.goto(`${BASE}/z.html?e=${id}`, { waitUntil: "load" }); await p.waitForSelector("[data-cbc='K4'] input[data-box]", { timeout: 20000 });
