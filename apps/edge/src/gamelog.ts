@@ -18,6 +18,8 @@ const prizeName = (cfg: EngagementCfg, key: PatternKey, ordinal: number) => (lin
 export interface GameLog {
   v: 1; id: string; name: string; brand?: { name: string; color: string; hasLogo: boolean }; rehearsal?: number; saved: boolean; savedMs: number | null;
   mode: { start: "auto" | "manual"; call: "auto" | "host"; afterPrizes: "keep" | "end" };
+  /** how people who finish on the same number are treated (the game's real setting; absent in logs saved before 1.6.8) */
+  ties?: "next" | "share";
   startsAtMs: number; firstNumberMs: number | null; endedAtMs: number | null; endReason: string | null; numbersCalled: number | null;
   people: { joined: number; late: number; waiting: number; present: number | null; most: number };
   /** when each ticket joined (ticket numbers only; the first 2,000) */
@@ -85,6 +87,7 @@ export async function buildGameLog(env: { DB: D1 }, kvOf: KV, e: any, cfg: Engag
   return {
     v: 1, id: eid, name: cfg.name || eid, saved: false, savedMs: null,
     ...(cfg.brand ? { brand: { name: cfg.brand.name, color: cfg.brand.color, hasLogo: !!cfg.brand.logo } } : {}), ...(e.rehearsal_of ? { rehearsal: Number(e.run_no) || 1 } : {}),
+    ties: cfg.ties === "share" ? "share" : "next",
     mode: { start: cfg.startMode === "manual" ? "manual" : "auto", call: cfg.callMode === "host" ? "host" : "auto", afterPrizes: cfg.keepCalling ? "keep" : "end" },
     startsAtMs: roundMs(e.start_round), firstNumberMs: end?.firstNumberMs ?? null, endedAtMs: end?.endMs ?? (life?.end_ms ?? null), endReason: end?.endReason ?? null, numbersCalled: end?.numbersCalled ?? null,
     people: { joined, late, waiting, present, most: joined }, joins, claims,

@@ -3,6 +3,7 @@
 import { BRAND } from "./brand";
 import { MORE_GAMES } from "../../../packages/beacon/src/more-games";
 import { calledLine } from "../../../packages/beacon/src/gaps";
+import { claimRuleText } from "../../../packages/beacon/src/config";
 import { GOLD, NAVY, PdfDoc, WHITE, type Column } from "./pdf";
 
 export interface ReportPerson { seat: number | null; name: string | null; phone: string | null; joinedMs: number | null; late: boolean; role: string | null; invitedBy: number | null; onRoster: boolean; joined: boolean; /** the list this person is on: Organizer, Host <name>, Co-host <name> (a guest's own invitees show under that guest) */ via?: string | null; /** who let them in from the waiting room or put them back */ admittedBy?: string | null; removed?: boolean }
@@ -24,7 +25,7 @@ export interface ReportData {
   /** Totals about the people, when the list itself is spread over several PDFs. */
   agg?: Agg; omitPeople?: boolean; totalPeople?: number;
   /** The complete claim and event log of the game (ticket numbers only), for the PDF sections "At a glance", "Every claim", "What happened" (1.6.1). */
-  log?: { people: { joined: number }; firstNumberMs: number | null; endedAtMs: number | null; numbersCalled: number | null; claims: { ticket: number; prize: string; outcome: string; atMs: number; afterNumber: number | null; takenAtNumber?: number }[]; prizes: { prize: string; text: string; ticket: number; callNo: number; atMs: number | null }[]; pauses: { by: string; fromMs: number; toMs: number | null }[]; changes: { atMs: number; who: string; what: string }[] };
+  log?: { ties?: string; people: { joined: number }; firstNumberMs: number | null; endedAtMs: number | null; numbersCalled: number | null; claims: { ticket: number; prize: string; outcome: string; atMs: number; afterNumber: number | null; takenAtNumber?: number }[]; prizes: { prize: string; text: string; ticket: number; callNo: number; atMs: number | null }[]; pauses: { by: string; fromMs: number; toMs: number | null }[]; changes: { atMs: number; who: string; what: string }[] };
   /** The organizer's own company name and logo (a data URL). The report page turns the logo into raw pixels (`logoPix`) before laying the PDF out. */
   brand?: { name?: string; color?: string; logo?: string }; logoPix?: { w: number; h: number; hex: string }; ourLogoPix?: { w: number; h: number; hex: string };
 }
@@ -100,7 +101,7 @@ export function layoutReport(d: ReportData): Uint8Array {
   pdf.h1("3. Prizes and winners");
   { const t0 = d.prizes.length, w0 = d.prizes.filter((p) => p.winners.length).length;
   pdf.para(`${t0} prize lines were set up; ${w0} were won (${t0 - w0} not won).`, { size: 9.5, gap: 4 });
-  pdf.para("Rule: everyone who claims before the next number is called wins that prize together. If there are more winners than prizes, the organizer or host decides how to share. Unlucky is awarded automatically.", { size: 9, gap: 4 });
+  pdf.para(claimRuleText(d.log?.ties), { size: 9, gap: 4 });
   for (const line of d.takenClaims ?? []) pdf.para(line, { size: 9, gap: 2 }); }
   for (const pr of d.prizes) {
     pdf.h2(`${d.rounds > 1 ? `Round ${pr.round}  |  ` : ""}${pr.label}${pr.text ? `   -   ${pr.text}` : ""}`);

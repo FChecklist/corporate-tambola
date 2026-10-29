@@ -54,7 +54,7 @@ export const personalDeleteAt = (endMs: number) => endMs + PURGE_AFTER_MS;
 export const reportLinkUntil = (endMs: number) => endMs + REPORT_LINK_MS;
 
 export function cfgOfRow(e: { tickets?: number; config?: string | null }): EngagementCfg {
-  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, verify: j.verify, employeesOnly: j.employeesOnly, callMode: j.callMode === "host" ? "host" : undefined, startMode: j.startMode === "manual" ? "manual" : undefined, afterPrizes: j.keepCalling ? "keep" : undefined }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* plain defaults */ }
+  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, ties: j.ties, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, verify: j.verify, employeesOnly: j.employeesOnly, callMode: j.callMode === "host" ? "host" : undefined, startMode: j.startMode === "manual" ? "manual" : undefined, afterPrizes: j.keepCalling ? "keep" : undefined }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* plain defaults */ }
   return (validateCfg({}) as { ok: true; cfg: EngagementCfg }).cfg;
 }
 
@@ -322,7 +322,7 @@ async function baseData(env: LifeEnv, e: any, cfg: EngagementCfg, sch: Awaited<R
   const lucky = cfg.breaks.filter((b) => b.kind === "lucky").map((b, i) => ({ title: b.title, winners: wrows.filter((w: any) => w.pattern === "lucky" && w.ordinal === i + 1).map(winnerOf) }));
   let logForPdf: ReportData["log"];
   let takenClaims: string[] = []; // claims that came in time but after the prize was already awarded: said in the owner's words in the report
-  try { const gl = await buildGameLog(env, d1kv(env), e, cfg, endMs); logForPdf = { people: gl.people, firstNumberMs: gl.firstNumberMs, endedAtMs: gl.endedAtMs, numbersCalled: gl.numbersCalled, claims: gl.claims, prizes: gl.prizes, pauses: gl.pauses, changes: gl.changes }; takenClaims = gl.claims.filter((c) => c.outcome === "prize taken").map((c) => `Ticket ${c.ticket} claimed ${c.prize}. Prize already taken: this claim came at number ${c.afterNumber}, after the prize was already awarded at number ${c.takenAtNumber}.`).slice(0, 60); } catch { /* the report is still sent */ }
+  try { const gl = await buildGameLog(env, d1kv(env), e, cfg, endMs); logForPdf = { ties: gl.ties, people: gl.people, firstNumberMs: gl.firstNumberMs, endedAtMs: gl.endedAtMs, numbersCalled: gl.numbersCalled, claims: gl.claims, prizes: gl.prizes, pauses: gl.pauses, changes: gl.changes }; takenClaims = gl.claims.filter((c) => c.outcome === "prize taken").map((c) => `Ticket ${c.ticket} claimed ${c.prize}. Prize already taken: this claim came at number ${c.afterNumber}, after the prize was already awarded at number ${c.takenAtNumber}.`).slice(0, 60); } catch { /* the report is still sent */ }
   const held = e.pack === 0;
   const early = !held && endMs < (await endBoundMs(env, e)) - 5 * 60_000;
   // How many numbers were really called in the last round: counted on the clock the phones used (pauses, breaks and the organizer's presses applied), never assumed to be 90.

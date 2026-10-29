@@ -143,8 +143,12 @@ describe("the report explains 'Prize already taken'", () => {
   test("the rule text is always in the prizes section and every taken claim has its line", () => {
     const base = { engagementId: "X", organizerEmail: "a@b.c", sentAtMs: T, scheduledMs: T, firstNumberMs: T, endMs: T + 60_000, endReason: "x", wasHeld: false, rounds: 1, callSeconds: 12, ticketsPerPerson: 1, cap: 50, inviteOnly: false, numbersCalled: 5, agg: { joined: 0, onRoster: 0, notJoined: 0, late: 0, viaInvite: 0, inviters: 0, topInviter: null, roles: 0, joinedInTime: 0, firstJoinMs: null }, people: [], prizes: [], lucky: [], timeline: [], breaks: [], personalDeleteAtMs: T, fullDeleteAtMs: T } as any;
     const text = (d: any) => [...new TextDecoder("latin1").decode(layoutReport(d)).matchAll(/\((.*?)\) Tj/g)].map((m) => m[1]).join(" ").replace(/\\(?=[()])/g, "").replace(/\s+/g, " ");
-    const t = text({ ...base, takenClaims: ["Ticket 3 claimed Top line. Prize already taken: this claim came at number 15, after the prize was already awarded at number 10."] });
+    const logOf = (ties?: string) => ({ ties, people: { joined: 0 }, firstNumberMs: null, endedAtMs: null, numbersCalled: 5, claims: [], prizes: [], pauses: [], changes: [] });
+    const t = text({ ...base, log: logOf("share"), takenClaims: ["Ticket 3 claimed Top line. Prize already taken: this claim came at number 15, after the prize was already awarded at number 10."] });
     expect(t).toContain("everyone who claims before the next number is called wins that prize together"); expect(t).toContain("Prize already taken: this claim came at number 15, after the prize was already awarded at number 10.");
     expect(text(base)).not.toContain("Prize already taken");
+    // TA19: the rule line follows the game's real setting
+    expect(text({ ...base, log: logOf("next") })).toContain("they take the next prizes one after the other"); expect(text({ ...base, log: logOf("next") })).not.toContain("wins that prize together");
+    expect(text({ ...base, log: logOf(undefined) })).not.toContain("wins that prize together"); // an old log: only what is true for every game
   });
 });

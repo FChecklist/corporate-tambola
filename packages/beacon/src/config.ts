@@ -125,6 +125,12 @@ export type StartMode = "auto" | "manual";
  */
 export const CLAIM_WINDOW_CALLS = 1; // a claim counts when it arrives before this many more numbers are called (one: before the next number)
 export const CLAIM_RULE_TEXT = "Press Claim before the next number is called.";
+/** The prize rule line of the reports and the game log, from the game's REAL tie setting (TA19). "next": people who finish on the same number take the next prizes one after the other; "share": they share that prize; unknown (a log saved before the setting was kept): only what is true for every game. */
+export const claimRuleText = (ties?: string | null): string => ties === "share"
+  ? "Rule: everyone who claims before the next number is called wins that prize together. If there are more winners than prizes, the organizer or host decides how to share. Unlucky is awarded automatically."
+  : ties === "next"
+    ? "Rule: a prize goes to a claim made before the next number is called. If several people finish on the same number, they take the next prizes one after the other, in a fixed public order. Unlucky is awarded automatically."
+    : "Rule: a prize is won by pressing Claim before the next number is called. Unlucky is awarded automatically.";
 export const PLAYER_TIP = "Tap each number as it is called. When a prize is complete, press Claim before the next number is called. A wrong claim is a Bogey: it does not count.";
 /** A DEMO GAME: a real game on the real server, free, for at most this many people; every screen says DEMO GAME. The organizer can make it a real game (choose a pack and pay) at any time. */
 export const DEMO_CAP = 10;
