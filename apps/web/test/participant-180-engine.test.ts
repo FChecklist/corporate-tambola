@@ -115,6 +115,13 @@ describe("1.8.0 family passes", () => {
     for (const from of [0, 1_000_000_000, 1_000_000_005, 1_500_000_007, 1_900_000_000]) expect([from, fam(from)]).toEqual([from, false]); // none, Co-host, Host, organizer codes
     expect(z).toContain("${FAMILY_LINK && (!J.note || /^This game is by invitation/.test(J.note)) ? \"You asked to join through a family pass."); // any other server note (for example "used all their invitations") is shown as it is
   });
+  test("a request that lapses because the GAME ENDED (a game on the 1.7.1 rules) shows the server's words, not the 30-minute sentence", async () => {
+    const o = await organizer(true); await game(o, "E180-11", { whoCanJoin: "list", startRound: OLD_START });
+    const p = await page(o, "/z?e=E180-11"); await join(p, "9811100091"); await p.waitFor((x) => /Please wait/i.test(x));
+    o.world.now = OLD_START_MS + 30 * 3600_000; // long after the game: the waiting request can only be closed because the game is over
+    const t = await p.waitFor((x) => /game has ended|This request has/i.test(x), 40_000);
+    expect(t).toMatch(/This game has ended/i); expect(t).not.toMatch(/waited 30 minutes/);
+  }, 120_000);
   test("a request that waited 30 minutes lapses and the person reads the polite words; 10 minutes before the start the family host cannot approve any more", async () => {
     const o = await organizer(); await game(o, "E180-4", { whoCanJoin: "list" });
     const p = await page(o, "/z?e=E180-4"); await join(p, "9811100031"); await p.waitFor((x) => /Please wait/i.test(x));

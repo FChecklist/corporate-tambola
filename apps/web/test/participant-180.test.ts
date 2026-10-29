@@ -26,8 +26,9 @@ describe("participant side 1.8.0", () => {
   test("family member: waits for the family host; waits that run out or are declined get the polite words", () => {
     expect(z).toContain("You asked to join through a family pass. Please wait while your family host approves your entry.");
     expect(z).toContain("approves your entry. You can come in as soon as they say yes.\" : J.note"); // the family sentence replaces the server note, so the text reads once
-    expect(z).toContain("Your request waited 30 minutes and nobody answered. Please open the game link and ask again, or talk to whoever shared it with you.");
-    expect(z).toContain("Thank you for asking. This game could not add you this time. Please talk to whoever shared the link with you.");
+    expect(z).not.toContain("Your request waited 30 minutes"); // the 30-minute words come from the server (a request can also lapse because the game ended)
+    expect(z).toContain("J.endNote = String(r.message || \"\").slice(0, 300)");
+    expect(z).toContain("${J.endNote ? esc(J.endNote) :");
   });
   test("the family card is readable in both looks: its link box follows the look", () => {
     expect(css).toContain("html[data-pt] .zlink{background:rgba(255,255,255,.08);color:var(--ink)");
