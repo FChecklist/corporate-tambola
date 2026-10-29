@@ -175,3 +175,22 @@ describe("the organizer's board screen: live panels", () => {
     expect(ph.text()).not.toMatch(/Average gap|Claims as they come|The whole game, newest first/);
   });
 });
+
+describe("A20 (WP-02): the board hides Pause, Resume and 'Add 30 more minutes' above 2,000 people only when the game is not called by a Host", () => {
+  // a Host-run game is capped at 1,000 people, so the control file never says startOnly for one; the file is tampered with here to prove the board itself decides by who calls the numbers
+  const startOnlyBoard = async (eid: string, host: boolean) => {
+    const x = await setup(eid, host); x.goLive(); for (let i = 0; i < 30; i++) await x.step();
+    const row = x.w.world.raw.prepare("SELECT k, v FROM kv WHERE k LIKE 'control/%' AND v LIKE ?").get(`%${eid}%`) as { k: string; v: string };
+    const f = JSON.parse(row.v); f.startOnly = true; x.w.world.raw.prepare("UPDATE kv SET v=? WHERE k=?").run(JSON.stringify(f), row.k);
+    const b = await boardPage(x, eid, x.token); await until(() => !!b.$("#bp-controls"));
+    return b;
+  };
+  test("a game the software calls, above 2,000: no Pause or Resume, and the board says why", async () => {
+    const b = await startOnlyBoard("BD-A20A", false);
+    expect(b.$("#bp-pause")).toBeNull(); expect(b.$("#bp-resume")).toBeNull(); expect(b.$("#bp-nopause")!.textContent).toMatch(/No pause on games above 2,000 people/);
+  });
+  test("a game a Host calls keeps its Pause, Resume and Next number, and does not claim the numbers 'keep coming at their own pace'", async () => {
+    const b = await startOnlyBoard("BD-A20B", true);
+    expect(b.$("#bp-pause")).toBeTruthy(); expect(b.$("#bp-resume")).toBeTruthy(); expect(b.$("#bp-next")).toBeTruthy(); expect(b.$("#bp-nopause")).toBeNull();
+  });
+});

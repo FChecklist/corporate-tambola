@@ -170,7 +170,7 @@
   function controlsHtml() {
     if (P.who !== "master" && P.who !== "host" && P.who !== "platform") return `<div class="bpbox" id="bp-controls"><h2>Controls</h2><p class="bpsmall">Pause, Resume and Next number are pressed by the Organizer or a Host.</p></div>`;
     const paused = pausedNowB(), manual = (S.cfg || {}).startMode === "manual", go = S.st ? S.st.goRound : null, host = (S.cfg || {}).callMode === "host", running = (S.logs[S.round] || []).length > 0 && (S.logs[S.round] || []).length < 90;
-    const off = P.busy ? " disabled" : "", startOnly = !!(S.cf && S.cf.startOnly);
+    const off = P.busy ? " disabled" : "", startOnly = !!(S.cf && S.cf.startOnly) && !host; // above 2,000 people only a game the software calls loses Pause (a Host-called game keeps its controls)
     return `<div class="bpbox" id="bp-controls"><h2>Controls</h2>${startOnly ? `<p class="bpsmall" id="bp-nopause">No pause on games above 2,000 people: the numbers keep coming at their own pace.</p>` : ""}<div class="bpbtns">
       ${manual && go === null ? `<button type="button" id="bp-go"${S.now !== null && S.now >= S.info.startRound ? off : " disabled"}>Start the game</button>` : ""}
       ${startOnly ? "" : `<button type="button" id="bp-pause"${paused || !running || P.busy ? " disabled" : ""}>Pause the game…</button>
