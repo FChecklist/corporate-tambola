@@ -265,6 +265,17 @@
   const demoTag = () => (isDemoGame() ? ' <span class="zdemotag">DEMO GAME</span>' : "");
   // Real housie: the ticket never marks itself. Each number is a button the player taps when it is called (`marks` = what they tapped); a tap on a number not called yet is refused in place.
   const ticketHtml = (t, marks, label, win) => `<div class="zticket${LOOK === "modern" ? " modern" : ""}${isDemoGame() ? " zdemogame" : ""}" aria-label="${label}${isDemoGame() ? " (demo game)" : ""}">${t.flat().map((v) => v === null ? `<div class="e"></div>` : `<div role="button" tabindex="0" data-tap="${v}" aria-pressed="${marks.has(v)}" aria-label="${v}${marks.has(v) ? ", marked" : ""}" class="${marks.has(v) ? "m" : ""}${marks.has(v) && NEWMARK === v ? " pop" : ""}${win && win.has(v) && marks.has(v) ? " w" : ""}">${v}</div>`).join("")}</div>`;
+  // ---------- Super Bumper: two tickets, ONE Super Ticket of 6 lines (A lines 1-3, B lines 1-3). Display only: the numbers called and the crossed numbers are the same as before ----------
+  const superOn = (v) => {
+    if (v.tickets.length !== 2 || !ZG.prizeStatus || !v.cfg || !v.cfg.rewards) return false;
+    let list = []; try { list = ZG.prizeStatus(v.cfg, v.results || [], v.round || 1); } catch { return false; }
+    const bump = list.filter((p) => p.key === "full2");
+    return bump.length > 0 && bump.some((p) => !p.claimed) && list.filter((p) => p.key !== "full2" && p.key !== "lucky" && p.key !== "unlucky").every((p) => p.claimed);
+  };
+  const superWrap = (called, inner, tickets) => {
+    let n = 0; for (const t of tickets) for (const row of t) for (const x of row) if (x !== null && called.has(x)) n++;
+    return `<div class="zsuper" id="zsuper"><p class="zsmall"><b>Super Bumper.</b> Your two tickets are now joined into one Super Ticket. Numbers you have already crossed stay crossed. New numbers are called in a fresh random order, and none repeats. The first player to cross all 6 lines wins.</p><p class="zsuperline"><b>Cross all 6 lines first to win.</b></p><p class="zsmall" id="zsupcount" aria-live="polite">${n} of 30 crossed</p>${inner}</div>`;
+  };
   const TIP = ZG.PLAYER_TIP || "Tap each number as it is called. When a prize is complete, press Claim before the next number is called. A wrong claim is a Bogey: it does not count.";
   const RULE = ZG.CLAIM_RULE_TEXT || "Press Claim before the next number is called.";
   let NEWMARK = 0; // the number just tapped: its place on the ticket is stamped
@@ -852,7 +863,8 @@
     const chk = v.pendingChecks > 0 ? `<p class="zsmall">Double-checking ${v.pendingChecks} earlier number${v.pendingChecks === 1 ? "" : "s"} in the background.</p>` : "";
     const curWins = v.won.filter((w) => w.round === v.round), winSet = new Set(curWins.flatMap((w) => w.cells));
     const ribbon = curWins.length ? `<div class="zwin" role="status">&#127881; Congratulations! You won ${curWins.map((w) => esc(lineName(v.cfg, w.pattern, w.ordinal))).join(", ")}${curWins.some((w) => w.text) ? " &middot; " + curWins.filter((w) => w.text).map((w) => esc(w.text)).join(", ") : ""}</div>` : "";
-    const tix = (v.tickets.length ? lookPicker() : "") + v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : DEMO ? "Video ticket" : "Your ticket", winSet)).join("");
+    const tix0 = (v.tickets.length ? lookPicker() : "") + v.tickets.map((t, i) => (v.tickets.length > 1 ? `<div class="zsmall" style="margin:${i ? 12 : 0}px 0 4px"><b>Ticket ${"AB"[i]}</b></div>` : "") + ticketHtml(t, called, v.tickets.length > 1 ? "Ticket " + "AB"[i] : DEMO ? "Video ticket" : "Your ticket", winSet)).join("");
+    const tix = superOn(v) ? superWrap(called, tix0, v.tickets) : tix0; // Super Bumper: the two tickets are shown as ONE Super Ticket of 6 lines (owner 30 Oct); nothing else changes
     const sndBtn = `<button class="zsnd zsndin" id="snd" aria-pressed="${sound}">${!sound ? "&#128263; Sound off" : !window.TBAudio || TBAudio.unlocked ? "&#128266; Sound on" : "&#128266; Tap for sound"}</button>`;
     return `${brandStrip(sndBtn)}<div class="zplay">
       ${demoCard(v)}${demoGameCard()}${annBanner(v)}${banners.join("")}

@@ -404,3 +404,5 @@ body:has(#claimbar) .ctg-back{display:none}
 .zmrow{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
 .zmrow .zbtn{min-height:44px;padding:8px 16px}
 .zmrow .zdanger{background:#b3261e;color:#fff}
+
+.zsuper{border:2px solid #C8102E;border-radius:14px;padding:8px;margin:8px 0}.zsuper .zsuperline{margin:4px 0;font-size:15px}
