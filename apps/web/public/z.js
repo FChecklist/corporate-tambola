@@ -917,10 +917,10 @@
   }
   function bindCheckin() {
     const $ = (id) => document.getElementById(id), x = CK.v, keep = () => { try { store.set("ctz:" + EID + ":ck", JSON.stringify(x)); } catch { /* not kept */ } }, sync = () => { keep(); const h = $("ckhint"); if (h) h.hidden = !!(x.okN && x.okM && String(x.code).length === 4); };
-    const hook = (id, fn) => { const el = $(id); if (el) el.oninput = () => { fn(el); CK.err = ""; const e = $("ckerr"); if (e) e.textContent = ""; sync(); }; };
+    const clearErr = () => { CK.err = ""; const e = $("ckerr"); if (e) e.textContent = ""; }, hook = (id, fn) => { const el = $(id); if (el) el.oninput = () => { fn(el); clearErr(); sync(); }; }; // A15: ticking a box clears the red line too (it said "tick the box" and kept saying it)
     hook("ckname", (el) => { x.name = el.value; }); hook("ckmob", (el) => { x.mobile = el.value; });
     hook("ckcode", (el) => { el.value = el.value.replace(/\D/g, "").slice(0, 4); x.code = el.value; });
-    const chk = (id, key) => { const el = $(id); if (el) el.onchange = () => { x[key] = el.checked; sync(); }; }; chk("ckokn", "okN"); chk("ckokm", "okM");
+    const chk = (id, key) => { const el = $(id); if (el) el.onchange = () => { x[key] = el.checked; clearErr(); sync(); }; }; chk("ckokn", "okN"); chk("ckokm", "okM");
     const ed = (id, key, field) => { const el = $(id); if (el) el.onclick = () => { x[key] = !x[key]; if (key === "editM" && x.editM && String(x.mobile).includes("*")) x.mobile = ""; CK.html = ""; CK.force = true; paint(); const f = $(field); if (f && x[key]) f.focus(); }; }; ed("ckeditn", "editN", "ckname"); ed("ckeditm", "editM", "ckmob");
     const go = $("cksubmit"); if (go) go.onclick = async () => {
       if (CK.busy) return;
@@ -1017,8 +1017,10 @@
     } catch { tapNote("Could not send your claim. Please press Claim again.", 0); }
     keys.forEach((k) => claimBusy.delete(k)); paint();
   }
+  /** A15: "Type it again" on a personal link goes back to the typing screen (a link-holder with no mode would see a page with no number box: a dead end). */
+  const againState = (token) => (token ? { mode: "needPhone", note: "Type your mobile number again, then press the button." } : { mode: "" });
   function bindJoin() {
-    const again = document.getElementById("again"); if (again) again.onclick = () => { clearInterval(J.timer); clearTimeout(J.retry); J.busyTries = 0; J.mode = ""; J.wid = ""; clearWait(); paint(); };
+    const again = document.getElementById("again"); if (again) again.onclick = () => { clearInterval(J.timer); clearTimeout(J.retry); J.busyTries = 0; Object.assign(J, againState(!!TOKEN)); J.wid = ""; clearWait(); paint(); };
     const go = document.getElementById("go"); if (!go) return;
     if (!DEMO) CBConsent.wire(document, "K4", J.k4); // never ticked in advance; the button stays off until both boxes are ticked
     const phEl = document.getElementById("ph"), ccEl = document.getElementById("cc");
