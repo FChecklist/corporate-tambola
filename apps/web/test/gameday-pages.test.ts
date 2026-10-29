@@ -163,8 +163,8 @@ describe("the console question: when every prize is won", () => {
     const c = await consolePage(x, "GD-RAD");
     await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /When every prize is won:/.test(t));
     const radio = Array.from(c.win.document.querySelectorAll('input[type=radio][name="after"]')) as any[];
-    expect(radio.map((e) => e.value)).toEqual(["keep", "end"]); expect(radio.filter((e) => e.checked).map((e) => e.value)).toEqual(["end"]); // a game made before the question keeps the old rule until the organizer chooses
-    expect(Array.from(c.win.document.querySelectorAll("#rg-after .zc-radio b")).map((e: any) => e.textContent.trim())).toEqual(["Keep calling until all 90 numbers", "End the game"]);
+    expect(radio.map((e) => e.value)).toEqual(["end", "keep"]); expect(radio.filter((e) => e.checked).map((e) => e.value)).toEqual(["end"]); // a game made before the question keeps the old rule until the organizer chooses
+    expect(Array.from(c.win.document.querySelectorAll("#rg-after .zc-radio b")).map((e: any) => e.textContent.trim())).toEqual(["Stop when every prize is awarded", "Keep calling all numbers"]); // WP-02 / owner ruling Q1: stopping at the last prize comes first, keeping on calling is the organizer's option
     expect(c.win.document.querySelectorAll("#rg-after .zc-rdesc").length).toBe(2);
     c.click('[data-ck="after"][data-v="keep"]'); await wait(50);
     c.click('#sec2 [data-save="2"]'); await c.waitFor((t) => /Saved\./.test(t));

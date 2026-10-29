@@ -1038,7 +1038,7 @@ describe("the console for an AI that works in the browser", () => {
     await p.waitFor((x) => /Your game at a glance/.test(x) && /Your draft is saved/.test(x), 15000);
     const hist = await o.json(await o.api("GET", "/api/history", undefined, o.aiKey)); expect(hist.engagements.length).toBe(1);
     const sm = await o.json(await o.api("GET", `/api/z/${hist.engagements[0].id}/summary`, undefined, o.aiKey));
-    expect(sm).toMatchObject({ limit: 250, status: "draft" });
+    expect(sm).toMatchObject({ limit: 250, status: "draft", afterPrizes: "end" }); // WP-02 / owner ruling Q1: a new game stops when every prize is awarded; "Keep calling all numbers" is the organizer's option
     expect(p.$('[data-open="1"]')).toBeTruthy(); expect(p.$("#mkdemo")).toBeNull();
   }, 60_000);
 
