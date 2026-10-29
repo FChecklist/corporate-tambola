@@ -16,7 +16,7 @@
   async function numbersOf(log) {
     const sc = log.schedule || {};
     if (!sc.startRound) return [];
-    const cf = { v: 1, engagementId: EID, pubKey: sc.pubKey || "00".repeat(32), hostKeys: sc.hostKeys || [], leadRounds: sc.leadRounds || 13, maxPauseRounds: sc.maxPauseRounds || 600, messages: sc.messages || [], ...(sc.startOnly ? { startOnly: true } : {}) };
+    const cf = { v: 1, engagementId: EID, pubKey: sc.pubKey || "00".repeat(32), hostKeys: sc.hostKeys || [], leadRounds: sc.leadRounds || 13, maxPauseRounds: sc.maxPauseRounds || 600, messages: sc.messages || [], ...(sc.startOnly ? { startOnly: true } : {}), ...(sc.fullGap ? { fullGap: true } : {}) };
     const cfg = { breaks: sc.breaks || [], rounds: sc.rounds || 1, callMode: sc.callMode === "host" ? "host" : "auto", startMode: sc.manualStart ? "manual" : "auto" };
     const st = sc.pubKey ? ZG.resolveControl(ZG.cfgOf(cf, ZG.hostGameOf(cfg, sc.startRound)), cf.messages) : null;
     const store = new ZG.RoundStore({}), stride = sc.callSeconds / 3, out = [];
@@ -41,7 +41,7 @@
     { const k = { acc: 0, wrong: 0, late: 0 }; for (const c of log.claims || []) { if (c.outcome === "wrong") k.wrong++; else if (c.outcome === "too late") k.late++; else k.acc++; }
       L.push(["h", "At a glance"]);
       L.push(["row", "Game started", log.firstNumberMs ? HMS(log.firstNumberMs) : "Did not start"]); L.push(["row", "Completed", log.endedAtMs ? HMS(log.endedAtMs) : "Not ended"]); L.push(["row", "Players", String(log.people.joined)]);
-      L.push(["row", "Numbers called", String(log.numbersCalled == null ? 0 : log.numbersCalled)]); L.push(["row", "Prizes awarded", String(log.prizes.length)]); L.push(["row", "Claims", `${(log.claims || []).length} (${k.acc} in time, ${k.wrong} wrong, ${k.late} too late)`]); }
+      L.push(["row", "Numbers called", String(log.numbersCalled == null ? 0 : log.numbersCalled)]); L.push(["row", "Prizes awarded", String(log.prizes.length)]); L.push(["row", "Claims", `${(log.claims || []).length + (log.claimsMore || 0)} (${k.acc} in time, ${k.wrong} wrong, ${k.late + (log.claimsMore || 0)} too late)`]); }
     L.push(["h", "The game"]);
     L.push(["row", "Start time", IST(log.startsAtMs)]);
     L.push(["row", "First number called", IST(log.firstNumberMs)]);
@@ -53,12 +53,14 @@
     L.push(["h", "People"]);
     L.push(["row", "People who joined", String(log.people.joined)]);
     for (const jn of (log.joins || [])) L.push(["row", `Ticket ${jn.ticket} joined`, HMS(jn.atMs)]);
+    if (log.joinsMore) L.push(["row", `... and ${log.joinsMore} more ${log.joinsMore === 1 ? "ticket" : "tickets"} joined`, "(this list shows the first " + (log.joins || []).length.toLocaleString("en-IN") + ")"]);
     L.push(["row", "Most people in the game at once", String(log.people.most) + " (nobody leaves the list)"]);
     L.push(["row", "Joined after the first number", String(log.people.late)]);
     if (log.people.present != null) L.push(["row", "Checked in as present", String(log.people.present)]);
     L.push(["h", "Prizes"]);
     L.push(["note", ZG.claimRuleText(log.ties)]);
     for (const c of (log.claims || [])) L.push(["row", `Ticket ${c.ticket} claimed ${c.prize}${c.afterNumber ? " after number " + c.afterNumber : ""}`, `${c.outcome === "accepted" ? "accepted" : c.outcome === "prize taken" ? "Prize already taken: this claim came at number " + c.afterNumber + ", after the prize was already awarded at number " + c.takenAtNumber + "." : c.outcome === "wrong" ? "wrong (a Bogey)" : "too late, refused"} · ${HMS(c.atMs)}`]);
+    if (log.claimsMore) L.push(["row", `... and ${log.claimsMore} more too-late ${log.claimsMore === 1 ? "claim" : "claims"}`, "(this list keeps the newest 200 of them)"]);
     if (!log.prizes.length) L.push(["note", "No prize was won."]);
     for (const p of log.prizes) L.push(["row", p.prize + (p.text ? " (" + p.text + ")" : ""), `Ticket number ${p.ticket}, after number call ${p.callNo}, at ${HMS(p.atMs)}`]);
     for (const l of (log.lucky || [])) L.push(["row", "Lucky draw: " + l.title, l.drawn ? `Drawn. Ticket number${l.tickets.length === 1 ? "" : "s"} ${l.tickets.join(", ")}` : `Not drawn yet (${l.winners} ticket${l.winners === 1 ? "" : "s"} picked at random)`]);

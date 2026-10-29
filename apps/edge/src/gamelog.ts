@@ -24,8 +24,12 @@ export interface GameLog {
   people: { joined: number; late: number; waiting: number; present: number | null; most: number };
   /** when each ticket joined (ticket numbers only; the first 2,000) */
   joins: { ticket: number; atMs: number }[];
+  /** how many more tickets joined than `joins` lists (the list holds the first 2,000); 0 when none, absent in logs saved before 1.6.8 */
+  joinsMore?: number;
   /** every claim: who (ticket number), which prize, what came of it (accepted, wrong, too late) and when; saved with the log because the claim tables are erased after the game */
   claims: { ticket: number; prize: string; outcome: "accepted" | "wrong" | "too late" | "prize taken"; atMs: number; afterNumber: number | null; takenAtNumber?: number }[];
+  /** how many more too-late claims there were than `claims` lists (the note keeps the newest 200); 0 when none, absent in logs saved before 1.6.8 */
+  claimsMore?: number;
   prizes: { prize: string; text: string; ticket: number; callNo: number; atMs: number | null }[];
   /** every lucky draw the organizer chose, drawn or not */
   lucky: { title: string; winners: number; drawn: boolean; tickets: number[] }[];
@@ -34,7 +38,7 @@ export interface GameLog {
   report: { state: string | null; sentMs: number | null };
   warnings: string[];
   /** what the page needs to work out every number called and its time */
-  schedule: { startRound: number; callSeconds: number; rounds: number; breaks: unknown[]; manualStart: boolean; goRound: number | null; messages: unknown[]; pubKey: string; hostKeys: string[]; leadRounds: number; maxPauseRounds: number; callMode: "auto" | "host"; startOnly: boolean };
+  schedule: { startRound: number; callSeconds: number; rounds: number; breaks: unknown[]; manualStart: boolean; goRound: number | null; messages: unknown[]; pubKey: string; hostKeys: string[]; leadRounds: number; maxPauseRounds: number; callMode: "auto" | "host"; startOnly: boolean; /** the control file's full-gap rule (see ControlConfig.fullGap): the page that shows the log needs it to work out the same numbers; absent in older logs */ fullGap?: boolean };
 }
 
 const key = (eid: string) => `glog/${eid}`;
@@ -56,6 +60,8 @@ export async function buildGameLog(env: { DB: D1 }, kvOf: KV, e: any, cfg: Engag
   const cl = (await db.prepare("SELECT pid, pattern, round, idx, at_ms AS at FROM claim WHERE eid=? ORDER BY at_ms").bind(eid).all<any>().catch(() => ({ results: [] }))).results ?? [];
   const bg = (await db.prepare("SELECT pid, pattern, round, at_ms AS at FROM bogey WHERE eid=? ORDER BY at_ms").bind(eid).all<any>().catch(() => ({ results: [] }))).results ?? [];
   const lt = await db.prepare("SELECT v FROM kv WHERE k=?").bind(`claimlate/${eid}`).first<{ v: string }>().catch(() => null); let lateArr: any[] = []; try { lateArr = lt ? JSON.parse(lt.v) : []; } catch { lateArr = []; }
+  const claimsMore = Math.max(0, Number((await db.prepare("SELECT v FROM kv WHERE k=?").bind(`claimlaten/${eid}`).first<{ v: string }>().catch(() => null))?.v ?? 0) || 0); // too-late claims the note had to drop (it keeps the newest 200)
+  const joinsTotal = await cnt("SELECT COUNT(*) AS c FROM participant p JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=?", eid).catch(() => 0);
   const wrows = (await db.prepare("SELECT round, pattern, ordinal, seat, idx, at_ms FROM winner WHERE eid=? ORDER BY round, at_ms, pattern, ordinal, seat").bind(eid).all<any>().catch(() => ({ results: [] }))).results ?? [];
   const pn = (k: string) => NAMES[k] ?? k;
   /** A claim that came in time but after every position of the prize was already awarded on an earlier number (and this ticket is not among the winners): the log says so in the owner's words. */
@@ -90,10 +96,10 @@ export async function buildGameLog(env: { DB: D1 }, kvOf: KV, e: any, cfg: Engag
     ties: cfg.ties === "share" ? "share" : "next",
     mode: { start: cfg.startMode === "manual" ? "manual" : "auto", call: cfg.callMode === "host" ? "host" : "auto", afterPrizes: cfg.keepCalling ? "keep" : "end" },
     startsAtMs: roundMs(e.start_round), firstNumberMs: end?.firstNumberMs ?? null, endedAtMs: end?.endMs ?? (life?.end_ms ?? null), endReason: end?.endReason ?? null, numbersCalled: end?.numbersCalled ?? null,
-    people: { joined, late, waiting, present, most: joined }, joins, claims,
+    people: { joined, late, waiting, present, most: joined }, joins, joinsMore: Math.max(0, joinsTotal - joins.length), claims, claimsMore,
     prizes, lucky: luckyList, pauses, changes: changesView(chg).map((c) => ({ atMs: c.at, when: c.when, who: c.who, what: c.what })).reverse(),
     report: { state: life?.report_state ?? null, sentMs: life?.report_ms ?? null }, warnings,
-    schedule: { startRound: e.start_round, callSeconds: e.call_seconds, rounds: cfg.rounds, breaks: cfg.breaks, manualStart: cfg.startMode === "manual", goRound: st?.goRound ?? null, messages: f?.messages ?? [], pubKey: f?.pubKey ?? "", hostKeys: f?.hostKeys ?? [], leadRounds: f?.leadRounds ?? 0, maxPauseRounds: f?.maxPauseRounds ?? 600, callMode: cfg.callMode === "host" ? "host" : "auto", startOnly: !!f?.startOnly },
+    schedule: { startRound: e.start_round, callSeconds: e.call_seconds, rounds: cfg.rounds, breaks: cfg.breaks, manualStart: cfg.startMode === "manual", goRound: st?.goRound ?? null, messages: f?.messages ?? [], pubKey: f?.pubKey ?? "", hostKeys: f?.hostKeys ?? [], leadRounds: f?.leadRounds ?? 0, maxPauseRounds: f?.maxPauseRounds ?? 600, callMode: cfg.callMode === "host" ? "host" : "auto", startOnly: !!f?.startOnly, ...(f?.fullGap ? { fullGap: true } : {}) },
   };
 }
 
@@ -109,6 +115,8 @@ export async function readSavedGameLog(env: { DB: D1 }, eid: string): Promise<Ga
   try { const r = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(key(eid)).first<{ v: string }>(); return r ? (JSON.parse(r.v) as GameLog) : null; } catch { return null; }
 }
 /** After the report e-mail has gone out: the log says so. */
-export async function noteReportSent(env: { DB: D1 }, eid: string, sentMs: number): Promise<void> {
-  try { const g = await readSavedGameLog(env, eid); if (!g) return; g.report = { state: "sent", sentMs }; await env.DB.prepare("UPDATE kv SET v=? WHERE k=?").bind(JSON.stringify(g), key(eid)).run(); } catch { /* best effort */ }
+export async function noteReportSent(env: { DB: D1 }, eid: string, sentMs: number): Promise<void> { await noteReportState(env, eid, "sent", sentMs); }
+/** The log's report line when there was nothing to send (no e-mail address on file): the log itself is saved at the end of the game either way. */
+export async function noteReportState(env: { DB: D1 }, eid: string, state: string, sentMs: number | null): Promise<void> {
+  try { const g = await readSavedGameLog(env, eid); if (!g) return; g.report = { state, sentMs }; await env.DB.prepare("UPDATE kv SET v=? WHERE k=?").bind(JSON.stringify(g), key(eid)).run(); } catch { /* best effort */ }
 }

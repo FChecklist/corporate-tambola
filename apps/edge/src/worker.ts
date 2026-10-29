@@ -99,7 +99,9 @@ async function bumpCv(db: D1, eid: string): Promise<void> {
   try { await db.prepare("INSERT INTO kv(k,v) VALUES(?,'1') ON CONFLICT(k) DO UPDATE SET v=CAST(CAST(v AS INTEGER)+1 AS TEXT)").bind(`cv/${eid}`).run(); } catch { /* the signal is a convenience; the slow claim poll still brings the news */ }
 }
 async function noteLateClaim(db: D1, eid: string, pid: string, pattern: string, now: number): Promise<void> {
-  try { const r = await db.prepare("SELECT v FROM kv WHERE k=?").bind(`claimlate/${eid}`).first<{ v: string }>(); const a: any[] = r ? JSON.parse(r.v) : []; a.push({ t: seatOfPidText(pid), p: pattern, at: now }); await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`claimlate/${eid}`, JSON.stringify(a.slice(-200))).run(); } catch { /* best effort */ }
+  try { const r = await db.prepare("SELECT v FROM kv WHERE k=?").bind(`claimlate/${eid}`).first<{ v: string }>(); const a: any[] = r ? JSON.parse(r.v) : []; a.push({ t: seatOfPidText(pid), p: pattern, at: now }); await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`claimlate/${eid}`, JSON.stringify(a.slice(-200))).run();
+    if (a.length > 200) await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=CAST(CAST(v AS INTEGER)+? AS TEXT)").bind(`claimlaten/${eid}`, String(a.length - 200), a.length - 200).run(); // the note keeps the newest 200: what it drops is counted, so the game log can say "and N more"
+  } catch { /* best effort */ }
 }
 /** The game's schedule and modes as they are NOW, riding in the control file every phone, the big screen and the Host's screen already poll: a change made after publishing (a new time, another mode) reaches them all with no new link and no extra requests. */
 async function liveField(env: Env, id: string): Promise<{ live?: ReturnType<typeof liveOf>; by?: string[] }> {
