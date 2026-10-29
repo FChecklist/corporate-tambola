@@ -793,19 +793,29 @@
   }
   const gtNote = (k) => (S.gtNote && S.gtNote.k === k ? `<p class="zc-small" id="gtnote" role="status"><b>${esc(S.gtNote.t)}</b></p>` : ""); const nearMsg = (id) => (S.near && S.near.id === id ? `<p class="zc-small zc-toast" role="status" data-near="${id}">${esc(S.near.t)}</p>` : ""); const gtv = (k) => esc((S.gt && S.gt[k]) || ""); const guestTools = () => (!canRun() ? "" : `<h4>A guest's own data</h4>${small("A player asks to see or delete their data? Enter their mobile number. Only you can do this.")}<div class="zc-inline"><label class="zc-sr" for="pdph">Their mobile number</label><input id="pdph" class="zc-in" inputmode="tel" autocomplete="off" placeholder="98765 43210" value="${esc(S.gtPh || "")}"><button type="button" class="zc-mini" id="pdsee">Show what we hold</button><button type="button" class="zc-mini zc-danger" id="pddel">Delete their data</button></div>${nearMsg("pd")}${gtNote("pd")}
       <h4>Change of phone</h4>${small("A ticket plays on one phone only. If someone lost or changed their phone, enter their mobile number: the next phone they join with keeps their ticket.")}<div class="zc-inline"><label class="zc-sr" for="ubph">Their mobile number</label><input id="ubph" class="zc-in" inputmode="tel" autocomplete="off" placeholder="98765 43210" value="${esc(S.gtUb || "")}"><button type="button" class="zc-mini" id="unbind">Let them move to a new phone</button></div>${nearMsg("ub")}${gtNote("ub")}`);
+  // TA14/S18: who was invited but has not opened their link yet. One reminder text for the group chat, a list to download, and a switch that shows only them. Not for a draft: the links do not work until the game is published.
+  const notJoined = (list) => (S.draft ? [] : (list || []).filter((p) => String(p.status || "invited").toLowerCase() === "invited" && !p.role));
+  const remindText = () => { const sm = role() === "cohost" ? S.coh && S.coh.startMs : S.info && S.info.startMs, nm = S.cfg && S.cfg.name ? S.cfg.name : S.coh && S.coh.name ? S.coh.name : ""; return `Reminder: our Corporate Tambola game${nm ? " " + nm : ""} starts${sm ? " " + when(sm) : " soon"}. Tap this link to get your ticket: ${commonLink()}`; };
+  function notJoinedBox(nj) {
+    if (!nj.length) return "";
+    const P = S.pp;
+    return `<div class="zc-box" id="notjoined"><b class="zc-bt">Not joined yet: ${nj.length}</b>${small("These people were invited but have not opened their link. Send the reminder below to your group, or press Send on WhatsApp next to a name.")}<p class="zc-small" id="remindtext">${esc(remindText())}</p><div class="zc-chips zc-gap"><button type="button" class="zc-mini" id="copyremind">Copy the reminder</button><button type="button" class="zc-mini" id="onlynot" aria-pressed="${!!P.onlyNot}">${P.onlyNot ? "Show everyone" : "Show only these " + nj.length}</button>${P.canExport ? `<button type="button" class="zc-mini" id="dlnotjoined">Download these as a list</button>` : ""}</div></div>`;
+  }
   function peopleBlock() {
     if (S.shield) return `<div class="zc-block" id="shieldnote"><h3>Guest names and numbers are hidden</h3>${small("This browser tab hides guest names and mobile numbers, so this page does not show or take them: the people list, looking up a guest, moving a ticket to a new phone and the report. Open the console in a new browser tab to use them yourself.")}</div>`;
     const P = S.pp, list = P.list;
     let h = `<div class="zc-block" id="mypeople"><h3>My people</h3>${P.stale ? `<p class="zc-small zc-warnt" id="ppstale" role="status">${esc(P.stale)} Showing the last list. It refreshes by itself.</p>` : ""}`;
     if (list === null) return h + (P.err ? `<p class="zc-small zc-warnt" id="ppnote" role="status">${esc(P.err)}</p>` : small("Loading…")) + `<p class="zc-small" id="emailrule2">${EMAIL_RULE}</p>${guestTools()}</div>`;
     const live = list.filter((p) => stLabel(p.status) !== "Removed"), full = !!P.limit && live.length >= P.limit;
+    const nj = notJoined(list);
     h += `<p class="zc-small"><b id="gcount">${live.length}</b> ${live.length === 1 ? "person is" : "people are"} on my list${P.limit ? ` (up to ${P.limit})` : ""}.</p>`;
     if (canRun()) h += small(`Who can play: <b>${whoNow() === "anyone" ? "Anyone with the link" : "Only people on a list"}</b>. You can change this in step 2 (Who is this game for?) until the game starts.`);
+    h += notJoinedBox(nj);
     h += waitingPanel();
     h += full ? small(`You have reached your limit of ${P.limit} people. Remove someone to add another.`) : addBox();
     if (P.sum) h += `<p class="zc-small" id="cleansum" role="status"><b>${esc(P.sum)}</b></p>`;
     if (P.wrong.length) h += `<div class="zc-box" id="wronglist"><b class="zc-bt">${P.wrong.every((w) => !String(w.raw || "").trim()) ? "These need a mobile number. Type it and press Fix and add." : "These look wrong. Fix the number and add them."}</b>${P.wrong.map((w, i) => `<div class="zc-inline"><span>${esc(w.name || "No name")}${w.empId ? ` <span class="zc-small zc-nomargin">(employee ID ${esc(w.empId)})</span>` : ""}${w.why ? ` <span class="zc-small zc-nomargin">${esc(w.why)}</span>` : ""}${/step 2/.test(w.why || "") ? ` <button type="button" class="zc-mini" data-open="2">Open step 2</button>` : ""}</span><label class="zc-sr" for="fixin${i}">Mobile number for ${esc(w.name || "this person")}</label><input id="fixin${i}" class="zc-in" inputmode="tel" value="${esc(w.raw)}"><button type="button" class="zc-mini" data-fix="${i}">Fix and add</button></div>`).join("")}</div>`;
-    h += list.map(personRow).join("") + (list.length ? "" : small("Nobody yet. Add your first person above."));
+    h += (P.onlyNot && nj.length ? nj : list).map(personRow).join("") + (list.length ? "" : small("Nobody yet. Add your first person above."));
     h += `<div class="zc-chips zc-gap"><button type="button" class="zc-mini" id="copycommon">Copy common link</button>${P.canExport ? `<button type="button" class="zc-mini" id="dlpeople">Download my list</button>` : ""}</div>`;
     h += small("The common link is for groups. The person types their own mobile number. A personal link is made for one person only.");
     h += `${small("Names and numbers stay here, in your own console.")}<p class="zc-small" id="emailrule2">${EMAIL_RULE}</p>`;
@@ -2120,6 +2130,12 @@
       await loadPeople(); redraw();
     };
     if ($("copycommon")) $("copycommon").onclick = async () => { const ok = await copyText(commonLink()); $("copycommon").textContent = ok ? "Copied" : "Select and copy it"; };
+    if ($("copyremind")) $("copyremind").onclick = async () => { const ok = await copyText(remindText()); $("copyremind").textContent = ok ? "Copied" : "Select the text above and copy it"; };
+    if ($("onlynot")) $("onlynot").onclick = () => { S.pp.onlyNot = !S.pp.onlyNot; redraw(); };
+    if ($("dlnotjoined")) $("dlnotjoined").onclick = () => {
+      const q = (x) => '"' + String(x == null ? "" : x).replace(/"/g, '""') + '"', text = ["Name,Mobile,WhatsApp link"].concat(notJoined(S.pp.list).map((p) => [p.name, p.maskedPhone, waHref(p)].map(q).join(","))).join("\n");
+      try { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" })); a.download = eid + "-not-joined.csv"; a.click(); } catch { /* the browser could not save it */ }
+    };
     if ($("dlpeople")) $("dlpeople").onclick = async () => {
       let text = ""; try { const r = await fetch(BASE + `/api/z/${eid}/people/export`, { headers: { "x-organizer": secret } }); if (!r.ok) throw new Error("no export"); text = await r.text(); } catch { text = localCsv(); }
       try { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" })); a.download = eid + "-my-people.csv"; a.click(); } catch { /* the browser could not save it */ }
