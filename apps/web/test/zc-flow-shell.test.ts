@@ -13,7 +13,7 @@ function page(search: string) {
   win.document.body.innerHTML = '<main id="app"></main>';
   win.ZG = { roundAt: (ms: number) => Math.floor(ms / 3000) };
   const fakeFetch = async (url: string, o: any) => { calls.push({ url, method: o.method, body: o.body ? JSON.parse(o.body) : null }); return { ok: true, json: async () => ({ ok: true }) }; };
-  new Function("window", "document", "location", "fetch", src("zc-flow.js"))(win, win.document, win.location, fakeFetch);
+  new Function("window", "document", "location", "fetch", src("zc-flow-game.js") + "\n" + src("pack/zc-flow.js"))(win, win.document, win.location, fakeFetch);
   return win;
 }
 
@@ -52,8 +52,9 @@ test("the Game dashboard opens only once the game is published", () => {
 
 test("the current console (zc.js) stands aside for flow=new and the page loads the new files", () => {
   expect(src("zc.js")).toContain('get("flow") === "new") return;');
-  expect(src("zc.html")).toContain("/zc-flow.js");
-  expect(src("zc.html")).toContain("/zc-flow.css");
+  expect(src("zc.html")).toContain("/pack/zc-flow.js");
+  expect(src("zc.html")).toContain("/zc-flow-game.js");
+  expect(src("zc.html")).toContain("/pack/zc-flow.css");
 });
 
 test("every word the organizer reads follows the language guide", () => {

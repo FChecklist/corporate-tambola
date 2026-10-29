@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Window } from "happy-dom";
 
-const src = readFileSync(join(import.meta.dir, "../public/zc-flow.js"), "utf8");
+const src = ["zc-flow-game.js", "pack/zc-flow.js"].map((f) => readFileSync(join(import.meta.dir, "../public", f), "utf8")).join("\n");
 const calls: any[] = [];
 function page(search = "?flow=new") {
   const win: any = new Window({ url: "http://localhost/zc.html" + search });

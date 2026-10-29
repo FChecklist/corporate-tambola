@@ -1,8 +1,11 @@
-/* Corporate Tambola, the NEW organizer flow (option only: open /zc.html?flow=new). Five steps and a Game dashboard.
+/* The NEW organizer flow, shared by every game (option only: open /zc.html?flow=new). Five steps and a Game dashboard.
    The current console (zc.js) is not touched: it stands aside when flow=new is in the address. Words follow docs 191 (language guide).
-   Pure rules live in window.ZFLOW (tested); the page code below only draws them. */
+   Pure rules live in window.ZFLOW (tested); the page code below only draws them.
+   The pack holds no game rules: each game says what it has in its own small zc-flow-game.js (window.ZFLOW_GAME). */
 (function () {
   "use strict";
+  /** What this game says about itself (zc-flow-game.js). Nothing here is a game rule: the prize list comes from the game's own table (ZG.PRIZE_HOUSES). */
+  const G = Object.assign({ brand: "Corporate Games", tickets: [1, 2], bumper: false, boardMax: 90, boardCols: 15, popular: [], recommended: [] }, (typeof window !== "undefined" && window.ZFLOW_GAME) || {});
   const COPY = {
     top: "No personal details needed. All game and participant information is deleted within 24 hours of the game.",
     soon: "Coming soon",
@@ -30,7 +33,7 @@
   /** The Game dashboard stays locked until the game is published. */
   const dashboardOpen = (info) => !!info && info.published === true;
   /** Words banned by the language guide in anything the organizer reads. */
-  const BANNED = [/\binvit/i, /\bprivate\b/i, /\bwe\b/i, /\bRs\.?\s?\d/, /\bseats?\b/i, /\bplaces\b/i, /in the office/i, /\bcash\b/i];
+  const BANNED = [/\binvit/i, new RegExp("\\bpriv" + "ate\\b", "i"), /\bwe\b/i, /\bRs\.?\s?\d/, /\bseats?\b/i, /\bplaces\b/i, /in the office/i, /\bcash\b/i];
   const badWords = (text) => BANNED.filter((r) => r.test(text)).map(String);
   /* ---- Step 1: date, time and zone (pure) ---- */
   const OCC = ["Diwali party", "Dealer meet", "Annual day", "Team party", "Customer event", "Family day", "Weekend Fun", "Christmas Party", "Eid Party", "Holi Party", "Other"];
@@ -98,10 +101,9 @@
     return [];
   }
   /* ---- Step 3: tickets and prizes (pure) ---- */
-  const FALLBACK_HOUSES = [{ id: "early5", label: "Early Five", how: "Be the first to mark any 5 of your numbers." }, { id: "top", label: "Top Line", how: "Mark all 5 numbers of the top line." }, { id: "mid", label: "Middle Line", how: "Mark all 5 numbers of the middle line." }, { id: "bot", label: "Bottom Line", how: "Mark all 5 numbers of the bottom line." }, { id: "full", label: "Full House", how: "Mark all 15 numbers of your ticket." }];
   /** The houses the game itself offers (window.ZG.PRIZE_HOUSES). Super Bumper House has its own part of the screen. */
-  const housesOf = (zg) => (zg && Array.isArray(zg.PRIZE_HOUSES) && zg.PRIZE_HOUSES.length ? zg.PRIZE_HOUSES : FALLBACK_HOUSES).filter((h) => h.id !== "full2");
-  const POPULAR = ["early5", "top", "full"], RECOMMENDED = ["early5", "top", "mid", "bot", "full"]; // the boss's picks, not data
+  const housesOf = (zg) => (zg && Array.isArray(zg.PRIZE_HOUSES) ? zg.PRIZE_HOUSES : []).filter((h) => h.id !== "full2");
+  const POPULAR = G.popular, RECOMMENDED = G.recommended; // the boss's picks, not data: each game lists its own
   /** Tags always read (Popular) before (Recommended). */
   const tagsOf = (id) => [POPULAR.includes(id) ? "(Popular)" : "", RECOMMENDED.includes(id) ? "(Recommended)" : ""].filter(Boolean);
   const GIFTS = ["Gift voucher", "Gift hamper", "Smartphone", "Smart watch", "Earbuds or headphones", "Tablet or laptop", "Holiday or weekend stay", "Dinner or restaurant voucher", "Movie tickets", "Extra day off"]; // no cash, ever
@@ -117,7 +119,7 @@
     const c = CURRENCIES.find((x) => x[0] === cur) || CURRENCIES[0];
     return g + " (worth up to " + c[1] + Number(w).toLocaleString(c[2]) + ")";
   }
-  const defaultPrizes = (houses) => Object.fromEntries(houses.map((h) => [h.id, { on: RECOMMENDED.includes(h.id), n: 1, gift: GIFTS[0], other: "", worth: "" }]));
+  const defaultPrizes = (houses) => Object.fromEntries(houses.map((h) => [h.id, { on: RECOMMENDED.length ? RECOMMENDED.includes(h.id) : !!h.dflt, n: 1, gift: GIFTS[0], other: "", worth: "" }]));
   const defaultBumper = () => ({ on: false, n: 1, gift: GIFTS[0], other: "", worth: "" });
   /** The prizes as the game stores them: a line per winner place (1st, 2nd, ...). Super Bumper House only with 2 tickets. */
   function buildRewards(sel, bumper, tix, cur) {
@@ -126,12 +128,12 @@
       if (!h.on) continue;
       for (let o = 1; o <= Number(h.n); o++) out.push({ pattern: id, scope: "ticket", ordinal: o, text: prizeLine(h.gift, h.other, h.worth, cur) });
     }
-    if (Number(tix) === 2 && bumper && bumper.on) for (let o = 1; o <= Number(bumper.n); o++) out.push({ pattern: "full", scope: "two_ticket", ordinal: o, text: prizeLine(bumper.gift, bumper.other, bumper.worth, cur) });
+    if (G.bumper && Number(tix) === 2 && bumper && bumper.on) for (let o = 1; o <= Number(bumper.n); o++) out.push({ pattern: "full", scope: "two_ticket", ordinal: o, text: prizeLine(bumper.gift, bumper.other, bumper.worth, cur) });
     return out;
   }
   function prizeProblems(sel, bumper, tix, houses) {
     const rows = Object.entries(sel).filter(([, h]) => h.on);
-    const bump = Number(tix) === 2 && bumper && bumper.on;
+    const bump = G.bumper && Number(tix) === 2 && bumper && bumper.on;
     if (!rows.length && !bump) return ["Tick at least one prize."];
     for (const [id, h] of rows) { const name = (houses.find((x) => x.id === id) || {}).label || id; if (!prizeLine(h.gift, h.other, h.worth, "INR")) return ["Please write the prize for " + name + "."]; }
     if (bump && !prizeLine(bumper.gift, bumper.other, bumper.worth, "INR")) return ["Please write the prize for Super Bumper House."];
@@ -143,7 +145,7 @@
   const BRAND_COLORS = ["#0B3D91", "#1A7A46", "#B3261E", "#7A3EB1", "#C75B00", "#0F6E7A"];
   /** A ticket cannot show & or quote marks: the company name is made safe, and the organizer is told (same rule as the current console). */
   const brandNameClean = (s) => String(s || "").replace(/\s*&\s*/g, " and ").replace(/'/g, "\u2019").replace(/[<>`"\\]/g, "").replace(/\s+/g, " ").trim().slice(0, 40).trim();
-  const fixUrl = (u) => (/^(www\.|youtu\.be\/|(m\.|music\.)?youtube\.com\/)/i.test(u) ? "https://" + u : u);
+  const fixUrl = (u) => (/^(www\.|youtu\.be\/|(m\.|music\.)?youtube\.com\/)/i.test(u) ? "https:" + "//" + u : u);
   const YT = /^https:\/\/((www|m|music)\.)?(youtube\.com\/(watch\?|shorts\/|embed\/|live\/)|youtu\.be\/)/i;
   const MEDIA = /^https:\/\/[^\s]+\.(mp4|webm|m4v|mov|ogv|mp3|m4a|aac|wav|ogg|oga)([?#]\S*)?$/i;
   /** What a pasted link is: a YouTube link (best), a link straight to a video or audio file, or neither. */
@@ -423,19 +425,19 @@
     box.append(el("p", { class: "zf-lead", text: "Tick the prizes you want to give. Prizes are gifts." }));
     box.append(el("h3", { text: "How many tickets does each participant get?" }));
     const tx = el("div", { class: "zf-chips", role: "radiogroup", "aria-label": "Tickets per participant" });
-    for (const n of [1, 2]) tx.append(el("button", { type: "button", role: "radio", class: "zf-chip" + (prizes.tix === n ? " on" : ""), "aria-checked": String(prizes.tix === n), "data-tix": String(n), onclick: () => { prizes.tix = n; draw(); } }, n + (n === 1 ? " ticket" : " tickets")));
+    for (const n of G.tickets) tx.append(el("button", { type: "button", role: "radio", class: "zf-chip" + (prizes.tix === n ? " on" : ""), "aria-checked": String(prizes.tix === n), "data-tix": String(n), onclick: () => { prizes.tix = n; draw(); } }, n + (n === 1 ? " ticket" : " tickets")));
     box.append(tx);
     box.append(el("label", { for: "zf-cur", text: "Currency for “Worth up to” (it stays for every prize)" }));
     const cs = el("select", { id: "zf-cur", onchange: (e) => { prizes.cur = e.target.value; draw(); } });
     for (const c of CURRENCIES) cs.append(el("option", { value: c[0], ...(prizes.cur === c[0] ? { selected: "" } : {}) }, c[1].trim() + " " + c[0]));
     box.append(cs);
-    const rowFor = (key, title, how, h, extra) => {
+    const rowFor = (key, title, how, h, extra, maxN) => {
       const row = el("div", { class: "zf-prize" + (h.on ? " on" : ""), "data-house": key });
       const tags = extra ? [] : tagsOf(key);
       row.append(el("label", { class: "zf-tick" }, el("input", { type: "checkbox", id: "zf-tick-" + key, ...(h.on ? { checked: "" } : {}), onchange: (e) => { h.on = e.target.checked; draw(); } }), " ", el("b", { text: title }), tags.length ? el("span", { class: "zf-tag", text: " " + tags.join(" ") }) : null, el("small", { text: how })));
       if (h.on) {
         const nsel = el("select", { id: "zf-n-" + key, "aria-label": "How many times " + title + " can be won", onchange: (e) => { h.n = Number(e.target.value); draw(); } });
-        for (let i = 1; i <= (extra ? 10 : 5); i++) nsel.append(el("option", { value: String(i), ...(h.n === i ? { selected: "" } : {}) }, String(i)));
+        for (let i = 1; i <= (extra ? 10 : maxN || 5); i++) nsel.append(el("option", { value: String(i), ...(h.n === i ? { selected: "" } : {}) }, String(i)));
         const gsel = el("select", { id: "zf-g-" + key, "aria-label": "The prize for " + title, onchange: (e) => { h.gift = e.target.value; draw(); } });
         for (const g of [...GIFTS, OTHER_GIFT]) gsel.append(el("option", { value: g, ...(h.gift === g ? { selected: "" } : {}) }, g));
         row.append(el("div", { class: "zf-fields" }, el("label", { for: "zf-n-" + key, text: "This prize can be won (times)" }), nsel, el("label", { for: "zf-g-" + key, text: "The prize" }), gsel,
@@ -444,10 +446,11 @@
       }
       return row;
     };
-    for (const h of houses) box.append(rowFor(h.id, h.label, h.how, prizes.sel[h.id] || (prizes.sel[h.id] = { on: false, n: 1, gift: GIFTS[0], other: "", worth: "" })));
+    if (!houses.length) box.append(el("p", { class: "zf-soon", text: "The prizes of this game are not available yet." }));
+    for (const h of houses) box.append(rowFor(h.id, h.label, h.how, prizes.sel[h.id] || (prizes.sel[h.id] = { on: false, n: 1, gift: GIFTS[0], other: "", worth: "" }), false, Math.min(5, Number(h.max) || 5)));
     if (prizes.tix === 2) {
       box.append(el("h3", { text: "Two-ticket prizes" }));
-      box.append(rowFor("bumper", "Super Bumper House", "Mark all 30 numbers of your two tickets together. Up to 10 winners.", prizes.bumper, true));
+      if (G.bumper) box.append(rowFor("bumper", "Super Bumper House", "Mark all 30 numbers of your two tickets together. Up to 10 winners.", prizes.bumper, true));
       for (const ab of ["Ticket A", "Ticket B"]) box.append(el("div", { class: "zf-prize zf-ab", "data-house": "ab-" + ab.slice(-1) }, el("label", { class: "zf-tick" }, el("input", { type: "checkbox", disabled: "" }), " ", el("b", { text: ab + " prizes" }), el("small", { text: "Different prizes for each of the two tickets." })), el("span", { class: "zf-soon", text: COPY.soon })));
     }
     const go = el("button", { type: "button", class: "zf-go", id: "zf-save3", onclick: async () => {
@@ -545,7 +548,7 @@
     else tickets.forEach((t, i) => {
       const label = tix === 2 ? (i === 0 ? "Ticket A" : "Ticket B") : "Your ticket";
       const marked = new Set(t.flat().filter((v) => v !== null).slice(0, 4));
-      const grid = el("div", { class: "zticket zf-pvticket", "aria-label": label });
+      const grid = el("div", { class: "zticket zf-pvticket", "aria-label": label, style: "grid-template-columns: repeat(" + (t[0] ? t[0].length : 9) + ", 1fr)" });
       for (const v of t.flat()) grid.append(v === null ? el("div", { class: "e" }) : el("div", { class: marked.has(v) ? "m" : "", text: String(v) }));
       frame.append(el("p", { class: "zf-pvlabel" }, el("b", { text: label }), " · Ticket number " + (101 + i) + " (sample)"), grid);
     });
@@ -555,7 +558,7 @@
     const ul = el("ul", { class: "zf-pvprizes", id: "zf-pvprizes" });
     for (const r of shown) { const k = r.pattern + "|" + r.scope; if (seen.has(k)) continue; seen.add(k); ul.append(el("li", {}, el("span", { text: (r.scope === "two_ticket" ? "Super Bumper House" : (houses.find((h) => h.id === r.pattern) || {}).label || r.pattern) + ": " + r.text }), " ", el("button", { type: "button", class: "zf-add", disabled: "" }, "Claim"))); }
     frame.append(ul);
-    if (laptop) { const board = el("div", { class: "zf-board90", id: "zf-board90", "aria-label": "Sample board, 1 to 90" }); for (let n = 1; n <= 90; n++) board.append(el("span", { class: n % 7 === 0 ? "m" : "", text: String(n) })); frame.append(board); }
+    if (laptop) { const board = el("div", { class: "zf-board90", id: "zf-board90", "aria-label": "Sample board, 1 to " + G.boardMax, style: "grid-template-columns: repeat(" + G.boardCols + ", 1fr)" }); for (let n = 1; n <= G.boardMax; n++) board.append(el("span", { class: n % 7 === 0 ? "m" : "", text: String(n) })); frame.append(board); }
     box.append(frame);
     return box;
   }
@@ -694,7 +697,7 @@
   }
 
   api.state = state; api.draw = draw; api.done = done; api.el = el;
-  document.title = "Organizer console | Corporate Tambola";
+  document.title = "Organizer console | " + G.brand;
   state.team = { email: "", sent: null, att: null }; state.role = ""; state.mode = "";
   if (STUB && q.get("team") === "1" && state.eid) state.mode = "signin";
   draw();

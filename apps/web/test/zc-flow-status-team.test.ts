@@ -7,7 +7,7 @@ import { Window } from "happy-dom";
 import { PRIZE_HOUSES } from "../../../packages/beacon/src/config";
 import { ticketsFor } from "../../../packages/beacon/src/game";
 
-const src = readFileSync(join(import.meta.dir, "../public/zc-flow.js"), "utf8");
+const src = ["zc-flow-game.js", "pack/zc-flow.js"].map((f) => readFileSync(join(import.meta.dir, "../public", f), "utf8")).join("\n");
 const calls: any[] = [];
 let info: any = { unpaid: true, startMs: Date.now() + 3 * 86400000 };
 function page(search = "?flow=new&e=EABCDEF", url = "http://localhost/zc.html") {
