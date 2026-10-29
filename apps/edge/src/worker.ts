@@ -132,6 +132,8 @@ const CLAIMS_PAGE = 500;
 /** The part of the settings every phone needs, public by design: how many tickets, what each house wins, and when the brand breaks are. */
 /** The brand strip as phones see it: the full brand (with the logo) from `info`; everywhere else only name and colour (a logo can be 40 KB and a 10,000-person list must not carry it). */
 const brandOut = (c: EngagementCfg, withLogo: boolean) => (c.brand ? { brand: withLogo ? c.brand : { name: c.brand.name, color: c.brand.color, ...(c.brand.logo ? { hasLogo: true } : {}) } } : {});
+/** What a player is told when the last place is taken (TA07: "game", and who to tell). */
+export const GAME_FULL_MSG = "This game is full. Please tell your organizer so they can make room.";
 const pub = (e: any, withLogo = false) => { const c = cfgOf(e); return { checkin: checkinRequired(e), tickets: c.tickets, ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, callMode: c.callMode ?? "auto", startMode: c.startMode ?? "auto", afterPrizes: c.keepCalling ? "keep" : "end", ...(c.name ? { name: c.name } : {}), ...(c.demo ? { demo: true } : {}), verify: c.verify ?? "number", employeesOnly: !!c.employeesOnly, ...brandOut(c, withLogo) }; };
 const cfgJson = (c: EngagementCfg) => JSON.stringify({ ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.callMode === "host" ? { callMode: "host" } : {}), ...(c.startMode === "manual" ? { startMode: "manual" } : {}), ...(c.keepCalling ? { keepCalling: true } : {}), ...(c.name ? { name: c.name } : {}), ...(c.brand ? { brand: c.brand } : {}), ...(c.demo ? { demo: true } : {}), ...(c.verify ? { verify: c.verify } : {}), ...(c.employeesOnly ? { employeesOnly: true } : {}) });
 /** Host mode (a Host presses a button for each number) makes every phone ask for the Host's presses every few seconds: the same size limit as the pause. */
@@ -1775,7 +1777,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!dev) return json({ error: "Please refresh this page and try again." }, 400);
     if (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) return json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket. Others can join from their own phones, using your invitation link if the organizer allowed it.", code: "device-used" }, 409);
     const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
-    if ((n?.c ?? 0) >= e.cap) return json({ error: "This engagement is full." }, 409);
+    if ((n?.c ?? 0) >= e.cap) return json({ error: GAME_FULL_MSG }, 409);
     // who owns the link this person came through? Only used when they are on no list.
     const inviteCfg = cfgOf(e).invites;
     let owner: string | null = null, cat: string | null = null;
@@ -1821,7 +1823,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!ck) joinExtra.push(await consentFromSeat(env.DB, { kind: "K4", ref: eid!, now, eid: eid!, ph }));
     await addSeat(ph, pii, dev, lateRound, { inv, cat: inv !== null ? cat : null, src: srcOf(inviter), ownerId: inviter, guardId, guardLimit, role, extra: joinExtra });
     const row = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.jr AS jr, s.role AS role FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; jr: number | null; role: string | null }>();
-    if (!row) return (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) ? json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket.", code: "device-used" }, 409) : guardId !== null ? wait(true, guardLimit) : json({ error: "This engagement is full." }, 409); // lost a race for the last place
+    if (!row) return (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) ? json({ error: "This phone already holds a ticket in this engagement. One phone, one ticket.", code: "device-used" }, 409) : guardId !== null ? wait(true, guardLimit) : json({ error: GAME_FULL_MSG }, 409); // lost a race for the last place
     if (row.dev && row.dev !== dev) return json({ error: "This ticket was opened in a different browser or app (or on another phone). A ticket plays on one device only. Open your link in the same browser or app you used first. If you cannot, ask your organizer to move your ticket to this phone.", code: "other-phone" }, 423);
     return reply(row.pid, { jr: row.jr ?? 0, ...(row.role ? { role: row.role } : {}) }); // (the K4 consent record went in with the seat, in the same batch)
   }

@@ -111,7 +111,7 @@ describe("people join a demo exactly as in a real game", () => {
     const master = await start("boss@acme.com");
     await mk(master, "DEMO-1"); await publish(master, "DEMO-1");
     for (let i = 1; i <= 10; i++) { const r = await join(i, "DEMO-1"); expect(r.status).toBe(200); expect((await j(r)).demo).toBe(true); }
-    const full = await join(11, "DEMO-1"); expect(full.status).toBe(409); expect((await j(full)).error).toBe("This engagement is full.");
+    const full = await join(11, "DEMO-1"); expect(full.status).toBe(409); expect((await j(full)).error).toBe("This game is full. Please tell your organizer so they can make room.");
     expect(count("SELECT COUNT(*) AS c FROM participant WHERE eid='DEMO-1'")).toBe(10);
     expect((await join(3, "DEMO-1")).status).toBe(200); // someone already in gets back in
   });

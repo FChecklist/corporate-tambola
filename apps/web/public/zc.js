@@ -1381,10 +1381,12 @@
   }
   const storyHtml = (st) => `<div class="zc-story" id="storyline" data-state="${st.state}"><b>${esc(st.say)}</b> <span>${esc(st.doNow)}</span></div>`;
   /** The vital details during the game and after it: from the game log the Worker keeps (tickets by number only). */
+  /** TA07: warn the organizer at 90 percent of the places, before a guest meets "This game is full". */
+  const nearFull = (joined) => { const cap = Number(S.info && S.info.cap) || 0; return cap > 0 && Number(joined) >= Math.ceil(cap * 0.9); };
   function vitalsHtml() {
     const g = S.glog; if (!g || S.draft) return "";
     const log = calledSoFar(), when = (ms) => (ms ? hmIst(ms) : "-");
-    const people = `${g.people.joined} joined` + (g.people.waiting ? `, ${g.people.waiting} waiting for your OK` : ", none waiting") + (g.people.present != null ? `, ${g.people.present} checked in as present` : "");
+    const people = `${g.people.joined} joined` + (g.people.waiting ? `, ${g.people.waiting} waiting for your OK` : ", none waiting") + (g.people.present != null ? `, ${g.people.present} checked in as present` : "") + (nearFull(g.people.joined) ? `. Nearly full (${g.people.joined} of ${S.info.cap}): raise the size in step 2 if more people are coming` : "");
     const luckyRows = (g.lucky || []).map((l) => `<div class="zc-rowl"><span><b>Lucky draw: ${esc(l.title)}</b></span><span>${l.drawn ? "Drawn · Ticket number" + (l.tickets.length === 1 ? " " : "s ") + l.tickets.join(", ") : "Not drawn yet · " + l.winners + " picked at random"}</span></div>`).join("");
     const prizes = g.prizes.length || luckyRows ? g.prizes.map((p) => `<div class="zc-rowl"><span><b>${esc(p.prize)}</b>${p.text ? " · " + esc(p.text) : ""}</span><span>Ticket number ${p.ticket} · ${esc(when(p.atMs))}</span></div>`).join("") + luckyRows : '<span class="zc-small zc-nomargin">None yet.</span>';
     const pauses = g.pauses.length ? g.pauses.map((p) => `Paused by ${p.by.replace(/^The /, "the ").replace(/^A /, "a ")} at ${esc(when(p.fromMs))}${p.toMs ? " until " + esc(when(p.toMs)) : ""}`).join("; ") : "Not paused so far.";

@@ -1,0 +1,18 @@
+// WP-01 (gap plan 2026-10-29): quick correctness and wording fixes in plain English. One guard file for the small items.
+import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { GAME_FULL_MSG } from "../../edge/src/worker";
+
+const pub = (f: string) => readFileSync(new URL(`../public/${f}`, import.meta.url), "utf8");
+
+describe("TA07: a full game says 'game' and who to tell", () => {
+  test("the message a player sees names the game and the organizer, never 'engagement'", () => {
+    expect(GAME_FULL_MSG).toMatch(/^This game is full\./); expect(GAME_FULL_MSG).toMatch(/organizer/); expect(GAME_FULL_MSG).not.toMatch(/engagement/i);
+  });
+  test("the organizer is warned at 90 percent of the places (89 of 100 no, 90 of 100 yes)", () => {
+    const src = pub("zc.js"); const m = src.match(/const nearFull = \(joined\) => \{[^\n]*\};/); expect(m).toBeTruthy();
+    const make = (cap: number) => new Function("S", `${m![0]}; return nearFull;`)({ info: { cap } }) as (n: number) => boolean;
+    expect(make(100)(89)).toBe(false); expect(make(100)(90)).toBe(true); expect(make(10)(9)).toBe(true); expect(make(10)(8)).toBe(false);
+    expect(make(0)(5)).toBe(false); // size unknown: no warning
+  });
+});
