@@ -6,11 +6,6 @@
   if (typeof window === "undefined" || !window.ZFLOW) return;
   const Z = window.ZFLOW, el = Z.el, st = Z.state, dash = Z.dash;
 
-  /* ---- pure rules (tested) ---- */
-    if (claimOpen) return { ready: false, secs: 0, label: "Claim in progress" };
-    const left = Math.max(0, Math.ceil((lastMs + 5000 - now) / 1000));
-    return left > 0 && lastMs ? { ready: false, secs: left, label: "Wait " + left + " seconds" } : { ready: true, secs: 0, label: "Press to Roll Out the Next Number" };
-  };
   /** The three claim messages, then what the board says when the claim is settled. */
   const claimText = (c, mode) => c.phase === "check" ? "Ticket " + c.ticket + " has claimed " + c.prize + ". The system is checking..."
     : c.phase === "ok" ? "Congratulations! The claim is correct." : c.phase === "gone" ? c.prize + " is gone. It has been won by Ticket " + c.ticket + "." + (mode === "manual" ? " Press the button to roll out the next number." : "") : "";
@@ -18,7 +13,7 @@
   const whoLines = (role, email, org) => role === "host" ? ["Host: " + email, "Organizer: " + org] : role === "cohost" ? ["Co-host: " + email, "Organizer: " + org] : ["Organizer: " + org];
   /** Ready check: link shared, payment, prizes chosen are needed; Hosts added and rehearsal done are optional. */
   const readyItems = (f) => [["Game link shared", !!f.shared, true], ["Payment", !!f.paid, true], ["Prizes chosen", !!f.prizes, true], ["Hosts added", !!f.hosts, false], ["Rehearsal done", !!f.rehearsed, false]];
-  window.ZTAMBOLA = { luckyOrder, luckyAt, claimText, whoLines, readyItems };
+  window.ZTAMBOLA = { claimText, whoLines, readyItems };
 
   /* ---- live state for the added sections ---- */
   const T = { mode: "auto", paused: false, lastRoll: 0, claim: null, prizes: [], reh: null, presence: null, glog: null, tick: 12, shared: false };
