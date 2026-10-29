@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
-import { WAIT_LIMIT_MS, FAMILY_CUTOFF_MS, waitingLapsed, familyCutoffPassed, mayDecide, cleanEmail, LAPSED_MESSAGE, FAMILY_CLOSED_MESSAGE } from "../src/approvals";
+import { WAIT_LIMIT_MS, FAMILY_CUTOFF_MS, waitingLapsed, familyCutoffPassed, mayDecide, cleanEmail, LAPSED_MESSAGE, FAMILY_CLOSED_MESSAGE, DECLINED_MESSAGE } from "../src/approvals";
+import { erasePersonal } from "../src/lifecycle";
 
 const T = Date.UTC(2026, 9, 1, 10, 0, 0);
 const GEN = 1692803367;
@@ -85,5 +86,29 @@ describe("an open game may keep an Email ID", () => {
     const again = await joinAs(2, { email: "asha@acme.com" }); expect(again.status).toBe(409); expect((await j(again)).code).toBe("email-used");
     expect((await joinAs(1, { email: "asha@acme.com" })).status).toBe(200); // the same phone again is the same ticket
     expect((await joinAs(3)).status).toBe(200); // no email: a game that does not ask for one still works as before
+  });
+});
+
+describe("real engine runs of the other new paths: reject, cap, and deletion", () => {
+  test("a declined request is told politely and cannot be admitted afterwards (first decision wins)", async () => {
+    const t = await setup({ closed: true });
+    const w = await j(await joinAs(1));
+    const d = await call("POST", `/api/z/APP-1/waiting/${w.wid}`, { decision: "decline" }, t.master); expect(d.status).toBe(200);
+    const me = await j(await call("GET", `/api/z/APP-1/me?wid=${w.wid}`)); expect(me.state).toBe("declined"); expect(me.message).toBe(DECLINED_MESSAGE);
+    const later = await j(await call("POST", `/api/z/APP-1/waiting/${w.wid}`, { decision: "admit" }, t.master)); expect(later.already).toBe("declined");
+  });
+  test("the cap is enforced: an open game of 2 turns the third person away kindly, even with an email", async () => {
+    const t = await setup(); await call("PATCH", "/api/z/APP-1/settings", { cap: 2 }, t.master);
+    expect((await joinAs(1, { email: "a@acme.com" })).status).toBe(200); expect((await joinAs(2, { email: "b@acme.com" })).status).toBe(200);
+    const third = await joinAs(3, { email: "c@acme.com" }); expect(third.status).toBe(409);
+  });
+  test("deletion: the email key, the people and the waiting requests are gone when the game's personal data is erased", async () => {
+    const t = await setup(); await joinAs(1, { email: "gone@acme.com" });
+    const kv = () => (env as any).DB.prepare("SELECT COUNT(*) AS c FROM kv WHERE k LIKE 'email/APP-1/%'").first();
+    expect((await kv()).c).toBe(1);
+    await erasePersonal(env as any, "APP-1", T + 30 * 3_600_000, "test");
+    expect((await kv()).c).toBe(0);
+    expect((await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid='APP-1'").first()).c).toBe(0);
+    expect((await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM waiting WHERE eid='APP-1'").first()).c).toBe(0);
   });
 });

@@ -28,5 +28,8 @@
     // only what the engine does today: people who join with the game link wait for the organizer or a Host. Co-host and family approval are not in the engine, so no sentence promises them.
     return role === "cohost" ? "" : role === "host" ? "People who join with the game link, a Host link or the organizer link wait for you or the organizer." : "People who join with the game link wait for you or a Host.";
   }
-  window.ZROLES = { FAMILY_CUTOFF_MIN, WAIT_LIMIT_MIN, approvers, decide, approvalText };
+  /** May this role let a waiting person in? (the approvers of that request include the role) */
+  const LABEL = { organizer: "organizer", host: "Host", cohost: "Co-host", familyhost: "family host" };
+  const canLetIn = (role, approverList) => approverList.indexOf(LABEL[role]) >= 0;
+  window.ZROLES = { canLetIn, FAMILY_CUTOFF_MIN, WAIT_LIMIT_MIN, approvers, decide, approvalText };
 })();
