@@ -1135,7 +1135,7 @@
       : /^Not accepted/i.test(m) ? "That press did not go through. Please wait a few seconds and press again."
       : m || "That did not go through. Please try again.";
   };
-  const PAYNOTE = (copied) => (copied ? "Copied. Paste it into WhatsApp or e-mail. " : "We could not copy it by itself. Touch and hold the link below, then choose Copy. ") + "Anyone with this link can pay for this game. It works until the game is paid or for 7 days.";
+  const PAYNOTE = (copied) => (copied ? "Copied. Paste it into WhatsApp or e-mail. " : "We could not copy it by itself. Touch and hold the link below, then choose Copy. ") + "Anyone with this link can pay for this game. It works until the game is paid. It lasts 7 days, or until the game starts if that is later.";
   const reportOpener = () => { let w = null; try { w = window.open("", "_blank"); if (w) w.opener = null; } catch { /* the pop-up was blocked */ } return w; }; // opened on the tap itself, filled in later (a phone browser blocks a window opened after a network call)
   const reportShow = (w, url, made) => { S.rptNote = made ? "New report link made. The old one has stopped." : ""; if (w) { try { w.location.href = url; return; } catch { /* shown below */ } } S.reportUrl = url; S.rptNote = (S.rptNote ? S.rptNote + " " : "") + "Your browser blocked the new tab. Tap the link below to open the report."; };
   const reportFail = (w, e) => { if (w) { try { w.close(); } catch { /* fine */ } } S.rptNote = friendly(e); };
