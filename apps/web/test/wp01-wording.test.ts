@@ -31,3 +31,9 @@ describe("TA19: no screen or report prints a fixed prize-tie rule", () => {
     expect(pub("zgame.js")).toContain("they take the next prizes one after the other"); expect(pub("reportgen.js")).toContain("they take the next prizes one after the other"); // rebuilt with bun run build:zgame / build:report
   });
 });
+
+describe("TA32: no selling to a player on the player's own screens", () => {
+  test("the ticket page, the board and the big screen never show 'Earn 50%' or 'Refer & earn' or link to the partner page", () => {
+    for (const f of ["z.js", "board.js", "big.js"]) { const s = pub(f); expect(s).not.toMatch(/Earn 50|Refer\s*(&amp;|&|and)\s*earn/i); expect(s).not.toContain("/partner.html"); }
+  });
+});
