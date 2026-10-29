@@ -10,7 +10,7 @@
   const claimText = (c, mode) => c.phase === "check" ? "Ticket " + c.ticket + " has claimed " + c.prize + ". The system is checking..."
     : c.phase === "ok" ? "Congratulations! The claim is correct." : c.phase === "gone" ? c.prize + " is gone. It has been won by Ticket " + c.ticket + "." + (mode === "manual" ? " Press the button to roll out the next number." : "") : "";
   /** The top-right label: who is signed in, and the organizer on a second line. */
-  const whoLines = (role, email, org) => role === "host" ? ["Host: " + email, "Organizer: " + org] : role === "cohost" ? ["Co-host: " + email, "Organizer: " + org] : ["Organizer: " + org];
+  const whoLines = (role, email, org, by) => role === "host" ? ["Host: " + email, "Organizer: " + org] : role === "cohost" ? ["Co-host: " + email, "You were made Co-host by: " + (by || org), "Organizer: " + org] : ["Organizer: " + org];
   /** Ready check: link shared, payment, prizes chosen are needed; Hosts added and rehearsal done are optional. */
   const readyItems = (f) => [["Game link shared", !!f.shared, true], ["Payment", !!f.paid, true], ["Prizes chosen", !!f.prizes, true], ["Hosts added", !!f.hosts, false], ["Rehearsal done", !!f.rehearsed, false]];
   window.ZTAMBOLA = { claimText, whoLines, readyItems };
@@ -37,7 +37,7 @@
   const h3 = (t) => el("h3", { text: t });
   const small = (t, a) => el("p", { class: "zf-small", ...(a || {}), text: t });
   function whoLabel() {
-    const org = (st.raw && st.raw.organizerEmail) || "organizer@acme.com", me = st.team && st.team.email ? st.team.email.trim() : org;
+    const org = (st.raw && st.raw.organizerEmail) || "your email", me = st.team && st.team.email ? st.team.email.trim() : org;
     return el("div", { class: "zt-who", id: "zt-who" }, whoLines(st.role || "organizer", me, org).map((l) => el("div", { text: l })));
   }
   function readyCheck() {
@@ -79,15 +79,30 @@
     const list = (T.team && T.team.cohosts) || [], lim = T.coLimit || 100, box = el("section", { class: "zt-cohosts", id: "zt-cohosts" }, h3("Your Co-hosts"));
     if (!list.length) { box.append(small("No Co-host added yet.")); return box; }
     const sel = el("select", { id: "zt-colimit", "aria-label": "Limit for each Co-host", onchange: async (e) => { try { await call("PATCH", `/api/z/${eid()}/settings`, { coHostLimit: Number(e.target.value) }); T.coLimit = Number(e.target.value); dash.note = "Saved."; } catch (er) { dash.note = er.message; } Z.draw(); } }, LIMITS.map((n) => el("option", { value: String(n), ...(n === lim ? { selected: "" } : {}) }, String(n))));
-    const t = el("table", { class: "zf-table", id: "zt-cotable" }, el("thead", {}, el("tr", {}, ["Co-host", "Brought so far"].map((c) => el("th", { scope: "col", text: c })))));
-    const tb = el("tbody"); for (const c of list) tb.append(el("tr", {}, el("td", { "data-label": "Co-host", text: c.email || c.label || "Co-host" }), el("td", { "data-label": "Brought so far", text: (Number(c.brought) || 0) + " of " + lim }))); t.append(tb);
+    const t = el("table", { class: "zf-table", id: "zt-cotable" }, el("thead", {}, el("tr", {}, ["Co-host", "Invited so far"].map((c) => el("th", { scope: "col", text: c })))));
+    const tb = el("tbody"); for (const c of list) tb.append(el("tr", {}, el("td", { "data-label": "Co-host", text: c.email || c.label || "Co-host" }), el("td", { "data-label": "Invited so far", text: (Number(c.brought) || 0) + " of " + lim }))); t.append(tb);
     box.append(el("div", { class: "zf-tablewrap" }, t), el("label", { for: "zt-colimit", text: "Each Co-host can bring up to " }), sel, small("The limit is the same for every Co-host of this game. You can change it any time."));
     return box;
   }
   /** The Co-host's own read-only line. */
   function coHostLimitLine() {
     const m = T.mine || {}, lim = Number(m.limit) || T.coLimit || 100, used = Number(m.used) || 0, by = (st.raw && st.raw.organizerEmail) || "the organizer";
-    return el("p", { class: "zf-small", id: "zt-colimitline", text: "You can bring up to " + lim + " people. Brought so far: " + used + ". " + Math.max(0, lim - used) + " left. This limit was set by " + by + "." });
+    return el("p", { class: "zf-small", id: "zt-colimitline", text: "You can invite up to " + lim + " people. Invited so far: " + used + ". " + Math.max(0, lim - used) + " left. This limit was set by " + by + "." });
+  }
+  /** The Co-host screen (spec 1.7.0 sec 10): only the invite link and the people they invited who wait. Nothing else. */
+  function coHostScreen() {
+    const m = T.mine || {}, link = m.commonLink || (location.origin + "/z.html?e=" + encodeURIComponent(eid())), lim = Number(m.limit) || T.coLimit || 100, used = Number(m.used) || 0;
+    const msg = "Please join our online team game. Game link: " + link + " (Game ID " + eid() + ")";
+    const box = el("section", { class: "zt-cohostscreen", id: "zt-cohostscreen" }, el("h2", { text: "Your link to invite people to the game" }),
+      el("input", { type: "text", readonly: "", id: "zt-colink", value: link }),
+      el("p", { class: "zf-btnrow" }, el("button", { type: "button", class: "zf-go", id: "zt-cocopy", onclick: async () => { try { await navigator.clipboard.writeText(link); dash.note = "Link copied."; } catch { dash.note = "Please copy it by hand."; } paint(); } }, "Copy link"), " ",
+        el("button", { type: "button", class: "zf-add", id: "zt-cocopymsg", onclick: async () => { try { await navigator.clipboard.writeText(msg); dash.note = "Message copied."; } catch { dash.note = "Please copy it by hand."; } paint(); } }, "Copy a message to share")),
+      small("Game ID " + eid() + ". Everyone who joins using this link is recorded as a participant you invited."), coHostLimitLine(),
+      el("h2", { text: "People you invited, waiting for you" }));
+    const rows = dash.waiting || [];
+    if (!rows.length) box.append(small("Nobody is waiting right now.", { id: "zt-nowait" }));
+    for (const w of rows) box.append(el("p", { "data-wid": String(w.id) }, "Ticket " + (w.ticket || w.seat || w.id) + " ", el("button", { type: "button", class: "zf-go", onclick: async () => { try { await call("POST", `/api/z/${eid()}/waiting/${encodeURIComponent(w.id)}`, { decision: "admit" }); } catch (e) { dash.note = e.message; } Z.draw(); } }, "Let in"), " ", el("button", { type: "button", class: "zf-add", onclick: async () => { try { await call("POST", `/api/z/${eid()}/waiting/${encodeURIComponent(w.id)}`, { decision: "later" }); } catch (e) { dash.note = e.message; } Z.draw(); } }, "Not now")));
+    return box;
   }
   function prizesBlock(co) {
     const P = T.prizes, won = P.length, box = el("section", { class: "zt-prizes", id: "zt-prizes" }, h3("Prizes: " + won + " won"));
@@ -120,6 +135,7 @@
     if (st.role && !document.getElementById("zt-who")) app.prepend(whoLabel());
     if ((st.role === "cohost" || st.view === "cohost") && T.mine === undefined) { T.mine = null; load(); }
     const d = document.getElementById("zf-dashboard");
+    if (d && (st.role === "cohost" || st.view === "cohost")) { if (!document.getElementById("zt-cohostscreen")) { d.replaceChildren(coHostScreen()); } return; }
     if (d && !document.getElementById("zt-ready") && !document.getElementById("zt-readysec")) {
       const co = !!(st.view === "cohost" || st.role === "cohost"), pay = document.getElementById("zf-pay"), banner = document.getElementById("zf-banner"), wait = document.getElementById("zf-waitsec");
       if (!co) { const at = banner ? banner.nextSibling : d.children[1]; d.insertBefore(readyCheck(), at); }

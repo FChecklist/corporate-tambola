@@ -25,7 +25,7 @@ test("claim messages are the owner's words", () => {
 test("who is signed in is shown on two lines for Host and Co-host", () => {
   const t = Tz();
   expect(t.whoLines("host", "h@a.com", "o@a.com")).toEqual(["Host: h@a.com", "Organizer: o@a.com"]);
-  expect(t.whoLines("cohost", "c@a.com", "o@a.com")).toEqual(["Co-host: c@a.com", "Organizer: o@a.com"]);
+  expect(t.whoLines("cohost", "c@a.com", "o@a.com")).toEqual(["Co-host: c@a.com", "You were made Co-host by: o@a.com", "Organizer: o@a.com"]);
   expect(t.whoLines("", "o@a.com", "o@a.com")).toEqual(["Organizer: o@a.com"]);
 });
 test("ready check: hosts and rehearsal are optional", () => {
@@ -51,5 +51,6 @@ test("Your Co-hosts table shows 'N of limit' and the limit drop-down saves coHos
   const sel = win.document.getElementById("zt-colimit"); sel.value = "500"; sel.dispatchEvent(new win.Event("change")); await new Promise((r) => setTimeout(r, 30));
   expect(calls.some((c) => c.method === "PATCH" && c.body && c.body.coHostLimit === 500)).toBe(true);
   s.role = "cohost"; s.view = "cohost"; win.ZFLOW.draw(); await new Promise((r) => setTimeout(r, 120)); win.ZFLOW.draw(); await new Promise((r) => setTimeout(r, 50));
-  expect(win.document.getElementById("zt-colimitline").textContent).toContain("Brought so far: 34. 216 left.");
+  const cs = win.document.getElementById("zt-cohostscreen").textContent; for (const bad of ["Payment", "Pay now", "Prizes", "Tickets claimed", "Game board"]) expect(cs).not.toContain(bad); expect(cs).toContain("Your link to invite people to the game"); expect(cs).toContain("People you invited, waiting for you");
+  expect(win.document.getElementById("zt-colimitline").textContent).toContain("Invited so far: 34. 216 left.");
 });
