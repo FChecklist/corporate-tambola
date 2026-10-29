@@ -210,6 +210,9 @@ describe("the release instant (set to the real deploy time right before deploy)"
     expect(Number.isInteger(APPROVAL_RULES_FROM_MS)).toBe(true); expect(APPROVAL_RULES_FROM_MS).toBeGreaterThan(Date.UTC(2026, 9, 29));
     expect(approvalRulesOn({ created_ms: APPROVAL_RULES_FROM_MS - 1 })).toBe(false); expect(approvalRulesOn({ created_ms: APPROVAL_RULES_FROM_MS })).toBe(true);
     expect(approvalRulesOn({ created_ms: null })).toBe(false); expect(approvalRulesOn(null)).toBe(false);
+  });
+});
+
 describe("1.8.1: the public settings say whether anyone can join (open) or only listed people (closed)", () => {
   test("an open game says open: true, so the player page shows the email box", async () => {
     await setup(); const info = await j(await call("GET", "/api/z/APP-1/info")); expect(info.open).toBe(true);
