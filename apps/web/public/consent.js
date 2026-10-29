@@ -3,7 +3,7 @@
    The words Terms, Privacy and Refund Policy inside a label are links to the site's own pages and open in a new tab. */
 (function () {
   const C = (window.CBConsent = {});
-  C.version = "2026-10-15";
+  C.version = "2026-10-30";
   C.text = {
     K1: {
       A: "I have read and agree to the Terms & Conditions, the Privacy Policy and the Refund Policy.",
@@ -12,7 +12,7 @@
     K2: { A: "I have read and agree to the Terms & Conditions and the Privacy Policy." },
     K3: { A: "I agree to the Terms and the Refund Policy. I understand there is no refund; my payment stays as credit." },
     K4: {
-      A: "I agree that my name and mobile number are used for this game only and deleted within 24 hours after it ends. I know who invited me is recorded until then. If I win, my name, mobile number and prize record are kept for 365 days so the prize can be handed over. We keep billing data for audit and tax reasons. This notice is available in Hindi on request.",
+      A: "I agree that my name and mobile number are used for this game only and deleted within 24 hours after it ends. If this game asks for my email ID, that is used only for this game and deleted within 24 hours of the game. I know who invited me is recorded until then. If I win, my name, mobile number and prize record are kept for 365 days so the prize can be handed over. We keep billing data for audit and tax reasons. This notice is available in Hindi on request.",
       B: "I am 18 or older.",
     },
     K5: { A: "I will not charge any player. I will hand over prizes as the organizer decides. I follow the Terms." },
