@@ -36,7 +36,7 @@ describe("1.8.0 open join form", () => {
     const o = await organizer(); await game(o, "E180-0"); const p = await page(o, "/z?e=E180-0"); await p.waitFor((x) => /Join the game/.test(x));
     expect(p.$("#mail")).toBeNull(); expect(p.text()).not.toContain("Your email ID");
   });
-  test("with the email box switched on, an open game asks for an optional Email ID; a good one joins and is kept for the organizer, a bad one is refused in the guide's words, the same email on another phone is refused, the same phone joining again keeps its ticket", async () => {
+  test("with the email box switched on the page sends the email, and 1.8.0 (EMAIL_ENABLED = false) ignores it: the join works, nothing is stored or checked", async () => {
     const o = await organizer(); await game(o, "E180-1");
     const p = await page(o, "/z?e=E180-1", true);
     await p.waitFor((x) => /Join the game/.test(x));
@@ -44,15 +44,12 @@ describe("1.8.0 open join form", () => {
     expect(p.text()).toMatch(/You are invited to join the Corporate Tambola \(Housie\) organized by/);
     await join(p, "9811100001", { mail: "asha@acme.com" });
     await p.waitFor((x) => /Your ticket|Starting in|What you can win|Before the game|Getting ready/.test(x));
-    // the same email on a second phone: one email, one ticket
-    const q = await page(o, "/z?e=E180-1", true); await join(q, "9811100002", { mail: "Asha@Acme.com" });
-    const t = await q.waitFor((x) => /could not use this email ID|Check your email/i.test(x)); expect(t).toMatch(/could not use this email ID/i);
-    // a bad shape is refused
+    // a bad shape and the same email on another phone are NOT refused while the server ignores email
+    const q = await page(o, "/z?e=E180-1", true); await join(q, "9811100002", { mail: "asha@acme.com" });
+    await q.waitFor((x) => /Your ticket|Starting in|What you can win|Before the game|Getting ready/.test(x));
     const r = await page(o, "/z?e=E180-1", true); await join(r, "9811100003", { mail: "asha@" });
-    expect(await r.waitFor((x) => /check your email ID|looks incomplete|Check your email ID/i.test(x))).toBeTruthy();
-    // no email at all is fine (optional)
-    const s = await page(o, "/z?e=E180-1", true); await join(s, "9811100004");
-    await s.waitFor((x) => /Your ticket|Starting in|What you can win|Before the game|Getting ready/.test(x));
+    await r.waitFor((x) => /Your ticket|Starting in|What you can win|Before the game|Getting ready/.test(x));
+    expect((o.world.raw.query("SELECT COUNT(*) c FROM kv WHERE k LIKE 'email/%'").get() as any).c).toBe(0);
     expect(p.errors).toEqual([]);
   });
   test("the same mobile on another device gets no second ticket, and the participant cap is kept", async () => {
@@ -153,8 +150,8 @@ describe("a game made BEFORE the approval rules date behaves exactly like 1.7.1"
     const j = await o2.api("POST", "/api/z/E180-9/join", { phone: "9811100081", name: "Old", device: dev(2), email: "asha@" }); expect(j.status).toBe(200);
     expect((o2.world.raw.query("SELECT COUNT(*) c FROM kv WHERE k LIKE 'email/%'").get() as any).c).toBe(0);
     const pii = (o2.world.raw.query("SELECT pii FROM participant WHERE eid='E180-9'").get() as any).pii as string; expect(typeof pii).toBe("string");
-    // and the same game made AFTER the date does read it (the new rules are really on for new games)
+    // and also for a game made after the date while EMAIL_ENABLED is false (the email is switched on in 1.8.1)
     const o3 = await organizer(); await game(o3, "E180-10");
-    expect((await o3.api("POST", "/api/z/E180-10/join", { phone: "9811100082", name: "New", device: dev(3), email: "asha@" })).status).toBe(400);
+    expect((await o3.api("POST", "/api/z/E180-10/join", { phone: "9811100082", name: "New", device: dev(3), email: "asha@" })).status).toBe(200); // 1.8.0: EMAIL_ENABLED is false, so email is ignored for every game
   }, 120_000);
 });
