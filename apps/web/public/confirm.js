@@ -62,7 +62,7 @@
     const i = $("lMail"); if (i) i.focus();
   }
   function codeView(email, devCode) {
-    view(card(`<div class="sheethead"><div class="eyebrow">Check your inbox</div><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><img src="/logo-mark.svg" alt="" width="26" height="26"></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
+    view(card(`<div class="sheethead"><div class="eyebrow">Check your inbox</div><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><img src="/logo-mark.svg?v=2" alt="" width="26" height="26"></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
       <h1 id="cdTitle">Check your email</h1>
       <p class="sheetbody">We emailed <b class="sendto">${esc(email)}</b>. Option 1: type the 6-digit number from the e-mail here. Option 2: tap <b>Sign me in</b> in the e-mail (then come back to this page). It works for 10 minutes. Check spam too.</p>
       ${devCode ? `<div class="note info devcode" role="note"><span>Local test mode: your passcode is <b>${esc(devCode)}</b></span><button type="button" class="btn sm" id="useCode">Use this passcode</button></div>` : ""}
