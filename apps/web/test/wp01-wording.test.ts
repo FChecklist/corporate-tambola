@@ -16,3 +16,11 @@ describe("TA07: a full game says 'game' and who to tell", () => {
     expect(make(0)(5)).toBe(false); // size unknown: no warning
   });
 });
+
+describe("TA10: the lost-claim lines reach the phone", () => {
+  test("z.js shows the two-line explanation from ZG.lostClaimLines (built into zgame.js), not the old merged guess", () => {
+    const z = pub("z.js"), bundle = pub("zgame.js");
+    expect(z).toContain("ZG.lostClaimLines("); expect(bundle).toContain("lostClaimLines"); // the shipped bundle has it (rebuild with bun run build:zgame)
+    expect(z).not.toContain("another ticket was ahead or the claim came after the next number");
+  });
+});

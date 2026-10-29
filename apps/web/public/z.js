@@ -799,7 +799,7 @@
     return `<div class="zclaims" id="claims">${btns ? `<div class="zclaimrow">${btns}</div>` : ""}${staleNote}${v.lateClaim ? `<div class="zbanner warn zlate" id="latenote" role="alert">${esc(v.lateClaim)}</div>` : ""}<p class="zsmall zrule" id="claimhint">The Claim button turns gold when you complete a prize. Press it before the next number is called.</p>
       ${sending.length ? `<p class="zsmall zsent zsending" role="status">Sending your claim for ${sending.map((k) => esc(KEYNAME(k))).join(", ")}. Keep this page open and your screen on until it says sent.</p>` : ""}
       ${checking.length ? `<p class="zsmall zsent" role="status">Claim sent for ${checking.map((k) => esc(KEYNAME(k))).join(", ")}. The software is checking it against the called numbers.</p>` : ""}
-      ${lost.length ? `<p class="zsmall zlost">${lost.map((k) => esc(KEYNAME(k))).join(", ")}: claimed, but another ticket was ahead or the claim came after the next number.</p>` : ""}
+      ${lost.map((k) => { let mine = -1; try { mine = ZG.completionIndexKey(v.tickets, k, v.log); } catch { /* unknown: the second line says so */ } const ls = ZG.lostClaimLines(KEYNAME(k), (v.results || []).filter((x) => x.pattern === k), mine); return `<p class="zsmall zlost"><b>${esc(KEYNAME(k))}: not this time.</b><br>${esc(ls[0])}<br>${esc(ls[1])}</p>`; }).join("")}
       ${bog ? `<p class="zsmall zbogeys">Bogeys: ${bog}</p>` : ""}${out}<div id="tapnote"></div></div>`;
   }
   /** SIDE claim button, once per prize (its first open line): gold when the player has this prize to claim, otherwise grey (while the game is in play) and a press asks first, because it would count as a wrong claim (a Bogey). */

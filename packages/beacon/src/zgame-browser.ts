@@ -17,5 +17,6 @@ import { MSG, MSG_VERSION, say, LANGS, TABLES, getLang, setLang } from "./messag
 import * as BEAT from "./beat";
 import { compactClaim } from "./opcodes";
 Object.assign((globalThis as any).ZG, { MSG, MSG_VERSION, say, BEAT, LANGS, TABLES, getLang, setLang, compactClaim });
+import { lostClaimLines } from "./claim-text";
 import { MORE_GAMES, moreGamesText } from "./more-games";
-Object.assign((globalThis as any).ZG, { MORE_GAMES, moreGamesText });
+Object.assign((globalThis as any).ZG, { MORE_GAMES, moreGamesText, lostClaimLines });
