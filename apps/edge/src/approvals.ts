@@ -32,5 +32,7 @@ export const EMAIL_UNUSABLE_MESSAGE = "The system could not use this email ID fo
 /** The earliest request time that can still be answered: 30 minutes back for a game under the new rules, 0 (no limit) for an older game. */
 export const waitSince = (e: { created_ms?: number | null }, now: number): number => (approvalRulesOn(e) ? now - WAIT_LIMIT_MS : 0);
 
-/** The Email ID of an open game. OFF in 1.8.0: while this is false the server ignores an email completely (nothing is sealed, no key is claimed, no refusal is sent), because the page does not yet show a consent notice for it. Turned on in 1.8.1 together with the notice. */
-export const EMAIL_ENABLED = false;
+/** The Email ID of an open game. OFF in 1.8.0, ON in 1.8.1: while this is false the server ignores an email completely (nothing is sealed, no key is claimed, no refusal is sent), because the page does not yet show a consent notice for it. Turned on in 1.8.1 together with the notice. */
+export const EMAIL_ENABLED = true;
+/** 1.8.1: how many times one network may be told "this email cannot be used" for one game in 10 minutes (so nobody can find out which emails hold a ticket). */
+export const EMAIL_MISS_PER_10MIN = 5;

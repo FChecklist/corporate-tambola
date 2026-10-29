@@ -41,7 +41,7 @@ import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { HELPDESK_SCHEMA, HELPER_MANUAL_NOTE, helpdeskCloseStatements, helpdeskRoute, helpdeskSweep, isDeskKeyId, isHelperKey, noteHelperGame } from "./helpdesk";
-import { cleanEmail, approvalRulesOn, EMAIL_ENABLED, EMAIL_UNUSABLE_MESSAGE } from "./approvals";
+import { cleanEmail, approvalRulesOn, EMAIL_ENABLED, EMAIL_UNUSABLE_MESSAGE, EMAIL_MISS_PER_10MIN } from "./approvals";
 import { normEmp, empHashOf, verifyOf, keptPhone, phoneDigits, cleanName as cleanPersonName, PEOPLE_SCHEMA, COHOST_FROM, HOST_FROM, ORG_FROM, COHOST_LIMIT_DEFAULT, COHOST_LIMIT_MIN, COHOST_LIMIT_MAX, WAITING_MAX, addWaiting, chainOf, cleanPhone, fromCodeOf, inviterOf, joinLinkPage, limitOfInviter, listCount, parseFrom, peopleRoute, personByPhone, personByToken, srcOf, waitingWho, type PersonRow } from "./people";
 import { PAYLINK_SCHEMA, PAYLINK_TOKEN, createPayLink, packFor } from "./paylink";
 import { HOST_LINK_TTL_MS, HOST_SCHEMA, confirmHostEmail, emailHashOf, hostForEmail, hostKeyStatus, hostSetupRoute, hostStateRow, identityRow, maskEmail, maskMobile, mintDeviceKey, retireHost } from "./hostsetup";
@@ -1804,9 +1804,16 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       joinEmail = cleanEmail(b.email);
       if (!joinEmail) return json({ error: "Please check your email ID. It looks incomplete.", code: "bad-email" }, 400);
       emailKey = `email/${eid}/${(await sha("em|" + eid + "|" + joinEmail)).slice(0, 32)}`;
-      await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(emailKey, ph).run(); // insert first, then read back: two phones asking at the same instant cannot both win
-      const seen = (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(emailKey).first<{ v: string }>())?.v;
-      if (seen && seen !== ph) return json({ error: EMAIL_UNUSABLE_MESSAGE, code: "email-unusable" }, 409);
+      const seen = (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(emailKey).first<{ v: string }>())?.v; // only a look here: the email is claimed inside the final join batch, so a join that fails later claims nothing
+      if (seen && seen !== ph) {
+        try { // guessing emails: only so many "cannot use" answers per network per game per 10 minutes
+          const ipk = (await sha("eip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16), k = `emailmiss/${eid}/${new Date(now).toISOString().slice(0, 15)}/${ipk}`;
+          const n = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0);
+          if (n >= EMAIL_MISS_PER_10MIN) return json({ error: "Too many tries. Please wait a few minutes and ask your organizer if you need help.", code: "too-many-tries" }, 429);
+          await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, String(n + 1)).run();
+        } catch { /* a counter never blocks a join */ }
+        return json({ error: EMAIL_UNUSABLE_MESSAGE, code: "email-unusable" }, 409);
+      }
     }
     if (!dev) return json({ error: "Please refresh this page and try again." }, 400);
     if (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) return json({ error: "This phone already holds a ticket in this game. One phone, one ticket. Others can join from their own phones, using your invitation link if the organizer allowed it.", code: "device-used" }, 409);
@@ -1855,8 +1862,13 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!(await spend(env, now, JOIN_WRITES))) return json({ error: "It is very busy right now. Please try again in a few minutes.", code: "busy" }, 503);
     const inv = inviter.startsWith("s:") ? Number(inviter.slice(2)) : null;
     if (!ck) joinExtra.push(await consentFromSeat(env.DB, { kind: "K4", ref: eid!, now, eid: eid!, ph }));
+    if (emailKey) joinExtra.push(env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(emailKey, ph)); // claimed together with the seat
     await addSeat(ph, pii, dev, lateRound, { inv, cat: inv !== null ? cat : null, src: srcOf(inviter), ownerId: inviter, guardId, guardLimit, role, extra: joinExtra });
     const row = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.jr AS jr, s.role AS role FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; jr: number | null; role: string | null }>();
+    if (row && emailKey && (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(emailKey).first<{ v: string }>())?.v !== ph) { // lost the race for this email: undo this join
+      await env.DB.batch([env.DB.prepare("DELETE FROM participant WHERE eid=? AND pid=?").bind(eid, row.pid), env.DB.prepare("DELETE FROM seat WHERE eid=? AND pid=?").bind(eid, row.pid), env.DB.prepare("DELETE FROM person WHERE eid=? AND ph=? AND role IS NULL").bind(eid, ph)]);
+      return json({ error: EMAIL_UNUSABLE_MESSAGE, code: "email-unusable" }, 409);
+    }
     if (!row) return (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) ? json({ error: "This phone already holds a ticket in this game. One phone, one ticket.", code: "device-used" }, 409) : guardId !== null ? wait(true, guardLimit) : json({ error: GAME_FULL_MSG }, 409); // lost a race for the last place
     if (row.dev && row.dev !== dev) return json({ error: "This ticket was opened in a different browser or app (or on another phone). A ticket plays on one device only. Open your link in the same browser or app you used first. If you cannot, ask your organizer to move your ticket to this phone.", code: "other-phone" }, 423);
     return reply(row.pid, { jr: row.jr ?? 0, ...(row.role ? { role: row.role } : {}) }); // (the K4 consent record went in with the seat, in the same batch)

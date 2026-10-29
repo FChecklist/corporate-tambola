@@ -14,7 +14,8 @@ const roundAt = (ms: number) => Math.floor((ms / 1000 - GEN) / 3) + 1;
 const roundMs = (r: number) => (GEN + (r - 1) * 3) * 1000;
 const START = roundAt(T) + 1200; // one hour after T
 const START_MS = roundMs(START);
-const EMAIL_TEST = EMAIL_ENABLED ? test : test.skip; // the email tests run when the flag is on (1.8.1); with it off the test below proves the email is ignored
+const EMAIL_TEST = EMAIL_ENABLED ? test : test.skip;
+const OFF_TEST = EMAIL_ENABLED ? test.skip : test; // the "email is ignored" proof runs only while the flag is off (1.8.0) // the email tests run when the flag is on (1.8.1); with it off the test below proves the email is ignored
 let env: PayEnv; let ipN = 0;
 const realFetch = globalThis.fetch;
 const call = (method: string, path: string, body?: unknown, key?: string, now = T, extra: Record<string, string> = {}) =>
@@ -223,7 +224,7 @@ describe("1.8.1: the public settings say whether anyone can join (open) or only 
 });
 
 describe("1.8.0: the Email ID is OFF (EMAIL_ENABLED = false)", () => {
-  test("with the flag off a join that carries an email stores nothing and gets the same result as one without", async () => {
+  OFF_TEST("with the flag off a join that carries an email stores nothing and gets the same result as one without", async () => {
     expect(EMAIL_ENABLED).toBe(false);
     await setup();
     const withMail = await joinAs(1, { email: "asha@acme.com" }); const bad = await joinAs(2, { email: "asha@" }); const twice = await joinAs(3, { email: "asha@acme.com" }); const plain = await joinAs(4);
@@ -232,5 +233,27 @@ describe("1.8.0: the Email ID is OFF (EMAIL_ENABLED = false)", () => {
     const rows = (await (env as any).DB.prepare("SELECT pii FROM participant WHERE eid='APP-1'").all()).results as any[];
     expect(rows.length).toBe(4);
     for (const r of rows) expect((await openPii(env as any, r.pii))?.email).toBeUndefined(); // the sealed details hold no email
+  });
+});
+
+describe("1.8.1: the Email ID is ON, with the audit fixes", () => {
+  const kvCount = async () => (await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM kv WHERE k LIKE 'email/APP-1/%'").first()).c;
+  EMAIL_TEST("a join that fails later (the game is full) claims no email", async () => {
+    const t = await setup(); await call("PATCH", "/api/z/APP-1/settings", { cap: 1 }, t.master);
+    expect((await joinAs(1)).status).toBe(200);
+    expect((await joinAs(2, { email: "squat@acme.com" })).status).toBe(409); // full
+    expect(await kvCount()).toBe(0); // nothing was claimed by the failed join
+  });
+  EMAIL_TEST("two phones at the same instant: one ticket, the other is taken out again and told kindly", async () => {
+    await setup();
+    const both = await Promise.all([joinAs(1, { email: "same@acme.com" }), joinAs(2, { email: "same@acme.com" })]);
+    expect(both.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect((await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid='APP-1'").first()).c).toBe(1);
+    expect(await kvCount()).toBe(1);
+  });
+  EMAIL_TEST("guessing: after 5 'cannot use' answers one network is slowed down (429)", async () => {
+    await setup(); expect((await joinAs(1, { email: "held@acme.com" })).status).toBe(200);
+    const codes: number[] = []; for (let i = 2; i < 9; i++) codes.push((await joinAs(i, { email: "held@acme.com" })).status);
+    expect(codes.slice(0, 5)).toEqual([409, 409, 409, 409, 409]); expect(codes[5]).toBe(429);
   });
 });
