@@ -75,3 +75,6 @@
 a.zf-go { display: inline-block; text-decoration: none; line-height: 32px; }
 #zf-link { width: min(100%, 420px); min-height: 44px; }
 @media (prefers-color-scheme: dark) { .zf-banner.unpaid { background: #3b3010; color: #ffe9a6; } .zf-banner.paid { background: #12301f; color: #cdeedb; } .zf-msgbox { background: #1a2745; } }
+.zf-body input[type=email], .zf-body input[type=tel], .zf-body input[type=url], .zf-body input[type=file] { min-height: 44px; padding: 6px 10px; font: inherit; max-width: 100%; box-sizing: border-box; }
+a.zf-add { display: inline-flex; align-items: center; text-decoration: none; }
+@media (prefers-color-scheme: dark) { .zf-sec a:not(.zf-go) { color: #9fc0ff; } }

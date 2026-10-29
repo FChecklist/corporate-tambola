@@ -260,6 +260,7 @@
   /* ---- talking to the game service (same sign-in key as the current console) ---- */
   const BASE = (q.get("api") || "").replace(/\/$/, "");
   const secret = () => { try { return (window.CTK ? window.CTK.get("ctz-org") : sessionStorage.getItem("ctz-org")) || ""; } catch { return ""; } };
+  { const k = q.get("k"); if (k && /^ct[hcak]_[0-9a-f]{48}$/.test(k)) { try { if (window.CTK) window.CTK.set("ctz-org", k); else sessionStorage.setItem("ctz-org", k); q.delete("k"); const rest = q.toString(); window.history.replaceState(null, "", location.pathname + (rest ? "?" + rest : "")); } catch { /* the page then asks for the link again */ } } } // a sign-in link from the current console (?k=...) works here too
   state.eid = q.get("e") || "";
   async function call(method, path, body) {
     const r = await fetch(BASE + path, { method, headers: { "content-type": "application/json", "x-organizer": secret() }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -496,7 +497,7 @@
   const originOf = () => (BASE || location.origin);
   async function refreshDash() {
     if (!state.eid) return;
-    try { const i = await call("GET", `/api/z/${state.eid}/info`); state.info = { ...(state.info || {}), published: !i.draft, paid: !i.unpaid, startsAt: i.startsAt }; } catch { /* the last answer stays */ }
+    try { const i = await call("GET", `/api/z/${state.eid}/info`); state.info = { ...(state.info || {}), published: !i.draft, paid: !i.unpaid, startMs: i.startMs }; } catch { /* the last answer stays */ }
     try { dash.waiting = (await call("GET", `/api/z/${state.eid}/waiting`)).waiting || []; } catch { /* the last list stays */ }
     try { dash.claims = (await call("GET", `/api/z/${state.eid}/claims`)).claims || []; } catch { /* the last count stays */ }
     dash.loaded = true;
@@ -512,10 +513,10 @@
   }
   function dashboard() {
     const o = originOf(), eid = state.eid, name = gameName(form.occ, form.oname);
-    const startText = state.when ? clockIn(state.when.ms, state.when.zone) : (state.info && state.info.startsAt) || "the start time";
+    const startText = state.when ? clockIn(state.when.ms, state.when.zone) : (state.info && state.info.startMs ? clockIn(state.info.startMs, "Asia/Kolkata") + " India time" : "the start time");
     const sec = el("section", { class: "zf-sec open zf-dashboard", id: "zf-dashboard", "aria-labelledby": "zf-hd" }, el("h2", { id: "zf-hd", text: COPY.dash }));
     const bn = bannerOf(state.info, startText);
-    if (bn) sec.append(el("div", { class: "zf-banner " + bn.kind, id: "zf-banner", role: "status" }, bn.text));
+    if (bn) sec.append(el("div", { class: "zf-banner " + bn.kind, id: "zf-banner", "aria-live": "polite" }, bn.text) /* not role=status: the help pop-up (guide.js) reads those as failures and would call this a payment error */);
     if (bn && bn.kind === "unpaid") {
       sec.append(el("h3", { text: "Payment" }), el("a", { class: "zf-go", id: "zf-paynow", href: payLink(o, eid), target: "_blank", rel: "noopener" }, "Pay now"), " ", el("button", { type: "button", class: "zf-add", id: "zf-copypay", onclick: () => copy(payLink(o, eid), "Payment link") }, "Copy payment link"));
     }
@@ -538,5 +539,5 @@
   api.state = state; api.draw = draw; api.done = done; api.el = el;
   document.title = "Organizer console | Corporate Tambola";
   draw();
-  if (state.eid && secret()) { call("GET", `/api/z/${state.eid}/info`).then((i) => { if (i && i.draft === false) { state.info = { published: true, paid: !i.unpaid, startsAt: i.startsAt }; for (const s of STEPS) state.done[s.n] = true; state.view = "dash"; draw(); refreshDash(); } }).catch(() => {}); }
+  if (state.eid && secret()) { call("GET", `/api/z/${state.eid}/info`).then((i) => { if (i && !i.draft && i.startMs) { state.info = { published: true, paid: !i.unpaid, startMs: i.startMs }; for (const s of STEPS) state.done[s.n] = true; state.view = "dash"; draw(); refreshDash(); } }).catch(() => {}); }
 })();
