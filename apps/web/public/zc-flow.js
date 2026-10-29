@@ -206,9 +206,74 @@
   /** Tickets claimed: real claims only (practice rows are left out). */
   const claimedCount = (claims) => (Array.isArray(claims) ? claims.filter((c) => !c.bogey).length : 0);
   const REPORT_NOTE = "After the game, download your game report within 24 hours. All game and participant information is deleted within 24 hours of the game.";
+  /* ---- Game ID and the eleven statuses (pure) ---- */
+  const STATUSES = {
+    draft: { label: "Draft", tone: "grey" },
+    pending: { label: "Published, payment pending", tone: "amber" },
+    paid: { label: "Published and paid", tone: "green" },
+    free: { label: "Published, free game", tone: "green" },
+    overdue: { label: "Payment pending, start time passed", tone: "red" },
+    live: { label: "Live now", tone: "red" },
+    paused: { label: "Paused", tone: "amber" },
+    completed: { label: "Completed", tone: "blue" },
+    cancelled: { label: "Cancelled", tone: "grey" },
+    refund: { label: "Cancelled, refund requested", tone: "amber" },
+    deleted: { label: "Data deleted", tone: "grey" },
+  };
+  /** The one status of a game, from what the game's own info answer says (`raw`), plus facts from elsewhere (paused, refund, report sent, data deleted). */
+  function statusOf(raw, facts, now) {
+    const f = facts || {};
+    if (f.deleted) return "deleted";
+    if (raw && raw.cancelled) return f.refund ? "refund" : "cancelled";
+    if (!raw || raw.draft) return "draft";
+    const start = Number(raw.startMs) || 0, end = start + (Number(raw.gameMinutes) || 60) * 60000 + 600000;
+    if (raw.unpaid === true) return raw.locked || (start && now >= start) ? "overdue" : "pending";
+    if (f.completed || (start && now > end)) return "completed";
+    if (f.paused) return "paused";
+    if (start && now >= start) return "live";
+    return raw.demo ? "free" : "paid";
+  }
+  const STATUS_WORDS = {
+    draft: "Saved as a draft. Nobody can join yet. Finish the steps and press Publish.",
+    overdue: "Payment is pending and the start time has passed, so the game has not started. Pay now, change the date, or cancel it.",
+    live: "Your game is live now. Your participants are playing.",
+    paused: "Your game is paused. It continues when it is resumed.",
+    completed: "Your game is complete. Download your game report within 24 hours. After that, all game and participant information is deleted.",
+    cancelled: "This game was cancelled. Nothing is charged. You can make a copy of it any time.",
+    refund: "This game was cancelled and a refund was requested. Please keep the Game ID for any question.",
+    deleted: "The information of this game has been deleted. Only the Game ID and the payment record remain.",
+  };
+  const BANNER_KIND = { draft: "off", pending: "unpaid", paid: "paid", free: "paid", overdue: "overdue", live: "live", paused: "paused", completed: "done", cancelled: "off", refund: "paused", deleted: "off" };
+  /** The one banner of a status. Pending and paid keep the owner's exact words (bannerOf); a free game reads like a paid one. */
+  function statusBanner(status, startText) {
+    const kind = BANNER_KIND[status] || "off";
+    if (status === "pending") return { kind, text: BANNER_UNPAID };
+    if (status === "paid") return { kind, text: bannerOf({ published: true, paid: true }, startText).text };
+    if (status === "free") return { kind, text: "Congratulations, your game is on! It is a free game. It will begin at " + startText + ". You can postpone or change it up to 5 minutes before the game begins." };
+    return { kind, text: STATUS_WORDS[status] || "" };
+  }
+
+  /* ---- Host and Co-host sign-in (DEMO STUB: the real passcode by email and the role check are Phase B; the stub only runs on this computer) ---- */
+  const TEAM_DEMO = { host: "host@acme.com", cohost: "cohost@acme.com", code: "123456" };
+  const PASS = { tries: 5, minutes: 10 };
+  const stubOn = (search, hostname) => new URLSearchParams(search).get("demo") === "roles" && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(hostname);
+  const roleOfEmail = (email) => { const e = String(email || "").trim().toLowerCase(); return e === TEAM_DEMO.host ? "host" : e === TEAM_DEMO.cohost ? "cohost" : null; };
+  /** One try at the 6-digit passcode: it works for 10 minutes and for 5 wrong tries. */
+  function passcodeCheck(att, code, now) {
+    if (now - att.sentMs > PASS.minutes * 60000) return { ok: false, reason: "expired", msg: "This passcode has expired. Please ask for a new one." };
+    if (att.tries >= PASS.tries) return { ok: false, reason: "locked", msg: "Too many wrong tries. Please ask for a new passcode." };
+    if (String(code) === TEAM_DEMO.code) return { ok: true };
+    att.tries++;
+    return { ok: false, reason: "wrong", msg: "That passcode is not right. You have " + (PASS.tries - att.tries) + (PASS.tries - att.tries === 1 ? " try" : " tries") + " left." };
+  }
+  const ROLE_BAR = {
+    host: "You are a Host of this game. You can change the game, like the organizer.",
+    cohost: "You are a Co-host of this game. You can share the game link and let people in. You cannot change the game or pay.",
+  };
+  const NOT_ON_LIST = "This email ID is not on the list. Please ask the organizer to add you, or join the game as a participant.";
   const registry = {}; // step number -> function(el, ctx) that draws the step body (each step adds its own)
 
-  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems, housesOf, tagsOf, GIFTS, prizeLine, defaultPrizes, defaultBumper, buildRewards, prizeProblems, breakMax, brandNameClean, linkKind, brandProblems, breakProblems, buildBrandPatch, contactProblems, readBack, bannerOf, gameLink, payLink, boardLink, shareMessage, claimedCount, BANNER_UNPAID };
+  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems, housesOf, tagsOf, GIFTS, prizeLine, defaultPrizes, defaultBumper, buildRewards, prizeProblems, breakMax, brandNameClean, linkKind, brandProblems, breakProblems, buildBrandPatch, contactProblems, readBack, bannerOf, gameLink, payLink, boardLink, shareMessage, claimedCount, BANNER_UNPAID, STATUSES, statusOf, statusBanner, stubOn, roleOfEmail, passcodeCheck, TEAM_DEMO, PASS, ROLE_BAR, NOT_ON_LIST, sampleTickets };
   if (typeof window !== "undefined") window.ZFLOW = api;
   if (typeof module !== "undefined") module.exports = api;
   if (typeof document === "undefined") return;
@@ -228,6 +293,10 @@
   function draw() {
     app.replaceChildren();
     app.append(el("p", { class: "zf-top", role: "note", text: COPY.top }));
+    { const rb = roleBar(); if (rb) app.append(rb); }
+    if (state.eid) app.append(idBar());
+    if (state.mode === "signin") { app.append(teamSignin()); return; }
+    if (state.view === "cohost") { app.append(dashboard({ cohost: true })); return; }
     const bar = el("ol", { class: "zf-bar", "aria-label": "Steps" });
     for (const s of STEPS) {
       const ok = canOpen(s.n, state.done), cur = state.open === s.n;
@@ -379,7 +448,7 @@
     if (prizes.tix === 2) {
       box.append(el("h3", { text: "Two-ticket prizes" }));
       box.append(rowFor("bumper", "Super Bumper House", "Mark all 30 numbers of your two tickets together. Up to 10 winners.", prizes.bumper, true));
-      box.append(el("p", {}, el("span", { class: "zf-soon", text: COPY.soon }), " Different prizes for Ticket A and Ticket B."));
+      for (const ab of ["Ticket A", "Ticket B"]) box.append(el("div", { class: "zf-prize zf-ab", "data-house": "ab-" + ab.slice(-1) }, el("label", { class: "zf-tick" }, el("input", { type: "checkbox", disabled: "" }), " ", el("b", { text: ab + " prizes" }), el("small", { text: "Different prizes for each of the two tickets." })), el("span", { class: "zf-soon", text: COPY.soon })));
     }
     const go = el("button", { type: "button", class: "zf-go", id: "zf-save3", onclick: async () => {
       const bad = prizeProblems(prizes.sel, prizes.bumper, prizes.tix, houses);
@@ -455,6 +524,41 @@
     box.append(msg, el("button", { type: "button", class: "zf-go", id: "zf-save4", onclick: () => save(false) }, "Save and continue"), " ", el("button", { type: "button", class: "zf-link", id: "zf-skip4", onclick: () => save(true) }, "Skip this step"));
   };
 
+  /* ---- Step 5: what your participants will see (the game's own ticket maker and the player page's own look, with sample numbers) ---- */
+  const pv = { view: "mobile" };
+  api.pv = pv;
+  /** Sample tickets from the game's real ticket maker (ZG.ticketsFor). null if the game files are not loaded. */
+  function sampleTickets(eid, tix) {
+    try { const t = window.ZG && window.ZG.ticketsFor ? window.ZG.ticketsFor(eid || "SAMPLE", "sample-player", Number(tix) === 2 ? 2 : 1) : null; return Array.isArray(t) && t.length ? t : null; } catch { return null; }
+  }
+  function previewNode() {
+    const tix = prizes.tix, tickets = sampleTickets(state.eid, tix), laptop = pv.view === "laptop";
+    const box = el("div", { class: "zf-preview", id: "zf-preview" });
+    const seg = el("div", { class: "zf-chips", role: "radiogroup", "aria-label": "Preview view" });
+    for (const [v, t] of [["mobile", "Mobile view"], ["laptop", "Laptop view"]]) seg.append(el("button", { type: "button", role: "radio", class: "zf-chip" + (pv.view === v ? " on" : ""), "aria-checked": String(pv.view === v), "data-pv": v, onclick: () => { pv.view = v; draw(); } }, t));
+    box.append(seg, el("p", { class: "zf-small", id: "zf-pvnote", text: "These are sample numbers. Your participants see their own tickets." }));
+    const frame = el("div", { class: "zf-frame " + (laptop ? "laptop" : "mobile"), id: "zf-frame", "aria-label": "Preview of the participant page" });
+    const b = brandForm.brand;
+    frame.append(el("div", { class: "zf-pvhead" }, b.logo ? el("img", { src: b.logo, alt: "", height: "30" }) : null, el("b", { text: brandNameClean(b.name) || "Your company name" }), el("span", { text: "Game ID " + (state.eid || "") })));
+    frame.append(el("p", { class: "zf-pvlast", text: "Last number: 47" }));
+    if (!tickets) frame.append(el("p", { class: "zf-small", text: "The sample tickets could not be made here." }));
+    else tickets.forEach((t, i) => {
+      const label = tix === 2 ? (i === 0 ? "Ticket A" : "Ticket B") : "Your ticket";
+      const marked = new Set(t.flat().filter((v) => v !== null).slice(0, 4));
+      const grid = el("div", { class: "zticket zf-pvticket", "aria-label": label });
+      for (const v of t.flat()) grid.append(v === null ? el("div", { class: "e" }) : el("div", { class: marked.has(v) ? "m" : "", text: String(v) }));
+      frame.append(el("p", { class: "zf-pvlabel" }, el("b", { text: label }), " · Ticket number " + (101 + i) + " (sample)"), grid);
+    });
+    frame.append(el("label", { class: "zf-small", for: "zf-pvname", text: "Your name (optional)" }), el("input", { type: "text", id: "zf-pvname", disabled: "" }));
+    const houses = housesOf(window.ZG), shown = buildRewards(prizes.sel || {}, prizes.bumper, tix, prizes.cur);
+    const seen = new Set();
+    const ul = el("ul", { class: "zf-pvprizes", id: "zf-pvprizes" });
+    for (const r of shown) { const k = r.pattern + "|" + r.scope; if (seen.has(k)) continue; seen.add(k); ul.append(el("li", {}, el("span", { text: (r.scope === "two_ticket" ? "Super Bumper House" : (houses.find((h) => h.id === r.pattern) || {}).label || r.pattern) + ": " + r.text }), " ", el("button", { type: "button", class: "zf-add", disabled: "" }, "Claim"))); }
+    frame.append(ul);
+    if (laptop) { const board = el("div", { class: "zf-board90", id: "zf-board90", "aria-label": "Sample board, 1 to 90" }); for (let n = 1; n <= 90; n++) board.append(el("span", { class: n % 7 === 0 ? "m" : "", text: String(n) })); frame.append(board); }
+    box.append(frame);
+    return box;
+  }
   /* ---- Step 5 ---- */
   const pub = { email: "", phone: "" };
   try { pub.email = (window.CTK ? window.CTK.get("ctz-email") : sessionStorage.getItem("ctz-email")) || ""; } catch { /* the box starts empty */ }
@@ -465,6 +569,7 @@
     const list = el("dl", { class: "zf-read", id: "zf-read" });
     for (const [k, v] of readBack({ name: gameName(form.occ, form.oname), when: state.when, card: who.card, upTo: who.upTo, choices: packChoices(state.packs), tix: prizes.tix, rewards, houses, brand: brandForm.brand, breaks: brandForm.breaks })) list.append(el("dt", { text: k }), el("dd", { text: v }));
     box.append(list);
+    box.append(el("h3", { text: "What your participants will see" }), previewNode());
     box.append(el("h3", { text: "Hosts and Co-hosts" }));
     box.append(el("p", { text: "A Host is your right hand: a Host can make any change you can, and you can have up to 5. A Co-host brings people to the game and cannot change the game. You can have as many as you like." }));
     box.append(el("p", {}, el("span", { class: "zf-soon", text: COPY.soon }), " Adding Hosts and Co-hosts by email ID. For now the game is yours, and you can still hand over a Host or Co-host link from the current console."));
@@ -491,17 +596,20 @@
     if (window.CBConsent) window.CBConsent.wire(consent, "K1", {}, go); // Publish waits for the tick
   };
 
-  /* ---- Game dashboard ---- */
-  const dash = { waiting: [], claims: [], note: "", loaded: false };
+  /* ---- Game dashboard, Game ID bar, Host / Co-host pages ---- */
+  const dash = { waiting: [], claims: [], note: "", loaded: false, facts: {} };
   api.dash = dash;
   const originOf = () => (BASE || location.origin);
+  const STUB = stubOn(location.search, location.hostname);
+  const statusNow = () => state.demoStatus || statusOf(state.raw, dash.facts, Date.now());
   async function refreshDash() {
     if (!state.eid) return;
-    try { const i = await call("GET", `/api/z/${state.eid}/info`); state.info = { ...(state.info || {}), published: !i.draft, paid: !i.unpaid, startMs: i.startMs }; } catch { /* the last answer stays */ }
+    try { const i = await call("GET", `/api/z/${state.eid}/info`); state.raw = i; state.info = { ...(state.info || {}), published: !i.draft, paid: !i.unpaid, startMs: i.startMs }; } catch { /* the last answer stays */ }
     try { dash.waiting = (await call("GET", `/api/z/${state.eid}/waiting`)).waiting || []; } catch { /* the last list stays */ }
     try { dash.claims = (await call("GET", `/api/z/${state.eid}/claims`)).claims || []; } catch { /* the last count stays */ }
+    try { const l = await call("GET", `/api/z/${state.eid}/life`); dash.facts = { ...dash.facts, deleted: !!(l && l.purged), completed: !!(l && l.reportSent) }; } catch { /* no life answer: the time decides */ }
     dash.loaded = true;
-    if (state.view === "dash") draw();
+    if (state.view === "dash" || state.view === "cohost") draw();
   }
   async function decide(id, decision) {
     try { await call("POST", `/api/z/${state.eid}/waiting/${encodeURIComponent(id)}`, { decision }); dash.note = decision === "admit" ? "Let in." : "Not now. You can let them in later."; } catch (e) { dash.note = e.message; }
@@ -511,15 +619,63 @@
     try { await navigator.clipboard.writeText(text); dash.note = what + " copied."; } catch { dash.note = "Please copy it by hand: " + text; }
     draw();
   }
-  function dashboard() {
-    const o = originOf(), eid = state.eid, name = gameName(form.occ, form.oname);
-    const startText = state.when ? clockIn(state.when.ms, state.when.zone) : (state.info && state.info.startMs ? clockIn(state.info.startMs, "Asia/Kolkata") + " India time" : "the start time");
-    const sec = el("section", { class: "zf-sec open zf-dashboard", id: "zf-dashboard", "aria-labelledby": "zf-hd" }, el("h2", { id: "zf-hd", text: COPY.dash }));
-    const bn = bannerOf(state.info, startText);
-    if (bn) sec.append(el("div", { class: "zf-banner " + bn.kind, id: "zf-banner", "aria-live": "polite" }, bn.text) /* not role=status: the help pop-up (guide.js) reads those as failures and would call this a payment error */);
-    if (bn && bn.kind === "unpaid") {
-      sec.append(el("h3", { text: "Payment" }), el("a", { class: "zf-go", id: "zf-paynow", href: payLink(o, eid), target: "_blank", rel: "noopener" }, "Pay now"), " ", el("button", { type: "button", class: "zf-add", id: "zf-copypay", onclick: () => copy(payLink(o, eid), "Payment link") }, "Copy payment link"));
+  /** The bar at the top of every screen once the game exists: its Game ID (with Copy) and its status. */
+  function idBar() {
+    const st = statusNow(), S = STATUSES[st];
+    const bar = el("div", { class: "zf-idbar", id: "zf-idbar" }, el("span", { class: "zf-idlabel", text: "Game ID" }), " ", el("b", { id: "zf-gameid", text: state.eid }), " ",
+      el("button", { type: "button", class: "zf-add", id: "zf-copyid", onclick: () => copy(state.eid, "Game ID") }, "Copy"), " ", el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": st, text: S.label }));
+    if (STUB && state.eid) {
+      const sel = el("select", { id: "zf-demostatus", "aria-label": "Demo: show status", onchange: (e) => { state.demoStatus = e.target.value || ""; draw(); } }, el("option", { value: "" }, "Demo: show status"));
+      for (const [id, v] of Object.entries(STATUSES)) sel.append(el("option", { value: id, ...(state.demoStatus === id ? { selected: "" } : {}) }, v.label));
+      bar.append(" ", sel);
     }
+    return bar;
+  }
+  const roleBar = () => (state.role ? el("div", { class: "zf-rolebar", id: "zf-rolebar" }, el("span", { text: ROLE_BAR[state.role] }), " ", el("button", { type: "button", class: "zf-add", id: "zf-signout", onclick: () => { state.role = ""; state.mode = "signin"; state.team = { email: "", sent: null, att: null }; draw(); } }, "Sign out")) : null);
+  /** Host / Co-host sign-in (demo stub): email ID, then the 6-digit passcode. */
+  function teamSignin() {
+    const t = state.team, sec = el("section", { class: "zf-sec open", id: "zf-signin" });
+    sec.append(el("p", { class: "zf-demo", id: "zf-demo", text: "DEMO ONLY: this sign-in is a pretend one for looking at the screens. Use host@acme.com or cohost@acme.com, passcode " + TEAM_DEMO.code + ". The real passcode by email needs Phase B." }));
+    if (!t.sent) {
+      sec.append(el("h2", { text: "Are you the Host or a Co-host?" }), el("label", { for: "zf-temail", text: "Type your email ID" }), el("input", { type: "email", id: "zf-temail", autocomplete: "email", value: t.email, oninput: (e) => { t.email = e.target.value; } }));
+      const msg = el("p", { class: "zf-msg", id: "zf-tmsg", role: "status" });
+      sec.append(msg, el("button", { type: "button", class: "zf-go", id: "zf-tgo", onclick: () => { if (!roleOfEmail(t.email)) { msg.textContent = NOT_ON_LIST; return; } t.sent = Date.now(); t.att = { tries: 0, sentMs: t.sent }; draw(); } }, "Continue"), " ", el("a", { class: "zf-link", id: "zf-asplayer", href: gameLink(originOf(), state.eid) }, "Join as a participant"));
+      return sec;
+    }
+    sec.append(el("h2", { text: "Type your 6-digit passcode" }), el("p", { text: "The system sent a passcode to " + t.email.trim() + ". It works for " + PASS.minutes + " minutes." }));
+    const row = el("div", { class: "zf-codes", id: "zf-codes" }), boxes = [];
+    for (let i = 0; i < 6; i++) boxes.push(el("input", { type: "text", inputmode: "numeric", maxlength: "1", id: "zf-pc" + i, "aria-label": "Digit " + (i + 1), autocomplete: "one-time-code",
+      oninput: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(-1); if (e.target.value && boxes[i + 1]) boxes[i + 1].focus(); },
+      onpaste: (e) => { const d = String((e.clipboardData || window.clipboardData).getData("text")).replace(/\D/g, "").slice(0, 6); if (!d) return; e.preventDefault(); boxes.forEach((b, k) => { b.value = d[k] || ""; }); } }));
+    row.append(...boxes);
+    const msg = el("p", { class: "zf-msg", id: "zf-tmsg", role: "status" });
+    sec.append(row, msg, el("button", { type: "button", class: "zf-go", id: "zf-pcgo", onclick: () => {
+      const r = passcodeCheck(t.att, boxes.map((b) => b.value).join(""), Date.now());
+      if (!r.ok) { msg.textContent = r.msg; return; }
+      const role = roleOfEmail(t.email);
+      state.role = role; state.mode = ""; for (const s of STEPS) state.done[s.n] = true;
+      state.raw = { startMs: Date.now() + 3 * 3600000, gameMinutes: 60 }; state.info = { published: true, paid: true, startMs: state.raw.startMs };
+      state.view = role === "host" ? "dash" : "cohost"; draw();
+    } }, "Check passcode"), " ", el("button", { type: "button", class: "zf-link", id: "zf-newcode", onclick: () => { t.sent = Date.now(); t.att = { tries: 0, sentMs: t.sent }; msg.textContent = "A new passcode was sent."; } }, "Send a new passcode"), " ", el("button", { type: "button", class: "zf-link", id: "zf-diffemail", onclick: () => { t.sent = null; t.att = null; draw(); } }, "Use a different email ID"));
+    return sec;
+  }
+  /** The Game dashboard (organizer and Host); a Co-host sees the Co-host page: game link and message, Waiting for you, Tickets claimed. */
+  function dashboard(opts) {
+    const co = !!(opts && opts.cohost), o = originOf(), eid = state.eid, name = gameName(form.occ, form.oname), st = statusNow();
+    const startText = state.when ? clockIn(state.when.ms, state.when.zone) : (state.info && state.info.startMs ? clockIn(state.info.startMs, "Asia/Kolkata") + " India time" : "the start time");
+    const title = co ? "Your Co-host page" : COPY.dash;
+    const sec = el("section", { class: "zf-sec open zf-dashboard", id: "zf-dashboard", "aria-labelledby": "zf-hd" }, el("h2", { id: "zf-hd", text: title }));
+    const bn = statusBanner(st, startText);
+    if (!co) sec.append(el("div", { class: "zf-banner " + bn.kind, id: "zf-banner", "aria-live": "polite" }, bn.text));
+    const gone = st === "cancelled" || st === "refund" || st === "deleted" || st === "draft";
+    if (!co && (st === "pending" || st === "overdue")) {
+      sec.append(el("h3", { text: "Payment" }), el("a", { class: "zf-go", id: "zf-paynow", href: payLink(o, eid), target: "_blank", rel: "noopener" }, "Pay now"), " ", el("button", { type: "button", class: "zf-add", id: "zf-copypay", onclick: () => copy(payLink(o, eid), "Payment link") }, "Copy payment link"));
+      if (st === "overdue") sec.append(el("p", {}, el("a", { class: "zf-add", id: "zf-changedate", href: "/zc.html?e=" + encodeURIComponent(eid) }, "Change the date"), " ", el("a", { class: "zf-add", id: "zf-cancelgame", href: "/zc.html?e=" + encodeURIComponent(eid) }, "Cancel this game")));
+    }
+    if (st === "paused") sec.append(el("p", {}, el("button", { type: "button", class: "zf-add", id: "zf-resume", disabled: "" }, "Resume"), " ", el("span", { class: "zf-soon", text: COPY.soon })));
+    if (st === "cancelled") sec.append(el("p", {}, el("button", { type: "button", class: "zf-add", id: "zf-copygame", disabled: "" }, "Make a copy"), " ", el("span", { class: "zf-soon", text: COPY.soon })));
+    if (st === "deleted") { sec.append(el("p", { class: "zf-msg", role: "status", id: "zf-dashnote", text: "" })); return sec; }
+    if (gone) { sec.append(el("p", { class: "zf-msg", role: "status", id: "zf-dashnote", text: dash.note })); return sec; }
     const link = gameLink(o, eid);
     sec.append(el("h3", { text: "Game link" }), el("p", { class: "zf-small", text: "Send this one link to your participants yourself, from your own mail or chat." }), el("input", { type: "text", readonly: "", id: "zf-link", value: link, "aria-label": "Game link" }), " ", el("button", { type: "button", class: "zf-add", id: "zf-copylink", onclick: () => copy(link, "Game link") }, "Copy link"),
       el("p", { class: "zf-msgbox", id: "zf-sharemsg", text: shareMessage(name, link) }), el("button", { type: "button", class: "zf-add", id: "zf-copymsg", onclick: () => copy(shareMessage(name, link), "Message") }, "Copy message"));
@@ -528,16 +684,19 @@
     else {
       const ul = el("ul", { class: "zf-wait", id: "zf-wait" });
       for (const w of dash.waiting) ul.append(el("li", { "data-wid": String(w.id) }, el("span", { text: String(w.firstName || w.name || "A participant") + (w.last4 ? " · ends " + w.last4 : "") }), " ", el("button", { type: "button", class: "zf-add", "data-decide": "admit", onclick: () => decide(w.id, "admit") }, "Let in"), " ", el("button", { type: "button", class: "zf-link", "data-decide": "decline", onclick: () => decide(w.id, "decline") }, "Not now")));
-      sec.append(ul, el("button", { type: "button", class: "zf-add", id: "zf-letall", onclick: async () => { for (const w of dash.waiting.slice()) { try { await call("POST", `/api/z/${state.eid}/waiting/${encodeURIComponent(w.id)}`, { decision: "admit" }); } catch (e) { dash.note = e.message; break; } } await refreshDash(); } }, "Let everyone in"));
+      sec.append(ul);
+      if (!co) sec.append(el("button", { type: "button", class: "zf-add", id: "zf-letall", onclick: async () => { for (const w of dash.waiting.slice()) { try { await call("POST", `/api/z/${state.eid}/waiting/${encodeURIComponent(w.id)}`, { decision: "admit" }); } catch (e) { dash.note = e.message; break; } } await refreshDash(); } }, "Let everyone in"));
     }
     sec.append(el("h3", { text: "Tickets claimed" }), el("p", { id: "zf-claimed", text: String(claimedCount(dash.claims)) }));
-    sec.append(el("h3", { text: "Game board" }), el("a", { class: "zf-add", id: "zf-board", href: boardLink(o, eid), target: "_blank", rel: "noopener" }, "Open the game board"));
-    sec.append(el("p", { class: "zf-small", id: "zf-report", text: REPORT_NOTE }), el("p", { class: "zf-msg", role: "status", id: "zf-dashnote", text: dash.note }));
+    if (!co) sec.append(el("h3", { text: "Game board" }), el("a", { class: "zf-add", id: "zf-board", href: boardLink(o, eid), target: "_blank", rel: "noopener" }, "Open the game board"), el("p", { class: "zf-small", id: "zf-report", text: REPORT_NOTE }));
+    sec.append(el("p", { class: "zf-msg", role: "status", id: "zf-dashnote", text: dash.note }));
     return sec;
   }
 
   api.state = state; api.draw = draw; api.done = done; api.el = el;
   document.title = "Organizer console | Corporate Tambola";
+  state.team = { email: "", sent: null, att: null }; state.role = ""; state.mode = "";
+  if (STUB && q.get("team") === "1" && state.eid) state.mode = "signin";
   draw();
-  if (state.eid && secret()) { call("GET", `/api/z/${state.eid}/info`).then((i) => { if (i && !i.draft && i.startMs) { state.info = { published: true, paid: !i.unpaid, startMs: i.startMs }; for (const s of STEPS) state.done[s.n] = true; state.view = "dash"; draw(); refreshDash(); } }).catch(() => {}); }
+  if (state.eid && secret()) { call("GET", `/api/z/${state.eid}/info`).then((i) => { if (i && !i.draft && i.startMs) { state.raw = i; state.info = { published: true, paid: !i.unpaid, startMs: i.startMs }; for (const s of STEPS) state.done[s.n] = true; state.view = "dash"; draw(); refreshDash(); } }).catch(() => {}); }
 })();
