@@ -64,8 +64,9 @@ const EMAILS: [string, boolean][] = [["asha@acme.com", true], ["Asha.Rao+tambola
 const EMAIL_ORACLE = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 test("logic: every scenario of the matrix (10,000+) gives the owner's outcome and the right approvers", () => {
   let n = 0; const bad: string[] = []; const t0 = Date.now(); let emailChecks = 0;
+  const LIMIT = Number(process.env.SCEN_LIMIT || 0); // a deliberate-break check runs only the first scenarios; the release gate (no limit) runs them all
   for (const sc of matrix()) {
-    n++;
+    n++; if (LIMIT && n > LIMIT) break;
     const minutes = sc.timing === "late" ? 10 : 120;
     const got = R.decide({ link: sc.link, validation: sc.validation, onList: sc.onList, family: sc.family, pay: sc.pay, minutesToStart: minutes, capFull: sc.cap === "full", waitedMinutes: sc.waited });
     const want = oracle(sc, minutes);
@@ -88,9 +89,9 @@ test("logic: every scenario of the matrix (10,000+) gives the owner's outcome an
     if (two.length !== wantTwo || two.some((x: any, i: number) => x.ordinal !== undefined && x.ordinal !== i + 1)) { if (bad.length < 5) bad.push("bumper " + JSON.stringify(sc) + " got " + two.length + " want " + wantTwo); }
   }
   console.log("scenarios run:", n, "failed:", bad.length, "email checks:", emailChecks, "seconds:", ((Date.now() - t0) / 1000).toFixed(1), "heapMB:", Math.round(process.memoryUsage().heapUsed / 1048576));
-  expect(n).toBeGreaterThanOrEqual(1_000_000); // the release gate: the matrix may grow, never shrink below one million
+  if (!LIMIT) expect(n).toBeGreaterThanOrEqual(1_000_000); // the release gate: the matrix may grow, never shrink below one million
   expect(bad).toEqual([]);
-});
+}, 900_000); // the matrix runs several million scenarios; the default 5 s test limit is far too short
 
 test("logic: the Step 1 summary line is right for the four start and caller choices, and every role reads who approves", () => {
   const w = newPage();
