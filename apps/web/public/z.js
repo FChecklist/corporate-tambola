@@ -720,7 +720,7 @@
         <div class="zrow1"><div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number just called " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
           <div class="ztxt"><div class="zlab">Number just called</div><div class="zmeta" id="calledcount">${esc(ZG.calledLine(calledTotal))}</div>${cdown}<p class="zhelp" id="ballhelp">${v.phase === "ended" ? "The game is over." : last ? "Find it on your ticket and tap it." : "The first number will appear here."}</p></div></div>
         <div class="zprog" role="progressbar" aria-valuemin="0" aria-valuemax="90" aria-valuenow="${calledTotal}"><i style="width:${Math.min(100, Math.round(calledTotal / 90 * 100))}%"></i></div>
-        ${few.length ? `<div class="zlastrow" id="lastfew"><span class="zlab">Last 5 numbers called</span><div class="zballs">${few.map((n) => `<i class="zlastn">${n}</i>`).join("")}</div></div>` : ""}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p>`}</div>`;
+        ${few.length ? `<div class="zlastrow" id="lastfew"><span class="zlab">Last 5 numbers called</span><div class="zballs">${few.map((n) => `<i class="zlastn">${n}</i>`).join("")}</div></div>` : ""}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p><p class="zsmall zkeepon" id="keepon">${esc(KEEPON)}</p>`}</div>`;
   }
   let LAST_CLAIM_NOW = "";
   // ---- everybody is told, calmly and in plain words, when a ticket claims a prize and what came of it (ticket numbers only, never names); each pop-up closes by itself
@@ -889,6 +889,7 @@
     }
     CK.loading = false;
   }
+  const KEEPON = "Tip: keep this screen on, and turn on Do Not Disturb, so a call or message does not make you miss a number."; // TA08 / A18: one plain line, the same on the check-in, the ticket and the pause
   const ckTime = (ms) => new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZoneName: "short" }); // the time on THIS phone, with its own time zone named: people play from all over the world
   function checkinView() {
     const ids = CK.ids ? `<div class="zckids"><div><span>Game ID</span><b>${esc(CK.ids.game)}</b></div><div><span>Participant ID</span><b>${esc(CK.ids.participant)}</b></div><div><span>Ticket ID</span><b>${esc(CK.ids.ticket)}</b></div></div>` : "";
@@ -896,11 +897,12 @@
     if (!CK.loaded) return `${brandStrip()}${demoGameCard()}<div class="zcard"><p class="zmsg">Loading your check-in…</p></div>`;
     if (!CK.open) {
       const left = Math.max(0, Math.round((CK.opensMs - Date.now()) / 1000));
-      return `${brandStrip()}${demoGameCard()}<div class="zcard zck"><div class="zeyebrow">Before the game</div><h2>Check-in opens at ${esc(ckTime(CK.opensMs))}</h2>${ids}<p class="zsmall">Check-in opens 5 minutes before the game starts. Keep this page open: the check-in appears here by itself, and your ticket opens once you are marked present.</p><div class="zckwait"><span>Opens in</span> <b>${esc(clock(left))}</b></div></div>`;
+      return `${brandStrip()}${demoGameCard()}<div class="zcard zck"><div class="zeyebrow">Before the game</div><h2>Check-in opens at ${esc(ckTime(CK.opensMs))}</h2>${ids}<p class="zsmall">Check-in opens 5 minutes before the game starts. Keep this page open: the check-in appears here by itself, and your ticket opens once you are marked present.</p><p class="zsmall zkeepon">${esc(KEEPON)}</p><div class="zckwait"><span>Opens in</span> <b>${esc(clock(left))}</b></div></div>`;
     }
     const x = CK.v, ready = x.okN && x.okM && String(x.code).length === 4;
     return `${brandStrip()}${demoGameCard()}<div class="zcard zck"><div class="zeyebrow">Before the game</div><h2>Mark yourself present</h2>${ids}
       <p class="zsmall">Check your name and mobile number, type the code shown below, and press Submit. Your ticket opens when you are marked present.</p>
+      <p class="zsmall zkeepon">${esc(KEEPON)}</p>
       <p class="zsmall zckkeep">We keep the time you check in (and a corrected name or number) with your other game data, and delete it within 24 hours after the game ends. If you win, the time of your check-in is kept for 365 days with the winners record.</p>
       <div class="zckrow"><label for="ckname">Your name</label><input id="ckname" class="zin" autocomplete="off" maxlength="60" value="${esc(x.name)}"${x.editN ? "" : " disabled"}><button type="button" class="zmini" id="ckeditn">${x.editN ? "Done" : "Edit"}</button></div>
       <label class="zchk"><input type="checkbox" id="ckokn"${x.okN ? " checked" : ""}> This name is correct</label>
@@ -936,6 +938,7 @@
     sync();
   }
   // Keep the screen on while numbers are being called (or are about to be): a phone that locks misses the number and the claim window. Where the phone cannot do it, nothing happens.
+  const wantAwake = (v, o) => !o.dns && !o.cancelled && !o.removed && !v.stopped && v.phase !== "ended" && (!!o.checkinWaiting || (v.phase === "play" && !v.locked && (v.log.length > 0 || (v.nextCallInSec !== null && v.nextCallInSec <= o.graceSecs + 60)))); // TA08: held from check-in to the end of the game, a pause included (the numbers come back after the break)
   let wl = null, wlAt = 0, awake = false;
   async function keepAwake(want) {
     try {
@@ -953,7 +956,7 @@
     if (INFO.rehearsal && INFO.rehearsal.over) { $app.innerHTML = rehearsalOverHtml(); return; } // an ended rehearsal: nothing else is shown, the real game's link is offered
     if (BOGEYASK && (v.claimNow || []).length) BOGEYASK = null; // a real prize to claim: the question must never sit on top of the gold buttons
     if (window.ctzView) window.ctzView(v); // the flight recorder (blackbox.js) learns which stage the game is in
-    awake = v.phase === "play" && !INFO.dns && !INFO.cancelled && !ME.removed && !v.locked && !v.paused && !v.stopped && (v.log.length > 0 || (v.nextCallInSec !== null && v.nextCallInSec <= GRACE_SECS + 60)); keepAwake(awake); // held from about a minute before the first number to the end of the game
+    awake = wantAwake(v, { dns: INFO.dns, cancelled: INFO.cancelled, removed: ME.removed, checkinWaiting: !!(INFO.checkin && v.pid && !CK.present), graceSecs: GRACE_SECS }); keepAwake(awake); // held from check-in (or about a minute before the first number) to the end of the game, a pause included
     if (!v.won) v.won = []; // an older saved copy of the game code during an update: never break the screen
     if (INFO.dns) { if (timer) { clearInterval(timer); timer = null; } clearInterval(J.timer); mediaHost.style.display = "none"; $app.innerHTML = dnsView(); window.__ctzOff = v.phase === "boot"; paintBrand(); return; } // a game that did not start: one calm screen, nobody can join or pay
     if (v.phase === "missing" || v.phase === "boot") { $app.innerHTML = (INFO.brand || v.phase === "boot" ? brandStrip() : "") + `<p class="zmsg">${esc(v.phase === "boot" && !navigator.onLine ? "No connection right now. Your ticket is safe on this phone. This page tries again by itself every few seconds and as soon as you are back online." : v.error || "Loading…")}</p><div class="zretry"><button class="zbtn" id="retry" type="button">Try again</button>${v.phase === "boot" ? `<p class="zsmall" style="text-align:center">This page also tries again by itself every few seconds.</p>` : ""}</div>`; paintBrand(); window.__ctgRetry = bootUp; const rb = document.getElementById("retry"); if (rb) rb.onclick = () => { rb.disabled = true; rb.textContent = "Trying…"; bootUp(); }; if (v.phase === "boot" && !bootTimer) bootTimer = setTimeout(bootUp, 8000); return; }
