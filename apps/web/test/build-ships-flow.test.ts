@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "../../..");
-const SHIPPED = ["zc-flow-game.js", "zc-flow-roles.js", "zc-flow-tambola.js", "zc-flow-tambola.css", "pack/zc-flow.js", "pack/zc-flow.css", "pack/MANIFEST.json", "trynew.js"];
+const SHIPPED = ["zc-flow-game.js", "zc-flow-roles.js", "zc-flow-tambola.js", "zc-flow-tambola.css", "pack/zc-flow.js", "pack/zc-flow.css", "pack/MANIFEST.json", "trynew.js", "zc-mode.js"];
 
 describe("1.7.0: the build ships everything the new console loads", () => {
   test("every file zc.html links for ?flow=new is in pages/public after a build, and pack files are byte-equal to the source", () => {

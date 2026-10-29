@@ -1,1 +1,1 @@
-(function(){var a=document.getElementById("trynew"),q=new URLSearchParams(location.search);if(!a)return;if(q.get("flow")==="new"){a.hidden=true;return}q.set("flow","new");a.href="/zc.html?"+q.toString()})();
+(function(){var a=document.getElementById("trynew");if(!a)return;var q=new URLSearchParams(location.search),old=window.CT_ZCFLOW==="old";q.set("flow",old?"new":"old");a.href="/zc.html?"+q.toString();a.textContent=old?"Use the new organizer screens":"Use the previous screens";})();
