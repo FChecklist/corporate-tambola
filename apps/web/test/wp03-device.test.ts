@@ -69,3 +69,22 @@ describe("A18: the welcome-back line names the numbers called while the player w
   });
 });
 
+describe("TA11 / S04 / O08: the player is told the numbers are public, and can read how the game is kept fair", () => {
+  const z = pub("z.js");
+  test("the ticket page says in one line that every number is public and the same on every phone, with a link to the fair page; the join page links it too", () => {
+    expect(z).toContain('id="fairline"'); expect(z).toContain("Every number comes from a public random source and is the same on every phone.");
+    expect(z.split('href="/fair.html"').length - 1).toBe(2); // the ticket page and the join page
+    expect(z).toContain('id="lastfew"'); expect(z).toContain("Last 5 numbers called"); // the strip of the last numbers is on the ticket page
+  });
+  test("the page /fair.html exists, is plain, linked from the organizer guide, served, listed in the sitemap, and says nothing the product does not do", () => {
+    const f = pub("fair.html");
+    expect(f).toContain("<h1>How we keep it fair</h1>");
+    for (const must of ["Nobody picks the numbers", "same number", "signature", "software decides the winners", "very hard, not impossible"]) expect(f.toLowerCase()).toContain(must.toLowerCase());
+    for (const never of [/private/i, /engagement/i, /guarantee/i, /100% (safe|fair)/i, /impossible to cheat/i]) expect(f).not.toMatch(never);
+    expect(pub("organizer-guide.html")).toContain('href="/fair.html"');
+    expect(pub("sitemap.xml")).toContain("https://housie.corporatetambola.com/fair.html");
+    const build = readFileSync(new URL("../../../pages/build.mjs", import.meta.url), "utf8");
+    expect(build).toContain('"fair.html"'); expect(build).toContain('["/fair", PLAINCSP, false]');
+  });
+});
+
