@@ -12,8 +12,9 @@ describe("P12: the version stamp", () => {
   test("it holds the commit, whether files differed from it, the build time and the game, and nothing else", () => {
     const calls: string[][] = [];
     const v = versionStamp({ root: ROOT, game: "corporate-test", now: () => new Date("2026-10-14T05:00:00Z"), run: (a: string[]) => { calls.push(a); return a[0] === "rev-parse" ? "abc123def456" : ""; } });
-    expect(v).toEqual({ commit: "abc123def456", dirty: false, builtAt: "2026-10-14T05:00:00.000Z", game: "corporate-test" });
-    expect(Object.keys(v).sort()).toEqual(["builtAt", "commit", "dirty", "game"]);
+    const rel = JSON.parse(readFileSync(join(ROOT, "apps/edge/src/releases.json"), "utf8"))[0].version;
+    expect(v).toEqual({ commit: "abc123def456", dirty: false, builtAt: "2026-10-14T05:00:00.000Z", game: "corporate-test", version: rel, releasedAt: "2026-10-14T05:00:00.000Z", releasedAtIST: "14 Oct 2026, 10:30 IST" });
+    expect(Object.keys(v).sort()).toEqual(["builtAt", "commit", "dirty", "game", "releasedAt", "releasedAtIST", "version"]);
     expect(versionStamp({ root: ROOT, game: "g", run: (a: string[]) => (a[0] === "rev-parse" ? "abc123def456" : " M file.ts") }).dirty).toBe(true);
   });
   test("built outside git it says so instead of failing", () => {
@@ -28,6 +29,12 @@ describe("P12: the version stamp", () => {
     expect(v.commit).toMatch(/^([0-9a-f]{7,40}|unknown)$/);
     expect(new Date(v.builtAt).toISOString()).toBe(v.builtAt);
     expect(typeof v.dirty).toBe("boolean");
+    // owner rule 2026-10-29: every product shows its version and release date and time
+    const rel = JSON.parse(readFileSync(join(ROOT, "apps/edge/src/releases.json"), "utf8"))[0].version;
+    expect(v.version).toBe(rel); expect(v.version).toMatch(/^\d+\.\d+\.\d+$/); expect(new Date(v.releasedAt).toISOString()).toBe(v.releasedAt); expect(v.releasedAtIST).toMatch(/^\d{2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4}, \d{2}:\d{2} IST$/);
+    const line = `Version ${v.version}, released ${v.releasedAtIST}`;
+    for (const f of ["index.html", "about.html", "contact.html", "privacy.html"]) expect([f, readFileSync(join(ROOT, "pages/public", f), "utf8").includes(`<p class="ufv"`) && readFileSync(join(ROOT, "pages/public", f), "utf8").includes(line)]).toEqual([f, true]);
+    expect(readFileSync(join(ROOT, "apps/web/public/index.html"), "utf8")).not.toContain("ufv"); // the sources stay free of the number
     const head = Bun.spawnSync(["git", "rev-parse", "--short=12", "HEAD"], { cwd: ROOT, stdout: "pipe" });
     if (head.exitCode === 0) expect(v.commit).toBe(new TextDecoder().decode(head.stdout).trim());
     expect(readFileSync(join(ROOT, "pages/public/_headers"), "utf8")).toMatch(/\/version\.json\n\s+Cache-Control: no-store/);
