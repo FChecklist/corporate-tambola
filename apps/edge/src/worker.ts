@@ -1561,7 +1561,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       });
     }
   }
-  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|logo|rehearsals|rehearsal|rehearsalclose|gamelog|changes|claims|bogey|settle|results|info|participants|erase|discard|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget|cohost|cancel-preview|cancel|reopen|clone|leave|datareq|checkin|presence|who|override)$/);
+  const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/(join|logo|rehearsals|rehearsal|rehearsalclose|gamelog|changes|claims|bogey|settle|results|info|participants|erase|discard|reuse|roster|settings|publish|summary|announce|unbind|seats|names|mark|won|over|invites|life|vote|confirm|prizes|prizegiven|myprizes|reportlink|person|forget|cohost|cancel-preview|cancel|reopen|clone|leave|datareq|checkin|checkins|presence|who|override)$/);
   if (!m) return json({ error: "Not found", hint: "Read the list of what you can do at /api/z/ai-manifest. Engagement routes look like /api/z/{id}/summary, /settings, /roster, /participants, /results, /publish." }, 404);
   const [, eid, action] = m;
   const e = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first<any>();
@@ -2070,7 +2070,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     return (r.meta?.changes ?? 0) > 0 ? json({ ok: true }) : json({ error: "That number has not joined yet. Ask them to open the game link first." }, 404);
   }
   if (action === "checkin" && (req.method === "GET" || req.method === "POST")) return checkinRoute({ env, e, eid: eid!, now, startMs: roundMs(e.start_round), json, spend: (n = 1) => spend(env, now, n), busy: BUSY, body, req, url });
-  if (action === "presence" && req.method === "GET") { if (!can(a, e)) return deny(a); return presenceRoute(env, eid!, json); } // the organizer, a Host or a Co-host: how many are present now
+  if (action === "checkins" && req.method === "GET") { if (!can(a, e)) return deny(a); return presenceRoute(env, eid!, json); } // the organizer, a Host or a Co-host: how many have checked in now (its own path: "presence" above is the phones-listening count and used to answer first, so this card read "Present: undefined of undefined")
   if (action === "invites" && req.method === "GET") { // how many people this participant has invited so far (their own id is the key to ask)
     const pid = url.searchParams.get("pid") ?? "";
     const me = await env.DB.prepare("SELECT seq, role, inv, blocked FROM seat WHERE eid=? AND pid=?").bind(eid, pid).first<{ seq: number; role: string | null; inv: number | null; blocked: number | null }>();
