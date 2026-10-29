@@ -41,7 +41,7 @@ import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { HELPDESK_SCHEMA, HELPER_MANUAL_NOTE, helpdeskCloseStatements, helpdeskRoute, helpdeskSweep, isDeskKeyId, isHelperKey, noteHelperGame } from "./helpdesk";
-import { cleanEmail } from "./approvals";
+import { cleanEmail, approvalRulesOn, EMAIL_UNUSABLE_MESSAGE } from "./approvals";
 import { normEmp, empHashOf, verifyOf, keptPhone, phoneDigits, cleanName as cleanPersonName, PEOPLE_SCHEMA, COHOST_FROM, HOST_FROM, ORG_FROM, COHOST_LIMIT_DEFAULT, COHOST_LIMIT_MIN, COHOST_LIMIT_MAX, WAITING_MAX, addWaiting, chainOf, cleanPhone, fromCodeOf, inviterOf, joinLinkPage, limitOfInviter, listCount, parseFrom, peopleRoute, personByPhone, personByToken, srcOf, waitingWho, type PersonRow } from "./people";
 import { PAYLINK_SCHEMA, PAYLINK_TOKEN, createPayLink, packFor } from "./paylink";
 import { HOST_LINK_TTL_MS, HOST_SCHEMA, confirmHostEmail, emailHashOf, hostForEmail, hostKeyStatus, hostSetupRoute, hostStateRow, identityRow, maskEmail, maskMobile, mintDeviceKey, retireHost } from "./hostsetup";
@@ -1795,18 +1795,19 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       }
     } else if (vf.mode === "both" && pr && !tok && !admitted) { const pp0 = await openPii(env, pr.pii); if (pp0?.empId) needIdAfterConsent = true; } // asked only after the consent box is ticked: an untick-and-ask cannot be used to find out who is on the list
     if (pr?.status === "removed") return removedReply();
-    // An open game may also keep an Email ID (1.8.0). Optional here; when it is given it must look right, and one email holds one ticket.
-    let joinEmail: string | null = null, emailKey = "";
-    if (!e.closed && b?.email !== undefined && b?.email !== null && String(b.email).trim() !== "") {
-      joinEmail = cleanEmail(b.email);
-      if (!joinEmail) return json({ error: "Please check your email ID. It looks incomplete.", code: "bad-email" }, 400);
-      emailKey = `email/${eid}/${(await sha("em|" + eid + "|" + joinEmail)).slice(0, 32)}`;
-      const seen = (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(emailKey).first<{ v: string }>())?.v;
-      if (seen && seen !== ph) return json({ error: "This email ID already holds a ticket in this game. Please open your ticket from the phone you first used.", code: "email-used" }, 409);
-    }
     const tickedBefore = !!(await env.DB.prepare("SELECT 1 AS x FROM consent_log WHERE kind='K4' AND ref=? AND subject=?").bind(eid, await pidOf(ph)).first()); // ticked when they asked to come in; the page does not keep it across a reload
     if (ck && !tickedBefore) return ck;
     if (needIdAfterConsent) return json({ error: "Enter your employee ID.", code: "need-id" }, 400);
+    // An open game may also keep an Email ID (1.8.0). Optional here; when it is given it must look right, and one email holds one ticket.
+    let joinEmail: string | null = null, emailKey = "";
+    if (!e.closed && approvalRulesOn(e) && b?.email !== undefined && b?.email !== null && String(b.email).trim() !== "") {
+      joinEmail = cleanEmail(b.email);
+      if (!joinEmail) return json({ error: "Please check your email ID. It looks incomplete.", code: "bad-email" }, 400);
+      emailKey = `email/${eid}/${(await sha("em|" + eid + "|" + joinEmail)).slice(0, 32)}`;
+      await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(emailKey, ph).run(); // insert first, then read back: two phones asking at the same instant cannot both win
+      const seen = (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(emailKey).first<{ v: string }>())?.v;
+      if (seen && seen !== ph) return json({ error: EMAIL_UNUSABLE_MESSAGE, code: "email-unusable" }, 409);
+    }
     if (!dev) return json({ error: "Please refresh this page and try again." }, 400);
     if (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) return json({ error: "This phone already holds a ticket in this game. One phone, one ticket. Others can join from their own phones, using your invitation link if the organizer allowed it.", code: "device-used" }, 409);
     const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
@@ -1853,7 +1854,6 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (await joinOverLimit(env, req, now, e.pack ?? 0, joinExtra)) return json({ error: "It is busy right now. Please try again in a few minutes.", code: "busy" }, 429);
     if (!(await spend(env, now, JOIN_WRITES))) return json({ error: "It is very busy right now. Please try again in a few minutes.", code: "busy" }, 503);
     const inv = inviter.startsWith("s:") ? Number(inviter.slice(2)) : null;
-    if (emailKey) joinExtra.push(env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(emailKey, ph));
     if (!ck) joinExtra.push(await consentFromSeat(env.DB, { kind: "K4", ref: eid!, now, eid: eid!, ph }));
     await addSeat(ph, pii, dev, lateRound, { inv, cat: inv !== null ? cat : null, src: srcOf(inviter), ownerId: inviter, guardId, guardLimit, role, extra: joinExtra });
     const row = await env.DB.prepare("SELECT p.pid AS pid, s.dev AS dev, s.jr AS jr, s.role AS role FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? AND p.phone_hash=?").bind(eid, ph).first<{ pid: string; dev: string | null; jr: number | null; role: string | null }>();
