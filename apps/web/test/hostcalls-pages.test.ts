@@ -184,7 +184,7 @@ describe("the phone page and the number screen", () => {
     x.goLive(); for (let i = 0; i < 3; i++) await x.step();
     const p = await openPage(x.w.world, { url: "http://localhost/z?e=HC-PH", html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, x.now); } });
     open.push(p);
-    await p.waitFor((t) => /Join the engagement/.test(t));
+    await p.waitFor((t) => /Join the game/.test(t));
     (p.$("#ph") as any).value = "9822222229"; (p.$("#nm") as any).value = "Asha"; p.click("#go");
     await p.waitFor((t) => /Waiting for the host/.test(t), 20_000);
     expect(p.text()).not.toMatch(/Next number in \d+s/);

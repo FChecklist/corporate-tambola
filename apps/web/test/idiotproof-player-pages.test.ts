@@ -35,7 +35,7 @@ async function phoneAt(o: O, url: string, pre?: (win: any) => void) {
   const p = await openPage(o.world, { url: "http://localhost" + url, html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "audio.js") pre?.(win); if (f === "zgame.js") rtFake(win, () => o.world.now); } });
   open.push(p); return p;
 }
-const typeJoin = async (p: Page, phone: string, name = "Asha") => { await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = phone; (p.$("#nm") as any).value = name; p.click("#go"); };
+const typeJoin = async (p: Page, phone: string, name = "Asha") => { await p.waitFor((x) => /Join the game/.test(x)); (p.$("#ph") as any).value = phone; (p.$("#nm") as any).value = name; p.click("#go"); };
 const setVal = (p: Page, sel: string, v: string) => { const el = p.$(sel) as any; el.value = v; el.dispatchEvent(new p.win.Event("input", { bubbles: true })); };
 const SEEN = /Your ticket|What you can win|Starting in|Getting ready/;
 
@@ -62,7 +62,7 @@ describe("joining: a refusal is shown next to the button, and a wrong entry can 
     await p.waitFor((x) => /Please wait a moment/.test(x));
     expect(p.text()).toMatch(/You asked with \+91 98222 33330/); expect(p.text()).toMatch(/Wrong number or ID\? Type it again/);
     p.click("#again");
-    await p.waitFor((x) => /Join the engagement/.test(x));
+    await p.waitFor((x) => /Join the game/.test(x));
     expect((p.$("#ph") as any).value).toBe("9822233330"); // what she typed is still there, so the slip can be seen
     (p.$("#ph") as any).value = "9822233333"; p.click("#go");
     await p.waitFor((x) => SEEN.test(x), 20_000);
@@ -75,12 +75,12 @@ describe("a game that cannot be opened", () => {
     const o = await organizer(); await published(o, "IP-BOOT");
     let failInfo = true;
     const p = await phoneAt(o, "/z?e=IP-BOOT", (win) => { const of = win.fetch; win.fetch = async (u: any, i?: any) => { if (failInfo && /\/info$/.test(String(u))) throw new Error("offline"); return of(u, i); }; });
-    await p.waitFor((x) => /Could not reach the engagement|No connection right now/.test(x));
+    await p.waitFor((x) => /Could not reach the game|No connection right now/.test(x));
     expect(!!p.$("#retry")).toBe(true); expect(p.text()).toMatch(/tries again by itself/);
     p.click("#retry"); // still no signal: the button comes back, nothing is lost
     await p.waitFor(() => !!p.$("#retry") && !(p.$("#retry") as any).disabled);
     failInfo = false; p.win.dispatchEvent(new p.win.Event("online")); // the signal returns: no reload needed
-    await p.waitFor((x) => /Join the engagement/.test(x));
+    await p.waitFor((x) => /Join the game/.test(x));
     expect(p.$("#retry")).toBeNull();
   });
 });
@@ -138,7 +138,7 @@ describe("the phone during the game", () => {
   test("TA22: the join page tells a late person the game is already running, before they join; not before the start", async () => {
     const o = await organizer(); await published(o, "IP-LATE");
     const at = (ms: () => number) => (win: any) => { win.Date.now = ms; };
-    const early = await phoneAt(o, "/z?e=IP-LATE", at(() => o.world.now)); await early.waitFor((x) => /Join the engagement/.test(x));
+    const early = await phoneAt(o, "/z?e=IP-LATE", at(() => o.world.now)); await early.waitFor((x) => /Join the game/.test(x));
     expect(early.$("#latetip")).toBeNull(); // the first number is hours away: nothing to warn about
     const late = await phoneAt(o, "/z?e=IP-LATE", at(() => roundMs(START) + 10 * 60_000)); await late.waitFor((x) => /This game is already running\./.test(x));
     const t = late.$("#latetip")!.textContent ?? ""; expect(t).toMatch(/about 90 seconds later/); expect(t).toMatch(/prizes already won stay won/); expect(t).toMatch(/other prizes are still open/);
@@ -173,7 +173,7 @@ describe("the phone during the game", () => {
     w.world.raw.prepare("UPDATE engagement SET pack=100 WHERE id=?").run("IP-CLM");
     let t = 0; const now = () => T0 + t; const step = (ms = 3000) => { t += ms; w.world.now = now(); };
     const p = await openPage(w.world, { url: "http://localhost/z?e=IP-CLM", html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, now); } }); open.push(p);
-    await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = "9822222231"; (p.$("#nm") as any).value = "Asha"; p.click("#go");
+    await p.waitFor((x) => /Join the game/.test(x)); (p.$("#ph") as any).value = "9822222231"; (p.$("#nm") as any).value = "Asha"; p.click("#go");
     await p.waitFor((x) => /Your ticket|Get ready|Starting in/.test(x), 20_000);
     const rt = p.win.__rt, doc = p.win.document;
     const tick = async () => { rt.syncedAtMono = -Infinity; rt.lastSeatPoll = -Infinity; rt.lastResultPoll = -Infinity; rt.lastVote = -Infinity; await rt.tick(); };

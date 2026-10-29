@@ -36,7 +36,7 @@ describe("K4 the join page", () => {
   test("two boxes before any name field, unticked; the button is off until both are ticked; the join carries both ticks and is stored", async () => {
     const o = await organizer(); await make(o, "CP-JOIN"); await publish(o, "CP-JOIN");
     const p = await page(o, "/z?e=CP-JOIN", "z.html", ["audio.js", "zgame.js", "z.js"], {}, { afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, () => o.world.now); } });
-    await p.waitFor((x) => /Join the engagement/.test(x));
+    await p.waitFor((x) => /Join the game/.test(x));
     const doc = p.win.document, boxes = Array.from(doc.querySelectorAll('[data-cbc="K4"] input[type=checkbox]')) as any[];
     expect(boxes.map((b) => b.checked)).toEqual([false, false]);
     expect(Array.from(doc.querySelectorAll('[data-cbc="K4"] label')).map((l: any) => l.textContent)).toEqual([

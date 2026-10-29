@@ -170,7 +170,7 @@ export class PhoneRuntime {
     } catch (e: any) {
       const st = e?.status; // the real reason: a wrong link, a game that is not open, or the connection / the service
       this.phase = st === 404 || st === 403 || st === 410 ? "missing" : "boot";
-      this.error = st === 404 ? "This engagement link is not valid." : st === 403 || st === 410 ? String(e?.message || "This engagement is not open yet.") : st && st >= 500 ? "The game could not be opened just now. Please try again in a minute." : "Could not reach the engagement. Check your connection.";
+      this.error = st === 404 ? "This game link is not valid." : st === 403 || st === 410 ? String(e?.message || "This game is not open yet.") : st && st >= 500 ? "The game could not be opened just now. Please try again in a minute." : "Could not reach the game. Check your connection.";
       return;
     }
     const pid = this.deps.store.get(this.key("pid"));

@@ -83,7 +83,7 @@ describe("one plain story: the same sentence on every screen", () => {
     const when = /The game starts at [A-Z][a-z]{2} \d{1,2}:\d{2} (am|pm)\./;
     expect(storyOf(c).state).toBe("waiting"); expect(storyOf(c).text).toMatch(when); expect(storyOf(c).text).toContain("Nothing to do yet. Share the link and keep this page open.");
     const ph = await openPage(x.w.world, { url: "http://localhost/z?e=ST-WAIT", html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, () => x.now() - 2 * 3_600_000); } });
-    open.push(ph); await ph.waitFor((t) => /Join the engagement/.test(t));
+    open.push(ph); await ph.waitFor((t) => /Join the game/.test(t));
     (ph.$("#ph") as any).value = "9822222221"; (ph.$("#nm") as any).value = "Asha"; ph.click("#go");
     await ph.waitFor((t) => /The game starts at/.test(t), 25_000);
     expect(storyOf(ph).state).toBe("waiting"); expect(storyOf(ph).text).toMatch(when); expect(storyOf(ph).text).toContain("Keep this page open. The numbers start by themselves.");
@@ -98,7 +98,7 @@ describe("one plain story: the same sentence on every screen", () => {
     x.goLive(); for (let i = 0; i < 40; i++) await x.step();
     const c = await consolePage(x, "ST-RUN");
     const ph = await openPage(x.w.world, { url: "http://localhost/z?e=ST-RUN", html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, x.now); } });
-    open.push(ph); await ph.waitFor((t) => /Join the engagement/.test(t));
+    open.push(ph); await ph.waitFor((t) => /Join the game/.test(t));
     (ph.$("#ph") as any).value = "9822222222"; (ph.$("#nm") as any).value = "Ravi"; ph.click("#go");
     const big = await openPage(x.w.world, { url: "http://localhost/big.html?e=ST-RUN", html: "big.html", scripts: ["zgame.js", "big.js"], afterLoad: (win, f) => { if (f === "zgame.js") fakeBeacon(win, x.now); } });
     open.push(big);
@@ -119,7 +119,7 @@ describe("one plain story: the same sentence on every screen", () => {
     const c = await consolePage(x, "ST-END");
     await c.waitFor((t) => /The game is over\. All 90 numbers were called\./.test(t), 60_000);
     const ph = await openPage(x.w.world, { url: "http://localhost/z?e=ST-END", html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, x.now); } });
-    open.push(ph); await ph.waitFor((t) => /Join the engagement/.test(t));
+    open.push(ph); await ph.waitFor((t) => /Join the game/.test(t));
     (ph.$("#ph") as any).value = "9822222223"; (ph.$("#nm") as any).value = "Meera"; ph.click("#go");
     const big = await openPage(x.w.world, { url: "http://localhost/big.html?e=ST-END", html: "big.html", scripts: ["zgame.js", "big.js"], afterLoad: (win, f) => { if (f === "zgame.js") fakeBeacon(win, x.now); } });
     open.push(big);

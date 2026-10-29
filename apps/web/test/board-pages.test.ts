@@ -168,7 +168,7 @@ describe("the organizer's board screen: live panels", () => {
     await b.waitFor((t) => /This board is for the Organizer/.test(t), 20_000); expect(b.$("#bp-controls")).toBeNull(); expect(b.$("#bp-log")).toBeNull();
     x.goLive(); for (let i = 0; i < 30; i++) await x.step();
     const ph = await openPage(x.w.world, { url: "http://localhost/z?e=BD-4", html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, x.now); } });
-    open.push(ph); await ph.waitFor((t) => /Join the engagement/.test(t));
+    open.push(ph); await ph.waitFor((t) => /Join the game/.test(t));
     (ph.$("#ph") as any).value = "9822222220"; (ph.$("#nm") as any).value = "Asha"; ph.click("#go");
     await ph.waitFor(() => !!ph.$("#calledcount"), 30_000);
     for (const id of ["bp-controls", "bp-log", "bp-claims", "bp-avg", "bp-people", "bp-pause", "bp-logbox"]) expect([id, !!ph.$("#" + id)]).toEqual([id, false]);

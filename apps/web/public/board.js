@@ -47,7 +47,7 @@
       S.round = Math.max(1, ...Object.keys(S.logs).filter((r) => S.logs[r].length > 0).map(Number));
       try { S.results = (await j(`/api/z/${EID}/results`)).results || []; } catch {}
       S.err = "";
-    } catch (e) { S.err = e.status === 403 ? "This engagement is not open yet." : e.status === 404 ? "That engagement was not found." : "Connecting…"; }
+    } catch (e) { S.err = e.status === 403 ? "This game is not open yet." : e.status === 404 ? "That game was not found." : "Connecting…"; }
   }
 
   // REHEARSAL: the same block at the top of every page of a rehearsal (Game ID, REHEARSAL GAME n, the sentence); the real game's pages never have it
@@ -223,7 +223,7 @@
     on("bp-pause", async () => { if (await askBoard("Are you sure? Numbers stop for everybody.", "The game pauses on every phone and on the big screen until you press Resume. It ends by itself after 30 minutes.", "Yes, pause the game", "No, keep playing", "I understand: the numbers stop for every player until I press Resume.")) press("pause", { pauseForRounds: 600 }); });
   }
 
-  if (!EID) { $app.innerHTML = `<p class="msg">No engagement was chosen.</p>`; return; }
+  if (!EID) { $app.innerHTML = `<p class="msg">No game was chosen.</p>`; return; }
   // Only the people who run the game see this board. The console link carries the key after the # (it never goes to the server in the address) and the server confirms it.
   let KEY = ""; try { const m = /(?:^|[#&])k=([^&]+)/.exec(location.hash || ""); if (m) { KEY = decodeURIComponent(m[1]); sessionStorage.setItem("ctz-board-" + EID, KEY); history.replaceState(null, "", location.pathname + location.search); } else KEY = sessionStorage.getItem("ctz-board-" + EID) || ""; } catch {}
   const checkKey = () => (KEY ? fetch(`/api/z/${EID}/cohost`, { headers: { "x-organizer": KEY }, cache: "no-store" }).then((r) => r.ok).catch(() => false) : Promise.resolve(false));

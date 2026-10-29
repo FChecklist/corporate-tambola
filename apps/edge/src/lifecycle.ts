@@ -130,7 +130,7 @@ export async function acceptOver(env: Env, e: any, eid: string, b: any, now: num
   const seat = typeof b?.pid === "string" ? seatOfPid(b.pid) : null;
   if (!b || seat === null) return jsonFn({ error: "Bad report." }, 400);
   const who = await env.DB.prepare("SELECT 1 AS x FROM participant WHERE eid=? AND pid=?").bind(eid, b.pid).first();
-  if (!who) return jsonFn({ error: "Not a participant of this engagement." }, 403);
+  if (!who) return jsonFn({ error: "Not a participant of this game." }, 403);
   if (checkinRequired(e) && !(await deviceMatches(env, eid, b.pid, b.device))) return jsonFn({ error: "This ticket belongs to another phone.", code: "other-phone" }, 403); // the participant id is public: only the phone that holds the ticket can say the game is over
   const earliest = roundMs(e.start_round + GRACE_ROUNDS) + 20 * e.call_seconds * 1000; // no game ends before 20 numbers
   if (now < earliest) return jsonFn({ ok: true, counted: false });

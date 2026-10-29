@@ -43,7 +43,7 @@ const rtFake = (win: any, nowMs: () => number) => {
 async function phonePage(x: X, eid: string, phone: string) {
   const p = await openPage(x.w.world, { url: `http://localhost/z?e=${eid}`, html: "z.html", scripts: ["audio.js", "zgame.js", "guide.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") { if (!win.ZG.PRIZE_HOUSES) win.ZG.PRIZE_HOUSES = PRIZE_HOUSES; rtFake(win, x.now); } } });
   open.push(p);
-  await p.waitFor((t) => /Join the engagement/.test(t));
+  await p.waitFor((t) => /Join the game/.test(t));
   (p.$("#ph") as any).value = phone; (p.$("#nm") as any).value = "Asha"; p.click("#go");
   await p.waitFor((t) => /Your ticket|Get ready|Starting in/.test(t), 20_000);
   return p;
