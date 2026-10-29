@@ -23,7 +23,9 @@ const change = (win: any, id: string, v: string) => { const n = win.document.get
 test("the prize list is the game's real houses (Super Bumper has its own place), the usual ones already ticked", () => {
   const win = page();
   const ids = [...win.document.querySelectorAll("#zf-sec3 [data-house]")].map((n: any) => n.dataset.house);
-  expect(ids).toEqual(PRIZE_HOUSES.filter((h) => h.id !== "full2").map((h) => h.id));
+  const real = PRIZE_HOUSES.filter((h) => h.id !== "full2").map((h) => h.id);
+  // Unlucky sits under "More prizes", after the others, and the Lucky draw comes last
+  expect(ids).toEqual([...real.filter((x) => x !== "unlucky"), "unlucky", "lucky"]);
   expect(win.document.getElementById("zf-tick-full").checked).toBe(true);
   expect(win.document.getElementById("zf-tick-plus").checked).toBe(false);
 });

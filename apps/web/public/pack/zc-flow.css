@@ -131,3 +131,20 @@ a.zf-add { display: inline-flex; align-items: center; text-decoration: none; }
 @media (max-width: 480px) { .zf-ball { width: 64px; height: 64px; line-height: 64px; font-size: 26px; } .zf-disc { font-size: 10px; } }
 .zf-sec .cbc-box, .zf-sec .cbc-box span, .zf-sec .tb-row label { color: inherit; }
 @media (prefers-color-scheme: dark) { .zf-sec .tb-err { color: #ffb3b3; } }
+
+.zf-ready { margin: 10px 0; padding: 12px 14px; border-radius: 10px; border: 1px solid #b9c4d8; }
+.zf-ready.ok { background: #e1f3e8; border-color: #1a7a46; } .zf-ready.todo { background: #fff8e1; }
+.zf-readylist { list-style: none; margin: 6px 0 0; padding: 0; } .zf-readylist li { padding: 4px 0; } .zf-readylist .done { font-weight: 600; }
+.zf-prizelist { list-style: none; padding: 0; margin: 8px 0; } .zf-prizelist li { padding: 8px 0; border-bottom: 1px solid #d3dbe9; } .zf-given { display: block; margin-top: 4px; font-weight: 400; }
+.zf-feed ul { padding-left: 18px; }
+.zf-lastline { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 700; }
+.zf-bottomrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.zf-timer { padding: 6px 12px; border-radius: 16px; background: #eef2fb; font-weight: 600; }
+.zf-rehcard { margin: 8px 0; padding: 12px; border: 1px solid #c9cdd6; border-radius: 12px; } .zf-rehcard.grey { opacity: .6; }
+.zf-warn { margin: 10px 0; padding: 10px 14px; border-radius: 10px; background: #fff0c2; color: #5a4300; font-weight: 600; }
+.zf-completed { margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: #d7e6fb; color: #0b2f6b; }
+@media (prefers-color-scheme: dark) {
+  .zf-ready { border-color: #3a4a6e; } .zf-ready.ok { background: #12301f; color: #cdeedb; border-color: #7fd6a2; } .zf-ready.todo { background: #3b3010; color: #ffe9a6; }
+  .zf-prizelist li { border-color: #2c3a5c; } .zf-timer { background: #1a2745; } .zf-rehcard { border-color: #3a4a6e; }
+  .zf-warn { background: #4a3a0d; color: #ffe9a6; } .zf-completed { background: #153a6e; color: #d7e6fb; }
+}

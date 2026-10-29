@@ -71,12 +71,12 @@ test("a game whose time has passed unpaid is red, with Pay now, Change the date 
   for (const id of ["zf-paynow", "zf-changedate", "zf-cancelgame"]) expect(d.getElementById(id)).not.toBe(null);
 });
 
-test("a cancelled game shows Make a copy waiting, and no game link; a deleted one shows only the banner", async () => {
+test("a cancelled game shows Make a copy, and no game link; a deleted one shows only the banner", async () => {
   info = { cancelled: true, startMs: Date.now() + HOUR };
   const win = page(); await wait();
   const d = win.document;
   expect(d.getElementById("zf-status").dataset.status).toBe("cancelled");
-  expect(d.getElementById("zf-copygame").hasAttribute("disabled")).toBe(true);
+  expect(d.getElementById("zf-copygame").hasAttribute("disabled")).toBe(false); // Make a copy works
   expect(d.getElementById("zf-link")).toBe(null);
   info = { unpaid: true, startMs: Date.now() + 3 * 86400000 };
 });

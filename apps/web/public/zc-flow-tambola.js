@@ -1,19 +1,12 @@
 /* Corporate Tambola only: the parts of the new organizer / Host / Co-host console (?flow=new) that other games do not have.
    Loaded AFTER pack/zc-flow.js. It never edits the shared pack: it adds sections to the pack's dashboard and step 3 when they are drawn.
    Wired to the real engine where the engine has support (rehearsals 1.6.0, prizes, prize handed over, presence, game log, claims, erase).
-   Marked DEMO STUB (Phase B, see handover 194): Lucky Draw 1-3 timing, the 5 s server lock, claim auto-pause, the 24 h delete lock. */
+   Owner rule D (29 Oct): UI layer only. Whatever the existing engine does not support is HIDDEN (no coming soon, no demo stub, no disabled look-alike). */
 (() => {
   if (typeof window === "undefined" || !window.ZFLOW) return;
   const Z = window.ZFLOW, el = Z.el, st = Z.state, dash = Z.dash;
-  const STUB_NOTE = "Demo: shown here only. The engine support comes in Phase B.";
 
   /* ---- pure rules (tested) ---- */
-  /** Lucky draws in the order they are drawn: lowest value first, highest last; equal or blank values keep the entered order. */
-  const luckyOrder = (draws) => draws.map((d, i) => ({ ...d, i, v: Number(d.value) || 0 })).sort((a, b) => a.v - b.v || a.i - b.i).map((d, k) => ({ ...d, label: "Lucky Draw " + (k + 1) }));
-  /** After how many numbers each lucky draw happens: 1 = end; 2 = middle + end; 3 = one third, two thirds, end. */
-  const luckyAt = (count, total) => { const t = total || 90, n = Math.max(1, Math.min(3, count | 0)); return n === 1 ? [t] : n === 2 ? [Math.round(t / 2), t] : [Math.round(t / 3), Math.round((2 * t) / 3), t]; };
-  /** The manual roll button: green when ready; grey for 5 seconds after a press; grey while a claim is open. */
-  const rollState = (lastMs, now, claimOpen) => {
     if (claimOpen) return { ready: false, secs: 0, label: "Claim in progress" };
     const left = Math.max(0, Math.ceil((lastMs + 5000 - now) / 1000));
     return left > 0 && lastMs ? { ready: false, secs: left, label: "Wait " + left + " seconds" } : { ready: true, secs: 0, label: "Press to Roll Out the Next Number" };
@@ -21,18 +14,14 @@
   /** The three claim messages, then what the board says when the claim is settled. */
   const claimText = (c, mode) => c.phase === "check" ? "Ticket " + c.ticket + " has claimed " + c.prize + ". The system is checking..."
     : c.phase === "ok" ? "Congratulations! The claim is correct." : c.phase === "gone" ? c.prize + " is gone. It has been won by Ticket " + c.ticket + "." + (mode === "manual" ? " Press the button to roll out the next number." : "") : "";
-  /** AUTO mode pauses during an open claim and resumes by itself when it is settled. */
-  const autoPaused = (mode, claim, manualPause) => !!manualPause || (mode === "auto" && !!claim && claim.phase === "check");
   /** The top-right label: who is signed in, and the organizer on a second line. */
   const whoLines = (role, email, org) => role === "host" ? ["Host: " + email, "Organizer: " + org] : role === "cohost" ? ["Co-host: " + email, "Organizer: " + org] : ["Organizer: " + org];
-  /** "Delete all participant data" turns green 24 hours after the game ended. */
-  const deleteReady = (endMs, now) => !!endMs && now - endMs >= 24 * 3600000;
   /** Ready check: link shared, payment, prizes chosen are needed; Hosts added and rehearsal done are optional. */
   const readyItems = (f) => [["Game link shared", !!f.shared, true], ["Payment", !!f.paid, true], ["Prizes chosen", !!f.prizes, true], ["Hosts added", !!f.hosts, false], ["Rehearsal done", !!f.rehearsed, false]];
-  window.ZTAMBOLA = { luckyOrder, luckyAt, rollState, claimText, autoPaused, whoLines, deleteReady, readyItems };
+  window.ZTAMBOLA = { luckyOrder, luckyAt, claimText, whoLines, readyItems };
 
   /* ---- live state for the added sections ---- */
-  const T = { mode: "auto", paused: false, lastRoll: 0, claim: null, prizes: [], reh: null, presence: null, glog: null, tick: 12, lucky: [{ value: "", prize: "" }], endMs: 0, shared: false };
+  const T = { mode: "auto", paused: false, lastRoll: 0, claim: null, prizes: [], reh: null, presence: null, glog: null, tick: 12, shared: false };
   const call = (m, p, b) => Z.call(m, p, b);
   const eid = () => st.eid;
   async function load() {
@@ -77,21 +66,14 @@
     if (!T.claim) return null;
     return el("div", { class: "zf-banner " + (T.claim.phase === "gone" ? "green" : "amber"), id: "zt-claim", role: "status" }, claimText(T.claim, T.mode));
   }
-  let tmr = 0;
-  function controls(co) {
-    const now = Date.now(), claimOpen = !!(T.claim && T.claim.phase === "check"), paused = autoPaused(T.mode, T.claim, T.paused);
-    const box = el("section", { class: "zt-ctl", id: "zt-ctl" });
-    box.append(el("p", { class: "zf-small", id: "zt-mode", text: T.mode === "auto" ? "Automatic: a new number every 12 seconds" + (paused ? " (paused)" : " (next in " + T.tick + ")") : "Manual: you press the button" }));
-    if (co) { box.append(small("You can watch the board. Only the organizer and Hosts can use the buttons.")); return box; }
-    box.append(el("p", { class: "zf-small", text: STUB_NOTE }));
-    if (T.mode === "manual") {
-      const r = rollState(T.lastRoll, now, claimOpen);
-      box.append(el("button", { type: "button", class: "zf-go zt-roll " + (r.ready ? "green" : "grey"), id: "zt-roll", ...(r.ready ? {} : { disabled: "" }), onclick: () => { T.lastRoll = Date.now(); const c = dash.called || (dash.called = []); let n; do n = 1 + Math.floor(Math.random() * 90); while (c.includes(n) && c.length < 90); c.push(n); Z.draw(); } }, r.ready ? r.label : r.label));
-      if (T.claim && T.claim.phase === "gone") box.append(small("Press the button to roll out the next number."));
-    }
-    box.append(" ", el("button", { type: "button", class: "zf-add", id: "zt-pause", onclick: () => { T.paused = !T.paused; Z.draw(); } }, T.paused ? "Resume" : "Pause game"), " ",
-      el("button", { type: "button", class: "zf-add", id: "zt-modeswitch", onclick: () => { T.mode = T.mode === "auto" ? "manual" : "auto"; Z.draw(); } }, T.mode === "auto" ? "Switch to manual" : "Switch to automatic"));
-    return box;
+  /** Play the game: the organizer and Hosts get a ticket like anyone (the engine's own people/me). */
+  function playBlock() {
+    const note = el("span", { class: "zf-small", id: "zt-playnote", role: "status" });
+    return el("p", { class: "zt-play", id: "zt-play" }, el("button", { type: "button", class: "zf-go", id: "zt-playnow", onclick: async () => {
+      let w = null; try { w = window.open("", "_blank"); if (w) w.opener = null; } catch { /* pop-up blocked */ }
+      try { const r = await call("POST", `/api/z/${eid()}/people/me`, {}), link = (r.person && r.person.link) || r.link; if (!link) throw new Error("Your ticket is not ready yet. Please try again in a moment."); if (w) w.location.href = link; else window.open(link, "_blank", "noopener"); }
+      catch (e) { if (w) { try { w.close(); } catch { /* fine */ } } note.textContent = e.message; }
+    } }, "Play the game"), " ", note);
   }
   function prizesBlock(co) {
     const P = T.prizes, won = P.length, box = el("section", { class: "zt-prizes", id: "zt-prizes" }, h3("Prizes: " + won + " won"));
@@ -114,22 +96,10 @@
     box.append(ul); return box;
   }
   function deleteBlock() {
-    const ready = deleteReady(T.endMs, Date.now()), done = !!(st.raw && st.raw.completed) || st.demoStatus === "completed";
+    const done = !!(st.raw && st.raw.completed) || st.demoStatus === "completed";
     if (!done) return null;
-    return el("p", {}, el("button", { type: "button", class: "zf-add zt-del " + (ready ? "green" : "grey"), id: "zt-delete", ...(ready ? {} : { disabled: "" }), onclick: async () => { try { await call("POST", `/api/z/${eid()}/erase`, {}); dash.note = "Participant data deleted."; } catch (e) { dash.note = e.message; } Z.draw(); } }, "Delete all participant data"), " ", ready ? "" : el("span", { class: "zf-small", text: "This unlocks 24 hours after the game." }));
+    return el("p", {}, el("button", { type: "button", class: "zf-add zt-del green", id: "zt-delete", onclick: async () => { try { await call("POST", `/api/z/${eid()}/erase`, {}); dash.note = "Participant data deleted."; } catch (e) { dash.note = e.message; } Z.draw(); } }, "Delete all participant data"));
   }
-  /* ---- Lucky Draw 1-3 and Unlucky in step 3 (DEMO STUB) ---- */
-  function luckyBlock() {
-    const box = el("section", { class: "zt-lucky", id: "zt-lucky" }, h3("LUCKY DRAW (Recommended)"), small("Choose 1, 2 or 3 lucky draws. The lowest value is drawn first and the highest last. The organizer, Hosts and Co-hosts are never drawn."), small(STUB_NOTE));
-    const row = el("p", { class: "zf-btnrow", role: "group", "aria-label": "How many lucky draws" });
-    for (const n of [1, 2, 3]) row.append(el("button", { type: "button", class: "zf-add" + (T.lucky.length === n ? " on" : ""), "data-lucky": String(n), "aria-pressed": String(T.lucky.length === n), onclick: () => { while (T.lucky.length < n) T.lucky.push({ value: "", prize: "" }); T.lucky.length = n; Z.draw(); } }, n === 1 ? "1 draw" : n + " draws"), " ");
-    box.append(row);
-    const ord = luckyOrder(T.lucky), at = luckyAt(T.lucky.length);
-    ord.forEach((d, k) => box.append(el("p", {}, el("b", { text: d.label }), " " , el("input", { type: "text", "aria-label": d.label + " prize", placeholder: "Prize", value: d.prize || "", oninput: (e) => { T.lucky[d.i].prize = e.target.value; } }), " ₹ ", el("input", { type: "number", min: "0", "aria-label": d.label + " worth up to", value: d.value || "", onchange: (e) => { T.lucky[d.i].value = e.target.value; Z.draw(); } }), el("span", { class: "zf-small", text: "  after number " + at[k] }))));
-    box.append(h3("UNLUCKY (Recommended)"), small("One participant who is not lucky gets a small gift. The organizer, Hosts and Co-hosts are never drawn."));
-    return box;
-  }
-
   /* ---- injection: the pack redraws the whole page, so the sections are added after each draw ---- */
   function paint() {
     const app = document.getElementById("app"); if (!app) return;
@@ -140,15 +110,15 @@
       if (!co) { const at = banner ? banner.nextSibling : d.children[1]; d.insertBefore(readyCheck(), at); }
       if (!co && pay) pay.after(rehearsals());
       const cb = claimBanner(); const anchor = document.getElementById("zf-retro") || document.getElementById("zf-dashnote");
-      const extra = [cb, controls(co), prizesBlock(co), feedBlock(), deleteBlock()].filter(Boolean);
-      if (anchor) { const r = document.getElementById("zf-retro"); (r ? r : anchor).before(...(r ? [cb].filter(Boolean) : extra)); if (r) r.after(...[controls(co), prizesBlock(co), feedBlock(), deleteBlock()].filter(Boolean)); } else d.append(...extra);
+      const extra = [cb, co ? null : playBlock(), prizesBlock(co), feedBlock(), deleteBlock()].filter(Boolean);
+      if (anchor) { const r = document.getElementById("zf-retro"); (r ? r : anchor).before(...(r ? [cb].filter(Boolean) : extra)); if (r) r.after(...[co ? null : playBlock(), prizesBlock(co), feedBlock(), deleteBlock()].filter(Boolean)); } else d.append(...extra);
     }
-    const s3 = document.getElementById("zf-sec3");
-    if (s3 && s3.classList.contains("open") && !document.getElementById("zt-lucky")) { const b = s3.querySelector(".zf-body") || s3; b.append(luckyBlock()); }
+    const ball = document.getElementById("zf-ball"), cl = dash.called || [];
+    if (ball && !document.getElementById("zt-last5") && cl.length) ball.after(el("p", { class: "zf-small", id: "zt-last5", text: "Last 5: " + cl.slice(-5).reverse().join(", ") }));
+    for (const n of document.querySelectorAll("#app .zf-soon, #zf-resume[disabled], #zf-copygame[disabled]")) n.remove(); // hidden until the engine supports them
   }
   let busy = false;
   new MutationObserver(() => { if (busy) return; busy = true; try { paint(); } finally { busy = false; } }).observe(document.getElementById("app"), { childList: true });
-  setInterval(() => { if (document.getElementById("zf-dashboard")) { T.tick = T.tick > 1 ? T.tick - 1 : 12; if (T.mode === "manual" && T.lastRoll) Z.draw(); } }, 1000);
   setInterval(load, 8000);
   load(); paint();
 })();
