@@ -75,7 +75,7 @@
       el("p", { class: "zf-btnrow" }, el("button", { type: "button", class: "zf-go", id: "zt-cocopy", onclick: async () => { try { await navigator.clipboard.writeText(link); dash.note = "Link copied."; } catch { dash.note = "Please copy it by hand."; } paint(); } }, "Copy link"), " ",
         el("button", { type: "button", class: "zf-add", id: "zt-cocopymsg", onclick: async () => { try { await navigator.clipboard.writeText(msg); dash.note = "Message copied."; } catch { dash.note = "Please copy it by hand."; } paint(); } }, "Copy a message to share")),
       small("Game ID " + eid() + ". Everyone who joins using this link is recorded as a participant you invited."), coHostLimitLine(),
-      el("h2", { text: "People you invited, waiting for you" }));
+      el("h2", { text: "People you invited, waiting for you" }), small(window.ZROLES ? window.ZROLES.approvalText("cohost") : "", { id: "zt-approves" }));
     const rows = T.waiting || [];
     if (!rows.length) box.append(small("Nobody is waiting right now.", { id: "zt-nowait" }));
     for (const w of rows) box.append(el("p", { "data-wid": String(w.id) }, "Ticket " + (w.ticket || w.seat || w.id) + " ", el("button", { type: "button", class: "zf-go", onclick: async () => { try { await call("POST", `/api/z/${eid()}/waiting/${encodeURIComponent(w.id)}`, { decision: "admit" }); } catch (e) { dash.note = e.message; } T.waiting = (T.waiting || []).filter((x) => x.id !== w.id); const o = document.getElementById("zt-cohostscreen"); if (o) o.remove(); paint(); } }, "Let in"), " ", el("button", { type: "button", class: "zf-add", onclick: async () => { try { await call("POST", `/api/z/${eid()}/waiting/${encodeURIComponent(w.id)}`, { decision: "later" }); } catch (e) { dash.note = e.message; } T.waiting = (T.waiting || []).filter((x) => x.id !== w.id); const o = document.getElementById("zt-cohostscreen"); if (o) o.remove(); paint(); } }, "Not now")));
@@ -101,6 +101,8 @@
     return box;
   }
   document.addEventListener("click", (e) => { if (e.target && e.target.id === "zf-save1") { let n = 0; const t = setInterval(() => { if (eid() || ++n > 30) { clearInterval(t); if (eid()) savedRun(); } }, 100); } });
+  // Step 2 saves callMode "auto" for every card: the organizer's answer from Step 1 is sent again right after it, so it is never lost
+  document.addEventListener("click", (e) => { if (e.target && e.target.id === "zf-save2") { setTimeout(savedRun, 700); setTimeout(savedRun, 2500); } });
   window.ZTAMBOLA.runSummary = runSummary; window.ZTAMBOLA.RUN = RUN;
 
   /* ---- steps 2 to 5: Tambola-only wording and hiding, applied to what the shared pack drew (the pack file itself is not edited) ---- */
@@ -147,6 +149,8 @@
       const ex = [coHostsBlock(), deleteBlock()].filter(Boolean), at = document.getElementById("zf-waitsec");
       if (at) at.after(...ex); else d.append(...ex);
     }
+    const wt = document.getElementById("zf-waitsec");
+    if (wt && window.ZROLES && !document.getElementById("zt-approves")) { const h = wt.querySelector("h3"); if (h) h.after(el("p", { class: "zf-small", id: "zt-approves", text: window.ZROLES.approvalText(st.role || "organizer") })); }
     const ball = document.getElementById("zf-ball"), cl = dash.called || [];
     if (ball && !document.getElementById("zt-last5") && cl.length) ball.after(el("p", { class: "zf-small", id: "zt-last5", text: "Last 5: " + cl.slice(-5).reverse().join(", ") }));
     for (const n of document.querySelectorAll("#app .zf-soon, #zf-resume[disabled], #zf-copygame[disabled]")) n.remove(); // hidden until the engine supports them
