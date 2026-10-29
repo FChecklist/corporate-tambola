@@ -115,6 +115,7 @@ describe("the console on Game day: the Next number button", () => {
     c.click("#nextnum");
     await c.waitFor((t) => /On its way/.test(t), 15_000);
     expect((c.$("#nextnum") as any).disabled).toBe(true);
+    expect(c.$("#hoststate")!.textContent).toMatch(/Your press is sent\. The next number (arrives in about \d+ seconds|is arriving now)/); // TA26: the Host is told something is coming, not left with silence
     const f1 = (await file(x, "HC-DAY"))!; expect(f1.messages.map((m) => m.action)).toEqual(["next"]); // the signed press is stored by the Worker
     expect(f1.messages[0]!.atBeaconRound - f1.messages[0]!.signedAtRound).toBe(2);
     for (let i = 0; i < 5; i++) await x.step(); // 15 s: the round is published and every phone has it
