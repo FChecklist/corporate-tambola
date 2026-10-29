@@ -26,6 +26,9 @@
     try { T.presence = await call("GET", `/api/z/${eid()}/presence`); } catch { T.presence = null; }
     try { T.glog = await call("GET", `/api/z/${eid()}/gamelog`); } catch { T.glog = null; }
     const open = (dash.claims || []).filter((c) => c && (c.state === "checking" || c.status === "checking")).pop();
+    try { T.team = await call("GET", "/api/org/team?e=" + encodeURIComponent(eid())); } catch { T.team = null; }
+    try { T.coLimit = Number(((await call("GET", `/api/z/${eid()}/summary`)) || {}).coHostLimit) || 100; } catch { /* the last limit stays */ }
+    if (st.role === "cohost" || st.view === "cohost") { try { T.mine = await call("GET", `/api/z/${eid()}/people?limit=1`); } catch { T.mine = null; } }
     T.claim = open ? { phase: "check", ticket: open.seat || open.ticket, prize: open.prize || open.name || "a prize" } : T.claim && T.claim.phase !== "check" ? T.claim : null;
     paint();
   }
@@ -70,6 +73,22 @@
       catch (e) { if (w) { try { w.close(); } catch { /* fine */ } } note.textContent = e.message; }
     } }, "Play the game"), " ", note);
   }
+  const LIMITS = [10, 25, 50, 100, 250, 500, 1000];
+  /** Your Co-hosts: who brought how many of the limit. The engine keeps ONE limit for the game (coHostLimit), the same for every Co-host. */
+  function coHostsBlock() {
+    const list = (T.team && T.team.cohosts) || [], lim = T.coLimit || 100, box = el("section", { class: "zt-cohosts", id: "zt-cohosts" }, h3("Your Co-hosts"));
+    if (!list.length) { box.append(small("No Co-host added yet.")); return box; }
+    const sel = el("select", { id: "zt-colimit", "aria-label": "Limit for each Co-host", onchange: async (e) => { try { await call("PATCH", `/api/z/${eid()}/settings`, { coHostLimit: Number(e.target.value) }); T.coLimit = Number(e.target.value); dash.note = "Saved."; } catch (er) { dash.note = er.message; } Z.draw(); } }, LIMITS.map((n) => el("option", { value: String(n), ...(n === lim ? { selected: "" } : {}) }, String(n))));
+    const t = el("table", { class: "zf-table", id: "zt-cotable" }, el("thead", {}, el("tr", {}, ["Co-host", "Brought so far"].map((c) => el("th", { scope: "col", text: c })))));
+    const tb = el("tbody"); for (const c of list) tb.append(el("tr", {}, el("td", { "data-label": "Co-host", text: c.email || c.label || "Co-host" }), el("td", { "data-label": "Brought so far", text: (Number(c.brought) || 0) + " of " + lim }))); t.append(tb);
+    box.append(el("div", { class: "zf-tablewrap" }, t), el("label", { for: "zt-colimit", text: "Each Co-host can bring up to " }), sel, small("The limit is the same for every Co-host of this game. You can change it any time."));
+    return box;
+  }
+  /** The Co-host's own read-only line. */
+  function coHostLimitLine() {
+    const m = T.mine || {}, lim = Number(m.limit) || T.coLimit || 100, used = Number(m.used) || 0, by = (st.raw && st.raw.organizerEmail) || "the organizer";
+    return el("p", { class: "zf-small", id: "zt-colimitline", text: "You can bring up to " + lim + " people. Brought so far: " + used + ". " + Math.max(0, lim - used) + " left. This limit was set by " + by + "." });
+  }
   function prizesBlock(co) {
     const P = T.prizes, won = P.length, box = el("section", { class: "zt-prizes", id: "zt-prizes" }, h3("Prizes: " + won + " won"));
     if (!won) box.append(small("No prize is won yet."));
@@ -99,14 +118,15 @@
   function paint() {
     const app = document.getElementById("app"); if (!app) return;
     if (st.role && !document.getElementById("zt-who")) app.prepend(whoLabel());
+    if ((st.role === "cohost" || st.view === "cohost") && T.mine === undefined) { T.mine = null; load(); }
     const d = document.getElementById("zf-dashboard");
     if (d && !document.getElementById("zt-ready") && !document.getElementById("zt-readysec")) {
       const co = !!(st.view === "cohost" || st.role === "cohost"), pay = document.getElementById("zf-pay"), banner = document.getElementById("zf-banner"), wait = document.getElementById("zf-waitsec");
       if (!co) { const at = banner ? banner.nextSibling : d.children[1]; d.insertBefore(readyCheck(), at); }
       if (!co && pay) pay.after(rehearsals());
       const cb = claimBanner(); const anchor = document.getElementById("zf-retro") || document.getElementById("zf-dashnote");
-      const extra = [cb, co ? null : playBlock(), prizesBlock(co), feedBlock(), deleteBlock()].filter(Boolean);
-      if (anchor) { const r = document.getElementById("zf-retro"); (r ? r : anchor).before(...(r ? [cb].filter(Boolean) : extra)); if (r) r.after(...[co ? null : playBlock(), prizesBlock(co), feedBlock(), deleteBlock()].filter(Boolean)); } else d.append(...extra);
+      const extra = [cb, co ? coHostLimitLine() : coHostsBlock(), co ? null : playBlock(), prizesBlock(co), feedBlock(), deleteBlock()].filter(Boolean);
+      if (anchor) { const r = document.getElementById("zf-retro"); (r ? r : anchor).before(...(r ? [cb].filter(Boolean) : extra)); if (r) r.after(...[co ? coHostLimitLine() : coHostsBlock(), co ? null : playBlock(), prizesBlock(co), feedBlock(), deleteBlock()].filter(Boolean)); } else d.append(...extra);
     }
     const ball = document.getElementById("zf-ball"), cl = dash.called || [];
     if (ball && !document.getElementById("zt-last5") && cl.length) ball.after(el("p", { class: "zf-small", id: "zt-last5", text: "Last 5: " + cl.slice(-5).reverse().join(", ") }));

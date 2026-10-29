@@ -1,5 +1,5 @@
 // Corporate Tambola's own parts of the new console (2026-10-29): lucky draw order and timing, the 5 s roll button, claim messages, auto pause, who-label, delete lock, ready check.
-// FALSIFIED BY: tambola-claim-text, tambola-who-label, tambola-ready-optional, tambola-no-stubs
+// FALSIFIED BY: tambola-claim-text, tambola-who-label, tambola-ready-optional, tambola-no-stubs, tambola-cohost-limit
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -37,4 +37,19 @@ test("no coming soon, demo stub, lucky draw stub or roll button on the dashboard
   const html = win.document.getElementById("app").innerHTML;
   expect(html).toContain("Ready check"); expect(html).toContain("Play the game"); expect(html).toContain("REHEARSAL GAME 1");
   for (const bad of ["Coming soon", "coming soon", "Demo:", "DEMO", "zt-roll", "zt-lucky"]) expect(html).not.toContain(bad);
+});
+test("Your Co-hosts table shows 'N of limit' and the limit drop-down saves coHostLimit; the Co-host sees a read-only line", async () => {
+  const win: any = new Window({ url: "http://localhost/zc.html?flow=new&e=EABCDEF" });
+  win.document.body.innerHTML = '<main id="app"></main>';
+  win.ZG = { roundAt: (ms: number) => Math.floor(ms / 3000), PRIZE_HOUSES };
+  const calls: any[] = [];
+  const fakeFetch = async (url: string, o: any = {}) => { calls.push({ url, method: o.method || "GET", body: o.body ? JSON.parse(o.body) : null }); const j = url.includes("/api/org/team") ? { cohosts: [{ email: "c@a.com", brought: 34 }] } : url.includes("/summary") ? { coHostLimit: 250 } : url.includes("/people") ? { limit: 250, used: 34 } : { ok: true }; return { ok: true, json: async () => j }; };
+  new Function("window", "document", "location", "fetch", "MutationObserver", src)(win, win.document, win.location, fakeFetch, win.MutationObserver);
+  const s = win.ZFLOW.state; s.eid = "EABCDEF"; s.info = { published: true, paid: true, startMs: Date.now() + 3 * 3600000 }; s.raw = { startMs: s.info.startMs, gameMinutes: 60 };
+  for (const k of [1, 2, 3, 4, 5]) s.done[k] = true; s.view = "dash"; win.ZFLOW.draw(); await new Promise((r) => setTimeout(r, 80)); win.ZFLOW.draw(); await new Promise((r) => setTimeout(r, 50));
+  expect(win.document.getElementById("zt-cotable").textContent).toContain("34 of 250");
+  const sel = win.document.getElementById("zt-colimit"); sel.value = "500"; sel.dispatchEvent(new win.Event("change")); await new Promise((r) => setTimeout(r, 30));
+  expect(calls.some((c) => c.method === "PATCH" && c.body && c.body.coHostLimit === 500)).toBe(true);
+  s.role = "cohost"; s.view = "cohost"; win.ZFLOW.draw(); await new Promise((r) => setTimeout(r, 120)); win.ZFLOW.draw(); await new Promise((r) => setTimeout(r, 50));
+  expect(win.document.getElementById("zt-colimitline").textContent).toContain("Brought so far: 34. 216 left.");
 });
