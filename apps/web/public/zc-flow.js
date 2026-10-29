@@ -77,9 +77,29 @@
     else if (ms > now + 30 * 86400000) bad.push("A game can start at most 30 days from today.");
     return bad;
   }
+  /* ---- Step 2: who is this game for (pure) ---- */
+  const CARDS = [
+    { id: "people", name: "Your people", line: "Everyone who works with you.", invites: false, cats: [] },
+    { id: "family", name: "Your people and their families", line: "Each person can bring up to 4 family members. Every ticket is one participant.", invites: true, cats: ["family"] },
+    { id: "extended", name: "Extended family", line: "Your people, their families and friends, wherever they are.", invites: true, cats: ["family", "colleagues"] },
+  ];
+  const FALLBACK_PACKS = [{ upTo: 100, inr: 2399 }, { upTo: 250, inr: 3499 }, { upTo: 500, inr: 4699 }, { upTo: 1000, inr: 7099 }];
+  const money = (n) => "₹" + Number(n).toLocaleString("en-IN");
+  /** The size choices, from the game's real pack ladder (smallest first). */
+  const packChoices = (packs) => (Array.isArray(packs) && packs.length ? packs : FALLBACK_PACKS).filter((k) => Number(k.upTo) > 0).map((k) => ({ upTo: Number(k.upTo), inr: Number(k.inr) || 0, label: "Up to " + k.upTo + " participants" + (k.inr ? " · " + money(k.inr) : "") })).sort((a, b) => a.upTo - b.upTo);
+  /** What the system saves for a card: only people the organizer lets in take part; family cards allow 4 more people each. */
+  function audienceSettings(cardId, upTo) {
+    const c = CARDS.find((x) => x.id === cardId) || CARDS[0];
+    return { cap: Number(upTo), whoCanJoin: "list", callMode: "auto", demo: false, invites: { on: c.invites, per: 4, cats: c.cats } };
+  }
+  function whoProblems(f, choices) {
+    if (!CARDS.some((c) => c.id === f.card)) return ["Please choose who the game is for."];
+    if (!choices.some((k) => k.upTo === Number(f.upTo))) return ["Please choose the size of your game."];
+    return [];
+  }
   const registry = {}; // step number -> function(el, ctx) that draws the step body (each step adds its own)
 
-  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn };
+  const api = { COPY, STEPS, canOpen, nextAfter, dashboardOpen, badWords, registry, OCC, ZONES, wallToMs, todayIn, timeOptions, elsewhere, gameName, whenProblems, clockIn, CARDS, money, packChoices, audienceSettings, whoProblems };
   if (typeof window !== "undefined") window.ZFLOW = api;
   if (typeof module !== "undefined") module.exports = api;
   if (typeof document === "undefined") return;
@@ -176,6 +196,38 @@
         state.when = { ms, zone: z };
         done(1);
       } catch (e) { go.disabled = false; msg.textContent = e.message; }
+    } }, "Save and continue");
+    box.append(msg, go);
+  };
+
+  /* ---- Step 2 ---- */
+  const who = { card: "people", upTo: 0, how: "self" };
+  api.who = who;
+  registry[2] = (box) => {
+    if (!state.packs) { fetch(BASE + "/api/z/ai-manifest").then((r) => r.json()).then((j) => { state.packs = j.packs || []; draw(); }).catch(() => { state.packs = []; draw(); }); box.append(el("p", { text: "Loading the sizes…" })); return; }
+    const choices = packChoices(state.packs);
+    if (!who.upTo) who.upTo = choices[0].upTo; // the smallest size is already chosen for you
+    const msg = el("p", { class: "zf-msg", role: "status", id: "zf-msg2" });
+    box.append(el("p", { class: "zf-lead", text: "You choose who the game is for. The system takes care of the rest." }));
+    const cards = el("div", { class: "zf-cards", role: "radiogroup", "aria-label": "Who is this game for" });
+    for (const c of CARDS) cards.append(el("button", { type: "button", role: "radio", class: "zf-card" + (who.card === c.id ? " on" : ""), "aria-checked": String(who.card === c.id), "data-card": c.id, onclick: () => { who.card = c.id; draw(); } }, el("b", { text: c.name }), el("span", { text: c.line })));
+    box.append(cards);
+    box.append(el("h3", { text: "How are your participants let in?" }));
+    const how = el("div", { class: "zf-how" });
+    how.append(el("label", { class: "zf-opt" }, el("input", { type: "radio", name: "zf-how", value: "system", disabled: "", id: "zf-how-system" }), " System validates for you ", el("span", { class: "zf-soon", text: COPY.soon }), el("small", { text: " The system checks each person against your list of employee IDs or email IDs. You can add the list yourself, whenever it is ready." })));
+    how.append(el("label", { class: "zf-opt" }, el("input", { type: "radio", name: "zf-how", value: "self", checked: "", id: "zf-how-self" }), " You validate yourself ", el("small", { text: " Everyone waits for you. You or your Host lets each person in from the Game dashboard." })));
+    box.append(how);
+    box.append(el("h3", { text: "How big is your game?" }));
+    const sel = el("select", { id: "zf-size", "aria-label": "Size of your game", onchange: (e) => { who.upTo = Number(e.target.value); draw(); } });
+    for (const k of choices) sel.append(el("option", { value: String(k.upTo), ...(who.upTo === k.upTo ? { selected: "" } : {}) }, k.label));
+    box.append(sel);
+    const go = el("button", { type: "button", class: "zf-go", id: "zf-save2", onclick: async () => {
+      const bad = whoProblems(who, choices);
+      if (bad.length) { msg.textContent = bad[0]; return; }
+      if (!state.eid) { msg.textContent = "Please save step 1 first."; return; }
+      go.disabled = true; msg.textContent = "Saving…";
+      try { await call("PATCH", `/api/z/${state.eid}/settings`, audienceSettings(who.card, who.upTo)); done(2); }
+      catch (e) { go.disabled = false; msg.textContent = e.message; }
     } }, "Save and continue");
     box.append(msg, go);
   };

@@ -38,3 +38,9 @@
   .zf-msg { color: #ffb3b3; }
   .zf-go { background: #8fb3ff; color: #0a1630; }
 }
+.zf-cards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.zf-card { text-align: left; min-height: 44px; padding: 12px 14px; border-radius: 12px; border: 1px solid #b9c4d8; background: #fff; color: #10223f; font: inherit; cursor: pointer; display: grid; gap: 4px; }
+.zf-card.on { border-color: #0b3d91; box-shadow: 0 0 0 2px #0b3d91; }
+.zf-opt { display: block; padding: 8px 0; font-weight: 600; }
+.zf-opt small { display: block; font-weight: 400; margin-left: 28px; }
+@media (prefers-color-scheme: dark) { .zf-card { background: #14203a; color: #e6edf9; border-color: #3a4a6e; } .zf-card.on { border-color: #8fb3ff; box-shadow: 0 0 0 2px #8fb3ff; } }
