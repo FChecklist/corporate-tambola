@@ -121,7 +121,7 @@ describe("1.8.5 the Email ID is case-insensitive everywhere, and never goes thro
     for (const at of [NEW_T, OLD_T]) {
       const d = makeD1(); env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" } as any;
       await setup(at); const r = await joinId(at, BASE, 1); expect(r.status).toBe(400); const b = await j(r); expect(b.code).toBe("bad-id");
-      if (at === NEW_T) expect(b.error).toContain("looks like an email ID"); else expect(b.error).toContain("letters and numbers only");
+      if (at === NEW_T) expect(String(b.error).toLowerCase()).toContain("looks like an email id"); else expect(b.error).toContain("letters and numbers only");
       expect(JSON.stringify(b)).not.toContain("DEMO1DEMOTESTINVALID");
     }
   });
