@@ -50,11 +50,12 @@ describe("accepted before the version moved: nobody is locked out", () => {
   });
   test("a Host whose acceptance carries the old version keeps working (people list); an organizer whose account was made under the old version keeps working", async () => {
     const key = await organizer("old@acme.com"); await game(key, "OV-3");
-    const host = (await j(await call("POST", "/api/org/host", { label: "Priya", email: "priya@acme.com" }, key))).hostKey as string;
+    const host = (await j(await call("POST", "/api/org/host", { label: "Priya", email: "priya@acme.com", e: "OV-3" }, key))).hostKey as string;
     expect((await call("POST", "/api/host/setup/email", { email: "priya@acme.com", consent: ticks("K5") }, host)).status).toBe(200);
     backdate("K5"); backdate("K2"); backdate("K1");
     expect((await call("GET", "/api/z/OV-3/people", undefined, key)).status).toBe(200); // the organizer
-    expect((await call("GET", "/api/z/OV-3/people", undefined, host)).status).toBe(200); // the Host
+    const who = await call("GET", "/api/whoami", undefined, host); expect(who.status).toBe(200); expect((await j(who)).kind).toBe("host"); // the Host is not asked for a tick again (no recorded-consent gate on Hosts)
+    expect((await call("POST", "/api/host/setup/email", { email: "priya@acme.com", consent: { v: CONSENT_VERSION, boxes: boxesOf("K5") } }, host)).status).toBeLessThan(500);
     expect((await call("GET", "/api/z/OV-3/info")).status).toBe(200);
     expect((await call("PATCH", "/api/z/OV-3/settings", { name: "Still mine" }, key)).status).toBeLessThan(400); // the organizer still edits
   });

@@ -3,7 +3,7 @@
 // FALSIFIED BY: open-ignores-rule-date, emailmiss-not-erased, email-key-kept-on-leave, privacy-silent-about-email
 import { beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join as pjoin } from "node:path";
 import { handle, type Env } from "../src/worker";
 import { CONSENT_VERSION, boxesOf, type ConsentKind } from "../src/consent";
 import { erasePersonal } from "../src/lifecycle";
@@ -17,17 +17,17 @@ const call = (method: string, path: string, body?: unknown, key?: string, now = 
 const j = async (r: Response) => (await r.json()) as any;
 const ticks = (k: ConsentKind) => ({ v: CONSENT_VERSION, boxes: boxesOf(k) });
 const dev = (i: number) => i.toString(16).padStart(4, "0").repeat(8);
-const ROOT = join(import.meta.dir, "../../..");
-const rd = (f: string) => readFileSync(join(ROOT, f), "utf8").replace(/\r\n/g, "\n");
+const ROOT = pjoin(import.meta.dir, "../../..");
+const rd = (f: string) => readFileSync(pjoin(ROOT, f), "utf8").replace(/\r\n/g, "\n");
 
 beforeEach(() => {
   const d = makeD1({ strictHosts: true }); raw = d.raw; ip = 0;
   env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt", DATA_KEY: "k", TEST_MODE: "1", FREE_LAUNCH: "1" } as Env;
 });
 async function game(id: string, t: number, over: Record<string, unknown> = {}) {
-  const key = (await j(await call("POST", "/api/start", { email: "boss@acme.com", consent: ticks("K2") }, undefined, t))).token as string;
+  const key = (await j(await call("POST", "/api/start", { email: `boss.${id.toLowerCase()}@acme.com`, consent: ticks("K2") }, undefined, t))).token as string;
   expect((await call("POST", "/api/z", { id, startRound: startOf(t), callSeconds: 6, cap: 100, ...over }, key, t)).status).toBe(200);
-  expect((await call("POST", `/api/z/${id}/publish`, { email: "boss@acme.com", phone: "98765 43210", consent: ticks("K1") }, key, t)).status).toBe(200);
+  expect((await call("POST", `/api/z/${id}/publish`, { email: `boss.${id.toLowerCase()}@acme.com`, phone: "98765 43210", consent: ticks("K1") }, key, t)).status).toBe(200);
   return key;
 }
 const join = (id: string, i: number, email?: string, t = T_NEW) => call("POST", `/api/z/${id}/join`, { phone: "98111005" + String(10 + i), name: "P" + i, device: dev(i), ...(email ? { email } : {}), consent: ticks("K4") }, undefined, t);
