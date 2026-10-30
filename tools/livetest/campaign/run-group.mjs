@@ -17,9 +17,9 @@ if (LAYER === "C" && !isReal(BASE)) { console.error("layer C is the real site: -
 if (LAYER !== "C" && isReal(BASE)) { console.error(`layer ${LAYER} runs on a LOCAL server; ${BASE} is the real site`); process.exit(2); }
 if (isReal(BASE) && process.env.CAMPAIGN_REAL !== "yes") { console.error(`REFUSED: ${BASE} is the real site. Layer C needs the boss's go: set CAMPAIGN_REAL=yes.`); process.exit(2); }
 mkdirSync(OUT, { recursive: true });
-const cases = JSON.parse(readFileSync(`${ROOT}/tools/livetest/usecases-100.json`, "utf8")).cases.filter((c) => c.group === GROUP && c.layers.includes(LAYER));
+const cases = JSON.parse(readFileSync(`${ROOT}/tools/livetest/usecases-100.json`, "utf8")).cases.filter((c) => c.group === GROUP && c.layers.includes(LAYER) && (!opt("only", "") || opt("only", "").split(",").includes(c.id))); // --only UC-G1-01,UC-G2-09 runs just those
 const clock = isReal(BASE) ? null : await readClock(BASE); if (clock) console.log(`compressed clock x${clock.speed} with the stand-in beacon`);
-const meter = new RequestMeter(BASE), api = makeApi(BASE, meter), browser = await launch(), results = []; const t0 = Date.now();
+const meter = new RequestMeter(BASE, isReal(BASE) ? {} : { limit: Infinity }), api = makeApi(BASE, meter), browser = await launch(), results = []; const t0 = Date.now();
 console.log(`${GROUP} layer ${LAYER} run ${RUN}: ${cases.length} cases on ${BASE}; meter ${meter.total}/${DAILY_LIMIT}`);
 try {
   for (const c of cases) {

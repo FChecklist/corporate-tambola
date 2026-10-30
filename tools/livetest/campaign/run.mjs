@@ -15,7 +15,7 @@ const cases = (want.length ? cat.filter((c) => want.includes(c.id)) : cat).filte
 if (isReal(BASE) && process.env.CAMPAIGN_REAL !== "yes") { console.error(`REFUSED: ${BASE} is the real site. Layer C needs the boss's go: set CAMPAIGN_REAL=yes.`); process.exit(2); }
 if (!cases.length) { console.error("no case selected for layer " + LAYER); process.exit(2); }
 const clock = isReal(BASE) ? null : await readClock(BASE); if (clock) console.log(`compressed clock x${clock.speed} with the stand-in beacon`);
-const meter = new RequestMeter(BASE);
+const meter = new RequestMeter(BASE, isReal(BASE) ? {} : { limit: Infinity });
 console.log(`run ${RUN}: ${cases.length} case(s) on ${BASE} (layer ${LAYER}); meter today ${meter.total}/${DAILY_LIMIT}`);
 const api = makeApi(BASE, meter), browser = await launch(), results = [];
 try {

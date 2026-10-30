@@ -7,7 +7,7 @@ const LONG = { startInSec: 900 }; // nobody needs the numbers to run in these ca
 const COHOST_FROM = 1_000_000_000;
 const sha256 = (s) => createHash("sha256").update(s).digest("hex");
 const waitPid = (p, ms = 45000) => p.page.waitForFunction(() => window.__rt && window.__rt.pid, null, { timeout: ms }).then(() => true).catch(() => false);
-const waiting = async (api, g, key) => ((await api("GET", `/api/z/${g.tag.id}/waiting`, undefined, key)).body.waiting || []);
+const waiting = async (api, g, key) => { const r = await api("GET", `/api/z/${g.tag.id}/waiting`, undefined, key); if (!r.ok) throw new Error(`waiting list refused (${r.status}): ` + JSON.stringify(r.body).slice(0, 140)); return r.body.waiting || []; };
 const decide = (api, g, key, wid, decision) => api("POST", `/api/z/${g.tag.id}/waiting/${wid}`, { decision }, key);
 const listGame = (o = {}) => ({ ...LONG, settings: { whoCanJoin: "list", ...(o.settings || {}) }, ...o });
 const mk = (api, runId, c, o) => createGame(api, runId, c.id, { startInSec: o.startInSec, cap: o.cap, settings: o.settings, rewards: o.rewards });
@@ -175,9 +175,9 @@ export const IMPL = {
       const m1 = await joinPlayer(browser, base, meter, g.tag.id, fakePhone(), { checkin: false, query: "&from=1&c=family" }); const m2 = await joinPlayer(browser, base, meter, g.tag.id, fakePhone(), { checkin: false, query: "&from=1&c=family" }); ps.push(m1, m2);
       ck("both members wait with the family words", /family host approves your entry/.test(await text(m1)) && /family host approves your entry/.test(await text(m2)));
       await host.page.waitForSelector('[data-fam="admit"]', { timeout: 80000 }).catch(() => {});
-      await host.page.click('[data-fam="admit"]').catch(() => {}); await sleep(1500);
-      await host.page.waitForSelector('[data-fam="decline"]', { timeout: 40000 }).catch(() => {}); await host.page.click('[data-fam="decline"]').catch(() => {});
-      await sleep(8000);
+      const pressedAdmit = await host.page.click('[data-fam="admit"]', { timeout: 8000 }).then(() => true).catch(() => false); ck("the family host pressed Admit (the button was there)", pressedAdmit); await sleep(1500);
+      await host.page.waitForSelector('[data-fam="decline"]', { timeout: 40000 }).catch(() => {}); const pressedDecline = await host.page.click('[data-fam="decline"]', { timeout: 8000 }).then(() => true).catch(() => false); ck("the family host pressed Decline on the other request", pressedDecline);
+      for (let i = 0; i < 45 && !((await hasTicket(m1)) || (await hasTicket(m2))); i++) await sleep(1000); await sleep(4000); // the member's page asks again every few seconds
       const got = [await hasTicket(m1), await hasTicket(m2)]; ck("exactly one family member got in", got.filter(Boolean).length === 1, got.join(","));
       const loser = got[0] ? m2 : m1; ck("the other reads the polite message", /could not add you|talk to whoever/i.test(await text(loser)));
     } finally { await closeAll(ps); }

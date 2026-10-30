@@ -12,7 +12,7 @@ export async function createGame(api, runId, caseId, o = {}) {
   const tag = tagOf(runId, caseId);
   const st = await api("POST", "/api/start", { email: tag.email });
   if (!st.ok) throw new Error("start refused: " + JSON.stringify(st.body).slice(0, 200));
-  const key = st.body.token;
+  const key = st.body.token; if (!key) throw new Error("start gave no organizer key (an e-mail that already has an account?): " + JSON.stringify(st.body).slice(0, 160));
   register({ id: tag.id, run: runId, case: caseId, key, email: tag.email });
   const startRound = roundAt(now() + (o.startInSec ?? 150) * 1000);
   const mk = await api("POST", "/api/z", { id: tag.id, startRound, callSeconds: o.callSeconds ?? 6, cap: o.cap ?? 10, demo: true, name: tag.name }, key);
@@ -34,16 +34,20 @@ export async function newContext(browser, base, meter, extra = {}) {
 export async function joinPlayer(browser, base, meter, id, phone, { checkin = true, name, emp, mail, query = "", routes } = {}) {
   const ctx = await newContext(browser, base, meter); const page = await ctx.newPage(); const errs = []; page.on("pageerror", (e) => errs.push(String(e).slice(0, 140)));
   if (routes) await routes(page);
-  await page.goto(`${base}/z.html?e=${id}${query}`, { waitUntil: "load" });
-  await page.waitForSelector("[data-cbc='K4'] input[data-box]", { timeout: 25000 });
-  const bx = page.locator("[data-cbc='K4'] input[data-box]"); for (let i = 0; i < await bx.count(); i++) await bx.nth(i).check({ force: true }).catch(() => {});
-  if (phone && (await page.$("#ph"))) await page.fill("#ph", phone); if (emp && (await page.$("#emp"))) await page.fill("#emp", emp); if (mail && (await page.$("#mail"))) await page.fill("#mail", mail); if (name && (await page.$("#nm"))) await page.fill("#nm", name);
-  await page.click("#go");
+  await page.goto(`${base}/z.html?e=${id}${query}`, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector("[data-cbc='K4'] input[data-box]", { timeout: 60000 });
+  // The whole form is filled and sent inside the page in one step: with a compressed clock the page redraws its form many times a second and a normal fill/click loses its target (Playwright waits for a stable element and times out).
+  await page.evaluate((v) => {
+    for (const b of document.querySelectorAll("[data-cbc='K4'] input[data-box]")) if (!b.checked) { b.checked = true; b.dispatchEvent(new Event("input", { bubbles: true })); b.dispatchEvent(new Event("change", { bubbles: true })); }
+    for (const [id, val] of [["ph", v.phone], ["emp", v.emp], ["mail", v.mail], ["nm", v.name]]) { const e = val && document.getElementById(id); if (e) { e.value = val; e.dispatchEvent(new Event("input", { bubbles: true })); e.dispatchEvent(new Event("change", { bubbles: true })); } }
+    document.getElementById("go").click();
+  }, { phone, emp, mail, name });
   const p = { page, ctx, errs, text: async () => (await page.locator("body").innerText()).replace(/\s+/g, " "), joined: false };
   await Promise.race([page.waitForFunction(() => window.__rt && window.__rt.pid, null, { timeout: 25000 }).then(() => { p.joined = true; }), sleep(25000)]).catch(() => {});
   if (p.joined && checkin) { // check-in is required for new games and opens 5 minutes before the start
     await page.waitForSelector("#ckokn", { timeout: 20000 }).catch(() => {});
-    if (await page.$("#ckokn")) { await page.check("#ckokn", { force: true }); await page.check("#ckokm", { force: true }); await page.fill("#ckcode", (await page.textContent("#ckshow")).trim()); await page.click("#cksubmit"); await sleep(1500); }
+    if (await page.$("#ckokn")) { // done inside the page in one step: with a compressed clock the check-in card redraws many times a second and a normal click can lose its target
+      await page.evaluate(() => { const t = (id) => { const e = document.getElementById(id); if (e && !e.checked) { e.checked = true; e.dispatchEvent(new Event("input", { bubbles: true })); e.dispatchEvent(new Event("change", { bubbles: true })); } }; t("ckokn"); t("ckokm"); const c = document.getElementById("ckcode"), sh = document.getElementById("ckshow"); if (c && sh) { c.value = sh.textContent.trim(); c.dispatchEvent(new Event("input", { bubbles: true })); } const b = document.getElementById("cksubmit"); if (b) b.click(); }).catch(() => {}); await sleep(1500); }
   }
   return p;
 }
@@ -54,7 +58,7 @@ export const mkChecks = () => { const checks = []; return { checks, ck: (n, ok, 
 // ---- COMPRESSED TIME (layer B on the LOCAL server only). The local server can run with CLOCK_SPEED=N and FAKE_BEACON=1 (apps/edge/src/local.ts, never part of the production worker).
 // Then every browser context gets the same warped clock (a script injected by this tool), the real beacon hosts are blocked, and the phone runtime is told to accept the stand-in beacon (the same patch the DOM test harness uses).
 let CLOCK = null;
-export const setClock = (c) => { CLOCK = c && c.speed > 1 && c.fakeBeacon ? c : null; };
+export const setClock = (c) => { CLOCK = c && c.fakeBeacon ? c : null; }; // the stand-in beacon patch is needed at speed 1 too (a server with FAKE_BEACON and no compression)
 export const speed = () => (CLOCK ? CLOCK.speed : 1);
 /** Server time in ms: the warped clock when compressed, else the wall clock. */
 export const now = () => (CLOCK ? CLOCK.base + (Date.now() - CLOCK.startReal) * CLOCK.speed : Date.now());
@@ -66,7 +70,7 @@ const warpScript = (c) => `(() => { const RD = Date.now.bind(Date), PN = perform
 const PHONE_PATCH = ";(function(){try{var O=ZG.PhoneRuntime;ZG.PhoneRuntime=class extends O{constructor(e,d){super(e,Object.assign({},d,{verify:function(x){return x.signature==='aa'}}))}}}catch(e){}})();";
 async function warp(ctx) {
   if (!CLOCK) return;
-  await ctx.addInitScript(warpScript(CLOCK));
+  if (CLOCK.speed > 1) await ctx.addInitScript(warpScript(CLOCK));
   await ctx.route((u) => /(^|\.)drand\.sh$|^drand\.cloudflare\.com$/.test(u.hostname), (r) => r.abort("blockedbyclient")); // only our own server's stand-in beacon is used
   await ctx.route("**/zgame.js*", async (route) => { const r = await route.fetch(); await route.fulfill({ response: r, body: (await r.text()) + PHONE_PATCH }); });
 }
@@ -87,8 +91,15 @@ export async function openConsole(env, g, key, { flow = "old", extra = "" } = {}
 }
 /** A Host or a Co-host of this game: the organizer adds them, they accept the role. Returns the key. */
 export async function addRole(api, g, kind, label = "Role") {
-  const r = kind === "host" ? await api("POST", "/api/org/host", { label, email: demoEmail(), e: g.tag.id }, g.key) : await api("POST", "/api/org/cohost", { label, phone: fakePhone(), e: g.tag.id }, g.key);
-  const key = r.body.hostKey || r.body.cohostKey; if (!key) throw new Error(kind + " not added: " + JSON.stringify(r.body).slice(0, 160));
+  const email = demoEmail();
+  const r = kind === "host" ? await api("POST", "/api/org/host", { label, email, e: g.tag.id }, g.key) : await api("POST", "/api/org/cohost", { label, phone: fakePhone(), e: g.tag.id }, g.key);
+  let key = r.body.hostKey || r.body.cohostKey; if (!key) throw new Error(kind + " not added: " + JSON.stringify(r.body).slice(0, 160));
+  if (kind === "host") { // a Host must finish setup first (mobile, then e-mail with the 6-digit code); the TEST server hands the code back as devCode. The key that comes back is the Host's own lasting key.
+    const m = await api("POST", "/api/host/setup/mobile", { mobile: fakePhone() }, key); if (!m.ok) throw new Error("host mobile refused: " + JSON.stringify(m.body).slice(0, 160));
+    const e = await api("POST", "/api/host/setup/email", { email }, key); if (!e.ok || !e.body.devCode) throw new Error("host e-mail step refused (no devCode: is the server in TEST mode?): " + JSON.stringify(e.body).slice(0, 160));
+    const v = await api("POST", "/api/host/setup/email/verify", { code: e.body.devCode }, key); if (!v.ok || !v.body.token) throw new Error("host code refused: " + JSON.stringify(v.body).slice(0, 160));
+    key = v.body.token;
+  }
   return key;
 }
 export const acceptRole = (api, key) => api("POST", "/api/org/role/accept", {}, key);
