@@ -55,6 +55,17 @@ Step 3 lives only in the Tambola console (`zc-flow-prizes.js` replaces `registry
 
 ---
 
+# RC 1.8.5 AUDIT FIXES A to H (coder to test author)
+Exact behaviour and place of each fix. NOTE: test C02 in the test branch asserts the OLD literal `${idWord(vf.idKind)}` text of guide.js and must change (item B).
+- **A** `apps/edge/src/hostsetup.ts` (lines 1, 28, 55, 118, 123): every account / host e-mail uses `normAccountEmail` (NFKC, trim, lower case; inner spaces KEPT). `POST /api/host/setup/email` with `john doe@acme.com` (or full-width `＠`) answers 400 "Please enter a valid e-mail address." and sends no code. `emailHashOf` uses the same form, so it matches the login routes (worker.ts 975, 988). Participant Email IDs still remove inner spaces.
+- **B** `apps/web/public/guide.js` line 87: matchers are literal sentences the server sends: "Enter your Email ID", "Enter your mobile number or your Email ID" (employee forms are on line 51). No template syntax in the file.
+- **C** `apps/web/public/guide.js` line 51: new card for "This looks like an Email ID. This game asks for an employee ID...": title "This game asks for an employee ID, not an email"; tells the person to type their employee ID (letters and numbers), not an email; guides to `#emp`. That sentence is no longer in the Email-ID card.
+- **D** `apps/edge/src/worker.ts` line 2263 (settings PATCH): changing idKind (email vs employee) when the game has any participant row answers 409, code `idkind-locked`, "You already have people listed. Start a new game to use a different kind of ID." Same for an older game switched to email. No people: allowed. Same kind sent again: allowed.
+- **E** `apps/web/public/z.js` line 179 (`emp()`): `<p id="empread" aria-live="polite">` sits directly under the ID box, the input has `aria-describedby="empread"`; `phone()` no longer renders it. Hint logic at line 1116 (no hint when an employee-ID game gets a value with "@").
+- **F** `apps/web/public/z.js` line 494 (`completedView`): INFO.open true: "played in groups, with a link from the organizer: company teams and their families"; otherwise "in close groups, by invitation only".
+- **G** `apps/edge/src/worker.ts` lines 142 and 1995: GET /api/z/<id>/info carries `endedAtMs` (number, from the `life` row, set once when the game ends by the phones' vote or the schedule bound; absent when no end is recorded or the game was cancelled; one number, no names or amounts). `apps/web/public/z.js` lines 53 and 491: `INFO.endedAtMs` is kept once; `endMsOf` returns it when present, otherwise the old estimate (start + calls x seconds).
+- **H** `apps/web/public/zc-flow-tambola.js` lines 117 to 125: the "Which ID?" radio group is added only when the saved game's `verify` (read once from GET /api/z/<id>/summary) is not "mobile". Copy: "The ID your people type to join. An Email ID is read in lower case. Older games keep the way they always read an employee ID."
+
 # RELEASE CANDIDATE rc/tambola-1.8.5 (coder to test author)
 Branch `rc/tambola-1.8.5` = `feat/tambola-1.8.5-empid` (275fda6: uniform employee ID, case-insensitive Email ID, idKind) + `origin/feat/1.8.4-ui` (e2b214e: Game completed page, join page, game screen prize rows, Host header). Version 1.8.5: the newest entry of `apps/edge/src/releases.json` (the build stamps `version.json` and the footer from it). No tests were run or edited by the coder.
 
