@@ -1,4 +1,62 @@
-<<<<<<< HEAD
+# RELEASE CANDIDATE rc/tambola-1.8.5 (coder to test author)
+Branch `rc/tambola-1.8.5` = `feat/tambola-1.8.5-empid` (275fda6: uniform employee ID, case-insensitive Email ID, idKind) + `origin/feat/1.8.4-ui` (e2b214e: Game completed page, join page, game screen prize rows, Host header). Version 1.8.5: the newest entry of `apps/edge/src/releases.json` (the build stamps `version.json` and the footer from it). No tests were run or edited by the coder.
+
+## Merge notes
+- One conflict only: `docs/TEST_HANDOFF.md` (both branches added it). Both documents are kept below (1.8.4 first, then 1.8.5). No product-code conflicts: git merged `z.js` and `zc-flow-tambola.js` (both branches edit them) without conflict. The tester should look at the join page (the 1.8.5 idKind label and "The system will read this as ..." hint beside the 1.8.4 join-page changes) and at the new console Step 2 ("Which ID?").
+- `EMP_CLEAN_FROM_MS` (`apps/edge/src/empid.ts`) is the deploy-time constant of the employee-ID rule: NOT filled. The release session sets it to the exact deploy instant (ms) right before deploy. Until then it is 2026-10-31 00:00 UTC. `APPROVAL_RULES_FROM_MS` (`approvals.ts`) already holds the 1.8.0 deploy instant.
+
+## How to start (the coder started no servers)
+- Engine tests, one file at a time: `cd apps/edge && bun test test/<file>.test.ts` (take `C:\ct\heavy.lock`, at least 600 MB free).
+- Local site with the real Worker: `bun tools/sim2/server.ts` (port 8801).
+- Browser flows: join page `/z.html?e=<id>`, organizer console `/zc.html?flow=new&e=<id>`.
+
+## Files changed by this release candidate
+Everything listed in the two sections below (1.8.4 and 1.8.5/idKind), plus `apps/edge/src/releases.json` (new 1.8.5 entry, release time 30 Oct 2026, 07:38 IST).
+
+---
+
+# TEST HANDOFF for 1.8.4 (coder to test author)
+
+Branch feat/1.8.4-ui (base tag tambola-v1.8.3 = 751df6c). Product code only; no tests were run or edited by the coder, except the one guard test no-null-text-184.test.ts added with the Paymentnull fix (b6ee745).
+Mock source: http://127.0.0.1:8765/ (folder C:\ct\test-sites\data\ui\ux-mock-5step). Gap report: C:\ct\test-sites\data\ui\compare-2026-10-30\gap-report.md and index.html.
+
+## Group 1: Game completed + 30-minute message (z.js)
+What changed
+- The end card heading is now "Game completed" (was "Game complete") and shows "Game ID <id>" and a line: "Your results stay on this page for 30 minutes after the game. After that this page only says the game is completed."
+- A phone that opens the page 30 or more minutes after the game ended (and did not see the game live in that visit) shows only the calm page: shared line, "Game completed", Game ID, "This game is now over. Thank you for being part of it.", the 30-minute line and the Share button. Client-side only: end time = scheduled start + numbers called x gap (no engine change, so 1.8.5 does not collide).
+Tests that will need updating (exact source or text pins)
+- apps/web/test/player-look.test.ts line 41 pins the source string `Game complete${demoTag()}`; lines 44-45 say the page is "hidden because the engine cannot do it" (the page now exists, computed on the phone).
+- pages.test.ts /Game complete/ regexes still match "Game completed".
+New tests to write
+- ended less than 30 minutes ago: results + "Game completed" + Game ID + 30-minute line; ended 31 minutes ago opened fresh: only the calm page, no ticket, no prizes; a phone that watched the end keeps the results even after 30 minutes pass in the same visit.
+- no word "private" in the new text; Hindi/other-language not involved.
+
+## Group 2: join page chips + before the game (z.js, z.css, zsw.js)
+- Join page: under the title, small chips: company name (when a brand is set), day and time in India time, "Game ID <id>" (id zjchips / joinchips). Not shown in the free demo.
+- Before the game (check-in games): a line "You are in! Game starts in <h m>." above "Check-in opens at ...". The ticket itself still opens only after check-in (owner rule since 1.8.0), so the mock's pre-start ticket is NOT shown: the gap stays for that one point.
+- zsw.js cache name ct-game-v40 -> ct-game-v41 (files changed shape). Any test that pins v40 must follow.
+- Tests to write: chips present with and without a brand; absent in demo; "You are in!" present in the check-in-closed state and absent once check-in is open.
+
+## Group 3: final results + Rules row (z.js, z.css)
+- Game over: a "Final results" card (id finalresults) after the Game completed card: one row per prize, "Ticket N" for the winner, "You" on the rows this phone won (class me), lucky draws that were published. Not shown in the demo.
+- In the game: the three rules sit under one collapsed "Rules" row (details id zrulesrow, the list keeps id zrules). Hidden after the game (as before).
+- NOT DONE in this group: the prize list during the game is still cards ("To win" tag with CLAIM), the mock has flat rows with a grey CLAIM at the right. Same for the compact Last 5 + ball row. These are pure restyles; they stay open in the gap report (rows 23, 50).
+- Tests to write: final results rows for 1, 5 prizes; "You" only on own wins; Rules row present in play and absent when ended; id zrules still exists.
+
+## Group 4: Host ribbon (zc-flow-tambola.js, zc-flow-tambola.css; the vendored pack is untouched)
+- A signed-in Host sees, under "Host: email / Organizer: email", the ribbon "You are a Host of this game <email> Sign out" (ids zt-hostribbon, zt-signout) and the sentence "As a Host you can make any change in the game, just like the organizer, and you help run the game and let people in. The organizer and Hosts can also play the game." (id zt-hostnote). Sign out clears the stored key and goes to /zc.html.
+- Honest note for the compare evidence: my live Host and organizer step screenshots (data/ui/compare-2026-10-30/live/host-*.png, org-step2..5) were taken WITHOUT a working sign-in (the page showed the draft view), so the gap-report rows for Host sign-in, Host dashboard, organizer steps 1-5 and the pill stepper are NOT valid evidence. The test author must re-capture them with the key set the way zc.html reads it. The Paymentnull finding came from an authenticated shot and is real.
+- Still open from the Host list: the organizer "5-bar step progress" and the white header strip with Host/Organizer emails on the right are pack-owned (pack/zc-flow.js, console repo) and are not changed here.
+
+## Open after 1.8.4 (not done, for the owner's list)
+- Game-screen prize rows (flat rows with grey CLAIM) and the compact Last 5 + ball row (restyle only).
+- Ticket shown before the game start for check-in games (blocked by the check-in rule, owner decision needed).
+- Pack-owned items above; port of the Paymentnull one-liner to the console pack source (sent to the master-console session).
+- UC-G2-13 finding (family Approve): the case starts the game 900 s ahead, which is exactly FAMILY_CUTOFF (15 min), so Approve is refused by design. Use startInSec >= 1500 in that case. Not a product bug.
+
+
+---
+
 # Test handoff: Tambola engine 1.8.5 (uniform employee ID, case-insensitive Email ID)
 
 Branch `feat/tambola-1.8.5-empid` (from `wip/join-redesign`). Coder: product code only. Tester: write and run all tests from this note; failures go back through the boss.
@@ -81,43 +139,4 @@ Test files for idKind are to be written by the test author (suggested `apps/edge
 ## Not done (product)
 - Old console (`zc.js`) has no "Which ID?" control (only the new console Step 2 has it).
 - List viewer labels still say "Employee ID" in tables for an Email-ID game (the stored value is the email).
-=======
-# TEST HANDOFF for 1.8.4 (coder to test author)
 
-Branch feat/1.8.4-ui (base tag tambola-v1.8.3 = 751df6c). Product code only; no tests were run or edited by the coder, except the one guard test no-null-text-184.test.ts added with the Paymentnull fix (b6ee745).
-Mock source: http://127.0.0.1:8765/ (folder C:\ct\test-sites\data\ui\ux-mock-5step). Gap report: C:\ct\test-sites\data\ui\compare-2026-10-30\gap-report.md and index.html.
-
-## Group 1: Game completed + 30-minute message (z.js)
-What changed
-- The end card heading is now "Game completed" (was "Game complete") and shows "Game ID <id>" and a line: "Your results stay on this page for 30 minutes after the game. After that this page only says the game is completed."
-- A phone that opens the page 30 or more minutes after the game ended (and did not see the game live in that visit) shows only the calm page: shared line, "Game completed", Game ID, "This game is now over. Thank you for being part of it.", the 30-minute line and the Share button. Client-side only: end time = scheduled start + numbers called x gap (no engine change, so 1.8.5 does not collide).
-Tests that will need updating (exact source or text pins)
-- apps/web/test/player-look.test.ts line 41 pins the source string `Game complete${demoTag()}`; lines 44-45 say the page is "hidden because the engine cannot do it" (the page now exists, computed on the phone).
-- pages.test.ts /Game complete/ regexes still match "Game completed".
-New tests to write
-- ended less than 30 minutes ago: results + "Game completed" + Game ID + 30-minute line; ended 31 minutes ago opened fresh: only the calm page, no ticket, no prizes; a phone that watched the end keeps the results even after 30 minutes pass in the same visit.
-- no word "private" in the new text; Hindi/other-language not involved.
-
-## Group 2: join page chips + before the game (z.js, z.css, zsw.js)
-- Join page: under the title, small chips: company name (when a brand is set), day and time in India time, "Game ID <id>" (id zjchips / joinchips). Not shown in the free demo.
-- Before the game (check-in games): a line "You are in! Game starts in <h m>." above "Check-in opens at ...". The ticket itself still opens only after check-in (owner rule since 1.8.0), so the mock's pre-start ticket is NOT shown: the gap stays for that one point.
-- zsw.js cache name ct-game-v40 -> ct-game-v41 (files changed shape). Any test that pins v40 must follow.
-- Tests to write: chips present with and without a brand; absent in demo; "You are in!" present in the check-in-closed state and absent once check-in is open.
-
-## Group 3: final results + Rules row (z.js, z.css)
-- Game over: a "Final results" card (id finalresults) after the Game completed card: one row per prize, "Ticket N" for the winner, "You" on the rows this phone won (class me), lucky draws that were published. Not shown in the demo.
-- In the game: the three rules sit under one collapsed "Rules" row (details id zrulesrow, the list keeps id zrules). Hidden after the game (as before).
-- NOT DONE in this group: the prize list during the game is still cards ("To win" tag with CLAIM), the mock has flat rows with a grey CLAIM at the right. Same for the compact Last 5 + ball row. These are pure restyles; they stay open in the gap report (rows 23, 50).
-- Tests to write: final results rows for 1, 5 prizes; "You" only on own wins; Rules row present in play and absent when ended; id zrules still exists.
-
-## Group 4: Host ribbon (zc-flow-tambola.js, zc-flow-tambola.css; the vendored pack is untouched)
-- A signed-in Host sees, under "Host: email / Organizer: email", the ribbon "You are a Host of this game <email> Sign out" (ids zt-hostribbon, zt-signout) and the sentence "As a Host you can make any change in the game, just like the organizer, and you help run the game and let people in. The organizer and Hosts can also play the game." (id zt-hostnote). Sign out clears the stored key and goes to /zc.html.
-- Honest note for the compare evidence: my live Host and organizer step screenshots (data/ui/compare-2026-10-30/live/host-*.png, org-step2..5) were taken WITHOUT a working sign-in (the page showed the draft view), so the gap-report rows for Host sign-in, Host dashboard, organizer steps 1-5 and the pill stepper are NOT valid evidence. The test author must re-capture them with the key set the way zc.html reads it. The Paymentnull finding came from an authenticated shot and is real.
-- Still open from the Host list: the organizer "5-bar step progress" and the white header strip with Host/Organizer emails on the right are pack-owned (pack/zc-flow.js, console repo) and are not changed here.
-
-## Open after 1.8.4 (not done, for the owner's list)
-- Game-screen prize rows (flat rows with grey CLAIM) and the compact Last 5 + ball row (restyle only).
-- Ticket shown before the game start for check-in games (blocked by the check-in rule, owner decision needed).
-- Pack-owned items above; port of the Paymentnull one-liner to the console pack source (sent to the master-console session).
-- UC-G2-13 finding (family Approve): the case starts the game 900 s ahead, which is exactly FAMILY_CUTOFF (15 min), so Approve is refused by design. Use startInSec >= 1500 in that case. Not a product bug.
->>>>>>> origin/feat/1.8.4-ui
