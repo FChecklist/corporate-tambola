@@ -140,6 +140,7 @@ export async function acceptOver(env: Env, e: any, eid: string, b: any, now: num
   const people = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 1;
   if (votes >= Math.min(3, Math.max(1, Math.ceil(people / 2)))) {
     const bound = await endBoundMs(env, e);
+    if (bound <= now) return jsonFn({ ok: true, counted: true }); // the scheduled end has already passed (and may already have been shown): a late vote never moves it
     const end = Math.min(now, bound);
     await env.DB.prepare("INSERT INTO life(eid,end_ms,end_src) VALUES(?,?,'phones') ON CONFLICT(eid) DO UPDATE SET end_ms=excluded.end_ms, end_src='phones' WHERE life.end_src<>'phones' AND life.purged_ms IS NULL").bind(eid, end).run();
   }
@@ -155,7 +156,7 @@ export async function erasePersonal(env: Env, eid: string, now: number, by: stri
     env.DB.prepare("DELETE FROM kv WHERE k=? OR k=? OR k=? OR k=? OR (k >= ? AND k < ?) OR k=?").bind(`seats-base/${eid}`, `rpt/${eid}`, `rptopen/${eid}`, `rptremind/${eid}`, `rptc/${eid}/`, prefixEnd(`rptc/${eid}/`), `seats-blk/${eid}`),
     env.DB.prepare("DELETE FROM kv WHERE (k >= ? AND k < ?) OR (k >= ? AND k < ?) OR (k >= ? AND k < ?) OR (k >= ? AND k < ?) OR (k >= ? AND k < ?) OR (k >= ? AND k < ?)").bind(`present/${eid}/`, prefixEnd(`present/${eid}/`), `ckfail/${eid}/`, prefixEnd(`ckfail/${eid}/`), `idx/${eid}/`, prefixEnd(`idx/${eid}/`), `email/${eid}/`, prefixEnd(`email/${eid}/`), `emailmiss/${eid}/`, prefixEnd(`emailmiss/${eid}/`), `idmiss/${eid}/`, prefixEnd(`idmiss/${eid}/`)), // the check-in records of every participant go with their data (the winners' evidence, wev/, stays with the winners record for 365 days)
     env.DB.prepare(eraseCohostsSql).bind(eid), // the game's Co-hosts: name, mobile number and key go with the participants' data
-    env.DB.prepare("INSERT INTO life(eid,end_ms,end_src,purged_ms,report_state) VALUES(?,?, 'organizer', ?, ?) ON CONFLICT(eid) DO UPDATE SET purged_ms=?, report_state=COALESCE(life.report_state, ?)").bind(eid, now, now, by, now, by),
+    env.DB.prepare("INSERT INTO life(eid,end_ms,end_src,purged_ms,report_state) VALUES(?,?, 'purge', ?, ?) ON CONFLICT(eid) DO UPDATE SET purged_ms=?, report_state=COALESCE(life.report_state, ?)").bind(eid, now, now, by, now, by),
   ]);
   await shredParticipantAudit(env as any, eid, now); // best effort inside: a held engagement keeps its log until the hold is lifted, then the tick shreds it
 }
