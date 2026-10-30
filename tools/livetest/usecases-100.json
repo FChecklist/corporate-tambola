@@ -1,0 +1,1431 @@
+{
+ "version": 1,
+ "note": "310-DEMO-GAME-CAMPAIGN-PLAN; layers A local engine, B real Chromium local, C real site metered",
+ "cases": [
+  {
+   "id": "UC-G1-01",
+   "group": "G1",
+   "title": "Step 1: automatic start, game calls the numbers",
+   "roles": "O+9P",
+   "options": "startMode auto, callMode auto, 12 s",
+   "steps": "create a draft, pick a start 2 minutes ahead, publish, all players join, game starts by itself",
+   "expected": "numbers come every 12 s, same on every phone, no repeats",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "basic"
+  },
+  {
+   "id": "UC-G1-02",
+   "group": "G1",
+   "title": "Step 1: manual start, organizer presses Start",
+   "roles": "O+9P",
+   "options": "startMode manual",
+   "steps": "publish, players wait, organizer presses Start",
+   "expected": "game does not start by itself; after Start the first number comes",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "manual-start"
+  },
+  {
+   "id": "UC-G1-03",
+   "group": "G1",
+   "title": "Step 1: host-called numbers (organizer rolls each number)",
+   "roles": "O+9P",
+   "options": "callMode host",
+   "steps": "start, organizer presses Roll Out the Next Number for 10 numbers",
+   "expected": "one number per press, never faster than the lock, same on every phone",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "host-called"
+  },
+  {
+   "id": "UC-G1-04",
+   "group": "G1",
+   "title": "Step 2: who is the game for, open join",
+   "roles": "O+9P",
+   "options": "whoCanJoin anyone",
+   "steps": "publish, players open the common link and join with a mobile number",
+   "expected": "all 9 join without approval, 10 tickets",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "open-join"
+  },
+  {
+   "id": "UC-G1-05",
+   "group": "G1",
+   "title": "Step 2: who is the game for, list game with 9 listed people",
+   "roles": "O+9P",
+   "options": "whoCanJoin list, 9 people uploaded",
+   "steps": "upload list, publish, listed players join",
+   "expected": "listed players join directly, an unlisted one waits",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "list-join"
+  },
+  {
+   "id": "UC-G1-06",
+   "group": "G1",
+   "title": "Step 3: one ticket each, early prizes only",
+   "roles": "O+9P",
+   "options": "tickets 1, prizes early5/top/mid/bot",
+   "steps": "play to the end of the prize list",
+   "expected": "each prize won once in order, game ends when all are claimed",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "prizes"
+  },
+  {
+   "id": "UC-G1-07",
+   "group": "G1",
+   "title": "Step 3: two tickets each (Ticket A and B)",
+   "roles": "O+9P",
+   "options": "tickets 2",
+   "steps": "players see Ticket A and B, switch between them",
+   "expected": "both tickets mark; the one not played is greyed; each ticket has its own number",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "two-tickets"
+  },
+  {
+   "id": "UC-G1-08",
+   "group": "G1",
+   "title": "Step 3: Lucky Draw 1 prize",
+   "roles": "O+9P",
+   "options": "lucky draw x1",
+   "steps": "play until the draw",
+   "expected": "one lucky winner among players, never the organizer/Host/Co-host",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "lucky"
+  },
+  {
+   "id": "UC-G1-09",
+   "group": "G1",
+   "title": "Step 3: Lucky Draw 3 prizes",
+   "roles": "O+9P",
+   "options": "lucky draw x3",
+   "steps": "play until the draws",
+   "expected": "three different winners, none repeated, none from the team",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "lucky"
+  },
+  {
+   "id": "UC-G1-10",
+   "group": "G1",
+   "title": "Step 3: Super Bumper with 1, 2, 5 and 10 prizes (four runs)",
+   "roles": "O+9P",
+   "options": "tickets 2, full2 x1/2/5/10",
+   "steps": "play each configuration",
+   "expected": "Super Bumper prizes won in order, one per player, game continues until all open prizes are won",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "super-bumper"
+  },
+  {
+   "id": "UC-G1-11",
+   "group": "G1",
+   "title": "Step 4: breaks, brand and time zone",
+   "roles": "O+9P",
+   "options": "opening, closing, one break, company name, time zone Dubai",
+   "steps": "set a message break and a brand, publish, play through the break",
+   "expected": "break shown to all phones at the same moment, brand strip, time zone in the start text",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "breaks-brand"
+  },
+  {
+   "id": "UC-G1-12",
+   "group": "G1",
+   "title": "Step 5: payment demo, publish and rehearsal 1-3",
+   "roles": "O",
+   "options": "free demo (up to 10 people), rehearsals 1, 2, 3",
+   "steps": "check and publish (free), start rehearsal 1, finish it, rehearsal 2, 3",
+   "expected": "rehearsal cards unlock in order, REHEARSAL block on the rehearsal game, real game untouched",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "rehearsal"
+  },
+  {
+   "id": "UC-G2-01",
+   "group": "G2",
+   "title": "Join by listed employee ID",
+   "roles": "O+9P",
+   "options": "verify id, list of 9 IDs",
+   "steps": "player types the ID",
+   "expected": "joins with the listed name; wrong ID waits for approval",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "id-join"
+  },
+  {
+   "id": "UC-G2-02",
+   "group": "G2",
+   "title": "Join by listed email ID",
+   "roles": "O+9P",
+   "options": "verify id, IDs are emails",
+   "steps": "player types the email",
+   "expected": "joins; a typo is refused with the neutral text",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "id-join"
+  },
+  {
+   "id": "UC-G2-03",
+   "group": "G2",
+   "title": "Not on the list, Host approves",
+   "roles": "O+H+P",
+   "options": "list game, one Host",
+   "steps": "unlisted player asks, Host admits",
+   "expected": "waiting screen, then the ticket appears by itself",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "approval"
+  },
+  {
+   "id": "UC-G2-04",
+   "group": "G2",
+   "title": "Not on the list, Co-host approves own people only",
+   "roles": "O+C+2P",
+   "options": "list game, one Co-host link",
+   "steps": "player joins with the Co-host link, Co-host admits; another Co-host's person is not visible",
+   "expected": "Co-host sees and decides only requests from their own link",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "approval"
+  },
+  {
+   "id": "UC-G2-05",
+   "group": "G2",
+   "title": "Not on the list, Organizer approves",
+   "roles": "O+P",
+   "options": "list game",
+   "steps": "unlisted player asks, organizer admits and declines another",
+   "expected": "admitted gets a ticket; declined reads the polite message",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "approval"
+  },
+  {
+   "id": "UC-G2-06",
+   "group": "G2",
+   "title": "Open join with an optional email ID",
+   "roles": "O+9P",
+   "options": "open game, EMAIL_ENABLED on",
+   "steps": "players join, three give an email, one bad shape, one reused email",
+   "expected": "bad shape and reused email refused with the agreed words; no email is fine",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "email"
+  },
+  {
+   "id": "UC-G2-07",
+   "group": "G2",
+   "title": "Duplicate mobile on another device",
+   "roles": "O+2P",
+   "options": "open game",
+   "steps": "same mobile on a second browser",
+   "expected": "refused: one ticket plays on one device; no second ticket",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "duplicate"
+  },
+  {
+   "id": "UC-G2-08",
+   "group": "G2",
+   "title": "Game full: cap reached",
+   "roles": "O+3P",
+   "options": "cap 2",
+   "steps": "third player joins",
+   "expected": "told the places are taken; the first two keep their tickets",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "cap"
+  },
+  {
+   "id": "UC-G2-09",
+   "group": "G2",
+   "title": "Late join after the first numbers",
+   "roles": "O+9P",
+   "options": "open game, late join",
+   "steps": "player joins after number 10",
+   "expected": "ticket counts only from the join round, earlier numbers shown as history only",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "late-join"
+  },
+  {
+   "id": "UC-G2-10",
+   "group": "G2",
+   "title": "Cached page with the old consent version",
+   "roles": "O+P",
+   "options": "stale consent.js",
+   "steps": "join from a page that sends the old version",
+   "expected": "told the page is out of date with a Reload button; after reload joins",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "stale-consent"
+  },
+  {
+   "id": "UC-G2-11",
+   "group": "G2",
+   "title": "Reconnect: close the page and reopen",
+   "roles": "O+P",
+   "options": "any game",
+   "steps": "close the tab mid-game, open the link again",
+   "expected": "same ticket, marks kept, game position correct",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "reconnect"
+  },
+  {
+   "id": "UC-G2-12",
+   "group": "G2",
+   "title": "Two devices: second phone for the same ticket",
+   "roles": "O+P",
+   "options": "any game",
+   "steps": "open the personal link on a second device",
+   "expected": "refused with the one-device message",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "two-devices"
+  },
+  {
+   "id": "UC-G2-13",
+   "group": "G2",
+   "title": "Family pass: request, approve, decline",
+   "roles": "O+F+2P",
+   "options": "list game, invites on (family)",
+   "steps": "two family requests; host approves one, declines one",
+   "expected": "approved comes in, declined reads the polite message",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "family"
+  },
+  {
+   "id": "UC-G2-14",
+   "group": "G2",
+   "title": "Family pass: 30-minute lapse and 15-minute cutoff",
+   "roles": "O+F+2P",
+   "options": "list game, invites on",
+   "steps": "one request waits 30 minutes (test clock), one asked after the cutoff",
+   "expected": "lapsed message with ask again; cutoff message, organizer can still admit",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "family-time"
+  },
+  {
+   "id": "UC-G3-01",
+   "group": "G3",
+   "title": "Host signs in with the Host link",
+   "roles": "O+H",
+   "options": "one Host",
+   "steps": "Host opens the link, accepts the role",
+   "expected": "Host console shows the game; role chip says Host",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "host"
+  },
+  {
+   "id": "UC-G3-02",
+   "group": "G3",
+   "title": "Co-host opens the Co-host link",
+   "roles": "O+C",
+   "options": "one Co-host",
+   "steps": "Co-host accepts the role, sees the small game header",
+   "expected": "no names, no settings; role chip says Co-host",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "cohost"
+  },
+  {
+   "id": "UC-G3-03",
+   "group": "G3",
+   "title": "Co-host limit: invite up to N people",
+   "roles": "O+C+P",
+   "options": "Co-host limit 3",
+   "steps": "four people join through the Co-host link",
+   "expected": "the fourth is refused or waits per the limit text",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "cohost-limit"
+  },
+  {
+   "id": "UC-G3-04",
+   "group": "G3",
+   "title": "Who approves text per role",
+   "roles": "O+H+C",
+   "options": "list game",
+   "steps": "open each console",
+   "expected": "organizer, Host and Co-host each read only the truthful sentence",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "approves-text"
+  },
+  {
+   "id": "UC-G3-05",
+   "group": "G3",
+   "title": "Organizer vs Host controls",
+   "roles": "O+H",
+   "options": "manual start",
+   "steps": "Host tries organizer-only steps",
+   "expected": "Host cannot erase, pay or change prizes; can approve",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "role-limits"
+  },
+  {
+   "id": "UC-G3-06",
+   "group": "G3",
+   "title": "Up to 5 Hosts",
+   "roles": "O+5H",
+   "options": "five Hosts",
+   "steps": "add five Hosts, a sixth",
+   "expected": "sixth refused with the plain limit message",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "hosts-limit"
+  },
+  {
+   "id": "UC-G3-07",
+   "group": "G3",
+   "title": "Co-host without accepting",
+   "roles": "O+C",
+   "options": "Co-host key never accepted",
+   "steps": "Co-host opens the console",
+   "expected": "asked to accept the role (tick box), nothing else works",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "cohost-consent"
+  },
+  {
+   "id": "UC-G3-08",
+   "group": "G3",
+   "title": "Co-host with an old-version acceptance",
+   "roles": "O+C",
+   "options": "K5 recorded under 2026-10-15",
+   "steps": "Co-host opens the console",
+   "expected": "works as before, no tick box, no reload dead end",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "cohost-old"
+  },
+  {
+   "id": "UC-G3-09",
+   "group": "G3",
+   "title": "Co-host sees waiting list of own link only",
+   "roles": "O+2C+3P",
+   "options": "two Co-hosts",
+   "steps": "players join through each link",
+   "expected": "each Co-host sees only their own waiting people",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "cohost-scope"
+  },
+  {
+   "id": "UC-G3-10",
+   "group": "G3",
+   "title": "Organizer removes a person and the email is released",
+   "roles": "O+2P",
+   "options": "open game with email",
+   "steps": "organizer removes player 1, player 2 reuses the email",
+   "expected": "second player joins; first player cannot rejoin",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "remove"
+  },
+  {
+   "id": "UC-G4-01",
+   "group": "G4",
+   "title": "Automatic timer 12 seconds",
+   "roles": "O+9P",
+   "options": "callMode auto 12 s",
+   "steps": "watch 15 numbers",
+   "expected": "gap between numbers 12 s (+/- 1 s), the same number at the same moment on all phones",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "timer"
+  },
+  {
+   "id": "UC-G4-02",
+   "group": "G4",
+   "title": "Manual start then automatic numbers",
+   "roles": "O+9P",
+   "options": "start manual, numbers auto",
+   "steps": "Start pressed, play 10 numbers",
+   "expected": "numbers start after Start only, then every 12 s",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "manual-start"
+  },
+  {
+   "id": "UC-G4-03",
+   "group": "G4",
+   "title": "Host-called numbers with the 5-second lock",
+   "roles": "O+9P",
+   "options": "callMode host",
+   "steps": "double-press Roll Out",
+   "expected": "second press inside the lock does nothing",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "host-called"
+  },
+  {
+   "id": "UC-G4-04",
+   "group": "G4",
+   "title": "Pause when a claim is checked",
+   "roles": "O+9P",
+   "options": "claim during play",
+   "steps": "a claim is sent",
+   "expected": "claim notice on all phones; game continues as the engine does (no auto-pause)",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "claim-notice"
+  },
+  {
+   "id": "UC-G4-05",
+   "group": "G4",
+   "title": "Pause and resume by the organizer",
+   "roles": "O+9P",
+   "options": "organizer pauses",
+   "steps": "pause for a minute, resume",
+   "expected": "numbers stop, phones show Paused, then resume with no repeat",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "pause"
+  },
+  {
+   "id": "UC-G4-06",
+   "group": "G4",
+   "title": "No repeated numbers across 90",
+   "roles": "O+9P",
+   "options": "run all 90",
+   "steps": "play to the end",
+   "expected": "every number 1..90 exactly once, same order on all phones",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "sequence"
+  },
+  {
+   "id": "UC-G4-07",
+   "group": "G4",
+   "title": "Game ends at 90 numbers",
+   "roles": "O+9P",
+   "options": "prizes that cannot all be won",
+   "steps": "play 90 numbers",
+   "expected": "game ends, final screen, thank-you strip",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "end-90"
+  },
+  {
+   "id": "UC-G4-08",
+   "group": "G4",
+   "title": "Game ends when all prizes are claimed",
+   "roles": "O+9P",
+   "options": "three prizes",
+   "steps": "claim all three",
+   "expected": "ends right after the last prize, not later",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "end-prizes"
+  },
+  {
+   "id": "UC-G4-09",
+   "group": "G4",
+   "title": "Early end by the organizer",
+   "roles": "O+9P",
+   "options": "organizer stops the game",
+   "steps": "press Stop mid-game",
+   "expected": "all phones show the game over screen",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "stop"
+  },
+  {
+   "id": "UC-G4-10",
+   "group": "G4",
+   "title": "Last numbers and called count",
+   "roles": "O+9P",
+   "options": "any game",
+   "steps": "check Last 5 and N of 90 called",
+   "expected": "strip matches the real sequence on every phone",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "strip"
+  },
+  {
+   "id": "UC-G4-11",
+   "group": "G4",
+   "title": "Crossing a number twice un-crosses it",
+   "roles": "O+P",
+   "options": "any game",
+   "steps": "tap a called number twice",
+   "expected": "cross appears and disappears; a not-called number is refused in place",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "crossing"
+  },
+  {
+   "id": "UC-G4-12",
+   "group": "G4",
+   "title": "Ticket A/B switch in a two-ticket game",
+   "roles": "O+P",
+   "options": "tickets 2",
+   "steps": "switch the playing ticket",
+   "expected": "the other is greyed, both keep marking",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "two-tickets"
+  },
+  {
+   "id": "UC-G4-13",
+   "group": "G4",
+   "title": "Retro and Modern looks",
+   "roles": "O+P",
+   "options": "player look",
+   "steps": "switch look",
+   "expected": "page theme changes, ticket stays the rich element, cross visible in both",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "looks"
+  },
+  {
+   "id": "UC-G4-14",
+   "group": "G4",
+   "title": "Phone, tablet and laptop widths",
+   "roles": "O+P",
+   "options": "360, 768, 1280 px",
+   "steps": "open the player page at each width",
+   "expected": "no sideways scroll, claim button reachable",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "widths"
+  },
+  {
+   "id": "UC-G5-01",
+   "group": "G5",
+   "title": "Early Five claim, correct",
+   "roles": "O+9P",
+   "options": "prize early5",
+   "steps": "a player completes and claims",
+   "expected": "gold CLAIM, checking notice, congratulations, prize marked won",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "claim"
+  },
+  {
+   "id": "UC-G5-02",
+   "group": "G5",
+   "title": "Top line claim, correct",
+   "roles": "O+9P",
+   "options": "prize top",
+   "steps": "claim",
+   "expected": "same, winning cells gold",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "claim"
+  },
+  {
+   "id": "UC-G5-03",
+   "group": "G5",
+   "title": "Middle line claim, correct",
+   "roles": "O+9P",
+   "options": "prize mid",
+   "steps": "claim",
+   "expected": "same",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "claim"
+  },
+  {
+   "id": "UC-G5-04",
+   "group": "G5",
+   "title": "Bottom line claim, correct",
+   "roles": "O+9P",
+   "options": "prize bot",
+   "steps": "claim",
+   "expected": "same",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "claim"
+  },
+  {
+   "id": "UC-G5-05",
+   "group": "G5",
+   "title": "Four corners and Star claims",
+   "roles": "O+9P",
+   "options": "prizes corners, star",
+   "steps": "claim each",
+   "expected": "both accepted with the right cells",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "claim"
+  },
+  {
+   "id": "UC-G5-06",
+   "group": "G5",
+   "title": "Full House 1st to 5th",
+   "roles": "O+9P",
+   "options": "full x5",
+   "steps": "claim five times",
+   "expected": "five different winners, in order of completion, ordinals 1..5",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "claim-multi"
+  },
+  {
+   "id": "UC-G5-07",
+   "group": "G5",
+   "title": "Bogey: claim with nothing to claim",
+   "roles": "O+P",
+   "options": "grey CLAIM pressed",
+   "steps": "press a grey CLAIM and Submit",
+   "expected": "asked first; counts as a wrong claim; no prize",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "bogey"
+  },
+  {
+   "id": "UC-G5-08",
+   "group": "G5",
+   "title": "Wrong claim: a stale mark",
+   "roles": "O+P",
+   "options": "player marks an uncalled number",
+   "steps": "claim",
+   "expected": "claim fails with Bogey; the other prizes stay open",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "wrong-claim"
+  },
+  {
+   "id": "UC-G5-09",
+   "group": "G5",
+   "title": "Late claim after the next number",
+   "roles": "O+P",
+   "options": "claim after the next call",
+   "steps": "claim too late",
+   "expected": "refused as too late",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "late-claim"
+  },
+  {
+   "id": "UC-G5-10",
+   "group": "G5",
+   "title": "Prize already taken",
+   "roles": "O+2P",
+   "options": "two near-simultaneous claims",
+   "steps": "both claim the same prize",
+   "expected": "one wins; the other reads Prize already taken",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "taken"
+  },
+  {
+   "id": "UC-G5-11",
+   "group": "G5",
+   "title": "Two winners on one number",
+   "roles": "O+2P",
+   "options": "tie settings share and next",
+   "steps": "two players finish on the same number",
+   "expected": "share: both win; next: they take consecutive positions",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "tie"
+  },
+  {
+   "id": "UC-G5-12",
+   "group": "G5",
+   "title": "Simultaneous claims by many players",
+   "roles": "O+9P",
+   "options": "all claim in the same second",
+   "steps": "claim together",
+   "expected": "exactly the allowed winners, no double award",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "burst"
+  },
+  {
+   "id": "UC-G5-13",
+   "group": "G5",
+   "title": "Claim during a pause",
+   "roles": "O+P",
+   "options": "pause then claim",
+   "steps": "claim while paused",
+   "expected": "handled as the engine does (accepted or refused with a clear text)",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "claim-pause"
+  },
+  {
+   "id": "UC-G5-14",
+   "group": "G5",
+   "title": "Bystander banner for other players' claims",
+   "roles": "O+9P",
+   "options": "any claim",
+   "steps": "watch a phone that did not claim",
+   "expected": "Ticket N has claimed ... then correct / not correct / won",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "bystander"
+  },
+  {
+   "id": "UC-G5-15",
+   "group": "G5",
+   "title": "Claim screens in both looks",
+   "roles": "O+P",
+   "options": "retro and modern",
+   "steps": "claim in each look",
+   "expected": "the three gold CLAIM buttons (top, sticky, side) are one claim",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "claim-ui"
+  },
+  {
+   "id": "UC-G5-16",
+   "group": "G5",
+   "title": "Super Bumper 1-10 prizes in order",
+   "roles": "O+9P",
+   "options": "tickets 2, full2 x10",
+   "steps": "play to the end",
+   "expected": "ten prizes won in order, one per player",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "super-bumper"
+  },
+  {
+   "id": "UC-G5-17",
+   "group": "G5",
+   "title": "Per-ticket A/B prize",
+   "roles": "O+9P",
+   "options": "Ticket B prize on a reward line",
+   "steps": "claim with Ticket B",
+   "expected": "prize goes to the B ticket owner, shown as Ticket B",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "ab-prize"
+  },
+  {
+   "id": "UC-G5-18",
+   "group": "G5",
+   "title": "Lucky Draw is drawn and published",
+   "roles": "O+9P",
+   "options": "lucky draw",
+   "steps": "play to the draw",
+   "expected": "winner announced on every phone, never a team member",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "lucky"
+  },
+  {
+   "id": "UC-G6-01",
+   "group": "G6",
+   "title": "Common link opens the join page",
+   "roles": "O+P",
+   "options": "open game",
+   "steps": "open the common link",
+   "expected": "invitation text names the organizer/company; join works",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "links"
+  },
+  {
+   "id": "UC-G6-02",
+   "group": "G6",
+   "title": "Personal link joins without a number",
+   "roles": "O+P",
+   "options": "list game, personal links",
+   "steps": "open a personal link",
+   "expected": "ticket without typing; second device refused",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "personal-link"
+  },
+  {
+   "id": "UC-G6-03",
+   "group": "G6",
+   "title": "Family link shows the family wording",
+   "roles": "O+F+P",
+   "options": "family link",
+   "steps": "open the family link",
+   "expected": "family sentence, not for Co-host or Host links",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "family-link"
+  },
+  {
+   "id": "UC-G6-04",
+   "group": "G6",
+   "title": "Co-host link never shows family words",
+   "roles": "O+C+P",
+   "options": "Co-host link",
+   "steps": "open the Co-host link as a player",
+   "expected": "no family wording, waits for the Co-host or organizer",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "cohost-link"
+  },
+  {
+   "id": "UC-G6-05",
+   "group": "G6",
+   "title": "Host link opens the Host console",
+   "roles": "O+H",
+   "options": "Host link",
+   "steps": "open it",
+   "expected": "Host console, not the player page",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "host-link"
+  },
+  {
+   "id": "UC-G6-06",
+   "group": "G6",
+   "title": "Thank-you page after the game",
+   "roles": "O+9P",
+   "options": "game ended",
+   "steps": "look at the end screen",
+   "expected": "thank-you strip with Share and WhatsApp, no rules row",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "thanks"
+  },
+  {
+   "id": "UC-G6-07",
+   "group": "G6",
+   "title": "Game completed page 30 minutes later",
+   "roles": "O+P",
+   "options": "30 minutes after the end",
+   "steps": "open the link",
+   "expected": "hidden until the engine exposes the end time: the plain end screen is shown, never an error",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "completed"
+  },
+  {
+   "id": "UC-G6-08",
+   "group": "G6",
+   "title": "30-minute wait message",
+   "roles": "O+P",
+   "options": "request waits 30 minutes",
+   "steps": "wait with the test clock",
+   "expected": "polite lapsed message with ask again",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "lapse-text"
+  },
+  {
+   "id": "UC-G6-09",
+   "group": "G6",
+   "title": "Share and WhatsApp buttons",
+   "roles": "O+P",
+   "options": "end screen",
+   "steps": "press Share and WhatsApp",
+   "expected": "link carries only the game address and a short line, no personal data",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "share"
+  },
+  {
+   "id": "UC-G6-10",
+   "group": "G6",
+   "title": "Brochure, guide and manual links",
+   "roles": "O",
+   "options": "footer and menu",
+   "steps": "open the brochure PDF, organizer guide and manual",
+   "expected": "200, one page, new logo, six-item menu",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "pages"
+  },
+  {
+   "id": "UC-G7-01",
+   "group": "G7",
+   "title": "24-hour erase of personal data",
+   "roles": "O+9P",
+   "options": "game ended, 21 h later (test clock)",
+   "steps": "run the sweep",
+   "expected": "names, numbers, emails, seats, links gone; winners record kept",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "erase"
+  },
+  {
+   "id": "UC-G7-02",
+   "group": "G7",
+   "title": "Email key deletion on leave and decline",
+   "roles": "O+2P",
+   "options": "open game with email",
+   "steps": "player leaves; another request declined",
+   "expected": "the email can be used again",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "email-release"
+  },
+  {
+   "id": "UC-G7-03",
+   "group": "G7",
+   "title": "Game log is kept and complete",
+   "roles": "O+9P",
+   "options": "finished game",
+   "steps": "open the game log",
+   "expected": "every call, claim and end reason present, no personal data",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "gamelog"
+  },
+  {
+   "id": "UC-G7-04",
+   "group": "G7",
+   "title": "Winners record kept for 365 days",
+   "roles": "O+9P",
+   "options": "finished game",
+   "steps": "read the record after the sweep",
+   "expected": "winning ticket numbers and prizes remain, no names",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "winners"
+  },
+  {
+   "id": "UC-G7-05",
+   "group": "G7",
+   "title": "Report e-mail and PDF",
+   "roles": "O+9P",
+   "options": "finished game",
+   "steps": "download the report",
+   "expected": "PDF with the new logo, correct counts",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "report"
+  },
+  {
+   "id": "UC-G7-06",
+   "group": "G7",
+   "title": "Delete data button",
+   "roles": "O+9P",
+   "options": "organizer erases now",
+   "steps": "press Delete all participant data",
+   "expected": "erased at once; confirm text; game record kept",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "delete-now"
+  },
+  {
+   "id": "UC-G7-07",
+   "group": "G7",
+   "title": "Consent text and version are the same everywhere",
+   "roles": "O+P",
+   "options": "server, page, terms",
+   "steps": "read all three",
+   "expected": "identical wording, version 2026-10-30",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "consent"
+  },
+  {
+   "id": "UC-G7-08",
+   "group": "G7",
+   "title": "Privacy pages name what is kept",
+   "roles": "O",
+   "options": "privacy, terms, trust",
+   "steps": "read them",
+   "expected": "mobile number, optional email ID, erase within 24 hours stated",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "privacy"
+  },
+  {
+   "id": "UC-G7-09",
+   "group": "G7",
+   "title": "Rehearsal data is erased with the rehearsal",
+   "roles": "O+P",
+   "options": "rehearsal game",
+   "steps": "finish a rehearsal and sweep",
+   "expected": "rehearsal participants gone, real game untouched",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "rehearsal-erase"
+  },
+  {
+   "id": "UC-G7-10",
+   "group": "G7",
+   "title": "No personal data in URLs",
+   "roles": "O+9P",
+   "options": "all pages",
+   "steps": "inspect every URL and request",
+   "expected": "no phone, name or email in any address",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "no-pii-url"
+  },
+  {
+   "id": "UC-G7-11",
+   "group": "G7",
+   "title": "Right to leave deletes the player's data",
+   "roles": "O+P",
+   "options": "player presses Leave",
+   "steps": "leave the game",
+   "expected": "seat and details removed, others unaffected",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "leave"
+  },
+  {
+   "id": "UC-G7-12",
+   "group": "G7",
+   "title": "Data request by a player",
+   "roles": "O+P",
+   "options": "what do you hold about me",
+   "steps": "send the request",
+   "expected": "recorded without name or number; organizer told",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "datareq"
+  },
+  {
+   "id": "UC-G8-01",
+   "group": "G8",
+   "title": "Offline then reload mid-game",
+   "roles": "O+P",
+   "options": "network cut for 30 s",
+   "steps": "go offline, reload, come back",
+   "expected": "Reconnecting then Back online; position correct; no duplicate marks",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "offline"
+  },
+  {
+   "id": "UC-G8-02",
+   "group": "G8",
+   "title": "Server refusals read as plain words",
+   "roles": "O+P",
+   "options": "forced refusals",
+   "steps": "provoke each refusal the engine can send",
+   "expected": "every refusal has a guide entry; no raw JSON shown",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "refusals"
+  },
+  {
+   "id": "UC-G8-03",
+   "group": "G8",
+   "title": "Rate limit (429) for an email or ID guess",
+   "roles": "O+P",
+   "options": "many wrong tries",
+   "steps": "guess an email repeatedly",
+   "expected": "429 with the polite message, then works after the window",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "rate-limit"
+  },
+  {
+   "id": "UC-G8-04",
+   "group": "G8",
+   "title": "Wrong organizer key",
+   "roles": "O",
+   "options": "bad key",
+   "steps": "open the console with a wrong key",
+   "expected": "refused, no data shown, sign-in offered",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "wrong-key"
+  },
+  {
+   "id": "UC-G8-05",
+   "group": "G8",
+   "title": "Expired or removed link",
+   "roles": "O+P",
+   "options": "link gone",
+   "steps": "open a removed person's link",
+   "expected": "link not active message",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "expired-link"
+  },
+  {
+   "id": "UC-G8-06",
+   "group": "G8",
+   "title": "Stale page after a release",
+   "roles": "O+P",
+   "options": "old consent script",
+   "steps": "join from a stale page",
+   "expected": "reload message and button (see G2)",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "stale-consent"
+  },
+  {
+   "id": "UC-G8-07",
+   "group": "G8",
+   "title": "Double submit of Join and Claim",
+   "roles": "O+P",
+   "options": "double click",
+   "steps": "press Join twice, Claim twice",
+   "expected": "one ticket, one claim",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "double-submit"
+  },
+  {
+   "id": "UC-G8-08",
+   "group": "G8",
+   "title": "Game cancelled by the organizer",
+   "roles": "O+P",
+   "options": "cancel",
+   "steps": "cancel before and during the game",
+   "expected": "calm screen for players; data erased within a day",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "cancelled"
+  },
+  {
+   "id": "UC-G8-09",
+   "group": "G8",
+   "title": "Payment pending locks the game",
+   "roles": "O+P",
+   "options": "unpaid at the start time",
+   "steps": "start time passes unpaid",
+   "expected": "players told the organizer's payment is not complete; nobody can join",
+   "layers": [
+    "A",
+    "B"
+   ],
+   "driver": "payment-pending"
+  },
+  {
+   "id": "UC-G8-10",
+   "group": "G8",
+   "title": "Free launch limit",
+   "roles": "O",
+   "options": "free game over 10 people",
+   "steps": "ask for 11 people",
+   "expected": "refused with the plain limit message",
+   "layers": [
+    "A",
+    "B",
+    "C"
+   ],
+   "driver": "free-limit"
+  }
+ ]
+}
