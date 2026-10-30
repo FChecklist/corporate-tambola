@@ -48,7 +48,13 @@
   const small = (t, a) => el("p", { class: "zf-small", ...(a || {}), text: t });
   function whoLabel() {
     const org = (st.raw && st.raw.organizerEmail) || "", me = st.team && st.team.email ? st.team.email.trim() : org;
-    return el("div", { class: "zt-who", id: "zt-who" }, whoLines(st.role || "organizer", me, org).map((l) => el("div", { text: l })));
+    const box = el("div", { class: "zt-who", id: "zt-who" }, whoLines(st.role || "organizer", me, org).map((l) => el("div", { text: l })));
+    if ((st.role || "organizer") === "host") { // 1.8.4 (approved mock): the Host ribbon with Sign out, and what a Host may do
+      const out = el("a", { href: "/zc.html", class: "zt-signout", id: "zt-signout", text: "Sign out" });
+      out.addEventListener("click", (e) => { e.preventDefault(); try { if (window.CTK && window.CTK.signOut) window.CTK.signOut(); else { sessionStorage.setItem("ctz-org", ""); localStorage.setItem("ctz-org", ""); } } catch { /* the page is left anyway */ } location.href = "/zc.html"; });
+      box.append(el("div", { class: "zt-hostribbon", id: "zt-hostribbon" }, el("span", { text: "You are a Host of this game " + me + " " }), out), el("p", { class: "zf-small", id: "zt-hostnote", text: "As a Host you can make any change in the game, just like the organizer, and you help run the game and let people in. The organizer and Hosts can also play the game." }));
+    }
+    return box;
   }
   const LIMITS = [10, 25, 50, 100, 250, 500, 1000];
   /** Your Co-hosts: who brought how many of the limit. The engine keeps ONE limit for the game (coHostLimit), the same for every Co-host. */

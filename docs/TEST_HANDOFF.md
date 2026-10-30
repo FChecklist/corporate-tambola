@@ -25,3 +25,14 @@ New tests to write
 - In the game: the three rules sit under one collapsed "Rules" row (details id zrulesrow, the list keeps id zrules). Hidden after the game (as before).
 - NOT DONE in this group: the prize list during the game is still cards ("To win" tag with CLAIM), the mock has flat rows with a grey CLAIM at the right. Same for the compact Last 5 + ball row. These are pure restyles; they stay open in the gap report (rows 23, 50).
 - Tests to write: final results rows for 1, 5 prizes; "You" only on own wins; Rules row present in play and absent when ended; id zrules still exists.
+
+## Group 4: Host ribbon (zc-flow-tambola.js, zc-flow-tambola.css; the vendored pack is untouched)
+- A signed-in Host sees, under "Host: email / Organizer: email", the ribbon "You are a Host of this game <email> Sign out" (ids zt-hostribbon, zt-signout) and the sentence "As a Host you can make any change in the game, just like the organizer, and you help run the game and let people in. The organizer and Hosts can also play the game." (id zt-hostnote). Sign out clears the stored key and goes to /zc.html.
+- Honest note for the compare evidence: my live Host and organizer step screenshots (data/ui/compare-2026-10-30/live/host-*.png, org-step2..5) were taken WITHOUT a working sign-in (the page showed the draft view), so the gap-report rows for Host sign-in, Host dashboard, organizer steps 1-5 and the pill stepper are NOT valid evidence. The test author must re-capture them with the key set the way zc.html reads it. The Paymentnull finding came from an authenticated shot and is real.
+- Still open from the Host list: the organizer "5-bar step progress" and the white header strip with Host/Organizer emails on the right are pack-owned (pack/zc-flow.js, console repo) and are not changed here.
+
+## Open after 1.8.4 (not done, for the owner's list)
+- Game-screen prize rows (flat rows with grey CLAIM) and the compact Last 5 + ball row (restyle only).
+- Ticket shown before the game start for check-in games (blocked by the check-in rule, owner decision needed).
+- Pack-owned items above; port of the Paymentnull one-liner to the console pack source (sent to the master-console session).
+- UC-G2-13 finding (family Approve): the case starts the game 900 s ahead, which is exactly FAMILY_CUTOFF (15 min), so Approve is refused by design. Use startInSec >= 1500 in that case. Not a product bug.

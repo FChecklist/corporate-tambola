@@ -10,3 +10,4 @@
 .zt-card.zt-grey { opacity: .6; }
 .zt-check { display: block; margin: 4px 0 0; }
 .zt-check.ok { color: #1b6e2d; } .zt-check.bad { color: #b3261e; }
+.zt-hostribbon{margin:6px 0;padding:10px 12px;border-radius:10px;background:#251f5a;color:#fff;display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap;font-size:14px}.zt-hostribbon .zt-signout{color:#fff;text-decoration:underline;font-weight:700}
