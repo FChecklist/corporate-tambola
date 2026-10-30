@@ -454,3 +454,6 @@ html[data-pt] .zbig{background:radial-gradient(circle at 35% 30%,#FFE9A8,#E0B872
 
 html[data-pt] .zlink{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--line)}
 html[data-pt] .zfamrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+
+.zjchips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:2px 0 10px}.zjchip{border:1px solid rgba(245,200,106,.55);border-radius:999px;padding:3px 10px;font-size:12px;color:#F5C86A;background:rgba(0,0,0,.18)}.zjco{font-weight:700}.zin{margin:0 0 6px;font-size:17px;color:#F5C86A}.zin b{font-size:20px}
+.zfrl{list-style:none;margin:0;padding:0}.zfr{display:flex;justify-content:space-between;gap:10px;padding:9px 4px;border-bottom:1px solid rgba(245,200,106,.25);font-size:15px}.zfr b{color:#F5C86A;white-space:nowrap}.zfr.me{background:rgba(245,200,106,.14);border-radius:8px}.zrulesrow{margin:10px 0}.zrulesrow summary{cursor:pointer;font:700 12px/1 Inter,system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#F5C86A;padding:8px 2px}

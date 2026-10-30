@@ -724,7 +724,7 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
     for (const i of items) {
       const li = el("li", { "data-ready": i.id, class: i.done ? "done" : "" });
       if (i.id === "link") li.append(el("label", {}, el("input", { type: "checkbox", id: "zf-shared", ...(i.done ? { checked: "" } : {}), onchange: (e) => setShared(e.target.checked) }), " ", i.label));
-      else li.append(el("span", { class: "zf-tickmark", text: i.done ? "✓ " : "○ " }), i.label, i.optional ? el("i", { text: " (optional)" }) : null);
+      else li.append(el("span", { class: "zf-tickmark", text: i.done ? "✓ " : "○ " }), i.label, ...(i.optional ? [el("i", { text: " (optional)" })] : []));
       ul.append(li);
     }
     card.append(ul);

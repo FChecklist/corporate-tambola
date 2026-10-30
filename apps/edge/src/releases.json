@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.8.5",
+    "date": "2026-10-30",
+    "releasedAtIST": "30 Oct 2026, 07:38 IST",
+    "commit": "this release",
+    "title": "One plain form for employee IDs and Email IDs, and the 1.8.4 screens",
+    "changes": [
+      "An employee ID is read in one plain form: letters and numbers only, upper case, so 1B-678, 1b.678 and 1B 678 are the same person. New games use this rule from the deploy instant; older games keep theirs",
+      "An organizer can choose the ID the game uses: an employee ID or an Email ID. An Email ID is read in lower case without spaces, so upper and lower case are the same address",
+      "An email typed where an employee ID is asked is refused with a plain message, and the join page shows how the system will read what was typed",
+      "The Game completed page, the join page, the prize rows on the game screen and the Host header follow the approved screens"
+    ]
+  },
+  {
     "version": "1.8.3",
     "date": "2026-10-30",
     "releasedAtIST": "30 Oct 2026, 06:49 IST",
