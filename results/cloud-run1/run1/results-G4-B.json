@@ -1,0 +1,236 @@
+{
+ "group": "G4",
+ "layer": "B",
+ "run": "r1",
+ "base": "http://localhost:8821",
+ "at": "2026-10-30T02:33:29.555Z",
+ "seconds": 208,
+ "requests": 12192,
+ "summary": {
+  "cases": 14,
+  "pass": 3,
+  "fail": 2,
+  "error": 0,
+  "notImplemented": 9,
+  "stopped": 0
+ },
+ "results": [
+  {
+   "id": "UC-G4-01",
+   "title": "Automatic timer 12 seconds",
+   "status": "fail",
+   "seconds": 55,
+   "game": "TR-r1-UCG401",
+   "evidence": [
+    {
+     "check": "organizer console opens without a script error",
+     "ok": true
+    },
+    {
+     "check": "all 9 players joined",
+     "ok": true
+    },
+    {
+     "check": "the game started by itself and 5 numbers were called",
+     "ok": false,
+     "detail": "numbers seen 0"
+    },
+    {
+     "check": "every phone shows the same numbers in the same order",
+     "ok": false,
+     "detail": " |  |  |  |  |  |  |  | "
+    },
+    {
+     "check": "no number repeats and all are within 1..90",
+     "ok": true
+    },
+    {
+     "check": "the numbers come on the 6-second beat (median gap NaN s)",
+     "ok": false,
+     "detail": ""
+    },
+    {
+     "check": "no phone had a script error",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G4-02",
+   "title": "Manual start then automatic numbers",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"manual-start\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G4-03",
+   "title": "Host-called numbers with the 5-second lock",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"host-called\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G4-04",
+   "title": "Pause when a claim is checked",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"claim-notice\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G4-05",
+   "title": "Pause and resume by the organizer",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"pause\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G4-06",
+   "title": "No repeated numbers across 90",
+   "status": "fail",
+   "seconds": 137,
+   "game": "TR-r1-UCG406",
+   "evidence": [
+    {
+     "check": "the game reached the numbers asked for (90, or it ended earlier when the last prize was won)",
+     "ok": false,
+     "detail": "0"
+    },
+    {
+     "check": "no number repeats",
+     "ok": true
+    },
+    {
+     "check": "every number is within 1..90",
+     "ok": true
+    },
+    {
+     "check": "every phone shows the same numbers in the same order",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G4-07",
+   "title": "Game ends at 90 numbers",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"end-90\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G4-08",
+   "title": "Game ends when all prizes are claimed",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"end-prizes\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G4-09",
+   "title": "Early end by the organizer",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"stop\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G4-10",
+   "title": "Last numbers and called count",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"strip\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G4-11",
+   "title": "Crossing a number twice un-crosses it",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"crossing\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G4-12",
+   "title": "Ticket A/B switch in a two-ticket game",
+   "status": "pass",
+   "seconds": 3,
+   "game": "TR-r1-UCG412",
+   "evidence": [
+    {
+     "check": "the Playing switch with Ticket A and Ticket B is there",
+     "ok": true
+    },
+    {
+     "check": "choosing Ticket B greys Ticket A",
+     "ok": true
+    },
+    {
+     "check": "choosing Ticket A greys Ticket B again",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G4-13",
+   "title": "Retro and Modern looks",
+   "status": "pass",
+   "seconds": 3,
+   "game": "TR-r1-UCG413",
+   "evidence": [
+    {
+     "check": "the page follows the modern look (html data-pt)",
+     "ok": true
+    },
+    {
+     "check": "a crossed number keeps its number and shows a cross in modern",
+     "ok": true
+    },
+    {
+     "check": "the page follows the retro look (html data-pt)",
+     "ok": true
+    },
+    {
+     "check": "a crossed number keeps its number and shows a cross in retro",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G4-14",
+   "title": "Phone, tablet and laptop widths",
+   "status": "pass",
+   "seconds": 9,
+   "game": "TR-r1-UCG414",
+   "evidence": [
+    {
+     "check": "360px: the join page does not scroll sideways",
+     "ok": true
+    },
+    {
+     "check": "360px: the page after joining does not scroll sideways",
+     "ok": true
+    },
+    {
+     "check": "768px: the join page does not scroll sideways",
+     "ok": true
+    },
+    {
+     "check": "768px: the page after joining does not scroll sideways",
+     "ok": true
+    },
+    {
+     "check": "1280px: the join page does not scroll sideways",
+     "ok": true
+    },
+    {
+     "check": "1280px: the page after joining does not scroll sideways",
+     "ok": true
+    }
+   ]
+  }
+ ]
+}

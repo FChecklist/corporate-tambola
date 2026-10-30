@@ -1,0 +1,187 @@
+{
+ "group": "G8",
+ "layer": "B",
+ "run": "r1",
+ "base": "http://localhost:8821",
+ "at": "2026-10-30T02:29:53.685Z",
+ "seconds": 99,
+ "requests": 505,
+ "summary": {
+  "cases": 10,
+  "pass": 6,
+  "fail": 1,
+  "error": 1,
+  "notImplemented": 2,
+  "stopped": 0
+ },
+ "results": [
+  {
+   "id": "UC-G8-01",
+   "title": "Offline then reload mid-game",
+   "status": "pass",
+   "seconds": 20,
+   "game": "TR-r1-UCG801",
+   "evidence": [
+    {
+     "check": "joined",
+     "ok": true
+    },
+    {
+     "check": "offline the page does not show a raw error",
+     "ok": true
+    },
+    {
+     "check": "back online the same ticket is still there",
+     "ok": true
+    },
+    {
+     "check": "no script error went unhandled",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G8-02",
+   "title": "Server refusals read as plain words",
+   "status": "fail",
+   "seconds": 25,
+   "game": "TR-r1-UCG802",
+   "evidence": [
+    {
+     "check": "an unknown game is refused in a plain sentence",
+     "ok": true
+    },
+    {
+     "check": "a bad mobile number is refused in a plain sentence",
+     "ok": true
+    },
+    {
+     "check": "a wrong organizer key is refused in a plain sentence",
+     "ok": true
+    },
+    {
+     "check": "on the page the bad number shows a sentence, never raw data",
+     "ok": false,
+     "detail": "CORPORATE TAMBOLA Corporate Tambola JOIN THE GAME Welcome! You are invited to join the Corporate Tambola (Housie) organized by your company on 30 Oct 2026, 2:43 am UTC. To join, type your mobile numbe"
+    }
+   ]
+  },
+  {
+   "id": "UC-G8-03",
+   "title": "Rate limit (429) for an email or ID guess",
+   "status": "pass",
+   "seconds": 0,
+   "game": "TR-r1-UCG803",
+   "evidence": [
+    {
+     "check": "a 429 came before 60 wrong IDs (it came at try 31)",
+     "ok": true
+    },
+    {
+     "check": "the 429 says to wait and ask the organizer, in plain words",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G8-04",
+   "title": "Wrong organizer key",
+   "status": "pass",
+   "seconds": 0,
+   "game": "TR-r1-UCG804",
+   "evidence": [
+    {
+     "check": "summary: refused with no data",
+     "ok": true
+    },
+    {
+     "check": "people: refused with no data",
+     "ok": true
+    },
+    {
+     "check": "waiting: refused with no data",
+     "ok": true
+    },
+    {
+     "check": "gamelog: refused with no data",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G8-05",
+   "title": "Expired or removed link",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"expired-link\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G8-06",
+   "title": "Stale page after a release",
+   "status": "pass",
+   "seconds": 26,
+   "game": "TR-r1-UCG806",
+   "evidence": [
+    {
+     "check": "the old page is told it is out of date, with the reload sentence",
+     "ok": true
+    },
+    {
+     "check": "a Reload button is shown",
+     "ok": true
+    },
+    {
+     "check": "after the reload the player joins",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G8-07",
+   "title": "Double submit of Join and Claim",
+   "status": "pass",
+   "seconds": 2,
+   "game": "TR-r1-UCG807",
+   "evidence": [
+    {
+     "check": "joined",
+     "ok": true
+    },
+    {
+     "check": "exactly one ticket was made for a double press of Join",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G8-08",
+   "title": "Game cancelled by the organizer",
+   "status": "error",
+   "seconds": 26,
+   "error": "page.waitForSelector: Timeout 25000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-cbc=\\'K4\\'] input[data-box]') to be visible\u001b[22m\n",
+   "evidence": []
+  },
+  {
+   "id": "UC-G8-09",
+   "title": "Payment pending locks the game",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"payment-pending\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G8-10",
+   "title": "Free launch limit",
+   "status": "pass",
+   "seconds": 0,
+   "game": "TR-r1-UCG810",
+   "evidence": [
+    {
+     "check": "a demo game for 11 people is refused with a plain sentence",
+     "ok": true
+    }
+   ]
+  }
+ ]
+}

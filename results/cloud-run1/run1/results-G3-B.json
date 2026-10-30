@@ -1,0 +1,193 @@
+{
+ "group": "G3",
+ "layer": "B",
+ "run": "r1",
+ "base": "http://localhost:8821",
+ "at": "2026-10-30T02:26:50.020Z",
+ "seconds": 64,
+ "requests": 410,
+ "summary": {
+  "cases": 10,
+  "pass": 5,
+  "fail": 2,
+  "error": 0,
+  "notImplemented": 3,
+  "stopped": 0
+ },
+ "results": [
+  {
+   "id": "UC-G3-01",
+   "title": "Host signs in with the Host link",
+   "status": "fail",
+   "seconds": 3,
+   "game": "TR-r1-UCG301",
+   "evidence": [
+    {
+     "check": "the Host accepts the role (API, the box is ticked by the client)",
+     "ok": false,
+     "detail": "403"
+    },
+    {
+     "check": "whoami says host",
+     "ok": true
+    },
+    {
+     "check": "the Host console opens with the game and no script error",
+     "ok": false,
+     "detail": "Use the new organizer screens Corporate Tambola Host Finish setup Two quick things, then your game opens. This link works once. 1. Your e-mail Use the e-mail yo "
+    },
+    {
+     "check": "it is not the player page",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G3-02",
+   "title": "Co-host opens the Co-host link",
+   "status": "fail",
+   "seconds": 3,
+   "game": "TR-r1-UCG302",
+   "evidence": [
+    {
+     "check": "whoami says cohost",
+     "ok": true
+    },
+    {
+     "check": "the small game header answers and the role is accepted",
+     "ok": true
+    },
+    {
+     "check": "a Co-host cannot read the organizer's settings or pay (API)",
+     "ok": true
+    },
+    {
+     "check": "the Co-host console shows the game header and no organizer sections",
+     "ok": false,
+     "detail": "Use the new organizer screens Corporate Tambola Signed in as Co-host Rs 0 · nothing to pay TEST-RUN-TR-r1-UCG302 · 30 Oct 2026 8:10 am Sign out Your progress 1 of 3 done · 33% Jump to 1 2 3 Help The g"
+    }
+   ]
+  },
+  {
+   "id": "UC-G3-03",
+   "title": "Co-host limit: invite up to N people",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"cohost-limit\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G3-04",
+   "title": "Who approves text per role",
+   "status": "pass",
+   "seconds": 3,
+   "game": "TR-r1-UCG304",
+   "evidence": [
+    {
+     "check": "the organizer reads 'wait for you or a Host'",
+     "ok": true
+    },
+    {
+     "check": "no Co-host or family approval is promised",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G3-05",
+   "title": "Organizer vs Host controls",
+   "status": "pass",
+   "seconds": 0,
+   "game": "TR-r1-UCG305",
+   "evidence": [
+    {
+     "check": "a Host is refused when erasing participant data (API)",
+     "ok": true
+    },
+    {
+     "check": "the organizer may erase (API)",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G3-06",
+   "title": "Up to 5 Hosts",
+   "status": "pass",
+   "seconds": 0,
+   "game": "TR-r1-UCG306",
+   "evidence": [
+    {
+     "check": "five Hosts were added",
+     "ok": true
+    },
+    {
+     "check": "the sixth is refused with a plain sentence",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G3-07",
+   "title": "Co-host without accepting",
+   "status": "pass",
+   "seconds": 0,
+   "game": "TR-r1-UCG307",
+   "evidence": [
+    {
+     "check": "the Co-host is asked for the tick (code consent-required)",
+     "ok": true
+    },
+    {
+     "check": "the small header says the role is not accepted yet",
+     "ok": true
+    },
+    {
+     "check": "after the tick everything opens",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G3-08",
+   "title": "Co-host with an old-version acceptance",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"cohost-old\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G3-09",
+   "title": "Co-host sees waiting list of own link only",
+   "status": "pass",
+   "seconds": 56,
+   "game": "TR-r1-UCG309",
+   "evidence": [
+    {
+     "check": "each Co-host sees exactly one request: their own (API)",
+     "ok": true
+    },
+    {
+     "check": "a Co-host cannot decide the other Co-host's request (API)",
+     "ok": true
+    },
+    {
+     "check": "a Co-host admits their own (API)",
+     "ok": true
+    },
+    {
+     "check": "the first person gets the ticket, the second keeps waiting",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G3-10",
+   "title": "Organizer removes a person and the email is released",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"remove\" is filled in S2",
+   "evidence": []
+  }
+ ]
+}

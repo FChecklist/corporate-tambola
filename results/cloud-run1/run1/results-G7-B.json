@@ -1,0 +1,165 @@
+{
+ "group": "G7",
+ "layer": "B",
+ "run": "r1",
+ "base": "http://localhost:8821",
+ "at": "2026-10-30T02:28:06.449Z",
+ "seconds": 3,
+ "requests": 135,
+ "summary": {
+  "cases": 12,
+  "pass": 4,
+  "fail": 0,
+  "error": 0,
+  "notImplemented": 8,
+  "stopped": 0
+ },
+ "results": [
+  {
+   "id": "UC-G7-01",
+   "title": "24-hour erase of personal data",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"erase\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G7-02",
+   "title": "Email key deletion on leave and decline",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"email-release\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G7-03",
+   "title": "Game log is kept and complete",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"gamelog\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G7-04",
+   "title": "Winners record kept for 365 days",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"winners\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G7-05",
+   "title": "Report e-mail and PDF",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"report\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G7-06",
+   "title": "Delete data button",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"delete-now\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G7-07",
+   "title": "Consent text and version are the same everywhere",
+   "status": "pass",
+   "seconds": 0,
+   "evidence": [
+    {
+     "check": "the page script carries the K4 wording and the current version",
+     "ok": true
+    },
+    {
+     "check": "the Terms page carries the same K4 wording and shows the same version",
+     "ok": true
+    },
+    {
+     "check": "the Terms page shows Version 2026-10-30",
+     "ok": true
+    },
+    {
+     "check": "a join from an old page is answered 'out of date' with the current version number",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G7-08",
+   "title": "Privacy pages name what is kept",
+   "status": "pass",
+   "seconds": 0,
+   "evidence": [
+    {
+     "check": "the privacy page names the mobile number, the optional email ID and the 24-hour erase",
+     "ok": true
+    },
+    {
+     "check": "the Terms page names the optional email ID among the personal data",
+     "ok": true
+    },
+    {
+     "check": "the Trust page says guests may give an optional email ID in an open game",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G7-09",
+   "title": "Rehearsal data is erased with the rehearsal",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"rehearsal-erase\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G7-10",
+   "title": "No personal data in URLs",
+   "status": "pass",
+   "seconds": 2,
+   "game": "TR-r1-UCG710",
+   "evidence": [
+    {
+     "check": "the player joined",
+     "ok": true
+    },
+    {
+     "check": "none of the 32 request addresses contains the mobile number or the email",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G7-11",
+   "title": "Right to leave deletes the player's data",
+   "status": "pass",
+   "seconds": 0,
+   "game": "TR-r1-UCG711",
+   "evidence": [
+    {
+     "check": "joined",
+     "ok": true
+    },
+    {
+     "check": "leaving is accepted (API, the same call the Leave link makes)",
+     "ok": true
+    },
+    {
+     "check": "the old ticket no longer answers as a participant",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G7-12",
+   "title": "Data request by a player",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"datareq\" is filled in S2",
+   "evidence": []
+  }
+ ]
+}

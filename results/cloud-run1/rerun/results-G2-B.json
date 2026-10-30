@@ -1,0 +1,317 @@
+{
+ "group": "G2",
+ "layer": "B",
+ "run": "r2",
+ "base": "http://localhost:8821",
+ "at": "2026-10-30T03:02:45.038Z",
+ "seconds": 648,
+ "requests": 2474,
+ "summary": {
+  "cases": 14,
+  "pass": 10,
+  "fail": 3,
+  "error": 0,
+  "notImplemented": 1,
+  "stopped": 0
+ },
+ "results": [
+  {
+   "id": "UC-G2-01",
+   "title": "Join by listed employee ID",
+   "status": "pass",
+   "seconds": 27,
+   "game": "TR-r2-UCG201",
+   "evidence": [
+    {
+     "check": "the three listed IDs joined directly",
+     "ok": true
+    },
+    {
+     "check": "an ID that is not on the list does not get a ticket and the organizer is asked",
+     "ok": true
+    },
+    {
+     "check": "the organizer sees the request waiting (API)",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G2-02",
+   "title": "Join by listed email ID",
+   "status": "pass",
+   "seconds": 26,
+   "game": "TR-r2-UCG202",
+   "evidence": [
+    {
+     "check": "an email in the ID box is refused with the plain sentence (letters and numbers only)",
+     "ok": true
+    },
+    {
+     "check": "no ticket was made for it",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G2-03",
+   "title": "Not on the list, Host approves",
+   "status": "fail",
+   "seconds": 70,
+   "game": "TR-r2-UCG203",
+   "evidence": [
+    {
+     "check": "the request waits (not a ticket)",
+     "ok": true
+    },
+    {
+     "check": "the Host sees the request (API)",
+     "ok": false,
+     "detail": "[]"
+    },
+    {
+     "check": "the player's page turns into the ticket by itself",
+     "ok": false,
+     "detail": ""
+    }
+   ]
+  },
+  {
+   "id": "UC-G2-04",
+   "title": "Not on the list, Co-host approves own people only",
+   "status": "pass",
+   "seconds": 56,
+   "game": "TR-r2-UCG204",
+   "evidence": [
+    {
+     "check": "each Co-host sees exactly one request: their own (API)",
+     "ok": true
+    },
+    {
+     "check": "a Co-host cannot decide the other Co-host's request (API)",
+     "ok": true
+    },
+    {
+     "check": "a Co-host admits their own (API)",
+     "ok": true
+    },
+    {
+     "check": "the first person gets the ticket, the second keeps waiting",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G2-05",
+   "title": "Not on the list, Organizer approves",
+   "status": "pass",
+   "seconds": 92,
+   "game": "TR-r2-UCG205",
+   "evidence": [
+    {
+     "check": "the organizer sees two requests (API)",
+     "ok": true
+    },
+    {
+     "check": "exactly one of the two got a ticket",
+     "ok": true
+    },
+    {
+     "check": "the declined person reads the polite message",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G2-06",
+   "title": "Open join with an optional email ID",
+   "status": "pass",
+   "seconds": 52,
+   "game": "TR-r2-UCG206",
+   "evidence": [
+    {
+     "check": "a good email joins",
+     "ok": true
+    },
+    {
+     "check": "the same email on another phone gets the one neutral sentence",
+     "ok": true
+    },
+    {
+     "check": "a bad shape is refused in plain words",
+     "ok": true
+    },
+    {
+     "check": "no email at all is fine",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G2-07",
+   "title": "Duplicate mobile on another device",
+   "status": "pass",
+   "seconds": 26,
+   "game": "TR-r2-UCG207",
+   "evidence": [
+    {
+     "check": "the first device joined",
+     "ok": true
+    },
+    {
+     "check": "the second device is told one ticket plays on one device",
+     "ok": true
+    },
+    {
+     "check": "the first device still holds its ticket",
+     "ok": true
+    },
+    {
+     "check": "the game is still there and answers",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G2-08",
+   "title": "Game full: cap reached",
+   "status": "pass",
+   "seconds": 26,
+   "game": "TR-r2-UCG208",
+   "evidence": [
+    {
+     "check": "the first two players joined",
+     "ok": true
+    },
+    {
+     "check": "the third player is told the places are taken",
+     "ok": true
+    },
+    {
+     "check": "the first two keep their tickets",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G2-09",
+   "title": "Late join after the first numbers",
+   "status": "fail",
+   "seconds": 127,
+   "game": "TR-r2-UCG209",
+   "evidence": [
+    {
+     "check": "the first player joined",
+     "ok": true
+    },
+    {
+     "check": "numbers started before the late joiner arrives",
+     "ok": false,
+     "detail": "0"
+    },
+    {
+     "check": "the late joiner gets a ticket",
+     "ok": true
+    },
+    {
+     "check": "the page is in play for the late joiner (numbers shown, no refusal)",
+     "ok": false,
+     "detail": "{\"log\":0,\"late\":false}"
+    }
+   ]
+  },
+  {
+   "id": "UC-G2-10",
+   "title": "Cached page with the old consent version",
+   "status": "pass",
+   "seconds": 26,
+   "game": "TR-r2-UCG210",
+   "evidence": [
+    {
+     "check": "the old page is told it is out of date, with the reload sentence",
+     "ok": true
+    },
+    {
+     "check": "a Reload button is shown",
+     "ok": true
+    },
+    {
+     "check": "after the reload the player joins",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G2-11",
+   "title": "Reconnect: close the page and reopen",
+   "status": "pass",
+   "seconds": 4,
+   "game": "TR-r2-UCG211",
+   "evidence": [
+    {
+     "check": "joined",
+     "ok": true
+    },
+    {
+     "check": "the reopened page shows the same ticket (same player id)",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G2-12",
+   "title": "Two devices: second phone for the same ticket",
+   "status": "pass",
+   "seconds": 26,
+   "game": "TR-r2-UCG212",
+   "evidence": [
+    {
+     "check": "the first device keeps the ticket",
+     "ok": true
+    },
+    {
+     "check": "the second device is told one ticket plays on one device and what to do",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G2-13",
+   "title": "Family pass: request, approve, decline",
+   "status": "fail",
+   "seconds": 91,
+   "game": "TR-r2-UCG213",
+   "evidence": [
+    {
+     "check": "the family host joined (seat 1)",
+     "ok": true
+    },
+    {
+     "check": "the Family Passes card shows the agreed words",
+     "ok": true
+    },
+    {
+     "check": "both members wait with the family words",
+     "ok": true
+    },
+    {
+     "check": "exactly one family member got in",
+     "ok": false,
+     "detail": "false,false"
+    },
+    {
+     "check": "the other reads the polite message",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G2-14",
+   "title": "Family pass: 30-minute lapse and 15-minute cutoff",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"family-time\" is filled in S2",
+   "evidence": []
+  }
+ ]
+}

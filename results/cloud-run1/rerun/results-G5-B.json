@@ -1,0 +1,163 @@
+{
+ "group": "G5",
+ "layer": "B",
+ "run": "r2",
+ "base": "http://localhost:8821",
+ "at": "2026-10-30T02:51:48.712Z",
+ "seconds": 325,
+ "requests": 16479,
+ "summary": {
+  "cases": 18,
+  "pass": 0,
+  "fail": 0,
+  "error": 6,
+  "notImplemented": 12,
+  "stopped": 0
+ },
+ "results": [
+  {
+   "id": "UC-G5-01",
+   "title": "Early Five claim, correct",
+   "status": "error",
+   "seconds": 20,
+   "error": "st.anySaw is not a function",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-02",
+   "title": "Top line claim, correct",
+   "status": "error",
+   "seconds": 42,
+   "error": "st.anySaw is not a function",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-03",
+   "title": "Middle line claim, correct",
+   "status": "error",
+   "seconds": 161,
+   "error": "page.goto: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:8821/z.html?e=TR-r2-UCG503\", waiting until \"load\"\u001b[22m\n",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-04",
+   "title": "Bottom line claim, correct",
+   "status": "error",
+   "seconds": 31,
+   "error": "page.goto: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:8821/z.html?e=TR-r2-UCG504\", waiting until \"load\"\u001b[22m\n",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-05",
+   "title": "Four corners and Star claims",
+   "status": "error",
+   "seconds": 34,
+   "error": "page.goto: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:8821/z.html?e=TR-r2-UCG505\", waiting until \"load\"\u001b[22m\n",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-06",
+   "title": "Full House 1st to 5th",
+   "status": "error",
+   "seconds": 31,
+   "error": "page.goto: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:8821/z.html?e=TR-r2-UCG506\", waiting until \"load\"\u001b[22m\n",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-07",
+   "title": "Bogey: claim with nothing to claim",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"bogey\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-08",
+   "title": "Wrong claim: a stale mark",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"wrong-claim\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-09",
+   "title": "Late claim after the next number",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"late-claim\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-10",
+   "title": "Prize already taken",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"taken\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-11",
+   "title": "Two winners on one number",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"tie\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-12",
+   "title": "Simultaneous claims by many players",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"burst\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-13",
+   "title": "Claim during a pause",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"claim-pause\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-14",
+   "title": "Bystander banner for other players' claims",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"bystander\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-15",
+   "title": "Claim screens in both looks",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"claim-ui\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-16",
+   "title": "Super Bumper 1-10 prizes in order",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"super-bumper\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-17",
+   "title": "Per-ticket A/B prize",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"ab-prize\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G5-18",
+   "title": "Lucky Draw is drawn and published",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"lucky\" is filled in S2",
+   "evidence": []
+  }
+ ]
+}

@@ -1,0 +1,46 @@
+G7 layer B run r1: 12 cases on http://localhost:8821; meter 9556/25000
+NOT-IMPLEMENTED  UC-G7-01 24-hour erase of personal data (0 s)
+NOT-IMPLEMENTED  UC-G7-02 Email key deletion on leave and decline (0 s)
+NOT-IMPLEMENTED  UC-G7-03 Game log is kept and complete (0 s)
+NOT-IMPLEMENTED  UC-G7-04 Winners record kept for 365 days (0 s)
+NOT-IMPLEMENTED  UC-G7-05 Report e-mail and PDF (0 s)
+NOT-IMPLEMENTED  UC-G7-06 Delete data button (0 s)
+PASS             UC-G7-07 Consent text and version are the same everywhere (0 s)
+PASS             UC-G7-08 Privacy pages name what is kept (0 s)
+NOT-IMPLEMENTED  UC-G7-09 Rehearsal data is erased with the rehearsal (0 s)
+PASS             UC-G7-10 No personal data in URLs (2 s)
+PASS             UC-G7-11 Right to leave deletes the player's data (0 s)
+NOT-IMPLEMENTED  UC-G7-12 Data request by a player (0 s)
+done: pass 4, fail 0, error 0, not-implemented 8; /tmp/claude-0/work/out/results-G7-B.json
+30 tagged game(s) to clean on http://localhost:8821
+gone     TR-r1-UCG101
+gone     TR-r1-UCG102
+gone     TR-r1-UCG103
+gone     TR-r1-UCG104
+gone     TR-r1-UCG105
+gone     TR-r1-UCG107
+gone     TR-r1-UCG112
+gone     TR-r1-UCG201
+gone     TR-r1-UCG202
+gone     TR-r1-UCG203
+gone     TR-r1-UCG204
+gone     TR-r1-UCG205
+gone     TR-r1-UCG206
+gone     TR-r1-UCG207
+gone     TR-r1-UCG208
+gone     TR-r1-UCG209
+gone     TR-r1-UCG210
+gone     TR-r1-UCG301
+gone     TR-r1-UCG302
+gone     TR-r1-UCG304
+gone     TR-r1-UCG305
+gone     TR-r1-UCG306
+gone     TR-r1-UCG307
+gone     TR-r1-UCG309
+gone     TR-r1-UCG601
+gone     TR-r1-UCG603
+gone     TR-r1-UCG604
+gone     TR-r1-UCG605
+cleaned  TR-r1-UCG710  cancel 200  erase 200
+cleaned  TR-r1-UCG711  cancel 200  erase 200
+finished

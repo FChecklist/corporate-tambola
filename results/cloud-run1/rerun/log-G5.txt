@@ -1,0 +1,59 @@
+compressed clock x6 with the stand-in beacon
+G5 layer B run r2: 18 cases on http://localhost:8821; meter 57775/25000
+ERROR            UC-G5-01 Early Five claim, correct (20 s)
+   ERROR st.anySaw is not a function
+ERROR            UC-G5-02 Top line claim, correct (42 s)
+   ERROR st.anySaw is not a function
+ERROR            UC-G5-03 Middle line claim, correct (161 s)
+   ERROR page.goto: Timeout 30000ms exceeded.
+Call log:
+[2m  - navigating to "http://localhost:8821/z.html?e=TR-r2-UCG503", waiting until "load"[22m
+
+ERROR            UC-G5-04 Bottom line claim, correct (31 s)
+   ERROR page.goto: Timeout 30000ms exceeded.
+Call log:
+[2m  - navigating to "http://localhost:8821/z.html?e=TR-r2-UCG504", waiting until "load"[22m
+
+ERROR            UC-G5-05 Four corners and Star claims (34 s)
+   ERROR page.goto: Timeout 30000ms exceeded.
+Call log:
+[2m  - navigating to "http://localhost:8821/z.html?e=TR-r2-UCG505", waiting until "load"[22m
+
+ERROR            UC-G5-06 Full House 1st to 5th (31 s)
+   ERROR page.goto: Timeout 30000ms exceeded.
+Call log:
+[2m  - navigating to "http://localhost:8821/z.html?e=TR-r2-UCG506", waiting until "load"[22m
+
+NOT-IMPLEMENTED  UC-G5-07 Bogey: claim with nothing to claim (0 s)
+NOT-IMPLEMENTED  UC-G5-08 Wrong claim: a stale mark (0 s)
+NOT-IMPLEMENTED  UC-G5-09 Late claim after the next number (0 s)
+NOT-IMPLEMENTED  UC-G5-10 Prize already taken (0 s)
+NOT-IMPLEMENTED  UC-G5-11 Two winners on one number (0 s)
+NOT-IMPLEMENTED  UC-G5-12 Simultaneous claims by many players (0 s)
+NOT-IMPLEMENTED  UC-G5-13 Claim during a pause (0 s)
+NOT-IMPLEMENTED  UC-G5-14 Bystander banner for other players' claims (0 s)
+NOT-IMPLEMENTED  UC-G5-15 Claim screens in both looks (0 s)
+NOT-IMPLEMENTED  UC-G5-16 Super Bumper 1-10 prizes in order (0 s)
+NOT-IMPLEMENTED  UC-G5-17 Per-ticket A/B prize (0 s)
+NOT-IMPLEMENTED  UC-G5-18 Lucky Draw is drawn and published (0 s)
+done: pass 0, fail 0, error 6, not-implemented 12; /tmp/claude-0/work/out2/results-G5-B.json
+18 tagged game(s) to clean on http://localhost:8821
+gone     TR-r2-UCG101
+gone     TR-r2-UCG102
+gone     TR-r2-UCG103
+gone     TR-r2-UCG104
+gone     TR-r2-UCG105
+gone     TR-r2-UCG107
+gone     TR-r2-UCG112
+gone     TR-r2-UCG401
+gone     TR-r2-UCG406
+gone     TR-r2-UCG412
+gone     TR-r2-UCG413
+gone     TR-r2-UCG414
+cleaned  TR-r2-UCG501  cancel 409  erase 200
+cleaned  TR-r2-UCG502  cancel 409  erase 200
+cleaned  TR-r2-UCG503  cancel 409  erase 200
+cleaned  TR-r2-UCG504  cancel 409  erase 409 game-running
+cleaned  TR-r2-UCG505  cancel 409  erase 409 game-running
+cleaned  TR-r2-UCG506  cancel 409  erase 409 game-running
+finished

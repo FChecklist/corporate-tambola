@@ -1,0 +1,41 @@
+G3 layer B run r1: 10 cases on http://localhost:8821; meter 8673/25000
+FAIL             UC-G3-01 Host signs in with the Host link (3 s)
+   FAIL the Host accepts the role (API, the box is ticked by the client) | 403
+   FAIL the Host console opens with the game and no script error | Use the new organizer screens Corporate Tambola Host Finish setup Two quick things, then your game opens. This link works once. 1. Your e-mail Use the e-mail yo 
+FAIL             UC-G3-02 Co-host opens the Co-host link (3 s)
+   FAIL the Co-host console shows the game header and no organizer sections | Use the new organizer screens Corporate Tambola Signed in as Co-host Rs 0 · nothing to pay TEST-RUN-TR-r1-UCG302 · 30 Oct 2026 8:10 am Sign out Your progress 1 of 3 done · 33% Jump to 1 2 3 Help The g
+NOT-IMPLEMENTED  UC-G3-03 Co-host limit: invite up to N people (0 s)
+PASS             UC-G3-04 Who approves text per role (3 s)
+PASS             UC-G3-05 Organizer vs Host controls (0 s)
+PASS             UC-G3-06 Up to 5 Hosts (0 s)
+PASS             UC-G3-07 Co-host without accepting (0 s)
+NOT-IMPLEMENTED  UC-G3-08 Co-host with an old-version acceptance (0 s)
+PASS             UC-G3-09 Co-host sees waiting list of own link only (56 s)
+NOT-IMPLEMENTED  UC-G3-10 Organizer removes a person and the email is released (0 s)
+done: pass 5, fail 2, error 0, not-implemented 3; /tmp/claude-0/work/out/results-G3-B.json
+24 tagged game(s) to clean on http://localhost:8821
+gone     TR-r1-UCG101
+gone     TR-r1-UCG102
+gone     TR-r1-UCG103
+gone     TR-r1-UCG104
+gone     TR-r1-UCG105
+gone     TR-r1-UCG107
+gone     TR-r1-UCG112
+gone     TR-r1-UCG201
+gone     TR-r1-UCG202
+gone     TR-r1-UCG203
+gone     TR-r1-UCG204
+gone     TR-r1-UCG205
+gone     TR-r1-UCG206
+gone     TR-r1-UCG207
+gone     TR-r1-UCG208
+gone     TR-r1-UCG209
+gone     TR-r1-UCG210
+cleaned  TR-r1-UCG301  cancel 200  erase 200
+cleaned  TR-r1-UCG302  cancel 200  erase 200
+cleaned  TR-r1-UCG304  cancel 200  erase 200
+cleaned  TR-r1-UCG305  cancel 200  erase 200
+cleaned  TR-r1-UCG306  cancel 200  erase 200
+cleaned  TR-r1-UCG307  cancel 200  erase 200
+cleaned  TR-r1-UCG309  cancel 200  erase 200
+finished

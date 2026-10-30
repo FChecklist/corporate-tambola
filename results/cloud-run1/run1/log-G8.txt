@@ -1,0 +1,57 @@
+G8 layer B run r1: 10 cases on http://localhost:8821; meter 9716/25000
+PASS             UC-G8-01 Offline then reload mid-game (20 s)
+FAIL             UC-G8-02 Server refusals read as plain words (25 s)
+   FAIL on the page the bad number shows a sentence, never raw data | CORPORATE TAMBOLA Corporate Tambola JOIN THE GAME Welcome! You are invited to join the Corporate Tambola (Housie) organized by your company on 30 Oct 2026, 2:43 am UTC. To join, type your mobile numbe
+PASS             UC-G8-03 Rate limit (429) for an email or ID guess (0 s)
+PASS             UC-G8-04 Wrong organizer key (0 s)
+NOT-IMPLEMENTED  UC-G8-05 Expired or removed link (0 s)
+PASS             UC-G8-06 Stale page after a release (26 s)
+PASS             UC-G8-07 Double submit of Join and Claim (2 s)
+ERROR            UC-G8-08 Game cancelled by the organizer (26 s)
+   ERROR page.waitForSelector: Timeout 25000ms exceeded.
+Call log:
+[2m  - waiting for locator('[data-cbc=\'K4\'] input[data-box]') to be visible[22m
+
+NOT-IMPLEMENTED  UC-G8-09 Payment pending locks the game (0 s)
+PASS             UC-G8-10 Free launch limit (0 s)
+done: pass 6, fail 1, error 1, not-implemented 2; /tmp/claude-0/work/out/results-G8-B.json
+38 tagged game(s) to clean on http://localhost:8821
+gone     TR-r1-UCG101
+gone     TR-r1-UCG102
+gone     TR-r1-UCG103
+gone     TR-r1-UCG104
+gone     TR-r1-UCG105
+gone     TR-r1-UCG107
+gone     TR-r1-UCG112
+gone     TR-r1-UCG201
+gone     TR-r1-UCG202
+gone     TR-r1-UCG203
+gone     TR-r1-UCG204
+gone     TR-r1-UCG205
+gone     TR-r1-UCG206
+gone     TR-r1-UCG207
+gone     TR-r1-UCG208
+gone     TR-r1-UCG209
+gone     TR-r1-UCG210
+gone     TR-r1-UCG301
+gone     TR-r1-UCG302
+gone     TR-r1-UCG304
+gone     TR-r1-UCG305
+gone     TR-r1-UCG306
+gone     TR-r1-UCG307
+gone     TR-r1-UCG309
+gone     TR-r1-UCG601
+gone     TR-r1-UCG603
+gone     TR-r1-UCG604
+gone     TR-r1-UCG605
+gone     TR-r1-UCG710
+gone     TR-r1-UCG711
+cleaned  TR-r1-UCG801  cancel 200  erase 200
+cleaned  TR-r1-UCG802  cancel 200  erase 200
+cleaned  TR-r1-UCG803  cancel 200  erase 200
+cleaned  TR-r1-UCG804  cancel 200  erase 200
+cleaned  TR-r1-UCG806  cancel 200  erase 200
+cleaned  TR-r1-UCG807  cancel 200  erase 200
+cleaned  TR-r1-UCG808  cancel 200  erase 200
+gone     TR-r1-UCG810
+finished

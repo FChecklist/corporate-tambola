@@ -1,0 +1,29 @@
+compressed clock x6 with the stand-in beacon
+G1 layer B run r1: 12 cases on http://localhost:8821; meter 0/25000
+FAIL             UC-G1-01 Step 1: automatic start, game calls the numbers (55 s)
+   FAIL the game started by itself and 5 numbers were called | numbers seen 0
+   FAIL every phone shows the same numbers in the same order |  |  |  |  |  |  |  |  | 
+   FAIL the numbers come on the 6-second beat (median gap NaN s) | 
+PASS             UC-G1-02 Step 1: manual start, organizer presses Start (12 s)
+PASS             UC-G1-03 Step 1: host-called numbers (organizer rolls each number) (12 s)
+PASS             UC-G1-04 Step 2: who is the game for, open join (5 s)
+PASS             UC-G1-05 Step 2: who is the game for, list game with 9 listed people (28 s)
+NOT-IMPLEMENTED  UC-G1-06 Step 3: one ticket each, early prizes only (0 s)
+PASS             UC-G1-07 Step 3: two tickets each (Ticket A and B) (1 s)
+NOT-IMPLEMENTED  UC-G1-08 Step 3: Lucky Draw 1 prize (0 s)
+NOT-IMPLEMENTED  UC-G1-09 Step 3: Lucky Draw 3 prizes (0 s)
+NOT-IMPLEMENTED  UC-G1-10 Step 3: Super Bumper with 1, 2, 5 and 10 prizes (four runs) (0 s)
+NOT-IMPLEMENTED  UC-G1-11 Step 4: breaks, brand and time zone (0 s)
+FAIL             UC-G1-12 Step 5: payment demo, publish and rehearsal 1-3 (0 s)
+   FAIL rehearsal 1 starts (API) | 402 {"error":"First publish your game and pay. This unlocks your 3 rehearsals.","code":"not-paid"}
+   FAIL the rehearsal game id came back | {"error":"First publish your game and pay. This unlocks your 3 rehearsals.","code":"not-paid"}
+done: pass 5, fail 2, error 0, not-implemented 5; /tmp/claude-0/work/out/results-G1-B.json
+7 tagged game(s) to clean on http://localhost:8821
+cleaned  TR-r1-UCG101  cancel 409  erase 409 game-running
+cleaned  TR-r1-UCG102  cancel 409  erase 409 game-running
+cleaned  TR-r1-UCG103  cancel 409  erase 409 game-running
+cleaned  TR-r1-UCG104  cancel 200  erase 200
+cleaned  TR-r1-UCG105  cancel 200  erase 200
+cleaned  TR-r1-UCG107  cancel 200  erase 200
+cleaned  TR-r1-UCG112  cancel 200  erase 200
+finished

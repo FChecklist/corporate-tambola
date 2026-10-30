@@ -1,0 +1,227 @@
+{
+ "group": "G1",
+ "layer": "B",
+ "run": "r1",
+ "base": "http://localhost:8821",
+ "at": "2026-10-30T02:16:37.288Z",
+ "seconds": 113,
+ "requests": 6737,
+ "summary": {
+  "cases": 12,
+  "pass": 5,
+  "fail": 2,
+  "error": 0,
+  "notImplemented": 5,
+  "stopped": 0
+ },
+ "results": [
+  {
+   "id": "UC-G1-01",
+   "title": "Step 1: automatic start, game calls the numbers",
+   "status": "fail",
+   "seconds": 55,
+   "game": "TR-r1-UCG101",
+   "evidence": [
+    {
+     "check": "organizer console opens without a script error",
+     "ok": true
+    },
+    {
+     "check": "all 9 players joined",
+     "ok": true
+    },
+    {
+     "check": "the game started by itself and 5 numbers were called",
+     "ok": false,
+     "detail": "numbers seen 0"
+    },
+    {
+     "check": "every phone shows the same numbers in the same order",
+     "ok": false,
+     "detail": " |  |  |  |  |  |  |  | "
+    },
+    {
+     "check": "no number repeats and all are within 1..90",
+     "ok": true
+    },
+    {
+     "check": "the numbers come on the 6-second beat (median gap NaN s)",
+     "ok": false,
+     "detail": ""
+    },
+    {
+     "check": "no phone had a script error",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G1-02",
+   "title": "Step 1: manual start, organizer presses Start",
+   "status": "pass",
+   "seconds": 12,
+   "game": "TR-r1-UCG102",
+   "evidence": [
+    {
+     "check": "both players joined and checked in",
+     "ok": true
+    },
+    {
+     "check": "manual start: no number came by itself 40 seconds after the start time (not driven: the Start press, a signed control key)",
+     "ok": true
+    },
+    {
+     "check": "the phones say the game is waiting, not over",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G1-03",
+   "title": "Step 1: host-called numbers (organizer rolls each number)",
+   "status": "pass",
+   "seconds": 12,
+   "game": "TR-r1-UCG103",
+   "evidence": [
+    {
+     "check": "both players joined and checked in",
+     "ok": true
+    },
+    {
+     "check": "host-called numbers: no number came by itself 40 seconds after the start time (not driven: the roll press, a signed control key)",
+     "ok": true
+    },
+    {
+     "check": "the phones say the game is waiting, not over",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G1-04",
+   "title": "Step 2: who is the game for, open join",
+   "status": "pass",
+   "seconds": 5,
+   "game": "TR-r1-UCG104",
+   "evidence": [
+    {
+     "check": "all 9 joined without approval",
+     "ok": true
+    },
+    {
+     "check": "each player holds one ticket and the tickets are all different",
+     "ok": true
+    },
+    {
+     "check": "no phone had a script error",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G1-05",
+   "title": "Step 2: who is the game for, list game with 9 listed people",
+   "status": "pass",
+   "seconds": 28,
+   "game": "TR-r1-UCG105",
+   "evidence": [
+    {
+     "check": "the five listed people joined directly",
+     "ok": true
+    },
+    {
+     "check": "an unlisted number waits (no ticket, the wait screen)",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G1-06",
+   "title": "Step 3: one ticket each, early prizes only",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"prizes\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G1-07",
+   "title": "Step 3: two tickets each (Ticket A and B)",
+   "status": "pass",
+   "seconds": 1,
+   "game": "TR-r1-UCG107",
+   "evidence": [
+    {
+     "check": "every player holds two tickets",
+     "ok": true
+    },
+    {
+     "check": "Ticket A and Ticket B of a player are different",
+     "ok": true
+    },
+    {
+     "check": "all six tickets are different from each other",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G1-08",
+   "title": "Step 3: Lucky Draw 1 prize",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"lucky\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G1-09",
+   "title": "Step 3: Lucky Draw 3 prizes",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"lucky\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G1-10",
+   "title": "Step 3: Super Bumper with 1, 2, 5 and 10 prizes (four runs)",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"super-bumper\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G1-11",
+   "title": "Step 4: breaks, brand and time zone",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"breaks-brand\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G1-12",
+   "title": "Step 5: payment demo, publish and rehearsal 1-3",
+   "status": "fail",
+   "seconds": 0,
+   "game": "TR-r1-UCG112",
+   "evidence": [
+    {
+     "check": "three rehearsal cards are offered (API)",
+     "ok": true
+    },
+    {
+     "check": "rehearsal 1 starts (API)",
+     "ok": false,
+     "detail": "402 {\"error\":\"First publish your game and pay. This unlocks your 3 rehearsals.\",\"code\":\"not-paid\"}"
+    },
+    {
+     "check": "rehearsal 2 is refused while 1 is not finished (API)",
+     "ok": true
+    },
+    {
+     "check": "the rehearsal game id came back",
+     "ok": false,
+     "detail": "{\"error\":\"First publish your game and pay. This unlocks your 3 rehearsals.\",\"code\":\"not-paid\"}"
+    }
+   ]
+  }
+ ]
+}

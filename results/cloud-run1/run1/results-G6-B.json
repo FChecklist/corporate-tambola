@@ -1,0 +1,152 @@
+{
+ "group": "G6",
+ "layer": "B",
+ "run": "r1",
+ "base": "http://localhost:8821",
+ "at": "2026-10-30T02:27:55.752Z",
+ "seconds": 58,
+ "requests": 423,
+ "summary": {
+  "cases": 10,
+  "pass": 4,
+  "fail": 1,
+  "error": 0,
+  "notImplemented": 5,
+  "stopped": 0
+ },
+ "results": [
+  {
+   "id": "UC-G6-01",
+   "title": "Common link opens the join page",
+   "status": "pass",
+   "seconds": 3,
+   "game": "TR-r1-UCG601",
+   "evidence": [
+    {
+     "check": "the invitation names the Corporate Tambola (Housie) and says what to type",
+     "ok": true
+    },
+    {
+     "check": "the join works",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G6-02",
+   "title": "Personal link joins without a number",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"personal-link\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G6-03",
+   "title": "Family link shows the family wording",
+   "status": "pass",
+   "seconds": 26,
+   "game": "TR-r1-UCG603",
+   "evidence": [
+    {
+     "check": "the family host joined",
+     "ok": true
+    },
+    {
+     "check": "the family link shows the family wording",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G6-04",
+   "title": "Co-host link never shows family words",
+   "status": "pass",
+   "seconds": 25,
+   "game": "TR-r1-UCG604",
+   "evidence": [
+    {
+     "check": "the person waits",
+     "ok": true
+    },
+    {
+     "check": "no family wording on a Co-host link",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G6-05",
+   "title": "Host link opens the Host console",
+   "status": "fail",
+   "seconds": 3,
+   "game": "TR-r1-UCG605",
+   "evidence": [
+    {
+     "check": "a console, not the join page",
+     "ok": false,
+     "detail": "Use the new organizer screens Corporate Tambola Host Finish setup Two quick things, then your game opens. This link works once. 1. Your e-mail Use the e-mail your Organizer gave us: t***@example.inval"
+    },
+    {
+     "check": "no script error",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "UC-G6-06",
+   "title": "Thank-you page after the game",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"thanks\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G6-07",
+   "title": "Game completed page 30 minutes later",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"completed\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G6-08",
+   "title": "30-minute wait message",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"lapse-text\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G6-09",
+   "title": "Share and WhatsApp buttons",
+   "status": "not-implemented",
+   "seconds": 0,
+   "note": "driver kind \"share\" is filled in S2",
+   "evidence": []
+  },
+  {
+   "id": "UC-G6-10",
+   "title": "Brochure, guide and manual links",
+   "status": "pass",
+   "seconds": 0,
+   "evidence": [
+    {
+     "check": "/brochure.pdf is a real PDF of a sensible size",
+     "ok": true
+    },
+    {
+     "check": "/organizer-manual.pdf is a real PDF of a sensible size",
+     "ok": true
+    },
+    {
+     "check": "the guide answers with the six-item menu",
+     "ok": true
+    },
+    {
+     "check": "the guide names the Use the previous screens link",
+     "ok": true
+    }
+   ]
+  }
+ ]
+}

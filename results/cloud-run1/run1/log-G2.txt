@@ -1,0 +1,42 @@
+G2 layer B run r1: 14 cases on http://localhost:8821; meter 6737/25000
+PASS             UC-G2-01 Join by listed employee ID (27 s)
+PASS             UC-G2-02 Join by listed email ID (26 s)
+FAIL             UC-G2-03 Not on the list, Host approves (70 s)
+   FAIL the Host sees the request (API) | []
+   FAIL the player's page turns into the ticket by itself | 
+PASS             UC-G2-04 Not on the list, Co-host approves own people only (56 s)
+PASS             UC-G2-05 Not on the list, Organizer approves (92 s)
+PASS             UC-G2-06 Open join with an optional email ID (52 s)
+PASS             UC-G2-07 Duplicate mobile on another device (26 s)
+PASS             UC-G2-08 Game full: cap reached (26 s)
+FAIL             UC-G2-09 Late join after the first numbers (127 s)
+   FAIL numbers started before the late joiner arrives | 0
+   FAIL the page is in play for the late joiner (numbers shown, no refusal) | {"log":0,"late":false}
+PASS             UC-G2-10 Cached page with the old consent version (26 s)
+ERROR            UC-G2-11 Reconnect: close the page and reopen (0 s)
+   ERROR start refused: {"error":"Too many new engagements from this network today. Please try again tomorrow."}
+ERROR            UC-G2-12 Two devices: second phone for the same ticket (0 s)
+   ERROR start refused: {"error":"Too many new engagements from this network today. Please try again tomorrow."}
+ERROR            UC-G2-13 Family pass: request, approve, decline (0 s)
+   ERROR start refused: {"error":"Too many new engagements from this network today. Please try again tomorrow."}
+NOT-IMPLEMENTED  UC-G2-14 Family pass: 30-minute lapse and 15-minute cutoff (0 s)
+done: pass 8, fail 2, error 3, not-implemented 1; /tmp/claude-0/work/out/results-G2-B.json
+17 tagged game(s) to clean on http://localhost:8821
+gone     TR-r1-UCG101
+gone     TR-r1-UCG102
+gone     TR-r1-UCG103
+gone     TR-r1-UCG104
+gone     TR-r1-UCG105
+gone     TR-r1-UCG107
+gone     TR-r1-UCG112
+cleaned  TR-r1-UCG201  cancel 200  erase 200
+cleaned  TR-r1-UCG202  cancel 200  erase 200
+cleaned  TR-r1-UCG203  cancel 200  erase 200
+cleaned  TR-r1-UCG204  cancel 200  erase 200
+cleaned  TR-r1-UCG205  cancel 200  erase 200
+cleaned  TR-r1-UCG206  cancel 200  erase 200
+cleaned  TR-r1-UCG207  cancel 200  erase 200
+cleaned  TR-r1-UCG208  cancel 200  erase 200
+cleaned  TR-r1-UCG209  cancel 409  erase 409 game-running
+cleaned  TR-r1-UCG210  cancel 200  erase 200
+finished

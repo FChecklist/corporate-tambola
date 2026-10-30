@@ -1,0 +1,66 @@
+compressed clock x6 with the stand-in beacon
+G4 layer B run r1: 14 cases on http://localhost:8821; meter 10271/25000
+FAIL             UC-G4-01 Automatic timer 12 seconds (55 s)
+   FAIL the game started by itself and 5 numbers were called | numbers seen 0
+   FAIL every phone shows the same numbers in the same order |  |  |  |  |  |  |  |  | 
+   FAIL the numbers come on the 6-second beat (median gap NaN s) | 
+NOT-IMPLEMENTED  UC-G4-02 Manual start then automatic numbers (0 s)
+NOT-IMPLEMENTED  UC-G4-03 Host-called numbers with the 5-second lock (0 s)
+NOT-IMPLEMENTED  UC-G4-04 Pause when a claim is checked (0 s)
+NOT-IMPLEMENTED  UC-G4-05 Pause and resume by the organizer (0 s)
+FAIL             UC-G4-06 No repeated numbers across 90 (137 s)
+   FAIL the game reached the numbers asked for (90, or it ended earlier when the last prize was won) | 0
+NOT-IMPLEMENTED  UC-G4-07 Game ends at 90 numbers (0 s)
+NOT-IMPLEMENTED  UC-G4-08 Game ends when all prizes are claimed (0 s)
+NOT-IMPLEMENTED  UC-G4-09 Early end by the organizer (0 s)
+NOT-IMPLEMENTED  UC-G4-10 Last numbers and called count (0 s)
+NOT-IMPLEMENTED  UC-G4-11 Crossing a number twice un-crosses it (0 s)
+PASS             UC-G4-12 Ticket A/B switch in a two-ticket game (3 s)
+PASS             UC-G4-13 Retro and Modern looks (3 s)
+PASS             UC-G4-14 Phone, tablet and laptop widths (9 s)
+done: pass 3, fail 2, error 0, not-implemented 9; /tmp/claude-0/work/out/results-G4-B.json
+43 tagged game(s) to clean on http://localhost:8821
+gone     TR-r1-UCG101
+gone     TR-r1-UCG102
+gone     TR-r1-UCG103
+gone     TR-r1-UCG104
+gone     TR-r1-UCG105
+gone     TR-r1-UCG107
+gone     TR-r1-UCG112
+gone     TR-r1-UCG201
+gone     TR-r1-UCG202
+gone     TR-r1-UCG203
+gone     TR-r1-UCG204
+gone     TR-r1-UCG205
+gone     TR-r1-UCG206
+gone     TR-r1-UCG207
+gone     TR-r1-UCG208
+gone     TR-r1-UCG209
+gone     TR-r1-UCG210
+gone     TR-r1-UCG301
+gone     TR-r1-UCG302
+gone     TR-r1-UCG304
+gone     TR-r1-UCG305
+gone     TR-r1-UCG306
+gone     TR-r1-UCG307
+gone     TR-r1-UCG309
+gone     TR-r1-UCG601
+gone     TR-r1-UCG603
+gone     TR-r1-UCG604
+gone     TR-r1-UCG605
+gone     TR-r1-UCG710
+gone     TR-r1-UCG711
+gone     TR-r1-UCG801
+gone     TR-r1-UCG802
+gone     TR-r1-UCG803
+gone     TR-r1-UCG804
+gone     TR-r1-UCG806
+gone     TR-r1-UCG807
+gone     TR-r1-UCG808
+gone     TR-r1-UCG810
+cleaned  TR-r1-UCG401  cancel 409  erase 200
+cleaned  TR-r1-UCG406  cancel 409  erase 200
+cleaned  TR-r1-UCG412  cancel 409  erase 409 game-running
+cleaned  TR-r1-UCG413  cancel 409  erase 409 game-running
+cleaned  TR-r1-UCG414  cancel 409  erase 409 game-running
+finished
