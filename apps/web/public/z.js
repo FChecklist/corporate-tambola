@@ -190,6 +190,11 @@
   // 1.8.0: an open game (people type their mobile number) also takes an optional Email ID. The server checks its shape and keeps one ticket per email.
   // 1.8.1: only an open game (the public settings say open: true) asks for the optional Email ID; the join notice K4 names it (data map, rule D2)
   const emailAsked = () => INFO.open === true && (INFO.verify || "mobile") === "mobile" && !INFO.empOnly;
+  /** 1.8.4 (approved mock, landing): the company, the day and time (India time) and the Game ID as small chips under the title. */
+  const joinChips = () => {
+    const co = INFO.brand && INFO.brand.name ? `<span class="zjchip zjco">${esc(INFO.brand.name)}</span>` : "", when = INFO.startMs && ZG.dayTimeIst ? `<span class="zjchip">&#128197; ${esc(ZG.dayTimeIst(INFO.startMs))}</span>` : "";
+    return EID && !DEMO ? `<div class="zjchips" id="joinchips">${co}${when}<span class="zjchip">Game ID ${esc(EID)}</span></div>` : "";
+  };
   const joinView = (msg) => {
     if (J.mode === "removed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>You are not on this game's list</h2><p class="zsmall" style="margin:0">You were removed from this game, so there is no ticket for you here. If you think this is a mistake, please ask the person who invited you.</p></div>`;
     if (J.mode === "gone") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This link is not active any more</h2><p class="zsmall" style="margin:0">Please ask the person who invited you for a new link.</p></div>`;
@@ -197,7 +202,8 @@
     if (J.mode === "waiting") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard zwait" role="status"><h2>Please wait a moment</h2><p style="margin:0 0 6px">${FAMILY_LINK && (!J.note || /^This game is by invitation/.test(J.note)) ? "You asked to join through a family pass. Please wait while your family host approves your entry. You can come in as soon as they say yes." : J.note ? esc(J.note) : `Your request to join has gone to ${J.who ? esc(J.who) : "the organizer"}.`}</p><p class="zsmall" style="margin:0">Keep this page open. As soon as you are let in, your ticket appears here.</p></div><div class="zagain">${J.emp || J.phone ? `<p class="zsmall" style="margin:0 0 6px">You asked with <b>${esc([J.emp, shownPhone()].filter(Boolean).join(" / "))}</b>. Is that wrong?</p>` : ""}<button class="zbtn s alt" id="again" type="button">Wrong number or ID? Type it again</button></div>`;
     if (J.mode === "declined" || J.mode === "lapsed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>${J.mode === "declined" ? "Your request was not accepted" : /waited 30 minutes/.test(J.endNote || "") ? "Your request has timed out" : /game has ended/i.test(J.endNote || "") ? "This game has ended" : "This request has run out"}</h2><p class="zsmall" style="margin:0 0 8px">${J.endNote ? esc(J.endNote) : J.mode === "declined" ? "You are not on the list for this game. Please ask the person who invited you." : "Nobody answered in time. You can ask again."}</p></div><div class="zagain"><button class="zbtn s alt" id="again" type="button">${J.mode === "declined" ? "Typed it wrong? Type it again" : "Ask again"}</button></div>`;
     const personal = !!TOKEN && J.mode !== "needPhone"; // a personal link is made for one person: no number to type unless the server asks
-    return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div>
+    const chips = joinChips();
+    return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div>${chips}
     <div class="zcard zform zjoin"><h2>Join the game</h2>
     ${welcomeLine(personal)}
     <ol class="zsteps" aria-label="How to join"><li><b>1</b><span>Tick the boxes</span></li><li><b>2</b><span>${personal ? "Press the button" : "Type your number"}</span></li><li><b>3</b><span>Get your ticket</span></li></ol><p class="zsmall zdnd" id="dndtip">Tip: turn on Do Not Disturb so other apps do not interrupt your game.</p>
@@ -960,7 +966,7 @@
     if (!CK.loaded) return `${brandStrip()}${demoGameCard()}<div class="zcard"><p class="zmsg">Loading your check-in…</p></div>`;
     if (!CK.open) {
       const left = Math.max(0, Math.round((CK.opensMs - Date.now()) / 1000));
-      return `${brandStrip()}${demoGameCard()}<div class="zcard zck"><div class="zeyebrow">Before the game</div><h2>Check-in opens at ${esc(ckTime(CK.opensMs))}</h2>${ids}<p class="zsmall">Check-in opens 5 minutes before the game starts. Keep this page open: the check-in appears here by itself, and your ticket opens once you are marked present.</p><p class="zsmall zkeepon">${esc(KEEPON)}</p><div class="zckwait"><span>Opens in</span> <b>${esc(clock(left))}</b></div></div>`;
+      return `${brandStrip()}${demoGameCard()}<div class="zcard zck"><div class="zeyebrow">Before the game</div><p class="zin" id="zin"><b>You are in!</b>${INFO.startMs ? ` Game starts in ${esc(clock((INFO.startMs - Date.now()) / 1000))}.` : ""}</p><h2>Check-in opens at ${esc(ckTime(CK.opensMs))}</h2>${ids}<p class="zsmall">Check-in opens 5 minutes before the game starts. Keep this page open: the check-in appears here by itself, and your ticket opens once you are marked present.</p><p class="zsmall zkeepon">${esc(KEEPON)}</p><div class="zckwait"><span>Opens in</span> <b>${esc(clock(left))}</b></div></div>`;
     }
     const x = CK.v, ready = x.okN && x.okM && String(x.code).length === 4;
     return `${brandStrip()}${demoGameCard()}<div class="zcard zck"><div class="zeyebrow">Before the game</div><h2>Mark yourself present</h2>${ids}

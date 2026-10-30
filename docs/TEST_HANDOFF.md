@@ -13,3 +13,9 @@ Tests that will need updating (exact source or text pins)
 New tests to write
 - ended less than 30 minutes ago: results + "Game completed" + Game ID + 30-minute line; ended 31 minutes ago opened fresh: only the calm page, no ticket, no prizes; a phone that watched the end keeps the results even after 30 minutes pass in the same visit.
 - no word "private" in the new text; Hindi/other-language not involved.
+
+## Group 2: join page chips + before the game (z.js, z.css, zsw.js)
+- Join page: under the title, small chips: company name (when a brand is set), day and time in India time, "Game ID <id>" (id zjchips / joinchips). Not shown in the free demo.
+- Before the game (check-in games): a line "You are in! Game starts in <h m>." above "Check-in opens at ...". The ticket itself still opens only after check-in (owner rule since 1.8.0), so the mock's pre-start ticket is NOT shown: the gap stays for that one point.
+- zsw.js cache name ct-game-v40 -> ct-game-v41 (files changed shape). Any test that pins v40 must follow.
+- Tests to write: chips present with and without a brand; absent in demo; "You are in!" present in the check-in-closed state and absent once check-in is open.
