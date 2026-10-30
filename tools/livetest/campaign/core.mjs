@@ -1,7 +1,7 @@
 // Helpers shared by every case implementation (impl/g*.mjs): the tagged demo game, players that join through the real page, consoles, role keys, checks.
-import { chromium, makeApi, roundAt, sleep } from "./lib.mjs";
+import { chromium, makeApi, roundAt, sleep, CONSENT } from "./lib.mjs";
 import { tagOf, register } from "./tags.mjs";
-export { chromium, makeApi, roundAt, sleep };
+export { chromium, makeApi, roundAt, sleep, CONSENT };
 export const PHONE = { width: 390, height: 844 };
 export const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : NaN; };
 
