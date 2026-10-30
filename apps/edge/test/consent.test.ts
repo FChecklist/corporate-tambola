@@ -161,13 +161,14 @@ describe("4. a new Terms version asks again", () => {
     const key = await organizer("b@acme.com"); const id = await draft(key, "CON-11");
     await staleRefusal(await call("POST", `/api/z/${id}/publish`, { ...PUB, consent: ticks("K1", OLD) }, key), "K1");
     expect((await call("POST", `/api/z/${id}/publish`, { ...PUB, consent: ticks("K1") }, key)).status).toBe(200);
-    // a Co-host who accepted under the old version is asked again
+    // 1.8.3: a Co-host who accepted under the old version is NOT locked out (the record counts under any version); a new acceptance carries the current one
     const co = (await j(await call("POST", "/api/org/cohost", { label: "Ravi", phone: "9876500001", e: id }, key))).cohostKey as string;
     expect((await call("POST", "/api/org/role/accept", { consent: ticks("K5") }, co)).status).toBe(200);
     expect((await call("GET", `/api/z/${id}/people`, undefined, co)).status).toBe(200);
     raw.run("UPDATE consent_log SET version=? WHERE kind='K5'", [OLD]);
-    await refusal(await call("GET", `/api/z/${id}/people`, undefined, co), "K5");
-    expect(await hasConsent(env.DB, (raw.query("SELECT subject FROM consent_log WHERE kind='K5'").get() as any).subject, "K5")).toBe(false);
+    expect((await call("GET", `/api/z/${id}/people`, undefined, co)).status).toBe(200);
+    expect(await hasConsent(env.DB, (raw.query("SELECT subject FROM consent_log WHERE kind='K5'").get() as any).subject, "K5")).toBe(false); // not the current version...
+    expect(await hasConsent(env.DB, (raw.query("SELECT subject FROM consent_log WHERE kind='K5'").get() as any).subject, "K5", true)).toBe(true); // ...but accepted
   });
 });
 
