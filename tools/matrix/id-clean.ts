@@ -139,22 +139,19 @@ for (const x of inputs()) {
 let workerRan = 0, pageRan = 0;
 if (WORKER_N > 0) {
   const { World } = await import(join(ROOT, "apps/edge/test/rc185/helpers.ts"));
-  const pick = keep.slice(0, WORKER_N); let w = new World(), m = "", gameNo = 0, inGame = 0; const taken = new Set<string>();
-  const fresh = async () => { w.restore(); w = new World(); gameNo++; m = await w.game(NEW_T, "EMP-1", {}, true); inGame = 0; taken.clear(); }; // an OPEN game that asks for the ID: any valid ID gets a ticket once
-  await fresh();
-  for (const x of pick) {
+  const pick = keep.slice(0, WORKER_N);
+  for (const x of pick) { // one list-only employee-ID game per input: the organizer lists the text, the person types the same text; the real routes decide
+    const w = new World();
     try {
-      if (inGame >= 60) await fresh();
-      inGame++;
-      const want = oracleEmpNew(x); const r = await w.join(NEW_T, x, inGame); const b = (await r.json()) as any;
-      const expectStatus = want === null ? 400 : want === "" ? 400 : taken.has(want) ? 423 : 200;
-      if (typeof want === "string" && want !== "" && r.status === 200) taken.add(want);
-      checks++; if (r.status !== expectStatus) bad("W1 real Worker join", x, `status ${r.status} (${JSON.stringify(b).slice(0, 120)}), wanted ${expectStatus}`);
-      if (nfHasAt(x)) { checks++; const lettered = E.cleanEmpId(x); if (r.status === 200 || JSON.stringify(b).includes(lettered) && lettered.length > 3) bad("W2 e-mail turned into letters by the Worker", x, JSON.stringify(b).slice(0, 160)); }
+      const m = await w.game(NEW_T, "EMP-1", {}, false); const want = oracleEmpNew(x); const usable = typeof want === "string" && want !== "";
+      const a = await w.add(NEW_T, m, [{ name: "A", empId: x }]); const ab = (await a.json()) as any;
+      checks++; if ((a.status === 200 && ab.added === 1) !== usable) bad("W1 real Worker list upload", x, `status ${a.status} ${JSON.stringify(ab).slice(0, 120)}, usable=${usable}`);
+      const r = await w.join(NEW_T, x, 1); const b = (await r.json()) as any; const bodyText = JSON.stringify(b);
+      checks++; if ((r.status === 200) !== usable || (!usable && r.status !== 400)) bad("W1 real Worker join", x, `status ${r.status} (${bodyText.slice(0, 120)}), usable=${usable}`);
+      if (nfHasAt(x)) { checks++; const lettered = E.cleanEmpId(x); if (r.status === 200 || (lettered.length > 3 && bodyText.includes(lettered))) bad("W2 e-mail turned into letters by the Worker", x, bodyText.slice(0, 160)); }
       workerRan++;
-    } catch (e: any) { bad("W0 real Worker error", x, String(e?.message ?? e).slice(0, 160)); }
+    } catch (e: any) { bad("W0 real Worker error", x, String(e?.message ?? e).slice(0, 160)); } finally { w.restore(); }
   }
-  w.restore();
   // account sign-up: the real route, ten thousand times would create ten thousand organizers; a few hundred are enough to show the route follows the same test
   const acctPick = keep.filter((x) => /[@＠﹫]/.test(x)).slice(0, Math.min(400, WORKER_N)); const w2 = new World(true); let ip = 0;
   for (const x of acctPick) {
