@@ -9,6 +9,7 @@ import { Window } from "happy-dom";
 import { newWorld, openPage, type Page } from "../harness";
 import { PUB } from "../storage-scan";
 import { organizer, published, phone, setVal, endedView, endMs, realPid, NEW_AT, roundAt, roundMs, LOG, CALL_S, type O } from "./page";
+import { lifecycleTick } from "../../../edge/src/lifecycle";
 import { PRIZE_HOUSES } from "../../../../packages/beacon/src/config";
 
 setDefaultTimeout(90_000);
@@ -147,8 +148,8 @@ describe("G: z.js takes the end time from the server's endedAtMs, and falls back
   async function opened(mins: number, life: number | null) {
     const o = await organizer(); await published(o, eid); const pid = await realPid(o, eid);
     if (life !== null) o.world.raw.prepare("INSERT INTO life(eid,end_ms,end_src) VALUES(?,?,'phones')").run(eid, endMs() + life * MIN);
-    const info = await o.json(await o.api("GET", `/api/z/${eid}/info`));
-    o.world.now = endMs() + mins * MIN;
+    o.world.now = endMs() + mins * MIN; // one fixed fake clock for the Worker and the page, set before anything is read: no real time, no other file
+    const info = await o.json(await o.api("GET", `/api/z/${eid}/info`, undefined, undefined, o.world.now));
     const p = await phone(o, `/z?e=${eid}`, { patch: endedView({ pid }) }); open.push(p);
     await p.waitFor((t) => /Game completed|Thank you for playing|This game is now over/.test(t), 30_000);
     return { p, info };
@@ -173,6 +174,60 @@ describe("G: z.js takes the end time from the server's endedAtMs, and falls back
     const z = readFileSync(join(PUB, "z.js"), "utf8");
     expect(z).toContain("const endMsOf = (v) => INFO.endedAtMs > 0 ? INFO.endedAtMs :");
     expect(z).toContain("if (Number(r.endedAtMs) > 0 && !INFO.endedAtMs) INFO.endedAtMs = Number(r.endedAtMs);");
+  });
+});
+
+describe("G2: the Worker's endedAtMs in /info: a phone-confirmed end always, a scheduled end only once it has passed, and a returned value never moves", () => {
+  const eid = "RC-GLIFE";
+  const lifeRow = (o: O) => o.world.raw.prepare("SELECT end_ms, end_src FROM life WHERE eid=?").get(eid) as { end_ms: number; end_src: string };
+  const infoAt = async (o: O, at: number) => o.json(await o.api("GET", `/api/z/${eid}/info`, undefined, undefined, at));
+  /** A paid game with one joined person, on the fixed clock NEW_AT. Returns the organizer, its key and the real start time. */
+  async function game() {
+    const o = await organizer(NEW_AT); await published(o, eid); o.world.raw.prepare("UPDATE engagement SET pack=100 WHERE id=?").run(eid);
+    await realPid(o, eid);
+    const start = roundMs((o.world.raw.prepare("SELECT start_round r FROM engagement WHERE id=?").get(eid) as { r: number }).r);
+    return { o, start };
+  }
+  test("a scheduled end that has not passed: no endedAtMs, at the start, in the middle and one second before it, even after the minute-by-minute tick wrote it down", async () => {
+    const { o, start } = await game();
+    await lifecycleTick(o.world.env as any, NEW_AT + 1000);
+    const r = lifeRow(o); expect(r.end_src).toBe("schedule"); expect(r.end_ms).toBeGreaterThan(start);
+    for (const at of [NEW_AT + 2000, start, start + 10 * MIN, r.end_ms - 1000]) expect(await infoAt(o, at)).not.toHaveProperty("endedAtMs");
+  });
+  test("a scheduled end that has passed: endedAtMs is exactly the stored end, and it never changes (later looks, later ticks)", async () => {
+    const { o, start } = await game();
+    await lifecycleTick(o.world.env as any, NEW_AT + 1000); const r = lifeRow(o);
+    const a = (await infoAt(o, r.end_ms)).endedAtMs; expect(a).toBe(r.end_ms); // the very moment it has passed
+    for (const at of [r.end_ms + 1000, r.end_ms + 5 * MIN, start + 5 * 3_600_000]) { await lifecycleTick(o.world.env as any, at); expect((await infoAt(o, at)).endedAtMs).toBe(a); }
+    expect(lifeRow(o).end_ms).toBe(a);
+  });
+  test("a break added later does not make a returned value move, and does not create one before the end", async () => {
+    const { o, start } = await game();
+    await lifecycleTick(o.world.env as any, NEW_AT + 1000); const first = lifeRow(o).end_ms;
+    const brk = { breaks: [{ kind: "speech", title: "Short talk", text: "hello", after: 3, seconds: 60 }] };
+    expect((await o.api("PATCH", `/api/z/${eid}/settings`, brk, o.token, NEW_AT + 3000)).status).toBe(200); // before the game: the scheduled end may move, and nothing is shown
+    await lifecycleTick(o.world.env as any, NEW_AT + 4000);
+    expect(await infoAt(o, NEW_AT + 5000)).not.toHaveProperty("endedAtMs");
+    const moved = lifeRow(o).end_ms; expect(moved).toBeGreaterThanOrEqual(first);
+    const late = moved + 10 * MIN; const a = (await infoAt(o, late)).endedAtMs; expect(a).toBe(moved);
+    const again = await o.api("PATCH", `/api/z/${eid}/settings`, { breaks: [{ kind: "speech", title: "Another", text: "hi", after: 5, seconds: 600 }] }, o.token, late + 1000); // after the end: refused or ignored, either way the value stays
+    await lifecycleTick(o.world.env as any, late + 2000);
+    expect([again.status, (await infoAt(o, late + 3000)).endedAtMs, lifeRow(o).end_ms]).toEqual([again.status, a, a]);
+    expect(start).toBeLessThan(a);
+  });
+  test("a phone-confirmed end is shown at once, even before the scheduled time, and the later schedule or tick never changes it", async () => {
+    const { o, start } = await game();
+    await lifecycleTick(o.world.env as any, NEW_AT + 1000); const sched = lifeRow(o).end_ms;
+    const voted = start + 8 * MIN; expect(voted).toBeLessThan(sched);
+    o.world.raw.prepare("UPDATE life SET end_ms=?, end_src='phones' WHERE eid=?").run(voted, eid);
+    for (const at of [voted - 5 * MIN, voted, voted + 1000, sched - 1000]) expect((await infoAt(o, at)).endedAtMs).toBe(voted); // whatever the clock says
+    await lifecycleTick(o.world.env as any, sched + MIN); await lifecycleTick(o.world.env as any, sched + 3_600_000);
+    expect((await infoAt(o, sched + 3_700_000)).endedAtMs).toBe(voted); expect(lifeRow(o)).toEqual({ end_ms: voted, end_src: "phones" });
+  });
+  test("a cancelled game never carries endedAtMs", async () => {
+    const { o, start } = await game();
+    o.world.raw.prepare("INSERT INTO life(eid,end_ms,end_src) VALUES(?,?,'cancel') ON CONFLICT(eid) DO UPDATE SET end_ms=excluded.end_ms, end_src='cancel'").run(eid, NEW_AT);
+    expect(await infoAt(o, start + 5 * 3_600_000)).not.toHaveProperty("endedAtMs");
   });
 });
 
