@@ -51,3 +51,6 @@ export const EMAIL_ID_BAD = "Please check your Email ID. It looks incomplete.";
 export const badIdMessageFor = (raw: unknown, kind: IdKind, e: { created_ms?: number | null } | null | undefined, oldText: string): string => (kind === "email" ? EMAIL_ID_BAD : empBadMessage(raw, e, oldText));
 /** The word for the ID in plain sentences. */
 export const idWord = (kind: IdKind): string => (kind === "email" ? "Email ID" : "employee ID");
+
+/** The email of an ACCOUNT or a team member typed by the organizer (sign-up, sign-in code, Host or Co-host to add): NFKC and lower case, trimmed at the ends, but a space INSIDE is kept so the address is refused, never glued into a different address. (A participant's Email ID in a game uses normEmail, which removes inner spaces.) */
+export const normAccountEmail = (raw: unknown): string => String(raw ?? "").normalize("NFKC").trim().toLowerCase();

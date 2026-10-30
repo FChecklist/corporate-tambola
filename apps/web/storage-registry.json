@@ -124,6 +124,14 @@
       ]
     },
     {
+      "id": "organizer-screens",
+      "store": "localStorage",
+      "say": "On an organizer's browser: whether the new organizer screens or the previous ones open first.",
+      "keys": [
+        "ctz-zcflow"
+      ]
+    },
+    {
       "id": "payer",
       "store": "localStorage",
       "say": "In an organizer's browser: the name, e-mail, mobile number and invoice details typed on the payment page, so the form is filled in next time.",
