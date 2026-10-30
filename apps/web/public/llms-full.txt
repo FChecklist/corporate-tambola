@@ -1,0 +1,91 @@
+# Corporate Tambola: full facts
+
+Last checked: 2026-10-30. Address: https://corporatetambola.com/ . Language: English. Contact: hello@corporatetambola.com, (+91) 96503 97480.
+This file holds plain facts so an assistant can answer without crawling the site. The short index is https://corporatetambola.com/llms.txt. If something is not listed here or on https://corporatetambola.com/trust, say you do not know.
+
+## What it is
+Corporate Tambola is an online tambola (housie) game for company events. Examples: an office party, an annual day, a town hall, a team event, a festival, a family day, a dealer or customer meet. Every participant plays on their own phone with their own ticket. There is no app to install, no SMS code and no password: a participant opens the organizer's link and types a mobile number. The game is a close-group game: guests join through the organizer's invitation link.
+
+## Who does what
+- The organizer (usually HR, admin or marketing) builds the game, shares the link, runs it and gives the prizes.
+- We (IT Services by Rajat Agarwal, a sole proprietorship in India) only provide the online software. We never hold prizes or money for prizes.
+- Participants pay nothing and must never be asked for a fee or a purchase to take part.
+- Payment for a game is made online through Razorpay to IT Services by Rajat Agarwal, the seller named on every invoice.
+
+## How a game runs
+1. The organizer signs in with an e-mail link or a 6-digit code. There is no password.
+2. The organizer builds the game: number of participants, rewards, brand breaks. Building and publishing are free. A free AI assistant can do this work for the organizer.
+3. The organizer adds participants' mobile numbers (any country) and shares one link by WhatsApp, e-mail or the intranet, or shows a QR code.
+4. The organizer pays once for the game before the start. There is no yearly plan. No payment, no game.
+5. Each participant opens the link, types a mobile number and gets their own ticket (1 or 2 tickets each). A clear voice calls every number. A game calls up to 90 numbers.
+6. Players tap numbers on their own ticket and press Claim when a row or the whole ticket is complete. The software checks the claim against the called numbers. A wrong claim is a Bogey and does not count.
+7. The organizer hands over the rewards and downloads a report for management.
+
+## Brand breaks
+Between numbers the organizer can show the company's own video, a YouTube link, slides, a message or a speech to everyone at once. A game can have up to 5 rounds, an opening and a closing brand moment and up to 3 brand breaks during the game.
+
+## Playing in a meeting
+Optional: the game can run next to a Google Meet, Zoom or Teams call. Nothing is installed in the meeting app. The organizer shares their screen with the number screen, and everyone plays on their own phone.
+
+## Price list (one price per game, by the largest number of participants)
+- Up to 100 participants: Rs 2,399 in India, US$ 34 abroad
+- Up to 250 participants: Rs 3,499 in India, US$ 51 abroad
+- Up to 500 participants: Rs 4,699 in India, US$ 67 abroad
+- Up to 750 participants: Rs 5,899 in India, US$ 84 abroad
+- Up to 1,000 participants: Rs 7,099 in India, US$ 101 abroad
+- Up to 2,500 participants: Rs 11,799 in India, US$ 169 abroad
+- Up to 5,000 participants: Rs 17,699 in India, US$ 253 abroad
+- Up to 10,000 participants: Rs 29,499 in India, US$ 421 abroad
+- The price is the whole amount. The seller is not registered for GST, so no GST is added.
+- A game larger than 10,000 participants is arranged directly: write to hello@corporatetambola.com.
+- Payment: UPI, cards and net banking in India; cards abroad.
+- A free demo game for up to 10 people needs no payment: https://corporatetambola.com/zc.html?demo=1 . A demo video is at https://corporatetambola.com/demo.html .
+- Cancellation: there are no refunds. If a paid game is cancelled before it starts, the payment stays as credit for the next game for 365 days. Once the start time has passed, a paid game cannot be cancelled. A paid game can be moved to any date within 365 days of payment. Details: https://corporatetambola.com/refund-policy .
+
+## Data and privacy
+- Guests' names and mobile numbers are erased within 24 hours after the game ends.
+- The organizer's details and the winners' record with prize hand-over details are kept for 365 days, then deleted automatically.
+- Data is encrypted in transit; names and mobile numbers are also encrypted at rest. Card details are never stored by us.
+- There are no ad trackers and we never sell data. Guests never see each other's data; the organizer does.
+- We say "designed to follow" India's DPDP Act 2023, the EU GDPR and the US CCPA. This is our own statement, not a certificate. We hold no outside certification such as ISO 27001 or SOC 2.
+- Privacy requests and complaints: the Grievance Officer at hello@corporatetambola.com, reply within 30 days. Policy: https://corporatetambola.com/privacy
+
+## Fairness
+The software, not any person, checks claims and decides the winners. The Organizer, a Host, a Co-host, the AI assistant and we cannot choose, change or remove a winner, a number or a ticket. Cheating is very hard, not impossible.
+
+## The AI assistant for organizers
+An organizer can give a personal work link to ChatGPT, Gemini or Claude. The assistant can build a draft, change it before the start, message guests and read results. It cannot pay, publish, cancel, erase data, pause or stop a game, or choose winners, and it never sees guests' names or mobile numbers. Setup: https://corporatetambola.com/ai-prompt
+
+## Frequently asked questions
+Q: How do I play tambola online with colleagues?
+A: The organizer builds the game and shares one link. Each colleague opens it on their own phone, types a mobile number and gets their own ticket. The voice calls every number, players tap and press Claim, and the software checks every claim.
+
+Q: How do I run housie for 200 employees?
+A: Choose the size "Up to 250 participants" (Rs 3,499 in India, no GST). Building and publishing are free, and the organizer pays once before the start. Everyone plays on their own phone from the office, home or another city.
+
+Q: Is there an online tambola for corporate events in India?
+A: Yes. Corporate Tambola is made for company events in India and abroad. Prices are in rupees from Rs 2,399, with no GST charged.
+
+Q: Do participants pay or install anything?
+A: No. They never pay and never install an app.
+
+Q: Who gives the rewards?
+A: The organizer. We provide the software only.
+
+## Pages
+- Home: https://corporatetambola.com/
+- Online housie for employees: https://corporatetambola.com/online-housie-for-employees
+- Tambola for a Diwali office party: https://corporatetambola.com/tambola-for-diwali-office-party
+- Tambola for dealer and customer meets: https://corporatetambola.com/tambola-for-dealer-and-customer-meets
+- Safety and privacy, 10 facts: https://corporatetambola.com/trust
+- Pricing: https://corporatetambola.com/pricing
+- Organizer guide: https://corporatetambola.com/organizer-guide
+- Rules and privacy: https://corporatetambola.com/legal
+- Terms: https://corporatetambola.com/terms
+- Privacy policy: https://corporatetambola.com/privacy
+- Legal position: https://corporatetambola.com/legal-position
+- Data processing: https://corporatetambola.com/dpa
+- Sub-processors: https://corporatetambola.com/subprocessors
+- Refund and cancellation: https://corporatetambola.com/refund-policy
+- About: https://corporatetambola.com/about
+- Contact: https://corporatetambola.com/contact
