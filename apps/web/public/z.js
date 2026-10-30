@@ -1049,7 +1049,7 @@
     if (INFO.cancelled) { if (timer) { clearInterval(timer); timer = null; } clearInterval(J.timer); mediaHost.style.display = "none"; $app.innerHTML = cancelledView(); paintBrand(); return; } // a cancelled game: one calm screen, nothing else
     if (v.phase === "join") { const f = document.getElementById("ph") || document.getElementById("nm") || document.getElementById("emp"); if (f && document.activeElement === f) return; $app.innerHTML = joinView(J.mode && J.mode !== "needPhone" ? null : v.error); paintBrand(); bindJoin(); return; }
     if (ME.removed) { if (timer) { clearInterval(timer); timer = null; } mediaHost.style.display = "none"; $app.innerHTML = removedView(); paintBrand(); return; } // taken off the list: the phone stops
-    if (INFO.checkin && v.pid && !CK.present) { // the ticket is hidden until the person marks themselves present
+    if (INFO.checkin && v.pid && !CK.present && !completedLate(v)) { // (after the game the calm "Game completed" page wins) the ticket is hidden until the person marks themselves present
       loadCk(v); const af = document.activeElement; if (!CK.force && af && /^ck/.test(af.id || "")) return; CK.force = false; // never wipe a box someone is typing in, but a redraw the Edit / Submit buttons ask for goes through
       loadInvites(v); if (v.pid) loadFamily(v); const h = checkinView() + (v.pid ? inviteCard(v) : ""); // 1.8.0: a family host must be able to approve BEFORE check-in opens (5 minutes before the start), because approvals close 15 minutes before it
       if (h !== CK.html || !$app.firstChild) { CK.html = h; $app.innerHTML = h; paintBrand(); bindCheckin(); bindInvite(v); }
@@ -1113,7 +1113,7 @@
     if (!DEMO) CBConsent.wire(document, "K4", J.k4); // never ticked in advance; the button stays off until both boxes are ticked
     const phEl = document.getElementById("ph"), ccEl = document.getElementById("cc");
     if (phEl && ccEl) phEl.addEventListener("change", () => { const p = CTPhone.parse(ccEl.value, phEl.value); if (p.ok && /^\s*(\+|00)/.test(phEl.value)) { ccEl.value = p.iso; phEl.value = p.national; } }); // +44 7911 123456 pasted: the list shows the United Kingdom and the box keeps the rest
-    { const ei = document.getElementById("emp"), er = document.getElementById("empread"); if (ei && er) { const show = () => { const rd = readAs(ei.value); er.textContent = ei.value.trim() && rd && !(idKind() !== "email" && ei.value.normalize("NFKC").includes("@")) && (idKind() === "email" || INFO.idClean) ? "The system will read this as " + rd : ""; }; ei.addEventListener("input", show); show(); } }
+    { const ei = document.getElementById("emp"), er = document.getElementById("empread"); if (ei && er) { const show = () => { const rd = readAs(ei.value); er.textContent = ei.value.trim() && rd && !(idKind() !== "email" && ei.value.normalize("NFKC").includes("@")) && (idKind() === "email" || INFO.idClean) ? (idKind() !== "email" && rd.length > 30 ? "This ID is too long. An employee ID may be up to 30 characters once cleaned." : "The system will read this as " + rd) : ""; }; ei.addEventListener("input", show); show(); } }
     ["ph", "nm", "emp"].forEach((id) => { const i = document.getElementById(id); if (i) i.addEventListener("keydown", (e) => { if (e.key === "Enter" && !go.disabled) { e.preventDefault(); go.click(); } }); }); // the keyboard's Go / Enter key does what the button does
     go.onclick = async () => {
       if (!DEMO && !CBConsent.all(document, "K4")) return;
