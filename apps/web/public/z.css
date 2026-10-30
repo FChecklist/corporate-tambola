@@ -464,3 +464,5 @@ html[data-pt] .zfamrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;ma
 /* 1.8.5 polish: the mandatory mark is 13px and dark enough; on a phone the fixed language button gets its own strip so it never covers the brand banner */
 .zreq{font-size:13px;color:#9C1C14}
 @media(max-width:480px){.zapp:not(.zc){padding-top:52px}}
+
+html[data-pt=retro] .zreq,html[data-pt=modern] .zreq{color:#FFB4A8}

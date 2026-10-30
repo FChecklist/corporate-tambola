@@ -132,6 +132,7 @@
   let usesId, usesIdAsked = false;
   // 7: a console opened without a session answers "Not allowed." (the server's plain 403 for nobody): say what to do instead
   const signInFirst = () => { for (const m of document.querySelectorAll(".zf-msg")) { if (m.textContent.trim() === "Not allowed.") { m.textContent = ""; m.append("Please sign in first. ", el("a", { href: "/zc.html", id: "zt-signin" }, "Open the organizer sign-in"), " and sign in with your e-mail, then come back to this step."); } } };
+  try { new MutationObserver(signInFirst).observe(document.body || document.documentElement, { childList: true, subtree: true, characterData: true }); } catch {} // the 403 text is written into the page after the call returns, with no repaint: convert it the moment it appears (it stops matching once converted)
   function patchSteps() {
     signInFirst();
     const sv1 = document.getElementById("zf-save1");
