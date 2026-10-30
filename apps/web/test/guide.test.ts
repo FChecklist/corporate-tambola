@@ -22,7 +22,10 @@ function serverMessages() {
     readFileSync(join(EDGE, f), "utf8").split("\n").forEach((l, i) => {
       for (const m of l.matchAll(/error:\s*("(?:[^"\\]|\\.)*"|`[^`]*`)/g)) {
         const st = /\}\s*,\s*(\d{3})\s*\)/.exec(l.slice(m.index! + m[0].length)) ?? /status:\s*(\d{3})/.exec(l);
-        out.push({ file: f, line: i + 1, status: st ? Number(st[1]) : 400, msg: m[1]!.slice(1, -1) });
+        const msg = m[1]!.slice(1, -1), status = st ? Number(st[1]) : 400;
+        // a sentence the server builds from the game's ID word is two real sentences: the guide must match each one as the person sees it (never the template text)
+        if (msg.includes("${idWord(vf.idKind)}")) for (const word of ["employee ID", "Email ID"]) out.push({ file: f, line: i + 1, status, msg: msg.split("${idWord(vf.idKind)}").join(word) });
+        else out.push({ file: f, line: i + 1, status, msg });
       }
     });
   }

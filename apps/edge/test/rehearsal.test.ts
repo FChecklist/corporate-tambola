@@ -99,17 +99,17 @@ describe("the same people through all four runs", () => {
     const pids: Record<string, string[]> = {};
     for (let k = 0; k < 3; k++) {
       const b = await j(await start("REAL-1", { people: "none" })); expect(b.id).toBe(runs[k]);
-      pids[b.id] = []; for (let i = 1; i <= 6; i++) pids[b.id].push((await join(b.id, i)).pid);
+      const mine: string[] = []; pids[b.id] = mine; for (let i = 1; i <= 6; i++) mine.push((await join(b.id, i)).pid);
       // a claim in this run is stored in this run only
-      const r = await call("POST", `/api/z/${b.id}/claims`, { pid: pids[b.id][0], device: "0".repeat(32), claims: [{ pattern: "top", idx: 0 }] });
+      const r = await call("POST", `/api/z/${b.id}/claims`, { pid: mine[0], device: "0".repeat(32), claims: [{ pattern: "top", idx: 0 }] });
       expect([200, 409]).toContain(r.status);
       await close(b.id);
     }
-    pids["REAL-1"] = []; for (let i = 1; i <= 6; i++) pids["REAL-1"].push((await join("REAL-1", i)).pid);
+    const realPids: string[] = []; pids["REAL-1"] = realPids; for (let i = 1; i <= 6; i++) realPids.push((await join("REAL-1", i)).pid);
     for (const id of [...runs, "REAL-1"]) { expect((raw.query("SELECT COUNT(*) c FROM seat WHERE eid=?").get(id) as any).c).toBe(6); expect((raw.query("SELECT COUNT(*) c FROM participant WHERE eid=?").get(id) as any).c).toBe(6); }
     expect((raw.query("SELECT COUNT(*) c FROM claim WHERE eid='REAL-1'").get() as any).c).toBe(0); // the real game starts clean
     // each run has its own pid space (the pid carries the game code in its hash): a pid of one run is not a participant of another
-    const foreign = await call("POST", "/api/z/REAL-1/claims", { pid: pids["REAL-1-R1"][0], device: "0".repeat(32), claims: [{ pattern: "top", idx: 0 }] });
+    const foreign = await call("POST", "/api/z/REAL-1/claims", { pid: pids["REAL-1-R1"]![0], device: "0".repeat(32), claims: [{ pattern: "top", idx: 0 }] });
     expect(foreign.status).toBe(403);
   });
   test("four guest-list shapes with the same phones: different, partly the same, identical, and the same as the real game's list", async () => {
