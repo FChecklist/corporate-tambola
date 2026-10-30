@@ -268,7 +268,7 @@ async function addPeople(c: Ctx, who: Caller, b: any): Promise<Response> {
   const vf = verifyOf(c.e);
   for (const x of b.people) {
     const raw = `${cleanName(x?.name)} ${String(x?.phone ?? "")}`.trim().slice(0, 100);
-    const empRaw = String(x?.empId ?? x?.employeeId ?? "").trim(), emp = normIdFor(x?.empId ?? x?.employeeId, vf.idKind, c.e);
+    const empRaw = String(x?.empId ?? x?.employeeId ?? "").trim(), emp = vf.mode === "mobile" ? "" : normIdFor(x?.empId ?? x?.employeeId, vf.idKind, c.e); // "mobile number" games never read the employee ID, so a bad one cannot reject the person
     if (emp === null) { invalid.push({ raw, why: badIdMessageFor(x?.empId ?? x?.employeeId, vf.idKind, c.e, "An employee ID has letters and numbers only (up to 30).") }); continue; }
     const phoneTyped = String(x?.phone ?? "").trim() !== "";
     if (vf.mode === "either" && !emp && !phoneTyped) { invalid.push({ raw, why: "Give a mobile number or an employee ID." }); continue; }
@@ -277,7 +277,7 @@ async function addPeople(c: Ctx, who: Caller, b: any): Promise<Response> {
       let digits = "";
       if (phoneTyped) { const cl = cleanPhone(x?.phone); if (!cl.ok) { invalid.push({ raw, why: cl.why }); continue; } digits = keptFromClean(cl.digits); }
       const ph = await empHashOf(c.env, emp);
-      if (seen.has(ph)) { if ((empCleanOn(c.e) || vf.idKind === "email") && rawOfEmp.get(ph) !== empRaw) invalid.push({ raw, why: `Same person after cleaning: it reads as ${emp}, like an earlier row.` }); else duplicates++; continue; }
+      if (seen.has(ph) || seen.has("I" + ph)) { if ((empCleanOn(c.e) || vf.idKind === "email") && (rawOfEmp.get(ph) ?? rawOfEmp.get("I" + ph)) !== empRaw) invalid.push({ raw, why: `Same person after cleaning: it reads as ${emp}, like an earlier row.` }); else duplicates++; continue; }
       seen.add(ph); rawOfEmp.set(ph, empRaw); todo.push({ name: cleanName(x?.name), digits, ph, empId: emp }); continue;
     }
     const cl = cleanPhone(x?.phone);
@@ -287,7 +287,7 @@ async function addPeople(c: Ctx, who: Caller, b: any): Promise<Response> {
     const idHash = vf.mode === "either" && emp ? await empHashOf(c.env, emp) : undefined; // "mobile number or employee ID": a listed person with both can come in with either, so the ID points to the mobile-number identity
     if (idHash) { // the same employee ID on two people of one list would let the second take over the first's ID: the second is a duplicate
       const al = await c.env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`idx/${c.eid}/${idHash}`).first<{ v: string }>();
-      if ((al && al.v !== ph && (await c.env.DB.prepare("SELECT 1 AS x FROM person WHERE eid=? AND ph=? AND status<>'removed'").bind(c.eid, al.v).first())) || seen.has("I" + idHash)) { if ((empCleanOn(c.e) || vf.idKind === "email") && seen.has("I" + idHash) && rawOfEmp.get("I" + idHash) !== empRaw) invalid.push({ raw, why: `Same person after cleaning: it reads as ${emp}, like an earlier row.` }); else duplicates++; continue; }
+      if ((al && al.v !== ph && (await c.env.DB.prepare("SELECT 1 AS x FROM person WHERE eid=? AND ph=? AND status<>'removed'").bind(c.eid, al.v).first())) || seen.has("I" + idHash) || seen.has(idHash)) { if ((empCleanOn(c.e) || vf.idKind === "email") && (seen.has("I" + idHash) || seen.has(idHash)) && (rawOfEmp.get("I" + idHash) ?? rawOfEmp.get(idHash)) !== empRaw) invalid.push({ raw, why: `Same person after cleaning: it reads as ${emp}, like an earlier row.` }); else duplicates++; continue; }
       seen.add("I" + idHash); rawOfEmp.set("I" + idHash, empRaw);
     }
     seen.add(ph); todo.push({ name: cleanName(x?.name), digits: keptFromClean(cl.digits), ph, ...(emp && vf.mode !== "mobile" ? { empId: emp } : {}), ...(idHash ? { idHash } : {}) });

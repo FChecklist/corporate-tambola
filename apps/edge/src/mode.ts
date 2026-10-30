@@ -9,6 +9,7 @@
 //   The switch itself is owner-only (the platform key, never through an AI work link), and every switch is written to the owner's access log (audit_access).
 //   The mode is read at most every few seconds per Worker instance (a switch is visible everywhere within TTL_MS; the instance that handled the switch sees it at once).
 import { logAccess } from "./audit";
+import { strictAccountEmail } from "./empid";
 import type { D1, Env } from "./worker";
 
 export type SiteMode = "TEST" | "LIVE";
@@ -60,7 +61,7 @@ export async function setMode(env: { DB: D1 }, to: SiteMode, reason: string, now
 
 // ------------------------------------------------------------------------------------------------ the e-mail allow-list
 /** gmail-style plus addresses (owner+t1@x.com) count as the owner's own address, so a test can use many accounts that all reach the owner. */
-export const normMail = (e: string): string => { const v = String(e ?? "").trim().toLowerCase(); const i = v.lastIndexOf("@"); return i < 1 ? v : v.slice(0, i).split("+")[0] + v.slice(i); };
+export const normMail = (e: string): string => { const v = String(e ?? "").normalize("NFKC").trim().toLowerCase(); const i = v.lastIndexOf("@"); return i < 1 ? v : v.slice(0, i).split("+")[0] + v.slice(i); };
 function defaultAllow(env: ModeEnv): string[] {
   const out: string[] = [];
   for (const x of [env.OWNER_EMAIL, ...(env.TEST_MAIL_ALLOW ?? "").split(",")]) if (x && x.trim()) out.push(x);
@@ -88,7 +89,6 @@ export async function mailGate(env: ModeEnv, to: string, subject: string, now: n
 // ------------------------------------------------------------------------------------------------ the routes
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 const readBody = async (req: Request): Promise<any | null> => { const t = await req.text(); if (t.length > 4096) return null; try { const v = JSON.parse(t); return v && typeof v === "object" ? v : null; } catch { return null; } };
-const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
 
 /**
  * GET /api/mode (public, read-only: only the word TEST or LIVE) and the owner-only routes under /api/owner/ (platform key, never through an AI work link; anybody else gets the
@@ -116,8 +116,9 @@ export async function modeRoute(req: Request, env: ModeEnv, now: number, owner: 
   if (what === "test-mail") {
     if (req.method === "GET") return json({ allowed: await allowList(env), fromList: ((await env.DB.prepare("SELECT COUNT(*) AS c FROM test_mail_allow").first<{ c: number }>())?.c ?? 0) > 0 });
     if (req.method !== "POST") return json({ error: "Not found" }, 404);
-    const b = await readBody(req); const add = typeof b?.add === "string" ? b.add.trim().toLowerCase() : "", rem = typeof b?.remove === "string" ? b.remove.trim().toLowerCase() : "";
-    if (add) { if (!EMAIL.test(add)) return json({ error: "Enter a valid e-mail address." }, 400); await env.DB.prepare("INSERT OR IGNORE INTO test_mail_allow(email,added_ms) VALUES(?,?)").bind(normMail(add), now).run(); }
+    const b = await readBody(req); const add = typeof b?.add === "string" ? strictAccountEmail(b.add) : "", rem = typeof b?.remove === "string" ? b.remove.trim().toLowerCase() : "", addRaw = typeof b?.add === "string" && b.add.trim() !== "";
+    if (addRaw && !add) return json({ error: "Enter a valid e-mail address." }, 400);
+    if (add) { await env.DB.prepare("INSERT OR IGNORE INTO test_mail_allow(email,added_ms) VALUES(?,?)").bind(normMail(add), now).run(); }
     if (rem) await env.DB.prepare("DELETE FROM test_mail_allow WHERE email=?").bind(normMail(rem)).run();
     if (!add && !rem) return json({ error: "Give an address to add or to remove." }, 400);
     await logAccess(env.DB, now, "test-mail-allowlist", null, null, 1, true, add ? "add" : "remove");
