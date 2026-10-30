@@ -9,6 +9,7 @@
 import type { D1, Env } from "./worker";
 import { sendMail, type PayEnv } from "./pay";
 import { testFlag } from "./mode";
+import { normAccountEmail } from "./empid";
 import { syncCommissions } from "./ledgerc";
 import { helperClosed } from "./helpdesk";
 import { signInMail } from "./mails";
@@ -49,7 +50,7 @@ export async function recordCommission(env: PayEnv, p: { id: string; ref?: strin
   try {
     if (!((p as any).amount > 0)) return; // a game paid wholly from credit is not a new sale: the commission was earned on the original payment
     // a customer belongs to the partner who first brought them for 12 months: their repeat purchases earn that partner the repeat rate, whether or not a link was used again
-    const email = String((p as any).email ?? "").trim().toLowerCase();
+    const email = normAccountEmail((p as any).email);
     const since = now - REPEAT_WINDOW_DAYS * 86_400_000;
     const earlier = email ? await env.DB.prepare("SELECT c.partner_code AS code FROM payment pay LEFT JOIN commission c ON c.payment_id=pay.id AND c.status<>'void' WHERE lower(pay.email)=? AND pay.status='paid' AND pay.id<>? AND pay.paid_ms>? ORDER BY pay.paid_ms LIMIT 1").bind(email, p.id, since).first<{ code: string | null }>() : null;
     const repeat = !!earlier;
@@ -94,7 +95,7 @@ export async function partnerRoute(req: Request, env: PayEnv, now: number, spend
     await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(k, String(n + 1), String(n + 1)).run();
     return false;
   };
-  const validEmail = (v: unknown): string => { const e = typeof v === "string" ? v.trim().toLowerCase() : ""; return /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(e) ? e : ""; };
+  const validEmail = (v: unknown): string => { const e = typeof v === "string" ? normAccountEmail(v) : ""; return /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(e) ? e : ""; };
 
   if (req.method === "GET" && p === "/api/partner/check") { // the landing page asks whether a ?ref= code is real, to show "referred by a partner"; limited per network so codes cannot be tried one after another
     if (await overLimit("check", 60)) return json({ valid: false });

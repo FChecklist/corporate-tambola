@@ -116,7 +116,7 @@ export async function modeRoute(req: Request, env: ModeEnv, now: number, owner: 
   if (what === "test-mail") {
     if (req.method === "GET") return json({ allowed: await allowList(env), fromList: ((await env.DB.prepare("SELECT COUNT(*) AS c FROM test_mail_allow").first<{ c: number }>())?.c ?? 0) > 0 });
     if (req.method !== "POST") return json({ error: "Not found" }, 404);
-    const b = await readBody(req); const add = typeof b?.add === "string" ? strictAccountEmail(b.add).toLowerCase() : "", rem = typeof b?.remove === "string" ? b.remove.trim().toLowerCase() : "", addRaw = typeof b?.add === "string" && b.add.trim() !== "";
+    const b = await readBody(req); const add = typeof b?.add === "string" ? strictAccountEmail(b.add) : "", rem = typeof b?.remove === "string" ? b.remove.trim().toLowerCase() : "", addRaw = typeof b?.add === "string" && b.add.trim() !== "";
     if (addRaw && !add) return json({ error: "Enter a valid e-mail address." }, 400);
     if (add) { await env.DB.prepare("INSERT OR IGNORE INTO test_mail_allow(email,added_ms) VALUES(?,?)").bind(normMail(add), now).run(); }
     if (rem) await env.DB.prepare("DELETE FROM test_mail_allow WHERE email=?").bind(normMail(rem)).run();
