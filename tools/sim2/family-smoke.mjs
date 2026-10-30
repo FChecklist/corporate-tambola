@@ -44,4 +44,15 @@ for (const w of [360, 768, 1280]) for (const scheme of ["light", "dark"]) for (c
   } catch (e) { check(`${tag}: the run`, false, String(e).slice(0, 160)); }
   await ctx.close();
 }
+// a LIST game: no email box (the public settings say open: false), the join form still works
+{
+  const id2 = `FL-${stamp.toUpperCase()}`;
+  await api("POST", "/api/z", { id: id2, startRound: roundAt(Date.now() + 3 * 3600 * 1000), callSeconds: 9, cap: 10, demo: true, name: "Diwali party", whoCanJoin: "list" }, tok);
+  console.log("publish list game", (await api("POST", `/api/z/${id2}/publish`, { email, phone: "9650397480", ...consent("K1") }, tok)).s);
+  for (const w of [360, 1280]) { const ctx = await browser.newContext({ viewport: { width: w, height: 900 } }); const p = await ctx.newPage();
+    await p.goto(`${BASE}/z.html?e=${id2}`, { waitUntil: "load" }); await p.waitForTimeout(2500);
+    const t = await p.locator("body").innerText();
+    check(`list game ${w}: no email box, the notice still names it conditionally`, (await p.locator("#mail").count()) === 0 && !/Your email ID/.test(t), t.slice(0, 120));
+    await p.screenshot({ path: `${OUT}/list-${w}.png` }); await ctx.close(); }
+}
 await browser.close(); console.log(bad ? `FAILED ${bad}` : "ALL PASSED"); process.exit(bad ? 1 : 0);
