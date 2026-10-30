@@ -357,7 +357,8 @@ describe("D. participants", () => {
     const ok = rs.filter((r) => r.status === 200).length, full = rs.filter((r) => r.status === 409).length;
     expect((raw.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid='CROWD-1'").get() as any).c).toBeLessThanOrEqual(5);
     expect(ok).toBe(5); expect(full).toBe(35);
-    expect((await call("POST", "/api/z/CROWD-1/join", { phone: phone(1) })).status).toBe(200); // someone who already has a place can always come back
+    const placed = rs.findIndex((r) => r.status === 200); // which of the 40 got the 5 places depends on how the simultaneous calls interleave: use one that really got a place
+    expect((await call("POST", "/api/z/CROWD-1/join", { phone: phone(placed + 1) })).status).toBe(200); // someone who already has a place can always come back
   });
   test("UC-33 invite-only: an unlisted number is refused, a listed one gets in", async () => {
     const o = await published("INVITE-1", { closed: true });
