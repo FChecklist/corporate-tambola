@@ -17,6 +17,8 @@ const kindOf = (method, path) => {
   if (path === "/api/start") return "K2";
   if (/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/publish$/.test(path)) return "K1";
   if (/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/join$/.test(path)) return "K4";
+  if (/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(roster|people)(\?.*)?$/.test(path)) return "K6";
+  if (path === "/api/org/role/accept" || path === "/api/host/setup/email") return "K5";
   return null;
 };
 /** A small API client: adds the consent boxes the real pages tick, counts every request in the meter, never throws on a refusal. */
