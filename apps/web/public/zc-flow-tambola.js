@@ -109,7 +109,7 @@
     try { await call("PATCH", `/api/z/${eid()}/settings`, { startMode: RUN.start, callMode: RUN.call, ...(RUN.idTouched ? { idKind: RUN.idKind } : {}) }); if (RUN.idTouched) idSaved = RUN.idKind; runMsg(""); }
     catch (e) {
       const msg = e && e.message ? e.message : "The choice could not be saved. Please try again.";
-      if (e && (e.code === "idkind-locked" || /already have people listed/.test(msg))) { RUN.idKind = idSaved || "emp"; RUN.idTouched = false; for (const i of document.querySelectorAll("input[name=zt-idkind]")) i.checked = i.value === RUN.idKind; }
+      if (e && (e.code === "id-kind-locked" || e.code === "idkind-locked" || /already have people listed/.test(msg))) { RUN.idKind = idSaved || "emp"; RUN.idTouched = false; for (const i of document.querySelectorAll("input[name=zt-idkind]")) i.checked = i.value === RUN.idKind; }
       runMsg(msg, e && e.status);
     }
   };

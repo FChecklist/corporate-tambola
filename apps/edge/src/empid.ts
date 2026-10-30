@@ -4,7 +4,7 @@
    Games created before EMP_CLEAN_FROM_MS keep the old rule so the IDs already stored for them still match. */
 
 /** The deploy instant (ms) from which NEW games use the uniform rule. The release session sets it to the exact deploy time right before deploy; a game created earlier keeps the old rule. */
-export const EMP_CLEAN_FROM_MS = Date.UTC(2026, 9, 31, 0, 0, 0);
+export const EMP_CLEAN_FROM_MS = Date.UTC(2099, 0, 1, 0, 0, 0); // PLACEHOLDER (far future): the release session sets the real deploy instant
 export const EMP_MAX = 30;
 
 /** The one cleaning function: only A-Z and 0-9 are left, in upper case. Always a string (empty when nothing usable was typed). */
@@ -22,13 +22,14 @@ export const EMP_BAD_NEW = "An employee ID has letters and numbers only. The sys
  * Older games: the original rule (spaces dropped, upper case, letters, digits and . _ - / allowed, 30 characters).
  */
 /** An Email ID by ONE rule everywhere (1.8.5): NFKC (full-width "＠" becomes "@"), every space removed, lower case. Compare, store and hash only this form; upper and lower case are the same address. Never run cleanEmpId on an email. */
-export const normEmail = (raw: unknown): string => String(raw ?? "").normalize("NFKC").replace(/[\s\u200b-\u200d\u2060\ufeff]/g, "").toLowerCase();
+export const normEmail = (raw: unknown): string => String(raw ?? "").normalize("NFKC").replace(/[\s\u200b-\u200d\u2060\ufeff\u0085\u2028\u2029]/g, "").toLowerCase();
 
 /** Does this text look like an email address? (an "@" after NFKC): an employee-ID box never turns one into letters and digits. */
 export const looksLikeEmail = (raw: unknown): boolean => String(raw ?? "").normalize("NFKC").includes("@");
 export const EMP_LOOKS_LIKE_EMAIL = "This looks like an Email ID. This game asks for an employee ID: letters and numbers only.";
 /** The refusal sentence for an ID that cannot be used, by the rule of the game it is for. */
-export const empBadMessage = (raw: unknown, e: { created_ms?: number | null } | null | undefined, oldText: string): string => (!empCleanOn(e) ? oldText : looksLikeEmail(raw) ? EMP_LOOKS_LIKE_EMAIL : EMP_BAD_NEW);
+export const empBadMessage = (raw: unknown, e: { created_ms?: number | null } | null | undefined, oldText: string): string => (!empCleanOn(e) ? oldText : looksLikeEmail(raw) ? EMP_LOOKS_LIKE_EMAIL : cleanEmpId(raw).length > EMP_MAX ? EMP_TOO_LONG : EMP_BAD_NEW);
+export const EMP_TOO_LONG = "This ID is too long. An employee ID may be up to 30 characters once cleaned.";
 
 export function normEmpFor(raw: unknown, e: { created_ms?: number | null } | null | undefined): string | null {
   if (!empCleanOn(e)) { const s = String(raw ?? "").replace(/\s+/g, "").toUpperCase(); if (!s) return ""; return /^[A-Z0-9][A-Z0-9._\-/]{0,29}$/.test(s) ? s : null; }
@@ -53,7 +54,7 @@ export const badIdMessageFor = (raw: unknown, kind: IdKind, e: { created_ms?: nu
 export const idWord = (kind: IdKind): string => (kind === "email" ? "Email ID" : "employee ID");
 
 /** The email of an ACCOUNT or a team member typed by the organizer (sign-up, sign-in code, Host or Co-host to add): NFKC and lower case, trimmed at the ends, but a space INSIDE is kept so the address is refused, never glued into a different address. (A participant's Email ID in a game uses normEmail, which removes inner spaces.) */
-export const normAccountEmail = (raw: unknown): string => String(raw ?? "").normalize("NFKC").trim().toLowerCase();
+export const normAccountEmail = (raw: unknown): string => { const n = String(raw ?? "").normalize("NFKC"); if (/[\u200b-\u200d\u2060\ufeff\u0085\u2028\u2029]/.test(n)) return ""; const t = n.trim(); return /\s/.test(t) ? "" : t.toLowerCase(); }; // an invisible character or a space INSIDE is refused (empty), never removed
 
 /** An ACCOUNT / sign-in / host / PAYMENT e-mail: checked as NFKC; the typed address is returned with outer spaces trimmed and its case unchanged. An inner space or an invisible character (U+200B-U+200D, U+2060, U+FEFF, U+0085, U+2028, U+2029) anywhere is REFUSED (returns ""), never repaired; the shape is checked on this cleaned value, never on the raw text. */
 export const strictAccountEmail = (raw: unknown): string => { const n = String(raw ?? "").normalize("NFKC"); if (/[\u200b-\u200d\u2060\ufeff\u0085\u2028\u2029]/.test(n)) return ""; const t = n.trim(); return t && !/\s/.test(t) && t.length <= 320 && /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(t) ? String(raw).trim() : ""; };

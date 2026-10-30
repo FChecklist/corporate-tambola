@@ -161,7 +161,7 @@
   const inviteOf = () => (INVITE_FROM ? { from: INVITE_FROM, cat: INVITE_CAT } : undefined);
   // What the ID of this game is (an employee ID, or an Email ID) and how the system reads what a person types (1.8.5: one cleaning rule, the same as the server's).
   const idKind = () => (INFO.idKind === "email" ? "email" : "emp"), idWord = () => (idKind() === "email" ? "Email ID" : "employee ID");
-  const readAs = (raw) => { const t = String(raw || "").normalize("NFKC"); return idKind() === "email" ? t.replace(/[\s\u200b-\u200d\u2060\ufeff]/g, "").toLowerCase() : t.replace(/[^A-Za-z0-9]/g, "").toUpperCase(); };
+  const readAs = (raw) => { const t = String(raw || "").normalize("NFKC"); return idKind() === "email" ? t.replace(/[\s\u200b-\u200d\u2060\ufeff\u0085\u2028\u2029]/g, "").toLowerCase() : t.replace(/[^A-Za-z0-9]/g, "").toUpperCase(); };
   const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
   // What the organizer asked people to give to get in: a mobile number (default), an employee ID, or both. Employees only: no way in without the ID.
   // Every box says whether it must be filled: a small red * and "mandatory", or "(optional)" in brackets. "alt": one of the two is needed.

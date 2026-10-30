@@ -74,6 +74,9 @@ export async function callTimeMs(env: Env, e: any, round: number, idx: number, s
  * will press for the last number, so the estimate is the software's own schedule at the chosen speed, or an hour after the Host's latest press if that is later
  * (the phones' votes, not this estimate, decide when a game is really over).
  */
+/** The instant the organizer's Stop takes effect (the round it names), or null when nobody stopped the game: an organizer-confirmed end, known as soon as that round has come. */
+export async function organizerStopMs(env: Env, e: any): Promise<number | null> { const s = await schedule(env, e); return s.st && s.st.stopRound != null ? roundMs(s.st.stopRound) : null; }
+
 export async function endBoundMs(env: Env, e: any): Promise<number> {
   const s = await schedule(env, e);
   if (s.cfg.startMode === "manual" && (s.st?.goRound ?? null) === null) return s.st?.stopRound != null ? roundMs(s.st.stopRound) + 60_000 : roundMs(e.start_round) + NEVER_STARTED_MS; // a game nobody pressed Start for is never started by the system: it closes (and its guest data is erased on the usual clock) a day after its scheduled time
