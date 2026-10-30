@@ -2,5 +2,7 @@
 import { IMPL as S0 } from "./s0.mjs";
 import { IMPL as G2 } from "./g2.mjs";
 import { IMPL as G3 } from "./g3.mjs";
+import { IMPL as G4 } from "./g4.mjs";
+import { IMPL as G5 } from "./g5.mjs";
 import { IMPL as G6 } from "./g6.mjs";
-export const IMPL = { ...S0, ...G2, ...G3, ...G6 };
+export const IMPL = { ...S0, ...G2, ...G3, ...G4, ...G5, ...G6 };

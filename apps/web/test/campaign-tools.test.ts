@@ -51,4 +51,9 @@ describe("tags and refusals", () => {
     const { runCase } = await import("../../../tools/livetest/campaign/driver.mjs?" + Date.now());
     const r = await runCase(cat.find((c) => c.id === "UC-G5-10"), {}); expect(r.status).toBe("not-implemented");
   });
+  test("every implemented case is in the catalogue, and the groups of the plan are all represented in the registry order", async () => {
+    const { IMPL } = await import("../../../tools/livetest/campaign/impl/index.mjs?" + Date.now());
+    const ids = new Set(cat.map((c) => c.id)); for (const k of Object.keys(IMPL)) expect([k, ids.has(k)]).toEqual([k, true]);
+    expect(Object.keys(IMPL).length).toBeGreaterThanOrEqual(30);
+  });
 });

@@ -94,3 +94,27 @@ export async function addRole(api, g, kind, label = "Role") {
 export const acceptRole = (api, key) => api("POST", "/api/org/role/accept", {}, key);
 /** The fast setting: the shortest gap the engine allows (6 s) and a short lead. Real-time otherwise; see README. */
 export const FAST = { callSeconds: 6, startInSec: 45 };
+
+/** A whole game with real players: the organizer's game, `n` players joined through the real page, then every phone plays along (the runtime's own play-along: taps the called numbers and claims, as a person would).
+ *  `watch` = { name: RegExp }: the page text of every phone is sampled about once a second and the first sighting of each pattern is kept per phone. Stops when done(state) is true or after `maxGameSec` game seconds. */
+export async function playGame(env, c, o = {}) {
+  const { api, browser, base, meter, runId } = env; const n = o.players ?? 9, SP = speed();
+  const g = await createGame(api, runId, c.id, { startInSec: o.startInSec ?? 40, callSeconds: o.callSeconds ?? 6, cap: 10, rewards: o.rewards, settings: o.settings });
+  const ps = [];
+  for (let i = 0; i < n; i++) ps.push(await joinPlayer(browser, base, meter, g.tag.id, fakePhone(), { checkin: true }));
+  const seen = ps.map(() => ({})); const state = { g, ps, seen, joined: ps.filter((p) => p.joined).length, numbers: 0, logs: [], endedBy: "timeout" };
+  const watch = o.watch || {}; let lastSample = 0; const t0 = Date.now(), limit = ((o.maxGameSec ?? 700) * 1000) / SP;
+  while (Date.now() - t0 < limit) {
+    await Promise.all(ps.map((p) => (p.joined ? p.page.evaluate(() => (window.__rt && window.__rt.playAlong ? window.__rt.playAlong() : null)).catch(() => null) : null)));
+    if (Date.now() - lastSample > 700) {
+      lastSample = Date.now();
+      await Promise.all(ps.map(async (p, i) => { if (!p.joined) return; const t = await p.page.evaluate(() => document.body.innerText.replace(/\s+/g, " ")).catch(() => ""); for (const [k, re] of Object.entries(watch)) if (!seen[i][k] && re.test(t)) seen[i][k] = true; }));
+      state.numbers = await ps[0].page.evaluate(() => (window.__rt && window.__rt.view ? window.__rt.view().log.length : 0)).catch(() => 0);
+      if (o.done && o.done(state)) { state.endedBy = "done"; break; }
+    }
+    await sleep(200);
+  }
+  state.logs = await Promise.all(ps.map((p) => (p.joined ? p.page.evaluate(() => window.__rt.view().log.slice()).catch(() => []) : [])));
+  state.anySaw = (k) => seen.some((s) => s[k]); state.countSaw = (k) => seen.filter((s) => s[k]).length;
+  return state;
+}
