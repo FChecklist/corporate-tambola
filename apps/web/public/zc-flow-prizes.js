@@ -22,7 +22,9 @@
   };
   const labelOf = (id, tickets) => (catalogue(tickets).find((c) => c.id === id) || { label: id }).label;
   // "" = 0; commas and spaces are allowed; anything else (a minus sign, letters) is NaN, so it blocks Next instead of being read as another number
-  const num = (v) => { const t = String(v == null ? "" : v).replace(/[,\s]/g, ""); if (!t) return 0; return /^\d+(\.\d+)?$/.test(t) ? Math.floor(Number(t)) : NaN; };
+  const num = (v) => { const t = String(v == null ? "" : v).replace(/[,\s₹$€£¥]/g, ""); if (!t) return 0; return /^\d+(\.\d+)?$/.test(t) ? Math.floor(Number(t)) : NaN; };
+  const NUMS = "Type numbers only.";
+  const typed = (v) => String(v == null ? "" : v).trim() !== "";
   const bud = () => { const n = num(S.budget); return Number.isFinite(n) ? n : 0; };
   const tooSmall = () => { if (S.mode !== "auto" || !(bud() > 0)) return ""; const pr = planNow().prizes; return pr.some((p) => !(p.amount >= 1)) ? "Your budget is too small for " + pr.length + " prizes. Choose fewer prizes or a bigger budget." : ""; };
   const planNow = () => P.plan(S.tickets, S.count || P.DEFAULT_COUNT[S.tickets], bud());
@@ -42,6 +44,8 @@
   };
   const save = async (ctx, msg) => {
     const rows = rowsNow(), c = S.currency;
+    if (S.mode === "auto" && typed(S.budget) && Number.isNaN(num(S.budget))) { msg.textContent = NUMS; return; }
+    if (S.mode === "manual" && S.manual.some((m) => typed(m.amount) && Number.isNaN(num(m.amount)))) { msg.textContent = NUMS; return; }
     if (S.mode === "auto" && !(num(S.budget) > 0)) { msg.textContent = BLANK; return; }
     if (tooSmall()) { msg.textContent = tooSmall(); return; }
     if (S.mode === "manual") { const bad = P.validateManual(rows.map((r) => ({ id: r.id, amount: r.amount, gift: r.gift }))).concat(orderProblem(rows) ? [orderProblem(rows)] : []); if (bad.length) { msg.textContent = bad[0]; return; } }
@@ -120,7 +124,7 @@
       const [t, pattern, o] = p.id.split(":"), key = (pattern === "full2" ? "full2" : keyOfId(p.id)), w = won.filter((x) => x.pattern === key && Number(x.ordinal) === Number(o));
       const ids = [...new Set(w.map((x) => x.seat))], s = P.shareOut(p.amount, ids.length);
       // who to give it to, as the organizer knows them: the listed Employee ID or Email ID, the name, and the mobile number (organizer-only data from GET /prizes; never in the public info)
-      const who = ids.map((seat) => { const x = w.find((q) => q.seat === seat) || {}, bits = [x.empId, x.name, x.phone].filter((b) => b && String(b).trim()); return "Ticket " + seat + (bits.length ? " – " + bits.join(", ") : ""); });
+      const who = ids.map((seat) => { const x = w.find((q) => q.seat === seat) || {}, bits = [x.empId, x.name, x.phone].filter((b) => b && String(b).trim()); return "Ticket " + seat + (bits.length ? " - " + bits.join(", ") : ""); });
       return { label: P.label(pattern, Number(o), plan.prizes.filter((q) => q.id.split(":")[0] === t && q.id.split(":")[1] === pattern).length, Number(t)), winners: ids, who, amount: p.amount, share: s.share, kept: s.leftover, gift: p.gift || "" };
     });
     return { currency: c, rows };
