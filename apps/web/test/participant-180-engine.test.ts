@@ -34,9 +34,9 @@ const join = async (p: Page, phone: string, extra: Record<string, string> = {}) 
 describe("1.8.0 open join form", () => {
   test("a list game shows no email box (the public settings say open: false); an open game shows it", async () => {
     const o = await organizer(); await game(o, "E180-0", { whoCanJoin: "list" }); const p = await page(o, "/z?e=E180-0"); await p.waitFor((x) => /Join the game/.test(x));
-    expect(p.$("#mail")).toBeNull(); expect(p.text()).not.toContain("Your email ID");
+    expect(!!p.$("#mail")).toBe(false); expect(p.text()).not.toContain("Your email ID");
     const o2 = await organizer(); await game(o2, "E180-00"); const q = await page(o2, "/z?e=E180-00"); await q.waitFor((x) => /Join the game/.test(x));
-    expect(q.$("#mail")).not.toBeNull(); expect(q.text()).toContain("Your email ID");
+    expect(!!q.$("#mail")).toBe(true); expect(q.text()).toContain("Your email ID");
   });
   test("an open game asks for an optional Email ID: a good one joins and is kept, a bad shape is refused in the guide's words, the same email on another phone gets the one neutral sentence, and no email at all is fine", async () => {
     const o = await organizer(); await game(o, "E180-1");
@@ -167,7 +167,7 @@ describe("1.8.3: a page opened before the new terms version", () => {
     await join(stale, "9811100301");
     const t = await stale.waitFor((x) => /out of date/i.test(x));
     expect(t).toContain("This page is out of date. Please reload it, then tick the boxes again and try again."); expect(t).not.toContain("Please tick the box to continue.");
-    expect(stale.$("#reloadpage")).not.toBeNull(); expect(stale.text()).toContain("Reload this page");
+    expect(!!stale.$("#reloadpage")).toBe(true); expect(stale.text()).toContain("Reload this page");
     const fresh = await page(o, "/z?e=E183-1"); await join(fresh, "9811100301"); // the reloaded page sends the current version
     await fresh.waitFor((x) => /Your ticket|Starting in|What you can win|Before the game|Getting ready/.test(x));
   });

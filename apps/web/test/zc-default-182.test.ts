@@ -112,7 +112,7 @@ describe("both screens load from the same page without a script error", () => {
   });
   test("?flow=old still loads the previous screens (no new bar), the link offers the new ones, no errors", async () => {
     const p = await load("?flow=old"); await p.waitFor((x) => /Hello|Last step|Your game|Hi\.|Let's|Start/i.test(x), 20_000);
-    expect(p.win.CT_ZCFLOW).toBe("old"); expect(p.win.document.querySelector(".zf-bar")).toBeNull();
+    expect(p.win.CT_ZCFLOW).toBe("old"); expect(!!p.win.document.querySelector(".zf-bar")).toBe(false);
     expect(p.errors).toEqual([]);
   });
 });
@@ -139,6 +139,6 @@ describe("an existing game made in the previous console opens in the new screens
     const n = await make(true, true, { startMode: "manual", callMode: "host" }); const nt = await n.waitFor((x) => /Tickets claimed/.test(x), 25_000);
     expect(/Start the game|Start now|Press to Roll Out/i.test(nt)).toBe(false); // what the new screens cannot do
     const o = await make(true, true, { startMode: "manual", callMode: "host" }, "?e=EX-1&flow=old"); const ot = await o.waitFor((x) => /Your progress/.test(x), 25_000);
-    expect(ot).toMatch(/Your game at a glance/); expect(o.win.document.querySelector(".zf-bar")).toBeNull(); expect(o.win.document.querySelector("#startgame, [data-open]")).not.toBeNull(); expect(o.errors).toEqual([]); // the previous console is the one that carries the Start block (a signed control key)
+    expect(ot).toMatch(/Your game at a glance/); expect(!!o.win.document.querySelector(".zf-bar")).toBe(false); expect(!!o.win.document.querySelector("#startgame, [data-open]")).toBe(true); expect(o.errors).toEqual([]); // the previous console is the one that carries the Start block (a signed control key)
   });
 });
