@@ -14,9 +14,10 @@ export const dev = (i: number) => (String(i).padStart(2, "0") + "b".repeat(32)).
 export const j = async (r: Response) => (await r.json()) as any;
 
 export class World {
-  env!: PayEnv; ipN = 0; realFetch = globalThis.fetch;
-  constructor() { this.reset(); }
-  reset() { const d = makeD1(); this.env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" } as any; (globalThis as any).fetch = async () => new Response("{}", { status: 404 }); }
+  env!: PayEnv; raw!: ReturnType<typeof makeD1>["raw"]; ipN = 0; realFetch = globalThis.fetch;
+  /** strictHosts: the real Host first-open rule (a Host must confirm an e-mail before the console works); the default test shortcut marks every new Host as confirmed. */
+  constructor(public strictHosts = false) { this.reset(); }
+  reset() { const d = makeD1({ strictHosts: this.strictHosts }); this.raw = d.raw; this.env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" } as any; (globalThis as any).fetch = async () => new Response("{}", { status: 404 }); }
   restore() { globalThis.fetch = this.realFetch; }
   call = (now: number, method: string, path: string, body?: unknown, key?: string) =>
     handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...(key ? { "x-organizer": key } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }), this.env as any, now);
