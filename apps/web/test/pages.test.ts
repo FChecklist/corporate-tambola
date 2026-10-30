@@ -618,7 +618,7 @@ describe("winners, the end, and break media on the phone", () => {
     const along = setInterval(() => { rt.playAlong(); }, 150);
     try {
     await until(() => !!doc.getElementById("hurray")); // worked out on the phone itself from its own claims: nobody published anything
-    expect(doc.getElementById("hurray")?.textContent).toMatch(/Congratulations, you won/);
+    expect(doc.getElementById("hurray")?.textContent).toMatch(/You won .*Your organizer will give you your prize\./) /* P-9: the duplicate "Congratulations, you won" line was removed on purpose */;
     expect(doc.querySelector("#hurray canvas")).toBeTruthy();
     expect(await p.waitFor((x) => /Congratulations! You won/.test(x))).toMatch(/Your prizes/);
     expect(doc.querySelectorAll(".zticket div.w").length).toBeGreaterThan(0); // the winning numbers are lit
