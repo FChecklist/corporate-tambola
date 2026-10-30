@@ -28,10 +28,10 @@ const joinAs = (i: number, extra: Record<string, unknown> = {}, now = T) => join
 
 async function setup(opts: { closed?: boolean; invites?: unknown; at?: number; start?: number } = {}) {
   const at = opts.at ?? T;
-  const st = await j(await handle(new Request("http://x/api/start", { method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": `7.7.8.${++ipN}` }, body: JSON.stringify({ email: "boss@acme.com" }) }), env, at));
+  const st = await j(await handle(new Request("http://x/api/start", { method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": `7.7.8.${++ipN}` }, body: JSON.stringify({ email: "demo1@demo-test.invalid" }) }), env, at));
   const master = st.token as string;
   await call("POST", "/api/z", { id: "APP-1", startRound: opts.start ?? START, callSeconds: 6, cap: 100, ...(opts.closed ? { whoCanJoin: "list" } : {}) }, master, at);
-  await call("POST", "/api/z/APP-1/publish", { email: "boss@acme.com", phone: "98765 43210" }, master, at);
+  await call("POST", "/api/z/APP-1/publish", { email: "demo1@demo-test.invalid", phone: "98765 43210" }, master, at);
   if (opts.invites) await call("PATCH", "/api/z/APP-1/settings", { guestInvites: opts.invites }, master, at);
   return { master };
 }
@@ -45,7 +45,7 @@ describe("the rules as small functions", () => {
     expect(waitingLapsed(0, 30 * 60_000 - 1)).toBe(false); expect(waitingLapsed(0, 30 * 60_000)).toBe(true);
     expect(familyCutoffPassed(1_000_000, 1_000_000 - FAMILY_CUTOFF_MS - 1)).toBe(false); expect(familyCutoffPassed(1_000_000, 1_000_000 - FAMILY_CUTOFF_MS)).toBe(true);
     expect(mayDecide({ all: true, id: "o" }, ",c:1,")).toBe(true); expect(mayDecide({ all: false, id: "c:1" }, ",c:1,o,")).toBe(true); expect(mayDecide({ all: false, id: "c:2" }, ",c:1,o,")).toBe(false);
-    expect(cleanEmail(" Asha@Acme.Com ")).toBe("asha@acme.com"); for (const bad of ["", "asha", "asha@", "@acme.com", "a@b", "a b@acme.com"]) expect(cleanEmail(bad)).toBe(null);
+    expect(cleanEmail(" Demo2@Demo-Test.invalid ")).toBe("demo2@demo-test.invalid"); for (const bad of ["", "asha", "asha@", "@acme.com", "a@b", "demo3@demo-test"]) expect(cleanEmail(bad)).toBe(null); expect(cleanEmail("de mo3@demo-test.invalid")).toBe("demo3@demo-test.invalid"); // 1.8.5: spaces inside an address are removed, so this one is valid
     expect(LAPSED_MESSAGE).toContain("ask again"); expect(FAMILY_CLOSED_MESSAGE).toContain("15 minutes");
   });
 });
@@ -86,9 +86,9 @@ describe("an open game may keep an Email ID", () => {
   EMAIL_TEST("a wrong email is refused kindly, a good one is kept, and the same email on another phone is not a second ticket", async () => {
     await setup();
     const bad = await joinAs(1, { email: "asha@" }); expect(bad.status).toBe(400); expect((await j(bad)).code).toBe("bad-email");
-    expect((await joinAs(1, { email: "Asha@Acme.com" })).status).toBe(200);
-    const again = await joinAs(2, { email: "asha@acme.com" }); expect(again.status).toBe(409); expect((await j(again)).code).toBe("email-unusable");
-    expect((await joinAs(1, { email: "asha@acme.com" })).status).toBe(200); // the same phone again is the same ticket
+    expect((await joinAs(1, { email: "Demo2@Demo-Test.invalid" })).status).toBe(200);
+    const again = await joinAs(2, { email: "demo2@demo-test.invalid" }); expect(again.status).toBe(409); expect((await j(again)).code).toBe("email-unusable");
+    expect((await joinAs(1, { email: "demo2@demo-test.invalid" })).status).toBe(200); // the same phone again is the same ticket
     expect((await joinAs(3)).status).toBe(200); // no email: a game that does not ask for one still works as before
   });
 });
@@ -103,11 +103,11 @@ describe("real engine runs of the other new paths: reject, cap, and deletion", (
   });
   test("the cap is enforced: an open game of 2 turns the third person away kindly, even with an email", async () => {
     const t = await setup(); await call("PATCH", "/api/z/APP-1/settings", { cap: 2 }, t.master);
-    expect((await joinAs(1, { email: "a@acme.com" })).status).toBe(200); expect((await joinAs(2, { email: "b@acme.com" })).status).toBe(200);
-    const third = await joinAs(3, { email: "c@acme.com" }); expect(third.status).toBe(409);
+    expect((await joinAs(1, { email: "demo4@demo-test.invalid" })).status).toBe(200); expect((await joinAs(2, { email: "demo3@demo-test.invalid" })).status).toBe(200);
+    const third = await joinAs(3, { email: "demo5@demo-test.invalid" }); expect(third.status).toBe(409);
   });
   EMAIL_TEST("deletion: the email key, the people and the waiting requests are gone when the game's personal data is erased", async () => {
-    const t = await setup(); await joinAs(1, { email: "gone@acme.com" });
+    const t = await setup(); await joinAs(1, { email: "demo6@demo-test.invalid" });
     const kv = () => (env as any).DB.prepare("SELECT COUNT(*) AS c FROM kv WHERE k LIKE 'email/APP-1/%'").first();
     expect((await kv()).c).toBe(1);
     await erasePersonal(env as any, "APP-1", T + 30 * 3_600_000, "test");
@@ -158,7 +158,7 @@ describe("1.8.0 audit fixes", () => {
 
   EMAIL_TEST("4. the email-held answer is generic, and two phones asking at the same instant cannot both get the email", async () => {
     await setup();
-    const both = await Promise.all([joinAs(1, { email: "race@acme.com" }), joinAs(2, { email: "race@acme.com" })]);
+    const both = await Promise.all([joinAs(1, { email: "demo7@demo-test.invalid" }), joinAs(2, { email: "demo7@demo-test.invalid" })]);
     expect(both.map((r) => r.status).sort()).toEqual([200, 409]);
     const lost = both.find((r) => r.status === 409)!; const body = await j(lost);
     expect(body.code).toBe("email-unusable"); expect(body.error).not.toMatch(/already holds|holds a ticket/i);
@@ -169,11 +169,11 @@ describe("1.8.0 audit fixes", () => {
   });
 
   EMAIL_TEST("5. when a person leaves, their email is free again for another phone", async () => {
-    await setup(); const a = await j(await joinAs(1, { email: "leave@acme.com" })); expect(a.pid).toBeTruthy();
-    expect((await joinAs(2, { email: "leave@acme.com" })).status).toBe(409);
+    await setup(); const a = await j(await joinAs(1, { email: "demo8@demo-test.invalid" })); expect(a.pid).toBeTruthy();
+    expect((await joinAs(2, { email: "demo8@demo-test.invalid" })).status).toBe(409);
     const left = await call("POST", "/api/z/APP-1/leave", { pid: a.pid, device: dev(1) }); expect(left.status).toBe(200);
     expect((await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM kv WHERE k LIKE 'email/APP-1/%'").first()).c).toBe(0);
-    expect((await joinAs(2, { email: "leave@acme.com" })).status).toBe(200);
+    expect((await joinAs(2, { email: "demo8@demo-test.invalid" })).status).toBe(200);
   });
 });
 
@@ -199,7 +199,7 @@ describe("1.8.0 audit: who may answer a request (negative tests)", () => {
   });
   test("an organizer of another game cannot see or answer this game's requests", async () => {
     const t = await setup({ closed: true }); const w = await j(await joinAs(1));
-    const other = (await j(await handle(new Request("http://x/api/start", { method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": "7.7.8.200" }, body: JSON.stringify({ email: "other@acme.com" }) }), env, T))).token as string;
+    const other = (await j(await handle(new Request("http://x/api/start", { method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": "7.7.8.200" }, body: JSON.stringify({ email: "demo9@demo-test.invalid" }) }), env, T))).token as string;
     expect((await call("GET", "/api/z/APP-1/waiting", undefined, other)).status).toBeGreaterThanOrEqual(400);
     expect((await call("POST", `/api/z/APP-1/waiting/${w.wid}`, { decision: "admit" }, other)).status).toBeGreaterThanOrEqual(400);
     expect((await j(await call("GET", `/api/z/APP-1/me?wid=${w.wid}`))).state).toBe("waiting"); void t;
@@ -227,7 +227,7 @@ describe("1.8.0: the Email ID is OFF (EMAIL_ENABLED = false)", () => {
   OFF_TEST("with the flag off a join that carries an email stores nothing and gets the same result as one without", async () => {
     expect(EMAIL_ENABLED).toBe(false);
     await setup();
-    const withMail = await joinAs(1, { email: "asha@acme.com" }); const bad = await joinAs(2, { email: "asha@" }); const twice = await joinAs(3, { email: "asha@acme.com" }); const plain = await joinAs(4);
+    const withMail = await joinAs(1, { email: "demo2@demo-test.invalid" }); const bad = await joinAs(2, { email: "asha@" }); const twice = await joinAs(3, { email: "demo2@demo-test.invalid" }); const plain = await joinAs(4);
     expect([withMail.status, bad.status, twice.status, plain.status]).toEqual([200, 200, 200, 200]); // no refusal, no "bad email", no "email in use"
     expect((await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM kv WHERE k LIKE 'email/APP-1/%'").first()).c).toBe(0); // no key
     const rows = (await (env as any).DB.prepare("SELECT pii FROM participant WHERE eid='APP-1'").all()).results as any[];
@@ -241,19 +241,19 @@ describe("1.8.1: the Email ID is ON, with the audit fixes", () => {
   EMAIL_TEST("a join that fails later (the game is full) claims no email", async () => {
     const t = await setup(); await call("PATCH", "/api/z/APP-1/settings", { cap: 1 }, t.master);
     expect((await joinAs(1)).status).toBe(200);
-    expect((await joinAs(2, { email: "squat@acme.com" })).status).toBe(409); // full
+    expect((await joinAs(2, { email: "demo10@demo-test.invalid" })).status).toBe(409); // full
     expect(await kvCount()).toBe(0); // nothing was claimed by the failed join
   });
   EMAIL_TEST("two phones at the same instant: one ticket, the other is taken out again and told kindly", async () => {
     await setup();
-    const both = await Promise.all([joinAs(1, { email: "same@acme.com" }), joinAs(2, { email: "same@acme.com" })]);
+    const both = await Promise.all([joinAs(1, { email: "demo11@demo-test.invalid" }), joinAs(2, { email: "demo11@demo-test.invalid" })]);
     expect(both.map((r) => r.status).sort()).toEqual([200, 409]);
     expect((await (env as any).DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid='APP-1'").first()).c).toBe(1);
     expect(await kvCount()).toBe(1);
   });
   EMAIL_TEST("guessing: after 5 'cannot use' answers one network is slowed down (429)", async () => {
-    await setup(); expect((await joinAs(1, { email: "held@acme.com" })).status).toBe(200);
-    const codes: number[] = []; for (let i = 2; i < 9; i++) codes.push((await joinAs(i, { email: "held@acme.com" })).status);
+    await setup(); expect((await joinAs(1, { email: "demo12@demo-test.invalid" })).status).toBe(200);
+    const codes: number[] = []; for (let i = 2; i < 9; i++) codes.push((await joinAs(i, { email: "demo12@demo-test.invalid" })).status);
     expect(codes.slice(0, 5)).toEqual([409, 409, 409, 409, 409]); expect(codes[5]).toBe(429);
   });
 });
