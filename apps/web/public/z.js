@@ -1130,7 +1130,7 @@
       const pp = CTPhone.parse(J.cc, J.phone), nd = joinNeeds(), idText = J.emp.replace(/\s+/g, "");
       if (!pp.ok && !pp.empty) return stop(pp.why); // typed, even if the box is optional: a mistyped number is never dropped silently
       if (idText) { const rd = readAs(J.emp), atSign = J.emp.normalize("NFKC").includes("@");
-        if (idKind() === "email" ? !EMAIL_RE.test(rd) : INFO.idClean ? !rd || rd.length > 30 || atSign : !/^[A-Za-z0-9][A-Za-z0-9._\-\/]{0,29}$/.test(idText)) return stop(idKind() === "email" ? "Please check your Email ID. It looks incomplete." : INFO.idClean && atSign ? "This looks like an Email ID. This game asks for an employee ID: letters and numbers only." : "An employee ID has letters and numbers only."); }
+        if (idKind() === "email" ? !EMAIL_RE.test(rd) : INFO.idClean ? !rd || rd.length > 30 || atSign : !/^[A-Za-z0-9][A-Za-z0-9._\-\/]{0,29}$/.test(idText)) return stop(idKind() === "email" ? "Please check your Email ID. It looks incomplete." : INFO.idClean && rd && !atSign && rd.length > 30 ? "This ID is too long. An employee ID may be up to 30 characters once cleaned." : INFO.idClean && atSign ? "This looks like an Email ID. This game asks for an employee ID: letters and numbers only." : "An employee ID has letters and numbers only."); }
       if (!(TOKEN && J.mode !== "needPhone")) {
         if (nd.emp === "req" && !idText && nd.phone === "req" && pp.empty) return stop("Enter your " + idWord() + " and your mobile number.");
         if (nd.emp === "req" && !idText) return stop("Enter your " + idWord() + ".");
