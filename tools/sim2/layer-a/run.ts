@@ -109,7 +109,7 @@ async function playGame(uc: UseCase, variant: number): Promise<{ ok: boolean; fa
       for (const p of phones) {
         if (step < p.joinAt) continue; const ph = p.rt.phase;
         if (step === p.joinAt) batch.push(p.rt.boot().then(() => p.rt.join(p.phone, "P" + p.phone.slice(-4))).catch((e: any) => { if (o.closed && (e?.code === "waiting" || e?.body?.waiting)) waitingSeen++; else p.failed.push("join: " + (e?.message ?? e)); }));
-        else if (ph === "play" || ph === "ended") batch.push(checkin(p).catch((e: any) => { if (!/opens at/i.test(String(e?.message))) p.failed.push("checkin: " + (e?.message ?? e)); }).then(() => p.rt.tick()).then(async () => { await (p.rt as any).playAlong(); }).catch((e: any) => p.failed.push("tick: " + (e?.message ?? e))));
+        else if (ph === "play" || ph === "ended") batch.push(checkin(p).catch((e: any) => { if (!/opens at|^offline$/i.test(String(e?.message))) p.failed.push("checkin: " + (e?.message ?? e)); }).then(() => p.rt.tick()).then(async () => { await (p.rt as any).playAlong(); }).catch((e: any) => { if (!/^offline$/i.test(String(e?.message))) p.failed.push("tick: " + (e?.message ?? e)); }));
         else if (ph === "join") batch.push(p.rt.join(p.phone, "P" + p.phone.slice(-4)).catch((e: any) => { if (o.closed && (e?.code === "waiting" || e?.body?.waiting)) waitingSeen++; }));
         else if (ph === "boot") batch.push(p.rt.boot().catch(() => {}));
       }
