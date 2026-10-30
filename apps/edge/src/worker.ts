@@ -138,6 +138,8 @@ const CLAIMS_PAGE = 500;
 const brandOut = (c: EngagementCfg, withLogo: boolean) => (c.brand ? { brand: withLogo ? c.brand : { name: c.brand.name, color: c.brand.color, ...(c.brand.logo ? { hasLogo: true } : {}) } } : {});
 /** What a player is told when the last place is taken (TA07: "game", and who to tell). */
 export const GAME_FULL_MSG = "This game is full. Please tell your organizer so they can make room.";
+/** G: when the game really ended (set once from the server record, never changed): a reloaded phone shows "completed" at the true end, not at start + calls. Public payload: one number, no names or amounts. */
+const endedAtOf = async (db: { prepare: (q: string) => any }, eid: string): Promise<{ endedAtMs?: number }> => { try { const l = (await db.prepare("SELECT end_ms, end_src FROM life WHERE eid=?").bind(eid).first()) as { end_ms: number | null; end_src: string | null } | null; return l && l.end_src !== "cancel" && Number.isFinite(Number(l.end_ms)) && Number(l.end_ms) > 0 ? { endedAtMs: Number(l.end_ms) } : {}; } catch { return {}; } };
 const pub = (e: any, withLogo = false) => { const c = cfgOf(e); return { open: !e.closed && approvalRulesOn(e), checkin: checkinRequired(e), tickets: c.tickets, ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, callMode: c.callMode ?? "auto", startMode: c.startMode ?? "auto", afterPrizes: c.keepCalling ? "keep" : "end", ...(c.name ? { name: c.name } : {}), ...(c.demo ? { demo: true } : {}), verify: c.verify ?? "number", employeesOnly: !!c.employeesOnly, idKind: c.idKind === "email" ? "email" : "emp", idClean: empCleanOn(e), ...brandOut(c, withLogo) }; };
 const cfgJson = (c: EngagementCfg) => JSON.stringify({ ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, ...(c.callMode === "host" ? { callMode: "host" } : {}), ...(c.startMode === "manual" ? { startMode: "manual" } : {}), ...(c.keepCalling ? { keepCalling: true } : {}), ...(c.name ? { name: c.name } : {}), ...(c.brand ? { brand: c.brand } : {}), ...(c.demo ? { demo: true } : {}), ...(c.verify ? { verify: c.verify } : {}), ...(c.idKind === "email" ? { idKind: "email" } : {}), ...(c.employeesOnly ? { employeesOnly: true } : {}) });
 /** Host mode (a Host presses a button for each number) makes every phone ask for the Host's presses every few seconds: the same size limit as the pause. */
@@ -536,7 +538,7 @@ export async function remindDrafts(env: Env, now: number): Promise<void> {
       const claimed = await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`draftrem${hours}/${x.id}`, String(now)).run(); // claim first, so two ticks never send it twice
       if ((claimed.meta?.changes ?? 0) < 1) continue;
       if (hours === 2) await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`draftrem24/${x.id}`, String(now)).run(); // the 24-hour mail would be late now
-      const m = draftReminderMail((env as PayEnv).PUBLIC_ORIGIN, { eid: x.id, hours, startMs: at });
+      const m = draftReminderMail((env as PayEnv).PUBLIC_ORIGIN ?? "", { eid: x.id, hours, startMs: at });
       await sendMail(env as PayEnv, env.DB, to, m.subject, m.text, now);
     }
   } catch { /* tried again at the next tick */ }
@@ -1990,7 +1992,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const turns = cfgOf(e).ties === "next";
     return json({ results: (r.results ?? []).map((x: any) => ({ pattern: x.pattern, ordinal: x.ordinal, round: x.round, idx: x.idx, count: JSON.parse(x.pids).length, tickets: (JSON.parse(x.pids) as string[]).slice(0, 5).map((p) => Number(seatOfPidText(p))).filter((n) => Number.isInteger(n) && n > 0), ...(x.pattern === "lucky" || x.pattern === "unlucky" || turns ? { winners: JSON.parse(x.pids) } : {}) })) });
   }
-  if (action === "info" && req.method === "GET") return json({ ...(await rehearsalFacts(env, e, now)), ...(cancelled ? { cancelled: true, message: "This game was cancelled by the organizer.", cancelledMs: e.cancelled_ms } : {}), ...(didNotStart ? { message: DNS_MSG } : {}), ...(isDraft ? { draft: true } : {}), ...(unpaid && !isDraft ? { ...(can(a, e) ? { unpaid: true } : {}), locked } : {}),
+  if (action === "info" && req.method === "GET") return json({ ...(await rehearsalFacts(env, e, now)), ...(await endedAtOf(env.DB, e.id)), ...(cancelled ? { cancelled: true, message: "This game was cancelled by the organizer.", cancelledMs: e.cancelled_ms } : {}), ...(didNotStart ? { message: DNS_MSG } : {}), ...(isDraft ? { draft: true } : {}), ...(unpaid && !isDraft ? { ...(can(a, e) ? { unpaid: true } : {}), locked } : {}),
     waitingFor: locked ? "organizer" : null, didNotStart, erasureMs: await erasureOf(env, e), ...(await creditFields(env, a, e, unpaid && !cancelled && !didNotStart, now)), ...(!unpaid && !cancelled && can(a, e) ? { moveUntilMs: await paidWindowEndMs(env.DB, e.id) } : {}), startMs: roundMs(e.start_round), cap: e.cap, startRound: e.start_round, callSeconds: e.call_seconds, trackClaims: tracks(e), controlUrl: controlUrl(env, e.id), whoCanJoin: e.closed ? "list" : "anyone", ...pub(e, true) });
 
   // everything below is for the organizer (or their AI, where allowed)
@@ -2258,6 +2260,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (roundMs(next.start_round) > cap) return json({ error: end ? AFTER_PAID_WINDOW(cap + 1) : TOO_FAR, code: end ? "after-paid-window" : "too-far" }, 400);
     }
     const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
+    if ((vc.cfg.idKind === "email") !== (cfgNow.idKind === "email") && (have?.c ?? 0) > 0) return json({ error: "You already have people listed. Start a new game to use a different kind of ID.", code: "idkind-locked" }, 409); // D: their stored ID hashes would no longer match (this also covers an older game being switched to Email ID)
     if (vc.cfg.demo && next.cap > DEMO_CAP) return json({ error: DEMO_CAP_MSG, code: "demo-cap" }, 400); // the one size rule of a demo game, before and after publishing
     if (!a.plat && e.pack !== 0 && !vc.cfg.demo && next.cap > (e.pack ?? e.cap)) return json({ error: `Your pack allows up to ${e.pack ?? e.cap} people. For more people, make a new game like this one.` }, 402);
     const listed = await env.DB.prepare("SELECT COUNT(*) AS c FROM person WHERE eid=? AND status<>'removed'").bind(eid).first<{ c: number }>().catch(() => null); // people on the lists who have not come in yet count too
