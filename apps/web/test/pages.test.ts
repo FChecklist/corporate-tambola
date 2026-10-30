@@ -1835,6 +1835,7 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
   test("Your games: an unpublished draft has a Delete (two taps) that frees its place; a published game has none", async () => {
     const o = await organizer(); await make(o, "UI-DRAFT1"); await make(o, "UI-DRAFT2"); await make(o, "UI-PUB1"); await publish(o, "UI-PUB1");
     const p = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" }); await p.waitFor((x) => /Your games/.test(x));
+    await p.waitFor(() => p.win.document.querySelectorAll("[data-del-draft]").length >= 2); // the list is drawn a moment after its heading (one full run read it too early)
     const dels = () => Array.from(p.win.document.querySelectorAll("[data-del-draft]")).map((e: any) => e.dataset.delDraft).sort();
     expect(dels()).toEqual(["UI-DRAFT1", "UI-DRAFT2"]); // only drafts, never the published game
     p.click('[data-del-draft="UI-DRAFT1"]'); expect(p.text()).toMatch(/Tap again to delete/); expect(dels()).toEqual(["UI-DRAFT1", "UI-DRAFT2"]); // the first tap only asks
