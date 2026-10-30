@@ -60,10 +60,23 @@ describe("winners of per-ticket prizes are kept and listed with their own key", 
     s.reset(); const { pid, at, started } = await game("WIRE-7", 1); const r = await vote("WIRE-7", pid, [{ pattern: "top", ordinal: 1, round: 1, idx: 3, pids: [pid] }], at[3]! + 1000); expect((await j(r)).accepted).toBe(1);
     const o = await s.call(started + 1000, "POST", "/api/z/WIRE-7/override", { round: 1, ordinal: 1, pattern: "top", seat: null }, P); expect(o.status).toBe(200);
   });
-  test("PRODUCT BUG P-3: the organizer's override works for a per-ticket prize (top@1) the same as for a plain one", async () => {
+  test("P-3 (fixed): the organizer's override works for a per-ticket prize (top@1) the same as for a plain one", async () => {
     s.reset(); const { pid, at, started } = await game("WIRE-6"); await vote("WIRE-6", pid, [{ pattern: "top@1", ordinal: 1, round: 1, idx: 3, pids: [pid] }], at[3]! + 1000);
     const o = await s.call(started + 1000, "POST", "/api/z/WIRE-6/override", { round: 1, ordinal: 1, pattern: "top@1", seat: null }, P);
     expect([o.status, (await j(o)).error]).toEqual([200, undefined]);
+  });
+});
+
+describe("P-3 (fixed) more: the override takes every per-ticket id and still refuses malformed ones", () => {
+  const vote = (id: string, pid: string, results: unknown[], now: number) => s.call(now, "POST", `/api/z/${id}/vote`, { pid, device: "0".repeat(32), results });
+  test("top@2, early5@1, full@1, full@2 can be overridden (nobody gets it); the change is listed; the 'given' tick still works after", async () => {
+    s.reset(); const { pid, at, started } = await game("WIRE-8"); const keys = ["top@2", "early5@1", "full@1", "full@2"];
+    for (const [n, k] of keys.entries()) { const vr = await j(await vote("WIRE-8", pid, [{ pattern: k, ordinal: 1, round: 1, idx: 3, pids: [pid] }], at[3]! + 1000 + n)); expect([k, vr.accepted, vr.error]).toEqual([k, 1, undefined]); }
+    for (const k of keys) { const o = await s.call(started + 1000, "POST", "/api/z/WIRE-8/override", { round: 1, ordinal: 1, pattern: k, seat: null }, P); expect([k, o.status, (await j(o)).error]).toEqual([k, 200, undefined]); }
+  });
+  test("malformed per-ticket ids are still a 400 'Choose the prize and who gets it.': top@3, top@0, top@, @1, TOP@1, top@1@1, top@12", async () => {
+    s.reset(); const { started } = await game("WIRE-9");
+    for (const k of ["top@3", "top@0", "top@", "@1", "TOP@1", "top@1@1", "top@12", "top @1", "t@1"]) { const o = await s.call(started + 1000, "POST", "/api/z/WIRE-9/override", { round: 1, ordinal: 1, pattern: k, seat: null }, P); const b = await j(o); expect([k, o.status, b.code]).toEqual([k, 400, "bad-override"]); }
   });
 });
 
@@ -79,7 +92,14 @@ describe("the plan the console's own planner makes must be accepted by the serve
   test("budgets from 100 up are accepted for all 8 plans (the smallest prize is at least 2.5 units)", async () => {
     for (const [t, c] of [[1, 4], [1, 6], [1, 8], [1, 10], [2, 12], [2, 14], [2, 16], [2, 20]] as const) for (const b of [100, 999, 10001, 123457]) { const r = await save("PLAN-" + t + c, t, c, b); expect([t, c, b, r.status]).toEqual([t, c, b, 200]); }
   });
-  test("PRODUCT BUG P-8: a small budget (1, 7, 39) is a valid Auto plan in the console (only a hint, 'never a block') but the server refuses it with a generic 400 because some prize rounds to 0", async () => {
-    for (const [t, c, b] of [[1, 6, 7], [1, 4, 1], [2, 20, 39], [2, 14, 7]] as const) { const r = await save("SMALL-" + t + c, t, c, b); expect([t, c, b, r.status]).toEqual([t, c, b, 200]); }
+  test("P-8 (fixed on the console side): the server still refuses a plan with a 0 prize, and the console now blocks exactly those budgets itself (the sentence is tested in console-step3). Here: server and planner agree for all 8 plans and 26 budgets - refused iff some planner amount is below 1", async () => {
+    let refused = 0, accepted = 0;
+    for (const [t, c] of [[1, 4], [1, 6], [1, 8], [1, 10], [2, 12], [2, 14], [2, 16], [2, 20]] as const) for (const b of [1, 2, 3, 5, 7, 10, 15, 20, 25, 30, 33, 34, 35, 36, 39, 40, 41, 45, 50, 60, 80, 99, 100, 101, 500, 1000]) {
+      const zero = ZP.plan(t, c, b).prizes.some((p: any) => p.amount < 1), r = await save("SMALL-" + t + c + "-" + b, t, c, b); expect([t, c, b, r.status]).toEqual([t, c, b, zero ? 400 : 200]); zero ? refused++ : accepted++;
+    }
+    expect(refused).toBeGreaterThan(20); expect(accepted).toBeGreaterThan(100);
+  });
+  test("P-8: the server's refusal of a 0 prize is a plain sentence the organizer can act on (it is only reached by a client that skips the console check)", async () => {
+    const r = await save("SMALL-MSG", 1, 6, 7), b = await j(r); expect(r.status).toBe(400); expect(b.error).toBe("The prize plan needs a budget, a prize count and, for each prize, a whole amount above 0 (at most 30 prizes).");
   });
 });

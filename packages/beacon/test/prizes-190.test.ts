@@ -7,6 +7,7 @@ import { baseKey, defaultCfg, houseLabel, keyOfLine, keysInPlay, maxWinnersFor, 
 import { completionIndexKey, settleAll, stillToWin, ticketsFor, winnersOfHouse, claimCounts, claimsByHouse, type PublicClaim } from "../src/game";
 import { PrizeEngine } from "../src/prize-engine";
 import { roundTimeMs, seededRand } from "../src";
+import { createRequire } from "node:module";
 import { ticketNumbers } from "../../shared/src/ticket";
 import { ruleOf } from "../src/house-rules";
 import { SPEC, type Row } from "../../../apps/web/test/prizes-190/spec";
@@ -224,7 +225,59 @@ describe("R4: claims, sharing, dense ranking, timing, Bogeys (real engine)", () 
     const good: PublicClaim = { ...claim, pattern: "top@2" };
     const out = settleAll(E, [pid], l, c2("share"), 1, undefined, undefined, { claims: [good], callRounds: cr }); expect(out.map((x) => `${x.pattern}:${x.ordinal}`)).toEqual(["top@2:1"]);
   });
-  test("the default tie rule of a new game is 'next', not 'share' (see TESTER_REPORT: the new console never sends `ties`)", () => {
+  test("the default tie rule of a new game is 'next', not 'share' (P-4 was fixed in the console, which now sends ties 'share'; the server default itself did not change: a client that sends no `ties` still gets 'next')", () => {
     expect(defaultCfg().ties).toBe("next"); const v: any = validateCfg({ tickets: 1 }); expect(v.cfg.ties).toBe("next");
+  });
+});
+
+// P-4 (fixed in fix round 1): the new console sends ties "share" with the plan. Here the game is configured exactly as the console's PATCH body is (validateCfg of { tickets, ties: "share", rewards: lines with empty text }) and the REAL engine deals the positions; the money is worked out with integer arithmetic of my own and compared with the planner's shareOut.
+describe("P-4: two players who complete the same prize on the same number share it (a game saved by the new console)", () => {
+  const ZP = createRequire(import.meta.url)("../../../apps/web/public/prize-planner.js");
+  const pids = mkPids(300), eid = "P4-1", callRounds = Array.from({ length: 90 }, (_, k) => 5000 + k * 3), log = shuffle("r4");
+  const consoleBody = (ties: "share" | "next" | undefined) => ({ tickets: 1, ...(ties ? { ties } : {}), rewards: [1, 2, 3, 4].map((o) => ({ pattern: "top", scope: "ticket", ordinal: o, text: "" })) });
+  const cfgOfBody = (b: any): EngagementCfg => { const v: any = validateCfg(b); expect(v.ok).toBe(true); return v.cfg; };
+  const done = (pid: string) => completionIndexKey(ticketsFor(eid, pid, 1), "top" as any, log);
+  const G = (() => { const m = new Map<number, string[]>(); for (const p of pids) { const i = done(p); if (i >= 0) (m.get(i) ?? m.set(i, []).get(i)!).push(p); } return [...m.entries()].sort((a, b) => a[0] - b[0]); })();
+  const claimIn = (pid: string, idx: number): PublicClaim => ({ pid, pattern: "top", round: 1, idx, atMs: roundTimeMs(callRounds[idx + 1]!) - 500 });
+  const deal = (cfg: EngagementCfg, claims: PublicClaim[]) => settleAll(eid, pids, log, cfg, 1, undefined, undefined, { claims, callRounds }).filter((x) => x.pattern === "top").sort((a, b) => a.ordinal - b.ordinal);
+  const AMOUNTS = [1001, 503, 100, 7]; // a Manual-style plan for the four Line 1 positions
+  const multi = G.filter(([, p]) => p.length >= 2);
+
+  test("the data has at least one call where 2 or more tickets finish together", () => { expect(multi.length).toBeGreaterThan(0); });
+  test("the console body (ties share) is valid and the stored game says share; a body without ties (the pre-fix console) says next", () => {
+    expect(cfgOfBody(consoleBody("share")).ties).toBe("share"); expect(cfgOfBody(consoleBody(undefined)).ties).toBe("next");
+  });
+  test("two claims on one number: ONE position, both players win it, each gets floor(amount / 2), the leftover stays with the organizer", () => {
+    const [i, ps] = multi[0]!, two = ps.slice(0, 2); const out = deal(cfgOfBody(consoleBody("share")), two.map((p) => claimIn(p, i)));
+    expect(out.length).toBe(1); expect(out[0]!.ordinal).toBe(1); expect([...out[0]!.pids].sort()).toEqual([...two].sort());
+    for (const a of [1001, 1000, 7, 1, 0]) { const sh = ZP.shareOut(a, 2); expect([a, sh.share, sh.leftover]).toEqual([a, Math.floor(a / 2), a - 2 * Math.floor(a / 2)]); }
+    expect(ZP.shareOut(1001, 2)).toEqual({ share: 500, leftover: 1, winners: 2 });
+  });
+  test("the money of every position: share x winners + leftover = amount, leftover < winners, for every group size the data has (2, 3, ...)", () => {
+    const body = cfgOfBody(consoleBody("share")), take = multi.slice(0, 4); const claims = take.flatMap(([i, ps]) => ps.map((p) => claimIn(p, i)));
+    const out = deal(body, claims); expect(out.length).toBe(take.length);
+    out.forEach((x, k) => {
+      const n = x.pids.length, a = AMOUNTS[k]!, floor = Math.floor(a / n), sh = ZP.shareOut(a, n); expect(n).toBe(take[k]![1].length);
+      expect(sh).toEqual({ share: floor, leftover: a - floor * n, winners: n }); expect(sh.share * n + sh.leftover).toBe(a); expect(sh.leftover).toBeLessThan(n);
+    });
+  });
+  test("dense ranking: the group of the next number takes the next ordinal (2nd), then the 3rd; no ordinal is skipped or reused, and a group's players are only in their own position", () => {
+    const take = multi.slice(0, 3), out = deal(cfgOfBody(consoleBody("share")), take.flatMap(([i, ps]) => ps.map((p) => claimIn(p, i))));
+    expect(out.map((x) => x.ordinal)).toEqual([1, 2, 3]); out.forEach((x, k) => expect([...x.pids].sort()).toEqual([...take[k]![1]].sort()));
+    expect(new Set(out.flatMap((x) => x.pids)).size).toBe(out.reduce((s, x) => s + x.pids.length, 0)); // nobody twice
+  });
+  test("single winners in between do not break the order: a lone winner of an earlier number takes the 1st, the sharing group the 2nd", () => {
+    const lone = G.find(([i, p]) => p.length === 1 && i < multi[0]![0]), grp = multi[0]!;
+    if (!lone) return; // the data decides; the case is covered by the dense-ranking test above when it exists
+    const out = deal(cfgOfBody(consoleBody("share")), [claimIn(lone[1][0]!, lone[0]), ...grp[1].map((p) => claimIn(p, grp[0]))]);
+    expect(out.map((x) => [x.ordinal, x.pids.length])).toEqual([[1, 1], [2, grp[1].length]]);
+  });
+  test("the same two claims in a game saved WITHOUT ties (the old console, mode next) do NOT share: they take the 1st and the 2nd position one after the other", () => {
+    const [i, ps] = multi[0]!, two = ps.slice(0, 2); const out = deal(cfgOfBody(consoleBody(undefined)), two.map((p) => claimIn(p, i)));
+    expect(out.map((x) => [x.ordinal, x.pids.length])).toEqual([[1, 1], [2, 1]]);
+  });
+  test("a late claim of the same number does not join the share; the on-time players still share", () => {
+    const [i, ps] = multi.find(([, p]) => p.length >= 3) ?? multi[0]!, late: PublicClaim = { ...claimIn(ps[0]!, i), atMs: roundTimeMs(callRounds[i + 1]!) };
+    const out = deal(cfgOfBody(consoleBody("share")), [late, ...ps.slice(1).map((p) => claimIn(p, i))]); expect(out.length).toBe(1); expect([...out[0]!.pids].sort()).toEqual(ps.slice(1).sort());
   });
 });

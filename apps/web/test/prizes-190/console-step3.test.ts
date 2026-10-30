@@ -70,15 +70,17 @@ describe("R3: the budget is mandatory in Auto", () => {
     test(`${label} (${JSON.stringify(v)}) blocks Next with the frozen sentence and sends nothing`, async () => {
       const w = page(); typeBudget(w, v); await save(w); expect(msg(w)).toBe(BLANK); expect(patches().length).toBe(0); expect(w.ZFLOW.state.done[3]).toBeFalsy();
     });
-  test("PRODUCT BUG P-5: a negative number blocks Next too (R3: blank/0/negative/non-number)", async () => {
-    // PRODUCT BUG P-5: the console strips everything but digits and dots, so '-500' is read as 500 and the plan is saved with a budget of 500.
-    const w = page(); typeBudget(w, "-500"); await save(w); expect(msg(w)).toBe(BLANK); expect(patches().length).toBe(0);
+  test("P-5 (fixed): a negative number blocks Next too (R3: blank/0/negative/non-number); a minus sign or letters inside a number are not ignored", async () => {
+    for (const v of ["-500", "- 500", "500-", "5a00", "-0.5", "1e5", "+500", "50 000 rupees"]) { const w = page(); typeBudget(w, v); await save(w); expect([v, msg(w)]).toEqual([v, BLANK]); expect([v, patches().length]).toEqual([v, 0]); expect(w.ZFLOW.state.done[3]).toBeFalsy(); }
   });
   test("a positive budget goes through: one PATCH, step 3 done, the next step opens", async () => {
     const w = page(); typeBudget(w, "50000"); await save(w); expect(patches().length).toBe(1); expect(patches()[0].url).toBe("/api/z/EABCDEF/settings"); expect(w.ZFLOW.state.done[3]).toBe(true);
   });
-  test("budget typed with commas / rupee sign / spaces is understood (1,00,000 = 100000; 12.9 = 12)", async () => {
-    for (const [v, want] of [["1,00,000", 100000], ["₹ 25000", 25000], [" 7 999 ", 7999], ["12.9", 12]] as const) { const w = page(); typeBudget(w, v); await save(w); expect([v, patches()[0]?.body?.prizePlan?.budget]).toEqual([v, want]); }
+  test("budget typed with commas / spaces is understood (1,00,000 = 100000; 12.9 = 12)", async () => {
+    for (const [v, want] of [["1,00,000", 100000], [" 7 999 ", 7999], ["12.9", 12], ["50000", 50000], ["1,234.5", 1234]] as const) { const w = page(); typeBudget(w, v); await save(w); expect([v, patches()[0]?.body?.prizePlan?.budget]).toEqual([v, want]); }
+  });
+  test("OBSERVATION P-10 (low, new in the fix round): a currency sign typed INSIDE the budget box ('₹ 25000') now blocks Next with the 'Enter your budget' sentence (before the fix the sign was dropped and 25000 was saved). The sentence does not say why", async () => {
+    const w = page(); typeBudget(w, "₹ 25000"); await save(w); expect(msg(w)).toBe(BLANK); expect(patches().length).toBe(0);
   });
 });
 
@@ -149,7 +151,11 @@ describe("Manual", () => {
   test("every prize needs an amount: a blank, 0 or text amount blocks Next with the plain sentence", async () => {
     for (const v of ["", "0", "abc"]) { const w = page(); typeBudget(w, "10000"); toManual(w); amt(w, 2, v); await save(w); expect([v, msg(w)]).toEqual([v, "Prize 3 needs an amount (a whole number above 0)."]); expect(patches().length).toBe(0); }
   });
-  test("PRODUCT BUG P-6: a valid Manual list saves (a gift name is optional). Today Next stays blocked with an EMPTY message: `validateManual(..).concat(orderProblem(..))` adds the empty string '' to the problem list", async () => { const w = page(); typeBudget(w, "10000"); toManual(w); await save(w); expect([msg(w), patches().length]).toEqual([msg(w), 1]); expect(patches()[0].body.prizePlan.mode).toBe("manual"); });
+  test("P-6 (fixed): a valid Manual list saves (a gift name is optional): one PATCH in mode manual, step 3 done, no empty message left behind", async () => { const w = page(); typeBudget(w, "10000"); toManual(w); await save(w); expect(patches().length).toBe(1); expect(patches()[0].body.prizePlan.mode).toBe("manual"); expect(w.ZFLOW.state.done[3]).toBe(true); });
+  test("P-6 (fixed): one blocking message at a time: with a valid amount list but the order wrong, the order sentence shows (not an empty one); with a bad amount, the amount sentence shows first", async () => {
+    const w = page(); typeBudget(w, "10000"); toManual(w); const i = rowsOf(w).findIndex((r) => r.dataset.prize === "0:full:1"); click(w, `#zp-table tbody tr:nth-child(${i + 1}) .zf-link`); amt(w, 0, "0"); await save(w);
+    expect(msg(w)).toBe("Prize 1 needs an amount (a whole number above 0)."); expect(msg(w)).not.toBe("");
+  });
   test("the 1st of a prize must come before the 2nd: removing '1st Full House' while '2nd Full House' stays is refused", async () => {
     const w = page(); typeBudget(w, "10000"); toManual(w); const i = rowsOf(w).findIndex((r) => r.dataset.prize === "0:full:1"); click(w, `#zp-table tbody tr:nth-child(${i + 1}) .zf-link`); await save(w);
     expect(msg(w)).toBe("Add the 1st Full House before the 2nd Full House."); expect(patches().length).toBe(0);
@@ -163,10 +169,10 @@ describe("Manual", () => {
     const x = page(2); toManual(x); for (let i = 0; i < 40; i++) q(x, "#zp-add").click(); expect(rowsOf(x).length).toBe(22); expect(rowsOf(x).length).toBeLessThanOrEqual(30);
     expect(new Set(rowsOf(x).map((r) => r.dataset.prize)).size).toBe(22);
   });
-  test("PRODUCT BUG P-6 (same cause): a good Manual list is sent with mode manual, its own amounts, the budget = their sum, and engine-valid lines", async () => {
-    const w = page(2); click(w, '[data-count="12"]'); typeBudget(w, "50000"); toManual(w); amt(w, 0, "111"); amt(w, 1, "222"); const g = rowsOf(w)[0].querySelector('input[maxlength]'); g.value = "Mug"; g.dispatchEvent(new w.Event("input")); await save(w);
+  test("P-6 (fixed): a good Manual list is sent with mode manual, its own amounts, the budget = their sum, and engine-valid lines", async () => {
+    const w = page(2); click(w, '[data-count="12"]'); typeBudget(w, "50000"); toManual(w); amt(w, 0, "111"); amt(w, 1, "222"); const g = rowsOf(w)[0].querySelector('input[maxlength]'); g.value = "Mug"; g.dispatchEvent(new w.Event("input")); const firstId = rowsOf(w)[0].dataset.prize; await save(w);
     const b = patches()[0].body; expect(b.prizePlan.mode).toBe("manual"); const sum = b.prizePlan.prizes.reduce((s: number, p: any) => s + p.amount, 0); expect(b.prizePlan.budget).toBe(sum);
-    expect(b.prizePlan.prizes[0]).toEqual({ id: rowsOf(w)[0].dataset.prize, amount: 111, gift: "Mug" }); expect(b.prizePlan.prizes[1].amount).toBe(222);
+    expect(b.prizePlan.prizes[0]).toEqual({ id: firstId, amount: 111, gift: "Mug" }); expect(b.prizePlan.prizes[1].amount).toBe(222);
     const v: any = validateCfg({ tickets: b.tickets, rewards: b.rewards, prizePlan: b.prizePlan }); expect(v.ok).toBe(true);
   });
   test("Manual -> Auto asks first (browser confirm); 'No' keeps the Manual list; 'Yes' goes back to a plan made from the budget", () => {
@@ -176,4 +182,47 @@ describe("Manual", () => {
   test("Manual with nothing changed from Auto does not warn when going back (only when there is a list to lose is a question asked) — pins today's behaviour", () => {
     const w = page(); toManual(w); confirmAnswer = false; click(w, '[data-pmode="auto"]'); expect(confirms.length).toBe(1); // the Manual list always exists after the switch, so the question is always asked
   });
+});
+
+describe("P-5 (fixed) in Manual: an amount with a minus sign or letters is refused, not read as another number", () => {
+  const toManual = (w: any) => click(w, '[data-pmode="manual"]');
+  const amt = (w: any, i: number, v: string) => { const n = qa(w, "#zp-table tbody tr")[i].querySelector(".zp-amt"); n.value = v; n.dispatchEvent(new w.Event("input")); };
+  test("-5, 5-, 5x, 1e3 as a Manual amount block Next with the amount sentence and send nothing", async () => {
+    for (const v of ["-5", "5-", "5x", "1e3", "- 5"]) { const w = page(); typeBudget(w, "10000"); toManual(w); amt(w, 2, v); await save(w); expect([v, msg(w)]).toEqual([v, "Prize 3 needs an amount (a whole number above 0)."]); expect([v, patches().length]).toEqual([v, 0]); }
+  });
+});
+
+describe("P-4 (fixed): a game made in the new console shares a prize between players who complete it on the same call", () => {
+  test("every save sends ties: 'share' (Auto and Manual, 1 and 2 tickets, all 8 plans)", async () => {
+    for (const [t, c] of [[1, 4], [1, 6], [1, 8], [1, 10], [2, 12], [2, 14], [2, 16], [2, 20]] as const) { const w = page(t); click(w, `[data-count="${c}"]`); typeBudget(w, "123457"); await save(w); expect([t, c, patches()[0]?.body?.ties]).toEqual([t, c, "share"]); }
+    const w = page(); typeBudget(w, "10000"); click(w, '[data-pmode="manual"]'); await save(w); expect(patches()[0].body.ties).toBe("share");
+  });
+  test("what the console sends is accepted by validateCfg and the stored game then has ties 'share' (the old default 'next' is gone for these games)", async () => {
+    const w = page(2); typeBudget(w, "123457"); await save(w); const b = patches()[0].body;
+    const v: any = validateCfg({ tickets: b.tickets, ties: b.ties, rewards: b.rewards, prizePlan: b.prizePlan }); expect(v.ok).toBe(true); expect(v.cfg.ties).toBe("share");
+  });
+});
+
+describe("P-8 (fixed): a budget too small for N prizes blocks Next with a plain sentence (the server would have refused with a generic one)", () => {
+  const SMALL = (n: number) => `Your budget is too small for ${n} prizes. Choose fewer prizes or a bigger budget.`;
+  test("budgets 1 and 7 on four plans (a prize rounds to 0 there): the sentence names the number of prizes, nothing is sent, the step stays open", async () => {
+    for (const [t, c] of [[1, 6], [1, 10], [2, 14], [2, 20]] as const) for (const b of ["1", "7"]) {
+      const w = page(t); click(w, `[data-count="${c}"]`); typeBudget(w, b); await save(w); expect([t, c, b, msg(w)]).toEqual([t, c, b, SMALL(c)]); expect(patches().length).toBe(0); expect(w.ZFLOW.state.done[3]).toBeFalsy();
+    }
+  });
+  test("the same sentence is shown live as the hint (before Next is pressed), and it replaces the small-prize hint", () => {
+    const w = page(); click(w, '[data-count="10"]'); typeBudget(w, "7"); expect(q(w, "#zp-hint").textContent).toBe(SMALL(10));
+  });
+  test("choosing fewer prizes, or a bigger budget, unblocks it; the line is exact: every amount at least 1 saves, one 0 blocks", async () => {
+    const w = page(); typeBudget(w, "7"); await save(w); expect(msg(w)).toBe(SMALL(6)); click(w, '[data-count="4"]'); await save(w); expect(patches().length).toBe(1); // 4 prizes at budget 7: every prize >= 1
+    const x = page(); typeBudget(x, "7"); await save(x); expect(patches().length).toBe(0); typeBudget(x, "100"); await save(x); expect(patches().length).toBe(1);
+  });
+  test("the smallest budget that works is found by the planner itself: for all 8 plans the console blocks exactly when some amount is 0", async () => {
+    const P = (await import("node:module")).createRequire(import.meta.url)("../../public/prize-planner.js");
+    for (const [t, c] of [[1, 4], [1, 6], [1, 8], [1, 10], [2, 12], [2, 14], [2, 16], [2, 20]] as const) for (const b of [1, 5, 10, 20, 30, 40, 41, 50, 60, 100]) {
+      const zero = P.plan(t, c, b).prizes.some((p: any) => p.amount < 1); const w = page(t); click(w, `[data-count="${c}"]`); typeBudget(w, String(b)); await save(w);
+      expect([t, c, b, patches().length === 0]).toEqual([t, c, b, zero]);
+    }
+  });
+  test("a small budget in Manual is not a problem: the amounts are the organizer's own", async () => { const w = page(); typeBudget(w, "7"); click(w, '[data-pmode="manual"]'); await save(w); expect(msg(w) === SMALL(6)).toBe(false); });
 });

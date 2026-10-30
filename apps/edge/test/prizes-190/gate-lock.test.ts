@@ -8,7 +8,11 @@ const s = new Site();
 const H = 3_600_000;
 
 describe("R8: new games only", () => {
-  test("PRIZES_FROM_MS is a fixed instant in the future of this test run's clock model: 2026-11-02 00:00 UTC (the coder's placeholder until deploy)", () => { expect(FROM).toBe(Date.UTC(2026, 10, 2, 0, 0, 0)); });
+  test("PRIZES_FROM_MS pin: still the coder's placeholder 2026-11-02 00:00 UTC (not yet the deploy instant). WHEN THE RELEASE SESSION FILLS IN THE REAL INSTANT, change ONLY this expected value; every other test derives its times from the constant", () => { expect(FROM).toBe(Date.UTC(2026, 10, 2, 0, 0, 0)); });
+  test("whatever its value, the constant is a whole number of milliseconds, a date in 2026 or later, and prizesOn is a >= test on the game's creation time", async () => {
+    expect(Number.isInteger(FROM)).toBe(true); expect(FROM).toBeGreaterThanOrEqual(Date.UTC(2026, 9, 30)); const { prizesOn } = await import("../../src/approvals");
+    expect([prizesOn({ created_ms: FROM - 1 }), prizesOn({ created_ms: FROM }), prizesOn({ created_ms: FROM + 1 }), prizesOn(null), prizesOn({ created_ms: null }), prizesOn({})]).toEqual([false, true, true, false, false, false]);
+  });
   test("a game created at or after the constant takes the plan and the per-ticket lines; a game created one millisecond before gets 409 prizes-old-game", async () => {
     for (const [dt, ok] of [[-1, false], [0, true], [1, true], [-86_400_000, false], [-7 * 86_400_000, false], [5 * 86_400_000, true]] as const) {
       s.reset(); const at = FROM + dt, id = `G-${dt < 0 ? "O" : "N"}${Math.abs(dt)}`, t = await s.make(id, at);
@@ -36,9 +40,19 @@ describe("R8: new games only", () => {
     expect((await s.patch(at + 2000, "NEW-1", { name: "Party" })).status).toBe(200); const sm = await s.summary(at + 3000, "NEW-1"); expect(sm.prizePlan.budget).toBe(7654321); expect(sm.name).toBe("Party");
     expect((await s.patch(at + 4000, "NEW-1", { prizePlan: null })).status).toBe(200); expect((await s.summary(at + 5000, "NEW-1")).prizePlan).toBeUndefined();
   });
-  test.failing("PRODUCT GAP G-1 (low): the create route POST /api/z accepts a prizePlan and per-ticket lines for a game created BEFORE the constant (only the settings route is gated)", async () => {
-    s.reset(); const at = FROM - H, r = await s.call(at, "POST", "/api/z", { id: "OLD-4", startRound: roundAt(at) + 2400, callSeconds: 9, cap: 100, ...body2() }, P);
-    expect(r.status).toBe(409);
+  test("G-1 (fixed): the create route POST /api/z refuses a prizePlan and per-ticket lines for a game created BEFORE the constant, with the same code and sentence as the settings route; nothing is stored", async () => {
+    for (const [name, extra] of [["plan + lines", body2()], ["plan only", { prizePlan: plan2() }], ["ticket_1 line only", { tickets: 2, rewards: [{ pattern: "top", scope: "ticket_1", ordinal: 1, text: "" }] }], ["ticket_2 line only", { tickets: 2, rewards: [{ pattern: "top", scope: "ticket_2", ordinal: 1, text: "" }] }]] as const) {
+      s.reset(); const at = FROM - H, r = await s.call(at, "POST", "/api/z", { id: "OLD-4", startRound: roundAt(at) + 2400, callSeconds: 9, cap: 100, ...extra }, P); const b = await j(r);
+      expect([name, r.status, b.code, b.error]).toEqual([name, 409, "prizes-old-game", OLD_MSG]); expect([name, s.raw.query("SELECT COUNT(*) AS c FROM engagement WHERE id='OLD-4'").get()]).toEqual([name, { c: 0 }]);
+    }
+  });
+  test("G-1: the create route still works for an old game with ordinary prizes (no plan, no per-ticket line), and for a new game with the plan and the lines (stored in the summary)", async () => {
+    s.reset(); const old = FROM - H; const ok = await s.call(old, "POST", "/api/z", { id: "OLD-5", startRound: roundAt(old) + 2400, callSeconds: 9, cap: 100, tickets: 2, rewards: [{ pattern: "top", scope: "ticket", ordinal: 1, text: "A" }, { pattern: "full", scope: "two_ticket", ordinal: 1, text: "B" }] }, P); expect(ok.status).toBe(200);
+    const at = FROM + H, nw = await s.call(at, "POST", "/api/z", { id: "NEW-5", startRound: roundAt(at) + 2400, callSeconds: 9, cap: 100, ...body2() }, P); expect(nw.status).toBe(200);
+    const sm = await s.summary(at + 1000, "NEW-5"); expect(sm.prizePlan.budget).toBe(7654321); expect(sm.rewards.filter((l: any) => l.scope === "ticket_1").length).toBe(3);
+  });
+  test("G-1: the boundary of the create route is the same as the settings route: a game created at FROM - 1 ms is refused, at FROM accepted", async () => {
+    for (const [dt, want] of [[-1, 409], [0, 200]] as const) { s.reset(); const at = FROM + dt, r = await s.call(at, "POST", "/api/z", { id: "BND-" + (dt < 0 ? "O" : "N"), startRound: roundAt(at) + 2400, callSeconds: 9, cap: 100, ...body2() }, P); expect([dt, r.status]).toEqual([dt, want]); }
   });
 });
 
@@ -111,8 +125,17 @@ describe("R5: players never see amounts, gift names or the plan (public payloads
   });
 });
 
-describe("the tie rule of a game the new console makes (the console never sends `ties`)", () => {
-  test("OBSERVATION (see TESTER_REPORT, finding P-4): a plan saved the way the console saves it (no `ties`) leaves the game on 'next', so players who finish on the same number take separate prizes and nobody 'shares'", async () => {
+describe("P-4 (fixed): the tie rule of a game the new console makes (the console now sends `ties: \"share\"`)", () => {
+  test("a plan saved the way the console saves it NOW (tickets, ties share, rewards, prizePlan) leaves the game on 'share' in the public info and in the organizer summary; clone-style re-save keeps it", async () => {
+    s.reset(); const at = FROM + H; await s.make("TIE-0", at); expect((await s.patch(at + 1000, "TIE-0", body2())).status).toBe(200);
+    expect((await j(await s.info(at + 2000, "TIE-0"))).ties).toBe("share"); expect((await s.summary(at + 2000, "TIE-0")).ties).toBe("share");
+    expect((await s.patch(at + 3000, "TIE-0", { name: "Party" })).status).toBe(200); expect((await j(await s.info(at + 4000, "TIE-0"))).ties).toBe("share");
+  });
+  test("a body with ties 'next' is still accepted and kept (it is the organizer's choice); an unknown value is refused", async () => {
+    s.reset(); const at = FROM + H; await s.make("TIE-2", at); expect((await s.patch(at + 1000, "TIE-2", body2({ ties: "next" }))).status).toBe(200); expect((await j(await s.info(at + 2000, "TIE-2"))).ties).toBe("next");
+    expect((await s.patch(at + 3000, "TIE-2", body2({ ties: "both" }))).status).toBe(400);
+  });
+  test("OBSERVATION: the SERVER default did not change: a plan saved WITHOUT `ties` (any client other than the new console) leaves the game on 'next', so that client's players do not share", async () => {
     s.reset(); const at = FROM + H; await s.make("TIE-1", at);
     const { ties: _t, ...consoleBody } = body2(); void _t;
     expect((await s.patch(at + 1000, "TIE-1", consoleBody)).status).toBe(200);

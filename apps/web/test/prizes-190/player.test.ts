@@ -45,7 +45,12 @@ describe("the winner popup", () => {
   const popup = async (wins: unknown[]) => { const { p } = await inGame({ won: wins }); await p.waitFor(() => !!p.$("#hurray"), 20_000); return (p.$("#hurray") as any).textContent as string; };
   test("one prize, not shared: 'You won <prize>. Your organizer will give you your prize.' and no 'shared' sentence", async () => {
     const t = await popup([win("top@1")]);
-    expect(t).toContain("You won Ticket 1: Top line. Your organizer will give you your prize."); expect(t).not.toMatch(/shared with/); expect(t).toContain("Congratulations, you won");
+    expect(t).toContain("You won Ticket 1: Top line. Your organizer will give you your prize."); expect(t).not.toMatch(/shared with/);
+  });
+  test("P-9 (fixed): the line is said once: no 'Congratulations, you won <prize>' above 'You won <prize>. Your organizer ...'; the card is Hurray!, the prize name once in a sentence, the button", async () => {
+    const t = await popup([win("top@1")]); expect(t).not.toContain("Congratulations"); expect((t.match(/You won/g) || []).length).toBe(1); expect((t.match(/Top line/g) || []).length).toBe(1);
+    expect(t.startsWith("Hurray!")).toBe(true); expect(t.endsWith("Wonderful")).toBe(true);
+    const two = await popup([win("top@1"), win("early5@1")]); expect((two.match(/You won/g) || []).length).toBe(1);
   });
   test("shared with 1: 'is shared with 1 other player.' (singular); with 3: '3 other players.'", async () => {
     expect(await popup([win("top@2", 1, 1)])).toContain("Ticket 2: Top line is shared with 1 other player.");
@@ -84,10 +89,16 @@ describe("no amount, budget, currency or gift name on any player page (the plan 
 });
 
 describe("prize names with several winner positions in a 2-ticket game", () => {
-  test.failing("PRODUCT NOTE P-9 (cosmetic): a per-ticket prize with 2 positions reads 'Ticket 1: 1st Full house' (the planner's own wording), not '1st Ticket 1: Full house'", async () => {
+  test("P-9 (fixed): a per-ticket prize with 2 positions reads 'Ticket 1: 1st Full house' (the planner's own wording), not '1st Ticket 1: Full house'", async () => {
     const lines = [1, 2].map((o) => ({ pattern: "full", scope: "ticket_1", ordinal: o, text: "" }));
     const { p } = await inGame({ cfg: { tickets: 2, ties: "share", rewards: lines, breaks: [], rounds: 1 }, won: [win("full@1", 1, 0)] });
     await p.waitFor(() => !!p.$("#hurray"), 20_000); const t = (p.$("#hurray") as any).textContent as string;
     expect(t).toContain("You won Ticket 1: 1st Full house.");
+  });
+  test("P-9 (fixed): the 2nd position of the same prize reads 'Ticket 1: 2nd Full house', and the wrong order is nowhere", async () => {
+    const lines = [1, 2].map((o) => ({ pattern: "full", scope: "ticket_1", ordinal: o, text: "" }));
+    const { p } = await inGame({ cfg: { tickets: 2, ties: "share", rewards: lines, breaks: [], rounds: 1 }, won: [win("full@1", 2, 0)] });
+    await p.waitFor(() => !!p.$("#hurray"), 20_000); const t = (p.$("#hurray") as any).textContent as string;
+    expect(t).toContain("You won Ticket 1: 2nd Full house."); expect(t).not.toMatch(/(1st|2nd) Ticket/);
   });
 });
