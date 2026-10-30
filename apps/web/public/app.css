@@ -38,7 +38,7 @@ a{color:var(--wine)}
 .btn.line{background:var(--surface);color:var(--ink);border:1px solid var(--line)}
 .btn.line:hover{border-color:var(--ink)}
 .btn.danger{background:var(--surface);color:var(--bad);border:1px solid #E8B4AE}
-.btn.ghost{background:transparent;color:var(--wine);padding:6px 8px;min-height:32px}
+.btn.ghost{background:transparent;color:var(--wine);padding:6px 8px;min-height:40px}
 .btn.sm{padding:7px 11px;font-size:13px;min-height:34px;border-radius:8px}
 .btn.block{width:100%}
 .btn:disabled,.btn[disabled]{opacity:.45;cursor:not-allowed}
