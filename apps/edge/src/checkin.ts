@@ -100,7 +100,7 @@ export async function checkinRoute(c: Ctx): Promise<Response> {
   }
   // optional edits: the name and the mobile number kept for the prize hand-over (the identity of the ticket itself never changes)
   let name = pii?.name ?? who.name ?? null, phone = pii?.phone ?? null, editedName = false, editedMobile = false;
-  const nn = typeof b?.name === "string" ? Array.from(b.name).filter((ch: string) => { const c = ch.charCodeAt(0); return !(c < 32 || c === 127 || (c >= 0x200b && c <= 0x200f) || c === 0x2028 || c === 0x2029 || c === 0xfeff || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069)); }).join("").replace(/[<>`]/g, "").replace(/^[=+\-@\s]+/, "").trim().slice(0, 60) : "";
+  const nn = typeof b?.name === "string" ? Array.from(String(b.name)).filter((ch: string) => { const c = ch.charCodeAt(0); return !(c < 32 || c === 127 || (c >= 0x200b && c <= 0x200f) || c === 0x2028 || c === 0x2029 || c === 0xfeff || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069)); }).join("").replace(/[<>`]/g, "").replace(/^[=+\-@\s]+/, "").trim().slice(0, 60) : "";
   if (nn && nn !== name) { name = nn; editedName = true; }
   const rawMob = typeof b?.mobile === "string" ? b.mobile.trim() : ""; // from any country: the page sends +<country code><number>
   if (rawMob) { const cl = cleanPhone(rawMob); if (!cl.ok) return json({ error: cl.why, code: "bad-mobile" }, 400); const kept = keptFromClean(cl.digits); if (kept !== keptPhone(phone ?? "")) { phone = kept; editedMobile = true; } }
