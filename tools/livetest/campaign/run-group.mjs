@@ -7,6 +7,7 @@ import { writeFileSync, readFileSync, mkdirSync } from "node:fs";
 import { ROOT, DATA, makeApi, isReal } from "./lib.mjs";
 import { RequestMeter, MeterStop, DAILY_LIMIT } from "./meter.mjs";
 import { launch, runCase } from "./driver.mjs";
+import { readClock, speed } from "./core.mjs";
 
 const args = process.argv.slice(2); const GROUP = args[0], LAYER = args[1];
 const opt = (k, d) => { const i = args.indexOf("--" + k); return i >= 0 ? args[i + 1] : d; };
@@ -17,6 +18,7 @@ if (LAYER !== "C" && isReal(BASE)) { console.error(`layer ${LAYER} runs on a LOC
 if (isReal(BASE) && process.env.CAMPAIGN_REAL !== "yes") { console.error(`REFUSED: ${BASE} is the real site. Layer C needs the boss's go: set CAMPAIGN_REAL=yes.`); process.exit(2); }
 mkdirSync(OUT, { recursive: true });
 const cases = JSON.parse(readFileSync(`${ROOT}/tools/livetest/usecases-100.json`, "utf8")).cases.filter((c) => c.group === GROUP && c.layers.includes(LAYER));
+const clock = isReal(BASE) ? null : await readClock(BASE); if (clock) console.log(`compressed clock x${clock.speed} with the stand-in beacon`);
 const meter = new RequestMeter(BASE), api = makeApi(BASE, meter), browser = await launch(), results = []; const t0 = Date.now();
 console.log(`${GROUP} layer ${LAYER} run ${RUN}: ${cases.length} cases on ${BASE}; meter ${meter.total}/${DAILY_LIMIT}`);
 try {

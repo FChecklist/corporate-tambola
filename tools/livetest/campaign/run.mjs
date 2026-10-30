@@ -5,6 +5,7 @@ import { writeFileSync, readFileSync } from "node:fs";
 import { ROOT, DATA, makeApi, isReal } from "./lib.mjs";
 import { RequestMeter, MeterStop, DAILY_LIMIT } from "./meter.mjs";
 import { launch, runCase } from "./driver.mjs";
+import { readClock, speed } from "./core.mjs";
 
 const args = process.argv.slice(2); const opt = (k, d) => { const i = args.indexOf("--" + k); return i >= 0 ? args[i + 1] : d; };
 const BASE = (opt("base", "http://localhost:8821")).replace(/\/$/, ""), RUN = opt("run", "r" + Date.now().toString(36).slice(-5)), LAYER = opt("layer", isReal(BASE) ? "C" : "B");
@@ -13,6 +14,7 @@ const want = opt("cases", "").split(",").filter(Boolean);
 const cases = (want.length ? cat.filter((c) => want.includes(c.id)) : cat).filter((c) => c.layers.includes(LAYER));
 if (isReal(BASE) && process.env.CAMPAIGN_REAL !== "yes") { console.error(`REFUSED: ${BASE} is the real site. Layer C needs the boss's go: set CAMPAIGN_REAL=yes.`); process.exit(2); }
 if (!cases.length) { console.error("no case selected for layer " + LAYER); process.exit(2); }
+const clock = isReal(BASE) ? null : await readClock(BASE); if (clock) console.log(`compressed clock x${clock.speed} with the stand-in beacon`);
 const meter = new RequestMeter(BASE);
 console.log(`run ${RUN}: ${cases.length} case(s) on ${BASE} (layer ${LAYER}); meter today ${meter.total}/${DAILY_LIMIT}`);
 const api = makeApi(BASE, meter), browser = await launch(), results = [];

@@ -14,19 +14,19 @@ export async function createGame(api, runId, caseId, o = {}) {
   if (!st.ok) throw new Error("start refused: " + JSON.stringify(st.body).slice(0, 200));
   const key = st.body.token;
   register({ id: tag.id, run: runId, case: caseId, key, email: tag.email });
-  const startRound = roundAt(Date.now() + (o.startInSec ?? 150) * 1000);
+  const startRound = roundAt(now() + (o.startInSec ?? 150) * 1000);
   const mk = await api("POST", "/api/z", { id: tag.id, startRound, callSeconds: o.callSeconds ?? 6, cap: o.cap ?? 10, demo: true, name: tag.name }, key);
   if (!mk.ok) throw new Error("create refused: " + JSON.stringify(mk.body).slice(0, 200));
   const rewards = o.rewards ?? [{ pattern: "early5", scope: "ticket", ordinal: 1, text: "Mug" }, { pattern: "top", scope: "ticket", ordinal: 1, text: "Voucher" }];
   await api("PATCH", `/api/z/${tag.id}/settings`, { rewards, whoCanJoin: "anyone", ...(o.settings || {}) }, key);
   const pub = await api("POST", `/api/z/${tag.id}/publish`, { email: tag.email, phone: tag.phone }, key);
   if (!pub.ok) throw new Error("publish refused: " + JSON.stringify(pub.body).slice(0, 200));
-  return { tag, key, startMs: Date.now() + (o.startInSec ?? 150) * 1000 };
+  return { tag, key, startMs: now() + (o.startInSec ?? 150) * 1000 };
 }
 
 export async function newContext(browser, base, meter, extra = {}) {
   const ctx = await browser.newContext({ viewport: PHONE, isMobile: true, hasTouch: true, ...extra });
-  if (meter) await meter.watch(ctx); // every request of this phone counts
+  await warp(ctx); if (meter) await meter.watch(ctx); // every request of this phone counts
   return ctx;
 }
 
@@ -51,6 +51,25 @@ export async function joinPlayer(browser, base, meter, id, phone, { checkin = tr
 export const mkChecks = () => { const checks = []; return { checks, ck: (n, ok, d = "") => { checks.push({ n, ok: !!ok, d: String(d).slice(0, 240) }); return !!ok; } }; };
 
 
+// ---- COMPRESSED TIME (layer B on the LOCAL server only). The local server can run with CLOCK_SPEED=N and FAKE_BEACON=1 (apps/edge/src/local.ts, never part of the production worker).
+// Then every browser context gets the same warped clock (a script injected by this tool), the real beacon hosts are blocked, and the phone runtime is told to accept the stand-in beacon (the same patch the DOM test harness uses).
+let CLOCK = null;
+export const setClock = (c) => { CLOCK = c && c.speed > 1 && c.fakeBeacon ? c : null; };
+export const speed = () => (CLOCK ? CLOCK.speed : 1);
+/** Server time in ms: the warped clock when compressed, else the wall clock. */
+export const now = () => (CLOCK ? CLOCK.base + (Date.now() - CLOCK.startReal) * CLOCK.speed : Date.now());
+export async function readClock(base) { try { const r = await fetch(base + "/__test/clock"); if (!r.ok) return null; const c = await r.json(); setClock(c); return CLOCK; } catch { return null; } }
+const warpScript = (c) => `(() => { const RD = Date.now.bind(Date), PN = performance.now.bind(performance), S = ${c.speed}, B = ${c.base}, R0 = ${c.startReal}, P0 = PN(); const T = () => B + (RD() - R0) * S; const D = Date;
+  function FD(...a) { return a.length ? new D(...a) : new D(T()); } FD.prototype = D.prototype; FD.now = T; FD.UTC = D.UTC; FD.parse = D.parse; window.Date = FD;
+  performance.now = () => P0 + (PN() - P0) * S; const st = window.setTimeout.bind(window), si = window.setInterval.bind(window);
+  window.setTimeout = (f, ms, ...a) => st(f, (ms || 0) / S, ...a); window.setInterval = (f, ms, ...a) => si(f, Math.max(1, (ms || 0) / S), ...a); })();`;
+const PHONE_PATCH = ";(function(){try{var O=ZG.PhoneRuntime;ZG.PhoneRuntime=class extends O{constructor(e,d){super(e,Object.assign({},d,{verify:function(x){return x.signature==='aa'}}))}}}catch(e){}})();";
+async function warp(ctx) {
+  if (!CLOCK) return;
+  await ctx.addInitScript(warpScript(CLOCK));
+  await ctx.route((u) => /(^|\.)drand\.sh$|^drand\.cloudflare\.com$/.test(u.hostname), (r) => r.abort("blockedbyclient")); // only our own server's stand-in beacon is used
+  await ctx.route("**/zgame.js*", async (route) => { const r = await route.fetch(); await route.fulfill({ response: r, body: (await r.text()) + PHONE_PATCH }); });
+}
 let phoneSeq = 0;
 /** A fake mobile number nobody owns (9 + 9 digits), unique inside this process. */
 export const fakePhone = () => String(9000000000 + ((Date.now() % 100000) * 100 + (phoneSeq++ % 100)));

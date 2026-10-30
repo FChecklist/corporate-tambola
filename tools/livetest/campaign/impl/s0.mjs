@@ -1,5 +1,5 @@
 // The three kinds built in S0: UC-G1-01 (basic), UC-G2-07 (duplicate), UC-G2-08 (cap).
-import { createGame, joinPlayer, newContext, mkChecks, median, sleep } from "../core.mjs";
+import { createGame, joinPlayer, newContext, mkChecks, median, sleep, speed, now } from "../core.mjs";
 export const IMPL = {};
 const KINDS = {
   /** G1-01: automatic start, the game calls the numbers: 10 pages (organizer + 9 players), the numbers come on the beat, identical on every phone, no repeats. */
@@ -14,7 +14,7 @@ const KINDS = {
       for (let i = 0; i < 9; i++) { players.push(await joinPlayer(browser, base, meter, g.tag.id, String(9000000000 + (Date.now() % 100000) * 100 + i))); }
       const pp = players.slice(1);
       ck("all 9 players joined", pp.every((p) => p.joined), pp.map((p) => p.joined).join(","));
-      const waitMs = Math.max(0, g.startMs - Date.now()) + (N + 3) * CALL * 1000 + 20000;
+      const SP = speed(); const waitMs = (Math.max(0, g.startMs - now()) + (N + 3) * CALL * 1000) / SP + 20000;
       const t0 = Date.now(); const stamps = []; let last = 0;
       while (Date.now() - t0 < waitMs) {
         const n = await pp[0].page.evaluate(() => (window.__rt && window.__rt.view ? window.__rt.view().log.length : 0)).catch(() => 0);
@@ -27,7 +27,7 @@ const KINDS = {
       const m = Math.min(...logs.map((l) => l.length));
       ck("every phone shows the same numbers in the same order", m >= N && logs.every((l) => l.slice(0, m).join() === logs[0].slice(0, m).join()), logs.map((l) => l.slice(0, N).join("-")).join(" | "));
       ck("no number repeats and all are within 1..90", new Set(logs[0]).size === logs[0].length && logs[0].every((x) => x >= 1 && x <= 90), logs[0].join(","));
-      const gaps = stamps.slice(1).map((t, i) => (t - stamps[i]) / 1000);
+      const gaps = stamps.slice(1).map((t, i) => ((t - stamps[i]) / 1000) * SP); // in game seconds
       ck(`the numbers come on the ${CALL}-second beat (median gap ${median(gaps).toFixed(1)} s)`, gaps.length >= 2 && Math.abs(median(gaps) - CALL) <= 1.5, gaps.map((x) => x.toFixed(1)).join(","));
       ck("no phone had a script error", pp.every((p) => p.errs.length === 0), pp.flatMap((p) => p.errs).join(";"));
     } finally { await Promise.all(players.map((p) => p.ctx.close().catch(() => {}))); }

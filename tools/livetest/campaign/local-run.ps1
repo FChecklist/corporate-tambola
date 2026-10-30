@@ -1,6 +1,6 @@
 # Queues behind C:\ct\heavy.lock (absent AND free RAM >= 900 MB, polled every 2 minutes for up to 60 minutes), takes the lock, starts the LOCAL server, runs one group on layer B, stops the server, releases the lock (guarded).
 #   powershell -File tools\livetest\campaign\local-run.ps1 -Group G2 [-Run r1] [-Tree C:\ct\test-sites\wt-player18\tambola]
-param([string]$Group = "G2", [string]$Run = ("r" + [int](Get-Date -UFormat %s) % 100000), [string]$Tree = "C:\ct\test-sites\wt-player18\tambola", [int]$Port = 8821)
+param([string]$Group = "G2", [string]$Run = ("r" + [int](Get-Date -UFormat %s) % 100000), [string]$Tree = "C:\ct\test-sites\wt-player18\tambola", [int]$Port = 8821, [int]$Speed = 1)
 $lock = 'C:\ct\heavy.lock'; $bun = 'C:\Users\Dell\AppData\Roaming\npm\node_modules\bun\bin\bun.exe'; $out = "C:\ct\test-sites\data\campaign"; $mine = $false
 $deadline = (Get-Date).AddMinutes(60)
 try {
@@ -12,6 +12,7 @@ try {
   }
   Set-Location $Tree
   $env:PORT = "$Port"; $env:TEST_MODE = "1"; $env:DB_FILE = "$out\local-$Group-$Run.sqlite"
+  if ($Speed -gt 1) { $env:CLOCK_SPEED = "$Speed"; $env:FAKE_BEACON = "1" } else { Remove-Item Env:CLOCK_SPEED, Env:FAKE_BEACON -ErrorAction SilentlyContinue } # compressed time: the local server only (apps/edge/src/local.ts)
   $srv = Start-Process -FilePath $bun -ArgumentList @('run', 'apps/edge/src/local.ts') -PassThru -WindowStyle Hidden -RedirectStandardOutput "$out\server-$Group-$Run.log" -RedirectStandardError "$out\server-$Group-$Run.err"
   Start-Sleep -Seconds 8
   & node tools/livetest/campaign/run-group.mjs $Group B --base "http://localhost:$Port" --run $Run --out $out *> "$out\local-$Group-$Run.log"

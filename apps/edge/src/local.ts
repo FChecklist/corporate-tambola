@@ -7,6 +7,12 @@ import { execFileSync } from "node:child_process";
 import { SCHEMA, handle, purgeOld, type D1, type D1Stmt } from "./worker";
 import type { PayEnv } from "./pay";
 
+/** Test tool only (this file is never part of the production worker): a COMPRESSED CLOCK and a STAND-IN BEACON for the campaign runs in real browsers (tools/livetest/campaign).
+ *  CLOCK_SPEED=6 makes the server's time run six times faster than the wall clock (a 12-second gap passes in 2 seconds); CLOCK_BASE_MS is the server time at start (default: now). /__test/clock tells a test browser the same numbers.
+ *  FAKE_BEACON=1 answers /api/beacon/<chain>/public/<round|latest> with a deterministic stand-in (signature "aa"), because the real public beacon has no future rounds; the test browser accepts it through its own test-side patch. */
+const CLOCK_SPEED = Number(process.env.CLOCK_SPEED ?? 1) || 1, CLOCK_START_REAL = Date.now(), CLOCK_BASE = Number(process.env.CLOCK_BASE_MS ?? CLOCK_START_REAL) || CLOCK_START_REAL;
+const campaignClockNow = () => CLOCK_BASE + (Date.now() - CLOCK_START_REAL) * CLOCK_SPEED;
+const FAKE_BEACON = process.env.FAKE_BEACON === "1";
 /** Test tool only: how many database reads and writes the request in progress made (SQL_COUNT_LOG=<file> writes one line per request; exact when requests come one at a time). */
 const SQLN = { r: 0, w: 0 };
 /** Test tool only: D1_READ_MS / D1_WRITE_MS make every database read / write wait that long (like a real D1 call), so a local load run is not unrealistically fast. Default 0. */
@@ -43,9 +49,12 @@ export function startLocal(o: { port?: number; secret?: string; dbFile?: string;
     port: o.port ?? Number(process.env.PORT ?? 8788),
     async fetch(req) {
       const u = new URL(req.url);
+      if (u.pathname === "/__test/clock") return Response.json({ base: CLOCK_BASE, startReal: CLOCK_START_REAL, speed: CLOCK_SPEED, now: campaignClockNow(), fakeBeacon: FAKE_BEACON }, { headers: { "cache-control": "no-store" } });
+      const bm = FAKE_BEACON ? /^\/api\/beacon\/[0-9a-f]{64}\/public\/(latest|[0-9]+)$/.exec(u.pathname) : null;
+      if (bm) { const r = bm[1] === "latest" ? Math.floor((campaignClockNow() / 1000 - 1692803367) / 3) + 1 : Number(bm[1]); return Response.json({ round: r, randomness: new Bun.CryptoHasher("sha256").update("fake" + r).digest("hex"), signature: "aa" }, { headers: { "cache-control": "no-store" } }); }
       if (u.pathname.startsWith("/api/") || u.pathname.startsWith("/ai/")) {
-        const log = process.env.SQL_COUNT_LOG; if (!log) return handle(req, env);
-        const r0 = SQLN.r, w0 = SQLN.w, res = await handle(req, env); (await import("node:fs")).appendFileSync(log, `${req.method} ${u.pathname.replace(/[A-Z0-9_-]{6,}/g, ":id")} reads=${SQLN.r - r0} writes=${SQLN.w - w0} status=${res.status}
+        const log = process.env.SQL_COUNT_LOG; if (!log) return handle(req, env, campaignClockNow());
+        const r0 = SQLN.r, w0 = SQLN.w, res = await handle(req, env, campaignClockNow()); (await import("node:fs")).appendFileSync(log, `${req.method} ${u.pathname.replace(/[A-Z0-9_-]{6,}/g, ":id")} reads=${SQLN.r - r0} writes=${SQLN.w - w0} status=${res.status}
 `); return res;
       }
       if (u.pathname === "/version.json") return new Response(versionBody(), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
@@ -55,7 +64,7 @@ export function startLocal(o: { port?: number; secret?: string; dbFile?: string;
       return (await f.exists()) ? new Response(f, { headers: { "cache-control": "no-store" } }) : new Response("Not found", { status: 404 });
     },
   });
-  return { server, env, raw, url: `http://localhost:${server.port}`, purge: () => purgeOld(env, Date.now()) };
+  return { server, env, raw, url: `http://localhost:${server.port}`, purge: () => purgeOld(env, campaignClockNow()) };
 }
 
 /** Local use: one organizer account whose key is kept in a file next to the database, so the console keeps its history across restarts. */
