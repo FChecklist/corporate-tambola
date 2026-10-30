@@ -474,14 +474,23 @@
     for (const id of ["drun", "dagain", "dagain2"]) { const b = document.getElementById(id); if (b) b.onclick = () => DEMO.run(); }
     for (const id of ["dcopy", "dcopy2"]) { const b = document.getElementById(id); if (b) b.onclick = async () => { const link = location.origin + "/demo.html"; try { await navigator.clipboard.writeText(link); b.textContent = "Link copied: " + link; } catch { b.textContent = "Send this link: " + link; } }; } // the plain address: whoever opens it runs their own demo
   }
+  // ---------- 1.8.4: Game completed. The results stay on the phone for 30 minutes after the game; a link opened later gets the calm "Game completed" page ----------
+  const AFTER_MS = 30 * 60 * 1000, THIRTY_NOTE = "Your results stay on this page for 30 minutes after the game. After that this page only says the game is completed.";
+  let SEEN_LIVE = false;
+  const endMsOf = (v) => (v.scheduledRound && v.log && v.log.length ? (1692803367 + (v.scheduledRound - 1) * 3) * 1000 + v.log.length * (v.callSeconds || 12) * 1000 : 0);
+  /** This phone opened the page after the game had been over for 30 minutes (it never saw the game live in this visit). */
+  const completedLate = (v) => !DEMO && v.phase === "ended" && !SEEN_LIVE && endMsOf(v) > 0 && Date.now() - endMsOf(v) > AFTER_MS;
+  const completedView = () => `${brandStrip()}<div class="zplay"><p class="zshare" id="zshare">Corporate Tambola is played in close groups, by invitation only: company teams and their families. Enjoyed it? Recommend it to others.</p><div class="zcard zfinal zdone" id="gamedone"><h2>Game completed</h2><p class="zsmall zgid">Game ID <b>${esc(EID || "")}</b></p><p class="zsmall zthanks">This game is now over. Thank you for being part of it.</p><p class="zsmall zthirty">${esc(THIRTY_NOTE)}</p><button class="zbtn" id="shr">Share with friends and colleagues</button></div></div>`;
   function finalCard(v) {
     if (DEMO) return `<div class="zcard zfinal"><h2>That was the video <span class="zdemotag">VIDEO</span></h2><div class="zfbig">${PRIZES.length ? "You won Four corners." : "You saw how a game runs."}</div>${PRIZES.length ? "" : `<p class="zsmall" style="margin:0 0 6px">Next time tap each number as it is called and press Claim when the four corners are marked: that is how a prize is won.</p>`}<p class="zsmall" style="font-size:15px;margin:6px 0 10px">A real game has 90 numbers, many prizes, your own brand messages and videos, lucky draws and a report. You build it in about five minutes and nobody pays until you are ready.</p><a class="zbtn" style="display:inline-flex;align-items:center;text-decoration:none" href="/">Create my game</a> <button class="zbtn s alt" id="dagain2" type="button">Run the video again</button> <button class="zbtn s alt" id="dcopy2" type="button">Copy the demo link</button></div>`;
     const n = PRIZES.length;
-    return `<p class="zshare" id="zshare">Thank you for playing the game. You can recommend this game to others.</p><div class="zcard zfinal"><h2>Game complete${demoTag()}</h2>
+    return `<p class="zshare" id="zshare">Thank you for playing the game. You can recommend this game to others.</p><div class="zcard zfinal"><h2>Game completed${demoTag()}</h2>
+      <p class="zsmall zgid">Game ID <b>${esc(EID || "")}</b></p>
       <div class="zmedal" aria-hidden="true">${n ? "&#127942;" : "&#127922;"}</div>
       <div class="zfbig">${n ? "You won " + n + (n === 1 ? " prize!" : " prizes!") : "Well played!"}</div>
       <p class="zsmall zthanks">Thank you for joining our extended family of Corporate Tambola.</p>
       <p class="zsmall" style="font-size:15px;margin:6px 0 10px">${n ? "Your prizes are listed below and stay on this phone. Show them to your organizer to collect." : "No prize this time. Every game is a good game, and the next one is another chance."}</p>
+      <p class="zsmall zthirty">${esc(THIRTY_NOTE)}</p>
       <button class="zbtn" id="shr">Share with friends and colleagues</button>
       <a class="zbtn s alt" style="display:inline-flex;align-items:center;text-decoration:none;margin-top:8px" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent("I just played Corporate Tambola with my team. Bring it to your company: " + shareLink)}">WhatsApp</a></div>`;
   }
@@ -883,6 +892,8 @@
     return `<div class="zcard zps" id="prizepanel"><h2>Prizes${open ? " still to win · " + open : " · all won"}</h2><div class="zlegend"><span><i class="g"></i>Still to win</span><span><i class="s"></i>Already won</span></div><ul class="zpl">${rows}</ul></div>`;
   }
   function playView(v) {
+    if (v.phase !== "ended") SEEN_LIVE = true;
+    if (completedLate(v)) return completedView();
     const called = new Set(v.marks || []); // what the player has tapped (the ticket never marks itself)
     const last = v.log[v.log.length - 1];
     toastsFrom(v);
