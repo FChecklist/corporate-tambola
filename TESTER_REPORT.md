@@ -1,3 +1,70 @@
+# TESTER_REPORT: Tambola rc 1.8.5, final4 (`tests/tambola-rc185-final4-2026-10-30`)
+
+- Base: `origin/tests/tambola-rc185-final3-2026-10-30` (cfe4912). `git merge-base --is-ancestor origin/rc/tambola-1.8.5 HEAD` is true (rc head is still f9280c8), so no merge was needed.
+- Changed: test files and this report only. **No product file was changed.** I put temporary breaks into `apps/edge/src/worker.ts` to prove the new tests, and restored it with `git checkout` each time (`git status` clean after).
+- Sandbox run, `bun test --isolate <folder>`, one folder at a time. Counts are copied from the last summary lines. Logs are in `/tmp/claude-0/` (not committed).
+
+## 1. Result
+
+| Check | Result |
+|---|---|
+| `bun run typecheck` | exit 0 |
+| ID matrix `bun tools/matrix/id-clean.ts` | **1,122,798 distinct inputs, 20,216,310 checks, failures 0** (1,581 real-Worker inputs, 2,406 real join-page inputs, 97.0 s) |
+| Every folder | 0 failures (table below) |
+
+| Folder | Pass | Fail | Skip |
+|---|---|---|---|
+| packages/shared | 12 | 0 | 0 |
+| packages/engine | 65 | 0 | 0 |
+| packages/beacon | 359 | 0 | 0 |
+| packages/billing | 26 | 0 | 0 |
+| tools/control-worker | 1 | 0 | 0 |
+| apps/edge | 2185 | 0 | 1 |
+| apps/server | 9 | 0 | 0 |
+| apps/web (last of 3 runs) | 930 | 0 | 0 |
+| tools/matrix (extra, small mode test) | 7 | 0 | 0 |
+
+## 2. Changes
+
+**(a) Matrix** `tools/matrix/id-clean.ts`, check "P1 join page hint": for an employee-ID game, when the cleaned ID is longer than 30 characters the expected hint is exactly `This ID is too long. An employee ID may be up to 30 characters once cleaned.` For 1 to 30 characters the old `The system will read this as ...` expectation is kept. The Email ID game is unchanged. The matrix has 82,649 inputs over 30 cleaned characters, so both sides are exercised. The small-mode test `tools/matrix/id-clean.test.ts` is green.
+
+**(b) `apps/web/test/rc185/audit-fixes.test.ts`**
+- The two G page tests ("endedAtMs later than the estimate", "endedAtMs earlier than the estimate") now set one fake clock (`o.world.now`) before anything is read, and `/info` is read at that same clock. They depend on no real time and no other file.
+- New describe `G2` (5 tests, through the real Worker and `lifecycleTick`, explicit clock on every call): scheduled end not passed -> no `endedAtMs`; passed -> present, equal to the stored end, never changes over later looks and ticks; a break added later does not create a value before the end and does not move a returned one; phone-confirmed end is present before the scheduled time (and with the clock before the vote) and stays; cancelled game never has it.
+- Result of the two G tests in each full apps/web run: 0 fail lines in all runs (my filter prints failing tests only, so "pass" means no `(fail)` line for them). Alone, the file gives 36 pass, 0 fail.
+
+**(c) One more test fix, found by the three runs.** In the first set of three runs, run 3 had 1 failure: `pages.test.ts` "Copy payment link: Organizer, Host and Co-host ..." (not a G test). The line read `h.$("#copypaylink")` at once, before the Host's step was drawn. The file alone passed 5 of 5 repeats (the 6th was cancelled), so it is a timing race in the test under load. I made the test wait for the button. Because that changed a file, I ran apps/web three more times in full.
+
+## 3. The three apps/web runs (final tests, after all fixes)
+| Run | Pass | Fail | Time | G tests |
+|---|---|---|---|---|
+| 1 | 930 | 0 | 574 s | no fail line |
+| 2 | 930 | 0 | 570 s | no fail line |
+| 3 | 930 | 0 | 574 s | no fail line |
+
+Earlier runs, for honesty: before my G edits, one run gave 925 pass, 0 fail. Before the pages.test fix, the runs gave 930/0, 930/0, then 929/1 (the payment-link race above). So I could **not reproduce** the 2 apps/web failures from cloud run 5 here, even on the old test code. I cannot say why they failed there; my guess (not verified) is that run 5 had the product from before f9280c8.
+
+## 4. Deliberate breaks for the new tests (product copy of `worker.ts` line 142, run on `apps/web/test/rc185/audit-fixes.test.ts`)
+| Break | Baseline | Broken |
+|---|---|---|
+| B1 scheduled end shown before it has passed | 36 pass | RED 2 (G2 "not passed", G2 "break added later") |
+| B2 scheduled end never shown | green | RED 2 (G2 "has passed", G2 "break added later") |
+| B3 phone-confirmed end also needs the clock | green | RED 1 (G2 "phone-confirmed") |
+| B4 value follows the clock (`now`) for scheduled ends | green | RED 2 (G2 "has passed", G2 "break added later") |
+| B5 cancelled games carry it | green | RED 1 (G2 "cancelled") |
+Each was restored to green after. Note: the two old page G tests do not go red for B3, because they read at a clock after the end; the new phone-confirmed test covers that. Matrix: the old expectation would flag every employee ID over 30 cleaned characters (the matrix failed 51 in cloud run 5); with the new expectation it reports 0. I did not run a separate break for the matrix expectation.
+
+## 5. Possible product issues
+None found. Observation only: `lifecycleTick` rewrites a *scheduled* end each minute (`lifecycle.ts` ~427) until phones confirm. A break added before the game moves it, which is right. I tested that after the end a returned value does not move; it did not.
+
+## 6. Notes
+- Branch pushed: `tests/tambola-rc185-final4-2026-10-30`, as the task asked (not the `claude/loving-rubin-rgdlzl` branch from the session setup).
+- The non-web folder counts, typecheck and the small matrix test come from one run made before the `pages.test.ts` fix; that fix cannot affect them.
+- `bun install` was needed first (no `node_modules`).
+
+---
+# Earlier report (final, not rewritten)
+
 # TESTER_REPORT: Tambola rc 1.8.5, final test branch `tests/tambola-rc185-final-2026-10-30`
 
 - Base: `origin/tests/tambola-rc185-merged-2026-10-30` (cfc416a) + merge of `origin/rc/tambola-1.8.5` (e2234f5). The merge had no conflicts.
