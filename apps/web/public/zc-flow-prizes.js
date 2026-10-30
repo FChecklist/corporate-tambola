@@ -21,8 +21,11 @@
     return out;
   };
   const labelOf = (id, tickets) => (catalogue(tickets).find((c) => c.id === id) || { label: id }).label;
-  const num = (v) => Math.floor(Number(String(v).replace(/[^\d.]/g, "")) || 0);
-  const planNow = () => P.plan(S.tickets, S.count || P.DEFAULT_COUNT[S.tickets], num(S.budget));
+  // "" = 0; commas and spaces are allowed; anything else (a minus sign, letters) is NaN, so it blocks Next instead of being read as another number
+  const num = (v) => { const t = String(v == null ? "" : v).replace(/[,\s]/g, ""); if (!t) return 0; return /^\d+(\.\d+)?$/.test(t) ? Math.floor(Number(t)) : NaN; };
+  const bud = () => { const n = num(S.budget); return Number.isFinite(n) ? n : 0; };
+  const tooSmall = () => { if (S.mode !== "auto" || !(bud() > 0)) return ""; const pr = planNow().prizes; return pr.some((p) => !(p.amount >= 1)) ? "Your budget is too small for " + pr.length + " prizes. Choose fewer prizes or a bigger budget." : ""; };
+  const planNow = () => P.plan(S.tickets, S.count || P.DEFAULT_COUNT[S.tickets], bud());
   const rowsNow = () => (S.mode === "auto" ? planNow().prizes.map((p) => ({ id: p.id, label: p.label, amount: p.amount, gift: S.gifts[p.id] || "" })) : S.manual.map((r) => ({ id: r.id, label: labelOf(r.id, S.tickets), amount: num(r.amount), gift: r.gift || "" })));
 
   /** The reward lines the engine reads: one per prize, per-ticket scope for a two-ticket game, text empty so players see names only. */
@@ -40,12 +43,13 @@
   const save = async (ctx, msg) => {
     const rows = rowsNow(), c = S.currency;
     if (S.mode === "auto" && !(num(S.budget) > 0)) { msg.textContent = BLANK; return; }
-    if (S.mode === "manual") { const bad = P.validateManual(rows.map((r) => ({ id: r.id, amount: r.amount, gift: r.gift }))).concat(orderProblem(rows)); if (bad.length) { msg.textContent = bad[0]; return; } }
+    if (tooSmall()) { msg.textContent = tooSmall(); return; }
+    if (S.mode === "manual") { const bad = P.validateManual(rows.map((r) => ({ id: r.id, amount: r.amount, gift: r.gift }))).concat(orderProblem(rows) ? [orderProblem(rows)] : []); if (bad.length) { msg.textContent = bad[0]; return; } }
     if (!st.eid) { msg.textContent = "Please save step 1 first."; return; }
     msg.textContent = "Saving…";
-    const budget = S.mode === "auto" ? num(S.budget) : rows.reduce((s, r) => s + r.amount, 0);
+    const budget = S.mode === "auto" ? bud() : rows.reduce((s, r) => s + r.amount, 0);
     try {
-      await Z.call("PATCH", `/api/z/${st.eid}/settings`, { tickets: S.tickets, rewards: rewardsOf(rows, S.tickets), prizePlan: { mode: S.mode, currency: c, budget, count: rows.length, prizes: rows.map((r) => ({ id: r.id, amount: r.amount, ...(r.gift ? { gift: r.gift } : {}) })) } });
+      await Z.call("PATCH", `/api/z/${st.eid}/settings`, { tickets: S.tickets, ties: "share", rewards: rewardsOf(rows, S.tickets), prizePlan: { mode: S.mode, currency: c, budget, count: rows.length, prizes: rows.map((r) => ({ id: r.id, amount: r.amount, ...(r.gift ? { gift: r.gift } : {}) })) } });
       Z.prizes.tix = S.tickets; // the Step 5 preview and read-back show the right tickets and prize names
       { const sel = Z.prizes.sel || (Z.prizes.sel = {}), count = {}; let sb = 0;
         for (const r of rows) { const [, pattern, o] = r.id.split(":"); if (pattern === "full2") sb = Math.max(sb, Number(o)); else count[pattern] = Math.max(count[pattern] || 0, Number(o)); }
@@ -99,7 +103,7 @@
     });
     box.append(el("div", { class: "zf-tablewrap" }, table));
     if (S.mode === "manual") box.append(el("button", { type: "button", class: "zf-add", id: "zp-add", onclick: () => { const used = new Set(S.manual.map((m) => m.id)), next = catalogue(S.tickets).find((c) => !used.has(c.id)); if (!next || S.manual.length >= P.MAX_MANUAL) return; S.manual.push({ id: next.id, amount: "", gift: "" }); ctx.redraw(); } }, "Add a prize"));
-    if (S.mode === "auto") { const h = P.hint(planNow()); if (h) box.append(el("p", { class: "zf-small zp-hint", id: "zp-hint", text: h })); }
+    if (S.mode === "auto") { const h = tooSmall() || P.hint(planNow()); if (h) box.append(el("p", { class: "zf-small zp-hint", id: "zp-hint", text: h })); }
     box.append(msg, el("button", { type: "button", class: "zf-go", id: "zp-save", onclick: () => save(ctx, msg) }, "Save and continue"));
     box.append(el("p", { class: "zf-small zp-foot", id: "zp-foot", text: FOOT }));
   };
@@ -115,7 +119,7 @@
     const c = plan.currency, rows = plan.prizes.map((p) => {
       const [t, pattern, o] = p.id.split(":"), key = (pattern === "full2" ? "full2" : keyOfId(p.id)), w = won.filter((x) => x.pattern === key && Number(x.ordinal) === Number(o));
       const ids = [...new Set(w.map((x) => x.seat))], s = P.shareOut(p.amount, ids.length);
-      return { label: P.label(pattern, Number(o), 2, Number(t)), winners: ids, amount: p.amount, share: s.share, kept: s.leftover, gift: p.gift || "" };
+      return { label: P.label(pattern, Number(o), plan.prizes.filter((q) => q.id.split(":")[0] === t && q.id.split(":")[1] === pattern).length, Number(t)), winners: ids, amount: p.amount, share: s.share, kept: s.leftover, gift: p.gift || "" };
     });
     return { currency: c, rows };
   }

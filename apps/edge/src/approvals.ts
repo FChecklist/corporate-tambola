@@ -43,3 +43,6 @@ export const EMAIL_MISS_PER_10MIN = 5;
 export const PRIZES_FROM_MS = Date.UTC(2026, 10, 2, 0, 0, 0);
 export const prizesOn = (e: { created_ms?: number | null } | null | undefined): boolean => Number(e?.created_ms) >= PRIZES_FROM_MS;
 export const PRIZES_OLD_GAME = "This game was made before the new prize planner, so its prizes stay as they are. Make a new game to plan prizes from a budget.";
+/** G-1: the ONE check of the prize feature for a game (create and settings use it): a game made before PRIZES_FROM_MS may not carry a prize plan or a prize for one ticket. Returns the refusal text, or null when allowed. */
+export const prizesRefusal = (e: { created_ms?: number | null } | null | undefined, body: { prizePlan?: unknown }, rewards: ReadonlyArray<{ scope?: string }>): string | null =>
+  !prizesOn(e) && (body.prizePlan !== undefined || rewards.some((l) => l.scope === "ticket_1" || l.scope === "ticket_2")) ? PRIZES_OLD_GAME : null;

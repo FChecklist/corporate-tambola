@@ -42,7 +42,7 @@ import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { HELPDESK_SCHEMA, HELPER_MANUAL_NOTE, helpdeskCloseStatements, helpdeskRoute, helpdeskSweep, isDeskKeyId, isHelperKey, noteHelperGame } from "./helpdesk";
 import { normIdFor, normEmail, normAccountEmail, badIdMessageFor, idWord, empCleanOn } from "./empid";
-import { prizesOn, PRIZES_OLD_GAME } from "./approvals";
+import { prizesRefusal } from "./approvals";
 import { cleanEmail, approvalRulesOn, EMAIL_ENABLED, EMAIL_UNUSABLE_MESSAGE, EMAIL_MISS_PER_10MIN } from "./approvals";
 import { normEmp, empHashOf, verifyOf, keptPhone, phoneDigits, cleanName as cleanPersonName, PEOPLE_SCHEMA, COHOST_FROM, HOST_FROM, ORG_FROM, COHOST_LIMIT_DEFAULT, COHOST_LIMIT_MIN, COHOST_LIMIT_MAX, WAITING_MAX, addWaiting, chainOf, cleanPhone, fromCodeOf, inviterOf, joinLinkPage, limitOfInviter, listCount, parseFrom, peopleRoute, personByPhone, personByToken, srcOf, waitingWho, type PersonRow } from "./people";
 import { PAYLINK_SCHEMA, PAYLINK_TOKEN, createPayLink, packFor } from "./paylink";
@@ -1500,6 +1500,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (roundMs(b.startRound) > createCap) return json({ error: createCap > now + MAX_AHEAD_MS ? AFTER_PAID_WINDOW(createCap + 1) : TOO_FAR, code: createCap > now + MAX_AHEAD_MS ? "after-paid-window" : "too-far" }, 400);
     const vc = validateCfg({ tickets: b.tickets, ties: b.ties, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, opening: b.opening, closing: b.closing, name: b.name, brand: b.brand, demo: b.demo, verify: b.verify, employeesOnly: b.employeesOnly, idKind: b.idKind, prizePlan: b.prizePlan, callMode: b.callMode, startMode: b.startMode, afterPrizes: b.afterPrizes });
     if (!vc.ok) return json({ error: vc.error }, 400);
+    { const pr = prizesRefusal({ created_ms: now }, b, vc.cfg.rewards); if (pr) return json({ error: pr, code: "prizes-old-game" }, 409); } // G-1: the same gate as the settings route
     if (vc.cfg.demo && b.cap > DEMO_CAP) return json({ error: DEMO_CAP_MSG, code: "demo-cap" }, 400); // a demo game is small; a bigger one is a real game
     { const big = modeTooBig(vc.cfg, b.cap); if (big) return json({ error: big, code: "manual-limit" }, 409); }
     const have = await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(b.id).first<{ org: string | null }>();
@@ -2247,7 +2248,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (b.coHostLimit !== undefined && (!Number.isInteger(b.coHostLimit) || b.coHostLimit < COHOST_LIMIT_MIN || b.coHostLimit > COHOST_LIMIT_MAX)) return json({ error: `A Co-host can list ${COHOST_LIMIT_MIN} to ${COHOST_LIMIT_MAX} people.` }, 400);
     const vc = validateCfg({ tickets: b.tickets, ties: b.ties, rewards: b.rewards, breaks: b.breaks, rounds: b.rounds, invites: b.invites !== undefined ? b.invites : b.guestInvites, opening: b.opening, closing: b.closing, name: b.name, brand: b.brand, demo: b.demo, verify: b.verify, employeesOnly: b.employeesOnly, idKind: b.idKind, prizePlan: b.prizePlan, callMode: b.callMode, startMode: b.startMode, afterPrizes: b.afterPrizes }, cfgOf(e)); // guestInvites is the console's name for invites
     if (!vc.ok) return json({ error: vc.error }, 400);
-    if (!prizesOn(e) && (b.prizePlan !== undefined || vc.cfg.rewards.some((l: any) => l.scope === "ticket_1" || l.scope === "ticket_2"))) return json({ error: PRIZES_OLD_GAME, code: "prizes-old-game" }, 409); // 1.9.0: only games made after the release instant
+    { const pr = prizesRefusal(e, b, vc.cfg.rewards); if (pr) return json({ error: pr, code: "prizes-old-game" }, 409); } // 1.9.0: only games made after the release instant
     const wasDemo = isDemo(e);
     if (wasDemo && !vc.cfg.demo && e.pack !== 0 && !a.plat) return json({ error: DEMO_PAY_MSG, code: "demo-pay" }, 402); // a published demo becomes a real game only through a paid conversion (pay.ts), never by flipping the mark
     const next = { start_round: b.startRound ?? e.start_round, call_seconds: b.callSeconds ?? e.call_seconds, cap: e.rehearsal_of ? e.cap : (b.cap ?? e.cap), closed: vc.cfg.employeesOnly ? 1 : b.whoCanJoin !== undefined ? (b.whoCanJoin === "list" ? 1 : 0) : b.closed === undefined ? e.closed : b.closed ? 1 : 0, cohost_limit: b.coHostLimit ?? e.cohost_limit ?? null }; // whoCanJoin "list" is the same switch as the older `closed`

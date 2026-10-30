@@ -159,7 +159,7 @@ export async function listAiAudit(db: D1, org: string | null, json: Json): Promi
 
 /** The organizer (or a Host) has the final say on who receives a prize: the software's result stands unless they change it here. Choose one of the tickets that claimed this prize, or nobody. Every change is kept with who made it and when. */
 export async function overridePrize(env: Env & PiiEnv, eid: string, b: any, kind: string | null, now: number, json: Json, spend: Spend): Promise<Response> {
-  if (!b || !Number.isInteger(b.round) || b.round < 1 || !Number.isInteger(b.ordinal) || b.ordinal < 1 || typeof b.pattern !== "string" || !/^[a-z0-9]{2,12}$/.test(b.pattern) || !(b.seat === null || (Number.isInteger(b.seat) && b.seat >= 1))) return json({ error: "Choose the prize and who gets it.", code: "bad-override" }, 400);
+  if (!b || !Number.isInteger(b.round) || b.round < 1 || !Number.isInteger(b.ordinal) || b.ordinal < 1 || typeof b.pattern !== "string" || !/^[a-z0-9]{2,12}(@[12])?$/.test(b.pattern) || !(b.seat === null || (Number.isInteger(b.seat) && b.seat >= 1))) return json({ error: "Choose the prize and who gets it.", code: "bad-override" }, 400);
   const had = (await env.DB.prepare("SELECT seat FROM prize WHERE eid=? AND round=? AND pattern=? AND ordinal=?").bind(eid, b.round, b.pattern, b.ordinal).all<{ seat: number }>()).results ?? [];
   if (!had.length) return json({ error: "That prize has no winner recorded yet, so there is nothing to change.", code: "no-prize" }, 404);
   let pid: string | null = null;

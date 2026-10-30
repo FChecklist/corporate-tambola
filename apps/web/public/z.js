@@ -383,7 +383,7 @@
   const prizeKey = "ctz-prizes:" + EID;
   const readJson = (k, d) => { try { const v = JSON.parse(store.get(k) || ""); return v || d; } catch { return d; } };
   const winId = (w) => w.round + ":" + w.pattern + ":" + w.ordinal;
-  const lineName = (cfg, key, ordinal) => (ZG.linesFor(cfg.rewards, key).length > 1 ? ordinalName(ordinal) + " " : "") + KEYNAME(key);
+  const lineName = (cfg, key, ordinal) => { const multi = ZG.linesFor(cfg.rewards, key).length > 1, i = key.indexOf("@"); if (i < 0) return (multi ? ordinalName(ordinal) + " " : "") + KEYNAME(key); const nm = NAMES[key.slice(0, i)] || key.slice(0, i); return "Ticket " + key.slice(i + 1) + ": " + (multi ? ordinalName(ordinal) + " " : "") + nm.replace(/[a-z]/g, (m) => m.toUpperCase()); }; // "Ticket 1: 1st Full House"
   let PRIZES = [];
   const celebrated = new Set();
   function syncPrizes(v) {
@@ -411,7 +411,7 @@
     const box = document.createElement("div"); box.id = "hurray"; box.className = "zhurray"; box.setAttribute("role", "alertdialog"); box.setAttribute("aria-live", "assertive");
     const what = list.map((w) => esc(w.name)).join(", ");
     const prize = list.filter((w) => w.text).map((w) => `<div class="zhp">${esc(w.text)}</div>`).join("");
-    box.innerHTML = `<canvas class="zconf" aria-hidden="true"></canvas><div class="zhcard"><div class="zhbig">Hurray!</div><div class="zhsub">Congratulations, you won</div><div class="zhwhat">${what}</div>${list.length === 1 && HOW[list[0].pattern] ? `<div class="zhsub">${esc(HOW[list[0].pattern])}</div>` : ""}${prize}<div class="zhsub">You won ${what}. Your organizer will give you your prize.</div>${list.filter((w) => w.shared > 0).map((w) => `<div class="zhsub">${esc(w.name)} is shared with ${w.shared} other player${w.shared === 1 ? "" : "s"}.</div>`).join("")}<button class="zbtn" id="hurok">Wonderful</button></div>`;
+    box.innerHTML = `<canvas class="zconf" aria-hidden="true"></canvas><div class="zhcard"><div class="zhbig">Hurray!</div>${list.length === 1 && HOW[list[0].pattern] ? `<div class="zhsub">${esc(HOW[list[0].pattern])}</div>` : ""}${prize}<div class="zhsub">You won ${what}. Your organizer will give you your prize.</div>${list.filter((w) => w.shared > 0).map((w) => `<div class="zhsub">${esc(w.name)} is shared with ${w.shared} other player${w.shared === 1 ? "" : "s"}.</div>`).join("")}<button class="zbtn" id="hurok">Wonderful</button></div>`;
     document.body.appendChild(box);
     const done = () => { if (box.isConnected) box.remove(); };
     box.querySelector("#hurok").onclick = done; setTimeout(done, 15000);
