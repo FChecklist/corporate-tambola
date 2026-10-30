@@ -50,7 +50,9 @@ describe("no AI-readable route returns a name or a mobile number", () => {
     bodies.push(await (await call("GET", "/api/z/ai-manifest", undefined, { "x-organizer": key })).text());
     bodies.push(await (await call("GET", `/ai/${key}?format=json`)).text());
     const all = bodies.join("\n");
-    for (const n of needles()) expect([role, n, all.includes(n)]).toEqual([role, n, false]);
+    // a 4-digit tail is also a run of digits inside random hex keys and ids (one full-folder run failed on "6789" found inside a random key): it counts as a leak only when it stands alone or behind mask characters
+    const leaks = (n: string) => (/^\d{4}$/.test(n) ? new RegExp(`(?<![0-9A-Za-z])[X*\u2022]*${n}(?![0-9A-Za-z])`).test(all) : all.includes(n));
+    for (const n of needles()) expect([role, n, leaks(n)]).toEqual([role, n, false]);
     expect(bodies.length).toBeGreaterThan(12);
   });
   test("an AI cannot send names or numbers either: roster, and mark/unbind by mobile number, are refused with a plain explanation", async () => {
