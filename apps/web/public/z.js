@@ -1112,7 +1112,7 @@
     if (!DEMO) CBConsent.wire(document, "K4", J.k4); // never ticked in advance; the button stays off until both boxes are ticked
     const phEl = document.getElementById("ph"), ccEl = document.getElementById("cc");
     if (phEl && ccEl) phEl.addEventListener("change", () => { const p = CTPhone.parse(ccEl.value, phEl.value); if (p.ok && /^\s*(\+|00)/.test(phEl.value)) { ccEl.value = p.iso; phEl.value = p.national; } }); // +44 7911 123456 pasted: the list shows the United Kingdom and the box keeps the rest
-    { const ei = document.getElementById("emp"), er = document.getElementById("empread"); if (ei && er) { const show = () => { const rd = readAs(ei.value); er.textContent = ei.value.trim() && rd && (idKind() === "email" || INFO.idClean) ? "The system will read this as " + rd : ""; }; ei.addEventListener("input", show); show(); } }
+    { const ei = document.getElementById("emp"), er = document.getElementById("empread"); if (ei && er) { const show = () => { const rd = readAs(ei.value); er.textContent = ei.value.trim() && rd && !(idKind() !== "email" && ei.value.normalize("NFKC").includes("@")) && (idKind() === "email" || INFO.idClean) ? "The system will read this as " + rd : ""; }; ei.addEventListener("input", show); show(); } }
     ["ph", "nm", "emp"].forEach((id) => { const i = document.getElementById(id); if (i) i.addEventListener("keydown", (e) => { if (e.key === "Enter" && !go.disabled) { e.preventDefault(); go.click(); } }); }); // the keyboard's Go / Enter key does what the button does
     go.onclick = async () => {
       if (!DEMO && !CBConsent.all(document, "K4")) return;
