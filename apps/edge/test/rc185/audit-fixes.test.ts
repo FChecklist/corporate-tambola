@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { World, NEW_T, OLD_T, GEN, roundAt, dev, j } from "./helpers";
 import { emailHashOf } from "../../src/hostsetup";
 import { normAccountEmail, normEmail } from "../../src/empid";
-import { lifecycleTick } from "../../src/lifecycle";
+import { endBoundMs, lifecycleTick } from "../../src/lifecycle";
 import { sealText } from "../../src/pii";
 
 let w: World;
@@ -159,19 +159,35 @@ describe("G: GET /api/z/<id>/info carries endedAtMs once the game has ended", ()
     await lifecycleTick(w.env as any, late + 5 * 60_000);
     expect((await w.info(late + 6 * 60_000)).endedAtMs).toBe(a);
   });
-  test("ended by the organizer (data erased once the game is over): endedAtMs is that moment, and a second erase does not move it", async () => {
+  test("R-end: an erase of the participants' data is NOT a game end: endedAtMs is the recomputed scheduled bound (not the erase moment), and a second erase does not move it", async () => {
     const { m, start } = await played();
-    const at = start + 2 * 3_600_000;
+    const row = () => w.raw.prepare("SELECT * FROM engagement WHERE id='EMP-1'").get();
+    const bound = await endBoundMs(w.env as any, row());
+    expect(bound).toBeGreaterThan(start);
+    const at = bound + 30 * 60_000; // erased half an hour after the scheduled end
     expect((await w.call(at, "POST", "/api/z/EMP-1/erase", {}, m)).status).toBe(200);
-    const a = (await w.info(at + 1000)).endedAtMs; expect(a).toBe(at);
+    const life = w.raw.prepare("SELECT end_src FROM life WHERE eid='EMP-1'").get() as { end_src: string };
+    expect(life.end_src).toBe("purge"); // the purge row is not an end record
+    const a = (await w.info(at + 1000)).endedAtMs; expect(a).toBe(bound); expect(a).not.toBe(at);
     await w.call(at + 120_000, "POST", "/api/z/EMP-1/erase", {}, m); await lifecycleTick(w.env as any, at + 180_000);
     expect((await w.info(at + 200_000)).endedAtMs).toBe(a);
+  });
+  test("R-end: a scheduled end is returned only once now >= the recomputed bound; absent one second before, present at the bound, and it never moves afterwards", async () => {
+    const { start } = await played();
+    const bound = await endBoundMs(w.env as any, w.raw.prepare("SELECT * FROM engagement WHERE id='EMP-1'").get());
+    expect(await w.info(bound - 1000)).not.toHaveProperty("endedAtMs");
+    expect((await w.info(bound)).endedAtMs).toBe(bound);
+    expect((await w.info(bound + 5 * 3_600_000)).endedAtMs).toBe(bound);
+    expect(bound).toBeGreaterThan(start);
   });
   test("a cancelled game never carries endedAtMs", async () => {
     const { m, start } = await played();
     const c = await w.call(start - 600_000, "POST", "/api/z/EMP-1/cancel", { confirmations: 3 }, m); expect(c.status).toBe(200);
     await lifecycleTick(w.env as any, start - 500_000);
     const i = await w.info(start - 400_000); expect(i.cancelled).toBe(true); expect(i).not.toHaveProperty("endedAtMs");
+    const bound = await endBoundMs(w.env as any, w.raw.prepare("SELECT * FROM engagement WHERE id='EMP-1'").get());
+    for (const at of [bound - 1000, bound, bound + 3_600_000, bound + 48 * 3_600_000]) await lifecycleTick(w.env as any, at); // R-end: 'cancel' is not an end, even after the time the game would have ended
+    for (const at of [bound, bound + 3_600_000, bound + 48 * 3_600_000]) { const late = await w.info(at); expect(late.cancelled).toBe(true); expect(late).not.toHaveProperty("endedAtMs"); }
   });
   test("the payload adds one number and no names or amounts: nothing about people, e-mail, mobile or money", async () => {
     const { start, pid } = await played(); const at = start + 8 * 60_000;

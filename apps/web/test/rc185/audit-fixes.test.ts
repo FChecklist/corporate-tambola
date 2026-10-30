@@ -144,13 +144,19 @@ describe("F: the calm 'Game completed' page says the true thing about who plays"
 
 describe("G: z.js takes the end time from the server's endedAtMs, and falls back to its own estimate without it", () => {
   const eid = "RC-GEND";
-  /** A game whose phone page is opened `mins` minutes after the ESTIMATED end (start + numbers called x seconds). `life` is the server's real end, relative to that estimate (minutes), or null for none. */
+  /** A game whose phone page is opened `mins` minutes after the ESTIMATED end (start + numbers called x seconds). `life` is the server's real end, relative to that estimate (minutes), or null for none.
+   *  With `life` null the Worker must really have no end to give (R-end: a scheduled end is returned only once now >= the recomputed bound), so the clock stays BEFORE the bound and the page's estimate is moved (scheduledRound) to lie `mins` before that clock. */
   async function opened(mins: number, life: number | null) {
     const o = await organizer(); await published(o, eid); const pid = await realPid(o, eid);
-    if (life !== null) o.world.raw.prepare("INSERT INTO life(eid,end_ms,end_src) VALUES(?,?,'phones')").run(eid, endMs() + life * MIN);
-    o.world.now = endMs() + mins * MIN; // one fixed fake clock for the Worker and the page, set before anything is read: no real time, no other file
+    let patch: Record<string, unknown> = {};
+    if (life !== null) { o.world.raw.prepare("INSERT INTO life(eid,end_ms,end_src) VALUES(?,?,'phones')").run(eid, endMs() + life * MIN); o.world.now = endMs() + mins * MIN; }
+    else {
+      const bound = (await o.json(await o.api("GET", `/api/z/${eid}/info`, undefined, undefined, endMs() + 48 * 3600_000))).endedAtMs as number;
+      o.world.now = bound - 5 * MIN; // one fixed fake clock for the Worker and the page: before the real bound
+      patch = { scheduledRound: roundAt(o.world.now - mins * MIN - LOG.length * CALL_S * 1000) }; // estimate end = now - mins
+    }
     const info = await o.json(await o.api("GET", `/api/z/${eid}/info`, undefined, undefined, o.world.now));
-    const p = await phone(o, `/z?e=${eid}`, { patch: endedView({ pid }) }); open.push(p);
+    const p = await phone(o, `/z?e=${eid}`, { patch: endedView({ pid, ...patch }) }); open.push(p);
     await p.waitFor((t) => /Game completed|Thank you for playing|This game is now over/.test(t), 30_000);
     return { p, info };
   }
@@ -226,7 +232,8 @@ describe("G2: the Worker's endedAtMs in /info: a phone-confirmed end always, a s
   });
   test("a cancelled game never carries endedAtMs", async () => {
     const { o, start } = await game();
-    o.world.raw.prepare("INSERT INTO life(eid,end_ms,end_src) VALUES(?,?,'cancel') ON CONFLICT(eid) DO UPDATE SET end_ms=excluded.end_ms, end_src='cancel'").run(eid, NEW_AT);
+    const c = await o.api("POST", `/api/z/${eid}/cancel`, { confirmations: 3 }, o.token, NEW_AT + 1000); expect(c.status).toBe(200); // a real cancel before the start (R-end: 'cancel' is not an end)
+    await lifecycleTick(o.world.env as any, NEW_AT + 60_000);
     expect(await infoAt(o, start + 5 * 3_600_000)).not.toHaveProperty("endedAtMs");
   });
 });

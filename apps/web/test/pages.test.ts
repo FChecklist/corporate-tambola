@@ -1244,7 +1244,7 @@ const waitOf = async (o: O, id: string, key = o.token) => (await o.json(await o.
 const fakeWin = () => { const w: any = { location: { href: "" }, opener: 1, closed: false, close() { w.closed = true; } }; return w; };
 describe("console phase 2: wording fixes, My people, waiting room, remove, play now (real Worker)", () => {
   const ready = async (o: O, id: string, w = spy(), key = o.token) => { const p = await consolePage(o, id, key, {}, { afterLoad: w.hook }); await p.waitFor((x) => /Hello|Last step|Your game|Hi\./i.test(x)); return p; };
-  const myPeople = async (p: Page) => { openStep(p, 6); await p.waitFor((x) => /My people/.test(x) && /people are on my list|person is on my list/.test(x)); };
+  const myPeople = async (p: Page) => { await p.waitFor(() => !!p.$('.zc-dot[data-open="6"]')); /* the jump bar is drawn a moment after the greeting (one full run failed here: no such button yet) */ openStep(p, 6); await p.waitFor((x) => /My people/.test(x) && /people are on my list|person is on my list/.test(x)); };
 
   test("wording: no 'engagement' anywhere in the ten steps, singular and plural right, friendly dates, 365-day line says who is kept, step 9 line does not repeat its title", async () => {
     const o = await organizer(); await make(o, "UI-WORD"); await publish(o, "UI-WORD");

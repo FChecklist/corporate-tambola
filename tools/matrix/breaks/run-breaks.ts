@@ -31,7 +31,7 @@ const baselines = new Map<string, { code: number | null; pass: number }>();
 const rows: string[] = []; let bad = 0;
 for (const b of list) {
   const path = join(TMP, b.file), orig = readFileSync(path, "utf8"), n = orig.split(b.find).length - 1;
-  if (n !== 1) { rows.push(`${b.id.padEnd(34)} BAD BREAK: the text to change occurs ${n} times in ${b.file}`); bad++; continue; }
+  if (n !== 1) { rows.push(`${b.id.padEnd(34)} BAD BREAK: the text to change occurs ${n} times in ${b.file}`); console.log(rows[rows.length - 1]); bad++; continue; }
   const key = b.run.join(" "); if (!baselines.has(key)) { const g = run(b.run); baselines.set(key, { code: g.code, pass: g.pass }); }
   const g = baselines.get(key)!;
   writeFileSync(path, orig.replace(b.find, () => b.replace));
