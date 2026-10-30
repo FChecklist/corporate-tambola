@@ -97,7 +97,22 @@
   const RUN = { start: "auto", call: "auto", idKind: "emp", idTouched: false };
   const timeText = () => { if (!st.when) return "the time you set"; try { return new Intl.DateTimeFormat("en-GB", { timeZone: st.when.zone, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(st.when.ms)); } catch { return "the time you set"; } };
   const runSummary = (r, when) => "Your game: " + (r.start === "manual" ? "starts at " + when + " when you press Start." : "starts by itself at " + when + ".") + " " + (r.call === "host" ? "You call the numbers." : "The game calls the numbers.");
-  const savedRun = async () => { if (!eid()) return; try { await call("PATCH", `/api/z/${eid()}/settings`, { startMode: RUN.start, callMode: RUN.call, ...(RUN.idTouched ? { idKind: RUN.idKind } : {}) }); } catch { /* the choice is sent again on the next Save */ } };
+  let idSaved = null; // the kind of ID the game really holds (from the server), so a refused change puts the radio back
+  const runMsg = (text, status) => { // a refused save is never silent: the server's plain message, with its guide card when the guide is on the page
+    let m = document.getElementById("zt-runmsg");
+    if (!m) { const anchor = document.getElementById("zt-idkind") || document.getElementById("zt-run"); if (!anchor) return; m = el("div", { id: "zt-runmsg", role: "alert", class: "zf-msg" }); anchor.after(m); }
+    m.textContent = text || ""; if (!text) return;
+    try { if (window.CTG && window.CTG.explain && window.CTG.inline) { const h = el("div", {}); m.append(h); window.CTG.inline(h, window.CTG.explain({ status: status || 409, message: text }), {}); } } catch { /* the plain message stays */ }
+  };
+  const savedRun = async () => {
+    if (!eid()) return;
+    try { await call("PATCH", `/api/z/${eid()}/settings`, { startMode: RUN.start, callMode: RUN.call, ...(RUN.idTouched ? { idKind: RUN.idKind } : {}) }); if (RUN.idTouched) idSaved = RUN.idKind; runMsg(""); }
+    catch (e) {
+      const msg = e && e.message ? e.message : "The choice could not be saved. Please try again.";
+      if (e && (e.code === "idkind-locked" || /already have people listed/.test(msg))) { RUN.idKind = idSaved || "emp"; RUN.idTouched = false; for (const i of document.querySelectorAll("input[name=zt-idkind]")) i.checked = i.value === RUN.idKind; }
+      runMsg(msg, e && e.status);
+    }
+  };
   function runQuestions() {
     const box = el("div", { class: "zt-run", id: "zt-run" });
     const group = (title, name, key, opts) => { const g = el("div", { role: "radiogroup", "aria-label": title }, el("h3", { text: title })); for (const [v, label, hint] of opts) g.append(el("label", { class: "zf-opt" }, el("input", { type: "radio", name, value: v, ...(RUN[key] === v ? { checked: "" } : {}), onchange: () => { RUN[key] = v; savedRun(); const sm = document.getElementById("zt-runsum"); if (sm) sm.textContent = runSummary(RUN, timeText()); } }), " " + label + " ", el("small", { text: hint }))); return g; };
@@ -115,13 +130,16 @@
   const linkProblem = (v) => { const t = String(v || "").trim(); if (!t) return ""; try { const u = new URL(t); return u.protocol === "https:" && u.hostname.includes(".") ? "" : "bad"; } catch { return "bad"; } };
   const LINK_BAD = "The link must start with https:// and be public, so everyone can open it.";
   let usesId, usesIdAsked = false;
+  // 7: a console opened without a session answers "Not allowed." (the server's plain 403 for nobody): say what to do instead
+  const signInFirst = () => { for (const m of document.querySelectorAll(".zf-msg")) { if (m.textContent.trim() === "Not allowed.") { m.textContent = ""; m.append("Please sign in first. ", el("a", { href: "/zc.html", id: "zt-signin" }, "Open the organizer sign-in"), " and sign in with your e-mail, then come back to this step."); } } };
   function patchSteps() {
+    signInFirst();
     const sv1 = document.getElementById("zf-save1");
     if (sv1 && !document.getElementById("zt-run")) sv1.before(runQuestions());
     const s5 = document.getElementById("zf-sec5");
     if (s5 && s5.classList.contains("open") && !document.getElementById("zt-runread")) { const h = s5.querySelector("h3") || s5.querySelector("h2"); (h || s5).after(el("p", { id: "zt-runread", class: "zf-small", text: runSummary(RUN, timeText()) })); }
     const how2 = document.getElementById("zf-how");
-    if (how2 && !document.getElementById("zt-idkind") && usesId === undefined && eid() && !usesIdAsked) { usesIdAsked = true; call("GET", `/api/z/${eid()}/summary`).then((j) => { usesId = !!j && !!j.verify && j.verify !== "mobile"; patchSteps(); }).catch(() => { usesIdAsked = false; }); } // H: "Which ID?" only where an ID is asked at the door
+    if (how2 && !document.getElementById("zt-idkind") && usesId === undefined && eid() && !usesIdAsked) { usesIdAsked = true; call("GET", `/api/z/${eid()}/summary`).then((j) => { usesId = !!j && !!j.verify && j.verify !== "mobile"; if (j && j.idKind) { idSaved = j.idKind; if (!RUN.idTouched) RUN.idKind = j.idKind; } patchSteps(); }).catch(() => { usesIdAsked = false; }); } // H: "Which ID?" only where an ID is asked at the door
     if (how2 && usesId && !document.getElementById("zt-idkind")) {
       const g = el("div", { class: "zt-idkind", id: "zt-idkind", role: "radiogroup", "aria-label": "Which ID?" }, el("h3", { text: "Which ID?" }), el("p", { class: "zf-small", text: "The ID your people type to join. An Email ID is read in lower case. Older games keep the way they always read an employee ID." }));
       for (const [v, label] of [["emp", "Employee ID"], ["email", "Email ID"]]) g.append(el("label", { class: "zf-opt" }, el("input", { type: "radio", name: "zt-idkind", value: v, ...(RUN.idKind === v ? { checked: "" } : {}), onchange: () => { RUN.idKind = v; RUN.idTouched = true; savedRun(); } }), " " + label));
