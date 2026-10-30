@@ -207,4 +207,10 @@ select#pack,.pwho select#pack{min-height:48px}
 }
 
 .snav .links a.how.demogame{background:#16a34a;color:#fff;border-color:#16a34a;font-weight:700}
-.heronote.demonote a{display:inline-flex;align-items:center;min-height:40px;padding:0 16px;margin:8px 8px 0 0;border-radius:999px;background:#fff;color:#0B3D91;font-weight:700;text-decoration:none}.heronote.demonote a:hover{background:#ffe9c7}
+.heronote.demonote a{display:inline-flex;align-items:center;min-height:40px;padding:0 16px;margin:8px 8px 0 0;border-radius:999px;background:#fff;color:#0B3D91;font-weight:700;text-decoration:none}.heronote.demonote a:hover{background:#ffe9c7}.ideas{display:flex;flex-wrap:wrap;gap:10px;list-style:none;margin:16px 0 0;padding:0}
+.ideas a{display:inline-flex;align-items:center;min-height:44px;padding:8px 16px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--wine);font-weight:600;text-decoration:none}
+.ideas a:hover{border-color:var(--gold)}
+.uc .hero p.lead{font-size:18px}.uc .cta{display:flex;flex-wrap:wrap;gap:12px;margin:18px 0 8px}
+.uc .cta a{display:inline-flex;align-items:center;min-height:46px;padding:10px 20px;border-radius:999px;font-weight:700;text-decoration:none;border:2px solid var(--wine);color:var(--wine);background:transparent}
+.uc .cta a.go{background:var(--wine);color:#fff}
+.uc h3{margin:18px 0 4px;font-size:18px}

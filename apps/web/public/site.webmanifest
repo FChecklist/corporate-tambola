@@ -1,0 +1,17 @@
+{
+  "name": "Corporate Tambola",
+  "short_name": "Corporate Tambola",
+  "description": "Online tambola (housie) for company events. Plays on any phone, with your own brand video between numbers.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "browser",
+  "background_color": "#FFF1D6",
+  "theme_color": "#0B3D91",
+  "lang": "en",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
