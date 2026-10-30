@@ -24,7 +24,7 @@ describe("Rules row (details #zrulesrow, list #zrules)", () => {
     expect(d.contains(l)).toBe(true); expect(p.win.document.querySelectorAll("#zrulesrow").length).toBe(1); expect(p.win.document.querySelectorAll("#zrules").length).toBe(1);
   });
   test("the rules sit at the end of the page (after the ticket and the prizes)", async () => { const p = await inPlay(); const h = p.html(); expect(h.indexOf('id="zrulesrow"')).toBeGreaterThan(h.indexOf('class="zcard ztk')); expect(h.indexOf('id="zrulesrow"')).toBeGreaterThan(h.indexOf('id="prizepanel"')); });
-  test("after the game: no Rules row, no zrules list", async () => { const p = await inPlay({}, true); expect(p.$("#zrulesrow")).toBeNull(); expect(p.$("#zrules")).toBeNull(); expect(p.$("#finalresults")).toBeTruthy(); });
+  test("after the game: no Rules row, no zrules list", async () => { const p = await inPlay({}, true); expect(!!p.$("#zrulesrow")).toBe(false); expect(!!p.$("#zrules")).toBe(false); expect(p.$("#finalresults")).toBeTruthy(); });
 });
 
 describe("prize rows on the game screen", () => {

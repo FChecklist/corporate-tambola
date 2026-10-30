@@ -19,7 +19,7 @@ Run each folder on its own, from the repo root.
 | Command | Files | Expected |
 |---|---|---|
 | `bun test --isolate apps/edge/test/rc185` | cleaner, worker-rules, idkind | **80 pass, 0 fail** |
-| `bun test --isolate apps/web/test/rc185` | game-completed, game-screen, join-page, host-header | **45 pass, 1 fail** (the fail is B1; 46 tests) |
+| `bun test --isolate apps/web/test/rc185` | game-completed, game-screen, join-page, host-header | **44 pass, 1 fail** (45 tests; the one fail is B1, left red on purpose) |
 | `bun test --isolate tools/matrix` | matrix.test.ts | **6 pass** |
 
 `helpers.ts` and `page.ts` are shared helpers, not tests.
@@ -32,7 +32,7 @@ Run each folder on its own, from the repo root.
 ### Pages, `apps/web/test/rc185/` (real `z.js` / console scripts in a DOM, real Worker; the runtime view is steered)
 - `game-completed.test.ts` (18): heading "Game completed", Game ID, 30-minute line, results kept under 30 min; calm page at 31 / 45 / 600 min (no ticket, no prizes, no results); the edge; a phone that watched keeps results; no end time = no calm page; no word "private"; Final results rows (1, 5, 7 prizes), `Ticket N`, "You" only on own wins, other-round win not "You", lucky draws, hidden in play / with no prizes.
 - `game-screen.test.ts` (8): Rules row (collapsed `details#zrulesrow`, 3 rules in `#zrules`, hidden after the game); current prize rows ("To win", crossed-out "Won by Ticket N", "You", "all won"). The flat-row restyle is still open per the handoff, so these pin today's rows.
-- `join-page.test.ts` (14): chips with / without a brand, none in the demo; "You are in! Game starts in ..." above "Check-in opens at", gone once check-in is open, ticket hidden before check-in; idKind label, keyboard, 254 limit, "read this as" hint, welcome line, phone refusals; B1.
+- `join-page.test.ts` (13): chips with / without a brand, none in the demo; "You are in! Game starts in ..." above "Check-in opens at", gone once check-in is open, ticket hidden before check-in; idKind label, keyboard, 254 limit, "read this as" hint, welcome line, phone refusals; B1.
 - `host-header.test.ts` (6): Host ribbon text, sentence, Sign out clears keys; absent for organizer and Co-host.
 
 ### Scenario matrix, `tools/matrix/`
@@ -42,8 +42,8 @@ Run each folder on its own, from the repo root.
 
 ### Deliberate breaks, `tools/matrix/breaks/`
 `bun tools/matrix/breaks/run-breaks.ts [--list] [--edge|--web] [--only ID]`, or one script per rule: `bun tools/matrix/breaks/B01-empid-keeps-dash.ts` (B01-B22 engine, W01-W15 pages). Each copies the product to a temp folder, checks the test is GREEN, changes one thing, checks the test goes RED (and the matrix, where marked), restores and compares byte for byte. The repo is never written; the script also checks `git status` is unchanged.
-- Engine B01-B22: all proven green, red, restored (last run).
-- Pages W01-W15: see the result block below.
+- Engine B01-B22 (22 breaks): all proven green, red, restored (last run).
+- Pages W01-W15: all proven green, red, restored (the web ones take about 5 minutes together).
 
 ## Not covered / limits
 - No browser screenshots (the 1.8.4 gap-report items still need a live capture).

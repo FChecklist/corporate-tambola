@@ -41,9 +41,9 @@ describe("a signed-in Host", () => {
 
 describe("other roles do not get the Host ribbon", () => {
   test("organizer: 'Organizer: email' only, no ribbon, no sentence, no Sign out", async () => {
-    const w = await consoleAs("organizer", { email: ORG }); expect($(w, "zt-who").textContent).toContain("Organizer: " + ORG); for (const id of ["zt-hostribbon", "zt-hostnote", "zt-signout"]) expect($(w, id)).toBeNull();
+    const w = await consoleAs("organizer", { email: ORG }); expect($(w, "zt-who").textContent).toContain("Organizer: " + ORG); for (const id of ["zt-hostribbon", "zt-hostnote", "zt-signout"]) expect(!!$(w, id)).toBe(false);
   });
   test("Co-host: 'Co-host: email' and 'You were made Co-host by', no Host ribbon", async () => {
-    const w = await consoleAs("cohost", { email: "demo4@demo-test.invalid" }); const t = $(w, "zt-who").textContent; expect(t).toContain("Co-host: demo4@demo-test.invalid"); expect(t).toContain("You were made Co-host by"); for (const id of ["zt-hostribbon", "zt-hostnote"]) expect($(w, id)).toBeNull();
+    const w = await consoleAs("cohost", { email: "demo4@demo-test.invalid" }); const t = $(w, "zt-who").textContent; expect(t).toContain("Co-host: demo4@demo-test.invalid"); expect(t).toContain("You were made Co-host by"); for (const id of ["zt-hostribbon", "zt-hostnote"]) expect(!!$(w, id)).toBe(false);
   });
 });

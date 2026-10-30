@@ -26,7 +26,7 @@ describe("Game completed page (opened less than 30 minutes after the game)", () 
       const o = await game(); const p = await ended(o, mins); const t = p.text();
       expect(t).toContain("Game completed"); expect(t).not.toMatch(/Game complete(?!d)/); expect(t).toContain("Game ID " + eid); expect(t).toContain(THIRTY_NOTE);
       expect(t).toContain("Thank you for playing the game. You can recommend this game to others."); expect(t).toContain("Thank you for joining our extended family of Corporate Tambola.");
-      expect(p.$("#finalresults")).toBeTruthy(); expect(p.$(".zticket")).toBeTruthy(); expect(p.$("#gamedone")).toBeNull(); expect(p.$("#shr")).toBeTruthy();
+      expect(p.$("#finalresults")).toBeTruthy(); expect(p.$(".zticket")).toBeTruthy(); expect(!!p.$("#gamedone")).toBe(false); expect(p.$("#shr")).toBeTruthy();
       expect(p.win.document.querySelector(".zgid")!.textContent).toContain("Game ID"); expect(p.win.document.querySelector(".zgid b")!.textContent).toBe(eid);
     });
   }
@@ -39,7 +39,7 @@ describe("a link opened 30 or more minutes after the game (never saw it live): o
       expect(p.$("#gamedone")).toBeTruthy(); expect(t).toContain("Game completed"); expect(t).toContain("Game ID " + eid);
       expect(t).toContain("This game is now over. Thank you for being part of it."); expect(t).toContain(THIRTY_NOTE); expect(p.$("#shr")!.textContent).toContain("Share with friends and colleagues");
       expect(t).toContain("Corporate Tambola is played in close groups, by invitation only"); expect(p.$("#zshare")).toBeTruthy();
-      expect(p.$(".zticket")).toBeNull(); expect(p.$("#finalresults")).toBeNull(); expect(p.$("#prizepanel")).toBeNull(); expect(p.$("#zrulesrow")).toBeNull();
+      expect(!!p.$(".zticket")).toBe(false); expect(!!p.$("#finalresults")).toBe(false); expect(!!p.$("#prizepanel")).toBe(false); expect(!!p.$("#zrulesrow")).toBe(false);
       expect(t).not.toMatch(/Your ticket|Final results|Still to win|You won|Voucher/);
     });
   }
@@ -47,18 +47,18 @@ describe("a link opened 30 or more minutes after the game (never saw it live): o
     const o = await game(); const a = await ended(o, 30); const aOK = !!a.$("#finalresults") && !a.$("#gamedone");
     const b = await ended(o, 30 + 1 / 60); // 1 s more
     // the handoff says "30 or more"; the code says "> 30 minutes". Whichever it is, the two sides of the line must differ and 1 s later must be the calm page.
-    expect(b.$("#gamedone")).toBeTruthy(); expect(b.$("#finalresults")).toBeNull(); void aOK;
+    expect(b.$("#gamedone")).toBeTruthy(); expect(!!b.$("#finalresults")).toBe(false); void aOK;
   });
   test("a phone that watched the game (even one number) keeps its results after 30 minutes pass in the same visit", async () => {
     const o = await game(); const pid = await realPid(o, eid); o.world.now = endMs() - 5 * MIN; // game still in play
     const p = await phone(o, `/z?e=${eid}`, { patch: playView({ pid }) }); open.push(p);
-    await p.waitFor(() => !!p.$(".zticket"), 30_000); expect(p.$("#finalresults")).toBeNull();
+    await p.waitFor(() => !!p.$(".zticket"), 30_000); expect(!!p.$("#finalresults")).toBe(false);
     o.world.now = endMs() + 40 * MIN; (p.win as any).__patch = endedView({ pid }); p.click("#snd"); // the sound button makes the page draw again
     await p.waitFor(() => !!p.$("#finalresults") || !!p.$("#gamedone"), 30_000);
-    expect(p.$("#finalresults")).toBeTruthy(); expect(p.$(".zticket")).toBeTruthy(); expect(p.$("#gamedone")).toBeNull(); expect(p.text()).toContain(THIRTY_NOTE);
+    expect(p.$("#finalresults")).toBeTruthy(); expect(p.$(".zticket")).toBeTruthy(); expect(!!p.$("#gamedone")).toBe(false); expect(p.text()).toContain(THIRTY_NOTE);
   });
   test("a game whose end time cannot be known (no scheduled round / no numbers called) never shows the calm page", async () => {
-    const o = await game(); const p = await ended(o, 600, { log: [] }); expect(p.$("#gamedone")).toBeNull(); expect(p.text()).toContain("Game completed");
+    const o = await game(); const p = await ended(o, 600, { log: [] }); expect(!!p.$("#gamedone")).toBe(false); expect(p.text()).toContain("Game completed");
   });
 });
 
@@ -99,9 +99,9 @@ describe("Final results table (id finalresults)", () => {
     const txt = rows(p).map((r) => r.textContent).join("|"); expect(txt).toContain("Lucky draw: Gift card"); expect(txt).toContain("You"); expect(txt).not.toContain("Hamper");
   });
   test("not shown while the game is still being played", async () => {
-    const o = await game(); const pid = await realPid(o, eid); o.world.now = endMs() - 5 * MIN; const p = await phone(o, `/z?e=${eid}`, { patch: playView({ pid }) }); open.push(p); await p.waitFor(() => !!p.$(".zticket"), 30_000); expect(p.$("#finalresults")).toBeNull();
+    const o = await game(); const pid = await realPid(o, eid); o.world.now = endMs() - 5 * MIN; const p = await phone(o, `/z?e=${eid}`, { patch: playView({ pid }) }); open.push(p); await p.waitFor(() => !!p.$(".zticket"), 30_000); expect(!!p.$("#finalresults")).toBe(false);
   });
   test("not shown in a game with no prizes in the cfg", async () => {
-    const o = await game(); const p = await ended(o, 2, { cfg: { tickets: 1, ties: "next", rewards: [], breaks: [], rounds: 1 } }); expect(p.$("#finalresults")).toBeNull();
+    const o = await game(); const p = await ended(o, 2, { cfg: { tickets: 1, ties: "next", rewards: [], breaks: [], rounds: 1 } }); expect(!!p.$("#finalresults")).toBe(false);
   });
 });

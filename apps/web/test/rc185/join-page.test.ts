@@ -46,13 +46,13 @@ describe("before the game (check-in games)", () => {
     await p.waitFor((t) => /Check-in opens at/.test(t), 30_000);
     const zin = p.$("#zin") as any; expect(zin).toBeTruthy(); expect(zin.textContent).toMatch(/^You are in! Game starts in .+\.$/); expect(zin.textContent).toMatch(/\d/);
     expect(p.html().indexOf('id="zin"')).toBeLessThan(p.html().indexOf("Check-in opens at"));
-    expect(p.$(".zticket")).toBeNull(); expect(p.text()).not.toMatch(/Your ticket/);
+    expect(!!p.$(".zticket")).toBe(false); expect(p.text()).not.toMatch(/Your ticket/);
   });
   test("once check-in is open, 'You are in!' is gone and 'Mark yourself present' is asked; the ticket still waits for the check-in", async () => {
     const o = await organizer(NEW_AT); await published(o, "RC-PRE2"); const p = await joinNow(o, "RC-PRE2"); await p.waitFor((t) => /Check-in opens at/.test(t), 30_000);
     o.world.now = roundMs(roundAt(NEW_AT) + 1200) - 3 * 60_000; // inside the last 5 minutes
     await p.waitFor((t) => /Mark yourself present/.test(t), 90_000);
-    expect(p.$("#zin")).toBeNull(); expect(p.text()).not.toContain("You are in!"); expect(p.$(".zticket")).toBeNull();
+    expect(!!p.$("#zin")).toBe(false); expect(p.text()).not.toContain("You are in!"); expect(!!p.$(".zticket")).toBe(false);
   });
 });
 

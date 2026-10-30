@@ -25,7 +25,7 @@ symlinkSync(join(REPO, "node_modules"), join(TMP, "node_modules"));
 for (const d of ["apps/edge", "apps/web", "packages/beacon"]) if (existsSync(join(REPO, d, "node_modules"))) symlinkSync(join(REPO, d, "node_modules"), join(TMP, d, "node_modules")); // the workspaces' own dependencies
 console.log(`temp copy: ${TMP}\n`);
 
-const run = (cmd: string[]) => { const p = Bun.spawnSync(cmd, { cwd: TMP, stdout: "pipe", stderr: "pipe", env: { ...process.env, NO_COLOR: "1" } }); const out = p.stdout.toString() + p.stderr.toString(); return { code: p.exitCode, out, fail: Number(/\n\s*(\d+) fail/.exec(out)?.[1] ?? 0), pass: Number(/\n\s*(\d+) pass/.exec(out)?.[1] ?? 0) }; };
+const run = (cmd: string[]) => { const p = Bun.spawnSync(cmd, { timeout: 300_000, cwd: TMP, stdout: "pipe", stderr: "pipe", env: { ...process.env, NO_COLOR: "1" } }); const out = p.stdout.toString() + p.stderr.toString(); return { code: p.exitCode, out, fail: Number(/\n\s*(\d+) fail/.exec(out)?.[1] ?? 0), pass: Number(/\n\s*(\d+) pass/.exec(out)?.[1] ?? 0) }; };
 const matrixCmd = ["bun", "tools/matrix/run.ts", "--small", "--worker", "0", "--root", TMP];
 const baselines = new Map<string, { code: number | null; pass: number }>();
 const rows: string[] = []; let bad = 0;
