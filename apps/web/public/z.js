@@ -178,6 +178,7 @@
     return phone("Your mobile number", "");
   };
   const BUSY_TRIES = 15;
+  document.addEventListener("click", (e) => { if (e.target && e.target.id === "reloadpage") location.reload(); }); // the "out of date" answer of the server: a page opened before a new Terms version
   const INAPP = /Instagram|FBAN|FBAV|LinkedInApp|Teams|Outlook|MicroMessenger|; wv\)/i.test(String(navigator.userAgent || "")); // a link opened inside another app's own browser: opening it later in Chrome or Safari looks like a second phone
   // 1.7.1 landing: who invites you, when, and what to type (display only; the join itself is unchanged)
   const welcomeLine = (personal) => {
@@ -188,7 +189,6 @@
   };
   // 1.8.0: an open game (people type their mobile number) also takes an optional Email ID. The server checks its shape and keeps one ticket per email.
   // 1.8.1: only an open game (the public settings say open: true) asks for the optional Email ID; the join notice K4 names it (data map, rule D2)
-  document.addEventListener("click", (e) => { if (e.target && e.target.id === "reloadpage") location.reload(); }); // the "out of date" answer of the server: a page opened before a new Terms version
   const emailAsked = () => INFO.open === true && (INFO.verify || "mobile") === "mobile" && !INFO.empOnly;
   const joinView = (msg) => {
     if (J.mode === "removed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>You are not on this game's list</h2><p class="zsmall" style="margin:0">You were removed from this game, so there is no ticket for you here. If you think this is a mistake, please ask the person who invited you.</p></div>`;
