@@ -38,20 +38,22 @@ describe("1.8.0 open join form", () => {
     const o2 = await organizer(); await game(o2, "E180-00"); const q = await page(o2, "/z?e=E180-00"); await q.waitFor((x) => /Join the game/.test(x));
     expect(q.$("#mail")).not.toBeNull(); expect(q.text()).toContain("Your email ID");
   });
-  test("with the email box switched on the page sends the email, and 1.8.0 (EMAIL_ENABLED = false) ignores it: the join works, nothing is stored or checked", async () => {
+  test("an open game asks for an optional Email ID: a good one joins and is kept, a bad shape is refused in the guide's words, the same email on another phone gets the one neutral sentence, and no email at all is fine", async () => {
     const o = await organizer(); await game(o, "E180-1");
-    const p = await page(o, "/z?e=E180-1", true);
+    const p = await page(o, "/z?e=E180-1");
     await p.waitFor((x) => /Join the game/.test(x));
     expect(p.text()).toContain("Your email ID"); expect(p.text()).toContain("(optional)");
     expect(p.text()).toMatch(/You are invited to join the Corporate Tambola \(Housie\) organized by/);
+    expect(p.text()).toContain("If this game asks for my email ID, that is used only for this game and deleted within 24 hours of the game."); // the notice names it
     await join(p, "9811100001", { mail: "asha@acme.com" });
     await p.waitFor((x) => /Your ticket|Starting in|What you can win|Before the game|Getting ready/.test(x));
-    // a bad shape and the same email on another phone are NOT refused while the server ignores email
-    const q = await page(o, "/z?e=E180-1", true); await join(q, "9811100002", { mail: "asha@acme.com" });
-    await q.waitFor((x) => /Your ticket|Starting in|What you can win|Before the game|Getting ready/.test(x));
-    const r = await page(o, "/z?e=E180-1", true); await join(r, "9811100003", { mail: "asha@" });
-    await r.waitFor((x) => /Your ticket|Starting in|What you can win|Before the game|Getting ready/.test(x));
-    expect((o.world.raw.query("SELECT COUNT(*) c FROM kv WHERE k LIKE 'email/%'").get() as any).c).toBe(0);
+    expect((o.world.raw.query("SELECT COUNT(*) c FROM kv WHERE k LIKE 'email/%'").get() as any).c).toBe(1);
+    const q = await page(o, "/z?e=E180-1"); await join(q, "9811100002", { mail: "Asha@Acme.com" }); // the same email, another phone
+    expect(await q.waitFor((x) => /could not use this email ID/i.test(x))).toBeTruthy();
+    const r = await page(o, "/z?e=E180-1"); await join(r, "9811100003", { mail: "asha@" }); // a bad shape
+    expect(await r.waitFor((x) => /check your email ID|looks incomplete/i.test(x))).toBeTruthy();
+    const t = await page(o, "/z?e=E180-1"); await join(t, "9811100004"); // no email
+    await t.waitFor((x) => /Your ticket|Starting in|What you can win|Before the game|Getting ready/.test(x));
     expect(p.errors).toEqual([]);
   });
   test("the same mobile on another device gets no second ticket, and the participant cap is kept", async () => {
@@ -152,8 +154,21 @@ describe("a game made BEFORE the approval rules date behaves exactly like 1.7.1"
     const j = await o2.api("POST", "/api/z/E180-9/join", { phone: "9811100081", name: "Old", device: dev(2), email: "asha@" }); expect(j.status).toBe(200);
     expect((o2.world.raw.query("SELECT COUNT(*) c FROM kv WHERE k LIKE 'email/%'").get() as any).c).toBe(0);
     const pii = (o2.world.raw.query("SELECT pii FROM participant WHERE eid='E180-9'").get() as any).pii as string; expect(typeof pii).toBe("string");
-    // and also for a game made after the date while EMAIL_ENABLED is false (the email is switched on in 1.8.1)
+    // while the same join in a game made after the date IS checked (bad email: 400)
     const o3 = await organizer(); await game(o3, "E180-10");
-    expect((await o3.api("POST", "/api/z/E180-10/join", { phone: "9811100082", name: "New", device: dev(3), email: "asha@" })).status).toBe(200); // 1.8.0: EMAIL_ENABLED is false, so email is ignored for every game
+    expect((await o3.api("POST", "/api/z/E180-10/join", { phone: "9811100082", name: "New", device: dev(3), email: "asha@" })).status).toBe(400); // the new rules read the email (EMAIL_ENABLED is on)
   }, 120_000);
+});
+
+describe("1.8.3: a page opened before the new terms version", () => {
+  test("a cached page that sends the OLD consent version is told to reload (message and a Reload button), not asked to tick again; after the reload it joins", async () => {
+    const o = await organizer(); await game(o, "E183-1");
+    const stale = await openPage(o.world, { url: "http://localhost/z?e=E183-1", html: "z.html", scripts: ["audio.js", "consent.js", "zgame.js", "z.js"], session: {}, afterLoad: (win: any, f: string) => { if (f === "consent.js") win.CBConsent.version = "2026-10-15"; if (f === "zgame.js") rtFake(win, () => o.world.now); } }); open.push(stale);
+    await join(stale, "9811100301");
+    const t = await stale.waitFor((x) => /out of date/i.test(x));
+    expect(t).toContain("This page is out of date. Please reload it, then tick the boxes again and join."); expect(t).not.toContain("Please tick the box to continue.");
+    expect(stale.$("#reloadpage")).not.toBeNull(); expect(stale.text()).toContain("Reload this page");
+    const fresh = await page(o, "/z?e=E183-1"); await join(fresh, "9811100301"); // the reloaded page sends the current version
+    await fresh.waitFor((x) => /Your ticket|Starting in|What you can win|Before the game|Getting ready/.test(x));
+  });
 });

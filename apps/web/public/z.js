@@ -188,6 +188,7 @@
   };
   // 1.8.0: an open game (people type their mobile number) also takes an optional Email ID. The server checks its shape and keeps one ticket per email.
   // 1.8.1: only an open game (the public settings say open: true) asks for the optional Email ID; the join notice K4 names it (data map, rule D2)
+  document.addEventListener("click", (e) => { if (e.target && e.target.id === "reloadpage") location.reload(); }); // the "out of date" answer of the server: a page opened before a new Terms version
   const emailAsked = () => INFO.open === true && (INFO.verify || "mobile") === "mobile" && !INFO.empOnly;
   const joinView = (msg) => {
     if (J.mode === "removed") return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>You are not on this game's list</h2><p class="zsmall" style="margin:0">You were removed from this game, so there is no ticket for you here. If you think this is a mistake, please ask the person who invited you.</p></div>`;
@@ -205,7 +206,7 @@
     ${DEMO ? "" : CBConsent.html("K4")}
     ${personal ? `<p class="zsmall" style="margin:0 0 6px">Your personal link is ready. Press the button to get your ticket.</p>` : joinWho()}
     ${personal ? "" : `<label for="nm">Your name <span class="zopt">(optional)</span></label><input id="nm" enterkeyhint="go" autocomplete="name" maxlength="60" value="${esc(J.name)}"><p class="zsmall" style="margin:2px 0 6px">Shown only to the organizer.</p>${emailAsked() ? `<label for="mail">Your email ID <span class="zopt">(optional)</span></label><input id="mail" type="text" inputmode="email" autocomplete="email" enterkeyhint="go" maxlength="120" value="${esc(J.email)}"><p class="zsmall" style="margin:2px 0 6px">Used only for this game and deleted within 24 hours of the game.</p>` : ""}`}
-    ${msg ? `<div class="zbanner bad" role="alert">${esc(msg)}</div>` : ""}
+    ${msg ? `<div class="zbanner bad" role="alert">${esc(msg)}</div>${/out of date/i.test(msg) ? `<button type="button" class="zbtn s alt" id="reloadpage">Reload this page</button>` : ""}` : ""}
     <button class="zbtn" id="go" ${DEMO ? "" : 'data-needs="K4" disabled aria-disabled="true"'}>Get my ticket</button>
     <p class="zsmall">We use your number for your ticket and, if you win, your prize. Your organizer sees it. Other players do not.</p>
     <p class="spriv">Players are 18 or older.</p>

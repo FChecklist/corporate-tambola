@@ -31,11 +31,14 @@ export const wordingHash = async (kind: ConsentKind): Promise<string> => hex(awa
 
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
+export const STALE_PAGE_MESSAGE = "This page is out of date. Please reload it, then tick the boxes again and join.";
 /** null when the request carries the current Terms version and every box of this point; otherwise the answer to send (HTTP 400, code consent-required). */
 export function consentMissing(b: any, kind: ConsentKind): Response | null {
   const c = b?.consent, need = boxesOf(kind);
   const given: unknown[] = Array.isArray(c?.boxes) ? c.boxes : [];
   if (c && typeof c === "object" && c.v === CONSENT_VERSION && need.length > 0 && need.every((id) => given.includes(id))) return null;
+  // a page that was opened before a new Terms version (its cached script sends the old one): the person DID tick, so tell them to reload instead of asking for a tick again
+  if (c && typeof c === "object" && typeof c.v === "string" && c.v !== CONSENT_VERSION) return json({ error: STALE_PAGE_MESSAGE, code: "consent-required", stale: true, kind, version: CONSENT_VERSION }, 400);
   return json({ error: "Please tick the box to continue.", code: "consent-required", kind, version: CONSENT_VERSION }, 400);
 }
 

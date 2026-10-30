@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.8.3",
+    "date": "2026-10-30",
+    "commit": "this release",
+    "title": "Optional email ID for open games",
+    "changes": [
+      "An open game can ask players for an email ID (optional). The join notice says so in one sentence, it is used only for this game and deleted within 24 hours of the game, and one email holds one ticket",
+      "The terms version moved to 2026-10-30. A phone that still holds an older page is told to reload it, with a Reload button, instead of being asked to tick again",
+      "Requests that nobody answers, or that are declined, release the email so the person can ask again"
+    ]
+  },
+  {
     "version": "1.8.2",
     "date": "2026-10-30",
     "releasedAtIST": "30 Oct 2026, 05:36 IST",
