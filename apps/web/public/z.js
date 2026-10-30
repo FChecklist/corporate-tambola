@@ -188,7 +188,7 @@
   const welcomeLine = (personal) => {
     const co = INFO.brand && INFO.brand.name ? INFO.brand.name : "your company";
     let when = ""; if (INFO.startMs) { try { when = " on " + new Date(INFO.startMs).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short" }); } catch (e) {} }
-    const vm = INFO.verify || "mobile", what = vm === "id" ? "your " + idWord() : vm === "either" ? "your " + idWord() + " or your mobile number" : "your mobile number";
+    const vm = INFO.verify || "mobile", what = INFO.idKind === "email" ? (vm === "id" ? "your Email ID" : vm === "either" ? "your Email ID or your mobile number" : "your mobile number") : (vm === "id" ? "your employee ID" : vm === "either" ? "your employee ID or your mobile number" : "your mobile number");
     return `<p class="zwelcome" id="zwelcome"><b>Welcome!</b> You are invited to join the Corporate Tambola (Housie) organized by ${esc(co)}${esc(when)}. ${personal ? "Press the button to get your ticket." : "To join, type " + what + "."}</p>`;
   };
   // 1.8.0: an open game (people type their mobile number) also takes an optional Email ID. The server checks its shape and keeps one ticket per email.

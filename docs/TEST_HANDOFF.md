@@ -140,3 +140,8 @@ Test files for idKind are to be written by the test author (suggested `apps/edge
 - Old console (`zc.js`) has no "Which ID?" control (only the new console Step 2 has it).
 - List viewer labels still say "Employee ID" in tables for an Email-ID game (the stored value is the email).
 
+
+---
+# RC fix round 1 (after the cloud run of 2718114)
+Product changes: (1) account and team emails (`/api/start`, `/api/auth/email`, `/api/auth/verify`, adding a Host or Co-host) use `normAccountEmail` (NFKC, trim, lower case; a space INSIDE is refused, not glued): `a b@c.com` -> 400 "Please enter a valid work email." again. A participant's Email ID in a game still uses `normEmail` (inner spaces removed). (2) guide entry now also matches the template messages `Enter your ${idWord(vf.idKind)}` and `Enter your mobile number or your ${idWord(vf.idKind)}`. (3) `zc-mode.js` names its key `ctz-zcflow` in the calls and `storage-registry.json` lists it (item `organizer-screens`); the Privacy page sentence was regenerated with `node tools/make-storage-notice.mjs`. (4) `z.js`: the landing text keeps the literal `your employee ID or your mobile number` in the source and no longer depends on `idWord` defined outside its block.
+Test-side (tester to update): worker.test join key list (+idKind); empid.test "looks like an Email ID" (product says "Email ID"); player-look "Game complete${demoTag()}" is now "Game completed${demoTag()}" (1.8.4 product change); scenario matrix email oracle (`a b@acme.com` is valid for a participant Email ID: inner spaces are removed by the owner rule); zc-flow-live line 191 (no-flags pack test): print the failing id to see which element is drawn.

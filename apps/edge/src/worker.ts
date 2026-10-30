@@ -41,7 +41,7 @@ import { PAY_SCHEMA, payRoute, retryOutbox, sendMail, freeLaunch, payMode, FREE_
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { HELPDESK_SCHEMA, HELPER_MANUAL_NOTE, helpdeskCloseStatements, helpdeskRoute, helpdeskSweep, isDeskKeyId, isHelperKey, noteHelperGame } from "./helpdesk";
-import { normIdFor, normEmail, badIdMessageFor, idWord, empCleanOn } from "./empid";
+import { normIdFor, normEmail, normAccountEmail, badIdMessageFor, idWord, empCleanOn } from "./empid";
 import { cleanEmail, approvalRulesOn, EMAIL_ENABLED, EMAIL_UNUSABLE_MESSAGE, EMAIL_MISS_PER_10MIN } from "./approvals";
 import { normEmp, empHashOf, verifyOf, keptPhone, phoneDigits, cleanName as cleanPersonName, PEOPLE_SCHEMA, COHOST_FROM, HOST_FROM, ORG_FROM, COHOST_LIMIT_DEFAULT, COHOST_LIMIT_MIN, COHOST_LIMIT_MAX, WAITING_MAX, addWaiting, chainOf, cleanPhone, fromCodeOf, inviterOf, joinLinkPage, limitOfInviter, listCount, parseFrom, peopleRoute, personByPhone, personByToken, srcOf, waitingWho, type PersonRow } from "./people";
 import { PAYLINK_SCHEMA, PAYLINK_TOKEN, createPayLink, packFor } from "./paylink";
@@ -972,7 +972,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   }
   if (req.method === "POST" && p === "/api/start") {
     const b = await body(req);
-    const email = typeof b?.email === "string" ? normEmail(b.email) : "";
+    const email = typeof b?.email === "string" ? normAccountEmail(b.email) : "";
     if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(email)) return json({ error: "Please enter a valid work email." }, 400);
     const eh = await sha("email|" + email);
     if (await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first()) { await holdPassForSignIn(env, eh, b?.pass, now); return json({ ok: true, exists: true }); }
@@ -985,7 +985,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   }
   if (req.method === "POST" && p === "/api/auth/email") {
     const b = await body(req);
-    const email = typeof b?.email === "string" ? normEmail(b.email) : "";
+    const email = typeof b?.email === "string" ? normAccountEmail(b.email) : "";
     if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(email)) return json({ error: "Please enter a valid work email." }, 400);
     const eh = await sha("email|" + email);
     const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
@@ -1078,7 +1078,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   }
   if (req.method === "POST" && p === "/api/auth/verify") {
     const b = await body(req);
-    const email = typeof b?.email === "string" ? normEmail(b.email) : "";
+    const email = typeof b?.email === "string" ? normAccountEmail(b.email) : "";
     const code = typeof b?.code === "string" ? b.code.replace(/\D/g, "") : "";
     if (!email || code.length !== 6) return json({ error: "Enter the 6-digit code." }, 400);
     const eh = await sha("email|" + email);
@@ -1203,7 +1203,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (a.kind === "ai") return json({ error: "A Host needs a mobile number or an e-mail address. Only the owner enters those, in the console (Your team). Tell the organizer to add the Host there." }, 403);
     if (a.kind !== "master" || !a.org) return deny(a);
     const hb = await body(req);
-    const hEmail = typeof hb?.email === "string" ? normEmail(hb.email) : "";
+    const hEmail = typeof hb?.email === "string" ? normAccountEmail(hb.email) : "";
     const rawMob = hb?.mobile ?? hb?.phone, hasMob = rawMob !== undefined && rawMob !== null && String(rawMob).trim() !== "";
     if (!hEmail && !hasMob) return json({ error: "Please give the Host's e-mail address or mobile number (at least one). Their own link is sent there." }, 400);
     if (hEmail && !EMAIL_RE.test(hEmail)) return json({ error: "That e-mail address does not look right. Please check it." }, 400);

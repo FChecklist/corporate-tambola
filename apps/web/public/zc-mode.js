@@ -3,8 +3,8 @@
 (function () {
   try {
     var q = new URLSearchParams(location.search), f = q.get("flow"), KEY = "ctz-zcflow", s = null;
-    try { s = localStorage.getItem(KEY); } catch (e) {}
-    if (f === "new" || f === "old") { try { localStorage.setItem(KEY, f); } catch (e) {} }
+    try { s = localStorage.getItem("ctz-zcflow"); } catch (e) {}
+    if (f === "new" || f === "old") { try { localStorage.setItem("ctz-zcflow", f); } catch (e) {} }
     else {
       // links the previous screens alone understand (demo game, pass, quick start, new game from the ticket page, cap, do, k = a Host / AI key link, api): they open the previous screens and the choice is NOT stored
       var OLD = ["demo", "pass", "quick", "quickform", "new", "cap", "do", "k", "api"], forced = false;
