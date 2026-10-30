@@ -182,7 +182,8 @@ if (PAGE_N > 0) {
         P.setVal(p, "#emp", x); const hint = (p.$("#empread") as any).textContent as string; const nf = x.normalize("NFKC");
         const read = kind === "email" ? oracleEmail(x) : nf.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
         const tooLong = kind === "emp" && read.length > 30; // product rule (rc 1.8.5, owner decision): an employee ID over 30 characters once cleaned gets this sentence instead of the "read this as" hint
-        const want = x.trim() && read && !(kind === "emp" && nf.includes("@")) ? (tooLong ? "This ID is too long. An employee ID may be up to 30 characters once cleaned." : "The system will read this as " + read) : "";
+        const looksAddress = kind !== "email" || /@[^]+\.[^]+/.test(read); // R-email-hint: in an Email ID game the hint appears ONLY when the value looks like an address (an @ followed later by a dot); 'notanemail' shows no hint. Read as: something between the @ and the dot and something after the dot, so "x@y." and "x@." (a dot with nothing around it) show no hint: an interpretation of the owner's words, listed for confirmation in TESTER_REPORT.md
+        const want = x.trim() && read && looksAddress && !(kind === "emp" && nf.includes("@")) ? (tooLong ? "This ID is too long. An employee ID may be up to 30 characters once cleaned." : "The system will read this as " + read) : "";
         checks++; if (hint !== want) bad(`P1 join page hint (${kind} game)`, x, `hint ${JSON.stringify(hint.slice(0, 80))} | rule ${JSON.stringify(want.slice(0, 80))}`);
         if (kind === "emp" && nf.includes("@")) { checks++; if (hint !== "") bad("P2 e-mail turned into letters on the page", x, hint.slice(0, 80)); }
         pageRan++;

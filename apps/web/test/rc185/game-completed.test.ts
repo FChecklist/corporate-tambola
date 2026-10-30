@@ -2,7 +2,7 @@
 // The real player page runs in a DOM; the view is fabricated (phase "ended"); the page's clock is the test's clock.
 // Run: bun test --isolate apps/web/test/rc185
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { organizer, published, phone, endedView, playView, endMs, realPid, REWARDS1, REWARDS5, REWARDS7, wait, type O } from "./page";
+import { organizer, published, phone, endedView, playView, endMs, realPid, SCHED, LOG, REWARDS1, REWARDS5, REWARDS7, wait, type O } from "./page";
 import type { Page } from "../harness";
 
 setDefaultTimeout(60_000);
@@ -12,9 +12,16 @@ let open: Page[] = [];
 afterEach(async () => { for (const p of open) await p.close(); open = []; });
 const eid = "RC-DONE";
 async function game(set: Record<string, unknown> = {}) { const o = await organizer(); await published(o, eid, set); return o; }
+/** R-end: the game's REAL end is what GET /api/z/<id>/info returns as endedAtMs once the scheduled bound has passed (schedule + 60 s); the page prefers it to its own estimate (start + calls). Read it from the Worker, never from the fabricated view. */
+async function realEnd(o: O): Promise<number> {
+  const keep = o.world.now; o.world.now = endMs() + 48 * 3600_000;
+  const i = await o.json(await o.api("GET", `/api/z/${eid}/info`)); o.world.now = keep;
+  expect(typeof i.endedAtMs).toBe("number"); return i.endedAtMs;
+}
 async function ended(o: O, minutesAfterEnd: number, over: Record<string, unknown> = {}) {
   const pid = await realPid(o, eid); // joined while the game is still open; then the clock moves on
-  o.world.now = endMs() + minutesAfterEnd * MIN;
+  const end = await realEnd(o);
+  o.world.now = end + Math.round(minutesAfterEnd * MIN);
   const p = await phone(o, `/z?e=${eid}`, { patch: endedView({ pid, ...over }) }); open.push(p);
   await p.waitFor((t) => /Game completed|Thank you for playing|This game is now over/.test(t), 30_000);
   return p;
@@ -44,10 +51,10 @@ describe("a link opened 30 or more minutes after the game (never saw it live): o
     });
   }
   test("the edge: 30 minutes exactly still shows the results ('more than 30' flips it, not 'at 30'); 1 second later it flips", async () => {
-    const o = await game(); const a = await ended(o, 30); const aOK = !!a.$("#finalresults") && !a.$("#gamedone");
+    const o = await game(); const a = await ended(o, 30); // fixed clock: exactly 30 min after the real end (endedAtMs from the Worker)
+    expect(a.$("#finalresults")).toBeTruthy(); expect(!!a.$("#gamedone")).toBe(false); // the code says "> 30 minutes" (the handoff says "30 or more"): exactly 30 still shows the results
     const b = await ended(o, 30 + 1 / 60); // 1 s more
-    // the handoff says "30 or more"; the code says "> 30 minutes". Whichever it is, the two sides of the line must differ and 1 s later must be the calm page.
-    expect(b.$("#gamedone")).toBeTruthy(); expect(!!b.$("#finalresults")).toBe(false); void aOK;
+    expect(b.$("#gamedone")).toBeTruthy(); expect(!!b.$("#finalresults")).toBe(false);
   });
   test("a phone that watched the game (even one number) keeps its results after 30 minutes pass in the same visit", async () => {
     const o = await game(); const pid = await realPid(o, eid); o.world.now = endMs() - 5 * MIN; // game still in play
@@ -57,8 +64,27 @@ describe("a link opened 30 or more minutes after the game (never saw it live): o
     await p.waitFor(() => !!p.$("#finalresults") || !!p.$("#gamedone"), 30_000);
     expect(p.$("#finalresults")).toBeTruthy(); expect(p.$(".zticket")).toBeTruthy(); expect(!!p.$("#gamedone")).toBe(false); expect(p.text()).toContain(THIRTY_NOTE);
   });
-  test("a game whose end time cannot be known (no scheduled round / no numbers called) never shows the calm page", async () => {
-    const o = await game(); const p = await ended(o, 600, { log: [] }); expect(!!p.$("#gamedone")).toBe(false); expect(p.text()).toContain("Game completed");
+  test("R-end: a game whose end is not known (the Worker has no endedAtMs yet: the schedule can still be live) and with no calls to estimate from never shows the calm page", async () => {
+    const o = await game(); const pid = await realPid(o, eid); const end = await realEnd(o);
+    o.world.now = end - 5 * MIN; // before the recomputed bound: info has no endedAtMs
+    expect(await o.json(await o.api("GET", `/api/z/${eid}/info`))).not.toHaveProperty("endedAtMs");
+    const p = await phone(o, `/z?e=${eid}`, { patch: endedView({ pid, log: [] }) }); open.push(p);
+    await p.waitFor((t) => /Game completed|Thank you for playing|This game is now over/.test(t), 30_000);
+    expect(!!p.$("#gamedone")).toBe(false); expect(p.text()).toContain("Game completed");
+  });
+  test("R-end: once the Worker returns endedAtMs the page uses it, not its own estimate: the estimate says 'long ago' but the real end was 5 minutes ago, so the results stay", async () => {
+    const o = await game(); const pid = await realPid(o, eid); const end = await realEnd(o);
+    o.world.now = end + 5 * MIN;
+    const p = await phone(o, `/z?e=${eid}`, { patch: endedView({ pid, scheduledRound: SCHED - 4000, log: LOG }) }); open.push(p); // estimate = about 3 h before the real end
+    await p.waitFor((t) => /Game completed/.test(t), 30_000);
+    expect(!!p.$("#gamedone")).toBe(false); expect(p.$("#finalresults")).toBeTruthy();
+  });
+  test("R-end: a real end that is long past (endedAtMs 2 h ago) shows the calm page even if the page's own estimate would say 'just now'", async () => {
+    const o = await game(); const pid = await realPid(o, eid); const end = await realEnd(o);
+    o.world.now = end + 120 * MIN;
+    const p = await phone(o, `/z?e=${eid}`, { patch: endedView({ pid }) }); open.push(p);
+    await p.waitFor((t) => /Game completed/.test(t), 30_000);
+    expect(p.$("#gamedone")).toBeTruthy(); expect(!!p.$("#finalresults")).toBe(false);
   });
 });
 

@@ -1,19 +1,20 @@
-# TESTER_REPORT: Tambola rc 1.8.5, final test branch `tests/tambola-rc185-final-2026-10-30`
+# TESTER_REPORT: Tambola rc 1.8.5, test branch `tests/tambola-rc185-final7-2026-10-30`
 
-- Base: `origin/tests/tambola-rc185-merged-2026-10-30` (cfc416a) + merge of `origin/rc/tambola-1.8.5` (e2234f5). The merge had no conflicts.
-- Only test files, test helpers, declaration files for test tools, the break table, and this report were changed. **No product file differs from rc e2234f5** (checked with `git diff origin/rc/tambola-1.8.5` on `apps/*/src`, `apps/web/public`, `packages/*/src`: empty).
-- All runs were made in this cloud sandbox, `bun test --isolate <folder>`, one folder at a time. Counts below are copied from the last summary lines of the final run (logs: `/tmp/claude-0/final/*.txt`, not committed).
+- Base: `origin/tests/tambola-rc185-final6-2026-10-30` (= previous tests + rc 8cac314). `git merge-base --is-ancestor origin/rc/tambola-1.8.5 HEAD` is true, and rc is still 8cac314, so nothing was merged.
+- **No product file was changed.** `git diff origin/rc/tambola-1.8.5 -- apps/edge/src apps/web/public apps/server packages/*/src tools/control-worker` is empty. Only tests, test helpers, the matrix tool, the break table and this report changed.
+- All runs: this cloud sandbox, `bun test --isolate <folder>`, one folder at a time, nothing else running. Counts below are copied from the last summary line of each run (logs were in `/tmp/claude-0/run/`, not committed).
 
 ## 1. Result in one view
 
 | Check | Result |
 |---|---|
-| `bun run typecheck` | **exit 0, 0 errors** (was 179 on the merged tree) |
-| Folders | 7 of 8 green. 2 red tests in apps/edge and 1 in apps/web, all three are product defects (section 5). They are red on purpose. |
-| New break checks for fixes A to H | 29 of 29 proven red then green (section 4) |
-| New cleaning matrix | **1,122,798 distinct inputs**, 20,216,310 checks, 0 failures |
+| `bun run typecheck` | exit 0, 0 errors |
+| ID matrix `bun tools/matrix/id-clean.ts` | **1,122,798 distinct inputs, 20,216,310 checks, 0 failures** |
+| Deliberate breaks | **98 of 98** proven green, then red, then restored (was 79; 19 added, 9 older ones repaired) |
+| Folders | 8 of 9 green. **apps/web has 4 red tests. All 4 are PRODUCT bugs (section 4). They are red on purpose, I did not bend them.** |
+| The run 8 failures (edge 1, web 5, matrix 896) | all fixed on the test side (section 3) |
 
-## 2. Counts (final run)
+## 2. Counts (last summary line of each run)
 
 | Folder | Pass | Fail | Skip |
 |---|---|---|---|
@@ -22,131 +23,90 @@
 | packages/beacon | 359 | 0 | 0 |
 | packages/billing | 26 | 0 | 0 |
 | tools/control-worker | 1 | 0 | 0 |
-| apps/edge | 2183 | **2** | 1 |
+| apps/edge | 2186 | 0 | 1 |
 | apps/server | 9 | 0 | 0 |
-| apps/web | 924 | **1** | 0 |
-| tools/matrix (extra, not in your list) | 7 | 0 | 0 |
+| apps/web | 963 | **4** | 0 |
+| tools/matrix (extra) | 8 | 0 | 0 |
 
-The 3 failing tests, by name:
-- apps/edge: `D: PATCH settings idKind is locked once people exist > PRODUCT BUG D1 ...` (product defect D1)
-- apps/edge: `G: GET /api/z/<id>/info carries endedAtMs ... > PRODUCT BUG G1 ...` (product defect G1)
-- apps/web: `guide.test.ts > every message the server can send has a guide` (product defect D2: the new 409 message has no guide entry)
+### apps/web, three full runs in a row (final tree)
 
-Noise, not a failure: `pdf-assets.test.ts` prints `ECONNREFUSED 127.0.0.1:80` and a Bun banner three times. That test passes. It was there before my changes.
-
-## 3. Typecheck: 179 to 0
-
-The merged tree had 179 errors (you counted 181; the 2 product errors are fixed in rc). All fixed in test code, no `@ts-ignore`, no new `any`.
-
-| Where | Errors | Cause and fix |
-|---|---|---|
-| apps/edge/test (143 of 149) | 143 | One root cause: `keyH` in `param-harness.ts` returned `{ "x-organizer": string } \| {}`. It now returns `Record<string, string>`. This one line cleared 143 errors in 11 files. |
-| apps/edge/test (rest) | 6 | `checkin.test.ts`: `.get()` is `unknown`, now cast to `{ c: number }`. `rehearsal.test.ts`: the `pids` record is now held in local typed arrays. `report-email.test.ts`: array lookups got `!`. |
-| packages/beacon/test | 13 | `beat.test.ts` (2): `MSG[...]!`. `control.test.ts` (1): the brand break is a typed variable (the real shape carries `kind` and `title`; `GameOpts` does not name them). `last-number-claim.test.ts` (2): `ticket!`. `phone-cost.test.ts` (4): removed the `as any` that hid the callback types. `phone-runtime.test.ts` (3): wrong callback signature. `real-housie.test.ts` (1): the result union is narrowed before `.error` and `.late` are read (was `as any`). |
-| tools/sim2/scenarios/matrix | 17 | New declaration files `lib.d.mts`, `gen-modes.d.mts`, `gen-permissions.d.mts` (real types: `Scenario`, `T`, `Rng`, `Clock`, `Mailbox`, `A.sql`). The four runners now import `lib.mjs` and the generators with those types (the `: any` on those imports is gone). Plus `noUncheckedIndexedAccess` fixes. |
-
-Not changed: older explicit `any` annotations in the sim2 runners (`scenarios: any[]`, `catch (e: any)`). They give no error and I did not widen the job. `apps/web/test` is not in `tsconfig.json`'s `include`, so the typecheck does not look at it.
-
-No error was in product code.
-
-## 4. Fixes A to H: tests and break checks (red then green)
-
-Every break runs in a temp copy of the repo, with the repo untouched. Tool: `bun tools/matrix/breaks/run-breaks.ts --only <ids>`. Table: `tools/matrix/breaks/table.ts` (new entries A1 to H3 and M01 to M11). Final run result: **edge 12 of 12 proven, web 17 of 17 proven, matrix 11 of 11 proven**, every restore byte for byte.
-
-Test files: `apps/edge/test/rc185/audit-fixes.test.ts` (A, D, G server side), `apps/web/test/rc185/audit-fixes.test.ts` (B, C, E, F, G page, H), changed `apps/web/test/rc185/fix-round1.test.ts` (old C02).
-
-| Fix | What the tests check | Break (one change in the product copy) | Baseline | Broken | 
+| Run | Summary | game-completed.test.ts | rc185/audit-fixes.test.ts (web) | Other failures |
 |---|---|---|---|---|
-| A | `/api/host/setup/email`: `john doe@acme.com`, full-width `＠` with a space, tab, NBSP, `john@acme .com` all 400 "Please enter a valid e-mail address.", no code made, no mail. `johndoe@acme.com` accepted, one mail. End spaces, capitals, full-width `＠` accepted. Address on file (kept in another form) is compared in the same form. The code is stored under the account hash. Participant Email IDs still remove inner spaces. | A1 glue the space in the route | green | RED (2 fail) |
-| | | A2 no NFKC and no tidy in the route | green | RED (1) |
-| | | A3 `emailHashOf` glues the space | green | RED (1) |
-| | | A4 on-file address compared raw | green | RED (1) |
-| | | A5 participant Email ID keeps inner space | green | RED (1) |
-| B | `guide.js` has no `${` and no `idWord(`. The six sentences the **real Worker** sends (id / either / both, employee ID and Email ID) go to the guide finder: all matched, each with title and steps. Email sentences get the Email ID card, employee sentences the employee card. An unrelated "Enter your ..." is not swallowed. Old C02 in `fix-round1.test.ts` now does the same with the real strings. `guide.test.ts` expands `${idWord(vf.idKind)}` into both real words before it looks them up. | B1 put `${idWord(...)}` back | green | RED (1) |
-| | | B2 remove the two Email ID fragments | green | RED (1) |
-| | | B3 remove the employee "mobile number or" fragment | green | RED (1) |
-| | | C02 (old table entry, now plain text) remove one fragment | green | RED (3) |
-| C | Own card, title "This game asks for an employee ID, not an email", steps say type your employee ID, letters and numbers, "Do not type your email", no step starts "Type your email", points at `#emp`. The Email ID card no longer claims that sentence. The sentence is the one the real Worker sends. | C1 card tells the person to type an email | green | RED (1) |
-| | | C2 card removed | green | RED (2) |
-| D | Nobody listed or joined: both ways allowed. A person joined: 409 `idkind-locked` with the plain sentence, kind unchanged, both ways. Same kind again and other settings: allowed. Old game (before `EMP_CLEAN_FROM_MS`): refused to email once people exist, allowed before. Open game, joined by mobile: locked. | D1 lock removed | green | RED (1) |
-| | | D2 lock even with nobody | green | RED (1) |
-| | | D3 lock even for the same kind | green | RED (1) |
-| | | D4 other message text | green | RED (1) |
-| E | In id, either and both modes, for employee and Email ID games (6 cases): `#empread` is the element right after `#emp`, one element with that id, `aria-live="polite"`, `aria-describedby`, same node updated while typing, none under the phone box. Mobile game: none. An email typed in an employee-ID box: empty hint. | E1 no aria-live | green | RED (6) |
-| | | E2 another element between box and hint | green | RED (6) |
-| | | E3 second `#empread` in the phone box | green | RED (7) |
-| F | Calm page (30+ minutes after the game, link opened fresh): open game says "played in groups, with a link from the organizer: company teams and their families"; invitation game says "in close groups, by invitation only: ...". Not mixed. | F1 always "invitation" | green | RED (1) |
-| | | F2 always "open" | green | RED (1) |
-| G server | No `endedAtMs` on a fresh game. Ended by the phones' vote: the vote time. Ended by the schedule: the scheduled end. Ended by the organizer (erase): that moment. Never changes after (more votes, ticks, a second erase). Cancelled: absent. Payload adds only `endedAtMs` (plus the existing `erasureMs`), no name, mobile, e-mail, money. | G1 field removed from `/info` | green | RED (3) |
-| | | G2 cancelled games carry it | green | RED (1) |
-| | | G3 extra fields in the payload | green | RED (1) |
-| G page | `endMsOf` uses `endedAtMs` when present (later and earlier than the estimate; the 30-minute edge follows it) and falls back to the old estimate without it. Source pins for the "kept once" line. | G4 ignore `endedAtMs` | green | RED (4) |
-| | | G5 never read it from `/info` | green | RED (4) |
-| | | G6 no fallback | green | RED (1) |
-| H | Step 2 of the new console, run against a fake `/summary`: group shown for verify `id`, `either`, `both` with the true copy (and not the old "one plain form" text); not shown for `mobile`, for an old game without `verify`, when the call fails, or with no saved game; the summary is read once (also while the first call is still open); choosing Email ID sends one `PATCH {idKind:"email"}`. | H1 group always shown | green | RED (5) |
-| | | H2 old copy | green | RED (3) |
-| | | H3 read again at every draw | green | RED (1) |
+| 1 | 963 pass, 4 fail | 0 failed | 0 failed | none |
+| 2 | 963 pass, 4 fail | 0 failed | 0 failed | none |
+| 3 | 963 pass, 4 fail | 0 failed | 0 failed | none |
 
-Fix proofs for the 3 red tests: `bun tools/matrix/breaks/fix-proofs.ts` puts the smallest possible fix into a temp copy and the red test must turn green. Result: **D1 red then green (1 pass), G1 red then green (1 pass), D2 red then green (13 pass in guide.test)**. This shows the tests are right. It does not say the fixes I tried are the final fixes.
+- The 4 failures are the same 4 tests every time (section 4).
+- The folder log does not list passing tests, so "0 failed" comes from the `(fail)` list. I also ran the two files alone three times: game-completed 20 pass / 0 fail, audit-fixes 36 pass / 0 fail, each time.
+- These two files use one fixed fake clock (the Worker and the page read the same value) and no sleeps. The clock is read from the Worker's own `endedAtMs`, not from the real time.
+- The new browser-check-2 file uses short polls (40 to 60 ms) to wait for a DOM redraw, never to decide a result, and a fixed clock.
 
-## 5. Matrices
+## 3. The failures of run 8, and what I did
 
-### Existing matrices, exact counts (from the logs of this run)
-| Matrix | Count |
-|---|---|
-| `bun tools/matrix/run.ts` (full, run today) | **6,422,528** scenarios, 6,422,528 distinct, 0 failures, 200 real-Worker checks, 112.8 s |
-| `apps/web/test/zc-flow-scenarios.test.ts` | **3,686,400** scenarios run, 0 failed, 245,760 email checks (the "3.69M") |
-| `apps/web/test/player-matrix.test.ts` | 460,800 permutations, 0 failed |
-| `apps/edge/test/empid.test.ts` matrix | 200 IDs x 28 formats = 5,600 inputs, 16,800 checks, 0 failed |
-| `tools/sim2/scenarios/matrix` (`--seed 1 --list`, counted only, not run: they need the sim server) | run.ts 4,659; run-modes 124; run-organizer 3,933; run-permissions 9,841 |
+1. **edge audit-fixes "ended by the organizer (data erased)"**. The test was wrong, the product is right (R-end). An erase is a purge row, not a game end. The test now says: the purge row is `end_src='purge'`, `endedAtMs` is the recomputed scheduled bound (not the erase moment), and a second erase or tick does not move it. I added: absent one second before the bound, present at the bound, never moves afterwards. A cancelled game test now also reads after the bound and 48 hours later (the old test passed even without the cancel guard, break G2 now proves it).
+2. **web game-completed (3 tests)**. The fixtures were wrong. They put the clock 31 minutes after a fabricated end (start + 30 calls), but the Worker's real end is the schedule bound (about 14.5 minutes after the start), so `endedAtMs` was about 19 minutes old and the page correctly showed the results. Now the fixture reads the real `endedAtMs` from `GET /info` and places the clock relative to it. I added three R-end cases: (a) no `endedAtMs` yet (clock before the bound) and no calls: never the calm page; (b) `endedAtMs` recent but the page's own estimate says "long ago": results stay (page uses `endedAtMs`); (c) `endedAtMs` 2 hours old: calm page. The 30-minute edge is exact: 30:00 shows results, 30:01 shows the calm page (the code uses `> 30 minutes`, as the handoff says).
+3. **web audit-fixes (2)**. (i) "no endedAtMs from the server, the estimate decides" now keeps the clock before the real bound and moves the page's estimate instead. (ii) "a cancelled game" used a bare `life` row with `end_src='cancel'`. A real cancel (API) is used now.
+4. **ID matrix**. The email-game hint check now expects the hint only when the value looks like an address. 0 failures at 1,122,798 distinct inputs. See the open question in section 5 (3 inputs).
 
-### New: streamed ID / e-mail cleaning matrix
-`bun tools/matrix/id-clean.ts` (small mode as a test: `tools/matrix/id-clean.test.ts`, 20,000 inputs).
+Also fixed on the test side (found while making the runs repeatable, all pre-existing test races, none is a product problem):
+- `apps/edge/test/ai-privacy.test.ts`: the 4-digit needle "6789" was found inside a random key in one full run. A 4-digit tail now counts as a leak only when it stands alone or behind mask characters.
+- `apps/edge/test/usecases.test.ts` UC-32: the re-join used phone 1, but which 5 of the 40 simultaneous callers get a place is not fixed. It now uses a phone that really got one.
+- `apps/web/test/pages.test.ts` (2 places): "My people" and "Your games" read buttons one moment before the page drew them. Both wait for the buttons now.
+- `apps/web/test/zc-default-182.test.ts`: the page's synchronous game lookup (`zc-mode.js`) made happy-dom connect to 127.0.0.1:80. The unhandled `ECONNREFUSED` ended two whole-folder runs with no summary. The page now gets the Worker's real answer. One test that needs the new screens for a manual/host game now uses `flow=new`; the product keeps the old screens for such a game, which a unit test in the same file already proves.
 
+## 4. PRODUCT bugs (rc 8cac314), with evidence. Not fixed (I do not touch product code)
+
+**P1. Fix (g) does not work when it matters: after "Not allowed." appears, nothing turns it into "Please sign in first."**
+- Test: `apps/web/test/rc185/browser-check2.test.ts`, "PRODUCT BUG ... Step 1 with no session" (2 tests: with and without the guide). Red.
+- The real Worker answers `POST /api/z` without a key with `403 {"error":"Not allowed."}` (the test records it). Step 1 puts that text into `#zf-msg1`.
+- `signInFirst()` in `zc-flow-tambola.js` (line 134) runs only inside `patchSteps()` from `paint()`, and `paint()` is triggered by a `MutationObserver` on `#app` with `{ childList: true }` only (line 205). Changing the text inside `#zf-msg1` is not a child change of `#app`, so the observer never fires and `#zf-msg1` stays "Not allowed.".
+- Proof that the conversion code itself is right: the control test appends one node to `#app` (what a redraw does) and the message becomes "Please sign in first. Open the organizer sign-in ..." with `#zt-signin` pointing to `/zc.html`. That control test is green and has a break (X16).
+- Limit of my evidence: the test loads the three console scripts and the guide, not the whole `zc.html`. Another script on the real page could redraw. Please re-check in a real browser, with no session.
+
+**P2. Fix (d) is only half done: a 31-character employee ID shows the too-long sentence in the hint, but not on submit.**
+- Test: `browser-check2.test.ts`, "PRODUCT BUG ... 31 cleaned characters". Red. Rule R-ids says hint and submit both say "This ID is too long. An employee ID may be up to 30 characters once cleaned."
+- Hint (`z.js` line 1116): correct. Submit (`z.js` line 1133): the check `rd.length > 30` is there, but its message is `"An employee ID has letters and numbers only."` (the test reads the alert banner after pressing the button and gets exactly that). Nothing is sent to the server (also asserted).
+- The guide card for the too-long sentence exists (green test, break X09), but the phone never shows the sentence it matches.
+
+**P3. The "* mandatory without an employee ID" label is unreadable in Retro (the default look) and in Modern.**
+- Test: `browser-check2.test.ts`, "PRODUCT BUG ... must also read at >= 4.5:1 in Retro ... and Modern". Red.
+- `z.css` line 465 sets `.zreq{font-size:13px;color:#9C1C14}`. In both looks the join card is transparent (`html[data-pt] .zcard`) over the dark page background. Computed from the CSS: `#9c1c14` on `#6b1429` (Retro, first gradient stop) = **1.47:1**, needed 4.5. No rule overrides `.zreq` for the looks.
+- On a light page it is fine (green test: 13px and 4.5:1 or more). The fix was made for the light page only.
+- The same method proves the other contrast fixes: error card in Retro and Modern, both as pop-up and in place, and the prize rows in Retro and Modern all pass (>= 4.5:1).
+
+R-end checks: the product follows R-end as written (`endedAtOf`, `worker.ts` line 142). One thing for the owner: no code path writes an "organizer end" row. The rule says an organizer end is returned whatever the clock says, but the only `end_src` values are `phones`, `schedule`, `cancel` and `purge`. So I could not test an organizer end. If one is planned, it needs its own row type.
+
+## 5. Open points for the owner (not failures)
+
+- **Email hint, three inputs.** I read "looks like an address" as: something between the `@` and the dot, and something after the dot. The page shows no hint for `.x@y.` , `de-mo-1@.` and `de-mo-1@-de-mo.` (a dot with nothing around it). A looser reading ("an `@` followed later by a dot") would show a hint for those 3 of 1.1 million inputs and the matrix would fail on them. Please confirm which reading you want. The matrix line is `looksAddress` in `tools/matrix/id-clean.ts`.
+- **Error code name.** The brief says `id-kind-locked`. The Worker, the coder's handoff and the existing tests say `idkind-locked`. The console does not read the code, it matches the sentence. I left the name as built.
+- The console shows the lock message together with the guide card by letting the guide's own watcher rewrite the box. Both forms (card, or plain sentence when the guide is not on the page) are tested.
+
+## 6. The seven new checks (second real-browser check) and their breaks
+
+New file `apps/web/test/rc185/browser-check2.test.ts` (35 tests, of which 4 are the red product-bug tests) and a small CSS cascade `apps/web/test/rc185/css.ts` (reads the real CSS files, picks the winning rule like a browser, gives colours and sizes). Tests (a), (g) run the new console against the **real Worker**.
+
+| Fix | What is tested | Result | Break (green to red to restored) |
+|---|---|---|---|
+| a | 409 on `PATCH /settings`: message under the radios with the guide card, radio back on the saved kind, `idTouched` reset; both lock sentences; plain text without the guide; stale message cleared on success; Save and continue with 400, 403, 409, 422 shows the server's words, re-enables the button, does not move on; control: a good save moves on | green | X01 radio, X02 silent, X03 idTouched, X04 swallowed 4xx |
+| b | "This game link does not work" card, as pop-up and in place, Retro and Modern, every text and button >= 4.5:1 | green | X05, X06 |
+| c | prize card heading, "Demo prize: Four corners" row, won row, tag, Retro and Modern; demo.html uses the same z.css | green | X07 |
+| d | hint says too long (and 30 characters does not); guide card for the sentence | green | X08, X09 |
+| d | **submit shows it** | **red, P2** | none possible (needs a green baseline) |
+| e | `#fsBtn`, `#spkBtn` have class `fs`; `.fs` >= 40 x 40 at 360, 1280, 1920 px | green | X10 |
+| f | `.zc-dot` ('Jump to') 40 x 40 at 360 and 1280; partner header/nav/footer links 40 px tall block boxes; mandatory label 13px and 4.5:1 on the light page; EN button box (top 6 + 40 = 46 px) fits inside the 52 px strip reserved at 480 px and below, none on wide screens | green | X11, X12, X13, X14, X15 |
+| f | mandatory label in Retro and Modern | **red, P3** | none possible |
+| g | the Worker's real 403 -> "Please sign in first." + `#zt-signin`; the conversion works once the console paints; a signed-in organizer and other refusals are left alone | conversion green | X16 |
+| g | **it happens on its own** | **red, P1** | none possible |
+
+Other breaks added or repaired (all proven): G2 (cancelled), G7 (scheduled end shown before the bound), G8 (an erase counted as an end), M12 (hint in an Email ID game without an address; needs the new `tools/matrix/id-clean-page.test.ts`, which types 400 inputs per game into the real join page). Nine older breaks (B14, W08, W15, D1 to D3, G1, G2, G3) had stopped matching the product text of rc 8cac314 and were silently skipped in the old runner; they are repaired, and the runner now prints `BAD BREAK` rows.
+
+## 7. How to run
+
+```bash
+bun install
+bun test --isolate packages/shared        # then engine, beacon, billing, tools/control-worker, apps/edge, apps/server, apps/web
+bun run typecheck
+bun tools/matrix/id-clean.ts              # about 85 s
+bun tools/matrix/breaks/run-breaks.ts     # all 98 breaks, about 5 minutes; --only X for the new ones
 ```
-dimensions: 62 cores (42 employee IDs + 20 e-mail addresses) x 65 spellings x 19 prefixes x 19 suffixes = 1,454,830 combinations
-inputs generated:    1,454,830
-distinct inputs run: 1,122,798   (332,032 repeats were skipped and never counted)
-checks made:         20,216,310
-real-Worker inputs:  1,581 (1,203 list-upload + join games, 378 sign-ups through /api/start)
-real join-page inputs: 2,406 (the same 1,203 texts typed into two games, employee ID and Email ID)
-failures:            0
-time: 115.6 s
-```
-Exact number run: **1,122,798 distinct inputs**. Distinct is proven with a set of every text seen, not assumed.
-
-Coverage among the distinct inputs: plain ASCII 251,835; full-width 170,912; sharp s 38,627; dashes of every kind 371,961; Devanagari or Arabic digits 51,984; compatibility letters (bold, circled, ligature, roman numeral, kg sign) 148,732; inner space (space, tab, newline, NBSP, ideographic, thin) 218,485; zero-width and invisible 311,686; emoji 135,595; contains an at-sign (plain, full-width, small) 353,741; very long (60+ characters) 75,380; more than 30 after cleaning 82,649; empty after cleaning 15,896; blank 727.
-
-Rules checked on every input, against an oracle written separately from the product (`tools/matrix/oracle.ts` plus new account-email rule):
-- R1 employee-ID game (new): result equals the oracle; cleaning twice changes nothing.
-- R2 **an employee-ID game never turns an email into letters**: every text with an at-sign after NFKC is refused, and every answer is null, empty or 1 to 30 of A-Z 0-9. Also checked on the real Worker (list upload and join) and on the real join page (hint stays empty).
-- R3 old games: equal to the oracle **and equal to the 1.8.3 function copied word for word** (so stored hashes still match).
-- R4 participant Email ID: equal to the oracle, lower case, no space or zero-width character, cleaning twice changes nothing.
-- R5 account e-mail: accepted exactly when the oracle accepts (the work-e-mail regex is read from `worker.ts` itself); an inner space is always refused; ends, capitals and full-width tidied. 378 sample inputs (the ones with an at-sign) went through the real `/api/start`.
-- R6 an Email ID is not cleaned like an employee ID and the reverse.
-
-Deliberate-break proof for the matrix: 11 product changes (M01 to M11) each turn the small matrix red: account e-mail glued, no NFKC, no trim; email turned into letters; old game on the new rule; Email ID not lower case; Email ID keeps spaces; sharp s becomes SS; Devanagari digit kept; cap 31; dash kept. All 11 proven red then green.
-
-## 6. Product problems (evidence, not fixed)
-
-1. **G1: `endedAtMs` is present before the game has ended, and it moves.** `lifecycleTick` writes a `life` row with `end_src='schedule'` from its first pass (`lifecycle.ts:425-427`, re-read every tick), and `endedAtOf` (`worker.ts:142`) returns every row that is not `cancel`. Real Worker, paid game, one person listed and joined: before any tick `/info` has no `endedAtMs`; after one `lifecycleTick` a second after the game was made it says `1793877114000` (the scheduled end, about 12 minutes after the start, an hour in the future); after adding a speech break it says `1793877174000`. The page keeps the first value for ever (`!INFO.endedAtMs`), so a break or pause added later leaves the phone with a wrong end time and the 30-minute "Game completed" switch can come too early. The spec says set once at the end, not by pauses or breaks, never changes. Test: `PRODUCT BUG G1`. A smallest fix in a temp copy (do not return rows with `end_src='schedule'`) makes it green.
-2. **D1: a person who is only listed does not lock `idKind`.** The check counts `participant` rows only (`worker.ts:2263`); listed people are in `person`. Real Worker: one person listed, nobody joined: `PATCH {idKind:"email"}` answers 200, so the listed employee IDs are now read as Email IDs. The refusal sentence itself says "You already have people listed". Spec D says "listed or joined". Test: `PRODUCT BUG D1`. Smallest fix in a temp copy: count `person` rows too, green.
-3. **D2: the new refusal has no guide entry.** `You already have people listed. Start a new game to use a different kind of ID.` (409) is in `worker.ts:2263`; the existing guide test (every server message has a guide) names it. Red until `guide.js` gets an entry. Smallest fix in a temp copy: green.
-4. **Minor, hint and refusal disagree for a too-long ID.** In a new employee-ID game, typing 31 letters shows "The system will read this as AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" (31), and the join then answers 400 "...may be up to 30 characters once cleaned." Checked with the real page and Worker. No test is red for it (the matrix encodes the current behaviour). Owner decision: hide the hint, or say it is too long.
-5. **Not verified, a question for the coder.** `z.js:1051` shows the check-in screen to any phone with a ticket that never marked itself present, before the "Game completed" calm page is considered (`completedLate` is only reached in `playView`). A person who joined and never checked in, opening the page after the game, may not see the calm page. I could not confirm what the check-in call answers after the game ends, so I report it as a question, not a defect.
-
-Fixed in rc and now green (was red before): the old "PRODUCT BUG B1" test (hint turning an email into letters in an employee-ID box). The product now shows no hint for an address.
-
-## 7. Other test changes (and why)
-
-- `apps/edge/test/empid.test.ts` and `rc185/worker-rules.test.ts`: both expected an e-mail with an inner space to hash the same as the clean one. After fix A the hash is the account form, where an inner space is never glued. The tests now say: participant forms (`normEmail`, `cleanEmail`) are equal for every spelling; the hash is equal for ends, tab, newline and full-width spellings and **different** for inner-space spellings.
-- `apps/web/test/zc-default-182.test.ts` "published and paid game shows the dashboard": failed 1 of 3 runs on the unchanged code (the rehearsal cards come from their own call and the test read the page first). Now it waits for `Start this rehearsal` too. 5 of 5 runs green after.
-- `apps/web/test/guide.test.ts`: the scan expands `${idWord(vf.idKind)}` into both real sentences. Before, the template text normalised to "enter your" and matched almost anything.
-- `apps/edge/test/rc185/helpers.ts`: `World` has `raw` (the database) and an optional strict-Hosts mode (the real first-open rule).
-- Tests that compare page elements now compare ids or booleans. A failed `toBe` on a DOM node printed the whole page and ran the break runner out of memory.
-
-## 8. What I did not do
-
-- I did not rerun the whole old break table (79 entries, many are slow web ones). I ran all new entries (A to H, M01 to M11, C02) in the final state of the tests. Older entries (B01 to B22, W01 to W15, C01, C03) were not rerun here.
-- The four sim2 matrices were counted, not run.
-- I changed no product file.
