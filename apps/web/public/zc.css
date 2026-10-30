@@ -251,3 +251,6 @@ a.zc-chip::before,.zc-chips .zc-chip[data-mode]::before{display:none}
 .zc-quiet{display:inline-block;margin-left:6px;font-size:12px;color:#7a6f73}
 .zcmodetop{margin:0;padding:4px 16px 0;text-align:right;font-size:12px}
 .zcmodetop a{color:inherit;opacity:.8}
+
+/* 1.8.5 polish: step buttons 40px */
+.zc-dot{width:40px;height:40px}
