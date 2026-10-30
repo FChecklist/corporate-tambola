@@ -4,7 +4,7 @@
    Games created before EMP_CLEAN_FROM_MS keep the old rule so the IDs already stored for them still match. */
 
 /** The deploy instant (ms) from which NEW games use the uniform rule. The release session sets it to the exact deploy time right before deploy; a game created earlier keeps the old rule. */
-export const EMP_CLEAN_FROM_MS = Date.UTC(2099, 0, 1, 0, 0, 0); // PLACEHOLDER (far future): the release session sets the real deploy instant
+export const EMP_CLEAN_FROM_MS = Date.UTC(2026, 9, 31, 0, 0, 0); // the release session replaces this with the exact deploy instant at release
 export const EMP_MAX = 30;
 
 /** The one cleaning function: only A-Z and 0-9 are left, in upper case. Always a string (empty when nothing usable was typed). */
