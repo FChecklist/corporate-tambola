@@ -487,6 +487,18 @@
   /** This phone opened the page after the game had been over for 30 minutes (it never saw the game live in this visit). */
   const completedLate = (v) => !DEMO && v.phase === "ended" && !SEEN_LIVE && endMsOf(v) > 0 && Date.now() - endMsOf(v) > AFTER_MS;
   const completedView = () => `${brandStrip()}<div class="zplay"><p class="zshare" id="zshare">Corporate Tambola is played in close groups, by invitation only: company teams and their families. Enjoyed it? Recommend it to others.</p><div class="zcard zfinal zdone" id="gamedone"><h2>Game completed</h2><p class="zsmall zgid">Game ID <b>${esc(EID || "")}</b></p><p class="zsmall zthanks">This game is now over. Thank you for being part of it.</p><p class="zsmall zthirty">${esc(THIRTY_NOTE)}</p><button class="zbtn" id="shr">Share with friends and colleagues</button></div></div>`;
+  /** 1.8.4 (approved mock, game over): FINAL RESULTS, one row for every prize with the winning ticket number; the rows this phone won say "You". Opaque ticket numbers only. */
+  function finalResults(v) {
+    if (DEMO || !ZG.prizeStatus || !v.cfg || !v.cfg.rewards) return "";
+    const list = ZG.prizeStatus(v.cfg, v.results || [], v.round || 1), lucky = v.lucky || [];
+    if (!list.length && !lucky.length) return "";
+    const mine = new Set((v.won || []).filter((w) => w.round === v.round).map((w) => w.pattern + "#" + w.ordinal));
+    const rows = list.map((p) => { const res = (v.results || []).find((x) => x.pattern === p.key && x.ordinal === p.ordinal && (x.round || 1) === (v.round || 1)), tk = res && res.tickets && res.tickets.length ? res.tickets : null, me = mine.has(p.key + "#" + p.ordinal);
+      return `<li class="zfr${me ? " me" : ""}"><span>${esc(p.name)}</span><b>${me ? "You" : tk ? "Ticket " + tk.map(esc).join(", ") : "Not won"}</b></li>`; }).join("")
+      + lucky.filter((l) => l.published).map((l) => { const res = (v.results || []).find((x) => x.pattern === "lucky" && x.ordinal === l.ordinal), tk = res && res.tickets && res.tickets.length ? res.tickets : null;
+        return `<li class="zfr${l.won ? " me" : ""}"><span>Lucky draw: ${esc(l.title)}</span><b>${l.won ? "You" : tk ? "Ticket " + tk.map(esc).join(", ") : "Drawn"}</b></li>`; }).join("");
+    return `<div class="zcard zfres" id="finalresults"><h2>Final results</h2><ul class="zfrl">${rows}</ul></div>`;
+  }
   function finalCard(v) {
     if (DEMO) return `<div class="zcard zfinal"><h2>That was the video <span class="zdemotag">VIDEO</span></h2><div class="zfbig">${PRIZES.length ? "You won Four corners." : "You saw how a game runs."}</div>${PRIZES.length ? "" : `<p class="zsmall" style="margin:0 0 6px">Next time tap each number as it is called and press Claim when the four corners are marked: that is how a prize is won.</p>`}<p class="zsmall" style="font-size:15px;margin:6px 0 10px">A real game has 90 numbers, many prizes, your own brand messages and videos, lucky draws and a report. You build it in about five minutes and nobody pays until you are ready.</p><a class="zbtn" style="display:inline-flex;align-items:center;text-decoration:none" href="/">Create my game</a> <button class="zbtn s alt" id="dagain2" type="button">Run the video again</button> <button class="zbtn s alt" id="dcopy2" type="button">Copy the demo link</button></div>`;
     const n = PRIZES.length;
@@ -923,7 +935,7 @@
     const sndBtn = `<button class="zsnd zsndin" id="snd" aria-pressed="${sound}">${!sound ? "&#128263; Sound off" : !window.TBAudio || TBAudio.unlocked ? "&#128266; Sound on" : "&#128266; Tap for sound"}</button>`;
     return `${brandStrip(sndBtn)}<div class="zplay">
       ${demoCard(v)}${demoGameCard()}${annBanner(v)}${banners.join("")}
-      ${v.phase === "ended" ? finalCard(v) + closingCard(v) + confirmCard(v) + prizesCard() : ""}
+      ${v.phase === "ended" ? finalCard(v) + finalResults(v) + closingCard(v) + confirmCard(v) + prizesCard() : ""}
       ${waitingRoom(v)}
       ${openingCard(v)}
       ${lateCard(v)}
@@ -935,7 +947,7 @@
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}
       <div class="zcard"><h2>Still to win</h2>${still}${chk}</div>
-      ${luckyCard(v)}${v.phase === "ended" ? "" : '<ol class="zrules" id="zrules"><li>This game works like the real one.</li><li>When a number is called, tap it on your ticket to cross it out.</li><li>If you complete a prize, press Claim before the next number is called.</li></ol>'}</div>${claimStick(v)}${toastHtml()}${bogeyAskHtml()}`;
+      ${luckyCard(v)}${v.phase === "ended" ? "" : '<details class="zrulesrow" id="zrulesrow"><summary>Rules</summary><ol class="zrules" id="zrules"><li>This game works like the real one.</li><li>When a number is called, tap it on your ticket to cross it out.</li><li>If you complete a prize, press Claim before the next number is called.</li></ol></details>'}</div>${claimStick(v)}${toastHtml()}${bogeyAskHtml()}`;
   }
 
   // ---------- present check-in: the ticket opens only after this ----------
