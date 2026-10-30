@@ -88,10 +88,10 @@
   }
 
   /* ---- Step 1: how the game starts and who calls the numbers (the engine's own startMode / callMode, 1.5.0 wording) ---- */
-  const RUN = { start: "auto", call: "auto" };
+  const RUN = { start: "auto", call: "auto", idKind: "emp", idTouched: false };
   const timeText = () => { if (!st.when) return "the time you set"; try { return new Intl.DateTimeFormat("en-GB", { timeZone: st.when.zone, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(st.when.ms)); } catch { return "the time you set"; } };
   const runSummary = (r, when) => "Your game: " + (r.start === "manual" ? "starts at " + when + " when you press Start." : "starts by itself at " + when + ".") + " " + (r.call === "host" ? "You call the numbers." : "The game calls the numbers.");
-  const savedRun = async () => { if (!eid()) return; try { await call("PATCH", `/api/z/${eid()}/settings`, { startMode: RUN.start, callMode: RUN.call }); } catch { /* the choice is sent again on the next Save */ } };
+  const savedRun = async () => { if (!eid()) return; try { await call("PATCH", `/api/z/${eid()}/settings`, { startMode: RUN.start, callMode: RUN.call, ...(RUN.idTouched ? { idKind: RUN.idKind } : {}) }); } catch { /* the choice is sent again on the next Save */ } };
   function runQuestions() {
     const box = el("div", { class: "zt-run", id: "zt-run" });
     const group = (title, name, key, opts) => { const g = el("div", { role: "radiogroup", "aria-label": title }, el("h3", { text: title })); for (const [v, label, hint] of opts) g.append(el("label", { class: "zf-opt" }, el("input", { type: "radio", name, value: v, ...(RUN[key] === v ? { checked: "" } : {}), onchange: () => { RUN[key] = v; savedRun(); const sm = document.getElementById("zt-runsum"); if (sm) sm.textContent = runSummary(RUN, timeText()); } }), " " + label + " ", el("small", { text: hint }))); return g; };
@@ -113,6 +113,12 @@
     if (sv1 && !document.getElementById("zt-run")) sv1.before(runQuestions());
     const s5 = document.getElementById("zf-sec5");
     if (s5 && s5.classList.contains("open") && !document.getElementById("zt-runread")) { const h = s5.querySelector("h3") || s5.querySelector("h2"); (h || s5).after(el("p", { id: "zt-runread", class: "zf-small", text: runSummary(RUN, timeText()) })); }
+    const how2 = document.getElementById("zf-how");
+    if (how2 && !document.getElementById("zt-idkind")) {
+      const g = el("div", { class: "zt-idkind", id: "zt-idkind", role: "radiogroup", "aria-label": "Which ID?" }, el("h3", { text: "Which ID?" }), el("p", { class: "zf-small", text: "The ID your people use to join. The system reads it in one plain form: an employee ID as letters and numbers, an Email ID in lower case." }));
+      for (const [v, label] of [["emp", "Employee ID"], ["email", "Email ID"]]) g.append(el("label", { class: "zf-opt" }, el("input", { type: "radio", name: "zt-idkind", value: v, ...(RUN.idKind === v ? { checked: "" } : {}), onchange: () => { RUN.idKind = v; RUN.idTouched = true; savedRun(); } }), " " + label));
+      how2.after(g);
+    }
     const size = document.getElementById("zf-size");
     if (size && !document.getElementById("zt-closest")) size.after(el("p", { class: "zf-small", id: "zt-closest", text: "Pick the closest. The price is shown with each size." }));
     for (const n of document.querySelectorAll("#zf-how-system, .zf-ab")) { const t = n.closest(".zf-opt") || n; t.remove(); } // list matching and A/B per-ticket prizes: the engine cannot do them yet

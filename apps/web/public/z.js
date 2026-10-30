@@ -51,7 +51,7 @@
     if ("brand" in r && !(fromJoin && INFO.brand)) { INFO.brand = cleanBrand(r.brand); if (!DEMO && EID && INFO.brand && INFO.brand.logo !== undefined) { try { store.set("ctz:" + EID + ":brand", JSON.stringify(INFO.brand)); } catch { /* storage full or blocked: the strip just is not kept */ } } } // a join answer carries the brand without its logo: never let it replace the full one read from info
     if (r.didNotStart === true) INFO.dns = true; else if ("startRound" in r && !fromJoin) INFO.dns = false;
     if ("open" in r) INFO.open = r.open === true; // 1.8.1: anyone can join with a mobile number (not a list or ID game)
-    if ("verify" in r) { INFO.verify = r.verify === "id" || r.verify === "either" || r.verify === "both" ? r.verify : "mobile"; INFO.empOnly = r.employeesOnly === true; }
+    if ("verify" in r) { INFO.verify = r.verify === "id" || r.verify === "either" || r.verify === "both" ? r.verify : "mobile"; INFO.empOnly = r.employeesOnly === true; INFO.idKind = r.idKind === "email" ? "email" : "emp"; INFO.idClean = r.idClean === true; }
     if ("rehearsal" in r) INFO.rehearsal = r.rehearsal && typeof r.rehearsal === "object" ? r.rehearsal : null; // a rehearsal: its pages carry the REHEARSAL block and, once it is over, the calm "over" page
     if ("startMs" in r && Number.isFinite(Number(r.startMs))) { INFO.startMs = Number(r.startMs); INFO.manualStart = r.startMode === "manual"; } // TA22: the join page says "already running" before the person joins
     if ("checkin" in r) INFO.checkin = r.checkin === true; // a game made after the check-in rule: the ticket opens only after the person marks themselves present
@@ -158,6 +158,10 @@
   const J = { k4: {}, consent: null, mode: "", phone: "", cc: (() => { try { return CT_BY_ISO(store.get(CC_KEY)).iso; } catch { return "IN"; } })(), e164: "", emp: "", email: "", endNote: "", name: "", wid: "", who: "", timer: null, retry: 0, busyTries: 0, polling: false, note: "" };
   const shownPhone = () => { const p = CTPhone.parse(J.cc, J.phone); return p.ok ? CTPhone.show(p) : String(J.phone || "").trim(); };
   const inviteOf = () => (INVITE_FROM ? { from: INVITE_FROM, cat: INVITE_CAT } : undefined);
+  // What the ID of this game is (an employee ID, or an Email ID) and how the system reads what a person types (1.8.5: one cleaning rule, the same as the server's).
+  const idKind = () => (INFO.idKind === "email" ? "email" : "emp"), idWord = () => (idKind() === "email" ? "Email ID" : "employee ID");
+  const readAs = (raw) => { const t = String(raw || "").normalize("NFKC"); return idKind() === "email" ? t.replace(/[\s\u200b-\u200d\u2060\ufeff]/g, "").toLowerCase() : t.replace(/[^A-Za-z0-9]/g, "").toUpperCase(); };
+  const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
   // What the organizer asked people to give to get in: a mobile number (default), an employee ID, or both. Employees only: no way in without the ID.
   // Every box says whether it must be filled: a small red * and "mandatory", or "(optional)" in brackets. "alt": one of the two is needed.
   const joinNeeds = () => {
@@ -170,11 +174,11 @@
   const markOf = (need, other) => (need === "req" ? `<span class="zreq"><b aria-hidden="true">*</b> mandatory</span>` : need === "alt" ? `<span class="zreq"><b aria-hidden="true">*</b> mandatory without ${other}</span>` : `<span class="zopt">(optional)</span>`);
   const joinWho = () => {
     const vm = INFO.verify || "mobile", eo = !!INFO.empOnly, nd = joinNeeds(), pv = esc(J.phone || ""), ev = esc(J.emp || "");
-    const phone = (label, hint) => `<label for="ph">${label} ${markOf(nd.phone, "an employee ID")}</label><div class="zphone"><select id="cc" aria-label="Country of your mobile number" autocomplete="off">${ccOptions(J.cc)}</select><input id="ph" type="tel" inputmode="tel" enterkeyhint="go" autocomplete="tel-national" placeholder="${J.cc === "IN" ? "98765 43210" : "Mobile number"}" ${nd.phone === "req" ? 'aria-required="true" ' : ""}value="${pv}"></div>${hint ? `<p class="zsmall" style="margin:2px 0 6px">${hint}</p>` : ""}`;
-    const emp = (label, hint) => `<label for="emp">${label} ${markOf(nd.emp, "a mobile number")}</label><input id="emp" enterkeyhint="go" autocomplete="off" autocapitalize="characters" maxlength="30" ${nd.emp === "req" ? 'aria-required="true" ' : ""}value="${ev}">${hint ? `<p class="zsmall" style="margin:2px 0 6px">${hint}</p>` : ""}`;
-    if (vm === "id") return emp("Your employee ID", eo ? "This game is for employees only." : "") + phone(eo ? "Your mobile number" : "No employee ID? Type your mobile number instead", eo ? "" : "Vendors, customers and families use their mobile number.");
-    if (vm === "either") return phone("Your mobile number", "") + `<p class="zsmall" style="margin:0 0 6px;text-align:center"><b>or</b></p>` + emp("Your employee ID", "Give either one. Employees can use their ID; everyone else uses a mobile number.");
-    if (vm === "both") return phone("Your mobile number", "") + emp(eo ? "Your employee ID" : "Your employee ID (employees only)", eo ? "This game is for employees only." : "Not an employee? Leave this empty.");
+    const phone = (label, hint) => `<label for="ph">${label} ${markOf(nd.phone, "an employee ID")}</label><div class="zphone"><select id="cc" aria-label="Country of your mobile number" autocomplete="off">${ccOptions(J.cc)}</select><input id="ph" type="tel" inputmode="tel" enterkeyhint="go" autocomplete="tel-national" placeholder="${J.cc === "IN" ? "98765 43210" : "Mobile number"}" ${nd.phone === "req" ? 'aria-required="true" ' : ""}value="${pv}"></div>${hint ? `<p class="zsmall" style="margin:2px 0 6px">${hint}</p>` : ""}<p class="zsmall" id="empread" aria-live="polite" style="margin:2px 0 6px"></p>`;
+    const emp = (label, hint) => `<label for="emp">${label} ${markOf(nd.emp, "a mobile number")}</label><input id="emp" enterkeyhint="go" autocomplete="off" ${idKind() === "email" ? 'inputmode="email" autocapitalize="none" maxlength="254"' : 'autocapitalize="characters" maxlength="60"'} ${nd.emp === "req" ? 'aria-required="true" ' : ""}value="${ev}">${hint ? `<p class="zsmall" style="margin:2px 0 6px">${hint}</p>` : ""}`;
+    if (vm === "id") return emp("Your " + idWord(), eo ? "This game is for employees only." : "") + phone(eo ? "Your mobile number" : "No employee ID? Type your mobile number instead", eo ? "" : "Vendors, customers and families use their mobile number.");
+    if (vm === "either") return phone("Your mobile number", "") + `<p class="zsmall" style="margin:0 0 6px;text-align:center"><b>or</b></p>` + emp("Your " + idWord(), "Give either one. Employees can use their ID; everyone else uses a mobile number.");
+    if (vm === "both") return phone("Your mobile number", "") + emp(eo ? "Your " + idWord() : "Your " + idWord() + " (employees only)", eo ? "This game is for employees only." : "Not an employee? Leave this empty.");
     return phone("Your mobile number", "");
   };
   const BUSY_TRIES = 15;
@@ -184,7 +188,7 @@
   const welcomeLine = (personal) => {
     const co = INFO.brand && INFO.brand.name ? INFO.brand.name : "your company";
     let when = ""; if (INFO.startMs) { try { when = " on " + new Date(INFO.startMs).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short" }); } catch (e) {} }
-    const vm = INFO.verify || "mobile", what = vm === "id" ? "your employee ID" : vm === "either" ? "your employee ID or your mobile number" : "your mobile number";
+    const vm = INFO.verify || "mobile", what = vm === "id" ? "your " + idWord() : vm === "either" ? "your " + idWord() + " or your mobile number" : "your mobile number";
     return `<p class="zwelcome" id="zwelcome"><b>Welcome!</b> You are invited to join the Corporate Tambola (Housie) organized by ${esc(co)}${esc(when)}. ${personal ? "Press the button to get your ticket." : "To join, type " + what + "."}</p>`;
   };
   // 1.8.0: an open game (people type their mobile number) also takes an optional Email ID. The server checks its shape and keeps one ticket per email.
@@ -1079,6 +1083,7 @@
     if (!DEMO) CBConsent.wire(document, "K4", J.k4); // never ticked in advance; the button stays off until both boxes are ticked
     const phEl = document.getElementById("ph"), ccEl = document.getElementById("cc");
     if (phEl && ccEl) phEl.addEventListener("change", () => { const p = CTPhone.parse(ccEl.value, phEl.value); if (p.ok && /^\s*(\+|00)/.test(phEl.value)) { ccEl.value = p.iso; phEl.value = p.national; } }); // +44 7911 123456 pasted: the list shows the United Kingdom and the box keeps the rest
+    { const ei = document.getElementById("emp"), er = document.getElementById("empread"); if (ei && er) { const show = () => { const rd = readAs(ei.value); er.textContent = ei.value.trim() && rd && (idKind() === "email" || INFO.idClean) ? "The system will read this as " + rd : ""; }; ei.addEventListener("input", show); show(); } }
     ["ph", "nm", "emp"].forEach((id) => { const i = document.getElementById(id); if (i) i.addEventListener("keydown", (e) => { if (e.key === "Enter" && !go.disabled) { e.preventDefault(); go.click(); } }); }); // the keyboard's Go / Enter key does what the button does
     go.onclick = async () => {
       if (!DEMO && !CBConsent.all(document, "K4")) return;
@@ -1094,12 +1099,13 @@
       if (J.mode === "needPhone" && !J.phone.trim() && !J.emp) return stop("Type your own mobile number, then press the button again."); // the link was used on another phone: the game needs the number it was made for
       const pp = CTPhone.parse(J.cc, J.phone), nd = joinNeeds(), idText = J.emp.replace(/\s+/g, "");
       if (!pp.ok && !pp.empty) return stop(pp.why); // typed, even if the box is optional: a mistyped number is never dropped silently
-      if (idText && !/^[A-Za-z0-9][A-Za-z0-9._\-\/]{0,29}$/.test(idText)) return stop("An employee ID has letters and numbers only.");
+      if (idText) { const rd = readAs(J.emp), atSign = J.emp.normalize("NFKC").includes("@");
+        if (idKind() === "email" ? !EMAIL_RE.test(rd) : INFO.idClean ? !rd || rd.length > 30 || atSign : !/^[A-Za-z0-9][A-Za-z0-9._\-\/]{0,29}$/.test(idText)) return stop(idKind() === "email" ? "Please check your Email ID. It looks incomplete." : INFO.idClean && atSign ? "This looks like an Email ID. This game asks for an employee ID: letters and numbers only." : "An employee ID has letters and numbers only."); }
       if (!(TOKEN && J.mode !== "needPhone")) {
-        if (nd.emp === "req" && !idText && nd.phone === "req" && pp.empty) return stop("Enter your employee ID and your mobile number.");
-        if (nd.emp === "req" && !idText) return stop("Enter your employee ID.");
+        if (nd.emp === "req" && !idText && nd.phone === "req" && pp.empty) return stop("Enter your " + idWord() + " and your mobile number.");
+        if (nd.emp === "req" && !idText) return stop("Enter your " + idWord() + ".");
         if (nd.phone === "req" && pp.empty) return stop("Enter your mobile number.");
-        if (nd.phone === "alt" && nd.emp === "alt" && !idText && pp.empty) return stop("Enter your employee ID or your mobile number.");
+        if (nd.phone === "alt" && nd.emp === "alt" && !idText && pp.empty) return stop("Enter your " + idWord() + " or your mobile number.");
       }
       if (pp.ok) { J.cc = pp.iso; J.e164 = pp.e164; } else J.e164 = "";
       go.textContent = "Getting your ticket…"; // a press shows at once that it is working (the redraw after a refusal builds the button again)

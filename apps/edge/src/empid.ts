@@ -22,11 +22,11 @@ export const EMP_BAD_NEW = "An employee ID has letters and numbers only. The sys
  * Older games: the original rule (spaces dropped, upper case, letters, digits and . _ - / allowed, 30 characters).
  */
 /** An Email ID by ONE rule everywhere (1.8.5): NFKC (full-width "＠" becomes "@"), every space removed, lower case. Compare, store and hash only this form; upper and lower case are the same address. Never run cleanEmpId on an email. */
-export const normEmail = (raw: unknown): string => String(raw ?? "").normalize("NFKC").replace(/\s+/g, "").toLowerCase();
+export const normEmail = (raw: unknown): string => String(raw ?? "").normalize("NFKC").replace(/[\s\u200b-\u200d\u2060\ufeff]/g, "").toLowerCase();
 
 /** Does this text look like an email address? (an "@" after NFKC): an employee-ID box never turns one into letters and digits. */
 export const looksLikeEmail = (raw: unknown): boolean => String(raw ?? "").normalize("NFKC").includes("@");
-export const EMP_LOOKS_LIKE_EMAIL = "This looks like an email ID. This game asks for an employee ID: letters and numbers only.";
+export const EMP_LOOKS_LIKE_EMAIL = "This looks like an Email ID. This game asks for an employee ID: letters and numbers only.";
 /** The refusal sentence for an ID that cannot be used, by the rule of the game it is for. */
 export const empBadMessage = (raw: unknown, e: { created_ms?: number | null } | null | undefined, oldText: string): string => (!empCleanOn(e) ? oldText : looksLikeEmail(raw) ? EMP_LOOKS_LIKE_EMAIL : EMP_BAD_NEW);
 
@@ -37,3 +37,17 @@ export function normEmpFor(raw: unknown, e: { created_ms?: number | null } | nul
   const c = cleanEmpId(raw);
   return c && c.length <= EMP_MAX ? c : null;
 }
+
+/* 1.8.5 idKind: what the ID of a game is. "emp" (the default, every older game) = an employee ID cleaned to A-Z 0-9; "email" = an Email ID cleaned with normEmail. Same names as Bingo (idKind, "emp" | "email"). */
+export type IdKind = "emp" | "email";
+const EMAIL_ID_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
+/** The ID a person gives, by what this game asks for. "" = nothing typed, null = not usable (an Email ID with no domain, an employee ID with nothing left, an email typed where an employee ID is asked). */
+export function normIdFor(raw: unknown, kind: IdKind, e: { created_ms?: number | null } | null | undefined): string | null {
+  if (kind === "email") { const k = normEmail(raw); if (!k) return ""; return EMAIL_ID_RE.test(k) && k.length <= 254 ? k : null; }
+  return normEmpFor(raw, e);
+}
+export const EMAIL_ID_BAD = "Please check your Email ID. It looks incomplete.";
+/** The refusal sentence for an ID that cannot be used, by what the game asks for. */
+export const badIdMessageFor = (raw: unknown, kind: IdKind, e: { created_ms?: number | null } | null | undefined, oldText: string): string => (kind === "email" ? EMAIL_ID_BAD : empBadMessage(raw, e, oldText));
+/** The word for the ID in plain sentences. */
+export const idWord = (kind: IdKind): string => (kind === "email" ? "Email ID" : "employee ID");

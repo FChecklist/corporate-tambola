@@ -11,7 +11,7 @@ import { openPii, openText, sealPii, sealText } from "./pii";
 import { consentMissing, recordConsent } from "./consent";
 import { deviceMatches } from "./checkin";
 import type { D1, Env } from "./worker";
-import { normEmpFor, empCleanOn, empBadMessage } from "./empid";
+import { normIdFor, empCleanOn, badIdMessageFor } from "./empid";
 import { waitingLapsed, familyCutoffPassed, roundStartMs, approvalRulesOn, waitSince, LAPSED_MESSAGE, FAMILY_CLOSED_MESSAGE, DECLINED_MESSAGE, WAIT_LIMIT_MS } from "./approvals";
 
 /** 0016_people.sql: who invited whom, the personal links, the waiting room, and the flag that stops a removed person's phone without touching the public seat list. */
@@ -55,7 +55,7 @@ export const normEmp = (raw: unknown): string | null => { const s = String(raw ?
 /** The identity of a person who is known by employee ID alone (no mobile number needed). One hash for the same ID in every game, like the phone hash. */
 export const empHashOf = (env: { PHONE_SALT?: string; ORGANIZER_SECRET?: string }, id: string) => sha(`${env.PHONE_SALT ?? env.ORGANIZER_SECRET ?? "unset"}|emp|${id}`);
 /** What the organizer asked people to give to get in, read from the game's stored settings. */
-export const verifyOf = (e: { config?: string | null }): { mode: "mobile" | "id" | "either" | "both"; employeesOnly: boolean } => { try { const j = e.config ? JSON.parse(e.config) : {}; return { mode: j.verify === "id" || j.verify === "either" || j.verify === "both" ? j.verify : "mobile", employeesOnly: j.employeesOnly === true }; } catch { return { mode: "mobile", employeesOnly: false }; } };
+export const verifyOf = (e: { config?: string | null }): { mode: "mobile" | "id" | "either" | "both"; employeesOnly: boolean; idKind: "emp" | "email" } => { try { const j = e.config ? JSON.parse(e.config) : {}; return { mode: j.verify === "id" || j.verify === "either" || j.verify === "both" ? j.verify : "mobile", employeesOnly: j.employeesOnly === true, idKind: j.idKind === "email" ? "email" : "emp" }; } catch { return { mode: "mobile", employeesOnly: false, idKind: "emp" }; } };
 
 export { cleanPhone, maskedPhone, keptPhone, phoneDigits, keptFromClean } from "./phonekit";
 export type { Cleaned } from "./phonekit";
@@ -268,8 +268,8 @@ async function addPeople(c: Ctx, who: Caller, b: any): Promise<Response> {
   const vf = verifyOf(c.e);
   for (const x of b.people) {
     const raw = `${cleanName(x?.name)} ${String(x?.phone ?? "")}`.trim().slice(0, 100);
-    const empRaw = String(x?.empId ?? x?.employeeId ?? "").trim(), emp = normEmpFor(x?.empId ?? x?.employeeId, c.e);
-    if (emp === null) { invalid.push({ raw, why: empBadMessage(x?.empId ?? x?.employeeId, c.e, "An employee ID has letters and numbers only (up to 30).") }); continue; }
+    const empRaw = String(x?.empId ?? x?.employeeId ?? "").trim(), emp = normIdFor(x?.empId ?? x?.employeeId, vf.idKind, c.e);
+    if (emp === null) { invalid.push({ raw, why: badIdMessageFor(x?.empId ?? x?.employeeId, vf.idKind, c.e, "An employee ID has letters and numbers only (up to 30).") }); continue; }
     const phoneTyped = String(x?.phone ?? "").trim() !== "";
     if (vf.mode === "either" && !emp && !phoneTyped) { invalid.push({ raw, why: "Give a mobile number or an employee ID." }); continue; }
     if (vf.employeesOnly && vf.mode !== "mobile" && vf.mode !== "either" && !emp) { invalid.push({ raw, why: "This game is for employees: the employee ID is missing." }); continue; }
@@ -277,7 +277,7 @@ async function addPeople(c: Ctx, who: Caller, b: any): Promise<Response> {
       let digits = "";
       if (phoneTyped) { const cl = cleanPhone(x?.phone); if (!cl.ok) { invalid.push({ raw, why: cl.why }); continue; } digits = keptFromClean(cl.digits); }
       const ph = await empHashOf(c.env, emp);
-      if (seen.has(ph)) { if (empCleanOn(c.e) && rawOfEmp.get(ph) !== empRaw) invalid.push({ raw, why: `Same person after cleaning: it reads as ${emp}, like an earlier row.` }); else duplicates++; continue; }
+      if (seen.has(ph)) { if ((empCleanOn(c.e) || vf.idKind === "email") && rawOfEmp.get(ph) !== empRaw) invalid.push({ raw, why: `Same person after cleaning: it reads as ${emp}, like an earlier row.` }); else duplicates++; continue; }
       seen.add(ph); rawOfEmp.set(ph, empRaw); todo.push({ name: cleanName(x?.name), digits, ph, empId: emp }); continue;
     }
     const cl = cleanPhone(x?.phone);
@@ -287,7 +287,7 @@ async function addPeople(c: Ctx, who: Caller, b: any): Promise<Response> {
     const idHash = vf.mode === "either" && emp ? await empHashOf(c.env, emp) : undefined; // "mobile number or employee ID": a listed person with both can come in with either, so the ID points to the mobile-number identity
     if (idHash) { // the same employee ID on two people of one list would let the second take over the first's ID: the second is a duplicate
       const al = await c.env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`idx/${c.eid}/${idHash}`).first<{ v: string }>();
-      if ((al && al.v !== ph && (await c.env.DB.prepare("SELECT 1 AS x FROM person WHERE eid=? AND ph=? AND status<>'removed'").bind(c.eid, al.v).first())) || seen.has("I" + idHash)) { if (empCleanOn(c.e) && seen.has("I" + idHash) && rawOfEmp.get("I" + idHash) !== empRaw) invalid.push({ raw, why: `Same person after cleaning: it reads as ${emp}, like an earlier row.` }); else duplicates++; continue; }
+      if ((al && al.v !== ph && (await c.env.DB.prepare("SELECT 1 AS x FROM person WHERE eid=? AND ph=? AND status<>'removed'").bind(c.eid, al.v).first())) || seen.has("I" + idHash)) { if ((empCleanOn(c.e) || vf.idKind === "email") && seen.has("I" + idHash) && rawOfEmp.get("I" + idHash) !== empRaw) invalid.push({ raw, why: `Same person after cleaning: it reads as ${emp}, like an earlier row.` }); else duplicates++; continue; }
       seen.add("I" + idHash); rawOfEmp.set("I" + idHash, empRaw);
     }
     seen.add(ph); todo.push({ name: cleanName(x?.name), digits: keptFromClean(cl.digits), ph, ...(emp && vf.mode !== "mobile" ? { empId: emp } : {}), ...(idHash ? { idHash } : {}) });

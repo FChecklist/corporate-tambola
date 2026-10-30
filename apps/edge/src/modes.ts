@@ -63,7 +63,7 @@ export function describeChanges(before: SettingsView, after: SettingsView): stri
   if ((b.ties ?? "share") !== (a.ties ?? "share")) out.push("The tie rule was changed");
   if ((b.name ?? "") !== (a.name ?? "")) out.push("The game name was changed");
   if (JSON.stringify(b.invites) !== JSON.stringify(a.invites)) out.push("The invite settings were changed");
-  if (JSON.stringify([b.verify, b.employeesOnly]) !== JSON.stringify([a.verify, a.employeesOnly])) out.push("How people are checked at the door was changed");
+  if (JSON.stringify([b.verify, b.employeesOnly, b.idKind]) !== JSON.stringify([a.verify, a.employeesOnly, a.idKind])) out.push("How people are checked at the door was changed");
   if (JSON.stringify([b.opening, b.closing, b.brand]) !== JSON.stringify([a.opening, a.closing, a.brand])) out.push("The company look or opening/closing moments were changed");
   return out;
 }

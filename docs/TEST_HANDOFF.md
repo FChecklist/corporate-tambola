@@ -46,3 +46,37 @@ Branch `feat/tambola-1.8.5-empid` (from `wip/join-redesign`). Coder: product cod
 - Browser hint "The system will read this as 1B678" in `z.js` and the new console pack.
 - Email-ID criterion and list matching by email (engine has none).
 - Per-game `EMP_CLEAN_FROM_MS` must be set to the real deploy instant before deploy.
+
+---
+# Addition: idKind (Employee ID or Email ID as the game's one ID criterion)
+Same names as Bingo (`8d1609a` on `release/bingo-1.4.0`): config/setting `idKind` = `"emp"` (default, every older game) | `"email"`.
+
+## What changed (product code)
+| File | Change |
+|---|---|
+| `packages/beacon/src/config.ts` | `EngagementCfg.idKind?: "email"`; `validateCfg` input `idKind` ("emp" or "email", else error "What the ID is: an employee ID or an Email ID."); kept from `base` on later saves |
+| `apps/edge/src/empid.ts` | `normIdFor(raw, kind, game)`, `badIdMessageFor`, `idWord`, `IdKind`; `normEmail` also removes zero-width characters; message "This looks like an Email ID. This game asks for an employee ID: letters and numbers only." |
+| `apps/edge/src/people.ts` | `verifyOf` returns `idKind`; list add/upload cleans per kind; "Same person after cleaning" flagged for both kinds |
+| `apps/edge/src/worker.ts` | `idKind` stored (`cfgJson`), read (`cfgOf`), saved by settings PATCH, shown in `/info` (`idKind`) and in the settings reply; join and "who" clean per kind; need-id messages use "Email ID" when the game asks for one; `/info` also has `idClean` (true for games using the uniform rule) |
+| `apps/edge/src/lifecycle.ts`, `modes.ts`, `gamerecord.ts` | idKind carried through stored cfg, change detection ("how people are checked" changes also when idKind changes), game record |
+| `apps/web/public/z.js` | join page: label/placeholder follow the kind ("Your Email ID" / "Your employee ID"), maxlength 254 for Email ID, hint under the box "The system will read this as 1B678" (or the lower-case email), client refusal sentences by kind |
+| `apps/web/public/zc-flow-tambola.js` | new console Step 2: "Which ID?" (Employee ID / Email ID) saved with `PATCH settings {idKind}` (resent after Step 2 saves, only once the organizer touched it) |
+| `apps/web/public/guide.js` | guide entries for "Please check your Email ID", "This looks like an Email ID", "Enter your Email ID ..." |
+
+## Behaviours to test (expected)
+- Settings: `PATCH /api/z/<id>/settings {"idKind":"email"}` -> 200, `GET /info` has `idKind:"email"`; `{"idKind":"emp"}` removes it (`idKind:"emp"` in info); `{"idKind":"x"}` -> 400 "What the ID is: an employee ID or an Email ID."; a later save that does not mention idKind keeps it.
+- Email-ID game (`verify:"id"`, `idKind:"email"`, list-only): list rows `Demo1@Demo-Test.invalid` and `demo2@demo-test.invalid`; a person types `DEMO1@demo-test.invalid`, ` demo1 @ demo-test.invalid `, `demo1＠demo-test.invalid` -> all the same person (ticket 200; a second phone with another case variant -> 423 `id-used`). The stored/hashed form is the lower-case address.
+- Email-ID game: an ID that is not an address (`demo1`, `demo1@`, `@demo-test.invalid`, `demo1@demo`) -> 400 `bad-id`, "Please check your Email ID. It looks incomplete."; upload: same rows -> in `invalid` with that text; two rows differing only by case/spaces -> second in `invalid` "Same person after cleaning: it reads as demo1@demo-test.invalid, like an earlier row."
+- Employee-ID game (`idKind` absent): a typed email -> 400 `bad-id` "This looks like an Email ID ..." (new game) or the old text (old game); an employee ID keeps the uniform rule (1.8.5 note above). Old games stay `"emp"`.
+- need-id messages: Email-ID game says "Enter your Email ID." / "Enter your Email ID and your mobile number." / "Enter your mobile number or your Email ID."
+- `/info` for a new game has `idClean:true`, old game `idClean:false`.
+- Join page (browser): in an Email-ID game the box is labelled "Your Email ID", types are not upper-cased by the keyboard, and under it appears "The system will read this as demo1@demo-test.invalid" while typing; in an employee-ID game of a new game it shows "The system will read this as 1B678" for `1b-678`.
+- New console Step 2: a "Which ID?" radio group (Employee ID default, Email ID); choosing Email ID sends one PATCH `{idKind:"email"}`; after "Save and continue" on Step 2 the choice is still `email` (resent).
+- Regression: everything in the 1.8.5 note above; `guide` test (new messages are in the catalogue); `modes` change detection (changing idKind is reported as "How people are checked at the door was changed").
+
+## Files and how to start
+Test files for idKind are to be written by the test author (suggested `apps/edge/test/idkind.test.ts`; the Bingo reference test is `apps/edge/test/email-id.test.ts` in the Bingo commit). Start as in the 1.8.5 section above.
+
+## Not done (product)
+- Old console (`zc.js`) has no "Which ID?" control (only the new console Step 2 has it).
+- List viewer labels still say "Employee ID" in tables for an Email-ID game (the stored value is the email).
