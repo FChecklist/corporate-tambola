@@ -50,6 +50,7 @@
     if (!r || typeof r !== "object") return;
     if ("brand" in r && !(fromJoin && INFO.brand)) { INFO.brand = cleanBrand(r.brand); if (!DEMO && EID && INFO.brand && INFO.brand.logo !== undefined) { try { store.set("ctz:" + EID + ":brand", JSON.stringify(INFO.brand)); } catch { /* storage full or blocked: the strip just is not kept */ } } } // a join answer carries the brand without its logo: never let it replace the full one read from info
     if (r.didNotStart === true) INFO.dns = true; else if ("startRound" in r && !fromJoin) INFO.dns = false;
+    if (Number(r.endedAtMs) > 0 && !INFO.endedAtMs) INFO.endedAtMs = Number(r.endedAtMs); // G: the real end, set once by the server
     if ("open" in r) INFO.open = r.open === true; // 1.8.1: anyone can join with a mobile number (not a list or ID game)
     if ("verify" in r) { INFO.verify = r.verify === "id" || r.verify === "either" || r.verify === "both" ? r.verify : "mobile"; INFO.empOnly = r.employeesOnly === true; INFO.idKind = r.idKind === "email" ? "email" : "emp"; INFO.idClean = r.idClean === true; }
     if ("rehearsal" in r) INFO.rehearsal = r.rehearsal && typeof r.rehearsal === "object" ? r.rehearsal : null; // a rehearsal: its pages carry the REHEARSAL block and, once it is over, the calm "over" page
@@ -487,7 +488,7 @@
   // ---------- 1.8.4: Game completed. The results stay on the phone for 30 minutes after the game; a link opened later gets the calm "Game completed" page ----------
   const AFTER_MS = 30 * 60 * 1000, THIRTY_NOTE = "Your results stay on this page for 30 minutes after the game. After that this page only says the game is completed.";
   let SEEN_LIVE = false;
-  const endMsOf = (v) => (v.scheduledRound && v.log && v.log.length ? (1692803367 + (v.scheduledRound - 1) * 3) * 1000 + v.log.length * (v.callSeconds || 12) * 1000 : 0);
+  const endMsOf = (v) => INFO.endedAtMs > 0 ? INFO.endedAtMs : (v.scheduledRound && v.log && v.log.length ? (1692803367 + (v.scheduledRound - 1) * 3) * 1000 + v.log.length * (v.callSeconds || 12) * 1000 : 0);
   /** This phone opened the page after the game had been over for 30 minutes (it never saw the game live in this visit). */
   const completedLate = (v) => !DEMO && v.phase === "ended" && !SEEN_LIVE && endMsOf(v) > 0 && Date.now() - endMsOf(v) > AFTER_MS;
   const completedView = () => `${brandStrip()}<div class="zplay"><p class="zshare" id="zshare">Corporate Tambola is played ${INFO.open ? "in groups, with a link from the organizer" : "in close groups, by invitation only"}: company teams and their families. Enjoyed it? Recommend it to others.</p><div class="zcard zfinal zdone" id="gamedone"><h2>Game completed</h2><p class="zsmall zgid">Game ID <b>${esc(EID || "")}</b></p><p class="zsmall zthanks">This game is now over. Thank you for being part of it.</p><p class="zsmall zthirty">${esc(THIRTY_NOTE)}</p><button class="zbtn" id="shr">Share with friends and colleagues</button></div></div>`;
