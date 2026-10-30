@@ -114,14 +114,16 @@
   /* ---- steps 2 to 5: Tambola-only wording and hiding, applied to what the shared pack drew (the pack file itself is not edited) ---- */
   const linkProblem = (v) => { const t = String(v || "").trim(); if (!t) return ""; try { const u = new URL(t); return u.protocol === "https:" && u.hostname.includes(".") ? "" : "bad"; } catch { return "bad"; } };
   const LINK_BAD = "The link must start with https:// and be public, so everyone can open it.";
+  let usesId, usesIdAsked = false;
   function patchSteps() {
     const sv1 = document.getElementById("zf-save1");
     if (sv1 && !document.getElementById("zt-run")) sv1.before(runQuestions());
     const s5 = document.getElementById("zf-sec5");
     if (s5 && s5.classList.contains("open") && !document.getElementById("zt-runread")) { const h = s5.querySelector("h3") || s5.querySelector("h2"); (h || s5).after(el("p", { id: "zt-runread", class: "zf-small", text: runSummary(RUN, timeText()) })); }
     const how2 = document.getElementById("zf-how");
-    if (how2 && !document.getElementById("zt-idkind")) {
-      const g = el("div", { class: "zt-idkind", id: "zt-idkind", role: "radiogroup", "aria-label": "Which ID?" }, el("h3", { text: "Which ID?" }), el("p", { class: "zf-small", text: "The ID your people use to join. The system reads it in one plain form: an employee ID as letters and numbers, an Email ID in lower case." }));
+    if (how2 && !document.getElementById("zt-idkind") && usesId === undefined && eid() && !usesIdAsked) { usesIdAsked = true; call("GET", `/api/z/${eid()}/summary`).then((j) => { usesId = !!j && !!j.verify && j.verify !== "mobile"; patchSteps(); }).catch(() => { usesIdAsked = false; }); } // H: "Which ID?" only where an ID is asked at the door
+    if (how2 && usesId && !document.getElementById("zt-idkind")) {
+      const g = el("div", { class: "zt-idkind", id: "zt-idkind", role: "radiogroup", "aria-label": "Which ID?" }, el("h3", { text: "Which ID?" }), el("p", { class: "zf-small", text: "The ID your people type to join. An Email ID is read in lower case. Older games keep the way they always read an employee ID." }));
       for (const [v, label] of [["emp", "Employee ID"], ["email", "Email ID"]]) g.append(el("label", { class: "zf-opt" }, el("input", { type: "radio", name: "zt-idkind", value: v, ...(RUN.idKind === v ? { checked: "" } : {}), onchange: () => { RUN.idKind = v; RUN.idTouched = true; savedRun(); } }), " " + label));
       how2.after(g);
     }

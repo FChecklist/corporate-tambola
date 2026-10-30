@@ -2262,6 +2262,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (roundMs(next.start_round) > cap) return json({ error: end ? AFTER_PAID_WINDOW(cap + 1) : TOO_FAR, code: end ? "after-paid-window" : "too-far" }, 400);
     }
     const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
+    if ((vc.cfg.idKind === "email") !== (cfgNow.idKind === "email") && (have?.c ?? 0) > 0) return json({ error: "You already have people listed. Start a new game to use a different kind of ID.", code: "idkind-locked" }, 409); // D: their stored ID hashes would no longer match (this also covers an older game being switched to Email ID)
     if (vc.cfg.demo && next.cap > DEMO_CAP) return json({ error: DEMO_CAP_MSG, code: "demo-cap" }, 400); // the one size rule of a demo game, before and after publishing
     if (!a.plat && e.pack !== 0 && !vc.cfg.demo && next.cap > (e.pack ?? e.cap)) return json({ error: `Your pack allows up to ${e.pack ?? e.cap} people. For more people, make a new game like this one.` }, 402);
     const listed = await env.DB.prepare("SELECT COUNT(*) AS c FROM person WHERE eid=? AND status<>'removed'").bind(eid).first<{ c: number }>().catch(() => null); // people on the lists who have not come in yet count too
