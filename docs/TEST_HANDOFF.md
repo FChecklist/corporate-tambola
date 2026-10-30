@@ -1,3 +1,7 @@
+# 1.9.0 PRIZES FIX ROUND 1 (coder to test author)
+- P-6 Manual saves (`zc-flow-prizes.js` orderProblem). P-4 Step 3 PATCH sends `ties: "share"`. P-5 `num()` is NaN for a minus sign or letters; Next is blocked. P-8 "Your budget is too small for N prizes. Choose fewer prizes or a bigger budget." blocks Auto Next. P-3 `winners.ts` overridePrize accepts `name@1` / `name@2`. P-7 prize sheet label counts the positions in the plan ("Line 1", "Corners", "Super Bumper"). P-9 popup "Ticket 1: 1st Full House", one "You won ..." line. G-1 `prizesRefusal` (approvals.ts) used by POST /api/z and the settings PATCH (409 `prizes-old-game`).
+- R6 Prize sheet winner column: for each winner "Ticket N - <Employee ID or Email ID>, <name>, <mobile>" (only the parts that exist), from the organizer-only GET /api/z/<id>/prizes (name, phone, empId). Never in the public info.
+
 # TEST HANDOFF: Tambola 1.9.0 prizes (branch feat/tambola-1.9.0-prizes, cut from rc/tambola-1.8.5 d049192)
 Spec: handover 370-PRIZE-SPLIT-FROZEN-DRAFT-2026-10-30.md (UPDATE 1 to 5 override the top). Product code only; the coder ran no tests and started no servers. Rebuilt bundles (light `bun build`): `zgame.js`, `control.js`, `reportgen.js`.
 

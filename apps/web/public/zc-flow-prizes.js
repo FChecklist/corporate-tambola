@@ -119,14 +119,16 @@
     const c = plan.currency, rows = plan.prizes.map((p) => {
       const [t, pattern, o] = p.id.split(":"), key = (pattern === "full2" ? "full2" : keyOfId(p.id)), w = won.filter((x) => x.pattern === key && Number(x.ordinal) === Number(o));
       const ids = [...new Set(w.map((x) => x.seat))], s = P.shareOut(p.amount, ids.length);
-      return { label: P.label(pattern, Number(o), plan.prizes.filter((q) => q.id.split(":")[0] === t && q.id.split(":")[1] === pattern).length, Number(t)), winners: ids, amount: p.amount, share: s.share, kept: s.leftover, gift: p.gift || "" };
+      // who to give it to, as the organizer knows them: the listed Employee ID or Email ID, the name, and the mobile number (organizer-only data from GET /prizes; never in the public info)
+      const who = ids.map((seat) => { const x = w.find((q) => q.seat === seat) || {}, bits = [x.empId, x.name, x.phone].filter((b) => b && String(b).trim()); return "Ticket " + seat + (bits.length ? " – " + bits.join(", ") : ""); });
+      return { label: P.label(pattern, Number(o), plan.prizes.filter((q) => q.id.split(":")[0] === t && q.id.split(":")[1] === pattern).length, Number(t)), winners: ids, who, amount: p.amount, share: s.share, kept: s.leftover, gift: p.gift || "" };
     });
     return { currency: c, rows };
   }
   function sheetNode(d) {
-    const t = el("table", { class: "zf-table", id: "zp-sheet-table" }, el("thead", {}, el("tr", {}, ["Prize", "Winner ticket numbers", "Each winner's share", "Organizer notes"].map((h) => el("th", { scope: "col", text: h })))));
+    const t = el("table", { class: "zf-table", id: "zp-sheet-table" }, el("thead", {}, el("tr", {}, ["Prize", "Winner (ticket, ID, name, mobile)", "Each winner's share", "Organizer notes"].map((h) => el("th", { scope: "col", text: h })))));
     const tb = el("tbody");
-    for (const r of d.rows) tb.append(el("tr", {}, el("td", { text: r.label }), el("td", { text: r.winners.length ? r.winners.join(", ") : "Not won (stays with you)" }), el("td", { text: r.winners.length ? sym(d.currency) + " " + r.share.toLocaleString("en-IN") + (r.winners.length > 1 ? " each (shared by " + r.winners.length + ")" : "") : "–" }), el("td", { text: r.gift })));
+    for (const r of d.rows) tb.append(el("tr", {}, el("td", { text: r.label }), el("td", { text: r.winners.length ? r.who.join("; ") : "Not won (stays with you)" }), el("td", { text: r.winners.length ? sym(d.currency) + " " + r.share.toLocaleString("en-IN") + (r.winners.length > 1 ? " each (shared by " + r.winners.length + ")" : "") : "–" }), el("td", { text: r.gift })));
     t.append(tb);
     return el("section", { class: "zf-sheet", id: "zp-sheet" }, el("h3", { text: "Prize sheet" }), el("p", { class: "zf-small", text: "For you only. Corporate Tambola shows and records the prizes; it never pays anybody. You give the prizes in your own way and time." }), el("div", { class: "zf-tablewrap" }, t), el("button", { type: "button", class: "zf-add", id: "zp-print", onclick: () => window.print() }, "Print the prize sheet"));
   }
