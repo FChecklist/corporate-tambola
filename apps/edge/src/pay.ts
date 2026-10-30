@@ -23,6 +23,7 @@ import { partnerCode, phoneHashFor, recordCommission, refCode } from "./partners
 import { helperRefFor } from "./helpdesk";
 import { attemptStatusOf, centralOf, derivedEventKey, eventSeen, markEventSeen, recordAttempt, recordRefund, storePaymentDetails, txnIdOf } from "./ledgerc";
 import { getMode, mailGate, testFlag, type ModeEnv } from "./mode";
+import { strictAccountEmail } from "./empid";
 import { isTestLogin } from "./testlogins";
 import { lookupPayLink, packFor, payLinkPublic } from "./paylink";
 import { rehearsalMailWrap } from "./rehearsal-mail";
@@ -289,9 +290,9 @@ async function fulfilInner(env: PayEnv, paymentId: string, now: number, spend: (
   ];
   await sendMail(env, db, p.email, `${brand.name}: payment received, invoice ${number}`, lines.join("\n\n"), now);
   // the same invoice goes to the organizer's own e-mail when someone else paid (a Co-host or a pay link) or the organizer's e-mail differs from the payer's
-  const orgMail = typeof organizer.email === "string" ? organizer.email.trim().toLowerCase() : "";
+  const orgMail = typeof organizer.email === "string" ? strictAccountEmail(organizer.email) : "";
   const teamTo = await teamEmails(env, org, eidForInvoice || meta.eid || null).catch(() => null), invSeen = new Set<string>([p.email.trim().toLowerCase()]), invTo: string[] = []; // the organizer and every Host get the invoice once; the payer already has the receipt
-  for (const t0 of [orgMail, teamTo?.organizer ?? "", ...(teamTo?.hosts ?? [])]) { const t = (t0 ?? "").trim().toLowerCase(); if (t && EMAIL.test(t) && !invSeen.has(t)) { invSeen.add(t); invTo.push(t); } }
+  for (const t0 of [orgMail, teamTo?.organizer ?? "", ...(teamTo?.hosts ?? [])]) { const t = strictAccountEmail(t0); if (t && !invSeen.has(t)) { invSeen.add(t); invTo.push(t); } }
   const ownerSet = new Set([orgMail, (teamTo?.organizer ?? "").trim().toLowerCase()]); // the organizer gets the whole invoice; a Host only hears that the game is paid (a Host may be outside the paying company, so no buyer details and no invoice link)
   for (const to of invTo) await sendMail(env, db, to, `${brand.name}: ${ownerSet.has(to) ? `invoice ${number} for your game` : `your game ${eidForInvoice ?? ""} is paid`}`, ownerSet.has(to)
     ? `An invoice for your game${eidForInvoice ? ` ${eidForInvoice}` : ""} was issued by ${brand.name}.
@@ -379,7 +380,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     const pack = boundPack ?? Number(b?.pack); const cur = b?.currency === "USD" ? "USD" : "INR";
     if (!b || !PACKS.some((x) => x[0] === pack)) return json({ error: "Choose a pack." }, 400);
     { const cm = consentMissing(b, "K3"); if (cm) return cm; } // K3: "I agree to the Terms and the Refund Policy. I understand there is no refund": checked here on the server, for the payment page and the pay link alike
-    if (typeof b.email !== "string" || !EMAIL.test(b.email.trim())) return json({ error: "Enter a valid e-mail address." }, 400);
+    if (typeof b.email !== "string" || !strictAccountEmail(b.email)) return json({ error: "Enter a valid e-mail address." }, 400);
     // minimum to pay: a name and an e-mail. Organisation, mobile, country and GSTIN are optional (an older caller that sends only `org` still works: it is used as the name).
     const payerName = (typeof b.name === "string" && b.name.trim() ? b.name : typeof b.org === "string" ? b.org : "").trim();
     if (payerName.length < 2) return json({ error: "Enter your name." }, 400);
@@ -400,15 +401,15 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     const meta = { org: orgName.slice(0, 120), name: payerName.slice(0, 120), ...(contact ? { phone: contact } : {}), country: typeof b.country === "string" ? b.country.slice(0, 2) : "IN", taxId: typeof b.taxId === "string" ? b.taxId.trim().slice(0, 20) : "", origin: env.PUBLIC_ORIGIN ?? url.origin, ...(boundOrg ? { orgId: boundOrg, eid: boundEid, paidBy, ...(credited > 0 ? { creditInr: credited } : {}), ...(convert ? { convert: true } : {}) } : {}) };
     let order: any = null;
     if (rzp) {
-      try { order = await placeOrder(env, rzp, { amountMinor: toMinor(pr.total), currency: cur, receipt: id, plan: `pack_${pack}`, user: boundOrg ?? null, email: b.email.trim().toLowerCase(), notes: { brand: brand.name, site: env.PAY_SITE ?? "corporate-tambola.pages.dev", stream: "sales", product: "corporate_tambola", plan: `pack_${pack}`, variation: `pack_${pack}`, pack: String(pack), currency: cur, organization: (meta.org || meta.name).slice(0, 80), payment_ref: id } }); }
+      try { order = await placeOrder(env, rzp, { amountMinor: toMinor(pr.total), currency: cur, receipt: id, plan: `pack_${pack}`, user: boundOrg ?? null, email: strictAccountEmail(b.email), notes: { brand: brand.name, site: env.PAY_SITE ?? "corporate-tambola.pages.dev", stream: "sales", product: "corporate_tambola", plan: `pack_${pack}`, variation: `pack_${pack}`, pack: String(pack), currency: cur, organization: (meta.org || meta.name).slice(0, 80), payment_ref: id } }); }
       catch (e: any) { return json({ error: `The payment service said: ${e.message}` }, 502); }
     }
     const ref = (await helperRefFor(db, boundEid)) ?? refCode(b.ref); // a game a Help Desk helper prepared always pays its helper (helpdesk.ts); otherwise from the buyer's own browser (valid for 30 days after the link was opened); checked against real partners when the payment is fulfilled
     const bph = partnerCode(b.phone); // optional, only used to spot a partner buying through their own link
     const lf = ledgerFields(siteOf(meta.origin), "game_pack", `pack_${pack}`, boundOrg ?? null);
-    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,ref,buyer_phone_hash,is_test,eid,site,product,product_type,product_ref,payer_user,txn_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), pack, cur, pr.total, pr.tax, order?.id ?? null, "created", now, JSON.stringify(meta), ref, bph ? await phoneHashFor(env, bph) : null, siteTest ? 1 : 0, boundEid, lf.site, lf.product, lf.productType, lf.productRef, lf.payerUser, txnIdOf(id)).run();
+    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,ref,buyer_phone_hash,is_test,eid,site,product,product_type,product_ref,payer_user,txn_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id, null, strictAccountEmail(b.email), pack, cur, pr.total, pr.tax, order?.id ?? null, "created", now, JSON.stringify(meta), ref, bph ? await phoneHashFor(env, bph) : null, siteTest ? 1 : 0, boundEid, lf.site, lf.product, lf.productType, lf.productRef, lf.payerUser, txnIdOf(id)).run();
     if (!rzp) { const f = await fulfil(env, id, now, spend); return "result" in f ? json({ mode: "test", paymentId: id, result: f.result, ...(siteTest ? { testPayment: true, label: "TEST payment: nothing was charged." } : {}) }) : json({ error: f.error }, f.status); }
-    return json({ mode: "razorpay", paymentId: id, ...hopOf(env), razorpay: { keyId: rzp.keyId, orderId: order.id, amount: toMinor(pr.total), currency: cur, name: brand.name, description: "(closed-group housie software) | owned and made by IT Services by Rajat Agarwal", prefill: { email: b.email.trim(), name: payerName.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name, participants: String(pack) }, theme: { color: brand.theme }, ...(cur === "INR" ? { config: UPI_FIRST } : {}) } });
+    return json({ mode: "razorpay", paymentId: id, ...hopOf(env), razorpay: { keyId: rzp.keyId, orderId: order.id, amount: toMinor(pr.total), currency: cur, name: brand.name, description: "(closed-group housie software) | owned and made by IT Services by Rajat Agarwal", prefill: { email: strictAccountEmail(b.email), name: payerName.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name, participants: String(pack) }, theme: { color: brand.theme }, ...(cur === "INR" ? { config: UPI_FIRST } : {}) } });
   }
 
   const ptm = p.match(/^\/api\/payments\/paytest\/(pay_[0-9a-f]{16})$/); // the test page asks while Razorpay is still confirming
@@ -421,7 +422,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
   if (req.method === "POST" && p === "/api/payments/paytest") { // Payment Testing: Rs 1 from India, US$ 1 from abroad; buys nothing; anyone, any number of times
     if (!rzp || (await getMode(env)) === "TEST") return json({ error: "Online payments are not switched on." }, 503);
     const b = await body(req);
-    if (!b || typeof b.email !== "string" || !EMAIL.test(b.email.trim())) return json({ error: "Enter a valid e-mail address." }, 400);
+    if (!b || typeof b.email !== "string" || !strictAccountEmail(b.email)) return json({ error: "Enter a valid e-mail address." }, 400);
     { const cm = consentMissing(b, "K3"); if (cm) return cm; } // K3: also before the Rs 1 test payment
     const nm = typeof b.name === "string" ? b.name.trim() : ""; if (nm.length < 2) return json({ error: "Enter your name." }, 400);
     const cty = typeof b.country === "string" && /^[A-Z]{2}$/.test(b.country) ? b.country : "IN", cur = cty === "IN" ? "INR" : "USD";
@@ -432,14 +433,14 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     const id = "pay_" + randHex(8);
     await recordConsent(db, { subject: id, kind: "K3", ref: id, now });
     let order: any;
-    try { order = await placeOrder(env, rzp, { amountMinor: 100, currency: cur, receipt: id, plan: "payment_test", email: b.email.trim().toLowerCase(), notes: { brand: brand.name, site: env.PAY_SITE ?? "corporate-tambola.pages.dev", stream: "sales", product: "corporate_tambola", plan: "payment_test", variation: "payment_test", payment_ref: id } }); }
+    try { order = await placeOrder(env, rzp, { amountMinor: 100, currency: cur, receipt: id, plan: "payment_test", email: strictAccountEmail(b.email), notes: { brand: brand.name, site: env.PAY_SITE ?? "corporate-tambola.pages.dev", stream: "sales", product: "corporate_tambola", plan: "payment_test", variation: "payment_test", payment_ref: id } }); }
     catch (e: any) { return json({ error: `The payment service said: ${e.message}` }, 502); }
     const taxId = typeof b.taxId === "string" ? b.taxId.trim().toUpperCase().slice(0, 20) : "";
     if (cty === "IN" && taxId && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(taxId)) return json({ error: "That GSTIN does not look right. It has 15 characters, like 27ABCDE1234F1Z5." }, 400);
     const meta = { paytest: true, name: nm.slice(0, 120), ...(typeof b.org === "string" && b.org.trim() ? { org: b.org.trim().slice(0, 120) } : {}), ...(taxId ? { taxId } : {}), ...(contact ? { phone: contact } : {}), country: cty, origin: env.PUBLIC_ORIGIN ?? url.origin };
     const lf = ledgerFields(siteOf(meta.origin), "payment_test", "payment_test", null);
-    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,is_test,site,product,product_type,product_ref,payer_user,txn_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,?,?)").bind(id, null, b.email.trim().toLowerCase(), 0, cur, 1, 0, order.id, "created", now, JSON.stringify(meta), lf.site, lf.product, lf.productType, lf.productRef, lf.payerUser, txnIdOf(id)).run();
-    return json({ mode: "razorpay", paymentId: id, ...hopOf(env), razorpay: { keyId: rzp.keyId, orderId: order.id, amount: 100, currency: cur, name: brand.name, description: "(closed-group housie software) | owned and made by IT Services by Rajat Agarwal", prefill: { email: b.email.trim(), name: nm.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name }, theme: { color: brand.theme }, ...(cur === "INR" ? { config: UPI_FIRST } : {}) } });
+    await db.prepare("INSERT INTO payment(id,org,email,pack,currency,amount,tax,rzp_order_id,status,created_ms,meta,is_test,site,product,product_type,product_ref,payer_user,txn_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,?,?)").bind(id, null, strictAccountEmail(b.email), 0, cur, 1, 0, order.id, "created", now, JSON.stringify(meta), lf.site, lf.product, lf.productType, lf.productRef, lf.payerUser, txnIdOf(id)).run();
+    return json({ mode: "razorpay", paymentId: id, ...hopOf(env), razorpay: { keyId: rzp.keyId, orderId: order.id, amount: 100, currency: cur, name: brand.name, description: "(closed-group housie software) | owned and made by IT Services by Rajat Agarwal", prefill: { email: strictAccountEmail(b.email), name: nm.slice(0, 80), ...(contact ? { contact } : {}) }, notes: { brand: brand.name }, theme: { color: brand.theme }, ...(cur === "INR" ? { config: UPI_FIRST } : {}) } });
   }
 
   if (req.method === "POST" && p === "/api/payments/verify") {
@@ -570,8 +571,8 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
       return new Response(pdf.build() as unknown as BodyInit, { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="invoice-${r.number.replace(/[^A-Za-z0-9._-]/g, "_")}.pdf"`, "cache-control": "no-store", "x-robots-tag": "noindex" } });
     }
     if (req.method === "POST" && ix[2] === "/email") {
-      const b = await body(req); const to = b && typeof b.to === "string" ? b.to.trim().toLowerCase() : "";
-      if (!EMAIL.test(to)) return json({ error: "Enter a valid e-mail address." }, 400);
+      const b = await body(req); const to = b && typeof b.to === "string" ? strictAccountEmail(b.to) : "";
+      if (!to) return json({ error: "Enter a valid e-mail address." }, 400);
       const k = `invmail/${ix[1]}`, used = Number((await db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0);
       if (used >= 5) return json({ error: "This invoice has already been e-mailed 5 times." }, 429);
       if (!(await spend(1))) return busy();
