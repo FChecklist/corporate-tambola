@@ -31,7 +31,7 @@ export const wordingHash = async (kind: ConsentKind): Promise<string> => hex(awa
 
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
-export const STALE_PAGE_MESSAGE = "This page is out of date. Please reload it, then tick the boxes again and join.";
+export const STALE_PAGE_MESSAGE = "This page is out of date. Please reload it, then tick the boxes again and try again.";
 /** null when the request carries the current Terms version and every box of this point; otherwise the answer to send (HTTP 400, code consent-required). */
 export function consentMissing(b: any, kind: ConsentKind): Response | null {
   const c = b?.consent, need = boxesOf(kind);

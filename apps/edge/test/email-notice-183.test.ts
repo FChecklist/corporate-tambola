@@ -33,7 +33,7 @@ describe("1.8.3 old page", () => {
     const { consentMissing, STALE_PAGE_MESSAGE } = await import("../src/consent");
     const old = consentMissing({ consent: { v: "2026-10-15", boxes: ["A", "B"] } }, "K4"); expect(old!.status).toBe(400);
     expect(await old!.json()).toEqual({ error: STALE_PAGE_MESSAGE, code: "consent-required", stale: true, kind: "K4", version: TERMS_VERSION });
-    expect(STALE_PAGE_MESSAGE).toBe("This page is out of date. Please reload it, then tick the boxes again and join.");
+    expect(STALE_PAGE_MESSAGE).toBe("This page is out of date. Please reload it, then tick the boxes again and try again.");
     const none = consentMissing({}, "K4"); expect(await none!.json()).toEqual({ error: "Please tick the box to continue.", code: "consent-required", kind: "K4", version: TERMS_VERSION });
     expect(consentMissing({ consent: { v: TERMS_VERSION, boxes: ["A", "B"] } }, "K4")).toBeNull();
   });

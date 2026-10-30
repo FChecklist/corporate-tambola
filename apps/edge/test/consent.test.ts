@@ -31,6 +31,10 @@ async function draft(key: string, id: string, cap = 100) { expect((await call("P
 const PUB = { email: "boss@acme.com", phone: "98765 43210" };
 async function published(id: string) { const key = await organizer(); await draft(key, id); expect((await call("POST", `/api/z/${id}/publish`, { ...PUB, consent: ticks("K1") }, key)).status).toBe(200); return key; }
 
+const staleRefusal = async (r: Response, kind: ConsentKind) => { // a request that carries an OLDER version: the person did tick, so the page is told to reload
+  expect(r.status).toBe(400); const b = await j(r);
+  expect(b).toEqual({ error: "This page is out of date. Please reload it, then tick the boxes again and try again.", code: "consent-required", stale: true, kind, version: TERMS_VERSION });
+};
 const refusal = async (r: Response, kind: ConsentKind) => {
   expect(r.status).toBe(400);
   const b = await j(r);
@@ -153,9 +157,9 @@ describe("2 and 3. accepted with the tick; the row is read back from the databas
 describe("4. a new Terms version asks again", () => {
   test("a request that carries an older version is refused; a tick stored under an older version does not count", async () => {
     const OLD = "2026-10-09";
-    await refusal(await call("POST", "/api/start", { email: "a@acme.com", consent: ticks("K2", OLD) }), "K2");
+    await staleRefusal(await call("POST", "/api/start", { email: "a@acme.com", consent: ticks("K2", OLD) }), "K2");
     const key = await organizer("b@acme.com"); const id = await draft(key, "CON-11");
-    await refusal(await call("POST", `/api/z/${id}/publish`, { ...PUB, consent: ticks("K1", OLD) }, key), "K1");
+    await staleRefusal(await call("POST", `/api/z/${id}/publish`, { ...PUB, consent: ticks("K1", OLD) }, key), "K1");
     expect((await call("POST", `/api/z/${id}/publish`, { ...PUB, consent: ticks("K1") }, key)).status).toBe(200);
     // a Co-host who accepted under the old version is asked again
     const co = (await j(await call("POST", "/api/org/cohost", { label: "Ravi", phone: "9876500001", e: id }, key))).cohostKey as string;

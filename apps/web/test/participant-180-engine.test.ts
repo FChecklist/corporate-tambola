@@ -166,7 +166,7 @@ describe("1.8.3: a page opened before the new terms version", () => {
     const stale = await openPage(o.world, { url: "http://localhost/z?e=E183-1", html: "z.html", scripts: ["audio.js", "consent.js", "zgame.js", "z.js"], session: {}, afterLoad: (win: any, f: string) => { if (f === "consent.js") win.CBConsent.version = "2026-10-15"; if (f === "zgame.js") rtFake(win, () => o.world.now); } }); open.push(stale);
     await join(stale, "9811100301");
     const t = await stale.waitFor((x) => /out of date/i.test(x));
-    expect(t).toContain("This page is out of date. Please reload it, then tick the boxes again and join."); expect(t).not.toContain("Please tick the box to continue.");
+    expect(t).toContain("This page is out of date. Please reload it, then tick the boxes again and try again."); expect(t).not.toContain("Please tick the box to continue.");
     expect(stale.$("#reloadpage")).not.toBeNull(); expect(stale.text()).toContain("Reload this page");
     const fresh = await page(o, "/z?e=E183-1"); await join(fresh, "9811100301"); // the reloaded page sends the current version
     await fresh.waitFor((x) => /Your ticket|Starting in|What you can win|Before the game|Getting ready/.test(x));
