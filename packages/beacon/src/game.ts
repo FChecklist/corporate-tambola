@@ -1,7 +1,7 @@
 // The phone-side game: everything a phone (or the organizer's console) needs to play and to check an engagement
 // from the public beacon alone. Pure and deterministic: no server, no phone clock.
 import { generateTicket, ticketNumbers, type PatternId, type Ticket } from "../../shared/src/ticket";
-import { CLAIM_WINDOW_CALLS, INTERMISSION_ROUNDS, PATTERN_ORDER, breakShift, keyOfLine, defaultCfg, keysInPlay, linesFor, roundEid, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import { CLAIM_WINDOW_CALLS, INTERMISSION_ROUNDS, PATTERN_ORDER, breakShift, keyOfLine, ticketOfKey, defaultCfg, keysInPlay, linesFor, roundEid, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
 import { hostCallRound, pauseShifts, pushedByPauses, type ControlState, type GameOpts } from "./control";
 
 /** What the control file needs from the game's public settings (who calls the numbers, the breaks and rounds a press must respect): pass it to cfgOf / publishControl. */
@@ -42,8 +42,9 @@ export function completionIndexKey(tickets: readonly Ticket[], key: PatternKey, 
     for (let i = 0; i < log.length; i++) if (left.delete(log[i]!) && left.size === 0) return i;
     return -1;
   }
+  const only = ticketOfKey(key); // "top@2": only the second ticket counts
   let best = -1;
-  for (const t of tickets) { const i = completionIndex(t, key, log); if (i >= 0 && (best < 0 || i < best)) best = i; }
+  for (let n = 0; n < tickets.length; n++) { if (only && n !== only - 1) continue; const i = completionIndex(tickets[n]!, key, log); if (i >= 0 && (best < 0 || i < best)) best = i; }
   return best;
 }
 
@@ -200,8 +201,9 @@ export const stillToWin = (t: Ticket | readonly Ticket[], pat: PatternKey, log: 
   const tickets: readonly Ticket[] = Array.isArray((t as any)[0]?.[0]) ? (t as unknown as readonly Ticket[]) : [t as unknown as Ticket];
   const called = new Set(log);
   if (pat === "full2") return tickets.length < 2 ? 30 : tickets.flatMap(ticketNumbers).filter((n) => !called.has(n)).length;
+  const only = ticketOfKey(pat);
   let min = Infinity;
-  for (const tk of tickets) { const left = ticketStillNeeds(tk, pat, called); if (left < min) min = left; }
+  for (let n = 0; n < tickets.length; n++) { if (only && n !== only - 1) continue; const left = ticketStillNeeds(tickets[n]!, pat, called); if (left < min) min = left; }
   return min;
 };
 

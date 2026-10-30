@@ -54,7 +54,7 @@ export interface RuntimeView {
   /** For each earlier round, the reward lines this phone received (a line is received when this phone completed it at the call the organizer published). */
   past: { round: number; got: { pattern: PatternKey; ordinal: number }[] }[];
   /** Every reward line this phone won, in any round (a line is won when this phone completed it at the call the results name). `text` is what the organizer wrote for that line. */
-  won: { round: number; pattern: PatternKey; ordinal: number; text: string; cells: number[]; idx: number }[];
+  won: { round: number; pattern: PatternKey; ordinal: number; text: string; cells: number[]; idx: number; shared: number }[];
   /** True when every reward line of the round being played has been awarded. */
   allAwarded: boolean;
   /** The engagement ended because every prize was awarded (not because all 90 numbers were called). */
@@ -799,7 +799,7 @@ export class PhoneRuntime {
       const un = key === "unlucky"; // Unlucky is not completed on a ticket: this phone won it when its seat is the named winner
       if (un || this.cfg.ties === "next" ? !(x.winners ?? []).includes(this.pid) || (!un && completionIndexKey(tk, key, log) !== x.idx) : completionIndexKey(tk, key, log) !== x.idx) continue; // taking turns: only the named winner of this position won it
       const line = linesFor(this.cfg.rewards, key).find((l) => l.ordinal === x.ordinal);
-      out.push({ round: r, pattern: key, ordinal: x.ordinal, text: line?.text ?? "", cells: un ? [] : winCells(tk, key, log, x.idx), idx: x.idx });
+      out.push({ round: r, pattern: key, ordinal: x.ordinal, text: line?.text ?? "", cells: un ? [] : winCells(tk, key, log, x.idx), idx: x.idx, shared: Math.max(0, Math.floor(Number((x as any).count ?? (x as any).pids?.length ?? 1)) - 1) }); // shared: how many OTHER players won this prize with this phone (no amounts anywhere)
     }
     return out;
   }

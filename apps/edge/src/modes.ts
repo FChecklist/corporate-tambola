@@ -58,6 +58,7 @@ export function describeChanges(before: SettingsView, after: SettingsView): stri
   if ((before.closed ? 1 : 0) !== (after.closed ? 1 : 0)) out.push(after.closed ? "Who can join: now only people on the list" : "Who can join: now anyone with the link");
   if (b.tickets !== a.tickets) out.push(`Tickets per person changed from ${b.tickets} to ${a.tickets}`);
   if (JSON.stringify(b.rewards) !== JSON.stringify(a.rewards)) out.push("The prizes were changed");
+  if (JSON.stringify(b.prizePlan ?? null) !== JSON.stringify(a.prizePlan ?? null)) out.push("The prize plan was changed"); // 1.9.0: logged like every other change before the game starts (no amounts in the line)
   if (JSON.stringify(b.breaks) !== JSON.stringify(a.breaks)) out.push("The breaks and brand moments were changed");
   if (b.rounds !== a.rounds) out.push(`Number of rounds changed from ${b.rounds} to ${a.rounds}`);
   if ((b.ties ?? "share") !== (a.ties ?? "share")) out.push("The tie rule was changed");

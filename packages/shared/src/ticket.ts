@@ -72,7 +72,7 @@ export const ticketKey = (t: Ticket) => JSON.stringify(t);
 
 // ---------- patterns ----------
 export type PatternId = "early5" | "top" | "mid" | "bot" | "corners" | "star" | "full";
-export type Scope = "ticket" | "two_ticket";
+export type Scope = "ticket" | "two_ticket" | "ticket_1" | "ticket_2"; // 1.9.0: ticket_1 / ticket_2 = a prize that only that ticket of a two-ticket game can win
 
 export const PATTERNS: Record<PatternId, { name: string; desc: string }> = {
   early5: { name: "Early Five", desc: "Any 5 numbers on your ticket" },

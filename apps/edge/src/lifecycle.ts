@@ -54,7 +54,7 @@ export const personalDeleteAt = (endMs: number) => endMs + PURGE_AFTER_MS;
 export const reportLinkUntil = (endMs: number) => endMs + REPORT_LINK_MS;
 
 export function cfgOfRow(e: { tickets?: number; config?: string | null }): EngagementCfg {
-  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, ties: j.ties, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, verify: j.verify, employeesOnly: j.employeesOnly, idKind: j.idKind, callMode: j.callMode === "host" ? "host" : undefined, startMode: j.startMode === "manual" ? "manual" : undefined, afterPrizes: j.keepCalling ? "keep" : undefined }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* plain defaults */ }
+  try { const j = e.config ? JSON.parse(e.config) : {}; const v = validateCfg({ tickets: e.tickets ?? 1, ties: j.ties, rewards: j.rewards, breaks: j.breaks, rounds: j.rounds, invites: j.invites, verify: j.verify, employeesOnly: j.employeesOnly, idKind: j.idKind, prizePlan: j.prizePlan, callMode: j.callMode === "host" ? "host" : undefined, startMode: j.startMode === "manual" ? "manual" : undefined, afterPrizes: j.keepCalling ? "keep" : undefined }, undefined, { stored: true }); if (v.ok) return v.cfg; } catch { /* plain defaults */ }
   return (validateCfg({}) as { ok: true; cfg: EngagementCfg }).cfg;
 }
 

@@ -7,7 +7,32 @@ import type { PatternId, Scope } from "../../shared/src/ticket";
 export type NewHouseId = "early7" | "early10" | "twolines" | "plus" | "frame" | "topbottom" | "midcorners" | "odd5" | "even5" | "low5" | "high5" | "unlucky";
 /** Every house an organizer can reward (the seven original ones, the newer ones, and Unlucky). */
 export type HouseId = PatternId | NewHouseId;
-export type PatternKey = HouseId | "full2"; // "full2" = Super Bumper House (all 30 numbers across both tickets)
+export type PatternKey = HouseId | "full2" | `${HouseId}@1` | `${HouseId}@2`; // "full2" = Super Bumper House (all 30 numbers across both tickets); "top@1" = the Top Line of Ticket 1 only (1.9.0)
+/** The house of a key without the ticket ("top@2" -> "top"). */
+export const baseKey = (k: string): string => { const i = k.indexOf("@"); return i < 0 ? k : k.slice(0, i); };
+/** The ticket (1 or 2) a key belongs to, 0 for every other key. */
+export const ticketOfKey = (k: string): number => { const i = k.indexOf("@"); return i < 0 ? 0 : Number(k.slice(i + 1)) === 2 ? 2 : Number(k.slice(i + 1)) === 1 ? 1 : 0; };
+/** One planned prize: id "<ticket>:<pattern>:<ordinal>" (ticket 0 = a 1-ticket game or a prize of both tickets), a whole-unit amount, an optional gift name (organizer only). */
+export interface PlannedPrize { id: string; amount: number; gift?: string }
+export interface PrizePlan { mode: "auto" | "manual"; currency: string; budget: number; count: number; prizes: PlannedPrize[] }
+export const MAX_PLANNED_PRIZES = 30;
+const cleanPlan = (raw: unknown): PrizePlan | null | "bad" => {
+  if (raw === null) return null;
+  const r = raw as any;
+  if (!r || typeof r !== "object" || (r.mode !== "auto" && r.mode !== "manual")) return "bad";
+  const currency = typeof r.currency === "string" && /^[A-Z]{3}$/.test(r.currency) ? r.currency : "INR";
+  const budget = Number.isInteger(r.budget) && r.budget >= 0 && r.budget <= 1e10 ? r.budget : "bad";
+  const count = Number.isInteger(r.count) && r.count >= 1 && r.count <= MAX_PLANNED_PRIZES ? r.count : "bad";
+  if (budget === "bad" || count === "bad" || !Array.isArray(r.prizes) || r.prizes.length < 1 || r.prizes.length > MAX_PLANNED_PRIZES) return "bad";
+  const seen = new Set<string>(), prizes: PlannedPrize[] = [];
+  for (const p of r.prizes) {
+    if (!p || typeof p.id !== "string" || !/^[0-2]:[a-z0-9]{3,12}:[1-9][0-9]?$/.test(p.id) || seen.has(p.id) || !Number.isInteger(p.amount) || p.amount < 1 || p.amount > 1e10) return "bad";
+    seen.add(p.id);
+    const gift = typeof p.gift === "string" ? p.gift.replace(/[<>`]/g, "").replace(/\s+/g, " ").trim().slice(0, 60) : "";
+    prizes.push({ id: p.id, amount: p.amount, ...(gift ? { gift } : {}) });
+  }
+  return { mode: r.mode, currency, budget, count, prizes };
+};
 export interface RewardLine { pattern: HouseId; scope: Scope; ordinal: number; text: string; /** 1.8.0, optional: the prize when Ticket B wins (a two-ticket game only); `text` is then the prize for Ticket A. Absent = one prize whichever ticket wins. */ textB?: string }
 /**
  * THE one table of houses: id, label, a short plain "how to win", and the most winners (reward lines: 1st, 2nd, ...) the organizer may give it. The server validates with it, the phone page and the
@@ -49,9 +74,9 @@ export const HOUSES_HELP: string = HOUSES_HELP_LIST.join(String.fromCharCode(10)
 /** Display order of every house (keysInPlay and the engines follow it). */
 export const HOUSE_ORDER: readonly PatternKey[] = PRIZE_HOUSES.map((h) => h.id);
 const HOUSE_BY_ID = new Map<string, PrizeHouse>(PRIZE_HOUSES.map((h) => [h.id, h]));
-export const houseLabel = (id: string): string => HOUSE_BY_ID.get(id)?.label ?? id;
+export const houseLabel = (id: string): string => { const t = ticketOfKey(id), b = baseKey(id); return (t ? `Ticket ${t}: ` : "") + (HOUSE_BY_ID.get(b)?.label ?? b); };
 /** The most winners (reward lines) a house may have. Games saved before this limit existed may hold up to LEGACY_MAX_ORDINAL; they stay valid (see `validateCfg`'s `stored`). */
-export const maxWinnersFor = (id: string): number => HOUSE_BY_ID.get(id)?.max ?? 1;
+export const maxWinnersFor = (id: string): number => HOUSE_BY_ID.get(baseKey(id))?.max ?? 1;
 export const LEGACY_MAX_ORDINAL = 5;
 export interface BreakCfg { after: number; seconds: number; kind: "file" | "youtube" | "slides" | "speech" | "lucky"; title: string; mediaUrl?: string; winners?: 1 | 3 | 5 | 10; /** How a lucky draw is shown on phones. The winners are drawn the same way either way; a scratch card only changes the reveal. */ style?: "draw" | "scratch";
   /** True when the software placed this break (evenly spread among the automatic ones) instead of the organizer typing a number. Saving again re-spreads every automatic break. */ auto?: true }
@@ -136,7 +161,7 @@ export const PLAYER_TIP = "Tap each number as it is called. When a prize is comp
 export const DEMO_CAP = 10;
 export type VerifyMode = "mobile" | "id" | "either" | "both";
 export const VERIFY_MODES: VerifyMode[] = ["mobile", "id", "either", "both"];
-export interface EngagementCfg { /** What a person must give to get in: their mobile number (default), their employee ID, or both. */ verify?: VerifyMode; /** Only the people on my list may play, and nobody may invite anyone. */ employeesOnly?: true; /** What the ID of this game is: absent = an employee ID (every older game), "email" = an Email ID. One criterion for the whole game; the list decides who is in. */ idKind?: "email"; /** A friendly name the organizer gives the game (optional, up to 60 characters). */ name?: string; /** Absent = auto. */ callMode?: CallMode; /** Absent = auto: the game starts by itself at the scheduled time. */ startMode?: StartMode; /** true = keep calling until all 90 numbers even when every prize has been won; absent = the game ends when the last prize is awarded (older games). */ keepCalling?: true; /** A free demo game (up to DEMO_CAP people). Cleared by a paid conversion. */ demo?: true; tickets: 1 | 2; /** What happens when people complete a house on the same number (absent in an older game = they share). */ ties?: TieMode; rewards: RewardLine[]; breaks: BreakCfg[]; rounds: number; invites?: InviteCfg; /** Before the first number (at most one per ticket). Always present after validateCfg. */ opening?: BrandSlot[]; /** On the final screen (at most one per ticket). Always present after validateCfg. */ closing?: BrandSlot[]; /** The company's mark on the ticket (name, colour, optional logo). Absent = the plain ticket. */ brand?: BrandCfg }
+export interface EngagementCfg { /** What a person must give to get in: their mobile number (default), their employee ID, or both. */ verify?: VerifyMode; /** Only the people on my list may play, and nobody may invite anyone. */ employeesOnly?: true; /** What the ID of this game is: absent = an employee ID (every older game), "email" = an Email ID. One criterion for the whole game; the list decides who is in. */ idKind?: "email"; /** 1.9.0, organizer only (never sent to players): the prize plan = what each prize is worth and, optionally, what is given. Players see prize NAMES only. */ prizePlan?: PrizePlan; /** A friendly name the organizer gives the game (optional, up to 60 characters). */ name?: string; /** Absent = auto. */ callMode?: CallMode; /** Absent = auto: the game starts by itself at the scheduled time. */ startMode?: StartMode; /** true = keep calling until all 90 numbers even when every prize has been won; absent = the game ends when the last prize is awarded (older games). */ keepCalling?: true; /** A free demo game (up to DEMO_CAP people). Cleared by a paid conversion. */ demo?: true; tickets: 1 | 2; /** What happens when people complete a house on the same number (absent in an older game = they share). */ ties?: TieMode; rewards: RewardLine[]; breaks: BreakCfg[]; rounds: number; invites?: InviteCfg; /** Before the first number (at most one per ticket). Always present after validateCfg. */ opening?: BrandSlot[]; /** On the final screen (at most one per ticket). Always present after validateCfg. */ closing?: BrandSlot[]; /** The company's mark on the ticket (name, colour, optional logo). Absent = the plain ticket. */ brand?: BrandCfg }
 /**
  * Who decides the winners: the software, never a person. Every phone works out the winners from the public numbers and reports them; our store accepts a result
  * only when this many DIFFERENT phones (one ticket per phone) reported exactly the same winners. Tiny games need half their people; larger ones 5% (3 to 25).
@@ -176,14 +201,16 @@ export const LUCKY_WINNERS = [1, 3, 5, 10] as const;
 export const defaultRewards = (): RewardLine[] => PATTERN_ORDER.map((pattern) => ({ pattern, scope: "ticket", ordinal: 1, text: "" }));
 export const defaultCfg = (): EngagementCfg => ({ tickets: 1, ties: "next", rewards: defaultRewards(), breaks: [], rounds: 1, invites: defaultInvites(), opening: [], closing: [] });
 
-export const keyOfLine = (l: Pick<RewardLine, "pattern" | "scope">): PatternKey => (l.scope === "two_ticket" ? "full2" : l.pattern);
+export const keyOfLine = (l: Pick<RewardLine, "pattern" | "scope">): PatternKey => (l.scope === "two_ticket" ? "full2" : l.scope === "ticket_1" ? (`${l.pattern}@1` as PatternKey) : l.scope === "ticket_2" ? (`${l.pattern}@2` as PatternKey) : l.pattern);
 export const lineKey = (l: RewardLine) => `${keyOfLine(l)}#${l.ordinal}`;
 /** The distinct houses in play, in a stable order. */
 export const keysInPlay = (rewards: readonly RewardLine[]): PatternKey[] => {
   const seen = new Set<PatternKey>();
   const order: readonly PatternKey[] = HOUSE_ORDER;
   for (const l of rewards) seen.add(keyOfLine(l));
-  return order.filter((k) => seen.has(k));
+  const plain = order.filter((k) => seen.has(k));
+  const perTicket = [...seen].filter((k) => ticketOfKey(k) > 0).sort((a, b) => ticketOfKey(a) - ticketOfKey(b) || order.indexOf(baseKey(a) as PatternKey) - order.indexOf(baseKey(b) as PatternKey)); // 1.9.0: Ticket 1 prizes, then Ticket 2 prizes, in the usual house order
+  return perTicket.length ? [...perTicket, ...plain] : plain;
 };
 export const linesFor = (rewards: readonly RewardLine[], key: PatternKey) => rewards.filter((l) => keyOfLine(l) === key).sort((a, b) => a.ordinal - b.ordinal);
 
@@ -196,8 +223,8 @@ const YT = /^https:\/\/((www|m|music)\.)?(youtube\.com|youtu\.be)\//i; // a phon
 export const SITE_MEDIA = /^\/[A-Za-z0-9._-]{1,80}\.(mp4|webm|m4a|mp3)$/i;
 
 /** Validates what the organizer sent. `opts.stored`: this is a game read back from storage, not new input, so a house may keep up to LEGACY_MAX_ORDINAL winners even where today's limit is lower (old games stay valid). Returns the cleaned config, or a plain-English reason. Missing parts keep their defaults. */
-export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?: unknown; breaks?: unknown; rounds?: unknown; invites?: unknown; opening?: unknown; closing?: unknown; name?: unknown; brand?: unknown; callMode?: unknown; startMode?: unknown; afterPrizes?: unknown; demo?: unknown; verify?: unknown; employeesOnly?: unknown; idKind?: unknown }, base: EngagementCfg = defaultCfg(), opts: { stored?: boolean } = {}): { ok: true; cfg: EngagementCfg } | { ok: false; error: string } {
-  const cfg: EngagementCfg & { opening: BrandSlot[]; closing: BrandSlot[] } = { tickets: base.tickets, ...(base.ties ? { ties: base.ties } : {}), rewards: base.rewards, breaks: base.breaks, rounds: base.rounds ?? 1, invites: base.invites ?? defaultInvites(), opening: base.opening ?? [], closing: base.closing ?? [], ...(base.name ? { name: base.name } : {}), ...(base.brand ? { brand: base.brand } : {}), ...(base.callMode === "host" ? { callMode: "host" as const } : {}), ...(base.startMode === "manual" ? { startMode: "manual" as const } : {}), ...(base.keepCalling ? { keepCalling: true as const } : {}), ...(base.demo ? { demo: true as const } : {}), ...(base.verify ? { verify: base.verify } : {}), ...(base.employeesOnly ? { employeesOnly: true as const } : {}), ...(base.idKind === "email" ? { idKind: "email" as const } : {}) }; /* a later save that does not mention them keeps what a person must give and employees-only */
+export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?: unknown; breaks?: unknown; rounds?: unknown; invites?: unknown; opening?: unknown; closing?: unknown; name?: unknown; brand?: unknown; callMode?: unknown; startMode?: unknown; afterPrizes?: unknown; demo?: unknown; verify?: unknown; employeesOnly?: unknown; idKind?: unknown; prizePlan?: unknown }, base: EngagementCfg = defaultCfg(), opts: { stored?: boolean } = {}): { ok: true; cfg: EngagementCfg } | { ok: false; error: string } {
+  const cfg: EngagementCfg & { opening: BrandSlot[]; closing: BrandSlot[] } = { tickets: base.tickets, ...(base.ties ? { ties: base.ties } : {}), rewards: base.rewards, breaks: base.breaks, rounds: base.rounds ?? 1, invites: base.invites ?? defaultInvites(), opening: base.opening ?? [], closing: base.closing ?? [], ...(base.name ? { name: base.name } : {}), ...(base.brand ? { brand: base.brand } : {}), ...(base.callMode === "host" ? { callMode: "host" as const } : {}), ...(base.startMode === "manual" ? { startMode: "manual" as const } : {}), ...(base.keepCalling ? { keepCalling: true as const } : {}), ...(base.demo ? { demo: true as const } : {}), ...(base.verify ? { verify: base.verify } : {}), ...(base.employeesOnly ? { employeesOnly: true as const } : {}), ...(base.idKind === "email" ? { idKind: "email" as const } : {}), ...(base.prizePlan ? { prizePlan: base.prizePlan } : {}) }; /* a later save that does not mention them keeps what a person must give and employees-only */
   if (input.callMode !== undefined) {
     if (input.callMode !== "auto" && input.callMode !== "host") return { ok: false, error: "Who calls the numbers: choose the software (auto) or a Host pressing a button for each number (host)." };
     if (input.callMode === "host") cfg.callMode = "host"; else delete cfg.callMode;
@@ -227,9 +254,10 @@ export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?
     if (!Array.isArray(input.rewards) || input.rewards.length < 1 || input.rewards.length > MAX_REWARD_LINES) return { ok: false, error: `Add between 1 and ${MAX_REWARD_LINES} rewards.` };
     const out: RewardLine[] = []; const seen = new Set<string>();
     for (const r of input.rewards as any[]) {
-      const pattern = r?.pattern as HouseId; const scope: Scope = r?.scope === "two_ticket" ? "two_ticket" : "ticket"; const ordinal = r?.ordinal === undefined ? 1 : r.ordinal;
+      const pattern = r?.pattern as HouseId; const scope: Scope = r?.scope === "two_ticket" ? "two_ticket" : r?.scope === "ticket_1" ? "ticket_1" : r?.scope === "ticket_2" ? "ticket_2" : "ticket"; const ordinal = r?.ordinal === undefined ? 1 : r.ordinal;
       if (!HOUSE_ORDER.includes(pattern) || (pattern as string) === "full2") return { ok: false, error: "Unknown house in the rewards." };
       if (scope === "two_ticket" && pattern !== "full") return { ok: false, error: "Only the Full House can be won across two tickets." };
+      if ((scope === "ticket_1" || scope === "ticket_2") && (pattern === "unlucky" || (input.tickets ?? cfg.tickets) !== 2)) return { ok: false, error: "A prize for one ticket needs two tickets per participant." };
       if (!Number.isInteger(ordinal) || ordinal < 1) return { ok: false, error: "A winner number must be 1 or more." };
       const most = Math.max(maxWinnersFor(scope === "two_ticket" ? "full2" : pattern), opts.stored ? LEGACY_MAX_ORDINAL : 0);
       const kept = base.rewards.some((x) => x.pattern === pattern && x.scope === scope && x.ordinal === ordinal); // already saved in this game: it stays
@@ -244,7 +272,7 @@ export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?
     if (out.some((l) => l.scope === "two_ticket") && (input.tickets ?? cfg.tickets) !== 2) return { ok: false, error: "A Super Bumper House needs two tickets per participant." };
     cfg.rewards = out;
   }
-  if (cfg.tickets === 1 && cfg.rewards.some((l) => l.scope === "two_ticket")) cfg.rewards = cfg.rewards.filter((l) => l.scope !== "two_ticket");
+  if (cfg.tickets === 1 && cfg.rewards.some((l) => l.scope === "two_ticket" || l.scope === "ticket_1" || l.scope === "ticket_2")) cfg.rewards = cfg.rewards.filter((l) => l.scope === "ticket");
   if (cfg.tickets === 1 && cfg.rewards.some((l) => l.textB)) cfg.rewards = cfg.rewards.map((l) => { const { textB: _drop, ...rest } = l; return rest; }); // a Ticket B prize needs two tickets
   if (cfg.rewards.length === 0) cfg.rewards = defaultRewards();
   if (input.breaks !== undefined) {
@@ -335,6 +363,11 @@ export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?
   if (input.employeesOnly !== undefined) {
     if (typeof input.employeesOnly !== "boolean") return { ok: false, error: "Employees only: say yes or no." };
     if (input.employeesOnly) cfg.employeesOnly = true; else delete cfg.employeesOnly;
+  }
+  if (input.prizePlan !== undefined) {
+    const pp = cleanPlan(input.prizePlan);
+    if (pp === "bad") return { ok: false, error: "The prize plan needs a budget, a prize count and, for each prize, a whole amount above 0 (at most 30 prizes)." };
+    if (pp === null) delete cfg.prizePlan; else cfg.prizePlan = pp;
   }
   if (input.idKind !== undefined) {
     if (input.idKind !== "email" && input.idKind !== "emp") return { ok: false, error: "What the ID is: an employee ID or an Email ID." };

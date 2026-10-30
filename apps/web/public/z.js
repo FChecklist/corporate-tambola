@@ -321,7 +321,7 @@
     host.innerHTML = `<div class="zbanner bad" role="alert">${esc(TAP.msg)}</div>`;
   }
   const ordinalName = (k) => ["", "1st", "2nd", "3rd"][k] || k + "th";
-  const KEYNAME = (key) => (key === "full2" ? "Super Bumper House" : NAMES[key]);
+  const KEYNAME = (key) => { const i = key.indexOf("@"), b = i < 0 ? key : key.slice(0, i), nm = b === "full2" ? "Super Bumper House" : NAMES[b]; return i < 0 ? nm : "Ticket " + key.slice(i + 1) + ": " + nm; }; // "top@1" = the Top Line of Ticket 1 (prizes per ticket)
 
   function roundCards(v) {
     let out = "";
@@ -388,7 +388,7 @@
   function syncPrizes(v) {
     const have = readJson(prizeKey, []), ids = new Set(have.map(winId)), fresh = [];
     const add = (w) => { if (!ids.has(winId(w))) { ids.add(winId(w)); have.push(w); if (!celebrated.has(winId(w))) fresh.push(w); celebrated.add(winId(w)); } };
-    for (const w of v.won) add({ round: w.round, pattern: w.pattern, ordinal: w.ordinal, text: w.text, name: lineName(v.cfg, w.pattern, w.ordinal) });
+    for (const w of v.won) add({ round: w.round, pattern: w.pattern, ordinal: w.ordinal, text: w.text, shared: w.shared || 0, name: lineName(v.cfg, w.pattern, w.ordinal) });
     for (const l of v.lucky) if (l.won) add({ round: 1, pattern: "lucky", ordinal: l.ordinal, text: l.title, name: l.title });
     if (fresh.length) store.set(prizeKey, JSON.stringify(have));
     PRIZES = have;
@@ -410,7 +410,7 @@
     const box = document.createElement("div"); box.id = "hurray"; box.className = "zhurray"; box.setAttribute("role", "alertdialog"); box.setAttribute("aria-live", "assertive");
     const what = list.map((w) => esc(w.name)).join(", ");
     const prize = list.filter((w) => w.text).map((w) => `<div class="zhp">${esc(w.text)}</div>`).join("");
-    box.innerHTML = `<canvas class="zconf" aria-hidden="true"></canvas><div class="zhcard"><div class="zhbig">Hurray!</div><div class="zhsub">Congratulations, you won</div><div class="zhwhat">${what}</div>${list.length === 1 && HOW[list[0].pattern] ? `<div class="zhsub">${esc(HOW[list[0].pattern])}</div>` : ""}${prize}<button class="zbtn" id="hurok">Wonderful</button></div>`;
+    box.innerHTML = `<canvas class="zconf" aria-hidden="true"></canvas><div class="zhcard"><div class="zhbig">Hurray!</div><div class="zhsub">Congratulations, you won</div><div class="zhwhat">${what}</div>${list.length === 1 && HOW[list[0].pattern] ? `<div class="zhsub">${esc(HOW[list[0].pattern])}</div>` : ""}${prize}<div class="zhsub">You won ${what}. Your organizer will give you your prize.</div>${list.filter((w) => w.shared > 0).map((w) => `<div class="zhsub">${esc(w.name)} is shared with ${w.shared} other player${w.shared === 1 ? "" : "s"}.</div>`).join("")}<button class="zbtn" id="hurok">Wonderful</button></div>`;
     document.body.appendChild(box);
     const done = () => { if (box.isConnected) box.remove(); };
     box.querySelector("#hurok").onclick = done; setTimeout(done, 15000);
@@ -951,7 +951,7 @@
       ${v.phase === "ended" ? "" : prizesCard()}
       ${mineCard(v)}${inviteCard(v)}
       <div class="zcard"><h2>Still to win</h2>${still}${chk}</div>
-      ${luckyCard(v)}${v.phase === "ended" ? "" : '<details class="zrulesrow" id="zrulesrow"><summary>Rules</summary><ol class="zrules" id="zrules"><li>This game works like the real one.</li><li>When a number is called, tap it on your ticket to cross it out.</li><li>If you complete a prize, press Claim before the next number is called.</li></ol></details>'}</div>${claimStick(v)}${toastHtml()}${bogeyAskHtml()}`;
+      ${luckyCard(v)}${v.phase === "ended" ? "" : '<details class="zrulesrow" id="zrulesrow"><summary>Rules</summary><ol class="zrules" id="zrules"><li>This game works like the real one.</li><li>When a number is called, tap it on your ticket to cross it out.</li><li>If you complete a prize, press Claim before the next number is called.</li></ol><p class="zsmall zprizes"><b>About the prizes.</b> Every prize in this game is chosen and given by your organizer, as a gift of thanks to the team. It may come as cash, a voucher or a gift, entirely as your organizer prefers. Corporate Tambola only runs the game and keeps the record. It plays no part in choosing, valuing or giving the prizes.</p></details>'}</div>${claimStick(v)}${toastHtml()}${bogeyAskHtml()}`;
   }
 
   // ---------- present check-in: the ticket opens only after this ----------

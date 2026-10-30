@@ -5,7 +5,7 @@
 // Late joiners: a participant who joined after the game began counts only the numbers whose beacon round is at or after `countFrom`
 // (their join round plus LATE_LAG_ROUNDS), so every phone has heard of them before their first number counts and nobody's result changes later.
 import { ticketNumbers } from "../../shared/src/ticket";
-import { CLAIM_WINDOW_CALLS, LATE_LAG_ROUNDS, keysInPlay, linesFor, roundEid, type EngagementCfg, type PatternKey } from "./config";
+import { CLAIM_WINDOW_CALLS, LATE_LAG_ROUNDS, keysInPlay, linesFor, roundEid, ticketOfKey, type EngagementCfg, type PatternKey } from "./config";
 import { ruleOf } from "./house-rules";
 import { claimCounts, claimsByHouse, ticketsFor, unluckyAt, unluckyPick, winnersOfHouse, type HouseClaims, type PublicClaim, type Settled } from "./game";
 import { NUMBERS } from "./index";
@@ -107,12 +107,14 @@ export class PrizeEngine {
   private build(s: SeatIn) {
     const tickets = ticketsFor(this.eid, s.pid, this.cfg.tickets);
     const first = this.unitPid.length;
-    for (const t of tickets) {
+    for (let ti = 0; ti < tickets.length; ti++) {
+      const t = tickets[ti]!;
       const mask = new Uint32Array(91), left = new Uint8Array(this.nb + 1);
       for (const k of this.keys) {
         if (k === "full2") continue;
         const b = this.bit.get(k)!, r = ruleOf(t, k);
         if (!r) continue;
+        const only = ticketOfKey(k); if (only && only !== ti + 1) { left[b] = 250; continue; } // 1.9.0: a prize of one ticket is out of reach for the other ticket
         if ("lines" in r) { // Two Lines: each line counts down on its own bit; the counter after them waits for two lines
           r.lines.forEach((ln, i) => { for (const n of ln) mask[n]! |= 1 << (this.auxBase + i); left[this.auxBase + i] = ln.length; });
           left[this.auxBase + 3] = 2; left[b] = 250;

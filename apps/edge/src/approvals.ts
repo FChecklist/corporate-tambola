@@ -37,3 +37,9 @@ export const waitSince = (e: { created_ms?: number | null }, now: number): numbe
 export const EMAIL_ENABLED = true;
 /** 1.8.1: how many times one network may be told "this email cannot be used" for one game in 10 minutes (so nobody can find out which emails hold a ticket). */
 export const EMAIL_MISS_PER_10MIN = 5;
+
+/** 1.9.0 PRIZE PLANNER and PRIZES PER TICKET: games created at or after this instant may use them; every game made before keeps the old prize behaviour exactly.
+ *  DEPLOY-TIME CONSTANT: NOT filled. The release session sets it to the exact deploy instant (ms) right before deploy. Until then it is 2026-11-02 00:00 UTC. */
+export const PRIZES_FROM_MS = Date.UTC(2026, 10, 2, 0, 0, 0);
+export const prizesOn = (e: { created_ms?: number | null } | null | undefined): boolean => Number(e?.created_ms) >= PRIZES_FROM_MS;
+export const PRIZES_OLD_GAME = "This game was made before the new prize planner, so its prizes stay as they are. Make a new game to plan prizes from a budget.";
