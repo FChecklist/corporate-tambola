@@ -131,7 +131,7 @@ describe("an existing game made in the previous console opens in the new screens
     const t = p.text(); expect(t).toMatch(/Opens after you publish/); expect(t).toMatch(/1\. Date and time/); expect(t).toMatch(/5 Check and publish/); expect(p.errors).toEqual([]);
   });
   test("a published and paid game shows the dashboard: share link, payment done, prizes, rehearsal cards, waiting list, claims, what is happening", async () => {
-    const p = await make(true, true); const t = await p.waitFor((x) => /Waiting for you to let them in/.test(x) && /Tickets claimed/.test(x), 25_000);
+    const p = await make(true, true); const t = await p.waitFor((x) => /Waiting for you to let them in/.test(x) && /Tickets claimed/.test(x) && /Start this rehearsal/.test(x), 25_000); // the rehearsal cards come from their own call: wait for them, never read the page before they are drawn
     for (const w of [/Share this game link/, /z\.html\?e=EX-1/, /Payment\s*Done/, /Practice before the real game/, /Start this rehearsal/, /Nobody is waiting right now/, /Tickets claimed/, /What is happening/, /Prizes/, /game report/i]) expect([String(w), w.test(t)]).toEqual([String(w), true]);
     expect(p.errors).toEqual([]);
   });

@@ -34,7 +34,7 @@ describe("the pre-installed messages", () => {
     const dir = new URL("../../../apps/web/public/", import.meta.url); const used = new Set<string>();
     for (const f of readdirSync(dir).filter((x) => /^(z|zc|board|big)\.js$/.test(x))) for (const m of readFileSync(new URL(f, dir), "utf8").matchAll(/ZG\.say\(\s*(?:[^"'`()]*\?\s*)?["']([a-z0-9.]+)["'](?:\s*:\s*["']([a-z0-9.]+)["'])?/g)) { used.add(m[1]!); if (m[2]) used.add(m[2]); }
     expect(used.size).toBeGreaterThan(3); for (const c of used) expect([c, c in MSG]).toEqual([c, true]);
-    expect(say("no.such.code")).toBe(MSG["generic"]); expect(MSG_VERSION).toBeGreaterThan(0);
+    expect(say("no.such.code")).toBe(MSG["generic"]!); expect(MSG_VERSION).toBeGreaterThan(0);
     expect(say("claim.k", { t: 7, p: "Top line" })).toBe("Ticket 7 has claimed Top line. Checking now…");
   });
 });
@@ -44,7 +44,7 @@ describe("languages", () => {
   test("English is the only language now; an unknown language is ignored; a second language is just another table with the same codes, and a missing code falls back to English", () => {
     expect(Object.keys(LANGS)).toEqual(["en"]); expect(setLang("xx")).toBe("en"); expect(getLang()).toBe("en");
     TABLES["zz"] = { "claim.k": "[zz] Ticket {t} {p}" }; LANGS["zz"] = "Test"; try {
-      expect(setLang("zz")).toBe("zz"); expect(say("claim.k", { t: 4, p: "Top line" })).toBe("[zz] Ticket 4 Top line"); expect(say("net.reconnecting")).toBe(MSG["net.reconnecting"]); // missing in zz: English
+      expect(setLang("zz")).toBe("zz"); expect(say("claim.k", { t: 4, p: "Top line" })).toBe("[zz] Ticket 4 Top line"); expect(say("net.reconnecting")).toBe(MSG["net.reconnecting"]!); // missing in zz: English
     } finally { setLang("en"); delete TABLES["zz"]; delete LANGS["zz"]; }
     expect(say("claim.k", { t: 4, p: "Top line" })).toBe("Ticket 4 has claimed Top line. Checking now…");
   });
