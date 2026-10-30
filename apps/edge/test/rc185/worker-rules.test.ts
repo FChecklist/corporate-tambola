@@ -102,7 +102,11 @@ describe("Email paths: the Email cleaner everywhere, case-insensitive, same hash
   const variants = Array.from({ length: 16 }, (_, k) => { const loc = "demo1", dom = "demo-test.invalid"; return `${k & 1 ? loc.toUpperCase() : loc}@${k & 2 ? dom.toUpperCase() : dom}`.split("").map((c, i) => (k & 4 && i % 2 ? c.toUpperCase() : k & 8 && i % 3 === 0 ? c.toUpperCase() : c)).join(""); });
   test("all 16 case variants: same cleanEmail and same hash", async () => { for (const v of variants) { expect(cleanEmail(v)).toBe(BASE); expect(await emailHashOf(v)).toBe(await emailHashOf(BASE)); } });
   test("spaces around/inside, tab, new line, full-width @ and letters: same address, same hash", async () => {
-    for (const v of [" demo1@demo-test.invalid ", "demo1 @ demo-test.invalid", "\tdemo1@demo-test.invalid\n", "demo1＠demo-test.invalid", "ｄｅｍｏ１＠ｄｅｍｏ－ｔｅｓｔ．ｉｎｖａｌｉｄ", "DEMO1 @Demo-Test.Invalid"]) { expect(cleanEmail(v)).toBe(BASE); expect(await emailHashOf(v)).toBe(await emailHashOf(BASE)); }
+    // a participant's Email ID: every space removed, so the inner-space spellings are the same address. The hash is the ACCOUNT form (Host and sign-in e-mails): a space INSIDE is never glued, so it is a different hash.
+    const allSpellings = [" demo1@demo-test.invalid ", "\tdemo1@demo-test.invalid\n", "demo1＠demo-test.invalid", "ｄｅｍｏ１＠ｄｅｍｏ－ｔｅｓｔ．ｉｎｖａｌｉｄ", "demo1 @ demo-test.invalid", "DEMO1 @Demo-Test.Invalid"];
+    for (const v of allSpellings) { expect(cleanEmail(v)).toBe(BASE); }
+    for (const v of [" demo1@demo-test.invalid ", "\tdemo1@demo-test.invalid\n", "demo1＠demo-test.invalid", "ｄｅｍｏ１＠ｄｅｍｏ－ｔｅｓｔ．ｉｎｖａｌｉｄ"]) expect(await emailHashOf(v)).toBe(await emailHashOf(BASE));
+    for (const v of ["demo1 @ demo-test.invalid", "DEMO1 @Demo-Test.Invalid"]) expect(await emailHashOf(v)).not.toBe(await emailHashOf(BASE));
   });
   test("a different address has a different hash; incomplete or empty gives null", async () => { expect(await emailHashOf("demo2@demo-test.invalid")).not.toBe(await emailHashOf(BASE)); expect(cleanEmail("demo1@")).toBe(null); expect(cleanEmail("")).toBe(null); expect(cleanEmail("de mo3@demo-test.invalid")).toBe("demo3@demo-test.invalid"); });
   test("open game join with an email: one ticket per address however it is spelled (1.8.1 email key)", async () => {

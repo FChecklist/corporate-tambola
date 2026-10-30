@@ -108,7 +108,7 @@ describe("the check-in flow", () => {
     const g = await game(); const a = await j(await join(g.id, 1, {}, T2)); await join(g.id, 2, {}, T2); const now = g.startMs - 1 * MIN;
     const code = (await j(await ck(g.id, a.pid, now))).code; expect((await submit(g.id, a.pid, { code }, now)).status).toBe(200); // a is present
     for (const device of [null, dev(2), "e".repeat(32)]) { const r = await claim(g.id, a.pid, now, device); expect(r.status).toBe(403); expect((await j(r)).code).toBe("other-phone"); const bg = await call("POST", `/api/z/${g.id}/bogey`, { pid: a.pid, ...(device ? { device } : {}), pattern: "early5" }, {}, now); expect(bg.status).toBe(403); }
-    expect(W.raw.prepare("SELECT COUNT(*) c FROM bogey WHERE eid=?").get(g.id).c).toBe(0);
+    expect((W.raw.prepare("SELECT COUNT(*) c FROM bogey WHERE eid=?").get(g.id) as { c: number }).c).toBe(0);
     expect((await claim(g.id, a.pid, now)).status).not.toBe(403); // the real phone is not refused
   });
   test("the organizer sees how many are present", async () => {

@@ -108,7 +108,11 @@ describe("1.8.5 the Email ID is case-insensitive everywhere, and never goes thro
     for (const v of variants) { expect(normEmail(v)).toBe(BASE); expect(cleanEmail(v)).toBe(BASE); expect(await emailHashOf(v)).toBe(await emailHashOf(BASE)); }
   });
   test("spaces around and inside, tabs, and the full-width at-sign and full stop are removed or normalised", async () => {
-    for (const v of [" demo1@demo-test.invalid ", "demo1 @ demo-test.invalid", "\tdemo1@demo-test.invalid\n", "demo1＠demo-test.invalid", "ｄｅｍｏ１＠ｄｅｍｏ－ｔｅｓｔ．ｉｎｖａｌｉｄ", "DEMO1\u00a0@Demo-Test.Invalid"]) { expect(normEmail(v)).toBe(BASE); expect(cleanEmail(v)).toBe(BASE); expect(await emailHashOf(v)).toBe(await emailHashOf(BASE)); }
+    // a participant's Email ID: every space removed, so the inner-space spellings are the same address. The hash is the ACCOUNT form (Host and sign-in e-mails): a space INSIDE is never glued, so it is a different hash.
+    const allSpellings = [" demo1@demo-test.invalid ", "\tdemo1@demo-test.invalid\n", "demo1＠demo-test.invalid", "ｄｅｍｏ１＠ｄｅｍｏ－ｔｅｓｔ．ｉｎｖａｌｉｄ", "demo1 @ demo-test.invalid", "DEMO1\u00a0@Demo-Test.Invalid"];
+    for (const v of allSpellings) { expect(normEmail(v)).toBe(BASE); expect(cleanEmail(v)).toBe(BASE); }
+    for (const v of [" demo1@demo-test.invalid ", "\tdemo1@demo-test.invalid\n", "demo1＠demo-test.invalid", "ｄｅｍｏ１＠ｄｅｍｏ－ｔｅｓｔ．ｉｎｖａｌｉｄ"]) expect(await emailHashOf(v)).toBe(await emailHashOf(BASE));
+    for (const v of ["demo1 @ demo-test.invalid", "DEMO1\u00a0@Demo-Test.Invalid"]) expect(await emailHashOf(v)).not.toBe(await emailHashOf(BASE));
     expect(cleanEmail("demo1@")).toBe(null); expect(cleanEmail("")).toBe(null);
   });
   test("the employee-ID cleaner is never applied to an email: it would make DEMO1DEMOTESTINVALID", () => {
