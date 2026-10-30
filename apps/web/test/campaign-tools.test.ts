@@ -37,7 +37,7 @@ describe("the request meter", () => {
 describe("tags and refusals", () => {
   test("every test game is findable: id, name and contact follow the tag, the contact is never a real address", async () => {
     const { tagOf, isTagged } = await import("../../../tools/livetest/campaign/tags.mjs?" + Date.now());
-    const t = tagOf("r1x", "UC-G1-01"); expect(t.id).toMatch(/^TR-r1x-UCG101$/); expect(t.name).toBe("TEST-RUN-" + t.id); expect(t.email).toBe("test+tr-r1x-ucg101@example.invalid"); expect(t.email.endsWith("@example.invalid")).toBe(true);
+    const t = tagOf("r1x", "UC-G1-01"); expect(t.id).toMatch(/^TR-r1x-UCG101$/); expect(t.name).toBe("TEST-RUN-" + t.id); expect(t.email).toMatch(/^demo[0-9]+@demo-test\.invalid$/); expect(tagOf("r1x", "UC-G1-02").email).not.toBe(t.email); const { cleanEmail } = await import("../../edge/src/approvals"); expect(cleanEmail(t.email)).toBe(t.email); expect(/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(t.email)).toBe(true);
     expect(isTagged(t.id)).toBe(true); expect(isTagged(t.name)).toBe(true); expect(isTagged("DEMO-1")).toBe(false); expect(isTagged("TR-bad")).toBe(false);
     expect(tagOf("a".repeat(40), "b".repeat(40)).id.length).toBeLessThanOrEqual(40);
   });

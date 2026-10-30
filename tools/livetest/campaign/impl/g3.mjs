@@ -1,5 +1,6 @@
 // G3 Roles. Host and Co-host keys are created through the organizer's API (what the console's "add a Host / Co-host" button does) and opened on real console pages.
 // Not implemented here (reason): UC-G3-03 (the Co-host limit has no setting reachable without the console flow), UC-G3-08 (needs a consent record dated before the version change: layer A / unit tests), UC-G3-10 (remove-person route to be confirmed).
+import { demoEmail } from "../tags.mjs";
 import { createGame, mkChecks, addRole, acceptRole, openConsole, closeAll } from "../core.mjs";
 import { IMPL as G2 } from "./g2.mjs";
 
@@ -49,7 +50,7 @@ export const IMPL = {
   async "UC-G3-06"(c, env) {
     const { ck, checks } = mkChecks(); const { api, runId } = env; const g = await mk(api, runId, c);
     let ok = 0, last = null;
-    for (let i = 1; i <= 6; i++) { const r = await api("POST", "/api/org/host", { label: "H" + i, email: `test+${g.tag.id.toLowerCase()}-h${i}@example.invalid`, e: g.tag.id }, g.key); if (r.ok) ok++; else last = r; }
+    for (let i = 1; i <= 6; i++) { const r = await api("POST", "/api/org/host", { label: "H" + i, email: demoEmail(), e: g.tag.id }, g.key); if (r.ok) ok++; else last = r; }
     ck("five Hosts were added", ok === 5, ok); ck("the sixth is refused with a plain sentence", !!last && last.status >= 400 && typeof last.body.error === "string" && /Host/i.test(last.body.error), JSON.stringify(last && last.body).slice(0, 160));
     return { checks, game: g.tag.id };
   },

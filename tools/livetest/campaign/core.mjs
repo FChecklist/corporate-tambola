@@ -1,6 +1,6 @@
 // Helpers shared by every case implementation (impl/g*.mjs): the tagged demo game, players that join through the real page, consoles, role keys, checks.
 import { chromium, makeApi, roundAt, sleep, CONSENT } from "./lib.mjs";
-import { tagOf, register } from "./tags.mjs";
+import { tagOf, register, demoEmail } from "./tags.mjs";
 export { chromium, makeApi, roundAt, sleep, CONSENT };
 export const PHONE = { width: 390, height: 844 };
 export const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : NaN; };
@@ -87,7 +87,7 @@ export async function openConsole(env, g, key, { flow = "old", extra = "" } = {}
 }
 /** A Host or a Co-host of this game: the organizer adds them, they accept the role. Returns the key. */
 export async function addRole(api, g, kind, label = "Role") {
-  const r = kind === "host" ? await api("POST", "/api/org/host", { label, email: `test+${g.tag.id.toLowerCase()}-h@example.invalid`, e: g.tag.id }, g.key) : await api("POST", "/api/org/cohost", { label, phone: fakePhone(), e: g.tag.id }, g.key);
+  const r = kind === "host" ? await api("POST", "/api/org/host", { label, email: demoEmail(), e: g.tag.id }, g.key) : await api("POST", "/api/org/cohost", { label, phone: fakePhone(), e: g.tag.id }, g.key);
   const key = r.body.hostKey || r.body.cohostKey; if (!key) throw new Error(kind + " not added: " + JSON.stringify(r.body).slice(0, 160));
   return key;
 }
