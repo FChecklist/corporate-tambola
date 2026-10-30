@@ -1,3 +1,60 @@
+# TEST HANDOFF: Tambola 1.9.0 prizes (branch feat/tambola-1.9.0-prizes, cut from rc/tambola-1.8.5 d049192)
+Spec: handover 370-PRIZE-SPLIT-FROZEN-DRAFT-2026-10-30.md (UPDATE 1 to 5 override the top). Product code only; the coder ran no tests and started no servers. Rebuilt bundles (light `bun build`): `zgame.js`, `control.js`, `reportgen.js`.
+
+## What is new
+1. **Prize planner** (pure, game-neutral, no Tambola imports): `apps/web/public/prize-planner.js` (`window.ZPRIZE`, also `module.exports`). `plan(tickets, count, budget)`, `shareOut(amount, winners)`, `validateManual(prizes)`, `hint(plan)`, `split`, `label`.
+2. **Console Step 3 "Prizes for your team"** (Tambola console only, replaces the pack's Step 3 renderer at runtime; the pack file is untouched): `apps/web/public/zc-flow-prizes.js`. Auto (Popular, Recommended; default) and Manual; prize-count chips; currency drop-down (INR sign default, display only); mandatory budget; table Prize / Amount / "Name the gift" (organizer only); hint; footer note (frozen UPDATE 5 text). Auto to Manual carries the table; Manual to Auto asks first (browser confirm).
+3. **Engine: prizes per ticket.** Reward-line scope `ticket_1` / `ticket_2` (new) beside `ticket` and `two_ticket`. Their key is `house@1` / `house@2` (for example `top@1`, `early5@1`, `full@2`). Files: `packages/shared/src/ticket.ts` (Scope), `packages/beacon/src/config.ts` (types, `baseKey`, `ticketOfKey`, `keyOfLine`, `keysInPlay`, `houseLabel` gives "Ticket 1: Top Line", validation), `game.ts` (`completionIndexKey` and `stillToWin` count only that ticket), `house-rules.ts` (`ruleOf` strips the ticket), `prize-engine.ts` (a ticket cannot reach the other ticket's prize), `prize-status.ts`, `phone-runtime.ts` (`won[].shared`), `apps/edge/src/worker.ts` (`patOk`: claims for `house@1/2` are accepted). Claim timing, same-call sharing and dense ranking are unchanged code.
+4. **Prize plan, organizer only**: `prizePlan` in the game config (`mode`, `currency`, `budget`, `count`, `prizes[{id,amount,gift}]`). Saved by `PATCH /api/z/<id>/settings` together with `tickets` and `rewards`; read back in `GET .../summary`; NEVER in the public `/info`. The reward line `text` stays empty so players see prize NAMES only. Kept in the game record (`gamerecord.ts`) and logged as "The prize plan was changed" (`modes.ts`).
+5. **Players**: the rules paragraph "About the prizes" (frozen text) under Rules in `z.js`; the winner popup adds "You won <prize>. Your organizer will give you your prize." and "<prize> is shared with N other player(s)." No amounts and no gift names.
+6. **Prize sheet** for the host at the end (Completed screen): prize, winner ticket numbers, each winner's share, organizer notes (gift names), Print button. Built in the browser from `summary.prizePlan` and `GET .../prizes`; "Not won (stays with you)" for an unwon prize.
+7. **New games only**: `PRIZES_FROM_MS` in `apps/edge/src/approvals.ts` (a marked deploy-time constant, NOT filled; until then 2026-11-02 00:00 UTC) with `prizesOn(game)`. For an older game the settings save answers 409 code `prizes-old-game` when it carries `prizePlan` or a `ticket_1/ticket_2` line; the console then falls back to the pack's old Step 3.
+8. **Lock**: the settings route already refuses every change once the game has started, so amounts and schedule lock at the start; every save before that is logged by `describeChanges`.
+
+## Files
+`apps/web/public/prize-planner.js` (new), `apps/web/public/zc-flow-prizes.js` (new), `apps/web/public/zc.html`, `pages/build.mjs` (ships the two new files), `apps/web/public/z.js`, `apps/web/public/{zgame,control,reportgen}.js` (rebuilt), `packages/shared/src/ticket.ts`, `packages/beacon/src/{config,game,house-rules,prize-engine,prize-status,phone-runtime}.ts`, `apps/edge/src/{worker,approvals,lifecycle,modes,gamerecord}.ts`.
+
+## Rule -> test the test author must write
+| Rule | Test |
+|---|---|
+| The 8 splits each add to exactly 100; counts 4/6/8/10 (1 ticket), 12/14/16/20 (2 tickets); 1-ticket 10 = Lines 9 x3, Corners 7, Early5 7 and 5, FH 24/14/9/7; 2-ticket 20 = per ticket Lines 3.5 x3, Corners 3, FH 6/4/2.5, Early5 4 and 3 (Ticket 1 only), SB 20/11/6/4 | planner unit: sum of `pct` is 100 for all 8; labels; Early 5 only on ticket 1 in 2-ticket lists; no Unlucky |
+| Amounts floor to whole units, leftover to the biggest prize (first on a tie); the amounts add up to the budget | planner unit with budgets 1, 99, 100, 101, 1000, 12345, 1e6 for all 8 splits; each amount an integer, sum equals the budget; blank or 0 budget gives all 0 |
+| `shareOut(amount, n)`: equal share floored, leftover stays with the organizer; n=0 gives share 0 and leftover = amount | unit |
+| `validateManual`: at least 1, amount mandatory (whole number above 0), gift optional (60), no duplicate id, at most 30 | unit incl. 30 ok / 31 refused |
+| Hint (never a block) when the average prize is under 100 units | unit: hint for budget 100 with 6 prizes, none for 6000 |
+| Per-ticket engine: `top@1` won only by Ticket 1, `top@2` only by Ticket 2; Early 5 for Ticket 1 only (`early5@1`); FH ordinals up to 4 per ticket; Super Bumper (`full2`) ordinals up to 4; `settleAll` and `PrizeEngine` agree (the existing equivalence-test pattern) with per-ticket lines | beacon tests: tickets from `ticketsFor`, a log that completes Ticket 2's top line first: `top@2` has a winner, `top@1` not; same-call winners share the ordinal; next group takes the next ordinal (dense) |
+| Old keys unchanged | the existing beacon suite stays green |
+| Claim accepted for `top@1`, refused for unknown (`top@3`, `nope@1`, `full2@1`) | edge worker test on the claim route (`patOk`) |
+| `validateCfg` accepts `ticket_1/ticket_2` only with 2 tickets (error "A prize for one ticket needs two tickets per participant."); drops them when tickets become 1 | beacon config test |
+| `prizePlan` validation and storage; absent from public `/info`; present in `summary`; copied by "Create a new game like this one" | edge test: save, read summary, read info (must not contain `prizePlan`, amounts or gift names) |
+| Game gate: a game created before `PRIZES_FROM_MS` gets 409 `prizes-old-game` for `prizePlan` or per-ticket lines and keeps the old behaviour | edge test with two creation times derived from the constant |
+| Lock at start and change log | edge test: a save before the start logs "The prize plan was changed"; a save after the start is refused |
+| Players see names only | DOM test on `z.js`: no amount or gift name anywhere; Rules contain the frozen "About the prizes" paragraph; winner popup sentences; "shared with N other player(s)" |
+| Console Step 3: Auto default; chips per ticket count (defaults 6 and 14); a blank budget blocks Next with "Enter your budget, or choose Manual to set your prizes yourself."; amounts update live; Manual needs an amount for every prize and the 1st before the 2nd; Auto to Manual carries the table; footer text; no "Change the split" link | happy-dom test on `zc-flow-prizes.js` with the pack; PATCH body check (`tickets`, `rewards` with `ticket_1/ticket_2` and empty text, `prizePlan`) |
+| Prize sheet: winners per prize, share per winner, "Not won" for an unwon prize | DOM test with fake `summary` and `prizes` answers |
+| Scenario matrix | extend with axes: ticket count x prize count x budget class x currency x mode; assert the plan sums to the budget |
+
+## Decisions the coder took (tell the boss if any is wrong)
+1. "Average prize is small" = under 100 units (the note gives no number).
+2. Count chips: 1 ticket 4/6/8/10, 2 tickets 12/14/16/20 (defaults 6 and 14).
+3. A tickets-per-participant choice (1 or 2) sits at the top of Step 3 because nothing earlier sets it.
+4. Super Bumper keeps `two_ticket` scope; its plan id is `0:full2:N`. Early 5 in a 2-ticket game is `ticket_1` scope only.
+5. The reward line `text` is empty for planner games (names only). Gift names live only in `prizePlan`.
+6. Manual to Auto confirmation uses the browser's confirm dialog.
+7. The Step 5 preview and read-back are driven by the pack's own prize selection; after saving, Step 3 copies the plan into that selection by house (the preview shows names by house, not the "Ticket 1:" detail).
+8. Amounts are whole numbers; the currency is display only, no conversion.
+9. The prize sheet is built in the browser from `summary` and `prizes`; the permanent record keeps the plan (`gamerecord.prizePlan`) and the winners record as today. There is no server-side sheet endpoint.
+
+## Conflicts between the spec and the engine
+- Prizes were keyed pattern+scope+ordinal with scope `ticket`/`two_ticket`, so "Ticket 1: Line 1" and "Ticket 2: Line 1" were one prize. Solved by the new keys `house@1` / `house@2`. Not done: a prize "for either ticket" together with a per-ticket prize of the same house in one game (the 8 splits do not need it).
+- Unlucky is gone from the planner; the engine still has it as a house (untouched).
+- Not run: the type checker (`tsc`) on the changed TypeScript; the three `bun build` bundle builds succeeded.
+
+## Shared organizer pack
+Step 3 lives only in the Tambola console (`zc-flow-prizes.js` replaces `registry[3]` at runtime). The pack (`pack/zc-flow.js`) did not change. To share it with the other games later, vendor `prize-planner.js` and the Step 3 renderer into the console repo's `packages/game-pack`.
+
+---
+
 # RELEASE CANDIDATE rc/tambola-1.8.5 (coder to test author)
 Branch `rc/tambola-1.8.5` = `feat/tambola-1.8.5-empid` (275fda6: uniform employee ID, case-insensitive Email ID, idKind) + `origin/feat/1.8.4-ui` (e2b214e: Game completed page, join page, game screen prize rows, Host header). Version 1.8.5: the newest entry of `apps/edge/src/releases.json` (the build stamps `version.json` and the footer from it). No tests were run or edited by the coder.
 
