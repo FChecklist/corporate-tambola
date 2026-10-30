@@ -62,7 +62,7 @@ describe("a claim on the very last number (90) wins", () => {
     for (let n = 1; n <= 80 && !a; n++) {
       const p = mkPhone(n); await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true);
       const full = settleAll(EID, [p.rt.pid!], reference()).find((s) => s.pattern === "full");
-      if (full && full.idx === 89 && p.rt.ticket.flat().includes(lastNumber)) { a = p; pid = p.rt.pid!; }
+      if (full && full.idx === 89 && p.rt.ticket!.flat().includes(lastNumber)) { a = p; pid = p.rt.pid!; }
     }
     expect(a).not.toBeNull(); // (if no ticket among 80 holds the last number the fixture itself is wrong)
     for (let i = 0; i < 200 && a!.rt.view().phase !== "ended"; i++) await step([a!]);
@@ -88,7 +88,7 @@ describe("a claim on the very last number (90) wins", () => {
     for (let n = 1; n <= 300 && group.length < 3; n++) {
       const p = mkPhone(n); await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true);
       const full = settleAll(EID, [p.rt.pid!], reference()).find((x) => x.pattern === "full");
-      if (full && full.idx === 89 && p.rt.ticket.flat().includes(lastNumber)) group.push(p); else p.quiet = true;
+      if (full && full.idx === 89 && p.rt.ticket!.flat().includes(lastNumber)) group.push(p); else p.quiet = true;
     }
     expect(group.length).toBe(3);
     for (let i = 0; i < 200 && group.some((p) => p.rt.view().phase !== "ended"); i++) await step(group);
