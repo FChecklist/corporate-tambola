@@ -189,7 +189,8 @@
     const rw = s.rewards || [];
     const names = {};
     for (const r of rw) { const k = r.pattern + "|" + r.scope; (names[k] = names[k] || { r, n: 0 }).n++; }
-    for (const { r, n } of Object.values(names)) lines.push([r.scope === "two_ticket" ? "Super Bumper House" : (s.houses.find((h) => h.id === r.pattern) || {}).label || r.pattern, r.text + (n > 1 ? " · won " + n + " times" : "")]);
+    if (s.plan && s.plan.rows && s.plan.rows.length) { const sy = { INR: "₹", USD: "$", EUR: "€", GBP: "£", SGD: "S$", AUD: "A$", AED: "AED " }[s.plan.currency] || s.plan.currency || ""; for (const pr of s.plan.rows) lines.push([pr.label, sy + Number(pr.amount).toLocaleString("en-IN") + (pr.gift ? " · " + pr.gift : "")]); } else
+        for (const { r, n } of Object.values(names)) lines.push([r.scope === "two_ticket" ? "Super Bumper House" : (s.houses.find((h) => h.id === r.pattern) || {}).label || r.pattern, r.text + (n > 1 ? " · won " + n + " times" : "")]);
     lines.push(["Company", s.brand && s.brand.name ? s.brand.name : "Not added"]);
     lines.push(["Message breaks", String((s.breaks || []).length)]);
     return lines;
@@ -646,7 +647,7 @@
     const rewards = buildRewards(prizes.sel || {}, prizes.bumper, prizes.tix, prizes.cur);
     box.append(el("p", { class: "zf-lead", text: "Please check everything. You can go back to any step to change it." }));
     const list = el("dl", { class: "zf-read", id: "zf-read" });
-    for (const [k, v] of readBack({ name: gameName(form.occ, form.oname), when: state.when, card: who.card, upTo: who.upTo, choices: packChoices(state.packs), tix: prizes.tix, rewards, houses, brand: brandForm.brand, breaks: brandForm.breaks })) list.append(el("dt", { text: k }), el("dd", { text: v }));
+    for (const [k, v] of readBack({ name: gameName(form.occ, form.oname), when: state.when, card: who.card, upTo: who.upTo, choices: packChoices(state.packs), tix: prizes.tix, rewards, plan: prizes.plan, houses, brand: brandForm.brand, breaks: brandForm.breaks })) list.append(el("dt", { text: k }), el("dd", { text: v }));
     box.append(list);
     { const w = startWarning(state.when ? state.when.ms : 0, Date.now()); if (w) box.append(el("div", { class: "zf-warn", id: "zf-startwarn" }, w)); }
     if (G.sample) box.append(el("h3", { text: "What your participants will see" }), previewNode());
@@ -896,6 +897,7 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
     const bn = statusBanner(st, startText);
     const gone = st === "cancelled" || st === "refund" || st === "deleted" || st === "draft";
     if (!gone) sec.append(shareCard(o, eid, name)); // 1 the share card, at the very top
+    if ((state.info && state.info.rehearsal) || /-R\d+$/.test(String(eid || ""))) sec.append(el("p", { class: "zf-rehlabel", id: "zf-rehlabel", text: "Rehearsal - practice only" })); // a rehearsal game says so at the top
     sec.append(el("div", { class: "zf-banner " + bn.kind, id: "zf-banner", "aria-live": "polite" }, bn.text)); // 2 the status banner
     if (st === "cancelled") sec.append(el("p", {}, el("button", { type: "button", class: "zf-add", id: "zf-copygame", onclick: () => makeCopy() }, "Make a copy")));
     if (gone) { sec.append(el("p", { class: "zf-msg", role: "status", id: "zf-dashnote", text: st === "deleted" ? "" : dash.note })); return sec; }
