@@ -11,6 +11,7 @@ import { keepLegalParty } from "./legal";
 import { ensureGameRecordTable, keepGameRecord } from "./gamerecord";
 import { buildGameLog, noteReportSent, noteReportState, readSavedGameLog, saveGameLog } from "./gamelog";
 import { sweepVisits } from "./visits";
+import { recordFun } from "./funnel";
 import { closeAuditFor, isHeld, shredParticipantAudit } from "./audit";
 import { GRACE_ROUNDS, INVITE_CATEGORIES, PRIZE_HOUSES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
 import { callRoundR, hostGameOf, luckyRound } from "../../../packages/beacon/src/game";
@@ -432,6 +433,10 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
         const end = await endBoundMs(env, e);
         await env.DB.prepare("INSERT INTO life(eid,end_ms,end_src) VALUES(?,?,'schedule') ON CONFLICT(eid) DO UPDATE SET end_ms=excluded.end_ms WHERE life.end_src='schedule' AND life.purged_ms IS NULL").bind(e.id, end).run();
         life = await env.DB.prepare("SELECT * FROM life WHERE eid=?").bind(e.id).first<any>();
+      }
+      if (life && now - roundMs(e.start_round) < 14 * 86_400_000) { // owner funnel (funnel.ts): started and completed, once each
+        if (roundMs(e.start_round) <= now && !(await neverStarted(env, e))) await recordFun(env as any, e.org, "game_started", now);
+        if (e.npart && now >= life.end_ms && !(await neverStarted(env, e))) await recordFun(env as any, e.org, "game_completed", now);
       }
       if (!life || now < life.end_ms + REPORT_AFTER_MS) continue; // still being played
       await saveEndLog(env, e, life.end_ms, now); // the game is over: its log is kept now, whatever happens to the report e-mail

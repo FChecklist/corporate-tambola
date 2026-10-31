@@ -312,7 +312,7 @@ export async function visitsJourney(env: VisitEnv, id: string) {
   const sess = (await env.DB.prepare(`SELECT * FROM visit_session WHERE ${byIp ? "iph" : "vid"}=? ORDER BY first_ms ASC LIMIT 200`).bind(v).all<any>()).results ?? [];
   const out = [];
   for (const s of sess) {
-    const ev = (await env.DB.prepare("SELECT at_ms, kind, path, name, val, n FROM visit_event WHERE sid=? ORDER BY id ASC LIMIT 500").bind(s.sid).all<any>()).results ?? [];
+    const ev = (await env.DB.prepare("SELECT at_ms, kind, path, name, val, n FROM visit_event WHERE sid=? AND kind<>'fn' ORDER BY id ASC LIMIT 500").bind(s.sid).all<any>()).results ?? [];
     out.push({ ...s, stageName: STEPS[s.stage] ?? "visit", events: ev });
   }
   return { id, by: byIp ? "network address (hashed)" : "visitor id", firstSeenMs: sess[0]?.first_ms ?? null, visits: sess.length, sessions: out };
