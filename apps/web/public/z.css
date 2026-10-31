@@ -466,3 +466,8 @@ html[data-pt] .zfamrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;ma
 @media(max-width:480px){.zapp:not(.zc){padding-top:52px}}
 
 html[data-pt=retro] .zreq,html[data-pt=modern] .zreq{color:#FFB4A8}
+
+/* 1.8.5 browser check 3: tap targets of 44px on the join page; the language button scrolls away with the page (it sits in the strip above the banner) */
+.spriv a,.rfoot a{display:inline-block;min-height:44px;line-height:44px;padding:0 4px}
+.mkownbtn{min-height:44px;display:inline-flex;align-items:center}
+.zt-runmsg{margin:8px 0}.zt-runtext{font-size:14px;font-weight:400;margin:0 0 6px;line-height:1.45}

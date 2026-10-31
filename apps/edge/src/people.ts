@@ -330,7 +330,7 @@ async function addPeople(c: Ctx, who: Caller, b: any): Promise<Response> {
   const waitingNow = todo.filter((t) => waits.has(t.ph) && waits.get(t.ph).status !== "admitted");
   for (const t of waitingNow) stmts.push(db.prepare("UPDATE waiting SET status='admitted', decided_by=?, decided_ms=? WHERE eid=? AND ph=?").bind(who.id, c.now, c.eid, t.ph));
   const res = await batched(db, stmts);
-  for (const t of todo) if (t.idHash) await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`idx/${c.eid}/${t.idHash}`, t.ph).run();
+  for (const t of todo) if (t.idHash || t.empId) await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`idx/${c.eid}/${t.idHash ?? t.ph}`, t.ph).run();
   await recordConsent(db, { subject: who.kind === "organizer" ? (c.e.org ?? "platform") : `${c.e.org ?? "-"}/${who.id}`, kind: "K6", ref: c.eid, now: c.now });
   if (c.started && revive.length) await refreshBlocked(db, c.eid);
   // stmts are in the order fresh..., revive (+seat update)..., waiting...: map the person inserts back by position
