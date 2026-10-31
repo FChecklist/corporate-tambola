@@ -418,7 +418,7 @@
   var SHOWN = {}; // pop-ups already shown for the failure in progress; a new failed action clears it
   var done = { has: function (el) { return !!(el && el.getAttribute && el.getAttribute("data-ctg-seen")); }, add: function (el) { try { el.setAttribute("data-ctg-seen", "1"); } catch (e) {} } };
   function okToUpgrade(el) {
-    if (!el || done.has(el) || el.closest(".ctg-inline,#ctg-dialog,#ctg-back")) return false;
+    if (!el || done.has(el) || (el.hasAttribute && el.hasAttribute("data-ctg-own")) || el.closest(".ctg-inline,#ctg-dialog,#ctg-back")) return false; // a box a page fills with its own sentence and card (data-ctg-own) is never rebuilt
     var t = (el.textContent || "").replace(/\s+/g, " ").trim(); if (t.length < 8 || t.length > 420) return false;
     if (el.querySelector("input,select,textarea,form")) return false;
     return t;

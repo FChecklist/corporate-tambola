@@ -99,9 +99,9 @@
   const runSummary = (r, when) => "Your game: " + (r.start === "manual" ? "starts at " + when + " when you press Start." : "starts by itself at " + when + ".") + " " + (r.call === "host" ? "You call the numbers." : "The game calls the numbers.");
   let idSaved = null; // the kind of ID the game really holds (from the server), so a refused change puts the radio back
   const signInInto = (m) => { m.textContent = ""; m.append("Please sign in first. ", el("a", { href: "/zc.html", id: "zt-signin" }, "Open the organizer sign-in"), " and sign in with your e-mail, then come back to this step."); };
-  const runMsg = (text, status) => { // a refused save is never silent: the server's plain message ONCE, then its guide card (the message sits in a heading element and the box has no alert role, so the guide's own page scan does not turn it into a second card)
+  const runMsg = (text, status) => { // a refused save is never silent: the server's plain message ONCE, then its guide card (the box is marked data-ctg-own so the guide's page scan does not turn it into a second card; it keeps role alert)
     let m = document.getElementById("zt-runmsg");
-    if (!m) { const anchor = document.getElementById("zt-idkind") || document.getElementById("zt-run"); if (!anchor) return; m = el("div", { id: "zt-runmsg", class: "zt-runmsg" }); anchor.after(m); }
+    if (!m) { const anchor = document.getElementById("zt-idkind") || document.getElementById("zt-run"); if (!anchor) return; m = el("div", { id: "zt-runmsg", role: "alert", "data-ctg-own": "1", class: "zt-runmsg" }); anchor.after(m); }
     m.textContent = ""; if (!text) return;
     if (/not allowed/i.test(text)) { m.className = "zf-msg"; signInInto(m); return; } // no session: the plain way in, never the raw 'Not allowed.'
     m.className = "zt-runmsg"; m.append(el("h4", { class: "zt-runtext", text }));
