@@ -75,7 +75,9 @@ export async function callTimeMs(env: Env, e: any, round: number, idx: number, s
  * (the phones' votes, not this estimate, decide when a game is really over).
  */
 /** The instant the organizer's Stop takes effect (the round it names), or null when nobody stopped the game: an organizer-confirmed end, known as soon as that round has come. */
-export async function organizerStopMs(env: Env, e: any): Promise<number | null> { const s = await schedule(env, e); return s.st && s.st.stopRound != null ? roundMs(s.st.stopRound) : null; }
+export async function organizerStopMs(env: Env, e: any): Promise<number | null> { const s = await schedule(env, e); if (s.cfg.startMode === "manual" && (s.st?.goRound ?? null) === null) return null; /* a Stop with no Start is not an end */ return s.st && s.st.stopRound != null ? roundMs(s.st.stopRound) : null; }
+/** A manual-start game that nobody started never ran: it has no real end. */
+export async function neverStarted(env: Env, e: any): Promise<boolean> { const s = await schedule(env, e); return s.cfg.startMode === "manual" && (s.st?.goRound ?? null) === null; }
 
 export async function endBoundMs(env: Env, e: any): Promise<number> {
   const s = await schedule(env, e);
