@@ -385,8 +385,10 @@
   const winId = (w) => w.round + ":" + w.pattern + ":" + w.ordinal;
   const lineName = (cfg, key, ordinal) => { const multi = ZG.linesFor(cfg.rewards, key).length > 1, i = key.indexOf("@"); if (i < 0) return (multi ? ordinalName(ordinal) + " " : "") + KEYNAME(key); const nm = NAMES[key.slice(0, i)] || key.slice(0, i); return "Ticket " + key.slice(i + 1) + ": " + (multi ? ordinalName(ordinal) + " " : "") + nm.replace(/[a-z]/g, (m) => m.toUpperCase()); }; // "Ticket 1: 1st Full House"
   let PRIZES = [];
+  let PLAN_GAME = false; // a game whose rewards carry a scope (made by the 1.9.0 console) uses the 1.9.0 winner wording
   const celebrated = new Set();
   function syncPrizes(v) {
+    PLAN_GAME = !!(v.cfg && (v.cfg.rewards || []).some((r) => r && r.scope));
     const have = readJson(prizeKey, []), ids = new Set(have.map(winId)), fresh = [];
     const add = (w) => { if (!ids.has(winId(w))) { ids.add(winId(w)); have.push(w); if (!celebrated.has(winId(w))) fresh.push(w); celebrated.add(winId(w)); } };
     for (const w of v.won) add({ round: w.round, pattern: w.pattern, ordinal: w.ordinal, text: w.text, shared: w.shared || 0, name: lineName(v.cfg, w.pattern, w.ordinal) });
@@ -410,7 +412,7 @@
     const old = document.getElementById("hurray"); if (old) old.remove();
     const box = document.createElement("div"); box.id = "hurray"; box.className = "zhurray"; box.setAttribute("role", "alertdialog"); box.setAttribute("aria-live", "assertive");
     const what = list.map((w) => esc(w.name)).join(", ");
-    const planWin = list.some((w) => String(w.pattern).indexOf("@") >= 0 || w.shared > 0); // prize-plan games (per-ticket keys, shared prizes) get the 1.9.0 wording; every other game keeps the 1.8.5 "Congratulations, you won"
+    const planWin = PLAN_GAME || list.some((w) => String(w.pattern).indexOf("@") >= 0 || w.shared > 0); // prize-plan games (per-ticket keys, shared prizes) get the 1.9.0 wording; every other game keeps the 1.8.5 "Congratulations, you won"
     const prize = list.filter((w) => w.text).map((w) => `<div class="zhp">${esc(w.text)}</div>`).join("");
     box.innerHTML = `<canvas class="zconf" aria-hidden="true"></canvas><div class="zhcard"><div class="zhbig">Hurray!</div>${planWin ? "" : `<div class="zhsub">Congratulations, you won</div><div class="zhwhat">${what}</div>`}${list.length === 1 && HOW[list[0].pattern] ? `<div class="zhsub">${esc(HOW[list[0].pattern])}</div>` : ""}${prize}${planWin ? `<div class="zhsub">You won ${what}. Your organizer will give you your prize.</div>` : ""}${list.filter((w) => w.shared > 0).map((w) => `<div class="zhsub">${esc(w.name)} is shared with ${w.shared} other player${w.shared === 1 ? "" : "s"}.</div>`).join("")}<button class="zbtn" id="hurok">Wonderful</button></div>`;
     document.body.appendChild(box);

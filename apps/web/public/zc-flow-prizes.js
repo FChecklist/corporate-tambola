@@ -44,8 +44,6 @@
   };
   const save = async (ctx, msg) => {
     const rows = rowsNow(), c = S.currency;
-    if (S.mode === "auto" && typed(S.budget) && Number.isNaN(num(S.budget))) { msg.textContent = NUMS; return; }
-    if (S.mode === "manual" && S.manual.some((m) => typed(m.amount) && Number.isNaN(num(m.amount)))) { msg.textContent = NUMS; return; }
     if (S.mode === "auto" && !(num(S.budget) > 0)) { msg.textContent = BLANK; return; }
     if (tooSmall()) { msg.textContent = tooSmall(); return; }
     if (S.mode === "manual") { const bad = P.validateManual(rows.map((r) => ({ id: r.id, amount: r.amount, gift: r.gift }))).concat(orderProblem(rows) ? [orderProblem(rows)] : []); if (bad.length) { msg.textContent = bad[0]; return; } }
@@ -124,7 +122,7 @@
       const [t, pattern, o] = p.id.split(":"), key = (pattern === "full2" ? "full2" : keyOfId(p.id)), w = won.filter((x) => x.pattern === key && Number(x.ordinal) === Number(o));
       const ids = [...new Set(w.map((x) => x.seat))], s = P.shareOut(p.amount, ids.length);
       // who to give it to, as the organizer knows them: the listed Employee ID or Email ID, the name, and the mobile number (organizer-only data from GET /prizes; never in the public info)
-      const who = ids.map((seat) => { const x = w.find((q) => q.seat === seat) || {}, bits = [x.empId, x.name, x.phone].filter((b) => b && String(b).trim()); return "Ticket " + seat + (bits.length ? " - " + bits.join(", ") : ""); });
+      const who = ids.map((seat) => { const x = w.find((q) => q.seat === seat) || {}, bits = [x.empId, x.name, x.phone].filter((b) => b && String(b).trim()); return "Ticket " + seat + (bits.length ? " – " + bits.join(", ") : ""); });
       return { label: P.label(pattern, Number(o), plan.prizes.filter((q) => q.id.split(":")[0] === t && q.id.split(":")[1] === pattern).length, Number(t)), winners: ids, who, amount: p.amount, share: s.share, kept: s.leftover, gift: p.gift || "" };
     });
     return { currency: c, rows };
