@@ -471,4 +471,4 @@ html[data-pt=retro] .zreq,html[data-pt=modern] .zreq{color:#FFB4A8}
 .spriv a,.rfoot a{display:inline-block;min-height:44px;line-height:44px;padding:0 4px}
 .mkownbtn{min-height:44px;display:inline-flex;align-items:center}
 .zt-runmsg{margin:8px 0}.zt-runtext{font-size:14px;font-weight:400;margin:0 0 6px;line-height:1.45}
-.cbc .cbc-row label,.cbc-row label{display:flex;align-items:center;min-height:44px}
+.cbc-row label{display:block;min-height:44px;padding:11px 0;box-sizing:border-box}.cbc-row a{display:inline-block;padding:12px 2px;margin:-12px 0}

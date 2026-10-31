@@ -149,3 +149,12 @@ a.zf-add { display: inline-flex; align-items: center; text-decoration: none; }
   .zf-warn { background: #4a3a0d; color: #ffe9a6; } .zf-completed { background: #153a6e; color: #d7e6fb; }
 }
 .zf-tick { display: flex; align-items: center; min-height: 44px; }
+/* 44 px tap areas (browser pass 6) */
+.zf-body label:has(input[type=checkbox]) { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.zf-body input[type=checkbox], #zf-shared { width: 24px; height: 24px; flex: none; margin: 0; }
+.cbc-row label { display: block; min-height: 44px; padding: 11px 0; box-sizing: border-box; }
+.cbc-row a { display: inline-block; padding: 12px 2px; margin: -12px 0; }
+.zcmodetop a, #trynewtop, #trynew { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 6px; }
+/* Step 3 prize table at phone width: rows wrap instead of running off the box */
+@media (max-width: 480px) { .zp-table, .zp-table tbody, .zp-table tr, .zp-table td, .zp-table th { display: block; width: auto; box-sizing: border-box; } .zp-table thead { display: none; } .zp-table tr { padding: 8px 0; border-bottom: 1px solid #d3dbe9; } .zp-table input[type=text] { width: 100%; } }
+.zf-rehlabel { margin: 0 0 8px; padding: 6px 12px; display: inline-block; border-radius: 8px; background: #fff1c2; color: #5a3a00; font-weight: 700; }

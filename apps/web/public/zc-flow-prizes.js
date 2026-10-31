@@ -52,6 +52,7 @@
     const budget = S.mode === "auto" ? bud() : rows.reduce((s, r) => s + r.amount, 0);
     try {
       await Z.call("PATCH", `/api/z/${st.eid}/settings`, { tickets: S.tickets, ties: "share", rewards: rewardsOf(rows, S.tickets), prizePlan: { mode: S.mode, currency: c, budget, count: rows.length, prizes: rows.map((r) => ({ id: r.id, amount: r.amount, ...(r.gift ? { gift: r.gift } : {}) })) } });
+      Z.prizes.plan = { currency: c, rows: rows.map((r) => ({ label: r.label, amount: r.amount, gift: r.gift || "" })) }; // Step 5 shows each prize with its amount
       Z.prizes.tix = S.tickets; // the Step 5 preview and read-back show the right tickets and prize names
       { const sel = Z.prizes.sel || (Z.prizes.sel = {}), count = {}; let sb = 0;
         for (const r of rows) { const [, pattern, o] = r.id.split(":"); if (pattern === "full2") sb = Math.max(sb, Number(o)); else count[pattern] = Math.max(count[pattern] || 0, Number(o)); }
