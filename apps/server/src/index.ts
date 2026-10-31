@@ -440,7 +440,7 @@ route_("POST", "/api/orgs/me/erase", async ({ req }) => {
     if (b.block !== false) db.query("INSERT OR IGNORE INTO optouts(organizer_id,hash,created_at) VALUES(?,?,?)").run(org, ohash(org, e164), now());
     return json({ ok: true });
   }
-  return fail(400, "Unknown erase request.");
+  return fail(400, "Unknown delete request.");
 });
 
 function reuseGroups(q: any) { return { list: q.list !== false && q.list !== "0", colleagues: q.colleagues !== false && q.colleagues !== "0", family: q.family === true || q.family === "1" }; }

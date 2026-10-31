@@ -12,7 +12,7 @@
     toast(esc(msg || "Copied"));
   }
   const root = $("app");
-  const NOTICE = "Tickets, phones, claims and the activity log are deleted 24 hours after the engagement ends. Names, numbers and departments are kept for up to 365 days so you can reuse them, then deleted. You can erase them any time from the Dashboard.";
+  const NOTICE = "Tickets, phones, claims and the activity log are deleted 24 hours after the engagement ends. Names, numbers and departments are kept for up to 365 days so you can reuse them, then deleted. You can delete them any time from the Dashboard.";
 
   // ---------------------------------------------------------------- constants
   const PN = { early5: "Early Five", top: "Top Line", mid: "Middle Line", bot: "Bottom Line", corners: "Four Corners", star: "Star", full: "Full House" };
@@ -1069,7 +1069,7 @@
   function aiCard() {
     const has = !!D.ai, st = aiStatus();
     return `<div class="panel dai" id="aiCard"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><div class="eyebrow">Your AI</div><h2 class="dlh">Let your AI do the work</h2></div>${st.pill}</div>
-      <p class="muted small" style="margin:4px 0 8px">Copy one message into ChatGPT, Gemini, Claude or any AI chat. Your AI then sets up engagements, adds or reuses people, runs the day and tells you the report. No password and no learning our screens. Starting, ending, removing people, erasing details and payments still need your tap.</p>
+      <p class="muted small" style="margin:4px 0 8px">Copy one message into ChatGPT, Gemini, Claude or any AI chat. Your AI then sets up engagements, adds or reuses people, runs the day and tells you the report. No password and no learning our screens. Starting, ending, removing people, deleting details and payments still need your tap.</p>
       ${D.ai !== undefined ? `<div class="dline" style="font-size:14px">${st.line}</div>` : ""}
       ${has ? `<p class="hint">A new link replaces and cancels the old one.</p>` : ""}
       ${aiChoices()}
@@ -1125,7 +1125,7 @@
     return `<div class="panel dcard"><div class="row" style="justify-content:space-between;align-items:flex-start"><div style="min-width:0"><b style="font:600 17px var(--serif)">${esc(x.name)}</b><div class="tiny muted">${esc(dDate(x.heldAt))} · ${esc(x.code)}</div></div>${pill("", "Ended")}</div>
       <div class="stats" style="margin:8px 0">Total <b>${x.total}</b> · Participated <b>${x.participated}</b></div>
       <div style="margin-bottom:10px">${kept ? pill("info", "Details kept until " + dDate(x.peopleExpiresAt) + " · " + people(x.peopleCount)) : pill("", "Details deleted")}</div>
-      <div class="row dbtns"><button class="btn sm dbtn" ${kept ? "" : "disabled"} data-a="dReuse" data-v="${esc(x.code)}">Reuse the data</button><button class="btn sm line dbtn" ${kept ? "" : "disabled"} data-a="dEraseEng" data-v="${esc(x.code)}">${ic("trash")} Erase kept details</button></div>
+      <div class="row dbtns"><button class="btn sm dbtn" ${kept ? "" : "disabled"} data-a="dReuse" data-v="${esc(x.code)}">Reuse the data</button><button class="btn sm line dbtn" ${kept ? "" : "disabled"} data-a="dEraseEng" data-v="${esc(x.code)}">${ic("trash")} Delete kept details</button></div>
       ${kept ? "" : `<p class="hint">Nothing is kept from this engagement, so there is nothing to reuse.</p>`}</div>`;
   }
   function activeCard(x) {
@@ -1137,7 +1137,7 @@
     if (!l) return `<p class="muted small">Loading…</p>`;
     if (l.error) return `<div class="err">${ic("alert")}<span>${esc(l.error)}</span></div>`;
     if (!l.rows.length) return `<p class="muted small">${D.libQ ? "Nobody matches this search." : "Nobody is saved yet."}</p>`;
-    return `<div class="liblist">${l.rows.map((r) => `<div class="librow"><div style="min-width:0;flex:1"><b>${esc(r.name || "(no name)")}</b>${r.info ? ` <span class="tiny muted">· ${esc(r.info)}</span>` : ""}<div class="mono tiny">${esc(r.number)}</div><div class="tiny muted">Kept until ${esc(dDate(r.expiresAt))}</div></div><button class="btn sm danger dbtn" data-a="libErase" data-v="${esc(r.e164)}" data-n="${esc(r.name || r.number)}" aria-label="Erase ${esc(r.name || r.number)}">${ic("trash")} Erase</button></div>`).join("")}</div>${l.total > l.rows.length && !D.libQ ? `<p class="hint">Showing the first ${l.rows.length} of ${l.total}. Use search to find anyone else.</p>` : ""}`;
+    return `<div class="liblist">${l.rows.map((r) => `<div class="librow"><div style="min-width:0;flex:1"><b>${esc(r.name || "(no name)")}</b>${r.info ? ` <span class="tiny muted">· ${esc(r.info)}</span>` : ""}<div class="mono tiny">${esc(r.number)}</div><div class="tiny muted">Kept until ${esc(dDate(r.expiresAt))}</div></div><button class="btn sm danger dbtn" data-a="libErase" data-v="${esc(r.e164)}" data-n="${esc(r.name || r.number)}" aria-label="Delete ${esc(r.name || r.number)}">${ic("trash")} Delete</button></div>`).join("")}</div>${l.total > l.rows.length && !D.libQ ? `<p class="hint">Showing the first ${l.rows.length} of ${l.total}. Use search to find anyone else.</p>` : ""}`;
   }
   function renderDash() {
     const me = S.me, d = D.dash;
@@ -1157,7 +1157,7 @@
       <h2 class="dh2" id="dHistory">History of all past engagements</h2>
       ${past.length ? past.map(pastCard).join("") : `<div class="panel center"><p class="muted small" style="margin:0">No past engagements yet.</p></div>`}
       <h2 class="dh2">My saved list</h2>
-      <div class="panel" id="dLib"><div class="row" style="justify-content:space-between;align-items:center"><div><b style="font:600 20px var(--serif)">${d.library.count}</b> <span class="muted">${d.library.count === 1 ? "person saved" : "people saved"}</span></div><button class="btn sm danger dbtn" ${d.library.count ? "" : "disabled"} data-a="libEraseAll">${ic("trash")} Erase everyone</button></div>
+      <div class="panel" id="dLib"><div class="row" style="justify-content:space-between;align-items:center"><div><b style="font:600 20px var(--serif)">${d.library.count}</b> <span class="muted">${d.library.count === 1 ? "person saved" : "people saved"}</span></div><button class="btn sm danger dbtn" ${d.library.count ? "" : "disabled"} data-a="libEraseAll">${ic("trash")} Delete everyone</button></div>
         <p class="hint">Kept for up to ${d.retentionDays} days after you last use them, then deleted automatically.${d.library.soonestExpiry ? " The earliest deletion is on " + esc(dDate(d.library.soonestExpiry)) + "." : ""}</p>
         <label class="lb" for="libQ">Search by name or number</label><input class="inp" id="libQ" type="search" value="${esc(D.libQ)}" placeholder="Search your saved list" data-i="libQ">
         <div id="libList" style="margin-top:10px">${libRows()}</div></div></div>`;
@@ -1268,19 +1268,19 @@
   // ---- erase (always behind a confirm sheet)
   function eraseEngagement(code) {
     const x = D.dash.history.find((h) => h.code === code); if (!x) return;
-    confirmSheet({ title: `Erase the kept details of ${x.name}?`, body: `The names, numbers and departments kept from this engagement are deleted now. The totals stay. People who are also in your saved list stay there until you erase them in My saved list or they expire.`, yes: "Erase kept details", danger: true,
-      onYes: async () => { closeSheet(); const r = await run(api("POST", "/api/orgs/me/erase", { type: "engagement", code }), "Kept details erased"); if (r) await refreshDash(); } });
+    confirmSheet({ title: `Delete the kept details of ${x.name}?`, body: `The names, numbers and departments kept from this engagement are deleted now. The totals stay. People who are also in your saved list stay there until you delete them in My saved list or they expire.`, yes: "Delete kept details", danger: true,
+      onYes: async () => { closeSheet(); const r = await run(api("POST", "/api/orgs/me/erase", { type: "engagement", code }), "Kept details deleted"); if (r) await refreshDash(); } });
   }
   function erasePerson(e164, name) {
-    confirmSheet({ title: `Erase ${name}?`, body: `Their name, number and department are deleted from your saved list and from every past engagement. <b>This also stops us keeping this number again</b>, even if you upload it in a future engagement.`, yes: "Erase this person", danger: true,
-      onYes: async () => { closeSheet(); const r = await run(api("POST", "/api/orgs/me/erase", { type: "person", e164 }), "Erased"); if (r) await refreshDash(); } });
+    confirmSheet({ title: `Delete ${name}?`, body: `Their name, number and department are deleted from your saved list and from every past engagement. <b>This also stops us keeping this number again</b>, even if you upload it in a future engagement.`, yes: "Delete this person", danger: true,
+      onYes: async () => { closeSheet(); const r = await run(api("POST", "/api/orgs/me/erase", { type: "person", e164 }), "Deleted"); if (r) await refreshDash(); } });
   }
   function eraseAll() {
     const go = async () => {
       if (!$("eaOk").checked) { sheetYes = go; return toast("Tick the box to confirm."); }
-      closeSheet(); const r = await run(api("POST", "/api/orgs/me/erase", { type: "all" }), "Everyone erased"); if (r) await refreshDash();
+      closeSheet(); const r = await run(api("POST", "/api/orgs/me/erase", { type: "all" }), "Everyone deleted"); if (r) await refreshDash();
     };
-    confirmSheet({ title: "Erase everyone you have saved?", body: "Every name, number and department kept from all your engagements is deleted. You will have to upload people again for your next engagement.", danger: true, yes: "Erase everyone", extra: `<label class="cb"><input type="checkbox" id="eaOk"> I understand this cannot be undone.</label>`, onYes: go });
+    confirmSheet({ title: "Delete everyone you have saved?", body: "Every name, number and department kept from all your engagements is deleted. You will have to upload people again for your next engagement.", danger: true, yes: "Delete everyone", extra: `<label class="cb"><input type="checkbox" id="eaOk"> I understand this cannot be undone.</label>`, onYes: go });
   }
 
   A.openEng = (el, e) => { e.preventDefault(); history.replaceState(null, "", "/console#" + el.dataset.v); startOrg(); };

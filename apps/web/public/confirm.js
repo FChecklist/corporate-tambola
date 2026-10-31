@@ -10,7 +10,7 @@
 
   const WORDS = {
     start_engagement: "Start the engagement", end_engagement: "End the engagement", remove_people: "Remove people",
-    erase_details: "Erase saved details", erase_people: "Erase saved details", raise_limit: "Raise the participant limit",
+    erase_details: "Delete saved details", erase_people: "Delete saved details", raise_limit: "Raise the participant limit",
   };
   const tool = (t) => WORDS[t] || String(t || "An action").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()).replace(/\bgames?\b/gi, "engagement").replace(/\bplayers?\b/gi, "participant").replace(/\bprizes?\b/gi, "reward").replace(/\badmin\b/gi, "organizer");
   const paramLine = (p) => {

@@ -32,7 +32,7 @@ export const roundMs = (r: number) => (GENESIS + (r - 1) * 3) * 1000;
 export const PURGE_AFTER_MS = 20 * 3_600_000;      // participants' personal data (and the personal part of their audit rows) goes this long after the game ended. The promise is 24 hours and the job may run up to 3 hours late (GitHub's scheduler; the lazy tick in worker.ts usually keeps it within minutes), so 20 + 3 = 20 hours stays inside it (docs/RETENTION.md)
 export const REPORT_LINK_MS = 19 * 3_600_000;      // the organizer's report link stops working this long after the game ended, an hour before the deletion
 export const REPORT_AFTER_MS = 3 * 60_000;         // the report starts a few minutes after the end, so late wins have been recorded
-export const UNPLAYED_WARN_MS = 6 * 3_600_000;       // the heads-up e-mail for a game that did not start goes out this long before its guests' data is erased
+export const UNPLAYED_WARN_MS = 6 * 3_600_000;       // the heads-up e-mail for a game that did not start goes out this long before its guests' data is auto-deleted
 export const SETTINGS_KEEP_MS = 30 * 86_400_000;      // the settings of a game that did not start (occasion, prizes, brand...) stay this long after it closed, so the Organizer can reuse them
 export const MAX_AHEAD_MS = 30 * 86_400_000;          // a game time can be set at most this far ahead
 const IST = 5.5 * 3_600_000, DAY = 86_400_000;
@@ -81,7 +81,7 @@ export async function neverStarted(env: Env, e: any): Promise<boolean> { const s
 
 export async function endBoundMs(env: Env, e: any): Promise<number> {
   const s = await schedule(env, e);
-  if (s.cfg.startMode === "manual" && (s.st?.goRound ?? null) === null) return s.st?.stopRound != null ? roundMs(s.st.stopRound) + 60_000 : roundMs(e.start_round) + NEVER_STARTED_MS; // a game nobody pressed Start for is never started by the system: it closes (and its guest data is erased on the usual clock) a day after its scheduled time
+  if (s.cfg.startMode === "manual" && (s.st?.goRound ?? null) === null) return s.st?.stopRound != null ? roundMs(s.st.stopRound) + 60_000 : roundMs(e.start_round) + NEVER_STARTED_MS; // a game nobody pressed Start for is never started by the system: it closes (and its guest data is auto-deleted on the usual clock) a day after its scheduled time
   const last = callRoundR(s.st, s.start, s.stride, s.cfg.breaks, s.cfg.rounds, 89);
   if (last === Infinity && s.st) {
     const auto = callRoundR({ ...s.st, host: false }, s.start, s.stride, s.cfg.breaks, s.cfg.rounds, 89);
@@ -268,7 +268,7 @@ const bodyFor = (eid: string, d: ReportData, link: string) => [
   `- Everything about this engagement is permanently deleted at 00:00 hours IST on ${istDate(d.fullDeleteAtMs)} (the end of the 365th day). We keep billing data for audit and tax reasons.`,
   ``,
   `The winners were worked out by the software from the public numbers and accepted only when several different phones agreed. You cannot choose or change a winner or a number, and neither can we.`, ``,
-  `You can ask us to delete everything sooner: press Erase in your console, ask your AI assistant to request it (you confirm in your console), or reply to this e-mail from your registered address.`, ``,
+  `You can ask us to delete everything sooner: press Delete in your console, ask your AI assistant to request it (you confirm in your console), or reply to this e-mail from your registered address.`, ``,
   `Corporate Tambola is built to follow India's DPDP Act, the EU and UK GDPR and US privacy laws (including CCPA / CPRA): we collect only what is needed to run your game, protect it with encryption, keep it for the shortest time we can, never sell it, and honour every request to see, correct or delete data.`, ``,
   `Sent on ${istFull(d.sentAtMs)} to ${d.organizerEmail}.`,
 ].join("\n");
@@ -375,10 +375,10 @@ async function remindReport(env: LifeEnv, e: any, life: any, now: number) {
 
 // ------------------------------------------------------------------------------------------------ games that did not start
 /**
- * A game that was never paid for (so its first number was never called). Its guests' names and numbers, people lists, waiting requests, personal links and Co-host details are erased
+ * A game that was never paid for (so its first number was never called). Its guests' names and numbers, people lists, waiting requests, personal links and Co-host details are auto-deleted
  * 20 hours after its scheduled END (the same end estimate a played game uses), following the NEWEST schedule: a reschedule moves the clock. Organizer and Host data, payments and invoices stay.
  * A published game is then CLOSED (`unplayed_ms`): nobody can join or pay. Six hours before, the Organizer and Hosts get a heads-up (once per erasure time); right after, an "it did not start" mail.
- * A draft nobody published is erased the same way but is not "closed" (it is forgotten after 30 days as before). Safe to repeat.
+ * A draft nobody published is auto-deleted the same way but is not "closed" (it is forgotten after 30 days as before). Safe to repeat.
  */
 export async function unplayedPass(env: LifeEnv, now: number): Promise<number> {
   let purged = 0;
@@ -386,13 +386,13 @@ export async function unplayedPass(env: LifeEnv, now: number): Promise<number> {
   const rows = (await env.DB.prepare("SELECT e.* FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE e.pack IS 0 AND e.cancelled_ms IS NULL AND e.unplayed_ms IS NULL AND l.purged_ms IS NULL AND e.start_round <= ? ORDER BY e.start_round LIMIT 25").bind(roundAtMs(now - PURGE_AFTER_MS + UNPLAYED_WARN_MS)).all<any>()).results ?? [];
   for (const e of rows) {
     try {
-      const erase = personalDeleteAt(await endBoundMs(env, e));
+      const purgeAt = personalDeleteAt(await endBoundMs(env, e));
       const published = !!(await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`pub/${e.id}`).first());
-      if (published && now >= erase - UNPLAYED_WARN_MS && now < erase) { // one heads-up per erasure time (a reschedule is a new time, so it is a new heads-up)
+      if (published && now >= purgeAt - UNPLAYED_WARN_MS && now < purgeAt) { // one heads-up per erasure time (a reschedule is a new time, so it is a new heads-up)
         const flag = `unplayed-warn/${e.id}`, seen = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(flag).first<{ v: string }>();
-        if (seen?.v !== String(erase)) { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(flag, String(erase)).run(); await mailErasureHeadsUp(env as any, e, erase, now); }
+        if (seen?.v !== String(purgeAt)) { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(flag, String(purgeAt)).run(); await mailErasureHeadsUp(env as any, e, purgeAt, now); }
       }
-      if (now >= erase && !(await isHeld(env.DB, e.id))) {
+      if (now >= purgeAt && !(await isHeld(env.DB, e.id))) {
         await erasePersonal(env, e.id, now, "unplayed");
         if (published) {
           await env.DB.prepare("UPDATE engagement SET unplayed_ms=? WHERE id=? AND unplayed_ms IS NULL AND pack=0").bind(now, e.id).run();
@@ -472,7 +472,7 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
     const late = (await env.DB.prepare("SELECT DISTINCT p.eid AS eid FROM audit_pii p JOIN life l ON l.eid=p.eid WHERE l.end_ms + ? <= ? AND NOT EXISTS (SELECT 1 FROM legal_hold h WHERE h.eid=p.eid) LIMIT 25").bind(PURGE_AFTER_MS, now).all<{ eid: string }>()).results ?? [];
     for (const x of late) await shredParticipantAudit(env as any, x.eid, now);
   } catch { /* tried again at the next tick */ }
-  // a paid game that was played with nobody in it (no guests, no people list, nobody waiting) has no personal data to erase, but it still gets its end record, so the 365-day clock has a start
+  // a paid game that was played with nobody in it (no guests, no people list, nobody waiting) has no personal data to delete, but it still gets its end record, so the 365-day clock has a start
   try {
     const bare = (await env.DB.prepare("SELECT e.* FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE l.eid IS NULL AND e.pack IS NOT 0 AND e.cancelled_ms IS NULL AND NOT EXISTS (SELECT 1 FROM participant p WHERE p.eid=e.id) AND NOT EXISTS (SELECT 1 FROM person q WHERE q.eid=e.id) AND NOT EXISTS (SELECT 1 FROM waiting w WHERE w.eid=e.id) ORDER BY e.start_round LIMIT 25").all<any>()).results ?? [];
     for (const e of bare) { const end = await endBoundMs(env, e); if (now >= end) await env.DB.prepare("INSERT OR IGNORE INTO life(eid,end_ms,end_src,purged_ms,report_state) VALUES(?,?,'schedule',?,'no-guests')").bind(e.id, end, now).run(); }

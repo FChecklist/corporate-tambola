@@ -17,7 +17,7 @@ const foot = tpl.slice(tpl.indexOf("</main>"));
 const SITE = "https://housie.corporatetambola.com";
 const META = {
   "legal.html": ["Rules, privacy and disclaimer", "The rules of a Corporate Tambola game, how participant names and mobile numbers are deleted within 24 hours, and the disclaimer. Plain English."],
-  "legal-position.html": ["Legal position", "The legal position on which Corporate Tambola is supplied: software only, no stake from players, closed groups, data erased within 24 hours."],
+  "legal-position.html": ["Legal position", "The legal position on which Corporate Tambola is supplied: software only, no stake from players, closed groups, data auto-deleted within 24 hours."],
   "refund-policy.html": ["Refund policy", "Cancellation, rescheduling and refund policy for Corporate Tambola: you pay per game, there is no refund after payment, and a paid game can be moved to any date within 365 days."],
   "privacy.html": ["Privacy Policy and notice", "What Corporate Tambola keeps, why, for how long and who sees it. A stand-alone notice in plain English, with your rights and the Grievance Officer."],
   "terms.html": ["Terms", "The short, plain-English terms for organizers who run a Corporate Tambola engagement for their company."],
@@ -59,14 +59,14 @@ const PAGES = {
     ]],
     ["payment", "Payment and credit", [
       "Building and publishing are free. A game does not begin until it is paid for.",
-      "You can pay at any time until the guest data is erased. A late payment starts the game 2 minutes after it is confirmed.",
+      "You can pay at any time until the guest data is auto-deleted. A late payment starts the game 2 minutes after it is confirmed.",
       "We do not give refunds. If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days. Unused credit lapses at the end of day 365.",
       "The credit belongs to your organizer account. We show the exact amount and date before you confirm.",
       "We e-mail you before it lapses. No credit note is raised for credit that lapses.",
       "Instead of cancelling, you can change the date of the game. A paid game can be moved to any date within 365 days of the payment.",
       "Once the start time has passed, a paid game cannot be cancelled. You can still end the game.",
       "A game that was never paid for can be cancelled at any time. Nothing is charged.",
-      "A game that was not paid for closes when its guest data is erased, 23 hours after it was meant to end.",
+      "A game that was not paid for closes when its guest data is auto-deleted, 23 hours after it was meant to end.",
       "You can then create a new game like it. The settings stay for 30 days.",
       "Unused places are not credited once the game has started.",
     ]],
@@ -160,7 +160,7 @@ const PAGES = {
       "Names and numbers are deleted within 24 hours after the game. Open your report before then.",
       "To delete earlier, use your console.",
     ]],
-    ["pay", "Payment", ["Build and publish for free. The game does not begin until it is paid for.", "You can pay at any time until the guest data is erased. A late payment starts the game 2 minutes after it is confirmed.", "To cancel, tap Cancel this game in your console.", "We do not give refunds. If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days. Unused credit lapses at the end of day 365.", "Once the start time has passed, a paid game cannot be cancelled.", "Want another game like this one? Tap Create a new game like this one. Your credit is offered first on the Pay step."]],
+    ["pay", "Payment", ["Build and publish for free. The game does not begin until it is paid for.", "You can pay at any time until the guest data is auto-deleted. A late payment starts the game 2 minutes after it is confirmed.", "To cancel, tap Cancel this game in your console.", "We do not give refunds. If you cancel a paid game before it starts, your payment stays as credit for your next game for 365 days. Unused credit lapses at the end of day 365.", "Once the start time has passed, a paid game cannot be cancelled.", "Want another game like this one? Tap Create a new game like this one. Your credit is offered first on the Pay step."]],
   ] },
 };
 

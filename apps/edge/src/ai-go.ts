@@ -174,7 +174,7 @@ export async function goScreen(ctx: GoCtx, step: string, q: URLSearchParams): Pr
       if (!made) return { say: "I could not find a free game code. Please open the console.", choices: choices([["Open the organizer's console", `${ctx.origin}/zc.html`]]) };
       if (st.v) await ctx.api("PATCH", `z/${id}/settings`, { invites: { on: true, per: st.v, cats: ["family", "colleagues"] } });
       return { done: true, say: [`Your draft is saved. Its code is ${id}. Nobody else can see it yet.`, `How a prize is won: ${HOUSIE_RULE}`, "What is left, and who does it:", `1. Name the prizes. ${PRIZE_NAMES_NOTE}`, "2. Write the welcome message for your guests (link below), or add more brand moments, videos or a lucky draw (I can help; I can also show you a test page so you see a video exactly as a guest will).", "3. Load the guest list in your console, or simply share the guest link (names never pass through me).", "4. You press Publish (free) on the page below: one tap.", `5. You pay on the pay link. Pay before the start time so the game begins on time; a later payment starts it 2 minutes after you pay (the last moment is shown on the pay page)"t")!)} India time). I never pay.`, "6. You share the guest link, which appears in your console and on my links page after you publish (we e-mail it too)."].join("\n"),
-        choices: choices([["Open the draft in the console (watch it)", made.openUrl ?? consoleOf(ctx, id), true], ["Write the welcome message", `${ctx.base}/go/msg?id=${id}`], ["Load the guest list: in your console (names never pass through me)", consoleOf(ctx, id)], ["Publish: the organizer taps once", consoleOf(ctx, id, "publish")], ["Pay: the organizer pays (any time until the guest data is erased)", payOf(ctx, id)], ["Read the game back", `${ctx.base}/go/game?id=${id}`], ["See the links", `${ctx.base}/go/links?id=${id}`]]), ifWrong: WRONG };
+        choices: choices([["Open the draft in the console (watch it)", made.openUrl ?? consoleOf(ctx, id), true], ["Write the welcome message", `${ctx.base}/go/msg?id=${id}`], ["Load the guest list: in your console (names never pass through me)", consoleOf(ctx, id)], ["Publish: the organizer taps once", consoleOf(ctx, id, "publish")], ["Pay: the organizer pays (any time until the guest data is auto-deleted)", payOf(ctx, id)], ["Read the game back", `${ctx.base}/go/game?id=${id}`], ["See the links", `${ctx.base}/go/links?id=${id}`]]), ifWrong: WRONG };
     }
     case "games": {
       const r = await ctx.api("GET", "history");
@@ -195,7 +195,7 @@ async function gameStep(ctx: GoCtx, step: string, q: URLSearchParams): Promise<S
   if (!/^[A-Za-z0-9_-]{4,40}$/.test(id)) return goScreen(ctx, "games", q);
   const sm = await ctx.api("GET", `z/${id}/summary`);
   if (sm.status !== 200) return { say: `I could not read the game ${id}: ${sm.json?.error ?? "not found"}.`, choices: choices([["Choose another game", `${ctx.base}/go/games`]]) };
-  const s = sm.json, draft = /draft/.test(s.status), unpaid = /payment due|NOT PAID/.test(s.status), published = !draft, payBefore: string | undefined = s.payUntil ?? s.payBefore; // the summary's payUntil (the erasure moment) is the real deadline
+  const s = sm.json, draft = /draft/.test(s.status), unpaid = /payment due|NOT PAID/.test(s.status), published = !draft, payBefore: string | undefined = s.payUntil ?? s.payBefore; // the summary's payUntil (the auto-deletion moment) is the real deadline
   const lk = s.links ?? {};
   const links = (): string[] => [`Console (your own page): ${lk.console ?? s.consoleUrl}`,
     ...(published ? [`Guest link (send to guests): ${lk.guest ?? s.shareUrl}`, `Number screen (for a TV, projector or a video call): ${lk.bigScreen ?? String(s.shareUrl).replace("/z.html", "/big.html")}`] : ["After you publish, two more links appear here: the guest link (to send to guests) and the number screen (for a TV, projector or a video call)."]),
@@ -222,7 +222,7 @@ async function gameStep(ctx: GoCtx, step: string, q: URLSearchParams): Promise<S
   if (published) rows.splice(2, 0, ["Send a message to every guest", `${ctx.base}/go/say?id=${id}`]);
   if (draft) rows.unshift(["Publish (free): the organizer taps once", consoleOf(ctx, id, "publish"), true]);
   if (draft || unpaid) rows.push(["Pay: the organizer pays", lk.pay ?? s.payUrl ?? payOf(ctx, id)]);
-  rows.push(["Erase all guest data now: the organizer confirms", consoleOf(ctx, id, "erase")], ["Pause or stop: the organizer taps once", consoleOf(ctx, id, "pause")]);
+  rows.push(["Delete all guest data now: the organizer confirms", consoleOf(ctx, id, "erase")], ["Pause or stop: the organizer taps once", consoleOf(ctx, id, "pause")]);
   return { say: [`Game ${id}: ${s.status}. Starts ${s.startsAtIST}. Up to ${s.limit} people, ${s.participants} joined, ${s.tickets} ticket${s.tickets === 1 ? "" : "s"} each.`, ...(unpaid && payBefore ? [`Payment is due before ${payBefore} (the organizer pays; I never do).`] : []), "What would you like to do?"].join("\n"), choices: choices(rows), ifWrong: WRONG };
 }
 

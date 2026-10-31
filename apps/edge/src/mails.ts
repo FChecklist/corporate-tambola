@@ -15,7 +15,7 @@ export interface BuiltMail { subject: string; text: string; html: string }
 import { BRAND, esc, footerText, pageHtml } from "./brand";
 
 const AI_CAN = "It can do what you do in the console.";
-const AI_STAYS = "You keep payment, publishing, erasing data, and pause or stop.";
+const AI_STAYS = "You keep payment, publishing, deleting data, and pause or stop.";
 const HOST_CAN = "Watch the game, message every guest, tick prizes as given.";
 const HOST_STAYS = "Nothing else. It cannot change settings, people, payment or data.";
 

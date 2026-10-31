@@ -34,7 +34,7 @@
   };
   // ---------- what the game's public settings say besides the plan: the brand strip, a cancelled game; and a personal invite link's token ----------
   const TOKEN = (q.get("t") || "").trim().slice(0, 80); // a personal link: sent as `token` when joining, so no mobile number is needed
-  const INFO = { brand: null, cancelled: null, dns: false, demo: false }; // demo = a DEMO GAME (free, up to 10 people): every screen says so, and the ticket carries a DEMO GAME watermark until the organizer makes it a real game // dns = "this game did not start": nobody paid, the time and 20 hours passed, the guest data was erased
+  const INFO = { brand: null, cancelled: null, dns: false, demo: false }; // demo = a DEMO GAME (free, up to 10 people): every screen says so, and the ticket carries a DEMO GAME watermark until the organizer makes it a real game // dns = "this game did not start": nobody paid, the time and 20 hours passed, the guest data was auto-deleted
   const cleanBrand = (b) => {
     if (!b || typeof b !== "object") return null;
     const name = String(b.name == null ? "" : b.name).replace(/\s+/g, " ").trim().slice(0, 60);
@@ -226,7 +226,7 @@
   /** TA22: a person who opens the link after the first number is told BEFORE joining: it is running, their numbers start later, what is gone and what is still open. */
   const lateTip = () => INFO.startMs && !INFO.manualStart && !INFO.dns && !INFO.cancelled && Date.now() >= INFO.startMs + 30000 ? `<div class="zbanner info" id="latetip" role="status" style="margin:0 0 8px"><b>This game is already running.</b> If you join now, your numbers start about ${Math.round(ZG.LATE_LAG_ROUNDS * 3)} seconds later. Numbers called before are gone for you, and prizes already won stay won. The other prizes are still open to you.</div>` : "";
   const cancelledView = () => `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This game was cancelled</h2><p class="zsmall" style="margin:0">${esc((INFO.cancelled && INFO.cancelled.message) || "The organizer cancelled this game.")} There is nothing to do on this page. Thank you for your interest.</p></div>`;
-  const dnsView = () => `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This game did not start</h2><p class="zsmall" style="margin:0">This game did not start. Your details have been erased. There is nothing to do on this page. Thank you for your interest.</p></div>`;
+  const dnsView = () => `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>This game did not start</h2><p class="zsmall" style="margin:0">This game did not start. Your details have been auto-deleted. There is nothing to do on this page. Thank you for your interest.</p></div>`;
   const removedView = () => `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div><div class="zcard" role="status"><h2>You have been removed from this game</h2><p class="zsmall" style="margin:0">This phone no longer plays in this game. If you think this is a mistake, please ask the person who invited you.</p></div>`;
   // what the server's "me" answer says about this ticket: removed, and (for a guest invited straight by the organizer's side) whether they may invite
   const ME = { at: -Infinity, role: null, removed: false, canInvite: false, per: 0, used: 0, loaded: false };

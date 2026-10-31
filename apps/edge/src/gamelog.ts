@@ -26,7 +26,7 @@ export interface GameLog {
   joins: { ticket: number; atMs: number }[];
   /** how many more tickets joined than `joins` lists (the list holds the first 2,000); 0 when none, absent in logs saved before 1.6.8 */
   joinsMore?: number;
-  /** every claim: who (ticket number), which prize, what came of it (accepted, wrong, too late) and when; saved with the log because the claim tables are erased after the game */
+  /** every claim: who (ticket number), which prize, what came of it (accepted, wrong, too late) and when; saved with the log because the claim tables are auto-deleted after the game */
   claims: { ticket: number; prize: string; outcome: "accepted" | "wrong" | "too late" | "prize taken"; atMs: number; afterNumber: number | null; takenAtNumber?: number }[];
   /** how many more too-late claims there were than `claims` lists (the note keeps the newest 200); 0 when none, absent in logs saved before 1.6.8 */
   claimsMore?: number;

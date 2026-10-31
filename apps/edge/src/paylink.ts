@@ -46,7 +46,7 @@ export async function lookupPayLink(db: D1, token: string, now: number): Promise
   if (!e || e.org !== link.org) return null;
   let status: PayLinkStatus;
   if (e.cancelled_ms) status = "cancelled";
-  else if (e.unplayed_ms) status = "closed"; // the game did not start and its guest data was erased: nobody can pay for it any more
+  else if (e.unplayed_ms) status = "closed"; // the game did not start and its guest data was auto-deleted: nobody can pay for it any more
   else if (e.pack !== 0) status = "paid";
   else if (link.revoked || now > link.exp_ms) status = "expired";
   else {

@@ -1,7 +1,7 @@
 // PRESENCE (1.6.3): "about how many phones are listening right now". A phone that is in front (a hidden page is silent) tells the server once in a while; the server
 // only counts. To keep the writes small, a phone reports only in the minutes where (ticket number mod K) = (minute mod K), K = ceil(cap / 5), and each report counts K
 // phones: so about 5 reports a minute for the whole game (about 300 small writes an hour) however big it is, and the estimate is the average of the last 5 complete minutes. No names, numbers or tickets are stored: one
-// counter per game and minute, erased after a day. A silent hidden tab is not "offline": the console says "listening" (in front), never "missing".
+// counter per game and minute, auto-deleted after a day. A silent hidden tab is not "offline": the console says "listening" (in front), never "missing".
 import type { D1 } from "./worker";
 import { PRESENCE_PER_MIN, presenceK } from "../../../packages/beacon/src/beat";
 

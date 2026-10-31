@@ -15,7 +15,7 @@ Read order: Part B is the thing a person pastes. Part A is the verified address 
 | There is NO AI link for a sales person or partner. A sales person uses public pages only (Part C, flow 24). | no `partner` role in `worker.ts` `authOfKey` |
 | `/ai/<key>/<api path>` behaves exactly like `/api/<api path>` with the key in the `x-organizer` header. For tools that can only GET: add `?_method=POST` (or `PATCH`) and `&_body=<URL-encoded JSON>` (decoded body at most 6,144 characters). Only on `/ai/<key>/...`. | `worker.ts` lines 298-316 |
 | Only `cta_` and `cth_` keys work in an address. The organizer's sign-in key `ctk_`, the partner key `ctp_` and the platform key never do. Unknown, mistyped, revoked and wrong-kind keys all get the same plain `404 Not found.` | `worker.ts` `aiLink()` |
-| The AI key can NEVER: pay, publish, erase data, pause/resume/stop, choose winners/numbers/tickets, load or read names and mobile numbers (roster answers 403), open the report address, read the organizer's sign-in keys. | `worker.ts` `deny`, `CONSOLE_ONLY`, `can(a,e,true)` checks; `ai-link.ts` `AI_CANNOT` |
+| The AI key can NEVER: pay, publish, delete data, pause/resume/stop, choose winners/numbers/tickets, load or read names and mobile numbers (roster answers 403), open the report address, read the organizer's sign-in keys. | `worker.ts` `deny`, `CONSOLE_ONLY`, `can(a,e,true)` checks; `ai-link.ts` `AI_CANNOT` |
 | Every AI call is written to an audit trail (time, key id, `/api` path, real method, status, network address, program, country), kept 365 days, readable by the organizer. The key itself is never recorded. | `winners.ts` `auditAi` |
 | Live payment status today: `GET /api/payments/status` returns `mode: "off"`, `freeLaunch: false`. Nobody can pay online right now; a published engagement is held at its start time. | curl, 2026-10-06 |
 | The guest page, big screen and payment page are the clean paths `/z`, `/big`, `/pay`. The `.html` spelling answers `308` to the clean path. Both work for a person. | curl |
@@ -82,7 +82,7 @@ Role column: O = organizer AI (`cta_`), H = co-host (`cth_`).
 | 36 | `POST z/<ID>/mark` `{seat,role}` | Flag a ticket organizer / host / co-host / none (may invite without limit, stays out of lucky draws) | O | `seat` = ticket number; a mobile number -> 403 for the AI; unknown seat -> 404 | YES |
 | 37 | `POST z/<ID>/unbind` `{seat}` | Change of phone: the next device to open the link keeps that ticket | O | ticket number only | YES |
 | 38 | `POST z/<ID>/publish` | AI: hand-over only. Draft -> `{needsOrganizer:true, consoleUrl}`. Published -> `{payUrl, shareUrl}` | O | the human publishes (Part C, flow 12) | PREPARE |
-| 39 | `POST z/<ID>/control/request` `{action,note}` | ASK for `pause`, `resume`, `stop` or `erase`; nothing happens until the organizer approves in the console | O | note at most 200 characters; an erase request also e-mails the organizer | PREPARE |
+| 39 | `POST z/<ID>/control/request` `{action,note}` | ASK for `pause`, `resume`, `stop` or `erase`; nothing happens until the organizer approves in the console | O | note at most 200 characters; an delete request also e-mails the organizer | PREPARE |
 | 40 | `GET z/<ID>/control/request` | Requests still waiting | O | | YES |
 | 41 | `GET z/<ID>/control` | The public pause file; `404 {registered:false}` until a published engagement has had its pause key registered by the organizer's console | anyone | used to check that announcements can reach phones (D4) | YES (read-only) |
 | 42 | `GET z/<ID>/reportlink` | `{ready, sent, url:null, note}` for the AI; the address is never given | O,H | | YES (status only) |
@@ -103,7 +103,7 @@ Role column: O = organizer AI (`cta_`), H = co-host (`cth_`).
 | 52 | `POST /api/org/close` `{confirm:true}` | Close account and delete every engagement (409 while a game runs) | organizer only | HUMAN |
 | 53 | `POST /api/checkout`, `POST /api/payments/verify`, `POST /api/payments/webhook` | Razorpay order, verification, webhook | organizer / gateway | HUMAN. An AI key with an engagement id gets 403 "Please sign in again"; the AI must not call these at all |
 | 54 | `POST z/<ID>/publish` (real) | Needs the organizer's own key and `{email, phone}` confirmation; start must be in the future; mails the share/pay links | organizer | HUMAN |
-| 55 | `POST z/<ID>/erase`, `POST z/<ID>/person`, `POST z/<ID>/forget`, `GET z/<ID>/names`, `POST z/<ID>/reportlink` | Erase all participant data; show / delete one player; names of a few winners; replace report link | organizer only | HUMAN |
+| 55 | `POST z/<ID>/erase`, `POST z/<ID>/person`, `POST z/<ID>/forget`, `GET z/<ID>/names`, `POST z/<ID>/reportlink` | Delete all participant data; show / delete one player; names of a few winners; replace report link | organizer only | HUMAN |
 | 56 | `PUT z/<ID>/control/key`, `POST z/<ID>/control`, `POST z/<ID>/control/request/clear` | Register the pause key, send the signed pause/resume/stop, clear requests | the organizer's own browser | HUMAN |
 | 57 | `POST z/<ID>/join`, `GET z/<ID>/seats`, `POST claims`, `POST vote`, `POST won`, `POST over`, `POST confirm`, `GET myprizes`, `GET invites` | What phones do (join with a mobile number, report winners, confirm prize details) | guests | n/a |
 | 58 | `POST z/<ID>/settle` | Always 403: nobody posts winners | nobody | never |
@@ -145,7 +145,7 @@ HOW WE WORK
 5. If an address cannot be opened, or you are not allowed to open an address you built yourself, say which one in one sentence and switch to SETUP SHEET mode: give me the exact values, in the order of the console's fields, and tell me which button to press. Do not print any address that contains my key, except the one I gave you.
 
 WHAT YOU PREPARE AND WHAT ONLY I DO
-You may build and edit my DRAFT (id, date and time, speed, limit, tickets, rounds, rewards, brand breaks, lucky draws, invitations, invite-only), read results, send a message to all guests once published, tick "prize given", flag tickets by number, and create a co-host link. Only I do: Publish, Pay, Erase data, Pause or Stop, load the guest list of names and mobile numbers, and download the report. The software alone decides winners and numbers. When I ask for one of mine, do not try. Tell me the page, the exact button, and what I will see next.
+You may build and edit my DRAFT (id, date and time, speed, limit, tickets, rounds, rewards, brand breaks, lucky draws, invitations, invite-only), read results, send a message to all guests once published, tick "prize given", flag tickets by number, and create a co-host link. Only I do: Publish, Pay, Delete data, Pause or Stop, load the guest list of names and mobile numbers, and download the report. The software alone decides winners and numbers. When I ask for one of mine, do not try. Tell me the page, the exact button, and what I will see next.
 
 DATA PROTECTION (binding)
 - Never ask me for, and never accept, a password, a sign-in code or OTP, a card or bank detail, a Razorpay key, a platform key, or the report address. If I paste one, tell me to delete it and to press Replace my AI link.
@@ -166,7 +166,7 @@ Blanks: `<ENGINE NAME>` (ChatGPT, Claude, Gemini, DeepSeek, z.ai, Grok) and `<MY
 Use B1 with these changes: replace the sentence "This is MY OWN account and I am the owner" with "I am a co-host (or host) invited by the organizer; this link is mine and was created for me", delete "Start by asking whether I am the organizer...", and replace the WHAT YOU PREPARE paragraph with:
 
 ```
-You may only: read the game summary, results and winners by ticket number, send a short message to every guest (160 characters, once published, one every 5 seconds), and tick "prize given". You cannot change the game, see names or numbers, publish, pay, pause, stop or erase. If I ask, say it is the organizer's job.
+You may only: read the game summary, results and winners by ticket number, send a short message to every guest (160 characters, once published, one every 5 seconds), and tick "prize given". You cannot change the game, see names or numbers, publish, pay, pause, stop or delete. If I ask, say it is the organizer's job.
 ```
 
 The co-host's calls through the link are audited like the organizer's. Prizes read through a co-host link show the mobile number as `XXXXXXXX` plus the last two digits.
@@ -217,7 +217,7 @@ Rules that come from the builder doc and are already satisfied by this product: 
 
 The manual (`/ai/<key>`, section 2) already teaches the AI a 12-step conversation (not 11): occasion and guests; limit; date and time; call speed; tickets; rewards; brand breaks; rounds, invite-only and invitations; participants; read-back and yes, then create and settings; publish hand-over and payment warning; afterwards (messages, flags, change of phone, results, prizes). It also lists the addresses, GET-mode examples, the cannot-do list, payment facts and tone.
 
-The manual does NOT contain, and B1 plus this Part therefore supply: the console page map and exact button names for every human step; the back/next/edit/delete command vocabulary; the setup-sheet fallback; the live payment mode check; that numbers start about 2 minutes after the start time; that announcements and pause need the organizer to open the console once after publishing; the reward-line text format of the console; the data-protection script; what to do for media (links only, no upload); flows for report, erase, invoice, AI-link management, refer & earn, and closing; and the facts that no draft can be deleted by hand and that no console field sets an exact date.
+The manual does NOT contain, and B1 plus this Part therefore supply: the console page map and exact button names for every human step; the back/next/edit/delete command vocabulary; the setup-sheet fallback; the live payment mode check; that numbers start about 2 minutes after the start time; that announcements and pause need the organizer to open the console once after publishing; the reward-line text format of the console; the data-protection script; what to do for media (links only, no upload); flows for report, delete, invoice, AI-link management, refer & earn, and closing; and the facts that no draft can be deleted by hand and that no console field sets an exact date.
 
 Everything in C1-C24 below is what the AI follows. Address templates use `<L>` (the AI link base) and `<ID>`. In GET mode write each action as `<L>/<path>?_method=POST&_body=<URL-encoded JSON>` (PATCH for settings).
 
@@ -314,7 +314,7 @@ The AI calls `POST <L>/z/<ID>/publish` once: it returns `{needsOrganizer:true, c
 
 1. The AI first reads `payments/status`. If `mode` is `off` (true today), say: online payment is not switched on yet; the engagement stays published and holds at its start time; they can pay later and the first number comes 2 minutes after the payment is confirmed; they can move the start time (the AI does it with `PATCH settings {startRound}`).
 2. When `mode` is `razorpay`: give `payUrl` from the summary (`/pay?e=<ID>`, no key in it). Page `/pay`: if not signed in, "Please sign in first" with "Sign in with email" (code by e-mail), then it returns to the page. Fields: Organization name, Country, GSTIN (India: 15 characters like 27ABCDE1234F1Z5; for other countries optional tax or VAT number), Email, Mobile number. Button "Pay Rs ... securely with Razorpay". The person enters card or UPI details on Razorpay's own window; the AI never sees them. Success page: "Payment received. Your engagement will begin on time." with "View your invoice" and "Open my engagement". A GST invoice is e-mailed.
-3. State the start time and the last moment to pay (`payUntil` in the summary: there is no other cut-off). Unpaid at the start: the engagement does not begin, the Organizer and Hosts see Payment pending, everyone else sees Waiting for the Organizer or Host to start the game; nothing is charged, no penalty. Paid late: starts 2 minutes after the payment is confirmed. After the guest data is erased the game is closed (This game did not start. Your details have been erased.) and the owner can create a new game like it; its settings stay 30 days. A game time is at most 30 days ahead. We do not give refunds: if the owner cancels a paid game before it starts, the payment stays as credit for their next game for 365 days, and unused credit lapses at the end of day 365.
+3. State the start time and the last moment to pay (`payUntil` in the summary: there is no other cut-off). Unpaid at the start: the engagement does not begin, the Organizer and Hosts see Payment pending, everyone else sees Waiting for the Organizer or Host to start the game; nothing is charged, no penalty. Paid late: starts 2 minutes after the payment is confirmed. After the guest data is auto-deleted the game is closed (This game did not start. Your details have been auto-deleted.) and the owner can create a new game like it; its settings stay 30 days. A game time is at most 30 days ahead. We do not give refunds: if the owner cancels a paid game before it starts, the payment stays as credit for their next game for 365 days, and unused credit lapses at the end of day 365.
 4. Never ask for card, UPI, bank, Razorpay or GSTIN details in the chat, and never call `checkout`, `verify` or `webhook`.
 
 ## C15. After publishing: two things the human must do once
@@ -341,7 +341,7 @@ Within 24 hours of the game ending the organizer is e-mailed ONE link (`/report?
 - Rewards CSV (contains winners' names): console card "Rewards" -> **Download report** (file `<ID>-rewards.csv`). Human only.
 - GST invoice: link in the payment mail and on the "Payment received" page ("View your invoice"); open it and print to PDF. Human only.
 
-## C20. Erase participant data (HUMAN confirms)
+## C20. Delete participant data (HUMAN confirms)
 
 The AI may ask: `POST <L>/z/<ID>/control/request {action:"erase", note}`. Nothing is deleted; the organizer is e-mailed. The person opens the console: card "Your AI assistant is asking" -> **Confirm: delete all participant data** (a browser confirmation follows) or **Dismiss**. Or the card "Participant data" -> **Delete all participant data now**. The winners record and the organizer's details stay. Automatic deletion: names and numbers within 24 hours of the end; winners' hand-over details and the winners record 365 days.
 

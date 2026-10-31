@@ -4,7 +4,7 @@
 //   - without the current version and every box of the point the answer is HTTP 400 { error, code: "consent-required", kind, version }
 //   - every acceptance is one row in consent_log: who (an opaque id), which point, which game or payment, the Terms version, the boxes, a hash of the exact wording shown, the time.
 //     No IP address, no browser details and no phone number are ever stored here.
-//   - the rows of a participant (K4) are erased with the game's other participant data (lifecycle.ts); an organizer's rows are kept as the record of what they accepted.
+//   - the rows of a participant (K4) are auto-deleted with the game's other participant data (lifecycle.ts); an organizer's rows are kept as the record of what they accepted.
 import { TERMS_VERSION } from "./brand";
 import TEXT from "./consent-text.json";
 import type { D1, D1Stmt } from "./worker";

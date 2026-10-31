@@ -1,6 +1,6 @@
 /* Corporate Tambola only: the parts of the new organizer / Host / Co-host console (?flow=new) that other games do not have.
    Loaded AFTER pack/zc-flow.js. It never edits the shared pack: it adds sections to the pack's dashboard and step 3 when they are drawn.
-   Wired to the real engine where the engine has support (rehearsals 1.6.0, prizes, prize handed over, presence, game log, claims, erase).
+   Wired to the real engine where the engine has support (rehearsals 1.6.0, prizes, prize handed over, presence, game log, claims, delete).
    Owner rule D (29 Oct): UI layer only. Whatever the existing engine does not support is HIDDEN (no coming soon, no demo stub, no disabled look-alike). */
 (() => {
   if (typeof window === "undefined" || !window.ZFLOW || !window.ZFLOW.state) return; // the current console also loads this file: it does nothing unless the new console (?flow=new) started
