@@ -123,7 +123,11 @@ describe("an existing game made in the previous console opens in the new screens
     await w.api("POST", "/api/z", { id: "EX-1", startRound: START, callSeconds: 9, cap: 100, name: "Old console game" }, s.aiKey);
     if (Object.keys(settings).length) await w.api("PATCH", "/api/z/EX-1/settings", settings, s.aiKey);
     if (publish) expect((await w.api("POST", "/api/z/EX-1/publish", { email: "boss@acme.com", phone: "98765 43210" }, s.token)).status).toBe(200);
-    const p = await openPage(w.world, { url: "http://localhost/zc.html" + search, html: "zc.html", scripts: SCRIPTS, session: { "ctz-org": s.token as string, "ctz-aimsg": s.aiMessage as string, "ctz-email": "boss@acme.com" }, afterLoad: (win: any, f: string) => { if (f === "zgame.js" && win.ZG && !win.ZG.PRIZE_HOUSES) win.ZG.PRIZE_HOUSES = PRIZE_HOUSES; } });
+    const gid = new URLSearchParams(search).get("e"); const infoText = gid ? await (await w.api("GET", `/api/z/${gid}/info`)).text() : "";
+    const p = await openPage(w.world, { url: "http://localhost/zc.html" + search, html: "zc.html", scripts: SCRIPTS, session: { "ctz-org": s.token as string, "ctz-aimsg": s.aiMessage as string, "ctz-email": "boss@acme.com" }, afterLoad: (win: any, f: string) => {
+      // zc-mode.js asks the game with a SYNCHRONOUS request, which cannot reach the in-memory Worker; happy-dom's own would connect to 127.0.0.1:80 and leave an unhandled ECONNREFUSED that killed whole-folder runs. The page gets the Worker's real answer, read just before.
+      if (f === "keep.js") win.XMLHttpRequest = class { status = 0; responseText = ""; open() {} send() { this.status = 200; this.responseText = infoText; } };
+      if (f === "zgame.js" && win.ZG && !win.ZG.PRIZE_HOUSES) win.ZG.PRIZE_HOUSES = PRIZE_HOUSES; } });
     open.push(p); return p;
   };
   test("an UNPAID draft resumes: the five steps, Draft, the dashboard locked until publish, step 1 filled in", async () => {
@@ -131,12 +135,12 @@ describe("an existing game made in the previous console opens in the new screens
     const t = p.text(); expect(t).toMatch(/Opens after you publish/); expect(t).toMatch(/1\. Date and time/); expect(t).toMatch(/5 Check and publish/); expect(p.errors).toEqual([]);
   });
   test("a published and paid game shows the dashboard: share link, payment done, prizes, rehearsal cards, waiting list, claims, what is happening", async () => {
-    const p = await make(true, true); const t = await p.waitFor((x) => /Waiting for you to let them in/.test(x) && /Tickets claimed/.test(x), 25_000);
+    const p = await make(true, true); const t = await p.waitFor((x) => /Waiting for you to let them in/.test(x) && /Tickets claimed/.test(x) && /Start this rehearsal/.test(x), 25_000); // the rehearsal cards come from their own call: wait for them, never read the page before they are drawn
     for (const w of [/Share this game link/, /z\.html\?e=EX-1/, /Payment\s*Done/, /Practice before the real game/, /Start this rehearsal/, /Nobody is waiting right now/, /Tickets claimed/, /What is happening/, /Prizes/, /game report/i]) expect([String(w), w.test(t)]).toEqual([String(w), true]);
     expect(p.errors).toEqual([]);
   });
   test("the same game with MANUAL start and host-called numbers: the new screens have no Start, roll or Pause control, and the previous screens do (so the page keeps the previous ones for it)", async () => {
-    const n = await make(true, true, { startMode: "manual", callMode: "host" }); const nt = await n.waitFor((x) => /Tickets claimed/.test(x), 25_000);
+    const n = await make(true, true, { startMode: "manual", callMode: "host" }, "?e=EX-1&flow=new"); const nt = await n.waitFor((x) => /Tickets claimed/.test(x), 25_000);
     expect(/Start the game|Start now|Press to Roll Out/i.test(nt)).toBe(false); // what the new screens cannot do
     const o = await make(true, true, { startMode: "manual", callMode: "host" }, "?e=EX-1&flow=old"); const ot = await o.waitFor((x) => /Your progress/.test(x), 25_000);
     expect(ot).toMatch(/Your game at a glance/); expect(!!o.win.document.querySelector(".zf-bar")).toBe(false); expect(!!o.win.document.querySelector("#startgame, [data-open]")).toBe(true); expect(o.errors).toEqual([]); // the previous console is the one that carries the Start block (a signed control key)
