@@ -8,16 +8,16 @@ import { join } from "node:path";
 import { writeFileSync, mkdirSync } from "node:fs";
 
 const args = process.argv.slice(2);
-const arg = (k: string, d?: string) => { const i = args.indexOf("--" + k); return i >= 0 ? (args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : "1") : d; };
+const arg = (k: string, d?: string) => { const i = args.indexOf("--" + k); return i >= 0 ? (args[i + 1] !== undefined && !args[i + 1]!.startsWith("--") ? args[i + 1] : "1") : d; };
 const seed = Number(arg("seed", "1")); const only = arg("only"); const listOnly = args.includes("--list"); const limit = Number(arg("limit", "0"));
 const PORT = Number(process.env.MATRIX_PORT ?? 8804);
 process.env.SIM_PORT = String(PORT); // the shared harness library reads this when it is imported
 const ROOT = join(import.meta.dir, "../../../..");
 
 const { startSim } = await import("../../server");
-const L: any = await import("./lib.mjs");
+const L = await import("./lib.mjs");
 const { A, clock } = L;
-const m: any = await import("./gen-permissions.mjs");
+const m = await import("./gen-permissions.mjs");
 let scenarios: any[] = (await m.default({ seed, R: L.rng(seed * 7919 + 13), L })).map((s: any) => ({ ...s, family: "permissions" }));
 const dup = scenarios.map((s) => s.name).filter((n, i, a) => a.indexOf(n) !== i);
 if (dup.length) { console.error("duplicate scenario names:", [...new Set(dup)].slice(0, 10)); process.exit(2); }
@@ -59,7 +59,7 @@ for (const sc of scenarios) {
     await leaveCurrent();
     if (sc.group) {
       cur = sc.group; const st = new L.T({ name: "setup:" + sc.group.key }, seed); st.calls = 0; st.fivexx = []; CUR = st;
-      try { await A.mailbox.clear(); await withTimeout(sc.group.enter(st), 240_000); groupNotes[sc.group.key] = sc.group.world?.notes ?? []; console.log(`# world ${sc.group.key}: built${groupNotes[sc.group.key].length ? " (" + groupNotes[sc.group.key].join(" ; ").slice(0, 300) + ")" : ""}`); }
+      try { await A.mailbox.clear(); await withTimeout(sc.group.enter(st), 240_000); groupNotes[sc.group.key] = sc.group.world?.notes ?? []; console.log(`# world ${sc.group.key}: built${(groupNotes[sc.group.key] ?? []).length ? " (" + (groupNotes[sc.group.key] ?? []).join(" ; ").slice(0, 300) + ")" : ""}`); }
       catch (e: any) { worldErr[sc.group.key] = (e?.message ?? String(e)).slice(0, 400); sc.group.error = worldErr[sc.group.key]; console.log(`# world ${sc.group.key}: BUILD FAILED ${worldErr[sc.group.key]}`); }
       CUR = null;
     } else { try { await clock.reset(); } catch { /* ignore */ } }
@@ -78,7 +78,7 @@ for (const sc of scenarios) {
 }
 await leaveCurrent();
 const passed = results.filter((r) => r.ok).length; const by: Record<string, { total: number; failed: number }> = {};
-for (const r of results) { by[r.group] ??= { total: 0, failed: 0 }; by[r.group].total++; if (!r.ok) by[r.group].failed++; }
+for (const r of results) { const g = (by[r.group] ??= { total: 0, failed: 0 }); g.total++; if (!r.ok) g.failed++; }
 const health = await (await inner(`http://localhost:${PORT}/__sim/health`)).json() as any;
 const summary = { seed, total: results.length, passed, failed: results.length - passed, checks: nChecks, byGroup: by, worldErrors: worldErr, groupNotes, seconds: Math.round((Date.now() - t0) / 1000), blockedFetches: health.blockedFetches };
 writeFileSync(join(ROOT, `sim/perm-result-seed${seed}.json`), JSON.stringify({ summary, results }, null, 1));
