@@ -44,7 +44,7 @@
   };
   const save = async (ctx, msg) => {
     const rows = rowsNow(), c = S.currency;
-    if (S.mode === "auto" && !(num(S.budget) > 0)) { msg.textContent = BLANK; return; }
+    if (S.mode === "auto" && (!/^[\d,.\s]*$/.test(String(S.budget == null ? "" : S.budget)) || !(num(S.budget) > 0))) { msg.textContent = BLANK; return; } // a currency sign or any other non-digit blocks too
     if (tooSmall()) { msg.textContent = tooSmall(); return; }
     if (S.mode === "manual") { const bad = P.validateManual(rows.map((r) => ({ id: r.id, amount: r.amount, gift: r.gift }))).concat(orderProblem(rows) ? [orderProblem(rows)] : []); if (bad.length) { msg.textContent = bad[0]; return; } }
     if (!st.eid) { msg.textContent = "Please save step 1 first."; return; }
