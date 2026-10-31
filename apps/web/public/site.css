@@ -56,7 +56,7 @@ body{overflow-x:hidden}
 .foot a{color:var(--gold2);display:inline-block;padding:8px 2px;min-height:40px}
 .foot .fl{display:flex;flex-wrap:wrap;gap:4px 18px}
 .foot p{margin:0 0 6px}
-.xbtn{position:absolute;right:12px;top:12px;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#fff;display:grid;place-items:center}
+.xbtn{position:absolute;right:12px;top:12px;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:#fff;display:grid;place-items:center}
 .sheet{position:relative}
 .sheet .row2{display:grid;gap:0 12px}
 .devcode{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between}

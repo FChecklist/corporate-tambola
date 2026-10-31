@@ -1154,6 +1154,7 @@
     const menu = document.createElement("div"); menu.id = "langmenu"; menu.setAttribute("role", "listbox"); menu.hidden = true; menu.style.cssText = "position:fixed;top:54px;right:6px;z-index:46;background:#fff;color:#1a2233;border:1px solid #c9cdd6;border-radius:8px;padding:4px;box-shadow:0 6px 16px rgba(0,0,0,.2)";
     const label = () => { btn.textContent = String(ZG.getLang()).toUpperCase() + " ▾"; };
     for (const [c, n] of Object.entries(ZG.LANGS)) { const o = document.createElement("button"); o.type = "button"; o.setAttribute("role", "option"); o.dataset.lang = c; o.textContent = n; o.style.cssText = "display:block;width:100%;text-align:left;min-height:40px;padding:8px 12px;border:0;background:none;font-size:.9rem;cursor:pointer"; o.onclick = () => { ZG.setLang(c); try { localStorage.setItem("ctz-lang", ZG.getLang()); } catch { /* not remembered */ } label(); menu.hidden = true; btn.setAttribute("aria-expanded", "false"); }; menu.appendChild(o); }
+    let lastY = 0; window.addEventListener("scroll", () => { const y = window.scrollY || 0; const hide = y > 60 && y > lastY; lastY = y; if (hide) { menu.hidden = true; btn.setAttribute("aria-expanded", "false"); } btn.style.opacity = hide ? "0" : "1"; btn.style.pointerEvents = hide ? "none" : "auto"; }, { passive: true });
     btn.onclick = () => { menu.hidden = !menu.hidden; btn.setAttribute("aria-expanded", String(!menu.hidden)); };
     label(); document.body.appendChild(btn); document.body.appendChild(menu);
   })();
