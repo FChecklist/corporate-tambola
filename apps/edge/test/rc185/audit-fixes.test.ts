@@ -62,8 +62,8 @@ describe("A: POST /api/host/setup/email (the Host's first open) reads the addres
     expect(await emailHashOf("johndoe@acme.com")).toBe(await emailHashOf("  JohnDoe＠ACME.com "));
     expect(await emailHashOf("john doe@acme.com")).not.toBe(await emailHashOf("johndoe@acme.com")); // an inner space is never glued
   });
-  test("an account e-mail keeps an inner space (so it is refused later); a participant's Email ID still REMOVES inner spaces", async () => {
-    expect(normAccountEmail(" John Doe@Acme.com ")).toBe("john doe@acme.com");
+  test("an account e-mail with an inner space is refused (never repaired); a participant's Email ID still REMOVES inner spaces", async () => {
+    expect(normAccountEmail(" John Doe@Acme.com ")).toBe(""); // an inner space is REFUSED (empty), never repaired
     expect(normEmail(" John Doe@Acme.com ")).toBe("johndoe@acme.com");
     // the same difference through the real Worker: a person listed as demo5x@... is the person who types 'demo5 x@...' in an Email-ID game
     const m = await w.game(NEW_T, "EML-1", { idKind: "email" });
@@ -84,16 +84,16 @@ describe("D: PATCH settings idKind is locked once people exist", () => {
     expect((await patch(NEW_T, m, { idKind: "email" })).status).toBe(200); expect(await kindOf(NEW_T)).toBe("email");
     expect((await patch(NEW_T, m, { idKind: "emp" })).status).toBe(200); expect(await kindOf(NEW_T)).toBe("emp");
   });
-  test("a person has JOINED: changing the kind either way is refused (409 idkind-locked, the plain sentence) and nothing changes", async () => {
+  test("a person has JOINED: changing the kind either way is refused (409 id-kind-locked, the plain sentence) and nothing changes", async () => {
     const m = await w.game(NEW_T); await w.add(NEW_T, m, [{ name: "A", empId: "1B678" }]);
     expect((await w.join(NEW_T, "1B678", 1)).status).toBe(200);
     const r = await patch(NEW_T, m, { idKind: "email" }); const b = await j(r);
-    expect([r.status, b.error, b.code]).toEqual([409, LOCK, "idkind-locked"]);
+    expect([r.status, b.error, b.code]).toEqual([409, LOCK, "id-kind-locked"]);
     expect(await kindOf(NEW_T)).toBe("emp");
     // and the other way round
     w.reset(); const m2 = await w.game(NEW_T, "EMP-1", { idKind: "email" }); await w.add(NEW_T, m2, [{ name: "A", empId: "demo1@demo-test.invalid" }]);
     expect((await w.join(NEW_T, "demo1@demo-test.invalid", 1)).status).toBe(200);
-    const r2 = await patch(NEW_T, m2, { idKind: "emp" }); expect([r2.status, (await j(r2)).code]).toEqual([409, "idkind-locked"]);
+    const r2 = await patch(NEW_T, m2, { idKind: "emp" }); expect([r2.status, (await j(r2)).code]).toEqual([409, "id-kind-locked"]);
     expect(await kindOf(NEW_T)).toBe("email");
   });
   test("sending the SAME kind again is allowed once people exist, and so is any other setting", async () => {
@@ -104,21 +104,21 @@ describe("D: PATCH settings idKind is locked once people exist", () => {
   });
   test("an OLD game (created before EMP_CLEAN_FROM_MS) cannot be switched to email once people exist, and can before", async () => {
     const m = await w.game(OLD_T); await w.add(OLD_T, m, [{ name: "A", empId: "1B-678" }]); expect((await w.join(OLD_T, "1B-678", 1)).status).toBe(200);
-    const r = await patch(OLD_T, m, { idKind: "email" }); expect([r.status, (await j(r)).code]).toEqual([409, "idkind-locked"]);
+    const r = await patch(OLD_T, m, { idKind: "email" }); expect([r.status, (await j(r)).code]).toEqual([409, "id-kind-locked"]);
     expect((await w.info(OLD_T)).idClean).toBe(false);
     w.reset(); const m2 = await w.game(OLD_T);
     expect((await patch(OLD_T, m2, { idKind: "email" })).status).toBe(200);
   });
-  test("an open game: a person who joined by mobile number also locks the kind", async () => {
+  test("an open game: a person who joined by mobile number only holds no ID hash, so the kind can still be changed (owner rule: the lock is for ID-hash holders)", async () => {
     const m = await w.game(NEW_T, "EMP-1", {}, true);
     expect((await w.call(NEW_T, "POST", "/api/z/EMP-1/join", { name: "G", phone: "9876543210", device: dev(1) })).status).toBe(200);
-    const r = await patch(NEW_T, m, { idKind: "email" }); expect([r.status, (await j(r)).code]).toEqual([409, "idkind-locked"]);
+    const r = await patch(NEW_T, m, { idKind: "email" }); expect(r.status).toBe(200);
   });
   test("PRODUCT BUG D1: a person who is only LISTED (not joined yet) must lock the kind too: the sentence says 'people listed', and the stored list IDs were cleaned for the old kind", async () => {
     const m = await w.game(NEW_T); await w.add(NEW_T, m, [{ name: "A", empId: "1B678" }]);
     expect(count("SELECT COUNT(*) c FROM person")).toBe(1); expect(count("SELECT COUNT(*) c FROM participant")).toBe(0);
     const r = await patch(NEW_T, m, { idKind: "email" });
-    expect([r.status, (await j(r)).code ?? null]).toEqual([409, "idkind-locked"]);
+    expect([r.status, (await j(r)).code ?? null]).toEqual([409, "id-kind-locked"]);
   });
 });
 
