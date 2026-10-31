@@ -388,7 +388,7 @@
   let PLAN_GAME = false; // a game whose rewards carry a scope (made by the 1.9.0 console) uses the 1.9.0 winner wording
   const celebrated = new Set();
   function syncPrizes(v) {
-    PLAN_GAME = !!(v.cfg && (v.cfg.rewards || []).some((r) => r && r.scope));
+    { const rw = (v.cfg && v.cfg.rewards) || []; PLAN_GAME = rw.some((r) => r && r.scope) && rw.every((r) => r && !r.text); } // the 1.9.0 console writes scoped lines with empty text (names only); an old game with gift texts keeps the 1.8.5 wording
     const have = readJson(prizeKey, []), ids = new Set(have.map(winId)), fresh = [];
     const add = (w) => { if (!ids.has(winId(w))) { ids.add(winId(w)); have.push(w); if (!celebrated.has(winId(w))) fresh.push(w); celebrated.add(winId(w)); } };
     for (const w of v.won) add({ round: w.round, pattern: w.pattern, ordinal: w.ordinal, text: w.text, shared: w.shared || 0, name: lineName(v.cfg, w.pattern, w.ordinal) });
