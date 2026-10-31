@@ -38,8 +38,9 @@ describe("player look 1.7.1", () => {
   });
   test("end of game: the thank-you strip with the share and WhatsApp buttons comes first; rules are not shown there", () => {
     expect(z).toContain("Thank you for playing the game. You can recommend this game to others.");
-    expect(z.indexOf('id="zshare"')).toBeLessThan(z.indexOf("Game complete${demoTag()}"));
-    expect(z).toContain('${v.phase === "ended" ? "" : \'<ol class="zrules"');
+    expect(z.indexOf(`id="zshare">Thank you for playing`)).toBeGreaterThan(-1);
+    expect(z.indexOf(`id="zshare">Thank you for playing`)).toBeLessThan(z.indexOf("<h2>Game completed${demoTag()}"));
+    expect(z).toContain('${v.phase === "ended" ? "" : \'<details class="zrulesrow" id="zrulesrow"><summary>Rules</summary><ol class="zrules"');
   });
   test("hidden because the engine cannot do it: no 'Game completed' page after 30 minutes (the view carries no end time)", () => {
     expect(z).not.toMatch(/Game completed \(Game/);
