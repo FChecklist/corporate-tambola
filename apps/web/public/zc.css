@@ -75,7 +75,7 @@ a.zc-chip::before,.zc-chips .zc-chip[data-mode]::before{display:none}
 .zc-small{font-size:12px;color:var(--zc-mut);margin:6px 0 0}
 .zc-nomargin{margin:0}
 .zc-okt{color:var(--zc-ok)}.zc-badt{color:var(--zc-bad)}.zc-warnt{color:var(--zc-warn)}
-.zc-check{display:flex;gap:8px;align-items:center;font-size:13px;margin:4px 0;cursor:pointer}
+.zc-check{display:flex;gap:8px;align-items:center;font-size:13px;margin:4px 0;cursor:pointer;min-height:44px}
 .zc-check input{width:18px;height:18px}
 .zc-btn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:0 20px;border:0;border-radius:11px;background:var(--wine,#5A1426);color:#fff;font-weight:700;font-size:15px;text-decoration:none;cursor:pointer}
 .zc-btn-s{min-height:40px;padding:0 16px;font-size:14px}
