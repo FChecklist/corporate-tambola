@@ -148,3 +148,4 @@ a.zf-add { display: inline-flex; align-items: center; text-decoration: none; }
   .zf-prizelist li { border-color: #2c3a5c; } .zf-timer { background: #1a2745; } .zf-rehcard { border-color: #3a4a6e; }
   .zf-warn { background: #4a3a0d; color: #ffe9a6; } .zf-completed { background: #153a6e; color: #d7e6fb; }
 }
+.zf-tick { display: flex; align-items: center; min-height: 44px; }
