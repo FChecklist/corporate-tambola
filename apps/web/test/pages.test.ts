@@ -1244,7 +1244,7 @@ const waitOf = async (o: O, id: string, key = o.token) => (await o.json(await o.
 const fakeWin = () => { const w: any = { location: { href: "" }, opener: 1, closed: false, close() { w.closed = true; } }; return w; };
 describe("console phase 2: wording fixes, My people, waiting room, remove, play now (real Worker)", () => {
   const ready = async (o: O, id: string, w = spy(), key = o.token) => { const p = await consolePage(o, id, key, {}, { afterLoad: w.hook }); await p.waitFor((x) => /Hello|Last step|Your game|Hi\./i.test(x)); return p; };
-  const myPeople = async (p: Page) => { openStep(p, 6); await p.waitFor((x) => /My people/.test(x) && /people are on my list|person is on my list/.test(x)); };
+  const myPeople = async (p: Page) => { await p.waitFor(() => !!p.$('.zc-dot[data-open="6"]')); /* the jump bar is drawn a moment after the greeting (one full run failed here: no such button yet) */ openStep(p, 6); await p.waitFor((x) => /My people/.test(x) && /people are on my list|person is on my list/.test(x)); };
 
   test("wording: no 'engagement' anywhere in the ten steps, singular and plural right, friendly dates, 365-day line says who is kept, step 9 line does not repeat its title", async () => {
     const o = await organizer(); await make(o, "UI-WORD"); await publish(o, "UI-WORD");
@@ -1529,7 +1529,7 @@ describe("console phase 3: brand on the ticket, See what guests see, payment lin
     expect(p.$("#copypaylink")!.textContent).toBe("Copy payment link"); p.click("#copypaylink");
     await p.waitFor((x) => /Anyone with this link can pay for this game\. It works until the game is paid\. It lasts 7 days, or until the game starts if that is later\./.test(x));
     const made = w.st.last["POST /api/z/UI-PAYL/paylink"]; expect(made.url).toMatch(/\/paylink\.html\?t=/); expect(copied).toBe(made.url); expect(p.$("#copypaylink")!.textContent).toBe("Copy payment link again");
-    const h = await consolePage(o, "UI-PAYL", await hostKey(o)); await h.waitFor((x) => /Last step|Your game/i.test(x)); openStep(h, 8); expect(h.$("#copypaylink")).toBeTruthy();
+    const h = await consolePage(o, "UI-PAYL", await hostKey(o)); await h.waitFor((x) => /Last step|Your game/i.test(x)); openStep(h, 8); await h.waitFor(() => !!h.$("#copypaylink")); expect(h.$("#copypaylink")).toBeTruthy(); // wait for the button: under load the step is drawn a moment after the click
     const c = await consolePage(o, "UI-PAYL", await cohostKey(o, "UI-PAYL")); await c.waitFor((x) => /Hi\. Here is the game/.test(x)); openStep(c, 3); await c.waitFor(() => !!c.$("#copypaylink"));
     Object.defineProperty(c.win.navigator, "clipboard", { value: { writeText: async (t: string) => { copied = t; } }, configurable: true }); c.click("#copypaylink"); await c.waitFor((x) => /Anyone with this link can pay/.test(x)); expect(copied).toMatch(/paylink\.html\?t=/);
     o.world.raw.prepare("UPDATE engagement SET pack=100 WHERE id='UI-PAYL'").run(); o.world.raw.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").run("paidby/UI-PAYL", JSON.stringify({ by: "organizer", ms: START_MS - HOUR }));
@@ -1781,7 +1781,7 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     p.click('[data-save="1"]'); await p.waitFor((x) => /Pick the day and the time/.test(x)); // the date is never copied, it must be picked
     p.click('[data-ck="day"][data-v="other"]'); const d = new Date((p.win as any).Date.now() + 5.5 * 3600000 + 3 * 86400000); setField(p, "#f-dayo", d.toISOString().slice(0, 10)); p.click('[data-ck="time"][data-v="18:00"]'); p.click('[data-save="1"]'); await p.waitFor((x) => /Saved\./.test(x));
     expect(p.$("#newgameread")).toBeNull();
-    const home = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage }, { afterLoad: w.hook }); await home.waitFor((x) => /Create a new game/.test(x)); home.click('[data-hist="1"]'); await home.waitFor(() => !!home.$('[data-clonebtn][data-from="UI-OLD1"]'));
+    const home = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage }, { afterLoad: w.hook }); await home.waitFor((x) => /Create a new game/.test(x)); await home.waitFor(() => !!home.$('[data-hist="1"]')); home.click('[data-hist="1"]'); await home.waitFor(() => !!home.$('[data-clonebtn][data-from="UI-OLD1"]'));
     home.click('[data-clonebtn][data-from="UI-OLD1"]'); await home.waitFor(() => !!home.$("#clonepanel")); expect(home.$("#clonepeople")).toBeTruthy();
     const h = await consolePage(o, "UI-OLD1", await hostKey(o)); await h.waitFor(() => !!h.$('.zc-dot[data-open="7"]')); openStep(h, 7); expect(h.$("[data-clonebtn]")).toBeTruthy(); // a Host has it too
     const c = await consolePage(o, "UI-OLD1", await cohostKey(o, "UI-OLD1")); await c.waitFor((x) => /Hi\. Here is the game/.test(x)); for (let n = 1; n <= 3; n++) openStep(c, n); expect(c.$("[data-clonebtn]")).toBeNull();
@@ -1835,6 +1835,7 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
   test("Your games: an unpublished draft has a Delete (two taps) that frees its place; a published game has none", async () => {
     const o = await organizer(); await make(o, "UI-DRAFT1"); await make(o, "UI-DRAFT2"); await make(o, "UI-PUB1"); await publish(o, "UI-PUB1");
     const p = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" }); await p.waitFor((x) => /Your games/.test(x));
+    await p.waitFor(() => p.win.document.querySelectorAll("[data-del-draft]").length >= 2); // the list is drawn a moment after its heading (one full run read it too early)
     const dels = () => Array.from(p.win.document.querySelectorAll("[data-del-draft]")).map((e: any) => e.dataset.delDraft).sort();
     expect(dels()).toEqual(["UI-DRAFT1", "UI-DRAFT2"]); // only drafts, never the published game
     p.click('[data-del-draft="UI-DRAFT1"]'); expect(p.text()).toMatch(/Tap again to delete/); expect(dels()).toEqual(["UI-DRAFT1", "UI-DRAFT2"]); // the first tap only asks
