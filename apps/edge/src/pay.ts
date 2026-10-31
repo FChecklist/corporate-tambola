@@ -23,7 +23,7 @@ import { partnerCode, phoneHashFor, recordCommission, refCode } from "./partners
 import { helperRefFor } from "./helpdesk";
 import { attemptStatusOf, centralOf, derivedEventKey, eventSeen, markEventSeen, recordAttempt, recordRefund, storePaymentDetails, txnIdOf } from "./ledgerc";
 import { getMode, mailGate, testFlag, type ModeEnv } from "./mode";
-import { strictAccountEmail } from "./empid";
+import { strictAccountEmail, normAccountEmail } from "./empid";
 import { isTestLogin } from "./testlogins";
 import { lookupPayLink, packFor, payLinkPublic } from "./paylink";
 import { rehearsalMailWrap } from "./rehearsal-mail";
@@ -210,7 +210,7 @@ async function fulfilInner(env: PayEnv, paymentId: string, now: number, spend: (
   if (!(await spend(6))) return { error: "Busy day. Your payment is safe; this will complete shortly.", status: 503 };
   const meta = JSON.parse(p.meta);
   if (meta.paytest) return fulfilPaytest(env, p, meta, now);
-  const eh = await sha("email|" + p.email.toLowerCase());
+  const eh = await sha("email|" + normAccountEmail(p.email));
   let org: string | null = meta.orgId ?? (await db.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>())?.org ?? null;
   let organizerKey: string | null = null;
   const test = p.is_test ? 1 : 0; // a payment made in TEST mode (mode.ts): everything it creates is flagged too
