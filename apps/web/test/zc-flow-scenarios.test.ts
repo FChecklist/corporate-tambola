@@ -60,8 +60,8 @@ const PRIZE_PAGE = (() => { const w: any = new Window({ url: "http://localhost/z
   new Function("window", "document", "location", "fetch", "MutationObserver", src)(w, w.document, w.location, async () => ({ ok: true, json: async () => ({ ok: true }) }), w.MutationObserver); return w.ZFLOW; })();
 const PRIZE_CACHE = new Map<string, any[]>();
 const AB_CACHE = new Map<string, boolean | null>();
-const EMAILS: [string, boolean][] = [["asha@acme.com", true], ["Asha.Rao+tambola@Acme.co.in", true], ["asha@", false], ["", false], ["a b@acme.com", false]];
-const EMAIL_ORACLE = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+const EMAILS: [string, boolean][] = [["asha@acme.com", true], ["Asha.Rao+tambola@Acme.co.in", true], ["asha@", false], ["", false], ["a b@acme.com", true]];
+const EMAIL_ORACLE = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.replace(/\s+/g, ""));
 test("logic: every scenario of the matrix (10,000+) gives the owner's outcome and the right approvers", () => {
   let n = 0; const bad: string[] = []; const t0 = Date.now(); let emailChecks = 0;
   const LIMIT = Number(process.env.SCEN_LIMIT || 0); // a deliberate-break check runs only the first scenarios; the release gate (no limit) runs them all

@@ -31,7 +31,7 @@ describe("the Housie landing page", () => {
   });
   test("the heading of the games is the owner's; the trust list is the owner's list of eight; contact (phone and e-mail) is in the hero", () => {
     expect(html).toContain("Choose a game for your close group:"); expect(html).toContain('<p class="six-title">Choose a game for your close group</p>'); expect(html).not.toContain("Choose your game");
-    for (const f of ["Designed for the engagement of company employees and their extended families.", "Close group online engagement and fun.", "Players never pay.", "Only the people you invite can join.", "No app to install.", "Player details are erased within 24 hours.", "A free Tambola or Bingo demo for 10 people.", "Designed to follow the EU GDPR, US privacy laws and India&rsquo;s DPDP Act."]) expect(html).toContain("<li><b>" + f + "</b></li>");
+    for (const f of ["Designed for the engagement of company employees and their extended families.", "Close group online engagement and fun.", "Players never pay.", "Only the people you invite can join.", "No app to install.", "Player details are auto-deleted within 24 hours.", "A free Tambola or Bingo demo for 10 people.", "Designed to follow the EU GDPR, US privacy laws and India&rsquo;s DPDP Act."]) expect(html).toContain("<li><b>" + f + "</b></li>");
     expect((html.match(/<ul class="lp-facts">([\s\S]*?)<\/ul>/)![1]!.match(/<li>/g) ?? []).length).toBe(8);
     expect(html).toContain('href="tel:+919650397480">(+91) 96503 97480'); expect(html).toContain('href="mailto:hello@corporatetambola.com">hello@corporatetambola.com');
   });

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
-import { cleanEmpId, empCleanOn, normEmpFor, normEmail, looksLikeEmail, EMP_CLEAN_FROM_MS, EMP_MAX } from "../src/empid";
+import { cleanEmpId, empCleanOn, normEmpFor, normEmail, normAccountEmail, looksLikeEmail, EMP_CLEAN_FROM_MS, EMP_MAX } from "../src/empid";
 import { cleanEmail } from "../src/approvals";
 import { emailHashOf } from "../src/hostsetup";
 
@@ -108,7 +108,7 @@ describe("1.8.5 the Email ID is case-insensitive everywhere, and never goes thro
     for (const v of variants) { expect(normEmail(v)).toBe(BASE); expect(cleanEmail(v)).toBe(BASE); expect(await emailHashOf(v)).toBe(await emailHashOf(BASE)); }
   });
   test("spaces around and inside, tabs, and the full-width at-sign and full stop are removed or normalised", async () => {
-    for (const v of [" demo1@demo-test.invalid ", "demo1 @ demo-test.invalid", "\tdemo1@demo-test.invalid\n", "demo1＠demo-test.invalid", "ｄｅｍｏ１＠ｄｅｍｏ－ｔｅｓｔ．ｉｎｖａｌｉｄ", "DEMO1\u00a0@Demo-Test.Invalid"]) { expect(normEmail(v)).toBe(BASE); expect(cleanEmail(v)).toBe(BASE); expect(await emailHashOf(v)).toBe(await emailHashOf(BASE)); }
+    for (const v of [" demo1@demo-test.invalid ", "demo1 @ demo-test.invalid", "\tdemo1@demo-test.invalid\n", "demo1＠demo-test.invalid", "ｄｅｍｏ１＠ｄｅｍｏ－ｔｅｓｔ．ｉｎｖａｌｉｄ", "DEMO1\u00a0@Demo-Test.Invalid"]) { expect(normEmail(v)).toBe(BASE); expect(cleanEmail(v)).toBe(BASE); if (/\s\S*@|@\S*\s/.test(v.trim())) expect(normAccountEmail(v)).toBe(""); /* an ACCOUNT e-mail with a space inside is refused, never repaired (1.8.5 audit fix) */ else expect(await emailHashOf(v)).toBe(await emailHashOf(BASE)); }
     expect(cleanEmail("demo1@")).toBe(null); expect(cleanEmail("")).toBe(null);
   });
   test("the employee-ID cleaner is never applied to an email: it would make DEMO1DEMOTESTINVALID", () => {
@@ -121,7 +121,7 @@ describe("1.8.5 the Email ID is case-insensitive everywhere, and never goes thro
     for (const at of [NEW_T, OLD_T]) {
       const d = makeD1(); env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" } as any;
       await setup(at); const r = await joinId(at, BASE, 1); expect(r.status).toBe(400); const b = await j(r); expect(b.code).toBe("bad-id");
-      if (at === NEW_T) expect(b.error).toContain("looks like an email ID"); else expect(b.error).toContain("letters and numbers only");
+      if (at === NEW_T) expect(b.error).toContain("looks like an Email ID"); else expect(b.error).toContain("letters and numbers only");
       expect(JSON.stringify(b)).not.toContain("DEMO1DEMOTESTINVALID");
     }
   });

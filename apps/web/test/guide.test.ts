@@ -22,7 +22,7 @@ function serverMessages() {
     readFileSync(join(EDGE, f), "utf8").split("\n").forEach((l, i) => {
       for (const m of l.matchAll(/error:\s*("(?:[^"\\]|\\.)*"|`[^`]*`)/g)) {
         const st = /\}\s*,\s*(\d{3})\s*\)/.exec(l.slice(m.index! + m[0].length)) ?? /status:\s*(\d{3})/.exec(l);
-        out.push({ file: f, line: i + 1, status: st ? Number(st[1]) : 400, msg: m[1]!.slice(1, -1) });
+        for (const msg of m[1]!.slice(1, -1).includes("${idWord(vf.idKind)}") ? ["employee ID", "Email ID"].map((w) => m[1]!.slice(1, -1).replace("${idWord(vf.idKind)}", w)) : [m[1]!.slice(1, -1)]) out.push({ file: f, line: i + 1, status: st ? Number(st[1]) : 400, msg }); // the ID word is a variable: check both words
       }
     });
   }

@@ -1133,7 +1133,7 @@ describe("console round 2 (cancel, confirming, team, e-mail rule, AI switch)", (
     const panel = p.$("#cancelpanel") as any; expect(panel.getAttribute("role")).toBe("alertdialog"); expect(panel.className).toMatch(/zc-cwarn/); expect(p.$("#cancelprog")!.textContent).toBe("Step 1 of 3"); expect(p.text()).toMatch(/You are cancelling the game\. You need to confirm 3 times before the game is cancelled\./);
     expect(p.$("#cancelback")!.textContent).toBe("No, keep my game"); expect(p.$("#cancel1")!.textContent).toBe("Yes, go to the 2nd confirmation"); expect(p.$("#cancel2")).toBeNull(); expect(p.$("#cancel3")).toBeNull();
     p.click("#cancel1"); await p.waitFor((x) => /2nd confirmation/.test(x) && /You cannot undo this/.test(x));
-    expect(p.$("#cancelprog")!.textContent).toBe("Step 2 of 3"); expect(p.text()).toMatch(/You are cancelling the game/); expect(p.$("#cancelwhat")!.textContent).toBe("Guests will be told. Their names and numbers will be erased. You cannot undo this."); expect(p.$("#cancel3")).toBeNull();
+    expect(p.$("#cancelprog")!.textContent).toBe("Step 2 of 3"); expect(p.text()).toMatch(/You are cancelling the game/); expect(p.$("#cancelwhat")!.textContent).toBe("Guests will be told. Their names and numbers will be auto-deleted. You cannot undo this."); expect(p.$("#cancel3")).toBeNull();
     expect((p.$("#cancel2") as any).disabled).toBe(true); expect((p.$("#cancelagree") as any).checked).toBe(false); expect(p.$("#cancel2")!.textContent).toBe("Submit"); // the box gates the button
     p.click("#cancelprev"); await p.waitFor((x) => /1st confirmation/.test(x)); p.click("#cancel1"); await p.waitFor((x) => /2nd confirmation/.test(x)); // Go back works
     expect((await o.json(await o.api("GET", "/api/z/UI-CAN/summary", undefined, o.token))).cancelled).toBeFalsy(); // two screens in, still nothing sent
@@ -1255,7 +1255,7 @@ describe("console phase 2: wording fixes, My people, waiting room, remove, play 
     expect(syn()[8]).not.toMatch(/After the game\s*After the game/);
     for (let n = 1; n <= 10; n++) { openStep(p, n); expect([n, /ngagement/.test(p.text())]).toEqual([n, false]); }
     openStep(p, 10); const t = await p.waitFor((x) => /Within 24 hours of the game ending/.test(x));
-    expect(t).toMatch(/Your details as Organizer and Host, and the winners record, are kept for 365 days\. Co-host details are erased with the guests\./);
+    expect(t).toMatch(/Your details as Organizer and Host, and the winners record, are kept for 365 days\. Co-host details are auto-deleted with the guests\./);
     expect(t).not.toMatch(/\d{4}-\d\d-\d\d|\bIST\b/); expect(t).toMatch(/deleted by \d{1,2} \w{3} \d{4}, \d{1,2}:\d\d (am|pm)/); expect(t).toMatch(/kept until \d{1,2} \w{3} \d{4}/);
     openStep(p, 7); expect(p.text()).toMatch(/Continue/); expect(p.text()).not.toMatch(/Save and continue/); openStep(p, 3); expect(p.$('[data-save="3"]')!.textContent).toBe("Save and continue");
     openStep(p, 5); expect(p.$('[data-save="5"]')!.textContent).toBe("Continue");
@@ -1715,7 +1715,7 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     expect(p.$("#norefund")!.textContent).toBe("There is no refund. Your payment stays as credit for your next game, for 365 days."); expect(p.$("#cancelresched")!.textContent).toBe("Change the date instead");
     p.click("#cancelresched"); await p.waitFor(() => /open/.test(p.$("#sec1")!.className)); expect(p.$("#cancelpanel")).toBeNull(); expect(posts.length).toBe(0); // it goes to step 1 and sends nothing
     openStep(p, 7); p.click("#cancelopen"); await p.waitFor((x) => /1st confirmation/.test(x)); p.click("#cancel1"); await p.waitFor((x) => /2nd confirmation/.test(x));
-    expect(p.$("#cancelwhat")!.textContent).toBe("Your credit: Rs 2,399.00, valid until 14 Jun 2027. Guests will be told. Their names and numbers will be erased. You cannot undo this.");
+    expect(p.$("#cancelwhat")!.textContent).toBe("Your credit: Rs 2,399.00, valid until 14 Jun 2027. Guests will be told. Their names and numbers will be auto-deleted. You cannot undo this.");
     expect(p.$("#cancelpanel")!.textContent).not.toMatch(/You paid|Payment charge|You get back|refund/i); expect((p.$("#cancel2") as any).disabled).toBe(true); tickAgree(p); p.click("#cancel2"); await p.waitFor((x) => /Final confirmation/.test(x)); expect(posts.length).toBe(0);
     p.click("#cancel3"); await p.waitFor((x) => /This game was cancelled/.test(x)); expect(posts).toEqual([{ confirmations: 3 }]);
     expect(p.$("#creditnote")!.textContent).toBe("Your payment of Rs 2,399.00 stays as credit until 14 Jun 2027. Use it for your next game.");
@@ -1725,7 +1725,7 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     const o = await organizer(); await make(o, "UI-CRU", { name: "Diwali Night" }); await publish(o, "UI-CRU");
     const p = await consolePage(o, "UI-CRU"); await p.waitFor((x) => /Last step|Your game|Hello/i.test(x)); openStep(p, 7);
     p.click("#cancelopen"); await p.waitFor((x) => /1st confirmation/.test(x)); expect(p.$("#norefund")).toBeNull(); expect(p.$("#cancelresched")).toBeTruthy(); p.click("#cancel1"); await p.waitFor((x) => /2nd confirmation/.test(x));
-    expect(p.$("#cancelwhat")!.textContent).toBe("Guests will be told. Their names and numbers will be erased. You cannot undo this."); expect(p.$("#cancelpanel")!.textContent).not.toMatch(/credit|refund/i);
+    expect(p.$("#cancelwhat")!.textContent).toBe("Guests will be told. Their names and numbers will be auto-deleted. You cannot undo this."); expect(p.$("#cancelpanel")!.textContent).not.toMatch(/credit|refund/i);
     tickAgree(p); p.click("#cancel2"); await p.waitFor((x) => /Final confirmation/.test(x)); p.click("#cancel3"); await p.waitFor((x) => /This game was cancelled/.test(x)); expect(p.$("#creditnote")).toBeNull();
   });
 
@@ -1755,15 +1755,15 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     expect(t).toMatch(/We do not give refunds\. If you cancel a paid game before it starts, your payment stays in the Organizer's account as credit for the next game, for 365 days\. Unused credit lapses at the end of day 365\./);
   });
 
-  test("a game that waits: the Organizer sees when guest data will be erased; the Co-host sees 'Waiting for the Organizer or Host to start the game.'; a game that did not start says so with the new-game button (and no way to pay)", async () => {
-    const o = await organizer(); await make(o, "UI-WAITS"); await publish(o, "UI-WAITS"); const erase = Date.parse("2026-10-03T21:30:00+05:30");
-    const p = await consolePage(o, "UI-WAITS", o.token, {}, { afterLoad: spy({ "GET /api/z/UI-WAITS/summary": async (_m, _b, _u, real) => ({ ...(await real()), waitingFor: "organizer", erasureMs: erase }) }).hook }); await p.waitFor((x) => /Last step|Your game|Hello/i.test(x));
-    await p.waitFor(() => !!p.$("#erasurestrip")); expect(p.$("#paynote")!.textContent).toMatch(/A payment is pending for this game/); expect(p.$("#erasurestrip")!.textContent).toBe("Guest data will be erased on 3 Oct 2026, 9:30 pm if the game does not start.");
-    openStep(p, 8); expect(p.$("#erasureline")!.textContent).toMatch(/erased on 3 Oct 2026, 9:30 pm/);
+  test("a game that waits: the Organizer sees when guest data will be auto-deleted; the Co-host sees 'Waiting for the Organizer or Host to start the game.'; a game that did not start says so with the new-game button (and no way to pay)", async () => {
+    const o = await organizer(); await make(o, "UI-WAITS"); await publish(o, "UI-WAITS"); const purgeAt = Date.parse("2026-10-03T21:30:00+05:30");
+    const p = await consolePage(o, "UI-WAITS", o.token, {}, { afterLoad: spy({ "GET /api/z/UI-WAITS/summary": async (_m, _b, _u, real) => ({ ...(await real()), waitingFor: "organizer", erasureMs: purgeAt }) }).hook }); await p.waitFor((x) => /Last step|Your game|Hello/i.test(x));
+    await p.waitFor(() => !!p.$("#erasurestrip")); expect(p.$("#paynote")!.textContent).toMatch(/A payment is pending for this game/); expect(p.$("#erasurestrip")!.textContent).toBe("Guest data will be auto-deleted on 3 Oct 2026, 9:30 pm if the game does not start.");
+    openStep(p, 8); expect(p.$("#erasureline")!.textContent).toMatch(/auto-deleted on 3 Oct 2026, 9:30 pm/);
     const c = await consolePage(o, "UI-WAITS", await cohostKey(o, "UI-WAITS"), {}, { afterLoad: spy({ "GET /api/z/UI-WAITS/cohost": async (_m, _b, _u, real) => ({ ...(await real()), waitingFor: "organizer" }) }).hook }); await c.waitFor((x) => /Hi\. Here is the game/.test(x));
     await c.waitFor(() => !!c.$("#cohwaiting")); expect(c.$("#cohwaiting")!.textContent).toBe("Waiting for the Organizer or Host to start the game."); expect(c.$("[data-clonebtn]")).toBeNull();
     const d = await consolePage(o, "UI-WAITS", o.token, {}, { afterLoad: spy({ "GET /api/z/UI-WAITS/summary": async (_m, _b, _u, real) => ({ ...(await real()), didNotStart: true }), "GET /api/z/UI-WAITS/info": async (_m, _b, _u, real) => ({ ...(await real()), didNotStart: true }) }).hook });
-    await d.waitFor(() => !!d.$("#didnotstart")); expect(d.$("#didnotstart")!.textContent).toMatch(/This game did not start\.\s*Guest details have been erased\./); expect(d.$("#didnotstart [data-clonebtn]")!.textContent).toBe("Create a new game like this one"); expect(d.$("#paynote")).toBeNull();
+    await d.waitFor(() => !!d.$("#didnotstart")); expect(d.$("#didnotstart")!.textContent).toMatch(/This game did not start\.\s*Guest details have been auto-deleted\./); expect(d.$("#didnotstart [data-clonebtn]")!.textContent).toBe("Create a new game like this one"); expect(d.$("#paynote")).toBeNull();
     openStep(d, 8); expect(d.$('#sec8 a[href^="/pay.html"]')).toBeNull(); expect(d.$("#copypaylink")).toBeNull();
   });
 
@@ -1790,7 +1790,7 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
   test("Create a new game like this one when the old list is gone: a calm line instead of the tick box; a server refusal is shown", async () => {
     const o = await organizer(); await make(o, "UI-OLD2"); await publish(o, "UI-OLD2");
     const p = await consolePage(o, "UI-OLD2", o.token, {}, { afterLoad: spy({ "POST /api/z/UI-OLD2/clone": () => ({ status: 409, body: { error: "You already have 10 drafts. Delete one first." } }) }).hook }); await p.waitFor((x) => /Last step|Your game|Hello/i.test(x)); openStep(p, 7);
-    p.click("[data-clonebtn]"); await p.waitFor(() => !!p.$("#clonepanel")); expect(p.$("#clonepeople")).toBeNull(); expect(p.$("#clonepanel")!.textContent).toMatch(/The old guest list has been erased, so add your people again\./);
+    p.click("[data-clonebtn]"); await p.waitFor(() => !!p.$("#clonepanel")); expect(p.$("#clonepeople")).toBeNull(); expect(p.$("#clonepanel")!.textContent).toMatch(/The old guest list has been auto-deleted, so add your people again\./);
     p.click("#clonego"); await p.waitFor((x) => /You already have 10 drafts/.test(x)); p.click("#cloneno"); expect(p.$("#clonepanel")).toBeNull();
   });
 
