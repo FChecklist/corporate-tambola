@@ -163,3 +163,7 @@ a.zf-add { display: inline-flex; align-items: center; text-decoration: none; }
 .zf-ready li label, li:has(> label > #zf-shared) { display: flex; align-items: center; gap: 10px; min-height: 44px; }
 li > label:has(#zf-shared) { display: flex; align-items: center; gap: 10px; min-height: 44px; width: 100%; box-sizing: border-box; padding: 8px 0; cursor: pointer; }
 input#zf-shared { width: 24px; height: 24px; flex: none; margin: 0; }
+/* Manual prize table: the Remove button stays inside the box and is a 44 px tap area */
+.zp-table .zf-link { min-height: 44px; min-width: 44px; padding: 0 10px; }
+@media (max-width: 480px) { .zp-table td:last-child { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; } .zp-table td:last-child input[type=text] { flex: 1 1 100%; } .zp-table td:last-child .zf-link { flex: 0 0 auto; } }
+@media (max-width: 900px) { .zf-table.zp-table { min-width: 0; width: 100%; table-layout: fixed; } .zp-table td input[type=text], .zp-table td select { max-width: 100%; box-sizing: border-box; } .zp-table td:last-child { word-break: break-word; } }
