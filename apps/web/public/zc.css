@@ -254,3 +254,6 @@ a.zc-chip::before,.zc-chips .zc-chip[data-mode]::before{display:none}
 
 /* 1.8.5 polish: step buttons 40px */
 .zc-dot{width:40px;height:40px}
+
+/* 1.8.5 browser check 3: radio rows 44px high */
+html .zf-opt{min-height:44px;display:flex;align-items:center;gap:8px}

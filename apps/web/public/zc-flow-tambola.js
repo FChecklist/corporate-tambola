@@ -98,10 +98,13 @@
   const timeText = () => { if (!st.when) return "the time you set"; try { return new Intl.DateTimeFormat("en-GB", { timeZone: st.when.zone, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(st.when.ms)); } catch { return "the time you set"; } };
   const runSummary = (r, when) => "Your game: " + (r.start === "manual" ? "starts at " + when + " when you press Start." : "starts by itself at " + when + ".") + " " + (r.call === "host" ? "You call the numbers." : "The game calls the numbers.");
   let idSaved = null; // the kind of ID the game really holds (from the server), so a refused change puts the radio back
-  const runMsg = (text, status) => { // a refused save is never silent: the server's plain message, with its guide card when the guide is on the page
+  const signInInto = (m) => { m.textContent = ""; m.append("Please sign in first. ", el("a", { href: "/zc.html", id: "zt-signin" }, "Open the organizer sign-in"), " and sign in with your e-mail, then come back to this step."); };
+  const runMsg = (text, status) => { // a refused save is never silent: the server's plain message ONCE, then its guide card (the message sits in a heading element and the box has no alert role, so the guide's own page scan does not turn it into a second card)
     let m = document.getElementById("zt-runmsg");
-    if (!m) { const anchor = document.getElementById("zt-idkind") || document.getElementById("zt-run"); if (!anchor) return; m = el("div", { id: "zt-runmsg", role: "alert", class: "zf-msg" }); anchor.after(m); }
-    m.textContent = text || ""; if (!text) return;
+    if (!m) { const anchor = document.getElementById("zt-idkind") || document.getElementById("zt-run"); if (!anchor) return; m = el("div", { id: "zt-runmsg", class: "zt-runmsg" }); anchor.after(m); }
+    m.textContent = ""; if (!text) return;
+    if (/not allowed/i.test(text)) { m.className = "zf-msg"; signInInto(m); return; } // no session: the plain way in, never the raw 'Not allowed.'
+    m.className = "zt-runmsg"; m.append(el("h4", { class: "zt-runtext", text }));
     try { if (window.CTG && window.CTG.explain && window.CTG.inline) { const h = el("div", {}); m.append(h); window.CTG.inline(h, window.CTG.explain({ status: status || 409, message: text }), {}); } } catch { /* the plain message stays */ }
   };
   const savedRun = async () => {
@@ -131,7 +134,7 @@
   const LINK_BAD = "The link must start with https:// and be public, so everyone can open it.";
   let usesId, usesIdAsked = false;
   // 7: a console opened without a session answers "Not allowed." (the server's plain 403 for nobody): say what to do instead
-  const signInFirst = () => { for (const m of document.querySelectorAll(".zf-msg")) { if (m.textContent.trim() === "Not allowed.") { m.textContent = ""; m.append("Please sign in first. ", el("a", { href: "/zc.html", id: "zt-signin" }, "Open the organizer sign-in"), " and sign in with your e-mail, then come back to this step."); } } };
+  const signInFirst = () => { for (const m of document.querySelectorAll(".zf-msg")) { if (/not allowed/i.test(m.textContent) && !m.querySelector("#zt-signin")) signInInto(m); } };
   try { new MutationObserver(signInFirst).observe(document.body || document.documentElement, { childList: true, subtree: true, characterData: true }); } catch {} // the 403 text is written into the page after the call returns, with no repaint: convert it the moment it appears (it stops matching once converted)
   function patchSteps() {
     signInFirst();
