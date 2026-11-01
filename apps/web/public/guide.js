@@ -59,6 +59,8 @@
       w: "The organizer asked everyone to give their employee ID to get in.", d: ["Type your employee ID in the box. Letters and numbers only, no spaces needed.", "If you are not an employee and the box allows it, type your mobile number instead.", "Still stuck? Ask the person who invited you."], g: { field: "#emp", label: "the employee ID box" } },
     { m: ["There is no account for this Google e-mail yet"], k: "blocked", t: "There is no account for this Google address yet",
       w: "Signing in needs an account first.", d: ["Choose Sign up to make your account with this address.", "Then come back and sign in."], g: { href: "/#login", label: "Sign up" } },
+    { m: ["There is no account for this Microsoft e-mail yet"], k: "blocked", t: "There is no account for this Microsoft address yet",
+      w: "Signing in needs an account first.", d: ["Choose Sign up to make your account with this address.", "Then come back and sign in."], g: { href: "/#login", label: "Sign up" } },
     { m: ["Too many codes requested"], s: [429], k: "wait", t: "Please give it a little time",
       w: "Several codes were asked for in a short time, so we paused new ones to keep your account safe.", d: ["Use the newest code in your e-mail.", "If it has not arrived, check the spam folder, or try again in an hour."], g: { retry: true } },
     { m: ["Too many tries from this network", "Too many new engagements from this network", "Too many payment attempts from this network", "Too many tries from this network today"], s: [429], k: "wait", t: "Please try again a little later",

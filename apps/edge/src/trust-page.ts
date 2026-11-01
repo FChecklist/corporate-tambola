@@ -30,6 +30,7 @@ const IT_ADDRESSES: { head: string; rows: [string, string][] }[] = [
     ["checkout.razorpay.com, api.razorpay.com", "Payment through Razorpay. Players never pay."],
     ["itservices-rajat-agarwal.pages.dev", "The payment record page of IT Services by Rajat Agarwal, shown inside the payment page."],
     ["accounts.google.com", "Only if someone presses Continue with Google to sign in."],
+    ["login.microsoftonline.com", "Only if someone presses Continue with Microsoft to sign in."],
   ] },
 ];
 /** The "For IT" part of the Trust page. `n` defaults to the real lifecycle numbers; a test passes others to prove the text follows them. */

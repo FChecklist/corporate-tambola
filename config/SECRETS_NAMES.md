@@ -50,6 +50,7 @@ Where things are set:
 | `AI_LINK_MAIL_AT_SIGNUP` | Switch for the AI work-link welcome e-mail sent when an account is made; the live site turns it off because the AI link is hidden in the console | wrangler var | setting |
 | `STRICT_KEYS` | "1" on the live site: the Worker refuses every request unless the required secrets are set | Pages variable | setting |
 | `GOOGLE_CLIENT_ID` | Google sign-in client id (public, not a secret); without it the Google button is off | Optional Pages variable | setting |
+| `MICROSOFT_CLIENT_ID` | Microsoft sign-in application (client) id, a GUID (public, not a secret; no client secret exists); without it the Microsoft button is off. Owner steps: docs/MICROSOFT_SIGNIN_SETUP.md | Optional Pages variable | setting |
 | `CONTROL_R2` | Optional R2 bucket holding the static copy of the pause file | Optional binding | binding |
 | `CONTROL_BASE` | Optional public address of that bucket | Optional Pages variable | setting |
 | `CLAIM_HOLD` | Set to 1 to make the game wait for everyone while a claim is checked (off when unset) | Worker setting | setting |

@@ -48,6 +48,7 @@ import { normEmp, empHashOf, verifyOf, keptPhone, phoneDigits, cleanName as clea
 import { PAYLINK_SCHEMA, PAYLINK_TOKEN, createPayLink, packFor } from "./paylink";
 import { HOST_LINK_TTL_MS, HOST_SCHEMA, confirmHostEmail, emailHashOf, hostForEmail, hostKeyStatus, hostSetupRoute, hostStateRow, identityRow, maskEmail, maskMobile, mintDeviceKey, retireHost } from "./hostsetup";
 import { googleClientId, verifyGoogleCredential } from "./google";
+import { microsoftClientId, verifyMicrosoftIdToken } from "./microsoft";
 import { MODE_SCHEMA, modeRoute, orgIsTest, testFlag } from "./mode";
 import { purgeTestData } from "./test-data";
 import { frontDoorText, nextHint, GET_BODY_MAX, LINK_KEY, CONVERSATION, aiPaste, manualJson, manualText, type LinkRole } from "./ai-link";
@@ -89,6 +90,8 @@ export interface Env {
   ANALYZE_AI_URL?: string; ANALYZE_AI_KEY?: string; ANALYZE_AI_MODEL?: string;
   /** Optional and public (it is not a secret): the Google sign-in client id. Without it the "Continue with Google" button is hidden and /api/auth/google answers 404. */
   GOOGLE_CLIENT_ID?: string;
+  /** Optional and public (it is not a secret): the Microsoft sign-in application (client) id. Without it the "Continue with Microsoft" button is hidden and /api/auth/microsoft answers 404. */
+  MICROSOFT_CLIENT_ID?: string;
 }
 const controlKey = (id: string) => `c/${id}.json`;
 const controlUrl = (env: Env, id: string) => (env.CONTROL_BASE && env.CONTROL_R2 ? `${env.CONTROL_BASE.replace(/\/$/, "")}/${controlKey(id)}` : null);
@@ -731,7 +734,7 @@ const newHostKey = (): string => "cth_" + randHex(24);
 const waLinkFor = (digits: string, name: string, link: string): string => `https://wa.me/${phoneDigits(digits)}?text=${encodeURIComponent(`${name ? "Hello " + name + ", you" : "You"} are a Host of a Corporate Tambola game. Open your link to finish your setup (it works once, for 7 days): ${link}`)}`;
 /** A brand-new organizer account for a work e-mail (used by the first-time start and by Google sign-up): the console key, the lasting AI key (shown only in the console), and the 24-hour AI-link mail. */
 /* AI_LINK_MAIL_AT_SIGNUP="0" (a Pages variable, set on the live site): the AI work link is not offered in the organizer console, so the welcome e-mail that carried it is not sent either. A new organizer then gets only the sign-in e-mail (the 6-digit code as option 1, the sign-in link as option 2). Any other value sends it as before. */
-async function createOrganizer(env: Env, req: Request, email: string, now: number, via: "start" | "signin-google" | "host-to-organizer", ticked = false): Promise<{ ok: true; token: string; aiKey: string; aiMessage: string } | { error: string; status: number }> {
+async function createOrganizer(env: Env, req: Request, email: string, now: number, via: "start" | "signin-google" | "signin-microsoft" | "host-to-organizer", ticked = false): Promise<{ ok: true; token: string; aiKey: string; aiMessage: string } | { error: string; status: number }> {
   const eh = await sha("email|" + email);
     const ipk = `start/${day(now)}/${(await sha("ip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16)}`;
     const used = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(ipk).first<{ v: string }>())?.v ?? 0);
@@ -1013,9 +1016,10 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     }
     return json({ ok: true, ...(devCode ? { devCode, devToken } : {}) });
   }
-  if (req.method === "GET" && p === "/api/auth/config") return json({ google: googleClientId(env) }); // the public Google client id, or null: the pages show "Continue with Google" only when it is there
-  if (req.method === "POST" && p === "/api/auth/google") { // "Continue with Google": proves the e-mail with Google, then does exactly what the e-mail code does (google.ts, hostsetup.ts)
-    if (!googleClientId(env)) return json({ error: "Not found" }, 404);
+  if (req.method === "GET" && p === "/api/auth/config") return json({ google: googleClientId(env), microsoft: microsoftClientId(env) }); // the public Google client id, or null: the pages show "Continue with Google" only when it is there
+  if (req.method === "POST" && (p === "/api/auth/google" || p === "/api/auth/microsoft")) { // "Continue with Google" / "Continue with Microsoft": proves the e-mail with the provider, then does exactly what the e-mail code does (google.ts, microsoft.ts, hostsetup.ts)
+    const MS = p === "/api/auth/microsoft", WHO = MS ? "Microsoft" : "Google";
+    if (!(MS ? microsoftClientId(env) : googleClientId(env))) return json({ error: "Not found" }, 404);
     const b = await body(req, 8192);
     const intent = b?.intent;
     if (intent !== "signup" && intent !== "signin" && intent !== "host") return json({ error: "Say whether you are signing up, signing in or finishing a Host setup." }, 400);
@@ -1023,8 +1027,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const fails = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(fk).first<{ v: string }>())?.v ?? 0);
     if (fails >= 20) return json({ error: "Too many tries from this network. Please use an e-mail code, or try again tomorrow." }, 429);
     const bad = async (msg: string, code?: string) => { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(fk, String(fails + 1), String(fails + 1)).run(); return json({ error: msg, ...(code ? { code } : {}) }, 400); };
-    const g = await verifyGoogleCredential(env, b.credential, now);
-    if (!g.ok) return bad("That Google sign-in could not be checked. Please try again, or use an e-mail code.", "google-failed");
+    const g = MS ? await verifyMicrosoftIdToken(env, b.credential, b.nonce, now) : await verifyGoogleCredential(env, b.credential, now);
+    if (!g.ok) return bad(`That ${WHO} sign-in could not be checked. Please try again, or use an e-mail code.`, MS ? "microsoft-failed" : "google-failed");
     const email = g.email, eh = await sha("email|" + email);
     if (intent === "host") { // a Host finishing the first open: Google confirms the e-mail the Organizer added them with
       const hk = typeof b.hostKey === "string" ? b.hostKey : "";
@@ -1050,7 +1054,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     }
     if (intent === "signup") {
       { const cm = consentMissing(b, "K2"); if (cm) return cm; } // K2: Google sign-up makes an account, so the Terms box is needed here too
-      const made = await createOrganizer(env, req, email, now, "signin-google", true);
+      const made = await createOrganizer(env, req, email, now, MS ? "signin-microsoft" : "signin-google", true);
       if ("error" in made) return made.status === 503 ? BUSY() : json({ error: made.error }, made.status);
       return json({ ok: true, token: made.token, aiKey: made.aiKey, aiMessage: made.aiMessage, created: true });
     }
@@ -1060,7 +1064,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       const hs = await hostStateRow(env.DB, hostAcct.host_id);
       return json({ ok: true, token: await mintDeviceKey(env, hostAcct.host_id, newHostKey(), now), kind: "host", ready: !!hs?.verified_ms && !!hs?.mobile_ok });
     }
-    return json({ error: "There is no account for this Google e-mail yet. Choose sign up to make one.", code: "no-account" }, 404);
+    return json({ error: MS ? "There is no account for this Microsoft e-mail yet. Choose sign up to make one." : "There is no account for this Google e-mail yet. Choose sign up to make one.", code: "no-account" }, 404);
   }
   if (req.method === "POST" && p === "/api/auth/link") { // the confirm page POSTs here; opening the link (GET, a mail scanner) consumes nothing
     const b = await body(req);

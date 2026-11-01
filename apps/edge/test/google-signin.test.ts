@@ -25,9 +25,9 @@ afterEach(() => { globalThis.fetch = realFetch; setGoogleKeyProvider(); });
 
 describe("configuration: no client id, no button, no route", () => {
   test("GET /api/auth/config says the client id, or null; POST /api/auth/google answers 404 when none is set", async () => {
-    expect(await j(await call("GET", "/api/auth/config"))).toEqual({ google: CLIENT_ID });
+    expect(await j(await call("GET", "/api/auth/config"))).toEqual({ google: CLIENT_ID, microsoft: null });
     delete env.GOOGLE_CLIENT_ID;
-    expect(await j(await call("GET", "/api/auth/config"))).toEqual({ google: null });
+    expect(await j(await call("GET", "/api/auth/config"))).toEqual({ google: null, microsoft: null });
     const r = await google(await idp.sign(claims("a@acme.com", T)));
     expect(r.status).toBe(404);
     env.GOOGLE_CLIENT_ID = "   "; expect((await j(await call("GET", "/api/auth/config"))).google).toBeNull();

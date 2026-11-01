@@ -10,7 +10,7 @@ export const consentFor = (kind: ConsentKind) => ({ v: CONSENT_VERSION, boxes: b
 function kindFor(method: string, path: string, body: any): ConsentKind | null {
   if (method !== "POST") return null;
   if (path === "/api/start") return "K2";
-  if (path === "/api/auth/google") return body?.intent === "host" ? "K5" : body?.intent === "signup" ? "K2" : null;
+  if (path === "/api/auth/google" || path === "/api/auth/microsoft") return body?.intent === "host" ? "K5" : body?.intent === "signup" ? "K2" : null;
   if (path === "/api/checkout" || path === "/api/payments/test" || path === "/api/payments/paytest" || /^\/api\/paylink\/[0-9a-f]{48}\/checkout$/.test(path)) return "K3";
   if (path === "/api/host/setup/email" || path === "/api/org/role/accept") return "K5";
   if (/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/publish$/.test(path)) return "K1";
