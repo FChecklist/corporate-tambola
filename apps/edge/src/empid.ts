@@ -10,6 +10,10 @@ export const EMP_MAX = 30;
 /** The one cleaning function: only A-Z and 0-9 are left, in upper case. Always a string (empty when nothing usable was typed). */
 export const cleanEmpId = (raw: unknown): string => String(raw ?? "").normalize("NFKC").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
 
+/** A letter or digit of another script (Arabic-Indic digits, accented or non-English letters) is refused, never converted or dropped: an ID is English letters and digits. Full-width forms become plain ASCII first (NFKC). */
+export const hasForeignChars = (raw: unknown): boolean => /[\p{L}\p{N}]/u.test(String(raw ?? "").normalize("NFKC").replace(/[A-Za-z0-9]/g, ""));
+export const EMP_ENGLISH = "Please use English letters and numbers only.";
+
 /** Does this game use the uniform rule? (created at or after the release instant) */
 export const empCleanOn = (e: { created_ms?: number | null } | null | undefined): boolean => Number(e?.created_ms) >= EMP_CLEAN_FROM_MS;
 
@@ -28,13 +32,14 @@ export const normEmail = (raw: unknown): string => String(raw ?? "").normalize("
 export const looksLikeEmail = (raw: unknown): boolean => String(raw ?? "").normalize("NFKC").includes("@");
 export const EMP_LOOKS_LIKE_EMAIL = "This looks like an Email ID. This game asks for an employee ID: letters and numbers only.";
 /** The refusal sentence for an ID that cannot be used, by the rule of the game it is for. */
-export const empBadMessage = (raw: unknown, e: { created_ms?: number | null } | null | undefined, oldText: string): string => (!empCleanOn(e) ? oldText : looksLikeEmail(raw) ? EMP_LOOKS_LIKE_EMAIL : cleanEmpId(raw).length > EMP_MAX ? EMP_TOO_LONG : EMP_BAD_NEW);
+export const empBadMessage = (raw: unknown, e: { created_ms?: number | null } | null | undefined, oldText: string): string => (!empCleanOn(e) ? oldText : looksLikeEmail(raw) ? EMP_LOOKS_LIKE_EMAIL : hasForeignChars(raw) ? EMP_ENGLISH : cleanEmpId(raw).length > EMP_MAX ? EMP_TOO_LONG : EMP_BAD_NEW);
 export const EMP_TOO_LONG = "This ID is too long. An employee ID may be up to 30 characters once cleaned.";
 
 export function normEmpFor(raw: unknown, e: { created_ms?: number | null } | null | undefined): string | null {
   if (!empCleanOn(e)) { const s = String(raw ?? "").replace(/\s+/g, "").toUpperCase(); if (!s) return ""; return /^[A-Z0-9][A-Z0-9._\-/]{0,29}$/.test(s) ? s : null; }
   if (String(raw ?? "").trim() === "") return "";
   if (looksLikeEmail(raw)) return null; // an email typed where an employee ID is asked is refused, never mangled into letters
+  if (hasForeignChars(raw)) return null;
   const c = cleanEmpId(raw);
   return c && c.length <= EMP_MAX ? c : null;
 }
