@@ -1360,9 +1360,9 @@ describe("console phase 2: wording fixes, My people, waiting room, remove, play 
     for (const i of [1, 2]) expect((await jn(o, "UI-WAIT", i, { name: i === 1 ? "Meera Shah" : "Nikhil Rao" })).status).toBe(403);
     const waiting = await waitOf(o, "UI-WAIT"); expect(waiting.length).toBe(2);
     const w = spy(); const p = await ready(o, "UI-WAIT", w); await myPeople(p);
-    const t = await p.waitFor((x) => /Waiting to come in: 2/.test(x)); expect(t).toMatch(/Meera \S+ 0001/); expect(t).toMatch(/Asking through/); expect(t).not.toMatch(/Shah|Rao/);
+    const t = await p.waitFor((x) => /People asking to join: 2/.test(x)); expect(t).toMatch(/Meera \S+ 0001/); expect(t).toMatch(/Asking through/); expect(t).not.toMatch(/Shah|Rao/);
     const first = waiting.find((x: any) => x.firstName === "Meera");
-    p.click(`[data-wid="${first.id}"][data-decide="admit"]`); await p.waitFor((x) => /Waiting to come in: 1/.test(x) && /Meera \S+ 0001: let in by/.test(x));
+    p.click(`[data-wid="${first.id}"][data-decide="admit"]`); await p.waitFor((x) => /People asking to join: 1/.test(x) && /Meera \S+ 0001: let in by/.test(x));
     expect(w.st.calls.find((c: any) => c[1].endsWith("/waiting/" + first.id))[2]).toEqual({ decision: "admit" }); expect((await waitOf(o, "UI-WAIT")).length).toBe(1);
     const second = (await waitOf(o, "UI-WAIT"))[0]; p.click(`[data-wid="${second.id}"][data-decide="decline"]`); await p.waitFor((x) => /Nobody is waiting right now/.test(x) && /declined by/.test(x));
   });
@@ -1373,10 +1373,10 @@ describe("console phase 2: wording fixes, My people, waiting room, remove, play 
     for (let i = 1; i <= 4; i++) await jn(o, "UI-ALL", i);
     const ck = await cohostKey(o, "UI-ALL"); const from = COHOST_FROM + parseInt(keyId(ck).slice(0, 7), 16); await jn(o, "UI-ALL", 9, { from });
     const w = spy(); const p = await ready(o, "UI-ALL", w); await myPeople(p);
-    await p.waitFor(() => !!p.$("#admitall")); expect(p.$("#admitall")!.textContent).toBe("Approve all (5)"); expect(p.$("#declineall")!.textContent).toBe("Decline all");
+    await p.waitFor(() => !!p.$("#admitall")); expect(p.$("#admitall")!.textContent).toBe("Confirm all (5)"); expect(p.$("#declineall")!.textContent).toBe("Not now for all");
     p.click("#admitall"); await p.waitFor((x) => /Let all 5 people in\?/.test(x)); expect(w.st.calls.some((c: any) => c[1].endsWith("/waiting/all"))).toBe(false);
     p.click("#bulkno"); expect(p.$("#bulkask")).toBeNull(); expect((await waitOf(o, "UI-ALL")).length).toBe(5);
-    const c = await ready(o, "UI-ALL", spy(), ck); openStep(c, 2); await c.waitFor((x) => /Waiting to come in: 1/.test(x)); expect(c.$("#admitall")!.textContent).toBe("Approve all (1)"); // only the people who came through this Co-host's link
+    const c = await ready(o, "UI-ALL", spy(), ck); openStep(c, 2); await c.waitFor((x) => /People asking to join: 1/.test(x)); expect(c.$("#admitall")!.textContent).toBe("Confirm all (1)"); // only the people who came through this Co-host's link
     p.click("#admitall"); p.click("#bulkyes");
     const t = await p.waitFor((x) => /5 people let in\./.test(x)); expect(w.st.calls.find((c2: any) => c2[1].endsWith("/waiting/all"))[2]).toEqual({ decision: "admit" }); expect(t).toMatch(/Nobody is waiting right now/); expect((await waitOf(o, "UI-ALL")).length).toBe(0); expect(p.$("#admitall")).toBeNull();
     await jn(o, "UI-ALL", 11); await jn(o, "UI-ALL", 12);
@@ -1387,7 +1387,7 @@ describe("console phase 2: wording fixes, My people, waiting room, remove, play 
   test("Approve all when the game is full: the server's answer says some are still waiting and the console says so (the server's own message)", async () => {
     const o = await organizer(); await make(o, "UI-FULL", { whoCanJoin: "list" }); await publish(o, "UI-FULL"); await jn(o, "UI-FULL", 1); await jn(o, "UI-FULL", 2);
     const p = await ready(o, "UI-FULL", spy({ "POST /api/z/UI-FULL/waiting/all": () => ({ admitted: 1, declined: 0, stillWaiting: 1, message: "The game is full. 1 person is still waiting." }) })); await myPeople(p);
-    await p.waitFor(() => !!p.$("#admitall")); p.click("#admitall"); p.click("#bulkyes"); const t = await p.waitFor((x) => /1 person let in\./.test(x)); await p.waitFor((x) => /The game is full\. 1 person is still waiting\./.test(x)); expect(t).toMatch(/Waiting to come in/);
+    await p.waitFor(() => !!p.$("#admitall")); p.click("#admitall"); p.click("#bulkyes"); const t = await p.waitFor((x) => /1 person let in\./.test(x)); await p.waitFor((x) => /The game is full\. 1 person is still waiting\./.test(x)); expect(t).toMatch(/People asking to join/);
   });
 
   test("Play now and Send my play link to my WhatsApp: Organizer and Host only; the seat is made on the first press and the link goes to their own number", async () => {
@@ -1639,7 +1639,7 @@ describe("console: ten steps, Pay is its own step, and the price is shown only t
   });
   test("step 2 reads clearly: four small sub-headings", async () => {
     const o = await organizer(); await make(o, "UI-SUB"); const p = await consolePage(o, "UI-SUB"); await p.waitFor((x) => /Hello/.test(x)); openStep(p, 2);
-    expect(Array.from(p.win.document.querySelectorAll("#sec2 .zc-sub")).map((e: any) => e.textContent)).toEqual(["How many players", "How the game runs", "Who can play"]);
+    expect(Array.from(p.win.document.querySelectorAll("#sec2 .zc-sub")).map((e: any) => e.textContent)).toEqual(["How many players", "How the game runs", "Who is playing", "How people join", "If someone is not on the list", "Your privacy"]);
   });
 });
 
