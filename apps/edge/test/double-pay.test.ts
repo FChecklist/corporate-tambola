@@ -14,10 +14,22 @@ const draft = async () => {
   return { ...o, id };
 };
 
+describe("LIVE: checkout", () => {
+  test("two clicks on Pay (at once or later) open ONE order; a different payer gets their own", async () => {
+    const g = await draft(); const ask = (email: string) => checkout(g.key, { eid: g.id, email, pack: 100 });
+    const [a, b] = await Promise.all([ask(g.email), ask(g.email)]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect(a.body.paymentId).toBe(b.body.paymentId); expect(a.body.razorpay.orderId).toBe(b.body.razorpay.orderId);
+    expect((await ask(g.email)).body.paymentId).toBe(a.body.paymentId);
+    expect((await ask("cofounder@acme.com")).body.paymentId).not.toBe(a.body.paymentId);
+    expect(one("SELECT COUNT(*) c FROM payment WHERE eid=? AND status='created' AND email=?", g.id, g.email).c).toBe(1);
+  });
+});
+
 describe("LIVE: two paid orders for one draft", () => {
   test("both paid at the same moment: one pack is bought, the second payment is kept as credit", async () => {
     const g = await draft();
-    const a = await checkout(g.key, { eid: g.id, email: g.email, pack: 100 }), b = await checkout(g.key, { eid: g.id, email: g.email, pack: 100 });
+    const a = await checkout(g.key, { eid: g.id, email: g.email, pack: 100 }), b = await checkout(g.key, { eid: g.id, email: "cofounder@acme.com", pack: 100 }); // another payer: a second, separate order
     expect(a.status).toBe(200); expect(b.status).toBe(200);
     capture(a.body, "pay_a"); capture(b.body, "pay_b");
     const [ra, rb] = await Promise.all([verify(a.body, "pay_a"), verify(b.body, "pay_b")]);
@@ -33,7 +45,7 @@ describe("LIVE: two paid orders for one draft", () => {
   });
   test("a second payment arriving later (the first one already published the game) is kept as credit too", async () => {
     const g = await draft();
-    const a = await checkout(g.key, { eid: g.id, email: g.email, pack: 100 }), b = await checkout(g.key, { eid: g.id, email: g.email, pack: 100 });
+    const a = await checkout(g.key, { eid: g.id, email: g.email, pack: 100 }), b = await checkout(g.key, { eid: g.id, email: "cofounder@acme.com", pack: 100 }); // another payer: a second, separate order
     capture(a.body, "pay_a"); capture(b.body, "pay_b");
     expect((await j(await verify(a.body, "pay_a"))).published).toBe(true);
     const second = await j(await verify(b.body, "pay_b", {}, T + 60_000));
