@@ -137,7 +137,7 @@ export function checkBrandLogo(v: unknown): { ok: true; bytes: number } | { ok: 
   if (long > short * LOGO_MAX_RATIO) return { ok: false, error: `The logo is too long and thin. It may be at most ${LOGO_MAX_RATIO} times wider than tall.` };
   return { ok: true, bytes: raw.length };
 }
-export const MAX_INVITES_PER_PERSON = 10;
+export const MAX_INVITES_PER_PERSON = 4;
 export const defaultInvites = (): InviteCfg => ({ on: false, per: 4, cats: ["family", "colleagues"] });
 /** Who calls the numbers: `auto` = the software, one number every callSeconds (the default); `host` = a Host presses a button for each number. The order of the numbers comes from the public beacon either way (see control.ts, "next"). */
 export type CallMode = "auto" | "host";
@@ -377,7 +377,7 @@ export function validateCfg(input: { tickets?: unknown; ties?: unknown; rewards?
     const v = input.invites as any;
     if (!v || typeof v !== "object" || typeof v.on !== "boolean") return { ok: false, error: "Invites: say whether they are on or off." };
     const per = v.per === undefined ? cfg.invites!.per : v.per;
-    if (!Number.isInteger(per) || per < 1 || per > MAX_INVITES_PER_PERSON) return { ok: false, error: `Each person can invite 1 to ${MAX_INVITES_PER_PERSON} people.` };
+    if (!Number.isInteger(per) || per < 1 || per > MAX_INVITES_PER_PERSON) return { ok: false, error: `You and up to ${MAX_INVITES_PER_PERSON} family members. Please choose a number from 1 to ${MAX_INVITES_PER_PERSON}.` };
     const cats = v.cats === undefined ? cfg.invites!.cats : v.cats;
     if (!Array.isArray(cats) || cats.some((c: unknown) => !INVITE_CATEGORIES.some((k) => k.id === c))) return { ok: false, error: "Pick the kinds of guests from the list." };
     const uniq = [...new Set(cats as string[])];

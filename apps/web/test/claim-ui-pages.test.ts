@@ -314,10 +314,10 @@ describe("1.5.0 claim buttons: gold top, bottom and side; grey side otherwise; t
     await ph.waitFor(() => !!ph.$("#claimtop") && !!ph.$("#claimbar .zbigclaim"), 15_000);
     const d = ph.win.document;
     expect(d.querySelectorAll("#prizepanel .zside.zgold").length).toBe(1); expect(d.querySelectorAll("#prizepanel .zside.zgrey").length).toBeGreaterThan(0);
-    expect(d.querySelector("#claimtop")!.textContent).toContain("Claim now in 11 s"); expect(d.querySelector("#claimbar")!.textContent).toContain("Claim now in 11 s"); expect(d.querySelector("#prizepanel .zside.zgold")!.textContent).toContain("Claim now in 11 s");
+    expect(d.querySelector("#claimtop")!.textContent).toContain("Claim now in 11 seconds"); expect(d.querySelector("#claimbar")!.textContent).toContain("Claim now in 11 seconds"); expect(d.querySelector("#prizepanel .zside.zgold")!.textContent).toContain("Claim now in 11 seconds");
     expect(ph.text()).not.toMatch(/Next number in/); // the normal countdown is hidden for this player while the claim timer shows
     set({ ...play, claimNow: ["early5"], claimOpen: ["early5"], claimable: ["early5"], claimLeft: 0, nextCallInSec: 1 });
-    await ph.waitFor((t) => /Claim now in 0 s/.test(t), 15_000);
+    await ph.waitFor((t) => /Claim now in 0 seconds/.test(t), 15_000);
     set({ ...play, claimNow: [], claimOpen: [], claimable: [], claimLeft: null, nextCallInSec: 12 }); // the next number: gold and timer go, the normal countdown returns at once
     await ph.waitFor((t) => /Next number in 12s/.test(t), 15_000);
     expect(ph.$("#claimtop")).toBeNull(); expect(ph.$("#claimbar")).toBeNull(); expect(d.querySelectorAll("#prizepanel .zside.zgold").length).toBe(0); expect(d.querySelectorAll("#prizepanel .zside.zgrey").length).toBeGreaterThan(0); expect(ph.text()).not.toMatch(/Claim now in/);

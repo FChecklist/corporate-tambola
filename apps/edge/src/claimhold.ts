@@ -40,7 +40,7 @@ export async function claimHolds(env: any, eid: string, nowMs: number): Promise<
   if (open) {
     const r = roundAt(nowMs), lead = (await readPublished({ get: async (k) => (await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(k).first())?.v ?? null, put: async () => {} }, eid))?.leadRounds ?? 10;
     const done = (await decidedCount(env.DB, eid)) - open.base >= open.k;
-    if (done) { open.end = Math.min(open.cap, Math.max(open.start + 1, r + 1)); await save(env.DB, eid, rec); }
+    if (done) { open.end = Math.min(open.cap, Math.max(open.start + 1, roundAt(nowMs + 2400) + 1)); await save(env.DB, eid, rec); }
     else if (r >= open.cap) { open.end = open.cap; await save(env.DB, eid, rec); }
   }
   return asIv(rec);

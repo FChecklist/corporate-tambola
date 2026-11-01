@@ -845,7 +845,7 @@
   const namesOf = (keys) => keys.map((k) => KEYNAME(k)).join(" and ");
   /** Gold, near the top: the player has just completed a prize and must press Claim before the next number is called. */
   /** "Claim in the next 11 s" on the gold buttons: a nudge only (the game's clock decides). None when a Host calls the numbers. */
-  const claimTimer = (v) => (v.callMode !== "host" && v.claimLeft !== null && v.claimLeft !== undefined ? `<small class="zclaimt">Claim now in ${v.claimLeft} s</small>` : "");
+  const claimTimer = (v) => (v.callMode !== "host" && v.claimLeft !== null && v.claimLeft !== undefined ? `<small class="zclaimt">Claim now in ${v.claimLeft} seconds</small>` : "");
   const claimingNow = (v) => (v.claimNow || []).length > 0;
   /** REHEARSAL: the same block at the top of every page of a rehearsal (Game ID, REHEARSAL GAME n, the sentence), and the calm page when it is over. */
   function showRehearsalBanner() {

@@ -271,10 +271,11 @@ describe("a media file kept on our own site", () => {
   });
 });
 
-describe("guest invitations: each guest may invite 1 to 10 people (default 4)", () => {
-  test("10 is the most; 0 and 11 are refused; the default stays 4", () => {
-    expect(validateCfg({ invites: { on: true, per: 10, cats: ["family"] } }).ok).toBe(true);
-    for (const per of [0, 11, 2.5]) expect(validateCfg({ invites: { on: true, per, cats: ["family"] } }).ok).toBe(false);
+describe("guest invitations: you and up to 4 family members (owner decision 1 Nov 2026)", () => {
+  test("4 is the most; 0 and 5 are refused politely; the default stays 4", () => {
+    expect(validateCfg({ invites: { on: true, per: 4, cats: ["family"] } }).ok).toBe(true);
+    for (const per of [0, 5, 10, 2.5]) expect(validateCfg({ invites: { on: true, per, cats: ["family"] } }).ok).toBe(false);
+    const r: any = validateCfg({ invites: { on: true, per: 5, cats: ["family"] } }); expect(r.error).toBe("You and up to 4 family members. Please choose a number from 1 to 4.");
     expect(defaultCfg().invites!.per).toBe(4);
   });
 });
