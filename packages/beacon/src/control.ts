@@ -261,7 +261,21 @@ function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: bool
   }
 }
 
-export function resolveControl(cfg: ControlConfig, log: readonly ControlMsg[]): ControlState {
+/** Claim holds (the server's, not signed): the game waits while a claim is checked. They join the Organizer's pauses as ordinary pause intervals, so every phone and the server work out the same call times. */
+export const MAX_HOLD_ROUNDS = 20; // 60 s: a hold can never keep a game stuck
+export function cleanHolds(x: unknown): PauseInterval[] {
+  if (!Array.isArray(x)) return [];
+  const out: PauseInterval[] = [];
+  for (const h of x.slice(0, 40)) { const a = (h as any)?.start, b = (h as any)?.end; if (Number.isInteger(a) && Number.isInteger(b) && a >= 0 && b > a && b - a <= MAX_HOLD_ROUNDS + 1) out.push({ start: a, end: b }); }
+  return out;
+}
+function withHolds(ivs: PauseInterval[], holds: readonly PauseInterval[]): PauseInterval[] {
+  if (!holds.length) return ivs;
+  const all = [...ivs, ...holds].sort((a, b) => a.start - b.start || a.end - b.end), out: PauseInterval[] = [];
+  for (const i of all) { const l = out[out.length - 1]; if (l && i.start <= l.end) l.end = Math.max(l.end, i.end); else out.push({ ...i }); }
+  return out;
+}
+export function resolveControl(cfg: ControlConfig, log: readonly ControlMsg[], holds: readonly PauseInterval[] = []): ControlState {
   const ivs: Cur[] = [];
   let cur: Cur | null = null, stop: number | null = null, applied = 0, goAt: number | null = null;
   const ignored: ControlState["ignored"] = [], nextRounds: number[] = [];
@@ -276,7 +290,7 @@ export function resolveControl(cfg: ControlConfig, log: readonly ControlMsg[]): 
     else if (m.action === "go") goAt = m.atBeaconRound;
     else stop = m.atBeaconRound;
   }
-  return { intervals: ivs.map((c) => ({ start: c.start, end: effEnd(c, cfg.maxPauseRounds) })), stopRound: stop, ignored, applied, nextRounds, host: cfg.callMode === "host", manualStart: cfg.startMode === "manual", goRound: goAt, ...(cfg.fullGap ? { fullGap: true } : {}) };
+  return { intervals: withHolds(ivs.map((c) => ({ start: c.start, end: effEnd(c, cfg.maxPauseRounds) })), cfg.callMode === "host" ? [] : holds), stopRound: stop, ignored, applied, nextRounds, host: cfg.callMode === "host", manualStart: cfg.startMode === "manual", goRound: goAt, ...(cfg.fullGap ? { fullGap: true } : {}) };
 }
 
 /** True while a pause is in force at the given beacon round. */
@@ -416,20 +430,22 @@ export class ControlTracker {
   /** Round of the first failed attempt in the current unbroken run of failures; null while attempts succeed or none were made. */
   failingSince: number | null = null;
   private resolved: ControlState;
+  holds: PauseInterval[] = []; holdsVer = 0;
   constructor(public cfg: ControlConfig, public engagementId: string, public safety: Safety, joinedAtRound: number) {
     this.lastGoodRound = joinedAtRound - safety.holdAfterRounds - 1; // a fresh phone has heard nothing: it holds until its first good fetch (and goes blind only after giveUpRounds)
     this.resolved = resolveControl(cfg, []);
   }
   get state(): ControlState { return this.resolved; }
   /** The game's rules changed before the start (another mode or time): take them and work the log out again. */
-  reconfigure(patch: Partial<ControlConfig>) { Object.assign(this.cfg, patch); this.resolved = resolveControl(this.cfg, this.log); }
+  reconfigure(patch: Partial<ControlConfig>) { Object.assign(this.cfg, patch); this.resolved = resolveControl(this.cfg, this.log, this.holds); }
   /** `body` is the parsed JSON of the control endpoint (or anything at all if it lied). Returns true if it was a good, verifiable answer. */
   async ingest(nowRound: number, body: unknown): Promise<boolean> {
     const b = body as { engagementId?: unknown; messages?: unknown } | null;
     if (!b || typeof b !== "object" || b.engagementId !== this.engagementId || !Array.isArray(b.messages)) return this.failed(nowRound);
     const { log, forged } = await acceptLogDetailed(this.cfg, this.engagementId, b.messages, this.log);
     if (forged > 0) return this.failed(nowRound); // anything forged in the answer: treat the whole answer as a lie (nothing from it is applied)
-    if (log.length !== this.log.length) { this.log = log; this.resolved = resolveControl(this.cfg, log); }
+    const holds = cleanHolds((b as any).holds), sameHolds = JSON.stringify(holds) === JSON.stringify(this.holds);
+    if (log.length !== this.log.length || !sameHolds) { this.log = log; if (!sameHolds) { this.holds = holds; this.holdsVer++; } this.resolved = resolveControl(this.cfg, log, this.holds); }
     this.lastGoodRound = nowRound;
     this.failingSince = null;
     return true;
@@ -447,7 +463,7 @@ export class ControlTracker {
 /* ---------------- publishing (shared by the local server and a Cloudflare Worker) ---------------- */
 
 export interface KV { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
-export interface PublishedFile { v: 1; engagementId: string; pubKey: string; maxPauseRounds: number; leadRounds: number; messages: ControlMsg[]; /** The Hosts' console keys that may sign too (see addHostKey). */ hostKeys?: string[]; /** A big game: only Start exists (no pause or end). */ startOnly?: boolean; /** Written when the key is registered: the first number after a Resume waits a full gap (see ControlConfig.fullGap). Absent in files registered before the rule. */ fullGap?: true }
+export interface PublishedFile { v: 1; /** The claim holds in force (server-written, see claimhold.ts). */ holds?: PauseInterval[]; engagementId: string; pubKey: string; maxPauseRounds: number; leadRounds: number; messages: ControlMsg[]; /** The Hosts' console keys that may sign too (see addHostKey). */ hostKeys?: string[]; /** A big game: only Start exists (no pause or end). */ startOnly?: boolean; /** Written when the key is registered: the first number after a Resume waits a full gap (see ControlConfig.fullGap). Absent in files registered before the rule. */ fullGap?: true }
 
 const fileKey = (id: string) => `control/${id}.json`;
 export async function readPublished(kv: KV, engagementId: string): Promise<PublishedFile | null> {

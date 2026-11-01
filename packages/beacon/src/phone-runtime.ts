@@ -31,7 +31,7 @@ export type Phase = "boot" | "missing" | "join" | "play" | "ended";
 export interface RuntimeView {
   phase: Phase; error: string | null; pid: string | null; ticket: Ticket | null; log: number[]; nowRound: number | null;
   locked: boolean;
-  startRound: number; scheduledRound: number; callSeconds: number; mode: "live" | "hold" | "blind" | "none"; paused: boolean; stopped: boolean;
+  startRound: number; scheduledRound: number; callSeconds: number; mode: "live" | "hold" | "blind" | "none"; /** A claim is being checked: the game waits for everyone (gentle words: "Claim being checked"). */ claimHold: boolean; paused: boolean; stopped: boolean;
   claimed: PatternKey[]; unsent: number; results: { pattern: PatternKey | "lucky"; ordinal: number; idx: number; count: number; winners?: string[]; tickets?: number[]; round?: number }[]; pendingChecks: number; discarded: number;
   nextCallInSec: number | null;
   /** Seconds left to claim, minus one (11 down to 0): a nudge only, the game's clock decides. null when there is no gap to count (a Host calls the numbers) or no time left. */
@@ -468,7 +468,7 @@ export class PhoneRuntime {
   private builtMsgs = 0;
   /** Extends a round's call log with newly available rounds instead of recomputing all 90 calls every second. Rebuilds from scratch only if a provisional round was thrown away or an organizer message arrived. */
   private buildLog(now: number, round: number): number[] {
-    const msgs = this.tracker ? this.tracker.log.filter((m) => m.action !== "next").length : 0; // a Host's press only adds a call at the end: nothing earlier moves, so no re-derivation
+    const msgs = this.tracker ? this.tracker.log.filter((m) => m.action !== "next").length + this.tracker.holdsVer * 100_000 : 0; // a Host's press only adds a call at the end: nothing earlier moves, so no re-derivation
     if (this.store.discarded !== this.builtDiscards || msgs !== this.builtMsgs) { this.logs = this.logs.map(() => []); this.logResets++; this.builtDiscards = this.store.discarded; this.builtMsgs = msgs; } // a new organizer message can move later calls: re-derive
     while (this.logs.length < round) this.logs.push([]);
     const out = this.logs[round - 1]!;
@@ -841,7 +841,7 @@ export class PhoneRuntime {
     return {
       phase: this.phase, error: this.error, pid: this.pid, ticket: this.ticket, log: this.visibleLog(), nowRound: now, startRound: this.startRound, scheduledRound: this.scheduledRound, callSeconds: this.callSeconds,
       locked: this.locked, announcement: this.announcement,
-      mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: isPaused, stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
+      mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: isPaused, claimHold: !!this.tracker && now !== null && this.tracker.holds.some((h) => now >= h.start && now < h.end), stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
       claimed: claimedNow, unsent: this.unsent, results: this.allResults.filter((x) => (x.round ?? 1) === this.cur), pendingChecks: this.store.pending(), discarded: this.store.discarded,
       nextCallInSec: nextRound !== null && now !== null ? secsTo(nextRound) : null,
       reconnecting: this.reconnecting,

@@ -15,6 +15,7 @@ import { closeAuditFor, isHeld, shredParticipantAudit } from "./audit";
 import { GRACE_ROUNDS, INVITE_CATEGORIES, PRIZE_HOUSES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
 import { callRoundR, hostGameOf, luckyRound } from "../../../packages/beacon/src/game";
 import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../../../packages/beacon/src/control";
+import { storedHolds } from "./claimhold";
 import { seatOfPid } from "../../../packages/beacon/src/unique-ticket";
 import { openPii, openText, sealText, type PiiEnv } from "./pii";
 import { BRAND } from "./brand";
@@ -61,7 +62,7 @@ export function cfgOfRow(e: { tickets?: number; config?: string | null }): Engag
 /** The engagement's calls on the clock: the organizer's pauses and stop applied, the brand breaks and rounds included. */
 async function schedule(env: Env, e: any) {
   const f = await readPublished(d1kv(env), e.id), cfg = cfgOfRow(e);
-  const st = f ? resolveControl(controlCfg(f, hostGameOf(cfg, e.start_round)), f.messages) : null;
+  const st = f ? resolveControl(controlCfg(f, hostGameOf(cfg, e.start_round)), f.messages, await storedHolds(env, e.id)) : null;
   return { cfg, st, start: e.start_round + GRACE_ROUNDS, stride: e.call_seconds / 3 };
 }
 export async function callTimeMs(env: Env, e: any, round: number, idx: number, sch?: Awaited<ReturnType<typeof schedule>>): Promise<number | null> {

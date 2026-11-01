@@ -63,6 +63,7 @@ import { hostGameOf } from "../../../packages/beacon/src/game";
 import { buildGameLog, readSavedGameLog } from "./gamelog";
 import { CLAIM_LATE_MSG } from "./modes";
 import { callTimeMs } from "./lifecycle";
+import { claimHolds, startClaimHold, storedHolds } from "./claimhold";
 import { NEEDS_CONSOLE_MSG, NOT_BEFORE_MSG, STARTED_MSG, modeTooBig, changesView, describeChanges, goRoundOf, liveOf, logChanges, needsControl, readChanges, whoLabel } from "./modes";
 import { QUICKNET } from "../../../packages/beacon/src/index";
 
@@ -107,8 +108,8 @@ async function noteLateClaim(db: D1, eid: string, pid: string, pattern: string, 
   } catch { /* best effort */ }
 }
 /** The game's schedule and modes as they are NOW, riding in the control file every phone, the big screen and the Host's screen already poll: a change made after publishing (a new time, another mode) reaches them all with no new link and no extra requests. */
-async function liveField(env: Env, id: string): Promise<{ live?: ReturnType<typeof liveOf>; by?: string[] }> {
-  try { const ge = await env.DB.prepare("SELECT tickets, config, start_round, call_seconds FROM engagement WHERE id=?").bind(id).first<any>(); return ge ? { live: liveOf(ge, cfgOf(ge)), by: await readBy(env.DB, id) } : {}; } catch { return {}; }
+async function liveField(env: Env, id: string): Promise<{ live?: ReturnType<typeof liveOf>; by?: string[]; holds?: { start: number; end: number }[] }> {
+  try { const ge = await env.DB.prepare("SELECT tickets, config, start_round, call_seconds FROM engagement WHERE id=?").bind(id).first<any>(); return ge ? { live: liveOf(ge, cfgOf(ge)), by: await readBy(env.DB, id), ...((h) => (h.length ? { holds: h } : {}))(await storedHolds(env, id)) } : {}; } catch { return {}; }
 }
 /** Who sent each control message, by sequence number: only the words "Organizer" or "Host", never a name or a key. Rides in the control file so a phone or the big screen can say "paused by the Organizer". */
 async function readBy(db: D1, id: string): Promise<string[]> {
@@ -1360,7 +1361,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!sub && req.method === "GET") return sharedRead(req, 1, async () => { // the pause file every phone asks for every few seconds: one answer per place per second is shared by all of them (far fewer database reads); a pause reaches phones at most a second later
       const f0 = await readPublished(kv, cid!);
       const ge = await env.DB.prepare("SELECT id, pack, start_round, call_seconds, tickets, config, cancelled_ms, unplayed_ms FROM engagement WHERE id=?").bind(cid).first<{ id: string; pack: number | null; start_round: number; call_seconds: number; tickets: number; config: string | null; cancelled_ms: number | null; unplayed_ms: number | null }>();
-      const f = f0 && ge ? { ...f0, live: liveOf(ge, cfgOf(ge)), by: await readBy(env.DB, cid!) } : f0;
+      const holds = f0 ? await claimHolds(env, cid!, now) : []; /* claim holds ride in the file phones already poll */ const f = f0 && ge ? { ...f0, live: liveOf(ge, cfgOf(ge)), by: await readBy(env.DB, cid!), ...(holds.length ? { holds } : {}) } : f0;
       if (ge?.cancelled_ms) return new Response(JSON.stringify({ ...(f ?? {}), cancelled: true }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } }); // phones and the big screen: "This game was cancelled by the organizer"
       if (ge?.unplayed_ms) return new Response(JSON.stringify({ ...(f ?? {}), didNotStart: true }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3" } }); // "This game did not start. Your details have been auto-deleted."
       if (ge && ge.pack === 0 && roundMs(ge.start_round) - LOCK_LEAD_MS <= now && (await isPublished(env, ge))) // published, unpaid, start time reached: phones hold, nothing is shown
@@ -1987,6 +1988,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       const r = await env.DB.prepare("INSERT OR IGNORE INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES(?,?,?,?,?,?)").bind(eid, b.pid, c.pattern, round, c.idx, now).run();
       stored += r.meta?.changes ?? 0; // a claim sent twice is stored once
     }
+    if (stored && (await startClaimHold(env, eid!, now))) await mirrorControl(env, eid!); /* the game waits for everyone while the claim is checked (flag CLAIM_HOLD) */
     if (stored || late) await bumpCv(env.DB, eid!);
     if (late && !stored) return json({ error: CLAIM_LATE_MSG, code: "claim-late", stored: 0, atMs: now }, 409); // nothing was recorded: the phone says it kindly and stops sending it
     return json({ ok: true, stored, ...(late ? { late } : {}), atMs: now }); // atMs: the store's clock, the time that decides whether the claim came before the next number
