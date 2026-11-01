@@ -2015,7 +2015,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!text) { await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`ann/${eid}`).run(); return json({ ok: true, cleared: true }); }
     const ann = { id: randHex(4), text, at: now };
     await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`ann/${eid}`, JSON.stringify(ann)).run();
-    return json({ ok: true, sent: ann, reachesPhonesWithin: "about a minute, on engagements with pause available" });
+    const live = !!(await readPublished(d1kv(env), eid!)); // phones read the message with the pause file, which exists once the organizer's console has been opened
+    return json({ ok: true, sent: ann, ...(live ? { reachesPhonesWithin: "about a minute, on engagements with pause available" } : { reachesPhones: false, note: "Saved, but it will not reach the phones yet: open the organizer console on this game once (it prepares the screen the phones read), then send it again." }) });
   }
   if (action === "summary" && req.method === "GET") { // one read-back of everything saved, so the organizer's AI can confirm it with them
     if (!can(a, e)) return deny(a);
