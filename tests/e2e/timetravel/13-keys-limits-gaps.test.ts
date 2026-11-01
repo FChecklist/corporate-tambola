@@ -69,7 +69,7 @@ tt({ id: "TT-36", role: "organizer", title: "a draft engagement cannot be delete
   const w = world(); const o = await organizer(w, "drafts@example.com"); const st: number[] = []; let msg = "";
   for (let i = 0; i < 11; i++) { const r = await w.call("POST", "/api/z", { id: `DRAFT${i}XX`, startRound: roundAt(T + 3 * DAY), callSeconds: 6, cap: 50 }, o.h); st.push(r.status); if (r.status !== 200) msg = (await r.json() as any).error; }
   expect(st.slice(0, 10).every((s) => s === 200) && st[10] !== 200).toBe(true);
-  const del = await w.call("DELETE", "/api/z/DRAFT0XX", undefined, o.h);
-  expect(msg + " | delete: " + del.status, "the refusal says 'delete one' but no delete exists").not.toMatch(/delete one/i);
+  const del = await w.call("POST", "/api/z/DRAFT0XX/discard", {}, o.h); // the console's "Delete" on an unpublished draft is this route
+  if (/delete one/i.test(msg)) expect(del.status, msg + " | the refusal says 'delete one', so deleting a draft must work").toBe(200);
   return msg;
 });
