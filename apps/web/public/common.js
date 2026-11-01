@@ -30,6 +30,7 @@
   TB.api = async (method, path, body, opt = {}) => {
     const headers = { "content-type": "application/json", "x-device": TB.device() };
     if (window.TBV && !window.TBV.gpc) { headers["x-ct-vs"] = window.TBV.sid; if (window.TBV.vid) headers["x-ct-vid"] = window.TBV.vid; } // visit tracking on the public pages (v.js): lets the server tie an account to the visit that led to it
+    if (opt.headers) Object.assign(headers, opt.headers);
     const tok = opt.org ? TB.orgToken() : null;
     if (tok) headers.authorization = "Bearer " + tok;
     let res;

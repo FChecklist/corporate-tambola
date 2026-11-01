@@ -60,7 +60,7 @@ describe("the id that ties A, B and C together", () => {
     expect(rz.orders[0].notes.payment_ref).toBe(paymentId);
   });
   test("the Rs 1 payment test gets its txn_id too, and so does a payment made in TEST mode (no Razorpay)", async () => {
-    const r = await (await call("POST", "/api/payments/paytest", { email: "t@x.com", name: "Tess Tester" })).json() as any;
+    const r = await (await call("POST", "/api/payments/paytest", { email: "t@x.com", name: "Tess Tester" }, { "x-organizer": "plat" })).json() as any;
     expect(payRow(r.paymentId).txn_id).toBe(`TAM-${r.paymentId}`);
     expect(rz.orders.at(-1).notes.txn_id).toBe(`TAM-${r.paymentId}`);
     env.RAZORPAY_KEY_ID = undefined; env.RAZORPAY_KEY_SECRET = undefined; env.TEST_MODE = "1";

@@ -308,6 +308,7 @@ const roundMs = (r: number) => (GENESIS + (r - 1) * 3) * 1000;
 /** An unpaid engagement is held from this long BEFORE its start, so every phone (they check every few seconds) knows before the first number would be shown. */
 const LOCK_LEAD_MS = 45_000;
 /** A DEMO GAME (config.demo): a real game, free, for up to DEMO_CAP people. It publishes without payment and is never held; the organizer may make it a real game (choose a pack and pay) at any time: pay.ts clears the mark. */
+const DEMO_PER_DAY = 3; // demo games per organizer and per network address per day
 const DEMO_CAP_MSG = "A demo game is for up to 10 people. Make it a real game to invite more.";
 const DEMO_PAY_MSG = "To make this a real game, choose the number of people and pay for it. Until then it stays a free demo game.";
 const isDemo = (e: { tickets?: number; config?: string | null }) => !!cfgOf(e).demo;
@@ -1506,6 +1507,14 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     { const big = modeTooBig(vc.cfg, b.cap); if (big) return json({ error: big, code: "manual-limit" }, 409); }
     const have = await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(b.id).first<{ org: string | null }>();
     if (have) return json({ ok: true, existed: true }); // creating twice never overwrites (and never reveals whose it is)
+    if (vc.cfg.demo && !a.plat) { // owner order 1 Nov 2026: a demo is free, so it is limited: at most DEMO_PER_DAY demo games per organizer and per network address per day (UTC); DEMO_GAME=0 switches demo games off
+      if (/^(0|off|false)$/i.test(String((env as any).DEMO_GAME ?? ""))) return json({ error: "Free demo games are not available right now. Please try again later.", code: "demo-off" }, 403);
+      const day = new Date(now).toISOString().slice(0, 10), keys = [`demoday/${day}/org/${a.org ?? "none"}`, `demoday/${day}/ip/${(await sha("ip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16)}`];
+      const used = await Promise.all(keys.map(async (k) => Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0)));
+      if (used.some((u) => u >= DEMO_PER_DAY)) return json({ error: `You can make ${DEMO_PER_DAY} free demo games a day. Please try again tomorrow, or make a real game.`, code: "demo-limit" }, 429);
+      for (let i = 0; i < keys.length; i++) await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(keys[i], String(used[i]! + 1)).run();
+    }
+
     // an organizer needs a purchased engagement (entitlement) big enough for the limit they ask for; we (platform) do not. A demo game never uses up a bought pack.
     if (!a.plat && !vc.cfg.demo && a.org) { try { await ownerTestGrant(env, a.org, b.cap, now); } catch { /* no grant: the game is a draft as for everybody */ } }
     const ent = a.plat || vc.cfg.demo ? null : await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(a.org, b.cap).first<{ id: string; pack: number }>();
@@ -2325,6 +2334,7 @@ export async function retentionSweep(env: Env, now: number): Promise<void> {
     const r = await db.prepare("SELECT k, v FROM kv WHERE k LIKE 'loginpass/%' LIMIT 2000").all<{ k: string; v: string }>();
     for (const x of r.results ?? []) { let at = 0; try { at = Number(JSON.parse(x.v).at) || 0; } catch { /* unreadable: drop it */ } if (now - at > 2 * 3_600_000) await db.prepare("DELETE FROM kv WHERE k=?").bind(x.k).run(); }
   });
+  await safe(() => db.prepare("DELETE FROM kv WHERE k >= 'demoday/' AND k < 'demoday0' AND k < ?").bind(`demoday/${new Date(now - 2 * 86_400_000).toISOString().slice(0, 10)}`).run()); // the daily demo counters of earlier days
   await safe(() => db.prepare("DELETE FROM kv WHERE (k LIKE 'seen/%' OR k LIKE 'alert/%') AND substr(k, instr(k, '/') + 1) NOT IN (SELECT substr(hash, 1, 10) FROM organizer_key WHERE revoked=0 AND (expires_ms IS NULL OR expires_ms > ?))").bind(now).run());
   await safe(() => db.prepare("DELETE FROM organizer_key WHERE expires_ms IS NOT NULL AND expires_ms < ?").bind(now - 7 * DAY).run());
   await safe(() => db.prepare("DELETE FROM organizer_key WHERE revoked=1 AND created_ms < ?").bind(now - 90 * DAY).run());

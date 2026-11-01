@@ -420,6 +420,7 @@ export async function payRoute(req: Request, env: PayEnv, now: number, spend: (n
     return row.status === "paid" ? json(JSON.parse(row.result)) : json({ confirming: true }, 202);
   }
   if (req.method === "POST" && p === "/api/payments/paytest") { // Payment Testing: Rs 1 from India, US$ 1 from abroad; buys nothing; anyone, any number of times
+    { const key = req.headers.get("x-organizer"); if (!env.ORGANIZER_SECRET || !key || key !== env.ORGANIZER_SECRET) return json({ error: "The payment test is for the owner only.", code: "owner-only" }, 403); } // owner order 1 Nov 2026: the Rs 1 test is owner-only, not for normal users
     if (!rzp || (await getMode(env)) === "TEST") return json({ error: "Online payments are not switched on." }, 503);
     const b = await body(req);
     if (!b || typeof b.email !== "string" || !strictAccountEmail(b.email)) return json({ error: "Enter a valid e-mail address." }, 400);

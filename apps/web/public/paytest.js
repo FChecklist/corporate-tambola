@@ -19,6 +19,7 @@
         <label for="em">Email (your invoice comes here)</label><input id="em" type="email" autocomplete="email" value="${esc(S.email)}" placeholder="Email">
         <label for="ph">Mobile <span class="zsmall" style="display:inline">(optional)</span></label>
         <div style="display:flex;gap:8px"><select id="pcode" aria-label="Country code" style="flex:0 0 112px">${TB.COUNTRIES.map(([c, n, d]) => `<option value="${d}" ${String(d) === String(S.pcode) ? "selected" : ""}>${c} +${d}</option>`).join("")}</select><input id="ph" type="tel" autocomplete="tel-national" value="${esc(S.phone)}" placeholder="Mobile number" style="flex:1"></div>
+        <label for="okey">Owner key <span class="zsmall" style="display:inline">(this test is for the owner only)</span></label><input id="okey" type="password" autocomplete="off" value="${esc(S.key || "")}" placeholder="Owner key">
         <label for="org">Company name <span class="zsmall" style="display:inline">(optional)</span></label><input id="org" autocomplete="organization" value="${esc(S.org || "")}" placeholder="Company name">
         <label for="tax">GST / Tax number <span class="zsmall" style="display:inline">(optional)</span></label><input id="tax" autocomplete="off" maxlength="30" value="${esc(S.tax || "")}" placeholder="GST / Tax number" style="text-transform:uppercase">
         <label for="cty">Your country</label><select id="cty">${TB.countryOpts(S.country)}</select>
@@ -27,7 +28,7 @@
         <button class="zbtn" id="go" data-needs="K3" disabled aria-disabled="true" ${S.busy ? 'data-hold="1"' : ""}>${S.busy ? "Confirming your payment…" : "Pay " + esc(amt) + " (test)"}</button>
         <p class="zsmall">Secure payment by Razorpay to IT Services by Rajat Agarwal. We keep billing data for audit and tax reasons. No refunds are given for test payments.</p></div>`;
   }
-  const keep = () => { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { name: g("nm"), email: g("em"), phone: g("ph"), pcode: g("pcode"), org: g("org"), tax: g("tax") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; };
+  const keep = () => { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { name: g("nm"), email: g("em"), phone: g("ph"), pcode: g("pcode"), org: g("org"), tax: g("tax"), key: g("okey") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; };
   const draw = () => { $app.innerHTML = view(); bind(); CBConsent.wire($app, "K3", S.k3); TB.payer.mark($app); if (S.done && TB.invoiceWire) TB.invoiceWire(S.done); };
   async function waitForConfirm(paymentId) {
     const t0 = Date.now();
@@ -43,6 +44,7 @@
     if ($("again")) $("again").onclick = () => { S.done = null; S.err = ""; draw(); };
     if ($("go")) $("go").onclick = async () => {
       keep(); S.err = "";
+      if (!(S.key || "").trim()) { S.err = "Please enter the owner key."; return draw(); }
       if (!CBConsent.all($app, "K3")) { S.err = "Please tick the box to continue."; return draw(); }
       const consent = CBConsent.payload($app, "K3");
       if ((S.name || "").trim().length < 2) { S.err = "Please enter your name."; return draw(); }
@@ -52,7 +54,7 @@
       TB.payer.save(S);
       S.busy = true; draw();
       try {
-        const r = await TB.api("POST", "/api/payments/paytest", { consent, org: (S.org || "").trim(), taxId, name: S.name.trim(), email: S.email.trim().toLowerCase(), country: S.country, phone: S.phone, phoneCode: S.pcode });
+        const r = await TB.api("POST", "/api/payments/paytest", { consent, org: (S.org || "").trim(), taxId, name: S.name.trim(), email: S.email.trim().toLowerCase(), country: S.country, phone: S.phone, phoneCode: S.pcode }, { headers: { "x-organizer": S.key.trim() } });
         let res = await TB.pay(r.razorpay, r.paymentId, r.hop); // opens Razorpay Checkout; the server verifies the payment
         if (res && res.confirming) res = await waitForConfirm(r.paymentId);
         S.done = res;

@@ -443,7 +443,7 @@ describe("invoice carries Razorpay's own record (owner list 2026-10-10)", () => 
 });
 
 describe("Payment Testing page (Rs 1 / US$ 1, buys nothing)", () => {
-  const start = (o: Record<string, unknown> = {}) => call("POST", "/api/payments/paytest", { name: "Asha Rao", email: "asha@acme.in", country: "IN", ...o });
+  const start = (o: Record<string, unknown> = {}) => call("POST", "/api/payments/paytest", { name: "Asha Rao", email: "asha@acme.in", country: "IN", ...o }, { "x-organizer": "plat" });
   const payIt = async (r: any, payId = "pay_T1") => {
     rz.payments[payId] = { id: payId, order_id: r.razorpay.orderId, status: "captured", amount: r.razorpay.amount, currency: r.razorpay.currency, method: "upi", vpa: "asha@okicici", created_at: Math.floor(T / 1000) };
     return call("POST", "/api/payments/verify", { paymentId: r.paymentId, razorpay_order_id: r.razorpay.orderId, razorpay_payment_id: payId, razorpay_signature: hmac("sek", `${r.razorpay.orderId}|${payId}`) });
@@ -520,7 +520,7 @@ describe("central payments (every order opens through IT Services by Rajat Agarw
     expect(central.orders[0].payment_ref).toMatch(/^pay_[0-9a-f]{16}$/);
   });
   test("the payment test is the payment_test plan", async () => {
-    const r = await call("POST", "/api/payments/paytest", { email: "a@b.co", name: "Asha Rao", country: "IN" });
+    const r = await call("POST", "/api/payments/paytest", { email: "a@b.co", name: "Asha Rao", country: "IN" }, { "x-organizer": "plat" });
     expect(r.status).toBe(200);
     expect(central.orders[0]).toMatchObject({ plan: "payment_test", amount_minor: 100 });
   });
