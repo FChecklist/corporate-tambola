@@ -367,7 +367,7 @@ describe("lapse, expiry and the e-mails", () => {
     expect(raw.prepare("SELECT COUNT(*) AS c FROM refund").get()).toEqual({ c: 0 }); expect(raw.prepare("SELECT COUNT(*) AS c FROM credit_note").get()).toEqual({ c: 0 });
   });
   test("expired credit cannot be used (even before the tick has run), and the game is simply charged in full", async () => {
-    const t = await setup(); await game(t.master, "GAME-Y", 100, exp + 5 * H, exp + H);
+    const t = await setup(); await game(t.master, "GAME-Y", 100, exp + 5 * H, exp - 2 * H); /* made while the sign-in key is alive: with no game left a year on, the key goes with the last game (TT-24) */
     const r = await j(await withCredit(t.master, "GAME-Y", exp)); // exactly at the lapse instant, tick not run
     expect(r).toMatchObject({ ok: true, paid: false, usedInr: 0, toPayInr: paidOf(100) });
     expect(raw.prepare("SELECT COUNT(*) AS c FROM credit_use").get()).toEqual({ c: 0 });

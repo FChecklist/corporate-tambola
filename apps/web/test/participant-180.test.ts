@@ -11,7 +11,7 @@ describe("participant side 1.8.0", () => {
   test("the join carries an optional email (runtime and page), asked only in a game where people type their mobile number", () => {
     expect(rt).toContain("empId?: string, email?: string): Promise<boolean>");
     expect(rt).toContain("...(email ? { email } : {})");
-    expect(z).toContain("rt.join(J.e164 || J.phone, J.name, inviteOf(), J.emp, J.email)");
+    expect(z).toContain("rt.join(J.e164 || J.phone, J.loc ? J.name + \" · \" + J.loc : J.name, inviteOf(), J.emp, J.email)"); /* ID-only join: the name carries the location */
     expect(z).toContain('Your email ID <span class="zopt">(optional)</span>');
     expect(z).toContain('INFO.open === true && (INFO.verify || "mobile") === "mobile" && !INFO.empOnly');
     expect(readFileSync(join(import.meta.dir, "../public/zgame.js"), "utf8")).toContain("email:"); // the built runtime has it
