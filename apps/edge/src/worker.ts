@@ -1492,7 +1492,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (b && b.callMode === "host" && (b.callSeconds === undefined || b.callSeconds === null)) b.callSeconds = 12; // a Host presses for each number: no gap is chosen; the stored 12 is never used for the pace
     if (b && only12(env) && b.callMode !== "host") { if (b.callSeconds === undefined || b.callSeconds === null) b.callSeconds = 12; if (b.callSeconds !== 12) return json({ error: ONLY_12S_MSG }, 400); }
     if (!b) return json({ error: "Check the details and try again." }, 400);
-    if (!ID.test(b.id ?? "")) return json({ error: "The game code can use letters, numbers, - and _ only (3 to 40 characters)." }, 400);
+    if (!ID.test(b.id ?? "")) return json({ error: "The game code can use letters, numbers, - and _ only (4 to 40 characters)." }, 400);
     if (!Number.isInteger(b.startRound)) return json({ error: "Pick the day and time the game starts." }, 400);
     if (!Number.isInteger(b.callSeconds) || b.callSeconds % 3 || b.callSeconds < 6) return json({ error: GAP_MSG }, 400);
     if (!Number.isInteger(b.cap) || b.cap < 1 || b.cap > 100000) return json({ error: "Please enter the number of people as a whole number from 1 up." }, 400);
@@ -1504,6 +1504,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!vc.ok) return json({ error: vc.error }, 400);
     { const pr = prizesRefusal({ created_ms: now }, b, vc.cfg.rewards); if (pr) return json({ error: pr, code: "prizes-old-game" }, 409); } // G-1: the same gate as the settings route
     if (vc.cfg.demo && b.cap > DEMO_CAP) return json({ error: DEMO_CAP_MSG, code: "demo-cap" }, 400); // a demo game is small; a bigger one is a real game
+    if (vc.cfg.demo && !a.plat && a.org && !(await env.DB.prepare("SELECT 1 AS x FROM engagement WHERE id=?").bind(b.id).first())) { const made = (await env.DB.prepare("SELECT COUNT(*) AS c FROM engagement WHERE org=? AND created_ms>? AND config LIKE ?").bind(a.org, now - 86_400_000, '%"demo":true%').first<{ c: number }>())?.c ?? 0; if (made >= 3) return json({ error: "Three demo games a day is the most. Please try again tomorrow, or make this a real game.", code: "demo-day" }, 429); } // rule 88: at most 3 demo games per Organizer in 24 hours
     { const big = modeTooBig(vc.cfg, b.cap); if (big) return json({ error: big, code: "manual-limit" }, 409); }
     const have = await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(b.id).first<{ org: string | null }>();
     if (have) return json({ ok: true, existed: true }); // creating twice never overwrites (and never reveals whose it is)
