@@ -597,7 +597,7 @@
     const msg = waMsg(name, link);
     TB.sheet(`<div class="res ok">${ic("check")}</div><h2 class="center">Pass ready for ${esc(firstName(name))}</h2>
       <div class="passbox"><span>Pass link</span><b class="mono" style="font-size:12.5px;word-break:break-all">${esc(link)}</b></div>
-      <a class="btn block" target="_blank" rel="noopener" href="${esc(waLink(digits, msg))}">${ic("phone")} Send to ${esc(firstName(name))} on WhatsApp</a>
+      <!-- hidden 1 Nov 2026: a personal WhatsApp link needs a mobile number; people join with an ID only. Copy stays. -->
       <button class="btn line block" data-act="copy" data-arg="${esc(msg)}">${ic("copy")} Copy link and message</button>
       <p class="tiny muted center">WhatsApp opens with the message ready. You press send. Not on WhatsApp? Use Copy and send it any way you like.</p>
       <button class="btn line block" data-act="famnew">Back to family passes</button>`);

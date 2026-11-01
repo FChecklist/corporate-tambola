@@ -1054,16 +1054,16 @@ describe("the console for an AI that works in the browser", () => {
   }, 60_000);
 
   test("Quick setup has every main choice: who calls the numbers (auto or manual with a Host), what a person must give to get in, and employees only (found when the owner looked at the live page, 25 Oct 2026)", async () => {
-    const o = await organizer(); const p = await quickPage(o); await p.waitFor((x) => /1\. Which game\?/.test(x) && /Who calls the numbers\?/.test(x) && /What must a person give to get in\?/.test(x) && /Only my employees/.test(x));
+    const o = await organizer(); const p = await quickPage(o); await p.waitFor((x) => /1\. Which game\?/.test(x) && /Who calls the numbers\?/.test(x) && !/What must a person give to get in\?/.test(x) && !/Only my employees/.test(x)); // hidden 1 Nov 2026: people join with an ID only
     expect(p.text()).toMatch(/I call the numbers/); expect(p.text()).toMatch(/I press the Next button for every number\./); expect(p.text()).toMatch(/The game calls the numbers/); expect(p.text()).toMatch(/How should the game start\?/);
     const tomorrow = new Date((p.win as any).Date.now() + 5.5 * 3600000 + 2 * 86400000); const d = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
     set(p, "#qk-name", "Manual game"); set(p, "#qk-date", d); set(p, "#qk-time", "18:30");
-    p.click('[data-ck="cap"][data-v="100"]'); p.click('[data-ck="mode"][data-v="host"]'); p.click('[data-ck="ver"][data-v="both"]'); p.click('[data-bool="emp"]');
-    await until(() => /a Host presses each number; employees only; people give their mobile number and employee ID/.test(p.text()), 8000).catch(() => { throw new Error("summary was: " + (p.$("#qk-summary") as any)?.textContent); });
+    p.click('[data-ck="cap"][data-v="100"]'); p.click('[data-ck="mode"][data-v="host"]'); /* 1 Nov 2026: people join with an ID only; the choice of ways and the employees-only switch are hidden */
+    await until(() => /a Host presses each number/.test(p.text()), 8000).catch(() => { throw new Error("summary was: " + (p.$("#qk-summary") as any)?.textContent); });
     p.click("#qk-save"); await p.waitFor((x) => /Your draft is saved/.test(x), 8000).catch(() => { throw new Error("save failed; error box: " + (p.$("#qk-err") as any)?.textContent + " | errors: " + p.errors.join("; ")); });
     const hist = await o.json(await o.api("GET", "/api/history", undefined, o.aiKey)); const id = hist.engagements[0].id;
     const sm = await o.json(await o.api("GET", `/api/z/${id}/summary`, undefined, o.aiKey));
-    expect(sm).toMatchObject({ limit: 100, callMode: "host", verify: "both", employeesOnly: true });
+    expect(sm).toMatchObject({ limit: 100, callMode: "host", verify: "id" });
   }, 60_000);
 
   test("Quick setup: real date and time pickers, the first steps as one form of tap choices; saving makes the draft with the right start, size, tickets, prizes and name, then opens it", async () => {
@@ -1072,9 +1072,9 @@ describe("the console for an AI that works in the browser", () => {
     expect(p.text()).not.toMatch(/Rs 2,399\.00/); /* no price while choosing the size */ expect(doc.querySelectorAll("select").length).toBe(0); // prices come from the software's own list
     const tomorrow = new Date((p.win as any).Date.now() + 5.5 * 3600000 + 2 * 86400000); const d = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, "0")}-${String(tomorrow.getUTCDate()).padStart(2, "0")}`;
     set(p, "#qk-name", "Diwali party"); set(p, "#qk-date", d); set(p, "#qk-time", "18:30");
-    p.click('[data-ck="cap"][data-v="500"]'); p.click('[data-ck="tix"][data-v="2"]'); p.click('[data-ck="spd"][data-v="12"]'); p.click('[data-ck="join"][data-v="list"]'); p.click('[data-bool="inv"]');
+    p.click('[data-ck="cap"][data-v="500"]'); p.click('[data-ck="tix"][data-v="2"]'); p.click('[data-ck="spd"][data-v="12"]'); p.click('[data-bool="inv"]');
     set(p, "#qk-t-full", "Voucher 5000"); p.click('[data-ck="hs.full.n"][data-v="2"]');
-    await until(() => /Diwali party: \d{4}-\d\d-\d\d at 18:30 India time; up to 500 people; 2 tickets each, a number every 12 seconds, 1 round; only people on a list; 6 prizes/.test(p.text()), 8000).catch(() => { throw new Error("summary was: " + (p.$("#qk-summary") as any)?.textContent); });
+    await until(() => /Diwali party: \d{4}-\d\d-\d\d at 18:30 India time; up to 500 people; 2 tickets each, a number every 12 seconds, 1 round; anyone with the link; 6 prizes/.test(p.text()), 8000).catch(() => { throw new Error("summary was: " + (p.$("#qk-summary") as any)?.textContent); });
     p.click("#qk-save"); await p.waitFor((x) => /Your draft is saved/.test(x), 8000).catch(() => { throw new Error("save failed; error box: " + (p.$("#qk-err") as any)?.textContent + " | errors: " + p.errors.join("; ")); });
     const hist = await o.json(await o.api("GET", "/api/history", undefined, o.aiKey)); expect(hist.engagements.length).toBe(1);
     const id = hist.engagements[0].id; expect(id).toMatch(/^DIWALI-PARTY-\d{4}$/);
@@ -1285,7 +1285,7 @@ describe("console phase 2: wording fixes, My people, waiting room, remove, play 
     let sm: any = null; for (let i = 0; i < 60; i++) { sm = await o.json(await o.api("GET", "/api/z/UI-WHO/summary", undefined, o.token)); if (sm.employeesOnly === true) break; await new Promise((r) => setTimeout(r, 60)); } // the Save is asynchronous: read the server when it has answered
     expect(sm).toMatchObject({ whoCanJoin: "list", employeesOnly: true, verify: "id" }); // employees only: the employee ID is asked
     const home = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage }, { afterLoad: w.hook }); await home.waitFor((x) => /Create a new game/.test(x));
-    home.click("#mk"); await home.waitFor(() => w.st.posts.length > 0); expect(w.st.posts[0].whoCanJoin).toBe("list");
+    home.click("#mk"); await home.waitFor(() => w.st.posts.length > 0); expect(w.st.posts[0].whoCanJoin).toBe("anyone"); // one way to join: anyone with the unique link
   });
 
   test("My people: typing a number cleans it; the row is masked; Send on WhatsApp is the server's wa.me link and is marked sent; Send again gets a new link from the server", async () => {

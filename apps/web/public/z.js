@@ -167,7 +167,7 @@
   // Every box says whether it must be filled: a small red * and "mandatory", or "(optional)" in brackets. "alt": one of the two is needed.
   const joinNeeds = () => {
     const vm = INFO.verify || "mobile", eo = !!INFO.empOnly;
-    if (vm === "id") return eo ? { phone: "opt", emp: "req" } : { phone: "alt", emp: "alt" };
+    if (vm === "id") return { phone: "none", emp: "req" }; // 1 Nov 2026: taking part needs an ID only; no mobile number or e-mail is asked
     if (vm === "either") return { phone: "alt", emp: "alt" };
     if (vm === "both") return eo ? { phone: "req", emp: "req" } : { phone: "req", emp: "opt" };
     return { phone: "req", emp: "none" };
@@ -177,7 +177,7 @@
     const vm = INFO.verify || "mobile", eo = !!INFO.empOnly, nd = joinNeeds(), pv = esc(J.phone || ""), ev = esc(J.emp || "");
     const phone = (label, hint) => `<label for="ph">${label} ${markOf(nd.phone, "an employee ID")}</label><div class="zphone"><select id="cc" aria-label="Country of your mobile number" autocomplete="off">${ccOptions(J.cc)}</select><input id="ph" type="tel" inputmode="tel" enterkeyhint="go" autocomplete="tel-national" placeholder="${J.cc === "IN" ? "98765 43210" : "Mobile number"}" ${nd.phone === "req" ? 'aria-required="true" ' : ""}value="${pv}"></div>${hint ? `<p class="zsmall" style="margin:2px 0 6px">${hint}</p>` : ""}`;
     const emp = (label, hint) => `<label for="emp">${label} ${markOf(nd.emp, "a mobile number")}</label><input id="emp" enterkeyhint="go" autocomplete="off" ${idKind() === "email" ? 'inputmode="email" autocapitalize="none" maxlength="254"' : 'autocapitalize="characters" maxlength="60"'} ${nd.emp === "req" ? 'aria-required="true" ' : ""}value="${ev}" aria-describedby="empread"><p class="zsmall" id="empread" aria-live="polite" style="margin:2px 0 6px"></p>${hint ? `<p class="zsmall" style="margin:2px 0 6px">${hint}</p>` : ""}`;
-    if (vm === "id") return emp("Your " + idWord(), eo ? "This game is for employees only." : "") + phone(eo ? "Your mobile number" : "No employee ID? Type your mobile number instead", eo ? "" : "Vendors, customers and families use their mobile number.");
+    if (vm === "id") return (J.step2 ? `<p class="zsmall" style="margin:0 0 6px">Your ID is not on the list yet. The Organizer will confirm it is you.</p><label for="nm">Your name ${markOf("req")}</label><input id="nm" enterkeyhint="next" autocomplete="name" maxlength="60" aria-required="true" value="${esc(J.name)}"><label for="loc">Your location ${markOf("req")}</label><input id="loc" enterkeyhint="next" autocomplete="off" maxlength="60" aria-required="true" value="${esc(J.loc || "")}">` : `<p class="zsmall" style="margin:0 0 6px">Enter your ID to join. A ticket is made for you, for this game only.</p>`) + emp(idKind() === "email" ? "Email ID" : "Employee, Associate, Vendor or Member ID", "") + `<p class="zsmall" style="margin:2px 0 6px">No mobile number or e-mail address is needed. What is typed here is deleted within 24 hours after the game.</p>`;
     if (vm === "either") return phone("Your mobile number", "") + `<p class="zsmall" style="margin:0 0 6px;text-align:center"><b>or</b></p>` + emp("Your " + idWord(), "Give either one. Employees can use their ID; everyone else uses a mobile number.");
     if (vm === "both") return phone("Your mobile number", "") + emp(eo ? "Your " + idWord() : "Your " + idWord() + " (employees only)", eo ? "This game is for employees only." : "Not an employee? Leave this empty.");
     return phone("Your mobile number", "");
@@ -211,15 +211,15 @@
     return `${brandStrip()}<div class="zhead"><b>Corporate Tambola</b></div>${chips}
     <div class="zcard zform zjoin"><h2>Join the game</h2>
     ${welcomeLine(personal)}
-    <ol class="zsteps" aria-label="How to join"><li><b>1</b><span>Tick the boxes</span></li><li><b>2</b><span>${personal ? "Press the button" : "Type your number"}</span></li><li><b>3</b><span>Get your ticket</span></li></ol><p class="zsmall zdnd" id="dndtip">Tip: turn on Do Not Disturb so other apps do not interrupt your game.</p>
+    <ol class="zsteps" aria-label="How to join"><li><b>1</b><span>Tick the boxes</span></li><li><b>2</b><span>${personal ? "Press the button" : (INFO.verify || "mobile") === "id" ? "Type your ID" : "Type your number"}</span></li><li><b>3</b><span>Get your ticket</span></li></ol><p class="zsmall zdnd" id="dndtip">Tip: turn on Do Not Disturb so other apps do not interrupt your game.</p>
     ${lateTip()}<p class="zsmall" id="soundtip" style="margin:0 0 6px">Sound is off, so your phone stays quiet in the office. To hear the numbers read out, press Sound on your ticket page.</p><p class="zgoalline" style="margin:0 0 6px">Numbers are called one by one. Tap each one on your ticket as it is called. When a row or the whole ticket is complete, press Claim before the next number: the software checks it, no need to shout.</p>${INVITE_FROM ? `<div class="zbanner ok" style="margin:0 0 8px">You were invited by a colleague or family member. Join with your own mobile number to get your own ticket.</div>` : ""}
     ${INAPP ? `<p class="zsmall" style="margin:0 0 8px">Tip: if this link opened inside another app, open it in Chrome or Safari and always use that same one for this game.</p>` : ""}${J.mode === "needPhone" && !msg ? `<div class="zbanner info" role="status" style="margin:0 0 8px">${J.note ? esc(J.note) : "This link was already opened on another phone. Please type your mobile number to get your ticket."}</div>` : ""}
     ${DEMO ? "" : CBConsent.html("K4")}
     ${personal ? `<p class="zsmall" style="margin:0 0 6px">Your personal link is ready. Press the button to get your ticket.</p>` : joinWho()}
-    ${personal ? "" : `<label for="nm">Your name <span class="zopt">(optional)</span></label><input id="nm" enterkeyhint="go" autocomplete="name" maxlength="60" value="${esc(J.name)}"><p class="zsmall" style="margin:2px 0 6px">Shown only to the organizer.</p>${emailAsked() ? `<label for="mail">Your email ID <span class="zopt">(optional)</span></label><input id="mail" type="text" inputmode="email" autocomplete="email" enterkeyhint="go" maxlength="120" value="${esc(J.email)}"><p class="zsmall" style="margin:2px 0 6px">Used only for this game and deleted within 24 hours of the game.</p>` : ""}`}
+    ${personal || (INFO.verify || "mobile") === "id" ? "" : `<label for="nm">Your name <span class="zopt">(optional)</span></label><input id="nm" enterkeyhint="go" autocomplete="name" maxlength="60" value="${esc(J.name)}"><p class="zsmall" style="margin:2px 0 6px">Shown only to the organizer.</p>${emailAsked() ? `<label for="mail">Your email ID <span class="zopt">(optional)</span></label><input id="mail" type="text" inputmode="email" autocomplete="email" enterkeyhint="go" maxlength="120" value="${esc(J.email)}"><p class="zsmall" style="margin:2px 0 6px">Used only for this game and deleted within 24 hours of the game.</p>` : ""}`}
     ${msg ? `<div class="zbanner bad" role="alert">${esc(msg)}</div>${/out of date/i.test(msg) ? `<button type="button" class="zbtn s alt" id="reloadpage">Reload this page</button>` : ""}` : ""}
-    <button class="zbtn" id="go" ${DEMO ? "" : 'data-needs="K4" disabled aria-disabled="true"'}>Get my ticket</button>
-    <p class="zsmall">We use your number for your ticket and, if you win, your prize. Your organizer sees it. Other players do not.</p>
+    <button class="zbtn" id="go" ${DEMO ? "" : 'data-needs="K4" disabled aria-disabled="true"'}>${(INFO.verify || "mobile") === "id" && !personal ? (J.step2 ? "Ask to join the game" : "Continue") : "Get my ticket"}</button>
+    <p class="zsmall">${(INFO.verify || "mobile") === "id" ? "What is typed here is deleted within 24 hours after the game. The Organizer sees it. Other players do not." : "Your number is used for your ticket and, if you win, your prize. Your organizer sees it. Other players do not."}</p>
     <p class="spriv">Players are 18 or older.</p>
     <p class="spriv"><a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a></p></div>`;
   };
@@ -268,7 +268,7 @@
   }
   /** Joins with what is typed (or just the token). Shows a ticket, or the calm screen that fits the answer. */
   async function doJoin() {
-    const ok = await rt.join(J.e164 || J.phone, J.name, inviteOf(), J.emp, J.email);
+    const ok = await rt.join(J.e164 || J.phone, J.loc ? J.name + " · " + J.loc : J.name, inviteOf(), J.emp, J.email);
     if (ok) {
       J.mode = ""; clearInterval(J.timer); clearWait();
       if (TOKEN) { try { const u = new URLSearchParams(location.search); u.delete("t"); history.replaceState(null, "", location.pathname + (u.toString() ? "?" + u : "")); } catch {} } // the personal token leaves the address bar once it has done its job
@@ -449,11 +449,11 @@
   function confirmCard(v) {
     if (DEMO || v.phase !== "ended" || !PRIZES.length) return "";
     if (!CF.loaded) return `<div class="zcard"><h2>Confirm where your prize goes</h2><p class="zsmall">Waiting for your result to be confirmed by the other phones. This takes a moment.</p></div>`;
-    if (CF.confirmed && !CF.editing) return `<div class="zcard"><h2>Details confirmed</h2><p style="margin:4px 0"><b>${esc(CF.name)}</b> &middot; ${esc(CF.phone)}</p><p class="zsmall">Your organizer has these details. <button class="zsnd" id="cfedit">Change</button></p></div>`;
+    if (CF.confirmed && !CF.editing) return `<div class="zcard"><h2>Details confirmed</h2><p style="margin:4px 0"><b>${esc(CF.name)}</b>${(INFO.verify || "mobile") === "id" ? "" : " &middot; " + esc(CF.phone)}</p><p class="zsmall">Your organizer has these details. <button class="zsnd" id="cfedit">Change</button></p></div>`;
     return `<div class="zcard zform"><h2>Confirm your prize details</h2>
-      <p class="zsmall" style="margin:0 0 6px">Your organizer will use this name and mobile number to hand over your prize. Please check them and correct anything that is wrong. If you change them, your organizer and co-host will see both what you joined with and what you changed it to.</p>
+      <p class="zsmall" style="margin:0 0 6px">Your organizer will use this name to hand over your prize. Please check them and correct anything that is wrong. If you change them, your organizer and co-host will see both what you joined with and what you changed it to.</p>
       <label for="cfnm">Your name</label><input id="cfnm" autocomplete="name" maxlength="60" value="${esc(CF.name)}">
-      <label for="cfph">Your mobile number</label><input id="cfph" inputmode="tel" autocomplete="tel" value="${esc(CF.phone)}">
+      ${(INFO.verify || "mobile") === "id" ? "" : `<label for="cfph">Your mobile number</label><input id="cfph" inputmode="tel" autocomplete="tel" value="${esc(CF.phone)}">`}
       ${CF.note ? `<div class="zbanner ${CF.note.startsWith("Thank") ? "ok" : "bad"}" role="alert">${esc(CF.note)}</div>` : ""}
       <button class="zbtn" id="cfgo"${CF.busy ? " disabled" : ""}>Confirm</button></div>`;
   }
@@ -1129,11 +1129,17 @@
       J.phone = ph ? ph.value : J.phone; J.name = nm ? nm.value.trim() : J.name;
       if (cc) { J.cc = CT_BY_ISO(cc.value).iso; try { store.set(CC_KEY, J.cc); } catch {} }
       const stop = (m) => { rt.error = m; try { document.activeElement && document.activeElement.blur(); } catch {} paint(); }; // said in place, at once: nothing is sent to the server for a mistake the phone can see
+      { const loc = document.getElementById("loc"); if (loc) { J.loc = loc.value.trim(); if (!(TOKEN && J.mode !== "needPhone")) { if (!J.name) return stop("Please type your name."); if (!J.loc) return stop("Please type your location."); } } }
       if (J.mode === "needPhone" && !J.phone.trim() && !J.emp) return stop("Type your own mobile number, then press the button again."); // the link was used on another phone: the game needs the number it was made for
       const pp = CTPhone.parse(J.cc, J.phone), nd = joinNeeds(), idText = J.emp.replace(/\s+/g, "");
       if (!pp.ok && !pp.empty) return stop(pp.why); // typed, even if the box is optional: a mistyped number is never dropped silently
       if (idText) { const rd = readAs(J.emp), atSign = J.emp.normalize("NFKC").includes("@");
         if (idKind() === "email" ? !EMAIL_RE.test(rd) : INFO.idClean ? !rd || rd.length > 30 || atSign : !/^[A-Za-z0-9][A-Za-z0-9._\-\/]{0,29}$/.test(idText)) return stop(idKind() === "email" ? "Please check your Email ID. It looks incomplete." : INFO.idClean && rd && !atSign && rd.length > 30 ? "This ID is too long. An employee ID may be up to 30 characters once cleaned." : INFO.idClean && atSign ? "This looks like an Email ID. This game asks for an employee ID: letters and numbers only." : "An employee ID has letters and numbers only."); }
+      if ((INFO.verify || "mobile") === "id" && !(TOKEN && J.mode !== "needPhone") && !J.step2) { // step 1: only the ID; a listed ID gets its ticket at once, an unlisted one is asked for name and location (step 2)
+        if (!idText) return stop("Please type your Employee, Associate, Vendor or Member ID.");
+        let known = false; try { const w = await rawApi("POST", `/api/z/${EID}/who`, { empId: J.emp, consent: J.consent }); known = !!(w && w.known); } catch (e) { known = false; }
+        if (!known) { J.step2 = true; rt.error = null; paint(); return; }
+      }
       if (!(TOKEN && J.mode !== "needPhone")) {
         if (nd.emp === "req" && !idText && nd.phone === "req" && pp.empty) return stop("Enter your " + idWord() + " and your mobile number.");
         if (nd.emp === "req" && !idText) return stop("Enter your " + idWord() + ".");

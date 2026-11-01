@@ -85,12 +85,13 @@ export async function confirmPrize(env: Env & PiiEnv, eid: string, b: any, now: 
   if (!mine) return json({ error: "This is not the phone that holds this ticket." }, 403);
   const rows = (await env.DB.prepare("SELECT round, pattern, ordinal, pii, orig, trail FROM prize WHERE eid=? AND seat=?").bind(eid, seat).all<any>()).results ?? [];
   if (!rows.length) return json({ error: "No reward recorded for this ticket." }, 404);
-  const name = cleanName(b.name), cur = await openPii(env, rows[0].pii), typed = String(b.phone ?? "").trim() ? cleanPhone(b.phone) : null;
+  const idGame = await (async () => { try { return JSON.parse(((await env.DB.prepare("SELECT config FROM engagement WHERE id=?").bind(eid).first<{ config: string | null }>())?.config) || "{}").verify === "id"; } catch { return false; } })(); // 1 Nov 2026: a game joined by ID never asks for or keeps a mobile number, also not for the prize hand-over
+  const name = cleanName(b.name), cur = await openPii(env, rows[0].pii), typed = !idGame && String(b.phone ?? "").trim() ? cleanPhone(b.phone) : null;
   if (!name) return json({ error: "Please write your name." }, 400);
   if (typed && !typed.ok) return json({ error: typed.why }, 400); // from any country: the page sends +<country code><number>
-  if (!typed && !cur?.empId) return json({ error: "Please enter your mobile number." }, 400); // a winner who came in by employee ID may be found by the ID: the number is then welcome, not needed
+  if (!idGame && !typed && !cur?.empId) return json({ error: "Please enter your mobile number." }, 400); // a winner who came in by employee ID may be found by the ID: the number is then welcome, not needed
   if (!(await spend(env, now, rows.length + 1))) return json({ error: "Busy day. Please try again after midnight UTC." }, 503);
-  const phone = typed && typed.ok ? keptFromClean(typed.digits) : cur?.phone ?? "";
+  const phone = idGame ? "" : typed && typed.ok ? keptFromClean(typed.digits) : cur?.phone ?? "";
   const changed = !cur || keptPhone(cur.phone ?? "") !== phone || (cur.name ?? "") !== name;
   const sealed = await sealPii(env, { phone, name, ...(cur?.empId ? { empId: cur.empId } : {}) }); // the employee ID stays with the record
   for (const r of rows) {
