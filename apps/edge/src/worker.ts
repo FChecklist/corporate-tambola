@@ -1982,6 +1982,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
         const nextAt = c.idx < 89 ? await callTimeMs(env as any, e, round, c.idx + 1) : await (async () => { const last = await callTimeMs(env as any, e, round, 89); return last === null ? null : last + (cfgOf(e).callMode === "host" ? 12 : Number(e.call_seconds)) * 1000; })(); // the last number of a round closes one gap (12.000 s) after it is announced; null: a Host who has not pressed yet, a game that was ended
         if (nextAt !== null && now >= nextAt) { late++; await noteLateClaim(env.DB, eid!, b.pid, String(c.pattern), now); continue; }
       }
+      if (await env.DB.prepare("SELECT 1 AS x FROM claim WHERE eid=? AND pid=? AND pattern=? AND round=? AND idx=?").bind(eid, b.pid, c.pattern, round, c.idx).first()) continue; // F-03: sent before (stored once): a repeat costs nothing, so it cannot use up the shared daily write allowance
       if (!(await spend(env, now))) return json({ error: "Busy day. Your claim is kept on your phone and will be sent again.", stored }, 503);
       const r = await env.DB.prepare("INSERT OR IGNORE INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES(?,?,?,?,?,?)").bind(eid, b.pid, c.pattern, round, c.idx, now).run();
       stored += r.meta?.changes ?? 0; // a claim sent twice is stored once
