@@ -131,7 +131,7 @@ describe("console steps 5 and 6: idiot-proof", () => {
     expect(j.status).toBe(403); // not on the list: "Please wait"
     const p = await consolePage(o, "IP-WB"); // an unpaid published game opens on step 8
     await p.waitFor((x) => /1 person is waiting to come in/.test(x));
-    p.click('#waitbanner [data-open="6"]'); await p.waitFor((x) => /Waiting to come in: 1/.test(x));
+    p.click('#waitbanner [data-open="6"]'); await p.waitFor((x) => /People asking to join: 1/.test(x));
     expect(p.$("#waitbanner")).toBeNull(); // the list itself is on screen now
   });
   test("a row with an employee ID but no mobile number: Fix and add keeps the ID, so an employees-only game takes the person instead of refusing them again", async () => {

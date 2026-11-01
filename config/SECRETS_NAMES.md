@@ -52,6 +52,7 @@ Where things are set:
 | `GOOGLE_CLIENT_ID` | Google sign-in client id (public, not a secret); without it the Google button is off | Optional Pages variable | setting |
 | `CONTROL_R2` | Optional R2 bucket holding the static copy of the pause file | Optional binding | binding |
 | `CONTROL_BASE` | Optional public address of that bucket | Optional Pages variable | setting |
+| `CLAIM_HOLD` | Set to 1 to make the game wait for everyone while a claim is checked (off when unset) | Worker setting | setting |
 | `ANALYZE_AI_URL` | Optional chat endpoint the owner's analyze route may send masked totals to | Optional Pages variable | setting |
 | `ANALYZE_AI_KEY` | Key for that endpoint | Optional Pages secret | secret |
 | `ANALYZE_AI_MODEL` | Model name for that endpoint | Optional Pages variable | setting |

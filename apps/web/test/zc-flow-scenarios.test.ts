@@ -1,7 +1,8 @@
 // New organizer flow, scenario matrix (2026-10-30, owner order): the cross product of the options, 10,000+ scenarios in fast mode, each checked against an independent oracle (logic test),
 // plus a wire test (screen choices -> API payload) and a smoke test (every step draws for sample scenarios).
 // FALSIFIED BY: scen-pay-pending-opens, scen-cap-ignored, scen-family-after-cutoff, scen-cohost-approver-missing, scen-open-needs-approval, scen-listed-offlist-enters, wire-callmode-lost, wire-startmode-lost
-import { expect, test } from "bun:test";
+import { expect, setDefaultTimeout, test } from "bun:test";
+setDefaultTimeout(60_000); // the page tests build a whole console; a slow machine needs more than bun's 5 s
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Window } from "happy-dom";

@@ -473,7 +473,7 @@
       + sm("The person gives their name and location. This goes to you and your Hosts. The person joins when one of you says yes.")
       + sm("Family members join under the ID of the person who brought them. That person says yes for them.")
       + hd("Your privacy")
-      + `<ul class="zc-small" style="font-size:12px;margin:2px 0 6px;padding-left:18px"><li>No mobile numbers. No e-mail addresses. Nobody is asked for them.</li><li>The link is private to this game. It is not listed anywhere.</li><li>All information about participants is deleted within 24 hours after the game.</li><li>Only these are kept: the winners' results, the game logs, the Organizer and Host details, and the tax invoices.</li></ul>`
+      + `<ul class="zc-small" style="font-size:12px;margin:2px 0 6px;padding-left:18px"><li>No mobile numbers. No e-mail addresses. Nobody is asked for them.</li><li>The link is for this game only. It is not listed anywhere.</li><li>All information about participants is deleted within 24 hours after the game.</li><li>Only these are kept: the winners' results, the game logs, the Organizer and Host details, and the tax invoices.</li></ul>`
       + `<details id="whoqa" style="font-size:12px;margin:2px 0 8px"><summary>Questions</summary>` + qa.map((x) => `<p style="font-size:12px;margin:4px 0"><b>${x[0]}</b> ${x[1]}</p>`).join("") + `</details></div>`;
   }
 
