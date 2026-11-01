@@ -34,7 +34,7 @@ const consolePage = (o: O, eid: string, key = o.token, session: Record<string, s
   page(o, `/zc?e=${eid}`, "zc.html", ZC_SCRIPTS, { "ctz-org": key, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com", ...session }, extra);
 
 // --- the single-page console: small helpers ---
-const ZC_SCRIPTS = "zgame.js control.js zc.js".split(" ");
+const ZC_SCRIPTS = "zgame.js control.js idlist.js zc.js".split(" ");
 /** Opens step n by its jump button (the numbered dot in the progress bar). */
 const openStep = (p: Page, n: number) => p.click(`.zc-dot[data-open="${n}"]`);
 const setField = (p: Page, sel: string, v: string) => { const el = p.$(sel) as any; el.value = v; el.dispatchEvent(new p.win.Event("input", { bubbles: true })); };
