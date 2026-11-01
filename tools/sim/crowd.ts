@@ -9,7 +9,7 @@ import { callRoundR, checkClaims, completionIndexKey, settleAll, ticketsFor } fr
 import { deriveCalls, roundAt, roundTimeMs, type Fetcher } from "../../packages/beacon/src";
 import { cfgOf, nextMessage, publicKeyFromSecret, readPublished, resolveControl, signControlWithSecret } from "../../packages/beacon/src/control";
 import { createHash } from "node:crypto";
-import { defaultCfg, keysInPlay, roundEid, type EngagementCfg } from "../../packages/beacon/src/config";
+import { defaultCfg, keysInPlay, quorumFor, roundEid, type EngagementCfg } from "../../packages/beacon/src/config";
 
 const N = Number(process.argv[2] ?? 2000);
 const ROUNDS = Number(process.env.ROUNDS ?? 1); // ROUNDS=2 plays two full rounds (new numbers and new tickets each)
@@ -132,7 +132,10 @@ for (const s of settled) {
   if (s.ordinal === 1) { const truth = Math.min(...pids.map((pid) => completionIndexKey(ticketsFor(roundEid(EID, s.round), pid, CFG.tickets), s.pattern, refs[s.round]!)).filter((i) => i >= 0)); if (s.idx !== truth) ok(false, `${s.pattern} earliest call matches ground truth`); }
 }
 ok(true, "earliest completion for every pattern equals ground truth over all tickets: " + settled.map((s) => `r${s.round}:${s.pattern}#${s.ordinal}@${s.idx + 1}x${s.pids.length}`).join(" "));
-const post = await raw("POST", `/api/z/${EID}/settle`, { results: settled.map((s) => ({ pattern: s.pattern, ordinal: s.ordinal, round: s.round, idx: s.idx, pids: s.pids })) }, org);
+// the organizer cannot settle: winners are accepted only when a quorum of different phones report the same result (what the phones do after the last call)
+const reports = settled.map((s) => ({ pattern: s.pattern, ordinal: s.ordinal, round: s.round, idx: s.idx, pids: s.pids }));
+const quorum = quorumFor(pids.length); let post = { ok: true };
+for (const pid of pids.slice(0, quorum)) for (let k = 0; k < reports.length; k += 3) { const r = await raw("POST", `/api/z/${EID}/vote`, { pid, results: reports.slice(k, k + 3) }); if (!r.ok) post = { ok: false }; }
 ok(post.ok, "organizer published the results");
 const pub = await (await raw("GET", `/api/z/${EID}/results`)).json() as any;
 if (pub.results.length !== settled.length) console.log("  (published", pub.results.length, "settled", settled.length, JSON.stringify(pub).slice(0, 200), ")");

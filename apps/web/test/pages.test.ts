@@ -338,7 +338,7 @@ describe("console (organizer page)", () => {
     expect(Array.from(p.win.document.querySelectorAll('[data-ck="op.0.k"]')).map((b: any) => b.textContent)).toEqual(["Type a message", "YouTube link", "Paste video file link", "Paste audio file link"]);
     setField(p, "#f-op-0-t", "Welcome to Diwali");
     p.click('[data-ck="mid.0.k"][data-v="yt"]'); setField(p, "#f-mid-0-v", "https://youtu.be/dQw4w9WgXcQ"); expect(p.$('[data-lk="mid.0"]')!.textContent).toMatch(/YouTube link: plays inside the game/);
-    expect(p.text()).toMatch(/We do not save your video or audio\. We play it straight from the link you paste, so the link must stay online while the game runs\. Please press Test it to check that it plays before you publish\./);
+    expect(p.text()).toMatch(/Your video or audio is not saved: it plays straight from the link you paste, so the link must stay online while the game runs. Please press Test it to check that it plays before you publish\./);
     p.click('[data-ck="mid.1.k"][data-v="vid"]'); setField(p, "#f-mid-1-v", "https://example.com/page"); expect(p.$('[data-lk="mid.1"]')!.textContent).toMatch(/opens a new tab/);
     setField(p, "#f-mid-1-v", "https://cdn.example.com/a.mp4"); expect(p.$('[data-lk="mid.1"]')!.textContent).toMatch(/Video file: plays inside the game/);
     p.click('[data-ck="cl.0.k"][data-v="aud"]'); setField(p, "#f-cl-0-v", "https://cdn.example.com/a.mp3"); expect(p.$('[data-lk="cl.0"]')!.textContent).toMatch(/Audio file/);
@@ -698,7 +698,7 @@ describe("console: results go out on their own, and a person can move to a new p
     const r = (await o.json(await o.api("GET", "/api/z/UI-AUTO/results"))) as any;
     expect(r.results).toEqual([]); // the organizer's page cannot settle anything
     expect(p.$("#settle")).toBeFalsy();
-    expect(p.text()).toMatch(/You and we cannot choose or change them in the software/);
+    expect(p.text()).toMatch(/Neither you nor the software can choose or change them/);
     expect((await o.api("POST", "/api/z/UI-AUTO/settle", { results: [{ pattern: "full", idx: 5, pids: [] }] }, o.token)).status).toBe(403);
   }, 60_000);
   test("'Change of phone': the organizer enters a number, and the next device that joins with it keeps the ticket", async () => {
@@ -1752,7 +1752,7 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
       { id: "c3", amountInr: 500, remainingInr: 500, createdMs: Date.parse("2025-01-10T12:00:00+05:30"), expiresMs: Date.parse("2026-01-10T12:00:00+05:30"), status: "expired", sourceGame: "OLD-3", uses: [] }] }) });
     const p = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-qauto": "1" }, { afterLoad: w.hook }); await p.waitFor((x) => /Your credit/.test(x)); // the dashboard, not the first game that a new organizer gets made for them
     const t = p.$("#creditsblock")!.textContent as string; expect(t).toMatch(/Rs 1,000\.00 of Rs 2,399\.00/); expect(t).toMatch(/valid until 14 Jun 2027/); expect(t).toMatch(/Active/); expect(t).toMatch(/used 1 Mar 2026 for NEW-1/); expect(t).toMatch(/Used/); expect(t).toMatch(/lapsed on 10 Jan 2026/); expect(t).toMatch(/Lapsed/);
-    expect(t).toMatch(/A paid game that is cancelled before it starts stays with the organizer as credit for the next game, valid for 365 days\. Unused credit lapses at the end of day 365\./);
+    expect(t).toMatch(/If you cancel a paid game before it starts, your payment stays as credit for your next game, valid for 365 days\. Unused credit lapses at the end of day 365\./);
   });
 
   test("a game that waits: the Organizer sees when guest data will be auto-deleted; the Co-host sees 'Waiting for the Organizer or Host to start the game.'; a game that did not start says so with the new-game button (and no way to pay)", async () => {

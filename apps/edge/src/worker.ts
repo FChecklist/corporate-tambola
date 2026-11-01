@@ -2341,16 +2341,26 @@ export async function purgeOld(env: Env, now: number): Promise<number> {
   const old = await env.DB.prepare("SELECT e.id AS id, e.created_ms AS created_ms, e.pack AS pack, e.unplayed_ms AS unplayed_ms, l.end_ms AS end_ms FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE e.created_ms < ? OR (e.pack=0 AND e.created_ms < ?) OR (e.unplayed_ms IS NOT NULL AND e.unplayed_ms < ?)").bind(loose, now - DRAFT_DAYS * 86_400_000, now - SETTINGS_KEEP_MS).all<{ id: string; created_ms: number; pack: number; unplayed_ms: number | null; end_ms: number | null }>();
   await env.DB.prepare("DELETE FROM ai_audit WHERE at_ms < ?").bind(now - RETENTION_DAYS * 86_400_000).run().catch(() => undefined);
   await sweepAudit(env.DB, now, RETENTION_DAYS); // the AI's audit trail is kept as long as the organizer's own details
-  let n = 0;
+  let n = 0; const dormant = new Set<string>();
   for (const x of old.results ?? []) {
     const draftDue = x.pack === 0 && x.unplayed_ms == null && x.created_ms < now - DRAFT_DAYS * 86_400_000 && !(await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(`pub/${x.id}`).first()); // a draft nobody published is forgotten after 30 days, even with a start time (and so a life row)
     let endMs: number | null = x.end_ms; // a game that never held personal data has no end clock yet: its end is the cancel time, or the scheduled end
     if (endMs == null && x.unplayed_ms == null && !draftDue) { const row = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(x.id).first<any>(); if (row && row.pack !== 0) endMs = Math.max(x.created_ms, row.cancelled_ms ?? (await endBoundMs(env as any, row))); }
     const due = draftDue ? true : x.unplayed_ms != null ? now >= x.unplayed_ms + SETTINGS_KEEP_MS : endMs != null ? now >= fullDeleteAt(endMs) : x.created_ms < now - RETENTION_DAYS * 86_400_000 || (x.pack === 0 && x.created_ms < now - DRAFT_DAYS * 86_400_000);
     if (!due) continue;
+    const orgOf = (await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(x.id).first<{ org: string | null }>())?.org ?? null;
     await eraseEverything(env, x.id, now);
+    if (orgOf) dormant.add(orgOf);
     try { await env.CONTROL_R2?.delete(controlKey(x.id)); } catch { /* the object expires with its engagement anyway */ }
     n++;
+  }
+  // the organizer's e-mail, hash and sign-in key go with the last game (the privacy page: kept until 365 days after the game), unless a game remains or credit is still valid
+  for (const org of dormant) {
+    if (await env.DB.prepare("SELECT 1 AS x FROM engagement WHERE org=?").bind(org).first()) continue;
+    if ((await activeCreditSummary(env.DB, org, now)).activeTotalInr > 0) continue;
+    const keys = (await env.DB.prepare("SELECT hash FROM organizer_key WHERE org=?").bind(org).all<{ hash: string }>()).results ?? [];
+    for (const k of keys) await env.DB.prepare("DELETE FROM kv WHERE k=? OR k=?").bind(`seen/${k.hash.slice(0, 10)}`, `alert/${k.hash.slice(0, 10)}`).run();
+    await env.DB.batch([env.DB.prepare("DELETE FROM kv WHERE k=? OR k=?").bind(`orgmail/${org}`, `aikey/${org}`), env.DB.prepare("DELETE FROM organizer_email WHERE org=?").bind(org), env.DB.prepare("DELETE FROM organizer_key WHERE org=?").bind(org), env.DB.prepare("DELETE FROM organizer_terms WHERE org=?").bind(org)]);
   }
   return n;
 }
