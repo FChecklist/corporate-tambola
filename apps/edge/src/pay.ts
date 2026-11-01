@@ -224,7 +224,7 @@ async function fulfilInner(env: PayEnv, paymentId: string, now: number, spend: (
   }
   // NO REFUNDS (docs/ROLES_AND_CONSOLE_SPEC_6.md): a payment that arrives for a game that was cancelled, or that closed as "did not start", is kept as CREDIT for the account. It buys no pack.
   const closedGame = meta.eid ? await db.prepare("SELECT id, org, config, cancelled_ms, unplayed_ms FROM engagement WHERE id=? AND org=?").bind(meta.eid, org).first<any>() : null;
-  let closed = !!(closedGame && (closedGame.cancelled_ms || closedGame.unplayed_ms)), dup = false;
+  const closed = !!(closedGame && (closedGame.cancelled_ms || closedGame.unplayed_ms));
   if (!closed) await db.prepare("INSERT OR IGNORE INTO entitlement(id,org,pack,payment_id,eid,created_ms) VALUES(?,?,?,?,NULL,?)").bind("ent_" + p.id, org, p.pack, p.id, now).run();
   let published: string | null = null, restart: number | null = null, converted = false;
   if (meta.eid && meta.convert && !closed) { // "Make this a real game": the DEMO GAME keeps its id, its people and its numbers; the demo mark goes, the size becomes the paid pack. Guarded on the mark itself, so a second paid order for the same game changes nothing more.
@@ -243,14 +243,10 @@ async function fulfilInner(env: PayEnv, paymentId: string, now: number, spend: (
     }
   } else if (meta.eid) { // publish the draft this payment was made for (only if it is still an unpublished draft of the same organizer)
     const up = await db.prepare("UPDATE engagement SET pack=?, cap=MIN(cap, ?) WHERE id=? AND org=? AND pack=0 AND cancelled_ms IS NULL AND unplayed_ms IS NULL").bind(p.pack, p.pack, meta.eid, org).run(); /* the size can never end above what was paid for: a size raised in a second tab while the payment window was open is brought back to the pack */ // a cancelled game is never published by a late payment
-    if ((up.meta?.changes ?? 0) === 0 && !closed) { // F-04: ANOTHER payment published this draft first (two checkouts passed the unpublished check at the same moment); this payment must not buy a second pack for it
+    if ((up.meta?.changes ?? 0) === 0 && !closed && test) { // F-04 (TEST mode only, nothing was charged): a second test payment for a draft ANOTHER payment already published is refused. A LIVE second payment is never refused (the money is taken, no refunds): it keeps its own entitlement, a spare pack for the organizer's next game (UC-15)
       const mine = await db.prepare("SELECT eid FROM entitlement WHERE id=?").bind("ent_" + p.id).first<{ eid: string | null }>(); // a retry of the payment that itself published it is not a duplicate
       const already = await db.prepare("SELECT 1 AS x FROM engagement WHERE id=? AND org=? AND pack>0").bind(meta.eid, org).first();
-      if (already && !mine?.eid) {
-        await db.prepare("DELETE FROM entitlement WHERE id=? AND eid IS NULL").bind("ent_" + p.id).run();
-        if (test) return { error: "This engagement is already published.", status: 409 }; // nothing was charged in test mode: refuse
-        dup = true; // LIVE: the money is already taken and there are no refunds, so the second payment is kept as credit for the account, like a payment for a cancelled game
-      }
+      if (already && !mine?.eid) { await db.prepare("DELETE FROM entitlement WHERE id=? AND eid IS NULL").bind("ent_" + p.id).run(); return { error: "This engagement is already published.", status: 409 }; }
     }
     if ((up.meta?.changes ?? 0) > 0) {
       await db.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(meta.eid, "ent_" + p.id).run(); published = meta.eid;
@@ -263,7 +259,6 @@ async function fulfilInner(env: PayEnv, paymentId: string, now: number, spend: (
       }
     }
   }
-  if (dup) closed = true; // from here on a duplicate is handled exactly like a payment that arrived for a closed game: credit, invoice marked as such, no pack
   if (published && typeof meta.creditInr === "number") await restoreCreditUses(db, published, now, meta.creditInr); // credit applied after this checkout was opened is given back: the game is already covered
   const cuses = published ? await creditUsesFor(db, published) : [];
   const creditTotal = Math.round(cuses.reduce((t, u) => t + u.amount, 0) * 100) / 100;
@@ -288,13 +283,13 @@ async function fulfilInner(env: PayEnv, paymentId: string, now: number, spend: (
   }
   const organizer = { name: meta.paidBy && meta.paidBy !== "organizer" ? contact.name : meta.name ?? contact.name, org: meta.org || undefined, email: contact.email ?? p.email, phone: contact.phone ? String(contact.phone) : meta.phone };
   const data: InvoiceData = { number, issuedAt: now, brand, company: co, draft: !!test || companyGaps(co).length > 0, buyer: { name: meta.org || meta.name || "", gstin: meta.taxId || undefined, email: p.email, phone: meta.phone || undefined, country: meta.country }, currency: p.currency,
-    lines: [{ description: closed ? `${brand.name}: ${dup ? "second payment for a game that was already paid" : "payment received after the game closed"} (kept as credit)` : `${brand.name}: up to ${p.pack} participants (one engagement)${creditTotal > 0 ? (p.amount > 0 ? ", balance after credit" : ", paid from credit") : ""}`, quantity: 1, amount: tax.taxable }], tax, paymentRef: p.rzp_payment_id ?? undefined, orderRef: p.id, paidAtMs: pinfo?.createdAtMs ?? now, ...(eidForInvoice ? { game: { id: eidForInvoice, ...(gameName ? { name: gameName } : {}), ...(gameStart ? { startMs: gameStart } : {}) } } : {}), organizer, ...(pinfo ? { pay: pinfo } : {}),
+    lines: [{ description: closed ? `${brand.name}: payment received after the game closed (kept as credit)` : `${brand.name}: up to ${p.pack} participants (one engagement)${creditTotal > 0 ? (p.amount > 0 ? ", balance after credit" : ", paid from credit") : ""}`, quantity: 1, amount: tax.taxable }], tax, paymentRef: p.rzp_payment_id ?? undefined, orderRef: p.id, paidAtMs: pinfo?.createdAtMs ?? now, ...(eidForInvoice ? { game: { id: eidForInvoice, ...(gameName ? { name: gameName } : {}), ...(gameStart ? { startMs: gameStart } : {}) } } : {}), organizer, ...(pinfo ? { pay: pinfo } : {}),
     ...(creditTotal > 0 ? { note: `${cuses.map((u) => `Paid from credit of invoice ${u.invoice ?? u.credit_id}: ${rs(u.amount, p.currency)}`).join("; ")}.` } : {}) };
   await db.prepare("INSERT OR IGNORE INTO invoice(token,payment_id,brand,fy,seq,number,issued_ms,data) VALUES(?,?,?,?,?,?,?,?)").bind(token, p.id, brand.id, fy, seq, number, now, JSON.stringify(data)).run();
   const origin = env.PUBLIC_ORIGIN ?? meta.origin ?? "";
   const keptCredit = closed ? await creditFromPayment(db, { ...p, paid_ms: now }, org, meta.eid, now, "late") : null; // a payment for a cancelled or closed game: credit, never a refund
   const lines = [
-    closed ? `Thank you. ${dup ? `Your payment arrived for the game "${meta.eid}", which another payment had already paid for.` : `Your payment was received after the game "${meta.eid}" had been cancelled or closed.`} We do not give refunds: it stays as credit for the organizer's next game${keptCredit ? ` until ${new Date(keptCredit.expires_ms - 1).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" })}` : ""}.` : `Thank you. Payment received for up to ${p.pack} participants.`,
+    closed ? `Thank you. Your payment was received after the game "${meta.eid}" had been cancelled or closed. We do not give refunds: it stays as credit for the organizer's next game${keptCredit ? ` until ${new Date(keptCredit.expires_ms - 1).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" })}` : ""}.` : `Thank you. Payment received for up to ${p.pack} participants.`,
     closed ? "The organizer has been told." : converted ? `Your demo game is now a real game for up to ${p.pack} people. It carries on exactly as it is: the same link, the same people, the same numbers; more people can join, up to the number you chose. Your console: ${origin}/zc.html?e=${published}` : published ? `Your engagement is live. Share the link from your console: ${origin}/zc.html?e=${published}` : organizerKey ? `Your organizer key (keep it to yourself, it is shown only once): ${organizerKey}\nOpen ${origin}/zc.html and paste it to begin.` : `Use your existing organizer key at ${origin}/zc.html to create this engagement.`,
     `\nINVOICE\n${renderInvoiceText(data)}\nView or print it: ${origin}/api/invoice/${token}`,
   ];

@@ -36,10 +36,8 @@ describe("LIVE: two paid orders for one draft", () => {
     expect([ra.status, rb.status]).toEqual([200, 200]); // the buyer paid both: neither is answered with an error
     const bodies = [await j(ra), await j(rb)];
     expect(bodies.filter((x) => x.published === true)).toHaveLength(1); // exactly one publishes the game
-    expect(bodies.filter((x) => x.creditKept === true)).toHaveLength(1); // the other is credit
     expect(one("SELECT COUNT(*) c FROM entitlement WHERE eid IS NOT NULL").c).toBe(1);
-    expect(one("SELECT COUNT(*) c FROM entitlement").c).toBe(1); // the credit buys no pack
-    expect(one("SELECT COUNT(*) c FROM credit WHERE kind='late'").c).toBe(1);
+    expect(one("SELECT COUNT(*) c FROM entitlement WHERE eid IS NULL").c).toBe(1); // the other payment is a spare pack for the next game, never lost
     expect(q("SELECT pack FROM engagement WHERE id=?", g.id)[0].pack).toBe(100);
     expect(one("SELECT COUNT(*) c FROM payment WHERE status='paid'").c).toBe(2); // both are recorded as paid (the money is real)
   });
@@ -49,12 +47,12 @@ describe("LIVE: two paid orders for one draft", () => {
     capture(a.body, "pay_a"); capture(b.body, "pay_b");
     expect((await j(await verify(a.body, "pay_a"))).published).toBe(true);
     const second = await j(await verify(b.body, "pay_b", {}, T + 60_000));
-    expect(second.published).toBe(false); expect(second.creditKept).toBe(true);
-    expect(one("SELECT COUNT(*) c FROM credit").c).toBe(1);
-    expect(one("SELECT COUNT(*) c FROM entitlement").c).toBe(1);
+    expect(second.published).toBe(false);
+    expect(one("SELECT COUNT(*) c FROM entitlement WHERE eid IS NULL").c).toBe(1); // a spare pack
+    expect(one("SELECT COUNT(*) c FROM entitlement").c).toBe(2);
     // the same payment delivered again (the webhook after the browser) changes nothing
     const again = await verify(b.body, "pay_b", {}, T + 120_000); expect(again.status).toBe(200);
-    expect(one("SELECT COUNT(*) c FROM credit").c).toBe(1);
+    expect(one("SELECT COUNT(*) c FROM entitlement").c).toBe(2);
   });
   test("one payment verified twice at once still publishes once and makes one entitlement", async () => {
     const g = await draft();
