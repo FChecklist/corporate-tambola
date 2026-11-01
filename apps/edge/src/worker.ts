@@ -1982,6 +1982,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
         const nextAt = c.idx < 89 ? await callTimeMs(env as any, e, round, c.idx + 1) : await (async () => { const last = await callTimeMs(env as any, e, round, 89); return last === null ? null : last + (cfgOf(e).callMode === "host" ? 12 : Number(e.call_seconds)) * 1000; })(); // the last number of a round closes one gap (12.000 s) after it is announced; null: a Host who has not pressed yet, a game that was ended
         if (nextAt !== null && now >= nextAt) { late++; await noteLateClaim(env.DB, eid!, b.pid, String(c.pattern), now); continue; }
       }
+      if (await env.DB.prepare("SELECT 1 AS x FROM claim WHERE eid=? AND pid=? AND pattern=? AND round=? AND idx=?").bind(eid, b.pid, c.pattern, round, c.idx).first()) continue; // F-03: sent before (stored once): a repeat costs nothing, so it cannot use up the shared daily write allowance
       if (!(await spend(env, now))) return json({ error: "Busy day. Your claim is kept on your phone and will be sent again.", stored }, 503);
       const r = await env.DB.prepare("INSERT OR IGNORE INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES(?,?,?,?,?,?)").bind(eid, b.pid, c.pattern, round, c.idx, now).run();
       stored += r.meta?.changes ?? 0; // a claim sent twice is stored once
@@ -2014,7 +2015,8 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!text) { await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`ann/${eid}`).run(); return json({ ok: true, cleared: true }); }
     const ann = { id: randHex(4), text, at: now };
     await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`ann/${eid}`, JSON.stringify(ann)).run();
-    return json({ ok: true, sent: ann, reachesPhonesWithin: "about a minute, on engagements with pause available" });
+    const live = !!(await readPublished(d1kv(env), eid!)); // phones read the message with the pause file, which exists once the organizer's console has been opened
+    return json({ ok: true, sent: ann, ...(live ? { reachesPhonesWithin: "about a minute, on engagements with pause available" } : { reachesPhones: false, note: "Saved, but it will not reach the phones yet: open the organizer console on this game once (it prepares the screen the phones read), then send it again." }) });
   }
   if (action === "summary" && req.method === "GET") { // one read-back of everything saved, so the organizer's AI can confirm it with them
     if (!can(a, e)) return deny(a);

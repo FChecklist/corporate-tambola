@@ -2,7 +2,7 @@
 import { expect } from "bun:test";
 import { createHmac } from "node:crypto";
 import { DAY, HOUR, PLAT, T, dev, j, join, organizer, paidEngagement, phone, roundAt, roundMs, tt, world, lifecycleTick, purgeOld } from "./lib";
-import { reportLink } from "../../../apps/edge/src/lifecycle";
+import { reportLink, PURGE_AFTER_MS, REPORT_LINK_MS } from "../../../apps/edge/src/lifecycle";
 import { housekeeping } from "../../../apps/edge/src/worker";
 
 const J = (x: unknown) => JSON.stringify(x).slice(0, 300);
@@ -64,32 +64,32 @@ async function endedGame(w: ReturnType<typeof world>, n = 6) {
   for (let i = 1; i <= n; i++) await join(w, g.id, i);
   return g;
 }
-tt({ id: "TT-16", role: "organizer", title: "report link: valid until 22 hours after the game ends, then closed", steps: "Run the tick after the end; open the report with the key at end+21h59 and end+22h01", expected: "200 then 403/404; key replaced by 'new link' kills the old one at once" }, async () => {
+tt({ id: "TT-16", role: "organizer", title: "report link: valid until 19 hours after the game ends, then closed", steps: "Run the tick after the end; open the report with the key at end+18h59 and end+19h01", expected: "200 then 403/404; key replaced by 'new link' kills the old one at once" }, async () => {
   const w = world(); const g = await endedGame(w);
   const endEst = g.startMs + 15 * 60_000;
   await tickUntilReport(w, g.id, endEst + 5 * 60_000);
   const life = w.raw.prepare("SELECT * FROM life WHERE eid=?").get(g.id) as any; expect(life, "life row after the tick").toBeTruthy();
   const url = await reportLink(w.env as any, g.id), k = new URL(url).searchParams.get("k")!;
   const at = (t: number, key = k) => w.call("GET", `/api/report/${g.id}?k=${key}`, undefined, {}, t);
-  const early = await at(life.end_ms + 21 * HOUR + 59 * 60_000), late = await at(life.end_ms + 22 * HOUR + 60_000);
+  const early = await at(life.end_ms + REPORT_LINK_MS - 60_000), late = await at(life.end_ms + REPORT_LINK_MS + 60_000);
   expect(early.status, J(await early.json())).toBe(200); expect([403, 404, 410]).toContain(late.status);
   // replacing the link kills the old key
   const nl = await j(await w.call("POST", `/api/z/${g.id}/reportlink`, {}, g.org.h, life.end_ms + HOUR));
   const old = await at(life.end_ms + 2 * HOUR, k); expect([403, 404]).toContain(old.status);
   const fresh = await at(life.end_ms + 2 * HOUR, new URL(nl.url).searchParams.get("k")!); expect(fresh.status).toBe(200);
-  return `end ${new Date(life.end_ms).toISOString()}; 21h59=200; 22h01=${late.status}; old key ${old.status}; new key 200`;
+  return `end ${new Date(life.end_ms).toISOString()}; 19h-1min=200; 19h+1min=${late.status}; old key ${old.status}; new key 200`;
 });
-tt({ id: "TT-17", role: "participants", title: "personal data is erased at end+23h (not before) and the winners record, organizer details and prize hand-over stay", steps: "Tick at end+22h59 and end+23h01; count participants, seats, claims, sealed audit parts", expected: "all present at 22h59; all gone at 23h01; winner rows and the engagement remain; audit chain verifies" }, async () => {
+tt({ id: "TT-17", role: "participants", title: "personal data is auto-deleted at end+20h (not before) and the winners record, organizer details and prize hand-over stay", steps: "Tick at end+19h59 and end+20h01; count participants, seats, claims, sealed audit parts", expected: "all present at 22h59; all gone at 23h01; winner rows and the engagement remain; audit chain verifies" }, async () => {
   const w = world(); const g = await endedGame(w, 8);
   const now0 = g.startMs + 4 * 60_000, seats = (await j(await w.call("GET", `/api/z/${g.id}/seats`, undefined, {}, now0))).seats as any[];
   for (const s of seats.slice(0, 3)) await w.call("POST", `/api/z/${g.id}/vote`, { pid: s[1], results: [{ pattern: "full", ordinal: 1, round: 1, idx: 50, pids: [seats[4][1]] }] }, {}, now0);
   const endEst = g.startMs + 15 * 60_000; await lifecycleTick(w.env as any, endEst + 5 * 60_000);
   const life = w.raw.prepare("SELECT * FROM life WHERE eid=?").get(g.id) as any;
   const state = () => ({ people: count(w, "SELECT COUNT(*) c FROM participant WHERE eid=?", g.id), seats: count(w, "SELECT COUNT(*) c FROM seat WHERE eid=?", g.id), winners: count(w, "SELECT COUNT(*) c FROM winner WHERE eid=?", g.id), prizes: count(w, "SELECT COUNT(*) c FROM prize WHERE eid=?", g.id), eng: count(w, "SELECT COUNT(*) c FROM engagement WHERE id=?", g.id), sealed: count(w, "SELECT COUNT(*) c FROM audit_pii WHERE eid=?", g.id) });
-  await lifecycleTick(w.env as any, life.end_ms + 22 * HOUR + 59 * 60_000); const before = state();
-  await lifecycleTick(w.env as any, life.end_ms + 23 * HOUR + 60_000); const after = state();
+  await lifecycleTick(w.env as any, life.end_ms + PURGE_AFTER_MS - 60_000); const before = state();
+  await lifecycleTick(w.env as any, life.end_ms + PURGE_AFTER_MS + 60_000); const after = state();
   expect(before.people).toBe(8); expect(before.seats).toBe(8);
-  expect([after.people, after.seats, after.sealed], `after 23h: ${J(after)}`).toEqual([0, 0, 0]);
+  expect([after.people, after.seats, after.sealed], `after the 20h purge: ${J(after)}`).toEqual([0, 0, 0]);
   expect([after.winners > 0, after.eng], "winner record and engagement stay").toEqual([true, 1]);
   const v = await j(await w.call("GET", `/api/owner/audit/${g.id}/verify`, undefined, PLAT, life.end_ms + 24 * HOUR)); expect(v.ok, J(v)).toBe(true);
   return `before ${J(before)}; after ${J(after)}; chain ok`;
@@ -102,7 +102,7 @@ tt({ id: "TT-18", role: "participant", title: "a prize winner's confirmed name a
   const conf = await w.call("POST", `/api/z/${g.id}/confirm`, { pid: win, device: dev("p5"), name: "Winner Name", phone: "9876500000" }, {}, now0 + HOUR);
   const life0 = g.startMs + 15 * 60_000; await lifecycleTick(w.env as any, life0 + 5 * 60_000);
   const life = w.raw.prepare("SELECT * FROM life WHERE eid=?").get(g.id) as any;
-  await lifecycleTick(w.env as any, life.end_ms + 23 * HOUR + 60_000);
+  await lifecycleTick(w.env as any, life.end_ms + PURGE_AFTER_MS + 60_000);
   const pr = await j(await w.call("GET", `/api/z/${g.id}/prizes`, undefined, g.org.h, life.end_ms + 30 * HOUR));
   const txt = JSON.stringify(pr);
   expect(conf.status, J(await conf.clone().json())).toBe(200);
@@ -154,7 +154,8 @@ tt({ id: "TT-22", role: "owner", title: "an engagement with an absurd start date
   const w = world(); const L = await import("./lib");
   w.raw.run("UPDATE mode SET mode='TEST' WHERE id=1"); const org = await organizer(w, "far@example.com"); const id = "FARSTART1";
   const far = roundAt(Date.UTC(2100, 0, 1));
-  const c = await w.call("POST", "/api/z", { id, startRound: far, callSeconds: 6, cap: 20 }, org.h); expect(c.status).toBe(200);
+  const c = await w.call("POST", "/api/z", { id, startRound: far, callSeconds: 6, cap: 20 }, org.h); expect(c.status, "a start date in 2100 is refused when the game is made").toBe(400); // since 1.8.x a game can be made at most 30 days ahead; the bound below is checked with a game that is made, paid for, and then never played
+  const near = await w.call("POST", "/api/z", { id, startRound: roundAt(T + 20 * DAY), callSeconds: 6, cap: 20 }, org.h); expect(near.status).toBe(200);
   await w.call("POST", `/api/z/${id}/publish`, { email: org.email, phone: "9811122233" }, org.h);
   await w.call("POST", "/api/payments/test", { eid: id, email: org.email, org: "Far", country: "IN" }, org.h);
   await join(w, id, 1);
@@ -165,7 +166,7 @@ tt({ id: "TT-22", role: "owner", title: "an engagement with an absurd start date
 });
 tt({ id: "TT-23", role: "organizer", title: "an unpublished draft is forgotten after 30 days (not before)", steps: "Create a draft; housekeeping at day 29 and day 31", expected: "present at 29, gone at 31" }, async () => {
   const w = world(); const org = await organizer(w, "draft@example.com"); const id = "DRAFT1";
-  await w.call("POST", "/api/z", { id, startRound: roundAt(T + 40 * DAY), callSeconds: 6, cap: 50 }, org.h);
+  await w.call("POST", "/api/z", { id, startRound: roundAt(T + 25 * DAY), callSeconds: 6, cap: 50 }, org.h);
   await housekeeping(w.env as any, T + 29 * DAY); const a = count(w, "SELECT COUNT(*) c FROM engagement WHERE id=?", id);
   await housekeeping(w.env as any, T + 31 * DAY); const b = count(w, "SELECT COUNT(*) c FROM engagement WHERE id=?", id);
   expect([a, b]).toEqual([1, 0]);

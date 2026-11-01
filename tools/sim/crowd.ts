@@ -1,7 +1,8 @@
 // Crowd test of the whole zero-server stack in virtual time: N real PhoneRuntime instances (the same code the phone page runs) talk to the real
 // Worker code (in-memory D1) and to a fake public beacon that fails in awkward ways. The organizer side (check claims, settle, publish) runs the same
 // functions the organizer page runs. Run: bun run tools/sim/crowd.ts [phones=2000]
-import { handle, type Env } from "../../apps/edge/src/worker";
+import { type Env } from "../../apps/edge/src/worker";
+import { handle } from "../../apps/edge/test/with-terms"; // does what a person does on the page: ticks the consent boxes the server demands
 import { makeD1 } from "../../apps/edge/test/d1-sqlite";
 import { PhoneRuntime } from "../../packages/beacon/src/phone-runtime";
 import { callRoundR, checkClaims, completionIndexKey, settleAll, ticketsFor } from "../../packages/beacon/src/game";

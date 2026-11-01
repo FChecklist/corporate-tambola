@@ -47,6 +47,7 @@ export async function acceptVotes(env: Env & PiiEnv, e: any, eid: string, b: any
     if (await env.DB.prepare("SELECT 1 AS x FROM settled WHERE eid=? AND round=? AND pattern=? AND ordinal=?").bind(eid, x.round, x.pattern, x.ordinal).first()) { done.push(`${x.round}:${x.pattern}:${x.ordinal}`); continue; }
     const pids: string[] = [...new Set<string>(x.pids)].sort();
     const digest = (await sha(JSON.stringify([x.pattern, x.ordinal, x.round, x.idx, pids]))).slice(0, 32);
+    if (await env.DB.prepare("SELECT 1 AS x FROM rvote WHERE eid=? AND round=? AND pattern=? AND ordinal=? AND seat=?").bind(eid, x.round, x.pattern, x.ordinal, seat).first()) continue; // F-03: this phone already reported this prize: a repeat costs nothing (a read), so one phone cannot use up the shared daily write allowance by repeating itself
     if (!(await spend(env, now, 3))) return json({ error: "Busy day. Your report is kept on your phone and will be sent again.", counted }, 503);
     const v = await env.DB.prepare("INSERT OR IGNORE INTO rvote(eid,round,pattern,ordinal,seat,digest) VALUES(?,?,?,?,?,?)").bind(eid, x.round, x.pattern, x.ordinal, seat, digest).run();
     if (!(v.meta?.changes ?? 0)) continue; // this phone already reported this prize

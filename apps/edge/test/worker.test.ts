@@ -225,7 +225,7 @@ describe("free-plan guard and scale", () => {
     for (let round = 0; round < 2; round++)
       await Promise.all(pids.slice(0, 2000).map((pid, i) => call("POST", "/api/z/ENG1/claims", { pid, claims: [{ pattern: pats[i % 7], idx: i % 90 }] })));
     expect((raw.query("SELECT COUNT(*) c FROM claim").get() as any).c).toBe(2000);
-    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(90002 + 4000); // 1 create + 1 entitlement-free + 10,000 joins at 9 units (what a join really writes) + one unit per claim sent (2,000 phones, twice; the second round stores nothing but is still a write attempt)
+    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(90002 + 2000); // 1 create + 1 entitlement-free + 10,000 joins at 9 units (what a join really writes) + one unit per claim stored (2,000 phones); the second round repeats the same claims and costs nothing (F-03: a repeat is a read, so it cannot use up the shared daily allowance)
     const r = (await (await call("POST", "/api/z/ENG1/claims", { pid: pids[0], claims: [{ pattern: "mid", idx: 7 }] })).json()) as any;
     expect(r.atMs).toBe(T); // the store's clock: the time that decides whether the claim came before the next number
     expect(((await (await call("GET", "/api/z/BIG01/info").catch(() => new Response("{}"))).json()) as any).trackClaims ?? true).toBe(true);

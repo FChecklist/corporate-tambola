@@ -209,7 +209,7 @@ describe("C. publish and pay", () => {
     const o = await organizer();
     await call("POST", "/api/z", eng("TWOPAY-1"), o.h);
     await call("POST", "/api/z/TWOPAY-1/publish", contact, o.h);
-    const c1 = await j(await checkout(o, "TWOPAY-1")), c2 = await j(await checkout(o, "TWOPAY-1")); // two tabs, both before either is paid
+    const c1 = await j(await checkout(o, "TWOPAY-1")), c2 = await j(await checkout(o, "TWOPAY-1", { email: "second.payer@acme.com" })); // two payers (a second tab of the same payer re-opens the SAME order, see double-pay.test.ts), both before either is paid
     await settle(c1.paymentId, c1.razorpay.orderId, "pay_a"); await settle(c2.paymentId, c2.razorpay.orderId, "pay_b");
     expect(engRow("TWOPAY-1").pack).toBe(100);
     expect((raw.prepare("SELECT COUNT(*) AS c FROM entitlement WHERE eid IS NULL").get() as any).c).toBe(1); // the spare one
