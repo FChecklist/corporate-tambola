@@ -25,6 +25,8 @@ describe("the game site is private (not listed by search engines) but still reac
     expect(existsSync(join(OUT, "sitemap.xml"))).toBe(false);
     const headers = readFileSync(join(OUT, "_headers"), "utf8").replace(/\r/g, "");
     expect(headers).toMatch(/\n\/\*\n[^\n/]*\n?\s+X-Robots-Tag: noindex, nofollow/);
+    // a more specific rule that sets its own X-Robots-Tag replaces the "/*" one on Cloudflare Pages, so every X-Robots-Tag line must itself say noindex
+    const xrt = headers.split("\n").filter((l) => /X-Robots-Tag:/.test(l)); expect(xrt.length).toBeGreaterThan(20); expect(xrt.filter((l) => !/noindex/.test(l))).toEqual([]);
     expect(headers.split("\n").filter((l) => l.startsWith("/")).length).toBeLessThanOrEqual(100);
   });
 
