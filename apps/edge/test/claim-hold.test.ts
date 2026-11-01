@@ -53,7 +53,7 @@ describe("claim hold", () => {
     const [a] = await setup(true); await claim(a!, 1, NOW);
     const open = (await control(NOW + 1000)).holds[0]; expect(open.end - open.start).toBe(20);
     decide("settled"); const t = NOW + 6000, after = (await control(t)).holds[0];
-    expect(after.end).toBeLessThan(open.end); expect(after.end).toBeGreaterThan(after.start - 1); expect(after.end).toBeLessThanOrEqual(Math.max(after.start + 1, roundAt(t) + 40));
+    expect(after.end).toBeLessThan(open.end); expect(after.end).toBeGreaterThan(after.start - 1); expect(after.end).toBeLessThanOrEqual(Math.max(after.start + 1, roundAt(t) + 1));
   });
   test("rejected (a false claim is recorded): the game goes on for everyone too", async () => {
     const [a] = await setup(true); await claim(a!, 1, NOW); decide("bogey");
