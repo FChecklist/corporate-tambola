@@ -5,8 +5,8 @@
 
 import { aiPaste } from "./ai-link";
 
-export const AI_WARNING = "DO NOT FORWARD: this email holds your personal AI work link";
-export const HOST_WARNING = "DO NOT FORWARD: this email holds a Host AI work link";
+export const AI_WARNING = "PLEASE KEEP PRIVATE: this email holds your personal AI work link";
+export const HOST_WARNING = "PLEASE KEEP PRIVATE: this email holds a Host AI work link";
 export const AI_SUBJECT = "Your personal AI work link - Corporate Tambola";
 export const HOST_SUBJECT = "A Host AI work link for your Corporate Tambola account";
 
@@ -87,7 +87,7 @@ export function coHostLinkMail(origin: string, key: string, owner: string, expir
 }
 
 export const HOST_LINK_SUBJECT = "You are a Host: your Corporate Tambola link";
-export const HOST_LINK_WARNING = "DO NOT FORWARD: this email holds your personal Host link";
+export const HOST_LINK_WARNING = "PLEASE KEEP PRIVATE: this email holds your personal Host link";
 /** The Host's OWN link (their console), e-mailed to the Host when the Organizer adds them. Not an AI link; it opens the Host's console. Only the Organizer and Hosts have an e-mail. */
 export function hostLinkMail(origin: string, key: string, name: string, eid = ""): BuiltMail {
   const url = `${origin}/zc.html?k=${key}${eid ? "&e=" + encodeURIComponent(eid) : ""}`; // with a game id the link opens that game
@@ -131,9 +131,9 @@ export const SIGNIN_SUBJECT = "Your Corporate Tambola sign-in: a 6-digit code, o
  *  (single use, 10 minutes). Nothing else: no AI link, no extra choices (people were confused by "sign-in link" and three options). */
 export function signInMail(origin: string, code: string, token: string, linkOverride?: string): BuiltMail {
   const link = linkOverride ?? `${origin}/signin.html?t=${token}&go=console`;
-  const foot = "If you did not ask for this, ignore this e-mail. Do not forward it: it opens your account.";
+  const foot = "If you did not ask for this, you can simply ignore this e-mail. Please keep it private: it opens your account.";
   const text = [
-    "SIGN IN TO YOUR ACCOUNT", "", "Do ONE of these two things. You do not need both.", "",
+    "SIGN IN TO YOUR ACCOUNT", "", "Please choose ONE of these two ways. You do not need both.", "",
     "OPTION 1 - TYPE THE 6-DIGIT CODE", "Go back to the sign-in page, type these 6 numbers in the six boxes and press Submit:", code, "It works for 10 minutes.", "",
     "OPTION 2 - TAP THE BUTTON", "Tap this link. You are signed in at once:", link, "It works once, for 10 minutes.", "",
     foot, "", footerText(origin), "",
@@ -154,7 +154,7 @@ export function draftReminderMail(origin: string, o: { eid: string; hours: 24 | 
     `Your game ${o.eid} starts in ${when}: ${istStamp(o.startMs)}.`, "",
     "It is not published yet: it is still a draft. Nobody can see it or join it until you publish it.", "",
     "What to do:", "1. Open your console: " + `${origin}/zc.html?e=${encodeURIComponent(o.eid)}`, "2. Go to step 7, Check and publish.", "3. Press Publish. Publishing is free.", "",
-    o.hours === 24 ? "Then send the guest link to your people. If the game is not for this date, you can change the date in step 1." : "If you publish now, send the guest link at once. If you do not want this game, ignore this e-mail. We will not remind you again.", "",
+    o.hours === 24 ? "Then send the guest link to your people. If the game is not for this date, you can change the date in step 1." : "If you publish now, send the guest link at once. If you do not want this game, you can simply ignore this e-mail. This is the only reminder.", "",
   ].join("\n") + "\n\n" + footerText(origin) + "\n";
   const html = pageHtml("Your game is not published yet", `<tr><td style="padding:20px 22px 4px;"><h1 style="margin:0;font-size:24px;line-height:1.25;color:#0B3D91;">Your game ${esc(o.eid)} is not published yet</h1><p style="margin:10px 0 0;font-size:15px;line-height:1.5;">It starts in ${when}: ${esc(istStamp(o.startMs))}. It is still a draft. Nobody can see it or join it until you publish it.</p></td></tr>
 <tr><td style="padding:12px 22px 20px;font-size:15px;line-height:1.5;"><p style="margin:0 0 8px;">Open your console, go to step 7, Check and publish, and press Publish. Publishing is free.</p><a href="${esc(origin + "/zc.html?e=" + encodeURIComponent(o.eid))}" style="display:inline-block;background:#E0B872;color:#0B3D91;font-weight:700;font-size:16px;text-decoration:none;padding:12px 22px;border-radius:8px;">Open my console</a></td></tr>`, origin);

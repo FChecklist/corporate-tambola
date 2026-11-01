@@ -129,7 +129,7 @@
       let c = CT_BY_ISO(iso), d = t.replace(/\D/g, "");
       if (t[0] === "+" || t.slice(0, 2) === "00") { // a whole number with its country code: it says which country it is
         const n = d.replace(/^00/, ""), len = [1, 2, 3].find((k) => CT_COUNTRIES.some((x) => x.dial === n.slice(0, k)));
-        if (!len) return { ok: false, why: "We do not know that country code. Choose the country from the list and type the rest of the number." };
+        if (!len) return { ok: false, why: "That country code is not in the list. Please choose the country from the list and type the rest of the number." };
         const dial = n.slice(0, len);
         if (c.dial !== dial) c = CT_BY_DIAL(dial);
         d = n.slice(len);

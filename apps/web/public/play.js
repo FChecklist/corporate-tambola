@@ -475,7 +475,7 @@
   const ACT = {
     reload: () => location.reload(),
     forget: () => TB.sheet(`<div class="eyebrow">Your details</div><h2>Do not keep my details?</h2><p class="muted small">Your organizer will not be able to invite you again from a saved list. Your ticket and phone details are deleted within 24 hours either way. This cannot be undone, but you can still be invited again with a new link.</p><button class="btn block" data-act="doforget">Yes, do not keep my name and number</button><button class="btn line block" data-act="close">Cancel</button>`),
-    doforget: async () => { try { await api("POST", `/api/e/${enc(code)}/me/forget`); TB.closeSheet(); TB.toast("Done. We will not keep your name and number."); } catch (e) { TB.toast(esc(e.message)); } },
+    doforget: async () => { try { await api("POST", `/api/e/${enc(code)}/me/forget`); TB.closeSheet(); TB.toast("Done. Your name and number are not kept."); } catch (e) { TB.toast(esc(e.message)); } },
     audio: async () => { await TBAudio.unlock(); TBAudio.preload(); paintStrip(); TB.toast("Audio is on. You will hear each number."); },
     voice: () => { TBAudio.enabled = !TBAudio.enabled; if (!TBAudio.enabled) TBAudio.stop(); paintStrip(); },
     tab: (t) => { G.tab = LET.indexOf(t) < G.tickets.length ? t : "A"; paintTabs(); paintGrid(); },

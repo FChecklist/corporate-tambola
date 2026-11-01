@@ -4,7 +4,7 @@
   const app = document.getElementById("app");
   const ss = { get: (k) => (window.CTK ? window.CTK.get(k) || "" : (() => { try { return sessionStorage.getItem(k) || ""; } catch { return ""; } })()), set: (k, v) => { if (window.CTK) window.CTK.set(k, v); else { try { sessionStorage.setItem(k, v); } catch {} } } };
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  const WARN = "DO NOT FORWARD: this page shows your personal AI work link";
+  const WARN = "PLEASE KEEP PRIVATE: this page shows your personal AI work link";
   let token = ss.get("ctz-org"), note = "";
   async function api(method, path, body, tk) {
     const r = await fetch(path, { method, headers: { "content-type": "application/json", "x-organizer": tk || token }, body: method === "GET" ? undefined : JSON.stringify(body || {}) });

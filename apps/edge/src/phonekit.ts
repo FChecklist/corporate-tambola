@@ -10,7 +10,7 @@ export function cleanPhone(raw: unknown): Cleaned {
   let d = typed.replace(/\D/g, "");
   if (!d) return { ok: false, why: "There is no number." };
   const international = (typed.startsWith("+") || typed.startsWith("00")) && !d.replace(/^00/, "").startsWith("91"); // +65, +44 ...: kept as typed, never given an Indian 91
-  if (international) { const n = d.replace(/^00/, ""); if (!knownDial(n)) return { ok: false, why: "We do not know that country code. Please pick your country from the list." }; return n.length >= 8 && n.length <= 15 ? { ok: true, digits: n, last10: n.slice(-10) } : { ok: false, why: n.length < 8 ? "That is too short for a mobile number." : "That is too long for a mobile number." }; }
+  if (international) { const n = d.replace(/^00/, ""); if (!knownDial(n)) return { ok: false, why: "That country code is not in the list. Please pick your country from the list." }; return n.length >= 8 && n.length <= 15 ? { ok: true, digits: n, last10: n.slice(-10) } : { ok: false, why: n.length < 8 ? "That is too short for a mobile number." : "That is too long for a mobile number." }; }
   if (d.startsWith("00")) d = d.slice(2);
   else if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
   const indian = (ten: string): Cleaned => (/^[6-9]\d{9}$/.test(ten) ? { ok: true, digits: "91" + ten, last10: ten } : { ok: false, why: "An Indian mobile number starts with 6, 7, 8 or 9." });

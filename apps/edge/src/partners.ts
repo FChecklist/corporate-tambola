@@ -127,7 +127,7 @@ export async function partnerRoute(req: Request, env: PayEnv, now: number, spend
     } else {
       const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000));
       await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`penr/${eh}`, JSON.stringify({ t: t0, n, c: await sha("pcode|" + eh + "|" + code), x: now + 600_000, ph, nm: name, src: b.source === "ticket" ? "ticket" : "direct", a: 0 })).run();
-      await sendMail(env, db, email, "Your Refer & earn code", `Your code is ${code}. It works for 10 minutes.\n\nIf you did not ask for it, ignore this e-mail.`, now);
+      await sendMail(env, db, email, "Your Refer & earn code", `Your code is ${code}. It works for 10 minutes.\n\nIf you did not ask for it, you can simply ignore this e-mail.`, now);
       if (env.TEST_MODE === "1") devCode = code;
     }
     return json({ ok: true, sent: true, ...(devCode ? { devCode } : {}) });

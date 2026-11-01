@@ -30,7 +30,7 @@ describe("the sign-in e-mail", () => {
     await account(); const r = await ask();
     const m = outbox().find((x) => x.subject === "[Tambola] " + SIGNIN_SUBJECT)!;
     expect(m.to_addr).toBe("boss@acme.com"); expect(SIGNIN_SUBJECT).toBe("Your Corporate Tambola sign-in: a 6-digit code, or one tap");
-    for (const t of ["SIGN IN TO YOUR ACCOUNT", "Do ONE of these two things. You do not need both.", "OPTION 1 - TYPE THE 6-DIGIT CODE", "type these 6 numbers in the six boxes and press Submit", r.devCode, "OPTION 2 - TAP THE BUTTON", "You are signed in at once", "It works once, for 10 minutes.", "Do not forward it"]) expect(m.body).toContain(t);
+    for (const t of ["SIGN IN TO YOUR ACCOUNT", "Please choose ONE of these two ways. You do not need both.", "OPTION 1 - TYPE THE 6-DIGIT CODE", "type these 6 numbers in the six boxes and press Submit", r.devCode, "OPTION 2 - TAP THE BUTTON", "You are signed in at once", "It works once, for 10 minutes.", "Please keep it private"]) expect(m.body).toContain(t);
     expect(m.body).not.toContain("OPTION 3"); expect(m.body).not.toMatch(/AI work link|go=ai/);
     expect(m.body + m.subject).not.toMatch(LEAK); expect(m.body).not.toMatch(/Corporate Tambola account\. I am the owner/);
     expect(m.body).toContain(`${ORIGIN}/signin.html?t=${r.devToken}&go=console`);

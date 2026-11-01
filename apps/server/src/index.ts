@@ -120,7 +120,7 @@ function mailReport(room: Room) {
   if (!o) return;
   const r = room.engine.report();
   ai.sendEmail(o.email, `Report: ${room.engine.settings.name}`,
-    `Hello ${o.org_name},\n\nYour engagement has ended. Here is the report.\n\n${ai.summariseReport(r)}\n\nWHAT HAPPENS NEXT\n  - Tickets, phones, claims and the activity log are deleted 24 hours after the end. Copy anything you need from the console now, or ask your AI: "Give me the full report of ${room.engine.settings.name}".\n  - The names and numbers of everyone on the list are kept ${Math.round(RETAIN_MS / DAY)} days, so your next engagement takes one step: ask your AI "Set up a new engagement and reuse everyone from the last one", or open your Dashboard and tap Reuse the data.\n  - You give the rewards yourself; we never handle reward money.\n\nCorporate Tambola\n`, false);
+    `Hello ${o.org_name},\n\nYour engagement has ended. Here is the report.\n\n${ai.summariseReport(r)}\n\nWHAT HAPPENS NEXT\n  - Tickets, phones, claims and the activity log are deleted 24 hours after the end. Copy anything you need from the console now, or ask your AI: "Give me the full report of ${room.engine.settings.name}".\n  - The names and numbers of everyone on the list are kept ${Math.round(RETAIN_MS / DAY)} days, so your next engagement takes one step: ask your AI "Set up a new engagement and reuse everyone from the last one", or open your Dashboard and tap Reuse the data.\n  - You give the rewards yourself; reward money never passes through the software.\n\nCorporate Tambola\n`, false);
 }
 
 function purgeRoom(room: Room) {

@@ -99,7 +99,7 @@ describe("console (organizer page)", () => {
     const t = await p.waitFor((x) => /YOUR AI WORK LINK/.test(x));
     const v = (p.$("#msg") as any).value as string; expect(v).toBe(o.aiMessage); expect(v.split("\n").length).toBeLessThanOrEqual(12); expect(v).toContain("/ai/cta_");
     expect(p.$("#cp")).toBeTruthy(); expect(p.$("#fr")).toBeTruthy(); expect(p.$("#rp")).toBeTruthy();
-    expect((t.match(/DO NOT FORWARD: this page shows your personal AI work link/g) ?? []).length).toBe(2);
+    expect((t.match(/PLEASE KEEP PRIVATE: this page shows your personal AI work link/g) ?? []).length).toBe(2);
     p.click("#fr"); await p.waitFor((x) => /fresh 24-hour link is on its way/.test(x));
     expect(p.errors).toEqual([]);
   });
@@ -1873,6 +1873,6 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     const o = await organizer(); await make(o, "UI-WORDS2"); await publish(o, "UI-WORDS2"); const p = await consolePage(o, "UI-WORDS2"); await p.waitFor((x) => /Last step|Your game|Hello/i.test(x));
     openStep(p, 7); expect(p.$("#sec7 .zc-about")!.textContent).toMatch(/a paid game stays as credit for your next game, valid for 365 days/); openStep(p, 8); expect(p.$("#sec8 .zc-about")!.textContent).toMatch(/your payment stays as credit for 365 days/);
     p.click('[data-act="help"]'); const q = Array.from(p.win.document.querySelectorAll(".zc-qh")).findIndex((e: any) => /Can I get a refund\?/.test(e.textContent)); expect(q).toBeGreaterThanOrEqual(0); p.click(`[data-q="${q}"]`);
-    expect(p.$(".zc-qa")!.textContent).toBe("A paid game that is cancelled before it starts stays with the organizer as credit for the next game, valid for 365 days. Unused credit lapses at the end of day 365.");
+    expect(p.$(".zc-qa")!.textContent).toBe("If you cancel a paid game before it starts, your payment stays as credit for your next game, valid for 365 days. Unused credit lapses at the end of day 365.");
   });
 });

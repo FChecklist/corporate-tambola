@@ -25,7 +25,7 @@
         ${CBConsent.html("K3")}
         ${S.err ? `<div class="zbanner bad">${esc(S.err)}</div>` : ""}${S.busy ? `<div class="zbanner info" role="status">Confirming your payment with Razorpay. Please keep this page open.</div>` : ""}
         <button class="zbtn" id="go" data-needs="K3" disabled aria-disabled="true" ${S.busy ? 'data-hold="1"' : ""}>${S.busy ? "Confirming your payment…" : "Pay " + esc(amt) + " (test)"}</button>
-        <p class="zsmall">Secure payment by Razorpay to IT Services by Rajat Agarwal. We keep billing data for audit and tax reasons. A test payment is only for trying the payment and its invoice; it is not returned.</p></div>`;
+        <p class="zsmall">Secure payment by Razorpay to IT Services by Rajat Agarwal. Billing data is kept for audit and tax reasons. A test payment is meant to stay a test, so it is kept and not refunded.</p></div>`;
   }
   const keep = () => { const g = (id) => { const e = document.getElementById(id); return e ? e.value : undefined; }; const v = { name: g("nm"), email: g("em"), phone: g("ph"), pcode: g("pcode"), org: g("org"), tax: g("tax") }; for (const k in v) if (v[k] !== undefined) S[k] = v[k]; };
   const draw = () => { $app.innerHTML = view(); bind(); CBConsent.wire($app, "K3", S.k3); TB.payer.mark($app); if (S.done && TB.invoiceWire) TB.invoiceWire(S.done); };

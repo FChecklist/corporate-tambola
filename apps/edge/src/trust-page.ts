@@ -56,7 +56,7 @@ ${addr}
 <li>${p(`The organizer's report link stops working ${n.reportHours} hours after the end, an hour before the auto-deletion.`)}</li>
 <li>${p(`A game that did not start: its guests' data is auto-deleted ${n.purgeHours} hours after the time it was meant to end. Its settings stay ${n.settingsDays} days so the organizer can reuse them.`)}</li>
 <li>${p(`A game that is not paid for yet can be set at most ${n.aheadDays} days ahead.`)}</li>
-<li>${p(`The organizer's own details and the winners' record are kept ${n.keepDays} days, then deleted for good at midnight India time at the end of day ${n.keepDays}. We keep billing data for audit and tax reasons.`)}</li>
+<li>${p(`The organizer's own details and the winners' record are kept ${n.keepDays} days, then deleted for good at midnight India time at the end of day ${n.keepDays}. Billing data is kept for audit and tax reasons.`)}</li>
 </ul>
 <h3>If something goes wrong</h3>
 <ul>
@@ -87,7 +87,7 @@ export function trustHtml(): string {
 ${facts}
 </ol>
 ${forItSection()}
-<div class="note"><b>Honest limits.</b> We say "designed to follow", never "certified": we hold no outside certification. We say cheating is "very hard", never "impossible". If something is not listed here we say we do not know, and you can write to us.</div>
+<div class="note"><b>Honest limits.</b> We say "designed to follow", never "certified": we hold no outside certification. We say cheating is "very hard", never "impossible". If something is not listed here, it is said plainly that it is not known, and you can write to hello@corporatetambola.com.</div>
 <p>More detail: <a href="/legal.html#privacy">Rules and privacy</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/legal-position.html">Legal position</a> &middot; <a href="/dpa.html">Data processing</a> &middot; <a href="/subprocessors.html">Sub-processors</a> &middot; <a href="/organizer-guide.html">Organizer guide</a> &middot; <a href="/demo.html">Try the free demo</a></p>
 <footer>Questions or requests: our Grievance Officer, <a href="mailto:hello@corporatetambola.com?subject=%5BTambola%5D%20">hello@corporatetambola.com</a>. We reply within 30 days.</footer>
 </main></body></html>
