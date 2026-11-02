@@ -18,3 +18,16 @@ describe("1.7.0: the build ships everything the new console loads", () => {
     expect(readFileSync(join(ROOT, "apps/web/public/zc.html"), "utf8")).not.toMatch(/<script>[^<]/); // an inline script is blocked by the page rules; it lives in trynew.js
   });
 });
+
+describe("2 Nov 2026: no shipped page links a script or style the build forgot", () => {
+  test("every local .js/.css a built page names exists in pages/public (idlist.js was missing, so the ID-only paste box never loaded)", () => {
+    const r = Bun.spawnSync([process.execPath, "pages/build.mjs"], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
+    expect(r.exitCode).toBe(0);
+    const out = join(ROOT, "pages/public"), missing: string[] = [];
+    for (const f of readdirSync(out).filter((x) => x.endsWith(".html"))) {
+      const html = readFileSync(join(out, f), "utf8");
+      for (const m of html.matchAll(/(?:src|href)=["'](\/[^"'?#]+\.(?:js|css))/g)) if (!existsSync(join(out, m[1]!))) missing.push(f + " -> " + m[1]);
+    }
+    expect(missing).toEqual([]);
+  });
+});
