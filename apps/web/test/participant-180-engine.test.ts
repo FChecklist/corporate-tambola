@@ -44,7 +44,9 @@ describe("1.8.0 open join form", () => {
     await p.waitFor((x) => /Join the game/.test(x));
     expect(p.text()).toContain("Your email ID"); expect(p.text()).toContain("(optional)");
     expect(p.text()).toMatch(/You are invited to join the Corporate Tambola \(Housie\) organized by/);
-    expect(p.text()).toContain("If this game asks for my email ID, that is used only for this game and deleted within 24 hours of the game."); // the notice names it
+    // since 1 Nov 2026 the join screen shows only the one agreement line (no tick-boxes); the sentence about the email ID (used for this game only, deleted within 24 hours) is the server's K4 wording and the linked Privacy document
+    expect(p.text()).toContain("By continuing, you agree to the Terms and Conditions, Privacy and Data, and Game rules.");
+    expect(JSON.parse(readFileSync(pjoin(import.meta.dir, "../../edge/src/consent-text.json"), "utf8")).K4.A).toContain("If this game asks for my email ID, that is used only for this game and deleted within 24 hours of the game.");
     await join(p, "9811100001", { mail: "asha@acme.com" });
     await p.waitFor((x) => /Your ticket|Starting in|What you can win|Before the game|Getting ready/.test(x));
     expect((o.world.raw.query("SELECT COUNT(*) c FROM kv WHERE k LIKE 'email/%'").get() as any).c).toBe(1);

@@ -34,7 +34,7 @@
   const open = (label) => `<a class="pk-btn" href="/zc.html?e=${encodeURIComponent(label)}">Open my game</a>`;
 
   function view() {
-    if (!secret) return `${head("Please sign in first")}<section class="pk-card"><p class="pk-sub">Open your console from the home page, or sign in with your e-mail: we send you a 6-digit code.</p><a class="pk-btn" href="/#login" id="goLogin">Sign in with email</a></section>`;
+    if (!secret) return `${head("Please sign in first")}<section class="pk-card"><p class="pk-sub">Open your console from the home page, or sign in with your e-mail: we send you a 6-digit code.</p><p class="pk-sub">Paying for someone else, for example from a finance team? Ask the organizer for the payment link. It needs no sign-in.</p><a class="pk-btn" href="/#login" id="goLogin">Sign in with email</a></section>`;
     if (S.done) {
       const d = S.done, gid = d.eid || eid, pack = d.pack || (S.info && packNow()) || 0;
       return PK.layout({
