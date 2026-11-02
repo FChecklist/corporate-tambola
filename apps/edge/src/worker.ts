@@ -732,7 +732,7 @@ async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promi
 const newHostKey = (): string => "cth_" + randHex(24);
 /** The WhatsApp button for a Host who has only a mobile number: opens WhatsApp to that number with the one-time link ready to send (the Organizer presses send). */
 const waLinkFor = (digits: string, name: string, link: string): string => `https://wa.me/${phoneDigits(digits)}?text=${encodeURIComponent(`${name ? "Hello " + name + ", you" : "You"} are a Host of a Corporate Tambola game. Open your link to finish your setup (it works once, for 7 days): ${link}`)}`;
-/** A brand-new organizer account for a work e-mail (used by the first-time start and by Google sign-up): the console key, the lasting AI key (shown only in the console), and the 24-hour AI-link mail. */
+/** A brand-new organizer account for an e-mail (used by the first-time start and by Google sign-up): the console key, the lasting AI key (shown only in the console), and the 24-hour AI-link mail. */
 /* AI_LINK_MAIL_AT_SIGNUP="0" (a Pages variable, set on the live site): the AI work link is not offered in the organizer console, so the welcome e-mail that carried it is not sent either. A new organizer then gets only the sign-in e-mail (the 6-digit code as option 1, the sign-in link as option 2). Any other value sends it as before. */
 async function createOrganizer(env: Env, req: Request, email: string, now: number, via: "start" | "signin-google" | "host-to-organizer", ticked = false): Promise<{ ok: true; token: string; aiKey: string; aiMessage: string } | { error: string; status: number }> {
   const eh = await sha("email|" + email);
@@ -966,7 +966,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   }
 
   /* ---- sign in with an e-mailed code (no passwords): also how an organizer who lost their key gets a fresh one ---- */
-  /* ---- start: a new organizer enters a work email and the console opens at once (no mail is sent). An email that already has an account is
+  /* ---- start: a new organizer enters an e-mail and the console opens at once (no mail is sent). An email that already has an account is
      asked for the e-mailed code instead, so nobody can open someone else's console by typing their address. ---- */
   if (req.method === "GET" && p === "/api/z/schedule") { // a helper for the organizer's AI: a date and time becomes a start round
     const atText = (url.searchParams.get("at") ?? "").trim(), at = Date.parse(atText);
@@ -983,7 +983,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (req.method === "POST" && p === "/api/start") {
     const b = await body(req);
     const email = typeof b?.email === "string" ? normAccountEmail(b.email) : "";
-    if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(email)) return json({ error: "Please enter a valid work email." }, 400);
+    if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(email)) return json({ error: "Please enter a valid e-mail address." }, 400);
     const eh = await sha("email|" + email);
     if (await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first()) { await holdPassForSignIn(env, eh, b?.pass, now); return json({ ok: true, exists: true }); }
     if (await hostForEmail(env.DB, eh)) { await holdPassForSignIn(env, eh, b?.pass, now); return json({ ok: true, exists: true }); } // a Host who confirmed this address signs in with a code, like an Organizer: the sign-in door must not offer them a new Organizer account
@@ -996,7 +996,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (req.method === "POST" && p === "/api/auth/email") {
     const b = await body(req);
     const email = typeof b?.email === "string" ? normAccountEmail(b.email) : "";
-    if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(email)) return json({ error: "Please enter a valid work email." }, 400);
+    if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(email)) return json({ error: "Please enter a valid e-mail address." }, 400);
     const eh = await sha("email|" + email);
     const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
     const hostAcct = await hostForEmail(env.DB, eh); // a Host who confirmed this address signs in the same way; a person who is both gets both roles

@@ -39,7 +39,7 @@
     if (status === 401) return "Please sign in again.";
     if (status === 409) return data.error || "This confirmation code does not match. Ask your AI for a fresh confirmation link.";
     if (status === 410) return data.error || "This request has expired or was already used. Ask your AI to draft it again.";
-    if (status === 404) return data.error || "This request was not found for your account. Make sure you are signed in with the same work email you gave your AI.";
+    if (status === 404) return data.error || "This request was not found for your account. Make sure you are signed in with the same e-mail you gave your AI.";
     return data.error || "Something went wrong. Please try again.";
   };
   const title = (status, data) => /already/i.test(data.error || "") ? "Already confirmed" : status === 410 ? "This request is no longer open" : status === 409 ? "This link does not match" : status === 404 ? "Not your request" : "We could not open this";
@@ -47,14 +47,14 @@
 
   // ---------- sign in ----------
   function signIn(msg) {
-    view(card(`<div class="eyebrow">Organizer sign in</div><h1>Sign in to confirm</h1><p class="muted small">Your AI cannot do this without you. Sign in with the work email you used for your account. We email you a 6-digit code: no password.</p>
+    view(card(`<div class="eyebrow">Organizer sign in</div><h1>Sign in to confirm</h1><p class="muted small">Your AI cannot do this without you. Sign in with the e-mail you used for your account. We email you a 6-digit code: no password.</p>
       ${msg ? `<div class="err" role="alert">${ic("alert")}<span>${esc(msg)}</span></div>` : ""}
-      <form id="lgForm" novalidate><label class="lb" for="lMail">Work email</label><input class="inp" id="lMail" type="email" autocomplete="email" placeholder="your e-mail" value="${esc(signedEmail)}"><div id="fErr"></div>
+      <form id="lgForm" novalidate><label class="lb" for="lMail">Your e-mail</label><input class="inp" id="lMail" type="email" autocomplete="email" placeholder="your e-mail" value="${esc(signedEmail)}"><div id="fErr"></div>
       <button class="btn block" style="margin-top:14px" type="submit" id="lgGo">Email me a code ${ic("arrow")}</button></form>`));
     $("lgForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const m = $("lMail").value.trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) return setErr("Please enter a valid work email.");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) return setErr("Please enter a valid e-mail address.");
       const b = $("lgGo"); b.disabled = true; setErr("");
       try { const r = await TB.api("POST", "/api/auth/email", { email: m }); signedEmail = m; codeView(m, r.devCode); }
       catch (er) { b.disabled = false; setErr(er.message); }

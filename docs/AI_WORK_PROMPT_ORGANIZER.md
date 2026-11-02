@@ -33,7 +33,7 @@ Legend for the last column: **YES** = the AI may call it through the AI link; **
 | # | Page | Path | What it does | Who | AI? |
 |---|---|---|---|---|---|
 | 1 | Home | `/` | Landing, price list, "Create my engagement" (e-mail -> console opens at once), "Log in" (e-mail code sheet), Refer & earn link | anyone | HUMAN (AI may explain, may print the address) |
-| 2 | Sign-in sheet | `/#login` | Work e-mail -> "Email me a code" -> 6-digit passcode -> "Sign in" (or the buttons in the e-mail) | organizer | HUMAN (the code is a secret: never typed to an AI) |
+| 2 | Sign-in sheet | `/#login` | E-mail -> "Email me a code" -> 6-digit passcode -> "Sign in" (or the buttons in the e-mail) | organizer | HUMAN (the code is a secret: never typed to an AI) |
 | 3 | Sign-in confirm | `/signin?t=<token>&go=ai` or `go=console` | The e-mail button lands here; "Continue to Corporate Tambola" consumes the single-use token (10 minutes) | organizer | HUMAN |
 | 4 | Show my AI work link | `/ai-link` | After sign-in: the two-line paste, Copy, seven AI buttons, "Get a fresh AI link", "Replace my AI link" | organizer | HUMAN |
 | 5 | Organizer console | `/zc` (home) and `/zc?e=<ID>` (one engagement) | Everything an organizer does by hand (Part C names every button) | organizer | PREPARE (AI hands over `consoleUrl`/`openUrl`, which carry no key) |
@@ -241,7 +241,7 @@ Navigation vocabulary (the person may type these any time; the AI states what it
 
 ## C1. Sign in and get the link (human)
 
-1. `https://corporate-tambola.pages.dev/` -> "Create my engagement" -> work e-mail -> the console opens at once. An address that already has an account gets "Email me a code": the code arrives by e-mail, 6 digits, 10 minutes, 5 tries, at most 5 mails an hour. The person types it; the AI never sees it.
+1. `https://corporate-tambola.pages.dev/` -> "Create my engagement" -> e-mail -> the console opens at once. An address that already has an account gets "Email me a code": the code arrives by e-mail, 6 digits, 10 minutes, 5 tries, at most 5 mails an hour. The person types it; the AI never sees it.
 2. Console `/zc` -> card "OPTION 1" -> "Copy my AI work link". If the box is empty: "Get my AI work link". Other buttons there: "Get a fresh AI link" (e-mailed 24-hour key), "Replace my AI link" (every old link stops at once), "Stop this link".
 3. Seven shortcuts: ChatGPT, Grok, Claude open a new chat with the paste pre-filled; Gemini, DeepSeek, z.ai copy it and open the site ("Copied. Press Ctrl+V, then Send").
 

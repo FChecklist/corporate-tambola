@@ -54,7 +54,7 @@
   document.addEventListener("change", (e) => { if (e.target && e.target.id === "pack2") { S.pack = e.target.value === DEMO ? DEMO : +e.target.value; renderPrices(); const f = $("pack2"); if (f) f.focus(); } });
   function startDemo() { try { sessionStorage.setItem("ctz-next", "/zc.html?demo=1"); } catch {} const t = (() => { try { return CTK.get("ctz-org"); } catch { return null; } })(); if (t) location.href = "/zc.html?demo=1"; else openLogin(""); } // signed in already: straight to the demo draft; otherwise the same sign-in as every game
   $("payBtn").addEventListener("click", () => (isDemo() ? startDemo() : openCheckout(S.pack)));
-  $("loginLink").addEventListener("click", (e) => { e.preventDefault(); openLogin(""); });
+  // The Log in link in the top bar is a plain link to the ONE sign-in page (the console); it no longer opens the sheet below.
 
   // ---------- helpers ----------
   const xbtn = `<button type="button" class="xbtn" data-close aria-label="Close">${ic("x")}</button>`;
@@ -116,7 +116,7 @@
   if (REF) TB.api("GET", "/api/partner/check?code=" + REF).then((r) => { if (!r.valid) { try { localStorage.removeItem("ctz-ref"); } catch {} } }).catch(() => {});
   let PAYMODE = "test"; // razorpay | test | off, from the server
   TB.api("GET", "/api/payments/status").then((s) => { PAYMODE = s.mode; }).catch(() => {});
-  // ---------- free launch: create an organizer account with a work email; the key arrives only through the e-mailed code ----------
+  // ---------- free launch: create an organizer account with an e-mail; the key arrives only through the e-mailed code ----------
   function openFree() {
     try { if (Number.isInteger(S.pack) && S.pack > 10) { sessionStorage.setItem("ctz-cap", String(S.pack)); } } catch {} // the size chosen on the website carries through the sign-in: Quick setup opens with it
     TB.sheet(`${xbtn}<div class="openfree" role="group" aria-labelledby="ofTitle">
@@ -133,7 +133,7 @@
     k2.addEventListener("change", sync); sync();
     $("frForm").addEventListener("submit", async (e) => {
       e.preventDefault(); const m = $("fMail").value.trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) return setErr("Please enter a valid work email.");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) return setErr("Please enter a valid e-mail address.");
       if (!CBConsent.all(k2, "K2")) return setErr("Please tick the box to continue.");
       const b = $("frGo"); b.disabled = true; setErr("");
       try {
@@ -149,7 +149,7 @@
   async function pay() {
     const org = $("oName").value.trim(), email = $("oMail").value.trim().toLowerCase(), country = $("oCty").value, taxId = $("oGst").value.trim().toUpperCase();
     if (org.length < 2) return setErr("Please enter your organization name.");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return setErr("Please enter a valid work email.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return setErr("Please enter a valid e-mail address.");
     setErr("");
     const btn = $("payGo"); btn.disabled = true; const keep = btn.innerHTML; btn.textContent = "Processing…";
     try {
@@ -256,7 +256,9 @@
     tick(); setInterval(tick, 1300);
     let bb = 0; setInterval(() => { bb = (bb + 2) % 102; const e = $("bbp"); if (e) e.style.setProperty("--p", bb + "%"); }, 200);
   }
-  const hashLogin = () => { if (location.hash === "#login") { let em = ""; try { em = sessionStorage.getItem("ctz-login-email") || ""; sessionStorage.removeItem("ctz-login-email"); } catch {} openLogin(em); } };
+  // The one sign-in is the console. A bare #login (an old link, a bookmark, the Guide's Sign in button) goes there; this sheet opens only for a flow that is waiting for it (a demo, a payment or the organizer console asks again and leaves ctz-next or ctz-login-email).
+  const CONSOLE_SIGNIN = "https://console.corporatetambola.com/";
+  const hashLogin = () => { if (location.hash === "#login") { let em = "", waiting = ""; try { em = sessionStorage.getItem("ctz-login-email") || ""; waiting = sessionStorage.getItem("ctz-next") || ""; sessionStorage.removeItem("ctz-login-email"); } catch {} if (!em && !waiting) { location.replace(CONSOLE_SIGNIN); return; } openLogin(em); } };
   window.addEventListener("hashchange", hashLogin); hashLogin();
   // ---------- who is signed in: the top link says it ("Organizer" or "Host") and goes to the right place ----------
   (async () => {

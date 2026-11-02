@@ -380,7 +380,7 @@ WHAT YOUR AI CAN DO FOR YOU
   - Watch the engagement on the day, and tell you the report afterwards: who won what, how many took part
 
 WHAT STILL NEEDS YOU (for your safety)
-  - Starting or ending an engagement, removing people, deleting saved names, and paying for a bigger pack. Your AI prepares these and gives you a confirmation link. You open it, sign in with your work email, and tap Confirm.
+  - Starting or ending an engagement, removing people, deleting saved names, and paying for a bigger pack. Your AI prepares these and gives you a confirmation link. You open it, sign in with your e-mail, and tap Confirm.
   - Buying a new engagement (the AI gives you the page).
 
 GOOD TO KNOW
@@ -427,7 +427,7 @@ ${na}`;
     const id = "drf_" + rid(8), code = rid(12), t = now();
     db.query("INSERT INTO ai_drafts(id,link_id,organizer_id,actions_json,summary,code_hash,created_at,expires_at,state) VALUES(?,?,?,?,?,?,?,?,?)").run(id, link.id, link.organizer_id, JSON.stringify(actions), summary, sha256(code), t, t + 30 * 60_000, "pending");
     return { draft_id: id, status: "awaiting_confirmation", summary, confirm_url: `${origin(req)}/confirm/${id}#${code}`, expires_in_minutes: 30,
-      tell_the_organizer: "Open the confirm link, sign in with your work email, check the summary and tap Confirm. Nothing happens until then." };
+      tell_the_organizer: "Open the confirm link, sign in with your e-mail, check the summary and tap Confirm. Nothing happens until then." };
   }
 
   async function runActions(actions: { tool: string; params: any }[], orgId: string, linkId: string, req: Request, signed?: unknown) {

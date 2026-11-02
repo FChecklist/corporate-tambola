@@ -262,7 +262,7 @@ describe("sign-in has one way: the e-mail (no Google button, even when the serve
   });
   test("the home page Log in sheet has the e-mail box and no Google button, with a client id", async () => {
     const o = await organizer({ GOOGLE_CLIENT_ID: GID });
-    const home = await openPage(o.world, { url: "http://localhost/#login", html: "index.html", scripts: ["keep.js", "common.js", "google.js", "site.js"] }); open.push(home);
+    const home = await openPage(o.world, { url: "http://localhost/#login", html: "index.html", scripts: ["keep.js", "common.js", "google.js", "site.js"], session: { "ctz-next": "/zc.html" } }); open.push(home); // a flow is waiting (a demo, a payment): only then does the game open its own sheet; a bare #login goes to the console
     await new Promise((r) => setTimeout(r, 600));
     const t = home.win.document.body.textContent || "";
     expect(t).not.toMatch(/Continue with Google/); expect(t).toMatch(/Type your e-mail and press Continue/); expect(home.errors).toEqual([]);
