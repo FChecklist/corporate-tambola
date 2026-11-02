@@ -9,6 +9,8 @@ import { TERMS_VERSION } from "./brand";
 import TEXT from "./consent-text.json";
 import type { D1, D1Stmt } from "./worker";
 
+/** The notice, as shown on every page (the same sentence as NOTICE_TEXT in vendor/game-core wording/src/consent.ts of the games that vendor the core; this game has no vendored core). */
+const NOTICE_TEXT = "By continuing, you agree to the Terms and Conditions, Privacy and Data, and Game rules.";
 export type ConsentKind = "K1" | "K2" | "K3" | "K4" | "K5" | "K6" | "K9";
 /** The current Terms version (one constant: brand.ts). */
 export const CONSENT_VERSION = TERMS_VERSION;
@@ -27,7 +29,8 @@ export const CONSENT_SCHEMA: string[] = [
 
 const encoder = new TextEncoder();
 const hex = (b: ArrayBuffer) => Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, "0")).join("");
-export const wordingHash = async (kind: ConsentKind): Promise<string> => hex(await crypto.subtle.digest("SHA-256", encoder.encode(wordingOf(kind).join("\n"))));
+/** The proof of what was shown: sha256 of the notice line (no tick-boxes since 1 Nov 2026: going ahead is the agreement). Same line for every point. */
+export const wordingHash = async (_kind: ConsentKind): Promise<string> => hex(await crypto.subtle.digest("SHA-256", encoder.encode(NOTICE_TEXT)));
 
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 

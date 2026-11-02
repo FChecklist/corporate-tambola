@@ -15,9 +15,9 @@ describe("1.8.3 email notice", () => {
     expect(rd("apps/web/public/consent.js")).toContain(a); // the page shows the exact words the server checks
   });
   test("one version everywhere: consent text, brand, page script, privacy and terms pages", () => {
-    expect((TEXT as any).version).toBe("2026-10-30"); expect(TERMS_VERSION).toBe("2026-10-30");
-    expect(rd("apps/web/public/consent.js")).toContain('C.version = "2026-10-30"');
-    for (const f of ["apps/web/public/privacy.html", "apps/web/public/terms.html"]) { const h = rd(f); expect(h).toContain("Version 2026-10-30"); expect(h).not.toContain("2026-10-15"); }
+    expect((TEXT as any).version).toBe("2026-11-01"); expect(TERMS_VERSION).toBe("2026-11-01");
+    expect(rd("apps/web/public/consent.js")).toContain('C.version = "2026-11-01"');
+    for (const f of ["apps/web/public/privacy.html", "apps/web/public/terms.html"]) { const h = rd(f); expect(h).toContain("Version 2026-11-01"); expect(h).not.toContain("2026-10-15"); }
   });
   test("the data map lists the e-mail as asked only if the organizer switches it on, with its row (sealed, erased with the rest)", () => {
     const doc = rd("docs/PRIVACY_AND_LIFECYCLE.md");
