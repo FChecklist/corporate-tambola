@@ -223,17 +223,20 @@ describe("See what guests see (ticket preview)", () => {
 
 describe("the pay link page (no sign-in)", () => {
   const linkOf = async (o: O, id: string) => { const r = await o.api("POST", `/api/z/${id}/paylink`, {}, o.token); expect(r.status).toBe(200); const j = await o.json(r); return new URL(j.url).searchParams.get("t")!; };
-  const pl = async (o: O, t: string, calls: Call[] = []) => { const hook = spy(calls); const p = await openPage(o.world, { url: "http://localhost/paylink.html" + (t ? "?t=" + t : ""), html: "paylink.html", scripts: ["common.js", "paylink.js"], afterLoad: (w, f) => hook(w, f) }); open.push(p); return p; };
-  test("shows only the game, date and price with GST, asks name and e-mail, and pays that one game (read back from the server)", async () => {
+  const pl = async (o: O, t: string, calls: Call[] = []) => { const hook = spy(calls); const p = await openPage(o.world, { url: "http://localhost/paylink.html" + (t ? "?t=" + t : ""), html: "paylink.html", scripts: ["common.js", "payfields.js", "paykit.js", "paylink.js"], afterLoad: (w, f) => hook(w, f) }); open.push(p); return p; };
+  test("shows only the game, date and price with GST, asks only for the country (no name or e-mail), and pays that one game (read back from the server)", async () => {
     const o = await organizer({ TEST_MODE: "1" }); await published(o, "PG-PL1", {}, { name: "Diwali Night" }); const t = await linkOf(o, "PG-PL1");
     const calls: Call[] = []; const p = await pl(o, t, calls);
     const txt = await p.waitFor((x) => /Diwali Night/.test(x));
-    expect(txt).toMatch(/₹/); expect(txt).not.toMatch(/plus GST/); expect(txt).toMatch(/Payment to IT Services by Rajat Agarwal/); expect(txt).toMatch(/Total/); expect(txt).not.toMatch(/Please sign in/i); expect(!!p.$("#nm")).toBe(true); expect(!!p.$("#em")).toBe(true); expect(!!p.$("#ph")).toBe(true); // the Details block asks for mobile, company name and GST / Tax number (all optional)
+    expect(txt).not.toMatch(/plus GST/); expect(txt).toMatch(/Payment to IT Services by Rajat Agarwal/); expect(txt).not.toMatch(/Please sign in/i);
+    for (const id of ["#nm", "#em", "#ph", "#org", "#tax"]) expect([id, p.$(id)]).toEqual([id, null]); // Razorpay asks for the mobile and the e-mail; the optional invoice details come after the payment
     expect(p.win.location.search).toBe(""); // the secret left the address bar
-    p.click("#paygo"); await p.waitFor((x) => /Please enter your name/.test(x)); expect(calls.filter((c) => c.m === "POST" && !c.u.endsWith("/api/proforma"))).toEqual([]); // nothing is sent until name and e-mail are good
-    (p.$("#nm") as any).value = "Neha Shah"; (p.$("#em") as any).value = "neha@acme.com"; p.click("#paygo");
+    expect((p.$("#paygo") as any).disabled).toBe(true); // the country is not known yet, so there is no price and nothing to pay
+    p.click('.pk-ctyopt[data-cty="IN"]'); await p.waitFor((x) => /Pay ₹/.test(x) && /Total/.test(x));
+    expect(calls.filter((c) => c.m === "POST" && !c.u.endsWith("/api/proforma"))).toEqual([]); // nothing is sent until Pay is pressed
+    p.click("#paygo");
     await p.waitFor((x) => /Payment received/.test(x), 20_000);
-    const post = calls.find((c) => c.m === "POST" && /\/checkout$/.test(c.u))!; expect(post.u).toBe(`/api/paylink/${t}/checkout`); expect(post.b).toMatchObject({ name: "Neha Shah", email: "neha@acme.com" });
+    const post = calls.find((c) => c.m === "POST" && /\/checkout$/.test(c.u))!; expect(post.u).toBe(`/api/paylink/${t}/checkout`); expect(post.b).toMatchObject({ country: "IN", currency: "INR" }); expect(["name", "email", "org", "phone"].filter((k) => k in (post.b as object))).toEqual([]);
     const st = await o.json(await o.api("GET", `/api/paylink/${t}`)); expect(st.status).toBe("paid");
     const sum = await o.json(await o.api("GET", "/api/z/PG-PL1/summary", undefined, o.token)); expect(sum.payment.status).toBe("paid");
   });

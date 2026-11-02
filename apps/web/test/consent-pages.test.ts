@@ -90,7 +90,7 @@ describe("K5 a Co-host takes the role", () => {
 describe("K3 the payment page", () => {
   test("no box: the pay button is on", async () => {
     const o = await organizer({ TEST_MODE: "1" }); await make(o, "CP-PAY"); await publish(o, "CP-PAY");
-    const p = await page(o, "/pay?e=CP-PAY", "pay.html", ["common.js", "pay.js"], { "ctz-org": o.token, "ctz-email": "boss@acme.com" });
+    const p = await page(o, "/pay?e=CP-PAY", "pay.html", ["common.js", "payfields.js", "paykit.js", "pay.js"], { "ctz-org": o.token, "ctz-email": "boss@acme.com", "ctz-paydraft-pay": '{"pick":"IN"}' }); // the country already chosen in this tab
     await p.waitFor((x) => /Payment/.test(x) && !!p.$("#paygo"));
     expect(p.win.document.querySelectorAll('[data-cbc="K3"] input').length).toBe(0);
     expect([(p.$("#paygo") as any).disabled, (p.$("#paygo") as any).getAttribute("aria-disabled")]).toEqual([false, "false"]);

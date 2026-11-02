@@ -96,7 +96,7 @@ describe("the phone, the number screen and the board of a 10-person Rs 0 game", 
 });
 
 describe("the pay page makes a demo a real game", () => {
-  const payPage = (o: O, eid: string, pack?: number) => page(o, `/pay?e=${eid}${pack ? "&pack=" + pack : ""}`, "pay.html", ["common.js", "pay.js"], { "ctz-org": o.token, "ctz-email": "boss@acme.com", "ctz-phone": "98765 43210" });
+  const payPage = (o: O, eid: string, pack?: number) => page(o, `/pay?e=${eid}${pack ? "&pack=" + pack : ""}`, "pay.html", ["common.js", "payfields.js", "paykit.js", "pay.js"], { "ctz-org": o.token, "ctz-email": "boss@acme.com", "ctz-phone": "98765 43210", "ctz-paydraft-pay": JSON.stringify({ pick: "IN" }) }); // India already chosen in this tab: the price shows
   test("the pack from the console is chosen; another pack can be picked; paying clears the demo and raises the size; the page then says it is paid", async () => {
     const o = await organizer({ TEST_MODE: "1" }); await make(o, "UI-DEMOP"); await publish(o, "UI-DEMOP");
     const p = await payPage(o, "UI-DEMOP", 250);
@@ -105,7 +105,7 @@ describe("the pay page makes a demo a real game", () => {
     expect(p.$('[data-pack="250"]')!.getAttribute("aria-pressed")).toBe("true"); expect(t).toMatch(/Up to 250/); expect(t).toMatch(/3,499/);
     p.click('[data-pack="500"]'); await p.waitFor((x) => /Pay ₹4,699 securely/.test(x));
     expect(p.$('[data-pack="500"]')!.getAttribute("aria-pressed")).toBe("true"); expect(p.text()).toMatch(/Up to 500/);
-    (p.$("#nm") as any).value = "Asha Rao"; p.click("#paygo");
+    p.click("#paygo"); // nothing about the payer is asked before paying: Razorpay asks for the mobile and the e-mail
     const d = await p.waitFor((x) => /Payment received/i.test(x));
     expect(d).toMatch(/Your demo game is now a real game/); expect(d).toMatch(/up to 500 participants/); expect(d).toMatch(/DEMO GAME mark goes away/);
     const r = row(o, "UI-DEMOP"); expect(r.pack).toBe(500); expect(r.cap).toBe(500); expect(JSON.parse(r.config).demo).toBeUndefined();

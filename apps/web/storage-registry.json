@@ -89,10 +89,17 @@
         "ctz-aimsg",
         "ctz-email",
         "ctz-phone",
-        "ctz-name",
         "ctz-pl",
         "ctz-shield",
         "ct-auto-done"
+      ]
+    },
+    {
+      "id": "pay-draft",
+      "store": "sessionStorage",
+      "say": "On the screen of whoever is paying: the country chosen, the Game ID typed on the payment test and, after paying, the payment's reference and the optional invoice details typed (name, company, tax number). Kept only in this tab so nothing is lost if the page reloads, and gone when the tab closes.",
+      "keys": [
+        "ctz-paydraft-*"
       ]
     },
     {

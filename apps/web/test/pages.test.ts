@@ -441,7 +441,7 @@ describe("console (organizer page)", () => {
 });
 
 describe("payment page", () => {
-  const payPage = (o: O, eid: string, signedIn = true) => page(o, `/pay?e=${eid}`, "pay.html", ["common.js", "pay.js"], signedIn ? { "ctz-org": o.token, "ctz-email": "boss@acme.com", "ctz-phone": "98765 43210" } : {});
+  const payPage = (o: O, eid: string, signedIn = true, pick = "") => page(o, `/pay?e=${eid}`, "pay.html", ["common.js", "payfields.js", "paykit.js", "pay.js"], { ...(signedIn ? { "ctz-org": o.token, "ctz-email": "boss@acme.com", "ctz-phone": "98765 43210" } : {}), ...(pick ? { "ctz-paydraft-pay": JSON.stringify({ pick }) } : {}) }); // pick = the country already chosen in this tab
   test("UC-55 not signed in: asks to sign in instead of showing a broken page", async () => {
     const o = await organizer(); await make(o, "UI-PAY0");
     const p = await payPage(o, "UI-PAY0", false); expect(await p.waitFor((x) => /Please sign in first/.test(x))).toMatch(/Sign in with email/);
@@ -453,25 +453,26 @@ describe("payment page", () => {
     expect(t).toMatch(/Online payment opens soon/); expect(t).toMatch(/Up to 250/); expect(t).not.toMatch(/plus GST/); 
     expect((p.$("#paygo") as any).disabled).toBe(true); expect(p.$("#pfpay")).toBeTruthy(); // the proforma invoice with its Pay now button sits above the details
   });
-  test("UC-9 / UC-55 test-payment mode end to end in the page: validation first, then paid, published, and told when it begins", async () => {
+  test("UC-9 / UC-55 test-payment mode end to end in the page: the country first, then paid, published, told when it begins, and the invoice after Skip", async () => {
     const o = await organizer({ TEST_MODE: "1" }); await make(o, "UI-PAY2", { cap: 100 }); await publish(o, "UI-PAY2");
-    const p = await payPage(o, "UI-PAY2"); await p.waitFor((x) => /Details/.test(x));
-    expect(p.$("select#pcode")).toBeTruthy(); expect((p.$("select#pcode") as any).value).toBe("91"); expect((p.$("select#cty") as any).value).toBe("IN"); // India and +91 are already chosen
-    p.click("#paygo"); await p.waitFor((x) => /your name/i.test(x)); // only a name and an e-mail are needed
+    const p = await payPage(o, "UI-PAY2"); await p.waitFor((x) => /Choose your country first/.test(x) && !!p.$("#ctyq"));
+    for (const id of ["#nm", "#em", "#ph", "select#pcode", "#org", "#tax"]) expect([id, p.$(id)]).toEqual([id, null]); // nothing about the payer is asked before the payment
+    expect((p.$("#paygo") as any).disabled).toBe(true); // no country, no price, no payment
+    p.click('.pk-ctyopt[data-cty="IN"]'); await p.waitFor((x) => /Paying from\s*India/.test(x) && /Pay ₹/.test(x));
     expect(p.text()).not.toMatch(/plus GST/); // no GSTIN question for a buyer in India: the seller charges no GST
     expect(p.text()).toMatch(/Payment to IT Services by Rajat Agarwal/); expect(p.$('a[href="https://itservices-rajat-agarwal.pages.dev/"]')).toBeTruthy(); // the seller is named here, as a plain link
-    (p.$("#nm") as any).value = "Asha Rao"; // no organization, no mobile: still pays
     p.click("#paygo");
     const t = await p.waitFor((x) => /Payment received/i.test(x));
-    expect(t).toMatch(/will begin on time/); expect(t).toMatch(/Open my game/);
-    expect(p.$("#invbody")).toBeTruthy(); expect((p.$("#invpdf") as any).getAttribute("href")).toMatch(/\/api\/invoice\/inv_[0-9a-f]{32}\.pdf$/); expect(p.$("#invwa")).toBeTruthy(); expect(p.$("#invsend")).toBeTruthy(); // the invoice itself, PDF, WhatsApp and e-mail on the done screen
+    expect(t).toMatch(/will begin on time/); expect(t).toMatch(/Open my game/); expect(t).toMatch(/Add to your invoice/); expect(p.$("#invbody")).toBeNull(); // paid and published at once; the tax invoice waits for the two buttons
     expect((o.world.raw.prepare("SELECT pack FROM engagement WHERE id='UI-PAY2'").get() as any).pack).toBe(100);
+    p.click("#invskip"); await p.waitFor((x) => /Your invoice/.test(x));
+    expect(p.$("#invbody")).toBeTruthy(); expect((p.$("#invpdf") as any).getAttribute("href")).toMatch(/\/api\/invoice\/inv_[0-9a-f]{32}\.pdf$/); expect(p.$("#invwa")).toBeTruthy(); expect(p.$("#invsend")).toBeTruthy(); // the invoice itself, PDF, WhatsApp and e-mail on the done screen
   });
   test("UC-12 / UC-55 paying while held: the page says when it will begin", async () => {
     const o = await organizer({ TEST_MODE: "1" }); await make(o, "UI-PAY3"); await publish(o, "UI-PAY3");
     o.world.now = START_MS + HOUR;
-    const p = await payPage(o, "UI-PAY3"); await p.waitFor((x) => /waiting for your payment now/i.test(x));
-    (p.$("#nm") as any).value = "Asha Rao"; p.click("#paygo");
+    const p = await payPage(o, "UI-PAY3", true, "IN"); await p.waitFor((x) => /waiting for your payment now/i.test(x) && /Pay ₹/.test(x));
+    p.click("#paygo");
     expect(await p.waitFor((x) => /Payment received/i.test(x))).toMatch(/It begins at/);
   });
   test("UC-55 an already paid engagement says so; a stranger's engagement is not shown", async () => {

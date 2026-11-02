@@ -33,7 +33,7 @@ async function published(id: string) { const key = await organizer(); await draf
 
 const staleRefusal = async (r: Response, kind: ConsentKind) => { // a request that carries an OLDER version: the person did tick, so the page is told to reload
   expect(r.status).toBe(400); const b = await j(r);
-  expect(b).toEqual({ error: "This page is out of date. Please reload it, then tick the boxes again and try again.", code: "consent-required", stale: true, kind, version: TERMS_VERSION });
+  expect(b).toEqual({ error: "This page is out of date. Please reload it and try again. Sorry for the trouble.", code: "consent-required", stale: true, kind, version: TERMS_VERSION });
 };
 const refusal = async (r: Response, kind: ConsentKind) => {
   expect(r.status).toBe(400);

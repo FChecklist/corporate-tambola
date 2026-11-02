@@ -142,7 +142,7 @@ describe("step 10: the report", () => {
 });
 
 describe("the payment page", () => {
-  const payPage = (o: O, eid: string, hook?: (win: any, f: string) => void) => page(o, `/pay?e=${eid}`, "pay.html", ["common.js", "pay.js"], { "ctz-org": o.token, "ctz-email": "boss@acme.com", "ctz-phone": "98765 43210" }, hook ? { afterLoad: hook } : {});
+  const payPage = (o: O, eid: string, hook?: (win: any, f: string) => void) => page(o, `/pay?e=${eid}`, "pay.html", ["common.js", "payfields.js", "paykit.js", "pay.js"], { "ctz-org": o.token, "ctz-email": "boss@acme.com", "ctz-phone": "98765 43210", "ctz-paydraft-pay": JSON.stringify({ pick: "IN" }) }, hook ? { afterLoad: hook } : {});
   const answer = (win: any, routes: Record<string, (real: () => Promise<Response>) => Promise<Response> | Response>) => { const real = win.fetch; win.fetch = async (input: any, init?: any) => { const u = new URL(String(input), "http://localhost"), h = routes[(init?.method || "GET").toUpperCase() + " " + u.pathname]; return h ? h(() => real(input, init)) : real(input, init); }; };
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -165,11 +165,12 @@ describe("the payment page", () => {
         "POST /api/payments/verify": () => { verifyCalls++; return json({ error: "Something went wrong. Please try again." }, 500); },
       });
     });
-    await p.waitFor((x) => /Details/.test(x)); (p.$("#nm") as any).value = "Asha Rao"; p.click("#paygo");
+    await p.waitFor(() => !!p.$("#paygo")); p.click("#paygo");
     await p.waitFor(() => verifyCalls === 1); await new Promise((r) => setTimeout(r, 300));
     expect(p.text()).toMatch(/Please keep this page open/); expect(p.text()).not.toMatch(/Something went wrong/); // the page is still asking, it did not hand the Pay button back
-    expect((p.$("#paygo") as any).getAttribute("data-hold")).toBe("1"); expect(checkouts).toBe(1);
-    o.world.raw.prepare("UPDATE engagement SET pack=100 WHERE id='IP-VERIFY'").run(); o.world.raw.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").run("paidby/IP-VERIFY", JSON.stringify({ by: "organizer", ms: START_MS - HOUR })); // the gateway's own message arrives: the game is paid
+    expect((p.$("#pk-busy") as any).hidden).toBe(false); expect((p.$("#paygo") as any).disabled).toBe(true); expect(checkouts).toBe(1);
+    o.world.raw.prepare("UPDATE engagement SET pack=100 WHERE id='IP-VERIFY'").run();
+    o.world.raw.prepare("INSERT OR REPLACE INTO payment(id,org,email,pack,currency,amount,tax,status,created_ms,paid_ms,meta,result) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)").run("pay_0123456789abcdef", null, "payer@acme.com", 100, "INR", 2399, 365.9, "paid", START_MS - HOUR, START_MS - HOUR, "{}", JSON.stringify({ ok: true, orderId: "pay_0123456789abcdef", pack: 100, total: 2399, currency: "INR", eid: "IP-VERIFY", published: true })); // the payment itself is now paid: the receipt the page keeps asking for comes back o.world.raw.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").run("paidby/IP-VERIFY", JSON.stringify({ by: "organizer", ms: START_MS - HOUR })); // the gateway's own message arrives: the game is paid
     await p.waitFor((x) => /Payment received/i.test(x), 15_000);
     expect(p.text()).toMatch(/Open my game/); expect(p.text()).not.toMatch(/engagement/i); expect(checkouts).toBe(1); expect(verifyCalls).toBe(1);
   });
