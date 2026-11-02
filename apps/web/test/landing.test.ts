@@ -26,8 +26,8 @@ describe("the Housie landing page", () => {
     const css = read("landing.css");
     const wide = css.slice(css.indexOf("@media (min-width:900px){")); expect(wide).toContain(".lp-six{display:block}"); expect(wide).toContain(".lp-choose{display:none}"); expect(css).toContain(".lp-six{display:none;"); // two different layouts, switched at 900px
   });
-  test("the label above the headline is the owner's; no 'event managers'; no link to the console host that does not exist yet", () => {
-    expect(html).toContain('<div class="eyebrow">For HR teams and managers</div>'); expect(/event manager/i.test(html)).toBe(false); expect(html).not.toContain("console.corporatetambola.com");
+  test("the label above the headline is the owner's; no 'event managers'; the only link to the console host is the one sign-in address (Log in)", () => {
+    expect(html).toContain('<div class="eyebrow">For HR teams and managers</div>'); expect(/event manager/i.test(html)).toBe(false); expect([...html.matchAll(/href="(https:\/\/console\.corporatetambola\.com[^"]*)"/g)].map((m) => m[1]).every((u) => u === "https://console.corporatetambola.com/")).toBe(true); expect(html).toContain('href="https://console.corporatetambola.com/"');
   });
   test("the heading of the games is the owner's; the trust list is the owner's list of eight; contact (phone and e-mail) is in the hero", () => {
     expect(html).toContain("Choose a game for your close group:"); expect(html).toContain('<p class="six-title">Choose a game for your close group</p>'); expect(html).not.toContain("Choose your game");

@@ -326,8 +326,8 @@ route_("GET", "/api/health", () => json({ ok: true, dev: DEV, fast: FAST, rooms:
 route_("POST", "/api/checkout", async ({ req }) => {
   const b = await body(req);
   const email = String(b.email ?? "").trim().toLowerCase();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail(400, "Enter a valid work email.");
-  if (!DEV && FREE_MAIL.test(email)) fail(400, "Please use your work email, not a free mail address.");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail(400, "Enter a valid e-mail address.");
+  if (!DEV && FREE_MAIL.test(email)) fail(400, "Please use a different e-mail address. Free mail addresses are not accepted for this step.");
   const org = String(b.org ?? "").trim();
   if (org.length < 2) fail(400, "Enter your organization name.");
   const pack = Number(b.pack);

@@ -5,7 +5,7 @@ import { readPng, isBadgeRed } from "./png-pixels";
 const PUB = new URL("../public/", import.meta.url);
 const read = (f: string) => readFileSync(new URL(f, PUB), "utf8");
 const bytes = (f: string) => new Uint8Array(readFileSync(new URL(f, PUB)));
-const SIX: [string, string][] = [["How it works", "#how"], ["Free demo game", "/zc?demo=1"], ["Guide", "/organizer-guide.html"], ["Brochure", "/brochure.pdf"], ["Refer & earn", "/partner.html"], ["Log in", "/#login"]];
+const SIX: [string, string][] = [["How it works", "#how"], ["Free demo game", "/zc?demo=1"], ["Guide", "/organizer-guide.html"], ["Brochure", "/brochure.pdf"], ["Refer & earn", "/partner.html"], ["Log in", "https://console.corporatetambola.com/"]];
 // the landing page and the 13 information pages that carry the header
 const PAGES = ["index.html", "about.html", "ai-prompt.html", "contact.html", "dpa.html", "legal.html", "legal-position.html", "organizer-guide.html", "partner-terms.html", "pricing.html", "privacy.html", "refund-policy.html", "subprocessors.html", "terms.html"];
 const menu = (h: string) => { const m = /<div class="ct-menu" id="ctMenu"><ul>([\s\S]*?)<\/ul>/.exec(h); return m ? [...m[1]!.matchAll(/<a href="([^"]*)"[^>]*>([^<]*)<\/a>/g)].map((x) => [x[2]!.replace(/&amp;/g, "&"), x[1]!]) : []; };

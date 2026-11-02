@@ -102,7 +102,7 @@ Order matters in two places that the matrix depends on:
 flowchart TD
   S0["Person types an e-mail on the sign-in sheet (site.js:179-203)"] --> S1["POST /api/start {email, consent?}<br/>worker.ts:885"]
   S1 --> S2{"E-mail looks valid?"}
-  S2 -- no --> S2x["400 Please enter a valid work email."]
+  S2 -- no --> S2x["400 Please enter a valid e-mail address."]
   S2 -- yes --> S3{"E-mail already has an Organizer account?"}
   S3 -- yes --> S5["200 ok exists:true<br/>a demo-pass token, if sent, is held for this e-mail"]
   S3 -- no --> S4{"E-mail is a confirmed Host?"}
