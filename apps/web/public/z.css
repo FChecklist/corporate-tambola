@@ -472,3 +472,12 @@ html[data-pt=retro] .zreq,html[data-pt=modern] .zreq{color:#FFB4A8}
 .mkownbtn{min-height:44px;display:inline-flex;align-items:center}
 .zt-runmsg{margin:8px 0}.zt-runtext{font-size:14px;font-weight:400;margin:0 0 6px;line-height:1.45}
 .cbc-row label{display:block;min-height:44px;padding:11px 0;box-sizing:border-box}.cbc-row a{display:inline-block;padding:12px 2px;margin:-12px 0}
+
+/* ===== design pass 2026-11-02: contrast on the dark page, bigger tap targets, language button above content ===== */
+html[data-pt] .zlab{color:#E9DCC6}
+html[data-pt] .zmeta{color:#D9C9B6}
+.zside{min-height:48px;min-width:112px;box-sizing:border-box}
+.zlookopt{min-height:44px}
+.zrulesrow summary{padding:16px 2px}
+a[href="/fair.html"]{display:inline-block;padding:15px 0;margin:-15px 0}
+#langsel{z-index:9999!important}#langmenu{z-index:10000!important}

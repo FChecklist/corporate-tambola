@@ -48,7 +48,7 @@ describe("the Housie landing page", () => {
   test("the cache rule: css and js are linked with ?v=N, the landing css is in the Pages build, and the offline app cache is a new version", () => {
     for (const f of ["app.css", "site.css", "landing.css", "site.js", "theme.js"]) expect(html).toContain("/" + f + "?v=");
     expect(readFileSync(new URL("../../../pages/build.mjs", import.meta.url), "utf8")).toContain('"landing.css"');
-    const sw = read("sw.js"); expect(sw).toContain('const CACHE = "tb-app-v3"');
+    const sw = read("sw.js"); expect(sw).toContain('const CACHE = "tb-app-v4"');
   });
   test("the page keeps the controls site.js needs (pack list, buy button, price card)", () => {
     for (const id of ['id="pack"', 'id="payBtn"', 'id="packs"', 'id="priceNote"', 'id="whoL"']) expect(html).toContain(id);
