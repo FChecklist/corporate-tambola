@@ -9,7 +9,8 @@ import { callRoundR, checkClaims, completionIndexKey, settleAll, ticketsFor } fr
 import { deriveCalls, roundAt, roundTimeMs, type Fetcher } from "../../packages/beacon/src";
 import { cfgOf, nextMessage, publicKeyFromSecret, readPublished, resolveControl, signControlWithSecret } from "../../packages/beacon/src/control";
 import { createHash } from "node:crypto";
-import { defaultCfg, keysInPlay, quorumFor, roundEid, type EngagementCfg } from "../../packages/beacon/src/config";
+import { countFromOf } from "../../packages/beacon/src/prize-engine";
+import { GRACE_ROUNDS, defaultCfg, keysInPlay, quorumFor, roundEid, type EngagementCfg } from "../../packages/beacon/src/config";
 
 const N = Number(process.argv[2] ?? 2000);
 const ROUNDS = Number(process.env.ROUNDS ?? 1); // ROUNDS=2 plays two full rounds (new numbers and new tickets each)
@@ -23,14 +24,15 @@ let checks = 0, failed = 0;
 const ok = (c: boolean, m: string) => { checks++; if (!c) { failed++; console.log("  FAIL:", m); } else console.log("  ok:", m); };
 let seed = 987654321; const rng = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 0x100000000);
 
+CFG.keepCalling = true; // the game keeps calling to number 90 after the last prize (the default "end" stops it, so the phones' logs would be shorter than 90)
 const d = makeD1();
 const env: Env = { DB: d.db, ORGANIZER_SECRET: SECRET, DAILY_WRITE_BUDGET: "100000" };
 let t = 0; const T0 = roundTimeMs(START - 3); const utc = () => T0 + t;
-const WALL = 1_700_000_000_000;
+// the store runs on the same virtual clock as the phones (a fixed wall time years after START made every join "late" and hid every number)
 const H = (h: Record<string, string> = {}) => ({ "content-type": "application/json", ...h });
-const raw = (m: string, p: string, b?: unknown, h: Record<string, string> = {}) => handle(new Request("http://x" + p, { method: m, headers: H(h), body: b === undefined ? undefined : JSON.stringify(b) }), env, WALL);
+const raw = (m: string, p: string, b?: unknown, h: Record<string, string> = {}) => handle(new Request("http://x" + p, { method: m, headers: H(h), body: b === undefined ? undefined : JSON.stringify(b) }), env, utc());
 
-await raw("POST", "/api/z", { id: EID, startRound: START, callSeconds: 6, cap: N <= 500 ? 500 : N <= 2000 ? 2000 : 100000, tickets: CFG.tickets, rewards: CFG.rewards, breaks: CFG.breaks, rounds: CFG.rounds }, { "x-organizer": SECRET });
+await raw("POST", "/api/z", { id: EID, startRound: START, callSeconds: 6, cap: N <= 500 ? 500 : N <= 2000 ? 2000 : 100000, tickets: CFG.tickets, rewards: CFG.rewards, breaks: CFG.breaks, rounds: CFG.rounds, afterPrizes: "keep" }, { "x-organizer": SECRET });
 await raw("PUT", `/api/z/${EID}/control/key`, { publicKey: publicKeyFromSecret(KEY) }, { "x-organizer": SECRET });
 
 interface P { rt: PhoneRuntime; phone: string; joinAt: number; offFrom: number; offTo: number; blockedAll: boolean; liar: boolean; flaky: number; cheater: boolean; stranded: boolean }
@@ -38,7 +40,7 @@ const phones: P[] = Array.from({ length: N }, (_, i) => {
   const blockedAll = rng() < 0.03, liar = !blockedAll && rng() < 0.02, flaky = rng() < 0.1 ? 0.3 : 0.0;
   const offFrom = rng() < 0.05 ? 20 + Math.floor(rng() * 100) : -1;
   const mem = new Map<string, string>();
-  const p: P = { rt: null as unknown as PhoneRuntime, phone: "9" + String(100000000 + i), joinAt: rng() < 0.3 ? Math.floor(rng() * 150) : 0, offFrom, offTo: offFrom + 25, blockedAll, liar, flaky, cheater: i % 100 === 7, stranded: blockedAll };
+  const p: P = { rt: null as unknown as PhoneRuntime, phone: "9" + String(100000000 + i), joinAt: rng() < 0.3 ? Math.floor(rng() * (GRACE_ROUNDS - 8)) : 0, offFrom, offTo: offFrom + 25, blockedAll, liar, flaky, cheater: i % 100 === 7, stranded: blockedAll };
   const isOff = () => offFrom >= 0 && step >= offFrom && step < p.offTo;
   const fetcher: Fetcher = async (url) => {
     if (blockedAll || isOff()) throw new Error("blocked");
@@ -63,7 +65,7 @@ const phones: P[] = Array.from({ length: N }, (_, i) => {
   return p;
 });
 let step = 0;
-const TICKS = (RICH ? 215 + 25 + 20 : 215) + (ROUNDS - 1) * 212; // the rich settings add 25 rounds of breaks; each extra round adds 180 + the 30-round wait + slack
+const TICKS = GRACE_ROUNDS + (RICH ? 215 + 25 + 20 : 215) + (ROUNDS - 1) * 212; // the rich settings add 25 rounds of breaks; each extra round adds 180 + the 30-round wait + slack
 const t0 = Date.now();
 const brkSeen = new Set<string>(); const brkLen = new Map<string, number>(); let brkGrew = false; let cheated = 0; let published = false, pauseIv: { start: number; end: number } | null = null; const sawDuring = new Set<number>();
 for (step = 0; step < TICKS; step++) {
@@ -73,7 +75,7 @@ for (step = 0; step < TICKS; step++) {
   for (const p of phones) {
     if (step < p.joinAt) continue;
     if (step === p.joinAt) batch.push(p.rt.boot().then(() => p.rt.join(p.phone, "P")));
-    else if (p.rt.phase === "play" || p.rt.phase === "ended") batch.push(p.rt.tick());
+    else if (p.rt.phase === "play" || p.rt.phase === "ended") batch.push(p.rt.tick().then(() => p.rt.playAlong())); // a person taps the called numbers and presses Claim: a claim goes only when pressed
     else if (p.rt.phase === "join") batch.push(p.rt.join(p.phone, "P")); // a failed join is retried by the person tapping again
     else if (p.rt.phase === "boot") batch.push(p.rt.boot());
   }
@@ -99,12 +101,13 @@ console.log(`\n  simulated ${N} phones x ${TICKS} ticks in ${elapsed} s`);
 const f = (await readPublished({ get: async (k) => (await d.db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<any>())?.v ?? null, put: async () => {} }, EID));
 const st = f ? resolveControl(cfgOf(f), f.messages) : null; // no file: nothing can be paused here (above 2,000 participants)
 const refs: Record<number, number[]> = {};
-for (let r = 1; r <= ROUNDS; r++) refs[r] = deriveCalls(roundEid(EID, r), Array.from({ length: 90 }, (_, k) => rnd(callRoundR(st, START, STRIDE, CFG.breaks, r, k)!)));
+for (let r = 1; r <= ROUNDS; r++) refs[r] = deriveCalls(roundEid(EID, r), Array.from({ length: 90 }, (_, k) => rnd(callRoundR(st, START + GRACE_ROUNDS, STRIDE, CFG.breaks, r, k)!)));
 const ref = refs[ROUNDS]!; // phones that finished show the last round
 ok(!pauseIv || sawDuring.size === 1, `during the pause no phone revealed a number (log held at ${[...sawDuring][0]})`);
 if (RICH) { ok(brkSeen.size === 2 && !brkGrew, `both brand breaks were shown (${[...brkSeen].join(", ")}) and no number appeared while one was showing`); ok(phones.filter((p) => p.rt.pid).every((p) => p.rt.view().tickets.length === 2), "every participant holds two tickets"); }
 const live = phones.filter((p) => !p.stranded && !p.liar && p.rt.pid);
-const same = live.filter((p) => { const l = p.rt.view().log; return l.length === 90 && l.every((n, i) => n === ref[i]); });
+const expectedFor = (p: P): number[] => { const cf = countFromOf((p.rt as any).myJr); return cf ? ref.filter((_, k) => (callRoundR(st, START + GRACE_ROUNDS, STRIDE, CFG.breaks, ROUNDS, k) ?? Infinity) >= cf) : ref; }; // a phone that joined after the first number sees (and counts) only the numbers from its own count-from round on
+const same = live.filter((p) => { const l = p.rt.view().log, e = expectedFor(p); return l.length === e.length && l.every((n, i) => n === e[i]); });
 const behind = live.filter((p) => !same.includes(p));
 for (const p of behind.slice(0, 3)) { const l = p.rt.view().log; console.log(`  (behind: phone ${p.phone} joinAt=${p.joinAt} flaky=${p.flaky} off=${p.offFrom}-${p.offTo} blocked=${p.blockedAll} logLen=${l.length} firstWrong=${l.findIndex((n, i) => n !== ref[i])} phase=${p.rt.phase} pending=${p.rt.view().pendingChecks} mode=${p.rt.view().mode})`); }
 ok(same.length === live.length, `every phone that could reach an honest beacon has the identical 90-call log (${same.length}/${live.length}${behind.length ? "; behind: " + behind.length : ""})`);
@@ -141,7 +144,7 @@ const pub = await (await raw("GET", `/api/z/${EID}/results`)).json() as any;
 if (pub.results.length !== settled.length) console.log("  (published", pub.results.length, "settled", settled.length, JSON.stringify(pub).slice(0, 200), ")");
 ok(JSON.stringify(pub).includes("pids") === false && pub.results.length === settled.length, "public results carry counts only, no participant ids");
 // an honest phone's own record: claimed everything it completed
-const sample = live.filter((p) => same.includes(p)).slice(0, 200);
+const sample = live.filter((p) => same.includes(p) && p.flaky === 0 && p.offFrom < 0).slice(0, 200); // a phone on a bad line or one that was offline can press Claim after the next number: the Worker then (rightly) says too late and records nothing
 
 const missed = sample.filter((p) => { const v = p.rt.view(); return !keysInPlay(CFG.rewards).every((pat) => v.claimed.includes(pat) || completionIndexKey(v.tickets, pat, v.log) < 0); });
 for (const p of missed.slice(0, 3)) console.log(`  (phone ${p.phone}: joinAt=${p.joinAt} flaky=${p.flaky} off=${p.offFrom} unsent=${p.rt.view().unsent} claimed=${p.rt.view().claimed.length})`);

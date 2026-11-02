@@ -188,7 +188,10 @@ test("a game that says it has none of these (no flags) shows none of them", asyn
   new Function("window", "document", "location", "fetch", "sessionStorage", "window.ZFLOW_GAME = { tickets: [1] };\n" + packOnly)(bare, bare.document, bare.location, async (u: string) => ({ ok: true, json: async () => (u.endsWith("/info") ? { unpaid: false, startMs: START } : { ok: true }) }), bare.sessionStorage);
   await wait();
   const d = bare.document;
-  for (const id of ["zf-reh", "zf-feed", "zf-bottomrow", "zf-online"]) expect(d.getElementById(id)).toBe(null);
-  expect(d.querySelector('[data-house="lucky"]')).toBe(null);
-  expect(win.document.getElementById("zf-reh")).not.toBe(null); // while Tambola, which has them, does
+  // compare booleans, never DOM nodes: a failing expect(node).toBe(null) makes bun print the whole happy-dom tree (minutes, GBs, then a crash)
+  for (const id of ["zf-reh", "zf-feed", "zf-online"]) expect(d.getElementById(id) === null).toBe(true);
+  expect(d.querySelector('[data-house="lucky"]') === null).toBe(true);
+  // the bottom row (Big screen / Play the game links) is in every game since the 1.7.0 pack re-vendor; what a no-flag game must not get is the next-number control in it
+  expect(d.getElementById("zf-bottomrow") !== null && d.getElementById("zf-bottomrow")!.querySelector("button") === null).toBe(true);
+  expect(win.document.getElementById("zf-reh") !== null).toBe(true); // while Tambola, which has them, does
 });
