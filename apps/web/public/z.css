@@ -279,9 +279,9 @@ body:has(#go) #ct-notify{display:none}
 /* small phones: the ball, the countdown and the first row of the ticket must be seen together without scrolling */
 @media (max-width:420px),(max-height:760px){.zring{width:72px;height:72px}.zring b{width:56px;height:56px;font-size:30px}.zcount{margin:2px 0 0;gap:2px}.zcount span{font-size:12px}.zapp .zbig{zoom:.78}}
 
-/* present check-in */
+/* present check-in (the ID box stays cream in every look, so its words carry their own dark colours: the Retro and Modern looks make the page text pale) */
 .zck h2{margin:4px 0 8px}.zckids{display:grid;grid-template-columns:1fr;gap:4px;margin:6px 0 10px;padding:8px 10px;border-radius:10px;background:#F4EFE3}
-.zckids div{display:flex;justify-content:space-between;gap:10px;font-size:13px}.zckids span{color:#6b5b57}.zckids b{font-family:ui-monospace,Consolas,monospace;word-break:break-all;text-align:right}
+.zckids div{display:flex;justify-content:space-between;gap:10px;font-size:13px}.zckids span{color:#6b5b57}.zckids b{color:#2E0812;font-family:ui-monospace,Consolas,monospace;word-break:break-all;text-align:right}
 .zckrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:10px 0 2px}.zckrow label{flex:1 0 100%;font-weight:700;font-size:14px}.zckrow input{flex:1 1 150px;min-width:0}.zckrow .zmini{flex:0 0 auto}
 .zchk{display:flex;align-items:center;gap:10px;margin:6px 0 4px;font-size:15px}.zchk{min-height:44px;min-width:44px}.zchk input{width:22px;height:22px;margin:0 11px}
 .zckinv{margin:12px 0;padding:8px 10px;border-radius:10px;background:#EEF2F9;font-size:14px}
