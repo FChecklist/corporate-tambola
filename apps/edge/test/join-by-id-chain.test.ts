@@ -28,4 +28,20 @@ describe("join by ID: the approval chain", () => {
     expect(raw.prepare("SELECT COUNT(*) AS c FROM person WHERE eid='CHN-1'").get()).toEqual({ c: 0 });
     expect(raw.prepare("SELECT COUNT(*) AS c FROM waiting WHERE eid='CHN-1'").get()).toEqual({ c: 0 });
   });
+  test("D1: an ID game never suggests a mobile number: the waiting answer is the soft 'with the Organizer' sentence; a mobile-number game keeps its own words", async () => {
+    const st = await j(await handle(new Request("http://x/api/start", { method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": "7.7.9.2" }, body: JSON.stringify({ email: "boss@acme.com" }) }), env, T)); const master = st.token as string;
+    await call("POST", "/api/z", { id: "CHN-ID", startRound: roundAt(T) + 1200, callSeconds: 6, cap: 100, verify: "id", whoCanJoin: "list" }, master);
+    await call("POST", "/api/z/CHN-ID/publish", { email: "demo1@demo-test.invalid", phone: "98765 43210" }, master);
+    const r = await call("POST", "/api/z/CHN-ID/join", { empId: "E9002", name: "Ravi · Delhi", device: "02" + "b".repeat(30) });
+    expect(r.status).toBe(403); const b = await j(r);
+    expect(b).toMatchObject({ code: "waiting", waiting: true, error: "Your request is with the Organizer. You can come in as soon as they say yes." });
+    expect(b.error).not.toMatch(/mobile|number|by invitation/i); // "This game is by invitation" is what the page's guide answers with "ask them to add your mobile number"
+    // the same question again (a reload) gets the same calm answer
+    expect((await j(await call("POST", "/api/z/CHN-ID/join", { empId: "E9002", name: "Ravi · Delhi", device: "02" + "b".repeat(30) }))).error).toBe("Your request is with the Organizer. You can come in as soon as they say yes.");
+    // a game that asks for mobile numbers keeps its own words
+    await call("POST", "/api/z", { id: "CHN-MB", startRound: roundAt(T) + 1200, callSeconds: 6, cap: 100, whoCanJoin: "list" }, master);
+    await call("POST", "/api/z/CHN-MB/publish", { email: "demo1@demo-test.invalid", phone: "98765 43210" }, master);
+    const m = await j(await call("POST", "/api/z/CHN-MB/join", { phone: "9822233333", name: "Ravi", device: "03" + "b".repeat(30) }));
+    expect(m.error).toBe("This game is by invitation. Your request is with the organizer. You can come in as soon as they say yes.");
+  });
 });

@@ -1863,10 +1863,11 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if ("full" in w) return json({ error: "Many people are waiting for an answer right now. Please try again a little later.", code: "waiting-full" }, 429);
       if (w.status === "declined") return json({ error: "This game could not add you. Please talk to whoever invited you.", code: "declined", declined: true, wid: w.id }, 403);
       const who = await waitingWho({ env, e, eid: eid! }, overlimit ? "o" : target);
-      const msg = `Your request is with ${who}. You can come in as soon as they say yes.`;
+      const idGame = vf.mode === "id"; // an ID game asks for no mobile number: its waiting words must not suggest one (D1, 3 Nov 2026)
+      const msg = `Your request is with ${idGame && who === "the organizer" ? "the Organizer" : who}. You can come in as soon as they say yes.`;
       return overlimit
         ? json({ error: `This invitation has already been used by ${limit} people, which is the most one person can invite. ${msg}`, code: "invite-full", waiting: true, wid: w.id, with: who }, 409)
-        : json({ error: `This game is by invitation. ${msg}`, code: "waiting", waiting: true, wid: w.id, with: who }, 403);
+        : json({ error: idGame ? msg : `This game is by invitation. ${msg}`, code: "waiting", waiting: true, wid: w.id, with: who }, 403); // "This game is by invitation" is what the guide answers with "ask them to add your mobile number"
     };
     let inviter: string | null = null, role: string | null = null, guardId: string | null = null, guardLimit: number | null = null, pii: string;
     if (pr) { inviter = pr.inviter; role = pr.role; const pp = await openPii(env, pr.pii); digits = pp?.phone || digits; const addName = !!(lateName && pp && !pp.name), addPhone = !!(extraDigits && pp && !pp.phone); pii = addName || addPhone ? await sealPii(env, { phone: addPhone ? extraDigits! : pp!.phone, name: addName ? lateName : pp!.name, ...(pp!.empId ? { empId: pp!.empId } : {}) }) : pr.pii; }
