@@ -50,7 +50,8 @@ describe("the document pages", () => {
     for (const f of ["index.html", "legal.html"]) for (const l of LINKS) expect(rd(f)).toContain(`href="${l}"`);
     expect(rd("partner.html")).toContain('href="/partner-terms.html"');
     const b = readFileSync(new URL("../../../pages/build.mjs", import.meta.url), "utf8");
-    for (const n of ["terms", "legal-position", "dpa", "subprocessors", "partner-terms", "organizer-guide"]) { expect(b).toContain(`"${n}.html"`); expect(b).toContain(`["/${n}", PLAINCSP`); if (!["legal-position", "dpa", "subprocessors"].includes(n)) expect(rd("sitemap.xml")).toContain(`/${n}.html`); // the three that only point to the one document are not listed }
+    // the three pages that only point to the one document (legal-position, dpa, subprocessors) are not listed in the sitemap
+    for (const n of ["terms", "legal-position", "dpa", "subprocessors", "partner-terms", "organizer-guide"]) { expect(b).toContain(`"${n}.html"`); expect(b).toContain(`["/${n}", PLAINCSP`); if (!["legal-position", "dpa", "subprocessors"].includes(n)) expect(rd("sitemap.xml")).toContain(`/${n}.html`); }
     expect(b).toContain('"consent.js"');
   });
   test("the software-only line is on the key pages", () => {
