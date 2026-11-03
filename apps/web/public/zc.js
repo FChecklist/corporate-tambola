@@ -1074,9 +1074,10 @@
       <label class="zc-check"><input type="checkbox" data-given="${i}" ${p.given ? "checked" : ""}> Prize given${p.given ? " " + esc(dmy(p.givenMs)) + (p.givenBy ? " by " + esc(p.givenBy) : "") : ""}</label>${p.canOverride === true ? ` <button type="button" class="zc-mini" data-ovopen="${i}">Change winner</button>` : ""}${p.canOverride === true && S.ovOpen === i ? `<div class="zc-chips zc-gap" role="group" aria-label="Choose the winner" data-ovlist="${i}">${(Array.isArray(p.claimants) ? p.claimants : []).map((c, j) => `<button type="button" class="zc-chip" data-ov="${i}" data-ovj="${j}">${esc(c.label || ("Ticket " + c.seat))}</button>`).join("")}<button type="button" class="zc-chip" data-ov="${i}" data-ovj="-1">Nobody</button></div>` : ""}</div>`).join("");
     return `<div class="zc-block"><h3>Prizes handed over</h3>${rows || small("No winner is confirmed yet.")}${rows ? small("This is the result the software worked out. You have the final say: you can change who gets a prize.", 'id="prizefinal"') : ""}${small("After the game each winner confirms their name and mobile number on their own phone. Anything they change is shown here together with what they joined with. Tick \"Prize given\" when you hand the prize over: the date is kept. The winners record and your details as Organizer and Host are kept for 365 days. Co-host details are auto-deleted with the guests.")}</div>`;
   }
+  function peopleInGame() { return (S.people || []).filter((p) => !p.removed).length; } // a person removed after the start keeps a seat in the list (the winners stay the same everywhere) but is not one of the people in the game
   function statsBlock() {
     if (!S.started || S.draft) return "";
-    const ps = S.people, late = ps.filter((p) => p.jr > 0).length, viaInv = ps.filter((p) => p.inv).length, roles = ps.filter((p) => p.role).length;
+    const ps = S.people.filter((p) => !p.removed), late = ps.filter((p) => p.jr > 0).length, viaInv = ps.filter((p) => p.inv).length, roles = ps.filter((p) => p.role).length;
     const byCat = {}; for (const p of ps) if (p.inv && p.cat) byCat[p.cat] = (byCat[p.cat] || 0) + 1;
     const label = (id) => ((ZG.INVITE_CATEGORIES || []).find((k) => k.id === id) || { label: id }).label;
     const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<div class="zc-rowl"><span>${esc(label(k))}</span><b>${n}</b></div>`).join("");
@@ -1377,7 +1378,7 @@
       if (S.locked && !S.draft) h += payDueCard();
       if ((S.reqs || []).length) h += `<div class="zc-alert"><h3>Your helper tool is asking</h3>${S.reqs.map((r) => rowl(esc(r.action) + (r.note ? " · " + esc(r.note) : ""))).join("")}<div class="zc-chips"><button type="button" class="zc-btn zc-btn-s${S.reqs[0].action === "erase" ? " zc-btn-bad" : ""}" id="reqok">${S.reqs[0].action === "erase" ? "Confirm: delete all participant data" : "Approve (" + esc(S.reqs[0].action) + ")"}</button><button type="button" class="zc-btn zc-btn-s zc-btn-alt" id="reqno">Dismiss</button></div></div>`;
       if (S.waitN > 0 && S.open !== 6) h += `<div class="zc-alert" id="waitbanner"><h3>${S.waitN === 1 ? "1 person is waiting to come in" : S.waitN + " people are waiting to come in"}</h3>${small("They opened your link but are not on your list. They wait until you let them in.")}<div class="zc-chips"><button type="button" class="zc-btn zc-btn-s" data-open="6">Open the waiting list</button></div></div>`;
-      if (!S.draft && S.cfg) h += `<div class="zc-live" id="zclive"><b>${S.people.length}</b> ${S.people.length === 1 ? "person" : "people"} · numbers called <b>${S.log.length} / 90</b>${S.cfg.rounds > 1 ? ` · round ${S.round} of ${S.cfg.rounds}` : ""}</div>`;
+      if (!S.draft && S.cfg) h += `<div class="zc-live" id="zclive"><b>${peopleInGame()}</b> ${peopleInGame() === 1 ? "person" : "people"} · numbers called <b>${S.log.length} / 90</b>${S.cfg.rounds > 1 ? ` · round ${S.round} of ${S.cfg.rounds}` : ""}</div>`;
     }
     return h;
   }

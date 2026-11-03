@@ -1,6 +1,6 @@
 // Phase 2: people, links and joining (docs/ROLES_AND_CONSOLE_SPEC_3.md, apps/edge/src/people.ts).
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { type Env } from "../src/worker";
+import { type Env, GAME_FULL_MSG } from "../src/worker";
 import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { cleanPhone, parseFrom, fromCodeOf, COHOST_FROM, HOST_FROM, ORG_FROM, phoneHashOf } from "../src/people";
@@ -441,6 +441,30 @@ describe("removing people", () => {
     const prizes = (await j(await call("GET", "/api/z/PPL-1/prizes", undefined, t.master, DURING))).prizes;
     expect(prizes[0]).toMatchObject({ notGiven: "removed", given: false });
     expect((await call("POST", "/api/z/PPL-1/prizegiven", { round: 1, pattern: "early5", ordinal: 1, seat: 1, given: true }, t.master, DURING)).status).toBe(409);
+  });
+  test("D4: a person removed after the start frees their place: someone new can join in it, the size is never passed, and the Organizer's board counts the same people", async () => {
+    const t = await setup({ cap: 3 });
+    raw.prepare("UPDATE engagement SET pack=100 WHERE id='PPL-1'").run(); // a paid game (an unpaid one seats nobody new once it is due: 403 locked)
+    const SOON = roundMs(START) + 2 * 60_000; // two minutes into the game
+    const p = (await j(await add(t.master, [{ name: "Asha", phone: mob(1) }]))).people[0];
+    expect((await join("PPL-1", { token: tokenOf(p.link), device: dev(1) })).status).toBe(200);
+    expect((await joinAs("PPL-1", 2)).status).toBe(200); expect((await joinAs("PPL-1", 3)).status).toBe(200);
+    const full = await joinAs("PPL-1", 4, {}, SOON); expect(full.status).toBe(409); expect((await j(full)).error).toBe(GAME_FULL_MSG);
+    expect((await call("POST", `/api/z/PPL-1/people/${p.id}/remove`, {}, t.master, SOON)).status).toBe(200);
+    expect(rowsOf("SELECT blocked FROM seat WHERE seq=1")[0].blocked).toBe(1); // the seat stays in the public list (identical winners on every phone)
+    // ... but it no longer holds a place: the next person gets in, the one after is told the game is full
+    const fresh = await joinAs("PPL-1", 4, {}, SOON + 1000); expect(fresh.status).toBe(200);
+    const over = await joinAs("PPL-1", 5, {}, SOON + 2000); expect(over.status).toBe(409); expect((await j(over)).error).toBe(GAME_FULL_MSG);
+    expect(rowsOf("SELECT COUNT(*) c FROM seat WHERE blocked IS NOT 1")[0].c).toBe(3); // never more than the size
+    expect((await joinAs("PPL-1", 1, {}, SOON + 3000)).status).toBe(403); // the removed person still cannot come back
+    expect((await add(t.master, [{ name: "Late", phone: mob(6) }], "PPL-1")).status).toBe(409); // the lists keep the size too
+    // the Organizer's board: "Checked in X of 3" and "3 people", the removed seat flagged and not counted
+    raw.prepare("INSERT INTO kv(k,v) VALUES('present/PPL-1/1','{}'),('present/PPL-1/2','{}')").run();
+    const ck = await j(await call("GET", "/api/z/PPL-1/checkins", undefined, t.master, SOON + 4000));
+    expect(ck).toMatchObject({ total: 3, present: 1, seats: [2] });
+    const pl = await j(await call("GET", "/api/z/PPL-1/participants", undefined, t.master, SOON + 4000));
+    expect(pl).toMatchObject({ total: 4, inGame: 3 }); // total = every row (paging); the console works winners out from all seats, as the phones do
+    expect(pl.participants.filter((x: any) => x.removed).map((x: any) => x.pid)).toEqual([rowsOf("SELECT pid FROM seat WHERE seq=1")[0].pid]);
   });
 });
 

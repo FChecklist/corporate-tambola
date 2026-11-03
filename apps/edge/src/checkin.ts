@@ -114,8 +114,11 @@ export async function checkinRoute(c: Ctx): Promise<Response> {
 /** The organizer's view: how many are present now, and which ticket numbers. */
 export async function presenceRoute(env: Env, eid: string, json: Ctx["json"]): Promise<Response> {
   const rows = (await env.DB.prepare("SELECT k FROM kv WHERE k >= ? AND k < ? ORDER BY k LIMIT 100000").bind(`present/${eid}/`, prefixEnd(`present/${eid}/`)).all<{ k: string }>()).results ?? [];
-  const total = (await env.DB.prepare("SELECT COUNT(*) AS c FROM seat WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
-  return json({ present: rows.length, total, seats: rows.map((r) => Number(r.k.split("/")[2])) });
+  // a person removed after the start keeps a (blocked) seat in the public list, but no longer counts as one of the people in the game (D4): neither in "of N" nor as checked in
+  const total = (await env.DB.prepare("SELECT COUNT(*) AS c FROM seat WHERE eid=? AND blocked IS NOT 1").bind(eid).first<{ c: number }>())?.c ?? 0;
+  const gone = new Set(((await env.DB.prepare("SELECT seq FROM seat WHERE eid=? AND blocked=1").bind(eid).all<{ seq: number }>()).results ?? []).map((r) => Number(r.seq)));
+  const seats = rows.map((r) => Number(r.k.split("/")[2])).filter((s) => !gone.has(s));
+  return json({ present: seats.length, total, seats });
 }
 
 /** Called when winners are recorded: the winners' check-in time and ids are copied to the record that is kept 365 days (everyone else's check-in data goes within 24 hours). */

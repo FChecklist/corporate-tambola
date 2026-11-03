@@ -142,6 +142,8 @@ const CLAIMS_PAGE = 500;
 const brandOut = (c: EngagementCfg, withLogo: boolean) => (c.brand ? { brand: withLogo ? c.brand : { name: c.brand.name, color: c.brand.color, ...(c.brand.logo ? { hasLogo: true } : {}) } } : {});
 /** What a player is told when the last place is taken (TA07: "game", and who to tell). */
 export const GAME_FULL_MSG = "This game is full. Please tell your organizer so they can make room.";
+/** The places a game has used: every seat except the ones removed after the start (D4, 3 Nov 2026). A person removed (or who left) once the game has begun keeps their seat row, marked blocked, so the public seat list and every phone's winners stay identical; that seat no longer takes a place, so someone new can join in it. (A seat and its participant row are always written and deleted together, so this is the old participant count less the removed seats, read from one table: no more rows read than before.) One `?` = the game id. */
+export const SEATED_SQL = "(SELECT COUNT(*) FROM seat s0 WHERE s0.eid=? AND s0.blocked IS NOT 1)";
 /** G: when the game really ended: the phones' confirmed end, or the scheduled end RECOMPUTED now from the current schedule (pauses, breaks, Host presses) and only once it has passed, so it is never a time in the future and is never a stale stored value. A cancelled game has none. Public payload: one number, no names or amounts. */
 const endedAtOf = async (env: Env, e: any, now: number): Promise<{ endedAtMs?: number }> => { try { if (e.cancelled_ms || e.unplayed_ms) return {}; /* a game that never ran has no end */ const l = await env.DB.prepare("SELECT end_ms, end_src FROM life WHERE eid=?").bind(e.id).first<{ end_ms: number | null; end_src: string | null }>(); if (l && l.end_src === "phones" && Number(l.end_ms) > 0) return { endedAtMs: Number(l.end_ms) }; if (await neverStarted(env, e)) return {}; const stopAt = await organizerStopMs(env, e); if (stopAt !== null && stopAt > 0 && now >= stopAt) return { endedAtMs: stopAt }; /* the organizer stopped it: that is the end, at once, not a minute later */ const bound = await endBoundMs(env, e); return Number.isFinite(bound) && bound > 0 && now >= bound ? { endedAtMs: bound } : {}; } catch { return {}; } };
 const pub = (e: any, withLogo = false) => { const c = cfgOf(e); return { open: !e.closed && approvalRulesOn(e), checkin: checkinRequired(e), tickets: c.tickets, ties: c.ties ?? "share", rewards: c.rewards, breaks: c.breaks, rounds: c.rounds, invites: c.invites, opening: c.opening, closing: c.closing, callMode: c.callMode ?? "auto", startMode: c.startMode ?? "auto", afterPrizes: c.keepCalling ? "keep" : "end", ...(c.name ? { name: c.name } : {}), ...(c.demo ? { demo: true } : {}), verify: c.verify ?? "number", employeesOnly: !!c.employeesOnly, idKind: c.idKind === "email" ? "email" : "emp", idClean: empCleanOn(e), ...brandOut(c, withLogo) }; };
@@ -1628,7 +1630,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   const addSeat = async (ph: string, pii: string, dev: string | null, jr: number, o: { extra?: D1Stmt[]; inv?: number | null; cat?: string | null; src: string; guardId?: string | null; guardLimit?: number | null; ownerId?: string | null; role?: string | null; joinedMs?: number }) => {
     const tail = (await pidOf(ph)).slice(0, 12);
     await env.DB.batch([
-      env.DB.prepare("INSERT OR IGNORE INTO seat(eid,seq,pid,ph,dev,jr,inv,cat,src,role) SELECT ?, s, s || 'x' || ?, ?, ?, ?, ?, ?, ?, ? FROM (SELECT COALESCE(MAX(seq),0)+1 AS s FROM seat WHERE eid=?) WHERE (SELECT COUNT(*) FROM participant WHERE eid=?) < ? AND (EXISTS (SELECT 1 FROM person WHERE eid=? AND ph=? AND status='invited') OR (SELECT COUNT(*) FROM participant WHERE eid=?) + (SELECT COUNT(*) FROM person p WHERE p.eid=? AND p.status='invited' AND NOT EXISTS (SELECT 1 FROM seat s2 WHERE s2.eid=p.eid AND s2.ph=p.ph)) < ?) AND (? IS NULL OR (SELECT COUNT(*) FROM person WHERE eid=? AND inviter=? AND status<>'removed' AND role IS NULL) < ?) AND (? IS NULL OR NOT EXISTS (SELECT 1 FROM seat WHERE eid=? AND dev=?))")
+      env.DB.prepare(`INSERT OR IGNORE INTO seat(eid,seq,pid,ph,dev,jr,inv,cat,src,role) SELECT ?, s, s || 'x' || ?, ?, ?, ?, ?, ?, ?, ? FROM (SELECT COALESCE(MAX(seq),0)+1 AS s FROM seat WHERE eid=?) WHERE ${SEATED_SQL} < ? AND (EXISTS (SELECT 1 FROM person WHERE eid=? AND ph=? AND status='invited') OR ${SEATED_SQL} + (SELECT COUNT(*) FROM person p WHERE p.eid=? AND p.status='invited' AND NOT EXISTS (SELECT 1 FROM seat s2 WHERE s2.eid=p.eid AND s2.ph=p.ph)) < ?) AND (? IS NULL OR (SELECT COUNT(*) FROM person WHERE eid=? AND inviter=? AND status<>'removed' AND role IS NULL) < ?) AND (? IS NULL OR NOT EXISTS (SELECT 1 FROM seat WHERE eid=? AND dev=?))`)
         .bind(eid, tail, ph, dev, jr, o.inv ?? null, o.cat ?? null, o.src, o.role ?? null, eid, eid, e.cap, eid, ph, eid, eid, e.cap, o.guardId ?? null, eid, o.guardId ?? null, o.guardLimit ?? 0, dev, eid, dev),
       env.DB.prepare("INSERT OR IGNORE INTO participant(eid,pid,phone_hash,name,pii,joined_ms) SELECT eid, pid, ph, NULL, ?, ? FROM seat WHERE eid=? AND ph=?").bind(pii, o.joinedMs ?? now, eid, ph),
       env.DB.prepare("UPDATE person SET status='joined', joined_ms=? WHERE eid=? AND ph=? AND status='invited' AND EXISTS (SELECT 1 FROM seat WHERE eid=? AND ph=?)").bind(now, eid, ph, eid, ph),
@@ -1708,7 +1710,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (a.kind === "cohost" && a.eid && a.eid !== e.id) return json({ error: `Your Co-host link is for the game ${a.eid}, not ${e.id}. Open the game ${a.eid}.` }, 403); // a Co-host belongs to one game
     const kid = a.kind === "cohost" ? (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 7) : null;
     const c = cfgOf(e), origin = (env as PayEnv).PUBLIC_ORIGIN ?? new URL(req.url).origin;
-    const joined = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
+    const joined = (await env.DB.prepare(`SELECT ${SEATED_SQL} AS c`).bind(eid).first<{ c: number }>())?.c ?? 0; // people removed after the start are not counted (D4)
     const savedLog = await readSavedGameLog(env, eid!); // a Co-host sees their own part only: how the game ended, in one line, and (below) how many people they brought
     const pk = unpaid ? PACKS.find((x) => x[0] >= e.cap)?.[0] ?? null : PACKS.some((x) => x[0] === e.pack) ? e.pack : null; // a demo (or free-launch) game is "paid" with its own size, which is no pack: no price to show
     const lockedC = unpaid && !isDraft && !cancelled && !e.unplayed_ms && roundMs(e.start_round) - LOCK_LEAD_MS <= now;
@@ -1835,7 +1837,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     }
     if (!dev) return json({ error: "Please refresh this page and try again." }, 400);
     if (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND dev=?").bind(eid, dev).first()) return json({ error: "This phone already holds a ticket in this game. One phone, one ticket. Others can join from their own phones, using your invitation link if the organizer allowed it.", code: "device-used" }, 409);
-    const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
+    const n = await env.DB.prepare(`SELECT ${SEATED_SQL} AS c`).bind(eid).first<{ c: number }>(); // a person removed after the start no longer holds a place (D4)
     if ((n?.c ?? 0) >= e.cap) return json({ error: GAME_FULL_MSG }, 409);
     // who owns the link this person came through? Only used when they are on no list.
     const inviteCfg = cfgOf(e).invites;
@@ -2120,9 +2122,11 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (action === "participants" && req.method === "GET") {
     if (!can(a, e)) return deny(a);
     const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || PAGE, 1), PAGE), offset = Math.max(Number(url.searchParams.get("offset")) || 0, 0);
-    const r = await env.DB.prepare("SELECT p.pid AS pid, COALESCE(s.jr,0) AS jr, s.role AS role, s.inv AS inv, s.cat AS cat FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? ORDER BY p.joined_ms, p.pid LIMIT ? OFFSET ?").bind(eid, limit, offset).all<any>(); // ids only: names are sealed and are opened one small batch at a time (see /names)
-    const total = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
-    return json({ participants: r.results ?? [], total, offset, limit, closed: !!e.closed, cap: e.cap, ...pub(e) });
+    const r = await env.DB.prepare("SELECT p.pid AS pid, COALESCE(s.jr,0) AS jr, s.role AS role, s.inv AS inv, s.cat AS cat, s.blocked AS removed FROM participant p LEFT JOIN seat s ON s.eid=p.eid AND s.pid=p.pid WHERE p.eid=? ORDER BY p.joined_ms, p.pid LIMIT ? OFFSET ?").bind(eid, limit, offset).all<any>(); // ids only: names are sealed and are opened one small batch at a time (see /names)
+    const total = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0; // every row, for paging: a removed seat stays in the list (the console works the winners out exactly as the phones do)
+    const inGame = (await env.DB.prepare(`SELECT ${SEATED_SQL} AS c`).bind(eid).first<{ c: number }>())?.c ?? 0; // the people who hold a place now (D4): a person removed after the start is flagged `removed` and not counted
+    const rows = (r.results ?? []).map((x: any) => { if (x.removed === 1) x.removed = true; else delete x.removed; return x; });
+    return json({ participants: rows, total, inGame, offset, limit, closed: !!e.closed, cap: e.cap, ...pub(e) });
   }
   if (action === "names" && req.method === "GET") { // the organizer's console asks for the names of a few people (winners); never a whole list in one request
     if (!can(a, e, true)) return deny(a);
@@ -2226,7 +2230,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (!b || !Array.isArray(b.people) || b.people.length < 1 || b.people.length > 100) return json({ error: "Send between 1 and 100 people at a time." }, 400);
     { const cm = consentMissing(b, "K6"); if (cm) return cm; } // K6: "I am allowed to use these names and numbers"
     await recordConsent(env.DB, { subject: e.org ?? "platform", kind: "K6", ref: eid!, now });
-    const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
+    const have = await env.DB.prepare(`SELECT ${SEATED_SQL} AS c`).bind(eid).first<{ c: number }>();
     let room = e.cap - (have?.c ?? 0);
     const todo: { ph: string; digits: string; name: string | null }[] = []; let invalid = 0;
     for (const x of b.people) { const ph = await phoneHash(x?.phone), digits = digitsOf(x?.phone); if (!ph || !digits) { invalid++; continue; } todo.push({ ph, digits, name: cleanName(x?.name) }); }
