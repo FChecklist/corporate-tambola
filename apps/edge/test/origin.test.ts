@@ -35,7 +35,7 @@ describe("the game's own address", () => {
     expect(h).not.toContain("Engage your company");
   });
   test("the legal pages and the organizer guide keep their hand-kept text (a regenerated copy from stale fragments once dropped clause 2.4 and a guide section in 1.6.4)", () => {
-    expect(read("terms.html")).toContain("2.4 Protection of the product"); expect(read("terms.html")).toContain("20 hours after its scheduled end");
+    expect(read("terms.html")).toContain("2.4 A failed, wrong or double payment"); expect(read("terms.html")).toContain("after it was meant to end");
     expect(read("organizer-guide.html")).toContain("How players win (real housie)"); expect(read("organizer-guide.html")).toContain("Someone to set it up for you");
   });
   test("the word 'private' is not used for our product anywhere a visitor reads (pages, legal pages, the games bar); owner rule, 1.6.7", () => {

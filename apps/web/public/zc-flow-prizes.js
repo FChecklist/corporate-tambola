@@ -129,7 +129,7 @@
     return { currency: c, rows };
   }
   function sheetNode(d) {
-    const t = el("table", { class: "zf-table", id: "zp-sheet-table" }, el("thead", {}, el("tr", {}, ["Prize", "Winner (ticket, ID, name, mobile)", "Each winner's share", "Organizer notes"].map((h) => el("th", { scope: "col", text: h })))));
+    const t = el("table", { class: "zf-table", id: "zp-sheet-table" }, el("thead", {}, el("tr", {}, ["Prize", "Winner (ticket, Employee ID, name, mobile)", "Each winner's share", "Organizer notes"].map((h) => el("th", { scope: "col", text: h })))));
     const tb = el("tbody");
     for (const r of d.rows) tb.append(el("tr", {}, el("td", { text: r.label }), el("td", { text: r.winners.length ? r.who.join("; ") : "Not won (stays with you)" }), el("td", { text: r.winners.length ? sym(d.currency) + " " + r.share.toLocaleString("en-IN") + (r.winners.length > 1 ? " each (shared by " + r.winners.length + ")" : "") : "–" }), el("td", { text: r.gift })));
     t.append(tb);

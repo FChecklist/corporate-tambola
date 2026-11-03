@@ -56,8 +56,8 @@ describe("TA23: the For IT section", () => {
     expect(t).toMatch(/Cloudflare/); expect(t).toMatch(/Asia-Pacific/); expect(t).toMatch(/global network/);
     expect(t).toMatch(/hello@corporatetambola\.com/); expect(t).toMatch(/Resend/);
     expect(t).toMatch(/breach[^.]*without undue delay/i);
-    expect(plain(read("apps/web/public/dpa.html"))).toMatch(/breach[^.]*without undue delay/i); // the data-processing terms say it first
-    expect(plain(read("apps/web/public/subprocessors.html"))).toMatch(/Asia-Pacific/);
+    expect(plain(read("apps/web/public/terms.html"))).toMatch(/incident[^.]*without delay/i); // the data-processing words are in the one document
+    expect(plain(read("apps/web/public/terms.html"))).toMatch(/Asia-Pacific/);
   });
   test("nothing is invented: no certificate, no breach hours, no tax or bank facts, no 'private', payee only as IT Services by Rajat Agarwal", () => {
     const t = plain(forIt!());

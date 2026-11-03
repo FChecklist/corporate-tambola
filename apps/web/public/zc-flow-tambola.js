@@ -97,7 +97,7 @@
   const RUN = { start: "auto", call: "auto", idKind: "emp", idTouched: false };
   const timeText = () => { if (!st.when) return "the time you set"; try { return new Intl.DateTimeFormat("en-GB", { timeZone: st.when.zone, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(st.when.ms)); } catch { return "the time you set"; } };
   const runSummary = (r, when) => "Your game: " + (r.start === "manual" ? "starts at " + when + " when you press Start." : "starts by itself at " + when + ".") + " " + (r.call === "host" ? "You call the numbers." : "The game calls the numbers.");
-  let idSaved = null; // the kind of ID the game really holds (from the server), so a refused change puts the radio back
+  let idSaved = null; // the kind of Employee or Email ID the game really holds (from the server), so a refused change puts the radio back
   const signInInto = (m) => { m.textContent = ""; m.append("Please sign in first. ", el("a", { href: "/zc.html", id: "zt-signin" }, "Open the organizer sign-in"), " and sign in with your e-mail, then come back to this step."); };
   const runMsg = (text, status) => { // a refused save is never silent: the server's plain message ONCE, then its guide card (the box is marked data-ctg-own so the guide's page scan does not turn it into a second card; it keeps role alert)
     let m = document.getElementById("zt-runmsg");
@@ -143,9 +143,9 @@
     const s5 = document.getElementById("zf-sec5");
     if (s5 && s5.classList.contains("open") && !document.getElementById("zt-runread")) { const h = s5.querySelector("h3") || s5.querySelector("h2"); (h || s5).after(el("p", { id: "zt-runread", class: "zf-small", text: runSummary(RUN, timeText()) })); }
     const how2 = document.getElementById("zf-how");
-    if (how2 && !document.getElementById("zt-idkind") && usesId === undefined && eid() && !usesIdAsked) { usesIdAsked = true; call("GET", `/api/z/${eid()}/summary`).then((j) => { usesId = !!j && !!j.verify && j.verify !== "mobile"; if (j && j.idKind) { idSaved = j.idKind; if (!RUN.idTouched) RUN.idKind = j.idKind; } patchSteps(); }).catch(() => { usesIdAsked = false; }); } // H: "Which ID?" only where an ID is asked at the door
+    if (how2 && !document.getElementById("zt-idkind") && usesId === undefined && eid() && !usesIdAsked) { usesIdAsked = true; call("GET", `/api/z/${eid()}/summary`).then((j) => { usesId = !!j && !!j.verify && j.verify !== "mobile"; if (j && j.idKind) { idSaved = j.idKind; if (!RUN.idTouched) RUN.idKind = j.idKind; } patchSteps(); }).catch(() => { usesIdAsked = false; }); } // H: "Which Employee or Email ID?" only where an ID is asked at the door
     if (how2 && usesId && !document.getElementById("zt-idkind")) {
-      const g = el("div", { class: "zt-idkind", id: "zt-idkind", role: "radiogroup", "aria-label": "Which ID?" }, el("h3", { text: "Which ID?" }), el("p", { class: "zf-small", text: "The ID your people type to join. An Email ID is read in lower case. Older games keep the way they always read an employee ID." }));
+      const g = el("div", { class: "zt-idkind", id: "zt-idkind", role: "radiogroup", "aria-label": "Which Employee or Email ID?" }, el("h3", { text: "Which Employee or Email ID?" }), el("p", { class: "zf-small", text: "The Employee or Email ID your people type to join. An Email ID is read in lower case. Older games keep the way they always read an employee ID." }));
       for (const [v, label] of [["emp", "Employee ID"], ["email", "Email ID"]]) g.append(el("label", { class: "zf-opt" }, el("input", { type: "radio", name: "zt-idkind", value: v, ...(RUN.idKind === v ? { checked: "" } : {}), onchange: () => { RUN.idKind = v; RUN.idTouched = true; savedRun(); } }), " " + label));
       how2.after(g);
     }

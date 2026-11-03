@@ -110,7 +110,7 @@ describe("robots, sitemap, social cards, offline page, 404, PWA", () => {
     expect(locs.length).toBeGreaterThan(8); expect(new Set(locs).size).toBe(locs.length);
     for (const l of locs) { expect(l.startsWith(BRAND.defaultOrigin + "/")).toBe(true); const path = l.slice(BRAND.defaultOrigin.length); expect(existsSync(join(PUB, path === "/" ? "index.html" : path.slice(1))), l).toBe(true); expect(everyoneRules, l).not.toContain(`Disallow: ${path}`); }
   });
-  test("the home page, pricing and legal pages are in the sitemap", () => { for (const p of ["/", "/pricing.html", "/terms.html", "/privacy.html", "/legal.html", "/contact.html"]) expect(locs, p).toContain(BRAND.defaultOrigin + p); });
+  test("the home page, pricing and the one legal document are in the sitemap", () => { for (const p of ["/", "/pricing.html", "/terms.html", "/contact.html"]) expect(locs, p).toContain(BRAND.defaultOrigin + p); });
   for (const f of ["index.html", "pricing.html", "about.html", "contact.html", "partner.html", "organizer-guide.html"]) {
     test(`${f}: a description under 175 characters, a canonical link on the real domain, and a share card with image, title and description`, () => {
       const h = read(f); const d = h.match(/<meta name="description" content="([^"]*)"/i)?.[1] ?? ""; expect(d.length).toBeGreaterThan(40); expect(d.length, f).toBeLessThanOrEqual(175);
@@ -136,7 +136,7 @@ describe("robots, sitemap, social cards, offline page, 404, PWA", () => {
 
 describe("the support and grievance path", () => {
   test("the contact page promises one thing about timing, and the privacy page names the data-request route and the 30-day outer limit", () => {
-    expect(textOf(read("contact.html"))).toMatch(/30 days/); const p = textOf(read("privacy.html")); expect(p).toMatch(/delete|erase/i);
+    expect(textOf(read("contact.html"))).toMatch(/30 days/); const p = textOf(read("terms.html")); expect(p).toMatch(/correction or deletion/i);
   });
   test("the player page links to the 'what do you hold about me / delete me' flow", () => { expect(read("z.js") + read("rights.js") + read("play.js")).toMatch(/datareq/); });
   test("the legal page names a grievance contact with an address", () => { const t = textOf(read("legal.html")); expect(t).toMatch(/grievance|complaint|contact/i); expect(read("legal.html")).toContain(BRAND.support); });
@@ -150,7 +150,7 @@ describe("the deletion times written for people match the clock in the code", ()
     const files = [...pages.map((f) => join(PUB, f)), ...scripts.map((f) => join(PUB, f)), ...["consent-text.json", "ai-facts.ts", "ai-functions.ts", "ai-link.ts", "mails.ts", "report-layout.ts"].map((f) => join(EDGE, f))];
     for (const f of files) expect(readFileSync(f, "utf8"), f).not.toMatch(/(?:22|23)[ -]hours?/i);
   });
-  test("the pages that give an exact time for a game that never started say 20 hours", () => {
-    for (const f of ["terms.html", "legal.html", "trust.html"]) expect(textOf(read(f)), f).toMatch(/20 hours after/);
+  test("the one document gives 24 hours for a game that never started, and the Trust facts keep their own 20-hour line", () => {
+    expect(textOf(read("terms.html"))).toMatch(/24 hours after it was meant to end/); expect(textOf(read("trust.html"))).toMatch(/20 hours after/);
   });
 });

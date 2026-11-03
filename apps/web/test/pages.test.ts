@@ -524,7 +524,7 @@ describe("phone page", () => {
     const p = await phone(o, "UI-PRIV"); await p.waitFor((x) => /Join the game/.test(x));
     quietPrivacy(p.win.document); expect(p.$("#go")).toBeTruthy(); expect(p.win.document.body.textContent).toContain("Players are 18 or older."); expect(p.win.document.querySelectorAll(".spriv").length).toBe(2);
     for (const f of ["z.css", "app.css"]) expect(readFileSync(new URL("../public/" + f, import.meta.url), "utf8")).toMatch(/.spriv{[^}]*font-size:12px[^}]*font-weight:400/);
-    expect(readFileSync(new URL("../public/legal.html", import.meta.url), "utf8")).toContain('id="privacy"');
+    expect(readFileSync(new URL("../public/terms.html", import.meta.url), "utf8")).toContain('id="privacy"');
   });
   test("UC-29 / UC-57 a guest joins a published engagement before payment and gets the waiting room: countdown, what can be won, how it works, sound check, calendar", async () => {
     const o = await organizer(); await make(o, "UI-PH1"); await o.api("PATCH", "/api/z/UI-PH1/settings", { rewards: [{ pattern: "full", ordinal: 1, text: "Voucher 5000" }, { pattern: "early5", ordinal: 1, text: "Gift hamper" }] }, o.aiKey); await publish(o, "UI-PH1");
@@ -1804,10 +1804,10 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     const near = new Date(T + 5.5 * 3600000 + 5 * 86400000); setField(p, "#f-dayo", near.toISOString().slice(0, 10)); p.click('[data-save="1"]'); await p.waitFor((x) => /This game has started, so its time cannot be changed\./.test(x));
   });
 
-  test("Terms: the guest-list clause replaces the removed tick-box, and the report, custody and retention lines are there", () => {
+  test("Terms: the one document carries the guest-list line, the report line and the retention lines", () => {
     const t = readFileSync(join(import.meta.dir, "../public/terms.html"), "utf8");
-    expect(t).toContain("11.4A"); expect(t).toMatch(/entitled to use those details for the Game and the people concerned have been told/); expect(t).toMatch(/not shown as a box: it is sent with each list/);
-    expect(t).toMatch(/Game report and custody/); expect(t).toMatch(/in the Organizer's custody/); expect(t).toMatch(/for 365 days\. After 365 days we delete all remaining data, except the invoice and tax records/);
+    expect(t).toMatch(/people listed by employee ID/); expect(t).toMatch(/The Organizer is responsible for that choice and for the prizes/);
+    expect(t).toMatch(/The game report is e-mailed to the Organizer and the Hosts within 3 hours after the game and is not stored/); expect(t).toMatch(/Details a winner confirms to receive a prize/); expect(t).toMatch(/365 days/);
   });
 
   test("a reload keeps employees-only, the employee-ID check and the tie rule: the form shows them and saving step 2 does not wipe them", async () => {

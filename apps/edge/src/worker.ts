@@ -2284,10 +2284,10 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     }
     const have = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
     const kindChanged = (vc.cfg.idKind === "email") !== (cfgNow.idKind === "email"), verifyChanged = (vc.cfg.verify ?? "mobile") !== (cfgNow.verify ?? "mobile");
-    if (kindChanged || verifyChanged) { // D: a changed kind of ID (or way of checking it) would orphan the stored hashes of everybody listed or joined
+    if (kindChanged || verifyChanged) { // D: a changed kind of Employee or Email ID (or way of checking it) would orphan the stored hashes of everybody listed or joined
       const listed = (await env.DB.prepare("SELECT COUNT(*) AS c FROM person WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 0;
       const idxRows = (await env.DB.prepare("SELECT COUNT(*) AS c FROM kv WHERE k LIKE ?").bind(`idx/${eid}/%`).first<{ c: number }>())?.c ?? 0, holdsId = ["id", "both"].includes(vc.cfg.verify ?? "mobile") && (have?.c ?? 0) + listed > 0; // in an ID-only game everybody holds an ID hash; in "either" and "mobile" games only the idx rows prove one. Only people who hold an ID hash are orphaned: a mobile-number game with people but no ID hash can still change
-      if (holdsId || idxRows > 0) return json({ error: kindChanged ? "You already have people listed. Start a new game to use a different kind of ID." : "You already have people listed. Start a new game to use a different way of asking for IDs.", code: "id-kind-locked" }, 409);
+      if (holdsId || idxRows > 0) return json({ error: kindChanged ? "You already have people listed. Start a new game to use a different kind of Employee or Email ID." : "You already have people listed. Start a new game to use a different way of asking for Employee IDs.", code: "id-kind-locked" }, 409);
     }
     if (vc.cfg.demo && next.cap > DEMO_CAP) return json({ error: DEMO_CAP_MSG, code: "demo-cap" }, 400); // the one size rule of a demo game, before and after publishing
     if (!a.plat && e.pack !== 0 && !vc.cfg.demo && next.cap > (e.pack ?? e.cap)) return json({ error: `Your pack allows up to ${e.pack ?? e.cap} people. For more people, make a new game like this one.` }, 402);

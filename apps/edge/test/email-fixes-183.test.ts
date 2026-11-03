@@ -80,11 +80,9 @@ describe("(a) the email race undo never erases a ticket that already exists", ()
 
 describe("(1) the pages name the optional Email ID", () => {
   test("privacy, DPA, terms and the Trust facts say: open game, optional, this game only, deleted with the rest within 24 hours", () => {
-    const p = rd("apps/web/public/privacy.html");
-    expect(p).toContain("In an open game you may also give an email ID: it is optional, used only for this game");
-    expect(p).toContain("name, mobile number, email ID (if given), ticket, phone code");
-    expect(rd("apps/web/public/dpa.html")).toContain("an optional email ID in an open game");
-    expect(rd("apps/web/public/terms.html")).toContain("mobile number, optional email ID, device identifier");
+    const p = rd("apps/web/public/privacy.html"); expect(p).toContain('href="/terms.html#privacy"'); // the privacy words are in the one document
+    expect(rd("apps/web/public/terms.html").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")).toContain("deleted within 24 hours after the game");
+    expect(rd("apps/web/public/dpa.html")).toContain('href="/terms.html#processors"');
     expect(rd("apps/edge/src/ai-facts.ts")).toContain("a guest in an open game may also give an optional email ID for that game, deleted with the rest within 24 hours");
     expect(rd("apps/web/public/trust.html")).toContain("optional email ID");
   });

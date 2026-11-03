@@ -18,7 +18,7 @@ export const EMP_ENGLISH = "Please use English letters and numbers only.";
 export const empCleanOn = (e: { created_ms?: number | null } | null | undefined): boolean => Number(e?.created_ms) >= EMP_CLEAN_FROM_MS;
 
 /** The plain sentence shown when an ID cannot be used after cleaning. */
-export const EMP_BAD_NEW = "An employee ID has letters and numbers only. The system ignores spaces, dashes and symbols, and the ID may be up to 30 characters once cleaned.";
+export const EMP_BAD_NEW = "An employee ID has letters and numbers only. The system ignores spaces, dashes and symbols, and the Employee ID may be up to 30 characters once cleaned.";
 
 /**
  * An employee ID as typed, by the rule of the game it is for. "" = nothing typed; null = not a usable ID.
@@ -33,7 +33,7 @@ export const looksLikeEmail = (raw: unknown): boolean => String(raw ?? "").norma
 export const EMP_LOOKS_LIKE_EMAIL = "This looks like an Email ID. This game asks for an employee ID: letters and numbers only.";
 /** The refusal sentence for an ID that cannot be used, by the rule of the game it is for. */
 export const empBadMessage = (raw: unknown, e: { created_ms?: number | null } | null | undefined, oldText: string): string => (!empCleanOn(e) ? oldText : looksLikeEmail(raw) ? EMP_LOOKS_LIKE_EMAIL : hasForeignChars(raw) ? EMP_ENGLISH : cleanEmpId(raw).length > EMP_MAX ? EMP_TOO_LONG : EMP_BAD_NEW);
-export const EMP_TOO_LONG = "This ID is too long. An employee ID may be up to 30 characters once cleaned.";
+export const EMP_TOO_LONG = "This Employee ID is too long. An employee ID may be up to 30 characters once cleaned.";
 
 export function normEmpFor(raw: unknown, e: { created_ms?: number | null } | null | undefined): string | null {
   if (!empCleanOn(e)) { const s = String(raw ?? "").replace(/\s+/g, "").toUpperCase(); if (!s) return ""; return /^[A-Z0-9][A-Z0-9._\-/]{0,29}$/.test(s) ? s : null; }

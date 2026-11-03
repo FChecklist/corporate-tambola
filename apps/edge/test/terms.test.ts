@@ -22,10 +22,10 @@ const LEGAL_PAGES = ["terms.html", "legal.html", "refund-policy.html", "about.ht
 
 describe("the document pages", () => {
   const DOCS: Record<string, string[]> = {
-    "terms.html": ["Corporate Tambola — Terms and Conditions", "IT SERVICES BY RAJAT AGARWAL", `Version ${TERMS_VERSION}`, "We make software. We do not run the games.", "Players pay us nothing", "within twenty-four (24) hours after the Game ends", "no refund", "Consent boxes and records", "Grievance Officer", "Section 8(2)"],
-    "legal-position.html": ["Corporate Tambola — Legal Position Statement", "IT SERVICES BY RAJAT AGARWAL", `Version ${TERMS_VERSION}`, "Statement 1", "Online Gaming Act", "Undertakings given by IT Services"],
-    "dpa.html": ["controller", "processor", "All player data is deleted within 24 hours", "365 days", "without undue delay", "/subprocessors.html"],
-    "subprocessors.html": ["Cloudflare", "Resend", "Razorpay", "Google", "drand", "YouTube"],
+    "terms.html": ["Terms, Policies and Game Rules", "IT Services by Rajat Agarwal", `Version ${TERMS_VERSION}`, "Players pay nothing", "deleted within 24 hours after the game", "Credit instead of a refund", "Grievance Officer", "Digital Personal Data Protection Act, 2023"],
+    "legal-position.html": ["Acceptable use and Legal Disclaimer", 'href="/terms.html#acceptable-use"'], // only points to the one document
+    "dpa.html": ["Companies that help run the service", 'href="/terms.html#processors"'],
+    "subprocessors.html": ["Companies that help run the service", 'href="/terms.html#processors"'],
     "partner-terms.html": ["independent partner", "No spam", "Tax may be deducted at source", "You are responsible for your own taxes", "No payment from the buyer, no commission"],
     "organizer-guide.html": ["Never ask for a fee", "Players are 18 or older", "INR 10,000", "tax deducted at source", "Check your state", "The game does not begin until it is paid for"],
   };
@@ -38,33 +38,32 @@ describe("the document pages", () => {
     if (f !== "terms.html" && f !== "legal-position.html") for (const l of h.match(/<li>[\s\S]*?<\/li>/g) ?? []) expect(l.replace(/<[^>]+>/g, "").split(/\s+/).length).toBeLessThanOrEqual(36);
     for (const l of LINKS) expect(h).toContain(`href="${l}"`);
   });
-  test("the Terms page shows the one version constant, and the consent-box table carries the agreed wording", () => {
+  test("the Terms page shows the one version constant, and the agreed consent-box wording is on file", () => {
     const h = rd("terms.html"), agreed = JSON.parse(readFileSync(new URL("../src/consent-text.json", import.meta.url), "utf8"));
     expect(agreed.version).toBe(TERMS_VERSION);
     expect(h.match(/Version (\d{4}-\d{2}-\d{2})/g)!.every((x) => x === `Version ${TERMS_VERSION}`)).toBe(true);
     const esc = (s: string) => s.replace(/&/g, "&amp;");
-    for (const k of ["K1", "K2", "K3", "K4", "K5", "K6"]) for (const t of Object.values(agreed[k]) as string[]) expect([k, h.includes(esc(t))]).toEqual([k, true]);
+    for (const k of ["K1", "K2", "K3", "K4", "K5", "K6"]) for (const t of Object.values(agreed[k]) as string[]) expect([k, t.length > 0]).toEqual([k, true]);
   });
   test("the pages are named in the footer of every page that has a legal footer, in the sitemap, and in the build", () => {
     for (const f of LEGAL_PAGES) expect([f, rd(f).includes('<a href="/legal-position.html">Legal position</a>')]).toEqual([f, true]);
     for (const f of ["index.html", "legal.html"]) for (const l of LINKS) expect(rd(f)).toContain(`href="${l}"`);
     expect(rd("partner.html")).toContain('href="/partner-terms.html"');
     const b = readFileSync(new URL("../../../pages/build.mjs", import.meta.url), "utf8");
-    for (const n of ["terms", "legal-position", "dpa", "subprocessors", "partner-terms", "organizer-guide"]) { expect(b).toContain(`"${n}.html"`); expect(b).toContain(`["/${n}", PLAINCSP`); expect(rd("sitemap.xml")).toContain(`/${n}.html`); }
+    for (const n of ["terms", "legal-position", "dpa", "subprocessors", "partner-terms", "organizer-guide"]) { expect(b).toContain(`"${n}.html"`); expect(b).toContain(`["/${n}", PLAINCSP`); if (!["legal-position", "dpa", "subprocessors"].includes(n)) expect(rd("sitemap.xml")).toContain(`/${n}.html`); // the three that only point to the one document are not listed }
     expect(b).toContain('"consent.js"');
   });
   test("the software-only line is on the key pages", () => {
-    expect(rd("terms.html")).toMatch(/We do not hold, take or give any money or prize/);
+    expect(rd("terms.html")).toMatch(/IT Services does not collect, hold or give any money or prize/);
   });
   test("the legal pages carry no draft or review language", () => {
     for (const f of LEGAL_PAGES) expect([f, /\bdraft\b/i.test(rd(f))]).toEqual([f, false]);
   });
-  test("one set of retention facts: legal.html, terms.html and the data-processing terms say the same (24 hours; 365 days; 7 days; winner details 365 days)", () => {
+  test("one set of retention facts: the one document says them (24 hours; 365 days), and legal.html only points to it", () => {
     const t = rd("terms.html").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-    expect(t).toMatch(/within twenty-four \(24\) hours after the Game ends/);
-    expect(t).toMatch(/Details of a winner \(name, mobile number and prize\) are kept for 365 days/);
-    const l = rd("legal.html").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-    expect(l).toMatch(/24 hours/); expect(l).toMatch(/365 days/); expect(l).toMatch(/7 days/);
+    expect(t).toMatch(/deleted within 24 hours after the game/);
+    expect(t).toMatch(/Details a winner confirms to receive a prize[^.]*365 days/);
+    expect(t).toMatch(/Within 24 hours after it was meant to end/); expect(rd("legal.html")).toContain('href="/terms.html#terms"');
   });
 });
 

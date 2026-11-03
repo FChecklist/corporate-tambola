@@ -34,7 +34,7 @@
     if (vals.filter(function (v) { return /^[\p{L}][\p{L} .'-]*$/u.test(v) && !/\d/.test(v); }).length * 5 >= n * 4) return { kind: "name", score: -4 };
     return { kind: "id", score: 2 + (vals.filter(function (v) { return /[A-Za-z]/.test(v) && /\d/.test(v); }).length * 2 >= n ? 2 : 0) };
   }
-  var LABEL = { serial: "Serial", name: "Name", id: "ID", email: "E-mail", mobile: "Mobile", empty: "Empty" };
+  var LABEL = { serial: "Serial", name: "Name", id: "Employee ID", email: "E-mail", mobile: "Mobile", empty: "Empty" };
   /** parse(text, forcedCol): forcedCol (1-based) is the person's pick in the dropdown. */
   function parse(text, forcedCol) {
     var rows = splitRows(text), width = rows.reduce(function (m, r) { return Math.max(m, r.length); }, 0), blank = 0, data = [];
@@ -77,9 +77,9 @@
     return { columns: width, labels: labels, header: !!head, idCol: idCol >= 0 ? idCol + 1 : 0, ask: ask || idCol < 0, ignored: ignored, ids: ids, ready: ids.length, blank: blank + blankCells, repeated: repeated, invalid: invalid, preview: ids.slice(0, 3) };
   }
   function describe(r) {
-    var line = "Found " + r.columns + " column" + (r.columns === 1 ? "" : "s") + ": " + r.labels.join(", ") + (r.idCol ? ". Using column " + r.idCol + " as the ID." : ". Please choose the ID column.");
-    var note = r.ignored.length ? "A column with e-mail addresses (or mobile numbers) was found. It is ignored and not saved. Only IDs are needed." : "";
-    var counts = r.ready + " ID" + (r.ready === 1 ? "" : "s") + " ready, " + r.blank + " blank row" + (r.blank === 1 ? "" : "s") + " skipped, " + r.repeated + " repeated ID" + (r.repeated === 1 ? "" : "s") + " removed" + (r.invalid.length ? ", " + r.invalid.length + " not usable" : "") + ".";
+    var line = "Found " + r.columns + " column" + (r.columns === 1 ? "" : "s") + ": " + r.labels.join(", ") + (r.idCol ? ". Using column " + r.idCol + " as the Employee ID." : ". Please choose the Employee ID column.");
+    var note = r.ignored.length ? "A column with e-mail addresses (or mobile numbers) was found. It is ignored and not saved. Only Employee IDs are needed." : "";
+    var counts = r.ready + " Employee ID" + (r.ready === 1 ? "" : "s") + " ready, " + r.blank + " blank row" + (r.blank === 1 ? "" : "s") + " skipped, " + r.repeated + " repeated Employee ID" + (r.repeated === 1 ? "" : "s") + " removed" + (r.invalid.length ? ", " + r.invalid.length + " not usable" : "") + ".";
     return { line: line, note: note, counts: counts, preview: r.preview.join(", ") };
   }
   var api = { parse: parse, describe: describe, clean: clean, HINT: "Paste only the Employee, Associate, Vendor or Member IDs from your Excel sheet. Please do not paste e-mail addresses, names, mobile numbers or any other details." };
