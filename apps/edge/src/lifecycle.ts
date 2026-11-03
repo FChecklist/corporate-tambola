@@ -93,6 +93,57 @@ export async function endBoundMs(env: Env, e: any): Promise<number> {
   return roundMs(s.st?.stopRound ?? s.start) + 60_000;
 }
 
+/**
+ * When every prize line of the last round has its accepted result (the `settled` list every phone reads as /results), the phones end the game where the claim window of the
+ * last prize closed: the next number, or one call gap after the 90th (phone-runtime.ts `byPrizes` / `resultFinal`). Null when that is not (yet) so, when the organizer chose to
+ * keep calling after the prizes, or when a brand break of round 1 is still to come (the phones play it first). Mirrors phone-runtime.ts `prizesAwarded` and `breaksPlayed`.
+ */
+async function prizesEndMs(env: Env, e: any, s: Awaited<ReturnType<typeof schedule>>): Promise<number | null> {
+  const cfg = s.cfg;
+  if (cfg.keepCalling) return null;
+  const all = keysInPlay(cfg.rewards), others = all.filter((k) => k !== "unlucky"), keys = others.length ? others : all; // Unlucky never keeps a game running
+  if (!keys.length) return null;
+  const round = cfg.rounds;
+  const rows = (await env.DB.prepare("SELECT pattern, ordinal, idx FROM settled WHERE eid=? AND round=?").bind(e.id, round).all<{ pattern: string; ordinal: number; idx: number }>()).results ?? [];
+  let lastIdx = -1;
+  for (const k of keys) for (const line of linesFor(cfg.rewards, k)) {
+    const r = rows.find((x) => x.pattern === k && Number(x.ordinal) === line.ordinal);
+    if (!r || !Number.isInteger(Number(r.idx))) return null; // a prize line still open: the game goes on
+    lastIdx = Math.max(lastIdx, Number(r.idx));
+  }
+  if (lastIdx < 0 || lastIdx > 89) return null;
+  const at = (k: number) => { const r = callRoundR(s.st, s.start, s.stride, cfg.breaks, round, k); return r === null || !Number.isFinite(r) ? null : r; };
+  let endR: number | null;
+  if (lastIdx < 89) endR = at(lastIdx + 1); // the next number closed the claim window (in Host mode: once the Host pressed for it)
+  else { const here = at(89); endR = here === null ? null : here + Math.ceil(Math.max(9, e.call_seconds) / 3); }
+  if (endR === null) return null;
+  if (round === 1) for (const b of cfg.breaks) { // a break is played once the number after it has come
+    if (!(b.after < 90)) return null;
+    const nb = at(b.after);
+    if (nb === null) return null;
+    endR = Math.max(endR, nb);
+  }
+  return roundMs(endR);
+}
+
+/**
+ * When the game REALLY ended, or null while it is genuinely still being played (D5, 3 Nov 2026). `endBoundMs` is only the end of a game nobody ends sooner (the 90th number plus
+ * a minute; in Host mode the latest press plus an hour), so a game that ended early must not be held to it. Ended, by the earliest of: the phones confirmed it; the organizer's
+ * Stop took effect; every prize was awarded (see prizesEndMs); the scheduled end passed. A manual-start game nobody started keeps the old rule (it closes a day after its time).
+ */
+export async function realEndMs(env: Env, e: any, now: number): Promise<number | null> {
+  const l = await env.DB.prepare("SELECT end_ms, end_src FROM life WHERE eid=?").bind(e.id).first<{ end_ms: number | null; end_src: string | null }>();
+  if (l && l.end_src === "phones" && Number(l.end_ms) > 0 && Number(l.end_ms) <= now) return Number(l.end_ms);
+  const s = await schedule(env, e);
+  if (!(s.cfg.startMode === "manual" && (s.st?.goRound ?? null) === null)) {
+    if (s.st && s.st.stopRound != null && now >= roundMs(s.st.stopRound)) return roundMs(s.st.stopRound);
+    const byPrizes = await prizesEndMs(env, e, s);
+    if (byPrizes !== null && now >= byPrizes) return byPrizes;
+  }
+  const bound = await endBoundMs(env, e);
+  return now >= bound ? bound : null;
+}
+
 /** When this game's guest data will be (or was) erased: 20 hours after it ended, after it was cancelled, or, for a game nobody paid for, after it was meant to end. Follows the newest schedule. */
 export async function erasureOf(env: Env, e: any): Promise<number> {
   if (e.cancelled_ms) return personalDeleteAt(e.cancelled_ms);
