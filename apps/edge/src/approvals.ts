@@ -40,7 +40,7 @@ export const EMAIL_MISS_PER_10MIN = 5;
 
 /** 1.9.0 PRIZE PLANNER and PRIZES PER TICKET: games created at or after this instant may use them; every game made before keeps the old prize behaviour exactly.
  *  DEPLOY-TIME CONSTANT: NOT filled. The release session sets it to the exact deploy instant (ms) right before deploy. Until then it is 2026-11-02 00:00 UTC. */
-export const PRIZES_FROM_MS = Date.UTC(2026, 10, 2, 0, 0, 0);
+export const PRIZES_FROM_MS = 1793554453235;
 export const prizesOn = (e: { created_ms?: number | null } | null | undefined): boolean => Number(e?.created_ms) >= PRIZES_FROM_MS;
 export const PRIZES_OLD_GAME = "This game was made before the new prize planner, so its prizes stay as they are. Make a new game to plan prizes from a budget.";
 /** G-1: the ONE check of the prize feature for a game (create and settings use it): a game made before PRIZES_FROM_MS may not carry a prize plan or a prize for one ticket. Returns the refusal text, or null when allowed. */
