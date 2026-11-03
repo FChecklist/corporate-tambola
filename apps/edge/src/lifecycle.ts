@@ -144,11 +144,23 @@ export async function realEndMs(env: Env, e: any, now: number): Promise<number |
   return now >= bound ? bound : null;
 }
 
+/**
+ * The end the 20-hour automatic-deletion clock counts from (deletion margin, 3 Nov 2026): the EARLIER of the stored end and the game's real end (`realEndMs`). Until phones confirm the end,
+ * the stored end is the scheduled one (in Host mode the latest press plus an hour), so a game that really ended early (every prize awarded, or the organizer's Stop) was wiped about an hour
+ * later than "20 hours after it ended", which leaves no room for a late scheduler inside the promised 24 hours. A game still being played has no real end yet, so it keeps the stored end.
+ * Only the deletion clock uses this; the report timing keeps the stored end.
+ */
+export async function deleteClockEndMs(env: Env, e: any, storedEndMs: number, now: number): Promise<number> {
+  const real = await realEndMs(env, e, now);
+  return real === null ? storedEndMs : Math.min(storedEndMs, real);
+}
+
 /** When this game's guest data will be (or was) erased: 20 hours after it ended, after it was cancelled, or, for a game nobody paid for, after it was meant to end. Follows the newest schedule. */
-export async function erasureOf(env: Env, e: any): Promise<number> {
+export async function erasureOf(env: Env, e: any, now = Date.now()): Promise<number> {
   if (e.cancelled_ms) return personalDeleteAt(e.cancelled_ms);
   if (e.pack !== 0) { const l = await env.DB.prepare("SELECT end_ms, end_src FROM life WHERE eid=?").bind(e.id).first<{ end_ms: number; end_src: string }>(); if (l && l.end_src === "phones") return personalDeleteAt(l.end_ms); }
-  return personalDeleteAt(await endBoundMs(env, e));
+  const bound = await endBoundMs(env, e);
+  return personalDeleteAt(e.pack !== 0 ? await deleteClockEndMs(env, e, bound, now) : bound); // a game nobody paid for never ran: it keeps the scheduled end
 }
 
 // ------------------------------------------------------------------------------------------------ winners record
@@ -488,8 +500,9 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
       }
       if (!life || now < life.end_ms + REPORT_AFTER_MS) continue; // still being played
       await saveEndLog(env, e, life.end_ms, now); // the game is over: its log is kept now, whatever happens to the report e-mail
+      const delEnd = await deleteClockEndMs(env, e, life.end_ms, now); // the 20-hour deletion clock counts from the earlier of the stored end and the real end (never later than 24 hours after the game really ended)
       if (!e.npart) { // a game that was played with nobody joined (only a people list): no report to make; the list goes 20 hours after the end like everyone's data
-        if (now >= personalDeleteAt(life.end_ms) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "auto"); out.purged++; await mailDataDeleted(env as any, e, now); }
+        if (now >= personalDeleteAt(delEnd) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "auto"); out.purged++; await mailDataDeleted(env as any, e, now); }
         continue;
       }
       if (!life.report_ms && life.report_state !== "no-email") {
@@ -498,7 +511,7 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
         else await env.DB.prepare("UPDATE life SET tries=tries+1 WHERE eid=?").bind(e.id).run();
       }
       if (life.report_ms && now >= reportLinkUntil(life.end_ms) - 6 * 3_600_000 && now < reportLinkUntil(life.end_ms)) await remindReport(env, e, life, now);
-      if (now >= personalDeleteAt(life.end_ms) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "auto"); out.purged++; await mailDataDeleted(env as any, e, now); } // an owner-set legal hold suspends this too
+      if (now >= personalDeleteAt(delEnd) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "auto"); out.purged++; await mailDataDeleted(env as any, e, now); } // an owner-set legal hold suspends this too
     } catch { /* this engagement is tried again at the next tick; the others still run */ }
   }
   // the permanent settings record (gamerecord.ts) also for the games the pass above does not look at (free and demo games), and for any game that has no record yet or whose ending is not in its record yet
