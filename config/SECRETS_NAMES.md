@@ -57,3 +57,6 @@ Where things are set:
 | `ANALYZE_AI_KEY` | Key for that endpoint | Optional Pages secret | secret |
 | `ANALYZE_AI_MODEL` | Model name for that endpoint | Optional Pages variable | setting |
 | `TARGET` | The scheduled job: the web address it calls | `apps/cron/wrangler.toml` | setting |
+| `ANALYTICS` | The one central visitor database `site-analytics`: this game's own visit tracker also copies each visit into it (the copy does nothing without this binding and `ANALYTICS_KEY`) | Binding in `pages/wrangler.toml` | binding |
+| `ANALYTICS_KEY` | Key that hashes network addresses for the central visitor database; the same value on every site, so one visitor can be followed across sites | Pages secret | secret |
+| `ANALYTICS_DAILY_WRITES` | Most central visitor-database writes per day (a cap; the default in the code is 400,000) | Optional Pages variable | setting |
