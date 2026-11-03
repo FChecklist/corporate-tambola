@@ -7,14 +7,14 @@ import { join } from "node:path";
 import { writeFileSync, mkdirSync } from "node:fs";
 
 const args = process.argv.slice(2);
-const arg = (k: string, d?: string) => { const i = args.indexOf("--" + k); return i >= 0 ? (args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : "1") : d; };
+const arg = (k: string, d?: string) => { const i = args.indexOf("--" + k); return i >= 0 ? (args[i + 1] !== undefined && !args[i + 1]!.startsWith("--") ? args[i + 1] : "1") : d; };
 const seed = Number(arg("seed", "1")); const only = arg("only"); const listOnly = args.includes("--list");
 const PORT = Number(process.env.MATRIX_PORT ?? 8803);
 process.env.SIM_PORT = String(PORT); // the shared harness library reads this when it is imported
 const ROOT = join(import.meta.dir, "../../../..");
 
 const { startSim } = await import("../../server");
-const L: any = await import("./lib.mjs");
+const L = await import("./lib.mjs");
 const { A, clock } = L;
 const families = ["organizer"];
 let scenarios: any[] = [];
@@ -93,7 +93,7 @@ const summary = { seed, total: results.length, passed, failed: results.length - 
 writeFileSync(join(ROOT, `sim/organizer-result-seed${seed}.json`), JSON.stringify({ summary, results }, null, 1));
 // findings: the failed checks grouped by their label (digits in the label are folded so "limit 12" and "limit 15" fall together), with how many scenarios and the first examples
 const groups = new Map<string, { check: string; scenarios: number; examples: { scenario: string; detail: string }[] }>();
-for (const r of results) for (const c of r.failed) { const key = String(c.name).replace(/\d+/g, "#"); const g = groups.get(key) ?? { check: c.name, scenarios: 0, examples: [] }; g.scenarios++; if (g.examples.length < 4) g.examples.push({ scenario: r.name, detail: c.detail }); groups.set(key, g); }
+for (const r of results) for (const c of r.failed) { const key = String(c.name).replace(/\d+/g, "#"); const g: { check: string; scenarios: number; examples: { scenario: string; detail: string }[] } = groups.get(key) ?? { check: c.name, scenarios: 0, examples: [] }; g.scenarios++; if (g.examples.length < 4) g.examples.push({ scenario: r.name, detail: c.detail }); groups.set(key, g); }
 writeFileSync(join(ROOT, `sim/organizer-findings-seed${seed}.json`), JSON.stringify([...groups.values()].sort((a, b) => b.scenarios - a.scenarios), null, 1));
 console.log(`ORGANIZER seed=${seed} scenarios=${results.length} passed=${passed} failed=${results.length - passed} checks=${nChecks} seconds=${summary.seconds} peakWrites=${usage[0]?.writes ?? 0} blockedFetches=${health.blockedFetches.length} failureGroups=${groups.size}`);
 console.log(JSON.stringify(by));

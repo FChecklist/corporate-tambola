@@ -199,7 +199,7 @@ describe("real phones: the ticket never marks itself", () => {
     const len = v1.log.length; for (let i = 0; i < 6 && first.rt.view().log.length === len; i++) { t += 3000; await first.rt.tick(); await first.rt.playAlong({ claim: false }); }
     expect(first.rt.view().log.length).toBeGreaterThan(len);
     expect(first.rt.view().claimNow).not.toContain(key); expect(first.rt.view().claimable).toContain(key);
-    const late = await first.rt.claim(key); expect(late.ok).toBe(false); expect((late as any).late).toBe(true); expect(late.error).toBe(CLAIM_LATE_TEXT);
+    const late = await first.rt.claim(key); expect(late.ok).toBe(false); if (late.ok) throw new Error("a late claim was accepted"); expect(late.late).toBe(true); expect(late.error).toBe(CLAIM_LATE_TEXT);
     expect(first.rt.view().pressed).not.toContain(key); expect(first.rt.view().lateClaim).toBe(CLAIM_LATE_TEXT); expect(first.rt.view().bogeys.filter((x) => x.pattern === key)).toEqual([]); // no penalty
     t += 6000; await first.rt.tick(); expect(first.rt.view().lateClaim).toBeNull(); // the note goes with the next number
   });

@@ -204,7 +204,8 @@ describe("host mode: a press releases the next number, the beacon still decides 
   const nx = (seq: number, signedAt: number, lead = NEXT_LEAD_ROUNDS) => mk(seq, "next", signedAt + lead, signedAt);
   test("the gaps come from the game's settings: every break and the intermission before each later round", () => {
     expect(H.hostGaps).toEqual([{ at: 3, rounds: 10 }, { at: 90, rounds: 30 }]);
-    expect(hostGameOf({ callMode: "host", breaks: [{ after: 3, seconds: 30, kind: "speech", title: "x" }], rounds: 2 })).toEqual({ callMode: "host", startMode: "auto", breaks: [{ after: 3, seconds: 30, kind: "speech", title: "x" }], rounds: 2 });
+    const brandBreaks = [{ after: 3, seconds: 30, kind: "speech" as const, title: "x" }]; // a brand break carries more than GameOpts names; hostGameOf passes it through untouched
+    expect(hostGameOf({ callMode: "host", breaks: brandBreaks, rounds: 2 })).toEqual({ callMode: "host", startMode: "auto", breaks: brandBreaks, rounds: 2 });
   });
   test("a press must be signed exactly NEXT_LEAD_ROUNDS before the round it names: too early, too late or with a pause end it is ignored", () => {
     const st = resolveControl(H, [nx(1, 1000, 1), nx(2, 1000, 3), nx(3, 1000, 0), mk(4, "next", 1002, 1000, 1010), nx(5, 1000)]);

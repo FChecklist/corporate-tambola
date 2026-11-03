@@ -5,16 +5,16 @@ import { join } from "node:path";
 import { writeFileSync, mkdirSync } from "node:fs";
 
 const args = process.argv.slice(2);
-const arg = (k: string, d?: string) => { const i = args.indexOf("--" + k); return i >= 0 ? (args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : "1") : d; };
+const arg = (k: string, d?: string) => { const i = args.indexOf("--" + k); return i >= 0 ? (args[i + 1] !== undefined && !args[i + 1]!.startsWith("--") ? args[i + 1] : "1") : d; };
 const seed = Number(arg("seed", "1")); const only = arg("only"); const listOnly = args.includes("--list"); const limit = Number(arg("limit", "0"));
 const PORT = Number(process.env.MODES_PORT ?? 8806);
 process.env.SIM_PORT = String(PORT);
 const ROOT = join(import.meta.dir, "../../../..");
 
 const { startSim } = await import("../../server");
-const L: any = await import("./lib.mjs");
+const L = await import("./lib.mjs");
 const { A, clock } = L;
-const m: any = await import("./gen-modes.mjs");
+const m = await import("./gen-modes.mjs");
 let scenarios: any[] = await m.default({ seed, R: L.rng(seed * 7919 + 17), L });
 const dup = scenarios.map((s) => s.name).filter((n, i, a) => a.indexOf(n) !== i);
 if (dup.length) { console.error("duplicate scenario names:", [...new Set(dup)].slice(0, 10)); process.exit(2); }

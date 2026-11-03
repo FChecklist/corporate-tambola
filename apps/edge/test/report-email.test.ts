@@ -67,7 +67,7 @@ describe("the branded e-mail", () => {
   });
   test("without a brand it falls back to our colour and our name; with many claims the e-mail shows the first rows and says how many more are in the full report; a rehearsal carries its red header", async () => {
     const s = await game("RPT-2");
-    for (let i = 0; i < REPORT_CLAIM_ROWS + 15; i++) raw.prepare("INSERT INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES('RPT-2',?,?,?,?,?)").run(s[i % 5]!.pid, ["early5", "top", "mid", "bot", "corners", "star", "full"][i % 7], 1 + Math.floor(i / 35), i % 90, T + 3_700_000 + i);
+    for (let i = 0; i < REPORT_CLAIM_ROWS + 15; i++) raw.prepare("INSERT INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES('RPT-2',?,?,?,?,?)").run(s[i % 5]!.pid, ["early5", "top", "mid", "bot", "corners", "star", "full"][i % 7]!, 1 + Math.floor(i / 35), i % 90, T + 3_700_000 + i);
     const log = await logOf("RPT-2");
     const m = brandedReportMail({ log, gameName: "Plain party", brand: null, origin: "https://tambola.test", link: "https://tambola.test/r", keptUntilMs: T, deleteAtMs: T, organizerEmail: "a@b.c", rehearsal: 2 });
     expect(m.html).toContain("#0B3D91"); expect(m.html).not.toContain("/api/z/RPT-2/logo"); expect(m.html).toContain("REHEARSAL GAME 2"); expect(m.html).toContain("... and 15 more in the full report.");
@@ -94,7 +94,7 @@ describe("the PDF", () => {
     raw.prepare("INSERT INTO winner(eid,round,pattern,ordinal,seat,idx,at_ms,src) VALUES('RPT-5',1,'top',1,?,9,?, 'phones')").run(s[0]!.seq, t0);
     raw.prepare("INSERT INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES('RPT-5',?,'top',1,9,?)").run(s[0]!.pid, t0 - 2000);
     raw.prepare("INSERT INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES('RPT-5',?,'top',1,14,?)").run(s[1]!.pid, t0 + 60_000);
-    for (let i = 0; i < REPORT_CLAIM_ROWS + 15; i++) raw.prepare("INSERT OR IGNORE INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES('RPT-5',?,?,?,?,?)").run(s[i % 5]!.pid, ["early5", "mid", "bot", "corners", "star", "full"][i % 6], 1 + Math.floor(i / 30), i % 90, t0 + 100_000 + i);
+    for (let i = 0; i < REPORT_CLAIM_ROWS + 15; i++) raw.prepare("INSERT OR IGNORE INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES('RPT-5',?,?,?,?,?)").run(s[i % 5]!.pid, ["early5", "mid", "bot", "corners", "star", "full"][i % 6]!, 1 + Math.floor(i / 30), i % 90, t0 + 100_000 + i);
     const log = await logOf("RPT-5");
     const base = { engagementId: "RPT-5", organizerEmail: "a@b.c", sentAtMs: T, scheduledMs: T, firstNumberMs: T, endMs: T + 60_000, endReason: "x", wasHeld: false, rounds: 1, callSeconds: 12, ticketsPerPerson: 1, cap: 50, inviteOnly: false, numbersCalled: 90, agg: { joined: 5, onRoster: 0, notJoined: 0, late: 0, viaInvite: 0, inviters: 0, topInviter: null, roles: 0, joinedInTime: 5, firstJoinMs: null }, people: [], prizes: [], lucky: [], timeline: [], breaks: [], personalDeleteAtMs: T, fullDeleteAtMs: T, brand: { name: "Acme Ltd", color: "#B3261E" } } as any;
     const pdf = new TextDecoder("latin1").decode(layoutReport({ ...base, log }));

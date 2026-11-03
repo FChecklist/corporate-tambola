@@ -41,7 +41,7 @@ describe("what each call of a phone costs", () => {
     let beaconCalls = 0;
     const fetcher: Fetcher = async (url) => { beaconCalls++; const last = url.split("/").pop()!; const nowR = roundAt(T0 + t); const r = last === "latest" ? nowR : Number(last); if (r > nowR) return { ok: false, status: 404, json: async () => ({}) }; return { ok: true, status: 200, json: async () => ({ round: r, randomness: rnd(r), signature: "aa" } as Round) }; };
     await call("POST", "/api/z", { id: EID, startRound: START - GRACE_ROUNDS, callSeconds: 12, cap: 2000 }, { "x-organizer": SECRET });
-    const phones = Array.from({ length: PHONES }, (_, n) => { const mem = new Map<string, string>(); const rt = new PhoneRuntime(EID, { noEarlyEnd: true, api, mono: () => t, store: { get: (k) => mem.get(k) ?? null, set: (k, v) => void mem.set(k, v) }, beacon: { fetcher, mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 }, verify: (x) => x.signature === "aa" && x.randomness === rnd(x.round) } as any); return { rt, phone: "9" + String(100000000 + n) }; });
+    const phones = Array.from({ length: PHONES }, (_, n) => { const mem = new Map<string, string>(); const rt = new PhoneRuntime(EID, { noEarlyEnd: true, api, mono: () => t, store: { get: (k) => mem.get(k) ?? null, set: (k, v) => void mem.set(k, v) }, beacon: { fetcher, mirrors: ["https://a.test", "https://b.test", "https://c.test"], timeoutMs: 500 }, verify: (x) => x.signature === "aa" && x.randomness === rnd(x.round) }); return { rt, phone: "9" + String(100000000 + n) }; });
     for (const p of phones) { await p.rt.boot(); expect(await p.rt.join(p.phone, "P")).toBe(true); }
     t += 0; const joinKeys = new Set(acc.keys());
     const snapshot = new Map([...acc].map(([k, v]) => [k, { ...v }]));

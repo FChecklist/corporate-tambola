@@ -618,7 +618,7 @@ describe("winners, the end, and break media on the phone", () => {
     const along = setInterval(() => { rt.playAlong(); }, 150);
     try {
     await until(() => !!doc.getElementById("hurray")); // worked out on the phone itself from its own claims: nobody published anything
-    expect(doc.getElementById("hurray")?.textContent).toMatch(/Congratulations, you won/);
+    expect(doc.getElementById("hurray")?.textContent).toMatch(/You won .*Your organizer will give you your prize\./) /* P-9: the duplicate "Congratulations, you won" line was removed on purpose */;
     expect(doc.querySelector("#hurray canvas")).toBeTruthy();
     expect(await p.waitFor((x) => /Congratulations! You won/.test(x))).toMatch(/Your prizes/);
     expect(doc.querySelectorAll(".zticket div.w").length).toBeGreaterThan(0); // the winning numbers are lit
@@ -1781,7 +1781,7 @@ describe("console: no refunds (credit), games that wait or did not start, 'Creat
     p.click('[data-save="1"]'); await p.waitFor((x) => /Pick the day and the time/.test(x)); // the date is never copied, it must be picked
     p.click('[data-ck="day"][data-v="other"]'); const d = new Date((p.win as any).Date.now() + 5.5 * 3600000 + 3 * 86400000); setField(p, "#f-dayo", d.toISOString().slice(0, 10)); p.click('[data-ck="time"][data-v="18:00"]'); p.click('[data-save="1"]'); await p.waitFor((x) => /Saved\./.test(x));
     expect(p.$("#newgameread")).toBeNull();
-    const home = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage }, { afterLoad: w.hook }); await home.waitFor((x) => /Create a new game/.test(x)); home.click('[data-hist="1"]'); await home.waitFor(() => !!home.$('[data-clonebtn][data-from="UI-OLD1"]'));
+    const home = await page(o, "/zc", "zc.html", ZC_SCRIPTS, { "ctz-org": o.token, "ctz-aimsg": o.aiMessage }, { afterLoad: w.hook }); await home.waitFor((x) => /Create a new game/.test(x)); await home.waitFor(() => !!home.$('[data-hist="1"]')); home.click('[data-hist="1"]'); await home.waitFor(() => !!home.$('[data-clonebtn][data-from="UI-OLD1"]'));
     home.click('[data-clonebtn][data-from="UI-OLD1"]'); await home.waitFor(() => !!home.$("#clonepanel")); expect(home.$("#clonepeople")).toBeTruthy();
     const h = await consolePage(o, "UI-OLD1", await hostKey(o)); await h.waitFor(() => !!h.$('.zc-dot[data-open="7"]')); openStep(h, 7); expect(h.$("[data-clonebtn]")).toBeTruthy(); // a Host has it too
     const c = await consolePage(o, "UI-OLD1", await cohostKey(o, "UI-OLD1")); await c.waitFor((x) => /Hi\. Here is the game/.test(x)); for (let n = 1; n <= 3; n++) openStep(c, n); expect(c.$("[data-clonebtn]")).toBeNull();
