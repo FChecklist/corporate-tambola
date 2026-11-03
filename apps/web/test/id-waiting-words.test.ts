@@ -51,12 +51,12 @@ describe("D1: an ID game's waiting screen never asks for a mobile number", () =>
     await p.waitFor((x) => /Join the game/.test(x));
     expect(p.text()).toMatch(/No mobile number or e-mail address is needed/);
     setVal(p, "#emp", "E9001"); p.click("#go");
-    await p.waitFor((x) => /Your ID is not on the list yet/.test(x)); // step 2: name and location
+    await p.waitFor((x) => /Your Employee ID is not on the list yet/.test(x)); // step 2: name and location (the legal wording calls it the Employee ID)
     setVal(p, "#nm", "Asha Rao"); setVal(p, "#loc", "Pune"); p.click("#go");
     const w = await waitingCard(p);
     expect(w.card).toContain(SOFT);
     expect(w.card).not.toMatch(/mobile|by invitation/i);
-    expect(w.again).toBe("Wrong ID? Type it again");
+    expect(w.again).toBe("Wrong Employee ID? Type it again");
     expect(w.guided).toBe(false);
     expect(p.text()).not.toMatch(/add your mobile number/i);
     expect(p.errors).toEqual([]);
