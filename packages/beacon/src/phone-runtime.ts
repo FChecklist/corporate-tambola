@@ -12,6 +12,16 @@ import { NUMBERS, QUICKNET, fetchRound, pickNumber, roundAt, roundTimeMs, type B
 
 /** The last seconds of a pause in which a phone counts "restarts in" (owner ruling Q2, 2026-10-29). */
 export const RESTART_COUNT_SECS = 5;
+/**
+ * D3 (250-person live game, 3 Nov 2026: 3 of 248 phones showed Top Line won at call 34, the store and 245 phones at call 31). A claim is stamped with the store's time when its
+ * request ARRIVES and written a little later (the request checks the ticket, the clock and the day's budget first), so under load a claim stamped a moment earlier can land after a
+ * later one, for example a wrong claim (Bogey) pressed a second later. A phone that asked in between had moved its cursor past the earlier claim and, asking "after the newest time
+ * I have", never received it: it gave the prize to the next claimant. So the phone asks from this long before the newest time it has (repeats are dropped by their id).
+ */
+export const CLAIM_CURSOR_SLACK_MS = 30_000;
+/** After the game the phone reads the store's agreed results (several phones' votes) until each prize it shows has one, at most this many times, every END_RESULT_EVERY_MS: what the store holds is shown. (Usually 1 or 2 reads: the votes settle every prize within a minute or so of the end.) */
+export const END_RESULT_POLLS = 10;
+export const END_RESULT_EVERY_MS = 30_000;
 export interface PhoneDeps {
   /** Calls our store. Must throw an Error with `.status` on HTTP errors, and a plain Error when offline. */
   api(method: string, path: string, body?: unknown): Promise<any>;
@@ -597,7 +607,8 @@ export class PhoneRuntime {
   // ---- the public claims: every phone reads them with the seat list (one request, already made) and feeds them to its engines ----
   private claimList: PublicClaim[] = [];
   private claimIds = new Set<string>();
-  private claimUpto = 0; // the newest atMs received: the next ask starts there
+  private claimUpto = 0; // the newest atMs received: the next ask starts a little before it (CLAIM_CURSOR_SLACK_MS)
+  private claimPageFull = false; // the last answer was a full page: the next ask goes on from the newest time, so a burst of claims still moves forward
   private claimVer = 0; // changes when the list changes
   private engineClaims = new Map<number, number>();
   /** `fromStore`: a page the store answered (its newest time becomes the next ask's start). This phone's own claim, noted at once, must NOT move that cursor: others' earlier claims would be skipped. */
@@ -645,10 +656,12 @@ export class PhoneRuntime {
     const askedAt = this.nowRound ?? 0;
     try {
       const askedMs = this.offsetMs === null ? null : this.deps.mono() + this.offsetMs;
-      const r = await this.deps.api("GET", `/api/z/${this.eid}/seats?after=${this.seatUpto}&cafter=${this.claimUpto}&v=${Math.max(0, this.cvKnown)}`);
+      const cafter = this.claimPageFull ? this.claimUpto : Math.max(0, this.claimUpto - CLAIM_CURSOR_SLACK_MS);
+      const r = await this.deps.api("GET", `/api/z/${this.eid}/seats?after=${this.seatUpto}&cafter=${cafter}&v=${Math.max(0, this.cvKnown)}`);
       if (Array.isArray(r?.claims)) { // the public claims ride with the seat list; after this answer every claim up to (about) the time of the ask is here, unless the page was full
         this.noteClaims(r.claims, true);
         const full = r.claims.length >= 500, newest = r.claims.reduce((m: number, c: any) => Math.max(m, Number(c?.atMs) || 0), 0);
+        this.claimPageFull = full;
         if (askedMs !== null) this.claimsFreshMs = Math.max(this.claimsFreshMs, full ? Math.min(newest, askedMs - 3000) : askedMs - 3000);
       }
       if (!r || !r.ready || !Array.isArray(r.seats)) return;
@@ -686,18 +699,36 @@ export class PhoneRuntime {
     if (local) {
       const mine: NonNullable<RuntimeView["results"]> = [];
       for (const [r, e] of this.engines) for (const x of e.results()) { if (x.pattern !== "unlucky" && !this.resultFinal(r, x.idx)) continue; mine.push({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, count: x.pids.length, round: r, tickets: x.pids.map((p) => seatOfPid(p)).filter((n): n is number => n !== null).slice(0, 5), ...(x.pattern === "unlucky" || this.cfg.ties === "next" ? { winners: x.pids } : {}) }); } // a position is shown, voted and counted only once its claim window has closed and the claims are in
-      this.allResults = [...mine, ...this.luckyResults(), ...this.serverResults.filter((x) => x.pattern === "lucky" && !this.luckyLocal.some((l) => l.ordinal === x.ordinal))];
+      this.allResults = [...this.withStore(mine), ...this.luckyResults(), ...this.serverResults.filter((x) => x.pattern === "lucky" && !this.luckyLocal.some((l) => l.ordinal === x.ordinal))];
     }
     // the organizer's published results: the fallback while the seat list is not here yet, and the only source for lucky draws
     // (lucky draws: only once a draw's break has been reached and its winners are not out yet, and then every 10 s)
     const luckyDue = this.cur === 1 && this.luckyView().some((l, i) => !l.published && this.logCache.length >= (this.cfg.breaks.filter((b) => b.kind === "lucky")[i]?.after ?? Infinity));
-    const needServer = !local || luckyDue;
-    if (!needServer || m - this.lastResultPoll < (local ? 10_000 : this.waitingForResult() ? 4_000 : 15_000) || !this.logs.some((l) => l.length > 0)) return;
+    const endCheck = local && this.phase === "ended" && this.endResultPolls < END_RESULT_POLLS && !this.storeHasAll(); // after the game: the store's agreed results, until every prize shown has one (D3)
+    const needServer = !local || luckyDue || endCheck;
+    if (!needServer || m - this.lastResultPoll < (local ? (luckyDue ? 10_000 : endCheck ? END_RESULT_EVERY_MS : 10_000) : this.waitingForResult() ? 4_000 : 15_000) || !this.logs.some((l) => l.length > 0)) return;
     this.lastResultPoll = m;
+    if (endCheck && !luckyDue) this.endResultPolls++;
     try {
       this.serverResults = (await this.deps.api("GET", `/api/z/${this.eid}/results`)).results ?? this.serverResults;
-      this.allResults = this.localOk ? [...this.allResults.filter((x) => x.pattern !== "lucky"), ...this.luckyResults(), ...this.serverResults.filter((x) => x.pattern === "lucky" && !this.luckyLocal.some((l) => l.ordinal === x.ordinal))] : this.serverResults;
+      this.allResults = this.localOk ? [...this.withStore(this.allResults.filter((x) => x.pattern !== "lucky")), ...this.luckyResults(), ...this.serverResults.filter((x) => x.pattern === "lucky" && !this.luckyLocal.some((l) => l.ordinal === x.ordinal))] : this.serverResults;
     } catch { /* shown next time */ }
+  }
+  private endResultPolls = 0;
+  /** A prize line's key: round, house, position. */
+  private static rkey(x: { pattern: string; ordinal: number; round?: number }): string { return `${x.round ?? 1}:${x.pattern}:${x.ordinal}`; }
+  /** The store's agreed result of a prize line (several different phones voted exactly it) is what the organizer and the winners record hold. Where the store has one, the phone shows that one, not its own working (D3: a phone that missed a claim worked out a different call). Lucky draws keep their own rule. */
+  private withStore(mine: NonNullable<RuntimeView["results"]>): NonNullable<RuntimeView["results"]> {
+    const store = new Map(this.serverResults.filter((x) => x.pattern !== "lucky").map((x) => [PhoneRuntime.rkey(x), x] as const));
+    if (!store.size) return mine;
+    const out = mine.map((x) => (x.pattern === "lucky" ? x : store.get(PhoneRuntime.rkey(x)) ?? x));
+    for (const [k, x] of store) if (!mine.some((y) => PhoneRuntime.rkey(y) === k)) out.push(x);
+    return out;
+  }
+  /** Every prize line this phone shows already has the store's agreed result. */
+  private storeHasAll(): boolean {
+    const mine = this.allResults.filter((x) => x.pattern !== "lucky");
+    return mine.length > 0 && mine.every((x) => this.serverResults.some((s) => PhoneRuntime.rkey(s) === PhoneRuntime.rkey(x)));
   }
   private luckyResults(): NonNullable<RuntimeView["results"]> { return this.luckyLocal.map((l) => ({ pattern: "lucky" as const, ordinal: l.ordinal, idx: l.idx, count: l.winners.length, round: 1, winners: l.winners, tickets: l.winners.map((p) => seatOfPid(p)).filter((n): n is number => n !== null).slice(0, 5) })); }
   /** A lucky draw is worked out here, from the public randomness of the round that ends its break and the public seat list: the same on every phone, and nobody can steer it. */
