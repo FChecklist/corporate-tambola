@@ -38,7 +38,7 @@ test("Ready check: link shared (a tick), payment, prizes chosen; optional Hosts 
   expect([...d.querySelectorAll("#zf-ready li")].map((n: any) => n.dataset.ready)).toEqual(["link", "pay", "prizes", "reh"]);
   expect(d.querySelector('[data-ready="pay"]').className).toBe("");           // unpaid: not done
   expect(d.querySelector('[data-ready="prizes"]').className).toBe("done");    // every prize has words
-  expect(d.querySelector('[data-ready="hosts"]')).toBe(null);               // no Hosts row (owner rule D)
+  expect(d.querySelector('[data-ready="hosts"]') === null).toBe(true);               // no Hosts row (owner rule D)
   const box = d.getElementById("zf-shared"); box.checked = true; box.dispatchEvent(new win.Event("change"));
   expect(d.querySelector('[data-ready="link"]').className).toBe("done");
   expect(d.getElementById("zf-ready").className).toContain("todo");           // payment is still pending
@@ -58,7 +58,7 @@ test("Publish warning: a game that starts within 30 minutes says so, with the mi
   const s = win.ZFLOW.state; s.done[1] = s.done[2] = s.done[3] = s.done[4] = true; s.open = 5; s.eid = "E1"; s.when = { ms: Date.now() + 10 * 60000, zone: "Asia/Kolkata" }; win.ZFLOW.draw();
   expect(win.document.getElementById("zf-startwarn").textContent).toContain("Your participants need time to join");
   s.when = { ms: Date.now() + 5 * 3600000, zone: "Asia/Kolkata" }; win.ZFLOW.draw();
-  expect(win.document.getElementById("zf-startwarn")).toBe(null);
+  expect(win.document.getElementById("zf-startwarn") === null).toBe(true);
 });
 
 test("Prizes: won and left, the winner's ticket number and only the details that are held, and a Prize handed over tick that tells the game", async () => {
@@ -80,7 +80,7 @@ test("Prizes: won and left, the winner's ticket number and only the details that
 test("the pretend Host / Co-host sign-in is gone (owner rule D): ?team=1&demo=roles shows no sign-in and no Co-host page", async () => {
   reset({}, { "/prizes": { prizes: [{ round: 1, pattern: "full", ordinal: 1, seat: 42, name: "Asha" }] } });
   const win = page("?flow=new&e=EABCDEF&team=1&demo=roles"); await wait();
-  expect(win.document.getElementById("zf-signin")).toBe(null); expect(win.document.getElementById("zf-demo")).toBe(null);
+  expect(win.document.getElementById("zf-signin") === null).toBe(true); expect(win.document.getElementById("zf-demo") === null).toBe(true);
 });
 
 test("What is happening: lines from the game's own log, and Online now from the presence count", async () => {
@@ -113,7 +113,7 @@ test("Next number in TWO places in Manual mode; one press calls once, locks both
   reset({ callMode: "auto", startMs: Date.now() - 600000, gameMinutes: 60 });
   const auto = page(); await wait();
   expect(auto.document.getElementById("zf-next-top").tagName).toBe("SPAN");
-  expect(auto.document.querySelector(".zf-nextnum")).toBe(null);
+  expect(auto.document.querySelector(".zf-nextnum") === null).toBe(true);
 });
 
 test("Rehearsals: three cards from the game's own API, locked until paid, never the people limit; Start asks first, then tells the game", async () => {
@@ -121,7 +121,7 @@ test("Rehearsals: three cards from the game's own API, locked until paid, never 
   const locked = page(); await wait();
   expect(locked.document.getElementById("zf-rehh").textContent).toBe("Practice before the real game");
   expect(locked.document.querySelectorAll(".zf-rehcard.grey").length).toBe(3);
-  expect(locked.document.querySelector("[data-reh-start]")).toBe(null);
+  expect(locked.document.querySelector("[data-reh-start]") === null).toBe(true);
   reset({ unpaid: false }, { "/rehearsals": { cards: [{ n: 1, state: "ready" }, { n: 2, state: "locked" }, { n: 3, state: "locked" }] } });
   const win = page(); await wait();
   const d = win.document;
@@ -150,7 +150,7 @@ test("Completed: Make a copy makes a new draft with this game's prizes and opens
   const d = win.document;
   expect(d.getElementById("zf-status").dataset.status).toBe("completed");
   expect(d.getElementById("zf-completed").textContent).toContain("within 24 hours");
-  expect(d.getElementById("zf-erase")).toBe(null);   // the pack has no delete button; Corporate Tambola's own part adds one
+  expect(d.getElementById("zf-erase") === null).toBe(true);   // the pack has no delete button; Corporate Tambola's own part adds one
   calls.length = 0;
   d.getElementById("zf-copygame").click(); await wait();
   const post = calls.find((c) => c.method === "POST" && c.url === "/api/z");
@@ -188,7 +188,9 @@ test("a game that says it has none of these (no flags) shows none of them", asyn
   new Function("window", "document", "location", "fetch", "sessionStorage", "window.ZFLOW_GAME = { tickets: [1] };\n" + packOnly)(bare, bare.document, bare.location, async (u: string) => ({ ok: true, json: async () => (u.endsWith("/info") ? { unpaid: false, startMs: START } : { ok: true }) }), bare.sessionStorage);
   await wait();
   const d = bare.document;
-  for (const id of ["zf-reh", "zf-feed", "zf-bottomrow", "zf-online"]) expect(d.getElementById(id)).toBe(null);
-  expect(d.querySelector('[data-house="lucky"]')).toBe(null);
-  expect(win.document.getElementById("zf-reh")).not.toBe(null); // while Tambola, which has them, does
+  const present = ["zf-reh", "zf-feed", "zf-online"].filter((id) => d.getElementById(id) !== null); expect(present.join(",")).toBe("");
+  // the bottom row itself is always drawn (Big screen and Play the game links); what a no-flag game must not show is the next-number control in it
+  expect(d.querySelector("#zf-bottomrow .zf-nextnum") === null).toBe(true);
+  expect(d.querySelector('[data-house="lucky"]') === null).toBe(true);
+  expect(win.document.getElementById("zf-reh") !== null).toBe(true); // while Tambola, which has them, does
 });

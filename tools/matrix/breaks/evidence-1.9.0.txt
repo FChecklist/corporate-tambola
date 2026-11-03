@@ -1,0 +1,66 @@
+temp copy: /tmp/claude-0/tambola-breaks-tzC9ww
+
+P01-split-sum-not-100              baseline GREEN (38 pass) -> broken RED (3 fail) -> restored yes 20b067cdce9c
+P02-two-ticket-count-18            baseline GREEN (38 pass) -> broken RED (5 fail) -> restored yes 20b067cdce9c
+P03-early5-on-ticket-2             baseline GREEN (38 pass) -> broken RED (5 fail) -> restored yes 20b067cdce9c
+P04-superbumper-4th-3              baseline GREEN (38 pass) -> broken RED (3 fail) -> restored yes 20b067cdce9c
+P05-fh3-below-2.5                  baseline GREEN (38 pass) -> broken RED (4 fail) -> restored yes 20b067cdce9c
+P06-amount-rounds                  baseline GREEN (38 pass) -> broken RED (4 fail) -> restored yes 20b067cdce9c
+P07-leftover-to-first              baseline GREEN (38 pass) -> broken RED (3 fail) -> restored yes 20b067cdce9c
+P08-leftover-dropped               baseline GREEN (38 pass) -> broken RED (4 fail) -> restored yes 20b067cdce9c
+P09-tie-picks-last                 baseline GREEN (3 pass) -> broken STAYED GREEN (0 fail) -> restored yes 20b067cdce9c   <== PROBLEM
+P10-share-ceil                     baseline GREEN (38 pass) -> broken RED (2 fail) -> restored yes 20b067cdce9c
+P11-share-no-winner-loses-amount   baseline GREEN (38 pass) -> broken RED (2 fail) -> restored yes 20b067cdce9c
+P12-manual-max-31                  baseline GREEN (38 pass) -> broken RED (1 fail) -> restored yes 20b067cdce9c
+P13-manual-zero-amount-ok          baseline GREEN (38 pass) -> broken RED (1 fail) -> restored yes 20b067cdce9c
+P14-manual-duplicate-ok            baseline GREEN (38 pass) -> broken RED (2 fail) -> restored yes 20b067cdce9c
+P15-hint-threshold                 baseline GREEN (38 pass) -> broken RED (1 fail) -> restored yes 20b067cdce9c
+K01-blank-budget-not-blocked       baseline GREEN (33 pass) -> broken RED (8 fail) -> restored yes cb8ed99ce0ab
+K02-blank-sentence                 baseline GREEN (33 pass) -> broken RED (8 fail) -> restored yes cb8ed99ce0ab
+K03-ticket2-lines-as-ticket1       baseline GREEN (33 pass) -> broken RED (2 fail) -> restored yes cb8ed99ce0ab
+K04-gift-in-reward-text            baseline GREEN (33 pass) -> broken RED (1 fail) -> restored yes cb8ed99ce0ab
+K05-auto-to-manual-not-carried     baseline GREEN (33 pass) -> broken RED (6 fail) -> restored yes cb8ed99ce0ab
+K06-manual-to-auto-no-warning      baseline GREEN (33 pass) -> broken RED (2 fail) -> restored yes cb8ed99ce0ab
+K07-change-the-split-link          baseline GREEN (33 pass) -> broken RED (1 fail) -> restored yes cb8ed99ce0ab
+K08-count-chips-wrong              baseline GREEN (33 pass) -> broken RED (6 fail) -> restored yes cb8ed99ce0ab
+K09-footer-wording                 baseline GREEN (33 pass) -> broken RED (1 fail) -> restored yes cb8ed99ce0ab
+S01-sheet-not-won-text             baseline GREEN (8 pass) -> broken RED (4 fail) -> restored yes cb8ed99ce0ab
+S02-sheet-key-ignores-ticket       baseline GREEN (8 pass) -> broken RED (2 fail) -> restored yes cb8ed99ce0ab
+S03-sheet-superbumper-key          baseline GREEN (8 pass) -> broken STAYED GREEN (0 fail) -> restored yes cb8ed99ce0ab   <== PROBLEM
+Z01-rules-paragraph-changed        baseline GREEN (10 pass) -> broken RED (1 fail) -> restored yes a2d68316949d
+Z02-popup-sentence                 baseline GREEN (10 pass) -> broken RED (3 fail) -> restored yes a2d68316949d
+Z03-popup-shared-plural            baseline GREEN (10 pass) -> broken RED (1 fail) -> restored yes a2d68316949d
+Z04-popup-shows-money              baseline GREEN (10 pass) -> broken RED (4 fail) -> restored yes a2d68316949d
+EN01-key-ticket1-as-2              baseline GREEN (29 pass) -> broken RED (7 fail) -> restored yes a484fe2f99a5
+EN03-per-ticket-with-one-ticket    baseline GREEN (29 pass) -> broken RED (1 fail) -> restored yes a484fe2f99a5
+EN04-keep-per-ticket-when-one-ticket baseline GREEN (29 pass) -> broken RED (1 fail) -> restored yes a484fe2f99a5
+EN05-no-sharing                    baseline GREEN (29 pass) -> broken RED (3 fail) -> restored yes 09b7b248519e
+EN06-claim-at-instant-in-time      baseline GREEN (29 pass) -> broken RED (4 fail) -> restored yes 09b7b248519e
+EN07-three-bogeys                  baseline GREEN (29 pass) -> broken RED (1 fail) -> restored yes 09b7b248519e
+EN08-plan-amount-zero-ok           baseline GREEN (29 pass) -> broken RED (1 fail) -> restored yes a484fe2f99a5
+EN09-plan-duplicate-id-ok          baseline GREEN (29 pass) -> broken RED (1 fail) -> restored yes a484fe2f99a5
+EN10-plan-31-prizes                baseline GREEN (29 pass) -> broken RED (1 fail) -> restored yes a484fe2f99a5
+EN11-engine-ignores-ticket         baseline GREEN (29 pass) -> broken RED (1 fail) -> restored yes 8c21622eedd7
+EN12-gift-not-cleaned              baseline GREEN (16 pass) -> broken RED (1 fail) -> restored yes a484fe2f99a5
+GT01-boundary-off-by-one           baseline GREEN (16 pass) -> broken RED (1 fail) -> restored yes 21aa9a188691
+GT02-old-game-accepted             baseline GREEN (16 pass) -> broken RED (3 fail) -> restored yes e94064dcbe09
+GT03-plan-in-public-info           baseline GREEN (16 pass) -> broken RED (2 fail) -> restored yes e94064dcbe09
+GT04-plan-change-not-logged        baseline GREEN (16 pass) -> broken RED (2 fail) -> restored yes 5f532f1f1f67
+GT05-no-lock-after-start           baseline GREEN (16 pass) -> broken RED (2 fail) -> restored yes e94064dcbe09
+GT06-claim-ticket2-refused         baseline GREEN (7 pass) -> broken RED (1 fail) -> restored yes e94064dcbe09
+GT07-claim-ticket3-accepted        baseline GREEN (7 pass) -> broken RED (2 fail) -> restored yes e94064dcbe09
+GT08-claim-full2-at-ticket         baseline GREEN (7 pass) -> broken RED (2 fail) -> restored yes e94064dcbe09
+GT09-plan-not-stored               baseline GREEN (16 pass) -> broken RED (7 fail) -> restored yes e94064dcbe09
+GT10-plan-not-in-summary           baseline GREEN (16 pass) -> broken RED (6 fail) -> restored yes e94064dcbe09
+MX01-matrix-floor                  baseline GREEN (3 pass) -> broken RED (1 fail) -> restored yes 20b067cdce9c
+MX02-matrix-share                  baseline GREEN (3 pass) -> broken RED (1 fail) -> restored yes 20b067cdce9c
+MX03-matrix-dense                  baseline GREEN (3 pass) -> broken RED (1 fail) -> restored yes 09b7b248519e
+MX04-matrix-late-claim             baseline GREEN (3 pass) -> broken RED (1 fail) -> restored yes 09b7b248519e
+MX05-wire-leak                     baseline GREEN (1 pass) -> broken STAYED GREEN (0 fail) -> restored yes e94064dcbe09   <== PROBLEM
+
+58 breaks, 54 proven (green -> red -> restored), 4 problem(s). Repo status unchanged: yes
+--- rerun of the three breaks that were fixed after the first pass (EN02 find string was ambiguous, S03 replaced P09/S03, MX05 strengthened):
+S03-sheet-share-label              baseline GREEN (8 pass) -> broken RED (4 fail) -> restored yes cb8ed99ce0ab
+EN02-per-ticket-counts-both        baseline GREEN (29 pass) -> broken RED (5 fail) -> restored yes 09b7b248519e
+MX05-wire-leak                     baseline GREEN (1 pass) -> broken RED (1 fail) -> restored yes e94064dcbe09
+(P09-tie-picks-last was dropped: none of the 8 plans has a tie, so '>' versus '>=' cannot change any output. S03-sheet-superbumper-key was dropped: equivalent change.)

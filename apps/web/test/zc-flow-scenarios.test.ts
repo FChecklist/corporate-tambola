@@ -60,8 +60,9 @@ const PRIZE_PAGE = (() => { const w: any = new Window({ url: "http://localhost/z
   new Function("window", "document", "location", "fetch", "MutationObserver", src)(w, w.document, w.location, async () => ({ ok: true, json: async () => ({ ok: true }) }), w.MutationObserver); return w.ZFLOW; })();
 const PRIZE_CACHE = new Map<string, any[]>();
 const AB_CACHE = new Map<string, boolean | null>();
-const EMAILS: [string, boolean][] = [["asha@acme.com", true], ["Asha.Rao+tambola@Acme.co.in", true], ["asha@", false], ["", false], ["a b@acme.com", false]];
-const EMAIL_ORACLE = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+const EMAILS: [string, boolean][] = [["asha@acme.com", true], ["Asha.Rao+tambola@Acme.co.in", true], ["asha@", false], ["", false], ["a b@acme.com", true], ["a b＠acme.com", true], ["a@b c.com", true]];
+/** A participant Email ID (owner rule): NFKC, trim, remove inner spaces, lowercase; then the shape check. Account sign-up/sign-in emails are different: they refuse inner spaces. */
+const EMAIL_ORACLE = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.normalize("NFKC").replace(/\s+/g, "").toLowerCase());
 test("logic: every scenario of the matrix (10,000+) gives the owner's outcome and the right approvers", () => {
   let n = 0; const bad: string[] = []; const t0 = Date.now(); let emailChecks = 0;
   const LIMIT = Number(process.env.SCEN_LIMIT || 0); // a deliberate-break check runs only the first scenarios; the release gate (no limit) runs them all
