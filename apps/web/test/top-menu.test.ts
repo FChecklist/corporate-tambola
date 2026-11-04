@@ -38,7 +38,7 @@ describe("the top menu: exactly six items, in the owner's order, on every page t
   test("what left the header is still reachable lower on the landing page: pricing, the AI assistant, the video, WhatsApp", () => {
     const h = read("index.html"), body = h.slice(h.indexOf("</header>"));
     expect(body).toContain('id="pricing"'); expect(body).toContain('id="ai-host"'); expect(body).toContain('href="/demo.html">Video<'); expect(body).toContain('href="/pricing.html">Pricing<'); expect(body).toContain('href="/ai-prompt.html">Set up with ChatGPT or Gemini<');
-    expect(h.slice(0, h.indexOf("</header>"))).toContain('href="/demo.html">Watch the video'); expect((body.match(/https:\/\/wa\.me\/919650397480/g) ?? []).length).toBe(1); expect((h.match(/https:\/\/wa\.me\/919650397480/g) ?? []).length).toBe(2); // the "Talk to a person" line (top) and the footer
+    expect(h.slice(0, h.indexOf("</header>"))).toContain('href="/demo.html">Watch the video'); expect((body.match(/https:\/\/wa\.me\/919650397480/g) ?? []).length).toBe(2); expect((h.match(/https:\/\/wa\.me\/919650397480/g) ?? []).length).toBe(4); // the "Talk to a person" line (top) and the footer
     expect(read("contact.html")).toContain("https://wa.me/919650397480");
   });
   test("the colour dots stay, now inside the menu row; the menu script, style and logo files are shipped by the Pages build", () => {

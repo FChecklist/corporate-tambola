@@ -61,7 +61,10 @@ describe("contact details and the seller", () => {
     }
   });
   test("the support address is one constant and the contact page shows it with a mailto link and the phone number", () => {
-    const h = read("contact.html"); expect(h).toContain(`mailto:${BRAND.support}`); expect(h).toMatch(/\+91[ -]?96503[ -]?97480/); expect(h).toContain("tel:+919650397480");
+    const h = read("contact.html"); expect(h).toContain(`mailto:${BRAND.support}`); expect(h).toMatch(/\+91[ -]?96503[ -]?97480/); expect(h).toContain("https://wa.me/919650397480?text=Hi%2C%20I%20am%20interested%20in%20corporate%20games");
+  });
+  test("every page that shows the owner's number links it to WhatsApp with the ready first line", () => {
+    for (const f of pages) { const h = read(f); if (!/96503 97480/.test(h)) continue; expect(h, f).toContain('href="https://wa.me/919650397480?text=Hi%2C%20I%20am%20interested%20in%20corporate%20games"'); expect(h, f).not.toContain("tel:"); }
   });
   test("every phone number on any page is the owner's number", () => {
     for (const f of pages) for (const m of read(f).matchAll(/(?:\+91|tel:\+?91)[ -]?\d{5}[ -]?\d{5}/g)) expect(m[0].replace(/\D/g, "").slice(-10), f).toBe("9650397480");

@@ -33,7 +33,7 @@ describe("the Housie landing page", () => {
     expect(html).toContain("Choose a game for your close group:"); expect(html).toContain('<p class="six-title">Choose a game for your close group</p>'); expect(html).not.toContain("Choose your game");
     for (const f of ["Designed for the engagement of company employees and their extended families.", "Close group online engagement and fun.", "Players never pay.", "Only the people you invite can join.", "No app to install.", "Player details are auto-deleted within 24 hours.", "A free Tambola or Bingo demo for 10 people.", "Designed to follow the EU GDPR, US privacy laws and India&rsquo;s DPDP Act."]) expect(html).toContain("<li><b>" + f + "</b></li>");
     expect((html.match(/<ul class="lp-facts">([\s\S]*?)<\/ul>/)![1]!.match(/<li>/g) ?? []).length).toBe(8);
-    expect(html).toContain('href="tel:+919650397480">(+91) 96503 97480'); expect(html).toContain('href="mailto:hello@corporatetambola.com">hello@corporatetambola.com');
+    expect(html).toContain('href="https://wa.me/919650397480?text=Hi%2C%20I%20am%20interested%20in%20corporate%20games" target="_blank" rel="noopener" aria-label="WhatsApp +91 9650397480 (opens WhatsApp)">(+91) 96503 97480'); expect(html).toContain('href="mailto:hello@corporatetambola.com">hello@corporatetambola.com');
   });
   test("How a game day feels: three moments with the corrected drawings (modern men and women, no beards, head-coverings or headbands), the free-game button and a link to How it works", () => {
     const day = html.slice(html.indexOf('id="game-day"'), html.indexOf('class="lp-show"'));
