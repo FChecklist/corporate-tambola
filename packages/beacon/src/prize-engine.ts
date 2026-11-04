@@ -5,7 +5,7 @@
 // Late joiners: a participant who joined after the game began counts only the numbers whose beacon round is at or after `countFrom`
 // (their join round plus LATE_LAG_ROUNDS), so every phone has heard of them before their first number counts and nobody's result changes later.
 import { ticketNumbers } from "../../shared/src/ticket";
-import { CLAIM_WINDOW_CALLS, LATE_LAG_ROUNDS, keysInPlay, linesFor, roundEid, ticketOfKey, type EngagementCfg, type PatternKey } from "./config";
+import { CLAIM_WINDOW_CALLS, LATE_LAG_ROUNDS, keysInPlay, linesFor, roundEid, baseKey, ticketOfKey, type EngagementCfg, type PatternKey } from "./config";
 import { ruleOf } from "./house-rules";
 import { claimCounts, claimsByHouse, ticketsFor, unluckyAt, unluckyPick, winnersOfHouse, type HouseClaims, type PublicClaim, type Settled } from "./game";
 import { NUMBERS } from "./index";
@@ -21,7 +21,7 @@ export class PrizeEngine {
   readonly keys: PatternKey[];
   private readonly eid: string;
   private readonly wantUnlucky: boolean;
-  private readonly twoBit: number; // the bit of Two Lines (its three lines use the bits after the houses, and a counter after those)
+  private readonly twoBits: number[]; // the bits of Two Lines, plain or tied to a ticket (the three lines use the bits after the houses, and a counter after those)
   private readonly nb: number;
   private readonly auxBase: number;
   private readonly bit = new Map<PatternKey, number>();
@@ -30,6 +30,7 @@ export class PrizeEngine {
   private unitCf: number[] = [];
   private unitMask: Uint32Array[] = [];
   private unitIsTicket: boolean[] = [];
+  private unitTicket: number[] = []; // the ticket (1 or 2) of a ticket unit, 0 for the two-ticket unit
   private unitNums: Uint8Array[] = [];
   private unitLeft0: Uint8Array[] = [];
   private unitLeft: Uint8Array[] = [];
@@ -61,8 +62,8 @@ export class PrizeEngine {
     this.keys = ks;
     this.keys.forEach((k, i) => this.bit.set(k, i));
     this.auxBase = this.keys.length;
-    this.nb = this.keys.length + (this.bit.has("twolines") ? 4 : 0);
-    this.twoBit = this.bit.get("twolines") ?? -1;
+    this.twoBits = this.keys.flatMap((k, i) => (baseKey(k) === "twolines" ? [i] : []));
+    this.nb = this.keys.length + (this.twoBits.length ? 4 : 0);
     this.donePid = this.keys.map(() => new Set());
     this.byKey = this.keys.map(() => new Map());
   }
@@ -115,7 +116,7 @@ export class PrizeEngine {
         const b = this.bit.get(k)!, r = ruleOf(t, k);
         if (!r) continue;
         const only = ticketOfKey(k); if (only && only !== ti + 1) { left[b] = 250; continue; } // 1.9.0: a prize of one ticket is out of reach for the other ticket
-        if ("lines" in r) { // Two Lines: each line counts down on its own bit; the counter after them waits for two lines
+        if ("lines" in r) { // Two Lines: each line counts down on its own bit; the counter after them waits for two lines (`apply` credits every Two Lines house this ticket may win)
           r.lines.forEach((ln, i) => { for (const n of ln) mask[n]! |= 1 << (this.auxBase + i); left[this.auxBase + i] = ln.length; });
           left[this.auxBase + 3] = 2; left[b] = 250;
         } else {
@@ -123,13 +124,13 @@ export class PrizeEngine {
           left[b] = r.pool.length < r.k ? 250 : r.k; // 250: this ticket cannot complete it
         }
       }
-      this.push(s, mask, left, true, Uint8Array.from(ticketNumbers(t)));
+      this.push(s, mask, left, true, Uint8Array.from(ticketNumbers(t)), ti + 1);
     }
     if (tickets.length === 2 && this.bit.has("full2")) { // the two-ticket house: every number on both tickets
       const b = this.bit.get("full2")!, all = new Set(tickets.flatMap(ticketNumbers)), mask = new Uint32Array(91), left = new Uint8Array(this.nb + 1);
       for (const n of all) mask[n]! |= 1 << b;
       left[b] = all.size;
-      this.push(s, mask, left, false, new Uint8Array(0));
+      this.push(s, mask, left, false, new Uint8Array(0), 0);
     }
     // numbers already called that count for this seat
     // CALL BY CALL (oldest first) across all of this seat's units, exactly as if the seat had been here from the start: "their other ticket got there first" in `apply` must be decided by call order.
@@ -137,9 +138,9 @@ export class PrizeEngine {
     // joiner) saw a different tie than every other phone (found by the 20-game rehearsal, G11, and covered by prize-engine.test.ts).
     for (let j = 0; j < this.callNum.length; j++) for (let u = first; u < this.unitPid.length; u++) this.apply(u, j, this.callNum[j]!, this.callBr[j]!);
   }
-  private push(s: SeatIn, mask: Uint32Array, left: Uint8Array, isTicket: boolean, nums: Uint8Array) {
+  private push(s: SeatIn, mask: Uint32Array, left: Uint8Array, isTicket: boolean, nums: Uint8Array, ticket: number) {
     const u = this.unitPid.length;
-    this.unitPid.push(s.pid); this.unitCf.push(s.countFrom); this.unitIsTicket.push(isTicket); this.unitNums.push(nums); this.unitMask.push(mask); this.unitLeft0.push(left); this.unitLeft.push(left.slice());
+    this.unitPid.push(s.pid); this.unitCf.push(s.countFrom); this.unitIsTicket.push(isTicket); this.unitTicket.push(ticket); this.unitNums.push(nums); this.unitMask.push(mask); this.unitLeft0.push(left); this.unitLeft.push(left.slice());
     for (let n = 1; n <= 90; n++) if (mask[n]) this.inv[n]!.push(u);
   }
 
@@ -151,12 +152,13 @@ export class PrizeEngine {
     for (let b = 0; b < this.nb; b++) {
       if (!((m >> b) & 1)) continue;
       if (--left[b]! !== 0) continue;
-      let h = b;
-      if (b >= this.auxBase) { if (--left[this.auxBase + 3]! !== 0) continue; h = this.twoBit; } // the second line of Two Lines is complete
-      const pid = this.unitPid[u]!;
-      if (this.donePid[h]!.has(pid)) continue; // their other ticket got there first
-      this.donePid[h]!.add(pid);
-      const g = this.byKey[h]!.get(j); if (g) g.push(pid); else this.byKey[h]!.set(j, [pid]);
+      if (b >= this.auxBase && --left[this.auxBase + 3]! !== 0) continue; // the second line of Two Lines is complete
+      for (const h of b >= this.auxBase ? this.twoBits.filter((x) => { const only = ticketOfKey(this.keys[x]!); return !only || only === this.unitTicket[u]; }) : [b]) {
+        const pid = this.unitPid[u]!;
+        if (this.donePid[h]!.has(pid)) continue; // their other ticket got there first
+        this.donePid[h]!.add(pid);
+        const g = this.byKey[h]!.get(j); if (g) g.push(pid); else this.byKey[h]!.set(j, [pid]);
+      }
     }
   }
 
