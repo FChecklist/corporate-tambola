@@ -5,7 +5,7 @@
 // Late joiners: a participant who joined after the game began counts only the numbers whose beacon round is at or after `countFrom`
 // (their join round plus LATE_LAG_ROUNDS), so every phone has heard of them before their first number counts and nobody's result changes later.
 import { ticketNumbers } from "../../shared/src/ticket";
-import { CLAIM_WINDOW_CALLS, LATE_LAG_ROUNDS, keysInPlay, linesFor, roundEid, ticketOfKey, type EngagementCfg, type PatternKey } from "./config";
+import { CLAIM_WINDOW_CALLS, LATE_LAG_ROUNDS, baseKey, keysInPlay, linesFor, roundEid, ticketOfKey, type EngagementCfg, type PatternKey } from "./config";
 import { ruleOf } from "./house-rules";
 import { claimCounts, claimsByHouse, ticketsFor, unluckyAt, unluckyPick, winnersOfHouse, type HouseClaims, type PublicClaim, type Settled } from "./game";
 import { NUMBERS } from "./index";
@@ -21,7 +21,11 @@ export class PrizeEngine {
   readonly keys: PatternKey[];
   private readonly eid: string;
   private readonly wantUnlucky: boolean;
-  private readonly twoBit: number; // the bit of Two Lines (its three lines use the bits after the houses, and a counter after those)
+  /** Every Two Lines house in play ("twolines", "twolines@1", "twolines@2") owns four bits after the houses: its three lines, then a counter that waits for two of them. Value = the first of the four. */
+  private readonly twoBase = new Map<PatternKey, number>();
+  /** For a line bit (>= auxBase): the counter bit of its group and the house bit that group completes. */
+  private readonly auxCounter: number[] = [];
+  private readonly auxHouse: number[] = [];
   private readonly nb: number;
   private readonly auxBase: number;
   private readonly bit = new Map<PatternKey, number>();
@@ -61,8 +65,13 @@ export class PrizeEngine {
     this.keys = ks;
     this.keys.forEach((k, i) => this.bit.set(k, i));
     this.auxBase = this.keys.length;
-    this.nb = this.keys.length + (this.bit.has("twolines") ? 4 : 0);
-    this.twoBit = this.bit.get("twolines") ?? -1;
+    let nb = this.keys.length;
+    for (const k of this.keys) if (baseKey(k) === "twolines") { // a per-ticket Two Lines ("twolines@1") needs its own line bits too, not only the plain one
+      this.twoBase.set(k, nb);
+      for (let i = 0; i < 3; i++) { this.auxCounter[nb + i] = nb + 3; this.auxHouse[nb + i] = this.bit.get(k)!; }
+      nb += 4;
+    }
+    this.nb = nb;
     this.donePid = this.keys.map(() => new Set());
     this.byKey = this.keys.map(() => new Map());
   }
@@ -116,8 +125,9 @@ export class PrizeEngine {
         if (!r) continue;
         const only = ticketOfKey(k); if (only && only !== ti + 1) { left[b] = 250; continue; } // 1.9.0: a prize of one ticket is out of reach for the other ticket
         if ("lines" in r) { // Two Lines: each line counts down on its own bit; the counter after them waits for two lines
-          r.lines.forEach((ln, i) => { for (const n of ln) mask[n]! |= 1 << (this.auxBase + i); left[this.auxBase + i] = ln.length; });
-          left[this.auxBase + 3] = 2; left[b] = 250;
+          const tb = this.twoBase.get(k)!;
+          r.lines.forEach((ln, i) => { for (const n of ln) mask[n]! |= 1 << (tb + i); left[tb + i] = ln.length; });
+          left[tb + 3] = 2; left[b] = 250;
         } else {
           for (const n of r.pool) mask[n]! |= 1 << b;
           left[b] = r.pool.length < r.k ? 250 : r.k; // 250: this ticket cannot complete it
@@ -152,7 +162,7 @@ export class PrizeEngine {
       if (!((m >> b) & 1)) continue;
       if (--left[b]! !== 0) continue;
       let h = b;
-      if (b >= this.auxBase) { if (--left[this.auxBase + 3]! !== 0) continue; h = this.twoBit; } // the second line of Two Lines is complete
+      if (b >= this.auxBase) { if (--left[this.auxCounter[b]!]! !== 0) continue; h = this.auxHouse[b]!; } // the second line of Two Lines is complete
       const pid = this.unitPid[u]!;
       if (this.donePid[h]!.has(pid)) continue; // their other ticket got there first
       this.donePid[h]!.add(pid);
