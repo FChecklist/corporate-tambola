@@ -81,3 +81,36 @@ describe("a join through a passing database overload", () => {
     expect(refused).toBeGreaterThan(100); expect(seated(id)).toBe(250);
   });
 });
+
+describe("a plain read (the control file, check-in, ...) through a passing database overload", () => {
+  beforeEach(() => { reset(); joinRetry.baseMs = 0; joinRetry.tries = 3; }); afterEach(() => { restore(); joinRetry.tries = oldTries; joinRetry.baseMs = oldBase; });
+  const ctl = (id: string) => call("GET", `/api/z/${id}/control`);
+
+  test("one overload on the way in: the control file is still answered (found by the 250 run, 5 Nov 2026: GET control -> 500)", async () => {
+    const id = uid("BZ"); await paidGame({ id });
+    const ok = await ctl(id); expect(ok.status).toBeLessThan(500);
+    let n = 1; flaky((sql) => { if (n > 0 && sql.startsWith("SELECT id, pack, start_round")) { n--; throw new Error(OVERLOAD); } });
+    const r = await ctl(id); expect(n).toBe(0); expect(r.status).toBe(ok.status);
+  });
+
+  test("still busy after the tries: a gentle 503 with retry-after for the read, not a 500", async () => {
+    const id = uid("BZ"); await paidGame({ id });
+    const oldSleep = joinRetry.sleep; let calls = 1; joinRetry.sleep = async () => { calls++; }; flaky(() => { throw new Error(OVERLOAD); });
+    const r = await ctl(id); joinRetry.sleep = oldSleep; expect(r.status).toBe(503); expect(r.headers.get("retry-after")).toBe("3");
+    const b = await j(r); expect(b.code).toBe("busy"); expect(String(b.error)).not.toMatch(/seat/i);
+    expect(calls).toBe(4); // the first go and three more
+  });
+
+  test("a real bug in a read is not hidden: still a 500, tried once", async () => {
+    const id = uid("BZ"); await paidGame({ id });
+    let first = "", calls = 0; flaky((sql) => { if (!first) first = sql; if (sql === first) calls++; throw new Error("TypeError: boom"); });
+    const r = await ctl(id); expect(r.status).toBe(500); expect(calls).toBe(1);
+  });
+
+  test("a write that is not a join is never asked twice by the server", async () => {
+    const id = uid("BZ"); await paidGame({ id });
+    let first = "", calls = 0; flaky((sql) => { if (!first) first = sql; if (sql === first) calls++; throw new Error(OVERLOAD); });
+    const r = await call("POST", `/api/z/${id}/claims`, { pid: "x", claims: [] }); expect(r.status).toBeGreaterThanOrEqual(400);
+    expect(calls).toBe(1);
+  });
+});

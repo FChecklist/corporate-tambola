@@ -642,7 +642,7 @@ async function cvFast(env: Env, eid: string): Promise<Response> {
 export const transientDb = (e: unknown): boolean => /overloaded|too many resources|network connection lost|connection (?:reset|closed)|timed out|timeout|internal error|temporarily unavailable|storage operation exceeded|D1_ERROR: .*(?:reset|unavailable)/i.test(String((e as any)?.message ?? e));
 /** Retry settings of a join; the tests set baseMs to 0 so they do not wait. */
 export const joinRetry = { tries: 3, baseMs: 250, sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)) };
-const busyReply = (): Response => new Response(JSON.stringify({ error: "The doors are very busy just now, with many guests arriving at the very same moment. Please wait a few seconds; the seat is still waiting, and the page will try again by itself.", code: "busy", retryAfter: 3 }), { status: 503, headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "3" } });
+const busyReply = (read = false): Response => new Response(JSON.stringify({ error: read ? "The doors are very busy just now. Please wait a few seconds; nothing is lost, and the page will try again by itself." : "The doors are very busy just now, with many guests arriving at the very same moment. Please wait a few seconds; the seat is still waiting, and the page will try again by itself.", code: "busy", retryAfter: 3 }), { status: 503, headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "3" } });
 export async function handle(req: Request, env: Env, now = Date.now(), waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
   if (req.method === "GET") { const cm = /^\/api\/z\/([A-Za-z0-9_-]{4,40})\/cv$/.exec(new URL(req.url).pathname); if (cm) return cvFast(env, cm[1]!); }
   const off = await maintenanceGate(req, env, now).catch(() => null);
@@ -656,14 +656,15 @@ export async function handle(req: Request, env: Env, now = Date.now(), waitUntil
   // because everything a join writes goes in ONE batch and the same person joining twice is the same participant, so trying again can never seat anyone twice.
   // If the database is still busy after that, the guest gets a gentle "please wait a moment" with a retry-after, never a bare server error.
   const joinTry = req.method === "POST" && /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/join$/.test(new URL(req.url).pathname);
+  const readTry = req.method === "GET"; // a plain read can be asked again as often as needed: nothing is written, so a retry cannot change anything
   const master = joinTry ? req.clone() : null;
   try {
     let attempt = 0;
     for (;;) {
       try { res = await handleCore(attempt === 0 || !master ? req : master.clone(), env, now, waitUntil); break; }
       catch (e) {
-        if (!joinTry || !transientDb(e)) throw e;
-        if (attempt >= joinRetry.tries) { await countError(env.DB, now).catch(() => {}); const p0 = recordServerError(env.DB, req, e, 503, now); if (waitUntil) waitUntil(p0); else await p0.catch(() => {}); return busyReply(); }
+        if (!(joinTry || readTry) || !transientDb(e)) throw e;
+        if (attempt >= joinRetry.tries) { await countError(env.DB, now).catch(() => {}); const p0 = recordServerError(env.DB, req, e, 503, now); if (waitUntil) waitUntil(p0); else await p0.catch(() => {}); return busyReply(readTry); }
         attempt++; await joinRetry.sleep(Math.round(joinRetry.baseMs * attempt * (0.6 + Math.random() * 0.8)));
       }
     }
