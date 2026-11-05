@@ -114,3 +114,20 @@ describe("a plain read (the control file, check-in, ...) through a passing datab
     expect(calls).toBe(1);
   });
 });
+
+describe("check-in (mark present) through a passing database overload", () => {
+  beforeEach(() => { reset(); joinRetry.baseMs = 0; joinRetry.tries = 3; }); afterEach(() => { restore(); joinRetry.tries = oldTries; joinRetry.baseMs = oldBase; });
+  test("POST check-in meeting one overload is asked again, not a 500 (39 of 1,135 errors in the 990-player run)", async () => {
+    const id = uid("BZ"); await paidGame({ id });
+    const oldSleep = joinRetry.sleep; let sleeps = 0; joinRetry.sleep = async () => { sleeps++; };
+    let n = 1; flaky((sql) => { if (n > 0 && sql.startsWith("SELECT * FROM engagement")) { n--; throw new Error(OVERLOAD); } });
+    const r = await call("POST", `/api/z/${id}/checkin`, { pid: "p-none", device: "d" }); joinRetry.sleep = oldSleep;
+    expect(n).toBe(0); expect(sleeps).toBe(1); expect(r.status).toBeLessThan(500);
+  });
+  test("still busy: gentle 503 with retry-after, no talk of seats", async () => {
+    const id = uid("BZ"); await paidGame({ id });
+    flaky((sql) => { if (sql.startsWith("SELECT * FROM engagement")) throw new Error(OVERLOAD); });
+    const r = await call("POST", `/api/z/${id}/checkin`, { pid: "p-none", device: "d" });
+    expect(r.status).toBe(503); expect(r.headers.get("retry-after")).toBe("3"); expect(String((await j(r)).error)).not.toMatch(/seat/i);
+  });
+});

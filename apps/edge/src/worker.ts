@@ -655,7 +655,7 @@ export async function handle(req: Request, env: Env, now = Date.now(), waitUntil
   // A join that meets a passing database overload ("D1 DB is overloaded ... 10 second window", a lost connection, a timeout) is tried again a few times with a short, random pause,
   // because everything a join writes goes in ONE batch and the same person joining twice is the same participant, so trying again can never seat anyone twice.
   // If the database is still busy after that, the guest gets a gentle "please wait a moment" with a retry-after, never a bare server error.
-  const joinTry = req.method === "POST" && /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/join$/.test(new URL(req.url).pathname);
+  const joinTry = req.method === "POST" && /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(join|checkin)$/.test(new URL(req.url).pathname); // join, and "I am here" (a check-in writes one idempotent present/ row: asking twice is the same answer)
   const readTry = req.method === "GET"; // a plain read can be asked again as often as needed: nothing is written, so a retry cannot change anything
   const master = joinTry ? req.clone() : null;
   try {
@@ -664,7 +664,7 @@ export async function handle(req: Request, env: Env, now = Date.now(), waitUntil
       try { res = await handleCore(attempt === 0 || !master ? req : master.clone(), env, now, waitUntil); break; }
       catch (e) {
         if (!(joinTry || readTry) || !transientDb(e)) throw e;
-        if (attempt >= joinRetry.tries) { await countError(env.DB, now).catch(() => {}); const p0 = recordServerError(env.DB, req, e, 503, now); if (waitUntil) waitUntil(p0); else await p0.catch(() => {}); return busyReply(readTry); }
+        if (attempt >= joinRetry.tries) { await countError(env.DB, now).catch(() => {}); const p0 = recordServerError(env.DB, req, e, 503, now); if (waitUntil) waitUntil(p0); else await p0.catch(() => {}); return busyReply(readTry || !/\/join$/.test(new URL(req.url).pathname)); }
         attempt++; await joinRetry.sleep(Math.round(joinRetry.baseMs * attempt * (0.6 + Math.random() * 0.8)));
       }
     }
