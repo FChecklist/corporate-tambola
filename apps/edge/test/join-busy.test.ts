@@ -31,6 +31,7 @@ describe("a join through a passing database overload", () => {
     expect(transientDb(new Error(OVERLOAD))).toBe(true);
     expect(transientDb(new Error("D1_ERROR: Network connection lost"))).toBe(true);
     expect(transientDb(new Error("D1_ERROR: timed out"))).toBe(true);
+    expect(transientDb(new Error("D1_ERROR: internal error; reference = d3rg4auvdvpoci8nm5qmu78l"))).toBe(true); // seen on Snakes, 5 Nov 2026
     expect(transientDb(new Error("TypeError: x is undefined"))).toBe(false);
     expect(transientDb(new Error("D1_ERROR: UNIQUE constraint failed: seat.pid"))).toBe(false);
   });
@@ -40,6 +41,12 @@ describe("a join through a passing database overload", () => {
     let n = 1; flaky((sql) => { if (n > 0 && sql.startsWith("SELECT * FROM engagement")) { n--; throw new Error(OVERLOAD); } });
     const r = await join(id, 1); expect(r.status).toBe(200); expect((await j(r)).pid).toBeTruthy();
     expect(n).toBe(0); expect(seated(id)).toBe(1);
+  });
+
+  test("a D1 internal error (as seen on Snakes, 5 Nov 2026) is retried as well", async () => {
+    const id = uid("BZ"); await paidGame({ id });
+    let n = 1; flaky((sql) => { if (n > 0 && sql.startsWith("SELECT * FROM engagement")) { n--; throw new Error("D1_ERROR: internal error; reference = d3rg4auvdvpoci8nm5qmu78l"); } });
+    const r = await join(id, 1); expect(r.status).toBe(200); expect(seated(id)).toBe(1);
   });
 
   test("an overload at the final write (the batch): tried again, still one seat", async () => {
