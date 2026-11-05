@@ -638,6 +638,11 @@ async function cvFast(env: Env, eid: string): Promise<Response> {
   if (cache) await cache.put(ck, res.clone()).catch(() => {});
   return res;
 }
+/** Errors that pass by themselves: the database's own 10-second overload limit, a dropped connection, a timeout. Anything else (a bug, a bad row) is NOT retried. */
+export const transientDb = (e: unknown): boolean => /overloaded|too many resources|network connection lost|connection (?:reset|closed)|timed out|timeout|temporarily unavailable|storage operation exceeded|D1_ERROR: .*(?:reset|unavailable)/i.test(String((e as any)?.message ?? e));
+/** Retry settings of a join; the tests set baseMs to 0 so they do not wait. */
+export const joinRetry = { tries: 3, baseMs: 250, sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)) };
+const busyReply = (): Response => new Response(JSON.stringify({ error: "The doors are very busy just now, with many guests arriving at the very same moment. Please wait a few seconds; the seat is still waiting, and the page will try again by itself.", code: "busy", retryAfter: 3 }), { status: 503, headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "3" } });
 export async function handle(req: Request, env: Env, now = Date.now(), waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
   if (req.method === "GET") { const cm = /^\/api\/z\/([A-Za-z0-9_-]{4,40})\/cv$/.exec(new URL(req.url).pathname); if (cm) return cvFast(env, cm[1]!); }
   const off = await maintenanceGate(req, env, now).catch(() => null);
@@ -647,7 +652,22 @@ export async function handle(req: Request, env: Env, now = Date.now(), waitUntil
   const seatsKey = req.method === "GET" && !req.headers.get("x-organizer") && typeof caches !== "undefined" && (/^\/api\/z\/[A-Za-z0-9_-]{4,40}\/seats$/.test(new URL(req.url).pathname) && new URL(req.url).searchParams.has("v") || /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/control$/.test(new URL(req.url).pathname) && !new URL(req.url).search) ? new Request(req.url) : null; // (the control file, read by every phone, is also public: a second of edge cache; a Host or the Organizer sends a key and always gets the fresh one)
   if (seatsKey) { const hit = await (caches as any).default.match(seatsKey).catch(() => null); if (hit) return hit; }
   let res: Response;
-  try { res = await handleCore(req, env, now, waitUntil); } catch (e) { await countError(env.DB, now); const p = recordServerError(env.DB, req, e, 500, now); if (waitUntil) waitUntil(p); else await p; return json({ error: "Something went wrong. Please try again.", code: "server-error" }, 500); }
+  // A join that meets a passing database overload ("D1 DB is overloaded ... 10 second window", a lost connection, a timeout) is tried again a few times with a short, random pause,
+  // because everything a join writes goes in ONE batch and the same person joining twice is the same participant, so trying again can never seat anyone twice.
+  // If the database is still busy after that, the guest gets a gentle "please wait a moment" with a retry-after, never a bare server error.
+  const joinTry = req.method === "POST" && /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/join$/.test(new URL(req.url).pathname);
+  const master = joinTry ? req.clone() : null;
+  try {
+    let attempt = 0;
+    for (;;) {
+      try { res = await handleCore(attempt === 0 || !master ? req : master.clone(), env, now, waitUntil); break; }
+      catch (e) {
+        if (!joinTry || !transientDb(e)) throw e;
+        if (attempt >= joinRetry.tries) { await countError(env.DB, now).catch(() => {}); const p0 = recordServerError(env.DB, req, e, 503, now); if (waitUntil) waitUntil(p0); else await p0.catch(() => {}); return busyReply(); }
+        attempt++; await joinRetry.sleep(Math.round(joinRetry.baseMs * attempt * (0.6 + Math.random() * 0.8)));
+      }
+    }
+  } catch (e) { await countError(env.DB, now); const p = recordServerError(env.DB, req, e, 500, now); if (waitUntil) waitUntil(p); else await p; return json({ error: "Something went wrong. Please try again.", code: "server-error" }, 500); }
   if (seatsKey && res.status === 200) { const h = new Headers(res.headers); h.set("cache-control", "public, max-age=0, s-maxage=" + (/\/control$/.test(new URL(req.url).pathname) ? "1" : "3")); const out = new Response(await res.text(), { status: 200, headers: h }); await (caches as any).default.put(seatsKey, out.clone()).catch(() => {}); return out; }
   if (res.status >= 500) { await countError(env.DB, now); const p = recordServerError(env.DB, req, undefined, res.status, now); if (waitUntil) waitUntil(p); else await p; }
   return res;
