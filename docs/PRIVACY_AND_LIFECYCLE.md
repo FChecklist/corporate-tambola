@@ -6,16 +6,16 @@ Short version: a player gives a name and a mobile number. The organizer is the c
 
 ## 1. The player notice (the two boxes shown before the name is asked)
 
-The wording is in `apps/edge/src/consent-text.json` (point K4) and is copied into `apps/web/public/consent.js`, which the join page renders (a test keeps the two identical); the join page does not fetch it from the server. Terms version 2026-10-15. Two boxes, never ticked in advance, both before any name field works:
+The wording is in `apps/edge/src/consent-text.json` (point K4) and is copied into `apps/web/public/consent.js`, which the join page renders (a test keeps the two identical); the join page does not fetch it from the server. Terms version 2026-10-30. Two boxes, never ticked in advance, both before any name field works:
 
-- A: the name and the mobile number are used for this game only and deleted within 24 hours after it ends; who invited the player is recorded until then; a winner's name, mobile number and prize record are kept for 365 days so the prize can be handed over; "We keep billing data for audit and tax reasons."; and the notice is available in Hindi on request. The same wording is in the Terms table, the stand-alone Privacy page (`/privacy.html`) and the organizer's report.
+- A: the name and the mobile number are used for this game only and deleted within 24 hours after it ends; if the game asks for an email ID (only an open game, and only if the player chooses to give it), that is used only for this game and deleted within 24 hours of the game; who invited the player is recorded until then; a winner's name, mobile number and prize record are kept for 365 days so the prize can be handed over; "We keep billing data for audit and tax reasons."; and the notice is available in Hindi on request. The same wording is in the Terms table, the stand-alone Privacy page (`/privacy.html`) and the organizer's report.
 - B: the player is 18 or older. Adults only: there is no parent's-device alternative (DPDP Act section 9); the box is never ticked in advance, the server refuses a join without it, and a join under an older Terms version is refused.
 
 The Join button stays disabled until both are ticked, and the server refuses a join without them. The server stores one row per acceptance in `consent_log`: the ticket id, the point (K4), the game id, the Terms version, the boxes, a hash of the exact wording, and the time. It holds no name, number, address or device. When the Terms version changes, the next join asks again.
 
 <!-- notice:start -->
 asked_from_player: name, mobile number
-asked_if_organizer_switches_on: none
+asked_if_organizer_switches_on: e-mail
 <!-- notice:end -->
 
 The block above is read by `apps/edge/test/data-map.test.ts`: it fails when the join notice mentions a field this list does not have, when this list has a field the notice leaves out, or when the player page asks for a field that is not listed.
@@ -30,6 +30,7 @@ The block above is read by `apps/edge/test/data-map.test.ts`: it fails when the 
 |---|---|---|---|---|
 | Name, typed by the player (2 to 60 characters, markup removed) | To show the organizer who a ticket belongs to (winners, prize hand-over) | **Sealed** (AES-256-GCM) in `participant.pii` at join | CF | Deleted 23 h after the game ends |
 | Mobile number, typed by the player (every player gives one in this game) | To find the person who comes back, to send a personal link and to keep one ticket for each person | **Sealed** in `participant.pii` and `person.pii`; a salted one-way hash in `participant.phone_hash`, `seat.ph`, `person.ph` | CF | 23 h after the end |
+| Email ID, typed by the player (optional; asked only in an open game, checked for shape, one email holds one ticket) | To keep one ticket for each person and to let the organizer reach the player about this game | **Sealed** in `participant.pii` (field `m`) and `person.pii`; a salted one-way hash in `kv email/<game id>/<hash>` to refuse a second ticket on the same email | CF | Deleted with the rest of the player data (23 h after the end; `kv email/<id>/` is removed by `erasePersonal`) |
 | Ticket number and player id (`pid`: the ticket number and a hash) | To tell players apart without a name; the winners record uses the ticket number | `seat`, `participant.pid`, `claim`, the seat list `kv seats-base/<id>` | CF | Deleted 23 h after the end (the winners record keeps the ticket number only) |
 | A hash of the phone's random device id (first 32 characters of `sha256("dev" + game id + device id)`) | One ticket per phone; the claims of a ticket come only from the phone that joined | `seat.dev` | CF | 23 h after the end |
 | Join time; a round number if the player joined after the game began | Report; late-join marker | `participant.joined_ms`, `seat.jr` | CF | 23 h after the end |

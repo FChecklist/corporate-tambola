@@ -10,7 +10,7 @@
 
   const WORDS = {
     start_engagement: "Start the engagement", end_engagement: "End the engagement", remove_people: "Remove people",
-    erase_details: "Erase saved details", erase_people: "Erase saved details", raise_limit: "Raise the participant limit",
+    erase_details: "Delete saved details", erase_people: "Delete saved details", raise_limit: "Raise the participant limit",
   };
   const tool = (t) => WORDS[t] || String(t || "An action").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()).replace(/\bgames?\b/gi, "engagement").replace(/\bplayers?\b/gi, "participant").replace(/\bprizes?\b/gi, "reward").replace(/\badmin\b/gi, "organizer");
   const paramLine = (p) => {
@@ -39,7 +39,7 @@
     if (status === 401) return "Please sign in again.";
     if (status === 409) return data.error || "This confirmation code does not match. Ask your AI for a fresh confirmation link.";
     if (status === 410) return data.error || "This request has expired or was already used. Ask your AI to draft it again.";
-    if (status === 404) return data.error || "This request was not found for your account. Make sure you are signed in with the same work email you gave your AI.";
+    if (status === 404) return data.error || "This request was not found for your account. Make sure you are signed in with the same e-mail you gave your AI.";
     return data.error || "Something went wrong. Please try again.";
   };
   const title = (status, data) => /already/i.test(data.error || "") ? "Already confirmed" : status === 410 ? "This request is no longer open" : status === 409 ? "This link does not match" : status === 404 ? "Not your request" : "We could not open this";
@@ -47,14 +47,14 @@
 
   // ---------- sign in ----------
   function signIn(msg) {
-    view(card(`<div class="eyebrow">Organizer sign in</div><h1>Sign in to confirm</h1><p class="muted small">Your AI cannot do this without you. Sign in with the work email you used for your account. We email you a 6-digit code: no password.</p>
+    view(card(`<div class="eyebrow">Organizer sign in</div><h1>Sign in to confirm</h1><p class="muted small">Your AI cannot do this without you. Sign in with the e-mail you used for your account. We email you a 6-digit code: no password.</p>
       ${msg ? `<div class="err" role="alert">${ic("alert")}<span>${esc(msg)}</span></div>` : ""}
-      <form id="lgForm" novalidate><label class="lb" for="lMail">Work email</label><input class="inp" id="lMail" type="email" autocomplete="email" placeholder="your e-mail" value="${esc(signedEmail)}"><div id="fErr"></div>
+      <form id="lgForm" novalidate><label class="lb" for="lMail">Your e-mail</label><input class="inp" id="lMail" type="email" autocomplete="email" placeholder="your e-mail" value="${esc(signedEmail)}"><div id="fErr"></div>
       <button class="btn block" style="margin-top:14px" type="submit" id="lgGo">Email me a code ${ic("arrow")}</button></form>`));
     $("lgForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const m = $("lMail").value.trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) return setErr("Please enter a valid work email.");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) return setErr("Please enter a valid e-mail address.");
       const b = $("lgGo"); b.disabled = true; setErr("");
       try { const r = await TB.api("POST", "/api/auth/email", { email: m }); signedEmail = m; codeView(m, r.devCode); }
       catch (er) { b.disabled = false; setErr(er.message); }
@@ -62,9 +62,9 @@
     const i = $("lMail"); if (i) i.focus();
   }
   function codeView(email, devCode) {
-    view(card(`<div class="sheethead"><div class="eyebrow">Check your inbox</div><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><img src="/logo-mark.svg" alt="" width="26" height="26"></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
+    view(card(`<div class="sheethead"><div class="eyebrow">Check your inbox</div><span class="sbrand" role="img" aria-label="Corporate Tambola"><span class="mark"><img src="/logo-mark.svg?v=2" alt="" width="26" height="26"></span><span class="word">Corporate Tambola<i>.</i></span></span></div>
       <h1 id="cdTitle">Check your email</h1>
-      <p class="sheetbody">We emailed <b class="sendto">${esc(email)}</b>. Tap a button in the email, or type the 6-digit passcode here. It works for 10 minutes. Check spam too.</p>
+      <p class="sheetbody">We emailed <b class="sendto">${esc(email)}</b>. Option 1: type the 6-digit number from the e-mail here. Option 2: tap <b>Sign me in</b> in the e-mail (then come back to this page). It works for 10 minutes. Check spam too.</p>
       ${devCode ? `<div class="note info devcode" role="note"><span>Local test mode: your passcode is <b>${esc(devCode)}</b></span><button type="button" class="btn sm" id="useCode">Use this passcode</button></div>` : ""}
       <form id="cdForm" novalidate><label class="lb" for="lCode">6-digit passcode</label><input class="inp mono codein" id="lCode" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="6" placeholder="••••••" aria-describedby="fErr cdHelp" autocapitalize="off" spellcheck="false"><div id="fErr" role="alert"></div>
       <button class="btn block big" style="margin-top:14px" type="submit" id="cdGo">Sign in</button></form>

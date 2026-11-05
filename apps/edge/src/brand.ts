@@ -3,7 +3,7 @@
 // The name is always exactly "Corporate Tambola". The palette is the site's (wine, gold, ivory).
 
 /** The version of the Terms in force (the date at the top of /terms.html). Stored with the organizer when they continue. */
-export const TERMS_VERSION = "2026-10-15";
+export const TERMS_VERSION = "2026-11-01";
 
 export const BRAND = {
   name: "Corporate Tambola",
@@ -11,7 +11,7 @@ export const BRAND = {
   tag: "Tambola", // the product tag at the start of every subject sent to people
   support: "hello@corporatetambola.com", // the contact address the site's legal page publishes
   legalPath: "/legal.html",
-  defaultOrigin: "https://corporatetambola.com",
+  defaultOrigin: "https://housie.corporatetambola.com",
   wine: "#0B3D91", gold: "#E0B872", gold2: "#F3D9A4", ivory: "#F4F7FC", line: "#D9E1F0",
 } as const;
 

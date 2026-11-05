@@ -1,0 +1,17 @@
+{
+ "step": "S10 who is let in (6 kinds of game)",
+ "trials": 500000,
+ "defects": 0,
+ "dpmo": 0,
+ "upper95PerMillion": 6,
+ "byKind": {
+  "list-mobile": 83166,
+  "open": 83378,
+  "emp-id": 83723,
+  "everyone-both": 83267,
+  "emp-both": 83321,
+  "everyone-id": 83145
+ },
+ "wrongKinds": {},
+ "seconds": 1266
+}

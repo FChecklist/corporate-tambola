@@ -13,7 +13,7 @@
       var b = document.createElement("button"); b.type = "button"; b.dataset.t = t[0]; b.style.background = t[1]; b.title = t[2]; b.setAttribute("aria-label", t[2] + " theme");
       b.onclick = function () { apply(t[0]); }; d.appendChild(b);
     });
-    document.body.appendChild(d); apply(get());
+    (document.querySelector(".ct-dots-slot") || document.body).appendChild(d); apply(get());
   }
   if (document.body) mount(); else document.addEventListener("DOMContentLoaded", mount);
 })();

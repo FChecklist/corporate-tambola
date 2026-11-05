@@ -128,7 +128,7 @@ export default [
     },
   },
   {
-    id: "S18-05", name: "The Bumper: with two tickets the Full Two-Ticket House can have many winners; the prizes list names 1st, 2nd... positions; a 101st winner is refused with a plain message",
+    id: "S18-05", name: "The Bumper: with two tickets the Super Bumper House can have many winners; the prizes list names 1st, 2nd... positions; a 101st winner is refused with a plain message",
     async run(t) {
       const org = await t.org("o"); const g = await t.game(org, { lead: 3 * H.HOUR, cfg: { tickets: 2 }, publish: false });
       const ok = await org.settings(g.id, { tickets: 2, rewards: [...rw("full", 1), ...rw("full", 25, "two_ticket")] });

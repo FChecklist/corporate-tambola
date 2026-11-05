@@ -4,7 +4,7 @@ Written 2026-10-22 for the owner. Plain words.
 
 ## What already exists
 
-Every organizer account has a private **AI work link** (console: "Let your free AI assistant do the work" → "Get my AI work link"). The link opens a front door written for AIs: rules, the guided path (`/go/new`: one short screen per question, each with numbered choices and a recommended answer), the 10 facts, and the hand-over links for the things only a human may do (publish, pay, erase, pause, end). The AI never sees guests' names or numbers and cannot choose winners.
+Every organizer account has a private **AI work link** (console: "Let your free AI assistant do the work" → "Get my AI work link"). The link opens a front door written for AIs: rules, the guided path (`/go/new`: one short screen per question, each with numbered choices and a recommended answer), the 10 facts, and the hand-over links for the things only a human may do (publish, pay, delete, pause, end). The AI never sees guests' names or numbers and cannot choose winners.
 
 ## What this task adds
 

@@ -245,6 +245,9 @@ describe("five brand moments for each ticket: openings, during the game, closing
     refused({ closing: [{ kind: "youtube", title: "Thanks", mediaUrl: "https://evil.example/x" }] });
     refused({ opening: [msg({ mediaUrl: "http://acme.com/a.mp4" })] });
     expect(good({ closing: [{ kind: "youtube", title: "Thanks", mediaUrl: "https://youtu.be/abcdefghijk" }] }).closing![0]!.mediaUrl).toContain("youtu.be");
+    for (const u of ["https://m.youtube.com/watch?v=abcdefghijk", "https://music.youtube.com/watch?v=abcdefghijk", "https://www.youtube.com/watch?v=abcdefghijk"]) expect(good({ closing: [{ kind: "youtube", title: "Thanks", mediaUrl: u }] }).closing![0]!.mediaUrl).toBe(u); // a link copied from a phone is a YouTube link
+    expect(refused({ closing: [{ kind: "youtube", title: "Thanks", mediaUrl: "https://youtube.com.evil.example/watch?v=abcdefghijk" }] })).toMatch(/not a YouTube video link/); // a look-alike address is not, and the sentence says what to do
+    expect(refused({ opening: [msg({ seconds: 40 })] })).toMatch(/steps of 3/); expect(refused({ breaks: [mid({ after: 30, seconds: 40 })] })).toMatch(/steps of 3/);
     refused({ opening: [msg({ title: "x" })] });
   });
 
@@ -268,10 +271,11 @@ describe("a media file kept on our own site", () => {
   });
 });
 
-describe("guest invitations: each guest may invite 1 to 10 people (default 4)", () => {
-  test("10 is the most; 0 and 11 are refused; the default stays 4", () => {
-    expect(validateCfg({ invites: { on: true, per: 10, cats: ["family"] } }).ok).toBe(true);
-    for (const per of [0, 11, 2.5]) expect(validateCfg({ invites: { on: true, per, cats: ["family"] } }).ok).toBe(false);
+describe("guest invitations: you and up to 4 family members (owner decision 1 Nov 2026)", () => {
+  test("4 is the most; 0 and 5 are refused politely; the default stays 4", () => {
+    expect(validateCfg({ invites: { on: true, per: 4, cats: ["family"] } }).ok).toBe(true);
+    for (const per of [0, 5, 10, 2.5]) expect(validateCfg({ invites: { on: true, per, cats: ["family"] } }).ok).toBe(false);
+    const r: any = validateCfg({ invites: { on: true, per: 5, cats: ["family"] } }); expect(r.error).toBe("You and up to 4 family members. Please choose a number from 1 to 4.");
     expect(defaultCfg().invites!.per).toBe(4);
   });
 });

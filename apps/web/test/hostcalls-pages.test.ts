@@ -65,37 +65,35 @@ const openStep = (p: Page, n: number) => p.click(`.zc-dot[data-open="${n}"]`);
 const file = (x: X, eid: string) => readPublished(x.kv, eid);
 
 describe("the console: who calls the numbers", () => {
-  test("step 1 offers the two plain choices; choosing the Host and saving stores callMode; step 2 then shows no speed chips; the read-back says so", async () => {
+  test("step 2 offers the two plain choices, before the gap; choosing the Host and saving stores callMode and hides the gap; the read-back says so", async () => {
     const x = await setup("HC-SET", false);
     const c = await consolePage(x, "HC-SET");
-    await c.waitFor((t) => /Who calls the numbers\?/.test(t));
-    const chips = Array.from(c.win.document.querySelectorAll('[data-ck="mode"]')).map((e: any) => e.textContent.trim());
-    expect(chips).toEqual(["The software, at the chosen speed", "A Host presses a button for each number"]);
-    expect((c.$('[data-ck="mode"][data-v="auto"]') as any).className).toMatch(/\bon\b/);
-    openStep(c, 2); await c.waitFor((t) => /Duration \(gap\) between two numbers/.test(t)); // auto: the speed chips are there
-    expect(c.$('[data-ck="spd"]')).toBeTruthy();
-    openStep(c, 1); c.click('[data-ck="mode"][data-v="host"]'); await wait(50);
-    expect(c.text()).toMatch(/press Next number on Game day/);
-    c.click('#sec1 [data-save="1"]');
+    await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /Who calls the numbers\?/.test(t) && /Duration \(gap\) between two numbers/.test(t));
+    const chips = Array.from(c.win.document.querySelectorAll('#rg-mode .zc-radio b')).map((e: any) => e.textContent.trim());
+    expect(chips).toEqual(["The game calls the numbers", "I call the numbers"]);
+    expect((c.$('[data-ck="mode"][data-v="auto"]') as any).checked).toBe(true);
+    const html = c.win.document.getElementById("sec2")!.innerHTML; expect(html.indexOf('data-ck="mode"')).toBeLessThan(html.indexOf('data-ck="spd"')); // who calls the numbers comes first, then the gap
+    expect(c.$('[data-ck="spd"]')).toBeTruthy(); // auto: the speed chips are there
+    c.click('[data-ck="mode"][data-v="host"]'); await wait(50);
+    expect(c.text()).toMatch(/I press the Next button for every number/);
+    expect(c.$('[data-ck="spd"]')).toBeNull(); expect(c.$("#nospeed")).toBeTruthy(); // host mode: no gap to choose
+    c.click('#sec2 [data-save="2"]');
     await c.waitFor((t) => /Saved\./.test(t));
     const sum = await x.w.json(await x.w.api("GET", "/api/z/HC-SET/summary", undefined, x.token));
     expect(sum.callMode).toBe("host");
     expect((await x.w.json(await x.w.api("GET", "/api/z/HC-SET/info"))).callMode).toBe("host");
-    openStep(c, 2); await c.waitFor((t) => /How many players/.test(t));
-    expect(c.$('[data-ck="spd"]')).toBeNull(); expect(c.$("#nospeed")).toBeTruthy(); // host mode: no gap to choose
     openStep(c, 7); await c.waitFor((t) => /a Host presses for each number/.test(t)); // the read-back
-    openStep(c, 1); await c.waitFor((t) => /Who calls the numbers\?/.test(t));
-    c.click('[data-ck="mode"][data-v="auto"]'); await wait(50); c.click('#sec1 [data-save="1"]'); // and back: the speed chips return once saved
+    openStep(c, 2); await c.waitFor((t) => /Who calls the numbers\?/.test(t));
+    await c.waitFor(() => !(c.win as any).__zc.saving); c.click('[data-ck="mode"][data-v="auto"]'); await wait(50); c.click('#sec2 [data-save="2"]'); // and back: the speed chips return
     const until = async (f: () => Promise<boolean>) => { const t0 = Date.now(); while (!(await f())) { if (Date.now() - t0 > 8000) throw new Error("timed out"); await wait(100); } };
     await until(async () => (await x.w.json(await x.w.api("GET", "/api/z/HC-SET/info"))).callMode === "auto");
     openStep(c, 2); await c.waitFor((t) => /Duration \(gap\)/.test(t), 12_000);
   });
-  test("step 1 refuses host mode for a game above the size limit, with a guide to the fix", async () => {
-    const x = await setup("HC-BIG", false, { cap: 2500 });
+  test("step 2 hides the Host-calling choice for a game above 1,000 people, with a short note why (nothing breaks)", async () => {
+    const x = await setup("HC-BIG", false, { cap: 1500 });
     const c = await consolePage(x, "HC-BIG");
-    await c.waitFor((t) => /Who calls the numbers\?/.test(t));
-    c.click('[data-ck="mode"][data-v="host"]'); c.click('#sec1 [data-save="1"]');
-    await c.waitFor((t) => /up to 2,000 people/.test(t));
+    await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /Games above 1,000 people are called by the game itself/.test(t));
+    expect(c.$('[data-ck="mode"]')).toBeNull(); expect(!!c.$("#callhidden")).toBe(true); expect(!!c.$('[data-ck="start"]')).toBe(true);
     expect((await x.w.json(await x.w.api("GET", "/api/z/HC-BIG/info"))).callMode).toBe("auto");
   });
 });
@@ -117,6 +115,7 @@ describe("the console on Game day: the Next number button", () => {
     c.click("#nextnum");
     await c.waitFor((t) => /On its way/.test(t), 15_000);
     expect((c.$("#nextnum") as any).disabled).toBe(true);
+    expect(c.$("#hoststate")!.textContent).toMatch(/Your press is sent\. The next number (arrives in about \d+ seconds|is arriving now)/); // TA26: the Host is told something is coming, not left with silence
     const f1 = (await file(x, "HC-DAY"))!; expect(f1.messages.map((m) => m.action)).toEqual(["next"]); // the signed press is stored by the Worker
     expect(f1.messages[0]!.atBeaconRound - f1.messages[0]!.signedAtRound).toBe(2);
     for (let i = 0; i < 5; i++) await x.step(); // 15 s: the round is published and every phone has it
@@ -141,6 +140,27 @@ describe("the console on Game day: the Next number button", () => {
     for (const p of x.phones) expect(p.rt.view().paused).toBe(true);
     expect(c.errors).toEqual([]);
   });
+  test("after End the game the Host's Next number button is off and says why; a press that still reaches a stopped game is refused in plain words, not 'engagement already stopped'", async () => {
+    const x = await setup("HC-END");
+    const c = await consolePage(x, "HC-END");
+    await c.waitFor((t) => /Game day|Your game|Last step/i.test(t));
+    openStep(c, 9); await c.waitFor((t) => /Next number/.test(t));
+    for (const p of x.phones) { await p.rt.boot(); expect(await p.rt.join(p.phone)).toBe(true); }
+    x.goLive(); for (let i = 0; i < 4; i++) await x.step();
+    await c.waitFor((t) => /Press for the first number when everyone is ready/.test(t), 15_000);
+    expect((c.$("#nextnum") as any).disabled).toBe(false);
+    // a press that reaches the server after the game was ended (from another device): the server answers 422 engagement already stopped
+    const real = c.win.fetch; let refuse = true;
+    c.win.fetch = async (input: any, init?: any) => { const u = new URL(String(input), "http://localhost"); if (refuse && (init?.method || "GET").toUpperCase() === "POST" && u.pathname === "/api/z/HC-END/control") return new Response(JSON.stringify({ error: "engagement already stopped" }), { status: 422, headers: { "content-type": "application/json" } }); return real(input, init); };
+    c.click("#nextnum"); await c.waitFor((t) => /This game has already been ended\./.test(t), 10_000);
+    expect(c.text()).not.toMatch(/engagement already stopped/i);
+    refuse = false;
+    // and when the game really is ended from this console, the button is off at once and the line under the number says so
+    c.click('[data-ctl="stop"]'); c.click("#zcsure [data-y]");
+    await c.waitFor((t) => /The game is (being ended|over)/.test(t), 15_000);
+    expect((c.$("#nextnum") as any).disabled).toBe(true); expect(c.$("#hoststate")!.textContent).toMatch(/The game is (being ended|over)/); expect(c.$("#hoststate")!.textContent).not.toMatch(/Press when you are ready/);
+    expect((await file(x, "HC-END"))!.messages.filter((m) => m.action === "next").length).toBe(0); // no number was released by the refused press
+  });
   test("in an auto-mode game there is no Next number button", async () => {
     const x = await setup("HC-AUTO", false);
     const c = await consolePage(x, "HC-AUTO");
@@ -164,7 +184,7 @@ describe("the phone page and the number screen", () => {
     x.goLive(); for (let i = 0; i < 3; i++) await x.step();
     const p = await openPage(x.w.world, { url: "http://localhost/z?e=HC-PH", html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { if (f === "zgame.js") rtFake(win, x.now); } });
     open.push(p);
-    await p.waitFor((t) => /Join the engagement/.test(t));
+    await p.waitFor((t) => /Join the game/.test(t));
     (p.$("#ph") as any).value = "9822222229"; (p.$("#nm") as any).value = "Asha"; p.click("#go");
     await p.waitFor((t) => /Waiting for the host/.test(t), 20_000);
     expect(p.text()).not.toMatch(/Next number in \d+s/);
@@ -179,7 +199,7 @@ describe("the phone page and the number screen", () => {
     await p.waitFor((t) => /1 of 90 called/.test(t) && /Waiting for the host/.test(t), 25_000);
     const n = p.win.__rt.view().log[0]; expect(n).toBeGreaterThan(0); // the page's own runtime
     expect((p.$("#big") as any).textContent.trim()).toBe(String(n));
-    await big.waitFor((t) => /1 of 90 numbers called/.test(t) && /Waiting for the host/.test(t), 25_000);
+    await big.waitFor((t) => /1 of 90 called/.test(t) && /Waiting for the host/.test(t), 25_000);
     expect(p.errors).toEqual([]); expect(big.errors).toEqual([]);
   });
 });

@@ -10,6 +10,8 @@ import { GRACE_ROUNDS, roundEid } from "../../packages/beacon/src/config";
 // @ts-ignore plain JS module shared with the node harness (no declaration file on purpose)
 import { fakeFetcher, fakeVerify, randomnessOf, roundTimeMs } from "./lib/beacon.mjs";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+const CONSENT: any = JSON.parse(readFileSync(new URL("../../apps/edge/src/consent-text.json", import.meta.url), "utf8")); // the K4 boxes a person ticks on the join page (without them the join answers "Please tick the box to continue.")
 
 const a = JSON.parse(process.argv[2] ?? "{}");
 const BASE: string = a.base ?? "http://localhost:8801", EID: string = a.eid, START: number = a.startRound, N: number = a.phones ?? 30, SEED: string = a.seed ?? "sim";
@@ -27,6 +29,14 @@ await post("/__sim/clock", { set: utc(), freeze: true });
 
 interface P { rt: PhoneRuntime; phone: string; joinAt: number; offFrom: number; offTo: number; failed: string[] }
 let step = 0;
+// Since 23 Oct 2026 a ticket opens, and a claim is accepted, only after the person marked themselves present (checkin.ts): fetch the code shown on the ticket page and submit it, as the page does
+async function checkin(p: any) {
+  if (p.ck) return; const v = p.rt.view(); if (!v.pid) return; const dev = p.rt.device();
+  const g: any = await p.rt.deps.api("GET", `/api/z/${EID}/checkin?pid=${encodeURIComponent(v.pid)}&device=${encodeURIComponent(dev)}`);
+  if (g && g.required === false) { p.ck = 1; return; }
+  await p.rt.deps.api("POST", `/api/z/${EID}/checkin`, { pid: v.pid, device: dev, code: g.code, confirmName: true, confirmMobile: true }); p.ck = 1;
+}
+const apiRefusals: string[] = [];
 const phones: P[] = Array.from({ length: N }, (_, i) => {
   const mem = new Map<string, string>(), phone = "9" + String(PHONE0 + i).padStart(9, "0").slice(-9), ip = `10.20.${(i >> 8) & 255}.${(i & 255) + 1}`;
   const offFrom = rng() < OFF ? 20 + Math.floor(rng() * 100) : -1;
@@ -35,8 +45,10 @@ const phones: P[] = Array.from({ length: N }, (_, i) => {
   p.rt = new PhoneRuntime(EID, {
     api: async (m: string, path: string, b?: unknown) => {
       if (isOff()) throw new Error("offline");
-      const r = await fetch(BASE + path, { method: m, headers: { "content-type": "application/json", "x-sim-ip": ip }, body: b === undefined ? undefined : JSON.stringify(b) });
+      const body = m === "POST" && /\/join$/.test(path) && b && typeof b === "object" && !(b as any).consent ? { ...(b as object), consent: { v: CONSENT.version, boxes: Object.keys(CONSENT.K4) } } : b;
+      const r = await fetch(BASE + path, { method: m, headers: { "content-type": "application/json", "x-sim-ip": ip }, body: body === undefined ? undefined : JSON.stringify(body) });
       const j: any = await r.json().catch(() => ({}));
+      if (!r.ok && /\/(claims|bogey)$/.test(path)) apiRefusals.push(`${m} ${path} -> ${r.status} ${JSON.stringify(j).slice(0, 160)}`);
       if (!r.ok) throw Object.assign(new Error(j.error ?? "http " + r.status), { status: r.status, code: j.code, body: j });
       return j;
     },
@@ -58,7 +70,7 @@ for (step = 0; step < MAX; step++) {
     if (step < p.joinAt) continue;
     const ph = p.rt.phase;
     if (step === p.joinAt) batch.push(p.rt.boot().then(() => p.rt.join(p.phone, "P" + p.phone.slice(-4))).catch((e: any) => p.failed.push("join: " + (e?.message ?? e))));
-    else if (ph === "play" || ph === "ended") batch.push(p.rt.tick().catch((e: any) => p.failed.push("tick: " + (e?.message ?? e))));
+    else if (ph === "play" || ph === "ended") batch.push(checkin(p).catch((e: any) => { if (!/opens at/i.test(String(e?.message))) p.failed.push("checkin: " + (e?.message ?? e)); }).then(() => p.rt.tick()).then(async () => { const got = await (p.rt as any).playAlong(); (p as any).pressed = ((p as any).pressed ?? 0) + got.length; }).catch((e: any) => p.failed.push("tick: " + (e?.message ?? e)))); // since the Claim button exists a phone only wins if its player taps the numbers and presses Claim: playAlong() is the rehearsal helper for exactly that
     else if (ph === "join") batch.push(p.rt.join(p.phone, "P" + p.phone.slice(-4)).catch(() => {}));
     else if (ph === "boot") batch.push(p.rt.boot().catch(() => {}));
   }
@@ -84,4 +96,4 @@ if (groups.size > 1) failures.push(`phones disagree on the winners (${groups.siz
 const badDetail: any[] = [];
 for (const x of ended.filter((x) => !full.includes(x)).slice(0, 5)) { const off = x.v.late?.hidden ?? 0, rf = ref[rounds - 1]!; const fm = x.v.log.findIndex((n: number, i: number) => n !== rf[i + off]); badDetail.push({ phone: x.p.phone, joinAt: x.p.joinAt, offFrom: x.p.offFrom, hidden: off, logLen: x.v.log.length, firstMismatch: fm, got: x.v.log.slice(Math.max(0, fm - 1), fm + 4), want: rf.slice(Math.max(0, fm - 1) + off, fm + 4 + off), late: x.v.late }); failures.push(`phone ${x.p.phone} has a wrong number log (joinAt ${x.p.joinAt}, offline from ${x.p.offFrom}, first mismatch at call ${fm})`); }
 const resultsFinal = await (await fetch(`${BASE}/api/z/${EID}/results`)).json() as any;
-console.log(JSON.stringify({ ok: !failures.length, phones: N, joined: joined.length, ended: ended.length, steps: step, seconds: +((Date.now() - t0) / 1000).toFixed(1), logsEqual: `${full.length}/${ended.length}`, groups: [...groups].map(([c, n]) => ({ count: n, results: JSON.parse(c).length })), results: ended[0]?.v.results ?? [], published: resultsFinal.results ?? [], reference: ref[rounds - 1], perPhone: ended.slice(0, 400).map((x) => ({ phone: x.p.phone, canon: sha(canon(x.v.results)).slice(0, 8) })), failures, badDetail, phases: views.reduce((m: any, x) => (m[x.v.phase] = (m[x.v.phase] ?? 0) + 1, m), {}), sample: views.slice(0, 3).map((x) => ({ firstMismatch: x.v.log.findIndex((n: number, i: number) => n !== ref[rounds - 1]![i + (x.v.late?.hidden ?? 0)]), logHead: x.v.log.slice(0, 6), refHead: ref[rounds - 1]!.slice(0, 6), phone: x.p.phone, phase: x.v.phase, error: x.v.error, log: x.v.log.length, nowRound: x.v.nowRound, startRound: x.v.startRound, mode: x.v.mode, locked: x.v.locked, late: x.v.late })), phoneErrors: phones.flatMap((p) => p.failed).slice(0, 5) }));
+console.log(JSON.stringify({ ok: !failures.length, phones: N, joined: joined.length, ended: ended.length, steps: step, seconds: +((Date.now() - t0) / 1000).toFixed(1), logsEqual: `${full.length}/${ended.length}`, groups: [...groups].map(([c, n]) => ({ count: n, results: JSON.parse(c).length })), results: ended[0]?.v.results ?? [], published: resultsFinal.results ?? [], reference: ref[rounds - 1], perPhone: ended.slice(0, 400).map((x) => ({ phone: x.p.phone, canon: sha(canon(x.v.results)).slice(0, 8) })), failures, badDetail, phases: views.reduce((m: any, x) => (m[x.v.phase] = (m[x.v.phase] ?? 0) + 1, m), {}), sample: views.slice(0, 3).map((x) => ({ firstMismatch: x.v.log.findIndex((n: number, i: number) => n !== ref[rounds - 1]![i + (x.v.late?.hidden ?? 0)]), logHead: x.v.log.slice(0, 6), refHead: ref[rounds - 1]!.slice(0, 6), phone: x.p.phone, phase: x.v.phase, error: x.v.error, log: x.v.log.length, nowRound: x.v.nowRound, startRound: x.v.startRound, mode: x.v.mode, locked: x.v.locked, late: x.v.late })), phoneErrors: phones.flatMap((p) => p.failed).slice(0, 5), apiRefusals: apiRefusals.slice(0, 5), pressedClaims: phones.reduce((n, p) => n + ((p as any).pressed ?? 0), 0), claimsKnown: views.map((x) => x.v.claimsKnown).slice(0, 3), marks: views.map((x) => x.v.marks.length).slice(0, 3) }));

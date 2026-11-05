@@ -4,11 +4,13 @@
 //   - without the current version and every box of the point the answer is HTTP 400 { error, code: "consent-required", kind, version }
 //   - every acceptance is one row in consent_log: who (an opaque id), which point, which game or payment, the Terms version, the boxes, a hash of the exact wording shown, the time.
 //     No IP address, no browser details and no phone number are ever stored here.
-//   - the rows of a participant (K4) are erased with the game's other participant data (lifecycle.ts); an organizer's rows are kept as the record of what they accepted.
+//   - the rows of a participant (K4) are auto-deleted with the game's other participant data (lifecycle.ts); an organizer's rows are kept as the record of what they accepted.
 import { TERMS_VERSION } from "./brand";
 import TEXT from "./consent-text.json";
-import type { D1 } from "./worker";
+import type { D1, D1Stmt } from "./worker";
 
+/** The notice, as shown on every page (the same sentence as NOTICE_TEXT in vendor/game-core wording/src/consent.ts of the games that vendor the core; this game has no vendored core). */
+const NOTICE_TEXT = "By continuing, you agree to the Terms and Conditions, Privacy and Data, and Game rules.";
 export type ConsentKind = "K1" | "K2" | "K3" | "K4" | "K5" | "K6" | "K9";
 /** The current Terms version (one constant: brand.ts). */
 export const CONSENT_VERSION = TERMS_VERSION;
@@ -27,15 +29,19 @@ export const CONSENT_SCHEMA: string[] = [
 
 const encoder = new TextEncoder();
 const hex = (b: ArrayBuffer) => Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, "0")).join("");
-export const wordingHash = async (kind: ConsentKind): Promise<string> => hex(await crypto.subtle.digest("SHA-256", encoder.encode(wordingOf(kind).join("\n"))));
+/** The proof of what was shown: sha256 of the notice line (no tick-boxes since 1 Nov 2026: going ahead is the agreement). Same line for every point. */
+export const wordingHash = async (_kind: ConsentKind): Promise<string> => hex(await crypto.subtle.digest("SHA-256", encoder.encode(NOTICE_TEXT)));
 
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
+export const STALE_PAGE_MESSAGE = "This page is out of date. Please reload it and try again. Sorry for the trouble.";
 /** null when the request carries the current Terms version and every box of this point; otherwise the answer to send (HTTP 400, code consent-required). */
 export function consentMissing(b: any, kind: ConsentKind): Response | null {
   const c = b?.consent, need = boxesOf(kind);
   const given: unknown[] = Array.isArray(c?.boxes) ? c.boxes : [];
   if (c && typeof c === "object" && c.v === CONSENT_VERSION && need.length > 0 && need.every((id) => given.includes(id))) return null;
+  // a page that was opened before a new Terms version (its cached script sends the old one): the person DID tick, so tell them to reload instead of asking for a tick again
+  if (c && typeof c === "object" && typeof c.v === "string" && c.v !== CONSENT_VERSION) return json({ error: STALE_PAGE_MESSAGE, code: "consent-required", stale: true, kind, version: CONSENT_VERSION }, 400);
   return json({ error: "Please tick the box to continue.", code: "consent-required", kind, version: CONSENT_VERSION }, 400);
 }
 
@@ -44,6 +50,12 @@ const newId = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), (x) =
 export async function recordConsent(db: D1, o: { subject: string; kind: ConsentKind; ref: string | null; now: number }): Promise<void> {
   await db.prepare("INSERT INTO consent_log(id,subject,kind,ref,version,boxes,text_hash,at_ms) VALUES(?,?,?,?,?,?,?,?)")
     .bind(newId(), o.subject, o.kind, o.ref, CONSENT_VERSION, boxesOf(o.kind).join(","), await wordingHash(o.kind), o.now).run();
+}
+
+/** The same record as recordConsent, as a statement that takes its subject (the participant id) from the seat just made, so a join can write it in the same batch as the seat. */
+export async function consentFromSeat(db: D1, o: { kind: ConsentKind; ref: string; now: number; eid: string; ph: string }): Promise<D1Stmt> {
+  return db.prepare("INSERT INTO consent_log(id,subject,kind,ref,version,boxes,text_hash,at_ms) SELECT ?, pid, ?, ?, ?, ?, ?, ? FROM seat WHERE eid=? AND ph=?")
+    .bind(newId(), o.kind, o.ref, CONSENT_VERSION, boxesOf(o.kind).join(","), await wordingHash(o.kind), o.now, o.eid, o.ph);
 }
 
 /** Has this subject ticked this point under the CURRENT Terms version? (Pass `anyVersion` to ask only whether they ever did.) */

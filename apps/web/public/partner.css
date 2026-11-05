@@ -68,3 +68,10 @@ body.signed #dash{display:block}
   .rsticky{display:none}.rfinal{padding-bottom:48px}.rfoot{padding-bottom:20px}
 }
 @media (prefers-reduced-motion:no-preference){.rcta,.rsticky a,.rcard .zbtn{transition:transform .12s}.rcta:hover,.rcard .zbtn:hover{transform:translateY(-1px)}}
+
+/* 1.8.5 polish: controls at least 40px high, text at least 14px (inputs 16px, no iOS zoom) */
+button,.btn{min-height:40px;font-size:max(14px,1em)}
+input:not([type=range]):not([type=checkbox]):not([type=radio]),select,textarea{min-height:40px;font-size:16px}
+
+/* 1.8.5 polish: header, nav and footer links have a 40px tap area */
+header a,nav a,footer a,.rfoot a{display:inline-block;min-height:40px;line-height:40px}

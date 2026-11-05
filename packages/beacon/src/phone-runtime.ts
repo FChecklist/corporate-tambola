@@ -1,14 +1,27 @@
 // The whole phone-side engagement loop, with no UI, so it can be tested without a browser and then wrapped by a thin page.
 // It talks to exactly two things: the public beacon (through BeaconOpts) and our one small store (through deps.api).
+import { beatOffsetMs, beatPeriodMs, followUpSpreadMs, msToNextBeat, presenceK, reconnectAfterMs, ticketOf } from "./beat";
 import { generateTicket, type Ticket } from "../../shared/src/ticket";
 import { winningNumbers } from "./house-rules";
 import { ALL_SAFETIES, ControlTracker, SAFETY_FAST, SAFETY_STANDARD, hostControlOf, pausedAt, type ControlConfig } from "./control";
-import { CLAIM_WINDOW_CALLS, GRACE_ROUNDS, LATE_LAG_ROUNDS, defaultCfg, houseLabel, keysInPlay, linesFor, roundEid, validateCfg, votersFor, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import { CLAIM_LATE_TEXT, CLAIM_WINDOW_CALLS, GRACE_ROUNDS, LATE_LAG_ROUNDS, defaultCfg, houseLabel, keysInPlay, linesFor, roundEid, validateCfg, votersFor, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
 import { PrizeEngine, countFromOf } from "./prize-engine";
 import { BOGEYS_OUT, RoundStore, activeBreak, activeIntermission, callRoundR, completionIndexKey, hostGameOf, luckyRound, luckyWinners, ticketsFor, type PublicClaim } from "./game";
 import { seatOfPid } from "./unique-ticket";
 import { NUMBERS, QUICKNET, fetchRound, pickNumber, roundAt, roundTimeMs, type BeaconOpts } from "./index";
 
+/** The last seconds of a pause in which a phone counts "restarts in" (owner ruling Q2, 2026-10-29). */
+export const RESTART_COUNT_SECS = 5;
+/**
+ * D3 (250-person live game, 3 Nov 2026: 3 of 248 phones showed Top Line won at call 34, the store and 245 phones at call 31). A claim is stamped with the store's time when its
+ * request ARRIVES and written a little later (the request checks the ticket, the clock and the day's budget first), so under load a claim stamped a moment earlier can land after a
+ * later one, for example a wrong claim (Bogey) pressed a second later. A phone that asked in between had moved its cursor past the earlier claim and, asking "after the newest time
+ * I have", never received it: it gave the prize to the next claimant. So the phone asks from this long before the newest time it has (repeats are dropped by their id).
+ */
+export const CLAIM_CURSOR_SLACK_MS = 30_000;
+/** After the game the phone reads the store's agreed results (several phones' votes) until each prize it shows has one, at most this many times, every END_RESULT_EVERY_MS: what the store holds is shown. (Usually 1 or 2 reads: the votes settle every prize within a minute or so of the end.) */
+export const END_RESULT_POLLS = 10;
+export const END_RESULT_EVERY_MS = 30_000;
 export interface PhoneDeps {
   /** Calls our store. Must throw an Error with `.status` on HTTP errors, and a plain Error when offline. */
   api(method: string, path: string, body?: unknown): Promise<any>;
@@ -28,9 +41,13 @@ export type Phase = "boot" | "missing" | "join" | "play" | "ended";
 export interface RuntimeView {
   phase: Phase; error: string | null; pid: string | null; ticket: Ticket | null; log: number[]; nowRound: number | null;
   locked: boolean;
-  startRound: number; scheduledRound: number; callSeconds: number; mode: "live" | "hold" | "blind" | "none"; paused: boolean; stopped: boolean;
-  claimed: PatternKey[]; unsent: number; results: { pattern: PatternKey | "lucky"; ordinal: number; idx: number; count: number; winners?: string[]; round?: number }[]; pendingChecks: number; discarded: number;
+  startRound: number; scheduledRound: number; callSeconds: number; mode: "live" | "hold" | "blind" | "none"; /** A claim is being checked: the game waits for everyone (gentle words: "Claim being checked"). */ claimHold: boolean; paused: boolean; stopped: boolean;
+  claimed: PatternKey[]; unsent: number; results: { pattern: PatternKey | "lucky"; ordinal: number; idx: number; count: number; winners?: string[]; tickets?: number[]; round?: number }[]; pendingChecks: number; discarded: number;
   nextCallInSec: number | null;
+  /** Seconds left to claim, minus one (11 down to 0): a nudge only, the game's clock decides. null when there is no gap to count (a Host calls the numbers) or no time left. */
+  claimLeft: number | null;
+  /** The claim signal has not answered for a while although the page is in front: the page says Reconnecting. */
+  reconnecting: boolean;
   tickets: Ticket[]; cfg: EngagementCfg;
   /** The brand break showing right now, with seconds left; null when none. */
   brk: { title: string; kind: BreakCfg["kind"]; mediaUrl?: string; secondsLeft: number; seconds: number; winners?: number } | null;
@@ -47,7 +64,7 @@ export interface RuntimeView {
   /** For each earlier round, the reward lines this phone received (a line is received when this phone completed it at the call the organizer published). */
   past: { round: number; got: { pattern: PatternKey; ordinal: number }[] }[];
   /** Every reward line this phone won, in any round (a line is won when this phone completed it at the call the results name). `text` is what the organizer wrote for that line. */
-  won: { round: number; pattern: PatternKey; ordinal: number; text: string; cells: number[]; idx: number }[];
+  won: { round: number; pattern: PatternKey; ordinal: number; text: string; cells: number[]; idx: number; shared: number }[];
   /** True when every reward line of the round being played has been awarded. */
   allAwarded: boolean;
   /** The engagement ended because every prize was awarded (not because all 90 numbers were called). */
@@ -60,6 +77,24 @@ export interface RuntimeView {
   callMode: "auto" | "host";
   /** Host mode, game running: the last number has reached this phone and the Host has not pressed for the next one yet. */
   waitingForHost: boolean;
+  /** The pause in force right now: who paused, since when (ms), when it should end by itself (ms), seconds left. Null when the game is not paused. */
+  pausedInfo: { by: "the Organizer" | "a Host"; sinceMs: number; endMs: number; secondsLeft: number; /** the last seconds before the numbers start again (5 or fewer): a "restarts in" count; null before that. After it the first number comes a full gap later (owner ruling Q2). */ restartsInSec: number | null } | null;
+  /** The prizes this player has just completed and can claim RIGHT NOW: the number that completed them is the latest one (the claim must reach the game before the next number is announced). Empty when paused, finished or too late. */
+  claimNow: PatternKey[];
+  /** The prizes that can still be claimed (the completing number is the latest one), even while the game is paused: the Claim buttons. */
+  claimOpen: PatternKey[];
+  /** The claims everybody can see (ticket numbers only), newest last: the phone shows "Ticket 214 has claimed Top Line. Checking now..." from them. */
+  claimFeed: { id: string; ticket: number; pattern: PatternKey; bogey: boolean; atMs: number }[];
+  /** The friendly message for a claim that came after the next number was announced (kept until the next number), or null. */
+  lateClaim: string | null;
+  /** How the game begins: by itself at the scheduled time (auto) or when the Host / Organizer presses Start (manual). */
+  startMode: "auto" | "manual";
+  /** Manual start: the scheduled time has come and nobody has pressed Start yet. */
+  waitingForStart: boolean;
+  /** Manual start: the beacon round Start named (the game begins in that round), or null while nobody has pressed Start. */
+  goRound: number | null;
+  /** Manual start: Start was pressed; the game begins in this many seconds. Null otherwise. */
+  startingInSec: number | null;
   /** The numbers of the round being played that THIS player has tapped on their ticket (kept on the phone). The ticket never marks itself. */
   marks: number[];
   /** The houses this player's own marks have completed and not yet claimed (and that still have an open position): a Claim button is shown for each. */
@@ -99,7 +134,10 @@ export class PhoneRuntime {
   private logs: number[][] = [[]];
   private ticketMemo = new Map<number, Ticket[]>();
   private offsetMs: number | null = null; // utc - mono
+  private offsetSamples: number[] = []; // the last few clock answers (the median is used)
   private syncedAtMono = -Infinity;
+  private clockFailSince: number | null = null; // when the public clock first failed to answer (a blocked network): after 15 seconds the banner says what to try
+  private sendingBogeys = false; // one send loop at a time, so two ticks that overlap never send the same Bogey twice
   private lastControlPoll = -Infinity;
   private lastResultPoll = -Infinity;
   private get logCache(): number[] { return this.logs[this.cur - 1] ?? (this.logs[this.cur - 1] = []); }
@@ -119,12 +157,19 @@ export class PhoneRuntime {
   private get stride() { return this.callSeconds / QUICKNET.periodSec; }
 
   /** UTC now from the beacon's own schedule: one verified "latest" answer, then our monotonic clock carries it. Re-synced every minute. */
+  /** The page came back to the front (another app, a call): ask for the clock again at once, so the number, the counter and the timer are right within a second. */
+  resync(): void { this.syncedAtMono = -Infinity; this.offsetSamples = []; }
   async syncClock(): Promise<boolean> {
     const m = this.deps.mono();
     if (this.offsetMs !== null && m - this.syncedAtMono < 60_000) return true;
     const x = await fetchRound("latest", { ...this.deps.beacon, ...(this.deps.verify ? { verify: this.deps.verify as any } : {}) }, 0);
     if (!x) return this.offsetMs !== null;
-    this.offsetMs = roundTimeMs(x.round) + (QUICKNET.periodSec * 1000) / 2 - m;
+    // One answer of "latest" can be a round or two old (a cached mirror) and then makes the clock run SLOW (seen: the countdown jumped 1:43 -> 1:49). A stale answer is never too new, so of the
+    // last 5 answers the NEWEST estimate (the largest) is the most accurate; the error left is under 1.5 s. An answer more than 15 s below the best one (a changed clock) starts the list again.
+    const sample = roundTimeMs(x.round) + (QUICKNET.periodSec * 1000) / 2 - m;
+    if (this.offsetSamples.length && Math.max(...this.offsetSamples) - sample > 15_000) this.offsetSamples = [];
+    this.offsetSamples.push(sample); if (this.offsetSamples.length > 5) this.offsetSamples.shift();
+    this.offsetMs = Math.max(...this.offsetSamples);
     this.syncedAtMono = m;
     return true;
   }
@@ -137,7 +182,7 @@ export class PhoneRuntime {
     } catch (e: any) {
       const st = e?.status; // the real reason: a wrong link, a game that is not open, or the connection / the service
       this.phase = st === 404 || st === 403 || st === 410 ? "missing" : "boot";
-      this.error = st === 404 ? "This engagement link is not valid." : st === 403 || st === 410 ? String(e?.message || "This engagement is not open yet.") : st && st >= 500 ? "The game could not be opened just now. Please try again in a minute." : "Could not reach the engagement. Check your connection.";
+      this.error = st === 404 ? "This game link is not valid." : st === 403 || st === 410 ? String(e?.message || "This game is not open yet.") : st && st >= 500 ? "The game could not be opened just now. Please try again in a minute." : "Could not reach the game. Check your connection.";
       return;
     }
     const pid = this.deps.store.get(this.key("pid"));
@@ -150,11 +195,15 @@ export class PhoneRuntime {
 
   /** Tickets, rewards and brand breaks come from the engagement's public settings; anything malformed falls back to the plain engagement. */
   private readCfg(info: any) {
-    const v = validateCfg({ tickets: info?.tickets, ties: info?.ties, rewards: info?.rewards, breaks: info?.breaks, rounds: info?.rounds, invites: info?.invites, opening: info?.opening, closing: info?.closing, callMode: info?.callMode === "host" ? "host" : undefined }, undefined, { stored: true });
+    const v = validateCfg({ tickets: info?.tickets, ties: info?.ties, rewards: info?.rewards, breaks: info?.breaks, rounds: info?.rounds, invites: info?.invites, opening: info?.opening, closing: info?.closing, callMode: info?.callMode === "host" ? "host" : undefined, startMode: info?.startMode === "manual" ? "manual" : undefined, afterPrizes: info?.afterPrizes === "keep" ? "keep" : undefined }, undefined, { stored: true });
     this.cfg = v.ok ? v.cfg : defaultCfg();
-    if (this.tracker) Object.assign(this.tracker.cfg, hostControlOf(hostGameOf(this.cfg))); // the settings are locked once the game starts; before that a re-read keeps the control rules in step
+    if (this.tracker) this.tracker.reconfigure(hostControlOf(hostGameOf(this.cfg, this.scheduledRound))); // before the start a re-read keeps the control rules in step
   }
   private get hostMode() { return this.cfg.callMode === "host"; }
+  /** A manual start: nothing is called until a Host or the Organizer presses Start (a signed "go" in the control file). */
+  /** Who sent each control message (role words from the control file): "paused by the Organizer". */
+  private ctlBy: string[] = [];
+  private get manualStart() { return this.cfg.startMode === "manual"; }
 
   // ---- real housie: the ticket never marks itself. The player's own marks, presses and Bogeys are kept on this phone (ctz:<eid>:marks) ----
   /** round -> the numbers this player tapped */
@@ -164,7 +213,7 @@ export class PhoneRuntime {
   /** "round:house" -> wrong claims (Bogeys) on it; at BOGEYS_OUT the ticket is out of that house for the round */
   private bogeys = new Map<string, number>();
   /** Bogey records the store has not taken yet (sent again on the next tick, like a claim) */
-  private bogeyUnsent: { pattern: PatternKey; round: number }[] = [];
+  private bogeyUnsent: { pattern: PatternKey; round: number; n: number }[] = [];
   private loadMarks() {
     this.marks.clear(); this.pressed.clear(); this.bogeys.clear();
     try {
@@ -183,10 +232,15 @@ export class PhoneRuntime {
   private outOf(key: PatternKey, round = this.cur) { return this.bogeysOn(key, round) >= BOGEYS_OUT; }
   /** Tells the store about a Bogey (every phone must know it, so the winners agree). Kept and sent again if the store cannot be reached. */
   private async sendBogeys() {
+    if (this.sendingBogeys) return; // the loop already running also sends anything added meanwhile (its condition is read again after every send)
+    this.sendingBogeys = true;
+    try { await this.sendBogeysNow(); } finally { this.sendingBogeys = false; }
+  }
+  private async sendBogeysNow() {
     while (this.bogeyUnsent.length && this.pid) {
       const b = this.bogeyUnsent[0]!;
       try {
-        const ans = this.trackClaims ? await this.deps.api("POST", `/api/z/${this.eid}/bogey`, { pid: this.pid, pattern: b.pattern, ...(b.round > 1 ? { round: b.round } : {}) }) : null;
+        const ans = this.trackClaims ? await this.deps.api("POST", `/api/z/${this.eid}/bogey`, { pid: this.pid, device: this.device(), pattern: b.pattern, n: b.n, ...(b.round > 1 ? { round: b.round } : {}) }) : null; // n = the number of this Bogey on this house (1, 2): sent again after a lost answer, the store keeps it once
         this.bogeyUnsent.shift();
         if (ans && Number(ans.atMs) > 0) this.noteClaims([{ pid: this.pid, pattern: b.pattern, round: b.round, idx: -1, atMs: Number(ans.atMs), bogey: true }]);
       } catch { break; /* the next tick tries again */ }
@@ -216,7 +270,7 @@ export class PhoneRuntime {
    * and this phone remembers "claimed by me"; if not, it is a BOGEY: nothing is sent, the Bogey is counted, and the player can fix the marks and claim again. Whether the claim WINS is decided by
    * every phone from the public claims and numbers (it must be the real completion call, and in time: before the next number).
    */
-  async claim(key: PatternKey): Promise<{ ok: true; sent: boolean; idx: number } | { ok: false; bogey: boolean; out?: boolean; error: string }> {
+  async claim(key: PatternKey): Promise<{ ok: true; sent: boolean; idx: number } | { ok: false; bogey: boolean; out?: boolean; late?: boolean; error: string }> {
     if (!this.pid || !this.tickets.length) return { ok: false, bogey: false, error: "The game has not started on this phone yet." };
     if (!keysInPlay(this.cfg.rewards).includes(key) || key === "unlucky") return { ok: false, bogey: false, error: "That prize is not in this game." };
     const id = `${this.cur}:${key}`, label = houseLabel(key);
@@ -225,15 +279,17 @@ export class PhoneRuntime {
     if (completionIndexKey(this.tickets, key, this.markedLog(this.cur)) < 0) return { ok: false, bogey: false, error: "Mark every number of this prize on your ticket first, then press Claim." };
     const log = this.maskedLog(this.cur), called = new Set(log.filter((n) => n > 0)), wrong = [...(this.marks.get(this.cur) ?? [])].find((n) => !called.has(n));
     const idx = completionIndexKey(this.tickets, key, log);
+    if (wrong === undefined && idx >= 0 && idx < log.length - 1) { this.lateNote = { text: CLAIM_LATE_TEXT, atLen: log.length }; return { ok: false, bogey: false, late: true, error: CLAIM_LATE_TEXT }; } // THE RULE: a prize completed on number N is claimed before number N+1 is announced. No penalty, nothing is sent.
     if (wrong !== undefined || idx < 0) { // a Bogey: the marks do not stand up against the called numbers. The store is told (every phone must know, so the winners agree).
       const n = this.bogeysOn(key) + 1; this.bogeys.set(id, n); this.saveMarks();
-      this.bogeyUnsent.push({ pattern: key, round: this.cur }); await this.sendBogeys();
+      this.bogeyUnsent.push({ pattern: key, round: this.cur, n }); await this.sendBogeys();
       const why = wrong !== undefined ? `Bogey! ${wrong} has not been called. Unmark it and keep playing.` : "Bogey! This prize is not complete on the called numbers. Check your ticket and keep playing.";
       return n >= BOGEYS_OUT ? { ok: false, bogey: true, out: true, error: `${why} Two Bogeys on ${label}: this ticket is out of the ${label} prize. Other prizes are still open to you.` } : { ok: false, bogey: true, error: why };
     }
     this.pressed.add(id); this.saveMarks();
     this.claimLens = []; // make the next autoClaim look again
     await this.autoClaim();
+    if (!this.pressed.has(id) && this.lateNote) return { ok: false, bogey: false, late: true, error: CLAIM_LATE_TEXT }; // the Worker said too late (its clock decides): nothing was sent, and the page says so kindly instead of "Claim saved"
     return { ok: true, sent: this.claimedAll.has(id), idx };
   }
   /**
@@ -275,17 +331,19 @@ export class PhoneRuntime {
   }
 
   /** Joins with a mobile number. The same number again returns the same participant (and the same ticket). */
-  async join(phone: string, name?: string, invite?: { from?: number; cat?: string }): Promise<boolean> {
+  async join(phone: string, name?: string, invite?: { from?: number; cat?: string }, empId?: string, email?: string): Promise<boolean> {
     try {
-      const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name, device: this.device(), ...(invite && Number.isInteger(invite.from) ? { from: invite.from, cat: invite.cat } : {}) });
+      const r = await this.deps.api("POST", `/api/z/${this.eid}/join`, { phone, name, ...(empId ? { empId } : {}), ...(email ? { email } : {}), device: this.device(), ...(invite && Number.isInteger(invite.from) ? { from: invite.from, cat: invite.cat } : {}) });
       this.scheduledRound = r.startRound; this.startRound = r.startRound + GRACE_ROUNDS; this.callSeconds = r.callSeconds; this.trackClaims = r.trackClaims !== false;
-      if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined || r.opening !== undefined || r.closing !== undefined || r.callMode !== undefined) this.readCfg(r);
+      if (r.tickets !== undefined || r.rewards !== undefined || r.breaks !== undefined || r.rounds !== undefined || r.opening !== undefined || r.closing !== undefined || r.callMode !== undefined || r.startMode !== undefined || r.afterPrizes !== undefined) this.readCfg(r);
       this.deps.store.set(this.key("pid"), r.pid);
       this.myJr = Number(r.jr) > 0 ? Number(r.jr) : 0; this.deps.store.set(this.key("jr"), String(this.myJr));
       this.adopt(r.pid); this.error = null;
       return true;
     } catch (e: any) {
-      this.error = e?.status === 423 || e?.code === "invite-full" ? String(e.message || "This ticket is already on another phone.") : e?.status === 409 ? "This engagement is full." : e?.status === 400 ? "Enter a valid mobile number." : e?.status === 503 ? "It is a busy day. Please try again in a few minutes." : "Could not join. Check your connection and try again.";
+      const m = String(e?.message ?? "").trim(), st = Number(e?.status) || 0;
+      const own = st >= 400 && m !== "" && !/^http \d+$/.test(m); // the server's own plain words say what is wrong and what to do (an employee ID, a full game, a busy minute): they are shown as they are
+      this.error = own ? m : st === 503 ? "It is a busy day. Please try again in a few minutes." : "Could not join. Check your connection and try again.";
       return false;
     }
   }
@@ -310,20 +368,37 @@ export class PhoneRuntime {
     const wasLocked = this.locked; this.locked = !!body?.locked;
     if (wasLocked && !this.locked) await this.reloadSchedule(); // paid at last: the start time has moved, read it again
     if (!body?.pubKey) { this.tracker?.failed(now); return; }
+    this.ctlBy = Array.isArray(body.by) ? body.by.slice(0, 500).map((x: unknown) => (x === "Host" ? "Host" : "Organizer")) : this.ctlBy;
+    this.applyLive(body.live); // a time or mode changed after publishing reaches this phone through the file it already polls, before anything in the file is used
     // the Hosts' console keys ride in the same file as the organizer's key (trusted the same way, on first use); the list only grows, and never beyond the team's size
     const hostKeys: string[] = Array.isArray(body.hostKeys) ? body.hostKeys.filter((k: unknown): k is string => typeof k === "string" && /^[0-9a-f]{64}$/i.test(k)).slice(0, 5) : [];
     if (!this.tracker) {
-      const cfg: ControlConfig = { pubKey: body.pubKey, maxPauseRounds: body.maxPauseRounds, leadRounds: body.leadRounds, hostKeys, ...hostControlOf(hostGameOf(this.cfg)) };
+      const cfg: ControlConfig = { pubKey: body.pubKey, maxPauseRounds: body.maxPauseRounds, leadRounds: body.leadRounds, hostKeys, ...(body.startOnly === true ? { startOnly: true } : {}), ...(body.fullGap === true ? { fullGap: true } : {}), ...hostControlOf(hostGameOf(this.cfg, this.scheduledRound)) };
       this.controlFast = body.leadRounds === SAFETY_FAST.leadRounds;
       const safety = ALL_SAFETIES.find((s) => s.leadRounds === body.leadRounds) ?? SAFETY_STANDARD;
       if (safety !== SAFETY_FAST && safety !== SAFETY_STANDARD) { this.pollBaseMs = Math.round(safety.pollMaxSec * 750); this.pollJitterMs = Math.round(safety.pollMaxSec * 250); }
       else { this.pollBaseMs = this.controlFast ? 6_000 : 9_000; this.pollJitterMs = 3_000; }
-      if (this.hostMode) { this.pollBaseMs = 5_000; this.pollJitterMs = 2_000; } // a Host's press must reach every phone within seconds: the fast safety's timer (5 to 7 s), whatever the game's size
+      if (this.hostMode) { this.pollBaseMs = 5_000; this.pollJitterMs = 2_000; } // (a Start needs no fast timer: its lead is longer than the slowest asking cadence of the game's own profile) // a Host's press must reach every phone within seconds: the fast safety's timer (5 to 7 s), whatever the game's size
       this.tracker = new ControlTracker(cfg, this.eid, safety, now);
     } else if (hostKeys.length > (this.tracker.cfg.hostKeys?.length ?? 0)) this.tracker.cfg.hostKeys = [...new Set([...(this.tracker.cfg.hostKeys ?? []), ...hostKeys])].slice(0, 5);
     if (await this.tracker.ingest(now, body)) this.controlState = "known";
   }
 
+  /**
+   * The game's schedule and modes as they are NOW (the control file carries them). Before the start the Organizer or a Host may move the time or switch a mode with no new link:
+   * this phone, the big screen and the Hosts' screens all read the same file, so they all follow. Nothing else changes: the key, the log and the numbers are untouched.
+   */
+  private applyLive(live: any) {
+    if (!live || typeof live !== "object") return;
+    const sr = Number(live.startRound), cs = Number(live.callSeconds);
+    if (!Number.isInteger(sr) || sr < 1 || !Number.isInteger(cs) || cs < 6) return;
+    const host = live.callMode === "host", manual = live.startMode === "manual", keep = live.afterPrizes === "keep";
+    if (sr === this.scheduledRound && cs === this.callSeconds && host === this.hostMode && manual === this.manualStart && keep === !!this.cfg.keepCalling) return;
+    this.scheduledRound = sr; this.startRound = sr + GRACE_ROUNDS; this.callSeconds = cs;
+    const c: EngagementCfg = { ...this.cfg }; if (host) c.callMode = "host"; else delete c.callMode; if (manual) c.startMode = "manual"; else delete c.startMode; if (keep) c.keepCalling = true; else delete c.keepCalling;
+    this.cfg = c;
+    if (this.tracker) this.tracker.reconfigure(hostControlOf(hostGameOf(this.cfg, this.scheduledRound)));
+  }
   private async reloadSchedule() {
     try { const info = await this.deps.api("GET", `/api/z/${this.eid}/info`); this.scheduledRound = info.startRound; this.startRound = info.startRound + GRACE_ROUNDS; this.callSeconds = info.callSeconds; this.gated = info.locked !== undefined; this.readCfg(info); } catch { /* the next poll tries again */ }
   }
@@ -334,6 +409,7 @@ export class PhoneRuntime {
     return this.tracker!.mode(now);
   }
   private roundFor(k: number, round = this.cur): number | null {
+    if ((this.hostMode || this.manualStart) && !this.tracker) return Infinity; // a game whose numbers the Host presses, with no signing key registered yet: nothing is called on a schedule of its own, the phone shows "waiting for the host" until the first press
     return callRoundR(this.tracker ? this.tracker.state : null, this.startRound, this.stride, this.cfg.breaks, round, k);
   }
   /** The latest round whose first number is due. Rounds before it are played out (or being caught up). */
@@ -347,7 +423,8 @@ export class PhoneRuntime {
   async tick(): Promise<RuntimeView> {
     if (this.phase === "ended") { await this.autoClaim(); await this.sendBogeys(); if (this.nowRound !== null) await this.pollSeats(this.nowRound); this.syncEngines(this.cur); await this.pollResults(); await this.castVotes(); return this.view(); } // after the last number the last claims (and the claims of others) still arrive: keep reading them, so the winners settle // a claim that failed to send keeps being retried after the last call // the engagement is over, but the outcome is still worth fetching
     if (this.phase !== "play") return this.view();
-    if (!(await this.syncClock())) { this.error = "Waiting for the clock. Check your connection."; return this.view(); }
+    if (!(await this.syncClock())) { const m0 = this.deps.mono(); if (this.clockFailSince === null) this.clockFailSince = m0; this.error = m0 - this.clockFailSince > 15_000 ? "This network is not letting the game get its numbers. If you are on office Wi-Fi, switch to mobile data. Keep this page open: it carries on by itself." : "Waiting for the clock. Check your connection."; return this.view(); }
+    this.clockFailSince = null;
     this.error = null;
     const now = this.nowRound!;
     await this.pollControl(now);
@@ -369,15 +446,23 @@ export class PhoneRuntime {
     this.store.verifySome(2);
     if (live) for (let r = 1; r <= Math.max(1, started); r++) this.buildLog(now, r); // on hold we keep showing what we had, and reveal nothing new
     this.setCurrent(Math.max(1, started));
+    try { this.onProgress?.(); } catch { /* the page drawing must never stop the game loop */ } // show the new number NOW: the claim, seat-list and Bogey calls below can take seconds when the store is busy, and must not hold the number back
     if (m !== "blind") await this.autoClaim(); // never claim from a log that might be missing a pause we could not hear about
     await this.sendBogeys();
+    await this.beat(now);
     await this.pollSeats(now);
     this.syncEngines(Math.max(1, started));
     await this.pollResults();
     await this.castVotes();
     const stopped = this.tracker?.state.stopRound != null && now >= this.tracker.state.stopRound;
-    const byPrizes = !this.deps.noEarlyEnd && this.cur >= this.cfg.rounds && this.prizesAwarded(this.cur) && this.breaksPlayed(now);
-    if (byPrizes) this.prizesEnded = true;
+    const byPrizes = !this.deps.noEarlyEnd && !this.cfg.keepCalling && this.cur >= this.cfg.rounds && this.prizesAwarded(this.cur) && this.breaksPlayed(now);
+    if (byPrizes) {
+      this.prizesEnded = true;
+      // The game stops where the last prize was completed (plus the one call whose claim window had to close): a phone that was reloaded, or that joined late, must not show the numbers that the clock would
+      // have called afterwards, so every phone, the number screen and the report agree on the count.
+      const idxs = this.allResults.filter((x) => (x.round ?? 1) === this.cur && Number.isInteger((x as any).idx)).map((x) => (x as any).idx as number);
+      if (idxs.length) { const E = Math.max(...idxs) + 2, lg = this.logs[this.cur - 1]; if (lg && lg.length > E) lg.length = E; }
+    }
     if ((this.cur >= this.cfg.rounds && (this.logs[this.cur - 1]?.length ?? 0) >= NUMBERS) || stopped || byPrizes) this.phase = "ended";
     return this.view();
   }
@@ -393,7 +478,7 @@ export class PhoneRuntime {
   private builtMsgs = 0;
   /** Extends a round's call log with newly available rounds instead of recomputing all 90 calls every second. Rebuilds from scratch only if a provisional round was thrown away or an organizer message arrived. */
   private buildLog(now: number, round: number): number[] {
-    const msgs = this.tracker ? this.tracker.log.filter((m) => m.action !== "next").length : 0; // a Host's press only adds a call at the end: nothing earlier moves, so no re-derivation
+    const msgs = this.tracker ? this.tracker.log.filter((m) => m.action !== "next").length + this.tracker.holdsVer * 100_000 : 0; // a Host's press only adds a call at the end: nothing earlier moves, so no re-derivation
     if (this.store.discarded !== this.builtDiscards || msgs !== this.builtMsgs) { this.logs = this.logs.map(() => []); this.logResets++; this.builtDiscards = this.store.discarded; this.builtMsgs = msgs; } // a new organizer message can move later calls: re-derive
     while (this.logs.length < round) this.logs.push([]);
     const out = this.logs[round - 1]!;
@@ -409,11 +494,13 @@ export class PhoneRuntime {
   }
 
   private unsent = 0;
+  /** "Ohooo! Sorry, you pressed Claim after the next number was announced": shown until the next number. */
+  private lateNote: { text: string; atLen: number } | null = null;
   /** Set once the last prize of the last round was awarded and every break has been played. */
   private prizesEnded = false;
   /** The beacon round this phone joined in when that was after the game began (0: in time). */
   private myJr = 0;
-  private cap = 0;
+  cap = 0;
   // every phone works out the winners itself from the public seat list
   private seatList: { pid: string; countFrom: number; ex?: boolean; blk?: boolean }[] = [];
   private blkVer = 0; // changes when the list of removed seats changes
@@ -421,6 +508,40 @@ export class PhoneRuntime {
   private seatUpto = 0;
   private seatsFetched = false;
   private lastSeatPoll = -Infinity;
+  /** The claim signal (a few digits, every ~2 s while this page is in front): when it moved, the claim list is read at once so everybody hears of a claim within a few seconds. The page sets beatOn=false while hidden. */
+  beatOn = true; private cvKnown = -1; private lastBeatCycle = -1; private beating = false; private lastBeatOk = -Infinity; private beatFails = 0; private seatsNotBefore = 0;
+  /** The page asks at the exact slot moment itself (setTimeout); without it (tests, a page that has not started its timer) the once-a-second tick asks when the slot's cycle changes. */
+  externalBeat = false;
+  private get wallNow(): number { return this.deps.mono() + (this.offsetMs ?? 0); }
+  /** Milliseconds until this phone's next ask, on the beacon-synced clock. */
+  msToNextBeat(): number { return msToNextBeat(this.wallNow, ticketOf(this.pid), this.cap); }
+  private async beat(now: number) {
+    if (this.externalBeat) return;
+    const period = beatPeriodMs(this.cap), cycle = Math.floor((this.wallNow - beatOffsetMs(ticketOf(this.pid), this.cap)) / period);
+    if (cycle === this.lastBeatCycle) return; // (the page ticks once a second: asks when this ticket's slot comes round)
+    await this.beatNow(now, cycle);
+  }
+  /** One ask of the claim signal. Called at the slot moment by the page, or by the tick. */
+  async beatNow(now: number = this.nowRound ?? 0, cycle = -2) {
+    if (!this.beatOn || this.beating || this.phase !== "play" || now < this.startRound) return;
+    if (cycle !== -2) this.lastBeatCycle = cycle;
+    const m = this.deps.mono(); this.beating = true;
+    try {
+      const n = Number(await this.deps.api("GET", `/api/z/${this.eid}/cv`));
+      if (Number.isFinite(n)) { if (this.cvKnown >= 0 && n > this.cvKnown) { this.wantSeats = true; this.seatsNotBefore = this.deps.mono() + followUpSpreadMs(ticketOf(this.pid), this.cap); } this.cvKnown = n; this.lastBeatOk = this.deps.mono(); this.beatFails = 0; this.reportPresence(); }
+    } catch { this.beatFails++; /* the slow poll still brings the news */ } finally { this.beating = false; }
+    void m;
+  }
+  /** PRESENCE: in the minutes where (ticket mod K) = (minute mod K) the page, if it is in front and the claim signal answered, tells the server once that it is listening (counts K phones; see apps/edge/src/presence.ts). */
+  private presenceMin = -1;
+  private reportPresence() {
+    const k = presenceK(this.cap), min = Math.floor(this.wallNow / 60_000);
+    if (min === this.presenceMin || ticketOf(this.pid) % k !== min % k) return;
+    this.presenceMin = min;
+    void Promise.resolve(this.deps.api("POST", `/api/z/${this.eid}/presence`, { pid: this.pid, k })).catch(() => {});
+  }
+  /** True when the claim signal has not answered for a while although the page is in front: the page shows a calm "Reconnecting". */
+  get reconnecting(): boolean { return this.beatOn && this.phase === "play" && this.beatFails >= 2 && this.deps.mono() - this.lastBeatOk > reconnectAfterMs(this.cap); }
   /** The beacon round the newest seat list was asked for in: a lucky draw is only worked out from a list at least that fresh. */
   private seatsFreshRound = 0;
   private wantSeats = false;
@@ -452,12 +573,15 @@ export class PhoneRuntime {
         const idx = completionIndexKey(tk, p, log);
         if (idx < 0) continue;
         try {
-          const ans = this.trackClaims ? await this.deps.api("POST", `/api/z/${this.eid}/claims`, { pid: this.pid, claims: [{ pattern: p, idx, ...(r > 1 ? { round: r } : {}) }] }) : null;
+          const ans = this.trackClaims ? await this.deps.api("POST", `/api/z/${this.eid}/claims`, { pid: this.pid, device: this.device(), claims: [{ pattern: p, idx, ...(r > 1 ? { round: r } : {}) }] }) : null;
           this.claimedAll.add(id);
           this.deps.store.set(this.key("claimed"), JSON.stringify([...this.claimedAll]));
           // this phone knows its own claim at once (the others learn it with the seat list): the store's clock says when it arrived
           if (ans && Number(ans.atMs) > 0) this.noteClaims([{ pid: this.pid, pattern: p, round: r, idx, atMs: Number(ans.atMs) }]);
-        } catch { this.unsent++; /* kept: the next tick sends it again; a claim is never lost because nothing is marked sent until it was */ }
+        } catch (e: any) {
+          if (e?.status === 409 && (e?.code === "claim-late" || /after the next number was announced/.test(String(e?.message)))) { this.pressed.delete(id); this.saveMarks(); this.lateNote = { text: CLAIM_LATE_TEXT, atLen: log.length }; continue; } // too late by the Worker's clock: said kindly, never sent again, nothing recorded
+          this.unsent++; /* kept: the next tick sends it again; a claim is never lost because nothing is marked sent until it was */
+        }
       }
     }
   }
@@ -483,7 +607,8 @@ export class PhoneRuntime {
   // ---- the public claims: every phone reads them with the seat list (one request, already made) and feeds them to its engines ----
   private claimList: PublicClaim[] = [];
   private claimIds = new Set<string>();
-  private claimUpto = 0; // the newest atMs received: the next ask starts there
+  private claimUpto = 0; // the newest atMs received: the next ask starts a little before it (CLAIM_CURSOR_SLACK_MS)
+  private claimPageFull = false; // the last answer was a full page: the next ask goes on from the newest time, so a burst of claims still moves forward
   private claimVer = 0; // changes when the list changes
   private engineClaims = new Map<number, number>();
   /** `fromStore`: a page the store answered (its newest time becomes the next ask's start). This phone's own claim, noted at once, must NOT move that cursor: others' earlier claims would be skipped. */
@@ -499,6 +624,8 @@ export class PhoneRuntime {
     if (changed) this.claimVer++;
   }
   /** The store's time (as this phone estimates it, a round of slack taken off) up to which it holds EVERY claim and Bogey: set by each seat-list answer. A position is settled only once this passed its claim deadline. */
+  /** Set by the page: called as soon as the numbers of this pass are known, before the slower calls of the same pass (claims, seat list, Bogeys). */
+  onProgress: (() => void) | null = null;
   private claimsFreshMs = -Infinity;
   /**
    * A winner position at call `idx` is final only when its claim window has closed (the next number was called, by the schedule every phone uses) AND this phone has read the store's claims up to
@@ -523,15 +650,18 @@ export class PhoneRuntime {
   private async pollSeats(now: number) {
     const m = this.deps.mono();
     // a phone that pressed Claim and has no result yet asks sooner (a few polls by a few phones), so a winner hears quickly and the game can end once the last prize is settled
+    if (this.wantSeats && m < this.seatsNotBefore) return; // (spread over 0..1 s by slot after a changed claim signal)
     if (now < this.startRound || (!this.wantSeats && m - this.lastSeatPoll < (this.seatsFetched ? (this.wantClaims() || this.waitingForResult() ? Math.min(6_000, this.seatEveryMs()) : this.seatEveryMs()) : 5_000) + (Math.floor(m) % 2000))) return;
     this.lastSeatPoll = m; this.wantSeats = false;
     const askedAt = this.nowRound ?? 0;
     try {
       const askedMs = this.offsetMs === null ? null : this.deps.mono() + this.offsetMs;
-      const r = await this.deps.api("GET", `/api/z/${this.eid}/seats?after=${this.seatUpto}&cafter=${this.claimUpto}`);
+      const cafter = this.claimPageFull ? this.claimUpto : Math.max(0, this.claimUpto - CLAIM_CURSOR_SLACK_MS);
+      const r = await this.deps.api("GET", `/api/z/${this.eid}/seats?after=${this.seatUpto}&cafter=${cafter}&v=${Math.max(0, this.cvKnown)}`);
       if (Array.isArray(r?.claims)) { // the public claims ride with the seat list; after this answer every claim up to (about) the time of the ask is here, unless the page was full
         this.noteClaims(r.claims, true);
         const full = r.claims.length >= 500, newest = r.claims.reduce((m: number, c: any) => Math.max(m, Number(c?.atMs) || 0), 0);
+        this.claimPageFull = full;
         if (askedMs !== null) this.claimsFreshMs = Math.max(this.claimsFreshMs, full ? Math.min(newest, askedMs - 3000) : askedMs - 3000);
       }
       if (!r || !r.ready || !Array.isArray(r.seats)) return;
@@ -548,7 +678,7 @@ export class PhoneRuntime {
     if (!this.seatsFetched) return;
     for (let r = 1; r <= started; r++) {
       let e = this.engines.get(r);
-      if (!e) { e = new PrizeEngine(this.eid, this.cfg, r); this.engines.set(r, e); this.engineCursor.set(r, 0); this.engineReset.set(r, this.logResets); }
+      if (!e) { e = new PrizeEngine(this.eid, this.cfg, r); e.setCallRound((k) => (k < NUMBERS ? this.roundFor(k, r) : null)); this.engines.set(r, e); this.engineCursor.set(r, 0); this.engineReset.set(r, this.logResets); }
       if (this.engineReset.get(r) !== this.logResets) { e.resetCalls(); this.engineReset.set(r, this.logResets); }
       const cur = this.engineCursor.get(r)!;
       if (cur < this.seatList.length) { e.addSeats(this.seatList.slice(cur)); this.engineCursor.set(r, this.seatList.length); }
@@ -568,21 +698,39 @@ export class PhoneRuntime {
     const local = this.localOk;
     if (local) {
       const mine: NonNullable<RuntimeView["results"]> = [];
-      for (const [r, e] of this.engines) for (const x of e.results()) { if (x.pattern !== "unlucky" && !this.resultFinal(r, x.idx)) continue; mine.push({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, count: x.pids.length, round: r, ...(x.pattern === "unlucky" || this.cfg.ties === "next" ? { winners: x.pids } : {}) }); } // a position is shown, voted and counted only once its claim window has closed and the claims are in
-      this.allResults = [...mine, ...this.luckyResults(), ...this.serverResults.filter((x) => x.pattern === "lucky" && !this.luckyLocal.some((l) => l.ordinal === x.ordinal))];
+      for (const [r, e] of this.engines) for (const x of e.results()) { if (x.pattern !== "unlucky" && !this.resultFinal(r, x.idx)) continue; mine.push({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, count: x.pids.length, round: r, tickets: x.pids.map((p) => seatOfPid(p)).filter((n): n is number => n !== null).slice(0, 5), ...(x.pattern === "unlucky" || this.cfg.ties === "next" ? { winners: x.pids } : {}) }); } // a position is shown, voted and counted only once its claim window has closed and the claims are in
+      this.allResults = [...this.withStore(mine), ...this.luckyResults(), ...this.serverResults.filter((x) => x.pattern === "lucky" && !this.luckyLocal.some((l) => l.ordinal === x.ordinal))];
     }
     // the organizer's published results: the fallback while the seat list is not here yet, and the only source for lucky draws
     // (lucky draws: only once a draw's break has been reached and its winners are not out yet, and then every 10 s)
     const luckyDue = this.cur === 1 && this.luckyView().some((l, i) => !l.published && this.logCache.length >= (this.cfg.breaks.filter((b) => b.kind === "lucky")[i]?.after ?? Infinity));
-    const needServer = !local || luckyDue;
-    if (!needServer || m - this.lastResultPoll < (local ? 10_000 : this.waitingForResult() ? 4_000 : 15_000) || !this.logs.some((l) => l.length > 0)) return;
+    const endCheck = local && this.phase === "ended" && this.endResultPolls < END_RESULT_POLLS && !this.storeHasAll(); // after the game: the store's agreed results, until every prize shown has one (D3)
+    const needServer = !local || luckyDue || endCheck;
+    if (!needServer || m - this.lastResultPoll < (local ? (luckyDue ? 10_000 : endCheck ? END_RESULT_EVERY_MS : 10_000) : this.waitingForResult() ? 4_000 : 15_000) || !this.logs.some((l) => l.length > 0)) return;
     this.lastResultPoll = m;
+    if (endCheck && !luckyDue) this.endResultPolls++;
     try {
       this.serverResults = (await this.deps.api("GET", `/api/z/${this.eid}/results`)).results ?? this.serverResults;
-      this.allResults = this.localOk ? [...this.allResults.filter((x) => x.pattern !== "lucky"), ...this.luckyResults(), ...this.serverResults.filter((x) => x.pattern === "lucky" && !this.luckyLocal.some((l) => l.ordinal === x.ordinal))] : this.serverResults;
+      this.allResults = this.localOk ? [...this.withStore(this.allResults.filter((x) => x.pattern !== "lucky")), ...this.luckyResults(), ...this.serverResults.filter((x) => x.pattern === "lucky" && !this.luckyLocal.some((l) => l.ordinal === x.ordinal))] : this.serverResults;
     } catch { /* shown next time */ }
   }
-  private luckyResults(): NonNullable<RuntimeView["results"]> { return this.luckyLocal.map((l) => ({ pattern: "lucky" as const, ordinal: l.ordinal, idx: l.idx, count: l.winners.length, round: 1, winners: l.winners })); }
+  private endResultPolls = 0;
+  /** A prize line's key: round, house, position. */
+  private static rkey(x: { pattern: string; ordinal: number; round?: number }): string { return `${x.round ?? 1}:${x.pattern}:${x.ordinal}`; }
+  /** The store's agreed result of a prize line (several different phones voted exactly it) is what the organizer and the winners record hold. Where the store has one, the phone shows that one, not its own working (D3: a phone that missed a claim worked out a different call). Lucky draws keep their own rule. */
+  private withStore(mine: NonNullable<RuntimeView["results"]>): NonNullable<RuntimeView["results"]> {
+    const store = new Map(this.serverResults.filter((x) => x.pattern !== "lucky").map((x) => [PhoneRuntime.rkey(x), x] as const));
+    if (!store.size) return mine;
+    const out = mine.map((x) => (x.pattern === "lucky" ? x : store.get(PhoneRuntime.rkey(x)) ?? x));
+    for (const [k, x] of store) if (!mine.some((y) => PhoneRuntime.rkey(y) === k)) out.push(x);
+    return out;
+  }
+  /** Every prize line this phone shows already has the store's agreed result. */
+  private storeHasAll(): boolean {
+    const mine = this.allResults.filter((x) => x.pattern !== "lucky");
+    return mine.length > 0 && mine.every((x) => this.serverResults.some((s) => PhoneRuntime.rkey(s) === PhoneRuntime.rkey(x)));
+  }
+  private luckyResults(): NonNullable<RuntimeView["results"]> { return this.luckyLocal.map((l) => ({ pattern: "lucky" as const, ordinal: l.ordinal, idx: l.idx, count: l.winners.length, round: 1, winners: l.winners, tickets: l.winners.map((p) => seatOfPid(p)).filter((n): n is number => n !== null).slice(0, 5) })); }
   /** A lucky draw is worked out here, from the public randomness of the round that ends its break and the public seat list: the same on every phone, and nobody can steer it. */
   private async computeLucky(now: number) {
     if (this.luckyBusy || !this.seatsFetched) return;
@@ -628,7 +776,7 @@ export class PhoneRuntime {
     }
     for (let i = 0; i < send.length; i += 3) {
       const part = send.slice(i, i + 3);
-      try { await this.deps.api("POST", `/api/z/${this.eid}/vote`, { pid: this.pid, results: part.map((x) => x.body) }); for (const x of part) this.voted.add(x.key); }
+      try { await this.deps.api("POST", `/api/z/${this.eid}/vote`, { pid: this.pid, device: this.device(), results: part.map((x) => x.body) }); for (const x of part) this.voted.add(x.key); }
       catch { break; /* kept: the next pass reports it again */ }
     }
   }
@@ -637,6 +785,7 @@ export class PhoneRuntime {
     if (now === null || this.phase !== "play" || !this.cfg.breaks.length || this.cur > 1) return null; // brand breaks belong to round 1
     const a = activeBreak(this.tracker ? this.tracker.state : null, this.startRound, this.stride, this.cfg.breaks, now);
     if (!a || this.offsetMs === null) return null;
+    if (this.logCache.length < a.brk.after) return null; // the number the break follows is still on its way: show the break only once it is on the screen
     return { title: a.brk.title, kind: a.brk.kind, ...(a.brk.mediaUrl ? { mediaUrl: a.brk.mediaUrl } : {}), ...(a.brk.winners ? { winners: a.brk.winners } : {}), seconds: a.brk.seconds, secondsLeft: Math.max(0, Math.round((roundTimeMs(a.endsAtRound) - (this.deps.mono() + this.offsetMs)) / 1000)) };
   }
   private luckyView(): RuntimeView["lucky"] {
@@ -681,7 +830,7 @@ export class PhoneRuntime {
       const un = key === "unlucky"; // Unlucky is not completed on a ticket: this phone won it when its seat is the named winner
       if (un || this.cfg.ties === "next" ? !(x.winners ?? []).includes(this.pid) || (!un && completionIndexKey(tk, key, log) !== x.idx) : completionIndexKey(tk, key, log) !== x.idx) continue; // taking turns: only the named winner of this position won it
       const line = linesFor(this.cfg.rewards, key).find((l) => l.ordinal === x.ordinal);
-      out.push({ round: r, pattern: key, ordinal: x.ordinal, text: line?.text ?? "", cells: un ? [] : winCells(tk, key, log, x.idx), idx: x.idx });
+      out.push({ round: r, pattern: key, ordinal: x.ordinal, text: line?.text ?? "", cells: un ? [] : winCells(tk, key, log, x.idx), idx: x.idx, shared: Math.max(0, Math.floor(Number((x as any).count ?? (x as any).pids?.length ?? 1)) - 1) }); // shared: how many OTHER players won this prize with this phone (no amounts anywhere)
     }
     return out;
   }
@@ -708,17 +857,31 @@ export class PhoneRuntime {
     const inter = now !== null && this.cur < this.cfg.rounds ? activeIntermission(st ?? null, this.startRound, this.stride, this.cfg.breaks, this.cur + 1, now) : null;
     const claimedNow = keysInPlay(this.cfg.rewards).filter((k) => this.claimedAll.has(`${this.cur}:${k}`));
     const isPaused = !!st && now !== null && pausedAt(st, now);
-    const waitingForHost = this.hostMode && this.phase === "play" && !this.locked && !isPaused && now !== null && now >= this.startRound && nextRound0 === Infinity && !inter && this.currentBreak(now) === null;
+    const gr0 = st?.goRound ?? null;
+    const waitingForHost = this.hostMode && (!this.manualStart || (gr0 !== null && now !== null && now >= gr0)) && this.phase === "play" && !this.locked && !isPaused && now !== null && now >= (this.manualStart ? (gr0 ?? this.startRound) : this.startRound) && nextRound0 === Infinity && !inter && this.currentBreak(now) === null;
+    const pz = st && now !== null ? st.intervals.find((i) => now >= i.start && now < i.end) : undefined;
+    const pzMsg = pz && this.tracker ? this.tracker.log.find((m) => m.action === "pause" && m.atBeaconRound === pz.start) : undefined;
+    const pausedInfo = pz ? { by: (pzMsg && this.ctlBy[pzMsg.seq - 1] === "Host" ? "a Host" : "the Organizer") as "the Organizer" | "a Host", sinceMs: roundTimeMs(pz.start), endMs: roundTimeMs(pz.end), secondsLeft: Math.max(0, (pz.end - now!) * 3), restartsInSec: (() => { const r = secsTo(pz.end); return r !== null && r >= 1 && r <= RESTART_COUNT_SECS ? r : null; })() } : null;
+    const mlog = this.maskedLog(this.cur);
+    const claimOpen = !this.locked && (this.phase === "play" || (this.phase === "ended" && !(st && st.stopRound !== null && now !== null && now >= st.stopRound))) ? this.claimableNow().filter((k) => { const i = completionIndexKey(this.tickets, k, mlog); return i === mlog.length - 1 || i < 0; }) : []; // the completing number is still the latest: the claim is still valid (even while paused); a prize the marks complete but the called numbers do not (a stale mark) stays pressable: it is answered with a Bogey, as in the real game
+    const claimNow = !isPaused && this.phase === "play" ? claimOpen.filter((k) => completionIndexKey(this.tickets, k, mlog) >= 0) : []; // the alert and the big button: only while the game is running
+    const goRound = st?.goRound ?? null;
+    // manual start: the scheduled time has come and nobody has pressed Start ("waiting for the host to begin the game"), or Start was pressed and the first number is a few seconds away
+    const waitingForStart = this.manualStart && this.phase === "play" && !this.locked && goRound === null && now !== null && now >= this.scheduledRound && !(st && st.stopRound !== null && now >= st.stopRound);
+    const startingIn = this.manualStart && goRound !== null && now !== null && now < goRound ? secsTo(goRound) : null;
     return {
       phase: this.phase, error: this.error, pid: this.pid, ticket: this.ticket, log: this.visibleLog(), nowRound: now, startRound: this.startRound, scheduledRound: this.scheduledRound, callSeconds: this.callSeconds,
       locked: this.locked, announcement: this.announcement,
-      mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: isPaused, stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
+      mode: now === null ? (this.controlState === "none" ? "none" : "hold") : this.modeAt(now), paused: isPaused, claimHold: !!this.tracker && now !== null && this.tracker.holds.some((h) => now >= h.start && now < h.end), stopped: !!st && now !== null && st.stopRound !== null && now >= st.stopRound,
       claimed: claimedNow, unsent: this.unsent, results: this.allResults.filter((x) => (x.round ?? 1) === this.cur), pendingChecks: this.store.pending(), discarded: this.store.discarded,
       nextCallInSec: nextRound !== null && now !== null ? secsTo(nextRound) : null,
+      reconnecting: this.reconnecting,
+      claimLeft: (() => { if (this.hostMode || now === null) return null; const lastR = done ? this.roundFor(NUMBERS - 1) : null; const end = nextRound !== null ? nextRound : lastR !== null && Number.isFinite(lastR) ? lastR + this.stride : null; if (end === null) return null; const n = secsTo(end); return n !== null && n >= 1 ? n - 1 : null; })(),
       tickets: this.tickets, cfg: this.cfg, brk: this.currentBreak(now), myIdx: this.myIdx(), lucky: this.luckyView(),
       round: this.cur, rounds: this.cfg.rounds, intermission: inter ? { round: this.cur + 1, secondsLeft: secsTo(inter.endsAtRound) ?? 0 } : null, past: this.pastView(),
       won: this.wonView(), allAwarded: this.prizesAwarded(this.cur), endedByPrizes: this.prizesEnded, late: this.lateView(now), localWinners: this.localOk,
       callMode: this.hostMode ? "host" : "auto", waitingForHost,
+      pausedInfo, claimNow, claimOpen, claimFeed: this.claimList.filter((c) => (c.round ?? 1) === this.cur).slice(-30).map((c) => ({ id: `${c.pid}|${c.pattern}|${c.round ?? 1}|${c.bogey ? "b" : c.idx}|${c.atMs}`, ticket: seatOfPid(c.pid) ?? 0, pattern: c.pattern as PatternKey, bogey: !!c.bogey, atMs: c.atMs })), lateClaim: this.lateNote && this.lateNote.atLen === this.maskedLog(this.cur).length ? this.lateNote.text : null, startMode: this.manualStart ? "manual" : "auto", waitingForStart, goRound: st?.goRound ?? null, startingInSec: startingIn,
       marks: [...(this.marks.get(this.cur) ?? [])].sort((a, b) => a - b), claimable: this.claimableNow(),
       pressed: keysInPlay(this.cfg.rewards).filter((k) => this.pressed.has(`${this.cur}:${k}`)), claimsKnown: this.claimList.length,
       bogeys: keysInPlay(this.cfg.rewards).filter((k) => this.bogeysOn(k) > 0).map((k) => ({ pattern: k, n: this.bogeysOn(k) })), outOf: keysInPlay(this.cfg.rewards).filter((k) => this.outOf(k)),

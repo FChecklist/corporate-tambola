@@ -16,7 +16,7 @@ const call = (method: string, path: string, body?: unknown, headers: Record<stri
 const j = async (r: Response) => (await r.json()) as any;
 const ORG = { "x-organizer": "plat" };
 const DURING = T + 3_600_000 + GRACE_ROUNDS * 3000 + 60_000; // a minute into the numbers
-beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt" } as any; });
+beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt" } as any; });
 const make = async (id: string, over: Record<string, unknown> = {}) => { expect((await call("POST", "/api/z", { id, startRound: START, callSeconds: 9, cap: 5000, ...over }, ORG)).status).toBe(200); };
 const join = async (id: string, i: number) => (await j(await call("POST", `/api/z/${id}/join`, { phone: "9" + String(100000000 + i), name: "P" + i }))).pid as string;
 

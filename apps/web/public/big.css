@@ -28,11 +28,12 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,syste
 .wins b{color:var(--gold)}
 .foot{font-size:clamp(12px,1.3vw,22px);color:var(--mute);text-align:center}
 .msg{font-size:clamp(18px,2.4vw,40px);text-align:center;margin-top:30vh;color:var(--mute)}
+.lostbar{background:#B3261E;color:#fff;font:700 clamp(20px,3vw,52px)/1.2 Inter,sans-serif;text-align:center;padding:.4em 1em;border-radius:.5em;margin-bottom:1vh}
 @media (max-width:800px){.main{grid-template-columns:1fr}}
 
 .annbar{background:var(--gold);color:#2a1308;font:700 clamp(22px,3.6vw,64px)/1.15 Inter,sans-serif;text-align:center;padding:.5em 1em;border-radius:.5em;margin-bottom:1vh}
 
-.brand{display:inline-flex;align-items:center;gap:.4em}.brand::before{content:"";flex:0 0 1.3em;width:1.3em;height:1.3em;border-radius:.3em;background:url(/icon-192.png) center/cover}
+.brand{display:inline-flex;align-items:center;gap:.4em}.brand::before{content:"";flex:0 0 1.3em;width:1.3em;height:1.3em;border-radius:.3em;background:url(/icon-192.png?v=4) center/cover}
 
 .top .brand{display:flex;align-items:center;gap:12px}
 .blogo{height:44px;width:auto;max-width:160px;object-fit:contain;background:rgba(255,255,255,.92);border-radius:6px;padding:3px}
@@ -42,3 +43,32 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,syste
 .ps{margin-top:2vh;background:rgba(255,255,255,.08);border-radius:14px;padding:1.2vh 1.6vw}.ps h2{margin:0 0 .6vh;font-size:2.4vh;color:#FFD27A}.ps ul{list-style:none;margin:0;padding:0;columns:2}.ps li{font-size:2.6vh;padding:.4vh 0;break-inside:avoid}.ps li.done{opacity:.6}.ps li.done s{text-decoration:line-through}.ps li.done small{font-size:1.6vh;font-weight:700;letter-spacing:.04em;margin-left:.6vw}
 /* a DEMO GAME: the badge beside the brand on the number screen and the board */
 .demotag{display:inline-block;background:#E4572E;color:#fff;font:800 clamp(14px,1.6vw,22px)/1 system-ui,sans-serif;letter-spacing:.12em;padding:.35em .6em;border-radius:.4em;vertical-align:middle;margin-left:.6em}
+
+/* the countdown under the number */
+.cdown{display:flex;flex-direction:column;align-items:center;margin-top:2.5vh}
+.cdnum{font:800 min(9vh,12vw)/1 Inter,system-ui,sans-serif;color:#7A1C33;font-variant-numeric:tabular-nums;background:#fff;border:.6vh solid #E0B872;border-radius:50%;width:min(14vh,18vw);height:min(14vh,18vw);display:grid;place-items:center}
+.cdlbl{margin-top:1vh;font-size:min(2.6vh,3.4vw);opacity:.85}
+
+/* one plain story, the counter and the last few numbers */
+.storybar{margin:1vh 3vw;padding:1.2vh 2vw;border-left:.7vw solid var(--gold);background:rgba(255,255,255,.08);border-radius:.8vw;font-size:clamp(16px,2.1vw,34px);line-height:1.35}
+.storybar b{display:block}.storybar span{display:block;opacity:.85;font-size:.85em}
+.calledbig{font-size:clamp(18px,2.4vw,40px);margin:.3em 0;color:var(--mute)}.calledbig b{color:#fff}
+.lastfew{font-size:clamp(14px,1.8vw,30px);color:var(--mute);display:flex;gap:.5em;justify-content:center;align-items:center;flex-wrap:wrap}.lastfew i{font-style:normal;font-weight:700;color:#fff;border:2px solid var(--mute);border-radius:50%;min-width:1.9em;text-align:center}
+
+/* ===== the organizer's board: live panels (laptop first; one column on a phone) ===== */
+#panels{max-width:1280px;margin:0 auto;padding:0 16px 32px;color:#e9edf5}
+.bp .storybar{margin:12px 0;padding:12px 16px;border-left:6px solid var(--gold);background:rgba(255,255,255,.08);border-radius:10px;font-size:clamp(15px,1.6vw,20px)}
+.bp .storybar b{display:block}.bp .storybar span{display:block;opacity:.85}.bp .bpquiet{display:block;margin-top:4px;font-size:12px;opacity:.65}
+.bpbox{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:12px 14px;margin:0 0 12px}.bpbox h2{font-size:1rem;margin:0 0 8px}
+.bpgrid{display:grid;grid-template-columns:1fr;gap:0 14px}@media(min-width:900px){.bpgrid{grid-template-columns:1fr 1fr}.bpwide{grid-column:1 / -1}}
+.bpbtns{display:flex;flex-wrap:wrap;gap:10px}.bpbtns button,.bpmbox button{min-height:48px;padding:8px 18px;border-radius:10px;border:2px solid var(--gold);background:transparent;color:#fff;font:600 1rem Inter,system-ui,sans-serif;cursor:pointer}
+.bpbtns button[disabled]{opacity:.4;cursor:not-allowed}.bpnote{margin:8px 0 0}.bpsmall{font-size:.85rem;opacity:.7}
+.bpscroll{max-height:320px;overflow:auto;overflow-x:hidden}.bpscroll table{width:100%;border-collapse:collapse;font-size:.9rem}.bpscroll td,.bpscroll th{padding:4px 6px;text-align:left;border-bottom:1px solid rgba(255,255,255,.1)}
+.bpev{padding:3px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:.92rem}.bpev span{display:inline-block;min-width:68px;opacity:.7;font-variant-numeric:tabular-nums}
+.bpmodal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;z-index:50}.bpmbox{background:#14233f;border:2px solid var(--gold);border-radius:14px;padding:18px;max-width:440px;width:92%}
+.bptick{display:flex;gap:10px;margin:12px 0;font-weight:600}.bptick input{width:24px;height:24px;flex:none}
+.bpcheck{margin:0 0 8px;padding:6px 10px;border-radius:8px;background:rgba(80,200,120,.14)}.bpcheck[data-ok="false"]{background:rgba(224,120,60,.25)}.bpev .bptime{display:inline;min-width:0;opacity:.85;font-variant-numeric:tabular-nums;margin:0 2px}
+.bpev span.bptime{font-weight:600}
+
+.bpmbox{max-height:calc(100dvh - 32px);overflow:auto}
+.bpscroll{overflow-x:auto}

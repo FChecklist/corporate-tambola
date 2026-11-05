@@ -6,12 +6,14 @@
 //     The one-tap publish approval is a link in an e-mail (7 days, single use). Opening it gives the page a master key for 30 minutes (kind 'master', created_by 'dp') which is revoked when the game is published or the link is stopped.
 //   - Every e-mail address is kept sealed. The Organizer's address is also kept as the same one-way hash the sign-in uses, so an invitation can be accepted only by the account of that address.
 //   - Every paid game the helper prepared earns the helper Refer-and-earn commission: the payment's `ref` is the helper's partner code (pay.ts), and recordCommission does the rest (same rate, same repeat rule, same self-referral block).
+import { ensurePartnerKey } from "./partners";
 import type { D1, Env } from "./worker";
 import { sendMail, type PayEnv } from "./pay";
 import { openText, sealText } from "./pii";
 import { HOST_LINK_TTL_MS, hostStateRow, maskEmail, mintDeviceKey, retireHost } from "./hostsetup";
 import { helpDeskPublishedMail } from "./mails";
 import { houseLabel } from "../../../packages/beacon/src/config";
+import { normAccountEmail } from "./empid";
 
 export const HELPDESK_SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS helpdesk_helper (partner_code TEXT PRIMARY KEY, email_sealed TEXT NOT NULL, joined_ms INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'active')`,
@@ -56,7 +58,7 @@ const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.d
 const randHex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
 async function body(req: Request, max = 2048): Promise<any | null> { const t = await req.text(); if (t.length > max) return null; try { const v = JSON.parse(t); return v && typeof v === "object" ? v : null; } catch { return null; } }
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
-const validEmail = (v: unknown): string => { const e = typeof v === "string" ? v.trim().toLowerCase() : ""; return EMAIL_RE.test(e) ? e : ""; };
+const validEmail = (v: unknown): string => { const e = typeof v === "string" ? normAccountEmail(v) : ""; return EMAIL_RE.test(e) ? e : ""; };
 const clean = (v: unknown, n: number): string => (typeof v === "string" ? v.replace(/[<>`]/g, "").trim().slice(0, n) : "");
 const TOKEN = /^[0-9a-f]{48}$/;
 const ID16 = /^[0-9a-f]{16}$/;
@@ -158,7 +160,8 @@ export async function helpdeskRoute(req: Request, env: PayEnv, now: number, spen
 
   const partner = async () => {
     const k = req.headers.get("x-partner") ?? "";
-    return k ? db.prepare("SELECT code, name, email_hash, state FROM partner WHERE key_hash=?").bind(await sha("partner|" + k)).first<{ code: string; name: string | null; email_hash: string | null; state: string }>() : null;
+    if (k) await ensurePartnerKey(db);
+    return k ? db.prepare("SELECT code, name, email_hash, state FROM partner WHERE key_hash=?1 OR code IN (SELECT code FROM partner_key WHERE key_hash=?1)").bind(await sha("partner|" + k)).first<{ code: string; name: string | null; email_hash: string | null; state: string }>() : null;
   };
   /** The helper: a partner who turned Help Desk on. */
   const helper = async () => {

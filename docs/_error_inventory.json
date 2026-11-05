@@ -1558,14 +1558,14 @@
 "line": 703,
 "status": 400,
 "code": null,
-"msg": "Please enter a valid work email."
+"msg": "Please enter a valid e-mail address."
 },
 {
 "file": "worker.ts",
 "line": 714,
 "status": 400,
 "code": null,
-"msg": "Please enter a valid work email."
+"msg": "Please enter a valid e-mail address."
 },
 {
 "file": "worker.ts",

@@ -13,14 +13,14 @@ const FAR_START = Math.floor(((T + 2 * 86_400_000) / 1000 - 1692803367) / 3) + 1
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}, now = T) =>
   handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: withDevice(method, path, body) }), env, now);
 const org = { "x-organizer": SECRET };
-const create = (over: Record<string, unknown> = {}) => call("POST", "/api/z", { id: "ENG1", startRound: 1000, callSeconds: 6, cap: 400, ...over }, org);
+const create = (over: Record<string, unknown> = {}) => call("POST", "/api/z", { id: "ENG1", startRound: FAR_START, callSeconds: 6, cap: 400, ...over }, org); // two days ahead: a game that is already over takes no new joiners
 const phone = (i: number) => "9" + String(100000000 + i);
 const join = (i: number, eid = "ENG1", now = T) => call("POST", `/api/z/${eid}/join`, { phone: phone(i), name: "P" + i }, {}, now);
 
 beforeEach(() => {
   const d = makeD1();
   raw = d.raw;
-  env = { DB: d.db, ORGANIZER_SECRET: SECRET, DAILY_WRITE_BUDGET: "80000", JOIN_PER_IP_DAY: "1000000", JOIN_PER_IP_MINUTE: "1000000" } as any;
+  env = { DB: d.db, ORGANIZER_SECRET: SECRET, RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "80000", JOIN_PER_IP_DAY: "1000000", JOIN_PER_IP_MINUTE: "1000000" } as any;
 });
 
 describe("engagement set-up", () => {
@@ -50,10 +50,10 @@ describe("joining", () => {
   beforeEach(async () => { await create(); });
   test("a join returns what the phone needs to play and nothing about others", async () => {
     const r = await (await join(1)).json() as any;
-    expect(r.startRound).toBe(1000);
+    expect(r.startRound).toBe(FAR_START);
     expect(r.callSeconds).toBe(6);
     expect(r.pid).toMatch(/^1x[0-9a-f]{12}$/); // seat number + hash: the seat makes the ticket collision-free
-    expect(Object.keys(r).sort()).toEqual(["breaks", "callMode", "callSeconds", "closing", "invites", "jr", "opening", "pid", "rewards", "rounds", "startRound", "tickets", "ties", "trackClaims"]);
+    expect(Object.keys(r).sort()).toEqual(["afterPrizes", "breaks", "callMode", "callSeconds", "checkin", "closing", "employeesOnly", "idClean", "idKind", "invites", "jr", "open", "opening", "pid", "rewards", "rounds", "startMode", "startRound", "tickets", "ties", "trackClaims", "verify"]);
   });
   test("the same number joining twice, even typed differently, is one participant and one write", async () => {
     const a = await (await call("POST", "/api/z/ENG1/join", { phone: "+91 98765-43210" })).json() as any;
@@ -167,17 +167,17 @@ describe("winners are decided by the software", () => {
     await settleByPhones(call, "ENG1", [{ pattern: "full", idx: 70, pids: [pids[1]!, pids[2]!] }], pids.slice(0, 3));
     const txt = await (await call("GET", "/api/z/ENG1/results")).text();
     expect(/\b[6-9]\d{9}\b/.test(txt)).toBe(false); // no mobile number, no name
-    expect(JSON.parse(txt).results[0]).toEqual({ pattern: "full", ordinal: 1, round: 1, idx: 70, count: 2, winners: [pids[1]!, pids[2]!].sort() });
+    expect(JSON.parse(txt).results[0]).toMatchObject({ pattern: "full", ordinal: 1, round: 1, idx: 70, count: 2, winners: [pids[1]!, pids[2]!].sort() }); // (the results also carry the public ticket numbers of the winners: tickets)
   });
   test("a winner confirms the details on their own phone; a change is kept with the original; the organizer ticks 'prize given'", async () => {
     await settleByPhones(call, "ENG1", [{ pattern: "full", idx: 70, pids: [pids[1]!] }], pids.slice(0, 3));
     const dev = deviceOf(phone(2));
     const mine = await (await call("GET", `/api/z/ENG1/myprizes?pid=${pids[1]!}&device=${dev}`)).json() as any;
-    expect(mine.prizes).toHaveLength(1); expect(mine.phone).toBe(phone(2)); expect(mine.confirmed).toBe(false);
+    expect(mine.prizes).toHaveLength(1); expect(mine.phone).toBe("91" + phone(2)); expect(mine.confirmed).toBe(false); // phone kept with its country code: 91 + 10 digits for India
     expect((await call("POST", "/api/z/ENG1/confirm", { pid: pids[1]!, device: deviceOf(phone(3)), name: "Thief", phone: phone(3) })).status).toBe(403); // another phone cannot take the prize
     expect((await call("POST", "/api/z/ENG1/confirm", { pid: pids[1]!, device: dev, name: "Asha Rao", phone: "98765 43210" })).status).toBe(200);
     const list = await (await call("GET", "/api/z/ENG1/prizes", undefined, org)).json() as any;
-    expect(list.prizes[0]).toMatchObject({ name: "Asha Rao", phone: "9876543210", confirmed: true, changed: true, joinedWithName: "P2", joinedWithPhone: phone(2), given: false });
+    expect(list.prizes[0]).toMatchObject({ name: "Asha Rao", phone: "919876543210", confirmed: true, changed: true, joinedWithName: "P2", joinedWithPhone: "91" + phone(2), given: false });
     expect(list.prizes[0].trail).toHaveLength(1);
     expect((await call("GET", "/api/z/ENG1/prizes")).status).toBe(403);
     expect((await call("POST", "/api/z/ENG1/prizegiven", { round: 1, pattern: "full", ordinal: 1, seat: 2, given: true }, org)).status).toBe(200);
@@ -201,21 +201,23 @@ describe("free-plan guard and scale", () => {
     expect((raw.query("SELECT COUNT(*) c FROM participant").get() as any).c).toBeLessThanOrEqual(11);
   });
   test("the budget resets on the next UTC day", async () => {
-    env.DAILY_WRITE_BUDGET = "3";
+    env.DAILY_WRITE_BUDGET = "18"; // a join is charged JOIN_WRITES (9) units: two joins fit, the third is refused
     await create();
     await join(1); await join(2);
     expect((await join(3)).status).toBe(503);
     expect((await join(3, "ENG1", T + 86_400_000)).status).toBe(200);
   });
   test("10,000 people join at once: every one gets in, no duplicates, writes stay inside the free daily budget", async () => {
+    env.DAILY_WRITE_BUDGET = "200000"; // the deployed guard is 2,000,000; a join is charged 9 units (what it really writes)
     await create({ cap: 20000 });
     const rs = await Promise.all(Array.from({ length: 10000 }, (_, i) => join(i)));
     expect(rs.every((r) => r.status === 200)).toBe(true);
     expect((raw.query("SELECT COUNT(*) c FROM participant").get() as any).c).toBe(10000);
-    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(30002);
-    expect(30001).toBeLessThan(100000 * 0.4); // one 10,000-person engagement uses ~30% of D1's free daily writes (3 per join: seat, participant, person list row)
+    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(90002);
+    expect(90001).toBeLessThan(2_000_000 * 0.05); // one 10,000-person engagement uses under 5% of the deployed daily guard (9 per join: what a join really writes)
   }, 120_000);
   test("a large engagement stores claims too (real housie: a prize is won only by a claim), once each however often a phone sends them, and says when each arrived", async () => {
+    env.DAILY_WRITE_BUDGET = "200000";
     await create({ cap: 20000 });
     const pids: string[] = [];
     for (let i = 0; i < 10000; i++) pids.push(((await (await join(i)).json()) as any).pid);
@@ -223,7 +225,7 @@ describe("free-plan guard and scale", () => {
     for (let round = 0; round < 2; round++)
       await Promise.all(pids.slice(0, 2000).map((pid, i) => call("POST", "/api/z/ENG1/claims", { pid, claims: [{ pattern: pats[i % 7], idx: i % 90 }] })));
     expect((raw.query("SELECT COUNT(*) c FROM claim").get() as any).c).toBe(2000);
-    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(30002 + 4000); // 1 create + 1 entitlement-free + 10,000 joins at 3 units (seat, participant, person) + one unit per claim sent (2,000 phones, twice; the second round stores nothing but is still a write attempt)
+    expect((raw.query("SELECT writes w FROM usage").get() as any).w).toBe(90002 + 2000); // 1 create + 1 entitlement-free + 10,000 joins at 9 units (what a join really writes) + one unit per claim stored (2,000 phones); the second round repeats the same claims and costs nothing (F-03: a repeat is a read, so it cannot use up the shared daily allowance)
     const r = (await (await call("POST", "/api/z/ENG1/claims", { pid: pids[0], claims: [{ pattern: "mid", idx: 7 }] })).json()) as any;
     expect(r.atMs).toBe(T); // the store's clock: the time that decides whether the claim came before the next number
     expect(((await (await call("GET", "/api/z/BIG01/info").catch(() => new Response("{}"))).json()) as any).trackClaims ?? true).toBe(true);
@@ -252,7 +254,7 @@ describe("roster, history, erase and 365-day retention", () => {
       expect((await call(m, p, m === "POST" ? {} : undefined)).status).toBe(403);
   });
   test("info is public and holds only what a phone needs", async () => {
-    expect(await (await call("GET", "/api/z/ENG1/info")).json()).toMatchObject({ startRound: 1000, callSeconds: 6, trackClaims: true, controlUrl: null, tickets: 1, breaks: [] });
+    expect(await (await call("GET", "/api/z/ENG1/info")).json()).toMatchObject({ startRound: FAR_START, callSeconds: 6, trackClaims: true, controlUrl: null, tickets: 1, breaks: [] });
   });
   test("the organizer sees ids and names, never phone numbers or hashes", async () => {
     await join(1);
@@ -651,7 +653,7 @@ describe("tickets, reward lines and brand breaks", () => {
     await settleByPhones(call, "CFG01", [{ pattern: "full", ordinal: 1, idx: 50, pids: [p1] }, { pattern: "full", ordinal: 2, idx: 53, pids: [p1, p2] }], [p1]);
     await settleByPhones(call, "CFG01", [{ pattern: "full", ordinal: 1, idx: 51, pids: [p2] }], [p2]); // a later, different report does not replace it
     const r = await (await call("GET", "/api/z/CFG01/results")).json() as any;
-    expect(r.results).toEqual([{ pattern: "full", ordinal: 1, round: 1, idx: 50, count: 1, winners: [p1] }, { pattern: "full", ordinal: 2, round: 1, idx: 53, count: 2, winners: [p1, p2].sort() }]);
+    expect(r.results).toMatchObject([{ pattern: "full", ordinal: 1, round: 1, idx: 50, count: 1, winners: [p1] }, { pattern: "full", ordinal: 2, round: 1, idx: 53, count: 2, winners: [p1, p2].sort() }]);
     await settleByPhones(call, "CFG01", [{ pattern: "full", ordinal: 6, idx: 1, pids: [p1] }, { pattern: "full2", ordinal: 1, idx: 1, pids: [p1] }], [p1]); // a line this engagement does not have is ignored
     expect(((await (await call("GET", "/api/z/CFG01/results")).json()) as any).results).toHaveLength(2);
   });
@@ -668,7 +670,7 @@ describe("lucky draw results", () => {
   test("the winners are accepted when several phones agree, and are shown by opaque ids so each phone can tell if it won", async () => {
     expect((await call("POST", "/api/z/LUCK1/settle", { results: [{ pattern: "lucky", ordinal: 1, idx: 20, pids: [pids[0]!] }] }, org)).status).toBe(403);
     await settleByPhones(call, "LUCK1", [{ pattern: "lucky", idx: 20, pids: [pids[0]!, pids[1]!, pids[2]!] }], pids.slice(0, 3));
-    expect((await pub()).results[0]).toEqual({ pattern: "lucky", ordinal: 1, round: 1, idx: 20, count: 3, winners: [pids[0]!, pids[1]!, pids[2]!].sort() });
+    expect((await pub()).results[0]).toMatchObject({ pattern: "lucky", ordinal: 1, round: 1, idx: 20, count: 3, winners: [pids[0]!, pids[1]!, pids[2]!].sort() });
   });
   test("house results carry only opaque ticket ids, never a name or a number", async () => {
     await settleByPhones(call, "LUCK1", [{ pattern: "full", idx: 70, pids: [pids[0]!] }], pids);
@@ -907,7 +909,7 @@ describe("late joiners and the public seat list", () => {
     const again = await (await call("GET", "/api/z/SEAT-C/seats", undefined, {}, at + 7000)).json() as any; expect(again.seats.length).toBe(3); // the saved list never changes: later seats come only as the tail
   });
   test("the organizer's participant list carries each join round, so the console counts what the phones count", async () => {
-    await create({ id: "SEAT-D", startRound: nowround(-400), cap: 50 }); // already started
+    await create({ id: "SEAT-D", startRound: nowround(-100), cap: 50 }); // already started, and still being played (a game that is over takes no new joiner)
     await joinAt("9800000301", "SEAT-D");
     const p = await (await call("GET", "/api/z/SEAT-D/participants", undefined, org)).json() as any;
     expect(p.participants[0].jr).toBe(nowRound);

@@ -1,0 +1,120 @@
+{
+ "A": {
+  "before": {
+   "admit+decline": {
+    "requests": 80,
+    "states": {
+     "declined/out": 77,
+     "declined/in": 3
+    },
+    "disagreements": 3,
+    "examples": [
+     {
+      "empId": "EMP-9PXB015",
+      "state": "declined",
+      "joinStatus": 200,
+      "org": "200{\"ok\":true,\"admitted\":true,\"placedUnder\"",
+      "host": "200{\"ok\":true,\"declined\":true}"
+     },
+     {
+      "empId": "EMP-9PXB000",
+      "state": "declined",
+      "joinStatus": 200,
+      "org": "200{\"ok\":true,\"admitted\":true,\"placedUnder\"",
+      "host": "200{\"ok\":true,\"declined\":true}"
+     },
+     {
+      "empId": "EMP-9PXB032",
+      "state": "declined",
+      "joinStatus": 200,
+      "org": "200{\"ok\":true,\"admitted\":true,\"placedUnder\"",
+      "host": "200{\"ok\":true,\"declined\":true}"
+     }
+    ]
+   },
+   "admit+admit": {
+    "requests": 80,
+    "states": {
+     "admitted/in": 80
+    },
+    "disagreements": 0,
+    "examples": []
+   },
+   "decline+decline": {
+    "requests": 80,
+    "states": {
+     "declined/out": 80
+    },
+    "disagreements": 0,
+    "examples": []
+   }
+  },
+  "beforeBig": null
+ },
+ "B": {
+  "sequential": {
+   "res": {
+    "admitByOrg": {
+     "ok": 7,
+     "bad": 0
+    },
+    "declineByHost": {
+     "ok": 7,
+     "bad": 0
+    },
+    "declineByOrg": {
+     "ok": 6,
+     "bad": 0
+    }
+   },
+   "examples": []
+  },
+  "races": {
+   "admit+decline": {
+    "requests": 80,
+    "states": {
+     "declined/out": 80
+    },
+    "disagreements": 0,
+    "examples": []
+   },
+   "admit+admit": {
+    "requests": 80,
+    "states": {
+     "admitted/in": 80
+    },
+    "disagreements": 0,
+    "examples": []
+   },
+   "decline+decline": {
+    "requests": 80,
+    "states": {
+     "declined/out": 80
+    },
+    "disagreements": 0,
+    "examples": []
+   }
+  }
+ },
+ "C": {
+  "small": {
+   "cap": 100,
+   "stopStatus": 200,
+   "secondsUntilPhoneShowsEnd": {
+    "0": 43.2,
+    "1": 43.2
+   }
+  },
+  "big": {
+   "cap": 1015,
+   "stopStatus": 200,
+   "secondsUntilPhoneShowsEnd": {
+    "0": 158.6,
+    "1": 159.1
+   }
+  }
+ },
+ "notes": [
+  "game started; decisions now happen during the game"
+ ]
+}

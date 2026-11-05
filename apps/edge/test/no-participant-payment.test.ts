@@ -14,7 +14,7 @@ const call = (method: string, path: string, body?: unknown, key?: string) =>
 const j = async (r: Response) => (await r.json()) as any;
 const rd = (rel: string) => readFileSync(new URL("../../../" + rel, import.meta.url), "utf8");
 const dev = (i: number) => i.toString(16).padStart(4, "0").repeat(8);
-beforeEach(() => { const d = makeD1(); raw = d.raw; ip = 0; env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt", DATA_KEY: "k", TEST_MODE: "1" } as WorkerEnv; });
+beforeEach(() => { const d = makeD1(); raw = d.raw; ip = 0; env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "100000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt", DATA_KEY: "k", TEST_MODE: "1" } as WorkerEnv; });
 
 describe("LR-1: no code path takes money from a participant", () => {
   test("the pages a participant sees contain no payment call, no payment provider and no price", () => {

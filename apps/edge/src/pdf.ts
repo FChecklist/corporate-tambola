@@ -62,13 +62,13 @@ export class PdfDoc {
     this.need(lead); this.y -= lead; this.put(latin1(text).slice(0, max), this.M, this.y + lead * 0.28, { font: "F3", size });
   }
   gap(h: number) { this.y -= h; }
-  private img: { w: number; h: number; hex: string } | null = null;
-  /** The organizer's logo (raw RGB pixels as hex), fitted inside a w x h white tile whose top-left corner is (x, top). One logo per file. */
+  private imgs: { w: number; h: number; hex: string }[] = [];
+  /** The organizer's logo (raw RGB pixels as hex), fitted inside a w x h white tile whose top-left corner is (x, top). Several pictures per file (our own logo and the organizer's). */
   logo(px: { w: number; h: number; hex: string }, x: number, top: number, w: number, h: number) {
     if (!px || !px.w || !px.h || px.hex.length !== px.w * px.h * 6) return;
-    this.img = px; const k = Math.min((w - 6) / px.w, (h - 6) / px.h), dw = px.w * k, dh = px.h * k;
+    this.imgs.push(px); const im = this.imgs.length; const k = Math.min((w - 6) / px.w, (h - 6) / px.h), dw = px.w * k, dh = px.h * k;
     this.cur.push(`1 1 1 rg ${num(x)} ${num(top - h)} ${num(w)} ${num(h)} re f`);
-    this.cur.push(`q ${num(dw)} 0 0 ${num(dh)} ${num(x + (w - dw) / 2)} ${num(top - h + (h - dh) / 2)} cm /Im1 Do Q`);
+    this.cur.push(`q ${num(dw)} 0 0 ${num(dh)} ${num(x + (w - dw) / 2)} ${num(top - h + (h - dh) / 2)} cm /Im${im} Do Q`);
   }
   h1(text: string) { this.need(40); this.gap(8); this.y -= 18; this.put(text, this.M, this.y, { font: "F2", size: 15, color: NAVY }); this.line(this.M, this.y - 5, this.W - this.M, this.y - 5, GOLD, 1.2); this.y -= 12; }
   h2(text: string) { this.need(28); this.gap(4); this.y -= 14; this.put(text, this.M, this.y, { font: "F2", size: 11, color: INK }); this.y -= 4; }
@@ -107,17 +107,17 @@ export class PdfDoc {
     const objs: string[] = [];
     const add = (s: string) => { objs.push(s); return objs.length; };
     const fonts = (["F1", "F2", "F3", "F4"] as Font[]).map((f) => add(`<< /Type /Font /Subtype /Type1 /BaseFont /${BASE[f]} /Encoding /WinAnsiEncoding >>`));
-    const imgId = this.img ? add(`<< /Type /XObject /Subtype /Image /Width ${this.img.w} /Height ${this.img.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${this.img.hex.length + 1} >>
+    const imgIds = this.imgs.map((im) => add(`<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${im.hex.length + 1} >>
 stream
-${this.img.hex}>
-endstream`) : 0;
+${im.hex}>
+endstream`));
     const pagesId = objs.length + 1 + pages.length * 2; // catalog and page tree come after the pages
     const pageIds: number[] = [];
     pages.forEach((content, i) => {
       const foot = `BT /F1 7.5 Tf ${col(GREY)} rg ${num(this.M)} 26 Td (${esc(this.footer)}) Tj ET BT /F1 7.5 Tf ${col(GREY)} rg ${num(this.W - this.M - 60)} 26 Td (${esc(`page ${i + 1} of ${pages.length}`)}) Tj ET`;
       const stream = content.join("\n") + "\n" + foot;
       const cid = add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
-      pageIds.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${num(this.W)} ${num(this.H)}] /Resources << /Font << ${fonts.map((id, k) => `/F${k + 1} ${id} 0 R`).join(" ")} >>${imgId ? ` /XObject << /Im1 ${imgId} 0 R >>` : ""} >> /Contents ${cid} 0 R >>`));
+      pageIds.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${num(this.W)} ${num(this.H)}] /Resources << /Font << ${fonts.map((id, k) => `/F${k + 1} ${id} 0 R`).join(" ")} >>${imgIds.length ? ` /XObject << ${imgIds.map((id, k) => `/Im${k + 1} ${id} 0 R`).join(" ")} >>` : ""} >> /Contents ${cid} 0 R >>`));
     });
     const tree = add(`<< /Type /Pages /Kids [${pageIds.map((i) => `${i} 0 R`).join(" ")}] /Count ${pages.length} >>`);
     const cat = add(`<< /Type /Catalog /Pages ${tree} 0 R >>`);

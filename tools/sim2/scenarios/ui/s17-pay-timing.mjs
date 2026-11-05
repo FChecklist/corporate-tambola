@@ -16,7 +16,7 @@ export default [
       await x.page.goto(`${H.SIM}/pay.html?e=${g.id}`); await x.page.waitForSelector("#paygo");
       await payOnPage(x.page, { email: org.email });
       await x.page.waitForFunction(() => /PAYMENT RECEIVED/i.test(document.body.innerText), null, { timeout: 15000 });
-      t.check("the receipt shows, with the way to stay and the way to open now", !!(await x.page.$("#goStay")) && /Open my engagement/i.test(await t.text(x.page)));
+      t.check("the receipt shows, with the way to stay and the way to open now", !!(await x.page.$("#goStay")) && /Open my game/i.test(await t.text(x.page)));
       t.check("the Organizer lands on the engagement page by themselves", await landed(x.page, g.id), x.page.url());
       await x.page.waitForSelector(".zc-sech", { timeout: 15000 });
       t.check("the engagement page shows Paid, not 'Payment pending'", /\bPaid\b/.test(await t.text(x.page)) && !/Payment pending/i.test(await t.text(x.page)));
@@ -59,7 +59,7 @@ export default [
       await x.page.waitForTimeout(9000);
       t.check("still on the pay page after 9 seconds", /\/pay/.test(new URL(x.page.url()).pathname), x.page.url());
       t.check("the receipt is still shown", /PAYMENT RECEIVED/i.test(await t.text(x.page)));
-      await x.page.click("text=Open my engagement");
+      await x.page.click("text=Open my game");
       t.check("the button opens the engagement page", await landed(x.page, g.id, 15000), x.page.url());
     },
   },

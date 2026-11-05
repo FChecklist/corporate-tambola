@@ -81,6 +81,7 @@ export function leaveStatements(c: Pick<RightsCtx, "db" | "eid" | "now" | "start
   // the player's line on the organizer's list: before the start it is deleted (the player may come back later); once the game has begun it stays as "removed by self" with nothing personal in it
   if (c.started) st.push(db.prepare("UPDATE person SET status='removed', removed_ms=?, removed_by='self', pii='', tok_hash=NULL, tok_sealed=NULL WHERE eid=? AND ph=? AND status<>'removed'").bind(now, eid, s.ph));
   else st.push(db.prepare("DELETE FROM person WHERE eid=? AND ph=? AND role IS NULL").bind(eid, s.ph));
+  st.push(db.prepare("DELETE FROM kv WHERE k >= ? AND k < ? AND v=?").bind(`email/${eid}/`, `email/${eid}0`, s.ph)); // the email record goes with the person (1.8.0)
   if (c.extraLeave) st.push(...c.extraLeave(eid, s.pid));
   if (c.started) st.push(db.prepare("UPDATE participant SET pii=NULL, name=NULL WHERE eid=? AND pid=?").bind(eid, s.pid), db.prepare("UPDATE seat SET blocked=1 WHERE eid=? AND pid=?").bind(eid, s.pid));
   else st.push(db.prepare("DELETE FROM participant WHERE eid=? AND pid=?").bind(eid, s.pid), db.prepare("DELETE FROM seat WHERE eid=? AND pid=?").bind(eid, s.pid));

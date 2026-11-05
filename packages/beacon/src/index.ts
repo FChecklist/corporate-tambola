@@ -24,6 +24,14 @@ export const QUICKNET = {
 
 const DST = "BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_";
 
+/** Our own server relays the public beacon (GET /api/beacon/<chain>/public/<round>): a network that blocks the beacon's own servers (a company firewall) can still reach the site the game is played on. The relay is only a postman: every answer is still checked against the beacon's public key on the phone. */
+export const relayMirror = (): string[] => { try { const l = (globalThis as any).location; return l && /^https?:$/.test(l.protocol) && l.origin ? [l.origin + "/api/beacon"] : []; } catch { return []; } };
+export const defaultMirrors = (net: typeof QUICKNET = QUICKNET): string[] => [...net.mirrors, ...relayMirror()];
+/** Mirrors that could not be reached at all (blocked, offline, hanging) are asked last for the next 40 numbers or so, so a blocked network does not slow every number. (Counted in requests, never in time: this code never reads the device clock.) */
+const DOWN_FOR = 40; let askCount = 0; const downUntil = new Map<string, number>();
+const isDown = (m: string) => (downUntil.get(m) ?? 0) > askCount;
+
+
 export type Round = { round: number; signature: string; randomness: string };
 
 /** UTC milliseconds at which a round is published. */
@@ -59,6 +67,8 @@ export interface BeaconOpts {
   mirrors?: readonly string[];
   fetcher?: Fetcher;
   timeoutMs?: number;
+  /** Milliseconds before the next mirror is asked as well (default 1200). */
+  hedgeMs?: number;
   /** Test hook only; production always uses the real signature check. */
   verify?: (x: Round, net: typeof QUICKNET) => boolean;
 }
@@ -66,27 +76,42 @@ export interface BeaconOpts {
 /** Fetches one round, trying mirrors in turn (rotated by `salt` so phones spread across mirrors). Only a signature-verified round is returned. */
 export async function fetchRound(r: number | "latest", opts: BeaconOpts = {}, salt = 0): Promise<Round | null> {
   const net = opts.net ?? QUICKNET;
-  const mirrors = opts.mirrors ?? net.mirrors;
+  askCount++; const all = opts.mirrors ?? defaultMirrors(net);
+  const rotated = all.map((_, i) => all[(i + salt) % all.length]!); const mirrors = [...rotated.filter((m) => !isDown(m)), ...rotated.filter(isDown)];
   const f = opts.fetcher ?? (fetch as unknown as Fetcher);
-  for (let i = 0; i < mirrors.length; i++) {
-    const m = mirrors[(i + salt) % mirrors.length]!;
-    try {
-      const ctl = new AbortController();
+  // Hedged: the first mirror is asked at once; if it has not answered within HEDGE_MS (or has failed) the next one is asked too, and the first VALID answer wins. A mirror that hangs therefore
+  // delays a number by about a second, not by its whole timeout (a number that arrives 5 seconds late and is followed by one a second later looks like "the numbers are going fast").
+  const HEDGE_MS = opts.hedgeMs ?? 1200;
+  return new Promise<Round | null>((resolve) => {
+    let launched = 0, finished = 0, won = false;
+    const ctls: AbortController[] = [];
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const finish = (x: Round | null) => { if (won) return; won = true; timers.forEach(clearTimeout); ctls.forEach((c) => { try { c.abort(); } catch { /* already done */ } }); resolve(x); };
+    const launch = () => {
+      if (won || launched >= mirrors.length) return;
+      const m = mirrors[launched]!; launched++;
+      const ctl = new AbortController(); ctls.push(ctl);
       const ms = opts.timeoutMs ?? 6000;
-      let t: ReturnType<typeof setTimeout> | undefined;
+      let to: ReturnType<typeof setTimeout> | undefined;
       // A mirror that hangs (or a fetcher that ignores the abort signal) must never stall the phone.
-      const res = await Promise.race([
+      Promise.race([
         f(`${m}/${net.chainHash}/public/${r}`, { signal: ctl.signal }),
-        new Promise<never>((_, rej) => { t = setTimeout(() => { ctl.abort(); rej(new Error("timeout")); }, ms); }),
-      ]).finally(() => clearTimeout(t));
-      if (!res.ok) continue; // 404 = not published yet (or a bad mirror): try the next
-      const x = (await res.json()) as Round;
-      if ((opts.verify ?? verifyRound)(x, net) && (r === "latest" || x.round === r)) return x;
-    } catch {
-      /* blocked, offline or slow mirror: move on */
-    }
-  }
-  return null;
+        new Promise<never>((_, rej) => { to = setTimeout(() => { ctl.abort(); rej(new Error("timeout")); }, ms); }),
+      ]).finally(() => clearTimeout(to)).then(async (res) => {
+        downUntil.delete(m); // it answered: it is reachable
+        if (!res.ok) return null; // 404 = not published yet (or a bad mirror): try the next
+        const x = (await res.json()) as Round;
+        return (opts.verify ?? verifyRound)(x, net) && (r === "latest" || x.round === r) ? x : null;
+      }).catch(() => { downUntil.set(m, askCount + DOWN_FOR); return null; } /* blocked, offline or slow mirror: move on, and ask it last for a while */).then((x) => {
+        finished++;
+        if (x) return finish(x);
+        if (finished >= mirrors.length) return finish(null);
+        launch(); // this one failed: ask the next at once
+      });
+      if (launched < mirrors.length) timers.push(setTimeout(launch, HEDGE_MS));
+    };
+    launch();
+  });
 }
 
 /** Phone-independent UTC: the newest verified round proves the real time is at least its publish time (and under 3 s after it). */
@@ -170,3 +195,5 @@ export function seededRand(seed: string): (n: number) => number {
   };
 }
 export * from "./control";
+export * from "./story";
+export * from "./gaps";

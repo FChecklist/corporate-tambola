@@ -101,3 +101,15 @@ describe("seats built AFTER numbers were called (every late joiner's phone) give
     expect(norm(late.results())).toEqual(norm(whole));
   });
 });
+
+describe("Two Lines tied to one ticket (T-15)", () => {
+  test("the engine awards twolines@1 and twolines@2 exactly as settleAll does", () => {
+    const rewards = [{ pattern: "twolines", scope: "ticket_1", ordinal: 1, text: "" }, { pattern: "twolines", scope: "ticket_2", ordinal: 1, text: "" }] as EngagementCfg["rewards"];
+    const cfg = cfgOf(2, { rewards }), eid = "PE-T15", pids = mkPids(30), log = shuffle("5444");
+    const e = new PrizeEngine(eid, cfg); e.addSeats(pids.map((pid) => ({ pid, countFrom: 0 }))); e.work(10_000);
+    for (let k = 0; k < 90; k++) e.feed(log[k]!, 100 + k * 3);
+    const whole = settleAll(eid, pids, log, cfg);
+    expect(whole.length).toBe(2);
+    expect(norm(e.results())).toEqual(norm(whole));
+  });
+});

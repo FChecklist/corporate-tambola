@@ -16,7 +16,7 @@ export const roundMs = (r: number) => (GEN + (r - 1) * 3) * 1000;
 
 export function newWorld(extra: Record<string, string> = {}) {
   const d = makeD1();
-  const env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt", ...extra } as unknown as Env;
+  const env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt", ...extra } as unknown as Env;
   const world = { env, raw: d.raw, now: T };
   const api = (method: string, path: string, body?: unknown, key?: string, now = world.now) =>
     handle(new Request("http://localhost" + path, { method, headers: { "content-type": "application/json", ...(key ? { "x-organizer": key } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }), env, now);
@@ -46,7 +46,8 @@ export async function openPage(world: { env: Env; now: number }, o: { url: strin
   try { Object.defineProperty(win, "indexedDB", { value: undefined, configurable: true }); } catch { /* the signing-key store needs a real browser; the page treats it as unavailable */ }
   win.addEventListener("error", (e: any) => errors.push(String(e?.message ?? e)));
   win.addEventListener("unhandledrejection", (e: any) => errors.push(String(e?.reason?.message ?? e?.reason ?? e)));
-  for (const f of o.scripts.includes("consent.js") ? o.scripts : ["consent.js", ...o.scripts]) {
+  const base = o.scripts.includes("consent.js") ? o.scripts : ["consent.js", ...o.scripts];
+  for (const f of base.includes("keep.js") ? base : ["keep.js", ...base]) { // keep.js (staying signed in) is the first script of every real page that has a sign-in
     const code = readFileSync(join(PUB, f), "utf8");
     try { new Function("window", `with (window) { ${code}\n}`).call(win, win); } catch (e: any) { errors.push(f + ": " + e.message); }
     if (f === "consent.js" && win.CBConsent && o.tick !== false) { // the person in these tests ticks every Terms box on the page (pass tick:false to see the unticked page)

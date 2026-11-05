@@ -14,8 +14,8 @@ async function consoleIn(mode: "TEST" | "LIVE") {
   const w = newWorld();
   const s = await w.json(await w.api("POST", "/api/start", { email: "boss@acme.com" }));
   if (mode === "TEST") await setMode(w.world.env as any, "TEST", "banner test", w.world.now);
-  const p = await openPage(w.world, { url: "http://localhost/zc", html: "zc.html", scripts: ["zgame.js", "control.js", "zc.js"], session: { "ctz-org": s.token, "ctz-aimsg": s.aiMessage, "ctz-email": "boss@acme.com" } });
-  open.push(p); await p.waitFor((x) => /Start a new game/.test(x)); await new Promise((r) => setTimeout(r, 30));
+  const p = await openPage(w.world, { url: "http://localhost/zc", html: "zc.html", scripts: ["zgame.js", "control.js", "zc.js"], session: { "ctz-org": s.token, "ctz-aimsg": s.aiMessage, "ctz-email": "boss@acme.com", "ctz-qauto": "1" } });
+  open.push(p); await p.waitFor((x) => /Create a new game/.test(x)); await new Promise((r) => setTimeout(r, 30));
   return p;
 }
 

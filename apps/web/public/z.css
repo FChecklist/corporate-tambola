@@ -2,7 +2,7 @@
 .zmsg{text-align:center;color:var(--muted);margin:30vh 0 0}
 .zhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
 .zhead b{font:700 15px var(--sans,inherit);color:var(--wine);display:inline-flex;align-items:center;gap:8px}
-.zhead b::before{content:"";flex:0 0 24px;width:24px;height:24px;border-radius:6px;background:url(/icon-192.png) center/cover}
+.zhead b::before{content:"";flex:0 0 24px;width:24px;height:24px;border-radius:6px;background:url(/icon-192.png?v=4) center/cover}
 .zsnd{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;min-height:36px}
 .zcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
 .zcard h2{margin:0 0 8px;font:700 13px var(--sans,inherit);letter-spacing:.08em;text-transform:uppercase;color:var(--golddt)}
@@ -79,11 +79,12 @@ a.zbtn#addcal{margin-left:6px}
 .spriv{margin:8px 0 0;text-align:center;font-size:12px;line-height:1.3;font-weight:400}.spriv a{color:var(--muted,#6b7385);font-weight:400;text-decoration:underline}
 
 .spriv.accept{font-size:12px}
-.zdemotag{display:inline-block;background:#E4572E;color:#fff;font:800 12px/1 system-ui,sans-serif;letter-spacing:.12em;padding:4px 7px;border-radius:6px;vertical-align:middle}
+.zdemotag{display:inline-block;background:#C2410C;color:#fff;font:800 12px/1 system-ui,sans-serif;letter-spacing:.12em;padding:4px 7px;border-radius:6px;vertical-align:middle}
 .zdemo{border:2px dashed #E4572E}
 /* a DEMO GAME (the organizer's free game): the words DEMO GAME run diagonally across the whole ticket, see-through, so the numbers stay readable */
 .zticket.zdemogame{position:relative;overflow:hidden}
-.zticket.zdemogame::after{content:"DEMO GAME";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-24deg);font:900 clamp(26px,9vw,44px)/1 system-ui,sans-serif;letter-spacing:.14em;color:rgba(228,87,46,.34);white-space:nowrap;pointer-events:none;text-shadow:0 0 2px #fff}
+.zticket.zdemogame::after{content:"DEMO GAME";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-24deg);font:900 clamp(26px,9vw,44px)/1 system-ui,sans-serif;letter-spacing:.14em;color:rgba(228,87,46,.18);white-space:nowrap;pointer-events:none;z-index:0}
+.zticket.zdemogame>div{position:relative;z-index:1} /* the numbers are always above the watermark, fully readable */
 
 /* the organizer's company strip at the top of the ticket page (colours are set from the script) and the small credit under it */
 .zbrand{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:#0B3D91;color:#fff;font:700 16px/1.25 var(--sans,inherit);min-width:0}
@@ -97,15 +98,17 @@ a.zbtn#addcal{margin-left:6px}
 .gor{margin:6px 0;text-align:center;font-size:13px;color:var(--muted,#6b7385)}.ggnote{margin:0;text-align:center}
 .zmia .zbtn{width:auto;flex:1 1 auto;min-height:40px;margin-top:0;padding:8px 12px;font-size:14px}
 #mine .zform .zbtn{margin-top:10px}
-/* a phone held sideways: the number on the left, the ticket and the rest on the right, so the ticket is visible without scrolling */
+/* a phone held sideways: the number on the left, the ticket and the rest on the right, so the ticket is visible without scrolling (the player page only; the consoles have their own layout) */
 @media (orientation:landscape) and (max-height:520px){
-.zapp{max-width:none;display:grid;grid-template-columns:minmax(220px,300px) minmax(0,1fr);column-gap:12px;align-content:start;padding:8px max(12px,env(safe-area-inset-right)) 24px max(12px,env(safe-area-inset-left));min-height:0}
-.zapp>*{grid-column:2;margin-top:0}
-.zapp>.zbrand,.zapp>.zbar,.zapp>.zhead{grid-column:1/-1}
-.zapp>.zbrand{padding:6px 12px;margin-bottom:6px}
-.zapp>.zhead{margin-bottom:6px}
-.zapp>.zcard:has(.zball){grid-column:1;grid-row:2/span 8;position:sticky;top:8px;align-self:start}
+.zapp:not(.zc){max-width:none;padding:8px max(12px,env(safe-area-inset-right)) 24px max(12px,env(safe-area-inset-left));min-height:0}
+.zapp:not(.zc) .zplay{display:grid;grid-template-columns:minmax(190px,250px) minmax(0,1fr);column-gap:12px;align-content:start;grid-auto-flow:row dense;max-width:none;padding:0;margin:0}
+.zapp:not(.zc) .zplay>*{grid-column:2;margin-top:0}
+.zapp:not(.zc) .zplay>.zstory,.zapp:not(.zc) .zplay>.zalert,.zapp:not(.zc) .zplay>.zbanner,.zapp:not(.zc) .zplay>.zann,.zapp:not(.zc) .zplay>.zwait{grid-column:1/-1}
+.zapp:not(.zc) .zplay>.zcall{grid-column:1;grid-row:span 8;position:sticky;top:8px;align-self:start;margin-top:0}
+.zapp:not(.zc) .zplay>.ztk{margin:0}
+.zapp:not(.zc)>.zbrand,.zapp:not(.zc)>.zbar .zbrand{padding:6px 12px;margin-bottom:6px}
 .zapp .zbig{zoom:.8}
+}
 }
 
 .pbrand{margin:0 0 12px;padding:18px 16px;border-radius:16px;text-align:center;color:#fff;background:linear-gradient(135deg,#8a0f3c 0%,#e8590c 62%,#f59f00 100%);box-shadow:0 6px 18px rgba(138,15,60,.28)}
@@ -147,12 +150,12 @@ body{background:linear-gradient(180deg,#FFF1D6 0,#FFE3EA 34%,#E6ECFF 70%,#FFF6DC
 .zbrand{border-radius:16px;box-shadow:0 4px 0 rgba(0,0,0,.18)}
 .zbrand.zdef{background:linear-gradient(100deg,#1565D8 0%,#7B3FE4 52%,#D6246B 100%);font-size:15px;letter-spacing:.06em;justify-content:center;text-align:center}
 .zbtn{min-height:52px;border-radius:14px;background:linear-gradient(180deg,#B02A5A,#7A1C33);box-shadow:0 3px 0 #4A0F20;font-size:17px}
-.zbtn:disabled,.zbtn[aria-disabled=true]{box-shadow:none}
+.zbtn:disabled,.zbtn[aria-disabled=true]{box-shadow:none}.zbtn:disabled{opacity:.6}
 .zbtn.alt{background:#fff;color:var(--zgrape);border:2px solid var(--zgrape);box-shadow:none}
 .zbtn.s{min-height:44px;font-size:15px}
 .zsmall{color:#4B4560}
 .zbanner{border-radius:14px}
-.zlink{background:#FBEAEE}
+.zlink{background:#FBEAEE;overflow-wrap:anywhere;word-break:break-all;user-select:all;-webkit-user-select:all}
 /* the join screen */
 .zsteps{display:flex;gap:8px;list-style:none;margin:0 0 10px;padding:0}
 .zsteps li{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;font:700 13px/1.25 var(--sans,inherit);color:#2E0812;background:#FDF0F3;border-radius:12px;padding:8px 4px}
@@ -161,6 +164,8 @@ body{background:linear-gradient(180deg,#FFF1D6 0,#FFE3EA 34%,#E6ECFF 70%,#FFF6DC
 .zgoalline{font-size:15px;line-height:1.4;margin-bottom:6px;color:#2A2140}
 .zform input[type=text],.zform input:not([type]),.zform input[type=tel]{border:2px solid #D9A5B6;border-radius:12px;min-height:50px}
 .zform input:focus{outline:3px solid #FFB703;outline-offset:1px}
+.zphone{display:flex;gap:6px;align-items:stretch}.zphone select{flex:0 0 46%;min-width:0;box-sizing:border-box;min-height:50px;font-size:16px;padding:8px 6px;border:2px solid #D9A5B6;border-radius:12px;background:#fff;color:inherit}.zphone select:focus{outline:3px solid #FFB703;outline-offset:1px}.zphone input{flex:1 1 0;width:auto;min-width:0}
+.zreq{font-size:11px;font-weight:600;color:#B3261E;margin-left:4px;white-space:nowrap}.zreq b{font-size:14px;line-height:1}.zopt{font-size:11px;font-weight:400;color:var(--muted);margin-left:4px}
 .cbc-tick{width:26px;height:26px;margin-top:0}
 .cbc .cbc-box{padding:6px 0}
 /* waiting room */
@@ -253,7 +258,7 @@ body:has(#go) #ct-notify{display:none}
 .zbar .zbrand.zdef b{font-size:14px;letter-spacing:.04em;line-height:1.2}
 
 /* Logo: a tiny mark before the name in the default brand strip; same line height, nothing moves. */
-.zbrand.zdef b::before{content:"";display:inline-block;width:18px;height:18px;margin-right:8px;vertical-align:-4px;border-radius:5px;background:url(/icon-192.png) center/cover}
+.zbrand.zdef b::before{content:"";display:inline-block;width:18px;height:18px;margin-right:8px;vertical-align:-4px;border-radius:5px;background:url(/icon-192.png?v=4) center/cover}
 .zbrand.zdef b{white-space:nowrap}
 /* Help Desk pages (helpdesk.html, helpdesk-accept.html, helpdesk-approve.html): a text link is a 40 px tap target, and the small brand line at the top is the page's one main heading. */
 .hdl{display:inline-flex;align-items:center;min-height:40px;padding:0 6px;margin-left:-6px}
@@ -262,3 +267,217 @@ body:has(#go) #ct-notify{display:none}
 /* the live prizes list: open prizes first, claimed ones crossed out with a small "claimed" */
 .zps h2{background:#FFEFC2;color:#7A3A00}.zpl{list-style:none;margin:0;padding:0}.zpl li{padding:8px 4px;border-bottom:1px solid #eee;font-size:15px}.zpl li:last-child{border:0}
 .zpl li.done{color:#7a8794}.zpl li.done s{text-decoration:line-through}.zpl li.done small{font-size:11px;color:#4c6b57;font-weight:700;letter-spacing:.03em;margin-left:4px}.zme{background:#F5820A;color:#fff;border-radius:99px;padding:1px 8px;font-size:11px;margin-left:6px}
+/* the ticket page: anyone who plays can become an organizer */
+.mkown{display:flex;flex-direction:column;gap:6px;align-items:flex-start;max-width:560px;margin:18px auto 6px;padding:14px 16px;border:2px dashed #E0B872;border-radius:14px;background:#FFF8EA;color:#2B3A55;font-size:14px;line-height:1.45}
+.mkown b{font-size:15px;color:#0B3D91}.mkownbtn{display:inline-block;margin-top:4px;padding:11px 18px;border-radius:10px;background:#0B3D91;color:#fff;font-weight:700;text-decoration:none}
+
+/* the countdown between two numbers (software-called games): 9, 8, 7 ... 1 */
+.zcount{display:flex;flex-direction:column;align-items:center;gap:6px;margin:6px 0 2px}
+.zring{--p:100;width:92px;height:92px;border-radius:50%;background:conic-gradient(#0E7C3A calc(var(--p)*1%),#E9DDE6 0);display:grid;place-items:center}
+.zring b{width:72px;height:72px;border-radius:50%;background:#fff;display:grid;place-items:center;font:800 38px/1 Inter,system-ui,sans-serif;color:#7A1C33;font-variant-numeric:tabular-nums}
+.zcount span{font-size:14px;color:#4a3a45}
+/* small phones: the ball, the countdown and the first row of the ticket must be seen together without scrolling */
+@media (max-width:420px),(max-height:760px){.zring{width:72px;height:72px}.zring b{width:56px;height:56px;font-size:30px}.zcount{margin:2px 0 0;gap:2px}.zcount span{font-size:12px}.zapp .zbig{zoom:.78}}
+
+/* present check-in (the ID box stays cream in every look, so its words carry their own dark colours: the Retro and Modern looks make the page text pale) */
+.zck h2{margin:4px 0 8px}.zckids{display:grid;grid-template-columns:1fr;gap:4px;margin:6px 0 10px;padding:8px 10px;border-radius:10px;background:#F4EFE3}
+.zckids div{display:flex;justify-content:space-between;gap:10px;font-size:13px}.zckids span{color:#6b5b57}.zckids b{color:#2E0812;font-family:ui-monospace,Consolas,monospace;word-break:break-all;text-align:right}
+.zckrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:10px 0 2px}.zckrow label{flex:1 0 100%;font-weight:700;font-size:14px}.zckrow input{flex:1 1 150px;min-width:0}.zckrow .zmini{flex:0 0 auto}
+.zchk{display:flex;align-items:center;gap:10px;margin:6px 0 4px;font-size:15px}.zchk{min-height:44px;min-width:44px}.zchk input{width:22px;height:22px;margin:0 11px}
+.zckinv{margin:12px 0;padding:8px 10px;border-radius:10px;background:#EEF2F9;font-size:14px}
+.zckcode{display:flex;flex-direction:column;align-items:center;margin:14px 0 8px;padding:12px;border:2px dashed #E0B872;border-radius:12px;background:#FFF8EA}
+.zckcode span{font-size:13px;color:#6b5b57}.zckcode b{font:800 44px/1.1 Inter,system-ui,sans-serif;letter-spacing:.28em;color:#7A1C33;font-variant-numeric:tabular-nums;padding-left:.28em}
+.zckin{font-size:24px;letter-spacing:.3em;text-align:center}.zckerr{min-height:20px;color:#b71c1c;font-weight:700;font-size:14px;margin:6px 0}
+.zckwait{margin-top:8px;font-size:15px}.zckwait b{font:800 26px/1 Inter,system-ui,sans-serif;color:#7A1C33}
+#cksubmit{margin-top:6px;width:100%}
+.zmini{min-height:44px;padding:0 16px;border:2px solid #D9A5B6;border-radius:999px;background:#fff;color:#2E0812;font:700 15px var(--sans,inherit)}
+.zckrow input{font-size:16px;min-height:46px}
+.zckhint{margin:6px 0 0}
+.zsending{color:#8a5a00}
+.zagain{margin:10px 0 0}.zagain .zbtn{margin-top:0}
+.zretry{margin:16px 0 0}
+.zlinkin{width:100%;box-sizing:border-box;min-height:44px;margin:0 0 8px;padding:8px 10px;font-size:16px;border:2px solid #D9A5B6;border-radius:10px;background:#FBEAEE}
+.zinvsheet{position:fixed;left:8px;right:8px;bottom:8px;z-index:40;max-width:504px;margin:0 auto;padding:12px;background:#fff;border:2px solid #C9A24A;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.3)}
+/* Traditional housie ticket (2026-10-27): a coloured card, white number squares with a bold number, coloured empty squares like a printed ticket,
+   and a RED CROSS drawn over a number the player has crossed. The number stays readable under the cross. Tapping a crossed number again takes the cross off (the phone runtime toggles it). */
+.zticket{padding:8px;gap:4px;background:#FFE08A;border:3px solid #1C2B3A;border-radius:12px;box-shadow:0 3px 0 rgba(28,43,58,.25)}
+.zticket div{position:relative;border-radius:4px;background:#fff;border:1.5px solid #1C2B3A;color:#1C2B3A;font-weight:800;box-shadow:none;text-shadow:none}
+.zticket div.e{background:repeating-linear-gradient(135deg,#0E7C6E 0 6px,#0A5F54 6px 12px);border-color:#1C2B3A;box-shadow:none}
+.zticket div.m{background:#FFEFEF;color:#5B1226;box-shadow:none;text-shadow:none}
+.zticket div.m::before,.zticket div.m::after{content:"";position:absolute;left:10%;right:10%;top:50%;height:3px;margin-top:-1.5px;background:rgba(214,40,40,.92);border-radius:2px;pointer-events:none}
+.zticket div.m::before{transform:rotate(45deg)}
+.zticket div.m::after{transform:rotate(-45deg)}
+.zticket div.w{background:linear-gradient(135deg,#FFE08A,#FFB703);color:#2A1B00;box-shadow:inset 0 0 0 2px #fff,0 0 0 2px #E8A200}
+/* The player's choice of look. Retro (the default) is the coloured ticket above. Modern: a plain white card, thin black lines, bold black numbers, a red cross. */
+.zlook{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:0 0 8px;font-size:14px}
+.zlooklbl{font-weight:700}
+.zlookopt{display:inline-flex;align-items:center;gap:6px;min-height:36px;cursor:pointer}
+.zlookopt input{width:20px;height:20px;accent-color:#1C2B3A}
+.zticket.modern{background:#fff;border:1px solid #1C2B3A;border-radius:6px;box-shadow:none;padding:0;gap:0}
+.zticket.modern div{border:1px solid #1C2B3A;border-radius:0;background:#fff;color:#000;font-weight:800;margin:-0.5px}
+.zticket.modern div.e{background:#fff;border-color:#1C2B3A}
+.zticket.modern div.m{background:#fff;color:#000}
+.zticket.modern div.w{background:#fff;color:#000;box-shadow:inset 0 0 0 3px #E8A200}
+
+/* the game is paused: a big banner, never missed */
+.zbanner.pause{display:flex;flex-direction:column;gap:4px;padding:16px 18px;border:3px solid #b45309;background:#fff4d6;color:#4a2a00;font-size:1.05rem;border-radius:12px}
+.zbanner.pause b{font-size:1.6rem;letter-spacing:.06em}
+
+/* one plain story at the top of the player's page, and the last few numbers beside the big one */
+.zstory{display:flex;flex-direction:column;gap:2px;padding:12px 14px;margin:0 0 10px;border-left:6px solid #0b3d91;background:#eef3fb;color:#14233f;border-radius:8px;font-size:1.05rem}
+.zstory[data-state="paused"]{border-color:#b45309;background:#fff4d6}.zstory[data-state^="ended"]{border-color:#1b6b3a;background:#e8f6ec}
+.zlast{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;margin:6px 0}.zlast span{font-size:.9rem;color:#555}
+.zlastn{font-style:normal;font-weight:600;min-width:34px;height:34px;border-radius:17px;display:inline-flex;align-items:center;justify-content:center;background:#e9eef7;border:1px solid #9aa7bd}
+
+/* ===== 1.4.3: the compact counter, the ticket as the star, the claim alert, the prizes panel ===== */
+.zplay{display:block}
+.ztight{padding:12px 14px}.ztight .zchiprow{margin:0 0 6px}
+.zrow1{display:flex;align-items:center;gap:14px}.zrow1 .zball{margin:0;flex:none}
+.ztight .zbig{width:84px;height:84px;min-width:84px;font-size:40px;margin:0}
+.ztxt{min-width:0}.zlab{font-size:12px;color:#6f6166;text-transform:uppercase;letter-spacing:.7px;font-weight:700}
+.ztally{font-size:13.5px;line-height:1.4;color:#6f6166;margin-top:2px}.ztally b{font-size:14.5px;color:#2e0812}
+.zprog{height:6px;background:#e9dfcb;border-radius:3px;overflow:hidden;margin:10px 0}.zprog i{display:block;height:100%;background:linear-gradient(90deg,#7a1c33,#e0b872);transition:width .3s}
+.zlastrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.zballs{display:flex;gap:6px}.zlastrow .zlastn{width:34px;height:34px;min-width:34px;font-size:14px}
+.ztk{margin:10px 8px;padding:12px 10px 14px;border-radius:20px}
+.ztk .zticket div,.ztk .zt div{font-size:clamp(19px,6.2vw,27px)}
+.zrules{margin:12px 4px 0;padding:10px 0 0 18px;border-top:1px dashed #e8ddcc;font-size:11.5px;line-height:1.55;color:#6f6166}
+.zalert{display:none;margin:12px 0 0;border-radius:16px;padding:14px 16px;background:linear-gradient(135deg,#f3d9a4,#e0b872);border:1px solid #b8894d;color:#2e0812;font-weight:700;font-size:1.1rem;line-height:1.35;box-shadow:0 10px 24px -12px rgba(138,98,40,.8)}
+.zalert small{display:block;font-weight:500;font-size:.9rem;margin-top:2px}.zalert.on{display:block;animation:znudge 1.6s ease-in-out infinite}
+@keyframes znudge{50%{transform:scale(1.015)}}
+.zclaimbar{display:none;position:sticky;bottom:0;z-index:20;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,rgba(246,241,231,.96) 28%)}
+.zclaimbar.on{display:grid;gap:8px}
+.zbigclaim{width:100%;min-height:62px;border-radius:999px;border:0;cursor:pointer;font:700 1.15rem Inter,system-ui,sans-serif;color:#fff;background:linear-gradient(135deg,#9a2a48,#5a1426);box-shadow:0 12px 24px -10px rgba(90,20,38,.9),0 0 0 4px rgba(224,184,114,.55);animation:zpulse 1.8s ease-in-out infinite}
+.zbigclaim small{display:block;font:500 .82rem Inter,system-ui,sans-serif;opacity:.9}.zsentline{padding:14px;text-align:center;border-radius:999px;background:#e4f3ec;color:#1f7a55;font-weight:700}.zsentline small{display:block;font-weight:500}
+@keyframes zpulse{50%{box-shadow:0 12px 24px -10px rgba(90,20,38,.9),0 0 0 9px rgba(224,184,114,.35)}}
+.zclaim.ready{min-height:60px;font-size:1.1rem;background:linear-gradient(135deg,#f3d9a4,#e0b872);color:#2e0812;box-shadow:0 0 0 4px rgba(224,184,114,.6),0 10px 20px -10px rgba(138,98,40,.9)}
+@media(prefers-reduced-motion:reduce){.zalert.on,.zbigclaim{animation:none}}
+.zps .zpl{list-style:none;padding:0;margin:0}.zps .zpl li{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;margin:8px 0;border:1px solid #e8ddcc}
+.zps .zpl li.open{background:#fffbf0;border-color:#e0b872}.zps .zpl li.done{background:#f3f0ea}.zps .zpl li.done s{color:#8b7f84}
+.zps .zic{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:800;flex:none}.zps .open .zic{background:#f3d9a4;color:#8a6228}.zps .done .zic{background:#cfc7b8;color:#fff}
+.zps .znm{display:flex;flex-direction:column;min-width:0}.zps .zneed,.zps .zwonby{font-size:13px;color:#6f6166}.zps .ztag{margin-left:auto;font-size:12px;font-weight:700;border-radius:999px;padding:4px 10px;background:#e0b872;color:#2e0812;white-space:nowrap}
+.zlegend{display:flex;gap:14px;font-size:12px;color:#6f6166;margin:2px 0 8px}.zlegend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px}.zlegend .g{background:#e0b872}.zlegend .s{background:#cfc7b8}
+.zlate{font-size:1rem}
+/* ===== LAPTOP, from 861 px: no phone frame; the ticket on the left, the counter, the claim and the prizes on the right ===== */
+@media(min-width:861px) and (min-height:521px){
+ .zapp:has(.zplay){max-width:1228px}
+ .zplay{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,1fr);column-gap:22px;max-width:1180px;margin:0 auto;padding:0 24px 24px;align-content:start;grid-auto-flow:row dense}
+ .zplay>*{grid-column:2}
+ .zplay>.zstory,.zplay>.zalert,.zplay>.zbanner,.zplay>.zann,.zplay>.zwait{grid-column:1 / -1}
+ .zplay>.ztk{grid-column:1;grid-row:span 8;margin:14px 0 0;padding:18px 20px 22px}
+ .zplay>.zcall{margin-top:14px}
+ .zclaimbar{max-width:560px;margin:0 auto;width:100%}
+}
+
+/* the quiet countdown: small, muted, a thin line; nothing moves except the line growing */
+.zquiet{display:flex;align-items:center;gap:8px;margin:6px 0 0;font-size:12px;color:#7a6f73}.zquiet i{flex:1;max-width:120px;height:2px;background:#e9dfcb;border-radius:1px;overflow:hidden}.zquiet b{display:block;height:100%;background:#b9a99a}
+
+.zmeta{font-size:12px;color:#7a6f73;margin-top:3px}.ztxt .zquiet{margin-top:2px}
+.zhelp{font-size:12.5px;color:#7a6f73;margin:6px 0 0}
+.zbig.none{background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.55) 0 8%,rgba(255,255,255,0) 28%),radial-gradient(circle at 50% 45%,#e8e0cf 0 62%,#cbbfa6 100%);color:#8a7f6e}
+.ztight .zbig:not(.none){box-shadow:0 5px 12px -5px rgba(138,98,40,.7),0 0 0 4px rgba(224,184,114,.25)}
+
+/* the pop-ups about other tickets' claims: calm, short, at the top, never covering the ticket for long */
+.ztoasts{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:30;display:grid;gap:6px;width:min(92vw,420px);pointer-events:none}
+.ztoast{background:#14233f;color:#fff;border-radius:12px;padding:10px 14px;font-size:.95rem;line-height:1.35;box-shadow:0 8px 20px -10px rgba(0,0,0,.6)}
+
+/* numbers sized from the TICKET's own width, so two digits always fit their cell at every screen size */
+.ztk .zticket,.ztk .zt{container-type:inline-size}
+.ztk .zticket div,.ztk .zt div{font-size:clamp(11px,5.6cqw,26px)}
+@media(max-width:380px){.zticket:not(.zx){padding:5px;gap:3px;border-width:2px}.ztk{margin:8px 2px;padding:10px 6px 12px}}
+
+/* several prizes ready at once: one big button, the rest compact; the small duplicates under the ticket hide while the bar is on; the guide's "Back" chip never sits on the bar; sheets scroll on short screens */
+.zbigclaim.zmore{min-height:44px;font-size:1rem;animation:none}.zbigclaim.zmore small{display:none}
+#app:has(#claimbar .zbigclaim) .zclaim.ready{display:none}
+body:has(#claimbar) .ctg-back{display:none}
+.zhcard,.zinvsheet{max-height:calc(100dvh - 32px);overflow:auto}
+
+/* 1.5.0 claim buttons: GOLD (top inside the alert, bottom bar, side by the prize) when the player has a prize to claim; GREY side buttons otherwise */
+.zgold,.zbigclaim{background:linear-gradient(#ffd44d,#f2a900);color:#2b1a00;border:2px solid #b87d00;border-radius:12px;font-weight:800;cursor:pointer}
+.zgold b,.zbigclaim b{font-size:1.15rem;letter-spacing:.08em;font-weight:900}
+.zgold small,.zbigclaim small,.zclaimt{display:block;font-size:.8rem;font-weight:700}
+#claimtop{margin:8px 0 2px;padding:10px 22px;min-height:44px}
+.zside{margin-left:auto;padding:6px 12px;min-height:40px;min-width:76px;border-radius:10px;font-weight:800;flex:none}
+.zside.zgrey{background:#d9d9d9;color:#5b5b5b;border:2px solid #b5b5b5;cursor:pointer}
+.zpl li{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.zmodal{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:16px}
+.zmbox{background:#fff;color:#1a1a1a;border-radius:14px;padding:18px;max-width:340px;width:100%;box-shadow:0 12px 30px rgba(0,0,0,.4)}
+.zmrow{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+.zmrow .zbtn{min-height:44px;padding:8px 16px}
+.zmrow .zdanger{background:#b3261e;color:#fff}
+
+.zsuper{border:2px solid #C8102E;border-radius:14px;padding:8px;margin:8px 0}.zsuper .zsuperline{margin:4px 0;font-size:15px}
+
+/* 1.7.1 player look (owner 30 Oct, approved mock): two themes on the whole page, html[data-pt]. The ticket is the only rich element; everything else is flat and quiet. Display only. */
+html[data-pt=retro]{--ink:#FBF1DC;--ink2:#EBDDBE;--muted:#D9C7A0;--faint:#B9A57C;--surface:transparent;--line:rgba(224,184,114,.28);--golddt:#E0B872;--wine:#F3D9A4;--info:#CFE0FF;--infobg:rgba(255,255,255,.08);--warn:#FFE3A1;--warnbg:rgba(255,255,255,.08);--ok:#BFF0D6;--okbg:rgba(255,255,255,.08);--bad:#FFC9C4;--badbg:rgba(255,255,255,.08)}
+html[data-pt=modern]{--ink:#EAF0FF;--ink2:#C9D4F5;--muted:#AEB8E0;--faint:#8E98C4;--surface:transparent;--line:rgba(140,170,255,.28);--golddt:#7FE7F2;--wine:#E7D5FF;--info:#CFE0FF;--infobg:rgba(255,255,255,.08);--warn:#FFE3A1;--warnbg:rgba(255,255,255,.08);--ok:#BFF0D6;--okbg:rgba(255,255,255,.08);--bad:#FFC9C4;--badbg:rgba(255,255,255,.08)}
+html[data-pt=retro] body{background:radial-gradient(120% 80% at 50% 0,#6B1429 0,#3E0A1A 60%,#2A0711 100%) fixed}
+html[data-pt=modern] body{background:linear-gradient(180deg,#1B1747 0,#12113A 55%,#0C0B2A 100%) fixed}
+html[data-pt] .zcard{background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;box-shadow:none;padding:12px 2px}
+html[data-pt] .zcard h2{color:var(--golddt)}
+html[data-pt] .zhead b{color:var(--golddt)}
+html[data-pt] .zapp a{color:var(--golddt)}
+html[data-pt] input,html[data-pt] select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--line)}
+html[data-pt=retro] .zbtn{background:linear-gradient(180deg,#E8C27A,#B8894D);color:#2E0812;border:0;border-radius:999px}
+html[data-pt=modern] .zbtn{background:linear-gradient(90deg,#27C9E6,#7B5CFF,#E0489A);color:#fff;border:0;border-radius:999px}
+html[data-pt] .zticket:not(.zx){padding:6px;border-radius:12px}
+html[data-pt=retro] .zticket:not(.zx){background:#FBF1DC;border:3px double #B8894D}
+html[data-pt=modern] .zticket:not(.zx){background:rgba(255,255,255,.08);border:1px solid rgba(140,170,255,.4)}
+html[data-pt] .zticket>div{font-size:16px;min-height:46px;position:relative}
+html[data-pt=modern] .zticket>div{border-radius:50%;color:#EAF0FF;background:rgba(255,255,255,.06);border:0}
+html[data-pt=retro] .zticket>div{border-radius:2px;color:#2E0812}
+html[data-pt] .zticket>div.e{background:transparent}
+/* a called (crossed) number keeps its number and gets a thin cross, in both looks */
+html[data-pt] .zticket>div.m{background:inherit;box-shadow:none}
+html[data-pt=retro] .zticket>div.m{background:#F6EFE0;color:#2E0812}
+html[data-pt=modern] .zticket>div.m{background:rgba(255,255,255,.06);color:#EAF0FF}
+html[data-pt=modern] .zticket>div.m::before,html[data-pt=modern] .zticket>div.m::after{background:#FF6FAE}
+html[data-pt] .zticket>div.m.w{background:linear-gradient(135deg,#FFE08A,#FFB703);color:#2A1B00}
+html[data-pt] .zbtn.zdanger{background:#b3261e;color:#fff}
+html[data-pt] .zbtn.alt{background:transparent;border:2px solid var(--golddt);color:var(--ink)}
+html[data-pt] .zbig{width:64px;height:64px;font-size:30px}
+html[data-pt] .zball{padding:2px 0}
+/* Ticket A | Ticket B: the one not being played is greyed (tap it or its button to switch); both keep marking */
+.zplaying{margin:8px 0;font-size:14px;color:var(--muted)}
+.zpl{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:5px 12px;min-height:44px;font:inherit;cursor:pointer}
+.zpl[aria-pressed=true]{background:var(--golddt);color:#2E0812;border-color:transparent;font-weight:700}
+.ztkwrap.zdim{opacity:.6;filter:grayscale(.8)}
+.zwelcome{margin:0 0 10px;font-size:16px;line-height:1.5}
+.zshare{margin:6px 0;padding:8px 12px;border:1px solid var(--line);border-radius:999px;text-align:center;font-size:14px}
+html[data-pt] .zapp{color:var(--ink)}
+html[data-pt] .zsmall,html[data-pt] .zapp p{color:var(--muted)}
+html[data-pt] .zapp label{color:var(--ink2)}
+html[data-pt] .rt-bar a,html[data-pt] .rt-link,html[data-pt] .rfoot a{color:var(--golddt)}
+html[data-pt] .zcount,html[data-pt] .zwait .zcount{color:var(--golddt);background:transparent}
+html[data-pt] .zcard h2{background:transparent;padding:0}
+html[data-pt] .zwait,html[data-pt] .zcard.zwait{background:transparent}
+html[data-pt] .zbig{background:radial-gradient(circle at 35% 30%,#FFE9A8,#E0B872 60%,#B8894D);color:#2E0812}
+
+html[data-pt] .zlink{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--line)}
+html[data-pt] .zfamrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+
+.zjchips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:2px 0 10px}.zjchip{border:1px solid rgba(245,200,106,.55);border-radius:999px;padding:3px 10px;font-size:12px;color:#F5C86A;background:rgba(0,0,0,.18)}.zjco{font-weight:700}.zin{margin:0 0 6px;font-size:17px;color:#F5C86A}.zin b{font-size:20px}
+.zfrl{list-style:none;margin:0;padding:0}.zfr{display:flex;justify-content:space-between;gap:10px;padding:9px 4px;border-bottom:1px solid rgba(245,200,106,.25);font-size:15px}.zfr b{color:#F5C86A;white-space:nowrap}.zfr.me{background:rgba(245,200,106,.14);border-radius:8px}.zrulesrow{margin:10px 0}.zrulesrow summary{cursor:pointer;font:700 12px/1 Inter,system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#F5C86A;padding:8px 2px}
+
+/* 1.8.5 polish: the prize list rows are light cards, so their text is dark in every look (Retro and Modern keep a light page text colour) */
+.zps .zpl li{color:#2e0812}.zps .zpl li .znm small,.zps .zpl li .zneed,.zps .zpl li .zwonby{color:#5a4d52}.zps .zpl li.done{color:#4a3f45}.zps .zpl li.done s{color:#6a5d62}
+
+/* 1.8.5 polish: the mandatory mark is 13px and dark enough; on a phone the fixed language button gets its own strip so it never covers the brand banner */
+.zreq{font-size:13px;color:#9C1C14}
+@media(max-width:480px){.zapp:not(.zc){padding-top:52px}}
+
+html[data-pt=retro] .zreq,html[data-pt=modern] .zreq{color:#FFB4A8}
+
+/* 1.8.5 browser check 3: tap targets of 44px on the join page; the language button scrolls away with the page (it sits in the strip above the banner) */
+.spriv a,.rfoot a{display:inline-block;min-height:44px;line-height:44px;padding:0 4px}
+.mkownbtn{min-height:44px;display:inline-flex;align-items:center}
+.zt-runmsg{margin:8px 0}.zt-runtext{font-size:14px;font-weight:400;margin:0 0 6px;line-height:1.45}
+.cbc-row label{display:block;min-height:44px;padding:11px 0;box-sizing:border-box}.cbc-row a{display:inline-block;padding:12px 2px;margin:-12px 0}
+
+/* ===== design pass 2026-11-02: contrast on the dark page, bigger tap targets, language button above content ===== */
+html[data-pt] .zlab{color:#E9DCC6}
+html[data-pt] .zmeta{color:#D9C9B6}
+.zside{min-height:48px;min-width:112px;box-sizing:border-box}
+.zlookopt{min-height:44px}
+.zrulesrow summary{padding:16px 2px}
+a[href="/fair.html"]{display:inline-block;padding:15px 0;margin:-15px 0}
+#langsel{z-index:9999!important}#langmenu{z-index:10000!important}

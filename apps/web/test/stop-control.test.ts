@@ -67,8 +67,8 @@ describe("O7: the console's End control stops the game on every phone", () => {
     await c.waitFor((t) => /Last step|Your game|Controls/i.test(t));
     c.click('.zc-dot[data-open="9"]'); await c.waitFor((t) => /Controls/.test(t));
     const end = c.$('[data-ctl="stop"]'); expect(end).toBeTruthy(); expect(String(end.textContent)).toMatch(/end/i);
-    c.click('[data-ctl="stop"]');
-    await c.waitFor((t) => /Stop sent/.test(t));
+    c.click('[data-ctl="stop"]'); await c.waitFor(() => !!c.$("#zcsure")); c.click("#zcsure [data-y]"); // the question is asked in the page now
+    await c.waitFor((t) => /Ending the game/.test(t));
     const f = (await readPublished({ get: async (k) => (x.w.world.raw.prepare("SELECT v FROM kv WHERE k=?").get(k) as any)?.v ?? null, put: async () => {} }, "O7-STOP"))!;
     expect(f.messages.map((m) => m.action)).toEqual(["stop"]); // the signed message is stored by the Worker
     for (let i = 0; i < 200; i++) await x.step();

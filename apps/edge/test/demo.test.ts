@@ -35,7 +35,7 @@ const convert = (key: string, id: string, pack: number | undefined, now = T) => 
 beforeEach(() => {
   const d = makeD1(); raw = d.raw;
   // TEST_MODE with no gateway keys: /api/checkout completes the order at once (the same path the pay page takes in a local run)
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", TEST_MODE: "1", OWNER_EMAIL: "owner@platform.test", JOIN_PER_IP_DAY: "1000000", JOIN_PER_IP_MINUTE: "1000000" } as any;
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", TEST_MODE: "1", OWNER_EMAIL: "owner@platform.test", JOIN_PER_IP_DAY: "1000000", JOIN_PER_IP_MINUTE: "1000000" } as any;
 });
 
 describe("making a demo game", () => {
@@ -68,7 +68,7 @@ describe("publishing a demo game is free", () => {
     expect(one("SELECT pack, cap FROM engagement WHERE id='DEMO-1'")).toEqual({ pack: 10, cap: 10 });
     expect(count("SELECT COUNT(*) AS c FROM payment")).toBe(0); expect(count("SELECT COUNT(*) AS c FROM invoice")).toBe(0); expect(count("SELECT COUNT(*) AS c FROM entitlement")).toBe(0);
     const mails = raw.prepare("SELECT subject, body FROM outbox").all() as any[];
-    expect(mails.some((m) => /DEMO GAME/.test(m.subject) && /free/.test(m.subject))).toBe(true);
+    expect(mails.some((m) => /Your game/.test(m.subject) && /Rs 0/.test(m.subject))).toBe(true);
     expect(mails.some((m) => /payment pending/i.test(m.subject + m.body))).toBe(false);
     const info = await j(await call("GET", "/api/z/DEMO-1/info", undefined, master));
     expect(info.demo).toBe(true); expect(info.draft).toBeUndefined(); expect(info.unpaid).toBeUndefined(); expect(info.locked).toBeUndefined(); expect(info.waitingFor).toBeNull();
@@ -101,7 +101,7 @@ describe("publishing a demo game is free", () => {
   test("the AI's publish answer explains a demo game, and the AI manual mentions it", async () => {
     const master = await start("boss@acme.com"); const ai = lastAi;
     await mk(master, "DEMO-1");
-    const a = await j(await call("POST", "/api/z/DEMO-1/publish", {}, ai)); expect(a.demo).toBe(true); expect(a.message).toMatch(/DEMO GAME \(free, up to 10 people\)/);
+    const a = await j(await call("POST", "/api/z/DEMO-1/publish", {}, ai)); expect(a.demo).toBe(true); expect(a.message).toMatch(/game for up to 10 people at Rs 0/);
     const manual = await (await call("GET", `/ai/${ai}`)).text(); expect(manual).toMatch(/A DEMO GAME exists/);
   });
 });
@@ -111,7 +111,7 @@ describe("people join a demo exactly as in a real game", () => {
     const master = await start("boss@acme.com");
     await mk(master, "DEMO-1"); await publish(master, "DEMO-1");
     for (let i = 1; i <= 10; i++) { const r = await join(i, "DEMO-1"); expect(r.status).toBe(200); expect((await j(r)).demo).toBe(true); }
-    const full = await join(11, "DEMO-1"); expect(full.status).toBe(409); expect((await j(full)).error).toBe("This engagement is full.");
+    const full = await join(11, "DEMO-1"); expect(full.status).toBe(409); expect((await j(full)).error).toBe("This game is full. Please tell your organizer so they can make room.");
     expect(count("SELECT COUNT(*) AS c FROM participant WHERE eid='DEMO-1'")).toBe(10);
     expect((await join(3, "DEMO-1")).status).toBe(200); // someone already in gets back in
   });

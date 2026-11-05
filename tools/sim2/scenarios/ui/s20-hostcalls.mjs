@@ -42,6 +42,13 @@ async function readyAgain(t, consolePage, pages) {
 /** the console registers the signing key when it opens before the start: wait until the control file has a public key */
 async function keyReady(t, eid) { return t.until(async () => (await H.call("GET", `/api/z/${eid}/control`)).body.pubKey, { what: "the signing key", timeout: 15000 }); }
 
+/** the games of these scenarios need the present check-in: the person ticks the two boxes and types the code shown on their own page (the ticket opens after it) */
+async function checkInUi(page) {
+  await page.waitForSelector("#ckshow", { timeout: 20000 }); const code = (await page.innerText("#ckshow")).trim();
+  await page.check("#ckokn"); await page.check("#ckokm"); await page.fill("#ckcode", code); await page.click("#cksubmit");
+  await page.waitForFunction(() => !document.getElementById("ckshow"), null, { timeout: 15000 });
+}
+
 export default [
   {
     id: "S20-01", name: "Host mode: 3 phones, the board and the number screen show the same numbers, only when the Organizer presses Next number; nothing moves on its own",
@@ -54,6 +61,7 @@ export default [
       const all = [c, ...ps, big, board];
       await goToStart(t, g, all, 30_000);
       await stepAll(t, all, 14); // past the start: the software calls nothing
+      for (const p of ps) await checkInUi(p.page);
       const lens0 = (await logsOf(ps)).map((l) => l.length);
       t.check("no number appears without a press (3 phones, 12 s past the start)", lens0.every((l) => l === 0), lens0.join("/"));
       t.check("the phone chip reads Waiting for the host", (await chipOf(ps[0])) === "Waiting for the host", await chipOf(ps[0]));
@@ -74,8 +82,8 @@ export default [
       await stepAll(t, all, 3);
       const last = String(logs[0][2]);
       const bigTxt = await guestText(big.page), boardTxt = await guestText(board.page), consoleLast = await c.page.evaluate(() => document.getElementById("hostlast")?.textContent.trim());
-      t.check("the number screen shows the last number and 3 of 90", new RegExp(`\\b${last}\\b`).test(bigTxt) && /3 of 90 numbers called/.test(bigTxt), bigTxt.slice(0, 160));
-      t.check("the board shows the last number and 3 of 90", new RegExp(`\\b${last}\\b`).test(boardTxt) && /3 of 90 numbers called/.test(boardTxt), boardTxt.slice(0, 160));
+      t.check("the number screen shows the last number and 3 of 90", new RegExp(`\\b${last}\\b`).test(bigTxt) && /3 of 90 called/.test(bigTxt), bigTxt.slice(0, 160));
+      t.check("the board shows the last number and 3 of 90", new RegExp(`\\b${last}\\b`).test(boardTxt) && /3 of 90 called/.test(boardTxt), boardTxt.slice(0, 160));
       t.check("the console's card shows the number just released", consoleLast === last, `${consoleLast} vs ${last}`);
       await stepAll(t, all, 20); // and again nothing more without a press
       const lens2 = (await logsOf(ps)).map((l) => l.length);
@@ -202,6 +210,75 @@ export default [
       t.check("logs are the same length on both phones", r.views[0].log.length === r.views[1].log.length && r.views[0].log.length > 20, r.views.map((v) => v.log.length).join("/"));
       const ctl = (await H.call("GET", `/api/z/${g.id}/control`)).body;
       t.check("no press was ever needed or stored", !ctl.messages || ctl.messages.length === 0, JSON.stringify(ctl.messages || []));
+    },
+  },
+  {
+    id: "S20-07", name: "Manual play at uneven moments: no screen counts down to the next number (phone, number screen, board); each says the host calls the numbers; every number appears only when pressed",
+    async run(t) {
+      const org = await t.org("o"); const g = await hostGame(t, org);
+      const c = await openConsole(t, org, g.id, { device: "laptop" }); await keyReady(t, g.id);
+      const ps = await phones(t, g, ["Mira", "Nikhil"]); ps.forEach((p) => (p.isPhone = true));
+      const big = await t.open({ device: "wide" }); await big.page.goto(`${H.SIM}/big.html?e=${g.id}`);
+      const board = await t.open({ device: "laptop" }); await board.page.goto(`${H.SIM}/board.html?e=${g.id}#k=${encodeURIComponent(org.token)}`);
+      const all = [c, ...ps, big, board];
+      await goToStart(t, g, all, 30_000); await stepAll(t, all, 14);
+      for (const p of ps) await checkInUi(p.page);
+      await openStep(c.page, 9); await c.page.waitForSelector("#nextnum", { timeout: 10000 });
+      const noCount = async (label) => {
+        const texts = [await guestText(ps[0].page), await guestText(ps[1].page), await guestText(big.page), await guestText(board.page)];
+        t.check(`${label}: no 'Next number in', no 'seconds to the next number' on the phones, the number screen or the board`, texts.every((x) => !/Next number in|seconds to the next number/i.test(x)), texts.map((x) => (x.match(/Next number in[^.]{0,12}|\d+\s+seconds to the next number/i) || [""])[0]).join(" | "));
+      };
+      await noCount("before the first press");
+      const waits = [0, 4, 15, 1, 8]; // uneven pauses between presses, in 3 s steps (0 s, 12 s, 45 s, 3 s, 24 s)
+      for (let k = 1; k <= waits.length; k++) {
+        await stepAll(t, all, waits[k - 1]);
+        const d = await pressAndMeasure(t, c.page, ps, all, k);
+        t.check(`press ${k}: the number reaches both phones`, d.simSec > 0 && d.simSec <= 15, `${d.simSec} s`);
+        await stepAll(t, all, 2);
+        await noCount(`after press ${k}`);
+        const phoneTxt = await guestText(ps[0].page);
+        t.check(`after press ${k}: the phone says the host calls the numbers`, /The host calls the numbers|Waiting for the host/.test(phoneTxt), phoneTxt.slice(0, 200));
+        await readyAgain(t, c.page, all);
+      }
+      await stepAll(t, all, 25); // a long wait with no press: still nothing counts down, still nothing is called
+      await noCount("after a 75 s wait");
+      const lens = (await logsOf(ps)).map((l) => l.length); t.check("still exactly 5 numbers on both phones", lens.every((l) => l === 5), lens.join("/"));
+      const ctl = (await H.call("GET", `/api/z/${g.id}/control`)).body;
+      const rounds = ctl.messages.filter((m) => m.action === "next").map((m) => m.atBeaconRound), gaps = rounds.slice(1).map((r, i) => (r - rounds[i]) * 3);
+      t.check("the presses were not evenly spaced (no fixed gap in the control file)", new Set(gaps).size > 2, gaps.join(", "));
+      await board.page.waitForSelector("#bp-avg", { timeout: 15000 }); const gt = await board.page.innerText("#bp-avg"); t.check("the board's average-gap box says called by the host, not by the game", /Called by the host/.test(gt) && !/Called by the game/.test(gt), gt.slice(0, 200));
+      await t.shot(ps[0].page, "phone-manual-play"); await t.shot(board.page, "board-manual-play");
+    },
+  },
+  {
+    id: "S20-08", name: "A tap that starts before a redraw and ends after it still counts, exactly once: a ticket number on the phone, and the Pause button on the organizer's board",
+    async run(t) {
+      const org = await t.org("o"); const g = await hostGame(t, org, { mode: "auto" });
+      const ps = await phones(t, g, ["Om"]); ps.forEach((p) => (p.isPhone = true));
+      const board = await t.open({ device: "laptop" }); await board.page.goto(`${H.SIM}/board.html?e=${g.id}#k=${encodeURIComponent(org.token)}`);
+      const all = [...ps, board];
+      await goToStart(t, g, all, 30_000); await stepAll(t, all, 40);
+      const ph = ps[0].page; await checkInUi(ph);
+      let n = null; // (no simulated tapping from here: wait for a NEW number that is on this ticket, then tap it with the real mouse)
+      for (let i = 0; i < 80 && n === null; i++) { await H.clock.advance(3000); t.shared.track.bump(3000); for (const o of all) await o.ctx.clock.runFor(3000); await H.sleep(60); n = await ph.evaluate(() => { const called = new Set(window.__rt.view().log); const c = [...document.querySelectorAll("[data-tap]:not(.m)")].find((e) => called.has(Number(e.dataset.tap))); return c ? Number(c.dataset.tap) : null; }); }
+      t.check("a called number is waiting on the ticket", n !== null, String(n));
+      if (n !== null) {
+        const before = await ph.evaluate(() => document.querySelectorAll("[data-tap].m").length);
+        await ph.locator(`[data-tap="${n}"]`).scrollIntoViewIfNeeded(); const box = await ph.locator(`[data-tap="${n}"]`).boundingBox();
+        await ph.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await ph.mouse.down();
+        await ps[0].ctx.clock.runFor(1200); // one redraw beat while the finger is down
+        await ph.mouse.up(); await H.sleep(300);
+        const marked = await ph.evaluate((x) => { const e = document.querySelector(`[data-tap="${x}"]`); return !!e && e.classList.contains("m"); }, n);
+        t.check("the number is marked although a redraw came between the touch and the release", marked);
+        const count = await ph.evaluate(() => document.querySelectorAll("[data-tap].m").length); t.check("and exactly one number was marked (not toggled twice)", count === before + 1, `${before} -> ${count}`);
+      }
+      await board.page.waitForSelector("#bp-pause:not([disabled])", { timeout: 20000 });
+      const pb = await board.page.evaluate(() => { const e = document.getElementById("bp-pause"); e.scrollIntoView({ block: "center" }); const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; });
+      await board.page.mouse.move(pb.x + pb.width / 2, pb.y + pb.height / 2); await board.page.mouse.down();
+      await board.ctx.clock.runFor(1200);
+      await board.page.mouse.up();
+      const sure = await board.page.waitForSelector("#bp-sure", { timeout: 6000 }).then(() => true, () => false);
+      t.check("the board's Pause press, spread over a redraw beat, opens the Are you sure box", sure, (await guestText(board.page)).slice(0, 120));
     },
   },
 ];

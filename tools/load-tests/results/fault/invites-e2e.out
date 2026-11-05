@@ -1,0 +1,30 @@
+ok   [setup] game O: open, guests may invite (4 each, family or colleagues), Co-host list limit 40 | want 200 | got 200 | coHostLimit 40
+ok   [setup] the Organizer has a common link with a code | want from=<number> | got 1900000000
+ok   [cohost] 10 Co-hosts added; each has an own common link | want 10 different codes | got 10 different
+ok   [cohost] 10 Co-hosts x 30 people through their own common link all get a ticket | want 300 | got 300 | 2.3 s
+ok   [cohost] 10 Co-hosts x 8 people added to their own list ("call others"), each joins with the personal link | want 80 | got 80 | lists 38,38,38,38,38,38,38,38,38,38
+ok   [cohost] each Co-host's 'brought' count equals what they really brought (30 by link + 8 by list) | want 10 of 10 = 38 | got 10 of 10
+ok   [cohost] a Co-host over their list limit (40): the extra people are refused with a clear message | want refused, message names the limit | got 409 (over-limit) {"error":"You can add 2 more people (your limit is 40). Nothing was added; please send few
+ok   [cohost] a stranger on a full Co-host link (40 used): put in the waiting room, not refused outright | want 403/409 waiting or invite-full | got 409 (invite-full)
+ok   [cohost] that over-the-limit request goes to the ORGANIZER (the Co-host whose list is full does not see it, by design) | want Co-host 0, Organizer 1 | got Co-host 0, Organizer 1 | what the person is told: This invitation has already been used by 40 people, which is the most one person can invite. Your request is w
+ok   [cohost] the Organizer admits it (placed on the Organizer's own list) | want 200 admitted | got 200 {"ok":true,"admitted":true,"placedUnder":"Organizer"}
+ok   [organizer] 250 people through the Organizer's common link | want 250 | got 250
+ok   [guests] a person who joined directly may invite (guest invites are on) | want 60 of 60 canInvite | got 60 of 60 | per 4
+ok   [guests] 40 guests x 2 people through their share link (family / colleagues) all get a ticket | want 80 | got 80
+ok   [guests] 20 guests add 2 people each to their own list; those people join with their personal link | want 40 added, 40 joined | got 40 added, 40 joined
+ok   [guests] a guest may invite 4 people in all (2 by link + 2 by list here is 4): the next one is refused with a message | want refused after the 4th | got 200 | 200 | 409(Your list is full: 4 people. Remove some) | 409(Your list is full: 4 people. Remove some)
+ok   [guests] a person who was invited by a guest cannot invite anyone (two levels only) | want canInvite false | got false
+ok   [guests] …their share link still lets people in but records no inviter (falls back to the Organizer, silently) | want 200 (info) | got 200 | INFORMATION: the person who shared it is not told it did not count
+ok   [cap] the game is full at 1000: the next person is told so | want 409 full | got 409 (This engagement is full.) | seats before filling 756
+FAIL [cap] a person who was invited (personal link) but opened it after the game filled up from the open link (5 such people) | want still gets the place that was promised | got 409 (This engagement is full.) | if 409: the invitation promised a place the game did not keep
+FAIL [track] the Organizer's total equals the cap and nothing is over it | want 1000 | got 1005 | cap 1000
+ok   [closed] a listed person joins | want 200 | got 200
+ok   [closed] strangers on a Co-host link (3) and on a guest's share link (3) are held (403 waiting) | want 6 x 403 waiting | got 403,403,403,403,403,403
+ok   [closed] the Co-host sees only the 3 who came through them; the guest sees only their 3; the Organizer sees all 6 | want 3 / 3 / 6 | got 3 / 3 / 6
+ok   [conflict] the Co-host declines, then the Organizer tries to admit the same person | want answer: already declined (the first decision stands) | got 200 {"ok":true,"already":"declined"}
+ok   [conflict] the Organizer adds the declined person to the list by hand (the way to overrule a decline) | want added 1 | got 200 added 1
+ok   [conflict] …and that person now gets in | want 200 | got 200
+ok   [closed] a guest admits a person who came through their own link | want 200 admitted | got 200 {"ok":true,"admitted":true,"placedUnder":"Guest (ticket 1)"}
+ok   [closed] a guest may NOT decide a request that came through a Co-host's link | want 404 (not theirs) | got 404 (No such request.)
+ok   [closed] the Co-host may NOT decide a request that came through a guest's link | want 404 (not theirs) | got 404 (No such request.)
+DONE 27 of 29 as expected; not as expected: a person who was invited (personal link) but opened it after the game filled up from the open link (5 such people) ; the Organizer's total equals the cap and nothing is over it

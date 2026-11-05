@@ -1,0 +1,115 @@
+{
+ "tag": "S1",
+ "browser": "chromium",
+ "site": "http://localhost:8892",
+ "mode": "auto",
+ "cap": 10,
+ "checks": [
+  {
+   "n": "signed in as Organizer",
+   "ok": true,
+   "d": ""
+  },
+  {
+   "n": "the organizer's e-mail is shown at the top right",
+   "ok": true,
+   "d": ""
+  },
+  {
+   "n": "a draft game exists after pressing Create a new game",
+   "ok": true,
+   "d": "http://localhost:8892/zc.html?e=Ev5xkg5"
+  },
+  {
+   "n": "the size choices are shown as chips",
+   "ok": true,
+   "d": "10,100,250,500,750,1000,2500,5000,10000"
+  },
+  {
+   "n": "manual hides the gap (duration) and auto shows it",
+   "ok": true,
+   "d": ""
+  },
+  {
+   "n": "the game is published and open to people",
+   "ok": true,
+   "d": "{\"cap\":10,\"startMs\":1793040300000}"
+  },
+  {
+   "n": "all 10 people joined (10 on real browser pages, 0 on protocol phones)",
+   "ok": true,
+   "d": "10 pages, 0/0 phones"
+  },
+  {
+   "n": "every page reached the end of the game",
+   "ok": true,
+   "d": "[\"ended\",\"ended\",\"ended\",\"ended\",\"ended\",\"ended\",\"ended\",\"ended\",\"ended\",\"ended\"]"
+  },
+  {
+   "n": "all 10 pages show the same 90 numbers in the same order",
+   "ok": true,
+   "d": "10/10"
+  },
+  {
+   "n": "every person holds a different, well-formed ticket",
+   "ok": true,
+   "d": "10 different"
+  },
+  {
+   "n": "all pages show the same winners",
+   "ok": true,
+   "d": "4,4,4,4,4,4,4,4,4,4"
+  },
+  {
+   "n": "no page error and no 5xx from our own site",
+   "ok": true,
+   "d": "[]"
+  }
+ ],
+ "errors": [],
+ "failedReq": [],
+ "notes": [
+  "no publish button: the game was already published (test pack)"
+ ],
+ "reqs": [
+  "PUT /api/z/Ev5xkg5/control/key {\"publicKey\":\"251df0a96a7ca1a93780b5b9b9676ea4850b75ca8325bfb5ec620ca1f5b36895\",\"profile\":\"standard\"}",
+  "PATCH /api/z/Ev5xkg5/settings {\"name\":\"Diwali party\",\"startRound\":33412312}",
+  "PATCH /api/z/Ev5xkg5/settings {\"callMode\":\"auto\",\"cap\":10,\"callSeconds\":9,\"tickets\":1,\"rounds\":1,\"whoCanJoin\":\"anyone\",\"verify\":\"mobile\",\"employeesOnly\":false,\"invites\":{\"on\":false,\"per\":4,\"",
+  "PATCH /api/z/Ev5xkg5/settings {\"tickets\":1,\"ties\":\"next\",\"rewards\":[{\"pattern\":\"early5\",\"scope\":\"ticket\",\"ordinal\":1,\"text\":\"\"},{\"pattern\":\"top\",\"scope\":\"ticket\",\"ordinal\":1,\"text\":\"\"},{\"pat",
+  "PATCH /api/z/Ev5xkg5/settings {\"tickets\":1,\"opening\":[],\"breaks\":[],\"closing\":[]}"
+ ],
+ "eid": "Ev5xkg5",
+ "capOptions": [
+  "10",
+  "100",
+  "250",
+  "500",
+  "750",
+  "1000",
+  "2500",
+  "5000",
+  "10000"
+ ],
+ "step2": "#back||All games  ;  #signout||Sign out  ;  |open=1|1  ;  |open=2|2  ;  |open=3|3  ;  |open=4|4  ;  |open=5|5  ;  |open=6|6  ;  |open=7|7  ;  |open=8|8  ;  |open=9|9  ;  |open=10|10  ;  ||Help  ;  |open=1|1Date and time of the   ;  |open=2|2Number of participant  ;  |open=3|3Set Prizes5 prizes○  ;  |open=4|4Set Brand Moments0 of  ;  |open=5|5Make hosts and co-hos  ;  |open=6|6Invite and Share link  ;  |open=7|7Check and publishPubl  ;  |open=8|8PayPaid. The game is   ;  |open=9|9Game dayOpens when th  ;  |open=10|10After the gameYour r  ;  |open=2|Go  ;  |open=1|1Date and time of the   ;  |open=2|2Number of participant  ;  ||i  ;  |ck=cap:10|Demo game · 10 people   ;  |ck=cap:100|Up to 100 people  ;  |ck=cap:250|Up to 250 people  ;  |ck=cap:500|Up to 500 people  ;  |ck=cap:750|Up to 750 people  ;  |ck=cap:1000|Up to 1000 people  ;  |ck=cap:2500|Up to 2500 people  ;  |ck=cap:5000|Up to 5000 people  ;  |ck=cap:10000|Up to 10000 people  ;  |bool=capOther|My crowd is a differen  ;  ||i  ;  |ck=mode:auto|The software, at the c  ;  |ck=mode:host|A Host presses a butto  ;  ||i  ;  |ck=spd:9|9 seconds  ;  |ck=spd:12|12 seconds  ;  ||i  ;  |ck=tix:1|1 ticket  ;  |ck=tix:2|2 tickets (more chance  ;  ||i  ;  |ck=rnd:1|1 game  ;  |ck=rnd:2|2 games  ;  |ck=rnd:3|3 games  ;  |ck=rnd:4|4 games  ;  |ck=rnd:5|5 games  ;  ||i  ;  |ck=aud:1|Only my employees (the  ;  |ck=aud:2|My employees, plus the  ;  |ck=aud:3|A list of people I cho  ;  |ck=aud:4|A list of people I cho  ;  |ck=aud:5|Anyone with the link  ;  |ck=aud:6|Anyone with the link,   ;  |save=2|Save and continue  ;  |open=3|3Set Prizes5 prizes○ T  ;  |open=4|4Set Brand Moments0 of  ;  |open=5|5Make hosts and co-hos  ;  |open=6|6Invite and Share link  ;  |open=7|7Check and publishPubl  ;  |open=8|8PayPaid. The game is   ;  |open=9|9Game dayOpens when th  ;  |open=10|10After the gameYour r  ;  ||How do I start?▼  ;  ||Who pays?▼  ;  ||What if nobody pays?▼  ;  ||Can I change things la  ;  ||How do I add a video?▼  ;  ||What do guests see?▼  ;  ||Is my guests' data saf  ;  ||What is a lucky draw?▼  ;  ||How do I stop the game  ;  ||Who can do what?▼  ;  ||What is the big screen  ;  ||What is the demo game?  ;  ||Can I get a refund?▼  ;  ||Who do I contact?▼  ;  ||Back to your steps  ;  ||Back to top  ;  ||AYour accountThese are",
+ "sum2": {
+  "verify": "mobile",
+  "emp": false,
+  "who": "anyone",
+  "status": 200
+ },
+ "step3": "TEST MODE: nothing here is real. No one outside the owner’s test list is e-maile",
+ "verTrail": [
+  "3:[\"mobile\",false]",
+  "4:[\"mobile\",false]",
+  "5:[\"mobile\",false]",
+  "6:[\"mobile\",false]"
+ ],
+ "step4": "TEST MODE: nothing here is real. No one outside the owner’s test list is e-maile",
+ "step5": "TEST MODE: nothing here is real. No one outside the owner’s test list is e-maile",
+ "step6": "TEST MODE: nothing here is real. No one outside the owner’s test list is e-maile",
+ "step7": "#back||All games  ;  #signout||Sign out  ;  |open=1|1  ;  |open=2|2  ;  |open=3|3  ;  |open=4|4  ;  |open=5|5  ;  |open=6|6  ;  |open=7|7  ;  |open=8|8  ;  |open=9|9  ;  |open=10|10  ;  ||Help  ;  |open=1|1Date and time of the   ;  |open=2|2Number of participant  ;  |open=3|3Set Prizes5 prizes✓  ;  |open=4|4Set Brand Moments0 of  ;  |open=5|5Make hosts and co-hos  ;  |open=6|6Invite and Share link  ;  |open=7|7Check and publishPubl  ;  |open=8|8PayPaid. The game is   ;  |open=9|9Game dayOpens when th  ;  |open=10|10After the gameYour r  ;  |open=9|Go  ;  |open=1|1Date and time of the   ;  |open=2|2Number of participant  ;  |open=3|3Set Prizes5 prizes✓ D  ;  |open=4|4Set Brand Moments0 of  ;  |open=5|5Make hosts and co-hos  ;  |open=6|6Invite and Share link  ;  |open=7|7Check and publishChec  ;  ||i  ;  |open=1|Change  ;  |open=2|Change  ;  |open=3|Change  ;  |open=4|Change  ;  #cancelopen||Cancel this game  ;  ||Create a new game like  ;  |save=7|Continue  ;  |open=8|8PayPaid. The game is   ;  |open=9|9Game dayOpens when th  ;  |open=10|10After the gameYour r  ;  ||How do I start?▼  ;  ||Who pays?▼  ;  ||What if nobody pays?▼  ;  ||Can I change things la  ;  ||How do I add a video?▼  ;  ||What do guests see?▼  ;  ||Is my guests' data saf  ;  ||What is a lucky draw?▼  ;  ||How do I stop the game  ;  ||Who can do what?▼  ;  ||What is the big screen  ;  ||What is the demo game?  ;  ||Can I get a refund?▼  ;  ||Who do I contact?▼  ;  ||Back to your steps  ;  ||Back to top  ;  ||AYour accountThese are",
+ "info": {
+  "cap": 10,
+  "startMs": 1793040300000
+ }
+}

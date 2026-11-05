@@ -25,6 +25,7 @@
   const KEY = "ct-asked";
   function notifyButton() {
     try {
+      if (/^\/(zc|z|big|board|screen)(\.html)?$/.test(location.pathname)) return; // never over a game screen: it covered the bottom bar of the console and the ticket
       if (!("Notification" in window) || Notification.permission !== "default" || localStorage.getItem(KEY)) return;
       const b = document.createElement("button"); b.type = "button"; b.id = "ct-notify"; b.textContent = "Notify me"; b.setAttribute("aria-label", "Notify me about news from Corporate Tambola");
       b.style.cssText = "position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));z-index:50;min-height:44px;padding:0 16px;border-radius:999px;border:2px solid #7A1C33;background:#fff;color:#7A1C33;font:700 13px system-ui,sans-serif;box-shadow:0 3px 10px rgba(0,0,0,.18);cursor:pointer";

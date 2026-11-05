@@ -19,24 +19,25 @@ const ORIGIN = "https://tambola.test";
 
 beforeEach(() => {
   const d = makeD1(); raw = d.raw;
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: ORIGIN, DATA_KEY: "test-data-key", TEST_MODE: "1" };
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: ORIGIN, DATA_KEY: "test-data-key", TEST_MODE: "1" };
 });
 async function account() { const x = await j(await call("POST", "/api/start", { email: "boss@acme.com" }, { "cf-connecting-ip": "1.1.1.1" })); return { ai: x.aiKey as string, token: x.token as string }; }
 async function ask(now = T, ip = "5.5.5.5") { const r = await j(await call("POST", "/api/auth/email", { email: "boss@acme.com" }, { "cf-connecting-ip": ip }, now)); return r as { devCode: string; devToken: string }; }
 const link = (t: string, ip = "6.6.6.6", now = T) => call("POST", "/api/auth/link", { token: t }, { "cf-connecting-ip": ip }, now);
 
 describe("the sign-in e-mail", () => {
-  test("subject, heading, intro, the three options, the footer, an HTML and a plain-text part; no AI key or paste text anywhere", async () => {
+  test("subject, heading, intro, exactly two options (code, button), the footer, an HTML and a plain-text part; no AI key or paste text anywhere", async () => {
     await account(); const r = await ask();
     const m = outbox().find((x) => x.subject === "[Tambola] " + SIGNIN_SUBJECT)!;
-    expect(m.to_addr).toBe("boss@acme.com"); expect(SIGNIN_SUBJECT).toBe("Sign in to Corporate Tambola - choose how you want to continue");
-    for (const t of ["YOU ARE ALMOST IN", "Choose one way to sign in.", "OPTION 1 - LET YOUR AI DO THE WORK", "Sign in and get my AI work link", "Your AI asks a few questions and sets it all up. You keep payment and publishing.", "OPTION 2 - WORK ON YOUR OWN", "Open my console", "OPTION 3 - SIGN-IN PAGE ALREADY OPEN?", `Type this 6-digit code there: ${r.devCode}`, "It works for 10 minutes.", "If you did not ask for this, ignore it. Do not forward it: it opens your account."]) expect(m.body).toContain(t);
+    expect(m.to_addr).toBe("boss@acme.com"); expect(SIGNIN_SUBJECT).toBe("Your Corporate Tambola sign-in: a 6-digit code, or one tap");
+    for (const t of ["SIGN IN TO YOUR ACCOUNT", "Please choose ONE of these two ways. You do not need both.", "OPTION 1 - TYPE THE 6-DIGIT CODE", "type these 6 numbers in the six boxes and press Submit", r.devCode, "OPTION 2 - TAP THE BUTTON", "You are signed in at once", "It works once, for 10 minutes.", "Please keep it private"]) expect(m.body).toContain(t);
+    expect(m.body).not.toContain("OPTION 3"); expect(m.body).not.toMatch(/AI work link|go=ai/);
     expect(m.body + m.subject).not.toMatch(LEAK); expect(m.body).not.toMatch(/Corporate Tambola account\. I am the owner/);
-    expect(m.body).toContain(`${ORIGIN}/signin.html?t=${r.devToken}&go=ai`); expect(m.body).toContain(`${ORIGIN}/signin.html?t=${r.devToken}&go=console`);
+    expect(m.body).toContain(`${ORIGIN}/signin.html?t=${r.devToken}&go=console`);
     const b = signInMail(ORIGIN, "123456", "ab".repeat(24));
-    expect(b.html).toContain("You are almost in"); expect(b.html).toContain("Let your AI do the work"); expect(b.html).toContain("Work on your own"); expect(b.html).toContain("Sign-in page already open?"); expect(b.html).toContain("123456");
+    expect(b.html).toContain("Sign in to Corporate Tambola"); expect(b.html).toContain("Type the 6-digit code"); expect(b.html).toContain("Tap the button"); expect(b.html).toContain("Sign me in"); expect(b.html).toContain("123456"); expect(b.html).not.toContain("OPTION 3");
     expect(b.html + b.text).not.toMatch(LEAK);
-    expect([...b.html.matchAll(/href="([^"]*)"/g)].map((x) => x[1]).filter((h) => !/^mailto:|legal.html$/.test(h!))).toEqual([`${ORIGIN}/signin.html?t=${"ab".repeat(24)}&amp;go=ai`, `${ORIGIN}/signin.html?t=${"ab".repeat(24)}&amp;go=console`]);
+    expect([...b.html.matchAll(/href="([^"]*)"/g)].map((x) => x[1]).filter((h) => !/^mailto:|legal.html$/.test(h!))).toEqual([`${ORIGIN}/signin.html?t=${"ab".repeat(24)}&amp;go=console`]);
     expect(env.DB).toBeTruthy();
     expect(JSON.stringify(raw.prepare("SELECT * FROM login_code").all())).not.toContain(r.devToken); // only a hash is kept
   });
@@ -54,7 +55,7 @@ describe("the one-click sign-in link", () => {
     const row = raw.prepare("SELECT link_hash FROM login_code").get() as any; expect(row.link_hash).toBeTruthy();
     const ok = await link(r.devToken); const x = await j(ok);
     expect(ok.status).toBe(200); expect(x.token).toMatch(/^ctk_[0-9a-f]{48}$/);
-    expect((await call("GET", "/api/whoami", undefined, { "x-organizer": x.token })).status).toBe(200); expect(await j(await call("GET", "/api/whoami", undefined, { "x-organizer": x.token }))).toEqual({ kind: "master" });
+    expect((await call("GET", "/api/whoami", undefined, { "x-organizer": x.token })).status).toBe(200); expect(await j(await call("GET", "/api/whoami", undefined, { "x-organizer": x.token }))).toEqual({ kind: "master", email: "boss@acme.com" });
     expect((await call("GET", "/api/history", undefined, { "x-organizer": x.token })).status).toBe(200);
     const again = await link(r.devToken); expect(again.status).toBe(400);
     expect((await call("POST", "/api/auth/verify", { email: "boss@acme.com", code: r.devCode })).status).toBe(400); // the code died with the link
@@ -63,6 +64,14 @@ describe("the one-click sign-in link", () => {
     await account(); const r = await ask();
     const v = await call("POST", "/api/auth/verify", { email: "boss@acme.com", code: r.devCode }); expect(v.status).toBe(200); expect((await j(v)).token).toMatch(/^ctk_/);
     expect((await link(r.devToken)).status).toBe(400);
+  });
+  test("wrong codes sent all at once still count one by one: after 5 tries even the right code is refused", async () => {
+    await account(); const r = await ask();
+    const wrong = String((Number(r.devCode) + 1) % 1000000).padStart(6, "0");
+    const rs = await Promise.all(Array.from({ length: 12 }, () => call("POST", "/api/auth/verify", { email: "boss@acme.com", code: wrong })));
+    expect(rs.every((x) => x.status === 400)).toBe(true);
+    expect((raw.prepare("SELECT attempts FROM login_code").get() as any).attempts).toBe(5); // not 12 and not fewer: the cap holds under parallel guesses
+    expect((await call("POST", "/api/auth/verify", { email: "boss@acme.com", code: r.devCode })).status).toBe(400); // locked until a new code is asked for
   });
   test("expiry: valid at 9 min 59 s, refused at 10 min 1 s; the code shares it", async () => {
     await account(); const r = await ask();
@@ -77,10 +86,10 @@ describe("the one-click sign-in link", () => {
     expect((await call("POST", "/api/auth/link", {})).status).toBe(400);
     expect((await link(b.devToken)).status).toBe(200);
   });
-  test("destinations: the AI button goes to the AI-link page, the console button to the console; both carry the same single-use token", async () => {
+  test("destination: the one button goes to the console and carries the single-use token", async () => {
     await account(); const r = await ask();
     const m = outbox().find((x) => x.subject === "[Tambola] " + SIGNIN_SUBJECT)!.body;
-    expect(m).toMatch(/signin\.html\?t=[0-9a-f]{48}&go=ai/); expect(m).toMatch(/signin\.html\?t=[0-9a-f]{48}&go=console/);
+    expect(m).toMatch(/signin\.html\?t=[0-9a-f]{48}&go=console/); expect(m).not.toMatch(/go=ai/);
     expect(new Set([...m.matchAll(/t=([0-9a-f]{48})&go=/g)].map((x) => x[1])).size).toBe(1); expect(m).toContain(r.devToken);
   });
   test("rate limits: at most 5 mails an hour per address (as before); at most 20 bad link tries a day per network; good tries still work from elsewhere", async () => {

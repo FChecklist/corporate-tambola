@@ -15,14 +15,14 @@ async function page(html = "pricing.html", url = "/pricing.html") {
   const p = await openPage(w.world, { url: "http://localhost" + url, html, scripts: ["guide.js"] });
   open.push(p); return p;
 }
-/** every `error: "..."` the server can send, with the status written next to it */
+/** every `error: "..."` the server can send, with the status written next to it. price-adjust.ts is left out on purpose: its messages are owner-only and a guide entry would put them in a public script (see price-adjust-secret.test.ts) */
 function serverMessages() {
   const out: { file: string; line: number; status: number; msg: string }[] = [];
-  for (const f of readdirSync(EDGE).filter((x) => x.endsWith(".ts"))) {
+  for (const f of readdirSync(EDGE).filter((x) => x.endsWith(".ts") && x !== "price-adjust.ts")) {
     readFileSync(join(EDGE, f), "utf8").split("\n").forEach((l, i) => {
       for (const m of l.matchAll(/error:\s*("(?:[^"\\]|\\.)*"|`[^`]*`)/g)) {
         const st = /\}\s*,\s*(\d{3})\s*\)/.exec(l.slice(m.index! + m[0].length)) ?? /status:\s*(\d{3})/.exec(l);
-        out.push({ file: f, line: i + 1, status: st ? Number(st[1]) : 400, msg: m[1]!.slice(1, -1) });
+        for (const msg of m[1]!.slice(1, -1).includes("${idWord(vf.idKind)}") ? ["employee ID", "Email ID"].map((w) => m[1]!.slice(1, -1).replace("${idWord(vf.idKind)}", w)) : [m[1]!.slice(1, -1)]) out.push({ file: f, line: i + 1, status: st ? Number(st[1]) : 400, msg }); // the ID word is a variable: check both words
       }
     });
   }
@@ -43,7 +43,7 @@ describe("every message the server can send has a guide", () => {
     const p = await page(); const CTG = p.win.CTG;
     const hidden = serverMessages().filter((m) => CTG.apiOnly(m.msg));
     expect(hidden.length).toBeGreaterThan(20);
-    for (const m of hidden) expect(["admin.ts", "partners.ts", "mode.ts", "ledgerc.ts", "pay.ts", "worker.ts", "lifecycle.ts", "people.ts", "credit.ts", "helpdesk.ts", "winners.ts", "hostsetup.ts", "rights.ts", "clone.ts", "consent.ts"]).toContain(m.file);
+    for (const m of hidden) expect(["admin.ts", "partners.ts", "mode.ts", "ledgerc.ts", "pay.ts", "worker.ts", "lifecycle.ts", "people.ts", "credit.ts", "helpdesk.ts", "winners.ts", "hostsetup.ts", "rights.ts", "clone.ts", "consent.ts", "owner-stats.ts", "prospect-links.ts"]).toContain(m.file);
   });
 });
 
@@ -147,6 +147,8 @@ describe("the right guide for the right message and the right person", () => {
     const full = p.win.CTG.explain({ status: 409, message: "This engagement is full." });
     expect(full.title).toBe("This game is full"); expect(full.go).toEqual({ none: true });
     expect(full.steps.join(" ")).not.toMatch(/Number of participants|Organizer, raise/i);
+    const full2 = p.win.CTG.explain({ status: 409, message: "This game is full. Please tell your organizer so they can make room." }); // TA07: the server now says "game"
+    expect(full2.title).toBe("This game is full"); expect(full2.go).toEqual({ none: true });
     for (const msg of ["This game was cancelled.", "This link is not valid any more. Please ask the person who invited you to send it again.", "This game did not start and is closed."]) {
       const g = p.win.CTG.explain({ status: 409, message: msg }); expect(g.go.step).toBeUndefined(); expect(String(g.go.href || "")).not.toMatch(/zc/);
     }

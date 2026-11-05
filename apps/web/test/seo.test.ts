@@ -3,12 +3,19 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { PACKS } from "../../../packages/shared/src/pricing";
 
-const PUB = new URL("../public/", import.meta.url), ORIGIN = "https://corporatetambola.com";
+const PUB = new URL("../public/", import.meta.url), ORIGIN = "https://housie.corporatetambola.com";
 const rd = (f: string) => readFileSync(new URL(f, PUB), "utf8");
-const INDEXABLE = ["index.html", "partner.html", "helpdesk.html", "legal.html", "terms.html", "privacy.html", "legal-position.html", "dpa.html", "subprocessors.html", "partner-terms.html", "organizer-guide.html", "ai-prompt.html", "trust.html", "brochure.html", "about.html", "contact.html", "pricing.html", "refund-policy.html"];
+const INDEXABLE = ["index.html", "partner.html", "helpdesk.html", "terms.html", "partner-terms.html", "organizer-guide.html", "ai-prompt.html", "trust.html", "fair.html", "brochure.html", "about.html", "contact.html", "pricing.html"];
 const NOINDEX = ["signin.html", "pay.html", "paytest.html", "ai-link.html", "helpdesk-accept.html", "helpdesk-approve.html", "report.html", "z.html", "zc.html", "big.html", "404.html", "owner-visits.html"];
+const POINTERS = ["legal.html", "privacy.html", "legal-position.html", "dpa.html", "subprocessors.html", "refund-policy.html"]; // they only point to the one legal document (terms.html): not indexed, not in the sitemap
 const urlOf = (f: string) => ORIGIN + (f === "index.html" ? "/" : "/" + f);
 const meta = (h: string, re: RegExp) => (h.match(re) ?? [])[1] ?? "";
+
+describe("the older legal pages only point to the one document", () => {
+  for (const f of POINTERS) test(`${f}: noindex, follow, canonical to terms.html, a link into the document, and not in the sitemap`, () => {
+    const h = rd(f); expect(h).toMatch(/name="robots" content="noindex, follow"/); expect(h).toContain(`<link rel="canonical" href="${ORIGIN}/terms.html">`); expect(h).toMatch(/href="\/terms\.html#[a-z-]+"/); expect(rd("sitemap.xml")).not.toContain("/" + f);
+  });
+});
 
 describe("sitemap and robots", () => {
   const sm = rd("sitemap.xml"), locs = [...sm.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]!);
@@ -41,7 +48,7 @@ describe("each indexable page", () => {
     expect(desc.length).toBeGreaterThanOrEqual(50); expect(desc.length).toBeLessThanOrEqual(320);
     expect(titles.has(title)).toBe(false); titles.set(title, f); expect(descs.has(desc)).toBe(false); descs.set(desc, f);
     expect(h.match(/<link rel="canonical"/g)?.length).toBe(1); expect(meta(h, /<link rel="canonical" href="([^"]+)"/)).toBe(urlOf(f));
-    expect(meta(h, /<meta property="og:url" content="([^"]+)"/)).toBe(urlOf(f)); expect(h).toMatch(/<meta property="og:title" content="[^"]+"/); expect(h).toMatch(/<meta property="og:description" content="[^"]+"/); expect(h).toMatch(/<meta property="og:image" content="https:\/\/corporatetambola\.com\/[^"]+"/);
+    expect(meta(h, /<meta property="og:url" content="([^"]+)"/)).toBe(urlOf(f)); expect(h).toMatch(/<meta property="og:title" content="[^"]+"/); expect(h).toMatch(/<meta property="og:description" content="[^"]+"/); expect(h).toMatch(/<meta property="og:image" content="https:\/\/housie\.corporatetambola\.com\/[^"]+"/);
     expect(h).toContain('<meta name="twitter:card" content="summary_large_image">'); expect(h).toMatch(/<meta name="twitter:title" content="[^"]+"/);
     expect(h).not.toMatch(/name="robots" content="[^"]*noindex/); expect(h).toMatch(/<html lang="en">/); expect(h).toContain('name="viewport"');
     for (const tag of ['name="description"', 'rel="canonical"', 'property="og:title"', 'name="twitter:card"']) expect(h.split(tag).length).toBe(2); // each exactly once
@@ -55,15 +62,15 @@ describe("each indexable page", () => {
   });
   test("every image has alt text and a size, and the picture at the top loads early", () => {
     for (const f of [...INDEXABLE, ...NOINDEX]) { let h = ""; try { h = rd(f); } catch { continue; } for (const img of h.match(/<img\b[^>]*>/g) ?? []) { expect([f, /\balt="[^"]+"/.test(img)]).toEqual([f, true]); expect([f, /\bwidth="\d+"/.test(img) && /\bheight="\d+"/.test(img)]).toEqual([f, true]); } }
-    expect(rd("index.html")).toMatch(/<img src="\/img\/ticket\.webp"[^>]*fetchpriority="high"/);
+    expect(rd("index.html")).not.toContain("/img/ticket.webp"); // 1.6.6: the front page no longer carries the old product picture (it showed Live now and Private group inside the image); the logo has alt and size, checked above
   });
   test("quick loading: fonts are self-hosted and swap in, the two main fonts are preloaded, scripts do not block the page, nothing third-party is loaded on the home page", () => {
     const h = rd("index.html"), f = rd("fonts.css");
     expect(f.match(/font-display: swap/g)!.length).toBe(f.match(/@font-face/g)!.length);
     for (const w of ["Inter-normal-400.woff2", "Fraunces-normal-500-700.woff2"]) expect(h).toContain(`<link rel="preload" href="/fonts/${w}" as="font" type="font/woff2" crossorigin>`);
-    for (const s of h.match(/<script\b[^>]*\bsrc="[^"]+"[^>]*>/g) ?? []) if (!/theme\.js|consent\.js|common\.js|google\.js|site\.js/.test(s)) expect(s).toMatch(/\bdefer\b/); // theme.js must run first (no flash of the wrong colours); common.js and site.js are the last thing in the body
-    expect(h).toMatch(/<script src="\/common\.js"><\/script><script src="\/google\.js"><\/script><script src="\/site\.js"><\/script>\s*<\/body>/); // the page scripts sit at the very end
-    expect(h.replace(/<footer class="uf"[\s\S]*?<\/footer>/, "")).not.toMatch(/(src|href)="https?:\/\/(?!corporatetambola\.com|shobhakamalsolutions\.pages\.dev|wa\.me\/919650397480\?text=Hi%2C%20Corporate%20Tambola%20team")/); // the one WhatsApp tap-to-chat link in the top bar; the uniform footer names the sister products on purpose
+    for (const s of h.match(/<script\b[^>]*\bsrc="[^"]+"[^>]*>/g) ?? []) if (!/theme\.js|keep\.js|consent\.js|common\.js|google\.js|site\.js/.test(s)) expect(s).toMatch(/\bdefer\b/); // theme.js must run first (no flash of the wrong colours); common.js and site.js are the last thing in the body
+    expect(h).toMatch(/<script src="\/common\.js"><\/script><script src="\/google\.js"><\/script><script src="\/site\.js(?:\?v=\d+)?"><\/script>\s*<\/body>/); // the page scripts sit at the very end
+    expect(h.replace(/<footer class="uf"[\s\S]*?<\/footer>/, "")).not.toMatch(/(src|href)="https?:\/\/(?!console\.corporatetambola\.com|housie\.corporatetambola\.com|home\.corporatetambola\.com|bingo\.corporatetambola\.com|tictactoe\.corporatetambola\.com|snakes\.corporatetambola\.com|luck\.corporatetambola\.com|games\.corporatetambola\.com|corporatetambola\.com|shobhakamalsolutions\.pages\.dev|wa\.me\/919650397480\?text=Hi%2C%20I%20am%20interested%20in%20corporate%20games")/); // the one WhatsApp tap-to-chat link in the top bar; the uniform footer names the sister products on purpose
     expect(rd("../../../pages/build.mjs" as any).includes("max-age=31536000, immutable")).toBe(true);
   });
 });

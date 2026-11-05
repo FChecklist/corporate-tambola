@@ -22,7 +22,7 @@ const call = (method: string, path: string, body?: unknown, headers: Record<stri
 const j = async (r: Response) => (await r.json()) as any;
 const root = join(import.meta.dir, "..", "..", "..");
 
-beforeEach(() => { const d = makeD1(); env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: ORIGIN, DATA_KEY: "test-data-key" }; });
+beforeEach(() => { const d = makeD1(); env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: ORIGIN, DATA_KEY: "test-data-key" }; });
 async function organizer() {
   const x = await j(await call("POST", "/api/start", { email: "boss@acme.com" }, { "cf-connecting-ip": "1.1.1.1" }));
   return { key: x.aiKey as string, token: x.token as string, base: `${ORIGIN}/ai/${x.aiKey}` };
@@ -95,7 +95,7 @@ describe("the guided path, followed like an outside AI", () => {
     expect(next).toEqual(expect.arrayContaining([expect.stringMatching(/Write the welcome message/), expect.stringMatching(/Load the guest list/), expect.stringMatching(/^Publish/), expect.stringMatching(/^Pay/)]));
     expect(choicesOf(t).find((c) => /Write the welcome message/.test(c.label))!.url).toBe(`${o.base}/go/msg?id=DIWALI-1002`);
     const sm = await j(await call("GET", `/ai/${o.key}/z/DIWALI-1002/summary`));
-    expect(sm).toMatchObject({ id: "DIWALI-1002", name: "Diwali party, Fri 2 Oct", tickets: 2, limit: 250, callSeconds: 9, rounds: 1, closed: false, status: "draft" });
+    expect(sm).toMatchObject({ id: "DIWALI-1002", name: "Diwali party, Fri 2 Oct", tickets: 2, limit: 250, callSeconds: 12, rounds: 1, closed: false, status: "draft" });
     expect(sm.startMs).toBe(Date.UTC(2026, 9, 2, 10, 30)); // 4 pm India time tomorrow
     expect(sm.rewards.map((r: any) => r.pattern)).toEqual(["early5", "top", "mid", "bot", "full"]);
     expect(sm.breaks).toMatchObject([{ kind: "lucky", winners: 1, after: 45 }]); // placed by the software
@@ -117,10 +117,10 @@ describe("the guided path, followed like an outside AI", () => {
     let g = await pick(start, /Change a game that has not started/); expect(g).toMatch(/DIWALI-1002/); expect(g).toMatch(/\(draft\)/);
     g = await pick(g, /DIWALI-1002/); expect(g).toMatch(/Game DIWALI-1002: draft/); expect(g).toMatch(/Publish \(free\)/);
     const menu = g; expect(menu).not.toMatch(/Send a message to every guest/); // nobody can see a draft
-    expect(choicesOf(menu).find((c) => /Erase all guest data/.test(c.label))!.url).toBe(`${ORIGIN}/zc.html?e=DIWALI-1002&do=erase`);
+    expect(choicesOf(menu).find((c) => /Delete all guest data/.test(c.label))!.url).toBe(`${ORIGIN}/zc.html?e=DIWALI-1002&do=erase`);
     expect(choicesOf(menu).find((c) => /Pause or stop/.test(c.label))!.url).toBe(`${ORIGIN}/zc.html?e=DIWALI-1002&do=pause`);
     const links = await pick(menu, /Show the links/); expect(links).toContain(`${ORIGIN}/zc.html?e=DIWALI-1002`); expect(links).toMatch(/After you publish, two more links appear here: the guest link .* and the number screen/);
-    expect(links).toContain(`${ORIGIN}/pay.html?e=DIWALI-1002`); expect(links).toContain(`${ORIGIN}/zc.html?e=DIWALI-1002&do=publish`); expect(links).toMatch(/Your board: open it from your console, step 6, 'Open my board' \(it carries your private key, so I cannot give it\)/);
+    expect(links).toContain(`${ORIGIN}/pay.html?e=DIWALI-1002`); expect(links).toContain(`${ORIGIN}/zc.html?e=DIWALI-1002&do=publish`); expect(links).toMatch(/Your board: open it from your console, step 6, 'Open my board' \(it carries your personal key, so I cannot give it\)/);
     expect(links).not.toMatch(/z\.html\?e=|big\.html\?e=/); // nothing is invented before publishing
     expect(links).toMatch(/308 and moves to the same name without \.html/); // the AI is told the 308 to /zc or /pay is normal
     expect(await pick(menu, /How many have joined/)).toMatch(/0 people have joined DIWALI-1002/);
@@ -202,7 +202,7 @@ describe("the third route: any AI that searches the web", () => {
     const text = pub("trust.html").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ");
     for (const f of FACTS) expect(text).toContain(f.say);
     expect(pub("trust.html")).not.toMatch(/<script/i); // plain page: readable by any crawler or AI, no JavaScript needed
-    expect(pub("llms.txt")).toContain("https://corporatetambola.com/trust.html");
+    expect(pub("llms.txt")).toContain("https://housie.corporatetambola.com/trust.html");
   });
   test("the facts never boast: no 'best', '100% safe', 'fully compliant', 'unhackable', 'cheat-proof' or 'certified' as a claim, and the honest limits are present", () => {
     const all = FACTS.map((f) => f.say).join(" ") + " " + llmsTxt();

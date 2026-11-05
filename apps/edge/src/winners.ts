@@ -9,7 +9,10 @@ import { keysInPlay, linesFor, quorumFor } from "../../../packages/beacon/src/co
 import { seatOfPid } from "../../../packages/beacon/src/unique-ticket";
 import { openPii, openText, sealPii, sealText, type PiiEnv } from "./pii";
 import { cfgOfRow, recordWinners } from "./lifecycle";
+import { transientDb } from "./transient";
+import { checkinRequired, deviceMatches } from "./checkin";
 import type { D1, Env } from "./worker";
+import { cleanPhone, keptFromClean, keptPhone } from "./phonekit";
 
 export const WINNERS_SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS rvote (eid TEXT NOT NULL, round INTEGER NOT NULL, pattern TEXT NOT NULL, ordinal INTEGER NOT NULL, seat INTEGER NOT NULL, digest TEXT NOT NULL, PRIMARY KEY (eid, round, pattern, ordinal, seat))`,
@@ -25,14 +28,14 @@ type Json = (o: unknown, s?: number) => Response;
 const sha = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))), (b) => b.toString(16).padStart(2, "0")).join("");
 const PID = /^[0-9]{1,6}x[0-9a-f]{12}$/;
 const cleanName = (n: unknown) => (typeof n === "string" ? n.replace(/[<>`]/g, "").replace(/\s+/g, " ").trim().slice(0, 60) : "");
-const digitsOf = (raw: unknown): string | null => { const d = String(raw ?? "").replace(/\D/g, ""); return d.length < 10 || d.length > 15 ? null : d.slice(-10); };
 
 /** A phone reports the winners it worked out. Several different phones must report exactly the same before the result is accepted. */
 export async function acceptVotes(env: Env & PiiEnv, e: any, eid: string, b: any, now: number, json: Json, spend: Spend): Promise<Response> {
   const seat = typeof b?.pid === "string" ? seatOfPid(b.pid) : null;
   if (!b || seat === null || !Array.isArray(b.results) || b.results.length < 1 || b.results.length > 3) return json({ error: "Bad report." }, 400);
   const who = await env.DB.prepare("SELECT 1 AS x FROM participant WHERE eid=? AND pid=?").bind(eid, b.pid).first();
-  if (!who) return json({ error: "Not a participant of this engagement." }, 403);
+  if (!who) return json({ error: "Not a participant of this game." }, 403);
+  if (checkinRequired(e) && !(await deviceMatches(env, eid, b.pid, b.device))) return json({ error: "This ticket belongs to another phone.", code: "other-phone" }, 403); // the participant id is public: a report counts only from the phone that holds the ticket, so strangers cannot invent a result
   const cfg = cfgOfRow(e), valid = new Set<string>(keysInPlay(cfg.rewards)), luckyCount = cfg.breaks.filter((x) => x.kind === "lucky").length;
   const people = (await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>())?.c ?? 1;
   const need = quorumFor(people);
@@ -45,24 +48,29 @@ export async function acceptVotes(env: Env & PiiEnv, e: any, eid: string, b: any
     if (await env.DB.prepare("SELECT 1 AS x FROM settled WHERE eid=? AND round=? AND pattern=? AND ordinal=?").bind(eid, x.round, x.pattern, x.ordinal).first()) { done.push(`${x.round}:${x.pattern}:${x.ordinal}`); continue; }
     const pids: string[] = [...new Set<string>(x.pids)].sort();
     const digest = (await sha(JSON.stringify([x.pattern, x.ordinal, x.round, x.idx, pids]))).slice(0, 32);
-    if (!(await spend(env, now, 3))) return json({ error: "Busy day. Your report is kept on your phone and will be sent again.", counted }, 503);
-    const v = await env.DB.prepare("INSERT OR IGNORE INTO rvote(eid,round,pattern,ordinal,seat,digest) VALUES(?,?,?,?,?,?)").bind(eid, x.round, x.pattern, x.ordinal, seat, digest).run();
-    if (!(v.meta?.changes ?? 0)) continue; // this phone already reported this prize
-    counted++;
-    await env.DB.prepare("INSERT OR IGNORE INTO rcand(eid,round,pattern,ordinal,digest,idx,pids) VALUES(?,?,?,?,?,?,?)").bind(eid, x.round, x.pattern, x.ordinal, digest, x.idx, JSON.stringify(pids)).run();
+    const mine = await env.DB.prepare("SELECT digest FROM rvote WHERE eid=? AND round=? AND pattern=? AND ordinal=? AND seat=?").bind(eid, x.round, x.pattern, x.ordinal, seat).first<{ digest: string }>();
+    const repeat = !!mine; if (mine && mine.digest !== digest) continue; // F-03: this phone already reported this prize: a repeat costs nothing (reads only), so one phone cannot use up the shared daily write allowance by repeating itself; the SAME report repeated may still finish a settlement a passing database hiccup left open
+    if (!repeat) {
+      if (!(await spend(env, now, 3))) return json({ error: "Busy day. Your report is kept on your phone and will be sent again.", counted }, 503);
+      const v = await env.DB.prepare("INSERT OR IGNORE INTO rvote(eid,round,pattern,ordinal,seat,digest) VALUES(?,?,?,?,?,?)").bind(eid, x.round, x.pattern, x.ordinal, seat, digest).run();
+      if (!(v.meta?.changes ?? 0)) continue; // this phone already reported this prize
+      counted++;
+      await env.DB.prepare("INSERT OR IGNORE INTO rcand(eid,round,pattern,ordinal,digest,idx,pids) VALUES(?,?,?,?,?,?,?)").bind(eid, x.round, x.pattern, x.ordinal, digest, x.idx, JSON.stringify(pids)).run();
+    }
     const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM rvote WHERE eid=? AND round=? AND pattern=? AND ordinal=? AND digest=?").bind(eid, x.round, x.pattern, x.ordinal, digest).first<{ c: number }>())?.c ?? 0;
     if (n < need) continue;
+    // The winner record and the prize rows are written BEFORE the prize is marked settled (both are safe to write twice): a passing database hiccup in between leaves the prize unsettled, so the next report repairs it, not settled with no winner record (5 Nov 2026 audit).
+    await recordWinners(env, e, eid, [{ pattern: x.pattern, ordinal: x.ordinal, round: x.round, idx: x.idx, pids }], now, "phones", true);
+    await makePrizeRows(env, eid, x.round, x.pattern, x.ordinal, pids.slice(0, 100), true);
     const ins = await env.DB.prepare("INSERT OR IGNORE INTO settled(eid,pattern,ordinal,round,idx,pids) VALUES(?,?,?,?,?,?)").bind(eid, x.pattern, x.ordinal, x.round, x.idx, JSON.stringify(pids.slice(0, 500))).run();
     if (!(ins.meta?.changes ?? 0)) continue;
     accepted++;
-    await recordWinners(env, e, eid, [{ pattern: x.pattern, ordinal: x.ordinal, round: x.round, idx: x.idx, pids }], now, "phones");
-    await makePrizeRows(env, eid, x.round, x.pattern, x.ordinal, pids.slice(0, 100));
   }
   return json({ ok: true, counted, accepted, done, need });
 }
 
 /** One record per winning seat, holding the sealed name and number the person joined with (they are asked to confirm it after the game). */
-async function makePrizeRows(env: Env, eid: string, round: number, pattern: string, ordinal: number, pids: string[]) {
+async function makePrizeRows(env: Env, eid: string, round: number, pattern: string, ordinal: number, pids: string[], strict = false) {
   try {
     for (const pid of pids) {
       const seat = seatOfPid(pid);
@@ -70,7 +78,7 @@ async function makePrizeRows(env: Env, eid: string, round: number, pattern: stri
       const row = await env.DB.prepare("SELECT pii FROM participant WHERE eid=? AND pid=?").bind(eid, pid).first<{ pii: string | null }>();
       await env.DB.prepare("INSERT OR IGNORE INTO prize(eid,round,pattern,ordinal,seat,pii,orig) VALUES(?,?,?,?,?,?,?)").bind(eid, round, pattern, ordinal, seat, row?.pii ?? null, row?.pii ?? null).run();
     }
-  } catch { /* the winner record itself already stands; the prize list is filled the next time */ }
+  } catch (err) { if (strict && transientDb(err)) throw err; /* the winner record itself already stands; the prize list is filled the next time */ }
 }
 
 /** The winner, on their own phone, confirms (or corrects) the name and mobile number the prize goes to. The phone proves it is the one that holds the ticket. Every change is kept. */
@@ -82,13 +90,15 @@ export async function confirmPrize(env: Env & PiiEnv, eid: string, b: any, now: 
   if (!mine) return json({ error: "This is not the phone that holds this ticket." }, 403);
   const rows = (await env.DB.prepare("SELECT round, pattern, ordinal, pii, orig, trail FROM prize WHERE eid=? AND seat=?").bind(eid, seat).all<any>()).results ?? [];
   if (!rows.length) return json({ error: "No reward recorded for this ticket." }, 404);
-  const name = cleanName(b.name), phone = digitsOf(b.phone);
+  const idGame = await (async () => { try { return JSON.parse(((await env.DB.prepare("SELECT config FROM engagement WHERE id=?").bind(eid).first<{ config: string | null }>())?.config) || "{}").verify === "id"; } catch { return false; } })(); // 1 Nov 2026: a game joined by ID never asks for or keeps a mobile number, also not for the prize hand-over
+  const name = cleanName(b.name), cur = await openPii(env, rows[0].pii), typed = !idGame && String(b.phone ?? "").trim() ? cleanPhone(b.phone) : null;
   if (!name) return json({ error: "Please write your name." }, 400);
-  if (!phone) return json({ error: "Please enter a valid mobile number." }, 400);
+  if (typed && !typed.ok) return json({ error: typed.why }, 400); // from any country: the page sends +<country code><number>
+  if (!idGame && !typed && !cur?.empId) return json({ error: "Please enter your mobile number." }, 400); // a winner who came in by employee ID may be found by the ID: the number is then welcome, not needed
   if (!(await spend(env, now, rows.length + 1))) return json({ error: "Busy day. Please try again after midnight UTC." }, 503);
-  const cur = await openPii(env, rows[0].pii);
-  const changed = !cur || cur.phone.slice(-10) !== phone || (cur.name ?? "") !== name;
-  const sealed = await sealPii(env, { phone, name });
+  const phone = idGame ? "" : typed && typed.ok ? keptFromClean(typed.digits) : cur?.phone ?? "";
+  const changed = !cur || keptPhone(cur.phone ?? "") !== phone || (cur.name ?? "") !== name;
+  const sealed = await sealPii(env, { phone, name, ...(cur?.empId ? { empId: cur.empId } : {}) }); // the employee ID stays with the record
   for (const r of rows) {
     let trail: any[] = []; try { trail = JSON.parse((await openText(env, r.trail)) ?? "[]"); } catch { /* none yet */ }
     if (changed) trail.push({ at: now, name, phone });
@@ -111,7 +121,7 @@ export async function myPrizes(env: Env & PiiEnv, eid: string, url: URL, json: J
 
 /** The organizer's / co-host's list of winners with the details they confirmed, whether anything was changed after the game, and whether the prize has been given. */
 /** `outside` = an outside AI is asking: mobile numbers are cut to their last two digits and the change history is left out, so a full number never travels through a chat. */
-export async function listPrizes(env: Env & PiiEnv, eid: string, json: Json, outside = false): Promise<Response> {
+export async function listPrizes(env: Env & PiiEnv, eid: string, json: Json, outside = false, canOverride = false): Promise<Response> {
   const rows = (await env.DB.prepare("SELECT prize.round AS round, prize.pattern AS pattern, prize.ordinal AS ordinal, prize.seat AS seat, prize.pii AS pii, prize.orig AS orig, prize.trail AS trail, prize.confirmed_ms AS confirmed_ms, prize.given_ms AS given_ms, prize.given_by AS given_by, COALESCE(s.blocked,0) AS removed FROM prize LEFT JOIN seat s ON s.eid=prize.eid AND s.seq=prize.seat WHERE prize.eid=? ORDER BY prize.round, prize.pattern, prize.ordinal, prize.seat LIMIT 400").bind(eid).all<any>()).results ?? [];
   const out = [];
   for (const r of rows) {
@@ -119,8 +129,12 @@ export async function listPrizes(env: Env & PiiEnv, eid: string, json: Json, out
     let trail: any[] = []; try { trail = JSON.parse((await openText(env, r.trail)) ?? "[]"); } catch { /* none */ }
     const hide = (ph: string | undefined) => (outside ? (ph ? "XXXXXXXX" + ph.slice(-2) : "") : ph ?? "");
     if (outside) out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, confirmed: !!r.confirmed_ms, changed: trail.length > 0, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null, ...(r.removed ? { notGiven: "removed" } : {}) });
-    else out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, name: cur?.name ?? "", phone: cur?.phone ?? "", confirmed: !!r.confirmed_ms, confirmedMs: r.confirmed_ms ?? null,
+    else out.push({ round: r.round, pattern: r.pattern, ordinal: r.ordinal, seat: r.seat, name: cur?.name ?? "", phone: cur?.phone ?? "", ...(cur?.empId ? { empId: cur.empId } : {}), confirmed: !!r.confirmed_ms, confirmedMs: r.confirmed_ms ?? null,
       changed: trail.length > 0, joinedWithName: orig?.name ?? "", joinedWithPhone: orig?.phone ?? "", trail, given: !!r.given_ms, givenMs: r.given_ms ?? null, givenBy: r.given_by ?? null, ...(r.removed ? { notGiven: "removed" } : {}) }); // a person removed during the game keeps the win, but the prize is not given
+  }
+  if (canOverride && !outside) { // the organizer has the final say: each row tells which tickets claimed this prize, so the console can offer them as choices
+    const cl = (await env.DB.prepare("SELECT DISTINCT round, pattern, pid FROM claim WHERE eid=? LIMIT 3000").bind(eid).all<{ round: number; pattern: string; pid: string }>()).results ?? [];
+    for (const o of out as any[]) { o.canOverride = true; o.claimants = cl.filter((c) => c.round === o.round && c.pattern === o.pattern).slice(0, 60).map((c) => { const s = seatOfPid(c.pid); return { seat: s, label: s === null ? c.pid : "Ticket " + String(s).padStart(4, "0") }; }).filter((c) => c.seat !== null); }
   }
   return json({ prizes: out });
 }
@@ -148,4 +162,23 @@ export async function listAiAudit(db: D1, org: string | null, json: Json): Promi
     ? await db.prepare("SELECT at_ms, eid, key_id, method, path, status, ip, ua, country FROM ai_audit WHERE org=? ORDER BY id DESC LIMIT 300").bind(org).all<any>()
     : await db.prepare("SELECT org, at_ms, eid, key_id, method, path, status, ip, ua, country FROM ai_audit ORDER BY id DESC LIMIT 300").all<any>();
   return json({ trail: r.results ?? [] });
+}
+
+/** The organizer (or a Host) has the final say on who receives a prize: the software's result stands unless they change it here. Choose one of the tickets that claimed this prize, or nobody. Every change is kept with who made it and when. */
+export async function overridePrize(env: Env & PiiEnv, eid: string, b: any, kind: string | null, now: number, json: Json, spend: Spend): Promise<Response> {
+  if (!b || !Number.isInteger(b.round) || b.round < 1 || !Number.isInteger(b.ordinal) || b.ordinal < 1 || typeof b.pattern !== "string" || !/^[a-z0-9]{2,12}(@[12])?$/.test(b.pattern) || !(b.seat === null || (Number.isInteger(b.seat) && b.seat >= 1))) return json({ error: "Choose the prize and who gets it.", code: "bad-override" }, 400);
+  const had = (await env.DB.prepare("SELECT seat FROM prize WHERE eid=? AND round=? AND pattern=? AND ordinal=?").bind(eid, b.round, b.pattern, b.ordinal).all<{ seat: number }>()).results ?? [];
+  if (!had.length) return json({ error: "That prize has no winner recorded yet, so there is nothing to change.", code: "no-prize" }, 404);
+  let pid: string | null = null;
+  if (b.seat !== null) {
+    const claims = (await env.DB.prepare("SELECT pid FROM claim WHERE eid=? AND round=? AND pattern=? LIMIT 3000").bind(eid, b.round, b.pattern).all<{ pid: string }>()).results ?? [];
+    pid = claims.map((c) => c.pid).find((p) => seatOfPid(p) === b.seat) ?? null;
+    if (!pid) return json({ error: "Only a ticket that claimed this prize can be given it.", code: "not-a-claimant" }, 409);
+    if (await env.DB.prepare("SELECT 1 AS x FROM seat WHERE eid=? AND seq=? AND blocked=1").bind(eid, b.seat).first()) return json({ error: "That person was removed from the game.", code: "removed" }, 409);
+  }
+  if (!(await spend(env, now, 4))) return json({ error: "Busy day. Please try again after midnight UTC." }, 503);
+  await env.DB.prepare("DELETE FROM prize WHERE eid=? AND round=? AND pattern=? AND ordinal=?").bind(eid, b.round, b.pattern, b.ordinal).run();
+  if (pid) await makePrizeRows(env, eid, b.round, b.pattern, b.ordinal, [pid]);
+  try { await env.DB.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").bind(`override/${eid}/${b.round}/${b.pattern}/${b.ordinal}/${now}`, JSON.stringify({ by: kind, at: now, from: had.map((h) => h.seat), to: b.seat })).run(); } catch { /* the change itself stands */ }
+  return json({ ok: true, seat: b.seat, message: b.seat === null ? "Nobody gets this prize now." : "The prize now goes to the ticket you chose." });
 }

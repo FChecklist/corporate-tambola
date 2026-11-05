@@ -5,7 +5,7 @@
 // The date and time are NEVER copied. Without `startRound` the draft is parked 30 days ahead and marked "start pending" (kv startpending/<id>): it cannot be published or paid
 // until the Organizer picks a time (the console opens on step 1 with the date empty). With `startRound` it is validated like any other time (future, at most 30 days ahead).
 // `withPeople: true` brings the old game's people list (names and numbers stay sealed; each person gets a NEW personal link, the old links stay with the old game). It works only while the
-// old list still exists (before its erasure); otherwise `peopleCopied` is 0 and `peopleNote` says so calmly. The old game's own copy is erased on its own clock as always.
+// old list still exists (before its erasure); otherwise `peopleCopied` is 0 and `peopleNote` says so calmly. The old game's own copy is auto-deleted on its own clock as always.
 import { sealText } from "./pii";
 import { newToken, tokenHash, randHex } from "./people";
 import { MAX_AHEAD_MS } from "./lifecycle";
@@ -21,11 +21,12 @@ const ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const suffix = () => Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => ALPHA[b % ALPHA.length]).join("");
 
 /** Copies the people list of `fromEid` into `toEid` as fresh, un-joined invitations with new personal links. Returns how many people were copied. */
-export async function copyPeople(env: Env, fromEid: string, toEid: string, cap: number, now: number, spend: (n: number) => Promise<boolean>): Promise<{ copied: number; busy?: boolean }> {
+export async function copyPeople(env: Env, fromEid: string, toEid: string, cap: number, now: number, spend: (n: number) => Promise<boolean>, only?: string[]): Promise<{ copied: number; busy?: boolean }> {
   const db = env.DB;
-  const listed = (await db.prepare("SELECT ph, pii, inviter FROM person WHERE eid=? AND status<>'removed' AND role IS NULL ORDER BY added_ms, id").bind(fromEid).all<{ ph: string; pii: string; inviter: string }>()).results ?? [];
+  const listed = (await db.prepare("SELECT id, ph, pii, inviter FROM person WHERE eid=? AND status<>'removed' AND role IS NULL ORDER BY added_ms, id").bind(fromEid).all<{ id: string; ph: string; pii: string; inviter: string }>()).results ?? [];
   const joined = (await db.prepare("SELECT p.phone_hash AS ph, p.pii AS pii FROM participant p WHERE p.eid=? AND p.pii IS NOT NULL AND p.phone_hash NOT IN (SELECT ph FROM person WHERE eid=? AND status<>'removed') AND NOT EXISTS (SELECT 1 FROM seat s WHERE s.eid=p.eid AND s.pid=p.pid AND (s.role IS NOT NULL OR s.blocked=1)) ORDER BY p.joined_ms, p.pid").bind(fromEid, fromEid).all<{ ph: string; pii: string }>()).results ?? [];
-  const all = [...listed.map((x) => ({ ph: x.ph, pii: x.pii, inviter: /^(o|h:[0-9a-f]+)$/.test(x.inviter) ? x.inviter : "o" })), ...joined.map((x) => ({ ph: x.ph, pii: x.pii, inviter: "o" }))].slice(0, cap);
+  const keep = only ? new Set(only) : null; // "pick from the real game's list": only these person ids
+  const all = [...(keep ? listed.filter((x: any) => keep.has(x.id)) : listed).map((x) => ({ ph: x.ph, pii: x.pii, inviter: /^(o|h:[0-9a-f]+)$/.test(x.inviter) ? x.inviter : "o" })), ...(keep ? [] : joined).map((x) => ({ ph: x.ph, pii: x.pii, inviter: "o" }))].slice(0, cap);
   if (!all.length) return { copied: 0 };
   if (!(await spend(all.length * 2))) return { copied: 0, busy: true };
   let copied = 0;
@@ -52,8 +53,8 @@ export async function cloneGame(env: Env, e: any, b: any, now: number, origin: s
     startRound = b.startRound;
   }
   if (org) {
-    const n = (await db.prepare("SELECT COUNT(*) AS c FROM engagement WHERE org=? AND pack=0").bind(org).first<{ c: number }>())?.c ?? 0;
-    if (n >= MAX_DRAFTS) return json({ error: `You have ${MAX_DRAFTS} unpublished drafts. Publish one, or let one lapse: an unpublished draft is forgotten after 30 days, and closing your organizer account deletes them all.`, code: "draft-limit" }, 409);
+    const n = (await db.prepare("SELECT COUNT(*) AS c FROM engagement e WHERE e.org=? AND e.pack=0 AND NOT EXISTS (SELECT 1 FROM kv WHERE k='pub/' || e.id)").bind(org).first<{ c: number }>())?.c ?? 0;
+    if (n >= MAX_DRAFTS) return json({ error: `You have ${MAX_DRAFTS} unpublished drafts. Publish one, or delete one you do not need (open Your games, then press Delete next to it). An unpublished draft is also forgotten after 30 days.`, code: "draft-limit" }, 409);
   }
   if (!(await spend(6))) return json({ error: "It is very busy right now. Please try again in a few minutes." }, 503);
   const base = String(e.id).replace(/-[A-Z2-9]{4}$/, "").slice(0, 34);
@@ -70,7 +71,7 @@ export async function cloneGame(env: Env, e: any, b: any, now: number, origin: s
   for (let i = 0; i < 6 && !made; i++) {
     id = `${base}-${suffix()}`;
     const r = await db.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config,is_test,cohost_limit) VALUES(?,?,?,?,?,?,?,0,?,?,?,?)")
-      .bind(id, sr, e.call_seconds, capOut, now, org, e.closed ? 1 : 0, e.tickets, configOut, test, e.cohost_limit ?? null).run();
+      .bind(id, sr, String((env as any)?.ONLY_12S ?? "") === "1" && cfg0.callMode !== "host" ? 12 : e.call_seconds, capOut, now, org, e.closed ? 1 : 0, e.tickets, configOut, test, e.cohost_limit ?? null).run();
     made = (r.meta?.changes ?? 0) > 0;
   }
   if (!made) return json({ error: "Could not make a new game code. Please try again." }, 503);
@@ -79,7 +80,7 @@ export async function cloneGame(env: Env, e: any, b: any, now: number, origin: s
   if (b?.withPeople === true) {
     const r = await copyPeople(env, e.id, id, e.cap, now, spend);
     peopleCopied = r.copied;
-    if (!r.copied) peopleNote = r.busy ? "It is very busy right now. Add your people again in a few minutes." : "The old guest list has been erased, so add your people again.";
+    if (!r.copied) peopleNote = r.busy ? "It is very busy right now. Add your people again in a few minutes." : "The old guest list has been auto-deleted, so add your people again.";
   }
   let cfg: any = {}; try { cfg = e.config ? JSON.parse(e.config) : {}; } catch { cfg = {}; }
   const copied = [

@@ -15,6 +15,7 @@ Where things are set:
 | `DATA_KEY` | Seals names and mobile numbers at rest (AES-256-GCM); never stored in the database | Pages secret | secret |
 | `PHONE_SALT` | Salt for the one-way hash of mobile numbers | Pages secret | secret |
 | `ORGANIZER_SECRET` | The platform (owner) key: opens every `/api/owner/*` address and the owner's tools | Pages secret | secret |
+| `RUNNER_KEY` | A long secret the owner's test programs send as the X-Runner-Key header: only with it are the test sign-in, the free owner-test packs and the SMK10M- join-guard bypass honoured | Pages secret | secret |
 | `CRON_KEY` | The scheduled job's own key: it can call only `/api/lifecycle/tick` | Pages secret and Cron secret (same value) | secret |
 | `INBOUND_SECRET` | Shared secret of the mail service's inbound webhook (e-mail to us asking for a deletion) | Pages secret | secret |
 | `VISIT_KEY` | Key that hashes network addresses for first-party public-page visit counts | Pages secret | secret |
@@ -28,6 +29,8 @@ Where things are set:
 | `RAZORPAY_BASE_URL` | Razorpay API address (tests only; the live default is Razorpay's own) | Optional Pages variable | setting |
 | `RAZORPAY_INTERNATIONAL` | "1" once international cards are enabled in Razorpay | Optional Pages variable | setting |
 | `PAY_SERVICE_KEY` | Key for the central payment ledger service (orders and figures are reported there) | Pages secret | secret |
+| `OWNER_STATS_KEY` | Read-only key the private owner console uses to read counts from `GET /api/owner/stats` (no player data) | Pages secret | secret |
+| `OWNER_LINK_KEY` | Key the private owner console uses to make and switch prospect links and to make one game free (`/api/owner/prospect-links`) | Pages secret | secret |
 | `PAY_SERVICE_URL` | Address of the central payment ledger service | Optional Pages variable | setting |
 | `PAY_SITE` | The name this site goes by in the central ledger | Optional Pages variable | setting |
 | `PAY_HOP_URL` | The payment page on the website registered with Razorpay | wrangler var | setting |
@@ -42,13 +45,19 @@ Where things are set:
 | `FREE_LAUNCH` | "1" lets small games be made without payment | Optional Pages variable | setting |
 | `PARTNER_COMMISSION_RATE` | Partner commission rate | Optional Pages variable | setting |
 | `DAILY_WRITE_BUDGET` | Most database writes the Worker allows itself per day | wrangler var | setting |
+| `ONLY_12S` | When set to 1, new games use one speed, a new number every 12 seconds (older games keep theirs) | wrangler var | setting |
+| `JOIN_PER_IP_MINUTE` | Most new places one network address may open in a minute (an office shares one address); the Worker uses 200 if this is not set | wrangler var | setting |
+| `JOIN_PER_IP_DAY` | Most new places one network address may open in a day; the Worker uses 1,500 if this is not set | wrangler var | setting |
+| `AI_LINK_MAIL_AT_SIGNUP` | Switch for the AI work-link welcome e-mail sent when an account is made; the live site turns it off because the AI link is hidden in the console | wrangler var | setting |
 | `STRICT_KEYS` | "1" on the live site: the Worker refuses every request unless the required secrets are set | Pages variable | setting |
-| `JOIN_PER_IP_DAY` | Joins one network address may make per day (default in code) | Optional Pages variable | setting |
-| `JOIN_PER_IP_MINUTE` | Joins one network address may make per minute (default in code) | Optional Pages variable | setting |
 | `GOOGLE_CLIENT_ID` | Google sign-in client id (public, not a secret); without it the Google button is off | Optional Pages variable | setting |
 | `CONTROL_R2` | Optional R2 bucket holding the static copy of the pause file | Optional binding | binding |
 | `CONTROL_BASE` | Optional public address of that bucket | Optional Pages variable | setting |
+| `CLAIM_HOLD` | Set to 1 to make the game wait for everyone while a claim is checked (off when unset) | Worker setting | setting |
 | `ANALYZE_AI_URL` | Optional chat endpoint the owner's analyze route may send masked totals to | Optional Pages variable | setting |
 | `ANALYZE_AI_KEY` | Key for that endpoint | Optional Pages secret | secret |
 | `ANALYZE_AI_MODEL` | Model name for that endpoint | Optional Pages variable | setting |
 | `TARGET` | The scheduled job: the web address it calls | `apps/cron/wrangler.toml` | setting |
+| `ANALYTICS` | The one central visitor database `site-analytics`: this game's own visit tracker also copies each visit into it (the copy does nothing without this binding and `ANALYTICS_KEY`) | Binding in `pages/wrangler.toml` | binding |
+| `ANALYTICS_KEY` | Key that hashes network addresses for the central visitor database; the same value on every site, so one visitor can be followed across sites | Pages secret | secret |
+| `ANALYTICS_DAILY_WRITES` | Most central visitor-database writes per day (a cap; the default in the code is 400,000) | Optional Pages variable | setting |

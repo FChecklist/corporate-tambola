@@ -1,0 +1,322 @@
+[
+ {
+  "page": "index",
+  "status": 200,
+  "violations": [
+   {
+    "id": "heading-order",
+    "impact": "moderate",
+    "help": "Heading levels should only increase by one",
+    "nodes": 1,
+    "sample": ".best > h4"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "help": "All page content should be contained by landmarks",
+    "nodes": 1,
+    "sample": ".tdots"
+   }
+  ]
+ },
+ {
+  "page": "pricing",
+  "status": 200,
+  "violations": []
+ },
+ {
+  "page": "about",
+  "status": 200,
+  "violations": []
+ },
+ {
+  "page": "contact",
+  "status": 200,
+  "violations": []
+ },
+ {
+  "page": "terms",
+  "status": 200,
+  "violations": []
+ },
+ {
+  "page": "privacy",
+  "status": 200,
+  "violations": []
+ },
+ {
+  "page": "trust",
+  "status": 200,
+  "violations": []
+ },
+ {
+  "page": "signin",
+  "status": 200,
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "help": "Page should contain a level-one heading",
+    "nodes": 1,
+    "sample": "html"
+   }
+  ]
+ },
+ {
+  "page": "demo",
+  "status": 200,
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "help": "Page should contain a level-one heading",
+    "nodes": 1,
+    "sample": "html"
+   }
+  ]
+ },
+ {
+  "page": "play",
+  "status": 200,
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "help": "Page should contain a level-one heading",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "help": "All page content should be contained by landmarks",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "page": "z",
+  "status": 200,
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "help": "Page should contain a level-one heading",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "help": "All page content should be contained by landmarks",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "page": "zc",
+  "status": 200,
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "help": "Page should contain a level-one heading",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "help": "All page content should be contained by landmarks",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "page": "organizer-guide",
+  "status": 200,
+  "violations": []
+ },
+ {
+  "page": "refund-policy",
+  "status": 200,
+  "violations": []
+ },
+ {
+  "page": "subprocessors",
+  "status": 200,
+  "violations": []
+ },
+ {
+  "page": "dpa",
+  "status": 200,
+  "violations": []
+ },
+ {
+  "page": "legal",
+  "status": 200,
+  "violations": []
+ },
+ {
+  "page": "partner",
+  "status": 200,
+  "violations": [
+   {
+    "id": "aria-required-children",
+    "impact": "critical",
+    "help": "Certain ARIA roles must contain particular children",
+    "nodes": 9,
+    "sample": ".rh"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "help": "All page content should be contained by landmarks",
+    "nodes": 2,
+    "sample": ".rsticky"
+   }
+  ]
+ },
+ {
+  "page": "paylink",
+  "status": 200,
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "help": "Page should contain a level-one heading",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "help": "All page content should be contained by landmarks",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "page": "pay",
+  "status": 200,
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "help": "Page should contain a level-one heading",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "help": "All page content should be contained by landmarks",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "page": "screen",
+  "status": 200,
+  "violations": [
+   {
+    "id": "region",
+    "impact": "moderate",
+    "help": "All page content should be contained by landmarks",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "page": "big",
+  "status": 200,
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "help": "Page should contain a level-one heading",
+    "nodes": 1,
+    "sample": "html"
+   }
+  ]
+ },
+ {
+  "page": "board",
+  "status": 200,
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "help": "Page should contain a level-one heading",
+    "nodes": 1,
+    "sample": "html"
+   }
+  ]
+ },
+ {
+  "page": "report",
+  "status": 200,
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "help": "Page should contain a level-one heading",
+    "nodes": 1,
+    "sample": "html"
+   }
+  ]
+ },
+ {
+  "page": "confirm",
+  "status": 200,
+  "violations": [
+   {
+    "id": "landmark-one-main",
+    "impact": "moderate",
+    "help": "Document should have one main landmark",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "help": "All page content should be contained by landmarks",
+    "nodes": 4,
+    "sample": ".cfbar"
+   }
+  ]
+ },
+ {
+  "page": "brochure",
+  "status": 200,
+  "violations": [
+   {
+    "id": "color-contrast",
+    "impact": "serious",
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "nodes": 1,
+    "sample": ".brand"
+   },
+   {
+    "id": "landmark-one-main",
+    "impact": "moderate",
+    "help": "Document should have one main landmark",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "help": "All page content should be contained by landmarks",
+    "nodes": 1,
+    "sample": ".page"
+   }
+  ]
+ }
+]

@@ -1,14 +1,18 @@
 // TT-01..: game integrity and free-plan protection, with the clock under our control (no waiting).
 import { expect } from "bun:test";
+import { CHECKIN_FROM_MS } from "../../../apps/edge/src/checkin";
 import { HOUR, T, dev, j, join, organizer, paidEngagement, phone, roundAt, roundMs, tt, world } from "./lib";
 
 const J = (x: unknown) => JSON.stringify(x).slice(0, 300);
 async function seatsOf(w: ReturnType<typeof world>, id: string, now: number) { const r = await j(await w.call("GET", `/api/z/${id}/seats`, undefined, {}, now)); return (r.seats ?? []) as [number, string, number][]; }
+// a game made on the current rules (created on or after the check-in release, 23 Oct 2026): a vote then needs the phone's own device id. The lib clock (6 Oct) is before that date, so the test says so explicitly.
+const currentRules = (w: ReturnType<typeof world>, id: string) => w.raw.prepare("UPDATE engagement SET created_ms=? WHERE id=?").run(CHECKIN_FROM_MS, id);
 const usage = (w: ReturnType<typeof world>) => ((w.raw.prepare("SELECT COALESCE(SUM(writes),0) AS c FROM usage").get() as any).c as number);
 
 tt({ id: "TT-01", role: "participant (one phone)", title: "one phone cannot forge the winners: votes must come from different phones, not from different public ticket ids", steps: "12 people join; after the game began one participant reads the public seat list and posts votes as 3 other ticket ids for a 'full house' result naming itself", expected: "the forged result is NOT accepted (no results, no prize row for the forger)", known: "F-01", severityIfFails: "H" }, async () => {
   const w = world(); const g = await paidEngagement(w, { cap: 100 });
   for (let i = 1; i <= 12; i++) expect((await join(w, g.id, i)).status).toBe(200);
+  currentRules(w, g.id);
   const now = g.startMs + 4 * 60_000; // after the 2-minute setup, the seat list is public
   const seats = await seatsOf(w, g.id, now); expect(seats.length).toBe(12);
   const attacker = seats[11]![1], voters = seats.slice(0, 3).map((s) => s[1]);
@@ -22,10 +26,11 @@ tt({ id: "TT-01", role: "participant (one phone)", title: "one phone cannot forg
 tt({ id: "TT-02", role: "participant (one phone)", title: "a forged result cannot be corrected once it is accepted (first accepted result stands)", steps: "After TT-01's forgery, honest phones report the true winner", expected: "the honest result replaces or flags the forged one", known: "F-01", severityIfFails: "H" }, async () => {
   const w = world(); const g = await paidEngagement(w, { cap: 100 });
   for (let i = 1; i <= 12; i++) await join(w, g.id, i);
+  currentRules(w, g.id);
   const now = g.startMs + 4 * 60_000, seats = await seatsOf(w, g.id, now), attacker = seats[11]![1];
   for (const s of seats.slice(0, 3)) await w.call("POST", `/api/z/${g.id}/vote`, { pid: s[1], results: [{ pattern: "full", ordinal: 1, round: 1, idx: 30, pids: [attacker] }] }, {}, now);
   const honest = seats[5]![1]; // the real winner
-  for (const s of seats.slice(3, 10)) await w.call("POST", `/api/z/${g.id}/vote`, { pid: s[1], results: [{ pattern: "full", ordinal: 1, round: 1, idx: 62, pids: [honest] }] }, {}, now + 60_000);
+  for (const s of seats.slice(3, 10)) await w.call("POST", `/api/z/${g.id}/vote`, { pid: s[1], device: dev("p" + s[0]), results: [{ pattern: "full", ordinal: 1, round: 1, idx: 62, pids: [honest] }] }, {}, now + 60_000);
   const row = w.raw.prepare("SELECT pids FROM settled WHERE eid=? AND pattern='full'").get(g.id) as any;
   expect(row ? JSON.parse(row.pids) : [], "settled winners for 'full'").toEqual([honest]);
   return "honest result stands";

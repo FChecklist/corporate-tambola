@@ -60,7 +60,7 @@ const settle = (paymentId: string, orderId: string, payId: string, now = T, stat
 beforeEach(() => {
   const d = makeD1(); raw = d.raw; ipN = 0;
   rz = { orders: [], payments: {}, mail: [], mailDown: false };
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" };
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" };
   installGateway();
 });
 afterEach(() => { globalThis.fetch = realFetch; });
@@ -70,7 +70,7 @@ describe("A. organizer: getting in", () => {
   test("UC-3 wrong code, expired code, five wrong tries lock the code, a used code is dead, too many code requests", async () => {
     const o = await organizer("login@acme.com");
     const ask = () => call("POST", "/api/auth/email", { email: "login@acme.com" });
-    const lastCode = () => (outbox("%Sign in to Corporate Tambola%").at(-1)!.body.match(/\b\d{6}\b/)![0]);
+    const lastCode = () => (outbox("%Corporate Tambola sign-in%").at(-1)!.body.match(/\b\d{6}\b/)![0]);
     await ask(); let code = lastCode();
     expect((await call("POST", "/api/auth/verify", { email: "login@acme.com", code: code === "000000" ? "111111" : "000000" })).status).toBe(400);
     expect((await call("POST", "/api/auth/verify", { email: "login@acme.com", code })).status).toBe(200); // right code after one miss still works
@@ -103,7 +103,7 @@ describe("A. organizer: getting in", () => {
     const mine = keys.keys.find((k: any) => k.kind === "master");
     const second = await organizer(); // a second master key is needed to retire the first one, as in real life
     expect(mine).toBeTruthy(); expect(second.token).not.toBe(o.token);
-    const fresh = await (async () => { await call("POST", "/api/auth/email", { email: o.email }); const c = outbox("%Sign in to Corporate Tambola%").at(-1)!.body.match(/\b\d{6}\b/)![0]; return (await j(await call("POST", "/api/auth/verify", { email: o.email, code: c }))).token as string; })();
+    const fresh = await (async () => { await call("POST", "/api/auth/email", { email: o.email }); const c = outbox("%Corporate Tambola sign-in%").at(-1)!.body.match(/\b\d{6}\b/)![0]; return (await j(await call("POST", "/api/auth/verify", { email: o.email, code: c }))).token as string; })();
     expect((await call("POST", "/api/org/keys/revoke", { id: mine.id }, { "x-organizer": fresh })).status).toBe(200);
     expect((await call("GET", "/api/history", undefined, o.h)).status).toBe(403); // the retired key stops at once
     expect((await call("GET", "/api/history", undefined, { "x-organizer": fresh })).status).toBe(200);
@@ -209,7 +209,7 @@ describe("C. publish and pay", () => {
     const o = await organizer();
     await call("POST", "/api/z", eng("TWOPAY-1"), o.h);
     await call("POST", "/api/z/TWOPAY-1/publish", contact, o.h);
-    const c1 = await j(await checkout(o, "TWOPAY-1")), c2 = await j(await checkout(o, "TWOPAY-1")); // two tabs, both before either is paid
+    const c1 = await j(await checkout(o, "TWOPAY-1")), c2 = await j(await checkout(o, "TWOPAY-1", { email: "second.payer@acme.com" })); // two payers (a second tab of the same payer re-opens the SAME order, see double-pay.test.ts), both before either is paid
     await settle(c1.paymentId, c1.razorpay.orderId, "pay_a"); await settle(c2.paymentId, c2.razorpay.orderId, "pay_b");
     expect(engRow("TWOPAY-1").pack).toBe(100);
     expect((raw.prepare("SELECT COUNT(*) AS c FROM entitlement WHERE eid IS NULL").get() as any).c).toBe(1); // the spare one
@@ -357,7 +357,8 @@ describe("D. participants", () => {
     const ok = rs.filter((r) => r.status === 200).length, full = rs.filter((r) => r.status === 409).length;
     expect((raw.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid='CROWD-1'").get() as any).c).toBeLessThanOrEqual(5);
     expect(ok).toBe(5); expect(full).toBe(35);
-    expect((await call("POST", "/api/z/CROWD-1/join", { phone: phone(1) })).status).toBe(200); // someone who already has a place can always come back
+    const seated = rs.findIndex((r) => r.status === 200); // which of the 40 got a place depends on the arrival order, so take one who really has one
+    expect((await call("POST", "/api/z/CROWD-1/join", { phone: phone(seated + 1) })).status).toBe(200); // someone who already has a place can always come back
   });
   test("UC-33 invite-only: an unlisted number is refused, a listed one gets in", async () => {
     const o = await published("INVITE-1", { closed: true });
@@ -639,7 +640,7 @@ describe("I. announcements, co-hosts and scratch cards", () => {
     for (let i = 0; i < 4; i++) expect((await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, o.h)).status).toBe(200);
     expect((await call("POST", "/api/org/host", { mobile: "9876500009", email: "host@acme.com" }, o.h)).status).toBe(409);
     // retire it with a second master key, as in real life
-    await call("POST", "/api/auth/email", { email: o.email }); const code = outbox("%Sign in to Corporate Tambola%").at(-1)!.body.match(/\b\d{6}\b/)![0];
+    await call("POST", "/api/auth/email", { email: o.email }); const code = outbox("%Corporate Tambola sign-in%").at(-1)!.body.match(/\b\d{6}\b/)![0];
     const m2 = (await j(await call("POST", "/api/auth/verify", { email: o.email, code }))).token as string;
     expect((await call("POST", "/api/org/keys/revoke", { id: hostRow.id }, { "x-organizer": m2 })).status).toBe(200);
     expect((await ann("HOST-1", h, "still there?", T + 60_000)).status).toBe(403);

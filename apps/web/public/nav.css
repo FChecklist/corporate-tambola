@@ -1,0 +1,37 @@
+/* The one top menu (1.6.8): the Corporate Tambola badge and name on the left, six items on the right, the same on the landing page and every information page. */
+.ct-top,.lp-bar.ct-lp{background:linear-gradient(180deg,var(--wine2,#7A1C33),var(--wine,#5A1426));border-bottom:3px solid var(--gold,#E0B872);color:#fff;position:relative}
+html[data-theme] .ct-top{background:linear-gradient(180deg,var(--wine2,#7A1C33),var(--wine,#5A1426))}
+.ct-nav{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:10px 0;font-family:var(--sans,Inter,system-ui,sans-serif)}
+.ct-brand{display:flex;align-items:center;gap:12px;color:#fff;text-decoration:none;min-height:48px;margin-right:auto;border-radius:10px}
+.ct-brand:focus-visible,.ct-menu a:focus-visible,.ct-burger:focus-visible{outline:3px solid #FFC93C;outline-offset:3px}
+.ct-badge{width:46px;height:46px;border-radius:12px;flex:0 0 46px;display:block;box-shadow:0 2px 8px rgba(0,0,0,.28)}
+.ct-word{display:flex;flex-direction:column;line-height:1}
+.ct-word i{font:600 11px/1 var(--sans,Inter,system-ui,sans-serif);font-style:normal;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.82);margin:0 0 4px 2px}
+.ct-word b{font:800 26px/1 var(--sans,Inter,system-ui,sans-serif);letter-spacing:-.01em;color:#fff}
+.ct-burger{display:none;align-items:center;gap:10px;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid rgba(255,255,255,.55);background:transparent;color:#fff;font:700 15px/1 var(--sans,Inter,system-ui,sans-serif);cursor:pointer}
+.ct-bars,.ct-bars:before,.ct-bars:after{display:block;width:18px;height:2px;border-radius:2px;background:currentColor;content:"";position:relative}
+.ct-bars:before{position:absolute;top:-6px;left:0}.ct-bars:after{position:absolute;top:6px;left:0}
+.ct-burger[aria-expanded="true"] .ct-bars{background:transparent}
+.ct-burger[aria-expanded="true"] .ct-bars:before{top:0;transform:rotate(45deg)}.ct-burger[aria-expanded="true"] .ct-bars:after{top:0;transform:rotate(-45deg)}
+.ct-menu{display:flex;align-items:center;gap:8px}
+.ct-menu ul{list-style:none;margin:0;padding:0;display:flex;align-items:center;gap:8px}
+.ct-menu li{margin:0}
+.ct-menu a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid rgba(255,255,255,.5);color:#fff;background:transparent;font:700 15px/1 var(--sans,Inter,system-ui,sans-serif);text-decoration:none;white-space:nowrap}
+.ct-menu a:hover{border-color:#fff;background:rgba(255,255,255,.12)}
+.ct-menu a.ct-demo{background:#15803D;border-color:#15803D;color:#fff}.ct-menu a.ct-demo:hover{background:#166534;border-color:#166534}
+.ct-menu a.ct-refer{border-color:var(--gold,#E0B872);color:var(--gold2,#F3D9A4)}
+.ct-menu a.ct-login{background:#fff;border-color:#fff;color:var(--deep,#2E0812)}.ct-menu a.ct-login:hover{background:#FFF3D6}
+.ct-menu a.signedin{max-width:240px;overflow:hidden;text-overflow:ellipsis;display:inline-block;line-height:44px;padding-top:0;padding-bottom:0}
+.ct-dots-slot{display:flex}.ct-dots-slot:empty{display:none}
+.ct-dots-slot .tdots{position:static!important;transform:none!important;display:flex;margin:0;padding:0 4px;gap:0;background:rgba(0,0,0,.25);backdrop-filter:none;border-radius:999px}
+@media (max-width:1079px){
+  .ct-burger{display:inline-flex}
+  .ct-menu{flex:1 1 100%;flex-direction:column;align-items:stretch;gap:12px;padding:6px 0 10px}
+  .ct-menu ul{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .ct-menu a{width:100%;justify-content:flex-start;min-height:48px;font-size:16px;border-radius:14px;padding:0 18px}
+  .ct-menu a.signedin{max-width:none}
+  .ct-menu:not(.open){display:none}
+}
+@media (max-width:599px){.ct-menu ul{grid-template-columns:1fr}.ct-word b{font-size:23px}.ct-badge{width:42px;height:42px;flex-basis:42px}}
+@media (max-width:380px){.ct-word b{font-size:21px}.ct-word i{letter-spacing:.18em}.ct-burger{padding:0 12px}}
+@media (prefers-reduced-motion:no-preference){.ct-menu a{transition:background .15s,border-color .15s}}

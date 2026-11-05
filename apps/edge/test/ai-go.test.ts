@@ -16,7 +16,7 @@ const call = (method: string, path: string, body?: unknown, headers: Record<stri
   handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: withDevice(method, path, body) }), env as Env, T);
 const j = async (r: Response) => (await r.json()) as any;
 const contact = { email: "boss@acme.com", phone: "98765 43210" };
-beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: ORIGIN, DATA_KEY: "test-data-key" }; });
+beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: ORIGIN, DATA_KEY: "test-data-key" }; });
 async function organizer() {
   const x = await j(await call("POST", "/api/start", { email: "boss@acme.com" }, { "cf-connecting-ip": "1.1.1.1" }));
   return { key: x.aiKey as string, token: x.token as string, base: `${ORIGIN}/ai/${x.aiKey}` };
@@ -74,14 +74,16 @@ describe("1. the day picker reaches every allowed day", () => {
 describe("2. how it plays: every question has numbered choices and a recommendation", () => {
   test("speed, who calls, rounds and the tie rule are each one screen; the choice shows on the play screen and is saved", async () => {
     const o = await organizer();
-    let t = await toPlay(o.base); expect(t).toMatch(/a number every 9 seconds, 1 round\. The software calls the numbers\. On a tie, people take the next prizes one after the other/);
+    let t = await toPlay(o.base); expect(t).toMatch(/a number every 12 seconds, 1 round\. The software calls the numbers. It starts by itself at the start time. On a tie, people take the next prizes one after the other/);
     const labels = choicesOf(t).map((c) => c.label); expect(labels[0]).toBe("Looks good, continue"); expect(choicesOf(t)[0]!.rec).toBe(true);
-    expect(labels).toEqual(expect.arrayContaining([expect.stringMatching(/^Change the speed \(now a number every 9 seconds\)/), expect.stringMatching(/^Who calls the numbers \(now: the software\)/), expect.stringMatching(/^Rounds \(now 1\)/), expect.stringMatching(/^What happens on a tie \(now: the next prizes\)/)]));
-    let s = await pick(t, /Change the speed/); expect(choicesOf(s).map((c) => c.label)).toEqual(["Every 6 seconds (fast)", "Every 9 seconds (normal)", "Every 12 seconds (relaxed)", "Every 15 seconds (slow)"]); expect(choicesOf(s).find((c) => c.rec)!.label).toMatch(/9 seconds/);
+    expect(labels).toEqual(expect.arrayContaining([expect.stringMatching(/^Change the speed \(now a number every 12 seconds\)/), expect.stringMatching(/^Who calls the numbers \(now: the software\)/), expect.stringMatching(/^Rounds \(now 1\)/), expect.stringMatching(/^What happens on a tie \(now: the next prizes\)/)]));
+    let s = await pick(t, /Change the speed/); expect(choicesOf(s).map((c) => c.label)).toEqual(["Every 12 seconds"]); expect(choicesOf(s).find((c) => c.rec)!.label).toMatch(/12 seconds/); expect(s).toMatch(/one speed/); expect(s).not.toMatch(/9 seconds/);
     t = await pick(s, /Every 12 seconds/); expect(t).toMatch(/a number every 12 seconds/);
-    s = await pick(t, /Who calls the numbers/); expect(s).toMatch(/presses a button for each number/); expect(s).toMatch(/up to 2,000 people/); expect(s).toMatch(/public random numbers, so nobody can choose one/);
+    s = await pick(t, /Who calls the numbers/); expect(s).toMatch(/presses a button for each number/); expect(s).toMatch(/up to 1,000 people/); expect(s).toMatch(/public random numbers, so nobody can choose one/);
     expect(choicesOf(s).map((c) => [c.label, c.rec])).toEqual([["The software calls the numbers", true], ["A Host presses a button for each number", false]]);
-    t = await pick(s, /A Host presses a button/); expect(t).toMatch(/A Host presses a button for each number\./);
+    t = await pick(s, /A Host presses a button/); expect(t).toMatch(/A Host presses a button for each number./);
+    s = await pick(t, /How does it start/); expect(choicesOf(s).map((c) => [c.label, c.rec])).toEqual([["It starts by itself at the start time", true], ["I press Start", false]]);
+    t = await pick(s, /^I press Start/); expect(t).toMatch(/You press Start at the start time\./);
     s = await pick(t, /^Rounds/); expect(choicesOf(s).map((c) => c.label)).toEqual(["1 round", "2 rounds", "3 rounds", "4 rounds", "5 rounds"]); expect(choicesOf(s)[0]!.rec).toBe(true);
     t = await pick(s, /^3 rounds/); expect(t).toMatch(/3 rounds/);
     s = await pick(t, /What happens on a tie/); expect(s).toMatch(/finish a prize on the same number/);
@@ -94,8 +96,8 @@ describe("2. how it plays: every question has numbered choices and a recommendat
     const sm = await j(await call("GET", `/ai/${o.key}/z/DIWALI-1002/summary`));
     expect(sm).toMatchObject({ callSeconds: 12, callMode: "host", rounds: 3, ties: "share", tickets: 1 });
   });
-  test("a game larger than 2,000 people is told plainly that the software calls the numbers, and the Host choice is not offered", async () => {
-    const o = await organizer(); const t = await toPlay(o.base, /Up to 5000/); const s = await pick(t, /Who calls the numbers/);
+  test("a game larger than 1,000 people is told plainly that the software calls the numbers, and the Host choice is not offered", async () => {
+    const o = await organizer(); const t = await toPlay(o.base, /Up to 5000/); const s = await pick(t, /Who calls the numbers/); const st = await pick(t, /How does it start/); expect(choicesOf(st).map((c) => c.label)).toEqual(["It starts by itself at the start time", "I press Start"]); // pressing Start works at every size
     expect(s).toMatch(/Your game is larger, so the software calls them/); expect(choicesOf(s).map((c) => c.label)).toEqual(["The software calls the numbers"]);
   });
 });
@@ -146,7 +148,7 @@ describe("5 to 8. the rule, the links, the next steps, the 308", () => {
     let sm = await j(await call("GET", `/ai/${o.key}/z/LINKS-1/summary`)); expect(sm.links).toMatchObject({ console: `${ORIGIN}/zc.html?e=LINKS-1`, publishHandover: `${ORIGIN}/zc.html?e=LINKS-1&do=publish`, pay: `${ORIGIN}/pay.html?e=LINKS-1` }); expect(sm.links.guest).toBeUndefined();
     let t = (await open(`${o.base}/go/links?id=LINKS-1`)).text;
     expect(t).toMatch(/- Console \(your own page\): https:\/\/tambola.test\/zc.html\?e=LINKS-1\n/); expect(t).toMatch(/- After you publish, two more links appear here: the guest link \(to send to guests\) and the number screen/);
-    expect(t).toMatch(/- Your board: open it from your console, step 6, 'Open my board' \(it carries your private key, so I cannot give it\)\./); expect(t).not.toMatch(/board\.html/);
+    expect(t).toMatch(/- Your board: open it from your console, step 6, 'Open my board' \(it carries your personal key, so I cannot give it\)\./); expect(t).not.toMatch(/board\.html/);
     expect(t).toMatch(/- Publish \(free, one tap by you\): https:\/\/tambola.test\/zc.html\?e=LINKS-1&do=publish/); expect(t).toMatch(/- Pay \(you pay; I never do\): https:\/\/tambola.test\/pay.html\?e=LINKS-1/);
     expect(t).not.toMatch(/z\.html\?e=LINKS-1|big\.html\?e=LINKS-1/);
     await call("POST", `/api/z/LINKS-1/publish`, contact, { "x-organizer": o.token });

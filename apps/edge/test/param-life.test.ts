@@ -1,7 +1,7 @@
 // Table-driven tests, part 5: privacy and retention timings (including a late tick), the lazy tick, erasure requests, rate and spend limits,
 // TEST versus LIVE mail, Help Desk parameter sets, and idempotency of the lifecycle tick.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { endBoundMs, fullDeleteAt, lifecycleTick, personalDeleteAt, PURGE_AFTER_MS, REPORT_LINK_MS } from "../src/lifecycle";
+import { endBoundMs, fullDeleteAt, lifecycleTick, personalDeleteAt, PURGE_AFTER_MS, REPORT_LINK_MS, roundMs } from "../src/lifecycle";
 import { LAZY_TICK_MS, lazyTickReset, purgeOld } from "../src/worker";
 import { sentReports, sendMail } from "../src/pay";
 import { OVERDUE_GRACE_MS } from "../src/admin";
@@ -81,6 +81,20 @@ describe("report mail and the report link", () => {
       const r = await call("GET", `/api/report/${eid}?k=${k}&part=base`, undefined, {}, g.end + offset); expect(r.status).toBe(status);
     });
   }
+  test("the report says how many numbers were REALLY called: a game that ended after 87 numbers is not reported as 90, and the reason says so", async () => {
+    const g = await played(3, { startRound: startIn(-2 * HOUR) });
+    const row = one("SELECT * FROM engagement WHERE id=?", g.id); const first = roundMs(row.start_round + 40); // the first number is 2 minutes (40 rounds) after the start round
+    const endsAt = first + 86 * 6000 + 2000; // the 87th number was called at first + 86 * 6 s; the game ended 2 s later (the organizer ended it, say): less than 5 minutes before the last number, which the old report rounded up to "90"
+    W.env.DB.prepare("INSERT INTO life(eid,end_ms,end_src) VALUES(?,?,'phones') ON CONFLICT(eid) DO UPDATE SET end_ms=excluded.end_ms, end_src='phones'").bind(g.id, endsAt).run();
+    let guard = 0; while (!sentReports.length && guard++ < 20) await tick(g.end + 5 * MIN);
+    const { eid, k } = link(); const r = await call("GET", `/api/report/${eid}?k=${k}&part=base`, undefined, {}, endsAt + 10 * MIN); expect(r.status).toBe(200);
+    const d0 = (await r.json()) as any; const d = d0.base ?? d0.data ?? d0; expect(d.numbersCalled).toBe(87); expect(d.endReason).toMatch(/after 87 numbers/); expect(d.endReason).not.toMatch(/All 90/);
+  });
+  test("a game that played all 90 numbers is reported as 90, 'All 90 numbers were called.'", async () => {
+    const g = await played(3); let guard = 0; while (!sentReports.length && guard++ < 20) await tick(g.end + 5 * MIN);
+    const { eid, k } = link(); const r = await call("GET", `/api/report/${eid}?k=${k}&part=base`, undefined, {}, g.end + 10 * MIN); expect(r.status).toBe(200);
+    const d0 = (await r.json()) as any; const d = d0.base ?? d0.data ?? d0; expect(d.numbersCalled).toBe(90); expect(d.endReason).toBe("All 90 numbers were called.");
+  });
   test("a wrong key never opens the report", async () => {
     const g = await played(3); let guard = 0; while (!sentReports.length && guard++ < 20) await tick(g.end + 5 * MIN);
     for (const k of ["0".repeat(40), "", "abc", link().k.slice(0, -1) + (link().k.endsWith("0") ? "1" : "0")]) expect([403, 404]).toContain((await call("GET", `/api/report/${g.id}?k=${k}&part=base`, undefined, {}, g.end + 10 * MIN)).status);
@@ -154,7 +168,7 @@ describe("the lazy tick: any /api request runs the housekeeping when the last ti
   });
   test("single flight: ten simultaneous requests start one tick, not ten", async () => {
     const real = W.env.DB.prepare.bind(W.env.DB); let runs = 0;
-    (W.env.DB as any).prepare = (sql: string) => { if (/SELECT e\.\*, \(SELECT COUNT\(\*\) FROM participant p WHERE p\.eid=e\.id\) AS npart/.test(sql)) runs++; return real(sql); };
+    (W.env.DB as any).prepare = (sql: string) => { if (/SELECT e\.\*, \(SELECT COUNT\(\*\) FROM participant p WHERE p\.eid=e\.id\) AS npart.*e\.start_round > \?/.test(sql)) runs++; return real(sql); };
     await Promise.all(Array.from({ length: 10 }, () => callRaw("GET", "/api/mode", undefined, {}, T, (p) => { pending.push(p); }))); await Promise.all(pending.splice(0));
     expect(runs).toBe(1);
   });
@@ -261,12 +275,30 @@ describe("rate limits and the daily spend limit", () => {
       expect((await call("GET", "/api/mode")).status).toBe(200);
     });
   }
-  test("one network address may open only so many new seats a minute (JOIN_PER_IP_MINUTE), then 429", async () => {
-    const g = await paidGame({ cap: 1000 }); reset({ JOIN_PER_IP_MINUTE: "3" } as any);
-    const o = await organizer(); const id = uid(); await create(o.key, id, { cap: 100 });
-    const { PLAT: P } = await import("./param-harness"); await call("POST", "/api/z", { id: "JOINL-1", startRound: startIn(2 * HOUR), callSeconds: 6, cap: 100 }, P);
-    const codes: number[] = []; for (let i = 1; i <= 6; i++) codes.push((await join("JOINL-1", i)).status);
-    expect(codes.slice(0, 3).every((s) => s === 200)).toBe(true); expect(codes.slice(3).some((s) => s === 429)).toBe(true); expect(g.id).toBeTruthy();
+  test("one network address may open only so many new seats a minute (JOIN_PER_IP_MINUTE), then 429 (an unpaid game: a paid game never falls below its pack, see below)", async () => {
+    reset({ JOIN_PER_IP_MINUTE: "3" } as any);
+    const o = await organizer(); const id = uid(); expect((await create(o.key, id, { cap: 100 })).status).toBe(200); expect((await publish(o.key, id)).status).toBe(200);
+    const codes: number[] = []; for (let i = 1; i <= 6; i++) codes.push((await join(id, i)).status);
+    expect(codes.slice(0, 3).every((s) => s === 200)).toBe(true); expect(codes.slice(3).some((s) => s === 429)).toBe(true);
+  });
+  test("an office behind ONE address can seat a whole PAID game: the default per-address allowance grows with the pack (300 people, one address, one minute: all in)", async () => {
+    const g = await paidGame({ cap: 500 }); const hdr = { "cf-connecting-ip": "9.9.9.9" }; const codes: number[] = [];
+    for (let i = 1; i <= 300; i++) codes.push((await call("POST", `/api/z/${g.id}/join`, { phone: mob(i), name: "Guest " + i, device: dev(i) }, hdr)).status);
+    expect(codes.filter((s) => s === 200).length).toBe(300);
+  });
+  test("an UNPAID game keeps the base figures (200 new seats a minute from one address), so a script cannot use a big free game to burn the write budget", async () => {
+    reset(); const o = await organizer(); const id = uid(); expect((await create(o.key, id, { cap: 500 })).status).toBe(200); expect((await publish(o.key, id)).status).toBe(200);
+    const hdr = { "cf-connecting-ip": "9.9.9.8" }; const codes: number[] = [];
+    for (let i = 1; i <= 230; i++) codes.push((await call("POST", `/api/z/${id}/join`, { phone: mob(i), name: "Guest " + i, device: dev(i) }, hdr)).status);
+    expect(codes.slice(0, 200).every((s) => s === 200)).toBe(true); expect(codes.slice(200).every((s) => s === 429)).toBe(true);
+  });
+  test("a limit set in the environment is the BASE: it is exact for an unpaid game, and a paid game still gets at least its pack (the deployed site sets 600 a minute; 700 people behind one address all get into a paid 1000)", async () => {
+    reset({ JOIN_PER_IP_MINUTE: "600", JOIN_PER_IP_DAY: "20000" } as any); const g = await paidGame({ cap: 1000 }); const hdr = { "cf-connecting-ip": "9.9.9.7" }; const codes: number[] = [];
+    for (let i = 1; i <= 700; i++) codes.push((await call("POST", `/api/z/${g.id}/join`, { phone: mob(i), name: "Guest " + i, device: dev(i) }, hdr)).status);
+    expect(codes.filter((s) => s === 200).length).toBe(700);
+    reset({ JOIN_PER_IP_MINUTE: "5" } as any); const o = await organizer(); const id = uid(); expect((await create(o.key, id, { cap: 500 })).status).toBe(200); expect((await publish(o.key, id)).status).toBe(200);
+    const c2: number[] = []; for (let i = 1; i <= 8; i++) c2.push((await call("POST", `/api/z/${id}/join`, { phone: mob(i), name: "Guest " + i, device: dev(i) }, { "cf-connecting-ip": "9.9.9.6" })).status);
+    expect(c2.slice(0, 5).every((s) => s === 200)).toBe(true); expect(c2.slice(5).every((s) => s === 429)).toBe(true); // unpaid: the environment's figure is exact
   });
   test("a body bigger than the limit is refused, never a 500", async () => {
     const r = await call("POST", "/api/start", { email: "a@b.co", pad: "x".repeat(200_000) }); expect(r.status).toBeLessThan(500);

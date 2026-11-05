@@ -102,7 +102,7 @@ export class T {
   async game(org, o = {}) {
     const st = await startAt(o.days ?? 7, o.time ?? "19:00");
     const id = o.id ?? this.gid();
-    const body = { id, startRound: o.startRound ?? st.round, callSeconds: o.gap ?? 9, cap: o.cap ?? 50, ...(o.tickets ? { tickets: o.tickets } : {}), ...(o.rounds ? { rounds: o.rounds } : {}), ...(o.name ? { name: o.name } : {}), ...(o.who ? { whoCanJoin: o.who } : {}), ...(o.rewards ? { rewards: o.rewards } : {}), ...(o.breaks ? { breaks: o.breaks } : {}), ...(o.opening ? { opening: o.opening } : {}), ...(o.closing ? { closing: o.closing } : {}), ...(o.brand ? { brand: o.brand } : {}) };
+    const body = { id, startRound: o.startRound ?? st.round, callSeconds: o.gap ?? 9, cap: o.cap ?? 50, ...(o.tickets ? { tickets: o.tickets } : {}), ...(o.rounds ? { rounds: o.rounds } : {}), ...(o.name ? { name: o.name } : {}), ...(o.who ? { whoCanJoin: o.who } : {}), ...(o.rewards ? { rewards: o.rewards } : {}), ...(o.breaks ? { breaks: o.breaks } : {}), ...(o.opening ? { opening: o.opening } : {}), ...(o.closing ? { closing: o.closing } : {}), ...(o.brand ? { brand: o.brand } : {}), ...(o.startMode ? { startMode: o.startMode } : {}), ...(o.callMode ? { callMode: o.callMode } : {}) };
     const r = await org.api("POST", "/api/z", body); this.eids.push(id);
     return { id, r, startRound: body.startRound, startMs: roundTimeMs(body.startRound), body };
   }
@@ -114,6 +114,9 @@ export class T {
     h.email = email; h.id = inv.id; h.inv = inv; h.setupBody = fo.setup; return h;
   }
   /** A Co-host bound to one game. */
-  async cohost(org, eid, label = personName(this.R)) { const c = await org.inviteCohost({ label, phone: mobile(this.R), e: eid }); return { key: c.cohostKey, h: { "x-organizer": c.cohostKey }, id: c.id, eid, raw: c, api: (m, p, b) => A.call(m, p, b, { "x-organizer": c.cohostKey }) }; }
+  async cohost(org, eid, label = personName(this.R), { accept = true } = {}) { const c = await org.inviteCohost({ label, phone: mobile(this.R), e: eid }); const h = { "x-organizer": c.cohostKey };
+    // the Co-host ticks the role consent (K5) first, as the real page does; without it every call answers 400 consent-required (pass { accept: false } to test that)
+    if (accept) { const a = await A.call("POST", "/api/org/role/accept", {}, h); if (!a.ok) throw new Error("co-host accept: HTTP " + a.status + " " + JSON.stringify(a.body).slice(0, 200)); }
+    return { key: c.cohostKey, h, id: c.id, eid, raw: c, api: (m, p, b) => A.call(m, p, b, h) }; }
   guest(eid, name, phone) { return new A.Guest("", eid, phone ?? mobile(this.R), name ?? personName(this.R)); }
 }
