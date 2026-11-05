@@ -3,7 +3,7 @@
 // Found by the 250-player run on 5 Nov 2026: two joins of 250 answered 500 "Something went wrong".
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { W, call, dev, j, mob, one, paidGame, reset, restore, uid } from "./param-harness";
-import { joinRetry, transientDb } from "../src/worker";
+import { joinRetry, retryKind, transientDb } from "../src/worker";
 
 const OVERLOAD = "D1_ERROR: D1 DB is overloaded. Too many resources consumed within a 10 second window";
 const wrapStmt = (s: any, fail: (sql: string) => void, sql: string): any => new Proxy(s, {
@@ -129,5 +129,50 @@ describe("check-in (mark present) through a passing database overload", () => {
     flaky((sql) => { if (sql.startsWith("SELECT * FROM engagement")) throw new Error(OVERLOAD); });
     const r = await call("POST", `/api/z/${id}/checkin`, { pid: "p-none", device: "d" });
     expect(r.status).toBe(503); expect(r.headers.get("retry-after")).toBe("3"); expect(String((await j(r)).error)).not.toMatch(/seat/i);
+  });
+});
+
+describe("what the server may ask twice on a passing database hiccup (round 2 audit, 5 Nov 2026)", () => {
+  beforeEach(() => { reset(); joinRetry.baseMs = 0; joinRetry.tries = 3; }); afterEach(() => { restore(); joinRetry.tries = oldTries; joinRetry.baseMs = oldBase; });
+  const kinds = (m: string, p: string) => retryKind(m, p);
+  test("the classes: reads and idempotent writes are asked again; money, keys, winners and cancel never", () => {
+    for (const r of ["claims", "mark", "unbind", "erase", "discard", "reuse", "roster", "settings", "over", "prizegiven", "confirm", "checkin", "who", "presence", "join", "forget", "person"]) expect(kinds("POST", `/api/z/ABCD/${r}`)).toBe("write");
+    expect(kinds("PATCH", "/api/z/ABCD/settings")).toBe("write");
+    for (const r of ["cancel", "reopen", "override", "reportlink", "vote", "publish", "clone", "rehearsal", "bogey", "announce", "control/request"]) expect(kinds("POST", `/api/z/ABCD/${r}`)).toBe("once");
+    for (const p of ["/api/auth/email", "/api/org/host", "/api/pay/webhook", "/api/z"]) expect(kinds("POST", p)).toBe("once");
+    expect(kinds("GET", "/api/z/ABCD/control")).toBe("read");
+  });
+  test("an idempotent write (mark) meeting one overload is asked again", async () => {
+    const id = uid("BZ"); await paidGame({ id });
+    const oldSleep = joinRetry.sleep; let sleeps = 0; joinRetry.sleep = async () => { sleeps++; };
+    let n = 1; flaky((sql) => { if (n > 0 && sql.startsWith("SELECT * FROM engagement")) { n--; throw new Error(OVERLOAD); } });
+    const r = await call("POST", `/api/z/${id}/mark`, { seat: 1, role: "organizer" }); joinRetry.sleep = oldSleep;
+    expect(n).toBe(0); expect(sleeps).toBe(1); expect(r.status).toBeLessThan(500);
+  });
+  test("a write that must not be asked twice (cancel) meets an overload: 503 busy with retry-after, tried once, nothing half-done", async () => {
+    const id = uid("BZ"); await paidGame({ id });
+    const oldSleep = joinRetry.sleep; let sleeps = 0; joinRetry.sleep = async () => { sleeps++; };
+    let reads = 0; flaky((sql) => { if (sql.startsWith("SELECT * FROM engagement")) { reads++; throw new Error(OVERLOAD); } });
+    const r = await call("POST", `/api/z/${id}/cancel`, { confirm: 3 }); joinRetry.sleep = oldSleep;
+    expect(r.status).toBe(503); expect(r.headers.get("retry-after")).toBe("3"); expect((await j(r)).code).toBe("busy");
+    expect(sleeps).toBe(0); expect(reads).toBe(1);
+  });
+});
+
+describe("the winners' vote when the database hiccups in the middle (round 2 audit: 'settled' used to be written first)", () => {
+  beforeEach(() => { reset(); joinRetry.baseMs = 0; joinRetry.tries = 3; }); afterEach(() => { restore(); joinRetry.tries = oldTries; joinRetry.baseMs = oldBase; });
+  const settledN = (id: string) => one("SELECT COUNT(*) c FROM settled WHERE eid=?", id).c as number;
+  const winnersN = (id: string) => one("SELECT COUNT(*) c FROM winner WHERE eid=?", id).c as number;
+  test("a hiccup while the winner record is written: 503 busy, the prize is NOT settled; the same phone's repeat finishes it with the winner record in place", async () => {
+    const id = uid("BZ"); await paidGame({ id });
+    const pids: string[] = []; for (let i = 1; i <= 8; i++) pids.push((await j(await join(id, i))).pid);
+    const rep = (pid: string) => call("POST", `/api/z/${id}/vote`, { pid, results: [{ pattern: "full", ordinal: 1, round: 1, idx: 70, pids: [pids[1], pids[2]] }] });
+    await rep(pids[0]!); await rep(pids[1]!); expect(settledN(id)).toBe(0);
+    let fails = 1; flaky((sql) => { if (fails > 0 && sql.startsWith("INSERT INTO winner")) { fails--; throw new Error(OVERLOAD); } });
+    const bad = await rep(pids[2]!); expect(fails).toBe(0);
+    expect(bad.status).toBe(503); expect((await j(bad)).code).toBe("busy");
+    expect(settledN(id)).toBe(0); // not marked settled over a missing winner record
+    const ok = await j(await rep(pids[2]!)); // the phone sends the same report again
+    expect(ok.accepted).toBe(1); expect(settledN(id)).toBe(1); expect(winnersN(id)).toBe(2);
   });
 });

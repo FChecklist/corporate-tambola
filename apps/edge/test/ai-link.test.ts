@@ -248,6 +248,12 @@ describe("what the organizer's AI may and may not do now", () => {
     const pr = await call("POST", `/ai/${o.ai}/z/CAP-6/control/request`, { action: "pause" }); expect(pr.status).toBe(200); // ask only: nothing is paused
     const refusal = await j(await call("POST", `/ai/${o.ai}/z/CAP-6/erase`, {})); expect(refusal.error).toMatch(/tell them plainly/i);
   });
+  test("asking twice for the same thing (a retry after a busy answer) leaves ONE open request, not two", async () => {
+    const o = await liveEngagement("CAP-6");
+    for (const action of ["pause", "pause", "erase", "erase"]) expect((await call("POST", `/ai/${o.ai}/z/CAP-6/control/request`, { action })).status).toBe(200);
+    expect((raw.prepare("SELECT COUNT(*) c FROM ctl_request WHERE eid='CAP-6' AND open=1 AND action='pause'").get() as any).c).toBe(1);
+    expect((raw.prepare("SELECT COUNT(*) c FROM ctl_request WHERE eid='CAP-6' AND open=1 AND action='erase'").get() as any).c).toBe(1);
+  });
   test("publishing through the link stays a hand-over: the organizer's console link, no publish", async () => {
     const o = await organizer(); await call("POST", `/ai/${o.ai}/z`, eng("CAP-7"));
     const r = await j(await call("POST", `/ai/${o.ai}/z/CAP-7/publish`, contact)); expect(r.needsOrganizer).toBe(true); expect(r.consoleUrl).toContain("/zc.html?e=CAP-7");
