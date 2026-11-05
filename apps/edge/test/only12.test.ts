@@ -13,7 +13,7 @@ let env: Env; let raw: ReturnType<typeof makeD1>["raw"];
 const P = { "x-organizer": "plat" };
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
   handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: withDevice(method, path, body) }), env, T);
-const mk = (on: boolean) => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt", ...(on ? { ONLY_12S: "1" } : {}) } as any; };
+const mk = (on: boolean) => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt", ...(on ? { ONLY_12S: "1" } : {}) } as any; };
 describe("one speed for new games", () => {
   test("the setting is on only when it is exactly 1", () => { expect(only12({ ONLY_12S: "1" })).toBe(true); expect(only12({})).toBe(false); expect(only12({ ONLY_12S: "0" })).toBe(false); });
   test("a new game: 9 is refused with a plain message, 12 (or none given) is accepted; with the setting off the old behaviour stays", async () => {

@@ -21,7 +21,7 @@ const backdate = (kind: string) => raw.run("UPDATE consent_log SET version=? WHE
 
 beforeEach(() => {
   const d = makeD1({ strictHosts: true }); raw = d.raw; ip = 0;
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt", DATA_KEY: "k", TEST_MODE: "1", FREE_LAUNCH: "1" } as Env;
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "100000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt", DATA_KEY: "k", TEST_MODE: "1", FREE_LAUNCH: "1" } as Env;
 });
 async function organizer(email = "boss@acme.com") { return (await j(await call("POST", "/api/start", { email, consent: ticks("K2") }))).token as string; }
 async function game(key: string, id: string) {

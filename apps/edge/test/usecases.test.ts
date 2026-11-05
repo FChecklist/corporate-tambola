@@ -60,7 +60,7 @@ const settle = (paymentId: string, orderId: string, payId: string, now = T, stat
 beforeEach(() => {
   const d = makeD1(); raw = d.raw; ipN = 0;
   rz = { orders: [], payments: {}, mail: [], mailDown: false };
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" };
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" };
   installGateway();
 });
 afterEach(() => { globalThis.fetch = realFetch; });

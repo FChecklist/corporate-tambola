@@ -22,7 +22,7 @@ const rd = (f: string) => readFileSync(pjoin(ROOT, f), "utf8").replace(/\r\n/g, 
 
 beforeEach(() => {
   const d = makeD1({ strictHosts: true }); raw = d.raw; ip = 0;
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt", DATA_KEY: "k", TEST_MODE: "1", FREE_LAUNCH: "1" } as Env;
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "100000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt", DATA_KEY: "k", TEST_MODE: "1", FREE_LAUNCH: "1" } as Env;
 });
 async function game(id: string, t: number, over: Record<string, unknown> = {}) {
   const key = (await j(await call("POST", "/api/start", { email: `boss.${id.toLowerCase()}@acme.com`, consent: ticks("K2") }, undefined, t))).token as string;

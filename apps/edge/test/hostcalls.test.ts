@@ -31,7 +31,7 @@ const publish = (o: { token: string }, id: string) => call("POST", `/api/z/${id}
 const signed = async (id: string, secret: string, now: number, a: Parameters<typeof nextMessage>[2]) => signControlWithSecret(secret, nextMessage((await readPublished(kv(), id))!, roundAt(now), a));
 const post = async (id: string, msg: unknown, now = T) => { const r = await call("POST", `/api/z/${id}/control`, { message: msg }, {}, now); return { status: r.status, body: await j(r) }; };
 
-beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt" } as any; });
+beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt" } as any; });
 
 describe("the setting: who calls the numbers", () => {
   test("callMode is saved at creation or in the settings, read back by phones (info) and the summary, and defaults to auto", async () => {

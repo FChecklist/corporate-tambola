@@ -16,7 +16,7 @@ const call = (method: string, path: string, body?: unknown, headers: Record<stri
 const roundAt = (ms: number) => Math.floor((ms / 1000 - 1692803367) / 3) + 1;
 beforeEach(() => {
   const d = makeD1(); raw = d.raw;
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: "https://tambola.test" };
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: "https://tambola.test" };
 });
 async function organizer(email = "boss@acme.com") {
   const j = await (await call("POST", "/api/start", { email }, { "cf-connecting-ip": "1.1.1.1" })).json() as any;

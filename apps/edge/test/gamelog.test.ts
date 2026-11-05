@@ -27,7 +27,7 @@ async function game(id = "GL-1") {
   for (let i = 1; i <= 3; i++) expect((await call("POST", `/api/z/${id}/join`, { phone: `981000000${i}`, name: i === 1 ? "Zainab Secret" : "P" + i })).status).toBe(200);
   return o;
 }
-beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt" } as any; });
+beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt" } as any; });
 
 describe("the live game log (the console's vital details)", () => {
   test("people joined, prizes won so far (prize, TICKET number, call number, time), pauses with who, setting changes with who; no name, number or key anywhere", async () => {

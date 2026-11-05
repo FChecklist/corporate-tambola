@@ -21,7 +21,7 @@ const chunk = (t: string, d: Uint8Array) => { const o = new Uint8Array(12 + d.le
 const makePng = (w: number, h: number) => { const ih = new Uint8Array(13), v = new DataView(ih.buffer); v.setUint32(0, w); v.setUint32(4, h); ih[8] = 8; ih[9] = 2; const row = new Uint8Array(1 + w * 3).fill(200); row[0] = 0; const raw = new Uint8Array(row.length * h); for (let y = 0; y < h; y++) raw.set(row, y * row.length); const parts = [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ih), chunk("IDAT", deflateSync(raw)), chunk("IEND", new Uint8Array(0))]; const all = new Uint8Array(parts.reduce((n, x) => n + x.length, 0)); let o = 0; for (const x of parts) { all.set(x, o); o += x.length; } return "data:image/png;base64," + btoa(String.fromCharCode(...all)); };
 const PNG = makePng(64, 64);
 let env: Env; let raw: ReturnType<typeof makeD1>["raw"];
-beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" } as any; });
+beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" } as any; });
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
   handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: withDevice(method, path, body) }), env, T);
 const j = async (r: Response) => (await r.json()) as any;

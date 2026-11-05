@@ -8,7 +8,7 @@ const roundAt = (ms: number) => Math.floor((ms / 1000 - GEN) / 3) + 1;
 let env: any, raw: any;
 const call = (method: string, path: string, body?: unknown, key?: string, now = T) => handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...(key ? { "x-organizer": key } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }), env, now);
 const j = async (r: Response) => (await r.json()) as any;
-beforeEach(() => { const d: any = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" }; });
+beforeEach(() => { const d: any = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" }; });
 
 describe("demo games and game codes", () => {
   test("the 4th demo game within a day is refused politely; a day later it is allowed again", async () => {

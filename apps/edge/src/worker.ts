@@ -74,7 +74,7 @@ export interface D1Stmt { bind(...v: unknown[]): D1Stmt; run(): Promise<D1Result
 export interface D1 { prepare(sql: string): D1Stmt; batch(s: D1Stmt[]): Promise<D1Result[]> }
 export interface R2Like { put(key: string, value: string, opts?: unknown): Promise<unknown>; delete(key: string): Promise<unknown> }
 export interface Env {
-  DB: D1; ORGANIZER_SECRET?: string; DAILY_WRITE_BUDGET?: string; ONLY_12S?: string; PHONE_SALT?: string;
+  DB: D1; ORGANIZER_SECRET?: string; DAILY_WRITE_BUDGET?: string; RUNNER_KEY?: string; ONLY_12S?: string; PHONE_SALT?: string;
   /** The secret that seals names and mobile numbers at rest (AES-256-GCM). Never stored in the database. */
   DATA_KEY?: string;
   /** Optional: the key that hashes network addresses for the public-page visit tracking (visits.ts); when absent it is derived from DATA_KEY. VISIT_DAILY_WRITES caps that tracking's share of the daily write allowance (default 20,000). */
@@ -422,7 +422,8 @@ async function useHeldPass(env: Env, org: string, eh: string, now: number): Prom
     const x = JSON.parse(row.v); if (now - Number(x.at) <= 2 * 3_600_000) await redeemDemoPass(env, org, String(x.t), now);
   } catch { /* the pass is only a gift: sign-in never fails because of it */ }
 }
-async function ownerTestGrant(env: Env, org: string, cap: number, now: number): Promise<boolean> {
+async function ownerTestGrant(env: Env, org: string, cap: number, now: number, runner = false): Promise<boolean> {
+  if (!runner) return false; // the free owner-test packs need the runner key (RUNNER_KEY)
   for (const t of OWNER_TEST_FREE) {
     if (now > t.until || cap > t.maxCap) continue;
     const eh = await sha("email|" + normEmail(t.email));
@@ -448,7 +449,18 @@ const CONSOLE_ONLY = () => json({ error: "Names and mobile numbers are handled b
  *  A whole office or hall sits behind ONE address, so the allowance of a PAID game never falls below its pack: one address may seat up to the pack's size in a minute (and three times that in a day).
  *  The base figures (the environment's JOIN_PER_IP_MINUTE / JOIN_PER_IP_DAY, else the defaults below) still apply to an unpaid game and to the waiting room, so a script cannot use a big free game to burn the write budget. */
 const JOIN_PER_IP_DAY = 1500, JOIN_PER_IP_MINUTE = 200, ID_MISS_PER_10MIN = 30;
-async function joinOverLimit(env: Env, req: Request, now: number, paidSeats = 0, collect?: D1Stmt[]): Promise<boolean> { // `collect`: the two counter writes are handed back to go into the join's one batch instead of being written one by one
+/** RUNNER_KEY (owner order 5 Nov 2026): a long secret set as a Worker secret. The owner's test programs send it as X-Runner-Key; ONLY then are the test sign-in, the free owner-test packs and the join-guard bypass honoured.
+ *  Without the header (or when no key is set) everything behaves exactly as for the public. Compared in constant time; a short key counts as no key. */
+function runnerOk(env: Env, req: Request): boolean {
+  const k = String((env as any).RUNNER_KEY ?? ""), h = req.headers.get("x-runner-key") ?? "";
+  if (k.length < 32 || h.length !== k.length) return false;
+  let d = 0; for (let i = 0; i < k.length; i++) d |= k.charCodeAt(i) ^ h.charCodeAt(i);
+  return d === 0;
+}
+/** The join guard is skipped only for the runner's own test games: a valid key AND an engagement id that starts with SMK10M- AND is_test=1. A real customer never matches. */
+const runnerTestGame = (env: Env, req: Request, e: any): boolean => !!e && String(e.id ?? "").startsWith("SMK10M-") && Number(e.is_test) === 1 && runnerOk(env, req);
+async function joinOverLimit(env: Env, req: Request, now: number, paidSeats = 0, collect?: D1Stmt[], runner = false): Promise<boolean> {
+  if (runner) return false; // `collect`: the two counter writes are handed back to go into the join's one batch instead of being written one by one
   try {
     const ip = (await sha("jip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16), perDay = Math.max(Number((env as any).JOIN_PER_IP_DAY ?? JOIN_PER_IP_DAY), paidSeats * 3), perMin = Math.max(Number((env as any).JOIN_PER_IP_MINUTE ?? JOIN_PER_IP_MINUTE), paidSeats);
     const bump = async (k: string, max: number) => { const n = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0); if (n >= max) return true; const up = env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=?").bind(k, String(n + 1), String(n + 1)); if (collect) collect.push(up); else await up.run(); return false; };
@@ -1097,7 +1109,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const code = typeof b?.code === "string" ? b.code.replace(/\D/g, "") : "";
     if (!email || code.length !== 6) return json({ error: "Enter the 6-digit code." }, 400);
     const eh = await sha("email|" + email);
-    if (TEST_LOGINS.has(email) && code === TEST_LOGIN_CODE) {
+    if (TEST_LOGINS.has(email) && code === TEST_LOGIN_CODE && runnerOk(env, req)) {
       { // a per-network daily limit and the write budget apply, like every other public write
         const tk = `tlg/${day(now)}/${(await sha("ip|" + (req.headers.get("cf-connecting-ip") ?? "local") + "|" + email)).slice(0, 16)}`; // per network and per account: one account cannot lock out another
         const tu = Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(tk).first<{ v: string }>())?.v ?? 0);
@@ -1518,7 +1530,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const have = await env.DB.prepare("SELECT org FROM engagement WHERE id=?").bind(b.id).first<{ org: string | null }>();
     if (have) return json({ ok: true, existed: true }); // creating twice never overwrites (and never reveals whose it is)
     // an organizer needs a purchased engagement (entitlement) big enough for the limit they ask for; we (platform) do not. A demo game never uses up a bought pack.
-    if (!a.plat && !vc.cfg.demo && a.org) { try { await ownerTestGrant(env, a.org, b.cap, now); } catch { /* no grant: the game is a draft as for everybody */ } }
+    if (!a.plat && !vc.cfg.demo && a.org) { try { await ownerTestGrant(env, a.org, b.cap, now, runnerOk(env, req)); } catch { /* no grant: the game is a draft as for everybody */ } }
     const ent = a.plat || vc.cfg.demo ? null : await env.DB.prepare("SELECT id, pack FROM entitlement WHERE org=? AND eid IS NULL AND pack>=? ORDER BY pack, created_ms LIMIT 1").bind(a.org, b.cap).first<{ id: string; pack: number }>();
     // no payment is needed to BUILD an engagement: without a purchased pack it is saved as a draft (pack 0) that participants cannot see or join;
     // payment is asked only when the organizer publishes it (POST /api/z/:id/publish)
@@ -1856,7 +1868,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const target = owner ?? "o";
     const lateName = cleanName(b?.name);
     const wait = async (overlimit: boolean, limit: number | null) => { // the waiting room: no place is used while someone waits
-      if (await joinOverLimit(env, req, now)) return json({ error: "It is busy right now. Please try again in a few minutes.", code: "busy" }, 429);
+      if (await joinOverLimit(env, req, now, 0, undefined, runnerTestGame(env, req, e))) return json({ error: "It is busy right now. Please try again in a few minutes.", code: "busy" }, 429);
       if (!(await spend(env, now, 2))) return json({ error: "It is very busy right now. Please try again in a few minutes.", code: "busy" }, 503);
       if (!ck) await k4(await pidOf(ph)); // the person ticked to ask to come in; the row goes with the rest of their data
       const w = await addWaiting({ env, eid: eid!, e, now }, { ph, digits: digits ?? "", empId: empNorm || null, name: lateName || tokPii?.name || null, via, inviter: target, overlimit });
@@ -1879,7 +1891,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       pii = await sealPii(env, { phone: digits ?? "", name: lateName || tokPii?.name || null, empId: vf.mode !== "mobile" && empNorm ? empNorm : null, ...(joinEmail ? { email: joinEmail } : {}) });
     }
     const joinExtra: D1Stmt[] = []; // everything a join writes goes into ONE database batch (one transaction): the seat, the person rows, the two per-address counters and the consent record
-    if (await joinOverLimit(env, req, now, e.pack ?? 0, joinExtra)) return json({ error: "It is busy right now. Please try again in a few minutes.", code: "busy" }, 429);
+    if (await joinOverLimit(env, req, now, e.pack ?? 0, joinExtra, runnerTestGame(env, req, e))) return json({ error: "It is busy right now. Please try again in a few minutes.", code: "busy" }, 429);
     if (!(await spend(env, now, JOIN_WRITES))) return json({ error: "It is very busy right now. Please try again in a few minutes.", code: "busy" }, 503);
     const inv = inviter.startsWith("s:") ? Number(inviter.slice(2)) : null;
     if (!ck) joinExtra.push(await consentFromSeat(env.DB, { kind: "K4", ref: eid!, now, eid: eid!, ph }));

@@ -35,7 +35,7 @@ const convert = (key: string, id: string, pack: number | undefined, now = T) => 
 beforeEach(() => {
   const d = makeD1(); raw = d.raw;
   // TEST_MODE with no gateway keys: /api/checkout completes the order at once (the same path the pay page takes in a local run)
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", TEST_MODE: "1", OWNER_EMAIL: "owner@platform.test", JOIN_PER_IP_DAY: "1000000", JOIN_PER_IP_MINUTE: "1000000" } as any;
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", TEST_MODE: "1", OWNER_EMAIL: "owner@platform.test", JOIN_PER_IP_DAY: "1000000", JOIN_PER_IP_MINUTE: "1000000" } as any;
 });
 
 describe("making a demo game", () => {

@@ -22,7 +22,7 @@ const call = (method: string, path: string, body?: unknown, headers: Record<stri
   handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", "cf-connecting-ip": "1.1.1.1", ...headers }, body: withDevice(method, path, body) }), env as Env, now);
 beforeEach(() => {
   const d = makeD1(); raw = d.raw;
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: "https://tambola.test" } as PayEnv;
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: "https://tambola.test" } as PayEnv;
 });
 async function organizer() { const j = await (await call("POST", "/api/start", { email: "boss@acme.com" })).json() as any; return { "x-organizer": j.token as string }; }
 /** An unpaid, published game that starts `startH` hours after T, published 3 hours before T. */

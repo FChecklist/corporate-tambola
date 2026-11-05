@@ -15,7 +15,7 @@ let env: Env; let raw: ReturnType<typeof makeD1>["raw"];
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}, now = T) =>
   handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: withDevice(method, path, body) }), env, now);
 const j = async (r: Response) => (await r.json()) as any;
-beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt" } as any; });
+beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt" } as any; });
 async function game(id: string, cap = 100) {
   expect((await call("POST", "/api/z", { id, startRound: START, callSeconds: 12, cap }, P)).status).toBe(200);
   raw.prepare("UPDATE engagement SET pack=? WHERE id=?").run(cap, id);

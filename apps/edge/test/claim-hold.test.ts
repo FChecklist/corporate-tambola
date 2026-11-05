@@ -19,7 +19,7 @@ const j = async (r: Response) => (await r.json()) as any;
 const P = { "x-organizer": "plat" };
 const kv = (): KV => ({ get: async (k) => (raw.query("SELECT v FROM kv WHERE k=?").get(k) as any)?.v ?? null, put: async () => {} });
 const setup = async (flag: boolean, id = "CH-1") => {
-  const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt", ...(flag ? { CLAIM_HOLD: "1" } : {}) } as any;
+  const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt", ...(flag ? { CLAIM_HOLD: "1" } : {}) } as any;
   expect((await call("POST", "/api/z", { id, startRound: START, callSeconds: 9, cap: 100 }, P)).status).toBe(200);
   raw.prepare("UPDATE engagement SET pack=100 WHERE id=?").run(id);
   expect((await call("PUT", `/api/z/${id}/control/key`, { publicKey: publicKeyFromSecret(ORG) }, P)).status).toBe(200);

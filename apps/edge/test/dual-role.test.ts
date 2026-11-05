@@ -13,7 +13,7 @@ let env: PayEnv; let ip = 0;
 const call = (method: string, path: string, body?: unknown, key?: string, now = T) =>
   handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", "cf-connecting-ip": `9.9.9.${++ip}`, ...(key ? { "x-organizer": key } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }), env as Env, now);
 const j = async (r: Response) => (await r.json()) as any;
-beforeEach(() => { const d = makeD1({ strictHosts: true }); env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: "http://x", TEST_MODE: "1" } as PayEnv; });
+beforeEach(() => { const d = makeD1({ strictHosts: true }); env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: "http://x", TEST_MODE: "1" } as PayEnv; });
 afterEach(() => setGoogleKeyProvider());
 
 const organizer = async (email: string, gameId: string) => {

@@ -29,7 +29,7 @@ async function setup(at: number) {
 }
 const add = (at: number, key: string, people: unknown[]) => call(at, "POST", "/api/z/EMP-1/people", { people }, key);
 const joinId = (at: number, empId: string, i: number) => call(at, "POST", "/api/z/EMP-1/join", { name: "G", empId, device: dev(i) });
-beforeEach(() => { const d = makeD1(); env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" } as any; (globalThis as any).fetch = async () => new Response("{}", { status: 404 }); });
+beforeEach(() => { const d = makeD1(); env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" } as any; (globalThis as any).fetch = async () => new Response("{}", { status: 404 }); });
 afterEach(() => { globalThis.fetch = realFetch; });
 
 describe("the one cleaning function", () => {
@@ -119,7 +119,7 @@ describe("1.8.5 the Email ID is case-insensitive everywhere, and never goes thro
   });
   test("on the real Worker: an email typed in an employee-ID game is refused with a plain message, not turned into letters; an old game refuses it too", async () => {
     for (const at of [NEW_T, OLD_T]) {
-      const d = makeD1(); env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" } as any;
+      const d = makeD1(); env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt" } as any;
       await setup(at); const r = await joinId(at, BASE, 1); expect(r.status).toBe(400); const b = await j(r); expect(b.code).toBe("bad-id");
       if (at === NEW_T) expect(b.error).toContain("looks like an Email ID"); else expect(b.error).toContain("letters and numbers only");
       expect(JSON.stringify(b)).not.toContain("DEMO1DEMOTESTINVALID");

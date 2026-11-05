@@ -10,7 +10,7 @@ let env: Env & Record<string, any>; let raw: ReturnType<typeof makeD1>["raw"];
 const get = (headers: Record<string, string> = {}, method = "GET") => handle(new Request("http://x/api/owner/stats", { method, headers }), env as any, T);
 beforeEach(() => {
   const d = makeD1(); raw = d.raw;
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", OWNER_STATS_KEY: KEY, DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://game.test", PHONE_SALT: "salt" } as any;
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", OWNER_STATS_KEY: KEY, RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "https://game.test", PHONE_SALT: "salt" } as any;
 });
 describe("owner stats", () => {
   test("only the stats key opens it; the platform key, no key, a wrong key and a POST all get the plain 404", async () => {

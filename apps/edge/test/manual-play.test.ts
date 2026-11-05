@@ -18,7 +18,7 @@ const START = roundAt(T) + 2400, AT = T + 2 * 3_600_000;
 const ORG = "11".repeat(32);
 const P = { "x-organizer": "plat" };
 let env: Env; let raw: ReturnType<typeof makeD1>["raw"];
-const mk = (only12: boolean) => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt", ...(only12 ? { ONLY_12S: "1" } : {}) } as any; };
+const mk = (only12: boolean) => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt", ...(only12 ? { ONLY_12S: "1" } : {}) } as any; };
 const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}, now = T) =>
   handle(new Request("http://x" + path, { method, headers: { "content-type": "application/json", ...headers }, body: withDevice(method, path, body) }), env, now);
 const j = async (r: Response) => (await r.json()) as any;

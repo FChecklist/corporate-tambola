@@ -22,7 +22,7 @@ const j = async (r: Response) => (await r.json()) as any;
 const P = { "x-organizer": "plat" };
 const kv = (): KV => ({ get: async (k) => (raw.query("SELECT v FROM kv WHERE k=?").get(k) as any)?.v ?? null, put: async () => {} });
 const HOUSES = HOUSE_ORDER.filter((k) => k !== "unlucky");
-beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt" } as any; });
+beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt" } as any; });
 
 const press = async (id: string, action: "go" | "next", now: number) => {
   const m = signControlWithSecret(ORG, nextMessage((await readPublished(kv(), id))!, roundAt(now), { action }));
