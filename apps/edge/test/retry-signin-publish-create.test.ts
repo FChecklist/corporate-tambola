@@ -2,7 +2,7 @@
 // because sign-in (/api/auth/verify), creating a game (POST /api/z) and publishing were the "ask once, then 503 busy" class, 9 of 13 games failed before a single guest joined.
 // These three are now asked again (3 tries, short random pause) exactly like a join. Each test below is also a falsifiability check: put the route back to "once" and it fails.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { W, call, contact, create, j, keyH, mails, one, organizer, publish, q, reset, restore, uid } from "./param-harness";
+import { W, call, contact, create, dev, j, keyH, mails, mob, one, organizer, paidGame, publish, q, reset, restore, uid } from "./param-harness";
 import { joinRetry, retryKind } from "../src/worker";
 
 const OVERLOAD = "D1_ERROR: D1 DB is overloaded. Too many resources consumed within a 10 second window";
@@ -31,6 +31,7 @@ describe("sign-in, create and publish through a passing database overload", () =
     expect(retryKind("POST", "/api/auth/verify")).toBe("write");
     expect(retryKind("POST", "/api/z")).toBe("write");
     expect(retryKind("POST", "/api/z/ABCD/publish")).toBe("write");
+    expect(retryKind("POST", "/api/z/ABCD/leave")).toBe("write");
     expect(retryKind("GET", "/api/z")).toBe("read");
     for (const p of ["/api/auth/email", "/api/org/host", "/api/pay/webhook", "/api/z/ABCD/cancel", "/api/z/ABCD/vote", "/api/z/ABCD/clone", "/api/z/ABCD/announce"]) expect(retryKind("POST", p)).toBe("once");
   });
@@ -79,5 +80,16 @@ describe("sign-in, create and publish through a passing database overload", () =
     expect(one("SELECT COUNT(*) c FROM kv WHERE k=?", `pub/${id}`).c).toBe(1);
     expect(mails(contact.email).filter((m: any) => String(m.subject).includes(id)).length).toBeGreaterThanOrEqual(1);
     expect(q("SELECT 1 FROM kv WHERE k=?", `mailowed/${id}`).length).toBe(0);
+  });
+
+  test("a player leaving meets one overload (the first overload of the 8 Nov ramp run was a /leave): the player is taken out, once", async () => {
+    const id = uid("RL"); await paidGame({ id });
+    const jr = await j(await call("POST", `/api/z/${id}/join`, { phone: mob(1), name: "Guest 1", device: dev(1) })); expect(jr.pid).toBeTruthy();
+    const seats = () => one("SELECT COUNT(*) c FROM seat WHERE eid=? AND pid=?", id, jr.pid).c as number;
+    expect(seats()).toBe(1);
+    let n = 1; flaky((sql) => { if (n > 0 && sql.startsWith("SELECT seq, pid, ph, dev")) { n--; throw new Error(OVERLOAD); } });
+    const r = await call("POST", `/api/z/${id}/leave`, { pid: jr.pid, device: dev(1) }); const b = await j(r);
+    expect(r.status).toBe(200); expect(b.left).toBe(true); expect(n).toBe(0); expect(sleeps).toBe(1);
+    expect(seats()).toBe(0);
   });
 });

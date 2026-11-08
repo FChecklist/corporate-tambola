@@ -643,10 +643,11 @@ export { transientDb };
 /** Retry settings of a join; the tests set baseMs to 0 so they do not wait. */
 export const joinRetry = { tries: 3, baseMs: 250, sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)) };
 /** What the server may do when the database has a passing hiccup. read: ask again. write: ask again (the route is idempotent: the same request twice changes nothing more than once). once: never ask again, answer "busy" (503) so nothing can be written twice. */
-export const SAFE_WRITE = /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(?:join|checkin|claims|mark|unbind|erase|discard|reuse|roster|settings|over|prizegiven|confirm|person|forget|who|presence|throw|rxmode|drawset|control|publish|luck\/(?:press|vote|end|tick)|ttt\/(?:result|settle|finish|pause|resume|open|stagelog))$/;
+export const SAFE_WRITE = /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(?:join|checkin|claims|mark|unbind|erase|discard|reuse|roster|settings|over|prizegiven|confirm|person|forget|who|presence|throw|rxmode|drawset|control|publish|leave|luck\/(?:press|vote|end|tick)|ttt\/(?:result|settle|finish|pause|resume|open|stagelog))$/;
 /** Exact POST addresses that are also safe to ask twice on a passing database hiccup (8 Nov 2026, after the cloud test of 12 games starting in the same second: D1 "overloaded, 10 second window" answered 9 sign-ins, publishes and joins with 503 "busy"):
  *  /api/auth/verify  - signing in mints a key (older keys are trimmed to 6) and counts the try before it compares the code, so a repeat can only count one try more, never let anybody in twice or the wrong person in;
  *  /api/z            - creating a game: "creating twice never overwrites" (INSERT OR IGNORE and an existing-id answer), so a repeat answers the same game;
+ *  /api/z/:id/leave (in SAFE_WRITE, added 8 Nov 2026 after the ramp run: the first overload of that run was a /leave) - one all-or-nothing batch takes the seat out; a repeat after it ran answers "not the phone that holds this seat" (never a second removal);
  *  /api/z/:id/publish (in SAFE_WRITE) - the publish is ONE all-or-nothing batch that also records the e-mail owed; a repeat of an already published game answers "already" and sends an owed e-mail once. */
 export const RETRY_POST_EXACT: ReadonlySet<string> = new Set(["/api/auth/verify", "/api/z"]);
 export const retryKind = (method: string, pathname: string): "read" | "write" | "once" => method === "GET" || method === "HEAD" ? "read" : method !== "OPTIONS" && (SAFE_WRITE.test(pathname) || (method === "POST" && RETRY_POST_EXACT.has(pathname))) ? "write" : "once";
