@@ -2158,14 +2158,17 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const paid = !!(ent || free), startMs = roundMs(e.start_round);
     const mailSubject = demo ? `Your game ${eid} is published (Rs 0, it starts ${istTime(startMs)})` : paid ? `Your engagement ${eid} is published and paid` : `Your engagement ${eid} is published: payment pending (it starts ${istTime(startMs)})`,
       mailText = demo ? `Your game ${eid} is live. It is for up to ${e.cap} people at Rs 0, and it starts on time without any payment.\n\nShare this link: ${shareUrl}\n\nWant more people? Open the Pay step in your console at any time, before, during or after the game: choose the number of people and pay, and the game carries on: ${payUrl}\n\nBig screen for the room: ${origin}/big.html?e=${eid}` : `Your engagement ${eid} is live.\n\nShare this link: ${shareUrl}\n\n${paid ? "" : `Payment pending: the game does not begin until it is paid for. You can pay at any time until the guest data is auto-deleted; if you pay late, the first number comes 2 minutes after the payment is confirmed (about 2 minutes to pay): ${payUrl}\n\n`}Big screen for the room: ${origin}/big.html?e=${eid}`;
-    await env.DB.batch([
+    const pubRes: any = await env.DB.batch([
       env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`contact/${eid}`, JSON.stringify({ email: cEmail, phone: cPhone.slice(-10) })),
+      // "e-mail owed": same all-or-nothing step as the publish, deleted once the mail is handed over. Written only by the request that really publishes (placed BEFORE the pub row, which makes the NOT EXISTS test true only for the first), so a second tab at the same moment neither re-creates a marker nor sends a second mail.
+      env.DB.prepare("INSERT OR REPLACE INTO kv(k,v) SELECT ?,? WHERE NOT EXISTS (SELECT 1 FROM kv WHERE k=?)").bind(`mailowed/${eid}`, JSON.stringify({ to: cEmail, subject: mailSubject, text: mailText }), `pub/${eid}`),
       env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`pub/${eid}`, String(now)),
-      env.DB.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").bind(`mailowed/${eid}`, JSON.stringify({ to: cEmail, subject: mailSubject, text: mailText })), // "e-mail owed": same all-or-nothing step as the publish, deleted once the mail is handed over
       ...(ent || free ? [env.DB.prepare("UPDATE engagement SET pack=? WHERE id=? AND pack=0").bind(ent?.pack ?? e.cap, eid)] : []),
       ...(ent ? [env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(eid, ent.id)] : []),
       await consentStatement(env.DB, { subject: e.org ?? "platform", kind: "K1", ref: eid!, now }), // the K1 record is part of the same all-or-nothing step (a repeat after a later hiccup used to skip it)
     ]);
+    const iPublished = (pubRes?.[2]?.meta?.changes ?? 1) !== 0; // 0 = another tab published this game a moment ago: that request sends the mail and counts the funnel step
+    if (!iPublished) return json({ ok: true, published: true, already: true, paid, ...(demo ? { demo: true } : {}), startMs, payUrl, shareUrl });
     try { await recordFunnelForOrg(env as VisitEnv, e.org, "published", now); } catch { /* a statistic only: never a reason to repeat the publish */ }
     await sendMail(env as PayEnv, env.DB, cEmail, mailSubject, mailText, now, { idem: `pubmail-${eid}` }); // same key on a repeat: the mail service sends it once
     await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`mailowed/${eid}`).run(); // sent: nothing is owed any more
