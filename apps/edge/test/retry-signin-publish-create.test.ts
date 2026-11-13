@@ -1,6 +1,6 @@
 // 8 Nov 2026: a cloud test started 12 games in the same second. Cloudflare D1 answered "D1 DB is overloaded. Too many resources consumed within a 10 second window" and,
 // because sign-in (/api/auth/verify), creating a game (POST /api/z) and publishing were the "ask once, then 503 busy" class, 9 of 13 games failed before a single guest joined.
-// These three are now asked again (3 tries, short random pause) exactly like a join. Each test below is also a falsifiability check: put the route back to "once" and it fails.
+// These three are now asked again (5 jittered repeats, about 13 s in all, only for D1's "overloaded"; see retry-setup-atomic.test.ts for the faults AFTER a write). Each test below is also a falsifiability check: put the route back to "once" and it fails.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { W, call, contact, create, dev, j, keyH, mails, mob, one, organizer, paidGame, publish, q, reset, restore, uid } from "./param-harness";
 import { isSetupStep, joinRetry, retryKind, setupRetry } from "../src/worker";
@@ -57,7 +57,7 @@ describe("sign-in, create and publish through a passing database overload", () =
 
   test("creating a game meets one overload at the insert: one game, and a repeat of the same request is the same game", async () => {
     const o = await organizer(); const id = uid("RC");
-    let n = 1; flaky((sql) => { if (n > 0 && sql.startsWith("INSERT OR IGNORE INTO engagement")) { n--; throw new Error(OVERLOAD); } });
+    let n = 1; flaky((sql) => { if (n > 0 && sql === "BATCH") { n--; throw new Error(OVERLOAD); } });
     const r = await create(o.key, id); expect(r.status).toBe(200); expect(n).toBe(0); expect(sleeps).toBe(1);
     expect(one("SELECT COUNT(*) c FROM engagement WHERE id=?", id).c).toBe(1);
     const again = await j(await create(o.key, id)); expect(again.existed).toBe(true); expect(one("SELECT COUNT(*) c FROM engagement WHERE id=?", id).c).toBe(1);
@@ -75,8 +75,9 @@ describe("sign-in, create and publish through a passing database overload", () =
 
   test("publishing: an overload AFTER the publish was written never loses the confirmation e-mail (at least one, owed mail is sent by the repeat)", async () => {
     const o = await organizer(); const id = uid("RQ"); expect((await create(o.key, id)).status).toBe(200);
-    let n = 1; flaky((sql) => { if (n > 0 && sql.startsWith("INSERT INTO consent")) { n--; throw new Error(OVERLOAD); } });
-    const r = await publish(o.key, id); expect(r.status).toBeLessThan(500);
+    let n = 1; flaky((sql) => { if (n > 0 && sql.startsWith("INSERT INTO outbox")) { n--; throw new Error(OVERLOAD); } });
+    const r = await publish(o.key, id); expect(r.status).toBeLessThan(500); expect(n).toBe(0);
+    expect(one("SELECT COUNT(*) c FROM consent_log WHERE kind='K1' AND ref=?", id).c).toBe(1); // the consent record is never lost
     expect(one("SELECT COUNT(*) c FROM kv WHERE k=?", `pub/${id}`).c).toBe(1);
     expect(mails(contact.email).filter((m: any) => String(m.subject).includes(id)).length).toBeGreaterThanOrEqual(1);
     expect(q("SELECT 1 FROM kv WHERE k=?", `mailowed/${id}`).length).toBe(0);

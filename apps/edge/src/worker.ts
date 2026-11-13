@@ -18,7 +18,7 @@ import { TEST_LOGINS, TEST_LOGIN_CODE, TEST_LOGINS_PER_IP_DAY } from "./testlogi
 import { deviceMatches, checkinRequired, checkinRoute, presenceRoute, presentMsOf, seatOfPidText } from "./checkin";
 import { TERMS_VERSION } from "./brand";
 import RELEASES from "./releases.json";
-import { CONSENT_SCHEMA, consentMissing, recordConsent, consentFromSeat, hasConsent, CONSENT_VERSION } from "./consent";
+import { CONSENT_SCHEMA, consentMissing, consentStatement, recordConsent, consentFromSeat, hasConsent, CONSENT_VERSION } from "./consent";
 import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, draftReminderMail, hostLinkMail, newUseAlertMail, signInMail } from "./mails";
 import { cancelGame, cancelPreview, entitlementWindowEndMs, paidWindowEndMs, reopenGame, teamEmails } from "./cancel";
 import { LEGAL_SCHEMA } from "./legal";
@@ -642,8 +642,10 @@ async function cvFast(env: Env, eid: string): Promise<Response> {
   if (cache) await cache.put(ck, res.clone()).catch(() => {});
   return res;
 }
-import { transientDb } from "./transient";
+import { overloadedBeforeRun, transientDb } from "./transient";
 export { transientDb };
+/** Requests that are a REPEAT of one that already failed (set by handle() only, so a caller cannot forge it): the sign-in does not count the same 6-digit try twice. */
+const repeated = new WeakSet<Request>();
 /** Retry settings of a join; the tests set baseMs to 0 so they do not wait. */
 export const joinRetry = { tries: 3, baseMs: 250, sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)) };
 /** What the server may do when the database has a passing hiccup. read: ask again. write: ask again (the route is idempotent: the same request twice changes nothing more than once). once: never ask again, answer "busy" (503) so nothing can be written twice. */
@@ -675,13 +677,14 @@ export async function handle(req: Request, env: Env, now = Date.now(), waitUntil
   const kind = retryKind(req.method, new URL(req.url).pathname);
   const master = kind === "write" ? req.clone() : null;
   try {
-    let attempt = 0;
+    let attempt = 0; const t0 = Date.now();
     for (;;) {
-      try { res = await handleCore(attempt === 0 || !master ? req : master.clone(), env, now, waitUntil); break; }
+      try { const r2 = attempt === 0 || !master ? req : master.clone(); if (attempt > 0) repeated.add(r2); res = await handleCore(r2, env, attempt === 0 ? now : now + (Date.now() - t0), waitUntil); break; } // a repeat after a long pause carries the time that really passed
       catch (e) {
         if (!transientDb(e)) throw e;
         const setup = isSetupStep(req.method, new URL(req.url).pathname), maxTries = setup ? setupRetry.delaysMs.length : joinRetry.tries;
-        if (kind === "once" || attempt >= maxTries) { await countError(env.DB, now).catch(() => {}); const p0 = recordServerError(env.DB, req, e, 503, now); if (waitUntil) waitUntil(p0); else await p0.catch(() => {}); return busyReply(!/\/join$/.test(new URL(req.url).pathname)); }
+        // set-up steps are repeated only for an error that PROVES nothing was written (D1 turned the request away); a timeout or lost connection may mean it was written
+        if (kind === "once" || (setup && !overloadedBeforeRun(e)) || attempt >= maxTries) { await countError(env.DB, now).catch(() => {}); const p0 = recordServerError(env.DB, req, e, 503, now); if (waitUntil) waitUntil(p0); else await p0.catch(() => {}); return busyReply(!/\/join$/.test(new URL(req.url).pathname)); }
         attempt++; if (setup) await setupRetry.sleep(Math.round(setupRetry.delaysMs[attempt - 1]! * setupRetry.scale * (0.6 + Math.random() * 0.8))); else await joinRetry.sleep(Math.round(joinRetry.baseMs * attempt * (0.6 + Math.random() * 0.8)));
       }
     }
@@ -1163,7 +1166,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const bad = () => json({ error: "That code is not right or has expired. Please ask for a new one." }, 400);
     if (!row || row.expires_ms < now || row.attempts >= 5) return bad();
     // the try is counted BEFORE the code is compared, in one statement that only succeeds while fewer than 5 are used: guesses sent in parallel cannot all slip under the cap
-    const tried = await env.DB.prepare("UPDATE login_code SET attempts=attempts+1 WHERE email_hash=? AND attempts<5").bind(eh).run();
+    const tried = repeated.has(req) ? { meta: { changes: 1 } } : await env.DB.prepare("UPDATE login_code SET attempts=attempts+1 WHERE email_hash=? AND attempts<5").bind(eh).run(); // a repeat of a request whose try was already counted does not count it again
     if (!(tried as any)?.meta?.changes) return bad();
     if (row.code_hash !== (await sha("code|" + eh + "|" + code))) return bad();
     const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
@@ -1579,9 +1582,10 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     }
     if (!(await spend(env, now, 2))) return BUSY();
     const isTestEng = (await testFlag(env)) === 1 || (await orgIsTest(env, a.org)) ? 1 : 0; // made in TEST mode, or by a test account
-    await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.whoCanJoin === "list" || (b.whoCanJoin === undefined && b.closed) || vc.cfg.employeesOnly ? 1 : 0, draft ? 0 : ent?.pack ?? b.cap, vc.cfg.tickets, cfgJson(vc.cfg), isTestEng).run(); // the console sends whoCanJoin "list"; the API default stays "anyone"
-    if (ent) await env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(b.id, ent.id).run();
-    if (a.kind === "ai" && a.org) await noteHelperGame(env.DB, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), a.org, b.id, now); // a game made with a Help Desk helper's key is recorded as theirs
+    const mk = env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.whoCanJoin === "list" || (b.whoCanJoin === undefined && b.closed) || vc.cfg.employeesOnly ? 1 : 0, draft ? 0 : ent?.pack ?? b.cap, vc.cfg.tickets, cfgJson(vc.cfg), isTestEng); // the console sends whoCanJoin "list"; the API default stays "anyone"
+    // the game and the link to the pack it uses are written in ONE all-or-nothing step (13 Nov 2026 audit): a hiccup between two separate writes left a game with its pack unlinked, and a repeat then answered "existed".
+    await env.DB.batch([mk, ...(ent ? [env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(b.id, ent.id)] : [])]);
+    if (a.kind === "ai" && a.org) try { await noteHelperGame(env.DB, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), a.org, b.id, now); } catch { /* attribution only: a hiccup here must not turn a created game into "existed" on a repeat */ } // a game made with a Help Desk helper's key is recorded as theirs
     return json({ ok: true, draft, ...(vc.cfg.demo ? { demo: true } : {}), openUrl: `${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html?e=${b.id}` });
   }
   if (req.method === "GET" && p === "/api/history") {
@@ -2136,7 +2140,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       }
       { // a Publish whose confirmation e-mail was lost to a passing database hiccup: the e-mail is still owed (recorded in the same step as the publish), so it goes out now, once
         const owed = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`mailowed/${eid}`).first<{ v: string }>();
-        if (owed) { const m = JSON.parse(owed.v) as { to: string; subject: string; text: string }; await sendMail(env as PayEnv, env.DB, m.to, m.subject, m.text, now); await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`mailowed/${eid}`).run(); }
+        if (owed) { const m = JSON.parse(owed.v) as { to: string; subject: string; text: string }; await sendMail(env as PayEnv, env.DB, m.to, m.subject, m.text, now, { idem: `pubmail-${eid}` }); await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`mailowed/${eid}`).run(); }
       }
       return json({ ok: true, published: true, already: true, paid: nowPaid, ...(demo ? { demo: true } : {}), startMs: roundMs(e.start_round), payUrl, shareUrl });
     }
@@ -2160,10 +2164,10 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       env.DB.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").bind(`mailowed/${eid}`, JSON.stringify({ to: cEmail, subject: mailSubject, text: mailText })), // "e-mail owed": same all-or-nothing step as the publish, deleted once the mail is handed over
       ...(ent || free ? [env.DB.prepare("UPDATE engagement SET pack=? WHERE id=? AND pack=0").bind(ent?.pack ?? e.cap, eid)] : []),
       ...(ent ? [env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(eid, ent.id)] : []),
+      await consentStatement(env.DB, { subject: e.org ?? "platform", kind: "K1", ref: eid!, now }), // the K1 record is part of the same all-or-nothing step (a repeat after a later hiccup used to skip it)
     ]);
-    await recordConsent(env.DB, { subject: e.org ?? "platform", kind: "K1", ref: eid!, now });
-    await recordFunnelForOrg(env as VisitEnv, e.org, "published", now);
-    await sendMail(env as PayEnv, env.DB, cEmail, mailSubject, mailText, now);
+    try { await recordFunnelForOrg(env as VisitEnv, e.org, "published", now); } catch { /* a statistic only: never a reason to repeat the publish */ }
+    await sendMail(env as PayEnv, env.DB, cEmail, mailSubject, mailText, now, { idem: `pubmail-${eid}` }); // same key on a repeat: the mail service sends it once
     await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`mailowed/${eid}`).run(); // sent: nothing is owed any more
     return json({ ok: true, published: true, paid, ...(demo ? { demo: true, free: true } : {}), startMs, payUrl, shareUrl, confirmed: { email: cEmail, phone: cPhone.slice(-10) } });
   }
