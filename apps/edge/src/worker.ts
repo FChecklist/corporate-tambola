@@ -242,6 +242,10 @@ export const SCHEMA: string[] = [
   ...REHEARSAL_SCHEMA,
   // the owner's private price for one game id, and its audit rows (0030_price_adjust.sql)
   ...ADJUST_SCHEMA,
+  // the set-up steps (sign-in, create, publish) looked these tables up by organizer with no index = a full scan of the table several times per game (0031_setup_indexes.sql; 13 Nov 2026)
+  "CREATE INDEX IF NOT EXISTS organizer_key_org ON organizer_key (org)",
+  "CREATE INDEX IF NOT EXISTS entitlement_org ON entitlement (org, eid)",
+  "CREATE INDEX IF NOT EXISTS engagement_org ON engagement (org)",
 ];
 
 const PATTERNS = new Set<string>([...HOUSE_ORDER.filter((k) => k !== "unlucky"), "lucky"]);
