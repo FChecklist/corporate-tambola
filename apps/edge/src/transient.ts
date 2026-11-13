@@ -1,3 +1,5 @@
 // Errors that pass by themselves (kept in their own file so winners.ts / lifecycle.ts can use them without importing the worker).
 /** Errors that pass by themselves: the database's own 10-second overload limit, a dropped connection, a timeout. Anything else (a bug, a bad row) is NOT retried. */
 export const transientDb = (e: unknown): boolean => /overloaded|too many resources|network connection lost|connection (?:reset|closed)|timed out|timeout|internal error|temporarily unavailable|storage operation exceeded|D1_ERROR: .*(?:reset|unavailable)/i.test(String((e as any)?.message ?? e));
+/** The one kind of error that PROVES nothing was written: D1 turned the request away before running it (its 10-second overload limit). A timeout or a lost connection can mean "written, but the reply got lost", so the set-up steps (sign-in, create, publish) are asked again only for this kind. */
+export const overloadedBeforeRun = (e: unknown): boolean => /overloaded|too many resources/i.test(String((e as any)?.message ?? e));

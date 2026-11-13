@@ -18,7 +18,7 @@ import { TEST_LOGINS, TEST_LOGIN_CODE, TEST_LOGINS_PER_IP_DAY } from "./testlogi
 import { deviceMatches, checkinRequired, checkinRoute, presenceRoute, presentMsOf, seatOfPidText } from "./checkin";
 import { TERMS_VERSION } from "./brand";
 import RELEASES from "./releases.json";
-import { CONSENT_SCHEMA, consentMissing, recordConsent, consentFromSeat, hasConsent, CONSENT_VERSION } from "./consent";
+import { CONSENT_SCHEMA, consentMissing, consentStatement, recordConsent, consentFromSeat, hasConsent, CONSENT_VERSION } from "./consent";
 import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, draftReminderMail, hostLinkMail, newUseAlertMail, signInMail } from "./mails";
 import { cancelGame, cancelPreview, entitlementWindowEndMs, paidWindowEndMs, reopenGame, teamEmails } from "./cancel";
 import { LEGAL_SCHEMA } from "./legal";
@@ -242,6 +242,10 @@ export const SCHEMA: string[] = [
   ...REHEARSAL_SCHEMA,
   // the owner's private price for one game id, and its audit rows (0030_price_adjust.sql)
   ...ADJUST_SCHEMA,
+  // the set-up steps (sign-in, create, publish) looked these tables up by organizer with no index = a full scan of the table several times per game (0031_setup_indexes.sql; 13 Nov 2026)
+  "CREATE INDEX IF NOT EXISTS organizer_key_org ON organizer_key (org)",
+  "CREATE INDEX IF NOT EXISTS entitlement_org ON entitlement (org, eid)",
+  "CREATE INDEX IF NOT EXISTS engagement_org ON engagement (org)",
 ];
 
 const PATTERNS = new Set<string>([...HOUSE_ORDER.filter((k) => k !== "unlucky"), "lucky"]);
@@ -638,13 +642,26 @@ async function cvFast(env: Env, eid: string): Promise<Response> {
   if (cache) await cache.put(ck, res.clone()).catch(() => {});
   return res;
 }
-import { transientDb } from "./transient";
+import { overloadedBeforeRun, transientDb } from "./transient";
 export { transientDb };
+/** A repeat of a request that already failed points to the original request (set by handle() only, so a caller cannot forge it); `counted` holds the originals whose sign-in try really WAS counted (set right after the count succeeded): a repeat then does not count the same 6-digit try twice, and a repeat of a try that was never counted (the hiccup came first) still counts it. */
+const repeatOf = new WeakMap<Request, Request>();
+const counted = new WeakSet<Request>();
 /** Retry settings of a join; the tests set baseMs to 0 so they do not wait. */
 export const joinRetry = { tries: 3, baseMs: 250, sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)) };
 /** What the server may do when the database has a passing hiccup. read: ask again. write: ask again (the route is idempotent: the same request twice changes nothing more than once). once: never ask again, answer "busy" (503) so nothing can be written twice. */
-export const SAFE_WRITE = /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(?:join|checkin|claims|mark|unbind|erase|discard|reuse|roster|settings|over|prizegiven|confirm|person|forget|who|presence|throw|rxmode|drawset|control|luck\/(?:press|vote|end|tick)|ttt\/(?:result|settle|finish|pause|resume|open|stagelog))$/;
-export const retryKind = (method: string, pathname: string): "read" | "write" | "once" => method === "GET" || method === "HEAD" ? "read" : method !== "OPTIONS" && SAFE_WRITE.test(pathname) ? "write" : "once";
+export const SAFE_WRITE = /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(?:join|checkin|claims|mark|unbind|erase|discard|reuse|roster|settings|over|prizegiven|confirm|person|forget|who|presence|throw|rxmode|drawset|control|publish|leave|luck\/(?:press|vote|end|tick)|ttt\/(?:result|settle|finish|pause|resume|open|stagelog))$/;
+/** Exact POST addresses that are also safe to ask twice on a passing database hiccup (8 Nov 2026, after the cloud test of 12 games starting in the same second: D1 "overloaded, 10 second window" answered 9 sign-ins, publishes and joins with 503 "busy"):
+ *  /api/auth/verify  - signing in mints a key (older keys are trimmed to 6) and counts the try before it compares the code, so a repeat can only count one try more, never let anybody in twice or the wrong person in;
+ *  /api/z            - creating a game: "creating twice never overwrites" (INSERT OR IGNORE and an existing-id answer), so a repeat answers the same game;
+ *  /api/z/:id/leave (in SAFE_WRITE, added 8 Nov 2026 after the ramp run: the first overload of that run was a /leave) - one all-or-nothing batch takes the seat out; a repeat after it ran answers "not the phone that holds this seat" (never a second removal);
+ *  /api/z/:id/publish (in SAFE_WRITE) - the publish is ONE all-or-nothing batch that also records the e-mail owed; a repeat of an already published game answers "already" and sends an owed e-mail once. */
+export const RETRY_POST_EXACT: ReadonlySet<string> = new Set(["/api/auth/verify", "/api/z"]);
+/** The three SET-UP steps of a game (sign-in, create, publish). D1 overloads for a whole 10-second window, so asking again after a quarter of a second does not outlast it: these steps wait longer between repeats
+ *  (about 13 seconds in all, random +/-40 %, so twelve organizers that failed together do not come back together). A join keeps its short 3 tries. The tests set scale to 0 so they do not wait. 13 Nov 2026 (TARGET-99 Tambola plan). */
+export const setupRetry = { delaysMs: [400, 1200, 2500, 4000, 5000], scale: 1, sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)) };
+export const isSetupStep = (method: string, pathname: string): boolean => method === "POST" && (pathname === "/api/auth/verify" || pathname === "/api/z" || /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/publish$/.test(pathname));
+export const retryKind = (method: string, pathname: string): "read" | "write" | "once" => method === "GET" || method === "HEAD" ? "read" : method !== "OPTIONS" && (SAFE_WRITE.test(pathname) || (method === "POST" && RETRY_POST_EXACT.has(pathname))) ? "write" : "once";
 const busyReply = (read = false): Response => new Response(JSON.stringify({ error: read ? "The doors are very busy just now. Please wait a few seconds; nothing is lost, and the page will try again by itself." : "The doors are very busy just now, with many guests arriving at the very same moment. Please wait a few seconds; the seat is still waiting, and the page will try again by itself.", code: "busy", retryAfter: 3 }), { status: 503, headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "3" } });
 export async function handle(req: Request, env: Env, now = Date.now(), waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
   if (req.method === "GET") { const cm = /^\/api\/z\/([A-Za-z0-9_-]{4,40})\/cv$/.exec(new URL(req.url).pathname); if (cm) return cvFast(env, cm[1]!); }
@@ -661,13 +678,15 @@ export async function handle(req: Request, env: Env, now = Date.now(), waitUntil
   const kind = retryKind(req.method, new URL(req.url).pathname);
   const master = kind === "write" ? req.clone() : null;
   try {
-    let attempt = 0;
+    let attempt = 0; const t0 = Date.now();
     for (;;) {
-      try { res = await handleCore(attempt === 0 || !master ? req : master.clone(), env, now, waitUntil); break; }
+      try { const r2 = attempt === 0 || !master ? req : master.clone(); if (attempt > 0) repeatOf.set(r2, req); res = await handleCore(r2, env, attempt === 0 ? now : now + (Date.now() - t0), waitUntil); break; } // a repeat after a long pause carries the time that really passed
       catch (e) {
         if (!transientDb(e)) throw e;
-        if (kind === "once" || attempt >= joinRetry.tries) { await countError(env.DB, now).catch(() => {}); const p0 = recordServerError(env.DB, req, e, 503, now); if (waitUntil) waitUntil(p0); else await p0.catch(() => {}); return busyReply(!/\/join$/.test(new URL(req.url).pathname)); }
-        attempt++; await joinRetry.sleep(Math.round(joinRetry.baseMs * attempt * (0.6 + Math.random() * 0.8)));
+        const setup = isSetupStep(req.method, new URL(req.url).pathname), maxTries = setup ? setupRetry.delaysMs.length : joinRetry.tries;
+        // set-up steps are repeated only for an error that PROVES nothing was written (D1 turned the request away); a timeout or lost connection may mean it was written
+        if (kind === "once" || (setup && !overloadedBeforeRun(e)) || attempt >= maxTries) { await countError(env.DB, now).catch(() => {}); const p0 = recordServerError(env.DB, req, e, 503, now); if (waitUntil) waitUntil(p0); else await p0.catch(() => {}); return busyReply(!/\/join$/.test(new URL(req.url).pathname)); }
+        attempt++; if (setup) await setupRetry.sleep(Math.round(setupRetry.delaysMs[attempt - 1]! * setupRetry.scale * (0.6 + Math.random() * 0.8))); else await joinRetry.sleep(Math.round(joinRetry.baseMs * attempt * (0.6 + Math.random() * 0.8)));
       }
     }
   } catch (e) { await countError(env.DB, now); const p = recordServerError(env.DB, req, e, 500, now); if (waitUntil) waitUntil(p); else await p; return json({ error: "Something went wrong. Please try again.", code: "server-error" }, 500); }
@@ -1146,10 +1165,12 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     }
     const row = await env.DB.prepare("SELECT code_hash, expires_ms, attempts FROM login_code WHERE email_hash=?").bind(eh).first<{ code_hash: string; expires_ms: number; attempts: number }>();
     const bad = () => json({ error: "That code is not right or has expired. Please ask for a new one." }, 400);
-    if (!row || row.expires_ms < now || row.attempts >= 5) return bad();
+    const root = repeatOf.get(req) ?? req, already = counted.has(root); // already: a first attempt of THIS request really counted its try (so the 5 on the row may be this very try)
+    if (!row || row.expires_ms < now || (!already && row.attempts >= 5)) return bad();
     // the try is counted BEFORE the code is compared, in one statement that only succeeds while fewer than 5 are used: guesses sent in parallel cannot all slip under the cap
-    const tried = await env.DB.prepare("UPDATE login_code SET attempts=attempts+1 WHERE email_hash=? AND attempts<5").bind(eh).run();
+    const tried = already ? { meta: { changes: 1 } } : await env.DB.prepare("UPDATE login_code SET attempts=attempts+1 WHERE email_hash=? AND attempts<5").bind(eh).run(); // a repeat of a request whose try was already counted does not count it again
     if (!(tried as any)?.meta?.changes) return bad();
+    counted.add(root);
     if (row.code_hash !== (await sha("code|" + eh + "|" + code))) return bad();
     const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
     const hostAcct = await hostForEmail(env.DB, eh);
@@ -1564,9 +1585,10 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     }
     if (!(await spend(env, now, 2))) return BUSY();
     const isTestEng = (await testFlag(env)) === 1 || (await orgIsTest(env, a.org)) ? 1 : 0; // made in TEST mode, or by a test account
-    await env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.whoCanJoin === "list" || (b.whoCanJoin === undefined && b.closed) || vc.cfg.employeesOnly ? 1 : 0, draft ? 0 : ent?.pack ?? b.cap, vc.cfg.tickets, cfgJson(vc.cfg), isTestEng).run(); // the console sends whoCanJoin "list"; the API default stays "anyone"
-    if (ent) await env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(b.id, ent.id).run();
-    if (a.kind === "ai" && a.org) await noteHelperGame(env.DB, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), a.org, b.id, now); // a game made with a Help Desk helper's key is recorded as theirs
+    const mk = env.DB.prepare("INSERT OR IGNORE INTO engagement(id,start_round,call_seconds,cap,created_ms,org,closed,pack,tickets,config,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(b.id, b.startRound, b.callSeconds, b.cap, now, a.org, b.whoCanJoin === "list" || (b.whoCanJoin === undefined && b.closed) || vc.cfg.employeesOnly ? 1 : 0, draft ? 0 : ent?.pack ?? b.cap, vc.cfg.tickets, cfgJson(vc.cfg), isTestEng); // the console sends whoCanJoin "list"; the API default stays "anyone"
+    // the game and the link to the pack it uses are written in ONE all-or-nothing step (13 Nov 2026 audit): a hiccup between two separate writes left a game with its pack unlinked, and a repeat then answered "existed".
+    await env.DB.batch([mk, ...(ent ? [env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(b.id, ent.id)] : [])]);
+    if (a.kind === "ai" && a.org) try { await noteHelperGame(env.DB, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), a.org, b.id, now); } catch { /* attribution only: a hiccup here must not turn a created game into "existed" on a repeat */ } // a game made with a Help Desk helper's key is recorded as theirs
     return json({ ok: true, draft, ...(vc.cfg.demo ? { demo: true } : {}), openUrl: `${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html?e=${b.id}` });
   }
   if (req.method === "GET" && p === "/api/history") {
@@ -2121,7 +2143,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       }
       { // a Publish whose confirmation e-mail was lost to a passing database hiccup: the e-mail is still owed (recorded in the same step as the publish), so it goes out now, once
         const owed = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`mailowed/${eid}`).first<{ v: string }>();
-        if (owed) { const m = JSON.parse(owed.v) as { to: string; subject: string; text: string }; await sendMail(env as PayEnv, env.DB, m.to, m.subject, m.text, now); await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`mailowed/${eid}`).run(); }
+        if (owed) { const m = JSON.parse(owed.v) as { to: string; subject: string; text: string }; await sendMail(env as PayEnv, env.DB, m.to, m.subject, m.text, now, { idem: `pubmail-${eid}` }); await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`mailowed/${eid}`).run(); }
       }
       return json({ ok: true, published: true, already: true, paid: nowPaid, ...(demo ? { demo: true } : {}), startMs: roundMs(e.start_round), payUrl, shareUrl });
     }
@@ -2139,16 +2161,19 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const paid = !!(ent || free), startMs = roundMs(e.start_round);
     const mailSubject = demo ? `Your game ${eid} is published (Rs 0, it starts ${istTime(startMs)})` : paid ? `Your engagement ${eid} is published and paid` : `Your engagement ${eid} is published: payment pending (it starts ${istTime(startMs)})`,
       mailText = demo ? `Your game ${eid} is live. It is for up to ${e.cap} people at Rs 0, and it starts on time without any payment.\n\nShare this link: ${shareUrl}\n\nWant more people? Open the Pay step in your console at any time, before, during or after the game: choose the number of people and pay, and the game carries on: ${payUrl}\n\nBig screen for the room: ${origin}/big.html?e=${eid}` : `Your engagement ${eid} is live.\n\nShare this link: ${shareUrl}\n\n${paid ? "" : `Payment pending: the game does not begin until it is paid for. You can pay at any time until the guest data is auto-deleted; if you pay late, the first number comes 2 minutes after the payment is confirmed (about 2 minutes to pay): ${payUrl}\n\n`}Big screen for the room: ${origin}/big.html?e=${eid}`;
-    await env.DB.batch([
+    const pubRes: any = await env.DB.batch([
       env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`contact/${eid}`, JSON.stringify({ email: cEmail, phone: cPhone.slice(-10) })),
+      // "e-mail owed": same all-or-nothing step as the publish, deleted once the mail is handed over. Written only by the request that really publishes (placed BEFORE the pub row, which makes the NOT EXISTS test true only for the first), so a second tab at the same moment neither re-creates a marker nor sends a second mail.
+      env.DB.prepare("INSERT OR REPLACE INTO kv(k,v) SELECT ?,? WHERE NOT EXISTS (SELECT 1 FROM kv WHERE k=?)").bind(`mailowed/${eid}`, JSON.stringify({ to: cEmail, subject: mailSubject, text: mailText }), `pub/${eid}`),
       env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`pub/${eid}`, String(now)),
-      env.DB.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").bind(`mailowed/${eid}`, JSON.stringify({ to: cEmail, subject: mailSubject, text: mailText })), // "e-mail owed": same all-or-nothing step as the publish, deleted once the mail is handed over
       ...(ent || free ? [env.DB.prepare("UPDATE engagement SET pack=? WHERE id=? AND pack=0").bind(ent?.pack ?? e.cap, eid)] : []),
       ...(ent ? [env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(eid, ent.id)] : []),
+      await consentStatement(env.DB, { subject: e.org ?? "platform", kind: "K1", ref: eid!, now }), // the K1 record is part of the same all-or-nothing step (a repeat after a later hiccup used to skip it)
     ]);
-    await recordConsent(env.DB, { subject: e.org ?? "platform", kind: "K1", ref: eid!, now });
-    await recordFunnelForOrg(env as VisitEnv, e.org, "published", now);
-    await sendMail(env as PayEnv, env.DB, cEmail, mailSubject, mailText, now);
+    const iPublished = (pubRes?.[2]?.meta?.changes ?? 1) !== 0; // 0 = another tab published this game a moment ago: that request sends the mail and counts the funnel step
+    if (!iPublished) return json({ ok: true, published: true, already: true, paid, ...(demo ? { demo: true } : {}), startMs, payUrl, shareUrl });
+    try { await recordFunnelForOrg(env as VisitEnv, e.org, "published", now); } catch { /* a statistic only: never a reason to repeat the publish */ }
+    await sendMail(env as PayEnv, env.DB, cEmail, mailSubject, mailText, now, { idem: `pubmail-${eid}` }); // same key on a repeat: the mail service sends it once
     await env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`mailowed/${eid}`).run(); // sent: nothing is owed any more
     return json({ ok: true, published: true, paid, ...(demo ? { demo: true, free: true } : {}), startMs, payUrl, shareUrl, confirmed: { email: cEmail, phone: cPhone.slice(-10) } });
   }

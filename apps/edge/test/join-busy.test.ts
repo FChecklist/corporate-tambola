@@ -138,8 +138,9 @@ describe("what the server may ask twice on a passing database hiccup (round 2 au
   test("the classes: reads and idempotent writes are asked again; money, keys, winners and cancel never", () => {
     for (const r of ["claims", "mark", "unbind", "erase", "discard", "reuse", "roster", "settings", "over", "prizegiven", "confirm", "checkin", "who", "presence", "join", "forget", "person"]) expect(kinds("POST", `/api/z/ABCD/${r}`)).toBe("write");
     expect(kinds("PATCH", "/api/z/ABCD/settings")).toBe("write");
-    for (const r of ["cancel", "reopen", "override", "reportlink", "vote", "publish", "clone", "rehearsal", "bogey", "announce", "control/request"]) expect(kinds("POST", `/api/z/ABCD/${r}`)).toBe("once");
-    for (const p of ["/api/auth/email", "/api/org/host", "/api/pay/webhook", "/api/z"]) expect(kinds("POST", p)).toBe("once");
+    for (const r of ["cancel", "reopen", "override", "reportlink", "vote", "clone", "rehearsal", "bogey", "announce", "control/request"]) expect(kinds("POST", `/api/z/ABCD/${r}`)).toBe("once");
+    for (const p of ["/api/auth/email", "/api/org/host", "/api/pay/webhook"]) expect(kinds("POST", p)).toBe("once");
+    for (const p of ["/api/auth/verify", "/api/z", "/api/z/ABCD/publish"]) expect(kinds("POST", p)).toBe("write"); // 8 Nov 2026: sign-in, create and publish are asked again too (retry-signin-publish-create.test.ts)
     expect(kinds("GET", "/api/z/ABCD/control")).toBe("read");
   });
   test("an idempotent write (mark) meeting one overload is asked again", async () => {
