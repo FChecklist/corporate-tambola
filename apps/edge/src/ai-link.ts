@@ -58,6 +58,8 @@ const ORG_ENDPOINTS: Endpoint[] = [
   { m: "GET", path: "z/{id}/reportlink", what: "Whether the end-of-game report is ready and sent. The report address itself is for the organizer only: it is e-mailed to them." },
   { m: "POST", path: "org/host", what: "NOT FOR AN AI (403): a Host needs a name and an e-mail address or a mobile number (at least one), which only the owner enters in the console (Your team). Guest lists, personal links, the waiting room and removing people (/api/z/{id}/people, /waiting) are the same: names and numbers never pass through an AI, every such call gets 403. Co-hosts (no limit; a name and mobile number only, no e-mail) are added by the Organizer or a Host in the console, never through an AI link. Pay links anyone can open (POST /api/z/{id}/paylink), new Host links and sign-in with Google are people's acts too: an AI gets 403 or no route. Cancelling a game is the Organizer's or a Host's own act in the console; the AI never does it.", body: "{ \"email\": \"the Host's e-mail address\", \"mobile\": \"9876543210\", \"label\": \"Priya\" }" },
   { m: "GET", path: "org/ai/audit", what: "The trail of every call made with AI links (what the owner sees in their console)" },
+  { m: "GET", path: "z/{id}/v2/aitrail", what: "This game's trail of AI calls, each labelled AI or AI: <name>" },
+  { m: "GET", path: "z/{id}/v2/receipts", what: "Payment history and payee, without the payer's e-mail or invoice links" },
   { m: "GET", path: "z/suggestions", what: "Ideas from every organizer's AI; POST z/suggestions {kind: feature|improvement|report|bug|other, title, body} adds one (no names or numbers)" },
 ];
 const HOST_ENDPOINTS: Endpoint[] = [
@@ -80,6 +82,7 @@ export const AI_CANNOT: { what: string; ask: string }[] = [
   { what: "Pause, resume or stop a running game. Only the organizer's own browser can sign that.", ask: "POST {api}/z/{id}/control/request with {action: pause|resume|stop}; tell them to approve it in their console now." },
   { what: "Choose, change, add or remove winners, numbers or tickets. The software decides, from public random numbers, when several phones agree. Neither the organizer nor the software can choose or change them.", ask: "Explain this plainly if asked. There is no way to ask for it." },
   { what: "Create or retire the organizer's own sign-in keys, change their e-mail, or delete their account.", ask: "Tell them to do it in their console (Keys card)." },
+  { what: "Download names or mobile numbers, approve or reject claims, or make keys.", ask: "Tell the organizer to open More tools in their console." },
   { what: "Write or run code on the platform.", ask: "Use the suggestions board for ideas (no names, no numbers)." },
 ];
 
