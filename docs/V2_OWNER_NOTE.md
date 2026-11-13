@@ -45,7 +45,7 @@ No rule of play was touched: number calling, ticket making, claim detection, sco
 9. **A Host's reason for rejecting a claim** is shown to the players of that game, and anyone who has the ticket number can read it. Hosts are told to write no name or number, and long digit runs are removed, but a name typed in words is kept for the life of the game.
 10. **Certificates stop checking if the platform's data key (`DATA_KEY` / `ORGANIZER_SECRET`) is changed.** Do not rotate it without a plan for the old certificates.
 11. **Support tickets and hand-over notes** are free text, kept 365 days.
-12. Game keys (and the keys of AI) appear in the team's key list as ordinary keys. The game-only Host keys do **not** use up the account's five Host places; at most five per game.
+12. Game keys (and the keys of AI) appear in the team's key list as ordinary keys. The Team screen may show more than five Hosts for a day, because game-only Host keys are listed until the daily clean-up switches them off. The game-only Host keys do **not** use up the account's five Host places; at most five per game.
 13. The older practice pages `play.html` and `screen.html` carry no language switch; the live game pages do.
 
 ## The migration and the rollback

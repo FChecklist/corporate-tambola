@@ -112,7 +112,7 @@ describe("ways round the gate stay shut", () => {
     const rows = () => (q("SELECT COUNT(*) AS c FROM organizer_key WHERE scope_eid=? AND revoked=0", g.id)[0] as { c: number }).c;
     expect(rows()).toBe(5);
     const acct = await call("POST", "/api/org/host", { label: "Real Host", email: "host@example.com", mobile: "9876543210" }, keyH(g.key));
-    expect(await j(acct)).not.toMatchObject({ error: expect.stringMatching(/up to 5 Hosts/) });
+    expect(acct.status).toBe(200); // a real Host can still be made: the five game-only keys use none of the account's places
     endGame(g.id, T);
     const { v2Purge } = await import("../src/v2");
     await v2Purge(W.env as any, T + 25 * HOUR);

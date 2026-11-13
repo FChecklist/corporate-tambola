@@ -81,7 +81,7 @@ Today the organizer's sign-in key (`ctk_`, kind `master`) belongs to the whole a
 ## 7. Host key without personal data (O08)
 
 - `POST /api/z/{id}/v2/host {label}` (Organizer or game master key; **not** an AI key) makes a Host key for that game: no e-mail, no mobile, no person confirming.
-- Safety: limited to that game; the narrow Host rights (the same set a Host's AI link has: watch, announce, prizes, override, report link) plus the new Host routes (claim review, step down, hand-over request, receipts without secrets, support); cannot pay, cancel, erase, clone, manage the team or make keys; expires 24 hours after the game ends; counts toward the 5-Host limit; revocable by the organizer (`POST /api/org/team/retire` as today, or `v2/keys/revoke`).
+- Safety: limited to that game; the narrow Host rights (the same set a Host's AI link has: watch, announce, prizes, override, report link) plus the new Host routes (claim review, step down, hand-over request, receipts without secrets, support); cannot pay, cancel, erase, clone, manage the team or make keys; expires 24 hours after the game ends; at most five per game and never one of the account's five Host places; revocable by the organizer (`POST /api/org/team/retire` as today, or `v2/keys/revoke`).
 - **Files:** new `v2-host.ts`. **Migration:** the scope columns above; `host_state` row marked ready.
 - **Play path:** NO.
 
