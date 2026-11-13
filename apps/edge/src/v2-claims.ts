@@ -62,6 +62,7 @@ export async function claimReviewRoute(c: V2Ctx, eid: string, rest: string): Pro
 /** Called for POST /prizegiven before the normal route: a prize whose claim a Host rejected is not handed over until it is approved. Returns a refusal or null. */
 export async function prizeHold(c: V2Ctx, eid: string): Promise<Response | null> {
   const db = c.env.DB;
+  if (!c.a.kind) return null; // no key: the normal route answers (401); the Host's reason is never given to a caller with no key
   if (!(await reviewOn(db, eid))) return null;
   const b = await c.body(c.req.clone()); // the SAME size limit as the route that follows: a longer body must not slip past this check
   if (!b || b.given !== true || !Number.isInteger(b.seat) || typeof b.pattern !== "string" || !Number.isInteger(b.round)) return null;

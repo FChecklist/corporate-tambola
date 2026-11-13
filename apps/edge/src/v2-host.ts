@@ -7,6 +7,7 @@ import { teamEmails } from "./credit";
 import { sendMail, type PayEnv } from "./pay";
 import { cleanText, randHex, sha, type V2Ctx } from "./v2-types";
 import { gameEndMs } from "./v2-keys";
+import { retireHost } from "./hostsetup";
 
 const MAX_HOSTS = 5;
 
@@ -55,7 +56,7 @@ export async function hostRoute(c: V2Ctx, eid: string, rest: string): Promise<Re
     if (a.scopeEid && a.scopeEid !== eid) return json({ error: "This Host key is for another game.", code: "key-scope" }, 403);
     const hid = a.hid ?? a.kh;
     if (!hid) return json({ error: "Not allowed." }, 403);
-    await db.prepare("UPDATE organizer_key SET revoked=1 WHERE hash=? OR host_id=?").bind(hid, hid).run();
+    await retireHost(db, hid); // the same wipe as the organizer's own "retire": keys off, sealed e-mail and details forgotten
     const who = (a.label ?? "").trim() || "A Host";
     await tell(c, e.org, eid, "stepdown", `${who} has stepped down (asked from game ${eid}). Every key this Host held on your account no longer works; make a new Host key for any game they were to look after.`);
     return json({ ok: true, message: "You have stepped down. Your Host key, for every game on this account, no longer works. The organizer has been told." });
@@ -92,7 +93,7 @@ export async function hostRoute(c: V2Ctx, eid: string, rest: string): Promise<Re
     if (b?.approve !== true) { await db.prepare("UPDATE v2_handover SET state='declined', decided_ms=? WHERE id=?").bind(now, r.id).run(); return json({ ok: true, state: "declined" }); }
     if ((await gameEndMs(env, e, now)) !== null) return json({ error: "This game is over, so a new Host is not needed.", code: "game-over" }, 409);
     if (!(await c.spend(4))) return c.busy();
-    await db.prepare("UPDATE organizer_key SET revoked=1 WHERE hash=? OR host_id=?").bind(r.host_id, r.host_id).run(); // the old Host is retired first (so the 5-Host limit is never in the way)
+    await retireHost(db, r.host_id); // the old Host is retired first (so the 5-Host limit is never in the way)
     const k = await makeLabelHost(c, eid, e.org, label(b?.label ?? "") || (r.label ? `${r.label} (new)` : ""));
     await db.prepare("UPDATE v2_handover SET state='approved', decided_ms=? WHERE id=?").bind(now, r.id).run();
     return json({ ok: true, state: "approved", note: "The old Host's keys on this account no longer work. The new key is for this game only.", hostKey: k.key, id: k.id, game: eid, link: `${c.origin}/zc.html?k=${k.key}&e=${encodeURIComponent(eid)}`, shownOnce: true });
