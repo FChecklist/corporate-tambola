@@ -30,7 +30,7 @@ The twelve changes you approved on 13 Nov 2026 are built, except number 9 (the H
 
 ## What did NOT change in play
 
-No rule of play was touched: number calling, ticket making, claim detection, scoring and winners are as they were. `packages/` (the game engine and the beacon) has **no change at all**. The files that run the join, claim, result, settle, control, over and won routes were not edited. Five shared files (`worker.ts`, `winners.ts`, `lifecycle.ts`, `ai-link.ts`, `audit.ts`) received small additions that do nothing for any existing key (see "Diff summary").
+No rule of play was touched: number calling, ticket making, claim detection, scoring and winners are as they were. `packages/` (the game engine and the beacon) has **no change at all**. The files that run the join, claim, result, settle, control, over and won routes were not edited. Seven shared files (`worker.ts`, `winners.ts`, `lifecycle.ts`, `ai-link.ts`, `audit.ts`, `hostsetup.ts`, `pay.ts`) received small additions that do nothing for any existing key (see "Diff summary").
 
 ## Things you should decide or know
 
@@ -51,6 +51,13 @@ No rule of play was touched: number calling, ticket making, claim detection, sco
 15. The player's claim note asks the server every 30 to 45 seconds while review is on and the player has claimed; keep review off for very large games unless needed.
 16. Only organizers who make a game key (`ctg_`) get the 24-hour expiry; the account sign-in key and the standing AI link are unchanged.
 17. The older practice pages `play.html` and `screen.html` carry no language switch; the live game pages do.
+18. **A game key cannot make a practice game** (`POST /z/{id}/rehearsal` would have made Co-host keys that do not stop after the game). Only the organizer's own key can. Found by the key sweep; fixed.
+19. **A key made for one game is accepted only in the key header (or the `/ai/<key>` link).** Sent in a request body or a query string it counts as no key. One function (`authOfKey`) decides this; `docs/V2_ROUTE_TABLE.md` lists every route with the key kinds each accepts, and `v2-route-walk.test.ts` tests it.
+20. **Two small things the last audit left open, by choice** (the audited code was frozen): an expired Host key without personal data still opens the static Host manual page at `/ai/<key>` (no game data; every data route says the key has expired), and such a Host key keeps `override` (it can hand a prize to another claimant) for the game's life. If you want it tighter, dropping `override` from that key's list is one line; say so and it is re-audited.
+21. **Certificates and downloads after the end:** a person's game key can download the game's data, receipts and status after the end but not list certificates (the organizer's own key can). Names are erased about 20 hours after the game anyway. The data export blanks names beyond 3,000 people without saying so in the file.
+22. **Support limits** (10 a day, 20 open) are per account, so a Host key without personal data could use them up; every ticket mails the help address.
+23. **Deploy order matters for the daily clean-up:** if the code goes live before migration 0032, the nightly erase batch fails for every game (it names the new claim-review table). Always the migration first, as in the steps below.
+24. **Pre-existing, not changed, worth a look:** a Host's AI work link is given the report link (it opens names and mobiles); `POST /api/helpdesk/approve/start` is public and, with an approval token, returns a 30-minute account key.
 
 ## The migration and the rollback
 
@@ -109,12 +116,14 @@ If anything looks wrong: run `deploy/ROLLBACK_V2.sql` with wrangler as in its he
 | `apps/edge/src/lifecycle.ts` | the erase list gains one V2 table, so claim-review notes are erased with the game | erase list only |
 | `apps/edge/src/ai-link.ts` | three lines in the AI manual | no |
 | `apps/edge/src/audit.ts` | for V2 calls the internal audit log keeps only the plain choices, never typed words | logging only |
+| `apps/edge/src/hostsetup.ts`, `apps/edge/src/pay.ts` | a device key keeps the scope of the key it came from; checkout and proforma ignore one-game keys | no |
 | `apps/web/public` | language files, the More tools panel, the certificate check page, the claim-note line, guide entries; script tags in `z.html`, `zc.html`, `big.html`, `board.html`; the offline cache number | the game pages only gain script tags |
 | `pages/build.mjs` | new files in the list and the `/verify` route | no |
 | `deploy/ROLLBACK_V2.sql` | new | no |
+| `docs/` | plan, this note, progress, route table, audit rounds 1 to 9 | no |
 
 ## Checks done
 
 - Every item has tests, including the refusals (wrong role, expired key, after the end, AI never sees names, language stays per person, certificate tamper checks, deletion at 24 hours). They are in `apps/edge/test/v2-*.test.ts` and `apps/web/test/v2-pages.test.ts`.
-- Suite result against c6897f2: SUITE_RESULT_PLACEHOLDER
-- Independent audits (a fresh auditor each round, who did not build it): AUDIT_ROUNDS_PLACEHOLDER
+- Suite result against c6897f2: every test file run on its own, one at a time. **c6897f2 (live): 248 files, 4,027 tests pass, 1 fails** (`ai-enablement`, "the third route ... Trust page and llms.txt", already failing before V2). **V2: 264 files, 4,207 tests pass, and the same 1 fails.** The run also caught one V2 slip, the word "erase" in the AI manual line for game keys (customer text may not say it); it is now "delete the game" and the file passes again. That one-word edit came after the last audit round; nothing else did.
+- Independent audits (a fresh auditor each round, who did not build it): nine rounds, each by a fresh auditor who did not build it (`docs/AUDIT-V2-ROUND-1.md` to `-9.md`). Rounds 1, 2, 4, 5, 6 and 7 found real key or permission problems (all fixed); round 3 passed; **rounds 8 and 9 both passed, in a row**, the second on the final code (9153cc2; only documents changed after it). Their small leftovers are items 18 to 24 above.
