@@ -30,8 +30,8 @@ describe("join with an ID only", () => {
   });
   test("the same ID cannot take two tickets; a different person's ID gets their own", async () => {
     const g = await idGame();
-    const a = await j(await idJoin(g.id, 3)); const a2 = await idJoin(g.id, 3); const b = await idJoin(g.id, 4);
-    expect(a.error).toBeUndefined(); expect(a2.status).toBeLessThan(500); expect(b.status).toBe(200);
+    const a = await j(await idJoin(g.id, 3)); const a2r = await idJoin(g.id, 3); const a2 = await j(a2r); const b = await idJoin(g.id, 4);
+    expect(a.error).toBeUndefined(); expect(a2r.status).toBe(200); expect(a2.pid).toBe(a.pid); expect(a.pid).toBeTruthy(); expect(b.status).toBe(200); // the same person coming back gets the SAME ticket, never a second one
     expect(q("SELECT COUNT(*) AS n FROM seat WHERE eid=?", g.id)[0].n).toBe(2);
   });
   test("an ID game asks for no mobile in its own words: the page text says ID", async () => {

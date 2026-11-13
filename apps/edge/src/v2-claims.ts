@@ -48,8 +48,8 @@ export async function claimReviewRoute(c: V2Ctx, eid: string, rest: string): Pro
     const ticket = Number(b?.ticket), pattern = typeof b?.pattern === "string" && /^[a-z0-9]{2,12}(@[12])?$/.test(b.pattern) ? b.pattern : "", round = b?.round === undefined ? 1 : Number(b.round);
     const decision = b?.decision === "approve" || b?.decision === "reject" ? b.decision : "";
     if (!Number.isInteger(ticket) || ticket < 1 || !pattern || !Number.isInteger(round) || round < 1 || !decision) return json({ error: "Say which ticket and prize, and approve or reject.", code: "bad-review" }, 400);
-    const reason = cleanText(b?.reason, 120);
-    if (decision === "reject" && reason.length < 3) return json({ error: "Please give a short reason; the player will read it.", code: "need-reason" }, 400);
+    const reason = cleanText(b?.reason, 120).replace(/\+?\d[\d\s-]{5,}\d/g, "…").trim(); // a long run of digits (a mobile number) is never kept: the note is read by anyone who has the ticket number
+    if (decision === "reject" && reason.length < 3) return json({ error: "Please give a short reason; the player will read it. Please write no name and no number.", code: "need-reason" }, 400);
     const has = ((await db.prepare("SELECT pid FROM claim WHERE eid=? AND pattern=? AND round=?").bind(eid, pattern, round).all<any>()).results ?? []).some((r: any) => seatOfPid(r.pid) === ticket);
     if (!has) return json({ error: "There is no such claim to review.", code: "no-claim" }, 404);
     if (!(await c.spend(2))) return c.busy();

@@ -92,7 +92,7 @@
         (r.claims || []).forEach(function (c) {
           var st = c.review ? (c.review.decision === "reject" ? T("rejected") + ": " + c.review.reason : T("approved")) : T("not reviewed");
           var row = el("div", { style: "padding:6px 0;border-bottom:1px solid #e3e6ee" }, [el("div", { text: T("Ticket") + " " + c.ticket + " · " + c.pattern + " · " + st })]);
-          if (r.on) { row.appendChild(btn("Approve", function () { api("POST", base, { ticket: c.ticket, pattern: c.pattern, round: c.round, decision: "approve" }).then(function () { views.claims(); }, fail); }, true)); row.appendChild(btn("Reject", function () { var why = ask("A short reason the player will read"); if (why === null) return; api("POST", base, { ticket: c.ticket, pattern: c.pattern, round: c.round, decision: "reject", reason: why }).then(function () { views.claims(); }, fail); }, true)); }
+          if (r.on) { row.appendChild(btn("Approve", function () { api("POST", base, { ticket: c.ticket, pattern: c.pattern, round: c.round, decision: "approve" }).then(function () { views.claims(); }, fail); }, true)); row.appendChild(btn("Reject", function () { var why = ask("A short reason the player will read. Please write no name and no number."); if (why === null) return; api("POST", base, { ticket: c.ticket, pattern: c.pattern, round: c.round, decision: "reject", reason: why }).then(function () { views.claims(); }, fail); }, true)); }
           nodes.push(row);
         });
         put(nodes);

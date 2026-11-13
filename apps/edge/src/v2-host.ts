@@ -56,8 +56,8 @@ export async function hostRoute(c: V2Ctx, eid: string, rest: string): Promise<Re
     if (!hid) return json({ error: "Not allowed." }, 403);
     await db.prepare("UPDATE organizer_key SET revoked=1 WHERE hash=? OR host_id=?").bind(hid, hid).run();
     const who = (a.label ?? "").trim() || "A Host";
-    await tell(c, e.org, eid, "stepdown", `${who} has stepped down from game ${eid}. Their key no longer works.`);
-    return json({ ok: true, message: "You have stepped down. Your key no longer works. The organizer has been told." });
+    await tell(c, e.org, eid, "stepdown", `${who} has stepped down (asked from game ${eid}). Every key this Host held on your account no longer works; make a new Host key for any game they were to look after.`);
+    return json({ ok: true, message: "You have stepped down. Your Host key, for every game on this account, no longer works. The organizer has been told." });
   }
 
   // ---- 11b: a Host asks for a hand-over (the organizer decides)
@@ -94,7 +94,7 @@ export async function hostRoute(c: V2Ctx, eid: string, rest: string): Promise<Re
     await db.prepare("UPDATE organizer_key SET revoked=1 WHERE hash=? OR host_id=?").bind(r.host_id, r.host_id).run(); // the old Host is retired first (so the 5-Host limit is never in the way)
     const k = await makeLabelHost(c, eid, e.org, label(b?.label ?? "") || (r.label ? `${r.label} (new)` : ""));
     await db.prepare("UPDATE v2_handover SET state='approved', decided_ms=? WHERE id=?").bind(now, r.id).run();
-    return json({ ok: true, state: "approved", hostKey: k.key, id: k.id, game: eid, link: `${c.origin}/zc.html?k=${k.key}&e=${encodeURIComponent(eid)}`, shownOnce: true });
+    return json({ ok: true, state: "approved", note: "The old Host's keys on this account no longer work. The new key is for this game only.", hostKey: k.key, id: k.id, game: eid, link: `${c.origin}/zc.html?k=${k.key}&e=${encodeURIComponent(eid)}`, shownOnce: true });
   }
   return json({ error: "Not found" }, 404);
 }

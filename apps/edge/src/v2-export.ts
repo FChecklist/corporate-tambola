@@ -19,7 +19,7 @@ export async function exportRoute(c: V2Ctx, eid: string): Promise<Response> {
   if (req.method !== "GET") return json({ error: "Not found" }, 404);
   const e: any = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(eid).first();
   if (!e) return json({ error: "No such engagement." }, 404);
-  if (!(a.plat || (a.org && a.org === e.org && a.kind === "master"))) return json({ error: "Only the organizer can download the game's data.", code: "not-allowed" }, 403);
+  if (!(a.plat || (a.org && a.org === e.org && (a.kind === "master" || a.scopeKind === "ga")))) return json({ error: "Only the organizer can download the game's data.", code: "not-allowed" }, 403);
   const part = url.searchParams.get("part") ?? "all", format = url.searchParams.get("format") ?? "json";
   if (!PARTS.has(part)) return json({ error: "part must be all, results, winners, tickets or payments.", code: "bad-part" }, 400);
   if (format !== "json" && format !== "csv") return json({ error: "format must be json or csv.", code: "bad-format" }, 400);

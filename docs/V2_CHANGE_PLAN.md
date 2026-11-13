@@ -21,7 +21,7 @@ Plus view-only static files (`lang/*.js`, `v2.js`, `v2.css`) and one script tag 
 
 - **Already there:** a per-person language dropdown (`#langsel`) in `z.js`, `zc.js`, `board.js`, `big.js`, remembered in this browser (`localStorage ctz-lang`), driven by `ZG.LANGS` / `ZG.TABLES` (`packages/beacon/src/messages.ts`). English was the only table.
 - **Build:** `apps/web/public/lang/hi.js` (Hindi) and `lang/ui.js` (the mechanism): a language is a file that calls `CTLang.add(code, name, {msg:{...}, ui:{...}})`. `msg` is merged into `ZG.TABLES[code]` (claim notices); `ui` is an English-phrase to translated-phrase table applied to the page text only when the person's language is not English (a small text-node pass; with English chosen nothing runs). Adding German later = adding `lang/de.js` and one script tag.
-- **Files:** new `lang/ui.js`, `lang/hi.js`; script tags in `z.html`, `zc.html`, `play.html`, `big.html`, `board.html`, `screen.html`; `pages/build.mjs` FILES list.
+- **Files:** new `lang/ui.js`, `lang/hi.js`; script tags in `z.html`, `zc.html`, `big.html`, `board.html` (the older `play.html` and `screen.html` do not carry it); `pages/build.mjs` FILES list.
 - **Routes:** none. The choice never goes to the server, so it cannot touch anyone else's view.
 - **Play path:** NO. View only. `zgame.js` (compiled) is not rebuilt; the Hindi table is added at runtime into the existing tables.
 - **Migration:** none.
@@ -133,3 +133,4 @@ The build followed the plan; these are the places where the finished code differ
 - **Claim review:** a player reads their note at `GET /api/z/{id}/v2/claimreview/note?pid=` (public); the Host decides with `POST /api/z/{id}/v2/claimreview`.
 - **Extra routes:** `GET /api/z/{id}/v2/status` (is the game over, when do game keys expire), `GET /api/org/v2/notices` (step-down and hand-over notices).
 - **The language switch** needed one fix on the way: a box's hint text (placeholder) is translated, what a person typed never is.
+- **Audit round 1 corrections:** a game key made for an AI (`ga`) now acts exactly as the organizer's AI key everywhere (it is read as an AI key at sign-in), so every existing "an AI may not" rule applies; it may still download the game's data (names never included) and certificates. It cannot make a new game from the old one or erase data after the end; the organizer does that. A Host key made without personal data (`lh`) no longer reaches the participant report link, and sees prizes in the same "outside" form (ticket numbers only) as an AI. `play.html` and `screen.html` are the older practice pages: they carry no language files (the live pages `z.html`, `zc.html`, `big.html`, `board.html` do).

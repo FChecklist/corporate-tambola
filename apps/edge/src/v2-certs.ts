@@ -40,7 +40,7 @@ async function chainOk(env: any, rows: CertRow[], upTo: number): Promise<boolean
 }
 
 const isAiCall = (c: V2Ctx) => c.a.kind === "ai" || c.a.scopeKind === "ga" || !!c.req.headers.get("x-ai-model");
-const mayUse = (c: V2Ctx, org: string | null) => c.a.plat || (!!c.a.org && c.a.org === org && c.a.kind === "master");
+const mayUse = (c: V2Ctx, org: string | null) => c.a.plat || (!!c.a.org && c.a.org === org && (c.a.kind === "master" || c.a.scopeKind === "ga"));
 
 export async function certsRoute(c: V2Ctx, eid: string, rest: string): Promise<Response> {
   const { a, req, env, now, json } = c;

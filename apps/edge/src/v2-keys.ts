@@ -22,7 +22,7 @@ export async function gameEndMs(env: any, e: any, now: number): Promise<number |
 }
 
 /** Existing game actions a Host key made without personal data (scope 'lh') may call: the narrow Host rights (the same set a Host's AI link has) plus what the Host console reads. */
-const LH_GET = new Set(["participants", "summary", "results", "info", "prizes", "life", "claims", "seats", "control", "gamelog", "changes", "presence", "reportlink", "myprizes"]);
+const LH_GET = new Set(["participants", "summary", "results", "info", "prizes", "life", "claims", "seats", "control", "gamelog", "changes", "presence", "myprizes"]);
 const LH_POST = new Set(["announce", "prizegiven", "override"]);
 /** After the game is over, a game master key may only: delete data, download data, fetch the invoice, make a new game like it. */
 const OVER_POST = new Set(["erase", "clone"]);
@@ -72,6 +72,7 @@ export async function scopeGate(c: V2Ctx): Promise<Response | null> {
 /** "Make a new game like this one" through a game key: the same clone as the console's, and the new game gets its own key (so the work can go on without the organizer). */
 async function cloneWithKey(c: V2Ctx, e: any): Promise<Response> {
   const { a, env, now, json, req, origin } = c;
+  if (a.scopeKind === "ga") return json({ error: "A new game is the organizer's to make: please ask them to make it from their own console.", code: "key-scope" }, 403);
   if (a.kind !== "master" || !a.org || a.org !== e.org) return json({ error: "Not allowed.", code: "key-scope" }, 403);
   const b = (await c.body(req, 512)) ?? {};
   const r = await cloneGame(env as any, e, b, now, origin, (n) => c.spend(n), json);

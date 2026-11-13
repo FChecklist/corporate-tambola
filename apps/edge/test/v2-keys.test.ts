@@ -100,10 +100,11 @@ describe("after the game: delete, download, invoice, clone, and nothing else; go
     expect((await call("GET", `/api/z/${b.id}/summary`, undefined, keyH(k), now)).status).toBe(403);
     const row = one("SELECT scope_eid, scope_src FROM organizer_key WHERE scope_eid=?", b.id); expect(row.scope_src).toBe(g.id);
   });
-  test("a key made for an AI stays an AI key when it clones", async () => {
+  test("a key made for an AI cannot make a new game: that is the organizer's to do", async () => {
     const g = await paidGame(); const k = await gameKey(g, { ai: true, label: "ChatGPT" }); endGame(g.id, T + HOUR);
-    const b = await j(await call("POST", `/api/z/${g.id}/clone`, {}, keyH(k), T + 2 * HOUR));
-    expect(one("SELECT scope_kind FROM organizer_key WHERE scope_eid=?", b.id).scope_kind).toBe("ga");
+    const r = await call("POST", `/api/z/${g.id}/clone`, {}, keyH(k), T + 2 * HOUR); expect(r.status).toBe(403);
+    expect((await j(r)).error).toMatch(/organizer/i);
+    expect(q("SELECT 1 FROM organizer_key WHERE scope_eid<>? AND scope_eid IS NOT NULL", g.id).length).toBe(0);
   });
   test("24 hours after the end the key is expired (401, with a plain message)", async () => {
     const g = await paidGame(); const k = await gameKey(g); const end = T + HOUR; endGame(g.id, end);
