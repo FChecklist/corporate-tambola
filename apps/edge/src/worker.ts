@@ -650,6 +650,10 @@ export const SAFE_WRITE = /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/(?:join|checkin|claim
  *  /api/z/:id/leave (in SAFE_WRITE, added 8 Nov 2026 after the ramp run: the first overload of that run was a /leave) - one all-or-nothing batch takes the seat out; a repeat after it ran answers "not the phone that holds this seat" (never a second removal);
  *  /api/z/:id/publish (in SAFE_WRITE) - the publish is ONE all-or-nothing batch that also records the e-mail owed; a repeat of an already published game answers "already" and sends an owed e-mail once. */
 export const RETRY_POST_EXACT: ReadonlySet<string> = new Set(["/api/auth/verify", "/api/z"]);
+/** The three SET-UP steps of a game (sign-in, create, publish). D1 overloads for a whole 10-second window, so asking again after a quarter of a second does not outlast it: these steps wait longer between repeats
+ *  (about 13 seconds in all, random +/-40 %, so twelve organizers that failed together do not come back together). A join keeps its short 3 tries. The tests set scale to 0 so they do not wait. 13 Nov 2026 (TARGET-99 Tambola plan). */
+export const setupRetry = { delaysMs: [400, 1200, 2500, 4000, 5000], scale: 1, sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)) };
+export const isSetupStep = (method: string, pathname: string): boolean => method === "POST" && (pathname === "/api/auth/verify" || pathname === "/api/z" || /^\/api\/z\/[A-Za-z0-9_-]{4,40}\/publish$/.test(pathname));
 export const retryKind = (method: string, pathname: string): "read" | "write" | "once" => method === "GET" || method === "HEAD" ? "read" : method !== "OPTIONS" && (SAFE_WRITE.test(pathname) || (method === "POST" && RETRY_POST_EXACT.has(pathname))) ? "write" : "once";
 const busyReply = (read = false): Response => new Response(JSON.stringify({ error: read ? "The doors are very busy just now. Please wait a few seconds; nothing is lost, and the page will try again by itself." : "The doors are very busy just now, with many guests arriving at the very same moment. Please wait a few seconds; the seat is still waiting, and the page will try again by itself.", code: "busy", retryAfter: 3 }), { status: 503, headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "3" } });
 export async function handle(req: Request, env: Env, now = Date.now(), waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
@@ -672,8 +676,9 @@ export async function handle(req: Request, env: Env, now = Date.now(), waitUntil
       try { res = await handleCore(attempt === 0 || !master ? req : master.clone(), env, now, waitUntil); break; }
       catch (e) {
         if (!transientDb(e)) throw e;
-        if (kind === "once" || attempt >= joinRetry.tries) { await countError(env.DB, now).catch(() => {}); const p0 = recordServerError(env.DB, req, e, 503, now); if (waitUntil) waitUntil(p0); else await p0.catch(() => {}); return busyReply(!/\/join$/.test(new URL(req.url).pathname)); }
-        attempt++; await joinRetry.sleep(Math.round(joinRetry.baseMs * attempt * (0.6 + Math.random() * 0.8)));
+        const setup = isSetupStep(req.method, new URL(req.url).pathname), maxTries = setup ? setupRetry.delaysMs.length : joinRetry.tries;
+        if (kind === "once" || attempt >= maxTries) { await countError(env.DB, now).catch(() => {}); const p0 = recordServerError(env.DB, req, e, 503, now); if (waitUntil) waitUntil(p0); else await p0.catch(() => {}); return busyReply(!/\/join$/.test(new URL(req.url).pathname)); }
+        attempt++; if (setup) await setupRetry.sleep(Math.round(setupRetry.delaysMs[attempt - 1]! * setupRetry.scale * (0.6 + Math.random() * 0.8))); else await joinRetry.sleep(Math.round(joinRetry.baseMs * attempt * (0.6 + Math.random() * 0.8)));
       }
     }
   } catch (e) { await countError(env.DB, now); const p = recordServerError(env.DB, req, e, 500, now); if (waitUntil) waitUntil(p); else await p; return json({ error: "Something went wrong. Please try again.", code: "server-error" }, 500); }
