@@ -21,7 +21,8 @@ async function makeLabelHost(c: V2Ctx, eid: string, org: string, label: string):
   ]);
   return { key, id: kh.slice(0, 10) };
 }
-const activeHosts = async (c: V2Ctx, org: string): Promise<number> => (await c.env.DB.prepare("SELECT COUNT(*) AS c FROM organizer_key WHERE org=? AND kind='host' AND revoked=0 AND expires_ms IS NULL AND (host_id IS NULL OR host_id=hash) AND COALESCE(created_by,'')<>'d'").bind(org).first<{ c: number }>())?.c ?? 0;
+/** The Host keys made without personal data for THIS game (at most five at a time). They never use one of the account's five Host places, and an old game's keys never block a new game. */
+const activeHosts = async (c: V2Ctx, eid: string): Promise<number> => (await c.env.DB.prepare("SELECT COUNT(*) AS c FROM organizer_key WHERE scope_eid=? AND scope_kind='lh' AND revoked=0").bind(eid).first<{ c: number }>())?.c ?? 0;
 
 async function tell(c: V2Ctx, org: string, eid: string, kind: string, text: string): Promise<void> {
   await c.env.DB.prepare("INSERT INTO v2_notice(org,eid,kind,text,at_ms) VALUES(?,?,?,?,?)").bind(org, eid, kind, text, c.now).run();
@@ -41,7 +42,7 @@ export async function hostRoute(c: V2Ctx, eid: string, rest: string): Promise<Re
     if (!accountOrGameMaster(c, e.org) || (a.scopeEid && a.scopeEid !== eid)) return json({ error: "Only the organizer (or their game key) can make a Host key.", code: "not-allowed" }, 403);
     if (a.viaLink) return json({ error: "A person makes Host keys, not an AI link.", code: "not-allowed" }, 403);
     if ((await gameEndMs(env, e, now)) !== null) return json({ error: "This game is over, so a new Host is not needed.", code: "game-over" }, 409);
-    if ((await activeHosts(c, e.org)) >= MAX_HOSTS) return json({ error: `You can have up to ${MAX_HOSTS} Hosts at a time. Retire one first.`, code: "too-many" }, 409);
+    if ((await activeHosts(c, eid)) >= MAX_HOSTS) return json({ error: `You can have up to ${MAX_HOSTS} Hosts at a time. Retire one first.`, code: "too-many" }, 409);
     if (!(await c.spend(4))) return c.busy();
     const lab = label((await c.body(req, 256))?.label ?? "");
     const k = await makeLabelHost(c, eid, e.org, lab);

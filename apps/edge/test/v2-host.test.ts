@@ -55,6 +55,9 @@ describe("item 7: a Host key without personal data", () => {
     const g = await paidGame();
     for (let i = 0; i < 5; i++) await labelHost(g, "H" + i);
     const r = await call("POST", `/api/z/${g.id}/v2/host`, {}, keyH(g.key)); expect(r.status).toBe(409); expect((await j(r)).code).toBe("too-many");
+    // the game-only keys never use up the account's five Host places, and an old game's keys never block a new game
+    const o = await call("GET", "/api/org/team", undefined, keyH(g.key)); expect(o.status).toBeLessThan(500);
+    const g3 = await paidGame(); expect((await call("POST", `/api/z/${g3.id}/v2/host`, {}, keyH(g3.key))).status).toBe(200);
     const g2 = await paidGame(); endGame(g2.id, T + HOUR);
     const r2 = await call("POST", `/api/z/${g2.id}/v2/host`, {}, keyH(g2.key), T + 2 * HOUR); expect(r2.status).toBe(409); expect((await j(r2)).code).toBe("game-over");
   });

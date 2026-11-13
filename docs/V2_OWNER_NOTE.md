@@ -41,7 +41,12 @@ No rule of play was touched: number calling, ticket making, claim detection, sco
 5. **Stepping down** retires that Host's keys on the whole account (the messages now say so), not just for one game.
 6. **Certificates are kept** (non-personal rows) so the check link keeps working; there is no expiry yet.
 7. **A game that never ends** keeps its keys until the game is purged.
-8. The older practice pages `play.html` and `screen.html` carry no language switch; the live game pages do.
+8. **A Host key made without personal data keeps `announce`, `override` and `prizegiven` for 24 hours after the game ends**, the same rights a normal Host has. It can also be opened as a Host AI link (`/ai/<key>`); then its calls are labelled AI and are limited to what a Host's AI link may do. Game keys (`ctg_`) never work as an `/ai/` link.
+9. **A Host's reason for rejecting a claim** is shown to the players of that game, and anyone who has the ticket number can read it. Hosts are told to write no name or number, and long digit runs are removed, but a name typed in words is kept for the life of the game.
+10. **Certificates stop checking if the platform's data key (`DATA_KEY` / `ORGANIZER_SECRET`) is changed.** Do not rotate it without a plan for the old certificates.
+11. **Support tickets and hand-over notes** are free text, kept 365 days.
+12. Game keys (and the keys of AI) appear in the team's key list as ordinary keys. The game-only Host keys do **not** use up the account's five Host places; at most five per game.
+13. The older practice pages `play.html` and `screen.html` carry no language switch; the live game pages do.
 
 ## The migration and the rollback
 
@@ -74,7 +79,7 @@ If anything looks wrong: run `deploy/ROLLBACK_V2.sql` with wrangler as in its he
 `keys`, `keys/revoke`, `receipts`, `receipts/send`, `certs`, `certs/issue`, `certs/csv`, `certs/{certId}.html`, `export`, `host`, `host/stepdown`, `host/handover`, `host/requests`, `host/requests/{n}`, `claimreview`, `claimreview/mode`, `aitrail`, `status`.
 
 **Other keyed**
-`GET /api/org/v2/receipts`, `GET /api/org/v2/notices`, `POST|GET /api/v2/support`, `GET /api/v2/support/{n}`, and (our own key only) `/api/owner/v2/support[/{n}]`.
+`GET /api/org/v2/receipts`, `GET /api/org/v2/notices`, `GET|POST /api/v2/support`, `GET|POST /api/v2/support/{n}`, and (our own key only) `/api/owner/v2/support[/{n}]`.
 
 **Changed behaviour**
 - `GET /api/whoami` answers for a game key: `{gameKey: true, game, over, expiresMs}`.

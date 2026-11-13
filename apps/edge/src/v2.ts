@@ -87,6 +87,8 @@ async function orgNotices(c: V2Ctx): Promise<Response> {
 /** Daily clean-up (called from purgeOld): old support tickets, and the V2 rows of games that no longer exist. */
 export async function v2Purge(env: { DB: V2Ctx["env"]["DB"] }, now: number): Promise<void> {
   await purgeSupport(env, now).catch(() => undefined);
+  // a game key stops answering 24 hours after its game ends (the gate says so at once); here the row is also switched off, so the team list is tidy
+  await env.DB.prepare("UPDATE organizer_key SET revoked=1 WHERE scope_eid IS NOT NULL AND revoked=0 AND (scope_eid IN (SELECT eid FROM life WHERE end_ms IS NOT NULL AND end_ms<?) OR scope_eid IN (SELECT id FROM engagement WHERE cancelled_ms IS NOT NULL AND cancelled_ms<?))").bind(now - KEY_AFTER_END_MS, now - KEY_AFTER_END_MS).run().catch(() => undefined);
   for (const sql of [
     "DELETE FROM organizer_key WHERE scope_eid IS NOT NULL AND scope_eid NOT IN (SELECT id FROM engagement)",
     "DELETE FROM v2_flag WHERE eid NOT IN (SELECT id FROM engagement)",

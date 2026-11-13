@@ -113,7 +113,7 @@ Today the organizer's sign-in key (`ctk_`, kind `master`) belongs to the whole a
 
 ## Migrations (all additive, file `0032_v2_changes.sql`, same text as `V2_SCHEMA`)
 
-`organizer_key` +3 columns, `ai_audit` +1 column, new tables `v2_cert`, `v2_support`, `v2_support_msg`, `v2_claim_review`, `v2_handover`, and indexes. No existing column or table is changed or dropped. Rollback of the data side is not needed (the old code ignores the new columns and tables); rollback of the code is a Pages rollback to the previous deployment id.
+`organizer_key` +3 columns, `ai_audit` +1 column, new tables `v2_cert`, `v2_support`, `v2_support_msg`, `v2_claim_review`, `v2_handover`, and indexes. No existing column or table is changed or dropped. Rollback of the data side is not needed (the old code ignores the new columns and tables); rollback of the code is a Pages rollback to the previous deployment id, PRECEDED by `deploy/ROLLBACK_V2.sql` (it switches off every V2-made key, which the old code would read as a full key); run the SQL again after the Pages rollback to close the gap between the two steps.
 
 ## Core play path summary
 

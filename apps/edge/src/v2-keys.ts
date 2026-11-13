@@ -40,7 +40,7 @@ export async function scopeGate(c: V2Ctx): Promise<Response | null> {
   const end = await gameEndMs(env, e, now);
   if (end !== null && now >= end + KEY_AFTER_END_MS) return json({ error: MSG_EXPIRED, code: "key-expired" }, 401);
   const over = end !== null, lh = a.scopeKind === "lh", M = req.method;
-  if (M === "GET" && p === "/api/whoami") return json({ kind: lh ? "host" : "master", gameKey: true, game: a.scopeEid, over, expiresMs: end === null ? null : end + KEY_AFTER_END_MS });
+  if (M === "GET" && p === "/api/whoami") return json({ kind: lh ? "host" : a.scopeKind === "ga" ? "ai" : "master", gameKey: true, game: a.scopeEid, over, expiresMs: end === null ? null : end + KEY_AFTER_END_MS });
   if (OPEN_OK.test(p)) return null;
   const m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/([A-Za-z0-9-]+)(?:\/(.*))?$/);
   if (!m) return json({ error: MSG_SCOPE, code: "key-scope" }, 403);

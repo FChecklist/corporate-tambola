@@ -18,8 +18,10 @@ const hit = (m: string, id: string, p: string, key: string, body?: unknown, now 
 describe("a game key for an AI acts as an AI key, not a master", () => {
   test("the report link is never given to it, to read or to replace", async () => {
     const { g, ai, mk } = await setup();
+    W.raw.prepare("INSERT INTO kv(k,v) VALUES(?,?)").run(`rpt/${g.id}`, JSON.stringify({ stage: "done" })); // the report is ready: a person's key gets the address, an AI key never does
     const get = await hit("GET", g.id, "reportlink", ai); const gb = await j(get);
-    expect(gb.url ?? null).toBeNull();
+    expect(gb.ready).toBe(true); expect(gb.url ?? null).toBeNull();
+    expect((await j(await hit("GET", g.id, "reportlink", mk))).url).toMatch(/^https?:\/\//);
     const salt0 = q("SELECT v FROM kv WHERE k=?", `rptsalt/${g.id}`).length;
     const post = await hit("POST", g.id, "reportlink", ai, {}); expect(post.status).toBe(403);
     expect(q("SELECT v FROM kv WHERE k=?", `rptsalt/${g.id}`).length).toBe(salt0);
@@ -89,5 +91,31 @@ describe("a Host's reason never carries a mobile number", () => {
     expect(d.status).toBe(200);
     const row = q("SELECT reason FROM v2_claim_review WHERE eid=?", g.id)[0] as { reason: string };
     expect(row.reason).not.toMatch(/\d{5}/); expect(row.reason).toMatch(/about it/);
+  });
+});
+
+describe("ways round the gate stay shut", () => {
+  test("game keys never work as /ai/ links, and odd spellings of a route are refused", async () => {
+    const { g, ai, mk } = await setup();
+    for (const k of [ai, mk]) expect((await call("GET", `/ai/${k}`, undefined, {})).status).toBe(404); // game keys are never accepted in an /ai/ link
+    for (const p of ["//api/z/" + g.id + "/roster", `/api/z/${g.id}/Roster`, `/api/z/${g.id}/roster/`, `/api/z/${g.id}/%72oster`, `/api/z/${g.id}/PRIZES`]) {
+      const r = await call("GET", p, undefined, keyH(ai)); expect([403, 404]).toContain(r.status);
+    }
+  });
+  test("whoami calls an AI game key an AI key", async () => {
+    const { ai, mk } = await setup();
+    expect((await j(await call("GET", "/api/whoami", undefined, keyH(ai)))).kind).toBe("ai");
+    expect((await j(await call("GET", "/api/whoami", undefined, keyH(mk)))).kind).toBe("master");
+  });
+  test("game-only Host keys never use the account's five Host places, and they are switched off after the game ends", async () => {
+    const g = await paidGame(); for (let i = 0; i < 5; i++) await labelHost(g, "H" + i);
+    const rows = () => (q("SELECT COUNT(*) AS c FROM organizer_key WHERE scope_eid=? AND revoked=0", g.id)[0] as { c: number }).c;
+    expect(rows()).toBe(5);
+    const acct = await call("POST", "/api/org/host", { label: "Real Host", email: "host@example.com", mobile: "9876543210" }, keyH(g.key));
+    expect(await j(acct)).not.toMatchObject({ error: expect.stringMatching(/up to 5 Hosts/) });
+    endGame(g.id, T);
+    const { v2Purge } = await import("../src/v2");
+    await v2Purge(W.env as any, T + 25 * HOUR);
+    expect(rows()).toBe(0);
   });
 });
