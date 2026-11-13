@@ -122,3 +122,14 @@ Today the organizer's sign-in key (`ctk_`, kind `master`) belongs to the whole a
 | **No** | `packages/engine/**`, `packages/beacon/**`, `worker.ts` routes for `join`, `claims`, `results`, `settle`, `control`, `over`, `won`, `seats`, `presence`; `winners.ts`, `claimhold.ts`, `lifecycle.ts`, `people.ts`, `pay.ts`, `clone.ts` |
 | **Edited, small, play-neutral** | `worker.ts` hooks H1 to H4; `apps/web/public/*.html` script tags |
 | **New** | `apps/edge/src/v2-*.ts`, `apps/web/public/lang/*`, `v2.js`, `v2.css`, `verify.*`, migration 0032, tests |
+
+## As built (corrections to the plan above, 13 Nov 2026)
+
+The build followed the plan; these are the places where the finished code differs from the words above.
+
+- **Files outside `v2-*.ts` that were edited**, all small and play-neutral: `worker.ts` (hooks H1 to H4, the exported `Auth` type gets the scope fields, the daily purge calls `v2Purge`, four lines in the AI manual and `AI_MANIFEST`), `winners.ts` (`auditAi` takes an optional `label` and `listAiAudit` returns it; the plan said it would not be edited), `lifecycle.ts` (one more table in the existing `erasePersonal` list: `v2_claim_review`), `ai-link.ts` (three manual lines), `guide.js` (a V2 block of kind messages), `zsw.js` (offline list, cache name v42), `pages/build.mjs` (ships the new files, `/verify` header rule), `z.html`, `zc.html`, `big.html`, `board.html` (script tags). `v2-audit.ts` and `v2.css` were not needed.
+- **Key scopes** are `gm` (a person's game key), `ga` (a game key made for an AI) and `lh` (a Host key made without personal data).
+- **Certificates:** `v2_cert` has no `game` column (the game id is its `eid`). The spreadsheet list is `GET /api/z/{id}/v2/certs/csv`.
+- **Claim review:** a player reads their note at `GET /api/z/{id}/v2/claimreview/note?pid=` (public); the Host decides with `POST /api/z/{id}/v2/claimreview`.
+- **Extra routes:** `GET /api/z/{id}/v2/status` (is the game over, when do game keys expire), `GET /api/org/v2/notices` (step-down and hand-over notices).
+- **The language switch** needed one fix on the way: a box's hint text (placeholder) is translated, what a person typed never is.
