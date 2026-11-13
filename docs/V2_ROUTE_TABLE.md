@@ -183,7 +183,7 @@ Scoped col: gm = M-like while live; ga = A-like; lh = host narrow set. After gam
 | POST /api/z/{id}/discard | header | P or M | deletes draft | nothing | log edit |
 | POST /api/z/{id}/cancel, /reopen, GET /cancel-preview | header | can(,true) | cancel / reopen / preview refund | nothing | log cancel |
 | GET /api/z/{id}/cohost | header | can() ; lists org keys incl cohost (ids) | key list | nothing | - |
-| GET/POST /api/z/{id}/rehearsals, /rehearsal, /rehearsalclose | header | can(,true) (gm ok) | rehearsal game | **copyCohosts: new unscoped ctc_ keys for every active cohost** (links `#cohost=<key>`) | log edit |
+| GET/POST /api/z/{id}/rehearsals, /rehearsal, /rehearsalclose | header | can(,true); **POST `/rehearsal` is refused for gm and ga keys (`key-scope`, fixed in f233d52)** | rehearsal game | account key only: copyCohosts makes new unscoped ctc_ keys for every active cohost (links `#cohost=<key>`) | log edit |
 | GET/PUT/POST /api/z/{id}/control, /control/key, /control/request, /request/clear | GET/POST control: none (signed message is the authorization); PUT key body publicKey; request body action | GET/POST control pub; PUT key can(,true); POST request can() including ai; GET request can(); clear can(,true); H viaLink not allowed on sub-routes | control state | nothing | log pause/resume/stop/erase |
 | POST /api/z/{id}/paylink | header | M, H, C (not ai, not viaLink); gm ok | `paylink.html?t=<token>` | **pay link TOKEN (48 hex)** | log pay ? |
 | POST /api/z/{id}/pay-with-credit | header | M, H, C (ai refused); gm ok | pays from credit | nothing | log pay |
@@ -342,7 +342,7 @@ What a **scoped** key becomes is given per flow.
 | POST /api/org/host | INSERT cth_ (sealed email+pii, host_id=hash) + 24h temp host key mailed | not reachable by gm (blocked) |
 | POST /api/org/host/link | `UPDATE organizer_key SET hash=?, host_id=?, created_ms=? WHERE hash=?` on an unverified host row (no scope_eid filter) | an lh row has verified_ms, so 409; any scoped row without verified_ms (? check other scoped inserts: gm/ga rows are kind master, not host rows) would be re-keyed and keep its scope |
 | POST /api/org/cohost | INSERT ctc_ (sealed pii, eid) | gm cannot reach (/api/org blocked) |
-| POST /api/z/{id}/rehearsal (copyCohosts) | INSERT NEW ctc_ cohost key (unscoped) for each active cohost of the real game | **gm key (reaches /api/z/{id}/rehearsal) mints unscoped Co-host keys that do not die 24h after the game ends** |
+| POST /api/z/{id}/rehearsal (copyCohosts) | INSERT NEW ctc_ cohost key (unscoped) for each active cohost of the real game | **fixed (f233d52): a gm or ga key is refused here; only the organizer's account key makes a practice game** |
 | POST /api/z/{id}/clone | cloneGame: no key copying. With gm key: INSERT new ctg_ gm key for the NEW game (insertGameKey, scope_src = old game) | **gm key -> new gm key for a new game; its 24h clock starts from the new game's end, so a chain of clones extends access indefinitely; withPeople:true moves personal data into the new game under the new key** |
 | POST /api/z/{id}/v2/keys | INSERT ctg_ gm or ga | only an account M (gm refused) |
 | POST /api/z/{id}/v2/host | INSERT cth_ lh (no expires_ms) | an account M or **gm** key can make lh Host keys (up to 5) |
