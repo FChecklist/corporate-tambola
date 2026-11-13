@@ -722,7 +722,7 @@ async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promi
   const m = url.pathname.match(/^\/ai\/([^/]+)(?:\/(.*))?$/s);
   if (!m || !LINK_KEY.test(m[1]!)) return linkGone();
   const key = m[1]!;
-  const a = await authOfKey(env, key, now);
+  const a = await authOfKey(env, key, now, true); // the link is rewritten into a header call that passes the scope gate
   if (a.plat || !a.org || (a.kind !== "ai" && a.kind !== "host")) return linkGone();
   const origin = (env as PayEnv).PUBLIC_ORIGIN ?? url.origin;
   const role: LinkRole = a.kind;
@@ -837,14 +837,15 @@ function d1kv(env: Env): KV { return {
 
 export interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null; /** V2: hash of the key presented, its private label, and (for a key made for ONE game) the game, the kind (gm, ga, lh) and the game it was cloned from */ kh?: string; label?: string | null; scopeEid?: string | null; scopeKind?: "gm" | "ga" | "lh" | null; scopeSrc?: string | null; viaLink?: boolean; eid?: string | null; /** A Host: the identity the key belongs to and whether the first-open setup (confirmed e-mail + mobile) is finished. */ hid?: string; hostReady?: boolean ; temp?: boolean }
 async function authOf(req: Request, env: Env, now: number): Promise<Auth> {
-  return authOfKey(env, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), now);
+  return authOfKey(env, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), now, true);
 }
-async function authOfKey(env: Env, presented: string, now: number): Promise<Auth> {
+/** THE one place a presented key becomes an identity. `gated` = the call comes through the scope gate (the x-organizer / Bearer header, or the /ai/<key> path that is rewritten into that header). A key made for ONE game (scope_eid set, V2) is accepted ONLY when gated: any other way of presenting a key (a request body, as the Google sign-in does; a query string; a helper flow) sees it as no key at all, so it can never be exchanged for a longer-lived or wider key. */
+export async function authOfKey(env: Env, presented: string, now: number, gated = false): Promise<Auth> {
   if (!presented) return { plat: false, org: null, kind: null };
   if (env.ORGANIZER_SECRET && presented === env.ORGANIZER_SECRET) return { plat: true, org: null, kind: "platform" };
   const kh = await sha("key|" + presented);
   const row = await env.DB.prepare("SELECT org, kind, eid, host_id, expires_ms, label, scope_eid, scope_kind, scope_src FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(kh, now).first<{ org: string; kind: "master" | "ai" | "host" | "cohost"; eid: string | null; host_id: string | null; expires_ms: number | null; label: string | null; scope_eid: string | null; scope_kind: "gm" | "ga" | "lh" | null; scope_src: string | null }>();
-  if (!row) return { plat: false, org: null, kind: null };
+  if (!row || (row.scope_eid && !gated)) return { plat: false, org: null, kind: null };
   if (row.kind === "host") { // a Host's first-open link works once and for 7 days; the console works only after setup (hostsetup.ts)
     const hs = await hostKeyStatus(env.DB, kh, row.host_id, now);
     if (!hs.usable) return { plat: false, org: null, kind: null };
