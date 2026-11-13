@@ -1,0 +1,30 @@
+# V2 progress notes (for BOSS)
+
+Branch `tambola-v2`, worktree `C:\ct\test-sites\_wt\tambola-v2`, built off live **c6897f2**. Nothing is deployed, pushed, or changed in DNS or secrets. The main folder `C:\ct\test-sites\tambola` was not touched.
+
+## Where things stand
+
+| Step | State |
+|---|---|
+| A. `docs/V2_CHANGE_PLAN.md` (files, routes, play-path touch, migrations; "As built" at the end) | done |
+| B/C. Build and tests for the 12 items (item 9 deliberately not built) | done, see the test list below |
+| D. Independent Rule 7c audit, two consecutive PASS | see `docs/AUDIT-V2-ROUND-N.md` |
+| E. `docs/V2_OWNER_NOTE.md` | written after the audit |
+
+## Tests
+
+New files: `apps/edge/test/v2-keys`, `v2-host`, `v2-receipts`, `v2-certs`, `v2-export`, `v2-ai-label`, `v2-support`, `v2-claims`, `v2-join-id` (`.test.ts`, shared helper `v2-helpers.ts`) and `apps/web/test/v2-pages.test.ts`. Existing tests touched, only to add the new files to a list: `migrations.test.ts` (0001 to 0032), `guide.test.ts` (the V2 source files may carry plain "Not found" fallbacks), `ai-mail.test.ts` (`v2-host.ts` makes a limited Host key and mails nothing).
+
+The whole suite was run **one file at a time** (one process, low-RAM laptop). Result against c6897f2 is in the owner note.
+
+## What a reviewer should know
+
+- Game keys are a NEW kind of key (`ctg_`). The account sign-in key (`ctk_`) is unchanged on purpose: narrowing it would lock organizers out of their own account.
+- A master-key call is labelled "AI" in the trail only when it says it is an AI (header `x-ai-model: AI: <name>`, which the gateway sends). Calls with the AI key, an AI game key, or a Host's AI link are always labelled.
+- Existing consent K4 keeps a winner's sealed name and mobile (`prize.pii`) for 365 days, which conflicts with the 24-hour promise on the site. V2 does not use `prize.pii` and does not make this worse; the owner should reconcile K4 and the promise.
+- Hindi covers the core player phrases and the new panel; every other phrase stays English until more is translated. Adding a language is adding one file.
+
+## Not done, on purpose
+
+- Item 9 (Host presses "Next number"): owner said not needed.
+- Nothing was run on live, on other machines, or in the cloud.

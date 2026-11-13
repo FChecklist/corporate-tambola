@@ -112,6 +112,25 @@ describe("the public certificate check page", () => {
   });
 });
 
+describe("the player's note from a Host who did not accept a claim", () => {
+  test("shown only to the player who claimed, only when review is on, with the Host's reason; silent otherwise", async () => {
+    const w = newWorld(); const s = await w.json(await w.api("POST", "/api/start", { email: "boss@acme.com" })); const token = s.token as string;
+    await w.api("POST", "/api/z", { id: "NOTE-1", startRound: roundAt(T) + 1200, callSeconds: 6, cap: 100 }, token);
+    const pid = "5x" + "ab".repeat(6);
+    w.world.raw.prepare("INSERT INTO claim(eid,pid,pattern,round,idx,at_ms) VALUES('NOTE-1',?,'top',1,11,?)").run(pid, T);
+    w.world.raw.prepare("INSERT INTO v2_claim_review(eid,round,pattern,ticket,decision,reason,by,at_ms) VALUES('NOTE-1',1,'top',5,'reject','The line was not complete','host',?)").run(T);
+    const mk = async (on: boolean, withClaim: boolean) => {
+      w.world.raw.prepare("DELETE FROM v2_flag").run(); if (on) w.world.raw.prepare("INSERT INTO v2_flag(eid,k,v) VALUES('NOTE-1','claimreview','1')").run();
+      const p = await openPage(w.world as any, { url: "http://localhost/z.html?e=NOTE-1", html: "z.html", scripts: ["claimnote.js"], afterLoad: (win: any, f: string) => { if (f === "keep.js") { const st = globalThis.setTimeout; win.setTimeout = (fn: any, ms?: number) => st(fn, Math.min(Number(ms) || 0, 60)); win.localStorage.setItem("ctz:NOTE-1:pid", pid); if (withClaim) win.localStorage.setItem("ctz:NOTE-1:claimed", JSON.stringify(["top"])); } } }); open.push(p);
+      return p;
+    };
+    const p1 = await mk(true, true); await waitFor(() => /could not accept your claim for/.test(String(p1.win.document.body.textContent)), 12000);
+    expect(String(p1.win.document.body.textContent)).toContain("The line was not complete");
+    const p2 = await mk(false, true); await wait(600); expect(String(p2.win.document.body.textContent)).not.toContain("could not accept");
+    const p3 = await mk(true, false); await wait(600); expect(String(p3.win.document.body.textContent)).not.toContain("could not accept");
+  });
+});
+
 function dlg(p: Page): string { return String(p.win.document.querySelector('[role="dialog"]')?.textContent ?? "").replace(/\s+/g, " "); }
 function tab(p: Page, t: string) { const b = p.win.document.querySelector(`[role="dialog"] [data-t="${t}"]`); if (!b) throw new Error("no tab " + t); b.click(); }
 async function waitFor(pred: () => boolean, ms = 6000) { const t0 = Date.now(); for (;;) { if (pred()) return; if (Date.now() - t0 > ms) throw new Error("timed out waiting"); await wait(25); } }

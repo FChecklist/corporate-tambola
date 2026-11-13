@@ -21,7 +21,7 @@ CTLang.add("hi", "हिन्दी", {
     "Top Line": "ऊपर की पंक्ति", "Middle Line": "बीच की पंक्ति", "Bottom Line": "नीचे की पंक्ति", "Full house": "फुल हाउस", "Full House": "फुल हाउस", "Four corners": "चार कोने", "Super Bumper House": "सुपर बंपर हाउस", "Star": "स्टार",
     "Claim": "दावा करें", "Join": "शामिल हों", "Language": "भाषा", "Refer & earn": "रेफ़र करें और कमाएँ", "Want to run a game of your own?": "क्या आप अपना खेल चलाना चाहते हैं?",
     "Create a new game as an organizer": "आयोजक के रूप में नया खेल बनाएँ", "Ticket {1}": "टिकट {1}", "Your ticket": "आपका टिकट",
-    "Receipts and payments": "रसीदें और भुगतान", "Download data": "डेटा डाउनलोड करें", "Certificates": "प्रमाणपत्र", "Support": "सहायता", "Game keys": "खेल की कुंजियाँ", "Host hand-over": "होस्ट बदलाव", "Claim review": "दावों की समीक्षा", "Close": "बंद करें",
+    "Receipts and payments": "रसीदें और भुगतान", "Download data": "डेटा डाउनलोड करें", "Certificates": "प्रमाणपत्र", "Support": "सहायता", "Game keys": "खेल की कुंजियाँ", "Host hand-over": "होस्ट बदलाव", "Claim review": "दावों की समीक्षा", "Close": "बंद करें", "The Host could not accept your claim for": "होस्ट आपका दावा स्वीकार नहीं कर सके:", "The game goes on.": "खेल जारी है।",
     "Paid to: IT SERVICES BY RAJAT AGARWAL via Razorpay": "भुगतान प्राप्तकर्ता: IT SERVICES BY RAJAT AGARWAL, Razorpay के माध्यम से"
   }
 });
