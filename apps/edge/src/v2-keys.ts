@@ -12,7 +12,7 @@ const MAX_GAME_KEYS = 5;
 
 export const MSG_OVER = "This game is over. With this key you can now only delete the game's data, download it, fetch the invoice, or make a new game like it. Nothing else is possible, and the key stops working 24 hours after the game ended.";
 export const MSG_EXPIRED = "This key has expired: it worked until 24 hours after its game ended. Ask the organizer for a key for a new game.";
-const MSG_SCOPE = "This key is for one game only. It cannot do account things such as the team, keys, payments, or other games.";
+const MSG_SCOPE = "This key is for one game only. It cannot do account things such as the team, keys, or other games.";
 const MSG_AI_PEOPLE = "Names and mobile numbers never pass through an AI. The organizer opens that list in their own console.";
 
 /** When the game really ended (null while it is still to be played or being played). A cancelled game ended when it was cancelled. */

@@ -42,15 +42,19 @@ No rule of play was touched: number calling, ticket making, claim detection, sco
 6. **Certificates are kept** (non-personal rows) so the check link keeps working; there is no expiry yet.
 7. **A game that never ends** keeps its keys until the game is purged.
 8. **A Host key made without personal data keeps `announce`, `override` and `prizegiven` for 24 hours after the game ends**, the same rights a normal Host has. It can also be opened as a Host AI link (`/ai/<key>`); then its calls are labelled AI and are limited to what a Host's AI link may do. Game keys (`ctg_`) never work as an `/ai/` link.
-9. **A Host's reason for rejecting a claim** is shown to the players of that game, and anyone who has the ticket number can read it. Hosts are told to write no name or number, and long digit runs are removed, but a name typed in words is kept for the life of the game.
+9. **A Host's reason for rejecting a claim** is shown to the players of that game; anyone who has a ticket number (they are in the public seat list) can read it, and the reply to a prize hand-over carries it too. The internal audit log does not copy it (nor support or hand-over words). Hosts are told to write no name or number, and long digit runs are removed, but a name typed in words is kept for the life of the game.
 10. **Certificates stop checking if the platform's data key (`DATA_KEY` / `ORGANIZER_SECRET`) is changed.** Do not rotate it without a plan for the old certificates.
 11. **Support tickets and hand-over notes** are free text, kept 365 days.
 12. Game keys (and the keys of AI) appear in the team's key list as ordinary keys. The Team screen may show more than five Hosts for a day, because game-only Host keys are listed until the daily clean-up switches them off. The game-only Host keys do **not** use up the account's five Host places; at most five per game.
-13. The older practice pages `play.html` and `screen.html` carry no language switch; the live game pages do.
+13. **Support tickets** are seen by the organizer (all), a game key (its game), and a Host key (only Hosts' tickets). A game master key can also spend the account's credit on its own game (`pay-with-credit`), like the organizer's own key.
+14. The player's claim note asks the server every 30 to 45 seconds while review is on and the player has claimed; keep review off for very large games unless needed.
+15. Only organizers who make a game key (`ctg_`) get the 24-hour expiry; the account sign-in key and the standing AI link are unchanged.
+16. The older practice pages `play.html` and `screen.html` carry no language switch; the live game pages do.
 
 ## The migration and the rollback
 
 - **Migration:** `apps/edge/migrations/0032_v2_changes.sql`. Additive only: new tables and three new columns (`scope_eid`, `scope_src`, `scope_kind`) on `organizer_key`, plus an AI-label column on the trail. Nothing existing is changed or dropped.
+- **Take a D1 backup (export) first.** The migration cannot be re-run after a partial failure; if it stops half way, restore the backup and start again.
 - **It MUST be applied BEFORE the deploy.** The new code reads the new columns on every keyed call. The ALTERs cannot be run twice.
 - **Rollback id:** the Cloudflare Pages deployment that is live just before the deploy (today it is the build of c6897f2; read its id from Pages > corporate-tambola > Deployments, or `node tools/list-deploys.mjs`). Write it down BEFORE deploying.
 - **Rollback steps:** (1) run `deploy/ROLLBACK_V2.sql` (it switches off every key made by V2, because the old code would read them as full keys); (2) roll Pages back to that deployment. The new tables and columns can stay; the old code does not read them.

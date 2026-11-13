@@ -29,7 +29,7 @@ function shape(c: V2Ctx, r: Row, notes: { number: string; token: string }[], ref
 }
 
 /** Who sees the full rows: the organizer's own key (the payer), a game master key, the platform. A Host, a Host key made without personal data and an AI key see them without secrets. */
-const seesAll = (c: V2Ctx): boolean => c.a.plat || (c.a.kind === "master" && c.a.scopeKind !== "ga");
+const seesAll = (c: V2Ctx): boolean => c.a.plat || (c.a.kind === "master" && c.a.scopeKind !== "ga" && !c.req.headers.get("x-ai-model"));
 
 /** The receipt rows of one game, shaped for the caller (full = with the payer's own links; otherwise without payment secrets). Used by the history screen and by the data export. */
 export async function receiptRows(c: V2Ctx, eid: string, gameName: string, full: boolean): Promise<any[]> {

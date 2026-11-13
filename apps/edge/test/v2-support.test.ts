@@ -44,7 +44,8 @@ describe("who sees what", () => {
     const k = await gameKey(g), h = await labelHost(g);
     const a = (await j(await raise(k))).id, b = (await j(await raise(h))).id, c = (await j(await raise(g.key, { game: g2 }))).id;
     const mine = (await tickets(k)).map((t) => t.id).sort(); expect(mine).toEqual([a, b].sort());
-    expect((await tickets(h)).map((t) => t.id).sort()).toEqual([a, b].sort());
+    expect((await tickets(h)).map((t) => t.id)).toEqual([b]); // a Host reads Hosts' tickets only, never the organizer's
+    expect((await call("GET", `/api/v2/support/${a}`, undefined, keyH(h))).status).toBe(404);
     expect((await tickets(g.key)).length).toBe(3);
     expect((await call("GET", `/api/v2/support/${c}`, undefined, keyH(k))).status).toBe(404); // another game's ticket
     expect((await tickets(h)).find((t) => t.id === b)!.by).toBe("host");
