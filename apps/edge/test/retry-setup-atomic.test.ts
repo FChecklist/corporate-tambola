@@ -93,4 +93,21 @@ describe("sign-in: a repeat does not count the same try twice", () => {
     expect(sleeps).toBe(setupRetry.delaysMs.length);
     expect(one("SELECT attempts a FROM login_code").a).toBe(1);
   });
+  // 13 Nov 2026, second independent audit: a hiccup BEFORE the count must not give a free guess, and a hiccup after the count of the 5th try must not reject the correct code.
+  test("a hiccup BEFORE the try is counted (at the code read): the repeat still counts it, a wrong code is not a free guess", async () => {
+    reset({ TEST_MODE: "1" } as any);
+    const o = await organizer(); const ask = await j(await call("POST", "/api/auth/email", { email: o.email }, { "cf-connecting-ip": "5.5.5.6" }));
+    const wrong = ask.devCode === "000000" ? "000001" : "000000";
+    let n = 1; flakyTx((sql) => { if (n > 0 && sql.startsWith("SELECT code_hash")) { n--; throw new Error(OVERLOAD); } });
+    const r = await call("POST", "/api/auth/verify", { email: o.email, code: wrong }); expect(r.status).toBe(400); expect(n).toBe(0); expect(sleeps).toBe(1);
+    expect(one("SELECT attempts a FROM login_code").a).toBe(1); // counted once, not zero
+  });
+  test("the 5th try counted, then a hiccup at a later step: the repeat does not reject the correct code because of its own count", async () => {
+    reset({ TEST_MODE: "1" } as any);
+    const o = await organizer(); const ask = await j(await call("POST", "/api/auth/email", { email: o.email }, { "cf-connecting-ip": "5.5.5.7" }));
+    q("UPDATE login_code SET attempts=4");
+    let n = 1; flakyTx((sql) => { if (n > 0 && sql.startsWith("SELECT org FROM organizer_email WHERE email_hash=?")) { n--; throw new Error(OVERLOAD); } });
+    const r = await call("POST", "/api/auth/verify", { email: o.email, code: ask.devCode }); expect(n).toBe(0);
+    expect(r.status).toBe(200); expect(sleeps).toBe(1);
+  });
 });

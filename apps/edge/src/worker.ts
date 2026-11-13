@@ -644,8 +644,9 @@ async function cvFast(env: Env, eid: string): Promise<Response> {
 }
 import { overloadedBeforeRun, transientDb } from "./transient";
 export { transientDb };
-/** Requests that are a REPEAT of one that already failed (set by handle() only, so a caller cannot forge it): the sign-in does not count the same 6-digit try twice. */
-const repeated = new WeakSet<Request>();
+/** A repeat of a request that already failed points to the original request (set by handle() only, so a caller cannot forge it); `counted` holds the originals whose sign-in try really WAS counted (set right after the count succeeded): a repeat then does not count the same 6-digit try twice, and a repeat of a try that was never counted (the hiccup came first) still counts it. */
+const repeatOf = new WeakMap<Request, Request>();
+const counted = new WeakSet<Request>();
 /** Retry settings of a join; the tests set baseMs to 0 so they do not wait. */
 export const joinRetry = { tries: 3, baseMs: 250, sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)) };
 /** What the server may do when the database has a passing hiccup. read: ask again. write: ask again (the route is idempotent: the same request twice changes nothing more than once). once: never ask again, answer "busy" (503) so nothing can be written twice. */
@@ -679,7 +680,7 @@ export async function handle(req: Request, env: Env, now = Date.now(), waitUntil
   try {
     let attempt = 0; const t0 = Date.now();
     for (;;) {
-      try { const r2 = attempt === 0 || !master ? req : master.clone(); if (attempt > 0) repeated.add(r2); res = await handleCore(r2, env, attempt === 0 ? now : now + (Date.now() - t0), waitUntil); break; } // a repeat after a long pause carries the time that really passed
+      try { const r2 = attempt === 0 || !master ? req : master.clone(); if (attempt > 0) repeatOf.set(r2, req); res = await handleCore(r2, env, attempt === 0 ? now : now + (Date.now() - t0), waitUntil); break; } // a repeat after a long pause carries the time that really passed
       catch (e) {
         if (!transientDb(e)) throw e;
         const setup = isSetupStep(req.method, new URL(req.url).pathname), maxTries = setup ? setupRetry.delaysMs.length : joinRetry.tries;
@@ -1164,10 +1165,12 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     }
     const row = await env.DB.prepare("SELECT code_hash, expires_ms, attempts FROM login_code WHERE email_hash=?").bind(eh).first<{ code_hash: string; expires_ms: number; attempts: number }>();
     const bad = () => json({ error: "That code is not right or has expired. Please ask for a new one." }, 400);
-    if (!row || row.expires_ms < now || row.attempts >= 5) return bad();
+    const root = repeatOf.get(req) ?? req, already = counted.has(root); // already: a first attempt of THIS request really counted its try (so the 5 on the row may be this very try)
+    if (!row || row.expires_ms < now || (!already && row.attempts >= 5)) return bad();
     // the try is counted BEFORE the code is compared, in one statement that only succeeds while fewer than 5 are used: guesses sent in parallel cannot all slip under the cap
-    const tried = repeated.has(req) ? { meta: { changes: 1 } } : await env.DB.prepare("UPDATE login_code SET attempts=attempts+1 WHERE email_hash=? AND attempts<5").bind(eh).run(); // a repeat of a request whose try was already counted does not count it again
+    const tried = already ? { meta: { changes: 1 } } : await env.DB.prepare("UPDATE login_code SET attempts=attempts+1 WHERE email_hash=? AND attempts<5").bind(eh).run(); // a repeat of a request whose try was already counted does not count it again
     if (!(tried as any)?.meta?.changes) return bad();
+    counted.add(root);
     if (row.code_hash !== (await sha("code|" + eh + "|" + code))) return bad();
     const acct = await env.DB.prepare("SELECT org FROM organizer_email WHERE email_hash=?").bind(eh).first<{ org: string }>();
     const hostAcct = await hostForEmail(env.DB, eh);
