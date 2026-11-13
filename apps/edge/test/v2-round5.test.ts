@@ -29,6 +29,13 @@ describe("an AI never reads the organizer's support tickets", () => {
     expect(((await j(await call("GET", "/api/v2/support", undefined, keyH(aik)))).tickets as any[]).map((t) => t.id)).toEqual([mine]);
   });
 });
+describe("a game key cannot make keys that outlive its game", () => {
+  test("a practice game (which makes new Co-host keys) is refused for a person's and an AI's game key; the account key is not refused", async () => {
+    const g = await paidGame(); const k = await gameKey(g); const aik = await gameKey(g, { ai: true, label: "ChatGPT" });
+    for (const key of [k, aik]) { const r = await call("POST", `/api/z/${g.id}/rehearsal`, { n: 1 }, keyH(key)); expect(r.status).toBe(403); expect((await j(r)).code).toBe("key-scope"); }
+    expect((await call("POST", `/api/z/${g.id}/rehearsal`, { n: 1 }, keyH(g.key))).status).not.toBe(403);
+  });
+});
 describe("a call that says it is an AI", () => {
   const ai = (key: string) => ({ ...keyH(key), "x-ai-model": "AI: ChatGPT" });
   test("cannot switch review, decide a claim, make a key or a Host; the organizer's own call still can", async () => {

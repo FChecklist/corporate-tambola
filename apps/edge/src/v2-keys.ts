@@ -60,6 +60,7 @@ export async function scopeGate(c: V2Ctx): Promise<Response | null> {
     if (!ok) return json({ error: MSG_OVER, code: "game-over" }, 403);
     return null;
   }
+  if (action === "rehearsal") return json({ error: "A practice game with its own keys is the organizer's to make: please ask them to make it from their own console.", code: "key-scope" }, 403); // it would make new Co-host keys that do not stop 24 hours after the game
   if (a.scopeKind === "ga" && AI_DENY.has(action)) return json({ error: MSG_AI_PEOPLE, code: "ai-people" }, 403);
   if (M === "POST" && action === "clone") return cloneWithKey(c, e);
   if (M === "POST" && action === "reuse") { // fetching people from another game is allowed only from the game this one was made from
