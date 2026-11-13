@@ -14,9 +14,10 @@ const roleOf = (c: V2Ctx): string => (c.a.scopeKind === "lh" ? "host" : c.a.scop
 function scopeSql(c: V2Ctx): { sql: string; bind: unknown[] } | null {
   const a = c.a;
   if (!a.org || (a.kind !== "master" && a.kind !== "host" && a.kind !== "ai")) return null;
-  if (a.scopeEid) return a.kind === "host" ? { sql: "org=? AND eid=? AND role='host'", bind: [a.org, a.scopeEid] } : { sql: "org=? AND eid=?", bind: [a.org, a.scopeEid] }; // a Host reads Hosts' tickets, never the organizer's (billing, tax)
+  if (a.scopeEid) return a.kind === "host" ? { sql: "org=? AND eid=? AND role='host'", bind: [a.org, a.scopeEid] } : a.kind === "ai" ? { sql: "org=? AND eid=? AND role IN ('ai','host')", bind: [a.org, a.scopeEid] } : { sql: "org=? AND eid=?", bind: [a.org, a.scopeEid] }; // a Host reads Hosts' tickets, never the organizer's (billing, tax)
   if (a.kind === "host" && a.eid) return { sql: "org=? AND eid=? AND role='host'", bind: [a.org, a.eid] };
   if (a.kind === "host") return { sql: "org=? AND role='host'", bind: [a.org] };
+  if (a.kind === "ai") return { sql: "org=? AND role IN ('ai','host')", bind: [a.org] }; // an AI never reads the organizer's own tickets (billing, tax)
   return { sql: "org=?", bind: [a.org] };
 }
 

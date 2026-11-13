@@ -39,6 +39,7 @@ export async function v2Route(c: V2Ctx): Promise<Response | null> {
   let m: RegExpMatchArray | null;
   if ((m = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/v2\/([a-z]+)(?:\/(.*))?$/))) {
     const eid = m[1]!, what = m[2]!, rest = m[3] ?? "";
+    if (a.kind === "master" && req.method !== "GET" && c.req.headers.get("x-ai-model") && (what === "keys" || what === "host" || what === "claimreview")) return json({ error: "A person does this, not an AI: the organizer opens it in their console.", code: "not-allowed" }, 403);
     switch (what) {
       case "keys": return keysRoute(c, eid, rest);
       case "receipts": return receiptsRoute(c, eid, rest);

@@ -68,7 +68,7 @@ export async function hostRoute(c: V2Ctx, eid: string, rest: string): Promise<Re
     const hid = a.hid ?? a.kh!;
     if (await db.prepare("SELECT 1 AS x FROM v2_handover WHERE eid=? AND host_id=? AND state='pending'").bind(eid, hid).first()) return json({ error: "You have already asked. The organizer has been told.", code: "already" }, 409);
     if (!(await c.spend(3))) return c.busy();
-    const note = cleanText((await c.body(req, 512))?.note, 200);
+    const note = cleanText((await c.body(req, 512))?.note, 200).replace(/\+?\d[\d\s-]{8,}\d/g, "…").trim(); // a mobile number typed in a note is not kept
     await db.prepare("INSERT INTO v2_handover(eid,org,host_id,label,note,state,created_ms) VALUES(?,?,?,?,?,'pending',?)").bind(eid, e.org, hid, a.label ?? "", note, now).run();
     await tell(c, e.org, eid, "handover", `${(a.label ?? "").trim() || "A Host"} asks to hand over the Host job of game ${eid}${note ? ": " + note : ""}. The Host keeps working until you approve.`);
     return json({ ok: true, state: "pending", message: "The organizer has been asked. You keep your key until they approve." });

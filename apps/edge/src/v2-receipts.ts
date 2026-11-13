@@ -23,8 +23,8 @@ async function rowsFor(c: V2Ctx, where: string, bind: unknown[]): Promise<{ pay:
 
 function shape(c: V2Ctx, r: Row, notes: { number: string; token: string }[], refund: { refund: number; status: string } | undefined, full: boolean, gameName?: string) {
   const o = c.origin;
-  const base: any = { payee: PAYEE, paymentId: r.id, game: r.eid, ...(gameName ? { gameName } : {}), currency: r.currency, amount: r.amount, tax: r.tax, status: r.status === "paid" ? "paid" : r.status, createdMs: r.created_ms, paidMs: r.paid_ms, invoiceNumber: r.number, creditNotes: notes.map((n) => n.number), ...(refund ? { refund: { amount: refund.refund, status: refund.status } } : {}) };
-  if (!full) return base; // a Host or an AI key: no secrets
+  const base: any = { payee: PAYEE, ...(full ? { paymentId: r.id } : {}), game: r.eid, ...(gameName ? { gameName } : {}), currency: r.currency, amount: r.amount, tax: r.tax, status: r.status === "paid" ? "paid" : r.status, createdMs: r.created_ms, paidMs: r.paid_ms, invoiceNumber: r.number, creditNotes: notes.map((n) => n.number), ...(refund ? { refund: { amount: refund.refund, status: refund.status } } : {}) };
+  if (!full) return base; // a Host or an AI key: no secrets (and no payment id: anyone holding it can open the public receipt and invoice)
   return { ...base, payerEmailMasked: maskEmail(r.email), gatewayReference: r.rzp, invoiceUrl: r.token ? `${o}/api/invoice/${r.token}` : null, invoicePdfUrl: r.token ? `${o}/api/invoice/${r.token}.pdf` : null, creditNoteUrls: notes.map((n) => `${o}/api/invoice/${n.token}`) };
 }
 
@@ -68,5 +68,6 @@ export async function orgReceiptsRoute(c: V2Ctx): Promise<Response> {
   const { pay, notes, refunds } = await rowsFor(c, "p.org=?", [a.org]);
   const names: Record<string, string> = {};
   for (const id of new Set(pay.map((r) => r.eid).filter(Boolean) as string[])) { try { const g = await env.DB.prepare("SELECT config FROM engagement WHERE id=?").bind(id).first<{ config: string | null }>(); names[id] = String(JSON.parse(g?.config ?? "{}").name ?? ""); } catch { names[id] = ""; } }
-  return json({ payee: PAYEE, secretsShown: true, receipts: pay.map((r) => shape(c, r, notes[r.id] ?? [], refunds[r.id], true, r.eid ? names[r.eid] : undefined)) });
+  const full = seesAll(c); // a call that says it is an AI gets the history without secrets
+  return json({ payee: PAYEE, secretsShown: full, receipts: pay.map((r) => shape(c, r, notes[r.id] ?? [], refunds[r.id], full, r.eid ? names[r.eid] : undefined)) });
 }

@@ -30,7 +30,7 @@ The twelve changes you approved on 13 Nov 2026 are built, except number 9 (the H
 
 ## What did NOT change in play
 
-No rule of play was touched: number calling, ticket making, claim detection, scoring and winners are as they were. `packages/` (the game engine and the beacon) has **no change at all**. The files that run the join, claim, result, settle, control, over and won routes were not edited. Four shared files received small additions that do nothing for any existing key (see "Diff summary").
+No rule of play was touched: number calling, ticket making, claim detection, scoring and winners are as they were. `packages/` (the game engine and the beacon) has **no change at all**. The files that run the join, claim, result, settle, control, over and won routes were not edited. Five shared files (`worker.ts`, `winners.ts`, `lifecycle.ts`, `ai-link.ts`, `audit.ts`) received small additions that do nothing for any existing key (see "Diff summary").
 
 ## Things you should decide or know
 
@@ -46,7 +46,7 @@ No rule of play was touched: number calling, ticket making, claim detection, sco
 10. **Certificates stop checking if the platform's data key (`DATA_KEY` / `ORGANIZER_SECRET`) is changed.** Do not rotate it without a plan for the old certificates.
 11. **Support tickets and hand-over notes** are free text, kept 365 days.
 12. Game keys (and the keys of AI) appear in the team's key list as ordinary keys. The Team screen may show more than five Hosts for a day, because game-only Host keys are listed until the daily clean-up switches them off. The game-only Host keys do **not** use up the account's five Host places; at most five per game.
-13. **Support tickets** are seen by the organizer (all), a game key (its game), and a Host key (only Hosts' tickets). A game master key can also spend the account's credit on its own game (`pay-with-credit`), like the organizer's own key.
+13. **Support tickets** are seen by the organizer (all), a game key (its game), a Host key (Hosts' tickets only) and an AI key (AI and Host tickets only, never the organizer's billing ones). Hand-over notes lose a typed mobile number; support texts are free text kept 365 days. A game master key can also spend the account's credit on its own game (`pay-with-credit`), like the organizer's own key.
 14. The player's claim note asks the server every 30 to 45 seconds while review is on and the player has claimed; keep review off for very large games unless needed.
 15. Only organizers who make a game key (`ctg_`) get the 24-hour expiry; the account sign-in key and the standing AI link are unchanged.
 16. The older practice pages `play.html` and `screen.html` carry no language switch; the live game pages do.
@@ -64,13 +64,16 @@ No rule of play was touched: number calling, ticket making, claim detection, sco
 ```bash
 # 0. Be sure no game is live, and note the current Pages deployment id (the rollback id).
 # 1. The database change, first:
-bun x wrangler@3 d1 execute corporate-tambola --remote --file apps/edge/migrations/0032_v2_changes.sql
+# (from the pages folder, with the D1 token in CLOUDFLARE_API_TOKEN, as deploy/UPDATE_LIVE_DATABASE.sql says)
+cd pages
+bun x wrangler@3 d1 execute corporate-tambola --remote --file ../apps/edge/migrations/0032_v2_changes.sql
+cd ..
 # 2. The site:
 bun run pages:deploy
 # 3. Check: open /version.json, it must show the V2 commit; open a game page, the "More tools" button appears.
 ```
 
-If anything looks wrong: run `deploy/ROLLBACK_V2.sql` with wrangler as in its header, then roll Pages back to the rollback id.
+If anything looks wrong: run `deploy/ROLLBACK_V2.sql` with wrangler as in its header, then roll Pages back to the rollback id, then run `deploy/ROLLBACK_V2.sql` AGAIN (a key made between the two steps would otherwise be read by the old code as a full key).
 
 ## New and changed public routes (for the AI gateway)
 
@@ -104,6 +107,7 @@ If anything looks wrong: run `deploy/ROLLBACK_V2.sql` with wrangler as in its he
 | `apps/edge/src/winners.ts` | the trail function takes an optional label (same behaviour without it) | trail only |
 | `apps/edge/src/lifecycle.ts` | the erase list gains one V2 table, so claim-review notes are erased with the game | erase list only |
 | `apps/edge/src/ai-link.ts` | three lines in the AI manual | no |
+| `apps/edge/src/audit.ts` | for V2 calls the internal audit log keeps only the plain choices, never typed words | logging only |
 | `apps/web/public` | language files, the More tools panel, the certificate check page, the claim-note line, guide entries; script tags in `z.html`, `zc.html`, `big.html`, `board.html`; the offline cache number | the game pages only gain script tags |
 | `pages/build.mjs` | new files in the list and the `/verify` route | no |
 | `deploy/ROLLBACK_V2.sql` | new | no |
