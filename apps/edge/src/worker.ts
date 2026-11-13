@@ -65,6 +65,8 @@ import { hostGameOf } from "../../../packages/beacon/src/game";
 import { buildGameLog, readSavedGameLog } from "./gamelog";
 import { CLAIM_LATE_MSG } from "./modes";
 import { callTimeMs } from "./lifecycle";
+import { V2_SCHEMA } from "./v2-schema";
+import { v2Route, v2AiLabel, v2Purge } from "./v2";
 import { claimHolds, startClaimHold, storedHolds } from "./claimhold";
 import { NEEDS_CONSOLE_MSG, NOT_BEFORE_MSG, STARTED_MSG, modeTooBig, changesView, describeChanges, goRoundOf, liveOf, logChanges, needsControl, readChanges, whoLabel } from "./modes";
 import { QUICKNET } from "../../../packages/beacon/src/index";
@@ -246,6 +248,8 @@ export const SCHEMA: string[] = [
   "CREATE INDEX IF NOT EXISTS organizer_key_org ON organizer_key (org)",
   "CREATE INDEX IF NOT EXISTS entitlement_org ON entitlement (org, eid)",
   "CREATE INDEX IF NOT EXISTS engagement_org ON engagement (org)",
+  // V2 (13 Nov 2026, 0032_v2_changes.sql): game keys, Host keys without personal data, the AI label, certificates, support tickets, claim review, Host hand-over (all additive)
+  ...V2_SCHEMA,
 ];
 
 const PATTERNS = new Set<string>([...HOUSE_ORDER.filter((k) => k !== "unlucky"), "lucky"]);
@@ -726,7 +730,7 @@ async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promi
   if (rest === "") {
     if (req.method !== "GET" && req.method !== "HEAD") return linkText("This address is read with GET.", 405);
     const keyId = (await sha("key|" + key)).slice(0, 10);
-    const work = auditAi(env.DB, a.org, new Request(origin + "/ai/manual", { method: "GET", headers: req.headers }), keyId, 200, now);
+    const work = auditAi(env.DB, a.org, new Request(origin + "/ai/manual", { method: "GET", headers: req.headers }), keyId, 200, now, v2AiLabel(a as any, req));
     if (waitUntil) waitUntil(work); else await work;
     await noteUse(env, a.org, role === "ai" ? "ai" : "host", keyId, req, now);
     const h = new Headers({ ...CORS, ...LINK_HEADERS });
@@ -739,7 +743,7 @@ async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promi
     if (req.method !== "GET" && req.method !== "HEAD") return linkText("These addresses are read with GET.", 405);
     const kind = rest === "start" || rest === "map" || rest === "facts" ? rest : "go";
     const keyId = (await sha("key|" + key)).slice(0, 10);
-    const work = auditAi(env.DB, a.org, new Request(origin + "/ai/" + kind, { method: "GET", headers: req.headers }), keyId, 200, now);
+    const work = auditAi(env.DB, a.org, new Request(origin + "/ai/" + kind, { method: "GET", headers: req.headers }), keyId, 200, now, v2AiLabel(a as any, req));
     if (waitUntil) waitUntil(work); else await work;
     await noteUse(env, a.org, role === "ai" ? "ai" : "host", keyId, req, now);
     const hh = new Headers({ ...CORS, ...LINK_HEADERS }); const asJson = url.searchParams.get("format") === "json";
@@ -831,7 +835,7 @@ function d1kv(env: Env): KV { return {
   put: async (k, v) => { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, v).run(); },
 }; }
 
-interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null; viaLink?: boolean; eid?: string | null; /** A Host: the identity the key belongs to and whether the first-open setup (confirmed e-mail + mobile) is finished. */ hid?: string; hostReady?: boolean ; temp?: boolean }
+export interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null; /** V2: hash of the key presented, its private label, and (for a key made for ONE game) the game, the kind (gm, ga, lh) and the game it was cloned from */ kh?: string; label?: string | null; scopeEid?: string | null; scopeKind?: "gm" | "ga" | "lh" | null; scopeSrc?: string | null; viaLink?: boolean; eid?: string | null; /** A Host: the identity the key belongs to and whether the first-open setup (confirmed e-mail + mobile) is finished. */ hid?: string; hostReady?: boolean ; temp?: boolean }
 async function authOf(req: Request, env: Env, now: number): Promise<Auth> {
   return authOfKey(env, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), now);
 }
@@ -839,16 +843,16 @@ async function authOfKey(env: Env, presented: string, now: number): Promise<Auth
   if (!presented) return { plat: false, org: null, kind: null };
   if (env.ORGANIZER_SECRET && presented === env.ORGANIZER_SECRET) return { plat: true, org: null, kind: "platform" };
   const kh = await sha("key|" + presented);
-  const row = await env.DB.prepare("SELECT org, kind, eid, host_id, expires_ms FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(kh, now).first<{ org: string; kind: "master" | "ai" | "host" | "cohost"; eid: string | null; host_id: string | null; expires_ms: number | null }>();
+  const row = await env.DB.prepare("SELECT org, kind, eid, host_id, expires_ms, label, scope_eid, scope_kind, scope_src FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(kh, now).first<{ org: string; kind: "master" | "ai" | "host" | "cohost"; eid: string | null; host_id: string | null; expires_ms: number | null; label: string | null; scope_eid: string | null; scope_kind: "gm" | "ga" | "lh" | null; scope_src: string | null }>();
   if (!row) return { plat: false, org: null, kind: null };
   if (row.kind === "host") { // a Host's first-open link works once and for 7 days; the console works only after setup (hostsetup.ts)
     const hs = await hostKeyStatus(env.DB, kh, row.host_id, now);
     if (!hs.usable) return { plat: false, org: null, kind: null };
     // the 24-hour Host AI-link key (cth_, mailed to the Organizer for an outside AI chat) has an expiry and no first-open record: it must never be able to finish a Host setup and turn itself into a lasting key
     const temp = row.expires_ms != null && !row.host_id && !(await hostStateRow(env.DB, kh));
-    return { plat: false, org: row.org, kind: "host", eid: row.eid ?? null, hid: hs.hid, hostReady: hs.ready, ...(temp ? { temp: true } : {}) };
+    return { plat: false, org: row.org, kind: "host", eid: row.eid ?? null, hid: hs.hid, hostReady: hs.ready, ...(temp ? { temp: true } : {}), kh, label: row.label, ...(row.scope_eid ? { scopeEid: row.scope_eid, scopeKind: row.scope_kind, scopeSrc: row.scope_src } : {}) };
   }
-  return { plat: false, org: row.org, kind: row.kind, eid: row.eid ?? null };
+  return { plat: false, org: row.org, kind: row.kind, eid: row.eid ?? null, kh, label: row.label, ...(row.scope_eid ? { scopeEid: row.scope_eid, scopeKind: row.scope_kind, scopeSrc: row.scope_src } : {}) };
 }
 /** May this caller act on this engagement? `master` = needs the organizer's own key, or a Host's (both are people, never the AI), or ours. A Co-host never passes: their rights are a few named routes only. */
 const can = (a: Auth, e: { org: string | null }, master = false) => a.plat || (!!a.org && e.org === a.org && a.kind !== "cohost" && (!master || a.kind === "master" || (a.kind === "host" && !a.viaLink)));
@@ -950,9 +954,12 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const presented = req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
     const kid = (await sha("key|" + presented)).slice(0, 10);
     kidForLog = kid;
-    await auditAi(env.DB, a.org, req, kid, r.status, now);
+    await auditAi(env.DB, a.org, req, kid, r.status, now, v2AiLabel(a as any, req)); // V2: the trail names the caller "AI" or "AI: ChatGPT"
     if (r.status !== 403) await noteUse(env, a.org, a.kind === "ai" ? "ai" : "host", kid, req, now);
-  } else if (a.org && a.kind) kidForLog = (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 10);
+  } else if (a.org && a.kind) {
+    kidForLog = (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 10);
+    const aiLabel = v2AiLabel(a as any, req); if (aiLabel) await auditAi(env.DB, a.org, req, kidForLog, r.status, now, aiLabel); // V2: a master-key or game-key call that says it is an AI is in the game's own trail too, labelled
+  }
   await auditRequest(env as AuditEnv, req, peek, a, r.status, now, kidForLog);
   return r;
 }
@@ -963,6 +970,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (a.kind === "host" && !a.viaLink && a.hostReady === false && !(p === "/api/whoami" || p.startsWith("/api/host/setup") || p.startsWith("/api/auth/") || p.startsWith("/api/paylink/") || (p === "/api/notices" && req.method === "GET")))
     return json({ error: "Please finish your setup first: confirm your e-mail address and add your mobile number.", code: "host-setup" }, 403);
 
+  { const v2 = await v2Route({ req, env: env as any, now, a: a as any, url, p, json, body, spend: (n = 1) => spend(env, now, n), busy: BUSY, origin: (env as PayEnv).PUBLIC_ORIGIN ?? url.origin, hostActions: HOST_ACTIONS }); if (v2) return v2; } // V2 (v2.ts): the new routes, and the gate for a key made for one game; null for every other key and route
   if (req.method === "GET" && p === "/api/z/ai-manifest") return json(AI_MANIFEST);
   { const bm = req.method === "GET" ? p.match(/^\/api\/beacon\/([0-9a-f]{64})\/public\/(latest|\d{1,10})$/) : null; if (bm) return beaconRelay(req, bm[1]!, bm[2]!); }
   { const mr = await modeRoute(req, env as any, now, a.plat && req.headers.get("x-ct-link") !== "1", (n) => purgeTestData(env, n)); if (mr) return mr; } // TEST/LIVE switch, allow-list, purge (mode.ts): owner only, except the public read of the word TEST or LIVE
@@ -2420,6 +2428,7 @@ export async function purgeOld(env: Env, now: number): Promise<number> {
   const loose = now - (RETENTION_DAYS - 2) * 86_400_000;
   const old = await env.DB.prepare("SELECT e.id AS id, e.created_ms AS created_ms, e.pack AS pack, e.unplayed_ms AS unplayed_ms, l.end_ms AS end_ms FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE e.created_ms < ? OR (e.pack=0 AND e.created_ms < ?) OR (e.unplayed_ms IS NOT NULL AND e.unplayed_ms < ?)").bind(loose, now - DRAFT_DAYS * 86_400_000, now - SETTINGS_KEEP_MS).all<{ id: string; created_ms: number; pack: number; unplayed_ms: number | null; end_ms: number | null }>();
   await env.DB.prepare("DELETE FROM ai_audit WHERE at_ms < ?").bind(now - RETENTION_DAYS * 86_400_000).run().catch(() => undefined);
+  await v2Purge(env, now); // V2: old support tickets, and the V2 rows of games that no longer exist
   await sweepAudit(env.DB, now, RETENTION_DAYS); // the AI's audit trail is kept as long as the organizer's own details
   let n = 0; const dormant = new Set<string>();
   for (const x of old.results ?? []) {

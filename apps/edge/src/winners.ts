@@ -150,17 +150,17 @@ export async function markGiven(env: Env, eid: string, b: any, kind: string | nu
 
 // ---------------------------------------------------------------------------------------------------- the external AI's audit trail
 /** Writes one line for a call made with an organizer's AI key: when, which key, what was asked, the answer's status, and where the call came from (network address, program and country). */
-export async function auditAi(db: D1, org: string, req: Request, keyId: string, status: number, now: number) {
+export async function auditAi(db: D1, org: string, req: Request, keyId: string, status: number, now: number, label: string | null = null) {
   try {
     const u = new URL(req.url);
     const m = u.pathname.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\//);
-    await db.prepare("INSERT INTO ai_audit(org,eid,at_ms,key_id,method,path,status,ip,ua,country) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(org, m ? m[1] : null, now, keyId, req.method, u.pathname.slice(0, 120), status, (req.headers.get("cf-connecting-ip") ?? "").slice(0, 64), (req.headers.get("user-agent") ?? "").slice(0, 200), (req.headers.get("cf-ipcountry") ?? "").slice(0, 8)).run();
+    await db.prepare("INSERT INTO ai_audit(org,eid,at_ms,key_id,method,path,status,ip,ua,country,label) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(org, m ? m[1] : null, now, keyId, req.method, u.pathname.slice(0, 120), status, (req.headers.get("cf-connecting-ip") ?? "").slice(0, 64), (req.headers.get("user-agent") ?? "").slice(0, 200), (req.headers.get("cf-ipcountry") ?? "").slice(0, 8), label).run();
   } catch { /* the trail must never break the work */ }
 }
 export async function listAiAudit(db: D1, org: string | null, json: Json): Promise<Response> {
   const r = org
-    ? await db.prepare("SELECT at_ms, eid, key_id, method, path, status, ip, ua, country FROM ai_audit WHERE org=? ORDER BY id DESC LIMIT 300").bind(org).all<any>()
-    : await db.prepare("SELECT org, at_ms, eid, key_id, method, path, status, ip, ua, country FROM ai_audit ORDER BY id DESC LIMIT 300").all<any>();
+    ? await db.prepare("SELECT at_ms, eid, key_id, label, method, path, status, ip, ua, country FROM ai_audit WHERE org=? ORDER BY id DESC LIMIT 300").bind(org).all<any>()
+    : await db.prepare("SELECT org, at_ms, eid, key_id, label, method, path, status, ip, ua, country FROM ai_audit ORDER BY id DESC LIMIT 300").all<any>();
   return json({ trail: r.results ?? [] });
 }
 
