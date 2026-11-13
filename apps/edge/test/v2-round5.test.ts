@@ -40,6 +40,10 @@ describe("a call that says it is an AI", () => {
     expect((await call("POST", `/api/z/${g.id}/v2/keys`, {}, keyH(g.key))).status).toBe(200);
     void seats;
   });
+  test("a declared-AI call with a game key cannot make a new game (and so a new key)", async () => {
+    const g = await paidGame(); const k = await gameKey(g);
+    const r = await call("POST", `/api/z/${g.id}/clone`, {}, { ...keyH(k), "x-ai-model": "AI: ChatGPT" }); expect(r.status).toBe(403);
+  });
   test("the all-games receipts hide the secrets from it", async () => {
     const g = await paidGame();
     const own = JSON.stringify(await j(await call("GET", "/api/org/v2/receipts", undefined, keyH(g.key))));

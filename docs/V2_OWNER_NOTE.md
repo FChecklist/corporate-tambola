@@ -46,10 +46,11 @@ No rule of play was touched: number calling, ticket making, claim detection, sco
 10. **Certificates stop checking if the platform's data key (`DATA_KEY` / `ORGANIZER_SECRET`) is changed.** Do not rotate it without a plan for the old certificates.
 11. **Support tickets and hand-over notes** are free text, kept 365 days.
 12. Game keys (and the keys of AI) appear in the team's key list as ordinary keys. The Team screen may show more than five Hosts for a day, because game-only Host keys are listed until the daily clean-up switches them off. The game-only Host keys do **not** use up the account's five Host places; at most five per game.
-13. **Support tickets** are seen by the organizer (all), a game key (its game), a Host key (Hosts' tickets only) and an AI key (AI and Host tickets only, never the organizer's billing ones). Hand-over notes lose a typed mobile number; support texts are free text kept 365 days. A game master key can also spend the account's credit on its own game (`pay-with-credit`), like the organizer's own key.
-14. The player's claim note asks the server every 30 to 45 seconds while review is on and the player has claimed; keep review off for very large games unless needed.
-15. Only organizers who make a game key (`ctg_`) get the 24-hour expiry; the account sign-in key and the standing AI link are unchanged.
-16. The older practice pages `play.html` and `screen.html` carry no language switch; the live game pages do.
+13. A certificate already issued stays valid if a Host rejects that claim afterwards; no certificate is made for a claim that is rejected before it (the decision, a ticket number and a word, is kept after the 24-hour erase; its reason is not).
+14. **Support tickets** are seen by the organizer (all), a game key (its game), a Host key (Hosts' tickets only) and an AI key (AI and Host tickets only, never the organizer's billing ones). Hand-over notes lose a typed mobile number; support texts are free text kept 365 days. A game master key can also spend the account's credit on its own game (`pay-with-credit`), like the organizer's own key.
+15. The player's claim note asks the server every 30 to 45 seconds while review is on and the player has claimed; keep review off for very large games unless needed.
+16. Only organizers who make a game key (`ctg_`) get the 24-hour expiry; the account sign-in key and the standing AI link are unchanged.
+17. The older practice pages `play.html` and `screen.html` carry no language switch; the live game pages do.
 
 ## The migration and the rollback
 

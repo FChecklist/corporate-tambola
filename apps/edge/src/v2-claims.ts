@@ -63,7 +63,7 @@ export async function claimReviewRoute(c: V2Ctx, eid: string, rest: string): Pro
 export async function prizeHold(c: V2Ctx, eid: string): Promise<Response | null> {
   const db = c.env.DB;
   if (!(await reviewOn(db, eid))) return null;
-  const b = await c.body(c.req.clone(), 1024);
+  const b = await c.body(c.req.clone()); // the SAME size limit as the route that follows: a longer body must not slip past this check
   if (!b || b.given !== true || !Number.isInteger(b.seat) || typeof b.pattern !== "string" || !Number.isInteger(b.round)) return null;
   const r = await db.prepare("SELECT reason FROM v2_claim_review WHERE eid=? AND round=? AND pattern=? AND ticket=? AND decision='reject'").bind(eid, b.round, b.pattern, b.seat).first<{ reason: string | null }>();
   return r ? c.json({ error: `A Host did not accept this claim${r.reason ? ": " + r.reason : ""}. Approve it first if you wish to hand over the prize.`, code: "claim-rejected" }, 409) : null;

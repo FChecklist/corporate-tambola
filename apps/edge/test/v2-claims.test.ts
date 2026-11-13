@@ -94,9 +94,24 @@ describe("what a rejection does, and what it does not", () => {
     await decide(g.id, g.key, { ticket: seats[0], decision: "reject", reason: "Not accepted" });
     expect(JSON.stringify([q("SELECT * FROM winner WHERE eid=?", g.id), q("SELECT * FROM claim WHERE eid=?", g.id), q("SELECT * FROM settled WHERE eid=?", g.id)])).toBe(before);
   });
-  test("the review notes go with the players' data (they hold a ticket number and a reason only)", async () => {
+  test("the review reasons go with the players' data; the decision (a ticket number and a word) stays so a rejected claim is never rewarded later", async () => {
     const { g, seats } = await claimGame(); await mode(g.id, g.key, true); await decide(g.id, g.key, { ticket: seats[0], decision: "reject", reason: "Not accepted" });
     const { erasePersonal } = await import("../src/lifecycle"); await erasePersonal(W.env as any, g.id, T + 30 * 3_600_000, "test");
-    expect(q("SELECT 1 FROM v2_claim_review WHERE eid=?", g.id).length).toBe(0);
+    const rows = q("SELECT decision, reason FROM v2_claim_review WHERE eid=?", g.id) as any[]; expect(rows.length).toBe(1); expect(rows[0].decision).toBe("reject"); expect(rows[0].reason).toBeNull();
+  });
+  test("a long body cannot slip past the prize hold", async () => {
+    const { g, seats } = await claimGame(); await mode(g.id, g.key, true); await decide(g.id, g.key, { ticket: seats[0], decision: "reject", reason: "Not accepted" });
+    const pad = (await call("POST", `/api/z/${g.id}/prizegiven`, { round: 1, pattern: "top", ordinal: 1, seat: seats[0], given: true, pad: "x".repeat(1500) }, keyH(g.key)));
+    expect(pad.status).toBe(409); expect((await j(pad)).code).toBe("claim-rejected");
+    expect(q("SELECT given_ms FROM prize WHERE eid=?", g.id).every((r: any) => r.given_ms == null)).toBe(true);
+  });
+  test("a certificate is never made for a claim a Host rejected, even after the reasons are erased", async () => {
+    const { g, seats } = await claimGame(); await mode(g.id, g.key, true); await decide(g.id, g.key, { ticket: seats[0], decision: "reject", reason: "Not accepted" });
+    const { erasePersonal } = await import("../src/lifecycle"); await erasePersonal(W.env as any, g.id, T + 30 * 3_600_000, "test");
+    const r = await call("POST", `/api/z/${g.id}/v2/certs/issue`, {}, keyH(g.key), T + 31 * 3_600_000);
+    expect(JSON.stringify(await j(r))).not.toMatch(/"issued":[1-9]/);
+    expect(q("SELECT 1 FROM v2_cert WHERE eid=?", g.id).length).toBe(0);    // control: the same game with no rejection does get its certificate after the erase, so the test above proves the rejection is what holds it back
+    const c = await claimGame(); await erasePersonal(W.env as any, c.g.id, T + 30 * 3_600_000, "test"); await call("POST", `/api/z/${c.g.id}/v2/certs/issue`, {}, keyH(c.g.key), T + 31 * 3_600_000);
+    expect(q("SELECT 1 FROM v2_cert WHERE eid=?", c.g.id).length).toBe(1);
   });
 });

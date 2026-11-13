@@ -72,7 +72,7 @@ export async function scopeGate(c: V2Ctx): Promise<Response | null> {
 /** "Make a new game like this one" through a game key: the same clone as the console's, and the new game gets its own key (so the work can go on without the organizer). */
 async function cloneWithKey(c: V2Ctx, e: any): Promise<Response> {
   const { a, env, now, json, req, origin } = c;
-  if (a.scopeKind === "ga") return json({ error: "A new game is the organizer's to make: please ask them to make it from their own console.", code: "key-scope" }, 403);
+  if (a.scopeKind === "ga" || req.headers.get("x-ai-model")) return json({ error: "A new game is the organizer's to make: please ask them to make it from their own console.", code: "key-scope" }, 403);
   if (a.kind !== "master" || !a.org || a.org !== e.org) return json({ error: "Not allowed.", code: "key-scope" }, 403);
   const b = (await c.body(req, 512)) ?? {};
   const r = await cloneGame(env as any, e, b, now, origin, (n) => c.spend(n), json);
