@@ -1105,7 +1105,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       const hk = typeof b.hostKey === "string" ? b.hostKey : "";
       const ha = hk ? await authOfKey(env, hk, now) : null;
       const kh = hk ? await sha("key|" + hk) : "";
-      const ident = ha && ha.kind === "host" && ha.hid === kh ? await env.DB.prepare("SELECT expires_ms FROM organizer_key WHERE hash=?").bind(kh).first<{ expires_ms: number | null }>() : null;
+      const ident = ha && ha.kind === "host" && ha.hid === kh ? await env.DB.prepare("SELECT expires_ms FROM organizer_key WHERE hash=? AND scope_eid IS NULL").bind(kh).first<{ expires_ms: number | null }>() : null; // V2: a Host key made for one game (no personal data) can never be turned into a lasting key here
       if (!ha || !ident || ident.expires_ms !== null || !ha.org) return bad("This link has been used or has expired. Ask the Organizer for a new one, or sign in with your e-mail.", "host-link-gone");
       const row = await identityRow(env.DB, ha.hid!), onFile = row?.email_sealed ? await openText(env as any, row.email_sealed) : null;
       if (onFile && normEmail(onFile) !== email) return json({ error: `This link is for ${maskEmail(onFile)}`, code: "email-mismatch" }, 403);
