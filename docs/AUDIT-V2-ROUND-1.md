@@ -100,7 +100,7 @@ I ran all 11 V2 test files one at a time and they pass: v2-keys, v2-ai-label, v2
 
 **Manifest:** AI_MANIFEST and ai-link.ts list receipts, aitrail, support and `whoami`. They do not list the others above. Their claims about AI game keys are false until finding 1 is fixed.
 
-Probe file (outside the repo): `C:\Users\Dell\AppData\Local\Temp\claude\7f79709927efae41\9834c9e5-2106-41bc-a1da-e43836679269\scratchpad\probe\probe.test.ts`</result>
+Probe file (outside the repo): `the builder's scratch folder`</result>
 <usage><subagent_tokens>245949</subagent_tokens><tool_uses>68</tool_uses><duration_ms>545848</duration_ms></usage>
 </task-notification>
 </system-reminder>
