@@ -6,7 +6,7 @@ Branch `tambola-v2`, built from the live version **c6897f2**. Written 14 Nov 202
 
 Tambola V2 adds twelve things the owner asked for on 13 Nov 2026, and leaves the rules of play exactly as they were. Organizers can make a key that works for ONE game and stops a day after it ends, and can download their game's data. They get receipts, certificates for winners, and a support ticket. Hosts can be given a key without any personal details, can approve or reject a claim with a short reason, and can step down or hand over. Players choose a language for their own screen, and can join with just an ID. Calls made by an AI are named in the game's trail. Every change was tested, and nine rounds of independent checking by people who had not built it found and closed a series of key-and-permission problems. The last two rounds, in a row, found nothing that should stop a deploy.
 
-One question is still the owner's: winners' names and mobiles are kept 365 days under an older consent, which does not match the "everything is deleted within 24 hours" promise. V2 does not use that copy and does not make it worse.
+One question was the owner's and is now decided (14 Nov 2026): a winner's name, mobile, e-mail (if available), game id and ticket number are kept 365 days, as the Terms and Conditions already say; the 24-hour limit applies only to the game key's access after a game ends. V2 does not use that kept copy and does not change it. A few V2 wording lines still need review against this ruling (see 05-OPEN-ITEMS.md).
 
 ## The pages
 

@@ -14,4 +14,4 @@ Branch `tambola-v2`, worktree a separate worktree, built off live **c6897f2**. L
 - Suite, each file on its own: live 248 files / 4,027 pass / 1 fail (pre-existing `ai-enablement`); V2 264 files / 4,207 pass / same 1 fail.
 - The AI gateway (the AI gateway) needs regenerating against V2: new routes are listed in the owner note ("New and changed public routes").
 - Not V2 but found on the way: a Host's AI work link gets the report link (names and mobiles); `POST /api/helpdesk/approve/start` is public and returns a 30-minute account key with an approval token.
-- Owner-only decisions: consent K4 (`prize.pii` 365 days) against the 24-hour promise; whether the Host key without personal data should lose `override`; Hindi coverage; item 9 stays unbuilt.
+- Owner decisions made: K4 closed on 14 Nov 2026 (winners' name, mobile, e-mail if available, game id and ticket number kept 365 days, as the Terms and Conditions say); the Host key without personal data keeps `override`. Still to do: review the V2 wording lines listed in `05-OPEN-ITEMS.md` (a new audit round is needed if they change). Hindi coverage and item 9 (unbuilt) are unchanged.

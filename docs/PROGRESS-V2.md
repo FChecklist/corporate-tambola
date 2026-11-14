@@ -23,7 +23,7 @@ The whole suite was run **one file at a time** (one process, low-RAM laptop). Re
 
 - Game keys are a NEW kind of key (`ctg_`). The account sign-in key (`ctk_`) is unchanged on purpose: narrowing it would lock organizers out of their own account.
 - A master-key call is labelled "AI" in the trail only when it says it is an AI (header `x-ai-model: AI: <name>`, which the gateway sends). Calls with the AI key, an AI game key, or a Host's AI link are always labelled.
-- Existing consent K4 keeps a winner's sealed name and mobile (`prize.pii`) for 365 days, which conflicts with the 24-hour promise on the site. V2 does not use `prize.pii` and does not make this worse; the owner should reconcile K4 and the promise.
+- Existing consent K4 keeps a winner's sealed name and mobile (`prize.pii`) for 365 days. **Owner ruling, 14 Nov 2026 (K4, CLOSED):** a winner's name, mobile, e-mail (if available), game id and ticket number are KEPT 365 days; this is already written in the Terms and Conditions. The 24-hour limit applies only to the game key's access after a game ends, not to winners' data. V2 does not use `prize.pii`.
 - Hindi covers the core player phrases and the new panel; every other phrase stays English until more is translated. Adding a language is adding one file.
 
 ## Not done, on purpose

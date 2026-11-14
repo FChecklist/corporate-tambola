@@ -46,7 +46,7 @@ Plus view-only static files (`lang/*.js`, `v2.js`, `v2.css`) and one script tag 
 - **Files:** new `v2-certs.ts`, `apps/web/public/verify.html`, `verify.js`.
 - **Play path:** NO. Reads the `winner` (winners record) table only after the game; writes only its own table.
 - **Migration:** `v2_cert` table.
-- **Owner conflict recorded:** existing code keeps a winner's sealed name+mobile (`prize.pii`) for 365 days because the join consent (K4) says so; the site promise says 24 hours. This build does not rely on `prize.pii`; the owner should reconcile K4 and the promise (see owner note).
+- **Owner conflict recorded, then decided:** existing code keeps a winner's sealed name+mobile (`prize.pii`) for 365 days because the join consent (K4) says so. **Owner ruling, 14 Nov 2026 (K4, CLOSED):** a winner's name, mobile, e-mail (if available), game id and ticket number are KEPT 365 days; this is already written in the Terms and Conditions. The 24-hour limit applies only to the game key's access after a game ends, not to winners' data. This build does not rely on `prize.pii`.
 
 ## 4. Data export (G41, O23)
 
