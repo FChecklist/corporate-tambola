@@ -120,7 +120,7 @@ describe("the one legal document (terms.html) carries the approved text, the old
   const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
   test("nine sections in one document with one version, and the older legal pages point into it", () => {
     for (const id of ["terms", "payments", "privacy", "retention", "cookies", "processors", "grievance", "acceptable-use", "game-rules"]) expect(html).toContain(`<section id="${id}">`);
-    expect(html).toContain('<article class="legal-doc" data-version="2026-11-01">');
+    expect(html).toContain('<article class="legal-doc" data-version="2026-11-16">');
     for (const [f, sec] of [["legal.html", "terms"], ["privacy.html", "privacy"], ["refund-policy.html", "payments"], ["legal-position.html", "acceptable-use"], ["dpa.html", "processors"], ["subprocessors.html", "processors"]] as const) expect([f, read("apps/web/public/" + f).includes(`href="/terms.html#${sec}"`)]).toEqual([f, true]);
     expect(html).toContain('hello@corporatetambola.com');
   });

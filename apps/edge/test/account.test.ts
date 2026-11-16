@@ -92,7 +92,7 @@ describe("the notification question", () => {
 
 describe("wording: third parties, fairness, version", () => {
   test("the one document names the public source of random values and YouTube in one line, with a version date; the sub-processor page points to it", () => {
-    const l = rd("terms.html"); expect(l).toContain("A public source of random values is used for draws, and YouTube in privacy mode only if an Organizer adds a video."); expect(l).toContain("Version 2026-11-01");
+    const l = rd("terms.html"); expect(l).toContain("A public source of random values is used for draws, and YouTube in privacy mode only if an Organizer adds a video."); expect(l).toContain("Version 2026-11-16");
     const s = rd("subprocessors.html"); expect(s).toContain('href="/terms.html#processors"');
   });
   test("fairness wording does not overclaim anywhere a customer reads it", () => {
