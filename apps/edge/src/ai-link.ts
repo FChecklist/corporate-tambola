@@ -70,7 +70,7 @@ const HOST_ENDPOINTS: Endpoint[] = [
   { m: "GET", path: "z/{id}/prizes", what: "Winners by ticket number and whether the prize was given. Names and numbers stay in the console." },
   { m: "POST", path: "z/{id}/prizegiven", what: "Tick (or untick) that a prize was handed over", body: "{round, pattern, ordinal, seat, given: true|false}" },
   { m: "POST", path: "z/{id}/announce", what: "A message to every guest's phone and the big screen (160 characters; empty text clears it; one per 5 seconds)", body: "{text}" },
-  { m: "GET", path: "z/{id}/reportlink", what: "The end-of-game report address, once it is ready" },
+  { m: "GET", path: "z/{id}/reportlink", what: "Whether the end-of-game report is ready and sent. The report address itself is for the organizer only: it is e-mailed to them." },
 ];
 
 export const AI_CANNOT: { what: string; ask: string }[] = [

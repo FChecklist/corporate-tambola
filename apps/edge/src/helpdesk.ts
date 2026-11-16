@@ -346,7 +346,7 @@ export async function helpdeskRoute(req: Request, env: PayEnv, now: number, spen
     if (a.pub.tmp_key_hash) await db.prepare("UPDATE organizer_key SET revoked=1 WHERE hash=?").bind(a.pub.tmp_key_hash).run(); // a second start replaces the first key
     const key = "ctk_" + randHex(24), kh = await sha("key|" + key), exp = now + TMP_KEY_MS;
     await db.batch([
-      db.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,expires_ms,is_test,label,created_by) VALUES(?,?,?,0,?,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0),?,'dp')").bind(kh, a.pub.org, "master", now, exp, a.pub.org, "Publish approval"),
+      db.prepare("INSERT INTO organizer_key(hash,org,kind,revoked,created_ms,expires_ms,is_test,label,created_by,eid) VALUES(?,?,?,0,?,?,COALESCE((SELECT MAX(k2.is_test) FROM organizer_key k2 WHERE k2.org=?),0),?,'dp',?)").bind(kh, a.pub.org, "master", now, exp, a.pub.org, "Publish approval", a.pub.eid),
       db.prepare("UPDATE helpdesk_pub SET tmp_key_hash=? WHERE token_hash=?").bind(kh, a.pub.token_hash),
     ]);
     return json({ ok: true, key, expiresMs: exp, eid: a.pub.eid });
