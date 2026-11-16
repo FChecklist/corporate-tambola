@@ -52,6 +52,12 @@ export async function recordConsent(db: D1, o: { subject: string; kind: ConsentK
     .bind(newId(), o.subject, o.kind, o.ref, CONSENT_VERSION, boxesOf(o.kind).join(","), await wordingHash(o.kind), o.now).run();
 }
 
+/** recordConsent as a statement that is NOT run yet, so a caller can put it in the same all-or-nothing batch as the thing the person agreed to (publish: the K1 record can no longer be lost between the publish and a repeat). */
+export async function consentStatement(db: D1, o: { subject: string; kind: ConsentKind; ref: string | null; now: number }): Promise<D1Stmt> {
+  return db.prepare("INSERT INTO consent_log(id,subject,kind,ref,version,boxes,text_hash,at_ms) VALUES(?,?,?,?,?,?,?,?)")
+    .bind(newId(), o.subject, o.kind, o.ref, CONSENT_VERSION, boxesOf(o.kind).join(","), await wordingHash(o.kind), o.now);
+}
+
 /** The same record as recordConsent, as a statement that takes its subject (the participant id) from the seat just made, so a join can write it in the same batch as the seat. */
 export async function consentFromSeat(db: D1, o: { kind: ConsentKind; ref: string; now: number; eid: string; ph: string }): Promise<D1Stmt> {
   return db.prepare("INSERT INTO consent_log(id,subject,kind,ref,version,boxes,text_hash,at_ms) SELECT ?, pid, ?, ?, ?, ?, ?, ? FROM seat WHERE eid=? AND ph=?")

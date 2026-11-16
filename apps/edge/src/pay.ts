@@ -103,7 +103,7 @@ const KEYRE = /ct[kah]_[0-9a-f]{48}/g;
  * mail that could not be sent is kept (with any organizer key blanked out) only so the daily job can try again, then it is dropped after 3 days.
  * Without RESEND_API_KEY (local/test) the mail simply stays in the outbox so it can be read.
  */
-export async function sendMail(env: PayEnv, db: D1, to: string, subject: string, text: string, now: number, opts: { html?: string; secret?: boolean; owner?: boolean } = {}): Promise<boolean> {
+export async function sendMail(env: PayEnv, db: D1, to: string, subject: string, text: string, now: number, opts: { html?: string; secret?: boolean; owner?: boolean; idem?: string } = {}): Promise<boolean> {
   if (isPendingEmail(to)) return false; // a Razorpay-first payment whose e-mail has not come back from Razorpay yet: nobody to write to (payfirst.ts)
   // `secret` = the mail carries a personal AI work link: if it cannot be sent, no body is kept at all (nothing to retry later; the organizer can replace the link and get a fresh mail).
   // TEST mode (mode.ts): only the owner's allow-list is ever e-mailed; everyone else is dropped and logged. Not sent = false, and no body is kept.
@@ -114,8 +114,10 @@ export async function sendMail(env: PayEnv, db: D1, to: string, subject: string,
   const html = opts.html ?? plainToHtml(subject, text, env.PUBLIC_ORIGIN); // every mail carries the brand header and footer, whoever built it
   text = withFooter(text, env.PUBLIC_ORIGIN);
   if (!env.RESEND_API_KEY) { await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,0)").bind(to, subject, text, now).run(); return true; }
-  const ok = await resendSend(env, to, subject, text, html);
-  await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,?)").bind(to, subject, ok ? "" : opts.secret ? "" : text.replace(KEYRE, "ctk_(blanked; use the key shown when you paid, or sign in with an e-mailed code)"), now, ok ? 1 : 0).run();
+  const ok = await resendSend(env, to, subject, text, html, opts.idem);
+  const log = db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,?)").bind(to, subject, ok ? "" : opts.secret ? "" : text.replace(KEYRE, "ctk_(blanked; use the key shown when you paid, or sign in with an e-mailed code)"), now, ok ? 1 : 0);
+  // A mail already handed over must never look "not sent" because its LOG row hit a passing database hiccup (13 Nov 2026 audit: the caller's repeat would send it twice). A failed mail still needs its row (the daily job retries from it), so that write stays fatal.
+  if (ok) { try { await log.run(); } catch { /* only the log is missing */ } } else await log.run();
   return ok;
 }
 /** Mail sent with attachments in a test run (no mail key): the tests read the PDFs from here. Never used in production. */
@@ -137,10 +139,10 @@ export async function sendReportMail(env: PayEnv, to: string, subject: string, t
     return r.ok;
   } catch { return false; }
 }
-async function resendSend(env: PayEnv, to: string, subject: string, text: string, html?: string): Promise<boolean> {
+async function resendSend(env: PayEnv, to: string, subject: string, text: string, html?: string, idem?: string): Promise<boolean> {
   try {
     const r = await fetch("https://api.resend.com/emails", {
-      method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
+      method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json", ...(idem ? { "idempotency-key": idem.slice(0, 250) } : {}) },
       body: JSON.stringify({ from: env.MAIL_FROM ?? "Corporate Tambola <hello@corporatetambola.com>", to: [to], subject, text, ...(html ? { html } : {}), reply_to: env.MAIL_REPLY_TO || "hello@corporatetambola.com", headers: { "Auto-Submitted": "auto-generated" } }),
     });
     return r.ok;
