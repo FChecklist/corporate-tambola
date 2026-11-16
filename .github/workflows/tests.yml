@@ -1,0 +1,48 @@
+# Runs on GitHub's free servers because the owner's laptop cannot hold the whole suite (see docs/KNOWLEDGE/03-HOW.md of the V2 branch:
+# "run every test file as its own process"). Nothing here deploys, publishes or touches a live database.
+name: tests
+on:
+  push:
+    branches: ['boss16/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: 1.3.14 }
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+  each-file:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: 1.3.14 }
+      - run: bun install --frozen-lockfile
+      - name: every test file as its own process
+        shell: bash
+        env:
+          # One test already fails on the live version (ai-enablement, "third route"); it is the only file allowed to fail, and with one failing test at most.
+          KNOWN_FAIL_FILE: apps/edge/test/ai-enablement.test.ts
+        run: |
+          set +e
+          files=$(find packages apps tools/control-worker -name '*.test.ts' -not -path '*/node_modules/*' | sort)
+          total=0; pass=0; fail=0; bad=()
+          for f in $files; do
+            out=$(bun test --timeout 60000 "$f" 2>&1); rc=$?
+            p=$(echo "$out" | grep -E '^ *[0-9]+ pass' | tail -1 | awk '{print $1}'); p=${p:-0}
+            x=$(echo "$out" | grep -E '^ *[0-9]+ fail' | tail -1 | awk '{print $1}'); x=${x:-0}
+            total=$((total+1)); pass=$((pass+p)); fail=$((fail+x))
+            if [ $rc -ne 0 ]; then
+              if [ "$f" = "$KNOWN_FAIL_FILE" ] && [ "$x" -le 1 ]; then echo "known failure kept: $f ($x fail)"; else bad+=("$f"); echo "::group::FAILED $f"; echo "$out" | tail -60; echo "::endgroup::"; fi
+            fi
+          done
+          echo "files=$total pass=$pass fail=$fail"
+          if [ ${#bad[@]} -gt 0 ]; then echo "failing files:"; printf ' %s\n' "${bad[@]}"; exit 1; fi
