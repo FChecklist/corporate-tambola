@@ -132,9 +132,9 @@ export default async function gen({ R, L }) {
   } });
   out.push({ name: "list|a level-1 guest's own list stops at their personal limit", run: async (t) => {
     const { org, g } = await openGame(t, { who: "anyone", inv: 2, cap: 50 }); const l1 = t.guest(g.id); await l1.join(); const seat = (await l1.me()).body.seat;
-    const add = (n) => A.call("POST", `/api/z/${g.id}/people`, { me: l1.pid, people: Array.from({ length: n }, () => ({ name: personName(t.R), phone: mobile(t.R) })) }, { "x-ct-pid": l1.pid });
+    const add = (n) => l1.addPeople(Array.from({ length: n }, () => ({ name: personName(t.R), phone: mobile(t.R) })));
     const a = await add(2); t.expect("two fit", a, "ok"); t.eq("added", a.body.added, 2); const b = await add(1); t.expect("third is over their limit", b, [409]); t.eq("code", b.body.code, "over-limit");
-    t.expect("a guest cannot download anyone's list", await A.call("GET", `/api/z/${g.id}/people/export`, undefined, { "x-ct-pid": l1.pid }), "deny");
+    t.expect("a guest cannot download anyone's list", await A.call("GET", `/api/z/${g.id}/people/export?me=${l1.pid}&device=${l1.device}`), "deny");
   } });
   out.push({ name: "list|200 people in one request are accepted, 201 are refused whole", run: async (t) => {
     const { org, g } = await openGame(t, { who: "list", cap: 250 }); const mk = (n) => ({ people: Array.from({ length: n }, (_, i) => ({ name: `${L.FIRST[i % L.FIRST.length]} ${L.LAST[(i * 7) % L.LAST.length]}`, phone: String(9000000000 + t.R.int(99999999) + i * 100000000 % 900000000) })) });

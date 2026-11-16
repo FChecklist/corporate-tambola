@@ -6,7 +6,7 @@ All diagrams are text. Names in boxes are real routes/functions; see `04-API-REF
 
 ```mermaid
 flowchart TD
-  A["Home / site.js: enter work e-mail"] -->|POST /api/start| B{"e-mail has account?"}
+  A["Home / site.js: enter e-mail"] -->|POST /api/start| B{"e-mail has account?"}
   B -->|"no"| C["Console opens at once: master key ctk_, AI key cta_, aiMessage<br/>one dedicated mail with a 24 h AI key"]
   B -->|"yes"| B2["POST /api/auth/email -> 6-digit code or one-click link<br/>POST /api/auth/verify or /api/auth/link -> new ctk_ key"]
   B2 --> C

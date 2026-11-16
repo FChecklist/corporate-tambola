@@ -10,7 +10,8 @@ export type Rule = { pool: number[]; k: number } | { lines: number[][] };
 const row = (t: Ticket, r: number) => t[r]!.filter((v): v is number => v !== null);
 
 /** The rule of house `key` on ticket `t`; null for houses that are not decided on one ticket (Unlucky, the two-ticket house). */
-export function ruleOf(t: Ticket, key: PatternKey): Rule | null {
+export function ruleOf(t: Ticket, keyIn: PatternKey): Rule | null {
+  const key = (keyIn.includes("@") ? keyIn.slice(0, keyIn.indexOf("@")) : keyIn) as PatternKey; // "top@1" is the Top Line rule (the ticket it belongs to is decided by the caller)
   const a = row(t, 0), b = row(t, 1), c = row(t, 2), all = ticketNumbers(t);
   const set = (n: number[]): Rule => ({ pool: n, k: n.length });
   const any = (pool: number[], k: number): Rule => ({ pool, k });

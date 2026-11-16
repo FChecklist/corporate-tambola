@@ -328,7 +328,7 @@ export async function verifyChain(db: D1, chain: string): Promise<{ ok: boolean;
     if (x.pdig) { // the personal part, while it exists, must be the one the chain committed to; once shredded it is rightly gone (the chain never needed it)
       const blob = piiRows.get(x.seq);
       if (blob !== undefined && (await sha(blob)) !== x.pdig) return { ok: false, rows: n, brokenAtSeq: x.seq, reason: "this row's personal part was changed", headHash: head };
-      if (blob === undefined && !shredded) return { ok: false, rows: n, brokenAtSeq: x.seq, reason: "this row's personal part is missing without a recorded erasure", headHash: head };
+      if (blob === undefined && !shredded) return { ok: false, rows: n, brokenAtSeq: x.seq, reason: "this row's personal part is missing without a recorded deletion", headHash: head };
     }
     prev = x.row_hash; head = x.row_hash; expectSeq = x.seq + 1;
   }
@@ -361,7 +361,7 @@ export function maskedAggregate(rows: OpenRow[]) {
     clientClockOffMoreThan5Min: skewBig, busiestHourUtc: Object.entries(hour).sort((x, y) => y[1] - x[1])[0]?.[0] ?? null,
   };
   const findings: string[] = [];
-  if (agg.deniedAiAttempts) findings.push(`${agg.deniedAiAttempts} attempt(s) by an AI key to publish, pay, erase, pause or settle were refused.`);
+  if (agg.deniedAiAttempts) findings.push(`${agg.deniedAiAttempts} attempt(s) by an AI key to publish, pay, delete, pause or settle were refused.`);
   if (agg.aiVendorMismatches) findings.push(`${agg.aiVendorMismatches} AI call(s) declared a model from a different vendor than the program that fetched them.`);
   if (agg.failedLogins >= 5) findings.push(`${agg.failedLogins} failed sign-in attempts.`);
   if (agg.devicesSeenFromSeveralNetworks) findings.push(`${agg.devicesSeenFromSeveralNetworks} device(s) were seen from more than one network.`);
@@ -417,7 +417,7 @@ export async function sweepAudit(db: D1, now: number, days = 365, anonDays = ANO
 }
 
 /**
- * Crypto-shreds the participants' personal part of an engagement's audit log (20 hours after the game ends, or when the organizer erases earlier): deletes every sealed blob and the
+ * Crypto-shreds the participants' personal part of an engagement's audit log (20 hours after the game ends, or when the organizer deletes earlier): deletes every sealed blob and the
  * engagement's key salt, then records a `shred` marker (engagement id, time, number of rows; nothing personal). Idempotent. A legal hold set by the owner suspends it (returns false).
  * The chain still verifies afterwards: it covers only the non-personal core and the blobs' digests, never the blobs themselves.
  */

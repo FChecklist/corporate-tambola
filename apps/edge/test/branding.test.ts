@@ -6,9 +6,10 @@ import { withDevice } from "./device";
 import { housekeeping, type Env } from "../src/worker";
 import { handle } from "./with-terms";
 import * as Mails from "../src/mails";
-import { BRAND, footerText, hasFooter, plainToHtml } from "../src/brand";
+import { BRAND, footerText, hasFooter, headerHtml, plainToHtml } from "../src/brand";
 import { sendMail, sendReportMail, sentReports, type PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
+import { readPng, isBadgeRed } from "../../web/test/png-pixels";
 
 const T = Date.UTC(2026, 9, 1, 10, 0, 0);
 const ORIGIN = "https://tambola.test";
@@ -22,7 +23,7 @@ const read = (...p: string[]) => readFileSync(join(root, ...p), "utf8");
 
 beforeEach(() => {
   const d = makeD1(); raw = d.raw;
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: ORIGIN, DATA_KEY: "test-data-key", TEST_MODE: "1" };
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: ORIGIN, DATA_KEY: "test-data-key", TEST_MODE: "1" };
   sentReports.length = 0;
 });
 const realFetch = globalThis.fetch;
@@ -35,6 +36,7 @@ const SAMPLES: Record<string, () => Mails.BuiltMail> = {
   hostLinkMail: () => Mails.hostLinkMail(ORIGIN, "cth_" + "e".repeat(48), "Priya"),
   helpDeskPublishedMail: () => Mails.helpDeskPublishedMail(ORIGIN, { eid: "GAME-1", hostKey: "cth_" + "f".repeat(48), aiHostKey: "cth_" + "d".repeat(48), expiresMs: T + 86_400_000 }),
   newUseAlertMail: () => Mails.newUseAlertMail({ when: "now", country: "IN", program: "x", kind: "AI", origin: ORIGIN }),
+  draftReminderMail: () => Mails.draftReminderMail(ORIGIN, { eid: "GAME-1", hours: 24, startMs: T + 86_400_000 }),
   signInMail: () => Mails.signInMail(ORIGIN, "123456", "c".repeat(48)),
 };
 
@@ -113,30 +115,17 @@ describe("pages: one title pattern, icons, manifest, theme colour", () => {
   });
 });
 
-describe("the legal page carries the owner's final text, and each line matches what the code does", () => {
-  const html = read("apps/web/public/legal.html");
-  const sec = (id: string) => { const m = html.match(new RegExp(`<section id="${id}"[\\s\\S]*?</section>`)); expect(m).toBeTruthy(); return m![0]; };
-  const items = (id: string) => [...sec(id).matchAll(/<li>([\s\S]*?)<\/li>/g)].map((x) => x[1]!.replace(/<[^>]+>/g, "").replace(/&rsquo;/g, "’").replace(/&ldquo;/g, "“").replace(/&rdquo;/g, "”").replace(/&amp;/g, "&"));
-  test("anchors, headings, counts, and one short line each", () => {
-    for (const id of ["rules", "privacy", "disclaimer"]) expect(html).toContain(`<section id="${id}"`);
-    expect(html).toContain(">Rules</h2>"); expect(html).toContain(">Privacy &amp; Data Policy</h2>"); expect(html).toContain(">Disclaimer</h2>");
-    expect(items("rules").length).toBe(11); expect(items("privacy").length).toBe(16); expect(items("disclaimer").length).toBe(6);
-    for (const id of ["rules", "privacy", "disclaimer"]) for (const l of items(id)) expect(l.split(/\s+/).length).toBeLessThanOrEqual(30);
-    expect(html).toMatch(/<p class="muted">[^<]{1,80}<\/p>/);
+describe("the one legal document (terms.html) carries the approved text, the older legal pages point to it, and the timings in it match what the code does", () => {
+  const html = read("apps/web/public/terms.html");
+  const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+  test("nine sections in one document with one version, and the older legal pages point into it", () => {
+    for (const id of ["terms", "payments", "privacy", "retention", "cookies", "processors", "grievance", "acceptable-use", "game-rules"]) expect(html).toContain(`<section id="${id}">`);
+    expect(html).toContain('<article class="legal-doc" data-version="2026-11-01">');
+    for (const [f, sec] of [["legal.html", "terms"], ["privacy.html", "privacy"], ["refund-policy.html", "payments"], ["legal-position.html", "acceptable-use"], ["dpa.html", "processors"], ["subprocessors.html", "processors"]] as const) expect([f, read("apps/web/public/" + f).includes(`href="/terms.html#${sec}"`)]).toEqual([f, true]);
+    expect(html).toContain('hello@corporatetambola.com');
   });
-  test("the sixteen privacy lines, word for word, with typographic apostrophes", () => {
-    expect(items("privacy")).toEqual([
-      "We delete all participant data from our systems within 24 hours after the game ends.", "A game that never starts is treated the same way: its guests’ names and numbers are deleted 20 hours after the time it was meant to end.", "All data is encrypted, in transit and at rest.", "Where the data is: the website runs on Cloudflare’s global network. The database is kept in Cloudflare’s Asia-Pacific region.", "Participants never see each other’s data.", "A player can leave at any time, ask what we hold about them, or ask us to delete it, from the game page. We answer within 7 days.", "We provide the software. The organizer runs the game.", "No advertising cookies or trackers. We never sell data.", "Your phone keeps only the items listed under “What your device keeps” below. We use no other cookie.", "Exception: winner prize details are kept for 365 days, so the organizer can confirm the prize was handed over. They are then deleted automatically.", "Fair play. We keep a private, encrypted record of game activity to keep every game fair. Only we can see it. Removed automatically 365 days after your game ends.", "Public pages: a first-party visitor id and shortened network address, never names or mobile numbers, kept 365 days. With Global Privacy Control or Do Not Track, we only count visits.", "Designed to follow India’s DPDP Act 2023, EU GDPR and US CCPA.", "Your phone contacts drand for public random numbers, and YouTube (privacy mode) only if your organizer adds a video.", "You may also complain to the Data Protection Board of India.",
-      "Questions or requests: our Grievance Officer, Rajat Agarwal, hello@corporatetambola.com. We reply within 30 days. The full notice is the Privacy Policy page."]);
-    expect(html).toContain('href="mailto:hello@corporatetambola.com?subject=%5BTambola%5D%20"');
-  });
-  test("the six disclaimer lines, word for word", () => {
-    expect(items("disclaimer")).toEqual(["This is a private game for a closed group, run by the organizer named on your ticket.", "Corporate Tambola provides the software only. Participants pay nothing to play.", "The organizer provides and hands over the prizes.", "The software decides the winners. Results are final.", "The organizer makes sure the game is allowed under local law.", "We are not responsible for prize handover or for disputes between the organizer and participants."]);
-  });
-  test("the rules say only what the software does (no claims, no manual cutting, no blocking), and the privacy timings match lifecycle.ts", () => {
-    const r = items("rules").join(" ");
-    expect(r).not.toMatch(/Cut your own|Late claims|wrong claim|block your ticket|for fun/i);
-    expect(r).toContain("Numbers 1 to 90 come from a public random beacon."); expect(r).not.toMatch(/No one can choose or change|not even the organizer|twice|every claim is checked/); expect(r).toContain("The 2nd Full House can only follow the 1st."); expect(r).toContain("One ticket per phone.");
+  test("the timings in the document match lifecycle.ts", () => {
+    expect(text).toContain("deleted within 24 hours after the game"); expect(text).toContain("Within 24 hours after it was meant to end");
     const lc = read("apps/edge/src/lifecycle.ts");
     expect(lc).toMatch(/PURGE_AFTER_MS = 20 \* 3_600_000/); // 20 h (plus a tick up to 3 h late) is inside "within 24 hours"
     expect(lc).toMatch(/endMs \+ 365 \* DAY/); expect(lc).toMatch(/DELETE FROM prize WHERE eid=\?/); // prize details go with the 365-day deletion
@@ -163,7 +152,20 @@ describe("claims register: customer-facing text never says what the build does n
   test("structured data prices equal the real packs", () => {
     const h = read("apps/web/public/index.html"); const { PACKS } = require("../../../packages/shared/src/pricing") as typeof import("../../../packages/shared/src/pricing");
     expect(h).toContain(`"lowPrice":"${Math.min(...PACKS.map((p) => p[1]))}"`); expect(h).toContain(`"highPrice":"${Math.max(...PACKS.map((p) => p[1]))}"`); expect(h).toContain(`"offerCount":"${PACKS.length}"`);
-    const site = read("apps/web/public/site.js"); expect(site).toContain("Festive offer: 50% off"); expect(site).toContain("Regular price after the festive offer"); expect(h).toContain("Festive offer: 50% off"); // owner decision: keep the offer, worded as a festive offer
+    const site = read("apps/web/public/site.js"); expect(site).not.toMatch(/Festive offer|50% OFF|Regular price after/); expect(h).not.toMatch(/Festive offer|50% off/i); // boss ruling Q8 2026-10-29 (gap plan TA17): one honest price, no computed "was" price and no permanent 50% badge (apps/edge/test/wp06-price-footer.test.ts)
     expect(`${h}${site}`).not.toMatch(/Most popular|2nd most popular/); // the offer price is what is charged, and equals the structured-data price (lowPrice above)
   });
 });
+
+// RELEASE 1.6.8: the logo is the red Corporate Tambola badge in everything we send: the e-mail header, the branded report e-mail, the report page (which draws our logo on the PDF), the game log page, the share card.
+describe("the logo in e-mails, the report PDF and the share card is the red Corporate Tambola badge", () => {
+  const png = (f: string) => readPng(new Uint8Array(readFileSync(join(root, "apps/web/public", f))));
+  test("the e-mail header picture (icon-192.png) is the new badge, 192 x 192, red to the edge", () => { const p = png("icon-192.png"); expect([p.w, p.h]).toEqual([192, 192]); expect(isBadgeRed(p.px(96, 8), 30)).toBe(true); expect(p.px(0, 0)[3]).toBe(0); });
+  test("the report e-mail logo and the report page's own PDF logo (logo-512.png) are the new badge, 512 x 512", () => { const p = png("logo-512.png"); expect([p.w, p.h]).toEqual([512, 512]); expect(isBadgeRed(p.px(256, 20), 30)).toBe(true); });
+  test("the share card (og-tambola.png, 1200 x 630) and the picture in the web-page data (logo-1024.png, the badge) are the new logo; the trust page names the card", () => { const c = png("og-tambola.png"); expect([c.w, c.h]).toEqual([1200, 630]); const p = png("logo-1024.png"); expect([p.w, p.h]).toEqual([1024, 1024]); expect(isBadgeRed(p.px(512, 40), 30)).toBe(true); expect(read("apps/edge/src", "trust-page.ts")).toContain("/og-tambola.png"); });
+  test("the e-mail header, the report e-mail, the report page and the game log page all point at those files", () => {
+    expect(headerHtmlOf()).toContain("/icon-192.png"); expect(read("apps/edge/src/report-email.ts")).toContain("/logo-512.png"); expect(read("apps/web/public/report.js")).toContain("/logo-512.png"); expect(read("apps/web/public/gamelog.js")).toContain("/logo-512.png");
+  });
+  test("the old logo art is nowhere in the sources the server sends", () => { for (const f of ["brand.ts", "report-email.ts", "trust-page.ts", "report-layout.ts", "pdf.ts"]) expect([f, /E8284F|#E8EEFF/.test(read("apps/edge/src", f))]).toEqual([f, false]); });
+});
+function headerHtmlOf() { return headerHtml("https://tambola.test"); }

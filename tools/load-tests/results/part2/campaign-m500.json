@@ -1,0 +1,8625 @@
+{
+ "summary": {
+  "tag": "m500",
+  "cases": 18,
+  "casesPassed": 14,
+  "checks": 586,
+  "checksFailed": 4,
+  "calls": 1118144,
+  "serverErrors": 0,
+  "failKinds": {},
+  "latencyMs": {
+   "p50": 2,
+   "p95": 502,
+   "p99": 1391,
+   "max": 5150
+  },
+  "beacon": {
+   "fetched": 3465,
+   "hits": 2346346,
+   "failed": 0
+  }
+ },
+ "results": [
+  {
+   "ticks": 822,
+   "n": 19,
+   "id": "CMP-M500-019",
+   "mode": "auto9",
+   "aud": "open",
+   "speed": 9,
+   "tickets": 2,
+   "prizes": "early5#1,top#1,mid#1,bot#1,corners#1,full#1",
+   "ties": "next",
+   "brand": true,
+   "rounds": 1,
+   "events": "-",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_61060b36f3ce2992557257588e1e6fe298ac4336baeed427\",\"aiKey\":\"cta_c7916bd67fad7"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-019\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33407255,\"callSeconds\":9,\"cap\":515,\"closed\":false,\"whoCanJoin\":\"anyone\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":2,\"reward"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793025129000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-019\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-019\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "the organizer's payment was accepted",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_ca45456396909c6b\",\"result\":{\"ok\":true,\"orderId\":\"pay_ca45456396909c6b\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_312c087d123ef0a5d"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "all 500 allowed people got a ticket",
+     "ok": true,
+     "d": "500 of 500"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 500"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "78,90,40,52,41,13,63,64,11,23,42,55,34,69,12,62,75,1,3,66,27,18,26,70,50,14,80,7"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"bot#1@33\",\"corners#1@25\",\"early5#1@6\",\"full#1@54\",\"mid#1@22\",\"top#1@9\"] phones [\"bot#1@33\",\"corners#1@25\",\"early5#1@6\",\"full#1@54\",\"mid#1@22\",\"top#1@9\"]"
+    },
+    {
+     "n": "audit: all 500 players hold 2 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 1000 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 500 players received the same 56 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 884 claims on the server are true on the claimer's own ticket(s) at the call claimed (240 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 6 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (6 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 6 numbers 56"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 56"
+    },
+    {
+     "n": "auto: the median gap between numbers is 9 s (+-1): 8.9",
+     "ok": true,
+     "d": "[7.47,8.196,8.26,8.36,8.371]"
+    },
+    {
+     "n": "auto: no burst of numbers: no two numbers came less than half the set gap apart",
+     "ok": true,
+     "d": "0 bursts, fastest 7.47, 5th percentile 8.36, 95th 9.794"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp19.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp19.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "org",
+   "payerMail": "cmp19.m500@sample-co.in",
+   "joined": 500,
+   "waiting": 0,
+   "needId": 0,
+   "joinMedianMs": 12,
+   "catchUpSec": 14,
+   "winnersAgreeSec": 0,
+   "numbers": 56,
+   "winners": 6,
+   "audit": {
+    "players": 500,
+    "tickets": 1000,
+    "claims": 1124
+   },
+   "medianGap": 8.9,
+   "timelineRef": [
+    [
+     25249.599999904633,
+     1
+    ],
+    [
+     25259.099999904633,
+     2
+    ],
+    [
+     25268,
+     3
+    ],
+    [
+     25276.200000047684,
+     4
+    ],
+    [
+     25285.900000095367,
+     5
+    ],
+    [
+     25294.5,
+     6
+    ],
+    [
+     25324.5,
+     7
+    ],
+    [
+     25333.299999952316,
+     8
+    ],
+    [
+     25342.700000047684,
+     9
+    ],
+    [
+     25351.299999952316,
+     10
+    ],
+    [
+     25361.099999904633,
+     11
+    ],
+    [
+     25369.599999904633,
+     12
+    ],
+    [
+     25378.200000047684,
+     13
+    ],
+    [
+     25387.900000095367,
+     14
+    ],
+    [
+     25396.5,
+     15
+    ],
+    [
+     25405.099999904633,
+     16
+    ],
+    [
+     25414.799999952316,
+     17
+    ],
+    [
+     25423.5,
+     18
+    ],
+    [
+     25432.099999904633,
+     19
+    ],
+    [
+     25441.799999952316,
+     20
+    ],
+    [
+     25450.5,
+     21
+    ],
+    [
+     25460,
+     22
+    ],
+    [
+     25468.799999952316,
+     23
+    ],
+    [
+     25477.299999952316,
+     24
+    ],
+    [
+     25487.099999904633,
+     25
+    ],
+    [
+     25495.900000095367,
+     26
+    ],
+    [
+     25504.599999904633,
+     27
+    ],
+    [
+     25513.099999904633,
+     28
+    ],
+    [
+     25522.599999904633,
+     29
+    ],
+    [
+     25531.099999904633,
+     30
+    ],
+    [
+     25540.700000047684,
+     31
+    ],
+    [
+     25549.599999904633,
+     32
+    ],
+    [
+     25558.099999904633,
+     33
+    ],
+    [
+     25568,
+     34
+    ],
+    [
+     25576.799999952316,
+     35
+    ],
+    [
+     25585.5,
+     36
+    ],
+    [
+     25594.5,
+     37
+    ],
+    [
+     25603.5,
+     38
+    ],
+    [
+     25612.599999904633,
+     39
+    ],
+    [
+     25621.599999904633,
+     40
+    ],
+    [
+     25630.599999904633,
+     41
+    ],
+    [
+     25639.900000095367,
+     42
+    ],
+    [
+     25649,
+     43
+    ],
+    [
+     25658.099999904633,
+     44
+    ],
+    [
+     25667,
+     45
+    ],
+    [
+     25675.400000095367,
+     46
+    ],
+    [
+     25685,
+     47
+    ],
+    [
+     25693.200000047684,
+     48
+    ],
+    [
+     25702.900000095367,
+     49
+    ],
+    [
+     25712.299999952316,
+     50
+    ],
+    [
+     25721,
+     51
+    ],
+    [
+     25730.599999904633,
+     52
+    ],
+    [
+     25738.900000095367,
+     53
+    ],
+    [
+     25747.799999952316,
+     54
+    ],
+    [
+     25757.299999952316,
+     55
+    ],
+    [
+     25766.700000047684,
+     56
+    ],
+    [
+     25774.099999904633,
+     57
+    ],
+    [
+     25783.700000047684,
+     58
+    ],
+    [
+     25792.5,
+     59
+    ],
+    [
+     25801.299999952316,
+     60
+    ],
+    [
+     25810.700000047684,
+     61
+    ],
+    [
+     25819.799999952316,
+     62
+    ],
+    [
+     25828.200000047684,
+     63
+    ],
+    [
+     25837.700000047684,
+     64
+    ]
+   ],
+   "fastestGap": 7.47,
+   "p5Gap": 8.36,
+   "p95Gap": 9.794,
+   "players": 500,
+   "endedAtMs": 1793025868148,
+   "runMin": 14.8,
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 1016,
+   "n": 20,
+   "id": "CMP-M500-020",
+   "mode": "auto12",
+   "aud": "open",
+   "speed": 12,
+   "tickets": 1,
+   "prizes": "early5#1,top#1,mid#1,bot#1,corners#1,full#1",
+   "ties": "next",
+   "brand": false,
+   "rounds": 1,
+   "events": "late",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_c425ea105b81689a2ad4693dc609a8526d4d6c0b216db8e4\",\"aiKey\":\"cta_8c2607c10c880"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-020\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33407255,\"callSeconds\":12,\"cap\":515,\"closed\":false,\"whoCanJoin\":\"anyone\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":1,\"rewar"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793025129000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-020\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-020\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "a pay link was made for the game",
+     "ok": true,
+     "d": "{\"url\":\"http://localhost:8832/paylink.html?t=3e743271ae7ae95fe4215b42ff765338295b225cba904966\",\"expiresMs\":1793629631818}"
+    },
+    {
+     "n": "the pay link page shows the game and a price",
+     "ok": true,
+     "d": "{\"game\":{\"name\":\"Lotus Foods game 20\",\"startMs\":1793025129000,\"participants\":750},\"price\":{\"base\":5899,\"gst\":0,\"total\":5899,\"currency\":\"INR\"},\"status\":\"open\"}"
+    },
+    {
+     "n": "someone else paid through the link",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_212124b127aa0d16\",\"result\":{\"ok\":true,\"orderId\":\"pay_212124b127aa0d16\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_a4a5f37369c1c0c91"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "all 500 allowed people got a ticket",
+     "ok": true,
+     "d": "450 of 450"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 500"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "49,62,31,24,74,44,30,35,70,18,32,15,13,22,82,60,38,37,51,47,45,42,40,10,76,36,65"
+    },
+    {
+     "n": "late joiners see only the numbers called after they joined, and they match",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"bot#1@33\",\"corners#1@30\",\"early5#1@8\",\"full#1@63\",\"mid#1@23\",\"top#1@18\"] phones [\"bot#1@33\",\"corners#1@30\",\"early5#1@8\",\"full#1@63\",\"mid#1@23\",\"top#1@18\"]"
+    },
+    {
+     "n": "audit: all 500 players hold 1 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 500 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 450 players received the same 65 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 844 claims on the server are true on the claimer's own ticket(s) at the call claimed (137 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 6 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (6 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 6 numbers 65"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 65"
+    },
+    {
+     "n": "auto: every number reached the phone within 4 s of its time (p50 0.6, p95 1.3, max 1.6 s)",
+     "ok": true,
+     "d": "max 1.6"
+    },
+    {
+     "n": "auto: the median gap between numbers is 12 s (+-1): 12",
+     "ok": true,
+     "d": "[10.918,11.012,11.018,11.069,11.107]"
+    },
+    {
+     "n": "auto: no burst of numbers: no two numbers came less than half the set gap apart",
+     "ok": true,
+     "d": "0 bursts, fastest 10.918, 5th percentile 11.069, 95th 12.89"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance20.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp20.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "link",
+   "payerMail": "finance20.m500@sample-co.in",
+   "joined": 450,
+   "waiting": 0,
+   "needId": 0,
+   "joinMedianMs": 12,
+   "catchUpSec": 5,
+   "winnersAgreeSec": 0,
+   "numbers": 65,
+   "winners": 6,
+   "audit": {
+    "players": 500,
+    "tickets": 500,
+    "claims": 981
+   },
+   "beaconP50": 0,
+   "beaconMax": 0.2,
+   "beaconOver3": 0,
+   "beaconRounds": 70,
+   "deliveries": 30975,
+   "late4": 14,
+   "late6": 1,
+   "late6ByN": {
+    "52": 1
+   },
+   "late6Own": 1,
+   "delayP50": 0.6,
+   "delayP95": 1.3,
+   "delayMax": 1.6,
+   "delays": [
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.2,
+    0.2,
+    0.2,
+    0.2,
+    0.2,
+    0.2,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.4,
+    0.4,
+    0.4,
+    0.4,
+    0.4,
+    0.4,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.8,
+    0.8,
+    0.8,
+    0.8,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1.1,
+    1.1,
+    1.2,
+    1.2,
+    1.2,
+    1.2,
+    1.3,
+    1.3,
+    1.4,
+    1.5,
+    1.6
+   ],
+   "medianGap": 12,
+   "timelineRef": [
+    [
+     25249.599999904633,
+     1
+    ],
+    [
+     25261.099999904633,
+     2
+    ],
+    [
+     25273.299999952316,
+     3
+    ],
+    [
+     25285.200000047684,
+     4
+    ],
+    [
+     25298,
+     5
+    ],
+    [
+     25309.599999904633,
+     6
+    ],
+    [
+     25321.5,
+     7
+    ],
+    [
+     25333.400000095367,
+     8
+    ],
+    [
+     25345.400000095367,
+     9
+    ],
+    [
+     25357.299999952316,
+     10
+    ],
+    [
+     25369.200000047684,
+     11
+    ],
+    [
+     25382,
+     12
+    ],
+    [
+     25394,
+     13
+    ],
+    [
+     25405.700000047684,
+     14
+    ],
+    [
+     25417.400000095367,
+     15
+    ],
+    [
+     25429.599999904633,
+     16
+    ],
+    [
+     25441.700000047684,
+     17
+    ],
+    [
+     25453.700000047684,
+     18
+    ],
+    [
+     25465.799999952316,
+     19
+    ],
+    [
+     25477.799999952316,
+     20
+    ],
+    [
+     25489.200000047684,
+     21
+    ],
+    [
+     25501.200000047684,
+     22
+    ],
+    [
+     25513.299999952316,
+     23
+    ],
+    [
+     25525.200000047684,
+     24
+    ],
+    [
+     25537.099999904633,
+     25
+    ],
+    [
+     25550.099999904633,
+     26
+    ],
+    [
+     25561.099999904633,
+     27
+    ],
+    [
+     25574,
+     28
+    ],
+    [
+     25585.200000047684,
+     29
+    ],
+    [
+     25597.299999952316,
+     30
+    ],
+    [
+     25609.599999904633,
+     31
+    ],
+    [
+     25621.799999952316,
+     32
+    ],
+    [
+     25633.299999952316,
+     33
+    ],
+    [
+     25646.200000047684,
+     34
+    ],
+    [
+     25657.5,
+     35
+    ],
+    [
+     25669.900000095367,
+     36
+    ],
+    [
+     25682.099999904633,
+     37
+    ],
+    [
+     25694,
+     38
+    ],
+    [
+     25706.5,
+     39
+    ],
+    [
+     25717.5,
+     40
+    ],
+    [
+     25729.799999952316,
+     41
+    ],
+    [
+     25741.400000095367,
+     42
+    ],
+    [
+     25753.5,
+     43
+    ],
+    [
+     25766.599999904633,
+     44
+    ],
+    [
+     25777.700000047684,
+     45
+    ],
+    [
+     25789.700000047684,
+     46
+    ],
+    [
+     25802.299999952316,
+     47
+    ],
+    [
+     25813.400000095367,
+     48
+    ],
+    [
+     25825.299999952316,
+     49
+    ],
+    [
+     25837.700000047684,
+     50
+    ],
+    [
+     25849.400000095367,
+     51
+    ],
+    [
+     25862.200000047684,
+     52
+    ],
+    [
+     25873.700000047684,
+     53
+    ],
+    [
+     25885.700000047684,
+     54
+    ],
+    [
+     25898.200000047684,
+     55
+    ],
+    [
+     25909.099999904633,
+     56
+    ],
+    [
+     25921.099999904633,
+     57
+    ],
+    [
+     25933.599999904633,
+     58
+    ],
+    [
+     25945.099999904633,
+     59
+    ],
+    [
+     25957.099999904633,
+     60
+    ],
+    [
+     25969.099999904633,
+     61
+    ],
+    [
+     25981.900000095367,
+     62
+    ],
+    [
+     25994.200000047684,
+     63
+    ],
+    [
+     26005.900000095367,
+     64
+    ],
+    [
+     26017.900000095367,
+     65
+    ],
+    [
+     26030.299999952316,
+     66
+    ],
+    [
+     26041.5,
+     67
+    ],
+    [
+     26054.400000095367,
+     68
+    ],
+    [
+     26065.5,
+     69
+    ]
+   ],
+   "fastestGap": 10.918,
+   "p5Gap": 11.069,
+   "p95Gap": 12.89,
+   "players": 500,
+   "endedAtMs": 1793026086969,
+   "runMin": 18.4,
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 948,
+   "n": 21,
+   "id": "CMP-M500-021",
+   "mode": "host",
+   "aud": "open",
+   "speed": 9,
+   "tickets": 2,
+   "prizes": "early5#1,top#1,mid#1,bot#1,corners#1,full#1",
+   "ties": "share",
+   "brand": false,
+   "rounds": 1,
+   "events": "offline",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_78b330ba959d5b0099b4f67aa401e6f0ef03f87c954befbb\",\"aiKey\":\"cta_6ee2dc06150ea"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-021\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33407601,\"callSeconds\":9,\"cap\":515,\"closed\":false,\"whoCanJoin\":\"anyone\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":2,\"reward"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793026167000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-021\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-021\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "the organizer's payment was accepted",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_1819cf915d6c68ac\",\"result\":{\"ok\":true,\"orderId\":\"pay_1819cf915d6c68ac\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_4d87722e48cd54a54"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "all 500 allowed people got a ticket",
+     "ok": true,
+     "d": "500 of 500"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 500"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "18,82,39,43,89,30,15,24,68,87,90,52,45,37,21,27,31,59,71,51,70,49,22,64,77,80,67"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"bot#1@17\",\"corners#1@28\",\"early5#1@8\",\"full#1@61\",\"mid#1@28\",\"top#1@25\"] phones [\"bot#1@17\",\"corners#1@28\",\"early5#1@8\",\"full#1@61\",\"mid#1@28\",\"top#1@25\"]"
+    },
+    {
+     "n": "audit: all 500 players hold 2 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 1000 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 500 players received the same 63 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 1109 claims on the server are true on the claimer's own ticket(s) at the call claimed (290 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 6 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (6 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 6 numbers 63"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 63"
+    },
+    {
+     "n": "manual: the numbers came only because the Host pressed Next (numbers <= presses stored on the server + 1)",
+     "ok": false,
+     "d": "numbers 63 presses stored 69 (seen by the test 69)"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp21.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp21.m500@sample-co.in"
+    }
+   ],
+   "notes": [
+    "offline 25s on 10 phones at number 12"
+   ],
+   "paidVia": "org",
+   "payerMail": "cmp21.m500@sample-co.in",
+   "joined": 500,
+   "waiting": 0,
+   "needId": 0,
+   "joinMedianMs": 177,
+   "catchUpSec": 14,
+   "winnersAgreeSec": 0,
+   "numbers": 63,
+   "winners": 6,
+   "audit": {
+    "players": 500,
+    "tickets": 1000,
+    "claims": 1399
+   },
+   "medianGap": 10.4,
+   "timelineRef": [
+    [
+     26263.299999952316,
+     1
+    ],
+    [
+     26272.799999952316,
+     2
+    ],
+    [
+     26288,
+     3
+    ],
+    [
+     26303.200000047684,
+     4
+    ],
+    [
+     26315,
+     5
+    ],
+    [
+     26326.900000095367,
+     6
+    ],
+    [
+     26333.299999952316,
+     7
+    ],
+    [
+     26347.099999904633,
+     8
+    ],
+    [
+     26359.900000095367,
+     9
+    ],
+    [
+     26368.299999952316,
+     10
+    ],
+    [
+     26377.099999904633,
+     11
+    ],
+    [
+     26390,
+     12
+    ],
+    [
+     26398.599999904633,
+     13
+    ],
+    [
+     26404.099999904633,
+     14
+    ],
+    [
+     26413.700000047684,
+     15
+    ],
+    [
+     26428.700000047684,
+     16
+    ],
+    [
+     26437.400000095367,
+     17
+    ],
+    [
+     26449.299999952316,
+     18
+    ],
+    [
+     26461.099999904633,
+     19
+    ],
+    [
+     26470.799999952316,
+     20
+    ],
+    [
+     26482.799999952316,
+     21
+    ],
+    [
+     26491.400000095367,
+     22
+    ],
+    [
+     26503.299999952316,
+     23
+    ],
+    [
+     26513.700000047684,
+     24
+    ],
+    [
+     26527.799999952316,
+     25
+    ],
+    [
+     26537.400000095367,
+     26
+    ],
+    [
+     26548.099999904633,
+     27
+    ],
+    [
+     26557.799999952316,
+     28
+    ],
+    [
+     26566.400000095367,
+     29
+    ],
+    [
+     26578.5,
+     30
+    ],
+    [
+     26593.5,
+     31
+    ],
+    [
+     26602,
+     32
+    ],
+    [
+     26611.900000095367,
+     33
+    ],
+    [
+     26621.5,
+     34
+    ],
+    [
+     26630,
+     35
+    ],
+    [
+     26641.799999952316,
+     36
+    ],
+    [
+     26653.599999904633,
+     37
+    ],
+    [
+     26663.099999904633,
+     38
+    ],
+    [
+     26674.900000095367,
+     39
+    ],
+    [
+     26680.5,
+     40
+    ],
+    [
+     26690.200000047684,
+     41
+    ],
+    [
+     26698.799999952316,
+     42
+    ],
+    [
+     26713.900000095367,
+     43
+    ],
+    [
+     26725.700000047684,
+     44
+    ],
+    [
+     26740,
+     45
+    ],
+    [
+     26746.5,
+     46
+    ],
+    [
+     26758.5,
+     47
+    ],
+    [
+     26767.099999904633,
+     48
+    ],
+    [
+     26782.5,
+     49
+    ],
+    [
+     26788.900000095367,
+     50
+    ],
+    [
+     26803.599999904633,
+     51
+    ],
+    [
+     26809.900000095367,
+     52
+    ],
+    [
+     26822.099999904633,
+     53
+    ],
+    [
+     26831.799999952316,
+     54
+    ],
+    [
+     26839.299999952316,
+     55
+    ],
+    [
+     26845.700000047684,
+     56
+    ],
+    [
+     26855.400000095367,
+     57
+    ],
+    [
+     26867.400000095367,
+     58
+    ],
+    [
+     26879.700000047684,
+     59
+    ],
+    [
+     26887.5,
+     60
+    ],
+    [
+     26894,
+     61
+    ],
+    [
+     26905.200000047684,
+     62
+    ],
+    [
+     26917.200000047684,
+     63
+    ],
+    [
+     26930,
+     64
+    ],
+    [
+     26942,
+     65
+    ],
+    [
+     26947.299999952316,
+     66
+    ],
+    [
+     26956.799999952316,
+     67
+    ],
+    [
+     26965.400000095367,
+     68
+    ],
+    [
+     26980.700000047684,
+     69
+    ]
+   ],
+   "fastestGap": 5.343,
+   "presses": 69,
+   "pressesSeen": 69,
+   "players": 500,
+   "endedAtMs": 1793027004959,
+   "runMin": 16.3,
+   "pass": false,
+   "reportMail": true
+  },
+  {
+   "ticks": 912,
+   "n": 22,
+   "id": "CMP-M500-022",
+   "mode": "auto9",
+   "aud": "list-mobile",
+   "speed": 9,
+   "tickets": 1,
+   "prizes": "early5#1,early5#2,top#1,top#2,full#1,full#2",
+   "ties": "next",
+   "brand": true,
+   "rounds": 1,
+   "events": "bogey",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_ad52771e1b74803ae3b1cc21188ba55ac5928e4109f78aa3\",\"aiKey\":\"cta_410d180e48561"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-022\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33407674,\"callSeconds\":9,\"cap\":515,\"closed\":true,\"whoCanJoin\":\"list\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":1,\"rewards\":"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793026386000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-022\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-022\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "a pay link was made for the game",
+     "ok": true,
+     "d": "{\"url\":\"http://localhost:8832/paylink.html?t=76d4b111cf9e784d0dfedb13e486f82899806d35357e9c53\",\"expiresMs\":1793630887055}"
+    },
+    {
+     "n": "the pay link page shows the game and a price",
+     "ok": true,
+     "d": "{\"game\":{\"name\":\"Himalaya Steel game 22\",\"startMs\":1793026386000,\"participants\":750},\"price\":{\"base\":5899,\"gst\":0,\"total\":5899,\"currency\":\"INR\"},\"status\":\"open\""
+    },
+    {
+     "n": "someone else paid through the link",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_6f53648adb661d7f\",\"result\":{\"ok\":true,\"orderId\":\"pay_6f53648adb661d7f\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_61e03944fe0e04715"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":425,\"invalid\":0,\"want\":425,\"s\":200}"
+    },
+    {
+     "n": "all 425 allowed people got a ticket",
+     "ok": true,
+     "d": "425 of 425"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 425"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "40,78,20,61,32,39,86,67,7,85,21,15,35,81,82,62,24,25,16,41,65,12,38,4,8,17,55,53"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"early5#1@10\",\"early5#2@10\",\"full#1@60\",\"full#2@61\",\"top#1@19\",\"top#2@23\"] phones [\"early5#1@10\",\"early5#2@10\",\"full#1@60\",\"full#2@61\",\"top#1@19\",\"top#2@23\"]"
+    },
+    {
+     "n": "audit: all 425 players hold 1 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 425 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 425 players received the same 63 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 504 claims on the server are true on the claimer's own ticket(s) at the call claimed (52 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 6 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (6 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 6 numbers 63"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 63"
+    },
+    {
+     "n": "auto: the median gap between numbers is 9 s (+-1): 8.9",
+     "ok": true,
+     "d": "[8.47,8.496,8.512,8.53,8.535]"
+    },
+    {
+     "n": "auto: no burst of numbers: no two numbers came less than half the set gap apart",
+     "ok": true,
+     "d": "0 bursts, fastest 8.47, 5th percentile 8.53, 95th 9.787"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance22.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp22.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "link",
+   "payerMail": "finance22.m500@sample-co.in",
+   "joined": 425,
+   "waiting": 75,
+   "needId": 0,
+   "joinMedianMs": 14,
+   "catchUpSec": 12,
+   "winnersAgreeSec": 0,
+   "numbers": 63,
+   "winners": 6,
+   "audit": {
+    "players": 425,
+    "tickets": 425,
+    "claims": 556
+   },
+   "medianGap": 8.9,
+   "timelineRef": [
+    [
+     26506.099999904633,
+     1
+    ],
+    [
+     26515.200000047684,
+     2
+    ],
+    [
+     26524.900000095367,
+     3
+    ],
+    [
+     26533.400000095367,
+     4
+    ],
+    [
+     26543.099999904633,
+     5
+    ],
+    [
+     26551.700000047684,
+     6
+    ],
+    [
+     26581.299999952316,
+     7
+    ],
+    [
+     26590.900000095367,
+     8
+    ],
+    [
+     26599.700000047684,
+     9
+    ],
+    [
+     26608.400000095367,
+     10
+    ],
+    [
+     26617.099999904633,
+     11
+    ],
+    [
+     26626.799999952316,
+     12
+    ],
+    [
+     26635.5,
+     13
+    ],
+    [
+     26645,
+     14
+    ],
+    [
+     26653.900000095367,
+     15
+    ],
+    [
+     26662.599999904633,
+     16
+    ],
+    [
+     26671.099999904633,
+     17
+    ],
+    [
+     26680.900000095367,
+     18
+    ],
+    [
+     26689.5,
+     19
+    ],
+    [
+     26698.299999952316,
+     20
+    ],
+    [
+     26707.099999904633,
+     21
+    ],
+    [
+     26716.900000095367,
+     22
+    ],
+    [
+     26725.799999952316,
+     23
+    ],
+    [
+     26734.400000095367,
+     24
+    ],
+    [
+     26743.200000047684,
+     25
+    ],
+    [
+     26752.900000095367,
+     26
+    ],
+    [
+     26761.700000047684,
+     27
+    ],
+    [
+     26770.5,
+     28
+    ],
+    [
+     26779.299999952316,
+     29
+    ],
+    [
+     26789,
+     30
+    ],
+    [
+     26797.900000095367,
+     31
+    ],
+    [
+     26806.700000047684,
+     32
+    ],
+    [
+     26815.599999904633,
+     33
+    ],
+    [
+     26824.5,
+     34
+    ],
+    [
+     26833.200000047684,
+     35
+    ],
+    [
+     26842.200000047684,
+     36
+    ],
+    [
+     26851.099999904633,
+     37
+    ],
+    [
+     26860.700000047684,
+     38
+    ],
+    [
+     26869.599999904633,
+     39
+    ],
+    [
+     26878.299999952316,
+     40
+    ],
+    [
+     26887.099999904633,
+     41
+    ],
+    [
+     26896.099999904633,
+     42
+    ],
+    [
+     26905.900000095367,
+     43
+    ],
+    [
+     26914.400000095367,
+     44
+    ],
+    [
+     26923.200000047684,
+     45
+    ],
+    [
+     26932.099999904633,
+     46
+    ],
+    [
+     26941.799999952316,
+     47
+    ],
+    [
+     26950.700000047684,
+     48
+    ],
+    [
+     26959.5,
+     49
+    ],
+    [
+     26969,
+     50
+    ],
+    [
+     26978.099999904633,
+     51
+    ],
+    [
+     26986.700000047684,
+     52
+    ],
+    [
+     26995.900000095367,
+     53
+    ],
+    [
+     27005,
+     54
+    ],
+    [
+     27013.400000095367,
+     55
+    ],
+    [
+     27022.299999952316,
+     56
+    ],
+    [
+     27031.099999904633,
+     57
+    ],
+    [
+     27040.900000095367,
+     58
+    ],
+    [
+     27049.5,
+     59
+    ],
+    [
+     27059,
+     60
+    ],
+    [
+     27067.5,
+     61
+    ],
+    [
+     27076.299999952316,
+     62
+    ],
+    [
+     27085.099999904633,
+     63
+    ],
+    [
+     27094.799999952316,
+     64
+    ],
+    [
+     27103.299999952316,
+     65
+    ],
+    [
+     27113.099999904633,
+     66
+    ],
+    [
+     27121.799999952316,
+     67
+    ],
+    [
+     27130.5,
+     68
+    ],
+    [
+     27139.299999952316,
+     69
+    ],
+    [
+     27149,
+     70
+    ]
+   ],
+   "fastestGap": 8.47,
+   "p5Gap": 8.53,
+   "p95Gap": 9.787,
+   "players": 425,
+   "endedAtMs": 1793027170055,
+   "runMin": 15.5,
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 522,
+   "n": 23,
+   "id": "CMP-M500-023",
+   "mode": "auto12",
+   "aud": "list-mobile",
+   "speed": 12,
+   "tickets": 2,
+   "prizes": "early5#1,early5#2,top#1,top#2,full#1,full#2",
+   "ties": "next",
+   "brand": false,
+   "rounds": 1,
+   "events": "end",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_afa075856a59624d2f329796f9e592f07656205d7b828696\",\"aiKey\":\"cta_78f54664642da"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-023\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33407980,\"callSeconds\":12,\"cap\":515,\"closed\":true,\"whoCanJoin\":\"list\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":2,\"rewards\""
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793027304000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-023\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-023\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "the organizer's payment was accepted",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_7a25a1eaf81c15d3\",\"result\":{\"ok\":true,\"orderId\":\"pay_7a25a1eaf81c15d3\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_20a46177046b14620"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":425,\"invalid\":0,\"want\":425,\"s\":200}"
+    },
+    {
+     "n": "all 425 allowed people got a ticket",
+     "ok": true,
+     "d": "425 of 425"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "organizer's End accepted",
+     "ok": true,
+     "d": "{\"ok\":true,\"seq\":1}"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 425"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "84,4,85,37,82,49,89,58,65,83,62,51,68,74,38,53,76,24,19,61,81,15"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"early5#1@7\",\"early5#2@7\"] phones [\"early5#1@7\",\"early5#2@7\"]"
+    },
+    {
+     "n": "audit: all 425 players hold 2 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 850 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 425 players received the same 22 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 199 claims on the server are true on the claimer's own ticket(s) at the call claimed (0 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 2 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the organizer's End stopped the game before 90 numbers",
+     "ok": true,
+     "d": "22 (ended at 15)"
+    },
+    {
+     "n": "auto: every number reached the phone within 4 s of its time (p50 0.3, p95 0.9, max 1.1 s)",
+     "ok": true,
+     "d": "max 1.1"
+    },
+    {
+     "n": "auto: the median gap between numbers is 12 s (+-1): 11.9",
+     "ok": true,
+     "d": "[10.998,11.588,11.674,11.688,11.764]"
+    },
+    {
+     "n": "auto: no burst of numbers: no two numbers came less than half the set gap apart",
+     "ok": true,
+     "d": "0 bursts, fastest 10.998, 5th percentile 11.588, 95th 12.764"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp23.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp23.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "org",
+   "payerMail": "cmp23.m500@sample-co.in",
+   "joined": 425,
+   "waiting": 75,
+   "needId": 0,
+   "joinMedianMs": 19,
+   "endedAtN": 15,
+   "catchUpSec": 2,
+   "winnersAgreeSec": 0,
+   "numbers": 22,
+   "winners": 2,
+   "audit": {
+    "players": 425,
+    "tickets": 850,
+    "claims": 199
+   },
+   "beaconP50": 0,
+   "beaconMax": 0,
+   "beaconOver3": 0,
+   "beaconRounds": 22,
+   "deliveries": 9350,
+   "late4": 0,
+   "late6": 0,
+   "late6ByN": {},
+   "late6Own": 0,
+   "delayP50": 0.3,
+   "delayP95": 0.9,
+   "delayMax": 1.1,
+   "delays": [
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.2,
+    0.2,
+    0.2,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.4,
+    0.5,
+    0.5,
+    0.6,
+    0.6,
+    0.7,
+    0.7,
+    0.8,
+    0.9,
+    1.1
+   ],
+   "medianGap": 11.9,
+   "timelineRef": [
+    [
+     27424.599999904633,
+     1
+    ],
+    [
+     27436.200000047684,
+     2
+    ],
+    [
+     27448.200000047684,
+     3
+    ],
+    [
+     27460.099999904633,
+     4
+    ],
+    [
+     27472.099999904633,
+     5
+    ],
+    [
+     27484.799999952316,
+     6
+    ],
+    [
+     27496.400000095367,
+     7
+    ],
+    [
+     27508.299999952316,
+     8
+    ],
+    [
+     27520.099999904633,
+     9
+    ],
+    [
+     27532.099999904633,
+     10
+    ],
+    [
+     27544.900000095367,
+     11
+    ],
+    [
+     27556.700000047684,
+     12
+    ],
+    [
+     27568.5,
+     13
+    ],
+    [
+     27580.299999952316,
+     14
+    ],
+    [
+     27592.299999952316,
+     15
+    ],
+    [
+     27604.5,
+     16
+    ],
+    [
+     27616.700000047684,
+     17
+    ],
+    [
+     27628.599999904633,
+     18
+    ],
+    [
+     27640.299999952316,
+     19
+    ],
+    [
+     27652.200000047684,
+     20
+    ],
+    [
+     27665.099999904633,
+     21
+    ],
+    [
+     27676.099999904633,
+     22
+    ]
+   ],
+   "fastestGap": 10.998,
+   "p5Gap": 11.588,
+   "p95Gap": 12.764,
+   "players": 425,
+   "endedAtMs": 1793027684689,
+   "runMin": 8.8,
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 996,
+   "n": 24,
+   "id": "CMP-M500-024",
+   "mode": "host",
+   "aud": "list-mobile",
+   "speed": 9,
+   "tickets": 1,
+   "prizes": "early5#1,early5#2,top#1,top#2,full#1,full#2",
+   "ties": "share",
+   "brand": false,
+   "rounds": 1,
+   "events": "reload",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_67a34b19f3641f1b5c4d4500f1a159a60580c991acc29922\",\"aiKey\":\"cta_d38e123922497"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-024\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33408035,\"callSeconds\":9,\"cap\":515,\"closed\":true,\"whoCanJoin\":\"list\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":1,\"rewards\":"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793027469000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-024\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-024\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "a pay link was made for the game",
+     "ok": true,
+     "d": "{\"url\":\"http://localhost:8832/paylink.html?t=5fde554b722c15241c3ce125e3c0bf662d66443cb50882d4\",\"expiresMs\":1793631970123}"
+    },
+    {
+     "n": "the pay link page shows the game and a price",
+     "ok": true,
+     "d": "{\"game\":{\"name\":\"Sunrise Textiles game 24\",\"startMs\":1793027469000,\"participants\":750},\"price\":{\"base\":5899,\"gst\":0,\"total\":5899,\"currency\":\"INR\"},\"status\":\"ope"
+    },
+    {
+     "n": "someone else paid through the link",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_6d72d18c439e1cf1\",\"result\":{\"ok\":true,\"orderId\":\"pay_6d72d18c439e1cf1\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_7dd45b0c2a8903c21"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":425,\"invalid\":0,\"want\":425,\"s\":200}"
+    },
+    {
+     "n": "all 425 allowed people got a ticket",
+     "ok": true,
+     "d": "425 of 425"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 425"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "71,35,70,7,46,29,16,78,47,62,49,58,8,11,26,28,2,65,45,69,85,57,67,5,75,9,21,12,6"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"early5#1@7\",\"early5#2@8\",\"full#1@62\",\"full#2@63\",\"top#1@32\",\"top#2@40\"] phones [\"early5#1@7\",\"early5#2@8\",\"full#1@62\",\"full#2@63\",\"top#1@32\",\"top#2@40\"]"
+    },
+    {
+     "n": "audit: all 425 players hold 1 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 425 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 425 players received the same 65 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 502 claims on the server are true on the claimer's own ticket(s) at the call claimed (63 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 6 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (6 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 6 numbers 65"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 65"
+    },
+    {
+     "n": "manual: the numbers came only because the Host pressed Next (numbers <= presses stored on the server + 1)",
+     "ok": false,
+     "d": "numbers 65 presses stored 71 (seen by the test 71)"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance24.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp24.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "link",
+   "payerMail": "finance24.m500@sample-co.in",
+   "joined": 425,
+   "waiting": 75,
+   "needId": 0,
+   "joinMedianMs": 12,
+   "catchUpSec": 6,
+   "winnersAgreeSec": 0,
+   "numbers": 65,
+   "winners": 6,
+   "audit": {
+    "players": 425,
+    "tickets": 425,
+    "claims": 565
+   },
+   "medianGap": 11.6,
+   "timelineRef": [
+    [
+     27565.799999952316,
+     1
+    ],
+    [
+     27574.299999952316,
+     2
+    ],
+    [
+     27583.900000095367,
+     3
+    ],
+    [
+     27593.799999952316,
+     4
+    ],
+    [
+     27605.599999904633,
+     5
+    ],
+    [
+     27617.299999952316,
+     6
+    ],
+    [
+     27630.200000047684,
+     7
+    ],
+    [
+     27637.700000047684,
+     8
+    ],
+    [
+     27649.599999904633,
+     9
+    ],
+    [
+     27661.5,
+     10
+    ],
+    [
+     27668.200000047684,
+     11
+    ],
+    [
+     27680,
+     12
+    ],
+    [
+     27693.900000095367,
+     13
+    ],
+    [
+     27707.099999904633,
+     14
+    ],
+    [
+     27715.700000047684,
+     15
+    ],
+    [
+     27724.400000095367,
+     16
+    ],
+    [
+     27730.799999952316,
+     17
+    ],
+    [
+     27745.700000047684,
+     18
+    ],
+    [
+     27757.5,
+     19
+    ],
+    [
+     27769.200000047684,
+     20
+    ],
+    [
+     27775.599999904633,
+     21
+    ],
+    [
+     27784.200000047684,
+     22
+    ],
+    [
+     27793.900000095367,
+     23
+    ],
+    [
+     27808.799999952316,
+     24
+    ],
+    [
+     27817.400000095367,
+     25
+    ],
+    [
+     27829.299999952316,
+     26
+    ],
+    [
+     27841.099999904633,
+     27
+    ],
+    [
+     27853.700000047684,
+     28
+    ],
+    [
+     27862.400000095367,
+     29
+    ],
+    [
+     27874.5,
+     30
+    ],
+    [
+     27884,
+     31
+    ],
+    [
+     27895.5,
+     32
+    ],
+    [
+     27910.299999952316,
+     33
+    ],
+    [
+     27922.200000047684,
+     34
+    ],
+    [
+     27929.599999904633,
+     35
+    ],
+    [
+     27938,
+     36
+    ],
+    [
+     27947.700000047684,
+     37
+    ],
+    [
+     27955.400000095367,
+     38
+    ],
+    [
+     27966.200000047684,
+     39
+    ],
+    [
+     27973.700000047684,
+     40
+    ],
+    [
+     27985.400000095367,
+     41
+    ],
+    [
+     27997.299999952316,
+     42
+    ],
+    [
+     28006.099999904633,
+     43
+    ],
+    [
+     28015.799999952316,
+     44
+    ],
+    [
+     28024.400000095367,
+     45
+    ],
+    [
+     28039.5,
+     46
+    ],
+    [
+     28051.099999904633,
+     47
+    ],
+    [
+     28060.799999952316,
+     48
+    ],
+    [
+     28073.900000095367,
+     49
+    ],
+    [
+     28081.599999904633,
+     50
+    ],
+    [
+     28093.400000095367,
+     51
+    ],
+    [
+     28105.400000095367,
+     52
+    ],
+    [
+     28117.5,
+     53
+    ],
+    [
+     28129.299999952316,
+     54
+    ],
+    [
+     28138.900000095367,
+     55
+    ],
+    [
+     28150.5,
+     56
+    ],
+    [
+     28162.200000047684,
+     57
+    ],
+    [
+     28172,
+     58
+    ],
+    [
+     28180.5,
+     59
+    ],
+    [
+     28192.400000095367,
+     60
+    ],
+    [
+     28202.099999904633,
+     61
+    ],
+    [
+     28214.099999904633,
+     62
+    ],
+    [
+     28229,
+     63
+    ],
+    [
+     28237.599999904633,
+     64
+    ],
+    [
+     28246.099999904633,
+     65
+    ],
+    [
+     28258.099999904633,
+     66
+    ],
+    [
+     28270.200000047684,
+     67
+    ]
+   ],
+   "fastestGap": 6.36,
+   "presses": 71,
+   "pressesSeen": 71,
+   "players": 425,
+   "endedAtMs": 1793028328460,
+   "runMin": 16.8,
+   "pass": false,
+   "reportMail": true
+  },
+  {
+   "ticks": 828,
+   "n": 25,
+   "id": "CMP-M500-025",
+   "mode": "auto9",
+   "aud": "emp-id",
+   "speed": 9,
+   "tickets": 2,
+   "prizes": "star#1,corners#1,top#1,full#1",
+   "ties": "next",
+   "brand": true,
+   "rounds": 1,
+   "events": "late",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_bbf9f3c8562284bb2f3a5b4963b3ca337aa9f0cbb77c1874\",\"aiKey\":\"cta_ed18bbea462eb"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-025\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33408206,\"callSeconds\":9,\"cap\":515,\"closed\":true,\"whoCanJoin\":\"list\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":2,\"rewards\":"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793027982000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-025\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-025\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "the organizer's payment was accepted",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_42e9f814e0360852\",\"result\":{\"ok\":true,\"orderId\":\"pay_42e9f814e0360852\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_acd223b820ae15ada"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":425,\"invalid\":0,\"want\":425,\"s\":200}"
+    },
+    {
+     "n": "all 425 allowed people got a ticket",
+     "ok": true,
+     "d": "383 of 383"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 425"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "15,70,55,2,8,6,74,42,27,3,18,7,24,19,52,50,44,69,13,40,88,12,35,86,73,5,89,29,72"
+    },
+    {
+     "n": "late joiners see only the numbers called after they joined, and they match",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"corners#1@20\",\"full#1@55\",\"star#1@22\",\"top#1@28\"] phones [\"corners#1@20\",\"full#1@55\",\"star#1@22\",\"top#1@28\"]"
+    },
+    {
+     "n": "audit: all 425 players hold 2 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 850 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 383 players received the same 57 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 374 claims on the server are true on the claimer's own ticket(s) at the call claimed (72 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 4 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (4 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 4 numbers 57"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 57"
+    },
+    {
+     "n": "auto: the median gap between numbers is 9 s (+-1): 8.8",
+     "ok": true,
+     "d": "[8.263,8.389,8.466,8.486,8.494]"
+    },
+    {
+     "n": "auto: no burst of numbers: no two numbers came less than half the set gap apart",
+     "ok": true,
+     "d": "0 bursts, fastest 8.263, 5th percentile 8.486, 95th 9.813"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp25.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp25.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "org",
+   "payerMail": "cmp25.m500@sample-co.in",
+   "joined": 383,
+   "waiting": 38,
+   "needId": 37,
+   "joinMedianMs": 13,
+   "catchUpSec": 10,
+   "winnersAgreeSec": 0,
+   "numbers": 57,
+   "winners": 4,
+   "audit": {
+    "players": 425,
+    "tickets": 850,
+    "claims": 446
+   },
+   "medianGap": 8.8,
+   "timelineRef": [
+    [
+     28103,
+     1
+    ],
+    [
+     28111.200000047684,
+     2
+    ],
+    [
+     28121,
+     3
+    ],
+    [
+     28129.5,
+     4
+    ],
+    [
+     28139.099999904633,
+     5
+    ],
+    [
+     28147.799999952316,
+     6
+    ],
+    [
+     28178,
+     7
+    ],
+    [
+     28186.5,
+     8
+    ],
+    [
+     28195.099999904633,
+     9
+    ],
+    [
+     28204.599999904633,
+     10
+    ],
+    [
+     28214.099999904633,
+     11
+    ],
+    [
+     28222.700000047684,
+     12
+    ],
+    [
+     28231.099999904633,
+     13
+    ],
+    [
+     28240.599999904633,
+     14
+    ],
+    [
+     28249.400000095367,
+     15
+    ],
+    [
+     28258.900000095367,
+     16
+    ],
+    [
+     28267.5,
+     17
+    ],
+    [
+     28276.299999952316,
+     18
+    ],
+    [
+     28285.900000095367,
+     19
+    ],
+    [
+     28294.5,
+     20
+    ],
+    [
+     28303.200000047684,
+     21
+    ],
+    [
+     28312.799999952316,
+     22
+    ],
+    [
+     28321.5,
+     23
+    ],
+    [
+     28330.299999952316,
+     24
+    ],
+    [
+     28339.900000095367,
+     25
+    ],
+    [
+     28348.599999904633,
+     26
+    ],
+    [
+     28357.299999952316,
+     27
+    ],
+    [
+     28366.900000095367,
+     28
+    ],
+    [
+     28375.700000047684,
+     29
+    ],
+    [
+     28384.299999952316,
+     30
+    ],
+    [
+     28393.700000047684,
+     31
+    ],
+    [
+     28402.200000047684,
+     32
+    ],
+    [
+     28412.099999904633,
+     33
+    ],
+    [
+     28420.5,
+     34
+    ],
+    [
+     28430,
+     35
+    ],
+    [
+     28438.599999904633,
+     36
+    ],
+    [
+     28447.299999952316,
+     37
+    ],
+    [
+     28457.099999904633,
+     38
+    ],
+    [
+     28465.799999952316,
+     39
+    ],
+    [
+     28474.599999904633,
+     40
+    ],
+    [
+     28483.099999904633,
+     41
+    ],
+    [
+     28492.799999952316,
+     42
+    ],
+    [
+     28501.299999952316,
+     43
+    ],
+    [
+     28510.900000095367,
+     44
+    ],
+    [
+     28519.700000047684,
+     45
+    ],
+    [
+     28528.200000047684,
+     46
+    ],
+    [
+     28538,
+     47
+    ],
+    [
+     28546.400000095367,
+     48
+    ],
+    [
+     28555.099999904633,
+     49
+    ],
+    [
+     28564.799999952316,
+     50
+    ],
+    [
+     28573.400000095367,
+     51
+    ],
+    [
+     28582.200000047684,
+     52
+    ],
+    [
+     28591.900000095367,
+     53
+    ],
+    [
+     28600.5,
+     54
+    ],
+    [
+     28609.299999952316,
+     55
+    ],
+    [
+     28618.099999904633,
+     56
+    ],
+    [
+     28627.700000047684,
+     57
+    ],
+    [
+     28636.299999952316,
+     58
+    ],
+    [
+     28645.200000047684,
+     59
+    ],
+    [
+     28654.099999904633,
+     60
+    ],
+    [
+     28663.799999952316,
+     61
+    ]
+   ],
+   "fastestGap": 8.263,
+   "p5Gap": 8.486,
+   "p95Gap": 9.813,
+   "players": 425,
+   "endedAtMs": 1793028685609,
+   "runMin": 14.2,
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 1102,
+   "n": 26,
+   "id": "CMP-M500-026",
+   "mode": "auto12",
+   "aud": "emp-id",
+   "speed": 12,
+   "tickets": 1,
+   "prizes": "star#1,corners#1,top#1,full#1",
+   "ties": "next",
+   "brand": false,
+   "rounds": 1,
+   "events": "slow",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_150b4b4bfea0c9c386240082557c6f24191983f10c709192\",\"aiKey\":\"cta_491d1d1282e36"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-026\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33408421,\"callSeconds\":12,\"cap\":515,\"closed\":true,\"whoCanJoin\":\"list\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":1,\"rewards\""
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793028627000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-026\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-026\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "a pay link was made for the game",
+     "ok": true,
+     "d": "{\"url\":\"http://localhost:8832/paylink.html?t=2e68d9d4071a9b5b25d92fe9735c771dd4456cf3f345dc5d\",\"expiresMs\":1793633128497}"
+    },
+    {
+     "n": "the pay link page shows the game and a price",
+     "ok": true,
+     "d": "{\"game\":{\"name\":\"Neelkanth Pharma game 26\",\"startMs\":1793028627000,\"participants\":750},\"price\":{\"base\":5899,\"gst\":0,\"total\":5899,\"currency\":\"INR\"},\"status\":\"ope"
+    },
+    {
+     "n": "someone else paid through the link",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_9d8f7620f77745b1\",\"result\":{\"ok\":true,\"orderId\":\"pay_9d8f7620f77745b1\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_b8f915a580a2c707a"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":425,\"invalid\":0,\"want\":425,\"s\":200}"
+    },
+    {
+     "n": "all 425 allowed people got a ticket",
+     "ok": true,
+     "d": "425 of 425"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 425"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "4,80,30,39,62,48,34,76,87,16,84,15,25,26,78,8,14,73,53,17,85,22,1,45,50,61,47,9,"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"corners#1@15\",\"full#1@63\",\"star#1@26\",\"top#1@24\"] phones [\"corners#1@15\",\"full#1@63\",\"star#1@26\",\"top#1@24\"]"
+    },
+    {
+     "n": "audit: all 425 players hold 1 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 425 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 425 players received the same 65 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 229 claims on the server are true on the claimer's own ticket(s) at the call claimed (96 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 4 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (4 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 4 numbers 65"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 65"
+    },
+    {
+     "n": "auto: every number reached the phone within 4 s of its time (p50 0.6, p95 1, max 1.1 s)",
+     "ok": true,
+     "d": "max 1.1"
+    },
+    {
+     "n": "auto: the median gap between numbers is 12 s (+-1): 11.9",
+     "ok": true,
+     "d": "[11.483,11.614,11.653,11.653,11.657]"
+    },
+    {
+     "n": "auto: no burst of numbers: no two numbers came less than half the set gap apart",
+     "ok": true,
+     "d": "0 bursts, fastest 11.483, 5th percentile 11.653, 95th 12.928"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance26.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp26.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "link",
+   "payerMail": "finance26.m500@sample-co.in",
+   "joined": 425,
+   "waiting": 38,
+   "needId": 37,
+   "joinMedianMs": 13,
+   "catchUpSec": 4,
+   "winnersAgreeSec": 0,
+   "numbers": 65,
+   "winners": 4,
+   "audit": {
+    "players": 425,
+    "tickets": 425,
+    "claims": 325
+   },
+   "beaconP50": 0,
+   "beaconMax": 0,
+   "beaconOver3": 0,
+   "beaconRounds": 71,
+   "deliveries": 29460,
+   "late4": 0,
+   "late6": 0,
+   "late6ByN": {},
+   "late6Own": 0,
+   "delayP50": 0.6,
+   "delayP95": 1,
+   "delayMax": 1.1,
+   "delays": [
+    0,
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.2,
+    0.2,
+    0.2,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.4,
+    0.4,
+    0.4,
+    0.4,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.8,
+    0.8,
+    0.8,
+    0.8,
+    0.8,
+    0.8,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1.1,
+    1.1
+   ],
+   "medianGap": 11.9,
+   "timelineRef": [
+    [
+     28747.299999952316,
+     1
+    ],
+    [
+     28759.099999904633,
+     2
+    ],
+    [
+     28771.799999952316,
+     3
+    ],
+    [
+     28783.599999904633,
+     4
+    ],
+    [
+     28795.5,
+     5
+    ],
+    [
+     28807.200000047684,
+     6
+    ],
+    [
+     28819.400000095367,
+     7
+    ],
+    [
+     28831.299999952316,
+     8
+    ],
+    [
+     28843.099999904633,
+     9
+    ],
+    [
+     28856,
+     10
+    ],
+    [
+     28867.900000095367,
+     11
+    ],
+    [
+     28879.700000047684,
+     12
+    ],
+    [
+     28891.599999904633,
+     13
+    ],
+    [
+     28903.299999952316,
+     14
+    ],
+    [
+     28916,
+     15
+    ],
+    [
+     28927.799999952316,
+     16
+    ],
+    [
+     28939.5,
+     17
+    ],
+    [
+     28951.200000047684,
+     18
+    ],
+    [
+     28964,
+     19
+    ],
+    [
+     28975.799999952316,
+     20
+    ],
+    [
+     28987.599999904633,
+     21
+    ],
+    [
+     28999.599999904633,
+     22
+    ],
+    [
+     29011.299999952316,
+     23
+    ],
+    [
+     29023.099999904633,
+     24
+    ],
+    [
+     29036,
+     25
+    ],
+    [
+     29047.900000095367,
+     26
+    ],
+    [
+     29059.700000047684,
+     27
+    ],
+    [
+     29071.599999904633,
+     28
+    ],
+    [
+     29083.400000095367,
+     29
+    ],
+    [
+     29095.400000095367,
+     30
+    ],
+    [
+     29107.599999904633,
+     31
+    ],
+    [
+     29119.200000047684,
+     32
+    ],
+    [
+     29132.099999904633,
+     33
+    ],
+    [
+     29144,
+     34
+    ],
+    [
+     29155.799999952316,
+     35
+    ],
+    [
+     29167.700000047684,
+     36
+    ],
+    [
+     29179.599999904633,
+     37
+    ],
+    [
+     29191.5,
+     38
+    ],
+    [
+     29203.099999904633,
+     39
+    ],
+    [
+     29216,
+     40
+    ],
+    [
+     29227.900000095367,
+     41
+    ],
+    [
+     29239.900000095367,
+     42
+    ],
+    [
+     29251.799999952316,
+     43
+    ],
+    [
+     29263.700000047684,
+     44
+    ],
+    [
+     29275.700000047684,
+     45
+    ],
+    [
+     29287.599999904633,
+     46
+    ],
+    [
+     29299.599999904633,
+     47
+    ],
+    [
+     29311.400000095367,
+     48
+    ],
+    [
+     29323.299999952316,
+     49
+    ],
+    [
+     29335.099999904633,
+     50
+    ],
+    [
+     29347.099999904633,
+     51
+    ],
+    [
+     29360.099999904633,
+     52
+    ],
+    [
+     29371.799999952316,
+     53
+    ],
+    [
+     29383.599999904633,
+     54
+    ],
+    [
+     29395.299999952316,
+     55
+    ],
+    [
+     29407,
+     56
+    ],
+    [
+     29419.700000047684,
+     57
+    ],
+    [
+     29431.5,
+     58
+    ],
+    [
+     29443.599999904633,
+     59
+    ],
+    [
+     29455.099999904633,
+     60
+    ],
+    [
+     29468,
+     61
+    ],
+    [
+     29479.900000095367,
+     62
+    ],
+    [
+     29491.599999904633,
+     63
+    ],
+    [
+     29503.599999904633,
+     64
+    ],
+    [
+     29515.599999904633,
+     65
+    ],
+    [
+     29527.299999952316,
+     66
+    ],
+    [
+     29539.299999952316,
+     67
+    ],
+    [
+     29551.099999904633,
+     68
+    ],
+    [
+     29564,
+     69
+    ],
+    [
+     29575.900000095367,
+     70
+    ]
+   ],
+   "fastestGap": 11.483,
+   "p5Gap": 11.653,
+   "p95Gap": 12.928,
+   "players": 425,
+   "endedAtMs": 1793029590542,
+   "runMin": 18.5,
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 922,
+   "n": 27,
+   "id": "CMP-M500-027",
+   "mode": "host",
+   "aud": "emp-id",
+   "speed": 9,
+   "tickets": 2,
+   "prizes": "star#1,corners#1,top#1,full#1",
+   "ties": "share",
+   "brand": false,
+   "rounds": 1,
+   "events": "-",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_75caf60fddbdc5410f7c610052230e78d538c03deaca087b\",\"aiKey\":\"cta_b78a6f08a168c"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-027\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33408540,\"callSeconds\":9,\"cap\":515,\"closed\":true,\"whoCanJoin\":\"list\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":2,\"rewards\":"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793028984000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-027\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-027\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "the organizer's payment was accepted",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_3583588cf87722ae\",\"result\":{\"ok\":true,\"orderId\":\"pay_3583588cf87722ae\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_88b80f1e1394035c8"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":425,\"invalid\":0,\"want\":425,\"s\":200}"
+    },
+    {
+     "n": "all 425 allowed people got a ticket",
+     "ok": true,
+     "d": "425 of 425"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 425"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "48,43,3,86,29,62,53,84,71,11,25,87,13,59,16,34,27,79,15,21,26,56,81,7,39,35,57,1"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"corners#1@20\",\"full#1@62\",\"star#1@24\",\"top#1@24\"] phones [\"corners#1@20\",\"full#1@62\",\"star#1@24\",\"top#1@24\"]"
+    },
+    {
+     "n": "audit: all 425 players hold 2 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 850 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 425 players received the same 64 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 416 claims on the server are true on the claimer's own ticket(s) at the call claimed (47 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 4 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (4 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 4 numbers 64"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 64"
+    },
+    {
+     "n": "manual: the numbers came only because the Host pressed Next (numbers <= presses stored on the server + 1)",
+     "ok": true,
+     "d": "numbers 64 presses stored 66 (seen by the test 66)"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp27.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp27.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "org",
+   "payerMail": "cmp27.m500@sample-co.in",
+   "joined": 425,
+   "waiting": 38,
+   "needId": 37,
+   "joinMedianMs": 13,
+   "catchUpSec": 46,
+   "winnersAgreeSec": 0,
+   "numbers": 64,
+   "winners": 4,
+   "audit": {
+    "players": 425,
+    "tickets": 850,
+    "claims": 463
+   },
+   "medianGap": 10.6,
+   "timelineRef": [
+    [
+     29080.700000047684,
+     1
+    ],
+    [
+     29089.299999952316,
+     2
+    ],
+    [
+     29099.099999904633,
+     3
+    ],
+    [
+     29107.700000047684,
+     4
+    ],
+    [
+     29119.799999952316,
+     5
+    ],
+    [
+     29129.5,
+     6
+    ],
+    [
+     29141.299999952316,
+     7
+    ],
+    [
+     29155.5,
+     8
+    ],
+    [
+     29165.200000047684,
+     9
+    ],
+    [
+     29176.099999904633,
+     10
+    ],
+    [
+     29188.099999904633,
+     11
+    ],
+    [
+     29200.900000095367,
+     12
+    ],
+    [
+     29213.900000095367,
+     13
+    ],
+    [
+     29221.299999952316,
+     14
+    ],
+    [
+     29232,
+     15
+    ],
+    [
+     29244,
+     16
+    ],
+    [
+     29254.799999952316,
+     17
+    ],
+    [
+     29266.799999952316,
+     18
+    ],
+    [
+     29274.200000047684,
+     19
+    ],
+    [
+     29284.799999952316,
+     20
+    ],
+    [
+     29293.400000095367,
+     21
+    ],
+    [
+     29303.099999904633,
+     22
+    ],
+    [
+     29315,
+     23
+    ],
+    [
+     29323.799999952316,
+     24
+    ],
+    [
+     29332.099999904633,
+     25
+    ],
+    [
+     29341.900000095367,
+     26
+    ],
+    [
+     29353.799999952316,
+     27
+    ],
+    [
+     29367.700000047684,
+     28
+    ],
+    [
+     29374.400000095367,
+     29
+    ],
+    [
+     29380.799999952316,
+     30
+    ],
+    [
+     29393.700000047684,
+     31
+    ],
+    [
+     29401,
+     32
+    ],
+    [
+     29407.5,
+     33
+    ],
+    [
+     29418.200000047684,
+     34
+    ],
+    [
+     29425.599999904633,
+     35
+    ],
+    [
+     29432,
+     36
+    ],
+    [
+     29443.700000047684,
+     37
+    ],
+    [
+     29452.200000047684,
+     38
+    ],
+    [
+     29461.900000095367,
+     39
+    ],
+    [
+     29467.200000047684,
+     40
+    ],
+    [
+     29483,
+     41
+    ],
+    [
+     29495,
+     42
+    ],
+    [
+     29509.799999952316,
+     43
+    ],
+    [
+     29518.400000095367,
+     44
+    ],
+    [
+     29530.099999904633,
+     45
+    ],
+    [
+     29536.700000047684,
+     46
+    ],
+    [
+     29545.299999952316,
+     47
+    ],
+    [
+     29558.200000047684,
+     48
+    ],
+    [
+     29565.799999952316,
+     49
+    ],
+    [
+     29572.299999952316,
+     50
+    ],
+    [
+     29587.400000095367,
+     51
+    ],
+    [
+     29596.099999904633,
+     52
+    ],
+    [
+     29605.900000095367,
+     53
+    ],
+    [
+     29614.200000047684,
+     54
+    ],
+    [
+     29629,
+     55
+    ],
+    [
+     29641.900000095367,
+     56
+    ],
+    [
+     29656.599999904633,
+     57
+    ],
+    [
+     29668.799999952316,
+     58
+    ],
+    [
+     29674.200000047684,
+     59
+    ],
+    [
+     29686.099999904633,
+     60
+    ],
+    [
+     29698.099999904633,
+     61
+    ],
+    [
+     29710.200000047684,
+     62
+    ],
+    [
+     29722.900000095367,
+     63
+    ],
+    [
+     29736,
+     64
+    ],
+    [
+     29743.400000095367,
+     65
+    ],
+    [
+     29752.099999904633,
+     66
+    ]
+   ],
+   "fastestGap": 5.273,
+   "presses": 66,
+   "pressesSeen": 66,
+   "players": 425,
+   "endedAtMs": 1793029808647,
+   "runMin": 16.2,
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 548,
+   "n": 28,
+   "id": "CMP-M500-028",
+   "mode": "auto9",
+   "aud": "emp-both",
+   "speed": 9,
+   "tickets": 1,
+   "prizes": "early5#1,top#1",
+   "ties": "next",
+   "brand": true,
+   "rounds": 1,
+   "events": "offline",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_066d9cf113785dbed21e4471dbda461c72f749ba6604bdaf\",\"aiKey\":\"cta_b83ff739d5ec9"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-028\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33408842,\"callSeconds\":9,\"cap\":515,\"closed\":true,\"whoCanJoin\":\"list\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":1,\"rewards\":"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793029890000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-028\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-028\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "a pay link was made for the game",
+     "ok": true,
+     "d": "{\"url\":\"http://localhost:8832/paylink.html?t=c6e147149197ca9f3b24ceabee8c0db59b646ab0d94571c5\",\"expiresMs\":1793634390596}"
+    },
+    {
+     "n": "the pay link page shows the game and a price",
+     "ok": true,
+     "d": "{\"game\":{\"name\":\"Lotus Foods game 28\",\"startMs\":1793029890000,\"participants\":750},\"price\":{\"base\":5899,\"gst\":0,\"total\":5899,\"currency\":\"INR\"},\"status\":\"open\"}"
+    },
+    {
+     "n": "someone else paid through the link",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_e4988f998d7bea1e\",\"result\":{\"ok\":true,\"orderId\":\"pay_e4988f998d7bea1e\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_8bf12717b66923054"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":425,\"invalid\":0,\"want\":425,\"s\":200}"
+    },
+    {
+     "n": "all 425 allowed people got a ticket",
+     "ok": true,
+     "d": "425 of 425"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 425"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "32,1,70,82,12,14,13,4,3,72,55,50,22,26,52,6,34,27,60,67,75,44,47,77"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"early5#1@4\",\"top#1@22\"] phones [\"early5#1@4\",\"top#1@22\"]"
+    },
+    {
+     "n": "audit: all 425 players hold 1 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 425 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 425 players received the same 24 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 164 claims on the server are true on the claimer's own ticket(s) at the call claimed (78 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 2 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (2 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 2 numbers 24"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 24"
+    },
+    {
+     "n": "auto: the median gap between numbers is 9 s (+-1): 8.8",
+     "ok": true,
+     "d": "[8.355,8.488,8.5,8.504,8.52]"
+    },
+    {
+     "n": "auto: no burst of numbers: no two numbers came less than half the set gap apart",
+     "ok": true,
+     "d": "0 bursts, fastest 8.355, 5th percentile 8.488, 95th 9.85"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance28.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp28.m500@sample-co.in"
+    }
+   ],
+   "notes": [
+    "offline 25s on 10 phones at number 12"
+   ],
+   "paidVia": "link",
+   "payerMail": "finance28.m500@sample-co.in",
+   "joined": 425,
+   "waiting": 38,
+   "needId": 37,
+   "joinMedianMs": 12,
+   "catchUpSec": 14,
+   "winnersAgreeSec": 0,
+   "numbers": 24,
+   "winners": 2,
+   "audit": {
+    "players": 425,
+    "tickets": 425,
+    "claims": 242
+   },
+   "medianGap": 8.8,
+   "timelineRef": [
+    [
+     30010.400000095367,
+     1
+    ],
+    [
+     30019.200000047684,
+     2
+    ],
+    [
+     30028.700000047684,
+     3
+    ],
+    [
+     30037.200000047684,
+     4
+    ],
+    [
+     30047.099999904633,
+     5
+    ],
+    [
+     30055.599999904633,
+     6
+    ],
+    [
+     30085.5,
+     7
+    ],
+    [
+     30095,
+     8
+    ],
+    [
+     30103.700000047684,
+     9
+    ],
+    [
+     30112.099999904633,
+     10
+    ],
+    [
+     30121.599999904633,
+     11
+    ],
+    [
+     30130.200000047684,
+     12
+    ],
+    [
+     30139.799999952316,
+     13
+    ],
+    [
+     30148.400000095367,
+     14
+    ],
+    [
+     30157.299999952316,
+     15
+    ],
+    [
+     30166.900000095367,
+     16
+    ],
+    [
+     30175.599999904633,
+     17
+    ],
+    [
+     30184.299999952316,
+     18
+    ],
+    [
+     30193.799999952316,
+     19
+    ],
+    [
+     30202.299999952316,
+     20
+    ],
+    [
+     30212,
+     21
+    ],
+    [
+     30220.5,
+     22
+    ],
+    [
+     30229.400000095367,
+     23
+    ],
+    [
+     30239,
+     24
+    ],
+    [
+     30247.5,
+     25
+    ],
+    [
+     30256.200000047684,
+     26
+    ],
+    [
+     30265.799999952316,
+     27
+    ],
+    [
+     30274.400000095367,
+     28
+    ],
+    [
+     30284.099999904633,
+     29
+    ]
+   ],
+   "fastestGap": 8.355,
+   "p5Gap": 8.488,
+   "p95Gap": 9.85,
+   "players": 425,
+   "endedAtMs": 1793030308352,
+   "runMin": 9.5,
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 584,
+   "n": 29,
+   "id": "CMP-M500-029",
+   "mode": "auto12",
+   "aud": "emp-both",
+   "speed": 12,
+   "tickets": 2,
+   "prizes": "early5#1,top#1",
+   "ties": "next",
+   "brand": false,
+   "rounds": 1,
+   "events": "-",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_e79999583201a37194ad3b1b0a540c0c713b76b78a934838\",\"aiKey\":\"cta_661064c51c90d"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-029\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33408914,\"callSeconds\":12,\"cap\":515,\"closed\":true,\"whoCanJoin\":\"list\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":2,\"rewards\""
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793030106000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-029\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-029\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "the organizer's payment was accepted",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_1b9f719b56ebf21b\",\"result\":{\"ok\":true,\"orderId\":\"pay_1b9f719b56ebf21b\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_ca1aaf712f139e7c4"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":425,\"invalid\":0,\"want\":425,\"s\":200}"
+    },
+    {
+     "n": "all 425 allowed people got a ticket",
+     "ok": true,
+     "d": "425 of 425"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 425"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "74,49,41,30,25,88,50,56,33,79,62,82,87,61,20,5,10,81,19,36,83,51,32,35,17"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"early5#1@7\",\"top#1@23\"] phones [\"early5#1@7\",\"top#1@23\"]"
+    },
+    {
+     "n": "audit: all 425 players hold 2 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 850 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 425 players received the same 25 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 278 claims on the server are true on the claimer's own ticket(s) at the call claimed (38 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 2 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (2 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 2 numbers 25"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 25"
+    },
+    {
+     "n": "auto: every number reached the phone within 4 s of its time (p50 0.5, p95 1.1, max 1.2 s)",
+     "ok": true,
+     "d": "max 1.2"
+    },
+    {
+     "n": "auto: the median gap between numbers is 12 s (+-1): 11.9",
+     "ok": true,
+     "d": "[11.616,11.657,11.663,11.673,11.765]"
+    },
+    {
+     "n": "auto: no burst of numbers: no two numbers came less than half the set gap apart",
+     "ok": true,
+     "d": "0 bursts, fastest 11.616, 5th percentile 11.657, 95th 12.838"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp29.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp29.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "org",
+   "payerMail": "cmp29.m500@sample-co.in",
+   "joined": 425,
+   "waiting": 38,
+   "needId": 37,
+   "joinMedianMs": 13,
+   "catchUpSec": 14,
+   "winnersAgreeSec": 0,
+   "numbers": 25,
+   "winners": 2,
+   "audit": {
+    "players": 425,
+    "tickets": 850,
+    "claims": 316
+   },
+   "beaconP50": 0,
+   "beaconMax": 0,
+   "beaconOver3": 0,
+   "beaconRounds": 29,
+   "deliveries": 11617,
+   "late4": 0,
+   "late6": 0,
+   "late6ByN": {},
+   "late6Own": 0,
+   "delayP50": 0.5,
+   "delayP95": 1.1,
+   "delayMax": 1.2,
+   "delays": [
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.2,
+    0.2,
+    0.2,
+    0.2,
+    0.3,
+    0.3,
+    0.3,
+    0.4,
+    0.5,
+    0.5,
+    0.6,
+    0.6,
+    0.6,
+    0.7,
+    0.7,
+    0.8,
+    0.9,
+    0.9,
+    1,
+    1,
+    1.1,
+    1.1,
+    1.2
+   ],
+   "medianGap": 11.9,
+   "timelineRef": [
+    [
+     30226.099999904633,
+     1
+    ],
+    [
+     30238.900000095367,
+     2
+    ],
+    [
+     30250.5,
+     3
+    ],
+    [
+     30262.200000047684,
+     4
+    ],
+    [
+     30274.200000047684,
+     5
+    ],
+    [
+     30287,
+     6
+    ],
+    [
+     30299.200000047684,
+     7
+    ],
+    [
+     30311.099999904633,
+     8
+    ],
+    [
+     30323.099999904633,
+     9
+    ],
+    [
+     30334.700000047684,
+     10
+    ],
+    [
+     30346.599999904633,
+     11
+    ],
+    [
+     30358.700000047684,
+     12
+    ],
+    [
+     30370.599999904633,
+     13
+    ],
+    [
+     30382.5,
+     14
+    ],
+    [
+     30394.200000047684,
+     15
+    ],
+    [
+     30407,
+     16
+    ],
+    [
+     30418.799999952316,
+     17
+    ],
+    [
+     30430.599999904633,
+     18
+    ],
+    [
+     30442.299999952316,
+     19
+    ],
+    [
+     30454.200000047684,
+     20
+    ],
+    [
+     30466.400000095367,
+     21
+    ],
+    [
+     30478.299999952316,
+     22
+    ],
+    [
+     30490.099999904633,
+     23
+    ],
+    [
+     30502.099999904633,
+     24
+    ],
+    [
+     30514.299999952316,
+     25
+    ],
+    [
+     30526.099999904633,
+     26
+    ],
+    [
+     30538.900000095367,
+     27
+    ]
+   ],
+   "fastestGap": 11.616,
+   "p5Gap": 11.657,
+   "p95Gap": 12.838,
+   "players": 425,
+   "endedAtMs": 1793030562521,
+   "runMin": 10.1,
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 616,
+   "n": 30,
+   "id": "CMP-M500-030",
+   "mode": "host",
+   "aud": "emp-both",
+   "speed": 9,
+   "tickets": 1,
+   "prizes": "early5#1,top#1",
+   "ties": "share",
+   "brand": false,
+   "rounds": 1,
+   "events": "late+reload",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_8d46a02c1c8ce31d2b013244bf9a95278228d6c2aeb3ea0f\",\"aiKey\":\"cta_2512ae81f0906"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-030\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33409081,\"callSeconds\":9,\"cap\":515,\"closed\":true,\"whoCanJoin\":\"list\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":1,\"rewards\":"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793030607000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-030\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-030\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "a pay link was made for the game",
+     "ok": true,
+     "d": "{\"url\":\"http://localhost:8832/paylink.html?t=87a4e99b828506bb15b4728f566d71f8846eb069ee973371\",\"expiresMs\":1793635108395}"
+    },
+    {
+     "n": "the pay link page shows the game and a price",
+     "ok": true,
+     "d": "{\"game\":{\"name\":\"Himalaya Steel game 30\",\"startMs\":1793030607000,\"participants\":750},\"price\":{\"base\":5899,\"gst\":0,\"total\":5899,\"currency\":\"INR\"},\"status\":\"open\""
+    },
+    {
+     "n": "someone else paid through the link",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_a85b9cb708003b01\",\"result\":{\"ok\":true,\"orderId\":\"pay_a85b9cb708003b01\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_56b6f16e19281d1ac"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":425,\"invalid\":0,\"want\":425,\"s\":200}"
+    },
+    {
+     "n": "all 425 allowed people got a ticket",
+     "ok": true,
+     "d": "383 of 383"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 425"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "21,4,18,31,34,6,73,26,42,77,74,81,5,79,29,49,52,27,3,67,10,71,15,78,89,75,20,11,"
+    },
+    {
+     "n": "late joiners see only the numbers called after they joined, and they match",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"early5#1@7\",\"top#1@31\"] phones [\"early5#1@7\",\"top#1@31\"]"
+    },
+    {
+     "n": "audit: all 425 players hold 1 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 425 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 383 players received the same 33 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 300 claims on the server are true on the claimer's own ticket(s) at the call claimed (23 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 2 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (2 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 2 numbers 33"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 33"
+    },
+    {
+     "n": "manual: the numbers came only because the Host pressed Next (numbers <= presses stored on the server + 1)",
+     "ok": true,
+     "d": "numbers 33 presses stored 35 (seen by the test 35)"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance30.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp30.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "link",
+   "payerMail": "finance30.m500@sample-co.in",
+   "joined": 383,
+   "waiting": 38,
+   "needId": 37,
+   "joinMedianMs": 12,
+   "catchUpSec": 14,
+   "winnersAgreeSec": 0,
+   "numbers": 33,
+   "winners": 2,
+   "audit": {
+    "players": 425,
+    "tickets": 425,
+    "claims": 323
+   },
+   "medianGap": 11.8,
+   "timelineRef": [
+    [
+     30704,
+     1
+    ],
+    [
+     30709.400000095367,
+     2
+    ],
+    [
+     30724.599999904633,
+     3
+    ],
+    [
+     30730.799999952316,
+     4
+    ],
+    [
+     30742.799999952316,
+     5
+    ],
+    [
+     30754.599999904633,
+     6
+    ],
+    [
+     30766.400000095367,
+     7
+    ],
+    [
+     30781.400000095367,
+     8
+    ],
+    [
+     30791,
+     9
+    ],
+    [
+     30803,
+     10
+    ],
+    [
+     30811.5,
+     11
+    ],
+    [
+     30823.400000095367,
+     12
+    ],
+    [
+     30838.299999952316,
+     13
+    ],
+    [
+     30847.099999904633,
+     14
+    ],
+    [
+     30862.200000047684,
+     15
+    ],
+    [
+     30874.900000095367,
+     16
+    ],
+    [
+     30886.900000095367,
+     17
+    ],
+    [
+     30898.799999952316,
+     18
+    ],
+    [
+     30909.700000047684,
+     19
+    ],
+    [
+     30922.299999952316,
+     20
+    ],
+    [
+     30934.099999904633,
+     21
+    ],
+    [
+     30949.099999904633,
+     22
+    ],
+    [
+     30955.599999904633,
+     23
+    ],
+    [
+     30964,
+     24
+    ],
+    [
+     30974,
+     25
+    ],
+    [
+     30982.599999904633,
+     26
+    ],
+    [
+     30997.400000095367,
+     27
+    ],
+    [
+     31009.200000047684,
+     28
+    ],
+    [
+     31018.599999904633,
+     29
+    ],
+    [
+     31027.299999952316,
+     30
+    ],
+    [
+     31040.099999904633,
+     31
+    ],
+    [
+     31048.799999952316,
+     32
+    ],
+    [
+     31057.599999904633,
+     33
+    ],
+    [
+     31066.200000047684,
+     34
+    ],
+    [
+     31078.099999904633,
+     35
+    ]
+   ],
+   "fastestGap": 5.42,
+   "presses": 35,
+   "pressesSeen": 35,
+   "players": 425,
+   "endedAtMs": 1793031101858,
+   "runMin": 10.7,
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 926,
+   "n": 31,
+   "id": "CMP-M500-031",
+   "mode": "auto9",
+   "aud": "everyone-id",
+   "speed": 9,
+   "tickets": 2,
+   "prizes": "early5#1,top#1,mid#1,bot#1,corners#1,full#1",
+   "ties": "next",
+   "brand": true,
+   "rounds": 1,
+   "events": "-",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_93d8351d1b81696f1c5dc54becbb1f32c16573d1675065df\",\"aiKey\":\"cta_bb18920ae0f20"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-031\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33409166,\"callSeconds\":9,\"cap\":515,\"closed\":false,\"whoCanJoin\":\"anyone\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":2,\"reward"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793030862000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-031\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-031\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "the organizer's payment was accepted",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_97051b6bbfaa839d\",\"result\":{\"ok\":true,\"orderId\":\"pay_97051b6bbfaa839d\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_eef55313ad958aab0"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":283,\"invalid\":0,\"want\":283,\"s\":200}"
+    },
+    {
+     "n": "all 462 allowed people got a ticket",
+     "ok": true,
+     "d": "462 of 462"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 462"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "59,28,90,71,37,69,82,16,2,51,1,17,58,45,33,32,72,7,36,80,21,47,29,15,25,84,81,19"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"bot#1@25\",\"corners#1@12\",\"early5#1@4\",\"full#1@64\",\"mid#1@24\",\"top#1@28\"] phones [\"bot#1@25\",\"corners#1@12\",\"early5#1@4\",\"full#1@64\",\"mid#1@24\",\"top#1@28\"]"
+    },
+    {
+     "n": "audit: all 462 players hold 2 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 924 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 462 players received the same 66 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 1103 claims on the server are true on the claimer's own ticket(s) at the call claimed (414 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 6 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (6 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 6 numbers 66"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 66"
+    },
+    {
+     "n": "auto: the median gap between numbers is 9 s (+-1): 8.8",
+     "ok": true,
+     "d": "[8.178,8.387,8.438,8.438,8.451]"
+    },
+    {
+     "n": "auto: no burst of numbers: no two numbers came less than half the set gap apart",
+     "ok": true,
+     "d": "0 bursts, fastest 8.178, 5th percentile 8.438, 95th 10.108"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp31.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp31.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "org",
+   "payerMail": "cmp31.m500@sample-co.in",
+   "joined": 462,
+   "waiting": 38,
+   "needId": 0,
+   "joinMedianMs": 13,
+   "catchUpSec": 7,
+   "winnersAgreeSec": 0,
+   "numbers": 66,
+   "winners": 6,
+   "audit": {
+    "players": 462,
+    "tickets": 924,
+    "claims": 1517
+   },
+   "medianGap": 8.8,
+   "timelineRef": [
+    [
+     30982.5,
+     1
+    ],
+    [
+     30991.5,
+     2
+    ],
+    [
+     31000.900000095367,
+     3
+    ],
+    [
+     31009.5,
+     4
+    ],
+    [
+     31018.099999904633,
+     5
+    ],
+    [
+     31028,
+     6
+    ],
+    [
+     31057.900000095367,
+     7
+    ],
+    [
+     31066.599999904633,
+     8
+    ],
+    [
+     31076,
+     9
+    ],
+    [
+     31084.700000047684,
+     10
+    ],
+    [
+     31093.200000047684,
+     11
+    ],
+    [
+     31102.900000095367,
+     12
+    ],
+    [
+     31111.700000047684,
+     13
+    ],
+    [
+     31120.099999904633,
+     14
+    ],
+    [
+     31129.900000095367,
+     15
+    ],
+    [
+     31138.400000095367,
+     16
+    ],
+    [
+     31147.200000047684,
+     17
+    ],
+    [
+     31156.900000095367,
+     18
+    ],
+    [
+     31165.5,
+     19
+    ],
+    [
+     31174.299999952316,
+     20
+    ],
+    [
+     31183,
+     21
+    ],
+    [
+     31192.599999904633,
+     22
+    ],
+    [
+     31201.200000047684,
+     23
+    ],
+    [
+     31210.799999952316,
+     24
+    ],
+    [
+     31219.5,
+     25
+    ],
+    [
+     31228.099999904633,
+     26
+    ],
+    [
+     31238,
+     27
+    ],
+    [
+     31246.700000047684,
+     28
+    ],
+    [
+     31255.400000095367,
+     29
+    ],
+    [
+     31265,
+     30
+    ],
+    [
+     31273.700000047684,
+     31
+    ],
+    [
+     31282.200000047684,
+     32
+    ],
+    [
+     31292,
+     33
+    ],
+    [
+     31300.900000095367,
+     34
+    ],
+    [
+     31309.700000047684,
+     35
+    ],
+    [
+     31318.299999952316,
+     36
+    ],
+    [
+     31327.099999904633,
+     37
+    ],
+    [
+     31337.200000047684,
+     38
+    ],
+    [
+     31345.799999952316,
+     39
+    ],
+    [
+     31354.299999952316,
+     40
+    ],
+    [
+     31364,
+     41
+    ],
+    [
+     31372.5,
+     42
+    ],
+    [
+     31381.400000095367,
+     43
+    ],
+    [
+     31390.099999904633,
+     44
+    ],
+    [
+     31400,
+     45
+    ],
+    [
+     31408.900000095367,
+     46
+    ],
+    [
+     31417.799999952316,
+     47
+    ],
+    [
+     31426.400000095367,
+     48
+    ],
+    [
+     31435.700000047684,
+     49
+    ],
+    [
+     31444.400000095367,
+     50
+    ],
+    [
+     31453.099999904633,
+     51
+    ],
+    [
+     31462.099999904633,
+     52
+    ],
+    [
+     31471.700000047684,
+     53
+    ],
+    [
+     31480.200000047684,
+     54
+    ],
+    [
+     31489.700000047684,
+     55
+    ],
+    [
+     31498.599999904633,
+     56
+    ],
+    [
+     31507.299999952316,
+     57
+    ],
+    [
+     31516.099999904633,
+     58
+    ],
+    [
+     31526.400000095367,
+     59
+    ],
+    [
+     31534.599999904633,
+     60
+    ],
+    [
+     31543.5,
+     61
+    ],
+    [
+     31552.400000095367,
+     62
+    ],
+    [
+     31561.599999904633,
+     63
+    ],
+    [
+     31570.599999904633,
+     64
+    ],
+    [
+     31579.700000047684,
+     65
+    ],
+    [
+     31588.5,
+     66
+    ],
+    [
+     31598.799999952316,
+     67
+    ],
+    [
+     31607.200000047684,
+     68
+    ],
+    [
+     31616.700000047684,
+     69
+    ],
+    [
+     31625.200000047684,
+     70
+    ],
+    [
+     31634,
+     71
+    ],
+    [
+     31642.900000095367,
+     72
+    ],
+    [
+     31651.599999904633,
+     73
+    ],
+    [
+     31660.099999904633,
+     74
+    ]
+   ],
+   "fastestGap": 8.178,
+   "p5Gap": 8.438,
+   "p95Gap": 10.108,
+   "players": 462,
+   "endedAtMs": 1793031677431,
+   "runMin": 16.1,
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 1072,
+   "n": 32,
+   "id": "CMP-M500-032",
+   "mode": "auto12",
+   "aud": "everyone-id",
+   "speed": 12,
+   "tickets": 1,
+   "prizes": "early5#1,top#1,mid#1,bot#1,corners#1,full#1",
+   "ties": "next",
+   "brand": false,
+   "rounds": 1,
+   "events": "-",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_75ffa4bc405a859b3b85d8ee80b18dd3580c95f3ec37b5a1\",\"aiKey\":\"cta_99b4f614e43c6"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-032\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33409345,\"callSeconds\":12,\"cap\":515,\"closed\":false,\"whoCanJoin\":\"anyone\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":1,\"rewar"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793031399000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-032\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-032\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "a pay link was made for the game",
+     "ok": true,
+     "d": "{\"url\":\"http://localhost:8832/paylink.html?t=b6bca68b25f1b4be8746c7295a7220841f004bb842df5792\",\"expiresMs\":1793635901902}"
+    },
+    {
+     "n": "the pay link page shows the game and a price",
+     "ok": true,
+     "d": "{\"game\":{\"name\":\"Sunrise Textiles game 32\",\"startMs\":1793031399000,\"participants\":750},\"price\":{\"base\":5899,\"gst\":0,\"total\":5899,\"currency\":\"INR\"},\"status\":\"ope"
+    },
+    {
+     "n": "someone else paid through the link",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_4a56a953530bf4f6\",\"result\":{\"ok\":true,\"orderId\":\"pay_4a56a953530bf4f6\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_493cdb40cf531f4e5"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":283,\"invalid\":0,\"want\":283,\"s\":200}"
+    },
+    {
+     "n": "all 462 allowed people got a ticket",
+     "ok": true,
+     "d": "462 of 462"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 462"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "83,36,15,86,44,41,4,20,52,63,62,48,7,79,18,54,75,84,57,73,78,3,16,21,26,31,72,77"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"bot#1@18\",\"corners#1@18\",\"early5#1@7\",\"full#1@63\",\"mid#1@30\",\"top#1@24\"] phones [\"bot#1@18\",\"corners#1@18\",\"early5#1@7\",\"full#1@63\",\"mid#1@30\",\"top#1@24\"]"
+    },
+    {
+     "n": "audit: all 462 players hold 1 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 462 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 462 players received the same 65 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 863 claims on the server are true on the claimer's own ticket(s) at the call claimed (146 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 6 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (6 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 6 numbers 65"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 65"
+    },
+    {
+     "n": "auto: every number reached the phone within 4 s of its time (p50 0.6, p95 1.1, max 1.6 s)",
+     "ok": true,
+     "d": "max 1.6"
+    },
+    {
+     "n": "auto: the median gap between numbers is 12 s (+-1): 12",
+     "ok": true,
+     "d": "[11.011,11.036,11.108,11.126,11.212]"
+    },
+    {
+     "n": "auto: no burst of numbers: no two numbers came less than half the set gap apart",
+     "ok": true,
+     "d": "0 bursts, fastest 11.011, 5th percentile 11.126, 95th 12.825"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance32.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp32.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "link",
+   "payerMail": "finance32.m500@sample-co.in",
+   "joined": 462,
+   "waiting": 38,
+   "needId": 0,
+   "joinMedianMs": 16,
+   "catchUpSec": 8,
+   "winnersAgreeSec": 0,
+   "numbers": 65,
+   "winners": 6,
+   "audit": {
+    "players": 462,
+    "tickets": 462,
+    "claims": 1009
+   },
+   "beaconP50": 0,
+   "beaconMax": 0,
+   "beaconOver3": 0,
+   "beaconRounds": 72,
+   "deliveries": 32231,
+   "late4": 1,
+   "late6": 0,
+   "late6ByN": {},
+   "late6Own": 0,
+   "delayP50": 0.6,
+   "delayP95": 1.1,
+   "delayMax": 1.6,
+   "delays": [
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.2,
+    0.2,
+    0.2,
+    0.2,
+    0.2,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.4,
+    0.4,
+    0.4,
+    0.4,
+    0.4,
+    0.4,
+    0.4,
+    0.5,
+    0.5,
+    0.5,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.8,
+    0.8,
+    0.8,
+    0.8,
+    0.8,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1.1,
+    1.1,
+    1.1,
+    1.1,
+    1.1,
+    1.1,
+    1.1,
+    1.3,
+    1.6
+   ],
+   "medianGap": 12,
+   "timelineRef": [
+    [
+     31519.299999952316,
+     1
+    ],
+    [
+     31531.700000047684,
+     2
+    ],
+    [
+     31543.099999904633,
+     3
+    ],
+    [
+     31556.099999904633,
+     4
+    ],
+    [
+     31567.200000047684,
+     5
+    ],
+    [
+     31579.5,
+     6
+    ],
+    [
+     31591.700000047684,
+     7
+    ],
+    [
+     31604.299999952316,
+     8
+    ],
+    [
+     31616.599999904633,
+     9
+    ],
+    [
+     31627.599999904633,
+     10
+    ],
+    [
+     31639.400000095367,
+     11
+    ],
+    [
+     31651.700000047684,
+     12
+    ],
+    [
+     31663.799999952316,
+     13
+    ],
+    [
+     31675.200000047684,
+     14
+    ],
+    [
+     31687.099999904633,
+     15
+    ],
+    [
+     31700.099999904633,
+     16
+    ],
+    [
+     31711.900000095367,
+     17
+    ],
+    [
+     31723.700000047684,
+     18
+    ],
+    [
+     31735.400000095367,
+     19
+    ],
+    [
+     31747.400000095367,
+     20
+    ],
+    [
+     31760,
+     21
+    ],
+    [
+     31771.599999904633,
+     22
+    ],
+    [
+     31783.299999952316,
+     23
+    ],
+    [
+     31795.099999904633,
+     24
+    ],
+    [
+     31808,
+     25
+    ],
+    [
+     31820.099999904633,
+     26
+    ],
+    [
+     31831.799999952316,
+     27
+    ],
+    [
+     31843.599999904633,
+     28
+    ],
+    [
+     31855.400000095367,
+     29
+    ],
+    [
+     31867.200000047684,
+     30
+    ],
+    [
+     31879.200000047684,
+     31
+    ],
+    [
+     31892.099999904633,
+     32
+    ],
+    [
+     31903.799999952316,
+     33
+    ],
+    [
+     31915.900000095367,
+     34
+    ],
+    [
+     31927.799999952316,
+     35
+    ],
+    [
+     31939.400000095367,
+     36
+    ],
+    [
+     31951.299999952316,
+     37
+    ],
+    [
+     31963.099999904633,
+     38
+    ],
+    [
+     31975.900000095367,
+     39
+    ],
+    [
+     31988,
+     40
+    ],
+    [
+     31999.900000095367,
+     41
+    ],
+    [
+     32012,
+     42
+    ],
+    [
+     32023.900000095367,
+     43
+    ],
+    [
+     32035.900000095367,
+     44
+    ],
+    [
+     32047.900000095367,
+     45
+    ],
+    [
+     32060.099999904633,
+     46
+    ],
+    [
+     32071.099999904633,
+     47
+    ],
+    [
+     32083.299999952316,
+     48
+    ],
+    [
+     32095.299999952316,
+     49
+    ],
+    [
+     32107.299999952316,
+     50
+    ],
+    [
+     32119.299999952316,
+     51
+    ],
+    [
+     32131.299999952316,
+     52
+    ],
+    [
+     32144,
+     53
+    ],
+    [
+     32156,
+     54
+    ],
+    [
+     32167.700000047684,
+     55
+    ],
+    [
+     32179.799999952316,
+     56
+    ],
+    [
+     32192.099999904633,
+     57
+    ],
+    [
+     32203.299999952316,
+     58
+    ],
+    [
+     32215.5,
+     59
+    ],
+    [
+     32227.099999904633,
+     60
+    ],
+    [
+     32239.599999904633,
+     61
+    ],
+    [
+     32251.700000047684,
+     62
+    ],
+    [
+     32263.599999904633,
+     63
+    ],
+    [
+     32276.099999904633,
+     64
+    ],
+    [
+     32287.200000047684,
+     65
+    ],
+    [
+     32299.299999952316,
+     66
+    ],
+    [
+     32311.400000095367,
+     67
+    ],
+    [
+     32323.599999904633,
+     68
+    ],
+    [
+     32335.700000047684,
+     69
+    ],
+    [
+     32347.400000095367,
+     70
+    ],
+    [
+     32359.5,
+     71
+    ]
+   ],
+   "fastestGap": 11.011,
+   "p5Gap": 11.126,
+   "p95Gap": 12.825,
+   "players": 462,
+   "endedAtMs": 1793032372515,
+   "runMin": 18.7,
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 890,
+   "n": 33,
+   "id": "CMP-M500-033",
+   "mode": "host",
+   "aud": "everyone-id",
+   "speed": 9,
+   "tickets": 2,
+   "prizes": "early5#1,top#1,mid#1,bot#1,corners#1,full#1",
+   "ties": "share",
+   "brand": false,
+   "rounds": 1,
+   "events": "bogey",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_37667f3344f5557d6936e93d97d5a014bc6c4fed8b1d0390\",\"aiKey\":\"cta_bcbbbc945ce05"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-033\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33409537,\"callSeconds\":9,\"cap\":515,\"closed\":false,\"whoCanJoin\":\"anyone\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":2,\"reward"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793031975000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-033\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-033\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "the organizer's payment was accepted",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_4bbbb2da43edb968\",\"result\":{\"ok\":true,\"orderId\":\"pay_4bbbb2da43edb968\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_eac12ee6fa69fb9db"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":283,\"invalid\":0,\"want\":283,\"s\":200}"
+    },
+    {
+     "n": "all 462 allowed people got a ticket",
+     "ok": true,
+     "d": "462 of 462"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 462"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "74,23,29,7,43,11,79,44,70,6,80,62,65,20,46,61,81,67,9,78,42,90,27,51,13,24,88,37"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"bot#1@27\",\"corners#1@9\",\"early5#1@5\",\"full#1@58\",\"mid#1@27\",\"top#1@23\"] phones [\"bot#1@27\",\"corners#1@9\",\"early5#1@5\",\"full#1@58\",\"mid#1@27\",\"top#1@23\"]"
+    },
+    {
+     "n": "audit: all 462 players hold 2 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 924 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 462 players received the same 60 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 920 claims on the server are true on the claimer's own ticket(s) at the call claimed (0 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 6 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (6 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 6 numbers 60"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 60"
+    },
+    {
+     "n": "manual: the numbers came only because the Host pressed Next (numbers <= presses stored on the server + 1)",
+     "ok": true,
+     "d": "numbers 60 presses stored 60 (seen by the test 60)"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp33.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp33.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "org",
+   "payerMail": "cmp33.m500@sample-co.in",
+   "joined": 462,
+   "waiting": 38,
+   "needId": 0,
+   "joinMedianMs": 15,
+   "catchUpSec": 60,
+   "winnersAgreeSec": 0,
+   "numbers": 60,
+   "winners": 6,
+   "audit": {
+    "players": 462,
+    "tickets": 924,
+    "claims": 920
+   },
+   "medianGap": 11.8,
+   "timelineRef": [
+    [
+     32071.799999952316,
+     1
+    ],
+    [
+     32077.299999952316,
+     2
+    ],
+    [
+     32089.900000095367,
+     3
+    ],
+    [
+     32102.200000047684,
+     4
+    ],
+    [
+     32113.400000095367,
+     5
+    ],
+    [
+     32128.5,
+     6
+    ],
+    [
+     32143.900000095367,
+     7
+    ],
+    [
+     32149.299999952316,
+     8
+    ],
+    [
+     32161.400000095367,
+     9
+    ],
+    [
+     32173.200000047684,
+     10
+    ],
+    [
+     32181.900000095367,
+     11
+    ],
+    [
+     32191.099999904633,
+     12
+    ],
+    [
+     32206.400000095367,
+     13
+    ],
+    [
+     32216,
+     14
+    ],
+    [
+     32230.799999952316,
+     15
+    ],
+    [
+     32242.599999904633,
+     16
+    ],
+    [
+     32254.799999952316,
+     17
+    ],
+    [
+     32263.599999904633,
+     18
+    ],
+    [
+     32278.299999952316,
+     19
+    ],
+    [
+     32288,
+     20
+    ],
+    [
+     32296.900000095367,
+     21
+    ],
+    [
+     32310.599999904633,
+     22
+    ],
+    [
+     32317.900000095367,
+     23
+    ],
+    [
+     32329.599999904633,
+     24
+    ],
+    [
+     32339.900000095367,
+     25
+    ],
+    [
+     32352.299999952316,
+     26
+    ],
+    [
+     32362.099999904633,
+     27
+    ],
+    [
+     32377.299999952316,
+     28
+    ],
+    [
+     32387.099999904633,
+     29
+    ],
+    [
+     32398.799999952316,
+     30
+    ],
+    [
+     32407.400000095367,
+     31
+    ],
+    [
+     32422.400000095367,
+     32
+    ],
+    [
+     32428.799999952316,
+     33
+    ],
+    [
+     32439.400000095367,
+     34
+    ],
+    [
+     32449.099999904633,
+     35
+    ],
+    [
+     32459,
+     36
+    ],
+    [
+     32467.599999904633,
+     37
+    ],
+    [
+     32479.5,
+     38
+    ],
+    [
+     32491.5,
+     39
+    ],
+    [
+     32503.299999952316,
+     40
+    ],
+    [
+     32513.099999904633,
+     41
+    ],
+    [
+     32525,
+     42
+    ],
+    [
+     32536.5,
+     43
+    ],
+    [
+     32548.599999904633,
+     44
+    ],
+    [
+     32560.5,
+     45
+    ],
+    [
+     32569.299999952316,
+     46
+    ],
+    [
+     32579.099999904633,
+     47
+    ],
+    [
+     32591,
+     48
+    ],
+    [
+     32602.900000095367,
+     49
+    ],
+    [
+     32614.799999952316,
+     50
+    ],
+    [
+     32627.700000047684,
+     51
+    ],
+    [
+     32635.299999952316,
+     52
+    ],
+    [
+     32644.099999904633,
+     53
+    ],
+    [
+     32656.900000095367,
+     54
+    ],
+    [
+     32669,
+     55
+    ],
+    [
+     32680.099999904633,
+     56
+    ],
+    [
+     32689.900000095367,
+     57
+    ],
+    [
+     32698.200000047684,
+     58
+    ],
+    [
+     32710.400000095367,
+     59
+    ],
+    [
+     32722.099999904633,
+     60
+    ]
+   ],
+   "fastestGap": 5.417,
+   "presses": 60,
+   "pressesSeen": 60,
+   "players": 462,
+   "endedAtMs": 1793032790947,
+   "runMin": 16,
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 898,
+   "n": 35,
+   "id": "CMP-M500-035",
+   "mode": "auto12",
+   "aud": "everyone-both",
+   "speed": 12,
+   "tickets": 2,
+   "prizes": "early5#1,early5#2,top#1,top#2,full#1,full#2",
+   "ties": "next",
+   "brand": false,
+   "rounds": 1,
+   "events": "late+offline",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_a45a801e16c4a994205ea379f001d831b2db0a2d79bed724\",\"aiKey\":\"cta_af0d1cca4b152"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-035\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33409908,\"callSeconds\":12,\"cap\":515,\"closed\":false,\"whoCanJoin\":\"anyone\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":2,\"rewar"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793033088000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-035\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-035\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "the organizer's payment was accepted",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_6eaed10fef3493fb\",\"result\":{\"ok\":true,\"orderId\":\"pay_6eaed10fef3493fb\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_743f051313318d189"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":283,\"invalid\":0,\"want\":283,\"s\":200}"
+    },
+    {
+     "n": "all 462 allowed people got a ticket",
+     "ok": true,
+     "d": "420 of 420"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 462"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "16,69,59,66,4,27,5,54,8,55,84,65,51,11,63,17,49,64,76,38,48,21,46,53,30,80,39,71"
+    },
+    {
+     "n": "late joiners see only the numbers called after they joined, and they match",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"early5#1@6\",\"early5#2@6\",\"full#1@60\",\"full#2@60\",\"top#1@22\",\"top#2@33\"] phones [\"early5#1@6\",\"early5#2@6\",\"full#1@60\",\"full#2@60\",\"top#1@22\",\"top#2@33\"]"
+    },
+    {
+     "n": "audit: all 462 players hold 2 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 924 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 420 players received the same 62 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 574 claims on the server are true on the claimer's own ticket(s) at the call claimed (42 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 6 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (6 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 6 numbers 62"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 62"
+    },
+    {
+     "n": "auto: every number reached the phone within 4 s of its time (p50 0.9, p95 2.9, max 4.2 s)",
+     "ok": false,
+     "d": "max 4.2"
+    },
+    {
+     "n": "auto: the median gap between numbers is 12 s (+-1): 12",
+     "ok": true,
+     "d": "[7.924,9.606,10.457,10.542,10.588]"
+    },
+    {
+     "n": "auto: no burst of numbers: no two numbers came less than half the set gap apart",
+     "ok": true,
+     "d": "0 bursts, fastest 7.924, 5th percentile 10.542, 95th 13.545"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "cmp35.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp35.m500@sample-co.in"
+    }
+   ],
+   "notes": [
+    "offline 25s on 10 phones at number 12"
+   ],
+   "paidVia": "org",
+   "payerMail": "cmp35.m500@sample-co.in",
+   "joined": 420,
+   "waiting": 38,
+   "needId": 0,
+   "joinMedianMs": 12,
+   "catchUpSec": 14,
+   "winnersAgreeSec": 0,
+   "numbers": 62,
+   "winners": 6,
+   "audit": {
+    "players": 462,
+    "tickets": 924,
+    "claims": 616
+   },
+   "delayP50": 0.9,
+   "delayP95": 2.9,
+   "delayMax": 4.2,
+   "delays": [
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.2,
+    0.2,
+    0.2,
+    0.2,
+    0.2,
+    0.3,
+    0.4,
+    0.4,
+    0.4,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    0.6,
+    0.6,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.8,
+    0.8,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    0.9,
+    1,
+    1,
+    1.1,
+    1.1,
+    1.1,
+    1.1,
+    1.1,
+    1.3,
+    1.3,
+    1.4,
+    1.4,
+    1.4,
+    1.5,
+    1.5,
+    1.6,
+    1.6,
+    1.6,
+    1.7,
+    1.8,
+    1.8,
+    1.8,
+    1.9,
+    2,
+    2,
+    2.2,
+    2.9,
+    3.2,
+    4,
+    4.2
+   ],
+   "medianGap": 12,
+   "timelineRef": [
+    [
+     33208.90000009537,
+     1
+    ],
+    [
+     33220.700000047684,
+     2
+    ],
+    [
+     33232.59999990463,
+     3
+    ],
+    [
+     33244.5,
+     4
+    ],
+    [
+     33256.40000009537,
+     5
+    ],
+    [
+     33268.5,
+     6
+    ],
+    [
+     33280.5,
+     7
+    ],
+    [
+     33292.5,
+     8
+    ],
+    [
+     33304.90000009537,
+     9
+    ],
+    [
+     33316.90000009537,
+     10
+    ],
+    [
+     33328.799999952316,
+     11
+    ],
+    [
+     33340.700000047684,
+     12
+    ],
+    [
+     33352.40000009537,
+     13
+    ],
+    [
+     33364.200000047684,
+     14
+    ],
+    [
+     33377.09999990463,
+     15
+    ],
+    [
+     33389,
+     16
+    ],
+    [
+     33400.90000009537,
+     17
+    ],
+    [
+     33412.90000009537,
+     18
+    ],
+    [
+     33425.09999990463,
+     19
+    ],
+    [
+     33436.09999990463,
+     20
+    ],
+    [
+     33448.90000009537,
+     21
+    ],
+    [
+     33461,
+     22
+    ],
+    [
+     33473.09999990463,
+     23
+    ],
+    [
+     33485.5,
+     24
+    ],
+    [
+     33496.700000047684,
+     25
+    ],
+    [
+     33509.59999990463,
+     26
+    ],
+    [
+     33520.09999990463,
+     27
+    ],
+    [
+     33533.299999952316,
+     28
+    ],
+    [
+     33544.90000009537,
+     29
+    ],
+    [
+     33556.40000009537,
+     30
+    ],
+    [
+     33568.09999990463,
+     31
+    ],
+    [
+     33580.299999952316,
+     32
+    ],
+    [
+     33593.09999990463,
+     33
+    ],
+    [
+     33604.90000009537,
+     34
+    ],
+    [
+     33617.40000009537,
+     35
+    ],
+    [
+     33629.799999952316,
+     36
+    ],
+    [
+     33642.200000047684,
+     37
+    ],
+    [
+     33653.09999990463,
+     38
+    ],
+    [
+     33665.40000009537,
+     39
+    ],
+    [
+     33678.90000009537,
+     40
+    ],
+    [
+     33689.40000009537,
+     41
+    ],
+    [
+     33702,
+     42
+    ],
+    [
+     33713.799999952316,
+     43
+    ],
+    [
+     33724.59999990463,
+     44
+    ],
+    [
+     33736.90000009537,
+     45
+    ],
+    [
+     33749.59999990463,
+     46
+    ],
+    [
+     33760.200000047684,
+     47
+    ],
+    [
+     33776.200000047684,
+     48
+    ],
+    [
+     33784.200000047684,
+     49
+    ],
+    [
+     33796.09999990463,
+     50
+    ],
+    [
+     33808.200000047684,
+     51
+    ],
+    [
+     33820.700000047684,
+     52
+    ],
+    [
+     33833.59999990463,
+     53
+    ],
+    [
+     33844.200000047684,
+     54
+    ],
+    [
+     33857.5,
+     55
+    ],
+    [
+     33869.90000009537,
+     56
+    ],
+    [
+     33881.799999952316,
+     57
+    ],
+    [
+     33893.700000047684,
+     58
+    ],
+    [
+     33905.299999952316,
+     59
+    ],
+    [
+     33916.700000047684,
+     60
+    ],
+    [
+     33930,
+     61
+    ],
+    [
+     33940.700000047684,
+     62
+    ],
+    [
+     33952.5,
+     63
+    ],
+    [
+     33967.200000047684,
+     64
+    ],
+    [
+     33976.799999952316,
+     65
+    ],
+    [
+     33992,
+     66
+    ]
+   ],
+   "fastestGap": 7.924,
+   "p5Gap": 10.542,
+   "p95Gap": 13.545,
+   "players": 462,
+   "endedAtMs": 1793034021348,
+   "runMin": 18,
+   "pass": false,
+   "reportMail": true
+  },
+  {
+   "ticks": 1574,
+   "n": 34,
+   "id": "CMP-M500-034",
+   "mode": "auto9",
+   "aud": "everyone-both",
+   "speed": 9,
+   "tickets": 1,
+   "prizes": "early5#1,early5#2,top#1,top#2,full#1,full#2",
+   "ties": "next",
+   "brand": true,
+   "rounds": 2,
+   "events": "-",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_20ac6ba752e78780df5608b8939ed57cfba93e506d212304\",\"aiKey\":\"cta_46ed29731913f"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-034\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33409769,\"callSeconds\":9,\"cap\":515,\"closed\":false,\"whoCanJoin\":\"anyone\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":1,\"reward"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793032671000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-034\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-034\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "a pay link was made for the game",
+     "ok": true,
+     "d": "{\"url\":\"http://localhost:8832/paylink.html?t=2fa97670ea8f244d7741b5e6dadb81609267fa5e7ae22e34\",\"expiresMs\":1793637172578}"
+    },
+    {
+     "n": "the pay link page shows the game and a price",
+     "ok": true,
+     "d": "{\"game\":{\"name\":\"Neelkanth Pharma game 34\",\"startMs\":1793032671000,\"participants\":750},\"price\":{\"base\":5899,\"gst\":0,\"total\":5899,\"currency\":\"INR\"},\"status\":\"ope"
+    },
+    {
+     "n": "someone else paid through the link",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_2a087d70ee54f574\",\"result\":{\"ok\":true,\"orderId\":\"pay_2a087d70ee54f574\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_d3bb9636f3ba8da0b"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":283,\"invalid\":0,\"want\":283,\"s\":200}"
+    },
+    {
+     "n": "all 462 allowed people got a ticket",
+     "ok": true,
+     "d": "462 of 462"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 462"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "16,55,39,26,89,4,63,1,22,6,58,13,60,87,83,19,74,66,61,75,15,14,8,53,81,40,68,3,5"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones (round 2 shown on the phone is inside the store list)",
+     "ok": true,
+     "d": "store [\"early5#1@7\",\"early5#1@8\",\"early5#2@8\",\"early5#2@8\",\"full#1@57\",\"full#1@60\",\"full#2@62\",\"full#2@62\" phones [\"early5#1@7\",\"early5#2@8\",\"full#1@60\",\"full#2@62\",\"top#1@29\",\"top#2@30\"]"
+    },
+    {
+     "n": "the game ended because every prize was won (6 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 6 numbers 64"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 64"
+    },
+    {
+     "n": "auto: the median gap between numbers is 9 s (+-1): 8.8",
+     "ok": true,
+     "d": "[7.233,7.348,7.709,7.747,7.782]"
+    },
+    {
+     "n": "auto: no burst of numbers: no two numbers came less than half the set gap apart",
+     "ok": true,
+     "d": "0 bursts, fastest 7.233, 5th percentile 7.961, 95th 10.24"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 0s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance34.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp34.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "link",
+   "payerMail": "finance34.m500@sample-co.in",
+   "joined": 462,
+   "waiting": 38,
+   "needId": 0,
+   "joinMedianMs": 13,
+   "catchUpSec": 5,
+   "winnersAgreeSec": 0,
+   "numbers": 64,
+   "winners": 6,
+   "medianGap": 8.8,
+   "timelineRef": [
+    [
+     32791,
+     1
+    ],
+    [
+     32800.90000009537,
+     2
+    ],
+    [
+     32809.59999990463,
+     3
+    ],
+    [
+     32818.40000009537,
+     4
+    ],
+    [
+     32827.09999990463,
+     5
+    ],
+    [
+     32836.700000047684,
+     6
+    ],
+    [
+     32866.59999990463,
+     7
+    ],
+    [
+     32875.200000047684,
+     8
+    ],
+    [
+     32884.799999952316,
+     9
+    ],
+    [
+     32893.299999952316,
+     10
+    ],
+    [
+     32902.700000047684,
+     11
+    ],
+    [
+     32911.09999990463,
+     12
+    ],
+    [
+     32920.59999990463,
+     13
+    ],
+    [
+     32929.299999952316,
+     14
+    ],
+    [
+     32938.200000047684,
+     15
+    ],
+    [
+     32947.90000009537,
+     16
+    ],
+    [
+     32956.59999990463,
+     17
+    ],
+    [
+     32966.09999990463,
+     18
+    ],
+    [
+     32974.59999990463,
+     19
+    ],
+    [
+     32983.09999990463,
+     20
+    ],
+    [
+     32992.799999952316,
+     21
+    ],
+    [
+     33001.40000009537,
+     22
+    ],
+    [
+     33010.09999990463,
+     23
+    ],
+    [
+     33019.700000047684,
+     24
+    ],
+    [
+     33028.200000047684,
+     25
+    ],
+    [
+     33037.799999952316,
+     26
+    ],
+    [
+     33046.299999952316,
+     27
+    ],
+    [
+     33056.09999990463,
+     28
+    ],
+    [
+     33064.700000047684,
+     29
+    ],
+    [
+     33073.200000047684,
+     30
+    ],
+    [
+     33082.90000009537,
+     31
+    ],
+    [
+     33091.59999990463,
+     32
+    ],
+    [
+     33100.09999990463,
+     33
+    ],
+    [
+     33109.700000047684,
+     34
+    ],
+    [
+     33118.299999952316,
+     35
+    ],
+    [
+     33127.09999990463,
+     36
+    ],
+    [
+     33136.700000047684,
+     37
+    ],
+    [
+     33145.40000009537,
+     38
+    ],
+    [
+     33154.799999952316,
+     39
+    ],
+    [
+     33163.299999952316,
+     40
+    ],
+    [
+     33172.90000009537,
+     41
+    ],
+    [
+     33181.5,
+     42
+    ],
+    [
+     33190.09999990463,
+     43
+    ],
+    [
+     33199.59999990463,
+     44
+    ],
+    [
+     33208.200000047684,
+     45
+    ],
+    [
+     33217.299999952316,
+     46
+    ],
+    [
+     33227,
+     47
+    ],
+    [
+     33235.799999952316,
+     48
+    ],
+    [
+     33244.5,
+     49
+    ],
+    [
+     33254.200000047684,
+     50
+    ],
+    [
+     33262.799999952316,
+     51
+    ],
+    [
+     33271.299999952316,
+     52
+    ],
+    [
+     33280.90000009537,
+     53
+    ],
+    [
+     33289.5,
+     54
+    ],
+    [
+     33298.200000047684,
+     55
+    ],
+    [
+     33307.40000009537,
+     56
+    ],
+    [
+     33316.09999990463,
+     57
+    ],
+    [
+     33325.799999952316,
+     58
+    ],
+    [
+     33334.299999952316,
+     59
+    ],
+    [
+     33344,
+     60
+    ],
+    [
+     33352.59999990463,
+     61
+    ],
+    [
+     33361.09999990463,
+     62
+    ],
+    [
+     33370.90000009537,
+     63
+    ],
+    [
+     33379.59999990463,
+     64
+    ],
+    [
+     33388.200000047684,
+     65
+    ],
+    [
+     33398,
+     66
+    ],
+    [
+     33406.799999952316,
+     67
+    ],
+    [
+     33415.5,
+     68
+    ],
+    [
+     33424.299999952316,
+     69
+    ],
+    [
+     33433.90000009537,
+     70
+    ],
+    [
+     33442.700000047684,
+     71
+    ],
+    [
+     33451.700000047684,
+     72
+    ],
+    [
+     33460.59999990463,
+     73
+    ],
+    [
+     33469.299999952316,
+     74
+    ],
+    [
+     33479,
+     75
+    ],
+    [
+     33487.09999990463,
+     76
+    ],
+    [
+     33496.700000047684,
+     77
+    ],
+    [
+     33506.299999952316,
+     78
+    ],
+    [
+     33515,
+     79
+    ],
+    [
+     33523.09999990463,
+     80
+    ],
+    [
+     33532.59999990463,
+     81
+    ],
+    [
+     33541.700000047684,
+     82
+    ],
+    [
+     33550.40000009537,
+     83
+    ],
+    [
+     33560.200000047684,
+     84
+    ],
+    [
+     33568.799999952316,
+     85
+    ],
+    [
+     33577.90000009537,
+     86
+    ],
+    [
+     33587,
+     87
+    ],
+    [
+     33596.40000009537,
+     88
+    ],
+    [
+     33605.799999952316,
+     89
+    ],
+    [
+     33613.200000047684,
+     90
+    ],
+    [
+     33714.90000009537,
+     1
+    ],
+    [
+     33723.299999952316,
+     2
+    ],
+    [
+     33731.200000047684,
+     3
+    ],
+    [
+     33740.09999990463,
+     4
+    ],
+    [
+     33749.90000009537,
+     5
+    ],
+    [
+     33758.40000009537,
+     6
+    ],
+    [
+     33767.09999990463,
+     7
+    ],
+    [
+     33775.799999952316,
+     8
+    ],
+    [
+     33786.200000047684,
+     9
+    ],
+    [
+     33793.40000009537,
+     10
+    ],
+    [
+     33802.700000047684,
+     11
+    ],
+    [
+     33812.5,
+     12
+    ],
+    [
+     33821.90000009537,
+     13
+    ],
+    [
+     33830.59999990463,
+     14
+    ],
+    [
+     33839.200000047684,
+     15
+    ],
+    [
+     33848.59999990463,
+     16
+    ],
+    [
+     33858.200000047684,
+     17
+    ],
+    [
+     33866.299999952316,
+     18
+    ],
+    [
+     33874.59999990463,
+     19
+    ],
+    [
+     33885,
+     20
+    ],
+    [
+     33893.09999990463,
+     21
+    ],
+    [
+     33902.40000009537,
+     22
+    ],
+    [
+     33911.5,
+     23
+    ],
+    [
+     33919.299999952316,
+     24
+    ],
+    [
+     33929.90000009537,
+     25
+    ],
+    [
+     33938.5,
+     26
+    ],
+    [
+     33947.40000009537,
+     27
+    ],
+    [
+     33958.700000047684,
+     28
+    ],
+    [
+     33966.799999952316,
+     29
+    ],
+    [
+     33974.5,
+     30
+    ]
+   ],
+   "fastestGap": 7.233,
+   "p5Gap": 7.961,
+   "p95Gap": 10.24,
+   "players": 462,
+   "endedAtMs": 1793034352409,
+   "runMin": 30.5,
+   "pass": true,
+   "reportMail": true
+  },
+  {
+   "ticks": 984,
+   "n": 36,
+   "id": "CMP-M500-036",
+   "mode": "host",
+   "aud": "everyone-both",
+   "speed": 9,
+   "tickets": 1,
+   "prizes": "early5#1,early5#2,top#1,top#2,full#1,full#2",
+   "ties": "share",
+   "brand": false,
+   "rounds": 1,
+   "events": "reload",
+   "claim": "mixed",
+   "people": 500,
+   "checks": [
+    {
+     "n": "organizer account made",
+     "ok": true,
+     "d": "{\"ok\":true,\"token\":\"ctk_6a1f55c9e53fb53bda29d7bbb7e7d16f77dd18d0952b5728\",\"aiKey\":\"cta_d4a9b5e698e85"
+    },
+    {
+     "n": "game created",
+     "ok": true,
+     "d": "{\"ok\":true,\"draft\":true,\"openUrl\":\"http://localhost:8832/zc.html?e=CMP-M500-036\"}"
+    },
+    {
+     "n": "settings saved",
+     "ok": true,
+     "d": "{\"ok\":true,\"startRound\":33410319,\"callSeconds\":9,\"cap\":515,\"closed\":false,\"whoCanJoin\":\"anyone\",\"coHostLimit\":100,\"guestInvites\":{\"on\":false,\"per\":4,\"cats\":[\"family\",\"colleagues\"]},\"tickets\":1,\"reward"
+    },
+    {
+     "n": "published",
+     "ok": true,
+     "d": "{\"ok\":true,\"published\":true,\"paid\":false,\"startMs\":1793034321000,\"payUrl\":\"http://localhost:8832/pay.html?e=CMP-M500-036\",\"shareUrl\":\"http://localhost:8832/z.html?e=CMP-M500-036\",\"confirmed\":{\"email\":"
+    },
+    {
+     "n": "a pay link was made for the game",
+     "ok": true,
+     "d": "{\"url\":\"http://localhost:8832/paylink.html?t=f50314f9d07d34d27f7107a1d7edc3003c430f4bb9c3f0c2\",\"expiresMs\":1793638823992}"
+    },
+    {
+     "n": "the pay link page shows the game and a price",
+     "ok": true,
+     "d": "{\"game\":{\"name\":\"Lotus Foods game 36\",\"startMs\":1793034321000,\"participants\":750},\"price\":{\"base\":5899,\"gst\":0,\"total\":5899,\"currency\":\"INR\"},\"status\":\"open\"}"
+    },
+    {
+     "n": "someone else paid through the link",
+     "ok": true,
+     "d": "{\"mode\":\"test\",\"paymentId\":\"pay_3acab8f93e08c01d\",\"result\":{\"ok\":true,\"orderId\":\"pay_3acab8f93e08c01d\",\"pack\":750,\"total\":5899,\"tax\":0,\"currency\":\"INR\",\"invoiceUrl\":\"/api/invoice/inv_30816d13e6497e228"
+    },
+    {
+     "n": "after payment the game is unlocked by itself (not held) and published",
+     "ok": true,
+     "d": "{\"cap\":515}"
+    },
+    {
+     "n": "the participant list was added",
+     "ok": true,
+     "d": "{\"added\":283,\"invalid\":0,\"want\":283,\"s\":200}"
+    },
+    {
+     "n": "all 462 allowed people got a ticket",
+     "ok": true,
+     "d": "462 of 462"
+    },
+    {
+     "n": "people not on the list or with a wrong ID are held in the waiting room (403 waiting)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "people who gave no employee ID are asked for it (400 need-id)",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "every phone that joined reached the end of the game",
+     "ok": true,
+     "d": "0 still not ended of 462"
+    },
+    {
+     "n": "every phone shows the same numbers in the same order (a phone may stop one number earlier or later at the very end of the game)",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "no number repeats and all are between 1 and 90",
+     "ok": true,
+     "d": "72,14,11,53,36,56,49,83,88,32,23,22,81,29,71,39,3,30,1,79,25,74,65,33,61,50,28,2"
+    },
+    {
+     "n": "every phone shows the same winners",
+     "ok": true,
+     "d": "0 differ"
+    },
+    {
+     "n": "the winners in the store equal the winners on the phones",
+     "ok": true,
+     "d": "store [\"early5#1@7\",\"early5#2@9\",\"full#1@65\",\"full#2@66\",\"top#1@27\",\"top#2@30\"] phones [\"early5#1@7\",\"early5#2@9\",\"full#1@65\",\"full#2@66\",\"top#1@27\",\"top#2@30\"]"
+    },
+    {
+     "n": "audit: all 462 players hold 1 well-formed ticket(s) each (3 x 9, 15 numbers, 5 per row, right column ranges)",
+     "ok": true,
+     "d": ""
+    },
+    {
+     "n": "audit: all 462 tickets of the game are different from each other",
+     "ok": true,
+     "d": "0 repeated"
+    },
+    {
+     "n": "audit: no two players hold the same set of tickets",
+     "ok": true,
+     "d": "0 players share a set"
+    },
+    {
+     "n": "audit: every one of 462 players received the same 68 numbers in the same order",
+     "ok": true,
+     "d": "0 differ:  (0 phones stopped one number earlier or later at the very end of the game)"
+    },
+    {
+     "n": "audit: all 577 claims on the server are true on the claimer's own ticket(s) at the call claimed (71 after the recorded numbers not re-checkable)",
+     "ok": true,
+     "d": "0 false claims got through: "
+    },
+    {
+     "n": "audit: all 6 prize positions: each winner completed the house at the call stated",
+     "ok": true,
+     "d": "0 winners did not"
+    },
+    {
+     "n": "audit: every winner's claim reached the server before the next number",
+     "ok": true,
+     "d": "0 late or missing"
+    },
+    {
+     "n": "audit: no earlier valid in-time claim was passed over (prize distribution follows the claims)",
+     "ok": true,
+     "d": "0 passed over"
+    },
+    {
+     "n": "audit: prize positions of a house are given in order of completion",
+     "ok": true,
+     "d": "0 out of order"
+    },
+    {
+     "n": "the game ended because every prize was won (6 prizes) or all 90 numbers were called",
+     "ok": true,
+     "d": "byPrizes true winners 6 numbers 68"
+    },
+    {
+     "n": "when the last prize was won the numbers stopped (not called to 90)",
+     "ok": true,
+     "d": "numbers 68"
+    },
+    {
+     "n": "manual: the numbers came only because the Host pressed Next (numbers <= presses stored on the server + 1)",
+     "ok": false,
+     "d": "numbers 68 presses stored 74 (seen by the test 74)"
+    },
+    {
+     "n": "no phone had an unhandled error",
+     "ok": true,
+     "d": "[]"
+    },
+    {
+     "n": "the end-of-game report e-mail was sent",
+     "ok": true,
+     "d": "after 150s"
+    },
+    {
+     "n": "the invoice reached the payer",
+     "ok": true,
+     "d": "finance36.m500@sample-co.in"
+    },
+    {
+     "n": "the invoice reached the organizer",
+     "ok": true,
+     "d": "cmp36.m500@sample-co.in"
+    }
+   ],
+   "notes": [],
+   "paidVia": "link",
+   "payerMail": "finance36.m500@sample-co.in",
+   "joined": 462,
+   "waiting": 38,
+   "needId": 0,
+   "joinMedianMs": 966,
+   "catchUpSec": 14,
+   "winnersAgreeSec": 0,
+   "numbers": 68,
+   "winners": 6,
+   "audit": {
+    "players": 462,
+    "tickets": 462,
+    "claims": 648
+   },
+   "medianGap": 11.5,
+   "timelineRef": [
+    [
+     34417.09999990463,
+     1
+    ],
+    [
+     34427.700000047684,
+     2
+    ],
+    [
+     34438.700000047684,
+     3
+    ],
+    [
+     34450.700000047684,
+     4
+    ],
+    [
+     34459.299999952316,
+     5
+    ],
+    [
+     34472.200000047684,
+     6
+    ],
+    [
+     34486.09999990463,
+     7
+    ],
+    [
+     34495.700000047684,
+     8
+    ],
+    [
+     34507.5,
+     9
+    ],
+    [
+     34516.09999990463,
+     10
+    ],
+    [
+     34531.40000009537,
+     11
+    ],
+    [
+     34541,
+     12
+    ],
+    [
+     34549.59999990463,
+     13
+    ],
+    [
+     34561.40000009537,
+     14
+    ],
+    [
+     34573.09999990463,
+     15
+    ],
+    [
+     34586.09999990463,
+     16
+    ],
+    [
+     34595.700000047684,
+     17
+    ],
+    [
+     34609.5,
+     18
+    ],
+    [
+     34621.40000009537,
+     19
+    ],
+    [
+     34630.200000047684,
+     20
+    ],
+    [
+     34639.90000009537,
+     21
+    ],
+    [
+     34651.90000009537,
+     22
+    ],
+    [
+     34663.5,
+     23
+    ],
+    [
+     34672.90000009537,
+     24
+    ],
+    [
+     34685.799999952316,
+     25
+    ],
+    [
+     34693.40000009537,
+     26
+    ],
+    [
+     34703.09999990463,
+     27
+    ],
+    [
+     34711.799999952316,
+     28
+    ],
+    [
+     34723.5,
+     29
+    ],
+    [
+     34735.299999952316,
+     30
+    ],
+    [
+     34744.90000009537,
+     31
+    ],
+    [
+     34753.5,
+     32
+    ],
+    [
+     34763,
+     33
+    ],
+    [
+     34774.90000009537,
+     34
+    ],
+    [
+     34786.700000047684,
+     35
+    ],
+    [
+     34795.5,
+     36
+    ],
+    [
+     34802.09999990463,
+     37
+    ],
+    [
+     34816.09999990463,
+     38
+    ],
+    [
+     34825.700000047684,
+     39
+    ],
+    [
+     34837.200000047684,
+     40
+    ],
+    [
+     34852.200000047684,
+     41
+    ],
+    [
+     34866,
+     42
+    ],
+    [
+     34877.90000009537,
+     43
+    ],
+    [
+     34891.799999952316,
+     44
+    ],
+    [
+     34903.90000009537,
+     45
+    ],
+    [
+     34915.59999990463,
+     46
+    ],
+    [
+     34927.5,
+     47
+    ],
+    [
+     34937.200000047684,
+     48
+    ],
+    [
+     34950.200000047684,
+     49
+    ],
+    [
+     34957.90000009537,
+     50
+    ],
+    [
+     34966.40000009537,
+     51
+    ],
+    [
+     34978.09999990463,
+     52
+    ],
+    [
+     34987.700000047684,
+     53
+    ],
+    [
+     34999.40000009537,
+     54
+    ],
+    [
+     35008.90000009537,
+     55
+    ],
+    [
+     35020.700000047684,
+     56
+    ],
+    [
+     35032.5,
+     57
+    ],
+    [
+     35044.59999990463,
+     58
+    ],
+    [
+     35053.200000047684,
+     59
+    ],
+    [
+     35062.799999952316,
+     60
+    ],
+    [
+     35073.700000047684,
+     61
+    ],
+    [
+     35083.200000047684,
+     62
+    ],
+    [
+     35093.09999990463,
+     63
+    ],
+    [
+     35104.90000009537,
+     64
+    ],
+    [
+     35116.700000047684,
+     65
+    ],
+    [
+     35122.200000047684,
+     66
+    ],
+    [
+     35131.59999990463,
+     67
+    ],
+    [
+     35143.09999990463,
+     68
+    ],
+    [
+     35158.200000047684,
+     69
+    ],
+    [
+     35167,
+     70
+    ],
+    [
+     35179.799999952316,
+     71
+    ],
+    [
+     35191.700000047684,
+     72
+    ],
+    [
+     35200.40000009537,
+     73
+    ],
+    [
+     35206.700000047684,
+     74
+    ]
+   ],
+   "fastestGap": 5.454,
+   "presses": 74,
+   "pressesSeen": 74,
+   "players": 462,
+   "endedAtMs": 1793035232912,
+   "runMin": 17.5,
+   "pass": false,
+   "reportMail": true
+  }
+ ]
+}

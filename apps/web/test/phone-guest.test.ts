@@ -46,7 +46,7 @@ async function phoneAt(o: O, url: string, calls: Call[] = [], pre?: (win: any) =
   const p = await openPage(o.world, { url: "http://localhost" + url, html: "z.html", scripts: ["audio.js", "zgame.js", "z.js"], afterLoad: (win, f) => { hook(win, f); if (f === "zgame.js") rtFake(win, () => o.world.now); } });
   open.push(p); return p;
 }
-const typeJoin = async (p: Page, phone: string, name = "Asha") => { await p.waitFor((x) => /Join the engagement/.test(x)); (p.$("#ph") as any).value = phone; (p.$("#nm") as any).value = name; p.click("#go"); };
+const typeJoin = async (p: Page, phone: string, name = "Asha") => { await p.waitFor((x) => /Join the game/.test(x)); (p.$("#ph") as any).value = phone; (p.$("#nm") as any).value = name; p.click("#go"); };
 const setVal = (p: Page, sel: string, v: string) => { const el = p.$(sel) as any; el.value = v; el.dispatchEvent(new p.win.Event("input", { bubbles: true })); };
 const SEEN = /Your ticket|What you can win|Starting in|Getting ready/;
 
@@ -54,7 +54,7 @@ describe("brand strip on the ticket page", () => {
   test("the company strip shows the name on the accent colour with readable text, the small logo from the settings, and a quiet 'Powered by' line; nothing is fetched from outside", async () => {
     const o = await organizer(); await published(o, "PG-BR1", { brand: { name: "Acme Foods", color: "#B3261E", logo: PNG } });
     const calls: Call[] = []; const p = await phoneAt(o, "/z?e=PG-BR1", calls);
-    await p.waitFor((x) => /Join the engagement/.test(x));
+    await p.waitFor((x) => /Join the game/.test(x));
     const strip = () => p.win.document.querySelector(".zbrand") as any;
     expect(strip().textContent).toContain("Acme Foods"); expect(p.text()).toMatch(/Powered by Corporate Tambola/); // on the join screen too
     await typeJoin(p, "9822222222"); await p.waitFor((x) => SEEN.test(x));
@@ -79,7 +79,7 @@ describe("brand strip on the ticket page", () => {
     const o = await organizer(); await published(o, "PG-BR4");
     const bad = { name: "<img src=x onerror=alert(1)>", color: "red", logo: "https://evil.example/x.png" };
     const p = await phoneAt(o, "/z?e=PG-BR4", [], (win) => { const of = win.fetch; win.fetch = async (u: any, i?: any) => { const r = await of(u, i); if (!/\/info$/.test(String(u))) return r; const j = await r.json(); return new Response(JSON.stringify({ ...j, brand: bad }), { status: 200, headers: { "content-type": "application/json" } }); }; });
-    await p.waitFor((x) => /Join the engagement/.test(x));
+    await p.waitFor((x) => /Join the game/.test(x));
     const s = p.win.document.querySelector(".zbrand") as any; expect(s.textContent).toContain("<img src=x"); expect(!!s.querySelector("img")).toBe(false); expect(!!p.win.document.querySelector("img")).toBe(false);
     expect(s.style.background).toMatch(/#0b3d91|rgb\(11, ?61, ?145\)/i);
   });
@@ -107,7 +107,7 @@ describe("joining: personal link, waiting, removed, cancelled", () => {
     await p.waitFor((x) => /already opened on another phone/.test(x)); expect(!!p.$("#ph")).toBe(true);
     (p.$("#ph") as any).value = "9822211111"; p.click("#go");
     await p.waitFor(() => calls.filter((c) => c.m === "POST" && /\/join$/.test(c.u)).length >= 2);
-    const again = calls.filter((c) => c.m === "POST" && /\/join$/.test(c.u))[1]!; expect(again.b.token).toBe(tk); expect(again.b.phone).toBe("9822211111");
+    const again = calls.filter((c) => c.m === "POST" && /\/join$/.test(c.u))[1]!; expect(again.b.token).toBe(tk); expect(again.b.phone).toBe("+919822211111"); /* the page sends +<country code><number> since the country list */
   });
   test("an unlisted number waits calmly, the page asks 'me' until it is let in, then the ticket opens", async () => {
     const o = await organizer(); await listOnly(o, "PG-WT1");
@@ -124,11 +124,11 @@ describe("joining: personal link, waiting, removed, cancelled", () => {
     const first = await phoneAt(o, "/z?e=PG-WT3"); await typeJoin(first, "9822266666"); await first.waitFor((x) => /Please wait a moment/.test(x));
     const saved = first.win.localStorage.getItem("ctz-wait-PG-WT3"); expect(saved).toBeTruthy(); await first.close(); // the old page is gone, as in a real reload
     const calls: Call[] = []; const p = await phoneAt(o, "/z?e=PG-WT3", calls, (win) => win.localStorage.setItem("ctz-wait-PG-WT3", saved!)); // the same phone after a reload
-    await p.waitFor((x) => /Please wait a moment/.test(x)); expect(p.text()).not.toMatch(/Join the engagement/); expect(!!p.$("#go")).toBe(false);
+    await p.waitFor((x) => /Please wait a moment/.test(x)); expect(p.text()).not.toMatch(/Join the game/); expect(!!p.$("#go")).toBe(false);
     const w = await o.json(await o.api("GET", "/api/z/PG-WT3/waiting", undefined, o.token)); expect(w.waiting.length).toBe(1);
     await o.api("POST", `/api/z/PG-WT3/waiting/${w.waiting[0].id}`, { decision: "admit" }, o.token);
     await p.waitFor((x) => SEEN.test(x), 20_000);
-    expect(calls.some((c) => c.m === "POST" && /\/join$/.test(c.u) && c.b.phone === "9822266666")).toBe(true); // it joined with what was typed before the reload
+    expect(calls.some((c) => c.m === "POST" && /\/join$/.test(c.u) && c.b.phone === "+919822266666")).toBe(true); // it joined with what was typed before the reload
     expect(p.win.localStorage.getItem("ctz-wait-PG-WT3") || "").toBe(""); // and forgot the waiting note
     expect(p.errors).toEqual([]);
   });
@@ -223,17 +223,20 @@ describe("See what guests see (ticket preview)", () => {
 
 describe("the pay link page (no sign-in)", () => {
   const linkOf = async (o: O, id: string) => { const r = await o.api("POST", `/api/z/${id}/paylink`, {}, o.token); expect(r.status).toBe(200); const j = await o.json(r); return new URL(j.url).searchParams.get("t")!; };
-  const pl = async (o: O, t: string, calls: Call[] = []) => { const hook = spy(calls); const p = await openPage(o.world, { url: "http://localhost/paylink.html" + (t ? "?t=" + t : ""), html: "paylink.html", scripts: ["common.js", "paylink.js"], afterLoad: (w, f) => hook(w, f) }); open.push(p); return p; };
-  test("shows only the game, date and price with GST, asks name and e-mail, and pays that one game (read back from the server)", async () => {
+  const pl = async (o: O, t: string, calls: Call[] = []) => { const hook = spy(calls); const p = await openPage(o.world, { url: "http://localhost/paylink.html" + (t ? "?t=" + t : ""), html: "paylink.html", scripts: ["common.js", "payfields.js", "paykit.js", "paylink.js"], afterLoad: (w, f) => hook(w, f) }); open.push(p); return p; };
+  test("shows only the game, date and price with GST, asks only for the country (no name or e-mail), and pays that one game (read back from the server)", async () => {
     const o = await organizer({ TEST_MODE: "1" }); await published(o, "PG-PL1", {}, { name: "Diwali Night" }); const t = await linkOf(o, "PG-PL1");
     const calls: Call[] = []; const p = await pl(o, t, calls);
     const txt = await p.waitFor((x) => /Diwali Night/.test(x));
-    expect(txt).toMatch(/₹/); expect(txt).not.toMatch(/plus GST/); expect(txt).toMatch(/Payment to IT Services by Rajat Agarwal/); expect(txt).toMatch(/Total/); expect(txt).not.toMatch(/Please sign in/i); expect(!!p.$("#nm")).toBe(true); expect(!!p.$("#em")).toBe(true); expect(!!p.$("#ph")).toBe(true); // the Details block asks for mobile, company name and GST / Tax number (all optional)
+    expect(txt).not.toMatch(/plus GST/); expect(txt).toMatch(/Payment to IT Services by Rajat Agarwal/); expect(txt).not.toMatch(/Please sign in/i);
+    for (const id of ["#nm", "#em", "#ph", "#org", "#tax"]) expect([id, p.$(id)]).toEqual([id, null]); // Razorpay asks for the mobile and the e-mail; the optional invoice details come after the payment
     expect(p.win.location.search).toBe(""); // the secret left the address bar
-    p.click("#paygo"); await p.waitFor((x) => /Please enter your name/.test(x)); expect(calls.filter((c) => c.m === "POST" && !c.u.endsWith("/api/proforma"))).toEqual([]); // nothing is sent until name and e-mail are good
-    (p.$("#nm") as any).value = "Neha Shah"; (p.$("#em") as any).value = "neha@acme.com"; p.click("#paygo");
+    expect((p.$("#paygo") as any).disabled).toBe(true); // the country is not known yet, so there is no price and nothing to pay
+    p.click('.pk-ctyopt[data-cty="IN"]'); await p.waitFor((x) => /Pay ₹/.test(x) && /Total/.test(x));
+    expect(calls.filter((c) => c.m === "POST" && !c.u.endsWith("/api/proforma"))).toEqual([]); // nothing is sent until Pay is pressed
+    p.click("#paygo");
     await p.waitFor((x) => /Payment received/.test(x), 20_000);
-    const post = calls.find((c) => c.m === "POST" && /\/checkout$/.test(c.u))!; expect(post.u).toBe(`/api/paylink/${t}/checkout`); expect(post.b).toMatchObject({ name: "Neha Shah", email: "neha@acme.com" });
+    const post = calls.find((c) => c.m === "POST" && /\/checkout$/.test(c.u))!; expect(post.u).toBe(`/api/paylink/${t}/checkout`); expect(post.b).toMatchObject({ country: "IN", currency: "INR" }); expect(["name", "email", "org", "phone"].filter((k) => k in (post.b as object))).toEqual([]);
     const st = await o.json(await o.api("GET", `/api/paylink/${t}`)); expect(st.status).toBe("paid");
     const sum = await o.json(await o.api("GET", "/api/z/PG-PL1/summary", undefined, o.token)); expect(sum.payment.status).toBe("paid");
   });
@@ -250,46 +253,22 @@ describe("the pay link page (no sign-in)", () => {
   });
 });
 
-describe("Continue with Google", () => {
-  const GID = "1234567890-abcdef.apps.googleusercontent.com";
-  const kp = generateKeyPairSync("rsa", { modulusLength: 2048 });
-  const jwk = { ...(kp.publicKey.export({ format: "jwk" }) as any), kid: "k1", alg: "RS256", use: "sig" };
-  const b64u = (b: Buffer | string) => Buffer.from(b).toString("base64url");
-  const credential = (email: string, over: Record<string, unknown> = {}, key = kp.privateKey) => { const h = b64u(JSON.stringify({ alg: "RS256", kid: "k1", typ: "JWT" })), c = b64u(JSON.stringify({ iss: "https://accounts.google.com", aud: GID, email, email_verified: true, iat: Math.floor(T / 1000) - 10, exp: Math.floor(T / 1000) + 3600, ...over })); const s = createSign("RSA-SHA256").update(h + "." + c).sign(key).toString("base64url"); return h + "." + c + "." + s; };
-  const fakeGsi = (win: any) => { win.google = { accounts: { id: { initialize: (c: any) => { win.__gcb = c.callback; }, renderButton: (el: any, opt: any) => { win.__gopt = opt; el.innerHTML = `<button type="button" id="gbtn">Continue with Google</button>`; } } } }; };
-  const signin = async (o: O, o2: { gsi?: boolean; ua?: string } = {}) => { const p = await openPage(o.world, { url: "http://localhost/signin.html?t=abc", html: "signin.html", scripts: ["google.js", "signin.js"], afterLoad: (win, f) => { if (f === "google.js") { if (o2.gsi !== false) fakeGsi(win); if (o2.ua) Object.defineProperty(win.navigator, "userAgent", { value: o2.ua, configurable: true }); } } }); open.push(p); return p; };
-
-  test("no client id: no button, nothing is loaded from Google, the e-mail way is all there is", async () => {
-    const o = await organizer(); const p = await signin(o); await p.waitFor((x) => /Continue to Corporate Tambola/.test(x)); await new Promise((r) => setTimeout(r, 300));
-    expect(p.text()).not.toMatch(/Continue with Google/); expect((p.$("#gWrap") as any).hidden).toBe(true);
-    expect(Array.from(p.win.document.querySelectorAll("script")).some((s: any) => /google/.test(s.src || ""))).toBe(false);
+describe("sign-in has one way: the e-mail (no Google button, even when the server has a Google client id)", () => {
+  const GID = "test-id.apps.googleusercontent.com";
+  const signin = async (o: O) => openPage(o.world, { url: "http://localhost/signin.html?t=abc", html: "signin.html", scripts: ["google.js", "signin.js"] });
+  test("the one-tap page shows only its own button; no Google button, nothing is loaded from Google, with or without a client id", async () => {
+    for (const env of [{}, { GOOGLE_CLIENT_ID: GID }]) {
+      const o = await organizer(env); const p = await signin(o); await p.waitFor((x) => /Sign me in/.test(x)); await new Promise((r) => setTimeout(r, 300));
+      expect(p.text()).not.toMatch(/Continue with Google/); expect((p.$("#gWrap") as any).hidden).toBe(true);
+      expect(Array.from(p.win.document.querySelectorAll("script")).some((s: any) => /google/.test(s.src || ""))).toBe(false);
+    }
   });
-  test("with a client id: the button shows above the e-mail way; a real Google credential signs the person in like the e-mail code does", async () => {
-    const o = await organizer({ GOOGLE_CLIENT_ID: GID }); setGoogleKeyProvider(async () => [jwk]);
-    const p = await signin(o); await p.waitFor((x) => /Continue with Google/.test(x)); expect(p.text()).toMatch(/to get an e-mail code/); expect((p.$("#gWrap") as any).hidden).toBe(false);
-    p.win.__gcb({ credential: credential("boss@acme.com") });
-    const t0 = Date.now(); while (!p.win.sessionStorage.getItem("ctz-org") && Date.now() - t0 < 8000) await new Promise((r) => setTimeout(r, 50));
-    const key = p.win.sessionStorage.getItem("ctz-org"); expect(key).toMatch(/^ctk_/);
-    const who = await o.json(await o.api("GET", "/api/whoami", undefined, key)); expect(who.kind ?? who.role ?? "master").toBeTruthy();
-  });
-  test("a credential that does not check out shows a calm message and signs nobody in", async () => {
-    const o = await organizer({ GOOGLE_CLIENT_ID: GID }); setGoogleKeyProvider(async () => [jwk]);
-    const other = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
-    const p = await signin(o); await p.waitFor((x) => /Continue with Google/.test(x));
-    p.win.__gcb({ credential: credential("boss@acme.com", {}, other) });
-    await p.waitFor((x) => /could not be checked/.test(x), 8000); expect(p.win.sessionStorage.getItem("ctz-org")).toBeNull();
-  });
-  test("inside another app's browser, or when Google will not load, a calm line points to the browser and the e-mail code", async () => {
+  test("the home page Log in sheet has the e-mail box and no Google button, with a client id", async () => {
     const o = await organizer({ GOOGLE_CLIENT_ID: GID });
-    const a = await signin(o, { ua: "Mozilla/5.0 (Linux; Android 13; wv) FBAN/FB4A" }); await a.waitFor((x) => /Open this page in your browser, or use an e-mail code\./.test(x));
-    expect(a.text()).not.toMatch(/Continue with Google/);
-    const b = await signin(o, { gsi: false }); await b.waitFor((x) => /Open this page in your browser, or use an e-mail code\./.test(x), 12_000);
-  });
-  test("the home page 'Log in' sheet and the free sign-up sheet carry the button too", async () => {
-    const o = await organizer({ GOOGLE_CLIENT_ID: GID });
-    const home = await openPage(o.world, { url: "http://localhost/#login", html: "index.html", scripts: ["common.js", "google.js", "site.js"], afterLoad: (win, f) => { if (f === "google.js") fakeGsi(win); } }); open.push(home);
-    const t0 = Date.now(); while (!/Continue with Google/.test(home.win.document.body.textContent || "") && Date.now() - t0 < 8000) await new Promise((r) => setTimeout(r, 50));
-    expect(home.win.document.body.textContent).toMatch(/Continue with Google/); expect(home.win.document.body.textContent).toMatch(/Continue|E-?mail me a code/);
-    expect(home.errors).toEqual([]);
+    const home = await openPage(o.world, { url: "http://localhost/#login", html: "index.html", scripts: ["keep.js", "common.js", "google.js", "site.js"], session: { "ctz-next": "/zc.html" } }); open.push(home); // a flow is waiting (a demo, a payment): only then does the game open its own sheet; a bare #login goes to the console
+    await new Promise((r) => setTimeout(r, 600));
+    const t = home.win.document.body.textContent || "";
+    expect(t).not.toMatch(/Continue with Google/); expect(t).toMatch(/Type your e-mail and press Continue/); expect(home.errors).toEqual([]);
   });
 });
+

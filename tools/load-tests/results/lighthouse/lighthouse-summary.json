@@ -1,0 +1,93 @@
+{
+ "tool": "lighthouse 12.8.2, mobile emulation, headless Chromium, LOCAL replica (network is Lighthouse-simulated)",
+ "rows": [
+  {
+   "page": "index.html",
+   "performance": 81,
+   "accessibility": 98,
+   "bestPractices": 100,
+   "seo": 100,
+   "LCP": "4.7 s",
+   "TBT": "70 ms",
+   "CLS": "0",
+   "weakAudits": [
+    "first-contentful-paint",
+    "largest-contentful-paint",
+    "interactive",
+    "largest-contentful-paint-element",
+    "heading-order",
+    "render-blocking-resources",
+    "unminified-css",
+    "unminified-javascript",
+    "unused-css-rules",
+    "unused-javascript"
+   ]
+  },
+  {
+   "page": "pricing.html",
+   "performance": 84,
+   "accessibility": 100,
+   "bestPractices": 100,
+   "seo": 100,
+   "LCP": "2.8 s",
+   "TBT": "0 ms",
+   "CLS": "0.221",
+   "weakAudits": [
+    "first-contentful-paint",
+    "largest-contentful-paint",
+    "cumulative-layout-shift",
+    "largest-contentful-paint-element",
+    "layout-shifts",
+    "render-blocking-resources",
+    "unminified-css",
+    "unminified-javascript",
+    "unused-css-rules",
+    "uses-text-compression"
+   ]
+  },
+  {
+   "page": "z.html",
+   "performance": 83,
+   "accessibility": 100,
+   "bestPractices": 96,
+   "seo": 54,
+   "LCP": "4.1 s",
+   "TBT": "40 ms",
+   "CLS": "0.074",
+   "weakAudits": [
+    "first-contentful-paint",
+    "largest-contentful-paint",
+    "max-potential-fid",
+    "errors-in-console",
+    "interactive",
+    "largest-contentful-paint-element",
+    "render-blocking-resources",
+    "unminified-css",
+    "unminified-javascript",
+    "unused-css-rules"
+   ]
+  },
+  {
+   "page": "signin.html",
+   "performance": 95,
+   "accessibility": 100,
+   "bestPractices": 100,
+   "seo": 54,
+   "LCP": "2.9 s",
+   "TBT": "0 ms",
+   "CLS": "0",
+   "weakAudits": [
+    "largest-contentful-paint",
+    "largest-contentful-paint-element",
+    "render-blocking-resources",
+    "unminified-css",
+    "unminified-javascript",
+    "unused-css-rules",
+    "modern-image-formats",
+    "uses-text-compression",
+    "meta-description",
+    "is-crawlable"
+   ]
+  }
+ ]
+}

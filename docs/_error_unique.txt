@@ -142,7 +142,7 @@
 403	worker.ts:643	Please finish your setup first: confirm your e-mail address and add your mobile number.
 400	worker.ts:692	Give a date and time with a time zone, like at=2026-10-03T16:00:00+05:30 (India time is +05:30). A time without a zone is not accepted because it could start your game at the wrong hour.
 None	worker.ts:698	That time has already passed. Pick a time in the future.
-400	worker.ts:703	Please enter a valid work email.
+400	worker.ts:703	Please enter a valid e-mail address.
 400	worker.ts:748	Say whether you are signing up, signing in or finishing a Host setup.
 429	worker.ts:751	Too many tries from this network. Please use an e-mail code, or try again tomorrow.
 404	worker.ts:790	There is no account for this Google e-mail yet. Choose sign up to make one.

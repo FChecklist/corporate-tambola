@@ -1,16 +1,16 @@
 // The phone-side game: everything a phone (or the organizer's console) needs to play and to check an engagement
 // from the public beacon alone. Pure and deterministic: no server, no phone clock.
 import { generateTicket, ticketNumbers, type PatternId, type Ticket } from "../../shared/src/ticket";
-import { CLAIM_WINDOW_CALLS, INTERMISSION_ROUNDS, PATTERN_ORDER, breakShift, keyOfLine, defaultCfg, keysInPlay, linesFor, roundEid, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
-import { hostCallRound, type ControlState, type GameOpts } from "./control";
+import { CLAIM_WINDOW_CALLS, INTERMISSION_ROUNDS, PATTERN_ORDER, breakShift, keyOfLine, ticketOfKey, defaultCfg, keysInPlay, linesFor, roundEid, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
+import { hostCallRound, pauseShifts, pushedByPauses, type ControlState, type GameOpts } from "./control";
 
 /** What the control file needs from the game's public settings (who calls the numbers, the breaks and rounds a press must respect): pass it to cfgOf / publishControl. */
-export const hostGameOf = (cfg: Pick<EngagementCfg, "callMode" | "breaks" | "rounds">): GameOpts => ({ callMode: cfg.callMode === "host" ? "host" : "auto", breaks: cfg.breaks, rounds: cfg.rounds });
+export const hostGameOf = (cfg: Pick<EngagementCfg, "callMode" | "startMode" | "breaks" | "rounds">, scheduledRound?: number): GameOpts => ({ callMode: cfg.callMode === "host" ? "host" : "auto", startMode: cfg.startMode === "manual" ? "manual" : "auto", ...(scheduledRound !== undefined ? { startNotBefore: scheduledRound } : {}), breaks: cfg.breaks, rounds: cfg.rounds });
 import { ticketCompletion, ticketStillNeeds } from "./house-rules";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
 import { positionOf, seatOfPid, ticketAt } from "./unique-ticket";
-import { NUMBERS, fetchRound, pickNumber, roundTimeMs, seededRand, verifyRound, type BeaconOpts, type Round } from "./index";
+import { NUMBERS, fetchRound, pickNumber, roundTimeMs, seededRand, verifyRound, type BeaconOpts, type Round, defaultMirrors } from "./index";
 
 export const ALL_PATTERNS: readonly PatternId[] = PATTERN_ORDER;
 
@@ -42,8 +42,9 @@ export function completionIndexKey(tickets: readonly Ticket[], key: PatternKey, 
     for (let i = 0; i < log.length; i++) if (left.delete(log[i]!) && left.size === 0) return i;
     return -1;
   }
+  const only = ticketOfKey(key); // "top@2": only the second ticket counts
   let best = -1;
-  for (const t of tickets) { const i = completionIndex(t, key, log); if (i >= 0 && (best < 0 || i < best)) best = i; }
+  for (let n = 0; n < tickets.length; n++) { if (only && n !== only - 1) continue; const i = completionIndex(tickets[n]!, key, log); if (i >= 0 && (best < 0 || i < best)) best = i; }
   return best;
 }
 
@@ -200,8 +201,9 @@ export const stillToWin = (t: Ticket | readonly Ticket[], pat: PatternKey, log: 
   const tickets: readonly Ticket[] = Array.isArray((t as any)[0]?.[0]) ? (t as unknown as readonly Ticket[]) : [t as unknown as Ticket];
   const called = new Set(log);
   if (pat === "full2") return tickets.length < 2 ? 30 : tickets.flatMap(ticketNumbers).filter((n) => !called.has(n)).length;
+  const only = ticketOfKey(pat);
   let min = Infinity;
-  for (const tk of tickets) { const left = ticketStillNeeds(tk, pat, called); if (left < min) min = left; }
+  for (let n = 0; n < tickets.length; n++) { if (only && n !== only - 1) continue; const left = ticketStillNeeds(tickets[n]!, pat, called); if (left < min) min = left; }
   return min;
 };
 
@@ -232,8 +234,15 @@ export function unshiftedRound(start: number, stride: number, breaks: readonly B
 /** The beacon round call k of round `round` uses, with the organizer's signed pauses applied. Null when the engagement was stopped before it. */
 export function callRoundR(st: ControlState | null, start: number, stride: number, breaks: readonly BreakCfg[], round: number, k: number): number | null {
   if (st?.host) return hostCallRound(st, (round - 1) * NUMBERS + k); // host mode: the k-th press of the whole game (Infinity until it is pressed)
+  if (st?.manualStart) { if (st.goRound === null) return st.stopRound !== null ? null : Infinity; start = st.goRound; } // a manual start: nothing is called until Start; number 1 comes in the round Start named
   let a = unshiftedRound(start, stride, breaks, round, k);
-  if (st) { for (const i of st.intervals) if (a >= i.start) a += i.end - i.start; if (st.stopRound !== null && a >= st.stopRound) return null; }
+  if (st) {
+    if (st.intervals.length) { // every pause pushes the calls after it by its length, and (a game whose control file says fullGap) the first call after a Resume waits a full gap (see pauseShifts)
+      const base = (g: number) => unshiftedRound(start, stride, breaks, Math.floor(g / NUMBERS) + 1, g % NUMBERS);
+      a = pushedByPauses(a, st.intervals, pauseShifts(st.intervals, stride, base, `R${start}|${JSON.stringify(breaks)}`, st.fullGap === true));
+    }
+    if (st.stopRound !== null && a >= st.stopRound) return null;
+  }
   return a;
 }
 /**
@@ -267,6 +276,8 @@ export function activeBreak(st: ControlState | null, start: number, stride: numb
   return null;
 }
 
+/** A mirror that gave nothing for a past round (blocked, offline, hanging) is left out of the next 100 catch-up rounds, about one whole catch-up: a blocked network is waited on once, not once per mirror per round. Counted in rounds asked for, never in time: this code never reads the device clock. */
+const BACKFILL_SKIP = 100;
 /**
  * Rounds a phone holds for an engagement. Past rounds (a late joiner) are accepted provisionally when two different mirrors
  * give byte-identical answers, then checked against the BLS signature in the background so the join never blocks for seconds.
@@ -276,12 +287,13 @@ export class RoundStore {
   readonly rounds = new Map<number, Round>();
   readonly verified = new Set<number>();
   discarded = 0;
+  readonly backfills = { asked: 0, skipUntil: new Map<string, number>() };
   constructor(readonly opts: BeaconOpts = {}, readonly verify: (x: Round) => boolean = (x) => verifyRound(x, opts.net)) {}
 
-  /** Live round: verified immediately. */
-  async fetchLive(r: number, salt = 0): Promise<boolean> {
+  /** Live round: verified immediately. `mirrors`, when given, is the list to ask in the order to ask it (instead of the default list rotated by `salt`). */
+  async fetchLive(r: number, salt = 0, mirrors?: readonly string[]): Promise<boolean> {
     if (this.verified.has(r)) return true;
-    const x = await fetchRound(r, { ...this.opts, verify: (y) => this.verify(y) }, salt);
+    const x = await fetchRound(r, { ...this.opts, ...(mirrors ? { mirrors } : {}), verify: (y) => this.verify(y) }, salt);
     if (!x) return false;
     this.rounds.set(r, x); this.verified.add(r);
     return true;
@@ -290,15 +302,21 @@ export class RoundStore {
   /** Past round: needs two mirrors to agree (their raw answers are compared), signature check deferred. */
   async fetchBackfill(r: number, salt = 0): Promise<boolean> {
     if (this.rounds.has(r)) return true;
-    const mirrors = this.opts.mirrors ?? ["https://api.drand.sh", "https://api2.drand.sh", "https://api3.drand.sh", "https://drand.cloudflare.com"];
+    const mirrors = this.opts.mirrors ?? defaultMirrors();
     const answers: Round[] = [];
+    const bf = this.backfills; bf.asked++;
+    const lately = (m: string) => (bf.skipUntil.get(m) ?? 0) > bf.asked; // gave nothing a moment ago
     for (let i = 0; i < mirrors.length && answers.length < 2; i++) {
+      const m = mirrors[(i + salt) % mirrors.length]!;
+      if (lately(m)) continue; // not waited on again for every round of a catch-up (checked at each step, so what the other rounds of this batch found counts)
       // no per-round signature check here (verify: always true); the deferred check below is what makes it safe
-      const x = await fetchRound(r, { ...this.opts, mirrors: [mirrors[(i + salt) % mirrors.length]!], verify: (y) => !!y && y.round === r && typeof y.signature === "string" && typeof y.randomness === "string" }, 0);
-      if (x) answers.push(x);
+      const x = await fetchRound(r, { ...this.opts, mirrors: [m], verify: (y) => !!y && y.round === r && typeof y.signature === "string" && typeof y.randomness === "string" }, 0);
+      if (x) { answers.push(x); bf.skipUntil.delete(m); } else bf.skipUntil.set(m, bf.asked + BACKFILL_SKIP);
     }
     if (answers.length < 2) { // not enough mirrors: fall back to the slow, fully-checked path rather than trust a single answer
-      return this.fetchLive(r, salt);
+      const late = mirrors.filter(lately), live = mirrors.filter((m) => !lately(m));
+      if (!late.length || !live.length) return this.fetchLive(r, salt);
+      return this.fetchLive(r, 0, [...live.map((_, i) => live[(i + salt) % live.length]!), ...late]); // the ones that gave nothing lately are asked last there too
     }
     if (answers[0]!.signature !== answers[1]!.signature || answers[0]!.randomness !== answers[1]!.randomness) return this.fetchLive(r, salt);
     this.rounds.set(r, answers[0]!);

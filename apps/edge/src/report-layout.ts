@@ -1,6 +1,9 @@
 // The engagement report the organizer receives by e-mail: one PDF with everything we hold about the game and its people, and a plain statement of what
 // is deleted and when. This file only lays data out; it knows nothing about the database (see lifecycle.ts for where the data comes from).
 import { BRAND } from "./brand";
+import { MORE_GAMES } from "../../../packages/beacon/src/more-games";
+import { calledLine } from "../../../packages/beacon/src/gaps";
+import { claimRuleText } from "../../../packages/beacon/src/config";
 import { GOLD, NAVY, PdfDoc, WHITE, type Column } from "./pdf";
 
 export interface ReportPerson { seat: number | null; name: string | null; phone: string | null; joinedMs: number | null; late: boolean; role: string | null; invitedBy: number | null; onRoster: boolean; joined: boolean; /** the list this person is on: Organizer, Host <name>, Co-host <name> (a guest's own invitees show under that guest) */ via?: string | null; /** who let them in from the waiting room or put them back */ admittedBy?: string | null; removed?: boolean }
@@ -11,7 +14,7 @@ export const emptyAgg = (): Agg => ({ joined: 0, onRoster: 0, notJoined: 0, late
 export interface ReportData {
   engagementId: string; organizerEmail: string; sentAtMs: number;
   scheduledMs: number; firstNumberMs: number; endMs: number; endReason: string; wasHeld: boolean;
-  rounds: number; callSeconds: number; ticketsPerPerson: number; cap: number; inviteOnly: boolean; numbersCalled: number;
+  rounds: number; takenClaims?: string[]; callSeconds: number; hostCalled?: boolean; ticketsPerPerson: number; cap: number; inviteOnly: boolean; numbersCalled: number;
   people: ReportPerson[];
   prizes: ReportPrize[];
   lucky: { title: string; winners: ReportWinner[] }[];
@@ -21,8 +24,10 @@ export interface ReportData {
   personalDeleteAtMs: number; fullDeleteAtMs: number;
   /** Totals about the people, when the list itself is spread over several PDFs. */
   agg?: Agg; omitPeople?: boolean; totalPeople?: number;
+  /** The complete claim and event log of the game (ticket numbers only), for the PDF sections "At a glance", "Every claim", "What happened" (1.6.1). */
+  log?: { ties?: string; people: { joined: number }; firstNumberMs: number | null; endedAtMs: number | null; numbersCalled: number | null; claims: { ticket: number; prize: string; outcome: string; atMs: number; afterNumber: number | null; takenAtNumber?: number }[]; /** too-late claims beyond the 200 the log keeps */ claimsMore?: number; prizes: { prize: string; text: string; ticket: number; callNo: number; atMs: number | null }[]; pauses: { by: string; fromMs: number; toMs: number | null }[]; changes: { atMs: number; who: string; what: string }[] };
   /** The organizer's own company name and logo (a data URL). The report page turns the logo into raw pixels (`logoPix`) before laying the PDF out. */
-  brand?: { name?: string; logo?: string }; logoPix?: { w: number; h: number; hex: string };
+  brand?: { name?: string; color?: string; logo?: string }; logoPix?: { w: number; h: number; hex: string }; ourLogoPix?: { w: number; h: number; hex: string };
 }
 
 const IST = 5.5 * 3_600_000;
@@ -35,7 +40,11 @@ export const istDate = (ms: number) => { const d = new Date(ms + IST); return `$
 const utcFull = (ms: number) => { const d = new Date(ms); return `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())} UTC`; };
 const hm = (ms: number) => { const d = new Date(ms + IST); return `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())}`; };
 const dur = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 3600)} h ${p2(Math.floor((s % 3600) / 60))} min`; };
-const mob = (p: string | null) => (p ? p.replace(/^(\d{5})(\d{5})$/, "$1 $2") : "-");
+const mob = (p: string | null) => { // a kept number: India as 91 + 10 digits (shown as 98765 43210, as before), any other country as +<code><number>
+  if (!p) return "-";
+  const d = p.replace(/\D/g, "");
+  return p[0] !== "+" && (d.length === 10 || (d.length === 12 && d.startsWith("91"))) ? d.slice(-10).replace(/^(\d{5})(\d{5})$/, "$1 $2") : p;
+};
 const who = (w: { name: string | null; phone: string | null }) => `${w.name || "(no name)"}, ${mob(w.phone)}`;
 
 export function layoutReport(d: ReportData): Uint8Array {
@@ -43,8 +52,10 @@ export function layoutReport(d: ReportData): Uint8Array {
   pdf.footer = `Corporate Tambola  |  Engagement ${d.engagementId}  |  sent ${istFull(d.sentAtMs)}`;
 
   // ---- title band
-  pdf.rect(0, pdf.H, pdf.W, 92, NAVY); pdf.rect(0, pdf.H - 92, pdf.W, 3, GOLD);
-  if (d.logoPix) pdf.logo(d.logoPix, pdf.W - pdf.M - 64, pdf.H - 14, 64, 64); // the organizer's logo, on a white tile at the right of the band
+  const band: [number, number, number] = (() => { const m = /^#([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})$/.exec(d.brand?.color ?? ""); return m ? [parseInt(m[1]!, 16) / 255, parseInt(m[2]!, 16) / 255, parseInt(m[3]!, 16) / 255] : NAVY; })(); // the customer's colour, else ours
+  pdf.rect(0, pdf.H, pdf.W, 92, band); pdf.rect(0, pdf.H - 92, pdf.W, 3, GOLD);
+  if (d.ourLogoPix) pdf.logo(d.ourLogoPix, pdf.W - pdf.M - 64, pdf.H - 14, 64, 64); // our own logo, always at the right end of the band
+  if (d.logoPix) pdf.logo(d.logoPix, pdf.W - pdf.M - 64 - (d.ourLogoPix ? 72 : 0), pdf.H - 14, 64, 64); // the organizer's logo, on a white tile at the right of the band
   pdf.y = pdf.H - 28;
   pdf.para(d.brand && d.brand.name ? `${d.brand.name} | Corporate Tambola` : "Corporate Tambola", { font: "F2", size: 11, color: GOLD, gap: 2 });
   pdf.para("Complete engagement report", { font: "F2", size: 22, color: WHITE, gap: 2 });
@@ -60,7 +71,7 @@ export function layoutReport(d: ReportData): Uint8Array {
   pdf.box("What we keep, and what we delete", [
     `We have given you ALL the data we hold about the people in this engagement. Within 24 hours of the game ending, and no later than ${istFull(d.personalDeleteAtMs)}, we permanently delete from our systems every participant's name, mobile number, join record, ticket assignment and invite link record. After that nobody at Corporate Tambola, and nothing in our software or database, holds them.`,
     "We keep, for 365 days, only: (1) the details of the organizer, host and co-hosts (name, e-mail, mobile number); (2) the winners record: which prize, which round, at what time, and the ticket seat number; and (3) the name and mobile number each winner confirmed for the prize hand-over, with the date it was given. The winners record itself holds no names or numbers.",
-    `Everything about this engagement, including those two records, is permanently deleted at 00:00 hours (IST) on ${istDate(d.fullDeleteAtMs)}, which is the end of the 365th day. We keep billing data for audit and tax reasons.`,
+    `Everything about this engagement, including those two records, is permanently deleted at 00:00 hours (IST) on ${istDate(d.fullDeleteAtMs)}, which is the end of the 365th day. Billing data is kept for audit and tax reasons.`,
     "For your next game you can reuse the people list until it is deleted (the reuse button in your console), or upload your own list again afterwards from this report.",
   ]);
 
@@ -73,8 +84,8 @@ export function layoutReport(d: ReportData): Uint8Array {
     ["How it ended", d.endReason],
     ["Playing time", d.wasHeld ? "-" : dur(d.endMs - d.firstNumberMs)],
     ["Rounds", String(d.rounds)],
-    ["Numbers called in the last round", String(d.numbersCalled)],
-    ["Call speed", `one number every ${d.callSeconds} seconds`],
+    ["Numbers called in the last round", calledLine(d.numbersCalled)],
+    ["Call speed", d.hostCalled ? "The host called the numbers (no fixed gap)" : `one number every ${d.callSeconds} seconds`],
     ["Tickets per person", String(d.ticketsPerPerson)],
     ["Participant limit", `${d.cap}${d.inviteOnly ? "  (invitation only)" : ""}`],
   ]);
@@ -89,19 +100,38 @@ export function layoutReport(d: ReportData): Uint8Array {
   // ---- 3 prizes and winners
   pdf.h1("3. Prizes and winners");
   { const t0 = d.prizes.length, w0 = d.prizes.filter((p) => p.winners.length).length;
-  pdf.para(`${t0} prize lines were set up; ${w0} were won (${t0 - w0} not won).`, { size: 9.5, gap: 4 }); }
+  pdf.para(`${t0} prize lines were set up; ${w0} were won (${t0 - w0} not won).`, { size: 9.5, gap: 4 });
+  pdf.para(claimRuleText(d.log?.ties), { size: 9, gap: 4 });
+  for (const line of d.takenClaims ?? []) pdf.para(line, { size: 9, gap: 2 }); }
   for (const pr of d.prizes) {
     pdf.h2(`${d.rounds > 1 ? `Round ${pr.round}  |  ` : ""}${pr.label}${pr.text ? `   -   ${pr.text}` : ""}`);
     if (!pr.winners.length) { pdf.para("Not won.", { size: 9, color: [0.4, 0.43, 0.48] }); continue; }
-    pdf.table([{ head: "Seat", width: 5, align: "r" }, { head: "Name", width: 21 }, { head: "Mobile", width: 12 }, { head: "At call", width: 6, align: "r" }, { head: "Time", width: 8 }, { head: "Role", width: 10 }, { head: "Agreed by", width: 8 }, { head: "Prize given", width: 12 }],
+    pdf.table([{ head: "Seat", width: 5, align: "r" }, { head: "Name", width: 17 }, { head: "Mobile", width: 16 }, { head: "At call", width: 6, align: "r" }, { head: "Time", width: 8 }, { head: "Role", width: 10 }, { head: "Agreed by", width: 8 }, { head: "Prize given", width: 12 }],
       pr.winners.map((w) => [w.seat === null ? "-" : String(w.seat), w.name || "(no name)", mob(w.phone), w.callNo === null ? "-" : String(w.callNo), w.atMs ? hm(w.atMs) : "-", w.role || "participant", w.verified ? "phones" : "-", w.given ? w.given : "not yet"]));
     for (const w of pr.winners) if (w.changedFrom) pdf.para(`Seat ${w.seat === null ? "-" : w.seat}: details changed after the game (${w.changedFrom}).`, { size: 8.5, color: [0.7, 0.15, 0.1] });
   }
   for (const l of d.lucky) {
     pdf.h2(`Lucky draw  -  ${l.title}`);
-    pdf.table([{ head: "Seat", width: 5, align: "r" }, { head: "Name", width: 24 }, { head: "Mobile", width: 12 }], l.winners.map((w) => [w.seat === null ? "-" : String(w.seat), w.name || "(no name)", mob(w.phone)]));
+    pdf.table([{ head: "Seat", width: 5, align: "r" }, { head: "Name", width: 20 }, { head: "Mobile", width: 16 }], l.winners.map((w) => [w.seat === null ? "-" : String(w.seat), w.name || "(no name)", mob(w.phone)]));
   }
   pdf.para("Every winner here was worked out by the software from the public numbers, and was accepted only when several different phones reported exactly the same result ('Agreed by: phones'). Neither you nor anyone at Corporate Tambola can choose, change or remove a winner or a number. Names and mobile numbers are those the winner confirmed on their own phone after the game; if they changed them, that is shown under the table.", { size: 8.5 });
+
+  // ---- 3b the complete claim and event log (1.6.1)
+  if (d.log) {
+    const hmsI = (ms: number | null | undefined) => (ms ? istFull(ms).split(", ")[1]?.replace(" IST", "") ?? "-" : "-");
+    pdf.h1("3b. At a glance, every claim, and what happened");
+    pdf.table([{ head: "Item", width: 32 }, { head: "Detail", width: 78 }], [
+      ["Game started", d.log.firstNumberMs ? istFull(d.log.firstNumberMs) : "Did not start"], ["Completed", d.log.endedAtMs ? istFull(d.log.endedAtMs) : "Not ended"], ["Players", String(d.log.people.joined)],
+      ["Numbers called", String(d.log.numbersCalled ?? 0)], ["Prizes awarded", String(d.log.prizes.length)], ["Claims", `${d.log.claims.length + (d.log.claimsMore ?? 0)} (${d.log.claims.filter((c) => c.outcome === "accepted" || c.outcome === "prize taken").length} in time, ${d.log.claims.filter((c) => c.outcome === "wrong").length} wrong, ${d.log.claims.filter((c) => c.outcome === "too late").length + (d.log.claimsMore ?? 0)} too late)`],
+    ]);
+    pdf.h2("Prizes (ticket numbers only)");
+    pdf.table([{ head: "Prize", width: 34 }, { head: "Ticket", width: 8, align: "r" }, { head: "After number", width: 14, align: "r" }, { head: "Awarded", width: 20 }], d.log.prizes.length ? d.log.prizes.map((p) => [p.prize + (p.text ? ` (${p.text})` : ""), String(p.ticket), String(p.callNo), hmsI(p.atMs)]) : [["No prize was won.", "", "", ""]]);
+    pdf.h2(`Every claim (${d.log.claims.length})`);
+    pdf.table([{ head: "Time", width: 12 }, { head: "Ticket", width: 8, align: "r" }, { head: "Prize", width: 28 }, { head: "What came of it", width: 52 }], d.log.claims.length ? d.log.claims.map((c) => [hmsI(c.atMs), String(c.ticket), c.prize + (c.afterNumber ? ` after ${c.afterNumber}` : ""), c.outcome === "accepted" ? "accepted" : c.outcome === "wrong" ? "wrong (a Bogey)" : c.outcome === "too late" ? "too late, refused" : `Prize already taken: came at number ${c.afterNumber}, after the prize was awarded at number ${c.takenAtNumber}`]).concat(d.log.claimsMore ? [["", "", `... and ${d.log.claimsMore} more too-late ${d.log.claimsMore === 1 ? "claim" : "claims"}`, "(the log keeps the newest 200 of them)"]] : []) : [["No claim.", "", "", ""]]);
+    const ev = [...d.log.pauses.map((p) => ({ atMs: p.fromMs, what: `Paused by ${p.by}${p.toMs ? ", resumed at " + hmsI(p.toMs) : ""}` })), ...d.log.changes.map((c) => ({ atMs: c.atMs, what: `${c.who}: ${c.what}` }))].sort((a, b) => a.atMs - b.atMs);
+    pdf.h2("What happened during the game");
+    pdf.table([{ head: "Time", width: 12 }, { head: "What", width: 88 }], ev.length ? ev.map((e) => [hmsI(e.atMs), e.what]) : [["", "Nothing was paused or changed."]]);
+  }
 
   // ---- 4 statistics
   const total = d.prizes.length, won = d.prizes.filter((p) => p.winners.length).length;
@@ -131,21 +161,23 @@ export function layoutReport(d: ReportData): Uint8Array {
     ["Participants' names and mobile numbers, seats, invite links", istFull(d.personalDeleteAtMs)],
     ["Organizer / host / co-host details and the winners record", `00:00 hours IST, ${istDate(d.fullDeleteAtMs)}`],
   ]);
-  pdf.para("You can ask us to delete everything sooner: press 'Erase' in your console, ask your AI assistant to request it (you confirm in your console), or e-mail us from your registered address.", { size: 9 });
+  pdf.para("You can ask us to delete everything sooner: press 'Delete' in your console, ask your AI assistant to request it (you confirm in your console), or e-mail us from your registered address.", { size: 9 });
 
   pdf.h1("8. Our commitment to your data");
   pdf.box("All of it is deleted. Here is exactly what, and when.", [
     `1. Everything about the people in this engagement (every name, mobile number, seat, join record and invite record) is permanently deleted from our systems within 24 hours of the game ending, and no later than ${istFull(d.personalDeleteAtMs)}. You have all of it in this report; after that we hold none of it.`,
     "2. We keep only these, for 365 days: the details of the organizer, host and co-hosts (name, e-mail address and mobile number), the winners record (which prize, which round, at what time, which seat number), and the name and mobile number each winner confirmed for the prize hand-over. The winners record itself has no names and no mobile numbers.",
-    `3. At 00:00 hours IST on ${istDate(d.fullDeleteAtMs)}, the end of the 365th day, everything else is permanently deleted too. We keep billing data for audit and tax reasons.`,
+    `3. At 00:00 hours IST on ${istDate(d.fullDeleteAtMs)}, the end of the 365th day, everything else is permanently deleted too. Billing data is kept for audit and tax reasons.`,
     "4. Names and mobile numbers are stored encrypted while we hold them, and only your own game's report is ever built from them.",
   ]);
   pdf.box("The laws we follow", [
     "Corporate Tambola is built to follow India's Digital Personal Data Protection Act, 2023 (DPDP Act), the European Union's General Data Protection Regulation (GDPR) and the United Kingdom's equivalent, and the privacy laws of the United States, including state laws such as the California Consumer Privacy Act (CCPA / CPRA).",
-    "In practice this means: we collect only the data needed to run your game; we use it only for that purpose; we protect it with encryption; we keep it for the shortest time we can and tell you exactly how long; we never sell it or use it for advertising; and the people who took part, and you, can ask us to show, correct or delete their data at any time.",
+    "In practice this means: we collect only the data needed to run your game; we use it only for that purpose; we protect it with encryption; we keep it for the shortest time possible, with the exact time stated; it is never sold or used for advertising; and the people who took part, and you, can ask to see, correct or delete their data at any time.",
     "You are the organizer of your game and decide who takes part; we process the data on your behalf. To exercise any right, or to ask us anything, reply to the e-mail this report came with.",
   ], [0.93, 0.96, 1], NAVY);
   pdf.para(`Sent on ${istFull(d.sentAtMs)} to ${d.organizerEmail}.`, { size: 8.5, color: [0.4, 0.43, 0.48] });
+  pdf.h2(`More games from ${BRAND.name}`);
+  pdf.table([{ head: "Game", width: 26 }, { head: "What it is, and where to play", width: 74 }], MORE_GAMES.map((g) => [g.name, `${g.line} ${g.url}`]));
   pdf.para(`${BRAND.name}  |  Questions? Write to ${BRAND.support}  |  Rules, privacy and disclaimer: ${BRAND.defaultOrigin}${BRAND.legalPath}`, { size: 8.5, color: [0.4, 0.43, 0.48] });
   return pdf.build();
 }
@@ -189,7 +221,7 @@ function treeSection(pdf: PdfDoc, people: ReportPerson[]) {
 function listSection(pdf: PdfDoc, people: ReportPerson[]) {
   pdf.h1("6. Everyone, with name and mobile number");
   pdf.para(`${people.length} people. 'Joined' is the time they opened the link (IST). Names in scripts other than Latin letters print as ? in this PDF.`, { size: 9, gap: 4 });
-  const cols: Column[] = [{ head: "Seat", width: 5, align: "r" }, { head: "Name", width: 24 }, { head: "Mobile", width: 12 }, { head: "Joined", width: 8 }, { head: "Late", width: 4 }, { head: "Role", width: 9 }, { head: "By", width: 5, align: "r" }, { head: "List", width: 4 }];
+  const cols: Column[] = [{ head: "Seat", width: 5, align: "r" }, { head: "Name", width: 20 }, { head: "Mobile", width: 16 }, { head: "Joined", width: 8 }, { head: "Late", width: 4 }, { head: "Role", width: 9 }, { head: "By", width: 5, align: "r" }, { head: "List", width: 4 }];
   pdf.table(cols, [...people].sort((a, b) => (a.seat ?? 1e9) - (b.seat ?? 1e9)).map((p) => [p.seat === null ? "-" : String(p.seat), p.name || "(no name)", mob(p.phone), p.joinedMs ? hm(p.joinedMs) : "-", p.late ? "yes" : "", p.role || "", p.invitedBy ? String(p.invitedBy) : "", p.onRoster ? "yes" : ""]), { zebra: true });
 }
 /** One of the extra PDFs of a big game: the invite tree and the list for up to 1,500 people. */

@@ -31,7 +31,7 @@ const publish = (o: { token: string }, id: string) => call("POST", `/api/z/${id}
 const signed = async (id: string, secret: string, now: number, a: Parameters<typeof nextMessage>[2]) => signControlWithSecret(secret, nextMessage((await readPublished(kv(), id))!, roundAt(now), a));
 const post = async (id: string, msg: unknown, now = T) => { const r = await call("POST", `/api/z/${id}/control`, { message: msg }, {}, now); return { status: r.status, body: await j(r) }; };
 
-beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt" } as any; });
+beforeEach(() => { const d = makeD1(); raw = d.raw; env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", PUBLIC_ORIGIN: "http://localhost", PHONE_SALT: "salt" } as any; });
 
 describe("the setting: who calls the numbers", () => {
   test("callMode is saved at creation or in the settings, read back by phones (info) and the summary, and defaults to auto", async () => {
@@ -51,14 +51,14 @@ describe("the setting: who calls the numbers", () => {
     const bad = await call("PATCH", "/api/z/HM-1/settings", { callMode: "manual" }, o.h);
     expect(bad.status).toBe(400); expect((await j(bad)).error).toMatch(/Who calls the numbers/);
   });
-  test("host mode is allowed up to the pause size limit (2,000) and refused above it, at creation and when the size is raised later", async () => {
+  test("host mode is allowed up to 1,000 people and refused above it, at creation and when the size is raised later", async () => {
     const o = await organizer();
     const big = await make(o, "HM-BIG", { cap: 5000, callMode: "host" });
-    expect(big.status).toBe(409); expect((await j(big)).error).toMatch(/up to 2,000 people/);
-    expect((await make(o, "HM-OK", { cap: 2000, callMode: "host" })).status).toBe(200);
-    const raise = await call("PATCH", "/api/z/HM-OK/settings", { cap: 2001 }, { "x-organizer": "plat" }); // (the platform key skips the pack check: only the host-mode rule can refuse)
-    expect(raise.status).toBe(409); expect((await j(raise)).error).toMatch(/up to 2,000 people/);
-    expect((await call("PATCH", "/api/z/HM-OK/settings", { cap: 2001, callMode: "auto" }, { "x-organizer": "plat" })).status).toBe(200);
+    expect(big.status).toBe(409); expect((await j(big)).error).toMatch(/Games above 1,000 people are called by the game itself/);
+    expect((await make(o, "HM-OK", { cap: 1000, callMode: "host" })).status).toBe(200);
+    const raise = await call("PATCH", "/api/z/HM-OK/settings", { cap: 1001 }, { "x-organizer": "plat" }); // (the platform key skips the pack check: only the host-mode rule can refuse)
+    expect(raise.status).toBe(409); expect((await j(raise)).error).toMatch(/Games above 1,000 people are called by the game itself/);
+    expect((await call("PATCH", "/api/z/HM-OK/settings", { cap: 1001, callMode: "auto" }, { "x-organizer": "plat" })).status).toBe(200);
     const flip = await call("PATCH", "/api/z/HM-OK/settings", { callMode: "host" }, { "x-organizer": "plat" });
     expect(flip.status).toBe(409);
   });
@@ -91,6 +91,15 @@ describe("the control address: a press is accepted from the organizer and a Host
     expect(later.status).toBe(200);
     const f = (await readPublished(kv(), "HM-C"))!;
     expect(f.messages.map((x) => x.action)).toEqual(["next", "next"]);
+  });
+  test("the organizer signed in on a second browser (or after clearing site data) adds that browser's key beside the first, then presses; the AI link and a guest still may not", async () => {
+    const o = await live();
+    const second = await call("PUT", "/api/z/HM-C/control/key", { publicKey: publicKeyFromSecret(HOST) }, o.h);
+    expect(second.status).toBe(200); expect((await j(second)).host).toBe(true);
+    const f = (await readPublished(kv(), "HM-C"))!;
+    expect(f.pubKey).toBe(publicKeyFromSecret(ORG)); expect(f.hostKeys).toEqual([publicKeyFromSecret(HOST)]); // the first key stays the organizer's main key
+    expect((await call("PUT", "/api/z/HM-C/control/key", { publicKey: publicKeyFromSecret(GUEST) }, { "x-organizer": o.ai })).status).toBe(403);
+    expect((await call("PUT", "/api/z/HM-C/control/key", { publicKey: publicKeyFromSecret(GUEST) })).status).toBe(403);
   });
   test("a Host registers their own console key beside the organizer's (the organizer's stays), then presses; a guest's key is refused at registration and at the press", async () => {
     const o = await live();

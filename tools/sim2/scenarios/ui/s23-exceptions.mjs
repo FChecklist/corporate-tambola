@@ -110,9 +110,9 @@ export default [
       await ps[1].ctx.setOffline(true);
       await c.page.reload(); await c.page.waitForSelector(".zc-sech", { timeout: 15000 }); await openStep(c.page, 9).catch(() => {});
       c.page.on("dialog", (d) => d.accept()); // "End this game for everyone?" is a browser confirm
-      await c.page.waitForSelector('[data-ctl="stop"]', { timeout: 15000 }); await c.page.click('[data-ctl="stop"]');
-      await c.page.waitForFunction(() => /Stop sent|End sent|sent\./.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
-      const stopped = /sent/.test(await t.text(c.page));
+      await c.page.waitForSelector('[data-ctl="stop"]', { timeout: 15000 }); await c.page.click('[data-ctl="stop"]'); await c.page.click("#zcsure [data-y]");
+      await c.page.waitForFunction(() => /Ending the game|Stop sent|End sent|sent\./.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      const stopped = /sent|Ending the game/.test(await t.text(c.page));
       const ctl = (await H.call("GET", `/api/z/${g.id}/control`)).body; t.note("control log: " + JSON.stringify(ctl).slice(0, 300));
       t.check("the store holds a signed stop message", JSON.stringify(ctl).includes('"stop"'));
       t.check("the game was ended by the organizer", stopped);

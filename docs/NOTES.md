@@ -16,7 +16,7 @@ Precedence per the handout: where prototype and handout disagree, **handout wins
 
 ## 2. The product in brief
 
-Web-only, mobile-first live Tambola/Housie for closed groups (companies, societies, clubs, families), 90 numbers, 3×9 tickets. Sold **per game** in packs of "engagements" (1 engagement = 1 ticket per mobile number). Players never pay; organizer gives all prizes; we never touch prize money. Identity is a mobile number only (E.164, any country) — no SMS/OTP for players. Organizers verify once by work-email code. All personal data hard-deleted 24 h after the game ends (anonymous summary stays). Selling points: scale, brand breaks (video/slides/speech for everyone at once), verified entry, report, no ads.
+Web-only, mobile-first live Tambola/Housie for closed groups (companies, societies, clubs, families), 90 numbers, 3×9 tickets. Sold **per game** in packs of "engagements" (1 engagement = 1 ticket per mobile number). Players never pay; organizer gives all prizes; we never touch prize money. Identity is a mobile number only (E.164, any country) — no SMS/OTP for players. Organizers verify once by e-mail code. All personal data hard-deleted 24 h after the game ends (anonymous summary stays). Selling points: scale, brand breaks (video/slides/speech for everyone at once), verified entry, report, no ads.
 
 Roles: Organizer › Host › Team Lead › Player › Invited colleague › Family member. Invite chain stops at Organizer → Team Lead → colleague → family.
 

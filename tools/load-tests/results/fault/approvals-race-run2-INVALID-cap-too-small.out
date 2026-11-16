@@ -1,0 +1,9 @@
+before the start admit+decline {"requests":60,"states":{"declined/out":59,"admitted/in":1},"disagreements":0,"examples":[]}
+before the start admit+admit {"requests":60,"states":{"admitted/in":60},"disagreements":0,"examples":[]}
+before the start decline+decline {"requests":60,"states":{"declined/out":60},"disagreements":0,"examples":[]}
+during the game sequential {"admitByOrg":{"ok":7,"bad":0},"declineByHost":{"ok":7,"bad":0},"declineByOrg":{"ok":6,"bad":0}} []
+during the game admit+decline {"requests":60,"states":{"declined/out":59,"admitted/in":1},"disagreements":0,"examples":[]}
+during the game admit+admit {"requests":60,"states":{"admitted/in":38,"admitted/out":22},"disagreements":22,"examples":[{"empId":"EMP-9DYS008","state":"admitted","joinStatus":409,"org":"200{\"ok\":true,\"admitted\":true,\"placedUnder\"","host":"200{\"ok\":true,\"admitted\":true,\"placedUnder\""},{"empId":"EMP-9DYS054","state":"admitted","joinStatus":409,"org":"200{\"ok\":true,\"admitted\":true,\"placedUnder\"","host":"200{\"
+during the game decline+decline {"requests":0,"states":{},"disagreements":0,"examples":[]}
+C end propagation {"small":{"cap":100,"stopStatus":200,"secondsUntilPhoneShowsEnd":{}},"big":{"cap":1015,"stopStatus":200,"secondsUntilPhoneShowsEnd":{"0":158.3,"1":157.3}}}
+DONE

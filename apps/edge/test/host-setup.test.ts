@@ -21,7 +21,7 @@ const one = (sql: string, ...v: unknown[]) => raw.prepare(sql).get(...(v as any[
 
 beforeEach(async () => {
   const d = makeD1({ strictHosts: true }); raw = d.raw; idp = await makeIdp(); trust(idp);
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: "http://x", TEST_MODE: "1", GOOGLE_CLIENT_ID: CLIENT_ID } as PayEnv;
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: "http://x", TEST_MODE: "1", GOOGLE_CLIENT_ID: CLIENT_ID } as PayEnv;
 });
 afterEach(() => setGoogleKeyProvider());
 
@@ -197,8 +197,8 @@ describe("later devices: e-mail code or Google, same Host, same label", () => {
     const { master } = await organizer(); const h = await addHost(master, { email: "p@acme.com", mobile: "9876500002" });
     const d1 = await confirmByCode(h.hostKey, "p@acme.com");
     const s = await j(await call("POST", "/api/auth/email", { email: "P@acme.com" }));
-    expect(s.devToken).toBeUndefined(); // a Host gets the code only, no one-click link
-    const mail = mailsTo("p@acme.com").filter((m) => /sign-in code/i.test(m.subject)); expect(mail).toHaveLength(1); expect(mail[0]!.body).toContain(s.devCode); expect(mail[0]!.body).not.toMatch(/AI work link|cta_/);
+    expect(s.devToken).toMatch(/^[0-9a-f]{48}$/); // a Host gets the same two ways in as an Organizer: the code and one single-use link
+    const mail = mailsTo("p@acme.com").filter((m) => /sign-in/i.test(m.subject)); expect(mail).toHaveLength(1); expect(mail[0]!.body).toContain(s.devCode); expect(mail[0]!.body).toContain(`t=${s.devToken}&go=console`); expect(mail[0]!.body).not.toMatch(/AI work link|cta_/);
     const v = await j(await call("POST", "/api/auth/verify", { email: "p@acme.com", code: s.devCode }));
     expect(v).toMatchObject({ ok: true, kind: "host", ready: true }); expect(v.token).toMatch(/^cth_/); expect(v.token).not.toBe(d1.token);
     expect((await call("GET", "/api/org/team", undefined, v.token)).status).toBe(200); expect((await call("GET", "/api/org/team", undefined, d1.token)).status).toBe(200);
@@ -264,6 +264,14 @@ describe("Google can satisfy the e-mail step (intent 'host')", () => {
     const { master } = await organizer(); const h = await addHost(master, { mobile: "9876500002" });
     const r = await j(await google(await idp.sign(claims("priya.personal@gmail.com", T)), h.hostKey));
     expect(r.ready).toBe(true); expect((await j(await call("GET", "/api/org/team", undefined, master))).hosts[0].email).toBe("priya.personal@gmail.com");
+  });
+  test("the 24-hour Host AI-link key (mailed to the Organizer) cannot finish a Host setup, so it cannot turn itself into a lasting Host key", async () => {
+    const { master } = await organizer(); await addHost(master, { email: "alice@acme.com", mobile: "9876500002" });
+    const mails = raw.prepare("SELECT body FROM outbox WHERE to_addr=?").all("boss@acme.com") as { body: string }[]; // the Organizer's own mail: the 24-hour Host AI link (the Host's first-open link goes to the Host)
+    const key = mails.map((m) => m.body.match(/cth_[0-9a-f]{48}/)?.[0]).find(Boolean);
+    expect(key).toBeTruthy(); const before = one("SELECT COUNT(*) AS c FROM organizer_key").c;
+    for (const [path, body] of [["/api/host/setup/mobile", { mobile: "9812345678" }], ["/api/host/setup/email", { email: "attacker@example.com" }], ["/api/host/setup/email/verify", { code: "123456" }]] as const) expect([path, (await call("POST", path, body, key)).status]).toEqual([path, 403]);
+    expect(one("SELECT COUNT(*) AS c FROM organizer_key").c).toBe(before); // no lasting Host key was minted from it
   });
   test("an expired, used, unknown or missing link key is refused; so is a 24-hour AI-link key", async () => {
     const { master } = await organizer(); const h = await addHost(master, { email: "alice@acme.com", mobile: "9876500002" });

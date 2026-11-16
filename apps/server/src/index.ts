@@ -120,7 +120,7 @@ function mailReport(room: Room) {
   if (!o) return;
   const r = room.engine.report();
   ai.sendEmail(o.email, `Report: ${room.engine.settings.name}`,
-    `Hello ${o.org_name},\n\nYour engagement has ended. Here is the report.\n\n${ai.summariseReport(r)}\n\nWHAT HAPPENS NEXT\n  - Tickets, phones, claims and the activity log are deleted 24 hours after the end. Copy anything you need from the console now, or ask your AI: "Give me the full report of ${room.engine.settings.name}".\n  - The names and numbers of everyone on the list are kept ${Math.round(RETAIN_MS / DAY)} days, so your next engagement takes one step: ask your AI "Set up a new engagement and reuse everyone from the last one", or open your Dashboard and tap Reuse the data.\n  - You give the rewards yourself; we never handle reward money.\n\nCorporate Tambola\n`, false);
+    `Hello ${o.org_name},\n\nYour engagement has ended. Here is the report.\n\n${ai.summariseReport(r)}\n\nWHAT HAPPENS NEXT\n  - Tickets, phones, claims and the activity log are deleted 24 hours after the end. Copy anything you need from the console now, or ask your AI: "Give me the full report of ${room.engine.settings.name}".\n  - The names and numbers of everyone on the list are kept ${Math.round(RETAIN_MS / DAY)} days, so your next engagement takes one step: ask your AI "Set up a new engagement and reuse everyone from the last one", or open your Dashboard and tap Reuse the data.\n  - You give the rewards yourself; reward money never passes through the software.\n\nCorporate Tambola\n`, false);
 }
 
 function purgeRoom(room: Room) {
@@ -326,8 +326,8 @@ route_("GET", "/api/health", () => json({ ok: true, dev: DEV, fast: FAST, rooms:
 route_("POST", "/api/checkout", async ({ req }) => {
   const b = await body(req);
   const email = String(b.email ?? "").trim().toLowerCase();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail(400, "Enter a valid work email.");
-  if (!DEV && FREE_MAIL.test(email)) fail(400, "Please use your work email, not a free mail address.");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail(400, "Enter a valid e-mail address.");
+  if (!DEV && FREE_MAIL.test(email)) fail(400, "Please use a different e-mail address. Free mail addresses are not accepted for this step.");
   const org = String(b.org ?? "").trim();
   if (org.length < 2) fail(400, "Enter your organization name.");
   const pack = Number(b.pack);
@@ -440,7 +440,7 @@ route_("POST", "/api/orgs/me/erase", async ({ req }) => {
     if (b.block !== false) db.query("INSERT OR IGNORE INTO optouts(organizer_id,hash,created_at) VALUES(?,?,?)").run(org, ohash(org, e164), now());
     return json({ ok: true });
   }
-  return fail(400, "Unknown erase request.");
+  return fail(400, "Unknown delete request.");
 });
 
 function reuseGroups(q: any) { return { list: q.list !== false && q.list !== "0", colleagues: q.colleagues !== false && q.colleagues !== "0", family: q.family === true || q.family === "1" }; }

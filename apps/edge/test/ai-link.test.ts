@@ -21,7 +21,7 @@ const j = async (r: Response) => (await r.json()) as any;
 
 beforeEach(() => {
   const d = makeD1(); raw = d.raw;
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: ORIGIN, DATA_KEY: "test-data-key" };
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "100000", PUBLIC_ORIGIN: ORIGIN, DATA_KEY: "test-data-key" };
 });
 
 async function organizer() {
@@ -54,7 +54,7 @@ describe("the paste text and the manual", () => {
     for (const must of [`GET ${base}/z/{id}/summary`, `POST ${base}/z `, `PATCH ${base}/z/{id}/settings`, `POST ${base}/z/{id}/roster`, `POST ${base}/z/{id}/announce`, `POST ${base}/z/{id}/prizegiven`, `GET ${base}/z/schedule`, `POST ${base}/org/host`, `GET ${base}/org/ai/audit`])
       expect(t).toContain(must);
     expect(t).toMatch(/ONE question at a time/); expect(t).toMatch(/_method=POST/); expect(t).toMatch(/about 20 people/); expect(t).toMatch(/WHAT YOU CANNOT DO/);
-    expect(t).toMatch(/Pay for anything/); expect(t).toMatch(/Publish\./); expect(t).toMatch(/Erase participant data/); expect(t).toMatch(/Pause, resume or stop/); expect(t).toMatch(/winners, numbers or tickets/);
+    expect(t).toMatch(/Pay for anything/); expect(t).toMatch(/Publish\./); expect(t).toMatch(/Delete participant data/); expect(t).toMatch(/Pause, resume or stop/); expect(t).toMatch(/winners, numbers or tickets/);
     expect(t).toMatch(/Only the owner's own messages/); expect(t).toMatch(/Not found/); // injection rule + what a dead link says
     // every example address in the manual carries the key; no bare /api/ address without it except the optional header path
     for (const line of t.split("\n").filter((l) => /^\s*(Read|Create|Change|Load|Send)[^:]*:\s+GET /.test(l))) expect(line).toContain(base);
@@ -237,7 +237,7 @@ describe("what the organizer's AI may and may not do now", () => {
     const hk = await j(await call("POST", "/api/org/host", { email: "host@acme.com", mobile: "9876500009" }, o.h)); expect(hk.manualUrl).toContain("/ai/cth_");
     const rep = await j(await call("GET", `/ai/${o.ai}/z/CAP-5/reportlink`)); expect(rep.url).toBeNull(); expect(rep.note).toMatch(/e-mailed to them/);
   });
-  test("it still cannot pay, publish, erase, pause, settle, touch winners, or manage the organizer's keys", async () => {
+  test("it still cannot pay, publish, delete, pause, settle, touch winners, or manage the organizer's keys", async () => {
     const o = await liveEngagement("CAP-6");
     const pub = await j(await call("POST", `/ai/${o.ai}/z/CAP-D2/publish`, contact)); expect(pub.error ?? "").toBeDefined();
     for (const [m, p, b] of [["POST", "/z/CAP-6/erase", {}], ["POST", "/z/CAP-6/settle", { results: [] }], ["PUT", "/z/CAP-6/control/key", { publicKey: "aa" }], ["GET", "/org/keys", undefined], ["POST", "/org/keys/revoke", { id: "x" }], ["POST", "/org/ai", {}], ["POST", "/org", {}], ["POST", "/checkout", { eid: "CAP-6", org: "X", email: "x@x.com" }]] as const)
@@ -247,6 +247,12 @@ describe("what the organizer's AI may and may not do now", () => {
     const req = await j(await call("POST", `/ai/${o.ai}/z/CAP-6/control/request`, { action: "erase" })); expect(req.message).toMatch(/Nothing has been deleted/); // ask only
     const pr = await call("POST", `/ai/${o.ai}/z/CAP-6/control/request`, { action: "pause" }); expect(pr.status).toBe(200); // ask only: nothing is paused
     const refusal = await j(await call("POST", `/ai/${o.ai}/z/CAP-6/erase`, {})); expect(refusal.error).toMatch(/tell them plainly/i);
+  });
+  test("asking twice for the same thing (a retry after a busy answer) leaves ONE open request, not two", async () => {
+    const o = await liveEngagement("CAP-6");
+    for (const action of ["pause", "pause", "erase", "erase"]) expect((await call("POST", `/ai/${o.ai}/z/CAP-6/control/request`, { action })).status).toBe(200);
+    expect((raw.prepare("SELECT COUNT(*) c FROM ctl_request WHERE eid='CAP-6' AND open=1 AND action='pause'").get() as any).c).toBe(1);
+    expect((raw.prepare("SELECT COUNT(*) c FROM ctl_request WHERE eid='CAP-6' AND open=1 AND action='erase'").get() as any).c).toBe(1);
   });
   test("publishing through the link stays a hand-over: the organizer's console link, no publish", async () => {
     const o = await organizer(); await call("POST", `/ai/${o.ai}/z`, eng("CAP-7"));

@@ -1,0 +1,195 @@
+[
+ {
+  "screen": "console: step 1 open",
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "screen": "console: step 2 open",
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "screen": "console: step 3 open",
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "screen": "console: step 4 open",
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "screen": "console: step 5 open",
+  "violations": [
+   {
+    "id": "color-contrast",
+    "impact": "serious",
+    "nodes": 5,
+    "sample": ".zc-role:nth-child(2) > ul > .zc-no:nth-child(6)"
+   },
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "screen": "console: step 6 open",
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "screen": "console: step 7 open",
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "screen": "console: step 8 open",
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "screen": "console: step 9 open",
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "screen": "console: step 10 open",
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ },
+ {
+  "screen": "player: join page (draft game)",
+  "violations": [
+   {
+    "id": "page-has-heading-one",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": "html"
+   },
+   {
+    "id": "region",
+    "impact": "moderate",
+    "nodes": 1,
+    "sample": ".rfoot"
+   }
+  ]
+ }
+]

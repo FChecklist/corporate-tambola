@@ -3,7 +3,8 @@
 import { test } from "bun:test";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join as pjoin } from "node:path";
-import { handle, purgeOld, type Env } from "../../../apps/edge/src/worker";
+import { purgeOld, type Env } from "../../../apps/edge/src/worker";
+import { handle } from "../../../apps/edge/test/with-terms";
 import type { PayEnv } from "../../../apps/edge/src/pay";
 import { lifecycleTick } from "../../../apps/edge/src/lifecycle";
 import { makeD1 } from "../../../apps/edge/test/d1-sqlite";
