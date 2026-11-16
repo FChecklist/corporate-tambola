@@ -2,7 +2,7 @@
    sits where the boxes used to be, and the request still carries the version so the server keeps its proof (apps/edge/src/consent.ts: version, sha256 of the shown line, time; nothing personal). */
 (function () {
   const C = (window.CBConsent = {});
-  C.version = "2026-11-01";
+  C.version = "2026-11-16";
   C.text = {
     K1: {
       A: "I have read and agree to the Terms & Conditions, the Privacy Policy and the Refund Policy.",
