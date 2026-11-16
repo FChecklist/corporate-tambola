@@ -1,0 +1,16 @@
+server 8831 up (db db-m250)
+2026-10-26T14:27:08Z START m250 cases 1-18 conc 3 people 250 lead 250 port 8831
+server 8832 up (db db-m500)
+2026-10-26T14:27:11Z START m500 cases 19-36 conc 2 people 500 lead 300 port 8832
+server 8833 up (db db-m1000a)
+2026-10-26T14:30:51Z START m1000a cases 37-39 conc 1 people 1000 lead 400 port 8833
+2026-10-26T15:37:43Z DONE m1000a (exit 0)
+server 8835 up (db db-m1000c)
+server 8834 up (db db-m1000b)
+2026-10-26T16:02:12Z START m1000b cases 40-42 conc 1 people 1000 lead 400 port 8834
+2026-10-26T16:02:12Z START m1000c cases 43-45 conc 1 people 1000 lead 400 port 8835
+2026-10-26T16:50:27Z DONE m1000c (exit 0)
+2026-10-26T17:07:18Z DONE m1000b (exit 0)
+server 8836 up (db db-m500r35)
+2026-10-26T17:09:21Z START m500r35 cases 35-35 conc 1 people 500 lead 300 port 8836
+2026-10-26T17:33:23Z DONE m500r35 (exit 0)

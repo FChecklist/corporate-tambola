@@ -15,7 +15,13 @@ export const PERIOD_SEC = 3; // drand quicknet period; the unit of every "round"
  * a press only decides WHEN the next number is released. It is signed `NEXT_LEAD_ROUNDS` rounds before the beacon round whose randomness makes the
  * number, so the randomness is still unknown to everybody (the Host included) at the moment of the press. Nobody can choose a number.
  */
-export type ControlAction = "pause" | "resume" | "extend" | "stop" | "next";
+export type ControlAction = "pause" | "resume" | "extend" | "stop" | "next" | "go";
+/**
+ * "go" = the Start button of a game whose start is manual (startMode "manual"). It is signed like every other message, `leadRounds` (or more) before the round it names, so every
+ * phone has it before that round arrives. The named round is the moment the game begins: with the software calling, number 1 is called in exactly that round and the rest follow at the
+ * chosen speed; with a Host calling, the Host's first press may come from that round on. Before the Start nothing at all is called, and the randomness of every later round is still
+ * unknown to everybody when Start is pressed, so no number can be chosen or predicted. It can only be pressed once, and not before the scheduled time.
+ */
 export const NEXT_LEAD_ROUNDS = 2; // 6 s: the round a press names is not published yet when the press is signed
 /** At most this many Hosts' console keys may sign beside the organizer's own (the team has at most 5 Hosts). */
 export const MAX_HOST_KEYS = 5;
@@ -47,6 +53,14 @@ export interface ControlConfig {
   hostKeys?: string[];
   /** Who calls the numbers: the software at the chosen speed (auto, the default) or a Host pressing a button for each number (host). */
   callMode?: "auto" | "host";
+  /** How the game begins: by itself at the scheduled time (auto, the default) or when a Host / the organizer presses Start (manual: nothing is called before a "go" message). */
+  startMode?: "auto" | "manual";
+  /** Manual start: the scheduled start round; a Start signed before it is refused (to start earlier, change the start time first). */
+  startNotBefore?: number;
+  /** A big game (above PAUSE_MAX_PARTICIPANTS): only Start exists. Pause, resume, extend and end are refused: phones ask too rarely for them to be safe. */
+  startOnly?: boolean;
+  /** The first number after a Resume comes a full gap later (owner ruling Q2, 2026-10-29). Set in the control file when the key is registered, so a game whose key was registered earlier keeps the schedule its players already saw and its log still reproduces. */
+  fullGap?: boolean;
   /** Host mode: the breaks and intermissions a press has to wait for, and how many presses there can be at most (90 per round). From the game's public settings, see hostGapsFor. */
   hostGaps?: HostGap[];
   maxNexts?: number;
@@ -121,7 +135,7 @@ export async function verifyControlSig(pubKeyHex: string, m: ControlMsg): Promis
 const isInt = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 0;
 export function wellFormed(x: any): x is ControlMsg {
   return !!x && typeof x === "object" && typeof x.engagementId === "string" && isInt(x.seq) && x.seq >= 1
-    && ["pause", "resume", "extend", "stop", "next"].includes(x.action) && isInt(x.atBeaconRound) && isInt(x.signedAtRound)
+    && ["pause", "resume", "extend", "stop", "next", "go"].includes(x.action) && isInt(x.atBeaconRound) && isInt(x.signedAtRound)
     && (x.untilRound === undefined || isInt(x.untilRound)) && typeof x.sig === "string";
 }
 
@@ -169,6 +183,12 @@ export interface ControlState {
   nextRounds: number[];
   /** True when this game's numbers are released by a Host's presses (callMode "host"). */
   host: boolean;
+  /** True when this game begins only when somebody presses Start (startMode "manual"). */
+  manualStart: boolean;
+  /** Manual start: the beacon round the Start named (the game begins in that round), or null while nobody has pressed Start. Always null in an automatic-start game. */
+  goRound: number | null;
+  /** True when the first number after a Resume waits a full gap (see ControlConfig.fullGap). Absent = the older rule: a pause pushes the later calls by exactly its length. */
+  fullGap?: boolean;
 }
 
 interface Cur { start: number; until: number | null; endedAt: number | null }
@@ -182,12 +202,24 @@ export const NEXT_REFUSALS = {
   order: "One moment: the last number is still on its way to the phones.",
   gap: "Please wait: the break is still on. The next number can come when it ends.",
   done: "Every number has been called.",
+  start: "Press Start first. The numbers begin after Start.",
+  early: "Please wait a moment: the game is just starting.",
+} as const;
+/** The plain reason a pause, resume, extension or end is refused in a big game. */
+export const BIG_GAME_REFUSAL = "Pause and End are available for games of up to 2,000 people. This game runs without them.";
+/** The plain reasons a Start is refused. */
+export const GO_REFUSALS = {
+  auto: "This game starts by itself at the scheduled time, so there is no Start button. To start by pressing Start, change \"How does it start?\" first.",
+  early: "The game cannot be started before its start time. To start earlier, change the start time first.",
+  lead: "That press did not go through. Please press Start again.",
+  again: "The game has already been started.",
 } as const;
 
 /** Why a message would take no effect, or null if it is valid in this state. Shared by the phone and the publisher. */
-function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: boolean, nexts: readonly number[]): string | null {
+function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: boolean, nexts: readonly number[], go: number | null): string | null {
   if (stopped) return "engagement already stopped";
   if (m.signedAtRound > m.atBeaconRound) return "takes effect before it was signed";
+  if (cfg.startOnly && (m.action === "pause" || m.action === "resume" || m.action === "extend" || m.action === "stop")) return BIG_GAME_REFUSAL;
   const lead = m.atBeaconRound - m.signedAtRound;
   const paused = cur && cur.start <= m.atBeaconRound && m.atBeaconRound < effEnd(cur, cfg.maxPauseRounds);
   switch (m.action) {
@@ -195,6 +227,7 @@ function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: bool
       if (cfg.callMode !== "host") return NEXT_REFUSALS.auto;
       if (lead !== NEXT_LEAD_ROUNDS || m.untilRound !== undefined) return NEXT_REFUSALS.lead; // exactly the lead: the round is still unknown when signed, and the number comes as soon as it can
       if (paused) return NEXT_REFUSALS.paused;
+      if (cfg.startMode === "manual") { if (go === null) return NEXT_REFUSALS.start; if (m.atBeaconRound < go) return NEXT_REFUSALS.early; } // a manual start: the Host's first press comes after Start, from the round Start named
       const k = nexts.length, prev = k ? nexts[k - 1]! : -1;
       if (k >= (cfg.maxNexts ?? 450)) return NEXT_REFUSALS.done;
       if (m.atBeaconRound <= prev) return NEXT_REFUSALS.order;
@@ -202,6 +235,12 @@ function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: bool
       if (gap && k > 0 && m.atBeaconRound < prev + 1 + gap.rounds) return NEXT_REFUSALS.gap; // the break (or intermission) shows after the previous number for its full length first
       return null;
     }
+    case "go":
+      if (cfg.startMode !== "manual") return GO_REFUSALS.auto;
+      if (go !== null) return GO_REFUSALS.again;
+      if (cfg.startNotBefore !== undefined && m.signedAtRound < cfg.startNotBefore) return GO_REFUSALS.early;
+      if (lead < cfg.leadRounds || m.untilRound !== undefined) return GO_REFUSALS.lead;
+      return null;
     case "pause":
       if (lead < cfg.leadRounds) return `pause needs at least ${cfg.leadRounds} rounds of lead`;
       if (cur && m.atBeaconRound < effEnd(cur, cfg.maxPauseRounds)) return "already paused";
@@ -222,21 +261,36 @@ function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: bool
   }
 }
 
-export function resolveControl(cfg: ControlConfig, log: readonly ControlMsg[]): ControlState {
+/** Claim holds (the server's, not signed): the game waits while a claim is checked. They join the Organizer's pauses as ordinary pause intervals, so every phone and the server work out the same call times. */
+export const MAX_HOLD_ROUNDS = 20; // 60 s: a hold can never keep a game stuck
+export function cleanHolds(x: unknown): PauseInterval[] {
+  if (!Array.isArray(x)) return [];
+  const out: PauseInterval[] = [];
+  for (const h of x.slice(0, 40)) { const a = (h as any)?.start, b = (h as any)?.end; if (Number.isInteger(a) && Number.isInteger(b) && a >= 0 && b > a && b - a <= MAX_HOLD_ROUNDS + 1) out.push({ start: a, end: b }); }
+  return out;
+}
+function withHolds(ivs: PauseInterval[], holds: readonly PauseInterval[]): PauseInterval[] {
+  if (!holds.length) return ivs;
+  const all = [...ivs, ...holds].sort((a, b) => a.start - b.start || a.end - b.end), out: PauseInterval[] = [];
+  for (const i of all) { const l = out[out.length - 1]; if (l && i.start <= l.end) l.end = Math.max(l.end, i.end); else out.push({ ...i }); }
+  return out;
+}
+export function resolveControl(cfg: ControlConfig, log: readonly ControlMsg[], holds: readonly PauseInterval[] = []): ControlState {
   const ivs: Cur[] = [];
-  let cur: Cur | null = null, stop: number | null = null, applied = 0;
+  let cur: Cur | null = null, stop: number | null = null, applied = 0, goAt: number | null = null;
   const ignored: ControlState["ignored"] = [], nextRounds: number[] = [];
   for (const m of [...log].sort((a, b) => a.seq - b.seq)) {
-    const why = check(m, cfg, cur, stop !== null, nextRounds);
+    const why = check(m, cfg, cur, stop !== null, nextRounds, goAt);
     if (why) { ignored.push({ seq: m.seq, why }); continue; }
     applied++;
     if (m.action === "pause") { cur = { start: m.atBeaconRound, until: m.untilRound ?? null, endedAt: null }; ivs.push(cur); }
     else if (m.action === "resume") cur!.endedAt = m.atBeaconRound;
     else if (m.action === "extend") cur!.until = m.untilRound!;
     else if (m.action === "next") nextRounds.push(m.atBeaconRound);
+    else if (m.action === "go") goAt = m.atBeaconRound;
     else stop = m.atBeaconRound;
   }
-  return { intervals: ivs.map((c) => ({ start: c.start, end: effEnd(c, cfg.maxPauseRounds) })), stopRound: stop, ignored, applied, nextRounds, host: cfg.callMode === "host" };
+  return { intervals: withHolds(ivs.map((c) => ({ start: c.start, end: effEnd(c, cfg.maxPauseRounds) })), cfg.callMode === "host" ? [] : holds), stopRound: stop, ignored, applied, nextRounds, host: cfg.callMode === "host", manualStart: cfg.startMode === "manual", goRound: goAt, ...(cfg.fullGap ? { fullGap: true } : {}) };
 }
 
 /** True while a pause is in force at the given beacon round. */
@@ -252,15 +306,46 @@ export function hostCallRound(s: ControlState, k: number): number | null {
   return s.stopRound !== null ? null : Infinity;
 }
 
+/** The most calls a game can have (5 rounds of 90): how far the full-gap search below ever has to look. */
+const MAX_CALLS = 450;
+const shiftCache = new Map<string, number[]>();
 /**
- * The beacon round call k uses. Without control messages this is start + k*stride (the existing schedule). Every pause pushes all
- * later calls later by exactly its length, so the gap between calls is still `stride` rounds (a multiple of 3 s) afterwards.
+ * How far each pause pushes the calls after it (owner ruling Q2, 2026-10-29): the length of the pause PLUS whatever is needed so that the first number after the
+ * Resume comes a FULL gap (`stride` rounds, 12 s at the normal speed) after the Resume, not the part of a gap that was left when the pause began.
+ * `base(k)` is call k's round before any pause (increasing in k). The pauses are applied in order, each to the calls already pushed by the earlier ones.
+ * A pause that began long before the next call was due (a break, an intermission) needs no extra: that call was already more than a full gap away.
+ */
+export function pauseShifts(ivs: readonly PauseInterval[], stride: number, base: (k: number) => number, key: string, fullGap = true): number[] {
+  if (!fullGap) return ivs.map((i) => i.end - i.start); // a game from before the full-gap rule: a pause pushes the later calls by exactly its length
+  const ck = `${key}|${stride}|${ivs.map((i) => `${i.start}-${i.end}`).join(",")}`;
+  const hit = shiftCache.get(ck); if (hit) return hit;
+  const sh: number[] = [];
+  for (let j = 0; j < ivs.length; j++) {
+    const s = ivs[j]!.start, len = ivs[j]!.end - s;
+    let first = -1; // the first call this pause moves (the first one due at or after its start, after the earlier pauses)
+    for (let k = 0; k < MAX_CALLS; k++) { let a = base(k); for (let m = 0; m < j; m++) if (a >= ivs[m]!.start) a += sh[m]!; if (a >= s) { first = a; break; } }
+    sh.push(first < 0 ? len : len + Math.max(0, stride - (first - s)));
+  }
+  if (shiftCache.size > 200) shiftCache.clear();
+  shiftCache.set(ck, sh);
+  return sh;
+}
+/** Applies `pauseShifts` to one call: its base round, pushed by every pause that starts at or before it. */
+export function pushedByPauses(a: number, ivs: readonly PauseInterval[], shifts: readonly number[]): number {
+  for (let j = 0; j < ivs.length; j++) if (a >= ivs[j]!.start) a += shifts[j]!;
+  return a;
+}
+
+/**
+ * The beacon round call k uses. Without control messages this is start + k*stride (the existing schedule). Every pause pushes all later calls later by its length, and
+ * the first call after the Resume waits a full `stride` after it (see pauseShifts), so the gap between calls is still `stride` rounds (a multiple of 3 s) afterwards.
  * Returns null when the engagement was stopped before that call. In host mode the k-th press decides it (hostCallRound).
  */
 export function callRound(s: ControlState, startRound: number, strideRounds: number, k: number): number | null {
   if (s.host) return hostCallRound(s, k);
-  let a = startRound + k * strideRounds;
-  for (const i of s.intervals) if (a >= i.start) a += i.end - i.start;
+  if (s.manualStart) { if (s.goRound === null) return s.stopRound !== null ? null : Infinity; startRound = s.goRound; } // nothing is called until somebody presses Start; then number 1 comes in the round Start named
+  const base = (j: number) => startRound + j * strideRounds;
+  const a = s.intervals.length ? pushedByPauses(base(k), s.intervals, pauseShifts(s.intervals, strideRounds, base, `L${startRound}`, s.fullGap === true)) : base(k);
   return s.stopRound !== null && a >= s.stopRound ? null : a;
 }
 
@@ -298,14 +383,36 @@ export const SAFETY_FAST = deriveSafety({ pollMaxSec: 7, cacheTtlSec: 3, latency
  */
 export const SAFETY_LEAN30 = deriveSafety({ pollMaxSec: 36, cacheTtlSec: 3, latencySec: 3, missedPollsTolerated: 1 }); // phones ask about every 27 to 36 s
 export const SAFETY_LEAN60 = deriveSafety({ pollMaxSec: 72, cacheTtlSec: 3, latencySec: 3, missedPollsTolerated: 1 }); // about every 54 to 72 s
-export const ALL_SAFETIES: Safety[] = [SAFETY_FAST, SAFETY_STANDARD, SAFETY_LEAN30, SAFETY_LEAN60];
+/**
+ * BIG GAMES (above PAUSE_MAX_PARTICIPANTS): only a Start button exists (no pause, no end), so the control file is asked for rarely and the Start LEAD is long. The same maths as every profile above:
+ *   a phone asks about every 0.75..1.0 x pollMaxSec, the shared copy is at most cacheTtlSec old, the answer takes latencySec, and one asked-for answer may be missed;
+ *   holdAfterRounds = that whole worst age (a phone reveals numbers only while its last good answer is that fresh) and leadRounds = holdAfterRounds + cache + 2.
+ * PROOF that no phone can show number 1 before it knows about Start: a manual-start game has NO call rounds at all until a verified "go" message is in the phone's log (callRound is Infinity), so a phone that has
+ * not heard shows nothing. PROOF that they all begin together: Start names a round at least leadRounds after the round it was signed in, and leadRounds exceeds the slowest phone's asking cadence plus the cache and
+ * the latency, so every phone that is online has the message before that round arrives; a phone that was offline or slow keeps "hold" (it reveals nothing without a fresh answer) and then catches up on the same
+ * numbers like a late joiner. Nobody, the Host included, can know the randomness of the named round when signing: it is at least leadRounds in the future.
+ */
+export const SAFETY_BIG10K = deriveSafety({ pollMaxSec: 90, cacheTtlSec: 3, latencySec: 3, missedPollsTolerated: 1 }); // 2,001 to 10,000 people: about every 67 to 90 s, Start lead about 3.3 minutes
+export const SAFETY_BIG = deriveSafety({ pollMaxSec: 120, cacheTtlSec: 3, latencySec: 3, missedPollsTolerated: 1 }); // above 10,000 people: about every 90 to 120 s, Start lead about 4.3 minutes
+export const ALL_SAFETIES: Safety[] = [SAFETY_FAST, SAFETY_STANDARD, SAFETY_LEAN30, SAFETY_LEAN60, SAFETY_BIG10K, SAFETY_BIG];
 export const PAUSE_MAX_PARTICIPANTS = 2000;
+/** A Host calling the numbers and/or a Start button need signed control messages for every phone; above this size only Auto Start + Auto Play is allowed (phones work the numbers out from the public beacon with almost no server work). Pause keeps PAUSE_MAX_PARTICIPANTS. */
+export const MANUAL_MAX_PARTICIPANTS = 1000;
 /** The pause profile for an engagement of this size, or null when it is too large for a pause to be affordable on the free plan. */
 export function safetyForCap(cap: number, fast = false): Safety | null {
   if (cap <= 250) return fast ? SAFETY_FAST : SAFETY_STANDARD;
   if (cap <= 1000) return SAFETY_LEAN30;
   if (cap <= PAUSE_MAX_PARTICIPANTS) return SAFETY_LEAN60;
   return null;
+}
+
+/**
+ * The profile of the control file for a game that can press Start: up to PAUSE_MAX_PARTICIPANTS the same as the pause profile; above it the BIG profiles (Start only: `startOnly` in the file, no pause, resume, extend or end).
+ */
+export function startSafetyForCap(cap: number): { safety: Safety; startOnly: boolean } {
+  const s = safetyForCap(cap);
+  if (s) return { safety: s, startOnly: false };
+  return { safety: cap <= 10_000 ? SAFETY_BIG10K : SAFETY_BIG, startOnly: true };
 }
 
 export type Mode = "live" | "hold" | "blind";
@@ -323,18 +430,22 @@ export class ControlTracker {
   /** Round of the first failed attempt in the current unbroken run of failures; null while attempts succeed or none were made. */
   failingSince: number | null = null;
   private resolved: ControlState;
+  holds: PauseInterval[] = []; holdsVer = 0;
   constructor(public cfg: ControlConfig, public engagementId: string, public safety: Safety, joinedAtRound: number) {
     this.lastGoodRound = joinedAtRound - safety.holdAfterRounds - 1; // a fresh phone has heard nothing: it holds until its first good fetch (and goes blind only after giveUpRounds)
     this.resolved = resolveControl(cfg, []);
   }
   get state(): ControlState { return this.resolved; }
+  /** The game's rules changed before the start (another mode or time): take them and work the log out again. */
+  reconfigure(patch: Partial<ControlConfig>) { Object.assign(this.cfg, patch); this.resolved = resolveControl(this.cfg, this.log, this.holds); }
   /** `body` is the parsed JSON of the control endpoint (or anything at all if it lied). Returns true if it was a good, verifiable answer. */
   async ingest(nowRound: number, body: unknown): Promise<boolean> {
     const b = body as { engagementId?: unknown; messages?: unknown } | null;
     if (!b || typeof b !== "object" || b.engagementId !== this.engagementId || !Array.isArray(b.messages)) return this.failed(nowRound);
     const { log, forged } = await acceptLogDetailed(this.cfg, this.engagementId, b.messages, this.log);
     if (forged > 0) return this.failed(nowRound); // anything forged in the answer: treat the whole answer as a lie (nothing from it is applied)
-    if (log.length !== this.log.length) { this.log = log; this.resolved = resolveControl(this.cfg, log); }
+    const holds = cleanHolds((b as any).holds), sameHolds = JSON.stringify(holds) === JSON.stringify(this.holds);
+    if (log.length !== this.log.length || !sameHolds) { this.log = log; if (!sameHolds) { this.holds = holds; this.holdsVer++; } this.resolved = resolveControl(this.cfg, log, this.holds); }
     this.lastGoodRound = nowRound;
     this.failingSince = null;
     return true;
@@ -352,7 +463,7 @@ export class ControlTracker {
 /* ---------------- publishing (shared by the local server and a Cloudflare Worker) ---------------- */
 
 export interface KV { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
-export interface PublishedFile { v: 1; engagementId: string; pubKey: string; maxPauseRounds: number; leadRounds: number; messages: ControlMsg[]; /** The Hosts' console keys that may sign too (see addHostKey). */ hostKeys?: string[] }
+export interface PublishedFile { v: 1; /** The claim holds in force (server-written, see claimhold.ts). */ holds?: PauseInterval[]; engagementId: string; pubKey: string; maxPauseRounds: number; leadRounds: number; messages: ControlMsg[]; /** The Hosts' console keys that may sign too (see addHostKey). */ hostKeys?: string[]; /** A big game: only Start exists (no pause or end). */ startOnly?: boolean; /** Written when the key is registered: the first number after a Resume waits a full gap (see ControlConfig.fullGap). Absent in files registered before the rule. */ fullGap?: true }
 
 const fileKey = (id: string) => `control/${id}.json`;
 export async function readPublished(kv: KV, engagementId: string): Promise<PublishedFile | null> {
@@ -360,13 +471,16 @@ export async function readPublished(kv: KV, engagementId: string): Promise<Publi
   return t ? (JSON.parse(t) as PublishedFile) : null;
 }
 /** The game's public settings a control file needs beside the keys: who calls the numbers, and the breaks / rounds a press has to respect. */
-export interface GameOpts { callMode?: "auto" | "host"; breaks?: readonly { after: number; seconds: number }[]; rounds?: number }
+export interface GameOpts { callMode?: "auto" | "host"; startMode?: "auto" | "manual"; /** the scheduled start round (a Start before it is refused) */ startNotBefore?: number; breaks?: readonly { after: number; seconds: number }[]; rounds?: number }
 /** The host-mode part of a ControlConfig from the game's public settings (empty in auto mode). */
-export const hostControlOf = (game?: GameOpts): Pick<ControlConfig, "callMode" | "hostGaps" | "maxNexts"> =>
-  game?.callMode === "host" ? { callMode: "host", hostGaps: hostGapsFor(game.breaks ?? [], game.rounds ?? 1), maxNexts: 90 * (game.rounds ?? 1) } : { callMode: "auto", hostGaps: [], maxNexts: 0 };
+export const hostControlOf = (game?: GameOpts): Pick<ControlConfig, "callMode" | "hostGaps" | "maxNexts" | "startMode" | "startNotBefore"> => ({
+  ...(game?.callMode === "host" ? { callMode: "host" as const, hostGaps: hostGapsFor(game.breaks ?? [], game.rounds ?? 1), maxNexts: 90 * (game.rounds ?? 1) } : { callMode: "auto" as const, hostGaps: [], maxNexts: 0 }),
+  startMode: game?.startMode === "manual" ? "manual" as const : "auto" as const,
+  startNotBefore: game?.startMode === "manual" ? game.startNotBefore : undefined,
+});
 export const cfgOf = (f: PublishedFile, game?: GameOpts): ControlConfig => ({
-  pubKey: f.pubKey, maxPauseRounds: f.maxPauseRounds, leadRounds: f.leadRounds, ...(f.hostKeys?.length ? { hostKeys: f.hostKeys } : {}),
-  ...(game?.callMode === "host" ? hostControlOf(game) : {}),
+  pubKey: f.pubKey, maxPauseRounds: f.maxPauseRounds, leadRounds: f.leadRounds, ...(f.hostKeys?.length ? { hostKeys: f.hostKeys } : {}), ...(f.startOnly ? { startOnly: true } : {}), ...(f.fullGap ? { fullGap: true } : {}),
+  ...(game?.callMode === "host" || game?.startMode === "manual" ? hostControlOf(game) : {}),
 });
 
 /** Adds a Host's own console key (registered from the Host's browser) as a second signer. Only the store's own access check decides WHO may call this. */
@@ -383,11 +497,11 @@ export async function addHostKey(kv: KV, engagementId: string, pubKeyHex: string
 }
 
 /** Registers the engagement's public key, once. Nobody (including the server) can swap it afterwards. */
-export async function registerKey(kv: KV, engagementId: string, pubKeyHex: string, safety: Safety = SAFETY_STANDARD, maxPauseRounds = 600): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function registerKey(kv: KV, engagementId: string, pubKeyHex: string, safety: Safety = SAFETY_STANDARD, maxPauseRounds = 600, opts: { startOnly?: boolean } = {}): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!/^[0-9a-f]{64}$/i.test(pubKeyHex)) return { ok: false, error: "The public key must be 32 bytes in hex." };
   if (!/^[A-Za-z0-9_-]{3,40}$/.test(engagementId)) return { ok: false, error: "Bad engagement id." };
   if (await readPublished(kv, engagementId)) return { ok: false, error: "A key is already registered for this engagement and cannot be changed." };
-  const f: PublishedFile = { v: 1, engagementId, pubKey: pubKeyHex.toLowerCase(), maxPauseRounds, leadRounds: safety.leadRounds, messages: [] };
+  const f: PublishedFile = { v: 1, engagementId, pubKey: pubKeyHex.toLowerCase(), maxPauseRounds, leadRounds: safety.leadRounds, messages: [], fullGap: true, ...(opts.startOnly ? { startOnly: true } : {}) };
   await kv.put(fileKey(engagementId), JSON.stringify(f));
   return { ok: true };
 }
@@ -408,7 +522,7 @@ export async function publishControl(kv: KV, engagementId: string, msg: unknown,
   if (msg.seq !== f.messages.length + 1) return { ok: false, status: 409, error: `Next sequence number is ${f.messages.length + 1}.` };
   const after = resolveControl(cfg, [...f.messages, msg]);
   const bad = after.ignored.find((x) => x.seq === msg.seq);
-  if (bad) return { ok: false, status: 422, error: msg.action === "next" ? bad.why : `Not accepted: ${bad.why}.` }; // a press is refused in the Host's own words
+  if (bad) return { ok: false, status: 422, error: msg.action === "next" || msg.action === "go" || bad.why === BIG_GAME_REFUSAL ? bad.why : `Not accepted: ${bad.why}.` }; // a press is refused in the Host's own words
   f.messages.push(msg);
   await kv.put(fileKey(engagementId), JSON.stringify(f));
   return { ok: true, seq: msg.seq };
@@ -421,14 +535,14 @@ export function describeControl(f: PublishedFile | null, nowRound?: number, game
   return {
     registered: true as const, pubKey: f.pubKey, leadRounds: f.leadRounds, leadSeconds: f.leadRounds * PERIOD_SEC, maxPauseRounds: f.maxPauseRounds,
     messages: f.messages.map((m) => ({ seq: m.seq, action: m.action, atBeaconRound: m.atBeaconRound, untilRound: m.untilRound })),
-    intervals: st.intervals, stopRound: st.stopRound, ignored: st.ignored, nextRounds: st.nextRounds,
+    intervals: st.intervals, stopRound: st.stopRound, ignored: st.ignored, nextRounds: st.nextRounds, goRound: st.goRound,
     pausedNow: nowRound === undefined ? undefined : pausedAt(st, nowRound), stopped: nowRound === undefined || st.stopRound === null ? undefined : nowRound >= st.stopRound,
   };
 }
 
 /** Builds the next message for the console. `nowRound` must come from the beacon (utcNow), never the device clock. */
 export function nextMessage(f: PublishedFile, nowRound: number, a: { action: ControlAction; inRounds?: number; pauseForRounds?: number; untilRound?: number; addRounds?: number }): UnsignedControl {
-  const lead = a.action === "next" ? NEXT_LEAD_ROUNDS : a.action === "resume" ? Math.max(1, a.inRounds ?? f.leadRounds) : Math.max(f.leadRounds, a.inRounds ?? 0);
+  const lead = a.action === "next" ? NEXT_LEAD_ROUNDS : a.action === "go" ? Math.max(f.leadRounds, a.inRounds ?? 0) : a.action === "resume" ? Math.max(1, a.inRounds ?? f.leadRounds) : Math.max(f.leadRounds, a.inRounds ?? 0);
   const at = nowRound + lead;
   const m: UnsignedControl = { engagementId: f.engagementId, seq: f.messages.length + 1, action: a.action, atBeaconRound: at, signedAtRound: nowRound };
   if (a.action === "pause" && a.pauseForRounds) m.untilRound = at + a.pauseForRounds;

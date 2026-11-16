@@ -24,7 +24,7 @@
 "Could not open the payment window. Please try again.": [
 "common.js:190"
 ],
-"Please enter a valid work email.": [
+"Please enter a valid e-mail address.": [
 "confirm.js:57",
 "site.js:123",
 "site.js:139"
@@ -42,7 +42,7 @@
 "That address already has an account. Use the code we send.": [
 "helpdesk-accept.js:44"
 ],
-"Please enter a valid e-mail.": [
+"Please enter a valid e-mail address.": [
 "helpdesk-accept.js:49",
 "helpdesk-approve.js:37",
 "paylink.js:78"

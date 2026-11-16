@@ -1,0 +1,476 @@
+{
+ "test": "employees-only manual game: approvals",
+ "at": "2026-10-26T15:57:17.316Z",
+ "base": "http://localhost:8882",
+ "N_LISTED": 800,
+ "N_UNKNOWN": 60,
+ "total": 58,
+ "ok": 53,
+ "notOk": 5,
+ "rows": [
+  {
+   "area": "setup",
+   "what": "create a manual game",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "setup",
+   "what": "employees only, employee ID needed",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "setup",
+   "what": "publish",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "setup",
+   "what": "pay",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "setup",
+   "what": "Host added and set up",
+   "want": "token",
+   "got": "token",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "setup",
+   "what": "Co-host added and accepted the role",
+   "want": "key",
+   "got": "key",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "list",
+   "what": "Organizer adds the employee list",
+   "want": "800",
+   "got": "800",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "list",
+   "what": "Co-host adds 50 people to their own list",
+   "want": "50",
+   "got": "200 added 50",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "list",
+   "what": "Host adds 30 people",
+   "want": "30",
+   "got": "200 added 30",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "list",
+   "what": "adding an employee who is already on the list is not added twice",
+   "want": "added 0",
+   "got": "200 added 0",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "list",
+   "what": "201 people in one request are refused (200 at most)",
+   "want": "413",
+   "got": "413 (too-many)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "early",
+   "what": "700 listed employees join with their ID (a third in lowercase), all at once",
+   "want": "700",
+   "got": "700",
+   "ok": true,
+   "note": "4 s"
+  },
+  {
+   "area": "early",
+   "what": "a person on the Co-host's own list joins with the ID",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "early",
+   "what": "a person on the Host's list joins with the ID",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "mistake",
+   "what": "the same employee ID on a second phone",
+   "want": "refused with a reason",
+   "got": "423 (other-phone)",
+   "ok": true,
+   "note": "must not give a second ticket"
+  },
+  {
+   "area": "mistake",
+   "what": "no employee ID typed",
+   "want": "400 need-id",
+   "got": "400 (need-id)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "mistake",
+   "what": "ID typed with a space inside (EMP 10001): the person is told what is wrong, not sent to the organizer",
+   "want": "400 with a reason",
+   "got": "403 (waiting)",
+   "ok": false,
+   "note": "INFORMATION: a typo goes to the organizer's waiting list instead of telling the person to check the ID"
+  },
+  {
+   "area": "mistake",
+   "what": "an ID already seated, typed again from the same phone (reload)",
+   "want": "200 (same person) or 409",
+   "got": "423 (other-phone)",
+   "ok": true,
+   "note": "device differs here, so a refusal is expected"
+  },
+  {
+   "area": "mistake",
+   "what": "the same phone opens the link again (reload): same ticket back",
+   "want": "200 again",
+   "got": "200",
+   "ok": true,
+   "note": "pid same"
+  },
+  {
+   "area": "approval",
+   "what": "60 people whose ID is not on the list are held in the waiting room",
+   "want": "60 x 403 waiting",
+   "got": "60 x 403 waiting",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "approval",
+   "what": "Organizer sees all of them waiting (name, last 4, ID), plus the one whose ID had a space typed in it",
+   "want": "61",
+   "got": "61",
+   "ok": true,
+   "note": "{\"id\":\"d07225241571\",\"firstName\":\"Spaced\",\"last4\":\"\",\"via\":\"direct\",\"at\":1793029694478,\"inviter\":\"Organizer\",\"overLimit\""
+  },
+  {
+   "area": "approval",
+   "what": "Host sees the same waiting list",
+   "want": "61",
+   "got": "61",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "approval",
+   "what": "the Co-host sees only requests that came through their own link (none here)",
+   "want": "0",
+   "got": "0",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "approval",
+   "what": "a waiting person is told who has their request",
+   "want": "state waiting + a name",
+   "got": "waiting: Your request is with the organizer. You can come in as soon ",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "approval",
+   "what": "Organizer admits one request",
+   "want": "200 admitted",
+   "got": "200 {\"ok\":true,\"admitted\":true,\"placedUnder\":\"Organizer\"}",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "approval",
+   "what": "Host declines one request",
+   "want": "200 declined",
+   "got": "200 {\"ok\":true,\"declined\":true}",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "approval",
+   "what": "an admitted person's page is told 'admitted'",
+   "want": "admitted",
+   "got": "admitted",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "approval",
+   "what": "a declined person's page is told 'declined'",
+   "want": "declined",
+   "got": "declined",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "approval",
+   "what": "after admit the person joins again (their page does this by itself) and gets a ticket",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "approval",
+   "what": "a declined person who tries again is refused (403 declined)",
+   "want": "403 declined",
+   "got": "403 (declined)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "approval",
+   "what": "a declined person on another phone is refused too",
+   "want": "403 declined",
+   "got": "403 (declined)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "conflict",
+   "what": "Organizer admits, THEN the Host declines the same request",
+   "want": "answer says it was already admitted; stays admitted",
+   "got": "200 {\"ok\":true,\"already\":\"admitted\"}",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "conflict",
+   "what": "…the person still gets in (first decision stands)",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "conflict",
+   "what": "Host declines, THEN the Organizer admits the same request",
+   "want": "answer says it was already declined; stays declined",
+   "got": "200 {\"ok\":true,\"already\":\"declined\"}",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "conflict",
+   "what": "…the person stays out (first decision stands)",
+   "want": "403 declined",
+   "got": "403 (declined)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "conflict",
+   "what": "10 requests admitted by the Organizer and declined by the Host at the SAME instant: the final answer and the person's entry agree",
+   "want": "0 disagreements",
+   "got": "1 disagreements of 10",
+   "ok": false,
+   "note": "[{\"i\":41,\"state\":\"declined\",\"join\":403,\"a\":\"{\\\"ok\\\":true,\\\"already\\\":\\\"declined\\\"}\",\"b\":\"{\\\"ok\\\":true,\\\"declined\\\":true}\"},{\"i\":40,\"state\":\"declined\",\"join\":200,\"a\":\"{\\\"ok\\\":true,\\\"admitted\\\":true,\\\"placedUnder\\\":\\\"Organize\",\"b\":\"{\\\"ok\\\":true,\\\"declined\\\":true}\"},{\"i\":43,\"state\":\"declined\",\"join\":403,\"a\":\"{\\\"ok\\\":true,\\\"already\\\":\\\"declined\\\"}\",\"b\":\"{\\\"ok\\\":true,\\\"declined\\\":true}\"}]"
+  },
+  {
+   "area": "approval",
+   "what": "Host presses \"approve all\" (16 still waiting)",
+   "want": "all admitted",
+   "got": "{\"admitted\":16,\"declined\":0,\"stillWaiting\":0}",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "approval",
+   "what": "nobody is left waiting afterwards",
+   "want": "0",
+   "got": "0",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "game",
+   "what": "three reference phones joined with their employee ID",
+   "want": "3",
+   "got": "3",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "game",
+   "what": "Host registers the game-day key",
+   "want": "ok",
+   "got": "{\"ok\":true,\"created\":true}",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "game",
+   "what": "Host presses Next",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "late",
+   "what": "80 listed employees join AFTER the first number",
+   "want": "80",
+   "got": "80",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "late",
+   "what": "a late joiner is told so and sees only the numbers called after joining",
+   "want": "late flag, fewer numbers than a phone that was there from the start",
+   "got": "late=true 0 vs 8 numbers",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "late",
+   "what": "40 strangers (ID not on the list) ask to come in during the game",
+   "want": "40 x 403 waiting",
+   "got": "40 x 403 waiting",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "late",
+   "what": "the Organizer sees them in the waiting list during the game",
+   "want": "40",
+   "got": "40",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "late",
+   "what": "an admitted stranger joins during the game as a late joiner",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "late",
+   "what": "a declined stranger is refused during the game",
+   "want": "403 declined",
+   "got": "403 (waiting)",
+   "ok": false,
+   "note": ""
+  },
+  {
+   "area": "track",
+   "what": "the Organizer's list shows who joined, who was invited, who was let in by whom",
+   "want": "statuses joined/invited, with 'let in by' for approved",
+   "got": "937 rows; joined 790; keys id,name,maskedPhone,status,empId,link,waLink,inviter",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "remove",
+   "what": "Organizer removes a seated person during the game",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "remove",
+   "what": "the Co-host may NOT remove someone who is not on their own list",
+   "want": "403 or 404",
+   "got": "404 (No such person on your list.)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "remove",
+   "what": "the Host removes a seated person during the game",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "game",
+   "what": "Organizer ends the game",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "game",
+   "what": "the reference phones reach the end",
+   "want": "3",
+   "got": "0",
+   "ok": false,
+   "note": "100 s"
+  },
+  {
+   "area": "game",
+   "what": "the three phones show the same numbers",
+   "want": "1 distinct",
+   "got": "1",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "limits",
+   "what": "the waiting room holds at most 500 requests; the next ones are told it is full (600 strangers, each from their own address)",
+   "want": "500 waiting + 100 waiting-full",
+   "got": "500 waiting + 100 waiting-full (other: 0)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "limits",
+   "what": "40 wrong employee IDs typed from ONE office address within minutes (an office of 1000 makes typos): nobody is locked out",
+   "want": "none locked out",
+   "got": "locked from try 31: too-many-tries \"Too many tries with an employee ID that is not on the list. Please ask your orga\"",
+   "ok": false,
+   "note": "KNOWN RISK ID_MISS_PER_10MIN = 30"
+  },
+  {
+   "area": "limits",
+   "what": "…a listed employee with a CORRECT ID, from the same office address, is still let in",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "limits",
+   "what": "…a listed employee from another address is let in",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  }
+ ]
+}

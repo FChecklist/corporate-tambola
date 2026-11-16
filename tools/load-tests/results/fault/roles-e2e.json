@@ -1,0 +1,465 @@
+{
+ "test": "roles end to end",
+ "at": "2026-10-26T15:13:23.429Z",
+ "total": 57,
+ "ok": 57,
+ "notOk": 0,
+ "rows": [
+  {
+   "area": "organizer",
+   "what": "sign-in makes an organizer key",
+   "want": "200 + token",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "organizer",
+   "what": "whoami says master",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "organizer",
+   "what": "create a manual (Host mode) game",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "organizer",
+   "what": "save the settings",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "organizer",
+   "what": "publish",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "organizer",
+   "what": "pay (test payment)",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "organizer",
+   "what": "add a Host (name + mobile)",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "whoami says host before setup",
+   "want": "200 kind host",
+   "got": "200 host",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "before setup every game route is held (403 host-setup)",
+   "want": "403",
+   "got": "403 (host-setup)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "setup: e-mail code requested",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "setup: code confirmed, a device key is given",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "setup finished (ready)",
+   "want": "ready true",
+   "got": "true",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "the one-time link stops working after setup",
+   "want": "401|403",
+   "got": "403 (Not allowed.)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "Host reads the game summary",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "Host changes the prizes (game right)",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "Host reads the guest list",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "Host may NOT add a Host (organizer only)",
+   "want": "403",
+   "got": "403 (Only the Organizer can do this. A Host looks after)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "Host may read the team list",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "Host adds a Co-host for this game",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "whoami says cohost",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "before accepting the role the Co-host can do nothing else (400 consent-required)",
+   "want": "400",
+   "got": "400 (consent-required)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "Co-host accepts the role (K5)",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "Co-host reads the small game header",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "the header has no names / list / settings",
+   "want": "no people|rewards|settings keys",
+   "got": "roleAccepted,name,startMs,cap,joined,brought,price,payment,waitingFor,didNotStart,erasureMs,credit,creditExpiresMs,creditApplied,inviteLink",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "Co-host may NOT change the settings",
+   "want": "403",
+   "got": "403 (A Co-host can invite people and pay. Ask the Organ)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "Co-host may NOT read the summary",
+   "want": "403",
+   "got": "403 (A Co-host can invite people and pay. Ask the Organ)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "Co-host may NOT add a Host",
+   "want": "403",
+   "got": "403 (A Co-host can invite people and pay. Ask the Organ)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "Co-host may NOT add a Co-host",
+   "want": "403",
+   "got": "403 (A Co-host can invite people and pay. Ask the Organ)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "Co-host may NOT read the team",
+   "want": "403",
+   "got": "403 (A Co-host can invite people and pay. Ask the Organ)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "Co-host may NOT publish or publish control",
+   "want": "403",
+   "got": "403 (A Co-host can invite people and pay. Ask the Organ)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "the invite link carries the chain mark (from=)",
+   "want": "a number",
+   "got": "1175364721",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "phones",
+   "what": "all guests got a ticket",
+   "want": "16",
+   "got": "16",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "the Co-host sees how many they brought (never who)",
+   "want": "8",
+   "got": "8",
+   "ok": true,
+   "note": "joined 16"
+  },
+  {
+   "area": "host",
+   "what": "the Host's guest list shows everyone who joined",
+   "want": "16",
+   "got": "16",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "Host registers the game-day signing key",
+   "want": "ok",
+   "got": "{\"ok\":true,\"created\":true}",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "Co-host may NOT register a game-day signing key (server route)",
+   "want": "403",
+   "got": "403 (A Co-host can invite people and pay. Ask the Organ)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "Co-host may NOT press Next",
+   "want": "refused (not 200)",
+   "got": "403",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "Host presses Next",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "phones",
+   "what": "phones show the numbers the Host pressed",
+   "want": "6 (±1)",
+   "got": "6",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "phones",
+   "what": "every phone shows the same numbers in the same order",
+   "want": "1 distinct log",
+   "got": "1",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "Host pauses the game",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "phones",
+   "what": "no number comes while paused",
+   "want": "same count",
+   "got": "6 -> 6",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "organizer",
+   "what": "Organizer resumes (Host paused it)",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "Co-host may NOT pause",
+   "want": "refused (not 200)",
+   "got": "403",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "organizer",
+   "what": "Organizer ends the game",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "phones",
+   "what": "every phone reaches the end after the Organizer's End",
+   "want": "16",
+   "got": "16",
+   "ok": true,
+   "note": "took 40 s"
+  },
+  {
+   "area": "organizer",
+   "what": "a second game is created for the payment test",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "organizer",
+   "what": "settings of game B",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "organizer",
+   "what": "publish game B",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "a Co-host can pay for the game (spec: Organizer, Host or Co-host)",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "organizer",
+   "what": "the summary records who paid",
+   "want": "paidBy co-host",
+   "got": "{\"status\":\"paid\",\"paidBy\":\"co-host\",\"paidMs\":1793027603337}",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "a Host may NOT retire a Host",
+   "want": "403",
+   "got": "403 (Only the Organizer can do this. A Host looks after)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "a Host retires a Co-host",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "cohost",
+   "what": "a retired Co-host's key stops at once",
+   "want": "401|403",
+   "got": "403 (Not allowed.)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "organizer",
+   "what": "the Organizer retires the Host",
+   "want": "200",
+   "got": "200",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "host",
+   "what": "a retired Host's key stops at once",
+   "want": "401|403",
+   "got": "403 (Not allowed.)",
+   "ok": true,
+   "note": ""
+  },
+  {
+   "area": "organizer",
+   "what": "at most 5 Hosts at a time (the 6th is refused)",
+   "want": "200 x5 then 409",
+   "got": "200,200,200,200,200,409",
+   "ok": true,
+   "note": "one Host was retired above, so this is a fresh count of 5 + the retired one"
+  }
+ ]
+}

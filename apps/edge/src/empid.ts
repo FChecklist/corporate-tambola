@@ -1,0 +1,65 @@
+/* 1.8.5 UNIFORM EMPLOYEE ID (owner rule, 30 Oct 2026). ONE function cleans an employee ID everywhere: what a person types, what the organizer types, pastes or uploads.
+   NFKC first (full-width letters and digits become plain ASCII), then everything that is not A-Z, a-z or 0-9 is removed (spaces, dashes, slashes, dots, underscores, symbols, accents,
+   other alphabets, emoji, zero-width characters), then upper case. "1B-678", "1b-678", "1B/678", "1B 678" and "1b.678" all become 1B678.
+   Games created before EMP_CLEAN_FROM_MS keep the old rule so the IDs already stored for them still match. */
+
+/** The deploy instant (ms) from which NEW games use the uniform rule. The release session sets it to the exact deploy time right before deploy; a game created earlier keeps the old rule. */
+export const EMP_CLEAN_FROM_MS = 1793554453235; // the release session replaces this with the exact deploy instant at release
+export const EMP_MAX = 30;
+
+/** The one cleaning function: only A-Z and 0-9 are left, in upper case. Always a string (empty when nothing usable was typed). */
+export const cleanEmpId = (raw: unknown): string => String(raw ?? "").normalize("NFKC").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+
+/** A letter or digit of another script (Arabic-Indic digits, accented or non-English letters) is refused, never converted or dropped: an ID is English letters and digits. Full-width forms become plain ASCII first (NFKC). */
+export const hasForeignChars = (raw: unknown): boolean => /[\p{L}\p{N}]/u.test(String(raw ?? "").normalize("NFKC").replace(/[A-Za-z0-9]/g, ""));
+export const EMP_ENGLISH = "Please use English letters and numbers only.";
+
+/** Does this game use the uniform rule? (created at or after the release instant) */
+export const empCleanOn = (e: { created_ms?: number | null } | null | undefined): boolean => Number(e?.created_ms) >= EMP_CLEAN_FROM_MS;
+
+/** The plain sentence shown when an ID cannot be used after cleaning. */
+export const EMP_BAD_NEW = "An employee ID has letters and numbers only. The system ignores spaces, dashes and symbols, and the Employee ID may be up to 30 characters once cleaned.";
+
+/**
+ * An employee ID as typed, by the rule of the game it is for. "" = nothing typed; null = not a usable ID.
+ * New games: cleaned with cleanEmpId; refused when nothing is left after cleaning or more than 30 characters are left.
+ * Older games: the original rule (spaces dropped, upper case, letters, digits and . _ - / allowed, 30 characters).
+ */
+/** An Email ID by ONE rule everywhere (1.8.5): NFKC (full-width "＠" becomes "@"), every space removed, lower case. Compare, store and hash only this form; upper and lower case are the same address. Never run cleanEmpId on an email. */
+export const normEmail = (raw: unknown): string => String(raw ?? "").normalize("NFKC").replace(/[\s\u200b-\u200d\u2060\ufeff\u0085\u2028\u2029]/g, "").toLowerCase();
+
+/** Does this text look like an email address? (an "@" after NFKC): an employee-ID box never turns one into letters and digits. */
+export const looksLikeEmail = (raw: unknown): boolean => String(raw ?? "").normalize("NFKC").includes("@");
+export const EMP_LOOKS_LIKE_EMAIL = "This looks like an Email ID. This game asks for an employee ID: letters and numbers only.";
+/** The refusal sentence for an ID that cannot be used, by the rule of the game it is for. */
+export const empBadMessage = (raw: unknown, e: { created_ms?: number | null } | null | undefined, oldText: string): string => (!empCleanOn(e) ? oldText : looksLikeEmail(raw) ? EMP_LOOKS_LIKE_EMAIL : hasForeignChars(raw) ? EMP_ENGLISH : cleanEmpId(raw).length > EMP_MAX ? EMP_TOO_LONG : EMP_BAD_NEW);
+export const EMP_TOO_LONG = "This Employee ID is too long. An employee ID may be up to 30 characters once cleaned.";
+
+export function normEmpFor(raw: unknown, e: { created_ms?: number | null } | null | undefined): string | null {
+  if (!empCleanOn(e)) { const s = String(raw ?? "").replace(/\s+/g, "").toUpperCase(); if (!s) return ""; return /^[A-Z0-9][A-Z0-9._\-/]{0,29}$/.test(s) ? s : null; }
+  if (String(raw ?? "").trim() === "") return "";
+  if (looksLikeEmail(raw)) return null; // an email typed where an employee ID is asked is refused, never mangled into letters
+  if (hasForeignChars(raw)) return null;
+  const c = cleanEmpId(raw);
+  return c && c.length <= EMP_MAX ? c : null;
+}
+
+/* 1.8.5 idKind: what the ID of a game is. "emp" (the default, every older game) = an employee ID cleaned to A-Z 0-9; "email" = an Email ID cleaned with normEmail. Same names as Bingo (idKind, "emp" | "email"). */
+export type IdKind = "emp" | "email";
+const EMAIL_ID_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
+/** The ID a person gives, by what this game asks for. "" = nothing typed, null = not usable (an Email ID with no domain, an employee ID with nothing left, an email typed where an employee ID is asked). */
+export function normIdFor(raw: unknown, kind: IdKind, e: { created_ms?: number | null } | null | undefined): string | null {
+  if (kind === "email") { const k = normEmail(raw); if (!k) return ""; return EMAIL_ID_RE.test(k) && k.length <= 254 ? k : null; }
+  return normEmpFor(raw, e);
+}
+export const EMAIL_ID_BAD = "Please check your Email ID. It looks incomplete.";
+/** The refusal sentence for an ID that cannot be used, by what the game asks for. */
+export const badIdMessageFor = (raw: unknown, kind: IdKind, e: { created_ms?: number | null } | null | undefined, oldText: string): string => (kind === "email" ? EMAIL_ID_BAD : empBadMessage(raw, e, oldText));
+/** The word for the ID in plain sentences. */
+export const idWord = (kind: IdKind): string => (kind === "email" ? "Email ID" : "employee ID");
+
+/** The email of an ACCOUNT or a team member typed by the organizer (sign-up, sign-in code, Host or Co-host to add): NFKC and lower case, trimmed at the ends, but a space INSIDE is kept so the address is refused, never glued into a different address. (A participant's Email ID in a game uses normEmail, which removes inner spaces.) */
+export const normAccountEmail = (raw: unknown): string => { const n = String(raw ?? "").normalize("NFKC"); if (/[\u200b-\u200d\u2060\ufeff\u0085\u2028\u2029]/.test(n)) return ""; const t = n.trim(); return /\s/.test(t) ? "" : t.toLowerCase(); }; // an invisible character or a space INSIDE is refused (empty), never removed
+
+/** An ACCOUNT / sign-in / host / PAYMENT e-mail: checked as NFKC; the NFKC-normalised address is returned, outer spaces trimmed, case as typed. An inner space or an invisible character (U+200B-U+200D, U+2060, U+FEFF, U+0085, U+2028, U+2029) anywhere is REFUSED (returns ""), never repaired; the shape is checked on this cleaned value, never on the raw text. */
+export const strictAccountEmail = (raw: unknown): string => { const n = String(raw ?? "").normalize("NFKC"); if (/[\u200b-\u200d\u2060\ufeff\u0085\u2028\u2029]/.test(n)) return ""; const t = n.trim(); return t && !/\s/.test(t) && t.length <= 320 && /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(t) ? t : ""; };

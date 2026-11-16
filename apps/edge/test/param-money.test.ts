@@ -50,10 +50,10 @@ describe("pay link: anyone with the link can pay, and only that game", () => {
   const link = async (g: Awaited<ReturnType<typeof unpaid>>, key = g.key) => { const r = await call("POST", `/api/z/${g.id}/paylink`, {}, keyH(key)); return { status: r.status, body: await j(r), token: ((await Promise.resolve(null)) as any) }; };
   const tokenOf = (url: string) => url.split("t=")[1]!;
   for (const who of ["key", "host", "cohost"] as const) {
-    test(`a link made by the ${who === "key" ? "Organizer" : who} opens for the public with the game name and price only`, async () => {
+    test(`a link made by the ${who === "key" ? "Organizer" : who} opens for the public with the game name, ID, the organizer's MASKED e-mail and the price only`, async () => {
       const g = await unpaid(100); const l = await link(g, who === "key" ? g.key : who === "host" ? g.host : g.cohost); expect(l.status).toBe(200);
       const info = await j(await call("GET", `/api/paylink/${tokenOf(l.body.url)}`)); expect(info.status).toBe("open");
-      expect(info.price.total).toBe(price(100, "INR").total); expect(JSON.stringify(info)).not.toMatch(/boss@|"cap"|acme|ctk_|cta_/);
+      expect(info.price.total).toBe(price(100, "INR").total); expect(JSON.stringify(info)).not.toMatch(/boss@|"cap"|ctk_|cta_/); expect(info.game.organizer.email).toMatch(/^[^@*]\*\*\*@acme\.com$/); // payment pages redesign (2 Nov 2026): the payer sees who organizes the game, the e-mail masked; never the full address
     });
   }
   test("an AI key cannot make a pay link", async () => { const g = await unpaid(100); expect((await call("POST", `/api/z/${g.id}/paylink`, {}, keyH(g.ai))).status).toBeGreaterThanOrEqual(400); });
@@ -77,9 +77,10 @@ describe("pay link: anyone with the link can pay, and only that game", () => {
     expect((await j(await call("GET", `/api/paylink/${t}`))).status).toBe("paid");
   });
   test("a link for a paid game cannot be made again", async () => { const g = await paidGame({ cap: 100 }); expect((await call("POST", `/api/z/${g.id}/paylink`, {}, g.h)).status).toBe(409); });
-  test("a pay link needs a name and an e-mail", async () => {
+  test("a pay link with a typed name or e-mail still needs both, well formed; with neither it is the Razorpay-first order (the payer gives them to Razorpay)", async () => {
     const g = await unpaid(100); const t = tokenOf((await link(g)).body.url);
-    for (const body of [{ email: "a@b.co" }, { name: "A", email: "a@b.co" }, { name: "Ab Cd", email: "nope" }, {}]) expect((await call("POST", `/api/paylink/${t}/checkout`, body)).status).toBe(400);
+    for (const body of [{ email: "a@b.co" }, { name: "A", email: "a@b.co" }, { name: "Ab Cd", email: "nope" }]) expect((await call("POST", `/api/paylink/${t}/checkout`, body)).status).toBe(400);
+    expect((await call("POST", `/api/paylink/${t}/checkout`, {})).status).toBe(200);
   });
 });
 

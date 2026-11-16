@@ -1,0 +1,14 @@
+PASS signed in as Organizer 
+PASS the organizer's e-mail is shown at the top right 
+PASS a draft game exists after pressing Create a new game 
+PASS the size choices are shown as chips 
+PASS manual hides the gap (duration) and auto shows it 
+PASS the game is published and open to people 
+GAME Ev5xkg5 starts 2026-10-26T18:45:00.000Z link http://localhost:8892/z.html?e=Ev5xkg5
+waiting until 7 minutes before the start 2026-10-26T18:38:00.000Z
+PASS all 10 people joined (10 on real browser pages, 0 on protocol phones) 
+PASS every page reached the end of the game 
+PASS all 10 pages show the same 90 numbers in the same order 
+PASS every person holds a different, well-formed ticket 
+PASS all pages show the same winners 
+PASS no page error and no 5xx from our own site 

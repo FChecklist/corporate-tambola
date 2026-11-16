@@ -13,7 +13,7 @@ export function prizeStatus(cfg: EngagementCfg, results: readonly { pattern: str
     const lines = linesFor(cfg.rewards, key);
     for (const l of lines) {
       const claimed = results.some((x) => x.pattern === keyOfLine(l) && x.ordinal === l.ordinal && (x.round ?? 1) === round);
-      const label = l.scope === "two_ticket" ? houseLabel("full2") : houseLabel(l.pattern);
+      const label = houseLabel(keyOfLine(l));
       out.push({ key, label, ordinal: l.ordinal, of: lines.length, name: lines.length > 1 ? `${ordName(l.ordinal)} ${label}` : label, text: l.text, claimed });
     }
   }

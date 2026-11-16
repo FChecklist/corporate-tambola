@@ -1,4 +1,4 @@
-// Family "houses": every prize house (the 19 houses of PRIZE_HOUSES plus the Full Two-Ticket House) at every legal number of winners, one more than the maximum (must be refused),
+// Family "houses": every prize house (the 19 houses of PRIZE_HOUSES plus the Super Bumper House) at every legal number of winners, one more than the maximum (must be refused),
 // the prize-text choices of the console (a named prize, "I will decide later" = empty text, "No prize"), and the rules that tie the lines together.
 import { PRIZE_HOUSES, MAX_REWARD_LINES } from "../../../../packages/beacon/src/config.ts";
 export default async function gen({ R, L }) {

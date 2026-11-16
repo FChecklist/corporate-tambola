@@ -164,7 +164,7 @@ export default [
       }
       const c = await openConsole(t, org, g.id, { device: "laptop" }); await openStep(c.page, 10);
       await c.page.click("#erase"); await c.page.waitForTimeout(800);
-      const conf = c.page.locator("#sec10 button:has-text('Yes'), #sec10 button:has-text('Delete')").last(); if (await conf.count()) { await conf.click().catch(() => {}); await c.page.waitForTimeout(1500); }
+      const conf = c.page.locator("#zcsure [data-y]").last(); if (await conf.count()) { await conf.click().catch(() => {}); await c.page.waitForTimeout(1500); }
       const left = (await H.sql("SELECT COUNT(*) c FROM participant WHERE eid=?", [g.id]))[0].c;
       t.check("participants are erased on request", left === 0 || true, `${left} left (a second confirmation may be required)`);
       const mails = await t.mails(); t.check("e-mail only to the Organizer and Hosts", mails.every((m) => t.team.has(m.to.toLowerCase())), mails.filter((m) => !t.team.has(m.to.toLowerCase())).map((m) => m.to).join(","));

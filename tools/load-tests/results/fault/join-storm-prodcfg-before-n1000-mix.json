@@ -1,0 +1,48 @@
+{
+ "test": "join storm: everybody joins at the start time",
+ "N": 1000,
+ "pack": 1000,
+ "ips": 5000,
+ "officeShare": 0.8,
+ "officeIps": 2,
+ "burstMs": 3000,
+ "retryS": [
+  5,
+  15
+ ],
+ "giveUpS": 900,
+ "startMs": 1793028555000,
+ "firstNumberMs": 1793028675000,
+ "seatedAtSecondsAfterBurst": {
+  "5": 704,
+  "10": 1000,
+  "30": 1000,
+  "60": 1000,
+  "90": 1000,
+  "120": 1000,
+  "300": 1000,
+  "600": 1000
+ },
+ "seatedBeforeFirstNumber": 1000,
+ "seatedEver": 1000,
+ "neverSeated": 0,
+ "seatedFirstTry": 1000,
+ "refusedFirstTry": 0,
+ "attemptsPerPerson": {
+  "1": 1000
+ },
+ "joinCallStatus": {
+  "200": 1000
+ },
+ "joinLatencyMs": {
+  "p50": 1993,
+  "p95": 2690,
+  "p99": 2835,
+  "max": 2877
+ },
+ "seatListFrozenWith": 1000,
+ "seatListReady": true,
+ "failKinds": {},
+ "testProgramLagMaxMs": 275,
+ "secondsToSeatEveryone": 5.4
+}

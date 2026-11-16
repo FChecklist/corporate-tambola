@@ -11,7 +11,7 @@ import { makeD1 } from "../../../apps/edge/test/d1-sqlite";
 import { PhoneRuntime, type PhoneDeps } from "../src/phone-runtime";
 import { BOGEYS_OUT, claimInTime, completionIndexKey, settleAll, ticketsFor, type PublicClaim } from "../src/game";
 import { PrizeEngine } from "../src/prize-engine";
-import { CLAIM_WINDOW_CALLS, GRACE_ROUNDS, defaultCfg, type EngagementCfg, type PatternKey } from "../src/config";
+import { CLAIM_LATE_TEXT, CLAIM_WINDOW_CALLS, GRACE_ROUNDS, defaultCfg, type EngagementCfg, type PatternKey } from "../src/config";
 import { deriveCalls, roundAt, roundTimeMs, type Fetcher, type Round } from "../src";
 
 const rnd = (r: number) => bytesToHex(sha256(new TextEncoder().encode("fake" + r)));
@@ -163,7 +163,7 @@ describe("real phones: the ticket never marks itself", () => {
     const stored = (await headCall("GET", `/api/z/${EID}/results`).then((r) => r.json()) as any).results;
     expect(norm(stored.map((x: any) => ({ pattern: x.pattern, ordinal: x.ordinal, idx: x.idx, pids: x.winners ?? [] })))).toEqual(norm(want)); // and the store holds the same, agreed by the phones
   });
-  test("a claim pressed after the next number was called does not count: the next claimant takes the position", async () => {
+  test("a claim pressed after the next number was called is refused, does not count, and the next claimant takes the position", async () => {
     const ps = [mkPhone(21), mkPhone(22), mkPhone(23)]; await joined(ps);
     const plain0 = settleAll(EID, ps.map((p) => p.rt.pid!), reference(), ps[0]!.rt.cfg, 1, undefined, { randomness: reference().map((_, k) => rnd(START + k * 2)) });
     const slow = ps.find((p) => plain0.some((x) => x.ordinal === 1 && x.pids.includes(p.rt.pid!)))!; // a phone whose ticket is first somewhere
@@ -181,9 +181,27 @@ describe("real phones: the ticket never marks itself", () => {
     const pids = ps.map((p) => p.rt.pid!), ref = reference();
     const plain = settleAll(EID, pids, ref, ps[0]!.rt.cfg, 1, undefined, { randomness: ref.map((_, k) => rnd(START + k * 2)) });
     expect(plain.some((x) => x.pids.includes(slow.rt.pid!))).toBe(true); // its ticket did complete something first
-    expect(slow.rt.view().pressed.length).toBeGreaterThan(0); // it did press, late
+    expect(slow.rt.view().pressed.length).toBe(0); // it pressed, late: the phone refuses it kindly and sends nothing (the rule: before the next number is announced)
     for (const p of ps) { const v = p.rt.view(); expect(v.results.length).toBeGreaterThan(0); expect(v.results.every((x) => !(x.winners ?? []).includes(slow.rt.pid!))).toBe(true); }
     expect(slow.rt.view().won).toEqual([]);
+  });
+  test("the claim alert (claimNow) exists exactly while the completing number is the latest one, goes away with the next number, and a late press is refused kindly with nothing sent; an in-time press is accepted", async () => {
+    const a = mkPhone(41), b = mkPhone(42); await joined([a, b]);
+    let ready = false;
+    for (let i = 0; i < 215 && !ready; i++) { t += 3000; for (const p of [a, b]) await p.rt.tick(); for (const p of [a, b]) await p.rt.playAlong({ claim: false }); ready = a.rt.view().claimNow.length > 0 || b.rt.view().claimNow.length > 0; }
+    expect(ready).toBe(true);
+    const first = a.rt.view().claimNow.length ? a : b, other = first === a ? b : a;
+    const v1 = first.rt.view(), key = v1.claimNow[0]!;
+    expect(v1.claimNow.every((k) => v1.claimable.includes(k))).toBe(true); expect(v1.lateClaim).toBeNull();
+    // an in-time press (this very step, before the next number): accepted
+    if (other.rt.view().claimNow.length) { const k2 = other.rt.view().claimNow[0]!; const ok = await other.rt.claim(k2); expect(ok.ok).toBe(true); expect(other.rt.view().pressed).toContain(k2); expect(other.rt.view().claimNow).not.toContain(k2); }
+    // the next number is announced: the alert is gone for this prize, a late press is refused kindly, nothing is pressed or sent
+    const len = v1.log.length; for (let i = 0; i < 6 && first.rt.view().log.length === len; i++) { t += 3000; await first.rt.tick(); await first.rt.playAlong({ claim: false }); }
+    expect(first.rt.view().log.length).toBeGreaterThan(len);
+    expect(first.rt.view().claimNow).not.toContain(key); expect(first.rt.view().claimable).toContain(key);
+    const late = await first.rt.claim(key); expect(late.ok).toBe(false); expect((late as any).late).toBe(true); expect(late.error).toBe(CLAIM_LATE_TEXT);
+    expect(first.rt.view().pressed).not.toContain(key); expect(first.rt.view().lateClaim).toBe(CLAIM_LATE_TEXT); expect(first.rt.view().bogeys.filter((x) => x.pattern === key)).toEqual([]); // no penalty
+    t += 6000; await first.rt.tick(); expect(first.rt.view().lateClaim).toBeNull(); // the note goes with the next number
   });
   test("a Bogey: a stale mark (the number was never called) makes the claim fail with Bogey!, nothing is sent, the Bogey is counted and recorded; the second on the same house puts the ticket out of it (the button goes), another house stays open; every phone agrees", async () => {
     const a = mkPhone(31), b = mkPhone(32); await joined([a, b]);

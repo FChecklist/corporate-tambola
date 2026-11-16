@@ -13,3 +13,6 @@ CREATE INDEX IF NOT EXISTS legal_party_org ON legal_party (org);
 INSERT OR IGNORE INTO legal_party(eid,org,organizer_name,organizer_email,payer_name,payer_org,payer_email,payer_country,payer_tax_id,payment_ids,kept_ms)
 SELECT p.eid, p.org, json_extract(p.meta,'$.name'), p.email, json_extract(p.meta,'$.name'), json_extract(p.meta,'$.org'), p.email, json_extract(p.meta,'$.country'), json_extract(p.meta,'$.taxId'), p.id, CAST(strftime('%s','now') AS INTEGER)*1000
 FROM payment p WHERE p.eid IS NOT NULL AND p.status='paid' AND p.id=(SELECT MIN(q.id) FROM payment q WHERE q.eid=p.eid AND q.status='paid');
+
+-- game_record (2026-10-25): the permanent settings record of every game, no personal data (the code also makes it by itself if it is missing)
+CREATE TABLE IF NOT EXISTS game_record (eid TEXT PRIMARY KEY, org TEXT, created_ms INTEGER, start_round INTEGER, settings TEXT NOT NULL, outcome TEXT, first_kept_ms INTEGER NOT NULL, kept_ms INTEGER NOT NULL);

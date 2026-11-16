@@ -36,7 +36,7 @@ beforeEach(() => {
     if (pm) { const p = payments[pm[1]!]; if (pm[2]) p.status = "captured"; return new Response(JSON.stringify(p)); }
     return new Response("{}", { status: 404 });
   };
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "1000000", RAZORPAY_KEY_ID: "rzp_test_x", RAZORPAY_KEY_SECRET: "sek", RAZORPAY_WEBHOOK_SECRET: "whsec", RAZORPAY_BASE_URL: "https://rzp.test/v1", PUBLIC_ORIGIN: "https://tambola.test", OWNER_EMAIL: "owner@platform.test" };
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "1000000", RAZORPAY_KEY_ID: "rzp_test_x", RAZORPAY_KEY_SECRET: "sek", RAZORPAY_WEBHOOK_SECRET: "whsec", RAZORPAY_BASE_URL: "https://rzp.test/v1", PUBLIC_ORIGIN: "https://tambola.test", OWNER_EMAIL: "owner@platform.test" };
 });
 afterEach(() => { globalThis.fetch = realFetch; });
 
@@ -152,7 +152,7 @@ describe("cancel e-mails", () => {
     const paid = paymentRow().amount;
     for (const to of ["boss@acme.com", "priya@acme.com"]) {
       const m = mailsTo(to).find((x) => /^\[Tambola\] Game cancelled/.test(x.subject))!; expect(m).toBeTruthy();
-      expect(m.body).toContain("cancelled by a Host"); expect(m.body).toContain("stays as credit until"); expect(m.body).toContain(paid.toLocaleString("en-IN")); expect(m.body).toContain("We do not give refunds.");
+      expect(m.body).toContain("cancelled by a Host"); expect(m.body).toContain("stays as credit until"); expect(m.body).toContain(paid.toLocaleString("en-IN")); expect(m.body).toContain("stays as credit for your next game");
       expect(m.body).not.toMatch(/refund of|2\.36|credit note/i);
     }
     expect(mailsTo("payer@acme.com").some((x) => /^\[Tambola\] Game cancelled/.test(x.subject))).toBe(false);
@@ -214,6 +214,14 @@ describe("Confirming your payment", () => {
     expect(r.status).toBe(200);
     expect((await j(await call("GET", "/api/z/CAN-1/summary", undefined, t.master))).payment.status).toBe("confirming");
     expect(raw.prepare("SELECT COUNT(*) AS c FROM payment WHERE status='paid'").get()).toEqual({ c: 0 });
+  });
+  test("a second checkout for the same game is refused while the first payment is being confirmed, and allowed again when that has worn off", async () => {
+    const t = await team();
+    const c = await j(await pay(t.master)); await complete(c, "pay_1", T, "created");
+    const again = await pay(t.master, "CAN-1", T + 60_000);
+    expect(again.status).toBe(409); const body = await j(again); expect(body.code).toBe("confirming"); expect(body.error).toMatch(/being confirmed/);
+    expect(raw.prepare("SELECT COUNT(*) AS c FROM payment").get()).toEqual({ c: 1 }); // no second order was made
+    expect((await pay(t.master, "CAN-1", T + 31 * 60_000)).status).toBe(200);
   });
   test("the 'confirming' state wears off after 30 minutes", async () => {
     const t = await team();

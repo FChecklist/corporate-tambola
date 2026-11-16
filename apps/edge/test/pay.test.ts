@@ -23,12 +23,12 @@ beforeEach(() => {
   // a stand-in for Razorpay's REST API
   (globalThis as any).fetch = async (url: string, init?: any) => {
     const u = String(url);
-    if (u.startsWith("https://rzp.test/v1/orders")) { const b = JSON.parse(init.body); const o = { id: "order_" + (rz.orders.length + 1), amount: b.amount, currency: b.currency, receipt: b.receipt, status: "created" }; rz.orders.push(o); return new Response(JSON.stringify(o), { status: 200 }); }
+    if (u.startsWith("https://rzp.test/v1/orders")) { const b = JSON.parse(init.body); const o = { id: "order_" + (rz.orders.length + 1), amount: b.amount, currency: b.currency, receipt: b.receipt, notes: b.notes, status: "created" }; rz.orders.push(o); return new Response(JSON.stringify(o), { status: 200 }); }
     const pm = u.match(/\/payments\/([^/]+)(\/capture)?$/);
     if (pm) { const p = rz.payments[pm[1]!]; if (!p) return new Response(JSON.stringify({ error: { description: "no such payment" } }), { status: 404 }); if (pm[2]) { rz.captured.push(pm[1]!); p.status = "captured"; } return new Response(JSON.stringify(p), { status: 200 }); }
     return new Response("{}", { status: 404 });
   };
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000", RAZORPAY_KEY_ID: "rzp_test_x", RAZORPAY_KEY_SECRET: "sek", RAZORPAY_WEBHOOK_SECRET: "whsec", RAZORPAY_BASE_URL: "https://rzp.test/v1", PUBLIC_ORIGIN: "https://tambola.test" };
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "100000", RAZORPAY_KEY_ID: "rzp_test_x", RAZORPAY_KEY_SECRET: "sek", RAZORPAY_WEBHOOK_SECRET: "whsec", RAZORPAY_BASE_URL: "https://rzp.test/v1", PUBLIC_ORIGIN: "https://tambola.test" };
 });
 afterEach(() => { globalThis.fetch = realFetch; });
 
@@ -205,7 +205,7 @@ describe("what a purchase lets you do", () => {
     expect((await call("PATCH", "/api/z/LIM1/settings", { cap: 500 }, K)).status).toBe(200);
     const r = await call("PATCH", "/api/z/LIM1/settings", { cap: 501 }, K);
     expect(r.status).toBe(402);
-    expect(((await r.json()) as any).error).toMatch(/Buy a bigger pack/);
+    expect(((await r.json()) as any).error).toMatch(/make a new game like this one/);
   });
   test("a returning buyer (same e-mail) gets another entitlement on the same organizer, with no second key", async () => {
     const first = await purchase();
@@ -285,7 +285,7 @@ describe("sign in by e-mailed code", () => {
     expect(t.token).not.toBe(first);
     expect((await call("GET", "/api/history", undefined, { "x-organizer": t.token })).status).toBe(200);
     expect((await call("GET", "/api/history", undefined, { "x-organizer": first })).status).toBe(200);
-    expect((raw.query("SELECT COUNT(*) c FROM outbox WHERE subject LIKE '%Sign in to Corporate Tambola%'").get() as any).c).toBe(1);
+    expect((raw.query("SELECT COUNT(*) c FROM outbox WHERE subject LIKE '%Corporate Tambola sign-in%'").get() as any).c).toBe(1);
   });
   test("an unknown address gets exactly the same answer and no mail, so nobody can learn who has an account", async () => {
     const r = await (await ask("nobody@nowhere.com")).json() as any;
@@ -297,7 +297,7 @@ describe("sign in by e-mailed code", () => {
     await account(); env.TEST_MODE = undefined; env.RAZORPAY_KEY_ID = "k"; env.RAZORPAY_KEY_SECRET = "s";
     const r = await (await ask("owner@corp.com")).json() as any;
     expect(r.devCode).toBeUndefined();
-    expect((raw.query("SELECT COUNT(*) c FROM outbox WHERE subject LIKE '%Sign in to Corporate Tambola%'").get() as any).c).toBe(1);
+    expect((raw.query("SELECT COUNT(*) c FROM outbox WHERE subject LIKE '%Corporate Tambola sign-in%'").get() as any).c).toBe(1);
   });
   test("a wrong code is refused, five wrong guesses lock that code, and the right one then no longer works", async () => {
     await account();
@@ -437,7 +437,7 @@ describe("invoice carries Razorpay's own record (owner list 2026-10-10)", () => 
     const v = await call("POST", "/api/payments/verify", { paymentId: r.paymentId, razorpay_order_id: r.razorpay.orderId, razorpay_payment_id: "pay_U1", razorpay_signature: hmac("sek", `${r.razorpay.orderId}|pay_U1`) });
     const j = (await v.json()) as any; expect(j.ok).toBe(true);
     const html = await (await call("GET", j.invoiceUrl)).text();
-    for (const x of ["Paid on (IST)", "15:30:00 IST", "Razorpay: UPI", "UPI ID as", "@okicici", "111122223333", "pay_U1", r.razorpay.orderId, "Asha Rao", "+919876543210", "Terms and conditions", "We keep billing data for audit and tax reasons"]) expect(html).toContain(x);
+    for (const x of ["Paid on (IST)", "15:30:00 IST", "Razorpay: UPI", "UPI ID as", "@okicici", "111122223333", "pay_U1", r.razorpay.orderId, "Asha Rao", "+919876543210", "Terms and conditions", "Billing data is kept for audit and tax reasons"]) expect(html).toContain(x);
     expect(html).not.toContain("asha.rao@okicici");
   });
 });
@@ -451,6 +451,13 @@ describe("Payment Testing page (Rs 1 / US$ 1, buys nothing)", () => {
   test("India pays Rs 1 with UPI first; the order is for exactly 100 paise", async () => {
     const r = (await (await start()).json()) as any;
     expect(r.razorpay.amount).toBe(100); expect(r.razorpay.currency).toBe("INR"); expect(r.razorpay.config.display.sequence[0]).toBe("block.upi"); expect(rz.orders[0].amount).toBe(100);
+  });
+  test("an optional test reference (free text, never looked up) travels in the order notes and is printed on the receipt as the Game ID of a payment test", async () => {
+    const r = (await (await start({ gameId: "  MY-TEST 01<b>  " })).json()) as any;
+    expect(rz.orders[0].notes.test_ref).toBe("MY-TEST 01b"); // cleaned: letters, digits, space, dash, underscore, dot only
+    const v = (await (await payIt(r)).json()) as any; expect(v.ok).toBe(true);
+    const html = await (await call("GET", v.invoiceUrl)).text(); expect(html).toContain("Game ID"); expect(html).toContain("MY-TEST 01b"); expect(html).toContain("payment test");
+    const none = (await (await start()).json()) as any; expect(none.razorpay.amount).toBe(100); expect(rz.orders[1].notes.test_ref).toBeUndefined(); // empty: as before
   });
   test("abroad pays US$ 1, only once international is on", async () => {
     expect((await start({ country: "US" })).status).toBe(400);
@@ -471,7 +478,7 @@ describe("Payment Testing page (Rs 1 / US$ 1, buys nothing)", () => {
     const frag = await call("GET", `${v.invoiceUrl}.fragment`); expect(frag.status).toBe(200);
     const fh = await frag.text(); expect(fh).toContain("<style>"); expect(fh).toContain("payment test"); expect(fh).not.toContain("<html"); expect(fh).not.toContain("<!doctype");
     const pdf = await call("GET", `${v.invoiceUrl}.pdf`); expect(pdf.status).toBe(200); expect(pdf.headers.get("content-type")).toBe("application/pdf"); expect(pdf.headers.get("content-disposition")).toContain(v.invoiceNumber);
-    const bytes = new Uint8Array(await pdf.arrayBuffer()); expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-"); expect(bytes.length).toBeGreaterThan(900);
+    const bytes = new Uint8Array(await pdf.arrayBuffer()); expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-"); expect(bytes.length).toBeGreaterThan(900); { const t = Buffer.from(bytes).toString("latin1"); expect(t).toContain("/Subtype /Image"); expect(t).toContain("e23e57"); } // 1.6.8: the invoice PDF carries the Corporate Tambola badge (red #E23E57), not text alone
     expect((await call("POST", `${v.invoiceUrl}/email`, { to: "nope" })).status).toBe(400);
     for (let i = 0; i < 5; i++) expect((await call("POST", `${v.invoiceUrl}/email`, { to: "friend@acme.in" })).status).toBe(200);
     expect((await call("POST", `${v.invoiceUrl}/email`, { to: "friend@acme.in" })).status).toBe(429);

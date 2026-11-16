@@ -105,9 +105,9 @@ tcb({ id: "PUB-07", role: "prospective organizer", title: "FAQ and privacy lines
   return "8 promises present";
 });
 tcb({ id: "PUB-08", role: "prospective organizer", title: "sign-in sheet: bad e-mail is explained, an unknown address gets the same neutral answer as a real one", steps: "#login: empty, 'abc', then an address with no account", expected: "inline error for the first two; the third shows 'Check your email' (no 'no such account')" }, async ({ page }) => {
-  await page.goto(u("/") + "#login"); await page.waitForSelector("#lMail");
-  await page.click("#lgGo"); await expect(page.locator("#fErr")).toContainText(/valid work email/i);
-  await page.fill("#lMail", "abc"); await page.click("#lgGo"); await expect(page.locator("#fErr")).toContainText(/valid work email/i);
+  await page.addInitScript(() => { try { sessionStorage.setItem("ctz-next", "/zc.html"); } catch {} }); /* a bare #login goes to the console; the game sheet opens for a waiting flow */ await page.goto(u("/") + "#login"); await page.waitForSelector("#lMail");
+  await page.click("#lgGo"); await expect(page.locator("#fErr")).toContainText(/valid e-mail address/i);
+  await page.fill("#lMail", "abc"); await page.click("#lgGo"); await expect(page.locator("#fErr")).toContainText(/valid e-mail address/i);
   await page.fill("#lMail", `nobody+e2e${Date.now()}@example.com`); await page.click("#lgGo");
   await expect(page.locator("#cdTitle")).toContainText(/Check your email/i);
   expect(await page.locator("body").innerText()).not.toMatch(/no account|not registered|unknown/i);
@@ -115,7 +115,7 @@ tcb({ id: "PUB-08", role: "prospective organizer", title: "sign-in sheet: bad e-
 });
 tcb({ id: "PUB-09", role: "organizer (new)", title: "create-engagement sheet: bad e-mail is refused in the sheet; a good alias creates the account and opens the console at once", steps: "Click 'Create your game', enter bad then good alias e-mail", expected: "inline error, then /zc opens signed in; TEST banner visible in console only (TEST mode)" }, async ({ page, context }) => {
   await page.goto(BASE + "/"); await page.locator("[data-buy]").first().click({ force: true }); await page.waitForSelector("#fMail");
-  await page.fill("#fMail", "x@y"); await page.click("#frGo"); await expect(page.locator("#fErr")).toContainText(/valid work email/i);
+  await page.fill("#fMail", "x@y"); await page.click("#frGo"); await expect(page.locator("#fErr")).toContainText(/valid e-mail address/i);
   const [mu, md] = (process.env.E2E_OWNER_MAIL ?? "hello@corporatetambola.com").split("@");
   await page.fill("#fMail", `${mu}+tbui${Date.now().toString(36)}@${md}`);
   await Promise.all([page.waitForURL(/\/zc(\.html)?$/, { timeout: 30_000 }), page.click("#frGo")]);

@@ -33,7 +33,7 @@ describe("prices are the price table, everywhere a rupee amount appears", () => 
   };
   for (const f of pages) {
     test(`${f}: each ₹ amount is a pack price`, () => {
-      const t = textOf(read(f)); const found = [...t.matchAll(/(?:₹|Rs\.?)\s?([0-9][0-9,]*(?:\.[0-9]{2})?)/g)].map((m) => m[1]!.replace(/,$/, "")).filter((a) => a !== "1"); // "Test a payment (Rs 1)" is the footer link to the owner's one-rupee test (paytest.html)
+      const t = textOf(read(f)); const found = [...t.matchAll(/(?:₹|Rs\.?)\s?([0-9][0-9,]*(?:\.[0-9]{2})?)/g)].map((m) => m[1]!.replace(/,$/, "")).filter((a) => a !== "1" && a !== "0"); // "Test a payment (Rs 1)" is the footer link to the owner's one-rupee test (paytest.html)
       for (const a of found) expect(inr.has(a) || allowedElsewhere[f]?.has(a) === true, `${f} shows an amount that is not a pack price: ₹${a}`).toBe(true);
     });
   }
@@ -61,7 +61,10 @@ describe("contact details and the seller", () => {
     }
   });
   test("the support address is one constant and the contact page shows it with a mailto link and the phone number", () => {
-    const h = read("contact.html"); expect(h).toContain(`mailto:${BRAND.support}`); expect(h).toMatch(/\+91[ -]?96503[ -]?97480/); expect(h).toContain("tel:+919650397480");
+    const h = read("contact.html"); expect(h).toContain(`mailto:${BRAND.support}`); expect(h).toMatch(/\+91[ -]?96503[ -]?97480/); expect(h).toContain("https://wa.me/919650397480?text=Hi%2C%20I%20am%20interested%20in%20corporate%20games");
+  });
+  test("every page that shows the owner's number links it to WhatsApp with the ready first line", () => {
+    for (const f of pages) { const h = read(f); if (!/96503 97480/.test(h)) continue; expect(h, f).toContain('href="https://wa.me/919650397480?text=Hi%2C%20I%20am%20interested%20in%20corporate%20games"'); expect(h, f).not.toContain("tel:"); }
   });
   test("every phone number on any page is the owner's number", () => {
     for (const f of pages) for (const m of read(f).matchAll(/(?:\+91|tel:\+?91)[ -]?\d{5}[ -]?\d{5}/g)) expect(m[0].replace(/\D/g, "").slice(-10), f).toBe("9650397480");
@@ -110,7 +113,7 @@ describe("robots, sitemap, social cards, offline page, 404, PWA", () => {
     expect(locs.length).toBeGreaterThan(8); expect(new Set(locs).size).toBe(locs.length);
     for (const l of locs) { expect(l.startsWith(BRAND.defaultOrigin + "/")).toBe(true); const path = l.slice(BRAND.defaultOrigin.length); expect(existsSync(join(PUB, path === "/" ? "index.html" : path.slice(1))), l).toBe(true); expect(everyoneRules, l).not.toContain(`Disallow: ${path}`); }
   });
-  test("the home page, pricing and legal pages are in the sitemap", () => { for (const p of ["/", "/pricing.html", "/terms.html", "/privacy.html", "/legal.html", "/contact.html"]) expect(locs, p).toContain(BRAND.defaultOrigin + p); });
+  test("the home page, pricing and the one legal document are in the sitemap", () => { for (const p of ["/", "/pricing.html", "/terms.html", "/contact.html"]) expect(locs, p).toContain(BRAND.defaultOrigin + p); });
   for (const f of ["index.html", "pricing.html", "about.html", "contact.html", "partner.html", "organizer-guide.html"]) {
     test(`${f}: a description under 175 characters, a canonical link on the real domain, and a share card with image, title and description`, () => {
       const h = read(f); const d = h.match(/<meta name="description" content="([^"]*)"/i)?.[1] ?? ""; expect(d.length).toBeGreaterThan(40); expect(d.length, f).toBeLessThanOrEqual(175);
@@ -136,7 +139,7 @@ describe("robots, sitemap, social cards, offline page, 404, PWA", () => {
 
 describe("the support and grievance path", () => {
   test("the contact page promises one thing about timing, and the privacy page names the data-request route and the 30-day outer limit", () => {
-    expect(textOf(read("contact.html"))).toMatch(/30 days/); const p = textOf(read("privacy.html")); expect(p).toMatch(/delete|erase/i);
+    expect(textOf(read("contact.html"))).toMatch(/30 days/); const p = textOf(read("terms.html")); expect(p).toMatch(/correction or deletion/i);
   });
   test("the player page links to the 'what do you hold about me / delete me' flow", () => { expect(read("z.js") + read("rights.js") + read("play.js")).toMatch(/datareq/); });
   test("the legal page names a grievance contact with an address", () => { const t = textOf(read("legal.html")); expect(t).toMatch(/grievance|complaint|contact/i); expect(read("legal.html")).toContain(BRAND.support); });
@@ -150,7 +153,7 @@ describe("the deletion times written for people match the clock in the code", ()
     const files = [...pages.map((f) => join(PUB, f)), ...scripts.map((f) => join(PUB, f)), ...["consent-text.json", "ai-facts.ts", "ai-functions.ts", "ai-link.ts", "mails.ts", "report-layout.ts"].map((f) => join(EDGE, f))];
     for (const f of files) expect(readFileSync(f, "utf8"), f).not.toMatch(/(?:22|23)[ -]hours?/i);
   });
-  test("the pages that give an exact time for a game that never started say 20 hours", () => {
-    for (const f of ["terms.html", "legal.html", "trust.html"]) expect(textOf(read(f)), f).toMatch(/20 hours after/);
+  test("the one document gives 24 hours for a game that never started, and the Trust facts keep their own 20-hour line", () => {
+    expect(textOf(read("terms.html"))).toMatch(/24 hours after it was meant to end/); expect(textOf(read("trust.html"))).toMatch(/20 hours after/);
   });
 });

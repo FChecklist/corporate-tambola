@@ -18,12 +18,12 @@ const call = (method: string, path: string, body?: unknown, key?: string, now = 
 const j = async (r: Response) => (await r.json()) as any;
 const ticks = (k: ConsentKind, v = CONSENT_VERSION) => ({ v, boxes: boxesOf(k) });
 const rows = (kind: string) => raw.query("SELECT * FROM consent_log WHERE kind=? ORDER BY at_ms, id").all(kind) as any[];
-const hashOf = (k: ConsentKind) => createHash("sha256").update(wordingOf(k).join("\n")).digest("hex");
+const hashOf = (_k: ConsentKind) => createHash("sha256").update("By continuing, you agree to the Terms and Conditions, Privacy and Data, and Game rules.").digest("hex"); // no tick-boxes: the proof hashes the one notice line
 const dev = (i: number) => i.toString(16).padStart(4, "0").repeat(8);
 
 beforeEach(() => {
   const d = makeD1({ strictHosts: true }); raw = d.raw; ip = 0;
-  env = { DB: d.db, ORGANIZER_SECRET: "plat", DAILY_WRITE_BUDGET: "100000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt", DATA_KEY: "k", TEST_MODE: "1" } as Env;
+  env = { DB: d.db, ORGANIZER_SECRET: "plat", RUNNER_KEY: "test-runner-key-test-runner-key-test0000", DAILY_WRITE_BUDGET: "100000000", PUBLIC_ORIGIN: "https://tambola.test", PHONE_SALT: "salt", DATA_KEY: "k", TEST_MODE: "1" } as Env;
 });
 
 async function organizer(email = "boss@acme.com") { const r = await j(await call("POST", "/api/start", { email, consent: ticks("K2") })); return r.token as string; }
@@ -31,6 +31,10 @@ async function draft(key: string, id: string, cap = 100) { expect((await call("P
 const PUB = { email: "boss@acme.com", phone: "98765 43210" };
 async function published(id: string) { const key = await organizer(); await draft(key, id); expect((await call("POST", `/api/z/${id}/publish`, { ...PUB, consent: ticks("K1") }, key)).status).toBe(200); return key; }
 
+const staleRefusal = async (r: Response, kind: ConsentKind) => { // a request that carries an OLDER version: the person did tick, so the page is told to reload
+  expect(r.status).toBe(400); const b = await j(r);
+  expect(b).toEqual({ error: "This page is out of date. Please reload it and try again. Sorry for the trouble.", code: "consent-required", stale: true, kind, version: TERMS_VERSION });
+};
 const refusal = async (r: Response, kind: ConsentKind) => {
   expect(r.status).toBe(400);
   const b = await j(r);
@@ -153,17 +157,18 @@ describe("2 and 3. accepted with the tick; the row is read back from the databas
 describe("4. a new Terms version asks again", () => {
   test("a request that carries an older version is refused; a tick stored under an older version does not count", async () => {
     const OLD = "2026-10-09";
-    await refusal(await call("POST", "/api/start", { email: "a@acme.com", consent: ticks("K2", OLD) }), "K2");
+    await staleRefusal(await call("POST", "/api/start", { email: "a@acme.com", consent: ticks("K2", OLD) }), "K2");
     const key = await organizer("b@acme.com"); const id = await draft(key, "CON-11");
-    await refusal(await call("POST", `/api/z/${id}/publish`, { ...PUB, consent: ticks("K1", OLD) }, key), "K1");
+    await staleRefusal(await call("POST", `/api/z/${id}/publish`, { ...PUB, consent: ticks("K1", OLD) }, key), "K1");
     expect((await call("POST", `/api/z/${id}/publish`, { ...PUB, consent: ticks("K1") }, key)).status).toBe(200);
-    // a Co-host who accepted under the old version is asked again
+    // 1.8.3: a Co-host who accepted under the old version is NOT locked out (the record counts under any version); a new acceptance carries the current one
     const co = (await j(await call("POST", "/api/org/cohost", { label: "Ravi", phone: "9876500001", e: id }, key))).cohostKey as string;
     expect((await call("POST", "/api/org/role/accept", { consent: ticks("K5") }, co)).status).toBe(200);
     expect((await call("GET", `/api/z/${id}/people`, undefined, co)).status).toBe(200);
     raw.run("UPDATE consent_log SET version=? WHERE kind='K5'", [OLD]);
-    await refusal(await call("GET", `/api/z/${id}/people`, undefined, co), "K5");
-    expect(await hasConsent(env.DB, (raw.query("SELECT subject FROM consent_log WHERE kind='K5'").get() as any).subject, "K5")).toBe(false);
+    expect((await call("GET", `/api/z/${id}/people`, undefined, co)).status).toBe(200);
+    expect(await hasConsent(env.DB, (raw.query("SELECT subject FROM consent_log WHERE kind='K5'").get() as any).subject, "K5")).toBe(false); // not the current version...
+    expect(await hasConsent(env.DB, (raw.query("SELECT subject FROM consent_log WHERE kind='K5'").get() as any).subject, "K5", true)).toBe(true); // ...but accepted
   });
 });
 
@@ -175,32 +180,29 @@ describe("5. the wording on the pages is the agreed wording", () => {
     return win;
   };
   test("version", () => { expect(AGREED.version).toBe(TERMS_VERSION); expect(pageWindow().CBConsent.version).toBe(TERMS_VERSION); });
-  test("every box a page draws says exactly what the agreed text says (string compare of the label text)", () => {
+  test("no tick-boxes: every point draws one small notice line (the same words), the agreed texts stay what the server checks", () => {
     const win = pageWindow();
     for (const kind of ["K1", "K2", "K3", "K4", "K5", "K6"] as const) {
       const host = win.document.createElement("div"); host.innerHTML = win.CBConsent.html(kind); win.document.body.appendChild(host);
-      const labels = Array.from(host.querySelectorAll("label")).map((l: any) => l.textContent);
-      expect([kind, labels]).toEqual([kind, Object.keys(AGREED[kind]).map((b) => AGREED[kind][b])]);
+      expect(host.querySelectorAll("input").length).toBe(0);
+      expect([kind, host.textContent.trim()]).toEqual([kind, "By continuing, you agree to the Terms and Conditions, Privacy and Data, and Game rules."]);
       expect([kind, win.CBConsent.text[kind]]).toEqual([kind, AGREED[kind]]);
-      expect([kind, CONSENT_TEXT[kind]]).toEqual([kind, AGREED[kind]]); // what the server checks
+      expect([kind, CONSENT_TEXT[kind]]).toEqual([kind, AGREED[kind]]);
     }
   });
-  test("never ticked in advance; each box has a real label; the page words are links that open in a new tab", () => {
+  test("the three names are links to the one document's sections and open in a new tab", () => {
     const win = pageWindow();
     const host = win.document.createElement("div"); host.innerHTML = win.CBConsent.html("K1"); win.document.body.appendChild(host);
-    for (const i of Array.from(host.querySelectorAll("input[type=checkbox]")) as any[]) { expect(i.checked).toBe(false); expect(host.querySelector(`label[for="${i.id}"]`)).toBeTruthy(); }
-    const hrefs = Array.from(host.querySelectorAll("label a")).map((a: any) => [a.textContent, a.getAttribute("href"), a.getAttribute("target"), a.getAttribute("rel")]);
-    expect(hrefs).toEqual([["Terms & Conditions", "/terms.html", "_blank", "noopener"], ["Privacy Policy", "/privacy.html", "_blank", "noopener"], ["Refund Policy", "/refund-policy.html", "_blank", "noopener"]]);
+    const hrefs = Array.from(host.querySelectorAll("a")).map((a: any) => [a.textContent, a.getAttribute("href"), a.getAttribute("target"), a.getAttribute("rel")]);
+    expect(hrefs).toEqual([["Terms and Conditions", "https://home.corporatetambola.com/terms#terms", "_blank", "noopener"], ["Privacy and Data", "https://home.corporatetambola.com/terms#privacy", "_blank", "noopener"], ["Game rules", "https://home.corporatetambola.com/terms#game-rules", "_blank", "noopener"]]);
   });
-  test("the button stays disabled (and aria-disabled) until every box of the point is ticked", () => {
+  test("the button is never held back by a box; the request still carries the version and the points, so the server keeps its proof", () => {
     const win = pageWindow();
-    const host = win.document.createElement("div"); host.innerHTML = win.CBConsent.html("K4") + `<button id="b" data-needs="K4">go</button>`; win.document.body.appendChild(host);
+    const host = win.document.createElement("div"); host.innerHTML = win.CBConsent.html("K4") + `<button id="b" data-needs="K4">go</button><button id="h" data-needs="K4" data-hold="1">held</button>`; win.document.body.appendChild(host);
     win.CBConsent.wire(host, "K4", {});
-    const b = host.querySelector("#b") as any, [a, c] = Array.from(host.querySelectorAll("input")) as any[];
-    expect([b.disabled, b.getAttribute("aria-disabled")]).toEqual([true, "true"]);
-    a.checked = true; a.dispatchEvent(new win.Event("change")); expect(b.disabled).toBe(true);
-    c.checked = true; c.dispatchEvent(new win.Event("change")); expect([b.disabled, b.getAttribute("aria-disabled")]).toEqual([false, "false"]);
-    a.checked = false; a.dispatchEvent(new win.Event("change")); expect(b.disabled).toBe(true);
+    const b = host.querySelector("#b") as any, h = host.querySelector("#h") as any;
+    expect([b.disabled, b.getAttribute("aria-disabled")]).toEqual([false, "false"]); expect(h.disabled).toBe(true); // a button held for another reason stays held
+    expect(win.CBConsent.payload(host, "K4")).toEqual({ v: TERMS_VERSION, boxes: ["A", "B"], notice: true });
   });
 });
 
@@ -231,5 +233,20 @@ describe("erasure and records", () => {
   test("the new account keeps the old continuity row (organizer_terms) with the same version", async () => {
     await organizer("c@acme.com");
     expect(raw.query("SELECT version, via FROM organizer_terms").all()).toEqual([{ version: TERMS_VERSION, via: "start" }]);
+  });
+});
+
+describe("a Co-host who has not accepted the role cannot pay or use credit (found by the permissions scenario family: the payment routes ran before the K5 gate)", () => {
+  test("checkout, proforma and credit are refused with consent-required until the K5 box is ticked", async () => {
+    const key = await organizer("pay-co@acme.com"); const id = await draft(key, "CON-PAY");
+    const co = (await j(await call("POST", "/api/org/cohost", { label: "Ravi", phone: "9876500001", e: id }, key))).cohostKey as string;
+    for (const [p, b] of [["/api/checkout", { eid: id, email: "x@acme.com", consent: ticks("K3") }], ["/api/proforma", { eid: id }], ["/api/org/credit", {}], [`/api/z/${id}/pay-with-credit`, {}]] as const) {
+      const r = await call("POST", p, b, co); const x = await j(r);
+      expect([p, r.status, x.code]).toEqual([p, 400, "consent-required"]);
+      expect(x.kind).toBe("K5");
+    }
+    expect((await call("POST", "/api/org/role/accept", { consent: ticks("K5") }, co)).status).toBe(200);
+    const after = await call("POST", "/api/checkout", { eid: id, email: "x@acme.com", consent: ticks("K3") }, co);
+    expect((await j(after)).code).not.toBe("consent-required"); // after the tick the normal payment rules apply
   });
 });

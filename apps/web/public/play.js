@@ -37,7 +37,7 @@
   const say = (t) => { const l = $("live"); if (l) l.textContent = t; };
   let pollT = null, waitWs = null;
   function show(html) { clearInterval(pollT); if (waitWs) { waitWs.close(); waitWs = null; } app.innerHTML = `<div class="pw">${html}</div>`; window.scrollTo(0, 0); }
-  const ptop = (menu) => `<div class="ptop"><span class="mark"><img src="/logo-mark.svg" alt="" width="34" height="34"></span><span class="word">Corporate Tambola<i>.</i></span>${menu ? `<button class="av" data-act="menu" aria-label="Menu" aria-haspopup="dialog">${ic("menu")}</button>` : ""}</div>`;
+  const ptop = (menu) => `<div class="ptop"><span class="mark"><img src="/logo-mark.svg?v=2" alt="" width="34" height="34"></span><span class="word">Corporate Tambola<i>.</i></span>${menu ? `<button class="av" data-act="menu" aria-label="Menu" aria-haspopup="dialog">${ic("menu")}</button>` : ""}</div>`;
   function errCard(k) {
     const [i, t, x] = ERRS[k] || ERRS.badlink;
     show(`${ptop()}<div class="pcard center"><div class="res no">${ic(i)}</div><h2>${t}</h2><p class="lead">${x}</p></div>`);
@@ -258,7 +258,7 @@
     if (G.status === "ended" || G.status === "purged") return endedScreen(G.status === "purged");
     show(`${ptop(true)}<div class="bp"><div class="bphd" id="hd"></div><div id="strip"></div><div id="still"></div><div id="boost"></div><div class="fields" id="fields"></div><div id="tabs"></div>
       <div class="tgrid" id="grid"></div><p class="pnote" id="pnote"></p><div id="notes"></div>
-      <div class="plegal">Private engagement for a closed group. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
+      <div class="plegal">Closed-group engagement. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
       <div class="plinks"><a href="/legal.html#rules" target="_blank" rel="noopener">Rules &amp; how to play</a><a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy</a><a href="/legal.html#disclaimer" target="_blank" rel="noopener">Disclaimer</a></div>
       <div class="stub" id="stub"></div></div>`);
     paintAll();
@@ -475,7 +475,7 @@
   const ACT = {
     reload: () => location.reload(),
     forget: () => TB.sheet(`<div class="eyebrow">Your details</div><h2>Do not keep my details?</h2><p class="muted small">Your organizer will not be able to invite you again from a saved list. Your ticket and phone details are deleted within 24 hours either way. This cannot be undone, but you can still be invited again with a new link.</p><button class="btn block" data-act="doforget">Yes, do not keep my name and number</button><button class="btn line block" data-act="close">Cancel</button>`),
-    doforget: async () => { try { await api("POST", `/api/e/${enc(code)}/me/forget`); TB.closeSheet(); TB.toast("Done. We will not keep your name and number."); } catch (e) { TB.toast(esc(e.message)); } },
+    doforget: async () => { try { await api("POST", `/api/e/${enc(code)}/me/forget`); TB.closeSheet(); TB.toast("Done. Your name and number are not kept."); } catch (e) { TB.toast(esc(e.message)); } },
     audio: async () => { await TBAudio.unlock(); TBAudio.preload(); paintStrip(); TB.toast("Audio is on. You will hear each number."); },
     voice: () => { TBAudio.enabled = !TBAudio.enabled; if (!TBAudio.enabled) TBAudio.stop(); paintStrip(); },
     tab: (t) => { G.tab = LET.indexOf(t) < G.tickets.length ? t : "A"; paintTabs(); paintGrid(); },
@@ -597,7 +597,7 @@
     const msg = waMsg(name, link);
     TB.sheet(`<div class="res ok">${ic("check")}</div><h2 class="center">Pass ready for ${esc(firstName(name))}</h2>
       <div class="passbox"><span>Pass link</span><b class="mono" style="font-size:12.5px;word-break:break-all">${esc(link)}</b></div>
-      <a class="btn block" target="_blank" rel="noopener" href="${esc(waLink(digits, msg))}">${ic("phone")} Send to ${esc(firstName(name))} on WhatsApp</a>
+      <!-- hidden 1 Nov 2026: a personal WhatsApp link needs a mobile number; people join with an ID only. Copy stays. -->
       <button class="btn line block" data-act="copy" data-arg="${esc(msg)}">${ic("copy")} Copy link and message</button>
       <p class="tiny muted center">WhatsApp opens with the message ready. You press send. Not on WhatsApp? Use Copy and send it any way you like.</p>
       <button class="btn line block" data-act="famnew">Back to family passes</button>`);
@@ -675,7 +675,7 @@
       <p class="lead">${deleted ? "This engagement has ended and its data has been deleted." : G.rounds > 1 ? "All rounds are finished." : "The engagement has ended."} The organizer gives the rewards directly. The software only called numbers and checked claims.</p>
       ${won.length ? `<div class="note ok" style="text-align:left">${ic("trophy")}<span>Your ticket won: <b>${won.map((r) => esc(r.name)).join(", ")}</b>. Your organizer will give the reward.</span></div>` : ""}
       ${deleted ? "" : `<p class="tiny muted">Your ticket and phone details are deleted within 24 hours. Your name and number are kept for up to 365 days so your organizer can invite you again.</p><button class="btn line block" data-act="forget">${ic("trash")} Do not keep my details</button>`}</div>
-      <div class="plegal">Private engagement for a closed group. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
+      <div class="plegal">Closed-group engagement. The organizer gives all rewards. The software only calls numbers and checks claims.</div>
       <div class="plinks"><a href="/legal.html#rules" target="_blank" rel="noopener">Rules</a><a href="/legal.html#privacy" target="_blank" rel="noopener">Privacy</a><a href="/legal.html#disclaimer" target="_blank" rel="noopener">Disclaimer</a></div>`);
   }
 

@@ -1,0 +1,88 @@
+bun test v1.4.4 (38afee6c8)
+
+apps/edge/test/pay.test.ts:
+central order unreachable Error: down
+
+apps/web/test/hostcalls-pages.test.ts:
+83 |     expect(sum.callMode).toBe("host");
+84 |     expect((await x.w.json(await x.w.api("GET", "/api/z/HC-SET/info"))).callMode).toBe("host");
+85 |     openStep(c, 7); await c.waitFor((t) => /a Host presses for each number/.test(t)); // the read-back
+86 |     openStep(c, 2); await c.waitFor((t) => /Who calls the numbers\?/.test(t));
+87 |     c.click('[data-ck="mode"][data-v="auto"]'); await wait(50); c.click('#sec2 [data-save="2"]'); // and back: the speed chips return
+88 |     const until = async (f: () => Promise<boolean>) => { const t0 = Date.now(); while (!(await f())) { if (Date.now() - t0 > 8000) throw new Error("timed out"); await wait(100); } };
+                                                                                                                                                  ^
+error: timed out
+      at <anonymous> (/home/user/ct-fix/apps/web/test/hostcalls-pages.test.ts:88:142)
+      at async <anonymous> (/home/user/ct-fix/apps/web/test/hostcalls-pages.test.ts:88:176)
+(fail) the console: who calls the numbers > step 2 offers the two plain choices, before the gap; choosing the Host and saving stores callMode and hides the gap; the read-back says so [8584.15ms]
+
+apps/web/test/pages.test.ts:
+65 |   }
+66 |   const text = () => String(win.document.getElementById("app")?.textContent ?? "").replace(/\s+/g, " ").trim();
+67 |   return {
+68 |     win, errors, text, html: () => String(win.document.getElementById("app")?.innerHTML ?? ""),
+69 |     $: (sel) => win.document.querySelector(sel),
+70 |     click: (sel) => { const el = win.document.querySelector(sel); if (!el) throw new Error("no element " + sel); el.click(); },
+                                                                                          ^
+error: no element [data-hist="1"]
+      at click (/home/user/ct-fix/apps/web/test/harness.ts:70:86)
+      at <anonymous> (/home/user/ct-fix/apps/web/test/pages.test.ts:1784:197)
+(fail) console: no refunds (credit), games that wait or did not start, 'Create a new game like this one', rescheduling > Create a new game like this one: on the game page and in the games list (not for a Co-host); the people tick box only when the old list exists; the new game opens on step 1 with the date and time empty and the read-back with Change buttons [771.38ms]
+
+apps/web/test/guide.test.ts:
+35 |     const missing: string[] = [];
+36 |     for (const m of serverMessages()) {
+37 |       if (CTG.apiOnly(m.msg)) continue;
+38 |       if (!CTG.find({ status: m.status, message: m.msg }).matched) missing.push(`${m.file}:${m.line} [${m.status}] ${m.msg.slice(0, 90)}`);
+39 |     }
+40 |     expect(missing).toEqual([]); // a message listed here needs a catalog entry in guide.js (what happened, what to do, where to go)
+                         ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   "worker.ts:224 [404] That round is not published yet.",
++   "worker.ts:231 [502] The number service cannot be reached right now. Please try again in a moment.",
++ ]
+
+- Expected  - 1
++ Received  + 4
+
+      at <anonymous> (/home/user/ct-fix/apps/web/test/guide.test.ts:40:21)
+(fail) every message the server can send has a guide > each one is either guided (matched by a catalog entry) or on the list of messages no person ever sees [188.21ms]
+
+packages/shared/test/shared.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+error: Cannot find module 'libphonenumber-js/max' from '/home/user/ct-fix/packages/shared/src/phone.ts'
+-------------------------------
+
+
+packages/engine/test/engine.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+error: Cannot find module '@tambola/shared' from '/home/user/ct-fix/packages/engine/test/engine.test.ts'
+-------------------------------
+
+
+packages/engine/test/surprise.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+error: Cannot find module '@tambola/shared' from '/home/user/ct-fix/packages/engine/test/surprise.test.ts'
+-------------------------------
+
+
+packages/beacon/test/phone-runtime.test.ts:
+host mode press-to-phone delays (s): 6, 6, 6, 6, 6
+
+packages/beacon/test/prize-engine.test.ts:
+10,000 seats x 2 tickets: build 1249 ms in total, 90 calls 77 ms (0.9 ms per call)
+
+ 2570 pass
+ 6 fail
+ 3 errors
+ 49009 expect() calls
+Ran 2576 tests across 116 files. [431.72s]

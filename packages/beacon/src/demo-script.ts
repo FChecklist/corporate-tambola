@@ -33,7 +33,7 @@ export const DEMO_PLAY_SECONDS = (DEMO_RAND.length - 1) * DEMO_CALL_SECONDS + DE
 export const DEMO_BREAK_VIDEO = "/demo-break.mp4";
 /** The settings of the demo game. The break plays the built-in explainer video; if the owner sets a YouTube link in demo-config.js, that plays instead. */
 export function demoCfg(videoUrl?: string): EngagementCfg {
-  const yt = /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(videoUrl || "");
+  const yt = /^https:\/\/((www|m|music)\.)?(youtube\.com|youtu\.be)\//i.test(videoUrl || "");
   return {
     tickets: 1, rounds: 1, opening: [], closing: [],
     rewards: [{ pattern: "corners", scope: "ticket", ordinal: 1, text: "Demo prize: Four corners" }],

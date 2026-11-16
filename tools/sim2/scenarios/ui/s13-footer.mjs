@@ -31,7 +31,7 @@ export default [
         t.check(`${path}: exactly one footer, and it is the uniform one`, info.count === 1 && info.footers === 1 && info.oldFoot === 0, JSON.stringify({ c: info.count, f: info.footers, old: info.oldFoot }));
         if (info.count !== 1) continue;
         t.check(`${path}: the footer keeps its own bright cream colour with no dark panel inside it`, info.bg === "rgb(255, 246, 229)" && info.darkBg.length === 0, `${info.bg} dark: ${info.darkBg.slice(0, 3)}`);
-        t.check(`${path}: seller line, payment-test link and the games line are there`, /IT Services by Rajat Agarwal/.test(info.text) && info.links.includes("/paytest.html") && /More from us/i.test(info.text) && /Luck by Chance/i.test(info.text), info.text.slice(0, 160));
+        t.check(`${path}: seller line and the games line are there, and no payment-test or sales-login link`, /IT Services by Rajat Agarwal/.test(info.text) && !info.links.includes("/paytest.html") && !/Sales login/i.test(info.text) && /More from us/i.test(info.text) && /Luck by Chance/i.test(info.text), info.text.slice(0, 160));
         t.check(`${path}: the footer fits 360 px with no sideways scroll`, info.left >= 0 && info.right <= info.iw + 0.5 && info.sw <= info.iw, `${info.left}..${info.right} of ${info.iw}, page ${info.sw}`);
         t.check(`${path}: footer links are tall enough to tap`, info.smallLinks === 0, String(info.smallLinks));
         info.links.filter((h) => h.startsWith("/")).forEach((h) => hrefs.add(h.split("#")[0]));
