@@ -264,7 +264,9 @@ export async function auditRequest(env: AuditEnv, req: Request, peek: Request | 
       proof = dec ? "declared" : uaVendor ? "observed" : "inferred"; // inferred = we only know a key of an AI kind made the call
       ai = { vendor_from_ua: uaVendor, vendor_from_declared_model: modelVendor, declared: dec, proof_level: proof, mismatch };
     }
-    const fields = body && typeof body === "object" ? redact(Object.fromEntries(Object.entries(body).filter(([k]) => k !== "device" && k !== "ai"))) : null;
+    const v2Call = /^\/api\/(z\/[^/]+\/|org\/|owner\/)?v2(\/|$)/.test(path); // V2 words (a Host's reason, a support text, a note) are never copied: this log lives 365 days. Only the plain choices are, so each decision stays accountable.
+    const V2_PLAIN = new Set(["decision", "ticket", "pattern", "round", "approve", "on", "part", "format", "game", "ordinal"]);
+    const fields = body && typeof body === "object" ? redact(Object.fromEntries(Object.entries(body).filter(([k, v]) => k !== "device" && k !== "ai" && (!v2Call || (V2_PLAIN.has(k) && (typeof v === "number" || typeof v === "boolean" || (typeof v === "string" && v.length <= 24 && /^[A-Za-z0-9@_-]*$/.test(v)))))))) : null;
     const details = {
       method, path: path.slice(0, 200), query: url.search ? [...url.searchParams.keys()].filter((k) => k !== "_body").slice(0, 20) : [], status,
       ip: ctx.ip, ua: ctx.ua, browser: ua.browser, os: ua.os, country: ctx.country, asn: ctx.asn,
