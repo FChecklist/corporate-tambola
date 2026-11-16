@@ -80,7 +80,7 @@ async function cloneWithKey(c: V2Ctx, e: any): Promise<Response> {
   if (r.status >= 300) return r;
   let out: any; try { out = await r.clone().json(); } catch { return r; }
   if (!out?.id) return r;
-  const k = await insertGameKey(c, out.id, a.scopeKind === "ga" ? "ga" : "gm", a.label ?? "", e.id);
+  const k = await insertGameKey(c, out.id, "gm", a.label ?? "", e.id);
   return json({ ...out, gameKey: k.key, gameKeyNote: "A key for the NEW game only. It is shown once. It works until 24 hours after that game ends." });
 }
 
