@@ -1,6 +1,7 @@
 // R3 (5 Nov 2026 audit, Option B): Publish saves the game in one all-or-nothing step and then sends the confirmation e-mail. If a passing database hiccup hits in the short gap, the game IS published
 // but the e-mail used to be lost for good (a repeat said "already published" and sent nothing). Now "e-mail owed" is recorded in the same step as the publish and the e-mail goes out on the next visit, once.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { setupRetry } from "../src/worker";
 import { W, contact, create, j, mails, one, organizer, publish, reset, restore, uid } from "./param-harness";
 
 const OVERLOAD = "D1_ERROR: D1 DB is overloaded. Too many resources consumed within a 10 second window";
@@ -20,7 +21,15 @@ const flaky = (fail: (sql: string) => void) => {
 const owedRows = (id: string) => one("SELECT COUNT(*) c FROM kv WHERE k=?", `mailowed/${id}`).c as number;
 
 describe("R3: the publish e-mail is never lost to a database hiccup", () => {
-  beforeEach(() => reset()); afterEach(() => restore());
+  const oldScale = setupRetry.scale;
+  beforeEach(() => { reset(); setupRetry.scale = 0; }); afterEach(() => { restore(); setupRetry.scale = oldScale; });
+
+  test("one hiccup right after the game was saved: publish is asked again (since PR 10) and succeeds, one e-mail, nothing owed", async () => {
+    const o = await organizer(); const id = uid("PM"); expect((await create(o.key, id)).status).toBe(200);
+    let n = 1; flaky((sql) => { if (n > 0 && sql.startsWith("INSERT INTO outbox")) { n--; throw new Error(OVERLOAD); } });
+    const r = await publish(o.key, id); expect(r.status).toBe(200); expect(n).toBe(0);
+    expect(mails(contact.email).length).toBe(1); expect(owedRows(id)).toBe(0);
+  });
 
   test("a normal publish: one e-mail, nothing left owed", async () => {
     const o = await organizer(); const id = uid("PM"); expect((await create(o.key, id)).status).toBe(200);
@@ -28,9 +37,9 @@ describe("R3: the publish e-mail is never lost to a database hiccup", () => {
     expect(mails(contact.email).length).toBe(1); expect(owedRows(id)).toBe(0);
   });
 
-  test("the database hiccups right after the game was saved: busy answer, e-mail owed; the next visit sends it exactly once", async () => {
+  test("the database keeps hiccuping through every repeat after the game was saved: busy answer, e-mail owed; the next visit sends it exactly once", async () => {
     const o = await organizer(); const id = uid("PM"); expect((await create(o.key, id)).status).toBe(200);
-    let n = 1; flaky((sql) => { if (n > 0 && sql.startsWith("INSERT INTO outbox")) { n--; throw new Error(OVERLOAD); } });
+    let n = 1 + setupRetry.delaysMs.length; flaky((sql) => { if (n > 0 && sql.startsWith("INSERT INTO outbox")) { n--; throw new Error(OVERLOAD); } });
     const r1 = await publish(o.key, id); expect(r1.status).toBe(503); expect((await j(r1)).code).toBe("busy");
     expect(n).toBe(0);
     expect(mails(contact.email).length).toBe(0); // nothing went out yet ...

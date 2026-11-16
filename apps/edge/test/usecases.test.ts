@@ -186,7 +186,8 @@ describe("C. publish and pay", () => {
     await call("POST", "/api/z", eng("DOUBLE-1"), o.h);
     const rs = await Promise.all([1, 2, 3, 4].map(() => call("POST", "/api/z/DOUBLE-1/publish", contact, o.h)));
     for (const r of rs) expect(r.status).toBe(200);
-    expect(outbox("%payment pending%").length).toBeLessThanOrEqual(2); // a simultaneous retry may e-mail again, but never more than once per tab
+    expect(outbox("%payment pending%").length).toBe(1); // only the tab that really publishes sends the mail (13 Nov audit: a second tab no longer repeats it, nor re-creates the owed marker)
+    expect((raw.prepare("SELECT COUNT(*) AS c FROM kv WHERE k=?").get("mailowed/DOUBLE-1") as any).c).toBe(0);
     const again = await j(await call("POST", "/api/z/DOUBLE-1/publish", contact, o.h));
     expect(again.already).toBe(true);
     expect((raw.prepare("SELECT COUNT(*) AS c FROM kv WHERE k='pub/DOUBLE-1'").get() as any).c).toBe(1);
