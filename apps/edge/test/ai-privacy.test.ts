@@ -90,3 +90,27 @@ describe("a player asks to see or delete their own data (console only)", () => {
     expect((await call("POST", "/api/z/PLANT-1/forget", { phone: PLANTED[0]!.phone }, o.h, run)).status).toBe(409);
   });
 });
+
+describe("the report link never travels through an outside AI (boss16 security item 1)", () => {
+  test("the organizer is given the report address; an AI key and a Host key used through an AI work link are told only ready/sent", async () => {
+    const o = await setup();
+    raw.prepare("INSERT INTO kv(k,v) VALUES(?,?)").run("rpt/PLANT-1", JSON.stringify({ stage: "done" })); // the report is built and sent
+    const own = await j(await call("GET", "/api/z/PLANT-1/reportlink", undefined, o.h));
+    expect(own.ready).toBe(true); expect(own.url).toMatch(/\/report\.html\?e=PLANT-1&k=/); // the organizer's console still gets it
+    const asked: [string, Record<string, string>][] = [
+      ["/api/z/PLANT-1/reportlink", { "x-organizer": o.ai }], // the organizer's AI key
+      ["/api/z/PLANT-1/reportlink", { "x-organizer": o.host, "x-ct-link": "1" }], // a Host key through the AI work link header
+      [`/ai/${o.host}/z/PLANT-1/reportlink`, {}], // a Host's AI work link address
+      [`/ai/${o.ai}/z/PLANT-1/reportlink`, {}], // the organizer's AI work link address
+    ];
+    for (const [path, hdr] of asked) {
+      const r = await call("GET", path, undefined, hdr); expect([path, r.status]).toEqual([path, 200]);
+      const b = await r.json() as any; expect([path, b.ready, b.url]).toEqual([path, true, null]);
+      expect([path, JSON.stringify(b).includes("k=")]).toEqual([path, false]);
+    }
+  });
+  test("the Host's manual no longer promises the address", () => {
+    const m = manualJson(ORIGIN, "cth_" + "a".repeat(48), "host", T), e = m.endpoints.find((x) => x.url.includes("reportlink"))!;
+    expect(e.what).not.toMatch(/address, once it is ready/); expect(e.what).toMatch(/for the organizer only/);
+  });
+});
