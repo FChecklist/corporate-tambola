@@ -1,0 +1,5 @@
+Contact: mailto:hello@corporatetambola.com
+Expires: 2027-10-30T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://corporatetambola.com/.well-known/security.txt
+Policy: https://corporatetambola.com/privacy

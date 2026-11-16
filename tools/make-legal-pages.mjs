@@ -1,4 +1,5 @@
 // Builds the short document pages (Terms, Data processing terms, Sub-processors, Partner terms, Organizer guide) in the same style as legal.html.
+// NOTE 2026-10-30: the pages were edited by hand after they were generated (organizer-guide.html has sections this file no longer lists), so do NOT re-run this file without diffing first.
 // Run: node tools/make-legal-pages.mjs   (writes apps/web/public/*.html; commit the result). The pages are plain static files: no new user flow.
 // The Terms page and the Legal position page are the two files in tools/legal/ (their {{TERMS_VERSION}} is replaced by the one constant in apps/edge/src/brand.ts).
 import { readFileSync, writeFileSync } from "node:fs";
@@ -9,28 +10,8 @@ const tpl = readFileSync(new URL("legal.html", PUB), "utf8");
 const nl = tpl.includes("\r\n") ? "\r\n" : "\n";
 const head = tpl.slice(0, tpl.indexOf('<main class="legal">'));
 const foot = tpl.slice(tpl.indexOf("</main>"));
-// Search-engine and sharing tags, one set per page (unique description, canonical, Open Graph, Twitter card). Written idempotently: old copies are removed first, so the template's own tags never leak into the other pages.
-const SITE = "https://corporatetambola.com";
-const META = {
-  "legal.html": ["Rules, privacy and disclaimer", "The rules of a Corporate Tambola game, how participant names and mobile numbers are deleted within 24 hours, and the disclaimer. Plain English."],
-  "legal-position.html": ["Legal position", "The legal position on which Corporate Tambola is supplied: software only, no stake from players, closed groups, data erased within 24 hours."],
-  "refund-policy.html": ["Refund policy", "Cancellation, rescheduling and refund policy for Corporate Tambola: you pay per game, there is no refund after payment, and a paid game can be moved to any date within 365 days."],
-  "privacy.html": ["Privacy Policy and notice", "What Corporate Tambola keeps, why, for how long and who sees it. A stand-alone notice in plain English, with your rights and the Grievance Officer."],
-  "terms.html": ["Terms", "The short, plain-English terms for organizers who run a Corporate Tambola engagement for their company."],
-  "dpa.html": ["Data processing terms", "Data processing terms for organizers: what we do with your participants' details, on one page."],
-  "subprocessors.html": ["Sub-processors", "The providers that help us run Corporate Tambola, and what each one receives."],
-  "partner-terms.html": ["Partner terms", "The terms for Corporate Tambola's Refer and earn partners, in plain English."],
-  "organizer-guide.html": ["Organizer guide", "Short notes for a safe, simple Corporate Tambola: how to set up, share, run and close an engagement."],
-};
-const attr = (v) => v.replace(/&(?!amp;|rsquo;|ldquo;|rdquo;)/g, "&amp;").replace(/"/g, "&quot;");
-export function withSeo(html, file) {
-  const [t, d] = META[file], title = `${t} | Corporate Tambola`, url = `${SITE}/${file}`;
-  const strip = html.replace(/[ \t]*<meta name="description"[^>]*>\r?\n?/g, "").replace(/[ \t]*<link rel="canonical"[^>]*>\r?\n?/g, "").replace(/[ \t]*<meta property="og:[^>]*>\r?\n?/g, "").replace(/[ \t]*<meta name="twitter:[^>]*>\r?\n?/g, "");
-  const tags = [`<meta name="description" content="${attr(d)}">`, `<link rel="canonical" href="${url}">`,
-    `<meta property="og:type" content="website"><meta property="og:site_name" content="Corporate Tambola"><meta property="og:title" content="${attr(title)}"><meta property="og:description" content="${attr(d)}"><meta property="og:url" content="${url}"><meta property="og:image" content="${SITE}/img/ticket.webp"><meta property="og:image:alt" content="The tambola ticket a participant sees on their phone"><meta property="og:locale" content="en_IN">`,
-    `<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${attr(title)}"><meta name="twitter:description" content="${attr(d)}"><meta name="twitter:image" content="${SITE}/img/ticket.webp">`].join(nl);
-  return strip.replace(/(<title>[^<]*<\/title>)\r?\n?/, (m, a) => a + nl + tags + nl);
-}
+// Search-engine and sharing tags (title, description, canonical, share cards, JSON-LD) now live in tools/seo-tags.mjs, shared with the other page tools.
+import { withSeo } from "./seo-tags.mjs";
 const FOOTNAV = '<nav class="fl" aria-label="Legal"><a href="/legal.html#rules">Rules</a><a href="/privacy.html">Privacy</a><a href="/legal.html#disclaimer">Disclaimer</a><a href="/terms.html">Terms</a><a href="/legal-position.html">Legal position</a><a href="/dpa.html">Data processing</a><a href="/subprocessors.html">Sub-processors</a><a href="/organizer-guide.html">Organizer guide</a><a href="/partner-terms.html">Partner terms</a><a href="/partner.html">Refer &amp; earn</a><a href="/demo.html">Demo</a><a href="/brochure.pdf">Brochure</a><a href="/">Home</a></nav>';
 const newFoot = foot.replace(/<nav class="fl"[\s\S]*?<\/nav>/, FOOTNAV);
 export const footNav = FOOTNAV;
