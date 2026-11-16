@@ -411,3 +411,26 @@ describe("clean-up", () => {
     expect(raw.query("SELECT (SELECT COUNT(*) FROM helpdesk_link) a, (SELECT COUNT(*) FROM helpdesk_link WHERE state='active') b, (SELECT COUNT(*) FROM helpdesk_pub) c").get()).toEqual({ a: 1, b: 1, c: 0 });
   });
 });
+
+describe("the 30-minute approval key is cut down to one publish (boss16 security item 2)", () => {
+  test("the public approve/start key is tied to the approved game and refuses everything but that game's publish and the whoami check", async () => {
+    const w = await world(); await makeGame(w.aiKey); await askAt(w, "HD-GAME-1"); await makeGame(w.aiKey, "HD-GAME-2");
+    const t = approvalToken();
+    const s = await j(await call("POST", "/api/helpdesk/approve/start", { t }));
+    expect(raw.query("SELECT eid, created_by FROM organizer_key WHERE hash=(SELECT tmp_key_hash FROM helpdesk_pub)").get()).toEqual({ eid: "HD-GAME-1", created_by: "dp" });
+    const refused: [string, string, unknown?][] = [
+      ["GET", "/api/z/HD-GAME-1/summary"], ["GET", "/api/org/team"], ["GET", "/api/org/ai/link"], ["POST", "/api/org/ai/fresh", {}], ["POST", "/api/org/ai/revoke", {}],
+      ["POST", "/api/z/HD-GAME-1/erase", {}], ["POST", "/api/z/HD-GAME-1/reportlink", {}], ["GET", "/api/z/HD-GAME-1/reportlink"], ["POST", "/api/z/HD-GAME-1/cancel", {}],
+      ["POST", "/api/z/HD-GAME-2/publish", { email: "boss@acme.com", phone: "9876500009" }], // another game of the same Organizer
+      ["GET", "/api/z/HD-GAME-1/publish"],
+    ];
+    for (const [m, path, b] of refused) { const r = await call(m, path, b, org(s.key)); expect([m, path, r.status, (await j(r)).code]).toEqual([m, path, 403, "approval-key-scope"]); }
+    expect((await call("GET", "/api/whoami", undefined, org(s.key))).status).toBe(200); // the page's own check of the key still works
+    // control: the Organizer's own key reaches those same routes, so the 403 above is the key's scope and not a missing route
+    for (const [m, path] of [["GET", "/api/z/HD-GAME-1/summary"], ["GET", "/api/org/team"]] as const) expect([m, path, (await call(m, path, undefined, org(w.master))).status]).toEqual([m, path, 200]);
+    // and the one thing it is for still works, once, for the right game
+    const pub = await call("POST", "/api/z/HD-GAME-1/publish", { email: "boss@acme.com", phone: "9876500009" }, org(s.key));
+    expect(pub.status).toBe(200); expect((await j(pub)).published).toBe(true);
+    expect(raw.query("SELECT COUNT(*) c FROM kv WHERE k='pub/HD-GAME-2'").get()).toEqual({ c: 0 }); // the other game stayed a draft
+  });
+});

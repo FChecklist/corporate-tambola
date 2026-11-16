@@ -835,7 +835,7 @@ function d1kv(env: Env): KV { return {
   put: async (k, v) => { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, v).run(); },
 }; }
 
-export interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null; /** V2: hash of the key presented, its private label, and (for a key made for ONE game) the game, the kind (gm, ga, lh) and the game it was cloned from */ kh?: string; label?: string | null; scopeEid?: string | null; scopeKind?: "gm" | "ga" | "lh" | null; scopeSrc?: string | null; viaLink?: boolean; eid?: string | null; /** A Host: the identity the key belongs to and whether the first-open setup (confirmed e-mail + mobile) is finished. */ hid?: string; hostReady?: boolean ; temp?: boolean }
+export interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null; /** V2: hash of the key presented, its private label, and (for a key made for ONE game) the game, the kind (gm, ga, lh) and the game it was cloned from */ kh?: string; label?: string | null; scopeEid?: string | null; scopeKind?: "gm" | "ga" | "lh" | null; scopeSrc?: string | null; viaLink?: boolean; eid?: string | null; /** A Host: the identity the key belongs to and whether the first-open setup (confirmed e-mail + mobile) is finished. */ hid?: string; hostReady?: boolean ; temp?: boolean; /** The 30-minute key of the Help Desk one-tap publish approval (organizer_key.created_by = 'dp'): it publishes ONE game and does nothing else (see route()). */ pubOnly?: boolean }
 async function authOf(req: Request, env: Env, now: number): Promise<Auth> {
   return authOfKey(env, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), now, true);
 }
@@ -844,7 +844,7 @@ export async function authOfKey(env: Env, presented: string, now: number, gated 
   if (!presented) return { plat: false, org: null, kind: null };
   if (env.ORGANIZER_SECRET && presented === env.ORGANIZER_SECRET) return { plat: true, org: null, kind: "platform" };
   const kh = await sha("key|" + presented);
-  const row = await env.DB.prepare("SELECT org, kind, eid, host_id, expires_ms, label, scope_eid, scope_kind, scope_src FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(kh, now).first<{ org: string; kind: "master" | "ai" | "host" | "cohost"; eid: string | null; host_id: string | null; expires_ms: number | null; label: string | null; scope_eid: string | null; scope_kind: "gm" | "ga" | "lh" | null; scope_src: string | null }>();
+  const row = await env.DB.prepare("SELECT org, kind, eid, host_id, expires_ms, label, scope_eid, scope_kind, scope_src, created_by FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(kh, now).first<{ org: string; kind: "master" | "ai" | "host" | "cohost"; eid: string | null; host_id: string | null; expires_ms: number | null; label: string | null; scope_eid: string | null; scope_kind: "gm" | "ga" | "lh" | null; scope_src: string | null; created_by: string | null }>();
   if (!row || (row.scope_eid && !gated)) return { plat: false, org: null, kind: null };
   if (row.kind === "host") { // a Host's first-open link works once and for 7 days; the console works only after setup (hostsetup.ts)
     const hs = await hostKeyStatus(env.DB, kh, row.host_id, now);
@@ -853,7 +853,7 @@ export async function authOfKey(env: Env, presented: string, now: number, gated 
     const temp = row.expires_ms != null && !row.host_id && !(await hostStateRow(env.DB, kh));
     return { plat: false, org: row.org, kind: "host", eid: row.eid ?? null, hid: hs.hid, hostReady: hs.ready, ...(temp ? { temp: true } : {}), kh, label: row.label, ...(row.scope_eid ? { scopeEid: row.scope_eid, scopeKind: row.scope_kind, scopeSrc: row.scope_src } : {}) };
   }
-  return { plat: false, org: row.org, kind: row.scope_kind === "ga" ? "ai" : row.kind, eid: row.eid ?? null, kh, label: row.label, ...(row.scope_eid ? { scopeEid: row.scope_eid, scopeKind: row.scope_kind, scopeSrc: row.scope_src } : {}) };
+  return { plat: false, org: row.org, kind: row.scope_kind === "ga" ? "ai" : row.kind, eid: row.eid ?? null, kh, label: row.label, ...(row.kind === "master" && row.created_by === "dp" ? { pubOnly: true } : {}), ...(row.scope_eid ? { scopeEid: row.scope_eid, scopeKind: row.scope_kind, scopeSrc: row.scope_src } : {}) };
 }
 /** May this caller act on this engagement? `master` = needs the organizer's own key, or a Host's (both are people, never the AI), or ours. A Co-host never passes: their rights are a few named routes only. */
 const can = (a: Auth, e: { org: string | null }, master = false) => a.plat || (!!a.org && e.org === a.org && a.kind !== "cohost" && (!master || a.kind === "master" || (a.kind === "host" && !a.viaLink)));
@@ -952,6 +952,10 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
   const a = await authOf(req, env, now);
   if (a.kind === "host" && req.headers.get("x-ct-link") === "1") a.viaLink = true; // a Host's AI work link keeps the narrow rights
   if (a.viaLink && /^\/api\/(payments\/|org\/(team|cohost))/.test(new URL(req.url).pathname)) return json({ error: "A Host's AI assistant cannot pay or manage the team. The Host does this in their own console.", code: "ai-not-allowed" }, 403); // paying and who is on the team are for people
+  if (a.pubOnly) { // the Help Desk approval key (30 minutes, handed out by the public /api/helpdesk/approve/start): it is a full account key in form, so it is cut down here to what the one-tap page needs, a publish of the approved game and the key check (GET /api/whoami), nothing else (no money, no erase, no team, no keys, no other game)
+    const pp = new URL(req.url).pathname, pm = pp.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/publish$/);
+    if (!(pp === "/api/whoami" && req.method === "GET") && !(req.method === "POST" && pm && (!a.eid || a.eid === pm[1]))) return json({ error: "This key only publishes the game you were asked to approve.", code: "approval-key-scope" }, 403);
+  }
   const peek = req.method === "GET" || req.method === "HEAD" ? null : req.clone(); // the internal audit log reads the body from this copy; the route reads the original
   const r = await route0(req, env, now, a);
   let kidForLog: string | null = null;
@@ -2258,7 +2262,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const st = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`rpt/${eid}`).first<{ v: string }>();
     const stage = st ? (JSON.parse(st.v).stage as string) : null;
     const ready = stage === "send" || stage === "done";
-    if (a.kind === "ai") return json({ ready, sent: !!life?.report_ms, url: null, note: "The report holds every participant's name and number, so its address goes only to the organizer (it is e-mailed to them). Tell them to open their e-mail or their console." }); // the address is a key to personal data: it never travels through an outside AI
+    if (a.kind === "ai" || a.viaLink) return json({ ready, sent: !!life?.report_ms, url: null, note: "The report holds every participant's name and number, so its address goes only to the organizer (it is e-mailed to them). Tell them to open their e-mail or their console." }); // the address is a key to personal data: it never travels through an outside AI (an Organizer-AI key, or a Host key used through an AI work link, a.viaLink)
     return json({ ready, sent: !!life?.report_ms, url: ready ? await reportLink(env as any, eid!) : null });
   }
   if (action === "vote" && req.method === "POST") return acceptVotes(env as any, e, eid!, await body(req, 65_536), now, json, spend);
