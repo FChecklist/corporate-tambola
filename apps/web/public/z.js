@@ -325,7 +325,7 @@
     if (window.CTG && TAP.guide) { try { CTG.inline(host, TAP.guide, {}); return; } catch {} }
     host.innerHTML = `<div class="zbanner bad" role="alert">${esc(TAP.msg)}</div>`;
   }
-  const ordinalName = (k) => ["", "1st", "2nd", "3rd"][k] || k + "th";
+  const ordinalName = (k) => { const n = Math.floor(k); if (!(n >= 1)) return ""; const t = n % 100, r = n % 10; return n + (t >= 11 && t <= 13 ? "th" : r === 1 ? "st" : r === 2 ? "nd" : r === 3 ? "rd" : "th"); }; // same rule as packages/shared/src/ordinal.ts
   const KEYNAME = (key) => { const i = key.indexOf("@"), b = i < 0 ? key : key.slice(0, i), nm = b === "full2" ? "Super Bumper House" : NAMES[b]; return i < 0 ? nm : "Ticket " + key.slice(i + 1) + ": " + nm; }; // "top@1" = the Top Line of Ticket 1 (prizes per ticket)
 
   function roundCards(v) {
