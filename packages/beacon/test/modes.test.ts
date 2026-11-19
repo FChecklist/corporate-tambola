@@ -55,6 +55,30 @@ describe("manual start, software calls (mode 3)", () => {
     expect(callRound(st, 0, STRIDE, 0)).toBe(g);
     expect(callRound(st, 0, STRIDE, 20)).toBe(g + 60 + 10); // call 20 = g+60 >= pause start g+30: pushed by 10
   });
+  test("F38: a pause that was over before the Start round moves nothing: number 1 comes in exactly the Start round and the later numbers follow at the chosen speed", () => {
+    const g = SCHED + 40 + LEAD;
+    const pause = mk(1, "pause", SCHED + LEAD + 5, SCHED + 5, SCHED + LEAD + 15); // ends at SCHED+28, well before Start
+    const st = resolveControl(manualAuto, [pause, go(2, SCHED + 40)]);
+    expect(st.ignored).toEqual([]); expect(st.intervals.length).toBe(1); expect(st.goRound).toBe(g);
+    for (const k of [0, 1, 5, 89]) {
+      expect(callRound(st, SCHED + 40, STRIDE, k)).toBe(g + k * STRIDE);
+      expect(callRoundR(st, SCHED + 40, STRIDE, NO_BREAKS, 1, k)).toBe(g + k * STRIDE);
+    }
+    // the same game with fullGap on (the rule of a newer game) is not moved either
+    const full = resolveControl({ ...manualAuto, fullGap: true }, [pause, go(2, SCHED + 40)]);
+    expect(callRound(full, SCHED + 40, STRIDE, 0)).toBe(g);
+    expect(callRoundR(full, SCHED + 40, STRIDE, NO_BREAKS, 1, 7)).toBe(g + 7 * STRIDE);
+    // the pause still shows as a pause for the rounds it covered
+    expect(st.intervals[0]!.end).toBeLessThan(g);
+  });
+  test("F38: a pause still in force at the Start round, or begun after it, still pushes the calls", () => {
+    const g = SCHED + 40 + LEAD;
+    const straddle = resolveControl(manualAuto, [mk(1, "pause", g - 5, g - 5 - LEAD, g + 10), go(2, SCHED + 40)]);
+    expect(straddle.ignored).toEqual([]);
+    expect(callRound(straddle, 0, STRIDE, 0)).toBeGreaterThan(g); // paused when Start arrives: number 1 waits
+    const later = resolveControl(manualAuto, [go(1, SCHED + 40), mk(2, "pause", g + 30, g + 10, g + 40)]);
+    expect(callRound(later, 0, STRIDE, 20)).toBe(g + 60 + 10);
+  });
   test("a stop before Start ends the game: nothing is ever called (null, not 'never yet')", () => {
     const st = resolveControl(manualAuto, [mk(1, "stop", SCHED + 50, SCHED + 30)]);
     expect(callRound(st, 0, STRIDE, 0)).toBeNull();
@@ -164,3 +188,25 @@ describe("Start at any size: the profile maths and the start-only file", () => {
     expect(ok.ok).toBe(true);
   });
 });
+
+describe("F39: a press is never released inside any pause (host calls)", () => {
+  test("a second pause that begins exactly where the first ends does not let a press named for a round of the first pause through", () => {
+    const hostCfg: ControlConfig = { ...base, maxPauseRounds: 60, callMode: "host", hostGaps: [], maxNexts: 90 };
+    const T0 = 2_000_000;
+    const log = [mk(1, "pause", T0 + 22, T0 + 5, T0 + 44), mk(2, "pause", T0 + 44, T0 + 22, T0 + 87), nx(3, T0 + 27)]; // the press is for round T0+29, inside the first pause
+    const st = resolveControl(hostCfg, log);
+    expect(st.ignored.map((x) => x.seq)).toEqual([3]);
+    expect(st.ignored[0]!.why).toBe(NEXT_REFUSALS.paused);
+    expect(st.nextRounds).toEqual([]);
+    for (const a of st.nextRounds) expect(st.intervals.some((i) => a >= i.start && a < i.end)).toBe(false);
+  });
+  test("a press before a pause, after the last pause, or between two separate pauses still goes through", () => {
+    const hostCfg: ControlConfig = { ...base, maxPauseRounds: 60, callMode: "host", hostGaps: [], maxNexts: 90 };
+    const T0 = 2_000_000;
+    const log = [nx(1, T0), mk(2, "pause", T0 + 30, T0 + 10, T0 + 40), nx(3, T0 + 45), mk(4, "pause", T0 + 70, T0 + 50, T0 + 80), nx(5, T0 + 90)];
+    const st = resolveControl(hostCfg, log);
+    expect(st.ignored).toEqual([]);
+    expect(st.nextRounds).toEqual([T0 + NEXT_LEAD_ROUNDS, T0 + 45 + NEXT_LEAD_ROUNDS, T0 + 90 + NEXT_LEAD_ROUNDS]);
+  });
+});
+
