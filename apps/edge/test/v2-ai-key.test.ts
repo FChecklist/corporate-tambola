@@ -34,7 +34,10 @@ describe("a game key for an AI acts as an AI key, not a master", () => {
     const pub = await hit("POST", g.id, "publish", ai, {}); // answered like the organizer's own AI key: a message, and nothing changes
     expect(pub.status === 403 || pub.status === 200).toBe(true);
     expect(JSON.stringify(q("SELECT * FROM engagement WHERE id=?", g.id))).toBe(before);
-    expect((await hit("POST", g.id, "paylink", ai, {})).status).toBe(403);
+    const pl = await hit("POST", g.id, "paylink", ai, {});
+    expect(pl.status).toBe(403);
+    expect((await j(pl)).error).toContain("A game key (ctg_) cannot make a pay link"); // the game-key guard in worker.ts, not the general refusal
+    expect(q("SELECT COUNT(*) AS c FROM paylink WHERE eid=?", g.id)).toEqual([{ c: 0 }]);
   });
   test("it may not switch claim review on, nor approve or reject a claim", async () => {
     const { g, seats, ai, mk } = await setup();
