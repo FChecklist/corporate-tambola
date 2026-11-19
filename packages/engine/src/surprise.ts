@@ -134,6 +134,7 @@ export class Surprise {
   private get(id: string) { return this.moments.find((m) => m.id === id)!; }
 
   private startNext(): void {
+    if (this.scratch) return; // one card at a time: a card running beside the numbers must be revealed before the next moment starts (scratch_tick comes back here)
     const id = this.queue.shift();
     if (!id) return this.afterMoment();
     const m = this.get(id);
@@ -283,7 +284,7 @@ export class Surprise {
     const wasConcurrent = s.concurrent;
     this.scratch = null;
     m.status = "done"; m.endedAt = t; this.lastMomentCall = this.e.called.length;
-    if (!wasConcurrent || (this.cont === "finale" && !this.lucky && !this.queue.length)) this.afterMoment(); // the finale was only waiting for this card
+    if (!wasConcurrent || (!this.lucky && (this.queue.length || this.cont === "finale"))) this.afterMoment(); // the next queued moment, or the finale, was only waiting for this card
   }
 
   private completeMoment(m: Moment): void {
@@ -302,7 +303,7 @@ export class Surprise {
       case "start": e.paused = null; e.nextAt = e.settings.callMode === "manual" ? null : t; e.emit({ to: "all", type: "resume" }); break;
       case "resume": e.paused = null; e.nextAt = e.settings.callMode === "manual" ? null : t + 3000; e.emit({ to: "all", type: "resume" }); e.applyPendingEmergency(); break;
       case "intermission": e.paused = { type: "intermission", round: this.round, until: Math.max(t, this.intermissionUntil) }; break;
-      case "finale": e.finishEngagement("All rounds complete"); break;
+      case "finale": this.finishAllPending(); break; // flushes any moment still pending (so the counters and the report are truthful), then ends
       default: e.paused = null;
     }
   }
@@ -323,8 +324,7 @@ export class Surprise {
     if (this.round >= this.rounds) {
       // the last round's winners stay where they are (the ticket screen and report read them there)
       e.nextAt = null;
-      if (this.cfg.momentsMode === "auto" && this.runSlots(["finale"], "finale")) return;
-      return this.finishAllPending();
+      return this.finishAllPending(); // every moment still pending (the finale ones and any that never got a window) runs now, the bumper draw last
     }
     e.winners = new Map();
     this.between = true;
@@ -336,11 +336,11 @@ export class Surprise {
 
   /** Last round, no finale moment left (or manual): any moment still pending is flushed so the counters were truthful, then the engagement ends. */
   private finishAllPending(): void {
-    if (this.lucky || this.scratch) { this.cont = "finale"; return; } // a draw or a card is still on screen (a late claim can bring us here again): the game ends when it has finished
     if (this.cfg.momentsMode === "auto") {
-      const rest = this.moments.filter((m) => m.status === "pending");
-      if (rest.length) { rest.forEach((m) => (m.slot = "finale")); this.queue = rest.map((m) => m.id); this.cont = "finale"; this.startNext(); return; }
+      const rest = this.moments.filter((m) => m.status === "pending" && !this.queue.includes(m.id));
+      if (rest.length) { const inOrder = [...rest.filter((m) => !m.bumper), ...rest.filter((m) => m.bumper)]; inOrder.forEach((m) => (m.slot = "finale")); this.queue.push(...inOrder.map((m) => m.id)); this.cont = "finale"; this.startNext(); return; }
     }
+    if (this.lucky || this.scratch || this.queue.length) { this.cont = "finale"; return; } // a draw or a card is still on screen or waiting (a late claim can bring us here again): the game ends when the last one has finished
     this.e.finishEngagement("All rounds complete");
   }
 
