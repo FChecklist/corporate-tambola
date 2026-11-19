@@ -56,7 +56,7 @@ describe("pay link: anyone with the link can pay, and only that game", () => {
       expect(info.price.total).toBe(price(100, "INR").total); expect(JSON.stringify(info)).not.toMatch(/boss@|"cap"|ctk_|cta_/); expect(info.game.organizer.email).toMatch(/^[^@*]\*\*\*@acme\.com$/); // payment pages redesign (2 Nov 2026): the payer sees who organizes the game, the e-mail masked; never the full address
     });
   }
-  test("an AI key cannot make a pay link", async () => { const g = await unpaid(100); expect((await call("POST", `/api/z/${g.id}/paylink`, {}, keyH(g.ai))).status).toBeGreaterThanOrEqual(400); });
+  test("the limited AI key (cta_) can make a pay link (owner ruling 20 Nov 2026)", async () => { const g = await unpaid(100); expect((await call("POST", `/api/z/${g.id}/paylink`, {}, keyH(g.ai))).status).toBe(200); });
   test("a new link cancels the old one", async () => {
     const g = await unpaid(100); const a = await link(g), b = await link(g);
     expect((await j(await call("GET", `/api/paylink/${tokenOf(a.body.url)}`))).status).toBe("expired");

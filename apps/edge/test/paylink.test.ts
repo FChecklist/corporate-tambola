@@ -60,14 +60,14 @@ describe("making the link: who may", () => {
   });
   test("an AI key, a stranger, no key, another Organizer, another game's Co-host and a Host on an AI link are all refused", async () => {
     const t = await team();
-    expect((await link(t.ai)).status).toBe(403); expect((await link("ctk_" + "a".repeat(48))).status).toBe(403); expect((await link("")).status).toBe(403);
+    expect((await link(t.ai)).status).toBe(200); /* 20 Nov 2026: the limited AI key (cta_) may make the link */ expect((await link("ctk_" + "a".repeat(48))).status).toBe(403); expect((await link("")).status).toBe(403);
     expect((await link(t.other, "PL-1")).status).toBe(404); expect((await link(t.master, "NOPE-1")).status).toBe(404);
     const other = await j(await call("POST", "/api/org/cohost", { label: "Zed", phone: "9876500005", e: "PL-2" }, t.other));
     expect((await link(other.cohostKey, "PL-1")).status).toBe(404);
     const mine = await j(await call("POST", "/api/org/cohost", { label: "Moe", phone: "9876500006", e: "PL-1" }, t.master));
     expect((await link(mine.cohostKey, "PL-1")).status).toBe(200);
-    const viaAi = await call("POST", `/ai/${t.ai}/z/PL-1/paylink`, {}); expect(viaAi.status).toBe(403);
-    expect((raw.prepare("SELECT COUNT(*) AS c FROM paylink").get() as any).c).toBe(1); // only the one made by this game's own Co-host
+    const viaAi = await call("POST", `/ai/${t.ai}/z/PL-1/paylink`, {}); expect(viaAi.status).toBe(200); // the same key, written in the address
+    expect((raw.prepare("SELECT COUNT(*) AS c FROM paylink").get() as any).c).toBe(3); // the AI key (twice: header and address) and this game's own Co-host each made one; nothing else did
   });
   test("the token is stored hashed, never in clear", async () => {
     const t = await team(); const r = await link(t.master); const tok = tokenOf(r.body.url);

@@ -897,6 +897,7 @@ export const AI_MANIFEST = {
   packs: PACKS.map(([n]) => ({ upTo: n, inr: price(n, "INR").total, usd: price(n, "USD").total })),
   choices: { call_seconds: [12], tickets: [1, 2], rewards: PRIZE_HOUSES.map((h) => h.id === "full2" ? "full2 (two tickets: pattern full, scope two_ticket)" : h.id), winners_per_reward: "1 up to the house maximum: Full House and full2 10, Top/Middle/Bottom Line 2, every other house 1", break_kinds: ["file", "youtube", "slides", "speech", "lucky (1, 3, 5 or 10 winners)"], rounds: "1 to 5" },
   you_can: [
+    { do: "Make the pay link a person opens to pay for a game that is not yet paid for (you pay nothing; the person pays)", call: "POST /api/z/{id}/paylink -> {url, expiresMs}; one open link per game, a new one cancels the old; 409 if the game is already paid for or cancelled" },
     { do: "Turn the organizer's chosen date and time into the startRound the engagement needs, and check it is in the future", call: "GET /api/z/schedule?at=2026-10-03T16:00:00+05:30 -> {startRound, startMs, startsInMinutes, startsAtIST}" },
     { do: "Read back everything saved for one engagement (start time in the organizer's time, speed, limit, tickets, every reward, every break, rounds, head-count, and whether it is a draft, published or paid). Use it to confirm the details with the organizer after every change", call: "GET /api/z/{id}/summary" },
     { do: "List engagements and head-counts", call: "GET /api/history" },
@@ -942,7 +943,6 @@ export const AI_MANIFEST = {
     "Delete participant data (you may ASK; the organizer confirms)",
     "Pause, resume or stop a running game (you may ASK; only the organizer's own browser holds that signing key)",
     "Create or retire the organizer's own sign-in keys, change their e-mail or delete the account, or sign in with Google",
-    "Make a pay link that anyone can open (POST /api/z/{id}/paylink answers 403 to an AI key: only the Organizer, a Host or a Co-host makes one)",
     "Download names, mobile numbers or e-mails, make a certificate that carries a name, or approve or reject a claim (the organizer does this in More tools in their console); make or retire game keys or Host keys",
     "Write or run code on the platform",
   ],
@@ -1275,8 +1275,9 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   { // a pay link anyone can open (paylink.ts): the Organizer, a Host or a Co-host of the game makes it; one open link per game, a new one cancels the old
     const plm = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/paylink$/);
     if (plm && req.method === "POST") {
-      if (a.kind === "ai") return json({ error: "A pay link is for people to make themselves. It is not available through an AI link. Ask the owner to make it in the console (Check, publish and pay)." }, 403);
-      if (!a.org || a.viaLink || (a.kind !== "master" && a.kind !== "host" && a.kind !== "cohost")) return deny(a);
+      if (a.kind === "ai" && a.scopeKind) return json({ error: "A game key (ctg_) cannot make a pay link. The organizer's own AI key (cta_) or the organizer makes it." }, 403); // a key made for ONE game keeps its narrow rights
+      if (a.kind === "ai" && (await isHelperKey(env.DB, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))) return json({ error: "A Help Desk helper's key cannot make a pay link. The organizer makes it." }, 403); // the helper's own AI key keeps its narrow rights
+      if (!a.org || a.viaLink || (a.kind !== "master" && a.kind !== "ai" && a.kind !== "host" && a.kind !== "cohost")) return deny(a); // the Organizer's limited AI key (cta_) may make the link: it pays nothing, a person opens it and pays. Every other AI limit stays (no pay, no team, no keys, no publish)
       const pe = await env.DB.prepare("SELECT id, org, cap, pack, cancelled_ms, start_round FROM engagement WHERE id=?").bind(plm[1]!).first<{ id: string; org: string | null; cap: number; pack: number | null; cancelled_ms: number | null; start_round: number }>();
       if (!pe || pe.org !== a.org) return json({ error: "No such engagement." }, 404);
       if (a.kind === "cohost" && a.eid && a.eid !== pe.id) return json({ error: `Your Co-host link is for the game ${a.eid}, not ${pe.id}. Open the game ${a.eid}.` }, 403);
