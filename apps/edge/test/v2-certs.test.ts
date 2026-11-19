@@ -147,3 +147,11 @@ describe("anyone can verify, and a changed record is caught", () => {
     expect((await call("GET", `/api/z/${a.g.id}/v2/certs/${cb[0].id}.html`, undefined, keyH(a.g.key))).status).toBe(404); // another game's certificate is not downloadable through this game
   });
 });
+
+describe("prize names on certificates use the right ordinal", () => {
+  test("21st, 22nd, 23rd, 11th, 12th, 13th", async () => {
+    const { prizeName } = await import("../src/v2-certs");
+    const want: Record<number, string> = { 21: "21st", 22: "22nd", 23: "23rd", 11: "11th", 12: "12th", 13: "13th", 31: "31st", 101: "101st" };
+    for (const [n, s] of Object.entries(want)) expect(prizeName("full", Number(n), true)).toStartWith(s + " ");
+  });
+});
