@@ -283,7 +283,7 @@ export class Surprise {
     const wasConcurrent = s.concurrent;
     this.scratch = null;
     m.status = "done"; m.endedAt = t; this.lastMomentCall = this.e.called.length;
-    if (!wasConcurrent) this.afterMoment();
+    if (!wasConcurrent || (this.cont === "finale" && !this.lucky && !this.queue.length)) this.afterMoment(); // the finale was only waiting for this card
   }
 
   private completeMoment(m: Moment): void {
@@ -295,6 +295,7 @@ export class Surprise {
   private afterMoment(): void {
     if (this.queue.length) return this.startNext();
     if (this.scratch && !this.scratch.concurrent) return; // still waiting for a pausing scratch card
+    if (this.scratch && this.cont === "finale") return; // a card that runs beside the numbers is still open: the engagement ends only once it has been revealed (scratch_tick finishes it)
     const c = this.cont; this.cont = "none";
     const e = this.e, t = e.now();
     switch (c) {
@@ -335,6 +336,7 @@ export class Surprise {
 
   /** Last round, no finale moment left (or manual): any moment still pending is flushed so the counters were truthful, then the engagement ends. */
   private finishAllPending(): void {
+    if (this.lucky || this.scratch) { this.cont = "finale"; return; } // a draw or a card is still on screen (a late claim can bring us here again): the game ends when it has finished
     if (this.cfg.momentsMode === "auto") {
       const rest = this.moments.filter((m) => m.status === "pending");
       if (rest.length) { rest.forEach((m) => (m.slot = "finale")); this.queue = rest.map((m) => m.id); this.cont = "finale"; this.startNext(); return; }

@@ -457,3 +457,37 @@ describe("a whole event: 2 rounds, lucky draws, a scratch card, a bumper", () =>
     expect(rep.winners.length).toBeGreaterThanOrEqual(6);
   });
 });
+
+describe("F28: a scratch card that runs beside the numbers in the finale is revealed before the game ends", () => {
+  function playToEnd(autoMark: boolean) {
+    let t = 1_800_000_000_000, seed = 7;
+    const rand = (n: number) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+    const events: PublicEvent[] = [];
+    const e = new EngagementEngine({ callMode: "ai" }, { now: () => t, rand, emit: (x) => events.push(x) });
+    e.updateSettings("organizer", { surprise: { scratchCards: 2, autoMark, momentsMode: "auto" } } as any);
+    e.setRewards("organizer", makeRewardLines([{ pattern: "early5", texts: ["a"] }]));
+    e.addParticipants(Array.from({ length: 10 }, (_, i) => ({ name: "P" + i, e164: "r" + i })));
+    e.participants.forEach((p, i) => e.confirmJoin("d" + i, p.id));
+    e.start(); t += 60_000;
+    let endedAfterReveal: boolean | null = null;
+    for (let s = 0; s < 4000 && e.status !== "ended"; s++) {
+      e.tick();
+      if (e.called.length >= 5 && !e.paused) for (const p of e.participants) { const own = p.tickets[0]!.flat().filter((n) => n && e.called.includes(n)); if (own.length >= 5) e.claim(p.id, { ticket: "A", pattern: "early5", cut: own as number[] }); }
+      t += 500;
+    }
+    endedAfterReveal = e.status === "ended" ? !e.sx.scratch : null;
+    for (let s = 0; s < 200; s++) { e.tick(); t += 500; } // well past the 45 s auto-reveal
+    return { e, events, endedAfterReveal };
+  }
+  for (const autoMark of [true, false]) {
+    test(`autoMark ${autoMark}: every card is revealed, none is left running, the report has them`, () => {
+      const { e, endedAfterReveal } = playToEnd(autoMark);
+      expect(e.status).toBe("ended");
+      expect(e.sx.scratch).toBeNull(); // nothing left running
+      expect(e.sx.moments.filter((m) => m.kind === "scratch").every((m) => m.status === "done")).toBe(true);
+      expect(e.sx.results.filter((r) => r.kind === "scratch").length).toBe(2); // both cards are in the results the report reads
+      expect(endedAfterReveal).toBe(true); // the game did not end while a card was still open
+    });
+  }
+});
+
