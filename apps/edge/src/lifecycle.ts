@@ -15,6 +15,7 @@ import { sweepVisits } from "./visits";
 import { closeAuditFor, isHeld, shredParticipantAudit } from "./audit";
 import { GRACE_ROUNDS, INVITE_CATEGORIES, PRIZE_HOUSES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
 import { callRoundR, hostGameOf, luckyRound } from "../../../packages/beacon/src/game";
+import { ordinalName } from "../../../packages/shared/src/ordinal";
 import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../../../packages/beacon/src/control";
 import { storedHolds } from "./claimhold";
 import { seatOfPid } from "../../../packages/beacon/src/unique-ticket";
@@ -41,7 +42,7 @@ const IST = 5.5 * 3_600_000, DAY = 86_400_000;
 const CHUNK = 250;                                  // people opened per call while preparing a report (keeps a call within a free Worker's CPU)
 const PART = 1500;                                  // people per PDF; a bigger game is e-mailed as several parts
 const NAMES: Record<string, string> = Object.fromEntries(PRIZE_HOUSES.map((h) => [h.id, h.label]));
-const ord = (n: number) => ["", "1st", "2nd", "3rd"][n] ?? `${n}th`;
+const ord = ordinalName;
 
 type LifeEnv = Env & PiiEnv & PayEnv;
 const d1kv = (env: Env): KV => ({
