@@ -65,6 +65,8 @@ import { hostGameOf } from "../../../packages/beacon/src/game";
 import { buildGameLog, readSavedGameLog } from "./gamelog";
 import { CLAIM_LATE_MSG } from "./modes";
 import { callTimeMs } from "./lifecycle";
+import { V2_SCHEMA } from "./v2-schema";
+import { v2Route, v2AiLabel, v2Purge } from "./v2";
 import { claimHolds, startClaimHold, storedHolds } from "./claimhold";
 import { NEEDS_CONSOLE_MSG, NOT_BEFORE_MSG, STARTED_MSG, modeTooBig, changesView, describeChanges, goRoundOf, liveOf, logChanges, needsControl, readChanges, whoLabel } from "./modes";
 import { QUICKNET } from "../../../packages/beacon/src/index";
@@ -246,6 +248,8 @@ export const SCHEMA: string[] = [
   "CREATE INDEX IF NOT EXISTS organizer_key_org ON organizer_key (org)",
   "CREATE INDEX IF NOT EXISTS entitlement_org ON entitlement (org, eid)",
   "CREATE INDEX IF NOT EXISTS engagement_org ON engagement (org)",
+  // V2 (13 Nov 2026, 0032_v2_changes.sql): game keys, Host keys without personal data, the AI label, certificates, support tickets, claim review, Host hand-over (all additive)
+  ...V2_SCHEMA,
 ];
 
 const PATTERNS = new Set<string>([...HOUSE_ORDER.filter((k) => k !== "unlucky"), "lucky"]);
@@ -718,7 +722,7 @@ async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promi
   const m = url.pathname.match(/^\/ai\/([^/]+)(?:\/(.*))?$/s);
   if (!m || !LINK_KEY.test(m[1]!)) return linkGone();
   const key = m[1]!;
-  const a = await authOfKey(env, key, now);
+  const a = await authOfKey(env, key, now, true); // the link is rewritten into a header call that passes the scope gate
   if (a.plat || !a.org || (a.kind !== "ai" && a.kind !== "host")) return linkGone();
   const origin = (env as PayEnv).PUBLIC_ORIGIN ?? url.origin;
   const role: LinkRole = a.kind;
@@ -726,7 +730,7 @@ async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promi
   if (rest === "") {
     if (req.method !== "GET" && req.method !== "HEAD") return linkText("This address is read with GET.", 405);
     const keyId = (await sha("key|" + key)).slice(0, 10);
-    const work = auditAi(env.DB, a.org, new Request(origin + "/ai/manual", { method: "GET", headers: req.headers }), keyId, 200, now);
+    const work = auditAi(env.DB, a.org, new Request(origin + "/ai/manual", { method: "GET", headers: req.headers }), keyId, 200, now, v2AiLabel(a as any, req));
     if (waitUntil) waitUntil(work); else await work;
     await noteUse(env, a.org, role === "ai" ? "ai" : "host", keyId, req, now);
     const h = new Headers({ ...CORS, ...LINK_HEADERS });
@@ -739,7 +743,7 @@ async function aiLink(req: Request, env: Env, now: number, waitUntil?: (p: Promi
     if (req.method !== "GET" && req.method !== "HEAD") return linkText("These addresses are read with GET.", 405);
     const kind = rest === "start" || rest === "map" || rest === "facts" ? rest : "go";
     const keyId = (await sha("key|" + key)).slice(0, 10);
-    const work = auditAi(env.DB, a.org, new Request(origin + "/ai/" + kind, { method: "GET", headers: req.headers }), keyId, 200, now);
+    const work = auditAi(env.DB, a.org, new Request(origin + "/ai/" + kind, { method: "GET", headers: req.headers }), keyId, 200, now, v2AiLabel(a as any, req));
     if (waitUntil) waitUntil(work); else await work;
     await noteUse(env, a.org, role === "ai" ? "ai" : "host", keyId, req, now);
     const hh = new Headers({ ...CORS, ...LINK_HEADERS }); const asJson = url.searchParams.get("format") === "json";
@@ -831,24 +835,25 @@ function d1kv(env: Env): KV { return {
   put: async (k, v) => { await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, v).run(); },
 }; }
 
-interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null; viaLink?: boolean; eid?: string | null; /** A Host: the identity the key belongs to and whether the first-open setup (confirmed e-mail + mobile) is finished. */ hid?: string; hostReady?: boolean ; temp?: boolean }
+export interface Auth { plat: boolean; org: string | null; kind: "platform" | "master" | "ai" | "host" | "cohost" | null; /** V2: hash of the key presented, its private label, and (for a key made for ONE game) the game, the kind (gm, ga, lh) and the game it was cloned from */ kh?: string; label?: string | null; scopeEid?: string | null; scopeKind?: "gm" | "ga" | "lh" | null; scopeSrc?: string | null; viaLink?: boolean; eid?: string | null; /** A Host: the identity the key belongs to and whether the first-open setup (confirmed e-mail + mobile) is finished. */ hid?: string; hostReady?: boolean ; temp?: boolean }
 async function authOf(req: Request, env: Env, now: number): Promise<Auth> {
-  return authOfKey(env, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), now);
+  return authOfKey(env, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), now, true);
 }
-async function authOfKey(env: Env, presented: string, now: number): Promise<Auth> {
+/** THE one place a presented key becomes an identity. `gated` = the call comes through the scope gate (the x-organizer / Bearer header, or the /ai/<key> path that is rewritten into that header). A key made for ONE game (scope_eid set, V2) is accepted ONLY when gated: any other way of presenting a key (a request body, as the Google sign-in does; a query string; a helper flow) sees it as no key at all, so it can never be exchanged for a longer-lived or wider key. */
+export async function authOfKey(env: Env, presented: string, now: number, gated = false): Promise<Auth> {
   if (!presented) return { plat: false, org: null, kind: null };
   if (env.ORGANIZER_SECRET && presented === env.ORGANIZER_SECRET) return { plat: true, org: null, kind: "platform" };
   const kh = await sha("key|" + presented);
-  const row = await env.DB.prepare("SELECT org, kind, eid, host_id, expires_ms FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(kh, now).first<{ org: string; kind: "master" | "ai" | "host" | "cohost"; eid: string | null; host_id: string | null; expires_ms: number | null }>();
-  if (!row) return { plat: false, org: null, kind: null };
+  const row = await env.DB.prepare("SELECT org, kind, eid, host_id, expires_ms, label, scope_eid, scope_kind, scope_src FROM organizer_key WHERE hash=? AND revoked=0 AND (expires_ms IS NULL OR expires_ms>?)").bind(kh, now).first<{ org: string; kind: "master" | "ai" | "host" | "cohost"; eid: string | null; host_id: string | null; expires_ms: number | null; label: string | null; scope_eid: string | null; scope_kind: "gm" | "ga" | "lh" | null; scope_src: string | null }>();
+  if (!row || (row.scope_eid && !gated)) return { plat: false, org: null, kind: null };
   if (row.kind === "host") { // a Host's first-open link works once and for 7 days; the console works only after setup (hostsetup.ts)
     const hs = await hostKeyStatus(env.DB, kh, row.host_id, now);
     if (!hs.usable) return { plat: false, org: null, kind: null };
     // the 24-hour Host AI-link key (cth_, mailed to the Organizer for an outside AI chat) has an expiry and no first-open record: it must never be able to finish a Host setup and turn itself into a lasting key
     const temp = row.expires_ms != null && !row.host_id && !(await hostStateRow(env.DB, kh));
-    return { plat: false, org: row.org, kind: "host", eid: row.eid ?? null, hid: hs.hid, hostReady: hs.ready, ...(temp ? { temp: true } : {}) };
+    return { plat: false, org: row.org, kind: "host", eid: row.eid ?? null, hid: hs.hid, hostReady: hs.ready, ...(temp ? { temp: true } : {}), kh, label: row.label, ...(row.scope_eid ? { scopeEid: row.scope_eid, scopeKind: row.scope_kind, scopeSrc: row.scope_src } : {}) };
   }
-  return { plat: false, org: row.org, kind: row.kind, eid: row.eid ?? null };
+  return { plat: false, org: row.org, kind: row.scope_kind === "ga" ? "ai" : row.kind, eid: row.eid ?? null, kh, label: row.label, ...(row.scope_eid ? { scopeEid: row.scope_eid, scopeKind: row.scope_kind, scopeSrc: row.scope_src } : {}) };
 }
 /** May this caller act on this engagement? `master` = needs the organizer's own key, or a Host's (both are people, never the AI), or ours. A Co-host never passes: their rights are a few named routes only. */
 const can = (a: Auth, e: { org: string | null }, master = false) => a.plat || (!!a.org && e.org === a.org && a.kind !== "cohost" && (!master || a.kind === "master" || (a.kind === "host" && !a.viaLink)));
@@ -913,6 +918,9 @@ export const AI_MANIFEST = {
     { do: "Create a Host key (up to 5 Hosts; through an AI link a Host may only watch, announce and tick prizes given)", call: "POST /api/org/host {label, email?, mobile?} (at least one of email or mobile) -> {hostKey, manualUrl, id, label}. The AI cannot call it (403). A Host must have an e-mail address or a mobile number (the owner gives it); their own one-time console link (7 days) is e-mailed to the Host, or sent by the owner on WhatsApp" },
     { do: "Co-hosts (unlimited; a Co-host has a name and a mobile number, no e-mail, belongs to one game, only invites people with an own link and pays) are added by the Organizer or a Host in the console, never through an AI link", call: "The people on the team: GET /api/org/team (or GET /api/org/team?e={game id}); remove one: POST /api/org/team/retire {id}" },
     { do: "Read the audit trail of AI calls, when the game ends, and whether the report is ready (the report address itself goes only to the organizer)", call: "GET /api/org/ai/audit ; GET /api/z/{id}/life ; GET /api/z/{id}/reportlink" },
+    { do: "Read this game's payment history (the payee is IT SERVICES BY RAJAT AGARWAL via Razorpay; an AI sees no payer e-mail, gateway reference or invoice link) and the game's own trail of AI calls, each labelled AI or AI: <name>", call: "GET /api/z/{id}/v2/receipts ; GET /api/z/{id}/v2/aitrail" },
+    { do: "Raise or read a support ticket for the organizer (never put names or mobile numbers in it)", call: "POST /api/v2/support {subject, body, game?} ; GET /api/v2/support ; GET /api/v2/support/{id}" },
+    { do: "A key made for ONE game (ctg_, given by the organizer, sent as x-organizer or Authorization: Bearer) works for that game only and stops 24 hours after it ends; after the end it can only delete data, download data, fetch the invoice, or make a new game like it. A key made for an AI is read exactly as your own AI key: labelled AI in the audit trail, never names, mobile numbers or the report link, and it cannot publish, pay, approve claims, make keys, delete the game, or make a new game (the organizer does those); after the end it can only read the results, receipts and report status, and download the game's data (GET /api/z/{id}/v2/export: ticket numbers only)", call: "GET /api/whoami -> {gameKey: true, game, over, expiresMs}" },
     { do: "Suggest a feature, improvement or report we should build (shared with every organizer's AI, reviewed by us)", call: "POST /api/z/suggestions {kind: feature|improvement|report|bug|other, title, body}" },
     { do: "See everyone's suggestions and what we decided, and add your support to one", call: "GET /api/z/suggestions ; POST /api/z/suggestions/{id}/vote" },
   ],
@@ -934,6 +942,7 @@ export const AI_MANIFEST = {
     "Pause, resume or stop a running game (you may ASK; only the organizer's own browser holds that signing key)",
     "Create or retire the organizer's own sign-in keys, change their e-mail or delete the account, or sign in with Google",
     "Make a pay link that anyone can open (POST /api/z/{id}/paylink answers 403 to an AI key: only the Organizer, a Host or a Co-host makes one)",
+    "Download names, mobile numbers or e-mails, make a certificate that carries a name, or approve or reject a claim (the organizer does this in More tools in their console); make or retire game keys or Host keys",
     "Write or run code on the platform",
   ],
 };
@@ -950,9 +959,12 @@ async function route(req: Request, env: Env, now: number): Promise<Response> {
     const presented = req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
     const kid = (await sha("key|" + presented)).slice(0, 10);
     kidForLog = kid;
-    await auditAi(env.DB, a.org, req, kid, r.status, now);
+    await auditAi(env.DB, a.org, req, kid, r.status, now, v2AiLabel(a as any, req)); // V2: the trail names the caller "AI" or "AI: ChatGPT"
     if (r.status !== 403) await noteUse(env, a.org, a.kind === "ai" ? "ai" : "host", kid, req, now);
-  } else if (a.org && a.kind) kidForLog = (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 10);
+  } else if (a.org && a.kind) {
+    kidForLog = (await sha("key|" + (req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))).slice(0, 10);
+    const aiLabel = v2AiLabel(a as any, req); if (aiLabel) await auditAi(env.DB, a.org, req, kidForLog, r.status, now, aiLabel); // V2: a master-key or game-key call that says it is an AI is in the game's own trail too, labelled
+  }
   await auditRequest(env as AuditEnv, req, peek, a, r.status, now, kidForLog);
   return r;
 }
@@ -963,6 +975,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (a.kind === "host" && !a.viaLink && a.hostReady === false && !(p === "/api/whoami" || p.startsWith("/api/host/setup") || p.startsWith("/api/auth/") || p.startsWith("/api/paylink/") || (p === "/api/notices" && req.method === "GET")))
     return json({ error: "Please finish your setup first: confirm your e-mail address and add your mobile number.", code: "host-setup" }, 403);
 
+  { const v2 = await v2Route({ req, env: env as any, now, a: a as any, url, p, json, body, spend: (n = 1) => spend(env, now, n), busy: BUSY, origin: (env as PayEnv).PUBLIC_ORIGIN ?? url.origin, hostActions: HOST_ACTIONS }); if (v2) return v2; } // V2 (v2.ts): the new routes, and the gate for a key made for one game; null for every other key and route
   if (req.method === "GET" && p === "/api/z/ai-manifest") return json(AI_MANIFEST);
   { const bm = req.method === "GET" ? p.match(/^\/api\/beacon\/([0-9a-f]{64})\/public\/(latest|\d{1,10})$/) : null; if (bm) return beaconRelay(req, bm[1]!, bm[2]!); }
   { const mr = await modeRoute(req, env as any, now, a.plat && req.headers.get("x-ct-link") !== "1", (n) => purgeTestData(env, n)); if (mr) return mr; } // TEST/LIVE switch, allow-list, purge (mode.ts): owner only, except the public read of the word TEST or LIVE
@@ -1093,7 +1106,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       const hk = typeof b.hostKey === "string" ? b.hostKey : "";
       const ha = hk ? await authOfKey(env, hk, now) : null;
       const kh = hk ? await sha("key|" + hk) : "";
-      const ident = ha && ha.kind === "host" && ha.hid === kh ? await env.DB.prepare("SELECT expires_ms FROM organizer_key WHERE hash=?").bind(kh).first<{ expires_ms: number | null }>() : null;
+      const ident = ha && ha.kind === "host" && ha.hid === kh ? await env.DB.prepare("SELECT expires_ms FROM organizer_key WHERE hash=? AND scope_eid IS NULL").bind(kh).first<{ expires_ms: number | null }>() : null; // V2: a Host key made for one game (no personal data) can never be turned into a lasting key here
       if (!ha || !ident || ident.expires_ms !== null || !ha.org) return bad("This link has been used or has expired. Ask the Organizer for a new one, or sign in with your e-mail.", "host-link-gone");
       const row = await identityRow(env.DB, ha.hid!), onFile = row?.email_sealed ? await openText(env as any, row.email_sealed) : null;
       if (onFile && normEmail(onFile) !== email) return json({ error: `This link is for ${maskEmail(onFile)}`, code: "email-mismatch" }, 403);
@@ -1281,7 +1294,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (hEmail && !EMAIL_RE.test(hEmail)) return json({ error: "That e-mail address does not look right. Please check it." }, 400);
     const hMob = hasMob ? cleanPhone(rawMob) : null;
     if (hMob && !hMob.ok) return json({ error: "Please check the Host's mobile number. " + hMob.why }, 400);
-    const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM organizer_key WHERE org=? AND kind='host' AND revoked=0 AND expires_ms IS NULL AND (host_id IS NULL OR host_id=hash) AND COALESCE(created_by,'')<>'d'").bind(a.org).first<{ c: number }>())?.c ?? 0; // a Help Desk Host (created_by 'd') does not use one of the 5 places
+    const n = (await env.DB.prepare("SELECT COUNT(*) AS c FROM organizer_key WHERE org=? AND kind='host' AND revoked=0 AND expires_ms IS NULL AND (host_id IS NULL OR host_id=hash) AND COALESCE(created_by,'')<>'d' AND scope_eid IS NULL").bind(a.org).first<{ c: number }>())?.c ?? 0; // V2: a game-only Host key never uses one of the account's places. A Help Desk Host (created_by 'd') does not use one of the 5 places
     if (n >= MAX_HOSTS) return json({ error: `You can have up to ${MAX_HOSTS} Hosts at a time. Retire one first.` }, 409);
     if (!(await spend(env, now, 4))) return BUSY();
     const key = "cth_" + randHex(24), label = cleanLabel(hb?.label), kh = await sha("key|" + key);
@@ -2251,7 +2264,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   if (action === "vote" && req.method === "POST") return acceptVotes(env as any, e, eid!, await body(req, 65_536), now, json, spend);
   if (action === "confirm" && req.method === "POST") return confirmPrize(env as any, eid!, await body(req), now, json, spend);
   if (action === "myprizes" && req.method === "GET") return myPrizes(env as any, eid!, url, json);
-  if (action === "prizes" && req.method === "GET") { if (!can(a, e)) return deny(a); const outside = a.kind === "ai" || (a.kind === "host" && req.headers.get("x-ct-link") === "1"); return listPrizes(env as any, eid!, json, outside, !outside && (a.plat || a.kind === "master" || a.kind === "host")); } // an AI (or a co-host's AI link) sees ticket numbers only
+  if (action === "prizes" && req.method === "GET") { if (!can(a, e)) return deny(a); const outside = a.kind === "ai" || a.scopeKind === "lh" || (a.kind === "host" && req.headers.get("x-ct-link") === "1"); return listPrizes(env as any, eid!, json, outside, !outside && (a.plat || a.kind === "master" || a.kind === "host")); } // an AI (or a co-host's AI link) sees ticket numbers only
   if (action === "override" && req.method === "POST") { if (!can(a, e) || !(a.plat || a.kind === "master" || a.kind === "host")) return deny(a); return overridePrize(env as any, eid!, await body(req), a.kind, now, json, spend); } // the organizer (or a Host) has the final say on who receives a prize
   if (action === "prizegiven" && req.method === "POST") { if (!can(a, e)) return deny(a); return markGiven(env, eid!, await body(req), a.kind, now, json, spend); }
   if (action === "erase" && req.method === "POST") { // right to deletion: every name, number, seat and invite of this engagement's people. The winners record and the organizer's own details stay, as the report says.
@@ -2420,6 +2433,7 @@ export async function purgeOld(env: Env, now: number): Promise<number> {
   const loose = now - (RETENTION_DAYS - 2) * 86_400_000;
   const old = await env.DB.prepare("SELECT e.id AS id, e.created_ms AS created_ms, e.pack AS pack, e.unplayed_ms AS unplayed_ms, l.end_ms AS end_ms FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE e.created_ms < ? OR (e.pack=0 AND e.created_ms < ?) OR (e.unplayed_ms IS NOT NULL AND e.unplayed_ms < ?)").bind(loose, now - DRAFT_DAYS * 86_400_000, now - SETTINGS_KEEP_MS).all<{ id: string; created_ms: number; pack: number; unplayed_ms: number | null; end_ms: number | null }>();
   await env.DB.prepare("DELETE FROM ai_audit WHERE at_ms < ?").bind(now - RETENTION_DAYS * 86_400_000).run().catch(() => undefined);
+  await v2Purge(env, now); // V2: old support tickets, and the V2 rows of games that no longer exist
   await sweepAudit(env.DB, now, RETENTION_DAYS); // the AI's audit trail is kept as long as the organizer's own details
   let n = 0; const dormant = new Set<string>();
   for (const x of old.results ?? []) {

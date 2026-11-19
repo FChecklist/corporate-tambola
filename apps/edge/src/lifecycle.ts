@@ -15,6 +15,7 @@ import { sweepVisits } from "./visits";
 import { closeAuditFor, isHeld, shredParticipantAudit } from "./audit";
 import { GRACE_ROUNDS, INVITE_CATEGORIES, PRIZE_HOUSES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
 import { callRoundR, hostGameOf, luckyRound } from "../../../packages/beacon/src/game";
+import { ordinalName } from "../../../packages/shared/src/ordinal";
 import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../../../packages/beacon/src/control";
 import { storedHolds } from "./claimhold";
 import { seatOfPid } from "../../../packages/beacon/src/unique-ticket";
@@ -41,7 +42,7 @@ const IST = 5.5 * 3_600_000, DAY = 86_400_000;
 const CHUNK = 250;                                  // people opened per call while preparing a report (keeps a call within a free Worker's CPU)
 const PART = 1500;                                  // people per PDF; a bigger game is e-mailed as several parts
 const NAMES: Record<string, string> = Object.fromEntries(PRIZE_HOUSES.map((h) => [h.id, h.label]));
-const ord = (n: number) => ["", "1st", "2nd", "3rd"][n] ?? `${n}th`;
+const ord = ordinalName;
 
 type LifeEnv = Env & PiiEnv & PayEnv;
 const d1kv = (env: Env): KV => ({
@@ -222,7 +223,7 @@ export async function acceptOver(env: Env, e: any, eid: string, b: any, now: num
 /** Deletes every participant's name, number, seat, invite record, ticket link and working copy of the report, and crypto-shreds the participants' personal part of the audit log (unless the owner set a legal hold). The winners record, the prize hand-over record, the organizer's details and the engagement itself stay. */
 export async function erasePersonal(env: Env, eid: string, now: number, by: string): Promise<void> {
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM bogey WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rvote WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rcand WHERE eid=?").bind(eid),
+    env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(eid), env.DB.prepare("UPDATE v2_claim_review SET reason=NULL WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM bogey WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rvote WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rcand WHERE eid=?").bind(eid),
     env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM consent_log WHERE kind='K4' AND ref=?").bind(eid), env.DB.prepare("DELETE FROM seat WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM person WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM waiting WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM overvote WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM data_request WHERE eid=?").bind(eid), // players' data requests (rights.ts) go with the people they are about
     env.DB.prepare("DELETE FROM kv WHERE k=? OR k=? OR k=? OR k=? OR (k >= ? AND k < ?) OR k=?").bind(`seats-base/${eid}`, `rpt/${eid}`, `rptopen/${eid}`, `rptremind/${eid}`, `rptc/${eid}/`, prefixEnd(`rptc/${eid}/`), `seats-blk/${eid}`),
     env.DB.prepare("DELETE FROM kv WHERE (k >= ? AND k < ?) OR (k >= ? AND k < ?) OR (k >= ? AND k < ?) OR (k >= ? AND k < ?) OR (k >= ? AND k < ?) OR (k >= ? AND k < ?)").bind(`present/${eid}/`, prefixEnd(`present/${eid}/`), `ckfail/${eid}/`, prefixEnd(`ckfail/${eid}/`), `idx/${eid}/`, prefixEnd(`idx/${eid}/`), `email/${eid}/`, prefixEnd(`email/${eid}/`), `emailmiss/${eid}/`, prefixEnd(`emailmiss/${eid}/`), `idmiss/${eid}/`, prefixEnd(`idmiss/${eid}/`)), // the check-in records of every participant go with their data (the winners' evidence, wev/, stays with the winners record for 365 days)
