@@ -134,7 +134,7 @@ export class Surprise {
   private get(id: string) { return this.moments.find((m) => m.id === id)!; }
 
   private startNext(): void {
-    if (this.scratch) return; // one card at a time: a card running beside the numbers must be revealed before the next moment starts (scratch_tick comes back here)
+    if (this.scratch || this.lucky) return; // one moment at a time: a card running beside the numbers must be revealed, and a draw must be finished, before the next moment starts (scratch_tick and finishLucky come back here)
     const id = this.queue.shift();
     if (!id) return this.afterMoment();
     const m = this.get(id);

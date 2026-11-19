@@ -542,3 +542,28 @@ describe("a round that ends while the moments of an earlier window are still wai
     expect(sx.between ? e.paused?.type : "intermission").toBe("intermission");
   });
 });
+
+describe("the last prize is awarded while a lucky draw is on screen", () => {
+  test("the draw on screen is not replaced; the other moments wait for it and every moment runs once", () => {
+    const h = make({ rounds: 1, luckyDraws: 3, luckyWinners: 1, bumper: true, scratchCards: 2, scratchWinning: 3, momentsMode: "auto", autoMark: true },
+      { rewards: makeRewardLines([{ pattern: "top", texts: ["T"] }]) });
+    join(h, 8);
+    h.eng.start();
+    const e = h.eng, sx = e.sx as any;
+    const pump = () => { h.advance(500); e.tick(); for (const w of toPid(h, "lucky_won")) e.confirmPresent(w.pid, w.momentId); };
+    for (let n = 0; n < 400 && (sx.scratch || sx.lucky || sx.queue.length); n++) pump(); // let the start-of-game moments finish first
+    const lk = sx.moments.find((m: any) => m.kind === "lucky" && !m.bumper && m.status === "pending");
+    lk.slot = "never"; sx.queue = [lk.id]; sx.cont = "resume"; sx.startNext();
+    expect(sx.lucky?.id).toBe(lk.id);
+    sx.finishRound("last prize"); // last round: every other pending moment is queued behind the draw
+    expect(sx.lucky?.id).toBe(lk.id); // not replaced
+    expect(sx.scratch).toBeNull(); // and nothing else started beside it
+    expect(sx.queue.length).toBeGreaterThan(0); // the others wait their turn
+    for (let n = 0; n < 4000 && e.status !== "ended"; n++) pump();
+    expect(e.status).toBe("ended");
+    expect(sx.moments.every((m: any) => m.status === "done")).toBe(true);
+    expect(sx.results.length).toBe(sx.moments.length); // each moment has exactly one result
+    const last = sx.results[sx.results.length - 1];
+    expect(sx.moments.find((m: any) => m.id === last.momentId).bumper).toBe(true);
+  });
+});
