@@ -331,7 +331,7 @@ export class Surprise {
     this.intermissionUntil = e.now() + SCFG.INTERMISSION_MS;
     e.paused = { type: "intermission", round: this.round, until: this.intermissionUntil };
     e.nextAt = null;
-    if (this.cfg.momentsMode === "auto") this.runSlots([`break:${this.round}:1`, `break:${this.round}:2`], "intermission");
+    if (this.cfg.momentsMode === "auto" && !this.runSlots([`break:${this.round}:1`, `break:${this.round}:2`], "intermission") && (this.lucky || this.queue.length)) this.cont = "intermission"; // moments of an earlier window are still waiting or running: when they are done the break goes on (a left-over "resume" would restart the numbers in the middle of the break)
   }
 
   /** Last round, no finale moment left (or manual): any moment still pending is flushed so the counters were truthful, then the engagement ends. */

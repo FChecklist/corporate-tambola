@@ -517,3 +517,28 @@ describe("F28: every planned moment happens before the game ends, the bumper dra
     });
   }
 });
+
+describe("a round that ends while the moments of an earlier window are still waiting", () => {
+  test("the waiting moments finish, and then the break goes on (the game is never resumed in the middle of a break)", () => {
+    const h = make({ rounds: 2, luckyDraws: 3, luckyWinners: 1, bumper: true, scratchCards: 2, scratchWinning: 3, momentsMode: "auto", autoMark: true },
+      { rewards: makeRewardLines([{ pattern: "top", texts: ["T"] }, { pattern: "mid", texts: ["M"] }]) });
+    join(h, 8);
+    h.eng.start();
+    const e = h.eng, sx = e.sx as any;
+    for (let n = 0; n < 400 && (sx.scratch || sx.lucky || sx.queue.length); n++) { h.advance(500); e.tick(); for (const w of toPid(h, "lucky_won")) e.confirmPresent(w.pid, w.momentId); } // let the start-of-game moments finish first
+    const sc = sx.moments.find((m: any) => m.kind === "scratch" && m.status === "pending"), lk = sx.moments.find((m: any) => m.kind === "lucky" && !m.bumper && m.status === "pending");
+    sc.slot = lk.slot = "never"; // only the hand-made queue below can run them
+    sx.queue = [sc.id, lk.id]; sx.cont = "resume"; sx.startNext(); // a card beside the numbers, the draw waits behind it
+    expect(sx.scratch).not.toBeNull(); expect(sx.queue).toEqual([lk.id]);
+    sx.finishRound("test"); // the round ends while the draw is still waiting
+    let resumedInBreak = false;
+    for (let n = 0; n < 400 && (sx.scratch || sx.lucky || sx.queue.length); n++) {
+      h.advance(500); e.tick();
+      for (const w of toPid(h, "lucky_won")) e.confirmPresent(w.pid, w.momentId);
+      if (sx.between && !e.paused) resumedInBreak = true;
+    }
+    expect(sx.results.filter((r: any) => r.kind === "lucky").length).toBe(1); // the waiting draw did happen
+    expect(resumedInBreak).toBe(false);
+    expect(sx.between ? e.paused?.type : "intermission").toBe("intermission");
+  });
+});
