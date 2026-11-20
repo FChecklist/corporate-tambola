@@ -290,7 +290,8 @@ async function addPeople(c: Ctx, who: Caller, b: any): Promise<Response> {
     if (seen.has(ph)) { duplicates++; continue; }
     const idHash = vf.mode === "either" && emp ? await empHashOf(c.env, emp) : undefined; // "mobile number or employee ID": a listed person with both can come in with either, so the ID points to the mobile-number identity
     if (idHash) { // the same employee ID on two people of one list would let the second take over the first's ID: the second is a duplicate
-      const al = await c.env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`idx/${c.eid}/${idHash}`).first<{ v: string }>();
+      const lgId = vf.idKind === "email" ? null : legacyEmpFor(x?.empId ?? x?.employeeId, c.e); // an older game may hold this ID under the form an older release stored (audit idi-e1 finding 1)
+      const al = (await c.env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`idx/${c.eid}/${idHash}`).first<{ v: string }>()) ?? (lgId ? await c.env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`idx/${c.eid}/${await empHashOf(c.env, lgId)}`).first<{ v: string }>() : null);
       if ((al && al.v !== ph && (await c.env.DB.prepare("SELECT 1 AS x FROM person WHERE eid=? AND ph=? AND status<>'removed'").bind(c.eid, al.v).first())) || seen.has("I" + idHash) || seen.has(idHash)) { if ((empCleanOn(c.e) || vf.idKind === "email") && (seen.has("I" + idHash) || seen.has(idHash)) && (rawOfEmp.get("I" + idHash) ?? rawOfEmp.get(idHash)) !== empRaw) invalid.push({ raw, why: `Same person after cleaning: it reads as ${emp}, like an earlier row.` }); else duplicates++; continue; }
       seen.add("I" + idHash); rawOfEmp.set("I" + idHash, empRaw);
     }
@@ -498,6 +499,7 @@ async function listWaiting(c: Ctx, who: Caller): Promise<Response> {
 }
 /** The invite and approval log (20 Nov 2026): every ID that asked to come in, who it came through, and what was decided and by whom, newest first. The Organizer and Hosts see every row; a Co-host or a family host only the rows of their own link (the same rule as the waiting room). Only the ID is shown: no name, no number. */
 async function peopleLog(c: Ctx, who: Caller): Promise<Response> {
+  if (who.kind === "guest") return c.json({ error: "Only the Organizer, Hosts and Co-hosts can see this log." }, 403); // owner rule 20 Nov 2026: a guest never reads the log (audit idi-e1 finding 3)
   const label = await labelsOf(c), rows: { ms: number; id: string; kind: string; through: string; by?: string }[] = [];
   const wq = who.all ? c.env.DB.prepare("SELECT pii, via, inviter, status, decided_by, decided_ms, at_ms FROM waiting WHERE eid=? ORDER BY at_ms DESC LIMIT 300").bind(c.eid)
     : c.env.DB.prepare("SELECT pii, via, inviter, status, decided_by, decided_ms, at_ms FROM waiting WHERE eid=? AND chain LIKE ? ORDER BY at_ms DESC LIMIT 300").bind(c.eid, `%,${who.id},%`);
