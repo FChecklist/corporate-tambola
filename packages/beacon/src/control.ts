@@ -511,7 +511,8 @@ export async function registerKey(kv: KV, engagementId: string, pubKeyHex: strin
  * completely open and still only ever accept the organizer's messages. Rejects (rather than silently ignoring) a message
  * that would take no effect, so the console tells the organizer immediately.
  */
-export async function publishControl(kv: KV, engagementId: string, msg: unknown, game?: GameOpts): Promise<{ ok: true; seq: number; duplicate?: boolean } | { ok: false; status: number; error: string }> {
+export const STALE_ROUND_REFUSAL = "Not accepted: it names a round that has already begun, so its random number could already be known. Please press again.";
+export async function publishControl(kv: KV, engagementId: string, msg: unknown, game?: GameOpts, nowRound?: number): Promise<{ ok: true; seq: number; duplicate?: boolean } | { ok: false; status: number; error: string }> {
   const f = await readPublished(kv, engagementId);
   if (!f) return { ok: false, status: 404, error: "No key is registered for this engagement." };
   if (!wellFormed(msg) || msg.engagementId !== engagementId) return { ok: false, status: 400, error: "Malformed control message." };
@@ -520,6 +521,9 @@ export async function publishControl(kv: KV, engagementId: string, msg: unknown,
   const existing = f.messages.find((m) => m.seq === msg.seq);
   if (existing) return existing.sig === msg.sig ? { ok: true, seq: msg.seq, duplicate: true } : { ok: false, status: 409, error: "That sequence number is already used." };
   if (msg.seq !== f.messages.length + 1) return { ok: false, status: 409, error: `Next sequence number is ${f.messages.length + 1}.` };
+  // FAIRNESS (250x10 game 4): `signedAtRound` is whatever the signer writes, so the lead rules above only compare a message with itself. The store knows the real clock: a message is accepted only if the round it
+  // names has NOT begun yet (its beacon randomness is not published), or a signer who waited could look at the numbers the already-published rounds would give and name the round that gives the one they want.
+  if (nowRound !== undefined && Number.isFinite(nowRound) && msg.atBeaconRound <= nowRound) return { ok: false, status: 422, error: msg.action === "next" || msg.action === "go" ? (msg.action === "next" ? NEXT_REFUSALS.lead : GO_REFUSALS.lead) : STALE_ROUND_REFUSAL };
   const after = resolveControl(cfg, [...f.messages, msg]);
   const bad = after.ignored.find((x) => x.seq === msg.seq);
   if (bad) return { ok: false, status: 422, error: msg.action === "next" || msg.action === "go" || bad.why === BIG_GAME_REFUSAL ? bad.why : `Not accepted: ${bad.why}.` }; // a press is refused in the Host's own words
