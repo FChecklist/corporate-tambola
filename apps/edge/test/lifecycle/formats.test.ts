@@ -78,6 +78,17 @@ for (const f of FORMATS) describe(`[${f.key}] ${f.label}`, () => {
     const log = (await j(await call("GET", `/api/z/${g.id}/people/log`, undefined, g.h))).log as any[];
     expect(log.filter((e) => e.id === "Y7001").map((e) => e.kind).sort()).toEqual(["asked", "declined"]);
   });
+  test("an ID game that is not set to 'only people on the list' still holds an unlisted ID in the waiting room (an ID never walks straight in); a listed ID still joins at once", async () => {
+    const g = await newGame(f, { list: false }); await addIds(g, ["OPEN1"]);
+    expect((await call("GET", `/api/z/${g.id}/info`, undefined, g.h)).status).toBe(200);
+    expect((await j(await call("GET", `/api/z/${g.id}/info`, undefined, g.h))).whoCanJoin).toBe("anyone");
+    expect((await joinId(g, "OPEN-1", 1)).status).toBe(200);
+    const un = await joinId(g, "NOT-LISTED", 2); expect(un.status).toBe(403); expect((await j(un)).code).toBe("waiting");
+    expect(count("SELECT COUNT(*) AS c FROM seat WHERE eid=?", g.id)).toBe(1);
+    const [w] = await waiting(g); expect(w.empId).toBe("NOTLISTED");
+    expect((await decide(g, w.id, "admit")).status).toBe(200);
+    expect((await joinId(g, "NOT LISTED", 2)).status).toBe(200);
+  });
   // ------------------------------------------------------------------ 5. family invite
   test("family invite: a listed guest adds 4 family IDs (the default), the 5th is refused, and those 4 join with no approval", async () => {
     const g = await newGame(f, { invites: { on: true, per: 4 } });
