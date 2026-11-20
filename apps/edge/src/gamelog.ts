@@ -4,6 +4,7 @@
 // the schedule below, the Organizer's pause record and the public random-number feed, exactly as every phone does (so they can never differ from what the players saw).
 import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../../../packages/beacon/src/control";
 import { hostGameOf } from "../../../packages/beacon/src/game";
+import { ordinalName } from "../../../packages/shared/src/ordinal";
 import { PRIZE_HOUSES, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
 import { checkinRequired, presentCount } from "./checkin";
 import { changesView, readChanges } from "./modes";
@@ -12,7 +13,7 @@ import type { D1 } from "./worker";
 const GENESIS_S = 1692803367;
 const roundMs = (r: number) => (GENESIS_S + (r - 1) * 3) * 1000;
 const NAMES: Record<string, string> = Object.fromEntries(PRIZE_HOUSES.map((h) => [h.id, h.label]));
-const ord = (n: number) => ["", "1st", "2nd", "3rd"][n] ?? `${n}th`;
+const ord = ordinalName;
 const prizeName = (cfg: EngagementCfg, key: PatternKey, ordinal: number) => (linesFor(cfg.rewards, key).length > 1 ? ord(ordinal) + " " : "") + (NAMES[key] ?? key);
 
 export interface GameLog {

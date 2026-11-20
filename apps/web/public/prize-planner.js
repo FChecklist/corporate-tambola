@@ -12,7 +12,7 @@
   var DEFAULT_COUNT = { 1: 6, 2: 14 };
   var LINES = [["top", "Line 1"], ["mid", "Line 2"], ["bot", "Line 3"]];
   var NAMES = { top: "Line 1", mid: "Line 2", bot: "Line 3", corners: "Corners", early5: "Early 5", full: "Full House", full2: "Super Bumper" };
-  var ORD = ["1st", "2nd", "3rd", "4th", "5th"];
+  var ORD = function (k) { var n = Math.floor(k); if (!(n >= 1)) return ""; var t = n % 100, r = n % 10; return n + (t >= 11 && t <= 13 ? "th" : r === 1 ? "st" : r === 2 ? "nd" : r === 3 ? "rd" : "th"); }; // same rule as packages/shared/src/ordinal.ts
 
   // The eight splits, in percent of the budget (each adds to exactly 100). p = [pattern, ordinal, percent]; ticket-specific prizes are repeated per ticket by the builder below.
   var ONE = {
@@ -32,7 +32,7 @@
   var label = function (pattern, ordinal, ofTotal, ticket) {
     var base = NAMES[pattern] || pattern;
     var t = ticket ? "Ticket " + ticket + ": " : "";
-    return t + (ofTotal > 1 ? (ORD[ordinal - 1] || ordinal + "th") + " " : "") + base;
+    return t + (ofTotal > 1 ? ORD(ordinal) + " " : "") + base;
   };
   var make = function (ticket, pattern, ordinal, ofTotal, pct) {
     return { id: ticket + ":" + pattern + ":" + ordinal, ticket: ticket, pattern: pattern, ordinal: ordinal, label: label(pattern, ordinal, ofTotal, ticket), pct: pct };

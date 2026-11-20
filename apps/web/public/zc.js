@@ -925,8 +925,8 @@
   function unnamedPrizes() {
     const rw = ((S.cfg && S.cfg.rewards) || []).filter((r) => r && r.pattern !== "unlucky" && r.pattern !== "lucky" && !String(r.text || "").trim());
     const label = (p) => { const h = (ZG.PRIZE_HOUSES || []).find((x) => x.id === p); return h ? h.label : p === "full2" ? "Full house, two tickets" : String(p); };
-    const ord = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th"];
-    return rw.map((r) => { const many = ((S.cfg && S.cfg.rewards) || []).filter((x) => x.pattern === r.pattern && (x.scope || "ticket") === (r.scope || "ticket")).length > 1; return (many ? (ord[(r.ordinal || 1) - 1] || r.ordinal) + " " : "") + label(r.scope === "two_ticket" ? "full2" : r.pattern); });
+    const ord = (k) => { const n = Math.floor(k); if (!(n >= 1)) return ""; const t = n % 100, r = n % 10; return n + (t >= 11 && t <= 13 ? "th" : r === 1 ? "st" : r === 2 ? "nd" : r === 3 ? "rd" : "th"); }; // same rule as packages/shared/src/ordinal.ts
+    return rw.map((r) => { const many = ((S.cfg && S.cfg.rewards) || []).filter((x) => x.pattern === r.pattern && (x.scope || "ticket") === (r.scope || "ticket")).length > 1; return (many ? ord(r.ordinal || 1) + " " : "") + label(r.scope === "two_ticket" ? "full2" : r.pattern); });
   }
   // TA12/S15: Publish never goes through silently while a prize has no name. The blank prizes are listed in a box; the first tap on Publish only asks (S.blankAsk); "Publish anyway" is the one more tap, and it covers only the list that was shown.
   const blankKey = () => eid + ":" + unnamedPrizes().join("|");
@@ -1064,7 +1064,8 @@
       ${lbl("annText", "Or write your own")}<textarea id="annText" class="zc-in zc-ta" rows="2" maxlength="160" placeholder="Write a short message">${esc(S.annDraft)}</textarea>
       <div class="zc-foot"><button class="zc-btn zc-btn-s" type="button" id="annSend"${avail && !S.annBusy ? "" : " disabled"}>${S.annBusy ? "Sending…" : "Send to everyone"}</button> <button class="zc-btn zc-btn-s zc-btn-alt" type="button" id="annClear"${avail && !S.annBusy ? "" : " disabled"}>Clear message</button></div>${S.annNote ? `<p class="zc-small"><b>${esc(S.annNote)}</b></p>` : ""}</div>`;
   }
-  const lineLabel = (s) => { const lines = (S.cfg && S.cfg.rewards || []).filter((l) => (l.scope === "two_ticket" ? "full2" : l.pattern) === s.pattern), line = lines.find((l) => l.ordinal === s.ordinal); return ((S.cfg && S.cfg.rounds > 1) ? "Round " + (s.round || 1) + " · " : "") + (lines.length > 1 ? ["", "1st", "2nd", "3rd"][s.ordinal] || s.ordinal + "th" : "") + (lines.length > 1 ? " " : "") + NAMES[s.pattern] + (line && line.text ? " (" + line.text + ")" : ""); };
+  const ordNm = (k) => { const n = Math.floor(k); if (!(n >= 1)) return ""; const t = n % 100, r = n % 10; return n + (t >= 11 && t <= 13 ? "th" : r === 1 ? "st" : r === 2 ? "nd" : r === 3 ? "rd" : "th"); }; // same rule as packages/shared/src/ordinal.ts
+  const lineLabel = (s) => { const lines = (S.cfg && S.cfg.rewards || []).filter((l) => (l.scope === "two_ticket" ? "full2" : l.pattern) === s.pattern), line = lines.find((l) => l.ordinal === s.ordinal); return ((S.cfg && S.cfg.rounds > 1) ? "Round " + (s.round || 1) + " · " : "") + (lines.length > 1 ? ordNm(s.ordinal) : "") + (lines.length > 1 ? " " : "") + NAMES[s.pattern] + (line && line.text ? " (" + line.text + ")" : ""); };
   const PNAME = NAMES;
   const prizeName = (p) => { const l = (S.cfg && S.cfg.rewards || []).find((x) => x.pattern === p.pattern && x.ordinal === p.ordinal); return p.pattern === "lucky" ? "Lucky draw " + p.ordinal : (PNAME[p.pattern] || p.pattern) + (p.ordinal > 1 ? " (" + p.ordinal + ")" : "") + (l && l.text ? " · " + l.text : ""); };
   function prizeBlock() {
