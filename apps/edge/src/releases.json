@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.9.3",
+    "date": "2026-11-21",
+    "releasedAtIST": "21 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Invoice and sign-in e-mails are kept apart from bulk mail, and a young sending domain warms up slowly",
+    "changes": [
+      "Invoice, payment, game-start and sign-in e-mails now travel in their own lane: bulk mail (reminders, invitations) has its own counter and daily limit, can never use the part of the allowance kept for invoices, and waits in a queue instead of going in front of an invoice",
+      "The first day of sending is for transactional mail only; bulk mail starts at 20 a day on day 2 and grows day by day (documented in docs/MAIL-DELIVERABILITY-OWNER-STEPS.md)",
+      "Every mail the mail service takes is followed: delivered, bounced, complained or delayed is recorded per mail once the owner sets the Resend webhook",
+      "An address that bounced for good or marked a mail as spam is not mailed again; the owner can take it off the list",
+      "A public status address (/api/status/mail) shows the lane counters and the warm-up day, and a log line is written when 80 % of the month's mail allowance is used"
+    ]
+  },
+  {
     "version": "1.9.2",
     "date": "2026-11-20",
     "releasedAtIST": "20 Nov 2026, time set at deploy",
