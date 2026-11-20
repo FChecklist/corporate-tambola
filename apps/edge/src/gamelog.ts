@@ -2,6 +2,7 @@
 // and SAVED when the game ends (kv glog/<eid>) so it survives the 20-hour deletion of the players' details; it is deleted with the game, 365 days after it.
 // NO names, mobile numbers, e-mail addresses or keys: people appear as TICKET NUMBERS only. The numbers called, with the time of each, are not stored: they are worked out by the page that shows the log from
 // the schedule below, the Organizer's pause record and the public random-number feed, exactly as every phone does (so they can never differ from what the players saw).
+import { ordinalName } from "../../../packages/shared/src/ticket";
 import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../../../packages/beacon/src/control";
 import { hostGameOf } from "../../../packages/beacon/src/game";
 import { PRIZE_HOUSES, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
@@ -12,7 +13,7 @@ import type { D1 } from "./worker";
 const GENESIS_S = 1692803367;
 const roundMs = (r: number) => (GENESIS_S + (r - 1) * 3) * 1000;
 const NAMES: Record<string, string> = Object.fromEntries(PRIZE_HOUSES.map((h) => [h.id, h.label]));
-const ord = (n: number) => ["", "1st", "2nd", "3rd"][n] ?? `${n}th`;
+const ord = ordinalName; // one rule for every place: 1st, 2nd, 3rd ... 21st, 22nd, 23rd (packages/shared/src/ticket.ts)
 const prizeName = (cfg: EngagementCfg, key: PatternKey, ordinal: number) => (linesFor(cfg.rewards, key).length > 1 ? ord(ordinal) + " " : "") + (NAMES[key] ?? key);
 
 export interface GameLog {

@@ -99,8 +99,12 @@ export function patternNumbers(t: Ticket, p: PatternId): number[] | null {
   }
 }
 
-export const ordinalName = (k: number): string =>
-  ["", "1st", "2nd", "3rd"][k] ?? `${k}th`;
+/** 1st, 2nd, 3rd, 4th ... 11th, 12th, 13th ... 21st, 22nd, 23rd ... 101st. The ONE place that spells a winner position; every screen and report uses it (a copy of the old one-line version printed "21th", "22th", "23th"). */
+export const ordinalName = (k: number): string => {
+  if (!k) return "";
+  const m = k % 100;
+  return k + (m >= 11 && m <= 13 ? "th" : k % 10 === 1 ? "st" : k % 10 === 2 ? "nd" : k % 10 === 3 ? "rd" : "th");
+};
 
 /** Human name of a reward line, e.g. "2nd Full House", "1st Full Two-Ticket House". */
 export function rewardName(pattern: PatternId, scope: Scope, ordinal: number, ofTotal: number): string {
