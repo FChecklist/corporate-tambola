@@ -22,6 +22,8 @@ async function everything(): Promise<string> {
   }
   return parts.join("\n");
 }
+/** the ID appears as a word of its own (not by chance inside random encrypted text or a hash) */
+const has = (all: string, id: string) => new RegExp(`(^|[^A-Za-z0-9+/_=-])${id.replace(/[-]/g, "\\-")}($|[^A-Za-z0-9+/_=-])`).test(all);
 async function playWholeGame(g: Game, n = 8) {
   const pids = await seat(g, n);
   await joinId(g, "ZZ-9001", 900); // a stranger asks and waits
@@ -49,7 +51,7 @@ for (const f of FORMATS) describe(`[${f.key}] ${f.label}: the report, then the e
     const g = await newGame(f);
     const { pids, last } = await playWholeGame(g);
     const idsBefore = await everything();
-    expect(idsBefore).toContain("P1000"); expect(idsBefore).toContain("ZZ9001"); // sanity: the sweep really sees the IDs while the game is on (so "gone" later means gone)
+    expect(has(idsBefore, "P1000")).toBe(true); expect(has(idsBefore, "ZZ9001")).toBe(true); // sanity: the sweep really sees the IDs while the game is on (so "gone" later means gone)
     expect(count("SELECT COUNT(*) AS c FROM waiting WHERE eid=?", g.id)).toBe(2);
     // --- the report
     const rep = await tickUntilReport(g, last + 10 * MIN);
@@ -78,7 +80,7 @@ for (const f of FORMATS) describe(`[${f.key}] ${f.label}: the report, then the e
     // --- the sweep: no ID of any kind survives anywhere, in the clear, sealed or hashed
     const all = await everything();
     const ids = ["P1000", "P1001", "P1007", "ZZ9001", "ZZ-9001", "YY8001", "YY-8001"];
-    for (const id of ids) expect([id, all.includes(id)]).toEqual([id, false]);
+    for (const id of ids) expect([id, has(all, id)]).toEqual([id, false]);
     for (const id of ["P1000", "P1007", "ZZ9001"]) { const h = await empHashOf(W.env as any, id); expect([id + " hash", all.includes(h)]).toEqual([id + " hash", false]); }
     for (const p of pids) expect([p, all.includes(p)]).toEqual([p, false]); // not even the ticket ids
   });
@@ -106,12 +108,12 @@ for (const f of FORMATS) describe(`[${f.key}] ${f.label}: the report, then the e
   });
   test("a person who is waiting at the end of the game (never answered) is erased with the rest, and so is a declined one", async () => {
     const g = await newGame(f); await addIds(g, ["A1"]);
-    await joinId(g, "WAIT-1", 1); await joinId(g, "NO-1", 2);
-    const no = (await waiting(g)).find((x) => x.empId === "NO1"); await decide(g, no.id, "decline");
+    await joinId(g, "STILLWAITING-55", 1); await joinId(g, "DECLINED-77", 2);
+    const no = (await waiting(g)).find((x) => x.empId === "DECLINED77"); await decide(g, no.id, "decline");
     expect(count("SELECT COUNT(*) AS c FROM waiting WHERE eid=?", g.id)).toBe(2);
     const { erasePersonal } = await import("../../src/lifecycle");
     await erasePersonal(W.env as any, g.id, 1, "test");
     expect(count("SELECT COUNT(*) AS c FROM waiting WHERE eid=?", g.id)).toBe(0);
-    expect(await everything()).not.toMatch(/WAIT1|NO1|WAIT-1/);
+    const all = await everything(); for (const id of ["STILLWAITING55", "STILLWAITING-55", "DECLINED77", "DECLINED-77"]) expect([id, has(all, id)]).toEqual([id, false]);
   });
 });
