@@ -423,7 +423,7 @@ describe("E. timing", () => {
 /* ============================== F. what can go wrong ============================== */
 describe("F. exceptions: what can go wrong", () => {
   test("UC-45 the mail service is down: sign-in, publish and payment still work; the mail is kept and sent on the next clean-up", async () => {
-    withGateway(); env.RESEND_API_KEY = "re_x"; rz.mailDown = true;
+    withGateway(); env.RESEND_API_KEY = "re_x"; (env as any).MAIL_RETRY_MS = "0"; rz.mailDown = true;
     const o = await organizer();
     await call("POST", "/api/z", eng("MAIL-1"), o.h);
     expect((await call("POST", "/api/z/MAIL-1/publish", contact, o.h)).status).toBe(200);

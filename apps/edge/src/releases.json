@@ -1,5 +1,17 @@
 [
   {
+    "version": "1.9.1",
+    "date": "2026-11-20",
+    "releasedAtIST": "20 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Payment and invoice e-mails are tried again within minutes",
+    "changes": [
+      "If the mail service is busy for a moment, an invoice or payment e-mail is now tried again at once instead of being lost",
+      "A mail that still cannot be sent is tried again every few minutes for an hour, newest first, instead of waiting for the next day",
+      "When a mail cannot be sent, the mail log now says why (the status and the service's error name), so the owner can find the cause the same day"
+    ]
+  },
+  {
     "version": "1.9.0",
     "date": "2026-10-31",
     "releasedAtIST": "31 Oct 2026, time set at deploy",
