@@ -1873,7 +1873,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const admitted = vf.mode !== "mobile" && !!pr && !!(await env.DB.prepare("SELECT 1 AS x FROM waiting WHERE eid=? AND ph=? AND status='admitted'").bind(eid, ph).first()); // the organizer already said yes to this person: the ID typed is not checked again, or they would wait for ever
     let idMiss = false, needIdAfterConsent = false; // an employee ID that does not match the list: the organizer decides
     if (vf.mode !== "mobile" && empNorm && !tok && !admitted) {
-      if (vf.mode === "both") { const pp0 = pr ? await openPii(env, pr.pii) : null; if (!pr || (pp0?.empId && pp0.empId !== empNorm)) { pr = null; idMiss = true; } }
+      if (vf.mode === "both") { const pp0 = pr ? await openPii(env, pr.pii) : null; const leg = legacyEmpFor(b?.empId, e); if (!pr || (pp0?.empId && pp0.empId !== empNorm && normIdFor(pp0.empId, vf.idKind, e) !== empNorm && !(leg && pp0.empId === leg))) { pr = null; idMiss = true; } }
       else if (!pr) idMiss = true; // ID alone, not on the list
       if (idMiss) { // guessing IDs: only so many wrong IDs per network per game per 10 minutes
         try {

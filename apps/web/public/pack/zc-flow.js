@@ -92,7 +92,7 @@
   /** What the system saves for a card: only people the organizer lets in take part; family cards allow 4 more people each. */
   function audienceSettings(cardId, upTo, per) {
     const c = CARDS.find((x) => x.id === cardId) || CARDS[0];
-    return { cap: Number(upTo), whoCanJoin: "list", callMode: "auto", demo: false, invites: { on: c.invites, per: Math.min(10, Math.max(1, Math.floor(Number(per)) || 4)), cats: c.cats } };
+    return { cap: Number(upTo), whoCanJoin: "list", verify: "id", callMode: "auto", demo: false, invites: { on: c.invites, per: Math.min(10, Math.max(1, Math.floor(Number(per)) || 4)), cats: c.cats } };
   }
   function whoProblems(f, choices) {
     if (!CARDS.some((c) => c.id === f.card)) return ["Please choose who the game is for."];
@@ -436,7 +436,7 @@
         const z = form.zone === OTHER_ZONE ? form.zoneOther : form.zone, ms = wallToMs(form.date, form.time, z), name = gameName(form.occ, form.oname);
         const startRound = window.ZG.roundAt(ms);
         if (state.eid) await call("PATCH", `/api/z/${state.eid}/settings`, { name, startRound });
-        else { const id = randId(); await call("POST", "/api/z", { id, name, startRound, callSeconds: G.callSeconds, cap: 10 }); state.eid = id; try { window.history.replaceState(null, "", location.pathname + "?flow=new&e=" + id); } catch {} }
+        else { const id = randId(); await call("POST", "/api/z", { id, name, startRound, callSeconds: G.callSeconds, cap: 10, verify: "id" }); state.eid = id; try { window.history.replaceState(null, "", location.pathname + "?flow=new&e=" + id); } catch {} }
         state.when = { ms, zone: z };
         done(1);
       } catch (e) { go.disabled = false; msg.textContent = e.message; }
@@ -471,15 +471,15 @@
     box.append(el("button", { type: "button", class: "zf-add", id: "zf-paste-open", style: "display:block;width:fit-content;margin:8px 0;", onclick: () => { who.paste = !who.paste; draw(); } }, "Paste a list"));
     if (who.paste) {
       const ta = el("textarea", { id: "zf-paste", style: "display:block;width:100%;max-width:32rem;margin:8px 0;", rows: "6", "aria-label": "IDs, one on each line", placeholder: "One ID on each line" }); ta.value = who.pasted || ""; ta.oninput = (e) => { who.pasted = e.target.value; };
-      box.append(ta, el("button", { type: "button", class: "zf-add", id: "zf-paste-go", style: "display:block;width:fit-content;margin:8px 0;", onclick: async () => {
+      const cbox = el("div", { id: "zf-consent6" }), pgo = el("button", { type: "button", class: "zf-add", id: "zf-paste-go", style: "display:block;width:fit-content;margin:8px 0;", onclick: async () => {
         const ids = idsOf(who.pasted); if (!ids.length) { pasteMsg.textContent = "Please paste at least one ID."; return; }
         if (!state.eid) { pasteMsg.textContent = "Please save step 1 first."; return; }
         pasteMsg.textContent = "Adding…";
-        try { const r = await call("POST", `/api/z/${state.eid}/people`, { people: ids.map((empId) => ({ empId })) }); who.pasted = ""; who.paste = false; who.added = r.added == null ? ids.length : r.added; draw(); } catch (e) { pasteMsg.textContent = e.message; }
-      } }, "Add to your list"));
+        try { const cp = ctl6 ? ctl6.payload() : null; const r = await call("POST", `/api/z/${state.eid}/people`, { people: ids.map((empId) => ({ empId })), ...(cp ? { consent: cp } : {}) }); who.pasted = ""; who.paste = false; who.added = r.added == null ? ids.length : r.added; who.skipped = Array.isArray(r.invalid) && r.invalid.length ? String(r.invalid[0].why || "") : ""; draw(); } catch (e) { pasteMsg.textContent = e.message; }
+      } }, "Add to your list"); const ctl6 = mountConsent(cbox, pgo, "K6"); box.append(ta, cbox, pgo);
     }
     box.append(pasteMsg);
-    if (who.added != null) pasteMsg.textContent = who.added + (who.added === 1 ? " ID was added to your list." : " IDs were added to your list.");
+    if (who.added != null) pasteMsg.textContent = who.added + (who.added === 1 ? " ID was added to your list." : " IDs were added to your list.") + (who.skipped ? " Some were not added: " + who.skipped : "");
     box.append(el("h3", { text: "How big is your game?" }));
     const sel = el("select", { id: "zf-size", "aria-label": "Size of your game", onchange: (e) => { who.upTo = Number(e.target.value); draw(); } });
     for (const k of choices) sel.append(el("option", { value: String(k.upTo), ...(who.upTo === k.upTo ? { selected: "" } : {}) }, k.label));
@@ -653,16 +653,16 @@
   const pub = { email: "", phone: "" };
   try { pub.email = (window.CTK ? window.CTK.get("ctz-email") : sessionStorage.getItem("ctz-email")) || ""; } catch { /* the box starts empty */ }
   /** The terms boxes: three games draw them three ways (CBConsent.wire, CBConsent.load/bind, or the TermsBox). One adapter: draws kind K1 into `box`, keeps `btn` disabled until every box is ticked, and says what to send. */
-  function mountConsent(box, btn) {
-    const C = window.CBConsent;
+  function mountConsent(box, btn, kind) {
+    const C = window.CBConsent, K = kind || "K1";
     if (C && typeof C.load === "function") {
       const st = {}; let info = null;
       btn.disabled = true;
-      C.load("K1", (p) => fetch(BASE + p).then((r) => r.json())).then((i) => { info = i; box.innerHTML = C.html(i, st); C.bind(box, i, st, btn); }).catch(() => { box.textContent = "The terms could not be loaded. Please try again."; });
+      C.load(K, (p) => fetch(BASE + p).then((r) => r.json())).then((i) => { info = i; box.innerHTML = C.html(i, st); C.bind(box, i, st, btn); }).catch(() => { box.textContent = "The terms could not be loaded. Please try again."; });
       return { payload: () => (info ? C.payload(info, st) : null) };
     }
-    if (C && typeof C.wire === "function") { box.innerHTML = C.html("K1"); C.wire(box, "K1", {}, btn); return { payload: () => C.payload(box, "K1") }; }
-    if (window.TermsBox) { let tb = null; btn.disabled = true; window.TermsBox.mount(box, "K1", { base: BASE, btn }).then((x) => { tb = x; }); return { payload: () => (tb ? tb.terms() : null) }; }
+    if (C && typeof C.wire === "function") { box.innerHTML = C.html(K); C.wire(box, K, {}, btn); return { payload: () => C.payload(box, K) }; }
+    if (window.TermsBox) { let tb = null; btn.disabled = true; window.TermsBox.mount(box, K, { base: BASE, btn }).then((x) => { tb = x; }); return { payload: () => (tb ? tb.terms() : null) }; }
     return { payload: () => null };
   }
   registry[5] = (box) => {
