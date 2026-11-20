@@ -134,6 +134,7 @@ export class Surprise {
   private get(id: string) { return this.moments.find((m) => m.id === id)!; }
 
   private startNext(): void {
+    if (this.scratch || this.lucky) return; // one moment at a time: a card running beside the numbers must be revealed, and a draw must be finished, before the next moment starts (scratch_tick and finishLucky come back here)
     const id = this.queue.shift();
     if (!id) return this.afterMoment();
     const m = this.get(id);
@@ -283,7 +284,7 @@ export class Surprise {
     const wasConcurrent = s.concurrent;
     this.scratch = null;
     m.status = "done"; m.endedAt = t; this.lastMomentCall = this.e.called.length;
-    if (!wasConcurrent) this.afterMoment();
+    if (!wasConcurrent || (!this.lucky && (this.queue.length || this.cont === "finale"))) this.afterMoment(); // the next queued moment, or the finale, was only waiting for this card
   }
 
   private completeMoment(m: Moment): void {
@@ -295,13 +296,14 @@ export class Surprise {
   private afterMoment(): void {
     if (this.queue.length) return this.startNext();
     if (this.scratch && !this.scratch.concurrent) return; // still waiting for a pausing scratch card
+    if (this.scratch && this.cont === "finale") return; // a card that runs beside the numbers is still open: the engagement ends only once it has been revealed (scratch_tick finishes it)
     const c = this.cont; this.cont = "none";
     const e = this.e, t = e.now();
     switch (c) {
       case "start": e.paused = null; e.nextAt = e.settings.callMode === "manual" ? null : t; e.emit({ to: "all", type: "resume" }); break;
       case "resume": e.paused = null; e.nextAt = e.settings.callMode === "manual" ? null : t + 3000; e.emit({ to: "all", type: "resume" }); e.applyPendingEmergency(); break;
       case "intermission": e.paused = { type: "intermission", round: this.round, until: Math.max(t, this.intermissionUntil) }; break;
-      case "finale": e.finishEngagement("All rounds complete"); break;
+      case "finale": this.finishAllPending(); break; // flushes any moment still pending (so the counters and the report are truthful), then ends
       default: e.paused = null;
     }
   }
@@ -322,23 +324,23 @@ export class Surprise {
     if (this.round >= this.rounds) {
       // the last round's winners stay where they are (the ticket screen and report read them there)
       e.nextAt = null;
-      if (this.cfg.momentsMode === "auto" && this.runSlots(["finale"], "finale")) return;
-      return this.finishAllPending();
+      return this.finishAllPending(); // every moment still pending (the finale ones and any that never got a window) runs now, the bumper draw last
     }
     e.winners = new Map();
     this.between = true;
     this.intermissionUntil = e.now() + SCFG.INTERMISSION_MS;
     e.paused = { type: "intermission", round: this.round, until: this.intermissionUntil };
     e.nextAt = null;
-    if (this.cfg.momentsMode === "auto") this.runSlots([`break:${this.round}:1`, `break:${this.round}:2`], "intermission");
+    if (this.cfg.momentsMode === "auto" && !this.runSlots([`break:${this.round}:1`, `break:${this.round}:2`], "intermission") && (this.lucky || this.queue.length)) this.cont = "intermission"; // moments of an earlier window are still waiting or running: when they are done the break goes on (a left-over "resume" would restart the numbers in the middle of the break)
   }
 
   /** Last round, no finale moment left (or manual): any moment still pending is flushed so the counters were truthful, then the engagement ends. */
   private finishAllPending(): void {
     if (this.cfg.momentsMode === "auto") {
-      const rest = this.moments.filter((m) => m.status === "pending");
-      if (rest.length) { rest.forEach((m) => (m.slot = "finale")); this.queue = rest.map((m) => m.id); this.cont = "finale"; this.startNext(); return; }
+      const rest = this.moments.filter((m) => m.status === "pending" && !this.queue.includes(m.id));
+      if (rest.length) { const inOrder = [...rest.filter((m) => !m.bumper), ...rest.filter((m) => m.bumper)]; inOrder.forEach((m) => (m.slot = "finale")); this.queue.push(...inOrder.map((m) => m.id)); this.cont = "finale"; this.startNext(); return; }
     }
+    if (this.lucky || this.scratch || this.queue.length) { this.cont = "finale"; return; } // a draw or a card is still on screen or waiting (a late claim can bring us here again): the game ends when the last one has finished
     this.e.finishEngagement("All rounds complete");
   }
 
