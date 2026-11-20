@@ -425,7 +425,7 @@ Legend. Cells name what the caller gets. Message texts for the codes are in sect
 | M70 | POST `/api/z/:id/unbind` move a ticket to a new phone (`worker.ts:1774`) | OK | OK† | G-CO | =Anon | =Anon | OK by ticket number only | D-ANON |
 | M71 | GET `/api/z/:id/prizes` (`worker.ts:1970`) | OK | OK†(link, numbers cut) | G-CO | =Anon | =Anon | OK-AI-masked | D-ANON |
 | M72 | POST `/api/z/:id/prizegiven` (`worker.ts:1971`; 409 code removed "Not given: this person was removed from the game."; recorded as "organizer" for master, **"co-host" for a Host**, "organizer's AI" for AI, gap G4) | OK | OK†(link) | G-CO | =Anon | =Anon | OK | D-ANON |
-| M73 | GET `/api/z/:id/reportlink` (`worker.ts:1958`) | OK (URL) | OK†(link): **URL returned even to a Host AI link** (G6) | G-CO | =Anon | =Anon | OK, `url:null` + note "The report holds every participant's name and number, so its address goes only to the organizer..." | D-ANON |
+| M73 | GET `/api/z/:id/reportlink` (`worker.ts:1958`) | OK (URL) | `url:null` + the same note (20 Nov 2026, smoke SM-08: owner rule "no leak to Hosts"; it used to return the URL, G6) | G-CO | =Anon | =Anon | OK, `url:null` + note "The report holds every participant's name and number, so its address goes only to the organizer..." | D-ANON |
 | M74 | POST `/api/z/:id/reportlink` new link, the old stops at once (`worker.ts:1952`) | OK | OK† (viaLink: D-HOST) | G-CO | =Anon | =Anon | D-AI | D-ANON |
 | M75 | GET `/api/z/:id/cohost` small header (`worker.ts:1551`) | OK | OK† | OK (own game; also before K5; returns `roleAccepted`, `inviteLink`, `brought`) | =Anon | =Anon | OK | D-ANON ("Not allowed.") |
 | **D. People, links and the waiting room** (`people.ts`; paths `/api/z/:id/people...`, `/waiting...`) | | | | | | | | |
@@ -588,7 +588,7 @@ flowchart TD
   E3 --> R0
   R0{"End + 3 minutes reached, and the game has participants?"} -- no --> R0x["a game with nobody joined: no report; lists go at End + 20 h"]
   R0 -- yes --> R1["Report built in small steps by the scheduled tick (sealed chunks of 250 people, PDF parts of 1500)"]
-  R1 --> R2["Link e-mailed to the Organizer: /report.html?e=ID&k=KEY. Valid until End + 19 h. Reminder at End + 13 h. Host can read the link in the console (reportlink GET), the PDF is built on the opener's own device"]
+  R1 --> R2["Link e-mailed to the Organizer: /report.html?e=ID&k=KEY. Valid until End + 19 h. Reminder at End + 13 h. Only the Organizer's own key can read the link in the console (reportlink GET; a Host gets none, smoke SM-08), the PDF is built on the opener's own device"]
   R2 --> D1{"Organizer or Host presses Delete all participant data now (step 10)?"}
   D1 -- "before the game, or within 2 minutes after start" --> D1a["confirm text: YOUR GAME HAS NOT STARTED YET. ... everyone who has already joined loses their ticket..."]
   D1 -- "during the game" --> D1b["confirm text: YOUR GAME IS STILL RUNNING. ... players lose their tickets in the middle of the game, claims and prizes can no longer be settled for them, and the report will have no guest details."]

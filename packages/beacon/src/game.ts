@@ -2,7 +2,7 @@
 // from the public beacon alone. Pure and deterministic: no server, no phone clock.
 import { generateTicket, ticketNumbers, type PatternId, type Ticket } from "../../shared/src/ticket";
 import { CLAIM_WINDOW_CALLS, INTERMISSION_ROUNDS, PATTERN_ORDER, breakShift, keyOfLine, ticketOfKey, defaultCfg, keysInPlay, linesFor, roundEid, type BreakCfg, type EngagementCfg, type PatternKey } from "./config";
-import { hostCallRound, pauseShifts, pushedByPauses, type ControlState, type GameOpts } from "./control";
+import { hostCallRound, pauseShifts, pushedByPauses, schedulePauses, type ControlState, type GameOpts } from "./control";
 
 /** What the control file needs from the game's public settings (who calls the numbers, the breaks and rounds a press must respect): pass it to cfgOf / publishControl. */
 export const hostGameOf = (cfg: Pick<EngagementCfg, "callMode" | "startMode" | "breaks" | "rounds">, scheduledRound?: number): GameOpts => ({ callMode: cfg.callMode === "host" ? "host" : "auto", startMode: cfg.startMode === "manual" ? "manual" : "auto", ...(scheduledRound !== undefined ? { startNotBefore: scheduledRound } : {}), breaks: cfg.breaks, rounds: cfg.rounds });
@@ -237,9 +237,10 @@ export function callRoundR(st: ControlState | null, start: number, stride: numbe
   if (st?.manualStart) { if (st.goRound === null) return st.stopRound !== null ? null : Infinity; start = st.goRound; } // a manual start: nothing is called until Start; number 1 comes in the round Start named
   let a = unshiftedRound(start, stride, breaks, round, k);
   if (st) {
-    if (st.intervals.length) { // every pause pushes the calls after it by its length, and (a game whose control file says fullGap) the first call after a Resume waits a full gap (see pauseShifts)
+    const ivs = schedulePauses(st, start);
+    if (ivs.length) { // every pause pushes the calls after it by its length, and (a game whose control file says fullGap) the first call after a Resume waits a full gap (see pauseShifts)
       const base = (g: number) => unshiftedRound(start, stride, breaks, Math.floor(g / NUMBERS) + 1, g % NUMBERS);
-      a = pushedByPauses(a, st.intervals, pauseShifts(st.intervals, stride, base, `R${start}|${JSON.stringify(breaks)}`, st.fullGap === true));
+      a = pushedByPauses(a, ivs, pauseShifts(ivs, stride, base, `R${start}|${JSON.stringify(breaks)}`, st.fullGap === true));
     }
     if (st.stopRound !== null && a >= st.stopRound) return null;
   }

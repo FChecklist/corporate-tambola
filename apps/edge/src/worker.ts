@@ -20,7 +20,8 @@ import { TERMS_VERSION } from "./brand";
 import RELEASES from "./releases.json";
 import { CONSENT_SCHEMA, consentMissing, consentStatement, recordConsent, consentFromSeat, hasConsent, CONSENT_VERSION } from "./consent";
 import { LINK_MAIL_TTL_MS, aiLinkMail, coHostLinkMail, draftReminderMail, hostLinkMail, newUseAlertMail, signInMail } from "./mails";
-import { cancelGame, cancelPreview, entitlementWindowEndMs, paidWindowEndMs, reopenGame, teamEmails } from "./cancel";
+import { mailCreated } from "./steps-mail";
+import { cancelGame, cancelPreview, mailDataDeleted, entitlementWindowEndMs, paidWindowEndMs, reopenGame, teamEmails } from "./cancel";
 import { LEGAL_SCHEMA } from "./legal";
 import { GAME_RECORD_SCHEMA, readGameRecords } from "./gamerecord";
 import { RIGHTS_SCHEMA, leaveRoute, requestRoute } from "./rights";
@@ -60,7 +61,7 @@ import { AUDIT_SCHEMA, auditRequest, analyzeChain, loadRows, logAccess, setHold,
 import { VISIT_SCHEMA, beaconRoute, linkVisitor, parseRange, recordFunnelForOrg, visitsJourney, visitsSummary, type VisitEnv } from "./visits";
 import { knownDial } from "./phonekit";
 import { WINNERS_SCHEMA, acceptVotes, auditAi, confirmPrize, listAiAudit, listPrizes, markGiven, myPrizes, overridePrize } from "./winners";
-import { PAUSE_MAX_PARTICIPANTS, addHostKey, safetyForCap, startSafetyForCap, publishControl, readPublished, registerKey, verifyControlSig, type KV } from "../../../packages/beacon/src/control";
+import { PAUSE_MAX_PARTICIPANTS, addHostKey, safetyForCap, startSafetyForCap, publishControl, readPublished, registerKey, verifyAnySig, verifyControlSig, type KV } from "../../../packages/beacon/src/control";
 import { hostGameOf } from "../../../packages/beacon/src/game";
 import { buildGameLog, readSavedGameLog } from "./gamelog";
 import { CLAIM_LATE_MSG } from "./modes";
@@ -327,6 +328,9 @@ const DEMO_CAP_MSG = "A demo game is for up to 10 people. Make it a real game to
 const DEMO_PAY_MSG = "To make this a real game, choose the number of people and pay for it. Until then it stays a free demo game.";
 const isDemo = (e: { tickets?: number; config?: string | null }) => !!cfgOf(e).demo;
 const roundOfMs = (ms: number) => Math.floor((ms / 1000 - GENESIS) / 3) + 1;
+/** A signed press may claim to be signed at most this many rounds (20 = one minute) ahead of the server's own clock, and a Start / Pause / Stop may not take effect in the past (SMOKE-20NOV F-01). */
+const CONTROL_SKEW_ROUNDS = 20;
+const CONTROL_SKEW_MSG = "That press did not go through: the clock of this device is not right, so the game could not place it. Please press it again. If it happens again, check the date and time of this device.";
 /** A published engagement is open to participants even before it is paid for; a draft is not. Paid engagements are always published. */
 async function isPublished(env: Env, e: { id: string; pack: number | null }): Promise<boolean> {
   if (e.pack !== 0) return true;
@@ -1459,6 +1463,15 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (!b) return json({ error: "Bad message." }, 400);
       const ge = await env.DB.prepare("SELECT tickets, config, start_round FROM engagement WHERE id=?").bind(cid).first<{ tickets: number; config: string | null; start_round: number }>();
       if (b.message?.action === "go" && ge && now < roundMs(ge.start_round) - 3000) return json({ error: NOT_BEFORE_MSG }, 422); // Start is never possible before the scheduled time, whatever the sender's own clock says
+      { // SMOKE-20NOV F-01: a press signed by a console whose clock is far off (the beacon was unreachable, the device clock was used) must not start the game before the press arrived, or minutes after it. The server's own round is the judge.
+        const m = b.message, nowR = roundOfMs(now), sg = Number(m?.signedAtRound), at = Number(m?.atBeaconRound);
+        if (Number.isInteger(sg) && Number.isInteger(at)) {
+          const pf = await readPublished(kv, cid!);
+          const dup = pf?.messages?.some((x: any) => x.seq === m.seq && x.sig === m.sig); // a repeat of a press already accepted is answered as before
+          const signed = !!pf && !!m?.sig && (await verifyAnySig(pf, m)); // only a press that carries a real signature is judged on its clock; a forged one gets the usual refusal below
+          if (signed && !dup && (sg > nowR + CONTROL_SKEW_ROUNDS || (["go", "pause", "stop", "extend"].includes(m.action) && at < nowR - 1))) return json({ error: CONTROL_SKEW_MSG, code: "clock" }, 422);
+        }
+      }
       const r = await publishControl(kv, cid!, b.message, ge ? hostGameOf(cfgOf(ge), ge.start_round) : undefined); // a Host's "next" press is checked against this game's breaks and rounds; a Start against the scheduled time
       if (r.ok && !(r as any).duplicate && ["go", "pause", "resume", "extend", "stop"].includes(b.message?.action)) { // who pressed Start / Pause / Resume / End, and when: the plain list the Organizer and the Host read, and the "paused by" line everybody sees (the signature says which key it was)
         const pf = await readPublished(kv, cid!);
@@ -1606,6 +1619,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     // the game and the link to the pack it uses are written in ONE all-or-nothing step (13 Nov 2026 audit): a hiccup between two separate writes left a game with its pack unlinked, and a repeat then answered "existed".
     await env.DB.batch([mk, ...(ent ? [env.DB.prepare("UPDATE entitlement SET eid=? WHERE id=? AND eid IS NULL").bind(b.id, ent.id)] : [])]);
     if (a.kind === "ai" && a.org) try { await noteHelperGame(env.DB, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, ""), a.org, b.id, now); } catch { /* attribution only: a hiccup here must not turn a created game into "existed" on a repeat */ } // a game made with a Help Desk helper's key is recorded as theirs
+    if (a.org) { try { await mailCreated(env as PayEnv, { id: b.id, org: a.org, config: JSON.stringify({ name: vc.cfg.name ?? "" }), start_round: b.startRound }, roundMs(b.startRound), now); } catch { /* a mail is a courtesy: the game is made */ } } // step 18: "your game is created" (once; steps-mail.ts)
     return json({ ok: true, draft, ...(vc.cfg.demo ? { demo: true } : {}), openUrl: `${(env as PayEnv).PUBLIC_ORIGIN ?? ""}/zc.html?e=${b.id}` });
   }
   if (req.method === "GET" && p === "/api/history") {
@@ -2252,13 +2266,14 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`rptsalt/${eid}`, randHex(12)).run();
     return json({ ok: true, url: await reportLink(env as any, eid!) });
   }
-  if (action === "reportlink" && req.method === "GET") { // the organizer's / co-host's way to the report page (the PDF is made on their own device)
+  if (action === "reportlink" && req.method === "GET") { // the organizer's way to the report page (the PDF is made on their own device)
     if (!can(a, e)) return deny(a);
     const life = await env.DB.prepare("SELECT report_ms FROM life WHERE eid=?").bind(eid).first<{ report_ms: number | null }>();
     const st = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`rpt/${eid}`).first<{ v: string }>();
     const stage = st ? (JSON.parse(st.v).stage as string) : null;
     const ready = stage === "send" || stage === "done";
-    if (a.kind === "ai" || a.viaLink) return json({ ready, sent: !!life?.report_ms, url: null, note: "The report holds every participant's name and number, so its address goes only to the organizer (it is e-mailed to them). Tell them to open their e-mail or their console." }); // the address is a key to personal data: it never travels through an outside AI (an Organizer-AI key, or a Host key used through an AI work link, a.viaLink)
+    if (!a.plat && a.kind !== "master") return json({ ready, sent: !!life?.report_ms, url: null, note: "The report holds every participant's name and number, so its address goes only to the organizer (it is e-mailed to them). Tell them to open their e-mail or their console." }); // SMOKE-20NOV F-06: a Host used to be given the address too; owner rule 20 Nov 2026: no leak to Hosts. An AI key or a work link never had it.
+    if (a.viaLink) return json({ ready, sent: !!life?.report_ms, url: null, note: "The report holds every participant's name and number, so its address goes only to the organizer (it is e-mailed to them). Tell them to open their e-mail or their console." }); // the address is a key to personal data: it never travels through an outside AI (an Organizer-AI key, or a Host key used through an AI work link, a.viaLink)
     return json({ ready, sent: !!life?.report_ms, url: ready ? await reportLink(env as any, eid!) : null });
   }
   if (action === "vote" && req.method === "POST") return acceptVotes(env as any, e, eid!, await body(req, 65_536), now, json, spend);
@@ -2273,6 +2288,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const n = await env.DB.prepare("SELECT COUNT(*) AS c FROM participant WHERE eid=?").bind(eid).first<{ c: number }>();
     if (!(await spend(env, now, (n?.c ?? 0) + 1))) return BUSY();
     await erasePersonal(env, eid!, now, "organizer");
+    if ((n?.c ?? 0) > 0) await mailDataDeleted(env as PayEnv, e, now); // step 18: "deletion done" also after the organizer's own Delete (it only mails the organizer and the Hosts who have an address; a courtesy, never a reason to fail)
     return json({ ok: true, erased: n?.c ?? 0 });
   }
   if (action === "discard" && req.method === "POST") { // an unpublished draft the organizer no longer wants: gone at once, so the 10-draft limit can never trap anyone. A published, paid, cancelled or started game is never touched here.

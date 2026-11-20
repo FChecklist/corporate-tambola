@@ -22,6 +22,8 @@
     "zlocal": "bun run apps/edge/src/local.ts",
     "pages:build": "bun run pages/build.mjs",
     "pages:deploy": "bun run pages/build.mjs && cd pages && bunx wrangler@3 pages deploy public --project-name corporate-tambola --branch main --commit-dirty=true",
+    "test:smoke": "bun test apps/edge/test/smoke packages/beacon/test/smoke-pause-auto.test.ts",
+    "smoke:falsify": "bun run tools/smoke/falsify.ts",
     "test:lifecycle": "bun test apps/edge/test/lifecycle",
     "lifecycle:browser": "bun run tools/sim/lifecycle-browser.ts"
   },

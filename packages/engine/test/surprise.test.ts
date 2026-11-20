@@ -457,3 +457,113 @@ describe("a whole event: 2 rounds, lucky draws, a scratch card, a bumper", () =>
     expect(rep.winners.length).toBeGreaterThanOrEqual(6);
   });
 });
+
+describe("F28: a scratch card that runs beside the numbers in the finale is revealed before the game ends", () => {
+  function playToEnd(autoMark: boolean) {
+    let t = 1_800_000_000_000, seed = 7;
+    const rand = (n: number) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+    const events: PublicEvent[] = [];
+    const e = new EngagementEngine({ callMode: "ai" }, { now: () => t, rand, emit: (x) => events.push(x) });
+    e.updateSettings("organizer", { surprise: { scratchCards: 2, autoMark, momentsMode: "auto" } } as any);
+    e.setRewards("organizer", makeRewardLines([{ pattern: "early5", texts: ["a"] }]));
+    e.addParticipants(Array.from({ length: 10 }, (_, i) => ({ name: "P" + i, e164: "r" + i })));
+    e.participants.forEach((p, i) => e.confirmJoin("d" + i, p.id));
+    e.start(); t += 60_000;
+    let endedAfterReveal: boolean | null = null;
+    for (let s = 0; s < 4000 && e.status !== "ended"; s++) {
+      e.tick();
+      if (e.called.length >= 5 && !e.paused) for (const p of e.participants) { const own = p.tickets[0]!.flat().filter((n) => n && e.called.includes(n)); if (own.length >= 5) e.claim(p.id, { ticket: "A", pattern: "early5", cut: own as number[] }); }
+      t += 500;
+    }
+    endedAfterReveal = e.status === "ended" ? !e.sx.scratch : null;
+    for (let s = 0; s < 200; s++) { e.tick(); t += 500; } // well past the 45 s auto-reveal
+    return { e, events, endedAfterReveal };
+  }
+  for (const autoMark of [true, false]) {
+    test(`autoMark ${autoMark}: every card is revealed, none is left running, the report has them`, () => {
+      const { e, endedAfterReveal } = playToEnd(autoMark);
+      expect(e.status).toBe("ended");
+      expect(e.sx.scratch).toBeNull(); // nothing left running
+      expect(e.sx.moments.filter((m) => m.kind === "scratch").every((m) => m.status === "done")).toBe(true);
+      expect(e.sx.results.filter((r) => r.kind === "scratch").length).toBe(2); // both cards are in the results the report reads
+      expect(endedAfterReveal).toBe(true); // the game did not end while a card was still open
+    });
+  }
+});
+
+describe("F28: every planned moment happens before the game ends, the bumper draw last", () => {
+  for (const autoMark of [true, false]) {
+    test(`autoMark ${autoMark}: 3 lucky draws (one a bumper) and 2 scratch cards in a one-round game`, () => {
+      let t = 1_800_000_000_000, seed = 11;
+      const rand = (n: number) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+      const e = new EngagementEngine({ callMode: "ai" }, { now: () => t, rand, emit: () => {} });
+      e.updateSettings("organizer", { surprise: { rounds: 1, luckyDraws: 3, luckyWinners: 1, bumper: true, scratchCards: 2, scratchWinning: 5, autoMark, momentsMode: "auto" } } as any);
+      e.setRewards("organizer", makeRewardLines([{ pattern: "early5", texts: ["a"] }]));
+      e.addParticipants(Array.from({ length: 10 }, (_, i) => ({ name: "P" + i, e164: "r" + i })));
+      e.participants.forEach((p, i) => e.confirmJoin("d" + i, p.id));
+      e.start(); t += 60_000;
+      for (let n = 0; n < 20000 && e.status !== "ended"; n++) {
+        e.tick();
+        if (e.called.length >= 5 && !e.paused) for (const p of e.participants) { const own = p.tickets[0]!.flat().filter((x) => x && e.called.includes(x)); if (own.length >= 5) e.claim(p.id, { ticket: "A", pattern: "early5", cut: own as number[] }); }
+        t += 500;
+      }
+      expect(e.status).toBe("ended");
+      expect(e.sx.lucky).toBeNull(); expect(e.sx.scratch).toBeNull();
+      expect(e.sx.moments.every((m) => m.status === "done")).toBe(true); // none left pending
+      expect(e.sx.results.filter((r) => r.kind === "lucky").length).toBe(3);
+      expect(e.sx.results.filter((r) => r.kind === "scratch").length).toBe(2);
+      const last = e.sx.results[e.sx.results.length - 1]!;
+      expect(last.kind === "lucky" && e.sx.moments.find((m) => m.id === last.momentId)!.bumper).toBe(true); // the bumper draw is the very last moment
+    });
+  }
+});
+
+describe("a round that ends while the moments of an earlier window are still waiting", () => {
+  test("the waiting moments finish, and then the break goes on (the game is never resumed in the middle of a break)", () => {
+    const h = make({ rounds: 2, luckyDraws: 3, luckyWinners: 1, bumper: true, scratchCards: 2, scratchWinning: 3, momentsMode: "auto", autoMark: true },
+      { rewards: makeRewardLines([{ pattern: "top", texts: ["T"] }, { pattern: "mid", texts: ["M"] }]) });
+    join(h, 8);
+    h.eng.start();
+    const e = h.eng, sx = e.sx as any;
+    for (let n = 0; n < 400 && (sx.scratch || sx.lucky || sx.queue.length); n++) { h.advance(500); e.tick(); for (const w of toPid(h, "lucky_won")) e.confirmPresent(w.pid, w.momentId); } // let the start-of-game moments finish first
+    const sc = sx.moments.find((m: any) => m.kind === "scratch" && m.status === "pending"), lk = sx.moments.find((m: any) => m.kind === "lucky" && !m.bumper && m.status === "pending");
+    sc.slot = lk.slot = "never"; // only the hand-made queue below can run them
+    sx.queue = [sc.id, lk.id]; sx.cont = "resume"; sx.startNext(); // a card beside the numbers, the draw waits behind it
+    expect(sx.scratch).not.toBeNull(); expect(sx.queue).toEqual([lk.id]);
+    sx.finishRound("test"); // the round ends while the draw is still waiting
+    let resumedInBreak = false;
+    for (let n = 0; n < 400 && (sx.scratch || sx.lucky || sx.queue.length); n++) {
+      h.advance(500); e.tick();
+      for (const w of toPid(h, "lucky_won")) e.confirmPresent(w.pid, w.momentId);
+      if (sx.between && !e.paused) resumedInBreak = true;
+    }
+    expect(sx.results.filter((r: any) => r.kind === "lucky").length).toBe(1); // the waiting draw did happen
+    expect(resumedInBreak).toBe(false);
+    expect(sx.between ? e.paused?.type : "intermission").toBe("intermission");
+  });
+});
+
+describe("the last prize is awarded while a lucky draw is on screen", () => {
+  test("the draw on screen is not replaced; the other moments wait for it and every moment runs once", () => {
+    const h = make({ rounds: 1, luckyDraws: 3, luckyWinners: 1, bumper: true, scratchCards: 2, scratchWinning: 3, momentsMode: "auto", autoMark: true },
+      { rewards: makeRewardLines([{ pattern: "top", texts: ["T"] }]) });
+    join(h, 8);
+    h.eng.start();
+    const e = h.eng, sx = e.sx as any;
+    const pump = () => { h.advance(500); e.tick(); for (const w of toPid(h, "lucky_won")) e.confirmPresent(w.pid, w.momentId); };
+    for (let n = 0; n < 400 && (sx.scratch || sx.lucky || sx.queue.length); n++) pump(); // let the start-of-game moments finish first
+    const lk = sx.moments.find((m: any) => m.kind === "lucky" && !m.bumper && m.status === "pending");
+    lk.slot = "never"; sx.queue = [lk.id]; sx.cont = "resume"; sx.startNext();
+    expect(sx.lucky?.id).toBe(lk.id);
+    sx.finishRound("last prize"); // last round: every other pending moment is queued behind the draw
+    expect(sx.lucky?.id).toBe(lk.id); // not replaced
+    expect(sx.scratch).toBeNull(); // and nothing else started beside it
+    expect(sx.queue.length).toBeGreaterThan(0); // the others wait their turn
+    for (let n = 0; n < 4000 && e.status !== "ended"; n++) pump();
+    expect(e.status).toBe("ended");
+    expect(sx.moments.every((m: any) => m.status === "done")).toBe(true);
+    expect(sx.results.length).toBe(sx.moments.length); // each moment has exactly one result
+    const last = sx.results[sx.results.length - 1];
+    expect(sx.moments.find((m: any) => m.id === last.momentId).bumper).toBe(true);
+  });
+});

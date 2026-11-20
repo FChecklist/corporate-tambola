@@ -216,7 +216,7 @@ export const GO_REFUSALS = {
 } as const;
 
 /** Why a message would take no effect, or null if it is valid in this state. Shared by the phone and the publisher. */
-function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: boolean, nexts: readonly number[], go: number | null): string | null {
+function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: boolean, nexts: readonly number[], go: number | null, all: readonly Cur[] = cur ? [cur] : []): string | null {
   if (stopped) return "engagement already stopped";
   if (m.signedAtRound > m.atBeaconRound) return "takes effect before it was signed";
   if (cfg.startOnly && (m.action === "pause" || m.action === "resume" || m.action === "extend" || m.action === "stop")) return BIG_GAME_REFUSAL;
@@ -226,7 +226,7 @@ function check(m: ControlMsg, cfg: ControlConfig, cur: Cur | null, stopped: bool
     case "next": {
       if (cfg.callMode !== "host") return NEXT_REFUSALS.auto;
       if (lead !== NEXT_LEAD_ROUNDS || m.untilRound !== undefined) return NEXT_REFUSALS.lead; // exactly the lead: the round is still unknown when signed, and the number comes as soon as it can
-      if (paused) return NEXT_REFUSALS.paused;
+      if (paused || all.some((c) => c.start <= m.atBeaconRound && m.atBeaconRound < effEnd(c, cfg.maxPauseRounds))) return NEXT_REFUSALS.paused; // inside ANY pause, not only the latest one (a second pause can begin exactly where the first ends, and a press named for a round of the first one must not be released)
       if (cfg.startMode === "manual") { if (go === null) return NEXT_REFUSALS.start; if (m.atBeaconRound < go) return NEXT_REFUSALS.early; } // a manual start: the Host's first press comes after Start, from the round Start named
       const k = nexts.length, prev = k ? nexts[k - 1]! : -1;
       if (k >= (cfg.maxNexts ?? 450)) return NEXT_REFUSALS.done;
@@ -280,7 +280,7 @@ export function resolveControl(cfg: ControlConfig, log: readonly ControlMsg[], h
   let cur: Cur | null = null, stop: number | null = null, applied = 0, goAt: number | null = null;
   const ignored: ControlState["ignored"] = [], nextRounds: number[] = [];
   for (const m of [...log].sort((a, b) => a.seq - b.seq)) {
-    const why = check(m, cfg, cur, stop !== null, nextRounds, goAt);
+    const why = check(m, cfg, cur, stop !== null, nextRounds, goAt, ivs);
     if (why) { ignored.push({ seq: m.seq, why }); continue; }
     applied++;
     if (m.action === "pause") { cur = { start: m.atBeaconRound, until: m.untilRound ?? null, endedAt: null }; ivs.push(cur); }
@@ -330,6 +330,15 @@ export function pauseShifts(ivs: readonly PauseInterval[], stride: number, base:
   shiftCache.set(ck, sh);
   return sh;
 }
+/**
+ * The pauses that can move a call. In a game with a manual start, a pause that was already over before the round Start named (it ended at or before that round) moves nothing:
+ * number 1 comes in exactly the Start round, and the later calls follow at the chosen speed. A pause that is still in force at the Start round, or begins later, counts as usual.
+ */
+export function schedulePauses(s: Pick<ControlState, "intervals" | "manualStart" | "goRound">, firstCallRound?: number): readonly PauseInterval[] {
+  // SMOKE-20NOV F-02: the same holds for a game that starts by itself: a pause that was over before number 1 was due (`firstCallRound`) moves nothing (it used to push number 1 by the whole length of the pause).
+  const go = s.manualStart ? s.goRound : firstCallRound ?? null;
+  return go !== null && go !== Infinity ? s.intervals.filter((i) => i.end > go) : s.intervals;
+}
 /** Applies `pauseShifts` to one call: its base round, pushed by every pause that starts at or before it. */
 export function pushedByPauses(a: number, ivs: readonly PauseInterval[], shifts: readonly number[]): number {
   for (let j = 0; j < ivs.length; j++) if (a >= ivs[j]!.start) a += shifts[j]!;
@@ -345,7 +354,8 @@ export function callRound(s: ControlState, startRound: number, strideRounds: num
   if (s.host) return hostCallRound(s, k);
   if (s.manualStart) { if (s.goRound === null) return s.stopRound !== null ? null : Infinity; startRound = s.goRound; } // nothing is called until somebody presses Start; then number 1 comes in the round Start named
   const base = (j: number) => startRound + j * strideRounds;
-  const a = s.intervals.length ? pushedByPauses(base(k), s.intervals, pauseShifts(s.intervals, strideRounds, base, `L${startRound}`, s.fullGap === true)) : base(k);
+  const ivs = schedulePauses(s, startRound);
+  const a = ivs.length ? pushedByPauses(base(k), ivs, pauseShifts(ivs, strideRounds, base, `L${startRound}`, s.fullGap === true)) : base(k);
   return s.stopRound !== null && a >= s.stopRound ? null : a;
 }
 
