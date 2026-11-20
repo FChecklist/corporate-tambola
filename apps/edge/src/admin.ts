@@ -28,6 +28,8 @@ export const ADMIN_SCHEMA: string[] = [
 
 /** How long a mail event row is kept. */
 export const MAIL_EVENT_DAYS = 90;
+/** How long the send log `mail_event` is kept: 3 days, the same as the outbox (docs/RETENTION.md). */
+export const MAIL_LOG_KEEP_MS = 3 * 86_400_000;
 /** The 10-minute bucket the error counter uses, and how many of them make "the last hour". */
 const BUCKET_MS = 600_000, BUCKETS_PER_HOUR = 6;
 /** The scheduler fails its check above this many 5xx answers in the last hour (also written in scheduler uptime.yml). */
@@ -124,6 +126,7 @@ export async function adminTick(db: D1, now: number): Promise<void> {
   try {
     await db.prepare("DELETE FROM kv WHERE k LIKE 'err/%' AND k<?").bind(bucketKey(now - 48 * 3_600_000)).run();
     await db.prepare("DELETE FROM mail_bounce WHERE at_ms<?").bind(now - MAIL_EVENT_DAYS * 86_400_000).run();
+    await db.prepare("DELETE FROM mail_event WHERE at_ms<?").bind(now - MAIL_LOG_KEEP_MS).run(); // the send log (hash of the address + subject + outcome) is kept 3 days like the outbox (audit of PR 30, M1)
   } catch { /* best effort */ }
 }
 
