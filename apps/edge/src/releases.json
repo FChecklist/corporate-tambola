@@ -1,5 +1,17 @@
 [
   {
+    "version": "1.9.2",
+    "date": "2026-11-20",
+    "releasedAtIST": "20 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Invoice and payment e-mails no longer depend on one mail service",
+    "changes": [
+      "If the main mail service cannot take a mail (its monthly allowance is used up, or it is busy or down), the same mail now goes out through a second route, the Cloudflare mail service, once and without a duplicate",
+      "When the main service says its allowance is used up, it is left alone for 30 minutes so invoices and payment notes are not delayed by useless tries",
+      "A mail that used the second route is recorded in the mail log, and a mail log entry is now forgotten after 3 days"
+    ]
+  },
+  {
     "version": "1.9.1",
     "date": "2026-11-20",
     "releasedAtIST": "20 Nov 2026, time set at deploy",

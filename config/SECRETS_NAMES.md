@@ -23,6 +23,8 @@ Where things are set:
 | `REPORT_KEY` | Key to read the first-party error and speed reports (`/api/telemetry`) | Pages secret | secret |
 | `RESEND_API_KEY` | Sends e-mail through the mail service (sign-in codes, invoices, reports, notes to the owner) | Pages secret | secret |
 | `RESEND_WEBHOOK_SECRET` | Checks the signature of the mail service's bounce / complaint / delivery webhook (`POST /api/mail/events`); with no value that address answers 404 | Pages secret | secret |
+| `CF_EMAIL_TOKEN` | Cloudflare API token that may send e-mail (Email Service); the second mail path used when Resend answers a quota or server error. Same value as `CLOUDFLARE_EMAIL_TOKEN` in the owner's secrets file. With no value there is no second path | Pages secret | secret |
+| `CF_ACCOUNT_ID` | The Cloudflare account id (32 hex characters) the second mail path sends through | Pages secret | secret |
 | `RAZORPAY_KEY_ID` | Razorpay key id, when this site takes payments itself | Pages secret | secret |
 | `RAZORPAY_KEY_SECRET` | Razorpay key secret, when this site takes payments itself | Pages secret | secret |
 | `RAZORPAY_WEBHOOK_SECRET` | Checks the signature of Razorpay's payment webhook | Pages secret | secret |
