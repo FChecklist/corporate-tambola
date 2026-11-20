@@ -3,7 +3,7 @@
 import { expect } from "bun:test";
 import { createHash } from "node:crypto";
 import { W, T, GEN, HOUR, MIN, call, j, one, q, organizer, create, publish, checkout, capture, verify, roundAt, roundMs, startIn, keyH, dev, mob } from "../param-harness";
-import { callTimeMs, endBoundMs, realEndMs } from "../../src/lifecycle";
+import { callTimeMs, cfgOfRow, endBoundMs, realEndMs } from "../../src/lifecycle";
 import { GRACE_ROUNDS, HOUSE_ORDER, keysInPlay, linesFor } from "../../../../packages/beacon/src/config";
 import { deriveCalls } from "../../../../packages/beacon/src";
 import { ticketFor, settleAll as settleLog } from "../../../../packages/beacon/src/game";
@@ -86,7 +86,7 @@ export async function callLog(g: Game, upto = 90): Promise<{ log: number[]; roun
   return { log: deriveCalls(g.id, rounds.map(randOf)), rounds };
 }
 /** What a phone computes at the end: every winner of every house, from the public log and the seat list. */
-export function winnersOf(g: Game, pids: string[], log: number[]) { return settleLog(g.id, pids, log, (require("../../src/lifecycle") as any).cfgOfRow(row(g.id))); }
+export function winnersOf(g: Game, pids: string[], log: number[]) { return settleLog(g.id, pids, log, cfgOfRow(row(g.id))); }
 
 /** The game's own start: automatic = the clock; by hand = the Organizer's Start press at/after the time. Returns the moment (ms) the first number is due, or null if it cannot run yet. */
 export async function startGame(g: Game): Promise<number> {
@@ -103,3 +103,14 @@ export async function runAllNumbers(g: Game): Promise<number> {
   return (await callTimeMs(W.env as any, row(g.id), 1, 89))!;
 }
 export { endBoundMs, realEndMs, keysInPlay, linesFor, ticketFor, HOUSE_ORDER, GRACE_ROUNDS, publicKeyFromSecret, signControlWithSecret, nextMessage, readPublished };
+
+/** An independent oracle (does not call settleAll): the call index (0-based) at which a ticket completes a house on `log`, or -1. */
+import { ticketNumbers, isValidTicket, type Ticket } from "../../../../packages/shared/src/ticket";
+export { ticketNumbers, isValidTicket };
+export function oracleIdx(t: Ticket, house: "early5" | "top" | "mid" | "bot" | "corners" | "full", log: readonly number[]): number {
+  const row = (r: number) => t[r]!.filter((v): v is number => v !== null);
+  const need: number[] = house === "top" ? row(0) : house === "mid" ? row(1) : house === "bot" ? row(2) : house === "full" ? ticketNumbers(t) : house === "corners" ? [row(0)[0]!, row(0)[4]!, row(2)[0]!, row(2)[4]!] : [];
+  if (house === "early5") { const all = new Set(ticketNumbers(t)); let c = 0; for (let i = 0; i < log.length; i++) if (all.has(log[i]!) && ++c === 5) return i; return -1; }
+  let last = -1; for (const n of need) { const i = log.indexOf(n); if (i < 0) return -1; last = Math.max(last, i); }
+  return last;
+}
