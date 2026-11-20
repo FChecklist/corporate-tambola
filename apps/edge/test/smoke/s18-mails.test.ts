@@ -61,3 +61,35 @@ for (const f of FORMATS) describe(`[${f.key}] step 18: one e-mail per step to th
     expect(m.length).toBe(1); expect(m[0]!.to).not.toMatch(/^P\d/);
   });
 });
+
+// ---- every mail of a whole game, read as a person would: who it went to, what it says, which links it carries
+import { hostSetup } from "./h";
+for (const f of FORMATS) describe(`[${f.key}] step 18: all the mail of one whole game`, () => {
+  test("S18-8 recipients: only the organizer's addresses (and the Hosts who gave one, for cancel / deletion notices), the platform owner's order note, never a player or a Co-host; nobody gets a mail twice", async () => {
+    const g = await newGame(f); const h = await hostSetup(g);
+    const { last } = await playGame(g, 4); await tickFor(last + 5 * MIN, 12);
+    const endMs = Number(one("SELECT end_ms FROM life WHERE eid=?", g.id).end_ms); await lifecycleTick(W.env as any, endMs + 20 * HOUR + MIN);
+    const ok = new Set([g.org.email, "boss@acme.com", "host@acme.com", "hello@corporatetambola.com"]);
+    for (const m of provider.delivered) expect([m.subject, m.to, ok.has(m.to)]).toEqual([m.subject, m.to, true]);
+    const host = provider.delivered.filter((m) => m.to === "host@acme.com").map((m) => m.subject);
+    for (const s of host) expect(s).toMatch(/deleted|cancel|did not start|time has passed|You are a Host/i); // a Host hears about the end of the data, never about money or the report
+    const sig = provider.delivered.map((m) => m.to + "|" + m.subject); expect(new Set(sig).size).toBe(sig.length); // not one identical mail twice
+    void h;
+  });
+  test("S18-9 words and links: every mail has a plain subject, the brand footer, no leftover placeholder ('undefined', 'null', 'NaN', '[object'), https links only, and no organizer key outside the AI-link mails", async () => {
+    const g = await newGame(f); await hostSetup(g);
+    const { last } = await playGame(g, 4); await tickFor(last + 5 * MIN, 12);
+    const endMs = Number(one("SELECT end_ms FROM life WHERE eid=?", g.id).end_ms); await lifecycleTick(W.env as any, endMs + 20 * HOUR + MIN);
+    expect(provider.delivered.length).toBeGreaterThanOrEqual(8);
+    for (const m of provider.delivered) {
+      const all = m.subject + "\n" + m.text;
+      expect([m.subject, /undefined|\bnull\b|NaN|\[object|\$\{/.test(all)]).toEqual([m.subject, false]);
+      expect([m.subject, /^\[Tambola\]/.test(m.subject) || /^\[TEST\]/.test(m.subject)]).toEqual([m.subject, true]);
+      expect([m.subject, m.subject.length <= 140]).toEqual([m.subject, true]);
+      expect([m.subject, /Corporate Tambola/.test(m.text)]).toEqual([m.subject, true]);
+      for (const u of all.match(/https?:\/\/[^\s)]+/g) ?? []) expect([m.subject, u.startsWith("https://")]).toEqual([m.subject, true]);
+      if (!/AI work link|You are a Host|Host AI work link/i.test(m.subject)) expect([m.subject, /ct[kah]_[0-9a-f]{20}/.test(all)]).toEqual([m.subject, false]);
+      expect([m.subject, /[A-Z]{12,}/.test(m.subject)]).toEqual([m.subject, false]); // no shouting
+    }
+  });
+});

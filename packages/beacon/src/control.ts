@@ -334,9 +334,10 @@ export function pauseShifts(ivs: readonly PauseInterval[], stride: number, base:
  * The pauses that can move a call. In a game with a manual start, a pause that was already over before the round Start named (it ended at or before that round) moves nothing:
  * number 1 comes in exactly the Start round, and the later calls follow at the chosen speed. A pause that is still in force at the Start round, or begins later, counts as usual.
  */
-export function schedulePauses(s: Pick<ControlState, "intervals" | "manualStart" | "goRound">): readonly PauseInterval[] {
-  const go = s.goRound;
-  return s.manualStart && go !== null ? s.intervals.filter((i) => i.end > go) : s.intervals;
+export function schedulePauses(s: Pick<ControlState, "intervals" | "manualStart" | "goRound">, firstCallRound?: number): readonly PauseInterval[] {
+  // SMOKE-20NOV F-02: the same holds for a game that starts by itself: a pause that was over before number 1 was due (`firstCallRound`) moves nothing (it used to push number 1 by the whole length of the pause).
+  const go = s.manualStart ? s.goRound : firstCallRound ?? null;
+  return go !== null && go !== Infinity ? s.intervals.filter((i) => i.end > go) : s.intervals;
 }
 /** Applies `pauseShifts` to one call: its base round, pushed by every pause that starts at or before it. */
 export function pushedByPauses(a: number, ivs: readonly PauseInterval[], shifts: readonly number[]): number {
@@ -353,7 +354,7 @@ export function callRound(s: ControlState, startRound: number, strideRounds: num
   if (s.host) return hostCallRound(s, k);
   if (s.manualStart) { if (s.goRound === null) return s.stopRound !== null ? null : Infinity; startRound = s.goRound; } // nothing is called until somebody presses Start; then number 1 comes in the round Start named
   const base = (j: number) => startRound + j * strideRounds;
-  const ivs = schedulePauses(s);
+  const ivs = schedulePauses(s, startRound);
   const a = ivs.length ? pushedByPauses(base(k), ivs, pauseShifts(ivs, strideRounds, base, `L${startRound}`, s.fullGap === true)) : base(k);
   return s.stopRound !== null && a >= s.stopRound ? null : a;
 }

@@ -48,7 +48,7 @@ describe("provider outage longer than the mail log is kept", () => {
     for (let h = 1; h <= 20; h++) await lifecycleTick(W.env as any, endMs + h * HOUR + MIN); // hourly ticks, provider down all the time
     expect(count("SELECT COUNT(*) AS c FROM participant WHERE eid=?", g.id)).toBe(0); // the data was deleted on time (the promise to the players)
     installProvider("ok");
-    await lifecycleTick(W.env as any, endMs + 21 * HOUR);
+    await lifecycleTick(W.env as any, endMs + 21 * HOUR); await lifecycleTick(W.env as any, endMs + 21 * HOUR + DAY); // the daily job tries the unsent mail again, once a day, for 3 days
     // the organizer must hear of the loss somewhere: any mail naming the game that says the report could not be sent
     const told = provider.delivered.filter((m) => m.text.includes(g.id) && /could not|not be sent|did not reach|missed/i.test(m.text + m.subject));
     expect(told.length).toBeGreaterThanOrEqual(1);

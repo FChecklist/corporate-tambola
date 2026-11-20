@@ -21,7 +21,8 @@ import { storedHolds } from "./claimhold";
 import { seatOfPid } from "../../../packages/beacon/src/unique-ticket";
 import { openPii, openText, sealPii, sealText, type PiiEnv } from "./pii";
 import { BRAND } from "./brand";
-import { brandedReportMail } from "./report-email";
+import { brandedReportMail, tilesOf } from "./report-email";
+import { mailCompleted, mailReportMissed, mailStarted, stepKey, stepOnce } from "./steps-mail";
 import { layoutReport, layoutPeoplePart, istDate, istFull, emptyAgg, type Agg, type ReportData, type ReportPerson, type ReportPrize, type ReportWinner } from "./report-layout";
 import { purgeOutbox, retryOutbox, sendReportMail, type PayEnv } from "./pay";
 import { eraseCohostsSql, mailDataDeleted, mailErasureHeadsUp } from "./cancel";
@@ -222,6 +223,7 @@ export async function acceptOver(env: Env, e: any, eid: string, b: any, now: num
 // ------------------------------------------------------------------------------------------------ deletion
 /** Deletes every participant's name, number, seat, invite record, ticket link and working copy of the report, and crypto-shreds the participants' personal part of the audit log (unless the owner set a legal hold). The winners record, the prize hand-over record, the organizer's details and the engagement itself stay. */
 export async function erasePersonal(env: Env, eid: string, now: number, by: string): Promise<void> {
+  await stripIdsFromPrizes(env, eid); // SMOKE-20NOV F-07: FIRST, and a failure here stops the erasure (the next wake repeats all of it). It used to run after the batch and swallow its error: the game was then marked erased and nobody ever came back to clean the winners' IDs, which would have stayed 365 days.
   await env.DB.batch([
     env.DB.prepare("DELETE FROM claim WHERE eid=?").bind(eid), env.DB.prepare("UPDATE v2_claim_review SET reason=NULL WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM bogey WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM settled WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rvote WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM rcand WHERE eid=?").bind(eid),
     env.DB.prepare("DELETE FROM participant WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM consent_log WHERE kind='K4' AND ref=?").bind(eid), env.DB.prepare("DELETE FROM seat WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM person WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM waiting WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM overvote WHERE eid=?").bind(eid), env.DB.prepare("DELETE FROM data_request WHERE eid=?").bind(eid), // players' data requests (rights.ts) go with the people they are about
@@ -230,19 +232,18 @@ export async function erasePersonal(env: Env, eid: string, now: number, by: stri
     env.DB.prepare(eraseCohostsSql).bind(eid), // the game's Co-hosts: name, mobile number and key go with the participants' data
     env.DB.prepare("INSERT INTO life(eid,end_ms,end_src,purged_ms,report_state) VALUES(?,?, 'purge', ?, ?) ON CONFLICT(eid) DO UPDATE SET purged_ms=?, report_state=COALESCE(life.report_state, ?)").bind(eid, now, now, by, now, by),
   ]);
-  await stripIdsFromPrizes(env, eid); // the prize hand-over record stays (design), but the person's ID and email go with the rest of their data (suite rules v1.1: IDs deleted within 24 hours)
   await shredParticipantAudit(env as any, eid, now); // best effort inside: a held engagement keeps its log until the hold is lifted, then the tick shreds it
 }
 /** The prize hand-over record (prize.pii / prize.orig, kept to day 365) was written from the participant's sealed details, which in an ID game hold the person's ID (and in an open game an email). Re-seal both without them. */
 export async function stripIdsFromPrizes(env: Env, eid: string): Promise<void> {
-  try {
+  {
     const rows = (await env.DB.prepare("SELECT round, pattern, ordinal, seat, pii, orig FROM prize WHERE eid=?").bind(eid).all<{ round: number; pattern: string; ordinal: number; seat: number; pii: string | null; orig: string | null }>()).results ?? [];
     const clean = async (sealed: string | null) => { const p = await openPii(env as any, sealed); return p && (p.empId || p.email) ? await sealPii(env as any, { phone: p.phone, name: p.name }) : sealed; };
     for (const r of rows) {
       const pii = await clean(r.pii), orig = await clean(r.orig);
       if (pii !== r.pii || orig !== r.orig) await env.DB.prepare("UPDATE prize SET pii=?, orig=? WHERE eid=? AND round=? AND pattern=? AND ordinal=? AND seat=?").bind(pii, orig, eid, r.round, r.pattern, r.ordinal, r.seat).run();
     }
-  } catch { /* the next erasure pass tries again */ }
+  }
 }
 /** Everything about an engagement, at the end of its 365 days (or for a draft nobody published). */
 export async function eraseEverything(env: Env, id: string, now = Date.now()): Promise<void> {
@@ -261,7 +262,7 @@ async function deleteEngagementRows(env: Env, id: string): Promise<void> {
   { const eg = await env.DB.prepare("SELECT * FROM engagement WHERE id=?").bind(id).first<any>(); if (eg) await keepGameRecord(env.DB, eg, Date.now()); } // the settings of the game are kept for ever (no personal data in them): written one last time before the game's own rows go
   await keepLegalParty(env.DB, id, Date.now()); // the law keeps payments, invoices, the organizer's invoice details and who paid, for ever: copy them out before the game's own rows go
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM kv WHERE k >= ? AND k < ?").bind(`wev/${id}/`, prefixEnd(`wev/${id}/`)), env.DB.prepare("DELETE FROM prize WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM data_request WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
+    env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM kv WHERE k >= ? AND k < ?").bind(`wev/${id}/`, prefixEnd(`wev/${id}/`)), env.DB.prepare("DELETE FROM kv WHERE k >= ? AND k < ?").bind(`stepmail/${id}/`, prefixEnd(`stepmail/${id}/`)), env.DB.prepare("DELETE FROM prize WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM data_request WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
     env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=? OR k=? OR k=? OR k=? OR k=?").bind(`glog/${id}`, `ctlby/${id}`, `chg/${id}`, `claimlate/${id}`, `claimlaten/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`rptsalt/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`mailowed/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`, `paidby/${id}`),
     env.DB.prepare("DELETE FROM organizer_key WHERE eid=? AND kind='cohost'").bind(id), env.DB.prepare("DELETE FROM shred WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM eng_key WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM audit_pii WHERE eid=?").bind(id), // erasePersonal above wrote a fresh shred marker
     env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
@@ -407,6 +408,34 @@ async function saveEndLog(env: LifeEnv, e: any, endMs: number, now: number): Pro
     await saveGameLog(env, d1kv(env), e, cfg, now, { endMs, endReason: f.endReason, numbersCalled: f.numbersCalled, firstNumberMs: roundMs(sch.start) });
   } catch { /* the report pass writes it again at its next step */ }
 }
+/** Step 18: "your game has ended", once, when the end is first seen (within 20 hours of it: older news is not sent). Needs no report and no people: a game nobody joined is also told about. */
+async function maybeMailCompleted(env: LifeEnv, e: any, endMs: number, delEnd: number, now: number): Promise<void> {
+  if (now > endMs + PURGE_AFTER_MS) return;
+  if (await env.DB.prepare("SELECT 1 AS x FROM kv WHERE k=?").bind(stepKey(e.id, "completed")).first()) return;
+  const cfg = cfgOfRow(e), sch = await schedule(env, e), f = await endFactsOf(env, e, cfg, sch, endMs);
+  const prizes = Number((await env.DB.prepare("SELECT COUNT(*) AS c FROM (SELECT DISTINCT round, pattern, ordinal FROM winner WHERE eid=?)").bind(e.id).first<{ c: number }>())?.c ?? 0);
+  await mailCompleted(env as any, e, { endMs, numbers: f.numbersCalled, prizes, players: Number(e.npart ?? 0), deleteAtMs: personalDeleteAt(delEnd), endReason: f.endReason }, now);
+}
+/** Step 18: the game has started (by the clock, or the organizer pressed Start), once. A start that is more than 6 hours old (the job was down, or this code is new) is marked without a mail: it would be stale news. */
+export async function startedPass(env: LifeEnv, now: number): Promise<number> {
+  const nowRound = Math.floor((now / 1000 - GENESIS) / 3) + 1; let sent = 0;
+  const rows = (await env.DB.prepare("SELECT e.* FROM engagement e WHERE e.pack IS NOT 0 AND e.cancelled_ms IS NULL AND e.unplayed_ms IS NULL AND e.start_round <= ? AND e.start_round >= ? AND NOT EXISTS (SELECT 1 FROM kv WHERE k = 'stepmail/' || e.id || '/started') ORDER BY e.start_round LIMIT 25").bind(nowRound, nowRound - 26 * 1200).all<any>()).results ?? [];
+  for (const e of rows) {
+    try {
+      const sch = await schedule(env, e), manual = sch.cfg.startMode === "manual", go = sch.st?.goRound ?? null;
+      const startedMs = manual ? (go === null || go === undefined ? null : roundMs(go)) : roundMs(e.start_round);
+      if (startedMs === null || startedMs > now) continue;
+      if (now - startedMs > 6 * 3_600_000) { await stepOnce(env.DB, e.id, "started", now, async () => undefined); continue; }
+      await mailStarted(env as any, e, startedMs, manual, sch.cfg.callMode === "host", now); sent++;
+    } catch { /* tried again at the next tick */ }
+  }
+  return sent;
+}
+async function maybeMailReportMissed(env: LifeEnv, e: any, deletedMs: number, now: number): Promise<void> {
+  const log = await readSavedGameLog(env, e.id); if (!log) return;
+  const lines = [...tilesOf(log).map(([k, v]) => `${k}: ${v}`), ...(log.prizes.length ? ["Prizes:", ...log.prizes.map((p) => `- ${p.prize}: Ticket ${p.ticket}, after number ${p.callNo}`)] : ["No prize was awarded."])];
+  await mailReportMissed(env as any, e, deletedMs, lines, now);
+}
 async function baseData(env: LifeEnv, e: any, cfg: EngagementCfg, sch: Awaited<ReturnType<typeof schedule>>, st: RptState, email: string, sentAt: number, endMs: number, first: number): Promise<ReportData> {
   const eid = e.id as string;
   const wrows = (await env.DB.prepare("SELECT round, pattern, ordinal, seat, idx, at_ms, src FROM winner WHERE eid=? ORDER BY round, pattern, ordinal, seat").bind(eid).all<any>()).results ?? [];
@@ -515,6 +544,7 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
       if (!life || now < life.end_ms + REPORT_AFTER_MS) continue; // still being played
       await saveEndLog(env, e, life.end_ms, now); // the game is over: its log is kept now, whatever happens to the report e-mail
       const delEnd = await deleteClockEndMs(env, e, life.end_ms, now); // the 20-hour deletion clock counts from the earlier of the stored end and the real end (never later than 24 hours after the game really ended)
+      try { await maybeMailCompleted(env, e, life.end_ms, delEnd, now); } catch { /* a mail is a courtesy: tried again at the next tick */ }
       if (!e.npart) { // a game that was played with nobody joined (only a people list): no report to make; the list goes 20 hours after the end like everyone's data
         if (now >= personalDeleteAt(delEnd) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "auto"); out.purged++; await mailDataDeleted(env as any, e, now); }
         continue;
@@ -525,7 +555,12 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
         else await env.DB.prepare("UPDATE life SET tries=tries+1 WHERE eid=?").bind(e.id).run();
       }
       if (life.report_ms && now >= reportLinkUntil(life.end_ms) - 6 * 3_600_000 && now < reportLinkUntil(life.end_ms)) await remindReport(env, e, life, now);
-      if (now >= personalDeleteAt(delEnd) && !(await isHeld(env.DB, e.id))) { await erasePersonal(env, e.id, now, "auto"); out.purged++; await mailDataDeleted(env as any, e, now); } // an owner-set legal hold suspends this too
+      if (now >= personalDeleteAt(delEnd) && !(await isHeld(env.DB, e.id))) { // an owner-set legal hold suspends this too
+        const l2 = await env.DB.prepare("SELECT report_ms, report_state FROM life WHERE eid=?").bind(e.id).first<{ report_ms: number | null; report_state: string | null }>();
+        const missed = !!l2 && !l2.report_ms && l2.report_state !== "no-email"; // the report never reached the organizer: they must be told before the list of people is gone for good
+        await erasePersonal(env, e.id, now, "auto"); out.purged++; await mailDataDeleted(env as any, e, now);
+        if (missed) { try { await maybeMailReportMissed(env, e, now, now); } catch { /* a mail is a courtesy */ } }
+      }
     } catch { /* this engagement is tried again at the next tick; the others still run */ }
   }
   // the permanent settings record (gamerecord.ts) also for the games the pass above does not look at (free and demo games), and for any game that has no record yet or whose ending is not in its record yet
@@ -555,8 +590,9 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
   // a paid game that was played with nobody in it (no guests, no people list, nobody waiting) has no personal data to delete, but it still gets its end record, so the 365-day clock has a start
   try {
     const bare = (await env.DB.prepare("SELECT e.* FROM engagement e LEFT JOIN life l ON l.eid=e.id WHERE l.eid IS NULL AND e.pack IS NOT 0 AND e.cancelled_ms IS NULL AND NOT EXISTS (SELECT 1 FROM participant p WHERE p.eid=e.id) AND NOT EXISTS (SELECT 1 FROM person q WHERE q.eid=e.id) AND NOT EXISTS (SELECT 1 FROM waiting w WHERE w.eid=e.id) ORDER BY e.start_round LIMIT 25").all<any>()).results ?? [];
-    for (const e of bare) { const end = await endBoundMs(env, e); if (now >= end) await env.DB.prepare("INSERT OR IGNORE INTO life(eid,end_ms,end_src,purged_ms,report_state) VALUES(?,?,'schedule',?,'no-guests')").bind(e.id, end, now).run(); }
+    for (const e of bare) { const end = await endBoundMs(env, e); if (now >= end) { await env.DB.prepare("INSERT OR IGNORE INTO life(eid,end_ms,end_src,purged_ms,report_state) VALUES(?,?,'schedule',?,'no-guests')").bind(e.id, end, now).run(); try { await maybeMailCompleted(env, { ...e, npart: 0 }, end, end, now); } catch { /* a courtesy */ } } }
   } catch { /* tried again at the next tick */ }
+  try { (out as any).startedMails = await startedPass(env, now); } catch { /* tried again at the next tick */ }
   // the mail log (recipient address and subject of mail sent) keeps nothing older than 3 days: forgotten every hour from THIS clock, not only when an organizer happens to visit; unsent mail gets one more try a day
   try {
     const h = new Date(now).toISOString().slice(0, 13), lastH = await env.DB.prepare("SELECT v FROM kv WHERE k='outbox_sweep_hour'").first<{ v: string }>();

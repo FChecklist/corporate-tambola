@@ -48,3 +48,22 @@ export async function playGame(g: Game, n = 4, opts: { prefix?: string; from?: n
 /** Run the cron once a minute from `t0` until `until(t)` says stop (the report is made in small steps). */
 export async function tickFor(t0: number, minutes: number, step = MIN) { let t = t0; for (let i = 0; i < minutes; i++, t += step) await lifecycleTick(W.env as any, t); return t; }
 export { FORMATS, newGame, lifecycleTick, reportLink, type Game, type Format };
+
+/** Make the database fail ONCE: the first statement (or batch containing a statement) whose SQL matches `pattern` throws, like a passing D1 hiccup. A batch fails as a whole, before anything is written (D1 batches are all-or-nothing). Returns a handle: `.fired` says whether it happened. */
+export function failOnce(pattern: RegExp) {
+  const db: any = (W.env as any).DB; const h = { fired: false, restore: () => { db.prepare = realPrepare; db.batch = realBatch; } };
+  const realPrepare = db.prepare.bind(db), realBatch = db.batch.bind(db);
+  const hit = (sql: string) => !h.fired && pattern.test(sql);
+  db.prepare = (sql: string) => { const wrap = (st: any): any => ({ ...st, sql, bind: (...v: any[]) => wrap(st.bind(...v)), run: (...a: any[]) => { if (hit(sql)) { h.fired = true; throw new Error("D1 hiccup"); } return st.run(...a); }, first: (...a: any[]) => { if (hit(sql)) { h.fired = true; throw new Error("D1 hiccup"); } return st.first(...a); }, all: (...a: any[]) => { if (hit(sql)) { h.fired = true; throw new Error("D1 hiccup"); } return st.all(...a); } }); return wrap(realPrepare(sql)); };
+  db.batch = async (xs: any[]) => { if (xs.some((x) => hit(x.sql ?? ""))) { h.fired = true; throw new Error("D1 hiccup"); } return realBatch(xs); };
+  return h;
+}
+
+/** A Host (with an e-mail address) and a Co-host (a mobile number only) for the game: the people who must NOT receive some mail. */
+export async function hostSetup(g: Game) {
+  const h = await j(await call("POST", "/api/org/host", { label: "Priya", mobile: "9822200011", email: "host@acme.com" }, g.h));
+  W.raw.prepare("UPDATE host_state SET verified_ms=?, mobile_ok=1").run(T);
+  const c = await j(await call("POST", "/api/org/cohost", { label: "Ravi", phone: "9876500001", e: g.id }, g.h));
+  return { host: keyH(h.hostKey), cohost: keyH(c.cohostKey) };
+}
+import { keyH } from "../param-harness";

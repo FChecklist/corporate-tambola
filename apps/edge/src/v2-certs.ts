@@ -5,10 +5,11 @@
 // Anyone can check a certificate at /verify.html?c=<id> (API: GET /api/v2/verify/<id>).
 import { PRIZE_HOUSES } from "../../../packages/beacon/src/config";
 import { openPii } from "./pii";
+import { ordinalName } from "../../../packages/shared/src/ordinal";
 import { sha, randHex, type V2Ctx } from "./v2-types";
 
 const HOUSE: Record<string, string> = Object.fromEntries(PRIZE_HOUSES.map((h) => [h.id, h.label]));
-const ord = (n: number) => ["", "1st", "2nd", "3rd"][n] ?? `${n}th`;
+const ord = ordinalName;
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
 
 /** "Early Five", "2nd Full House", "Lucky draw": the same house names the game uses. */
