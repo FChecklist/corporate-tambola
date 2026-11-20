@@ -51,3 +51,6 @@ bun test packages apps tools/control-worker   # the whole repository suite
 
 ## Not covered here (needs the owner or another repo)
 See `docs/STATE.md`, "Needs owner".
+
+## The 20 Nov smoke matrix
+The permutation matrix built on top of this suite (start formats x crowd sizes x every prize house x pause x clock x mail x export x deletion, 435 more cells), its failures and fixes: `docs/SMOKE-20NOV-TAMBOLA.md`. Run: `bun test apps/edge/test/smoke`. Break-and-see-it-fail check: `bun run tools/smoke/falsify.ts`.

@@ -9,7 +9,7 @@ beforeEach(() => { reset(); installProvider(); }); afterEach(restore);
 async function hostOf(g: Game) {
   const h = await j(await call("POST", "/api/org/host", { label: "Priya", mobile: "9822200011", email: "host@acme.com" }, g.h));
   W.raw.prepare("UPDATE host_state SET verified_ms=?, mobile_ok=1").run(T);
-  expect((await call("PUT", `/api/z/${g.id}/control/key`, { publicKey: publicKeyFromSecret(HOST_SECRET) }, keyH(h.hostKey))).status).toBe(200);
+  expect((await call("PUT", `/api/z/${g.id}/control/key`, { publicKey: publicKeyFromSecret(HOST_SECRET) }, keyH(h.hostKey) as Record<string, string>)).status).toBe(200);
   return keyH(h.hostKey);
 }
 describe("S16-C1 the Host goes away and comes back (organizer-calls formats)", () => {

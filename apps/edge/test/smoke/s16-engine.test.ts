@@ -116,7 +116,7 @@ describe("E3b two-ticket houses and Unlucky", () => {
       for (const [key, e] of [["full2", full2], ["top@1", t1], ["top@2", t2]] as const) {
         const r = got.filter((x) => x.pattern === key); if (!e) { expect(r.length).toBe(0); continue; }
         expect(r.length).toBeGreaterThanOrEqual(1); expect(r[0]!.idx).toBe(e[0]);
-        if (ties === "share") expect([...r[0]!.pids].sort()).toEqual([...e[1]].sort()); else expect(e[1]).toContain(r[0]!.pids[0]);
+        if (ties === "share") expect([...r[0]!.pids].sort()).toEqual([...e[1]].sort()); else expect(e[1]).toContain(r[0]!.pids[0]!);
       }
     }
   });

@@ -81,7 +81,7 @@ for (const f of FORMATS) describe(`[${f.key}] the report (step 19)`, () => {
   });
   test.failing("S19-6 OPEN (owner decision): a Host cannot read the name of a player who has not won (today: any pid, 60 at a time, so a Host can read the whole list)", async () => {
     const { g, host, pids } = await mobileGame(f);
-    const r = await j(await call("GET", `/api/z/${g.id}/names?pids=${pids.join(",")}`, undefined, host, g.at + 5 * MIN));
+    const r = await j(await call("GET", `/api/z/${g.id}/names?pids=${pids.join(",")}`, undefined, host as Record<string, string>, g.at + 5 * MIN));
     expect(Object.keys(r.names ?? {}).length).toBeLessThan(5);
   });
 });
