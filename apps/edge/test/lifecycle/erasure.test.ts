@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from
 import { reset, restore, mails } from "../param-harness";
 import { FORMATS, newGame, seat, addIds, joinId, waiting, decide, runAllNumbers, callLog, winnersOf, row, W, one, q, call, j, MIN, HOUR, count, type Game } from "./harness";
 import { lifecycleTick, reportLink } from "../../src/lifecycle";
-import { openText } from "../../src/pii";
+import { openText, openPii } from "../../src/pii";
 import { empHashOf } from "../../src/people";
 setDefaultTimeout(120_000);
 beforeEach(() => reset()); afterEach(restore);
@@ -81,6 +81,19 @@ for (const f of FORMATS) describe(`[${f.key}] ${f.label}: the report, then the e
     for (const id of ids) expect([id, all.includes(id)]).toEqual([id, false]);
     for (const id of ["P1000", "P1007", "ZZ9001"]) { const h = await empHashOf(W.env as any, id); expect([id + " hash", all.includes(h)]).toEqual([id + " hash", false]); }
     for (const p of pids) expect([p, all.includes(p)]).toEqual([p, false]); // not even the ticket ids
+  });
+  test("the prize hand-over record (kept to day 365 so a prize can still be handed over) stays, but holds no ID: LC-1", async () => {
+    const g = await newGame(f);
+    const { last } = await playWholeGame(g, 8);
+    const before = q("SELECT pii FROM prize WHERE eid=?", g.id); expect(before.length).toBe(7);
+    let withId = 0; for (const r of before) if ((await openPii(W.env as any, r.pii))?.empId) withId++;
+    expect(withId).toBe(7); // sanity: while the game is on, the record does hold the winner's ID
+    await tickUntilReport(g, last + 10 * MIN);
+    const endMs = Number(one("SELECT end_ms FROM life WHERE eid=?", g.id).end_ms);
+    await lifecycleTick(W.env as any, endMs + 20 * HOUR + MIN);
+    const after = q("SELECT pii, orig, trail FROM prize WHERE eid=?", g.id); expect(after.length).toBe(7); // the hand-over record itself stays
+    for (const r of after) for (const sealed of [r.pii, r.orig]) expect((await openPii(W.env as any, sealed))?.empId).toBeUndefined();
+    expect(q("SELECT * FROM winner WHERE eid=?", g.id).length).toBe(7); // the winners record (ticket number only) stays
   });
   test("every one of the 24 hours counts: the erasure runs at the first cron after 20 hours, never later than 24 hours after the game ended, even when the cron only wakes at the last minute", async () => {
     const g = await newGame(f);

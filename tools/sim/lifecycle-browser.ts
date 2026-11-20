@@ -4,6 +4,7 @@
  * a wrong game link shows no ticket; erasing the game's people takes the tickets away.   Run:  bun run tools/sim/lifecycle-browser.ts   (needs Chromium: pre-installed in the cloud sandbox)
  * Result: prints PASS / FAIL lines and exits 1 on any FAIL. Part of docs/LIFECYCLE_TESTS.md.
  */
+// @ts-ignore Playwright is pre-installed in the cloud sandbox and is not a dependency of this repository
 import { chromium } from "playwright";
 import { startLocal } from "../../apps/edge/src/local";
 import { CONSENT_VERSION, boxesOf } from "../../apps/edge/src/consent";

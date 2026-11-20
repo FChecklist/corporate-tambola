@@ -35,12 +35,12 @@ export async function newGame(fmt: Format, o: Opts = {}): Promise<Game> {
   const id = `LC-${fmt.key}-${(++seq).toString(36)}`;
   const start = startIn(2 * HOUR);
   const body: Record<string, unknown> = { id, startRound: start, callSeconds: fmt.callMode === "host" ? 9 : 12, cap: o.cap ?? 100, startMode: fmt.startMode, callMode: fmt.callMode, verify: o.verify ?? "id", whoCanJoin: o.list === false ? "anyone" : "list", ...(o.over ?? {}) };
-  const r = await call("POST", "/api/z", body, org.h); expect([id, r.status, r.status === 200 ? "" : JSON.stringify(await j(r.clone()))]).toEqual([id, 200, ""]);
+  const r = await call("POST", "/api/z", body, org.h as Record<string, string>); expect([id, r.status, r.status === 200 ? "" : JSON.stringify(await j(r.clone()))]).toEqual([id, 200, ""]);
   expect((await publish(org.key, id)).status).toBe(200);
-  if (o.invites) { const s = await call("PATCH", `/api/z/${id}/settings`, { invites: { cats: ["family", "colleagues"], ...o.invites } }, org.h); expect([s.status, JSON.stringify(await j(s.clone()))].slice(0, 1)).toEqual([200]); }
-  const g: Game = { id, fmt, key: org.key, h: org.h, startRound: start, startMs: roundMs(start), at: roundMs(start), org };
+  if (o.invites) { const s = await call("PATCH", `/api/z/${id}/settings`, { invites: { cats: ["family", "colleagues"], ...o.invites } }, org.h as Record<string, string>); expect([s.status, JSON.stringify(await j(s.clone()))].slice(0, 1)).toEqual([200]); }
+  const g: Game = { id, fmt, key: org.key, h: org.h as Record<string, string>, startRound: start, startMs: roundMs(start), at: roundMs(start), org };
   if (o.pay !== false) await payGame(g);
-  if (o.sign !== false) expect((await call("PUT", `/api/z/${id}/control/key`, { publicKey: publicKeyFromSecret(ORG_SECRET) }, org.h)).status).toBe(200);
+  if (o.sign !== false) expect((await call("PUT", `/api/z/${id}/control/key`, { publicKey: publicKeyFromSecret(ORG_SECRET) }, org.h as Record<string, string>)).status).toBe(200);
   return g;
 }
 /** the Razorpay stand-in: checkout -> captured -> verified. Returns the verify answer. */

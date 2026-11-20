@@ -73,4 +73,4 @@ for (const f of FORMATS) describe(`[${f.key}] ${f.label}: only a paid game start
     const i = await info(g, T, g.h); expect([i.startMode, i.callMode, i.unpaid]).toEqual([f.startMode, f.callMode, undefined]);
   });
 });
-test.todo("console signed 'paid' notice (POST /api/console/paid, act `paid`, 60 s, one use; markPaid repeatable, organizer's own game and size only): not built in this repo; build it, then replace this todo with the same checks as the tests above");
+test.todo("console signed 'paid' notice (POST /api/console/paid, act `paid`, 60 s, one use; markPaid repeatable, organizer's own game and size only): not built in this repo; build it, then replace this todo with the same checks as the tests above", () => {});

@@ -18,7 +18,7 @@ for (const f of FORMATS) describe(`[${f.key}] ${f.label}`, () => {
     const o = await organizer();
     const r = await create(o.key, `LC-C-${f.key}`, { startMode: f.startMode, callMode: f.callMode, callSeconds: f.callMode === "host" ? 9 : 12, verify: "id", whoCanJoin: "list" });
     expect(r.status).toBe(200);
-    const i = await j(await call("GET", `/api/z/LC-C-${f.key}/info`, undefined, o.h));
+    const i = await j(await call("GET", `/api/z/LC-C-${f.key}/info`, undefined, o.h as Record<string, string>));
     expect([i.startMode, i.callMode, i.whoCanJoin]).toEqual([f.startMode, f.callMode, "list"]);
     const d = await call("POST", `/api/z/LC-C-${f.key}/join`, { empId: "A1", device: dev(1) });
     expect(d.status).toBe(403); expect((await j(d)).error).toMatch(/not open yet/i); // draft: no guest gets in
