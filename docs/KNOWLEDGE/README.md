@@ -19,6 +19,7 @@ One question was the owner's and is now decided (14 Nov 2026): a winner's name, 
 | [05-OPEN-ITEMS.md](05-OPEN-ITEMS.md) | What is still open: the winner-data question, two older problems on the live version, and small leftovers |
 | [06-DEPLOY-AND-ROLLBACK.md](06-DEPLOY-AND-ROLLBACK.md) | The deploy plan and rollback steps as written (not run) |
 | [07-ID-INVITE.md](07-ID-INVITE.md) | ID-only invite (1.10.0): the one ID rule, join, waiting room, log, where the tests are, what is open |
+| [08-MAIL-DELIVERABILITY.md](08-MAIL-DELIVERABILITY.md) | Mail lanes (transactional never held up by bulk), the warm-up of the young domain, the send counter and 80 % alert, delivery reports per mail, the do-not-mail list (release 1.9.3, not part of V2) |
 | [OWNER-NOTE.md](OWNER-NOTE.md) | The note written for the owner, in plain words |
 | [HANDOVER.md](HANDOVER.md) | The builder's hand-over note |
 
