@@ -50,6 +50,8 @@ Not a cause (checked): wrong or missing DKIM, a second SPF record, a From domain
 * The Gmail search (inbox and trash; the search tool cannot look in Spam) finds mails from `hello@corporatetambola.com` to the owner's address from 16 to 17 Nov (the "personal data deleted" notices), so Gmail did accept this sender into the inbox before.
 * It finds NO mail from `hello@corporatetambola.com` in the last 3 hours, although the mail log says 6122 and 6124 were accepted at 17:23 and 17:41 UTC. That fits "placed in Spam" or "not delivered", and cannot tell which.
 
+* **Addendum, 20 Nov 18:30 UTC:** one test mail sent through Cloudflare Email Service (from `hello@corporatetambola.com`, to the owner's address) arrived in the **Inbox** (category Updates) within a minute. So Gmail accepts this domain and sender through the Cloudflare route, and the earlier missing Resend mails (6120, 6122, 6124) point at the Resend path (placed in Spam, or not delivered after acceptance), not at the domain as a whole. Still unproven which: check the Resend dashboard (step 1 below). If the Resend path is the weak one, the Cloudflare route can carry the invoice mail first.
+
 ## What to do (in order)
 1. **Look in the Resend dashboard, Emails list**, for the two mails (subjects "published: payment pending" and "payment received, invoice CT/2026-27/000002"). Each row shows `Delivered`, `Bounced`, `Complained` or `Suppressed`. This answers the question in one minute. (Not possible from the repo: no Resend key is stored locally.)
 2. Check **Spam** and **All Mail** in the owner's Gmail for the same subjects. If found in Spam, mark "Not spam" for `hello@corporatetambola.com` once, and add it to contacts.
