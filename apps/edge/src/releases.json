@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.10.1",
+    "date": "2026-11-21",
+    "releasedAtIST": "21 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Pasting a list of IDs now works, however long the list",
+    "changes": [
+      "Paste a list in the default organizer screens now adds the IDs: before, the server turned every paste away because the page did not send the Terms tick",
+      "A pasted list of more than 200 IDs is sent in parts of 200, so a big office list goes in at once",
+      "Choosing the size of your game now takes effect when you paste, so a list of more than 10 IDs is no longer turned away before you press Save and continue",
+      "A paste of IDs that are already on your list now says so, instead of only \"0 IDs were added\""
+    ]
+  },
+  {
     "version": "1.10.0",
     "date": "2026-11-21",
     "releasedAtIST": "21 Nov 2026, time set at deploy",
@@ -11,6 +24,18 @@
       "A new invite and approval log for the Organizer, Hosts and Co-hosts shows only the ID, how it came, and who decided",
       "A pasted list that cannot be added now says why, instead of only \"0 IDs were added\"",
       "A person listed in an older game with a dash in their stored ID (A-1101) now gets in with the ID and the listed mobile number, instead of waiting for approval"
+    ]
+  },
+  {
+    "version": "1.9.2",
+    "date": "2026-11-20",
+    "releasedAtIST": "20 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Invoice and payment e-mails no longer depend on one mail service",
+    "changes": [
+      "If the main mail service cannot take a mail (its monthly allowance is used up, or it is busy or down), the same mail now goes out through a second route, the Cloudflare mail service, once and without a duplicate",
+      "When the main service says its allowance is used up, it is left alone for 30 minutes so invoices and payment notes are not delayed by useless tries",
+      "A mail that used the second route is recorded in the mail log, and a mail log entry is now forgotten after 3 days"
     ]
   },
   {

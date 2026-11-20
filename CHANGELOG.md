@@ -2,6 +2,22 @@
 
 Newest first. The owner-only release list the site reads is `apps/edge/src/releases.json`; this file adds the PR and audit lines the version standard asks for (marketing-ledger/plans/VERSION-AND-KNOWLEDGE-STANDARD-2026-11-20.md). Earlier releases (1.0.0 to 1.9.0) are in `releases.json`.
 
+## 1.10.1 - 2026-11-21
+### Fixed (audit of PR #26 head 7bad139: audit 1 FAIL, audit 2 PASS)
+- **"Paste a list" in the default console was refused by the real Worker** (audit 1, High 1). The paste call carried no Terms consent (K6), so the server answered 400 `consent-required` ("Please tick the box to continue") and no ID was added; the screen has no box to tick. `apps/web/public/pack/zc-flow.js` now sends the same consent as `zc.js` (`CBConsent.payload(null, "K6")`).
+- **A pasted list of more than 200 IDs is sent in parts of 200** (audit 1, Medium 2), like `zc.js`. Before, one call over 200 got 413.
+- **Found while testing the above: choosing the size did not reach the server until Save and continue.** A new game holds 10 people, so a paste of more than 10 IDs before Save was refused ("This game is for 10 people"). The paste now saves the chosen size first (`audienceSettings`).
+- A paste of IDs that are already on the list now says "N were already on your list" instead of only "0 IDs were added".
+- `apps/web/public/pack/MANIFEST.json` sha updated for `zc-flow.js`.
+### Merged
+- master `d5c9419` (1.9.2 mail fallback, PR 32; F38/F39 pause fix, PR 24) merged into the branch (audit 1, Medium 3). `CHANGELOG.md` and `apps/edge/src/releases.json` hold 1.10.1, 1.10.0 (never deployed) and 1.9.2. `zgame.js` is master's bundle with only the invite maximum changed 4 to 10 (hand-patched: bundles do not rebuild byte for byte under this Bun); `zsw.js` cache `ct-game-v44` (master v43).
+### Tests (each goes red when its fix is removed)
+- `apps/web/test/zc-flow-id-default.test.ts` now calls the REAL `handle` (`apps/edge/src/worker`) for every call the pack makes, not the `with-terms` helper that adds the consent by itself. Without the consent fix 4 of 5 tests fail; with one call instead of parts of 200 the 450-ID test fails; without the size save the 450-ID test fails.
+### Known and not changed (unchanged from 1.10.0, owner's choice)
+- Audit 2 (second audit of 7bad139) Medium 1 and 2: the wrong-ID guess cap is per network address only, and counts every unlisted ID, so one office on one WiFi can reach 30.
+- Audit 2 Low: after a paste the console shows only the first refused row's reason, and the server's `raw` is empty for an ID row (`people.ts:273`), so a refused row is not named. The invite log shows at most 300 waiting and 300 listed rows without a "truncated" note (`people.ts:504-520`).
+- `/who` still returns first name and initial for a listed ID in older games.
+
 ## 1.10.0 - 2026-11-21
 ### Added
 - **ID-only invite (owner-approved 20 Nov 2026).** Where: `apps/web/public/pack/zc-flow.js` (default console, step 2), `apps/web/public/zc.js` (previous screens), `apps/web/public/z.js` (join page), `apps/edge/src/empid.ts` (one ID rule), `apps/edge/src/people.ts` (list, waiting room, invite log), `apps/edge/src/worker.ts` (join). People are invited with an ID alone; an ID not on the list waits for the Organizer's yes or no. A-1101, A 1101 and A/1101 are one ID. Family number 1 to 10 (default 4).
@@ -24,6 +40,17 @@ Newest first. The owner-only release list the site reads is `apps/edge/src/relea
 - `zc-flow.js` no longer bans the word "invit" in its text (the owner's own sentences use it).
 - `zc.js` still has 89 first-person strings (allowed by the owner rule: older screens may only improve).
 - PR: https://github.com/FChecklist/corporate-tambola/pull/26. Audit: round 1 FAIL (audit 1), fixed here; two PASS audits on the exact commit are needed before deploy. Rollback id: the previous deploy in `docs/DEPLOYS.md`.
+
+## 1.9.2 - 2026-11-20
+### Fixed
+- **Invoice, receipt and organizer mails fall back to Cloudflare Email when Resend cannot take them.** Where: `apps/edge/src/pay.ts` (`resendSend`, `cloudflareSend`). The live Resend account's MONTHLY quota ran out (mail log: `send_failed 429 monthly_quota_exceeded`), so retrying Resend could not help. Now: Resend first; a quota answer, a busy answer (429) after two more tries, a 5xx or no answer sends the SAME mail once through Cloudflare Email Service (`POST /accounts/<id>/email/sending/send`) with the SAME idempotency key; a plain refusal (4xx) is never repeated or sent a second way; after a quota answer Resend is skipped for 30 minutes. Each provider call has a 4 s time limit. The scheduled retry tries Resend once per tick (the tick is the loop).
+### Added
+- Mail log outcomes `resend_failed <why>; sent_by_cloudflare` and `send_failed <why>; cloudflare <status> [code<n>]` (provider names and codes only, never text or addresses).
+- Settings `CF_EMAIL_TOKEN` and `CF_ACCOUNT_ID` (Pages secrets, both in `config/SECRETS_NAMES.md`). WITHOUT BOTH the behaviour is exactly 1.9.1: the second route is off until the owner sets them.
+### Security / privacy
+- `mail_event` (hash of the address, subject, outcome) is now deleted after 3 days by the hourly tick and listed in `docs/RETENTION.md` (audit of PR 30, M1).
+- Tests: `apps/edge/test/mail-fallback.test.ts` (15 tests; 14 breaks of the code each went red, then restored).
+- PR: see the pull request of branch `boss/mail-fallback-cloudflare-1.9.2`. Audit: pending (two audits before deploy). Rollback id: the 1.9.1 deploy `8706cf94-f0ab-4e90-9784-fa06da7e24c4`.
 
 ## 1.9.1 - 2026-11-20
 ### Fixed

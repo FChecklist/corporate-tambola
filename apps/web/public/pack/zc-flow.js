@@ -453,6 +453,7 @@
   /** Owner text, 20 Nov 2026: invite people with just an ID. Word for word. */
   const ID_INVITE_LINES = ["Invite people with just an ID", "No names or personal details are needed.", "Just upload or paste the IDs of the people you want to invite: employee ID, associate ID, vendor ID or customer ID, whichever you use.", "Your invitee opens the game link and enters their ID. If it is on your list, they join and play. If it is not, you get a request to approve or decline.", "The list and all IDs are deleted within 24 hours after the game ends."];
   /** One ID per line (a comma or a tab also separates). The game cleans them: A-1101, A 1101 and A/1101 are the same ID. */
+  const PASTE_PART = 200; // people.ts MAX_ADD_BATCH
   const idsOf = (text) => Array.from(new Set(String(text || "").split(/[\r\n,;\t]+/).map((x) => x.trim()).filter(Boolean)));
   api.who = who;
   registry[2] = (box) => {
@@ -475,11 +476,23 @@
         const ids = idsOf(who.pasted); if (!ids.length) { pasteMsg.textContent = "Please paste at least one ID."; return; }
         if (!state.eid) { pasteMsg.textContent = "Please save step 1 first."; return; }
         pasteMsg.textContent = "Adding…";
-        try { const r = await call("POST", `/api/z/${state.eid}/people`, { people: ids.map((empId) => ({ empId })) }); who.pasted = ""; who.paste = false; who.added = r.added == null ? ids.length : r.added; who.why = r.invalid && r.invalid[0] && r.invalid[0].why ? String(r.invalid[0].why) : ""; draw(); } catch (e) { pasteMsg.textContent = e.message; }
+        /* K6 (the right to use these names and numbers) is part of the Terms notice: the server refuses the call without it (people.ts, consentMissing). Same as zc.js addPeople. */
+        const C = window.CBConsent, consent = C && typeof C.payload === "function" ? C.payload(null, "K6") : { v: C && C.version, boxes: ["A"], notice: true };
+        let added = 0, dup = 0, why = "";
+        try {
+          await call("PATCH", `/api/z/${state.eid}/settings`, audienceSettings(who.card, who.upTo, who.per)); // a new game holds 10 people until a size is saved: the chosen size goes first, or a list over 10 is refused ("This game is for 10 people")
+          for (let i = 0; i < ids.length; i += PASTE_PART) { // the server takes up to 200 people in one call; a longer list goes in parts, as zc.js does
+            const r = await call("POST", `/api/z/${state.eid}/people`, { consent, people: ids.slice(i, i + PASTE_PART).map((empId) => ({ empId })) });
+            added += typeof r.added === "number" ? r.added : Math.min(PASTE_PART, ids.length - i); dup += Number(r.duplicates) || 0;
+            if (!why && r.invalid && r.invalid[0] && r.invalid[0].why) why = String(r.invalid[0].why);
+          }
+        } catch (e) { pasteMsg.textContent = (added ? added + (added === 1 ? " ID was added before this problem. " : " IDs were added before this problem. ") : "") + e.message; return; }
+        who.pasted = ""; who.paste = false; who.added = added; who.dup = dup; who.why = why; draw();
       } }, "Add to your list"));
     }
     box.append(pasteMsg);
     if (who.added != null) pasteMsg.textContent = who.added + (who.added === 1 ? " ID was added to your list." : " IDs were added to your list."); // the server's reason is never thrown away: a row that was refused says why
+    if (who.added != null && who.dup) pasteMsg.textContent += " " + who.dup + (who.dup === 1 ? " was already on your list." : " were already on your list.");
     if (who.added != null && who.why) pasteMsg.textContent += " " + who.why;
     box.append(el("h3", { text: "How big is your game?" }));
     const sel = el("select", { id: "zf-size", "aria-label": "Size of your game", onchange: (e) => { who.upTo = Number(e.target.value); draw(); } });
