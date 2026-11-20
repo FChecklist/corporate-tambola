@@ -37,6 +37,7 @@ Where things are set:
 | `PUBLIC_ORIGIN` | The public web address of this site (links in mails, payment return) | wrangler var | setting |
 | `MAIL_FROM` | The sender name and address of every mail | wrangler var | setting |
 | `MAIL_REPLY_TO` | Reply-to address of mails (optional) | Optional Pages variable | setting |
+| `MAIL_RETRY_MS` | Wait in milliseconds before the first re-try of a refused mail (default 800; tests set 0) | Optional Pages variable | setting |
 | `OWNER_EMAIL` | The owner's address on the TEST-mode allow-list | wrangler var | setting |
 | `OWNER_NOTIFY_EMAIL` | Overrides the address that gets the note on each paid order and each data request | Optional Pages variable | setting |
 | `TEST_MAIL_ALLOW` | Extra addresses TEST mode may mail (comma separated) | Optional Pages variable | setting |

@@ -26,3 +26,8 @@ Older text on the live version that also says guests' data is deleted within 24 
 
 ## Small leftovers the last audit noted (disclosed, not blocking)
 An expired Host key without personal data still opens the static Host manual page (no game data); a person's game key cannot list certificates after the end; the export blanks names beyond 3,000 without a flag; support limits are per account; the 5-key game limit counts expired but unswitched keys; two approvals of one hand-over at the same moment could make two keys; rejection reasons are readable by anyone holding a ticket number; Hindi covers the core phrases only. More in [OWNER-NOTE.md](OWNER-NOTE.md).
+
+## Open since 20 Nov 2026 (RCA of the Rs 1 live payment, `docs/RCA-NO-INVOICE-MAIL-2026-11-20.md`)
+1. Mail refusals: after the 1.9.1 deploy, read `mail_event` rows `send_failed <status> <error name>` to learn why the mail service refused three of the four mails of that payment (shared Resend account: rate limit or quota is the leading, unproven, cause).
+2. No Razorpay webhook has reached the game or IT Services since 21 Oct / 15 Oct 2026: check the webhook URL and secret in the Razorpay dashboard (owner step).
+3. The invoice mail accepted for `raajat.agarwal@gmail.com` at 13:28 UTC on 20 Nov was not found in Inbox or Trash: the owner checks Spam.
