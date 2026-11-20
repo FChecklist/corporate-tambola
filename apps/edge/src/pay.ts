@@ -22,7 +22,7 @@ import { ledgerFields, logWebhook, siteOf, type HookRecord } from "./ledger";
 import { partnerCode, phoneHashFor, recordCommission, refCode } from "./partners";
 import { helperRefFor } from "./helpdesk";
 import { attemptStatusOf, centralOf, derivedEventKey, eventSeen, markEventSeen, recordAttempt, recordRefund, storePaymentDetails, txnIdOf } from "./ledgerc";
-import { getMode, mailGate, testFlag, type ModeEnv } from "./mode";
+import { getMode, logMail, mailGate, testFlag, type ModeEnv } from "./mode";
 import { strictAccountEmail, normAccountEmail } from "./empid";
 import { isTestLogin } from "./testlogins";
 import { lookupPayLink, packFor, payLinkPublic } from "./paylink";
@@ -114,7 +114,7 @@ export async function sendMail(env: PayEnv, db: D1, to: string, subject: string,
   const html = opts.html ?? plainToHtml(subject, text, env.PUBLIC_ORIGIN); // every mail carries the brand header and footer, whoever built it
   text = withFooter(text, env.PUBLIC_ORIGIN);
   if (!env.RESEND_API_KEY) { await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,0)").bind(to, subject, text, now).run(); return true; }
-  const ok = await resendSend(env, to, subject, text, html, opts.idem);
+  const ok = await resendSend(env, to, subject, text, html, opts.idem, now);
   const log = db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,?)").bind(to, subject, ok ? "" : opts.secret ? "" : text.replace(KEYRE, "ctk_(blanked; use the key shown when you paid, or sign in with an e-mailed code)"), now, ok ? 1 : 0);
   // A mail already handed over must never look "not sent" because its LOG row hit a passing database hiccup (13 Nov 2026 audit: the caller's repeat would send it twice). A failed mail still needs its row (the daily job retries from it), so that write stays fatal.
   if (ok) { try { await log.run(); } catch { /* only the log is missing */ } } else await log.run();
@@ -139,14 +139,29 @@ export async function sendReportMail(env: PayEnv, to: string, subject: string, t
     return r.ok;
   } catch { return false; }
 }
-async function resendSend(env: PayEnv, to: string, subject: string, text: string, html?: string, idem?: string): Promise<boolean> {
-  try {
-    const r = await fetch("https://api.resend.com/emails", {
-      method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json", ...(idem ? { "idempotency-key": idem.slice(0, 250) } : {}) },
-      body: JSON.stringify({ from: env.MAIL_FROM ?? "Corporate Tambola <hello@corporatetambola.com>", to: [to], subject, text, ...(html ? { html } : {}), reply_to: env.MAIL_REPLY_TO || "hello@corporatetambola.com", headers: { "Auto-Submitted": "auto-generated" } }),
-    });
-    return r.ok;
-  } catch { return false; }
+/**
+ * One mail through Resend. A busy or briefly-down mail service (429, 5xx, no answer) is tried again up to twice, a second apart, with ONE idempotency key so a retry can never deliver the mail twice.
+ * A mail that still fails leaves a reason in the mail log (`mail_event`: "send_failed <status> <name>", the provider's own error NAME only, never its free text, which can quote the address),
+ * so "why did the invoice not arrive" is answered by reading the log instead of guessing (RCA 2026-11-20: three of four mails of the Rs 1 live payment failed and nothing said why).
+ */
+async function resendSend(env: PayEnv, to: string, subject: string, text: string, html?: string, idem?: string, now: number = Date.now()): Promise<boolean> {
+  const key = (idem ?? crypto.randomUUID()).slice(0, 250), waitMs = Number((env as any).MAIL_RETRY_MS ?? 800) || 0;
+  let why = "network";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const r = await fetch("https://api.resend.com/emails", {
+        method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json", "idempotency-key": key },
+        body: JSON.stringify({ from: env.MAIL_FROM ?? "Corporate Tambola <hello@corporatetambola.com>", to: [to], subject, text, ...(html ? { html } : {}), reply_to: env.MAIL_REPLY_TO || "hello@corporatetambola.com", headers: { "Auto-Submitted": "auto-generated" } }),
+      });
+      if (r.ok) return true;
+      let name = ""; try { const j: any = await r.json(); name = String(j?.name ?? "").replace(/[^A-Za-z0-9_ -]/g, "").slice(0, 40); } catch { /* no readable reason */ }
+      why = `${r.status}${name ? " " + name : ""}`;
+      if (!(r.status === 429 || r.status >= 500)) break; // a refusal (bad address, bad sender) is not repeated
+    } catch { why = "network"; }
+    if (attempt < 2 && waitMs > 0) await new Promise((res) => setTimeout(res, waitMs * (attempt + 1)));
+  }
+  await logMail(env.DB, now, to, subject, `send_failed ${why}`);
+  return false;
 }
 /** How long the mail log (the address a mail went to and its subject) is kept. docs/RETENTION.md and the privacy documents say 3 days. */
 export const OUTBOX_KEEP_MS = 3 * 86_400_000;
@@ -160,9 +175,31 @@ export async function retryOutbox(env: PayEnv, now: number): Promise<{ retried: 
   const db = env.DB; let retried = 0;
   if (env.RESEND_API_KEY && (await getMode(env)) !== "TEST") { // in TEST mode nothing queued earlier is sent: it is only ever the owner's allow-list that gets mail
     const rows = (await db.prepare("SELECT id, to_addr, subject, body FROM outbox WHERE sent=0 AND body<>'' AND at_ms>?").bind(now - 3 * 86_400_000).all<any>()).results ?? [];
-    for (const r of rows) if (await resendSend(env, r.to_addr, r.subject, r.body)) { await db.prepare("UPDATE outbox SET sent=1, body='' WHERE id=?").bind(r.id).run(); retried++; }
+    for (const r of rows) if (await resendSend(env, r.to_addr, r.subject, r.body, undefined, `outbox-${r.id}`, now)) { await db.prepare("UPDATE outbox SET sent=1, body='' WHERE id=?").bind(r.id).run(); retried++; }
   }
   return { retried, dropped: await purgeOutbox(db, now) };
+}
+
+/**
+ * Run by every scheduled/lazy tick (not only the daily job): the few newest mails that could not be sent (an invoice, a "paid" note) are tried again soon, with a growing wait (1, 2, 4, 8, 16, 32 minutes, six tries),
+ * so one passing Resend hiccup costs minutes, not a day. Newest first and at most 3 a tick, so an old backlog can never starve a fresh invoice or burst into the provider's rate limit.
+ * A mail is only ever tried here within 24 hours of the failure; the daily job and the 3-day purge still apply after that. RCA 2026-11-20.
+ */
+export const TICK_RETRY_TRIES = 6;
+export async function retryRecentOutbox(env: PayEnv, now: number): Promise<number> {
+  const db = env.DB; let retried = 0;
+  if (!env.RESEND_API_KEY || (await getMode(env)) === "TEST") return 0;
+  let rows: any[] = [];
+  try { rows = (await db.prepare("SELECT id, to_addr, subject, body FROM outbox WHERE sent=0 AND body<>'' AND at_ms>? AND at_ms<=? ORDER BY at_ms DESC, id DESC LIMIT 3").bind(now - 86_400_000, now - 60_000).all<any>()).results ?? []; } catch { return 0; }
+  for (const r of rows) {
+    const k = `outretry/${r.id}`;
+    const prev = await db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>().catch(() => null);
+    const [n, last] = (prev?.v ?? "0:0").split(":").map(Number) as [number, number];
+    if (n >= TICK_RETRY_TRIES || now - last < 60_000 * 2 ** n) continue;
+    await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, `${n + 1}:${now}`).run();
+    if (await resendSend(env, r.to_addr, r.subject, r.body, undefined, `outbox-${r.id}`, now)) { await db.prepare("UPDATE outbox SET sent=1, body='' WHERE id=?").bind(r.id).run(); retried++; }
+  }
+  return retried;
 }
 
 /** The public "Payment Testing" page (Rs 1 / US$ 1, owner order 2026-10-10): a REAL payment that buys nothing. It never touches packs, credit, commission or the real invoice series; the receipt is numbered PAYTEST-<year>-<n> and the row is flagged is_test so it stays out of the owner's reports. */
