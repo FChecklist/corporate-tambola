@@ -2,11 +2,11 @@
 
 Branch `p1/tambola-lifecycle-tests`, draft PR into `feat/id-invite-2026-11-20` (PR 26). Code and tests only: nothing deployed, no live service or secret touched, no real money.
 
-**Exact commit tested: `32541b3` (the last commit before this file and a small test fix; see "Commit" at the bottom for the final sha).**
+**Exact commit: see "Commit" at the bottom.**
 
 ## Built
 - A re-runnable suite in `apps/edge/test/lifecycle/`: 7 files, **174 tests + 1 todo**, run once for EACH of the four start formats (auto-start + auto-numbers, auto-start + organizer-calls, organizer-start + auto-numbers, organizer-start + organizer-calls). About 20 seconds. `bun run test:lifecycle`.
-- A thin real-browser run (Chromium) of one format: `bun run lifecycle:browser` (`tools/sim/lifecycle-browser.ts`). Playwright works in this sandbox. 12 checks, all pass.
+- A thin real-browser run (Chromium) of one format: `bun run lifecycle:browser` (`tools/sim/lifecycle-browser.ts`). Playwright works in this sandbox. 16 checks, all pass.
 - `docs/LIFECYCLE_TESTS.md`: what is covered, where, and how it is built.
 - One product fix (LC-1 below).
 
@@ -58,4 +58,6 @@ No Blocker found.
 Please have **two independent auditors** read branch `p1/tambola-lifecycle-tests` and each reply PASS or FAIL with reasons. Suggested checks for each: (a) run `bun run test:lifecycle` and `bun run lifecycle:browser`; (b) pick any 3 tests, break the product line they guard, and confirm the named test goes red; (c) read the LC-1 fix for anything that loses data it should keep (prize rows, winners record); (d) confirm nothing outside `apps/edge/test/lifecycle/`, `tools/sim/lifecycle-browser.ts`, `docs/`, `package.json` scripts and `apps/edge/src/lifecycle.ts` changed.
 
 ## Commit
-Tested commit: `32541b31602b3126c5e30eba77edf09c614f6abf`. This file is added in the next commit on the same branch (docs only); the final sha is in the PR and in the report.
+- Product code last changed in \`32541b3\` (the LC-1 fix is in \`apps/edge/src/lifecycle.ts\`; nothing else in \`src\` changed). The whole-repository run (4408 pass, 1 known fail, 1 todo) was made on that product code.
+- After it only test files, \`package.json\` scripts and docs changed (a sweep that cannot match by chance, type fixes, this file). The lifecycle suite was then run 10 times in a row: 174 pass, 1 todo, 0 fail each time.
+- Final head of the branch when this file was written: \`9ca066e\` plus this correction commit. The exact final sha is in the PR and in the report that came with it.
