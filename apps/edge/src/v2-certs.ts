@@ -3,12 +3,13 @@
 //  - mobile number and e-mail are NEVER on it and are never copied into this table;
 //  - the verification record is signed (HMAC) and hash-chained per game, and keeps only NON-PERSONAL fields (no name, no mobile, no e-mail, no game name).
 // Anyone can check a certificate at /verify.html?c=<id> (API: GET /api/v2/verify/<id>).
+import { ordinalName } from "../../../packages/shared/src/ticket";
 import { PRIZE_HOUSES } from "../../../packages/beacon/src/config";
 import { openPii } from "./pii";
 import { sha, randHex, type V2Ctx } from "./v2-types";
 
 const HOUSE: Record<string, string> = Object.fromEntries(PRIZE_HOUSES.map((h) => [h.id, h.label]));
-const ord = (n: number) => ["", "1st", "2nd", "3rd"][n] ?? `${n}th`;
+const ord = ordinalName; // one rule for every place: 1st, 2nd, 3rd ... 21st, 22nd, 23rd (packages/shared/src/ticket.ts)
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
 
 /** "Early Five", "2nd Full House", "Lucky draw": the same house names the game uses. */

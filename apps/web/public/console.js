@@ -33,7 +33,7 @@
   const CAPS = [10, 25, 50, 100];
   const PAUSE_WHY = ["Internet issue", "Technical problem", "Safety"];
   const FILTERS = [["all", "Everyone"], ["host", "Hosts"], ["team_lead", "Team Leads"], ["family", "Family"], ["colleague", "Colleagues"], ["notjoined", "Not joined"]];
-  const ord = (n) => ["", "1st", "2nd", "3rd"][n] || n + "th";
+  const ord = (n) => { if (!n) return ""; const m = n % 100; return n + (m >= 11 && m <= 13 ? "th" : n % 10 === 1 ? "st" : n % 10 === 2 ? "nd" : n % 10 === 3 ? "rd" : "th"); }; // 1st, 2nd, 3rd ... 21st, 22nd, 23rd
   let indT = null;
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

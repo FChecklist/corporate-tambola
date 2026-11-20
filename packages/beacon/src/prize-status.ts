@@ -1,9 +1,10 @@
 // The live list of prizes everybody can read: the ones still open come first, the ones already claimed follow (the screens draw them crossed out with a small "claimed").
 // It is read-only: it only looks at the organizer's reward lines and the published results, it never decides anything.
+import { ordinalName } from "../../shared/src/ticket";
 import { keyOfLine, keysInPlay, linesFor, houseLabel, type EngagementCfg, type PatternKey } from "./config";
 
 export interface PrizeLine { key: PatternKey; label: string; ordinal: number; of: number; name: string; text: string; claimed: boolean }
-const ordName = (n: number): string => { const t = n % 100; if (t >= 11 && t <= 13) return n + "th"; return n + (n % 10 === 1 ? "st" : n % 10 === 2 ? "nd" : n % 10 === 3 ? "rd" : "th"); };
+const ordName = ordinalName;
 
 /** `results`: what is published so far ({ pattern, ordinal, round }). `round`: the round being played (every round awards its own prizes). */
 export function prizeStatus(cfg: EngagementCfg, results: readonly { pattern: string; ordinal: number; round?: number }[], round = 1): PrizeLine[] {
