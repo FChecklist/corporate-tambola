@@ -227,7 +227,7 @@ export async function adminRoute(req: Request, env: AdminEnv, now: number, owner
   if (p === "/api/mail/events") return mailEventsWebhook(req, env, now, spend);
   if (p === "/api/status/mail") { // public, numbers only (no address, no key): the mail counters, the warm-up day, the 80 % alert of the monthly quota
     if (req.method !== "GET" && req.method !== "HEAD") return jsonRes({ error: "Not found" }, 404);
-    try { return jsonRes(await mailStatus(env.DB, env, now)); } catch { return jsonRes({ ok: false, error: "unreadable" }, 500); }
+    try { return jsonRes(await mailStatus(env.DB, env, now)); } catch { return jsonRes({ ok: false, unreadable: true }, 500); } // no `error:` text: this address is for machines, and a message with that key needs an entry in the public guide script (apps/web/test/guide.test.ts)
   }
   const m = p.match(/^\/api\/owner\/(site|organizer|data-requests|mail-events|mail-suppress|errors)$/);
   if (!m) return null;
