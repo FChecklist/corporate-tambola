@@ -27,11 +27,11 @@ export const count = (sql: string, ...a: any[]) => Number((one(sql, ...a) as any
 export const AT = (startRound: number) => roundMs(startRound); // the scheduled moment
 
 export interface Game { id: string; fmt: Format; key: string; h: Record<string, string>; startRound: number; startMs: number; at: number; org: Awaited<ReturnType<typeof organizer>> }
-export interface Opts { cap?: number; verify?: "id" | "mobile" | "either"; list?: boolean; invites?: { on: boolean; per: number; cats?: string[] }; pay?: boolean; sign?: boolean; extra?: Record<string, unknown>; over?: Record<string, unknown> }
+export interface Opts { org?: Awaited<ReturnType<typeof organizer>>; cap?: number; verify?: "id" | "mobile" | "either"; list?: boolean; invites?: { on: boolean; per: number; cats?: string[] }; pay?: boolean; sign?: boolean; extra?: Record<string, unknown>; over?: Record<string, unknown> }
 let seq = 0;
 /** create -> publish -> (pay with the test Razorpay stand-in) -> settings (ID list game) -> register the console's signing key. Everything an organizer does before the guests come. */
 export async function newGame(fmt: Format, o: Opts = {}): Promise<Game> {
-  const org = await organizer();
+  const org = o.org ?? (await organizer());
   const id = `LC-${fmt.key}-${(++seq).toString(36)}`;
   const start = startIn(2 * HOUR);
   const body: Record<string, unknown> = { id, startRound: start, callSeconds: fmt.callMode === "host" ? 9 : 12, cap: o.cap ?? 100, startMode: fmt.startMode, callMode: fmt.callMode, verify: o.verify ?? "id", whoCanJoin: o.list === false ? "anyone" : "list", ...(o.over ?? {}) };
