@@ -35,7 +35,7 @@ import { creditAppliedFor, creditFromPayment, creditUsesFor, mailCreditCreated, 
 
 export interface PayEnv extends Env, Pick<ModeEnv, "OWNER_EMAIL" | "TEST_MAIL_ALLOW"> {
   RAZORPAY_KEY_ID?: string; RAZORPAY_KEY_SECRET?: string; RAZORPAY_WEBHOOK_SECRET?: string; RAZORPAY_BASE_URL?: string; RAZORPAY_INTERNATIONAL?: string;
-  PARTNER_COMMISSION_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; FREE_LAUNCH?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string; PAY_HOP_URL?: string; PAY_SERVICE_KEY?: string; PAY_SERVICE_URL?: string; PAY_SITE?: string;
+  PARTNER_COMMISSION_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; CF_EMAIL_TOKEN?: string; CF_ACCOUNT_ID?: string; FREE_LAUNCH?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string; PAY_HOP_URL?: string; PAY_SERVICE_KEY?: string; PAY_SERVICE_URL?: string; PAY_SITE?: string;
 }
 
 export const PAY_SCHEMA = [
@@ -139,26 +139,69 @@ export async function sendReportMail(env: PayEnv, to: string, subject: string, t
     return r.ok;
   } catch { return false; }
 }
+/** Every mail call to a provider gives up after this long, so one stuck provider cannot hold the scheduled tick (audit of PR 30, M2). */
+const MAIL_FETCH_MS = 4000;
+/** After Resend answers "quota used up", it is not asked again for this long while Cloudflare Email is configured: no wasted call and no wait on every mail. */
+export const RESEND_PAUSE_MS = 30 * 60_000;
+const RESEND_PAUSE_KEY = "mail_resend_pause_until";
+/** The second mail path (owner decision 2026-11-17: Cloudflare Email is the default fallback). Both values are Pages secrets; without them nothing changes. */
+const cfMailOf = (env: PayEnv): { token: string; account: string } | null => (env.CF_EMAIL_TOKEN && env.CF_ACCOUNT_ID && /^[0-9a-f]{32}$/i.test(env.CF_ACCOUNT_ID) ? { token: env.CF_EMAIL_TOKEN, account: env.CF_ACCOUNT_ID } : null);
+/** "Name <addr>" with a comma or other special character in the name must be quoted for Cloudflare (a comma in the name once made it refuse every mail). */
+export const cfFrom = (from: string): string => {
+  const m = /^\s*(.*?)\s*<([^<>]+)>\s*$/.exec(from); if (!m || !m[1]) return from;
+  const n = m[1].replace(/^"|"$/g, "");
+  return /[",;:<>@()[\]\\]/.test(n) ? `"${n.replace(/(["\\])/g, "\\$1")}" <${m[2]}>` : `${n} <${m[2]}>`;
+};
+const providerWhy = (status: number, name: string) => `${status}${name ? " " + name : ""}`;
+async function resendAttempt(env: PayEnv, key: string, to: string, subject: string, text: string, html?: string): Promise<{ ok: boolean; why: string; again: boolean; quota: boolean }> {
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json", "idempotency-key": key }, signal: AbortSignal.timeout(MAIL_FETCH_MS),
+      body: JSON.stringify({ from: env.MAIL_FROM ?? "Corporate Tambola <hello@corporatetambola.com>", to: [to], subject, text, ...(html ? { html } : {}), reply_to: env.MAIL_REPLY_TO || "hello@corporatetambola.com", headers: { "Auto-Submitted": "auto-generated" } }),
+    });
+    if (r.ok) return { ok: true, why: "", again: false, quota: false };
+    let name = ""; try { const j: any = await r.json(); name = String(j?.name ?? "").replace(/[^A-Za-z0-9_ -]/g, "").slice(0, 40); } catch { /* no readable reason */ }
+    const quota = r.status === 429 && /quota/i.test(name); // "daily/monthly_quota_exceeded": asking Resend again cannot help until its plan resets
+    return { ok: false, why: providerWhy(r.status, name), again: (r.status === 429 || r.status >= 500) && !quota, quota };
+  } catch { return { ok: false, why: "network", again: true, quota: false }; }
+}
+/** The same mail through Cloudflare Email Service (the owner's own account; corporatetambola.com is enabled for sending). On failure the reason is the HTTP status and Cloudflare's numeric error code only. */
+async function cloudflareSend(env: PayEnv, cf: { token: string; account: string }, key: string, to: string, subject: string, text: string, html?: string): Promise<{ ok: boolean; why: string }> {
+  try {
+    const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cf.account}/email/sending/send`, {
+      method: "POST", headers: { authorization: `Bearer ${cf.token}`, "content-type": "application/json", "idempotency-key": key }, signal: AbortSignal.timeout(MAIL_FETCH_MS),
+      body: JSON.stringify({ from: cfFrom(env.MAIL_FROM ?? "Corporate Tambola <hello@corporatetambola.com>"), to, subject, text, ...(html ? { html } : {}) }),
+    });
+    let j: any = null; try { j = await r.json(); } catch { /* no body */ }
+    if (r.ok && j?.success !== false) return { ok: true, why: "" };
+    const code = Number(j?.errors?.[0]?.code); return { ok: false, why: `${r.status}${Number.isInteger(code) && code > 0 ? " code" + code : ""}` };
+  } catch { return { ok: false, why: "network" }; }
+}
 /**
- * One mail through Resend. A busy or briefly-down mail service (429, 5xx, no answer) is tried again up to twice, a second apart, with ONE idempotency key so a retry can never deliver the mail twice.
- * A mail that still fails leaves a reason in the mail log (`mail_event`: "send_failed <status> <name>", the provider's own error NAME only, never its free text, which can quote the address),
- * so "why did the invoice not arrive" is answered by reading the log instead of guessing (RCA 2026-11-20: three of four mails of the Rs 1 live payment failed and nothing said why).
+ * One mail out. Resend first. A busy or briefly-down Resend (429 rate limit, 5xx, no answer) is tried again up to twice, with ONE idempotency key so a retry can never deliver the mail twice.
+ * When Resend cannot take it (quota used up, or still busy after the tries) and Cloudflare Email is configured (CF_EMAIL_TOKEN + CF_ACCOUNT_ID), the SAME mail goes out once through Cloudflare Email with the same key,
+ * and a quota answer pauses Resend for 30 minutes. A plain refusal (4xx: bad address, bad sender) is never repeated and never sent a second way.
+ * Every failure leaves a reason in the mail log (`mail_event`: provider status and error NAME only, never the provider's free text or the address), and a mail that had to use the second path says so.
+ * `tries`: the scheduled retry passes 1, because the tick itself is the retry loop. RCA 2026-11-20.
  */
-async function resendSend(env: PayEnv, to: string, subject: string, text: string, html?: string, idem?: string, now: number = Date.now()): Promise<boolean> {
-  const key = (idem ?? crypto.randomUUID()).slice(0, 250), waitMs = Number((env as any).MAIL_RETRY_MS ?? 800) || 0;
-  let why = "network";
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const r = await fetch("https://api.resend.com/emails", {
-        method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json", "idempotency-key": key },
-        body: JSON.stringify({ from: env.MAIL_FROM ?? "Corporate Tambola <hello@corporatetambola.com>", to: [to], subject, text, ...(html ? { html } : {}), reply_to: env.MAIL_REPLY_TO || "hello@corporatetambola.com", headers: { "Auto-Submitted": "auto-generated" } }),
-      });
-      if (r.ok) return true;
-      let name = ""; try { const j: any = await r.json(); name = String(j?.name ?? "").replace(/[^A-Za-z0-9_ -]/g, "").slice(0, 40); } catch { /* no readable reason */ }
-      why = `${r.status}${name ? " " + name : ""}`;
-      if (!(r.status === 429 || r.status >= 500)) break; // a refusal (bad address, bad sender) is not repeated
-    } catch { why = "network"; }
-    if (attempt < 2 && waitMs > 0) await new Promise((res) => setTimeout(res, waitMs * (attempt + 1)));
+async function resendSend(env: PayEnv, to: string, subject: string, text: string, html?: string, idem?: string, now: number = Date.now(), tries = 3): Promise<boolean> {
+  const key = (idem ?? crypto.randomUUID()).slice(0, 250), waitMs = Number((env as any).MAIL_RETRY_MS ?? 800) || 0, cf = cfMailOf(env);
+  let why = "network", refused = false;
+  const paused = cf ? Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(RESEND_PAUSE_KEY).first<{ v: string }>().catch(() => null))?.v ?? 0) > now : false;
+  if (paused) why = "429 quota (paused)";
+  else for (let attempt = 0; attempt < tries; attempt++) {
+    const r = await resendAttempt(env, key, to, subject, text, html);
+    if (r.ok) return true;
+    why = r.why; refused = !r.again && !r.quota;
+    if (r.quota && cf) await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(RESEND_PAUSE_KEY, String(now + RESEND_PAUSE_MS)).run().catch(() => {});
+    if (!r.again) break; // a refusal, or a used-up quota: asking Resend again cannot help
+    if (attempt < tries - 1 && waitMs > 0) await new Promise((res) => setTimeout(res, waitMs * (attempt + 1)));
+  }
+  if (cf && !refused) {
+    const c = await cloudflareSend(env, cf, key, to, subject, text, html);
+    if (c.ok) { await logMail(env.DB, now, to, subject, `resend_failed ${why}; sent_by_cloudflare`); return true; }
+    await logMail(env.DB, now, to, subject, `send_failed ${why}; cloudflare ${c.why}`);
+    return false;
   }
   await logMail(env.DB, now, to, subject, `send_failed ${why}`);
   return false;
@@ -175,7 +218,7 @@ export async function retryOutbox(env: PayEnv, now: number): Promise<{ retried: 
   const db = env.DB; let retried = 0;
   if (env.RESEND_API_KEY && (await getMode(env)) !== "TEST") { // in TEST mode nothing queued earlier is sent: it is only ever the owner's allow-list that gets mail
     const rows = (await db.prepare("SELECT id, to_addr, subject, body FROM outbox WHERE sent=0 AND body<>'' AND at_ms>?").bind(now - 3 * 86_400_000).all<any>()).results ?? [];
-    for (const r of rows) if (await resendSend(env, r.to_addr, r.subject, r.body, undefined, `outbox-${r.id}`, now)) { await db.prepare("UPDATE outbox SET sent=1, body='' WHERE id=?").bind(r.id).run(); retried++; }
+    for (const r of rows) if (await resendSend(env, r.to_addr, r.subject, r.body, undefined, `outbox-${r.id}`, now, 1)) { await db.prepare("UPDATE outbox SET sent=1, body='' WHERE id=?").bind(r.id).run(); retried++; }
   }
   return { retried, dropped: await purgeOutbox(db, now) };
 }
@@ -197,7 +240,7 @@ export async function retryRecentOutbox(env: PayEnv, now: number): Promise<numbe
     const [n, last] = (prev?.v ?? "0:0").split(":").map(Number) as [number, number];
     if (n >= TICK_RETRY_TRIES || now - last < 60_000 * 2 ** n) continue;
     await db.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, `${n + 1}:${now}`).run();
-    if (await resendSend(env, r.to_addr, r.subject, r.body, undefined, `outbox-${r.id}`, now)) { await db.prepare("UPDATE outbox SET sent=1, body='' WHERE id=?").bind(r.id).run(); retried++; }
+    if (await resendSend(env, r.to_addr, r.subject, r.body, undefined, `outbox-${r.id}`, now, 1)) { await db.prepare("UPDATE outbox SET sent=1, body='' WHERE id=?").bind(r.id).run(); retried++; }
   }
   return retried;
 }
