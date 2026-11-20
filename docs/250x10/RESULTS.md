@@ -13,10 +13,10 @@ How to run: `bun run tools/game250/run.ts all` (or `3`, `5,6`), then `bun run to
 | 1 | Scheduled start, auto numbers | 250/250 | 7 | 5/5 | 10/10 | 400:2 403:3 404:9 | 3682 (4.6%) |
 | 2 | Host-started, auto numbers | 250/250 | 7 | 7/7 | 13/13 | 400:2 403:4 404:9 422:2 | 3550 (4.4%) |
 | 3 | Host-started, host-called numbers | 250/250 | 7 | 7/7 | 14/14 | 400:2 403:4 404:9 422:6 | 3563 (4.5%) |
-| 4 | Scheduled start, host-called numbers | 250/250 | 7 | 6/6 | 15/15 | 400:2 403:4 404:9 409:2 422:4 | 3641 (4.6%) |
+| 4 | Scheduled start, host-called numbers | 250/250 | 7 | 6/6 | 15/15 | 400:2 403:4 404:9 422:4 | 3656 (4.6%) |
 | 5 | ID-only invite, 250 IDs + intruders | 250/250 | 7 | 13/13 | 10/10 | 400:12 403:63 404:9 409:36 423:20 429:50 | 4001 (5%) |
 | 6 | Late joiners, leave and rejoin | 250/250 | 7 | 11/11 | 10/10 | 400:2 403:8 404:9 409:1 423:10 | 3589 (4.5%) |
-| 7 | Pause and resume | 250/250 | 7 | 9/9 | 11/11 | 400:2 403:4 404:9 422:6 | 4626 (5.8%) |
+| 7 | Pause and resume | 250/250 | 7 | 9/9 | 11/11 | 400:2 403:4 404:9 422:6 | 4624 (5.8%) |
 | 8 | All prize types and tie-breaks | 250/250 | 54 | 9/9 | 10/10 | 400:2 403:3 404:9 | 8112 (10.1%) |
 | 9 | Mail and notification fan-out | 250/250 | 7 | 14/14 | 10/10 | 400:3 403:4 404:9 | 3564 (4.5%) |
 | 10 | End, report, deletion, retention | 250/250 | 5 | 18/18 | 3/3 | 403:2 404:4 | 3277 (4.1%) |
@@ -254,28 +254,28 @@ Game id `G250-04`. Mode: start: scheduled / numbers: Host presses Next.
 
 | What | Result |
 |---|---|
-| Players joined | 250 of 250 (not joined: 0; join retries: 5) |
+| Players joined | 250 of 250 (not joined: 0; join retries: 1) |
 | First / last player joined at (virtual minutes after the game was made) | 0.6 / 10.5 |
 | Players checked in (present check) | 250 |
 | Join refusals seen | `[]` |
-| Claims stored | 456 |
-| Claim requests answered too late (409) | 2 |
-| Claims by house | `{"bot":36,"corners":59,"early5":239,"full":3,"mid":65,"top":54}` |
+| Claims stored | 470 |
+| Claim requests answered too late (409) | 0 |
+| Claims by house | `{"bot":38,"corners":63,"early5":243,"full":3,"mid":66,"top":57}` |
 | Wrong claims (Bogeys) | 0 |
-| Phones that pressed Claim | 240 |
+| Phones that pressed Claim | 243 |
 | Prizes published | 7: bot#1@42, corners#1@13, early5#1@9x2, full#1@64, full#2@66, mid#1@25, top#1@33 |
 | Numbers called | 67 |
 | First number at (virtual minutes after the game was made) | 15.3 |
-| Game length, first number to all phones ended (virtual minutes) | 18.1 |
-| Test run length (real seconds) | 45.7 |
-| Requests to the Worker | 150133 |
+| Game length, first number to all phones ended (virtual minutes) | 18.4 |
+| Test run length (real seconds) | 47.3 |
+| Requests to the Worker | 151429 |
 | Outbound network requests made by the test (must be 0) | 0 |
-| Responses other than 200 | `{"200":150112,"400":2,"403":4,"404":9,"409":2,"422":4}` |
-| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 326 / 5 of 150133 |
-| Slowest request CPU in the crowd (ms, upper bound) | 139.6 |
-| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.3/0.41/0.85","GET /api/z/:id/control":"0.1/0.14/0.17","GET /api/z/:id/seats":"0.75/0.83/0.84","GET /api/z/:id/results":"0.07/0.1/0.14","GET /api/z/:id/cv":"0.01/0.01/0.05","POST /api/z/:id/join (already joined)":"0.57/0.65/0.67","POST /api/z/:id/claims (a repeat of a true claim)":"0.64/1.31/4.61","POST /api/z/:id/presence":"0.33/0.4/0.5","POST /api/z/:id/control (signature of a stranger)":"0.7/0.79/0.92","POST /api/z/:id/control (a real signature)":"0.58/0.72/1.32"}` |
-| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 48.9 / 726 |
-| Store writes | 3641 = 4.6% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
+| Responses other than 200 | `{"200":151410,"400":2,"403":4,"404":9,"422":4}` |
+| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 310 / 13 of 151429 |
+| Slowest request CPU in the crowd (ms, upper bound) | 175.1 |
+| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.33/1.53/4.3","GET /api/z/:id/control":"0.18/0.25/0.32","GET /api/z/:id/seats":"1.28/1.43/3.12","GET /api/z/:id/results":"0.11/0.17/0.24","GET /api/z/:id/cv":"0.01/0.04/0.08","POST /api/z/:id/join (already joined)":"0.7/5.64/6.42","POST /api/z/:id/claims (a repeat of a true claim)":"0.92/1.95/4.56","POST /api/z/:id/presence":"0.52/0.6/0.68","POST /api/z/:id/control (signature of a stranger)":"1.07/1.19/1.82","POST /api/z/:id/control (a real signature)":"0.9/1.96/10.79"}` |
+| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 59 / 651 |
+| Store writes | 3656 = 4.6% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
 
 Game-specific measurements:
 
@@ -302,7 +302,7 @@ Fairness checks (nobody could predict or alter the numbers):
 | a Next press signed by a stranger is refused | PASS |  |
 | every phone's number log equals the log re-derived from the public beacon alone | PASS |  |
 | a Host who waited cannot pick WHICH already-published beacon round decides the next number (a press that names a past round is refused) | PASS |  |
-| before the first number, none of the 14509 store answers held the game's numbers | PASS |  |
+| before the first number, none of the 14620 store answers held the game's numbers | PASS |  |
 | the store keeps no copy of the numbers (78 tables searched for the first 8 called numbers in order) | PASS |  |
 | a pause signed with a key the game does not know is refused | PASS |  |
 | a signed message whose round was changed afterwards is refused | PASS |  |
@@ -329,7 +329,6 @@ Errors the Worker answered (grouped):
 |---|---|---|---|
 | 422 | POST /api/z/:id/control | That press did not go through. Please press again. | 4 |
 | 403 | POST /api/z/:id/control | Signature does not match the organizer key. | 3 |
-| 409 | POST /api/z/:id/claims | Ohooo! 😊 Sorry, you pressed Claim after the next number was announced. This claim cannot be made. | 2 |
 | 400 | POST /api/z/:id/control | Malformed control message. | 2 |
 | 403 | PATCH /api/z/:id/settings | Not allowed. | 1 |
 
@@ -514,28 +513,28 @@ Game id `G250-07`. Mode: pauses: timed (auto-resume), open-ended + manual resume
 
 | What | Result |
 |---|---|
-| Players joined | 250 of 250 (not joined: 0; join retries: 9) |
-| First / last player joined at (virtual minutes after the game was made) | 0.6 / 10.5 |
+| Players joined | 250 of 250 (not joined: 0; join retries: 7) |
+| First / last player joined at (virtual minutes after the game was made) | 0.6 / 10.2 |
 | Players checked in (present check) | 250 |
 | Join refusals seen | `[]` |
-| Claims stored | 1458 |
+| Claims stored | 1455 |
 | Claim requests answered too late (409) | 0 |
-| Claims by house | `{"bot":243,"corners":243,"early5":243,"full":243,"mid":243,"top":243}` |
+| Claims by house | `{"bot":243,"corners":242,"early5":243,"full":241,"mid":243,"top":243}` |
 | Wrong claims (Bogeys) | 0 |
 | Phones that pressed Claim | 243 |
 | Prizes published | 7: bot#1@30, corners#1@21x2, early5#1@8, full#1@58, full#2@66, mid#1@35, top#1@29 |
 | Numbers called | 90 |
 | First number at (virtual minutes after the game was made) | 17 |
 | Game length, first number to all phones ended (virtual minutes) | 24 |
-| Test run length (real seconds) | 75.8 |
-| Requests to the Worker | 194704 |
+| Test run length (real seconds) | 77.9 |
+| Requests to the Worker | 194376 |
 | Outbound network requests made by the test (must be 0) | 0 |
-| Responses other than 200 | `{"200":194683,"400":2,"403":4,"404":9,"422":6}` |
-| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 287 / 3 of 194704 |
-| Slowest request CPU in the crowd (ms, upper bound) | 192.4 |
-| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.31/1.33/2.03","GET /api/z/:id/control":"0.06/0.1/0.13","GET /api/z/:id/seats":"0.84/0.99/1.03","GET /api/z/:id/results":"0.06/0.11/0.16","GET /api/z/:id/cv":"0.01/0.02/3.5","POST /api/z/:id/join (already joined)":"0.64/1.28/2.48","POST /api/z/:id/claims (a repeat of a true claim)":"0.6/0.7/5.28","POST /api/z/:id/presence":"0.29/0.37/0.51","POST /api/z/:id/control (signature of a stranger)":"0.5/1.13/7.13","POST /api/z/:id/control (a real signature)":"0.41/0.51/0.63"}` |
-| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 75.6 / 934 |
-| Store writes | 4626 = 5.8% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
+| Responses other than 200 | `{"200":194355,"400":2,"403":4,"404":9,"422":6}` |
+| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 313 / 8 of 194376 |
+| Slowest request CPU in the crowd (ms, upper bound) | 142.2 |
+| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.3/2.32/4.43","GET /api/z/:id/control":"0.07/0.11/0.29","GET /api/z/:id/seats":"0.9/1.2/1.22","GET /api/z/:id/results":"0.07/0.14/1.37","GET /api/z/:id/cv":"0.01/0.03/0.06","POST /api/z/:id/join (already joined)":"0.8/1.11/1.3","POST /api/z/:id/claims (a repeat of a true claim)":"0.77/1.04/1.18","POST /api/z/:id/presence":"0.46/0.69/0.82","POST /api/z/:id/control (signature of a stranger)":"0.88/1.12/1.2","POST /api/z/:id/control (a real signature)":"0.71/1/2.13"}` |
+| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 89.7 / 914 |
+| Store writes | 4624 = 5.8% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
 
 Game-specific measurements:
 
@@ -568,7 +567,7 @@ Fairness checks (nobody could predict or alter the numbers):
 |---|---|---|
 | every phone's number log equals the log re-derived from the public beacon alone | PASS |  |
 | a Resume or an Extend that names a round that has already begun (its beacon number is public) is refused, so nobody can pick the round the numbers restart from | PASS |  |
-| before the first number, none of the 11760 store answers held the game's numbers | PASS |  |
+| before the first number, none of the 11765 store answers held the game's numbers | PASS |  |
 | the store keeps no copy of the numbers (78 tables searched for the first 8 called numbers in order) | PASS |  |
 | a pause signed with a key the game does not know is refused | PASS |  |
 | a signed message whose round was changed afterwards is refused | PASS |  |
