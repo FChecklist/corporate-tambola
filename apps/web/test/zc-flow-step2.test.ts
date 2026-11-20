@@ -39,7 +39,7 @@ test("three cards; the list option is hidden (no coming soon), everybody waits f
 
 test("what each card saves; family cards let each person bring 1 to 10 (4 unless the organizer chooses)", () => {
   const F = page().ZFLOW;
-  expect(F.audienceSettings("people", 100)).toEqual({ cap: 100, whoCanJoin: "list", callMode: "auto", demo: false, invites: { on: false, per: 4, cats: [] } });
+  expect(F.audienceSettings("people", 100)).toEqual({ cap: 100, whoCanJoin: "list", verify: "id", callMode: "auto", demo: false, invites: { on: false, per: 4, cats: [] } });
   expect(F.audienceSettings("family", 250).invites).toEqual({ on: true, per: 4, cats: ["family"] });
   expect(F.audienceSettings("extended", 250).invites.cats).toEqual(["family", "colleagues"]);
   expect(F.audienceSettings("family", 250, 10).invites.per).toBe(10); expect(F.audienceSettings("family", 250, 1).invites.per).toBe(1);

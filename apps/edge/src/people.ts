@@ -226,7 +226,7 @@ export async function peopleRoute(c: Ctx): Promise<Response> {
   if (c.e.unplayed_ms && method !== "GET") return c.json({ error: "This game did not start. Your details have been auto-deleted.", code: "did-not-start", didNotStart: true }, 409);
   if (c.cancelled && method !== "GET") return c.json({ error: "This game was cancelled by the organizer.", code: "cancelled", cancelled: true }, 409);
 
-    if (parts[0] === "waiting") {
+  if (parts[0] === "waiting") {
     if (parts.length === 1 && method === "GET") return listWaiting(c, who);
     if (parts.length === 2 && parts[1] === "all" && method === "POST") return decideAll(c, who, bodyObj);
     if (parts.length === 2 && method === "POST") return decideWaiting(c, who, parts[1]!, bodyObj);

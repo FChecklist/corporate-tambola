@@ -92,7 +92,7 @@
   /** What the system saves for a card: only people the organizer lets in take part; family cards allow 4 more people each. */
   function audienceSettings(cardId, upTo, per) {
     const c = CARDS.find((x) => x.id === cardId) || CARDS[0];
-    return { cap: Number(upTo), whoCanJoin: "list", callMode: "auto", demo: false, invites: { on: c.invites, per: Math.min(10, Math.max(1, Math.floor(Number(per)) || 4)), cats: c.cats } };
+    return { cap: Number(upTo), whoCanJoin: "list", verify: "id", callMode: "auto", demo: false, invites: { on: c.invites, per: Math.min(10, Math.max(1, Math.floor(Number(per)) || 4)), cats: c.cats } };
   }
   function whoProblems(f, choices) {
     if (!CARDS.some((c) => c.id === f.card)) return ["Please choose who the game is for."];
@@ -436,7 +436,7 @@
         const z = form.zone === OTHER_ZONE ? form.zoneOther : form.zone, ms = wallToMs(form.date, form.time, z), name = gameName(form.occ, form.oname);
         const startRound = window.ZG.roundAt(ms);
         if (state.eid) await call("PATCH", `/api/z/${state.eid}/settings`, { name, startRound });
-        else { const id = randId(); await call("POST", "/api/z", { id, name, startRound, callSeconds: G.callSeconds, cap: 10 }); state.eid = id; try { window.history.replaceState(null, "", location.pathname + "?flow=new&e=" + id); } catch {} }
+        else { const id = randId(); await call("POST", "/api/z", { id, name, startRound, callSeconds: G.callSeconds, cap: 10, verify: "id" }); state.eid = id; try { window.history.replaceState(null, "", location.pathname + "?flow=new&e=" + id); } catch {} }
         state.when = { ms, zone: z };
         done(1);
       } catch (e) { go.disabled = false; msg.textContent = e.message; }
@@ -475,11 +475,12 @@
         const ids = idsOf(who.pasted); if (!ids.length) { pasteMsg.textContent = "Please paste at least one ID."; return; }
         if (!state.eid) { pasteMsg.textContent = "Please save step 1 first."; return; }
         pasteMsg.textContent = "Adding…";
-        try { const r = await call("POST", `/api/z/${state.eid}/people`, { people: ids.map((empId) => ({ empId })) }); who.pasted = ""; who.paste = false; who.added = r.added == null ? ids.length : r.added; draw(); } catch (e) { pasteMsg.textContent = e.message; }
+        try { const r = await call("POST", `/api/z/${state.eid}/people`, { people: ids.map((empId) => ({ empId })) }); who.pasted = ""; who.paste = false; who.added = r.added == null ? ids.length : r.added; who.why = r.invalid && r.invalid[0] && r.invalid[0].why ? String(r.invalid[0].why) : ""; draw(); } catch (e) { pasteMsg.textContent = e.message; }
       } }, "Add to your list"));
     }
     box.append(pasteMsg);
-    if (who.added != null) pasteMsg.textContent = who.added + (who.added === 1 ? " ID was added to your list." : " IDs were added to your list.");
+    if (who.added != null) pasteMsg.textContent = who.added + (who.added === 1 ? " ID was added to your list." : " IDs were added to your list."); // the server's reason is never thrown away: a row that was refused says why
+    if (who.added != null && who.why) pasteMsg.textContent += " " + who.why;
     box.append(el("h3", { text: "How big is your game?" }));
     const sel = el("select", { id: "zf-size", "aria-label": "Size of your game", onchange: (e) => { who.upTo = Number(e.target.value); draw(); } });
     for (const k of choices) sel.append(el("option", { value: String(k.upTo), ...(who.upTo === k.upTo ? { selected: "" } : {}) }, k.label));
