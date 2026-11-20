@@ -45,7 +45,7 @@ describe("player matrix", () => {
               (swHtml.includes("Playing:") === (tickets === 2 && !sup)) && // R2
               (sup === expectSup) && (!sup || tickets === 2) && // R3
               (rulesRowShown(screen, phase) === !["ended", "won"].includes(screen)) && // R4
-              w.includes("Corporate Tambola (Housie) organized by Acme India (Team - Finance)") && w.includes(personal ? "Press the button to get your ticket." : verify === "mobile" ? "type your mobile number." : verify === "id" ? "type your employee ID." : "type your employee ID or your mobile number.") && // R5
+              w.includes("Corporate Tambola (Housie) organized by Acme India (Team - Finance)") && w.includes(personal ? "Press the button to get your ticket." : verify === "mobile" ? "type your mobile number." : verify === "id" ? "type your ID." : "type your employee ID or your mobile number.") && // R5
               !/approv/i.test(w + swHtml + (sup ? h.superWrap(new Set(), "", v.tickets) : "")) && // R6
               PHASES.filter((p) => p === phase).length === 1; // R7
             if (!ok && bad.length < 5) bad.push(`${theme}/${tickets}/${sname}/${verify}/${tp}/${personal}/${screen}/${phase}/${link}/${width}/${fam}`);

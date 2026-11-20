@@ -33,15 +33,17 @@ test("three cards; the list option is hidden (no coming soon), everybody waits f
   const d = win.document;
   expect([...d.querySelectorAll(".zf-card b")].map((b: any) => b.textContent)).toEqual(["Your people", "Your people and their families", "Extended family"]);
   expect(d.getElementById("zf-how-system")).toBe(null);
-  expect(d.getElementById("zf-how").textContent).toContain("Everybody waits for you");
+  expect(d.getElementById("zf-how").textContent).toContain("waits for you");
   expect(d.querySelector(".zf-opt .zf-soon")).toBe(null);
 });
 
-test("what each card saves; family cards let each person bring 4", () => {
+test("what each card saves; family cards let each person bring 1 to 10 (4 unless the organizer chooses)", () => {
   const F = page().ZFLOW;
   expect(F.audienceSettings("people", 100)).toEqual({ cap: 100, whoCanJoin: "list", callMode: "auto", demo: false, invites: { on: false, per: 4, cats: [] } });
   expect(F.audienceSettings("family", 250).invites).toEqual({ on: true, per: 4, cats: ["family"] });
   expect(F.audienceSettings("extended", 250).invites.cats).toEqual(["family", "colleagues"]);
+  expect(F.audienceSettings("family", 250, 10).invites.per).toBe(10); expect(F.audienceSettings("family", 250, 1).invites.per).toBe(1);
+  expect(F.audienceSettings("family", 250, 99).invites.per).toBe(10); expect(F.audienceSettings("family", 250, 0).invites.per).toBe(4);
   expect(F.whoProblems({ card: "x", upTo: 100 }, F.packChoices(PACKS))[0]).toContain("who");
   expect(F.whoProblems({ card: "people", upTo: 7 }, F.packChoices(PACKS))[0]).toContain("size");
 });
@@ -65,4 +67,22 @@ test("words on this step follow the language guide", async () => {
   const text = win.document.getElementById("zf-sec2").textContent;
   expect(win.ZFLOW.badWords(text)).toEqual([]);
   expect(text).not.toContain("Rs");
+});
+
+// 20 Nov 2026 (owner): "Invite people with just an ID". The owner's text word for word; a visible Paste a list button; one ID per line; no Name or Mobile; family 1 to 10 (default 4).
+test("the owner's ID-invite text is on step 2 word for word; Paste a list sends IDs only; family picks 1 to 10", async () => {
+  calls.length = 0;
+  const win = page(); await wait();
+  const d = win.document, box = d.getElementById("zf-idinvite").textContent;
+  for (const line of ["Invite people with just an ID", "No names or personal details are needed.", "Just upload or paste the IDs of the people you want to invite: employee ID, associate ID, vendor ID or customer ID, whichever you use.", "Your invitee opens the game link and enters their ID. If it is on your list, they join and play. If it is not, you get a request to approve or decline.", "The list and all IDs are deleted within 24 hours after the game ends."]) expect(box.includes(line)).toBe(true);
+  expect(d.getElementById("zf-per")).toBe(null); // "Your people" has no family
+  d.querySelector('[data-card="family"]').click();
+  const per = [...d.querySelectorAll("#zf-per option")].map((o: any) => o.textContent); expect(per).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]); expect(d.getElementById("zf-per").value).toBe("4");
+  const t = d.getElementById("zf-sec2").textContent; expect(/Name|Mobile|mobile number|Anyone with the link/.test(t.replace("No names or personal details are needed.", ""))).toBe(false);
+  d.getElementById("zf-paste-open").click(); const ta = d.getElementById("zf-paste"); expect(!!ta).toBe(true);
+  ta.value = "A-1101\nA 1101\nB2202"; ta.dispatchEvent(new win.Event("input"));
+  d.getElementById("zf-paste-go").click(); await wait(60);
+  const post = calls.find((c) => c.method === "POST" && c.url === "/api/z/EABCDEF/people");
+  expect(post.body.people).toEqual([{ empId: "A-1101" }, { empId: "A 1101" }, { empId: "B2202" }]); // the game turns all three spellings of A1101 into one person
+  expect(JSON.stringify(post.body)).not.toMatch(/name|phone|mobile/i);
 });

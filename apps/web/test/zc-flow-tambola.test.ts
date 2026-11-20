@@ -102,7 +102,7 @@ test("step 1 asks how the game starts and who calls the numbers; the choice save
   new Function("window", "document", "location", "fetch", "MutationObserver", src)(win, win.document, win.location, fakeFetch, win.MutationObserver);
   win.ZFLOW.state.eid = "EABCDEF"; win.ZFLOW.state.open = 1; win.ZFLOW.draw(); await tick();
   const d = win.document, txt = d.getElementById("zt-run").textContent;
-  expect(txt).toContain("How should the game start?"); expect(txt).toContain("Who calls the numbers?"); expect(txt).toContain("A new number comes every 12 seconds, by itself.");
+  expect(txt).toContain("How should the game start?"); expect(txt).toContain("Who calls the numbers?"); expect(txt).toContain("A new random number appears every 12 seconds.");
   expect(d.getElementById("zt-runsum").textContent).toBe("Your game: starts by itself at the time you set. The game calls the numbers.");
   const r = d.querySelector('input[name="zt-call"][value="host"]'); r.checked = true; r.dispatchEvent(new win.Event("change")); await tick();
   expect(calls.some((c: any) => c.method === "PATCH" && c.body && c.body.callMode === "host" && c.body.startMode === "auto")).toBe(true);

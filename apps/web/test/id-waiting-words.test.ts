@@ -45,18 +45,17 @@ async function waitingCard(p: Page) {
 }
 
 describe("D1: an ID game's waiting screen never asks for a mobile number", () => {
-  test("an ID not on the list: name and location, then the request waits with the soft Organizer sentence; no guide card about a mobile number", async () => {
+  test("an ID not on the list: the request waits at once with the soft Organizer sentence; no guide card about a mobile number", async () => {
     const o = await idGame("IDW-1");
     const p = await phone(o, "IDW-1");
     await p.waitFor((x) => /Join the game/.test(x));
-    expect(p.text()).toMatch(/No mobile number or e-mail address is needed/);
-    setVal(p, "#emp", "E9001"); p.click("#go");
-    await p.waitFor((x) => /Your Employee ID is not on the list yet/.test(x)); // step 2: name and location (the legal wording calls it the Employee ID)
-    setVal(p, "#nm", "Asha Rao"); setVal(p, "#loc", "Pune"); p.click("#go");
+    expect(p.text()).toMatch(/No name, mobile number or e-mail address is needed/);
+    expect(p.$("#nm")).toBeNull(); expect(p.$("#loc")).toBeNull(); expect(p.$("#ph")).toBeNull(); // one box: the ID (20 Nov 2026), no name, no location, no number
+    setVal(p, "#emp", "E9001"); p.click("#go"); // not on the list: it waits at once, no second step
     const w = await waitingCard(p);
     expect(w.card).toContain(SOFT);
     expect(w.card).not.toMatch(/mobile|by invitation/i);
-    expect(w.again).toBe("Wrong Employee ID? Type it again");
+    expect(w.again).toBe("Wrong ID? Type it again");
     expect(w.guided).toBe(false);
     expect(p.text()).not.toMatch(/add your mobile number/i);
     expect(p.errors).toEqual([]);
