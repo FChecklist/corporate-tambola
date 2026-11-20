@@ -93,3 +93,20 @@ for (const f of FORMATS) describe(`[${f.key}] step 18: all the mail of one whole
     }
   });
 });
+
+// ---- two things at the same moment must not send a mail twice (two cron runs at once, a double-tapped Create)
+for (const f of FORMATS) describe(`[${f.key}] step 18: exactly once when two run at the same time`, () => {
+  test("S18-10 two cron runs at the same moment at the start and at the end: one 'started' mail, one 'ended' mail; two Create taps at once: one 'created' mail", async () => {
+    provider.honourIdem = false; // the provider offers no repeat protection: our own once-only claim has to hold by itself
+    const o = await organizer(); const id = `SM-DB-${f.key}`;
+    await Promise.all([create(o.key, id, { startMode: f.startMode, callMode: f.callMode }), create(o.key, id, { startMode: f.startMode, callMode: f.callMode })]);
+    expect(provider.delivered.filter((m) => /is created/i.test(m.subject) && m.text.includes(id)).length).toBe(1);
+    const g = await newGame(f); const { last } = await playGame(g, 3);
+    await Promise.all([lifecycleTick(W.env as any, last - 10 * MIN), lifecycleTick(W.env as any, last - 10 * MIN), lifecycleTick(W.env as any, last - 10 * MIN)]);
+    expect(provider.delivered.filter((m) => /\bstarted\b/i.test(m.subject) && !/published/i.test(m.subject) && m.text.includes(g.id)).length).toBe(1);
+    await tickFor(last + 5 * MIN, 3); const t = last + 10 * MIN;
+    await Promise.all([lifecycleTick(W.env as any, t), lifecycleTick(W.env as any, t), lifecycleTick(W.env as any, t)]);
+    expect(provider.delivered.filter((m) => /Your game has ended/i.test(m.subject) && m.text.includes(g.id)).length).toBe(1);
+    expect(provider.delivered.filter((m) => /report is ready/i.test(m.subject) && m.text.includes(g.id)).length).toBeLessThanOrEqual(1);
+  });
+});

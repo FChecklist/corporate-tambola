@@ -10,9 +10,9 @@ export const DAY = 24 * HOUR;
 export const istMidnightAfter = (ms: number) => (Math.floor((ms + 19_800_000) / DAY) + 1) * DAY - 19_800_000;
 
 /** A stand-in for the mail provider (Resend). `mode` is changed by a test: "ok" delivers, "down" answers 500, "throw" is a network failure, "flaky:N" fails the first N calls. A repeated idempotency key is delivered once, as the real provider does. */
-export const provider = { mode: "ok" as string, delivered: [] as { to: string; subject: string; text: string; attachments: number; idem: string | null }[], calls: 0, seenIdem: new Set<string>(), failLeft: 0 };
+export const provider = { mode: "ok" as string, delivered: [] as { to: string; subject: string; text: string; attachments: number; idem: string | null }[], calls: 0, seenIdem: new Set<string>(), failLeft: 0, honourIdem: true };
 export function installProvider(mode = "ok") {
-  provider.mode = mode; provider.delivered = []; provider.calls = 0; provider.seenIdem = new Set(); provider.failLeft = mode.startsWith("flaky:") ? Number(mode.slice(6)) : 0;
+  provider.mode = mode; provider.honourIdem = true; provider.delivered = []; provider.calls = 0; provider.seenIdem = new Set(); provider.failLeft = mode.startsWith("flaky:") ? Number(mode.slice(6)) : 0;
   (W.env as any).RESEND_API_KEY = "re_test_key";
   const prev = globalThis.fetch;
   globalThis.fetch = (async (url: any, init?: any) => {
@@ -22,7 +22,7 @@ export function installProvider(mode = "ok") {
     if (provider.mode === "down") return new Response("{}", { status: 500 });
     if (provider.failLeft > 0) { provider.failLeft--; return new Response("{}", { status: 503 }); }
     const b = JSON.parse(init.body); const idem = init.headers?.["idempotency-key"] ?? null;
-    if (idem && provider.seenIdem.has(idem)) return new Response(JSON.stringify({ id: "dup" }), { status: 200 });
+    if (provider.honourIdem && idem && provider.seenIdem.has(idem)) return new Response(JSON.stringify({ id: "dup" }), { status: 200 });
     if (idem) provider.seenIdem.add(idem);
     provider.delivered.push({ to: b.to[0], subject: b.subject, text: b.text, attachments: (b.attachments ?? []).length, idem });
     return new Response(JSON.stringify({ id: "m" + provider.delivered.length }), { status: 200 });
