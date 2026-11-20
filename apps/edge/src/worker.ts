@@ -1465,7 +1465,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (!b) return json({ error: "Bad message." }, 400);
       const ge = await env.DB.prepare("SELECT tickets, config, start_round FROM engagement WHERE id=?").bind(cid).first<{ tickets: number; config: string | null; start_round: number }>();
       if (b.message?.action === "go" && ge && now < roundMs(ge.start_round) - 3000) return json({ error: NOT_BEFORE_MSG }, 422); // Start is never possible before the scheduled time, whatever the sender's own clock says
-      const r = await publishControl(kv, cid!, b.message, ge ? hostGameOf(cfgOf(ge), ge.start_round) : undefined); // a Host's "next" press is checked against this game's breaks and rounds; a Start against the scheduled time
+      const r = await publishControl(kv, cid!, b.message, ge ? hostGameOf(cfgOf(ge), ge.start_round) : undefined, roundOfMs(now)); // (the store's own clock: a message may only name a round that has not begun) // a Host's "next" press is checked against this game's breaks and rounds; a Start against the scheduled time
       if (r.ok && !(r as any).duplicate && ["go", "pause", "resume", "extend", "stop"].includes(b.message?.action)) { // who pressed Start / Pause / Resume / End, and when: the plain list the Organizer and the Host read, and the "paused by" line everybody sees (the signature says which key it was)
         const pf = await readPublished(kv, cid!);
         const org = !!(pf && b.message.sig && (await verifyControlSig(pf.pubKey, b.message)));
