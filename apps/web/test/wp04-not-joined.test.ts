@@ -33,7 +33,7 @@ async function game(eid: string, publish = true) {
   }
   return o;
 }
-const openList = async (p: Page) => { await p.waitFor(() => !!p.$('.zc-dot[data-open="6"]')); p.click('.zc-dot[data-open="6"]'); await p.waitFor((x) => /My people/.test(x) && /people are on my list|person is on my list/.test(x)); };
+const openList = async (p: Page) => { await p.waitFor(() => !!p.$('.zc-dot[data-open="6"]')); p.click('.zc-dot[data-open="6"]'); await p.waitFor((x) => /My people/.test(x) && /people are on your list|person is on your list/.test(x)); };
 const rows = (p: Page) => Array.from(p.win.document.querySelectorAll("#mypeople .zc-prow")).map((e: any) => e.querySelector("b").textContent.trim());
 
 describe("TA14/S18: the not-joined list", () => {

@@ -1,5 +1,32 @@
 [
   {
+    "version": "1.10.1",
+    "date": "2026-11-21",
+    "releasedAtIST": "21 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Pasting a list of IDs now works, however long the list",
+    "changes": [
+      "Paste a list in the default organizer screens now adds the IDs: before, the server turned every paste away because the page did not send the Terms tick",
+      "A pasted list of more than 200 IDs is sent in parts of 200, so a big office list goes in at once",
+      "Choosing the size of your game now takes effect when you paste, so a list of more than 10 IDs is no longer turned away before you press Save and continue",
+      "A paste of IDs that are already on your list now says so, instead of only \"0 IDs were added\""
+    ]
+  },
+  {
+    "version": "1.10.0",
+    "date": "2026-11-21",
+    "releasedAtIST": "21 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Invite people with just an ID",
+    "changes": [
+      "The default organizer screens now make a game that takes people by ID alone: paste or upload a list of IDs, family number 1 to 10 (default 4), and the people who are not on your list wait for your yes or no",
+      "One ID rule everywhere: letters and numbers only, capitals; A-1101, A 1101 and A/1101 are one ID, at upload, join, approval and matching (games made before this release are also looked up in their older form)",
+      "A new invite and approval log for the Organizer, Hosts and Co-hosts shows only the ID, how it came, and who decided",
+      "A pasted list that cannot be added now says why, instead of only \"0 IDs were added\"",
+      "A person listed in an older game with a dash in their stored ID (A-1101) now gets in with the ID and the listed mobile number, instead of waiting for approval"
+    ]
+  },
+  {
     "version": "1.9.2",
     "date": "2026-11-20",
     "releasedAtIST": "20 Nov 2026, time set at deploy",
@@ -111,7 +138,8 @@
       "Clearer fairness wording (no one knows the next number) and a shorter footer that names who owns the site and who collects payments",
       "Fixes from user feedback: clearer messages when a Co-host link is for another game, and a reminder e-mail for a game still in draft"
     ]
-  }, {
+  },
+  {
     "version": "1.6.7",
     "date": "2026-10-29",
     "commit": "this release",
