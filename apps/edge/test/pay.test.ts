@@ -334,7 +334,7 @@ describe("e-mail through Resend (organizers only)", () => {
   beforeEach(() => {
     sent = []; resendUp = true;
     env.RAZORPAY_KEY_ID = undefined; env.RAZORPAY_KEY_SECRET = undefined; env.TEST_MODE = "1";
-    env.RESEND_API_KEY = "re_test_dummy"; env.MAIL_REPLY_TO = "help@veridian-aios.com";
+    env.RESEND_API_KEY = "re_test_dummy"; env.MAIL_REPLY_TO = "help@veridian-aios.com"; (env as any).MAIL_RETRY_MS = "0"; // no waiting between the provider retries in tests
     const inner = (globalThis as any).fetch;
     (globalThis as any).fetch = async (url: string, init?: any) => {
       if (String(url) === "https://api.resend.com/emails") { if (!resendUp) return new Response("{}", { status: 500 }); sent.push({ auth: init.headers.authorization, ...JSON.parse(init.body) }); return new Response("{}", { status: 200 }); }
