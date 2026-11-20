@@ -18,7 +18,7 @@ import { callRoundR, hostGameOf, luckyRound } from "../../../packages/beacon/src
 import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../../../packages/beacon/src/control";
 import { storedHolds } from "./claimhold";
 import { seatOfPid } from "../../../packages/beacon/src/unique-ticket";
-import { openPii, openText, sealText, type PiiEnv } from "./pii";
+import { openPii, openText, sealPii, sealText, type PiiEnv } from "./pii";
 import { BRAND } from "./brand";
 import { brandedReportMail } from "./report-email";
 import { layoutReport, layoutPeoplePart, istDate, istFull, emptyAgg, type Agg, type ReportData, type ReportPerson, type ReportPrize, type ReportWinner } from "./report-layout";
@@ -229,7 +229,19 @@ export async function erasePersonal(env: Env, eid: string, now: number, by: stri
     env.DB.prepare(eraseCohostsSql).bind(eid), // the game's Co-hosts: name, mobile number and key go with the participants' data
     env.DB.prepare("INSERT INTO life(eid,end_ms,end_src,purged_ms,report_state) VALUES(?,?, 'purge', ?, ?) ON CONFLICT(eid) DO UPDATE SET purged_ms=?, report_state=COALESCE(life.report_state, ?)").bind(eid, now, now, by, now, by),
   ]);
+  await stripIdsFromPrizes(env, eid); // the prize hand-over record stays (design), but the person's ID and email go with the rest of their data (suite rules v1.1: IDs deleted within 24 hours)
   await shredParticipantAudit(env as any, eid, now); // best effort inside: a held engagement keeps its log until the hold is lifted, then the tick shreds it
+}
+/** The prize hand-over record (prize.pii / prize.orig, kept to day 365) was written from the participant's sealed details, which in an ID game hold the person's ID (and in an open game an email). Re-seal both without them. */
+export async function stripIdsFromPrizes(env: Env, eid: string): Promise<void> {
+  try {
+    const rows = (await env.DB.prepare("SELECT round, pattern, ordinal, seat, pii, orig FROM prize WHERE eid=?").bind(eid).all<{ round: number; pattern: string; ordinal: number; seat: number; pii: string | null; orig: string | null }>()).results ?? [];
+    const clean = async (sealed: string | null) => { const p = await openPii(env as any, sealed); return p && (p.empId || p.email) ? await sealPii(env as any, { phone: p.phone, name: p.name }) : sealed; };
+    for (const r of rows) {
+      const pii = await clean(r.pii), orig = await clean(r.orig);
+      if (pii !== r.pii || orig !== r.orig) await env.DB.prepare("UPDATE prize SET pii=?, orig=? WHERE eid=? AND round=? AND pattern=? AND ordinal=? AND seat=?").bind(pii, orig, eid, r.round, r.pattern, r.ordinal, r.seat).run();
+    }
+  } catch { /* the next erasure pass tries again */ }
 }
 /** Everything about an engagement, at the end of its 365 days (or for a draft nobody published). */
 export async function eraseEverything(env: Env, id: string, now = Date.now()): Promise<void> {
