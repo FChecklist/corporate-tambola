@@ -14,12 +14,12 @@ How to run: `bun run tools/game250/run.ts all` (or `3`, `5,6`), then `bun run to
 | 2 | Host-started, auto numbers | 250/250 | 7 | 7/7 | 13/13 | 400:2 403:4 404:9 422:2 | 3550 (4.4%) |
 | 3 | Host-started, host-called numbers | 250/250 | 7 | 7/7 | 14/14 | 400:2 403:4 404:9 422:6 | 3563 (4.5%) |
 | 4 | Scheduled start, host-called numbers | 250/250 | 7 | 6/6 | 15/15 | 400:2 403:4 404:9 409:1 422:4 | 3642 (4.6%) |
-| 5 | ID-only invite, 250 IDs + intruders | 250/250 | 7 | 13/13 | 10/10 | 400:12 403:63 404:9 409:36 423:20 429:50 | 4001 (5%) |
-| 6 | Late joiners, leave and rejoin | 250/250 | 7 | 11/11 | 10/10 | 400:2 403:8 404:9 409:1 423:10 | 3589 (4.5%) |
-| 7 | Pause and resume | 250/250 | 7 | 9/9 | 11/11 | 400:2 403:4 404:9 422:6 | 4625 (5.8%) |
-| 8 | All prize types and tie-breaks | 250/250 | 54 | 9/9 | 10/10 | 400:2 403:3 404:9 | 8109 (10.1%) |
-| 9 | Mail and notification fan-out | 250/250 | 7 | 14/14 | 10/10 | 400:3 403:4 404:9 | 3564 (4.5%) |
-| 10 | End, report, deletion, retention | 250/250 | 5 | 18/18 | 3/3 | 403:2 404:4 | 3277 (4.1%) |
+| 5 | ID-only invite, 250 IDs + intruders | 250/250 | 7 | 13/13 | 10/10 | 400:12 403:63 404:9 409:36 423:20 429:50 | 4007 (5%) |
+| 6 | Late joiners, leave and rejoin | 250/250 | 7 | 11/11 | 10/10 | 400:2 403:8 404:9 409:2 423:10 | 3627 (4.5%) |
+| 7 | Pause and resume | 250/250 | 7 | 9/9 | 11/11 | 400:2 403:4 404:9 409:4 422:6 | 4618 (5.8%) |
+| 8 | All prize types and tie-breaks | 250/250 | 54 | 9/9 | 10/10 | 400:2 403:3 404:9 409:1 | 8027 (10%) |
+| 9 | Mail and notification fan-out | 250/250 | 7 | 14/14 | 10/10 | 400:3 403:4 404:9 | 3563 (4.5%) |
+| 10 | End, report, deletion, retention | 250/250 | 5 | 18/18 | 3/3 | 403:2 404:4 409:1 | 3276 (4.1%) |
 
 ## Game 1: Scheduled start, auto numbers
 
@@ -40,14 +40,14 @@ Game id `G250-01`. Mode: start: scheduled / numbers: auto.
 | Numbers called | 76 |
 | First number at (virtual minutes after the game was made) | 17 |
 | Game length, first number to all phones ended (virtual minutes) | 15.1 |
-| Test run length (real seconds) | 45.2 |
-| Requests to the Worker | 122758 |
+| Test run length (real seconds) | 41.5 |
+| Requests to the Worker | 122757 |
 | Outbound network requests made by the test (must be 0) | 0 |
-| Responses other than 200 | `{"200":122744,"400":2,"403":3,"404":9}` |
-| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 245 / 7 of 122758 |
-| Slowest request CPU in the crowd (ms, upper bound) | 195.7 |
-| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.22/0.69/4.14","GET /api/z/:id/control":"0.05/0.09/0.75","GET /api/z/:id/seats":"0.85/1.09/1.32","GET /api/z/:id/results":"0.06/0.11/0.3","GET /api/z/:id/cv":"0.01/0.02/0.2","POST /api/z/:id/join (already joined)":"0.62/1.18/4.52","POST /api/z/:id/claims (a repeat of a true claim)":"0.52/0.88/2.72","POST /api/z/:id/presence":"0.23/0.43/1.13","POST /api/z/:id/control (signature of a stranger)":"0.49/0.9/0.92","POST /api/z/:id/control (a real signature)":"0.47/0.82/1.88"}` |
-| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 48.6 / 623 |
+| Responses other than 200 | `{"200":122743,"400":2,"403":3,"404":9}` |
+| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 298 / 9 of 122757 |
+| Slowest request CPU in the crowd (ms, upper bound) | 202.7 |
+| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.2/0.56/4.23","GET /api/z/:id/control":"0.05/0.09/0.24","GET /api/z/:id/seats":"0.86/0.98/1.06","GET /api/z/:id/results":"0.06/0.1/0.16","GET /api/z/:id/cv":"0.01/0.04/0.11","POST /api/z/:id/join (already joined)":"0.68/3.35/6.68","POST /api/z/:id/claims (a repeat of a true claim)":"0.81/1.11/4.54","POST /api/z/:id/presence":"0.39/0.58/1.04","POST /api/z/:id/control (signature of a stranger)":"0.81/1.14/1.6","POST /api/z/:id/control (a real signature)":"0.57/0.9/1.44"}` |
+| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 48.9 / 628 |
 | Store writes | 3682 = 4.6% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
 
 Game-specific measurements:
@@ -108,14 +108,14 @@ Game id `G250-02`. Mode: start: Host presses Start / numbers: auto.
 | Numbers called | 70 |
 | First number at (virtual minutes after the game was made) | 17.6 |
 | Game length, first number to all phones ended (virtual minutes) | 13.8 |
-| Test run length (real seconds) | 40.3 |
+| Test run length (real seconds) | 37.6 |
 | Requests to the Worker | 124436 |
 | Outbound network requests made by the test (must be 0) | 0 |
 | Responses other than 200 | `{"200":124419,"400":2,"403":4,"404":9,"422":2}` |
-| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 213 / 8 of 124436 |
-| Slowest request CPU in the crowd (ms, upper bound) | 172.4 |
-| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.17/0.82/2.77","GET /api/z/:id/control":"0.04/0.1/4.09","GET /api/z/:id/seats":"0.61/0.74/0.79","GET /api/z/:id/results":"0.05/0.08/0.1","GET /api/z/:id/cv":"0.01/0.01/0.05","POST /api/z/:id/join (already joined)":"0.63/0.74/1.14","POST /api/z/:id/claims (a repeat of a true claim)":"0.53/3.73/4.51","POST /api/z/:id/presence":"0.15/0.31/0.38","POST /api/z/:id/control (signature of a stranger)":"0.4/0.61/0.89","POST /api/z/:id/control (a real signature)":"0.35/0.5/0.5"}` |
-| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 42.5 / 701 |
+| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 293 / 9 of 124436 |
+| Slowest request CPU in the crowd (ms, upper bound) | 167.8 |
+| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.2/1.99/4.23","GET /api/z/:id/control":"0.06/0.1/0.26","GET /api/z/:id/seats":"0.75/0.88/0.91","GET /api/z/:id/results":"0.06/0.09/0.1","GET /api/z/:id/cv":"0.01/0.04/0.05","POST /api/z/:id/join (already joined)":"0.8/5.28/8.77","POST /api/z/:id/claims (a repeat of a true claim)":"0.79/0.92/0.97","POST /api/z/:id/presence":"0.56/5.16/6.6","POST /api/z/:id/control (signature of a stranger)":"0.81/1.09/1.66","POST /api/z/:id/control (a real signature)":"0.75/1.13/1.18"}` |
+| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 43.7 / 598 |
 | Store writes | 3550 = 4.4% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
 
 Game-specific measurements:
@@ -185,14 +185,14 @@ Game id `G250-03`. Mode: start: Host presses Start / numbers: Host presses Next.
 | Numbers called | 61 |
 | First number at (virtual minutes after the game was made) | 17.8 |
 | Game length, first number to all phones ended (virtual minutes) | 13.6 |
-| Test run length (real seconds) | 44.4 |
-| Requests to the Worker | 123335 |
+| Test run length (real seconds) | 38.7 |
+| Requests to the Worker | 123334 |
 | Outbound network requests made by the test (must be 0) | 0 |
-| Responses other than 200 | `{"200":123314,"400":2,"403":4,"404":9,"422":6}` |
-| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 250 / 12 of 123335 |
-| Slowest request CPU in the crowd (ms, upper bound) | 173.6 |
-| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.31/0.74/4.42","GET /api/z/:id/control":"0.1/0.2/0.34","GET /api/z/:id/seats":"0.63/0.88/0.93","GET /api/z/:id/results":"0.16/0.26/0.47","GET /api/z/:id/cv":"0.02/0.03/0.11","POST /api/z/:id/join (already joined)":"1.47/16.19/21.72","POST /api/z/:id/claims (a repeat of a true claim)":"0.58/2.8/4.81","POST /api/z/:id/presence":"0.48/0.62/0.66","POST /api/z/:id/control (signature of a stranger)":"0.76/1.2/2.06","POST /api/z/:id/control (a real signature)":"0.61/0.85/0.9"}` |
-| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 46.9 / 711 |
+| Responses other than 200 | `{"200":123313,"400":2,"403":4,"404":9,"422":6}` |
+| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 220 / 14 of 123334 |
+| Slowest request CPU in the crowd (ms, upper bound) | 166.8 |
+| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.31/1.8/4.34","GET /api/z/:id/control":"0.1/0.14/0.15","GET /api/z/:id/seats":"0.69/0.75/0.88","GET /api/z/:id/results":"0.06/0.1/0.12","GET /api/z/:id/cv":"0.01/0.02/0.04","POST /api/z/:id/join (already joined)":"0.66/0.88/2.45","POST /api/z/:id/claims (a repeat of a true claim)":"1.7/6.11/6.65","POST /api/z/:id/presence":"0.35/0.58/1.61","POST /api/z/:id/control (signature of a stranger)":"0.68/0.91/1.01","POST /api/z/:id/control (a real signature)":"0.56/0.76/0.81"}` |
+| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 46.1 / 617 |
 | Store writes | 3563 = 4.5% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
 
 Game-specific measurements:
@@ -258,23 +258,23 @@ Game id `G250-04`. Mode: start: scheduled / numbers: Host presses Next.
 | First / last player joined at (virtual minutes after the game was made) | 0.6 / 10.5 |
 | Players checked in (present check) | 250 |
 | Join refusals seen | `[]` |
-| Claims stored | 457 |
+| Claims stored | 458 |
 | Claim requests answered too late (409) | 1 |
-| Claims by house | `{"bot":36,"corners":60,"early5":239,"full":3,"mid":65,"top":54}` |
+| Claims by house | `{"bot":36,"corners":60,"early5":240,"full":3,"mid":65,"top":54}` |
 | Wrong claims (Bogeys) | 0 |
-| Phones that pressed Claim | 241 |
+| Phones that pressed Claim | 242 |
 | Prizes published | 7: bot#1@42, corners#1@13, early5#1@9x2, full#1@64, full#2@66, mid#1@25, top#1@33 |
 | Numbers called | 67 |
 | First number at (virtual minutes after the game was made) | 15.3 |
 | Game length, first number to all phones ended (virtual minutes) | 18.1 |
-| Test run length (real seconds) | 49.8 |
-| Requests to the Worker | 149931 |
+| Test run length (real seconds) | 50.7 |
+| Requests to the Worker | 150250 |
 | Outbound network requests made by the test (must be 0) | 0 |
-| Responses other than 200 | `{"200":149911,"400":2,"403":4,"404":9,"409":1,"422":4}` |
-| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 298 / 8 of 149931 |
-| Slowest request CPU in the crowd (ms, upper bound) | 170.5 |
-| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.33/0.52/0.56","GET /api/z/:id/control":"0.1/0.16/0.27","GET /api/z/:id/seats":"0.78/1.07/1.16","GET /api/z/:id/results":"0.05/0.1/0.3","GET /api/z/:id/cv":"0.01/0.03/0.09","POST /api/z/:id/join (already joined)":"1/1.12/1.16","POST /api/z/:id/claims (a repeat of a true claim)":"0.63/0.75/4.2","POST /api/z/:id/presence":"0.3/0.35/0.41","POST /api/z/:id/control (signature of a stranger)":"0.47/0.79/2.76","POST /api/z/:id/control (a real signature)":"0.41/0.61/6.29"}` |
-| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 51.9 / 709 |
+| Responses other than 200 | `{"200":150230,"400":2,"403":4,"404":9,"409":1,"422":4}` |
+| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 305 / 9 of 150250 |
+| Slowest request CPU in the crowd (ms, upper bound) | 341.5 |
+| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.39/0.84/1.51","GET /api/z/:id/control":"0.13/0.16/0.17","GET /api/z/:id/seats":"0.9/1.04/1.41","GET /api/z/:id/results":"0.07/0.11/0.13","GET /api/z/:id/cv":"0.01/0.02/0.05","POST /api/z/:id/join (already joined)":"1.2/5.61/7.35","POST /api/z/:id/claims (a repeat of a true claim)":"0.98/1.35/12.23","POST /api/z/:id/presence":"0.57/0.88/0.95","POST /api/z/:id/control (signature of a stranger)":"1.35/1.64/7.56","POST /api/z/:id/control (a real signature)":"0.84/1.05/1.74"}` |
+| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 59.4 / 672 |
 | Store writes | 3642 = 4.6% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
 
 Game-specific measurements:
@@ -339,28 +339,28 @@ Game id `G250-05`. Mode: who: only people on the ID list (employee ID, no mobile
 
 | What | Result |
 |---|---|
-| Players joined | 250 of 250 (not joined: 0; join retries: 1) |
+| Players joined | 250 of 250 (not joined: 0; join retries: 7) |
 | First / last player joined at (virtual minutes after the game was made) | 0.6 / 10.5 |
 | Players checked in (present check) | 250 |
 | Join refusals seen | `[]` |
-| Claims stored | 443 |
+| Claims stored | 447 |
 | Claim requests answered too late (409) | 0 |
-| Claims by house | `{"bot":38,"corners":74,"early5":243,"full":2,"mid":45,"top":41}` |
+| Claims by house | `{"bot":40,"corners":75,"early5":243,"full":2,"mid":46,"top":41}` |
 | Wrong claims (Bogeys) | 0 |
 | Phones that pressed Claim | 243 |
 | Prizes published | 7: bot#1@37x2, corners#1@27, early5#1@9, full#1@61, full#2@63, mid#1@19, top#1@24 |
-| Numbers called | 66 |
+| Numbers called | 68 |
 | First number at (virtual minutes after the game was made) | 17 |
-| Game length, first number to all phones ended (virtual minutes) | 13 |
-| Test run length (real seconds) | 37.3 |
-| Requests to the Worker | 112316 |
+| Game length, first number to all phones ended (virtual minutes) | 13.5 |
+| Test run length (real seconds) | 47.4 |
+| Requests to the Worker | 111827 |
 | Outbound network requests made by the test (must be 0) | 0 |
-| Responses other than 200 | `{"200":112126,"400":12,"403":63,"404":9,"409":36,"423":20,"429":50}` |
-| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 167 / 6 of 112316 |
-| Slowest request CPU in the crowd (ms, upper bound) | 148.1 |
-| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.15/0.23/0.58","GET /api/z/:id/control":"0.04/0.1/0.18","GET /api/z/:id/seats":"0.59/0.72/0.79","GET /api/z/:id/results":"0.04/0.1/0.13","GET /api/z/:id/cv":"0.01/0.03/0.14","POST /api/z/:id/join (already joined)":"0.69/1.31/3.06","POST /api/z/:id/claims (a repeat of a true claim)":"0.65/0.94/1.04","POST /api/z/:id/presence":"0.35/0.61/0.64","POST /api/z/:id/control (signature of a stranger)":"0.74/1.3/1.63","POST /api/z/:id/control (a real signature)":"0.51/0.93/1.78"}` |
-| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 39.9 / 565 |
-| Store writes | 4001 = 5% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
+| Responses other than 200 | `{"200":111637,"400":12,"403":63,"404":9,"409":36,"423":20,"429":50}` |
+| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 422 / 14 of 111827 |
+| Slowest request CPU in the crowd (ms, upper bound) | 197.5 |
+| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.23/0.58/2.4","GET /api/z/:id/control":"0.07/0.31/0.36","GET /api/z/:id/seats":"0.88/1.13/1.13","GET /api/z/:id/results":"0.07/0.14/0.24","GET /api/z/:id/cv":"0.01/0.04/0.25","POST /api/z/:id/join (already joined)":"1.16/6.85/13.14","POST /api/z/:id/claims (a repeat of a true claim)":"0.74/1.42/6.69","POST /api/z/:id/presence":"0.49/0.78/0.92","POST /api/z/:id/control (signature of a stranger)":"0.85/6.35/8.07","POST /api/z/:id/control (a real signature)":"0.85/4.89/5.02"}` |
+| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 53 / 682 |
+| Store writes | 4007 = 5% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
 
 Game-specific measurements:
 
@@ -374,14 +374,14 @@ Game-specific measurements:
 | intruders | `{"unknownTried":30,"unknownEntered":0,"foreignTried":8,"foreignEntered":0,"impostorTried":10,"impostorEntered":0,"errors":[["Your request is with the Organizer. You can come in as soon as they say yes.",30],["Please use English letters and numbers only.",5],["This game is full. Please tell your organizer so they can make room.",3],["This employee ID already has a ticket on another phone. A ticket plays on one phone only. ",10]]}` |
 | waitingRoom | 30 |
 | declined | 30 |
-| retention | `{"endMs":1795170966000,"deletedAtIST":"2027-11-21T00:00:00.000 IST","stillThere5MinBefore":true,"leftoverRows":{},"keptOnPurpose":{"entitlement":1,"audit_cert":1,"audit_stats":1,"consent_log":5,"game_record":1},"leftoverKvKeys":[]}` |
+| retention | `{"endMs":1795170972000,"deletedAtIST":"2027-11-21T00:00:00.000 IST","stillThere5MinBefore":true,"leftoverRows":{},"keptOnPurpose":{"entitlement":1,"audit_cert":1,"audit_stats":1,"consent_log":5,"game_record":1},"leftoverKvKeys":[]}` |
 
 Fairness checks (nobody could predict or alter the numbers):
 
 | Check | Result | Detail |
 |---|---|---|
 | every phone's number log equals the log re-derived from the public beacon alone | PASS |  |
-| before the first number, none of the 12492 store answers held the game's numbers | PASS |  |
+| before the first number, none of the 12229 store answers held the game's numbers | PASS |  |
 | the store keeps no copy of the numbers (82 tables searched for the first 8 called numbers in order) | PASS |  |
 | a pause signed with a key the game does not know is refused | PASS |  |
 | a signed message whose round was changed afterwards is refused | PASS |  |
@@ -432,24 +432,24 @@ Game id `G250-06`. Mode: players: 140 on time, 60 late, 25 offline and back, 10 
 | First / last player joined at (virtual minutes after the game was made) | 0.6 / 25.1 |
 | Players checked in (present check) | 250 |
 | Join refusals seen | `[]` |
-| Claims stored | 446 |
-| Claim requests answered too late (409) | 0 |
-| Claims by house | `{"bot":55,"corners":60,"early5":212,"full":3,"mid":57,"top":59}` |
+| Claims stored | 477 |
+| Claim requests answered too late (409) | 1 |
+| Claims by house | `{"bot":65,"corners":62,"early5":219,"full":4,"mid":66,"top":61}` |
 | Wrong claims (Bogeys) | 0 |
-| Phones that pressed Claim | 222 |
-| Prizes published | 7: bot#1@39x2, corners#1@33x2, early5#1@7, full#1@60, full#2@71, mid#1@37, top#1@29x2 |
-| Numbers called | 72 |
+| Phones that pressed Claim | 229 |
+| Prizes published | 7: bot#1@35, corners#1@33x2, early5#1@11x4, full#1@71, full#2@72x2, mid#1@33, top#1@29x2 |
+| Numbers called | 73 |
 | First number at (virtual minutes after the game was made) | 17 |
-| Game length, first number to all phones ended (virtual minutes) | 14.3 |
-| Test run length (real seconds) | 39.3 |
-| Requests to the Worker | 108856 |
+| Game length, first number to all phones ended (virtual minutes) | 14.5 |
+| Test run length (real seconds) | 42.4 |
+| Requests to the Worker | 111632 |
 | Outbound network requests made by the test (must be 0) | 0 |
-| Responses other than 200 | `{"200":108826,"400":2,"403":8,"404":9,"409":1,"423":10}` |
-| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 211 / 2 of 108856 |
-| Slowest request CPU in the crowd (ms, upper bound) | 58.2 |
-| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.17/0.94/4.01","GET /api/z/:id/control":"0.05/0.09/0.28","GET /api/z/:id/seats":"0.8/1/1.19","GET /api/z/:id/results":"0.06/0.1/0.17","GET /api/z/:id/cv":"0.01/0.02/0.05","POST /api/z/:id/join (already joined)":"0.66/1.26/6.57","POST /api/z/:id/claims (a repeat of a true claim)":"0.55/0.71/0.81","POST /api/z/:id/presence":"0.49/11.66/18.93","POST /api/z/:id/control (signature of a stranger)":"0.69/0.82/2.33","POST /api/z/:id/control (a real signature)":"0.43/0.56/0.95"}` |
-| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 41.2 / 646 |
-| Store writes | 3589 = 4.5% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
+| Responses other than 200 | `{"200":111601,"400":2,"403":8,"404":9,"409":2,"423":10}` |
+| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 289 / 3 of 111632 |
+| Slowest request CPU in the crowd (ms, upper bound) | 59.4 |
+| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.18/0.37/0.53","GET /api/z/:id/control":"0.05/0.1/0.28","GET /api/z/:id/seats":"0.87/1.28/1.41","GET /api/z/:id/results":"0.07/0.1/0.28","GET /api/z/:id/cv":"0.01/0.02/0.04","POST /api/z/:id/join (already joined)":"0.77/1.01/2.31","POST /api/z/:id/claims (a repeat of a true claim)":"0.75/3.17/11.81","POST /api/z/:id/presence":"0.38/0.44/0.48","POST /api/z/:id/control (signature of a stranger)":"0.59/0.68/0.72","POST /api/z/:id/control (a real signature)":"0.63/1.19/2.3"}` |
+| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 47.6 / 680 |
+| Store writes | 3627 = 4.5% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
 
 Game-specific measurements:
 
@@ -462,8 +462,8 @@ Game-specific measurements:
 | fullAnswer | 409 This game is full. Please tell your organizer so they can make room. |
 | leaveDone | true |
 | rejoinDone | true |
-| late | `{"joined":60,"withHiddenNumbers":59,"hiddenAvg":31.9,"wonAnything":0}` |
-| offline | `{"phones":25,"caughtUp":24,"notCaught":["9100000203 phase=play log=0 blocked=true liar=false off=1200000-1440000 t=1878000"]}` |
+| late | `{"joined":60,"withHiddenNumbers":59,"hiddenAvg":28.7,"wonAnything":0}` |
+| offline | `{"phones":25,"caughtUp":24,"notCaught":["9100000203 phase=play log=0 blocked=true liar=false off=1260000-1560000 t=1890000"]}` |
 | retention | `{"endMs":1795170972000,"deletedAtIST":"2027-11-21T00:00:00.000 IST","stillThere5MinBefore":true,"leftoverRows":{},"keptOnPurpose":{"entitlement":1,"audit_cert":1,"audit_stats":1,"game_record":1},"leftoverKvKeys":[]}` |
 
 Fairness checks (nobody could predict or alter the numbers):
@@ -471,7 +471,7 @@ Fairness checks (nobody could predict or alter the numbers):
 | Check | Result | Detail |
 |---|---|---|
 | every phone's number log equals the log re-derived from the public beacon alone | PASS |  |
-| before the first number, none of the 9045 store answers held the game's numbers | PASS |  |
+| before the first number, none of the 9269 store answers held the game's numbers | PASS |  |
 | the store keeps no copy of the numbers (82 tables searched for the first 8 called numbers in order) | PASS |  |
 | a pause signed with a key the game does not know is refused | PASS |  |
 | a signed message whose round was changed afterwards is refused | PASS |  |
@@ -488,13 +488,13 @@ Game checks:
 | players joined (250 of 250) | PASS | 250 |
 | the store holds exactly the people who joined (no duplicates) | PASS | 250 vs 250 |
 | prizes were published | PASS | 7 |
-| published winners equal the winners worked out from the public numbers and tickets | PASS | want bot#1@38 corners#1@32 early5#1@6 full#1@59 full#2@70 mid#1@36 top#1@28 / got bot#1@38 corners#1@32 early5#1@6 full#1@59 full#2@70 mid#1@36 top#1@28 |
-| late joiners joined and play from their own first number | PASS | {"joined":60,"withHiddenNumbers":59,"hiddenAvg":31.9,"wonAnything":0} |
+| published winners equal the winners worked out from the public numbers and tickets | PASS | want bot#1@34 corners#1@32 early5#1@10 full#1@70 full#2@71 mid#1@32 top#1@28 / got bot#1@34 corners#1@32 early5#1@10 full#1@70 full#2@71 mid#1@32 top#1@28 |
+| late joiners joined and play from their own first number | PASS | {"joined":60,"withHiddenNumbers":59,"hiddenAvg":28.7,"wonAnything":0} |
 | a new phone with the same number was refused until the Organizer moved the ticket | PASS | {"tried":10,"refusedOtherPhone":10,"afterUnbindJoined":10,"sameTicket":10,"unbind":[200,200,200,200,200,200,200,200,200,200]} |
 | after the Organizer moved the ticket the new phone got the SAME ticket | PASS | {"tried":10,"refusedOtherPhone":10,"afterUnbindJoined":10,"sameTicket":10,"unbind":[200,200,200,200,200,200,200,200,200,200]} |
 | players who pressed leave were taken out and their details deleted at once | PASS | {"tried":5,"ok":5,"rejoinTried":5,"rejoinAnswer":["You were removed from this game by the organizer.","You were removed from this game by the organizer.","You w |
 | the 251st person is refused politely while all 250 places are taken | PASS | 409 This game is full. Please tell your organizer so they can make room. |
-| phones that were offline caught up to the same numbers when they came back | PASS | {"phones":25,"caughtUp":24,"notCaught":["9100000203 phase=play log=0 blocked=true liar=false off=1200000-1440000 t=1878000"]} |
+| phones that were offline caught up to the same numbers when they came back | PASS | {"phones":25,"caughtUp":24,"notCaught":["9100000203 phase=play log=0 blocked=true liar=false off=1260000-1560000 t=1890000"]} |
 | 365 days later: the game is kept until 00:00 IST of its last day and then everything of it is deleted, except the records kept on purpose | PASS | before=1 leftovers={} [] |
 
 Errors the Worker answered (grouped):
@@ -502,6 +502,7 @@ Errors the Worker answered (grouped):
 | Status | Route | Message | Count |
 |---|---|---|---|
 | 423 | POST /api/z/:id/join | This ticket was opened in a different browser or app (or on another phone). A ticket plays on one device only. Open your link in the same browser or app you use | 10 |
+| 409 | POST /api/z/:id/claims | Ohooo! 😊 Sorry, you pressed Claim after the next number was announced. This claim cannot be made. | 1 |
 | 409 | POST /api/z/:id/join | This game is full. Please tell your organizer so they can make room. | 1 |
 | 403 | POST /api/z/:id/join | You were removed from this game by the organizer. | 5 |
 | 403 | POST /api/z/:id/control | Signature does not match the organizer key. | 2 |
@@ -514,28 +515,28 @@ Game id `G250-07`. Mode: pauses: timed (auto-resume), open-ended + manual resume
 
 | What | Result |
 |---|---|
-| Players joined | 250 of 250 (not joined: 0; join retries: 1) |
+| Players joined | 250 of 250 (not joined: 0; join retries: 6) |
 | First / last player joined at (virtual minutes after the game was made) | 0.6 / 10.5 |
 | Players checked in (present check) | 250 |
 | Join refusals seen | `[]` |
-| Claims stored | 1457 |
-| Claim requests answered too late (409) | 0 |
-| Claims by house | `{"bot":243,"corners":243,"early5":243,"full":242,"mid":243,"top":243}` |
+| Claims stored | 1450 |
+| Claim requests answered too late (409) | 4 |
+| Claims by house | `{"bot":242,"corners":243,"early5":243,"full":239,"mid":242,"top":241}` |
 | Wrong claims (Bogeys) | 0 |
 | Phones that pressed Claim | 243 |
 | Prizes published | 7: bot#1@30, corners#1@21x2, early5#1@8, full#1@58, full#2@66, mid#1@35, top#1@29 |
 | Numbers called | 90 |
 | First number at (virtual minutes after the game was made) | 17 |
 | Game length, first number to all phones ended (virtual minutes) | 24 |
-| Test run length (real seconds) | 73.7 |
-| Requests to the Worker | 196648 |
+| Test run length (real seconds) | 100.7 |
+| Requests to the Worker | 194703 |
 | Outbound network requests made by the test (must be 0) | 0 |
-| Responses other than 200 | `{"200":196627,"400":2,"403":4,"404":9,"422":6}` |
-| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 297 / 9 of 196648 |
-| Slowest request CPU in the crowd (ms, upper bound) | 158.9 |
-| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.23/1.69/1.91","GET /api/z/:id/control":"0.04/0.11/0.16","GET /api/z/:id/seats":"0.67/0.96/1.04","GET /api/z/:id/results":"0.05/0.31/1.2","GET /api/z/:id/cv":"0.01/0.03/0.09","POST /api/z/:id/join (already joined)":"0.76/1.29/3.97","POST /api/z/:id/claims (a repeat of a true claim)":"0.76/1.07/1.14","POST /api/z/:id/presence":"0.52/0.87/1.31","POST /api/z/:id/control (signature of a stranger)":"0.93/1.18/1.31","POST /api/z/:id/control (a real signature)":"0.77/1.11/2.15"}` |
-| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 86.9 / 907 |
-| Store writes | 4625 = 5.8% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
+| Responses other than 200 | `{"200":194678,"400":2,"403":4,"404":9,"409":4,"422":6}` |
+| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 543 / 15 of 194703 |
+| Slowest request CPU in the crowd (ms, upper bound) | 172.5 |
+| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.31/1.8/4.41","GET /api/z/:id/control":"0.07/0.11/0.13","GET /api/z/:id/seats":"1.05/1.58/2.06","GET /api/z/:id/results":"0.08/0.1/1.23","GET /api/z/:id/cv":"0.01/0.07/0.22","POST /api/z/:id/join (already joined)":"1.24/1.91/2","POST /api/z/:id/claims (a repeat of a true claim)":"1.3/10.79/13.5","POST /api/z/:id/presence":"0.77/1.15/1.38","POST /api/z/:id/control (signature of a stranger)":"1.44/2.55/13.83","POST /api/z/:id/control (a real signature)":"1.07/1.29/2.82"}` |
+| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 112.2 / 955 |
+| Store writes | 4618 = 5.8% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
 
 Game-specific measurements:
 
@@ -568,7 +569,7 @@ Fairness checks (nobody could predict or alter the numbers):
 |---|---|---|
 | every phone's number log equals the log re-derived from the public beacon alone | PASS |  |
 | a Resume or an Extend that names a round that has already begun (its beacon number is public) is refused, so nobody can pick the round the numbers restart from | PASS |  |
-| before the first number, none of the 12453 store answers held the game's numbers | PASS |  |
+| before the first number, none of the 11953 store answers held the game's numbers | PASS |  |
 | the store keeps no copy of the numbers (82 tables searched for the first 8 called numbers in order) | PASS |  |
 | a pause signed with a key the game does not know is refused | PASS |  |
 | a signed message whose round was changed afterwards is refused | PASS |  |
@@ -600,6 +601,7 @@ Errors the Worker answered (grouped):
 | 422 | POST /api/z/:id/control | Not accepted: resume before the pause began. | 1 |
 | 422 | POST /api/z/:id/control | Not accepted: already paused. | 2 |
 | 422 | POST /api/z/:id/control | Not accepted: it names a round that has already begun, so its random number could already be known. Please press again. | 3 |
+| 409 | POST /api/z/:id/claims | Ohooo! 😊 Sorry, you pressed Claim after the next number was announced. This claim cannot be made. | 4 |
 | 400 | POST /api/z/:id/control | Malformed control message. | 2 |
 | 403 | PATCH /api/z/:id/settings | Not allowed. | 1 |
 
@@ -609,28 +611,28 @@ Game id `G250-08`. Mode: tickets: 2 each; ties: next (one after the other by pub
 
 | What | Result |
 |---|---|
-| Players joined | 250 of 250 (not joined: 0; join retries: 1) |
+| Players joined | 250 of 250 (not joined: 0; join retries: 3) |
 | First / last player joined at (virtual minutes after the game was made) | 0.6 / 10.5 |
 | Players checked in (present check) | 250 |
 | Join refusals seen | `[]` |
-| Claims stored | 3162 |
-| Claim requests answered too late (409) | 0 |
-| Claims by house | `{"bot":161,"corners":209,"early10":243,"early5":243,"early7":243,"even5":241,"frame":86,"full":50,"full2":2,"high5":179,"low5":183,"mid":170,"midcorners":115,"odd5":238,"plus":123,"star":179,"top":205,"topbottom":112,"twolines":180}` |
+| Claims stored | 3086 |
+| Claim requests answered too late (409) | 1 |
+| Claims by house | `{"bot":150,"corners":208,"early10":243,"early5":243,"early7":243,"even5":240,"frame":78,"full":42,"full2":3,"high5":177,"low5":186,"mid":167,"midcorners":111,"odd5":237,"plus":111,"star":175,"top":200,"topbottom":103,"twolines":169}` |
 | Wrong claims (Bogeys) | 0 |
 | Phones that pressed Claim | 243 |
-| Prizes published | 54: bot#1@32, bot#2@38, corners#1@21, corners#2@29, early10#1@27, early5#1@6, early5#2@9, early5#3@10, early5#4@11, early5#5@11, early5#6@11, early5#7@12, early5#8@12, early5#9@12, early5#10@12, early5#11@12, early5#12@12, early5#13@13, early5#14@13, early5#15@13, early5#16@13, early5#17@14, early5#18@14, early5#19@14, early5#20@14, early5#21@14, early5#22@14, early5#23@14, early5#24@14, early5#25@15, early7#1@12, early7#2@16, even5#1@18, frame#1@60, full#1@65, full#2@66, full#3@68, full#4@69, full2#1@77, high5#1@24, low5#1@20, mid#1@20, mid#2@25, midcorners#1@49, odd5#1@19, plus#1@42, star#1@21, top#1@30, top#2@35, top#3@40, topbottom#1@59, twolines#1@43, twolines#2@49, unlucky#1@65 |
-| Numbers called | 82 |
+| Prizes published | 54: bot#1@32, bot#2@38, corners#1@21, corners#2@29, early10#1@27, early5#1@6, early5#2@9, early5#3@10, early5#4@11, early5#5@11, early5#6@11, early5#7@12, early5#8@12, early5#9@12, early5#10@12, early5#11@12, early5#12@12, early5#13@13, early5#14@13, early5#15@13, early5#16@13, early5#17@14, early5#18@14, early5#19@14, early5#20@14, early5#21@14, early5#22@14, early5#23@14, early5#24@14, early5#25@15, early7#1@12, early7#2@16, even5#1@18, frame#1@60, full#1@65, full#2@66, full#3@68, full#4@69, full2#1@76, high5#1@24, low5#1@20, mid#1@25, mid#2@27, midcorners#1@49, odd5#1@19, plus#1@41, star#1@21, top#1@30, top#2@34, top#3@35, topbottom#1@59, twolines#1@43, twolines#2@49, unlucky#1@65 |
+| Numbers called | 81 |
 | First number at (virtual minutes after the game was made) | 17 |
-| Game length, first number to all phones ended (virtual minutes) | 16.2 |
-| Test run length (real seconds) | 596.4 |
-| Requests to the Worker | 145409 |
+| Game length, first number to all phones ended (virtual minutes) | 16 |
+| Test run length (real seconds) | 716.3 |
+| Requests to the Worker | 143395 |
 | Outbound network requests made by the test (must be 0) | 0 |
-| Responses other than 200 | `{"200":145395,"400":2,"403":3,"404":9}` |
-| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 6412 / 400 of 145409 |
-| Slowest request CPU in the crowd (ms, upper bound) | 5393.9 |
-| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.74/2.44/3.66","GET /api/z/:id/control":"0.13/0.89/1.97","GET /api/z/:id/seats":"0.87/1.09/1.19","GET /api/z/:id/results":"0.23/0.3/0.39","GET /api/z/:id/cv":"0.01/0.05/0.13","POST /api/z/:id/join (already joined)":"1.08/2.15/3.24","POST /api/z/:id/claims (a repeat of a true claim)":"0.93/9.59/19.81","POST /api/z/:id/presence":"0.44/0.77/8.74","POST /api/z/:id/control (signature of a stranger)":"0.86/1.28/2.48","POST /api/z/:id/control (a real signature)":"0.8/1.57/1.67"}` |
-| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 641.1 / 1522 |
-| Store writes | 8109 = 10.1% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
+| Responses other than 200 | `{"200":143380,"400":2,"403":3,"404":9,"409":1}` |
+| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 7993 / 564 of 143395 |
+| Slowest request CPU in the crowd (ms, upper bound) | 5584.1 |
+| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"1.22/2.22/2.72","GET /api/z/:id/control":"0.12/0.16/0.22","GET /api/z/:id/seats":"0.91/1.35/1.44","GET /api/z/:id/results":"0.25/0.34/0.38","GET /api/z/:id/cv":"0.01/0.04/0.15","POST /api/z/:id/join (already joined)":"1.12/1.57/1.81","POST /api/z/:id/claims (a repeat of a true claim)":"0.88/3.48/72.05","POST /api/z/:id/presence":"0.5/0.74/2.43","POST /api/z/:id/control (signature of a stranger)":"1.08/1.96/12.69","POST /api/z/:id/control (a real signature)":"2.58/6.88/30.36"}` |
+| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 790 / 1633 |
+| Store writes | 8027 = 10% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
 
 Game-specific measurements:
 
@@ -639,7 +641,7 @@ Game-specific measurements:
 | rewardLines | 54 |
 | positionsOnSameCall | `["early5@10x3","early5@11x6","early5@12x4","early5@13x8"]` |
 | earlyFiveOrdinals | 25 |
-| reportNames | `["1st Early Five","2nd Early Five","3rd Early Five","4th Early Five","5th Early Five","6th Early Five","7th Early Five","8th Early Five","9th Early Five","10th Early Five","11th Early Five","12th Early Five","1st Early Seven","13th Early Five","14th Early Five","15th Early Five","16th Early Five","17th Early Five","18th Early Five","19th Early Five","20th Early Five","21st Early Five","22nd Early Five","23rd Early Five","24th Early Five","25th Early Five","2nd Early Seven","1st Middle Line","1st Four Corners","2nd Middle Line"]` |
+| reportNames | `["1st Early Five","2nd Early Five","3rd Early Five","4th Early Five","5th Early Five","6th Early Five","7th Early Five","8th Early Five","9th Early Five","10th Early Five","11th Early Five","12th Early Five","1st Early Seven","13th Early Five","14th Early Five","15th Early Five","16th Early Five","17th Early Five","18th Early Five","19th Early Five","20th Early Five","21st Early Five","22nd Early Five","23rd Early Five","24th Early Five","25th Early Five","2nd Early Seven","1st Four Corners","1st Middle Line","2nd Middle Line"]` |
 | retention | `{"endMs":1795170966000,"deletedAtIST":"2027-11-21T00:00:00.000 IST","stillThere5MinBefore":true,"leftoverRows":{},"keptOnPurpose":{"entitlement":1,"audit_cert":1,"audit_stats":1,"game_record":1},"leftoverKvKeys":[]}` |
 
 Fairness checks (nobody could predict or alter the numbers):
@@ -647,7 +649,7 @@ Fairness checks (nobody could predict or alter the numbers):
 | Check | Result | Detail |
 |---|---|---|
 | every phone's number log equals the log re-derived from the public beacon alone | PASS |  |
-| before the first number, none of the 12453 store answers held the game's numbers | PASS |  |
+| before the first number, none of the 12202 store answers held the game's numbers | PASS |  |
 | the store keeps no copy of the numbers (82 tables searched for the first 8 called numbers in order) | PASS |  |
 | a pause signed with a key the game does not know is refused | PASS |  |
 | a signed message whose round was changed afterwards is refused | PASS |  |
@@ -675,6 +677,7 @@ Errors the Worker answered (grouped):
 
 | Status | Route | Message | Count |
 |---|---|---|---|
+| 409 | POST /api/z/:id/claims | Ohooo! 😊 Sorry, you pressed Claim after the next number was announced. This claim cannot be made. | 1 |
 | 403 | POST /api/z/:id/control | Signature does not match the organizer key. | 2 |
 | 400 | POST /api/z/:id/control | Malformed control message. | 2 |
 | 403 | PATCH /api/z/:id/settings | Not allowed. | 1 |
@@ -685,28 +688,28 @@ Game id `G250-09`. Mode: mail: Organizer, Host, players (with e-mail), winners; 
 
 | What | Result |
 |---|---|
-| Players joined | 250 of 250 (not joined: 0; join retries: 1) |
-| First / last player joined at (virtual minutes after the game was made) | 0.6 / 10.5 |
+| Players joined | 250 of 250 (not joined: 0; join retries: 5) |
+| First / last player joined at (virtual minutes after the game was made) | 0.6 / 11.4 |
 | Players checked in (present check) | 250 |
 | Join refusals seen | `[]` |
-| Claims stored | 454 |
+| Claims stored | 453 |
 | Claim requests answered too late (409) | 0 |
-| Claims by house | `{"bot":64,"corners":54,"early5":242,"full":3,"mid":47,"top":44}` |
+| Claims by house | `{"bot":64,"corners":53,"early5":243,"full":3,"mid":46,"top":44}` |
 | Wrong claims (Bogeys) | 0 |
-| Phones that pressed Claim | 242 |
+| Phones that pressed Claim | 243 |
 | Prizes published | 7: bot#1@20, corners#1@24x2, early5#1@11, full#1@61, full#2@65, mid#1@26, top#1@39 |
-| Numbers called | 71 |
+| Numbers called | 68 |
 | First number at (virtual minutes after the game was made) | 17 |
-| Game length, first number to all phones ended (virtual minutes) | 14 |
-| Test run length (real seconds) | 34.7 |
-| Requests to the Worker | 115931 |
+| Game length, first number to all phones ended (virtual minutes) | 13.5 |
+| Test run length (real seconds) | 39.6 |
+| Requests to the Worker | 114072 |
 | Outbound network requests made by the test (must be 0) | 0 |
-| Responses other than 200 | `{"200":115915,"400":3,"403":4,"404":9}` |
-| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 203 / 8 of 115931 |
-| Slowest request CPU in the crowd (ms, upper bound) | 130.8 |
-| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.17/0.29/9.81","GET /api/z/:id/control":"0.06/0.2/7.98","GET /api/z/:id/seats":"0.69/4.74/5.02","GET /api/z/:id/results":"0.05/0.1/0.13","GET /api/z/:id/cv":"0.01/0.03/0.07","POST /api/z/:id/join (already joined)":"0.87/3.06/4.58","POST /api/z/:id/claims (a repeat of a true claim)":"0.82/3.84/7.47","POST /api/z/:id/presence":"0.41/0.5/0.89","POST /api/z/:id/control (signature of a stranger)":"0.81/1.55/1.89","POST /api/z/:id/control (a real signature)":"0.82/1.29/7.92"}` |
-| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 41.9 / 620 |
-| Store writes | 3564 = 4.5% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
+| Responses other than 200 | `{"200":114056,"400":3,"403":4,"404":9}` |
+| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 249 / 11 of 114072 |
+| Slowest request CPU in the crowd (ms, upper bound) | 202.2 |
+| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.2/0.49/0.9","GET /api/z/:id/control":"0.06/0.09/0.11","GET /api/z/:id/seats":"1.29/1.45/1.86","GET /api/z/:id/results":"0.11/0.16/0.22","GET /api/z/:id/cv":"0.01/0.02/0.05","POST /api/z/:id/join (already joined)":"0.98/1.51/8.81","POST /api/z/:id/claims (a repeat of a true claim)":"0.69/1.1/1.64","POST /api/z/:id/presence":"0.56/0.65/0.71","POST /api/z/:id/control (signature of a stranger)":"1.25/5.71/7.2","POST /api/z/:id/control (a real signature)":"0.91/1.19/1.54"}` |
+| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 45.3 / 1703 |
+| Store writes | 3563 = 4.5% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
 
 Game-specific measurements:
 
@@ -715,12 +718,12 @@ Game-specific measurements:
 | announce | `[{"name":"Organizer","status":200,"atSimMin":17.8},{"name":"Host","status":200,"atSimMin":20.8}]` |
 | a1 | true |
 | a1seen | true |
-| a1seenCount | 242 |
+| a1seenCount | 238 |
 | a1seenAtSimMin | 17.9 |
 | a2 | true |
 | a2from | 1248000 |
 | a2seen | true |
-| a2seenCount | 241 |
+| a2seenCount | 237 |
 | a2lagSec | 3 |
 | a3 | true |
 | tooLongStatus | 400 |
@@ -731,15 +734,15 @@ Game-specific measurements:
 | prizesListed | 8 |
 | prizesKeys | `["prizes"]` |
 | prizesMarkedGiven | 8 |
-| mail | `{"attemptsTotal":3,"distinctMails":2,"deliveredOnce":2,"neverDelivered":[],"refused429":1,"refused500":0,"retriedToSuccess":1,"bySubject":[{"subject":"[Tambola] You are a Host: your Corporate Tambola link","n":1,"recipients":["h***@acme.com"]},{"subject":"[Tambola] Your game report is ready: <id> (<id>), # Nov #","n":1,"recipients":["d***@xyz.in"]}],"sentToPlayers":0,"sentToOrganizer":1,"sentToHost":1,"bodiesWithPlayerMobile":0,"bodiesWithPlayerEmail":0,"outboxByState":[{"sent":1,"n":1}],"mailEvents":[]}` |
-| retention | `{"endMs":1795170966000,"deletedAtIST":"2027-11-21T00:00:00.000 IST","stillThere5MinBefore":true,"leftoverRows":{},"keptOnPurpose":{"entitlement":1,"outbox":1,"audit_cert":1,"audit_stats":1,"game_record":1,"mail_track":1},"leftoverKvKeys":[]}` |
+| mail | `{"attemptsTotal":5,"distinctMails":2,"deliveredOnce":2,"neverDelivered":[],"refused429":1,"refused500":2,"retriedToSuccess":2,"bySubject":[{"subject":"[Tambola] You are a Host: your Corporate Tambola link","n":1,"recipients":["h***@acme.com"]},{"subject":"[Tambola] Your game report is ready: <id> (<id>), # Nov #","n":1,"recipients":["d***@xyz.in"]}],"sentToPlayers":0,"sentToOrganizer":1,"sentToHost":1,"bodiesWithPlayerMobile":0,"bodiesWithPlayerEmail":0,"outboxByState":[{"sent":1,"n":1}],"mailEvents":[]}` |
+| retention | `{"endMs":1795170972000,"deletedAtIST":"2027-11-21T00:00:00.000 IST","stillThere5MinBefore":true,"leftoverRows":{},"keptOnPurpose":{"entitlement":1,"outbox":1,"audit_cert":1,"audit_stats":1,"game_record":1,"mail_track":1},"leftoverKvKeys":[]}` |
 
 Fairness checks (nobody could predict or alter the numbers):
 
 | Check | Result | Detail |
 |---|---|---|
 | every phone's number log equals the log re-derived from the public beacon alone | PASS |  |
-| before the first number, none of the 12453 store answers held the game's numbers | PASS |  |
+| before the first number, none of the 12297 store answers held the game's numbers | PASS |  |
 | the store keeps no copy of the numbers (82 tables searched for the first 8 called numbers in order) | PASS |  |
 | a pause signed with a key the game does not know is refused | PASS |  |
 | a signed message whose round was changed afterwards is refused | PASS |  |
@@ -761,8 +764,8 @@ Game checks:
 | the Organizer got the publish and report mails | PASS | [Tambola] Your game report is ready: G250-09 (G250-09), 20 Nov 2026 |
 | the Host got their link mail | PASS | [Tambola] You are a Host: your Corporate Tambola link |
 | no mail carries a player's mobile number or e-mail address | PASS | 0 / 0 |
-| the Organizer's message reached 150+ phones | PASS | 242 |
-| the Host's message reached 150+ phones | PASS | 241 lag 3s |
+| the Organizer's message reached 150+ phones | PASS | 238 |
+| the Host's message reached 150+ phones | PASS | 237 lag 3s |
 | a 200-character message and a stranger's message are refused | PASS | 400 403 |
 | every winner could confirm their name and number on their own phone | PASS | 7/7  |
 | the Organizer listed the prizes and ticked them as given | PASS | 8 listed 8 ticked ["prizes"] |
@@ -784,28 +787,28 @@ Game id `G250-10`. Mode: organizer stops the game; report; +20h personal data de
 
 | What | Result |
 |---|---|
-| Players joined | 250 of 250 (not joined: 0; join retries: 8) |
-| First / last player joined at (virtual minutes after the game was made) | 0.6 / 10.5 |
+| Players joined | 250 of 250 (not joined: 0; join retries: 13) |
+| First / last player joined at (virtual minutes after the game was made) | 0.6 / 10.8 |
 | Players checked in (present check) | 250 |
 | Join refusals seen | `[]` |
-| Claims stored | 270 |
-| Claim requests answered too late (409) | 0 |
-| Claims by house | `{"bot":4,"corners":15,"early5":234,"mid":6,"top":11}` |
+| Claims stored | 267 |
+| Claim requests answered too late (409) | 1 |
+| Claims by house | `{"bot":4,"corners":14,"early5":233,"mid":6,"top":10}` |
 | Wrong claims (Bogeys) | 0 |
-| Phones that pressed Claim | 234 |
-| Prizes published | 5: bot#1@18, corners#1@20x2, early5#1@6, mid#1@31, top#1@28 |
+| Phones that pressed Claim | 233 |
+| Prizes published | 5: bot#1@18, corners#1@20x2, early5#1@9, mid#1@31, top#1@28 |
 | Numbers called | 43 |
 | First number at (virtual minutes after the game was made) | 17 |
 | Game length, first number to all phones ended (virtual minutes) | 8.4 |
-| Test run length (real seconds) | 30 |
-| Requests to the Worker | 85980 |
+| Test run length (real seconds) | 32.9 |
+| Requests to the Worker | 84922 |
 | Outbound network requests made by the test (must be 0) | 0 |
-| Responses other than 200 | `{"200":85974,"403":2,"404":4}` |
-| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 170 / 32 of 85980 |
-| Slowest request CPU in the crowd (ms, upper bound) | 281.2 |
-| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.14/0.22/0.33","GET /api/z/:id/control":"0.04/0.08/0.15","GET /api/z/:id/seats":"0.54/0.62/0.65","GET /api/z/:id/results":"0.05/0.13/0.19","GET /api/z/:id/cv":"0.01/0.02/0.08","POST /api/z/:id/join (already joined)":"0.73/1.03/8.38","POST /api/z/:id/claims (a repeat of a true claim)":"0.89/1.3/5.97","POST /api/z/:id/presence":"0.59/0.67/0.74","POST /api/z/:id/control (signature of a stranger)":"0.66/0.96/1.86","POST /api/z/:id/control (a real signature)":"0.54/0.68/15.78"}` |
-| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 32.1 / 831 |
-| Store writes | 3277 = 4.1% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
+| Responses other than 200 | `{"200":84915,"403":2,"404":4,"409":1}` |
+| Requests over 10 ms CPU (in the crowd, upper bound) / over 50 ms | 268 / 32 of 84922 |
+| Slowest request CPU in the crowd (ms, upper bound) | 170.7 |
+| Isolated request CPU, ms (p50/p95/max) | `{"GET /api/z/:id/info":"0.18/0.31/1.05","GET /api/z/:id/control":"0.06/0.09/0.12","GET /api/z/:id/seats":"0.57/0.67/1","GET /api/z/:id/results":"0.06/0.08/0.09","GET /api/z/:id/cv":"0.01/0.03/0.04","POST /api/z/:id/join (already joined)":"0.65/1/1.43","POST /api/z/:id/claims (a repeat of a true claim)":"0.92/1.06/1.43","POST /api/z/:id/presence":"0.61/0.71/14.9","POST /api/z/:id/control (signature of a stranger)":"1.19/1.32/2.04","POST /api/z/:id/control (a real signature)":"1.01/1.34/8.02"}` |
+| Process CPU for the whole run (s) / peak memory (MB, whole test process) | 36 / 1003 |
+| Store writes | 3276 = 4.1% of the 80,000 a day the Worker allows itself (the free D1 plan is 100,000) |
 
 Game-specific measurements:
 
@@ -822,7 +825,7 @@ Game-specific measurements:
 | reportMs | 1795171299000 |
 | reportState | sent |
 | reportAfterEndMin | 15.2 |
-| reportMails | `[{"to":"d***@xyz.in","subject":"[Tambola] Your game report is ready: G250-10 (G250-10), 20 Nov 2026","bytes":34989,"attachments":0}]` |
+| reportMails | `[{"to":"d***@xyz.in","subject":"[Tambola] Your game report is ready: G250-10 (G250-10), 20 Nov 2026","bytes":34893,"attachments":0}]` |
 | reportApi | `{"status":200,"people":250,"totalPeople":250,"winners":7}` |
 | reportAfterDelete | 404 |
 | resultsAfterDelete | 0 |
@@ -840,9 +843,9 @@ Data held over time:
 
 | When after the end | Players held | Seats with a number | List rows | Check-ins | Claims | Prize rows | Report parts | Audit (personal) | Game rows | Settings record |
 |---|---|---|---|---|---|---|---|---|---|---|
-| report ready (0.25 h) | 250 | 250 | 250 | 250 | 270 | 6 | 1 | 2276 | 1 | 1 |
-| +18h (18 h) | 250 | 250 | 250 | 250 | 270 | 6 | 1 | 2276 | 1 | 1 |
-| +19.5h (19.5 h) | 250 | 250 | 250 | 250 | 270 | 6 | 1 | 2276 | 1 | 1 |
+| report ready (0.25 h) | 250 | 250 | 250 | 250 | 267 | 6 | 1 | 2273 | 1 | 1 |
+| +18h (18 h) | 250 | 250 | 250 | 250 | 267 | 6 | 1 | 2273 | 1 | 1 |
+| +19.5h (19.5 h) | 250 | 250 | 250 | 250 | 267 | 6 | 1 | 2273 | 1 | 1 |
 | +20.1h (20.1 h) | 0 | 0 | 0 | 0 | 0 | 6 | 0 | 0 | 1 | 1 |
 | +30d (720 h) | 0 | 0 | 0 | 0 | 0 | 6 | 0 | 0 | 1 | 1 |
 | +365d -2h (8766.06 h) | 0 | 0 | 0 | 0 | 0 | 6 | 0 | 0 | 1 | 1 |
@@ -853,7 +856,7 @@ Fairness checks (nobody could predict or alter the numbers):
 | Check | Result | Detail |
 |---|---|---|
 | every phone's number log equals the log re-derived from the public beacon alone | PASS |  |
-| before the first number, none of the 12412 store answers held the game's numbers | PASS |  |
+| before the first number, none of the 12069 store answers held the game's numbers | PASS |  |
 | the store keeps no copy of the numbers (82 tables searched for the first 8 called numbers in order) | PASS |  |
 
 Game checks:
@@ -863,14 +866,14 @@ Game checks:
 | players joined (250 of 250) | PASS | 250 |
 | the store holds exactly the people who joined (no duplicates) | PASS | 250 vs 250 |
 | prizes were published | PASS | 5 |
-| published winners equal the winners worked out from the public numbers and tickets | PASS | want bot#1@17 corners#1@19 early5#1@5 mid#1@30 top#1@27 / got bot#1@17 corners#1@19 early5#1@5 mid#1@30 top#1@27 |
+| published winners equal the winners worked out from the public numbers and tickets | PASS | want bot#1@17 corners#1@19 early5#1@8 mid#1@30 top#1@27 / got bot#1@17 corners#1@19 early5#1@8 mid#1@30 top#1@27 |
 | the Organizer's Stop was accepted and every phone stopped | PASS | 200  |
 | no report was made one minute after the end (it waits 3 minutes so late wins are in) | PASS | sim time at the first tick was 11.2 min after the scheduled end |
-| the Organizer's report was e-mailed after the end | PASS | [{"to":"d***@xyz.in","subject":"[Tambola] Your game report is ready: G250-10 (G250-10), 20 Nov 2026","bytes":34989,"attachments":0}] |
+| the Organizer's report was e-mailed after the end | PASS | [{"to":"d***@xyz.in","subject":"[Tambola] Your game report is ready: G250-10 (G250-10), 20 Nov 2026","bytes":34893,"attachments":0}] |
 | the report link works and lists the people (names and numbers) while the data is kept | PASS | {"status":200,"people":250,"totalPeople":250,"winners":7} |
 | a wrong report key is refused | PASS | 403 |
 | the report link works at 18 hours and is closed at 19.5 hours | PASS | 200 / 404 |
-| at 19.5 hours the players' details are still held (deleted at 20 h) | PASS | {"label":"+19.5h","atH":19.5,"participants":250,"seats_with_ph":250,"people_list":250,"checkins":250,"claims":270,"prizeRows":6,"reportChunks":1,"auditPii":2276 |
+| at 19.5 hours the players' details are still held (deleted at 20 h) | PASS | {"label":"+19.5h","atH":19.5,"participants":250,"seats_with_ph":250,"people_list":250,"checkins":250,"claims":267,"prizeRows":6,"reportChunks":1,"auditPii":2273 |
 | 20 hours after the end every player's name, number, seat details and check-in are deleted | PASS | {"label":"+20.1h","atH":20.1,"participants":0,"seats_with_ph":0,"people_list":0,"checkins":0,"claims":0,"prizeRows":6,"reportChunks":0,"auditPii":0,"engagement" |
 | the players' personal part of the audit log is shredded | PASS | 0 |
 | the winners' record (seat, prize, round) is kept | PASS | {"label":"+20.1h","atH":20.1,"participants":0,"seats_with_ph":0,"people_list":0,"checkins":0,"claims":0,"prizeRows":6,"reportChunks":0,"auditPii":0,"engagement" |
@@ -883,6 +886,7 @@ Errors the Worker answered (grouped):
 
 | Status | Route | Message | Count |
 |---|---|---|---|
+| 409 | POST /api/z/:id/claims | Ohooo! 😊 Sorry, you pressed Claim after the next number was announced. This claim cannot be made. | 1 |
 | 403 | GET /api/report/G250-10 | This report link is not valid. | 1 |
 | 404 | GET /api/report/G250-10 | This report is not ready, or the link has closed and the participants' details are being or have been deleted (that happens within 24 hours of the game ending,  | 2 |
 | 403 | POST /api/z/:id/datareq | This is not the phone that holds this ticket. Nobody can ask for another player. | 1 |
