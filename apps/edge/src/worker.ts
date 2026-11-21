@@ -1973,7 +1973,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     return reply(row.pid, { jr: row.jr ?? 0, ...(row.role ? { role: row.role } : {}) }); // (the K4 consent record went in with the seat, in the same batch)
   }
   if ((action === "leave" || action === "datareq") && req.method === "POST") { // a player's own rights (rights.ts): leave at any time, and "what do you hold about me / correct / delete me"; the player's card id AND their phone's own device id are the proof
-    const rc = { env: env as PayEnv, db: env.DB, e, eid: eid!, now, started: now >= roundMs(e.start_round), b: await body(req, 2_048), json, gameName: cfgOf(e).name || e.id, orgEmail: async () => (await teamEmails(env as PayEnv, e.org, e.id)).organizer, erasureMs: () => erasureOf(env, e, now), spend: (n: number) => spend(env, now, n) };
+    const rc = { env: env as PayEnv, db: env.DB, e, eid: eid!, now, started: now >= roundMs(e.start_round), b: await body(req, 2_048), json, ip: req.headers.get("cf-connecting-ip") ?? "local", gameName: cfgOf(e).name || e.id, orgEmail: async () => (await teamEmails(env as PayEnv, e.org, e.id)).organizer, erasureMs: () => erasureOf(env, e, now), spend: (n: number) => spend(env, now, n) };
     return action === "leave" ? leaveRoute(rc) : requestRoute(rc);
   }
   if (action === "seats" && req.method === "GET") {

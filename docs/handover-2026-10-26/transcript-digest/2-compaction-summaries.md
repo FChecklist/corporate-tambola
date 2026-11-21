@@ -56,7 +56,7 @@ Summary:
    - (pasted path) "C:\ct\ct\.claude\worktrees\goofy-northcutt-3d4a48\docs\AUDIT_ALL_PRODUCTS_2026-10-23.md" + pasted previous summary
    - (pasted prior final report with no instruction)
    - "make checklist of tasks to be done, uncommited changes, and complete everythng"
-   - "hello@ forwarding - we use one email id - hello@corporatetambola.com for all 5 games / for dpdp - hello@veridian-aios.com / hello@rajatsir.com for startup / an uptime alarm - make it / lawyer/CA sign-off - i gave explicit instructions publish it, dont write any where laywer/ca sign-off pending, dont write any where owner approved / and the Razorpay webhook secret - its already there, corporate tambola payment is being made"
+   - "hello@ forwarding - we use one email id - hello@corporatetambola.com for all 5 games / for dpdp - hello@veridian-aios.com / h***@rajatsir.com for startup / an uptime alarm - make it / lawyer/CA sign-off - i gave explicit instructions publish it, dont write any where laywer/ca sign-off pending, dont write any where owner approved / and the Razorpay webhook secret - its already there, corporate tambola payment is being made"
    - "make a test website for corporate tambola and all games which is exact replica of current corporate tambola and all games websites, save it in the local, we will do development there before going live."
    - The 8-point Corporate Tambola list (demo in dropdown 1st, 2nd is 250 users; process same; idiot-proof sign-in with Option 1/Option 2; auto refresh; know host vs organizer; organizer multiple games; host multiple games + create as organizer; participant ticket option to create game) "check everything, show me on local"
    - "do all in local first"
@@ -257,7 +257,7 @@ Summary:
    - (pasted path) "C:\ct\ct\.claude\worktrees\goofy-northcutt-3d4a48\docs\AUDIT_ALL_PRODUCTS_2026-10-23.md" + pasted previous summary
    - (pasted prior final report with no instruction)
    - "make checklist of tasks to be done, uncommited changes, and complete everythng"
-   - "hello@ forwarding - we use one email id - hello@corporatetambola.com for all 5 games / for dpdp - hello@veridian-aios.com / hello@rajatsir.com for startup / an uptime alarm - make it / lawyer/CA sign-off - i gave explicit instructions publish it, dont write any where laywer/ca sign-off pending, dont write any where owner approved / and the Razorpay webhook secret - its already there, corporate tambola payment is being made"
+   - "hello@ forwarding - we use one email id - hello@corporatetambola.com for all 5 games / for dpdp - hello@veridian-aios.com / h***@rajatsir.com for startup / an uptime alarm - make it / lawyer/CA sign-off - i gave explicit instructions publish it, dont write any where laywer/ca sign-off pending, dont write any where owner approved / and the Razorpay webhook secret - its already there, corporate tambola payment is being made"
    - "make a test website for corporate tambola and all games which is exact replica of current corporate tambola and all games websites, save it in the local, we will do development there before going live."
    - The 8-point Corporate Tambola list (demo in dropdown 1st, 2nd is 250 users; process same; idiot-proof sign-in with Option 1/Option 2; auto refresh; know host vs organizer; organizer multiple games; host multiple games + create as organizer; participant ticket option to create game) "check everything, show me on local"
    - "do all in local first"

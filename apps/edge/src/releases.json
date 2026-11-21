@@ -1,12 +1,27 @@
 [
   {
+    "version": "1.11.2",
+    "date": "2026-11-21",
+    "releasedAtIST": "21 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Mail caps now hold for the whole site and for each address, not only per game; the Help Desk limit can no longer be dodged with a changed spelling of an address; the answer to a player no longer claims a mail that was not sent",
+    "changes": [
+      "Player data-request mail is now limited four ways a day, not only per game: per game (10), per requester's network (10), per organizer address (10) and for the whole site (30 mails to the owner). Over a limit ONE short summary mail is sent and the rest are only stored and listed for the owner, so many games, or someone else's address typed in as the organizer e-mail, can no longer be used to flood a mailbox; the owner can change each number",
+      "The Help Desk limit of 3 invitations a day to one address now counts the mailbox, not the spelling: name+tag@, name@ and, on Gmail, the same name with dots added are one address",
+      "What a player is told after asking to be deleted is true now: 'We sent the organizer a note' appears only when that note really went out; otherwise the answer says only that the name and place were deleted (the deletion itself is never held back)",
+      "Counting of the mail limits is exact when many requests arrive at the same moment (one step instead of two), so a busy moment can no longer lose the summary mail or block the mail wrongly",
+      "A busy answer in the Help Desk no longer uses up a place in the hourly limit; the message for a paused invitation now says the invitation was NOT sent and must be typed again; the saved copies of the site on phones are renewed so they get this text",
+      "The owner's personal mailbox address is no longer written in any test or tool file of the repository (old text stays in the history of git, which cannot be changed); a test now looks at the whole repository for it"
+    ]
+  },
+  {
     "version": "1.11.1",
     "date": "2026-11-21",
     "releasedAtIST": "21 Nov 2026, time set at deploy",
     "commit": "this release",
     "title": "Player data-request mail and Help Desk invitation mail now have caps; the mail notes no longer say 'monthly' when it may have been the daily limit; the release notes tell the truth about reminders",
     "changes": [
-      "Each game can mail its organizer and the owner about at most 10 player data requests a day (the owner can change the number): after that ONE short digest is sent to each side and the rest are only stored and listed for the owner, so one person who fills a game with seats can no longer send about 1,500 mails; the requests, their answer time and a request to delete a player are not touched",
+      "Each game can mail its organizer and the owner about at most 10 player data requests a day (the owner can change the number): after that ONE short digest is sent to each side and the rest are only stored and listed for the owner, so one person who fills ONE game with seats can no longer send about 1,500 mails from it (many games were still not covered: see 1.11.2); the requests, their answer time and a request to delete a player are not touched",
       "Help Desk invitations have a site-wide cap of 30 an hour (the owner can change it); over it, the helper is told in plain words to try again in about an hour, and no link and no mail is made",
       "The note an organizer sees when our e-mail service has reached its limit now says 'sending limit' and does not say monthly or daily: it is true for both, and a daily limit used to be called monthly",
       "The release notes and the knowledge pages now say what the code does: only the draft reminder is bulk mail and only it is held back by the do-not-mail list, and the hourly cap on Refer & earn sign-up mail covers that one path, not all mail",

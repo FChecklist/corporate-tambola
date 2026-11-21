@@ -111,6 +111,32 @@ describe("inviting an Organizer", () => {
     expect((await call("POST", "/api/helpdesk/invite", { email: "client4@acme.com" }, part(keys[4]!))).status).toBe(429);
     expect((await call("POST", "/api/helpdesk/invite", { email: "client5@acme.com" }, part(keys[3]!), T + 3_600_000)).status).toBe(200); // the next hour starts fresh
   });
+  test("1.11.2 (audit M2): the 3-a-day limit per address counts the MAILBOX: +tag, dots and googlemail spellings of one Gmail address are one address; another address is not held back", async () => {
+    const p = await helperJoined();
+    const send = (email: string) => call("POST", "/api/helpdesk/invite", { email }, part(p.partnerKey));
+    expect((await send("Victim@Gmail.com")).status).toBe(200);
+    expect((await send("victim+a@gmail.com")).status).toBe(200);
+    expect((await send("vic.tim@gmail.com")).status).toBe(200);
+    const r = await send("v.i.c.t.i.m+b@googlemail.com"); expect(r.status).toBe(429); expect((await j(r)).error).toMatch(/that address has had enough invitations today/i);
+    expect(mails().filter((m) => /asks to prepare/.test(m.subject) && /victim|vic\.tim/i.test(m.to_addr)).length).toBe(3);
+    expect((await send("victor@gmail.com")).status).toBe(200); // a different mailbox
+  });
+  test("1.11.2: outside Gmail only the +tag is folded; dots stay part of the name (a.b@ and ab@ are different people at a company)", async () => {
+    const { canonMailbox } = await import("../src/mail-lanes");
+    expect(canonMailbox("A.B+news@Acme.com")).toBe("a.b@acme.com"); expect(canonMailbox("ab@acme.com")).toBe("ab@acme.com");
+    expect(canonMailbox("v.ic.tim+x@googlemail.com")).toBe("victim@gmail.com"); expect(canonMailbox("Vic.Tim@gmail.com")).toBe("victim@gmail.com");
+    expect(canonMailbox("no-at-sign")).toBe("no-at-sign");
+  });
+  test("1.11.2 (audit L2): a busy answer does not use up a place in the hourly site-wide limit", async () => {
+    (env as any).HD_INVITE_MAIL_PER_HOUR = "1";
+    const p = await helperJoined();
+    const used = (raw.query("SELECT writes FROM usage WHERE day=?").get(new Date(T).toISOString().slice(0, 10)) as any).writes as number;
+    (env as any).DAILY_WRITE_BUDGET = String(used + 1); // too little left for an invitation (it costs 4)
+    expect((await call("POST", "/api/helpdesk/invite", { email: "late1@acme.com" }, part(p.partnerKey))).status).toBe(503);
+    (env as any).DAILY_WRITE_BUDGET = "100000";
+    expect((await call("POST", "/api/helpdesk/invite", { email: "late2@acme.com" }, part(p.partnerKey))).status).toBe(200); // the one place of the hour was not spent by the busy answer
+    expect((await call("POST", "/api/helpdesk/invite", { email: "late3@acme.com" }, part(p.partnerKey))).status).toBe(429);
+  });
   test("the invitation cap is off at 0, and the default is 30 an hour", async () => {
     const { DEFAULT_HD_INVITE_MAIL_PER_HOUR, hourlyMailAllowed } = await import("../src/mail-lanes");
     expect(DEFAULT_HD_INVITE_MAIL_PER_HOUR).toBe(30);

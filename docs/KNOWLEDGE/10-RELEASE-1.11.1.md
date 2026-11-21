@@ -25,7 +25,7 @@ The counters are `kv` rows `mailcap/<hour or day>/...`, deleted by the hourly ti
 - Any change after a deploy is a new version: `releases.json`, `CHANGELOG.md`, this folder, then the page footer (the build writes it from `releases.json`).
 
 ## Tests
-- `apps/edge/test/rights.test.ts`: "1.11.1 (audit 2, M-A)", four tests (cap at 3, per game and per day, default 10 and 0, an erasure held back for mail is still done).
+- `apps/edge/test/rights.test.ts`: "1.11.1 (audit 2, M-A)", four tests (the cap here was per game only: 1.11.2 widened it) (cap at 3, per game and per day, default 10 and 0, an erasure held back for mail is still done).
 - `apps/edge/test/helpdesk.test.ts`: the site-wide invitation cap and its default.
 - `apps/edge/test/mail-quota-organizer.test.ts`: "1.11.1" (the notes name no period; a daily answer does not say monthly).
 - `apps/edge/test/release-1-11-1-docs.test.ts`: the version is in every place, the release lines, the "reminders and invitations" wording, masked addresses.
@@ -33,7 +33,7 @@ The counters are `kv` rows `mailcap/<hour or day>/...`, deleted by the hourly ti
 ## Open (owner / BOSS)
 1. Two independent audits on the exact head commit, then a deploy by BOSS. No migration, no secret needed: both settings are optional.
 2. Everything open in `09-RELEASE-1.11.0.md` and `05-OPEN-ITEMS.md` stays open: `MAIL_WARMUP_START`, the Resend webhook secret, DMARC `rua=`, an uptime check on `/api/status/mail`, Turnstile, `List-Unsubscribe`.
-3. Test files and `tools/` still use the owner's address as a fixture; they are not docs. Replace them when those tests are next touched.
+3. (Done in 1.11.2, see `11-RELEASE-1.11.2.md`: the fixtures are replaced and a test looks at the whole repository.)
 
 ## Roll back
 Deploy 1.11.0 (`8a4a0be`, deployment `1366bf89`). Nothing in the database changes in this release (the new counters are `kv` rows that the old code ignores).

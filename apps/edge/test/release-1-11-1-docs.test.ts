@@ -20,23 +20,23 @@ const walk = (dir: string, out: string[] = []): string[] => {
 };
 
 describe("1.11.1: the version rule (a change after a deploy is a new version)", () => {
-  test("releases.json, CHANGELOG, the knowledge page and its index all say 1.11.1, and 1.11.0 (the deployed release) is still listed right under it", () => {
-    expect(rel[0]!.version).toBe("1.11.1"); expect(rel[1]!.version).toBe("1.11.0");
-    expect(rel[0]!.date).toMatch(/^2026-11-2\d$/); expect(rel[0]!.changes.length).toBeGreaterThan(3);
+  test("releases.json, CHANGELOG, the knowledge page and its index all say 1.11.1, and 1.11.0 (the deployed release) is still listed right under it (1.11.2 sits on top since the second round of audits; see release-1-11-2.test.ts)", () => {
+    const i1 = rel.findIndex((r) => r.version === "1.11.1"); expect(i1).toBeGreaterThanOrEqual(0); expect(rel[i1 + 1]!.version).toBe("1.11.0");
+    expect(rel[i1]!.date).toMatch(/^2026-11-2\d$/); expect(rel[i1]!.changes.length).toBeGreaterThan(3);
     expect(read("CHANGELOG.md")).toMatch(/^## 1\.11\.1 - 2026-11-2\d$/m);
     expect(read("CHANGELOG.md").indexOf("## 1.11.1")).toBeLessThan(read("CHANGELOG.md").indexOf("## 1.11.0"));
     expect(existsSync(join(ROOT, "docs/KNOWLEDGE/10-RELEASE-1.11.1.md"))).toBe(true);
     expect(read("docs/KNOWLEDGE/10-RELEASE-1.11.1.md")).toMatch(/^# Release 1\.11\.1/);
     expect(read("docs/KNOWLEDGE/README.md")).toContain("10-RELEASE-1.11.1.md");
   });
-  test("the page footer stamp comes from releases.json (the build writes it), so the stamped version is 1.11.1", () => {
+  test("the page footer stamp comes from releases.json (the build writes it): the first entry is the stamped version", () => {
     // the real build is tested in apps/web/test/version-stamp.test.ts; here only the source of the stamp is pinned
     expect(rel[0]!.version).toBe(JSON.parse(read("apps/edge/src/releases.json"))[0].version);
   });
 });
 
 describe("1.11.1 L2: the release lines are true", () => {
-  const all = (): string[] => rel.slice(0, 2).flatMap((r) => r.changes);
+  const all = (): string[] => rel.slice(0, 3).flatMap((r) => r.changes);
   test("no line says reminders AND invitations are bulk mail: only the draft reminder is", () => {
     for (const c of all()) expect(c).not.toMatch(/reminders and invitations|invitations and reminders|reminders, invitations/i);
   });

@@ -23,7 +23,7 @@ async function consolePage(o: O, eid: string, hook?: (win: any, f: string) => vo
     url: "http://localhost/zc?e=" + eid, html: "zc.html", scripts: ZC_SCRIPTS, session: { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" },
     afterLoad: (win: any, f: string) => { if (f === "zgame.js" && win.ZG && !win.ZG.PRIZE_HOUSES) win.ZG.PRIZE_HOUSES = PRIZE_HOUSES; hook?.(win, f); },
   });
-  open.push(p); await p.waitFor((x) => /Hello|Last step|Your game|Hi\./i.test(x)); return p;
+  open.push(p); await p.waitFor((x) => /Hello|Last step|Your game|Hi\./i.test(x)); await p.waitFor(() => !!p.$('.zc-dot[data-open="6"]')); return p; // the step dots are drawn a moment after the greeting; a click before that found nothing (audit 1 L5, seen once under the load of the full suite)
 }
 const openStep = (p: Page, n: number) => p.click(`.zc-dot[data-open="${n}"]`);
 const setField = (p: Page, sel: string, v: string) => { const el = p.$(sel) as any; el.value = v; el.dispatchEvent(new p.win.Event("input", { bubbles: true })); };

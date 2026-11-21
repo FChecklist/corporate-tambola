@@ -141,6 +141,7 @@ Warm-up in short: day 1 only transactional mail; bulk mail (draft reminders, any
 ## Two optional caps (release 1.11.1)
 No step is needed: both have a safe default. Change them in the Cloudflare Pages variables only if you see the need.
 * `DATAREQ_MAIL_PER_GAME_DAY` (default 10): how many player data-request mails one game may send to its organizer and to you in a day. After that ONE short digest goes to each and nothing more that day; every request is still stored and still shown in your list of data requests. `0` means no cap.
+* `DATAREQ_MAIL_PER_IP_DAY` (default 10), `DATAREQ_MAIL_PER_RECIPIENT_DAY` (default 10, counts the organizer mailbox over all games, so `name+tag@` and Gmail dot forms are one box) and `DATAREQ_MAIL_PER_DAY` (default 30, the whole site, mails to you): the same rule from the other sides (release 1.11.2). One organizer address gets at most the limit plus one summary a day, you get at most 30 plus one summary a day. `0` means no cap.
 * `HD_INVITE_MAIL_PER_HOUR` (default 30): how many Help Desk invitations the whole site may mail in an hour. `0` means no cap.
 
 ## What no step here can do

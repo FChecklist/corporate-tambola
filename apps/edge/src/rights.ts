@@ -1,7 +1,7 @@
 // A player's own rights, with no account (gates U5, U6, D7):
 //   * LEAVE  - POST /api/z/{id}/leave {pid, device}: the player takes their own seat and details out of the game, at any time.
 //   * REQUEST - POST /api/z/{id}/datareq {pid, device, kind: access | correction | erasure, note?}: "what do you hold about me / correct / delete me".
-//               The request is stored, the game's organizer and the owner are told by e-mail, the player is shown the promised answer time (PROMISE_DAYS),
+//               The request is stored, the game's organizer and the owner are told by e-mail (one mail each up to the daily caps of mail-lanes.ts `dataRequestMailTurns`, then ONE digest, then none: the request is stored either way), the player is shown the promised answer time (PROMISE_DAYS),
 //               and an erasure is carried out at once with the same code a player leaving uses. {kind: "status"} lists the player's own requests.
 // The player proves who they are the same way the prize-confirmation route does: their card id (pid) AND the phone's own random device id, whose hash
 // is the one stored with the seat (the pid alone is public: it is in the seat list every phone reads). Nobody else can ask on a player's behalf.
@@ -12,7 +12,7 @@ import type { D1, D1Stmt } from "./worker";
 import { sendMail, type PayEnv } from "./pay";
 import { ownerAddress } from "./owner-mail";
 import { BRAND } from "./brand";
-import { dataRequestMailTurn } from "./mail-lanes";
+import { dataRequestMailTurns, canonMailbox } from "./mail-lanes";
 
 /** The answer time we promise a player. ONE constant: change it here and the page, the e-mails and the tests all follow. */
 export const PROMISE_DAYS = 7;
@@ -46,6 +46,8 @@ export interface RightsCtx {
   orgEmail: () => Promise<string | null>;
   /** When this game's participant data is deleted for good (ms). */
   erasureMs: () => Promise<number>;
+  /** The requester's network address as the request arrived (only a hash of it is ever kept, and only in a counter that is deleted after 48 hours). Missing = "local". */
+  ip?: string;
   /** Spends from the day's write allowance; false = too busy. */
   spend: (n: number) => Promise<boolean>;
   /** Statements for whatever this game keeps about a player in its OWN tables (names on a bracket, a nickname, votes ...). */
@@ -130,7 +132,8 @@ export async function heldAbout(c: RightsCtx, s: Seat): Promise<{ what: string; 
 const cleanNote = (n: unknown): string => (typeof n === "string" ? n.replace(/[<>`]/g, "").replace(/\s+/g, " ").trim().slice(0, 300) : "");
 const KIND_WORDS: Record<RequestKind, string> = { access: "to see what is held about them", correction: "to correct their details", erasure: "to be deleted", nomination: "to name another person who may use their rights for them (DPDP Act, section 14)" };
 
-async function mailBoth(c: RightsCtx, id: string, kind: RequestKind, seat: Seat, name: string, note: string, due: number, erased: boolean): Promise<void> {
+/** Mails the organizer and the owner about a request, within the daily caps. Answers whether the organizer was told ABOUT THIS REQUEST by a mail the mail service took (a digest or no mail is not that). */
+async function mailBoth(c: RightsCtx, id: string, kind: RequestKind, seat: Seat, name: string, note: string, due: number, erased: boolean): Promise<boolean> {
   const subjectEnd = `${c.gameName} (${NOUN} ${seat.seq})`;
   const base = [
     `A player of "${c.gameName}" has asked ${KIND_WORDS[kind]}.`, "",
@@ -141,17 +144,20 @@ async function mailBoth(c: RightsCtx, id: string, kind: RequestKind, seat: Seat,
     erased ? "The player's name and place were deleted at once, as they asked. Nothing more is needed from you." : kind === "nomination" ? `The player has been asked to write to ${BRAND.support} with the name of the person they nominate. Please answer the player.` : kind === "access" ? "The player has already been shown what we hold. Please answer anything more they ask." : "You are the one who holds this name for the game. Please answer the player.",
     `Request number: ${id}`].join("\n");
   const ownerBody = [...base, `Organizer informed: yes`, "", erased ? "Deleted at once." : "Open.", `Request number: ${id}`].join("\n");
-  // 1.11.1 (audit 2, M-A): the mail is a nudge, the stored request is the record. A game that sends more requests than the day's cap (`DATAREQ_MAIL_PER_GAME_DAY`, default 10) is mailed ONE digest per side, then nothing more that day.
-  const turn = await dataRequestMailTurn(c.db, c.env as any, c.eid, c.now).catch(() => "send" as const);
-  if (turn === "hold") return;
-  if (turn === "digest") {
-    const digest = (who: string) => [`More players of "${c.gameName}" (${c.eid}) have sent data requests today than we mail one by one.`, "", `Every request is stored and has its answer time (${PROMISE_TEXT}). ${who}`, "No more mails about single requests will come for this game today."].join("\n");
-    try { const to = await c.orgEmail(); if (to) await sendMail(c.env, c.db, to, `Many data requests: ${c.gameName}`, digest("Please write to " + BRAND.support + " if you want the list."), c.now); } catch { /* the requests are stored */ }
-    try { await sendMail(c.env, c.db, ownerAddress(c.env), `Many data requests: ${c.gameName}`, digest("Read them in the owner's list of data requests."), c.now, { owner: true }); } catch { /* the requests are stored */ }
-    return;
-  }
-  try { const to = await c.orgEmail(); if (to) await sendMail(c.env, c.db, to, `A player's data request: ${subjectEnd}`, orgBody, c.now); } catch { /* the request is stored; a mail is a nudge */ }
-  try { await sendMail(c.env, c.db, ownerAddress(c.env), `Player data request (${kind}): ${subjectEnd}`, ownerBody, c.now, { owner: true }); } catch { /* the request is stored */ }
+  // 1.11.2 (audit M1): the mail is a nudge, the stored request is the record. Caps per game, per requester network, per organizer mailbox and for the whole site (`dataRequestMailTurns`); over them ONE digest per side, then nothing.
+  const to = await c.orgEmail().catch(() => null);
+  const turns = await dataRequestMailTurns(c.db, c.env as any, { eid: c.eid, ipHash: (await sha("dreq-ip|" + (c.ip ?? "local"))).slice(0, 16), recipientHash: to ? (await sha("dreq-rcpt|" + canonMailbox(to))).slice(0, 16) : null }, c.now).catch(() => ({ org: "send", owner: "send" }) as const);
+  const digest = (who: string) => [`More players of "${c.gameName}" (${c.eid}) have sent data requests today than we mail one by one.`, "", `Every request is stored and has its answer time (${PROMISE_TEXT}). ${who}`, "No more mails about single requests will come for this game today."].join("\n");
+  let told = false;
+  try {
+    if (to && turns.org === "send") told = (await sendMail(c.env, c.db, to, `A player's data request: ${subjectEnd}`, orgBody, c.now)) === true;
+    else if (to && turns.org === "digest") await sendMail(c.env, c.db, to, `Many data requests: ${c.gameName}`, digest("Please write to " + BRAND.support + " if you want the list."), c.now);
+  } catch { /* the request is stored; a mail is a nudge */ }
+  try {
+    if (turns.owner === "send") await sendMail(c.env, c.db, ownerAddress(c.env), `Player data request (${kind}): ${subjectEnd}`, ownerBody, c.now, { owner: true });
+    else if (turns.owner === "digest") await sendMail(c.env, c.db, ownerAddress(c.env), `Many data requests: ${c.gameName}`, digest("Read them in the owner's list of data requests."), c.now, { owner: true });
+  } catch { /* the request is stored */ }
+  return told;
 }
 
 /** POST /api/z/{id}/datareq  {pid, device, kind: "access"|"correction"|"erasure"|"status", note?} */
@@ -178,9 +184,9 @@ export async function requestRoute(c: RightsCtx): Promise<Response> {
   const erased = kind === "erasure";
   await c.db.prepare("INSERT INTO data_request(id,eid,pid,kind,note,created_ms,due_ms,status,done_ms) VALUES(?,?,?,?,?,?,?,?,?)").bind(id, c.eid, s.pid, kind, note || null, c.now, due, erased ? "done" : "open", erased ? c.now : null).run();
   if (erased) await takeOut(c, s);
-  await mailBoth(c, id, kind, s, name, note, due, erased);
+  const told = await mailBoth(c, id, kind, s, name, note, due, erased); // true only when a mail about THIS request reached the mail service
   return c.json({
-    ok: true, id, kind, status: erased ? "done" : "open", promiseDays: PROMISE_DAYS, promise: PROMISE_TEXT, receivedMs: c.now, answerByMs: due, ...(held ? { held } : {}), ...(erased ? { erased: true } : {}),
-    message: erased ? "Done. Your name and your place were deleted just now. We told the organizer." : kind === "nomination" ? `We have your request. To name the person, please write to ${BRAND.support} with their name and how to reach them. You will have your answer ${PROMISE_TEXT}, by ${istDay(due)}.` : `We have your request. You will have your answer ${PROMISE_TEXT}, by ${istDay(due)}.`,
+    ok: true, id, kind, status: erased ? "done" : "open", promiseDays: PROMISE_DAYS, promise: PROMISE_TEXT, receivedMs: c.now, answerByMs: due, ...(held ? { held } : {}), ...(erased ? { erased: true, organizerTold: told } : {}),
+    message: erased ? "Done. Your name and your place were deleted just now." + (told ? " We sent the organizer a note." : "") : kind === "nomination" ? `We have your request. To name the person, please write to ${BRAND.support} with their name and how to reach them. You will have your answer ${PROMISE_TEXT}, by ${istDay(due)}.` : `We have your request. You will have your answer ${PROMISE_TEXT}, by ${istDay(due)}.`,
   });
 }

@@ -209,8 +209,7 @@ export async function anonMailAllowed(db: D1, env: { ANON_MAIL_PER_HOUR?: string
   const cap = posInt(env.ANON_MAIL_PER_HOUR) ?? DEFAULT_ANON_MAIL_PER_HOUR; if (cap === 0) return true;
   try {
     const k = `anonmail/${hourOf(now)}`;
-    await db.prepare("INSERT INTO kv(k,v) VALUES(?,'1') ON CONFLICT(k) DO UPDATE SET v=CAST(CAST(v AS INTEGER)+1 AS TEXT)").bind(k).run();
-    const n = Number((await db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0);
+    const n = Number((await db.prepare("INSERT INTO kv(k,v) VALUES(?,'1') ON CONFLICT(k) DO UPDATE SET v=CAST(CAST(v AS INTEGER)+1 AS TEXT) RETURNING v").bind(k).first<{ v: string }>())?.v ?? 0); // ONE statement (1.11.2): count up and read back together, so parallel calls never read each other's increments
     if (n === cap + 1) console.warn(`[mail-alert] anonymous-triggered mail passed ${cap} in one hour: the rest of the hour is not mailed (numbers only).`);
     return n <= cap;
   } catch { return true; }
@@ -220,6 +219,9 @@ export async function anonMailAllowed(db: D1, env: { ANON_MAIL_PER_HOUR?: string
 export const dayKey = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 export const DEFAULT_HD_INVITE_MAIL_PER_HOUR = 30;
 export const DEFAULT_DATAREQ_MAIL_PER_GAME_DAY = 10;
+export const DEFAULT_DATAREQ_MAIL_PER_IP_DAY = 10;
+export const DEFAULT_DATAREQ_MAIL_PER_RECIPIENT_DAY = 10;
+export const DEFAULT_DATAREQ_MAIL_PER_DAY = 30;
 /**
  * One counter row `mailcap/<period>/<name>` in kv, counted up on every call. Returns how many calls the period has had now. A database that cannot count answers 0 (so nothing is ever blocked by accident).
  * The hourly tick deletes rows older than 48 hours (`lanesTick`).
@@ -227,8 +229,7 @@ export const DEFAULT_DATAREQ_MAIL_PER_GAME_DAY = 10;
 async function countCap(db: D1, period: string, name: string): Promise<number> {
   try {
     const k = `mailcap/${period}/${name}`;
-    await db.prepare("INSERT INTO kv(k,v) VALUES(?,'1') ON CONFLICT(k) DO UPDATE SET v=CAST(CAST(v AS INTEGER)+1 AS TEXT)").bind(k).run();
-    return Number((await db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0);
+    return Number((await db.prepare("INSERT INTO kv(k,v) VALUES(?,'1') ON CONFLICT(k) DO UPDATE SET v=CAST(CAST(v AS INTEGER)+1 AS TEXT) RETURNING v").bind(k).first<{ v: string }>())?.v ?? 0); // ONE statement (1.11.2, audit L1): parallel calls each get their own number
   } catch { return 0; }
 }
 /**
@@ -242,16 +243,45 @@ export async function hourlyMailAllowed(db: D1, name: string, setting: string | 
   return n <= cap;
 }
 /**
- * The per-game cap on player data-request mail (audit 2 M-A): every request mails the organizer once and the owner once; a hostile person who fills a game with seats could cause about 1,500 mails from one game.
- * Up to the cap a game's requests mail as before. The first request over the cap answers "digest" (the caller sends ONE short mail to each side that says more requests came and where to read them: no name, no
- * ticket); the rest answer "hold" (no mail). The request itself is ALWAYS stored and shown in the owner's list (`GET /api/owner/data-requests`), the player's answer time and an erasure are not touched.
- * Env `DATAREQ_MAIL_PER_GAME_DAY` (0 = no cap). Counted per game and per UTC day.
+ * The ONE mailbox an address names, for counting only (never for sending): lower case, the `+tag` removed on every domain, and on Gmail (`gmail.com`, `googlemail.com`) the dots in the name removed too, because
+ * `vic.tim@`, `v.i.c.tim@` and `victim+a@` are all the same inbox there (1.11.2, audit M2). Over-counting a rare real `+` address is the safe side.
  */
-export async function dataRequestMailTurn(db: D1, env: { DATAREQ_MAIL_PER_GAME_DAY?: string }, eid: string, now: number): Promise<"send" | "digest" | "hold"> {
-  const cap = posInt(env.DATAREQ_MAIL_PER_GAME_DAY) ?? DEFAULT_DATAREQ_MAIL_PER_GAME_DAY; if (cap === 0) return "send";
-  const n = await countCap(db, dayKey(now), `datareq/${eid}`); if (n === 0 || n <= cap) return "send";
-  if (n === cap + 1) { console.warn(`[mail-alert] a game passed ${cap} player data-request mails in one day: one digest is sent, the rest are stored and not mailed (numbers only).`); return "digest"; }
-  return "hold";
+export const canonMailbox = (raw: unknown): string => {
+  const v = String(raw ?? "").normalize("NFKC").trim().toLowerCase(), i = v.lastIndexOf("@");
+  if (i < 1) return v;
+  let local = v.slice(0, i).split("+")[0]!, dom = v.slice(i + 1);
+  if (dom === "googlemail.com") dom = "gmail.com";
+  if (dom === "gmail.com") local = local.replace(/\./g, "");
+  return local + "@" + dom;
+};
+
+export type MailTurn = "send" | "digest" | "hold";
+/** Walks nested caps from the widest to the narrowest. A count of 0 (no cap, or a database that could not count) is skipped. The first count over a cap answers "digest" ONCE (cap + 1), then "hold". All fine: "send". */
+function turnOf(scopes: { n: number; cap: number; what: string }[]): MailTurn {
+  for (const s of scopes) {
+    if (s.cap === 0 || s.n === 0 || s.n <= s.cap) continue;
+    if (s.n === s.cap + 1) { console.warn(`[mail-alert] ${s.what} passed ${s.cap} player data-request mails in one day: one digest is sent, the rest are stored and not mailed (numbers only).`); return "digest"; }
+    return "hold";
+  }
+  return "send";
+}
+/**
+ * The caps on player data-request mail (audit 2 M-A in 1.11.1, audit M1 in 1.11.2). Every request used to mail the organizer once and the owner once, so one person with many seats, or many games, could cause a flood
+ * in the owner's box and in the box of any address typed in as an organizer e-mail. Each request now counts, per UTC day, in four places: the game (`DATAREQ_MAIL_PER_GAME_DAY`, default 10), the requester's network
+ * (`DATAREQ_MAIL_PER_IP_DAY`, 10, stored only as a hash), the organizer's mailbox (`DATAREQ_MAIL_PER_RECIPIENT_DAY`, 10, counted on the canonical mailbox so `+tags` and Gmail dots do not help) and the whole site
+ * (`DATAREQ_MAIL_PER_DAY`, 30, the owner's box). 0 = no cap. The organizer's side answers by recipient, then network, then game; the owner's side by site, then network, then game. Up to a cap the request mails as
+ * before; the first request over the widest cap that is passed answers "digest" (ONE short mail with no name, ticket or note), the rest "hold". So one organizer address gets at most cap + 1 mails a day, whatever
+ * the number of games, and the owner at most (site cap) + 1. The request is ALWAYS stored and shown in the owner's list (`GET /api/owner/data-requests`); the answer time and an erasure are not touched.
+ */
+export async function dataRequestMailTurns(db: D1, env: { DATAREQ_MAIL_PER_GAME_DAY?: string; DATAREQ_MAIL_PER_IP_DAY?: string; DATAREQ_MAIL_PER_RECIPIENT_DAY?: string; DATAREQ_MAIL_PER_DAY?: string }, who: { eid: string; ipHash: string; recipientHash: string | null }, now: number): Promise<{ org: MailTurn; owner: MailTurn }> {
+  const gameCap = posInt(env.DATAREQ_MAIL_PER_GAME_DAY) ?? DEFAULT_DATAREQ_MAIL_PER_GAME_DAY, ipCap = posInt(env.DATAREQ_MAIL_PER_IP_DAY) ?? DEFAULT_DATAREQ_MAIL_PER_IP_DAY;
+  const rcptCap = posInt(env.DATAREQ_MAIL_PER_RECIPIENT_DAY) ?? DEFAULT_DATAREQ_MAIL_PER_RECIPIENT_DAY, siteCap = posInt(env.DATAREQ_MAIL_PER_DAY) ?? DEFAULT_DATAREQ_MAIL_PER_DAY;
+  const d = dayKey(now), count = (cap: number, name: string) => (cap === 0 ? Promise.resolve(0) : countCap(db, d, name));
+  const [game, ip, site, rcpt] = await Promise.all([count(gameCap, `datareq/${who.eid}`), count(ipCap, `datareq-ip/${who.ipHash}`), count(siteCap, "datareq-all"), who.recipientHash ? count(rcptCap, `datareq-rcpt/${who.recipientHash}`) : Promise.resolve(0)]);
+  return {
+    org: turnOf([{ n: rcpt, cap: rcptCap, what: "one organizer address" }, { n: ip, cap: ipCap, what: "one network" }, { n: game, cap: gameCap, what: "a game" }]),
+    owner: turnOf([{ n: site, cap: siteCap, what: "the whole site" }, { n: ip, cap: ipCap, what: "one network" }, { n: game, cap: gameCap, what: "a game" }]),
+  };
 }
 
 // ------------------------------------------------------------------------------------------------ the bulk queue

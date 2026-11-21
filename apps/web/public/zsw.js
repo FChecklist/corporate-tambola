@@ -7,7 +7,7 @@
  *  - Pages: network first (new versions arrive when online), the saved copy when offline.
  *  - Other files: the saved copy at once, refreshed quietly in the background.
  */
-const CACHE = "ct-game-v46"; // v46 (1.11.0): common.js gained TB.mailNote, so every phone saves a matching set. Bump when the game files change shape, so every phone saves a matching set
+const CACHE = "ct-game-v47"; // v47 (1.11.2): guide.js changed its Help Desk invitation text, so saved copies are renewed. v46 (1.11.0): common.js gained TB.mailNote, so every phone saves a matching set. Bump when the game files change shape, so every phone saves a matching set
 const FILES = ["/claimnote.js", "/lang/ui.js", "/lang/hi.js", "/v2.js", "/offline.html", "/offline.js", "/z.html", "/zc.html", "/zc-mode.js", "/trynew.js", "/big.html", "/board.html", "/consent.js", "/blackbox.js", "/guide.js", "/z.js", "/rights.js", "/zc.js", "/big.js", "/zgame.js", "/control.js", "/audio.js", "/common.js",
   "/app.css", "/z.css", "/big.css", "/fonts.css", "/pwa.js", "/autoupdate.js", "/keep.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/logo-mark.svg",
   "/fonts/Fraunces-italic-500.woff2", "/fonts/Fraunces-normal-500-700.woff2", "/fonts/IBMPlexMono-normal-500.woff2", "/fonts/Inter-normal-400.woff2"];
