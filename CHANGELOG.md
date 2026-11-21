@@ -2,6 +2,18 @@
 
 Newest first. The owner-only release list the site reads is `apps/edge/src/releases.json`; this file adds the PR and audit lines the version standard asks for (marketing-ledger/plans/VERSION-AND-KNOWLEDGE-STANDARD-2026-11-20.md). Earlier releases (1.0.0 to 1.9.0) are in `releases.json`.
 
+## 1.10.2 - 2026-11-21
+Stacked release: PRs #22, #23 and #25 (each had two audit PASS, but on master `d5c9419` / 1.9.2) re-applied on top of 1.10.1 (`4a18c29`, PR #26). Needs its own two audits on the exact head commit before any deploy. Merge order: PR #26, then this branch.
+### Fixed
+- **Prize names (from PR #22, head `80e725b`)**: one shared ordinal helper (`packages/shared/src/ordinal.ts`): 21st, 22nd, 23rd; 11th, 12th, 13th stay "th". Used by `ticket.ts`, `gamelog.ts`, `lifecycle.ts`, `v2-certs.ts` and the screens `big.js`, `board.js`, `console.js`, `prize-planner.js`, `z.js`, `zc.js`. Tests: `packages/shared/test/ordinal.test.ts`, `apps/edge/test/ordinal-certs.test.ts`.
+- **F28 scratch card in the finale (from PR #23, head `08cbfad`)**: the card is revealed before the game ends (auto-mark on); the finale waits for an open card or draw. `packages/engine/src/surprise.ts`, doc `docs/dev/06-BUSINESS-LOGIC.md` (G5a). Tests: `packages/engine/test/surprise.test.ts`.
+### Changed
+- **The organizer's limited AI key (`cta_`) may make the pay link (from PR #25, head `567ee8b`, owner ruling 20 Nov 2026)**: `POST /api/z/{id}/paylink`. It pays nothing; a person opens the link and pays. A game key (`ctg_`) and a Help Desk helper's key are still refused (403). Money settings are untouched; `PAY_VIA_MONEYPENNY` stays off. Tests: `apps/edge/test/ai-paylink.test.ts` and the updated paylink/helpdesk/param tests.
+### Stacking notes (where PRs #22 and #25 overlapped PR #26)
+- `apps/web/public/z.js`, `zc.js`, `zsw.js`: #22's ordinal change merged without a text conflict beside #26's ID-invite edits (different lines). `zsw.js` cache name: master v43, #26 and #22 both v44; this release is **`ct-game-v45`** because `z.js` and `zc.js` changed again after the v44 set that is live.
+- `apps/edge/src/worker.ts`, `apps/web/public/guide.js`: #25's edits (AI manifest lines, the paylink gate, one guide entry) sit in other regions than #26's join/ID edits; both are kept.
+- #23 touches only the engine and one doc: no overlap.
+
 ## 1.10.1 - 2026-11-21
 ### Fixed (audit of PR #26 head 7bad139: audit 1 FAIL, audit 2 PASS)
 - **"Paste a list" in the default console was refused by the real Worker** (audit 1, High 1). The paste call carried no Terms consent (K6), so the server answered 400 `consent-required` ("Please tick the box to continue") and no ID was added; the screen has no box to tick. `apps/web/public/pack/zc-flow.js` now sends the same consent as `zc.js` (`CBConsent.payload(null, "K6")`).

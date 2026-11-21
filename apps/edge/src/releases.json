@@ -1,5 +1,17 @@
 [
   {
+    "version": "1.10.2",
+    "date": "2026-11-21",
+    "releasedAtIST": "21 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Prize names, the finale scratch card, and the AI pay link",
+    "changes": [
+      "Prize names now read right for every number: 21st, 22nd, 23rd, and 11th, 12th, 13th stay th. One shared rule is used on the game screens, the winner list, the certificates and the game log",
+      "The scratch card in the finale is revealed before the game ends, so a game no longer ends with a card still on screen",
+      "The organizer's own limited AI key can make the pay link (it pays nothing: a person opens the link and pays). A key made for one game and a Help Desk helper's key still cannot"
+    ]
+  },
+  {
     "version": "1.10.1",
     "date": "2026-11-21",
     "releasedAtIST": "21 Nov 2026, time set at deploy",

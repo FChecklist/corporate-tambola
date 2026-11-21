@@ -18,3 +18,6 @@ Owner rule, 20 Nov 2026: people are invited with ONLY an ID (employee, associate
 2. Live data cannot be read from the cloud: whether any live game holds IDs stored in the older form with punctuation is unknown. Such an ID is found only if the invitee types the same punctuation. Check the live database before the deploy.
 3. The version number is the top entry of `apps/edge/src/releases.json`; `/version.json` is written by the build (`bun run pages:deploy`), it is not a file in the repository.
 4. Audit 2 (M2, M3) left for the owner: IDs can be guessed because only wrong IDs are counted (30 per network per 10 minutes); the waiting room holds 500 (`WAITING_MAX`). A cap that counts right IDs too would lock out an office behind one address.
+
+## Release 1.10.2 (21 Nov 2026) - stacked on 1.10.1, not deployed
+PRs #22 (ordinal names 21st/22nd/23rd), #23 (F28 finale scratch card) and #25 (organizer's limited AI key `cta_` may make the pay link) were re-applied on top of 1.10.1 as one release. Nothing in the ID-invite behaviour above changed. The service-worker cache is `ct-game-v45`. See CHANGELOG.md, section 1.10.2.
