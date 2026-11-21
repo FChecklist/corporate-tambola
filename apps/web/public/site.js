@@ -169,7 +169,7 @@
       <div id="mailNote"></div>
       <div id="fErr"></div>
       <button class="btn block" id="toLogin" type="button">Open my console ${ic("arrow")}</button>`);
-    TB.mailNote("mailNote"); // says so, in plain words, when our mail service is at its limit and the invoice mail may be late
+    try { if (typeof TB.mailNote === "function") TB.mailNote("mailNote"); } catch {} // says so, in plain words, when our mail service is at its limit and the invoice mail may be late. Guarded: a returning visitor can still hold an OLD cached common.js without it (service worker, stale-while-revalidate); the key and the "Open my console" button must work then too
     const cp = $("cpKey"); if (cp) cp.addEventListener("click", () => { try { navigator.clipboard.writeText(o.organizerKey); TB.toast("Key copied"); } catch {} });
     $("toLogin").addEventListener("click", () => { if (o.organizerKey) { try { CTK.set("ctz-org", o.organizerKey); } catch {} location.href = "/zc.html"; } else askCode(o.email, $("toLogin")); });
   }

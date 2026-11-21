@@ -18,7 +18,7 @@ import { PURGE_AFTER_MS } from "./lifecycle";
 import type { D1, Env } from "./worker";
 import { normAccountEmail } from "./empid";
 import { logMail } from "./mode";
-import { hashMail, isHardBounce, lanesTick, mailStatus, recordState, suppress, type LaneEnv } from "./mail-lanes";
+import { hashMail, isHardBounce, lanesTick, mailStatus, mailStatusCached, publicMailStatus, recordState, suppress, suppressKey, type LaneEnv } from "./mail-lanes";
 
 export const GAME_NAME = "Corporate Tambola";
 export interface AdminEnv extends Env, LaneEnv { RESEND_WEBHOOK_SECRET?: string; MAIL_FROM?: string; CF_EMAIL_TOKEN?: string; CF_ACCOUNT_ID?: string }
@@ -173,7 +173,7 @@ async function mailEventsWebhook(req: Request, env: AdminEnv, now: number, spend
   if (ref && (await recordState(env.DB, now, ref, toHash, clip(d.subject, 120), event))) await logMail(env.DB, now, to, clip(d.subject, 120) ?? "", "provider " + event); // per mail: delivered, bounced, complained, delayed (a later state is never overwritten by an earlier one)
   const ours = fromIsOurs(d.from, env.MAIL_FROM); // the provider account is shared with other products: only mail from our own sending domain puts an address on OUR do-not-mail list
   const hard = event === "complained" || (event === "bounced" && isHardBounce(d.bounce?.type));
-  if (ours && hard) await suppress(env.DB, now, toHash, maskMail(to), event === "complained" ? "complained" : "bounced_permanent", ref || null);
+  if (ours && hard) await suppress(env.DB, now, await suppressKey(to), maskMail(to), event === "complained" ? "complained" : "bounced_permanent", ref || null);
   const r = await env.DB.prepare("INSERT OR IGNORE INTO mail_bounce(id,at_ms,event,to_hash,to_mask,subject,kind,detail) VALUES(?,?,?,?,?,?,?,?)").bind(id, now, event, await sha(normMail(to)), maskMail(to), clip(d.subject, 120), kind, detail).run();
   return jsonRes({ ok: true, event, again: (r.meta?.changes ?? 0) === 0 });
 }
@@ -225,11 +225,11 @@ export async function adminRoute(req: Request, env: AdminEnv, now: number, owner
     return jsonRes({ ok: dbOk && overdue.count === 0, errors_last_hour: errors, threshold: ERROR_ALERT_THRESHOLD, overdue_purge: overdue.count, overdue_hours: overdue.oldestHours, maintenance: await siteIsOff(env.DB, now), at: new Date(now).toISOString() });
   }
   if (p === "/api/mail/events") return mailEventsWebhook(req, env, now, spend);
-  if (p === "/api/status/mail") { // public, numbers only (no address, no key): the mail counters, the warm-up day, the 80 % alert of the monthly quota
+  if (p === "/api/status/mail") { // public: only whether all is well and what an organizer should be told (no counters, no plan size, no route settings: those are the owner's, /api/owner/mail-status). Read from the database at most every 30 seconds.
     if (req.method !== "GET" && req.method !== "HEAD") return jsonRes({ error: "Not found" }, 404);
-    try { return jsonRes(await mailStatus(env.DB, env, now)); } catch { return jsonRes({ ok: false, unreadable: true }, 500); } // no `error:` text: this address is for machines, and a message with that key needs an entry in the public guide script (apps/web/test/guide.test.ts)
+    try { return jsonRes(publicMailStatus(await mailStatusCached(env.DB, env, now))); } catch { return jsonRes({ ok: false, unreadable: true }, 500); } // no `error:` text: this address is for machines, and a message with that key needs an entry in the public guide script (apps/web/test/guide.test.ts)
   }
-  const m = p.match(/^\/api\/owner\/(site|organizer|data-requests|mail-events|mail-suppress|errors)$/);
+  const m = p.match(/^\/api\/owner\/(site|organizer|data-requests|mail-events|mail-suppress|mail-status|errors)$/);
   if (!m) return null;
   const what = m[1]!;
   if (!owner) { await logAccess(env.DB, now, "denied:" + what, null, null, 0, false, null); return jsonRes({ error: "Not found" }, 404); }
@@ -278,6 +278,10 @@ export async function adminRoute(req: Request, env: AdminEnv, now: number, owner
     await logAccess(env.DB, now, "mail-events-list", null, null, rows.length);
     return jsonRes({ counts: Object.fromEntries(counts.map((c) => [c.event, c.n])), events: rows.map((r) => ({ id: r.id, at: new Date(r.at_ms).toISOString(), event: r.event, to: r.to_mask, subject: r.subject, kind: r.kind, detail: r.detail })), keptDays: MAIL_EVENT_DAYS, webhook: (env.RESEND_WEBHOOK_SECRET ?? "").trim() ? "on" : "off (set RESEND_WEBHOOK_SECRET, see docs/OWNER_DESK.md)" });
   }
+  if (what === "mail-status") { // the full mail numbers (lanes, plan size, warm-up day, backup route set or not, do-not-mail count): owner only
+    if (req.method !== "GET") return jsonRes({ error: "Not found" }, 404);
+    try { await logAccess(env.DB, now, "mail-status", null, null, 1); return jsonRes(await mailStatus(env.DB, env, now)); } catch { return jsonRes({ ok: false, unreadable: true }, 500); }
+  }
   if (what === "mail-suppress") { // the do-not-mail list: read it (masked), put an address on it, take one off (a wrongly stopped customer)
     if (req.method === "GET") {
       const rows = (await env.DB.prepare("SELECT to_mask, reason, at_ms FROM mail_suppress ORDER BY at_ms DESC LIMIT 200").all<any>()).results ?? [];
@@ -287,7 +291,7 @@ export async function adminRoute(req: Request, env: AdminEnv, now: number, owner
     if (req.method !== "POST") return jsonRes({ error: "Not found" }, 404);
     const b = await readBody(req); const mail = typeof b?.email === "string" ? b.email.trim() : "";
     if (!EMAIL.test(mail) || (b?.action !== "clear" && b?.action !== "add")) return jsonRes({ error: 'Send {"action": "clear" or "add", "email": "<the address>"}.' }, 400);
-    const h = await hashMail(mail);
+    const h = await suppressKey(mail);
     if (b.action === "add") { const added = await suppress(env.DB, now, h, maskMail(mail), "owner", null); await logAccess(env.DB, now, "mail-suppress-add", null, null, 1, true, null); return jsonRes({ ok: true, added }); }
     const gone = (await env.DB.prepare("DELETE FROM mail_suppress WHERE to_hash=?").bind(h).run()).meta?.changes ?? 0;
     await logAccess(env.DB, now, "mail-suppress-clear", null, null, gone, true, null); // the address itself is not written down

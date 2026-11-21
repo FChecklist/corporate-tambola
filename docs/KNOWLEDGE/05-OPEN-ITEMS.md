@@ -32,11 +32,12 @@ An expired Host key without personal data still opens the static Host manual pag
 2. Migration `0033_mail_lanes.sql` must be applied before the deploy.
 3. Marketing mail sent by OTHER products from the same Resend account or the Cloudflare account is not counted here; the lanes protect only mail sent through this site's `sendMail`.
 4. The monthly count follows the calendar month (UTC); the provider's own month may start on another day.
+5. Audit fixes, same release (see `09-RELEASE-1.11.0.md`, "After the first two audits"): still open by choice: a bot check (Turnstile, needs the owner's keys) on the Refer & earn code and the sign-in code; a `List-Unsubscribe` header on bulk mail; a game-level hostile-join test (audit 2, L9); an owner e-mail for the 80 % and 100 % alerts (today a log line only); the console's automatic one retry of a refused Host press (audit 2, L5, not checked in this pass).
 
 ## Open since 20 Nov 2026 (RCA of the Rs 1 live payment, `docs/RCA-NO-INVOICE-MAIL-2026-11-20.md`)
 1. Mail refusals: after the 1.9.1 deploy, read `mail_event` rows `send_failed <status> <error name>` to learn why the mail service refused three of the four mails of that payment (shared Resend account: rate limit or quota is the leading, unproven, cause).
 2. No Razorpay webhook has reached the game or IT Services since 21 Oct / 15 Oct 2026: check the webhook URL and secret in the Razorpay dashboard (owner step).
-3. The invoice mail accepted for `raajat.agarwal@gmail.com` at 13:28 UTC on 20 Nov was not found in Inbox or Trash: the owner checks Spam.
+3. The invoice mail accepted for the owner's own mailbox at 13:28 UTC on 20 Nov was not found in Inbox or Trash: the owner checks Spam.
 
 ## Release 1.11.0 (21 Nov 2026): what is open
 See `09-RELEASE-1.11.0.md`, section Open: migration 0033 before deploy, the Cloudflare route secrets, the Resend webhook and DMARC `rua=`, the real `MAIL_MONTHLY_QUOTA`, and two audits on the exact head commit.

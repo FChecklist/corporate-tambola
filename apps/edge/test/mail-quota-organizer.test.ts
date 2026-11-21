@@ -11,7 +11,8 @@ import { ORGANIZER_NOTE_BACKUP, ORGANIZER_NOTE_LATE, QUOTA_SEEN_MS, mailStatus }
 const NOW = Date.UTC(2026, 10, 21, 10, 0, 0), ACC = "ac433821e311dbc89d0e002a192f92bc";
 let env: PayEnv & Record<string, any>; let raw: ReturnType<typeof makeD1>["raw"]; let who: string[]; let resend: () => { status: number; body?: unknown }; let warns: string[];
 const realFetch = globalThis.fetch, realWarn = console.warn;
-const status = async (now = NOW) => (await (await handle(new Request("http://x/api/status/mail"), env, now)).json()) as any;
+const status = async (now = NOW) => (await (await handle(new Request("http://x/api/owner/mail-status", { headers: { "x-organizer": "plat" } }), env, now)).json()) as any; // the full read (owner); the public one is the same `organizer` part, cached 30 s
+const publicStatus = async (now = NOW) => (await (await handle(new Request("http://x/api/status/mail"), env, now)).json()) as any;
 
 beforeEach(() => {
   const d = makeD1(); raw = d.raw; who = []; warns = [];
@@ -51,6 +52,26 @@ describe("Resend says monthly_quota_exceeded", () => {
   });
   test("the note is honest: no provider name, no number, no secret; it says the payment is not affected", () => {
     for (const n of [ORGANIZER_NOTE_BACKUP, ORGANIZER_NOTE_LATE]) { expect(n).not.toMatch(/resend|cloudflare|\d|re_|token/i); expect(n).toContain("Your payment is not affected."); }
+  });
+  test("1.11.0 audit M2: the 'late' note only promises what happens: the invoice can be late, and the key must be kept from the screen (a waiting mail never carries the key)", async () => {
+    expect(ORGANIZER_NOTE_LATE).toMatch(/invoice e-mail can arrive late/i);
+    expect(ORGANIZER_NOTE_LATE).not.toMatch(/\(invoice, organizer key\)|e-mails \(/i); // no longer "your e-mails (invoice, organizer key) can arrive late"
+    expect(ORGANIZER_NOTE_LATE).toMatch(/keep the organizer key shown on this screen/i);
+    expect(ORGANIZER_NOTE_LATE).toMatch(/does not carry the key/i);
+    // the fact the note rests on: a mail that failed and waits for its retry has the organizer key blanked out
+    resend = () => ({ status: 429, body: { name: "monthly_quota_exceeded" } });
+    const key = "ctk_" + "ab".repeat(24);
+    expect(await sendMail(env, env.DB, "boss@acme.com", "Your organizer key", `Your key: ${key}`, NOW)).toBe(false);
+    const kept = raw.prepare("SELECT body FROM outbox WHERE sent=0 AND body<>''").get() as { body: string };
+    expect(kept.body).not.toContain(key); expect(kept.body).toContain("blanked");
+    // and the public address carries the same words
+    expect((await publicStatus()).organizer).toEqual({ degraded: "late", note: ORGANIZER_NOTE_LATE });
+  });
+  test("audit 1 L1: only a MONTHLY quota answer is a used-up month: a daily quota answer raises no critical alert and no organizer note", async () => {
+    resend = () => ({ status: 429, body: { name: "daily_quota_exceeded" } });
+    await sendMail(env, env.DB, "boss@acme.com", "Corporate Tambola: invoice CT/1", "INVOICE", NOW);
+    expect(warns.filter((w) => w.includes("[mail-alert] CRITICAL"))).toEqual([]);
+    expect((await status()).organizer.degraded).toBe("none");
   });
   test("when nothing is wrong the organizer is told nothing", async () => {
     const s = await status();

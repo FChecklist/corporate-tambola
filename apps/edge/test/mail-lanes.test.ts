@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { makeD1 } from "./d1-sqlite";
 import { drainBulkMail, retryRecentOutbox, sendMail, type PayEnv } from "../src/pay";
 import { handle } from "./with-terms";
-import { BULK_AFTER_WARMUP, BULK_QUEUE_KEEP_MS, WARMUP_BULK_CAPS, bulkCapForDay, bulkDecision, mailStatus, readUsage, warmupDay } from "../src/mail-lanes";
+import { BULK_AFTER_WARMUP, BULK_QUEUE_KEEP_MS, STATUS_TTL_MS, WARMUP_BULK_CAPS, bulkCapForDay, bulkDecision, mailStatus, readUsage, suppressKey, warmupDay } from "../src/mail-lanes";
 import { adminTick } from "../src/admin";
 
 const DAY = 86_400_000, MIN = 60_000;
@@ -172,7 +172,7 @@ describe("the tick sends waiting bulk mail, after and never before the transacti
   });
   test("an address that went on the do-not-mail list while its mail waited is dropped, not mailed", async () => {
     await queueOne(EVE);
-    await env.DB.prepare("INSERT INTO mail_suppress(to_hash,to_mask,reason,at_ms) VALUES(?,?,?,?)").bind(await (await import("../src/mail-lanes")).hashMail("lead@acme.com"), "l***@acme.com", "complained", D1ST).run();
+    await env.DB.prepare("INSERT INTO mail_suppress(to_hash,to_mask,reason,at_ms) VALUES(?,?,?,?)").bind(await suppressKey("lead@acme.com"), "l***@acme.com", "complained", D1ST).run();
     const n = by("resend").length;
     expect(await drainBulkMail(env, dayAt(2) + 2 * 3_600_000)).toBe(0); expect(by("resend").length).toBe(n); expect(q("SELECT COUNT(*) c FROM mail_bulk_queue")[0].c).toBe(0);
   });
@@ -230,20 +230,37 @@ describe("80 % of the provider's monthly quota raises the alert (a log line and 
   });
 });
 
-describe("GET /api/status/mail: public, numbers only", () => {
+describe("GET /api/status/mail: public and short; the full numbers are the owner's", () => {
   const call = (method: string, path = "/api/status/mail", headers: Record<string, string> = {}, now = D1ST) => handle(new Request("http://x" + path, { method, headers }), env, now);
-  test("answers without any key; shows the lanes, the warm-up day, the quota and no secret or address", async () => {
+  const OWNER = { "x-organizer": "plat" };
+  test("the public answer has only ok, level, time and the organizer note: no counters, no plan size, no route setting, no secret or address", async () => {
     env.CF_EMAIL_TOKEN = TOKEN; env.CF_ACCOUNT_ID = ACC;
     await tx("secret.person@acme.com", "invoice"); await bulk("lead@acme.com", "r");
     const r = await call("GET"); expect(r.status).toBe(200); expect(r.headers.get("cache-control")).toBe("no-store");
     const s: any = await r.json();
+    expect(Object.keys(s).sort()).toEqual(["at", "level", "ok", "organizer"]);
+    expect(s).toMatchObject({ ok: true, level: "ok", organizer: { degraded: "none", note: null } });
+    const text = JSON.stringify(s); for (const bad of ["acme", "secret.person", KEY, TOKEN, ACC, "quota", "cloudflare", "lanes", "warmup", "doNotMail"]) expect(text).not.toContain(bad);
+  });
+  test("the public answer is read from the database at most every 30 seconds (a loop on the address, and every payment-done screen, share one read)", async () => {
+    const reads = () => { let n = 0; const real = env.DB.prepare.bind(env.DB); (env.DB as any).prepare = (sql: string) => { if (/mail_count|mail_suppress|mail_bulk_queue/.test(sql)) n++; return real(sql); }; return () => n; };
+    const n = reads();
+    await call("GET", "/api/status/mail", {}, D1ST); const first = n(); expect(first).toBeGreaterThan(0);
+    for (let i = 1; i <= 5; i++) await call("GET", "/api/status/mail", {}, D1ST + i * 5000); expect(n()).toBe(first); // five more calls inside 30 s: no new reads
+    await call("GET", "/api/status/mail", {}, D1ST + STATUS_TTL_MS + 1000); expect(n()).toBeGreaterThan(first); // after 30 s: one fresh read
+  });
+  test("the full numbers (lanes, plan size, warm-up day, backup route set, do-not-mail count) are behind the owner key", async () => {
+    env.CF_EMAIL_TOKEN = TOKEN; env.CF_ACCOUNT_ID = ACC;
+    await tx("secret.person@acme.com", "invoice"); await bulk("lead@acme.com", "r");
+    for (const h of [{}, { "x-organizer": "wrong" }, { ...OWNER, "x-cb-link": "1" }]) expect((await call("GET", "/api/owner/mail-status", h as any)).status).toBe(404);
+    const s: any = await (await call("GET", "/api/owner/mail-status", OWNER)).json();
     expect(s).toMatchObject({ ok: true, level: "ok", alert: null, month: "2026-11", quota: { monthly: 3000, sent: 1, pct: 0, providerSaysUsedUp: false }, cloudflare: { configured: true, today: 0 },
       lanes: { tx: { today: 1, month: 1 }, bulk: { today: 0, todayCap: 0, allowedNow: false, waiting: 1 } }, warmup: { day: 1, startedOn: "2026-11-20", bulkCapToday: 0, transactionalOnly: true } });
     const text = JSON.stringify(s); for (const bad of ["acme", "secret.person", KEY, TOKEN, ACC]) expect(text).not.toContain(bad);
   });
   test("a day later bulk is allowed (cap 20) and the day number moves; reading the status never starts the warm-up clock", async () => {
     delete (env as any).MAIL_WARMUP_START;
-    const s: any = await (await call("GET")).json(); expect(s.warmup).toMatchObject({ day: 1, startedOn: null });
+    const s: any = await (await call("GET", "/api/owner/mail-status", OWNER)).json(); expect(s.warmup).toMatchObject({ day: 1, startedOn: null });
     expect(q("SELECT COUNT(*) c FROM kv WHERE k='mail/warmup_start'")[0].c).toBe(0);
   });
   test("only GET and HEAD; it still answers while the site is switched off; a Resend quota answer shows as providerSaysUsedUp and not ok", async () => {
@@ -291,13 +308,28 @@ describe("which mails are bulk: the draft reminder and the Help Desk invitation;
     expect(await drainBulkMail(env, T0 + 14 * H)).toBe(1); // 2 Oct 00:00 UTC, day 2
     expect(by("resend").filter((c) => /not published yet/.test(c.subject)).length).toBe(1);
   });
-  test("the Help Desk invitation to an address a helper typed in is marked bulk; the sign-in code, invoice and payment mails are not", async () => {
+  test("the draft reminder is the ONLY bulk mail: the Help Desk invitation (a live link), the sign-in code, invoice and payment mails are all transactional", async () => {
     const { readFileSync } = await import("node:fs");
     const src = (f: string) => readFileSync(new URL("../src/" + f, import.meta.url), "utf8");
-    expect(src("helpdesk.ts")).toMatch(/asks to prepare Corporate Tambola games for you[\s\S]{0,900}lane: "bulk"/);
-    const marked = [...["worker.ts", "pay.ts", "partners.ts", "hostsetup.ts", "credit.ts", "rights.ts", "people.ts", "v2-receipts.ts", "v2-host.ts", "v2-support.ts", "owner-mail.ts"].flatMap((f) => [...src(f).matchAll(/lane: "bulk"/g)].map(() => f)), "helpdesk.ts"];
+    const marked = ["worker.ts", "pay.ts", "partners.ts", "hostsetup.ts", "credit.ts", "rights.ts", "people.ts", "v2-receipts.ts", "v2-host.ts", "v2-support.ts", "owner-mail.ts", "helpdesk.ts"].flatMap((f) => [...src(f).matchAll(/lane: "bulk"/g)].map(() => f));
     expect(marked.filter((f) => f === "worker.ts").length).toBe(1); // only the draft reminder
     expect(marked.filter((f) => f === "pay.ts").length).toBe(0); // no invoice, receipt or payment mail is bulk
-    for (const f of ["partners.ts", "hostsetup.ts", "credit.ts", "rights.ts", "people.ts", "v2-receipts.ts", "v2-host.ts", "v2-support.ts", "owner-mail.ts"]) expect([f, marked.includes(f)]).toEqual([f, false]);
+    for (const f of ["partners.ts", "hostsetup.ts", "credit.ts", "rights.ts", "people.ts", "v2-receipts.ts", "v2-host.ts", "v2-support.ts", "owner-mail.ts", "helpdesk.ts"]) expect([f, marked.includes(f)]).toEqual([f, false]);
+    expect(src("helpdesk.ts")).toMatch(/asks to prepare Corporate Tambola games for you[\s\S]{0,900}\{ secret: true \}\)/);
+  });
+  test("1.11.0 audit M1: a `secret` mail that reaches the bulk lane is never queued: no address, no body, no link is kept; it is dropped and the log says why", async () => {
+    // day 1: the bulk cap is 0, so a bulk mail would normally wait in the queue
+    expect(await sendMail(env, env.DB, "helper.target@acme.com", "invite", "https://tambola.test/helpdesk-accept.html?t=" + "a".repeat(48), D1ST, { lane: "bulk", secret: true })).toBe(false);
+    expect(q("SELECT COUNT(*) c FROM mail_bulk_queue")[0].c).toBe(0);
+    expect(q("SELECT COUNT(*) c FROM outbox WHERE body<>''")[0].c).toBe(0);
+    expect(JSON.stringify(q("SELECT * FROM mail_bulk_queue"))).not.toMatch(/helpdesk-accept|helper\.target/);
+    expect(q("SELECT outcome FROM mail_event").map((e) => e.outcome).join("|")).toMatch(/bulk_secret_dropped/);
+    // the provider refusing a secret bulk mail on an open day does not queue it either
+    resend = () => ({ status: 500 });
+    expect(await sendMail(env, env.DB, "helper.target@acme.com", "invite", "https://tambola.test/helpdesk-accept.html?t=" + "b".repeat(48), dayAt(6), { lane: "bulk", secret: true })).toBe(false);
+    expect(q("SELECT COUNT(*) c FROM mail_bulk_queue")[0].c).toBe(0);
+    // a plain (not secret) bulk mail still waits as before
+    expect(await sendMail(env, env.DB, "lead@acme.com", "reminder", "x", D1ST, { lane: "bulk" })).toBe(false);
+    expect(q("SELECT COUNT(*) c FROM mail_bulk_queue")[0].c).toBe(1);
   });
 });

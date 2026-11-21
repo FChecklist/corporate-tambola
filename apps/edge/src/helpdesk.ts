@@ -244,7 +244,7 @@ export async function helpdeskRoute(req: Request, env: PayEnv, now: number, spen
     await db.prepare("INSERT INTO helpdesk_link(id,partner_code,org_email_sealed,org_email_hash,org,state,token_hash,created_ms) VALUES(?,?,?,?,NULL,'invited',?,?)").bind(id, h.code, await sealText(env as any, email), eh, await sha("hdlink|" + token), now).run();
     const hn = h.name || "A Help Desk person", greet = clean(b?.name, 60);
     await sendMail(env, db, email, `${hn} asks to prepare Corporate Tambola games for you`,
-      `${greet ? `Hello ${greet},\n\n` : ""}${hn} asks to prepare games for you in Corporate Tambola.\n\nNothing is published or paid without your OK.\n\nRead the short promise and choose here: ${origin}/helpdesk-accept.html?t=${token}\n\nThe link works for ${INVITE_DAYS} days. If you do not know this person, ignore this e-mail and nothing happens.`, now, { secret: true, lane: "bulk" }); // an invitation to an address a helper typed in: bulk lane (mail-lanes.ts), it never takes the place of an invoice
+      `${greet ? `Hello ${greet},\n\n` : ""}${hn} asks to prepare games for you in Corporate Tambola.\n\nNothing is published or paid without your OK.\n\nRead the short promise and choose here: ${origin}/helpdesk-accept.html?t=${token}\n\nThe link works for ${INVITE_DAYS} days. If you do not know this person, ignore this e-mail and nothing happens.`, now, { secret: true }); // the invitation carries a live accept link: transactional lane (never the bulk queue, which would keep the link and the address for 24 hours; 1.11.0 audit M1). Its per-helper and per-recipient limits above keep it from crowding out an invoice.
     return json({ ok: true, id }); // the same answer whether or not the address already has an account
   }
 

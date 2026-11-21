@@ -153,7 +153,7 @@ export async function noteProviderQuota(db: D1, now: number): Promise<void> {
 }
 /** The words an organizer sees on the payment-done screens when the main mail service cannot take mail. Plain, true, no provider name, no numbers. */
 export const ORGANIZER_NOTE_BACKUP = "Our main e-mail service has reached its monthly limit, so your e-mails now go by our backup route. They can arrive a few minutes later than usual and may land in Spam, so please look there too. Your payment is not affected.";
-export const ORGANIZER_NOTE_LATE = "Our e-mail service has reached its monthly limit and our backup route is not switched on, so your e-mails (invoice, organizer key) can arrive late. We keep trying every few minutes. Your payment is not affected.";
+export const ORGANIZER_NOTE_LATE = "Our e-mail service has reached its monthly limit and our backup route is not switched on, so your invoice e-mail can arrive late. We keep trying every few minutes. Please keep the organizer key shown on this screen: an e-mail that has to wait does not carry the key. You can always sign in later with an e-mailed code. Your payment is not affected.";
 
 // ------------------------------------------------------------------------------------------------ what the provider tells us, per mail
 export async function recordSent(db: D1, now: number, ref: string, toHash: string, subject: string, lane: MailLane): Promise<void> {
@@ -172,13 +172,19 @@ export async function recordState(db: D1, now: number, ref: string, toHash: stri
 }
 
 // ------------------------------------------------------------------------------------------------ the do-not-mail list
+/** The do-not-mail list key: the EXACT address (lower case, no spaces), the +tag part kept. A bounce of `john+typo@co.com` must never stop mail to `john@co.com`. */
+export const suppressKey = async (to: string): Promise<string> => {
+  const n = String(to ?? "").normalize("NFKC").trim().toLowerCase();
+  return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode("suppress|" + n))), (b) => b.toString(16).padStart(2, "0")).join("");
+};
+/** The send-log / provider-tracking hash (plus part removed, so the log is one row per person). NOT the do-not-mail key: see `suppressKey`. */
 export const hashMail = async (to: string): Promise<string> => {
   const v = String(to ?? "").normalize("NFKC").trim().toLowerCase(), i = v.lastIndexOf("@"), n = i < 1 ? v : v.slice(0, i).split("+")[0] + v.slice(i); // the same address form the send log uses (plus part removed)
   return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(n))), (b) => b.toString(16).padStart(2, "0")).join("");
 };
-/** A lookup that fails means "not on the list": a database hiccup must never stop an invoice. */
+/** The do-not-mail list is read by the BULK lane only (reminders, invitations): invoices, sign-in codes, organizer-key mail, reports and owner notes are never held back by it. A lookup that fails means "not on the list". */
 export async function isSuppressed(db: D1, to: string): Promise<boolean> {
-  try { return !!(await db.prepare("SELECT 1 AS x FROM mail_suppress WHERE to_hash=?").bind(await hashMail(to)).first()); } catch { return false; }
+  try { return !!(await db.prepare("SELECT 1 AS x FROM mail_suppress WHERE to_hash=?").bind(await suppressKey(to)).first()); } catch { return false; }
 }
 /** Puts an address on the list (hash, not the address). Idempotent; the first reason stays. */
 export async function suppress(db: D1, now: number, toHash: string, mask: string, reason: string, ref: string | null): Promise<boolean> {
@@ -187,6 +193,26 @@ export async function suppress(db: D1, now: number, toHash: string, mask: string
 }
 /** A bounce that means "this address does not exist": the provider calls it Permanent. A full mailbox or a busy server (Transient) and the unknown (Undetermined) are not. */
 export const isHardBounce = (type: unknown): boolean => typeof type === "string" && type.trim().toLowerCase() === "permanent";
+
+// ------------------------------------------------------------------------------------------------ mail anybody can trigger without signing in
+/** The hour key `YYYY-MM-DDTHH`. */
+export const hourOf = (ms: number): string => new Date(ms).toISOString().slice(0, 13);
+export const DEFAULT_ANON_MAIL_PER_HOUR = 60;
+/**
+ * A cap on ALL mail that an anonymous visitor can trigger for any address (the Refer & earn code), counted over the whole site for the hour. The per-address and per-network caps stay; this one stops many addresses
+ * from many networks from using up the month's quota that the invoices need (audit 2, M4). Counts the call and answers whether it may send. A database hiccup answers "yes": the cap must never block by accident.
+ * Env `ANON_MAIL_PER_HOUR` (0 = no cap). Not a CAPTCHA: a bot check on these endpoints needs the owner's Turnstile keys (docs/MAIL-DELIVERABILITY-OWNER-STEPS.md).
+ */
+export async function anonMailAllowed(db: D1, env: { ANON_MAIL_PER_HOUR?: string }, now: number): Promise<boolean> {
+  const cap = posInt(env.ANON_MAIL_PER_HOUR) ?? DEFAULT_ANON_MAIL_PER_HOUR; if (cap === 0) return true;
+  try {
+    const k = `anonmail/${hourOf(now)}`;
+    await db.prepare("INSERT INTO kv(k,v) VALUES(?,'1') ON CONFLICT(k) DO UPDATE SET v=CAST(CAST(v AS INTEGER)+1 AS TEXT)").bind(k).run();
+    const n = Number((await db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0);
+    if (n === cap + 1) console.warn(`[mail-alert] anonymous-triggered mail passed ${cap} in one hour: the rest of the hour is not mailed (numbers only).`);
+    return n <= cap;
+  } catch { return true; }
+}
 
 // ------------------------------------------------------------------------------------------------ the bulk queue
 export async function queueBulk(db: D1, now: number, to: string, subject: string, body: string, html: string | undefined): Promise<void> {
@@ -199,6 +225,7 @@ export async function queueBulk(db: D1, now: number, to: string, subject: string
 export async function drainBulkQueue(db: D1, env: LaneEnv, now: number, txWaiting: () => Promise<boolean>, send: (row: { id: number; to_addr: string; subject: string; body: string; html: string | null }) => Promise<boolean>, max = 2): Promise<{ sent: number; waiting: number; dropped: number }> {
   let sent = 0, dropped = 0;
   try { dropped += (await db.prepare("DELETE FROM mail_bulk_queue WHERE at_ms<?").bind(now - BULK_QUEUE_KEEP_MS).run()).meta?.changes ?? 0; } catch { return { sent, waiting: 0, dropped }; }
+  if (dropped > 0) console.warn(`[mail-queue] ${dropped} waiting bulk mail(s) were older than 24 hours and were dropped, not sent (numbers only).`); // a drop is never silent
   const count = async () => Number((await db.prepare("SELECT COUNT(*) AS c FROM mail_bulk_queue").first<{ c: number }>())?.c ?? 0);
   if (await txWaiting()) return { sent, waiting: await count(), dropped };
   const rows = (await db.prepare("SELECT id, to_addr, subject, body, html FROM mail_bulk_queue ORDER BY id LIMIT ?").bind(Math.max(1, max) * 3).all<any>()).results ?? [];
@@ -219,6 +246,7 @@ export async function lanesTick(db: D1, now: number): Promise<void> {
     await db.prepare("DELETE FROM mail_suppress WHERE at_ms<?").bind(now - SUPPRESS_KEEP_MS).run();
     await db.prepare("DELETE FROM mail_count WHERE day<?").bind(dayOf(now - MAIL_COUNT_KEEP_DAYS * 86_400_000)).run();
     await db.prepare("DELETE FROM mail_bulk_queue WHERE at_ms<?").bind(now - BULK_QUEUE_KEEP_MS).run();
+    await db.prepare("DELETE FROM kv WHERE k LIKE 'anonmail/%' AND k<?").bind(`anonmail/${hourOf(now - 48 * 3_600_000)}`).run();
   } catch { /* best effort */ }
 }
 
@@ -232,6 +260,16 @@ export interface MailStatus {
   doNotMail: { addresses: number };
   /** What an organizer should be told: `none` (nothing to say), `backup` (main service used up, mail goes by the Cloudflare route), `late` (used up, no backup route: mail is late). `note` is the plain-words text, or null. */
   organizer: { degraded: "none" | "backup" | "late"; note: string | null };
+}
+/** What the PUBLIC address shows: no counters, no plan size, no route settings. Only what an organizer screen needs, and whether all is well. The full read is the owner's (`GET /api/owner/mail-status`). */
+export const publicMailStatus = (s: MailStatus): { ok: boolean; level: MailStatus["level"]; at: string; organizer: MailStatus["organizer"] } => ({ ok: s.ok, level: s.level, at: s.at, organizer: s.organizer });
+const statusMemo = new WeakMap<object, { at: number; s: MailStatus }>();
+/** The status, read from the database at most once every 30 seconds per worker: a script that loops on the public address, and every payment-done screen, share one read (audit 2, M3). */
+export const STATUS_TTL_MS = 30_000;
+export async function mailStatusCached(db: D1, env: LaneEnv & { CF_EMAIL_TOKEN?: string; CF_ACCOUNT_ID?: string }, now: number): Promise<MailStatus> {
+  const c = statusMemo.get(db);
+  if (c && now >= c.at && now - c.at < STATUS_TTL_MS) return c.s;
+  const s = await mailStatus(db, env, now); statusMemo.set(db, { at: now, s }); return s;
 }
 export async function mailStatus(db: D1, env: LaneEnv & { CF_EMAIL_TOKEN?: string; CF_ACCOUNT_ID?: string }, now: number): Promise<MailStatus> {
   const u = await readUsage(db, now), quota = monthlyQuotaOf(env), daily = dailyLimitOf(env), sent = u.txMonth + u.bulkMonth, pct = Math.floor((sent * 100) / quota), month = dayOf(now).slice(0, 7);

@@ -10,7 +10,7 @@ Everything here is for the owner only. It uses the platform key (`ORGANIZER_SECR
 | Errors (A7) | `GET /api/owner/errors` (by hour), and the public `GET /api/status/health` -> `{ok, errors_last_hour, threshold, overdue_purge, overdue_hours, maintenance}` | "A7", "A8" |
 | Mail events (E12) | `GET /api/owner/mail-events?event=bounced` | "E12" |
 | Do-not-mail list (1.11.0) | `GET /api/owner/mail-suppress` (masked), `POST /api/owner/mail-suppress {"action": "clear" or "add", "email": "..."}` | `apps/edge/test/mail-webhook.test.ts` |
-| Mail counters and alert (1.11.0) | public `GET /api/status/mail` (numbers only) | `apps/edge/test/mail-lanes.test.ts` |
+| Mail counters and alert (1.11.0) | owner `GET /api/owner/mail-status` (full numbers); public `GET /api/status/mail` is short: `ok`, `level`, `at`, `organizer` | `apps/edge/test/mail-lanes.test.ts` |
 
 ## The site switch
 

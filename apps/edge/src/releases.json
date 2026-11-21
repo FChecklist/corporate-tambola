@@ -8,11 +8,16 @@
     "changes": [
       "Invoice, payment, game-start and sign-in e-mails now travel in their own lane: reminders and invitations are bulk mail, have their own daily limit and wait in a queue, and can never take the part of the allowance kept for invoices",
       "When our main mail service has used up its month (it did on 21 Nov 2026), invoice mail goes by the backup route, and the payment screens tell the organizer so in plain words: mail can arrive a few minutes late and may land in Spam; the payment is not affected",
-      "The owner is warned when 80 % of the month's mail allowance is used, and at once when the mail service itself says the month is used up; a public status address shows the counters",
+      "The owner is warned when 80 % of the month's mail allowance is used, and at once when the mail service itself says the month is used up; a public status address says whether all is well, and the owner can read the counters",
       "A young sending domain warms up slowly: the first day is invoice mail only, bulk mail starts at 20 a day on day 2 and grows day by day",
       "Every mail the mail service takes is followed (delivered, bounced, complained, delayed) once the owner sets the Resend webhook; an address that bounced for good or marked a mail as spam is not mailed again, and the owner can take it off the list",
       "Fairness: a Host or Organizer can no longer choose the number by waiting and then signing a press that names a random-number round that has already been published",
-      "Ten complete 250-player test games (scheduled and Host-started games, a Host who stalls, ID-only invite, late joiners, pause and resume, every prize type, mail fan-out, the end-of-game report and the 365-day deletion) pass; a deleted game's two small leftover counters are now deleted with it"
+      "Ten complete 250-player test games (scheduled and Host-started games, a Host who stalls, ID-only invite, late joiners, pause and resume, every prize type, mail fan-out, the end-of-game report and the 365-day deletion) pass; a deleted game's two small leftover counters are now deleted with it",
+      "Audit fixes before any deploy: the payment-done screen no longer breaks for a returning visitor who still holds an old saved copy of the site's script (the new note is optional there, and the saved copies are renewed)",
+      "A Help Desk invitation (it carries a live link) is now sent as an ordinary important e-mail, never parked in the waiting queue for bulk mail; a mail that carries a link or key is never kept in that queue",
+      "The note shown when mail may be late no longer promises e-mailed organizer keys: it says the invoice can be late and tells the organizer to keep the key shown on the screen",
+      "The do-not-mail list now holds back reminders and invitations only; invoices, sign-in codes, organizer-key mail, reports and the owner's own notes are always tried, and a +tag address is a different address from the plain one",
+      "The public mail status shows only whether all is well and the organizer note; the full counters are the owner's. The Refer & earn code has a site-wide cap of mails per hour, so many sign-ups cannot use up the month's mail allowance"
     ]
   },
   {

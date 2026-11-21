@@ -6,7 +6,7 @@ import { makeD1 } from "./d1-sqlite";
 import { handle } from "./with-terms";
 import { retryRecentOutbox, retryOutbox, sendMail, sendReportMail, type PayEnv } from "../src/pay";
 import { fromIsOurs } from "../src/admin";
-import { hashMail, isHardBounce } from "../src/mail-lanes";
+import { hashMail, isHardBounce, suppressKey } from "../src/mail-lanes";
 
 const T = Date.UTC(2026, 10, 21, 9, 0, 0), MIN = 60_000;
 const SECRET = "whsec_" + Buffer.from("test-secret-bytes-0123456789abcd").toString("base64");
@@ -35,6 +35,9 @@ const hook = (type: string, data: Record<string, unknown>, id = "msg_" + Math.ra
 const FROM = "Corporate Tambola <hello@corporatetambola.com>";
 const ev = (over: Record<string, unknown> = {}) => ({ email_id: "em_1", from: FROM, to: ["Maya.Lopez@Acme.com"], subject: "Corporate Tambola: invoice", ...over });
 const send = (to = "maya.lopez@acme.com", subject = "invoice", now = T) => sendMail(env, env.DB, to, subject, "INVOICE", now);
+const LATE = T + 5 * 86_400_000; // warm-up day 6: the bulk lane is open
+/** a BULK mail (a reminder): the only kind the do-not-mail list holds back */
+const bsend = (to = "maya.lopez@acme.com", subject = "reminder", now = LATE) => sendMail(env, env.DB, to, subject, "REMINDER", now, { lane: "bulk" });
 
 describe("per mail: what the mail service says about each mail is kept against that mail", () => {
   test("a sent mail is tracked by the provider's id; delivered updates the same row and the mail log says so", async () => {
@@ -84,18 +87,26 @@ describe("a hard bounce or a complaint: the address is not mailed again", () => 
     const row = q("SELECT * FROM mail_suppress")[0]; expect(row).toMatchObject({ to_mask: "m***@acme.com", reason: "bounced_permanent", ref: "em_1", at_ms: T + MIN }); expect(row.to_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(JSON.stringify(row)).not.toMatch(/maya|lopez|does not exist/i);
     const n = calls.length;
-    expect(await send("maya.lopez@acme.com", "invoice 2", T + 2 * MIN)).toBe(false);
+    expect(await bsend("maya.lopez@acme.com", "reminder 2")).toBe(false); // a BULK mail is not sent to a stopped address
     expect(calls.length).toBe(n); expect(q("SELECT outcome FROM mail_event ORDER BY id").map((e) => e.outcome)).toContain("suppressed_bounce");
-    expect(q("SELECT COUNT(*) c FROM outbox WHERE subject LIKE '%invoice 2%'")[0].c).toBe(0); // nothing kept to retry
+    expect(q("SELECT COUNT(*) c FROM outbox WHERE subject LIKE '%reminder 2%'")[0].c).toBe(0); expect(q("SELECT COUNT(*) c FROM mail_bulk_queue")[0].c).toBe(0); // nothing kept to retry
+    expect(await send("maya.lopez@acme.com", "invoice 2", T + 2 * MIN)).toBe(true); // an invoice (transactional) still goes: a bounce of a reminder never costs a customer their invoice
+    expect(calls.length).toBe(n + 1);
   });
-  test("the same person written another way (capitals, a +tag) is the same address", async () => {
+  test("the same address written in capitals or with spaces is the same address; a +tag is a DIFFERENT address (a bounce of john+typo@co.com never stops john@co.com)", async () => {
     await hook("email.bounced", ev({ bounce: { type: "Permanent", subType: "General" } }), "b1");
-    for (const a of ["MAYA.LOPEZ@ACME.COM", "maya.lopez+games@acme.com", " Maya.Lopez@acme.com "]) expect([a, await send(a, "x", T + MIN)]).toEqual([a, false]);
-    expect(await send("maya.other@acme.com", "x", T + MIN)).toBe(true);
+    for (const a of ["MAYA.LOPEZ@ACME.COM", " Maya.Lopez@acme.com "]) expect([a, await bsend(a, "x")]).toEqual([a, false]);
+    for (const a of ["maya.lopez+games@acme.com", "maya.other@acme.com"]) expect([a, await bsend(a, "x")]).toEqual([a, true]);
+    // and the other way round: a bounce of the tagged address leaves the plain address alone, for bulk and transactional mail
+    raw.run("DELETE FROM mail_suppress");
+    await hook("email.bounced", ev({ to: ["Maya.Lopez+typo@Acme.com"], bounce: { type: "Permanent", subType: "General" } }), "b2");
+    expect(q("SELECT COUNT(*) c FROM mail_suppress")[0].c).toBe(1);
+    expect(await bsend("maya.lopez@acme.com", "y")).toBe(true); expect(await send("maya.lopez@acme.com", "z")).toBe(true); expect(await bsend("maya.lopez+typo@acme.com", "w")).toBe(false);
   });
   test("a complaint (marked as spam) does the same", async () => {
     await hook("email.complained", ev(), "c1");
-    expect(q("SELECT reason FROM mail_suppress")).toEqual([{ reason: "complained" }]); expect(await send("maya.lopez@acme.com", "x", T + MIN)).toBe(false);
+    expect(q("SELECT reason FROM mail_suppress")).toEqual([{ reason: "complained" }]); expect(await bsend("maya.lopez@acme.com", "x")).toBe(false);
+    expect(await send("maya.lopez@acme.com", "sign-in code", T + MIN)).toBe(true); // one press of "Spam" on a reminder never takes away the sign-in code, the invoice or the organizer key
   });
   test("a transient bounce (mailbox full), an undetermined one, a delay, a failure and a delivery do NOT stop mailing", async () => {
     await hook("email.bounced", ev({ bounce: { type: "Transient", subType: "MailboxFull" } }), "t1");
@@ -112,16 +123,22 @@ describe("a hard bounce or a complaint: the address is not mailed again", () => 
     expect(fromIsOurs(undefined)).toBe(true); expect(fromIsOurs("x@corporatetambola.com.evil.com")).toBe(false); expect(fromIsOurs("A <a@corporatetambola.com>", "B <b@corporatetambola.com>")).toBe(true);
     expect(isHardBounce("Permanent")).toBe(true); expect(isHardBounce("permanent ")).toBe(true); expect(isHardBounce("Transient")).toBe(false); expect(isHardBounce(undefined)).toBe(false);
   });
-  test("it holds for every kind of mail: an invoice, a report with a PDF, and the retry loops never send to a stopped address", async () => {
-    await env.DB.prepare("INSERT INTO mail_suppress(to_hash,to_mask,reason,at_ms) VALUES(?,?,?,?)").bind(await hashMail("maya.lopez@acme.com"), "m***@acme.com", "bounced_permanent", T).run();
+  test("it holds back the BULK lane only: an invoice, a sign-in code, an organizer-key mail, a report with a PDF and both retry loops still send to a listed address", async () => {
+    await env.DB.prepare("INSERT INTO mail_suppress(to_hash,to_mask,reason,at_ms) VALUES(?,?,?,?)").bind(await suppressKey("maya.lopez@acme.com"), "m***@acme.com", "bounced_permanent", T).run();
+    expect(await send("maya.lopez@acme.com", "invoice")).toBe(true);
+    expect(await sendMail(env, env.DB, "maya.lopez@acme.com", "Your sign-in code", "123456", T, { secret: true })).toBe(true);
+    expect(await sendMail(env, env.DB, "maya.lopez@acme.com", "Your organizer key", "ctk_" + "a".repeat(48), T, { secret: true })).toBe(true);
+    expect(await sendMail(env, env.DB, "maya.lopez@acme.com", "Owner note", "x", T, { owner: true })).toBe(true);
     const before = calls.length;
-    expect(await sendReportMail(env, "maya.lopez@acme.com", "Your report", "t", [{ filename: "r.pdf", content: new Uint8Array([1]) }])).toBe(false);
-    // a mail that failed BEFORE the address was stopped waits in the outbox: neither retry loop sends it, and its body is dropped
+    expect(await sendReportMail(env, "maya.lopez@acme.com", "Your report", "t", [{ filename: "r.pdf", content: new Uint8Array([1]) }])).toBe(true);
+    expect(calls.length).toBe(before + 1);
+    // a mail that failed earlier waits in the outbox: both retry loops still send it
     for (const [k, run] of [["tick", (now: number) => retryRecentOutbox(env, now)], ["daily", (now: number) => retryOutbox(env, now)]] as const) {
       await env.DB.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES('maya.lopez@acme.com','invoice ' || ?,'INVOICE',?,0)").bind(k, T - 10 * MIN).run();
       await run(T + MIN);
     }
-    expect(calls.length).toBe(before); expect(q("SELECT COUNT(*) c FROM outbox WHERE body<>''")[0].c).toBe(0);
+    expect(q("SELECT COUNT(*) c FROM outbox WHERE body<>''")[0].c).toBe(0); // both were sent and their bodies forgotten
+    expect(await bsend()).toBe(false); // the bulk lane is the one that is held back
   });
   test("the lookup that decides can fail without stopping an invoice: with the table missing the mail still goes", async () => {
     raw.run("DROP TABLE mail_suppress"); expect(await send()).toBe(true);
@@ -165,17 +182,17 @@ describe("the owner can read the do-not-mail list (masked) and take an address o
   test("only the owner; clearing a wrongly stopped customer lets the next mail go; the address is not written to the access log", async () => {
     await hook("email.bounced", ev({ bounce: { type: "Permanent", subType: "General" } }), "b1");
     for (const h of [{}, { "x-organizer": "wrong" }, { ...PLAT, "x-cb-link": "1" }]) { expect((await route("GET", "/api/owner/mail-suppress", undefined, h as any)).status).toBe(404); expect((await route("POST", "/api/owner/mail-suppress", JSON.stringify({ action: "clear", email: "maya.lopez@acme.com" }), h as any)).status).toBe(404); }
-    expect(await send("maya.lopez@acme.com", "x", T + MIN)).toBe(false);
+    expect(await bsend("maya.lopez@acme.com", "x")).toBe(false);
     const list = await (await route("GET", "/api/owner/mail-suppress", undefined, PLAT)).json() as any;
     expect(list).toMatchObject({ count: 1, addresses: [{ to: "m***@acme.com", reason: "bounced_permanent" }] }); expect(JSON.stringify(list)).not.toMatch(/lopez/i);
     expect(await (await route("POST", "/api/owner/mail-suppress", JSON.stringify({ action: "clear", email: "Maya.Lopez@acme.com" }), PLAT)).json()).toEqual({ ok: true, cleared: true });
-    expect(await send("maya.lopez@acme.com", "x", T + 2 * MIN)).toBe(true);
+    expect(await bsend("maya.lopez@acme.com", "x", LATE + 2 * MIN)).toBe(true);
     expect(await (await route("POST", "/api/owner/mail-suppress", JSON.stringify({ action: "clear", email: "maya.lopez@acme.com" }), PLAT)).json()).toEqual({ ok: true, cleared: false });
     expect((await route("POST", "/api/owner/mail-suppress", JSON.stringify({ action: "clear", email: "not-an-address" }), PLAT)).status).toBe(400);
     expect(JSON.stringify(q("SELECT * FROM audit_access"))).not.toMatch(/lopez/i);
   });
   test("the owner can add an address by hand (for a complaint that came another way)", async () => {
     expect(await (await route("POST", "/api/owner/mail-suppress", JSON.stringify({ action: "add", email: "angry@acme.com" }), PLAT)).json()).toEqual({ ok: true, added: true });
-    expect(await send("angry@acme.com")).toBe(false);
+    expect(await bsend("angry@acme.com")).toBe(false); expect(await send("angry@acme.com")).toBe(true); // a reminder is held back, an invoice is not
   });
 });

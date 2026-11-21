@@ -105,7 +105,7 @@ Why: the Resend free plan allows 3,000 mails a month and 100 a day, and the acco
 3. Tell the site the new limits so the 80 % alert and the lane reserve use the right numbers. Cloudflare, **Workers & Pages**, **corporate-tambola**, **Settings**, **Variables and Secrets**, **Add**, type **Text** (these are not secret):
    * Name `MAIL_MONTHLY_QUOTA`, value: the monthly number of the new plan (for example `50000`).
    * Name `MAIL_DAILY_LIMIT`, value: the daily number of the plan, or `0` when the plan has no daily limit.
-4. Redeploy (ask BOSS). Check `GET https://housie.corporatetambola.com/api/status/mail`: `quota.monthly` must show the new number.
+4. Redeploy (ask BOSS). Check `GET https://housie.corporatetambola.com/api/owner/mail-status` with the platform key (`x-organizer` header): `quota.monthly` must show the new number.
 
 ### B. Switch on (or keep) the Cloudflare Email route as the second path
 
@@ -117,13 +117,13 @@ Already coded in 1.9.2 (PR 32, `docs/MAIL-FALLBACK-2026-11-20.md`). It is off un
 4. Redeploy (ask BOSS).
 5. Limits to know: 3,000 mails a month are inside the Workers Paid plan, then a price per thousand; 200 mails a day for the whole account. Only transactional mail uses this route; the bulk lane never does (code rule), so marketing sent by this site cannot use up the 200.
 
-Check: after redeploy `GET https://housie.corporatetambola.com/api/status/mail` shows `"cloudflare": { "configured": true ... }`.
+Check: after redeploy `GET https://housie.corporatetambola.com/api/owner/mail-status` (platform key) shows `"cloudflare": { "configured": true ... }`.
 
 ---
 
 ## 5. What BOSS should watch (no dashboard needed)
 
-Public address, numbers only (no address, no key): `GET https://housie.corporatetambola.com/api/status/mail`.
+The full numbers are owner only: `GET https://housie.corporatetambola.com/api/owner/mail-status` with the platform key in the `x-organizer` header. The public address `GET https://housie.corporatetambola.com/api/status/mail` shows only `ok`, `level`, `at` and the organizer note (it is safe for an uptime check: `ok` turns false at 80 % or when the provider says its quota is used up). The table below is the owner read.
 
 | Field | Meaning |
 |---|---|
@@ -136,7 +136,7 @@ Public address, numbers only (no address, no key): `GET https://housie.corporate
 
 The same alert is written ONCE a month, as a log line starting `[mail-alert]` (Cloudflare dashboard, **Workers & Pages**, **corporate-tambola**, **Logs** / real-time logs), at 80 % and at 100 %. The line has numbers only.
 
-Warm-up in short: day 1 only transactional mail; bulk mail (draft reminders, Help Desk invitations, any marketing sent through this site) is allowed 20 a day on day 2, then 30, 40, 50, 75, 100, 125, 150, 175, 200, 250, 300, 400, and 500 from day 15. Day 1 is the day the new code first handled a mail. To pick another start day, set the Pages variable `MAIL_WARMUP_START` to a date like `2026-11-21`.
+Warm-up in short: day 1 only transactional mail; bulk mail (draft reminders, any marketing sent through this site; the Help Desk invitation is NOT bulk: it carries a link and goes with the invoices) is allowed 20 a day on day 2, then 30, 40, 50, 75, 100, 125, 150, 175, 200, 250, 300, 400, and 500 from day 15. Day 1 is the day the new code first handled a mail. To pick another start day, set the Pages variable `MAIL_WARMUP_START` to a date like `2026-11-21`.
 
 ## What no step here can do
 
