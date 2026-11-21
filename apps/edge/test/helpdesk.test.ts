@@ -161,7 +161,10 @@ describe("the Organizer says Allow", () => {
     expect((await call("GET", "/api/org/keys", undefined, org(w.aiKey))).status).toBe(403);
     expect((await call("POST", "/api/org/host", { email: "x@acme.com" }, org(w.aiKey))).status).toBe(403);
     expect((await call("POST", "/api/org/close", { confirm: true }, org(w.aiKey))).status).toBe(403);
-    expect((await call("POST", `/api/z/HD-GAME-1/paylink`, {}, org(w.aiKey))).status).toBe(403);
+    const plink = await call("POST", `/api/z/HD-GAME-1/paylink`, {}, org(w.aiKey));
+    expect(plink.status).toBe(403);
+    expect((await j(plink)).error).toContain("A Help Desk helper's key cannot make a pay link"); // the helper-key guard in worker.ts, not the general refusal
+    expect(raw.query("SELECT COUNT(*) c FROM paylink WHERE eid='HD-GAME-1'").get()).toEqual({ c: 0 });
     // the Organizer's own AI key makes games that are not the helper's
     const ownAi = (await j(await call("GET", "/api/org/ai/link", undefined, org(w.master)))).aiMessage.match(/cta_[0-9a-f]{48}/)[0];
     expect((await makeGame(ownAi, "OWN-GAME-1")).status).toBe(200);

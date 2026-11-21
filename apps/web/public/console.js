@@ -33,7 +33,7 @@
   const CAPS = [10, 25, 50, 100];
   const PAUSE_WHY = ["Internet issue", "Technical problem", "Safety"];
   const FILTERS = [["all", "Everyone"], ["host", "Hosts"], ["team_lead", "Team Leads"], ["family", "Family"], ["colleague", "Colleagues"], ["notjoined", "Not joined"]];
-  const ord = (n) => ["", "1st", "2nd", "3rd"][n] || n + "th";
+  const ord = (k) => { const n = Math.floor(k); if (!(n >= 1)) return ""; const t = n % 100, r = n % 10; return n + (t >= 11 && t <= 13 ? "th" : r === 1 ? "st" : r === 2 ? "nd" : r === 3 ? "rd" : "th"); }; // same rule as packages/shared/src/ordinal.ts
   let indT = null;
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

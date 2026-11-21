@@ -4,17 +4,17 @@
 //  - the verification record is signed (HMAC) and hash-chained per game, and keeps only NON-PERSONAL fields (no name, no mobile, no e-mail, no game name).
 // Anyone can check a certificate at /verify.html?c=<id> (API: GET /api/v2/verify/<id>).
 import { PRIZE_HOUSES } from "../../../packages/beacon/src/config";
+import { ordinalName } from "../../../packages/shared/src/ordinal";
 import { openPii } from "./pii";
 import { sha, randHex, type V2Ctx } from "./v2-types";
 
 const HOUSE: Record<string, string> = Object.fromEntries(PRIZE_HOUSES.map((h) => [h.id, h.label]));
-const ord = (n: number) => ["", "1st", "2nd", "3rd"][n] ?? `${n}th`;
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
 
 /** "Early Five", "2nd Full House", "Lucky draw": the same house names the game uses. */
 export function prizeName(pattern: string, ordinal: number, multi: boolean): string {
   const base = pattern === "lucky" ? "Lucky draw" : /^[a-z0-9]+@2$/.test(pattern) ? `${HOUSE[pattern.split("@")[0]!] ?? pattern.split("@")[0]} (two tickets)` : HOUSE[pattern] ?? pattern;
-  return (multi || ordinal > 1 ? ord(ordinal) + " " : "") + base;
+  return (multi || ordinal > 1 ? ordinalName(ordinal) + " " : "") + base;
 }
 
 const secretOf = (env: any): string => String(env.DATA_KEY || env.ORGANIZER_SECRET || "");

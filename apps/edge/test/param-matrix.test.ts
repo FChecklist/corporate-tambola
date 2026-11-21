@@ -38,7 +38,7 @@ const ROWS: Row[] = [
   { name: "clone a game", method: "POST", path: `/api/z/${GID}/clone`, body: {}, allowed: ["master", "host", "platform"] },
   { name: "see the people list", method: "GET", path: `/api/z/${GID}/people`, allowed: ["master", "host", "cohost", "platform"] },
   { name: "export the people list", method: "GET", path: `/api/z/${GID}/people/export`, allowed: ["master", "host", "platform"] },
-  { name: "make a pay link", method: "POST", path: `/api/z/${GID}/paylink`, body: {}, allowed: ["master", "host", "cohost"] },
+  { name: "make a pay link", method: "POST", path: `/api/z/${GID}/paylink`, body: {}, allowed: ["master", "ai", "host", "cohost"] },
   { name: "read the Co-host page of a game", method: "GET", path: `/api/z/${GID}/cohost`, allowed: ["master", "ai", "host", "cohost", "platform"] },
   { name: "create a game", method: "POST", path: "/api/z", body: { id: "MATRIX-NEW", startRound: startIn(2 * HOUR), callSeconds: 6, cap: 100 }, allowed: ["master", "ai", "platform"] },
   { name: "add a Host", method: "POST", path: "/api/org/host", body: { mobile: "9876500077", label: "X" }, allowed: ["master"] },
