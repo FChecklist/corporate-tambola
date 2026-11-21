@@ -79,13 +79,15 @@ export async function retentionCheck(c: Ctx) {
   w.t = due - T0 - 5 * MIN; await w.call("POST", "/api/lifecycle/tick", {}, { "x-organizer": "plat" }); await w.call("POST", "/api/purge", {}, { "x-organizer": "plat" });
   const early = w.one("SELECT COUNT(*) n FROM engagement WHERE id=?", id).n;
   w.t = due - T0 + 5 * MIN; await w.call("POST", "/api/lifecycle/tick", {}, { "x-organizer": "plat" }); await w.call("POST", "/api/purge", {}, { "x-organizer": "plat" });
+  // the real scheduled tick (worker.ts runTick) also runs adminTick every time; it is what forgets the per-mail state `mail_track` (3 days, mail-lanes.ts lanesTick), so the test clock runs it too
+  const { adminTick } = await import("../../apps/edge/src/admin"); await adminTick(w.env.DB as any, w.utc());
   const { bad: detail, kept } = leftovers(w, id);
   const bad = Object.keys(detail);
   rec.extra.retention = { endMs: end, deletedAtIST: new Date(due + 5.5 * HOUR).toISOString().replace("Z", " IST"), stillThere5MinBefore: early === 1, leftoverRows: detail, keptOnPurpose: kept, leftoverKvKeys: bad.includes("kv") ? w.q("SELECT k FROM kv WHERE k LIKE ?", "%" + id + "%").map((x: any) => x.k) : [] };
   check(rec.checks, "365 days later: the game is kept until 00:00 IST of its last day and then everything of it is deleted, except the records kept on purpose", early === 1 && w.one("SELECT COUNT(*) n FROM engagement WHERE id=?", id).n === 0 && bad.length === 0, `before=${early} leftovers=${JSON.stringify(detail)} ${JSON.stringify((rec.extra.retention as any).leftoverKvKeys)}`);
 }
 
-/** Every table row that still mentions the game, split into "kept on purpose" (settings record, payment record the law keeps, append-only audit certificates, the Organizer's own consent rows, mail log younger than 3 days) and "should be gone". */
+/** Every table row that still mentions the game, split into "kept on purpose" (settings record, payment record the law keeps, append-only audit certificates, the Organizer's own consent rows, mail log and per-mail mail state younger than 3 days) and "should be gone". */
 export function leftovers(w: World, id: string) {
   const bad: Record<string, number> = {}, kept: Record<string, number> = {};
   const KEEP = new Set(["game_record", "entitlement", "audit_cert", "audit_stats"]);
@@ -94,7 +96,7 @@ export function leftovers(w: World, id: string) {
       let nb = 0, nk = 0;
       for (const row of w.q(`SELECT * FROM "${t}"`)) {
         if (!JSON.stringify(row).includes(id)) continue;
-        const keep = KEEP.has(t) || (t === "consent_log" && row.kind !== "K4") || (t === "outbox" && Number(row.at_ms) > w.utc() - 3 * DAY);
+        const keep = KEEP.has(t) || (t === "consent_log" && row.kind !== "K4") || (t === "outbox" && Number(row.at_ms) > w.utc() - 3 * DAY) || (t === "mail_track" && (Number(row.at_ms) > w.utc() - 3 * DAY || Number(row.at_ms) > Date.now() - 3 * DAY)); // mail_track (per-mail state, 3 days): a mail sent by a path that has no clock argument (the report mail) is stamped with the REAL clock, which in this test is later than the virtual clock, so it is "young" by the real clock; in production the two are the same
         if (keep) nk++; else nb++;
       }
       if (nb) bad[t] = nb; if (nk) kept[t] = nk;

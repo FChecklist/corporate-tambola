@@ -1,4 +1,4 @@
-// Mail lanes, warm-up, send counter, quota alert and the do-not-mail list (release 1.9.3, 20 Nov 2026).
+// Mail lanes, warm-up, send counter, quota alert and the do-not-mail list (release 1.11.0, 20 Nov 2026).
 //
 // WHY: the live Resend account answered `429 monthly_quota_exceeded`; the domain is young (registered 15 Oct 2026) and has no sending history, so a burst of mail of any kind can
 // hurt the mail that matters (invoice, payment, sign-in code). Two lanes keep them apart:

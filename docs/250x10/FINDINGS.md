@@ -1,6 +1,6 @@
 ## Failure points found, root causes and fixes
 
-Branch `claude/youthful-pasteur-jpgax0`. Nothing is merged or deployed. "Before" data (the same games on the code before the fixes) is in `docs/250x10/data-before-fixes/`. Each fix was proven with a test that goes **red without the fix and green with it** (the fix was taken out with `git stash`, the test run, the fix put back).
+Branch `boss/mail-lanes-250x10-1.11.0` (release 1.11.0; the games were first built on `claude/youthful-pasteur-jpgax0`, PR #35). Nothing is merged or deployed. The ten games in `RESULTS.md` were RUN AGAIN on the 1.11.0 code (1.10.2 plus mail lanes plus these fixes): all ten pass. The earlier "before the fixes" records were not carried over; each fix is proven by a test that goes **red without the fix and green with it**. Row 2 (the ordinal) is already fixed in 1.10.2 by `packages/shared/src/ordinal.ts` (PR #22); only its extra guard test `ordinal-names.test.ts` is kept. In 1.11.0 the games also check the new mail tables: the per-mail state `mail_track` is forgotten after 3 days by the scheduled tick (the test clock now runs it like the real tick), and a report mail stamped by the real clock counts as young.
 
 | # | Found in | What went wrong | Root cause | Fix | Test (red before, green after) | Size |
 |---|---|---|---|---|---|---|

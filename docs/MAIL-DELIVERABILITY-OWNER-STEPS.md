@@ -1,4 +1,4 @@
-# Mail deliverability: what the owner must set in the dashboards (release 1.9.3, 21 Nov 2026)
+# Mail deliverability: what the owner must set in the dashboards (release 1.11.0, 21 Nov 2026)
 
 For: the owner. Nothing here is in the repository: each step is a setting in a dashboard. This file holds NAMES and places only, never a value. Do not paste a secret into a chat, a ticket or a file. Where a step needs a secret, you type it once into the Cloudflare dashboard (or use the one command shown).
 

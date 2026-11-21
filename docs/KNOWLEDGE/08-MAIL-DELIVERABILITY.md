@@ -1,6 +1,6 @@
-# Mail deliverability: lanes, warm-up, delivery reports (release 1.9.3, 21 Nov 2026)
+# Mail deliverability: lanes, warm-up, delivery reports (release 1.11.0, 21 Nov 2026)
 
-Written for a future person or AI session that has not seen this work. It describes the code as built in branch `claude/intelligent-mendel-gacbp5` (stacked on PR 32, the Cloudflare Email fallback). Nothing here is deployed. No secret or address is in this page.
+Written for a future person or AI session that has not seen this work. It describes the code as built in PR 34 (branch `claude/intelligent-mendel-gacbp5`) and landed in release 1.11.0 on top of the 1.10.2 branch. Nothing here is deployed. No secret or address is in this page.
 
 ## 1. What and why
 - 20 Nov 2026: the owner's Rs 1 payments made invoices, but mails Resend accepted were not seen in his inbox and others were refused with `429 monthly_quota_exceeded` (the free plan, shared by the products). The domain `corporatetambola.com` is young (registered 15 Oct 2026), has no sending history, and nobody received delivery feedback (RCA: `docs/RCA-NO-INVOICE-MAIL-2026-11-20.md`, PR 33 `docs/RCA-MAIL-DELIVERABILITY-2026-11-20.md`).

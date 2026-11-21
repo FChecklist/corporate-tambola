@@ -1,4 +1,4 @@
-// Release 1.9.3: two mail lanes (transactional never held up by bulk), the warm-up of the young sending domain, a send counter with an 80 % alert of the monthly quota, and a status address.
+// Release 1.11.0: two mail lanes (transactional never held up by bulk), the warm-up of the young sending domain, a send counter with an 80 % alert of the monthly quota, and a status address.
 // Through the real sendMail / tick code and a real SQLite; the mail services are stand-ins (fetch). The rule itself (bulkDecision) is also tested as a pure function.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { makeD1 } from "./d1-sqlite";

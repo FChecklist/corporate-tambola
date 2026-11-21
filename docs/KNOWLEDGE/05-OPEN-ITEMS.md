@@ -27,7 +27,7 @@ Older text on the live version that also says guests' data is deleted within 24 
 ## Small leftovers the last audit noted (disclosed, not blocking)
 An expired Host key without personal data still opens the static Host manual page (no game data); a person's game key cannot list certificates after the end; the export blanks names beyond 3,000 without a flag; support limits are per account; the 5-key game limit counts expired but unswitched keys; two approvals of one hand-over at the same moment could make two keys; rejection reasons are readable by anyone holding a ticket number; Hindi covers the core phrases only. More in [OWNER-NOTE.md](OWNER-NOTE.md).
 
-## Mail lanes (1.9.3, 21 Nov 2026): what is open
+## Mail lanes (1.11.0, 21 Nov 2026): what is open
 1. Owner steps in `docs/MAIL-DELIVERABILITY-OWNER-STEPS.md`: Resend webhook and its secret, DMARC `rua=`, Gmail Postmaster Tools, plan upgrade or the Cloudflare route. Until the webhook is set, no delivery state arrives and no address is ever put on the do-not-mail list by a bounce.
 2. Migration `0033_mail_lanes.sql` must be applied before the deploy.
 3. Marketing mail sent by OTHER products from the same Resend account or the Cloudflare account is not counted here; the lanes protect only mail sent through this site's `sendMail`.
@@ -37,3 +37,6 @@ An expired Host key without personal data still opens the static Host manual pag
 1. Mail refusals: after the 1.9.1 deploy, read `mail_event` rows `send_failed <status> <error name>` to learn why the mail service refused three of the four mails of that payment (shared Resend account: rate limit or quota is the leading, unproven, cause).
 2. No Razorpay webhook has reached the game or IT Services since 21 Oct / 15 Oct 2026: check the webhook URL and secret in the Razorpay dashboard (owner step).
 3. The invoice mail accepted for `raajat.agarwal@gmail.com` at 13:28 UTC on 20 Nov was not found in Inbox or Trash: the owner checks Spam.
+
+## Release 1.11.0 (21 Nov 2026): what is open
+See `09-RELEASE-1.11.0.md`, section Open: migration 0033 before deploy, the Cloudflare route secrets, the Resend webhook and DMARC `rua=`, the real `MAIL_MONTHLY_QUOTA`, and two audits on the exact head commit.

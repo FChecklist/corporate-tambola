@@ -251,7 +251,7 @@ export const SCHEMA: string[] = [
   "CREATE INDEX IF NOT EXISTS engagement_org ON engagement (org)",
   // V2 (13 Nov 2026, 0032_v2_changes.sql): game keys, Host keys without personal data, the AI label, certificates, support tickets, claim review, Host hand-over (all additive)
   ...V2_SCHEMA,
-  // mail lanes (1.9.3, 0033_mail_lanes.sql): the send counter, the per-mail state from the provider, the do-not-mail list, the waiting bulk mail (mail-lanes.ts)
+  // mail lanes (1.11.0, 0033_mail_lanes.sql): the send counter, the per-mail state from the provider, the do-not-mail list, the waiting bulk mail (mail-lanes.ts)
   ...MAIL_LANES_SCHEMA,
 ];
 
@@ -598,7 +598,7 @@ export async function runTick(env: Env, now: number) {
   const life = await lifecycleTick(env as any, now);
   const purged = await purgeOld(env, now);
   const mailRetried = await retryRecentOutbox(env as PayEnv, now).catch(() => 0); // a mail that failed (an invoice, a paid note) is tried again within minutes, not at the next daily job (RCA 2026-11-20)
-  await drainBulkMail(env as PayEnv, now).catch(() => 0); // waiting bulk mail goes AFTER the transactional retry and only when none is waiting (mail-lanes.ts, 1.9.3)
+  await drainBulkMail(env as PayEnv, now).catch(() => 0); // waiting bulk mail goes AFTER the transactional retry and only when none is waiting (mail-lanes.ts, 1.11.0)
   const invoices = await issueDueInvoices(env as PayEnv, now); // Razorpay-first payments whose payer closed the page: the tax invoice is issued 15 minutes after the capture (payfirst.ts)
   await purgePaytestCounters(env.DB, now);
   try { await env.DB.prepare("INSERT INTO kv(k,v) VALUES('tick_last_ms',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(String(now)).run(); } catch { /* the stamp only spares a repeat */ }

@@ -1,4 +1,4 @@
-// Release 1.9.3: the mail service's signed webhook (POST /api/mail/events) now reports PER MAIL (delivered, bounced, complained, delayed) and stops mailing an address after a hard bounce or a complaint.
+// Release 1.11.0: the mail service's signed webhook (POST /api/mail/events) now reports PER MAIL (delivered, bounced, complained, delayed) and stops mailing an address after a hard bounce or a complaint.
 // Through the real Worker route and sendMail, a real SQLite, and stand-ins for the mail services.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
