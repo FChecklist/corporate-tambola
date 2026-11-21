@@ -42,7 +42,7 @@ Where things are set:
 | `MAIL_RETRY_MS` | Wait in milliseconds before the first re-try of a refused mail (default 800; tests set 0) | Optional Pages variable | setting |
 | `MAIL_MONTHLY_QUOTA` | The mail plan's monthly allowance (default 3000, the Resend free plan); the 80 % alert and the bulk reserve are worked out from it (`GET /api/owner/mail-status`) | Optional Pages variable | setting |
 | `MAIL_DAILY_LIMIT` | The mail plan's daily allowance (default 100, the Resend free plan; 0 means no daily limit) | Optional Pages variable | setting |
-| `ANON_MAIL_PER_HOUR` | Site-wide cap of Refer & earn code mails an anonymous visitor can trigger per hour (default 60; 0 turns the cap off) | Optional Pages variable | setting |
+| `ANON_MAIL_PER_HOUR` | Site-wide cap of Refer & earn code mails an anonymous visitor can trigger per hour (default 60; 0 means no cap) | Optional Pages variable | setting |
 | `MAIL_WARMUP_START` | First day of the sending warm-up, `YYYY-MM-DD` (optional; without it the day the 1.11.0 code first handled a mail is day 1) | Optional Pages variable | setting |
 | `OWNER_EMAIL` | The owner's address on the TEST-mode allow-list | wrangler var | setting |
 | `OWNER_NOTIFY_EMAIL` | Overrides the address that gets the note on each paid order and each data request | Optional Pages variable | setting |
