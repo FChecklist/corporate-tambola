@@ -86,6 +86,19 @@ describe("joining Help Desk", () => {
 });
 
 describe("inviting an Organizer", () => {
+  test("1.11.0 audit M1: the invitation (it carries a live accept link) goes out on the transactional lane even on warm-up day 1; nothing with the link or the address is kept in the bulk queue", async () => {
+    const real = globalThis.fetch; const sent: { to: string; subject: string; text: string }[] = [];
+    (globalThis as any).fetch = async (url: string, init?: any) => { if (String(url) !== "https://api.resend.com/emails") return new Response("{}", { status: 404 }); const b = JSON.parse(init.body); sent.push({ to: b.to[0], subject: b.subject, text: b.text }); return new Response(JSON.stringify({ id: "em_" + sent.length }), { status: 200 }); };
+    try {
+      const p = await helperJoined(); // (the partner's own code mails are not looked at)
+      env.RESEND_API_KEY = "re_test"; (env as any).MAIL_RETRY_MS = "0"; sent.length = 0; // mail goes through the real provider path from here; the warm-up clock starts now, so the bulk lane's cap today is 0
+      const r = await j(await call("POST", "/api/helpdesk/invite", { email: "boss@acme.com", name: "Boss" }, part(p.partnerKey)));
+      expect(r.ok).toBe(true);
+      const inv = sent.filter((m) => /asks to prepare/.test(m.subject)); expect(inv.length).toBe(1); expect(inv[0]!.to).toBe("boss@acme.com"); expect(inv[0]!.text).toMatch(/helpdesk-accept\.html\?t=[0-9a-f]{48}/);
+      expect(raw.query("SELECT COUNT(*) c FROM mail_bulk_queue").get()).toEqual({ c: 0 });
+      expect(JSON.stringify(raw.query("SELECT * FROM outbox").all())).not.toMatch(/helpdesk-accept|boss@acme\.com.*[0-9a-f]{48}/); // no body with the link is kept anywhere
+    } finally { globalThis.fetch = real; delete (env as any).RESEND_API_KEY; }
+  });
   test("the Organizer is mailed a link, the answer never says whether they have an account, and the helper sees only a masked address", async () => {
     const p = await helperJoined();
     await startOrg("known@acme.com");

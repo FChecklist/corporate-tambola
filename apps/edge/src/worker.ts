@@ -25,6 +25,7 @@ import { LEGAL_SCHEMA } from "./legal";
 import { GAME_RECORD_SCHEMA, readGameRecords } from "./gamerecord";
 import { RIGHTS_SCHEMA, leaveRoute, requestRoute } from "./rights";
 import { ADMIN_SCHEMA, adminRoute, adminTick, countError, maintenanceGate } from "./admin";
+import { MAIL_LANES_SCHEMA } from "./mail-lanes";
 import { ownerStatsRoute } from "./owner-stats";
 import { getProspectLink, prospectLinksRoute } from "./prospect-links";
 import { recordServerError } from "./errorbox";
@@ -38,7 +39,7 @@ import { REHEARSAL_SCHEMA, closeRehearsal, listRehearsals, rehearsalFacts, start
 import { CREDIT_SCHEMA, activeCreditSummary, creditAppliedFor, creditLastDay, creditRoute } from "./credit";
 import { cloneGame } from "./clone";
 import { acceptOver, acceptWon, endBoundMs, realEndMs, neverStarted, eraseEverything, erasePersonal, erasureOf, fullDeleteAt, lifecycleTick, MAX_AHEAD_MS, personalDeleteAt, SETTINGS_KEEP_MS, recordWinners, reportApi, reportLink } from "./lifecycle";
-import { PAY_SCHEMA, issueDueInvoices, payRoute, retryOutbox, retryRecentOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
+import { PAY_SCHEMA, drainBulkMail, issueDueInvoices, payRoute, retryOutbox, retryRecentOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { HELPDESK_SCHEMA, HELPER_MANUAL_NOTE, helpdeskCloseStatements, helpdeskRoute, helpdeskSweep, isDeskKeyId, isHelperKey, noteHelperGame } from "./helpdesk";
@@ -250,6 +251,8 @@ export const SCHEMA: string[] = [
   "CREATE INDEX IF NOT EXISTS engagement_org ON engagement (org)",
   // V2 (13 Nov 2026, 0032_v2_changes.sql): game keys, Host keys without personal data, the AI label, certificates, support tickets, claim review, Host hand-over (all additive)
   ...V2_SCHEMA,
+  // mail lanes (1.11.0, 0033_mail_lanes.sql): the send counter, the per-mail state from the provider, the do-not-mail list, the waiting bulk mail (mail-lanes.ts)
+  ...MAIL_LANES_SCHEMA,
 ];
 
 const PATTERNS = new Set<string>([...HOUSE_ORDER.filter((k) => k !== "unlucky"), "lucky"]);
@@ -569,7 +572,7 @@ export async function remindDrafts(env: Env, now: number): Promise<void> {
       if ((claimed.meta?.changes ?? 0) < 1) continue;
       if (hours === 2) await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`draftrem24/${x.id}`, String(now)).run(); // the 24-hour mail would be late now
       const m = draftReminderMail((env as PayEnv).PUBLIC_ORIGIN ?? "", { eid: x.id, hours, startMs: at });
-      await sendMail(env as PayEnv, env.DB, to, m.subject, m.text, now);
+      await sendMail(env as PayEnv, env.DB, to, m.subject, m.text, now, { lane: "bulk" }); // a reminder to finish a draft is not an invoice: bulk lane (mail-lanes.ts)
     }
   } catch { /* tried again at the next tick */ }
 }
@@ -595,6 +598,7 @@ export async function runTick(env: Env, now: number) {
   const life = await lifecycleTick(env as any, now);
   const purged = await purgeOld(env, now);
   const mailRetried = await retryRecentOutbox(env as PayEnv, now).catch(() => 0); // a mail that failed (an invoice, a paid note) is tried again within minutes, not at the next daily job (RCA 2026-11-20)
+  await drainBulkMail(env as PayEnv, now).catch(() => 0); // waiting bulk mail goes AFTER the transactional retry and only when none is waiting (mail-lanes.ts, 1.11.0)
   const invoices = await issueDueInvoices(env as PayEnv, now); // Razorpay-first payments whose payer closed the page: the tax invoice is issued 15 minutes after the capture (payfirst.ts)
   await purgePaytestCounters(env.DB, now);
   try { await env.DB.prepare("INSERT INTO kv(k,v) VALUES('tick_last_ms',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(String(now)).run(); } catch { /* the stamp only spares a repeat */ }
@@ -1461,7 +1465,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (!b) return json({ error: "Bad message." }, 400);
       const ge = await env.DB.prepare("SELECT tickets, config, start_round FROM engagement WHERE id=?").bind(cid).first<{ tickets: number; config: string | null; start_round: number }>();
       if (b.message?.action === "go" && ge && now < roundMs(ge.start_round) - 3000) return json({ error: NOT_BEFORE_MSG }, 422); // Start is never possible before the scheduled time, whatever the sender's own clock says
-      const r = await publishControl(kv, cid!, b.message, ge ? hostGameOf(cfgOf(ge), ge.start_round) : undefined); // a Host's "next" press is checked against this game's breaks and rounds; a Start against the scheduled time
+      const r = await publishControl(kv, cid!, b.message, ge ? hostGameOf(cfgOf(ge), ge.start_round) : undefined, roundOfMs(now)); // (the store's own clock: a message may only name a round that has not begun) // a Host's "next" press is checked against this game's breaks and rounds; a Start against the scheduled time
       if (r.ok && !(r as any).duplicate && ["go", "pause", "resume", "extend", "stop"].includes(b.message?.action)) { // who pressed Start / Pause / Resume / End, and when: the plain list the Organizer and the Host read, and the "paused by" line everybody sees (the signature says which key it was)
         const pf = await readPublished(kv, cid!);
         const org = !!(pf && b.message.sig && (await verifyControlSig(pf.pubKey, b.message)));

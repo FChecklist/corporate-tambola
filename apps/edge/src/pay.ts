@@ -23,6 +23,7 @@ import { partnerCode, phoneHashFor, recordCommission, refCode } from "./partners
 import { helperRefFor } from "./helpdesk";
 import { attemptStatusOf, centralOf, derivedEventKey, eventSeen, markEventSeen, recordAttempt, recordRefund, storePaymentDetails, txnIdOf } from "./ledgerc";
 import { getMode, logMail, mailGate, testFlag, type ModeEnv } from "./mode";
+import { bulkAllowed, checkQuotaAlert, noteProviderQuota, countSend, drainBulkQueue, hashMail, isSuppressed, queueBulk, recordSent, type LaneEnv, type MailLane } from "./mail-lanes";
 import { strictAccountEmail, normAccountEmail } from "./empid";
 import { isTestLogin } from "./testlogins";
 import { lookupPayLink, packFor, payLinkPublic } from "./paylink";
@@ -33,7 +34,7 @@ import { consentMissing, recordConsent } from "./consent";
 import { PRICE_LINE, adjustFor, adjustMeta, adjustNotes } from "./price-adjust";
 import { creditAppliedFor, creditFromPayment, creditUsesFor, mailCreditCreated, restoreCreditUses, rs, teamEmails } from "./credit";
 
-export interface PayEnv extends Env, Pick<ModeEnv, "OWNER_EMAIL" | "TEST_MAIL_ALLOW"> {
+export interface PayEnv extends Env, Pick<ModeEnv, "OWNER_EMAIL" | "TEST_MAIL_ALLOW">, LaneEnv {
   RAZORPAY_KEY_ID?: string; RAZORPAY_KEY_SECRET?: string; RAZORPAY_WEBHOOK_SECRET?: string; RAZORPAY_BASE_URL?: string; RAZORPAY_INTERNATIONAL?: string;
   PARTNER_COMMISSION_RATE?: string; TEST_MODE?: string; COMPANY_JSON?: string; RESEND_API_KEY?: string; CF_EMAIL_TOKEN?: string; CF_ACCOUNT_ID?: string; FREE_LAUNCH?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string; PUBLIC_ORIGIN?: string; PAY_HOP_URL?: string; PAY_SERVICE_KEY?: string; PAY_SERVICE_URL?: string; PAY_SITE?: string;
 }
@@ -103,22 +104,48 @@ const KEYRE = /ct[kah]_[0-9a-f]{48}/g;
  * mail that could not be sent is kept (with any organizer key blanked out) only so the daily job can try again, then it is dropped after 3 days.
  * Without RESEND_API_KEY (local/test) the mail simply stays in the outbox so it can be read.
  */
-export async function sendMail(env: PayEnv, db: D1, to: string, subject: string, text: string, now: number, opts: { html?: string; secret?: boolean; owner?: boolean; idem?: string } = {}): Promise<boolean> {
+export async function sendMail(env: PayEnv, db: D1, to: string, subject: string, text: string, now: number, opts: { html?: string; secret?: boolean; owner?: boolean; idem?: string; lane?: MailLane } = {}): Promise<boolean> {
   if (isPendingEmail(to)) return false; // a Razorpay-first payment whose e-mail has not come back from Razorpay yet: nobody to write to (payfirst.ts)
   // `secret` = the mail carries a personal AI work link: if it cannot be sent, no body is kept at all (nothing to retry later; the organizer can replace the link and get a fresh mail).
   // TEST mode (mode.ts): only the owner's allow-list is ever e-mailed; everyone else is dropped and logged. Not sent = false, and no body is kept.
   if (isTestLogin(to)) return false; // the owner's three test addresses belong to a real outside domain: nothing is ever sent to them
+  if (opts.lane === "bulk" && (await isSuppressed(db, to))) { await logMail(db, now, to, subject, "suppressed_bounce"); return false; } // the do-not-mail list (a hard bounce or a complaint) holds back the BULK lane only: an invoice, a sign-in code, an organizer-key mail, a report or an owner note is always tried (1.11.0 audit; the owner can clear an entry)
   { const rw = await rehearsalMailWrap(db, subject, text, opts.html); subject = rw.subject; text = rw.text; if (rw.html !== undefined) opts = { ...opts, html: rw.html }; } // a rehearsal's mail says so in its subject and first lines
   subject = tagSubject(subject); // the game tag starts every subject
   if ((await getMode(env)) === "TEST") { if (!opts.owner && !(await mailGate(env, to, subject, now))) return false; subject = "[TEST] " + subject; } // `owner` = a note to the owner of the platform (owner-mail.ts): always allowed
   const html = opts.html ?? plainToHtml(subject, text, env.PUBLIC_ORIGIN); // every mail carries the brand header and footer, whoever built it
   text = withFooter(text, env.PUBLIC_ORIGIN);
   if (!env.RESEND_API_KEY) { await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,0)").bind(to, subject, text, now).run(); return true; }
+  if (opts.lane === "bulk") return bulkSend(env, db, to, subject, text, html, now, !!opts.secret); // the bulk lane: own counter, own ramp, own queue; never in front of an invoice (mail-lanes.ts)
   const ok = await resendSend(env, to, subject, text, html, opts.idem, now);
   const log = db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,?)").bind(to, subject, ok ? "" : opts.secret ? "" : text.replace(KEYRE, "ctk_(blanked; use the key shown when you paid, or sign in with an e-mailed code)"), now, ok ? 1 : 0);
   // A mail already handed over must never look "not sent" because its LOG row hit a passing database hiccup (13 Nov 2026 audit: the caller's repeat would send it twice). A failed mail still needs its row (the daily job retries from it), so that write stays fatal.
   if (ok) { try { await log.run(); } catch { /* only the log is missing */ } } else await log.run();
   return ok;
+}
+/**
+ * The bulk lane (marketing, invitations, reminders). Allowed by the lane rule (mail-lanes.ts `bulkDecision`): ONE try at Resend and no Cloudflare fallback. Not allowed yet, or not taken: it waits in `mail_bulk_queue`
+ * (the tick sends it later, 24 hours at most). Returns true only when the provider took it now.
+ */
+async function bulkSend(env: PayEnv, db: D1, to: string, subject: string, text: string, html: string, now: number, secret = false): Promise<boolean> {
+  const d = await bulkAllowed(db, env, now);
+  if (d.allow && (await resendSend(env, to, subject, text, html, undefined, now, 1, "bulk"))) {
+    try { await db.prepare("INSERT INTO outbox(to_addr,subject,body,at_ms,sent) VALUES(?,?,?,?,1)").bind(to, subject, "", now).run(); } catch { /* only the log is missing */ }
+    return true;
+  }
+  if (secret) { await logMail(db, now, to, subject, "bulk_secret_dropped " + (d.allow ? "provider did not take it" : d.why)); return false; } // a `secret` mail (it carries a live link or key) is never put in the queue: no address and no body is kept, the same rule as the transactional lane (1.11.0 audit, M1). Such mail belongs in the transactional lane.
+  try { await queueBulk(db, now, to, subject, text, html); } catch { /* table not there yet: the bulk mail is dropped, never an error */ }
+  await logMail(db, now, to, subject, "bulk_waiting " + (d.allow ? "provider did not take it" : d.why));
+  return false;
+}
+/** True while a transactional mail is waiting for its retry (a failed invoice, a "paid" note): the bulk queue does not send anything then. */
+async function txWaiting(db: D1, now: number): Promise<boolean> {
+  try { return !!(await db.prepare("SELECT 1 AS x FROM outbox WHERE sent=0 AND body<>'' AND at_ms>? LIMIT 1").bind(now - 86_400_000).first()); } catch { return false; }
+}
+/** Run by the tick AFTER the transactional retry: sends waiting bulk mail within today's allowance (at most 2 a tick). */
+export async function drainBulkMail(env: PayEnv, now: number): Promise<number> {
+  if (!env.RESEND_API_KEY || (await getMode(env)) === "TEST") return 0;
+  return (await drainBulkQueue(env.DB, env, now, () => txWaiting(env.DB, now), (r) => resendSend(env, r.to_addr, r.subject, r.body, r.html ?? undefined, `bulkq-${r.id}`, now, 1, "bulk"))).sent;
 }
 /** Mail sent with attachments in a test run (no mail key): the tests read the PDFs from here. Never used in production. */
 export const sentReports: { to: string; subject: string; text: string; attachments: { filename: string; content: Uint8Array }[] }[] = [];
@@ -136,6 +163,7 @@ export async function sendReportMail(env: PayEnv, to: string, subject: string, t
       method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
       body: JSON.stringify({ from: env.MAIL_FROM ?? "Corporate Tambola <hello@corporatetambola.com>", to: [to], subject, text, html, attachments: attachments.map((a) => ({ filename: a.filename, content: toB64(a.content) })), reply_to: env.MAIL_REPLY_TO || "hello@corporatetambola.com", headers: { "Auto-Submitted": "auto-generated" } }),
     });
+    if (r.ok) await countSend(env.DB, Date.now(), "tx", "resend"); // a report is a transactional mail: it counts against the transactional lane
     return r.ok;
   } catch { return false; }
 }
@@ -153,16 +181,16 @@ export const cfFrom = (from: string): string => {
   return /[",;:<>@()[\]\\]/.test(n) ? `"${n.replace(/(["\\])/g, "\\$1")}" <${m[2]}>` : `${n} <${m[2]}>`;
 };
 const providerWhy = (status: number, name: string) => `${status}${name ? " " + name : ""}`;
-async function resendAttempt(env: PayEnv, key: string, to: string, subject: string, text: string, html?: string): Promise<{ ok: boolean; why: string; again: boolean; quota: boolean }> {
+async function resendAttempt(env: PayEnv, key: string, to: string, subject: string, text: string, html?: string): Promise<{ ok: boolean; why: string; again: boolean; quota: boolean; monthly?: boolean; id?: string }> {
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json", "idempotency-key": key }, signal: AbortSignal.timeout(MAIL_FETCH_MS),
       body: JSON.stringify({ from: env.MAIL_FROM ?? "Corporate Tambola <hello@corporatetambola.com>", to: [to], subject, text, ...(html ? { html } : {}), reply_to: env.MAIL_REPLY_TO || "hello@corporatetambola.com", headers: { "Auto-Submitted": "auto-generated" } }),
     });
-    if (r.ok) return { ok: true, why: "", again: false, quota: false };
+    if (r.ok) { let id = ""; try { const j: any = await r.json(); id = typeof j?.id === "string" ? j.id.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80) : ""; } catch { /* the mail is taken; only its id is missing */ } return { ok: true, why: "", again: false, quota: false, id }; }
     let name = ""; try { const j: any = await r.json(); name = String(j?.name ?? "").replace(/[^A-Za-z0-9_ -]/g, "").slice(0, 40); } catch { /* no readable reason */ }
     const quota = r.status === 429 && /quota/i.test(name); // "daily/monthly_quota_exceeded": asking Resend again cannot help until its plan resets
-    return { ok: false, why: providerWhy(r.status, name), again: (r.status === 429 || r.status >= 500) && !quota, quota };
+    return { ok: false, why: providerWhy(r.status, name), again: (r.status === 429 || r.status >= 500) && !quota, quota, monthly: quota && /monthly/i.test(name) };
   } catch { return { ok: false, why: "network", again: true, quota: false }; }
 }
 /** The same mail through Cloudflare Email Service (the owner's own account; corporatetambola.com is enabled for sending). On failure the reason is the HTTP status and Cloudflare's numeric error code only. */
@@ -177,6 +205,13 @@ async function cloudflareSend(env: PayEnv, cf: { token: string; account: string 
     const code = Number(j?.errors?.[0]?.code); return { ok: false, why: `${r.status}${Number.isInteger(code) && code > 0 ? " code" + code : ""}` };
   } catch { return { ok: false, why: "network" }; }
 }
+/** A provider took a mail: count it in its lane, remember the provider's mail id (the webhook reports on it later), and look at the monthly quota. Never fails the mail. */
+async function tookMail(env: PayEnv, now: number, lane: MailLane, provider: "resend" | "cloudflare", to: string, subject: string, ref?: string): Promise<void> {
+  try {
+    await countSend(env.DB, now, lane, provider);
+    if (provider === "resend") { if (ref) await recordSent(env.DB, now, ref, await hashMail(to), subject, lane); await checkQuotaAlert(env.DB, env, now); }
+  } catch { /* the counter is a help, never a requirement */ }
+}
 /**
  * One mail out. Resend first. A busy or briefly-down Resend (429 rate limit, 5xx, no answer) is tried again up to twice, with ONE idempotency key so a retry can never deliver the mail twice.
  * When Resend cannot take it (quota used up, or still busy after the tries) and Cloudflare Email is configured (CF_EMAIL_TOKEN + CF_ACCOUNT_ID), the SAME mail goes out once through Cloudflare Email with the same key,
@@ -184,22 +219,23 @@ async function cloudflareSend(env: PayEnv, cf: { token: string; account: string 
  * Every failure leaves a reason in the mail log (`mail_event`: provider status and error NAME only, never the provider's free text or the address), and a mail that had to use the second path says so.
  * `tries`: the scheduled retry passes 1, because the tick itself is the retry loop. RCA 2026-11-20.
  */
-async function resendSend(env: PayEnv, to: string, subject: string, text: string, html?: string, idem?: string, now: number = Date.now(), tries = 3): Promise<boolean> {
-  const key = (idem ?? crypto.randomUUID()).slice(0, 250), waitMs = Number((env as any).MAIL_RETRY_MS ?? 800) || 0, cf = cfMailOf(env);
+async function resendSend(env: PayEnv, to: string, subject: string, text: string, html?: string, idem?: string, now: number = Date.now(), tries = 3, lane: MailLane = "tx"): Promise<boolean> {
+  const key = (idem ?? crypto.randomUUID()).slice(0, 250), waitMs = Number((env as any).MAIL_RETRY_MS ?? 800) || 0, cf = lane === "bulk" ? null : cfMailOf(env); // the bulk lane never uses the Cloudflare route: that route (and its daily allowance) belongs to the invoices
   let why = "network", refused = false;
-  const paused = cf ? Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(RESEND_PAUSE_KEY).first<{ v: string }>().catch(() => null))?.v ?? 0) > now : false;
+  const paused = cf || lane === "bulk" ? Number((await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(RESEND_PAUSE_KEY).first<{ v: string }>().catch(() => null))?.v ?? 0) > now : false;
   if (paused) why = "429 quota (paused)";
   else for (let attempt = 0; attempt < tries; attempt++) {
     const r = await resendAttempt(env, key, to, subject, text, html);
-    if (r.ok) return true;
+    if (r.ok) { await tookMail(env, now, lane, "resend", to, subject, r.id); return true; }
     why = r.why; refused = !r.again && !r.quota;
-    if (r.quota && cf) await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(RESEND_PAUSE_KEY, String(now + RESEND_PAUSE_MS)).run().catch(() => {});
+    if (r.monthly) await noteProviderQuota(env.DB, now); // Resend's own word that the month is used up (21 Nov 2026), whatever our counter says: critical alert, and the organizer note
+    if (r.quota && (cf || lane === "bulk")) await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(RESEND_PAUSE_KEY, String(now + RESEND_PAUSE_MS)).run().catch(() => {});
     if (!r.again) break; // a refusal, or a used-up quota: asking Resend again cannot help
     if (attempt < tries - 1 && waitMs > 0) await new Promise((res) => setTimeout(res, waitMs * (attempt + 1)));
   }
   if (cf && !refused) {
     const c = await cloudflareSend(env, cf, key, to, subject, text, html);
-    if (c.ok) { await logMail(env.DB, now, to, subject, `resend_failed ${why}; sent_by_cloudflare`); return true; }
+    if (c.ok) { await logMail(env.DB, now, to, subject, `resend_failed ${why}; sent_by_cloudflare`); await tookMail(env, now, lane, "cloudflare", to, subject); return true; }
     await logMail(env.DB, now, to, subject, `send_failed ${why}; cloudflare ${c.why}`);
     return false;
   }
@@ -218,7 +254,9 @@ export async function retryOutbox(env: PayEnv, now: number): Promise<{ retried: 
   const db = env.DB; let retried = 0;
   if (env.RESEND_API_KEY && (await getMode(env)) !== "TEST") { // in TEST mode nothing queued earlier is sent: it is only ever the owner's allow-list that gets mail
     const rows = (await db.prepare("SELECT id, to_addr, subject, body FROM outbox WHERE sent=0 AND body<>'' AND at_ms>?").bind(now - 3 * 86_400_000).all<any>()).results ?? [];
-    for (const r of rows) if (await resendSend(env, r.to_addr, r.subject, r.body, undefined, `outbox-${r.id}`, now, 1)) { await db.prepare("UPDATE outbox SET sent=1, body='' WHERE id=?").bind(r.id).run(); retried++; }
+    for (const r of rows) {
+      if (await resendSend(env, r.to_addr, r.subject, r.body, undefined, `outbox-${r.id}`, now, 1)) { await db.prepare("UPDATE outbox SET sent=1, body='' WHERE id=?").bind(r.id).run(); retried++; }
+    }
   }
   return { retried, dropped: await purgeOutbox(db, now) };
 }
