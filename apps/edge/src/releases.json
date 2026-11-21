@@ -6,7 +6,7 @@
     "commit": "this release",
     "title": "Player data-request mail and Help Desk invitation mail now have caps; the mail notes no longer say 'monthly' when it may have been the daily limit; the release notes tell the truth about reminders",
     "changes": [
-      "Each game can mail its organizer and the owner about at most 10 player data requests a day (the owner can change the number): after that ONE short digest is sent to each side and the rest are only stored and listed for the owner, so one person who fills a game with seats can no longer send about 1,500 mails; the requests, their answer time and an erasure are not touched",
+      "Each game can mail its organizer and the owner about at most 10 player data requests a day (the owner can change the number): after that ONE short digest is sent to each side and the rest are only stored and listed for the owner, so one person who fills a game with seats can no longer send about 1,500 mails; the requests, their answer time and a request to delete a player are not touched",
       "Help Desk invitations have a site-wide cap of 30 an hour (the owner can change it); over it, the helper is told in plain words to try again in about an hour, and no link and no mail is made",
       "The note an organizer sees when our e-mail service has reached its limit now says 'sending limit' and does not say monthly or daily: it is true for both, and a daily limit used to be called monthly",
       "The release notes and the knowledge pages now say what the code does: only the draft reminder is bulk mail and only it is held back by the do-not-mail list, and the hourly cap on Refer & earn sign-up mail covers that one path, not all mail",
