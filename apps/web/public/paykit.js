@@ -269,7 +269,8 @@
     if (d.invoiceNumber) r.push(PK.row("Invoice number", esc(d.invoiceNumber), "mono"));
     for (const x of o.rows || []) r.push(PK.row(x[0], x[1], x[2]));
     const mail = py.email || o.email || "";
-    return `<section class="pk-card done" role="status"><div class="pk-done-head"><span class="tick">${I.check}</span><div><h2>${esc(o.title || "Payment received")}</h2><p>${o.lead || ""}</p></div></div><dl class="pk-dl">${r.join("")}</dl>${d.invoicePending ? (o.form || "") : ""}${PK.invoice(d, mail)}${d.invoiceUrl && py.email ? `<p class="pk-note">We e-mailed your tax invoice to <b>${esc(py.email)}</b>.</p>` : ""}${o.after || ""}</section>`;
+    if (d.invoiceUrl && py.email && window.TB && TB.mailNote) TB.mailNote("mailNote"); // the screen says "we e-mailed your invoice": when our mail service is at its limit it says so (common.js)
+    return `<section class="pk-card done" role="status"><div class="pk-done-head"><span class="tick">${I.check}</span><div><h2>${esc(o.title || "Payment received")}</h2><p>${o.lead || ""}</p></div></div><dl class="pk-dl">${r.join("")}</dl>${d.invoicePending ? (o.form || "") : ""}${PK.invoice(d, mail)}${d.invoiceUrl && py.email ? `<p class="pk-note">We e-mailed your tax invoice to <b>${esc(py.email)}</b>.</p><div id="mailNote"></div>` : ""}${o.after || ""}</section>`;
   };
   /** the proforma invoice (not paid), folded away until asked for; same ids as before so TB.proformaWire still works */
   PK.proforma = () => '<details class="pk-pf"><summary>Proforma invoice (not paid)</summary><div class="in"><div class="pk-invbody" id="pfbody">Preparing your proforma invoice...</div><div class="pk-btns"><button class="pk-btn alt" id="pfpay" type="button">Pay now</button></div></div></details>';

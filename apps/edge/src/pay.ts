@@ -23,7 +23,7 @@ import { partnerCode, phoneHashFor, recordCommission, refCode } from "./partners
 import { helperRefFor } from "./helpdesk";
 import { attemptStatusOf, centralOf, derivedEventKey, eventSeen, markEventSeen, recordAttempt, recordRefund, storePaymentDetails, txnIdOf } from "./ledgerc";
 import { getMode, logMail, mailGate, testFlag, type ModeEnv } from "./mode";
-import { bulkAllowed, checkQuotaAlert, countSend, drainBulkQueue, hashMail, isSuppressed, queueBulk, recordSent, type LaneEnv, type MailLane } from "./mail-lanes";
+import { bulkAllowed, checkQuotaAlert, noteProviderQuota, countSend, drainBulkQueue, hashMail, isSuppressed, queueBulk, recordSent, type LaneEnv, type MailLane } from "./mail-lanes";
 import { strictAccountEmail, normAccountEmail } from "./empid";
 import { isTestLogin } from "./testlogins";
 import { lookupPayLink, packFor, payLinkPublic } from "./paylink";
@@ -228,6 +228,7 @@ async function resendSend(env: PayEnv, to: string, subject: string, text: string
     const r = await resendAttempt(env, key, to, subject, text, html);
     if (r.ok) { await tookMail(env, now, lane, "resend", to, subject, r.id); return true; }
     why = r.why; refused = !r.again && !r.quota;
+    if (r.quota) await noteProviderQuota(env.DB, now); // Resend's own word that the month is used up (21 Nov 2026), whatever our counter says: critical alert, and the organizer note
     if (r.quota && (cf || lane === "bulk")) await env.DB.prepare("INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(RESEND_PAUSE_KEY, String(now + RESEND_PAUSE_MS)).run().catch(() => {});
     if (!r.again) break; // a refusal, or a used-up quota: asking Resend again cannot help
     if (attempt < tries - 1 && waitMs > 0) await new Promise((res) => setTimeout(res, waitMs * (attempt + 1)));

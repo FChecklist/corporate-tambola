@@ -137,6 +137,24 @@ export async function checkQuotaAlert(db: D1, env: LaneEnv, now: number): Promis
   } catch { /* an alert must never stop a mail */ }
 }
 
+// ------------------------------------------------------------------------------------------------ the provider says "quota used up" (21 Nov 2026: Resend 429 monthly_quota_exceeded)
+/** How long a provider's "quota used up" answer counts as current when nothing else is sent (the status address and the organizer note use it). */
+export const QUOTA_SEEN_MS = 2 * 3_600_000;
+/**
+ * Called when Resend answers 429 with a quota name. Our own counter only knows the mails sent since this code ran, so it can be far below Resend's real number for the month: the provider's own word is the
+ * truth. It (1) remembers when it was said (kv `mail_quota_seen`, shown by the status address) and (2) writes the CRITICAL alert line once for the month, even when our counter is under 80 %.
+ */
+export async function noteProviderQuota(db: D1, now: number): Promise<void> {
+  try {
+    await db.prepare("INSERT INTO kv(k,v) VALUES('mail_quota_seen',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(String(now)).run();
+    const month = dayOf(now).slice(0, 7), claim = await db.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`mailalert/critical/${month}`, JSON.stringify({ at: new Date(now).toISOString(), by: "provider" })).run();
+    if ((claim.meta?.changes ?? 0) > 0) console.warn(`[mail-alert] CRITICAL: the mail provider answered that its monthly quota is used up (our own counter may show less: it counts only since this code ran). Transactional mail goes by the Cloudflare route when it is set; bulk mail waits.`);
+  } catch { /* an alert must never stop a mail */ }
+}
+/** The words an organizer sees on the payment-done screens when the main mail service cannot take mail. Plain, true, no provider name, no numbers. */
+export const ORGANIZER_NOTE_BACKUP = "Our main e-mail service has reached its monthly limit, so your e-mails now go by our backup route. They can arrive a few minutes later than usual and may land in Spam, so please look there too. Your payment is not affected.";
+export const ORGANIZER_NOTE_LATE = "Our e-mail service has reached its monthly limit and our backup route is not switched on, so your e-mails (invoice, organizer key) can arrive late. We keep trying every few minutes. Your payment is not affected.";
+
 // ------------------------------------------------------------------------------------------------ what the provider tells us, per mail
 export async function recordSent(db: D1, now: number, ref: string, toHash: string, subject: string, lane: MailLane): Promise<void> {
   if (!ref) return;
@@ -212,6 +230,8 @@ export interface MailStatus {
   cloudflare: { today: number; month: number; configured: boolean };
   warmup: { day: number; startedOn: string | null; bulkCapToday: number; transactionalOnly: boolean };
   doNotMail: { addresses: number };
+  /** What an organizer should be told: `none` (nothing to say), `backup` (main service used up, mail goes by the Cloudflare route), `late` (used up, no backup route: mail is late). `note` is the plain-words text, or null. */
+  organizer: { degraded: "none" | "backup" | "late"; note: string | null };
 }
 export async function mailStatus(db: D1, env: LaneEnv & { CF_EMAIL_TOKEN?: string; CF_ACCOUNT_ID?: string }, now: number): Promise<MailStatus> {
   const u = await readUsage(db, now), quota = monthlyQuotaOf(env), daily = dailyLimitOf(env), sent = u.txMonth + u.bulkMonth, pct = Math.floor((sent * 100) / quota), month = dayOf(now).slice(0, 7);
@@ -219,13 +239,16 @@ export async function mailStatus(db: D1, env: LaneEnv & { CF_EMAIL_TOKEN?: strin
   const one = async <T>(sql: string, ...a: unknown[]): Promise<T | null> => { try { return await db.prepare(sql).bind(...a).first<T>(); } catch { return null; } };
   const lvl = levelOf(pct), alertRow = await one<{ k: string }>("SELECT k FROM kv WHERE k IN (?,?) ORDER BY k", `mailalert/critical/${month}`, `mailalert/warn/${month}`);
   const paused = Number((await one<{ v: string }>("SELECT v FROM kv WHERE k='mail_resend_pause_until'"))?.v ?? 0) > now;
+  const seen = Number((await one<{ v: string }>("SELECT v FROM kv WHERE k='mail_quota_seen'"))?.v ?? 0), usedUp = paused || (seen > 0 && now - seen < QUOTA_SEEN_MS) || pct >= ALERT_CRITICAL_PCT;
+  const cfOn = !!(env.CF_EMAIL_TOKEN && env.CF_ACCOUNT_ID), degraded = !usedUp ? "none" : cfOn ? "backup" : "late";
   const waiting = Number((await one<{ c: number }>("SELECT COUNT(*) AS c FROM mail_bulk_queue"))?.c ?? 0), suppressed = Number((await one<{ c: number }>("SELECT COUNT(*) AS c FROM mail_suppress"))?.c ?? 0);
   return {
-    ok: lvl === "ok" && !paused, level: lvl, alert: alertRow ? alertRow.k.split("/")[1]! : null, month, at: new Date(now).toISOString(),
-    quota: { monthly: quota, sent, pct, dailyLimit: daily, providerSaysUsedUp: paused },
+    ok: lvl === "ok" && !usedUp, level: lvl, alert: alertRow ? alertRow.k.split("/")[1]! : null, month, at: new Date(now).toISOString(),
+    quota: { monthly: quota, sent, pct, dailyLimit: daily, providerSaysUsedUp: usedUp },
     lanes: { tx: { today: u.txToday, month: u.txMonth, reservedMonth: Math.ceil(quota * TX_RESERVE_SHARE) }, bulk: { today: u.bulkToday, month: u.bulkMonth, todayCap: bulkCapForDay(warmDay), allowedNow: allowed.allow, why: allowed.why, waiting } },
     cloudflare: { today: u.cfToday, month: u.cfMonth, configured: !!(env.CF_EMAIL_TOKEN && env.CF_ACCOUNT_ID) },
     warmup: { day: warmDay, startedOn: start, bulkCapToday: bulkCapForDay(warmDay), transactionalOnly: bulkCapForDay(warmDay) === 0 },
     doNotMail: { addresses: suppressed },
+    organizer: { degraded, note: degraded === "backup" ? ORGANIZER_NOTE_BACKUP : degraded === "late" ? ORGANIZER_NOTE_LATE : null },
   };
 }

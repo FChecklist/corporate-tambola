@@ -41,6 +41,19 @@
     return data;
   };
 
+  // ---- the honest mail note (1.11.0): a screen that says "we e-mailed you" asks the public mail status first. When the main mail service has used up its month (Resend 429, 21 Nov 2026) the server
+  // sends a plain note (mail goes by the backup route, or can be late) and this puts it into the element `id`. Public address, numbers only; any failure shows nothing (the screen is as before).
+  TB.mailNote = (id) => {
+    try {
+      fetch("/api/status/mail", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+        const n = j && j.organizer && typeof j.organizer.note === "string" ? j.organizer.note : "";
+        if (!n) return;
+        const put = () => { const el = document.getElementById(id); if (el) el.innerHTML = '<div class="note info" role="note">' + TB.esc(n) + "</div>"; return !!el; };
+        if (!put()) setTimeout(put, 400);
+      }).catch(() => {});
+    } catch { /* no note */ }
+  };
+
   // ---- WebSocket with automatic reconnect. TB.ws(code, {org:true}|{}, onMessage) -> {close()} ----
   TB.ws = (code, opt, onMsg, onState) => {
     let ws, closed = false, tries = 0;
