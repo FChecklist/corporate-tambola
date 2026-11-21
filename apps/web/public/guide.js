@@ -63,6 +63,8 @@
       w: "Several codes were asked for in a short time, so we paused new ones to keep your account safe.", d: ["Use the newest code in your e-mail.", "If it has not arrived, check the spam folder, or try again in an hour."], g: { retry: true } },
     { m: ["A lot of people are signing up right now"], s: [429], k: "wait", t: "Please try again in about an hour",
       w: "Many people asked for a sign-up code in the last hour, so we paused new ones for a while to keep the service safe.", d: ["Try again in about an hour.", "If you already have a code in your e-mail, use that one."], g: { retry: true } },
+    { m: ["Many invitations are being sent right now"], s: [429], k: "wait", t: "Please try again in about an hour",
+      w: "Many invitations were sent in the last hour, so we paused new ones for a while to keep the service safe. Your invitation was not sent.", d: ["Try again in about an hour.", "Type the client's e-mail address again then."], g: { retry: true } },
     { m: ["Too many tries from this network", "Too many new engagements from this network", "Too many payment attempts from this network", "Too many tries from this network today"], s: [429], k: "wait", t: "Please try again a little later",
       w: "Many tries came from this internet connection in a short time, so we paused it to keep everyone safe. Nothing you did is lost.", d: ["Wait a few minutes, or try again tomorrow if it says so.", "You can also switch from Wi-Fi to your phone's data and try again."], g: { retry: true } },
     { m: ["You already asked for several fresh links today"], k: "wait", t: "You already have a fresh link",

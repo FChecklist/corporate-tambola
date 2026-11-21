@@ -118,3 +118,17 @@ describe("the screens that say 'we e-mailed you' ask for the note", () => {
     expect(readFileSync(join(PUB, "paykit.js"), "utf8")).toContain('TB.mailNote("mailNote")');
   });
 });
+
+describe("1.11.1: the organizer note does not say which limit was reached (daily or monthly): it is true for both", () => {
+  test("the two notes name no period (no monthly, daily, month, day, today)", () => {
+    for (const n of [ORGANIZER_NOTE_BACKUP, ORGANIZER_NOTE_LATE]) { expect(n).not.toMatch(/\b(monthly|daily|month|day|today|yearly|weekly)\b/i); expect(n).toMatch(/sending limit/i); }
+  });
+  test("a DAILY quota answer from the provider (with the backup route set) gives the backup note and it does not say 'monthly'", async () => {
+    env.CF_EMAIL_TOKEN = "cf-token"; env.CF_ACCOUNT_ID = ACC;
+    resend = () => ({ status: 429, body: { name: "daily_quota_exceeded" } });
+    expect(await sendMail(env, env.DB, "boss@acme.com", "s", "b", NOW, { lane: "bulk" })).toBe(false); // a bulk mail meets the daily limit and pauses the provider for a while
+    const s = await publicStatus();
+    expect(s.organizer.degraded).toBe("backup"); expect(s.organizer.note).not.toBeNull(); expect(s.organizer.note).not.toMatch(/monthly|daily/i);
+    expect(warns.filter((w) => w.includes("[mail-alert] CRITICAL"))).toEqual([]); // still no used-up-month alert for a daily answer
+  });
+});

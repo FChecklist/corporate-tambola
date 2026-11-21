@@ -8,7 +8,7 @@ Written 2026-10-01 from Razorpay's official documentation and a READ-ONLY look a
 ## 1. What I found in your account
 | Item | What it shows |
 |---|---|
-| Account | "IT Services by Rajat Agarwal", **live mode**, activated; owner login rajatsiroffice@gmail.com |
+| Account | "IT Services by Rajat Agarwal", **live mode**, activated; owner login r***@gmail.com |
 | API key | A **live key already exists** (key id `rzp_live_Td726wQamWw5I5`, generated 7 Dec 2022). The id is not a secret; the secret is hidden and I have not seen it. A key is "universal": the same key works for every approved website |
 | Websites (Business website details) | **Primary: societyexpense.com: Approved, but a liveness check says it cannot be reached** (the domain is no longer yours). `twoler.in`: Approved. **`dewberry.in`: liveness check pending** |
 | Activity | Rs 0 collected in the last 7 days; nothing in recent history to clean |

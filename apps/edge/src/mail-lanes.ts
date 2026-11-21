@@ -1,9 +1,11 @@
 // Mail lanes, warm-up, send counter, quota alert and the do-not-mail list (release 1.11.0, 20 Nov 2026).
 //
+// NOTE (1.11.1): the Help Desk invitation is NOT bulk: it carries a live link and goes on the transactional lane.
+//
 // WHY: the live Resend account answered `429 monthly_quota_exceeded`; the domain is young (registered 15 Oct 2026) and has no sending history, so a burst of mail of any kind can
 // hurt the mail that matters (invoice, payment, sign-in code). Two lanes keep them apart:
 //   tx   (transactional) invoice, payment, receipt, game-start, sign-in code, AI/Host link, data request ... Never refused or delayed by anything in the bulk lane. This is the default.
-//   bulk (marketing, invitations, reminders)  Has its OWN counter, its OWN daily ramp (warm-up) and may only use the part of every limit that the transactional lane does not keep for itself.
+//   bulk (the draft reminder; marketing mail if it is ever sent)  Has its OWN counter, its OWN daily ramp (warm-up) and may only use the part of every limit that the transactional lane does not keep for itself.
 //        A bulk mail that is not allowed yet is WAITED for in `mail_bulk_queue` (24 hours, then dropped), never put in front of an invoice, never sent through Cloudflare Email
 //        (its 200-a-day account allowance is the invoices' second route), and never retried by the transactional retry loop.
 //
@@ -151,9 +153,9 @@ export async function noteProviderQuota(db: D1, now: number): Promise<void> {
     if ((claim.meta?.changes ?? 0) > 0) console.warn(`[mail-alert] CRITICAL: the mail provider answered that its monthly quota is used up (our own counter may show less: it counts only since this code ran). Transactional mail goes by the Cloudflare route when it is set; bulk mail waits.`);
   } catch { /* an alert must never stop a mail */ }
 }
-/** The words an organizer sees on the payment-done screens when the main mail service cannot take mail. Plain, true, no provider name, no numbers. */
-export const ORGANIZER_NOTE_BACKUP = "Our main e-mail service has reached its monthly limit, so your e-mails now go by our backup route. They can arrive a few minutes later than usual and may land in Spam, so please look there too. Your payment is not affected.";
-export const ORGANIZER_NOTE_LATE = "Our e-mail service has reached its monthly limit and our backup route is not switched on, so your invoice e-mail can arrive late. We keep trying every few minutes. Please keep the organizer key shown on this screen: an e-mail that has to wait does not carry the key. You can always sign in later with an e-mailed code. Your payment is not affected.";
+/** The words an organizer sees on the payment-done screens when the main mail service cannot take mail. Plain, true, no provider name, no numbers. It does not say WHICH limit (a day's or the month's): both mean the same thing for the reader, and a daily answer must not be called monthly (1.11.1, audit 1 Low 1). */
+export const ORGANIZER_NOTE_BACKUP = "Our main e-mail service has reached its sending limit for now, so your e-mails now go by our backup route. They can arrive a few minutes later than usual and may land in Spam, so please look there too. Your payment is not affected.";
+export const ORGANIZER_NOTE_LATE = "Our e-mail service has reached its sending limit for now and our backup route is not switched on, so your invoice e-mail can arrive late. We keep trying every few minutes. Please keep the organizer key shown on this screen: an e-mail that has to wait does not carry the key. You can always sign in later with an e-mailed code. Your payment is not affected.";
 
 // ------------------------------------------------------------------------------------------------ what the provider tells us, per mail
 export async function recordSent(db: D1, now: number, ref: string, toHash: string, subject: string, lane: MailLane): Promise<void> {
@@ -182,7 +184,7 @@ export const hashMail = async (to: string): Promise<string> => {
   const v = String(to ?? "").normalize("NFKC").trim().toLowerCase(), i = v.lastIndexOf("@"), n = i < 1 ? v : v.slice(0, i).split("+")[0] + v.slice(i); // the same address form the send log uses (plus part removed)
   return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(n))), (b) => b.toString(16).padStart(2, "0")).join("");
 };
-/** The do-not-mail list is read by the BULK lane only (reminders, invitations): invoices, sign-in codes, organizer-key mail, reports and owner notes are never held back by it. A lookup that fails means "not on the list". */
+/** The do-not-mail list is read by the BULK lane only (the draft reminder): invoices, sign-in codes, organizer-key mail, reports and owner notes are never held back by it. A lookup that fails means "not on the list". */
 export async function isSuppressed(db: D1, to: string): Promise<boolean> {
   try { return !!(await db.prepare("SELECT 1 AS x FROM mail_suppress WHERE to_hash=?").bind(await suppressKey(to)).first()); } catch { return false; }
 }
@@ -207,11 +209,79 @@ export async function anonMailAllowed(db: D1, env: { ANON_MAIL_PER_HOUR?: string
   const cap = posInt(env.ANON_MAIL_PER_HOUR) ?? DEFAULT_ANON_MAIL_PER_HOUR; if (cap === 0) return true;
   try {
     const k = `anonmail/${hourOf(now)}`;
-    await db.prepare("INSERT INTO kv(k,v) VALUES(?,'1') ON CONFLICT(k) DO UPDATE SET v=CAST(CAST(v AS INTEGER)+1 AS TEXT)").bind(k).run();
-    const n = Number((await db.prepare("SELECT v FROM kv WHERE k=?").bind(k).first<{ v: string }>())?.v ?? 0);
+    const n = Number((await db.prepare("INSERT INTO kv(k,v) VALUES(?,'1') ON CONFLICT(k) DO UPDATE SET v=CAST(CAST(v AS INTEGER)+1 AS TEXT) RETURNING v").bind(k).first<{ v: string }>())?.v ?? 0); // ONE statement (1.11.2): count up and read back together, so parallel calls never read each other's increments
     if (n === cap + 1) console.warn(`[mail-alert] anonymous-triggered mail passed ${cap} in one hour: the rest of the hour is not mailed (numbers only).`);
     return n <= cap;
   } catch { return true; }
+}
+
+/** The period key `YYYY-MM-DD` (UTC day). */
+export const dayKey = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+export const DEFAULT_HD_INVITE_MAIL_PER_HOUR = 30;
+export const DEFAULT_DATAREQ_MAIL_PER_GAME_DAY = 10;
+export const DEFAULT_DATAREQ_MAIL_PER_IP_DAY = 10;
+export const DEFAULT_DATAREQ_MAIL_PER_RECIPIENT_DAY = 10;
+export const DEFAULT_DATAREQ_MAIL_PER_DAY = 30;
+/**
+ * One counter row `mailcap/<period>/<name>` in kv, counted up on every call. Returns how many calls the period has had now. A database that cannot count answers 0 (so nothing is ever blocked by accident).
+ * The hourly tick deletes rows older than 48 hours (`lanesTick`).
+ */
+async function countCap(db: D1, period: string, name: string): Promise<number> {
+  try {
+    const k = `mailcap/${period}/${name}`;
+    return Number((await db.prepare("INSERT INTO kv(k,v) VALUES(?,'1') ON CONFLICT(k) DO UPDATE SET v=CAST(CAST(v AS INTEGER)+1 AS TEXT) RETURNING v").bind(k).first<{ v: string }>())?.v ?? 0); // ONE statement (1.11.2, audit L1): parallel calls each get their own number
+  } catch { return 0; }
+}
+/**
+ * A site-wide cap per hour on one kind of mail that an open sign-up can cause (the Help Desk invitation, audit 2 M-A: helpers come from the same open sign-up as Refer & earn, and the invitation is on the transactional
+ * lane). `setting` is the owner's value (0 = no cap, a bad value = the default). ONE `[mail-alert]` line (numbers only) the first time the hour passes the cap.
+ */
+export async function hourlyMailAllowed(db: D1, name: string, setting: string | undefined, dflt: number, now: number): Promise<boolean> {
+  const cap = posInt(setting) ?? dflt; if (cap === 0) return true;
+  const n = await countCap(db, hourOf(now), name); if (n === 0) return true;
+  if (n === cap + 1) console.warn(`[mail-alert] ${name} mail passed ${cap} in one hour: the rest of the hour is not mailed (numbers only).`);
+  return n <= cap;
+}
+/**
+ * The ONE mailbox an address names, for counting only (never for sending): lower case, the `+tag` removed on every domain, and on Gmail (`gmail.com`, `googlemail.com`) the dots in the name removed too, because
+ * `vic.tim@`, `v.i.c.tim@` and `victim+a@` are all the same inbox there (1.11.2, audit M2). Over-counting a rare real `+` address is the safe side.
+ */
+export const canonMailbox = (raw: unknown): string => {
+  const v = String(raw ?? "").normalize("NFKC").trim().toLowerCase(), i = v.lastIndexOf("@");
+  if (i < 1) return v;
+  let local = v.slice(0, i).split("+")[0]!, dom = v.slice(i + 1);
+  if (dom === "googlemail.com") dom = "gmail.com";
+  if (dom === "gmail.com") local = local.replace(/\./g, "");
+  return local + "@" + dom;
+};
+
+export type MailTurn = "send" | "digest" | "hold";
+/** Walks nested caps from the widest to the narrowest. A count of 0 (no cap, or a database that could not count) is skipped. The first count over a cap answers "digest" ONCE (cap + 1), then "hold". All fine: "send". */
+function turnOf(scopes: { n: number; cap: number; what: string }[]): MailTurn {
+  for (const s of scopes) {
+    if (s.cap === 0 || s.n === 0 || s.n <= s.cap) continue;
+    if (s.n === s.cap + 1) { console.warn(`[mail-alert] ${s.what} passed ${s.cap} player data-request mails in one day: one digest is sent, the rest are stored and not mailed (numbers only).`); return "digest"; }
+    return "hold";
+  }
+  return "send";
+}
+/**
+ * The caps on player data-request mail (audit 2 M-A in 1.11.1, audit M1 in 1.11.2). Every request used to mail the organizer once and the owner once, so one person with many seats, or many games, could cause a flood
+ * in the owner's box and in the box of any address typed in as an organizer e-mail. Each request now counts, per UTC day, in four places: the game (`DATAREQ_MAIL_PER_GAME_DAY`, default 10), the requester's network
+ * (`DATAREQ_MAIL_PER_IP_DAY`, 10, stored only as a hash), the organizer's mailbox (`DATAREQ_MAIL_PER_RECIPIENT_DAY`, 10, counted on the canonical mailbox so `+tags` and Gmail dots do not help) and the whole site
+ * (`DATAREQ_MAIL_PER_DAY`, 30, the owner's box). 0 = no cap. The organizer's side answers by recipient, then network, then game; the owner's side by site, then network, then game. Up to a cap the request mails as
+ * before; the first request over the widest cap that is passed answers "digest" (ONE short mail with no name, ticket or note), the rest "hold". So one organizer address gets at most cap + 1 mails a day, whatever
+ * the number of games, and the owner at most (site cap) + 1. The request is ALWAYS stored and shown in the owner's list (`GET /api/owner/data-requests`); the answer time and an erasure are not touched.
+ */
+export async function dataRequestMailTurns(db: D1, env: { DATAREQ_MAIL_PER_GAME_DAY?: string; DATAREQ_MAIL_PER_IP_DAY?: string; DATAREQ_MAIL_PER_RECIPIENT_DAY?: string; DATAREQ_MAIL_PER_DAY?: string }, who: { eid: string; ipHash: string; recipientHash: string | null }, now: number): Promise<{ org: MailTurn; owner: MailTurn }> {
+  const gameCap = posInt(env.DATAREQ_MAIL_PER_GAME_DAY) ?? DEFAULT_DATAREQ_MAIL_PER_GAME_DAY, ipCap = posInt(env.DATAREQ_MAIL_PER_IP_DAY) ?? DEFAULT_DATAREQ_MAIL_PER_IP_DAY;
+  const rcptCap = posInt(env.DATAREQ_MAIL_PER_RECIPIENT_DAY) ?? DEFAULT_DATAREQ_MAIL_PER_RECIPIENT_DAY, siteCap = posInt(env.DATAREQ_MAIL_PER_DAY) ?? DEFAULT_DATAREQ_MAIL_PER_DAY;
+  const d = dayKey(now), count = (cap: number, name: string) => (cap === 0 ? Promise.resolve(0) : countCap(db, d, name));
+  const [game, ip, site, rcpt] = await Promise.all([count(gameCap, `datareq/${who.eid}`), count(ipCap, `datareq-ip/${who.ipHash}`), count(siteCap, "datareq-all"), who.recipientHash ? count(rcptCap, `datareq-rcpt/${who.recipientHash}`) : Promise.resolve(0)]);
+  return {
+    org: turnOf([{ n: rcpt, cap: rcptCap, what: "one organizer address" }, { n: ip, cap: ipCap, what: "one network" }, { n: game, cap: gameCap, what: "a game" }]),
+    owner: turnOf([{ n: site, cap: siteCap, what: "the whole site" }, { n: ip, cap: ipCap, what: "one network" }, { n: game, cap: gameCap, what: "a game" }]),
+  };
 }
 
 // ------------------------------------------------------------------------------------------------ the bulk queue
@@ -247,6 +317,7 @@ export async function lanesTick(db: D1, now: number): Promise<void> {
     await db.prepare("DELETE FROM mail_count WHERE day<?").bind(dayOf(now - MAIL_COUNT_KEEP_DAYS * 86_400_000)).run();
     await db.prepare("DELETE FROM mail_bulk_queue WHERE at_ms<?").bind(now - BULK_QUEUE_KEEP_MS).run();
     await db.prepare("DELETE FROM kv WHERE k LIKE 'anonmail/%' AND k<?").bind(`anonmail/${hourOf(now - 48 * 3_600_000)}`).run();
+    await db.prepare("DELETE FROM kv WHERE k LIKE 'mailcap/%' AND k<?").bind(`mailcap/${hourOf(now - 48 * 3_600_000)}`).run(); // the hourly and daily cap rows (1.11.1); a day key sorts before the hour key of the same day, so it goes a little earlier, never later
   } catch { /* best effort */ }
 }
 

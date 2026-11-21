@@ -7,7 +7,7 @@ TASK: Run ONE live Corporate Tambola game with 250 participants on the real webs
 
 RULES (do not break these)
 - Use only this organizer login: demo1@xyz.in . On the sign-in page ask for the e-mail code, then type 123456 (this test login never sends a mail; the code is always 123456).
-- Do not pay anything, do not open any payment page, do not change any site setting, do not touch Cloudflare, GitHub or any other account. Do not use pehueagle@gmail.com for this test.
+- Do not pay anything, do not open any payment page, do not change any site setting, do not touch Cloudflare, GitHub or any other account. Do not use p***@gmail.com for this test.
 - Real website only (not a local server). Organizer actions must be done by clicking and typing in the page, like a person (no API calls to create or set up the game).
 - If the site answers HTTP 500 or "something did not work on our side", wait 5 minutes and try again; keep trying, do not give up. Report every such error with the time.
 

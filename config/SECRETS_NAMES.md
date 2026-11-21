@@ -43,6 +43,11 @@ Where things are set:
 | `MAIL_MONTHLY_QUOTA` | The mail plan's monthly allowance (default 3000, the Resend free plan); the 80 % alert and the bulk reserve are worked out from it (`GET /api/owner/mail-status`) | Optional Pages variable | setting |
 | `MAIL_DAILY_LIMIT` | The mail plan's daily allowance (default 100, the Resend free plan; 0 means no daily limit) | Optional Pages variable | setting |
 | `ANON_MAIL_PER_HOUR` | Site-wide cap of Refer & earn code mails an anonymous visitor can trigger per hour (default 60; 0 means no cap) | Optional Pages variable | setting |
+| `HD_INVITE_MAIL_PER_HOUR` | Site-wide cap of Help Desk invitation mails per hour (default 30; 0 means no cap) | Optional Pages variable | setting |
+| `DATAREQ_MAIL_PER_GAME_DAY` | Cap of player data-request mails per game and day: the organizer and the owner each get the first this many, then ONE digest, then nothing that day; the requests are always stored (default 10; 0 means no cap) | Optional Pages variable | setting |
+| `DATAREQ_MAIL_PER_IP_DAY` | Cap of player data-request mails per requester network and day (default 10; 0 means no cap). Only a hash of the network is counted | Optional Pages variable | setting |
+| `DATAREQ_MAIL_PER_RECIPIENT_DAY` | Cap of player data-request mails per organizer mailbox and day, whatever the number of games (`+tags` and Gmail dots count as the same mailbox) (default 10; 0 means no cap) | Optional Pages variable | setting |
+| `DATAREQ_MAIL_PER_DAY` | Cap of player data-request mails to the owner for the whole site per day, then ONE digest (default 30; 0 means no cap) | Optional Pages variable | setting |
 | `MAIL_WARMUP_START` | First day of the sending warm-up, `YYYY-MM-DD` (optional; without it the day the 1.11.0 code first handled a mail is day 1) | Optional Pages variable | setting |
 | `OWNER_EMAIL` | The owner's address on the TEST-mode allow-list | wrangler var | setting |
 | `OWNER_NOTIFY_EMAIL` | Overrides the address that gets the note on each paid order and each data request | Optional Pages variable | setting |

@@ -1,4 +1,6 @@
-# Release 1.11.0 (21 Nov 2026): mail lanes, the 21 Nov quota fact, the Host number fix, ten 250-player games - not deployed
+# Release 1.11.0 (21 Nov 2026): mail lanes, the 21 Nov quota fact, the Host number fix, ten 250-player games - deployed 21 Nov 2026
+
+**Update:** this release is live (commit `8a4a0be`, deployment `1366bf89`). Later changes are in `10-RELEASE-1.11.1.md`. The text below was written before the deploy and is kept as it was.
 
 Written for a person or AI session that has not seen this work. One pull request on top of the 1.10.2 branch (PR #36, `fix/small-prs-on-1-10-1-2026-11-21`, head `38521ef`). It stacks two older pull requests that were never merged: PR #34 (mail lanes) and PR #35 (250x10). No secret, key or address is in this page. The money flag `PAY_VIA_MONEYPENNY` is off and is not touched.
 
