@@ -252,8 +252,10 @@ async function deleteEngagementRows(env: Env, id: string): Promise<void> {
     env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM kv WHERE k >= ? AND k < ?").bind(`wev/${id}/`, prefixEnd(`wev/${id}/`)), env.DB.prepare("DELETE FROM prize WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM data_request WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
     env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=? OR k=? OR k=? OR k=? OR k=?").bind(`glog/${id}`, `ctlby/${id}`, `chg/${id}`, `claimlate/${id}`, `claimlaten/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`rptsalt/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`mailowed/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`, `paidby/${id}`),
     env.DB.prepare("DELETE FROM organizer_key WHERE eid=? AND kind='cohost'").bind(id), env.DB.prepare("DELETE FROM shred WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM eng_key WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM audit_pii WHERE eid=?").bind(id), // erasePersonal above wrote a fresh shred marker
+    env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`cv/${id}`), // the claim-signal counter (a version number: no name, but the game is forgotten, so it goes too)
     env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
   ]);
+  try { await env.DB.prepare("DELETE FROM presence WHERE eid=?").bind(id).run(); } catch { /* the table is made by the first "phones listening" report: a game without one has nothing to delete */ }
 }
 
 // ------------------------------------------------------------------------------------------------ the report
@@ -549,6 +551,7 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
   try {
     const h = new Date(now).toISOString().slice(0, 13), lastH = await env.DB.prepare("SELECT v FROM kv WHERE k='outbox_sweep_hour'").first<{ v: string }>();
     if (lastH?.v !== h) { await env.DB.prepare("INSERT INTO kv(k,v) VALUES('outbox_sweep_hour',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(h).run(); (out as any).outboxDropped = await purgeOutbox(env.DB, now); }
+    if (lastH?.v !== h) { try { await env.DB.prepare("DELETE FROM presence WHERE minute < ?").bind(Math.floor(now / 60_000) - 24 * 60).run(); } catch { /* no phone has reported yet: no table */ } } // "phones listening" counters older than a day go every hour, not only when somebody opens the console
     const d = h.slice(0, 10), lastD = await env.DB.prepare("SELECT v FROM kv WHERE k='outbox_retry_day'").first<{ v: string }>();
     if (lastD?.v !== d) { await env.DB.prepare("INSERT INTO kv(k,v) VALUES('outbox_retry_day',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(d).run(); (out as any).outboxRetried = (await retryOutbox(env, now)).retried; }
   } catch { /* tried again at the next tick */ }
