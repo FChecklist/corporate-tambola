@@ -12,6 +12,7 @@ import type { D1, D1Stmt } from "./worker";
 import { sendMail, type PayEnv } from "./pay";
 import { ownerAddress } from "./owner-mail";
 import { BRAND } from "./brand";
+import { dataRequestMailTurn } from "./mail-lanes";
 
 /** The answer time we promise a player. ONE constant: change it here and the page, the e-mails and the tests all follow. */
 export const PROMISE_DAYS = 7;
@@ -140,6 +141,15 @@ async function mailBoth(c: RightsCtx, id: string, kind: RequestKind, seat: Seat,
     erased ? "The player's name and place were deleted at once, as they asked. Nothing more is needed from you." : kind === "nomination" ? `The player has been asked to write to ${BRAND.support} with the name of the person they nominate. Please answer the player.` : kind === "access" ? "The player has already been shown what we hold. Please answer anything more they ask." : "You are the one who holds this name for the game. Please answer the player.",
     `Request number: ${id}`].join("\n");
   const ownerBody = [...base, `Organizer informed: yes`, "", erased ? "Deleted at once." : "Open.", `Request number: ${id}`].join("\n");
+  // 1.11.1 (audit 2, M-A): the mail is a nudge, the stored request is the record. A game that sends more requests than the day's cap (`DATAREQ_MAIL_PER_GAME_DAY`, default 10) is mailed ONE digest per side, then nothing more that day.
+  const turn = await dataRequestMailTurn(c.db, c.env as any, c.eid, c.now).catch(() => "send" as const);
+  if (turn === "hold") return;
+  if (turn === "digest") {
+    const digest = (who: string) => [`More players of "${c.gameName}" (${c.eid}) have sent data requests today than we mail one by one.`, "", `Every request is stored and has its answer time (${PROMISE_TEXT}). ${who}`, "No more mails about single requests will come for this game today."].join("\n");
+    try { const to = await c.orgEmail(); if (to) await sendMail(c.env, c.db, to, `Many data requests: ${c.gameName}`, digest("Please write to " + BRAND.support + " if you want the list."), c.now); } catch { /* the requests are stored */ }
+    try { await sendMail(c.env, c.db, ownerAddress(c.env), `Many data requests: ${c.gameName}`, digest("Read them in the owner's list of data requests."), c.now, { owner: true }); } catch { /* the requests are stored */ }
+    return;
+  }
   try { const to = await c.orgEmail(); if (to) await sendMail(c.env, c.db, to, `A player's data request: ${subjectEnd}`, orgBody, c.now); } catch { /* the request is stored; a mail is a nudge */ }
   try { await sendMail(c.env, c.db, ownerAddress(c.env), `Player data request (${kind}): ${subjectEnd}`, ownerBody, c.now, { owner: true }); } catch { /* the request is stored */ }
 }

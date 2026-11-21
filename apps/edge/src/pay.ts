@@ -124,7 +124,7 @@ export async function sendMail(env: PayEnv, db: D1, to: string, subject: string,
   return ok;
 }
 /**
- * The bulk lane (marketing, invitations, reminders). Allowed by the lane rule (mail-lanes.ts `bulkDecision`): ONE try at Resend and no Cloudflare fallback. Not allowed yet, or not taken: it waits in `mail_bulk_queue`
+ * The bulk lane (the draft reminder; marketing mail if it is ever sent. The Help Desk invitation is NOT bulk: it carries a live link). Allowed by the lane rule (mail-lanes.ts `bulkDecision`): ONE try at Resend and no Cloudflare fallback. Not allowed yet, or not taken: it waits in `mail_bulk_queue`
  * (the tick sends it later, 24 hours at most). Returns true only when the provider took it now.
  */
 async function bulkSend(env: PayEnv, db: D1, to: string, subject: string, text: string, html: string, now: number, secret = false): Promise<boolean> {

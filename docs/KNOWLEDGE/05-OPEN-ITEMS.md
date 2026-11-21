@@ -41,3 +41,6 @@ An expired Host key without personal data still opens the static Host manual pag
 
 ## Release 1.11.0 (21 Nov 2026): what is open
 See `09-RELEASE-1.11.0.md`, section Open: migration 0033 before deploy, the Cloudflare route secrets, the Resend webhook and DMARC `rua=`, the real `MAIL_MONTHLY_QUOTA`, and two audits on the exact head commit.
+
+## Release 1.11.1 (21 Nov 2026): what is open
+See `10-RELEASE-1.11.1.md`, section Open: two audits on the exact head commit, then a deploy. Still open by choice: a bot check (Turnstile) on the Refer & earn code and the sign-in code; the sign-in code has no site-wide cap; owner e-mail for the 80 % and 100 % alerts; `List-Unsubscribe` on bulk mail; a game-level hostile-join test; test files and `tools/` that use the owner's address as a fixture.

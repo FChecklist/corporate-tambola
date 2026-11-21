@@ -12,6 +12,7 @@ import { sendMail, type PayEnv } from "./pay";
 import { openText, sealText } from "./pii";
 import { HOST_LINK_TTL_MS, hostStateRow, maskEmail, mintDeviceKey, retireHost } from "./hostsetup";
 import { helpDeskPublishedMail } from "./mails";
+import { DEFAULT_HD_INVITE_MAIL_PER_HOUR, hourlyMailAllowed } from "./mail-lanes";
 import { houseLabel } from "../../../packages/beacon/src/config";
 import { normAccountEmail } from "./empid";
 
@@ -238,6 +239,7 @@ export async function helpdeskRoute(req: Request, env: PayEnv, now: number, spen
     const nh = await counter.get(hk), no = await counter.get(ok);
     if (nh >= INVITES_PER_HOUR) return json({ error: "That is enough invitations for this hour. Please try again later." }, 429);
     if (no >= INVITES_PER_ORG_DAY) return json({ error: "That address has had enough invitations today. Please try again tomorrow." }, 429);
+    if (!(await hourlyMailAllowed(db, "hdinvite", (env as any).HD_INVITE_MAIL_PER_HOUR, DEFAULT_HD_INVITE_MAIL_PER_HOUR, now))) return json({ error: "Many invitations are being sent right now. Please try again in about an hour." }, 429); // a site-wide cap (1.11.1, audit 2 M-A): helpers come from an open sign-up and the invitation travels with the invoices
     if (!(await spend(4))) return busy();
     await counter.inc(hk, nh); await counter.inc(ok, no);
     const id = randHex(8), token = randHex(24);

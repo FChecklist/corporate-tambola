@@ -190,3 +190,46 @@ describe("the answer time the pages promise is the one constant", () => {
     expect(doc).toContain(`(\`PROMISE_DAYS = ${PROMISE_DAYS}\``);
   });
 });
+
+describe("1.11.1 (audit 2, M-A): data-request mail has a per-game cap per day", () => {
+  const orgMails = () => mails().filter((m) => /A player's data request/.test(m.subject)), ownerMails = () => mails().filter((m) => /Player data request \(/.test(m.subject)), digests = () => mails().filter((m) => /Many data requests/.test(m.subject));
+  test("with the cap at 3: the first 3 requests of a game on one day mail the organizer AND the owner; the 4th and later are stored and answered the same but send no mail; ONE digest goes to each, with no name, no ticket and no note in it", async () => {
+    (env as any).DATAREQ_MAIL_PER_GAME_DAY = "3";
+    await game("CAP-1"); const org1 = orgMail;
+    const pids: string[] = []; for (let i = 1; i <= 7; i++) pids.push(await joinAs("CAP-1", i, `Secret Name ${i}`));
+    const before = mails().length;
+    for (let i = 1; i <= 7; i++) { const r = await ask("CAP-1", pids[i - 1]!, dev(i), "correction", { note: `please fix ${i}` }); expect(r.status).toBe(200); expect((await j(r)).status).toBe("open"); }
+    expect(count("SELECT COUNT(*) c FROM data_request WHERE eid='CAP-1'")).toBe(7); // nothing is lost: every request is stored and shown in the owner's list
+    expect(orgMails().length).toBe(3); expect(ownerMails().length).toBe(3);
+    expect(digests().length).toBe(2); expect(digests().map((m) => m.to_addr).sort()).toEqual([org1, OWNER_NOTIFY_EMAIL].sort());
+    expect(mails().length - before).toBe(3 + 3 + 2); // at most 2 mails per request up to the cap, then one digest per side, never one per request
+    for (const d of digests()) { expect(d.body).not.toMatch(/Secret Name|please fix|ticket number|dr_[0-9a-f]/i); expect(d.body).toContain("CAP-1"); }
+  });
+  test("another game is not held back by the first one, and the next day the first game mails again (and may send one more digest)", async () => {
+    (env as any).DATAREQ_MAIL_PER_GAME_DAY = "2";
+    await game("CAP-2"); const a = await joinAs("CAP-2", 1), b = await joinAs("CAP-2", 2), c = await joinAs("CAP-2", 3);
+    for (const [pid, i] of [[a, 1], [b, 2], [c, 3]] as const) await ask("CAP-2", pid, dev(i), "access");
+    expect(orgMails().length).toBe(2); // the third one was held
+    await game("CAP-3"); const x = await joinAs("CAP-3", 11); await ask("CAP-3", x, dev(11), "access");
+    expect(orgMails().length).toBe(3); // a different game: mailed
+    await ask("CAP-2", c, dev(3), "correction", { note: "next day" }, T + 25 * 3_600_000);
+    expect(orgMails().length).toBe(4); // a new day: mailed again
+  });
+  test("the default is 10 a game and day, 0 switches the cap off, and a database that cannot count never blocks a mail", async () => {
+    await game("CAP-4");
+    const pids: string[] = []; for (let i = 1; i <= 12; i++) pids.push(await joinAs("CAP-4", i));
+    for (let i = 1; i <= 12; i++) await ask("CAP-4", pids[i - 1]!, dev(i), "access");
+    expect(orgMails().length).toBe(10); expect(count("SELECT COUNT(*) c FROM data_request WHERE eid='CAP-4'")).toBe(12);
+    (env as any).DATAREQ_MAIL_PER_GAME_DAY = "0";
+    await ask("CAP-4", pids[0]!, dev(1), "correction", { note: "again" }); await ask("CAP-4", pids[1]!, dev(2), "correction", { note: "again" });
+    expect(orgMails().length).toBe(12); // no cap: both mailed
+  });
+  test("an erasure that is held back for mail is still carried out at once (the cap only limits mail)", async () => {
+    (env as any).DATAREQ_MAIL_PER_GAME_DAY = "1";
+    await game("CAP-5"); const a = await joinAs("CAP-5", 1, "First Person"), b = await joinAs("CAP-5", 2, "Second Person");
+    await ask("CAP-5", a, dev(1), "access");
+    const r = await ask("CAP-5", b, dev(2), "erasure"); expect(r.status).toBe(200); expect((await j(r)).erased).toBe(true);
+    expect(count("SELECT COUNT(*) c FROM seat WHERE pid=?", b)).toBe(0); expect(orgMails().length).toBe(1);
+  });
+});
+

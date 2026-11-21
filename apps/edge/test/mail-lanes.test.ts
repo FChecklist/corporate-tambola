@@ -291,7 +291,7 @@ describe("only retention-listed data is kept, and for as long as the list says",
   });
 });
 
-describe("which mails are bulk: the draft reminder and the Help Desk invitation; everything else stays transactional", () => {
+describe("which mails are bulk: only the draft reminder; the Help Desk invitation and everything else stay transactional", () => {
   const H = 3_600_000, T0 = Date.UTC(2026, 9, 1, 10, 0, 0); // 1 Oct 2026, warm-up day 1 for this test
   test("a draft reminder is a bulk mail: on warm-up day 1 it waits in the queue (the provider is not called), the next day's tick sends it", async () => {
     const { withDevice } = await import("./device"); const { remindDrafts } = await import("../src/worker");

@@ -99,6 +99,25 @@ describe("inviting an Organizer", () => {
       expect(JSON.stringify(raw.query("SELECT * FROM outbox").all())).not.toMatch(/helpdesk-accept|boss@acme\.com.*[0-9a-f]{48}/); // no body with the link is kept anywhere
     } finally { globalThis.fetch = real; delete (env as any).RESEND_API_KEY; }
   });
+  test("1.11.1 (audit 2, M-A): a site-wide cap per hour on invitation mail: helpers come from an open sign-up, so many helpers could use the transactional allowance; the cap says so plainly, creates no link and sends nothing", async () => {
+    (env as any).HD_INVITE_MAIL_PER_HOUR = "3";
+    const keys: string[] = [];
+    for (let i = 1; i <= 5; i++) keys.push((await helperJoined(`98111 2223${i}`, `Helper ${i}`, `helper${i}@partner.example`)).partnerKey);
+    for (let i = 0; i < 3; i++) { const r = await call("POST", "/api/helpdesk/invite", { email: `client${i}@acme.com` }, part(keys[i]!)); expect(r.status).toBe(200); }
+    const before = mails().length, links = (raw.query("SELECT COUNT(*) c FROM helpdesk_link").get() as any).c;
+    const r4 = await call("POST", "/api/helpdesk/invite", { email: "client3@acme.com" }, part(keys[3]!)); expect(r4.status).toBe(429);
+    expect((await j(r4)).error).toMatch(/many invitations are being sent right now.*about an hour/i);
+    expect(mails().length).toBe(before); expect((raw.query("SELECT COUNT(*) c FROM helpdesk_link").get() as any).c).toBe(links); // no link row, no mail
+    expect((await call("POST", "/api/helpdesk/invite", { email: "client4@acme.com" }, part(keys[4]!))).status).toBe(429);
+    expect((await call("POST", "/api/helpdesk/invite", { email: "client5@acme.com" }, part(keys[3]!), T + 3_600_000)).status).toBe(200); // the next hour starts fresh
+  });
+  test("the invitation cap is off at 0, and the default is 30 an hour", async () => {
+    const { DEFAULT_HD_INVITE_MAIL_PER_HOUR, hourlyMailAllowed } = await import("../src/mail-lanes");
+    expect(DEFAULT_HD_INVITE_MAIL_PER_HOUR).toBe(30);
+    const bare = makeD1().db; for (let i = 0; i < 30; i++) expect(await hourlyMailAllowed(bare, "hdinvite", undefined, 30, T)).toBe(true); expect(await hourlyMailAllowed(bare, "hdinvite", undefined, 30, T)).toBe(false);
+    expect(await hourlyMailAllowed(bare, "hdinvite", "0", 30, T)).toBe(true);
+    expect(await hourlyMailAllowed({ prepare: () => { throw new Error("db down"); } } as any, "hdinvite", undefined, 30, T)).toBe(true);
+  });
   test("the Organizer is mailed a link, the answer never says whether they have an account, and the helper sees only a masked address", async () => {
     const p = await helperJoined();
     await startOrg("known@acme.com");

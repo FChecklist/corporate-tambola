@@ -21,7 +21,7 @@ I read the audit. It matches the handover summary, with a few details that add t
   - Tambola is on 661c3ee.
   - Bingo is on 5a7b2b5 with live payments.
   - Snakes & Ladders, Luck by Chance and Tic Tac Toe are in test payment mode, shown as "Coming soon".
-- **Cleanup the previous session left for you:** the test accounts `raajat.agarwal+demonew1..4` and `+livetest2` are empty shells. Close them with `node tools/livetest/live.mjs cleanup --close`, but only after their games' 1-hour window has passed.
+- **Cleanup the previous session left for you:** the test accounts `r***+demonew1..4` and `+livetest2` are empty shells. Close them with `node tools/livetest/live.mjs cleanup --close`, but only after their games' 1-hour window has passed.
 - **Harmless known issue:** Cloudflare's bot-challenge snippet is blocked by our strict Content-Security-Policy. It only shows a console warning and has no effect for users.
 - **Owner-only items beyond the earlier list:** the Razorpay webhook secret, a real paid purchase on Startup Coach, and a test of the DPDP screens behind sign-in. The last one needs a throw-away account.
 
@@ -1136,7 +1136,7 @@ Adding tests for the three changes: no staff-list consent box (with the consent 
 That e-mail is the "personal AI work link" message, not the sign-in code mail. I need to see which e-mails the sign-up flow sends and in what order, to find why the code e-mail didn't arrive.
 
 ## 2026-10-26T04:31:12
-Understood, the prospective client is `pehueagle@gmail.com`. Reading the sign-up and sign-in code paths to see which e-mails go out in which order.
+Understood, the prospective client is `p***@gmail.com`. Reading the sign-up and sign-in code paths to see which e-mails go out in which order.
 
 ## 2026-10-26T04:32:43
 The deploy didn't run to the end: PowerShell treated an npm notice as an error and stopped. Re-running it without that.

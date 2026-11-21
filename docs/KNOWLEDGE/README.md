@@ -21,6 +21,7 @@ One question was the owner's and is now decided (14 Nov 2026): a winner's name, 
 | [07-ID-INVITE.md](07-ID-INVITE.md) | ID-only invite (1.10.0): the one ID rule, join, waiting room, log, where the tests are, what is open |
 | [08-MAIL-DELIVERABILITY.md](08-MAIL-DELIVERABILITY.md) | Mail lanes (transactional never held up by bulk), the warm-up of the young domain, the send counter and 80 % alert, delivery reports per mail, the do-not-mail list (release 1.11.0, not part of V2) |
 | [09-RELEASE-1.11.0.md](09-RELEASE-1.11.0.md) | Release 1.11.0: the 21 Nov Resend quota fact (backup route, honest note to the organizer, 80 % warning), mail lanes, the Host number fix, the ten 250-player games, what is open |
+| [10-RELEASE-1.11.1.md](10-RELEASE-1.11.1.md) | Release 1.11.1: the leftovers of the 1.11.0 audits (caps on data-request mail and Help Desk invitation mail, neutral wording of the mail note, true release lines, masked addresses), and why it is a new version |
 | [OWNER-NOTE.md](OWNER-NOTE.md) | The note written for the owner, in plain words |
 | [HANDOVER.md](HANDOVER.md) | The builder's hand-over note |
 

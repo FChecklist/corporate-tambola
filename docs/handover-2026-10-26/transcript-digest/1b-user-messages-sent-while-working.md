@@ -1359,7 +1359,7 @@ WHAT IS THE QUOTA SIZE NEEDED FOR 500 PEOPLE PLAY
 AND IS THE QUOTA SIZE VARIABLE  - SO THAT I DONT SPEND MONEY CONTINOUSLY
 
 ## 2026-10-25T16:18:12Z
-IS THis QUOTA FOR COMPLETE GAMES, ALL WEBSITES ATTACHED WITH raajat.agarwal@gmail.com login account of cloudflare ?
+IS THis QUOTA FOR COMPLETE GAMES, ALL WEBSITES ATTACHED WITH r***@gmail.com login account of cloudflare ?
 
 ## 2026-10-25T16:19:56Z
 and if $0.30 is per million for extra request, why do they want $5 per month ?
@@ -1394,7 +1394,7 @@ can you confirm if the updated ui / ux and functions and fixes are in the go liv
 in the real website of corporate tambola
 create options of
 100 people game with Rs 0
-that you can test in the real website corporatetambola.com using raajat.agarwal@gmail.com
+that you can test in the real website corporatetambola.com using r***@gmail.com
 
 you have access to the email id
 
@@ -1592,10 +1592,10 @@ today a prospective client will test our game, will also test the 10 participant
 are we ready for it ?
 
 ## 2026-10-26T04:31:04Z
-user id pehueagle@gmail.com
+user id p***@gmail.com
 
 ## 2026-10-26T04:31:36Z
-pehueagle@gmail.com is one of the prospective client
+p***@gmail.com is one of the prospective client
 
 ## 2026-10-26T04:32:28Z
 we have hidden the ai link, so ai related email should also hide
@@ -1736,7 +1736,7 @@ Confirmed claims behave as designed—late or beaten claims get told another tic
 - **Real-browser behaviour:** this was Chromium only, so a normal desktop or phone browser could behave differently. One saved headless profile failed to reload the site ("net::ERR_FAILED") until I cleared its service-worker cache, which needs a retest in a normal browser.
 
 **What I did on your behalf**
-- I ticked the Terms and Privacy box for pehueagle@gmail.com, as you approved in chat.
+- I ticked the Terms and Privacy box for p***@gmail.com, as you approved in chat.
 - I used a made-up organizer mobile number, 9876543210, as you approved in chat.
 - I ticked the "I am allowed to use these names and numbers" declaration for the fake test names, which you did not specifically approve.
 - I left about 15 test games in that account, including the unpaid E9suhm6. They should erase themselves.
