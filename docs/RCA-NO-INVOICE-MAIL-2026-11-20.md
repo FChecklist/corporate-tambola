@@ -61,3 +61,8 @@ Not done by hand and not with a fake mail. The real organizer copy (row 6121, th
 * The mail service's reply for the three refused sends was never recorded, so the exact refusal cause cannot be proven from the past. The fix records it from now on.
 * IT Services' own repository was not read; only its database (read-only) was used to confirm the payment record.
 * The Resend dashboard (delivery log) was not available to this session.
+
+## Addendum: after deploy (2026-11-20 16:05 UTC, deploy `8706cf94`, rollback `b7cf346e`)
+* The mail log now names the refusal: `send_failed 429 monthly_quota_exceeded` (2 rows). Hypothesis 8 is confirmed in kind: the mail service's **monthly quota** is exhausted (shared account), which also explains why the old code lost the mails without a reason.
+* The first tick after the deploy sent the organizer copy of invoice `CT/2026-27/000001` (outbox 6121, `sent=1`). The "published" note (6118) and the "paid order" note (6119) were refused again with the quota error and remain queued for the tick retries.
+* Owner action: raise or reset the Resend plan/quota. Follow-ups M1 to M3 of the audits are in `docs/KNOWLEDGE/05-OPEN-ITEMS.md`.
