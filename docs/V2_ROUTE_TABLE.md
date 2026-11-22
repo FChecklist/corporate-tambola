@@ -79,6 +79,9 @@ Everything here comes from reading the checks in code (can(), canAi(), mayPay(),
 | GET /api/payments/where | none | pub | country/currency guess for the buyer | nothing | - |
 | GET /api/partner/check?code= | query `code` (TOKEN, partner code) | pub | whether the code is valid | nothing | log: partner? (GET returns null) |
 | POST /api/mail/events | header svix-signature + svix-id + svix-timestamp (webhook secret RESEND_WEBHOOK_SECRET) | machine | 404 if no secret set; 400 bad signature | nothing | - |
+| GET /api/status/mail | none | pub | `ok`, `level`, `at`, `organizer` (note for the payment screens); no counters, no address, no key; read at most every 30 s | nothing | - |
+| GET /api/owner/mail-status | platform key (owner only, never an AI link) | owner | the full mail numbers: quota, lanes, warm-up day, backup route set or not, do-not-mail count | nothing | log |
+| GET, POST /api/owner/mail-suppress | platform key (owner only, never an AI link) | owner | masked do-not-mail list; clear or add one address | one row in `mail_suppress` | log (no address) |
 | POST /api/inbound-email | header x-inbound-secret | machine | forwards inbound mail to support; ? check what it returns | nothing | log other_write |
 | POST /api/lifecycle/tick | P key, or header x-cron-key | P or cron | purge/lifecycle result counts | nothing | - (classify skips) |
 | POST /api/purge | P key | P | purge counts | nothing | - |

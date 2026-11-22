@@ -58,7 +58,7 @@ tc({ id: "VIS-04", role: "owner", title: "visit reports are owner-only and every
 let PK = "", PCODE = "", PEMAIL = "";
 tc({ id: "PTR-01", role: "sales partner", title: "enrol with mobile, e-mail and consent; the same answer for a new and an already-enrolled person", steps: "POST /api/partner/enroll twice with the same details (before and after verifying)", expected: "{ok:true,sent:true} both times (no 'already enrolled' leak); consent required; bad mobile/e-mail refused" }, async () => {
   if (IS_LIVE) return "skipped on the real site: the 6-digit code is only e-mailed (verified on the local stand-in)";
-  const [mu, md] = ["raajat.agarwal", "gmail.com"]; PEMAIL = `${mu}+tbpartner${rnd(4)}@${md}`;
+  PEMAIL = `tester+tbpartner${rnd(4)}@example.com`; // a fixture address (example.com never receives mail)
   const ip = `10.7.${Math.floor(Math.random() * 200)}.9`; const A = new Api(BASE, undefined, ip);
   expect((await A.post("/api/partner/enroll", { phone: "123", email: PEMAIL, consent: true })).status).toBe(400);
   expect((await A.post("/api/partner/enroll", { phone: phone(7001), email: "nope", consent: true })).status).toBe(400);
@@ -75,7 +75,7 @@ tc({ id: "PTR-01", role: "sales partner", title: "enrol with mobile, e-mail and 
 });
 tc({ id: "PTR-02", role: "sales partner", title: "five wrong codes lock the enrolment; the code expires", steps: "6 wrong verify attempts then the right one", expected: "after 5 wrong tries the right code is refused" }, async () => {
   if (IS_LIVE) return "skipped on the real site (code is e-mailed)";
-  const em = `raajat.agarwal+tbpl${rnd(4)}@gmail.com`; const A = new Api(BASE, undefined, `10.8.${Math.floor(Math.random() * 200)}.3`);
+  const em = `tester+tbpl${rnd(4)}@example.com`; const A = new Api(BASE, undefined, `10.8.${Math.floor(Math.random() * 200)}.3`);
   const e = await A.post("/api/partner/enroll", { phone: phone(7100 + Math.floor(Math.random() * 800)), email: em, consent: true });
   for (let i = 0; i < 6; i++) await A.post("/api/partner/enroll/verify", { email: em, code: String(100000 + i) });
   const late = await A.post("/api/partner/enroll/verify", { email: em, code: e.body.devCode });

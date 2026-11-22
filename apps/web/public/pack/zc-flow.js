@@ -32,7 +32,7 @@
   /** The Game dashboard stays locked until the game is published. */
   const dashboardOpen = (info) => !!info && info.published === true;
   /** Words banned by the language guide in anything the organizer reads. */
-  const BANNED = [/\binvit/i, new RegExp("\\bpriv" + "ate\\b", "i"), /\bwe\b/i, /\bRs\.?\s?\d/, /\bseats?\b/i, /\bplaces\b/i, /in the office/i, /\bcash\b/i];
+  const BANNED = [new RegExp("\\bpriv" + "ate\\b", "i"), /\bwe\b/i, /\bRs\.?\s?\d/, /\bseats?\b/i, /\bplaces\b/i, /in the office/i, /\bcash\b/i];
   const badWords = (text) => BANNED.filter((r) => r.test(text)).map(String);
   /* ---- Step 1: date, time and zone (pure) ---- */
   const OCC = ["Diwali party", "Dealer meet", "Annual day", "Team party", "Customer event", "Family day", "Weekend Fun", "Christmas Party", "Eid Party", "Holi Party", "Other"];
@@ -82,7 +82,7 @@
   /* ---- Step 2: who is this game for (pure) ---- */
   const CARDS = [
     { id: "people", name: "Your people", line: "Everyone who works with you.", invites: false, cats: [] },
-    { id: "family", name: "Your people and their families", line: "Each person can bring up to 4 family members. Every ticket is one participant.", invites: true, cats: ["family"] },
+    { id: "family", name: "Your people and their families", line: "Each person can bring family members (you choose how many, up to 10). Every ticket is one participant.", invites: true, cats: ["family"] },
     { id: "extended", name: "Extended family", line: "Your people, their families and friends, wherever they are.", invites: true, cats: ["family", "colleagues"] },
   ];
   const FALLBACK_PACKS = [{ upTo: 100, inr: 2399 }, { upTo: 250, inr: 3499 }, { upTo: 500, inr: 4699 }, { upTo: 1000, inr: 7099 }];
@@ -90,9 +90,9 @@
   /** The size choices, from the game's real pack ladder (smallest first). */
   const packChoices = (packs) => (Array.isArray(packs) && packs.length ? packs : FALLBACK_PACKS).filter((k) => Number(k.upTo) > 0).map((k) => ({ upTo: Number(k.upTo), inr: Number(k.inr) || 0, label: "Up to " + k.upTo + " participants" + (k.inr ? " · " + money(k.inr) : "") })).sort((a, b) => a.upTo - b.upTo);
   /** What the system saves for a card: only people the organizer lets in take part; family cards allow 4 more people each. */
-  function audienceSettings(cardId, upTo) {
+  function audienceSettings(cardId, upTo, per) {
     const c = CARDS.find((x) => x.id === cardId) || CARDS[0];
-    return { cap: Number(upTo), whoCanJoin: "list", callMode: "auto", demo: false, invites: { on: c.invites, per: 4, cats: c.cats } };
+    return { cap: Number(upTo), whoCanJoin: "list", verify: "id", callMode: "auto", demo: false, invites: { on: c.invites, per: Math.min(10, Math.max(1, Math.floor(Number(per)) || 4)), cats: c.cats } };
   }
   function whoProblems(f, choices) {
     if (!CARDS.some((c) => c.id === f.card)) return ["Please choose who the game is for."];
@@ -211,7 +211,7 @@
     const all = [
       { label: "Ticket number", get: (w) => (w.ticket != null ? String(w.ticket) : ""), always: true },
       { label: "Name", get: (w) => String(w.name || w.firstName || "") },
-      { label: "Employee ID", get: (w) => String(w.empId || w.employeeId || "") },
+      { label: "ID", get: (w) => String(w.empId || w.employeeId || "") },
       { label: "Email ID", get: (w) => String(w.email || "") },
       { label: "Mobile", get: (w) => (w.mobile ? String(w.mobile) : w.last4 ? "ends " + w.last4 : "") },
       { label: "Referred by", get: (w) => String(w.via || w.referredBy || "") },
@@ -436,7 +436,7 @@
         const z = form.zone === OTHER_ZONE ? form.zoneOther : form.zone, ms = wallToMs(form.date, form.time, z), name = gameName(form.occ, form.oname);
         const startRound = window.ZG.roundAt(ms);
         if (state.eid) await call("PATCH", `/api/z/${state.eid}/settings`, { name, startRound });
-        else { const id = randId(); await call("POST", "/api/z", { id, name, startRound, callSeconds: G.callSeconds, cap: 10 }); state.eid = id; try { window.history.replaceState(null, "", location.pathname + "?flow=new&e=" + id); } catch {} }
+        else { const id = randId(); await call("POST", "/api/z", { id, name, startRound, callSeconds: G.callSeconds, cap: 10, verify: "id" }); state.eid = id; try { window.history.replaceState(null, "", location.pathname + "?flow=new&e=" + id); } catch {} }
         state.when = { ms, zone: z };
         done(1);
       } catch (e) { go.disabled = false; msg.textContent = e.message; }
@@ -445,7 +445,16 @@
   };
 
   /* ---- Step 2 ---- */
-  const who = { card: "people", upTo: 0, how: "self" };
+  const who = { card: "people", upTo: 0, how: "self", per: 4 };
+  // OWNER RULE (20 Nov 2026), the invite screen: invite people with ONLY an ID (employee, associate, vendor or customer ID). No name, no mobile number, no e-mail.
+  // The screen text below is the owner's, word for word: do not reword it. One ID per line; PDF and CSV uploads stay; a visible "Paste a list" button.
+  // IDs are cleaned the same way everywhere (upload, join, approval, matching): every character that is not a letter or a number is dropped, then capitals. A-1101, A 1101 and A/1101 are ONE ID.
+  // An ID that is not on the list waits for the organizer's yes or no. The list and all IDs are deleted within 24 hours after the game ends. Notes: marketing-ledger plans/ID-INVITE-AND-ARCHITECTURE-RULES-2026-11-20.md
+  /** Owner text, 20 Nov 2026: invite people with just an ID. Word for word. */
+  const ID_INVITE_LINES = ["Invite people with just an ID", "No names or personal details are needed.", "Just upload or paste the IDs of the people you want to invite: employee ID, associate ID, vendor ID or customer ID, whichever you use.", "Your invitee opens the game link and enters their ID. If it is on your list, they join and play. If it is not, you get a request to approve or decline.", "The list and all IDs are deleted within 24 hours after the game ends."];
+  /** One ID per line (a comma or a tab also separates). The game cleans them: A-1101, A 1101 and A/1101 are the same ID. */
+  const PASTE_PART = 200; // people.ts MAX_ADD_BATCH
+  const idsOf = (text) => Array.from(new Set(String(text || "").split(/[\r\n,;\t]+/).map((x) => x.trim()).filter(Boolean)));
   api.who = who;
   registry[2] = (box) => {
     if (!state.packs) { fetch(BASE + "/api/z/ai-manifest").then((r) => r.json()).then((j) => { state.packs = j.packs || []; draw(); }).catch(() => { state.packs = []; draw(); }); box.append(el("p", { text: "Loading the sizes…" })); return; }
@@ -453,10 +462,38 @@
     if (!who.upTo) who.upTo = choices[0].upTo; // the smallest size is already chosen for you
     const msg = el("p", { class: "zf-msg", role: "status", id: "zf-msg2" });
     box.append(el("p", { class: "zf-lead", text: "You choose who the game is for. The system takes care of the rest." }));
+    box.append(el("section", { class: "zf-idinvite", id: "zf-idinvite" }, el("h3", { text: ID_INVITE_LINES[0] }), ID_INVITE_LINES.slice(1).map((t) => el("p", { text: t }))));
     const cards = el("div", { class: "zf-cards", role: "radiogroup", "aria-label": "Who is this game for" });
     for (const c of CARDS) cards.append(el("button", { type: "button", role: "radio", class: "zf-card" + (who.card === c.id ? " on" : ""), "aria-checked": String(who.card === c.id), "data-card": c.id, onclick: () => { who.card = c.id; draw(); } }, el("b", { text: c.name }), el("span", { text: c.line })));
     box.append(cards);
-    box.append(el("p", { class: "zf-small", id: "zf-how", text: "Everybody waits for you. You let each person in from the Game dashboard." }));
+    box.append(el("p", { class: "zf-small", id: "zf-how", text: "Anybody who is not on your list waits for you. You let each person in from the Game dashboard." }));
+    if (who.card !== "people") { const ps = el("select", { id: "zf-per", "aria-label": "How many people each person can invite", onchange: (e) => { who.per = Number(e.target.value); draw(); } }); for (let i = 1; i <= 10; i++) ps.append(el("option", { value: String(i), ...(who.per === i ? { selected: "" } : {}) }, String(i))); ps.value = String(who.per); box.append(el("label", { for: "zf-per", text: "How many people can each person invite? (1 to 10)" }), ps); }
+    const pasteMsg = el("p", { class: "zf-small", id: "zf-paste-msg", role: "status" });
+    box.append(el("button", { type: "button", class: "zf-add", id: "zf-paste-open", style: "display:block;width:fit-content;margin:8px 0;", onclick: () => { who.paste = !who.paste; draw(); } }, "Paste a list"));
+    if (who.paste) {
+      const ta = el("textarea", { id: "zf-paste", style: "display:block;width:100%;max-width:32rem;margin:8px 0;", rows: "6", "aria-label": "IDs, one on each line", placeholder: "One ID on each line" }); ta.value = who.pasted || ""; ta.oninput = (e) => { who.pasted = e.target.value; };
+      box.append(ta, el("button", { type: "button", class: "zf-add", id: "zf-paste-go", style: "display:block;width:fit-content;margin:8px 0;", onclick: async () => {
+        const ids = idsOf(who.pasted); if (!ids.length) { pasteMsg.textContent = "Please paste at least one ID."; return; }
+        if (!state.eid) { pasteMsg.textContent = "Please save step 1 first."; return; }
+        pasteMsg.textContent = "Adding…";
+        /* K6 (the right to use these names and numbers) is part of the Terms notice: the server refuses the call without it (people.ts, consentMissing). Same as zc.js addPeople. */
+        const C = window.CBConsent, consent = C && typeof C.payload === "function" ? C.payload(null, "K6") : { v: C && C.version, boxes: ["A"], notice: true };
+        let added = 0, dup = 0, why = "";
+        try {
+          await call("PATCH", `/api/z/${state.eid}/settings`, audienceSettings(who.card, who.upTo, who.per)); // a new game holds 10 people until a size is saved: the chosen size goes first, or a list over 10 is refused ("This game is for 10 people")
+          for (let i = 0; i < ids.length; i += PASTE_PART) { // the server takes up to 200 people in one call; a longer list goes in parts, as zc.js does
+            const r = await call("POST", `/api/z/${state.eid}/people`, { consent, people: ids.slice(i, i + PASTE_PART).map((empId) => ({ empId })) });
+            added += typeof r.added === "number" ? r.added : Math.min(PASTE_PART, ids.length - i); dup += Number(r.duplicates) || 0;
+            if (!why && r.invalid && r.invalid[0] && r.invalid[0].why) why = String(r.invalid[0].why);
+          }
+        } catch (e) { pasteMsg.textContent = (added ? added + (added === 1 ? " ID was added before this problem. " : " IDs were added before this problem. ") : "") + e.message; return; }
+        who.pasted = ""; who.paste = false; who.added = added; who.dup = dup; who.why = why; draw();
+      } }, "Add to your list"));
+    }
+    box.append(pasteMsg);
+    if (who.added != null) pasteMsg.textContent = who.added + (who.added === 1 ? " ID was added to your list." : " IDs were added to your list."); // the server's reason is never thrown away: a row that was refused says why
+    if (who.added != null && who.dup) pasteMsg.textContent += " " + who.dup + (who.dup === 1 ? " was already on your list." : " were already on your list.");
+    if (who.added != null && who.why) pasteMsg.textContent += " " + who.why;
     box.append(el("h3", { text: "How big is your game?" }));
     const sel = el("select", { id: "zf-size", "aria-label": "Size of your game", onchange: (e) => { who.upTo = Number(e.target.value); draw(); } });
     for (const k of choices) sel.append(el("option", { value: String(k.upTo), ...(who.upTo === k.upTo ? { selected: "" } : {}) }, k.label));
@@ -466,7 +503,7 @@
       if (bad.length) { msg.textContent = bad[0]; return; }
       if (!state.eid) { msg.textContent = "Please save step 1 first."; return; }
       go.disabled = true; msg.textContent = "Saving…";
-      try { await call("PATCH", `/api/z/${state.eid}/settings`, audienceSettings(who.card, who.upTo)); done(2); }
+      try { await call("PATCH", `/api/z/${state.eid}/settings`, audienceSettings(who.card, who.upTo, who.per)); done(2); }
       catch (e) { go.disabled = false; msg.textContent = e.message; }
     } }, "Save and continue");
     box.append(msg, go);
@@ -849,6 +886,27 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
     }
     return sec;
   }
+  /** The invite and approval log (smallest view): who asked, through whom, what was decided and by whom. Only the ID. */
+  function inviteLogBlock() {
+    const sec = el("section", { class: "zf-invitelog", id: "zf-invitelog" });
+    sec.append(el("button", { type: "button", class: "zf-add", id: "zf-logtoggle", onclick: async () => {
+      dash.logOpen = !dash.logOpen;
+      if (dash.logOpen) { try { dash.log = (await call("GET", `/api/z/${state.eid}/people/log`)).log || []; } catch { dash.log = []; } }
+      draw();
+    } }, dash.logOpen ? "Hide who asked and who was let in" : "Who asked and who was let in"));
+    if (dash.logOpen) {
+      const rows = dash.log || [];
+      if (!rows.length) sec.append(el("p", { id: "zf-lognone", text: "Nothing yet." }));
+      else {
+        const table = el("table", { class: "zf-table", id: "zf-logrows" });
+        table.append(el("thead", {}, el("tr", {}, ["ID", "What happened", "Through", "By"].map((t) => el("th", { scope: "col", text: t })))));
+        const tb = el("tbody");
+        for (const r of rows) tb.append(el("tr", {}, el("td", { text: String(r.id || "") }), el("td", { text: String(r.kind || "") }), el("td", { text: String(r.through || "") }), el("td", { text: String(r.by || "") })));
+        table.append(tb); sec.append(el("div", { class: "zf-tablewrap" }, table));
+      }
+    }
+    return sec;
+  }
   /** Waiting for you: one table, a column only when a participant gave that detail; Let in / Not now; then the grey Not now list and the green list. */
   function waitingBlock() {
     const sec = el("section", { class: "zf-waitsec", id: "zf-waitsec" }, el("h3", { text: "Waiting for you to let them in the game" }));
@@ -905,6 +963,7 @@ el("span", { class: "zf-pillstatus " + S.tone, id: "zf-status", "data-status": s
     sec.append(paymentBlock(st, o, eid)); // 4 payment
     if (G.rehearsal) sec.append(rehearsalBlock(st)); // 5 rehearsals
     sec.append(waitingBlock()); // 6 waiting for you
+    sec.append(inviteLogBlock());
     if (G.claims) sec.append(el("h3", { text: "Tickets claimed" }), el("p", { id: "zf-claimed", text: String(claimedCount(dash.claims)) })); // 7 tickets claimed
     if (G.presence && dash.pres && dash.pres.listening != null) sec.append(el("p", { id: "zf-online", text: "Online now: about " + dash.pres.listening }));
     const playing = st === "live" || st === "paused", withControl = G.control && playing;

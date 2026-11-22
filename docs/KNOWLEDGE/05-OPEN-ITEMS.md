@@ -27,9 +27,25 @@ Older text on the live version that also says guests' data is deleted within 24 
 ## Small leftovers the last audit noted (disclosed, not blocking)
 An expired Host key without personal data still opens the static Host manual page (no game data); a person's game key cannot list certificates after the end; the export blanks names beyond 3,000 without a flag; support limits are per account; the 5-key game limit counts expired but unswitched keys; two approvals of one hand-over at the same moment could make two keys; rejection reasons are readable by anyone holding a ticket number; Hindi covers the core phrases only. More in [OWNER-NOTE.md](OWNER-NOTE.md).
 
+## Mail lanes (1.11.0, 21 Nov 2026): what is open
+1. Owner steps in `docs/MAIL-DELIVERABILITY-OWNER-STEPS.md`: Resend webhook and its secret, DMARC `rua=`, Gmail Postmaster Tools, plan upgrade or the Cloudflare route. Until the webhook is set, no delivery state arrives and no address is ever put on the do-not-mail list by a bounce.
+2. Migration `0033_mail_lanes.sql` must be applied before the deploy.
+3. Marketing mail sent by OTHER products from the same Resend account or the Cloudflare account is not counted here; the lanes protect only mail sent through this site's `sendMail`.
+4. The monthly count follows the calendar month (UTC); the provider's own month may start on another day.
+5. Audit fixes, same release (see `09-RELEASE-1.11.0.md`, "After the first two audits"): still open by choice: a bot check (Turnstile, needs the owner's keys) on the Refer & earn code and the sign-in code; a `List-Unsubscribe` header on bulk mail; a game-level hostile-join test (audit 2, L9); an owner e-mail for the 80 % and 100 % alerts (today a log line only); the console's automatic one retry of a refused Host press (audit 2, L5, not checked in this pass).
+
 ## Open since 20 Nov 2026 (RCA of the Rs 1 live payment, `docs/RCA-NO-INVOICE-MAIL-2026-11-20.md`)
 1. Mail refusals: after the 1.9.1 deploy, read `mail_event` rows `send_failed <status> <error name>` to learn why the mail service refused three of the four mails of that payment (shared Resend account: rate limit or quota is the leading, unproven, cause).
 2. No Razorpay webhook has reached the game or IT Services since 21 Oct / 15 Oct 2026: check the webhook URL and secret in the Razorpay dashboard (owner step).
-3. The invoice mail accepted for `raajat.agarwal@gmail.com` at 13:28 UTC on 20 Nov was not found in Inbox or Trash: the owner checks Spam.
+3. The invoice mail accepted for the owner's own mailbox at 13:28 UTC on 20 Nov was not found in Inbox or Trash: the owner checks Spam.
 4. **Resend monthly quota is used up (found live 2026-11-20 after deploy 1.9.1):** mail log shows `send_failed 429 monthly_quota_exceeded`. The mail account is shared by the eight products: check the Resend plan and usage (owner step). Until then some mails are refused; the tick retries each up to six times, then the daily sweep until the 3-day purge.
 5. Audit follow-ups of PR 30 (Medium, not fixed so the audited commit stayed the deployed one): (M1) `mail_event` has no purge and now holds a hash of the address in LIVE mode: delete rows older than 3 days in `adminTick` and add it to RETENTION.md; (M2) the mail `fetch` has no timeout (add `AbortSignal.timeout(4000)` or run the retry after `issueDueInvoices`); (M3) the outbox scan in `retryRecentOutbox` has no usable index (needs a migration).
+
+## Release 1.11.0 (21 Nov 2026): what is open
+See `09-RELEASE-1.11.0.md`, section Open: migration 0033 before deploy, the Cloudflare route secrets, the Resend webhook and DMARC `rua=`, the real `MAIL_MONTHLY_QUOTA`, and two audits on the exact head commit.
+
+## Release 1.11.1 (21 Nov 2026): what is open
+See `10-RELEASE-1.11.1.md`, section Open: two audits on the exact head commit, then a deploy. Still open by choice: a bot check (Turnstile) on the Refer & earn code and the sign-in code; the sign-in code has no site-wide cap; owner e-mail for the 80 % and 100 % alerts; `List-Unsubscribe` on bulk mail; a game-level hostile-join test; (the test files and `tools/` that used the owner's address as a fixture were cleaned in 1.11.2).
+
+## Release 1.11.2 (21 Nov 2026): what is open
+See `11-RELEASE-1.11.2.md`, section Open: two audits on the exact head commit, then a deploy. The caps are a ceiling, not a lock: with many networks and many helper accounts the site-wide caps (30 data-request mails to the owner a day, 30 Help Desk invitations an hour) can still be filled, and then real helpers wait. The owner's old address is still in the history of git (a pull request cannot remove it). Still open by choice: Turnstile, `List-Unsubscribe`, owner e-mail for the 80 % and 100 % alerts, a site-wide cap on the sign-in code.

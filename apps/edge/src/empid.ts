@@ -1,10 +1,13 @@
 /* 1.8.5 UNIFORM EMPLOYEE ID (owner rule, 30 Oct 2026). ONE function cleans an employee ID everywhere: what a person types, what the organizer types, pastes or uploads.
    NFKC first (full-width letters and digits become plain ASCII), then everything that is not A-Z, a-z or 0-9 is removed (spaces, dashes, slashes, dots, underscores, symbols, accents,
    other alphabets, emoji, zero-width characters), then upper case. "1B-678", "1b-678", "1B/678", "1B 678" and "1b.678" all become 1B678.
-   Games created before EMP_CLEAN_FROM_MS keep the old rule so the IDs already stored for them still match. */
+   20 Nov 2026 (owner): the uniform rule now applies to EVERY game, old or new, at upload, join and approval ("A-1101", "A 1101" and "A/1101" are all A1101).
+   A game created before EMP_LEGACY_BEFORE_MS may still hold IDs stored under the old rule (spaces dropped, . _ - / kept): for those games the ID is ALSO looked up in its old form (legacyEmpFor), so nobody already on a list is locked out. Nothing stored is rewritten. */
 
 /** The deploy instant (ms) from which NEW games use the uniform rule. The release session sets it to the exact deploy time right before deploy; a game created earlier keeps the old rule. */
-export const EMP_CLEAN_FROM_MS = 1793554453235; // the release session replaces this with the exact deploy instant at release
+export const EMP_CLEAN_FROM_MS = 0; // every game uses the uniform rule (20 Nov 2026)
+/** A game created before this instant (the first release of the uniform rule, 1 Nov 2026) may hold IDs stored under the old rule. */
+export const EMP_LEGACY_BEFORE_MS = 1793554453235;
 export const EMP_MAX = 30;
 
 /** The one cleaning function: only A-Z and 0-9 are left, in upper case. Always a string (empty when nothing usable was typed). */
@@ -15,7 +18,16 @@ export const hasForeignChars = (raw: unknown): boolean => /[\p{L}\p{N}]/u.test(S
 export const EMP_ENGLISH = "Please use English letters and numbers only.";
 
 /** Does this game use the uniform rule? (created at or after the release instant) */
-export const empCleanOn = (e: { created_ms?: number | null } | null | undefined): boolean => Number(e?.created_ms) >= EMP_CLEAN_FROM_MS;
+export const empCleanOn = (_e?: { created_ms?: number | null } | null | undefined): boolean => true;
+/** Could this game hold IDs stored under the old rule? (created before the first release of the uniform rule) */
+export const isLegacyGame = (e: { created_ms?: number | null } | null | undefined): boolean => Number(e?.created_ms) < EMP_LEGACY_BEFORE_MS;
+/** The old-rule form of an ID (spaces dropped, upper case, letters, digits and . _ - / kept, 30 characters), only for a game that may still hold such IDs, and only when it differs from the cleaned form. null = nothing more to try. */
+export function legacyEmpFor(raw: unknown, e: { created_ms?: number | null } | null | undefined): string | null {
+  if (!isLegacyGame(e)) return null;
+  const s = String(raw ?? "").replace(/\s+/g, "").toUpperCase();
+  if (!s || !/^[A-Z0-9][A-Z0-9._\-/]{0,29}$/.test(s)) return null;
+  return s === cleanEmpId(raw) ? null : s;
+}
 
 /** The plain sentence shown when an ID cannot be used after cleaning. */
 export const EMP_BAD_NEW = "An employee ID has letters and numbers only. The system ignores spaces, dashes and symbols, and the Employee ID may be up to 30 characters once cleaned.";
@@ -36,7 +48,6 @@ export const empBadMessage = (raw: unknown, e: { created_ms?: number | null } | 
 export const EMP_TOO_LONG = "This Employee ID is too long. An employee ID may be up to 30 characters once cleaned.";
 
 export function normEmpFor(raw: unknown, e: { created_ms?: number | null } | null | undefined): string | null {
-  if (!empCleanOn(e)) { const s = String(raw ?? "").replace(/\s+/g, "").toUpperCase(); if (!s) return ""; return /^[A-Z0-9][A-Z0-9._\-/]{0,29}$/.test(s) ? s : null; }
   if (String(raw ?? "").trim() === "") return "";
   if (looksLikeEmail(raw)) return null; // an email typed where an employee ID is asked is refused, never mangled into letters
   if (hasForeignChars(raw)) return null;

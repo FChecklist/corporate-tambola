@@ -70,12 +70,12 @@ describe("the console: who calls the numbers", () => {
     const c = await consolePage(x, "HC-SET");
     await c.waitFor(() => !!c.$('.zc-dot[data-open="2"]')); openStep(c, 2); await c.waitFor((t) => /Who calls the numbers\?/.test(t) && /Duration \(gap\) between two numbers/.test(t));
     const chips = Array.from(c.win.document.querySelectorAll('#rg-mode .zc-radio b')).map((e: any) => e.textContent.trim());
-    expect(chips).toEqual(["The game calls the numbers", "I call the numbers"]);
+    expect(chips).toEqual(["Numbers come by themselves", "You call the numbers"]);
     expect((c.$('[data-ck="mode"][data-v="auto"]') as any).checked).toBe(true);
     const html = c.win.document.getElementById("sec2")!.innerHTML; expect(html.indexOf('data-ck="mode"')).toBeLessThan(html.indexOf('data-ck="spd"')); // who calls the numbers comes first, then the gap
     expect(c.$('[data-ck="spd"]')).toBeTruthy(); // auto: the speed chips are there
     c.click('[data-ck="mode"][data-v="host"]'); await wait(50);
-    expect(c.text()).toMatch(/I press the Next button for every number/);
+    expect(c.text()).toMatch(/Press Next whenever you want a new random number/);
     expect(c.$('[data-ck="spd"]')).toBeNull(); expect(c.$("#nospeed")).toBeTruthy(); // host mode: no gap to choose
     c.click('#sec2 [data-save="2"]');
     await c.waitFor((t) => /Saved\./.test(t));

@@ -92,7 +92,7 @@ Status words: **PASS** = was already right, now proved by a named test. **FIXED*
 | Contact page: one support address (`hello@corporatetambola.com`) and one phone (+91 96503 97480) on every page, with mailto and tel links | PASS | `gtm-site.test.ts` "contact details and the seller" |
 | Data-request flow for players (`POST /api/z/{id}/datareq`), the owner's queue (`/api/owner/data-requests`), the owner desk | PASS | `rights.test.ts`, `admin.test.ts` A6, `param-life.test.ts`, `docs/OWNER_DESK.md` |
 | `hello@corporatetambola.com` really reaches the owner: the domain's mail records exist (Cloudflare Email Routing, three MX records, read on 2026-10-19) but a forwarding rule to a verified inbox has not been proved | OWNER-ONLY | section 3, step 5. Note: the paid-order and data-request notes to the owner also go to this address (`apps/edge/src/owner-mail.ts`, override with the secret `OWNER_NOTIFY_EMAIL`) |
-| Receipts print the seller's own address `rajatsiroffice@gmail.com` (`config/company.json`) while the site and mails use `hello@`: two addresses by design | OWNER-ONLY decision | section 3, step 5 |
+| Receipts print the seller's own address `r***@gmail.com` (`config/company.json`) while the site and mails use `hello@`: two addresses by design | OWNER-ONLY decision | section 3, step 5 |
 
 ### Pricing, pages, onboarding
 
@@ -112,7 +112,7 @@ Status words: **PASS** = was already right, now proved by a named test. **FIXED*
 3. **Sister-product links** in the footer go to `rajat-agarwal-startup-coach.pages.dev` and the seller's own site `itservices-rajat-agarwal.pages.dev` (named on the contact page). These are the only addresses on a `pages.dev` name; the tests allow exactly these two.
 4. **The brochure PDF** (`apps/web/public/brochure.pdf`, linked from every footer) is regenerated from the corrected `brochure.html` (still exactly one page). Look at it once before you share it: the text inside a PDF cannot be searched by the tests.
 5. **tools/sim2 scenarios** that hard-coded 22 / 23 hours were edited to 19 / 20 so they follow the new clock. They were not re-run here (they need the live-data copy and a browser, and the laptop had about 1 GB free). Run `node tools/sim2/smoke.mjs` and the life scenarios when RAM allows.
-6. **Two e-mail addresses** (support `hello@`, seller on receipts `rajatsiroffice@gmail.com`): kept as they are; see section 3, step 5.
+6. **Two e-mail addresses** (support `hello@`, seller on receipts `r***@gmail.com`): kept as they are; see section 3, step 5.
 
 ## 3. OWNER-ONLY list, in plain words
 
@@ -144,7 +144,7 @@ Nothing here can be done by the software or by me. Do them in this order. None o
 **Step 5. Make sure mail to hello@ reaches you.**
 1. dash.cloudflare.com > **corporatetambola.com** > **Email** > **Email Routing** > **Routes**. There must be a line `hello@corporatetambola.com` > a destination marked **Verified**. If the destination says **Unverified**, open the mailbox it names and click the link in Cloudflare's mail.
 2. From a different mail account, write to hello@corporatetambola.com and confirm it arrives. Do the same with a reply to one of our mails.
-3. Decide whether receipts should keep `rajatsiroffice@gmail.com` as the seller's address (now) or also use hello@. To change it, edit `config/company.json` and the Pages secret `COMPANY_JSON`.
+3. Decide whether receipts should keep `r***@gmail.com` as the seller's address (now) or also use hello@. To change it, edit `config/company.json` and the Pages secret `COMPANY_JSON`.
 
 **Step 7. Alarms reach you.** In GitHub, open the `FChecklist/scheduler` repository > **Actions** > **uptime** > **Run workflow** once and confirm GitHub's failure/success mail reaches you (Settings > Notifications). Also in Resend: **Webhooks** > Add `https://corporatetambola.com/api/mail/events` (events bounced, complained, delivered) and put its signing secret in Cloudflare as `RESEND_WEBHOOK_SECRET`. Check Resend's monthly sending limit is above what you expect.
 

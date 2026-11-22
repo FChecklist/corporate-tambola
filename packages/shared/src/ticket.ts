@@ -1,5 +1,7 @@
 /** Ticket generation and patterns (handout section 5, prototype genTicket/patternNums). */
 
+import { ordinalName } from "./ordinal";
+
 export type Ticket = (number | null)[][]; // 3 rows x 9 columns
 export type Rand = (n: number) => number; // returns integer in [0, n)
 
@@ -99,8 +101,7 @@ export function patternNumbers(t: Ticket, p: PatternId): number[] | null {
   }
 }
 
-export const ordinalName = (k: number): string =>
-  ["", "1st", "2nd", "3rd"][k] ?? `${k}th`;
+export { ordinalName };
 
 /** Human name of a reward line, e.g. "2nd Full House", "1st Full Two-Ticket House". */
 export function rewardName(pattern: PatternId, scope: Scope, ordinal: number, ofTotal: number): string {

@@ -165,8 +165,8 @@ describe("a phone from first open to full house", () => {
   });
   test("a refused join shows the server's own plain words (not a mobile-number line for an employee ID); only 'nothing heard' gets the connection line", async () => {
     const a = mkPhone(90); await a.rt.boot();
-    expect(await a.rt.join(a.phone, "Asha", undefined, "E#12")).toBe(false); // an employee ID with a hash sign
-    expect(a.rt.error).toMatch(/letters and numbers only/); expect(a.rt.error).not.toMatch(/mobile number/); expect(a.rt.phase).toBe("join");
+    expect(await a.rt.join(a.phone, "Asha", undefined, "E".repeat(40))).toBe(false); // an ID that is too long (a hash sign or a space is now simply dropped, 20 Nov 2026)
+    expect(a.rt.error).toMatch(/too long/); expect(a.rt.error).not.toMatch(/mobile number/); expect(a.rt.phase).toBe("join");
     const off = mkPhone(91, { down: () => true });
     expect(await off.rt.join(off.phone)).toBe(false);
     expect(off.rt.error).toBe("Could not join. Check your connection and try again.");

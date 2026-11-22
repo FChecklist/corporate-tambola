@@ -116,11 +116,13 @@
       runMsg(msg, e && e.status);
     }
   };
+  // OWNER RULE (20 Nov 2026), console voice: the organizer console speaks TO the organizer as "you". Never "I", "my" or "me", no jargon, short sentences (docs/CONSOLE_VOICE.md).
+  // Approved wording for the two start questions below. Values stay auto/manual and auto/host. The numbers question exists in Tambola and Bingo only.
   function runQuestions() {
     const box = el("div", { class: "zt-run", id: "zt-run" });
     const group = (title, name, key, opts) => { const g = el("div", { role: "radiogroup", "aria-label": title }, el("h3", { text: title })); for (const [v, label, hint] of opts) g.append(el("label", { class: "zf-opt" }, el("input", { type: "radio", name, value: v, ...(RUN[key] === v ? { checked: "" } : {}), onchange: () => { RUN[key] = v; savedRun(); const sm = document.getElementById("zt-runsum"); if (sm) sm.textContent = runSummary(RUN, timeText()); } }), " " + label + " ", el("small", { text: hint }))); return g; };
-    box.append(group("How should the game start?", "zt-start", "start", [["auto", "Auto start", "The game starts by itself at the time I set."], ["manual", "Manual start", "The game starts when I press the Start button."]]),
-      group("Who calls the numbers?", "zt-call", "call", [["auto", "The game calls the numbers", "A new number comes every 12 seconds, by itself."], ["host", "I call the numbers", "I press the button to roll out every number, one press at a time."]]),
+    box.append(group("How should the game start?", "zt-start", "start", [["auto", "The game starts by itself", "The game begins at the time you set. You do nothing."], ["manual", "You start the game", "The game waits for you. Press Start when you are ready."]]),
+      group("Who calls the numbers?", "zt-call", "call", [["auto", "Numbers come by themselves", "A new random number appears every 12 seconds."], ["host", "You call the numbers", "Press Next whenever you want a new random number."]]),
       el("p", { class: "zf-small", id: "zt-runsum", text: runSummary(RUN, timeText()) }));
     return box;
   }

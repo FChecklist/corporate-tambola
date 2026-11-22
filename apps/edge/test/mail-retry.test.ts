@@ -44,16 +44,16 @@ describe("a busy mail service does not lose the invoice mail", () => {
 
 describe("a refused mail says why (the provider's error name only)", () => {
   test("still refused after the tries: kept for the retry, and the log holds the status and the error NAME, never the address or the provider's message", async () => {
-    script = () => ({ status: 429, body: { name: "daily_quota_exceeded", message: "You have reached your daily quota for boss@acme.com" } });
+    script = () => ({ status: 429, body: { name: "rate_limit_exceeded", message: "You have reached your daily quota for boss@acme.com" } });
     expect(await send()).toBe(false); expect(calls.length).toBe(3);
     const row = q("SELECT sent, body FROM outbox")[0]!; expect(row.sent).toBe(0); expect(row.body).toContain("INVOICE"); // kept so a later try can send it
     const ev = q("SELECT outcome, subject FROM mail_event");
-    expect(ev.map((e) => e.outcome)).toEqual(["send_failed 429 daily_quota_exceeded"]);
+    expect(ev.map((e) => e.outcome)).toEqual(["send_failed 429 rate_limit_exceeded"]);
     expect(JSON.stringify(ev)).not.toContain("boss@acme.com"); expect(JSON.stringify(ev)).not.toContain("quota for");
   });
   test("a plain refusal (403) is logged and NOT repeated", async () => {
     script = () => ({ status: 403, body: { name: "validation_error" } });
-    expect(await send("raajat+x@gmail.com")).toBe(false); expect(calls.length).toBe(1);
+    expect(await send("tester+x@example.com")).toBe(false); expect(calls.length).toBe(1);
     expect(q("SELECT outcome FROM mail_event").map((e) => e.outcome)).toEqual(["send_failed 403 validation_error"]);
   });
   test("a dropped connection is logged as 'network'", async () => {

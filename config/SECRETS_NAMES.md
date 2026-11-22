@@ -23,6 +23,8 @@ Where things are set:
 | `REPORT_KEY` | Key to read the first-party error and speed reports (`/api/telemetry`) | Pages secret | secret |
 | `RESEND_API_KEY` | Sends e-mail through the mail service (sign-in codes, invoices, reports, notes to the owner) | Pages secret | secret |
 | `RESEND_WEBHOOK_SECRET` | Checks the signature of the mail service's bounce / complaint / delivery webhook (`POST /api/mail/events`); with no value that address answers 404 | Pages secret | secret |
+| `CF_EMAIL_TOKEN` | Cloudflare API token that may send e-mail (Email Service); the second mail path used when Resend answers a quota or server error. Same value as `CLOUDFLARE_EMAIL_TOKEN` in the owner's secrets file. With no value there is no second path | Pages secret | secret |
+| `CF_ACCOUNT_ID` | The Cloudflare account id (32 hex characters) the second mail path sends through | Pages secret | secret |
 | `RAZORPAY_KEY_ID` | Razorpay key id, when this site takes payments itself | Pages secret | secret |
 | `RAZORPAY_KEY_SECRET` | Razorpay key secret, when this site takes payments itself | Pages secret | secret |
 | `RAZORPAY_WEBHOOK_SECRET` | Checks the signature of Razorpay's payment webhook | Pages secret | secret |
@@ -38,6 +40,15 @@ Where things are set:
 | `MAIL_FROM` | The sender name and address of every mail | wrangler var | setting |
 | `MAIL_REPLY_TO` | Reply-to address of mails (optional) | Optional Pages variable | setting |
 | `MAIL_RETRY_MS` | Wait in milliseconds before the first re-try of a refused mail (default 800; tests set 0) | Optional Pages variable | setting |
+| `MAIL_MONTHLY_QUOTA` | The mail plan's monthly allowance (default 3000, the Resend free plan); the 80 % alert and the bulk reserve are worked out from it (`GET /api/owner/mail-status`) | Optional Pages variable | setting |
+| `MAIL_DAILY_LIMIT` | The mail plan's daily allowance (default 100, the Resend free plan; 0 means no daily limit) | Optional Pages variable | setting |
+| `ANON_MAIL_PER_HOUR` | Site-wide cap of Refer & earn code mails an anonymous visitor can trigger per hour (default 60; 0 means no cap) | Optional Pages variable | setting |
+| `HD_INVITE_MAIL_PER_HOUR` | Site-wide cap of Help Desk invitation mails per hour (default 30; 0 means no cap) | Optional Pages variable | setting |
+| `DATAREQ_MAIL_PER_GAME_DAY` | Cap of player data-request mails per game and day: the organizer and the owner each get the first this many, then ONE digest, then nothing that day; the requests are always stored (default 10; 0 means no cap) | Optional Pages variable | setting |
+| `DATAREQ_MAIL_PER_IP_DAY` | Cap of player data-request mails per requester network and day (default 10; 0 means no cap). Only a hash of the network is counted | Optional Pages variable | setting |
+| `DATAREQ_MAIL_PER_RECIPIENT_DAY` | Cap of player data-request mails per organizer mailbox and day, whatever the number of games (`+tags` and Gmail dots count as the same mailbox) (default 10; 0 means no cap) | Optional Pages variable | setting |
+| `DATAREQ_MAIL_PER_DAY` | Cap of player data-request mails to the owner for the whole site per day, then ONE digest (default 30; 0 means no cap) | Optional Pages variable | setting |
+| `MAIL_WARMUP_START` | First day of the sending warm-up, `YYYY-MM-DD` (optional; without it the day the 1.11.0 code first handled a mail is day 1) | Optional Pages variable | setting |
 | `OWNER_EMAIL` | The owner's address on the TEST-mode allow-list | wrangler var | setting |
 | `OWNER_NOTIFY_EMAIL` | Overrides the address that gets the note on each paid order and each data request | Optional Pages variable | setting |
 | `TEST_MAIL_ALLOW` | Extra addresses TEST mode may mail (comma separated) | Optional Pages variable | setting |

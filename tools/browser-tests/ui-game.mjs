@@ -61,7 +61,7 @@ try {
   // step 7: check and publish
   await openStep(p, 7); R.step7 = await ctrls(p);
   if (await p.$("#publishopen")) { await p.click("#publishopen").catch(() => {}); await sleep(800);
-  await p.fill("#pubEmail", "raajat.agarwal@gmail.com").catch(() => {}); await p.fill("#pubPhone", "9650397480").catch(() => {});
+  await p.fill("#pubEmail", "tester@example.com").catch(() => {}); await p.fill("#pubPhone", "9650397480").catch(() => {});
   for (const bx of await p.$$("#sec7 input[type=checkbox]")) await bx.check({ force: true }).catch(() => {});
   await sleep(500); await p.click("#pubgo"); await sleep(6000); } else R.notes.push("no publish button: the game was already published (test pack)");
   const info = await (await fetch(`${SITE}/api/z/${eid}/info`)).json().catch(() => ({})); R.info = { cap: info.cap, locked: info.locked, demo: info.demo, startMs: info.startMs };

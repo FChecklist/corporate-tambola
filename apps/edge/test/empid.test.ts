@@ -5,12 +5,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { handle } from "./with-terms";
 import type { PayEnv } from "../src/pay";
 import { makeD1 } from "./d1-sqlite";
-import { cleanEmpId, empCleanOn, normEmpFor, normEmail, normAccountEmail, looksLikeEmail, EMP_CLEAN_FROM_MS, EMP_MAX } from "../src/empid";
+import { cleanEmpId, empCleanOn, normEmpFor, normEmail, normAccountEmail, looksLikeEmail, legacyEmpFor, EMP_CLEAN_FROM_MS, EMP_LEGACY_BEFORE_MS, EMP_MAX } from "../src/empid";
 import { cleanEmail } from "../src/approvals";
+import { empHashOf } from "../src/people";
 import { emailHashOf } from "../src/hostsetup";
 
-const NEW_T = Math.max(Date.UTC(2026, 10, 5, 10, 0, 0), EMP_CLEAN_FROM_MS + 86_400_000); // a game made after the release instant: the uniform rule
-const OLD_T = EMP_CLEAN_FROM_MS - 3 * 86_400_000; // a game made before it: the old rule
+const NEW_T = Math.max(Date.UTC(2026, 10, 5, 10, 0, 0), EMP_LEGACY_BEFORE_MS + 86_400_000); // a game made after the release instant: the uniform rule
+const OLD_T = EMP_LEGACY_BEFORE_MS - 3 * 86_400_000; // a game made before it: the old rule
 const GEN = 1692803367;
 const roundAt = (ms: number) => Math.floor((ms / 1000 - GEN) / 3) + 1;
 let env: PayEnv; let ipN = 0;
@@ -40,12 +41,13 @@ describe("the one cleaning function", () => {
     expect(cleanEmpId("1B🙂678")).toBe("1B678"); expect(cleanEmpId("1B​6‌7‍8⁠")).toBe("1B678"); expect(cleanEmpId("ß1")).toBe("1"); // never "SS1"
   });
   test("full-width letters and digits become plain ones (NFKC first)", () => { expect(cleanEmpId("１Ｂ－６７８")).toBe("1B678"); expect(cleanEmpId("ｅｍｐ００１")).toBe("EMP001"); });
-  test("normEmpFor: new games clean, refuse an ID with nothing left or more than 30 left, and keep empty as 'nothing typed'; old games keep the old rule", () => {
+  test("normEmpFor: new games clean, refuse an ID with nothing left or more than 30 left, and keep empty as 'nothing typed'; every game cleans, and an older game also knows the old form to look for", () => {
     const n = { created_ms: NEW_T }, o = { created_ms: OLD_T };
     expect(normEmpFor("1b.678", n)).toBe("1B678"); expect(normEmpFor("   ", n)).toBe(""); expect(normEmpFor("", n)).toBe(""); expect(normEmpFor("---", n)).toBe(null); expect(normEmpFor("​", n)).toBe(null); expect(normEmpFor("🙂🙂", n)).toBe(null);
     expect(normEmpFor("A".repeat(EMP_MAX), n)).toBe("A".repeat(EMP_MAX)); expect(normEmpFor("A".repeat(EMP_MAX + 1), n)).toBe(null); expect(normEmpFor("ab-".repeat(16), n)).toBe(null); // 32 characters once cleaned
-    expect(normEmpFor("1B-678", o)).toBe("1B-678"); expect(normEmpFor("1b 678", o)).toBe("1B678"); expect(normEmpFor("---", o)).toBe(null); expect(normEmpFor("1B🙂678", o)).toBe(null);
-    expect(empCleanOn({ created_ms: EMP_CLEAN_FROM_MS - 1 })).toBe(false); expect(empCleanOn({ created_ms: EMP_CLEAN_FROM_MS })).toBe(true); expect(empCleanOn(null)).toBe(false);
+    expect(normEmpFor("1B-678", o)).toBe("1B678"); expect(normEmpFor("1b 678", o)).toBe("1B678"); expect(normEmpFor("---", o)).toBe(null); expect(normEmpFor("1B🙂678", o)).toBe("1B678");
+    expect(empCleanOn({ created_ms: OLD_T })).toBe(true); expect(empCleanOn(null)).toBe(true); // every game, old or new
+    expect(legacyEmpFor("1B-678", o)).toBe("1B-678"); expect(legacyEmpFor("1B678", o)).toBe(null); expect(legacyEmpFor("1B-678", n)).toBe(null); expect(legacyEmpFor("---", o)).toBe(null); // the old form is tried only for a game that may hold it, and only when it differs
   });
 });
 
@@ -66,11 +68,22 @@ describe("on the real Worker", () => {
   test("a NEW game refuses an ID with nothing usable in it, with a plain message", async () => {
     await setup(NEW_T); for (const bad of ["---", "​​", "🙂"]) { const r = await joinId(NEW_T, bad, 3); expect(r.status).toBe(400); const b = await j(r); expect(b.code).toBe("bad-id"); expect(b.error).toContain("letters and numbers only"); }
   });
-  test("an OLD game keeps the old rule: '1B-678' and '1B678' are different people, '1b 678' still equals '1B678'", async () => {
-    const m = await setup(OLD_T); expect((await add(OLD_T, m, [{ name: "Asha", empId: "1B-678" }, { name: "Ben", empId: "1B678" }])).status).toBe(200);
-    expect((await joinId(OLD_T, "1b-678", 1)).status).toBe(200); // the dashed one
-    expect((await joinId(OLD_T, "1b 678", 2)).status).toBe(200); // "1B678", a different listed person
-    expect((await joinId(OLD_T, "1B.678", 3)).status).toBe(403); // not on the list under the old rule: waits
+  test("an OLD game now cleans too: '1B-678' and '1B678' are the same person (20 Nov 2026), and a listed ID is found in any form", async () => {
+    const m = await setup(OLD_T); const r = await j(await add(OLD_T, m, [{ name: "Asha", empId: "1B-678" }, { name: "Ben", empId: "1B678" }]));
+    expect(r.added ?? r.people?.length).toBe(1); // the second row is the same person after cleaning
+    for (const [i, x] of ["1b-678", "1B 678", "1B/678"].entries()) { const rr = await joinId(OLD_T, x, i + 1); if (i === 0) expect(rr.status).toBe(200); else expect(rr.status).toBe(423); } // the first press seats the person; the same person again is refused
+  });
+  test("an OLD game that already holds an ID stored under the old rule ('1B-678') still lets that person in with the old form, and a new upload of the same ID is a duplicate, not a second person", async () => {
+    const m = await setup(OLD_T); expect((await add(OLD_T, m, [{ name: "Asha", empId: "1B678" }])).status).toBe(200);
+    const stored = await empHashOf(env as any, "1B-678"), clean = await empHashOf(env as any, "1B678"); // simulate a row an older release stored
+    await env.DB.prepare("UPDATE person SET ph=? WHERE eid='EMP-1' AND ph=?").bind(stored, clean).run();
+    const again = await j(await add(OLD_T, m, [{ name: "Asha", empId: "1b-678" }])); expect(again.added ?? again.people?.length ?? 0).toBe(0); expect(again.duplicates).toBe(1);
+    expect((await joinId(OLD_T, "1b-678", 1)).status).toBe(200); // found by its old form
+  });
+  test("a NEW game never looks for the old form: a person stored under it is not matched", async () => {
+    const m = await setup(NEW_T); expect((await add(NEW_T, m, [{ name: "Asha", empId: "1B678" }])).status).toBe(200);
+    await env.DB.prepare("UPDATE person SET ph=? WHERE eid='EMP-1' AND ph=?").bind(await empHashOf(env as any, "1B-678"), await empHashOf(env as any, "1B678")).run();
+    expect((await joinId(NEW_T, "1b-678", 1)).status).toBe(403);
   });
 });
 
