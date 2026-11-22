@@ -2,7 +2,7 @@
 
 Newest first. The owner-only release list the site reads is `apps/edge/src/releases.json`; this file adds the PR and audit lines the version standard asks for (marketing-ledger/plans/VERSION-AND-KNOWLEDGE-STANDARD-2026-11-20.md). Earlier releases (1.0.0 to 1.9.0) are in `releases.json`.
 
-## 1.11.2 - 2026-11-21
+## 1.11.2 - 2026-11-21 (DEPLOYED 22 Nov 2026 about 10:22 IST, deployment 8c70bf72)
 Release on top of 1.11.1 (PR #38, same branch, head `0b2155e` before this one). 1.11.0 is the live release (commit `8a4a0bed`, Cloudflare Pages deployment `1366bf89`, rollback `edd21023` = 1.10.2); neither 1.11.1 nor 1.11.2 is deployed. Needs two independent audits on the exact head commit before any deploy. Money flag `PAY_VIA_MONEYPENNY` stays off; no payment code is touched. Payments still go only through IT Services by Rajat Agarwal and Razorpay.
 ### Why a new version
 Both audits of the 1.11.1 head `0b2155e` said `AUDIT: FAIL` (audit 1: one Medium; audit 2: three Medium). The head changes, so the number changes: this is 1.11.2. The earlier writer of PR #38 stopped answering; this is the one writer that finished it. The head had not moved since `0b2155e`.
@@ -30,7 +30,7 @@ Both audits of the 1.11.1 head `0b2155e` said `AUDIT: FAIL` (audit 1: one Medium
 - `bun test packages apps tools/control-worker` on the tree this commit was made from: **4438 pass, 1 skip, 0 fail** (4439 tests, 285 files). 1.11.1 had 4414 pass in 284 files: this release adds 24 tests and one test file (`release-1-11-2.test.ts`).
 - `bun run typecheck` (`tsc --noEmit`): 430 error lines, the same number the audits found on 1.11.1 and 1.11.0; none is in `apps/*/src`, in `apps/web/public` or in a test file this release adds. They are old and were not fixed here.
 - Red without the fix: 13 throwaway mutations, each removing ONE fix (site scope, mailbox scope, network scope, `canonMailbox`, the Help Desk key, the answer text, `countCap`, `anonMailAllowed`, the busy order, an owner fixture put back, the guide text, the cache name, the version). Every one turned at least one new test red; every file was restored afterwards.
-- Not run: the ten 250-player games (nothing they cover was changed). Not deployed, not merged.
+- Not run: the ten 250-player games (nothing they cover was changed). Deployed 22 Nov 2026 to Cloudflare Pages project corporate-tambola as deployment 8c70bf72 after two independent AUDIT: PASS on ec5e5eb8c7681367f62bbba99ec1a521b8c5cda6. Rollback id: 1366bf89 (1.11.0, commit 8a4a0bed). Not merged to the default branch.
 
 ## 1.11.1 - 2026-11-21
 Release on top of the deployed 1.11.0 (commit `8a4a0bed`, Cloudflare Pages deployment `1366bf89`, rollback `edd21023` = 1.10.2). Not deployed. Needs two independent audits on the exact head commit before any deploy. Money flag `PAY_VIA_MONEYPENNY` stays off; no payment code is touched.
