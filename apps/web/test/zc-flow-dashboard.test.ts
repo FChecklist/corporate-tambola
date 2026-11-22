@@ -10,6 +10,7 @@ const calls: any[] = [];
 const START = Date.UTC(2099, 10, 1, 12, 30); // 18:00 in India, far ahead so the test never ages
 let info: any = { unpaid: true, startMs: START }; // the real answer leaves "draft" out once the game is published
 let waiting: any[] = [{ id: "w1", firstName: "Asha", last4: "4321" }, { id: "w2", firstName: "Ravi", last4: "9988" }];
+const LOG = [{ ms: 2, id: "Z9001", kind: "let in", through: "you", by: "Organizer" }, { ms: 1, id: "Z9001", kind: "asked", through: "you" }];
 let claims: any[] = [{ id: 1 }, { id: 2, bogey: true }, { id: 3 }];
 function page(search = "?flow=new&e=EABCDEF") {
   const win: any = new Window({ url: "http://localhost/zc.html" + search });
@@ -18,7 +19,7 @@ function page(search = "?flow=new&e=EABCDEF") {
   win.sessionStorage.setItem("ctz-org", "ctk_" + "0".repeat(48));
   const fakeFetch = async (url: string, o: any = {}) => {
     calls.push({ url, method: o.method || "GET", body: o.body ? JSON.parse(o.body) : null });
-    const j = url.endsWith("/info") ? info : url.endsWith("/waiting") ? { waiting } : url.endsWith("/claims") ? { claims } : { ok: true };
+    const j = url.endsWith("/info") ? info : url.endsWith("/people/log") ? { log: LOG } : url.endsWith("/waiting") ? { waiting } : url.endsWith("/claims") ? { claims } : { ok: true };
     return { ok: true, json: async () => j };
   };
   new Function("window", "document", "location", "fetch", "sessionStorage", src)(win, win.document, win.location, fakeFetch, win.sessionStorage);
@@ -168,4 +169,21 @@ test("the retro Housie board: HOUSIE title, a gold ball, 90 round discs in 10 co
   win.ZFLOW.dash.called = [5, 17]; win.ZFLOW.draw();
   expect([...d.querySelectorAll(".zf-disc.called")].map((n: any) => n.textContent)).toEqual(["5", "17"]);
   expect(d.getElementById("zf-ball").textContent).toBe("17");
+});
+
+// 20 Nov 2026 (owner): an ID-only game. The waiting table shows the ID (no name, no mobile column), and the log of who asked and who was let in is one click away; it shows only the ID.
+test("the waiting table says ID, and the invite log opens with the ID, what happened, through whom and by whom", async () => {
+  info = { unpaid: true, startMs: START }; calls.length = 0;
+  const saved = waiting; waiting = [{ id: "w1", empId: "Z9001" }, { id: "w2", empId: "Q77" }];
+  try {
+    const win = page(); await wait(); const d = win.document;
+    expect([...d.querySelectorAll("#zf-wait thead th")].map((n: any) => n.textContent).filter(Boolean)).toEqual(["Ticket number", "ID"]);
+    expect(d.getElementById("zf-logrows")).toBe(null);
+    d.getElementById("zf-logtoggle").click(); await wait();
+    expect(calls.some((c) => c.url === "/api/z/EABCDEF/people/log")).toBe(true);
+    expect([...d.querySelectorAll("#zf-logrows thead th")].map((n: any) => n.textContent)).toEqual(["ID", "What happened", "Through", "By"]);
+    const rows = [...d.querySelectorAll("#zf-logrows tbody tr")].map((r: any) => r.textContent);
+    expect(rows.length).toBe(2); expect(rows[0]).toContain("Z9001"); expect(rows[0]).toContain("let in");
+    expect(/name|mobile|phone/i.test(d.getElementById("zf-invitelog").textContent.replace(/who asked and who was let in/i, ""))).toBe(false);
+  } finally { waiting = saved; }
 });

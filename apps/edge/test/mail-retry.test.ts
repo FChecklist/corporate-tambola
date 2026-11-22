@@ -53,7 +53,7 @@ describe("a refused mail says why (the provider's error name only)", () => {
   });
   test("a plain refusal (403) is logged and NOT repeated", async () => {
     script = () => ({ status: 403, body: { name: "validation_error" } });
-    expect(await send("raajat+x@gmail.com")).toBe(false); expect(calls.length).toBe(1);
+    expect(await send("tester+x@example.com")).toBe(false); expect(calls.length).toBe(1);
     expect(q("SELECT outcome FROM mail_event").map((e) => e.outcome)).toEqual(["send_failed 403 validation_error"]);
   });
   test("a dropped connection is logged as 'network'", async () => {

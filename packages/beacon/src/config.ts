@@ -137,7 +137,7 @@ export function checkBrandLogo(v: unknown): { ok: true; bytes: number } | { ok: 
   if (long > short * LOGO_MAX_RATIO) return { ok: false, error: `The logo is too long and thin. It may be at most ${LOGO_MAX_RATIO} times wider than tall.` };
   return { ok: true, bytes: raw.length };
 }
-export const MAX_INVITES_PER_PERSON = 4;
+export const MAX_INVITES_PER_PERSON = 10; // 20 Nov 2026 (owner): each invited person may invite 1 to 10; the default stays 4
 export const defaultInvites = (): InviteCfg => ({ on: false, per: 4, cats: ["family", "colleagues"] });
 /** Who calls the numbers: `auto` = the software, one number every callSeconds (the default); `host` = a Host presses a button for each number. The order of the numbers comes from the public beacon either way (see control.ts, "next"). */
 export type CallMode = "auto" | "host";

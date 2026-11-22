@@ -25,6 +25,7 @@ import { LEGAL_SCHEMA } from "./legal";
 import { GAME_RECORD_SCHEMA, readGameRecords } from "./gamerecord";
 import { RIGHTS_SCHEMA, leaveRoute, requestRoute } from "./rights";
 import { ADMIN_SCHEMA, adminRoute, adminTick, countError, maintenanceGate } from "./admin";
+import { MAIL_LANES_SCHEMA } from "./mail-lanes";
 import { ownerStatsRoute } from "./owner-stats";
 import { getProspectLink, prospectLinksRoute } from "./prospect-links";
 import { recordServerError } from "./errorbox";
@@ -38,14 +39,14 @@ import { REHEARSAL_SCHEMA, closeRehearsal, listRehearsals, rehearsalFacts, start
 import { CREDIT_SCHEMA, activeCreditSummary, creditAppliedFor, creditLastDay, creditRoute } from "./credit";
 import { cloneGame } from "./clone";
 import { acceptOver, acceptWon, endBoundMs, realEndMs, neverStarted, eraseEverything, erasePersonal, erasureOf, fullDeleteAt, lifecycleTick, MAX_AHEAD_MS, personalDeleteAt, SETTINGS_KEEP_MS, recordWinners, reportApi, reportLink } from "./lifecycle";
-import { PAY_SCHEMA, issueDueInvoices, payRoute, retryOutbox, retryRecentOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
+import { PAY_SCHEMA, drainBulkMail, issueDueInvoices, payRoute, retryOutbox, retryRecentOutbox, sendMail, freeLaunch, payMode, FREE_CAP, MAX_DRAFTS, type PayEnv } from "./pay";
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { PARTNER_SCHEMA, partnerRoute } from "./partners";
 import { HELPDESK_SCHEMA, HELPER_MANUAL_NOTE, helpdeskCloseStatements, helpdeskRoute, helpdeskSweep, isDeskKeyId, isHelperKey, noteHelperGame } from "./helpdesk";
 import { prizesRefusal } from "./approvals";
-import { strictAccountEmail, normIdFor, normEmail, normAccountEmail, badIdMessageFor, idWord, empCleanOn } from "./empid";
+import { strictAccountEmail, normIdFor, normEmail, normAccountEmail, badIdMessageFor, idWord, empCleanOn, legacyEmpFor } from "./empid";
 import { cleanEmail, approvalRulesOn, EMAIL_ENABLED, EMAIL_UNUSABLE_MESSAGE, EMAIL_MISS_PER_10MIN } from "./approvals";
-import { normEmp, empHashOf, verifyOf, keptPhone, phoneDigits, cleanName as cleanPersonName, PEOPLE_SCHEMA, COHOST_FROM, HOST_FROM, ORG_FROM, COHOST_LIMIT_DEFAULT, COHOST_LIMIT_MIN, COHOST_LIMIT_MAX, WAITING_MAX, addWaiting, chainOf, cleanPhone, fromCodeOf, inviterOf, joinLinkPage, limitOfInviter, listCount, parseFrom, peopleRoute, personByPhone, personByToken, srcOf, waitingWho, type PersonRow } from "./people";
+import { normEmp, empHashOf, verifyOf, keptPhone, phoneDigits, cleanName as cleanPersonName, PEOPLE_SCHEMA, COHOST_FROM, HOST_FROM, ORG_FROM, COHOST_LIMIT_DEFAULT, COHOST_LIMIT_MIN, COHOST_LIMIT_MAX, WAITING_MAX, addWaiting, chainOf, cleanPhone, fromCodeOf, inviterOf, joinLinkPage, limitOfInviter, listCount, parseFrom, peopleRoute, personByEmpId, personByPhone, personByToken, srcOf, waitingWho, type PersonRow } from "./people";
 import { PAYLINK_SCHEMA, PAYLINK_TOKEN, createPayLink, packFor } from "./paylink";
 import { purgePaytestCounters } from "./payfirst";
 import { HOST_LINK_TTL_MS, HOST_SCHEMA, confirmHostEmail, emailHashOf, hostForEmail, hostKeyStatus, hostSetupRoute, hostStateRow, identityRow, maskEmail, maskMobile, mintDeviceKey, retireHost } from "./hostsetup";
@@ -250,6 +251,8 @@ export const SCHEMA: string[] = [
   "CREATE INDEX IF NOT EXISTS engagement_org ON engagement (org)",
   // V2 (13 Nov 2026, 0032_v2_changes.sql): game keys, Host keys without personal data, the AI label, certificates, support tickets, claim review, Host hand-over (all additive)
   ...V2_SCHEMA,
+  // mail lanes (1.11.0, 0033_mail_lanes.sql): the send counter, the per-mail state from the provider, the do-not-mail list, the waiting bulk mail (mail-lanes.ts)
+  ...MAIL_LANES_SCHEMA,
 ];
 
 const PATTERNS = new Set<string>([...HOUSE_ORDER.filter((k) => k !== "unlucky"), "lucky"]);
@@ -569,7 +572,7 @@ export async function remindDrafts(env: Env, now: number): Promise<void> {
       if ((claimed.meta?.changes ?? 0) < 1) continue;
       if (hours === 2) await env.DB.prepare("INSERT OR IGNORE INTO kv(k,v) VALUES(?,?)").bind(`draftrem24/${x.id}`, String(now)).run(); // the 24-hour mail would be late now
       const m = draftReminderMail((env as PayEnv).PUBLIC_ORIGIN ?? "", { eid: x.id, hours, startMs: at });
-      await sendMail(env as PayEnv, env.DB, to, m.subject, m.text, now);
+      await sendMail(env as PayEnv, env.DB, to, m.subject, m.text, now, { lane: "bulk" }); // a reminder to finish a draft is not an invoice: bulk lane (mail-lanes.ts)
     }
   } catch { /* tried again at the next tick */ }
 }
@@ -595,6 +598,7 @@ export async function runTick(env: Env, now: number) {
   const life = await lifecycleTick(env as any, now);
   const purged = await purgeOld(env, now);
   const mailRetried = await retryRecentOutbox(env as PayEnv, now).catch(() => 0); // a mail that failed (an invoice, a paid note) is tried again within minutes, not at the next daily job (RCA 2026-11-20)
+  await drainBulkMail(env as PayEnv, now).catch(() => 0); // waiting bulk mail goes AFTER the transactional retry and only when none is waiting (mail-lanes.ts, 1.11.0)
   const invoices = await issueDueInvoices(env as PayEnv, now); // Razorpay-first payments whose payer closed the page: the tax invoice is issued 15 minutes after the capture (payfirst.ts)
   await purgePaytestCounters(env.DB, now);
   try { await env.DB.prepare("INSERT INTO kv(k,v) VALUES('tick_last_ms',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(String(now)).run(); } catch { /* the stamp only spares a repeat */ }
@@ -897,6 +901,7 @@ export const AI_MANIFEST = {
   packs: PACKS.map(([n]) => ({ upTo: n, inr: price(n, "INR").total, usd: price(n, "USD").total })),
   choices: { call_seconds: [12], tickets: [1, 2], rewards: PRIZE_HOUSES.map((h) => h.id === "full2" ? "full2 (two tickets: pattern full, scope two_ticket)" : h.id), winners_per_reward: "1 up to the house maximum: Full House and full2 10, Top/Middle/Bottom Line 2, every other house 1", break_kinds: ["file", "youtube", "slides", "speech", "lucky (1, 3, 5 or 10 winners)"], rounds: "1 to 5" },
   you_can: [
+    { do: "Make the pay link a person opens to pay for a game that is not yet paid for (you pay nothing; the person pays)", call: "POST /api/z/{id}/paylink -> {url, expiresMs}; one open link per game, a new one cancels the old; 409 if the game is already paid for or cancelled" },
     { do: "Turn the organizer's chosen date and time into the startRound the engagement needs, and check it is in the future", call: "GET /api/z/schedule?at=2026-10-03T16:00:00+05:30 -> {startRound, startMs, startsInMinutes, startsAtIST}" },
     { do: "Read back everything saved for one engagement (start time in the organizer's time, speed, limit, tickets, every reward, every break, rounds, head-count, and whether it is a draft, published or paid). Use it to confirm the details with the organizer after every change", call: "GET /api/z/{id}/summary" },
     { do: "List engagements and head-counts", call: "GET /api/history" },
@@ -942,7 +947,6 @@ export const AI_MANIFEST = {
     "Delete participant data (you may ASK; the organizer confirms)",
     "Pause, resume or stop a running game (you may ASK; only the organizer's own browser holds that signing key)",
     "Create or retire the organizer's own sign-in keys, change their e-mail or delete the account, or sign in with Google",
-    "Make a pay link that anyone can open (POST /api/z/{id}/paylink answers 403 to an AI key: only the Organizer, a Host or a Co-host makes one)",
     "Download names, mobile numbers or e-mails, make a certificate that carries a name, or approve or reject a claim (the organizer does this in More tools in their console); make or retire game keys or Host keys",
     "Write or run code on the platform",
   ],
@@ -1275,8 +1279,9 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
   { // a pay link anyone can open (paylink.ts): the Organizer, a Host or a Co-host of the game makes it; one open link per game, a new one cancels the old
     const plm = p.match(/^\/api\/z\/([A-Za-z0-9_-]{4,40})\/paylink$/);
     if (plm && req.method === "POST") {
-      if (a.kind === "ai") return json({ error: "A pay link is for people to make themselves. It is not available through an AI link. Ask the owner to make it in the console (Check, publish and pay)." }, 403);
-      if (!a.org || a.viaLink || (a.kind !== "master" && a.kind !== "host" && a.kind !== "cohost")) return deny(a);
+      if (a.kind === "ai" && a.scopeKind) return json({ error: "A game key (ctg_) cannot make a pay link. The organizer's own AI key (cta_) or the organizer makes it." }, 403); // a key made for ONE game keeps its narrow rights
+      if (a.kind === "ai" && (await isHelperKey(env.DB, req.headers.get("x-organizer") || (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")))) return json({ error: "A Help Desk helper's key cannot make a pay link. The organizer makes it." }, 403); // the helper's own AI key keeps its narrow rights
+      if (!a.org || a.viaLink || (a.kind !== "master" && a.kind !== "ai" && a.kind !== "host" && a.kind !== "cohost")) return deny(a); // the Organizer's limited AI key (cta_) may make the link: it pays nothing, a person opens it and pays. Every other AI limit stays (no pay, no team, no keys, no publish)
       const pe = await env.DB.prepare("SELECT id, org, cap, pack, cancelled_ms, start_round FROM engagement WHERE id=?").bind(plm[1]!).first<{ id: string; org: string | null; cap: number; pack: number | null; cancelled_ms: number | null; start_round: number }>();
       if (!pe || pe.org !== a.org) return json({ error: "No such engagement." }, 404);
       if (a.kind === "cohost" && a.eid && a.eid !== pe.id) return json({ error: `Your Co-host link is for the game ${a.eid}, not ${pe.id}. Open the game ${a.eid}.` }, 403);
@@ -1460,7 +1465,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
       if (!b) return json({ error: "Bad message." }, 400);
       const ge = await env.DB.prepare("SELECT tickets, config, start_round FROM engagement WHERE id=?").bind(cid).first<{ tickets: number; config: string | null; start_round: number }>();
       if (b.message?.action === "go" && ge && now < roundMs(ge.start_round) - 3000) return json({ error: NOT_BEFORE_MSG }, 422); // Start is never possible before the scheduled time, whatever the sender's own clock says
-      const r = await publishControl(kv, cid!, b.message, ge ? hostGameOf(cfgOf(ge), ge.start_round) : undefined); // a Host's "next" press is checked against this game's breaks and rounds; a Start against the scheduled time
+      const r = await publishControl(kv, cid!, b.message, ge ? hostGameOf(cfgOf(ge), ge.start_round) : undefined, roundOfMs(now)); // (the store's own clock: a message may only name a round that has not begun) // a Host's "next" press is checked against this game's breaks and rounds; a Start against the scheduled time
       if (r.ok && !(r as any).duplicate && ["go", "pause", "resume", "extend", "stop"].includes(b.message?.action)) { // who pressed Start / Pause / Resume / End, and when: the plain list the Organizer and the Host read, and the "paused by" line everybody sees (the signature says which key it was)
         const pf = await readPublished(kv, cid!);
         const org = !!(pf && b.message.sig && (await verifyControlSig(pf.pubKey, b.message)));
@@ -1799,9 +1804,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const b = await body(req), vf = verifyOf(e), id = normIdFor(b?.empId, vf.idKind, e);
     if (vf.mode === "mobile" || !id) return json({ known: false });
     const ck = consentMissing(b, "K4"); if (ck) return ck;
-    const eh = await empHashOf(env, id);
-    let hit = await personByPhone(env, eid!, eh);
-    if (!hit) { const al = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`idx/${eid}/${eh}`).first<{ v: string }>(); if (al) hit = await personByPhone(env, eid!, al.v); }
+    const hit = await personByEmpId(env, eid!, id, legacyEmpFor(b?.empId, e));
     if (!hit || hit.status === "removed") {
       try {
         const ipk = (await sha("jip|" + (req.headers.get("cf-connecting-ip") ?? "local"))).slice(0, 16), k = `idmiss/${eid}/${new Date(now).toISOString().slice(0, 15)}/${ipk}`;
@@ -1834,9 +1837,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     if (vf.employeesOnly && vf.mode === "either" && !empNorm && !typedGiven && !tok) return json({ error: `Enter your mobile number or your ${idWord(vf.idKind)}.`, code: "need-id" }, 400);
     let extraDigits: string | null = null, idHit = false; // a mobile number given together with an employee ID that is on the list: kept as the person's contact, never a reason to refuse
     if ((vf.mode === "either" || vf.mode === "id") && empNorm && !tok) { // "mobile number or employee ID" (and ID alone): an ID on the list is as good as the listed mobile number (the person is then known by their listed number)
-      const eh = await empHashOf(env, empNorm);
-      let hit = await personByPhone(env, eid!, eh);
-      if (!hit) { const al = await env.DB.prepare("SELECT v FROM kv WHERE k=?").bind(`idx/${eid}/${eh}`).first<{ v: string }>(); if (al) hit = await personByPhone(env, eid!, al.v); }
+      const hit = await personByEmpId(env, eid!, empNorm, legacyEmpFor(b?.empId, e)); // the cleaned form first, then (an older game only) the form an older release stored
       if (hit) { tok = hit; tokPii = await openPii(env, hit.pii); extraDigits = typedDigits; idHit = true; typedPh = null; typedDigits = null; }
     }
     const idOnly = (vf.mode === "id" || vf.mode === "either") && !!empNorm && !typedGiven && !tok; // known by employee ID alone
@@ -1878,7 +1879,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     const admitted = vf.mode !== "mobile" && !!pr && !!(await env.DB.prepare("SELECT 1 AS x FROM waiting WHERE eid=? AND ph=? AND status='admitted'").bind(eid, ph).first()); // the organizer already said yes to this person: the ID typed is not checked again, or they would wait for ever
     let idMiss = false, needIdAfterConsent = false; // an employee ID that does not match the list: the organizer decides
     if (vf.mode !== "mobile" && empNorm && !tok && !admitted) {
-      if (vf.mode === "both") { const pp0 = pr ? await openPii(env, pr.pii) : null; if (!pr || (pp0?.empId && pp0.empId !== empNorm)) { pr = null; idMiss = true; } }
+      if (vf.mode === "both") { /* 21 Nov 2026 (audit 2, M1): an ID stored in an older form (A-1101) is compared in its cleaned form (A1101), like the typed one */ const pp0 = pr ? await openPii(env, pr.pii) : null; if (!pr || (pp0?.empId && (normIdFor(pp0.empId, vf.idKind, e) ?? pp0.empId) !== empNorm)) { pr = null; idMiss = true; } }
       else if (!pr) idMiss = true; // ID alone, not on the list
       if (idMiss) { // guessing IDs: only so many wrong IDs per network per game per 10 minutes
         try {
@@ -1972,7 +1973,7 @@ async function route0(req: Request, env: Env, now: number, a: Auth): Promise<Res
     return reply(row.pid, { jr: row.jr ?? 0, ...(row.role ? { role: row.role } : {}) }); // (the K4 consent record went in with the seat, in the same batch)
   }
   if ((action === "leave" || action === "datareq") && req.method === "POST") { // a player's own rights (rights.ts): leave at any time, and "what do you hold about me / correct / delete me"; the player's card id AND their phone's own device id are the proof
-    const rc = { env: env as PayEnv, db: env.DB, e, eid: eid!, now, started: now >= roundMs(e.start_round), b: await body(req, 2_048), json, gameName: cfgOf(e).name || e.id, orgEmail: async () => (await teamEmails(env as PayEnv, e.org, e.id)).organizer, erasureMs: () => erasureOf(env, e, now), spend: (n: number) => spend(env, now, n) };
+    const rc = { env: env as PayEnv, db: env.DB, e, eid: eid!, now, started: now >= roundMs(e.start_round), b: await body(req, 2_048), json, ip: req.headers.get("cf-connecting-ip") ?? "local", gameName: cfgOf(e).name || e.id, orgEmail: async () => (await teamEmails(env as PayEnv, e.org, e.id)).organizer, erasureMs: () => erasureOf(env, e, now), spend: (n: number) => spend(env, now, n) };
     return action === "leave" ? leaveRoute(rc) : requestRoute(rc);
   }
   if (action === "seats" && req.method === "GET") {

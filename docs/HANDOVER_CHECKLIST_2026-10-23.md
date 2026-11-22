@@ -16,7 +16,7 @@ Built from the previous session's report, docs/AUDIT_ALL_PRODUCTS_2026-10-23.md 
 - [ ] Trademark application.
 - [ ] Startup Coach: one real paid purchase.
 - [ ] DPDP app screens behind sign-in: needs a throw-away account to test.
-- [ ] Test shells raajat.agarwal+demonew1..4 and +livetest2: close with `node tools/livetest/live.mjs cleanup --close` (needs a live sign-in token; closing deletes the account, so the owner should confirm which account the saved token belongs to).
+- [ ] Test shells r***+demonew1..4 and +livetest2: close with `node tools/livetest/live.mjs cleanup --close` (needs a live sign-in token; closing deletes the account, so the owner should confirm which account the saved token belongs to).
 
 ## Open engineering (decision needed, not started)
 - [ ] Port release B (multi-winner + tie rule, free demo game, Host-calls mode, prizes list) to Bingo, Snakes & Ladders, Luck by Chance, Tic Tac Toe. Each game has different rules; confirm which features apply to which game before building.

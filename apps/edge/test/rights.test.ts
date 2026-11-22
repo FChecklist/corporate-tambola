@@ -18,8 +18,8 @@ const call = (method: string, path: string, body?: unknown, headers: Record<stri
 const j = async (r: Response) => (await r.json()) as any;
 const dev = (i: number) => String(i).padStart(2, "0").repeat(16); // 32 hex characters
 const mails = () => raw.query("SELECT to_addr, subject, body FROM outbox ORDER BY id").all() as { to_addr: string; subject: string; body: string }[];
-async function game(id: string) {
-  orgMail = `org${++n}@acme.com`;
+async function game(id: string, email?: string) {
+  orgMail = email ?? `org${++n}@acme.com`;
   const r = await j(await call("POST", "/api/start", { email: orgMail }, { "cf-connecting-ip": `10.0.0.${n}` }));
   const h = { "x-organizer": r.token as string };
   expect((await call("POST", "/api/z", { id, startRound: START, callSeconds: 6, cap: 100 }, h)).status).toBe(200);
@@ -188,5 +188,121 @@ describe("the answer time the pages promise is the one constant", () => {
     }
     const doc = await Bun.file(new URL("docs/PRIVACY_AND_LIFECYCLE.md", root)).text();
     expect(doc).toContain(`(\`PROMISE_DAYS = ${PROMISE_DAYS}\``);
+  });
+});
+
+describe("1.11.1 (audit 2, M-A): data-request mail has a per-game cap per day", () => {
+  const orgMails = () => mails().filter((m) => /A player's data request/.test(m.subject)), ownerMails = () => mails().filter((m) => /Player data request \(/.test(m.subject)), digests = () => mails().filter((m) => /Many data requests/.test(m.subject));
+  test("with the cap at 3: the first 3 requests of a game on one day mail the organizer AND the owner; the 4th and later are stored and answered the same but send no mail; ONE digest goes to each, with no name, no ticket and no note in it", async () => {
+    (env as any).DATAREQ_MAIL_PER_GAME_DAY = "3";
+    await game("CAP-1"); const org1 = orgMail;
+    const pids: string[] = []; for (let i = 1; i <= 7; i++) pids.push(await joinAs("CAP-1", i, `Secret Name ${i}`));
+    const before = mails().length;
+    for (let i = 1; i <= 7; i++) { const r = await ask("CAP-1", pids[i - 1]!, dev(i), "correction", { note: `please fix ${i}` }); expect(r.status).toBe(200); expect((await j(r)).status).toBe("open"); }
+    expect(count("SELECT COUNT(*) c FROM data_request WHERE eid='CAP-1'")).toBe(7); // nothing is lost: every request is stored and shown in the owner's list
+    expect(orgMails().length).toBe(3); expect(ownerMails().length).toBe(3);
+    expect(digests().length).toBe(2); expect(digests().map((m) => m.to_addr).sort()).toEqual([org1, OWNER_NOTIFY_EMAIL].sort());
+    expect(mails().length - before).toBe(3 + 3 + 2); // at most 2 mails per request up to the cap, then one digest per side, never one per request
+    for (const d of digests()) { expect(d.body).not.toMatch(/Secret Name|please fix|ticket number|dr_[0-9a-f]/i); expect(d.body).toContain("CAP-1"); }
+  });
+  test("another game is not held back by the first one, and the next day the first game mails again (and may send one more digest)", async () => {
+    (env as any).DATAREQ_MAIL_PER_GAME_DAY = "2";
+    await game("CAP-2"); const a = await joinAs("CAP-2", 1), b = await joinAs("CAP-2", 2), c = await joinAs("CAP-2", 3);
+    for (const [pid, i] of [[a, 1], [b, 2], [c, 3]] as const) await ask("CAP-2", pid, dev(i), "access");
+    expect(orgMails().length).toBe(2); // the third one was held
+    await game("CAP-3"); const x = await joinAs("CAP-3", 11); await ask("CAP-3", x, dev(11), "access");
+    expect(orgMails().length).toBe(3); // a different game: mailed
+    await ask("CAP-2", c, dev(3), "correction", { note: "next day" }, T + 25 * 3_600_000);
+    expect(orgMails().length).toBe(4); // a new day: mailed again
+  });
+  test("the default is 10 a game and day, 0 switches the cap off, and a database that cannot count never blocks a mail", async () => {
+    await game("CAP-4");
+    const pids: string[] = []; for (let i = 1; i <= 12; i++) pids.push(await joinAs("CAP-4", i));
+    for (let i = 1; i <= 12; i++) await ask("CAP-4", pids[i - 1]!, dev(i), "access");
+    expect(orgMails().length).toBe(10); expect(count("SELECT COUNT(*) c FROM data_request WHERE eid='CAP-4'")).toBe(12);
+    (env as any).DATAREQ_MAIL_PER_GAME_DAY = "0";
+    await ask("CAP-4", pids[0]!, dev(1), "correction", { note: "again" }); await ask("CAP-4", pids[1]!, dev(2), "correction", { note: "again" });
+    expect(orgMails().length).toBe(10); // 1.11.2: the game's own cap is off, but the organizer address and the network have their caps too (10 each)
+    for (const k of ["DATAREQ_MAIL_PER_IP_DAY", "DATAREQ_MAIL_PER_RECIPIENT_DAY", "DATAREQ_MAIL_PER_DAY"]) (env as any)[k] = "0";
+    await ask("CAP-4", pids[2]!, dev(3), "correction", { note: "again" }); await ask("CAP-4", pids[3]!, dev(4), "correction", { note: "again" });
+    expect(orgMails().length).toBe(12); // no cap anywhere: both mailed
+  });
+  test("an erasure that is held back for mail is still carried out at once (the cap only limits mail)", async () => {
+    (env as any).DATAREQ_MAIL_PER_GAME_DAY = "1";
+    await game("CAP-5"); const a = await joinAs("CAP-5", 1, "First Person"), b = await joinAs("CAP-5", 2, "Second Person");
+    await ask("CAP-5", a, dev(1), "access");
+    const r = await ask("CAP-5", b, dev(2), "erasure"); expect(r.status).toBe(200); expect((await j(r)).erased).toBe(true);
+    expect(count("SELECT COUNT(*) c FROM seat WHERE pid=?", b)).toBe(0); expect(orgMails().length).toBe(1);
+  });
+});
+
+describe("1.11.2 (audit M1): data-request mail is capped for the whole site, per requester network and per organizer address, not only per game", () => {
+  const OFF = { DATAREQ_MAIL_PER_GAME_DAY: "0", DATAREQ_MAIL_PER_IP_DAY: "0", DATAREQ_MAIL_PER_RECIPIENT_DAY: "0", DATAREQ_MAIL_PER_DAY: "0" };
+  const only = (k: keyof typeof OFF, v: string) => Object.assign(env as any, OFF, { [k]: v });
+  const ownerSends = () => mails().filter((m) => /Player data request \(/.test(m.subject)).length, orgSends = () => mails().filter((m) => /A player's data request/.test(m.subject)).length;
+  const digestsTo = (to: string) => mails().filter((m) => /Many data requests/.test(m.subject) && m.to_addr === to).length;
+  const askFrom = (netw: string, id: string, pid: string, device: string, kind = "access", extra: Record<string, unknown> = {}) => call("POST", `/api/z/${id}/datareq`, { pid, device, kind, ...extra }, { "cf-connecting-ip": netw });
+  const another = async (h: Record<string, string>, id: string) => { // a further game of the SAME organizer
+    expect((await call("POST", "/api/z", { id, startRound: START, callSeconds: 6, cap: 100 }, h)).status).toBe(200);
+    expect((await call("POST", `/api/z/${id}/publish`, { email: "boss@acme.com", phone: "98765 43210" }, h)).status).toBe(200);
+  };
+
+  test("the whole site: many games from many networks cannot send the owner more than the site cap (4 here) and ONE digest a day", async () => {
+    only("DATAREQ_MAIL_PER_DAY", "4");
+    let k = 0;
+    for (const id of ["SITE-1", "SITE-2", "SITE-3"]) { await game(id); for (let i = 1; i <= 2; i++) { k++; const pid = await joinAs(id, k); expect((await askFrom(`20.0.0.${k}`, id, pid, dev(k))).status).toBe(200); } }
+    expect(count("SELECT COUNT(*) c FROM data_request")).toBe(6); // every request is stored
+    expect(ownerSends()).toBe(4); expect(digestsTo(OWNER_NOTIFY_EMAIL)).toBe(1); // the 5th gets the digest, the 6th nothing
+    expect(orgSends()).toBe(6); // each organizer is under their own limits and is told as before
+  });
+  test("one organizer address across many games: at most the recipient cap (2 here) plus ONE digest, however many games name it", async () => {
+    only("DATAREQ_MAIL_PER_RECIPIENT_DAY", "2");
+    const h = await game("RC-1"); const to = orgMail; await another(h, "RC-2"); await another(h, "RC-3"); await another(h, "RC-4");
+    let k = 0; for (const id of ["RC-1", "RC-2", "RC-3", "RC-4"]) { k++; await askFrom(`21.0.0.${k}`, id, await joinAs(id, k), dev(k)); }
+    expect(mails().filter((m) => m.to_addr === to && /A player's data request/.test(m.subject)).length).toBe(2);
+    expect(digestsTo(to)).toBe(1); expect(ownerSends()).toBe(4); // the owner's side has its own limits
+  });
+  test("a third party's address typed in as the organizer e-mail cannot be flooded by changing its spelling (+tag, dots, googlemail): all spellings are one mailbox", async () => {
+    only("DATAREQ_MAIL_PER_RECIPIENT_DAY", "1");
+    const spellings = ["victim+a@gmail.com", "v.ictim@gmail.com", "Victim@googlemail.com", "vic.tim+b@gmail.com"]; let k = 0;
+    for (const e of spellings) { k++; const id = `AL-${k}`; await game(id, e); await askFrom(`22.0.0.${k}`, id, await joinAs(id, k), dev(k)); }
+    const toVictim = mails().filter((m) => /victim|v\.ictim|vic\.tim/i.test(m.to_addr) && /data request/i.test(m.subject)); // (the organizer-key mail of each sign-up is not a data-request mail)
+    expect(toVictim.filter((m) => /A player's data request/.test(m.subject)).length).toBe(1);
+    expect(toVictim.length).toBe(2); // one mail about a request, one digest, nothing more
+    const other = "somebody.else@gmail.com"; await game("AL-9", other); await askFrom("22.0.0.99", "AL-9", await joinAs("AL-9", 9), dev(9));
+    expect(mails().filter((m) => m.to_addr === other && /data request/i.test(m.subject)).length).toBe(1); // a different mailbox is not held back
+  });
+  test("one requester network: at most the network cap (2 here) across games, then one digest each side; another network is not held back", async () => {
+    only("DATAREQ_MAIL_PER_IP_DAY", "2");
+    await game("IP-1"); await game("IP-2");
+    const a = await joinAs("IP-1", 1), b = await joinAs("IP-1", 2), c = await joinAs("IP-2", 3), d = await joinAs("IP-2", 4);
+    await askFrom("30.0.0.1", "IP-1", a, dev(1)); await askFrom("30.0.0.1", "IP-1", b, dev(2)); await askFrom("30.0.0.1", "IP-2", c, dev(3));
+    expect(ownerSends()).toBe(2); expect(orgSends()).toBe(2); expect(digestsTo(OWNER_NOTIFY_EMAIL)).toBe(1);
+    await askFrom("30.0.0.2", "IP-2", d, dev(4)); expect(ownerSends()).toBe(3); expect(count("SELECT COUNT(*) c FROM data_request")).toBe(4);
+  });
+  test("the counters keep no address: only a hash of the network and of the mailbox is in the key", async () => {
+    await game("HS-1", "victim+z@gmail.com"); await askFrom("31.2.3.4", "HS-1", await joinAs("HS-1", 1), dev(1));
+    const keys = (raw.query("SELECT k FROM kv WHERE k LIKE 'mailcap/%'").all() as { k: string }[]).map((r) => r.k).join("\n");
+    expect(keys).toMatch(/datareq-ip\/[0-9a-f]{16}\n?/); expect(keys).toMatch(/datareq-rcpt\/[0-9a-f]{16}/); expect(keys).toContain("datareq-all");
+    expect(keys).not.toMatch(/31\.2\.3\.4|victim|gmail/);
+  });
+  test("an answer to a deleting player never claims a mail that was not sent: at the cap the answer says only that the name and place were deleted; under the cap it says a note was sent", async () => {
+    only("DATAREQ_MAIL_PER_GAME_DAY", "1");
+    await game("TOLD-1"); const a = await joinAs("TOLD-1", 1), b = await joinAs("TOLD-1", 2);
+    await ask("TOLD-1", a, dev(1), "access");
+    const held = await j(await ask("TOLD-1", b, dev(2), "erasure"));
+    expect(held.erased).toBe(true); expect(held.organizerTold).toBe(false); expect(held.message).toBe("Done. Your name and your place were deleted just now."); expect(held.message).not.toMatch(/told|note|organizer/i);
+    expect(mails().filter((m) => /A player's data request/.test(m.subject)).length).toBe(1); // only the first request was mailed one by one
+    Object.assign(env as any, OFF);
+    await game("TOLD-2"); const c = await joinAs("TOLD-2", 3);
+    const sent = await j(await ask("TOLD-2", c, dev(3), "erasure"));
+    expect(sent.organizerTold).toBe(true); expect(sent.message).toBe("Done. Your name and your place were deleted just now. We sent the organizer a note.");
+    expect(mails().some((m) => m.to_addr === orgMail && /A player's data request/.test(m.subject))).toBe(true);
+  });
+  test("with no organizer address on file the answer does not say the organizer was told", async () => {
+    await game("TOLD-3"); const a = await joinAs("TOLD-3", 1);
+    raw.run("DELETE FROM kv WHERE k LIKE 'orgmail/%' OR k LIKE 'contact/%'"); // no address known: nobody to write to
+    const r = await j(await ask("TOLD-3", a, dev(1), "erasure"));
+    expect(r.erased).toBe(true); expect(r.organizerTold).toBe(false); expect(r.message).not.toMatch(/organizer/i);
   });
 });

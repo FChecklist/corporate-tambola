@@ -85,7 +85,7 @@ hello@ forwarding - we use one email id - hello@corporatetambola.com for all 5 g
 
 for dpdp - hello@veridian-aios.com
 
-hello@rajatsir.com for startup
+h***@rajatsir.com for startup
 
 an uptime alarm - make it
 lawyer/CA sign-off - i gave explicit instructions publish it, dont write any where laywer/ca sign-off pending, dont write any where owner approved

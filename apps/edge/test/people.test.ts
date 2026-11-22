@@ -148,7 +148,7 @@ describe("who may call", () => {
   test("settings: guestInvites per goes up to 4 (you and up to 4 family members), whoCanJoin is list or anyone and is the same switch as closed", async () => {
     const t = await setup();
     expect((await call("PATCH", "/api/z/PPL-1/settings", { guestInvites: { on: true, per: 4 } }, t.master)).status).toBe(200);
-    expect((await call("PATCH", "/api/z/PPL-1/settings", { guestInvites: { on: true, per: 5 } }, t.master)).status).toBe(400); /* the 5th family member is refused politely */
+    expect((await call("PATCH", "/api/z/PPL-1/settings", { guestInvites: { on: true, per: 11 } }, t.master)).status).toBe(400); /* the 11th family member is refused politely (the limit is 10 since 20 Nov 2026) */
     expect((await call("PATCH", "/api/z/PPL-1/settings", { whoCanJoin: "everyone" }, t.master)).status).toBe(400);
     expect((await j(await call("PATCH", "/api/z/PPL-1/settings", { whoCanJoin: "list" }, t.host))).closed).toBe(true);
     expect((await j(await call("GET", "/api/z/PPL-1/info"))).whoCanJoin).toBe("list");

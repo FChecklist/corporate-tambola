@@ -15,6 +15,7 @@ import { sweepVisits } from "./visits";
 import { closeAuditFor, isHeld, shredParticipantAudit } from "./audit";
 import { GRACE_ROUNDS, INVITE_CATEGORIES, PRIZE_HOUSES, validateCfg, keysInPlay, linesFor, type EngagementCfg, type PatternKey } from "../../../packages/beacon/src/config";
 import { callRoundR, hostGameOf, luckyRound } from "../../../packages/beacon/src/game";
+import { ordinalName } from "../../../packages/shared/src/ordinal";
 import { cfgOf as controlCfg, readPublished, resolveControl, type KV } from "../../../packages/beacon/src/control";
 import { storedHolds } from "./claimhold";
 import { seatOfPid } from "../../../packages/beacon/src/unique-ticket";
@@ -41,7 +42,7 @@ const IST = 5.5 * 3_600_000, DAY = 86_400_000;
 const CHUNK = 250;                                  // people opened per call while preparing a report (keeps a call within a free Worker's CPU)
 const PART = 1500;                                  // people per PDF; a bigger game is e-mailed as several parts
 const NAMES: Record<string, string> = Object.fromEntries(PRIZE_HOUSES.map((h) => [h.id, h.label]));
-const ord = (n: number) => ["", "1st", "2nd", "3rd"][n] ?? `${n}th`;
+const ord = ordinalName;
 
 type LifeEnv = Env & PiiEnv & PayEnv;
 const d1kv = (env: Env): KV => ({
@@ -251,8 +252,10 @@ async function deleteEngagementRows(env: Env, id: string): Promise<void> {
     env.DB.prepare("DELETE FROM winner WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM kv WHERE k >= ? AND k < ?").bind(`wev/${id}/`, prefixEnd(`wev/${id}/`)), env.DB.prepare("DELETE FROM prize WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM life WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM data_request WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM ctl_request WHERE eid=?").bind(id),
     env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`control/${id}.json`), env.DB.prepare("DELETE FROM kv WHERE k=? OR k=? OR k=? OR k=? OR k=?").bind(`glog/${id}`, `ctlby/${id}`, `chg/${id}`, `claimlate/${id}`, `claimlaten/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`rptsalt/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`contact/${id}`), env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`mailowed/${id}`), env.DB.prepare("DELETE FROM kv WHERE k IN (?,?,?,?,?)").bind(`pub/${id}`, `lockmail/${id}`, `remind/${id}`, `ann/${id}`, `paidby/${id}`),
     env.DB.prepare("DELETE FROM organizer_key WHERE eid=? AND kind='cohost'").bind(id), env.DB.prepare("DELETE FROM shred WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM eng_key WHERE eid=?").bind(id), env.DB.prepare("DELETE FROM audit_pii WHERE eid=?").bind(id), // erasePersonal above wrote a fresh shred marker
+    env.DB.prepare("DELETE FROM kv WHERE k=?").bind(`cv/${id}`), // the claim-signal counter (a version number: no name, but the game is forgotten, so it goes too)
     env.DB.prepare("DELETE FROM engagement WHERE id=?").bind(id),
   ]);
+  try { await env.DB.prepare("DELETE FROM presence WHERE eid=?").bind(id).run(); } catch { /* the table is made by the first "phones listening" report: a game without one has nothing to delete */ }
 }
 
 // ------------------------------------------------------------------------------------------------ the report
@@ -548,6 +551,7 @@ export async function lifecycleTick(env: LifeEnv, now: number): Promise<{ checke
   try {
     const h = new Date(now).toISOString().slice(0, 13), lastH = await env.DB.prepare("SELECT v FROM kv WHERE k='outbox_sweep_hour'").first<{ v: string }>();
     if (lastH?.v !== h) { await env.DB.prepare("INSERT INTO kv(k,v) VALUES('outbox_sweep_hour',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(h).run(); (out as any).outboxDropped = await purgeOutbox(env.DB, now); }
+    if (lastH?.v !== h) { try { await env.DB.prepare("DELETE FROM presence WHERE minute < ?").bind(Math.floor(now / 60_000) - 24 * 60).run(); } catch { /* no phone has reported yet: no table */ } } // "phones listening" counters older than a day go every hour, not only when somebody opens the console
     const d = h.slice(0, 10), lastD = await env.DB.prepare("SELECT v FROM kv WHERE k='outbox_retry_day'").first<{ v: string }>();
     if (lastD?.v !== d) { await env.DB.prepare("INSERT INTO kv(k,v) VALUES('outbox_retry_day',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(d).run(); (out as any).outboxRetried = (await retryOutbox(env, now)).retried; }
   } catch { /* tried again at the next tick */ }

@@ -23,7 +23,7 @@ async function consolePage(o: O, eid: string, hook?: (win: any, f: string) => vo
     url: "http://localhost/zc?e=" + eid, html: "zc.html", scripts: ZC_SCRIPTS, session: { "ctz-org": o.token, "ctz-aimsg": o.aiMessage, "ctz-email": "boss@acme.com" },
     afterLoad: (win: any, f: string) => { if (f === "zgame.js" && win.ZG && !win.ZG.PRIZE_HOUSES) win.ZG.PRIZE_HOUSES = PRIZE_HOUSES; hook?.(win, f); },
   });
-  open.push(p); await p.waitFor((x) => /Hello|Last step|Your game|Hi\./i.test(x)); return p;
+  open.push(p); await p.waitFor((x) => /Hello|Last step|Your game|Hi\./i.test(x)); await p.waitFor(() => !!p.$('.zc-dot[data-open="6"]')); return p; // the step dots are drawn a moment after the greeting; a click before that found nothing (audit 1 L5, seen once under the load of the full suite)
 }
 const openStep = (p: Page, n: number) => p.click(`.zc-dot[data-open="${n}"]`);
 const setField = (p: Page, sel: string, v: string) => { const el = p.$(sel) as any; el.value = v; el.dispatchEvent(new p.win.Event("input", { bubbles: true })); };
@@ -35,7 +35,7 @@ const chooseFile = (p: Page, sel: string, name: string, text: string) => {
   inp.dispatchEvent(new p.win.Event("change", { bubbles: true }));
 };
 const until = async (pred: () => boolean, ms = 6000) => { const t0 = Date.now(); while (!pred()) { if (Date.now() - t0 > ms) throw new Error("timed out"); await new Promise((r) => setTimeout(r, 30)); } };
-const peopleReady = (p: Page) => p.waitFor((x) => /My people/.test(x) && /people are on my list|person is on my list/.test(x));
+const peopleReady = (p: Page) => p.waitFor((x) => /My people/.test(x) && /people are on your list|person is on your list/.test(x));
 
 describe("console steps 5 and 6: idiot-proof", () => {
   test("Send a new link: the page opens no pop-up by itself; the row gets a real Send on WhatsApp button with the new link and says the old one has stopped", async () => {
@@ -55,7 +55,7 @@ describe("console steps 5 and 6: idiot-proof", () => {
 
   test("Add one person: a refusal says what to fix and keeps what was typed; a good add empties the boxes", async () => {
     const o = await organizer(); await make(o, "IP-ADD"); await publish(o, "IP-ADD");
-    const p = await consolePage(o, "IP-ADD"); openStep(p, 6); await p.waitFor((x) => /0 people are on my list/.test(x));
+    const p = await consolePage(o, "IP-ADD"); openStep(p, 6); await p.waitFor((x) => /0 people are on your list/.test(x));
     setField(p, "#gname", "Asha Rao"); p.click("#gadd");
     await p.waitFor((x) => /There is no mobile number\. Fix it and press Add again\./.test(x));
     expect((p.$("#gname") as any).value).toBe("Asha Rao"); // nothing to type twice

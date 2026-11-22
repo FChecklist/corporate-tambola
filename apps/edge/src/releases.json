@@ -1,5 +1,94 @@
 [
   {
+    "version": "1.11.2",
+    "date": "2026-11-21",
+    "releasedAtIST": "21 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Mail caps now hold for the whole site and for each address, not only per game; the Help Desk limit can no longer be dodged with a changed spelling of an address; the answer to a player no longer claims a mail that was not sent",
+    "changes": [
+      "Player data-request mail is now limited four ways a day, not only per game: per game (10), per requester's network (10), per organizer address (10) and for the whole site (30 mails to the owner). Over a limit ONE short summary mail is sent and the rest are only stored and listed for the owner, so many games, or someone else's address typed in as the organizer e-mail, can no longer be used to flood a mailbox; the owner can change each number",
+      "The Help Desk limit of 3 invitations a day to one address now counts the mailbox, not the spelling: name+tag@, name@ and, on Gmail, the same name with dots added are one address",
+      "What a player is told after asking to be deleted is true now: 'We sent the organizer a note' appears only when that note really went out; otherwise the answer says only that the name and place were deleted (the deletion itself is never held back)",
+      "Counting of the mail limits is exact when many requests arrive at the same moment (one step instead of two), so a busy moment can no longer lose the summary mail or block the mail wrongly",
+      "A busy answer in the Help Desk no longer uses up a place in the hourly limit; the message for a paused invitation now says the invitation was NOT sent and must be typed again; the saved copies of the site on phones are renewed so they get this text",
+      "The owner's personal mailbox address is no longer written in any test or tool file of the repository (old text stays in the history of git, which cannot be changed); a test now looks at the whole repository for it"
+    ]
+  },
+  {
+    "version": "1.11.1",
+    "date": "2026-11-21",
+    "releasedAtIST": "21 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Player data-request mail and Help Desk invitation mail now have caps; the mail notes no longer say 'monthly' when it may have been the daily limit; the release notes tell the truth about reminders",
+    "changes": [
+      "Each game can mail its organizer and the owner about at most 10 player data requests a day (the owner can change the number): after that ONE short digest is sent to each side and the rest are only stored and listed for the owner, so one person who fills ONE game with seats can no longer send about 1,500 mails from it (many games were still not covered: see 1.11.2); the requests, their answer time and a request to delete a player are not touched",
+      "Help Desk invitations have a site-wide cap of 30 an hour (the owner can change it); over it, the helper is told in plain words to try again in about an hour, and no link and no mail is made",
+      "The note an organizer sees when our e-mail service has reached its limit now says 'sending limit' and does not say monthly or daily: it is true for both, and a daily limit used to be called monthly",
+      "The release notes and the knowledge pages now say what the code does: only the draft reminder is bulk mail and only it is held back by the do-not-mail list, and the hourly cap on Refer & earn sign-up mail covers that one path, not all mail",
+      "Personal e-mail addresses in the older documents are masked (one letter and ***); the full seller address is only in the company settings file"
+    ]
+  },
+  {
+    "version": "1.11.0",
+    "date": "2026-11-21",
+    "releasedAtIST": "21 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Invoice mail is kept apart from bulk mail and warns before the month runs out; a Host can no longer pick the number; ten 250-player games pass",
+    "changes": [
+      "Invoice, payment, game-start and sign-in e-mails now travel in their own lane: the draft reminder is bulk mail (the only bulk mail today), has its own daily limit and waits in a queue, and can never take the part of the allowance kept for invoices; the Help Desk invitation goes with the invoices, not in the bulk lane",
+      "When our main mail service has used up its month (it did on 21 Nov 2026), invoice mail goes by the backup route, and the payment screens tell the organizer so in plain words: mail can arrive a few minutes late and may land in Spam; the payment is not affected",
+      "The owner is warned when 80 % of the month's mail allowance is used, and at once when the mail service itself says the month is used up; a public status address says whether all is well, and the owner can read the counters",
+      "A young sending domain warms up slowly: the first day is invoice mail only, bulk mail starts at 20 a day on day 2 and grows day by day",
+      "Every mail the mail service takes is followed (delivered, bounced, complained, delayed) once the owner sets the Resend webhook; an address that bounced for good or marked a mail as spam is not sent draft reminders again (invoices, sign-in codes and the other mails are still tried), and the owner can take it off the list",
+      "Fairness: a Host or Organizer can no longer choose the number by waiting and then signing a press that names a random-number round that has already been published",
+      "Ten complete 250-player test games (scheduled and Host-started games, a Host who stalls, ID-only invite, late joiners, pause and resume, every prize type, mail fan-out, the end-of-game report and the 365-day deletion) pass; a deleted game's two small leftover counters are now deleted with it",
+      "Audit fixes before any deploy: the payment-done screen no longer breaks for a returning visitor who still holds an old saved copy of the site's script (the new note is optional there, and the saved copies are renewed)",
+      "A Help Desk invitation (it carries a live link) is now sent as an ordinary important e-mail, never parked in the waiting queue for bulk mail; a mail that carries a link or key is never kept in that queue",
+      "The note shown when mail may be late no longer promises e-mailed organizer keys: it says the invoice can be late and tells the organizer to keep the key shown on the screen",
+      "The do-not-mail list now holds back draft reminders only; invoices, sign-in codes, organizer-key mail, reports and the owner's own notes are always tried, and a +tag address is a different address from the plain one",
+      "The public mail status shows only whether all is well and the organizer note; the full counters are the owner's. The Refer & earn code has a site-wide cap of mails per hour, so a burst of sign-ups is held back at 60 an hour on that one path (it does not cover every mail path; the data-request and Help Desk invitation paths are capped in 1.11.1; a bot check is still not done)"
+    ]
+  },
+  {
+    "version": "1.10.2",
+    "date": "2026-11-21",
+    "releasedAtIST": "21 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Prize names, the finale scratch card, and the AI pay link",
+    "changes": [
+      "Prize names now read right for every number: 21st, 22nd, 23rd, and 11th, 12th, 13th stay th. One shared rule is used on the game screens, the winner list, the certificates and the game log",
+      "The scratch card in the finale is revealed before the game ends, so a game no longer ends with a card still on screen",
+      "The organizer's own limited AI key can make the pay link (it pays nothing: a person opens the link and pays). A key made for one game and a Help Desk helper's key still cannot"
+    ]
+  },
+  {
+    "version": "1.10.1",
+    "date": "2026-11-21",
+    "releasedAtIST": "21 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Pasting a list of IDs now works, however long the list",
+    "changes": [
+      "Paste a list in the default organizer screens now adds the IDs: before, the server turned every paste away because the page did not send the Terms tick",
+      "A pasted list of more than 200 IDs is sent in parts of 200, so a big office list goes in at once",
+      "Choosing the size of your game now takes effect when you paste, so a list of more than 10 IDs is no longer turned away before you press Save and continue",
+      "A paste of IDs that are already on your list now says so, instead of only \"0 IDs were added\""
+    ]
+  },
+  {
+    "version": "1.10.0",
+    "date": "2026-11-21",
+    "releasedAtIST": "21 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "Invite people with just an ID",
+    "changes": [
+      "The default organizer screens now make a game that takes people by ID alone: paste or upload a list of IDs, family number 1 to 10 (default 4), and the people who are not on your list wait for your yes or no",
+      "One ID rule everywhere: letters and numbers only, capitals; A-1101, A 1101 and A/1101 are one ID, at upload, join, approval and matching (games made before this release are also looked up in their older form)",
+      "A new invite and approval log for the Organizer, Hosts and Co-hosts shows only the ID, how it came, and who decided",
+      "A pasted list that cannot be added now says why, instead of only \"0 IDs were added\"",
+      "A person listed in an older game with a dash in their stored ID (A-1101) now gets in with the ID and the listed mobile number, instead of waiting for approval"
+    ]
+  },
+  {
     "version": "1.9.2",
     "date": "2026-11-20",
     "releasedAtIST": "20 Nov 2026, time set at deploy",
@@ -111,7 +200,8 @@
       "Clearer fairness wording (no one knows the next number) and a shorter footer that names who owns the site and who collects payments",
       "Fixes from user feedback: clearer messages when a Co-host link is for another game, and a reminder e-mail for a game still in draft"
     ]
-  }, {
+  },
+  {
     "version": "1.6.7",
     "date": "2026-10-29",
     "commit": "this release",

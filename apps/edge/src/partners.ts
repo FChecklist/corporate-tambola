@@ -13,6 +13,7 @@ import { normAccountEmail } from "./empid";
 import { syncCommissions } from "./ledgerc";
 import { helperClosed } from "./helpdesk";
 import { signInMail } from "./mails";
+import { anonMailAllowed } from "./mail-lanes";
 
 export const ATTRIBUTION_DAYS = 30;
 /** The commission every partner earns on the software price (no GST is charged) of a paid, referred purchase. Owner decision 2026-10-03: 50%. PARTNER_COMMISSION_RATE can lower it (never above 50%). */
@@ -118,6 +119,7 @@ export async function partnerRoute(req: Request, env: PayEnv, now: number, spend
     const win = await db.prepare("SELECT v FROM kv WHERE k=?").bind(`penr/${eh}`).first<{ v: string }>();
     const prev = win ? JSON.parse(win.v) : null;
     if (prev && now - prev.t < 60_000 * 60 && prev.n >= 5) return json({ ok: true, sent: true }); // quietly stop mailing: no more than 5 a hour per address
+    if (!(await anonMailAllowed(db, env as any, now))) return json({ error: "A lot of people are signing up right now. Please try again in about an hour." }, 429); // a site-wide cap on mail that anybody can trigger for any address (audit 2, M4): the month's mail quota is for invoices first
     if (!(await spend(3))) return busy();
     const n = prev && now - prev.t < 3_600_000 ? prev.n + 1 : 1, t0 = prev && now - prev.t < 3_600_000 ? prev.t : now;
     let devCode: string | undefined;

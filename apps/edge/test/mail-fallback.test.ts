@@ -84,7 +84,7 @@ describe("a busy or broken Resend: tried again, then the same mail goes through 
 describe("what is NOT sent a second way, and what is logged when nothing works", () => {
   test("a plain refusal from Resend (403 validation_error: bad address or sender) is not repeated and not sent through Cloudflare", async () => {
     resend = () => ({ status: 403, body: { name: "validation_error" } });
-    expect(await send("raajat+x@gmail.com")).toBe(false); expect(by("resend").length).toBe(1); expect(by("cf").length).toBe(0);
+    expect(await send("tester+x@example.com")).toBe(false); expect(by("resend").length).toBe(1); expect(by("cf").length).toBe(0);
     expect(q("SELECT outcome FROM mail_event").map((e) => e.outcome)).toEqual(["send_failed 403 validation_error"]);
   });
   test("both fail: not sent, the body is kept for the retries, both reasons are logged (status and error code only)", async () => {
