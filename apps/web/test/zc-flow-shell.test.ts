@@ -61,5 +61,5 @@ test("every word the organizer reads follows the language guide", () => {
   const F = page("?flow=new").ZFLOW;
   const all = [...Object.values(F.COPY), ...F.STEPS.map((s: any) => s.name)].join(" | ");
   expect(F.badWords(all)).toEqual([]);
-  for (const bad of ["We invite you", "a private game", "Rs 2,399", "cash prize", "places left"]) expect(F.badWords(bad).length).toBeGreaterThan(0);
+  for (const bad of ["We invite you", "a private game", "Rs 2,999", "cash prize", "places left"]) expect(F.badWords(bad).length).toBeGreaterThan(0);
 });

@@ -73,8 +73,8 @@ describe("invoice rendering", () => {
 
 describe("no GST (the seller is not registered, owner decision 2026-10-09)", () => {
   test("GST is off by default: the price is the whole amount, no tax lines", () => {
-    const t = splitGst(2399, "INR", "", undefined);
-    expect(t).toMatchObject({ mode: "none", taxable: 2399, total: 2399, cgst: 0, sgst: 0, igst: 0 });
+    const t = splitGst(2999, "INR", "", undefined);
+    expect(t).toMatchObject({ mode: "none", taxable: 2999, total: 2999, cgst: 0, sgst: 0, igst: 0 });
     expect(companyGaps(DEFAULT_COMPANY)).toEqual([]); // nothing else is needed on a receipt
   });
   test("the receipt says INVOICE, names the seller plainly, and carries no GST, GSTIN, place of supply or tax rows", () => {

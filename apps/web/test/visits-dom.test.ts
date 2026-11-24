@@ -58,11 +58,11 @@ describe("v.js on the home page", () => {
     expect(s.rows("SELECT name, SUM(n) AS ms FROM visit_event WHERE kind='sec' GROUP BY name ORDER BY name")).toEqual([{ name: "faq", ms: 5000 }, { name: "pricing", ms: 7000 }]);
     expect(s.rows("SELECT stage FROM visit_session")[0]!.stage).toBe(1); // pricing seen
   });
-  test("choosing a size in the price card (#pack2) and in the home drop-down (#pack) each tell the size and the price shown", async () => {
+  test("choosing a size in the home drop-down (#pack) tells the size and the price shown (the three cups have their own Create buttons, below)", async () => {
     const s = await site(); await s.flush();
-    const pack2 = s.p.$("#pack2"); pack2.value = "2500"; pack2.dispatchEvent(new s.p.win.Event("change", { bubbles: true }));
+    const pack = s.p.$("#pack"); pack.value = "2500"; pack.dispatchEvent(new s.p.win.Event("change", { bubbles: true }));
     await new Promise((r) => setTimeout(r, 10));
-    const pack = s.p.$("#pack"); pack.value = "250"; pack.dispatchEvent(new s.p.win.Event("change", { bubbles: true }));
+    pack.value = "250"; pack.dispatchEvent(new s.p.win.Event("change", { bubbles: true }));
     await new Promise((r) => setTimeout(r, 10));
     await s.flush();
     const acts = s.sent.flatMap((x) => x.body.e).filter((e: any) => e.k === "act");
@@ -73,9 +73,9 @@ describe("v.js on the home page", () => {
   });
   test("pressing Create sends at once, with the size and the price; switching currency and opening Log in are actions too", async () => {
     const s = await site(); await s.flush(); const before = s.sent.length;
-    s.p.click(".pcta"); await s.drain();
+    s.p.click('.cup-pop [data-buy="500"]'); await s.drain();
     expect(s.sent.length).toBe(before + 1);
-    const create = s.sent[s.sent.length - 1]!.body.e.find((e: any) => e.n === "create"); expect(create).toMatchObject({ k: "act", n: "create", z: 250 }); expect(create.v).toMatch(/^(INR|USD) /);
+    const create = s.sent[s.sent.length - 1]!.body.e.find((e: any) => e.n === "create"); expect(create).toMatchObject({ k: "act", n: "create", z: 500 }); expect(create.v).toMatch(/^(INR|USD) /);
     s.p.click('[data-c="USD"]'); s.p.click("#loginLink"); await s.drain(); await s.flush();
     const names = s.sent.flatMap((x) => x.body.e).filter((e: any) => e.k === "act").map((e: any) => e.n);
     expect(names).toEqual(expect.arrayContaining(["create", "cur", "signin_open"]));

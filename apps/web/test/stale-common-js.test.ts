@@ -18,7 +18,7 @@ describe("old cached common.js beside new site.js / paykit.js", () => {
     new Function("window", `with (window) { ${code}\n}`).call(p.win, p.win);
     p.win.fetch = async (input: any) => {
       const u = String(input);
-      if (u.endsWith("/api/checkout")) return new Response(JSON.stringify({ mode: "test", result: { orderId: "ord_1", total: 3499, currency: "INR", pack: 250, invoiceNumber: "INV-1", invoiceUrl: "/inv", organizerKey: "ctk_" + "a".repeat(48) } }), { headers: { "content-type": "application/json" } });
+      if (u.endsWith("/api/checkout")) return new Response(JSON.stringify({ mode: "test", result: { orderId: "ord_1", total: 3799, currency: "INR", pack: 250, invoiceNumber: "INV-1", invoiceUrl: "/inv", organizerKey: "ctk_" + "a".repeat(48) } }), { headers: { "content-type": "application/json" } });
       return new Response("{}", { headers: { "content-type": "application/json" } });
     };
     p.click('[data-buy="250"]');

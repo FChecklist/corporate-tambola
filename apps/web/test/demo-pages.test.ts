@@ -46,10 +46,10 @@ describe("the Rs 0 game for up to 10 people is a real game: nothing marks it as 
     expect(p.$("#demopill")).toBeNull(); expect(p.$("#paypill")!.textContent).toMatch(/Rs 0/); expect(p.$("#paypill")!.className).toMatch(/zc-pill-paid/);
     expect(t).not.toMatch(/DEMO GAME|Payment pending|payment is pending|Pay now/); expect(p.$("#paynote")).toBeNull();
     openStep(p, 2); await p.waitFor((x) => /Demo game · 10 people · Rs 0/.test(x));
-    expect(p.$('[data-ck="demo"]')).toBeNull(); expect(p.$('[data-ck="cap"]')!.getAttribute("data-v")).toBe("10"); expect(p.$('[data-ck="cap"][data-v="250"]')).toBeTruthy();
+    expect(p.$('[data-ck="demo"]')).toBeNull(); expect(p.$('[data-ck="cap"]')!.getAttribute("data-v")).toBe("10"); expect(p.$('[data-ck="cap"][data-v="250"]')).toBeNull(); p.click("[data-sizes]"); expect(p.$('[data-ck="cap"][data-v="250"]')).toBeTruthy(); /* the three cups first; the other sizes behind "See more sizes" */
     openStep(p, 7); expect(await p.waitFor((x) => /Published/.test(x))).toMatch(/Nothing to pay/);
     openStep(p, 8); const t8 = await p.waitFor((x) => /Need more than 10 people/.test(x));
-    expect(t8).toMatch(/Rs 0 · up to 10 people/); expect(t8).not.toMatch(/DEMO GAME/); expect(t8).toMatch(/Up to 100 people · Rs 2,399\.00/); expect(t8).toMatch(/Up to 250 people/);
+    expect(t8).toMatch(/Rs 0 · up to 10 people/); expect(t8).not.toMatch(/DEMO GAME/); expect(t8).toMatch(/Small · Up to 100 people · Rs 2,999\.00/); expect(t8).toMatch(/Medium · Up to 500 people · Rs 4,999\.00 · Most chosen/); expect(t8).toMatch(/Up to 250 people/); /* "See more sizes" was opened in step 2 and stays open */
     expect((p.$("#makerealgo") as any).getAttribute("href")).toBe("/pay.html?e=UI-DEMO&pack=100"); expect(p.$("#pricerow")).toBeNull(); expect(p.$("#copypaylink")).toBeNull();
     p.click('[data-realpack="250"]'); await p.waitFor((x) => /Choose 250 people and pay/.test(x));
     expect((p.$("#makerealgo") as any).getAttribute("href")).toBe("/pay.html?e=UI-DEMO&pack=250");
@@ -102,8 +102,8 @@ describe("the pay page makes a demo a real game", () => {
     const p = await payPage(o, "UI-DEMOP", 250);
     const t = await p.waitFor((x) => /Make this a real game/.test(x));
     expect(t).toMatch(/free demo game for up to 10 people/); expect(t).not.toMatch(/already paid and published|Payment pending/);
-    expect(p.$('[data-pack="250"]')!.getAttribute("aria-pressed")).toBe("true"); expect(t).toMatch(/Up to 250/); expect(t).toMatch(/3,499/);
-    p.click('[data-pack="500"]'); await p.waitFor((x) => /Pay ₹4,699 securely/.test(x));
+    expect(p.$('[data-pack="250"]')!.getAttribute("aria-pressed")).toBe("true"); expect(t).toMatch(/Up to 250/); expect(t).toMatch(/3,799/);
+    p.click('[data-pack="500"]'); await p.waitFor((x) => /Pay ₹4,999 securely/.test(x));
     expect(p.$('[data-pack="500"]')!.getAttribute("aria-pressed")).toBe("true"); expect(p.text()).toMatch(/Up to 500/);
     p.click("#paygo"); // nothing about the payer is asked before paying: Razorpay asks for the mobile and the e-mail
     const d = await p.waitFor((x) => /Payment received/i.test(x));
@@ -115,7 +115,7 @@ describe("the pay page makes a demo a real game", () => {
   test("without a pack in the address the smallest pack is offered first", async () => {
     const o = await organizer({ TEST_MODE: "1" }); await make(o, "UI-DEMOQ"); await publish(o, "UI-DEMOQ");
     const p = await payPage(o, "UI-DEMOQ"); await p.waitFor((x) => /Make this a real game/.test(x));
-    expect(p.$('[data-pack="100"]')!.getAttribute("aria-pressed")).toBe("true"); expect(p.text()).toMatch(/Pay ₹2,399 securely/);
+    expect(p.$('[data-pack="100"]')!.getAttribute("aria-pressed")).toBe("true"); expect(p.text()).toMatch(/Pay ₹2,999 securely/);
   });
 });
 

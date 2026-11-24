@@ -1,1 +1,1 @@
-{ "name": "@tambola/engine", "version": "0.1.0", "type": "module", "main": "src/index.ts", "dependencies": { "@tambola/shared": "workspace:*" } }
+{ "name": "@tambola/engine", "version": "1.12.0", "type": "module", "main": "src/index.ts", "dependencies": { "@tambola/shared": "workspace:*" } }

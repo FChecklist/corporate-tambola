@@ -435,11 +435,21 @@
     if (cur && !list.some((p) => p.n === cur)) list.push({ n: cur, price: 0 }), list.sort((a, b) => a.n - b.n);
     return [{ n: DEMO_CAP, price: 0, demo: true }].concat(list.filter((p) => p.n !== DEMO_CAP));
   };
+  // The three cups (owner pricing update 2026-11-23): Small 100, Medium 500 ("Most chosen"), Large 1,000. Every other size is behind "See more sizes". Mirror of CUPS in packages/shared/src/pricing.ts (pricing-agree.test.ts keeps them equal). The size buttons show no price (the price shows only in the Pay step); the Pay step takes it from the server's size list, never from this file.
+  const CUP_SIZES = [[100, "Small", false], [500, "Medium", true], [1000, "Large", false]];
+  const cupOf = (n) => CUP_SIZES.find((c) => c[0] === Number(n));
+  const capChip = (f, p, quick) => { const c = cupOf(p.n); return `<button type="button" class="zc-chip${String(f.cap) === String(p.n) ? " on" : ""}" data-ck="cap" data-v="${p.n}" aria-pressed="${String(f.cap) === String(p.n)}"><span>${p.demo ? (quick ? "Up to 10 people" : "Demo game · 10 people · Rs 0") : (c ? c[1] + " · " : "") + `Up to ${p.n} people` + (c && c[2] ? " · Most chosen" : "")}</span></button>`; };
+  /** The size buttons: the demo game, the three cups, then (behind "See more sizes") the other sizes. A game that already has another size shows it open. */
+  const capChips = (f, quick) => {
+    const all = capOptions(), cups = all.filter((p) => p.demo || cupOf(p.n)), rest = all.filter((p) => !p.demo && !cupOf(p.n));
+    const open = !!S.moreSizes || rest.some((p) => String(p.n) === String(f.cap));
+    return cups.map((p) => capChip(f, p, quick)).join("") + (rest.length ? (open ? rest.map((p) => capChip(f, p, quick)).join("") : `<button type="button" class="zc-mini" data-sizes="1">See more sizes</button>`) : "");
+  };
   function stepPlay() {
     if (!S.f) return small("Loading…");
     if (lockedGame()) return lockedNote() + readBack();
     const f = S.f, cats = ZG.INVITE_CATEGORIES || [];
-    const caps = capOptions().map((p) => `<button type="button" class="zc-chip${String(f.cap) === String(p.n) ? " on" : ""}" data-ck="cap" data-v="${p.n}" aria-pressed="${String(f.cap) === String(p.n)}"><span>${p.demo ? "Demo game · 10 people · Rs 0" : `Up to ${p.n} people`}</span></button>`).join("");
+    const caps = capChips(f);
     const demoNow = Number(f.cap) > 0 && Number(f.cap) <= DEMO_CAP; f.demo = demoNow ? "1" : "0"; // a game of 10 people or fewer costs Rs 0; it is a real game in every other way
     const custom = !!f.capOther || !capOptions().some((p) => String(p.n) === String(f.cap)); // the sizes above are the choices; a different number is only for a crowd that fits none of them
     const own = `<div class="zc-gap"${custom ? "" : " hidden"}>${lbl("f-cap", "Your own number of players")}${inp("cap", { type: "number", ph: "For example 180", attrs: `inputmode="numeric" min="1" max="10000" step="1"` })}</div>` + (custom ? "" : `<div class="zc-chips zc-gap"><button type="button" class="zc-mini" data-bool="capOther">My crowd is a different size</button></div>`);
@@ -1056,9 +1066,11 @@
   /** A DEMO GAME: "Make this a real game". The usual packs; the payment itself happens on the pay page (the same page and checkout as any game). After the game has ended, a new real game like this one is made instead (the clone). */
   function makeRealBlock() {
     const ended = gameEnded();
-    const packs = (S.packs || []).length ? S.packs : [{ upTo: 100, inr: 2399 }, { upTo: 250, inr: 3499 }, { upTo: 500, inr: 4699 }, { upTo: 1000, inr: 7099 }];
+    const packs = (S.packs || []).length ? S.packs : [{ upTo: 100, inr: 2999 }, { upTo: 500, inr: 4999 }, { upTo: 1000, inr: 7499 }];
     const pick = Number(S.realPack) || packs[0].upTo;
-    const chips = packs.map((k) => `<button type="button" class="zc-chip${pick === k.upTo ? " on" : ""}" data-realpack="${k.upTo}" aria-pressed="${pick === k.upTo}">Up to ${k.upTo} people${k.inr ? " \u00b7 " + esc(money(k.inr)) : ""}</button>`).join("");
+    const chipOf = (k) => { const c = cupOf(k.upTo); return `<button type="button" class="zc-chip${pick === k.upTo ? " on" : ""}" data-realpack="${k.upTo}" aria-pressed="${pick === k.upTo}">${c ? c[1] + " \u00b7 " : ""}Up to ${k.upTo} people${k.inr ? " \u00b7 " + esc(money(k.inr)) : ""}${c && c[2] ? " \u00b7 Most chosen" : ""}</button>`; };
+    const restPacks = packs.filter((k) => !cupOf(k.upTo)), moreOpen = !!S.moreSizes || restPacks.some((k) => k.upTo === pick); // the three cups first; the other sizes behind "See more sizes"
+    const chips = packs.filter((k) => cupOf(k.upTo)).map(chipOf).join("") + (restPacks.length ? (moreOpen ? restPacks.map(chipOf).join("") : `<button type="button" class="zc-mini" data-sizes="1">See more sizes</button>`) : "");
     const head = `<div class="zc-rowl zc-paid"><span><b>Rs 0 \u00b7 up to ${DEMO_CAP} people</b><br><span class="zc-small zc-nomargin">Nothing to pay for this game.</span></span><span aria-hidden="true">&#10003;</span></div>`;
     if (ended) return head + `<div class="zc-block" id="makereal"><h3>Create a new game like this one</h3>${small("A new game with the same settings, prizes and brand is made for you: pick the date and time and the number of people, then publish.")}<div class="zc-chips zc-gap"><button type="button" class="zc-btn zc-btn-s" data-clonebtn="1" id="makerealclone">Make a real game like this one</button></div></div>`;
     return head + `<div class="zc-block" id="makereal"><h3>Need more than 10 people?</h3>${small(S.started ? "You can do this now, during the game. The game carries on as it is: the same link, the same people, the same numbers. More people can join, up to the number you choose." : "Choose the number of people and pay. The game stays as it is: the same link, the same settings. More people can join, up to the number you choose.")}<span class="zc-lbl" id="gl-realpack">How many people?</span><div class="zc-chips" role="group" aria-labelledby="gl-realpack">${chips}</div><div class="zc-foot"><a class="zc-btn" id="makerealgo" href="/pay.html?e=${encodeURIComponent(eid)}&pack=${pick}">Choose ${pick} people and pay</a></div>${small("If you cancel a paid game before it starts, your payment stays as credit for your next game, valid for 365 days.")}</div>`;
@@ -1560,7 +1572,7 @@
   function applyBundleTo(f, b) { const set = BUNDLES[b]; if (!set) return; for (const [k] of HS) { const h = f.hs[k]; h.on = !!set[k]; if (set[k]) h.n = set[k]; } f.ph = (HS.find(([k]) => f.hs[k].on) || ["full"])[0]; }
   function quickView() {
     const f = S.f;
-    const caps = capOptions().map((p) => `<button type="button" class="zc-chip${String(f.cap) === String(p.n) ? " on" : ""}" data-ck="cap" data-v="${p.n}" aria-pressed="${String(f.cap) === String(p.n)}"><span>Up to ${p.n} people</span></button>`).join("");
+    const caps = capChips(f, true);
     const houses = HS.filter(([k]) => k !== "full2").map(([k, n, how, mx]) => `<div class="zc-box"><label class="zc-check" for="qk-h-${k}"><input type="checkbox" id="qk-h-${k}" data-hc="${k}" ${f.hs[k].on ? "checked" : ""}> ${n}</label><p class="zc-small zc-how">${esc(how || "")}</p>${mx > 1 ? grp(`hs.${k}.n`, "Winners", [1, 2, 3, 4, 5, 10, 20].filter((x) => x <= mx).map((x) => [String(x), String(x)])) : ""}${lbl("qk-t-" + k, "What is the prize? (up to 80 characters; you can fill this in later)")}<input id="qk-t-${k}" class="zc-in" data-qkprize="${k}" maxlength="80" value="${esc(f.hs[k].pt === "later" ? "" : prizeText(f.hs[k].pt, f.hs[k].pd))}"></div>`).join("");
     const main = `<div class="zc-block"><h3>1. Which game?</h3>${lbl("qk-name", "Name of the game (optional)")}<input id="qk-name" class="zc-in" data-fi="oname" maxlength="60" placeholder="Diwali party" value="${esc(f.oname)}">
         ${grp("occ", "Occasion", OCC.map((o) => [o, o]))}${lbl("qk-date", "Day (India time)")}<input id="qk-date" class="zc-in" type="date" data-fi="dayo" value="${esc(f.dayo)}" min="${istDateStr(istNow())}">${lbl("qk-time", "Start time (India time)")}<input id="qk-time" class="zc-in" type="time" data-fi="timeo" step="300" value="${esc(f.timeo)}">
@@ -2275,6 +2287,7 @@
     // history and the account
     all("[data-hist]", (b) => (b.onclick = () => { S.showHist = !S.showHist; redraw(); }));
     all("[data-realpack]", (b) => (b.onclick = () => { S.realPack = Number(b.dataset.realpack); redraw(); }));
+    all("[data-sizes]", (b) => (b.onclick = () => { S.moreSizes = true; redraw(); }));
     all("[data-clonebtn]", (b) => (b.onclick = async () => { if (b.dataset.people === undefined && !S.pp.list && !(S.people || []).length) { try { await loadPeople(); } catch { /* the panel then asks the old way */ } } const from = b.dataset.from || eid; S.clone = { from, hasPeople: b.dataset.people !== undefined ? b.dataset.people === "1" : hasOldPeople(), withPeople: false, err: "" }; redraw(); go("clonepanel"); }));
     if ($("clonepeople")) $("clonepeople").onchange = () => { S.clone.withPeople = $("clonepeople").checked; redraw(); };
     if ($("cloneno")) $("cloneno").onclick = () => { S.clone = null; redraw(); };

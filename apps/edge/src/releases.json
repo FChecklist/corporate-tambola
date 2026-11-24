@@ -1,5 +1,21 @@
 [
   {
+    "version": "1.12.0",
+    "date": "2026-11-24",
+    "releasedAtIST": "24 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "New prices with three cups (Small, Medium, Large) for every game and console, and five more sizes behind 'See more sizes'",
+    "changes": [
+      "New rupee prices, no GST shown: up to 100 participants Rs 2,999, up to 250 Rs 3,799, up to 500 Rs 4,999, up to 750 Rs 6,299, up to 1,000 Rs 7,499, up to 2,500 Rs 11,999, up to 5,000 Rs 17,999, up to 10,000 Rs 29,999 (before: 2,399, 3,499, 4,699, 5,899, 7,099, 11,799, 17,699, 29,499). The US dollar prices did not change",
+      "The home page and the price page now show three cups first: Small (up to 100), Medium (up to 500, marked 'Most chosen') and Large (up to 1,000). Under each cup are three lines: you choose auto or manual mode, close group only, you are in control. The other five sizes are behind 'See more sizes'. The heading is 'Run a game your whole team will talk about.'",
+      "Under the cups: a strip of three trust lines (details removed within 24 hours after the game, over 200 games played, pay once per game with a receipt straight away) and plain Terms and Privacy links. No tick boxes, no GST line and no money-back promise",
+      "The organizer's console (step 2, the quick setup and the 'make this a real game' card of a demo game) shows the same three cups first, with the other sizes behind 'See more sizes'. The console still shows no price while you choose a size; the price shows in the Pay step",
+      "The one-page brochure (page and PDF) and the Refer and earn example carry the new prices: a partner now earns Rs 1,499.50 on a first pack of Rs 2,999",
+      "The prices are written in one place in the code, with one matching copy for the browser. A new test fails if any file still shows an old price, if the copy for the browser differs, or if a page carries a claim the owner forbade",
+      "Payments are unchanged: only IT Services by Rajat Agarwal through Razorpay, and the money switches are untouched. Not deployed; it needs two independent audits first"
+    ]
+  },
+  {
     "version": "1.11.2",
     "date": "2026-11-21",
     "releasedAtIST": "21 Nov 2026, time set at deploy",

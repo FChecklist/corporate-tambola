@@ -161,7 +161,7 @@ describe("the payment page", () => {
       if (f !== "common.js") return;
       win.Razorpay = function (this: any, opts: any) { this.on = () => {}; this.open = () => setTimeout(() => opts.handler({ razorpay_order_id: "order_x", razorpay_payment_id: "pay_x", razorpay_signature: "sig" }), 0); };
       answer(win, {
-        "POST /api/checkout": () => { checkouts++; return json({ mode: "razorpay", paymentId: "pay_0123456789abcdef", razorpay: { keyId: "k", orderId: "order_x", amount: 239900, currency: "INR", name: "Corporate Tambola", description: "d", prefill: {}, notes: {}, theme: {} } }); },
+        "POST /api/checkout": () => { checkouts++; return json({ mode: "razorpay", paymentId: "pay_0123456789abcdef", razorpay: { keyId: "k", orderId: "order_x", amount: 299900, currency: "INR", name: "Corporate Tambola", description: "d", prefill: {}, notes: {}, theme: {} } }); },
         "POST /api/payments/verify": () => { verifyCalls++; return json({ error: "Something went wrong. Please try again." }, 500); },
       });
     });
@@ -170,7 +170,7 @@ describe("the payment page", () => {
     expect(p.text()).toMatch(/Please keep this page open/); expect(p.text()).not.toMatch(/Something went wrong/); // the page is still asking, it did not hand the Pay button back
     expect((p.$("#pk-busy") as any).hidden).toBe(false); expect((p.$("#paygo") as any).disabled).toBe(true); expect(checkouts).toBe(1);
     o.world.raw.prepare("UPDATE engagement SET pack=100 WHERE id='IP-VERIFY'").run();
-    o.world.raw.prepare("INSERT OR REPLACE INTO payment(id,org,email,pack,currency,amount,tax,status,created_ms,paid_ms,meta,result) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)").run("pay_0123456789abcdef", null, "payer@acme.com", 100, "INR", 2399, 365.9, "paid", START_MS - HOUR, START_MS - HOUR, "{}", JSON.stringify({ ok: true, orderId: "pay_0123456789abcdef", pack: 100, total: 2399, currency: "INR", eid: "IP-VERIFY", published: true })); // the payment itself is now paid: the receipt the page keeps asking for comes back o.world.raw.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").run("paidby/IP-VERIFY", JSON.stringify({ by: "organizer", ms: START_MS - HOUR })); // the gateway's own message arrives: the game is paid
+    o.world.raw.prepare("INSERT OR REPLACE INTO payment(id,org,email,pack,currency,amount,tax,status,created_ms,paid_ms,meta,result) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)").run("pay_0123456789abcdef", null, "payer@acme.com", 100, "INR", 2999, 365.9, "paid", START_MS - HOUR, START_MS - HOUR, "{}", JSON.stringify({ ok: true, orderId: "pay_0123456789abcdef", pack: 100, total: 2999, currency: "INR", eid: "IP-VERIFY", published: true })); // the payment itself is now paid: the receipt the page keeps asking for comes back o.world.raw.prepare("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)").run("paidby/IP-VERIFY", JSON.stringify({ by: "organizer", ms: START_MS - HOUR })); // the gateway's own message arrives: the game is paid
     await p.waitFor((x) => /Payment received/i.test(x), 15_000);
     expect(p.text()).toMatch(/Open my game/); expect(p.text()).not.toMatch(/engagement/i); expect(checkouts).toBe(1); expect(verifyCalls).toBe(1);
   });

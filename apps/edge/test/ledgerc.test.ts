@@ -42,7 +42,7 @@ afterEach(() => { globalThis.fetch = realFetch; });
 const central = () => { env.PAY_SERVICE_KEY = "site-key-for-tests"; env.PAY_SERVICE_URL = "https://central.test"; };
 const centralCalls = (path: string) => rz.calls.filter((c) => c.url === "https://central.test" + path);
 const hook = (ev: unknown, eventId?: string, secret = "whsec") => { const body = JSON.stringify(ev); return call("POST", "/api/payments/webhook", body, { "x-razorpay-signature": hmac(secret, body), ...(eventId ? { "x-razorpay-event-id": eventId } : {}) }); };
-const entity = (orderId: string, id: string, extra: Record<string, unknown> = {}, amount = 469900) => ({ id, order_id: orderId, amount, currency: "INR", ...extra });
+const entity = (orderId: string, id: string, extra: Record<string, unknown> = {}, amount = 499900) => ({ id, order_id: orderId, amount, currency: "INR", ...extra });
 const captured = (orderId: string, id = "pay_ok", extra: Record<string, unknown> = {}, createdAt = Math.floor(T / 1000)) => ({ event: "payment.captured", created_at: createdAt, payload: { payment: { entity: entity(orderId, id, { status: "captured", ...extra }) } } });
 const failed = (orderId: string, id = "pay_f1", createdAt = Math.floor(T / 1000) - 60) => ({ event: "payment.failed", created_at: createdAt, payload: { payment: { entity: entity(orderId, id, { status: "failed", method: "upi", vpa: "someone@okbank", error_code: "BAD_REQUEST_ERROR", error_description: "Payment failed because of insufficient balance", error_source: "customer", error_step: "payment_authorization", error_reason: "insufficient_funds" }) } } });
 const attempts = () => raw.query("SELECT * FROM payment_attempt ORDER BY rzp_payment_id").all() as any[];
@@ -87,7 +87,7 @@ describe("every attempt is kept (webhook), success and failure, once", () => {
     expect(raw.query("SELECT COUNT(*) c FROM entitlement").get()).toEqual({ c: 0 });
     expect(raw.query("SELECT COUNT(*) c FROM invoice").get()).toEqual({ c: 0 });
     expect(attempts()).toHaveLength(1);
-    expect(attempts()[0]).toMatchObject({ rzp_payment_id: "pay_f1", payment_id: paymentId, rzp_order_id: orderId, txn_id: `TAM-${paymentId}`, status: "failed", method: "upi", error_code: "BAD_REQUEST_ERROR", error_reason: "insufficient_funds", amount_minor: 469900, currency: "INR", failed_ms: (Math.floor(T / 1000) - 60) * 1000 });
+    expect(attempts()[0]).toMatchObject({ rzp_payment_id: "pay_f1", payment_id: paymentId, rzp_order_id: orderId, txn_id: `TAM-${paymentId}`, status: "failed", method: "upi", error_code: "BAD_REQUEST_ERROR", error_reason: "insufficient_funds", amount_minor: 499900, currency: "INR", failed_ms: (Math.floor(T / 1000) - 60) * 1000 });
     expect(attempts()[0].error_description).toContain("insufficient balance");
     // the buyer tries again and pays
     expect((await hook(captured(orderId, "pay_ok", { method: "upi" }), "evt_c1")).status).toBe(200);
@@ -175,7 +175,7 @@ describe("fee, tax, method and the bank reference are kept", () => {
   test("browser path: Razorpay's payment gives the figures; if it lacks them, the central service's answer does", async () => {
     central();
     const { paymentId, orderId } = await newBuy();
-    rz.payments.pay_v1 = { id: "pay_v1", order_id: orderId, status: "captured", amount: 469900, currency: "INR", method: "upi", acquirer_data: { rrn: "999" } };
+    rz.payments.pay_v1 = { id: "pay_v1", order_id: orderId, status: "captured", amount: 499900, currency: "INR", method: "upi", acquirer_data: { rrn: "999" } };
     const r = await call("POST", "/api/payments/verify", { paymentId, razorpay_order_id: orderId, razorpay_payment_id: "pay_v1", razorpay_signature: hmac("sek", `${orderId}|pay_v1`) });
     expect(r.status).toBe(200);
     expect(payRow(paymentId)).toMatchObject({ status: "paid", method: "upi", rrn: "999", fee_minor: 11800, tax_minor: 1800 }); // fee and tax from B's answer (Razorpay's message had none yet)
@@ -183,7 +183,7 @@ describe("fee, tax, method and the bank reference are kept", () => {
   });
   test("browser path: a failed payment is kept as a failed attempt with Razorpay's reason and the payment stays unpaid", async () => {
     const { paymentId, orderId } = await newBuy();
-    rz.payments.pay_bad = { id: "pay_bad", order_id: orderId, status: "failed", amount: 469900, error_code: "GATEWAY_ERROR", error_reason: "payment_timeout", error_description: "timed out" };
+    rz.payments.pay_bad = { id: "pay_bad", order_id: orderId, status: "failed", amount: 499900, error_code: "GATEWAY_ERROR", error_reason: "payment_timeout", error_description: "timed out" };
     const r = await call("POST", "/api/payments/verify", { paymentId, razorpay_order_id: orderId, razorpay_payment_id: "pay_bad", razorpay_signature: hmac("sek", `${orderId}|pay_bad`) });
     expect(r.status).toBe(402);
     expect(attempts()[0]).toMatchObject({ rzp_payment_id: "pay_bad", status: "failed", error_code: "GATEWAY_ERROR", error_reason: "payment_timeout", currency: "INR" });
@@ -207,11 +207,11 @@ describe("commission is posted to the central ledger", () => {
   test("a new accrued commission is posted at once with the exact body the central ledger expects", async () => {
     const pid = await paidSale("pay_s1");
     const c = crow(pid);
-    expect(c).toMatchObject({ status: "accrued", amount: 2349.5, sync_status: "accrued" }); expect(c.synced_ms).toBe(T);
+    expect(c).toMatchObject({ status: "accrued", amount: 2499.5, sync_status: "accrued" }); expect(c.synced_ms).toBe(T);
     const posts = centralCalls("/api/pay/commission");
     expect(posts).toHaveLength(1);
     expect(posts[0]!.init.headers["x-site-key"]).toBe("site-key-for-tests");
-    expect(posts[0]!.body).toEqual({ site: "corporate-tambola.pages.dev", site_ref: String(c.id), payment_ref: pid, partner_code: CODE, amount_minor: 234950, currency: "INR", status: "accrued" });
+    expect(posts[0]!.body).toEqual({ site: "corporate-tambola.pages.dev", site_ref: String(c.id), payment_ref: pid, partner_code: CODE, amount_minor: 249950, currency: "INR", status: "accrued" });
   });
   test("409 (the sale is not in B yet) keeps the row unsynced and it is retried by the tick, not sooner than 10 minutes", async () => {
     let answer = 409; rz.commission = () => (answer === 409 ? { status: 409, body: { error: "the sale is not a paid sale in the central ledger yet" } } : ok({ ok: true }));
@@ -236,7 +236,7 @@ describe("commission is posted to the central ledger", () => {
     rz.calls.length = 0;
     await call("POST", "/api/partners/payout", { code: CODE, reference: "UTR12345" }, plat);
     const paid = centralCalls("/api/pay/commission");
-    expect(paid).toHaveLength(1); expect(paid[0]!.body).toMatchObject({ payment_ref: b, status: "paid", paid_ref: "UTR12345", amount_minor: 234950, site_ref: String(crow(b).id) });
+    expect(paid).toHaveLength(1); expect(paid[0]!.body).toMatchObject({ payment_ref: b, status: "paid", paid_ref: "UTR12345", amount_minor: 249950, site_ref: String(crow(b).id) });
     expect(crow(b)).toMatchObject({ status: "paid", sync_status: "paid" });
   });
   test("rows that must not be posted are not: TEST-mode rows, TEST-mode payments, rows waiting for a rate, blocked rows, a void that B never heard of", async () => {
@@ -335,10 +335,10 @@ describe("the owner's view of C", () => {
     raw.run("UPDATE payment SET meta=json_set(meta,'$.org','=HYPERLINK(\"x\")') WHERE id=?", [paymentId]);
     const j = await (await call("GET", "/api/owner/ledger?month=2026-10", undefined, plat)).json() as any;
     expect(j).toMatchObject({ site: "corporate-tambola.pages.dev", month: "2026-10" });
-    expect(j.summary).toMatchObject({ currency: "INR", paid_count: 1, failed_count: 1, revenue_minor: 469900, fee_minor: 11800, tax_minor: 1800 });
+    expect(j.summary).toMatchObject({ currency: "INR", paid_count: 1, failed_count: 1, revenue_minor: 499900, fee_minor: 11800, tax_minor: 1800 });
     expect(j.payments).toHaveLength(1);
     const p = j.payments[0];
-    expect(p).toMatchObject({ txn_id: `TAM-${paymentId}`, payment_id: paymentId, rzp_order_id: orderId, rzp_payment_id: "pay_ok", amount: 4699, amount_minor: 469900, currency: "INR", status: "paid", method: "card", fee_minor: 11800, tax_minor: 1800, net_minor: 458100, rrn: "55", plan: "pack_500", product: "corporate_tambola", captured_attempts: 1 });
+    expect(p).toMatchObject({ txn_id: `TAM-${paymentId}`, payment_id: paymentId, rzp_order_id: orderId, rzp_payment_id: "pay_ok", amount: 4999, amount_minor: 499900, currency: "INR", status: "paid", method: "card", fee_minor: 11800, tax_minor: 1800, net_minor: 488100, rrn: "55", plan: "pack_500", product: "corporate_tambola", captured_attempts: 1 });
     expect(p.paid_utc).toBe(new Date(T).toISOString()); expect(p.paid_ist).toBe("2026-10-01 15:30:00 IST");
     expect(p.attempts.map((a: any) => [a.rzp_payment_id, a.status, a.error_reason])).toEqual([["pay_f1", "failed", "insufficient_funds"], ["pay_ok", "captured", null]]);
     expect(JSON.stringify(j)).not.toContain("Boss@Acme.com"); expect(JSON.stringify(j)).not.toContain("someone@okbank"); // no payer e-mail, no full UPI id

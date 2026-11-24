@@ -122,7 +122,7 @@ describe('console steps 1 and 2: told what is wrong, and how to put it right', (
     const pw = spy();
     const p = await consolePage(o, 'IP-PAID', { hook: pw.hook }); await p.waitFor((x) => x.includes('Your game at a glance')); openStep(p, 2);
     expect(p.text()).toContain('Your payment covers up to 100 people. For more people, make a new game like this one in step 7.');
-    p.click(ck('cap', '250')); p.click(`[data-save='2']`);
+    p.click('[data-sizes]'); p.click(ck('cap', '250')); p.click(`[data-save='2']`);
     await p.waitFor((x) => x.includes('Your payment covers up to 100 people. Choose 100 or fewer'));
     expect(pw.patches.length).toBe(0); // nothing was sent
     await idle(p);

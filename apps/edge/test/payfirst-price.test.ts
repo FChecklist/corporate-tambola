@@ -27,33 +27,33 @@ describe("paid first on a game with the owner's price", () => {
     const g = await unpaid(100);
     expect((await adj({ eid: g.id, currency: "INR", direction: "down", amount: 400, reason: "agreed on phone 2 Nov" })).status).toBe(200);
     const c = await order(g, "IN"); expect(c.status).toBe(200);
-    expect(c.body.razorpay.amount).toBe(199900); expect(sentOrders.at(-1).amount).toBe(199900);
-    expect(sentOrders.at(-1).notes).toMatchObject({ list_minor: "239900", adjust_minor: "-40000", net_minor: "199900", game_id: g.id });
+    expect(c.body.razorpay.amount).toBe(259900); expect(sentOrders.at(-1).amount).toBe(259900);
+    expect(sentOrders.at(-1).notes).toMatchObject({ list_minor: "299900", adjust_minor: "-40000", net_minor: "259900", game_id: g.id });
     expect(JSON.stringify(sentOrders.at(-1))).not.toContain("agreed on phone"); // the owner's own note never leaves this site
     expect(JSON.stringify(c.body)).not.toMatch(SECRET_WORDS);
     const pid = c.body.paymentId as string;
     const p = await pay(c.body); expect(p.status).toBe(200); expect(p.body).toMatchObject({ ok: true, invoicePending: true });
     expect(JSON.stringify(p.body)).not.toMatch(SECRET_WORDS);
     expect(one("SELECT pack FROM engagement WHERE id=?", g.id).pack).toBe(100);
-    expect(one("SELECT status, amount FROM payment WHERE id=?", pid)).toMatchObject({ status: "paid", amount: 1999 });
+    expect(one("SELECT status, amount FROM payment WHERE id=?", pid)).toMatchObject({ status: "paid", amount: 2599 });
     // the owner's mail at the capture keeps the full picture
     const owner = q("SELECT body, subject FROM outbox WHERE subject LIKE '%Paid order%'").map((m) => m.subject + "\n" + m.body).join("\n");
-    expect(owner).toMatch(/owner set price: list Rs 2,399, adjustment minus Rs 400/);
+    expect(owner).toMatch(/owner set price: list Rs 2,999, adjustment minus Rs 400/);
     // Skip: ONE line, only the amount actually charged; nothing about how the price came about
     const s = await skip(pid); expect(s.status, JSON.stringify(s.body)).toBe(200); expect(s.body.invoiceUrl).toMatch(/^\/api\/invoice\//);
     expect(JSON.stringify(s.body)).not.toMatch(SECRET_WORDS);
     const inv = invoiceData(pid);
-    expect(inv.lines).toEqual([{ description: "Corporate Tambola: up to 100 participants (one engagement), price as agreed", quantity: 1, amount: 1999 }]);
-    expect(inv.tax.total).toBe(1999);
-    const html = await (await call("GET", s.body.invoiceUrl)).text(); expect(html).toContain("price as agreed"); expect(html).not.toMatch(/coupon|discount|2,399|2399/i);
+    expect(inv.lines).toEqual([{ description: "Corporate Tambola: up to 100 participants (one engagement), price as agreed", quantity: 1, amount: 2599 }]);
+    expect(inv.tax.total).toBe(2599);
+    const html = await (await call("GET", s.body.invoiceUrl)).text(); expect(html).toContain("price as agreed"); expect(html).not.toMatch(/coupon|discount|2,999|2999/i);
     const orgMail = q("SELECT body, subject FROM outbox WHERE subject NOT LIKE '%Paid order%'").map((m) => m.subject + "\n" + m.body).join("\n");
-    expect(orgMail).not.toMatch(/coupon|discount|promo|2,399|2399|owner set price/i);
+    expect(orgMail).not.toMatch(/coupon|discount|promo|2,999|2999|owner set price/i);
     expect(one("SELECT seq FROM invoice WHERE payment_id=?", pid).seq).toBe(1); // invoice numbering is unchanged
   });
 
   test("a net Rs 1 game (the owner's live test): paid at the capture, and the invoice comes by itself 15 minutes later with the same single line", async () => {
     const g = await unpaid(100);
-    await adj({ eid: g.id, currency: "INR", direction: "down", amount: 2398, reason: "Rs 1 live test" });
+    await adj({ eid: g.id, currency: "INR", direction: "down", amount: 2998, reason: "Rs 1 live test" });
     const c = await order(g, "IN"); expect(c.body.razorpay.amount).toBe(100);
     const pid = c.body.paymentId as string; const p = await pay(c.body); expect(p.status).toBe(200);
     expect(one("SELECT pack FROM engagement WHERE id=?", g.id).pack).toBe(100);
@@ -70,7 +70,7 @@ describe("paid first on a game with the owner's price", () => {
     expect(de.body.razorpay).toMatchObject({ currency: "USD", amount: 3400 });
     expect(sentOrders.at(-1).notes.list_minor).toBeUndefined();
     const plain = await unpaid(100); const c = await order(plain, "IN");
-    expect(c.body.razorpay.amount).toBe(239900); expect(sentOrders.at(-1).notes.list_minor).toBeUndefined();
+    expect(c.body.razorpay.amount).toBe(299900); expect(sentOrders.at(-1).notes.list_minor).toBeUndefined();
     const pid = c.body.paymentId as string; await pay(c.body, "pay_fp2");
     await skip(pid);
     expect(invoiceData(pid).lines[0].description).toBe("Corporate Tambola: up to 100 participants (one engagement)"); // the ordinary line

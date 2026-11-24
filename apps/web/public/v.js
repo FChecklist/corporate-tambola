@@ -105,13 +105,14 @@
   addEventListener("pagehide", exitNow);
 
   // ---- actions: the choices a visitor makes (a handful of named ones; the server drops anything else) ----
-  function shown() { var t = doc.querySelector(".pcard .tot"), m = t && t.textContent.replace(/,/g, "").match(/(₹|US\$)\s*([\d.]+)/); return m ? (m[1] === "₹" ? "INR " : "USD ") + m[2] : ""; }
+  // the price the visitor sees for a size, in the currency button that is on (the cups and the size list draw from the same TB.price)
+  function shown(size) { var T = window.TB, b = doc.querySelector("[data-cur] .on"), cur = b && b.getAttribute("data-c") === "USD" ? "USD" : "INR"; if (!T || !T.price || !(size > 0)) return ""; try { var x = T.price(size, cur); return cur + " " + (cur === "INR" ? x.base : x.total); } catch (_) { return ""; } }
   function act(n, size, v, now) { push({ k: "act", n: n, z: size, v: v }); if (now) flush(); }
   doc.addEventListener("click", function (e) {
     var t = e.target && e.target.closest ? e.target : null; if (!t) return;
     var c = t.closest("[data-buy]");
-    if (c) return act("create", +c.getAttribute("data-buy") || 0, shown(), true);
-    if (t.closest("#payBtn")) { var p = doc.getElementById("pack"); return act("create", p ? +p.value || 0 : 0, shown(), true); }
+    if (c) { var z = +c.getAttribute("data-buy") || 0; return act("create", z, shown(z), true); }
+    if (t.closest("#payBtn")) { var p = doc.getElementById("pack"); var z2 = p ? +p.value || 0 : 0; return act("create", z2, shown(z2), true); }
     var cu = t.closest("[data-c]"); if (cu) return act("cur", null, cu.getAttribute("data-c"), false);
     if (t.closest("#loginLink")) return act("signin_open", null, "", true);
     var a = t.closest("a[href]"); if (!a) return;
@@ -122,7 +123,7 @@
   doc.addEventListener("change", function (e) {
     var t = e.target; if (!t || (t.id !== "pack" && t.id !== "pack2")) return;
     var size = +t.value || 0;
-    setTimeout(function () { act("pack", size, shown(), false); }, 0); // after the page has redrawn the price card
+    setTimeout(function () { act("pack", size, shown(size), false); }, 0);
   });
   doc.addEventListener("submit", function (e) {
     var id = e.target && e.target.id;

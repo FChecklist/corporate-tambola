@@ -9,7 +9,7 @@ const html = join(root, "apps/web/public/brochure.html"), pdf = join(root, "apps
 const browsers = ["C:/Program Files/Google/Chrome/Application/chrome.exe", "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", "/usr/bin/google-chrome", "/usr/bin/chromium"];
 const exe = browsers.find((b) => existsSync(b));
 if (!exe) { console.error("No Chrome or Edge found."); process.exit(1); }
-const r = spawnSync(exe, ["--headless=new", "--disable-gpu", "--no-pdf-header-footer", `--print-to-pdf=${pdf}`, pathToFileURL(html).href], { stdio: "ignore" });
+const r = spawnSync(exe, [...(process.getuid && process.getuid() === 0 ? ["--no-sandbox"] : []), "--headless=new", "--disable-gpu", "--no-pdf-header-footer", `--print-to-pdf=${pdf}`, pathToFileURL(html).href], { stdio: "ignore" });
 if (!existsSync(pdf)) { console.error("PDF not written", r.status); process.exit(1); }
 const pages = (readFileSync(pdf, "latin1").match(/\/Type\s*\/Page[^s]/g) || []).length;
 console.log("wrote", pdf, readFileSync(pdf).length, "bytes,", pages, "page(s)");

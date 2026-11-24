@@ -117,14 +117,14 @@ The same ladder, shown in US$ and INR; no GST while the seller is not GST regist
 
 | Players | US$ | INR |
 |---|---|---|
-| 100 | 34 | 2,399 |
-| 250 | 51 | 3,499 |
-| 500 | 67 | 4,699 |
-| 750 | 84 | 5,899 |
-| 1,000 | 101 | 7,099 |
-| 2,500 | 169 | 11,799 |
-| 5,000 | 253 | 17,699 |
-| 10,000 | 421 | 29,499 |
+| 100 | 34 | 2,999 |
+| 250 | 51 | 3,799 |
+| 500 | 67 | 4,999 |
+| 750 | 84 | 6,299 |
+| 1,000 | 101 | 7,499 |
+| 2,500 | 169 | 11,999 |
+| 5,000 | 253 | 17,999 |
+| 10,000 | 421 | 29,999 |
 Plan ids on the central ledger: `bingo_pack_100` ... `bingo_pack_10000` and `payment_test`.
 
 ## 10. Data and rules for the build ("new" work)

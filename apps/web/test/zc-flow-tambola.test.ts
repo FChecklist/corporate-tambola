@@ -55,7 +55,7 @@ function stepPage(step: number, setup?: (s: any, w: any) => void) {
   const win: any = new Window({ url: "http://localhost/zc.html?flow=new&e=EABCDEF" });
   win.document.body.innerHTML = '<main id="app"></main>';
   win.ZG = { roundAt: (ms: number) => Math.floor(ms / 3000), PRIZE_HOUSES };
-  const fakeFetch = async (url: string) => ({ ok: true, json: async () => (url.includes("ai-manifest") ? { packs: [{ upTo: 100, inr: 2399 }, { upTo: 250, inr: 3499 }] } : { ok: true }) });
+  const fakeFetch = async (url: string) => ({ ok: true, json: async () => (url.includes("ai-manifest") ? { packs: [{ upTo: 100, inr: 2999 }, { upTo: 250, inr: 3799 }] } : { ok: true }) });
   new Function("window", "document", "location", "fetch", "MutationObserver", src)(win, win.document, win.location, fakeFetch, win.MutationObserver);
   const s = win.ZFLOW.state; s.eid = "EABCDEF"; for (let k = 1; k < step; k++) s.done[k] = true; s.open = step; if (setup) setup(s, win); win.ZFLOW.draw();
   return win;

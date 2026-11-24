@@ -124,7 +124,7 @@ test("wire: every card and size becomes the right audience payload; every start/
 test("smoke: every step draws for all three cards and both ticket counts without an error", async () => {
   let drawn = 0;
   for (const tix of [1, 2]) for (const card of ["people", "family", "extended"]) {
-    const w = newPage([], (u) => (u.includes("ai-manifest") ? { packs: [{ upTo: 100, inr: 2399 }] } : { ok: true }));
+    const w = newPage([], (u) => (u.includes("ai-manifest") ? { packs: [{ upTo: 100, inr: 2999 }] } : { ok: true }));
     const F = w.ZFLOW; F.state.eid = "EABCDEF"; F.who.card = card; F.prizes.tix = tix; F.state.when = { ms: Date.now() + 86400000, zone: "Asia/Kolkata" };
     for (let step = 1; step <= 5; step++) { for (let k = 1; k < step; k++) F.state.done[k] = true; F.state.open = step; F.draw(); await tick(15); drawn++; expect(w.document.getElementById("zf-sec" + step)).not.toBe(null); }
   }

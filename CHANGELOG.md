@@ -2,6 +2,33 @@
 
 Newest first. The owner-only release list the site reads is `apps/edge/src/releases.json`; this file adds the PR and audit lines the version standard asks for (marketing-ledger/plans/VERSION-AND-KNOWLEDGE-STANDARD-2026-11-20.md). Earlier releases (1.0.0 to 1.9.0) are in `releases.json`.
 
+## 1.12.0 - 2026-11-24
+New prices with three cups, on top of 1.11.2 (master `6d38283`). Not deployed and not merged. Needs two independent audits on the exact head commit before any deploy. 1.11.0 is the live release (commit `8a4a0bed`); 1.11.1 and 1.11.2 are merged into master but not deployed, so a deploy of this release also ships them. The money flags stay off and no payment code is touched; payments are still taken only by IT Services by Rajat Agarwal through Razorpay.
+### What changed, in plain English
+- **New prices (owner decision of 23 Nov 2026: "Rs 2,500 to open a game + Rs 5 per player place, charm endings").** Up to 100 participants Rs 2,999, up to 250 Rs 3,799, up to 500 Rs 4,999, up to 750 Rs 6,299, up to 1,000 Rs 7,499, up to 2,500 Rs 11,999, up to 5,000 Rs 17,999, up to 10,000 Rs 29,999. Before: 2,399 / 3,499 / 4,699 / 5,899 / 7,099 / 11,799 / 17,699 / 29,499. No GST is shown. The US dollar prices did not change (the decision named rupees only).
+- **Three cups everywhere.** Small (up to 100), Medium (up to 500, marked "Most chosen") and Large (up to 1,000) come first on the home page, the price page and in the organizer's console (step 2, the quick setup and the "make this a real game" card of a demo game). The other five sizes are behind "See more sizes". Under each cup: three lines (you choose auto or manual mode; close group only; you are in control). Heading: "Run a game your whole team will talk about."
+- **Trust strip and links.** Three lines under the cups ("Players' details are erased within 24 hours after the game." / "Over 200 games played." / "Pay once per game, receipt straight away.") and plain Terms and Privacy links. No tick boxes, no GST line, no money-back promise. Nothing says "no data is taken", "100% secure" or "played by major companies".
+- **One-page brochure and Refer and earn.** `brochure.html` and `brochure.pdf` (rebuilt) show the cups and the other sizes; the partner example is now half of Rs 2,999 = Rs 1,499.50.
+- **One list of prices.** `PACKS`, `CUPS` and `PRICING_COPY` in `packages/shared/src/pricing.ts`; the browser copy is `TB.PACKS`, `TB.CUPS` and `TB.PRICING_COPY` in `apps/web/public/common.js`. To revert: edit those two places (a test turns red if only one is edited), follow the version rule.
+- **Visit counting.** `v.js` now works out the price of a clicked cup or size from the same list (the old price card it read from is gone).
+- **Phones renew their saved copy:** `zsw.js` cache `ct-game-v47` to `ct-game-v48`.
+### Decisions the owner should look at
+- **The word "erased".** The owner's trust line says "erased"; the owner's order of 1 Nov 2026 (and `no-erase-words.test.ts`) say customer text never says erase / erased. The newer written wording is used, word for word, and the test allows exactly that one sentence. To go back to the 1 Nov rule: write "deleted" in `PRICING_COPY`, `common.js`, `pricing.html`, `brochure.html` (and the PDF) and delete the one allowance line in the test.
+- **Not every size follows "Rs 2,500 + Rs 5 a place".** 100, 500 and 1,000 do (3,000 / 5,000 / 7,500 with charm endings). 250 (3,750) and 750 (6,250) were given as 3,799 and 6,299; 2,500, 5,000 and 10,000 are far below the formula (15,000 / 27,500 / 52,500) by the owner's own list. They are built exactly as given.
+- **Console size buttons show no price** (an older owner rule, tested: "the price shows ONLY in the Pay step"). The new organizer flow's size list and the demo card still show prices, from the game's own size list, never from a fixed number.
+- **Brochure:** the three benefit lines are printed once under the three cups (one page), not under each box.
+### Tests
+- New: `apps/web/test/pricing-cups.test.ts` (the exact list, the cups, the copy, the browser copy equal to the code, the home page, the price page, the brochure, a scan of the whole repository for any old price and for the forbidden claims), one test each in `zc-flow-step2.test.ts`, `pdf-assets.test.ts`, `demo.test.ts` (all eight sizes through the proforma invoice) and `release-1-12-0.test.ts` (the version rule).
+- Changed to the new prices: `credit`, `pay`, `ledgerc`, `partners`, `demo`, `helpdesk`, `ai-enablement`, `ai-paylink`, `param-journey`, `price-adjust`, `payfirst-price`, `game-id-payment`, `billing`, `shared`, `pages`, `demo-pages`, `owner-desk`, `visits-dom`, the console tests and the `tools/sim2` scenarios. Money that follows from a price (commission, the price after an agreed reduction, what is left to pay after credit) was recalculated, not copied.
+- `shared.test.ts`: the rule of 9 Oct 2026 ("the old GST-inclusive price rounded to a 99 ending") is replaced by "every price ends in 99 and rises with the size" plus the exact list.
+### Not changed on purpose
+- Bingo, Snakes and Tic Tac Toe (their own pull requests); `docs/BINGO_SPEC.md` only shows the same table in the new rupee prices.
+- Money flags, secrets, live settings, payment, invoice, credit and commission code (they read the one list). No deploy, no merge.
+- `tests/e2e` (Playwright; needs a running site): its price-card selectors were already stale before this release and are not run here.
+- `tools/make-brochure.mjs` got `--no-sandbox` when run as root, so the PDF can be rebuilt in this kind of cloud session.
+### Checks
+See the pull request comment for the exact results (type-check and every test file as its own process).
+
 ## 1.11.2 - 2026-11-21
 Release on top of 1.11.1 (PR #38, same branch, head `0b2155e` before this one). 1.11.0 is the live release (commit `8a4a0bed`, Cloudflare Pages deployment `1366bf89`, rollback `edd21023` = 1.10.2); neither 1.11.1 nor 1.11.2 is deployed. Needs two independent audits on the exact head commit before any deploy. Money flag `PAY_VIA_MONEYPENNY` stays off; no payment code is touched. Payments still go only through IT Services by Rajat Agarwal and Razorpay.
 ### Why a new version

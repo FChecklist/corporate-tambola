@@ -139,9 +139,9 @@ test("step 3 with 2 tickets shows no Ticket A / Ticket B prize rows (hidden: the
 test("the money sign is ₹ on every step: no 'Rs' anywhere on the screens", () => {
   const win = page("?flow=new"); const F = win.ZFLOW;
   F.state.done[1] = F.state.done[2] = F.state.done[3] = F.state.done[4] = true; F.who.upTo = 100; F.prizes.sel = F.defaultPrizes(F.housesOf({ PRIZE_HOUSES }));
-  F.state.packs = [{ upTo: 100, inr: 2399 }];
+  F.state.packs = [{ upTo: 100, inr: 2999 }];
   let all = "";
   for (let n = 1; n <= 5; n++) { F.state.open = n; F.state.eid = "EABCDEF"; F.draw(); all += win.document.getElementById("app").textContent + " "; }
   expect(/\bRs\b/.test(all)).toBe(false);
-  expect(all).toContain("₹2,399");
+  expect(all).toContain("₹2,999");
 });

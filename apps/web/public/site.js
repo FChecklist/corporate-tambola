@@ -2,7 +2,7 @@
 (function () {
   const $ = TB.$, esc = TB.esc, ic = TB.ic;
   const nf = (n) => Number(n).toLocaleString("en-IN");
-  const S = { cur: TB.guessCurrency(), pack: 250 };
+  const S = { cur: TB.guessCurrency(), pack: 500 }; // 500 = the Medium cup ("Most chosen")
   const DEMO = "demo"; // the first choice in both size lists: a free demo game for up to 10 people (no payment); every other step is the same
   const isDemo = () => S.pack === DEMO;
   const packOptions = (sel) => `<option value="${DEMO}" ${sel === DEMO ? "selected" : ""}>Demo game (up to 10 participants)</option>` + TB.PACKS.map(([n]) => `<option value="${n}" ${n === sel ? "selected" : ""}>Up to ${nf(n)} participants</option>`).join("");
@@ -29,15 +29,16 @@
       $("priceNote").textContent = "The free demo game is for up to 10 people and costs nothing. Sign in with your e-mail and build it the same way as a real game."; return;
     }
     if ($("heroBrk")) $("heroBrk").innerHTML = breakdown(S.pack, S.cur);
-    { // one price card: the organizer picks the size, then sees the one real price (never a list of every pack, never a struck-out "was" price: gap plan 2026-10-29, TA17)
-      const n = S.pack, x = TB.price(n, S.cur), shown = S.cur === "INR" ? x.base : x.total;
-      const opts = packOptions(n);
-      const perks = ["All features included", "Free AI assistant to build your game", "Unlimited fun for your company&rsquo;s extended family", "Your brand and message breaks: play your video or audio", "Everyone engaged", "Create positive vibes", "Build it free, pay just before the game starts", "No fee to create or edit your game", "All participant data deleted within 24 hours", "A small amount, simple for HR / Admin to pay and claim back"];
-      $("packs").innerHTML = `<div class="pcard"><div class="pwho"><label for="pack2">How many participants?</label><div class="selwrap"><select id="pack2" aria-label="Number of participants">${opts}</select><svg class="ic chev"><use href="#i-chev"/></svg></div></div>` +
-        `<div class="pmain">` +
-        `<div class="pamt"><span class="tot"><small>Price</small> ${TB.money(shown, S.cur)}</span></div>` +
-        `<button type="button" class="btn pcta" data-buy="${n}" aria-label="Create your game for up to ${nf(n)} participants">Create your game ${ic("arrow")}</button></div>` +
-        `<ul class="pperks">${perks.map((t) => `<li><span class="tick" aria-hidden="true">&#10003;</span>${t}</li>`).join("")}</ul></div>`;
+    { // three cups (Small, Medium, Large), the other sizes behind "See more sizes" (owner pricing update 2026-11-23); the prices come from TB.PACKS, never a struck-out "was" price
+      const C = TB.PRICING_COPY, cupNames = TB.CUPS.map((c) => c.upTo);
+      const cup = (c) => { const x = TB.price(c.upTo, S.cur), shown = S.cur === "INR" ? x.base : x.total;
+        return `<article class="cup${c.mostChosen ? " cup-pop" : ""}">${c.mostChosen ? `<span class="cup-tag">${esc(C.mostChosen)}</span>` : ""}<h3>${esc(c.name)}</h3><p class="cup-up">Up to ${nf(c.upTo)} participants</p><p class="cup-price">${TB.money(shown, S.cur)}</p>` +
+          `<ul class="cup-b">${C.benefits.map((t) => `<li>${esc(t)}</li>`).join("")}</ul><button type="button" class="cup-go" data-buy="${c.upTo}" aria-label="Create your ${esc(c.name)} game for up to ${nf(c.upTo)} participants">Create your game</button></article>`; };
+      const more = TB.PACKS.filter((p) => !cupNames.includes(p[0])).map(([n]) => { const x = TB.price(n, S.cur), shown = S.cur === "INR" ? x.base : x.total;
+        return `<tr><td>Up to ${nf(n)} participants</td><td class="num">${TB.money(shown, S.cur)}</td><td class="num"><button type="button" class="cup-go2" data-buy="${n}" aria-label="Create your game for up to ${nf(n)} participants">Create your game</button></td></tr>`; }).join("");
+      $("packs").innerHTML = `<div class="cups"><div class="cuprow">${TB.CUPS.map(cup).join("")}</div>` +
+        `<details class="cup-more"${cupNames.includes(S.pack) ? "" : " open"}><summary>${esc(C.moreSizes)}</summary><table class="cup-sizes"><thead><tr><th>Size</th><th class="num">Price</th><th class="num"><span class="sr">Create</span></th></tr></thead><tbody>${more}</tbody></table></details>` +
+        `<ul class="cup-trust">${C.trust.map((t) => `<li>${esc(t)}</li>`).join("")}</ul><p class="cup-legal"><a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a></p></div>`;
     }
     if ($("pack2")) $("pack2").value = String(S.pack);
     if (FREE.on) { $("priceNote").textContent = "You build and publish your engagement for free. You pay before it starts: if it is not paid by the start time, it will not begin. " + (S.cur === "INR" ? "Prices in Indian rupees." : "Prices in US dollars."); return; }

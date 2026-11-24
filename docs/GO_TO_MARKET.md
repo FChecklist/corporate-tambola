@@ -127,10 +127,10 @@ Nothing here can be done by the software or by me. Do them in this order. None o
 6. Open dash.cloudflare.com > **Workers & Pages** > **corporate-tambola** > **Settings** > **Variables and Secrets** > **Add** > type `RAZORPAY_WEBHOOK_SECRET`, paste the secret, choose **Encrypt**, **Save**.
 7. **Deployments** tab > the top line > three dots > **Retry deployment** (a new secret is read only by a new deployment).
 
-**Step 2. One real payment, to prove the whole chain (this spends Rs 1 first, then, if you choose, Rs 2,399).**
+**Step 2. One real payment, to prove the whole chain (this spends Rs 1 first, then, if you choose, Rs 2,999).**
 1. Open `https://corporatetambola.com/paytest.html`. Pay Rs 1 with your own card or UPI.
 2. Check: Razorpay dashboard > **Transactions** shows it captured; an invoice mail arrives; a note "Paid order" arrives at hello@ (this also proves step 5).
-3. For the full chain: sign in, make a game for 100 people, publish, pay Rs 2,399, confirm the invoice mail and that the game shows "paid". Cancel it (more than a minute before its start) to see the credit appear; credit is not a refund (Terms).
+3. For the full chain: sign in, make a game for 100 people, publish, pay Rs 2,999, confirm the invoice mail and that the game shows "paid". Cancel it (more than a minute before its start) to see the credit appear; credit is not a refund (Terms).
 
 **Step 3. Dollar cards (optional, only if you want overseas customers).**
 1. Razorpay dashboard > **Account & Settings** > **Payment Methods** (or **International Payments**) > **Request** / write to Razorpay support asking to enable international cards. Razorpay decides; it can take days.

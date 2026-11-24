@@ -85,8 +85,9 @@
     { id: "family", name: "Your people and their families", line: "Each person can bring family members (you choose how many, up to 10). Every ticket is one participant.", invites: true, cats: ["family"] },
     { id: "extended", name: "Extended family", line: "Your people, their families and friends, wherever they are.", invites: true, cats: ["family", "colleagues"] },
   ];
-  const FALLBACK_PACKS = [{ upTo: 100, inr: 2399 }, { upTo: 250, inr: 3499 }, { upTo: 500, inr: 4699 }, { upTo: 1000, inr: 7099 }];
+  const FALLBACK_PACKS = [{ upTo: 100, inr: 2999 }, { upTo: 250, inr: 3799 }, { upTo: 500, inr: 4999 }, { upTo: 750, inr: 6299 }, { upTo: 1000, inr: 7499 }, { upTo: 2500, inr: 11999 }, { upTo: 5000, inr: 17999 }, { upTo: 10000, inr: 29999 }];
   const money = (n) => "₹" + Number(n).toLocaleString("en-IN");
+  const CUP_NAMES = { 100: "Small", 500: "Medium", 1000: "Large" }, CUP_MOST_CHOSEN = 500; // the three cups. Mirror of CUPS in packages/shared/src/pricing.ts (pricing-agree.test.ts keeps them equal). The prices come from the game's own size list, never from this file.
   /** The size choices, from the game's real pack ladder (smallest first). */
   const packChoices = (packs) => (Array.isArray(packs) && packs.length ? packs : FALLBACK_PACKS).filter((k) => Number(k.upTo) > 0).map((k) => ({ upTo: Number(k.upTo), inr: Number(k.inr) || 0, label: "Up to " + k.upTo + " participants" + (k.inr ? " · " + money(k.inr) : "") })).sort((a, b) => a.upTo - b.upTo);
   /** What the system saves for a card: only people the organizer lets in take part; family cards allow 4 more people each. */
@@ -497,7 +498,11 @@
     box.append(el("h3", { text: "How big is your game?" }));
     const sel = el("select", { id: "zf-size", "aria-label": "Size of your game", onchange: (e) => { who.upTo = Number(e.target.value); draw(); } });
     for (const k of choices) sel.append(el("option", { value: String(k.upTo), ...(who.upTo === k.upTo ? { selected: "" } : {}) }, k.label));
-    box.append(sel);
+    /* The three cups first (owner pricing update 2026-11-23); every other size is behind "See more sizes" (the list below holds ALL sizes and stays the control that is saved). */
+    const cupCards = el("div", { class: "zf-cups", role: "radiogroup", "aria-label": "Size of your game", id: "zf-cups" });
+    for (const k of choices.filter((x) => CUP_NAMES[x.upTo])) cupCards.append(el("button", { type: "button", role: "radio", class: "zf-cup" + (who.upTo === k.upTo ? " on" : ""), "aria-checked": String(who.upTo === k.upTo), "data-cup": String(k.upTo), onclick: () => { who.upTo = k.upTo; draw(); } }, el("b", { text: CUP_NAMES[k.upTo] + (k.upTo === CUP_MOST_CHOSEN ? " · Most chosen" : "") }), el("span", { text: "Up to " + k.upTo + " participants" + (k.inr ? " · " + money(k.inr) : "") })));
+    if (cupCards.children.length) box.append(cupCards);
+    box.append(el("details", { class: "zf-more", id: "zf-more", ...(CUP_NAMES[who.upTo] && cupCards.children.length ? {} : { open: "" }) }, el("summary", { text: "See more sizes" }), sel));
     const go = el("button", { type: "button", class: "zf-go", id: "zf-save2", onclick: async () => {
       const bad = whoProblems(who, choices);
       if (bad.length) { msg.textContent = bad[0]; return; }

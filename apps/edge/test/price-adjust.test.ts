@@ -31,13 +31,13 @@ describe("owner price: setting it", () => {
   test("lookup shows pack, list prices, status; a set price is shown with its note and audited (who, when, old, new, reason)", async () => {
     const g = await unpaidGame(100);
     const a = await j(await call("GET", `/api/owner/price?eid=${g.id}`, undefined, PLAT));
-    expect(a).toMatchObject({ eid: g.id, status: "published, not paid", pack: 100, editable: true, adjustment: null, list: { INR: 2399, USD: 34 } });
+    expect(a).toMatchObject({ eid: g.id, status: "published, not paid", pack: 100, editable: true, adjustment: null, list: { INR: 2999, USD: 34 } });
     expect((await adj({ eid: g.id, currency: "INR", direction: "down", amount: 400, reason: "agreed on phone 2 Nov" })).status).toBe(200);
     const b = await j(await call("GET", `/api/owner/price?eid=${g.id}`, undefined, PLAT));
-    expect(b.adjustment).toMatchObject({ currency: "INR", amount: -400, net: 1999, reason: "agreed on phone 2 Nov", applies: true });
+    expect(b.adjustment).toMatchObject({ currency: "INR", amount: -400, net: 2599, reason: "agreed on phone 2 Nov", applies: true });
     await adj({ eid: g.id, currency: "INR", direction: "up", amount: 150, reason: "added a logo" });
     const au = q("SELECT action, old_adjust_minor, new_adjust_minor, net_minor, list_minor, reason, actor FROM price_adjust_audit WHERE eid=? ORDER BY id", g.id);
-    expect(au).toEqual([{ action: "set", old_adjust_minor: null, new_adjust_minor: -40000, net_minor: 199900, list_minor: 239900, reason: "agreed on phone 2 Nov", actor: "owner" }, { action: "change", old_adjust_minor: -40000, new_adjust_minor: 15000, net_minor: 254900, list_minor: 239900, reason: "added a logo", actor: "owner" }]);
+    expect(au).toEqual([{ action: "set", old_adjust_minor: null, new_adjust_minor: -40000, net_minor: 259900, list_minor: 299900, reason: "agreed on phone 2 Nov", actor: "owner" }, { action: "change", old_adjust_minor: -40000, new_adjust_minor: 15000, net_minor: 314900, list_minor: 299900, reason: "added a logo", actor: "owner" }]);
   });
   test("the panel (the owner's form, sent as data) has the find box, the facts, the fields, the Remove button and the history", async () => {
     const g = await unpaidGame(100);
@@ -45,9 +45,9 @@ describe("owner price: setting it", () => {
     expect(find.form).toMatchObject({ method: "GET", path: "/api/owner/panel", submit: "Find game" });
     await adj({ eid: g.id, currency: "INR", direction: "down", amount: 400, reason: "agreed on phone 2 Nov" });
     const v = await j(await call("GET", `/api/owner/panel?q=${g.id}`, undefined, PLAT));
-    expect(v.facts).toContainEqual(["List price", "Rs 2,399 / US$ 34"]); expect(v.facts).toContainEqual(["Status", "published, not paid"]); expect(v.facts).toContainEqual(["Organizer pays", "Rs 1,999"]);
+    expect(v.facts).toContainEqual(["List price", "Rs 2,999 / US$ 34"]); expect(v.facts).toContainEqual(["Status", "published, not paid"]); expect(v.facts).toContainEqual(["Organizer pays", "Rs 2,599"]);
     expect(v.form.fields.map((f: any) => f.id)).toEqual(["currency", "direction", "amount", "reason"]);
-    expect(v.form.fills.map((f: any) => f.set.amount)).toEqual(["2398", "33"]); // "Make it 1" for rupees and for dollars
+    expect(v.form.fills.map((f: any) => f.set.amount)).toEqual(["2998", "33"]); // "Make it 1" for rupees and for dollars
     expect(v.buttons[0]).toMatchObject({ label: "Remove", body: { eid: g.id, remove: true } });
     expect(v.table.rows.length).toBe(1);
     const paid = await paidGame(); const pv = await j(await call("GET", `/api/owner/panel?q=${paid.id}`, undefined, PLAT));
@@ -56,11 +56,11 @@ describe("owner price: setting it", () => {
   });
   test("the net can never go below Rs 1 (US$ 1) or above twice the list price; zero, a missing note and an unknown game are refused", async () => {
     const g = await unpaidGame(100);
-    expect((await adj({ eid: g.id, currency: "INR", amount: -2399, reason: "free" })).status).toBe(400); // net 0
-    expect((await adj({ eid: g.id, currency: "INR", amount: -2398.5, reason: "too low" })).status).toBe(400); // net 0.5
-    expect((await adj({ eid: g.id, currency: "INR", amount: -2398, reason: "payment test" })).status).toBe(200); // net exactly Rs 1
-    expect((await adj({ eid: g.id, currency: "INR", amount: 2399, reason: "double" })).status).toBe(200); // exactly twice
-    expect((await adj({ eid: g.id, currency: "INR", amount: 2400, reason: "typo" })).status).toBe(400);
+    expect((await adj({ eid: g.id, currency: "INR", amount: -2999, reason: "free" })).status).toBe(400); // net 0
+    expect((await adj({ eid: g.id, currency: "INR", amount: -2998.5, reason: "too low" })).status).toBe(400); // net 0.5
+    expect((await adj({ eid: g.id, currency: "INR", amount: -2998, reason: "payment test" })).status).toBe(200); // net exactly Rs 1
+    expect((await adj({ eid: g.id, currency: "INR", amount: 2999, reason: "double" })).status).toBe(200); // exactly twice
+    expect((await adj({ eid: g.id, currency: "INR", amount: 3000, reason: "typo" })).status).toBe(400);
     expect((await adj({ eid: g.id, currency: "USD", direction: "down", amount: 34, reason: "free" })).status).toBe(400);
     expect((await adj({ eid: g.id, currency: "USD", direction: "down", amount: 33, reason: "dollar test" })).status).toBe(200);
     expect((await adj({ eid: g.id, currency: "INR", amount: 0, reason: "nothing" })).status).toBe(400);
@@ -75,25 +75,25 @@ describe("owner price: checkout", () => {
     const g = await unpaidGame(100), other = await unpaidGame(100);
     await adj({ eid: g.id, currency: "INR", amount: -400, reason: "agreed on phone" });
     const c = await checkout(g.key, { eid: g.id, email: g.email }); expect(c.status).toBe(200);
-    expect(c.body.razorpay.amount).toBe(199900);
-    expect(sentOrders.at(-1).amount).toBe(199900);
-    expect(sentOrders.at(-1).notes).toMatchObject({ list_minor: "239900", adjust_minor: "-40000", net_minor: "199900", adjust_code: "owner_adjust", pack: "100", plan: "pack_100" });
+    expect(c.body.razorpay.amount).toBe(259900);
+    expect(sentOrders.at(-1).amount).toBe(259900);
+    expect(sentOrders.at(-1).notes).toMatchObject({ list_minor: "299900", adjust_minor: "-40000", net_minor: "259900", adjust_code: "owner_adjust", pack: "100", plan: "pack_100" });
     expect(JSON.stringify(sentOrders.at(-1))).not.toContain("agreed on phone"); // the owner's own note never leaves this site
     expect(JSON.stringify(c.body)).not.toMatch(SECRET_WORDS); // nothing in the answer to the organizer's browser
-    expect(one("SELECT amount, product_ref FROM payment WHERE id=?", c.body.paymentId)).toMatchObject({ amount: 1999, product_ref: "pack_100" });
-    expect(JSON.parse(one("SELECT meta FROM payment WHERE id=?", c.body.paymentId).meta).priceAdjust).toEqual({ listMinor: 239900, adjustMinor: -40000, netMinor: 199900, code: "owner_adjust" });
-    const c2 = await checkout(other.key, { eid: other.id, email: other.email }); expect(c2.body.razorpay.amount).toBe(239900);
+    expect(one("SELECT amount, product_ref FROM payment WHERE id=?", c.body.paymentId)).toMatchObject({ amount: 2599, product_ref: "pack_100" });
+    expect(JSON.parse(one("SELECT meta FROM payment WHERE id=?", c.body.paymentId).meta).priceAdjust).toEqual({ listMinor: 299900, adjustMinor: -40000, netMinor: 259900, code: "owner_adjust" });
+    const c2 = await checkout(other.key, { eid: other.id, email: other.email }); expect(c2.body.razorpay.amount).toBe(299900);
     expect(sentOrders.at(-1).notes.list_minor).toBeUndefined();
-    const bare = await checkout(g.key, { pack: 100, email: g.email }); expect(bare.body.razorpay.amount).toBe(239900); // a bare pack is never touched
+    const bare = await checkout(g.key, { pack: 100, email: g.email }); expect(bare.body.razorpay.amount).toBe(299900); // a bare pack is never touched
   });
   test("a price set in dollars is not applied to a rupee checkout; a removed price applies nothing", async () => {
     const g = await unpaidGame(100);
     await adj({ eid: g.id, currency: "USD", amount: -10, reason: "abroad" });
-    expect((await checkout(g.key, { eid: g.id, email: g.email })).body.razorpay.amount).toBe(239900);
-    await adj({ eid: g.id, currency: "INR", amount: -399, reason: "rupees" });
+    expect((await checkout(g.key, { eid: g.id, email: g.email })).body.razorpay.amount).toBe(299900);
+    await adj({ eid: g.id, currency: "INR", amount: -999, reason: "rupees" });
     expect((await checkout(g.key, { eid: g.id, email: g.email })).body.razorpay.amount).toBe(200000);
     const rm = await j(await adj({ eid: g.id, remove: true })); expect(rm.removed).toBe(true); expect(rm.next).toBe(`/api/owner/panel?q=${g.id}`);
-    expect((await checkout(g.key, { eid: g.id, email: g.email })).body.razorpay.amount).toBe(239900);
+    expect((await checkout(g.key, { eid: g.id, email: g.email })).body.razorpay.amount).toBe(299900);
     expect(q("SELECT action FROM price_adjust_audit WHERE eid=? ORDER BY id", g.id).map((r) => r.action)).toEqual(["set", "change", "remove"]);
   });
   test("the pay link, the game info and the proforma show ONE total (the net): no list price, no extra field, no secret word", async () => {
@@ -101,14 +101,14 @@ describe("owner price: checkout", () => {
     await adj({ eid: g.id, currency: "INR", amount: -400, reason: "agreed on phone" });
     const { token } = await createPayLink(W.env.DB, g.id, one("SELECT org FROM engagement WHERE id=?", g.id).org, "organizer", T);
     const plText = await (await call("GET", `/api/paylink/${token}`)).text(), pl = JSON.parse(plText);
-    expect(pl.price.total).toBe(1999); expect(Object.keys(pl).sort()).toEqual(["game", "price", "status"]);
+    expect(pl.price.total).toBe(2599); expect(Object.keys(pl).sort()).toEqual(["game", "price", "status"]);
     const pc = await call("POST", `/api/paylink/${token}/checkout`, { email: "fin@acme.com", name: "Fin Person", pack: 100, currency: "INR" });
-    expect((await j(pc)).razorpay.amount).toBe(199900);
+    expect((await j(pc)).razorpay.amount).toBe(259900);
     const infoText = await (await call("GET", `/api/z/${g.id}/info`, undefined, g.h)).text(), info = JSON.parse(infoText);
-    expect(info.payable).toEqual({ currency: "INR", amount: 1999 });
+    expect(info.payable).toEqual({ currency: "INR", amount: 2599 });
     const pfText = await (await call("POST", "/api/proforma", { eid: g.id, currency: "INR", email: "a@b.co", name: "Asha" }, g.h)).text(), pf = JSON.parse(pfText);
-    expect(pf.total).toBe(1999); expect(pf.html).toContain("price as agreed");
-    for (const t of [plText, infoText, pfText]) { expect(t).not.toMatch(SECRET_WORDS); expect(t).not.toMatch(/2399|2,399/); }
+    expect(pf.total).toBe(2599); expect(pf.html).toContain("price as agreed");
+    for (const t of [plText, infoText, pfText]) { expect(t).not.toMatch(SECRET_WORDS); expect(t).not.toMatch(/2999|2,999/); }
   });
 });
 
@@ -117,14 +117,14 @@ describe("owner price: only the owner's panel can set it", () => {
     const g = await unpaidGame(100);
     for (const extra of [{ coupon: "X" }, { code: "OWNER" }, { adjust: -500 }, { adjust_minor: -100000 }, { price: 1 }, { amount: 1 }, { promo: "Y" }, { net_minor: 100 }]) {
       const c = await checkout(g.key, { eid: g.id, email: g.email, ...extra }); expect(c.status).toBe(200);
-      expect(c.body.razorpay.amount).toBe(239900); expect(sentOrders.at(-1).notes.list_minor).toBeUndefined();
+      expect(c.body.razorpay.amount).toBe(299900); expect(sentOrders.at(-1).notes.list_minor).toBeUndefined();
     }
     expect(q("SELECT * FROM price_adjust")).toEqual([]);
     await adj({ eid: g.id, currency: "INR", amount: -400, reason: "agreed on phone" }); // the owner sets it for this exact game id
-    const other = await unpaidGame(100); expect((await checkout(other.key, { eid: other.id, email: other.email })).body.razorpay.amount).toBe(239900); // another game id: unaffected
-    expect((await checkout(g.key, { eid: g.id, email: g.email })).body.razorpay.amount).toBe(199900);
+    const other = await unpaidGame(100); expect((await checkout(other.key, { eid: other.id, email: other.email })).body.razorpay.amount).toBe(299900); // another game id: unaffected
+    expect((await checkout(g.key, { eid: g.id, email: g.email })).body.razorpay.amount).toBe(259900);
     await adj({ eid: g.id, remove: true }); // removing it restores the normal price
-    expect((await checkout(g.key, { eid: g.id, email: g.email })).body.razorpay.amount).toBe(239900);
+    expect((await checkout(g.key, { eid: g.id, email: g.email })).body.razorpay.amount).toBe(299900);
   });
 });
 
@@ -132,7 +132,7 @@ describe("owner price: pending to paid at Rs 1", () => {
   test("through the Razorpay stand-in: a net Rs 1 order is paid and the game goes from not paid to paid; the organizer's invoice has one line, the owner's mail the full picture", async () => {
     const g = await unpaidGame(100);
     expect(one("SELECT pack FROM engagement WHERE id=?", g.id).pack).toBe(0);
-    await adj({ eid: g.id, currency: "INR", amount: -2398, reason: "Rs 1 live test" });
+    await adj({ eid: g.id, currency: "INR", amount: -2998, reason: "Rs 1 live test" });
     const c = await checkout(g.key, { eid: g.id, email: g.email }); expect(c.body.razorpay.amount).toBe(100);
     capture(c.body, "pay_cp1"); const v = await verify(c.body, "pay_cp1"); expect(v.status).toBe(200);
     const res = await j(v); expect(res).toMatchObject({ ok: true, pack: 100, total: 1, published: true });
@@ -141,18 +141,18 @@ describe("owner price: pending to paid at Rs 1", () => {
     const inv = JSON.parse(one("SELECT data FROM invoice WHERE payment_id=?", c.body.paymentId).data);
     expect(inv.lines).toEqual([{ description: "Corporate Tambola: up to 100 participants (one engagement), price as agreed", quantity: 1, amount: 1 }]); // one line, only the amount actually charged
     expect(inv.tax.total).toBe(1);
-    const html = await (await call("GET", res.invoiceUrl)).text(); expect(html).toContain("price as agreed"); expect(html).not.toMatch(/coupon|discount|2,399|2399/i);
+    const html = await (await call("GET", res.invoiceUrl)).text(); expect(html).toContain("price as agreed"); expect(html).not.toMatch(/coupon|discount|2,999|2999/i);
     expect(JSON.stringify(res)).not.toMatch(SECRET_WORDS);
     const owner = q("SELECT body, subject FROM outbox WHERE subject LIKE '%Paid order%'").map((m) => m.subject + "\n" + m.body).join("\n");
-    expect(owner).toMatch(/owner set price: list Rs 2,399, adjustment minus Rs 2,398/); // the owner's own paid-order mail keeps the full picture
+    expect(owner).toMatch(/owner set price: list Rs 2,999, adjustment minus Rs 2,998/); // the owner's own paid-order mail keeps the full picture
     const orgMail = q("SELECT body, subject FROM outbox WHERE subject NOT LIKE '%Paid order%'").map((m) => m.subject + "\n" + m.body).join("\n");
-    expect(orgMail).toContain("price as agreed"); expect(orgMail).not.toMatch(/coupon|discount|promo|2,399|2399/i); // the organizer's mails say nothing else
+    expect(orgMail).toContain("price as agreed"); expect(orgMail).not.toMatch(/coupon|discount|promo|2,999|2999/i); // the organizer's mails say nothing else
     expect(one("SELECT seq FROM invoice WHERE payment_id=?", c.body.paymentId).seq).toBe(1); // invoice numbering is unchanged
   });
   test("through TEST_MODE (no gateway): the Rs 1 checkout is paid at once and the game is paid", async () => {
     reset({ RAZORPAY_KEY_ID: undefined, RAZORPAY_KEY_SECRET: undefined, RAZORPAY_WEBHOOK_SECRET: undefined, TEST_MODE: "1" });
     const g = await unpaidGame(100);
-    await adj({ eid: g.id, currency: "INR", amount: -2398, reason: "Rs 1 test" });
+    await adj({ eid: g.id, currency: "INR", amount: -2998, reason: "Rs 1 test" });
     expect(one("SELECT pack FROM engagement WHERE id=?", g.id).pack).toBe(0);
     const c = await checkout(g.key, { eid: g.id, email: g.email }); expect(c.status).toBe(200);
     expect(c.body.mode).toBe("test"); expect(c.body.result).toMatchObject({ ok: true, total: 1, pack: 100, published: true });
@@ -161,7 +161,7 @@ describe("owner price: pending to paid at Rs 1", () => {
   });
   test("the webhook finishes the same Rs 1 order when the buyer closed the tab", async () => {
     const g = await unpaidGame(100);
-    await adj({ eid: g.id, currency: "INR", amount: -2398, reason: "Rs 1 test" });
+    await adj({ eid: g.id, currency: "INR", amount: -2998, reason: "Rs 1 test" });
     const c = await checkout(g.key, { eid: g.id, email: g.email });
     const raw = JSON.stringify({ event: "payment.captured", created_at: 1, payload: { payment: { entity: { id: "pay_wh", order_id: c.body.razorpay.orderId, amount: 100, status: "captured", currency: "INR" } } } });
     const r = await call("POST", "/api/payments/webhook", raw, { "x-razorpay-signature": createHmac("sha256", "whsec").update(raw).digest("hex"), "x-razorpay-event-id": "evt_cp" });
@@ -172,10 +172,10 @@ describe("owner price: pending to paid at Rs 1", () => {
 describe("owner price: locked once paid", () => {
   test("after the game is paid a price can be neither set, changed nor removed, and the old one is not applied again", async () => {
     const g = await unpaidGame(100);
-    await adj({ eid: g.id, currency: "INR", amount: -2398, reason: "Rs 1 test" });
+    await adj({ eid: g.id, currency: "INR", amount: -2998, reason: "Rs 1 test" });
     const c = await checkout(g.key, { eid: g.id, email: g.email }); capture(c.body, "pay_lock"); expect((await verify(c.body, "pay_lock")).status).toBe(200);
     for (const body of [{ eid: g.id, currency: "INR", amount: -100, reason: "late" }, { eid: g.id, remove: true }]) { const r = await adj(body); expect(r.status).toBe(409); expect((await j(r)).code).toBe("paid"); }
-    expect(one("SELECT adjust_minor FROM price_adjust WHERE eid=?", g.id).adjust_minor).toBe(-239800); // untouched
+    expect(one("SELECT adjust_minor FROM price_adjust WHERE eid=?", g.id).adjust_minor).toBe(-299800); // untouched
     expect(await j(await call("GET", `/api/owner/price?eid=${g.id}`, undefined, PLAT))).toMatchObject({ status: "paid", editable: false });
   });
   test("a cancelled game and a game whose payment is being confirmed cannot take a price", async () => {
