@@ -1,6 +1,6 @@
 /**
  * THE ONE PLACE FOR THE PRICES. To revert a price change, edit PACKS here (and its browser copy `TB.PACKS` in apps/web/public/common.js, which
- * `packages/shared/test/pricing-agree.test.ts` keeps equal to this list), then follow the version rule.
+ * `apps/web/test/pricing-cups.test.ts` keeps equal to this list), then follow the version rule.
  *
  * Packs are sold as "Up to N participants" (glossary). [participants, INR price the customer pays, USD price].
  * Owner decision 2026-10-09: the seller is not registered for GST, so NO GST is charged. GST_ON is the one switch: when the seller registers, set it to true
@@ -24,7 +24,7 @@ export const CUPS: ReadonlyArray<{ readonly key: "small" | "medium" | "large"; r
 export const PRICING_COPY = {
   headline: "Run a game your whole team will talk about.",
   benefits: ["You choose auto mode or manual mode.", "Close group only: just the people you invite.", "You are in control, from start to finish."],
-  trust: ["Players' details are erased within 24 hours after the game.", "Over 200 games played.", "Pay once per game, receipt straight away."],
+  trust: ["Players' details are erased within 24 hours after the game.", "Pay once per game, receipt straight away."],
   mostChosen: "Most chosen",
   moreSizes: "See more sizes",
 } as const;

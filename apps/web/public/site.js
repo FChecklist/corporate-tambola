@@ -17,6 +17,13 @@
       : `<span>Total <b>${TB.money(x.total, "USD")}</b></span><span>No tax added · billed in US dollars</span>`;
   }
   function renderPrices() {
+    if (!TB.CUPS || !TB.PRICING_COPY) { // an OLD common.js saved on this phone (the service worker serves it stale while it renews): it holds the OLD price list, so show NO price, no Create button, and ask for a reload (it heals by itself on the next load)
+      const hb = $("heroBrk"), pk = $("packs"), pn = $("priceNote"), pb = $("payBtn");
+      if (hb) hb.innerHTML = ""; if (pb) pb.disabled = true;
+      if (pk) pk.innerHTML = `<p class="cup-stale">The prices on this page are being renewed. Please reload the page to see them. <button type="button" data-reload>Reload</button></p>`;
+      if (pn) pn.textContent = "Prices are shown after the page is reloaded.";
+      return;
+    }
     document.querySelectorAll("[data-cur]").forEach((el) => {
       el.innerHTML = ["INR", "USD"].map((k) => `<button type="button" class="${S.cur === k ? "on" : ""}" aria-pressed="${S.cur === k}" data-c="${k}">${k === "INR" ? "₹ INR" : "US$"}</button>`).join("");
     });
@@ -46,6 +53,7 @@
   }
   document.addEventListener("click", (e) => {
     const c = e.target.closest("[data-c]"); if (c) { S.cur = c.dataset.c; renderPrices(); if ($("ordSum")) sumRefresh(); return; }
+    if (e.target.closest("[data-reload]")) { location.reload(); return; }
     if (e.target.closest("[data-demo]")) { startDemo(); return; }
     const b = e.target.closest("[data-buy]"); if (b) { S.pack = +b.dataset.buy; renderPrices(); openCheckout(S.pack); return; }
     if (e.target.closest("[data-close]")) TB.closeSheet();

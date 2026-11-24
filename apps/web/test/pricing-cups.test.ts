@@ -8,6 +8,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { CUPS, PACKS, PRICING_COPY } from "../../../packages/shared/src/pricing";
 import { newWorld, openPage, type Page } from "./harness";
+import { GAMES_PLAYED_CLAIM } from "./claims";
 
 setDefaultTimeout(30_000);
 const ROOT = join(import.meta.dir, "..", "..", "..");
@@ -22,7 +23,7 @@ const nf = (n: number) => n.toLocaleString("en-IN");
 const COPY = {
   headline: "Run a game your whole team will talk about.",
   benefits: ["You choose auto mode or manual mode.", "Close group only: just the people you invite.", "You are in control, from start to finish."],
-  trust: ["Players' details are erased within 24 hours after the game.", "Over 200 games played.", "Pay once per game, receipt straight away."],
+  trust: ["Players' details are erased within 24 hours after the game.", "Pay once per game, receipt straight away."],
 };
 
 describe("one list of prices", () => {
@@ -38,6 +39,20 @@ describe("one list of prices", () => {
   test("the page copy constant holds the owner's words, word for word", () => {
     expect(PRICING_COPY.headline).toBe(COPY.headline); expect([...PRICING_COPY.benefits]).toEqual(COPY.benefits); expect([...PRICING_COPY.trust]).toEqual(COPY.trust);
     expect(PRICING_COPY.mostChosen).toBe("Most chosen"); expect(PRICING_COPY.moreSizes).toBe("See more sizes");
+  });
+  test("owner decision 2026-11-24, no claim we cannot back: exactly two trust lines, and no games-played count anywhere in the copy (code list and browser copy)", async () => {
+    expect(PRICING_COPY.trust.length).toBe(2);
+    expect(PRICING_COPY.trust[0]).toBe("Players' details are erased within 24 hours after the game."); // the owner's line, word for word
+    const w = newWorld({ DATA_KEY: "k" });
+    const p = await openPage(w.world, { url: "http://localhost/pricing.html", html: "pricing.html", scripts: ["common.js"] });
+    try {
+      expect(p.win.TB.PRICING_COPY.trust.length).toBe(2);
+      for (const text of [JSON.stringify(PRICING_COPY), JSON.stringify(p.win.TB.PRICING_COPY), read("common.js")]) { expect(text).not.toMatch(GAMES_PLAYED_CLAIM); expect(text).not.toMatch(/games played/i); }
+    } finally { await p.close(); }
+  });
+  test("the claim pattern itself still catches the wordings it is there for (so a weakened pattern turns this red) and lets the harmless texts pass", () => {
+    for (const bad of ["Over 200 games played.", "200+ games hosted", "500 events run", "More than 1,000 games.", "hundreds of games", "We have played 300 games", "Over 200 games", "1,200 real games played"]) expect(bad).toMatch(GAMES_PLAYED_CLAIM);
+    for (const ok of ["13.3 Games run on India time", "when more than 25 games hold personal data at once", "3. game played", "Pay once per game, receipt straight away.", "games played by the persons they invite", "413 over 200 and the"]) expect(ok).not.toMatch(GAMES_PLAYED_CLAIM);
   });
   test("common.js (the browser copy) is equal to pricing.ts: PACKS, CUPS and the words", async () => {
     const w = newWorld({ DATA_KEY: "k" });
@@ -100,6 +115,8 @@ describe("the home page: three cups", () => {
     const t = cupText(box);
     expect(t).not.toMatch(/GST/i); expect(t).not.toMatch(/money.?back|refund|guarantee/i);
     expect(t).not.toMatch(/no data is taken|100% secure|major companies/i);
+    expect(t).not.toMatch(GAMES_PLAYED_CLAIM); expect(t).not.toMatch(/games played/i); expect(box.querySelectorAll(".cup-trust li").length).toBe(2);
+    expect(textOf(read("index.html"))).not.toMatch(GAMES_PLAYED_CLAIM); // the page source too (the strip is drawn by site.js, from the same two lines)
   });
   test("the section headline is the owner's; the currency button switches the cups to US dollars (the dollar column is unchanged)", async () => {
     const p = await home(), d = p.win.document;
@@ -133,6 +150,8 @@ describe("the written pages", () => {
     expect(html).toContain('href="/cups.css'); expect(existsSync(join(PUB, "cups.css"))).toBe(true);
     const section = html.slice(html.indexOf('<section class="cups"'), html.indexOf("</section>", html.indexOf('<section class="cups"')));
     expect(section).not.toMatch(/type="checkbox"|GST|money.?back|refund/i);
+    expect(textOf(html)).not.toMatch(GAMES_PLAYED_CLAIM); expect(textOf(html)).not.toMatch(/games played/i); // no games-played count on the price page
+    expect(html.match(/<ul class="cup-trust">([\s\S]*?)<\/ul>/)![1]!.match(/<li>/g)!.length).toBe(2);
   });
   test("the build ships cups.css", () => { expect(readFileSync(join(ROOT, "pages/build.mjs"), "utf8")).toContain('"cups.css"'); });
   test("brochure.html: the same headline, the three cups, the five other sizes and the trust strip", () => {
@@ -142,6 +161,7 @@ describe("the written pages", () => {
     for (const b of COPY.benefits) expect(t).toContain(b);
     expect(t).toContain("More sizes: up to 250 ₹3,799 · up to 750 ₹6,299 · up to 2,500 ₹11,999 · up to 5,000 ₹17,999 · up to 10,000 ₹29,999.");
     expect(t).toContain(COPY.trust.join(" "));
+    expect(t).not.toMatch(GAMES_PLAYED_CLAIM); expect(t).not.toMatch(/games played/i); // no games-played count in the brochure (its PDF is read in pdf-assets.test.ts)
   });
   test("the home page's structured data and the Refer & earn example follow the list (lowest 2,999, highest 29,999, eight sizes; half of 2,999 is 1,499.50)", () => {
     const idx = read("index.html"); expect(idx).toContain('"lowPrice":"2999","highPrice":"29999","offerCount":"8"');
@@ -163,8 +183,13 @@ function walk(dir: string, out: string[] = []): string[] {
   }
   return out;
 }
-const FILES = walk(ROOT).map((f) => relative(ROOT, f).split("\\").join("/")).filter((f) => f !== "apps/web/public/zgame.js" && !f.startsWith("docs/KNOWLEDGE/") && !HISTORY.has(f) && !/pricing-cups\.test\.ts$/.test(f) && !f.startsWith("pages/public/"));
+const FILES = walk(ROOT).map((f) => relative(ROOT, f).split("\\").join("/")).filter((f) => f !== "apps/web/public/zgame.js" && !f.startsWith("docs/KNOWLEDGE/") && !HISTORY.has(f) && !/pricing-cups\.test\.ts$/.test(f) && f !== "apps/web/test/claims.ts" && !f.startsWith("pages/public/"));
 describe("the whole repository", () => {
+  test("no games-played / games-hosted COUNT is written for customers anywhere (code, pages, scripts, docs, CHANGELOG, release notes), also not in the release history", () => {
+    const hits: string[] = [];
+    for (const f of [...FILES, ...HISTORY, ...walk(join(ROOT, "docs/KNOWLEDGE")).map((x) => relative(ROOT, x).split("\\").join("/"))]) { const s = readFileSync(join(ROOT, f), "utf8"); for (const m of s.matchAll(new RegExp(GAMES_PLAYED_CLAIM.source, "gi"))) hits.push(`${f}: ${m[0]}`); }
+    expect(hits).toEqual([]);
+  });
   test("scanned files exist (so the scan below cannot pass by finding nothing)", () => { expect(FILES.length).toBeGreaterThan(500); expect(FILES).toContain("apps/web/public/common.js"); expect(FILES).toContain("apps/web/public/brochure.html"); });
   test("none of the old prices (Rs 2,399 / 3,499 / 4,699 / 5,899 / 7,099 / 11,799 / 17,699 / 29,499, with or without commas, or in paise) is written anywhere but the release history", () => {
     const re = new RegExp(`(?<![0-9A-Za-z.])(${[...OLD, ...OLD_PAISE, ...OLD.map((x) => x.length === 4 ? x[0] + "," + x.slice(1) : x.slice(0, 2) + "," + x.slice(2))].join("|")})(?![0-9A-Za-z])`, "g");

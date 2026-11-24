@@ -25,7 +25,7 @@ No GST is shown or added (`GST_ON` stays false). Everything that charges, invoic
 ## Where the prices and words live (revert = edit these)
 | What | Where |
 |---|---|
-| `PACKS` (prices), `CUPS` (Small 100, Medium 500, Large 1,000), `PRICING_COPY` (headline, three benefit lines, three trust lines) | `packages/shared/src/pricing.ts` (the one place) |
+| `PACKS` (prices), `CUPS` (Small 100, Medium 500, Large 1,000), `PRICING_COPY` (headline, three benefit lines, two trust lines) | `packages/shared/src/pricing.ts` (the one place) |
 | The browser copy: `TB.PACKS`, `TB.CUPS`, `TB.PRICING_COPY` | `apps/web/public/common.js` (a test keeps it equal to the code) |
 | The home page cups (drawn from `TB`) | `apps/web/public/site.js`, `cups.css`, the heading in `index.html`, the structured-data offers in `index.html` |
 | The price page, the brochure | `pricing.html`, `brochure.html` (+ `brochure.pdf`, rebuilt with `node tools/make-brochure.mjs`), `partner.html` (the Refer and earn example) |

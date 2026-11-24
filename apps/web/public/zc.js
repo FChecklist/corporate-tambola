@@ -435,7 +435,7 @@
     if (cur && !list.some((p) => p.n === cur)) list.push({ n: cur, price: 0 }), list.sort((a, b) => a.n - b.n);
     return [{ n: DEMO_CAP, price: 0, demo: true }].concat(list.filter((p) => p.n !== DEMO_CAP));
   };
-  // The three cups (owner pricing update 2026-11-23): Small 100, Medium 500 ("Most chosen"), Large 1,000. Every other size is behind "See more sizes". Mirror of CUPS in packages/shared/src/pricing.ts (pricing-agree.test.ts keeps them equal). The size buttons show no price (the price shows only in the Pay step); the Pay step takes it from the server's size list, never from this file.
+  // The three cups (owner pricing update 2026-11-23): Small 100, Medium 500 ("Most chosen"), Large 1,000. Every other size is behind "See more sizes". Mirror of CUPS in packages/shared/src/pricing.ts (pricing-cups.test.ts keeps them equal). The size buttons show no price (the price shows only in the Pay step); the Pay step takes it from the server's size list, never from this file.
   const CUP_SIZES = [[100, "Small", false], [500, "Medium", true], [1000, "Large", false]];
   const cupOf = (n) => CUP_SIZES.find((c) => c[0] === Number(n));
   const capChip = (f, p, quick) => { const c = cupOf(p.n); return `<button type="button" class="zc-chip${String(f.cap) === String(p.n) ? " on" : ""}" data-ck="cap" data-v="${p.n}" aria-pressed="${String(f.cap) === String(p.n)}"><span>${p.demo ? (quick ? "Up to 10 people" : "Demo game · 10 people · Rs 0") : (c ? c[1] + " · " : "") + `Up to ${p.n} people` + (c && c[2] ? " · Most chosen" : "")}</span></button>`; };
@@ -906,7 +906,7 @@
   const paidRow = () => { const p = payState(); return `<div class="zc-rowl zc-paid"><span><b>Paid</b><br><span class="zc-small zc-nomargin">${p.paidBy ? "Paid by the " + esc(WHO[p.paidBy] || p.paidBy) : "Paid"}${p.paidMs ? " on " + esc(dmy(p.paidMs)) : ""}. The game is on.</span></span><span aria-hidden="true">&#10003;</span></div>`; };
   // ---------- cancel the game (Organizer and Host): three taps, each more serious; the server wants confirmations: 3 ----------
   const CANCEL_NO = "This game cannot be cancelled now.";
-  /** "Your credit: Rs 2,358.82, valid until 14 Jun 2027." (no refund: a paid game that is cancelled becomes credit for 365 days) */
+  /** "Your credit: Rs 2,999, valid until 14 Jun 2027." (no refund: a paid game that is cancelled becomes credit for 365 days) */
   const creditText = (c) => (c ? `Your credit: ${money(c.amountInr)}, valid until ${dayIst(c.expiresMs)}.` : "");
   const cloneButton = () => (canRun() && eid ? `<div class="zc-chips zc-gap"><button type="button" class="zc-btn zc-btn-s zc-btn-alt" data-clonebtn="1">${isDemo() ? "Make a real game like this one" : "Create a new game like this one"}</button></div>` : "");
   /** A cancelled PAID game can be moved to any date within 365 days of the payment (the payment stays with the game as its credit). */

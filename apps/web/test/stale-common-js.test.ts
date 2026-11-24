@@ -1,5 +1,6 @@
 // A returning visitor can hold an OLD cached common.js (the service worker serves /common.js stale-while-revalidate) next to a NEW site.js or paykit.js.
 // Written from the rule, not from the code: a script that uses a helper added to common.js in 1.11.0 (TB.mailNote) must still finish its screen when the helper is missing.
+// 1.12.0 adds TB.CUPS and TB.PRICING_COPY (the three cups): site.js must not leave the price section empty or show the OLD price list when they are missing.
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { newWorld, openPage } from "./harness";
@@ -45,6 +46,31 @@ describe("old cached common.js beside new site.js / paykit.js", () => {
       expect(calls.length).toBeGreaterThan(0);
       for (const c of calls) expect(c).toMatch(/typeof TB\.mailNote === "function"|TB\.mailNote\)/);
     }
+  });
+
+  // The OLD common.js holds the OLD price list (written in two halves so the repository-wide old-price scan in pricing-cups.test.ts finds nothing here).
+  const OLD_LIST: [number, number, number][] = [[100, Number("2" + "399"), 34], [250, Number("3" + "499"), 51], [500, Number("4" + "699"), 67], [750, Number("5" + "899"), 84], [1000, Number("7" + "099"), 101], [2500, Number("11" + "799"), 169], [5000, Number("17" + "699"), 253], [10000, Number("29" + "499"), 421]];
+  test("1.12.0: an OLD common.js (no TB.CUPS, no TB.PRICING_COPY, the old price list) beside the NEW site.js: no error, no price anywhere, no Create button, a reload note, the pay button off", async () => {
+    const w = newWorld();
+    const p = await openPage(w, { url: "http://localhost/", html: "index.html", scripts: ["keep.js", "common.js", "google.js", "site.js"], afterLoad: (win, f) => { if (f === "common.js") { delete win.TB.CUPS; delete win.TB.PRICING_COPY; win.TB.PACKS = OLD_LIST; } } });
+    try {
+      const d = p.win.document;
+      expect(p.win.TB.CUPS).toBeUndefined(); expect(p.win.TB.PRICING_COPY).toBeUndefined();
+      expect(d.querySelectorAll("#packs .cup").length).toBe(0); expect(d.querySelectorAll("#packs [data-buy]").length).toBe(0);
+      expect(d.getElementById("packs")!.textContent).toContain("Please reload the page");
+      const shown = (d.getElementById("packs")!.textContent + " " + (d.getElementById("heroBrk")?.textContent ?? "") + " " + d.getElementById("priceNote")!.textContent) as string;
+      expect(shown).not.toMatch(/₹\s?\d|US\$\s?\d|Rs\.?\s?\d/); // not one price of the old list (and none at all)
+      for (const [, inr] of OLD_LIST) expect(d.body.textContent).not.toContain(inr.toLocaleString("en-IN"));
+      expect((d.getElementById("payBtn") as any).disabled).toBe(true);
+      expect(d.querySelectorAll("#packs button[data-reload]").length).toBe(1); // the one way forward: reload the page (the next load brings the new common.js)
+    } finally { await p.close(); }
+  });
+
+  test("source rule: site.js reads TB.CUPS and TB.PRICING_COPY only after the guard that checks both", () => {
+    const code = read("site.js"), guard = code.indexOf("if (!TB.CUPS || !TB.PRICING_COPY)");
+    expect(guard).toBeGreaterThan(0);
+    expect(code.search(/TB\.(CUPS|PRICING_COPY)\b/)).toBe(guard + "if (!".length); // the very first mention is the guard itself
+    expect(code.slice(guard, code.indexOf("\n", code.indexOf("return;", guard)))).toContain("return;"); // and the guard ends the function
   });
 
   test("the service worker cache name moved on from v45, so every phone saves the common.js that has the helper", () => {

@@ -58,3 +58,7 @@ Kinds: **DOC** = document is stale; **CODE?** = code or a user-facing promise is
 ## Refund wording in older documents (spec 6, 2026-10-08)
 
 `docs/ROLES_AND_CONSOLE_SPEC_2.md` (items 1 and 2), `docs/ROLES_AND_CONSOLE_SPEC_4.md` (the "Check, publish and pay" write-up), `docs/RAZORPAY_COLLECT_AND_PAYOUT.md` and `docs/compliance/*` may still describe a refund minus the gateway charge. That rule is gone: **there are no refunds**; a cancelled paid game becomes credit for 365 days (`docs/ROLES_AND_CONSOLE_SPEC_6.md`). Trust the code (`apps/edge/src/credit.ts`, `apps/edge/src/cancel.ts`). Likewise the 24-hour payment cut-off of the first draft of spec 5 does not exist: a game can be paid until its guest data is erased.
+
+## Old price figures in a design mock (24 Nov 2026, release 1.12.0)
+
+`docs/mock/console-mock-v5.html` (line 80, a design mock of the console, not shipped) still holds the old GST-inclusive example prices (four sizes). It is not a price list and no page reads it. The real list is `PACKS` in `packages/shared/src/pricing.ts` (new list from 24 Nov 2026). Fix it only if the mock is used again.

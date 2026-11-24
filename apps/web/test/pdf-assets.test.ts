@@ -2,6 +2,7 @@
 // The report PDF and the invoice PDF are checked in apps/edge/test (report-logo.test.ts, pay.test.ts). Text is read with the pdf.js copy the site already ships (vendor/pdfjs).
 import { describe, expect, test } from "bun:test";
 import { readFileSync, existsSync } from "node:fs";
+import { GAMES_PLAYED_CLAIM } from "./claims";
 const PUB = new URL("../public/", import.meta.url);
 const bytes = (f: string) => new Uint8Array(readFileSync(new URL(f, PUB)));
 const lib: any = await import(new URL("vendor/pdfjs/pdf.min.mjs", PUB).href);
@@ -27,7 +28,7 @@ describe("brochure.pdf: one page, the new logo, real screens", () => {
     expect(t).toMatch(/most chosen/i);
     for (const b of ["You choose auto mode or manual mode.", "Close group only: just the people you invite.", "You are in control, from start to finish."]) expect(t).toContain(b);
     expect(t).toContain("up to 250 ₹3,799 · up to 750 ₹6,299 · up to 2,500 ₹11,999 · up to 5,000 ₹17,999 · up to 10,000 ₹29,999");
-    expect(t).toContain("Players' details are erased within 24 hours after the game."); expect(t).toContain("Over 200 games played."); expect(t).toContain("Pay once per game, receipt straight away.");
+    expect(t).toContain("Players' details are erased within 24 hours after the game."); expect(t).toContain("Pay once per game, receipt straight away."); expect(t).not.toMatch(GAMES_PLAYED_CLAIM); expect(t).not.toMatch(/\bgames played\b/i); /* the owner dropped the "games played" count: nothing in the repository backs it */
     for (const [h, l] of [["2", "399"], ["3", "499"], ["4", "699"], ["5", "899"], ["7", "099"], ["11", "799"], ["17", "699"], ["29", "499"]]) expect(t).not.toContain(h + "," + l); /* the old rupee prices, written in two halves so the repository-wide scan in pricing-cups.test.ts finds nothing here */
   });
   test("the pictures are in it: the home page with the six-item menu and three real screens (at least 4 images; the old PDF had none)", () => { expect(images("brochure.pdf")).toBeGreaterThanOrEqual(4); });

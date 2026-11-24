@@ -178,7 +178,7 @@ sc("K24", "partner commission stays as earned when the game is cancelled; paying
   const g = await w.game(org, { leadMs: 3 * DAY }); const r = await org.api("POST", "/api/payments/test", { eid: g.id, email: org.email, org: "Sim Org", ref: partner.code }); w.expect("paid with the partner code", r.status === 200, JSON.stringify(r.body).slice(0, 160));
   const before = await sql("SELECT status, COUNT(*) c FROM commission GROUP BY status"); w.expect("a commission was earned", before.reduce((t, x) => t + x.c, 0) >= 1, JSON.stringify(before));
   await org.cancel(g.id); const after = await sql("SELECT status, COUNT(*) c FROM commission GROUP BY status"); w.eq("commission unchanged by the cancel (not voided)", after, before);
-  const g2 = await w.game(org, { leadMs: 4 * DAY }); await payCredit(org, g2.id); w.eq("paying by credit adds no commission MONEY", (await sql("SELECT ROUND(SUM(amount),2) s FROM commission"))[0].s, 1199.5); w.eq("paying by credit adds no commission ROW", await sql("SELECT status, COUNT(*) c FROM commission GROUP BY status"), before);
+  const g2 = await w.game(org, { leadMs: 4 * DAY }); await payCredit(org, g2.id); w.eq("paying by credit adds no commission MONEY", (await sql("SELECT ROUND(SUM(amount),2) s FROM commission"))[0].s, 1499.5); w.eq("paying by credit adds no commission ROW", await sql("SELECT status, COUNT(*) c FROM commission GROUP BY status"), before);
 });
 sc("K25", "IST day edge: a payment at 23:59:59 IST and one at 00:00:00 IST the next day lapse one calendar day apart, both at an IST midnight", async (w) => {
   const midnight = (Math.floor(((await w.now()) + IST) / DAY) + 1) * DAY - IST; // the next 00:00 IST

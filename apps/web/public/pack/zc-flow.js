@@ -87,7 +87,7 @@
   ];
   const FALLBACK_PACKS = [{ upTo: 100, inr: 2999 }, { upTo: 250, inr: 3799 }, { upTo: 500, inr: 4999 }, { upTo: 750, inr: 6299 }, { upTo: 1000, inr: 7499 }, { upTo: 2500, inr: 11999 }, { upTo: 5000, inr: 17999 }, { upTo: 10000, inr: 29999 }];
   const money = (n) => "₹" + Number(n).toLocaleString("en-IN");
-  const CUP_NAMES = { 100: "Small", 500: "Medium", 1000: "Large" }, CUP_MOST_CHOSEN = 500; // the three cups. Mirror of CUPS in packages/shared/src/pricing.ts (pricing-agree.test.ts keeps them equal). The prices come from the game's own size list, never from this file.
+  const CUP_NAMES = { 100: "Small", 500: "Medium", 1000: "Large" }, CUP_MOST_CHOSEN = 500; // the three cups. Mirror of CUPS in packages/shared/src/pricing.ts (pricing-cups.test.ts keeps them equal). The prices come from the game's own size list, never from this file.
   /** The size choices, from the game's real pack ladder (smallest first). */
   const packChoices = (packs) => (Array.isArray(packs) && packs.length ? packs : FALLBACK_PACKS).filter((k) => Number(k.upTo) > 0).map((k) => ({ upTo: Number(k.upTo), inr: Number(k.inr) || 0, label: "Up to " + k.upTo + " participants" + (k.inr ? " · " + money(k.inr) : "") })).sort((a, b) => a.upTo - b.upTo);
   /** What the system saves for a card: only people the organizer lets in take part; family cards allow 4 more people each. */
