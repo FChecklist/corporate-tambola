@@ -55,6 +55,7 @@ describe("old cached common.js beside new site.js / paykit.js", () => {
     const p = await openPage(w, { url: "http://localhost/", html: "index.html", scripts: ["keep.js", "common.js", "google.js", "site.js"], afterLoad: (win, f) => { if (f === "common.js") { delete win.TB.CUPS; delete win.TB.PRICING_COPY; win.TB.PACKS = OLD_LIST; } } });
     try {
       const d = p.win.document;
+      expect(p.errors).toEqual([]); // no script error while the page loads with the old common.js
       expect(p.win.TB.CUPS).toBeUndefined(); expect(p.win.TB.PRICING_COPY).toBeUndefined();
       expect(d.querySelectorAll("#packs .cup").length).toBe(0); expect(d.querySelectorAll("#packs [data-buy]").length).toBe(0);
       expect(d.getElementById("packs")!.textContent).toContain("Please reload the page");
@@ -70,7 +71,7 @@ describe("old cached common.js beside new site.js / paykit.js", () => {
     const code = read("site.js"), guard = code.indexOf("if (!TB.CUPS || !TB.PRICING_COPY)");
     expect(guard).toBeGreaterThan(0);
     expect(code.search(/TB\.(CUPS|PRICING_COPY)\b/)).toBe(guard + "if (!".length); // the very first mention is the guard itself
-    expect(code.slice(guard, code.indexOf("\n", code.indexOf("return;", guard)))).toContain("return;"); // and the guard ends the function
+    expect(code).toMatch(/if \(!TB\.CUPS \|\| !TB\.PRICING_COPY\) \{[^}]*\breturn;\s*\}/); // the guard block ends with a return, so nothing below it runs
   });
 
   test("the service worker cache name moved on from v45, so every phone saves the common.js that has the helper", () => {
