@@ -1,5 +1,17 @@
 [
   {
+    "version": "1.11.3",
+    "date": "2026-11-25",
+    "releasedAtIST": "25 Nov 2026, time set at deploy",
+    "commit": "this release",
+    "title": "A small mark, the three numerals १३९, now sits at the very top centre of every page",
+    "changes": [
+      "Every page, screen and error page now shows the small mark १३९ at the very top centre, above the header, in 6px bold dark blue with a very thin dark red line under it",
+      "The mark takes no room, cannot be clicked, is skipped by screen readers and cannot be copied; nothing else on any page moved, changed or was reworded",
+      "The saved copies of the site on phones are renewed so the mark shows"
+    ]
+  },
+  {
     "version": "1.11.2",
     "date": "2026-11-21",
     "releasedAtIST": "21 Nov 2026, time set at deploy",

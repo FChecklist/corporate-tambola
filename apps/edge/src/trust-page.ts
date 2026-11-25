@@ -2,6 +2,7 @@
 // AI that searches the web all read the same words. tools/make-trust.ts writes the two files; a test regenerates them and fails if they differ, so they cannot drift.
 import { FACTS } from "./ai-facts";
 import { fullDeleteAt, MAX_AHEAD_MS, PURGE_AFTER_MS, REPORT_LINK_MS, SETTINGS_KEEP_MS } from "./lifecycle";
+import { MARK139_CSS, MARK139_HTML } from "./mark139";
 
 const ORIGIN = "https://housie.corporatetambola.com";
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -78,7 +79,7 @@ export function trustHtml(): string {
 <meta property="og:type" content="website"><meta property="og:site_name" content="Corporate Tambola"><meta property="og:title" content="${esc(TITLE)}"><meta property="og:description" content="${esc(DESC)}"><meta property="og:url" content="${ORIGIN}/trust.html"><meta property="og:image" content="${ORIGIN}/og-tambola.png">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(TITLE)}"><meta name="twitter:description" content="${esc(DESC)}"><meta name="twitter:image" content="${ORIGIN}/og-tambola.png">
 <link rel="stylesheet" href="/fonts.css"><link rel="stylesheet" href="/app.css"><link rel="icon" href="/favicon-32.png?v=4" type="image/png" sizes="32x32"><link rel="icon" href="/icon-192.png?v=4" type="image/png" sizes="192x192">
-<style>body{margin:0;font:17px/1.55 Inter,system-ui,sans-serif;color:#1b1f2a;background:#fff}main{max-width:760px;margin:0 auto;padding:28px 18px 56px}h1{font-size:28px;line-height:1.2;margin:0 0 8px}li{margin:0 0 14px}.lead{color:#444}h2{font-size:22px;line-height:1.25;margin:32px 0 8px}h3{font-size:17px;margin:18px 0 6px}#for-it ul{padding-left:20px}#for-it li{margin:0 0 8px}.note{background:#f5f7fb;border-radius:10px;padding:12px 14px;margin:20px 0}a{color:#0B3D91}footer{margin-top:28px;font-size:15px;color:#444}</style></head><body>
+<style>${MARK139_CSS}body{margin:0;font:17px/1.55 Inter,system-ui,sans-serif;color:#1b1f2a;background:#fff}main{max-width:760px;margin:0 auto;padding:28px 18px 56px}h1{font-size:28px;line-height:1.2;margin:0 0 8px}li{margin:0 0 14px}.lead{color:#444}h2{font-size:22px;line-height:1.25;margin:32px 0 8px}h3{font-size:17px;margin:18px 0 6px}#for-it ul{padding-left:20px}#for-it li{margin:0 0 8px}.note{background:#f5f7fb;border-radius:10px;padding:12px 14px;margin:20px 0}a{color:#0B3D91}footer{margin-top:28px;font-size:15px;color:#444}</style></head><body>${MARK139_HTML}
 <main>
 <p><a href="/">Corporate Tambola</a></p>
 <h1>Safety, privacy and how it works: 10 facts</h1>
