@@ -17,12 +17,13 @@ const packageJsons = (dir = "."): string[] => readdirSync(join(ROOT, dir)).flatM
 
 describe("1.12.0: the version rule for the pricing update", () => {
   test("releases.json says 1.12.0 on top, with 1.11.2, 1.11.1 and 1.11.0 right under it; the notes are plain", () => {
-    expect(rel.slice(0, 4).map((r) => r.version)).toEqual(["1.12.0", "1.11.2", "1.11.1", "1.11.0"]);
-    expect(rel[0]!.date).toBe("2026-11-24"); expect(rel[0]!.changes.length).toBeGreaterThan(4);
-    for (const c of rel[0]!.changes) { expect(c).not.toMatch(/`|\.ts\b|\.js\b|DATAREQ_|kv\b/); expect(c.length).toBeLessThan(520); }
-    expect(rel[0]!.changes.join(" ")).toContain("Rs 2,999"); expect(rel[0]!.changes.join(" ")).toContain("Most chosen");
+    const i0 = rel.findIndex((r) => r.version === "1.12.0"); expect(i0).toBeGreaterThanOrEqual(0); // newer releases (1.12.1: the gap fixes) may sit above it; see gap-fixes-1-12-1.test.ts
+    expect(rel.slice(i0, i0 + 4).map((r) => r.version)).toEqual(["1.12.0", "1.11.2", "1.11.1", "1.11.0"]);
+    expect(rel[i0]!.date).toBe("2026-11-24"); expect(rel[i0]!.changes.length).toBeGreaterThan(4);
+    for (const c of rel[i0]!.changes) { expect(c).not.toMatch(/`|\.ts\b|\.js\b|DATAREQ_|kv\b/); expect(c.length).toBeLessThan(520); }
+    expect(rel[i0]!.changes.join(" ")).toContain("Rs 2,999"); expect(rel[i0]!.changes.join(" ")).toContain("Most chosen"); // the 1.12.0 notes keep the prices of that release; 1.12.1 sets the owner numbers
   });
-  test("every package.json that has a version says 1.12.0, and so does the lock file's list of our own packages", () => {
+  test("every package.json that has a version says the newest version (1.12.1 now), and so does the lock file's list of our own packages", () => {
     const files = packageJsons(); expect(files.length).toBeGreaterThanOrEqual(9); expect(files).toContain("package.json"); expect(files).toContain("apps/edge/package.json");
     const versions = files.map((f) => [f, JSON.parse(read(f)).version]).filter((x) => x[1] !== undefined);
     expect(versions.length).toBeGreaterThanOrEqual(9); // the root and eight packages

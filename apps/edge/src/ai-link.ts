@@ -5,6 +5,7 @@
 
 import { PACKS, price } from "../../../packages/shared/src/pricing";
 import { HOUSES_HELP_LIST, INVITE_CATEGORIES, PRIZE_HOUSES } from "../../../packages/beacon/src/config";
+import { PAYEE_NAME } from "./v2-types";
 import { FACTS, FACT_RULES, factsText } from "./ai-facts";
 import { FUNCTIONS, mapJson, mapText } from "./ai-functions";
 
@@ -159,6 +160,8 @@ export function manualText(origin: string, key: string, role: LinkRole, now: num
       "",
       "6. PAYMENT FACTS (explain these honestly)",
       "- Only the organizer publishes (confirming their e-mail and mobile number) and only the organizer pays; you never do either.",
+      "- Pay now: payments are taken only by " + PAYEE_NAME + ", through Moneypenny credits. Say this plainly to the organizer. Credits from a cancelled game pay first.",
+      "- You may prepare the pre-game message and the winner messages for the organizer to read and send. You may NOT pay: checkout accepts only organizer and co-organizer keys, and the AI key (it starts with cta_) is refused there.",
       "- The price depends on the limit (section 1). They pay on the payment page, online, in about 2 minutes; an invoice is e-mailed. Credit from a cancelled game pays first (the organizer taps Use my credit).",
       "- No payment, no game. There is no separate payment cut-off: they can pay any time until the guests' data is auto-deleted (20 hours after the game was meant to end). Until then the Organizer and Hosts see Payment pending and everyone else sees Waiting for the Organizer or Host to start the game. If they pay late the first number comes 2 minutes after the payment is confirmed. After the auto-deletion the game is closed (This game did not start. Your details have been auto-deleted.).",
       "- A DEMO GAME exists: create with demo: true and a limit of at most 10 people. It is free, publishes without any payment, and every screen says DEMO GAME. To make it a real game (before, during or after the demo) the organizer opens Make this a real game on the pay page (/pay.html?e={id}), chooses the number of people and pays; the game carries on with the same link and people, the mark goes away and more people can join. After the demo has ended, Create a new game like this one in the console gives a real game to pay for.",

@@ -170,13 +170,13 @@ describe("Make this a real game", () => {
   test("the proforma invoice for a demo being made real is for the chosen pack", async () => {
     const master = await start("boss@acme.com");
     await mk(master, "DEMO-1"); await publish(master, "DEMO-1");
-    const pf = await j(await call("POST", "/api/proforma", { eid: "DEMO-1", pack: 500, name: "Boss", email: "boss@acme.com" }, master)); expect(pf.ok).toBe(true); expect(pf.total).toBe(4999); expect(pf.html).toMatch(/up to 500 participants/);
-    const pf2 = await j(await call("POST", "/api/proforma", { eid: "DEMO-1", name: "Boss", email: "boss@acme.com" }, master)); expect(pf2.total).toBe(2999); // no choice yet: the smallest pack
+    const pf = await j(await call("POST", "/api/proforma", { eid: "DEMO-1", pack: 500, name: "Boss", email: "boss@acme.com" }, master)); expect(pf.ok).toBe(true); expect(pf.total).toBe(4872); expect(pf.html).toMatch(/up to 500 participants/);
+    const pf2 = await j(await call("POST", "/api/proforma", { eid: "DEMO-1", name: "Boss", email: "boss@acme.com" }, master)); expect(pf2.total).toBe(2872); // no choice yet: the smallest pack
   });
   test("owner pricing update 2026-11-23: the proforma invoice charges the new price for every one of the eight sizes (the numbers are written out here, not read from the price list)", async () => {
     const master = await start("boss@acme.com");
     await mk(master, "DEMO-1"); await publish(master, "DEMO-1");
-    const want: Record<number, number> = { 100: 2999, 250: 3799, 500: 4999, 750: 6299, 1000: 7499, 2500: 11999, 5000: 17999, 10000: 29999 };
+    const want: Record<number, number> = { 100: 2872, 250: 3799, 500: 4872, 750: 6299, 1000: 7882, 2500: 11999, 5000: 17999, 10000: 29999 };
     for (const [pack, inr] of Object.entries(want)) {
       const pf = await j(await call("POST", "/api/proforma", { eid: "DEMO-1", pack: Number(pack), name: "Boss", email: "boss@acme.com" }, master));
       expect([pack, pf.ok, pf.total]).toEqual([pack, true, inr]);
