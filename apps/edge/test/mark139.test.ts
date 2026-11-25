@@ -12,7 +12,9 @@ const norm = (s: string) => s.replace(/\r\n/g, "\n");
 const count = (s: string, needle: string) => s.split(needle).length - 1;
 
 const PUB = "apps/web/public";
-const STATIC = [...readdirSync(join(ROOT, PUB)).filter((f) => f.endsWith(".html")).map((f) => `${PUB}/${f}`), `${PUB}/pack/gamelog.html`];
+const walkHtml = (d: string): string[] => readdirSync(join(ROOT, d), { withFileTypes: true }).flatMap((e) =>
+  e.isDirectory() ? (e.name === "node_modules" ? [] : walkHtml(`${d}/${e.name}`)) : e.name.endsWith(".html") ? [`${d}/${e.name}`] : []);
+const STATIC = walkHtml(PUB); // every html page, in every folder (the generated trust.html too: tools/make-trust.ts)
 const CSS_IN_APP_CSS = new Set([`${PUB}/z.html`, `${PUB}/zc.html`]); // their policy is style-src 'self': the CSS comes from app.css
 // Pages built in code: file -> how many page templates it holds (e-mails are not pages: brand.ts, report-email.ts).
 const BUILT: Record<string, number> = {

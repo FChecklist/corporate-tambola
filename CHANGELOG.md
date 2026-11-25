@@ -9,6 +9,7 @@ Owner order of 25 Nov 2026 (the same change in every FChecklist repository): the
 - The invoice fragment shown on the payment-done screen drops the mark (that screen already has its own), so it is never shown twice.
 - `zsw.js` cache `ct-game-v47` to `ct-game-v48` so saved copies get the mark.
 - Guard test `apps/edge/test/mark139.test.ts`: every page source has exactly one mark and the approved CSS and numerals.
+- `trust.html` is written again by `tools/make-trust.ts` so it matches the generator (its two tests failed on the hand-edited copy); the guard test now walks every html page under `apps/web/public` in all folders, not a fixed list.
 ### Not done
 - E-mails (`brand.ts`, `report-email.ts`) are not pages and were left alone. Pictures: no SVG banner exists; raster pictures (`og-tambola.png`, `img/*`) are untouched. Design, reference and prototype HTML under `design/`, `docs/mock/`, `reference/`, `tools/` are not product pages.
 
