@@ -1,4 +1,4 @@
-/* Corporate Tambola, phone page for zero-server engagements. All game logic lives in zgame.js (window.ZG); this file only draws it. */
+/* Corporate Tambola, phone page for zero-server games. All game logic lives in zgame.js (window.ZG); this file only draws it. */
 (function () {
   const ZG = window.ZG;
   const $app = document.getElementById("app");
@@ -72,7 +72,7 @@
     } catch (e) { if (isJoin) lastJoin = { status: e && e.status, code: (e && e.code) || (e && e.body && e.body.code) || "", body: (e && e.body) || {}, message: String((e && e.message) || "") }; throw e; }
   };
   const INVITE_FROM = Number(q.get("from")) || 0, INVITE_CAT = q.get("c") || "";
-  const FAMILY_LINK = INVITE_FROM > 0 && INVITE_FROM < 1_000_000_000; // a guest's family link; Co-host, Host and organizer links carry larger codes (apps/edge/src/people.ts COHOST_FROM)
+  const FAMILY_LINK = INVITE_FROM > 0 && INVITE_FROM < 1_000_000_000; // a guest's family link; Co-host, Co-organizer and organizer links carry larger codes (apps/edge/src/people.ts COHOST_FROM)
   const NAMES = { early5: "Early Five", top: "Top line", mid: "Middle line", bot: "Bottom line", corners: "Four corners", star: "Star", full: "Full house" };
   // the newer houses come from the one shared table (ZG.PRIZE_HOUSES); the seven original names above keep their spelling
   ZG.PRIZE_HOUSES.forEach((h) => { if (!NAMES[h.id]) NAMES[h.id] = h.label; });
@@ -309,6 +309,8 @@
   };
   const TIP = ZG.PLAYER_TIP || "Tap each number as it is called. When a prize is complete, press Claim before the next number is called. A wrong claim is a Bogey: it does not count.";
   const RULE = ZG.CLAIM_RULE_TEXT || "Press Claim before the next number is called.";
+  /** The claim rules for the player: tap, then the short lines (one claim = one prize, what a wrong claim does, what a tie does) from the one shared function. */
+  const CLAIMTEXT = (v) => "Tap each number as it is called. " + (ZG.claimLinesForPlayer ? ZG.claimLinesForPlayer(v && v.ties) : [RULE]).join(" ");
   let NEWMARK = 0; // the number just tapped: its place on the ticket is stamped
   let LOOK = store.get("ctz-look") === "modern" ? "modern" : "retro"; // the player's choice of ticket look; the Retro look is the default
   try { document.documentElement.setAttribute("data-pt", LOOK); } catch (e) {} // 1.7.1: the whole page follows the chosen look (Retro | Modern)
@@ -359,7 +361,7 @@
   }
   /** Before the first number: what to expect, what can be won, a sound check and a calendar entry. Everything here is known at boot, so it costs no extra requests. */
   function waitingRoom(v) {
-    if (v.phase === "play" && !v.locked && !v.late && !v.log.length && v.round <= 1 && v.startMode === "manual" && !DEMO) { // a game that begins when the Host or Organizer presses Start: what is happening, in plain words
+    if (v.phase === "play" && !v.locked && !v.late && !v.log.length && v.round <= 1 && v.startMode === "manual" && !DEMO) { // a game that begins when the Co-organizer or Organizer presses Start: what is happening, in plain words
       const ms0 = (1692803367 + (v.scheduledRound - 1) * 3) * 1000, when0 = new Date(ms0).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
       const sec0 = v.nowRound === null ? null : Math.max(0, (v.scheduledRound - v.nowRound) * 3);
       const top0 = v.waitingForStart ? `<h2>Waiting for the host to begin the game</h2><div class="zsetup">The host will press Start soon. Keep this page open: the game begins by itself on your phone the moment they do.</div>`
@@ -479,7 +481,7 @@
     return `<div class="zcard zprizes"><h2>Your prizes</h2>${rows}<p class="zsmall" style="margin:6px 0 0">Saved on this phone. Show this to your organizer to collect.</p></div>`;
   }
   let shareLink = location.origin + "/";
-  try { localStorage.removeItem("ctz-phone"); } catch {} // older versions saved the participant's own number on the phone: it is not kept any more
+  try { localStorage.removeItem("ctz-phone"); } catch {} // older versions saved the player's own number on the phone: it is not kept any more
   /** A DEMO GAME (the organizer's free game for up to 10 people): one plain line, on every screen of the game. */
   const demoGameCard = () => (isDemoGame() ? `<div class="zcard zdemo" id="demogame" role="note"><span class="zdemotag">DEMO GAME</span> <span class="zsmall">This is a demo game for up to 10 people. The organizer can make it a real game at any time.</span></div>` : "");
   function demoCard(v) {
@@ -616,7 +618,7 @@
     try { inviteInfo = await api("GET", `/api/z/${EID}/invites?pid=${encodeURIComponent(v.pid)}`); } catch { /* shown next time */ }
   }
   const inviteLink = (v) => `${location.origin}/z.html?e=${encodeURIComponent(EID)}&from=${seatOf(v.pid)}${inviteCat ? "&c=" + encodeURIComponent(inviteCat) : ""}`;
-  // ---------- 1.8.0 family host: people who ask through this participant's family link wait for them; they can approve until 15 minutes before the game begins ----------
+  // ---------- 1.8.0 family host: people who ask through this player's family link wait for them; they can approve until 15 minutes before the game begins ----------
   const FAM = { list: [], at: -Infinity, note: "", until: 0 };
   async function loadFamily(v) {
     if (!v.pid || !(v.cfg.invites && v.cfg.invites.on) || performance.now() - FAM.at < 20000) return;
@@ -808,7 +810,7 @@
         <div class="zrow1"><div class="zball"><div class="zbig ${last ? "r" + rangeOf(last) : "none"}${NEWCALL && NEWCALL === last ? " pop" : ""}" id="big" aria-live="assertive" aria-label="${last ? "Number just called " + last : "No number yet"}">${last ? `<span>${last}</span>` : "–"}</div></div>
           <div class="ztxt"><div class="zlab">Number just called</div><div class="zmeta" id="calledcount">${esc(ZG.calledLine(calledTotal))}</div>${cdown}<p class="zhelp" id="ballhelp">${v.phase === "ended" ? "The game is over." : last ? "Find it on your ticket and tap it." : "The first number will appear here."}</p></div></div>
         <div class="zprog" role="progressbar" aria-valuemin="0" aria-valuemax="90" aria-valuenow="${calledTotal}"><i style="width:${Math.min(100, Math.round(calledTotal / 90 * 100))}%"></i></div>
-        ${few.length ? `<div class="zlastrow" id="lastfew"><span class="zlab">Last 5 numbers called</span><div class="zballs">${few.map((n) => `<i class="zlastn">${n}</i>`).join("")}</div></div>` : ""}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat">${esc(TIP)}</p><p class="zsmall zkeepon" id="keepon">${esc(KEEPON)}</p>`}<p class="zsmall zfairline" id="fairline">Every number comes from a public random source and is the same on every phone. <a href="/fair.html" target="_blank" rel="noopener">How we keep it fair</a></p></div>`;
+        ${few.length ? `<div class="zlastrow" id="lastfew"><span class="zlab">Last 5 numbers called</span><div class="zballs">${few.map((n) => `<i class="zlastn">${n}</i>`).join("")}</div></div>` : ""}<div class="zsub">${cdown ? "" : sub}</div>${v.phase === "ended" ? "" : `<p class="zsmall zwhat" id="claimrules">${esc(CLAIMTEXT(v))}</p><p class="zsmall zkeepon" id="keepon">${esc(KEEPON)}</p>`}<p class="zsmall zfairline" id="fairline">Every number comes from a public random source and is the same on every phone. <a href="/fair.html" target="_blank" rel="noopener">How we keep it fair</a></p></div>`;
   }
   let LAST_CLAIM_NOW = "";
   // ---- everybody is told, calmly and in plain words, when a ticket claims a prize and what came of it (ticket numbers only, never names); each pop-up closes by itself
@@ -847,7 +849,7 @@
   /** Under the ticket: a Claim button for every prize the player's marks complete, what was claimed and is being checked, this player's Bogeys, and the prizes the ticket is out of. */
   const namesOf = (keys) => keys.map((k) => KEYNAME(k)).join(" and ");
   /** Gold, near the top: the player has just completed a prize and must press Claim before the next number is called. */
-  /** "Claim in the next 11 s" on the gold buttons: a nudge only (the game's clock decides). None when a Host calls the numbers. */
+  /** "Claim in the next 11 s" on the gold buttons: a nudge only (the game's clock decides). None when a Co-organizer calls the numbers. */
   const claimTimer = (v) => (v.callMode !== "host" && v.claimLeft !== null && v.claimLeft !== undefined ? `<small class="zclaimt">Claim now in ${v.claimLeft} seconds</small>` : "");
   const claimingNow = (v) => (v.claimNow || []).length > 0;
   /** REHEARSAL: the same block at the top of every page of a rehearsal (Game ID, REHEARSAL GAME n, the sentence), and the calm page when it is over. */
@@ -931,7 +933,7 @@
     { const now = (v.claimNow || []).join(","); if (now && now !== LAST_CLAIM_NOW) { try { navigator.vibrate && navigator.vibrate(220); } catch {} } LAST_CLAIM_NOW = now; } // a short buzz the moment a prize becomes claimable, where the phone allows it
     if (v.reconnecting) banners.push(`<div class="zbanner info" id="reconnecting" role="status">${esc(ZG.say("net.reconnecting"))}</div>`);
     if (v.error) banners.push(`<div class="zbanner warn" role="alert">${esc(v.error)}</div>`);
-    if (v.locked) banners.push(ME.role === "organizer" || ME.role === "host" ? `<div class="zbanner warn" role="status"><b>Payment pending for this game.</b> The game starts 2 minutes after the payment is confirmed. Open your console to pay. Your ticket is safe. Keep this page open.</div>` : `<div class="zbanner warn" role="status"><b>Waiting for the Organizer or Host to start the game.</b> Your ticket is safe. Keep this page open: it begins as soon as they are done.</div>`);
+    if (v.locked) banners.push(ME.role === "organizer" || ME.role === "host" ? `<div class="zbanner warn" role="status"><b>Payment pending for this game.</b> The game starts 2 minutes after the payment is confirmed. Open your console to pay. Your ticket is safe. Keep this page open.</div>` : `<div class="zbanner warn" role="status"><b>Waiting for the Organizer or Co-organizer to start the game.</b> Your ticket is safe. Keep this page open: it begins as soon as they are done.</div>`);
     else if (v.stopped) banners.push(`<div class="zbanner info">The organizer has ended this game.</div>`);
     else if (v.paused) { const p = v.pausedInfo, hm = (ms) => new Date(ms).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }), left = p ? Math.max(1, Math.round(p.secondsLeft / 60)) : 0; banners.push(`<div class="zbanner pause" role="status" id="pausebanner"><b>PAUSED</b><span>${p && p.restartsInSec ? "Restarts in " + p.restartsInSec + (p.restartsInSec === 1 ? " second" : " seconds") + "." + (v.callMode === "host" ? "" : " The first number comes " + (v.callSeconds || 12) + " seconds after that.") : p ? "Paused by " + esc(p.by) + " at " + esc(hm(p.sinceMs)) + ". The numbers start again at about " + esc(hm(p.endMs)) + " (in about " + left + (left === 1 ? " minute" : " minutes") + "), or sooner when they press Resume. Keep this page open." : "The game is paused. It will carry on shortly. Keep this page open."}</span></div>`); }
     else if (v.mode === "hold" && v.nowRound !== null && v.phase !== "ended") banners.push(`<div class="zbanner warn">Checking with the organizer… numbers will continue in a moment.</div>`);
@@ -985,7 +987,7 @@
   const KEEPON = "Tip: keep this screen on, and turn on Do Not Disturb, so a call or message does not make you miss a number."; // TA08 / A18: one plain line, the same on the check-in, the ticket and the pause
   const ckTime = (ms) => new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZoneName: "short" }); // the time on THIS phone, with its own time zone named: people play from all over the world
   function checkinView() {
-    const ids = CK.ids ? `<div class="zckids"><div><span>Game ID</span><b>${esc(CK.ids.game)}</b></div><div><span>Participant ID</span><b>${esc(CK.ids.participant)}</b></div><div><span>Ticket ID</span><b>${esc(CK.ids.ticket)}</b></div></div>` : "";
+    const ids = CK.ids ? `<div class="zckids"><div><span>Game ID</span><b>${esc(CK.ids.game)}</b></div><div><span>Player ID</span><b>${esc(CK.ids.participant)}</b></div><div><span>Ticket ID</span><b>${esc(CK.ids.ticket)}</b></div></div>` : "";
     if (CK.fatal) return `${brandStrip()}${demoGameCard()}<div class="zcard" role="status"><h2>We could not open your check-in</h2><p class="zsmall" style="margin:0">${esc(CK.fatal)}</p></div>`;
     if (!CK.loaded) return `${brandStrip()}${demoGameCard()}<div class="zcard"><p class="zmsg">Loading your check-in…</p></div>`;
     if (!CK.open) {
